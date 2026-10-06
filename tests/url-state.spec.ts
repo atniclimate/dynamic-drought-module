@@ -153,7 +153,25 @@ test.describe('URL as state', () => {
   });
 
   test('a deep link restores the region and the exact layer set', async ({ page }) => {
+    await page.route('**/USDM_current/**', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/geo+json',
+        body: JSON.stringify({
+          type: 'FeatureCollection',
+          features: [{
+            type: 'Feature',
+            properties: { DM: 3, MapDate: Date.now() },
+            geometry: {
+              type: 'Polygon',
+              coordinates: [[[-125, 42], [-116, 42], [-116, 49], [-125, 49], [-125, 42]]]
+            }
+          }]
+        })
+      })
+    );
     await gotoApp(page, '?region=central_oregon&layers=usdm,tribal');
+    await expect(layerPill(page, 'usdm')).toHaveText(PILL.live);
 
     // Region restored.
     await expect(regionSelect(page)).toHaveValue('region:central_oregon');

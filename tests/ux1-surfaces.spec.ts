@@ -7,7 +7,9 @@ import {
   waitForLayerSettled,
   openTribalNationsDetails,
   ROLE_GROUPS,
-  SURFACE_KEYS
+  SURFACE_KEYS,
+  PILL,
+  stubHeatRiskCatalog
 } from './helpers';
 
 /**
@@ -15,11 +17,9 @@ import {
  * structurally. Layers are grouped by role, and condition surfaces are
  * mutually exclusive.
  *
- * These assertions are network-independent: role-group rendering, checkbox
- * exclusivity, and old-link resolution are all client-side. The one surface
- * driven here (heatrisk) catches its own data failures and resolves per the
- * ratified stay-on contract, so it stays checked even when its upstream is
- * unreachable from a CI runner.
+ * Enabled positive cases answer their USDM and HeatRisk reads from local
+ * fixtures and assert successful activation before checking exclusivity and
+ * old-link resolution. A custom layer set can withdraw a failed activation.
  */
 test.describe('UX-1 role groups and exclusive surfaces', () => {
   test('the four role groups render in order with their hints', async ({ page }) => {
@@ -43,6 +43,7 @@ test.describe('UX-1 role groups and exclusive surfaces', () => {
   });
 
   test('checking a surface deactivates the surface that was on (one at a time)', async ({ page }) => {
+    await stubHeatRiskCatalog(page);
     // Console boot: this spec drives catalog checkboxes, and E1 deliverable 1
     // hides the Brief-mode catalog behind the console door.
     await gotoApp(page, '?view=console');
@@ -55,6 +56,8 @@ test.describe('UX-1 role groups and exclusive surfaces', () => {
 
     // Turning on HeatRisk must turn NADM off.
     await layerCheckbox(page, 'heatrisk').check();
+    await expect(layerPill(page, 'heatrisk')).toHaveText(PILL.live);
+    await expect(layerCheckbox(page, 'heatrisk')).toBeChecked();
     await expect(layerCheckbox(page, 'nadm-drought')).not.toBeChecked();
     await expect(layerCheckbox(page, 'heatrisk')).toBeChecked();
 
@@ -65,12 +68,7 @@ test.describe('UX-1 role groups and exclusive surfaces', () => {
       else await expect(cb).not.toBeChecked();
     }
 
-    // The URL tracks exactly one surface: NADM dropped, heatrisk present.
-    // heatrisk enters the URL only after its activate() resolves, which on a
-    // slow-upstream day legitimately exceeds the default 10-second expect
-    // ceiling (its metadata fetch alone carries a 10-second budget before the
-    // stay-on contract resolves it); 25 seconds matches waitForLayerSettled.
-    // (This exact poll flaked in CI on 2026-07-03 under the default ceiling.)
+    // The URL tracks exactly one settled surface: NADM dropped, HeatRisk present.
     await expect
       .poll(async () => (await urlLayers(page)).has('nadm-drought'), { timeout: 25_000 })
       .toBe(false);
@@ -80,7 +78,25 @@ test.describe('UX-1 role groups and exclusive surfaces', () => {
   });
 
   test('an old multi-surface link keeps the first surface named (usdm before heatrisk)', async ({ page }) => {
+    await page.route('**/USDM_current/**', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/geo+json',
+        body: JSON.stringify({
+          type: 'FeatureCollection',
+          features: [{
+            type: 'Feature',
+            properties: { DM: 3, MapDate: Date.now() },
+            geometry: {
+              type: 'Polygon',
+              coordinates: [[[-125, 42], [-116, 42], [-116, 49], [-125, 49], [-125, 42]]]
+            }
+          }]
+        })
+      })
+    );
     await gotoApp(page, '?layers=usdm,heatrisk,tribal,telemetry');
+    await expect(layerPill(page, 'usdm')).toHaveText(PILL.live);
 
     await expect(layerCheckbox(page, 'usdm')).toBeChecked();
     await expect(layerCheckbox(page, 'heatrisk')).not.toBeChecked();
@@ -104,6 +120,7 @@ test.describe('UX-1 role groups and exclusive surfaces', () => {
   });
 
   test('a surface deactivated by the exclusivity rule clears its status pill', async ({ page }) => {
+    await stubHeatRiskCatalog(page);
     // Console boot: drives a catalog checkbox (E1 deliverable 1 hides the
     // Brief-mode catalog behind the console door).
     await gotoApp(page, '?view=console');
@@ -115,6 +132,8 @@ test.describe('UX-1 role groups and exclusive surfaces', () => {
     // Turning on another surface deactivates NADM; an off layer has no load
     // status, so its pill returns to the empty pre-activation state.
     await layerCheckbox(page, 'heatrisk').check();
+    await expect(layerPill(page, 'heatrisk')).toHaveText(PILL.live);
+    await expect(layerCheckbox(page, 'heatrisk')).toBeChecked();
     await expect(layerPill(page, 'nadm-drought')).toBeEmpty();
   });
 });

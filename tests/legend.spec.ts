@@ -1,15 +1,15 @@
 import { test, expect } from './offline-test';
-import { gotoApp, layerCheckbox, waitForLayerSettled } from './helpers';
+import { gotoApp, layerCheckbox, layerPill, PILL, waitForLayerSettled } from './helpers';
+import { stubCpcDroughtOutlook } from './cpc-outlook-fixtures';
 
 /**
  * UX-3 unified legend registry: one panel whose sections are contributed by
  * the active layers, retiring the four ad-hoc per-layer panels.
  *
- * These specs drive layers whose legend appears synchronously on activate
- * (the drought and gridded-index raster surfaces, and the bundled-PMTiles
- * ecoregion reference), so the assertions do not couple to a live agency
- * fetch. The event legend (nifc-fires) is verified in the manual lane, where
- * its appearance depends on the upstream returning perimeters.
+ * The CPC Drought Outlook is answered from a deterministic vector fixture.
+ * Each case that enables it waits for a live layer before inspecting its legend.
+ * Ecoregions is a bundled PMTiles reference; the gridded-index cases exercise
+ * their own product controls.
  */
 
 /** The data-legend keys of the rendered sections, in DOM (visual) order. */
@@ -23,6 +23,7 @@ test.describe('UX-3 unified legend registry', () => {
   test('unifies the active surface and the ecoregion reference into one ordered panel', async ({
     page
   }) => {
+    await stubCpcDroughtOutlook(page);
     // Console boot: this spec drives catalog checkboxes, and E1 deliverable 1
     // hides the Brief-mode catalog behind the console door.
     await gotoApp(page, '?view=console');
@@ -30,9 +31,11 @@ test.describe('UX-3 unified legend registry', () => {
     // swap below (an in-flight activation could re-add its section).
     await waitForLayerSettled(page, 'nadm-drought');
 
-    // Turn on a raster surface (synchronous legend) and the bundled ecoregion
-    // reference (synchronous legend). The surface deactivates NADM.
+    // Turn on the fixture-backed outlook and the bundled ecoregion reference.
+    // The outlook surface deactivates NADM.
     await layerCheckbox(page, 'drought').check();
+    await expect(layerPill(page, 'drought')).toHaveText(PILL.live);
+    await expect(layerCheckbox(page, 'drought')).toBeChecked();
     await layerCheckbox(page, 'ecoregions').check();
 
     const panel = page.locator('#legend-panel');
@@ -55,9 +58,12 @@ test.describe('UX-3 unified legend registry', () => {
   });
 
   test('switching the surface swaps only the surface section', async ({ page }) => {
+    await stubCpcDroughtOutlook(page);
     await gotoApp(page, '?view=console'); // catalog-driving spec (E1 deliverable 1)
     await waitForLayerSettled(page, 'nadm-drought');
     await layerCheckbox(page, 'drought').check();
+    await expect(layerPill(page, 'drought')).toHaveText(PILL.live);
+    await expect(layerCheckbox(page, 'drought')).toBeChecked();
     await layerCheckbox(page, 'ecoregions').check();
     await expect.poll(() => sectionKeys(page)).toEqual(['drought', 'ecoregions']);
 
@@ -138,14 +144,18 @@ test.describe('UX-3 unified legend registry', () => {
   });
 
   test('the panel hides when the last legend layer is turned off', async ({ page }) => {
+    await stubCpcDroughtOutlook(page);
     await gotoApp(page, '?view=console'); // catalog-driving spec (E1 deliverable 1)
     await waitForLayerSettled(page, 'nadm-drought');
     await layerCheckbox(page, 'drought').check();
+    await expect(layerPill(page, 'drought')).toHaveText(PILL.live);
+    await expect(layerCheckbox(page, 'drought')).toBeChecked();
     await expect(page.locator('#legend-panel')).toBeVisible();
 
+    // Prove the settled outlook owns the only section before removing it.
+    await expect.poll(() => sectionKeys(page)).toEqual(['drought']);
     // Turning off the only legend-bearing layer leaves no section, so the panel
-    // hides rather than showing an empty legend. (Telemetry and Tribal, still
-    // on by default, carry no legend.)
+    // hides rather than showing an empty legend.
     await layerCheckbox(page, 'drought').uncheck();
     await expect(page.locator('#legend-panel')).toBeHidden();
     await expect(page.locator('#legend-sections .legend-section')).toHaveCount(0);

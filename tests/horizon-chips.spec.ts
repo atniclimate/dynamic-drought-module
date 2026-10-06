@@ -49,7 +49,7 @@ import type { EvidenceClass } from '../src/impact/types';
 import { renderClaim } from '../src/ui/claim-render';
 import { HAZARD_CLUSTER_KEYS, HAZARD_CLUSTERS, TEMPORAL_HORIZON_KEYS } from '../src/config/clusters';
 import { stubCpcDroughtOutlook } from './cpc-outlook-fixtures';
-import { gotoApp, PILL, search, stubHeatRiskCatalog, urlLayers } from './helpers';
+import { gotoApp, layerCheckbox, layerPill, PILL, search, stubHeatRiskCatalog, urlLayers } from './helpers';
 
 const SNAPSHOT_PATH = join(process.cwd(), 'public', 'data', 'enso-indices.json');
 
@@ -423,8 +423,18 @@ test.describe('DDM-P8-T03 clause 1: every horizon chip either changes the map or
   });
 
   test('a disabled chip is a refusal, not a silent no-op', async ({ page }) => {
+    await stubHeatRiskCatalog(page);
     await gotoApp(page, '?view=brief&layers=places');
     await page.locator('.shell-cluster-btn[data-cluster="heat"]').click();
+    // The retained Places layer makes this a custom set. Finish both successful
+    // activations before attributing any later layer change to the refused press.
+    await expect(layerPill(page, 'heatrisk')).toHaveText(PILL.live);
+    await expect(layerCheckbox(page, 'heatrisk')).toBeChecked();
+    await expect.poll(async () => (await urlLayers(page)).has('heatrisk')).toBe(true);
+    // The default NWS fixture is a successful empty response.
+    await expect(layerPill(page, 'nws-alerts')).toHaveClass(/\bno-data\b/);
+    await expect(layerCheckbox(page, 'nws-alerts')).toBeChecked();
+    await expect.poll(async () => (await urlLayers(page)).has('nws-alerts')).toBe(true);
     const season = page.locator('.shell-horizon-btn[data-horizon="season-ahead"]');
     await expect(season).toHaveAttribute('aria-disabled', 'true');
     const pressedBefore = await season.getAttribute('aria-pressed');

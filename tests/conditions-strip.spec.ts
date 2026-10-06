@@ -454,8 +454,27 @@ test.describe('the drought tile swatch (D1 M10)', () => {
     // the docked tile, not the sidebar's own copy, is what gets measured
     // (repair round on M10; predicted red without it: "element(s) not
     // found", since the node never moves into `#map-condition-indicator`).
+    await page.route('**/USDM_current/**', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/geo+json',
+        body: JSON.stringify({
+          type: 'FeatureCollection',
+          features: [{
+            type: 'Feature',
+            properties: { DM: 3, MapDate: Date.now() },
+            geometry: {
+              type: 'Polygon',
+              coordinates: [[[-125, 42], [-116, 42], [-116, 49], [-125, 49], [-125, 42]]]
+            }
+          }]
+        })
+      })
+    );
     await gotoApp(page, '?region=washington_state&layers=usdm&view=brief');
-    await waitForLayerSettled(page, 'usdm');
+    await expect(layerPill(page, 'usdm')).toHaveText(PILL.live);
+    await expect(layerCheckbox(page, 'usdm')).toBeChecked();
+    await expect.poll(async () => (await urlLayers(page)).has('usdm')).toBe(true);
     const drought = page.locator('#map-condition-indicator .conditions-metric[data-metric="drought"]');
     await expect(drought.locator('.conditions-value')).toHaveText('D3');
     const swatch = drought.locator('.conditions-swatch');

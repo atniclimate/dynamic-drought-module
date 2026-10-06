@@ -1,5 +1,5 @@
-import { test, expect } from './offline-test';
-import { gotoApp, search } from './helpers';
+import { test, expect, type Page } from './offline-test';
+import { gotoApp, layerCheckbox, layerPill, PILL, search, urlLayers } from './helpers';
 import {
   FRAMINGS,
   FRAMING_KEYS,
@@ -724,6 +724,32 @@ test.describe('framing coverage clauses render only where each is true', () => {
   const MEXICO_MINIMAP = 'North American Drought Monitor informs this minimap in Mexico';
   const MEXICO_BRIEFING = 'Place selection and local briefings are unavailable';
 
+  async function stubUsdmSurface(page: Page): Promise<void> {
+    // A successful US-scoped surface keeps the coverage clauses under test
+    // independent of failed custom-layer rollback at the offline boundary.
+    await page.route('**/USDM_current/**', (route) => route.fulfill({
+      status: 200,
+      contentType: 'application/geo+json',
+      body: JSON.stringify({
+        type: 'FeatureCollection',
+        features: [{
+          type: 'Feature',
+          properties: { DM: 3, MapDate: Date.now() },
+          geometry: {
+            type: 'Polygon',
+            coordinates: [[[-125, 42], [-116, 42], [-116, 49], [-125, 49], [-125, 42]]]
+          }
+        }]
+      })
+    }));
+  }
+
+  async function expectUsdmSurfaceActive(page: Page): Promise<void> {
+    await expect(layerPill(page, 'usdm')).toHaveText(PILL.live);
+    await expect(layerCheckbox(page, 'usdm')).toBeChecked();
+    await expect.poll(async () => (await urlLayers(page)).has('usdm')).toBe(true);
+  }
+
   test('the tri-national NADM surface is not told it fails to cover Mexico, while the clauses that stay true still render', async ({
     page,
   }) => {
@@ -747,7 +773,9 @@ test.describe('framing coverage clauses render only where each is true', () => {
   }) => {
     // The control for the case above. Without it, a fix that simply deleted
     // the sentence would pass just as well as one that gated it.
+    await stubUsdmSurface(page);
     await gotoApp(page, '?view=brief&layers=usdm&framing=mexico');
+    await expectUsdmSurfaceActive(page);
     const key = page.locator('#map-key');
     await expect(key).toContainText(MEXICO_DISPLAY);
     await expect(key).toContainText(MEXICO_MINIMAP);
@@ -759,7 +787,9 @@ test.describe('framing coverage clauses render only where each is true', () => {
     // Finding 5's second case. The widget is hidden in Console and its
     // retained drought and wildfire reads stop; a sentence about what
     // "informs this minimap" has no referent there.
+    await stubUsdmSurface(page);
     await gotoApp(page, '?view=console&layers=usdm&framing=mexico');
+    await expectUsdmSurfaceActive(page);
     await expect(page.locator('.shell-minimap-map')).toBeHidden();
     const key = page.locator('#map-key');
     await expect(key).not.toContainText(MEXICO_MINIMAP);
