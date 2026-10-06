@@ -98,6 +98,35 @@ export interface FlowView {
 
 const EMPTY: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
 
+/** A lost style can still hold native flow layers in MapLibre's saved snapshot. */
+const pendingRemovals = new WeakMap<MlMap, () => void>();
+
+function removeFlowLayers(map: MlMap): void {
+  for (const id of [...FLOW_LAYER_IDS].reverse()) if (map.getLayer(id)) map.removeLayer(id);
+  if (map.getSource(STILL_SOURCE_ID)) map.removeSource(STILL_SOURCE_ID);
+}
+
+/** This closure retains only the map and layer ids, never a disposed field or ribbon. */
+function removeFlowAfterRestore(map: MlMap): void {
+  if (pendingRemovals.has(map)) return;
+  const cancel = (): void => {
+    map.off('style.load', remove);
+    map.off('remove', cancel);
+    if (pendingRemovals.get(map) === cancel) pendingRemovals.delete(map);
+  };
+  const remove = (): void => {
+    // Evented.fire copies its listeners. off() cannot retract a callback
+    // already in that copy after an earlier listener mounted a successor.
+    if (pendingRemovals.get(map) !== cancel) return;
+    if (!map.getStyle()) return;
+    removeFlowLayers(map);
+    cancel();
+  };
+  pendingRemovals.set(map, cancel);
+  map.on('style.load', remove);
+  map.on('remove', cancel);
+}
+
 /**
  * The coverage of `view` by `field`: every grid node inside the view's
  * longitude and latitude box is visited once (at most the grid's own node
@@ -179,8 +208,11 @@ function widenedQuad(field: FlowField, view: ViewQuad): ViewQuad {
 
 /** Put `field` on `map` in the form the view and the motion state allow. */
 export function mountFlowView(map: MlMap, field: FlowField, options: FlowViewOptions): FlowView {
+  // A new view now owns these ids. An old deferred teardown must not erase it.
+  pendingRemovals.get(map)?.();
   const now = options.now ?? Date.now;
   let halted = false;
+  let disposed = false;
   let renders = 0;
   let rebuildTimer: ReturnType<typeof setTimeout> | null = null;
   let staleTimer: ReturnType<typeof setTimeout> | null = null;
@@ -210,11 +242,6 @@ export function mountFlowView(map: MlMap, field: FlowField, options: FlowViewOpt
       else layer.detach(map);
       return false;
     }
-  };
-  /** Remove every layer and the source this view added, whatever is left of them. */
-  const removeAll = (): void => {
-    for (const id of [...FLOW_LAYER_IDS].reverse()) if (map.getLayer(id)) map.removeLayer(id);
-    if (map.getSource(STILL_SOURCE_ID)) map.removeSource(STILL_SOURCE_ID);
   };
 
   // The moving form needs WebGL2 and its programs. If they fail here, at the
@@ -414,9 +441,12 @@ export function mountFlowView(map: MlMap, field: FlowField, options: FlowViewOpt
    * hand and no canvas listener keeps the field alive (review lead 1).
    */
   function dispose(): void {
+    if (disposed) return;
+    disposed = true;
     halt();
     const inStyle = map.getLayer(FLOW_PATHS_ID) !== undefined;
-    removeAll();
+    removeFlowLayers(map);
+    if (!map.getStyle()) removeFlowAfterRestore(map);
     if (ribbon && !inStyle) ribbon.detach(map);
     ribbon = null;
   }

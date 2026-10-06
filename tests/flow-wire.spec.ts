@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import type { Map as MlMap } from 'maplibre-gl';
 
 import { expect, test, type Locator, type Page, type Route } from './offline-test';
 
@@ -117,6 +118,27 @@ async function openKeyDrawer(page: Page): Promise<void> {
 const flowStatus = (page: Page): Locator => page.locator('#map-key [data-enso-flow="status"]');
 const flowNotes = (page: Page): Locator => page.locator('#map-key [data-enso-flow="notes"]');
 const flowProvenance = (page: Page): Locator => page.locator('#map-key [data-enso-flow="provenance"]');
+
+interface FlowRestoreWindow extends Window {
+  __flowRestoreMaps?: MlMap[];
+  __flowRestoreExtension?: WEBGL_lose_context;
+  __flowRestoreComplete?: boolean;
+}
+
+/** Observe the actual map constructor, as in flow-plumb; do not replace its methods. */
+async function captureFlowRestoreMap(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const maps: MlMap[] = [];
+    (window as FlowRestoreWindow).__flowRestoreMaps = maps;
+    Object.defineProperty(Object.prototype, '_onWindowOnline', {
+      configurable: true,
+      set(this: MlMap, value: unknown) {
+        Object.defineProperty(this, '_onWindowOnline', { configurable: true, enumerable: true, writable: true, value });
+        maps.push(this);
+      }
+    });
+  });
+}
 
 /** A dated instant in the page's own Intl, the panel's own format. */
 async function pageDate(page: Page, time: number): Promise<string> {
@@ -492,6 +514,61 @@ test.describe('E2-1 flowing paths in ENSO mode', () => {
     await expect(flowNotes(page)).not.toContainText(FLOW_WORDS.context);
     expect(noddStubLog(page), 'no refetch after the restore').toHaveLength(reads);
   });
+
+  for (const scenario of [
+    { kind: 'wind', action: 'off' }, { kind: 'waves', action: 'off' }, { kind: 'wind', action: 'leave' }
+  ] as const) {
+    test(`${scenario.kind}: ${scenario.action} while graphics are lost cannot restore old native flow marks`, async ({ page }) => {
+      await page.setViewportSize({ width: 1280, height: 800 });
+      await captureFlowRestoreMap(page);
+      await bootEnso(page, '', LIVE_CLOCK, 'live');
+      await choose(page, scenario.kind);
+      await expect(panel(page)).toHaveAttribute('data-flow-form', 'moving');
+      const pause = page.locator('#map-key-flow-pause');
+      await pause.click();
+      await expect(panel(page)).toHaveAttribute('data-flow-form', 'still');
+      expect(Number(await panel(page).getAttribute('data-flow-features'))).toBeGreaterThan(0);
+      await expect.poll(() => page.evaluate(() => {
+        const map = (window as FlowRestoreWindow).__flowRestoreMaps!.find((candidate) => candidate.getContainer().id === 'map')!;
+        return map.queryRenderedFeatures({ layers: ['flow-still', 'flow-still-marks'] }).length;
+      })).toBeGreaterThan(0);
+      const reads = noddStubLog(page).length;
+      await page.evaluate(() => {
+        const state = window as FlowRestoreWindow;
+        const map = state.__flowRestoreMaps!.find((candidate) => candidate.getContainer().id === 'map')!;
+        const extension = map.getCanvas().getContext('webgl2')!.getExtension('WEBGL_lose_context')!;
+        state.__flowRestoreExtension = extension;
+        extension.loseContext();
+      });
+      await expect.poll(() => page.evaluate(() => {
+        const map = (window as FlowRestoreWindow).__flowRestoreMaps!.find((candidate) => candidate.getContainer().id === 'map')!;
+        return map.getStyle() === undefined;
+      })).toBe(true);
+      if (scenario.action === 'off') {
+        await choose(page, 'off');
+        await expect(panel(page)).toHaveAttribute('data-status', 'off');
+      } else {
+        await page.locator('.shell-cluster-btn[data-cluster="drought"]').click();
+        await expect(page.locator('.shell-cluster-btn[data-cluster="drought"]')).toHaveAttribute('aria-pressed', 'true');
+      }
+      await page.evaluate(() => {
+        const state = window as FlowRestoreWindow;
+        const map = state.__flowRestoreMaps!.find((candidate) => candidate.getContainer().id === 'map')!;
+        state.__flowRestoreComplete = false;
+        map.once('style.load', () => { state.__flowRestoreComplete = true; });
+        state.__flowRestoreExtension!.restoreContext();
+      });
+      await expect.poll(() => page.evaluate(() => (window as FlowRestoreWindow).__flowRestoreComplete)).toBe(true);
+      await expect.poll(() => page.evaluate(() => {
+        const map = (window as FlowRestoreWindow).__flowRestoreMaps!.find((candidate) => candidate.getContainer().id === 'map')!;
+        return {
+          source: Boolean(map.getSource('flow-still')),
+          layers: map.getStyle().layers.filter((layer) => layer.id.startsWith('flow-')).map((layer) => layer.id)
+        };
+      })).toEqual({ source: false, layers: [] });
+      expect(noddStubLog(page), 'restoration after Off or mode exit does not refetch the old frame').toHaveLength(reads);
+    });
+  }
 
   /**
    * Zoom the map in with MapLibre's own keyboard handler ("=" zooms to the

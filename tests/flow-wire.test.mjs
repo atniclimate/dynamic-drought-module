@@ -180,6 +180,8 @@ function fakeMap(lon, lat, zoom, { w = 1440, h = 900, gl = fakeGl(), throwOnLaye
   };
   const sources = new Map();
   let layers = [];
+  let stylePresent = true;
+  let lostStyle = null;
   const events = new Map();
   const map = {
     canvasListeners, sources, events, repaints: 0,
@@ -188,6 +190,26 @@ function fakeMap(lon, lat, zoom, { w = 1440, h = 900, gl = fakeGl(), throwOnLaye
     eventCount: () => [...events.values()].reduce((n, set) => n + set.size, 0),
     /** MapLibre 6.6 on a lost context: the style goes, custom layers with it, onRemove never runs. */
     dropStyle: () => { layers = []; sources.clear(); },
+    /** Installed MapLibre map.ts:4125-4172 serializes native data before dropping the style. */
+    loseContext: () => {
+      lostStyle = {
+        layers: structuredClone(layers.filter((layer) => layer.type !== 'custom')),
+        sources: [...sources].map(([id, source]) => [id, structuredClone({ ...source.spec, data: source.data })])
+      };
+      map.dropStyle();
+      stylePresent = false;
+      map.emit('webglcontextlost');
+    },
+    restoreContext: (beforeStyleLoad = () => {}) => {
+      stylePresent = true;
+      layers = lostStyle.layers;
+      for (const [id, spec] of lostStyle.sources) map.addSource(id, spec);
+      lostStyle = null;
+      map.emit('webglcontextrestored');
+      beforeStyleLoad();
+      map.emit('style.load');
+    },
+    emit: (type) => { for (const fn of [...(events.get(type) ?? [])]) fn(); },
     camera: () => ({ lon, lat, zoom, w, h }),
     /** Jump the camera and fire moveend, as MapLibre does after a move. */
     moveTo: (nextLon, nextLat, nextZoom) => {
@@ -232,7 +254,7 @@ function fakeMap(lon, lat, zoom, { w = 1440, h = 900, gl = fakeGl(), throwOnLaye
       if (i < 0) layers.push(layer);
       else layers.splice(i, 0, layer);
     },
-    getStyle: () => ({ layers }),
+    getStyle: () => stylePresent ? { layers } : undefined,
     setPaintProperty() {},
     on: (type, fn) => {
       if (!events.has(type)) events.set(type, new Set());
@@ -387,6 +409,87 @@ test('dispose while the ribbon is out of the style (a lost context) leaves no li
   flow.dispose();
   assert.equal(map.canvasListenerCount(), 0, 'no canvas listener left (the ribbon detached itself)');
   assert.equal(map.eventCount(), 0, 'no map listener left');
+});
+
+test('Off while graphics are lost removes the saved native still layers when the style returns', () => {
+  const map = fakeMap(-145, 26, 3);
+  const flow = mount(map, uniform('wind', GLOBAL_1P00));
+  window.dispatchEvent(new CustomEvent(MOTION_REQUEST_EVENT, { detail: { paused: true } }));
+  assert.equal(flow.state.form, 'still');
+  assert.ok(map.getSource('flow-still').data.features.length > 0, 'the saved native source contains real marks');
+  map.loseContext();
+  assert.equal(map.getStyle(), undefined);
+  // Reset the test's shared preference after the native snapshot was saved.
+  window.dispatchEvent(new CustomEvent(MOTION_REQUEST_EVENT, { detail: { paused: false } }));
+  flow.dispose();
+  assert.equal(map.canvasListenerCount(), 0, 'no canvas listener retains the disposed field');
+  map.restoreContext();
+  assert.deepEqual(map.layerIds().filter((id) => id.startsWith('flow-')), [], 'no restored flow layers after Off');
+  assert.equal(map.getSource('flow-still'), undefined, 'no restored native source after Off');
+  assert.equal(map.eventCount(), 0, 'restoration cleanup releases every map listener');
+});
+
+test('a successor mounted before restored style.load retains its layers and data', () => {
+  const map = fakeMap(-145, 26, 3);
+  const old = mount(map, uniform('wind', GLOBAL_1P00));
+  window.dispatchEvent(new CustomEvent(MOTION_REQUEST_EVENT, { detail: { paused: true } }));
+  map.loseContext();
+  window.dispatchEvent(new CustomEvent(MOTION_REQUEST_EVENT, { detail: { paused: false } }));
+  old.dispose();
+  let current;
+  map.restoreContext(() => {
+    current = mount(map, uniform('waves', WAVE_CROP));
+    window.dispatchEvent(new CustomEvent(MOTION_REQUEST_EVENT, { detail: { paused: true } }));
+  });
+  try {
+    assert.ok(map.getLayer(FLOW_PATHS_ID), 'successor ribbon remains');
+    assert.equal(current.state.form, 'still');
+    assert.ok(map.getSource('flow-still').data.features.length > 0, 'successor has visible marks');
+    const source = map.getSource('flow-still');
+    old.dispose();
+    assert.ok(map.getSource('flow-still') === source, 'repeated old disposal cannot remove a successor');
+    assert.ok(map.getLayer(FLOW_PATHS_ID));
+  } finally {
+    window.dispatchEvent(new CustomEvent(MOTION_REQUEST_EVENT, { detail: { paused: false } }));
+    current?.dispose();
+  }
+  assert.equal(map.eventCount(), 0);
+});
+
+test('removing a map before graphics restore releases deferred disposal listeners', () => {
+  const map = fakeMap(-145, 26, 3);
+  const flow = mount(map, uniform('wind', GLOBAL_1P00));
+  map.loseContext();
+  flow.dispose();
+  map.emit('remove');
+  assert.equal(map.eventCount(), 0);
+  assert.equal(map.canvasListenerCount(), 0);
+});
+
+test('a cancelled cleanup already copied into style.load dispatch cannot remove a successor', () => {
+  const map = fakeMap(-145, 26, 3);
+  const old = mount(map, uniform('wind', GLOBAL_1P00));
+  let current;
+  const replace = () => {
+    map.off('style.load', replace);
+    current = mount(map, uniform('waves', WAVE_CROP));
+    window.dispatchEvent(new CustomEvent(MOTION_REQUEST_EVENT, { detail: { paused: true } }));
+  };
+  // MapLibre Evented.fire iterates a copied array. This earlier listener takes
+  // ownership after that copy, so off() alone cannot retire the old callback.
+  map.on('style.load', replace);
+  map.loseContext();
+  old.dispose();
+  try {
+    map.restoreContext();
+    assert.ok(map.getSource('flow-still'), 'successor source survives the old dispatch snapshot');
+    assert.ok(map.getLayer(FLOW_PATHS_ID), 'successor ribbon survives the old dispatch snapshot');
+    assert.ok(map.getSource('flow-still').data.features.length > 0, 'successor still marks remain');
+  } finally {
+    window.dispatchEvent(new CustomEvent(MOTION_REQUEST_EVENT, { detail: { paused: false } }));
+    current?.dispose();
+  }
+  assert.equal(map.eventCount(), 0);
 });
 
 // --- review lead 5: a mount that throws part way ------------------------------
