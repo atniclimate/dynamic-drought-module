@@ -1,194 +1,187 @@
 /**
- * Config-level proof (DDM-P15-T08, ROADMAP.yaml DDM-P15-T08 clause 4):
- * `npm test` and `npm run test:serial` cannot collect
- * tests/mode-switch-cost.spec.ts, and `npm run measure:mode-switch` collects
- * nothing else. Since ENSO-FLOW-PLAN E2-2 the same holds for the flowing
- * paths' tests/flow-measure.spec.ts and `npm run measure:flow`: both specs
- * live in the chromium-measure project (MEASURE_SPECS), so each script names
- * its own spec.
+ * Config/file-routing proof (DDM-P15-T08 and ENSO-FLOW-PLAN E2-2).
+ * Ordinary scripts exclude both measurement specs; each measurement script
+ * selects only its own file. This is the config-object fallback anticipated by
+ * the former --list checks, whose repeated spec collection exceeded their 20 s
+ * assumption. Import the actual config once; never start a CLI, collect test
+ * declarations, launch a browser or start its webServer here.
  *
- * package.json's `test` and `test:serial` used to be bare `playwright test`
- * invocations, which collect every project, including `chromium-measure`
- * (playwright.config.ts's fourth project, added for DDM-P14-T08's
- * mode-switch measurement alone). Route A (smallest, per the DDM-P15-T08
- * brief): both scripts now name
- * `--project=chromium --project=chromium-interaction --project=chromium-3d`
- * explicitly, the same three projects CI's fixed matrix names
- * (.github/workflows/browser-suite.yml); playwright.config.ts is unchanged.
- *
- * Two checks: (1) the script text itself names exactly the right projects
- * and never chromium-measure, and `measure:mode-switch` names only
- * chromium-measure; (2) `playwright test --list` (collects without a build
- * or a browser) run with each script's own project flags actually
- * excludes/includes the measurement spec. If `--list` ever starts the
- * webServer or grows past about twenty seconds, this file would need to
- * fall back to parsing playwright.config.ts's `MEASURE_SPECS` and project
- * names instead of shelling out; measured at write time (2026-09-12) it took
- * low single-digit seconds and started no server, so that fallback is not
- * implemented.
+ * Keep this proof deliberately narrow: literal spec lists, the current default
+ * match and test directory, and explicit script arguments. A broader pattern,
+ * dependency or filter fails closed until this proof covers its semantics.
+ * Actual test registration and execution remain the browser lanes' job.
  */
-
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
-import { readFile } from 'node:fs/promises';
-import { createRequire } from 'node:module';
-import { dirname, join } from 'node:path';
+import { readFileSync, statSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
+import config from '../playwright.config.ts';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const THREE_PROJECTS = ['chromium', 'chromium-interaction', 'chromium-3d'];
-const LIST_BUDGET_MS = 20_000;
-
-async function readPkg() {
-  return JSON.parse(await readFile(join(ROOT, 'package.json'), 'utf8'));
-}
-
-function projectFlagsIn(script) {
-  return [...script.matchAll(/--project=(\S+)/g)].map((m) => m[1]);
-}
-
-test('test and test:serial name exactly the three CI projects, never chromium-measure', async () => {
-  const pkg = await readPkg();
-  for (const name of ['test', 'test:serial']) {
-    const script = pkg.scripts[name];
-    assert.ok(script, `${name} script is missing`);
-    assert.deepEqual(
-      projectFlagsIn(script),
-      THREE_PROJECTS,
-      `${name} must name exactly ${THREE_PROJECTS.join(', ')}, in order`
-    );
-    assert.doesNotMatch(script, /chromium-measure/, `${name} must never name chromium-measure`);
-  }
-});
-
-test('measure:mode-switch names only chromium-measure', async () => {
-  const pkg = await readPkg();
-  const script = pkg.scripts['measure:mode-switch'];
-  assert.ok(script, 'measure:mode-switch script is missing');
-  assert.deepEqual(
-    projectFlagsIn(script),
-    ['chromium-measure'],
-    'measure:mode-switch must name only chromium-measure'
-  );
-});
-
-/*
- * ENSO-FLOW-PLAN E2-2: the flowing paths' measure spec joins MEASURE_SPECS
- * (playwright.config.ts), so the chromium-measure project now holds two
- * specs and each `measure:*` script must name its own spec, or running one
- * measurement would run (and, for the mode-switch spec, possibly write the
- * committed docs record of) the other.
- */
 const MEASURE_SCRIPTS = [
   ['measure:mode-switch', 'tests/mode-switch-cost.spec.ts'],
   ['measure:flow', 'tests/flow-measure.spec.ts']
 ];
+const MEASURE_FILES = MEASURE_SCRIPTS.map(([, spec]) => spec.slice('tests/'.length));
+const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
 
-function specArgsIn(script) {
-  return [...script.matchAll(/(?:^|\s)(tests\/\S+\.spec\.ts)(?=\s|$)/g)].map((m) => m[1]);
+function scriptArgs(script, label) {
+  assert.equal(typeof script, 'string', `${label} script is missing`);
+  const words = script.trim().split(/\s+/);
+  assert.deepEqual(words.splice(0, 2), ['playwright', 'test'], `${label}: direct default-config invocation`);
+  // Fail closed on shell syntax, alternate config, grep, shard, positional
+  // patterns or any other argument this file-routing proof does not cover.
+  for (const word of words) {
+    assert.match(word, /^(?:--project=[a-z0-9-]+|--workers=1|--reporter=list|tests\/[a-z0-9-]+\.spec\.ts)$/, `${label}: unsupported argument ${word}`);
+  }
+  return {
+    projects: words.filter((word) => word.startsWith('--project=')).map((word) => word.slice('--project='.length)),
+    files: words.filter((word) => word.startsWith('tests/')),
+    words
+  };
 }
 
-test('measure:mode-switch and measure:flow each name only chromium-measure and only their own spec', async () => {
-  const pkg = await readPkg();
+function proveScripts(scripts) {
+  for (const name of ['test', 'test:serial']) {
+    const args = scriptArgs(scripts[name], name);
+    assert.deepEqual(args.projects, THREE_PROJECTS, `${name}: exactly the three CI projects, in order`);
+    assert.deepEqual(args.files, [], `${name}: no narrowed ordinary file selection`);
+  }
   for (const [name, spec] of MEASURE_SCRIPTS) {
-    const script = pkg.scripts[name];
-    assert.ok(script, `${name} script is missing`);
-    assert.deepEqual(projectFlagsIn(script), ['chromium-measure'], `${name} must name only chromium-measure`);
-    assert.deepEqual(specArgsIn(script), [spec], `${name} must name only ${spec}`);
+    const args = scriptArgs(scripts[name], name);
+    assert.deepEqual(args.projects, ['chromium-measure'], `${name}: only chromium-measure`);
+    assert.deepEqual(args.files, [spec], `${name}: only its own spec`);
   }
-  assert.match(pkg.scripts['measure:flow'], /--workers=1/, 'measure:flow runs one worker (one measurement at a time)');
-});
-
-/**
- * Resolve the Playwright CLI from this project's own installed
- * `@playwright/test` package: the same doctrine
- * tests/types/check-context-literal-typo.mjs uses for `tsc` (no global
- * binary, no PATH guess, this process's own node).
- */
-function resolvePlaywrightCli() {
-  const require = createRequire(join(ROOT, 'package.json'));
-  const pkgPath = require.resolve('@playwright/test/package.json');
-  const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
-  const binRelative = typeof pkg.bin === 'string' ? pkg.bin : pkg.bin?.playwright;
-  assert.ok(binRelative, '@playwright/test package.json declares no "playwright" bin entry');
-  return join(dirname(pkgPath), binRelative);
+  assert.ok(scriptArgs(scripts['measure:flow'], 'measure:flow').words.includes('--workers=1'), 'measure:flow runs one worker');
 }
 
-function listSpecs(projectFlags, files = []) {
-  const cli = resolvePlaywrightCli();
-  const started = Date.now();
-  const result = spawnSync(
-    process.execPath,
-    // Files before --project: the CLI's --project takes every argument after it.
-    [cli, 'test', '--list', ...files, ...projectFlags.flatMap((p) => ['--project', p])],
-    { cwd: ROOT, encoding: 'utf8', windowsHide: true, timeout: 30_000 }
-  );
-  const elapsedMs = Date.now() - started;
-  if (result.error) {
-    assert.fail(`playwright --list (${projectFlags.join(',')}) could not run: ${result.error.message}`);
-  }
-  assert.equal(
-    result.status,
-    0,
-    `playwright --list (${projectFlags.join(',')}) exited ${result.status}: ${result.stderr}`
-  );
-  assert.ok(
-    elapsedMs < LIST_BUDGET_MS,
-    `playwright --list (${projectFlags.join(',')}) took ${elapsedMs}ms, over the ~${LIST_BUDGET_MS}ms budget ` +
-      'this test assumes (no webServer, no browser); this config-level proof needs the ' +
-      'playwright.config.ts-parsing fallback described in this file\'s header if that budget stops holding'
-  );
-  return { lines: (result.stdout ?? '').split(/\r?\n/), elapsedMs };
+function literalFiles(patterns, label) {
+  assert.ok(Array.isArray(patterns) && patterns.length > 0, `${label}: nonempty literal spec list`);
+  return patterns.map((pattern) => {
+    assert.equal(typeof pattern, 'string', `${label}: string pattern`);
+    const match = /^\*\*\/([a-z0-9-]+\.spec\.ts)$/.exec(pattern);
+    assert.ok(match, `${label}: unsupported nonliteral pattern ${pattern}`);
+    return match[1];
+  });
 }
 
-test('playwright test --list with the test script projects never lists mode-switch-cost.spec.ts', () => {
-  const { lines, elapsedMs } = listSpecs(THREE_PROJECTS);
-  console.log(`playwright --list (${THREE_PROJECTS.join(',')}) took ${elapsedMs}ms`);
-  const hit = lines.find((line) => line.includes('mode-switch-cost.spec.ts'));
-  assert.equal(hit, undefined, `mode-switch-cost.spec.ts is collected by the test script's own projects: ${hit}`);
-});
-
-test('playwright test --list --project=chromium-measure lists the two measure specs and nothing else', () => {
-  // E2-2: this case used to say "mode-switch-cost.spec.ts and nothing else".
-  // The project now holds the flowing paths' measure spec too (MEASURE_SPECS),
-  // so the assertion it still makes is the one it guards: the measure project
-  // collects exactly the measure specs and no ordinary spec.
-  const { lines, elapsedMs } = listSpecs(['chromium-measure']);
-  console.log(`playwright --list (chromium-measure) took ${elapsedMs}ms`);
-  const specLines = lines.filter((line) => line.trim().startsWith('['));
-  assert.ok(specLines.length > 0, 'chromium-measure listed no tests at all');
-  for (const line of specLines) {
-    assert.match(
-      line,
-      /mode-switch-cost\.spec\.ts|flow-measure\.spec\.ts/,
-      `chromium-measure listed a spec that is not a measure spec: ${line}`
-    );
+function proveConfig(candidate) {
+  assert.equal(resolve(ROOT, candidate.testDir ?? ''), resolve(ROOT, 'tests'), 'root testDir stays tests');
+  assert.equal(candidate.testMatch, undefined, 'root retains the default .spec.ts match');
+  assert.equal(candidate.testIgnore, undefined, 'root has no unexamined ignore');
+  for (const owner of [candidate, ...candidate.projects]) {
+    for (const key of ['grep', 'grepInvert', 'dependencies', 'teardown']) {
+      assert.equal(owner[key], undefined, `${owner.name ?? 'root'}: no unexamined ${key}`);
+    }
+    assert.notEqual(owner.respectGitIgnore, true, 'explicit testDir is not narrowed by gitignore');
   }
-  assert.ok(specLines.some((l) => /mode-switch-cost\.spec\.ts/.test(l)), 'chromium-measure lists the mode-switch spec');
-  assert.ok(specLines.some((l) => /flow-measure\.spec\.ts/.test(l)), 'chromium-measure lists the flow spec');
-});
-
-test('playwright test --list with the test script projects never lists flow-measure.spec.ts', () => {
-  const { lines, elapsedMs } = listSpecs(THREE_PROJECTS);
-  console.log(`playwright --list (${THREE_PROJECTS.join(',')}, flow) took ${elapsedMs}ms`);
-  const hit = lines.find((line) => line.includes('flow-measure.spec.ts'));
-  assert.equal(hit, undefined, `flow-measure.spec.ts is collected by the test script's own projects: ${hit}`);
-});
-
-test('measure:mode-switch collects only the mode-switch spec and measure:flow only the flow spec', async () => {
-  const pkg = await readPkg();
-  for (const [name, spec] of MEASURE_SCRIPTS) {
-    const script = pkg.scripts[name];
-    assert.ok(script, `${name} script is missing`);
-    // The script's own project and spec arguments, as the CLI would receive them.
-    const { lines, elapsedMs } = listSpecs(projectFlagsIn(script), specArgsIn(script));
-    console.log(`playwright --list (${name}) took ${elapsedMs}ms`);
-    const specLines = lines.filter((line) => line.trim().startsWith('['));
-    assert.ok(specLines.length > 0, `${name} collects no tests at all`);
-    for (const line of specLines) {
-      assert.ok(line.includes(spec.replace('tests/', '')), `${name} collected a spec other than ${spec}: ${line}`);
+  assert.deepEqual(candidate.projects.map((project) => project.name), [...THREE_PROJECTS, 'chromium-measure'], 'exact named projects');
+  for (const project of candidate.projects) {
+    assert.equal(resolve(ROOT, project.testDir ?? candidate.testDir), resolve(ROOT, 'tests'), `${project.name}: shared testDir`);
+    if (project.name === 'chromium') {
+      assert.equal(project.testMatch, undefined, 'chromium retains its default .spec.ts match');
+      assert.ok(Array.isArray(project.testIgnore), 'chromium uses an explicit ignore list');
+      for (const file of MEASURE_FILES) {
+        assert.ok(project.testIgnore.includes(`**/${file}`), `chromium explicitly ignores ${file}`);
+      }
+    } else {
+      const files = literalFiles(project.testMatch, project.name);
+      if (project.name === 'chromium-measure') {
+        assert.deepEqual([...files].sort(), [...MEASURE_FILES].sort(), 'measurement project matches exactly both measurement files');
+        // This is the only broad ignore admitted by this narrow proof. It
+        // cannot match either .spec.ts file. Other ignores must be literal.
+        for (const ignore of project.testIgnore ?? []) {
+          if (ignore === '**/*.test.mjs') continue;
+          const [file] = literalFiles([ignore], 'measurement ignore');
+          assert.ok(!MEASURE_FILES.includes(file), `measurement file is ignored: ${file}`);
+        }
+      } else {
+        assert.ok(files.every((file) => !MEASURE_FILES.includes(file)), `${project.name}: measurement files excluded`);
+      }
     }
   }
+}
+
+test('ordinary and measurement scripts retain exact projects and file selections', () => {
+  proveScripts(pkg.scripts);
+});
+
+test('actual config isolates both measurement files from all ordinary projects', () => {
+  proveConfig(config);
+  for (const [, spec] of MEASURE_SCRIPTS) {
+    assert.ok(statSync(join(ROOT, spec)).isFile(), `${spec} exists as a real spec file`);
+  }
+});
+
+function changedProject(name, change) {
+  return {
+    ...config,
+    projects: config.projects.map((project) => project.name === name ? { ...project, ...change(project) } : project)
+  };
+}
+
+for (const file of MEASURE_FILES) {
+  test(`mutation control: losing the ordinary ignore for ${file} is rejected`, () => {
+    const changed = changedProject('chromium', (project) => ({ testIgnore: project.testIgnore.filter((pattern) => pattern !== `**/${file}`) }));
+    assert.throws(() => proveConfig(changed), /chromium explicitly ignores/);
+  });
+}
+
+for (const [name, match] of [
+  ['broadened', ['**/*.spec.ts']],
+  ['empty', []],
+  ['incomplete', ['**/mode-switch-cost.spec.ts']],
+  ['extra ordinary file', ['**/mode-switch-cost.spec.ts', '**/flow-measure.spec.ts', '**/popup-viewport.spec.ts']]
+]) {
+  test(`mutation control: ${name} measurement match is rejected`, () => {
+    assert.throws(() => proveConfig(changedProject('chromium-measure', () => ({ testMatch: match }))), /literal|exactly both/);
+  });
+}
+
+for (const ignore of ['**/flow-measure.spec.ts', '**/*.spec.ts', /measure/]) {
+  test(`mutation control: excluding a measurement through ${ignore} is rejected`, () => {
+    assert.throws(() => proveConfig(changedProject('chromium-measure', () => ({ testIgnore: [ignore] }))), /ignored|nonliteral|string pattern/);
+  });
+}
+
+for (const name of ['chromium-interaction', 'chromium-3d']) {
+  test(`mutation control: ${name} cannot broaden or include a measurement`, () => {
+    for (const testMatch of [['**/*.spec.ts'], ['**/flow-measure.spec.ts']]) {
+      assert.throws(() => proveConfig(changedProject(name, () => ({ testMatch }))), /nonliteral|measurement files excluded/);
+    }
+  });
+}
+
+test('mutation control: config directory, defaults, dependencies and project drift fail closed', () => {
+  for (const change of [
+    { testDir: './other-tests' },
+    { testMatch: '**/nothing.spec.ts' },
+    { testIgnore: '**/*.spec.ts' },
+    { grep: /nothing/ },
+    { projects: config.projects.slice(1) }
+  ]) assert.throws(() => proveConfig({ ...config, ...change }));
+  for (const change of [
+    { testDir: './other-tests' },
+    { testIgnore: '**/mode-switch-cost.spec.ts **/flow-measure.spec.ts' },
+    { dependencies: ['chromium-measure'] },
+    { teardown: 'chromium-measure' },
+    { grepInvert: /.*/ },
+    { respectGitIgnore: true }
+  ]) assert.throws(() => proveConfig(changedProject('chromium', () => change)));
+});
+
+test('mutation control: script project, spec, config and extra-filter drift fail closed', () => {
+  for (const [name, script] of [
+    ['test', 'playwright test'],
+    ['test', `${pkg.scripts.test} --project=chromium-measure`],
+    ['test', `${pkg.scripts.test} tests/popup-viewport.spec.ts`],
+    ['test', `${pkg.scripts.test} --config=other.ts`],
+    ['test', `${pkg.scripts.test} --grep=nothing`],
+    ['test', `${pkg.scripts.test} && playwright test`],
+    ['measure:flow', 'playwright test --project=chromium-measure --workers=1'],
+    ['measure:flow', `${pkg.scripts['measure:flow']} tests/mode-switch-cost.spec.ts`],
+    ['measure:flow', pkg.scripts['measure:flow'].replace('--workers=1', '')]
+  ]) assert.throws(() => proveScripts({ ...pkg.scripts, [name]: script }), `${name}: ${script}`);
 });
