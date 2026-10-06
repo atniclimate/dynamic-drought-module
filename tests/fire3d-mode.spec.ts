@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page, type Route } from '@playwright/test';
 
 import {
   FIRE3D_CAMERA_TRANSITION_MS,
@@ -1506,98 +1506,124 @@ function fire3dTransportStamp(page: Page): Promise<string | undefined> {
 }
 
 /**
- * The page's own requests, counted on the Node side. A frozen page cannot
- * report its own traffic, but the browser process can: this keeps counting
- * while the page's main thread is blocked (S30D B3 CI3).
+ * How long a single read may stay unanswered before the wait stops charging
+ * it. Playwright reads the page on its main thread, so a read that is still
+ * out after this long was waiting on a page that could not run, not on an
+ * app that ran and had not got there yet.
+ *
+ * Measured on GitHub's software renderer (S30D B6-3D, the retry traces of
+ * runs 37238546758, 37317297848 and 37347470195, chromium-3d shard 2): one
+ * stamp read took 14.9 s and a legend read 15.3 s, a click 21.3 and 37.1 s,
+ * an uncheck 25.8 and 41.7 s, a locator count 21.4 and 35.2 s, while every
+ * answered read around them took 10 to 600 ms. An `expect.poll` charges that
+ * frozen time to its budget: its 10 and 30 s deadlines fired while a read was
+ * still out, and the read that came back afterwards held the expected value
+ * (the context stamp) or the page had simply not run since the gesture (the
+ * ribbon stamp, read once as `on` 70 ms after a 41.7 s uncheck, then frozen
+ * again for 35.6 s).
  */
-interface SceneTraffic {
-  /** Requests started and not yet finished or failed. */
-  open: number;
-  /** Date.now() of the last request start, finish or failure. */
-  lastActivityAt: number;
-}
-
-/** Register BEFORE the first boot. */
-function trackSceneTraffic(page: Page): SceneTraffic {
-  const traffic: SceneTraffic = { open: 0, lastActivityAt: Date.now() };
-  const tracked = new Set<unknown>();
-  const end = (request: unknown): void => {
-    if (!tracked.delete(request)) return;
-    traffic.open -= 1;
-    traffic.lastActivityAt = Date.now();
-  };
-  page.on('request', (request) => {
-    tracked.add(request);
-    traffic.open += 1;
-    traffic.lastActivityAt = Date.now();
-  });
-  page.on('requestfinished', end);
-  page.on('requestfailed', end);
-  return traffic;
-}
-
-/** One 1x1 readback on the map's own context: it returns only when the
- * software renderer has drawn every frame queued before it. Returns how long
- * the page was blocked, on the page's clock. */
-function drainDrawQueue(page: Page): Promise<number> {
-  return page.evaluate(() => {
-    const started = performance.now();
-    const canvas = document.querySelector('canvas.maplibregl-canvas') as HTMLCanvasElement | null;
-    const gl = (canvas?.getContext('webgl2') ?? canvas?.getContext('webgl')) as WebGLRenderingContext | null;
-    gl?.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(4));
-    return Math.round(performance.now() - started);
-  });
-}
-
-/** A drain faster than this found the queue empty (measured 2026-10-05,
- * reduced motion: 1, 13 and 244 ms once quiet; 1.7 to 2.3 s while the pulse
- * kept refilling it). */
-const SCENE_DRAIN_EMPTY_MS = 300;
-/** No request started or ended for this long counts as quiet traffic. */
-const SCENE_QUIET_MS = 1500;
-/** Rounds of drain then quiet before the scene is called busy for good
- * (measured: 2 to 4 rounds under reduced motion at 1x, 4x and 6x CPU). */
-const SCENE_SETTLE_ROUNDS = 8;
+const UNANSWERED_READ_CHARGE_MS = 1_000;
+/** The pause between reads, charged in full. */
+const ANSWERED_POLL_INTERVAL_MS = 250;
 
 /**
- * Wait until the 3D scene has stopped using the page, so a layer switched on
- * next starts its first activation outside the scene's startup stall. It
- * decides from what it can measure instead of from the scene's own
- * `transport` stamp, and it has no wall-clock deadline that a slow runner
- * could decide: it drains the software renderer's draw queue (the readback
- * returns when the queue is empty, however long that takes), then waits for
- * the network to go quiet, then drains again, until a drain finds the queue
- * empty and nothing was requested since before it began.
- *
- * Why not the stamp (measured 2026-10-05, S30D B3 CI3, in the scratch
- * diagnostics of that unit): GitHub's retry trace had the page frozen 22.5
- * and 32.4 s inside the 60 s stamp poll, so the poll could not finish; and in
- * 1 of 18 local runs the stamp read `streaming` for 180 s over a page with
- * almost no traffic (REGISTER baseline-007's open question). The RAWS marker
- * case still waits on the stamp, as before. The drain is the RAWS case's own
- * recipe (its comment at the `fire3dTransportStamp` wait carries the first
- * measurements: 5.8 to 11.9 s on a settled scene). It converges only when
- * nothing refills the queue, so a caller runs with reduced motion (the
- * wildfire pulse queues a pitch-60 frame every 500 ms: with it, 8 rounds of
- * 1.7 to 2.3 s drains never converged).
+ * Wait until `read` returns a value `accept` takes, with a budget the app
+ * spends and a frozen page does not. Every pause between reads is charged in
+ * full, and every read is charged its own duration up to
+ * UNANSWERED_READ_CHARGE_MS, so on a page that answers this is the wall-clock
+ * wait it replaces, budget for budget, and on a page whose main thread is
+ * blocked by the software renderer the blocked time is not charged. A state
+ * the app never reaches on a page that keeps answering still fails at the
+ * same budget, and its message names the last value, the charged and
+ * wall-clock times, and the longest read, so a failure says whether the app
+ * or the renderer was slow. A page that never answers again is caught by the
+ * test's own timeout.
  */
-async function waitForSceneToSettle(page: Page, traffic: SceneTraffic): Promise<void> {
-  const rounds: string[] = [];
-  for (let round = 0; round < SCENE_SETTLE_ROUNDS; round += 1) {
-    const startedAt = Date.now();
-    const drainMs = await drainDrawQueue(page);
-    await expect
-      .poll(() => traffic.open <= 0 && Date.now() - traffic.lastActivityAt >= SCENE_QUIET_MS, {
-        message: 'the 3D scene kept requesting tiles',
-        timeout: 30_000,
-        intervals: [250]
-      })
-      .toBe(true);
-    const quietSinceBefore = traffic.lastActivityAt < startedAt;
-    rounds.push(`drain ${drainMs} ms, ${quietSinceBefore ? 'no traffic' : 'traffic'}`);
-    if (drainMs < SCENE_DRAIN_EMPTY_MS && quietSinceBefore) return;
+async function untilAnswered<T>(
+  read: () => Promise<T>,
+  accept: (value: T) => boolean,
+  budgetMs: number,
+  what: string
+): Promise<T> {
+  const startedAt = Date.now();
+  let charged = 0;
+  let longestRead = 0;
+  for (;;) {
+    const readStartedAt = Date.now();
+    const value = await read();
+    const readMs = Date.now() - readStartedAt;
+    longestRead = Math.max(longestRead, readMs);
+    if (accept(value)) return value;
+    charged += Math.min(readMs, UNANSWERED_READ_CHARGE_MS);
+    if (charged >= budgetMs) {
+      throw new Error(
+        `${what}: still ${JSON.stringify(value)} after ${charged} ms of answered reads ` +
+          `(${Date.now() - startedAt} ms on the clock; longest read ${longestRead} ms)`
+      );
+    }
+    await new Promise((resolve) => setTimeout(resolve, ANSWERED_POLL_INTERVAL_MS));
+    charged += ANSWERED_POLL_INTERVAL_MS;
   }
-  throw new Error(`the 3D scene never went quiet: ${rounds.join('; ')}`);
+}
+
+/** A production stamp reaches `expected` (an `expect.poll(...).toBe` whose
+ * budget a frozen page does not spend). */
+async function stampReaches(
+  page: Page,
+  stamp: (page: Page) => Promise<string | undefined>,
+  expected: string | undefined,
+  budgetMs: number,
+  what: string
+): Promise<void> {
+  await untilAnswered(() => stamp(page), (value) => value === expected, budgetMs, what);
+}
+
+/** An element's text comes to contain `expected` (the `expect.poll` over
+ * `textContent()` this file used, on the same answered-read budget). A
+ * missing element reads as null and keeps the wait going. */
+async function textComesToContain(
+  page: Page,
+  selector: string,
+  expected: string,
+  budgetMs: number
+): Promise<void> {
+  await untilAnswered(
+    () => page.evaluate((s) => document.querySelector(s)?.textContent ?? null, selector),
+    (text) => text !== null && text.includes(expected),
+    budgetMs,
+    `${selector} never came to contain ${JSON.stringify(expected)}`
+  );
+}
+
+/** The URL's query string comes to satisfy `accept`. */
+async function searchSettles(
+  page: Page,
+  accept: (query: string) => boolean,
+  budgetMs: number,
+  what: string
+): Promise<void> {
+  await untilAnswered(() => search(page), accept, budgetMs, what);
+}
+
+/**
+ * helpers.ts `waitForLayerSettled` on the answered-read budget: the layer's
+ * status pill carries a terminal raw status class (anything but `loading`),
+ * with the same 25 s default. Returns the pill's raw status class, so a
+ * caller that needs `ready` and not merely terminal can say so.
+ */
+async function layerSettles(page: Page, key: string, budgetMs = 25_000): Promise<string> {
+  const terminal = ['ready', 'degraded', 'error', 'no-data', 'zoom-in'];
+  const tokens = await untilAnswered(
+    () =>
+      page.evaluate(
+        (k) => (document.querySelector(`[data-layer-status="${k}"]`)?.getAttribute('class') ?? '').split(/\s+/),
+        key
+      ),
+    (classes) => terminal.some((status) => classes.includes(status)),
+    budgetMs,
+    `layer "${key}" never left the loading state`
+  );
+  return terminal.find((status) => tokens.includes(status)) ?? '';
 }
 
 const TOGGLE = '.shell-fire3d-btn';
@@ -1646,6 +1672,88 @@ const CAPTURE_EVIDENCE =
 // single allowance and requires the CI guard.
 const EVIDENCE_BOUNDARIES = CAPTURE_EVIDENCE ? ('live' as const) : ('fixture' as const);
 
+/** A one-pixel PNG for the basemap tiles (the shape tests/flow-plumb.spec.ts
+ * and tests/heat-h0-integrity.spec.ts fulfil OpenStreetMap with). */
+const BASEMAP_TILE_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+  'base64'
+);
+
+/**
+ * Answer the OpenStreetMap basemap tiles from a fixture. The scene cases
+ * below read them live otherwise: GitHub's retry traces of the three cases
+ * found-145 names (runs 37317297848 and 37347470195) carry 76 to 84 live
+ * tile.openstreetmap.org reads each and no other unrouted host, and every
+ * arriving tile re-renders the pitched scene on the software renderer. No
+ * assertion here reads the basemap, so a routine run needs none of it; the
+ * deliberate evidence capture keeps the real basemap it photographs.
+ */
+async function routeBasemapTiles(page: Page): Promise<void> {
+  if (CAPTURE_EVIDENCE) return;
+  await page.route('https://tile.openstreetmap.org/**', (route) =>
+    route.fulfill({ status: 200, contentType: 'image/png', body: BASEMAP_TILE_PNG })
+  );
+}
+
+/** Freeze the page's main thread for `ms` (a busy loop, as a blocked GPU
+ * readback does), starting `delayMs` from now, then optionally stamp
+ * `data-probe="done"` `stampAfterMs` after the freeze ends. Returns at once. */
+async function freezePageSoon(
+  page: Page,
+  options: { delayMs: number; ms: number; stampAfterMs: number | null }
+): Promise<void> {
+  await page.evaluate(({ delayMs, ms, stampAfterMs }) => {
+    setTimeout(() => {
+      const end = performance.now() + ms;
+      while (performance.now() < end) {
+        // the frozen main thread
+      }
+      if (stampAfterMs !== null) {
+        setTimeout(() => {
+          document.documentElement.dataset['probe'] = 'done';
+        }, stampAfterMs);
+      }
+    }, delayMs);
+  }, options);
+}
+
+function probeStamp(page: Page): Promise<string | undefined> {
+  return page.evaluate(() => document.documentElement.dataset['probe']);
+}
+
+test('an answered-read wait is not charged for a page the renderer has frozen past its budget', async ({
+  page
+}) => {
+  // The found-145 shape without the renderer: the page freezes for 8 s,
+  // longer than the 3 s budget, and reaches the state 300 ms after it thaws.
+  // An `expect.poll` with a 3 s timeout fails here (its deadline passes while
+  // the read is still out); the answered-read wait charges the frozen read
+  // 1 s and passes. A fresh page is about:blank, which already has a
+  // documentElement for the stamp, so no navigation is needed.
+  await freezePageSoon(page, { delayMs: 100, ms: 8_000, stampAfterMs: 300 });
+  const startedAt = Date.now();
+  await stampReaches(page, probeStamp, 'done', 3_000, 'the probe never stamped done');
+  expect(Date.now() - startedAt).toBeGreaterThan(8_000);
+});
+
+test('an answered-read wait still fails at its budget when the state never comes, frozen or not', async ({
+  page
+}) => {
+  // A page that answers and never gets there fails on the budget, as the
+  // `expect.poll` it replaces did.
+  await expect(
+    stampReaches(page, probeStamp, 'done', 2_000, 'the probe never stamped done')
+  ).rejects.toThrow(/the probe never stamped done: still undefined after \d+ ms of answered reads/);
+  // A freeze in the middle is not charged, and the wait still fails once the
+  // page has answered for the budget, naming the frozen read.
+  await freezePageSoon(page, { delayMs: 100, ms: 5_000, stampAfterMs: null });
+  const startedAt = Date.now();
+  await expect(
+    stampReaches(page, probeStamp, 'done', 2_000, 'the probe never stamped done')
+  ).rejects.toThrow(/longest read [4-9]\d{3} ms/);
+  expect(Date.now() - startedAt).toBeGreaterThan(5_000);
+});
+
 test.describe('W3/W4 browser truth', () => {
   test('the desktop toggle activates the 3D scene with the volume legend, then exits cleanly', async ({
     page
@@ -1656,6 +1764,7 @@ test.describe('W3/W4 browser truth', () => {
     test.setTimeout(180_000);
     await stubWildfireFeeds(page);
     await stubDeepTerrainArchive(page);
+    await routeBasemapTiles(page);
 
     // Measure the terrain archive's real transport for the activation
     // budget row (logged, not asserted; the preview serves the bundled
@@ -1687,7 +1796,7 @@ test.describe('W3/W4 browser truth', () => {
     });
 
     await gotoApp(page, '?region=washington_state&cluster=wildfire', { boundaries: EVIDENCE_BOUNDARIES });
-    await waitForLayerSettled(page, 'hms-smoke');
+    await layerSettles(page, 'hms-smoke');
 
     const toggle = page.locator(TOGGLE);
     await expect(toggle).toBeVisible();
@@ -1705,51 +1814,50 @@ test.describe('W3/W4 browser truth', () => {
     // refusal: the sentence appears only where it is true.
     await expect(page.locator('#shell-fire3d-refused')).toHaveCount(0);
 
+    // Every wait on a stamp, a legend text or the URL below keeps the budget
+    // it had as an `expect.poll` (10 s, or the 30 s it named), on the
+    // answered-read clock: this is the animated case (no reduced motion; the
+    // pulse and the eased camera are what it covers), and GitHub's software
+    // renderer froze it 35.2, 14.9 and 15.3 s in a row here (found-145; see
+    // UNANSWERED_READ_CHARGE_MS).
     await toggle.click();
     await expect(toggle).toHaveAttribute('aria-pressed', 'true');
-    await expect.poll(async () => search(page)).toContain('fire3d=true');
-    await expect
-      .poll(() => fire3dStamp(page), { timeout: 30_000 })
-      .toBe('active');
-    await expect.poll(() => fire3dSmokeStamp(page)).toBe('volume');
+    await searchSettles(page, (q) => q.includes('fire3d=true'), 10_000, 'the URL never gained fire3d=true');
+    await stampReaches(page, fire3dStamp, 'active', 30_000, 'the scene never stamped active');
+    await stampReaches(page, fire3dSmokeStamp, 'volume', 10_000, 'the smoke never stamped volume');
     await expect(
       page.locator('.shell-fire3d-status')
     ).toHaveAttribute('data-fire3d-status', 'active');
 
     // The volume legend carries the honest vertical qualification.
-    const volumeLegend = page.locator(
-      '.legend-section[data-legend="hms-smoke-volume"]'
-    );
+    const volumeLegendSelector = '.legend-section[data-legend="hms-smoke-volume"]';
+    const volumeLegend = page.locator(volumeLegendSelector);
     await expect(volumeLegend).toHaveCount(1);
-    await expect
-      .poll(() => volumeLegend.textContent())
-      .toContain(HMS_VOLUME_QUALIFICATION);
+    await textComesToContain(page, volumeLegendSelector, HMS_VOLUME_QUALIFICATION, 10_000);
 
     // The context layers this mode OWNS activated, each with its issuer
     // palette or caveat qualification. Power is not among them since
     // 2026-08-19: it is a catalog layer, off unless someone asks for it,
     // and its legend must not appear while it is off.
-    await expect
-      .poll(() => fire3dContextStamp(page), { timeout: 30_000 })
-      .toBe('whp structures');
-    const hazardLegend = page.locator(
-      '.legend-section[data-legend="whp-2023"]'
+    await stampReaches(
+      page,
+      fire3dContextStamp,
+      'whp structures',
+      30_000,
+      'the context layers never stamped whp structures'
     );
+    const hazardLegendSelector = '.legend-section[data-legend="whp-2023"]';
+    const hazardLegend = page.locator(hazardLegendSelector);
     await expect(hazardLegend).toHaveCount(1);
-    await expect
-      .poll(() => hazardLegend.textContent())
-      .toContain(WHP_SHADE_QUALIFICATION);
+    await textComesToContain(page, hazardLegendSelector, WHP_SHADE_QUALIFICATION, 10_000);
     const powerLegend = page.locator(
       '.legend-section[data-legend="power-context"]'
     );
     await expect(powerLegend).toHaveCount(0);
-    const structuresLegend = page.locator(
-      '.legend-section[data-legend="structures-3d"]'
-    );
+    const structuresLegendSelector = '.legend-section[data-legend="structures-3d"]';
+    const structuresLegend = page.locator(structuresLegendSelector);
     await expect(structuresLegend).toHaveCount(1);
-    await expect
-      .poll(() => structuresLegend.textContent())
-      .toContain(STRUCTURES_QUALIFICATION);
+    await textComesToContain(page, structuresLegendSelector, STRUCTURES_QUALIFICATION, 10_000);
     // The embed disclosure chip is embed-only chrome; the desktop shell
     // already carries the notes, so no chip appears here.
     await expect(page.locator('#fire3d-embed-note')).toHaveCount(0);
@@ -1782,8 +1890,8 @@ test.describe('W3/W4 browser truth', () => {
     // Toggle off: the flat scene returns and the flag drops.
     await toggle.click();
     await expect(toggle).toHaveAttribute('aria-pressed', 'false');
-    await expect.poll(() => fire3dStamp(page)).toBe('inactive');
-    await expect.poll(async () => search(page)).not.toContain('fire3d');
+    await stampReaches(page, fire3dStamp, 'inactive', 10_000, 'the scene never stamped inactive');
+    await searchSettles(page, (q) => !q.includes('fire3d'), 10_000, 'the URL kept fire3d');
     await expect(volumeLegend).toHaveCount(0);
     await expect(hazardLegend).toHaveCount(0);
     await expect(powerLegend).toHaveCount(0);
@@ -2021,44 +2129,48 @@ test.describe('W3/W4 browser truth', () => {
   }) => {
     // A terrain build plus the perimeter fetch on the software renderer.
     test.setTimeout(180_000);
+    // Reduced motion, as the RAWS marker and extra-layer cases run, and the
+    // answered-read waits (UNANSWERED_READ_CHARGE_MS), both for found-145:
+    // GitHub's retry traces of this case (runs 37317297848 and 37347470195)
+    // have the page frozen 21.3 to 37.1 s inside each gesture, and the
+    // ribbon stamp read `on` once, 70 ms after a 41.7 s uncheck, before the
+    // page froze again for the rest of the 30 s poll; the off path is a
+    // registry change after the layer's 250 ms fade
+    // (src/state/layer-controller.ts deactivateInternal), which a page that
+    // does not run cannot reach. What this case asserts (the ribbon follows
+    // the perimeter layer in, out, back in and off) reads stamps and the
+    // legend, never the camera path, the pulse or the fade, so it does not
+    // depend on animation; the animated enter and exit are the desktop
+    // toggle case's.
+    await page.emulateMedia({ reducedMotion: 'reduce' });
     await stubWildfireFeeds(page);
     await stubDeepTerrainArchive(page);
+    await routeBasemapTiles(page);
     await gotoApp(page, '?region=washington_state&cluster=wildfire&fire3d=true');
 
-    await expect
-      .poll(() => fire3dStamp(page), { timeout: 30_000 })
-      .toBe('active');
-    await waitForLayerSettled(page, 'nifc-fires');
+    await stampReaches(page, fire3dStamp, 'active', 30_000, 'the scene never stamped active');
+    await layerSettles(page, 'nifc-fires');
     // The perimeter data lands after the scene does, so the ribbon arrives
     // on the layer's status seam rather than on a toggle.
-    await expect
-      .poll(() => fire3dRibbonStamp(page), { timeout: 30_000 })
-      .toBe('on');
+    await stampReaches(page, fire3dRibbonStamp, 'on', 30_000, 'the ribbon never stamped on');
 
-    const ribbonLegend = page.locator(
-      '.legend-section[data-legend="nifc-perimeter-ribbon"]'
-    );
+    const ribbonLegendSelector = '.legend-section[data-legend="nifc-perimeter-ribbon"]';
+    const ribbonLegend = page.locator(ribbonLegendSelector);
     await expect(ribbonLegend).toHaveCount(1);
-    await expect
-      .poll(() => ribbonLegend.textContent())
-      .toContain(PERIMETER_RIBBON_QUALIFICATION);
+    await textComesToContain(page, ribbonLegendSelector, PERIMETER_RIBBON_QUALIFICATION, 10_000);
 
     // Leaving the scene takes the ribbon and its legend with it, and the
     // flat perimeter carries on alone.
     await page.locator(TOGGLE).click();
-    await expect.poll(() => fire3dStamp(page)).toBe('inactive');
+    await stampReaches(page, fire3dStamp, 'inactive', 10_000, 'the scene never stamped inactive');
     expect(await fire3dRibbonStamp(page)).toBeUndefined();
     await expect(ribbonLegend).toHaveCount(0);
     await expect(layerCheckbox(page, 'nifc-fires')).toBeChecked();
 
     // Re-entering rebuilds it from the perimeters already on the map.
     await page.locator(TOGGLE).click();
-    await expect
-      .poll(() => fire3dStamp(page), { timeout: 30_000 })
-      .toBe('active');
-    await expect
-      .poll(() => fire3dRibbonStamp(page), { timeout: 30_000 })
-      .toBe('on');
+    await stampReaches(page, fire3dStamp, 'active', 30_000, 'the scene never stamped active again');
+    await stampReaches(page, fire3dRibbonStamp, 'on', 30_000, 'the ribbon never stamped on again');
 
     // Turning the perimeter layer off takes the ribbon with it while the
     // scene stays up: the ribbon is a re-presentation of that layer and has
@@ -2066,9 +2178,13 @@ test.describe('W3/W4 browser truth', () => {
     // custom, which hides the 3D control while a fire event layer keeps the
     // scene alive, so this is the last gesture of the case.)
     await layerCheckbox(page, 'nifc-fires').uncheck();
-    await expect
-      .poll(() => fire3dRibbonStamp(page), { timeout: 30_000 })
-      .toBe('off');
+    await stampReaches(
+      page,
+      fire3dRibbonStamp,
+      'off',
+      30_000,
+      'the ribbon outlived its perimeter layer'
+    );
     await expect(ribbonLegend).toHaveCount(0);
     expect(await fire3dStamp(page)).toBe('active');
   });
@@ -2383,36 +2499,67 @@ test('an embed without the flag never activates and never gains it', async ({
     // are the desktop toggle case's, and reduced motion's own is the case
     // further down.
     await page.emulateMedia({ reducedMotion: 'reduce' });
-    const traffic = trackSceneTraffic(page);
     await stubWildfireFeeds(page);
     await stubDeepTerrainArchive(page);
+    await routeBasemapTiles(page);
+    // found-126: the scene is held streaming while `places` comes on. Every
+    // hazard drape tile read is parked (the header and root directory reads,
+    // `bytes=0-...`, pass, so the drape still activates and the scene still
+    // stamps active), which keeps the drape source loading and the scene's
+    // own `transport` stamp at `streaming` (src/map/fire3d.ts
+    // deriveSceneTransport) until the case releases them below.
+    const heldDrapeReads: Route[] = [];
+    let holdDrapeReads = true;
+    await page.route('**/data/whp-2023-pnw.pmtiles', async (route) => {
+      const range = route.request().headers()['range'] ?? '';
+      if (!holdDrapeReads || range.startsWith('bytes=0-')) {
+        await route.fallback();
+        return;
+      }
+      heldDrapeReads.push(route);
+    });
+    const releaseDrapeReads = async (): Promise<void> => {
+      holdDrapeReads = false;
+      for (const route of heldDrapeReads.splice(0)) await route.fallback();
+    };
     await gotoApp(page, '?region=washington_state&cluster=wildfire&view=console&fire3d=true');
 
-    await expect
-      .poll(() => fire3dStamp(page), { timeout: 30_000 })
-      .toBe('active');
-    await waitForLayerSettled(page, 'nifc-fires');
-    await waitForLayerSettled(page, 'hms-smoke');
+    await stampReaches(page, fire3dStamp, 'active', 30_000, 'the scene never stamped active');
+    await layerSettles(page, 'nifc-fires');
+    await layerSettles(page, 'hms-smoke');
 
-    // Add one bundled reference layer: the display honestly demotes to a
-    // custom layer set (cluster= leaves the URL) but the scene stays. Let the
-    // scene finish its startup first: GitHub run 37238546758 saw `places`
-    // (bundled, same origin) never leave loading inside waitForLayerSettled's
-    // 25 s while the scene was still streaming and drawing, the stall the RAWS
-    // marker case documents, and run 37276902844 froze the page 22.5 and 32.4
-    // s inside a 60 s wait on the scene's `transport` stamp. The wait below
-    // drains the draw queue and waits for quiet traffic instead; no timeout
-    // grew.
-    await waitForSceneToSettle(page, traffic);
+    // Add one bundled reference layer while the scene is still streaming:
+    // the display honestly demotes to a custom layer set (cluster= leaves the
+    // URL), the scene stays, and `places` reaches ready inside it.
+    //
+    // Why this replaced the wait for the scene to settle (found-126): GitHub
+    // run 37238546758 failed `places` inside waitForLayerSettled's 25 s, and
+    // the settle wait that followed would also have hidden a `places` that
+    // never loads in a streaming scene. The retry trace of that run shows the
+    // cause: the `places` check itself took 25.6 s (the page frozen by the
+    // software renderer, the stall the RAWS marker case documents) and the
+    // pill was terminal 142 ms later. `places` reads a bundled same-origin
+    // file and adds one symbol layer (src/layers/places.ts activate), with no
+    // dependency on the scene's sources. Locally at 6x CPU throttling
+    // (2026-10-05, the pre-B6 shape: no hold, no reduced motion) the check
+    // itself took 29.1 s and the pill read ready 14.3 s later with the scene
+    // still streaming; with the drape held it read ready 355 ms after the
+    // check. So the case asserts that, on the answered-read clock, with the
+    // same 25 s budget: a frozen page is not charged, and a `places` stuck in
+    // loading while the scene streams fails here.
+    expect(await fire3dTransportStamp(page)).toBe('streaming');
     await layerCheckbox(page, 'places').check();
-    await waitForLayerSettled(page, 'places');
-    await expect.poll(async () => search(page)).not.toContain('cluster=');
+    expect(await layerSettles(page, 'places')).toBe('ready');
+    expect(await fire3dTransportStamp(page)).toBe('streaming');
+    expect(heldDrapeReads.length).toBeGreaterThan(0);
+    await releaseDrapeReads();
+    await searchSettles(page, (q) => !q.includes('cluster='), 10_000, 'the URL kept cluster=');
     expect(await fire3dStamp(page)).toBe('active');
 
     // Removing the smoke layer keeps terrain but honestly downgrades the
     // smoke read to (absent) flat; the volume never outlives its layer.
     await layerCheckbox(page, 'hms-smoke').uncheck();
-    await expect.poll(() => fire3dSmokeStamp(page)).toBe('flat');
+    await stampReaches(page, fire3dSmokeStamp, 'flat', 10_000, 'the smoke never stamped flat');
     expect(await fire3dStamp(page)).toBe('active');
     await expect(
       page.locator('.legend-section[data-legend="hms-smoke-volume"]')
@@ -2421,7 +2568,7 @@ test('an embed without the flag never activates and never gains it', async ({
     // Removing the last fire event layer exits the scene; the durable
     // preference (and its URL flag) survives for the next Fire view.
     await layerCheckbox(page, 'nifc-fires').uncheck();
-    await expect.poll(() => fire3dStamp(page)).toBe('inactive');
+    await stampReaches(page, fire3dStamp, 'inactive', 10_000, 'the scene never stamped inactive');
     expect(await search(page)).toContain('fire3d=true');
   });
 
