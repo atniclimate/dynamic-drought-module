@@ -683,7 +683,7 @@ async function showWeek(map: maplibregl.Map, index: number): Promise<void> {
   activeSlot = inSlot;
   timeline.setUsdmWeek(clamped === weeks.length - 1 ? null : key);
   installTimeBar(map);
-  reportStatus('ready');
+  reportStatus((frame?.features ?? []).length === 0 ? 'no-data' : 'ready');
 
   await crossfadeFrames(map, pairFadeTargets(outSource), pairFadeTargets(inSource));
   if (signal.aborted || myEpoch !== stepEpoch) return;
