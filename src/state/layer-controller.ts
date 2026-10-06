@@ -85,7 +85,7 @@ export interface LayerController {
   activate(key: string, cascade?: boolean): Promise<void>;
   deactivate(key: string): void;
   applyPreset(preset: ViewPreset): void;
-  /** Boot-only, call once: skips every key a command has already set. */
+  /** Boot-only, call once (a second call rejects): skips every key a command has already set. */
   applyLayerSet(keys: Iterable<string>): Promise<void>;
   ensureActive(key: string): void;
 }
@@ -110,6 +110,8 @@ export function createLayerController(
    * turned-off layer into the registry and the URL.
    */
   const desiredOn = new Map<string, boolean>();
+  /** Whether the one boot `applyLayerSet` call has been taken. */
+  let layerSetApplied = false;
 
   /**
    * Monotonic intent generation per key, bumped on EVERY intent flip (on or
@@ -573,6 +575,10 @@ export function createLayerController(
    * key a person has ever touched.
    */
   async function applyLayerSet(keys: Iterable<string>): Promise<void> {
+    // Enforce the boot-only rule (found-128): a second call is refused, not
+    // silently reduced to the keys no command has touched.
+    if (layerSetApplied) throw new Error('applyLayerSet is boot-only');
+    layerSetApplied = true;
     const tasks: Array<Promise<void>> = [];
     for (const key of keys) {
       const def = getLayerDef(key);
