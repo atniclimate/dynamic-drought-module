@@ -28,7 +28,7 @@
     "test:guards": "node --test tests/guards.test.mjs",
     "test:fetch-budget": "node --test tests/fetch-budget.test.mjs",
     "test:chunk-retry": "node --test tests/chunk-retry.test.mjs",
-    "test:place-return": "node --test tests/place-return.test.mjs",
+    "test:place-return": "node --test tests/place-return.test.mjs tests/studio-restore-precondition.test.mjs",
     "test:boot-idle-seam": "node --test tests/boot-idle-seam.test.mjs",
     "test:raster-contract": "node --test tests/raster-readiness-contract.test.mjs",
     "test:hillshade-reactivation": "node --test tests/hillshade-reactivation.test.mjs",

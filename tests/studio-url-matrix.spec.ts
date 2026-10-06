@@ -2,6 +2,7 @@ import { expect, test, type Page } from './offline-test';
 
 import { FRAMINGS, type FramingKey } from '../src/config/framings';
 import { HAZARD_CLUSTERS, HAZARD_CLUSTER_KEYS } from '../src/config/clusters';
+import { TRIBAL_NATIONS_GROUP } from '../src/config/layer-groups';
 import { parseShellParams, parseStudioParam } from '../src/state/url';
 import { gotoApp, search, stubHeatRiskCatalog, urlLayers, waitForLayerSettled } from './helpers';
 import { stubRecentSatellite } from './satellite-fixture';
@@ -393,13 +394,18 @@ test.describe('studio URL precedence matrix', () => {
         );
     /** The layers= list once the URL agrees with the checked catalog rows
      * (the bridge intent syncUrl serializes, src/ui/sidebar.ts pushUrl). */
-    const settledLayers = async (selector: string, moment: string): Promise<string[]> => {
+    const settledLayers = async (
+      selector: string,
+      moment: string,
+      requiredKeys: readonly string[] = []
+    ): Promise<string[]> => {
       let settled: string[] = [];
       await expect
         .poll(
           async () => {
             settled = await checkedKeys(selector);
-            return JSON.stringify(urlLayers()) === JSON.stringify(settled);
+            return requiredKeys.every((key) => settled.includes(key)) &&
+              JSON.stringify(urlLayers()) === JSON.stringify(settled);
           },
           { message: `${moment}: layers= matches the checked rows` }
         )
@@ -441,7 +447,14 @@ test.describe('studio URL precedence matrix', () => {
         'aria-pressed',
         'true'
       );
-      const before = await settledLayers(sidebarRows, `${moment}: before`);
+      // The pressed rail renders before its effects install the reference
+      // intent. URL and checked rows can still agree on the old display.
+      // Capture only after the tribe rail's shipped members reach both.
+      const before = await settledLayers(
+        sidebarRows,
+        `${moment}: before`,
+        TRIBAL_NATIONS_GROUP.members
+      );
       expect(before, `${moment}: places is on before the writes`).toContain('places');
       await state.click();
       await expect(state, `${moment}: the state rail is pressed`).toHaveAttribute(
