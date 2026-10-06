@@ -32,8 +32,8 @@
 #   set_layer: { key: <layer>, on: <bool> }
 #   wait_settled: <layer key>        wait for a terminal status pill
 #   wait_fire3d: <active|inactive>   wait for the document stamp
-#   settle_scene: true               drain the draw queue and wait for quiet
-#                                    traffic (needs reduced_motion: true)
+#   settle_scene: true               wait for the application-reported 3D
+#                                    context to equal "whp structures"
 #   hold_first_power_probe: <ms>     hold the power layer's first line archive
 #                                    header read for <ms> (past its 10 s probe
 #                                    budget) before letting it through

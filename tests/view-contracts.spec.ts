@@ -6,10 +6,10 @@ import { parse } from 'yaml';
 import {
   gotoApp,
   layerCheckbox,
-  layerPill,
   search,
   waitForLayerSettled
 } from './helpers';
+import { untilAnswered } from './answered-read';
 import { stubDeepTerrainArchive, stubWildfireFeeds } from './wildfire-fixtures';
 
 /**
@@ -190,101 +190,12 @@ async function watchPowerLayerReads(page: Page): Promise<PowerReads> {
 }
 
 // ---------------------------------------------------------------------------
-// The 3D scene's startup stall (S30D B3 CI3)
-// ---------------------------------------------------------------------------
-
-/**
- * The page's own requests, counted on the Node side: a frozen page cannot
- * report its own traffic, but the browser process can. Same shape as the
- * helper of the same name in tests/fire3d-mode.spec.ts (each spec stays
- * self-contained; tests/helpers.ts is not this unit's).
- */
-interface SceneTraffic {
-  /** Requests started and not yet finished or failed. */
-  open: number;
-  /** Date.now() of the last request start, finish or failure. */
-  lastActivityAt: number;
-}
-
-/** Register BEFORE the first boot. */
-function trackSceneTraffic(page: Page): SceneTraffic {
-  const traffic: SceneTraffic = { open: 0, lastActivityAt: Date.now() };
-  const tracked = new Set<unknown>();
-  const end = (request: unknown): void => {
-    if (!tracked.delete(request)) return;
-    traffic.open -= 1;
-    traffic.lastActivityAt = Date.now();
-  };
-  page.on('request', (request) => {
-    tracked.add(request);
-    traffic.open += 1;
-    traffic.lastActivityAt = Date.now();
-  });
-  page.on('requestfinished', end);
-  page.on('requestfailed', end);
-  return traffic;
-}
-
-/** One 1x1 readback on the map's own context: it returns only when the
- * software renderer has drawn every frame queued before it. Returns how long
- * the page was blocked, on the page's clock. */
-function drainDrawQueue(page: Page): Promise<number> {
-  return page.evaluate(() => {
-    const started = performance.now();
-    const canvas = document.querySelector('canvas.maplibregl-canvas') as HTMLCanvasElement | null;
-    const gl = (canvas?.getContext('webgl2') ?? canvas?.getContext('webgl')) as WebGLRenderingContext | null;
-    gl?.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(4));
-    return Math.round(performance.now() - started);
-  });
-}
-
-/** A drain faster than this found the queue empty (measured 2026-10-05,
- * reduced motion: 1, 13 and 244 ms once quiet; 1.7 to 2.3 s while the pulse
- * kept refilling it). */
-const SCENE_DRAIN_EMPTY_MS = 300;
-/** No request started or ended for this long counts as quiet traffic. */
-const SCENE_QUIET_MS = 1500;
-/** Rounds of drain then quiet before the scene is called busy for good
- * (measured: 2 to 4 rounds under reduced motion at 1x, 4x and 6x CPU). */
-const SCENE_SETTLE_ROUNDS = 8;
-
-/**
- * Wait until the 3D scene has stopped using the page: drain the draw queue
- * (the readback returns when the queue is empty, however long that takes),
- * wait for the network to go quiet, drain again, until a drain finds the
- * queue empty and nothing was requested since before it began. It decides
- * from what it can measure and has no wall-clock deadline a slow runner could
- * decide; it does not read the scene's `transport` stamp (see the
- * `set_layer` step for why, and tests/fire3d-mode.spec.ts for the same
- * helper with the measurements).
- */
-async function waitForSceneToSettle(page: Page, traffic: SceneTraffic): Promise<void> {
-  const rounds: string[] = [];
-  for (let round = 0; round < SCENE_SETTLE_ROUNDS; round += 1) {
-    const startedAt = Date.now();
-    const drainMs = await drainDrawQueue(page);
-    await expect
-      .poll(() => traffic.open <= 0 && Date.now() - traffic.lastActivityAt >= SCENE_QUIET_MS, {
-        message: 'the 3D scene kept requesting tiles',
-        timeout: 30_000,
-        intervals: [250]
-      })
-      .toBe(true);
-    const quietSinceBefore = traffic.lastActivityAt < startedAt;
-    rounds.push(`drain ${drainMs} ms, ${quietSinceBefore ? 'no traffic' : 'traffic'}`);
-    if (drainMs < SCENE_DRAIN_EMPTY_MS && quietSinceBefore) return;
-  }
-  throw new Error(`the 3D scene never went quiet: ${rounds.join('; ')}`);
-}
-
-// ---------------------------------------------------------------------------
 // Steps
 // ---------------------------------------------------------------------------
 
 async function runStep(
   page: Page,
   step: Step,
-  traffic: SceneTraffic,
   power: PowerReads
 ): Promise<void> {
   if ('click_cluster' in step) {
@@ -355,20 +266,25 @@ async function runStep(
   }
 
   if ('wait_fire3d' in step) {
-    await expect
-      .poll(() => fire3dStamp(page), { timeout: FIRE3D_STAMP_TIMEOUT_MS })
-      .toBe(step.wait_fire3d);
+    await untilAnswered(
+      () => fire3dStamp(page),
+      (value) => value === step.wait_fire3d,
+      FIRE3D_STAMP_TIMEOUT_MS,
+      `3D scene stamp ${step.wait_fire3d}`
+    );
     return;
   }
 
   if ('settle_scene' in step) {
-    // Ride out the scene's startup stall before the reads that follow: every
-    // page read blocks while the software renderer drains its queue, so a
-    // 20 s URL poll or a 10 s attribute read can expire inside it (GitHub
-    // runs 37276902844 and 37282168792: the reloaded-share row's first attempt
-    // failed its 20 s URL poll in both, with page reads blocked 10 to 32 s in
-    // the same shard). The row that uses this step runs reduced motion.
-    await waitForSceneToSettle(page, traffic);
+    // The legacy matrix token waits for the application's owned context,
+    // as the reloaded-share case in fire3d-mode does. Tile traffic and the
+    // renderer's draw queue do not decide whether that context was restored.
+    await untilAnswered(
+      () => fire3dContextStamp(page),
+      (value) => value === 'whp structures',
+      30_000,
+      '3D scene context whp structures'
+    );
     return;
   }
 
@@ -452,12 +368,12 @@ async function assertExpectations(
   }
 
   for (const [name, value] of Object.entries(wanted.url_params ?? {})) {
-    await expect
-      .poll(() => urlParam(page, name), {
-        message: `URL parameter ${name}`,
-        timeout: URL_POLL_TIMEOUT_MS
-      })
-      .toBe(value);
+    await untilAnswered(
+      () => urlParam(page, name),
+      (actual) => actual === value,
+      URL_POLL_TIMEOUT_MS,
+      `URL parameter ${name}`
+    );
   }
 
   if (wanted.url_layers_include || wanted.url_layers_exclude) {
@@ -477,9 +393,12 @@ async function assertExpectations(
     if (wanted.fire3d_stamp === 'absent') {
       expect(await fire3dStamp(page)).toBeUndefined();
     } else {
-      await expect
-        .poll(() => fire3dStamp(page), { timeout: FIRE3D_STAMP_TIMEOUT_MS })
-        .toBe(wanted.fire3d_stamp);
+      await untilAnswered(
+        () => fire3dStamp(page),
+        (value) => value === wanted.fire3d_stamp,
+        FIRE3D_STAMP_TIMEOUT_MS,
+        `3D scene stamp ${wanted.fire3d_stamp}`
+      );
     }
   }
 
@@ -518,21 +437,25 @@ async function assertExpectations(
     // stable contract now that the displayed text varies per layer.
     const polledSince = Date.now();
     let lastWord = '';
-    await expect
-      .poll(
-        async () => {
-          const cls = (await layerPill(page, key).getAttribute('class')) ?? '';
-          const tokens = cls.split(/\s+/);
-          const word = tokens.filter((token) => token !== 'layer-toggle-status').join(' ');
-          if (key === 'power-infrastructure' && word !== lastWord) {
-            lastWord = word;
-            power.timeline.push(`+${Date.now() - polledSince}ms ${word || 'no status class'}`);
-          }
-          return tokens;
-        },
-        { message: `layer ${key} status`, timeout: FIRE3D_STAMP_TIMEOUT_MS }
-      )
-      .toContain(status);
+    await untilAnswered(
+      async () => {
+        // A missing pill is an unanswered status, not a locator auto-wait.
+        const cls = await page.evaluate(
+          (layerKey) => document.querySelector(`[data-layer-status="${layerKey}"]`)?.getAttribute('class') ?? null,
+          key
+        );
+        const tokens = (cls ?? '').split(/\s+/);
+        const word = tokens.filter((token) => token !== 'layer-toggle-status').join(' ');
+        if (key === 'power-infrastructure' && word !== lastWord) {
+          lastWord = word;
+          power.timeline.push(`+${Date.now() - polledSince}ms ${word || 'no status class'}`);
+        }
+        return tokens;
+      },
+      (tokens) => tokens.includes(status),
+      FIRE3D_STAMP_TIMEOUT_MS,
+      `layer ${key} status`
+    );
   }
 
   for (const [selector, count] of Object.entries(
@@ -557,7 +480,6 @@ test.describe('view contracts', () => {
 
       // Before any stub and any boot (see watchPowerLayerReads).
       const power = await watchPowerLayerReads(page);
-      const traffic = trackSceneTraffic(page);
       if (row.reduced_motion) await page.emulateMedia({ reducedMotion: 'reduce' });
 
       if (row.stub_wildfire) {
@@ -573,9 +495,16 @@ test.describe('view contracts', () => {
       try {
         await gotoApp(page, row.url);
 
-        for (const step of row.steps ?? []) await runStep(page, step, traffic, power);
+        for (const step of row.steps ?? []) await runStep(page, step, power);
 
         await assertExpectations(page, row.expect, power);
+        for (const step of row.steps ?? []) {
+          if ('hold_first_power_probe' in step) {
+            expect(power.timeline, 'the declared first power probe was held').toContain(
+              `holding the first line archive probe ${step.hold_first_power_probe} ms`
+            );
+          }
+        }
       } finally {
         // The evidence for WHICH power read degraded and when. Rows that never
         // touch the power layer record nothing and attach nothing.
