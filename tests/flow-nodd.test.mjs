@@ -361,6 +361,142 @@ test('a frame past cycle + 24 h is refused', async () => {
 });
 
 // ---------------------------------------------------------------------------
+// The bounded Range read (found-147: moved here from tests/fetch-budget.test.mjs
+// with src/util/fetch.ts's bounds, same inputs and outcomes). A server or proxy
+// that ignores Range answers 200 with the whole file (41 MB for 1p00, 11.6 MB
+// for the wave grid), so the read stops at the cap, a status other than the
+// expected one is refused, and with both set the body must be exactly maxBytes
+// long. It keeps fetchBufferedWithBudget's budget and owner abort over the body.
+// ---------------------------------------------------------------------------
+
+const { fetchBoundedWithBudget } = nodd;
+
+/**
+ * A fetch stub whose body is a stream the test controls (the
+ * tests/fetch-budget.test.mjs stub): `close: false` sends the chunks and
+ * stalls; `cancelled` resolves when the consumer cancels the stream.
+ */
+function stubFetch({ status = 200, chunks = [], close = true } = {}) {
+  let noteCancelled;
+  const cancelled = new Promise((resolve) => {
+    noteCancelled = resolve;
+  });
+  let noteHeaders;
+  const headersReturned = new Promise((resolve) => {
+    noteHeaders = resolve;
+  });
+  const calls = [];
+  const fetchImpl = async (url, init) => {
+    calls.push({ url, init });
+    if (init?.signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+    const body = new ReadableStream({
+      start(controller) {
+        for (const chunk of chunks) controller.enqueue(new TextEncoder().encode(chunk));
+        if (close) controller.close();
+      },
+      cancel() {
+        noteCancelled();
+      }
+    });
+    noteHeaders();
+    return new Response(body, { status });
+  };
+  return { fetchImpl, cancelled, headersReturned, calls };
+}
+
+test('the flow Range read aborts a 200 whole-file answer at the cap', async () => {
+  // A whole-file answer that keeps streaming: 3 kB sent, never closed. The
+  // 10 s budget would end it only much later; the cap must end it at once.
+  const kB = 'x'.repeat(1024);
+  const stub = stubFetch({ status: 200, chunks: [kB, kB, kB], close: false });
+  await withFetch(stub, async () => {
+    const request = fetchBoundedWithBudget('/whole-file.grib2', null, null, 10_000, { maxBytes: 2048 });
+    await assert.rejects(raced(request, 2000, 'the capped read'), { name: 'RangeError' });
+    await raced(stub.cancelled, 2000, 'stream cancel');
+  });
+  // Under the cap, maxBytes alone accepts any status (a 404 still reads as 404).
+  const small = stubFetch({ status: 404, chunks: ['not here'] });
+  await withFetch(small, async () => {
+    const response = await fetchBoundedWithBudget('/missing.idx', null, null, 5000, { maxBytes: 2048 });
+    assert.equal(response.status, 404);
+    assert.equal(await response.text(), 'not here');
+  });
+});
+
+test('the flow Range read with expectStatus 206 rejects a 200 and a short body', async () => {
+  const bounds = { expectStatus: 206, maxBytes: 10 };
+  // A 200 (Range ignored) is refused at the headers, and the request is
+  // aborted, which in a browser ends the body stream and the connection.
+  const whole = stubFetch({ status: 200, chunks: ['0123456789'], close: false });
+  await withFetch(whole, async () => {
+    const request = fetchBoundedWithBudget('/range.grib2', null, null, 10_000, bounds);
+    await assert.rejects(raced(request, 2000, 'the 200 read'), { name: 'RangeError' });
+    assert.equal(whole.calls[0].init.signal.aborted, true, 'the request signal is aborted');
+  });
+  // A 206 that ends short of the requested span is refused.
+  const short = stubFetch({ status: 206, chunks: ['012345'] });
+  await withFetch(short, async () => {
+    await assert.rejects(
+      raced(fetchBoundedWithBudget('/range.grib2', null, null, 5000, bounds), 2000, 'the short read'),
+      { name: 'RangeError' }
+    );
+  });
+  // A 206 one byte long is refused too (over the cap).
+  const long = stubFetch({ status: 206, chunks: ['0123456789A'] });
+  await withFetch(long, async () => {
+    await assert.rejects(
+      raced(fetchBoundedWithBudget('/range.grib2', null, null, 5000, bounds), 2000, 'the long read'),
+      { name: 'RangeError' }
+    );
+  });
+  // Control: a 206 of exactly the span passes through with its bytes.
+  const exact = stubFetch({ status: 206, chunks: ['01234', '56789'] });
+  await withFetch(exact, async () => {
+    const response = await raced(fetchBoundedWithBudget('/range.grib2', null, null, 5000, bounds), 2000, 'exact');
+    assert.equal(response.status, 206);
+    assert.equal(await response.text(), '0123456789');
+  });
+});
+
+test('the flow Range read keeps the body budget, the owner abort and credentials as given', async () => {
+  // A stalled body is cut off by the budget and the stream is cancelled.
+  const stalled = stubFetch({ status: 206, chunks: ['01'], close: false });
+  await withFetch(stalled, async () => {
+    const request = fetchBoundedWithBudget('/range.grib2', null, null, 40, { maxBytes: 10 });
+    await assert.rejects(raced(request, 2000, 'the budgeted read'), { name: 'AbortError' });
+    await raced(stalled.cancelled, 2000, 'stream cancel');
+  });
+  // An abort of the owning signal after headers cancels the read.
+  const held = stubFetch({ status: 206, chunks: ['01'], close: false });
+  await withFetch(held, async () => {
+    const master = new AbortController();
+    const request = fetchBoundedWithBudget('/range.grib2', null, master.signal, 10_000, { maxBytes: 10 });
+    await raced(held.headersReturned, 2000, 'headers');
+    master.abort();
+    await assert.rejects(raced(request, 2000, 'the aborted read'), { name: 'AbortError' });
+    await raced(held.cancelled, 2000, 'stream cancel');
+  });
+  // An already-aborted owning signal never reaches fetch.
+  const never = stubFetch({ status: 206, chunks: ['0123456789'] });
+  await withFetch(never, async () => {
+    const master = new AbortController();
+    master.abort();
+    await assert.rejects(fetchBoundedWithBudget('/range.grib2', null, master.signal, 5000, { maxBytes: 10 }), {
+      name: 'AbortError'
+    });
+    assert.equal(never.calls.length, 0);
+  });
+  // The request init is passed through (the reader's credentials: 'omit' and Range).
+  const plain = stubFetch({ status: 206, chunks: ['0123456789'] });
+  await withFetch(plain, async () => {
+    const init = { credentials: 'omit', headers: { Range: 'bytes=0-9' } };
+    await fetchBoundedWithBudget('/range.grib2', init, null, 5000, { expectStatus: 206, maxBytes: 10 });
+    assert.equal(plain.calls[0].init.credentials, 'omit');
+    assert.deepEqual(plain.calls[0].init.headers, { Range: 'bytes=0-9' });
+  });
+});
+
+// ---------------------------------------------------------------------------
 // The frames
 // ---------------------------------------------------------------------------
 

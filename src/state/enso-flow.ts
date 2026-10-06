@@ -24,9 +24,10 @@ export function ensoFlowModeDefault(
   params: URLSearchParams,
   clusters: Readonly<Record<string, HazardClusterDef>> = HAZARD_CLUSTERS
 ): EnsoFlowKind {
-  if (params.has('layers')) return 'off';
-  const token = params.get('cluster');
-  return Object.values(clusters).find((def) => def.urlToken === token)?.flowDefault ?? 'off';
+  return (
+    Object.values(clusters).find((def) => !params.has('layers') && def.urlToken === params.get('cluster'))
+      ?.flowDefault ?? 'off'
+  );
 }
 
 /**
@@ -38,13 +39,9 @@ export function parseEnsoFlowParams(
   modeDefault: EnsoFlowKind = ensoFlowModeDefault(params)
 ): EnsoFlowPreference {
   const values = params.getAll('flow');
-  const value = values.length === 1 ? values[0] : null;
-  const kind =
-    values.length === 0
-      ? modeDefault
-      : value === 'currents' || value === 'wind' || value === 'waves'
-        ? value
-        : 'off';
+  // No key reads as the mode default, which is itself a kind or off.
+  const value = values.length > 1 ? null : (values[0] ?? modeDefault);
+  const kind = value === 'currents' || value === 'wind' || value === 'waves' ? value : 'off';
   const inks = params.getAll('flowink');
   return { kind, ink: inks.length === 1 && inks[0] === 'dark' ? 'dark' : 'light' };
 }
@@ -59,11 +56,10 @@ export function writeEnsoFlowParams(
   preference: EnsoFlowPreference,
   modeDefault: EnsoFlowKind = ensoFlowModeDefault(params)
 ): void {
-  const { kind } = preference;
   params.delete('flow');
   params.delete('flowink');
-  if (kind !== modeDefault) params.set('flow', kind);
-  if (kind !== 'off' && preference.ink === 'dark') params.set('flowink', 'dark');
+  if (preference.kind !== modeDefault) params.set('flow', preference.kind);
+  if (preference.kind !== 'off' && preference.ink === 'dark') params.set('flowink', 'dark');
 }
 
 export function syncEnsoFlowParams(preference: EnsoFlowPreference): void {

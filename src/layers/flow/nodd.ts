@@ -18,7 +18,7 @@
  *    the next line's offset minus 1, so a needed message on the last line is
  *    refused.
  * 4. Read: one Range GET per message, `credentials: 'omit'`, through
- *    `fetchBufferedWithBudget` with the 12 s complete-body budget and
+ *    `fetchBoundedWithBudget` with the 12 s complete-body budget and
  *    `{expectStatus: 206, maxBytes}` (a 200, a short body or an over-long
  *    body is refused). Content-Range and ETag are not readable cross-origin;
  *    integrity is the 206, the exact length, and the decoder's section 0
@@ -33,7 +33,7 @@
  * not a failure). Every other failure is a FlowUnavailableError.
  */
 
-import { fetchBufferedWithBudget, linkAbort } from '../../util/fetch';
+import { linkAbort } from '../../util/fetch';
 import { isStale, type FlowField, type FlowKind } from './field';
 import {
   FLOW_SOURCES,
@@ -151,8 +151,75 @@ function moduleWorker(): DecodeWorkerLike {
 
 const abortError = (): DOMException => new DOMException('Aborted', 'AbortError');
 
+/**
+ * The bounded Range read: `fetchBufferedWithBudget`'s contract (the budget
+ * and the owner's abort span the body, which is cancelled on either; the
+ * Response carries the status and headers over the buffered bytes) plus a
+ * byte bound, kept here in the lazy flow chunk rather than in the eager
+ * src/util/fetch.ts (found-147). The read stops and rejects with a
+ * RangeError as soon as the body passes `maxBytes`, so a server that ignores
+ * Range cannot stream a whole file. With `expectStatus` as well, any other
+ * status rejects with a RangeError at the headers and the request is
+ * aborted, and the body must be exactly `maxBytes` long (a Range read of a
+ * known span), so a short body is refused too.
+ */
+export async function fetchBoundedWithBudget(
+  url: string,
+  opts: RequestInit | null,
+  masterSignal: AbortSignal | null,
+  timeoutMs: number,
+  bounds: { readonly maxBytes: number; readonly expectStatus?: number }
+): Promise<Response> {
+  if (masterSignal?.aborted) throw abortError();
+  const { maxBytes, expectStatus } = bounds;
+  const ctrl = new AbortController();
+  const { signal } = ctrl;
+  const unlink = linkAbort(ctrl, masterSignal);
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, { ...(opts ?? {}), signal });
+    if (expectStatus !== undefined && response.status !== expectStatus) {
+      ctrl.abort();
+      throw new RangeError(`HTTP ${response.status}`);
+    }
+    const bytes = new Uint8Array(maxBytes);
+    let length = 0;
+    const reader = response.body?.getReader();
+    if (reader) {
+      const cancel = (): void => void reader.cancel().catch(() => undefined);
+      signal.addEventListener('abort', cancel);
+      if (signal.aborted) cancel();
+      try {
+        for (;;) {
+          const chunk = await reader.read();
+          if (signal.aborted) throw abortError();
+          if (chunk.done) break;
+          if (length + chunk.value.byteLength > maxBytes) {
+            cancel();
+            throw new RangeError();
+          }
+          bytes.set(chunk.value, length);
+          length += chunk.value.byteLength;
+        }
+      } finally {
+        signal.removeEventListener('abort', cancel);
+        reader.releaseLock();
+      }
+    }
+    if (expectStatus !== undefined && length !== maxBytes) throw new RangeError();
+    return new Response(length ? bytes.subarray(0, length) : null, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: response.headers
+    });
+  } finally {
+    clearTimeout(timer);
+    unlink();
+  }
+}
+
 function ranged(url: string, start: number, end: number, signal: AbortSignal, exact: boolean): Promise<Response> {
-  return fetchBufferedWithBudget(
+  return fetchBoundedWithBudget(
     url,
     { credentials: 'omit', headers: { Range: `bytes=${start}-${end}` } },
     signal,
@@ -226,7 +293,7 @@ export async function readFlowFrame(kind: FlowKind, options: FlowReadOptions): P
     if (signal.aborted) throw abortError();
     if (e instanceof FlowUnavailableError) throw e;
     const reason = e instanceof RangeError ? 'refused' : 'failed';
-    // A RangeError is fetchBufferedWithBudget's bound: a status other than
+    // A RangeError is fetchBoundedWithBudget's bound: a status other than
     // 206, or a body longer or shorter than the span asked for.
     throw new FlowUnavailableError(reason, `${kind} read: ${e instanceof Error ? `${e.name} ${e.message}` : String(e)}`);
   } finally {
