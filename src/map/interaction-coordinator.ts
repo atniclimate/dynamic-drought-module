@@ -360,13 +360,27 @@ export function initInteractionCoordinator(map: maplibregl.Map): void {
  * hands a MODEL, and the coordinator, the frame's one caller, paints the
  * frame into the adopted popup (`paintAdopted`).
  */
-export function adoptExternalResponse(popup: maplibregl.Popup): ExternalResponse {
-  dismissResponse();
+export function adoptExternalResponse(
+  popup: maplibregl.Popup,
+  map: maplibregl.Map,
+  origin: HTMLElement
+): ExternalResponse {
+  replacingPopup = true;
+  try {
+    dismissResponse();
+  } finally {
+    replacingPopup = false;
+  }
+  // The native popup may already have focused its close control before its
+  // open event reaches us. Its opener explicitly supplies the return target.
+  focusBeforeCommit = origin;
   const token = {};
   adoption = token;
+  const closeKeyboard = bindPopupKeyboard(popup, map);
   popup.once('close', () => {
     if (adoption === token) adoption = null;
     closed(popup);
+    closeKeyboard();
   });
   currentPopup = popup;
   return { paint: (model, mount) => paintAdopted(popup, token, model, mount) };
@@ -549,6 +563,34 @@ function returnFocus(map: maplibregl.Map): void {
       ? before
       : map.getCanvas();
   target.focus({ preventScroll: true });
+}
+
+/** One Escape/focus lifecycle for both created and adopted popups. */
+function bindPopupKeyboard(popup: maplibregl.Popup, map: maplibregl.Map): () => void {
+  const contains = (target: EventTarget | null): boolean =>
+    target instanceof Node && (popup.getElement()?.contains(target) ?? false);
+  let focusInside = contains(document.activeElement);
+  const onEscape = (event: KeyboardEvent): void => {
+    if (event.key === 'Escape' && currentPopup === popup) dismissResponse();
+  };
+  // An adopted popup can open before its lazy frame creates any DOM. Listen
+  // on the document so the first paint and later hydration keep the same
+  // focus lifecycle even when the popup's element is not available yet.
+  const onFocusIn = (event: FocusEvent): void => {
+    focusInside = contains(event.target);
+  };
+  const onFocusOut = (event: FocusEvent): void => {
+    if (event.relatedTarget instanceof Node && !contains(event.relatedTarget)) focusInside = false;
+  };
+  document.addEventListener('keydown', onEscape);
+  document.addEventListener('focusin', onFocusIn);
+  document.addEventListener('focusout', onFocusOut);
+  return () => {
+    document.removeEventListener('keydown', onEscape);
+    document.removeEventListener('focusin', onFocusIn);
+    document.removeEventListener('focusout', onFocusOut);
+    if (focusInside && !replacingPopup) returnFocus(map);
+  };
 }
 
 /**
@@ -896,36 +938,12 @@ function renderPopup(
     .setDOMContent(container)
     .addTo(map);
 
-  // Keyboard dismissal (acceptance clause 2). MapLibre's Popup focuses its
-  // content on open (`focusAfterOpen`) but does not itself bind Escape to
-  // close; without this, a keyboard user who tabs into the popup has no
-  // keyboard path out of it at all except tabbing all the way past every
-  // link. One document-level listener per open popup, removed the moment
-  // the popup closes (by any route: this key, the close button, or the
-  // next commit's `dismissResponse`), so it can never fire against a
-  // popup that already closed nor leak across commits.
-  const onEscape = (e: KeyboardEvent): void => {
-    if (e.key === 'Escape') dismissResponse();
-  };
-  document.addEventListener('keydown', onEscape);
-
-  // Focus return (M28): whether focus is inside the popup. MapLibre has
-  // already focused its first control on open; a removal while focused
-  // fires focusout with no target, which leaves the flag set.
-  const popupElement = popup.getElement() as HTMLElement | null;
-  let focusInside = popupElement?.contains(document.activeElement) ?? false;
-  popupElement?.addEventListener('focusin', () => {
-    focusInside = true;
-  });
-  popupElement?.addEventListener('focusout', (e) => {
-    if (e.relatedTarget instanceof Node && !popupElement.contains(e.relatedTarget)) focusInside = false;
-  });
-
+  // MapLibre focuses popup content on open but does not bind Escape.
+  const closeKeyboard = bindPopupKeyboard(popup, map);
   popup.on('close', () => {
-    document.removeEventListener('keydown', onEscape);
     closed(popup);
     if (selection && getPlaceSelection() === selection) setPlaceSelection(null);
-    if (focusInside && !replacingPopup) returnFocus(map);
+    closeKeyboard();
   });
   currentPopup = popup;
 

@@ -111,6 +111,12 @@ class FakeNode {
   get firstChild() {
     return this.childNodes[0] ?? null;
   }
+  contains(node) {
+    return node === this || this.childNodes.some((child) => child.contains(node));
+  }
+  get isConnected() {
+    return this === document.body || this.parentNode?.isConnected === true;
+  }
   remove() {
     if (!this.parentNode) return;
     const siblings = this.parentNode.childNodes;
@@ -171,6 +177,16 @@ class FakeElement extends FakeNode {
   querySelector() {
     return null;
   }
+  getClientRects() {
+    return this.isConnected ? [{}] : [];
+  }
+  focus() {
+    if (!this.isConnected || document.activeElement === this) return;
+    const previous = document.activeElement;
+    document.activeElement = this;
+    for (const fn of documentListeners.get('focusout') ?? []) fn({ target: previous, relatedTarget: this });
+    for (const fn of documentListeners.get('focusin') ?? []) fn({ target: this, relatedTarget: previous });
+  }
   // The disclosure's buttons and the briefing door bind clicks; nothing here dispatches one.
   addEventListener() {}
   removeEventListener() {}
@@ -178,7 +194,11 @@ class FakeElement extends FakeNode {
 const mapContainer = new FakeElement();
 /** The document's listeners by event type, as the DOM keeps them (P1-FRAME repair round 2: Escape). */
 const documentListeners = new Map();
+globalThis.Node = FakeNode;
+globalThis.HTMLElement = FakeElement;
 globalThis.document = {
+  body: new FakeElement(),
+  activeElement: null,
   documentElement: { dataset: {} },
   getElementById: (id) => (id === 'map-container' ? mapContainer : null),
   createElement: () => new FakeElement(),
@@ -256,10 +276,14 @@ function harness(layers, { warm = false } = {}) {
   // A popup an earlier case left open keeps its own Escape handler; a fresh
   // harness starts with none, so a case sees only the handlers it caused.
   documentListeners.clear();
+  document.body.textContent = '';
+  document.activeElement = document.body;
+  const canvas = document.body.appendChild(new FakeElement());
   const calls = [];
   /** Every map event handler the coordinator bound, by type (MapLibre's `map.on`). */
   const handlers = new Map();
   const map = {
+    getCanvas: () => canvas,
     on(type, handler) {
       handlers.set(type, [...(handlers.get(type) ?? []), handler]);
     },
@@ -302,8 +326,130 @@ function harness(layers, { warm = false } = {}) {
   const fire = (type) => {
     for (const handler of handlers.get(type) ?? []) handler({ type });
   };
-  return { calls, click, tryClick, fire, ready: warm ? settle() : Promise.resolve() };
+  return { calls, click, tryClick, fire, map, canvas, ready: warm ? settle() : Promise.resolve() };
 }
+
+/** An external popup can open before its frame chunk supplies any DOM. */
+function stationPopup() {
+  let element = null;
+  const closers = [];
+  return {
+    removes: 0,
+    once(type, fn) {
+      if (type === 'close') closers.push(fn);
+      return this;
+    },
+    getElement: () => element,
+    paintElement() {
+      element = document.body.appendChild(new FakeElement());
+      return element.appendChild(new FakeElement());
+    },
+    remove() {
+      this.removes++;
+      if (element?.contains(document.activeElement)) {
+        const previous = document.activeElement;
+        document.activeElement = document.body;
+        for (const fn of documentListeners.get('focusout') ?? []) fn({ target: previous, relatedTarget: null });
+      }
+      element?.remove();
+      element = null;
+      for (const fn of closers.splice(0)) fn();
+      return this;
+    }
+  };
+}
+
+test('Escape closes an adopted station before its lazy frame paints and retires the late paint', async () => {
+  const { map } = harness({});
+  const marker = document.body.appendChild(new FakeElement());
+  marker.focus();
+  const station = stationPopup();
+  const response = coordinator.adoptExternalResponse(station, map, marker);
+  response.paint(MODEL);
+  assert.deepEqual(rendered, [], 'the frame is still pending');
+  assert.deepEqual(press('Escape'), [], 'Escape is not swallowed');
+  assert.equal(station.removes, 1, 'Escape closes the adopted popup once');
+  await settle();
+  assert.deepEqual(rendered, [], 'the retired adoption never serializes or paints');
+  assert.equal(keydownListeners(), 0, 'no Escape handler outlives the popup');
+  assert.equal(document.activeElement, marker, 'focus never left the marker while the frame was pending');
+});
+
+test('an adopted station tracks focus after a late first paint, returns it on Escape, and binds once on each reopen', () => {
+  const { map } = harness({});
+  const marker = document.body.appendChild(new FakeElement());
+  const station = stationPopup();
+  for (let opened = 1; opened <= 2; opened++) {
+    marker.focus();
+    coordinator.adoptExternalResponse(station, map, marker);
+    station.paintElement().focus();
+    assert.deepEqual(press('Enter'), [], 'other keys do not close the popup');
+    assert.equal(station.removes, opened - 1);
+    assert.equal(keydownListeners(), 1, 'one Escape listener for the open popup');
+    press('Escape');
+    assert.equal(station.removes, opened, 'one close per Escape');
+    assert.equal(document.activeElement, marker, 'focus returns to the station marker');
+    assert.equal(keydownListeners(), 0);
+    assert.equal((documentListeners.get('focusin') ?? []).length, 0);
+    assert.equal((documentListeners.get('focusout') ?? []).length, 0);
+  }
+});
+
+test('adopted popup dismissal keeps focus that left for another control, and falls back to the canvas when its marker is gone', () => {
+  const { map, canvas } = harness({});
+  const marker = document.body.appendChild(new FakeElement());
+  const other = document.body.appendChild(new FakeElement());
+  const station = stationPopup();
+  marker.focus();
+  coordinator.adoptExternalResponse(station, map, marker);
+  station.paintElement().focus();
+  other.focus();
+  press('Escape');
+  assert.equal(station.removes, 1);
+  assert.equal(document.activeElement, other, 'a deliberate move outside the popup is preserved');
+
+  marker.focus();
+  coordinator.adoptExternalResponse(station, map, marker);
+  station.paintElement().focus();
+  marker.remove();
+  press('Escape');
+  assert.equal(station.removes, 2);
+  assert.equal(document.activeElement, canvas, 'a disconnected station cannot receive focus');
+  assert.equal(keydownListeners(), 0);
+});
+
+test('replacing an adopted popup with a normal response removes its keyboard listeners', async () => {
+  const { map, tryClick, ready } = harness({ surface: [{ model: MODEL }] }, { warm: true });
+  await ready;
+  const marker = document.body.appendChild(new FakeElement());
+  const station = stationPopup();
+  marker.focus();
+  coordinator.adoptExternalResponse(station, map, marker);
+  assert.equal(keydownListeners(), 1);
+  assert.equal(tryClick(), null);
+  assert.equal(station.removes, 1, 'the normal response replaces the station');
+  assert.equal(keydownListeners(), 1, 'only the replacement response listens');
+  press('Escape');
+  assert.equal(globalThis.__ddmPopups[0].removed, true);
+  assert.equal(station.removes, 1, 'the retired station is not closed a second time');
+  assert.equal(keydownListeners(), 0);
+});
+
+test('a list-opened station returns focus to its visible initiator or the canvas when it is hidden or removed', () => {
+  const { map, canvas } = harness({});
+  const item = document.body.appendChild(new FakeElement());
+  const station = stationPopup();
+  for (const state of ['visible', 'hidden', 'removed']) {
+    coordinator.adoptExternalResponse(station, map, item);
+    station.paintElement().focus();
+    if (state === 'hidden') item.getClientRects = () => [];
+    if (state === 'removed') item.remove();
+    press('Escape');
+    const expected = state === 'visible' ? item : canvas;
+    assert.ok(document.activeElement === expected, `${state}: use the first available return target`);
+    assert.equal(keydownListeners(), 0);
+  }
+});
 
 test('a model answer hands the popup path exactly the frame serialization', async () => {
   const { tryClick, ready } = harness({ surface: [{ model: MODEL }] }, { warm: true });
@@ -470,7 +616,7 @@ test('removing the map during the wait retires the commit even with no popup on 
 });
 
 test('closing an adopted station popup during the wait retires the commit', async () => {
-  const { tryClick } = harness({ place: [STALE] });
+  const { tryClick, map } = harness({ place: [STALE] });
   const closers = [];
   // The shape adoptExternalResponse reads; MapLibre's close control calls
   // remove(), which fires the popup's 'close'.
@@ -485,7 +631,7 @@ test('closing an adopted station popup during the wait retires the commit', asyn
       return station;
     }
   };
-  coordinator.adoptExternalResponse(station);
+  coordinator.adoptExternalResponse(station, map, document.body);
   const thrown = tryClick();
   station.remove();
   await settle();

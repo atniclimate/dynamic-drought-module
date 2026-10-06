@@ -252,7 +252,73 @@ test.describe('InteractionCoordinator: one click, one response', () => {
     await expect(page.locator('.maplibregl-popup-content')).toContainText(
       'Puget Sound Vital Signs'
     );
+    const close = popup.getByRole('button', { name: 'Close popup' });
+    await close.focus();
+    await page.keyboard.press('Escape');
+    await expect(popup).toHaveCount(0);
+    await expect(marker).toBeFocused();
   });
+
+  for (const key of ['Enter', 'Space'] as const) {
+    test(`a focused station marker opens once with ${key}, and Escape returns focus on each open`, async ({ page }) => {
+      await page.setViewportSize({ width: 1440, height: 900 });
+      // Keep the curated markers fixed while testing the actual MapLibre
+      // marker key handler. Discovery failure is an intentional offline fixture.
+      await page.route('**/ddm-proxy.atniclimate.workers.dev/**', (route) => route.abort('failed'));
+      await page.route('**/waterservices.usgs.gov/**', (route) => route.abort('failed'));
+      await gotoApp(page, '?region=washington_state&view=console&layers=telemetry');
+      await waitForLayerSettled(page, 'telemetry');
+      const marker = page.locator('[data-telemetry-station-id="ps_vital_signs"]');
+      const popup = page.locator('.maplibregl-popup');
+      await expect(marker).toHaveCount(1);
+      await expect(marker).toHaveAttribute('tabindex', '0');
+      await expect(marker).toHaveAttribute('role', 'button');
+      for (let opened = 0; opened < 2; opened++) {
+        await marker.focus();
+        await expect(marker).toBeFocused();
+        await page.keyboard.press(key);
+        await expect(popup).toHaveCount(1);
+        await expect(popup.locator('[data-popup-frame]')).toContainText('Puget Sound Vital Signs');
+        await expect(popup).toHaveAttribute('data-ddm-external-response', '');
+        const close = popup.getByRole('button', { name: 'Close popup' });
+        await close.focus();
+        await expect(close).toBeFocused();
+        await page.keyboard.press('Escape');
+        await expect(popup).toHaveCount(0);
+        await expect(marker).toBeFocused();
+      }
+    });
+  }
+
+  for (const view of ['console', 'brief'] as const) {
+    test(`Escape after a Water & Snow ${view} opener returns to its visible button or the canvas`, async ({ page }) => {
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.route('**/ddm-proxy.atniclimate.workers.dev/**', (route) => route.abort('failed'));
+      await page.route('**/waterservices.usgs.gov/**', (route) => route.abort('failed'));
+      await gotoApp(page, `?region=washington_state&view=${view}&layers=telemetry`);
+      await waitForLayerSettled(page, 'telemetry');
+      if (view === 'brief') await page.locator('#layers-studio-entry').click();
+      await page.locator('#telemetry-reveal').click();
+      const item = page.locator('.telemetry-item', { hasText: 'Ice Harbor Dam' });
+      await item.focus();
+      await expect(item).toBeFocused();
+      await page.keyboard.press('Enter');
+      const popup = page.locator('.maplibregl-popup');
+      await expect(popup).toHaveCount(1);
+      await expect(popup.locator('.popup-title')).toHaveText('Ice Harbor Dam');
+      await popup.getByRole('button', { name: 'Close popup' }).focus();
+      await page.keyboard.press('Escape');
+      await expect(popup).toHaveCount(0);
+      if (view === 'console') {
+        await expect(item).toBeVisible();
+        await expect(item).toBeFocused();
+      } else {
+        await expect(page.locator('.layers-studio')).toHaveCount(0);
+        await expect(item).toBeHidden();
+        await expect(page.locator('#map canvas.maplibregl-canvas')).toBeFocused();
+      }
+    });
+  }
 
   test('a broad surface never blankets a boundary: SPC ranks as a condition surface', async ({
     page

@@ -22,10 +22,10 @@
  * layer's debounced viewport discovery, and every discovery rebuilds every
  * marker and closes an open popup with it, so each row waits for the markers
  * to hold still and opens the popup again before it reads; (2) an adopted
- * popup has no Escape handler and is offered no late briefing door (the
- * marker is the subject; the coordinator attaches the door only to its own
- * popup), so it is closed with its own close control and the row asserts
- * the door's absence.
+ * popup is offered no late briefing door (the marker is the subject; the
+ * coordinator attaches the door only to its own popup), so the row asserts
+ * the door's absence. These tier rows use the popup's own close control;
+ * keyboard dismissal has its coordinator cases.
  */
 import { expect, type Page, type Route } from '@playwright/test';
 import type { TierFixture } from './frame-fixtures';
@@ -258,7 +258,7 @@ async function openStation(page: Page, coveredMap: 'fail' | 'dispatch' = 'fail')
   return opened!;
 }
 
-/** Close the adopted popup with its own close control (it binds no Escape). */
+/** Close the adopted popup with its own close control. */
 async function closeStation(page: Page): Promise<void> {
   const popup = page.locator('.maplibregl-popup');
   if ((await popup.count()) > 0) await page.locator('.maplibregl-popup .maplibregl-popup-close-button').click();

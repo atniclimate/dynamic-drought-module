@@ -1136,7 +1136,7 @@ function buildTelemetryList(
       // from cache or joins the in-flight fetch.
       void import('../layers/telemetry')
         .then(({ flyToStation }) => {
-          flyToStation(map, station.id);
+          flyToStation(map, station.id, item);
         })
         .catch((err: unknown) => {
           console.error('[sidebar] telemetry fly-to failed to load:', err);

@@ -81,6 +81,8 @@ const stationByMarker = new WeakMap<maplibregl.Marker, TelemetryStation>();
  * garbage collection of stale entries follows the marker's lifetime.
  */
 const abortControllers = new WeakMap<maplibregl.Marker, AbortController>();
+/** The list button belongs only to the synchronous popup open it requested. */
+const popupOrigins = new WeakMap<maplibregl.Marker, HTMLElement>();
 
 const LAYER_KEY = 'telemetry';
 const MOVEEND_DEBOUNCE_MS = 350;
@@ -260,8 +262,10 @@ function renderStations(map: maplibregl.Map, views: readonly TelemetryMarkerView
 
     const marker = new maplibregl.Marker({ element: el })
       .setLngLat([lng, lat])
-      .setPopup(popup)
-      .addTo(map);
+      // addTo removes an earlier keypress listener in MapLibre 6.6; bind
+      // the popup afterward so its native Enter/Space handler remains.
+      .addTo(map)
+      .setPopup(popup);
 
     stationByMarker.set(marker, station);
     markersByStationId.set(station.id, marker);
@@ -582,7 +586,7 @@ function clearMarkers(): void {
  *   1. Abort and clear the controller so an in-flight read can no longer
  *      paint the popup.
  */
-export function bindPopups(_map: maplibregl.Map): void {
+export function bindPopups(map: maplibregl.Map): void {
   for (const marker of activeMarkers) {
     const station = stationByMarker.get(marker);
     if (!station) continue;
@@ -597,7 +601,9 @@ export function bindPopups(_map: maplibregl.Map): void {
       // station is the table's top point-event, so the marker popup
       // WINS: adopting it dismisses any coordinator response committed
       // for the same click and occupies the single response slot.
-      const response = adoptExternalResponse(popup);
+      const origin = popupOrigins.get(marker) ?? marker.getElement();
+      popupOrigins.delete(marker);
+      const response = adoptExternalResponse(popup, map, origin);
 
       // Abort any prior in-flight read from a popup that the user opened
       // and dismissed quickly.
@@ -863,7 +869,7 @@ function radians(degrees: number): number {
  *
  * No-op if `stationId` is not in the active marker set.
  */
-export function flyToStation(map: maplibregl.Map, stationId: string): void {
+export function flyToStation(map: maplibregl.Map, stationId: string, origin?: HTMLElement): void {
   const marker = markersByStationId.get(stationId);
   if (!marker) return;
 
@@ -883,6 +889,12 @@ export function flyToStation(map: maplibregl.Map, stationId: string): void {
     // mid-flight (for example, the user toggled the layer off while the
     // animation was running).
     if (!markersByStationId.has(stationId)) return;
-    marker.togglePopup();
+    popupOrigins.set(marker, origin ?? marker.getElement());
+    try {
+      marker.togglePopup();
+    } finally {
+      // A toggle can close an already-open popup without firing an open event.
+      popupOrigins.delete(marker);
+    }
   });
 }
