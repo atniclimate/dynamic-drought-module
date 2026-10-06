@@ -48,6 +48,7 @@ import type { LayerRole, LayerStatus } from '../../types/layer';
 import type { LayerController } from '../../state/layer-controller';
 import { resolveStatusPillText } from './pill-text';
 import { setChecked } from './bridge';
+import { isFailedCheckedLayer, requestLayerOn } from '../layer-toggle-command';
 
 /**
  * User-facing labels for the four role groups (UX-1), moved verbatim
@@ -134,7 +135,16 @@ function LayerRow({
   const coverage = def.key === 'hillshade' ? coverageCue(def.source) : null;
 
   const onChange = (event: Event): void => {
-    const on = (event.currentTarget as HTMLInputElement).checked;
+    const input = event.currentTarget as HTMLInputElement;
+    // A press retries the failed committed layer without withdrawing intent.
+    // Restore the native checkbox first: its change event has already flipped
+    // the DOM, while the bridge still records the committed checked state.
+    if (isFailedCheckedLayer(def.key)) {
+      input.checked = true;
+      requestLayerOn(def.key);
+      return;
+    }
+    const on = input.checked;
     setChecked(def.key, on);
     if (on) {
       void controller.activate(def.key);

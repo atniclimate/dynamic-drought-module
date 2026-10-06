@@ -38,9 +38,14 @@ function isOn(key: string): boolean {
   return isChecked(key) || registry.getActiveKeys().has(key);
 }
 
+/** A committed layer's failed activation keeps its on-intent for retry. */
+export function isFailedCheckedLayer(key: string): boolean {
+  return isChecked(key) && !registry.getActiveKeys().has(key) && registry.getStatus(key) === 'error';
+}
+
 /**
- * Turn a layer on if the recorded INTENT is not already on. Deliberately
- * intent-only (never `isOn`): a layer whose off-toggle is still draining
+ * Turn a layer on if intent is off, or retry its failed checked activation.
+ * Otherwise intent-only (never `isOn`): a layer whose off-toggle is still draining
  * through the per-key op chain is registry-active with its checkbox
  * unchecked, and during that window a re-on request must proceed, not
  * silently no-op (found 2026-07-15, the Unit I session: a quick
@@ -53,7 +58,7 @@ function isOn(key: string): boolean {
  * every existing activation path does.
  */
 export function requestLayerOn(key: string): void {
-  if (isChecked(key)) return;
+  if (isChecked(key) && !isFailedCheckedLayer(key)) return;
   setChecked(key, true);
   void controller?.activate(key);
 }

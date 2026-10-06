@@ -15,7 +15,7 @@ import type { ReadonlySignal } from '@preact/signals';
 
 import { getLayerDef } from '../../config/layers';
 import { timeline } from '../../state/timeline';
-import { requestLayerOff, requestLayerOn } from '../layer-toggle-command';
+import { isFailedCheckedLayer, requestLayerOff, requestLayerOn } from '../layer-toggle-command';
 import { HAZARD_CLUSTERS } from '../../config/clusters';
 import type { HazardClusterKey } from '../../config/clusters';
 import { getHazardCluster, onHazardClusterChange } from '../../state/cluster-store';
@@ -63,7 +63,7 @@ function clusterOffersDroughtFamily(clusterKey: HazardClusterKey): boolean {
  * state ("Show") and accessible-plus-hover elsewhere, so the strip
  * still reads as a summary first, not a second catalog.
  */
-function tileAriaLabel(name: string, m: Metric, isOn: boolean, disclose: boolean): string {
+function tileAriaLabel(name: string, m: Metric, isOn: boolean, disclose: boolean, retries: boolean): string {
   let status: string;
   if (m.tone === 'data') {
     status = `${m.value} ${m.sublabel}.`;
@@ -79,7 +79,8 @@ function tileAriaLabel(name: string, m: Metric, isOn: boolean, disclose: boolean
     status = `${name} ${m.sublabel}.`;
   }
   const stale = m.stale ? ' Reading is stale.' : '';
-  const action = isOn
+  // DRAFT wording (DR-177): "Press to retry." names the failed checked tile's action.
+  const action = retries ? ' Press to retry.' : isOn
     ? ` ${name} layer on. Press to hide.`
     : ` Press to show.${
         disclose ? ` Showing ${name} replaces the current condition surface.` : ''
@@ -100,6 +101,9 @@ function MetricTile({
 }) {
   const name = getLayerDef(tile.key)?.name ?? tile.key;
   const showsDetails = id === 'drought' && isOn;
+  const retries = !showsDetails && isFailedCheckedLayer(tile.key);
+  // DRAFT wording (DR-177): failed checked tile action "Retry" and title "Retry {layer name}".
+  const action = retries ? 'Retry' : 'Hide';
   const [detailsOpen, setDetailsOpen] = useState(false);
   useEffect(() => {
     const update = (event: Event): void => {
@@ -112,7 +116,7 @@ function MetricTile({
   const onClick = (): void => {
     if (showsDetails) {
       window.dispatchEvent(new Event('ddm:toggle-map-key-details'));
-    } else if (isOn) {
+    } else if (isOn && !isFailedCheckedLayer(tile.key)) {
       requestLayerOff(tile.key);
     } else {
       requestLayerOn(tile.key);
@@ -132,12 +136,12 @@ function MetricTile({
       aria-controls={showsDetails ? 'map-key-content' : undefined}
       aria-label={showsDetails
         ? `${m.value} ${m.sublabel}.${m.stale ? ' Reading is stale.' : ''} ${detailsOpen ? 'Close' : 'Open'} drought details and key.`
-        : tileAriaLabel(name, m, isOn, tile.disclose)}
+        : tileAriaLabel(name, m, isOn, tile.disclose, retries)}
       title={
         showsDetails
           ? 'Drought details and key'
           : isOn
-          ? `Hide ${name}`
+          ? `${action} ${name}`
           : tile.disclose
             ? `Show ${name} (replaces the current condition surface)`
             : `Show ${name}`
@@ -162,10 +166,10 @@ function MetricTile({
         {m.stale ? <span class="conditions-stale-tag">stale</span> : null}
       </span>
       {!isOn && m.tone === 'off' ? <span class="conditions-action">Show</span> : null}
-      {/* Name the action visibly: active drought opens the key, while the
-          Console's event tiles retain their explicit Hide action. */}
+      {/* Name the action visibly: active drought opens the key; event tiles
+          retry failed activation or hide their active layer. */}
       {isOn && m.tone !== 'loading' ? (
-        <span class="conditions-action conditions-action-hide">{showsDetails ? 'Key' : 'Hide'}</span>
+        <span class="conditions-action conditions-action-hide">{showsDetails ? 'Key' : action}</span>
       ) : null}
     </button>
   );
