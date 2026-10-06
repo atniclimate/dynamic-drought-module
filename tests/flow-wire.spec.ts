@@ -5,7 +5,7 @@ import { expect, test, type Locator, type Page, type Route } from './offline-tes
 
 import * as ensoFlowData from '../src/layers/enso-flow-data';
 import { locateMessage } from '../src/layers/flow/nodd';
-import { FLOW_SOURCES } from '../src/layers/flow/source';
+import { FLOW_SOURCES, frameGrid } from '../src/layers/flow/source';
 import { gotoApp, layerCheckbox, noddStubLog } from './helpers';
 
 /*
@@ -138,6 +138,28 @@ async function captureFlowRestoreMap(page: Page): Promise<void> {
       }
     });
   });
+}
+
+/** Count geometric grid nodes with the actual camera, independently of masks and direction marks. */
+async function geometricNodeCount(page: Page, kind: 'wind' | 'waves'): Promise<number> {
+  return page.evaluate((grid) => {
+    const map = (window as FlowRestoreWindow).__flowRestoreMaps!.find((candidate) => candidate.getContainer().id === 'map')!;
+    const bounds = map.getBounds();
+    const canvas = map.getCanvas();
+    const center = map.getCenter().lng;
+    const first = Math.max(0, Math.ceil((grid.lat0 - bounds.getNorth()) / grid.dlat - 1e-9));
+    const last = Math.min(grid.ny - 1, Math.floor((grid.lat0 - bounds.getSouth()) / grid.dlat + 1e-9));
+    let count = 0;
+    for (let row = first; row <= last; row++) {
+      for (let column = 0; column < grid.nx; column++) {
+        let longitude = grid.lon0 + column * grid.dlon;
+        longitude += Math.round((center - longitude) / 360) * 360;
+        const point = map.project([longitude, grid.lat0 - row * grid.dlat]);
+        if (point.x >= 0 && point.x <= canvas.clientWidth && point.y >= 0 && point.y <= canvas.clientHeight) count++;
+      }
+    }
+    return count;
+  }, frameGrid(kind));
 }
 
 /** A dated instant in the page's own Intl, the panel's own format. */
@@ -584,6 +606,7 @@ test.describe('E2-1 flowing paths in ENSO mode', () => {
   }
 
   test('wind zoomed in between grid nodes (z10) reads live with node arrows, never no data or the wave-marks words', async ({ page }) => {
+    await captureFlowRestoreMap(page);
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.clock.setFixedTime(LIVE_CLOCK);
@@ -593,10 +616,9 @@ test.describe('E2-1 flowing paths in ENSO mode', () => {
     await expect(panel(page)).toHaveAttribute('data-status', 'live');
     await expect(panel(page)).toHaveAttribute('data-flow-form', 'still');
     await zoomInSteps(page, 4);
-    // Two honest outcomes past the grid: a model node inside the view draws its
-    // node arrows; no node inside the view draws nothing and says so (E2-1's
-    // review fix). Either way the status stays live and never reads wave marks.
-    const NO_MODEL_POINT = "No model point falls inside this view; zoom out to see the model's values.";
+    // Separate geometric coverage from drawable direction marks: an in-view
+    // model point can lack a mark. The native camera provides the coverage proof.
+    const nodes = await geometricNodeCount(page, 'wind');
     await expect(panel(page)).toHaveAttribute('data-status', 'live');
     const featureStamp = await panel(page).getAttribute('data-flow-features');
     expect(featureStamp).toMatch(/^\d+$/);
@@ -608,6 +630,7 @@ test.describe('E2-1 flowing paths in ENSO mode', () => {
     await openKeyDrawer(page);
     await expect(flowStatus(page)).toContainText('Atmospheric currents · live · Model run ');
     if (features > 0) {
+      expect(nodes).toBeGreaterThan(0);
       await expect(panel(page)).toHaveAttribute('data-flow-form', 'arrows');
       await expect(panel(page)).toHaveAttribute('data-flow-drawn', 'wind');
       await expect(flowNotes(page)).toContainText(FLOW_WORDS.pastGrid);
@@ -616,12 +639,13 @@ test.describe('E2-1 flowing paths in ENSO mode', () => {
       await expect(panel(page)).toHaveAttribute('data-flow-form', 'none');
       await expect(panel(page)).toHaveAttribute('data-flow-drawn', '');
       await expect(panel(page)).toHaveAttribute('data-flow-features', '0');
-      await expect(flowNotes(page)).toContainText(NO_MODEL_POINT);
+      await expect(flowNotes(page)).toContainText(nodes > 0 ? FLOW_WORDS.noNodeDirection : FLOW_WORDS.noModelPoint);
     }
     await expect(flowNotes(page)).not.toContainText(FLOW_WORDS.waveBox);
   });
 
   test('waves zoomed in inside the crop (z12) read live with honest native-output stamps, never outside the wave marks area', async ({ page }) => {
+    await captureFlowRestoreMap(page);
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.clock.setFixedTime(LIVE_CLOCK);
@@ -630,6 +654,7 @@ test.describe('E2-1 flowing paths in ENSO mode', () => {
     await gotoApp(page, '?cluster=enso&select=state:HI&flow=waves');
     await expect(panel(page)).toHaveAttribute('data-status', /^live/);
     await zoomInSteps(page, 6);
+    const nodes = await geometricNodeCount(page, 'waves');
     const featureStamp = await panel(page).getAttribute('data-flow-features');
     expect(featureStamp).toMatch(/^\d+$/);
     const features = Number(featureStamp);
@@ -642,6 +667,12 @@ test.describe('E2-1 flowing paths in ENSO mode', () => {
     await expect(status).toContainText('live · Model run ');
     await openKeyDrawer(page);
     await expect(flowStatus(page)).toContainText('Ocean waves · live · Model run ');
+    if (features > 0) {
+      expect(nodes).toBeGreaterThan(0);
+      await expect(flowNotes(page)).toContainText(FLOW_WORDS.pastGrid);
+    } else {
+      await expect(flowNotes(page)).toContainText(nodes > 0 ? FLOW_WORDS.noNodeDirection : FLOW_WORDS.noModelPoint);
+    }
   });
 
   test('if the ribbon rebuild throws after a context restore, the still form stands and the detail says so', async ({ page }) => {
