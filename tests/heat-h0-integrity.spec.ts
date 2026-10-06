@@ -206,13 +206,21 @@ test('an all-404 HeatRisk selected frame becomes unavailable', async ({
   page
 }) => {
   await stubHeatRisk(page, 'missing');
+  // found-103: gotoApp's boot-idle wait is bounded by the default 10 s expect
+  // timeout, but an all-404 selected frame only settles after its own retry
+  // schedule, which a loaded runner can stretch past that. Opt out of the
+  // boot-idle wait and wait on the settled unavailable state itself, the
+  // thing this case is about. The budget is the layer's own bound (the 10 s
+  // tile-success deadline plus its 10 s fetch timeout, src/layers/heatrisk.ts)
+  // with margin, so it cannot expire before the layer has had its full say.
   await gotoApp(
     page,
-    '?region=washington_state&layers=heatrisk&view=console'
+    '?region=washington_state&layers=heatrisk&view=console',
+    { bootIdle: false }
   );
 
   await expect(layerPill(page, 'heatrisk')).toHaveText('unavailable', {
-    timeout: 15_000
+    timeout: 25_000
   });
 });
 

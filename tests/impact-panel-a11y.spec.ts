@@ -159,8 +159,14 @@ test.describe('impact panel accessibility', () => {
   test('Tab reaches Technical information after resources and wraps within the modal', async ({ page }) => {
     await gotoApp(page, '?select=state:WA');
     const panel = page.locator('#impact-panel');
+    // found-110: wait on the settled modal, not only its flag. The panel is
+    // visible (its first paint is done), no horizon cell and no point-heat
+    // card is still loading (each settling lane re-renders the body, which
+    // replaces every focusable in it), and the catalog row below has landed.
+    await expect(panel).toBeVisible({ timeout: 15_000 });
     await expect(panel).toHaveAttribute('aria-modal', 'true');
     await expect(panel.locator('.impact-horizon-loading')).toHaveCount(0);
+    await expect(panel.locator('.point-heat-pill-loading')).toHaveCount(0);
     const lastResource = panel.locator('.impact-resources a[href]').last();
     const technical = panel.locator('.impact-technical-information');
     const summary = technical.locator('summary');

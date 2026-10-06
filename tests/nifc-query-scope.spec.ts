@@ -358,9 +358,16 @@ test.describe('NIFC WFIGS query scope', () => {
     async function popupTitleAtMapCenter(page: Page): Promise<string> {
       const mapBox = await page.locator('#map').boundingBox();
       if (!mapBox) throw new Error('map container has no box');
-      await page.mouse.click(mapBox.x + mapBox.width / 2, mapBox.y + mapBox.height / 2);
       const title = page.locator('.popup-title').first();
-      await expect(title).toBeVisible();
+      // found-105: a click that lands while the settled collection is not
+      // yet queryable opens no popup, and a loaded runner can stretch that
+      // window. Retry the click until the popup title shows, as
+      // text-registration's `openPlaceResponse` does. Only the wait changed:
+      // what the title reads is still asserted by the callers.
+      await expect(async () => {
+        await page.mouse.click(mapBox.x + mapBox.width / 2, mapBox.y + mapBox.height / 2);
+        await expect(title).toBeVisible({ timeout: 1500 });
+      }).toPass({ timeout: 20_000 });
       return ((await title.textContent()) ?? '').trim();
     }
 
@@ -812,14 +819,25 @@ test.describe('DDM-P14-T07: the briefing and the minimap read the loaded NIFC co
     // start at page load; the minimap's retained fetch does not wait on
     // ANY layer status), so its initial nine queries can land before the
     // layer settles to `ready` and are not this case's subject. A live
-    // mode toggle away from and back to Wildfire unmounts then remounts
-    // `retainMinimapWildfire` (src/ui/island/minimap.tsx gates it on
-    // `metricContext === 'wildfire'`), which is "a minimap refresh" (the
+    // view toggle to Console and back to Brief unmounts then remounts
+    // `retainMinimapWildfire` (src/ui/island/minimap.tsx: its effect skips
+    // `viewMode === 'console'`), which is "a minimap refresh" (the
     // acceptance sentence's phrase) driven well after `waitForLayerSettled`
-    // above, with the layer unambiguously `ready`.
+    // above, with the layer unambiguously `ready`: a view switch changes no
+    // layer. found-136: this was a cluster toggle (Drought, then Wildfire),
+    // and that re-queues the layer itself (Wildfire off, then on again, so
+    // its status is `loading` while the collection is read once more). Whether
+    // the minimap's remount saw `ready` or `loading` was therefore a race; on
+    // `loading` the Hawaii framing correctly took its count-only POST, which
+    // this case stubs as `{ count: 0 }`, and read below-threshold.
     countGeometries.length = 0;
-    await page.locator('.shell-cluster-btn[data-cluster="drought"]').click();
-    await page.locator('.shell-cluster-btn[data-cluster="wildfire"]').click();
+    await page.locator('.view-switch [data-view="console"]').click();
+    await expect(page.locator('.view-switch [data-view="console"]')).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+    await page.locator('.view-switch [data-view="brief"]').click();
+    await expect(layerPill(page, 'nifc-fires')).toHaveClass(/ready/);
 
     const expectedCount = HAWAII_STUB.features.filter((feature) =>
       matchesMinimapActiveFilter(feature.properties)
