@@ -13,4 +13,8 @@ public/data/landscape-signature-pnw.json -text
 # (tests/helpers.ts) and checked by length and hash: no end-of-line conversion.
 tests/fixtures/flow/*.idx -text
 tests/fixtures/flow/reference.json -text
+# The notices file and its shipped copy are compared byte for byte and read line
+# by line (tests/third-party-notices.test.mjs): LF on every checkout.
+THIRD-PARTY-NOTICES.md text eol=lf
+public/THIRD-PARTY-NOTICES.md text eol=lf
 .githooks/* text eol=lf
