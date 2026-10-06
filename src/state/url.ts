@@ -6,7 +6,7 @@ import { HAZARD_CLUSTERS, TEMPORAL_HORIZON_KEYS } from '../config/clusters';
 import type { HazardClusterKey } from '../config/clusters';
 import type { OceanKey } from '../config/oceans';
 import { deriveViewMode } from './view-mode';
-import { parseEnsoFlowParams, writeEnsoFlowParams } from './enso-flow';
+import { ensoFlowModeDefault, parseEnsoFlowParams, writeEnsoFlowParams } from './enso-flow';
 import type { ViewMode } from './view-mode';
 import { parseBasemapParam } from './basemap-store';
 import type { BasemapMode } from './basemap-store';
@@ -543,6 +543,20 @@ export interface UrlSyncState {
 }
 
 /**
+ * The ENSO flow panel (src/layers/enso-flow.ts, `.enso-flow`) is in the page:
+ * it has parsed its preference from the link and keeps it. Read from the DOM
+ * because the panel mounts after the layer activates, and this module must not
+ * import the lazy layer.
+ */
+function ensoFlowPanelMounted(): boolean {
+  return (
+    typeof document !== 'undefined' &&
+    typeof document.querySelector === 'function' &&
+    document.querySelector('.enso-flow') !== null
+  );
+}
+
+/**
  * Replace the current history entry with a URL that encodes `state`.
  *
  *   region   only emitted when non-null
@@ -582,7 +596,6 @@ export function syncUrl(state: UrlSyncState): void {
     new URLSearchParams(window.location.search)
   );
   const params = new URLSearchParams();
-  const flow = parseEnsoFlowParams(new URLSearchParams(window.location.search));
 
   if (state.region) {
     params.set('region', state.region);
@@ -655,7 +668,26 @@ export function syncUrl(state: UrlSyncState): void {
     params.set('studio', state.studio);
   }
   if (state.layers.has('sst-anomaly') || state.cluster === 'enso') {
-    writeEnsoFlowParams(params, flow);
+    // A link with no `flow=` means the default of the mode it names. The link
+    // being replaced names the mode being left, so a switch INTO a mode that
+    // has a default reads the absent key as that new default (ENSO opens with
+    // wind, never `flow=off`), from the cluster definitions (DR-113). That
+    // holds only until the flow panel exists: the panel parses the link once,
+    // when it mounts, and keeps that preference. A switch writes several
+    // intermediate links before the panel mounts (the granular intent with the
+    // SST surface lands first), so what the link shows cannot tell a switch
+    // from a custom display. Once the panel is mounted it has its preference
+    // (a display that already showed the SST surface keeps it through an ENSO
+    // press, nothing activates again), and the link must keep saying what the
+    // panel shows, so the current link's own default applies. The same goes
+    // where the new display has no default, so wind survives a move to the
+    // granular display. An explicit `flow=` is read as written either way.
+    const current = new URLSearchParams(window.location.search);
+    const entered = ensoFlowModeDefault(params);
+    writeEnsoFlowParams(
+      params,
+      parseEnsoFlowParams(current, entered === 'off' || ensoFlowPanelMounted() ? ensoFlowModeDefault(current) : entered)
+    );
   }
 
   const url = window.location.pathname + '?' + params.toString();

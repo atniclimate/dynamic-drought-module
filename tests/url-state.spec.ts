@@ -963,9 +963,10 @@ test.describe('D1 M13: the Share control states its own restore contract (found-
  * cluster field (C-fit.md 1.4). A mode whose definition carries `flowDefault`
  * opens with that kind when its link names no `flow=`; `flow=off` is the new
  * token that keeps it off, written only where that default is on. Block E1
- * sets `flowDefault` on no cluster, so ENSO still opens with flow off; the
- * default-on cases here pass a synthetic cluster table or an explicit
- * default, never a real cluster's.
+ * set `flowDefault` on no cluster; E2-4 (DR-111, precedence.md 2.4) sets it
+ * on ENSO alone, as wind, so ENSO opens with wind on. The default-on cases
+ * here still pass a synthetic cluster table or an explicit default, so they
+ * hold whatever a real cluster carries.
  */
 test.describe('E1-5: flow=off and the flowDefault cluster field', () => {
   /** Parse, then write back over the same query, as the cloning writer does. */
@@ -1054,16 +1055,23 @@ test.describe('E1-5: flow=off and the flowDefault cluster field', () => {
       [key]: { ...HAZARD_CLUSTERS[key], flowDefault }
     });
 
-    // Block E1 sets it on no cluster: ENSO still opens with flow off, and an
-    // off ENSO link writes no flow=off.
+    // E2-4 sets it on ENSO alone (DR-111 wind): ENSO opens with wind, the
+    // other modes open with flow off, and an off ENSO link writes flow=off.
     for (const key of HAZARD_CLUSTER_KEYS) {
-      expect(HAZARD_CLUSTERS[key].flowDefault, `${key} carries no flowDefault in block E1`).toBeUndefined();
+      const token = HAZARD_CLUSTERS[key].urlToken;
+      expect(HAZARD_CLUSTERS[key].flowDefault, `${key}'s flowDefault`).toBe(token === 'enso' ? 'wind' : undefined);
     }
-    expect(ensoFlowState.ensoFlowModeDefault(new URLSearchParams('cluster=enso'))).toBe('off');
-    expect(parseEnsoFlowParams(new URLSearchParams('cluster=enso'))).toEqual({ kind: 'off', ink: 'light' });
+    expect(ensoFlowState.ensoFlowModeDefault(new URLSearchParams('cluster=enso'))).toBe('wind');
+    expect(ensoFlowState.ensoFlowModeDefault(new URLSearchParams('cluster=wildfire'))).toBe('off');
+    expect(ensoFlowState.ensoFlowModeDefault(new URLSearchParams('view=console'))).toBe('off');
+    expect(parseEnsoFlowParams(new URLSearchParams('cluster=enso'))).toEqual({ kind: 'wind', ink: 'light' });
+    expect(parseEnsoFlowParams(new URLSearchParams('cluster=enso&flow=off'))).toEqual({ kind: 'off', ink: 'light' });
     const enso = new URLSearchParams('cluster=enso');
     writeEnsoFlowParams(enso, { kind: 'off', ink: 'light' });
-    expect(enso.toString()).toBe('cluster=enso');
+    expect(enso.toString()).toBe('cluster=enso&flow=off');
+    const ensoWindDefault = new URLSearchParams('cluster=enso');
+    writeEnsoFlowParams(ensoWindDefault, { kind: 'wind', ink: 'light' });
+    expect(ensoWindDefault.toString()).toBe('cluster=enso');
 
     // The field decides, whichever cluster carries it.
     const ensoWind = withDefault('enso', 'wind');
@@ -1074,7 +1082,8 @@ test.describe('E1-5: flow=off and the flowDefault cluster field', () => {
     expect(ensoFlowState.ensoFlowModeDefault(new URLSearchParams('cluster=enso&layers=sst-anomaly'), ensoWind)).toBe('off');
     const wildfireWaves = withDefault('wildfire', 'waves');
     expect(ensoFlowState.ensoFlowModeDefault(new URLSearchParams('cluster=wildfire'), wildfireWaves)).toBe('waves');
-    expect(ensoFlowState.ensoFlowModeDefault(new URLSearchParams('cluster=enso'), wildfireWaves)).toBe('off');
+    // ENSO keeps its own field (wind) beside the synthetic Wildfire default.
+    expect(ensoFlowState.ensoFlowModeDefault(new URLSearchParams('cluster=enso'), wildfireWaves)).toBe('wind');
     // Drought's URL truth is absence, so a default on Drought reads from no token.
     expect(ensoFlowState.ensoFlowModeDefault(new URLSearchParams('view=console'), withDefault('drought', 'currents'))).toBe('currents');
 

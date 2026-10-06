@@ -58,7 +58,8 @@ test('all three ENSO overlays remain bounded, independently timed, and preserve 
     // The wave crop ends at 165 E and 100 W, inside this Pacific view's edges.
     await expect(panel).toHaveAttribute('data-status', kind === 'waves' ? /^live/ : 'live');
     await expect(panel.locator('.enso-flow-status')).toContainText('Model valid');
-    expect(new URLSearchParams(await search(page)).get('flow')).toBe(kind);
+    // Wind is ENSO's default since E2-4, written as the absence of the key.
+    expect(new URLSearchParams(await search(page)).get('flow')).toBe(kind === 'wind' ? null : kind);
   }
   // Only ocean currents read Open-Meteo; wind and waves read the NODD fixtures.
   expect(calls).toHaveLength(before + 1);
@@ -78,14 +79,16 @@ test('all three ENSO overlays remain bounded, independently timed, and preserve 
   await expect(panel).toContainText('independently timed from the observed SST map');
   await panel.locator('[data-flow-kind="off"]').click();
   await expect(panel).toHaveAttribute('data-status', 'off');
-  expect(new URLSearchParams(await search(page)).has('flow')).toBe(false);
+  // Off is written beside ENSO's wind default so the link keeps meaning off (E2-4).
+  expect(new URLSearchParams(await search(page)).get('flow')).toBe('off');
 });
 
 test('turning an ENSO overlay off aborts its held request and drops the late response', async ({ page }) => {
   await stubSst(page);
   let held: Route | null = null;
   await page.route(FLOW_ROUTE, (route) => { held = route; });
-  await gotoApp(page, '?cluster=enso&ocean=pacific&view=brief&basemap=default');
+  // flow=off: the boot reads nothing, so the only held request is the currents one below (ENSO opens with wind since E2-4).
+  await gotoApp(page, '?cluster=enso&ocean=pacific&view=brief&basemap=default&flow=off');
   const panel = page.locator('.enso-flow');
   // Ocean currents, the one kind still sampled from Open-Meteo (wind and
   // waves: tests/flow-wire.spec.ts "off intent aborts every range").
@@ -97,7 +100,7 @@ test('turning an ENSO overlay off aborts its held request and drops the late res
   await expect(panel).toHaveAttribute('data-status', 'off');
   await respond(held!).catch(() => undefined);
   await expect(panel.locator('.enso-flow-status')).toHaveText('Direction overlay off');
-  expect(new URLSearchParams(await search(page)).has('flow')).toBe(false);
+  expect(new URLSearchParams(await search(page)).get('flow')).toBe('off');
 });
 
 test('marine no-data and network failure remain separate from a successful direction field', async ({ page }) => {
@@ -264,7 +267,8 @@ test("found-115 the arrows' Key drawer row follows the open panel: none while of
   await page.clock.setFixedTime(LIVE_CLOCK);
   await stubSst(page);
   await page.route(FLOW_ROUTE, (route) => respond(route, false, LIVE_CLOCK));
-  await gotoApp(page, '?cluster=enso&ocean=pacific&view=console&basemap=default');
+  // flow=off: this case starts from off ("none while off"); ENSO opens with wind since E2-4.
+  await gotoApp(page, '?cluster=enso&ocean=pacific&view=console&basemap=default&flow=off');
   const panel = page.locator('.enso-flow');
   const panelStatus = panel.locator('.enso-flow-status');
   await expect(panel).toBeVisible();

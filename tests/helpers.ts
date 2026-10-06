@@ -318,6 +318,49 @@ export interface GotoAppOptions {
    * and prove neither.
    */
   readonly bootIdle?: boolean;
+  /**
+   * Whether this boot's ENSO flowing paths may run their motion loop
+   * (ENSO-FLOW-PLAN E2-4). ENSO opens with wind on (`flowDefault`), and a
+   * running loop asks MapLibre for a frame every 33 ms, so MapLibre never
+   * fires `idle` and every spec that waits on `'idle'` would hang. Defaults to
+   * `hold`: the page's sessionStorage carries the viewer's stored Pause choice
+   * (`ddm:flow-motion` = `paused`, read by src/layers/flow/motion-loop.ts)
+   * before any script runs, only where the page has no choice of its own. The
+   * paths still load, decode and draw, in their still form: the drawer and the
+   * panel read `live` and `data-flow-drawn` is set, and the map takes no
+   * continuous repaint. `live` is the explicit opt-out for a spec that reads
+   * the moving form (a `data-flow-form` of `moving`, a repaint or step rate, a
+   * Pause toggle from the playing state); that spec owns its own waits and
+   * must not wait on `'idle'`. A spec that stores its own choice, or turns on
+   * `prefers-reduced-motion`, is unaffected by `hold`.
+   */
+  readonly flowMotion?: FlowMotionHold;
+}
+
+/** `hold` pauses the flowing paths' motion loop for the boot; `live` leaves it to the page. */
+export type FlowMotionHold = 'hold' | 'live';
+
+/** src/layers/flow/motion-loop.ts MOTION_STORAGE_KEY; tests/enso-flow-default.spec.ts pins the two together. */
+export const FLOW_MOTION_STORAGE_KEY = 'ddm:flow-motion';
+
+/**
+ * Seed the viewer's stored Pause choice (E2-4), so the motion loop starts
+ * paused and MapLibre can reach `idle`. Set only where no choice is stored, so
+ * a reload keeps a choice the viewer (or the spec) made. Storage can be
+ * blocked; then the loop runs, as it would for a viewer in that state.
+ */
+export async function installFlowMotionHold(page: Page, mode: FlowMotionHold = 'hold'): Promise<void> {
+  if (mode === 'live') return;
+  await page.addInitScript((key) => {
+    try {
+      // Under prefers-reduced-motion the loop is already still, and its own
+      // word (`reduced`) must stay readable: a stored choice would read `paused`.
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      if (window.sessionStorage.getItem(key) === null) window.sessionStorage.setItem(key, 'paused');
+    } catch {
+      // storage blocked: nothing to seed
+    }
+  }, FLOW_MOTION_STORAGE_KEY);
 }
 
 export async function gotoApp(
@@ -384,6 +427,10 @@ export async function gotoApp(
   // paths read that bucket at runtime; without this every ENSO spec would
   // read AWS, and the repo has no egress host list to catch it.
   await installDefaultNoddStub(page);
+  // ENSO-FLOW-PLAN E2-4: ENSO opens with wind on, so a routine ENSO boot holds
+  // the motion loop (still form, same data) and 'idle' stays reachable. See
+  // `GotoAppOptions.flowMotion` for the opt-out.
+  await installFlowMotionHold(page, options.flowMotion ?? 'hold');
   coverFuturePages(page);
   await page.goto(query, { waitUntil: 'domcontentloaded' });
   // DOM READY, and no longer a proxy for a finished boot. The generated
@@ -1074,9 +1121,21 @@ export const NODD_FIXTURES: readonly NoddFixture[] = [
 /**
  * How the default stub answered one NODD request: from a fixture (200 or
  * 206), 416 for an `.idx` range that starts past the object's end (S3's
- * answer, not a test failure), or unstubbed (404, and the test fails).
+ * answer, not a test failure), absent (404 for the `.idx` of a cycle the
+ * fixtures do not cover, E2-4: NODD's answer for an unpublished cycle, not a
+ * test failure), or unstubbed (404, and the test fails).
  */
-export type NoddStubAnswer = 'fixture' | 'unsatisfiable' | 'unstubbed';
+export type NoddStubAnswer = 'fixture' | 'unsatisfiable' | 'absent' | 'unstubbed';
+
+/**
+ * The `.idx` keys the ENSO reader asks for (src/layers/flow/source.ts): the
+ * atmos 1.00 degree index (wind) and the global 0.25 degree wave index, for any
+ * cycle and forecast hour. A GET for one with no fixture is `absent`.
+ */
+const NODD_READER_INDEX_KEYS: readonly RegExp[] = [
+  /^gfs\.\d{8}\/\d{2}\/atmos\/gfs\.t\d{2}z\.pgrb2\.1p00\.f\d{3}\.idx$/,
+  /^gfs\.\d{8}\/\d{2}\/wave\/gridded\/gfswave\.t\d{2}z\.global\.0p25\.f\d{3}\.grib2\.idx$/
+];
 
 /** One NODD request the default stub answered. */
 export interface NoddStubEntry {
@@ -1155,7 +1214,11 @@ function noddIndexRead(
  * LIST) is answered 404 with that same header, as NODD answers a missing
  * key (B-grib.md section 2.1), recorded in `noddStubLog`, and fails the
  * running test through `expect.soft`, naming the method, URL and range: add
- * a fixture row, or route the read in the spec. Like the other suite-wide
+ * a fixture row, or route the read in the spec. One shape is not a failure
+ * (E2-4, answer `absent`): a plain GET for an `.idx` under the reader's own
+ * product paths (NODD_READER_INDEX_KEYS) that has no fixture, which is what
+ * every routine ENSO boot at the real date asks first (a cycle the fixtures do
+ * not cover); it is answered 404 and logged. Like the other suite-wide
  * stubs, a spec's own `page.route` for the bucket wins (Playwright checks
  * Page routes before Context routes). Idempotent per context.
  */
@@ -1177,6 +1240,14 @@ export async function installDefaultNoddStub(page: Page): Promise<void> {
         get && range !== null ? NODD_FIXTURES.find((row) => row.key === key && row.range === range) : undefined;
       const indexBody = index ? noddIndexBody(index.file) : null;
       const indexRead = indexBody ? noddIndexRead(indexBody.length, range) : null;
+      // E2-4: ENSO opens with wind on, so a routine ENSO boot reads the bucket
+      // at the machine's real date, a cycle no fixture covers. Its `.idx` is
+      // answered 404, as NODD answers a cycle it has not published, and the
+      // reader steps back and reads `unavailable`. That one shape is `absent`:
+      // logged as its own answer, not a failure. It is only a plain GET of an
+      // `.idx` under the reader's own two product paths; every other key, and
+      // every message, HEAD, LIST or query read, is still `unstubbed` and fails.
+      const absent = get && !index && NODD_READER_INDEX_KEYS.some((pattern) => pattern.test(key));
       log.push({
         method: request.method(),
         url: request.url(),
@@ -1186,7 +1257,9 @@ export async function installDefaultNoddStub(page: Page): Promise<void> {
             ? 'fixture'
             : indexRead !== null
               ? 'unsatisfiable'
-              : 'unstubbed'
+              : absent
+                ? 'absent'
+                : 'unstubbed'
       });
       if (indexBody && indexRead) {
         const headers = { 'access-control-allow-origin': '*', 'accept-ranges': 'bytes' };
@@ -1220,6 +1293,12 @@ export async function installDefaultNoddStub(page: Page): Promise<void> {
         return;
       }
       const fixture = message;
+      if (absent) {
+        await route
+          .fulfill({ status: 404, headers: { 'access-control-allow-origin': '*' }, contentType: 'application/xml', body: '' })
+          .catch(() => undefined);
+        return;
+      }
       if (!fixture || fixture.range === null) {
         try {
           expect

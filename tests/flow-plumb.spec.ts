@@ -366,9 +366,11 @@ test.describe('E1-5 flow plumbing (ENSO-FLOW-PLAN block E1)', () => {
       if (isNoddUrl(request.url())) noddRequests.push(request.url());
     });
     await stubEnsoSurface(page);
-    await gotoApp(page, '?cluster=enso');
+    // ENSO opens with wind on since E2-4, which reads NODD at boot; flow=off
+    // keeps this case on the routine boot that reads none of it.
+    await gotoApp(page, '?cluster=enso&flow=off');
     const answers = recordNoddAnswers(page);
-    // Block E1 wires nothing to NODD: the boot itself reads none of it.
+    // With flow off the boot itself reads none of NODD.
     expect(noddRequests, 'the ENSO boot made no NODD request').toEqual([]);
 
     // The reads E1-2's reader makes are answered from E1-1's fixtures, byte
@@ -408,7 +410,7 @@ test.describe('E1-5 flow plumbing (ENSO-FLOW-PLAN block E1)', () => {
   }) => {
     const aborted = await abortUnroutedHosts(page, new URL(baseURL ?? 'http://127.0.0.1:4173/').origin);
     await stubEnsoSurface(page);
-    await gotoApp(page, '?cluster=enso');
+    await gotoApp(page, '?cluster=enso&flow=off');
     const answers = recordNoddAnswers(page);
     const ranges = recordNoddRanges(page);
 
@@ -453,7 +455,7 @@ test.describe('E1-5 flow plumbing (ENSO-FLOW-PLAN block E1)', () => {
   }) => {
     const aborted = await abortUnroutedHosts(page, new URL(baseURL ?? 'http://127.0.0.1:4173/').origin);
     await stubEnsoSurface(page);
-    await gotoApp(page, '?cluster=enso');
+    await gotoApp(page, '?cluster=enso&flow=off');
 
     // readFlowFrame's requests, kind by kind, from the app's page with the
     // reader's own init: the `.idx` by the kind's capped Range, then each
@@ -502,7 +504,7 @@ test.describe('E1-5 flow plumbing (ENSO-FLOW-PLAN block E1)', () => {
   }) => {
     const aborted = await abortUnroutedHosts(page, new URL(baseURL ?? 'http://127.0.0.1:4173/').origin);
     await stubEnsoSurface(page);
-    await gotoApp(page, '?cluster=enso');
+    await gotoApp(page, '?cluster=enso&flow=off');
     expect(test.info().errors, 'the boot itself recorded no error').toEqual([]);
     const answers = recordNoddAnswers(page);
 

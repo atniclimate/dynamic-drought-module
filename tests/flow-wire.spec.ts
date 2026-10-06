@@ -83,11 +83,19 @@ async function stubOpenMeteo(page: Page, clock: number): Promise<URL[]> {
   return calls;
 }
 
-async function bootEnso(page: Page, query = '', clock = LIVE_CLOCK): Promise<URL[]> {
+/**
+ * ENSO opens with wind on since E2-4, so a boot that names no `flow=` here
+ * adds `flow=off`: every case below starts from off and chooses its kind, as
+ * it did before the default. `motion: 'live'` leaves the motion loop to the
+ * page (the cases that read the moving form); the rest take `gotoApp`'s hold
+ * and read the same paths in their still form.
+ */
+async function bootEnso(page: Page, query = '', clock = LIVE_CLOCK, motion: 'hold' | 'live' = 'hold'): Promise<URL[]> {
   await page.clock.setFixedTime(clock);
   await stubSst(page);
   const calls = await stubOpenMeteo(page, clock);
-  await gotoApp(page, `?cluster=enso&ocean=pacific${query}`);
+  const named = /(?:^|&)flow=/.test(query) ? query : `${query}&flow=off`;
+  await gotoApp(page, `?cluster=enso&ocean=pacific${named}`, { flowMotion: motion });
   return calls;
 }
 
@@ -354,7 +362,7 @@ test.describe('E2-1 flowing paths in ENSO mode', () => {
       if ((await route.request().headerValue('range'))?.startsWith('bytes=0-')) await route.fallback();
       else held.push(route);
     });
-    await bootEnso(page, '&view=console');
+    await bootEnso(page, '&view=console', LIVE_CLOCK, 'live');
     await choose(page, 'wind');
     await expect.poll(() => held.length).toBe(2);
     await expect(panel(page)).toHaveAttribute('data-status', 'loading');
@@ -458,7 +466,7 @@ test.describe('E2-1 flowing paths in ENSO mode', () => {
 
   test('after webglcontextlost the status stays, the still form draws, the detail says so, and restore rebuilds from CPU state with no refetch', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
-    await bootEnso(page);
+    await bootEnso(page, '', LIVE_CLOCK, 'live');
     await choose(page, 'wind');
     await expect(panel(page)).toHaveAttribute('data-flow-form', 'moving');
     const reads = noddStubLog(page).length;
@@ -508,15 +516,27 @@ test.describe('E2-1 flowing paths in ENSO mode', () => {
     await expect(panel(page)).toHaveAttribute('data-status', 'live');
     await expect(panel(page)).toHaveAttribute('data-flow-form', 'still');
     await zoomInSteps(page, 4);
-    await expect(panel(page)).toHaveAttribute('data-flow-form', 'arrows');
+    // Two honest outcomes past the grid: a model node inside the view draws its
+    // node arrows; no node inside the view draws nothing and says so (E2-1's
+    // review fix). Either way the status stays live and never reads wave marks.
+    const NO_MODEL_POINT = "No model point falls inside this view; zoom out to see the model's values.";
     await expect(panel(page)).toHaveAttribute('data-status', 'live');
-    expect(Number(await panel(page).getAttribute('data-flow-features')), 'node arrows at the nearest nodes').toBeGreaterThan(0);
+    await expect(panel(page)).toHaveAttribute('data-flow-form', 'arrows');
+    const features = Number(await panel(page).getAttribute('data-flow-features'));
     const status = panel(page).locator('.enso-flow-status');
     await expect(status).toContainText('live · Model run ');
     await expect(status).not.toContainText('wave marks');
     await openKeyDrawer(page);
     await expect(flowStatus(page)).toContainText('Atmospheric currents · live · Model run ');
-    await expect(flowNotes(page)).toContainText(FLOW_WORDS.pastGrid);
+    if (features > 0) {
+      await expect(panel(page)).toHaveAttribute('data-flow-form', 'arrows');
+      await expect(flowNotes(page)).toContainText(FLOW_WORDS.pastGrid);
+    } else {
+      // The form stays `arrows` with no features: nothing is drawn, and the sentence says why.
+      await expect(panel(page)).toHaveAttribute('data-flow-form', 'arrows');
+      await expect(panel(page)).toHaveAttribute('data-flow-features', '0');
+      await expect(flowNotes(page)).toContainText(NO_MODEL_POINT);
+    }
     await expect(flowNotes(page)).not.toContainText(FLOW_WORDS.waveBox);
   });
 
@@ -542,14 +562,14 @@ test.describe('E2-1 flowing paths in ENSO mode', () => {
     await page.setViewportSize({ width: 1280, height: 800 });
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
-    await bootEnso(page);
+    await bootEnso(page, '', LIVE_CLOCK, 'live');
     await choose(page, 'wind');
     await expect(panel(page)).toHaveAttribute('data-flow-form', 'moving');
     const reads = noddStubLog(page).length;
     await page.evaluate(() => {
       const canvas = document.querySelector<HTMLCanvasElement>('#map canvas.maplibregl-canvas')!;
       const lose = canvas.getContext('webgl2')!.getExtension('WEBGL_lose_context')!;
-      lose.loseContext();
+      (window as unknown as { __lose: WEBGL_lose_context }).__lose = lose;
       // Only the flow ribbon's own shaders (u_ring, a_seg) fail to compile on the
       // restored context; MapLibre's shaders compile as usual.
       const proto = WebGL2RenderingContext.prototype;
@@ -557,8 +577,17 @@ test.describe('E2-1 flowing paths in ENSO mode', () => {
       proto.shaderSource = function patched(this: WebGL2RenderingContext, shader: WebGLShader, source: string): void {
         shaderSource.call(this, shader, /u_ring|a_seg/.test(source) ? 'not glsl' : source);
       };
-      setTimeout(() => lose.restoreContext(), 200);
+      lose.loseContext();
     });
+    // Restore only once the page has handled the loss. Chrome dispatches
+    // webglcontextlost from its own task, and allows restoreContext() only
+    // after a listener (MapLibre's) has called preventDefault on that event;
+    // a restore asked for earlier is refused and the context stays lost, so
+    // the paths would hold still (`held`) for good. The flow view reports the
+    // handled loss as the still form held by the lost context.
+    await expect(panel(page)).toHaveAttribute('data-flow-motion', 'held');
+    await expect(panel(page)).toHaveAttribute('data-flow-form', 'still');
+    await page.evaluate(() => (window as unknown as { __lose: WEBGL_lose_context }).__lose.restoreContext());
     // The moving form cannot come back, so Pause is no longer offered and the still form draws.
     await expect(panel(page)).toHaveAttribute('data-flow-motion', 'none');
     await expect(panel(page)).toHaveAttribute('data-flow-form', 'still');

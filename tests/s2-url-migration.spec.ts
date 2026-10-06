@@ -321,6 +321,9 @@ test.describe('S2 ocean= in the browser', () => {
     expect(params.get('cluster')).toBe('enso');
     expect(params.get('ocean')).toBe('pacific');
     expect(params.get('layers')).toBeNull();
+    // ENSO's default flow kind (wind, E2-4) is the absence of `flow=`: the
+    // boot opens it without writing it back (tests/enso-flow-default.spec.ts).
+    expect(params.has('flow')).toBe(false);
   });
 
   test('ocean= without cluster=enso is ignored and dropped on sync', async ({ page }) => {

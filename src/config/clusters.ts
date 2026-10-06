@@ -114,9 +114,8 @@ export interface HazardClusterDef {
    * The ENSO flow kind this mode opens with when its link names no `flow=`
    * (DR-111 Q-WIND-MODES; precedence.md 2.4 and section 3). Read only through
    * src/state/enso-flow.ts `ensoFlowModeDefault`, never as a mode literal
-   * (DR-113); `flow=off` keeps such a mode off. Unset means off, and it is
-   * unset on every cluster until the flowing paths are wired (ENSO-FLOW-PLAN
-   * block E2, unit E2-4).
+   * (DR-113); `flow=off` keeps such a mode off. Unset means off. ENSO sets it
+   * to 'wind' (ENSO-FLOW-PLAN block E2, unit E2-4); no other mode sets it.
    */
   readonly flowDefault?: 'currents' | 'wind' | 'waves';
 }
@@ -206,7 +205,10 @@ export const HAZARD_CLUSTERS: Record<HazardClusterKey, HazardClusterDef> = {
     // Deferred, not absent: ENSO's place row (the sea surface temperature
     // anomaly) moves to the ocean sprint the owner asked for on 2026-10-01
     // (PLACE_CONDITION_ROW_DEFERRED in src/config/place-condition-rows.ts).
-    placeConditionRow: null
+    placeConditionRow: null,
+    // ENSO opens with the NOAA GFS wind paths on (DR-111 Q-WIND-MODES;
+    // precedence.md 2.4); `flow=off` keeps it off (ENSO-FLOW-PLAN E2-4).
+    flowDefault: 'wind'
   }
 };
 

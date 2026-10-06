@@ -324,7 +324,10 @@ async function boot(browser: Browser, options: BootOptions): Promise<Booted> {
     });
   }
   const cdp = await context.newCDPSession(page);
-  await gotoApp(page, `?cluster=enso&ocean=pacific&flow=${options.flow}`);
+  // flowMotion live: the measure reads the moving form, so routine boots' hold
+  // (tests/helpers.ts, E2-4) must not pause it; a stored-pause condition seeds
+  // its own choice above.
+  await gotoApp(page, `?cluster=enso&ocean=pacific&flow=${options.flow}`, { flowMotion: 'live' });
   await waitFlowReady(page, options.flow);
   return { context, page, cdp, aborted, openMeteoCalls };
 }
@@ -746,7 +749,7 @@ test.describe('flow measure (ENSO-FLOW-PLAN 4.2 and 4.4)', () => {
           }).catch(() => undefined);
         });
         // Boot with flow off: the flow chunk and the Worker are then the cost of choosing the kind, not of boot.
-        await gotoApp(page, '?cluster=enso&ocean=pacific&flow=off');
+        await gotoApp(page, '?cluster=enso&ocean=pacific&flow=off', { flowMotion: 'live' });
         const bootUrls = new Set([...requests.values()].map((r) => r.url));
         await panelOf(page).locator(`[data-flow-kind="${flow}"]`).click();
         await waitFlowReady(page, flow);
@@ -837,7 +840,7 @@ test.describe('flow measure (ENSO-FLOW-PLAN 4.2 and 4.4)', () => {
           await new Promise((resolve) => setTimeout(resolve, Math.max(0, done - now)));
           await route.fallback();
         });
-        await gotoApp(page, '?cluster=enso&ocean=pacific&flow=off');
+        await gotoApp(page, '?cluster=enso&ocean=pacific&flow=off', { flowMotion: 'live' });
         const panel = panelOf(page);
         const t0 = performance.now();
         await panel.locator('[data-flow-kind="waves"]').click();

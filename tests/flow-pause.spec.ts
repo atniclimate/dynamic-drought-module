@@ -49,7 +49,11 @@ async function stubSst(page: Page): Promise<void> {
 /** Boot ENSO with the arrows off, so only the synthetic snapshots speak. */
 async function bootEnso(page: Page, query = ''): Promise<void> {
   await stubSst(page);
-  await gotoApp(page, `?cluster=enso&ocean=pacific${query}`);
+  // ENSO opens with wind on since E2-4, so name flow=off here: only the
+  // synthetic snapshots speak. `flowMotion: 'live'` because the loop cases
+  // below build their own loop on the page's sessionStorage, which the
+  // routine hold would pre-set to paused.
+  await gotoApp(page, `?cluster=enso&ocean=pacific&flow=off${query}`, { flowMotion: 'live' });
   await expect(page.locator('.enso-flow')).toHaveAttribute('data-status', 'off');
   await expect(page.locator('#map-key-details-toggle')).toBeVisible();
 }
