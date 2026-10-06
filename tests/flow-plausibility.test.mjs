@@ -1,7 +1,7 @@
 /**
  * E2a-3 (REGISTER found-148): the decode Worker refuses a frame with any
  * unmasked value outside its kind's physical bound, so wind or wave paths
- * are never drawn from a damaged message that still parses
+ * are not drawn from a message with values outside those bounds
  * (src/layers/flow/decode-worker.ts). GRIB2 carries no checksum; the bytes
  * arrive over TLS with an exact-length 206, so this is defence in depth.
  *
@@ -123,6 +123,68 @@ const VGRD = fixture('gfs1p00-VGRD-10m-f006.grib2');
 
 const refusedByBound = (variable) => (e) =>
   e instanceof RangeError && new RegExp(`^${variable} `).test(e.message) && /outside the plausible range/.test(e.message);
+
+// Landing review F2: source metadata must be established by the message before
+// values are turned into a packet labelled with the configured grid and level.
+const headerMutations = [
+  ['first surface type', 4, 22, 'setUint8', 100],
+  ['first surface value', 4, 24, 'setUint32', 100],
+  ['first surface scale', 4, 23, 'setUint8', 1],
+  ['second fixed surface', 4, 28, 'setUint8', 103],
+  ['longitude increment', 3, 63, 'setUint32', 500_000],
+  ['latitude increment', 3, 67, 'setUint32', 500_000],
+  ['last longitude', 3, 59, 'setUint32', 358_000_000],
+  ['last latitude', 3, 55, 'setUint32', 0x80000000 + 89_000_000],
+  ['earth shape', 3, 14, 'setUint8', 0],
+  ['grid-relative vector components', 3, 54, 'setUint8', 56],
+  ['missing direction increments', 3, 54, 'setUint8', 0]
+];
+for (const [label, section, offset, setter, value] of headerMutations) {
+  test(`the Worker refuses a wind message with mismatched ${label}`, () => {
+    const bad = UGRD.slice();
+    new DataView(bad.buffer)[setter](sectionOf(bad, section).start + offset, value, false);
+    assert.throws(
+      () => decodeFrame({ kind: 'wind', cycle: CYCLE, forecastHour: 6, messages: [buffer(bad), buffer(VGRD)] }),
+      (e) => e.name === 'GribError' && /expectation|unsupported-feature/.test(e.code),
+      `${label} must be refused before constructing a 10 m, one-degree wind packet`
+    );
+  });
+}
+
+test('the Worker refuses wave surface metadata that does not match the source', () => {
+  const bad = WAVE_DIRPW.slice();
+  new DataView(bad.buffer).setUint32(sectionOf(bad, 4).start + 24, 100, false);
+  assert.throws(
+    () => decodeFrame({ kind: 'waves', cycle: CYCLE, forecastHour: 6, messages: [buffer(bad), buffer(WAVE_HTSGW)] }),
+    (e) => e.name === 'GribError' && e.code === 'expectation'
+  );
+});
+
+test('nonfinite wind values are refused instead of becoming masked cells', () => {
+  for (const variable of ['UGRD', 'VGRD']) {
+    for (const value of [NaN, Infinity, -Infinity]) {
+      assert.throws(() => checkPlausible(variable, Float32Array.of(value)), refusedByBound(variable));
+    }
+  }
+  const good = new Float32Array(WIND_POINTS).fill(1);
+  const bad = good.slice();
+  bad[10] = NaN;
+  assert.throws(() => buildPacket('wind', [bad, good], CYCLE, 6), refusedByBound('UGRD'));
+  assert.throws(() => buildPacket('wind', [good, bad], CYCLE, 6), refusedByBound('VGRD'));
+});
+
+test('legitimate wave bitmap cells remain masked through the Worker', () => {
+  const packet = decodeFrame({ kind: 'waves', cycle: CYCLE, forecastHour: 6, messages: [buffer(fixture('global0p25-DIRPW-f006.grib2')), buffer(WAVE_HTSGW)] });
+  assert.ok(packet.mask.some((value) => value === 0), 'land cells remain masked');
+  assert.ok(packet.mask.some((value) => value === 1), 'ocean cells remain available');
+  for (let i = 0; i < packet.mask.length; i++) {
+    if (packet.mask[i] === 0) {
+      assert.equal(packet.u[i], -32768);
+      assert.equal(packet.v[i], -32768);
+      assert.equal(packet.m[i], -32768);
+    }
+  }
+});
 
 // ---------------------------------------------------------------------------
 // The reader, for "not drawn": a NODD stand-in serving one wind frame
@@ -390,11 +452,11 @@ function sweep(job) {
   });
 }
 
-test('a corrupted-byte sweep: across N seeded single-byte flips of section 7 of the UGRD and DIRPW fixtures, no frame that passes decode and bounds differs from the clean decode by more than the bound', async (t) => {
+test('seeded corruptions exercise structural and plausibility refusals while exposing accepted value changes', async (t) => {
   // minRefused: the share of flips that must be refused. Measured 2026-10-05 at N = 300: UGRD 299 refused
   // (13 by the decoder, 286 by the bound), 1 passed differing by 13.66 m/s; DIRPW 14 refused (7 and 7),
   // 285 passed differing by up to 122.3 degrees, 1 identical. A flip inside JPEG 2000 code-block data leaves
-  // the codestream structurally valid and its values in range, so no share is required of DIRPW: the
+  // the codestream structurally valid and its values in range, so no refusal rate is promised for DIRPW: the
   // decoder refuses structurally invalid messages and values outside physical bounds, nothing stronger.
   const jobs = [
     { name: 'gfs1p00-UGRD-10m-f006', variable: 'UGRD', grid: GLOBAL_1P00, seed: 20261005, minRefused: 0.98 },
@@ -414,5 +476,8 @@ test('a corrupted-byte sweep: across N seeded single-byte flips of section 7 of 
     assert.ok(r.maxDiff <= bound, `${r.name}: a passing frame differs from the clean decode by ${r.maxDiff}, more than the bound ${bound}`);
     const refused = r.refusedByDecoder + r.refusedByBound;
     assert.ok(refused >= jobs[i].minRefused * r.flips, `${r.name}: ${refused} of ${r.flips} flips refused`);
+    assert.ok(r.refusedByDecoder > 0, `${r.name}: the sweep exercises structural refusals`);
+    assert.ok(r.refusedByBound > 0, `${r.name}: the sweep exercises out-of-range refusals`);
+    assert.ok(r.differing > 0, `${r.name}: plausible damaged values can still pass; this is not an integrity check`);
   }
 });

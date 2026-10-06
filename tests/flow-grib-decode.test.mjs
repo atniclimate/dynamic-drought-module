@@ -311,6 +311,27 @@ async function assertAllRefused(jobs, label) {
   return results;
 }
 
+for (const [label, offset, setter, value] of [
+  ['NaN reference', 11, 'setFloat32', NaN],
+  ['positive infinite reference', 11, 'setFloat32', Infinity],
+  ['negative infinite reference', 11, 'setFloat32', -Infinity],
+  ['overflowing binary scale', 15, 'setUint16', 1024],
+  ['underflowing binary scale', 15, 'setUint16', 0x8000 + 1075],
+  ['overflowing decimal scale', 17, 'setUint16', 0x8000 + 309],
+  ['underflowing decimal scale', 17, 'setUint16', 324],
+  ['Float32 value overflow', 15, 'setUint16', 128]
+]) {
+  test(`refuses ${label} in packed values while preserving wave masks`, async () => {
+    const jobs = ['gfs1p00-UGRD-10m-f006', 'wcoast0p16-HTSGW-f006'].map((name, i) => {
+      const bytes = fixture(name).bytes.slice();
+      new DataView(bytes.buffer)[setter](sectionOf(bytes, 5).start + offset, value, false);
+      return { label: name, bytes, expect: { grid: i === 0 ? GLOBAL_1P00 : WCOAST_0P16 } };
+    });
+    const results = await assertAllRefused(jobs, label);
+    for (const result of results) assert.equal(result.code, 'data');
+  });
+}
+
 // ---------------------------------------------------------------------------
 // The plan's cases
 // ---------------------------------------------------------------------------

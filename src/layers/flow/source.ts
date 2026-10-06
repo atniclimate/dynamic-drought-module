@@ -66,7 +66,8 @@ export interface FlowSource {
   /** Byte cap of the `.idx` read. */
   readonly idxMaxBytes: number;
   /** The source grid every message must carry (template 3.0). */
-  readonly grid: { readonly ni: number; readonly nj: number; readonly la1: number; readonly lo1: number; readonly di: number; readonly dj: number };
+  readonly grid: { readonly ni: number; readonly nj: number; readonly la1: number; readonly lo1: number; readonly la2: number; readonly lo2: number; readonly di: number; readonly dj: number };
+  readonly surface: { readonly type: number; readonly value: number };
   readonly packing: 3 | 40;
   readonly bitmap: boolean;
   /** Messages in the order the Worker receives them. */
@@ -95,7 +96,8 @@ export const FLOW_SOURCES: Readonly<Record<FlowKind, FlowSource>> = {
     units: 'm s-1',
     cadenceHours: 3,
     idxMaxBytes: 65_536,
-    grid: { ni: 360, nj: 181, la1: 90, lo1: 0, di: 1, dj: 1 },
+    grid: { ni: 360, nj: 181, la1: 90, lo1: 0, la2: -90, lo2: 359, di: 1, dj: 1 },
+    surface: { type: 103, value: 10 },
     packing: 3,
     bitmap: false,
     messages: [
@@ -117,7 +119,9 @@ export const FLOW_SOURCES: Readonly<Record<FlowKind, FlowSource>> = {
     units: 'm',
     cadenceHours: 1,
     idxMaxBytes: 4_096,
-    grid: { ni: 1440, nj: 721, la1: 90, lo1: 0, di: 0.25, dj: 0.25 },
+    // The committed NOAA messages encode this endpoint; node spacing is 0.25.
+    grid: { ni: 1440, nj: 721, la1: 90, lo1: 0, la2: -90, lo2: 359.750016, di: 0.25, dj: 0.25 },
+    surface: { type: 1, value: 1 },
     packing: 40,
     bitmap: true,
     messages: [

@@ -3,7 +3,7 @@
  * section 2.3). A module Worker: it receives the GRIB2 messages of one frame
  * (one buffer per Range GET, in the source row's order), decodes each with
  * DDM's own decoder (./grib2), checks it is the message asked for (grid,
- * parameter, cycle, forecast hour, template, bitmap), turns GFS-Wave DIRPW
+ * surface, parameter, cycle, forecast hour, template, bitmap), turns GFS-Wave DIRPW
  * FROM into its TO unit vector through `waveToVector` (./source, the one
  * rotation), crops to the kind's coverage box, quantizes to Int16 steps and
  * transfers the result. A global 0.25 degree field is 4.15 MB as Float32;
@@ -43,16 +43,17 @@ export const PLAUSIBLE_RANGE: Readonly<Record<string, readonly [number, number]>
 
 /**
  * Refuse (RangeError) a decoded field holding any unmasked value outside its
- * variable's range, anywhere on the grid; NaN is a masked point. A variable
+ * variable's range, anywhere on the grid; only wave fields allow masked NaNs. A variable
  * with no range is refused too. Exported for the tests.
  */
 export function checkPlausible(variable: string, values: Float32Array): void {
   const range = PLAUSIBLE_RANGE[variable];
   if (!range) throw new RangeError(`${variable} has no plausibility bound`);
   const [lo, hi] = range;
+  const allowsMask = variable === 'DIRPW' || variable === 'HTSGW';
   for (let k = 0; k < values.length; k++) {
     const x = values[k] as number;
-    if (!Number.isNaN(x) && !(x >= lo && x <= hi)) {
+    if (!(allowsMask && Number.isNaN(x)) && !(x >= lo && x <= hi)) {
       throw new RangeError(`${variable} ${x} at point ${k} is outside the plausible range ${lo} to ${hi}; the frame is refused`);
     }
   }
@@ -139,6 +140,7 @@ export function decodeFrame(request: DecodeRequest): FlowPacket {
   const values = s.messages.map((message, k) =>
     decodeGrib2(new Uint8Array(request.messages[k] as ArrayBuffer), {
       grid: s.grid,
+      surface: s.surface,
       parameter: message.parameter,
       refTime: request.cycle,
       forecastHours: request.forecastHour,

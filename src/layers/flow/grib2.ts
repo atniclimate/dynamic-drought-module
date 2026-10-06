@@ -137,7 +137,8 @@ export interface GribField extends GribHeader {
 /** What the caller asked for; anything that differs is refused. */
 export interface GribExpect {
   /** The grid header to accept (longitudes compare modulo 360). */
-  grid: { ni: number; nj: number; la1: number; lo1: number };
+  grid: { ni: number; nj: number; la1: number; lo1: number; la2?: number; lo2?: number; di?: number; dj?: number };
+  surface?: { type: number; value: number };
   parameter?: GribParameter;
   /** Reference time (cycle), ms since the epoch, UTC. */
   refTime?: number;
@@ -251,6 +252,9 @@ function parseHeader(sec: Sections): GribHeader {
   if (u8(s3, 10) !== 0) fail('unsupported-feature', 'an optional list of points per row');
   const gridTemplate = u16(s3, 12);
   if (gridTemplate !== 0) unsupportedTemplate(`3.${gridTemplate}`);
+  if (u8(s3, 14) !== 6) fail('unsupported-feature', `earth shape ${u8(s3, 14)} (6 is supported)`);
+  // Flag table 3.3: both increments supplied, earth-relative components.
+  if (u8(s3, 54) !== 48) fail('unsupported-feature', `resolution and component flags ${u8(s3, 54)}`);
   const points = u32(s3, 6);
   const ni = u32(s3, 30);
   const nj = u32(s3, 34);
@@ -281,6 +285,7 @@ function parseHeader(sec: Sections): GribHeader {
   if (u16(s4, 5) !== 0) fail('unsupported-feature', 'coordinate values after the product template');
   const productTemplate = u16(s4, 7);
   if (productTemplate !== 0) unsupportedTemplate(`4.${productTemplate}`);
+  if (u8(s4, 28) !== 255) fail('unsupported-feature', 'a layer between two fixed surfaces');
   if (u8(s4, 17) !== 1) fail('unsupported-feature', `time unit indicator ${u8(s4, 17)} in section 4 (1 = hour is supported)`);
   const forecastHours = u32(s4, 18);
   const surfaceScale = u8(s4, 23);
@@ -307,6 +312,10 @@ function parseHeader(sec: Sections): GribHeader {
     decimalScale: s16(s5, 17),
     bitsPerValue: u8(s5, 19)
   };
+  if (!Number.isFinite(packing.reference)) fail('data', 'the packing reference is not finite');
+  for (const scale of [2 ** packing.binaryScale, 10 ** -packing.decimalScale]) {
+    if (!Number.isFinite(scale) || scale === 0) fail('data', 'the packing scale overflows or underflows');
+  }
   if (packing.packedCount > points) fail('size', `${packing.packedCount} packed values for ${points} grid points`);
   if (packing.bitsPerValue > 31) fail('unsupported-feature', `${packing.bitsPerValue} bits per value`);
 
@@ -349,6 +358,17 @@ function checkExpect(h: GribHeader, expect: GribExpect): void {
   }
   if (Math.round(h.grid.la1 * 1e6) !== Math.round(g.la1 * 1e6) || !sameLongitude(h.grid.lo1, g.lo1)) {
     fail('expectation', `first grid point (${h.grid.la1}, ${h.grid.lo1}), expected (${g.la1}, ${g.lo1})`);
+  }
+  for (const key of ['la2', 'di', 'dj'] as const) {
+    if (g[key] !== undefined && Math.round(h.grid[key] * 1e6) !== Math.round(g[key] * 1e6)) {
+      fail('expectation', `grid ${key} ${h.grid[key]}, expected ${g[key]}`);
+    }
+  }
+  if (g.lo2 !== undefined && !sameLongitude(h.grid.lo2, g.lo2)) {
+    fail('expectation', `last longitude ${h.grid.lo2}, expected ${g.lo2}`);
+  }
+  if (expect.surface && (h.surface.type !== expect.surface.type || h.surface.value !== expect.surface.value)) {
+    fail('expectation', `surface ${h.surface.type}:${h.surface.value}, expected ${expect.surface.type}:${expect.surface.value}`);
   }
   const p = expect.parameter;
   if (p && (h.parameter.discipline !== p.discipline || h.parameter.category !== p.category || h.parameter.number !== p.number)) {
@@ -527,7 +547,10 @@ export function decodeGrib2(bytes: Uint8Array, expect: GribExpect): GribField {
   const values = new Float32Array(points);
   let missingCount = 0;
   if (!header.bitmap) {
-    for (let k = 0; k < points; k++) values[k] = (R + (ints[k] as number) * scale) * decimal;
+    for (let k = 0; k < points; k++) {
+      values[k] = (R + (ints[k] as number) * scale) * decimal;
+      if (!Number.isFinite(values[k])) fail('data', `nonfinite decoded value at point ${k}`);
+    }
   } else {
     const map = sec.s6;
     let j = 0;
@@ -535,6 +558,7 @@ export function decodeGrib2(bytes: Uint8Array, expect: GribExpect): GribField {
       if ((u8(map, 6 + (k >> 3)) >> (7 - (k & 7))) & 1) {
         if (j >= n) fail('bitmap', `the bitmap marks more than the ${n} packed values`);
         values[k] = (R + (ints[j++] as number) * scale) * decimal;
+        if (!Number.isFinite(values[k])) fail('data', `nonfinite decoded value at point ${k}`);
       } else {
         values[k] = Number.NaN;
         missingCount++;
