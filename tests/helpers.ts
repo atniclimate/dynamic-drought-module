@@ -16,6 +16,7 @@ import { installMinimapAnalysisStubs } from './minimap-fixtures';
 import { installBoundaryStubs, type BoundaryStubMode } from './tribal-fixtures';
 import { installDefaultNifcStub, type NifcStubMode } from './wildfire-fixtures';
 import { installDefaultNwsWwaStub, type NwsWwaStubMode } from './nws-wwa-fixtures';
+import { untilAnswered } from './answered-read';
 
 const TEST_NADM_SNAPSHOT = {
   type: 'FeatureCollection',
@@ -467,8 +468,10 @@ export async function gotoApp(
   // and changes none of them. Derived from registry and transport state,
   // never from elapsed time, so it cannot flip early and hide a failure.
   //
-  // `expect.poll` at the same default timeout `toHaveAttribute` used
-  // (`playwright.config.ts`'s `expect.timeout`, 10s; never lengthened here):
+  // The explicit 10 s answered-read budget matches the current
+  // `playwright.config.ts` expect.timeout; it does not inherit config changes.
+  // Only a blocked page read is capped, following the Fire 3D wait model;
+  // responsive reads and Node polling pauses keep the existing budget.
   // on a miss the diagnostic reads `window.__ddm.snapshot()` (DDM-P1-T09
   // step 2 parts a, b and c; src/state/boot-idle.ts's `DdmSeam`, mirrored
   // here as `DdmSeamRead`, `:901-906`) instead of inferring from pills and
@@ -483,7 +486,12 @@ export async function gotoApp(
   // clause and the original error survives as `cause`, never flattened.
   if (options.bootIdle !== false) {
     try {
-      await expect.poll(() => page.locator('html').getAttribute('data-ddm-boot')).toBe('idle');
+      await untilAnswered(
+        () => page.evaluate(() => document.documentElement.getAttribute('data-ddm-boot')),
+        (value) => value === 'idle',
+        10_000,
+        'boot-idle never reached "idle"'
+      );
     } catch (err) {
       let diagnostic: string;
       try {
@@ -499,7 +507,7 @@ export async function gotoApp(
         diagnostic = `the boot-idle seam could not be read (${(evalErr as Error).message})`;
       }
       throw new Error(
-        `boot-idle never reached "idle" within the default expect timeout; ${diagnostic}.`,
+        `boot-idle never reached "idle" within the 10 s answered-read budget; ${diagnostic}.`,
         { cause: err }
       );
     }
@@ -613,16 +621,17 @@ const TERMINAL_STATUS_CLASSES: readonly string[] = [
  * the URL assertions deterministic regardless of how slow the upstream is.
  */
 export async function waitForLayerSettled(page: Page, key: string, timeout = 25_000): Promise<void> {
-  await expect
-    .poll(
-      async () => {
-        const cls = (await layerPill(page, key).getAttribute('class')) ?? '';
-        const tokens = cls.split(/\s+/);
-        return TERMINAL_STATUS_CLASSES.some((status) => tokens.includes(status));
-      },
-      { message: `layer "${key}" never left the loading state`, timeout }
-    )
-    .toBe(true);
+  await untilAnswered(
+    // An absent pill is an immediate null, not a locator's auto-wait.
+    () => page.evaluate((layerKey) =>
+      document.querySelector(`[data-layer-status="${layerKey}"]`)?.getAttribute('class') ?? null, key),
+    (cls) => {
+      const tokens = (cls ?? '').split(/\s+/);
+      return TERMINAL_STATUS_CLASSES.some((status) => tokens.includes(status));
+    },
+    timeout,
+    `layer "${key}" never left the loading state`
+  );
 }
 
 /**

@@ -33,7 +33,7 @@
     "test:raster-contract": "node --test tests/raster-readiness-contract.test.mjs",
     "test:hillshade-reactivation": "node --test tests/hillshade-reactivation.test.mjs",
     "test:sst-frame-readiness": "node --test tests/sst-frame-readiness.test.mjs",
-    "test:sleep-inventory": "node --test tests/sleep-inventory.test.mjs",
+    "test:sleep-inventory": "node --test tests/sleep-inventory.test.mjs tests/answered-read.test.mjs tests/helper-waits.test.mjs",
     "test:mode-switch-report": "node --test tests/mode-switch-cost-report.test.mjs",
     "test:lanes": "node --test tests/test-lanes.test.mjs",
     "test:preset-pressed": "node --test tests/preset-pressed.test.mjs",
