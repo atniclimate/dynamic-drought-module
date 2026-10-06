@@ -5,6 +5,18 @@ import type * as maplibregl from 'maplibre-gl';
 import { BOOT_URLS } from '../config/urls-boot';
 
 /**
+ * The absolute same-origin glyph template under the deployed base: the page's
+ * own directory when `BASE_URL` is relative (`./`, today's Vite `base`), the
+ * origin-rooted path when it is absolute. `{fontstack}` and `{range}` are
+ * appended as text after the URL is resolved, because `URL` would percent
+ * encode the braces and MapLibre would never find its placeholders.
+ */
+function glyphTemplate(): string {
+  const root = new URL(`${import.meta.env.BASE_URL}fonts/glyphs/`, document.baseURI);
+  return `${root.href}{fontstack}/{range}.pbf`;
+}
+
+/**
  * Build the base MapLibre GL JavaScript style specification.
  *
  * Returns a minimal shared scene: a dark background and subdued OpenStreetMap
@@ -19,8 +31,11 @@ import { BOOT_URLS } from '../config/urls-boot';
  * traffic. Symbol layers must name a hosted fontstack explicitly in
  * `text-font` (today: 'Noto Sans Regular'); MapLibre's implicit default
  * stack is not hosted and would fail visibly. The template is built
- * absolute from the page origin because a relative glyphs URL is not
- * reliably resolved across MapLibre versions.
+ * absolute because a relative glyphs URL is not reliably resolved across
+ * MapLibre versions, and from the document base rather than by gluing
+ * `window.location.origin` to `BASE_URL`: with Vite `base: './'` that glue
+ * read `http://host./fonts/...` (a dot after the host), which neither parses
+ * locally nor exists on Pages (found-039). See `glyphTemplate`.
  *
  * Attribution covers OpenStreetMap contributors. Recent NOAA imagery adds its
  * own source attribution when active.
@@ -28,7 +43,7 @@ import { BOOT_URLS } from '../config/urls-boot';
 export function buildBaseStyle(): maplibregl.StyleSpecification {
   return {
     version: 8,
-    glyphs: `${window.location.origin}${import.meta.env.BASE_URL}fonts/glyphs/{fontstack}/{range}.pbf`,
+    glyphs: glyphTemplate(),
     sources: {
       // atni-geobase: terrain-source seam. The ATNI-GeoBase T0 elevation
       // baseline registers here as a `raster-dem` source (a LOCAL tile set
