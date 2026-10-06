@@ -136,17 +136,30 @@ test('a grid that wraps in longitude never reads outside, even with every node m
 
 // --- a fake MapLibre map ------------------------------------------------------
 
-function fakeGl({ failPrograms = false } = {}) {
+function fakeGl({ failPrograms = false, failCalls = {} } = {}) {
   let id = 0;
-  return new Proxy({ drawingBufferWidth: 1440, drawingBufferHeight: 900 }, {
+  const calls = new Map();
+  const created = [];
+  const deleted = [];
+  return new Proxy({ drawingBufferWidth: 1440, drawingBufferHeight: 900, created, deleted }, {
     get(target, prop) {
       if (prop in target) return target[prop];
       if (prop === 'isContextLost') return () => false;
       if (typeof prop === 'string' && /^[A-Z0-9_]+$/.test(prop)) return prop;
       return (...args) => {
+        const count = (calls.get(prop) ?? 0) + 1;
+        calls.set(prop, count);
+        const fails = failCalls[prop]?.includes(count);
         if (prop === 'createProgram' && failPrograms) return null;
-        if (typeof prop === 'string' && prop.startsWith('create')) return { kind: prop.slice(6), id: ++id };
-        if (prop === 'getShaderParameter' || prop === 'getProgramParameter') return true;
+        if (typeof prop === 'string' && prop.startsWith('create')) {
+          if (fails) return null;
+          const handle = { kind: prop.slice(6), id: ++id };
+          created.push(handle);
+          return handle;
+        }
+        if (prop === 'getShaderParameter' || prop === 'getProgramParameter') return !fails;
+        if (fails) throw new Error(`injected ${prop} failure`);
+        if (typeof prop === 'string' && prop.startsWith('delete')) deleted.push(args[0]);
         if (prop === 'getAttribLocation') return 0;
         if (prop === 'getUniformLocation') return { uniform: args[1] };
         return undefined;
@@ -375,4 +388,62 @@ test('a ribbon whose programs fail at the first mount leaves the still form with
   assert.equal(flow.state.rebuildFailed, true, 'the panel gives the rebuild-failed note');
   assert.ok(flow.state.features > 0);
   flow.dispose();
+});
+
+// L1-GPU: allocation can fail after any earlier handle was successfully created.
+function assertReleased(gl) {
+  assert.deepEqual(
+    gl.deleted.map((handle) => handle.id).sort((a, b) => a - b),
+    gl.created.map((handle) => handle.id).sort((a, b) => a - b),
+    'each created GPU handle is deleted exactly once'
+  );
+}
+
+for (const [method, call] of [
+  ['createShader', 1], ['createShader', 2],
+  ['getShaderParameter', 1], ['getShaderParameter', 2],
+  ['getProgramParameter', 1], ['createProgram', 2],
+  ['getShaderParameter', 3], ['getProgramParameter', 2],
+  ['createVertexArray', 1], ['createVertexArray', 2],
+  ['createBuffer', 1], ['bufferData', 1]
+]) {
+  test(`partial ribbon build releases every handle when ${method} call ${call} fails`, () => {
+    const gl = fakeGl({ failCalls: { [method]: [call] } });
+    const map = fakeMap(-145, 26, 3, { gl });
+    const flow = mount(map, uniform('wind', GLOBAL_1P00));
+    assert.equal(flow.state.form, 'still', 'the still fallback remains available');
+    assert.equal(flow.state.rebuildFailed, true);
+    assert.equal(map.getLayer(FLOW_PATHS_ID), undefined);
+    assertReleased(gl);
+    flow.dispose();
+    flow.dispose();
+    assertReleased(gl);
+    assert.equal(map.canvasListenerCount(), 0);
+    assert.equal(map.eventCount(), 0);
+  });
+}
+
+test('repeated shader failures in one context leave no accumulated GPU handles', () => {
+  const gl = fakeGl({ failCalls: { getShaderParameter: [1, 2, 3] } });
+  const map = fakeMap(-145, 26, 3, { gl });
+  for (let i = 0; i < 3; i++) {
+    const flow = mount(map, uniform('wind', GLOBAL_1P00));
+    assert.equal(flow.state.rebuildFailed, true);
+    flow.dispose();
+    assertReleased(gl);
+  }
+  assert.equal(gl.created.filter((handle) => handle.kind === 'Program').length, 3);
+  assert.equal(map.canvasListenerCount(), 0);
+});
+
+test('a successful ribbon retains its programs until removal and deletes each handle once', () => {
+  const gl = fakeGl();
+  const map = fakeMap(-145, 26, 3, { gl });
+  const flow = mount(map, uniform('wind', GLOBAL_1P00));
+  assert.equal(flow.state.form, 'moving');
+  assert.equal(gl.created.filter((handle) => handle.kind === 'Program').length, 2);
+  assert.equal(gl.deleted.filter((handle) => handle.kind !== 'Shader').length, 0);
+  flow.dispose();
+  flow.dispose();
+  assertReleased(gl);
 });

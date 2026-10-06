@@ -925,7 +925,7 @@ test.describe('flow measure (ENSO-FLOW-PLAN 4.2 and 4.4)', () => {
     }
     record('conditions', { renderer, softwareGlFloor: software, warmUpMs: WARM_UP_MS, windowMs: WINDOW_MS, runs: RUNS, viewport: VIEWPORT, conditions: out });
     const standard = (out['wind-standard'] as { medianOfMedians: Json }).medianOfMedians;
-    expect(standard['glFramesPerSec'], 'wind at Standard rendered frames').not.toBeNull();
+    expect(standard['glFramesPerSec'], 'wind at Standard rendered frames').toBeGreaterThan(0);
   });
 
   test('paused: 0 renders in 2 s after a 3 s settle', async ({ browser }) => {

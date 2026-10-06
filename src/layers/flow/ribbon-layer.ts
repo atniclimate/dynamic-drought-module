@@ -131,18 +131,26 @@ export const RIBBON_SHADERS = { VERT_RING, VERT_MARKS, FRAG } as const;
 function compile(gl: WebGL2RenderingContext, vs: string, fs: string): WebGLProgram {
   const program = gl.createProgram();
   if (!program) throw new Error('flow ribbon: createProgram failed');
-  for (const [type, src] of [[gl.VERTEX_SHADER, vs], [gl.FRAGMENT_SHADER, fs]] as const) {
-    const shader = gl.createShader(type);
-    if (!shader) throw new Error('flow ribbon: createShader failed');
-    gl.shaderSource(shader, src);
-    gl.compileShader(shader);
-    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(shader) ?? 'flow ribbon: compile failed');
-    gl.attachShader(program, shader);
-    gl.deleteShader(shader);
+  try {
+    for (const [type, src] of [[gl.VERTEX_SHADER, vs], [gl.FRAGMENT_SHADER, fs]] as const) {
+      const shader = gl.createShader(type);
+      if (!shader) throw new Error('flow ribbon: createShader failed');
+      try {
+        gl.shaderSource(shader, src);
+        gl.compileShader(shader);
+        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(shader) ?? 'flow ribbon: compile failed');
+        gl.attachShader(program, shader);
+      } finally {
+        gl.deleteShader(shader);
+      }
+    }
+    gl.linkProgram(program);
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(program) ?? 'flow ribbon: link failed');
+    return program;
+  } catch (error) {
+    gl.deleteProgram(program);
+    throw error;
   }
-  gl.linkProgram(program);
-  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(program) ?? 'flow ribbon: link failed');
-  return program;
 }
 
 /** The view of a MapLibre map as a ViewQuad, x unwrapped near `nearX`. */
@@ -294,7 +302,13 @@ export class FlowRibbonLayer implements CustomLayerInterface {
     this.map = map;
     const canvas = map.getCanvas();
     canvas.addEventListener('webglcontextlost', this.onLost);
-    this.build(gl);
+    try {
+      this.build(gl);
+    } catch (error) {
+      canvas.removeEventListener('webglcontextlost', this.onLost);
+      this.map = null;
+      throw error;
+    }
     this.needsReset = true;
   }
 
@@ -330,32 +344,52 @@ export class FlowRibbonLayer implements CustomLayerInterface {
 
   /** Programs, VAOs and buffers from scratch; the ring texture follows the particle capacity. */
   private build(gl: WebGL2RenderingContext): void {
-    const ringProgram = compile(gl, VERT_RING, FRAG);
-    const markProgram = compile(gl, VERT_MARKS, FRAG);
-    const ringVao = gl.createVertexArray();
-    const markVao = gl.createVertexArray();
-    const markBuffer = gl.createBuffer();
-    if (!ringVao || !markVao || !markBuffer) throw new Error('flow ribbon: GL allocation failed');
-    gl.bindVertexArray(markVao);
-    gl.bindBuffer(gl.ARRAY_BUFFER, markBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, MAX_MARKS * 2 * 6 * 4, gl.DYNAMIC_DRAW);
-    const aSeg = gl.getAttribLocation(markProgram, 'a_seg');
-    const aMeta = gl.getAttribLocation(markProgram, 'a_meta');
-    gl.enableVertexAttribArray(aSeg);
-    gl.vertexAttribPointer(aSeg, 4, gl.FLOAT, false, 24, 0);
-    gl.vertexAttribDivisor(aSeg, 1);
-    gl.enableVertexAttribArray(aMeta);
-    gl.vertexAttribPointer(aMeta, 2, gl.FLOAT, false, 24, 16);
-    gl.vertexAttribDivisor(aMeta, 1);
-    gl.bindVertexArray(null);
-    gl.bindBuffer(gl.ARRAY_BUFFER, null);
-    this.gpu = {
-      gl, ringProgram, markProgram, ringVao, markVao, markBuffer,
-      ringTexture: null, ringCapacity: 0, uniforms: new Map()
-    };
-    // A rebuilt context starts with an empty texture: send the whole CPU ring.
-    if (this.particles) this.particles.ringDirty = true;
-    if (this.marks) this.uploadMarks(gl);
+    let ringProgram: WebGLProgram | null = null;
+    let markProgram: WebGLProgram | null = null;
+    let ringVao: WebGLVertexArrayObject | null = null;
+    let markVao: WebGLVertexArrayObject | null = null;
+    let markBuffer: WebGLBuffer | null = null;
+    try {
+      ringProgram = compile(gl, VERT_RING, FRAG);
+      markProgram = compile(gl, VERT_MARKS, FRAG);
+      ringVao = gl.createVertexArray();
+      markVao = gl.createVertexArray();
+      markBuffer = gl.createBuffer();
+      if (!ringVao || !markVao || !markBuffer) throw new Error('flow ribbon: GL allocation failed');
+      gl.bindVertexArray(markVao);
+      gl.bindBuffer(gl.ARRAY_BUFFER, markBuffer);
+      gl.bufferData(gl.ARRAY_BUFFER, MAX_MARKS * 2 * 6 * 4, gl.DYNAMIC_DRAW);
+      const aSeg = gl.getAttribLocation(markProgram, 'a_seg');
+      const aMeta = gl.getAttribLocation(markProgram, 'a_meta');
+      gl.enableVertexAttribArray(aSeg);
+      gl.vertexAttribPointer(aSeg, 4, gl.FLOAT, false, 24, 0);
+      gl.vertexAttribDivisor(aSeg, 1);
+      gl.enableVertexAttribArray(aMeta);
+      gl.vertexAttribPointer(aMeta, 2, gl.FLOAT, false, 24, 16);
+      gl.vertexAttribDivisor(aMeta, 1);
+      this.gpu = {
+        gl, ringProgram, markProgram, ringVao, markVao, markBuffer,
+        ringTexture: null, ringCapacity: 0, uniforms: new Map()
+      };
+      // A rebuilt context starts with an empty texture: send the whole CPU ring.
+      if (this.particles) this.particles.ringDirty = true;
+      if (this.marks) this.uploadMarks(gl);
+    } catch (error) {
+      // Until build finishes, these handles are owned here, including when the
+      // second program or the initial buffer upload fails.
+      this.gpu = null;
+      if (!gl.isContextLost()) {
+        if (ringProgram) gl.deleteProgram(ringProgram);
+        if (markProgram) gl.deleteProgram(markProgram);
+        if (ringVao) gl.deleteVertexArray(ringVao);
+        if (markVao) gl.deleteVertexArray(markVao);
+        if (markBuffer) gl.deleteBuffer(markBuffer);
+      }
+      throw error;
+    } finally {
+      gl.bindVertexArray(null);
+      gl.bindBuffer(gl.ARRAY_BUFFER, null);
+    }
   }
 
   private uniform(gl: WebGL2RenderingContext, program: WebGLProgram, name: string): WebGLUniformLocation | null {
