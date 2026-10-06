@@ -24,7 +24,6 @@
 import type { GeoJsonProperties } from 'geojson';
 
 import type { IssuedModel, PopupClock, PopupDetail } from './popup-frame';
-import { escapeHtml } from '../util/escape';
 
 /** The frame's explanation for issuer time text DDM does not parse (PF1; the M25 builders' wording). */
 const SUPPLIED_TIME_EXPLANATION = 'As the issuer states it; DDM does not read it as a full date.';
@@ -144,80 +143,6 @@ export function buildPowerLinePopupModel(props: GeoJsonProperties): IssuedModel 
     source: { none: LINE_SOURCE },
     qualifications: [LINE_NOTE]
   };
-}
-
-// ---------------------------------------------------------------------------
-// The legacy markup, kept only for tests/power-layer.spec.ts
-// ---------------------------------------------------------------------------
-
-/*
- * The two HTML builders below are the pre-frame popups, unchanged. No src
- * module imports them (src/layers/power-3d.ts paints the models above
- * through the frame, and the build drops these as unused); they stay only
- * because tests/power-layer.spec.ts, outside D1 M26b's files, still pins its
- * plant and line wording through them. The same honesty rules are pinned on
- * the models in tests/identify-paths.spec.ts ("the NWS, SPC and power models
- * print the issuer words"). Retire both when that spec moves to the models.
- */
-
-/** The pre-frame plant popup (see above). */
-export function buildPowerPlantPopupHtml(props: GeoJsonProperties): string {
-  const p = props ?? {};
-  const name = p['Plant_Name'] || 'Power plant';
-  const source = p['PrimSource'] || '';
-  const utility = p['Utility_Na'] || '';
-  const megawatts = Number(p['Total_MW']);
-  const period = readEiaPeriod(p['Period']);
-
-  return `
-    <div class="popup-title">${escapeHtml(String(name))}</div>
-    <div class="popup-agency">U.S. Energy Information Administration · Forms 860/860M</div>
-    ${source ? `<div class="popup-treaty-meta">Primary energy source: ${escapeHtml(String(source))}</div>` : ''}
-    ${
-      Number.isFinite(megawatts)
-        ? `<div class="popup-treaty-meta">Nameplate capacity: ${escapeHtml(
-            megawatts.toLocaleString(undefined, { maximumFractionDigits: 1 })
-          )} MW</div>`
-        : ''
-    }
-    ${utility ? `<div class="popup-treaty-meta">Utility: ${escapeHtml(String(utility))}</div>` : ''}
-    ${period ? `<div class="popup-treaty-meta">Issuer reporting period: ${escapeHtml(period)}</div>` : ''}
-    <div class="popup-description">${PLANT_NOTE}</div>
-    <div class="popup-links">
-      <a href="https://www.eia.gov/electricity/data/eia860/" target="_blank" rel="noopener">EIA Form 860 documentation</a>
-    </div>
-  `;
-}
-
-/** 'YYYYMM' as published becomes 'YYYY-MM'; anything else prints verbatim. */
-function readEiaPeriod(raw: unknown): string {
-  if (typeof raw !== 'string' || raw === '') return '';
-  return /^\d{6}$/.test(raw) ? `${raw.slice(0, 4)}-${raw.slice(4)}` : raw;
-}
-
-/** The pre-frame line popup (see above). */
-export function buildPowerLinePopupHtml(props: GeoJsonProperties): string {
-  const p = props ?? {};
-  const voltClass = readHifldValue(p['VOLT_CLASS']);
-  const owner = readHifldValue(p['OWNER']);
-  const status = readHifldValue(p['STATUS']);
-  const type = readHifldValue(p['TYPE']);
-  const voltage = Number(p['VOLTAGE']);
-  const voltageText =
-    Number.isFinite(voltage) && voltage > 0
-      ? `${voltage.toLocaleString(undefined, { maximumFractionDigits: 0 })} kV`
-      : '';
-
-  return `
-    <div class="popup-title">Transmission line</div>
-    <div class="popup-agency">HIFLD (U.S. Government) · archived, no longer maintained</div>
-    <div class="popup-treaty-meta">Voltage class: ${escapeHtml(voltClass || 'not published')}</div>
-    ${voltageText ? `<div class="popup-treaty-meta">Voltage: ${escapeHtml(voltageText)}</div>` : ''}
-    <div class="popup-treaty-meta">Owner: ${escapeHtml(owner || 'not published')}</div>
-    <div class="popup-treaty-meta">Operational status: ${escapeHtml(status || 'not published')}</div>
-    ${type ? `<div class="popup-treaty-meta">Type: ${escapeHtml(type)}</div>` : ''}
-    <div class="popup-description">${LINE_NOTE}</div>
-  `;
 }
 
 /** HIFLD writes 'NOT AVAILABLE' where a value is unknown; keep it an unknown. */

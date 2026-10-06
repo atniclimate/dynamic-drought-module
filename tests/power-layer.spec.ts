@@ -16,8 +16,8 @@ import {
 import { getPowerContextState } from '../src/state/power-context';
 import { registry } from '../src/state/registry';
 import {
-  buildPowerLinePopupHtml,
-  buildPowerPlantPopupHtml
+  buildPowerLinePopupModel,
+  buildPowerPlantPopupModel
 } from '../src/ui/power-popups';
 import {
   captureWarnings,
@@ -290,7 +290,7 @@ test('both sources dead is unavailable, not an empty success', async () => {
 // ---------------------------------------------------------------------------
 
 test('a plant popup prints the issuer fields with the vintage beside the capacity', () => {
-  const html = buildPowerPlantPopupHtml({
+  const model = buildPowerPlantPopupModel({
     Plant_Name: 'Synthetic Falls',
     PrimSource: 'hydroelectric',
     Total_MW: 24,
@@ -298,17 +298,23 @@ test('a plant popup prints the issuer fields with the vintage beside the capacit
     Period: '202502'
   });
 
-  expect(html).toContain('Synthetic Falls');
-  expect(html).toContain('hydroelectric');
-  expect(html).toContain('24 MW');
-  expect(html).toContain('Synthetic Power');
-  expect(html).toContain('2025-02');
+  expect(model.title).toBe('Synthetic Falls');
+  expect(model.issuer.name).toBe('U.S. EIA · Forms 860/860M');
+  expect(model.value).toEqual([{ text: 'Nameplate capacity: 24 MW' }]);
+  expect(model.details).toEqual([
+    { kind: 'row', label: 'Primary energy source', text: 'hydroelectric' },
+    { kind: 'row', label: 'Utility', text: 'Synthetic Power' }
+  ]);
+  expect(model.clocks).toEqual([{
+    kind: 'point', meaning: 'data-period', label: 'Issuer reporting period',
+    at: { precision: 'month', month: '2025-02' }
+  }]);
   // A nameplate rating is not current output, and the popup says so.
-  expect(html).toContain('rated maximum');
+  expect(model.qualifications?.join(' ')).toContain('rated maximum');
 });
 
 test('a line popup never prints the issuer unknown sentinels as values', () => {
-  const html = buildPowerLinePopupHtml({
+  const model = buildPowerLinePopupModel({
     VOLT_CLASS: 'NOT AVAILABLE',
     OWNER: 'NOT AVAILABLE',
     STATUS: 'IN SERVICE',
@@ -318,26 +324,32 @@ test('a line popup never prints the issuer unknown sentinels as values', () => {
 
   // -999999 is the issuer's unknown marker; printing it would fabricate a
   // reading, and 'NOT AVAILABLE' is an absence, not an owner named that.
-  expect(html).not.toContain('-999999');
-  expect(html).not.toContain('999,999');
-  expect(html).not.toContain('NOT AVAILABLE');
-  expect(html).toContain('Voltage class: not published');
-  expect(html).toContain('Owner: not published');
-  expect(html).toContain('IN SERVICE');
+  expect(JSON.stringify(model)).not.toContain('-999999');
+  expect(JSON.stringify(model)).not.toContain('999,999');
+  expect(JSON.stringify(model)).not.toContain('NOT AVAILABLE');
+  expect(model.value).toEqual([{ text: 'Voltage class: not published' }]);
+  expect(model.details).toEqual([
+    { kind: 'row', label: 'Owner', text: 'not published' },
+    { kind: 'row', label: 'Operational status', text: 'IN SERVICE' },
+    { kind: 'row', label: 'Type', text: 'AC' }
+  ]);
   // The archive caveat is mandatory on every line response.
-  expect(html).toContain('2024-09-30');
-  expect(html).toContain('no longer maintained');
+  expect(model.clocks).toEqual([{
+    kind: 'point', meaning: 'edition', label: 'Last data update',
+    at: { precision: 'date', date: '2024-09-30' }
+  }]);
+  expect(model.qualifications?.join(' ')).toContain('no one maintains it');
 });
 
 test('a line popup prints a real published voltage', () => {
-  const html = buildPowerLinePopupHtml({
+  const model = buildPowerLinePopupModel({
     VOLT_CLASS: '500',
     OWNER: 'BONNEVILLE POWER ADMINISTRATION',
     STATUS: 'IN SERVICE',
     VOLTAGE: 500
   });
-  expect(html).toContain('500 kV');
-  expect(html).toContain('BONNEVILLE POWER ADMINISTRATION');
+  expect(model.details).toContainEqual({ kind: 'row', label: 'Voltage', text: '500 kV' });
+  expect(model.details).toContainEqual({ kind: 'row', label: 'Owner', text: 'BONNEVILLE POWER ADMINISTRATION' });
 });
 
 test('the shared qualification names the absent surfaces and why', () => {
