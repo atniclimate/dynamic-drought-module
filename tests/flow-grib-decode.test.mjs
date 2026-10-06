@@ -744,3 +744,143 @@ test('the call refuses a parameter, clock, packing or grid it did not ask for', 
   assert.equal(h.packing.packedCount, 65_160);
   assert.equal('values' in h, false);
 });
+
+// ---------------------------------------------------------------------------
+// found-148: a data section must be consumed to its end (E2a-3)
+// ---------------------------------------------------------------------------
+
+/**
+ * An independent count of the bits a template 5.3 message's section 7
+ * holds, from its own descriptors (template 7.3), read bit by bit here
+ * rather than by the decoder: the extra descriptors, the group references,
+ * widths and lengths (each run byte-aligned), then every group's packed
+ * values. Bits are counted from the first byte of section 7.
+ */
+function complexBitsUsed(msg) {
+  const s5 = sectionOf(msg, 5);
+  const s7 = sectionOf(msg, 7);
+  const b5 = msg.subarray(s5.start, s5.start + s5.length);
+  const b7 = msg.subarray(s7.start, s7.start + s7.length);
+  const n = u32(b5, 5);
+  const nbits = b5[19];
+  const ng = u32(b5, 31);
+  const [widthRef, widthBits] = [b5[35], b5[36]];
+  const [lengthRef, lengthInc, lengthLast, lengthBits] = [u32(b5, 37), b5[41], u32(b5, 42), b5[46]];
+  const [order, extra] = [b5[47], b5[48]];
+  let pos = 8 * 5;
+  const read = (k) => {
+    let v = 0;
+    for (let i = 0; i < k; i++, pos++) v = v * 2 + ((b7[pos >> 3] >> (7 - (pos & 7))) & 1);
+    return v;
+  };
+  const align = () => {
+    pos = Math.ceil(pos / 8) * 8;
+  };
+  pos += 8 * extra * (order + 1);
+  pos += ng * nbits;
+  align();
+  const widths = Array.from({ length: ng }, () => read(widthBits) + widthRef);
+  align();
+  const lengths = Array.from({ length: ng }, () => read(lengthBits) * lengthInc + lengthRef);
+  align();
+  lengths[ng - 1] = lengthLast;
+  let total = 0;
+  for (let g = 0; g < ng; g++) {
+    total += lengths[g];
+    pos += widths[g] * lengths[g];
+  }
+  assert.equal(total, n, 'the groups hold the packed-value count');
+  return { usedBits: pos, sectionBits: 8 * s7.length };
+}
+
+/** Section 7 of `msg` with `extra` bytes appended (zeros), every length field fixed. */
+function padSection7(msg, extra) {
+  const s7 = sectionOf(msg, 7);
+  const body = new Uint8Array(s7.length - 5 + extra);
+  body.set(msg.subarray(s7.start + 5, s7.start + s7.length));
+  return withSection(msg, 7, body);
+}
+
+const WIND_EXPECT = (number) => ({
+  grid: GLOBAL_1P00,
+  parameter: { discipline: 0, category: 2, number },
+  refTime: CYCLE,
+  forecastHours: 6,
+  packing: 3,
+  bitmap: false
+});
+
+test('a 5.3 message whose section 7 is not consumed to its last byte is refused', () => {
+  const msg = fixture('gfs1p00-UGRD-10m-f006').bytes;
+  const expect = WIND_EXPECT(2);
+  assert.doesNotThrow(() => decodeGrib2(msg, expect), 'the untouched message decodes');
+  // Padded: the packed values end one or more whole bytes before section 7 does.
+  for (const extra of [1, 2, 64]) {
+    const padded = padSection7(msg, extra);
+    assert.equal(readGrib2Header(padded).packing.template, 3, `+${extra}: the earlier sections still parse`);
+    assert.throws(
+      () => decodeGrib2(padded, expect),
+      (e) => e instanceof GribError && e.code === 'data' && /section 7/.test(e.message) && /structurally invalid/.test(e.message),
+      `section 7 padded by ${extra} byte(s) is refused by name`
+    );
+  }
+  // Truncated by one byte: the packed values run past section 7.
+  const s7 = sectionOf(msg, 7);
+  const cut = withSection(msg, 7, msg.slice(s7.start + 5, s7.start + s7.length - 1));
+  assert.throws(
+    () => decodeGrib2(cut, expect),
+    (e) => e instanceof GribError && e.code === 'data',
+    'section 7 one byte short is refused'
+  );
+});
+
+test('every committed 5.3 fixture consumes section 7 to its last byte', (t) => {
+  for (const [name, number] of [
+    ['gfs1p00-UGRD-10m-f006', 2],
+    ['gfs1p00-VGRD-10m-f006', 3]
+  ]) {
+    const msg = fixture(name).bytes;
+    const { usedBits, sectionBits } = complexBitsUsed(msg);
+    const slack = sectionBits - usedBits;
+    t.diagnostic(`${name}: section 7 is ${sectionBits} bits, the packed data use ${usedBits}, slack ${slack} bits`);
+    assert.ok(slack >= 0 && slack < 8, `${name}: slack ${slack} bits lies inside the last byte`);
+    assert.doesNotThrow(() => decodeGrib2(msg, WIND_EXPECT(number)), `${name} decodes`);
+    // One whole byte of slack more is refused, so the rule binds on real messages.
+    assert.throws(
+      () => decodeGrib2(padSection7(msg, 1), WIND_EXPECT(number)),
+      (e) => e instanceof GribError && e.code === 'data',
+      `${name} with one byte of section 7 left over is refused`
+    );
+  }
+});
+
+test('a 5.40 codestream without its closing EOC is refused', () => {
+  const grids = { 'wcoast0p16-HTSGW-f006': WCOAST_0P16, 'wcoast0p16-DIRPW-f006': WCOAST_0P16, 'global0p25-HTSGW-f006': GLOBAL_0P25 };
+  for (const [name, grid] of Object.entries(grids)) {
+    const msg = fixture(name).bytes;
+    // The committed messages close with EOC directly after their last tile-part.
+    const good = decodeGrib2(msg, { grid });
+    const cs = codestreamOf(msg);
+    assert.equal((cs[cs.length - 2] << 8) | cs[cs.length - 1], 0xffd9, `${name} closes with EOC`);
+    const variants = [
+      // EOC cut off.
+      ['no EOC', cs.slice(0, cs.length - 2)],
+      // Two bytes after EOC.
+      ['bytes after EOC', Uint8Array.from([...cs, 0, 0])]
+    ];
+    for (const [label, bad] of variants) {
+      assert.throws(
+        () => decodeGrib2(withSection(msg, 7, bad), { grid }),
+        (e) => e instanceof GribError && e.code === 'jpeg2000' && /EOC/.test(e.message),
+        `${name} ${label} is refused by name`
+      );
+    }
+    // Padding after the last packet is legal encoding: it decodes to the same values.
+    const { sodEnd } = codestreamLayout(cs);
+    const tile = cs.slice(sodEnd, cs.length - 2);
+    const padded = new Uint8Array(tile.length + 1);
+    padded.set(tile);
+    const f = decodeGrib2(withSection(msg, 7, withTileBody(cs, padded)), { grid });
+    assert.deepEqual(f.values, good.values, `${name} with one byte of tile-data padding decodes unchanged`);
+  }
+});

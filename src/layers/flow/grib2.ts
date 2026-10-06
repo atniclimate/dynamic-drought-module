@@ -15,9 +15,13 @@
  *
  * Anything else is refused loudly with a GribError that names it (another
  * template, a second field in one message, a predefined bitmap, a
- * truncated or inconsistent message), so a change at NCEP reads as
- * unavailable rather than drawing wrong values. Grid expectations are
- * parameters of each call, never fixed to one grid.
+ * truncated or inconsistent message, a data section not consumed to its
+ * last byte), so a change at NCEP reads as unavailable rather than drawing
+ * wrong values. The decoder refuses structurally invalid messages; GRIB2
+ * has no checksum, so a damaged message that stays structurally valid is
+ * not detected here (the decode Worker's plausibility bounds are the next
+ * check). Grid expectations are parameters of each call, never fixed to
+ * one grid.
  *
  * Verified against eccodes 2.49.0 on real NODD messages
  * (tests/flow-grib-decode.test.mjs). It copies no code from any other
@@ -47,7 +51,7 @@ export type GribErrorCode =
   | 'size'
   /** The bitmap and the packed-point count disagree. */
   | 'bitmap'
-  /** Template 5.3 data runs out or contradicts its own group descriptors. */
+  /** Template 5.3 data runs out, is left over, or contradicts its own group descriptors. */
   | 'data'
   /** The template 5.40 JPEG 2000 codestream is refused (the message says why). */
   | 'jpeg2000';
@@ -366,12 +370,17 @@ function checkExpect(h: GribHeader, expect: GribExpect): void {
 interface BitReader {
   read(n: number): number;
   align(): void;
+  /** Bits consumed, counted from the first byte of `b`. */
+  position(): number;
 }
 
 function bitReader(b: Uint8Array, start: number): BitReader {
   let byte = start;
   let bit = 0;
   return {
+    position(): number {
+      return byte * 8 + bit;
+    },
     read(nIn: number): number {
       let n = nIn;
       let v = 0;
@@ -458,6 +467,11 @@ function unpackComplex(s5: Uint8Array, s7: Uint8Array, n: number, nbits: number)
     }
   }
   if (k !== n) fail('data', `groups hold ${k} values; section 5 gives ${n}`);
+  // The packed values end in section 7's last byte; only that byte's padding bits may follow.
+  const leftover = 8 * s7.length - br.position();
+  if (leftover >= 8) {
+    fail('data', `structurally invalid: section 7 holds ${Math.floor(leftover / 8)} byte(s) after its packed values`);
+  }
 
   // Undo the spatial differencing (regulation 92.9.4, template 7.3).
   if (order === 1) {

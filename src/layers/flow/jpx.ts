@@ -13,8 +13,11 @@
  * from pdf.js, OpenJPEG, JasPer or any other decoder.
  *
  * Every codestream feature outside the subset is refused with a JpxError
- * that names it; a malformed codestream throws JpxError rather than looping
- * or allocating without bound (ENSO-FLOW-PLAN section 2.3, hardening).
+ * that names it; a structurally invalid codestream (including one with no
+ * EOC directly after its last tile-part) throws
+ * JpxError rather than looping or allocating without bound (ENSO-FLOW-PLAN
+ * section 2.3, hardening). It has no checksum: damaged code-block data that
+ * stays structurally valid decodes to wrong samples undetected.
  */
 
 export type JpxErrorCode = 'truncated' | 'unsupported' | 'size' | 'corrupt';
@@ -545,6 +548,10 @@ export function decodeJpeg2000(cs: Uint8Array, expectedSamples: number): JpxImag
     p = end;
   }
   if (bodies.length === 0) fail('corrupt', 'no tile-part');
+  // T.800 A.4.4: the codestream closes with EOC, directly after its last tile-part.
+  if (p !== cs.length - 2 || u16(cs, p) !== 0xffd9) {
+    fail('corrupt', 'structurally invalid: the codestream does not close with EOC after its last tile-part');
+  }
   if (exponents.length !== 3 * levels + 1) fail('corrupt', 'quantization exponents do not match the levels');
   let body = bodies[0] as Uint8Array;
   if (bodies.length > 1) {

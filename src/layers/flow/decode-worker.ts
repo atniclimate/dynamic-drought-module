@@ -9,10 +9,15 @@
  * transfers the result. A global 0.25 degree field is 4.15 MB as Float32;
  * the wave crop as Int16 plus a byte mask is about 0.77 MB.
  *
- * Any refusal (a template the decoder does not implement, a message that is
- * not the one asked for, a value outside the Int16 range) replies with an
- * error, and the reader reads the kind as unavailable. Nothing is clamped
- * and nothing masked is filled.
+ * Any refusal (a template the decoder does not implement, a structurally
+ * invalid message, a message that is not the one asked for, an unmasked
+ * value outside its variable's physical bound, a value outside the Int16
+ * range) replies with an error, and the reader reads the kind as
+ * unavailable. Nothing is clamped and nothing masked is filled.
+ *
+ * GRIB2 carries no checksum, so a damaged message can still parse. The
+ * bounds below refuse values no real field holds (found-148); a damaged
+ * message whose values all stay inside them is not detected.
  */
 
 import { decodeGrib2 } from './grib2';
@@ -20,6 +25,38 @@ import type { FlowKind } from './field';
 import { FLOW_SOURCES, PACKET_NO_VALUE, waveToVector, type DecodeReply, type DecodeRequest, type FlowPacket } from './source';
 
 const HOUR = 3_600_000;
+
+/** GFS 10 m UGRD and VGRD, m/s: above the strongest sustained surface wind estimated in any tropical cyclone (about 96 m/s). */
+export const WIND_COMPONENT_MAX_MS = 100;
+/** GFS-Wave HTSGW, m: the largest buoy-measured significant wave height is about 19 m; 30 m leaves room for a model peak. */
+export const WAVE_HEIGHT_MAX_M = 30;
+/** GFS-Wave DIRPW, degrees true clockwise from north: 360 is accepted in case the issuer writes north as 360. */
+export const WAVE_DIRECTION_MAX_DEG = 360;
+
+/** The inclusive range each source message's unmasked values must lie in, by `.idx` variable. */
+export const PLAUSIBLE_RANGE: Readonly<Record<string, readonly [number, number]>> = {
+  UGRD: [-WIND_COMPONENT_MAX_MS, WIND_COMPONENT_MAX_MS],
+  VGRD: [-WIND_COMPONENT_MAX_MS, WIND_COMPONENT_MAX_MS],
+  HTSGW: [0, WAVE_HEIGHT_MAX_M],
+  DIRPW: [0, WAVE_DIRECTION_MAX_DEG]
+};
+
+/**
+ * Refuse (RangeError) a decoded field holding any unmasked value outside its
+ * variable's range, anywhere on the grid; NaN is a masked point. A variable
+ * with no range is refused too. Exported for the tests.
+ */
+export function checkPlausible(variable: string, values: Float32Array): void {
+  const range = PLAUSIBLE_RANGE[variable];
+  if (!range) throw new RangeError(`${variable} has no plausibility bound`);
+  const [lo, hi] = range;
+  for (let k = 0; k < values.length; k++) {
+    const x = values[k] as number;
+    if (!Number.isNaN(x) && !(x >= lo && x <= hi)) {
+      throw new RangeError(`${variable} ${x} at point ${k} is outside the plausible range ${lo} to ${hi}; the frame is refused`);
+    }
+  }
+}
 
 /** Quantize one cropped component to Int16 steps; a NaN node is PACKET_NO_VALUE. */
 function quantize(src: Float32Array, step: number, what: string): Int16Array {
@@ -47,6 +84,8 @@ export function buildPacket(kind: FlowKind, values: readonly Float32Array[], cyc
   if (values.length !== s.messages.length || values.some((a) => a.length !== ni * nj)) {
     throw new Error(`${kind}: expected ${s.messages.length} fields of ${ni}x${nj}`);
   }
+  // The whole grid, not only the crop: a value out of bound anywhere marks the message as damaged.
+  s.messages.forEach((message, k) => checkPlausible(message.variable, values[k] as Float32Array));
   const c = s.crop ?? { column0: 0, row0: 0, nx: ni, ny: nj };
   if (c.row0 < 0 || c.row0 + c.ny > nj || c.nx > ni) throw new Error(`${kind}: the crop leaves the grid`);
   const n = c.nx * c.ny;
