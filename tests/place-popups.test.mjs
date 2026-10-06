@@ -38,6 +38,7 @@ registerHooks({
 const popups = await import('../src/ui/popups.ts');
 const { buildPlaceConditionsHtml } = await import('../src/ui/popup-conditions.ts');
 const { registry } = await import('../src/state/registry.ts');
+const { isChecked, setChecked } = await import('../src/ui/island/bridge.ts');
 const { dateTok } = await import('../src/util/text-tokens.ts');
 const { serializePopupFrame } = await import('../src/ui/popup-frame.ts');
 const { getLayerDef } = await import('../src/config/layers.ts');
@@ -593,6 +594,7 @@ test('nothing on, and a layer asked for but unread, keep their sentences', () =>
   const noneHtml = buildStatePopupHtml({ NAME: 'Fixture State' }, none);
   assert.equal(noneHtml.includes('data-popup-slot="conditions"'), false);
   registry.setStatus('nifc-fires', 'error');
+  setChecked('nifc-fires', true);
   try {
     const unread = buildPlaceConditionsHtml(fakeMap({}), [0, 0], PLACE);
     assert.deepEqual(unread.head, [
@@ -603,6 +605,7 @@ test('nothing on, and a layer asked for but unread, keep their sentences', () =>
     ]);
     assert.deepEqual(unread.rows, []);
   } finally {
+    setChecked('nifc-fires', false);
     registry.deactivate('nifc-fires');
   }
   // Layers on, nothing reported at the place: every row is an absence, so
@@ -699,17 +702,23 @@ const NO_ROW_FOR_MODE = 'No condition layer for this mode is currently active';
  * `on` is a registered key (a module that resolved, or one whose later
  * refresh failed and kept its fill); off with a status is an activation still
  * loading (the controller registers a key only once it resolves) or one that
- * failed (the controller drops the key and keeps its 'error').
+ * failed (the controller drops the key and keeps its 'error'). `checked`
+ * records the independent on-intent; committed failures keep it true.
  */
 function withRegistry(entries, run) {
-  for (const { key, status, on } of entries) {
+  const previous = new Map(entries.map(({ key }) => [key, isChecked(key)]));
+  for (const { key, status, on, checked = true } of entries) {
+    setChecked(key, checked);
     if (on) registry.activate(key);
     if (status !== undefined) registry.setStatus(key, status);
   }
   try {
     return run();
   } finally {
-    for (const { key } of entries) registry.deactivate(key);
+    for (const { key } of entries) {
+      registry.deactivate(key);
+      setChecked(key, previous.get(key));
+    }
   }
 }
 
@@ -880,6 +889,38 @@ test('a layer that failed to activate beside a complete read: not every layer re
 
 // The Codex review of dbf5e1fa (C:/dev/_reviews/dynamic-drought-module/
 // b3m24-proofs/read-completeness.test.mjs), ported as regression cases.
+
+test('an off-intent failed custom-set layer has no switched-on sentence and no row', () => {
+  withRegistry([{ key: 'nifc-fires', status: 'error', on: false, checked: false }], () => {
+    const alone = buildPlaceConditionsHtml(fakeMap({}), [0, 0], PLACE);
+    assert.deepEqual(alone.head, [{ label: 'Conditions', text: NOTHING_ON }]);
+    assert.deepEqual(alone.rows, []);
+    const beside = withRegistry([{ key: 'nadm-drought', status: 'ready', on: true }], () =>
+      buildPlaceConditionsHtml(fakeMap({ 'nadm-drought-fill': [] }), [0, 0], PLACE)
+    );
+    assert.deepEqual(beside.head, [{ text: "Nothing mapped here on the active condition layers; each layer's reading is below." }]);
+    assert.deepEqual(beside.rows, [
+      { label: 'Drought', text: 'No drought category polygon here (North American Drought Monitor).' }
+    ]);
+  });
+});
+
+test('an enabled failed layer keeps its unavailable row until its on-intent is cleared', () => {
+  withRegistry([
+    { key: 'nadm-drought', status: 'ready', on: true },
+    { key: 'nifc-fires', status: 'error', on: false, checked: true }
+  ], () => {
+    const map = fakeMap({ 'nadm-drought-fill': [] });
+    const enabled = buildPlaceConditionsHtml(map, [0, 0], PLACE);
+    assert.deepEqual(enabled.head, [{ text: NOT_EVERY_READ }]);
+    assert.ok(enabled.rows.some((row) => row.label === 'Wildfire' && row.state === 'unavailable'));
+    setChecked('nifc-fires', false);
+    const disabled = buildPlaceConditionsHtml(map, [0, 0], PLACE);
+    assert.equal(registry.getStatus('nifc-fires'), 'error', 'the failure status remains');
+    assert.ok(disabled.rows.every((row) => row.label !== 'Wildfire'));
+    assert.deepEqual(disabled.head, [{ text: "Nothing mapped here on the active condition layers; each layer's reading is below." }]);
+  });
+});
 
 test('a failed activation has a body state when the head promises each layer state below (Codex P2 2)', () => {
   const result = withRegistry(

@@ -95,6 +95,7 @@ import { geometriesOverlap } from '../util/polygon-overlap';
 import { dateTok } from '../util/text-tokens';
 import type { PopupClock, SixStateWord, ValueRow } from './popup-frame';
 import { SUPPLIED_TIME_EXPLANATION } from './popups';
+import { isChecked } from './island/bridge';
 
 /** A `queryRenderedFeatures` region: a bare point, or a screen-space box. */
 type QueryRegion = maplibregl.PointLike | [maplibregl.PointLike, maplibregl.PointLike];
@@ -883,7 +884,7 @@ export function buildPlaceConditionsHtml(
   // genuinely-nothing-on case below. The layers checked are the declared
   // rows' own (PLACE_CONDITION_ROWS), never a second list kept here.
   const enabledButUnread = rowKeys.flatMap((key) => PLACE_CONDITION_ROWS[key].layerKeys).filter((key) => {
-    if (isLayerOn(key)) return false;
+    if (isLayerOn(key) || !isChecked(key)) return false;
     const status = registry.getStatus(key);
     return status === 'error' || status === 'degraded';
   });

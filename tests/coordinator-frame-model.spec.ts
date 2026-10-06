@@ -3,6 +3,14 @@ import { gotoApp, waitForLayerSettled } from './helpers';
 import { serializePopupFrame } from '../src/ui/popup-frame';
 import type { PopupModel } from '../src/ui/popup-frame';
 
+// Register before boot so the specific fixtures take precedence over this backstop.
+test.beforeEach(async ({ context }) => {
+  await context.route(
+    (url) => url.protocol.startsWith('http') && url.hostname !== '127.0.0.1' && url.hostname !== 'localhost',
+    (route) => route.fulfill({ status: 503, contentType: 'text/plain', body: 'Synthetic offline response' })
+  );
+});
+
 /**
  * S30D P1-FRAME (2026-10-04): the InteractionCoordinator is the popup frame's
  * one caller. A click target may answer a MODEL (`CoordinatedResponse.model`)

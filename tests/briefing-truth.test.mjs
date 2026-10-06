@@ -310,6 +310,29 @@ test('a CPC read with one layer request failed in one window is live (partial) a
   assert.equal(cell.note, undefined);
 });
 
+for (const [name, payload] of [
+  ['a malformed payload', {}],
+  ['null feature properties', collection([feature(null)])],
+  ['unreadable feature properties', collection([feature('unreadable')])]
+]) {
+  test(`a CPC layer with ${name} leaves the read incomplete and the cell partial`, async () => {
+    const readable = cpcAnswer({
+      cpc_6_10_day_outlk: { 0: CPC_ABOVE_TEMP, 1: CPC_BELOW_PRECIP },
+      cpc_8_14_day_outlk: { 0: CPC_ABOVE_TEMP, 1: CPC_BELOW_PRECIP }
+    });
+    const result = await withFetch(
+      (url) => url.includes('/cpc_6_10_day_outlk/MapServer/0/query') ? jsonResponse(payload) : readable(url),
+      () => sources.fetchCpcOutlookClaims(place(-120.625, 47.4), signal())
+    );
+    const cell = settledCell('nearTerm', 'drought', [['cpcExtended', result]]);
+    assert.deepEqual([result.ok, result.partial, cell.status], [true, true, 'partial']);
+    assert.equal(result.claims.length, 2, 'the three readable variables keep both windows');
+    assert.doesNotMatch(result.claims[0].text, /temperature/);
+    assert.equal(result.note, undefined, 'an unreadable answer is not a silent window');
+    assert.equal(cell.note, undefined);
+  });
+}
+
 test('a CPC window whose two layers answered with no feature is complete: not partial and no did-not-respond note', async () => {
   const result = await withFetch(
     cpcAnswer({

@@ -53,7 +53,8 @@ const CPC_OUT_FIELDS = 'cat,prob,fcst_date,start_date,end_date';
 /**
  * Query one CPC outlook layer (0 = temperature, 1 = precipitation) at a point.
  * Rejects when the request failed; resolves `null` when the layer answered
- * with no feature here (a complete answer with nothing to state); a feature
+ * with no feature here (a complete answer with nothing to state); resolves
+ * `undefined` for an unreadable payload or feature properties; a feature
  * whose `cat` is not text resolves with `cat: ''`, which no `leanPhrase` code
  * reads, so the caller treats it as an answer it could not read (S30D
  * P3-TRUTH: those three outcomes are kept apart all the way to the cell).
@@ -64,11 +65,14 @@ async function fetchCpcLayer(
   lng: number,
   lat: number,
   signal: AbortSignal
-): Promise<OutlookValue | null> {
+): Promise<OutlookValue | null | undefined> {
   const url = `${base}/${layer}/query?${esriPointQuery(lng, lat, CPC_OUT_FIELDS).toString()}`;
   const json: unknown = await fetchJson(url, GEOJSON_ACCEPT, signal);
-  const f = featuresOf(json)[0] ?? null;
-  if (!isObject(f) || !isObject(f.properties)) return null;
+  const features = featuresOf(json);
+  if (!isObject(json) || json.type !== 'FeatureCollection' || !Array.isArray(json.features)) return undefined;
+  if (features.length === 0) return null;
+  const f = features[0];
+  if (!isObject(f) || !isObject(f.properties)) return undefined;
   const cat = f.properties.cat;
   const prob = f.properties.prob;
   return {
@@ -86,7 +90,7 @@ async function fetchCpcLayer(
  * returned none. An outlook must never state a window it was not given, so
  * each half is omitted independently rather than inferred from the other.
  */
-function outlookValiditySentence(v: OutlookValue | null): string {
+function outlookValiditySentence(v: OutlookValue | null | undefined): string {
   if (!v) return '';
   const parts: string[] = [];
   if (v.issued !== null) parts.push(`Issued ${humanDayUtc(v.issued)}`);
@@ -116,7 +120,7 @@ function outlookValiditySentence(v: OutlookValue | null): string {
  * surviving variable, or drops the window if neither answers (see the
  * `parts.filter` call above this function's caller).
  */
-function leanPhrase(v: OutlookValue | null, variable: string): string | null {
+function leanPhrase(v: OutlookValue | null | undefined, variable: string): string | null {
   if (!v) return null;
   const odds = Number.isFinite(v.prob) ? ` (${v.prob}% odds)` : '';
   if (v.cat === 'Above') return `above-normal ${variable}${odds}`;
@@ -129,7 +133,7 @@ function leanPhrase(v: OutlookValue | null, variable: string): string | null {
 }
 
 /** Drought-and-fire interpretation of a temperature and precipitation lean. */
-function outlookInterpretation(temp: OutlookValue | null, precip: OutlookValue | null): string {
+function outlookInterpretation(temp: OutlookValue | null | undefined, precip: OutlookValue | null | undefined): string {
   if (temp?.cat === 'Above' && precip?.cat === 'Below') {
     return 'This hotter, drier tilt worsens near-term dryness and raises fire and heat risk.';
   }
@@ -204,11 +208,11 @@ export async function readCpcOutlookClaims(
         if (signal.aborted) return;
         const tempPhrase = leanPhrase(temp, 'temperature');
         const precipPhrase = leanPhrase(precip, 'precipitation');
-        // An answer whose category the code cannot read (`leanPhrase` null on
-        // a returned feature) is neither "no outlook here" nor "did not
+        // An unreadable payload, properties or category is neither
+        // "no outlook here" nor "did not
         // respond": the read did not establish that variable, so it is
         // incomplete, and no note is attached (none would be true).
-        if (failed > 0 || (temp && !tempPhrase) || (precip && !precipPhrase)) incomplete = true;
+        if (failed > 0 || (temp !== null && !tempPhrase) || (precip !== null && !precipPhrase)) incomplete = true;
         if (silent > 1) windowFailed = true;
         if (failed < 2) answered = true;
         const parts = [tempPhrase, precipPhrase].filter((p): p is string => p !== null);
@@ -276,4 +280,3 @@ export async function readCpcOutlookClaims(
     ...(windowFailed ? { note: 'One CPC outlook window did not respond.' } : {})
   };
 }
-

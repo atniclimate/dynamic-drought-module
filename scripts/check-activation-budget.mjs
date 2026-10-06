@@ -451,7 +451,7 @@ const FEATURE_BUDGETS = [
   },
   {
     key: 'popup-frame',
-    label: 'NEW 2026-10-04 with S30D P1-FRAME, for the owner to ratify at the next landing: the popup frame (src/ui/popup-frame.ts) as its own first-use cost. The InteractionCoordinator is its one caller and loads it with one dynamic import, warmed when the first click target registers; builders hand the coordinator a model and import only the frame\'s types, so the frame rides no other row (the popup frame renderer rule above holds that). Its first-activation closure is the frame chunk plus the shared text-tokens chunk it imports: measured 5.5 kB (5,471 bytes gzip, the frame chunk 5,176 plus text-tokens 295) by the worker gate p1frame-4 on a94eee5 plus this change. The frame fetches nothing, so its network columns are zero.',
+    label: 'NEW 2026-10-04 with S30D P1-FRAME, ratified by the owner on 2026-10-05 (RATIFICATION-11 row 14): the popup frame (src/ui/popup-frame.ts) as its own first-use cost. The InteractionCoordinator is its one caller and loads it with one dynamic import, warmed when the first click target registers; builders hand the coordinator a model and import only the frame\'s types, so the frame rides no other row (the popup frame renderer rule above holds that). Its first-activation closure is the frame chunk plus the shared text-tokens chunk it imports: measured 5.5 kB (5,471 bytes gzip, the frame chunk 5,176 plus text-tokens 295) by the worker gate p1frame-4 on a94eee5 plus this change. The frame fetches nothing, so its network columns are zero.',
     rootModules: ['src/ui/popup-frame.ts'],
     measuredJsGzipKb: 5.5,
     networkBytes: 0,
