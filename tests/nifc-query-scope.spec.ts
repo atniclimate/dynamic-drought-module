@@ -817,7 +817,7 @@ test.describe('DDM-P14-T07: the briefing and the minimap read the loaded NIFC co
     // 'drought' (src/state/url.ts's `parseShellParams`).
     await gotoApp(page, '?view=brief&cluster=wildfire&region=hawaii');
     await waitForLayerSettled(page, 'nifc-fires');
-    const minimap = page.locator('.shell-minimap-canvas');
+    const minimap = page.locator('.shell-minimap-map .shell-minimap-canvas');
     await expect(minimap).toHaveAttribute('data-wildfire-status', 'live-partial');
     expect(geojsonQueries, "the layer's own boot query, fit to the Hawaii camera").toHaveLength(1);
 
