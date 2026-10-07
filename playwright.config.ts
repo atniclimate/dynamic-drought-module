@@ -116,14 +116,9 @@ export default defineConfig({
   // `--workers=1` per runner and fans out across runners instead
   // (browser-suite.yml).
   //
-  // The serial baseline recorded here was "about 31 minutes, 2026-08-28".
-  // That is stale and low. Re-measured 2026-09-01 on `d5aaac1`: about 3.8 s
-  // per browser test in `chromium`, about 4.1 s in `chromium-interaction`,
-  // and 11.1 minutes for `fire3d-mode.spec.ts` alone, over 852 tests in 107
-  // files, which puts `npm run test:serial` at roughly 50 to 55 minutes.
-  // Treat it as the integration branch's final pass, not a routine loop; the
-  // cheaper tiers are `npm run verify:quick`, `verify:smoke`, and
-  // `verify:fire` (tests/README.md).
+  // Keep full serial verification for the assembled integration/release
+  // candidate. Use the scoped ladder in tests/README.md while editing;
+  // historical runtime estimates are not verification requirements.
   fullyParallel: true,
   workers: 2,
 

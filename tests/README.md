@@ -24,78 +24,76 @@ on port 4173, the suite fails instead of reusing an unattributed build.
 
 ## The local verification ladder
 
-Three commands a person types, cheapest first. Every duration below was measured
-on 2026-09-01 on the developer laptop (Windows 11, 13th Gen i5-1340P, 32 GB,
-Chromium on ANGLE over SwiftShader, `--workers=1`), except where it says
-inferred. Re-measure these when the suite grows; a stale number here is worse
-than no number.
+Choose verification for the changed behavior. The scripts in `package.json`
+are the executable rosters; `playwright.pure.config.ts` owns pure-lane membership.
+Avoid copying spec counts and runtime estimates into several documents.
 
-| Script | What it runs | Duration |
+| Work being checked | Command | Scope |
 | --- | --- | --- |
-| `npm run verify:quick` | `typecheck`, `scan:emdash`, `check:vocabulary`, `check:coverage` | about 5 s |
-| `npm run verify:pure` | the sixteen browser-free spec files under `playwright.pure.config.ts` (read its list, not this count, for the roster), no build, no server; since DDM-P15-T08 (2026-09-12) it also runs inside `check:all`, so a spec whose imported code reaches the DOM fails the gate, not just this manual command | seconds (2.6 s measured 2026-09-12) |
-| `npm test` | the three CI projects (`chromium`, `chromium-interaction`, `chromium-3d`), never `chromium-measure` (DDM-P15-T08, package.json's `test` script names them explicitly) | see `verify:smoke`/`test:serial` for the browser suite's own cost |
-| `npm run verify:smoke` | `gate` plus the smoke specs named in `package.json` (27 on 2026-09-12, after the two pure-lane files left the roster because `gate` now runs `verify:pure`; read the script, not this table, for the roster), `--workers=1` | about 11 min measured 2026-09-10 (10.7 and 10.8 min on the same tree); 10.5 min on 2026-09-12 |
-| `npm run test:serial` | all tests, the three CI projects (`chromium`, `chromium-interaction`, `chromium-3d`), one worker; `chromium-measure` (the mode-switch cost measurement) is excluded since DDM-P15-T08 (2026-09-12) and runs only via `npm run measure:mode-switch` | 31.1 min measured 2026-09-03 with the boot-idle seam, before the chromium-measure exclusion (894 tests; 23.9 min before the seam, which makes every boot wait for real idle) |
-| `npm run check:all` | the shared `node:test` suites and static checks, `verify:pure`, the new `test:lanes` config-level proof (DDM-P15-T08), then `typecheck:tests` last; read the script for the ordered list, not this table | about 21 s measured 2026-09-12 (verify:pure and test:lanes together added under 6 s) |
+| An edit during development | `npm run verify:quick` | Types, vocabulary, coverage and punctuation; no browser or build |
+| Pure logic | `npm run verify:pure -- tests/layer-order.spec.ts` | Selected source-level cases; omit the selector for the whole pure lane |
+| Source checks without a bundle | `npm run gate:nobuild` | Types and all source checks, including the pure lane |
+| A browser behavior | `npx playwright test --workers=1 tests/boot.spec.ts` | Fresh production build and the selected cases |
+| Cross-cutting build/configuration changes | `npm run gate` | Fresh build, artifact budgets and all source checks |
+| Integration block smoke verification | `npm run verify:smoke` | Gate and the smoke roster, one fresh build, one owned preview |
+| Final integration/release candidate | `npm run test:serial` | All three assertion projects, one worker; excludes the measurement project |
 
-`verify:quick` is the save-and-think loop. No build, no network, no browser.
+`npm test` runs the same three assertion projects with the configured worker
+count. Keep one browser runner at a time. The pure lane starts no browser or
+preview; its execution inside the smoke gate finishes before preview starts.
+Run `npm run verify:pure` without selectors to check all of its source-level cases.
 
-`verify:pure` (DR-052 b) is the same loop for the pure logic under `src/`: the
-spec files that never ask for a page run against the source directly, in
-seconds, because the pure config has no `webServer` and so no build and no
-preview to wait behind. They also run inside `test:serial` under the main
-config, so nothing is proven only here. Membership is enforced by
-`tests/pure-lane-inventory.test.mjs` under `check:all`: a listed file that
-grows a browser case fails the inventory, and leaves the list.
-`check:vocabulary` and `check:coverage` are the two that catch a config-table
-edit drifting from its documentation, which is the most common silent break
-here, and `scan:emdash` enforces hard rule 9 before it reaches a diff.
+### Iteration and session closeout
 
-`verify:smoke` is the before-you-hand-it-over loop. Its twelve specs are
-`boot`, `ux1-surfaces`, `url-state`, `cluster-controller-integration`,
-`temporal-axis`, `impact-panel-a11y`, `legend`, `conditions-strip`,
-`mobile-sheet`, `embed-viewport`, `interface-responsive`, and `s4-minimap`:
-about 105 tests covering map lifecycle, role-group order and surface
-exclusivity, URL-as-state, cluster switching, the time controls, the briefing
-modal, the unified legend, the honest off states, the phone sheet, the embed
-viewports, the 720 px boundary, and the minimap framings. One build, one
-preview.
+Run affected tests while developing. Pure logic belongs in the pure lane when it
+does not require rendering, navigation or a real browser. Keep browser cases that
+prove the production wiring and user behavior. The pure inventory check rejects
+browser fixtures and boot helpers; the lane's execution catches imported DOM
+dependencies. All these cases remain in the full suite.
 
-`test:serial` is the integration branch's final pass before a push to main, not
-a routine loop.
+A session handoff is a record of work, not a new application verification event.
+Do not start `verify:smoke` or `test:serial` solely because the session is ending,
+or rerun an unchanged candidate just to recover context. Preserve the prior
+command, result, candidate identity and evidence path. Record unfinished checks
+and failures explicitly; they remain required before the corresponding task,
+integration block or release can be declared complete.
 
-When fire or 3D changed, run those two specs directly before you push. They are
-excluded from `verify:smoke` because together they are longer than the rest of
-the smoke set combined (about 20 min inferred; `fire3d-mode` alone measured
-11.1 min):
+For documentation-only work, check the changed text and public-tree policy.
+For verification-tooling work, run the relevant lane/configuration tests, types,
+the gate when build orchestration changes, and a focused execution of the changed
+browser startup path. A tooling check does not establish application readiness.
 
-```
+After shared navigation, map lifecycle or state changes, run affected browser
+cases first and the full serial suite on the assembled candidate. Do not repeat
+that release-scale suite for each intermediate edit. Fire/3D changes additionally
+need their focused pair:
+
+```powershell
 npx playwright test --workers=1 tests/fire3d-mode.spec.ts tests/view-contracts.spec.ts
 ```
 
-Two underlying checks sit beneath the three commands. `npm run gate` is the
-deterministic backbone, 17 steps in about 40 s, and it is what CI runs.
-`npm run gate:nobuild` is the same backbone minus the three steps that need a
-build: it typechecks (`tsc --noEmit` emits nothing and needs no `dist/`) and
-runs the fourteen steps that read only source and `public/`, skipping `vite
-build`, `check:bundle`, and `check:activation`, the only two steps that read
-`dist/`. Measured at about 19 s. Use it when nothing you changed can move the
-bundle; use `gate` before you hand work over.
+### One build per smoke invocation
 
-Neither step list is written twice. `npm run check:all` holds the fourteen
-shared steps; `gate` is `build && check:bundle && check:activation &&
-check:all` and `gate:nobuild` is `typecheck && check:all`, so the two doors
-cannot drift apart.
+`verify:smoke` uses `playwright.smoke.config.ts`. Its owned server command runs
+`npm run gate && npm run preview -- --host 127.0.0.1 --strictPort`: gate builds
+and checks the artifact, then preview serves that same output. A failed gate
+prevents preview startup. The ordinary Playwright config still builds for direct
+targeted runs. Neither path reuses a pre-existing listener or accepts a stale
+`dist/` through a skip-build flag.
 
-`npm run check:links` exists but is wired into no gate and no workflow. It is
-not part of any tier above, and it may reach the network. Treat a green
-`check:links` as an unratified extra, not as coverage.
+`check:all` is the shared source-check list. `gate` adds the production build,
+bundle check and activation check; `gate:nobuild` typechecks instead and does not
+certify an artifact. Do not run `gate` immediately before `verify:smoke`:
+smoke already owns it.
+
+`npm run check:links` is outside these gates and can reach the network. It is
+not a substitute for any assigned verification.
+
 
 ### tests/ is typechecked too (`npm run typecheck:tests`)
 
 `tsconfig.tests.json` (repository root) typechecks every file under `tests/`
-plus `playwright.config.ts` and `playwright.pure.config.ts`, with the
+plus the base, pure and smoke Playwright configs, with the
 Playwright, `node:test`, and Cloudflare Workers types each spec needs; it
 never weakens a strict flag from the production `tsconfig.json`, and that
 file's own `include` (`src/**` only) is untouched. `npm run typecheck:tests`

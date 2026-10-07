@@ -36,10 +36,12 @@ export const PURE_SPECS = [
   'tests/display-summary.spec.ts',
   'tests/enso-flow-data.spec.ts',
   'tests/gl-capability.spec.ts',
+  'tests/layer-order.spec.ts',
   'tests/location-identity.spec.ts',
   'tests/minimap-drought.spec.ts',
   'tests/minimap-wildfire.spec.ts',
   'tests/nadm-shared-payload.spec.ts',
+  'tests/overlap-engine.spec.ts',
   'tests/place-ref.spec.ts',
   'tests/point-in-polygon.spec.ts',
   'tests/polygon-overlap.spec.ts',
@@ -47,7 +49,8 @@ export const PURE_SPECS = [
   'tests/s1-substrate.spec.ts',
   'tests/satellite-source.spec.ts',
   'tests/umbrella-config.spec.ts',
-  'tests/usfs-whp.spec.ts'
+  'tests/usfs-whp.spec.ts',
+  'tests/verification-config.spec.ts'
 ] as const;
 
 const { webServer: _webServer, projects: _projects, ...inherited } = base;
