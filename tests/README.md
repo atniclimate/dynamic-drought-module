@@ -92,6 +92,18 @@ bundle check and activation check; `gate:nobuild` typechecks instead and does no
 certify an artifact. Do not run `gate` immediately before `verify:smoke`:
 smoke already owns it.
 
+When the gate and full serial suite are required together for the same frozen
+candidate, run `npm run test:serial -- --config=playwright.smoke.config.ts`.
+This runs all three assertion projects and serves the gate's checked build.
+A separate preparatory gate is unnecessary for that same frozen candidate
+unless independently required by the task.
+
+A build SHA or dirty marker alone does not establish equivalent inputs. Preserve
+the recorded commit, tracked diff, untracked inventory and relevant input
+identities; review intervening source, generated-data, fixture and configuration
+changes before carrying a result. Attribute each result to the candidate that
+actually ran it and record later documentation changes separately.
+
 `npm run check:links` is outside these gates and can reach the network. It is
 not a substitute for any assigned verification.
 
@@ -155,25 +167,14 @@ Error: http://127.0.0.1:4173 is already used, make sure that nothing is
 running on the port/url or set reuseExistingServer:true in config.webServer.
 ```
 
-Do not set `reuseExistingServer: true`. Find the orphan and stop it.
+Keep `reuseExistingServer: false`. Before stopping a listener, establish which
+run and workspace own it using process metadata and available run records.
+The port number and `node.exe` name alone do not establish ownership.
 
-```powershell
-# PowerShell 7
-Get-NetTCPConnection -LocalPort 4173 -State Listen |
-  Select-Object -ExpandProperty OwningProcess |
-  ForEach-Object { Get-Process -Id $_ }        # confirm it is node.exe
-Get-NetTCPConnection -LocalPort 4173 -State Listen |
-  ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }
-```
-
-```bash
-# Git Bash equivalent
-netstat -ano | grep -E 'LISTENING' | grep ':4173'   # last column is the PID
-taskkill //PID <pid> //F
-```
-
-A killed run can also leave a `chrome-headless-shell.exe` behind; it holds no
-port and exits on its own, so stop it only if it is burning CPU.
+If it belongs to an active or unidentified run, coordinate with its owner.
+Stop only a positively identified orphan from your own ended run, and recheck
+its PID and start time immediately before stopping it. Apply the same ownership
+check to leftover headless browsers; CPU use alone is insufficient.
 
 ## The citation manifest
 
