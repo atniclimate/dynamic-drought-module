@@ -927,7 +927,9 @@ test.describe('DDM-P8-T02: the Extreme Heat screen has a seven-day time control'
     await expect(detailsDoor).toBeVisible();
     await expect(detailsDoor).toBeEnabled();
     await expect(detailsDoor).toHaveAttribute('aria-expanded', 'false');
-    await expect(page.locator('#time-bar')).toBeHidden();
+    await expect(page.locator('#shell-time-popover')).toBeHidden();
+    // Console keeps the full rail; only Brief substitutes the compact row.
+    await expect(page.locator('#time-bar')).toBeVisible();
   });
 
   test('a closed focused time door hands focus to its stable row when the owning surface stands down', async ({

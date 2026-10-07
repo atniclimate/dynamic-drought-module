@@ -319,6 +319,9 @@ export interface GotoAppOptions {
    * and prove neither.
    */
   readonly bootIdle?: boolean;
+  /** Shorter assertion budget for deliberate boot-idle diagnostic failures only.
+   * The normal 10 s ceiling and every application/network budget stay unchanged. */
+  readonly bootIdleBudgetMs?: number;
   /**
    * Whether this boot's ENSO flowing paths may run their motion loop
    * (ENSO-FLOW-PLAN E2-4). ENSO opens with wind on (`flowDefault`), and a
@@ -485,11 +488,12 @@ export async function gotoApp(
   // boot-idle failure with an unrelated one, so the fallback is a literal
   // clause and the original error survives as `cause`, never flattened.
   if (options.bootIdle !== false) {
+    const bootIdleBudgetMs = Math.min(options.bootIdleBudgetMs ?? 10_000, 10_000);
     try {
       await untilAnswered(
         () => page.evaluate(() => document.documentElement.getAttribute('data-ddm-boot')),
         (value) => value === 'idle',
-        10_000,
+        bootIdleBudgetMs,
         'boot-idle never reached "idle"'
       );
     } catch (err) {
@@ -507,7 +511,7 @@ export async function gotoApp(
         diagnostic = `the boot-idle seam could not be read (${(evalErr as Error).message})`;
       }
       throw new Error(
-        `boot-idle never reached "idle" within the 10 s answered-read budget; ${diagnostic}.`,
+        `boot-idle never reached "idle" within the ${bootIdleBudgetMs / 1_000} s answered-read budget; ${diagnostic}.`,
         { cause: err }
       );
     }

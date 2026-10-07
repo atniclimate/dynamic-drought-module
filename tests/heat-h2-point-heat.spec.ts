@@ -1323,7 +1323,9 @@ test.describe('DDM-P7-T07: the season-ahead heat cell', () => {
     await expect(page.locator('#shell-time')).toHaveAttribute('data-has-spec', 'true');
     await expect(page.locator('#shell-time .shell-time-empty')).toHaveCount(0);
     await expect(page.locator('#time-bar .time-bar-stamp-detail')).toContainText('NWS HeatRisk');
-    await expect(page.locator('#time-bar')).toBeHidden();
+    await expect(page.locator('#time-bar')).toBeVisible();
+    await expect(page.locator('#shell-time-more')).toHaveAttribute('aria-expanded', 'false');
+    await expect(page.locator('#shell-time-popover')).toBeHidden();
     const chip = page.locator('.shell-horizon-btn[data-horizon="season-ahead"]');
     await expect(chip).toBeVisible();
     await expect(chip).toHaveAttribute('aria-pressed', 'false');

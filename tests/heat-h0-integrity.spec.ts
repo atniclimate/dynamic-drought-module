@@ -228,9 +228,12 @@ test('a mixed-success HeatRisk selected frame is live partial', async ({
   page
 }) => {
   await stubHeatRisk(page, 'mixed');
+  // A mixed verdict also waits for the tile watcher's deadline. Observe that
+  // verdict directly instead of racing it against gotoApp's boot-idle deadline.
   await gotoApp(
     page,
-    '?region=washington_state&layers=heatrisk&view=console'
+    '?region=washington_state&layers=heatrisk&view=console',
+    { bootIdle: false }
   );
 
   await expect(layerPill(page, 'heatrisk')).toHaveText('live (partial)', {

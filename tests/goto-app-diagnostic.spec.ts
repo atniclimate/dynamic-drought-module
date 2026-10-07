@@ -1,6 +1,6 @@
 import { expect, test, type Route } from './offline-test';
 
-import { gotoApp } from './helpers';
+import { gotoApp, readDdmSeam } from './helpers';
 
 /**
  * DDM-P1-T09 step 2 parts b and d (S30D C4 M4): `gotoApp`'s own boot-idle
@@ -41,19 +41,22 @@ test.describe('gotoApp boot-idle diagnostic and the deterministic NADM fixture',
   test("gotoApp's boot-idle failure names the pending layer keys and each pending shared transport key", async ({
     page
   }) => {
-    // The shared 'us-states-geojson' transport never settles, so the
-    // boot-idle seam can never see the 'states' layer, or the transport
-    // it is waiting on, leave the pending set. No `route.fulfill` and no
-    // `route.abort` ever runs; the request simply hangs for the test's
-    // whole life, which is the point.
-    await page.route('**/data/us-states.geojson', () => new Promise<void>(() => undefined));
-
-    let thrown: unknown;
-    try {
-      await gotoApp(page, '?view=console&layers=states');
-    } catch (err) {
-      thrown = err;
-    }
+    // The request is held, but the application still has its own 10 s abort.
+    // Exercise gotoApp's diagnostic before that deadline clears the pending set.
+    let routeSeen = false;
+    await page.route('**/data/us-states.geojson', () => {
+      routeSeen = true;
+      return new Promise<void>(() => undefined);
+    });
+    // Handle rejection immediately, including when the page is slow to answer
+    // the independent pending-state read below.
+    const boot = gotoApp(page, '?view=console&layers=states', { bootIdleBudgetMs: 250 })
+      .then(() => undefined, (error: unknown) => error);
+    await expect.poll(() => routeSeen).toBe(true);
+    const pending = await readDdmSeam(page);
+    expect(pending?.pendingLayerKeys).toContain('states');
+    expect(pending?.pendingTransportKeys['us-states-geojson']).toBe(1);
+    const thrown = await boot;
     expect(thrown).toBeInstanceOf(Error);
     const message = (thrown as Error).message;
     // Both readings come from the same `window.__ddm` snapshot: the pending
