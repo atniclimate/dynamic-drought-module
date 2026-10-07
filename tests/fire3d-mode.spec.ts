@@ -2284,8 +2284,9 @@ test.describe('W3/W4 browser truth', () => {
     await expect
       .poll(() => fire3dStamp(page), { timeout: 30_000 })
       .toBe('active');
-    await page.waitForTimeout(4_000);
     if (CAPTURE_EVIDENCE) {
+      // Only the optional screenshot needs the additional terrain-tile settle.
+      await page.waitForTimeout(4_000);
       await page.screenshot({
         path: 'fire3d-evidence/fire3d-reduced-motion.png'
       });

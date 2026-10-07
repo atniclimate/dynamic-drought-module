@@ -1,7 +1,8 @@
 import { continueLocalRoute } from './offline-test';
 import { test, expect } from './offline-test';
 import { stubCpcDroughtOutlook } from './cpc-outlook-fixtures';
-import { TEMPORAL_HORIZON_KEYS } from '../src/config/clusters';
+import { HAZARD_CLUSTER_KEYS, TEMPORAL_HORIZON_KEYS } from '../src/config/clusters';
+import { stubUsdmWeeks } from './usdm-fixtures';
 import { HORIZON_CHROME, SHELL_HORIZON_KEY } from '../src/impact/horizon-chrome';
 import {
   gotoApp,
@@ -709,13 +710,18 @@ test.describe('S4 r2: custom-composition horizon honesty and the failed range sw
     // re-resolve a custom set, so Weeks/Season ahead must disable with
     // an honest reason instead of pressing a chip for a time the map
     // does not show.
+    await stubUsdmWeeks(page);
     await gotoApp(
       page,
       '?view=brief&layers=hillshade,aiannh,bia-reservations,states,usdm,places'
     );
-    await expect(page.locator('.shell-cluster-btn')).toHaveCount(4);
+    await waitForLayerSettled(page, 'usdm');
+    await expect(page.locator('[data-layer-status="usdm"]')).toHaveClass(/\bready\b/);
+    await expect(layerCheckbox(page, 'usdm')).toBeChecked();
+    expect(await urlLayers(page)).toContain('usdm');
+    await expect(page.locator('.shell-cluster-btn')).toHaveCount(HAZARD_CLUSTER_KEYS.length);
     // Custom: no cluster button claims pressed.
-    for (const key of ['drought', 'wildfire', 'heat', 'enso']) {
+    for (const key of HAZARD_CLUSTER_KEYS) {
       await expect(
         page.locator(`.shell-cluster-btn[data-cluster="${key}"]`)
       ).toHaveAttribute('aria-pressed', 'false');

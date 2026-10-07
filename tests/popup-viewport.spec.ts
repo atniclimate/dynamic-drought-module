@@ -1880,6 +1880,15 @@ test.describe('D1 M23 PF3: framed heads keep the tier promises (generic over mig
   ): Promise<void> {
     const migrated = migratedBuilders();
     expect(migrated.length).toBe(eligibleBuilders().length - LEGACY_ALLOWANCE.length);
+    // M26b has dedicated PF3 rows below that call these same fixture methods.
+    // Partition the builders so every contract runs once on its own fresh page.
+    const dedicated = new Set<string>(M26B_IDS);
+    const generic = migrated.filter((builder) => !dedicated.has(builder.id));
+    expect(dedicated.size, 'dedicated PF3 IDs are unique').toBe(M26B_IDS.length);
+    expect(
+      [...generic.map((builder) => builder.id), ...M26B_IDS].sort(),
+      'generic and dedicated PF3 rows cover every migrated builder exactly once'
+    ).toEqual(migrated.map((builder) => builder.id).sort());
     // Network-isolated (the Codex review of M24 round 1, finding 2): ONE
     // catch-all external-request backstop on the context, installed BEFORE
     // the first fresh page boots (the census installs the same 503 backstop
@@ -1895,7 +1904,7 @@ test.describe('D1 M23 PF3: framed heads keep the tier promises (generic over mig
       (url) => url.protocol.startsWith('http') && url.hostname !== '127.0.0.1' && url.hostname !== 'localhost',
       (route) => route.fulfill({ status: 503, contentType: 'text/plain', body: 'Synthetic offline response' })
     );
-    for (const builder of migrated) {
+    for (const builder of generic) {
       const fixture = TIER_FIXTURES[builder.id];
       if (!fixture) throw new Error(`${builder.id} left LEGACY_ALLOWANCE without a ${missing} fixture here`);
       const page = await context.newPage();
@@ -2033,9 +2042,9 @@ test.describe('D1 M26b: the NWS, SPC and power heads hold one line per slot', ()
 });
 
 /**
- * The PF3 tier rows above run every registered fixture; these two run only
- * the four M26b fixtures, so their verdict reads on its own (the M26a census
- * pattern). The tallest of the four cards (the power line: four detail rows,
+ * These rows own the four M26b fixtures; the generic PF3 rows above own the
+ * remaining migrated builders. Together they run every registered fixture
+ * once per contract. The tallest of the four cards (the power line: four detail rows,
  * its caveat and its stated source) is read at 1280x720 inside the long-head
  * row. Red on bd8c1aa: the legacy cards are no frame (no source-fallback
  * slot at the tier boundaries; "the card is a frame" at the desktop seats).

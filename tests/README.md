@@ -51,6 +51,12 @@ prove the production wiring and user behavior. The pure inventory check rejects
 browser fixtures and boot helpers; the lane's execution catches imported DOM
 dependencies. All these cases remain in the full suite.
 
+The popup PF3 cases partition migrated builders between the generic loop and
+the dedicated M26b rows. Run both groups when checking the complete tier contract;
+each builder keeps its own fresh page and runs each fixture method once. Tests
+that require a live layer or date rail must install positive fixtures explicitly;
+the offline backstop's error response cannot establish those preconditions.
+
 A session handoff is a record of work, not a new application verification event.
 Do not start `verify:smoke` or `test:serial` solely because the session is ending,
 or rerun an unchanged candidate just to recover context. Preserve the prior

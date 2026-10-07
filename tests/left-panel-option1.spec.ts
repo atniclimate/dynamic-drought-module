@@ -1,6 +1,7 @@
 import { test, expect } from './offline-test';
 
-import { gotoApp } from './helpers';
+import { gotoApp, search } from './helpers';
+import { stubUsdmWeeks, USDM_FIXTURE_PRIOR_WEEK } from './usdm-fixtures';
 
 test.describe('D-0.7.0-067 contextual time rail', () => {
   test('desktop reads hazard, time, place, then selection response with Share last', async ({ page }) => {
@@ -58,8 +59,11 @@ test.describe('D-0.7.0-067 contextual time rail', () => {
   });
 
   test('mobile Brief moves the same focused control between stable hosts', async ({ page }) => {
+    await stubUsdmWeeks(page);
     await page.setViewportSize({ width: 390, height: 844 });
     await gotoApp(page, '?view=brief&layers=usdm');
+    await expect(page.locator('#time-bar')).toHaveAttribute('data-register', 'observed');
+    await expect(page.locator('#time-bar .time-bar-stamp-headline')).toHaveText('Valid Jun 30, 2026');
 
     await page.locator('#mobile-footer-nav button[data-tab="place"]').click();
     await expect(page.locator('#app')).toHaveAttribute('data-sheet-detent', 'half');
@@ -100,9 +104,12 @@ test.describe('D-0.7.0-067 contextual time rail', () => {
     }
 
     const previous = bar.locator('[data-step="-1"]');
+    await expect(previous).toBeEnabled();
     await previous.focus();
     await expect(previous).toBeFocused();
     await page.keyboard.press('Enter');
+    await expect(bar.locator('.time-bar-stamp-headline')).toHaveText('Valid Jun 23, 2026');
+    expect(new URLSearchParams(await search(page)).get('week')).toBe(USDM_FIXTURE_PRIOR_WEEK);
     await expect(previous).toBeFocused();
     await page.setViewportSize({ width: 1280, height: 900 });
     // The desktop seat honors the S4 band order: the bar returns AFTER
@@ -118,8 +125,12 @@ test.describe('D-0.7.0-067 contextual time rail', () => {
   });
 
   test('embed keeps the floating date hidden through its explicit exit', async ({ page }) => {
+    await stubUsdmWeeks(page);
     await page.setViewportSize({ width: 400, height: 600 });
     await gotoApp(page, '?embed=true&view=brief&layers=usdm');
+    await expect(page.locator('#time-bar')).toHaveAttribute('data-register', 'observed');
+    await expect(page.locator('#time-bar .time-bar-stamp-headline')).toHaveText('Valid Jun 30, 2026');
+    expect(new URLSearchParams(await search(page)).get('layers')?.split(',')).toContain('usdm');
 
     await expect(page.locator('#time-bar')).toBeHidden();
     await expect(page.locator('#embed-date-stamp')).toBeHidden();

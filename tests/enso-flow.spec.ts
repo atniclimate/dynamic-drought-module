@@ -317,12 +317,11 @@ for (const surface of ANNOUNCEMENT_SURFACES) {
       // Opening the visual reader must not replay either announcement.
       expect.soft(await flowAnnouncements(page, loading)).toHaveLength(1);
       expect.soft(await flowAnnouncements(page, terminal)).toHaveLength(1);
-      await test.info().attach('flow-announcement-routes', {
-        contentType: 'application/json', body: Buffer.from(JSON.stringify({ surface, outcome,
-          loading: await flowAnnouncements(page, loading), terminal: await flowAnnouncements(page, terminal),
-          resample: await flowAnnouncements(page, `${terminal} · Update area to resample`)
-        }, null, 2))
-      });
+      // Keep the text diagnostic in reporter stdout without an artifact attachment.
+      console.log('[flow-announcement-routes]', JSON.stringify({ surface, outcome,
+        loading: await flowAnnouncements(page, loading), terminal: await flowAnnouncements(page, terminal),
+        resample: await flowAnnouncements(page, `${terminal} · Update area to resample`)
+      }, null, 2));
     });
   }
 }

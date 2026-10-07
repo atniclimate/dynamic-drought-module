@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './offline-test';
 import { readFileSync } from 'node:fs';
 import base from '../playwright.config';
 import smoke from '../playwright.smoke.config';

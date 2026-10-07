@@ -174,11 +174,14 @@ rows:
       (src/state/cluster-service.ts:351) and the chrome must not claim
       otherwise.
     url: '?region=washington_state&layers=usdm'
+    stub_usdm: true
     steps: []
     expect:
       cluster_pressed: none
       layers_checked: [usdm]
       url_layers_include: [usdm]
+      layer_status:
+        usdm: ready
       url_params:
         cluster: null
       fire3d_toggle: absent

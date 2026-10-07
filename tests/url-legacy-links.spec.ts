@@ -1,4 +1,5 @@
 import { test, expect } from './offline-test';
+import { stubUsdmWeeks } from './usdm-fixtures';
 import {
   gotoApp,
   layerCheckbox,
@@ -15,11 +16,10 @@ import {
  * a link ever shared must keep working as the parameter schema grows.
  * This spec asserts the tolerant-reading half of that contract, which
  * url-state.spec.ts does not cover (that spec covers the happy-path
- * round trip and the embed contract). Everything here is
- * network-independent: parsing, fallback, and forward-mapping are all
- * client-side, so the assertions never couple to a live agency value
- * (smoke-suite doctrine: assert the deterministic backbone, never exact
- * live values). Where a test also checks the WRITE half (that syncUrl
+ * round trip and the embed contract). Positive USDM fixtures preserve the
+ * layer and its date rail in cases that require them; a failed custom layer
+ * correctly rolls back its intent. No case depends on live agency data.
+ * Where a test also checks the WRITE half (that syncUrl
  * canonicalizes the URL), it first settles a default-on layer so the
  * boot-time rewrite has run; a terminal pill is network-independent in
  * outcome, matching the established pattern in url-state.spec.ts.
@@ -44,7 +44,10 @@ test.describe('URL legacy links and tolerant reading', () => {
   });
 
   test('an unknown layer key is dropped and never enters the URL (policy rule 2)', async ({ page }) => {
+    await stubUsdmWeeks(page);
     await gotoApp(page, '?layers=usdm,notalayer');
+    await waitForLayerSettled(page, 'usdm');
+    await expect(page.locator('[data-layer-status="usdm"]')).toHaveClass(/\bready\b/);
 
     // The known layer activates; the unknown key has no control (toggles
     // are built only from LAYER_DEFS).
@@ -80,8 +83,11 @@ test.describe('URL legacy links and tolerant reading', () => {
   });
 
   test('whitespace around layer keys is tolerated and canonicalized away (policy rule 7)', async ({ page }) => {
+    await stubUsdmWeeks(page);
     // `?layers=usdm, tribal` (a comma-plus-space a human might type).
     await gotoApp(page, '?layers=usdm%2C%20tribal');
+    await waitForLayerSettled(page, 'usdm');
+    await expect(page.locator('[data-layer-status="usdm"]')).toHaveClass(/\bready\b/);
 
     await expect(layerCheckbox(page, 'usdm')).toBeChecked();
     await expect(layerCheckbox(page, 'tribal')).toBeChecked();
@@ -95,8 +101,11 @@ test.describe('URL legacy links and tolerant reading', () => {
   });
 
   test('layer list order carries no meaning, and no state hides in the fragment (policy rules 6, 9)', async ({ page }) => {
+    await stubUsdmWeeks(page);
     // Same set, listed in a non-default order; all three resolve.
     await gotoApp(page, '?layers=telemetry,tribal,usdm');
+    await waitForLayerSettled(page, 'usdm');
+    await expect(page.locator('[data-layer-status="usdm"]')).toHaveClass(/\bready\b/);
 
     await expect(layerCheckbox(page, 'usdm')).toBeChecked();
     await expect(layerCheckbox(page, 'tribal')).toBeChecked();
@@ -123,11 +132,14 @@ test.describe('URL legacy links and tolerant reading', () => {
   });
 
   test('L1: a legacy multi-surface link keeps the first surface and drops the rest from the URL (retired-form table)', async ({ page }) => {
+    await stubUsdmWeeks(page);
     // The project's first retired form: `layers` naming more than one
     // condition surface, from before surfaces became mutually exclusive.
     // The forward map keeps the first surface (usdm) and drops the later
     // one (heatrisk); non-surface layers (tribal) are unaffected.
     await gotoApp(page, '?layers=usdm,heatrisk,tribal');
+    await waitForLayerSettled(page, 'usdm');
+    await expect(page.locator('[data-layer-status="usdm"]')).toHaveClass(/\bready\b/);
 
     await expect(layerCheckbox(page, 'usdm')).toBeChecked();
     await expect(layerCheckbox(page, 'heatrisk')).not.toBeChecked();

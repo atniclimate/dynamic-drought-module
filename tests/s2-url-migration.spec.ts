@@ -1,4 +1,5 @@
 import { test, expect } from './offline-test';
+import { stubUsdmWeeks } from './usdm-fixtures';
 
 import {
   gotoApp,
@@ -268,7 +269,10 @@ test.describe('S2 cluster= in the browser', () => {
   test('layers= outranks cluster= at boot: layers wins, cluster is dropped on sync', async ({
     page
   }) => {
+    await stubUsdmWeeks(page);
     await gotoApp(page, '?layers=usdm&cluster=wildfire');
+    await waitForLayerSettled(page, 'usdm');
+    await expect(page.locator('[data-layer-status="usdm"]')).toHaveClass(/\bready\b/);
 
     await expect(layerCheckbox(page, 'usdm')).toBeChecked();
     await expect(layerCheckbox(page, 'nifc-fires')).not.toBeChecked();
@@ -396,8 +400,11 @@ test.describe('S2 framing= and the legacy links in the browser', () => {
   test('legacy region= links keep working byte for byte, national included (D-0.7.0-039)', async ({
     page
   }) => {
+    await stubUsdmWeeks(page);
     // An ordinary curated region: honored exactly as today.
     await gotoApp(page, '?region=central_oregon&layers=usdm');
+    await waitForLayerSettled(page, 'usdm');
+    await expect(page.locator('[data-layer-status="usdm"]')).toHaveClass(/\bready\b/);
     await expect(regionSelect(page)).toHaveValue('region:central_oregon');
     await expect(layerCheckbox(page, 'usdm')).toBeChecked();
 

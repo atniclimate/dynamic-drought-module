@@ -130,7 +130,7 @@ const SITES = [
     occurrence: 1,
     class: 'tile-dependent',
     reason:
-      'scene-tile settle after the camera-fly stamp reaches active, before the evidence capture (deferred to M7).'
+      'capture-only scene-tile settle after the camera-fly stamp reaches active; ordinary assertions use that stamp (deferred to M7).'
   },
   {
     file: 'fire3d-mode.spec.ts',

@@ -1,6 +1,7 @@
 import { test, expect } from './offline-test';
 
-import { gotoApp, layerCheckbox, urlLayers } from './helpers';
+import { gotoApp, layerCheckbox, urlLayers, waitForLayerSettled } from './helpers';
+import { stubWildfireFeeds } from './wildfire-fixtures';
 
 /**
  * U3f1 / found-007: the wildfire event pair is INDEPENDENT (the owner's
@@ -14,13 +15,16 @@ import { gotoApp, layerCheckbox, urlLayers } from './helpers';
  * both. An inbound URL is authoritative, so a deep link restores exactly the
  * layers it names.
  *
- * Every assertion is on checkbox intent and `layers=`, which the controller
- * writes through the island bridge, so the specs are independent of whether
- * the live NIFC / HMS fetches succeed in the test environment. The checkbox
+ * Positive fixtures keep the requested layers active after loading; a failed
+ * custom layer correctly rolls back its intent. The checkbox
  * assertions are the deterministic discriminator: the retired cascade set the
  * partner's checkbox synchronously inside the same change handler.
  */
 test.describe('U3f1 the fire perimeters and smoke plumes checkboxes are independent (found-007)', () => {
+  test.beforeEach(async ({ page }) => {
+    await stubWildfireFeeds(page);
+  });
+
   test('checking Current Mapped Fire Perimeters turns on only itself, not Smoke Plumes', async ({
     page
   }) => {
@@ -76,6 +80,11 @@ test.describe('U3f1 the fire perimeters and smoke plumes checkboxes are independ
   test('a deep link naming both of the pair restores both', async ({ page }) => {
     await gotoApp(page, '?layers=nifc-fires,hms-smoke');
 
+    for (const key of ['nifc-fires', 'hms-smoke']) {
+      await waitForLayerSettled(page, key);
+      await expect(page.locator(`[data-layer-status="${key}"]`)).toHaveClass(/\bready\b/);
+      expect(await urlLayers(page)).toContain(key);
+    }
     await expect(layerCheckbox(page, 'nifc-fires')).toBeChecked();
     await expect(layerCheckbox(page, 'hms-smoke')).toBeChecked();
   });
@@ -119,6 +128,8 @@ test.describe('U3f1 the fire perimeters and smoke plumes checkboxes are independ
 
     // Action 1: check nifc-fires. Only nifc-fires enters layers=.
     await layerCheckbox(page, 'nifc-fires').check();
+    await waitForLayerSettled(page, 'nifc-fires');
+    await expect(page.locator('[data-layer-status="nifc-fires"]')).toHaveClass(/\bready\b/);
     await expect(layerCheckbox(page, 'hms-smoke')).not.toBeChecked();
     await expect
       .poll(
@@ -145,6 +156,8 @@ test.describe('U3f1 the fire perimeters and smoke plumes checkboxes are independ
 
     // Action 3: check hms-smoke. Only hms-smoke enters layers=.
     await layerCheckbox(page, 'hms-smoke').check();
+    await waitForLayerSettled(page, 'hms-smoke');
+    await expect(page.locator('[data-layer-status="hms-smoke"]')).toHaveClass(/\bready\b/);
     await expect(layerCheckbox(page, 'nifc-fires')).not.toBeChecked();
     await expect
       .poll(

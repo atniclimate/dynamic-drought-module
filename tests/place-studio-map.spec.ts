@@ -1,6 +1,7 @@
 import { expect, test, type Page } from './offline-test';
 
-import { gotoApp, search, waitForLayerSettled } from './helpers';
+import { gotoApp, search, urlLayers, waitForLayerSettled } from './helpers';
+import { stubUsdmWeeks } from './usdm-fixtures';
 
 const PLACE_ROOT = '#place-studio-root';
 const EMPTY_COLLECTION = JSON.stringify({ type: 'FeatureCollection', features: [] });
@@ -38,9 +39,6 @@ async function stubLocalMapLayers(page: Page): Promise<void> {
       body: JSON.stringify({ places: [{ name: 'Fixture City', lon: -120, lat: 47 }] })
     })
   );
-  await page.route('**/US_Drought_Monitor/**', (route) =>
-    route.fulfill({ contentType: 'application/geo+json', body: EMPTY_COLLECTION })
-  );
 }
 
 async function stubWildfireRecipe(page: Page): Promise<void> {
@@ -61,8 +59,15 @@ test.describe('PS-MAP clean-selection display', () => {
   test('sets aside conditions and events, switches reference types, and restores intent', async ({
     page
   }) => {
+    await stubUsdmWeeks(page);
     await gotoApp(page, '?view=brief&layers=places,usdm,nifc-fires,states');
 
+    await waitForLayerSettled(page, 'usdm');
+    await expect(page.locator('[data-layer-status="usdm"]')).toHaveClass(/\bready\b/);
+    await waitForLayerSettled(page, 'nifc-fires');
+    await expect(page.locator('[data-layer-status="nifc-fires"]')).toHaveClass(/\bno-data\b/);
+    expect(await urlLayers(page)).toContain('usdm');
+    expect(await urlLayers(page)).toContain('nifc-fires');
     await expect(page.locator('#layer-toggle-usdm')).toBeChecked();
     await expect(page.locator('#layer-toggle-nifc-fires')).toBeChecked();
     await expect(page.locator('#layer-toggle-hms-smoke')).not.toBeChecked();

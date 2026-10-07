@@ -1,4 +1,6 @@
 import { readFileSync } from 'node:fs';
+import { stubUsdmWeeks } from './usdm-fixtures';
+import { HAZARD_CLUSTER_KEYS } from '../src/config/clusters';
 
 import { expect, test, type Page } from './offline-test';
 import { parse } from 'yaml';
@@ -34,7 +36,7 @@ import { stubDeepTerrainArchive, stubWildfireFeeds } from './wildfire-fixtures';
  * reads a dev handle, so these rows hold against the deployed artifact.
  */
 
-const CLUSTER_KEYS = ['drought', 'wildfire', 'heat', 'enso'] as const;
+const CLUSTER_KEYS = HAZARD_CLUSTER_KEYS;
 const FIRE3D_TOGGLE = '.shell-fire3d-btn';
 
 /** Terrain build plus a DEM fan-out on the software renderer is slow. */
@@ -82,6 +84,7 @@ interface Row {
   description: string;
   url: string;
   stub_wildfire?: boolean;
+  stub_usdm?: boolean;
   /** Run the row with `prefers-reduced-motion: reduce` (S30D B3 CI3). */
   reduced_motion?: boolean;
   timeout_ms?: number;
@@ -481,6 +484,7 @@ test.describe('view contracts', () => {
       // Before any stub and any boot (see watchPowerLayerReads).
       const power = await watchPowerLayerReads(page);
       if (row.reduced_motion) await page.emulateMedia({ reducedMotion: 'reduce' });
+      if (row.stub_usdm) await stubUsdmWeeks(page);
 
       if (row.stub_wildfire) {
         await stubWildfireFeeds(page);
@@ -494,6 +498,10 @@ test.describe('view contracts', () => {
       }
       try {
         await gotoApp(page, row.url);
+        if (row.stub_usdm) {
+          await waitForLayerSettled(page, 'usdm');
+          await expect(page.locator('[data-layer-status="usdm"]')).toHaveClass(/\bready\b/);
+        }
 
         for (const step of row.steps ?? []) await runStep(page, step, power);
 
