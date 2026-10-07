@@ -1205,6 +1205,31 @@ test('ArcGIS polygon parser rejects malformed and error-shaped HTTP 200 bodies',
   expect(truncated.truncated).toBe(true);
 });
 
+test('ArcGIS polygon parser preserves both transfer-limit placements without masking truncation', () => {
+  const cases = [
+    { fields: {}, truncated: false },
+    { fields: { exceededTransferLimit: false }, truncated: false },
+    { fields: { exceededTransferLimit: true }, truncated: true },
+    { fields: { properties: { exceededTransferLimit: false } }, truncated: false },
+    { fields: { properties: { exceededTransferLimit: true } }, truncated: true },
+    { fields: { exceededTransferLimit: false, properties: { exceededTransferLimit: true } }, truncated: true },
+    { fields: { exceededTransferLimit: true, properties: { exceededTransferLimit: false } }, truncated: true }
+  ];
+  for (const { fields, truncated } of cases) {
+    const body = { ...VALID_POLYGON_COLLECTION, ...fields };
+    const parsed = parseArcGisPolygonFeatureCollection(body, 'Test source');
+    expect(parsed.collection).toBe(body);
+    expect(parsed.collection.features).toHaveLength(1);
+    expect(parsed.truncated).toBe(truncated);
+  }
+  for (const flag of ['true', 1, null]) {
+    expect(() => parseArcGisPolygonFeatureCollection({
+      ...VALID_POLYGON_COLLECTION,
+      properties: { exceededTransferLimit: flag }
+    }, 'Test source')).toThrow();
+  }
+});
+
 test('NIFC, HMS, and SPC map invalid responses to unavailable and truncation to live partial', async () => {
   const originalFetch = globalThis.fetch;
   const documentDescriptor = Object.getOwnPropertyDescriptor(
@@ -1259,9 +1284,31 @@ test('NIFC, HMS, and SPC map invalid responses to unavailable and truncation to 
       renders: false,
       reason: 'ArcGIS error 400: bad query'
     },
+    ...[
+      { name: 'nested true', fields: { properties: { exceededTransferLimit: true } }, malformed: false },
+      { name: 'nested malformed', fields: { properties: { exceededTransferLimit: 'true' } }, malformed: true },
+      { name: 'top false cannot mask nested true', fields: { exceededTransferLimit: false, properties: { exceededTransferLimit: true } }, malformed: false },
+      { name: 'nested false cannot mask top true', fields: { exceededTransferLimit: true, properties: { exceededTransferLimit: false } }, malformed: false },
+      { name: 'nested false cannot mask malformed top', fields: { exceededTransferLimit: 'true', properties: { exceededTransferLimit: false } }, malformed: true }
+    ].map(({ name, fields, malformed }) => ({
+      name: 'SPC no-area singleton with ' + name,
+      body: {
+        type: 'FeatureCollection',
+        ...fields,
+        features: [{
+          type: 'Feature', geometry: null,
+          properties: { dn: 0, valid: '202610071200', expire: '202610081200' }
+        }]
+      },
+      status: 'error' as const,
+      renders: false,
+      reason: malformed
+        ? 'response was not a valid FeatureCollection.'
+        : 'response contained an invalid polygon feature.'
+    })),
     {
       name: 'transfer-truncated FeatureCollection',
-      body: { ...VALID_POLYGON_COLLECTION, exceededTransferLimit: true },
+      body: { ...VALID_POLYGON_COLLECTION, properties: { exceededTransferLimit: true } },
       status: 'degraded',
       renders: true,
       reason: null
@@ -1327,6 +1374,41 @@ test('NIFC, HMS, and SPC map invalid responses to unavailable and truncation to 
     } else {
       Reflect.deleteProperty(globalThis, 'document');
     }
+  }
+});
+
+test('SPC complete no-area singleton accepts absent or false transfer flags at either location', async () => {
+  const originalFetch = globalThis.fetch;
+  const documentDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'document');
+  const harness = fakeMapHarness();
+  try {
+    Object.defineProperty(globalThis, 'document', {
+      configurable: true, value: { getElementById: () => null }
+    });
+    for (const fields of [
+      {},
+      { exceededTransferLimit: false },
+      { properties: { exceededTransferLimit: false } },
+      { exceededTransferLimit: false, properties: { exceededTransferLimit: false } }
+    ]) {
+      globalThis.fetch = async () => new Response(JSON.stringify({
+        type: 'FeatureCollection', ...fields,
+        features: [{ type: 'Feature', geometry: null,
+          properties: { dn: 0, valid: '202610071200', expire: '202610081200' } }]
+      }), { status: 200, headers: { 'content-type': 'application/geo+json' } });
+      await activateSpc(harness.map);
+      expect(registry.getStatus('spc-fire-weather')).toBe('no-data');
+      expect(harness.sources.size).toBe(1);
+      expect(harness.layers.size).toBe(0);
+      deactivateSpc(harness.map);
+      registry.deactivate('spc-fire-weather');
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+    deactivateSpc(harness.map);
+    registry.deactivate('spc-fire-weather');
+    if (documentDescriptor) Object.defineProperty(globalThis, 'document', documentDescriptor);
+    else Reflect.deleteProperty(globalThis, 'document');
   }
 });
 

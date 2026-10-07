@@ -651,6 +651,90 @@ test('P3-TRUTH: an SPC read with one failed day renders live (partial), keeping 
   await expect(cell).not.toContainText('SPC Day 3 Fire Weather Outlook');
 });
 
+test('D6 CPC high-probability chart preserves the actual 70-percent source claim', async ({ page }) => {
+  await stubBaselineBriefingHosts(page);
+  await stubSpcFireOutlook(page, {});
+  const outlook = (cat: string, prob: number): string => collection([{
+    type: 'Feature',
+    geometry: null,
+    properties: {
+      cat, prob, fcst_date: Date.UTC(2026, 8, 1),
+      start_date: Date.UTC(2026, 8, 7), end_date: Date.UTC(2026, 8, 11)
+    }
+  }]);
+  await page.route('**/cpc_6_10_day_outlk/MapServer/*/query?*', route =>
+    route.fulfill({ status: 200, contentType: 'application/geo+json',
+      body: /\/MapServer\/0\/query/.test(route.request().url())
+        ? outlook('Above', 70) : outlook('Below', 40) }));
+  await page.route('**/cpc_8_14_day_outlk/MapServer/*/query?*', route =>
+    route.fulfill({ status: 200, contentType: 'application/geo+json', body: collection([]) }));
+  await gotoApp(page, '?view=brief&layers=places&select=state:WA');
+  const cell = cellAt(page, 'nearTerm', 'drought');
+  await expect(cell).toContainText(
+    'CPC 6-10 day outlook: above-normal temperature (70% odds), below-normal precipitation (40% odds).'
+  );
+  const svg = cell.locator('svg').filter({
+    has: page.locator('title', { hasText: 'CPC 6-10 day temperature outlook: Above normal favored at 70 percent' })
+  });
+  await expect(svg).toHaveCount(1);
+  await svg.scrollIntoViewIfNeeded();
+  expect(await svg.locator('rect').evaluateAll(rects =>
+    rects.map(rect => Number(rect.getAttribute('width'))))).toEqual([8.9, 71.5, 187.6]);
+  expect(await svg.locator('rect').evaluateAll(rects =>
+    rects.map(rect => rect.getAttribute('fill')))).toEqual([
+    'var(--bg-3)', 'var(--bg-3)', '#B32E05'
+  ]);
+  await expect(svg).toContainText('Above 70%');
+  const numericLabel = svg.locator('text').filter({ hasText: 'Above 70%' });
+  await expect(numericLabel).toBeVisible();
+  await expect(numericLabel).toHaveCSS('font-family', /^"?DDM Heros"?,/);
+  await expect(numericLabel).toHaveCSS('font-variant-numeric', /^(?:lining-nums tabular-nums|tabular-nums lining-nums)$/);
+  const claim = svg.locator('xpath=ancestor::div[contains(concat(" ", normalize-space(@class), " "), " impact-claim ")][1]');
+  await expect(claim).toHaveCount(1);
+  const badge = claim.locator('.impact-claim-badge');
+  await expect(badge).toHaveText('Outlook');
+  await expect(badge).toHaveCSS('color', 'rgb(198, 203, 212)');
+  await expect(badge).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+  await expect(badge).toHaveCSS('border-top-style', 'dashed');
+  await expect(badge).toHaveCSS('border-top-width', '1px');
+  await expect(badge).toHaveCSS('border-top-color', 'rgb(152, 161, 180)');
+  await expect(claim.locator('.impact-claim-register')).toHaveText('outlook');
+  // Actual fetched CPC claim, not the separate chart-helper specimen.
+  await expect(svg.locator('rect[fill="#B32E05"]')).toHaveCSS('fill', 'rgb(179, 46, 5)');
+  await page.emulateMedia({ media: 'print' });
+  await expect(svg).toBeVisible();
+  await expect(svg.locator('rect[fill="#B32E05"]')).toHaveCSS('fill', 'rgb(179, 46, 5)');
+  for (const text of await svg.locator('text').all()) await expect(text).toHaveCSS('fill', 'rgb(0, 0, 0)');
+  await page.emulateMedia({ media: 'screen' });
+  await expect(svg.locator('rect[fill="#B32E05"]')).toHaveCSS('fill', 'rgb(179, 46, 5)');
+  for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) {
+    await page.setViewportSize(viewport);
+    if (viewport.width === 390) {
+      // Resizing into the phone shell starts with its map-first closed sheet.
+      // Use the ordinary Brief door to expose the existing report.
+      await page.locator('#mobile-footer-nav button[data-tab="brief"]').click();
+      await expect(page.locator('#app')).toHaveAttribute('data-sheet-detent', 'full');
+      await expect(page.locator('#sheet-report .impact-panel')).toBeVisible();
+    }
+    await badge.scrollIntoViewIfNeeded();
+    await expect(badge).toBeVisible();
+    const fit = await badge.evaluate(element => {
+      const bounds = element.getBoundingClientRect();
+      const parent = element.closest('.impact-claim')!.getBoundingClientRect();
+      const text = document.createRange();
+      text.selectNodeContents(element);
+      const letters = text.getBoundingClientRect();
+      return {
+        wordFits: letters.left >= bounds.left && letters.right <= bounds.right && letters.top >= bounds.top && letters.bottom <= bounds.bottom,
+        parentFits: bounds.left >= parent.left && bounds.right <= parent.right,
+        viewportFits: bounds.left >= 0 && bounds.right <= innerWidth,
+        noOverflow: element.scrollWidth <= element.clientWidth
+      };
+    });
+    expect(fit).toEqual({ wordFits: true, parentFits: true, viewportFits: true, noOverflow: true });
+  }
+});
+
 test('P3-TRUTH: a CPC read with the 8-14 day window failed renders live (partial) with the 6-10 day claim and the window note', async ({
   page
 }) => {

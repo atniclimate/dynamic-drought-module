@@ -23,6 +23,28 @@ import { stubWildfireFeeds } from './wildfire-fixtures';
  */
 
 const POINTER = '#map-info-attribution button[data-open-acknowledgements]';
+
+test('D3 ATNI lockup appears in acknowledgements and the print-only report footer', async ({ page }) => {
+  await gotoApp(page, '?view=console&flow=off');
+  await openPointer(page);
+  const panel = page.locator('#impact-panel');
+  const lockup = panel.locator('.impact-acknowledgements .ack-atni-lockup');
+  await expect(lockup).toBeVisible();
+  await expect(lockup).toHaveAttribute('src', /brand\/atni-climate-lockup\.png$/);
+  await expect.poll(() => lockup.evaluate(node => {
+    const image = node as HTMLImageElement;
+    return image.complete && image.naturalWidth > 0;
+  })).toBe(true);
+  const footer = panel.locator('.impact-print-brand');
+  await expect(footer).toBeHidden();
+  await page.emulateMedia({ media: 'print' });
+  await expect(footer).toBeVisible();
+  await expect(footer.locator('img')).toHaveAttribute('src', /brand\/atni-climate-lockup\.png$/);
+  await expect(footer.locator('img')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+  await page.emulateMedia({ media: 'screen' });
+  await expect(footer).toBeHidden();
+  await expect(lockup).toBeVisible();
+});
 const RAWS_NOTICE =
   'Public-view station data for awareness only; not for on-the-ground coordination.';
 
@@ -92,6 +114,61 @@ const HELD_REFRESH_FOCUS = [
 ] as const;
 
 test.describe('the acknowledgements pointer and section (D1 M22)', () => {
+  for (const priorBriefing of [false, true]) {
+    test(`failed acknowledgements runtime disables Mail${priorBriefing ? ' after an unavailable briefing' : ' on its first open'}`, async ({ page }) => {
+      const blockedRuntimeRequests: string[] = [];
+      // Same production-chunk failure seam as slim-entry.spec.ts, including
+      // recovery so an earlier failed briefing cannot mask this failure path.
+      await page.route(/\/assets\/impact-panel-runtime-(primary|recovery)-[^/]+\.js$/, async route => {
+        blockedRuntimeRequests.push(route.request().url());
+        await route.abort('failed');
+      });
+      await gotoApp(page, '?region=washington_state&view=console');
+      const panel = page.locator('#impact-panel');
+      const trigger = page.locator('#region-briefing-btn');
+
+      if (priorBriefing) {
+        await trigger.click();
+        await expect(panel).toBeVisible({ timeout: 15_000 });
+        await expect(panel.locator('.impact-capability-unavailable')).toBeVisible();
+        await expect(panel.locator('.impact-panel-action-mail')).toHaveAttribute('href', /^mailto:\?subject=/);
+        await panel.locator('.impact-panel-close').click();
+        await expect(panel).toBeHidden();
+      }
+
+      await openPointer(page);
+      await expect(panel).toBeVisible({ timeout: 15_000 });
+      await expect(panel.locator('#impact-panel-title')).toHaveText('Acknowledgements');
+      await expect(panel.locator('.impact-horizon-note')).toContainText('application module could not load');
+      await expect(panel.locator('.impact-acknowledgements')).toHaveCount(0);
+      expect(blockedRuntimeRequests).toHaveLength(priorBriefing ? 2 : 1);
+
+      const mail = panel.locator('.impact-panel-action-mail');
+      await expect(mail).toHaveAttribute('aria-disabled', 'true');
+      await expect(mail).not.toHaveAttribute('href');
+      // Exercise the existing stale-href re-arm listeners without invoking an
+      // external mail application, matching the neighboring regression.
+      await mail.dispatchEvent('pointerdown');
+      await mail.dispatchEvent('focus');
+      expect(await mail.evaluate(anchor => ({
+        disabled: anchor.getAttribute('aria-disabled'),
+        href: anchor.getAttribute('href')
+      }))).toEqual({ disabled: 'true', href: null });
+
+      await panel.locator('.impact-panel-close').click();
+      await expect(panel).toBeHidden();
+      await expect(page.locator('#map-info-btn')).toBeFocused();
+      // A later briefing must still recover its enabled action on this shell,
+      // even when its own runtime remains unavailable.
+      await trigger.click();
+      await expect(panel).toBeVisible({ timeout: 15_000 });
+      await expect(panel.locator('.impact-capability-unavailable')).toBeVisible();
+      await expect(panel.locator('#impact-panel-title')).toHaveText('Washington');
+      await expect(mail).not.toHaveAttribute('aria-disabled', 'true');
+      await expect(mail).toHaveAttribute('href', /^mailto:\?subject=Washington/);
+    });
+  }
+
   test('with no place selected the pointer opens the acknowledgements-only presentation and starts no request', async ({
     page
   }) => {

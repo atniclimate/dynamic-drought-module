@@ -15,6 +15,67 @@ const NODD_ROUTE = /^https:\/\/noaa-gfs-bdp-pds\.s3\.amazonaws\.com\//;
  */
 const LIVE_CLOCK = Date.UTC(2026, 9, 5, 12, 30);
 
+for (const width of [1440, 721, 720, 390]) {
+  test(`D3 neutral flow controls retain keyboard selection and fit at ${width}`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.clock.setFixedTime(LIVE_CLOCK);
+    await stubSst(page);
+    await gotoApp(page, '?cluster=enso&ocean=pacific&view=brief&basemap=default&flow=off');
+    if (width <= 720) await page.locator('#mobile-footer-nav button[data-tab="layers"]').click();
+    const panel = page.locator('.enso-flow');
+    await expect(panel).toBeVisible();
+    expect(await page.evaluate(() => {
+      const css = getComputedStyle(document.documentElement);
+      return ['--accent', '--accent-strong', '--accent-soft', '--warn', '--good', '--danger'].map((name, index) => {
+        const value = css.getPropertyValue(name).trim();
+        if (index >= 3) return value;
+        // Compare resolved colors, not the minifier's equivalent hex/RGBA spelling.
+        const probe = document.createElement('span');
+        probe.style.color = `var(${name})`;
+        document.body.append(probe);
+        const resolved = getComputedStyle(probe).color;
+        probe.remove();
+        return resolved;
+      });
+    })).toEqual(['rgb(255, 255, 255)', 'rgb(232, 236, 240)', 'rgba(255, 255, 255, 0.08)', '', '', '']);
+    const off = panel.locator('[data-flow-kind="off"]');
+    await expect(off).toHaveAttribute('aria-pressed', 'true');
+    await expect(off).toHaveCSS('background-color', 'rgb(42, 49, 56)');
+    await expect(off).toHaveCSS('color', 'rgb(255, 255, 255)');
+    await expect(off).toHaveCSS('font-weight', '700');
+    await expect(off).toHaveCSS('border-radius', width > 720 ? '0px' : '4px');
+    await page.keyboard.press('Tab');
+    await off.focus();
+    await expect(off).toHaveCSS('outline-color', 'rgb(255, 255, 255)');
+    await expect(off).toHaveCSS('outline-width', '2px');
+    await expect(off).toHaveCSS('outline-offset', '0px');
+    await expect(off).toHaveCSS('box-shadow', /rgb\(1, 11, 19\) 0px 0px 0px 4px/);
+    await expect(off).toHaveCSS('box-shadow', /inset/);
+    await page.keyboard.press('Space');
+    await expect(off).toHaveAttribute('aria-pressed', 'true');
+    await expect(panel).toHaveAttribute('data-status', 'off');
+    const creditLink = panel.locator('a[href]').first();
+    await expect(creditLink).toBeVisible();
+    await expect(creditLink).toHaveCSS('color', width > 720 ? 'rgb(242, 107, 94)' : 'rgb(232, 236, 240)');
+    await expect(creditLink).toHaveCSS('text-decoration-line', 'underline');
+    expect(new URLSearchParams(await search(page)).get('flow')).toBe('off');
+    const fits = await panel.evaluate(node => [...node.querySelectorAll('button, select')].every(control => {
+      const element = control as HTMLElement;
+      const seat = element.getBoundingClientRect();
+      return seat.left >= 0 && seat.right <= innerWidth && element.scrollWidth <= element.clientWidth;
+    }));
+    expect(fits).toBe(true);
+    if (width <= 720) {
+      const rail = page.locator('#mobile-footer-nav button[data-tab="layers"]');
+      await expect(rail).toHaveCSS('background-color', 'rgba(1, 11, 19, 0.86)');
+      await expect(rail).toHaveCSS('border-radius', '4px');
+      await rail.focus();
+      await expect(rail).toHaveCSS('outline-offset', '0px');
+      await expect(rail).toHaveCSS('box-shadow', /rgb\(1, 11, 19\) 0px 0px 0px 4px/);
+    }
+  });
+}
+
 async function stubSst(page: Page): Promise<void> {
   await page.route((url) => url.href.includes('DescribeDomains'), (route) => route.fulfill({
     status: 200, contentType: 'text/xml',

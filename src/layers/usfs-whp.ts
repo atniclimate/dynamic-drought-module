@@ -127,7 +127,7 @@ function watchTerrainPresentation(map: maplibregl.Map): void {
     if (next) registerWhpImageShadeProtocol();
     shadeOn = next;
     source.setTiles([`${next ? 'whp-image-shade://' : ''}${buildImageTileTemplate()}`]);
-    map.setPaintProperty(LAYER_ID, 'raster-resampling', next ? 'nearest' : 'linear');
+    map.setPaintProperty(LAYER_ID, 'raster-resampling', 'nearest');
     publishShadeState();
   };
   map.on('terrain', sync);
@@ -235,6 +235,9 @@ export async function activate(map: maplibregl.Map): Promise<void> {
         tileSize: 256,
         attribution: 'USDA Forest Service - Wildfire Hazard Potential'
       });
+      // Floor flat-view coverage zoom so categorical tiles are magnified rather
+      // than rounded up into linear minification. Pitch needs separate coverage.
+      map.getSource<maplibregl.RasterTileSource>(SOURCE_ID)!.roundZoom = false;
     }
 
     if (!map.getLayer(LAYER_ID)) {
@@ -246,7 +249,7 @@ export async function activate(map: maplibregl.Map): Promise<void> {
           // 0.55 opacity preserves basemap topography and lets the USDM /
           // NIFC overlays read clearly when stacked above WHP.
           'raster-opacity': WHP_SURFACE_OPACITY,
-          'raster-resampling': shadeOn ? 'nearest' : 'linear'
+          'raster-resampling': 'nearest'
         }
       });
     }

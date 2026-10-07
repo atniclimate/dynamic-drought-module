@@ -6,6 +6,22 @@ import { BUILDERS, LEGACY_ALLOWANCE, stripComments } from './identify-paths-mani
 import { serializePopupFrame } from '../src/ui/popup-frame';
 import type { PopupModel } from '../src/ui/popup-frame';
 
+test('R8 USDM change popup uses all exact signed issuer classes and rejects invalid DN', async () => {
+  const { buildUsdmChangePopupModel } = await import('../src/layers/usdm');
+  const expected: Array<[number, string]> = [[-5,"#003D75"],[-4,"#016678"],[-3,"#359766"],[-2,"#8AD48C"],[-1,"#CCFFD4"],[0,"#CCCCCC"],[1,"#FFFF73"],[2,"#FFD438"],[3,"#FF9900"],[4,"#A87000"],[5,"#543005"]];
+  const labels = ["Improved 5 categories","Improved 4 categories","Improved 3 categories","Improved 2 categories","Improved 1 category","No category change","Worsened 1 category","Worsened 2 categories","Worsened 3 categories","Worsened 4 categories","Worsened 5 categories"];
+  for (const [i, [dn, color]] of expected.entries()) {
+    const model = buildUsdmChangePopupModel({ DN: dn, MapDate: Date.UTC(2026, 5, 30) });
+    expect(model.value).toEqual([{ text: labels[i], swatch: {
+      table: 'USDM_CHANGE_COLORS', classKey: String(dn), color
+    } }]);
+    expect(model.clocks).toEqual(buildUsdmChangePopupModel({ DN: 0, MapDate: Date.UTC(2026, 5, 30) }).clocks);
+  }
+  for (const dn of [undefined, null, '', '0', '-5', false, NaN, -6, 6, .5]) {
+    expect(buildUsdmChangePopupModel({ DN: dn }).value).toEqual([{ text: 'Unknown change class' }]);
+  }
+});
+
 // Codex block 2 review, P2: every external request a fixture does not route
 // (the OSM raster tiles, an unstubbed service) is answered 503 locally, as in
 // popup-viewport.spec.ts's tier dispatcher. Registered first, so gotoApp's

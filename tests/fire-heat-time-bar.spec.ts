@@ -418,7 +418,7 @@ test.describe('DDM-P8-T02: the Wildfire screen has a time control at every horiz
     await expectChipsStillHonest(page);
   });
 
-  test('a successful fire check expires from green to red and retains its last successful date', async ({ page }) => {
+  test('a successful fire check changes neutral freshness form and retains its last successful date', async ({ page }) => {
     await page.clock.install({ time: new Date('2026-09-13T18:00:00Z') });
     await stubCommon(page);
     await stubFire(page, { spc: 'outlined' });
@@ -426,7 +426,11 @@ test.describe('DDM-P8-T02: the Wildfire screen has a time control at every horiz
     const dot = page.locator('#time-bar .feed-freshness-dot');
     const summary = page.locator('#time-bar .feed-current');
     await expect(dot).toHaveAttribute('data-freshness', 'current');
-    await expect(dot).toHaveCSS('background-color', 'rgb(74, 222, 128)');
+    await expect(dot).toHaveCSS('background-color', 'rgb(232, 236, 240)');
+    await expect(dot).toHaveCSS('border-radius', '0px');
+    await expect(dot).toHaveCSS('border-width', '1px');
+    await expect(dot).toHaveCSS('width', '8px');
+    await expect(dot).toHaveCSS('height', '8px');
     await expect(summary).toHaveText('Current Conditions');
     const initialStamp = await readStamp(page);
     const feed = page.locator('#time-bar .time-bar-feed-details');
@@ -437,13 +441,15 @@ test.describe('DDM-P8-T02: the Wildfire screen has a time control at every horiz
       month: 'numeric', day: 'numeric', year: '2-digit'
     }).format(new Date()));
 
-    // Source freshness belongs to the successful browser check. Its green
+    // Source freshness belongs to the successful browser check. Its filled
     // indicator stays current inside the five-minute check window.
     await page.clock.fastForward(4 * 60_000);
     await expect(dot).toHaveAttribute('data-freshness', 'current');
     await page.clock.fastForward(70_000);
     await expect(dot).toHaveAttribute('data-freshness', 'stale');
-    await expect(dot).toHaveCSS('background-color', 'rgb(248, 113, 113)');
+    await expect(dot).toHaveCSS('color', 'rgb(198, 203, 212)');
+    await expect(dot).toHaveCSS('background-image', /linear-gradient\(90deg,.*50%/);
+    await expect(dot).toHaveCSS('animation-name', 'none');
     await expect(dot).toHaveAttribute('aria-label', `Last successful feed check ${checkedDate}`);
     await expect(summary).toHaveText(`Current Conditions${checkedDate}`);
     // Expiry updates the visible source state without closing details or
@@ -483,6 +489,8 @@ test.describe('DDM-P8-T02: the Wildfire screen has a time control at every horiz
       register: 'outlook',
       issuer: 'NOAA SPC Day 1 Fire Weather Outlook'
     });
+    await expect(page.locator('#time-bar .time-bar-stamp-headline')).toHaveCSS('color', 'rgb(198, 203, 212)');
+    await expect(page.locator('#time-bar .time-bar-stamp-headline')).toHaveCSS('font-style', 'italic');
     // Clause 3: the period is the fixture's own valid and expire fields,
     // rendered in UTC.
     expect(stamp.headline).toBe(

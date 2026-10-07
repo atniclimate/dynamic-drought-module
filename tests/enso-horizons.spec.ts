@@ -139,6 +139,33 @@ function ensoCell(page: Page, horizon: string) {
   );
 }
 
+test('S13 operational RONI reference guides render its own CPC colors in the actual briefing', async ({ page }) => {
+  const snapshot = withWeekly();
+  snapshot.retrieved = daysAgo(0);
+  await openBriefing(page, snapshot);
+  const chart = ensoCell(page, 'current').locator('svg').filter({
+    has: page.locator('title', { hasText: 'Observed operational RONI and historical-continuity ONI over recent seasons' })
+  });
+  await expect(chart).toBeVisible();
+  for (const [hex, rgb, label] of [
+    ['#e80016', 'rgb(232, 0, 22)', 'El Nino +0.5'],
+    ['#195fe4', 'rgb(25, 95, 228)', 'La Nina -0.5']
+  ] as const) {
+    const guide = chart.locator(`line[stroke="${hex}"]`);
+    await expect(guide).toHaveCount(1);
+    await expect(guide).toHaveCSS('stroke', rgb);
+    await expect(guide).toHaveCSS('stroke-dasharray', '3px, 3px');
+    await expect(chart.locator('text').filter({ hasText: label })).toHaveCSS('fill', 'rgb(198, 203, 212)');
+  }
+  await expect(chart.locator('[data-index-guide-casing]')).toHaveCount(2);
+  for (const casing of await chart.locator('[data-index-guide-casing]').all()) {
+    await expect(casing).toHaveCSS('stroke', 'rgb(198, 203, 212)');
+    await expect(casing).toHaveCSS('stroke-width', '1.6px');
+  }
+  await expect(chart.locator('polyline[data-index-series="primary"]')).toHaveCSS('stroke', 'rgb(241, 245, 249)');
+  await expect(chart.locator('polyline[data-index-series="comparison"]')).toHaveCSS('stroke-dasharray', '4px, 2px');
+});
+
 /**
  * `openBriefing`'s `gotoApp` returns after boot-idle, not after the briefing
  * panel's own hydration lanes settle (`src/impact/hydrate.ts` runs them

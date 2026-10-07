@@ -1,26 +1,58 @@
 /* =============================================================================
    Dynamic Drought Module (DDM) · stylesheet
    Aesthetic: technical-cartographic. Slate foundation, water-cyan accent.
-   Typography: League Spartan (titles/labels) + Lexend (body/data).
+   Typography: Spartan MB (titles/labels) + DDM Heros (body/data).
    ============================================================================= */
 
-/* Self-hosted fonts (public/fonts/, SIL OFL 1.1; license texts alongside the
-   files so every dist/ copy carries them). Both families ship as variable
-   fonts, so one file per family and subset covers every weight the app uses;
-   unicode-range keeps latin-ext lazy (fetched only if a glyph needs it).
-   No third-party font request: the project's no-tracking stewardship rule is
-   that the module observes the landscape for the user, it does not report on
-   them. */
+/* Self-hosted brand faces and lazy glyph fallbacks. Licences, source hashes
+   and subset provenance accompany the files in public/fonts/. Orthography
+   uses a separate family so base-plus-mark clusters can share one font
+   without replacing ordinary ASCII in the primary faces. */
 @font-face {
-  font-family: 'League Spartan';
+  font-family: 'Spartan MB';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/spartanmb-600.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Spartan MB';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/spartanmb-700.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Spartan MB';
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url('/fonts/spartanmb-800.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'DDM Heros';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/ddm-heros-regular-latin.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'DDM Heros';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/ddm-heros-bold-latin.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'DDM Glyph Fallback';
   font-style: normal;
   font-weight: 100 900;
   font-display: swap;
-  src: url('/fonts/league-spartan-latin.woff2') format('woff2');
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+  src: url('/fonts/lexend-latin.woff2') format('woff2');
+  unicode-range: U+02BB-02BC;
 }
 @font-face {
-  font-family: 'League Spartan';
+  font-family: 'DDM Glyph Fallback';
   font-style: normal;
   font-weight: 100 900;
   font-display: swap;
@@ -28,51 +60,48 @@
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
 @font-face {
-  font-family: 'Lexend';
+  font-family: 'DDM Orthography Fallback';
   font-style: normal;
-  font-weight: 100 900;
+  font-weight: 400;
   font-display: swap;
-  src: url('/fonts/lexend-latin.woff2') format('woff2');
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-}
-@font-face {
-  font-family: 'Lexend';
-  font-style: normal;
-  font-weight: 100 900;
-  font-display: swap;
-  src: url('/fonts/lexend-latin-ext.woff2') format('woff2');
-  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+  src: url('/fonts/ddm-orthography-fallback.woff2') format('woff2');
+  unicode-range: U+0020-007E, U+0294, U+02B7, U+0313, U+0331, U+1E35;
 }
 
 :root {
-  /* Palette */
-  --bg-0: #0b1220;
-  --bg-1: #0f172a;
-  --bg-2: #131f36;
-  --bg-3: #1b2942;
+  /* D3 M5 additions. Existing D1 tokens below keep their adopted values. */
+  --surface-base: #010B13;
+  --brand-wordmark-red: #E13D33;
+  --surface-band: #171C20;
+  --rule: #3B3B3B;
+  --rule-control: #8A94A6;
+  --glass-control: rgba(1, 11, 19, 0.48);
+
+  /* D3 M5: retain legacy names as aliases of the adopted opaque ramp. */
+  --bg-0: var(--surface-base);
+  --bg-1: var(--surface-raised);
+  --bg-2: var(--surface-overlay);
+  --bg-3: var(--surface-hover);
   --line: #243049;
   --line-strong: #2f3d5a;
 
-  --fg-0: #f1f5f9;
-  --fg-1: #cbd5e1;
-  --fg-2: #94a3b8;
+  --fg-0: var(--ink);
+  --fg-1: var(--ink-soft);
+  --fg-2: var(--ink-muted);
   /* Raised from #64748b on 2026-09-01 (UI-04). The token is the color of
      38 rules, every one of them 9-11px, and at #64748b it measured
      3.93:1 on --bg-0 down to 3.06:1 on --bg-3, under the 4.5:1 WCAG
      1.4.3 floor for normal text at every size this app uses it at.
-     #7d8ba1 measures 5.42 / 5.17 / 4.76 / 4.21 on --bg-0/1/2/3. The
-     first three pass; --bg-3 is only ever a hover background
+     Those earlier surface ratios predate the D3 opaque alias migration.
+     The retained #7d8ba1 clears 4.5 on adopted S0-S2; --bg-3 is a hover background
      (.preset-chip, .telemetry-item, .hazard-rail-btn, #share-btn) and
      still misses AA at 4.21 -- see the report note on #8592a6 (4.62). */
-  --fg-3: #7d8ba1;
+  /* D3 T4: use only on S0-S2; S3 descendants step up to ink-muted. */
+  --fg-3: var(--ink-faint);
 
-  --accent: #06b6d4;
-  --accent-strong: #0891b2;
-  --accent-soft: rgba(6, 182, 212, 0.14);
-
-  --warn: #f59e0b;
-  --good: #10b981;
-  --danger: #ef4444;
+  --accent: #FFFFFF;
+  --accent-strong: #E8ECF0;
+  --accent-soft: rgba(255, 255, 255, 0.08);
 
   /* The ruled Tribal identity family (E2: D-0.7.0-058 ruling 3 pinned
      the one family color). UI accents referencing the family use this
@@ -80,22 +109,17 @@
      (TRIBAL_FAMILY_COLOR), and the value must match it. */
   --tribal-family: #8d006b;
 
-  /* Typography
-     ATNI Climate brand: League Spartan (display), Lexend (body).
-     Both self-hosted from public/fonts/, both SIL OFL 1.1 licensed. */
-  --font-display: 'League Spartan', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --font-body: 'Lexend', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  /* Typography: supplied Spartan MB display faces and renamed Heros body
+     subsets. Each source licence and derivation receipt ships beside them. */
+  --font-display: 'Spartan MB', 'DDM Glyph Fallback', 'DDM Orthography Fallback', system-ui, sans-serif;
+  --font-body: 'DDM Heros', 'DDM Glyph Fallback', 'DDM Orthography Fallback', system-ui, sans-serif;
+  font-synthesis: none;
 
-  /* Weight tokens. Both families are variable (wght 100-900), so weights are
-     shaved slightly below their nominal steps: light-on-dark text halates and
-     reads one notch heavier than the same weight dark-on-light, and this UI
-     is permanently dark (0.3.0 typography pass; CSS-Tricks "Dark mode and
-     variable fonts", CHI 2023 polarity study). The hierarchy steps are
-     preserved: 580 titles, 490 subtitles/emphasis, 385 body. */
-  --fw-title: 580;     /* League Spartan Semibold, optically corrected for dark */
-  --fw-subtitle: 490;  /* League Spartan Medium, optically corrected */
-  --fw-body: 385;      /* Lexend Normal, optically corrected */
-  --fw-strong: 490;    /* Lexend Medium (emphasized body) */
+  /* Adopted static face weights; no synthetic weight or style. */
+  --fw-title: 700;
+  --fw-subtitle: 600;
+  --fw-body: 400;
+  --fw-strong: 700;
 
   /* Tracking tokens (0.3.0 typography pass). Kerning is the font's job
      (font-kerning below keeps the kern tables on at small sizes); tracking is
@@ -153,19 +177,19 @@
   --radius-md: 6px;
   --radius-lg: 8px;
   /* Mobile map chrome: one glass language and one right-edge control grid. */
-  --rich-black: #004040;
-  --rich-black-glass: rgba(0, 64, 64, 0.30);
-  --rich-black-border: rgba(0, 64, 64, 0.20);
+  --rich-black: #010B13;
+  --rich-black-glass: rgba(1, 11, 19, 0.30);
+  --rich-black-border: rgba(1, 11, 19, 0.20);
   --rich-black-blur: 15px;
   /* Same hue and blur, a darker alpha: the screen-filling studios read
      continuously, not glimpsed, and must guarantee body-text contrast
      over an arbitrary (possibly bright) map background. See the
      .layers-studio @supports rule for the measured reasoning. */
-  --rich-black-glass-strong: rgba(0, 64, 64, 0.55);
+  --rich-black-glass-strong: rgba(1, 11, 19, 0.55);
   --mobile-map-edge: 8px;
   --mobile-map-control-size: 52px;
   --mobile-map-control-gap: 8px;
-  --mobile-map-control-radius: var(--radius-sm);
+  --mobile-map-control-radius: 4px;
   --mobile-map-key-collapsed-height: 224px;
   /* The one map-control family width (E2, D-0.7.0-058 ruling 2): Share
      view, Reset, and the Satellite switcher all render at this width on
@@ -273,6 +297,13 @@
   --focus-outer: #010B13;                /* "Focus": the 4 px casing */
   --glass-read: rgba(1, 11, 19, 0.72);   /* "Glass": desktop glass that carries text */
   --link-on-dark: #F26B5E;               /* "Buttons and links": opaque S0 to S2 only */
+}
+
+/* Links on the light About card (#f8fafc): outside the D1 block, which
+   holds only the names D1.md lists. #B02821 is about 6.3:1 on that face. */
+:root {
+  --link-on-light: #B02821;
+  --link-on-light-hover: #8C1F19;
 }
 
 * {
@@ -474,35 +505,46 @@ a:hover {
   grid-column: 1;
   grid-row: 1;
 }
-/* The organizational seal on a light circular chip. The chip color matches
-   the seal asset's own background (#e9edf0, sampled from the source PNG) so
-   the crop edge is invisible; a plain ring, no glow (a glow under a formal
-   seal reads gimmicky). It is a button: activating it opens the about card
-   with the full lockup. */
+/* The adopted wordmark opens the About card without changing its button role. */
 .brand-seal {
   appearance: none;
-  width: 32px;
-  height: 32px;
-  padding: 0;
+  width: auto;
+  height: auto;
+  min-height: 40px;
+  padding: 4px;
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: #e9edf0;
+  background: var(--surface-base);
   border: none;
-  border-radius: 50%;
-  box-shadow: 0 0 0 1px var(--line-strong);
+  border-radius: 0;
+  box-shadow: none;
   cursor: pointer;
   transition: box-shadow 0.15s ease;
 }
 .brand-seal:hover { box-shadow: 0 0 0 1px var(--accent-strong); }
-.brand-seal img {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  display: block;
-}
 .brand-text { min-width: 0; }
+.atni-wordmark {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  flex-shrink: 0;
+  min-height: 32px;
+  background: var(--surface-base);
+  color: var(--ink-strong);
+  font-family: 'Spartan MB', sans-serif;
+  font-weight: 800;
+  font-size: 14px;
+  line-height: 16px;
+  letter-spacing: 0;
+}
+.atni-wordmark-climate { color: var(--brand-wordmark-red); }
+.brand-seal:focus-visible {
+  outline: 2px solid var(--focus-inner);
+  outline-offset: 0;
+  box-shadow: 0 0 0 4px var(--focus-outer);
+}
 .brand-text h1 {
   margin: 0;
   font-family: var(--font-display);
@@ -522,6 +564,14 @@ a:hover {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* The wider adopted wordmark shares the header without truncating its words. */
+.brand-text h1,
+.brand-text p {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
 }
 
 .sidebar-scroll {
@@ -570,7 +620,7 @@ a:hover {
   width: 28px;
   height: 28px;
   background: transparent;
-  border: 1px solid var(--line);
+  border: 1px solid var(--rule-control);
   border-radius: var(--radius-sm);
   color: var(--fg-2);
   cursor: pointer;
@@ -579,7 +629,7 @@ a:hover {
 .icon-btn:hover {
   background: var(--bg-2);
   color: var(--fg-0);
-  border-color: var(--line-strong);
+  border-color: var(--rule-control);
 }
 
 .sidebar-expand-btn {
@@ -591,7 +641,7 @@ a:hover {
   left: 12px;
   z-index: calc(var(--z-map-control) + 1);
   background: var(--bg-1);
-  border-color: var(--line-strong);
+  border-color: var(--rule-control);
   display: none;
 }
 .app-shell.sidebar-collapsed .sidebar-expand-btn,
@@ -741,6 +791,7 @@ html:not([data-ddm-controls='ready']) .app-shell .sidebar-expand-btn {
   color: var(--fg-3);
   opacity: 0.72;
   white-space: nowrap;
+  font-variant-numeric: tabular-nums lining-nums;
 }
 
 .conditions-metrics {
@@ -827,13 +878,14 @@ button.conditions-metric:hover .conditions-action-hide {
 }
 
 .conditions-value {
-  font-family: var(--font-display);
+  font-family: var(--font-body);
   font-weight: var(--fw-title);
   font-feature-settings: 'tnum' 1;
   font-size: 20px;
   line-height: 1;
   letter-spacing: var(--track-display);
   color: var(--fg-0);
+  font-variant-numeric: tabular-nums lining-nums;
 }
 
 .conditions-sublabel {
@@ -872,15 +924,15 @@ button.conditions-metric:hover .conditions-action-hide {
    confidently current, and the date line switches to the same warn tone and
    says so. Static styling only, so reduced-motion is inherently respected. */
 .conditions-metric[data-stale='true'] {
-  border-color: var(--warn);
+  border-color: var(--ink-soft);
 }
 .conditions-stale-tag {
   display: inline-block;
   margin-left: 5px;
   padding: 0 4px;
-  border: 1px solid var(--warn);
+  border: 1px solid var(--ink-soft);
   border-radius: 3px;
-  color: var(--warn);
+  color: var(--ink-soft);
   font-size: 9px;
   font-weight: 500;
   letter-spacing: var(--track-caps-sm);
@@ -888,7 +940,7 @@ button.conditions-metric:hover .conditions-action-hide {
   vertical-align: 1px;
 }
 .conditions-date[data-stale='true'] {
-  color: var(--warn);
+  color: var(--ink-soft);
 }
 
 /* ----------------------------------------------------------------------------
@@ -1163,7 +1215,7 @@ button.conditions-metric:hover .conditions-action-hide {
   appearance: none;
   background: var(--bg-2);
   color: var(--fg-1);
-  border: 1px solid var(--line);
+  border: 1px solid var(--rule-control);
   border-radius: var(--radius-md);
   padding: 6px 12px;
   font-family: var(--font-display);
@@ -1181,7 +1233,7 @@ button.conditions-metric:hover .conditions-action-hide {
 }
 .preset-chip:hover {
   background: var(--bg-3);
-  border-color: var(--line-strong);
+  border-color: var(--rule-control);
   color: var(--fg-0);
 }
 .preset-chip:active {
@@ -1344,7 +1396,7 @@ button.conditions-metric:hover .conditions-action-hide {
   border-radius: var(--radius-md);
   cursor: pointer;
 }
-.layer-umbrella-cta:hover { border-color: var(--accent); background: rgba(6, 182, 212, 0.22); }
+.layer-umbrella-cta:hover { border-color: var(--accent); background: color-mix(in srgb, var(--ink-strong) 22%, transparent); }
 .layer-umbrella-cta:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .layer-umbrella-count {
@@ -1388,6 +1440,25 @@ button.conditions-metric:hover .conditions-action-hide {
    .impact-panel[hidden] lesson): the collapsed member region stays gone. */
 .layer-umbrella-controls[hidden] { display: none; }
 
+/* D3 M6: opaque catalog actions, separate from the Tribal identity rule. */
+@media (min-width: 721px) {
+  .app-shell:not(.embed) #sidebar .layer-umbrella-cta {
+    background: var(--surface-overlay);
+    color: var(--ink);
+    border-color: var(--rule-control);
+  }
+  .app-shell:not(.embed) #sidebar .layer-umbrella-cta:hover {
+    background: var(--surface-hover);
+    color: var(--ink);
+    border-color: var(--rule-control);
+  }
+  .app-shell:not(.embed) #sidebar :is(.layer-umbrella-cta, .layer-umbrella-details-toggle):focus-visible {
+    outline: 2px solid var(--focus-inner);
+    outline-offset: 0;
+    box-shadow: 0 0 0 4px var(--focus-outer);
+  }
+}
+
 /* The compact Brief-door action (the eager mirror of the umbrella button,
    hosted by the impact panel's static chrome). One labeled row; no child
    rows, no provenance paragraph (those stay in the catalog). */
@@ -1420,7 +1491,7 @@ button.conditions-metric:hover .conditions-action-hide {
   border-radius: var(--radius-md);
   cursor: pointer;
 }
-.tribal-nations-brief-action:hover { border-color: var(--accent); background: rgba(6, 182, 212, 0.22); }
+.tribal-nations-brief-action:hover { border-color: var(--accent); background: color-mix(in srgb, var(--ink-strong) 22%, transparent); }
 .tribal-nations-brief-action:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 /* found-006: the Brief-door control is now a real toggle; its pressed
    state (both layers on) needs a sighted-user cue to match aria-pressed,
@@ -1458,10 +1529,10 @@ button.conditions-metric:hover .conditions-action-hide {
    a faint accent border; the active hover deepens rather than reverting to the
    neutral hover. */
 .layer-toggle:has(input:checked) {
-  background: rgba(6, 182, 212, 0.1);
-  border-color: rgba(6, 182, 212, 0.3);
+  background: color-mix(in srgb, var(--ink-strong) 10%, transparent);
+  border-color: color-mix(in srgb, var(--ink-strong) 30%, transparent);
 }
-.layer-toggle:has(input:checked):hover { background: rgba(6, 182, 212, 0.16); }
+.layer-toggle:has(input:checked):hover { background: color-mix(in srgb, var(--ink-strong) 16%, transparent); }
 
 .layer-toggle input[type="checkbox"] {
   appearance: none;
@@ -1470,7 +1541,7 @@ button.conditions-metric:hover .conditions-action-hide {
   margin: 2px 0 0;
   flex-shrink: 0;
   background: var(--bg-0);
-  border: 1px solid var(--line-strong);
+  border: 1px solid var(--rule-control);
   border-radius: 3px;
   cursor: pointer;
   position: relative;
@@ -1493,6 +1564,29 @@ button.conditions-metric:hover .conditions-action-hide {
 }
 
 .layer-toggle-text { min-width: 0; flex: 1; }
+/* D3 M6: opaque sidebar and rehosted Layers studio selection is neutral;
+   source swatches and status
+   words retain their independent meaning. Phone and embed seats are unchanged. */
+@media (min-width: 721px) {
+  :is(.app-shell:not(.embed) #sidebar, #layers-studio-root) .layer-toggle:has(input:checked:not(:disabled):not([aria-disabled='true'])) {
+    background: var(--surface-hover);
+    border-color: var(--rule-control);
+    box-shadow: inset 2px 0 0 var(--ink-strong);
+  }
+  :is(.app-shell:not(.embed) #sidebar, #layers-studio-root) .layer-toggle:has(input:checked:not(:disabled):not([aria-disabled='true'])) .layer-toggle-name {
+    color: var(--ink-strong);
+    font-weight: var(--fw-strong);
+  }
+  :is(.app-shell:not(.embed) #sidebar, #layers-studio-root) .layer-toggle input[type='checkbox']:checked:not(:disabled):not([aria-disabled='true']) {
+    background: var(--ink-strong);
+    border-color: var(--ink-strong);
+  }
+  :is(.app-shell:not(.embed) #sidebar, #layers-studio-root) .layer-toggle input[type='checkbox']:focus-visible {
+    outline: 2px solid var(--focus-inner);
+    outline-offset: 0;
+    box-shadow: 0 0 0 4px var(--focus-outer);
+  }
+}
 .layer-toggle-name {
   font-family: var(--font-display);
   font-size: 12px;
@@ -1519,14 +1613,39 @@ button.conditions-metric:hover .conditions-action-hide {
   display: block;
   letter-spacing: var(--track-pill);
 }
-.layer-toggle-status.loading { color: var(--warn); }
-.layer-toggle-status.error { color: var(--danger); }
-.layer-toggle-status.ready { color: var(--good); }
-/* Partial source loss (0.7.0 H4): live data is showing, but one of the
-   layer's merged sources failed; warn tone, not error red. */
-.layer-toggle-status.degraded { color: var(--warn); }
-.layer-toggle-status.no-data { color: var(--fg-2); font-style: italic; }
-.layer-toggle-status.zoom-in { color: var(--accent); }
+/* DR-138 / D3 M6: status is a word and static shape, never hazard color. */
+.layer-toggle-status.loading,
+.layer-toggle-status.no-data,
+.layer-toggle-status.zoom-in { color: var(--ink-soft); }
+.layer-toggle-status.error { color: var(--ink-strong); font-weight: 700; }
+.layer-toggle-status.ready,
+.layer-toggle-status.degraded { color: var(--ink); }
+.layer-toggle-status.no-data { font-style: italic; }
+.layer-toggle-status:is(.loading, .error, .ready, .degraded, .no-data, .zoom-in)::before {
+  content: '';
+  display: inline-block;
+  box-sizing: border-box;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border: 1px solid currentColor;
+  vertical-align: 0;
+}
+.layer-toggle-status.ready::before { background: currentColor; }
+.layer-toggle-status.degraded::before {
+  background: linear-gradient(to right, currentColor 50%, transparent 50%);
+}
+.layer-toggle-status.error::before {
+  background: linear-gradient(135deg, transparent 40%, currentColor 40%, currentColor 60%, transparent 60%);
+}
+.layer-toggle-status.no-data::before {
+  background: linear-gradient(currentColor, currentColor) center / 4px 1px no-repeat;
+}
+.layer-toggle-status.zoom-in::before {
+  background:
+    linear-gradient(currentColor, currentColor) center / 4px 1px no-repeat,
+    linear-gradient(currentColor, currentColor) center / 1px 4px no-repeat;
+}
 
 /* ----------------------------------------------------------------------------
    Telemetry list
@@ -1544,14 +1663,18 @@ button.conditions-metric:hover .conditions-action-hide {
   gap: 10px;
   padding: 9px 10px;
   background: var(--bg-2);
-  border: 1px solid var(--line);
+  border: 1px solid var(--rule-control);
   border-radius: var(--radius-sm);
   cursor: pointer;
   transition: all 0.12s ease;
 }
 .telemetry-item:hover {
-  background: var(--bg-3);
-  border-color: var(--line-strong);
+  background: var(--surface-hover);
+  border-color: var(--rule-control);
+}
+/* D3 allowed-ink matrix: faint T4 is not valid on the S3 hover face. */
+.telemetry-item:hover .telemetry-values:is(.loading, .unavailable) {
+  color: var(--ink-muted);
 }
 
 .telemetry-marker-dot {
@@ -1597,11 +1720,12 @@ button.conditions-metric:hover .conditions-action-hide {
   display: block;
   margin-top: 2px;
   letter-spacing: 0.01em;
+  font-variant-numeric: tabular-nums lining-nums;
 }
 .telemetry-values:empty { display: none; }
 .telemetry-values.loading { color: var(--fg-3); font-style: italic; }
 .telemetry-values.fresh { color: var(--fg-1); }
-.telemetry-values.stale { color: var(--warn); }
+.telemetry-values.stale { color: var(--ink-soft); }
 .telemetry-values.unavailable { color: var(--fg-3); font-style: italic; }
 
 /* ----------------------------------------------------------------------------
@@ -1690,7 +1814,7 @@ button.conditions-metric:hover .conditions-action-hide {
   appearance: none;
   background: var(--bg-2);
   color: var(--fg-0);
-  border: 1px solid var(--line-strong);
+  border: 1px solid var(--rule-control);
   border-radius: var(--radius-sm);
   padding: 5px 8px;
   font-family: var(--font-body);
@@ -1701,12 +1825,50 @@ button.conditions-metric:hover .conditions-action-hide {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
+/* D3 M5/M6: ordinary actions on the opaque sidebar use neutral selection
+   and the adopted two-tone focus boundary. Phone sheets keep their own pass. */
+@media (min-width: 721px) {
+  .app-shell:not(.embed) #sidebar .region-briefing-btn {
+    background: var(--surface-overlay);
+    color: var(--ink);
+    border-color: var(--rule-control);
+  }
+  .app-shell:not(.embed) #sidebar .region-briefing-btn:hover {
+    background: var(--surface-hover);
+    color: var(--ink);
+    border-color: var(--rule-control);
+  }
+  .app-shell:not(.embed) #sidebar .preset-chip:not([aria-disabled='true']):active {
+    background: var(--surface-hover);
+    border-color: var(--rule-control);
+    color: var(--ink);
+  }
+  .app-shell:not(.embed) #sidebar .preset-chip[aria-pressed='true'] {
+    background: var(--surface-hover);
+    color: var(--ink-strong);
+    border-color: var(--ink-strong);
+    font-weight: 700;
+    box-shadow: inset 2px 0 0 var(--ink-strong);
+  }
+  .app-shell:not(.embed) #sidebar :is(.region-briefing-btn, .preset-chip):focus-visible {
+    outline: 2px solid var(--focus-inner);
+    outline-offset: 0;
+    box-shadow: 0 0 0 4px var(--focus-outer);
+  }
+  .app-shell:not(.embed) #sidebar .preset-chip[aria-pressed='true']:focus-visible {
+    box-shadow: inset 2px 0 0 var(--ink-strong), 0 0 0 4px var(--focus-outer);
+  }
+}
+
 .gridded-index-ramp-bar {
-  display: block;
+  display: flex;
   height: 10px;
   border-radius: 2px;
   border: 1px solid rgba(0, 0, 0, 0.25);
-  background: linear-gradient(to right, #a8763e, #d8c8a8, #eef0ee, #7fb89a, #2e8b6b);
+  overflow: hidden;
+}
+.gridded-index-ramp-bar > span {
+  flex: 1;
 }
 .gridded-index-ramp-labels {
   display: flex;
@@ -1769,6 +1931,7 @@ button.conditions-metric:hover .conditions-action-hide {
   font-weight: var(--fw-body);
   letter-spacing: 0.02em;
   padding: 1px 6px !important;
+  font-variant-numeric: tabular-nums lining-nums;
 }
 
 /* The two generated scale controls remain independently sized because their
@@ -2002,6 +2165,7 @@ button.conditions-metric:hover .conditions-action-hide {
 .fire-context-distance {
   color: var(--fg-3);
   font-feature-settings: 'tnum' 1;
+  font-variant-numeric: tabular-nums lining-nums;
 }
 .fire-context-note {
   margin: 6px 0 0;
@@ -2125,25 +2289,25 @@ button.conditions-metric:hover .conditions-action-hide {
    wildfire perimeter -- never a DDM judgement, a raster hazard-potential
    surface, or an outlook; src/ui/popup-conditions.ts `hasWarning`).
    The STATIC form comes first and carries the full meaning alone (clause
-   b): a solid red/orange edge plus the warning's own product name in the
-   button's visible text (accessibility clause d: colour is never the only
+   b): a solid issuer-color edge plus the warning's own product name in the
+   condition row or legacy button (accessibility clause d: colour is never the only
    carrier). The keyframe on top is an addition, not the only signal, and
    is fully retired under prefers-reduced-motion below. */
-.popup-impact-btn--pulse {
-  border-color: var(--danger);
-  box-shadow: 0 0 0 1px var(--danger);
+.popup-impact-btn.popup-impact-btn--pulse {
+  border-color: var(--door-issuer-color, var(--ink-strong));
+  box-shadow: 0 0 0 2px var(--door-issuer-color, var(--ink-strong));
   animation: popup-impact-btn-pulse 1.6s ease-in-out infinite;
 }
-.popup-impact-btn--pulse:hover {
-  border-color: var(--danger);
+.popup-impact-btn.popup-impact-btn--pulse:hover {
+  border-color: var(--door-issuer-color, var(--ink-strong));
 }
 @keyframes popup-impact-btn-pulse {
-  0%, 100% { box-shadow: 0 0 0 1px var(--danger); }
-  50% { box-shadow: 0 0 0 3px var(--warn); }
+  0%, 100% { box-shadow: 0 0 0 1px var(--door-issuer-color, var(--ink-strong)); }
+  50% { box-shadow: 0 0 0 3px var(--door-issuer-color, var(--ink-strong)); }
 }
 /* The reduced-motion fallback lives in the consolidated
    @media (prefers-reduced-motion: reduce) block below (search
-   "popup-impact-btn-pulse"): the static red/orange edge above already
+   "popup-impact-btn-pulse"): the static 2px issuer-color edge above already
    carries the full meaning with no motion, so reduced motion only drops
    the animation, per clause b. */
 
@@ -2676,6 +2840,7 @@ button.conditions-metric:hover .conditions-action-hide {
 .hover-item {
   white-space: nowrap;
   font-feature-settings: 'tnum' 1;
+  font-variant-numeric: tabular-nums lining-nums;
 }
 .hover-label {
   margin-right: 5px;
@@ -3088,8 +3253,8 @@ button.conditions-metric:hover .conditions-action-hide {
    guarantee, and this comment used to claim one (corrected 2026-09-10,
    Codex adversarial review finding 9, arithmetic re-derived here rather
    than taken on trust). Composited over a snow-white map patch this
-   glass is rgb(114.75, 149.95, 149.95), against which --fg-0 measures
-   2.94:1 and --fg-1 2.17:1. Both fail AA. What actually protects text on
+   adopted glass is rgb(115.3, 120.8, 125.2), against which --fg-0 measures
+   3.72:1 and --fg-1 2.71:1. Both fail AA. What actually protects text on
    this surface is the SECOND rule below, not the alpha: every real
    content block (.layers-studio-catalog, .layers-studio-depth,
    .layers-studio-search, both .place-studio-*-panels, and the type-rail
@@ -3462,7 +3627,7 @@ button.conditions-metric:hover .conditions-action-hide {
   padding: 8px 10px;
   color: var(--fg-0);
   background: var(--bg-2);
-  border: 1px solid var(--line-strong);
+  border: 1px solid var(--rule-control);
   border-radius: var(--radius-md);
   font-family: var(--font-body);
   font-size: 12px;
@@ -3843,7 +4008,7 @@ button.conditions-metric:hover .conditions-action-hide {
   left: 50%;
   transform: translateX(-50%) translateY(-8px);
   z-index: var(--z-toast);
-  background: rgba(8, 145, 178, 0.95);
+  background: rgba(1, 11, 19, 0.95);
   color: #ffffff;
   border: 1px solid var(--accent);
   padding: 8px 16px;
@@ -3852,7 +4017,7 @@ button.conditions-metric:hover .conditions-action-hide {
   font-size: 12px;
   font-weight: var(--fw-subtitle);
   letter-spacing: 0.02em;
-  box-shadow: 0 6px 20px rgba(8, 145, 178, 0.4);
+  box-shadow: 0 6px 20px rgba(1, 11, 19, 0.4);
   opacity: 0;
   transition: opacity 0.2s ease, transform 0.2s ease;
 }
@@ -4717,7 +4882,7 @@ button.conditions-metric:hover .conditions-action-hide {
   font-weight: var(--fw-strong);
   cursor: pointer;
 }
-.sheet-report-door:hover { background: rgba(6, 182, 212, 0.24); }
+.sheet-report-door:hover { background: color-mix(in srgb, var(--ink-strong) 24%, transparent); }
 
 /* Container-query tile adaptation (headroom B3): in a narrow sheet the
    tiles compact instead of restating their status words (dataviz lens). */
@@ -4754,8 +4919,9 @@ button.conditions-metric:hover .conditions-action-hide {
    A control needing a DIFFERENT ring overrides by specificity (see
    .legend-select's 1px offset). */
 :is(button, a, input, select, textarea, summary, [tabindex]):not(.maplibregl-canvas):focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+  outline: 2px solid var(--focus-inner);
+  outline-offset: 0;
+  box-shadow: 0 0 0 4px var(--focus-outer), var(--selection-shadow, 0 0 transparent);
 }
 /* The canvas ring (S30D D1 M28; interface-chrome-popups-text.md 2.7,
    "Visible focus"): the chrome's 2 px ring in inset form, on keyboard
@@ -5188,22 +5354,29 @@ button.telemetry-item {
   white-space: nowrap;
 }
 .point-heat-pill-loading {
-  color: var(--warn);
-  border-color: var(--warn);
+  color: var(--ink-soft);
+  border-color: currentColor;
 }
 .point-heat-pill-ready {
-  color: var(--good);
-  border-color: var(--good);
+  color: var(--ink);
+  border-color: currentColor;
 }
 .point-heat-pill-degraded {
-  color: var(--accent);
-  border-color: var(--accent-strong);
+  color: var(--ink);
+  border-color: currentColor;
 }
-.point-heat-pill-error,
 .point-heat-pill-no-data,
 .point-heat-pill-zoom-in {
-  color: var(--fg-3);
+  color: var(--ink-soft);
+  border-color: currentColor;
+}
+.point-heat-pill-no-data {
   font-style: italic;
+}
+.point-heat-pill-error {
+  color: var(--ink-strong);
+  border-color: currentColor;
+  font-weight: var(--fw-strong);
 }
 .point-heat-grid {
   display: grid;
@@ -5407,10 +5580,10 @@ button.telemetry-item {
   letter-spacing: 0.02em;
   white-space: nowrap;
 }
-.impact-horizon-pill-loading { color: var(--warn); border-color: var(--warn); }
-.impact-horizon-pill-ready { color: var(--good); border-color: var(--good); }
-.impact-horizon-pill-partial { color: var(--accent); border-color: var(--accent-strong); }
-.impact-horizon-pill-unavailable { color: var(--fg-3); font-style: italic; }
+.impact-horizon-pill-loading { color: var(--ink-soft); border-color: currentColor; }
+.impact-horizon-pill-ready,
+.impact-horizon-pill-partial { color: var(--ink); border-color: currentColor; }
+.impact-horizon-pill-unavailable { color: var(--ink-strong); border-color: currentColor; font-weight: var(--fw-strong); }
 
 .impact-horizon-loading {
   display: flex;
@@ -5508,10 +5681,39 @@ button.telemetry-item {
   letter-spacing: 0.02em;
   white-space: nowrap;
 }
-.impact-hazard-pill-loading { color: var(--warn); border-color: var(--warn); }
-.impact-hazard-pill-ready { color: var(--good); border-color: var(--good); }
-.impact-hazard-pill-partial { color: var(--accent); border-color: var(--accent-strong); }
-.impact-hazard-pill-unavailable { color: var(--fg-3); font-style: italic; }
+.impact-hazard-pill-loading { color: var(--ink-soft); border-color: currentColor; }
+.impact-hazard-pill-ready,
+.impact-hazard-pill-partial { color: var(--ink); border-color: currentColor; }
+.impact-hazard-pill-unavailable { color: var(--ink-strong); border-color: currentColor; font-weight: var(--fw-strong); }
+/* D3 M6: report read-state words share the static 8px glyph vocabulary.
+   These marks describe source readiness, never a hazard intensity. */
+:is(.point-heat-pill, .impact-horizon-pill, .impact-hazard-pill)::before {
+  content: '';
+  display: inline-block;
+  box-sizing: border-box;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border: 1px solid currentColor;
+  vertical-align: 0;
+}
+:is(.point-heat-pill-ready, .impact-horizon-pill-ready, .impact-hazard-pill-ready)::before {
+  background: currentColor;
+}
+:is(.point-heat-pill-degraded, .impact-horizon-pill-partial, .impact-hazard-pill-partial)::before {
+  background: linear-gradient(to right, currentColor 50%, transparent 50%);
+}
+:is(.point-heat-pill-error, .impact-horizon-pill-unavailable, .impact-hazard-pill-unavailable)::before {
+  background: linear-gradient(135deg, transparent 40%, currentColor 40%, currentColor 60%, transparent 60%);
+}
+.point-heat-pill-no-data::before {
+  background: linear-gradient(currentColor, currentColor) center / 4px 1px no-repeat;
+}
+.point-heat-pill-zoom-in::before {
+  background:
+    linear-gradient(currentColor, currentColor) center / 4px 1px no-repeat,
+    linear-gradient(currentColor, currentColor) center / 1px 4px no-repeat;
+}
 .impact-hazard-claims {
   margin-top: 2px;
 }
@@ -5553,39 +5755,26 @@ button.telemetry-item {
   border-radius: var(--radius-sm);
   margin-bottom: 4px;
 }
-/* The seven evidence classes (T-P0-2 contract; src/impact/evidence.ts owns
-   the labels) are visually distinct so a modeled, derived, or probabilistic
-   read can never wear the observed-fact presentation (the honest-feedback
-   invariant). Green = directly observed; teal/blue = authoritative analysis
-   and classification; cyan = a DDM-derived read; violet/purple = model-borne;
-   amber = forward outlook. */
+/* D3 R4: seven unchanged evidence words use three neutral form tiers.
+   Only observations receive a filled plate; source evidence owns the words. */
 .impact-claim-observed .impact-claim-badge {
-  color: var(--good);
-  background: rgba(16, 185, 129, 0.12);
+  color: var(--surface-base);
+  background: var(--ink);
+  border: 1px solid var(--ink);
 }
-.impact-claim-analyzed .impact-claim-badge {
-  color: #2dd4bf;
-  background: rgba(45, 212, 191, 0.12);
-}
-.impact-claim-classified .impact-claim-badge {
-  color: #60a5fa;
-  background: rgba(96, 165, 250, 0.12);
-}
+.impact-claim-analyzed .impact-claim-badge,
+.impact-claim-classified .impact-claim-badge,
 .impact-claim-derived .impact-claim-badge {
-  color: var(--accent);
-  background: rgba(6, 182, 212, 0.12);
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--keyline);
 }
-.impact-claim-modeled .impact-claim-badge {
-  color: #a78bfa;
-  background: rgba(167, 139, 250, 0.12);
-}
-.impact-claim-modeled-analysis .impact-claim-badge {
-  color: #c084fc;
-  background: rgba(192, 132, 252, 0.14);
-}
+.impact-claim-modeled .impact-claim-badge,
+.impact-claim-modeled-analysis .impact-claim-badge,
 .impact-claim-outlook .impact-claim-badge {
-  color: var(--warn);
-  background: rgba(245, 158, 11, 0.12);
+  color: var(--ink-soft);
+  background: transparent;
+  border: 1px dashed var(--ink-muted);
 }
 .impact-claim-date {
   white-space: nowrap;
@@ -5708,7 +5897,7 @@ a.impact-resource-link::after {
   transition: background 0.12s ease, border-color 0.12s ease;
 }
 .popup-impact-btn:hover {
-  background: rgba(6, 182, 212, 0.24);
+  background: color-mix(in srgb, var(--ink-strong) 24%, transparent);
   border-color: var(--accent);
 }
 
@@ -5785,10 +5974,10 @@ a.impact-resource-link::after {
   /* The wave pulse falls back to the static three-stroke glyph. */
   .spinner-waves path { animation: none; }
   .telemetry-marker { animation: none; }
-  /* The briefing-door warning pulse falls back to its static red/orange
+  /* The briefing-door warning pulse falls back to its static 2px issuer-color
      edge (box-shadow set on the base .popup-impact-btn--pulse rule
      already carries the full meaning with no motion; clause b). */
-  .popup-impact-btn--pulse { animation: none; }
+  .popup-impact-btn.popup-impact-btn--pulse { animation: none; }
   /* The shimmer sweep falls back to a static faint tint (no motion). */
   .skeleton-shimmer::after {
     animation: none;
@@ -5814,6 +6003,7 @@ a.impact-resource-link::after {
   height: auto;
   font-family: var(--font-body);
   font-feature-settings: 'tnum' 1;
+  font-variant-numeric: tabular-nums lining-nums;
 }
 .ddm-chart text {
   font-family: var(--font-body);
@@ -5961,19 +6151,39 @@ a.impact-resource-link::after {
 .about-card::backdrop {
   background: rgba(11, 18, 32, 0.55);
 }
-.about-card .about-lockup {
-  display: block;
-  width: 100%;
-  height: auto;
-  border-radius: var(--radius-md);
-  margin-bottom: 12px;
-}
 .about-card p { margin: 0 0 8px; }
+.about-card .about-seal {
+  display: block;
+  width: 64px;
+  height: 64px;
+  box-sizing: content-box;
+  padding: 6px;
+  border-radius: 50%;
+  background: #FFFFFF;
+  margin: 0 auto 12px;
+}
+.ack-atni-lockup, .impact-print-brand img {
+  display: block;
+  width: 220px;
+  max-width: 100%;
+  height: auto;
+  padding: 8px;
+  box-sizing: border-box;
+  background: #FFFFFF;
+}
+.ack-atni-lockup { margin: 12px 0; }
+.impact-print-brand { display: none; }
+@media print {
+  body:has(.impact-panel.open) .impact-print-brand {
+    display: block;
+    margin-top: 16px;
+    break-inside: avoid;
+  }
+}
 .about-card .about-links { margin: 0; font-size: 12px; }
 .about-card a { color: #0e7490; }
 
-/* Embed provenance chip: in an iframe there is no sidebar, so the seal and
-   name travel with the map. Hidden outside embed mode. */
+/* Embed provenance: the same wordmark links to the full map. */
 .embed-brand {
   display: none;
   margin-left: auto;
@@ -5990,9 +6200,13 @@ a.impact-resource-link::after {
   letter-spacing: var(--track-pill);
   text-decoration: none;
 }
-.embed-brand img { border-radius: 50%; background: #e9edf0; }
 .embed-brand:hover { color: var(--fg-0); border-color: var(--accent-strong); }
 .app-shell.embed .embed-brand { display: inline-flex; }
+.app-shell.embed .embed-brand {
+  padding: 4px;
+  background: var(--surface-base);
+  border-radius: 0;
+}
 
 /* The 3D Fire embed disclosure (src/map/fire3d.ts syncEmbedNote): embeds
    hide the sidebar chrome that carries the mode's coverage note,
@@ -6094,6 +6308,36 @@ a.impact-resource-link::after {
     font-size: 13px;
   }
 }
+.sst-anomaly-scale {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  width: 100%;
+}
+.sst-anomaly-ramp {
+  display: flex;
+  min-width: 0;
+  height: 10px;
+  overflow: hidden;
+  border: 1px solid var(--keyline);
+  border-radius: 2px;
+}
+.sst-anomaly-ramp > span {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.sst-anomaly-orientation {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  color: var(--fg-1);
+  font-size: 10px;
+  line-height: 1.3;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.sst-anomaly-orientation > span:nth-child(2) { text-align: center; }
+.sst-anomaly-orientation > span:last-child { text-align: right; }
 .map-key-scale {
   display: flex;
   flex: 1 1 100%;
@@ -6110,6 +6354,13 @@ a.impact-resource-link::after {
 }
 .map-key-scale[data-heatrisk-scale] .map-key-item {
   flex: 1 1 60px;
+}
+/* M8: the bundled fonts need balanced wrapping for these existing labels. */
+@media (min-width: 721px) {
+  .app-shell:not(.embed) .map-key-scale[data-heatrisk-scale] .map-key-item,
+  .app-shell:not(.embed) .map-key-item[data-enso-flow='status'] {
+    text-wrap: balance;
+  }
 }
 .map-key-nws-products .map-key-item {
   flex: 1 1 132px;
@@ -6919,8 +7170,9 @@ a.impact-resource-link::after {
 .heatrisk-sequence-date { color: var(--fg-2); }
 .heatrisk-sequence-value {
   margin-top: 2px;
-  font-family: var(--font-display);
+  font-family: var(--font-body);
   font-size: 12px;
+  font-variant-numeric: tabular-nums lining-nums;
 }
 .heatrisk-sequence-cell:hover,
 .heatrisk-sequence-cell:focus-visible {
@@ -7033,7 +7285,7 @@ a.impact-resource-link::after {
 }
 .time-bar[hidden] { display: none; }
 .time-bar[data-register="outlook"] {
-  border-top-color: var(--warn);
+  border-top-color: var(--ink-soft);
 }
 
 .time-bar-rail-row {
@@ -7113,13 +7365,13 @@ a.impact-resource-link::after {
 .time-bar-jump:hover { color: var(--fg-0); border-color: var(--line-strong); }
 /* A hatched jump chip previews the outlook instrument it switches to. */
 .time-bar-jump.hatched {
-  color: var(--warn);
-  border-color: rgba(245, 158, 11, 0.45);
+  color: var(--ink-soft);
+  border-color: var(--rule-control);
   background:
     repeating-linear-gradient(
       45deg,
       transparent 0 3px,
-      rgba(245, 158, 11, 0.16) 3px 5px
+      color-mix(in srgb, var(--ink-soft) 16%, transparent) 3px 5px
     ),
     var(--bg-2);
 }
@@ -7133,13 +7385,13 @@ a.impact-resource-link::after {
 }
 /* Observed register: the hard, factual date stamp. */
 .time-bar-stamp-headline {
-  font-family: var(--font-display);
+  font-family: var(--font-body);
   font-weight: var(--fw-title);
   font-size: 12px;
   letter-spacing: var(--track-caps-sm);
   text-transform: uppercase;
   color: var(--accent);
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums lining-nums;
   font-feature-settings: 'tnum' 1;
 }
 /* Outlook register: a different instrument, visibly (face, weight, color). */
@@ -7149,7 +7401,7 @@ a.impact-resource-link::after {
   font-style: italic;
   text-transform: none;
   letter-spacing: 0;
-  color: var(--warn);
+  color: var(--ink-soft);
 }
 .time-bar-stamp-detail {
   font-family: var(--font-body);
@@ -7252,13 +7504,13 @@ a.impact-resource-link::after {
   background: rgba(15, 23, 42, 0.92);
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-sm);
-  font-family: var(--font-display);
+  font-family: var(--font-body);
   font-weight: var(--fw-title);
   font-size: 10.5px;
   letter-spacing: var(--track-caps-sm);
   text-transform: uppercase;
   color: var(--accent);
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums lining-nums;
   font-feature-settings: 'tnum' 1;
   pointer-events: none;
 }
@@ -7268,7 +7520,7 @@ a.impact-resource-link::after {
   font-style: italic;
   text-transform: none;
   letter-spacing: 0;
-  color: var(--warn);
+  color: var(--ink-soft);
 }
 
 /* ----------------------------------------------------------------------------
@@ -7280,6 +7532,11 @@ a.impact-resource-link::after {
    PNG export is 0.8.0; this stylesheet is the U1 report-at-depth delivery.
    ---------------------------------------------------------------------------- */
 @media print {
+  html:has(.impact-panel.open),
+  body:has(.impact-panel.open) {
+    height: auto;
+    overflow: visible;
+  }
   body:has(.impact-panel.open) {
     background: #fff;
   }
@@ -7306,6 +7563,15 @@ a.impact-resource-link::after {
   }
   body:has(.impact-panel.open) .impact-panel-body {
     overflow: visible;
+  }
+  /* Report surfaces become paper; issuer swatches and chart marks retain
+     their own colors. Black print text must not sit on screen-theme cards. */
+  body:has(.impact-panel.open) .impact-panel :is(
+    .impact-land-caveat, .impact-landscape-card, .point-heat,
+    .point-heat-card, .point-heat-synthesis, .impact-horizon,
+    .impact-hazard-active, .impact-resource
+  ) {
+    background: #fff;
   }
   body:has(.impact-panel.open) .impact-panel-close,
   body:has(.impact-panel.open) .impact-panel-action {
@@ -7358,11 +7624,28 @@ a.impact-resource-link::after {
      chart SVGs carry dark-theme tokens as PRESENTATION ATTRIBUTES
      (fill="var(--fg-0)" and friends), which print near-white text on white
      paper. CSS rules outrank presentation attributes, so text is re-inked
-     and accent-toned marks darken to a printable teal; category-colored
-     data marks (USDM and tercile hexes) are deliberately untouched, they
-     are the data. Gridlines lighten to a paper-appropriate grey. */
+     and interface-accent marks darken to a printable teal. Neutral measured
+     index series re-ink through semantic marks; issuer phase/category colors
+     stay unchanged. Gridlines lighten to a paper-appropriate grey. */
   body:has(.impact-panel.open) .impact-panel .impact-claim-chart svg text {
     fill: #000;
+  }
+  body:has(.impact-panel.open) .impact-panel .impact-claim-chart svg [data-index-guide-casing] {
+    stroke: #000;
+  }
+  /* DDM neutral index series re-ink for paper; issuer phase/category marks
+     remain literal source colors. Geometry and solid/dashed meaning stay put. */
+  body:has(.impact-panel.open) .impact-panel .impact-claim-chart svg [data-index-series='primary'] {
+    --index-print-ink: #000;
+  }
+  body:has(.impact-panel.open) .impact-panel .impact-claim-chart svg [data-index-series='comparison'] {
+    --index-print-ink: #444;
+  }
+  body:has(.impact-panel.open) .impact-panel .impact-claim-chart svg [data-index-series][stroke] {
+    stroke: var(--index-print-ink);
+  }
+  body:has(.impact-panel.open) .impact-panel .impact-claim-chart svg circle[data-index-series] {
+    fill: var(--index-print-ink);
   }
   body:has(.impact-panel.open) .impact-panel .impact-claim-chart svg [fill='var(--accent)'] {
     fill: #0e7490;
@@ -7388,6 +7671,7 @@ a.impact-resource-link::after {
   body:has(.impact-panel.sheet-hosted.open) .sidebar-scroll > *:not(.sheet-report) {
     display: none !important;
   }
+  body:has(.impact-panel.sheet-hosted.open) #app,
   body:has(.impact-panel.sheet-hosted.open) .sidebar,
   body:has(.impact-panel.sheet-hosted.open) .sidebar-scroll,
   body:has(.impact-panel.sheet-hosted.open) .sheet-report {
@@ -7432,7 +7716,7 @@ a.impact-resource-link::after {
   font-weight: var(--fw-body);
   color: var(--fg-0);
   background: var(--bg-2);
-  border: 1px solid var(--line);
+  border: 1px solid var(--rule-control);
   border-radius: var(--radius-md);
   padding: 7px 8px;
   transition: border-color 0.2s ease, background 0.2s ease;
@@ -7606,12 +7890,12 @@ a.impact-resource-link::after {
   width: 100%;
   min-height: 36px;
   background: var(--bg-2);
-  border: 1px solid var(--line);
+  border: 1px solid var(--rule-control);
   border-radius: var(--radius-md);
 }
 #shell-share-host > #share-btn:hover {
   background: var(--bg-3);
-  border-color: var(--line-strong);
+  border-color: var(--rule-control);
 }
 
 /* VIEW: the four hazard cluster buttons. */
@@ -7660,10 +7944,11 @@ a.impact-resource-link::after {
   border-radius: 50%;
   background: var(--fg-3);
 }
-.feed-freshness-dot[data-freshness='current'] { background: #4ade80; }
-.feed-freshness-dot[data-freshness='stale'],
-.feed-freshness-dot[data-freshness='unavailable'] { background: #f87171; }
-.feed-freshness-dot[data-freshness='loading'] { background: var(--warn); }
+.feed-freshness-dot { box-sizing: border-box; border: 1px solid currentColor; border-radius: 0; color: var(--ink-soft); background: transparent; }
+.feed-freshness-dot[data-freshness='current'] { color: var(--ink); background: currentColor; }
+.feed-freshness-dot[data-freshness='stale'] { background: linear-gradient(90deg, currentColor 50%, transparent 50%); }
+.feed-freshness-dot[data-freshness='unavailable'] { color: var(--ink-strong); background: linear-gradient(135deg, transparent 40%, currentColor 40% 60%, transparent 60%); }
+.feed-freshness-dot[data-freshness='loading'] { background: transparent; }
 .time-bar-feed-details { padding: 8px 10px; }
 .time-bar-feed-details > summary { cursor: pointer; font-weight: 600; }
 .time-bar-feed-details p { color: var(--fg-2); font-size: 11px; line-height: 1.5; }
@@ -8258,7 +8543,8 @@ a.impact-resource-link::after {
 /* Title and subtitle from HORIZON_CHROME (DDM-P8-T03, R1, 2026-09-07):
    text only, same tokens the button already carried. */
 .shell-horizon-btn-title {
-  line-height: 1.15;
+  /* The supplied Spartan face needs room for its full ascent/descent. */
+  line-height: 1.4;
 }
 .shell-horizon-btn-sub {
   font-size: 9px;
@@ -8292,7 +8578,7 @@ a.impact-resource-link::after {
 .shell-time-headline {
   flex: 1;
   min-width: 0;
-  font-family: var(--font-display);
+  font-family: var(--font-body);
   font-size: 10.5px;
   font-weight: var(--fw-subtitle);
   letter-spacing: 0.04em;
@@ -8316,8 +8602,9 @@ a.impact-resource-link::after {
   overflow: hidden;
   line-height: 1.3;
   height: calc(1.3em * 2);
+  font-variant-numeric: tabular-nums lining-nums;
 }
-.shell-time-headline[data-register='outlook'] { color: var(--warn); }
+.shell-time-headline[data-register='outlook'] { color: var(--ink-soft); }
 .shell-time-empty {
   font-family: var(--font-body);
   font-size: 10.5px;
@@ -8385,15 +8672,16 @@ a.impact-resource-link::after {
 .shell-time-detail { display: grid; gap: 10px; }
 .shell-time-detail-stamp { display: grid; gap: 2px; }
 .shell-time-detail-headline {
-  font-family: var(--font-display);
+  font-family: var(--font-body);
   font-size: 11px;
   font-weight: var(--fw-subtitle);
   letter-spacing: 0.04em;
   color: var(--accent);
   font-feature-settings: 'tnum' 1;
+  font-variant-numeric: tabular-nums lining-nums;
 }
 .shell-time-detail-stamp[data-register='outlook'] .shell-time-detail-headline {
-  color: var(--warn);
+  color: var(--ink-soft);
 }
 .shell-time-detail-line {
   font-family: var(--font-body);
@@ -8439,7 +8727,7 @@ a.impact-resource-link::after {
   font-family: var(--font-body);
   font-size: 11px;
   line-height: 1.45;
-  color: var(--warn);
+  color: var(--ink-soft);
 }
 /* The caveat live region is persistently rendered (never hidden or
    display-toggled: that defeats aria-live announcement); when empty it
@@ -9122,4 +9410,34 @@ a.impact-resource-link::after {
   font-weight: var(--fw-body);
   line-height: 1.45;
   letter-spacing: var(--track-pill);
+}
+
+/* D3 M5/M6: interface selection, links and desktop geometry.
+   Issuer marks and the phone rail's opacity remain independent. */
+@media (min-width: 721px) {
+  :root { --radius-sm: 0px; --radius-md: 0px; --radius-lg: 0px; }
+  :is(.status-pill, .conditions-stale-tag, .telemetry-discovery-note, .hover-inspector, .test-preview-badge, .point-heat-pill, .impact-horizon-pill, .impact-hazard-pill, .embed-brand, .heatrisk-sequence-cell, .shell-minimap-hawaii),
+  .layer-toggle input[type='checkbox'], .map-key [data-heatrisk-day] { border-radius: 0; }
+  .sidebar-scroll::-webkit-scrollbar-thumb, .ecoregion-legend::-webkit-scrollbar-thumb, .impact-panel-body::-webkit-scrollbar-thumb { border-radius: 0; }
+}
+@media screen {
+  body a[href]:not([role='button']) { color: var(--link-on-dark); text-decoration: underline; }
+  :is(.map-key, #map-key, .map-info-panel, .maplibregl-popup, .layers-studio, .place-studio, .sheet-enso-flow) a[href]:not([role='button']) { color: var(--ink); }
+  .about-card a[href]:not([role='button']) { color: var(--link-on-light); }
+  .about-card a[href]:not([role='button']):hover { color: var(--link-on-light-hover); }
+}
+:is(.view-switch button, .shell-cluster-btn, .shell-horizon-btn, .shell-fire3d-btn, .place-studio-type, .hazard-rail-btn)[aria-pressed='true']:not(:disabled):not([aria-disabled='true']),
+.time-bar-mode.active:not(:disabled) {
+  --selection-shadow: inset 2px 0 0 var(--ink-strong);
+  background: var(--surface-hover);
+  color: var(--ink-strong);
+  border-color: var(--rule-control);
+  font-weight: var(--fw-strong);
+  box-shadow: var(--selection-shadow);
+}
+:is(.view-switch button, .shell-cluster-btn, .shell-horizon-btn, .shell-fire3d-btn, .place-studio-type, .hazard-rail-btn)[aria-pressed='true']:not(:disabled):not([aria-disabled='true']):focus-visible,
+.time-bar-mode.active:not(:disabled):focus-visible {
+  outline: 2px solid var(--focus-inner);
+  outline-offset: 0;
+  box-shadow: 0 0 0 4px var(--focus-outer), var(--selection-shadow);
 }

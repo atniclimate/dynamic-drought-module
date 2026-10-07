@@ -92,6 +92,14 @@ bundle check and activation check; `gate:nobuild` typechecks instead and does no
 certify an artifact. Do not run `gate` immediately before `verify:smoke`:
 smoke already owns it.
 
+Within `check:all`, adjacent compatible Node tests share a literal
+`node --test --test-concurrency=1` command. Each file retains its default
+subprocess isolation; Node orders files within each group. Non-Node checks
+remain between the same groups, and the NIFC model keeps its separate
+`--experimental-transform-types` invocation. Individual `test:*` scripts remain
+available for focused checks. A failed group stops the `&&` chain before later
+checks or preview startup.
+
 When the gate and full serial suite are required together for the same frozen
 candidate, run `npm run test:serial -- --config=playwright.smoke.config.ts`.
 This runs all three assertion projects and serves the gate's checked build.

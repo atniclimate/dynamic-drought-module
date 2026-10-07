@@ -162,6 +162,9 @@ function readNoAreaAnswer(value: unknown): Readonly<Record<string, unknown>> | n
   if (value['type'] !== 'FeatureCollection') return null;
   const flag = value['exceededTransferLimit'];
   if (flag !== undefined && flag !== false) return null;
+  const collectionProperties = isRecord(value['properties']) ? value['properties'] : null;
+  const nestedFlag = collectionProperties?.['exceededTransferLimit'];
+  if (nestedFlag !== undefined && nestedFlag !== false) return null;
   const features = value['features'];
   if (!Array.isArray(features) || features.length !== 1) return null;
   const feature: unknown = features[0];

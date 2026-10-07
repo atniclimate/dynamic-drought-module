@@ -32,7 +32,8 @@
  *
  * Lazy chunks and CSS are informational.
  *
- * npm semantics: exit 0 under both lines, exit 1 over either or when
+ * npm semantics: exit 0 below both app lines and at or below the HTML
+ * line, exit 1 at/over an app line, over the HTML line, or when
  * dist/ is missing (run `npm run build` first; the gate script
  * sequences that). Sizes are reported in kB of 1000 bytes to match
  * Vite's build report.
@@ -45,19 +46,19 @@ import { gzipSync } from 'node:zlib';
 const DIST = 'dist';
 const ASSETS = join(DIST, 'assets');
 
-// The last ratified measurement of the entry chunk, measured at the C2
-// landing, main 45756c7, 2026-09-11, ratified by DR-085
-// amendment_2026_09_12. To re-record: run `npm run build && npm run
-// check:bundle`, put the new measured figure here with the date and
-// the reason for the growth, and cite the commit. Growth past the
-// headroom fails the gate until that is done.
-const RATIFIED_ENTRY_KB = 35.0;
+// Owner-ratified 2026-10-07: DR-085
+// bundle_measurements_ratified_2026_10_07. The W2 PMTiles repair bounds
+// range bodies and shared-reader cancellation; measured growth is 928 B
+// entry and 929 B eager. Ratified measurement build index SHA256:
+// 523bb337df88c34c7c94763ffe3fa10c0aaae25d9ae96c99e28dbc281051d009.
+// Future re-recording requires measured
+// bytes, a dated reason and owner ratification; headroom stays unchanged.
+const RATIFIED_ENTRY_KB = 38.637;
 
-// The last ratified measurement of the eager boot payload (entry plus
-// modulepreload, vendor exempt), measured at the same C2 landing, main
-// 45756c7, 2026-09-11, ratified by DR-085 amendment_2026_09_12.
-// Re-record the same way as RATIFIED_ENTRY_KB above.
-const RATIFIED_EAGER_KB = 51.6;
+// Eager boot payload (entry plus modulepreload, vendor exempt), from
+// the same 2026-10-07 measurement and owner ruling as the entry above.
+// First-party transport bytes are included; no vendor exemption changed.
+const RATIFIED_EAGER_KB = 56.619;
 
 // The last ratified measurement of the built dist/index.html's own gzip
 // size (DR-158, found-085): 9,000 B, measured near 8,452 to 9,631 B across
@@ -69,8 +70,8 @@ const RATIFIED_HTML_GZIP_B = 9000;
 // The one headroom both lines carry above their ratified measurement.
 // Same name and value as check-activation-budget.mjs's constant, by
 // intent (one rule stated twice), not by import: the two scripts do
-// not share code. Eight percent, rounded to one decimal, turns 35.0
-// into 37.8 and 51.6 into 55.7; see budgetForMeasurement() below.
+// not share code. Eight percent, rounded to one decimal, turns 38.637
+// into 41.7 and 56.619 into 61.1; see budgetForMeasurement() below.
 const ACTIVATION_HEADROOM = 0.08;
 
 /** The enforced line for a ratified measurement, in kB to one decimal. */
@@ -78,7 +79,7 @@ function budgetForMeasurement(measuredKb) {
   return Math.round(measuredKb * (1 + ACTIVATION_HEADROOM) * 10) / 10;
 }
 
-// Enforced lines derived from the constants above: 37.8 kB entry, 55.7
+// Enforced lines derived from the constants above: 41.7 kB entry, 61.1
 // kB eager app.
 const ENTRY_LINE_KB = budgetForMeasurement(RATIFIED_ENTRY_KB);
 const APP_LINE_KB = budgetForMeasurement(RATIFIED_EAGER_KB);

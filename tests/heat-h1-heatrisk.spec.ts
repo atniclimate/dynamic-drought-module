@@ -366,11 +366,63 @@ test('the issuer HeatRisk table and the near-term horizon heading are exact and 
 });
 
 test.describe('selected-place HeatRisk sequence and briefing', () => {
+  test('D3 desktop HeatRisk read-glass preserves issuer rows with allowed neutral text', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await stubHeatH1(page);
+    await gotoApp(page, '?view=console&layers=heatrisk,nws-alerts&heatday=3&select=state:WA&flow=off');
+    await expect(layerPill(page, 'heatrisk')).toHaveText('live');
+    await openHeatKey(page);
+    const key = page.locator('#map-key');
+    await expect(key).toHaveCSS('background-color', 'rgba(1, 11, 19, 0.72)');
+    await expect(key).toHaveCSS('border-top-color', 'rgb(198, 203, 212)');
+    const rows = key.locator('[data-heatrisk-scale] .map-key-item');
+    await expect(rows).toHaveCount(5);
+    for (const [index, category] of HEATRISK_CATEGORIES.entries()) {
+      const row = rows.nth(index);
+      await expect(row).toHaveCSS('color', 'rgb(198, 203, 212)');
+      await expect(row).toContainText(String(category.value));
+      await expect(row.locator('.map-key-swatch')).toHaveAttribute('style', `background:${category.color}`);
+    }
+  });
   test.use({ viewport: { width: 400, height: 600 } });
 
   test('uses exact-time identify, redundant values, keyboard selection, and a classified claim', async ({
     page
   }) => {
+    // Observe the actual map as in fire3d-mode's animated ribbon case.
+    // This leaves the renderer and application methods intact.
+    type ClassMap = {
+      getContainer(): HTMLElement;
+      getPaintProperty(layer: string, property: string): unknown;
+      getLayer(layer: string): { source: string } | undefined;
+      getSource(source: string): { roundZoom: boolean } | undefined;
+    };
+    type ClassWindow = Window & { __classMaps: ClassMap[] };
+    await page.addInitScript(() => {
+      const maps: ClassMap[] = [];
+      (window as unknown as ClassWindow).__classMaps = maps;
+      Object.defineProperty(Object.prototype, '_onWindowOnline', {
+        configurable: true,
+        set(this: ClassMap, value: unknown) {
+          Object.defineProperty(this, '_onWindowOnline', {
+            configurable: true, enumerable: true, writable: true, value
+          });
+          maps.push(this);
+        }
+      });
+    });
+    const expectClassSampling = async (): Promise<void> => {
+      expect(await page.evaluate(() => {
+        const map = (window as unknown as ClassWindow).__classMaps.find(
+          (candidate) => candidate.getContainer().id === 'map'
+        );
+        const layer = map?.getLayer('heatrisk');
+        return {
+          sampling: map?.getPaintProperty('heatrisk', 'raster-resampling'),
+          roundZoom: layer ? map?.getSource(layer.source)?.roundZoom : undefined
+        };
+      })).toEqual({ sampling: 'nearest', roundZoom: false });
+    };
     await page.emulateMedia({ reducedMotion: 'reduce' });
     const receipt = await stubHeatH1(page);
     await gotoApp(
@@ -379,6 +431,7 @@ test.describe('selected-place HeatRisk sequence and briefing', () => {
     );
 
     await expect(layerPill(page, 'heatrisk')).toHaveText('live');
+    await expectClassSampling();
     const sequence = page.locator('#heatrisk-sequence');
     await expect(sequence).toBeVisible();
     const cells = sequence.locator('[data-heatrisk-sequence-day]');
@@ -402,6 +455,12 @@ test.describe('selected-place HeatRisk sequence and briefing', () => {
     await expect(cells.nth(2)).toContainText('2');
     await expect(cells.nth(3)).toContainText('3');
     await expect(cells.nth(4)).toContainText('4');
+    for (const index of [0, 1, 2, 3, 4]) {
+      const value = cells.nth(index).locator('.heatrisk-sequence-value');
+      await expect(value).toHaveText(String(index));
+      await expect(value).toHaveCSS('font-family', /^"?DDM Heros"?,/);
+      await expect(value).toHaveCSS('font-variant-numeric', /^(?:lining-nums tabular-nums|tabular-nums lining-nums)$/);
+    }
     await expect(cells.nth(5)).toContainText('ND');
     await expect(cells.nth(5)).toHaveAttribute('data-value', 'no-data');
     await expect(cells.nth(2)).toHaveAttribute('aria-pressed', 'true');
@@ -493,6 +552,8 @@ test.describe('selected-place HeatRisk sequence and briefing', () => {
     await cells.nth(6).focus();
     await page.keyboard.press('ArrowLeft');
     await expect(selector).toHaveValue('6');
+    await expect(layerPill(page, 'heatrisk')).toHaveText('live');
+    await expectClassSampling();
     await expect(selectedRead).toContainText('no data');
     await expect(selectedRead).toContainText(
       'The National Weather Service returned no HeatRisk value'

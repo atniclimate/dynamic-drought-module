@@ -206,16 +206,15 @@ test('fetchJsonWithBudget: a non-OK status throws the HTTP error, as before', as
   });
 });
 
-// ---- The byte bound lives in the lazy flow chunk (found-147). The NODD
-// Range read's cap, its 206 check and its exact length (E1-2) are
-// `fetchBoundedWithBudget` in src/layers/flow/nodd.ts, and their cases are in
-// tests/flow-nodd.test.mjs; this eager seam carries none of it, so the page's
-// first load pays nothing for the flowing paths.
+// NODD Range admission stays in the lazy flow chunk (found-147): its 206
+// and exact-length checks are tested in flow-nodd.test.mjs. The shared reader
+// now accepts an optional decoded-byte ceiling for bounded polygon paging.
+// Existing four-argument behavior above remains unchanged; polygon-pages.test
+// exercises the optional ceiling. Its eager byte cost is measured at the gate.
 
 test('src/util/fetch.ts exports no Range-read bound', () => {
-  assert.equal(fetchBufferedWithBudget.length, 4, 'fetchBufferedWithBudget takes url, opts, signal and budget only');
   const source = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'util', 'fetch.ts'), 'utf8');
-  assert.doesNotMatch(source, /maxBytes|expectStatus|RangeError/, 'no byte cap or status bound in the eager seam');
+  assert.doesNotMatch(source, /expectStatus|Content-Range|flow\/nodd|status\s*!==?\s*206/, 'NODD Range admission stays in its lazy source reader');
 });
 
 // ---- The inventory: no caller under src/ pairs fetchWithBudget with a body read.

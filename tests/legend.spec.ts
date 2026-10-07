@@ -132,6 +132,26 @@ test.describe('UX-3 unified legend registry', () => {
     // The date is the product's own, read from the issuer, and it follows the
     // selection rather than staying on the window that happened to load first.
     await expect(page.locator('#gridded-index-valid')).toHaveText('Valid Aug 31, 2026');
+    // S12: actual legend and product controls, with independent decoded issuer pins.
+    // The white slot has no issuer label; no numeric threshold is inferred.
+    const spiColors = [
+      'rgb(115, 0, 0)', 'rgb(230, 0, 0)', 'rgb(255, 170, 0)',
+      'rgb(252, 211, 127)', 'rgb(255, 255, 0)', 'rgb(255, 255, 255)',
+      'rgb(170, 255, 85)', 'rgb(1, 255, 255)', 'rgb(0, 170, 255)',
+      'rgb(0, 0, 255)', 'rgb(0, 0, 170)'
+    ];
+    for (const days of [30, 60, 90, 180, 365]) {
+      await page.selectOption('#gridded-index-product', `ce-ACIS_NRCC_NN-spi-${days}d`);
+      await expect(page.locator('#gridded-index-product-label')).toHaveText(`SPI, ${days} day`);
+      await expect(page.locator('.gridded-index-ramp-bar > span')).toHaveCount(11);
+      expect(await page.locator('.gridded-index-ramp-bar > span').evaluateAll(
+        elements => elements.map(element => getComputedStyle(element).backgroundColor)
+      )).toEqual(spiColors);
+      await expect(page.locator('.gridded-index-ramp-bar')).toHaveCSS('background-image', 'none');
+      await expect(page.locator('.gridded-index-ramp-labels')).toHaveText('DrierWetter');
+    }
+    await page.selectOption('#gridded-index-product', 'ce-ACIS_NRCC_NN-spi-90d');
+    await expect(page.locator('#gridded-index-valid')).toHaveText('Valid Aug 31, 2026');
     await page.selectOption('#gridded-index-product', 'ce-ACIS_NRCC_NN-spi-365d');
     await expect(page.locator('#gridded-index-valid')).toHaveText('Valid Jul 1, 2026');
 

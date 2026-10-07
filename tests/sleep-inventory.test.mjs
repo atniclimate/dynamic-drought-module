@@ -95,6 +95,16 @@ const REASON_CLASSES = Object.freeze([
 
 /** @type {ReadonlyArray<{file: string, line: number, test: string, text: string, occurrence: number, class: ReasonClass, reason: string}>} */
 const SITES = [
+  {
+    file: 'fire3d-mode.spec.ts',
+    line: 2850,
+    test: '${protocol}: removing the owner cancels a native body and suppresses late data',
+    text: 'await page.waitForTimeout(300);',
+    occurrence: 1,
+    class: 'absence-window',
+    reason:
+      'diagnostic window after native socket cancellation and held-body release, checking no stale source content or errors survive removal; not a readiness wait.'
+  },
   // cluster-controller-integration.spec.ts:183 was an absence-window; S30D
   // P3-STALE (found-124) replaced it with a wait on every held request's
   // outcome (delivered and finished, or aborted by the page), so the case no

@@ -2,13 +2,17 @@
   display: none;
 }
 
+@media (min-width: 721px) {
+  .enso-flow button, .enso-flow select, #map-key > .map-key-flow-pause { border-radius: 0; }
+}
+
 .sidebar-scroll > #enso-flow-controls {
   margin-inline: 18px;
 }
 
 .enso-flow {
-  --enso-flow-line: var(--border, #334155);
-  --enso-flow-ink: var(--text, #e2e8f0);
+  --enso-flow-line: var(--rule-control);
+  --enso-flow-ink: var(--ink);
   color: var(--enso-flow-ink);
   padding: 12px 0;
   border-top: 1px solid var(--enso-flow-line);
@@ -31,23 +35,28 @@
 .enso-flow select {
   color: inherit;
   font: inherit;
-  background: var(--surface, #142137);
+  background: var(--surface-overlay);
   border: 1px solid var(--enso-flow-line);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   min-height: 36px;
   padding: 6px 8px;
 }
 
 .enso-flow button[aria-pressed="true"] {
-  border-color: var(--accent, #22d3ee);
-  background: color-mix(in srgb, var(--accent, #22d3ee) 14%, transparent);
+  --selection-shadow: inset 2px 0 0 var(--ink-strong);
+  border-color: var(--rule-control);
+  background: var(--surface-hover);
+  color: var(--ink-strong);
+  font-weight: var(--fw-strong);
+  box-shadow: var(--selection-shadow);
 }
 
 .enso-flow button:focus-visible,
 .enso-flow select:focus-visible,
 .enso-flow summary:focus-visible {
-  outline: 2px solid var(--accent, #22d3ee);
-  outline-offset: 2px;
+  outline: 2px solid var(--focus-inner);
+  outline-offset: 0;
+  box-shadow: 0 0 0 4px var(--focus-outer), var(--selection-shadow, 0 0 transparent);
 }
 
 .enso-flow-toolbar {
@@ -73,7 +82,7 @@
 
 .enso-flow details {
   margin-top: 6px;
-  color: var(--text-muted, #a7b4c8);
+  color: var(--ink-soft);
   line-height: 1.5;
 }
 
@@ -89,7 +98,8 @@
 }
 
 .enso-flow a {
-  color: var(--accent, #67e8f9);
+  color: var(--ink);
+  text-decoration: underline;
 }
 
 @media (pointer: coarse), (max-width: 720px) {
@@ -135,7 +145,7 @@
   color: var(--fg-1, #e2e8f0);
   background: transparent;
   border: 1px solid var(--line-strong, #334155);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
 }
 
@@ -144,8 +154,9 @@
 }
 
 #map-key > .map-key-flow-pause:focus-visible {
-  outline: 2px solid var(--accent, #22d3ee);
-  outline-offset: 2px;
+  outline: 2px solid var(--focus-inner);
+  outline-offset: 0;
+  box-shadow: 0 0 0 4px var(--focus-outer);
 }
 
 #map-key > .map-key-flow-pause svg {

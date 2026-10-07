@@ -11,6 +11,7 @@ import type * as maplibregl from 'maplibre-gl';
 import type { GeoJsonProperties } from 'geojson';
 
 import { URLS } from '../config/urls';
+import { CDM_CATEGORIES } from '../config/palette';
 import { registerClickTarget } from '../map/interaction-coordinator';
 import { registry } from '../state/registry';
 import {
@@ -31,8 +32,8 @@ const BEFORE_ID = 'first-symbol';
 const FETCH_TIMEOUT_MS = 15_000;
 const FILL_OPACITY = 0.54;
 const OUTLINE_OPACITY = 0.45;
-const CLASS_CODES = ['D0', 'D1', 'D2', 'D3', 'D4'] as const;
-const CLASS_COLORS = ['#FFFF00', '#FCD37F', '#FFAA00', '#E60000', '#730000'] as const;
+const CLASS_CODES = CDM_CATEGORIES.map(({ code }) => code);
+const CLASS_COLORS = CDM_CATEGORIES.map(({ color }) => color);
 const SNAPSHOT_EVENT = 'ddm:cdm-snapshot';
 const LICENSE_TITLE = 'Open Government Licence - Canada';
 const LICENSE_URL =
@@ -86,15 +87,15 @@ const COLOR_EXPRESSION: maplibregl.ExpressionSpecification = [
   'match',
   ['get', 'dm'],
   0,
-  CLASS_COLORS[0],
+  CDM_CATEGORIES[0].color,
   1,
-  CLASS_COLORS[1],
+  CDM_CATEGORIES[1].color,
   2,
-  CLASS_COLORS[2],
+  CDM_CATEGORIES[2].color,
   3,
-  CLASS_COLORS[3],
+  CDM_CATEGORIES[3].color,
   4,
-  CLASS_COLORS[4],
+  CDM_CATEGORIES[4].color,
   'rgba(0,0,0,0)'
 ];
 

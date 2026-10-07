@@ -1360,6 +1360,12 @@ test.describe('identify paths: the telemetry station popup joins the frame (D1 M
     const body = root.locator(':scope > [data-popup-region="body"]');
     const headValue = head.locator(':scope > [data-popup-slot="value"]');
 
+    // Layer settlement does not await sidebar hydration. Finish the two CWMS
+    // setup reads before holding only the popup's independently owned reads.
+    await expect(page.locator('[data-station-values="ihr"]')).toContainText('Forebay 75.5 ft');
+    await expect(page.locator('[data-station-values="ihr"]')).toHaveCSS('font-family', /^"?DDM Heros"?,/);
+    await expect(page.locator('[data-station-values="ihr"]')).toHaveCSS('font-variant-numeric', /^(?:lining-nums tabular-nums|tabular-nums lining-nums)$/);
+    await expect(page.locator('[data-station-values="bono3"]')).toContainText('Forebay 75.5 ft');
     holding = true;
     const open = async (reads: number): Promise<void> => {
       await expect(async () => {

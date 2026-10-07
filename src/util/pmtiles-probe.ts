@@ -49,17 +49,19 @@ export const PMTILES_HEADER_BYTES = 127;
 /**
  * The header fields the application reads. Offsets per the PMTiles v3
  * specification, all little-endian: tile data offset at 56 and length at 64
- * (uint64), min and max zoom at 100 and 101 (uint8). The bounding box
- * (bytes 102 to 117) and the tile type (byte 99) are deliberately not
- * parsed: no caller reads them, and this chunk sits inside two
- * first-activation budgets (scripts/check-activation-budget.mjs), so every
- * field here is one somebody uses.
+ * (uint64), min and max zoom at 100 and 101 (uint8), and the WGS84 box
+ * at 102 to 117 (signed int32 divided by 1e7). The resolved terrain uses
+ * that box for its coverage statement. Tile type (byte 99) is not needed.
  */
 export interface PmtilesHeader {
   readonly tileDataOffset: number;
   readonly tileDataLength: number;
   readonly minZoom: number;
   readonly maxZoom: number;
+  readonly west: number;
+  readonly south: number;
+  readonly east: number;
+  readonly north: number;
 }
 
 /** Parse a v3 header from its leading bytes; throws on any malformation. */
@@ -80,10 +82,19 @@ export function parsePmtilesHeader(bytes: Uint8Array): PmtilesHeader {
     tileDataOffset: Number(view.getBigUint64(56, true)),
     tileDataLength: Number(view.getBigUint64(64, true)),
     minZoom: view.getUint8(100),
-    maxZoom: view.getUint8(101)
+    maxZoom: view.getUint8(101),
+    west: view.getInt32(102, true) / 1e7,
+    south: view.getInt32(106, true) / 1e7,
+    east: view.getInt32(110, true) / 1e7,
+    north: view.getInt32(114, true) / 1e7
   };
   if (header.maxZoom < header.minZoom || header.tileDataLength === 0) {
     throw new Error('PMTiles header declares impossible zooms or no tile data');
+  }
+  if (header.west >= header.east || header.south >= header.north ||
+      header.west < -180 || header.east > 180 ||
+      header.south < -85.0511 || header.north > 85.0511) {
+    throw new Error('PMTiles header declares invalid geographic bounds');
   }
   return header;
 }

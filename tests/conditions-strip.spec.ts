@@ -67,10 +67,24 @@ test.describe('UX-3 conditions strip', () => {
       await expect.poll(() => heldSatelliteTiles).toBeGreaterThan(0);
       const drought = page.locator('#map-condition-indicator .conditions-metric[data-metric="drought"]');
       await expect(drought).toHaveAttribute('data-tone', 'loading');
+      // The real held source, not a manufactured status class. Loading must
+      // retain the full read-glass backing and an allowed secondary ink.
+      await expect(drought).toHaveCSS('background-color', 'rgba(1, 11, 19, 0.72)');
+      await expect(drought).toHaveCSS('opacity', '1');
+      await expect(drought).toHaveCSS('border-top-color', 'rgb(198, 203, 212)');
+      await expect(drought.locator('.conditions-value')).toHaveCSS('color', 'rgb(198, 203, 212)');
       releaseDrought();
       await expect(drought).toHaveAttribute('data-tone', 'data');
       await expect(drought.locator('.conditions-value')).toHaveText('D3');
+      await expect(drought.locator('.conditions-value')).toHaveCSS('font-family', /^"?DDM Heros"?,/);
+      await expect(drought.locator('.conditions-value')).toHaveCSS('font-variant-numeric', /^(?:lining-nums tabular-nums|tabular-nums lining-nums)$/);
       await expect(drought.locator('.conditions-sublabel')).toContainText('Extreme drought');
+      await expect(drought.locator('.conditions-sublabel')).toHaveCSS('color', 'rgb(198, 203, 212)');
+      await expect(drought).toHaveCSS('opacity', '1');
+      await drought.focus();
+      await expect(drought).toHaveCSS('outline-color', 'rgb(255, 255, 255)');
+      await expect(drought).toHaveCSS('outline-offset', '0px');
+      await expect(drought).toHaveCSS('box-shadow', 'rgb(1, 11, 19) 0px 0px 0px 4px');
       // No satellite response has been released: this read must follow the
       // drought source's render, rather than depend on whole-map idle.
       await expect(drought).not.toContainText('No polygon');

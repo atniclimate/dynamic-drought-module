@@ -469,7 +469,7 @@ function wildfireMetricNote(snapshot: MinimapWildfireSnapshot): string {
     'Otherwise, WHP 2023 fills are orange above 50% High or Very High, yellow above 30% Moderate or higher, light below both thresholds, and dark for no data or an unavailable current check. ' +
     // vocab-allow: honesty disclaimer denying that static WHP is a forecast
     'Percentages are approximate shares of classified WHP land in the covered United States portion. WHP is static strategic context, not a forecast; hatching marks partial coverage. ' +
-    `A zero current-fire count with WHP data renders desaturated and stippled: ${WHP_EDITION_CAPTION}, a static potential overview, not a current wildfire condition.`
+    `A zero current-fire count with WHP data renders stippled: ${WHP_EDITION_CAPTION}, a static potential overview, not a current wildfire condition.`
   );
 }
 
@@ -540,52 +540,13 @@ function isWildfireWhpFallback(
   );
 }
 
-function hexToRgb(hex: string): readonly [number, number, number] {
-  const value = hex.replace('#', '');
-  return [
-    parseInt(value.slice(0, 2), 16),
-    parseInt(value.slice(2, 4), 16),
-    parseInt(value.slice(4, 6), 16),
-  ];
-}
-
-function rgbToHex(channels: readonly [number, number, number]): string {
-  return `#${channels
-    .map((channel) =>
-      Math.round(Math.min(255, Math.max(0, channel)))
-        .toString(16)
-        .padStart(2, '0'),
-    )
-    .join('')}`.toUpperCase();
-}
-
-/** A neutral slate, already the palette's "unknown/static" hue family
- * (MINIMAP_WILDFIRE_COLORS['no-data'] / ['unavailable']). */
-const WHP_FALLBACK_NEUTRAL: readonly [number, number, number] = [148, 163, 184];
-const WHP_FALLBACK_DESATURATION = 0.55;
-
-/**
- * DR-041 b: blend a WHP condition color 55% toward neutral slate so the
- * static fallback fill is UNMISTAKABLY not the vivid live/current palette,
- * independent of which of the three WHP condition colors it started from.
- */
-function desaturateForWhpFallback(hex: string): string {
-  const [r, g, b] = hexToRgb(hex);
-  const [nr, ng, nb] = WHP_FALLBACK_NEUTRAL;
-  return rgbToHex([
-    r + (nr - r) * WHP_FALLBACK_DESATURATION,
-    g + (ng - g) * WHP_FALLBACK_DESATURATION,
-    b + (nb - b) * WHP_FALLBACK_DESATURATION,
-  ]);
-}
-
 type MinimapFillTreatment =
   | { readonly kind: 'solid'; readonly color: string }
   | { readonly kind: 'pattern'; readonly patternId: string };
 
 /**
  * One fill decision per framing shape, used identically for the mainland
- * paths and the Hawaii islands. `whp-fallback` (DR-041 b, desaturated +
+ * paths and the Hawaii islands. `whp-fallback` (DR-138 R5, issuer color +
  * stippled) takes precedence over the older partial-coverage crosshatch
  * for wildfire, since every wildfire `live-partial` state IS a WHP
  * fallback state (see `isWildfireWhpFallback`); drought's crosshatch is
@@ -1092,7 +1053,7 @@ export function Minimap({
               if (!treatment || treatment.kind !== 'pattern') return null;
               const fill = metricFill(droughtSummary, wildfireSummary);
               if (fill === undefined) return null;
-              // DR-041 b: the WHP fallback pattern is desaturated fill plus
+              // DR-138 R5: the WHP fallback pattern is issuer color plus
               // a stipple dot, deliberately distinct from the older
               // diagonal-hatch partial-coverage pattern below it.
               const whpFallback = isWildfireWhpFallback(wildfireSummary);
@@ -1107,7 +1068,7 @@ export function Minimap({
                   <rect
                     width="8"
                     height="8"
-                    fill={whpFallback ? desaturateForWhpFallback(fill) : fill}
+                    fill={fill}
                   />
                   {whpFallback ? (
                     <circle cx="2" cy="2" r="0.9" fill="#0F172A" fill-opacity="0.4" />
@@ -1403,9 +1364,7 @@ export function Minimap({
                         width="8"
                         height="8"
                         fill={
-                          hawaiiWhpFallback && hawaiiFill !== undefined
-                            ? desaturateForWhpFallback(hawaiiFill)
-                            : (hawaiiFill ?? MINIMAP_WILDFIRE_COLORS['no-data'])
+                          hawaiiFill ?? MINIMAP_WILDFIRE_COLORS['no-data']
                         }
                       />
                       {hawaiiWhpFallback ? (

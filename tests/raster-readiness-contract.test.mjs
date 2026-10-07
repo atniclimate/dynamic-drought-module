@@ -322,6 +322,10 @@ const TILE_PROVEN = new Map([
  */
 const EXCEPTIONS = new Map([
   [
+    'src/layers/dryness-ground.ts#s.sourceId',
+    'dormant: dryness-ground is reached only through dryness-grey-protocol, which no shipped module imports, so no build carries it (checked 2026-10-08 for release 0.7.1); it must become tile-proven before its admission activates it, and this exception is removed then'
+  ],
+  [
     'src/layers/hillshade.ts#SOURCE_ID',
     'C2 hillshade (bundled PNW raster-dem PMTiles): a director\'s-ruling exception at DDM-P14-T04, decided on a measured build-time profile. With the shared completeness watcher wired here, the Fire 3D pair (fire3d-mode.spec.ts, view-contracts.spec.ts) fell from 57/59 to 47/59 (I:/claude-temp/ddm-s30d/gates/c4-bisect-fire3d.log): the 3D scene\'s own animation suppresses map idle, so every 3D boot waited out the tile-proof deadline. Restoring the probe-then-add design with no tile wait (c4-hillshade-probe.log) returned the pair to 58/59. The archive is bundled, same-origin and deterministic, so the residual risk a tile proof would catch is small next to the 3D cost it imposes'
   ],

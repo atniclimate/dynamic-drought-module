@@ -75,7 +75,8 @@ export async function fetchWithBudget(
  */
 async function readBodyBytes(
   response: Response,
-  signal: AbortSignal
+  signal: AbortSignal,
+  maxDecodedBytes?: number
 ): Promise<ArrayBuffer | null> {
   if (response.body === null) return null;
 
@@ -89,7 +90,7 @@ async function readBodyBytes(
 
   try {
     if (signal.aborted) {
-      await reader.cancel().catch(() => undefined);
+      void reader.cancel().catch(() => undefined);
       throw new DOMException('Aborted', 'AbortError');
     }
 
@@ -97,6 +98,10 @@ async function readBodyBytes(
       const chunk = await reader.read();
       if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
       if (chunk.done) break;
+      if (maxDecodedBytes !== undefined && byteLength + chunk.value.byteLength > maxDecodedBytes) {
+        void reader.cancel().catch(() => undefined);
+        throw new RangeError('Response body exceeded decoded byte limit.');
+      }
       chunks.push(chunk.value);
       byteLength += chunk.value.byteLength;
     }
@@ -163,8 +168,12 @@ export async function fetchBufferedWithBudget(
   url: string,
   opts: RequestInit | null,
   masterSignal: AbortSignal | null,
-  timeoutMs: number
+  timeoutMs: number,
+  maxDecodedBytes?: number
 ): Promise<Response> {
+  if (maxDecodedBytes !== undefined && (!Number.isSafeInteger(maxDecodedBytes) || maxDecodedBytes <= 0)) {
+    throw new RangeError('Invalid decoded byte limit.');
+  }
   const ctrl = new AbortController();
   if (masterSignal?.aborted) {
     ctrl.abort();
@@ -175,7 +184,7 @@ export async function fetchBufferedWithBudget(
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
     const response = await fetch(url, { ...(opts ?? {}), signal: ctrl.signal });
-    const body = await readBodyBytes(response, ctrl.signal);
+    const body = await readBodyBytes(response, ctrl.signal, maxDecodedBytes);
     if (ctrl.signal.aborted) throw new DOMException('Aborted', 'AbortError');
     const nullBodyStatus =
       response.status === 101 ||

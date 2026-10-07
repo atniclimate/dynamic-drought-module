@@ -65,6 +65,19 @@ test.describe('S4b minimap', () => {
     // that the rest of the suite stopped fetching them live.
   });
 
+  test('monthly NADM D1 uses its own issuer color in the actual minimap', async ({ page }) => {
+    const body = structuredClone(NADM_FIXTURE);
+    body.features[0]!.properties.DROUGHTCAT = 'd1';
+    await page.route('**/NADM-current.geojson', route => route.fulfill({
+      status: 200, contentType: 'application/geo+json', body: JSON.stringify(body)
+    }));
+    await gotoApp(page, '?region=washington_state&view=brief');
+    await expect(page.locator('.shell-minimap-map .shell-minimap-scale')).toHaveText('NADM · Jul 2026');
+    const pacificPath = page.locator('.shell-minimap-map [data-framing="pacific-coast"]');
+    await expect(pacificPath).toHaveAttribute('data-drought-class', 'D1');
+    await expect(pacificPath).toHaveCSS('fill', 'rgb(252, 210, 126)');
+  });
+
   test('renders the nine framings plus ALL, with the ALL radio checked at boot', async ({
     page,
   }) => {
@@ -210,7 +223,7 @@ test.describe('S4b minimap', () => {
     ).toHaveAttribute('data-wildfire-condition', 'mapped-wildfire');
     await expect(
       minimap.locator('[data-framing="alaska-northwest"]'),
-    ).toHaveCSS('fill', 'rgb(215, 48, 39)');
+    ).toHaveCSS('fill', 'rgb(255, 76, 0)');
     // A live mapped-fire framing has no discrete date to claim.
     expect(
       await minimap
@@ -230,13 +243,13 @@ test.describe('S4b minimap', () => {
       'aria-label',
       /static strategic landscape potential, not current fire conditions or a forecast/i,
     );
-    // DR-041 b: a WHP fallback (this framing's zero current-fire count with
-    // WHP data) renders desaturated and stippled, distinct from the older
+    // DR-138 R5: a WHP fallback (this framing's zero current-fire count with
+    // WHP data) keeps its issuer class color and stipple, distinct from the older
     // plain partial-coverage crosshatch; its source's valid time is the
     // edition year, never a retrieval timestamp.
     await expect(
       minimap.locator('#shell-minimap-whp-pacific-coast rect'),
-    ).toHaveAttribute('fill', '#C4BE93');
+    ).toHaveAttribute('fill', '#ffff63');
     await expect(
       minimap.locator('#shell-minimap-whp-pacific-coast circle'),
     ).toHaveCount(1);
@@ -665,6 +678,68 @@ test.describe('S4b minimap', () => {
     ).toHaveCount(0);
     expect(await pacific.getAttribute('data-metric-time')).toBeNull();
     await expect(minimap.locator('.shell-minimap-metric-note')).toHaveCount(0);
+    const hawaii = minimap.locator('[data-framing="hawaii"]');
+    await expect(hawaii).toHaveAttribute('data-wildfire-condition', 'unavailable');
+    await expect(hawaii.locator('.shell-minimap-island')).toHaveCount(4);
+    for (const island of await hawaii.locator('.shell-minimap-island').all()) {
+      await expect(island).toHaveCSS('fill', 'rgb(30, 41, 59)');
+    }
+    await expect(hawaii.locator('pattern')).toHaveCount(0);
+    expect(await hawaii.getAttribute('data-metric-time')).toBeNull();
+  });
+
+  test('D3 M3 mainland and Hawaii fallback preserve neutral color, stipple and no-data separation', async ({ page }) => {
+    await stubWildfireMinimap(page);
+    await gotoApp(page, '?view=brief&cluster=wildfire');
+    const minimap = page.locator('.shell-minimap-map');
+    // Actual artifact: these two framings are below threshold. This does
+    // not substitute their neutral mark for an unexercised High class.
+    for (const key of ['plains-prairies', 'hawaii']) {
+      const framing = minimap.locator(`[data-framing="${key}"]`);
+      await expect(framing).toHaveAttribute('data-wildfire-condition', 'below-threshold');
+      await expect(framing).toHaveAttribute('data-metric-time', '2023');
+      await expect(framing).toHaveAttribute('aria-label', /static strategic landscape potential, not current fire conditions or a forecast/i);
+      const patternId = `shell-minimap-whp-${key}`;
+      const pattern = minimap.locator(`#${patternId}`);
+      await expect(pattern.locator('rect')).toHaveAttribute('fill', '#E2E8F0');
+      await expect(pattern.locator('circle')).toHaveAttribute('fill', '#0F172A');
+      await expect(pattern.locator('circle')).toHaveAttribute('fill-opacity', '0.4');
+      await expect(pattern.locator('path')).toHaveCount(0);
+      const shapes = key === 'hawaii' ? framing.locator('.shell-minimap-island') : framing;
+      await expect(shapes).toHaveCount(key === 'hawaii' ? 4 : 1);
+      for (const shape of await shapes.all()) {
+        const fill = await shape.evaluate(element => (element as SVGElement).style.fill);
+        expect(fill.replaceAll('"', '').replaceAll("'", '')).toBe(`url(#${patternId})`);
+      }
+    }
+    const partial = minimap.locator('[data-framing="pacific-coast"]');
+    await expect(partial).toHaveAttribute('data-wildfire-region-status', 'live-partial');
+    await expect(minimap.locator('#shell-minimap-whp-pacific-coast rect')).toHaveAttribute('fill', '#ffff63');
+    for (const key of ['mexico', 'boreal-arctic']) {
+      const framing = minimap.locator(`[data-framing="${key}"]`);
+      await expect(framing).toHaveAttribute('data-wildfire-condition', 'no-data');
+      await expect(framing).toHaveCSS('fill', 'rgb(51, 65, 85)');
+      await expect(minimap.locator(`#shell-minimap-whp-${key}`)).toHaveCount(0);
+      expect(await framing.getAttribute('data-metric-time')).toBeNull();
+    }
+  });
+
+  test('D3 M3 current-fire precedence removes fallback on mainland and Hawaii', async ({ page }) => {
+    await stubWildfireMinimap(page, { 'pacific-coast': 1, hawaii: 1 });
+    await gotoApp(page, '?view=brief&cluster=wildfire');
+    const minimap = page.locator('.shell-minimap-map');
+    for (const key of ['pacific-coast', 'hawaii']) {
+      const framing = minimap.locator(`[data-framing="${key}"]`);
+      await expect(framing).toHaveAttribute('data-wildfire-condition', 'mapped-wildfire');
+      await expect(framing).toHaveAttribute('data-wildfire-region-status', 'live');
+      await expect(minimap.locator(`#shell-minimap-whp-${key}`)).toHaveCount(0);
+      expect(await framing.getAttribute('data-metric-time')).toBeNull();
+      const shapes = key === 'hawaii' ? framing.locator('.shell-minimap-island') : framing;
+      await expect(shapes).toHaveCount(key === 'hawaii' ? 4 : 1);
+      for (const shape of await shapes.all()) {
+        await expect(shape).toHaveCSS('fill', 'rgb(255, 76, 0)');
+      }
+    }
   });
 });
 

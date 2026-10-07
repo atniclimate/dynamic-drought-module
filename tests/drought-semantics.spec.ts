@@ -4,11 +4,8 @@ import type * as maplibregl from 'maplibre-gl';
 import { USDM_NONE_SWATCH } from '../src/config/palette';
 import { buildFireContextHtml } from '../src/impact/fire-context';
 import {
-  buildD4RimLayerSpecification,
   buildUsdmFillPaint,
-  fadeLayerIds,
-  USDM_D4_RIM_LAYER_IDS,
-  USDM_D4_RIM_STYLE
+  fadeLayerIds
 } from '../src/layers/usdm';
 import { buildOutlookFillPaint } from '../src/layers/drought';
 import { registry } from '../src/state/registry';
@@ -64,31 +61,13 @@ test('fire context does not infer no drought without an analyzed-area mask', () 
   expect(html).toContain('does not confirm no drought');
 });
 
-test('every absolute USDM frame keeps polygon borders visually absent', () => {
-  expect(USDM_D4_RIM_LAYER_IDS).toEqual([
-    'usdm-frame-a-d4-rim',
-    'usdm-frame-b-d4-rim'
+test('USDM fade targets contain the actual fill and outline layers only', () => {
+  expect(fadeLayerIds).toEqual([
+    'usdm-frame-a-fill', 'usdm-frame-a-outline',
+    'usdm-frame-b-fill', 'usdm-frame-b-outline',
+    'usdm-change-fill', 'usdm-change-outline',
+    'bc-drought-fill', 'bc-drought-outline'
   ]);
-  expect(USDM_D4_RIM_STYLE).toEqual({
-    color: '#f87171',
-    width: 1.5,
-    opacity: 0
-  });
-
-  const visible = buildD4RimLayerSpecification('usdm-frame-a', true);
-  expect(visible.id).toBe('usdm-frame-a-d4-rim');
-  expect(visible.source).toBe('usdm-frame-a');
-  expect(visible.filter).toEqual(['==', ['get', 'DM'], 4]);
-  expect(visible.layout).toEqual({ visibility: 'visible' });
-  expect(visible.paint).toEqual({
-    'line-color': '#f87171',
-    'line-width': 1.5,
-    'line-opacity': 0
-  });
-
-  const hidden = buildD4RimLayerSpecification('usdm-frame-b', false);
-  expect(hidden.layout).toEqual({ visibility: 'none' });
-  for (const id of USDM_D4_RIM_LAYER_IDS) expect(fadeLayerIds).toContain(id);
 });
 
 // ---------------------------------------------------------------------------

@@ -129,6 +129,65 @@ async function routeArtifact(
 }
 
 test.describe('Canadian Drought Monitor committed monthly snapshot', () => {
+  test('D3 CDM key agrees with actual rendered class paint', async ({ page }) => {
+    type CdmMap = {
+      getContainer(): HTMLElement;
+      getPaintProperty(layer: string, property: string): unknown;
+      queryRenderedFeatures(options: { layers: string[] }): Array<{ properties: { dm?: number } }>;
+    };
+    type CdmWindow = Window & { __cdmMaps: CdmMap[] };
+    await page.addInitScript(() => {
+      const maps: CdmMap[] = [];
+      (window as unknown as CdmWindow).__cdmMaps = maps;
+      // Existing actual-map observation seam; no production test hook.
+      Object.defineProperty(Object.prototype, '_onWindowOnline', {
+        configurable: true,
+        set(this: CdmMap, value: unknown) {
+          Object.defineProperty(this, '_onWindowOnline', {
+            configurable: true, enumerable: true, writable: true, value
+          });
+          maps.push(this);
+        }
+      });
+    });
+    await routeBasemap(page);
+    const fixture = artifactFixture([0, 1, 2, 3, 4]);
+    // Separate class interiors, all visible inside the BC initial view.
+    fixture.data.features.forEach((feature, dm) => {
+      const west = -132 + dm * 3;
+      feature.geometry.coordinates = [[
+        [west, 50], [west + 2, 50], [west + 2, 56], [west, 56], [west, 50]
+      ]];
+    });
+    await routeArtifact(page, fixture);
+    await gotoApp(page, '?embed=true&region=british_columbia&layers=cdm-drought');
+    await expect(layerPill(page, 'cdm-drought')).toHaveText('live');
+    await page.locator('#map-key-details-toggle').click();
+    const expected = ['#FFFF00', '#FFD37F', '#E69800', '#E60000', '#730000'];
+    await expect.poll(() => page.evaluate(() => {
+      const map = (window as unknown as CdmWindow).__cdmMaps.find(candidate =>
+        candidate.getContainer()?.id === 'map');
+      return [...new Set(map?.queryRenderedFeatures({ layers: ['cdm-drought-fill'] })
+        .map(feature => feature.properties.dm) ?? [])].sort();
+    })).toEqual([0, 1, 2, 3, 4]);
+    const paints = await page.evaluate(() => {
+      const map = (window as unknown as CdmWindow).__cdmMaps.find(candidate =>
+        candidate.getContainer()?.id === 'map')!;
+      return ['fill', 'outline'].map(kind => map.getPaintProperty(
+        'cdm-drought-' + kind, kind === 'fill' ? 'fill-color' : 'line-color'));
+    });
+    for (const paint of paints) expect(paint).toEqual([
+      'match', ['get', 'dm'], 0, expected[0], 1, expected[1],
+      2, expected[2], 3, expected[3], 4, expected[4], 'rgba(0,0,0,0)'
+    ]);
+    const keyColors = await page.locator('#map-key-content .map-key-swatch').evaluateAll(nodes =>
+      nodes.map(node => getComputedStyle(node).backgroundColor));
+    expect(keyColors).toEqual([
+      'rgb(255, 255, 0)', 'rgb(255, 211, 127)', 'rgb(230, 152, 0)',
+      'rgb(230, 0, 0)', 'rgb(115, 0, 0)'
+    ]);
+  });
+
   test('committed artifact records publication, class occupancy, provenance, and stewardship', () => {
     const artifact = JSON.parse(readFileSync(ARTIFACT_PATH, 'utf8'));
     expect(statSync(ARTIFACT_PATH).size).toBeLessThanOrEqual(1_000_000);

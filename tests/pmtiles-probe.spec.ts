@@ -177,3 +177,20 @@ test.describe('the PMTiles header probe', () => {
     );
   });
 });
+
+test('terrain header bounds divide signed coordinates exactly and validate the Mercator box', () => {
+  const exact = pmtilesV3Header({ bounds: [-125, 24, -66.9, 49.5] });
+  expect(parsePmtilesHeader(exact).east).toBe(-66.9);
+  for (const bounds of [
+    [-100, 24, -125, 49], [-125, 49, -100, 24],
+    [-181, 24, -100, 49], [-125, 24, 181, 49],
+    [-125, -86, -100, 49], [-125, 24, -100, 86],
+    [-125, 24, -125, 49], [-125, 24, -100, 24]
+  ] as const) {
+    expect(() => parsePmtilesHeader(pmtilesV3Header({ bounds }))).toThrow(/bounds/);
+  }
+  // The selected contract accepts its inclusive Mercator latitude limit.
+  expect(() => parsePmtilesHeader(pmtilesV3Header({
+    bounds: [-180, -85.0511, 180, 85.0511]
+  }))).not.toThrow();
+});

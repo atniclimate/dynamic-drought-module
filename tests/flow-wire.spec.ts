@@ -238,6 +238,64 @@ test.describe('E2-1 flow words', () => {
 });
 
 test.describe('E2-1 flowing paths in ENSO mode', () => {
+  for (const kind of ['wind', 'waves'] as const) {
+    test(`${kind} module wait is bounded and a late module cannot draw after timeout`, async ({ page }) => {
+      await bootEnso(page);
+      let held: Route | undefined;
+      await page.route(/\/assets\/flow-[^/]+\.js$/, (route) => { held = route; });
+      await choose(page, kind);
+      await expect.poll(() => held !== undefined).toBe(true);
+      await expect(panel(page)).toHaveAttribute('data-status', 'loading');
+      try {
+        await expect(panel(page)).toHaveAttribute('data-status', 'unavailable', { timeout: 15_000 });
+        await expect(panel(page)).toContainText(FAILED_NOTE);
+        expect(noddStubLog(page)).toHaveLength(0);
+      } finally {
+        // Release even on the red baseline so the test leaves no held route.
+        await held!.continue();
+      }
+      // Await this same module's evaluation, then let the original import's
+      // continuation run. This observes late completion without a sleep.
+      await page.evaluate(async (url) => {
+        await import(/* @vite-ignore */ url);
+        await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      }, held!.request().url());
+      await expect(panel(page)).toHaveAttribute('data-status', 'unavailable');
+      await expect(panel(page)).toHaveAttribute('data-flow-form', 'none');
+      expect(noddStubLog(page)).toHaveLength(0);
+      // The cached module can serve a new, explicitly selected generation.
+      await choose(page, 'off');
+      await choose(page, kind);
+      await expect(panel(page)).toHaveAttribute('data-status', /^live/);
+      await expect(panel(page)).toHaveAttribute('data-flow-drawn', kind);
+    });
+  }
+
+  test('off during a held flow module wait stays off after late completion', async ({ page }) => {
+    await bootEnso(page);
+    let held: Route | undefined;
+    await page.route(/\/assets\/flow-[^/]+\.js$/, (route) => { held = route; });
+    await choose(page, 'wind');
+    await expect.poll(() => held !== undefined).toBe(true);
+    try {
+      await expect(panel(page)).toHaveAttribute('data-status', 'loading');
+      await choose(page, 'off');
+      await expect(panel(page)).toHaveAttribute('data-status', 'off');
+    } finally {
+      await held!.continue();
+    }
+    await page.evaluate(async (url) => {
+      await import(/* @vite-ignore */ url);
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    }, held!.request().url());
+    await expect(panel(page)).toHaveAttribute('data-status', 'off');
+    await expect(panel(page)).toHaveAttribute('data-flow-form', 'none');
+    expect(noddStubLog(page)).toHaveLength(0);
+    await choose(page, 'wind');
+    await expect(panel(page)).toHaveAttribute('data-status', 'live');
+    await expect(panel(page)).toHaveAttribute('data-flow-drawn', 'wind');
+  });
+
   test('ENSO wind reads only the NODD .idx and two ranges, and no Open-Meteo host', async ({ page }) => {
     const calls = await bootEnso(page);
     const requested: string[] = [];

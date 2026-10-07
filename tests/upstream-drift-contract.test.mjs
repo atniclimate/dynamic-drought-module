@@ -349,6 +349,7 @@ const OUT_FIELDS_SENDERS = [
   'src/layers/aiannh.ts',
   'src/layers/bc-drought.ts',
   'src/layers/bia-reservations.ts',
+  'src/layers/cpc-seasonal-read.ts',
   'src/layers/drought.ts',
   'src/layers/heatrisk.ts',
   'src/layers/hms-smoke.ts',
@@ -363,6 +364,7 @@ const OUT_FIELDS_SENDERS = [
   'src/ui/heatrisk-sequence.ts',
   'src/ui/island/place-studio.tsx',
   'src/ui/search-controller.ts',
+  'src/util/bcws-perimeter-read.ts',
 ];
 
 test('every src file that sends outFields is probed or explicitly accounted for', async () => {

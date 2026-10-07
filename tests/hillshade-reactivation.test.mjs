@@ -164,6 +164,9 @@ test('re-activating hillshade with the source present but the layer missing rest
     await settle();
     assert.ok(map.getSource('hillshade-dem'), 'setup: the first activation did not add the source');
     assert.ok(map.getLayer('hillshade'), 'setup: the first activation did not add the layer');
+    assert.equal(map.getLayer('hillshade').paint['hillshade-shadow-color'], '#1E242C');
+    assert.equal(map.getLayer('hillshade').paint['hillshade-highlight-color'], '#F4F7FB');
+    assert.equal(map.getLayer('hillshade').paint['hillshade-exaggeration'], 0.22);
 
     // Drop only the layer, the way a style reset or a stray removeLayer
     // call can: the source survives, the layer does not.
@@ -179,6 +182,8 @@ test('re-activating hillshade with the source present but the layer missing rest
       map.getLayer('hillshade'),
       're-activation over a source with no layer left the layer missing on the map'
     );
+    assert.equal(map.getLayer('hillshade').paint['hillshade-shadow-color'], '#1E242C');
+    assert.equal(map.getLayer('hillshade').paint['hillshade-highlight-color'], '#F4F7FB');
     assert.equal(
       registry.getStatus('hillshade'),
       'ready',

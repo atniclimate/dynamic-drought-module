@@ -137,7 +137,7 @@ test('no orphan rows; the deployer row renders only when a deployer is configure
   expect(renderAcknowledgements({ deployer: DEPLOYER })).toContain('data-ack-id="deployer"');
 });
 
-test('every licence renders as an https link, and the section carries no image', () => {
+test('every licence renders as an https link, with only the adopted ATNI lockup image', () => {
   const html = renderAcknowledgements({ deployer: DEPLOYER });
   let licensed = 0;
   for (const id of ACKNOWLEDGEMENT_IDS) {
@@ -148,7 +148,9 @@ test('every licence renders as an https link, and the section carries no image',
     expect(html, `${id}: licence link`).toContain(`href="${escapeHtml(licence.url)}"`);
   }
   expect(licensed).toBeGreaterThan(0);
-  expect(html).not.toMatch(/<img/i);
+  expect([...html.matchAll(/<img\b[^>]*>/gi)].map(match => match[0])).toEqual([
+    '<img class="ack-atni-lockup" src="./brand/atni-climate-lockup.png" alt="Affiliated Tribes of Northwest Indians, ATNI Climate" loading="lazy" />'
+  ]);
   for (const id of ACKNOWLEDGEMENT_IDS) expect(ACKNOWLEDGEMENTS[id].logo.verdict).toBe('styled-text');
   const hrefs = [...html.matchAll(/href="([^"]*)"/g)].map((m) => m[1] ?? '');
   expect(hrefs.filter((href) => !href.startsWith('https://'))).toEqual([]);

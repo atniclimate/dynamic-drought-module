@@ -1064,6 +1064,7 @@ export async function fetchEnsoClaims(
       title: 'Observed operational RONI and historical-continuity ONI over recent seasons',
       source: `NOAA CPC RONI and ONI, retrieved ${snap.retrieved}`,
       primaryLabel: 'RONI',
+      guideSource: 'RONI',
       compare: { values: snap.oni.values, label: 'ONI' }
     });
 

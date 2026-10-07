@@ -71,6 +71,60 @@ async function routeNadm(
 }
 
 test.describe('North American Drought Monitor continental context', () => {
+  test('D3 NADM key agrees with actual rendered class paint', async ({ page }) => {
+    type NadmMap = {
+      getContainer(): HTMLElement;
+      getPaintProperty(layer: string, property: string): unknown;
+      queryRenderedFeatures(options: { layers: string[] }): Array<{ properties: { DROUGHTCAT?: string } }>;
+    };
+    type NadmWindow = Window & { __nadmMaps: NadmMap[] };
+    await page.addInitScript(() => {
+      const maps: NadmMap[] = [];
+      (window as unknown as NadmWindow).__nadmMaps = maps;
+      Object.defineProperty(Object.prototype, '_onWindowOnline', {
+        configurable: true,
+        set(this: NadmMap, value: unknown) {
+          Object.defineProperty(this, '_onWindowOnline', {
+            configurable: true, enumerable: true, writable: true, value
+          });
+          maps.push(this);
+        }
+      });
+    });
+    await routeBasemap(page);
+    const body = fixture([0, 1, 2, 3, 4].map(dm => feature('d' + dm)));
+    body.features.forEach((entry, dm) => {
+      const west = -132 + dm * 3;
+      entry.geometry.coordinates = [[
+        [west, 50], [west + 2, 50], [west + 2, 56], [west, 56], [west, 50]
+      ]];
+    });
+    await routeNadm(page, body, []);
+    await gotoApp(page, '?embed=true&region=british_columbia&layers=nadm-drought');
+    await expect(layerPill(page, 'nadm-drought')).toHaveText('live');
+    await page.locator('#map-key-details-toggle').click();
+    await expect.poll(() => page.evaluate(() => {
+      const map = (window as unknown as NadmWindow).__nadmMaps.find(candidate => candidate.getContainer()?.id === 'map');
+      return [...new Set(map?.queryRenderedFeatures({ layers: ['nadm-drought-fill'] })
+        .map(entry => entry.properties.DROUGHTCAT) ?? [])].sort();
+    })).toEqual(['d0', 'd1', 'd2', 'd3', 'd4']);
+    const paint = await page.evaluate(() => {
+      const map = (window as unknown as NadmWindow).__nadmMaps.find(candidate => candidate.getContainer()?.id === 'map')!;
+      return map.getPaintProperty('nadm-drought-fill', 'fill-color');
+    });
+    expect(paint).toEqual([
+      'match', ['downcase', ['to-string', ['get', 'DROUGHTCAT']]],
+      'd0', '#FFFF00', 'd1', '#FCD27E', 'd2', '#FFAA00',
+      'd3', '#E60000', 'd4', '#730000', 'rgba(0,0,0,0)'
+    ]);
+    const keyColors = await page.locator('#map-key-content .map-key-swatch').evaluateAll(nodes =>
+      nodes.map(node => getComputedStyle(node).backgroundColor));
+    expect(keyColors).toEqual([
+      'rgb(255, 255, 0)', 'rgb(252, 210, 126)', 'rgb(255, 170, 0)',
+      'rgb(230, 0, 0)', 'rgb(115, 0, 0)'
+    ]);
+  });
+
   test('fetches only the direct .geojson and surfaces consensus month and lag', async ({
     page
   }) => {

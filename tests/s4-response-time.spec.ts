@@ -112,6 +112,8 @@ test.describe('S4c compact/detail temporal adapters', () => {
     const timeRow = page.locator('#shell-time[data-has-spec="true"]');
     await expect(timeRow).toBeVisible({ timeout: 45_000 });
     await expect(page.locator('.shell-time-headline')).not.toHaveText('');
+    await expect(page.locator('.shell-time-headline')).toHaveCSS('font-family', /^"?DDM Heros"?,/);
+    await expect(page.locator('.shell-time-headline')).toHaveCSS('font-variant-numeric', /^(?:lining-nums tabular-nums|tabular-nums lining-nums)$/);
 
     // The full sidebar rail stands down on the desktop shell (compact
     // owns the WHEN band); the embed date chip contract is untouched.
@@ -127,6 +129,9 @@ test.describe('S4c compact/detail temporal adapters', () => {
     // The detail renders from the same spec: the USDM stepped rail (an
     // authored product: a discrete rail, never a Play control).
     await expect(popover.locator('.shell-time-detail')).toBeVisible();
+    await expect(popover.locator('.shell-time-detail-headline')).toBeVisible();
+    await expect(popover.locator('.shell-time-detail-headline')).toHaveCSS('font-family', /^"?DDM Heros"?,/);
+    await expect(popover.locator('.shell-time-detail-headline')).toHaveCSS('font-variant-numeric', /^(?:lining-nums tabular-nums|tabular-nums lining-nums)$/);
     await expect(popover.locator('.time-bar-rail')).toHaveCount(1);
     await expect(popover.locator('.time-bar-play')).toHaveCount(0);
 

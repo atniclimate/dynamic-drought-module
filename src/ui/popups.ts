@@ -14,6 +14,7 @@ import type { CwmsLatest } from '../util/cwms';
 import { fetchHydrometDaily, hydrometStationValue } from '../util/hydromet';
 import type { HydrometSeries } from '../util/hydromet';
 import { escapeHtml } from '../util/escape';
+import { briefingDoorColor } from './briefing-door-color';
 import type { PlaceConditions } from './popup-conditions';
 import type {
   ChartDetail,
@@ -89,7 +90,7 @@ import { sparklineSvg } from './charts';
  * would be colour alone); the motion itself is added by CSS
  * (`.popup-impact-btn--pulse`) and is fully retired under
  * `prefers-reduced-motion: reduce`, where the class still renders its
- * static red/orange edge treatment (clause b).
+ * static issuer-color edge treatment (clause b).
  */
 export function buildImpactTriggerButtonHtml(
   placeTitle: string,
@@ -102,7 +103,10 @@ export function buildImpactTriggerButtonHtml(
     pulse && warningLabel !== null
       ? `${escapeHtml(warningLabel)} - Open the Impact Briefing for ${escapeHtml(placeTitle)}`
       : `Open the Impact Briefing for ${escapeHtml(placeTitle)}`;
-  return `<button type="button" class="${cls}" data-ddm-impact-trigger>${label}</button>`;
+  const style = pulse && warningLabel !== null
+    ? ` style="--door-issuer-color: ${briefingDoorColor(warningLabel)}"`
+    : '';
+  return `<button type="button" class="${cls}" data-ddm-impact-trigger${style}>${label}</button>`;
 }
 
 

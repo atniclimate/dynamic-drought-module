@@ -43,6 +43,7 @@ import type { Popup } from 'maplibre-gl';
 import type { ProductKey } from '../config/products';
 import type { SparklineOptions } from './charts';
 import { escapeHtml } from '../util/escape';
+import { briefingDoorColor } from './briefing-door-color';
 import { dateTok } from '../util/text-tokens';
 
 /** A model the renderer refuses (a caller bug, never a data condition). */
@@ -638,7 +639,10 @@ function doorHtml(door: DoorSpec): string {
   // The pulse only; the warning's words live in its value row (DoorSpec).
   const pulse = warningLabel !== undefined;
   const label = `Open the Impact Briefing for ${place}`;
-  return `<button type="button" class="${pulse ? 'popup-impact-btn popup-impact-btn--pulse' : 'popup-impact-btn'}" data-ddm-impact-trigger>${label}</button>`;
+  const style = warningLabel !== undefined
+    ? ` style="--door-issuer-color: ${briefingDoorColor(warningLabel)}"`
+    : '';
+  return `<button type="button" class="${pulse ? 'popup-impact-btn popup-impact-btn--pulse' : 'popup-impact-btn'}" data-ddm-impact-trigger${style}>${label}</button>`;
 }
 
 function noteHtml(note: string, attribute = ''): string {

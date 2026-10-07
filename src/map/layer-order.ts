@@ -73,10 +73,8 @@ export const CONDITION_SURFACE_IDS: readonly string[] = [
   'bc-drought-outline',
   'usdm-frame-a-fill',
   'usdm-frame-a-outline',
-  'usdm-frame-a-d4-rim',
   'usdm-frame-b-fill',
   'usdm-frame-b-outline',
-  'usdm-frame-b-d4-rim',
   'usdm-change-fill',
   'usdm-change-outline'
 ];

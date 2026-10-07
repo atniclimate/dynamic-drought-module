@@ -7,8 +7,9 @@
  * with an issuer-given `html` form renders that first-party markup (its
  * text content is asserted equal to the cited text in
  * tests/acknowledgements.spec.ts); a licence renders as an `https://`
- * anchor only. Styled text throughout (Q-LOGOS): no image, no issuer
- * colour. A sentence with a null `citeId` never renders (DR-147).
+ * anchor only. Issuer rows use styled text (Q-LOGOS), without issuer images
+ * or colour. D3 M8 adds the ATNI lockup above the rows. A sentence with a null
+ * `citeId` never renders (DR-147).
  *
  * Imported only by the lazy impact-panel runtime and the tests, never by
  * the eager facade (DR-085; `scripts/check-activation-budget.mjs`).
@@ -109,6 +110,7 @@ export function renderAcknowledgements(options: AcknowledgementsOptions = {}): s
   return (
     `<details id="${ACKNOWLEDGEMENTS_SECTION_ID}" class="impact-acknowledgements"${options.open ? ' open' : ''}>` +
     '<summary>Acknowledgements</summary>' +
+    `<img class="ack-atni-lockup" src="${escapeHtml((import.meta.env?.BASE_URL ?? './') + 'brand/atni-climate-lockup.png')}" alt="Affiliated Tribes of Northwest Indians, ATNI Climate" loading="lazy" />` +
     groups +
     '</details>'
   );
