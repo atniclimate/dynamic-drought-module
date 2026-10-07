@@ -101,6 +101,10 @@ const EMPTY: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: 
 /** A lost style can still hold native flow layers in MapLibre's saved snapshot. */
 const pendingRemovals = new WeakMap<MlMap, () => void>();
 
+function graphicsAreLost(map: MlMap): boolean {
+  return map.getCanvas().getContext('webgl2')?.isContextLost() ?? false;
+}
+
 function removeFlowLayers(map: MlMap): void {
   for (const id of [...FLOW_LAYER_IDS].reverse()) if (map.getLayer(id)) map.removeLayer(id);
   if (map.getSource(STILL_SOURCE_ID)) map.removeSource(STILL_SOURCE_ID);
@@ -118,7 +122,9 @@ function removeFlowAfterRestore(map: MlMap): void {
     // Evented.fire copies its listeners. off() cannot retract a callback
     // already in that copy after an earlier listener mounted a successor.
     if (pendingRemovals.get(map) !== cancel) return;
-    if (!map.getStyle()) return;
+    // A destination adapter can load an empty style while graphics remain lost.
+    // That event does not retire MapLibre's saved native layers; restoration does.
+    if (!map.getStyle() || graphicsAreLost(map)) return;
     removeFlowLayers(map);
     cancel();
   };
@@ -446,7 +452,7 @@ export function mountFlowView(map: MlMap, field: FlowField, options: FlowViewOpt
     halt();
     const inStyle = map.getLayer(FLOW_PATHS_ID) !== undefined;
     removeFlowLayers(map);
-    if (!map.getStyle()) removeFlowAfterRestore(map);
+    if (!map.getStyle() || graphicsAreLost(map)) removeFlowAfterRestore(map);
     if (ribbon && !inStyle) ribbon.detach(map);
     ribbon = null;
   }

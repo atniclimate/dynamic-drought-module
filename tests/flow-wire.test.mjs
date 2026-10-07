@@ -170,8 +170,10 @@ function fakeGl({ failPrograms = false, failCalls = {} } = {}) {
 
 function fakeMap(lon, lat, zoom, { w = 1440, h = 900, gl = fakeGl(), throwOnLayer = null } = {}) {
   const canvasListeners = new Map();
+  let contextLost = false;
   const canvas = {
     clientWidth: w, clientHeight: h,
+    getContext: () => ({ isContextLost: () => contextLost }),
     addEventListener: (type, fn) => {
       if (!canvasListeners.has(type)) canvasListeners.set(type, new Set());
       canvasListeners.get(type).add(fn);
@@ -198,10 +200,17 @@ function fakeMap(lon, lat, zoom, { w = 1440, h = 900, gl = fakeGl(), throwOnLaye
       };
       map.dropStyle();
       stylePresent = false;
+      contextLost = true;
       map.emit('webglcontextlost');
+    },
+    // A destination adapter may initialize an empty style before graphics return.
+    loadInterimStyle: () => {
+      stylePresent = true;
+      map.emit('style.load');
     },
     restoreContext: (beforeStyleLoad = () => {}) => {
       stylePresent = true;
+      contextLost = false;
       layers = lostStyle.layers;
       for (const [id, spec] of lostStyle.sources) map.addSource(id, spec);
       lostStyle = null;
@@ -428,6 +437,27 @@ test('Off while graphics are lost removes the saved native still layers when the
   assert.equal(map.getSource('flow-still'), undefined, 'no restored native source after Off');
   assert.equal(map.eventCount(), 0, 'restoration cleanup releases every map listener');
 });
+
+for (const disposeFirst of [true, false]) {
+  test(`mode exit ${disposeFirst ? 'before' : 'after'} an interim lost-context style still removes the restored native marks`, () => {
+    const map = fakeMap(-145, 26, 3);
+    const flow = mount(map, uniform('wind', GLOBAL_1P00));
+    window.dispatchEvent(new CustomEvent(MOTION_REQUEST_EVENT, { detail: { paused: true } }));
+    assert.ok(map.getSource('flow-still').data.features.length > 0);
+    map.loseContext();
+    window.dispatchEvent(new CustomEvent(MOTION_REQUEST_EVENT, { detail: { paused: false } }));
+    if (disposeFirst) flow.dispose();
+    map.loadInterimStyle();
+    assert.ok(map.getStyle(), 'the interim style is loaded while graphics remain lost');
+    assert.equal(map.getCanvas().getContext('webgl2').isContextLost(), true);
+    if (!disposeFirst) flow.dispose();
+    map.restoreContext();
+    assert.deepEqual(map.layerIds().filter((id) => id.startsWith('flow-')), []);
+    assert.equal(map.getSource('flow-still'), undefined);
+    assert.equal(map.eventCount(), 0, 'no deferred cleanup listener remains');
+    assert.equal(map.canvasListenerCount(), 0, 'no disposed field remains attached');
+  });
+}
 
 test('a successor mounted before restored style.load retains its layers and data', () => {
   const map = fakeMap(-145, 26, 3);
