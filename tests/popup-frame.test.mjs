@@ -66,6 +66,26 @@ function surface(overrides = {}) {
   };
 }
 
+test('briefing frame decorates an earned warning with its issuer color without changing words', () => {
+  const cases = [
+    ['Red Flag Warning', '#ff1493'],
+    ['Extreme Heat Warning', '#c71585'],
+    ['Mapped wildfire perimeter', '#ff4c00'],
+    ['Unknown Warning', 'var(--ink-strong)'],
+    ['toString', 'var(--ink-strong)'],
+    ['__proto__', 'var(--ink-strong)'],
+    ['\";color:red;\"', 'var(--ink-strong)']
+  ];
+  for (const [warningLabel, color] of cases) {
+    const html = serializePopupFrame(surface({ actions: [{ kind: 'briefing', place: 'Fixture Place', warningLabel }] }));
+    assert.ok(html.includes(`data-ddm-impact-trigger style="--door-issuer-color: ${color}">Open the Impact Briefing for Fixture Place</button>`), warningLabel);
+    assert.equal(html.includes('color:red'), false);
+  }
+  const plain = serializePopupFrame(surface({ actions: [{ kind: 'briefing', place: 'Fixture Place' }] }));
+  assert.equal(plain.includes('--door-issuer-color'), false);
+  assert.equal(plain.includes('popup-impact-btn--pulse'), false);
+});
+
 /** The head region's markup: from its opening to the body's opening. */
 function headOf(html) {
   const start = html.indexOf('data-popup-region="head"');
@@ -250,7 +270,7 @@ test('every string is escaped (an injected img onerror stays inert)', () => {
  */
 test('the briefing door keeps one label whatever its warning, and pulses only with a warning', () => {
   const doorOf = (html) => {
-    const match = /<button type="button" class="([^"]*)" data-ddm-impact-trigger>([^<]*)<\/button>/.exec(html);
+    const match = /<button type="button" class="([^"]*)" data-ddm-impact-trigger(?: style="[^"]*")?>([^<]*)<\/button>/.exec(html);
     assert.ok(match, 'the frame carries one briefing door');
     return { className: match[1], label: match[2] };
   };

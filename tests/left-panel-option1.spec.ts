@@ -56,6 +56,26 @@ test.describe('D-0.7.0-067 contextual time rail', () => {
     const panel = page.locator('#impact-panel');
     await expect(panel).toBeVisible();
     await expect(panel.locator('.impact-panel-title')).toHaveText('Oregon');
+    // A desktop hard close retires its owned selection. Its report door
+    // becomes hidden, so the stable Brief search receives keyboard focus.
+    await panel.locator('.impact-panel-close').click();
+    await expect(panel).toBeHidden();
+    await expect(page.locator('#brief-selection-summary')).toBeHidden();
+    await expect(page.locator('#brief-full-report-link')).toBeHidden();
+    await expect(page.locator('#app')).not.toHaveAttribute('data-place-selected', '');
+    await expect(search).toBeFocused();
+    await search.fill('oregon');
+    await page.locator('#brief-search [data-search-kind="place"][data-search-id="OR"]').click();
+    await expect(page.locator('#brief-full-report-link')).toBeVisible();
+    await page.locator('#brief-full-report-link').focus();
+    await expect(page.locator('#brief-full-report-link')).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(panel).toBeVisible();
+    await expect(panel.locator('.impact-panel-close')).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(panel).toBeHidden();
+    await expect(page.locator('#brief-selection-summary')).toBeHidden();
+    await expect(search).toBeFocused();
   });
 
   test('mobile Brief moves the same focused control between stable hosts', async ({ page }) => {

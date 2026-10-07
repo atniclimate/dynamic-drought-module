@@ -60,6 +60,8 @@ import {
   isWithinTerrainCoverage
 } from '../config/fire3d-presentation';
 import type { TerrainCoverageReading } from '../config/fire3d-presentation';
+import { terrainCoverageFromHeader, FIRE3D_TERRAIN_COVERAGE,
+  type TerrainCoverage } from '../config/terrain-coverage';
 import { URLS } from '../config/urls';
 import { resolveHillshadeArchive } from '../layers/hillshade';
 import { probeArchiveHeader } from '../util/pmtiles-probe';
@@ -118,6 +120,8 @@ export interface Fire3DStatus {
    * because a declared option overrides the archive header permanently.
    */
   readonly terrainMaxZoom: number | null;
+  /** Extent of the archive actually installed; null outside an active scene. */
+  readonly terrainExtent?: TerrainCoverage | null;
   /**
    * How much of the CURRENT VIEW's ground FIRE3D_TERRAIN_COVERAGE holds,
    * while the scene is active: `full`, `partial`, or `none`. Uncovered
@@ -251,6 +255,7 @@ let status: Fire3DStatus = {
   perimeterRibbon: false,
   contextLayers: [],
   terrainMaxZoom: null,
+  terrainExtent: null,
   terrainCoverage: 'full',
   transport: null
 };
@@ -266,6 +271,7 @@ let terrainCoverage: TerrainCoverageReading = 'full';
 /** Mirrors Fire3DStatus.terrainMaxZoom: the resolved archive's header
  * depth from activation to rollback, null in between. */
 let resolvedTerrainMaxZoom: number | null = null;
+let resolvedTerrainExtent: TerrainCoverage | null = null;
 /** The 'moveend' listener that keeps terrainCoverage current across a
  * pan while the scene stays active; detached in rollbackScene. */
 let coverageMoveListener: (() => void) | null = null;
@@ -353,7 +359,7 @@ function syncEmbedNote(active: boolean): void {
     FIRE3D_NON_PREDICTION_NOTE,
     resolvedTerrainMaxZoom === null
       ? FIRE3D_COVERAGE_NOTE
-      : fire3dCoverageNote(resolvedTerrainMaxZoom),
+      : fire3dCoverageNote(resolvedTerrainExtent ?? resolvedTerrainMaxZoom),
     ...terrainCoverageLines(terrainCoverage),
     ...contextEmbedLines
   ].filter((line) => line.length > 0);
@@ -391,11 +397,13 @@ function readTerrainCoverage(map: maplibregl.Map): TerrainCoverageReading {
     const east = bounds.getEast();
     const north = bounds.getNorth();
     if ([west, south, east, north].every(Number.isFinite)) {
-      return classifyTerrainCoverage({ west, south, east, north });
+      return classifyTerrainCoverage({ west, south, east, north },
+        resolvedTerrainExtent ?? FIRE3D_TERRAIN_COVERAGE);
     }
   }
   const center = map.getCenter();
-  return isWithinTerrainCoverage(center.lng, center.lat) ? 'full' : 'none';
+  return isWithinTerrainCoverage(center.lng, center.lat,
+    resolvedTerrainExtent ?? FIRE3D_TERRAIN_COVERAGE) ? 'full' : 'none';
 }
 
 function publishStatus(
@@ -409,6 +417,7 @@ function publishStatus(
     perimeterRibbon: state === 'active' && ribbonOn,
     contextLayers: state === 'active' ? contextKeys : [],
     terrainMaxZoom: state === 'active' ? resolvedTerrainMaxZoom : null,
+    terrainExtent: state === 'active' ? resolvedTerrainExtent : null,
     terrainCoverage: state === 'active' ? terrainCoverage : 'full',
     transport: state === 'active' ? sceneTransport : null
   };
@@ -579,6 +588,7 @@ function rollbackScene(map: maplibregl.Map): void {
   }
   terrainCoverage = 'full';
   resolvedTerrainMaxZoom = null;
+  resolvedTerrainExtent = null;
   if (tileWatch) {
     tileWatch.detach();
     tileWatch = null;
@@ -645,6 +655,7 @@ interface ResolvedTerrainArchive {
   readonly url: string;
   /** The depth the archive's own header declares (byte 101), for disclosure. */
   readonly maxZoom: number;
+  readonly coverage: TerrainCoverage;
 }
 
 async function resolveFire3DTerrainUrl(
@@ -652,14 +663,16 @@ async function resolveFire3DTerrainUrl(
 ): Promise<ResolvedTerrainArchive> {
   try {
     const header = await probeArchiveHeader(URLS.terrainPmtilesDeep, signal);
-    return { url: URLS.terrainPmtilesDeep, maxZoom: header.maxZoom };
+    return { url: URLS.terrainPmtilesDeep, maxZoom: header.maxZoom,
+      coverage: terrainCoverageFromHeader(header) };
   } catch (err) {
     // An aborted probe is a withdrawn activation, not a missing archive: let
     // the caller's own abort handling see it rather than spending a second
     // probe on a scene nobody is waiting for.
     if (signal.aborted) throw err;
     const bundled = await resolveHillshadeArchive(signal);
-    return { url: bundled.url, maxZoom: bundled.header.maxZoom };
+    return { url: bundled.url, maxZoom: bundled.header.maxZoom,
+      coverage: terrainCoverageFromHeader(bundled.header) };
   }
 }
 
@@ -745,6 +758,7 @@ async function activateScene(map: maplibregl.Map): Promise<void> {
   // Recorded before the source exists so the first 'active' publish and the
   // embed note already name the archive that answered.
   resolvedTerrainMaxZoom = resolved.maxZoom;
+  resolvedTerrainExtent = resolved.coverage;
   try {
     if (!map.getSource(TERRAIN_SOURCE_ID)) {
       map.addSource(TERRAIN_SOURCE_ID, {

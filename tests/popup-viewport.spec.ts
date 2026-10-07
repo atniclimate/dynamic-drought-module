@@ -1127,6 +1127,14 @@ test.describe('DEF-4: the telemetry popup fits a 390px viewport (390x844)', () =
     const viewport = page.viewportSize()!;
     expectWithinViewport(await popup.boundingBox(), viewport, 'telemetry popup');
 
+    // Settled source text must clear the phone rail, not just the viewport.
+    await expect(popup.locator('[data-popup-slot="value"] [data-state]')).toHaveText('unavailable');
+    await expect.poll(async () => {
+      const card = await popup.locator('.maplibregl-popup-content').boundingBox();
+      const rail = await page.locator('#mobile-footer-nav').boundingBox();
+      return card && rail ? rail.x - (card.x + card.width) : -1;
+    }, { message: 'hydrated popup remains left of the phone action rail' }).toBeGreaterThanOrEqual(11);
+
     const closeButton = popup.locator('.maplibregl-popup-close-button');
     expectWithinViewport(await closeButton.boundingBox(), viewport, 'popup close control');
 

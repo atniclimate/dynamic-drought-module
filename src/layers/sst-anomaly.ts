@@ -46,10 +46,7 @@
 import type * as maplibregl from 'maplibre-gl';
 
 import { URLS } from '../config/urls';
-import {
-  SST_ANOMALY_LEGEND_TITLE,
-  SST_ANOMALY_SCALE
-} from '../config/palette';
+import { renderSstAnomalyLegend } from '../ui/sst-anomaly-legend';
 import { registry } from '../state/registry';
 import { timeline } from '../state/timeline';
 import { fetchBufferedWithBudget, sleepUnlessAborted } from '../util/fetch';
@@ -63,7 +60,7 @@ import {
 } from '../util/raster-status';
 import { TILE_PROOF_WATCH, waitForRasterTileProof } from '../util/raster-proof';
 import { setTimeBar, clearTimeBar } from '../ui/time-bar';
-import { showLegend, hideLegend, LEGEND_ORDER, renderSwatchLegend } from '../ui/legend-registry';
+import { showLegend, hideLegend, LEGEND_ORDER } from '../ui/legend-registry';
 import { showToast } from '../ui/overlay';
 import { activateEnsoFlow, cancelEnsoFlowLoad, deactivateEnsoFlow } from './enso-flow';
 
@@ -734,15 +731,7 @@ export async function activate(map: maplibregl.Map): Promise<void> {
 
     showLegend(LAYER_KEY, {
       order: LEGEND_ORDER.surface,
-      render: (body) =>
-        renderSwatchLegend(
-          body,
-          SST_ANOMALY_LEGEND_TITLE,
-          // The one shared scale (src/config/palette.ts): the sidebar legend
-          // and the on-map key read the same table so they cannot drift.
-          SST_ANOMALY_SCALE,
-          'NASA GHRSST MUR daily anomaly · the dashed box is Nino 3.4, the region the ENSO index measures'
-        )
+      render: renderSstAnomalyLegend
     });
 
     if (!pacificHintShown && !viewIncludesNino34(map)) {

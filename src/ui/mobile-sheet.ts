@@ -87,6 +87,11 @@ let deepLinkRaise = false;
 /** The detent to restore when the report closes (set by the impact-panel host). */
 let restoreDetent: SheetDetent | null = null;
 
+// A print paper size is not a reader resize. Keep the current sheet/host while
+// the browser temporarily evaluates width media queries against that paper.
+let printing = false;
+let printReleaseFrame: number | null = null;
+
 /** The briefing the at-hand block renders, pushed by the impact panel. */
 let sheetBriefing: ImpactBriefing | null = null;
 
@@ -448,6 +453,7 @@ function shouldBeActive(): boolean {
 }
 
 function evaluate(): void {
+  if (printing) return;
   if (shouldBeActive()) {
     if (detent === null) activate();
   } else if (detent !== null) {
@@ -563,6 +569,21 @@ export function initMobileSheet(
   });
 
   mql?.addEventListener('change', evaluate);
+  window.addEventListener('beforeprint', () => {
+    if (printReleaseFrame !== null) window.cancelAnimationFrame(printReleaseFrame);
+    printReleaseFrame = null;
+    printing = true;
+  });
+  window.addEventListener('afterprint', () => {
+    if (printReleaseFrame !== null) window.cancelAnimationFrame(printReleaseFrame);
+    // Width media queries can still describe paper inside afterprint. Reconcile
+    // at the next screen frame, retaining ordinary resize behavior thereafter.
+    printReleaseFrame = window.requestAnimationFrame(() => {
+      printReleaseFrame = null;
+      printing = false;
+      evaluate();
+    });
+  });
 
   // Browser chrome and the keyboard can resize the map behind an open panel.
   const vv = window.visualViewport;

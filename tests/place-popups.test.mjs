@@ -36,6 +36,28 @@ registerHooks({
 });
 
 const popups = await import('../src/ui/popups.ts');
+
+test('legacy briefing door preserves warning opt-in and escaped words while borrowing issuer color', () => {
+  for (const [warningLabel, color] of [
+    ['Red Flag Warning', '#ff1493'],
+    ['Mapped wildfire perimeter', '#ff4c00'],
+    ['Unknown Warning', 'var(--ink-strong)'],
+    ['constructor', 'var(--ink-strong)']
+  ]) {
+    const html = popups.buildImpactTriggerButtonHtml('A & B', { pulse: true, warningLabel });
+    assert.ok(html.includes(`style="--door-issuer-color: ${color}"`));
+    assert.ok(html.endsWith(`>${warningLabel} - Open the Impact Briefing for A &amp; B</button>`));
+  }
+  for (const opts of [undefined, { pulse: false, warningLabel: 'Red Flag Warning' }, { pulse: true, warningLabel: null }]) {
+    const html = popups.buildImpactTriggerButtonHtml('A & B', opts);
+    assert.equal(html.includes('--door-issuer-color'), false);
+    assert.equal(html.includes('popup-impact-btn--pulse'), false);
+    assert.ok(html.endsWith('>Open the Impact Briefing for A &amp; B</button>'));
+  }
+  const injected = popups.buildImpactTriggerButtonHtml('Fixture Place', { pulse: true, warningLabel: '\"><img src=x>' });
+  assert.ok(injected.includes('style="--door-issuer-color: var(--ink-strong)"'));
+  assert.equal(injected.includes('<img'), false);
+});
 const { buildPlaceConditionsHtml } = await import('../src/ui/popup-conditions.ts');
 const { registry } = await import('../src/state/registry.ts');
 const { isChecked, setChecked } = await import('../src/ui/island/bridge.ts');
@@ -113,7 +135,7 @@ function noteOf(html) {
 }
 
 function doorOf(html) {
-  const match = /<button type="button" class="([^"]*)" data-ddm-impact-trigger>([^<]*)<\/button>/.exec(html);
+  const match = /<button type="button" class="([^"]*)" data-ddm-impact-trigger(?: style="[^"]*")?>([^<]*)<\/button>/.exec(html);
   assert.ok(match, 'the frame carries one briefing door');
   return { className: match[1], label: textOf(match[2]) };
 }

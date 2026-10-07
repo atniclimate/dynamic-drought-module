@@ -1,6 +1,7 @@
 import type * as maplibregl from 'maplibre-gl';
+import { FIRE3D_TERRAIN_COVERAGE, type TerrainCoverage } from './terrain-coverage';
 
-import { HILLSHADE_SHADOW } from './palette';
+import { HILLSHADE_SHADOW, MAP_GROUND_COLOR } from './interface-tokens';
 import {
   NIFC_MAX_ALLOWABLE_OFFSET_DEG,
   WILDFIRE_STATIC_COLOR
@@ -48,14 +49,14 @@ export const FIRE3D_CAMERA_TRANSITION_MS = 800;
 
 /**
  * Sky and fog for the pitched scene, tuned to the app's dark palette: the
- * base style's background '#0b1220' (src/map/style.ts) and the hillshade
+ * base style's background (src/map/style.ts) and the hillshade
  * shadow tone carry into the horizon so the 3D scene stays in the same
  * visual family as the flat map instead of introducing a daylight sky.
  */
 export const FIRE3D_SKY_SPECIFICATION: maplibregl.SkySpecification = {
-  'sky-color': '#0b1220',
+  'sky-color': MAP_GROUND_COLOR,
   'horizon-color': HILLSHADE_SHADOW,
-  'fog-color': '#0b1220',
+  'fog-color': MAP_GROUND_COLOR,
   'fog-ground-blend': 0.8,
   'horizon-fog-blend': 0.6,
   'sky-horizon-blend': 0.7,
@@ -89,14 +90,7 @@ export const FIRE3D_SKY_CLEAR_SPECIFICATION: maplibregl.SkySpecification = {
  * the 3DEPElevation ImageServer (src/layers/hillshade.ts:4-6); it carries
  * no vertical-accuracy claim, and none is made here.
  */
-export const FIRE3D_TERRAIN_COVERAGE = {
-  issuer: 'USGS 3D Elevation Program',
-  west: -125,
-  south: 41.5,
-  east: -110.5,
-  north: 49.5,
-  maxZoom: 8
-} as const;
+export { FIRE3D_TERRAIN_COVERAGE } from './terrain-coverage';
 
 /**
  * Whether a lng/lat sits inside the bundled terrain archive's own extent.
@@ -113,12 +107,14 @@ export const FIRE3D_TERRAIN_COVERAGE = {
  * the box (see FIRE3D_TERRAIN_COVERAGE_SENTENCE's own comment on why the two
  * must stay apart).
  */
-export function isWithinTerrainCoverage(lng: number, lat: number): boolean {
+export function isWithinTerrainCoverage(
+  lng: number, lat: number, coverage: TerrainCoverage = FIRE3D_TERRAIN_COVERAGE
+): boolean {
   return (
-    lng >= FIRE3D_TERRAIN_COVERAGE.west &&
-    lng <= FIRE3D_TERRAIN_COVERAGE.east &&
-    lat >= FIRE3D_TERRAIN_COVERAGE.south &&
-    lat <= FIRE3D_TERRAIN_COVERAGE.north
+    lng >= coverage.west &&
+    lng <= coverage.east &&
+    lat >= coverage.south &&
+    lat <= coverage.north
   );
 }
 
@@ -164,8 +160,9 @@ export type TerrainCoverageReading = 'full' | 'partial' | 'none';
  * still fully covered. Antimeridian-naive, like every other box in this
  * codebase.
  */
-export function classifyTerrainCoverage(view: ViewBox): TerrainCoverageReading {
-  const box = FIRE3D_TERRAIN_COVERAGE;
+export function classifyTerrainCoverage(
+  view: ViewBox, box: TerrainCoverage = FIRE3D_TERRAIN_COVERAGE
+): TerrainCoverageReading {
   const disjoint =
     view.west > box.east ||
     view.east < box.west ||
@@ -211,13 +208,15 @@ export function formatLongitudeDeg(value: number): string {
  * it verbatim (that module is in the eager graph and must not import this
  * chunk); tests/fire3d-mode.spec.ts pins the two against drift.
  */
-export function fire3dTerrainCoverageSentence(maxZoom: number): string {
+export function fire3dTerrainCoverageSentence(terrain: number | TerrainCoverage): string {
+  const coverage = typeof terrain === 'number'
+    ? { ...FIRE3D_TERRAIN_COVERAGE, maxZoom: terrain } : terrain;
   return (
-    `Terrain relief uses the ${FIRE3D_TERRAIN_COVERAGE.issuer}'s elevation data for ` +
-    `${formatLongitudeDeg(FIRE3D_TERRAIN_COVERAGE.west)} to ${formatLongitudeDeg(FIRE3D_TERRAIN_COVERAGE.east)}, ` +
-    `${formatLatitudeDeg(FIRE3D_TERRAIN_COVERAGE.south)} to ${formatLatitudeDeg(FIRE3D_TERRAIN_COVERAGE.north)}; ` +
+    `Terrain relief uses the ${coverage.issuer}'s elevation data for ` +
+    `${formatLongitudeDeg(coverage.west)} to ${formatLongitudeDeg(coverage.east)}, ` +
+    `${formatLatitudeDeg(coverage.south)} to ${formatLatitudeDeg(coverage.north)}; ` +
     'outside that box the ground renders flat. ' +
-    `The archive's detail ends at zoom ${maxZoom}; closer views stretch its deepest tiles.`
+    `The archive's detail ends at zoom ${coverage.maxZoom}; closer views stretch its deepest tiles.`
   );
 }
 
@@ -241,9 +240,9 @@ export const FIRE3D_TERRAIN_COVERAGE_SENTENCE = fire3dTerrainCoverageSentence(
  * from FIRE3D_TERRAIN_COVERAGE, not typed by hand), so the mode never
  * implies national relief or a precision the archive does not carry.
  */
-export function fire3dCoverageNote(terrainMaxZoom: number): string {
+export function fire3dCoverageNote(terrain: number | TerrainCoverage): string {
   return (
-    `${fire3dTerrainCoverageSentence(terrainMaxZoom)} Bundled structure data covers the ` +
+    `${fire3dTerrainCoverageSentence(terrain)} Bundled structure data covers the ` +
     'central Oregon pilot area only, from zoom 13.'
   );
 }
@@ -283,7 +282,7 @@ export const FIRE3D_COVERAGE_NOTE = fire3dCoverageNote(FIRE3D_TERRAIN_COVERAGE.m
  * naming the source a second way.
  */
 export const FIRE3D_OUT_OF_COVERAGE_STATUS =
-  `This view is outside the ${FIRE3D_TERRAIN_COVERAGE.issuer}'s bundled ` +
+  `This view is outside the ${FIRE3D_TERRAIN_COVERAGE.issuer}'s ` +
   'elevation extent, so the ground here carries no archived elevation and ' +
   'renders flat; that is a coverage gap, not a failed scene.';
 
@@ -304,7 +303,7 @@ export const FIRE3D_OUT_OF_COVERAGE_STATUS =
  */
 export const FIRE3D_PARTIAL_COVERAGE_STATUS =
   `Part of this view lies outside the ${FIRE3D_TERRAIN_COVERAGE.issuer}'s ` +
-  'bundled elevation extent; that ground carries no archived elevation and ' +
+  'elevation extent; that ground carries no archived elevation and ' +
   'renders flat, while the rest of the view is modelled. That is a coverage ' +
   'gap, not a failed scene.';
 

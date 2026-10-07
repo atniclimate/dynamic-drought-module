@@ -141,6 +141,16 @@ const LIVE_BOUNDARY_ALLOWANCE = {
  * `routeAllTribalFixtures` or `routeBoundary` for exactly that reason).
  */
 const DIRECT_BOOT_REASONS = {
+  'tests/fonts.spec.ts': {
+    sites: 1,
+    reason:
+      'after gotoApp supplies built stylesheet URLs, an isolated same-origin routed font specimen navigates without application scripts; boundary and minimap stubs are explicitly installed on the specimen before navigation'
+  },
+  'tests/place-popups.spec.ts': {
+    sites: 1,
+    reason:
+      'the briefing-door animation test renders the shipped serializer and stylesheet in an isolated document without app scripts; it explicitly installs boundary and minimap stubs before setContent and retains the offline context'
+  },
   'tests/offline-boundary.spec.ts': {
     sites: 5,
     reason:
@@ -216,6 +226,8 @@ const DIRECT_BOOT_REASONS = {
  * here, so an entry has to say which shape it is.
  */
 const SECOND_PAGE_REASONS = {
+  'tests/fonts.spec.ts':
+    'the second Page isolates lazy font loading from the application DOM; it inherits the offline context, explicitly installs boundary and minimap stubs before its routed same-origin specimen navigation, and closes in finally',
   'tests/identify-paths.spec.ts': {
     reason:
       'the D1 M24 to M26 frame census (tests/frame-fixtures.ts): one fresh page in the SAME context per migrated builder, so one fixture\'s page routes and viewport never reach the next. Not a popup: each page is created by the spec and booted by its fixture through gotoApp, which installs the suite stubs (the same stub story as the census boots before them), and each fixture routes its own data.'

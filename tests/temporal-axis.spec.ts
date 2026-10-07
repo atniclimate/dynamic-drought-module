@@ -115,6 +115,8 @@ test.describe('0.5.0b temporal axis', () => {
     // The observed stamp is a hard VALID date; no Play exists on an
     // authored product (the affordance is the lesson).
     await expect(bar.locator('.time-bar-stamp-headline')).toHaveText('Valid Jun 30, 2026');
+    await expect(bar.locator('.time-bar-stamp-headline')).toHaveCSS('font-family', /^"?DDM Heros"?,/);
+    await expect(bar.locator('.time-bar-stamp-headline')).toHaveCSS('font-variant-numeric', /^(?:lining-nums tabular-nums|tabular-nums lining-nums)$/);
     await expect(bar.locator('[data-play]')).toHaveCount(0);
 
     // Discrete rail: 52 real weekly stops, parked on the newest.
@@ -128,12 +130,16 @@ test.describe('0.5.0b temporal axis', () => {
     // Step one week back: the stamp, the URL, and the chip state follow.
     await bar.locator('[data-step="-1"]').click();
     await expect(bar.locator('.time-bar-stamp-headline')).toHaveText('Valid Jun 23, 2026');
+    await expect(bar.locator('.time-bar-stamp-headline')).toHaveCSS('font-family', /^"?DDM Heros"?,/);
+    await expect(bar.locator('.time-bar-stamp-headline')).toHaveCSS('font-variant-numeric', /^(?:lining-nums tabular-nums|tabular-nums lining-nums)$/);
     await expect.poll(async () => new URLSearchParams(await search(page)).get('week')).toBe('20260623');
     await expect(bar.locator('[data-mode="chg1"]')).toBeDisabled();
 
     // The conditions strip reads the scrubbed week as deliberate history,
     // never as a frozen feed.
     await expect(page.locator('#conditions-date')).toContainText('viewing week of Jun 23, 2026');
+    await expect(page.locator('#conditions-date')).toHaveCSS('font-family', /^"?DDM Heros"?,/);
+    await expect(page.locator('#conditions-date')).toHaveCSS('font-variant-numeric', /^(?:lining-nums tabular-nums|tabular-nums lining-nums)$/);
     await expect(page.locator('#conditions-date')).not.toHaveAttribute('data-stale', 'true');
   });
 

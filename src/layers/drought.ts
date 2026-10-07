@@ -252,7 +252,7 @@ const patternExpression: maplibregl.ExpressionSpecification = [
 /**
  * The outlook register's fill paint: a hatch `fill-pattern`, never a solid
  * `fill-color` (that distinction IS the observed-vs-outlook grammar, DR-070).
- * Exported as a pure seam, mirroring `buildD4RimLayerSpecification` in
+ * Exported as a pure seam, mirroring `buildUsdmFillPaint` in
  * usdm.ts, so a future edit cannot silently flatten the register without a
  * test noticing (tests/drought-semantics.spec.ts).
  */

@@ -10,6 +10,37 @@ async function rect(locator: Locator): Promise<{ x: number; y: number; width: nu
 test.describe('mobile side rail and glass panels', () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
+  test('native PDF print retains the open phone report and ordinary resize still resets it', async ({ page }) => {
+    await gotoApp(page, '?view=brief&select=state:WA&flow=off');
+    const app = page.locator('#app');
+    const panel = page.locator('#impact-panel');
+    await page.locator('#sheet-report-door').click();
+    await expect(app).toHaveAttribute('data-sheet-detent', 'full');
+    await expect(panel).toBeVisible();
+    await page.evaluate(() => {
+      const events: string[] = [];
+      (window as typeof window & { __nativePrintEvents?: string[] }).__nativePrintEvents = events;
+      window.addEventListener('beforeprint', () => events.push('before'));
+      window.addEventListener('afterprint', () => events.push('after'));
+    });
+    // Native print lifecycle only: no synthetic events or emulateMedia. No
+    // permanent capture artifact is written; inspect the returned PDF buffer.
+    const pdf = await page.pdf({ format: 'Letter', printBackground: true });
+    expect(pdf.subarray(0, 5).toString()).toBe('%PDF-');
+    expect(await page.evaluate(() =>
+      (window as typeof window & { __nativePrintEvents?: string[] }).__nativePrintEvents
+    )).toEqual(['before', 'after']);
+    // Observe after the application's scheduled screen reconciliation.
+    await page.evaluate(() => new Promise<void>(resolve =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+    await expect(app).toHaveAttribute('data-sheet-detent', 'full');
+    await expect(panel).toBeVisible();
+    await page.setViewportSize({ width: 1000, height: 844 });
+    await expect(app).not.toHaveAttribute('data-sheet-detent', /./);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(app).toHaveAttribute('data-sheet-detent', 'closed');
+  });
+
   test('boots map-first with a vertical rail and no drawer affordance', async ({ page }) => {
     await gotoApp(page);
 

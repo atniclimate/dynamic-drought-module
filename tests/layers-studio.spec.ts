@@ -18,6 +18,42 @@ async function stubPlaces(page: Page): Promise<void> {
 }
 
 test.describe('minimal LAYERS studio', () => {
+  for (const width of [1440, 820]) {
+    test(`D3 neutral layer controls survive studio rehosting at ${width}`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await gotoApp(page, '?view=console&layers=places&studio=layers&flow=off');
+      const studio = page.locator(STUDIO);
+      await expect(studio).toBeVisible();
+      const input = studio.locator('input[data-layer-key="places"]');
+      const row = studio.locator('.layer-toggle').filter({ has: page.locator('input[data-layer-key="places"]') });
+      await expect(input).toBeChecked();
+      await expect(studio.locator('[data-layer-status="places"]')).toHaveClass(/\bready\b/);
+      await expect(studio.locator('.layers-studio-catalog')).toHaveCSS('background-color', 'rgb(20, 20, 20)');
+      await expect(row).toHaveCSS('background-color', 'rgb(42, 49, 56)');
+      await expect(row).toHaveCSS('box-shadow', 'rgb(255, 255, 255) 2px 0px 0px 0px inset');
+      await expect(row.locator('.layer-toggle-name')).toHaveCSS('font-weight', '700');
+      await expect(input).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+      await row.hover();
+      await expect(row).toHaveCSS('background-color', 'rgb(42, 49, 56)');
+      await input.focus();
+      await expect(input).toHaveCSS('outline-color', 'rgb(255, 255, 255)');
+      await expect(input).toHaveCSS('outline-offset', '0px');
+      await expect(input).toHaveCSS('box-shadow', 'rgb(1, 11, 19) 0px 0px 0px 4px');
+      await input.press('Space');
+      await expect(input).not.toBeChecked();
+      await expect.poll(async () => (await urlLayers(page)).has('places')).toBe(false);
+      await expect(row).toHaveCSS('box-shadow', 'none');
+      await input.press('Space');
+      await expect(input).toBeChecked();
+      await expect(studio.locator('[data-layer-status="places"]')).toHaveClass(/\bready\b/);
+      await expect.poll(async () => (await urlLayers(page)).has('places')).toBe(true);
+      await studio.getByRole('button', { name: 'Back to map' }).click();
+      await expect(studio).toHaveCount(0);
+      const restored = page.locator('#sidebar .layer-toggle').filter({ has: page.locator('input[data-layer-key="places"]') });
+      await expect(restored).toHaveCSS('background-color', 'rgb(42, 49, 56)');
+      await expect(restored.locator('input')).toBeChecked();
+    });
+  }
   test.beforeEach(async ({ page }) => {
     await stubPlaces(page);
   });

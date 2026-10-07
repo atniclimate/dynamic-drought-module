@@ -1,4 +1,7 @@
 import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { parsePmtilesHeader } from '../src/util/pmtiles-probe';
+import { createServer, type ServerResponse } from 'node:http';
 import { join } from 'node:path';
 import type { Map as MlMap } from 'maplibre-gl';
 
@@ -439,6 +442,13 @@ test('activation builds terrain, sky, camera, and the smoke volume; deactivation
     });
     expect(String((dem as { url?: string }).url)).toMatch(/^pmtiles:\/\//);
     expect(harness.skyCalls[0]).toEqual(FIRE3D_SKY_SPECIFICATION);
+    // Independent adopted pins on the actual scene setSky call, not a
+    // comparison of a token against itself. Blend/camera tuning stays fixed.
+    expect(harness.skyCalls[0]).toEqual({
+      'sky-color': '#010B13', 'horizon-color': '#1E242C', 'fog-color': '#010B13',
+      'fog-ground-blend': 0.8, 'horizon-fog-blend': 0.6,
+      'sky-horizon-blend': 0.7, 'atmosphere-blend': 0.3
+    });
 
     // Motion allowed: an ease to the ruled pitch, at the ruled duration.
     expect(harness.cameraCalls[0]).toEqual({
@@ -2655,3 +2665,413 @@ test('an embed without the flag never activates and never gains it', async ({
       .toBe('active');
   });
 });
+
+// Exercise the protocols registered by the built application, through actual
+// MapLibre sources. No replacement protocol, fake fetch, or shortened deadline.
+type W2Window = Window & {
+  __w2Maps: MlMap[];
+  __w2Errors: Array<{ sourceId: string; name: string; message: string }>;
+  __w2Data: string[];
+  __w2Loading: string[];
+};
+
+async function observeW2Map(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const observed = window as unknown as W2Window;
+    observed.__w2Maps = [];
+    observed.__w2Errors = [];
+    observed.__w2Data = [];
+    observed.__w2Loading = [];
+    Object.defineProperty(Object.prototype, '_onWindowOnline', {
+      configurable: true,
+      set(this: MlMap, value: unknown) {
+        Object.defineProperty(this, '_onWindowOnline', {
+          configurable: true, enumerable: true, writable: true, value
+        });
+        observed.__w2Maps.push(this);
+      }
+    });
+  });
+}
+
+async function bootW2Consumers(page: Page): Promise<void> {
+  await observeW2Map(page);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await stubWildfireFeeds(page);
+  await stubDeepTerrainArchive(page);
+  await routeBasemapTiles(page);
+  await gotoApp(page, '?region=washington_state&cluster=wildfire&fire3d=true');
+  await expect.poll(() => fire3dStamp(page), { timeout: 30_000 }).toBe('active');
+  // Fire3D registers whp-shade. Stop its scene before testing transport so its
+  // rendering load does not obscure the native 15 s network deadline.
+  await page.locator(TOGGLE).click();
+  await expect.poll(() => fire3dStamp(page), { timeout: 30_000 }).toBe('inactive');
+  await page.evaluate(() => {
+    const observed = window as unknown as W2Window;
+    const map = observed.__w2Maps.find((candidate) => candidate.getContainer().id === 'map')!;
+    map.on('error', (event) => {
+      const sourceId = (event as unknown as { sourceId?: string }).sourceId;
+      if (sourceId?.startsWith('w2-')) observed.__w2Errors.push({
+        sourceId, name: 'name' in event.error ? String(event.error.name) : '', message: event.error.message
+      });
+    });
+    map.on('sourcedata', (event) => {
+      // removeSource emits a synthetic metadata event after deleting the source.
+      // Count successful source content, not that teardown notification.
+      if (event.sourceId.startsWith('w2-') && event.sourceDataType === 'content') {
+        observed.__w2Data.push(event.sourceId);
+      }
+    });
+    map.on('sourcedataloading', (event) => {
+      if (event.sourceId.startsWith('w2-')) observed.__w2Loading.push(event.sourceId);
+    });
+  });
+}
+
+async function w2ArchiveServer(
+  hold: 'headers' | 'body',
+  archiveName = 'whp-2023-pnw.pmtiles',
+  passProbe = false
+) {
+  const archive = readFileSync(join(process.cwd(), 'public/data', archiveName));
+  const pending: Array<{ response: ServerResponse; bytes: Buffer; sent: number }> = [];
+  const tileDataOffset = Number(archive.readBigUInt64LE(56));
+  const center: [number, number] = [archive.readInt32LE(119) / 1e7, archive.readInt32LE(123) / 1e7];
+  const zoom = Math.max(archive[100]!, Math.min(archive[118]!, archive[101]!));
+  const state = { probeReads: 0, headerReads: 0, tileReads: 0, held: 0, cancelled: 0, released: false };
+  const server = createServer((request, response) => {
+    response.setHeader('Access-Control-Allow-Origin', '*');
+    response.setHeader('Access-Control-Allow-Headers', 'Range');
+    response.setHeader('Access-Control-Expose-Headers', 'Content-Range, ETag');
+    if (request.method === 'OPTIONS') { response.writeHead(204); response.end(); return; }
+    const range = /^bytes=(\d+)-(\d+)$/.exec(request.headers.range ?? '');
+    if (!range) { response.writeHead(400); response.end(); return; }
+    const start = Number(range[1]);
+    const end = Math.min(Number(range[2]), archive.length - 1);
+    const bytes = archive.subarray(start, end + 1);
+    response.statusCode = 206;
+    response.setHeader('Content-Type', 'application/octet-stream');
+    response.setHeader('Content-Range', `bytes ${start}-${end}/${archive.length}`);
+    response.setHeader('Content-Length', bytes.length);
+    response.setHeader('ETag', '"w2-bundled-fixture"');
+    response.setHeader('Cache-Control', 'no-store');
+    if (passProbe && start === 0 && end === 126) {
+      state.probeReads += 1;
+      response.end(bytes);
+      return;
+    }
+    if (start === 0) state.headerReads += 1;
+    if (start >= tileDataOffset) state.tileReads += 1;
+    if (start !== 0 || state.released) { response.end(bytes); return; }
+    state.held += 1;
+    response.on('close', () => { if (!response.writableEnded) state.cancelled += 1; });
+    // Native HTTP headers without a completed body distinguish fetch settlement
+    // from body settlement. Playwright route.fulfill cannot express this case.
+    const sent = hold === 'body' ? 1 : 0;
+    if (sent) { response.flushHeaders(); response.write(bytes.subarray(0, sent)); }
+    pending.push({ response, bytes, sent });
+  });
+  await new Promise<void>((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', () => resolve());
+  });
+  const address = server.address();
+  if (!address || typeof address === 'string') throw new Error('Missing loopback fixture port');
+  return {
+    url: `http://127.0.0.1:${address.port}/whp.pmtiles`, state, center, zoom,
+    release() {
+      state.released = true;
+      for (const { response, bytes, sent } of pending.splice(0)) {
+        if (!response.destroyed) response.end(bytes.subarray(sent));
+      }
+    },
+    async close() {
+      server.closeAllConnections();
+      await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+    }
+  };
+}
+
+async function addW2Source(page: Page, id: string, url: string): Promise<void> {
+  await page.evaluate(({ id, url }) => {
+    const map = (window as unknown as W2Window).__w2Maps.find((candidate) => candidate.getContainer().id === 'map')!;
+    // Match the actual WHP archive and production whp-3d source contract.
+    map.addSource(id, { type: 'raster', url, tileSize: 512 });
+    map.addLayer({ id, type: 'raster', source: id });
+  }, { id, url });
+}
+
+async function removeW2Source(page: Page, id: string): Promise<void> {
+  await page.evaluate((id) => {
+    const map = (window as unknown as W2Window).__w2Maps.find((candidate) => candidate.getContainer().id === 'map')!;
+    map.removeLayer(id);
+    map.removeSource(id);
+  }, id);
+}
+
+test.describe('W2 registered native consumers', () => {
+  test.setTimeout(120_000);
+
+  test('hillshade native deadline downgrades its real pill; checkbox Off cancels the retry', async ({ page }) => {
+    await observeW2Map(page);
+    await routeBasemapTiles(page);
+    const fixture = await w2ArchiveServer('body', 'hillshade-dem-pnw.pmtiles', true);
+    try {
+      // Preserve the application's exact archive URL and actual DEM bytes.
+      // Redirect, rather than fulfill, so the browser receives a native stream.
+      await page.route('**/hillshade-dem-pnw.pmtiles*', (route) => route.fulfill({
+        status: 307, headers: { location: fixture.url }, body: ''
+      }));
+      await gotoApp(page, '?view=console&layers=hillshade&region=washington_state', { bootIdle: false });
+      const pill = page.locator('[data-layer-status="hillshade"]');
+      await expect.poll(() => fixture.state.probeReads).toBe(1);
+      await expect.poll(() => fixture.state.held).toBe(1);
+      // Existing hillshade exception: a valid probe initially reports ready.
+      await expect(pill).toHaveClass(/\bready\b/);
+      await expect(pill).toHaveClass(/\berror\b/, { timeout: 20_000 });
+      await expect(pill).toHaveText('unavailable');
+      await expect.poll(() => fixture.state.cancelled).toBe(1);
+      await layerCheckbox(page, 'hillshade').uncheck();
+      await layerCheckbox(page, 'hillshade').check();
+      await expect.poll(() => fixture.state.held).toBe(2);
+      await expect(pill).toHaveClass(/\bready\b/);
+      await layerCheckbox(page, 'hillshade').uncheck();
+      await expect.poll(() => fixture.state.cancelled, { timeout: 3_000 }).toBe(2);
+      fixture.release();
+      await expect(layerCheckbox(page, 'hillshade')).not.toBeChecked();
+      expect(await page.evaluate(() => {
+        const map = (window as unknown as W2Window).__w2Maps.find((candidate) => candidate.getContainer().id === 'map')!;
+        return { layer: !!map.getLayer('hillshade'), source: !!map.getSource('hillshade-dem') };
+      })).toEqual({ layer: false, source: false });
+    } finally { await fixture.close(); }
+  });
+
+  for (const protocol of ['pmtiles', 'whp-shade'] as const) {
+    for (const hold of ['headers', 'body'] as const) {
+      test(`${protocol}: held ${hold} emits a deadline error`, async ({ page }) => {
+        await bootW2Consumers(page);
+        const fixture = await w2ArchiveServer(hold);
+        try {
+          await addW2Source(page, 'w2-deadline', `${protocol}://${fixture.url}`);
+          await expect.poll(() => fixture.state.held).toBe(1);
+          // Allow scheduling slack around the existing 15 s ceiling. This does
+          // not amend the product budget, and cannot pass by merely aborting:
+          // MapLibre suppresses AbortError instead of emitting a source error.
+          await expect.poll(() => page.evaluate(() =>
+            (window as unknown as W2Window).__w2Errors.filter((event) => event.sourceId === 'w2-deadline')
+          ), { timeout: 20_000 }).toEqual([
+            expect.objectContaining({ sourceId: 'w2-deadline', message: expect.stringContaining('PMTiles read timed out') })
+          ]);
+          // ensureError may wrap a DOMException. Event delivery is the contract:
+          // an AbortError would have been suppressed before reaching the map.
+          expect(await page.evaluate(() => (window as unknown as W2Window).__w2Errors[0]?.name)).not.toBe('AbortError');
+          await expect.poll(() => fixture.state.cancelled).toBe(1);
+          expect(await page.evaluate(() => (window as unknown as W2Window).__w2Data)).toEqual([]);
+        } finally {
+          try { await removeW2Source(page, 'w2-deadline'); }
+          finally { await fixture.close(); }
+        }
+      });
+    }
+
+    test(`${protocol}: removing the owner cancels a native body and suppresses late data`, async ({ page }) => {
+      await bootW2Consumers(page);
+      const fixture = await w2ArchiveServer('body');
+      try {
+        await addW2Source(page, 'w2-off', `${protocol}://${fixture.url}`);
+        await expect.poll(() => fixture.state.held).toBe(1);
+        await removeW2Source(page, 'w2-off');
+        await expect.poll(() => fixture.state.cancelled, { timeout: 3_000 }).toBe(1);
+        fixture.release();
+        // Diagnostic absence window after confirmed native cancellation and
+        // fixture release, classified in sleep-inventory.test.mjs. This does
+        // not establish readiness or replace an observable setup condition.
+        await page.waitForTimeout(300);
+        expect(await page.evaluate(() => {
+          const observed = window as unknown as W2Window;
+          const map = observed.__w2Maps.find((candidate) => candidate.getContainer().id === 'map')!;
+          return { data: observed.__w2Data, errors: observed.__w2Errors,
+            layer: !!map.getLayer('w2-off'), source: !!map.getSource('w2-off') };
+        })).toEqual({ data: [], errors: [], layer: false, source: false });
+      } finally { await fixture.close(); }
+    });
+  }
+
+  test('missing WHP tile 6/9/21 completes transparently and native Off removes it', async ({ page }) => {
+    await bootW2Consumers(page);
+    const fixture = await w2ArchiveServer('body');
+    fixture.release();
+    type MissingWindow = W2Window & { __w2MissingTiles: string[] };
+    const framebufferPixel = (): Promise<number[]> => page.evaluate(() => {
+      const map = (window as unknown as W2Window).__w2Maps.find((candidate) => candidate.getContainer().id === 'map')!;
+      // Read during the actual render callback before Chromium may discard the
+      // default framebuffer. No image/paint/protocol function is substituted.
+      return new Promise<number[]>((resolve) => {
+        map.once('render', () => {
+          const gl = map.painter.context.gl;
+          const pixel = new Uint8Array(4);
+          gl.readPixels(Math.floor(gl.drawingBufferWidth / 2), Math.floor(gl.drawingBufferHeight / 2),
+            1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
+          resolve([...pixel]);
+        });
+        map.triggerRepaint();
+      });
+    });
+    try {
+      await page.evaluate(() => {
+        const observed = window as unknown as MissingWindow;
+        observed.__w2MissingTiles = [];
+        const map = observed.__w2Maps.find((candidate) => candidate.getContainer().id === 'map')!;
+        map.jumpTo({ center: [-124.5, 49.25], zoom: 8, pitch: 0, bearing: 0 });
+        map.on('sourcedataloading', (event) => {
+          if (event.sourceId === 'w2-missing' && event.coord) {
+            const { z, x, y } = event.coord.canonical;
+            observed.__w2MissingTiles.push(`${z}/${x}/${y}`);
+          }
+        });
+        // Opaque reference drawn above the application's existing map content.
+        map.addLayer({ id: 'w2-missing-background', type: 'background',
+          paint: { 'background-color': '#123456', 'background-opacity': 1 } });
+      });
+      expect(await framebufferPixel()).toEqual([18, 52, 86, 255]);
+      await page.evaluate((url) => {
+        const map = (window as unknown as W2Window).__w2Maps.find((candidate) => candidate.getContainer().id === 'map')!;
+        // A small area wholly inside known missing 6/9/21. Pin maxzoom so the
+        // native consumer requests that real archive entry, not another level.
+        map.addSource('w2-missing', { type: 'raster', tileSize: 512,
+          tiles: [`whp-shade://${url}/{z}/{x}/{y}`], minzoom: 6, maxzoom: 6,
+          bounds: [-125, 49, -124, 49.5] });
+        map.addLayer({ id: 'w2-missing', type: 'raster', source: 'w2-missing',
+          paint: { 'raster-opacity': 1, 'raster-fade-duration': 0 } });
+      }, fixture.url);
+      await expect.poll(() => page.evaluate(() =>
+        [...new Set((window as unknown as MissingWindow).__w2MissingTiles)]
+      )).toEqual(['6/9/21']);
+      await expect.poll(() => page.evaluate(() => {
+        const map = (window as unknown as W2Window).__w2Maps.find((candidate) => candidate.getContainer().id === 'map')!;
+        return map.isSourceLoaded('w2-missing');
+      }), { timeout: 20_000 }).toBe(true);
+      expect(fixture.state.headerReads).toBe(1);
+      expect(fixture.state.tileReads).toBe(0);
+      expect(await page.evaluate(() => (window as unknown as W2Window).__w2Errors)).toEqual([]);
+      // Completed no-data imagery must neither invent a category nor obscure
+      // the known underlying color, even with raster opacity set to one.
+      expect(await framebufferPixel()).toEqual([18, 52, 86, 255]);
+      await removeW2Source(page, 'w2-missing');
+      expect(await page.evaluate(() => {
+        const map = (window as unknown as W2Window).__w2Maps.find((candidate) => candidate.getContainer().id === 'map')!;
+        return { layer: !!map.getLayer('w2-missing'), source: !!map.getSource('w2-missing') };
+      })).toEqual({ layer: false, source: false });
+      expect(await framebufferPixel()).toEqual([18, 52, 86, 255]);
+    } finally {
+      try {
+        await page.evaluate(() => {
+          const map = (window as unknown as W2Window).__w2Maps.find((candidate) => candidate.getContainer().id === 'map')!;
+          if (map.getLayer('w2-missing')) map.removeLayer('w2-missing');
+          if (map.getSource('w2-missing')) map.removeSource('w2-missing');
+          if (map.getLayer('w2-missing-background')) map.removeLayer('w2-missing-background');
+        });
+      } finally { await fixture.close(); }
+    }
+  });
+
+  test('ordinary and shaded WHP coalesce; one cancelled owner preserves its survivor and warm cache', async ({ page }) => {
+    await bootW2Consumers(page);
+    const fixture = await w2ArchiveServer('body');
+    try {
+      await page.evaluate(({ center, zoom }) => {
+        const map = (window as unknown as W2Window).__w2Maps.find((candidate) => candidate.getContainer().id === 'map')!;
+        map.jumpTo({ center, zoom, pitch: 0, bearing: 0 });
+      }, { center: fixture.center, zoom: fixture.zoom });
+      await addW2Source(page, 'w2-ordinary', `pmtiles://${fixture.url}`);
+      await expect.poll(() => fixture.state.held).toBe(1);
+      await addW2Source(page, 'w2-shaded', `whp-shade://${fixture.url}`);
+      // Both real source owners have started loading; do not infer entry from
+      // an arbitrary delay. The final warm-cache assertion also catches a
+      // second header request if its HTTP dispatch arrives later.
+      await expect.poll(() => page.evaluate(() => (window as unknown as W2Window).__w2Loading))
+        .toEqual(['w2-ordinary', 'w2-shaded']);
+      expect(fixture.state.headerReads).toBe(1);
+      await removeW2Source(page, 'w2-ordinary');
+      expect(fixture.state.cancelled).toBe(0);
+      fixture.release();
+      // A source can briefly report loaded between metadata and its first
+      // render-driven tile request; require real payload work before settling.
+      await expect.poll(() => fixture.state.tileReads, { timeout: 20_000 }).toBeGreaterThan(0);
+      await expect.poll(() => page.evaluate(() => {
+        const map = (window as unknown as W2Window).__w2Maps.find((candidate) => candidate.getContainer().id === 'map')!;
+        return map.isSourceLoaded('w2-shaded');
+      }), { timeout: 20_000 }).toBe(true);
+      expect(fixture.state.tileReads).toBeGreaterThan(0);
+      // Reusing the same URL after one owner aborts must retain the survivor's
+      // resolved header/root cache, including across the protocol boundary.
+      await addW2Source(page, 'w2-warm', `pmtiles://${fixture.url}`);
+      await expect.poll(() => page.evaluate(() => {
+        const map = (window as unknown as W2Window).__w2Maps.find((candidate) => candidate.getContainer().id === 'map')!;
+        return map.isSourceLoaded('w2-warm');
+      }), { timeout: 20_000 }).toBe(true);
+      expect(fixture.state.headerReads).toBe(1);
+      expect(await page.evaluate(() => (window as unknown as W2Window).__w2Errors)).toEqual([]);
+      await removeW2Source(page, 'w2-shaded');
+      await removeW2Source(page, 'w2-warm');
+    } finally {
+      await fixture.close();
+    }
+  });
+});
+
+test('the historical deep archive fixture pins its URL, header, declared extent and PNW coverage', () => {
+  const receipt = JSON.parse(readFileSync(new URL('./fixtures/terrain-deep-archive.json', import.meta.url), 'utf8'));
+  const bytes = Buffer.from(receipt.headerHex, 'hex');
+  expect(bytes.length).toBe(127);
+  expect(createHash('sha256').update(bytes).digest('hex')).toBe(receipt.headerSha256);
+  expect(receipt.archiveUrl).toBe(URLS.terrainPmtilesDeep);
+  expect(receipt.contentRange).toBe('bytes 0-126/' + receipt.declaredObjectBytes);
+  const header = parsePmtilesHeader(bytes);
+  expect(header.tileDataOffset + header.tileDataLength).toBe(receipt.declaredObjectBytes);
+  expect({
+    issuer: FIRE3D_TERRAIN_COVERAGE.issuer,
+    west: header.west, south: header.south, east: header.east, north: header.north,
+    minZoom: header.minZoom, maxZoom: header.maxZoom
+  }).toEqual(receipt.coverage);
+});
+
+for (const outcome of ['deep', 'missing', 'invalid-box'] as const) {
+  test('terrain coverage follows the answering archive: ' + outcome, async () => {
+    const browser = installFakeBrowser({ desktop: true, reducedMotion: false });
+    const restoreFetch = stubDeepTerrainFetch(() => outcome === 'missing'
+      ? new Response('not found', { status: 404 })
+      : pmtilesHeaderResponse({ maxZoom: 11, bounds: outcome === 'deep'
+        ? [-125, 24, -66.9, 50] : [-66.9, 24, -125, 50] }));
+    const harness = fakeMapHarness({ center: { lng: -105, lat: 39 }, viewHalfSpan: 0.1 });
+    try {
+      setFire3DActive(harness.map, true);
+      await expect.poll(() => getFire3DStatus().state).toBe('active');
+      const status = getFire3DStatus();
+      const deep = outcome === 'deep';
+      expect(status.terrainCoverage).toBe(deep ? 'full' : 'none');
+      expect(status.terrainExtent).toEqual({
+        issuer: FIRE3D_TERRAIN_COVERAGE.issuer, minZoom: 0,
+        west: -125, south: deep ? 24 : 41.5,
+        east: deep ? -66.9 : -110.5, north: deep ? 50 : 49.5,
+        maxZoom: deep ? 11 : 8
+      });
+      const source = harness.sources.get('fire3d-terrain-dem') as { url?: string };
+      expect(source.url).toBe('pmtiles://' + (deep ? URLS.terrainPmtilesDeep : URLS.hillshadePmtilesLocal));
+      expect(fire3dCoverageNote(status.terrainExtent!)).toContain(deep ? '66.9°W' : '110.5°W');
+      expect(fire3dCoverageNote(status.terrainExtent!)).toContain('zoom ' + (deep ? 11 : 8));
+      harness.setCenter({ lng: -119, lat: 45.5 });
+      expect(getFire3DStatus().terrainCoverage).toBe('full');
+      harness.setCenter({ lng: -105, lat: 39 });
+      expect(getFire3DStatus().terrainCoverage).toBe(deep ? 'full' : 'none');
+      setFire3DActive(harness.map, false);
+      await expect.poll(() => getFire3DStatus().state).toBe('inactive');
+      expect(getFire3DStatus().terrainExtent).toBeNull();
+      expect(harness.listenerCount('moveend')).toBe(0);
+    } finally {
+      setFire3DActive(harness.map, false);
+      restoreFetch();
+      browser.restore();
+    }
+  });
+}

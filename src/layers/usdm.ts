@@ -37,10 +37,9 @@
  *
  * Render. Per USDM convention, the five categories use the canonical
  * yellow-to-dark-red ramp resolved by a MapLibre `match` expression keyed
- * off the integer `DM` field. The change view uses a color-blind-safe
- * diverging ramp keyed off the signed `DN` class delta (blue improved,
- * red worsened), stepped, with the class read also carried by the legend
- * labels rather than color alone.
+ * off the integer `DM` field. The change view matches the eleven issuer
+ * colors to signed integer `DN` classes. Invalid values have no class color;
+ * the class read is also carried by the legend labels.
  */
 
 import type * as maplibregl from 'maplibre-gl';
@@ -59,6 +58,10 @@ import {
 } from '../state/timeline';
 import { requestHorizon } from '../state/cluster-service';
 import { USDM_CATEGORIES, USDM_NONE_SWATCH } from '../config/palette';
+import {
+  buildUsdmChangeColorExpression, usdmChangeColor,
+  usdmChangeLabel, usdmChangeLegendItems
+} from '../config/usdm-change';
 import {
   BC_BASIN_EDITION_HELD,
   resetDroughtSurfacePresentation,
@@ -86,36 +89,18 @@ type Slot = 0 | 1;
 
 const fillId = (src: string): string => `${src}-fill`;
 const outlineId = (src: string): string => `${src}-outline`;
-const rimId = (src: string): string => `${src}-d4-rim`;
 
 /** Change-map view (the derivative register). */
 const CHANGE_SOURCE = 'usdm-change';
 const CHANGE_FILL = fillId(CHANGE_SOURCE);
 const CHANGE_OUTLINE = outlineId(CHANGE_SOURCE);
 
-/**
- * A presentation-only D4 edge for legibility against the shared dark scene.
- * It does not change, buffer, or reinterpret the official USDM category.
- */
-export const USDM_D4_RIM_STYLE = {
-  color: '#f87171',
-  width: 1.5,
-  opacity: 0
-} as const;
-
-export const USDM_D4_RIM_LAYER_IDS = [
-  rimId(SLOT_SOURCES[0]),
-  rimId(SLOT_SOURCES[1])
-] as const;
-
 /** Fade targets for the sidebar's toggle transitions (LayerModule contract). */
 export const fadeLayerIds = [
   fillId(SLOT_SOURCES[0]),
   outlineId(SLOT_SOURCES[0]),
-  rimId(SLOT_SOURCES[0]),
   fillId(SLOT_SOURCES[1]),
   outlineId(SLOT_SOURCES[1]),
-  rimId(SLOT_SOURCES[1]),
   CHANGE_FILL,
   CHANGE_OUTLINE,
   'bc-drought-fill',
@@ -170,19 +155,6 @@ const USDM_LABELS: ReadonlyArray<string> = [
   'D3 - Extreme Drought',
   'D4 - Exceptional Drought'
 ];
-
-/**
- * Diverging change ramp (ColorBrewer RdBu endpoints, color-blind safe):
- * blue = improved, red = worsened, muted slate for no change. Class is
- * also carried in the legend text, never by hue alone.
- */
-const CHANGE_COLORS = {
-  improved2: '#2166ac',
-  improved1: '#92c5de',
-  same: '#8b93a3',
-  worsened1: '#f4a582',
-  worsened2: '#b2182b'
-} as const;
 
 type UsdmStatus = 'loading' | 'ready' | 'error' | 'no-data';
 
@@ -335,42 +307,14 @@ const dmColorExpression: maplibregl.ExpressionSpecification = [
   '#cccccc'
 ];
 
-/** Stepped diverging ramp over the signed DN class delta. */
-const changeColorExpression: maplibregl.ExpressionSpecification = [
-  'step',
-  ['get', 'DN'],
-  CHANGE_COLORS.improved2,
-  -1, CHANGE_COLORS.improved1,
-  0, CHANGE_COLORS.same,
-  1, CHANGE_COLORS.worsened1,
-  2, CHANGE_COLORS.worsened2
-];
-
-/** Build one frame's presentation-only D4 edge. Exported as a pure seam so
- * its source/category/style contract can be verified without network work. */
-export function buildD4RimLayerSpecification(
-  sourceId: string,
-  visible: boolean
-): maplibregl.LineLayerSpecification {
-  return {
-    id: rimId(sourceId),
-    type: 'line',
-    source: sourceId,
-    filter: ['==', ['get', 'DM'], 4],
-    layout: { visibility: visible ? 'visible' : 'none' },
-    paint: {
-      'line-color': USDM_D4_RIM_STYLE.color,
-      'line-width': USDM_D4_RIM_STYLE.width,
-      'line-opacity': USDM_D4_RIM_STYLE.opacity
-    }
-  };
-}
+/** Exact issuer classes; unknown values receive no class color. */
+const changeColorExpression = buildUsdmChangeColorExpression();
 
 /**
  * The observed register's fill paint: a solid `fill-color`, never a hatch
  * `fill-pattern` (that distinction IS the observed-vs-outlook grammar,
- * DR-070). Exported as a pure seam, mirroring `buildD4RimLayerSpecification`
- * above, so a future edit cannot silently flatten the register without a
+ * DR-070). Exported as a pure seam so a future edit cannot silently flatten
+ * the register without a
  * test noticing (tests/drought-semantics.spec.ts).
  */
 export function buildUsdmFillPaint(
@@ -383,8 +327,7 @@ function addPolygonPair(
   map: maplibregl.Map,
   sourceId: string,
   color: maplibregl.ExpressionSpecification,
-  visible: boolean,
-  withD4Rim = false
+  visible: boolean
 ): void {
   const beforeId = resolveBeforeId(map);
   const visibility = visible ? 'visible' : 'none';
@@ -416,9 +359,6 @@ function addPolygonPair(
       beforeId
     );
   }
-  if (withD4Rim && !map.getLayer(rimId(sourceId))) {
-    map.addLayer(buildD4RimLayerSpecification(sourceId, visible), beforeId);
-  }
 }
 
 const EMPTY_FC: GeoJSON.FeatureCollection = {
@@ -444,8 +384,8 @@ function ensureSources(map: maplibregl.Map, initial: GeoJSON.FeatureCollection):
       attribution: 'USDM change (NDMC / NOAA / USDA via drought.gov)'
     });
   }
-  addPolygonPair(map, SLOT_SOURCES[0], dmColorExpression, true, true);
-  addPolygonPair(map, SLOT_SOURCES[1], dmColorExpression, false, true);
+  addPolygonPair(map, SLOT_SOURCES[0], dmColorExpression, true);
+  addPolygonPair(map, SLOT_SOURCES[1], dmColorExpression, false);
   addPolygonPair(map, CHANGE_SOURCE, changeColorExpression, false);
 }
 
@@ -456,7 +396,7 @@ function setPairData(map: maplibregl.Map, sourceId: string, data: GeoJSON.Featur
 
 function setPairVisibility(map: maplibregl.Map, sourceId: string, visible: boolean): void {
   const visibility = visible ? 'visible' : 'none';
-  for (const id of [fillId(sourceId), outlineId(sourceId), rimId(sourceId)]) {
+  for (const id of [fillId(sourceId), outlineId(sourceId)]) {
     if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', visibility);
   }
 }
@@ -466,13 +406,6 @@ function pairFadeTargets(sourceId: string): FadeTarget[] {
     { layerId: fillId(sourceId), prop: 'fill-opacity', target: FILL_OPACITY },
     { layerId: outlineId(sourceId), prop: 'line-opacity', target: OUTLINE_OPACITY }
   ];
-  if (sourceId !== CHANGE_SOURCE) {
-    targets.push({
-      layerId: rimId(sourceId),
-      prop: 'line-opacity',
-      target: USDM_D4_RIM_STYLE.opacity
-    });
-  }
   return targets;
 }
 
@@ -505,13 +438,7 @@ function showChangeLegend(mode: UsdmViewMode): void {
       renderSwatchLegend(
         body,
         `Drought change key (${span})`,
-        [
-          { color: CHANGE_COLORS.improved2, label: 'Improved 2+ categories' },
-          { color: CHANGE_COLORS.improved1, label: 'Improved 1 category' },
-          { color: CHANGE_COLORS.same, label: 'No category change' },
-          { color: CHANGE_COLORS.worsened1, label: 'Worsened 1 category' },
-          { color: CHANGE_COLORS.worsened2, label: 'Worsened 2+ categories' }
-        ],
+        usdmChangeLegendItems(),
         `USDM ${span} change · what moved, not where it stands`
       )
   });
@@ -872,7 +799,7 @@ function deactivateUsdm(map: maplibregl.Map): void {
   }
   stepEpoch++;
   for (const src of [...SLOT_SOURCES, CHANGE_SOURCE]) {
-    for (const id of [fillId(src), outlineId(src), rimId(src)]) {
+    for (const id of [fillId(src), outlineId(src)]) {
       if (map.getLayer(id)) map.removeLayer(id);
     }
     if (map.getSource(src)) map.removeSource(src);
@@ -990,23 +917,16 @@ export function buildUsdmPopupModel(props: GeoJsonProperties): IssuedModel {
 
 /** Plain-language read of a signed change class delta. */
 function changeLabel(dn: unknown): string {
-  const n = typeof dn === 'number' ? dn : Number(dn);
-  if (!Number.isFinite(n) || !Number.isInteger(n)) return 'Unknown change class';
-  if (n === 0) return 'No category change';
-  const dir = n > 0 ? 'Worsened' : 'Improved';
-  const steps = Math.abs(n);
-  return `${dir} ${steps} ${steps === 1 ? 'category' : 'categories'}`;
+  return usdmChangeLabel(dn);
 }
 
 /**
- * The change swatch the map draws for a class delta: the same steps as
+ * The change swatch the map draws for a class delta: the same exact classes as
  * `changeColorExpression` over a numeric `DN`; none for an unknown class.
  */
 function changeSwatch(dn: unknown): IssuerSwatch | undefined {
-  if (typeof dn !== 'number' || !Number.isInteger(dn)) return undefined;
-  const classKey: keyof typeof CHANGE_COLORS =
-    dn <= -2 ? 'improved2' : dn === -1 ? 'improved1' : dn === 0 ? 'same' : dn === 1 ? 'worsened1' : 'worsened2';
-  return { table: 'CHANGE_COLORS', classKey, color: CHANGE_COLORS[classKey] };
+  const color = usdmChangeColor(dn);
+  return color === undefined ? undefined : { table: 'USDM_CHANGE_COLORS', classKey: String(dn), color };
 }
 
 /** The change-map polygon's popup model (D1 M25; the frame's surface head). */

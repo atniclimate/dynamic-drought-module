@@ -1,5 +1,5 @@
 import { expect, test } from './offline-test';
-import type { Page } from './offline-test';
+import type { Locator, Page } from './offline-test';
 
 import { placeRefFromBoundary } from '../src/config/entities';
 import {
@@ -599,6 +599,106 @@ async function stubBrowserNwsHeat(page: Page): Promise<void> {
 }
 
 test.describe('H2 critical-first surfaces', () => {
+  async function expectReadPill(
+    pill: Locator,
+    state: 'loading' | 'ready' | 'partial' | 'unavailable' | 'no-data'
+  ): Promise<void> {
+    const labels = {
+      loading: 'loading...', ready: 'live', partial: 'live (partial)',
+      unavailable: 'unavailable', 'no-data': 'no data'
+    };
+    const ink = state === 'unavailable' ? 'rgb(255, 255, 255)'
+      : state === 'ready' || state === 'partial' ? 'rgb(232, 236, 240)'
+      : 'rgb(198, 203, 212)';
+    await expect(pill).toBeVisible();
+    await expect(pill).toHaveText(labels[state]);
+    await expect(pill).toHaveCSS('color', ink);
+    await expect(pill).toHaveCSS('border-top-color', ink);
+    await expect(pill).toHaveCSS('font-style', state === 'no-data' ? 'italic' : 'normal');
+    if (state === 'unavailable') await expect(pill).toHaveCSS('font-weight', '700');
+    const glyph = await pill.evaluate((node) => {
+      const style = getComputedStyle(node, '::before');
+      const box = node.getBoundingClientRect();
+      const header = node.parentElement!.getBoundingClientRect();
+      return {
+        content: style.content, width: style.width, height: style.height,
+        border: style.borderTopWidth, color: style.borderTopColor,
+        background: style.backgroundColor, image: style.backgroundImage,
+        size: style.backgroundSize, animation: style.animationName,
+        left: box.left - header.left, right: header.right - box.right,
+        overflow: node.scrollWidth - node.clientWidth
+      };
+    });
+    expect(glyph).toMatchObject({ content: '""', width: '8px', height: '8px', border: '1px', color: ink, animation: 'none' });
+    expect(glyph.left).toBeGreaterThanOrEqual(-1);
+    expect(glyph.right).toBeGreaterThanOrEqual(-1);
+    expect(glyph.overflow).toBeLessThanOrEqual(1);
+    if (state === 'ready') expect(glyph.background).toBe(ink);
+    if (state === 'loading') {
+      expect(glyph.background).toBe('rgba(0, 0, 0, 0)');
+      expect(glyph.image).toBe('none');
+    }
+    if (state === 'partial') {
+      expect(glyph.image).toMatch(/linear-gradient\((?:to right|90deg),/);
+      expect(glyph.image).toContain(`${ink} 50%`);
+      expect(glyph.image).toContain('rgba(0, 0, 0, 0) 50%');
+    }
+    if (state === 'unavailable') {
+      expect(glyph.image).toContain('135deg');
+      expect(glyph.image).toContain(`${ink} 40%`);
+      expect(glyph.image).toContain(`${ink} 60%`);
+    }
+    if (state === 'no-data') expect(glyph.size).toBe('4px 1px');
+  }
+
+  for (const width of [1440, 390]) {
+    for (const outcome of ['ready', 'partial', 'no-data', 'unavailable'] as const) {
+      test(`D3 actual report read pills ${outcome} at ${width}`, async ({ page }) => {
+        await page.setViewportSize({ width, height: 900 });
+        await page.clock.setFixedTime('2026-07-29T12:30:00+00:00');
+        await stubBrowserNwsHeat(page);
+        let release = () => {};
+        const held = new Promise<void>((resolve) => { release = resolve; });
+        await page.route(NWS_PROXY_ROUTE, async (route) => {
+          const url = new URL(nwsUpstreamUrl(route.request().url()));
+          if (url.pathname.startsWith('/points/') || url.pathname === '/alerts/active') await held;
+          if (outcome === 'unavailable' && url.pathname.startsWith('/points/')) {
+            await route.fulfill({ status: 503, body: 'unavailable' });
+          } else if (outcome === 'partial' && url.pathname === '/gridpoints/TOP/31,80') {
+            await route.fulfill({ status: 503, body: 'unavailable' });
+          } else if (outcome === 'no-data' && url.pathname === '/gridpoints/TOP/31,80/stations') {
+            await route.fulfill({ json: { type: 'FeatureCollection', features: [] } });
+          } else if (outcome === 'no-data' && url.pathname === '/gridpoints/TOP/31,80') {
+            await route.fulfill({ json: { properties: { temperature: { uom: 'wmoUnit:degC', values: [] } } } });
+          } else {
+            await route.fallback();
+          }
+        });
+        try {
+          await gotoApp(page, '?select=state:WA');
+          if (width === 390) await page.locator('#sheet-report-door').click();
+          const panel = page.locator('#impact-panel');
+          const point = panel.locator('.point-heat[aria-label="Heat at selected point"] > .impact-horizon-head .point-heat-pill');
+          const currentHeat = panel.locator('.impact-hazard[data-horizon="current"][data-hazard="heat"] .impact-hazard-pill');
+          await expectReadPill(point, 'loading');
+          await expectReadPill(currentHeat, 'loading');
+          release();
+          await expectReadPill(point, outcome);
+          await expectReadPill(currentHeat, 'ready');
+          await expectReadPill(panel.locator('.impact-hazard[data-horizon="longRange"][data-hazard="fire"] .impact-hazard-pill'), 'unavailable');
+          // This horizon has answered seasonal guidance beside the explicitly
+          // unavailable PDF-only fire cell: it must stay live (partial).
+          await expectReadPill(panel.locator('.impact-horizon').filter({ has: page.locator('.impact-hazard[data-horizon="longRange"]') }).locator(':scope > .impact-horizon-head > .impact-horizon-pill'), 'partial');
+          // Reduced motion changes neither the words nor the static glyph.
+          await page.emulateMedia({ reducedMotion: 'reduce' });
+          await expectReadPill(point, outcome);
+        } finally {
+          release();
+        }
+      });
+    }
+  }
+
   test('mobile at-hand and full report lead with point heat', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.clock.setFixedTime('2026-07-29T12:30:00+00:00');

@@ -492,18 +492,21 @@ function renderFrame(map: maplibregl.Map, day: number): void {
     // The NWS service advertises 2,539.703 m Web Mercator cells (verified
     // 2026-09-13). z6 serves 2,445.98 m pixels. Requesting ever-finer
     // exports only enlarges those class cells into hard square blocks.
-    // Overscale the colorized image with linear filtering instead. Raw
-    // category values and point-identify reads remain nearest-neighbor.
+    // Preserve issuer class colors when overscaling (DR-138, D3 R7).
+    // Point-identify reads retain their separate category values.
     maxzoom: 6,
     attribution: 'NOAA NWS HeatRisk (experimental)'
   });
+  // Floor flat-view coverage zoom so categorical tiles are magnified rather
+  // than rounded up into linear minification. Pitch needs separate coverage.
+  map.getSource<maplibregl.RasterTileSource>(sourceId)!.roundZoom = false;
   map.addLayer({
     id: LAYER_ID,
     type: 'raster',
     source: sourceId,
     paint: {
       'raster-opacity': 0.55,
-      'raster-resampling': 'linear'
+      'raster-resampling': 'nearest'
     }
   });
 

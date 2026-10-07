@@ -1,0 +1,19 @@
+{
+  "archiveUrl": "https://ddm-terrain.atniclimate.workers.dev/pnw-z10-2026-09-10.pmtiles",
+  "observedAt": "2026-09-26T04:30:49Z",
+  "status": 206,
+  "contentRange": "bytes 0-126/435700035",
+  "declaredObjectBytes": 435700035,
+  "headerSha256": "8d897c5acdacd298befa5746af008df46acee35944fd7ea8abaed99166422b08",
+  "headerHex": "504D54696C6573037F00000000000000C81400000000000047150000000000009101000000000000D8160000000000000000000000000000D8160000000000006B2AF81900000000A707000000000000A707000000000000A70700000000000001020102000A80837EB5C065BC18C00923BEC019811D08800A12B9C0BF1E1B",
+  "coverage": {
+    "issuer": "USGS 3D Elevation Program",
+    "west": -125,
+    "south": 41.5,
+    "east": -110.5,
+    "north": 49.5,
+    "minZoom": 0,
+    "maxZoom": 10
+  },
+  "provenance": "Historical response header and first 127 archive bytes. Not a fresh reachability receipt or a national coverage claim."
+}

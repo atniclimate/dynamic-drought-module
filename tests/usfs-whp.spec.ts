@@ -47,7 +47,7 @@ test('3D hazard shading preserves class order, source transparency, and visible 
 
 type MapEvent = Record<string, unknown>;
 type MapHandler = (event: MapEvent) => void;
-type FakeSource = { tiles: string[]; setTiles: (tiles: string[]) => void };
+type FakeSource = { tiles: string[]; roundZoom: boolean; setTiles: (tiles: string[]) => void };
 
 class FakeWhpMap {
   private source: FakeSource | undefined;
@@ -63,7 +63,9 @@ class FakeWhpMap {
   }
 
   addSource(_id: string, source: { tiles: string[] }): void {
-    this.source = { ...source, setTiles: (tiles) => { this.source!.tiles = tiles; } };
+    // Match the native RasterTileSource default. The adapter must change it;
+    // this fake proves configuration/lifecycle, not GPU sampling.
+    this.source = { ...source, roundZoom: true, setTiles: (tiles) => { this.source!.tiles = tiles; } };
   }
 
   removeSource(): void {
@@ -133,22 +135,29 @@ test('Long Range WHP uses white shading on terrain and restores issuer colors on
   const map = fakeMap as unknown as Parameters<typeof activate>[0];
   try {
     await activate(map);
+    expect(fakeMap.paint.get('raster-resampling')).toBe('nearest');
+    expect(fakeMap.getSource()!.roundZoom).toBe(false);
     const issuerTiles = [...fakeMap.getSource()!.tiles];
     expect(issuerTiles[0]).not.toContain('whp-image-shade://');
     fakeMap.terrain = true;
     fakeMap.emit('terrain');
     expect(fakeMap.getSource()!.tiles).toEqual(issuerTiles.map((tile) => `whp-image-shade://${tile}`));
     expect(fakeMap.paint.get('raster-resampling')).toBe('nearest');
+    expect(fakeMap.getSource()!.roundZoom).toBe(false);
     fakeMap.terrain = false;
     fakeMap.emit('terrain');
     expect(fakeMap.getSource()!.tiles).toEqual(issuerTiles);
-    expect(fakeMap.paint.get('raster-resampling')).toBe('linear');
+    // DR-138 / D3 R7 preserves class sampling after leaving shaded terrain.
+    expect(fakeMap.paint.get('raster-resampling')).toBe('nearest');
+    expect(fakeMap.getSource()!.roundZoom).toBe(false);
     deactivate(map);
     fakeMap.terrain = true;
     fakeMap.emit('terrain');
     expect(fakeMap.getSource()).toBeUndefined();
     await activate(map);
     expect(fakeMap.getSource()!.tiles[0]).toContain('whp-image-shade://');
+    expect(fakeMap.paint.get('raster-resampling')).toBe('nearest');
+    expect(fakeMap.getSource()!.roundZoom).toBe(false);
   } finally {
     deactivate(map);
     registry.deactivate('usfs-whp');

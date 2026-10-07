@@ -110,9 +110,9 @@ test.describe('generated minimap WHP overview', () => {
 test.describe('minimap wildfire classification', () => {
   test('pins the visible red, orange, yellow, and neutral channels', () => {
     expect(MINIMAP_WILDFIRE_COLORS).toEqual({
-      'mapped-wildfire': '#D73027',
-      'high-potential': '#FF9F1C',
-      'moderate-potential': '#FFE066',
+      'mapped-wildfire': '#ff4c00',
+      'high-potential': '#ffa300',
+      'moderate-potential': '#ffff63',
       'below-threshold': '#E2E8F0',
       'no-data': '#334155',
       'unavailable': '#1E293B',

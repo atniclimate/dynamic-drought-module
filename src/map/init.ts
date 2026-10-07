@@ -7,7 +7,7 @@ import * as maplibregl from 'maplibre-gl';
 // `base: './'`, so the emitted URL stays relative and works both at a
 // domain root and at the `/dynamic-drought-module/` project subpath.
 import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
-import { Protocol } from 'pmtiles';
+import { pmtilesTransport } from './tile-protocol';
 import { buildBaseStyle } from './style';
 import { BasemapSwitcherControl } from './basemap-switcher';
 import { MAP_MIN_ZOOM } from '../config/regions';
@@ -25,8 +25,7 @@ import { watchDesktopMapSeat } from '../ui/map-control-seat';
 let pmtilesRegistered = false;
 function registerPmtilesProtocol(): void {
   if (pmtilesRegistered) return;
-  const protocol = new Protocol();
-  maplibregl.addProtocol('pmtiles', protocol.tile);
+  maplibregl.addProtocol('pmtiles', pmtilesTransport.tilev4);
   pmtilesRegistered = true;
 }
 

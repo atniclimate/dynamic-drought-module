@@ -39,6 +39,47 @@ const COUNT = `${UMBRELLA} .layer-umbrella-count`;
 const MEMBERS = ['aiannh', 'bia-reservations'] as const;
 const BUTTON_SET = ['aiannh', 'bia-reservations'] as const;
 
+for (const width of [1440, 820]) {
+  test('D3 opaque umbrella actions preserve keyboard behavior with neutral focus at ' + width, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await gotoApp(page, '?view=console&layers=none&flow=off');
+    const command = page.locator(CTA);
+    const disclosure = page.locator(DETAILS_TOGGLE);
+    await expect(command).toBeVisible();
+    await expect(command).toHaveCSS('background-color', 'rgb(30, 36, 44)');
+    await expect(command).toHaveCSS('color', 'rgb(232, 236, 240)');
+    await expect(command).toHaveCSS('border-top-color', 'rgb(138, 148, 166)');
+    await command.hover();
+    await expect(command).toHaveCSS('background-color', 'rgb(42, 49, 56)');
+    await expect(command).toHaveCSS('color', 'rgb(232, 236, 240)');
+    await expect(command).toHaveCSS('border-top-color', 'rgb(138, 148, 166)');
+    await disclosure.focus();
+    await page.keyboard.press('Enter');
+    await expect(disclosure).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.locator(CONTROLS)).toBeVisible();
+    await expect(disclosure).toHaveCSS('outline-color', 'rgb(255, 255, 255)');
+    await expect(disclosure).toHaveCSS('outline-width', '2px');
+    await expect(disclosure).toHaveCSS('outline-offset', '0px');
+    await expect(disclosure).toHaveCSS('box-shadow', 'rgb(1, 11, 19) 0px 0px 0px 4px');
+    await page.keyboard.press('Enter');
+    await expect(disclosure).toHaveAttribute('aria-expanded', 'false');
+    await expect(page.locator(CONTROLS)).toBeHidden();
+    await command.focus();
+    await expect(command).toHaveCSS('outline-color', 'rgb(255, 255, 255)');
+    await expect(command).toHaveCSS('outline-width', '2px');
+    await expect(command).toHaveCSS('outline-offset', '0px');
+    await expect(command).toHaveCSS('box-shadow', 'rgb(1, 11, 19) 0px 0px 0px 4px');
+    await page.keyboard.press('Enter');
+    await expect.poll(async () => {
+      const layers = await urlLayers(page);
+      return BUTTON_SET.every(key => layers.has(key));
+    }).toBe(true);
+    await expect(page.locator(COUNT)).toHaveText('2 of 2 selected');
+    // The command remains a command, not a new pressed-state toggle.
+    expect(await command.getAttribute('aria-pressed')).toBeNull();
+  });
+}
+
 test.describe('the Tribal Nations umbrella (console catalog)', () => {
   test('structure: the four role groups hold, the umbrella is a card inside Place, members stay mounted', async ({
     page

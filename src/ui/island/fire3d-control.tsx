@@ -124,7 +124,7 @@ function statusLine(status: Fire3DStatus | null): string {
  */
 function coverageNote(status: Fire3DStatus | null): string {
   if (status?.state === 'active' && status.terrainMaxZoom !== null) {
-    return fire3dCoverageNote(status.terrainMaxZoom);
+    return fire3dCoverageNote(status.terrainExtent ?? status.terrainMaxZoom);
   }
   return FIRE3D_COVERAGE_NOTE;
 }

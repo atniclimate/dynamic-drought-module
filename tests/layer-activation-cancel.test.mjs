@@ -444,3 +444,60 @@ test('NWS alerts: a normal activation is unchanged (one read, then the source, l
   assert.ok(seen.legends.includes('nws-alerts'));
   assert.equal(longTimers.size, 1, 'the five-minute refresh is scheduled as before');
 });
+
+for (const variable of ['precipitation', 'temperature']) {
+  for (const held of [false, true]) {
+    test(`CPC ${variable}: real controller Off ${held ? 'aborts held headers and suppresses late drawing' : 'cleans its completed source and registry'}`, async (t) => {
+      const { createCpcSeasonalAdapter } = await import('../src/layers/cpc-seasonal-outlook.ts');
+      const { cpcSeasonalBody } = await import('./cpc-seasonal-polygon-fixtures.mjs');
+      const key = variable === 'precipitation' ? 'cpc-seasonal-precip' : 'cpc-seasonal-temp';
+      // Test-only catalogue registration: no public entry or admitted allowance.
+      const module = createCpcSeasonalAdapter({ variable, fillOpacity: 0.75,
+        limits: { timeoutMs: 1_000, maxDecodedBytes: 100_000, maxFeatures: 20, maxAllowableOffset: 0.01 } });
+      const definition = { ...LAYER_DEFS.find(row => row.key === 'heatrisk'), key,
+        defaultOn: false, load: async () => module };
+      LAYER_DEFS.push(definition);
+      globalThis.cancelModules.set(key, module);
+      resetSeen();
+      const originalFetch = globalThis.fetch;
+      const net = installFetch(() => JSON.stringify(cpcSeasonalBody('polygons')),
+        { holdIndexes: held ? [0] : [], ignoreAbort: held });
+      const map = fakeMap();
+      t.after(() => {
+        net.release();
+        module.deactivate(map);
+        registry.deactivate(key);
+        globalThis.cancelModules.delete(key);
+        LAYER_DEFS.splice(LAYER_DEFS.indexOf(definition), 1);
+        globalThis.fetch = originalFetch;
+      });
+      const controller = harness(map, [key]);
+      const pending = controller.activate(key);
+      if (held) await settle();
+      else await pending;
+      assert.equal(net.calls.length, 1);
+      assert.equal(net.calls[0].signal.aborted, false);
+      if (!held) {
+        assert.ok(map.getSource(key));
+        assert.equal(registry.getActiveKeys().has(key), true);
+      }
+      controller.deactivate(key);
+      // Completed transport listeners are detached; a held transport must abort now.
+      if (held) assert.equal(net.calls[0].signal.aborted, true);
+      net.release();
+      await pending;
+      await settle();
+      assert.equal(map.getSource(key), undefined);
+      assert.equal(map.getLayer(key + '-fill'), undefined);
+      assert.equal(map.getLayer(key + '-line'), undefined);
+      assert.equal(module.getSnapshot(), null);
+      assert.equal(registry.getActiveKeys().has(key), false);
+      assert.equal(registry.getStatus(key), undefined);
+      assert.equal(net.calls.length, 1);
+      if (held) {
+        assert.deepEqual(seen.sources, []);
+        assert.deepEqual(seen.layers, []);
+      }
+    });
+  }
+}

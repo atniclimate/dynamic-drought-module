@@ -1,0 +1,108 @@
+{"Legend": [{
+  "layerName": "rg_conus_week_data",
+  "title": "rg_conus_week_data",
+  "rules": [{"symbolizers": [{"Raster":   {
+    "colormap":     {
+      "entries":       [
+                {
+          "label": " ",
+          "quantity": "1.0",
+          "color": "#FFFFFF",
+          "opacity": "1.0"
+        },
+                {
+          "label": " 1 - 10%",
+          "quantity": "11.0",
+          "color": "#732600",
+          "opacity": "1.0"
+        },
+                {
+          "label": " 11 - 20%",
+          "quantity": "21.0",
+          "color": "#E60000",
+          "opacity": "1.0"
+        },
+                {
+          "label": " 21 - 30%",
+          "quantity": "31.0",
+          "color": "#F57A7A",
+          "opacity": "1.0"
+        },
+                {
+          "label": " 31 - 40%",
+          "quantity": "41.0",
+          "color": "#FFD37F",
+          "opacity": "1.0"
+        },
+                {
+          "label": " 41 - 50%",
+          "quantity": "51.0",
+          "color": "#FFFF00",
+          "opacity": "1.0"
+        },
+                {
+          "label": " 51 - 60%",
+          "quantity": "61.0",
+          "color": "#C7D79E",
+          "opacity": "1.0"
+        },
+                {
+          "label": " 61 - 70%",
+          "quantity": "71.0",
+          "color": "#89CD66",
+          "opacity": "1.0"
+        },
+                {
+          "label": " 71 - 80%",
+          "quantity": "81.0",
+          "color": "#98E600",
+          "opacity": "1.0"
+        },
+                {
+          "label": " 81 - 90%",
+          "quantity": "91.0",
+          "color": "#70A800",
+          "opacity": "1.0"
+        },
+                {
+          "label": " 91 - 100%",
+          "quantity": "101.0",
+          "color": "#5C8944",
+          "opacity": "1.0"
+        },
+                {
+          "label": " No Data",
+          "quantity": "250.0",
+          "color": "#1E1E1E",
+          "opacity": "1.0"
+        },
+                {
+          "label": " Clouds/Bright Surface",
+          "quantity": "251.0",
+          "color": "#FFFFFF",
+          "opacity": "1.0"
+        },
+                {
+          "label": " No Data",
+          "quantity": "254.0",
+          "color": "#1E1E1E",
+          "opacity": "1.0"
+        },
+                {
+          "label": " Water",
+          "quantity": "255.0",
+          "color": "#73B2FF",
+          "opacity": "1.0"
+        },
+                {
+          "label": " No Data",
+          "quantity": "256.0",
+          "color": "#1E1E1E",
+          "opacity": "1.0"
+        }
+      ],
+      "type": "intervals"
+    },
+    "opacity": "1.0"
+  }}]}]
+}]}

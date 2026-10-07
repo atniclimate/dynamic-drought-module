@@ -89,6 +89,14 @@ export function parseArcGisPolygonFeatureCollection(
     throw new Error(`${sourceLabel} response was not a valid FeatureCollection.`);
   }
 
+  // ArcGIS f=geojson can put this collection flag in properties. Either
+  // true value means incomplete; a false at one location must not hide it.
+  const collectionProperties = isRecord(value['properties']) ? value['properties'] : null;
+  const nestedTransferLimit = collectionProperties?.['exceededTransferLimit'];
+  if (nestedTransferLimit !== undefined && typeof nestedTransferLimit !== 'boolean') {
+    throw new Error(`${sourceLabel} response was not a valid FeatureCollection.`);
+  }
+
   for (const feature of value['features']) {
     if (
       !isRecord(feature) ||
@@ -104,7 +112,7 @@ export function parseArcGisPolygonFeatureCollection(
 
   return {
     collection: value as unknown as FeatureCollection,
-    truncated: value['exceededTransferLimit'] === true
+    truncated: value['exceededTransferLimit'] === true || nestedTransferLimit === true
   };
 }
 

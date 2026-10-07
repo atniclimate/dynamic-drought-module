@@ -8,11 +8,10 @@ and are not ours to reword.
 
 ## How this list was decided
 
-A package is listed when its code is inside the files `npm run build` writes to `dist/assets`. The build writes
-source maps, and the maps name every package folder whose code was bundled. The six packages below are the ones the
-maps name. The four packages in the `dependencies` field of `package.json` are all among them. Two more, `fflate`
-and `@preact/signals-core`, are installed by those four and are bundled with them. MapLibre GL JS ships its own
-dependencies already bundled into its files, so its `LICENSE.txt` is the notice that covers them.
+The packages below include the runtime dependencies in `package.json` and their bundled dependencies.
+Source maps written by `npm run build` name the package folders whose code reaches `dist/assets`.
+MapLibre GL JS ships its own dependencies already bundled into its files, so its `LICENSE.txt` is the
+notice that covers them.
 
 `tests/third-party-notices.test.mjs` checks this file against `package.json`, `package-lock.json` and, when a
 build exists, against those source maps.
@@ -27,6 +26,9 @@ build exists, against those source maps.
 | `maplibre-gl` | 6.6.0 | BSD-3-Clause | The map renderer. |
 | `pmtiles` | 4.4.1 | BSD-3-Clause | Reading PMTiles archives. |
 | `fflate` | 0.8.3 | MIT | Decompression. (installed by `pmtiles`) |
+| `polygon-clipping` | 0.15.7 | MIT | Polygon intersection. |
+| `splaytree` | 3.2.3 | MIT | Polygon intersection sweep ordering. (installed by `polygon-clipping`) |
+| `robust-predicates` | 3.0.3 | Unlicense | Robust geometric predicates. (installed by `polygon-clipping`) |
 
 ## preact
 
@@ -302,6 +304,88 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+```
+
+## polygon-clipping
+
+Version 0.15.7. Licence id: MIT.
+
+The text below is `LICENSE.md` from the installed package, verbatim.
+
+```
+The MIT License (MIT)
+
+Copyright (c) 2018 Mike Fogel <mike@fogel.ca> - covers everything not specially attributed to others below.
+
+Copyright (c) 2016 Alexander Milevski <info@w8r.name> - covers all portions originally part of github:w8r/martinez, from which this project was forked on Febuary 2, 2018.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+```
+
+## splaytree
+
+Version 3.2.3. Licence id: MIT.
+
+The text below is the License section of `Readme.md` from the installed package, verbatim.
+
+```
+The MIT License (MIT)
+
+Copyright (c) 2019 Alexander Milevski <info@w8r.name>
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+```
+
+## robust-predicates
+
+Version 3.0.3. Licence id: Unlicense.
+
+The text below is `LICENSE` from the installed package, verbatim.
+
+```
+This is free and unencumbered software released into the public domain.
+
+Anyone is free to copy, modify, publish, use, compile, sell, or
+distribute this software, either in source code form or as a compiled
+binary, for any purpose, commercial or non-commercial, and by any
+means.
+
+In jurisdictions that recognize copyright laws, the author or authors
+of this software dedicate any and all copyright interest in the
+software to the public domain. We make this dedication for the benefit
+of the public at large and to the detriment of our heirs and
+successors. We intend this dedication to be an overt act of
+relinquishment in perpetuity of all present and future rights to this
+software under copyright law.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+OTHER DEALINGS IN THE SOFTWARE.
+
+For more information, please refer to <http://unlicense.org>
 ```
 
 ## The ENSO flowing paths

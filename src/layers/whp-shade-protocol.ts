@@ -1,9 +1,8 @@
 import { addProtocol, type AddProtocolAction } from 'maplibre-gl';
-import { Protocol } from 'pmtiles';
+import { pmtilesTransport, PMTILES_READ_TIMEOUT_MS } from '../map/tile-protocol';
 import { WHP_SHADE_CATEGORIES } from '../config/whp-shade';
 
 let registered = false;
-const protocol = new Protocol();
 const SHADE_ALPHA_BY_RGB = new Map(WHP_SHADE_CATEGORIES.map((category) => [
   Number.parseInt(category.color.slice(1), 16), category.opacity
 ]));
@@ -46,9 +45,9 @@ export async function shadeImage(blob: Blob, signal: AbortSignal): Promise<Image
 /** Keep archive bounds/zooms in TileJSON; shade only requested image tiles. */
 export const loadWhpShade: AddProtocolAction = async (request, abortController) => {
     const signal = abortController.signal;
-    const timer = setTimeout(() => abortController.abort(), 15_000);
+    const timer = setTimeout(() => abortController.abort(new DOMException('PMTiles read timed out', 'TimeoutError')), PMTILES_READ_TIMEOUT_MS);
     try {
-      const response = await protocol.tilev4({
+      const response = await pmtilesTransport.tilev4({
         ...request,
         url: request.url.replace(/^whp-shade:\/\//, 'pmtiles://')
       }, abortController);
@@ -56,6 +55,9 @@ export const loadWhpShade: AddProtocolAction = async (request, abortController) 
       if (request.type === 'json') {
         return { data: { ...response.data as object, tiles: [`${request.url}/{z}/{x}/{y}`] } };
       }
+      // Missing WHP coverage is transparent. MapLibre completes an empty image
+      // buffer as a transparent pixel, whereas null leaves its image pending.
+      if (response.data === null) return { data: new ArrayBuffer(0) };
       if (!(response.data instanceof Uint8Array)) return { data: response.data };
       return { data: await shadeImage(new Blob([response.data.slice()]), signal) };
     } finally {

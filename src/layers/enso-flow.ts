@@ -266,12 +266,32 @@ async function loadCurrents(activeMap: maplibregl.Map, generation: number): Prom
   }
 }
 
-function loadFlowModule(): Promise<FlowModule> {
+function loadFlowModule(signal: AbortSignal): Promise<FlowModule> {
   flowModule ??= import('./flow/index').catch((error: unknown) => {
     flowModule = null;
     throw error;
   });
-  return flowModule;
+  const pending = flowModule;
+  // Native import has no abortable transport. Bound this generation's wait
+  // with the existing 12 s read duration; later module evaluation stays cached
+  // but cannot resume a cancelled or timed-out field load.
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (error: unknown, module?: FlowModule): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      signal.removeEventListener('abort', stop);
+      if (module) resolve(module);
+      else reject(error);
+    };
+    const stop = (): void => finish(new DOMException('Flow module wait aborted', 'AbortError'));
+    const timer = setTimeout(() => finish(new Error('Flow module wait timed out')), 12_000);
+    signal.addEventListener('abort', stop, { once: true });
+    if (signal.aborted) stop();
+    // Attach both handlers even on abort so a late rejection is consumed.
+    pending.then((module) => finish(null, module), (error: unknown) => finish(error));
+  });
 }
 
 const fieldKey = (kind: FlowFieldKind, cycle: number, forecastHour: number): string =>
@@ -353,7 +373,7 @@ async function loadField(activeMap: maplibregl.Map, kind: FlowFieldKind, generat
   if (detailNode) detailNode.textContent = TIMING_NOTE;
   const current = (): boolean => !owned.signal.aborted && generation === epoch && map === activeMap;
   try {
-    const flow = await loadFlowModule();
+    const flow = await loadFlowModule(owned.signal);
     if (!current()) return;
     let field = cachedField(flow, kind, Date.now());
     if (!field) {
@@ -382,6 +402,8 @@ async function loadField(activeMap: maplibregl.Map, kind: FlowFieldKind, generat
     disposeFlowView();
     setStatus('unavailable', `unavailable · ${FLOW_WORDS.unavailable[kind]}`, kind, [FAILED_NOTE]);
     if (detailNode) detailNode.textContent = FAILED_NOTE;
+  } finally {
+    if (controller === owned) controller = null;
   }
 }
 

@@ -25,13 +25,13 @@
  * browser exposes it, since mobile browser chrome, pinch zoom, and the
  * on-screen keyboard move it without any layout resize; the layout
  * viewport as the fallback), intersected with the map container rect,
- * minus the app's own bottom-docked chrome, inset by a small margin. The
+ * minus the app's own bottom-docked chrome and phone action rail, inset by a small margin. The
  * two candidates are read from their LIVE bounding rects at every clamp:
  * the mobile panel (`#sidebar` while `#app[data-sheet-detent]` is present)
  * and the mobile navigation (`#mobile-footer-nav`). A candidate only
  * raises the region's bottom edge when its live rect touches that edge.
- * The current side panel and side rail therefore leave the full vertical
- * map region available.
+ * A side-positioned phone action rail instead reserves its horizontal strip,
+ * leaving the full vertical map region available.
  *
  * Three mechanisms compose to keep the card inside the region:
  *
@@ -66,8 +66,7 @@
  * the spec prose in tests/popup-viewport.spec.ts cite it rather than
  * restating limits of their own, and on any divergence the table wins.
  *
- * Overlap by chrome that does not touch the bottom edge is not modeled
- * here. The body scroll window itself is CSS-side (the coordinated
+ * Other floating chrome is not modeled here. The body scroll window is CSS-side (the coordinated
  * head/body flex rules and the U-UX-FIX-1 section in app.css); the tier
  * table states exactly when that CSS can and cannot deliver it.
  *
@@ -392,6 +391,21 @@ function containingBounds(popup: HTMLElement): Bounds {
   for (const r of rects) {
     if (r.top < bottom && r.bottom >= bottom - 1) {
       bottom = r.top;
+    }
+  }
+
+  // The phone navigation is a right-side rail, not a bottom footer. Its
+  // buttons paint above map popups. Reserve that strip even when the
+  // anchor is beside it, so hydration and body scrolling cannot put source
+  // text underneath an action button. Hidden embed/desktop rails have no box.
+  if (footer) {
+    const rail = footer.getBoundingClientRect();
+    const style = getComputedStyle(footer);
+    if (style.display !== 'none' && style.visibility !== 'hidden' &&
+        rail.width > 0 && rail.height > 0 && rail.height > rail.width &&
+        rail.left > (left + right) / 2 && rail.left < right &&
+        rail.bottom > top && rail.top < bottom) {
+      right = rail.left;
     }
   }
 

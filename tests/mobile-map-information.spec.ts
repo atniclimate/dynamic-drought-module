@@ -149,8 +149,8 @@ test.describe('mobile map-information disclosure (390x844)', () => {
         borderRadius: style.borderRadius
       };
     });
-    expect(glass.richBlack.toLowerCase()).toBe('#004040');
-    expect(glass.backgroundColor).toBe('rgba(0, 64, 64, 0.3)');
+    expect(glass.richBlack.toLowerCase()).toBe('#010b13');
+    expect(glass.backgroundColor).toBe('rgba(1, 11, 19, 0.3)');
     expect(glass.borderRadius).toBe('4px');
 
     await page.evaluate(() => {

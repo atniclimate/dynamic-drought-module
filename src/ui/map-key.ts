@@ -25,13 +25,17 @@
  */
 
 import { registry } from '../state/registry';
+import { sstAnomalyScaleHtml } from './sst-anomaly-legend';
+import { timeline } from '../state/timeline';
+import { usdmChangeLegendItems } from '../config/usdm-change';
 import {
   BC_DROUGHT_LEVELS,
   BC_DROUGHT_NO_UPDATE,
+  CDM_CATEGORIES,
   HEATRISK_CATEGORIES,
   NADM_CATEGORIES,
   NWS_ALERT_COLORS,
-  SST_ANOMALY_SCALE,
+  SST_ANOMALY_LABELS,
   USDM_CATEGORIES,
   USDM_NONE_SWATCH,
   SPC_FIREWX_CATEGORIES
@@ -353,6 +357,15 @@ function swatchItem(color: string, code: string): string {
 }
 
 function droughtKey(): KeySpec {
+  if (getDroughtSurfacePresentation().edition === 'usdm' && timeline.usdmMode !== 'absolute') {
+    const span = timeline.usdmMode === 'chg4' ? '4-week' : '1-week';
+    const title = `Drought change key (${span})`;
+    return {
+      label: title,
+      ariaLabel: title,
+      itemsHtml: usdmChangeLegendItems().map(item => swatchItem(item.color, item.label)).join('')
+    };
+  }
   const presentation = getDroughtSurfacePresentation();
   // DR-160 (2026-09-28): while BC_BASIN_EDITION_HELD is true in
   // src/config/layers.ts, no writer ever sets edition 'bc-basin'
@@ -395,9 +408,8 @@ function formatSstDate(iso: string): string {
 
 /**
  * The ENSO ocean-surface key (W2-D1): the one quick view that previously
- * had no on-map scale. Swatches and wording come from the shared
- * SST_ANOMALY_SCALE table (src/config/palette.ts), the same table the
- * sidebar legend renders, so the two surfaces cannot drift. The observed
+ * had no on-map scale. Full source colors and existing qualitative words
+ * come from the same helper as the sidebar legend. The observed
  * date mirrors the frame the ddm:sst-snapshot event announced (the same
  * date the temporal stamp shows); the scale stays qualitative because the
  * GIBS metadata states no climatology baseline.
@@ -406,13 +418,13 @@ function sstKey(): KeySpec {
   const observed = sstObservedDate
     ? ` Observed ${formatSstDate(sstObservedDate)}.`
     : '';
-  const first = SST_ANOMALY_SCALE[0]!;
-  const last = SST_ANOMALY_SCALE.at(-1)!;
+  const first = SST_ANOMALY_LABELS[0];
+  const last = SST_ANOMALY_LABELS[2];
   const flow = ensoFlowRow();
   return {
     label: 'Ocean temperature',
     ariaLabel:
-      `Ocean temperature anomaly key, ${first.label.toLowerCase()} through ${last.label.toLowerCase()}, a qualitative scale.` +
+      `Ocean temperature anomaly key, ${first.toLowerCase()} through ${last.toLowerCase()}, a qualitative scale.` +
       observed +
       ' NASA GIBS GHRSST MUR SST anomaly.' +
       flow.ariaLabel,
@@ -423,7 +435,7 @@ function sstKey(): KeySpec {
           )}</span>`
         : '') +
       '<span class="map-key-scale" data-sst-anomaly-key>' +
-      SST_ANOMALY_SCALE.map((entry) => swatchItem(entry.color, entry.label)).join('') +
+      sstAnomalyScaleHtml() +
       '</span>' +
       '<span class="map-key-item" data-sst-attribution>NASA GIBS GHRSST MUR</span>' +
       flow.html
@@ -697,7 +709,7 @@ function cdmKey(): KeySpec {
       `Canadian Drought Monitor key for ${month}. Agriculture and Agri-Food Canada. Areas without a polygon are not assigned class zero.`,
     itemsHtml:
       `<span class="map-key-item">${escapeHtml(month)}</span>` +
-      USDM_CATEGORIES.map((entry) =>
+      CDM_CATEGORIES.map((entry) =>
         swatchItem(
           entry.color,
           stateByClass.get(entry.code) === 'absent-no-occupied-area'
@@ -1630,6 +1642,7 @@ export function initMapKey(): void {
   registry.on('status-change', () => {
     update();
   });
+  timeline.onChange(update);
   // The arrows may have loaded before this chunk did (a boot with `flow=`
   // in the URL): ask once for their state; nothing answers while inactive.
   ensoFlowSnapshot = null;

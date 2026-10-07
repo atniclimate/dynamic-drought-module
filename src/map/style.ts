@@ -3,6 +3,7 @@ import type * as maplibregl from 'maplibre-gl';
 // style needs one tile template, and importing `URLS` here would carry the
 // whole 70-entry table into the entry chunk for it.
 import { BOOT_URLS } from '../config/urls-boot';
+import { MAP_GROUND_COLOR } from '../config/interface-tokens';
 
 /**
  * The absolute same-origin glyph template under the deployed base: the page's
@@ -70,7 +71,7 @@ export function buildBaseStyle(): maplibregl.StyleSpecification {
         id: 'background',
         type: 'background',
         paint: {
-          'background-color': '#0b1220'
+          'background-color': MAP_GROUND_COLOR
         }
       },
       {

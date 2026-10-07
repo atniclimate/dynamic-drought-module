@@ -7,24 +7,14 @@
 /* ---------------------------------------------------------------------------
  * North American drought minimap
  *
- * The minimap is a condition overview, so it uses the shared D0 through D4
- * drought ramp rather than editorial region colors. `none` is deliberately
+ * The minimap summarizes monthly NADM, so its colors derive from NADM below.
+ * They are independent of the weekly USDM table. `none` is deliberately
  * white, per the map convention. Loading and unavailable states are separate
  * UI states and never receive a drought color.
  * ------------------------------------------------------------------------- */
 
 export type DroughtSeverityCode = 'none' | 'D0' | 'D1' | 'D2' | 'D3' | 'D4';
 
-export const MINIMAP_DROUGHT_COLORS: Readonly<
-  Record<DroughtSeverityCode, string>
-> = {
-  none: '#FFFFFF',
-  D0: '#FFFF00',
-  D1: '#FCD37F',
-  D2: '#FFAA00',
-  D3: '#E60000',
-  D4: '#730000'
-};
 
 /* ---------------------------------------------------------------------------
  * Wildfire minimap evidence hierarchy
@@ -47,9 +37,10 @@ export type MinimapWildfireColorKey =
 export const MINIMAP_WILDFIRE_COLORS: Readonly<
   Record<MinimapWildfireColorKey, string>
 > = {
-  'mapped-wildfire': '#D73027',
-  'high-potential': '#FF9F1C',
-  'moderate-potential': '#FFE066',
+  // DR-138 R5: borrow the NIFC mark and issuer WHP High/Moderate colors.
+  'mapped-wildfire': '#ff4c00',
+  'high-potential': '#ffa300',
+  'moderate-potential': '#ffff63',
   'below-threshold': '#E2E8F0',
   'no-data': '#334155',
   'unavailable': '#1E293B'
@@ -87,16 +78,17 @@ export const ECOREGION_DEFAULT_COLOR = '#5a6b7d';
 /* ---------------------------------------------------------------------------
  * NOAA CPC Seasonal Drought Outlook category palette
  *
- * The CPC encodes status in a numeric attribute that maps to one of these
- * forecast categories. Used by the legend; the actual fill comes from the
- * upstream WMS so this table is for the sidebar swatches only.
+ * NOAA cpc_drought_outlk MapServer layers 1 and 4 publish these class colors.
+ * The vector adapter keys the outlook attribute; this table drives hatch ink,
+ * outlines and swatches. DDM display opacity is a separate transform.
+ * D3 M0 receipt: cpc-seasonal-drought-outlook, clause_verdicts_2026_10_07.
  * ------------------------------------------------------------------------- */
 
 export const DROUGHT_COLORS: Readonly<Record<string, string>> = {
-  PERSISTS: '#cd853f',
-  DEVELOPS: '#daa520',
-  IMPROVES: '#9acd32',
-  REMOVAL: '#3cb371'
+  PERSISTS: '#9B634A',
+  DEVELOPS: '#FFDE63',
+  IMPROVES: '#DED4BC',
+  REMOVAL: '#B2AD69'
 };
 
 /* ---------------------------------------------------------------------------
@@ -239,25 +231,49 @@ export const USDM_NONE_SWATCH: Readonly<{ code: string; label: string; color: st
   color: '#253247'
 };
 
+/**
+ * CDM source colors, independently owned from USDM/NADM.
+ * AAFC ImageServer legend PNG interiors verified 2026-10-07 (D3 S3/M11).
+ * Receipt: aafc-canadian-drought-monitor, clause_verdicts_2026_10_07.
+ * https://agriculture.canada.ca/imagery-images/rest/services/canadian_drought_monitor/ImageServer/legend?f=pjson
+ */
+export const CDM_CATEGORIES = [
+  { code: 'D0', color: '#FFFF00' },
+  { code: 'D1', color: '#FFD37F' },
+  { code: 'D2', color: '#E69800' },
+  { code: 'D3', color: '#E60000' },
+  { code: 'D4', color: '#730000' }
+] as const;
+
 /* ---------------------------------------------------------------------------
  * North American Drought Monitor (NADM) monthly consensus categories
  *
- * Kept separate from the weekly USDM palette even though the published class
- * names and colors align. NADM is a tri-national monthly consensus product,
+ * Kept separate from the weekly USDM palette; issuer D1 colors differ.
+ * NADM is a tri-national monthly consensus product,
  * not a USDM extension or a field to blend with USDM, CDM, or BC basin levels.
  * ------------------------------------------------------------------------- */
-
+// D3 S2: NOAA NADM hub's NADM_Current/FeatureServer/0 renderer, 2026-10-07.
+// Exact RGBA receipt: private references ledger nadm-ncei, palette_review_2026_10_07.
 export const NADM_CATEGORIES: ReadonlyArray<{
   readonly code: string;
   readonly label: string;
   readonly color: string;
 }> = [
   { code: 'D0', label: 'Abnormally dry', color: '#FFFF00' },
-  { code: 'D1', label: 'Moderate drought', color: '#FCD37F' },
+  { code: 'D1', label: 'Moderate drought', color: '#FCD27E' },
   { code: 'D2', label: 'Severe drought', color: '#FFAA00' },
   { code: 'D3', label: 'Extreme drought', color: '#E60000' },
   { code: 'D4', label: 'Exceptional drought', color: '#730000' }
 ];
+
+export const MINIMAP_DROUGHT_COLORS: Readonly<Record<DroughtSeverityCode, string>> = {
+  none: '#FFFFFF',
+  D0: NADM_CATEGORIES[0]!.color,
+  D1: NADM_CATEGORIES[1]!.color,
+  D2: NADM_CATEGORIES[2]!.color,
+  D3: NADM_CATEGORIES[3]!.color,
+  D4: NADM_CATEGORIES[4]!.color
+};
 
 /* ---------------------------------------------------------------------------
  * Province of British Columbia basin drought levels
@@ -274,20 +290,23 @@ export interface BcDroughtLevel {
   readonly color: string;
 }
 
+// D3 S4: BC portal webmap 02472f91813a4dac8fabf24f92a23c93 renderer, 2026-10-07.
+// Exact RGBA receipt: private references ledger bc-drought-levels. DR-160 hold unchanged.
 export const BC_DROUGHT_LEVELS: readonly BcDroughtLevel[] = [
-  { value: 0, code: '0', label: 'Level 0', color: '#2f855a' },
-  { value: 1, code: '1', label: 'Level 1', color: '#f6e05e' },
-  { value: 2, code: '2', label: 'Level 2', color: '#f6ad55' },
-  { value: 3, code: '3', label: 'Level 3', color: '#ed8936' },
-  { value: 4, code: '4', label: 'Level 4', color: '#e53e3e' },
-  { value: 5, code: '5', label: 'Level 5', color: '#822727' }
+  { value: 0, code: '0', label: 'Level 0', color: '#FFFFFF' },
+  { value: 1, code: '1', label: 'Level 1', color: '#EBD1B8' },
+  { value: 2, code: '2', label: 'Level 2', color: '#C2A57A' },
+  { value: 3, code: '3', label: 'Level 3', color: '#8C683A' },
+  { value: 4, code: '4', label: 'Level 4', color: '#5B3E22' },
+  { value: 5, code: '5', label: 'Level 5', color: '#261A0F' }
 ];
 
 export const BC_DROUGHT_NO_UPDATE: BcDroughtLevel = {
   value: 99,
   code: 'No update',
   label: 'Not measured right now',
-  color: '#64748b'
+  // Issuer alpha 191/255 is source data, separate from adapter display opacity.
+  color: 'rgba(204, 204, 204, 0.7490196078431373)'
 };
 
 /* ---------------------------------------------------------------------------
@@ -422,7 +441,7 @@ export const AIANNH_OUTLINE_COLOR = TRIBAL_FAMILY_COLOR;
  * at opacity zero) so a click anywhere inside a state can open the briefing.
  * ------------------------------------------------------------------------- */
 
-export const STATE_OUTLINE_COLOR = '#64748b';
+export { STATE_OUTLINE_COLOR } from './interface-tokens';
 
 /* ---------------------------------------------------------------------------
  * Municipal place labels (U4e; Natural Earth bundled points)
@@ -431,11 +450,10 @@ export const STATE_OUTLINE_COLOR = '#64748b';
  * both-basemaps rule accepts unchanged over the desaturated OSM default AND
  * over satellite imagery (the halo carries the contrast, not the text
  * color). These are the map-side tokens for label chrome; on-map paint
- * cannot read CSS custom properties, so palette.ts is their single source.
+ * cannot read CSS custom properties; interface-tokens owns these mirrors.
  * ------------------------------------------------------------------------- */
 
-export const PLACE_LABEL_COLOR = '#334155';
-export const PLACE_LABEL_HALO = '#f8fafc';
+export { PLACE_LABEL_COLOR, PLACE_LABEL_HALO } from './interface-tokens';
 
 /* ---------------------------------------------------------------------------
  * Hillshade underlay (U4g)
@@ -447,8 +465,7 @@ export const PLACE_LABEL_HALO = '#f8fafc';
  * the "subtle" knob and lives here so a design pass tunes one number.
  * ------------------------------------------------------------------------- */
 
-export const HILLSHADE_SHADOW = '#1e293b';
-export const HILLSHADE_HIGHLIGHT = '#f8fafc';
+export { HILLSHADE_SHADOW, HILLSHADE_HIGHLIGHT } from './interface-tokens';
 export const HILLSHADE_EXAGGERATION = 0.22;
 
 /* ---------------------------------------------------------------------------
@@ -478,9 +495,9 @@ export const NWS_ALERT_DEFAULT_COLOR = '#9ca3af';
  * SPC Fire Weather Outlook categories
  *
  * Keyed by the MapServer's integer `dn` (Data Number) field. Colors follow
- * the Storm Prediction Center's own fire-weather display convention
- * (Elevated orange, Critical red, Extreme magenta), so the module never
- * invents its own severity language.
+ * NOAA SPC_firewx MapServer layers 1 and 4 publish these exact RGBA colors.
+ * D3 M0 receipt: spc-fire-weather-days-1-8, clause_verdicts_2026_10_07.
+ * Display opacity remains separate from the issuer's opaque class colors.
  * ------------------------------------------------------------------------- */
 
 export const SPC_FIREWX_CATEGORIES: ReadonlyArray<{
@@ -489,34 +506,269 @@ export const SPC_FIREWX_CATEGORIES: ReadonlyArray<{
   readonly color: string;
 }> = [
   { dn: 5, label: 'Elevated', color: '#e69800' },
-  { dn: 8, label: 'Critical', color: '#e60000' },
+  { dn: 8, label: 'Critical', color: '#FF0000' },
   // DDM-P7-T03 (science verdict, 2026-09-09): the MapServer renderer's own
   // word here is "Extreme", but SPC's public product word (about.html) is
   // "Extremely Critical"; the label is corrected to the issuer's word so the
   // map legend and the briefing agree (director grant, brief section 2).
-  { dn: 10, label: 'Extremely Critical', color: '#ff00ff' }
+  { dn: 10, label: 'Extremely Critical', color: '#E600A9' }
 ];
 
 export const SPC_FIREWX_DEFAULT_COLOR = '#9ca3af';
 
-/* ---------------------------------------------------------------------------
- * Sea surface temperature (SST) anomaly qualitative scale
- *
- * The ENSO ocean surface (src/layers/sst-anomaly.ts) renders NASA GIBS
- * GHRSST MUR anomaly tiles that are colorized upstream; the GIBS metadata
- * states no climatology baseline, so this scale stays deliberately
- * qualitative (warmer / near / cooler) and never asserts a numeric ramp.
- * ONE table drives both the sidebar legend and the on-map key so the two
- * surfaces cannot drift.
- * ------------------------------------------------------------------------- */
-
+/**
+ * NASA GIBS GHRSST MUR SST anomaly, full v1.3 colormap.
+ * Receipt: nasa-gibs-acknowledgement.palette_review_2026_10_07.
+ * https://gibs.earthdata.nasa.gov/colormaps/v1.3/GHRSST_Sea_Surface_Temperature_Anomalies.xml
+ * Intervals are source metadata in degrees C; no climatology baseline is inferred.
+ * Ref 0 is transparent no-data, not a zero/near-usual class.
+ */
 export const SST_ANOMALY_SCALE: ReadonlyArray<{
+  readonly ref: number;
+  readonly interval: string | null;
   readonly color: string;
-  readonly label: string;
+  readonly transparent: boolean;
 }> = [
-  { color: '#b2182b', label: 'Warmer than usual' },
-  { color: '#f7f7f7', label: 'Near usual' },
-  { color: '#2166ac', label: 'Cooler than usual' }
+  { ref: 0, interval: null, color: '#000000', transparent: true },
+  { ref: 1, interval: '[-INF,-3.0)', color: '#6b00db', transparent: false },
+  { ref: 2, interval: '[-3.0,-2.9)', color: '#7400d6', transparent: false },
+  { ref: 3, interval: '[-2.9,-2.8)', color: '#7f00d3', transparent: false },
+  { ref: 4, interval: '[-2.8,-2.7)', color: '#8900cf', transparent: false },
+  { ref: 5, interval: '[-2.7,-2.6)', color: '#9600ca', transparent: false },
+  { ref: 6, interval: '[-2.6,-2.5)', color: '#9109cc', transparent: false },
+  { ref: 7, interval: '[-2.5,-2.4)', color: '#7f1ad1', transparent: false },
+  { ref: 8, interval: '[-2.4,-2.3)', color: '#6031dc', transparent: false },
+  { ref: 9, interval: '[-2.3,-2.2)', color: '#414be6', transparent: false },
+  { ref: 10, interval: '[-2.2,-2.1)', color: '#2264f1', transparent: false },
+  { ref: 11, interval: '[-2.1,-2.0)', color: '#087cfb', transparent: false },
+  { ref: 12, interval: '[-2.0,-1.9)', color: '#0094ff', transparent: false },
+  { ref: 13, interval: '[-1.9,-1.8)', color: '#00aeff', transparent: false },
+  { ref: 14, interval: '[-1.8,-1.7)', color: '#00caff', transparent: false },
+  { ref: 15, interval: '[-1.7,-1.6)', color: '#00e3ff', transparent: false },
+  { ref: 16, interval: '[-1.6,-1.5)', color: '#03f8fa', transparent: false },
+  { ref: 17, interval: '[-1.5,-1.4)', color: '#18fce5', transparent: false },
+  { ref: 18, interval: '[-1.4,-1.3)', color: '#2fffce', transparent: false },
+  { ref: 19, interval: '[-1.3,-1.2)', color: '#47ffb6', transparent: false },
+  { ref: 20, interval: '[-1.2,-1.1)', color: '#60ff9e', transparent: false },
+  { ref: 21, interval: '[-1.1,-1.0)', color: '#76ff8c', transparent: false },
+  { ref: 22, interval: '[-1.0,-0.9)', color: '#88ff84', transparent: false },
+  { ref: 23, interval: '[-0.9,-0.8)', color: '#97ff8b', transparent: false },
+  { ref: 24, interval: '[-0.8,-0.7)', color: '#a4ff91', transparent: false },
+  { ref: 25, interval: '[-0.7,-0.6)', color: '#b1ff98', transparent: false },
+  { ref: 26, interval: '[-0.6,-0.5)', color: '#bdfe9e', transparent: false },
+  { ref: 27, interval: '[-0.5,-0.4)', color: '#bff4a3', transparent: false },
+  { ref: 28, interval: '[-0.4,-0.3)', color: '#bfe8a9', transparent: false },
+  { ref: 29, interval: '[-0.3,-0.2)', color: '#bfdbb0', transparent: false },
+  { ref: 30, interval: '[-0.2,-0.1)', color: '#bfd0b6', transparent: false },
+  { ref: 31, interval: '[-0.1,0.0)', color: '#c2cab8', transparent: false },
+  { ref: 32, interval: '[0.0,0.1)', color: '#cacab7', transparent: false },
+  { ref: 33, interval: '[0.1,0.2)', color: '#d5d5ac', transparent: false },
+  { ref: 34, interval: '[0.2,0.3)', color: '#e2e2a2', transparent: false },
+  { ref: 35, interval: '[0.3,0.4)', color: '#eded98', transparent: false },
+  { ref: 36, interval: '[0.4,0.5)', color: '#f9f88d', transparent: false },
+  { ref: 37, interval: '[0.5,0.6)', color: '#fff679', transparent: false },
+  { ref: 38, interval: '[0.6,0.7)', color: '#ffea5e', transparent: false },
+  { ref: 39, interval: '[0.7,0.8)', color: '#ffde43', transparent: false },
+  { ref: 40, interval: '[0.8,0.9)', color: '#ffd025', transparent: false },
+  { ref: 41, interval: '[0.9,1.0)', color: '#ffc209', transparent: false },
+  { ref: 42, interval: '[1.0,1.1)', color: '#ffb601', transparent: false },
+  { ref: 43, interval: '[1.1,1.2)', color: '#ffaa00', transparent: false },
+  { ref: 44, interval: '[1.2,1.3)', color: '#ff9d00', transparent: false },
+  { ref: 45, interval: '[1.3,1.4)', color: '#ff9100', transparent: false },
+  { ref: 46, interval: '[1.4,1.5)', color: '#ff8200', transparent: false },
+  { ref: 47, interval: '[1.5,1.6)', color: '#ff7100', transparent: false },
+  { ref: 48, interval: '[1.6,1.7)', color: '#ff5900', transparent: false },
+  { ref: 49, interval: '[1.7,1.8)', color: '#ff3d00', transparent: false },
+  { ref: 50, interval: '[1.8,1.9)', color: '#ff2100', transparent: false },
+  { ref: 51, interval: '[1.9,2.0)', color: '#fe0900', transparent: false },
+  { ref: 52, interval: '[2.0,2.1)', color: '#f90113', transparent: false },
+  { ref: 53, interval: '[2.1,2.2)', color: '#f3002d', transparent: false },
+  { ref: 54, interval: '[2.2,2.3)', color: '#ec004a', transparent: false },
+  { ref: 55, interval: '[2.3,2.4)', color: '#e60067', transparent: false },
+  { ref: 56, interval: '[2.4,2.5)', color: '#de007d', transparent: false },
+  { ref: 57, interval: '[2.5,2.6)', color: '#d30085', transparent: false },
+  { ref: 58, interval: '[2.6,2.7)', color: '#bf0068', transparent: false },
+  { ref: 59, interval: '[2.7,2.8)', color: '#ab0048', transparent: false },
+  { ref: 60, interval: '[2.8,2.9)', color: '#9a002c', transparent: false },
+  { ref: 61, interval: '[2.9,3.0)', color: '#88000f', transparent: false },
+  { ref: 62, interval: '[3.0,+INF)', color: '#800000', transparent: false }
 ];
 
+/** Existing qualitative orientation words, not issuer-defined numeric bins. */
+export const SST_ANOMALY_LABELS = [
+  'Warmer than usual', 'Near usual', 'Cooler than usual'
+] as const;
+
+/** R8: NDMC USDM signed change classes, exact issuer metadata colors.
+ * Receipt: usdm-change-maps-drought-gov, clause_verdicts_2026_10_07.
+ * Transparent unmatched values are a DDM absence treatment, not an issuer class.
+ */
+export const USDM_CHANGE_COLORS = [
+  { dn: -5, color: '#003D75' },
+  { dn: -4, color: '#016678' },
+  { dn: -3, color: '#359766' },
+  { dn: -2, color: '#8AD48C' },
+  { dn: -1, color: '#CCFFD4' },
+  { dn: 0, color: '#CCCCCC' },
+  { dn: 1, color: '#FFFF73' },
+  { dn: 2, color: '#FFD438' },
+  { dn: 3, color: '#FF9900' },
+  { dn: 4, color: '#A87000' },
+  { dn: 5, color: '#543005' },
+] as const;
+
 export const SST_ANOMALY_LEGEND_TITLE = 'Ocean temperature anomaly';
+
+/** D3 M11, S13: product-specific CPC reference-guide colors.
+ * ONI: cpc-oni-data-file.palette_review_2026_10_07 (historical v5 HTML).
+ * RONI: cpc-roni-product-page.guide_colors_2026_10_07 (operational CSS).
+ * These guides do not classify episodes or recolor measured series/plumes.
+ */
+export const ENSO_INDEX_GUIDE_COLORS = {
+  ONI: { warm: '#ff0000', cold: '#0000ff' },
+  RONI: { warm: '#e80016', cold: '#195fe4' }
+} as const;
+
+/** D3 M2, S13: current DDM probability-plume colors frozen before chrome migration.
+ * CPC issuer-color receipts remain pending. These are not newly verified CPC
+ * display standards; a later correction must cite that receipt.
+ */
+export const ENSO_PHASE_COLORS = {
+  elNino: '#f59e0b',
+  neutral: '#94a3b8',
+  laNina: '#06b6d4'
+} as const;
+
+/** CPC 6-10 and 8-14 day unique-value renderers, exact cat,prob pairs.
+ * D3 M0/S14 receipt: cpc-extended-range-outlook, renderer_review_2026_10_07.
+ * The prob field has no declared domain; these are renderer matches, not
+ * forecast probability bounds or intervals. Unmatched input has no issuer hue.
+ */
+export const CPC_OUTLOOK_TERCILE_COLORS = {
+  temperature: {
+    'Above,33': '#E7B168',
+    'Above,40': '#E38B4B',
+    'Above,50': '#DA5731',
+    'Above,60': '#C93B1A',
+    'Above,70': '#B32E05',
+    'Above,80': '#912600',
+    'Above,90': '#702100',
+    'Normal,36': '#A0A0A0',
+    'Below,33': '#BFCBE4',
+    'Below,40': '#A0C0DF',
+    'Below,50': '#77B5E2',
+    'Below,60': '#389FDC',
+    'Below,70': '#005DA1',
+    'Below,80': '#2E216F',
+    'Below,90': '#221852'
+  },
+  precipitation: {
+    'Above,33': '#B3D9AB',
+    'Above,40': '#95CE7F',
+    'Above,50': '#48B430',
+    'Above,60': '#009620',
+    'Above,70': '#007814',
+    'Above,80': '#28600A',
+    'Above,90': '#285300',
+    'Normal,36': '#A0A0A0',
+    'Below,33': '#F0D493',
+    'Below,40': '#D8A74F',
+    'Below,50': '#BB6D33',
+    'Below,60': '#9B5031',
+    'Below,70': '#934639',
+    'Below,80': '#804000',
+    'Below,90': '#4F2F2F'
+  }
+} as const;
+
+/** DDM observation/index marks, frozen independently of interface ink. */
+/** D3 M7 / M-027: neutral OKLab steps for D8 classes 1, 2 and 3.
+ * Class 1: TIGER S1100; class 2: qualifying S1200; class 3: remaining S1200.
+ * NRN classification and ferry connectors remain D8's responsibility.
+ * Retokened at t=.30/.15/0 to meet the two NIFC-neutral separation floors.
+ * These are DDM display tokens, not an issuer road-safety classification.
+ */
+export const ROAD_CLASS_COLORS = {
+  1: '#898A8B',
+  2: '#767677',
+  3: '#636363'
+} as const;
+export const ROAD_CASING = '#010B13';
+export const ROAD_HALO = { color: '#E8ECF0', opacity: 0.6 } as const;
+export const ROAD_NOT_ASSESSED_KNOCKOUT = { color: '#010B13', opacity: 0.9 } as const;
+
+/** S15: adopted conditional fallback, not a verified FHWA digital color.
+ * Proposed #FED141 failed the digital comparison. Exact issuer web hex and
+ * physical CFR compliance remain unverified; see M-027.
+ * Caution/source separation remains unresolved for USDM change +2 #FFD438.
+ */
+export const CAUTION_LINE_COLORS = { yellow: '#FFD100', black: '#000000' } as const;
+
+export const OBSERVATION_SERIES_COLOR = '#06b6d4';
+export const INDEX_SERIES_COLORS = { primary: '#f1f5f9', comparison: '#94a3b8' } as const;
+
+/**
+ * S12: decoded ACIS Grid 1 SPI legend.png class interiors, all five offered
+ * windows, 2026-10-07. Receipt: nidis-gridded-drought-indices,
+ * scale_review_2026_10_07. These are legend pixels, not numeric bin metadata.
+ * The white slot is unlabeled by the issuer; null does not assert zero/no-data.
+ */
+export const GRIDDED_INDEX_RAMP = [
+  { code: 'D4', color: '#730000' },
+  { code: 'D3', color: '#E60000' },
+  { code: 'D2', color: '#FFAA00' },
+  { code: 'D1', color: '#FCD37F' },
+  { code: 'D0', color: '#FFFF00' },
+  { code: null, color: '#FFFFFF' },
+  { code: 'W0', color: '#AAFF55' },
+  { code: 'W1', color: '#01FFFF' },
+  { code: 'W2', color: '#00AAFF' },
+  { code: 'W3', color: '#0000FF' },
+  { code: 'W4', color: '#0000AA' }
+] as const;
+
+/** CPC seasonal Lead 1 uniqueValue renderer, cat+prob, 2026-10-07 metadata.
+ * Precip SHA256 547953231f105348e8e6eadfec9aec7f2c248f0c2339a865d8266af8b7c20553.
+ * Temp SHA256 52695582302e38969e0e8e2d0c80952066714df8a421490dc7562c9c65b46da5.
+ * Source RGBA, including distinct transparent EC RGB, not a DDM class transform.
+ */
+export const CPC_SEASONAL_COLORS = {
+  precipitation: [
+    { cat: 'Above', prob: 90, label: 'Above, 90%', color: [40, 83, 0, 255] },
+    { cat: 'Above', prob: 80, label: 'Above, 80%', color: [40, 96, 10, 255] },
+    { cat: 'Above', prob: 70, label: 'Above, 70%', color: [0, 120, 20, 255] },
+    { cat: 'Above', prob: 60, label: 'Above, 60%', color: [0, 150, 32, 255] },
+    { cat: 'Above', prob: 50, label: 'Above, 50%', color: [72, 180, 48, 255] },
+    { cat: 'Above', prob: 40, label: 'Above, 40%', color: [149, 206, 127, 255] },
+    { cat: 'Above', prob: 33, label: 'Above, 33%', color: [179, 217, 171, 255] },
+    { cat: 'Normal', prob: 33, label: 'Near Normal, 33%', color: [215, 217, 217, 255] },
+    { cat: 'Normal', prob: 40, label: 'Near Normal, 40%', color: [160, 160, 160, 255] },
+    { cat: 'Below', prob: 33, label: 'Below, 33%', color: [240, 212, 147, 255] },
+    { cat: 'Below', prob: 40, label: 'Below, 40%', color: [216, 167, 79, 255] },
+    { cat: 'Below', prob: 50, label: 'Below, 50%', color: [187, 109, 51, 255] },
+    { cat: 'Below', prob: 60, label: 'Below, 60%', color: [155, 80, 49, 255] },
+    { cat: 'Below', prob: 70, label: 'Below, 70%', color: [147, 70, 57, 255] },
+    { cat: 'Below', prob: 80, label: 'Below, 80%', color: [128, 64, 0, 255] },
+    { cat: 'Below', prob: 90, label: 'Below, 90%', color: [79, 47, 47, 255] },
+    { cat: 'EC', prob: 33, label: 'Equal Chances', color: [0, 0, 0, 0] }
+  ],
+  temperature: [
+    { cat: 'Above', prob: 90, label: 'Above, 90%', color: [112, 33, 0, 255] },
+    { cat: 'Above', prob: 80, label: 'Above, 80%', color: [145, 38, 0, 255] },
+    { cat: 'Above', prob: 70, label: 'Above, 70%', color: [179, 46, 5, 255] },
+    { cat: 'Above', prob: 60, label: 'Above, 60%', color: [201, 59, 26, 255] },
+    { cat: 'Above', prob: 50, label: 'Above, 50%', color: [218, 87, 49, 255] },
+    { cat: 'Above', prob: 40, label: 'Above, 40%', color: [227, 139, 75, 255] },
+    { cat: 'Above', prob: 33, label: 'Above, 33%', color: [231, 177, 104, 255] },
+    { cat: 'Normal', prob: 33, label: 'Near Normal, 33%', color: [215, 217, 217, 255] },
+    { cat: 'Normal', prob: 40, label: 'Near Normal, 40%', color: [160, 160, 160, 255] },
+    { cat: 'Below', prob: 33, label: 'Below, 33%', color: [191, 203, 228, 255] },
+    { cat: 'Below', prob: 40, label: 'Below, 40%', color: [160, 192, 223, 255] },
+    { cat: 'Below', prob: 50, label: 'Below, 50%', color: [119, 181, 226, 255] },
+    { cat: 'Below', prob: 60, label: 'Below, 60%', color: [56, 159, 220, 255] },
+    { cat: 'Below', prob: 70, label: 'Below, 70%', color: [0, 93, 161, 255] },
+    { cat: 'Below', prob: 80, label: 'Below, 80%', color: [46, 33, 111, 255] },
+    { cat: 'Below', prob: 90, label: 'Below, 90%', color: [34, 24, 82, 255] },
+    { cat: 'EC', prob: 33, label: 'Equal Chances', color: [255, 255, 255, 0] }
+  ],
+} as const;

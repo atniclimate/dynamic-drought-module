@@ -174,6 +174,7 @@ export function ensureImpactPanelShell(): ImpactPanelShell {
       </div>
     </header>
     <div class="impact-panel-body"></div>
+    <footer class="impact-print-brand" aria-hidden="true"><img src="${import.meta.env?.BASE_URL ?? './'}brand/atni-climate-lockup.png" alt="" /></footer>
   `;
   document.body.appendChild(panel);
 
@@ -357,7 +358,15 @@ export function closeImpactPanelShell(restoreFocus = true): void {
 
   const opener = shellOpener;
   shellOpener = null;
-  if (restoreFocus && opener && document.contains(opener)) opener.focus();
+  if (restoreFocus && opener && document.contains(opener)) {
+    opener.focus();
+    // Hard close retires the panel-owned selection, hiding the Brief report
+    // door. Return to its visible place-search entry rather than losing
+    // keyboard focus when that now-hidden opener cannot receive it.
+    if (document.activeElement !== opener && opener.id === 'brief-full-report-link') {
+      document.querySelector<HTMLInputElement>('#brief-search [data-ddm-search]')?.focus();
+    }
+  }
   window.setTimeout(() => {
     if (shell && !shell.panel.classList.contains('open')) {
       shell.panel.hidden = true;
@@ -805,6 +814,7 @@ export function openAcknowledgements(opener: HTMLElement | null): void {
       // DRAFT wording (DR-177): source-directory description pending owner read.
       current.kind.textContent = 'Every data source this map can show';
       current.body.innerHTML = `<p class="impact-horizon-note">${UNAVAILABLE_NOTE}</p>`;
+      setMailActionEnabled(false);
       unavailableOpen = true;
       unavailableSelection = null;
       openImpactPanelShell(closeImpactPanel, opener);

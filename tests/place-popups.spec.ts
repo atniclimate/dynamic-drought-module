@@ -1,4 +1,51 @@
 import { test, expect, type Page, type Route } from './offline-test';
+import { readFileSync } from 'node:fs';
+import { installBoundaryStubs } from './tribal-fixtures';
+import { installMinimapAnalysisStubs } from './minimap-fixtures';
+import { buildImpactTriggerButtonHtml } from '../src/ui/popups';
+
+const css = readFileSync(new URL('../src/styles/app.css', import.meta.url), 'utf8');
+
+// Render the shipped serializer and full stylesheet in an isolated document.
+// No map, source requests, GPU contention, or clock sleeps are needed.
+test('briefing warning ring changes width only and keeps a 2px reduced-motion edge', async ({ page }) => {
+  await installBoundaryStubs(page);
+  await installMinimapAnalysisStubs(page);
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await page.setContent(`<style>${css}</style><main>${[
+    'Red Flag Warning', 'Extreme Heat Warning', 'Mapped wildfire perimeter', 'Unknown Warning'
+  ].map((warningLabel) => buildImpactTriggerButtonHtml('Fixture Place', { pulse: true, warningLabel })).join('')}</main>`);
+  const doors = page.locator('[data-ddm-impact-trigger]');
+  const colors = ['rgb(255, 20, 147)', 'rgb(199, 21, 133)', 'rgb(255, 76, 0)', 'rgb(255, 255, 255)'];
+  for (let i = 0; i < colors.length; i += 1) {
+    const door = doors.nth(i);
+    const samples = await door.evaluate((element) => {
+      const animation = element.getAnimations().find((item) => item instanceof CSSAnimation && item.animationName === 'popup-impact-btn-pulse');
+      if (!animation) throw new Error('missing briefing-door width animation');
+      animation.pause();
+      return [0, 800, 1600].map((time) => {
+        animation.currentTime = time;
+        const style = getComputedStyle(element);
+        const rect = element.getBoundingClientRect();
+        return { shadow: style.boxShadow, border: style.borderTopColor, width: rect.width, height: rect.height };
+      });
+    });
+    for (let j = 0; j < samples.length; j += 1) {
+      expect(samples[j]?.shadow).toBe(`${colors[i]} 0px 0px 0px ${j === 1 ? 3 : 1}px`);
+      expect(samples[j]?.border).toBe(colors[i]);
+      expect(samples[j]?.width).toBe(samples[0]?.width);
+      expect(samples[j]?.height).toBe(samples[0]?.height);
+    }
+    await door.hover();
+    await expect(door).toHaveCSS('border-top-color', colors[i]!);
+  }
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  for (let i = 0; i < colors.length; i += 1) {
+    await expect(doors.nth(i)).toHaveCSS('animation-name', 'none');
+    await expect(doors.nth(i)).toHaveCSS('box-shadow', `${colors[i]} 0px 0px 0px 2px`);
+    await expect(doors.nth(i)).toHaveCSS('border-top-color', colors[i]!);
+  }
+});
 import { gotoApp, layerCheckbox, layerPill, waitForLayerSettled } from './helpers';
 import { AIANNH_ROUTE, routeGeojson } from './tribal-fixtures';
 import { HAZARD_CLUSTERS, type HazardClusterKey } from '../src/config/clusters';
@@ -154,6 +201,12 @@ test.describe('place popups: the briefing door', () => {
         if (firesOn) {
           pulsed += 1;
           await expect(door).toHaveClass(/popup-impact-btn--pulse/);
+          await expect(door).toHaveCSS('border-top-color', 'rgb(255, 76, 0)');
+          await expect(door).toHaveCSS('--door-issuer-color', '#ff4c00');
+          await page.emulateMedia({ reducedMotion: 'reduce' });
+          await expect(door).toHaveCSS('animation-name', 'none');
+          await expect(door).toHaveCSS('box-shadow', 'rgb(255, 76, 0) 0px 0px 0px 2px');
+          // The native door still opens the same place below.
           await expect(root.locator('[data-popup-region="head"] [data-popup-slot="value"]')).toContainText('Wildfire');
           const wildfire = root.locator('[data-popup-region="body"] [data-popup-slot="conditions"] [data-value-row]', { hasText: 'Wildfire' });
           await expect(wildfire).toHaveCount(1);

@@ -1,6 +1,5 @@
 import { expect, test, type Locator, type Page } from './offline-test';
 
-import { SST_ANOMALY_SCALE } from '../src/config/palette';
 import { gotoApp } from './helpers';
 import { routeAllTribalFixtures } from './tribal-fixtures';
 import { installMinimapAnalysisStubs } from './minimap-fixtures';
@@ -295,7 +294,7 @@ test.describe('mobile key growth at 390x844', () => {
       };
     });
     expect(chrome.radius).toBe('4px');
-    expect(chrome.background).toBe('rgba(0, 64, 64, 0.3)');
+    expect(chrome.background).toBe('rgba(1, 11, 19, 0.3)');
     expect(chrome.backdrop).toContain('blur(15px)');
 
     for (const section of [
@@ -460,27 +459,61 @@ async function stubSstAnomaly(page: Page): Promise<void> {
   );
 }
 
-/** Assert the one shared SST scale renders in the on-map key (W2-D1). */
+// Independent ordered GIBS v1.3 literals, warm-to-cool; no production-table import.
+const SST_ISSUER_COLORS = [
+  '#800000', '#88000f', '#9a002c', '#ab0048', '#bf0068', '#d30085',
+  '#de007d', '#e60067', '#ec004a', '#f3002d', '#f90113', '#fe0900',
+  '#ff2100', '#ff3d00', '#ff5900', '#ff7100', '#ff8200', '#ff9100',
+  '#ff9d00', '#ffaa00', '#ffb601', '#ffc209', '#ffd025', '#ffde43',
+  '#ffea5e', '#fff679', '#f9f88d', '#eded98', '#e2e2a2', '#d5d5ac',
+  '#cacab7', '#c2cab8', '#bfd0b6', '#bfdbb0', '#bfe8a9', '#bff4a3',
+  '#bdfe9e', '#b1ff98', '#a4ff91', '#97ff8b', '#88ff84', '#76ff8c',
+  '#60ff9e', '#47ffb6', '#2fffce', '#18fce5', '#03f8fa', '#00e3ff',
+  '#00caff', '#00aeff', '#0094ff', '#087cfb', '#2264f1', '#414be6',
+  '#6031dc', '#7f1ad1', '#9109cc', '#9600ca', '#8900cf', '#7f00d3',
+  '#7400d6', '#6b00db'
+];
+async function expectSstSourceRamp(root: Locator): Promise<void> {
+  const ramp = root.locator('.sst-anomaly-ramp');
+  await expect(ramp).toBeVisible();
+  const swatches = ramp.locator('[data-sst-color]');
+  await expect(swatches).toHaveCount(62);
+  const actual = await swatches.evaluateAll(elements => elements.map(element =>
+    [element.getAttribute('data-sst-color'), getComputedStyle(element).backgroundColor]));
+  const expected = SST_ISSUER_COLORS.map((color, index) => [
+    String(62 - index), `rgb(${parseInt(color.slice(1, 3), 16)}, ${parseInt(color.slice(3, 5), 16)}, ${parseInt(color.slice(5, 7), 16)})`
+  ]);
+  expect(actual).toEqual(expected);
+  await expect(ramp.locator('[data-sst-color="0"]')).toHaveCount(0);
+  await expect(root.locator('.sst-anomaly-orientation > span')).toHaveText(
+    ['Warmer than usual', 'Near usual', 'Cooler than usual']);
+  const wordsFit = await root.locator('.sst-anomaly-orientation > span').evaluateAll(elements => elements.every(element => {
+    const box = element.getBoundingClientRect();
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    return element.scrollWidth <= element.clientWidth + 1 &&
+      element.scrollHeight <= element.clientHeight + 1 &&
+      [...range.getClientRects()].every(rect => rect.left >= box.left - 1 &&
+        rect.right <= box.right + 1 && rect.top >= box.top - 1 && rect.bottom <= box.bottom + 1);
+  }));
+  expect(wordsFit, 'All three orientation phrases fit their actual text boxes').toBe(true);
+  const fit = await ramp.evaluate(element => {
+    const box = element.getBoundingClientRect();
+    const cells = [...element.children].map(child => child.getBoundingClientRect());
+    return { width: box.width, overflow: element.scrollWidth - element.clientWidth,
+      cellsInside: cells.every(cell => cell.width > 0 && cell.left >= box.left && cell.right <= box.right + 0.1) };
+  });
+  expect(fit.width).toBeGreaterThan(0);
+  expect(fit.overflow).toBeLessThanOrEqual(1);
+  expect(fit.cellsInside).toBe(true);
+}
+
+/** Assert source colors independently while retaining the existing key contract. */
 async function expectSstKeyContent(
   root: ReturnType<Page['locator']>
 ): Promise<void> {
   await expect(root.locator('.map-key-label')).toHaveText('Ocean temperature');
-  const swatches = root.locator('[data-sst-anomaly-key] .map-key-item');
-  await expect(swatches).toHaveCount(SST_ANOMALY_SCALE.length);
-  for (let index = 0; index < SST_ANOMALY_SCALE.length; index += 1) {
-    const entry = SST_ANOMALY_SCALE[index]!;
-    await expect(swatches.nth(index)).toContainText(entry.label);
-    const rendered = await swatches
-      .nth(index)
-      .locator('.map-key-swatch')
-      .evaluate((element) => getComputedStyle(element).backgroundColor);
-    const hex = entry.color.replace('#', '');
-    const rgb = `rgb(${parseInt(hex.slice(0, 2), 16)}, ${parseInt(
-      hex.slice(2, 4),
-      16
-    )}, ${parseInt(hex.slice(4, 6), 16)})`;
-    expect(rendered, `${entry.label} swatch color`).toBe(rgb);
-  }
+  await expectSstSourceRamp(root.locator('[data-sst-anomaly-key]'));
   await expect(root.locator('[data-sst-attribution]')).toHaveText(
     'NASA GIBS GHRSST MUR'
   );
@@ -493,6 +526,19 @@ async function expectSstKeyContent(
 }
 
 test.describe('the ENSO ocean key reaches every surface (W2-D1)', () => {
+  test('the actual SST sidebar and map key render the complete source ramp', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await stubSstAnomaly(page);
+    await gotoApp(page, '?view=console&layers=sst-anomaly,aiannh');
+    const sidebar = page.locator('.legend-section[data-legend="sst-anomaly"]');
+    await expect(sidebar).toBeVisible();
+    await expect(sidebar.locator('.legend-section-title')).toHaveText('Ocean temperature anomaly');
+    await expect(sidebar.locator('.legend-note')).toHaveText(
+      'NASA GHRSST MUR daily anomaly · the dashed box is Nino 3.4, the region the ENSO index measures');
+    await expectSstSourceRamp(sidebar);
+    await openMapKey(page);
+    await expectSstKeyContent(page.locator('#map-key'));
+  });
   test('the phone quick view renders the SST anomaly key like Fire and Heat', async ({
     page
   }) => {

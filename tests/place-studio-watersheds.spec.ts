@@ -300,12 +300,19 @@ test('the ephemeral emphasis surface shows, updates, and clears areal geometry',
   expect(sources.has('place-studio-boundary')).toBe(true);
   expect(layers.get('place-studio-boundary-fill')).toMatchObject({
     type: 'fill',
-    paint: { 'fill-opacity': 0.1 }
+    paint: { 'fill-opacity': 0.1, 'fill-color': '#FFFFFF' }
   });
   expect(layers.get('place-studio-boundary-line')).toMatchObject({
     type: 'line',
-    paint: { 'line-width': 2 }
+    paint: { 'line-width': 2, 'line-color': '#FFFFFF', 'line-dasharray': [2, 2] }
   });
+  expect(layers.get('place-studio-boundary-casing')).toMatchObject({
+    type: 'line',
+    paint: { 'line-width': 4, 'line-color': '#010B13' }
+  });
+  expect([...layers.keys()]).toEqual([
+    'place-studio-boundary-fill', 'place-studio-boundary-casing', 'place-studio-boundary-line'
+  ]);
 
   showStudioBoundary(map, PACIFIC_NORTHWEST);
   expect(latestData).toMatchObject({
@@ -317,4 +324,10 @@ test('the ephemeral emphasis surface shows, updates, and clears areal geometry',
   expect(sources.has('place-studio-boundary')).toBe(false);
   expect(layers.has('place-studio-boundary-fill')).toBe(false);
   expect(layers.has('place-studio-boundary-line')).toBe(false);
+  expect(layers.has('place-studio-boundary-casing')).toBe(false);
+  showStudioBoundary(map, YAKIMA);
+  expect(layers.size).toBe(3);
+  expect(layers.get('place-studio-boundary-line')).toMatchObject({ paint: { 'line-dasharray': [2, 2] } });
+  clearStudioBoundary(map);
+  expect(layers.size).toBe(0);
 });

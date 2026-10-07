@@ -43,7 +43,7 @@
  *
  * No popups: the index color scale is baked into the tiles and they carry no
  * per-feature properties, so there is nothing to query on click. The legend
- * panel provides an orientation gradient and links the authoritative drought.gov
+ * panel provides the issuer's discrete legend swatches and links drought.gov's
  * legend.
  *
  * Valid date: each product publishes `<slug>/info.json` beside its tiles,
@@ -69,6 +69,7 @@
 import type * as maplibregl from 'maplibre-gl';
 import { URLS } from '../config/urls';
 import { registry } from '../state/registry';
+import { GRIDDED_INDEX_RAMP } from '../config/palette';
 import { escapeHtml } from '../util/escape';
 import { fetchJsonWithBudget } from '../util/fetch';
 import { isObject } from '../util/guards';
@@ -563,7 +564,11 @@ function renderLegendSection(map: maplibregl.Map, body: HTMLElement): void {
     '<select id="gridded-index-product" class="legend-select" aria-label="Gridded drought index product"></select>' +
     '</label>' +
     '<div class="gridded-index-ramp" role="img" aria-label="Standardized Precipitation Index scale: drier on the left, wetter on the right">' +
-    '<span class="gridded-index-ramp-bar"></span>' +
+    '<span class="gridded-index-ramp-bar" aria-hidden="true">' +
+    GRIDDED_INDEX_RAMP.map(({ color }) =>
+      `<span style="background-color:${color}"></span>`
+    ).join('') +
+    '</span>' +
     '<div class="gridded-index-ramp-labels"><span>Drier</span><span>Wetter</span></div>' +
     '</div>' +
     `<p class="legend-note"><span id="gridded-index-product-label">${escapeHtml(productLabel(currentSlug))}</span> · <span id="gridded-index-valid">${escapeHtml(validDateStamp())}</span> · NOAA NIDIS. The exact color scale is baked into the tiles; <a href="https://www.drought.gov/current-conditions" target="_blank" rel="noopener">see the drought.gov legend</a>.</p>` +

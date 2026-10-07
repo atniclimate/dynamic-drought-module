@@ -334,6 +334,31 @@
   }
 }
 
+/* D3 M6: read-glass admits T0-T2 only. Keep these aliases local to the
+   desktop map seats, including content rehosted into the Key drawer.
+   Issuer swatches keep their own paint; opaque sidebar cards are outside. */
+@media (min-width: 721px) {
+  #app:not(.embed) #map-condition-indicator,
+  #app:not(.embed) #map-key {
+    --fg-2: var(--ink-soft);
+    --fg-3: var(--ink-soft);
+    --accent: var(--ink);
+    --accent-strong: var(--ink-soft);
+    --indicator-border: var(--ink-soft);
+  }
+  /* Loading remains a word/state. Fading the entire tile would also fade
+     its .72 backing and defeat the allowed-ink contrast calculation. */
+  #app:not(.embed) #map-condition-indicator .conditions-metric,
+  #app:not(.embed) #map-condition-indicator .conditions-date {
+    opacity: 1;
+  }
+  #app:not(.embed) #map-condition-indicator :is(button, select, summary):focus-visible {
+    outline: 2px solid var(--focus-inner);
+    outline-offset: 0;
+    box-shadow: 0 0 0 4px var(--focus-outer);
+  }
+}
+
 /* The pill (S30D D1 M10; interface-chrome-popups-text.md section 2.5): one
    line, centred at the top, centre y 32 (top 18 plus half its 28px
    height, matching the chip's own centre y). The max-width formula keeps
