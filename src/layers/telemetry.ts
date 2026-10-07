@@ -73,6 +73,7 @@ import { prefersReducedMotion } from '../util/motion';
 const activeMarkers: maplibregl.Marker[] = [];
 const markersByStationId = new Map<string, maplibregl.Marker>();
 const stationByMarker = new WeakMap<maplibregl.Marker, TelemetryStation>();
+const markerViews = new WeakMap<maplibregl.Marker, TelemetryMarkerView>();
 
 /**
  * Per-marker AbortController. Stored externally (rather than as a custom
@@ -185,10 +186,27 @@ function showStationLegend(): void {
 }
 
 function renderStations(map: maplibregl.Map, views: readonly TelemetryMarkerView[]): void {
-  clearMarkers();
+  const nextViews = new Map(views.map((view) => [view.station.id, view]));
+  // A viewport refresh must not dismiss an unchanged station's open popup or
+  // restart its live read. Changed identities/handles and marker labels still
+  // take the full removal path, so no popup remains bound to obsolete data.
+  for (let index = activeMarkers.length - 1; index >= 0; index--) {
+    const marker = activeMarkers[index]!;
+    const previous = markerViews.get(marker)!;
+    const next = nextViews.get(previous.station.id);
+    if (next && next.station === previous.station &&
+        next.freshness === previous.freshness &&
+        next.primaryParameterCategory === previous.primaryParameterCategory &&
+        next.networkLabel === previous.networkLabel) continue;
+    removeMarker(marker);
+    markersByStationId.delete(previous.station.id);
+    activeMarkers.splice(index, 1);
+  }
+  const created: maplibregl.Marker[] = [];
 
   for (const view of views) {
     const { station } = view;
+    if (markersByStationId.has(station.id)) continue;
     const el = document.createElement('div');
     el.className = 'telemetry-marker';
     el.dataset.telemetryStationId = station.id;
@@ -222,6 +240,7 @@ function renderStations(map: maplibregl.Map, views: readonly TelemetryMarkerView
       ? `${accessibleLabel} ${buildRawsWindAccessibleName(glyphWind)}`
       : accessibleLabel;
     el.setAttribute('aria-label', accessibleLabel);
+    el.setAttribute('role', 'button');
 
     const inner = document.createElement('div');
     inner.className = 'telemetry-marker-inner';
@@ -268,11 +287,13 @@ function renderStations(map: maplibregl.Map, views: readonly TelemetryMarkerView
       .setPopup(popup);
 
     stationByMarker.set(marker, station);
+    markerViews.set(marker, view);
     markersByStationId.set(station.id, marker);
     activeMarkers.push(marker);
+    created.push(marker);
   }
 
-  bindPopups(map);
+  bindPopups(map, created);
   showStationLegend();
 }
 
@@ -553,15 +574,18 @@ export function deactivate(map: maplibregl.Map): void {
   clearMarkers();
 }
 
-function clearMarkers(): void {
-  for (const marker of activeMarkers) {
-    const controller = abortControllers.get(marker);
-    if (controller) {
-      controller.abort();
-      abortControllers.delete(marker);
-    }
-    marker.remove();
+function removeMarker(marker: maplibregl.Marker): void {
+  const controller = abortControllers.get(marker);
+  if (controller) {
+    controller.abort();
+    abortControllers.delete(marker);
   }
+  popupOrigins.delete(marker);
+  marker.remove();
+}
+
+function clearMarkers(): void {
+  for (const marker of activeMarkers) removeMarker(marker);
   activeMarkers.length = 0;
   markersByStationId.clear();
 }
@@ -569,9 +593,8 @@ function clearMarkers(): void {
 /**
  * Wire the per-popup open / close handlers that drive live data hydration.
  *
- * Called once at the end of `activate` (so each batch of fresh markers gets
- * its handlers in the same pass). Exported so a future caller could rebind
- * after replacing markers in place; today the only call site is `activate`.
+ * Called for each newly created batch by `renderStations`. Retained markers
+ * keep their original handlers, controller and coordinator-owned popup.
  *
  * On `open`:
  *   1. Hand the popup to the coordinator, which adopts it as the response.
@@ -586,8 +609,8 @@ function clearMarkers(): void {
  *   1. Abort and clear the controller so an in-flight read can no longer
  *      paint the popup.
  */
-export function bindPopups(map: maplibregl.Map): void {
-  for (const marker of activeMarkers) {
+export function bindPopups(map: maplibregl.Map, markers: readonly maplibregl.Marker[] = activeMarkers): void {
+  for (const marker of markers) {
     const station = stationByMarker.get(marker);
     if (!station) continue;
     const popup = marker.getPopup();
@@ -864,8 +887,8 @@ function radians(degrees: number): number {
  * finished moving, causing autoPan to over-correct). MapLibre's `moveend`
  * fires once the camera has settled, regardless of duration.
  *
- * Uses `map.once` so a queued open does not survive a subsequent
- * `flyToStation` call to a different station.
+ * Animated movement uses `map.once`; reduced motion opens after the
+ * synchronous camera update instead of waiting for an event already emitted.
  *
  * No-op if `stationId` is not in the active marker set.
  */
@@ -875,26 +898,32 @@ export function flyToStation(map: maplibregl.Map, stationId: string, origin?: HT
 
   const lngLat = marker.getLngLat();
   const targetZoom = Math.max(map.getZoom(), 9);
+  const reducedMotion = prefersReducedMotion();
 
   // Jump instead of flying for reduced-motion users (WCAG 2.3.3, #7).
   map.flyTo({
     center: [lngLat.lng, lngLat.lat],
     zoom: targetZoom,
     speed: 1.2,
-    ...(prefersReducedMotion() ? { animate: false } : {})
+    ...(reducedMotion ? { animate: false } : {})
   });
 
-  map.once('moveend', () => {
+  const openPopup = (): void => {
     // Re-check that the marker still exists; a deactivate could have run
     // mid-flight (for example, the user toggled the layer off while the
     // animation was running).
-    if (!markersByStationId.has(stationId)) return;
-    popupOrigins.set(marker, origin ?? marker.getElement());
+    const currentMarker = markersByStationId.get(stationId);
+    if (!currentMarker) return;
+    popupOrigins.set(currentMarker, origin ?? currentMarker.getElement());
     try {
-      marker.togglePopup();
+      currentMarker.togglePopup();
     } finally {
       // A toggle can close an already-open popup without firing an open event.
-      popupOrigins.delete(marker);
+      popupOrigins.delete(currentMarker);
     }
-  });
+  };
+  // animate:false completes and emits moveend inside flyTo. Its camera is
+  // already settled here; registering afterward would miss the only event.
+  if (reducedMotion) openPopup();
+  else map.once('moveend', openPopup);
 }

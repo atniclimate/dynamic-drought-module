@@ -3,7 +3,7 @@ import { test, expect, type Page } from './offline-test';
 import { TRIBAL_NATIONS_PROVENANCE_NOTE } from '../src/config/provenance';
 import { parseStudioParam } from '../src/state/url';
 import { STATUS_PILL_TEXT } from '../src/ui/island/pill-text';
-import { gotoApp, ROLE_GROUPS, search, urlLayers } from './helpers';
+import { gotoApp, layerPill, PILL, ROLE_GROUPS, search, urlLayers } from './helpers';
 
 const STUDIO = '#layers-studio-root';
 
@@ -150,32 +150,47 @@ test.describe('minimal LAYERS studio', () => {
   // national default's viewport exceeds the discovery area cap, so
   // src/config/station-registry.ts's discoverStationsForViewport returns
   // "zoom-in" before issuing any fetch; the curated seed still renders).
-  test('a Water & Snow station press closes the studio and frames the station with its popup open', async ({
-    page
-  }) => {
-    // deriveViewMode (src/state/view-mode.ts) sends a bare `layers=` URL to
-    // CONSOLE, whose surface has no on-screen studio door (#layers-studio-entry
-    // lives only in #brief-display, the Brief surface); an explicit
-    // view=brief keeps the door visible, matching every other case in this
-    // file that opens the studio by pressing it.
-    await gotoApp(page, '?view=brief&layers=telemetry');
+  for (const reducedMotion of ['no-preference', 'reduce'] as const) {
+    test(`a Water & Snow station press closes the studio and frames the station with its popup open (${reducedMotion})`, async ({
+      page
+    }) => {
+      // deriveViewMode (src/state/view-mode.ts) sends a bare `layers=` URL to
+      // CONSOLE, whose surface has no on-screen studio door (#layers-studio-entry
+      // lives only in #brief-display, the Brief surface); an explicit
+      // view=brief keeps the door visible, matching every other case in this
+      // file that opens the studio by pressing it.
+      await page.emulateMedia({ reducedMotion });
+      await gotoApp(page, '?view=brief&layers=telemetry');
+      await expect(layerPill(page, 'telemetry')).toHaveText(PILL.zoomIn);
+      const marker = page.locator('.telemetry-marker[data-telemetry-station-id="ihr"]');
+      const initialMarker = await marker.elementHandle();
+      expect(initialMarker).not.toBeNull();
 
-    await page.locator('#layers-studio-entry').click();
-    await expect(page.locator(STUDIO)).toBeVisible();
+      await page.locator('#layers-studio-entry').click();
+      await expect(page.locator(STUDIO)).toBeVisible();
 
-    await page.locator('#telemetry-reveal').click();
-    await page
-      .locator('.telemetry-item', { hasText: 'Ice Harbor Dam' })
-      .click();
+      await page.locator('#telemetry-reveal').click();
+      await page
+        .locator('.telemetry-item', { hasText: 'Ice Harbor Dam' })
+        .click();
 
-    // The visible response: the studio is gone (never merely covered by
-    // it), the station's own marker exists, and its popup is open and
-    // named for the pressed station, not silent.
-    await expect(page.locator(STUDIO)).toHaveCount(0);
-    const marker = page.locator('.telemetry-marker[data-telemetry-station-id="ihr"]');
-    await expect(marker).toHaveCount(1);
-    const popup = page.locator('.maplibregl-popup');
-    await expect(popup).toBeVisible();
-    await expect(popup.locator('.popup-title')).toHaveText('Ice Harbor Dam');
-  });
+      // The visible response: the studio is gone (never merely covered by
+      // it), the station's own marker exists, and its popup is open and
+      // named for the pressed station, not silent.
+      await expect(page.locator(STUDIO)).toHaveCount(0);
+      // The national boot skipped discovery. The destination now discovers
+      // against the offline backstop, then reports live (partial). Check after
+      // that refresh so a transient popup before marker replacement cannot pass.
+      await expect(layerPill(page, 'telemetry')).toHaveText(PILL.degraded);
+      await expect(marker).toHaveCount(1);
+      expect(await initialMarker!.evaluate((element) => element.isConnected)).toBe(true);
+      const popup = page.locator('.maplibregl-popup');
+      await expect(popup).toBeVisible();
+      await expect(popup.locator('.popup-title')).toHaveText('Ice Harbor Dam');
+      await popup.getByRole('button', { name: 'Close popup' }).focus();
+      await page.keyboard.press('Escape');
+      await expect(popup).toHaveCount(0);
+      await expect(page.locator('#map canvas.maplibregl-canvas')).toBeFocused();
+    });
+  }
 });
