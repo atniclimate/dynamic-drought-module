@@ -10,6 +10,6 @@
     // config's include and not a consumer of this option).
     "allowJs": true
   },
-  "include": ["tests/**/*.ts", "playwright.config.ts", "playwright.pure.config.ts"],
+  "include": ["tests/**/*.ts", "playwright.config.ts", "playwright.pure.config.ts", "playwright.smoke.config.ts"],
   "exclude": ["tests/types/key-typos.ts", "tests/types/context-literal-typo.ts", "tests/types/popup-model-invalid.ts"]
 }

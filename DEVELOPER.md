@@ -235,41 +235,20 @@ bump and the owner's publish, the daily `upstream-monitor` run opens exactly
 one `upstream-drift` issue naming the mismatch, which is the design working
 as intended, and it closes automatically on the first run after the publish.
 
-Run the cross-cutting gate after application, configuration, build, generated
-data, or broadly shared documentation changes:
+Choose checks using the [local verification ladder](tests/README.md#the-local-verification-ladder).
+Run focused source or browser tests while editing, `npm run gate` for build and
+cross-cutting configuration changes, and `npm run verify:smoke` for an integration
+block. Smoke owns its gate and serves that gate's single fresh build.
 
-```powershell
-npm run gate
-```
+Reserve `npm run test:serial` for the assembled integration/release candidate
+after shared navigation, map lifecycle or state changes. A routine session
+handoff records existing results and remaining work; it does not trigger another
+full suite. Documentation-only and verification-tooling checks are scoped in the
+same ladder. Report exactly what ran and what remains unverified.
 
-Run a targeted Playwright file before the full serial suite:
-
-```powershell
-npx playwright test tests/boot.spec.ts --workers=1
-npm run test:serial
-```
-
-The verification ladder is three commands a person types (measured durations on
-the owner's machine):
-
-```powershell
-npm run verify:quick    # typecheck, em-dash scan, vocabulary, coverage: about 5 s
-npm run verify:smoke    # gate plus twelve smoke specs, serial: about 6 min
-npm run test:serial     # the whole suite, one worker: 50 to 55 min
-```
-
-Two underlying checks sit beneath them, run directly when you want just the
-deterministic backbone:
-
-```powershell
-npm run gate            # build, bundle and activation budgets, then check:all: about 40 s
-npm run gate:nobuild    # typecheck plus check:all, the steps that need no dist/: about 20 s
-```
-
-`check:all` is the shared step list both gates run, so the list exists once.
-`gate` adds `build`, `check:bundle` and `check:activation`, the only steps that
-read `dist/`; `gate:nobuild` swaps `build` for `tsc --noEmit` and is what a
-worker on a shared tree runs.
+`check:all` is the source-check list shared by `gate` and `gate:nobuild`.
+`gate` adds the build, bundle and activation checks. `gate:nobuild` runs
+typechecking and source checks without certifying a production artifact.
 
 `npm run lint` is the one lint command, and `check:all` runs it, so both gates
 name it. It is Biome (`biome.jsonc`) over `src/**/*.ts` and `src/styles/app.css`:
