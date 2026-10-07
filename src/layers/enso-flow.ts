@@ -560,7 +560,8 @@ function onMoveEnd(): void {
     // Preserve the panel's existing prompt only where its control can be used.
     // The Key keeps its source status without an unavailable resample instruction.
     if (updateButton && updateButton.getClientRects().length > 0 &&
-        !updateButton.closest('[inert], [aria-hidden="true"]')) {
+        !updateButton.closest('[inert], [aria-hidden="true"]') &&
+        getComputedStyle(updateButton).visibility === 'visible') {
       announceFlowStatus(`${LABELS.currents} · ${text}`);
     }
   }

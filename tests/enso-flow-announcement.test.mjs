@@ -49,6 +49,7 @@ class Element extends EventTarget {
     this.attributes = new Map();
     this.hidden = false;
     this.rendered = true;
+    this.visibility = 'visible';
     this.writes = [];
     this.text = '';
   }
@@ -108,6 +109,7 @@ class Element extends EventTarget {
 }
 
 const body = new Element('body');
+globalThis.getComputedStyle = (element) => ({ visibility: element.visibility });
 const host = new Element();
 const live = new Element();
 live.id = 'layer-status-live';
@@ -263,6 +265,21 @@ test('a pan does not announce a resample instruction while its control is hidden
   assert.match(line().textContent, /Update area to resample$/);
   assert.deepEqual(live.writes, before);
 });
+
+for (const visibility of ['hidden', 'collapse']) {
+  test(`a pan does not announce a resample instruction through CSS visibility ${visibility}`, async () => {
+    boot();
+    answer();
+    await until(() => panel().dataset.status === 'live');
+    const before = [...live.writes];
+    // A visibility-hidden control still has layout rectangles. Supply the
+    // computed value here; browser cases cover the actual inherited CSS.
+    host.querySelectorAll('button').find((button) => button.textContent === 'Update area').visibility = visibility;
+    mapEvents.get('moveend')();
+    assert.match(line().textContent, /Update area to resample$/);
+    assert.deepEqual(live.writes, before);
+  });
+}
 
 for (const [attribute, value] of [['inert', ''], ['aria-hidden', 'true']]) {
   test(`a pan does not announce a resample instruction through an ${attribute} ancestor`, async () => {
