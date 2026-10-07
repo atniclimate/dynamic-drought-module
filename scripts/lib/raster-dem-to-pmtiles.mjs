@@ -1,6 +1,6 @@
 import { performance } from 'node:perf_hooks';
 import { PNG } from 'pngjs';
-import { fromArrayBuffer, fromUrl } from 'geotiff';
+import { fromArrayBuffer, fromFile, fromUrl } from 'geotiff';
 import { zxyToTileId, writePmtiles } from './pmtiles-writer.mjs';
 
 const TILETYPE_PNG = 2;
@@ -13,6 +13,53 @@ const WEB_MERCATOR_HALF_WORLD = Math.PI * WEB_MERCATOR_RADIUS;
 
 function clamp(v, lo, hi) {
   return Math.max(lo, Math.min(hi, v));
+}
+
+/** Local mirror handle; callers own close(), including failed tile work. */
+export async function openLocalDem(path, signal) {
+  signal?.throwIfAborted();
+  const tiff = await fromFile(path, signal);
+  try {
+    const image = await tiff.getImage();
+    const keys = image.getGeoKeys();
+    // Selected 3DEP local mirror is NAD83 geographic (EPSG4269). WGS84
+    // geographic fixtures/declared local mirrors are also supported; this
+    // degree-window path performs no projected-CRS or datum transformation.
+    if (keys?.GTModelTypeGeoKey !== 2 || ![4269,4326].includes(keys.GeographicTypeGeoKey) ||
+        (keys.ProjectedCSTypeGeoKey !== undefined && keys.ProjectedCSTypeGeoKey !== 32767)) {
+      throw Error('Local DEM requires supported geographic GeoKeys');
+    }
+    signal?.throwIfAborted();
+    return { image, bounds: image.getBoundingBox(), nodata: image.getGDALNoData(),
+      close: () => tiff.close() };
+  } catch (error) { try { await tiff.close(); } catch { /* Preserve the original read/abort failure. */ } throw error; }
+}
+
+/** GeoTIFFImage takes a pixel window, not a geographic bbox. North-up DEMs only. */
+export async function readDemWindow(image, { bbox, width, height, signal }) {
+  signal?.throwIfAborted();
+  if (!Array.isArray(bbox) || bbox.length !== 4 || !bbox.every(Number.isFinite) ||
+      bbox[0] >= bbox[2] || bbox[1] >= bbox[3] ||
+      ![width,height].every(n => Number.isSafeInteger(n) && n > 0)) throw Error('Invalid DEM window');
+  const origin = image.getOrigin(), resolution = image.getResolution();
+  const transform = image.getFileDirectory?.().getValue('ModelTransformation');
+  if (transform || ![origin[0],origin[1],resolution[0],resolution[1]].every(Number.isFinite) ||
+      resolution[0] <= 0 || resolution[1] >= 0) throw Error('DEM must use north-up pixel-scale georeferencing');
+  const sourceBounds = [origin[0],origin[1]+resolution[1]*image.getHeight(),
+    origin[0]+resolution[0]*image.getWidth(),origin[1]];
+  if (bbox[0]<sourceBounds[0] || bbox[1]<sourceBounds[1] || bbox[2]>sourceBounds[2] || bbox[3]>sourceBounds[3]) {
+    throw Error('DEM window outside source; caller must intersect its footprint first');
+  }
+  const window = [Math.floor((bbox[0]-origin[0])/resolution[0]),
+    Math.floor((bbox[3]-origin[1])/resolution[1]),
+    Math.ceil((bbox[2]-origin[0])/resolution[0]),
+    Math.ceil((bbox[1]-origin[1])/resolution[1])];
+  window[0]=clamp(window[0],0,image.getWidth()); window[2]=clamp(window[2],0,image.getWidth());
+  window[1]=clamp(window[1],0,image.getHeight()); window[3]=clamp(window[3],0,image.getHeight());
+  if(window[0]>=window[2] || window[1]>=window[3]) throw Error('DEM window outside source');
+  const result = await image.readRasters({window,width,height,samples:[0],resampleMethod:'bilinear',signal});
+  signal?.throwIfAborted();
+  return result;
 }
 
 export function lonToTileX(lon, z) {
@@ -209,7 +256,7 @@ async function retry(label, fn, attempts = 8) {
   throw lastErr;
 }
 
-async function fillFromSourceTile(out, { z, x, y, tileSize, bounds }, source) {
+async function fillFromSourceTile(out, { z, x, y, tileSize, bounds }, source, readWindow) {
   if (!intersects(bounds, source.bounds)) return false;
 
   const west = Math.max(bounds[0], source.bounds[0]);
@@ -233,12 +280,13 @@ async function fillFromSourceTile(out, { z, x, y, tileSize, bounds }, source) {
   const readSouth = Math.max(globalPixelToLat(tileOriginY + rowEnd, z, tileSize), source.bounds[1]);
   if (readWest >= readEast || readSouth >= readNorth) return false;
 
-  const rasters = await retry(`read window ${source.name}`, () => source.image.readRasters({
+  const windowOptions = {
     bbox: [readWest, readSouth, readEast, readNorth],
     width,
-    height,
-    resampleMethod: 'bilinear'
-  }));
+    height
+  };
+  const rasters = readWindow ? await readWindow(source.image, windowOptions)
+    : await retry(`read window ${source.name}`, () => readDemWindow(source.image, windowOptions));
   const band = rasters[0];
   for (let row = 0; row < height; row++) {
     const outOffset = (rowStart + row) * tileSize + colStart;
@@ -314,6 +362,39 @@ function cumulativeArchiveSizes(tiles, opts) {
     sizes.push({ zoom: z, cumulativeBytes: archive.length, tileCount: subset.length });
   }
   return sizes;
+}
+
+/** Local-only national bake seam. Pool supplies an explicit ordered source plan.
+ * Degree-window floor/ceil and bilinear resampling are the existing approximate
+ * sampling method, not exact reprojection or a datum conversion.
+ */
+export async function renderLocalDemTile(job, {maxSourcePixels,maxTileBytes}) {
+  const tileSize=512,bounds=tileBounds(job.z,job.x,job.y);
+  const elevations=new Float32Array(tileSize*tileSize);
+  let filledSources=0;
+  if(job.kind!=='ocean'){
+    for(const receipt of job.sources){
+      const source=await openLocalDem(receipt.path);
+      let failed=false;
+      try{
+        const pixels=source.image.getWidth()*source.image.getHeight();
+        if(!Number.isSafeInteger(pixels)||pixels>maxSourcePixels)throw Error('Local DEM source pixel allowance');
+        if(await fillFromSourceTile(elevations,{z:job.z,x:job.x,y:job.y,tileSize,bounds},
+          {...source,name:receipt.path},(image,options)=>readDemWindow(image,options)))filledSources++;
+      }catch(error){failed=true;throw error;}
+      finally{try{await source.close();}catch(error){if(!failed)throw error;}}
+    }
+  }
+  if(job.kind==='land'&&filledSources===0)throw Error('Land tile has no intersecting source');
+  const data=terrariumPng(elevations,tileSize,tileSize).data;
+  if(data.length>maxTileBytes)throw Error('Local DEM encoded tile allowance');
+  return {tileId:zxyToTileId(job.z,job.x,job.y),data};
+}
+
+/** Returns receipt-backed records for writeTerrainPmtiles; never an archive-sized buffer. */
+export async function buildRasterDemTileStore(options) {
+  const {buildLocalTerrainStore}=await import('./terrain-local-pool.mjs');
+  return buildLocalTerrainStore(options);
 }
 
 export function decodeTerrariumTile(buffer) {
