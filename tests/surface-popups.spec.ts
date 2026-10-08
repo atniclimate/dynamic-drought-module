@@ -148,7 +148,9 @@ const NAMED_FIELDS: readonly NamedFieldRow[] = [
       title: 'U.S. Drought Monitor change',
       issuer: 'Issued by: NDMC, NOAA, USDA (via drought.gov)',
       values: ['Worsened 1 category'],
-      swatches: ['worsened1'],
+      // The exact issuer class (DN), keyed in USDM_CHANGE_COLORS since the
+      // 2026-10-07 change palette replaced the five grouped buckets.
+      swatches: ['1'],
       clocks: [clockLine('Through', { time: 'Aug 11, 2026', datetime: '2026-08-11' })],
       source: CHANGE_SOURCE,
       fallback: CHANGE_SOURCE,

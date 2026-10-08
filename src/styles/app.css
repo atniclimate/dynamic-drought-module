@@ -1846,7 +1846,9 @@ button.conditions-metric:hover .conditions-action-hide {
   .app-shell:not(.embed) #sidebar .preset-chip[aria-pressed='true'] {
     background: var(--surface-hover);
     color: var(--ink-strong);
-    border-color: var(--ink-strong);
+    /* The same edge as the shared pressed treatment (horizon chips, mode
+       buttons), so a pressed quick view reads as one with its horizon. */
+    border-color: var(--rule-control);
     font-weight: 700;
     box-shadow: inset 2px 0 0 var(--ink-strong);
   }
@@ -5547,6 +5549,9 @@ button.telemetry-item {
 }
 .impact-horizon-head {
   display: flex;
+  /* A status pill that cannot fit beside its title drops below it instead
+     of crossing the briefing's edge (200 px embed, self-hosted fonts). */
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
@@ -8611,8 +8616,12 @@ a.impact-resource-link::after {
   color: var(--fg-3);
 }
 .shell-time > .shell-popover-door {
-  flex: 0 0 64px;
-  width: 64px;
+  /* 72px and one line: with the self-hosted Spartan MB (2026-10-07) "More
+     time" no longer fit 64px and wrapped, so the row grew in Drought and
+     shrank under "Details", moving every control below it (s4-shell). */
+  flex: 0 0 72px;
+  width: 72px;
+  white-space: nowrap;
   /* DDM-P17-T07 (found-020): the More time / Details door measured 64x17
      at 1440x900 with a mouse. Its width already clears the floor; only
      the height needs raising. */

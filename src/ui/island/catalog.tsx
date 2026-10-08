@@ -131,7 +131,9 @@ function LayerRow({
 }: RowProps) {
   const id = `${studio ? 'studio-' : ''}layer-toggle-${def.key}`;
   const isOn = checked.value.get(def.key) ?? false;
-  const status = statuses.value.get(def.key);
+  // An off layer makes no claim: a late answer from a read superseded by the
+  // off press can still write a status, so the pill shows one only while on.
+  const status = isOn ? statuses.value.get(def.key) : undefined;
   const coverage = def.key === 'hillshade' ? coverageCue(def.source) : null;
 
   const onChange = (event: Event): void => {

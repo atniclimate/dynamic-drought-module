@@ -376,7 +376,8 @@ test.describe('S4b minimap', () => {
     expect(proportions.height).toBeCloseTo(0.39, 2);
     await expect(
       page.locator('.shell-minimap-map .shell-minimap-island').first(),
-    ).toHaveCSS('stroke', 'rgb(241, 245, 249)');
+    // --fg-0 is var(--ink), #E8ECF0, since the 2026-10-07 interface tokens.
+    ).toHaveCSS('stroke', 'rgb(232, 236, 240)');
   });
 
   test('removes minimap transitions when reduced motion is requested', async ({
@@ -402,7 +403,9 @@ test.describe('S4b minimap', () => {
     await expect(
       page.locator('.shell-minimap-map .shell-minimap-tooltip'),
     ).toHaveCount(0);
-    await expect(pacific).toHaveCSS('stroke', 'rgb(6, 182, 212)');
+    // --accent is white since the 2026-10-07 interface tokens (the old cyan
+    // is the map's La Niña colour).
+    await expect(pacific).toHaveCSS('stroke', 'rgb(255, 255, 255)');
     // `.shell-minimap-mainland` transitions `filter 0.12s ease`
     // (src/styles/app.css:6147); a one-shot getComputedStyle read right
     // after hover() can still catch the pre-transition `none` on the first

@@ -233,7 +233,9 @@ function levelRead(level: unknown): { title: string; description: string; swatch
       title: 'No update',
       description:
         'This basin is not measured right now because it is outside the core drought season. This is not a drought severity.',
-      swatch: { table: 'BC_DROUGHT_NO_UPDATE', classKey: BC_DROUGHT_NO_UPDATE.code, color: BC_DROUGHT_NO_UPDATE.color }
+      // The popup swatch is an opaque patch (#RRGGBB only), so it takes the
+      // issuer's RGB without the map fill's 191/255 alpha.
+      swatch: { table: 'BC_DROUGHT_NO_UPDATE', classKey: BC_DROUGHT_NO_UPDATE.code, color: '#CCCCCC' }
     };
   }
   const entry = BC_DROUGHT_LEVELS.find((candidate) => candidate.value === numeric);
