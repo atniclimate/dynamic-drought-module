@@ -50,7 +50,7 @@ test.describe('Fire 3D controller deferral (DDM-P2-T04)', () => {
     await page.route(FIRE3D_CHUNK_PATTERN, async (route) => {
       requests.push(route.request().url());
       if (blocked) await route.abort('failed');
-      else await route.continue();
+      else await route.fallback();
     });
     await gotoApp(page, '?cluster=wildfire');
     await expect(page.locator('[data-fire3d-status]')).toHaveAttribute('data-fire3d-status', 'unavailable');
