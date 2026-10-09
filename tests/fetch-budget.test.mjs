@@ -25,11 +25,29 @@
 
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { getEventListeners } from 'node:events';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { fetchBufferedWithBudget, fetchJsonWithBudget } from '../src/util/fetch.ts';
+import { fetchBufferedWithBudget, fetchJsonWithBudget, sleepUnlessAborted } from '../src/util/fetch.ts';
+
+test('completed sleeps release their abort listeners', async () => {
+  const controller = new AbortController();
+  for (let i = 0; i < 20; i += 1) await sleepUnlessAborted(0, controller.signal);
+  assert.equal(getEventListeners(controller.signal, 'abort').length, 0);
+});
+
+test('aborted sleeps resolve early and release their timers and listeners', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const controller = new AbortController();
+  const pending = sleepUnlessAborted(10_000, controller.signal);
+  assert.equal(getEventListeners(controller.signal, 'abort').length, 1);
+  controller.abort();
+  await pending;
+  await sleepUnlessAborted(10_000, controller.signal);
+  assert.equal(getEventListeners(controller.signal, 'abort').length, 0);
+});
 
 const encoder = new TextEncoder();
 
@@ -289,7 +307,6 @@ test('no file under src/ calls fetchWithBudget: body readers use the buffered or
     lines.forEach((line, index) => {
       const code = line.trim();
       if (code.startsWith('*') || code.startsWith('//') || code.startsWith('/*')) return;
-      if (/\bfunction fetchWithBudget\(/.test(code)) return;
       if (/\bfetchWithBudget\(/.test(code)) {
         offenders.push(`${relative(srcRoot, path).replace(/\\/g, '/')}:${index + 1}`);
       }
