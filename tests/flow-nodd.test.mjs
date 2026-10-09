@@ -16,6 +16,7 @@
  */
 
 import assert from 'node:assert/strict';
+import { getEventListeners } from 'node:events';
 import { existsSync, readFileSync } from 'node:fs';
 import { registerHooks } from 'node:module';
 import test from 'node:test';
@@ -532,6 +533,21 @@ test('every read sends credentials omit and a Range header, never HEAD', async (
     ['bytes=0-4095', 'bytes=3968286-4855671', 'bytes=3029161-3457288'],
     'waves read DIRPW and HTSGW, never PERPW (3457289-3968285)'
   );
+});
+
+test('Worker startup failure is normalized and unlinks the activation signal', async () => {
+  const activation = new AbortController();
+  const stub = noddStub();
+  await assert.rejects(
+    read('wind', stub, {
+      signal: activation.signal,
+      createWorker: () => { throw new DOMException('Worker startup blocked', 'SecurityError'); }
+    }),
+    (error) => error instanceof FlowUnavailableError && error.reason === 'failed' && error.message.includes('SecurityError')
+  );
+  assert.equal(getEventListeners(activation.signal, 'abort').length, 0);
+  assert.equal(activation.signal.aborted, false);
+  assert.deepEqual(stub.calls, [], 'startup failure makes no network requests');
 });
 
 test('abort of the activation signal cancels every outstanding range and terminates the Worker', async () => {
