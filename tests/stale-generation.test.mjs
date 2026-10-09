@@ -231,6 +231,30 @@ function release(record, n) {
 
 const WILDFIRE_PAIR = HAZARD_CLUSTERS.wildfire.recipes.current;
 
+test('a fade-out failure still removes resources and allows reactivation', async (t) => {
+  t.mock.method(console, 'error', () => {});
+  const key = 'tribal';
+  registry.deactivate(key);
+  const records = installModules(new Set());
+  const record = records.get(key);
+  const controller = bindRealController();
+  await controller.activate(key);
+  globalThis.__staleFade = async () => { throw new Error('paint failed'); };
+  try {
+    controller.deactivate(key);
+    await flush();
+    assert.equal(record.source, null, 'teardown ran despite the paint failure');
+    assert.equal(registry.getActiveKeys().has(key), false);
+    await controller.activate(key);
+    assert.equal(record.source, 2);
+    assert.equal(registry.getActiveKeys().has(key), true);
+  } finally {
+    delete globalThis.__staleFade;
+    controller.deactivate(key);
+    await flush();
+  }
+});
+
 test('a thrown activation removes partial resources before a retry', async (t) => {
   t.mock.method(console, 'error', () => {});
   const key = 'tribal';
