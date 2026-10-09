@@ -7,7 +7,7 @@ import { stubDeepTerrainArchive, stubWildfireFeeds } from './wildfire-fixtures';
  * DDM-P2-T04: the Fire 3D controller chunk is fetched only once eligibility
  * is real, never on a bare desktop Drought boot that has no way to reach the
  * scene. src/main.ts's fire3d block gates the dynamic import
- * (`import('./map/fire3d')`) on the committed cluster becoming 'wildfire' or
+ * through fire3d-chunk.ts on the committed cluster becoming 'wildfire' or
  * the boot URL naming the mode; this proves the network-request consequence
  * at the wire, following the request-INITIATION pattern of
  * tests/telemetry-raws-gate.spec.ts (counted independently of whether the
@@ -39,6 +39,29 @@ function fire3dStamp(page: import('@playwright/test').Page): Promise<string | un
 }
 
 test.describe('Fire 3D controller deferral (DDM-P2-T04)', () => {
+  test('a failed controller chunk reports unavailable and retries on the 3D toggle', async ({ page }) => {
+    test.setTimeout(120_000);
+    await stubWildfireFeeds(page);
+    await stubDeepTerrainArchive(page);
+    let blocked = true;
+    const requests: string[] = [];
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    await page.route(FIRE3D_CHUNK_PATTERN, async (route) => {
+      requests.push(route.request().url());
+      if (blocked) await route.abort('failed');
+      else await route.continue();
+    });
+    await gotoApp(page, '?cluster=wildfire');
+    await expect(page.locator('[data-fire3d-status]')).toHaveAttribute('data-fire3d-status', 'unavailable');
+    blocked = false;
+    await page.locator('.shell-fire3d-btn').click();
+    await expect.poll(() => fire3dStamp(page), { timeout: 30_000 }).toBe('active');
+    await expect(page.locator('[data-fire3d-status]')).toHaveAttribute('data-fire3d-status', 'active');
+    expect(requests.some((url) => new URL(url).searchParams.has('retry'))).toBe(true);
+    expect(errors.filter((message) => /dynamically imported module|module script/i.test(message))).toEqual([]);
+  });
+
   test('a bare desktop Drought boot never requests the Fire 3D chunk', async ({
     page
   }) => {

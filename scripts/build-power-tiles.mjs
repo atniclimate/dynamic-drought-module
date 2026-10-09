@@ -25,7 +25,7 @@
 
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { PMTiles } from 'pmtiles';
 import { transformWithOxc } from 'vite';
 import { geojsonLayersToPmtiles } from './lib/geojson-to-pmtiles.mjs';
@@ -81,8 +81,6 @@ const MAX_EXPECTED_FEATURES = 20_000;
  */
 const MAX_ARCHIVE_BYTES = 8_000_000;
 const FIELDS = ['ID', 'TYPE', 'STATUS', 'OWNER', 'VOLTAGE', 'VOLT_CLASS', 'SOURCEDATE', 'VAL_DATE'];
-/** UTC retrieval date, matching the archive attribution's own clock. */
-const RETRIEVED = new Date().toISOString().slice(0, 10);
 
 const OUT_PATH = fileURLToPath(new URL('../public/data/power-lines-pnw.pmtiles', import.meta.url));
 
@@ -148,25 +146,28 @@ const CACHE_PATH = fileURLToPath(
   new URL('./.cache/power-lines-pnw-raw.geojson', import.meta.url)
 );
 
-async function readCachedFeatures() {
+async function readCachedPull() {
   try {
     const raw = await readFile(CACHE_PATH, 'utf8');
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed?.features)) return null;
     console.log(`  using cached pull: ${CACHE_PATH} (${parsed.features.length} features)`);
-    return parsed.features;
+    return parsed;
   } catch {
     return null;
   }
 }
 
-async function main() {
+export async function main() {
   console.log('power transmission-line bake (archived HIFLD copy, PNW box)');
   console.log(`  service: ${SERVICE}`);
   console.log(`  max zoom: ${MAX_ZOOM}${DRY_RUN ? ' (dry run)' : ''}`);
 
-  let features = await readCachedFeatures();
-  if (features === null) {
+  const cached = await readCachedPull();
+  let features = cached?.features;
+  let retrieved = typeof cached?.retrieved === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(cached.retrieved)
+    ? cached.retrieved : 'unknown';
+  if (cached === null) {
     features = [];
     let exhausted = false;
     for (let page = 0; page < MAX_PAGES; page++) {
@@ -188,10 +189,11 @@ async function main() {
         `page budget (${MAX_PAGES}) spent with the server still reporting more data; refusing to bake a truncated archive`
       );
     }
+    retrieved = new Date().toISOString().slice(0, 10);
     await mkdir(dirname(CACHE_PATH), { recursive: true });
     await writeFile(
       CACHE_PATH,
-      JSON.stringify({ type: 'FeatureCollection', features })
+      JSON.stringify({ type: 'FeatureCollection', features, retrieved })
     );
     console.log(`  cached the raw pull at ${CACHE_PATH}`);
   }
@@ -214,7 +216,7 @@ async function main() {
     'U.S. Electric Power Transmission Lines (HIFLD, U.S. Government), via the Esri ' +
     'Federal User Community archive; includes OpenStreetMap-derived geometries ' +
     '(OpenStreetMap contributors); ARCHIVED source, last data update 2024-09-30, ' +
-    `no longer maintained; retrieved ${RETRIEVED}; not comprehensive or current and ` +
+    `no longer maintained; retrieved ${retrieved}; not comprehensive or current and ` +
     'not for siting or safety-critical decisions.';
 
   const { archive, tileCount } = geojsonLayersToPmtiles(
@@ -263,7 +265,9 @@ async function main() {
   console.log(`  attribution: "${meta.attribution}"`);
 }
 
-main().catch((err) => {
-  console.error('build-power-tiles failed:', err);
-  process.exit(1);
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((err) => {
+    console.error('build-power-tiles failed:', err);
+    process.exit(1);
+  });
+}

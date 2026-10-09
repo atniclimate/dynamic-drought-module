@@ -43,7 +43,7 @@
     "test:text-tokens": "node --test tests/text-tokens.test.mjs",
     "test:popup-frame": "node --test tests/popup-frame.test.mjs",
     "test:coordinator-collect": "node --test tests/interaction-coordinator-collect.test.mjs",
-    "test:pmtiles-stream-writer": "node --test tests/pmtiles-leaf-writer.test.mjs",
+    "test:pmtiles-stream-writer": "node --test tests/pmtiles-leaf-writer.test.mjs tests/power-bake-cache.test.mjs",
     "test:footer-version-mechanism": "node --test tests/footer-version-mechanism.test.mjs",
     "test:coordinator-model": "node --test tests/interaction-coordinator-model.test.mjs",
     "test:activation-selftest": "node --test tests/activation-budget-selftest.test.mjs",

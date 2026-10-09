@@ -298,8 +298,7 @@ export function createLayerController(
       desiredOn.get(def.key) === true && intentGen.get(def.key) === gen;
     return enqueueLayerOp(def.key, async () => {
       // The user reversed or superseded this toggle while it waited in the
-      // queue, or the layer is already fully active (an off/on flip whose
-      // off was skipped as stale); either way there is nothing to do.
+      // queue, or the layer is already fully active.
       if (!ownsIntent()) return;
       if (registry.getActiveKeys().has(def.key)) return;
 
@@ -418,9 +417,9 @@ export function createLayerController(
       console.error(`Layer "${def.key}" failed to cancel cleanly:`, err);
     }
     void enqueueLayerOp(def.key, async () => {
-      // The user re-toggled the layer on while this off waited in the queue;
-      // the newer activation owns the outcome.
-      if (desiredOn.get(def.key) !== false) return;
+      // An active layer's signal was already aborted; tear it down even if
+      // on intent returned, so the queued activation gets a fresh signal.
+      if (desiredOn.get(def.key) !== false && !registry.getActiveKeys().has(def.key)) return;
       try {
         // A module that was never loaded has nothing on the map; the optional
         // chain is a no-op then, and the intent flip above makes any in-flight
@@ -538,9 +537,10 @@ export function createLayerController(
         view.isCheckboxChecked(key) &&
         !registry.getActiveKeys().has(key) &&
         registry.getStatus(key) === 'error';
-      const isOn =
+      const isOn = desiredOn.get(key) !== false && (
         registry.getActiveKeys().has(key) ||
-        (view.isCheckboxChecked(key) && !failedButChecked);
+        (view.isCheckboxChecked(key) && !failedButChecked)
+      );
       if (isOn) continue;
       view.setCheckbox(key, true);
       void activateWithIndicator(def);

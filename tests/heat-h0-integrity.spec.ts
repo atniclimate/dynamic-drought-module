@@ -206,14 +206,17 @@ test('an all-404 HeatRisk selected frame becomes unavailable', async ({
   page
 }) => {
   await stubHeatRisk(page, 'missing');
+  // An all-404 frame may need the full raster deadline before boot can settle.
   await gotoApp(
     page,
-    '?region=washington_state&layers=heatrisk&view=console'
+    '?region=washington_state&layers=heatrisk&view=console',
+    { bootIdle: false }
   );
 
   await expect(layerPill(page, 'heatrisk')).toHaveText('unavailable', {
     timeout: 15_000
   });
+  await expect(page.locator('html')).toHaveAttribute('data-ddm-boot', 'idle');
 });
 
 test('a mixed-success HeatRisk selected frame is live partial', async ({

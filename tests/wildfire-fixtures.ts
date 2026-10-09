@@ -17,6 +17,19 @@
 
 import type { BrowserContext, Page, Route } from '@playwright/test';
 
+export async function stubSceneBasemap(page: Page): Promise<void> {
+  await page.route('https://tile.openstreetmap.org/**', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'image/png',
+      body: Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+        'base64'
+      )
+    })
+  );
+}
+
 /** A small axis-aligned polygon seated in the PNW envelope. */
 export const PNW_POLYGON = (west: number, south: number) => ({
   type: 'Polygon',

@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page, type Request } from '@playwright/test';
 import { parse } from 'yaml';
 
 import {
@@ -10,7 +10,7 @@ import {
   search,
   waitForLayerSettled
 } from './helpers';
-import { stubDeepTerrainArchive, stubWildfireFeeds } from './wildfire-fixtures';
+import { stubDeepTerrainArchive, stubSceneBasemap, stubWildfireFeeds } from './wildfire-fixtures';
 
 /**
  * The cross-view contract net.
@@ -203,13 +203,18 @@ interface SceneTraffic {
   open: number;
   /** Date.now() of the last request start, finish or failure. */
   lastActivityAt: number;
+  pendingRequests(): string[];
 }
 
 /** Register BEFORE the first boot. */
 function trackSceneTraffic(page: Page): SceneTraffic {
-  const traffic: SceneTraffic = { open: 0, lastActivityAt: Date.now() };
-  const tracked = new Set<unknown>();
-  const end = (request: unknown): void => {
+  const tracked = new Set<Request>();
+  const traffic: SceneTraffic = {
+    open: 0,
+    lastActivityAt: Date.now(),
+    pendingRequests: () => [...tracked].map((request) => request.url())
+  };
+  const end = (request: Request): void => {
     if (!tracked.delete(request)) return;
     traffic.open -= 1;
     traffic.lastActivityAt = Date.now();
@@ -252,8 +257,7 @@ const SCENE_SETTLE_ROUNDS = 8;
  * (the readback returns when the queue is empty, however long that takes),
  * wait for the network to go quiet, drain again, until a drain finds the
  * queue empty and nothing was requested since before it began. It decides
- * from what it can measure and has no wall-clock deadline a slow runner could
- * decide; it does not read the scene's `transport` stamp (see the
+ * from draw and network activity; it does not read the scene's `transport` stamp (see the
  * `set_layer` step for why, and tests/fire3d-mode.spec.ts for the same
  * helper with the measurements).
  */
@@ -268,7 +272,10 @@ async function waitForSceneToSettle(page: Page, traffic: SceneTraffic): Promise<
         timeout: 30_000,
         intervals: [250]
       })
-      .toBe(true);
+      .toBe(true)
+      .catch((cause: unknown) => {
+        throw new Error(`Pending scene requests: ${JSON.stringify(traffic.pendingRequests())}`, { cause });
+      });
     const quietSinceBefore = traffic.lastActivityAt < startedAt;
     rounds.push(`drain ${drainMs} ms, ${quietSinceBefore ? 'no traffic' : 'traffic'}`);
     if (drainMs < SCENE_DRAIN_EMPTY_MS && quietSinceBefore) return;
@@ -531,6 +538,7 @@ test.describe('view contracts', () => {
 
       if (row.stub_wildfire) {
         await stubWildfireFeeds(page);
+        await stubSceneBasemap(page);
         // Every `stub_wildfire: true` row either enters the 3D scene or
         // shares its boot with rows that do (tests/view-contracts.yaml); the
         // deep terrain host went LIVE 2026-09-10, so a row that omits this

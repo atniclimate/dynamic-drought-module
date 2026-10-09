@@ -78,7 +78,7 @@ const stubs = {
     export const loadLayerModule = async (def) => globalThis.__staleModules.get(def.key);`,
   'maplibre-gl': 'export {};',
   '/map/layer-order': 'export function reassertLabelOrder(){} export function reassertThematicOrder(){}',
-  '/util/layer-fade': 'export function fadeInLayers(){} export async function fadeOutLayers(){}',
+  '/util/layer-fade': 'export function fadeInLayers(){} export async function fadeOutLayers(){ await globalThis.__staleFade?.(); }',
   '/ui/overlay': 'export function showLoading(){ return 1; } export function hideLoading(){}'
 };
 registerHooks({
@@ -230,6 +230,56 @@ function release(record, n) {
 }
 
 const WILDFIRE_PAIR = HAZARD_CLUSTERS.wildfire.recipes.current;
+
+test('off/on of an active layer replaces its aborted signal and keeps viewport refreshes live', async () => {
+  const key = 'hydrography';
+  registry.deactivate(key);
+  const records = installModules(new Set());
+  const controller = bindRealController();
+  await controller.activate(key);
+  const record = records.get(key);
+  controller.deactivate(key);
+  await controller.activate(key);
+  assert.equal(record.calls.length, 2);
+  assert.equal(record.calls[0].signal.aborted, true);
+  assert.equal(record.calls[1].signal.aborted, false);
+  assert.equal(record.source, 2);
+  assert.equal(registry.getActiveKeys().has(key), true);
+  controller.deactivate(key);
+  await flush();
+});
+
+test('a preset returning during fade-out restores the checkbox and reactivates the layer', async () => {
+  for (const def of LAYER_DEFS) {
+    registry.deactivate(def.key);
+    bridge.setChecked(def.key, false);
+  }
+  const key = 'nadm-drought';
+  const records = installModules(new Set());
+  const controller = bindRealController();
+  const preset = { label: 'Test', layers: [key] };
+  controller.applyPreset(preset);
+  await flush();
+  let finishFade;
+  globalThis.__staleFade = () => new Promise((resolve) => { finishFade = resolve; });
+  try {
+    controller.applyPreset({ label: 'Empty', layers: [] });
+    await flush();
+    assert.equal(typeof finishFade, 'function');
+    controller.applyPreset(preset);
+    finishFade();
+    await flush();
+    assert.equal(bridge.isChecked(key), true);
+    assert.equal(registry.getActiveKeys().has(key), true);
+    assert.equal(records.get(key).calls.length, 2);
+    assert.equal(records.get(key).calls[1].signal.aborted, false);
+    assert.equal(records.get(key).source, 2);
+  } finally {
+    delete globalThis.__staleFade;
+    controller.deactivate(key);
+    await flush();
+  }
+});
 
 test('a rejected old import cannot uncheck or cancel the latest on intent', async () => {
   const records = installModules(new Set());

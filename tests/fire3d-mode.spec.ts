@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page, type Request } from '@playwright/test';
 
 import {
   FIRE3D_CAMERA_TRANSITION_MS,
@@ -66,6 +66,7 @@ import {
   PLANTS_STUB_FC,
   PNW_POLYGON,
   stubDeepTerrainArchive,
+  stubSceneBasemap,
   stubWildfireFeeds
 } from './wildfire-fixtures';
 import { RAWS_ROUTE, RAWS_FIXTURE_MARKER_ID, rawsHappyBody } from './fixtures/raws-fixtures';
@@ -1515,13 +1516,18 @@ interface SceneTraffic {
   open: number;
   /** Date.now() of the last request start, finish or failure. */
   lastActivityAt: number;
+  pendingRequests(): string[];
 }
 
 /** Register BEFORE the first boot. */
 function trackSceneTraffic(page: Page): SceneTraffic {
-  const traffic: SceneTraffic = { open: 0, lastActivityAt: Date.now() };
-  const tracked = new Set<unknown>();
-  const end = (request: unknown): void => {
+  const tracked = new Set<Request>();
+  const traffic: SceneTraffic = {
+    open: 0,
+    lastActivityAt: Date.now(),
+    pendingRequests: () => [...tracked].map((request) => request.url())
+  };
+  const end = (request: Request): void => {
     if (!tracked.delete(request)) return;
     traffic.open -= 1;
     traffic.lastActivityAt = Date.now();
@@ -1563,8 +1569,7 @@ const SCENE_SETTLE_ROUNDS = 8;
  * Wait until the 3D scene has stopped using the page, so a layer switched on
  * next starts its first activation outside the scene's startup stall. It
  * decides from what it can measure instead of from the scene's own
- * `transport` stamp, and it has no wall-clock deadline that a slow runner
- * could decide: it drains the software renderer's draw queue (the readback
+ * `transport` stamp: it drains the software renderer's draw queue (the readback
  * returns when the queue is empty, however long that takes), then waits for
  * the network to go quiet, then drains again, until a drain finds the queue
  * empty and nothing was requested since before it began.
@@ -1592,7 +1597,10 @@ async function waitForSceneToSettle(page: Page, traffic: SceneTraffic): Promise<
         timeout: 30_000,
         intervals: [250]
       })
-      .toBe(true);
+      .toBe(true)
+      .catch((cause: unknown) => {
+        throw new Error(`Pending scene requests: ${JSON.stringify(traffic.pendingRequests())}`, { cause });
+      });
     const quietSinceBefore = traffic.lastActivityAt < startedAt;
     rounds.push(`drain ${drainMs} ms, ${quietSinceBefore ? 'no traffic' : 'traffic'}`);
     if (drainMs < SCENE_DRAIN_EMPTY_MS && quietSinceBefore) return;
@@ -2384,6 +2392,7 @@ test('an embed without the flag never activates and never gains it', async ({
     // further down.
     await page.emulateMedia({ reducedMotion: 'reduce' });
     const traffic = trackSceneTraffic(page);
+    await stubSceneBasemap(page);
     await stubWildfireFeeds(page);
     await stubDeepTerrainArchive(page);
     await gotoApp(page, '?region=washington_state&cluster=wildfire&view=console&fire3d=true');
