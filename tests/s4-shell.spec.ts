@@ -1368,38 +1368,20 @@ test.describe('M8: the refit on a sidebar toggle (found-029, DDM-P10-T07)', () =
   });
 
   test('a pan during the transition cancels refit', async ({ page }) => {
+    await page.clock.install();
     const before = await boot(page, '?region=washington_state');
     const point = await mapPoint(page);
-    // The page's own clock times the collapse click and the first dragging
-    // move, so a slow run fails on the timing it could not meet rather than
-    // passing or failing on the product.
-    const timings = page.evaluate(
-      () =>
-        new Promise<{ click: number; move: number }>((resolve) => {
-          let click = -1;
-          document.getElementById('sidebar-collapse')?.addEventListener(
-            'click',
-            () => {
-              click = performance.now();
-            },
-            { capture: true, once: true }
-          );
-          const onMove = (event: MouseEvent): void => {
-            if (click < 0 || event.buttons === 0) return;
-            window.removeEventListener('mousemove', onMove, true);
-            resolve({ click, move: performance.now() });
-          };
-          window.addEventListener('mousemove', onMove, true);
-        })
-    );
+    // Hold the refit timer until mouse input has queued the pan, even on a slow runner.
+    await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1000));
     const since = await pageNow(page);
     await page.locator('#sidebar-collapse').click();
     await drag(page, point, -160, 80);
-    const { click, move } = await timings;
-    expect(move - click, 'the drag began inside the 220 ms transition').toBeLessThan(180);
+    await page.clock.runFor(SETTLE_FLOOR_MS);
+    await page.clock.resume();
     await expect(page.locator('#app')).toHaveClass(/\bsidebar-collapsed\b/);
 
     const after = await settledBounds(page, since);
+    expect(centre(after), 'the drag changed the camera centre').not.toEqual(centre(before));
     expect(spanChange(after, before), 'no refit: the vertical span keeps the pre-toggle zoom').toBeLessThanOrEqual(
       SPAN_TOLERANCE
     );
