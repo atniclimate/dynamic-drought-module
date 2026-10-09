@@ -285,9 +285,11 @@ test.describe('real layer-controller integration (DG-080 r2 finding 4)', () => {
     }
     // The dropped surface (nadm-drought, the Drought press's surface at the
     // current horizon) is off and makes no claim: unchecked, and its pill
-    // carries no stale status class from the superseded generation.
+    // carries no stale status class from the superseded generation. The pill
+    // clears only after the off-toggle's fade-out (LAYER_FADE_MS plus a render),
+    // so poll for the settled state; a pill stuck on "ready" still fails.
     await expect(layerCheckbox(page, 'nadm-drought')).not.toBeChecked();
-    expect(await pillStatusClasses(page, 'nadm-drought')).not.toContain('ready');
+    await expect.poll(() => pillStatusClasses(page, 'nadm-drought')).not.toContain('ready');
     await expect(page.locator('#shell-summary-primary')).toContainText(
       'Current Mapped Fire Perimeters (National Interagency Fire Center, NIFC)'
     );
