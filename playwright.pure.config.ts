@@ -35,6 +35,7 @@ export const PURE_SPECS = [
   'tests/config-key-authority.spec.ts',
   'tests/display-summary.spec.ts',
   'tests/enso-flow-data.spec.ts',
+  'tests/fetch.spec.ts',
   'tests/gl-capability.spec.ts',
   'tests/layer-order.spec.ts',
   'tests/location-identity.spec.ts',
