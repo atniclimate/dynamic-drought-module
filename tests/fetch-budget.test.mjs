@@ -217,10 +217,11 @@ test('fetchBufferedWithBudget: a non-OK status is returned, not thrown, so the c
   });
 });
 
-test('fetchJsonWithBudget: a non-OK status throws the HTTP error, as before', async () => {
-  const stub = stubFetch({ status: 503, chunks: ['{}'] });
+test('fetchJsonWithBudget: a non-OK status aborts the unused body and preserves the HTTP error', async () => {
+  const stub = stubFetch({ status: 503, chunks: ['{}'], close: false });
   await withFetch(stub, async () => {
     await assert.rejects(fetchJsonWithBudget('/down.json', null, null, 5000), /HTTP 503/);
+    assert.equal(stub.calls[0].init.signal.aborted, true);
   });
 });
 
