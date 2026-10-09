@@ -740,6 +740,7 @@ test.describe('DDM-P14-T07: the briefing and the minimap read the loaded NIFC co
   test('(b) a covered minimap framing reads the collection: no count-only POST for it, its count matches the declared filter', async ({
     page
   }) => {
+    await page.clock.install();
     await stubWildfireFeeds(page);
     const hawaiiGeometry = buildMinimapWildfireQueryBody('hawaii').get('geometry');
     const HAWAII_STUB = {
@@ -781,7 +782,7 @@ test.describe('DDM-P14-T07: the briefing and the minimap read the loaded NIFC co
           return route.fulfill({
             status: 200,
             contentType: 'application/json',
-            body: JSON.stringify({ count: 0 })
+            body: JSON.stringify({ count: body.get('geometry') === hawaiiGeometry ? 1 : 0 })
           });
         }
         geojsonQueries.push(request.url());
@@ -806,29 +807,29 @@ test.describe('DDM-P14-T07: the briefing and the minimap read the loaded NIFC co
     // 'drought' (src/state/url.ts's `parseShellParams`).
     await gotoApp(page, '?view=brief&cluster=wildfire&region=hawaii');
     await waitForLayerSettled(page, 'nifc-fires');
+    await expect(layerPill(page, 'nifc-fires')).toHaveClass(/ready/);
     expect(geojsonQueries, "the layer's own boot query, fit to the Hawaii camera").toHaveLength(1);
 
-    // The minimap's first mount races the layer's own boot activation (both
-    // start at page load; the minimap's retained fetch does not wait on
-    // ANY layer status), so its initial nine queries can land before the
-    // layer settles to `ready` and are not this case's subject. A live
-    // mode toggle away from and back to Wildfire unmounts then remounts
-    // `retainMinimapWildfire` (src/ui/island/minimap.tsx gates it on
-    // `metricContext === 'wildfire'`), which is "a minimap refresh" (the
-    // acceptance sentence's phrase) driven well after `waitForLayerSettled`
-    // above, with the layer unambiguously `ready`.
+    await expect(page.locator('.shell-minimap-canvas').first())
+      .toHaveAttribute('data-wildfire-status', /^live(?:-partial)?$/);
+    const hawaiiFraming = page.locator('.shell-minimap-map [data-framing="hawaii"]');
+    const beforeRefreshLabel = await hawaiiFraming.getAttribute('aria-label');
+    expect(beforeRefreshLabel).not.toBeNull();
+
+    // Refresh after boot without changing clusters, which deactivates the loaded layer.
     countGeometries.length = 0;
-    await page.locator('.shell-cluster-btn[data-cluster="drought"]').click();
-    await page.locator('.shell-cluster-btn[data-cluster="wildfire"]').click();
+    await page.clock.fastForward(5 * 60_000);
+    await expect(hawaiiFraming).not.toHaveAttribute('aria-label', beforeRefreshLabel!);
 
     const expectedCount = HAWAII_STUB.features.filter((feature) =>
       matchesMinimapActiveFilter(feature.properties)
     ).length;
     expect(expectedCount, 'setup: the Hawaii stub must carry a countable feature').toBeGreaterThan(0);
 
-    const hawaiiFraming = page.locator('.shell-minimap-map [data-framing="hawaii"]');
     await expect(hawaiiFraming).toHaveAttribute('data-wildfire-condition', 'mapped-wildfire');
     await expect(hawaiiFraming).toHaveAttribute('data-nifc-perimeter-count', String(expectedCount));
+    expect(countGeometries.length, 'uncovered framings refreshed through count-only queries').toBeGreaterThan(0);
+    expect(geojsonQueries, 'the loaded layer was retained through the refresh').toHaveLength(1);
 
     expect(
       countGeometries.includes(hawaiiGeometry ?? '__unreachable__'),
