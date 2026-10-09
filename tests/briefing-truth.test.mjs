@@ -114,6 +114,7 @@ registerHooks({
 });
 
 const sources = await import('../src/impact/sources.ts');
+const { fetchAwdbDailySeries, toStationValue } = await import('../src/util/awdb.ts');
 const matrix = await import('../src/impact/matrix.ts');
 const { registry } = await import('../src/state/registry.ts');
 const { clearNwsResponseCache } = await import('../src/impact/nws-point.ts');
@@ -178,6 +179,67 @@ function collection(features) {
 }
 
 const signal = () => new AbortController().signal;
+
+test('AWDB missing readings stay unavailable; numeric zero remains an observation', async () => {
+  for (const value of [null, '', '  ', false, true, [], {}, 'invalid', 0, '0', 12.5]) {
+    const valid = typeof value === 'number' || value === '0';
+    await withFetch(() => jsonResponse([{ data: [null, { stationElement: null }, {
+      stationElement: { elementCode: 'WTEQ', storedUnitCode: 'in' },
+      values: [null, { date: '2026-10-08', value }]
+    }] }]), async () => {
+      const [series] = await fetchAwdbDailySeries('test:SNTL', ['WTEQ'], 7, signal());
+      assert.deepEqual(series.readings, valid ? [{ date: '2026-10-08', value: Number(value) }] : []);
+      const station = toStationValue('test', series);
+      assert.equal(station.value, valid ? Number(value) : null);
+      if (!valid) assert.equal(station.freshness, 'unavailable');
+    });
+  }
+});
+
+test('malformed feature responses are unavailable, while a valid empty collection establishes absence', async (t) => {
+  t.mock.method(console, 'warn', () => {});
+  for (const payload of [null, {}, { features: null }, { features: {} }, collection([])]) {
+    await withFetch(() => jsonResponse(payload), async () => {
+      const result = await sources.fetchUsdmClaims(place(-120, 47), signal());
+      const valid = Array.isArray(payload?.features);
+      assert.equal(result.ok, valid);
+      assert.equal(result.claims.length, valid ? 1 : 0);
+      if (valid) assert.match(result.claims[0].text, /No drought category/);
+    });
+  }
+});
+
+test('USDM missing or invalid categories cannot become D0 or an absence claim', async (t) => {
+  t.mock.method(console, 'warn', () => {});
+  for (const dm of [null, '', '  ', false, true, [], {}, -1, 5, 1.5, 0, '0', 4]) {
+    await withFetch(() => jsonResponse(collection([feature({ DM: dm })])), async () => {
+      const result = await sources.fetchUsdmClaims(place(-120, 47), signal());
+      const valid = dm === 0 || dm === '0' || dm === 4;
+      assert.equal(result.ok, valid, `DM=${JSON.stringify(dm)}`);
+      if (!valid) assert.deepEqual(result.claims, []);
+    });
+  }
+});
+
+test('DSCI missing readings do not invent easing; numeric zero remains valid', async () => {
+  const context = {
+    ...place(-120, 47),
+    properties: { STUSPS: 'WA', NAME: 'Washington' },
+    containing: { state: { code: 'WA', name: 'Washington', basis: 'feature-property' } }
+  };
+  for (const dsci of [null, '', '  ', false, true, [], {}, 'invalid', 0, '0', 25]) {
+    await withFetch(() => jsonResponse([
+      { mapDate: '2026-07-14', dsci: 200 },
+      { mapDate: '2026-10-06', dsci }
+    ]), async () => {
+      const result = await sources.fetchDsciTrendClaims(context, signal());
+      const valid = typeof dsci === 'number' || dsci === '0';
+      assert.equal(result.ok, valid, `DSCI=${JSON.stringify(dsci)}`);
+      if (!valid) assert.deepEqual(result.claims, []);
+      else assert.ok(result.claims.length > 0);
+    });
+  }
+});
 
 /** Yield to the event loop `ticks` times through `setImmediate`, which no
  * case mocks (the deadline cases mock only `setTimeout`). */

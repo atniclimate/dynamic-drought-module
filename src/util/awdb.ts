@@ -21,6 +21,7 @@
 
 import { URLS } from '../config/urls';
 import { fetchBufferedWithBudget } from './fetch';
+import { isObject } from './guards';
 import type { StationValue, TelemetryFreshness } from '../types/station';
 
 /** Per-call network budget, matching the popup hydration budget. */
@@ -109,18 +110,17 @@ function parseAwdbPayload(payload: unknown): AwdbElementSeries[] {
 
   const out: AwdbElementSeries[] = [];
   for (const block of station.data) {
-    const el = (block as { stationElement?: unknown }).stationElement as
-      | { elementCode?: unknown; storedUnitCode?: unknown }
-      | undefined;
-    const values = (block as { values?: unknown }).values;
-    if (!el || typeof el.elementCode !== 'string' || !Array.isArray(values)) continue;
+    if (!isObject(block)) continue;
+    const { stationElement: el, values } = block;
+    if (!isObject(el) || typeof el.elementCode !== 'string' || !Array.isArray(values)) continue;
 
     const readings: Array<{ date: string; value: number }> = [];
     for (const v of values) {
-      const date = (v as { date?: unknown }).date;
-      const value = (v as { value?: unknown }).value;
+      if (!isObject(v)) continue;
+      const { date, value } = v;
       if (typeof date !== 'string') continue;
-      const n = typeof value === 'number' ? value : Number(value);
+      const n = typeof value === 'number' || (typeof value === 'string' && value.trim() !== '')
+        ? Number(value) : NaN;
       if (!Number.isFinite(n)) continue;
       readings.push({ date, value: n });
     }
