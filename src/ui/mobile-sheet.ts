@@ -19,8 +19,7 @@ import { selectBriefNarrativeLine } from '../impact/brief-narrative-selector';
 import {
   getViewMode,
   onViewModeChange,
-  setViewMode,
-  clearExplicitBriefBoot
+  setViewMode
 } from '../state/view-mode';
 import { escapeHtml } from '../util/escape';
 import { TRIBAL_NATIONS_GROUP } from '../config/layer-groups';
@@ -118,11 +117,6 @@ export function getSheetDetent(): SheetDetent | null {
 /** Whether a briefing open may auto-raise the closed sheet (see above). */
 export function sheetAllowsAutoRaise(): boolean {
   return userInteracted || deepLinkRaise;
-}
-
-/** Side panels do not create a bottom obstruction for camera padding. */
-export function currentSheetInsetPx(): number {
-  return 0;
 }
 
 /** Subscribe to detent settles (after the height transition and map.resize). */
@@ -599,11 +593,4 @@ export function initMobileSheet(
   }
 
   evaluate();
-
-  // The explicit-view ask is a BOOT-ONLY raise (DEF-2): whether or not the
-  // boot viewport activated the sheet (a desktop boot does not), the flag
-  // is spent now. Later activations (a desktop-to-mobile crossing, the
-  // embed exit) keep their map-first behavior; the app's own `view=` stamp
-  // never reopens the panel.
-  clearExplicitBriefBoot();
 }

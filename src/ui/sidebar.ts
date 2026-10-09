@@ -116,8 +116,7 @@ import type {
 import {
   getViewMode,
   onViewModeChange,
-  setViewMode,
-  setExplicitBriefBoot
+  setViewMode
 } from '../state/view-mode';
 import { installPopupViewportContainment } from './popup-viewport';
 import { getBasemapMode, onBasemapChange, setBasemapMode } from '../state/basemap-store';
@@ -1523,15 +1522,6 @@ function applyUrlStateSync(map: maplibregl.Map): ParsedUrlParams {
   // the URL, and the URL must carry the derived mode from its first write).
   setViewMode(params.view);
 
-  // Record the RAW explicit-view ask beside the mode (U-UX-FIX-1 DEF-2):
-  // once the first pushUrl stamps `view=` onto every URL, only this
-  // parse-time flag still distinguishes a shared `?view=brief` link from
-  // a bare boot's derived Brief mode. The mobile sheet consumes it at its
-  // boot activation (see initMobileSheet) to honor the shared link with
-  // the half-detent Brief surface while a bare boot stays map-first
-  // closed (D-0.7.0-041).
-  setExplicitBriefBoot(params.explicitView && params.view === 'brief');
-
   // Seed the region-shell stores (S2) BEFORE the first pushUrl for the
   // same reason: a `framing=` or `cluster=` deep link must survive the
   // first canonical write. The parser already resolved the precedence
@@ -2087,12 +2077,3 @@ function cssAttrEscape(value: string): string {
  * the sidebar is the only UI module already in scope.
  */
 export { showToast };
-
-/**
- * Read-only getter for the cached map reference. Exists so future test
- * harnesses can assert that `buildSidebar` was called; the harness
- * checks this is non-null after boot.
- */
-export function getMapRef(): maplibregl.Map | null {
-  return mapRef;
-}

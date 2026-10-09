@@ -200,11 +200,6 @@ export function markBooting(): void {
   }
 }
 
-/** Current phase, for readers that cannot see the attribute. */
-export function bootPhase(): BootPhase | null {
-  return phase;
-}
-
 /**
  * The layers still owed by the boot: checked in the bridge, and neither
  * active with a terminal status nor recorded as a terminal failure. A key

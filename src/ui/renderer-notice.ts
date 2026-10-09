@@ -55,8 +55,3 @@ export function hideRendererNotice(): void {
   if (typeof document === 'undefined') return;
   document.getElementById(NOTICE_ID)?.remove();
 }
-
-/** The notice text for a reason; exported so a spec asserts the one copy. */
-export function rendererNoticeText(reason: RendererNoticeReason): string {
-  return NOTICE_TEXT[reason];
-}

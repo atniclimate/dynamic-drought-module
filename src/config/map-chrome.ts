@@ -302,41 +302,6 @@ export function pillMaxWidth(containerWidth: number, chipX: number): number {
   return containerWidth - 2 * (chipX + MAP_CHROME_TOKENS.chipW + 8);
 }
 
-/** The pill's own seat: centred at the container's horizontal middle,
- * top 18 (20 on a coarse pointer per 2.2's "Coarse pointer" column),
- * height 28 so its centre y is 32, matching the chip's centre y. */
-export function pillSeatRect(
-  containerWidth: number,
-  chipX: number,
-  coarse = false
-): MapChromeRect {
-  const width = Math.max(0, pillMaxWidth(containerWidth, chipX));
-  return {
-    x: (containerWidth - width) / 2,
-    y: coarse ? 20 : 18,
-    width,
-    height: 28
-  };
-}
-
-/** The dock's symmetric insets on the desktop shell: `var(--dock-inset)`
- * both sides (`MAP_CHROME_TOKENS.dockInset`), bottom 34 (60 coarse). The
- * open impact panel's own inset still wins on the right (app.css). */
-export function dockSeatRect(
-  containerWidth: number,
-  containerHeight: number,
-  coarse = false
-): MapChromeRect {
-  const { dockInset } = MAP_CHROME_TOKENS;
-  const bottom = coarse ? 60 : 34;
-  return {
-    x: dockInset,
-    y: containerHeight - bottom,
-    width: Math.max(0, containerWidth - 2 * dockInset),
-    height: bottom
-  };
-}
-
 /*
  * ----------------------------------------------------------------------
  * M28: KEYBOARD IDENTIFY (interface-chrome-popups-text.md section 2.7,
