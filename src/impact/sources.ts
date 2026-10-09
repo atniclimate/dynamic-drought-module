@@ -209,14 +209,15 @@ function esriErrorMessage(json: unknown): string | null {
 }
 
 /**
- * The `features` array of a GeoJSON-shaped payload, or `[]` when absent.
+ * The `features` array of a GeoJSON-shaped payload; malformed payloads throw.
  * Throws `EsriServiceError` on an HTTP 200 error envelope (see above); no
  * retry is attempted, so the existing per-call budget still bounds the work.
  */
 export function featuresOf(json: unknown): unknown[] {
   const serviceMessage = esriErrorMessage(json);
   if (serviceMessage !== null) throw new EsriServiceError(serviceMessage);
-  return isObject(json) && Array.isArray(json.features) ? json.features : [];
+  if (!isObject(json) || !Array.isArray(json.features)) throw new Error('Missing features array');
+  return json.features;
 }
 
 /**
@@ -494,9 +495,12 @@ export async function fetchUsdmClaims(
     let worst = -1;
     let mapDate: number | null = null;
     for (const f of features) {
-      if (!isObject(f) || !isObject(f.properties)) continue;
-      const dm = Number(f.properties.DM);
-      if (Number.isInteger(dm) && dm > worst) worst = dm;
+      if (!isObject(f) || !isObject(f.properties)) throw new Error('Invalid USDM feature');
+      const value = f.properties.DM;
+      const dm = typeof value === 'number' || (typeof value === 'string' && value.trim() !== '')
+        ? Number(value) : NaN;
+      if (!Number.isInteger(dm) || dm < 0 || dm > 4) throw new Error('Invalid USDM category');
+      if (dm > worst) worst = dm;
       mapDate ??= epochField(f.properties.MapDate);
     }
     // The USDM is an expert-analyzed weekly product: evidence 'analyzed'. The
@@ -714,7 +718,8 @@ export async function fetchDsciTrendClaims(
     for (const r of rows) {
       if (!isObject(r) || typeof r.mapDate !== 'string') continue;
       const t = Date.parse(r.mapDate);
-      const v = typeof r.dsci === 'number' ? r.dsci : Number(r.dsci);
+      const v = typeof r.dsci === 'number' || (typeof r.dsci === 'string' && r.dsci.trim() !== '')
+        ? Number(r.dsci) : NaN;
       if (Number.isFinite(t) && Number.isFinite(v)) {
         points.push({ t, v });
         rawByT.set(t, r.mapDate);
