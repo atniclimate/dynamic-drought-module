@@ -1040,7 +1040,7 @@ export function isNoddRequestUrl(url: URL): boolean {
 interface NoddFixture {
   /** The object key, as a virtual-hosted path without its leading slash. */
   readonly key: string;
-  /** The exact Range header a message read sends, or null for a whole `.idx` GET. */
+  /** The exact Range header a read sends, or null for a whole `.idx` GET. */
   readonly range: string | null;
   /** The fixture file under tests/fixtures/flow/. */
   readonly file: string;
@@ -1054,11 +1054,14 @@ interface NoddFixture {
  */
 export const NODD_FIXTURES: readonly NoddFixture[] = [
   { key: 'gfs.20261005/06/atmos/gfs.t06z.pgrb2.1p00.f006.idx', range: null, file: 'gfs.t06z.pgrb2.1p00.f006.idx' },
+  { key: 'gfs.20261005/06/atmos/gfs.t06z.pgrb2.1p00.f006.idx', range: 'bytes=0-65535', file: 'gfs.t06z.pgrb2.1p00.f006.idx' },
   { key: 'gfs.20261005/06/atmos/gfs.t06z.pgrb2.1p00.f006', range: 'bytes=34998139-35077224', file: 'gfs1p00-UGRD-10m-f006.grib2' },
   { key: 'gfs.20261005/06/atmos/gfs.t06z.pgrb2.1p00.f006', range: 'bytes=35077225-35156831', file: 'gfs1p00-VGRD-10m-f006.grib2' },
   { key: 'gfs.20261005/06/wave/gridded/gfswave.t06z.global.0p25.f006.grib2.idx', range: null, file: 'gfswave.t06z.global.0p25.f006.grib2.idx' },
+  { key: 'gfs.20261005/06/wave/gridded/gfswave.t06z.global.0p25.f006.grib2.idx', range: 'bytes=0-4095', file: 'gfswave.t06z.global.0p25.f006.grib2.idx' },
   { key: 'gfs.20261005/06/wave/gridded/gfswave.t06z.global.0p25.f006.grib2', range: 'bytes=3029161-3457288', file: 'global0p25-HTSGW-f006.grib2' },
   { key: 'gfs.20261005/06/wave/gridded/gfswave.t06z.wcoast.0p16.f006.grib2.idx', range: null, file: 'gfswave.t06z.wcoast.0p16.f006.grib2.idx' },
+  { key: 'gfs.20261005/06/wave/gridded/gfswave.t06z.wcoast.0p16.f006.grib2.idx', range: 'bytes=0-4095', file: 'gfswave.t06z.wcoast.0p16.f006.grib2.idx' },
   { key: 'gfs.20261005/06/wave/gridded/gfswave.t06z.wcoast.0p16.f006.grib2', range: 'bytes=65805-75391', file: 'wcoast0p16-HTSGW-f006.grib2' },
   { key: 'gfs.20261005/06/wave/gridded/gfswave.t06z.wcoast.0p16.f006.grib2', range: 'bytes=87636-106888', file: 'wcoast0p16-DIRPW-f006.grib2' }
 ];
@@ -1095,7 +1098,7 @@ function noddKey(url: URL): string {
  *
  * FAIL-CLOSED, and LOUD. A GET whose key and Range header match a
  * `NODD_FIXTURES` row is answered from that file: 200 for a whole `.idx`, 206
- * with a `Content-Range` for a message, each with the
+ * with a `Content-Range` for a bounded index or message, each with the
  * `Access-Control-Allow-Origin: *` NODD sends. Anything else (another key, a
  * range with no fixture, a whole-message GET, HEAD, a LIST) is answered 404
  * with that same header, as NODD answers a missing key (B-grib.md section
@@ -1147,16 +1150,20 @@ export async function installDefaultNoddStub(page: Page): Promise<void> {
         return;
       }
       const [first, last] = fixture.range.slice('bytes='.length).split('-');
+      const isIndex = fixture.file.endsWith('.idx');
+      const rangeBody = isIndex ? body.subarray(Number(first), Number(last) + 1) : body;
       await route
         .fulfill({
           status: 206,
           headers: {
             'access-control-allow-origin': '*',
             'accept-ranges': 'bytes',
-            'content-range': `bytes ${first}-${last}/*`
+            'content-range': isIndex
+              ? `bytes ${first}-${Number(first) + rangeBody.length - 1}/${body.length}`
+              : `bytes ${first}-${last}/*`
           },
-          contentType: 'binary/octet-stream',
-          body
+          contentType: isIndex ? 'text/plain' : 'binary/octet-stream',
+          body: rangeBody
         })
         .catch(() => undefined);
     }

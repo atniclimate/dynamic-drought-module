@@ -191,8 +191,9 @@ export async function readFlowFrame(kind: FlowKind, options: FlowReadOptions): P
   const source = FLOW_SOURCES[kind];
   const ctrl = new AbortController();
   const unlink = linkAbort(ctrl, signal);
-  const worker = (options.createWorker ?? moduleWorker)();
+  let worker: DecodeWorkerLike | undefined;
   try {
+    worker = (options.createWorker ?? moduleWorker)();
     const t = now();
     let cycle = candidateCycle(t);
     for (let tries = 1; ; tries++) {
@@ -230,7 +231,7 @@ export async function readFlowFrame(kind: FlowKind, options: FlowReadOptions): P
     // 206, or a body longer or shorter than the span asked for.
     throw new FlowUnavailableError(reason, `${kind} read: ${e instanceof Error ? `${e.name} ${e.message}` : String(e)}`);
   } finally {
-    worker.terminate();
+    worker?.terminate();
     ctrl.abort();
     unlink();
   }

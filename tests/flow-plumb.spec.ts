@@ -172,7 +172,7 @@ interface NoddRead {
 
 /**
  * One cross-origin GET from the app's own page, the way the E1-2 reader will
- * make it: `credentials: 'omit'` and, for a message, one Range header.
+ * make it: `credentials: 'omit'` and one Range header for a bounded read.
  */
 async function readNodd(page: Page, url: string, range: string | null): Promise<NoddRead> {
   return page.evaluate(
@@ -299,6 +299,18 @@ test.describe('E1-5 flow plumbing (ENSO-FLOW-PLAN block E1)', () => {
       bytes: 39_706,
       error: null
     });
+    for (const [key, file, range] of [
+      [WIND_IDX_KEY, 'gfs.t06z.pgrb2.1p00.f006.idx', 'bytes=0-65535'],
+      [`${WAVE_KEY}.idx`, 'gfswave.t06z.global.0p25.f006.grib2.idx', 'bytes=0-4095'],
+      [WAVE_KEY.replace('global.0p25', 'wcoast.0p16') + '.idx', 'gfswave.t06z.wcoast.0p16.f006.grib2.idx', 'bytes=0-4095']
+    ] as const) {
+      const url = `${NODD_ORIGIN}/${key}`;
+      const response = page.waitForResponse(url);
+      const bounded = await readNodd(page, url, range);
+      const bytes = readFileSync(new URL(`./fixtures/flow/${file}`, import.meta.url)).length;
+      expect(bounded).toEqual({ ok: true, status: 206, sha256: fixtureSha256(file), bytes, error: null });
+      expect(await (await response).headerValue('content-range')).toBe(`bytes 0-${bytes - 1}/${bytes}`);
+    }
     const ugrd = await readNodd(page, `${NODD_ORIGIN}/${WIND_KEY}`, UGRD_RANGE);
     expect(ugrd).toEqual({
       ok: true,
@@ -309,6 +321,9 @@ test.describe('E1-5 flow plumbing (ENSO-FLOW-PLAN block E1)', () => {
     });
     await expect.poll(() => answers, { message: 'each answer carried the CORS header NODD sends' }).toEqual([
       [200, '*'],
+      [206, '*'],
+      [206, '*'],
+      [206, '*'],
       [206, '*']
     ]);
     expect(
