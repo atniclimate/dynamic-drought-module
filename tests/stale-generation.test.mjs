@@ -231,6 +231,62 @@ function release(record, n) {
 
 const WILDFIRE_PAIR = HAZARD_CLUSTERS.wildfire.recipes.current;
 
+test('a thrown activation removes partial resources before a retry', async (t) => {
+  t.mock.method(console, 'error', () => {});
+  const key = 'tribal';
+  registry.deactivate(key);
+  const records = installModules(new Set());
+  const record = records.get(key);
+  const module = globalThis.__staleModules.get(key);
+  const activate = module.activate;
+  module.activate = async (map, activation) => {
+    await activate(map, activation);
+    if (record.calls.length === 1) throw new Error('setup failed after adding a source');
+  };
+  const controller = bindRealController();
+  await controller.activate(key);
+  assert.equal(record.source, null, 'the failed activation left no source');
+  assert.equal(registry.getActiveKeys().has(key), false);
+  assert.equal(registry.getStatus(key), 'error');
+  await controller.activate(key);
+  assert.equal(record.source, 2, 'retry installed its own source');
+  assert.equal(registry.getStatus(key), 'ready');
+  assert.equal(registry.getActiveKeys().has(key), true);
+  controller.deactivate(key);
+  await flush();
+});
+
+test('a superseded activation that throws cleans up before the latest on intent', async (t) => {
+  t.mock.method(console, 'error', () => {});
+  const key = 'tribal';
+  registry.deactivate(key);
+  const records = installModules(new Set());
+  const record = records.get(key);
+  const module = globalThis.__staleModules.get(key);
+  const activate = module.activate;
+  let rejectSetup;
+  module.activate = async (map, activation) => {
+    await activate(map, activation);
+    if (record.calls.length === 1) {
+      await new Promise((_resolve, reject) => { rejectSetup = reject; });
+    }
+  };
+  const controller = bindRealController();
+  const first = controller.activate(key);
+  await flush();
+  controller.deactivate(key);
+  bridge.setChecked(key, true);
+  const latest = controller.activate(key);
+  rejectSetup(new Error('superseded setup failed'));
+  await Promise.all([first, latest]);
+  assert.equal(record.source, 2, 'partial stale resources did not block the latest source');
+  assert.equal(registry.getStatus(key), 'ready');
+  assert.equal(bridge.isChecked(key), true);
+  assert.equal(registry.getActiveKeys().has(key), true);
+  controller.deactivate(key);
+  await flush();
+});
+
 test('off/on of an active layer replaces its aborted signal and keeps viewport refreshes live', async () => {
   const key = 'hydrography';
   registry.deactivate(key);

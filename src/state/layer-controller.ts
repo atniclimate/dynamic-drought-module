@@ -304,8 +304,9 @@ export function createLayerController(
 
       const token = showLoading(`Loading ${def.name}...`);
       registry.setStatus(def.key, 'loading');
+      let mod: LayerModule | undefined;
       try {
-        const mod = await loadLayerModule(def);
+        mod = await loadLayerModule(def);
         if (!ownsIntent()) return;
         ensurePopupsBound(def.key, mod);
         // The attempt opens here, after the chunk import, so a module never
@@ -368,13 +369,14 @@ export function createLayerController(
         reassertLabelOrder(map);
         registry.activate(def.key);
       } catch (err) {
-        if (!ownsIntent()) return;
-        // A thrown activation has nothing left in flight worth keeping; the
-        // attempt closes so a later activate starts from a fresh signal.
-        // `mod` may never have been assigned (a chunk import failure throws
-        // before that binding exists), so unlike the non-thrown branch above
-        // there is no module instance here to call `deactivate` on.
         abortAttempt(def.key);
+        // A setup failure may leave resources behind even after intent changed.
+        try {
+          mod?.deactivate(map);
+        } catch (cleanupError) {
+          console.error(`Layer "${def.key}" failed to deactivate cleanly:`, cleanupError);
+        }
+        if (!ownsIntent()) return;
         console.error(`Layer "${def.key}" failed to load:`, err);
         // Shared failure tail (DDM-P1-T03): nothing was reported here, so
         // failActivation asserts 'error' once after registry.deactivate.
