@@ -222,6 +222,7 @@ test('an all-404 HeatRisk selected frame becomes unavailable', async ({
   await expect(layerPill(page, 'heatrisk')).toHaveText('unavailable', {
     timeout: 25_000
   });
+  await expect(page.locator('html')).toHaveAttribute('data-ddm-boot', 'idle');
 });
 
 test('a mixed-success HeatRisk selected frame is live partial', async ({

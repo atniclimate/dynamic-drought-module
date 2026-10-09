@@ -50,7 +50,8 @@ export const PURE_SPECS = [
   'tests/satellite-source.spec.ts',
   'tests/umbrella-config.spec.ts',
   'tests/usfs-whp.spec.ts',
-  'tests/verification-config.spec.ts'
+  'tests/verification-config.spec.ts',
+  'tests/worker-proxy-policy.spec.ts'
 ] as const;
 
 const { webServer: _webServer, projects: _projects, ...inherited } = base;

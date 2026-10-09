@@ -4,6 +4,7 @@ import worker, {
   buildCacheKey,
   buildUpstreamRequest,
   fetchUpstreamWithTimeout,
+  MAX_UPSTREAM_BYTES,
   isAllowedRoute,
   normalizeAccept,
   parseAndValidateUpstream,
@@ -612,6 +613,71 @@ test('the upstream deadline remains active through body consumption', async () =
   );
 
   await expect(pending).rejects.toMatchObject({ name: 'TimeoutError' });
+});
+
+test('the proxy byte limit accepts the exact boundary without changing bytes or headers', async () => {
+  const bytes = new Uint8Array(MAX_UPSTREAM_BYTES);
+  bytes[0] = 255;
+  bytes[bytes.length - 1] = 127;
+  const response = await fetchUpstreamWithTimeout(
+    new Request('https://api.weather.gov/points/38.5,-97.5'),
+    1000,
+    (async () => new Response(bytes, { headers: { 'Content-Type': 'application/octet-stream' } })) as typeof fetch
+  );
+  expect(response.headers.get('Content-Type')).toBe('application/octet-stream');
+  expect(Buffer.from(await response.arrayBuffer()).equals(Buffer.from(bytes))).toBe(true);
+});
+
+test('oversized bodies with missing or dishonest lengths are cancelled, rejected and never cached', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalCaches = Object.getOwnPropertyDescriptor(globalThis, 'caches');
+  let cacheWrites = 0;
+  Object.defineProperty(globalThis, 'caches', {
+    configurable: true,
+    value: { default: { match: async () => undefined, put: async () => { cacheWrites++; } } }
+  });
+  try {
+    for (const contentLength of [null, '1']) {
+      let pulls = 0;
+      let cancelled = false;
+      const signals: AbortSignal[] = [];
+      globalThis.fetch = (async (_request: Request, init?: RequestInit) => {
+        if (init?.signal) signals.push(init.signal);
+        return new Response(new ReadableStream<Uint8Array>({
+          pull(controller) {
+            pulls++;
+            controller.enqueue(new Uint8Array(pulls === 1 ? MAX_UPSTREAM_BYTES : 1));
+          },
+          cancel() { cancelled = true; }
+        }, { highWaterMark: 0 }), {
+          headers: contentLength === null ? {} : { 'Content-Length': contentLength }
+        });
+      }) as typeof fetch;
+      const response = await fetchWorker(
+        proxyRequest(['https://api.weather.gov/points/38.5,-97.5']),
+        { waitUntil() { throw new Error('oversized response must not be cached'); } }
+      );
+      expect(response.status).toBe(502);
+      await expect(response.json()).resolves.toMatchObject({ error: 'upstream_unreachable' });
+      await expect.poll(() => cancelled, { timeout: 1000 }).toBe(true);
+      expect(pulls).toBe(2);
+      expect(signals[0]?.aborted).toBe(true);
+    }
+    expect(cacheWrites).toBe(0);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalCaches) Object.defineProperty(globalThis, 'caches', originalCaches);
+    else Reflect.deleteProperty(globalThis, 'caches');
+  }
+});
+
+test('the deadline cancels a stalled body even when the stream ignores the fetch signal', async () => {
+  let cancelled = false;
+  await expect(fetchUpstreamWithTimeout(
+    new Request('https://api.weather.gov/points/38.5,-97.5'), 25,
+    (async () => new Response(new ReadableStream({ cancel() { cancelled = true; } }))) as typeof fetch
+  )).rejects.toMatchObject({ name: 'TimeoutError' });
+  expect(cancelled).toBe(true);
 });
 
 test('a full proxy read preserves bytes and swallows cache.put rejection', async () => {

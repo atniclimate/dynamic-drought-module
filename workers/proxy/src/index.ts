@@ -20,8 +20,7 @@
  *   - The Worker MUST forward only normalized Accept plus its fixed User-Agent.
  *
  * Operational notes:
- *   - The upstream fetch is bounded by a 12 second timeout, matching the
- *     in-browser per-mirror budget used by the client.
+ *   - The upstream fetch is bounded by a 12 second timeout and a 16 MiB body limit.
  *   - Status-200 GET responses are stored in `caches.default` keyed by the
  *     upstream URL plus normalized Accept, so repeated reads within the
  *     time-to-live are served without mixing media-type variants.
@@ -105,9 +104,10 @@ export function isAllowedRoute(upstreamUrl: URL): boolean {
 
 const USER_AGENT =
   "DDM-Proxy/0.1.0 (+https://github.com/atniclimate/dynamic-drought-module)";
-const WORKER_REVISION = "2026-08-29-options-policy-v4";
+const WORKER_REVISION = "2026-10-08-body-limit-v5";
 
 const UPSTREAM_TIMEOUT_MS = 12_000;
+export const MAX_UPSTREAM_BYTES = 16 * 1024 * 1024;
 const EDGE_CACHE_MAX_AGE_SECONDS = 60;
 const EDGE_CACHE_CONTROL = `public, max-age=${EDGE_CACHE_MAX_AGE_SECONDS}`;
 const CACHED_ORIGIN_CACHE_CONTROL = "X-DDM-Origin-Cache-Control";
@@ -366,8 +366,8 @@ const MAX_REDIRECT_HOPS = 5;
 /**
  * Fetch the upstream with a hard timeout, following redirects MANUALLY so each
  * complete URL is re-validated against the exact route table. The final body is
- * buffered as bytes before the timer is cleared, so the deadline covers DNS,
- * headers, redirects, and body consumption. Rebuilding a Response from that
+ * buffered up to MAX_UPSTREAM_BYTES before the timer is cleared, so the deadline
+ * covers DNS, headers, redirects, and body consumption. Rebuilding a Response from that
  * ArrayBuffer preserves the exact bytes without interpreting them.
  */
 export async function fetchUpstreamWithTimeout(
@@ -390,10 +390,25 @@ export async function fetchUpstreamWithTimeout(
       const isRedirect = resp.status >= 300 && resp.status < 400;
       const location = isRedirect ? resp.headers.get("location") : null;
       if (!location) {
-        const body =
-          request.method.toUpperCase() === "HEAD" || resp.body === null
-            ? null
-            : await resp.arrayBuffer();
+        let body: ArrayBuffer | null = null;
+        if (request.method.toUpperCase() !== "HEAD" && resp.body !== null) {
+          let byteLength = 0;
+          const bounded = resp.body.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({
+            transform(chunk, output) {
+              byteLength += chunk.byteLength;
+              if (byteLength > MAX_UPSTREAM_BYTES) {
+                throw new RangeError(`Upstream response exceeds ${MAX_UPSTREAM_BYTES} bytes.`);
+              }
+              output.enqueue(chunk);
+            }
+          }), { signal: controller.signal });
+          try {
+            body = await new Response(bounded).arrayBuffer();
+          } catch (error) {
+            controller.abort(error);
+            throw error;
+          }
+        }
         return new Response(body, {
           status: resp.status,
           statusText: resp.statusText,

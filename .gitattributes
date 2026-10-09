@@ -1,6 +1,7 @@
 # Parity baselines and their manifest are byte-frozen: no end-of-line
 # conversion anywhere (the tests compare sha256 and raw bytes).
 scripts/landscape/tests/fixtures/legacy/* -text
+tests/fixtures/flow/*.idx -text
 scripts/landscape/tests/fixtures/synthetic/* binary
 scripts/landscape/tests/fixtures/corrected/* -text
 scripts/landscape/tests/fixtures/delta-manifest.json -text

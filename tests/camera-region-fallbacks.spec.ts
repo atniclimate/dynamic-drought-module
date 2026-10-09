@@ -6,7 +6,7 @@ import { coverageFamilyForGeography } from '../src/config/place-coverage';
 import { resolveStateCode } from '../src/impact/resources';
 import { briefingSourcePolicy } from '../src/impact/source-policy';
 import type { BoundarySelectionContext } from '../src/impact/types';
-import { resolveWaterSupplyPoint } from '../src/impact/water-supply';
+import { fetchWaterSupplyClaims, resolveWaterSupplyPoint } from '../src/impact/water-supply';
 
 /**
  * Every remaining place decision that can still reach the camera region
@@ -17,6 +17,32 @@ import { resolveWaterSupplyPoint } from '../src/impact/water-supply';
  */
 
 const LNG_LAT = { lng: -120.5, lat: 47.2 };
+
+test('water-supply blanks and invalid numbers stay missing while reported zero remains valid', async () => {
+  const originalFetch = globalThis.fetch;
+  const selection = context({
+    containing: { state: 'WA', basis: 'point-in-polygon' },
+    regionKey: 'washington_state'
+  });
+  try {
+    for (const [forecast, runoff, count] of [
+      ['', '', 0], ['  ', '  ', 0], ['N/A', 'N/A', 0],
+      ['100', '', 1], ['100', '  ', 1], ['100', 'N/A', 1], ['0', '0', 2]
+    ] as const) {
+      globalThis.fetch = async () => new Response(
+        `ID,Location,FcstPeriod,50PerAvg,CurPerAvg,FcstDate\nBONO3,COLUMBIA - BONNEVILLE DAM,APR-SEP,${forecast},${runoff},2026-10-08`
+      );
+      const result = await fetchWaterSupplyClaims(selection, new AbortController().signal);
+      expect(result.claims, JSON.stringify({ forecast, runoff })).toHaveLength(count);
+      expect(result.ok).toBe(count > 0);
+      if (forecast === '0') {
+        expect(result.claims.every((claim) => claim.text.includes('0 percent'))).toBe(true);
+      }
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
 
 function context(
   overrides: Partial<BoundarySelectionContext> &

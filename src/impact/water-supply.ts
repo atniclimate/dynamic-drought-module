@@ -123,8 +123,8 @@ function parseWsReport(text: string): WsRow[] {
     const fcstPeriod = f[iPeriod];
     const fcstDate = f[iDate];
     if (!id || !location || !fcstPeriod || !fcstDate) continue;
-    const pct = Number(f[iPct]);
-    const cur = Number(f[iCur]);
+    const pct = f[iPct]?.trim() ? Number(f[iPct]) : NaN;
+    const cur = f[iCur]?.trim() ? Number(f[iCur]) : NaN;
     rows.push({
       id,
       location,

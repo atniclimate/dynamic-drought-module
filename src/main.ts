@@ -5,6 +5,8 @@ import './styles/mobile-panels.css';
 
 import type * as maplibregl from 'maplibre-gl';
 import { createMap } from './map/init';
+import { loadFire3DController } from './map/fire3d-chunk';
+import { onFire3DPreferenceChange } from './state/fire3d-store';
 import { initInteractionCoordinator } from './map/interaction-coordinator';
 import { setMap } from './state/map-store';
 import { applyDeepLink } from './state/deep-link';
@@ -413,19 +415,24 @@ function wireMapDependentChrome(map: maplibregl.Map): void {
   // boot URL names the mode directly (only the exact single token `true`
   // counts, matching src/state/url.ts's parseFire3dParam so a stray or
   // duplicated parameter never triggers a fetch a bare boot has no use for).
-  // A boot below the breakpoint still arms a one-shot widen listener; the
+  // A boot below the breakpoint still arms a widen listener; the
   // same eligibility rule applies when it fires, so a later resize into
   // desktop width finds a live controller rather than an inert control.
   const fire3dViewport = window.matchMedia('(min-width: 721px)');
   let fire3dLoaded = false;
   let unsubscribeFire3dEligibility: (() => void) | null = null;
+  let unsubscribeFire3dPreference: (() => void) | null = null;
   const loadFire3D = (): void => {
     if (fire3dLoaded) return;
     fire3dLoaded = true;
-    unsubscribeFire3dEligibility?.();
-    unsubscribeFire3dEligibility = null;
-    void import('./map/fire3d').then(({ initFire3DController }) => {
+    void loadFire3DController().then(({ initFire3DController }) => {
       initFire3DController(map);
+      unsubscribeFire3dEligibility?.();
+      unsubscribeFire3dPreference?.();
+      fire3dViewport.removeEventListener('change', maybeLoadFire3D);
+    }).catch((error: unknown) => {
+      fire3dLoaded = false;
+      console.warn('Fire 3D controller could not load:', error);
     });
   };
   const fire3dParamRequested = (): boolean => {
@@ -440,16 +447,9 @@ function wireMapDependentChrome(map: maplibregl.Map): void {
     if (fire3dViewport.matches && fire3dEligible()) loadFire3D();
   };
   unsubscribeFire3dEligibility = onCommittedSnapshotChange(maybeLoadFire3D);
-  if (fire3dViewport.matches) {
-    maybeLoadFire3D();
-  } else {
-    const onWiden = (): void => {
-      if (!fire3dViewport.matches) return;
-      fire3dViewport.removeEventListener('change', onWiden);
-      maybeLoadFire3D();
-    };
-    fire3dViewport.addEventListener('change', onWiden);
-  }
+  unsubscribeFire3dPreference = onFire3DPreferenceChange(maybeLoadFire3D);
+  fire3dViewport.addEventListener('change', maybeLoadFire3D);
+  maybeLoadFire3D();
 
   // Selected-place emphasis (U3h, headroom A1): the chosen boundary stays lit
   // while its popup or briefing is open. This wires only the close seam (clear

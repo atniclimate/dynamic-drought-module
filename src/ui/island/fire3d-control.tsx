@@ -65,6 +65,7 @@ import {
 } from '../../config/fire3d-presentation';
 import type { HazardClusterKey } from '../../config/clusters';
 import type { Fire3DStatus } from '../../map/fire3d';
+import { loadFire3DController } from '../../map/fire3d-chunk';
 // The shared, once-per-page probe result (already in the entry chunk through
 // main.ts, so reading it here adds no eager weight and no second context).
 import { webGl2Capability } from '../../map/gl-capability';
@@ -248,6 +249,7 @@ export function Fire3DControl({
     fireView: cluster === 'wildfire'
   });
   const visible = offer === 'control';
+  const [chunkUnavailable, setChunkUnavailable] = useState(false);
   useEffect(() => {
     setMapTechnicalNote('fire3d', coverageNote(status));
   }, [status]);
@@ -256,18 +258,21 @@ export function Fire3DControl({
     if (!visible) return;
     let disposed = false;
     let unsubscribe: (() => void) | null = null;
-    void import('../../map/fire3d').then((mod) => {
+    void loadFire3DController().then((mod) => {
       if (disposed) return;
+      setChunkUnavailable(false);
       setStatus(mod.getFire3DStatus());
       unsubscribe = mod.onFire3DStatusChange(() => {
         setStatus(mod.getFire3DStatus());
       });
+    }).catch(() => {
+      if (!disposed) setChunkUnavailable(true);
     });
     return () => {
       disposed = true;
       unsubscribe?.();
     };
-  }, [visible]);
+  }, [visible, preference]);
 
   // A refusal reads as one sentence in the slot the button would have
   // occupied, directly after the hazard-view button group, so a person
@@ -308,7 +313,7 @@ export function Fire3DControl({
       <details class="shell-fire3d-details">
         <summary>
           3D information
-          {status?.state === 'checking' ? ' · loading' :
+          {chunkUnavailable ? ' · unavailable' : status?.state === 'checking' ? ' · loading' :
             status?.state === 'active' ? (status.smokeVolume ? ' · live' : ' · live (partial)') :
               status?.state === 'unavailable' ? ' · unavailable' : ''}
         </summary>
@@ -316,11 +321,11 @@ export function Fire3DControl({
           only its text swaps, so screen readers announce it reliably. */}
       <p
         class="shell-fire3d-status"
-        data-fire3d-status={status?.state ?? 'inactive'}
+        data-fire3d-status={chunkUnavailable ? 'unavailable' : status?.state ?? 'inactive'}
         data-fire3d-transport={status?.transport ?? undefined}
         aria-live="polite"
       >
-        {statusLine(status)}
+        {chunkUnavailable ? 'Unavailable.' : statusLine(status)}
       </p>
       {emptySmokeLine(status, smokeStatus) ? (
         <p class="shell-fire3d-empty" data-fire3d-empty-smoke>
