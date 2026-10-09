@@ -5,8 +5,6 @@
  * A cased mark clears 3:1 over any ground: the worst ground makes core and
  * casing equally contrasting, which is sqrt(core-to-casing contrast).
  */
-import type { FlowClass } from './field';
-
 export type FlowInkName = 'light' | 'dark';
 
 export interface FlowInk {
@@ -30,10 +28,6 @@ export const FLOW_CASING_WIDTH_PX = 0.75;
 export const FLOW_CASING_ALPHA = 0.8;
 /** Head alpha of a moving ribbon; it falls linearly to 0 at the tail. */
 export const FLOW_HEAD_ALPHA = 0.95;
-
-export function coreWidth(cls: FlowClass): number {
-  return FLOW_CORE_WIDTH_PX[cls];
-}
 
 /** '#RRGGBB' as sRGB channels in 0..1, for shader uniforms. */
 export function inkRgb(hex: string): [number, number, number] {
