@@ -428,8 +428,11 @@ export function createLayerController(
         // activation stand down at its next checkpoint.
         const mod = getLoadedLayerModule(def.key);
         if (mod) {
-          await fadeOutLayers(map, mod.fadeLayerIds);
-          mod.deactivate(map);
+          try {
+            await fadeOutLayers(map, mod.fadeLayerIds);
+          } finally {
+            mod.deactivate(map);
+          }
         }
       } catch (err) {
         console.error(`Layer "${def.key}" failed to deactivate cleanly:`, err);
