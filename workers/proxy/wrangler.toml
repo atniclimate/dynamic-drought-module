@@ -32,8 +32,9 @@ compatibility_date = "2026-05-09"
 # Node.js built-in surface by way of a routine date bump (hard rule 4). This
 # is a config-only change; it takes effect only on the next publish, which
 # needs the owner's say. See DEVELOPER.md's "Optional Worker" section for
-# the rollback handle to record at that publish.
-compatibility_flags = ["no_nodejs_compat"]
+# the rollback handle to record at that publish. Cloudflare's docs require
+# both flags to turn Node.js compatibility off completely (2026-10-09).
+compatibility_flags = ["no_nodejs_compat", "no_nodejs_compat_v2"]
 
 # No KV, no D1, no Durable Objects, no R2. The Worker is stateless except for
 # the per-edge response cache exposed via `caches.default` and the platform

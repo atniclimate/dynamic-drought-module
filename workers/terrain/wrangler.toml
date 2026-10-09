@@ -29,8 +29,9 @@ compatibility_date = "2026-05-09"
 
 # DR-010 a, matching workers/proxy: this Worker uses only Web APIs (Request,
 # Response, R2Bucket) and must not gain the Node.js built-in surface by way of
-# a routine compatibility-date bump (hard rule 4).
-compatibility_flags = ["no_nodejs_compat"]
+# a routine compatibility-date bump (hard rule 4). Both flags are needed to
+# turn it off completely; this one takes effect at the next terrain publish.
+compatibility_flags = ["no_nodejs_compat", "no_nodejs_compat_v2"]
 
 # The one piece of state this Worker touches, read-only by convention: it
 # calls head() and get() and never put, delete or list.
