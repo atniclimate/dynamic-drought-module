@@ -369,6 +369,7 @@ export function createLayerController(
         reassertLabelOrder(map);
         registry.activate(def.key);
       } catch (err) {
+        if (!ownsIntent()) return;
         // A thrown activation has nothing left in flight worth keeping; the
         // attempt closes so a later activate starts from a fresh signal.
         // `mod` may never have been assigned (a chunk import failure throws

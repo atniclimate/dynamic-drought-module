@@ -370,6 +370,74 @@ function proveLatestFrame(map) {
   map.loadTile(DEFAULT_SOURCE, 'latest-1', true);
 }
 
+for (const action of ['pause', 'reactivate', 'deactivate']) {
+  test(`${action} during a held crossfade cannot stop or duplicate new playback`, async (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    await withSst({ answer: () => domainsOk() }, async ({ map }) => {
+      map.isSourceLoaded = () => true;
+      await mod.activate(map);
+      proveLatestFrame(map);
+      const crossfade = gate();
+      globalThis.__rasterReadinessTest.crossfadeGate = crossfade.held;
+      timeBars.get(KEY).play.onToggle();
+      await settle();
+      globalThis.__rasterReadinessTest.crossfadeGate = null;
+      if (action === 'pause') timeBars.get(KEY).play.onToggle();
+      else {
+        if (action === 'deactivate') mod.deactivate(map);
+        await mod.activate(map);
+        proveLatestFrame(map);
+      }
+      timeBars.get(KEY).play.onToggle();
+      await settle();
+      const index = timeBars.get(KEY).rail.index;
+      crossfade.release();
+      await settle();
+      t.mock.timers.tick(900);
+      await settle();
+      assert.equal(timeBars.get(KEY).rail.index, (index + 1) % WINDOW.length);
+      assert.equal(timeBars.get(KEY).play.playing, true);
+      t.mock.timers.tick(900);
+      await settle();
+      assert.equal(timeBars.get(KEY).rail.index, (index + 2) % WINDOW.length);
+    });
+  });
+}
+
+test('pause/resume and manual stepping retire the old playback loop', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  await withSst({ answer: () => domainsOk() }, async ({ map }) => {
+    map.isSourceLoaded = () => true;
+    await mod.activate(map);
+    proveLatestFrame(map);
+    const toggle = () => timeBars.get(KEY).play.onToggle();
+    toggle();
+    await settle();
+    t.mock.timers.tick(100);
+    toggle();
+    toggle();
+    await settle();
+    const resumedIndex = timeBars.get(KEY).rail.index;
+    t.mock.timers.tick(800);
+    await settle();
+    assert.equal(timeBars.get(KEY).rail.index, resumedIndex, 'old sleep cannot advance the resumed run');
+    assert.equal(timeBars.get(KEY).play.playing, true, 'old finalizer cannot stop the resumed run');
+    t.mock.timers.tick(100);
+    await settle();
+    assert.equal(timeBars.get(KEY).rail.index, (resumedIndex + 1) % WINDOW.length);
+    timeBars.get(KEY).rail.onStep(0);
+    await settle();
+    t.mock.timers.tick(100);
+    toggle();
+    await settle();
+    const steppedIndex = timeBars.get(KEY).rail.index;
+    t.mock.timers.tick(800);
+    await settle();
+    assert.equal(timeBars.get(KEY).rail.index, steppedIndex, 'manual step retired the previous run');
+    assert.equal(timeBars.get(KEY).play.playing, true);
+  });
+});
+
 test('a plain boot stays loading while DescribeDomains is held, even with the latest frame proven, and reads live once the axis answers (M1: the frame proof precedes ready)', async () => {
   const domains = gate();
   await withSst({ answer: async () => (await domains.held, domainsOk()) }, async ({ map, log }) => {
