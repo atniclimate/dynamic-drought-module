@@ -82,6 +82,7 @@ export async function fetchJsonWithBudget(
   try {
     const response = await fetch(url, { ...(opts ?? {}), signal: ctrl.signal });
     if (!response.ok) {
+      ctrl.abort();
       throw new Error(`HTTP ${response.status} ${response.statusText}`);
     }
     const bytes = await readBodyBytes(response, ctrl.signal);
