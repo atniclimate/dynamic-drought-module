@@ -267,9 +267,13 @@ function scanRasterSources(dir = join(ROOT, 'src'), baseDir = ROOT) {
  */
 function exceptionProblems(sources, exceptions) {
   const problems = [];
-  const found = new Set(sources.map((s) => `${s.file}#${s.identity ?? '(unnamed)'}`));
+  const found = new Set();
   for (const source of sources) {
     const identityKey = `${source.file}#${source.identity ?? '(unnamed)'}`;
+    if (found.has(identityKey)) {
+      problems.push(`${identityKey}: multiple raster declarations cannot share one exception`);
+    }
+    found.add(identityKey);
     if (!exceptions.has(identityKey)) {
       problems.push(
         `${identityKey}: adds a raster source but is neither a tile-proven row nor a declared exception naming this identity`
@@ -516,24 +520,8 @@ test('C9 self-test: a same-count replacement of an exempt source is not covered 
   assert.deepEqual(exceptionProblems(sources, exceptions), []);
 });
 
-/**
- * Finding (this task): two `addSource` calls that share one literal identity
- * text inside the same exempt file collapse to a single `${file}#${identity}`
- * key. `exceptionProblems`'s `found` set is built with `sources.map(...)`
- * fed into a `Set`, so the duplicate key de-duplicates there; more directly,
- * its per-source loop checks `exceptions.has(identityKey)` for each entry
- * independently, and an identical identityKey text means an exception that
- * disposes the first also, silently, disposes the second. A second raster
- * source in an already-exempt file is only caught when it carries an
- * identity the scan has not already seen once. This case is filed `todo`
- * (Node's `{ todo: true }` runs it and reports a failure without failing the
- * suite, node --test todo-probe): it names the gap without turning a lane
- * this brief does not own (`exceptionProblems`, `scanRasterSources`) red for
- * everyone. Fixing the collapse is a handoff, not a new self-test case.
- */
 test(
-  'C9 self-test: two addSource calls sharing one literal identity in an exempt file collapse to one key and the second is silently exempted',
-  { todo: true },
+  'C9 self-test: one exception cannot cover two addSource calls sharing one literal identity',
   (t) => {
     const dir = withFixtureDir(t, {
       'exempt-file.ts': [
