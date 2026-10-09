@@ -48,7 +48,7 @@ const isCI = !!process.env['CI'];
 // timing on these specs, not product behavior) instead of inflating the
 // global budget, and so a general shard never waits behind a scene build.
 // Locally `npm test` and `npm run test:serial` still run both projects.
-const FIRE3D_SPECS = ['**/fire3d-mode.spec.ts', '**/view-contracts.spec.ts'];
+const FIRE3D_SPECS = ['**/fire3d-mode.spec.ts', '**/view-contracts.spec.ts', '**/wildfire3d-ground.spec.ts'];
 
 // The interaction cluster (R1/R3, 2026-08-29): these four files carry about
 // 35 of the 53 named flake events tallied in the per-test table (section 3)

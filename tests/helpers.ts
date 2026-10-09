@@ -10,6 +10,7 @@
 
 import { execSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import { crc32, deflateSync } from 'node:zlib';
 import { expect, type BrowserContext, type Page, type Locator, type Route } from '@playwright/test';
 import { stubRecentSatellite } from './satellite-fixture';
 import { installMinimapAnalysisStubs } from './minimap-fixtures';
@@ -435,6 +436,10 @@ export async function gotoApp(
   // the motion loop (still form, same data) and 'idle' stays reachable. See
   // `GotoAppOptions.flowMotion` for the opt-out.
   await installFlowMotionHold(page, options.flowMotion ?? 'hold');
+  // DDM-P9-T13: entering Wildfire 3D reads the NOAA STAR VHI tiles and the
+  // USGS Relative Greenness WMS. Every boot answers both from synthetic
+  // fixtures (`installDefaultDrynessStub`), so no spec reaches either agency.
+  await installDefaultDrynessStub(page);
   coverFuturePages(page);
   await page.goto(query, { waitUntil: 'domcontentloaded' });
   // DOM READY, and no longer a proxy for a finished boot. The generated
@@ -1345,4 +1350,173 @@ export async function installDefaultNoddStub(page: Page): Promise<void> {
         .catch(() => undefined);
     }
   );
+}
+
+// ---------------------------------------------------------------------------
+// The Wildfire 3D dryness ground (DDM-P9-T13): NOAA STAR VHI and USGS RG arms
+// ---------------------------------------------------------------------------
+
+/** The STAR tile host and path the runtime builds (src/config/urls.ts starVhiJ01TileTemplate). */
+export const STAR_VHI_TILE_PATH = 'https://www.star.nesdis.noaa.gov/smcd/emb/vci/VH/image_mapTile.php';
+/** The USGS RG WMS the runtime reads (src/config/urls.ts usgsRgConusWeekWms). */
+export const USGS_RG_WMS = 'https://dmsdata.cr.usgs.gov/geoserver/firedanger_rg_conus_week_data/wms';
+/** Monday TIMEs the capabilities fixture lists, oldest first, as the issuer lists them. */
+export const RG_FIXTURE_TIMES = ['2026-09-14T00:00:00.000Z', '2026-09-21T00:00:00.000Z', '2026-09-28T00:00:00.000Z'] as const;
+
+export type StarArm = 'fixture' | 'unknown-colour' | 'abort' | 'corrupt' | 'wrong-mime' | 'hold';
+export type RgArm = 'fixture' | 'service-exception' | 'abort' | 'hold';
+
+export interface DrynessStubEntry {
+  readonly host: 'star' | 'rg';
+  readonly url: string;
+  /** STAR: the requested zoom; RG: null. */
+  readonly z: number | null;
+  /** STAR: the yyyy0WW week; RG: the TIME, or 'capabilities'. */
+  readonly frame: string;
+  readonly answer: string;
+}
+
+/** Mutable per context: a spec sets an arm before (or between) entries into Wildfire 3D. */
+export interface DrynessStubState {
+  star: StarArm;
+  /** The first N distinct STAR weeks requested (k, then k-1) answer like STAR's CORS-less 500. */
+  starFailWeeks: number;
+  /** One palette index filling every STAR tile, or null for bands of index 0 and all nine classes. */
+  starFill: number | null;
+  rg: RgArm;
+  readonly weeks: string[];
+  readonly log: DrynessStubEntry[];
+}
+
+const drynessStubStates = new WeakMap<BrowserContext, DrynessStubState>();
+
+/** The arms of this page's context (installed by `gotoApp`). */
+export function drynessStub(page: Page): DrynessStubState {
+  const state = drynessStubStates.get(page.context());
+  if (!state) throw new Error('installDefaultDrynessStub has not run for this context');
+  return state;
+}
+
+const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+
+function pngChunk(type: string, data: Buffer): Buffer {
+  const head = Buffer.alloc(8);
+  head.writeUInt32BE(data.length, 0);
+  head.write(type, 4, 'ascii');
+  const crc = Buffer.alloc(4);
+  crc.writeUInt32BE(crc32(Buffer.concat([head.subarray(4), data])) >>> 0, 0);
+  return Buffer.concat([head, data, crc]);
+}
+
+/** A 256 px paletted PNG (colour type 3), the form both issuers serve. */
+function palettedPng(palette: Buffer, transparency: Buffer | null, pixel: (x: number, y: number) => number): Buffer {
+  const size = 256;
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(size, 0);
+  header.writeUInt32BE(size, 4);
+  header[8] = 8;
+  header[9] = 3;
+  const rows = Buffer.alloc(size * (size + 1));
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) rows[y * (size + 1) + 1 + x] = pixel(x, y);
+  }
+  return Buffer.concat([
+    PNG_SIGNATURE, pngChunk('IHDR', header), pngChunk('PLTE', palette),
+    ...(transparency ? [pngChunk('tRNS', transparency)] : []),
+    pngChunk('IDAT', deflateSync(rows)), pngChunk('IEND', Buffer.alloc(0))
+  ]);
+}
+
+/** The observed STAR palette (102 entries, index 0 transparent) from the committed synthetic receipt. */
+function starPalette(): Buffer {
+  const receipt = Buffer.from(
+    readFileSync(new URL('./fixtures/vhi/lb5-palette.png.base64', import.meta.url), 'utf8').trim(), 'base64'
+  );
+  for (let offset = 8; offset < receipt.length;) {
+    const size = receipt.readUInt32BE(offset);
+    if (receipt.toString('ascii', offset + 4, offset + 8) === 'PLTE') return Buffer.from(receipt.subarray(offset + 8, offset + 8 + size));
+    offset += size + 12;
+  }
+  throw new Error('the STAR receipt has no PLTE chunk');
+}
+
+/** Index 0 (no measurement) and one index inside each of STAR's nine colour runs. */
+const STAR_BAND_INDICES = [0, 3, 9, 18, 30, 42, 54, 66, 78, 90] as const;
+
+function starTile(fill: number | null, unknownColour: boolean): Buffer {
+  const palette = starPalette();
+  // A tenth colour no class table names: the grey protocol must fail closed.
+  if (unknownColour) palette.set([0x12, 0x34, 0x56], 3 * 3);
+  return palettedPng(palette, Buffer.from([0]), (_x, y) =>
+    unknownColour ? 3 : fill ?? STAR_BAND_INDICES[Math.floor((y * STAR_BAND_INDICES.length) / 256)]!);
+}
+
+/** RG's ten classes, then its white, No Data and Water (tests/fixtures/vhi/rg-legend.json). */
+const RG_PALETTE = ['#732600', '#E60000', '#F57A7A', '#FFD37F', '#FFFF00', '#C7D79E', '#89CD66', '#98E600', '#70A800', '#5C8944',
+  '#FFFFFF', '#1E1E1E', '#73B2FF'] as const;
+
+function rgTile(): Buffer {
+  const palette = Buffer.from(RG_PALETTE.flatMap((hex) => [1, 3, 5].map((at) => Number.parseInt(hex.slice(at, at + 2), 16))));
+  return palettedPng(palette, null, (_x, y) => Math.floor((y * RG_PALETTE.length) / 256));
+}
+
+const RG_CAPABILITIES =
+  '<?xml version="1.0" encoding="UTF-8"?><WMS_Capabilities version="1.3.0" xmlns="http://www.opengis.net/wms">' +
+  '<Service><Name>WMS</Name></Service><Capability><Layer><Title>fixture</Title><Layer><Name>rg_conus_week_data</Name>' +
+  `<Dimension name="time" units="ISO8601">${RG_FIXTURE_TIMES.join(',')}</Dimension></Layer></Layer></Capability></WMS_Capabilities>`;
+
+const RG_SERVICE_EXCEPTION =
+  '<?xml version="1.0" encoding="UTF-8"?><ServiceExceptionReport version="1.3.0" xmlns="http://www.opengis.net/ogc">' +
+  '<ServiceException code="InvalidDimensionValue">TIME is not a listed value</ServiceException></ServiceExceptionReport>';
+
+const CORS = { 'access-control-allow-origin': '*' };
+
+/**
+ * Route both dryness issuers on the CONTEXT, fail-closed, with fresh bytes on
+ * every request (no fixture caches a tile, so a changed arm is what the next
+ * entry reads, as a NOAA revision would be). A spec's own page route wins.
+ */
+export async function installDefaultDrynessStub(page: Page): Promise<void> {
+  const context = page.context();
+  if (drynessStubStates.has(context)) return;
+  const state: DrynessStubState = { star: 'fixture', starFailWeeks: 0, starFill: null, rg: 'fixture', weeks: [], log: [] };
+  drynessStubStates.set(context, state);
+  await context.route((url) => url.href.startsWith(STAR_VHI_TILE_PATH), async (route) => {
+    const url = new URL(route.request().url());
+    const frame = /\/j01_500m_VHI\/(\d{7})$/.exec(url.searchParams.get('type') ?? '')?.[1] ?? 'unparsed';
+    const z = Number(url.searchParams.get('Z'));
+    if (frame !== 'unparsed' && !state.weeks.includes(frame)) state.weeks.push(frame);
+    const failedWeek = state.weeks.indexOf(frame) < state.starFailWeeks;
+    // STAR answers a missing week, an unparsed request and Z=8 with a 500 that carries no CORS header.
+    const answer = frame === 'unparsed' || z >= 8 || failedWeek ? 'abort' : state.star;
+    state.log.push({ host: 'star', url: url.href, z, frame, answer });
+    if (answer === 'hold') return;
+    if (answer === 'abort') return route.abort('failed').catch(() => undefined);
+    const body = answer === 'corrupt'
+      ? Buffer.concat([starTile(null, false).subarray(0, 33), Buffer.alloc(64, 7)])
+      : starTile(state.starFill, answer === 'unknown-colour');
+    return route.fulfill({
+      status: 200, headers: CORS, contentType: answer === 'wrong-mime' ? 'text/html' : 'image/png', body
+    }).catch(() => undefined);
+  });
+  await context.route((url) => url.href.startsWith(USGS_RG_WMS), async (route) => {
+    const url = new URL(route.request().url());
+    const capabilities = url.searchParams.get('REQUEST') === 'GetCapabilities';
+    const frame = capabilities ? 'capabilities' : url.searchParams.get('TIME') ?? 'unparsed';
+    const listed = capabilities || (RG_FIXTURE_TIMES as readonly string[]).includes(frame);
+    const answer = state.rg === 'fixture' && !listed ? 'service-exception' : state.rg;
+    state.log.push({ host: 'rg', url: url.href, z: null, frame, answer });
+    if (answer === 'hold') return;
+    if (answer === 'abort') return route.abort('failed').catch(() => undefined);
+    if (capabilities) {
+      return route.fulfill({ status: 200, headers: CORS, contentType: 'text/xml', body: RG_CAPABILITIES }).catch(() => undefined);
+    }
+    if (answer === 'service-exception') {
+      // The issuer's off-list TIME answer: HTTP 200 with an XML body, never a PNG.
+      return route.fulfill({
+        status: 200, headers: CORS, contentType: 'application/vnd.ogc.se_xml', body: RG_SERVICE_EXCEPTION
+      }).catch(() => undefined);
+    }
+    return route.fulfill({ status: 200, headers: CORS, contentType: 'image/png', body: rgTile() }).catch(() => undefined);
+  });
 }

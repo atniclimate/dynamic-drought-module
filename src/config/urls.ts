@@ -1237,6 +1237,22 @@ export const URLS = Object.freeze({
   usgsQuickdriWeeklyWms:
     'https://dmsdata.cr.usgs.gov/geoserver/quickdri_quickdri_conus_week_data/wms',
 
+  // ---------- Wildfire 3D dryness ground (DDM-P9-T13; admissions star-vhi, usgs-relative-greenness) ----------
+  // NOAA NESDIS STAR VIIRS 500 m Vegetation Health Index map tiles (j01,
+  // NOAA-20), wildcard CORS on 200; a missing week or Z=8 answers 500 with
+  // no CORS header, so the two cannot be told apart. {week} is yyyy0WW,
+  // weeks 1 to 52 only; tiles z0 to z7 only. Cache-Control private,
+  // max-age=0 with no validator, and STAR rewrites back-weeks after
+  // publishing: never cache a week in the app (owner direction 2026-10-09).
+  starVhiJ01TileTemplate:
+    'https://www.star.nesdis.noaa.gov/smcd/emb/vci/VH/image_mapTile.php?type=/j01_500m_VHI/{week}&Z={z}&X={x}&Y={y}',
+  // USGS EROS eVIIRS weekly Relative Greenness WMS, layer rg_conus_week_data,
+  // the automatic fallback ground. TIME labels the week's START Monday and
+  // must match a capabilities value exactly (an off-list TIME answers a 200
+  // ServiceException); bbox -128.54 to -65.37, 22.47 to 51.78 N, no Alaska.
+  usgsRgConusWeekWms:
+    'https://dmsdata.cr.usgs.gov/geoserver/firedanger_rg_conus_week_data/wms',
+
   // ---------- B4 transboundary slate (verified 2026-07-06; 0.7.0 wiring) ----------
   // Per the ratified B4 scope these are VERIFIED, NOT WIRED; region-config
   // and UI work is 0.7.0. Seam doctrine (phase LOG 2026-07-07): USDM weekly,

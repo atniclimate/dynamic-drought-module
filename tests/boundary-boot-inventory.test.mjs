@@ -114,7 +114,14 @@ const LIVE_BOUNDARY_MODE = /boundar[a-z]*[^\n]*['"]live['"]/i;
  */
 const ROUTE_HOMES = [
   { home: 'tests/tribal-fixtures.ts', marker: BOUNDARY_MARKER, family: 'boundary' },
-  { home: 'tests/minimap-fixtures.ts', marker: MINIMAP_MARKER, family: 'minimap analysis' }
+  { home: 'tests/minimap-fixtures.ts', marker: MINIMAP_MARKER, family: 'minimap analysis' },
+  // DDM-P9-T13: the Wildfire 3D dryness ground's NOAA STAR and USGS RG arms
+  // (installDefaultDrynessStub); a spec sets an arm, never its own route.
+  {
+    home: 'tests/helpers.ts',
+    marker: /STAR_VHI_TILE_PATH|USGS_RG_WMS|star\.nesdis\.noaa\.gov|firedanger_rg_conus_week_data/,
+    family: 'dryness ground'
+  }
 ];
 
 /**
@@ -268,6 +275,11 @@ const SCREENSHOT_REASONS = {
     sites: 1,
     reason:
       'decodes crops of the desktop column icons in the test itself to measure their optical centring (S30D D1 M9), and never attaches them'
+  },
+  'tests/wildfire3d-ground.spec.ts': {
+    sites: 1,
+    reason:
+      'decodes a crop of the 3D ground in the test itself to prove a revised STAR week is drawn on re-entry (DDM-P9-T13), and never attaches it'
   }
 };
 

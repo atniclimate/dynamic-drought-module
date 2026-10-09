@@ -608,13 +608,17 @@ function drynessMap() {
     event(type, event) { for (const callback of [...(listeners.get(type) ?? [])]) callback(event); }
   };
 }
+/** One loaded tile of `sourceId`: the tile proof (DDM-P14-T04) the ground waits for before live. */
+function drynessTileProof(sourceId) {
+  return { sourceId, dataType: 'source', tile: { tileID: { key: 1 } }, isSourceLoaded: true };
+}
 function drynessOptions(map, snapshots, overrides = {}) {
   const frame = (value, productKey = 'star-vhi') => ({ productKey, frame: value,
     issuer: 'fixture issuer', legendRows: ['fixture class'], clockLabel: value,
     coverage: 'fixture coverage', qualification: 'fixture qualification', creditKey: 'fixture-credit',
     tileUrl: (z, x, y) => `https://fixture.invalid/${value}/${z}/${x}/${y}.png`, tileSize: 256,
     maxZoom: 7, bounds: [-180, -80, 180, 80] });
-  return { protocolName: 'dryness-test', layerId: 'dryness-ground-test', beforeId: 'hillshade',
+  return { protocolName: 'dryness-test', layerId: 'dryness-ground-test', beforeId: () => 'hillshade',
     allowedOrigins: ['https://fixture.invalid'], star: [frame('2026001'), frame('2025052')],
     rg: { capabilitiesUrl: 'https://fixture.invalid/capabilities', layerName: 'rg_conus_week_data',
       frame: time => frame(time, 'usgs-relative-greenness') },
@@ -636,6 +640,8 @@ test('dryness selected STAR record is atomic, native owner cancellation does not
     const adapter = createDrynessGround(drynessOptions(map, snapshots));
     await adapter.activate(map, owner.signal);
     assert.equal(events.fetched, 1);
+    assert.equal(snapshots.at(-1).state, 'loading');
+    map.event('sourcedata', drynessTileProof(snapshots.at(-1).sourceId));
     assert.equal(snapshots.at(-1).state, 'live');
     assert.equal(snapshots.at(-1).selected.frame, '2026001');
     const tile = await adapter.protocol({ url: 'dryness-test://1/0/5/5/11' }, new AbortController());
@@ -730,6 +736,8 @@ test('dryness setup failure removes partial source before retrying and source re
     assert.equal(snapshots.at(-1).selected.frame, '2025052');
     assert.equal(snapshots.at(-1).state, 'loading');
     map.loaded = true; map.event('sourcedata', { sourceId: snapshots.at(-1).sourceId });
+    assert.equal(snapshots.at(-1).state, 'loading');
+    map.event('sourcedata', drynessTileProof(snapshots.at(-1).sourceId));
     assert.equal(snapshots.at(-1).state, 'live');
     adapter.deactivate();
   });
@@ -753,6 +761,9 @@ test('dryness native source failure advances once and stale source events cannot
     const publish = options.publish;
     options.publish = snapshot => {
       publish(snapshot);
+      if (snapshot?.selected?.frame === '2025052' && snapshot.state === 'loading') {
+        setTimeout(() => map.event('sourcedata', drynessTileProof(snapshot.sourceId)), 0);
+      }
       if (snapshot?.selected?.frame === '2025052' && snapshot.state === 'live') ready.resolve();
     };
     const adapter = createDrynessGround(options);

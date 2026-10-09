@@ -173,6 +173,21 @@ let disposeMapKeyViewMode: (() => void) | null = null;
 let disposeMapKeyHazardCluster: (() => void) | null = null;
 let whpShadeActive = false;
 let flatWhpShadeActive = false;
+/** The Wildfire 3D dryness ground (DDM-P9-T13); mirrored literals of src/layers/wildfire-dryness.ts. */
+const DRYNESS_GROUND_EVENT = 'ddm:dryness-ground';
+const DRYNESS_GROUND_REQUEST_EVENT = 'ddm:dryness-ground-request';
+let drynessGround: import('../layers/wildfire-dryness').DrynessGroundDetail | null = null;
+
+/** Third in the key after fires and fuel risk; `data-product-key` is the product mounted on the map. */
+function drynessKeyHtml(): string {
+  const ground = drynessGround;
+  if (!ground) return '';
+  return `<span class="map-key-scale" data-dryness-key data-dryness-state="${escapeHtml(ground.state)}" data-product-key="${ground.productKey}">` +
+    `<strong>${escapeHtml(ground.title ?? 'Dryness ground')}</strong> <span class="map-key-qualification">${escapeHtml(ground.state)}</span>` +
+    ground.rows.map((row) => swatchItem(row.grey, row.label)).join('') +
+    ground.lines.map((line) => `<span class="map-key-qualification">${escapeHtml(line)}</span>`).join('') +
+    '</span>';
+}
 
 /**
  * Seat the on-map key beside the map controls on the desktop shell, and
@@ -1425,6 +1440,7 @@ export function initMapKey(): void {
     widthQuery.removeEventListener('change', onWidthChange);
     window.removeEventListener('ddm:toggle-map-key-details', toggleDetails);
     window.removeEventListener('ddm:whp-shade', onWhpShade);
+    window.removeEventListener(DRYNESS_GROUND_EVENT, onDrynessGround);
     host.removeEventListener('keydown', closeDetailsOnEscape);
     document.removeEventListener('focusin', onFocusIn);
     document.removeEventListener('focusout', onFocusOut);
@@ -1466,7 +1482,7 @@ export function initMapKey(): void {
         )).join('') + `<span class="map-key-qualification">${escapeHtml(WHP_SHADE_QUALIFICATION)}</span></span>`
       : '';
     const html =
-      `<span class="map-key-label">${escapeHtml(spec.label)}</span>` + spec.itemsHtml + shadeKey;
+      `<span class="map-key-label">${escapeHtml(spec.label)}</span>` + spec.itemsHtml + shadeKey + drynessKeyHtml();
     if (html !== rendered) {
       // A re-render replaces every node in the strip, so anything the
       // person was operating loses focus. The HeatRisk valid-date select
@@ -1573,6 +1589,11 @@ export function initMapKey(): void {
     update();
   };
   window.addEventListener('ddm:whp-shade', onWhpShade);
+  const onDrynessGround = (event: Event): void => {
+    drynessGround = (event as CustomEvent<typeof drynessGround>).detail ?? null;
+    update();
+  };
+  window.addEventListener(DRYNESS_GROUND_EVENT, onDrynessGround);
 
   window.addEventListener(HEATRISK_FRAMES_EVENT, (event) => {
     const detail = (event as CustomEvent<HeatRiskFrameEventDetail>).detail;
@@ -1647,5 +1668,7 @@ export function initMapKey(): void {
   // in the URL): ask once for their state; nothing answers while inactive.
   ensoFlowSnapshot = null;
   window.dispatchEvent(new Event(ENSO_FLOW_SNAPSHOT_REQUEST_EVENT));
+  drynessGround = null;
+  window.dispatchEvent(new Event(DRYNESS_GROUND_REQUEST_EVENT));
   update();
 }

@@ -35,12 +35,22 @@ test('native XML parser admits exact RG domain and only parsed ServiceException 
     for (const response of ['service', 'malformed', 'html', 'wrong-mime', 'all-service', 'missing-metadata', 'wrong-frame']) {
       const requests: string[] = [], snapshots: Array<import('../src/layers/dryness-ground').DrynessSnapshot | null> = [];
       const sources = new Map<string, unknown>(), layers = new Map<string, { source?: unknown }>();
+      const handlers = new Map<string, Set<(event: unknown) => void>>();
       const map = {
         addSource(id: string, value: unknown) { sources.set(id, value); }, getSource(id: string) { return sources.get(id); },
         removeSource(id: string) { sources.delete(id); }, addLayer(value: { id: string; source?: unknown }) { layers.set(value.id, value); },
         getLayer(id: string) { return layers.get(id); }, removeLayer(id: string) { layers.delete(id); },
-        isSourceLoaded(id: string) { return sources.has(id); }, on() {}, off() {}
+        on(type: string, fn: (event: unknown) => void) { if (!handlers.has(type)) handlers.set(type, new Set()); handlers.get(type)!.add(fn); },
+        off(type: string, fn: (event: unknown) => void) { handlers.get(type)?.delete(fn); }
       } as unknown as import('maplibre-gl').Map;
+      // One loaded tile of the mounted source: the tile proof the ground now waits for.
+      const proveTile = () => {
+        for (const sourceId of sources.keys()) {
+          for (const fn of [...(handlers.get('sourcedata') ?? [])]) {
+            fn({ sourceId, dataType: 'source', tile: { tileID: { key: 1 } }, isSourceLoaded: true });
+          }
+        }
+      };
       const frame = (value: string, productKey: 'star-vhi' | 'usgs-relative-greenness') => ({ productKey, frame: value,
         issuer: 'fixture', legendRows: ['fixture'], clockLabel: value, coverage: 'fixture', qualification: 'fixture', creditKey: 'fixture',
         tileUrl: (z: number, x: number, y: number) => `https://dryness.invalid/${value}/${z}/${x}/${y}.png`,
@@ -58,7 +68,7 @@ test('native XML parser admits exact RG domain and only parsed ServiceException 
         }
         return new Response(png, { headers: { 'content-type': 'image/png' } });
       };
-      const adapter = ground.createDrynessGround({ protocolName: 'dryness-browser-test', layerId: 'dryness-test', beforeId: 'hillshade',
+      const adapter = ground.createDrynessGround({ protocolName: 'dryness-browser-test', layerId: 'dryness-test', beforeId: () => 'hillshade',
         allowedOrigins: ['https://dryness.invalid'], star: [frame('2026001', 'star-vhi'), frame('2025052', 'star-vhi')],
         rg: { capabilitiesUrl: 'https://dryness.invalid/capabilities', layerName: 'rg_conus_week_data', frame: time => ({
           ...frame(time, 'usgs-relative-greenness'), ...(response === 'missing-metadata' ? { coverage: '' } : {}),
@@ -74,6 +84,7 @@ test('native XML parser admits exact RG domain and only parsed ServiceException 
         } });
       try {
         await adapter.activate(map, new AbortController().signal);
+        proveTile();
         const final = snapshots.at(-1);
         cases.push({ response, requests, state: final?.state, frame: final?.selected?.frame, product: final?.selected?.productKey,
           failures: final?.failures, mounted: sources.size });

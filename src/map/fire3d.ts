@@ -301,6 +301,9 @@ let transportIdleListener: (() => void) | null = null;
  * what actually rendered (never static claims). */
 let contextEmbedLines: readonly string[] = [];
 let contextAbort: AbortController | null = null;
+/** DDM-P9-T13: the dryness ground's lazy chunk and the one activation it serves. */
+let drynessModule: typeof import('../layers/wildfire-dryness') | null = null;
+let drynessAbort: AbortController | null = null;
 
 /** The latest mode status. */
 export function getFire3DStatus(): Fire3DStatus {
@@ -520,6 +523,8 @@ function currentSceneSourceIds(map: maplibregl.Map): string[] {
   const ids = [TERRAIN_SOURCE_ID];
   if (contextKeys.includes('whp')) ids.push(WHP_DRAPE_SOURCE_ID);
   if (contextKeys.includes('structures')) ids.push(STRUCTURES_SOURCE_ID);
+  const dryness = drynessModule?.getDrynessSourceId();
+  if (dryness) ids.push(dryness);
   return ids.filter((id) => Boolean(map.getSource(id)));
 }
 
@@ -598,6 +603,9 @@ function rollbackScene(map: maplibregl.Map): void {
     contextAbort = null;
   }
   if (contextModule) contextModule.deactivateContextLayers(map);
+  // Aborting the ground's activation aborts its reads and removes its layer.
+  drynessAbort?.abort();
+  drynessAbort = null;
   contextKeys = [];
   contextEmbedLines = [];
   // The ribbon owns its own derived source, so its teardown cannot strand
@@ -819,6 +827,18 @@ async function activateScene(map: maplibregl.Map): Promise<void> {
     if (state !== 'error') return;
     failScene(map, 'Terrain tiles failed to load.');
   });
+
+  // DDM-P9-T13: the dryness ground rides its own lazy chunk, loaded only here,
+  // and is non-fatal: its own six states say what it shows, and a failure
+  // leaves terrain, hillshade and drapes as they are.
+  const dryness = new AbortController();
+  drynessAbort = dryness;
+  void import('../layers/wildfire-dryness')
+    .then((module) => {
+      drynessModule = module;
+      return dryness.signal.aborted ? undefined : module.activateWildfireDryness(map, dryness.signal);
+    })
+    .catch((err: unknown) => warnComponent('dryness ground', err));
 
   // W4: the volumetric smoke rides its own lazy chunk and is non-fatal by
   // contract; terrain stays and the flat veil stays visible on any failure.
