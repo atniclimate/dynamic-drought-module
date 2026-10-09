@@ -146,6 +146,7 @@ const frameWatches = new Map<string, RasterTileWatch>();
 /** Each mounted frame's latest tile verdict; absent until its first cycle ends. */
 const frameVerdicts = new Map<string, RasterTileOutcome>();
 let playing = false;
+let playEpoch = 0;
 let buffering = false;
 /** Supersede counter (invariant 5). */
 let stepEpoch = 0;
@@ -456,13 +457,13 @@ async function showFrame(map: maplibregl.Map, index: number): Promise<void> {
 }
 
 /** The Play loop: fixed cadence, visible clock, wraps at the window end. */
-async function playLoop(map: maplibregl.Map): Promise<void> {
+async function playLoop(map: maplibregl.Map, epoch: number): Promise<void> {
   const signal = masterController?.signal ?? null;
   if (!signal) return;
-  while (playing && !signal.aborted) {
+  while (playing && epoch === playEpoch && !signal.aborted) {
     const next = dateIndex >= dates.length - 1 ? 0 : dateIndex + 1;
     await showFrame(map, next);
-    if (!playing || signal.aborted) break;
+    if (!playing || epoch !== playEpoch || signal.aborted) break;
     // The crossfade rides inside the cadence; sleep the remainder so each
     // frame holds for a steady, predictable beat (the radar recipe).
     try {
@@ -476,14 +477,16 @@ async function playLoop(map: maplibregl.Map): Promise<void> {
 function togglePlay(map: maplibregl.Map): void {
   if (playing) {
     playing = false;
+    playEpoch++;
     installTimeBar(map);
     return;
   }
   if (prefersReducedMotion()) return; // the control is disabled; belt and braces
   playing = true;
+  const epoch = ++playEpoch;
   installTimeBar(map);
-  void playLoop(map).finally(() => {
-    playing = false;
+  void playLoop(map, epoch).finally(() => {
+    if (epoch === playEpoch) playing = false;
   });
 }
 
@@ -580,6 +583,7 @@ function installTimeBar(map: maplibregl.Map): void {
       valueText: (i) => dateLabel(dates[i] ?? date),
       onStep: (i) => {
         playing = false;
+        playEpoch++;
         void showFrame(map, i);
       }
     },
@@ -621,6 +625,8 @@ function installTimeBar(map: maplibregl.Map): void {
 export async function activate(map: maplibregl.Map): Promise<void> {
   reportStatus('loading');
 
+  playing = false;
+  playEpoch++;
   if (masterController) masterController.abort();
   masterController = new AbortController();
   const signal = masterController.signal;
@@ -866,6 +872,7 @@ export function cancelActivation(): void {
 export function deactivate(map: maplibregl.Map): void {
   deactivateEnsoFlow();
   playing = false;
+  playEpoch++;
   buffering = false;
   stepEpoch++;
   if (masterController) {

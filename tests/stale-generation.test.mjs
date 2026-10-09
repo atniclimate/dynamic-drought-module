@@ -231,6 +231,30 @@ function release(record, n) {
 
 const WILDFIRE_PAIR = HAZARD_CLUSTERS.wildfire.recipes.current;
 
+test('a rejected old import cannot uncheck or cancel the latest on intent', async () => {
+  const records = installModules(new Set());
+  const key = 'usdm';
+  const module = globalThis.__staleModules.get(key);
+  let rejectImport;
+  globalThis.__staleModules.set(key, new Promise((_resolve, reject) => { rejectImport = reject; }));
+  registry.deactivate(key);
+  const controller = bindRealController();
+  bridge.setChecked(key, true);
+  const first = controller.activate(key);
+  await flush();
+  controller.deactivate(key);
+  bridge.setChecked(key, true);
+  const latest = controller.activate(key);
+  globalThis.__staleModules.set(key, module);
+  rejectImport(new Error('superseded import failed'));
+  await Promise.all([first, latest]);
+  assert.equal(records.get(key).calls.length, 1);
+  assert.equal(bridge.isChecked(key), true);
+  assert.equal(registry.getActiveKeys().has(key), true);
+  controller.deactivate(key);
+  await flush();
+});
+
 // ---------------------------------------------------------------------------
 // Cases
 // ---------------------------------------------------------------------------
