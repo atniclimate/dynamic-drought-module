@@ -1,9 +1,7 @@
 /**
  * Cancellable fetch helpers.
  *
- * Direct ports of `fetchWithBudget` and `sleepUnlessAborted` from the
- * vanilla `app.js` v0.1.x baseline (lines ~1374 to 1413). These are the
- * primitives behind the project's cancellation
+ * These are the primitives behind the project's cancellation
  * invariant: every non-trivial network operation must respect a master
  * cancellation signal AND a per-call timeout, and late-arriving responses
  * to superseded operations are dropped rather than rendered.
@@ -16,62 +14,8 @@
  */
 
 /**
- * `fetch()` wrapper that respects an external "master" cancellation
- * signal AND a per-call timeout. The two are composed manually so this
- * works on Safari 14 plus where `AbortSignal.any()` is not available.
- *
- * Returns the Response. Throws an AbortError on either user-cancel
- * (master signal aborted) or timeout (per-call budget elapsed).
- *
- * The budget ends when the HEADERS arrive (Codex 2026-09-10 finding S2).
- * The timer is cleared and the master listener removed before the caller
- * ever sees the Response, so a body read after this returns (`.json()`,
- * `.text()`, `.arrayBuffer()`) has no timeout and no longer answers the
- * owner's abort: a server that answers 200 and then stalls holds the caller
- * open for as long as the stream stays silent. Since 2026-09-11 no caller
- * under `src/` pairs this with a body read; the ones that did use
- * `fetchBufferedWithBudget` (same signature, same Response shape, the budget
- * spans the body) or `fetchJsonWithBudget`. `tests/fetch-budget.test.mjs`
- * keeps it that way. This helper stays for a caller that genuinely wants
- * headers only, or one that streams the body under its own controller (the
- * shape `src/util/hydromet.ts` and `src/util/pmtiles-probe.ts` implement).
- *
- * @param url          Target URL passed straight to `fetch`.
- * @param opts         Standard `RequestInit`, or `null` for a default GET.
- * @param masterSignal The owning operation's abort signal, or `null` to
- *                     run with timeout-only cancellation.
- * @param timeoutMs    Per-call timeout in milliseconds. After this many
- *                     ms the inner controller aborts.
- */
-export async function fetchWithBudget(
-  url: string,
-  opts: RequestInit | null,
-  masterSignal: AbortSignal | null,
-  timeoutMs: number
-): Promise<Response> {
-  const ctrl = new AbortController();
-  if (masterSignal && masterSignal.aborted) {
-    ctrl.abort();
-    throw new DOMException('Aborted', 'AbortError');
-  }
-  const onMasterAbort = (): void => ctrl.abort();
-  if (masterSignal) masterSignal.addEventListener('abort', onMasterAbort);
-  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
-  try {
-    return await fetch(url, { ...(opts ?? {}), signal: ctrl.signal });
-  } finally {
-    clearTimeout(timer);
-    if (masterSignal) masterSignal.removeEventListener('abort', onMasterAbort);
-  }
-}
-
-/**
- * Fetch and parse a JSON response while retaining the owning cancellation
- * signal and timeout through response-body consumption.
- *
- * This is intentionally separate from `fetchWithBudget`, whose contract ends
- * when response headers arrive. The response body is read through an explicit
- * reader so an abort can cancel a stalled stream before JSON parsing finishes.
+ * Read the body through an explicit reader so an abort can cancel a stalled
+ * stream before consumption finishes.
  */
 async function readBodyBytes(
   response: Response,
@@ -150,8 +94,7 @@ export async function fetchJsonWithBudget(
 
 /**
  * Fetch a response and retain cancellation ownership until its exact body bytes
- * have arrived. Use this when callers need status and headers before parsing;
- * unlike `fetchWithBudget`, the timeout cannot expire between headers and body.
+ * have arrived. Use this when callers need status and headers before parsing.
  *
  * The returned Response carries the original status, statusText and headers
  * over an in-memory body, so `.ok` checks, `.json()`, `.text()` and
@@ -379,9 +322,8 @@ export function fetchSharedJsonWithBudget(
  * to the module; the module keeps its own per-fetch controller (the one it
  * also aborts when a new viewport supersedes the request) and links it here,
  * so the controller's abort reaches every fetch the module has in flight
- * without the module exposing a second seam. Composed by hand for the same
- * reason `fetchWithBudget` is: `AbortSignal.any()` is missing from the
- * Safari floor.
+ * without the module exposing a second seam. Composed by hand because
+ * `AbortSignal.any()` is missing from the Safari floor.
  *
  * Returns an unlink function; call it when the child's work is over so a
  * long-lived parent does not accumulate listeners across viewport refreshes.
@@ -417,16 +359,12 @@ export function sleepUnlessAborted(
       resolve();
       return;
     }
-    const timer = setTimeout(resolve, ms);
-    if (signal) {
-      signal.addEventListener(
-        'abort',
-        () => {
-          clearTimeout(timer);
-          resolve();
-        },
-        { once: true }
-      );
-    }
+    const finish = (): void => {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', finish);
+      resolve();
+    };
+    const timer = setTimeout(finish, ms);
+    signal?.addEventListener('abort', finish, { once: true });
   });
 }
