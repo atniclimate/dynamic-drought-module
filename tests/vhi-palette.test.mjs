@@ -159,6 +159,37 @@ test('partial alpha and malformed RGBA fail before mutation instead of inventing
   }
 });
 
+test('lightness contract: High and Very High fuel risk read brighter than every plant-stress grey; Low and Moderate overlap', async () => {
+  const { WHP_SHADE_CATEGORIES } = await import('../src/config/whp-shade.ts');
+  const { DRAPE_OPACITY } = await import('../src/config/wildfire-presentation.ts');
+  const { MAP_GROUND_COLOR } = await import('../src/config/interface-tokens.ts');
+  const { DRYNESS_NOT_ASSESSED_COLOR } = await import('../src/config/dryness-ground.ts');
+  // CIE L* of an sRGB grey level 0..1 (D65); the drape is white, blended in sRGB as c = g(1 - a) + a.
+  const lstar = (level) => {
+    const y = level <= 0.04045 ? level / 12.92 : ((level + 0.055) / 1.055) ** 2.4;
+    return y > 216 / 24389 ? 116 * Math.cbrt(y) - 16 : (24389 / 27) * y;
+  };
+  const level = (hex) => rgba(hex)[0] / 255;
+  // The CIEDE2000 lightness term alone, a lower bound on the full difference.
+  const lightnessDe = (a, b) => {
+    const mean = (a + b) / 2 - 50;
+    return Math.abs(a - b) / (1 + (0.015 * mean ** 2) / Math.sqrt(20 + mean ** 2));
+  };
+  const alphas = WHP_SHADE_CATEGORIES.slice(0, 5).map(row => row.opacity * DRAPE_OPACITY);
+  assert.deepEqual(alphas.map(value => +value.toFixed(3)), [0, 0.075, 0.19, 0.34, 0.5]);
+  for (const classes of [STAR_DRYNESS_CLASSES, RG_DRYNESS_CLASSES]) {
+    const greys = classes.map(row => level(row.grey));
+    greys.slice(1).forEach((grey, index) => assert.ok(lstar(grey) - lstar(greys[index]) >= 2.5, `step ${index}`));
+    const darkest = greys[0], lightest = lstar(greys.at(-1));
+    const over = (alpha) => lstar(darkest * (1 - alpha) + alpha);
+    assert.ok(over(alphas[3]) >= lightest + 1 && over(alphas[4]) >= lightest + 1);
+    // Low and Moderate land inside the grey range: the briefing's fuelRiskOverlap sentence is owed.
+    assert.ok(over(alphas[1]) < lightest && over(alphas[2]) < lightest);
+    const neutral = lstar(level(DRYNESS_NOT_ASSESSED_COLOR));
+    for (const other of [...greys, rgba(MAP_GROUND_COLOR)[1] / 255]) assert.ok(lightnessDe(neutral, lstar(other)) >= 10);
+  }
+});
+
 test('the Impact Briefing carries the plant-stress full text, with NOAA STAR\'s disclaimer whole only beside STAR data', async () => {
   const { DRYNESS_BRIEFING_NOTES: notes, DRYNESS_KEY, drynessBriefing } = await import('../src/layers/wildfire-dryness.ts');
   const { renderMapTechnicalInformation, setPlantStressBriefing } = await import('../src/ui/map-technical-information.ts');
@@ -170,7 +201,7 @@ test('the Impact Briefing carries the plant-stress full text, with NOAA STAR\'s 
   setPlantStressBriefing(drynessBriefing(frame('star-vhi')));
   const star = renderMapTechnicalInformation();
   for (const line of [DRYNESS_KEY.starTitle, 'Week 40: Oct 1 to Oct 7, 2026', notes.starMeaning, notes.starScope, notes.starRevision,
-    notes.starDesert, notes.starMiddle, notes.fuelRiskVintage, notes.twoProducts, notes.starDisclaimer]) {
+    notes.starDesert, notes.starMiddle, notes.fuelRiskOverlap, notes.fuelRiskVintage, notes.twoProducts, notes.starDisclaimer]) {
     assert.ok(star.includes(`<p>${escapeHtml(line)}</p>`), line);
   }
   assert.ok(star.includes(`href="${notes.starDisclaimerUrl}"`));

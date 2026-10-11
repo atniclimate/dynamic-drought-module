@@ -8,8 +8,11 @@
  *
  * Greys below are DDM display derivations, NOT issuer colors. Equally spaced
  * CIE L* targets12..38 (nine or ten steps), D65/sRGB, rounded to8-bit output.
- * Tentative until the D5 N10 native lightness/appearance proof. This module
- * neither activates a layer nor asserts that the presentation is admitted.
+ * The lightness contract (DR-127) is pinned by arithmetic in
+ * tests/vhi-palette.test.mjs: over the darkest grey, the white fuel-risk drape
+ * at High and Very High still reads brighter than the lightest grey; Low and
+ * Moderate overlap the grey range, and the Impact Briefing says so. How the
+ * greys read under the hillshade and fog is the owner's sitting.
  */
 export type DrynessProduct = 'star-vhi' | 'relative-greenness';
 

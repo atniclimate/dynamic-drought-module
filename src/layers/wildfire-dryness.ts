@@ -66,7 +66,8 @@ export const DRYNESS_BRIEFING_NOTES = {
   starDisclaimer: 'NOAA STAR says: "Data and images hosted on the STAR webservers are not official NOAA operational products, and are provided only as examples for experimental use by remote sensing researchers, experienced meteorologists, or oceanographers. Although STAR provides "operational" data for some products, the STAR website primarily hosts examples of ongoing experimental product development. STAR pages and data sources may therefore be interrupted, changed, or canceled at any time without notice. STAR websites are not managed to meet operational data standards of uptime or redundant operations."',
   starDisclaimerUrl: 'https://www.star.nesdis.noaa.gov/star/productdisclaimer.php',
   rgLowValues: 'USGS: low values indicate "drought-stressed or dormant vegetation".',
-  fuelRiskVintage: 'Wildfire Hazard Potential 2023 reflects landscape conditions as of the end of 2020 (USFS), so areas burned since then still show their earlier class.',
+  fuelRiskOverlap: 'The Wildfire Hazard Potential classes Low and Moderate lighten the ground; compare with the Wildfire Hazard Potential legend.',
+  fuelRiskVintage:'Wildfire Hazard Potential 2023 reflects landscape conditions as of the end of 2020 (USFS), so areas burned since then still show their earlier class.',
   twoProducts: 'Two separate products drawn on top of each other; DDM combines no values and computes no score.'
 } as const;
 
@@ -164,7 +165,7 @@ export function drynessBriefing(frame: Pick<DrynessFrame, 'productKey' | 'clockL
     lines: [
       star ? DRYNESS_KEY.starTitle : DRYNESS_KEY.rgTitle, frame.clockLabel, frame.qualification, frame.coverage,
       ...(star ? [notes.starMeaning, notes.starScope, notes.starRevision, notes.starDesert, notes.starMiddle] : [notes.rgLowValues]),
-      notes.fuelRiskVintage, notes.twoProducts,
+      notes.fuelRiskOverlap, notes.fuelRiskVintage, notes.twoProducts,
       ...(star ? [notes.starDisclaimer] : [])
     ],
     disclaimerUrl: star ? notes.starDisclaimerUrl : null
