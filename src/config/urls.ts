@@ -34,15 +34,9 @@ export const URLS = Object.freeze({
   // ---------- Basemaps (raster tiles) ----------
   // MapLibre GL JavaScript raster sources do not natively expand the `{s}`
   // subdomain placeholder used by Leaflet templates. Pin a single subdomain
-  // (`a`) for the primary template; callers wanting round-robin can read
-  // the `basemapTopoVariants` array and rotate themselves. If a future
-  // migration moves to a hosted vector tile bundle, this comment can go.
+  // (`a`) for the primary template. If a future migration moves to a hosted
+  // vector tile bundle, this comment can go.
   basemapTopo: 'https://a.tile.opentopomap.org/{z}/{x}/{y}.png',
-  basemapTopoVariants: [
-    'https://a.tile.opentopomap.org/{z}/{x}/{y}.png',
-    'https://b.tile.opentopomap.org/{z}/{x}/{y}.png',
-    'https://c.tile.opentopomap.org/{z}/{x}/{y}.png'
-  ],
 
   // OSM standard tiles: the active basemap, subdued via raster paint in
   // `src/map/style.ts`. The bare hostname is the OSM tile policy's ONLY
@@ -915,7 +909,6 @@ export const URLS = Object.freeze({
   // both locally and on Pages; that was a latent bug (the empty-placeholder
   // layers surfaced as `error` instead of `no-data`). BASE_URL ends with a
   // slash, so the path segment must not start with one.
-  ecoregionsLocal: BASE_URL + 'data/ecoregions-pnw.geojson',
   // EPA Omernik Level III and Level IV ecoregion polygons for the PNW, baked
   // into a PMTiles vector bundle by scripts/build-ecoregion-tiles.mjs
   // (`npm run build:ecoregion-tiles`) from the EPA Region 10 shapefiles. Two

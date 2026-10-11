@@ -329,6 +329,14 @@ const MAP_EXEMPT = [
     maxRawBytes: 4096,
     reason: 'generated Vite dependency-preload helper; no source modules by construction',
   },
+  {
+    // The class-field helper the bundler hoists into its own chunk once two
+    // chunks that share no other chunk both need it (the dryness ground's
+    // lazy chunk made that so, release 0.7.3); measured 0.6 kB raw.
+    pattern: /^defineProperty-/,
+    maxRawBytes: 2048,
+    reason: 'generated class-field helper; no source modules by construction',
+  },
 ];
 
 /* ------------------------------------------------------------------ *
