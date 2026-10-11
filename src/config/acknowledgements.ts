@@ -36,6 +36,7 @@ import type { ProductKey } from './products';
 /** Every row id, in no rendered order (the renderer groups and sorts). */
 export const ACKNOWLEDGEMENT_IDS = [
   'noaa-nesdis',
+  'noaa-star',
   'nasa',
   'noaa-nws',
   'noaa-cpc',
@@ -84,6 +85,7 @@ export const PROVIDER_KEYS = [
   'structures',
   'terrain-archive',
   'whp-3d',
+  'dryness-ground',
   'landscape-signature',
   'minimap-drought-metric'
 ] as const;
@@ -180,6 +182,8 @@ function nameOnly(
 
 export const ACKNOWLEDGEMENTS: Readonly<Record<AcknowledgementId, AcknowledgementRow>> = {
   'noaa-nesdis': nameOnly('noaa-nesdis', 'NOAA NESDIS Satellite Maps'),
+  // ledger: star-vhi names the issuer and no credit sentence; STAR's disclaimer shows beside its data (Technical information).
+  'noaa-star': nameOnly('noaa-star', 'NOAA NESDIS Center for Satellite Applications and Research (STAR)'),
   nasa: nameOnly(
     'nasa',
     "NASA Global Imagery Browse Services (GIBS), part of NASA's Earth Science Data and Information System (ESDIS)"
@@ -429,6 +433,8 @@ export const PROVIDERS: Readonly<
   structures: ['overture'],
   'terrain-archive': ['usgs'],
   'whp-3d': ['usfs'],
+  // The Wildfire 3D plant-stress ground: STAR's index, USGS Relative Greenness as the fallback.
+  'dryness-ground': ['noaa-star', 'usgs'],
   // public/data/landscape-signature-pnw.json, the briefing's terrain facts.
   'landscape-signature': ['usgs'],
   // The minimap drought metric: CDM input and the Nunavut exclusion mask.
