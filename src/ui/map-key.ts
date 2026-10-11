@@ -183,7 +183,7 @@ function drynessKeyHtml(): string {
   const ground = drynessGround;
   if (!ground) return '';
   return `<span class="map-key-scale" data-dryness-key data-dryness-state="${escapeHtml(ground.state)}" data-product-key="${ground.productKey}">` +
-    `<strong>${escapeHtml(ground.title ?? 'Dryness ground')}</strong> <span class="map-key-qualification">${escapeHtml(ground.state)}</span>` +
+    `<strong>${escapeHtml(ground.title ?? 'Plant stress')}</strong> <span class="map-key-qualification">${escapeHtml(ground.state)}</span>` +
     ground.rows.map((row) => swatchItem(row.grey, row.label)).join('') +
     ground.lines.map((line) => `<span class="map-key-qualification">${escapeHtml(line)}</span>`).join('') +
     '</span>';

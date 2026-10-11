@@ -23,30 +23,51 @@ const PROTOCOL = 'dryness-ground';
 export const DRYNESS_GROUND_EVENT = 'ddm:dryness-ground';
 /** The map key asks for the last state when it loads after the ground. */
 export const DRYNESS_GROUND_REQUEST_EVENT = 'ddm:dryness-ground-request';
-const RG_BOUNDS = [-128.54, 22.47, -65.37, 51.78] as const;
+// The layer's own extent reaches 51.78 N, but it holds no data north of the
+// United States (southern British Columbia measured empty, week of 2026-09-28).
+const RG_BOUNDS = [-128.54, 22.47, -65.37, 49.4] as const;
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] as const;
 
 /**
- * DRAFT key strings (release 0.7.3 step 2), every one in this one place: step
- * 3 (ddm-cite) owns the final wording and replaces these. None is cited yet,
- * except `starFailure`, which is DDM-P9-T13's own sentence.
+ * The key's wording, every string in this one place. Checked against the
+ * issuers on 2026-10-11 and worded by the owner the same day (the references
+ * ledger, entries star-vhi and usgs-relative-greenness): the feature reads
+ * "Plant stress", and the key stays tight.
  */
-export const DRYNESS_KEY_DRAFT = {
-  starTitle: 'Vegetation health (NOAA STAR VHI), darker is drier',
+export const DRYNESS_KEY = {
+  starTitle: 'Plant stress (NOAA STAR Vegetation Health Index), darker is more stressed',
   rgTitle: 'Relative Greenness (USGS), darker is less green',
   starRows: ['0 to 6', '6 to 12', '12 to 24', '24 to 36', '36 to 48', '48 to 60', '60 to 72', '72 to 84', '84 to 100'],
   rgRows: ['1 to 10%', '11 to 20%', '21 to 30%', '31 to 40%', '41 to 50%', '51 to 60%', '61 to 70%', '71 to 80%', '81 to 90%', '91 to 100%'],
-  notMeasured: 'Not measured (water, cloud or no data)',
-  starWeek: (week: number, first: string, last: string): string => `NOAA STAR week ${week}: ${first} to ${last}`,
-  rgWeek: (first: string, last: string): string => `USGS week of ${first} to ${last}`,
-  starRevision: 'Recent weeks may be revised by NOAA.',
-  starCoverage: 'Coverage: global land.',
-  rgCoverage: 'Coverage: contiguous United States and southern British Columbia to 51.78 N; Alaska and the rest of Canada are not covered.',
-  starQualification: 'Experimental NOAA STAR product, not an official NOAA operational product.',
-  rgQualification: 'Low values can be normal seasonal curing.',
-  // The exact failure sentence of DDM-P9-T13; the others are drafts.
+  starNoValue: 'No value shown (snow, ice, or missing data)',
+  rgNoValue: 'Not assessed (no data, water, clouds or bright surfaces)',
+  starWeek: (week: number, first: string, last: string): string => `Week ${week}: ${first} to ${last}`,
+  rgWeek: (first: string, last: string): string => `Week of ${first} to ${last}`,
+  starDefinition: 'Weekly vegetation health from satellite greenness and surface temperature, adjusted using each place\'s multi-year record.',
+  rgDefinition: 'How green vegetation is in the week shown, compared with the lowest and highest greenness recorded at that place.',
+  starCoverage: 'Coverage: land from 55°S to 75°N.',
+  rgCoverage: 'Coverage: contiguous United States only.',
   starFailure: 'NOAA STAR vegetation health unavailable; showing USGS Relative Greenness',
-  unavailable: 'Dryness ground unavailable: NOAA STAR and USGS did not answer.'
+  unavailable: 'Plant stress ground unavailable: no usable data from NOAA STAR or USGS.'
+} as const;
+
+/**
+ * The longer text the owner moved out of the key (2026-10-11): it belongs in
+ * the Impact Briefing, which does not read it yet. The ground must not be
+ * released before the briefing shows `starDisclaimer`, which the owner
+ * accepted on the condition that it is quoted in full.
+ */
+export const DRYNESS_BRIEFING_NOTES = {
+  starScope: 'Measures plant stress only, not fuel moisture or fire risk.',
+  starRevision: 'Recent weeks may change after NOAA STAR publishes them.',
+  starDesert: 'Deserts may appear as the darkest grey.',
+  starMiddle: 'About 15% of land pixels read exactly 50 in the source data, which NOAA STAR does not explain; read mid-greys (48 to 60) with caution.',
+  starMeaning: 'NOAA STAR: "The VH are indices, which range from 0 to 100 characterizing changes in vegetation conditions from extremely poor (0) to excellent (100)." "The VH values below 40 are used for identifying vegetation stress which is an indirect drought indicator."',
+  starDisclaimer: 'NOAA STAR says: "Data and images hosted on the STAR webservers are not official NOAA operational products, and are provided only as examples for experimental use by remote sensing researchers, experienced meteorologists, or oceanographers. Although STAR provides "operational" data for some products, the STAR website primarily hosts examples of ongoing experimental product development. STAR pages and data sources may therefore be interrupted, changed, or canceled at any time without notice. STAR websites are not managed to meet operational data standards of uptime or redundant operations."',
+  starDisclaimerUrl: 'https://www.star.nesdis.noaa.gov/star/productdisclaimer.php',
+  rgLowValues: 'USGS: low values indicate "drought-stressed or dormant vegetation".',
+  fuelRiskVintage: 'Wildfire Hazard Potential 2023 reflects landscape conditions as of the end of 2020 (USFS), so areas burned since then still show their earlier class.',
+  twoProducts: 'Two separate products drawn on top of each other; DDM combines no values and computes no score.'
 } as const;
 
 const day = (date: Date, withYear: boolean): string =>
@@ -71,13 +92,13 @@ export function starPreviousWeek(frame: string): string {
 /** Week w is days 7w-6 to 7w of its year (week 52 ends Dec 30, Dec 29 in a leap year). */
 export function starWeekLine(frame: string): string {
   const year = Number(frame.slice(0, 4)), week = Number(frame.slice(5));
-  return DRYNESS_KEY_DRAFT.starWeek(week, ...range(new Date(Date.UTC(year, 0, 7 * week - 6)), new Date(Date.UTC(year, 0, 7 * week))));
+  return DRYNESS_KEY.starWeek(week, ...range(new Date(Date.UTC(year, 0, 7 * week - 6)), new Date(Date.UTC(year, 0, 7 * week))));
 }
 
 /** RG's TIME labels the week's START Monday; the week runs to the Sunday after. */
 export function rgWeekLine(time: string): string {
   const start = new Date(time);
-  return DRYNESS_KEY_DRAFT.rgWeek(...range(start, new Date(start.getTime() + 6 * 86_400_000)));
+  return DRYNESS_KEY.rgWeek(...range(start, new Date(start.getTime() + 6 * 86_400_000)));
 }
 
 const HALF = 20037508.342789244;
@@ -88,9 +109,9 @@ function mercatorBbox(z: number, x: number, y: number): string {
 
 function starFrame(frame: string): DrynessFrame {
   return {
-    productKey: 'star-vhi', frame, issuer: 'NOAA/NESDIS STAR', legendRows: DRYNESS_KEY_DRAFT.starRows,
-    clockLabel: starWeekLine(frame), coverage: DRYNESS_KEY_DRAFT.starCoverage,
-    qualification: DRYNESS_KEY_DRAFT.starQualification, creditKey: 'noaa-star',
+    productKey: 'star-vhi', frame, issuer: 'NOAA/NESDIS STAR', legendRows: DRYNESS_KEY.starRows,
+    clockLabel: starWeekLine(frame), coverage: DRYNESS_KEY.starCoverage,
+    qualification: DRYNESS_KEY.starDefinition, creditKey: 'noaa-star',
     tileUrl: (z, x, y) => URLS.starVhiJ01TileTemplate.replace('{week}', frame)
       .replace('{z}', String(z)).replace('{x}', String(x)).replace('{y}', String(y)),
     // z8 answers 500: maxZoom 7 keeps every request at z7 or shallower.
@@ -100,9 +121,9 @@ function starFrame(frame: string): DrynessFrame {
 
 function rgFrame(time: string): DrynessFrame {
   return {
-    productKey: 'usgs-relative-greenness', frame: time, issuer: 'USGS EROS', legendRows: DRYNESS_KEY_DRAFT.rgRows,
-    clockLabel: rgWeekLine(time), coverage: DRYNESS_KEY_DRAFT.rgCoverage,
-    qualification: DRYNESS_KEY_DRAFT.rgQualification, creditKey: 'usgs',
+    productKey: 'usgs-relative-greenness', frame: time, issuer: 'USGS EROS', legendRows: DRYNESS_KEY.rgRows,
+    clockLabel: rgWeekLine(time), coverage: DRYNESS_KEY.rgCoverage,
+    qualification: DRYNESS_KEY.rgDefinition, creditKey: 'usgs',
     tileUrl: (z, x, y) => `${URLS.usgsRgConusWeekWms}?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap` +
       '&LAYERS=rg_conus_week_data&STYLES=firedanger_weekly_rg_conus_raster&CRS=EPSG:3857' +
       `&BBOX=${mercatorBbox(z, x, y)}&WIDTH=256&HEIGHT=256&FORMAT=image/png&TRANSPARENT=true&TIME=${encodeURIComponent(time)}`,
@@ -138,17 +159,20 @@ function describe(snapshot: DrynessSnapshot, map: MapLibreMap): DrynessGroundDet
   const starFailed = snapshot.failures.some(row => row.productKey === 'star-vhi');
   const lines = [
     ...(shown ? [shown.clockLabel] : []),
-    ...(mounted ? [mounted.coverage, ...(star ? [DRYNESS_KEY_DRAFT.starRevision] : []), mounted.qualification] : []),
-    ...(snapshot.state === 'unavailable' ? [DRYNESS_KEY_DRAFT.unavailable]
-      : starFailed && !star ? [DRYNESS_KEY_DRAFT.starFailure] : [])
+    // A tight key (owner, 2026-10-11): the definition, and the coverage line
+    // only when the view is not wholly covered.
+    ...(mounted ? [mounted.qualification,
+      ...(snapshot.state === 'live (partial)' || snapshot.state === 'no data' ? [mounted.coverage] : [])] : []),
+    ...(snapshot.state === 'unavailable' ? [DRYNESS_KEY.unavailable]
+      : starFailed && !star ? [DRYNESS_KEY.starFailure] : [])
   ];
   return {
     state: snapshot.state,
     productKey: mounted?.productKey ?? 'none',
-    title: shown ? (star ? DRYNESS_KEY_DRAFT.starTitle : DRYNESS_KEY_DRAFT.rgTitle) : null,
+    title: shown ? (star ? DRYNESS_KEY.starTitle : DRYNESS_KEY.rgTitle) : null,
     rows: mounted
       ? [...mounted.legendRows.map((label, index) => ({ grey: greys[index]!.grey, label })),
-        { grey: DRYNESS_NOT_ASSESSED_COLOR, label: DRYNESS_KEY_DRAFT.notMeasured }]
+        { grey: DRYNESS_NOT_ASSESSED_COLOR, label: star ? DRYNESS_KEY.starNoValue : DRYNESS_KEY.rgNoValue }]
       : [],
     lines
   };

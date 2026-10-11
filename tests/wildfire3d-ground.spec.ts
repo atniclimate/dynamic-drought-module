@@ -13,7 +13,7 @@ import {
 } from './helpers';
 import { stubDeepTerrainArchive, stubWildfireFeeds } from './wildfire-fixtures';
 import {
-  DRYNESS_KEY_DRAFT,
+  DRYNESS_KEY,
   rgWeekLine,
   starCurrentWeek,
   starPreviousWeek,
@@ -68,11 +68,11 @@ test('STAR weeks follow the issuer\'s 1-to-52 rule and the key states each week 
   expect(starCurrentWeek(at('2026-01-08'))).toBe('2026001');
   expect(starCurrentWeek(at('2026-12-31'))).toBe('2026052');
   expect(starPreviousWeek('2026001')).toBe('2025052');
-  expect(starWeekLine('2026038')).toBe('NOAA STAR week 38: Sep 17 to Sep 23, 2026');
-  expect(starWeekLine('2026052')).toBe('NOAA STAR week 52: Dec 24 to Dec 30, 2026');
-  expect(starWeekLine('2024052')).toBe('NOAA STAR week 52: Dec 23 to Dec 29, 2024');
-  expect(rgWeekLine('2026-09-28T00:00:00.000Z')).toBe('USGS week of Sep 28 to Oct 4, 2026');
-  expect(rgWeekLine('2025-12-29T00:00:00.000Z')).toBe('USGS week of Dec 29, 2025 to Jan 4, 2026');
+  expect(starWeekLine('2026038')).toBe('Week 38: Sep 17 to Sep 23, 2026');
+  expect(starWeekLine('2026052')).toBe('Week 52: Dec 24 to Dec 30, 2026');
+  expect(starWeekLine('2024052')).toBe('Week 52: Dec 23 to Dec 29, 2024');
+  expect(rgWeekLine('2026-09-28T00:00:00.000Z')).toBe('Week of Sep 28 to Oct 4, 2026');
+  expect(rgWeekLine('2025-12-29T00:00:00.000Z')).toBe('Week of Dec 29, 2025 to Jan 4, 2026');
 });
 
 test.describe('Wildfire 3D dryness ground', () => {
@@ -94,7 +94,7 @@ test.describe('Wildfire 3D dryness ground', () => {
     // Week k from STAR's own rule, read straight through: no fallback was needed.
     expect(drynessStub(page).weeks).toEqual([starCurrentWeek(new Date())]);
     await expect(dryKey(page)).toContainText(starWeekLine(starCurrentWeek(new Date())));
-    await expect(dryKey(page)).toContainText(DRYNESS_KEY_DRAFT.starRevision);
+    await expect(dryKey(page)).toContainText(DRYNESS_KEY.starDefinition);
   });
 
   test('a week-k failure steps to k-1 and then swaps to Relative Greenness atomically, reading the named source failure', async ({ page }) => {
@@ -117,10 +117,9 @@ test.describe('Wildfire 3D dryness ground', () => {
     for (const detail of details) {
       if (!detail || detail.productKey === 'none') continue;
       const star = detail.productKey === 'star-vhi';
-      expect(detail.title).toBe(star ? DRYNESS_KEY_DRAFT.starTitle : DRYNESS_KEY_DRAFT.rgTitle);
-      expect(detail.rows.map((row) => row.label).slice(0, -1)).toEqual([...(star ? DRYNESS_KEY_DRAFT.starRows : DRYNESS_KEY_DRAFT.rgRows)]);
-      expect(detail.lines).toContain(star ? DRYNESS_KEY_DRAFT.starCoverage : DRYNESS_KEY_DRAFT.rgCoverage);
-      expect(detail.lines.includes(DRYNESS_KEY_DRAFT.starRevision)).toBe(star);
+      expect(detail.title).toBe(star ? DRYNESS_KEY.starTitle : DRYNESS_KEY.rgTitle);
+      expect(detail.rows.map((row) => row.label).slice(0, -1)).toEqual([...(star ? DRYNESS_KEY.starRows : DRYNESS_KEY.rgRows)]);
+      expect(detail.lines).toContain(star ? DRYNESS_KEY.starDefinition : DRYNESS_KEY.rgDefinition);
     }
     expect(details.some((detail) => detail?.productKey === 'star-vhi')).toBe(false);
     await expect(dryKey(page)).toContainText('NOAA STAR vegetation health unavailable; showing USGS Relative Greenness');
@@ -157,7 +156,7 @@ test.describe('Wildfire 3D dryness ground', () => {
       expect(read.legend).toBe(read.mounted);
       // The classes drawn in the key are the mounted product's own, never the attempted one's.
       expect(read.swatches).toBe(read.mounted === 'star-vhi' ? 10 : read.mounted === 'usgs-relative-greenness' ? 11 : 0);
-      if (read.mounted === 'usgs-relative-greenness') expect(read.title).toBe(DRYNESS_KEY_DRAFT.rgTitle);
+      if (read.mounted === 'usgs-relative-greenness') expect(read.title).toBe(DRYNESS_KEY.rgTitle);
     }
     expect(reads.at(-1)).toEqual({ legend: 'none', mounted: 'none', title: null, swatches: 0 });
   });
@@ -167,17 +166,17 @@ test.describe('Wildfire 3D dryness ground', () => {
     await reaches(page, 'ddmFire3d', 'active');
     await reaches(page, 'ddmDryness', 'unavailable');
     expect(await stamp(page, 'ddmDrynessProduct')).toBe('none');
-    await expect(dryKey(page)).toContainText(DRYNESS_KEY_DRAFT.unavailable);
+    await expect(dryKey(page)).toContainText(DRYNESS_KEY.unavailable);
     await expect(layerCheckbox(page, 'hillshade')).toBeChecked();
     await waitForLayerSettled(page, 'hillshade');
     expect(await stamp(page, 'ddmFire3d')).toBe('active');
   });
 
-  test('RG north of 51.78 N reads live (partial) with the coverage line', async ({ page }) => {
+  test('RG across the northern edge of the United States reads live (partial) with the coverage line', async ({ page }) => {
     await bootWith(page, '?region=british_columbia&cluster=wildfire&fire3d=true', { starFailWeeks: 2 });
     await reaches(page, 'ddmDrynessProduct', 'usgs-relative-greenness');
     await reaches(page, 'ddmDryness', 'live (partial)');
-    await expect(dryKey(page)).toContainText(DRYNESS_KEY_DRAFT.rgCoverage);
+    await expect(dryKey(page)).toContainText(DRYNESS_KEY.rgCoverage);
     await expect(dryKey(page)).toHaveAttribute('data-dryness-state', 'live (partial)');
   });
 
