@@ -35,8 +35,13 @@ Avoid copying spec counts and runtime estimates into several documents.
 | Source checks without a bundle | `npm run gate:nobuild` | Types and all source checks, including the pure lane |
 | A browser behavior | `npx playwright test --workers=1 tests/boot.spec.ts` | Fresh production build and the selected cases |
 | Cross-cutting build/configuration changes | `npm run gate` | Fresh build, artifact budgets and all source checks |
-| Integration block smoke verification | `npm run verify:smoke` | Gate and the smoke roster, one fresh build, one owned preview |
-| Final integration/release candidate | `npm run test:serial` | All three assertion projects, one worker; excludes the measurement project |
+| A wider local signal before pushing (optional) | `npm run verify:smoke` | Gate and the smoke roster, one fresh build, one owned preview |
+| Full suite locally, when GitHub is unavailable | `npm run test:serial` | All three assertion projects, one worker; excludes the measurement project |
+
+The full browser suite normally runs on GitHub, in the Validate workflow, which
+slices it into eight shards. On a branch without an open pull request, start it
+with `gh workflow run validate.yml --ref <branch>`. A local `test:serial` takes
+more than an hour and is the fallback, not a routine step.
 
 `npm test` runs the same three assertion projects with the configured worker
 count. Keep one browser runner at a time. The pure lane starts no browser or
@@ -57,12 +62,21 @@ each builder keeps its own fresh page and runs each fixture method once. Tests
 that require a live layer or date rail must install positive fixtures explicitly;
 the offline backstop's error response cannot establish those preconditions.
 
-A session handoff is a record of work, not a new application verification event.
-Do not start `verify:smoke` or `test:serial` solely because the session is ending,
-or rerun an unchanged candidate just to recover context. Preserve the prior
-command, result, candidate identity and evidence path. Record unfinished checks
-and failures explicitly; they remain required before the corresponding task,
-integration block or release can be declared complete.
+While developing, run `npm run typecheck` and the focused tests for the change
+(a single spec, or `-g` for the changed cases). When a piece of work is
+finished, run the focused tests again and the browser-free checks
+(`npm run verify:quick`, plus `npm run gate:nobuild` or `npm run gate` when the
+change is cross-cutting), then push the branch and let GitHub run the full
+suite. `npm run verify:smoke` is a useful local middle rung when a wider signal
+is wanted before pushing; it is not required for each task. Before a release,
+the full suite must be green on GitHub for the frozen release candidate, and
+the release's whole diff gets one independent review.
+
+A session ending is not a new application verification event. Do not start
+`verify:smoke` or `test:serial` solely because the session is ending, or rerun
+an unchanged candidate just to recover context. A report says what ran and what
+happened, including unfinished checks and failures. The detailed record (commit,
+build SHA, run id) is kept for the release candidate only.
 
 For documentation-only work, check the changed text and public-tree policy.
 For verification-tooling work, run the relevant lane/configuration tests, types,
@@ -70,7 +84,7 @@ the gate when build orchestration changes, and a focused execution of the change
 browser startup path. A tooling check does not establish application readiness.
 
 After shared navigation, map lifecycle or state changes, run affected browser
-cases first and the full serial suite on the assembled candidate. Do not repeat
+cases locally and let the full suite run on GitHub. Do not repeat
 that release-scale suite for each intermediate edit. Fire/3D changes additionally
 need their focused pair:
 
@@ -100,17 +114,15 @@ remain between the same groups, and the NIFC model keeps its separate
 available for focused checks. A failed group stops the `&&` chain before later
 checks or preview startup.
 
-When the gate and full serial suite are required together for the same frozen
-candidate, run `npm run test:serial -- --config=playwright.smoke.config.ts`.
+As the local fallback when GitHub is unavailable, to run the gate and the full
+serial suite together on one build, run
+`npm run test:serial -- --config=playwright.smoke.config.ts`.
 This runs all three assertion projects and serves the gate's checked build.
-A separate preparatory gate is unnecessary for that same frozen candidate
-unless independently required by the task.
+A separate preparatory gate is unnecessary for the same candidate.
 
-A build SHA or dirty marker alone does not establish equivalent inputs. Preserve
-the recorded commit, tracked diff, untracked inventory and relevant input
-identities; review intervening source, generated-data, fixture and configuration
-changes before carrying a result. Attribute each result to the candidate that
-actually ran it and record later documentation changes separately.
+A build SHA or dirty marker alone does not establish equivalent inputs. For a
+release candidate, record the commit, build SHA and GitHub run id of the run
+that passed, and attribute the result to the candidate that actually ran it.
 
 `npm run check:links` is outside these gates and can reach the network. It is
 not a substitute for any assigned verification.
@@ -247,10 +259,10 @@ regression would actually break.
 Pull requests run the deterministic root gate and Worker typecheck (without
 deploying the optional Worker) beside the browser suite; the Pages workflow
 runs the root gate and build beside the same browser suite, and deploys only
-when both have passed. Run focused affected specs during development and
-`npm run test:serial` when a change affects shared navigation, map lifecycle,
-state, or release readiness. The verification ladder above wraps that advice
-into four named scripts.
+when both have passed. Run focused affected specs during development, and
+when a change affects shared navigation, map lifecycle, or state, run the
+affected specs locally and let the full suite run on GitHub. The verification
+ladder above wraps that advice into scripts.
 
 ## How CI runs the suite
 
@@ -310,8 +322,8 @@ shard and five to eight times the cheapest. The split is by file order over 32
 tests whose first 10 run in milliseconds, so shard 1 is nearly free by
 construction. Splitting `chromium-3d` three ways again, or moving
 `view-contracts.spec.ts` into its own project so the split is by cost rather
-than by file order, would rebalance it. Not done here: it is a CI-shape change
-and CI is being demoted to a confirmation lane.
+than by file order, would rebalance it. Not done here: it is a CI-shape change,
+and GitHub's Validate run is where the full browser suite runs.
 
 `browser-suite.yml` also takes `workers` and `retries` experiment inputs
 (mirrored as `workflow_dispatch` inputs on `validate.yml`), both defaulted to
