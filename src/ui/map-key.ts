@@ -63,8 +63,8 @@ import {
 } from './heatrisk-sequence-loader';
 import { watchDesktopMapSeat } from './map-control-seat';
 import { getTimeBarSpec, onTimeBarSpecChange } from './time-bar';
-import { WHP_SHADE_CATEGORIES, WHP_SHADE_QUALIFICATION, WHP_SURFACE_OPACITY } from '../config/whp-shade';
-import { DRAPE_OPACITY } from '../config/wildfire-presentation';
+import { MAP_GROUND_COLOR } from '../config/interface-tokens';
+import { WHP_3D_SHADE_CATEGORIES, WHP_SHADE_CATEGORIES, WHP_SHADE_QUALIFICATION, WHP_SURFACE_OPACITY } from '../config/whp-shade';
 
 export interface KeySpec {
   readonly label: string;
@@ -184,7 +184,7 @@ function drynessKeyHtml(): string {
   if (!ground) return '';
   return `<span class="map-key-scale" data-dryness-key data-dryness-state="${escapeHtml(ground.state)}" data-product-key="${ground.productKey}">` +
     `<strong>${escapeHtml(ground.title ?? 'Plant stress')}</strong> <span class="map-key-qualification">${escapeHtml(ground.state)}</span>` +
-    ground.rows.map((row) => swatchItem(row.grey, row.label)).join('') +
+    ground.rows.map((row) => swatchItem(whiteShade(row.alpha), row.label)).join('') +
     ground.lines.map((line) => `<span class="map-key-qualification">${escapeHtml(line)}</span>`).join('') +
     '</span>';
 }
@@ -369,6 +369,16 @@ function swatchItem(color: string, code: string): string {
   return `<span class="map-key-item"><span class="map-key-swatch" style="background:${escapeHtml(
     color
   )}"></span>${escapeHtml(code)}</span>`;
+}
+
+/**
+ * A Wildfire 3D white shade (fuel risk, plant stress) as it reads on the map:
+ * white at `alpha` over the map's dark ground. Nothing drawn is a transparent swatch.
+ */
+function whiteShade(alpha: number): string {
+  if (alpha === 0) return 'transparent';
+  const white = `rgba(255,255,255,${alpha})`;
+  return `linear-gradient(${white},${white}),${MAP_GROUND_COLOR}`;
 }
 
 function droughtKey(): KeySpec {
@@ -1477,8 +1487,8 @@ export function initMapKey(): void {
     keyLabel = spec.label;
     const shadeKey = whpShadeActive
       ? '<span class="map-key-scale" data-whp-shade-key><strong>3D wildfire potential</strong>' +
-        WHP_SHADE_CATEGORIES.map((category) => swatchItem(
-          `rgba(255,255,255,${category.opacity * DRAPE_OPACITY})`, category.label
+        WHP_3D_SHADE_CATEGORIES.map((category) => swatchItem(
+          whiteShade(category.opacity), category.label
         )).join('') + `<span class="map-key-qualification">${escapeHtml(WHP_SHADE_QUALIFICATION)}</span></span>`
       : '';
     const html =

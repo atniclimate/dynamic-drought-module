@@ -8048,7 +8048,10 @@ a.impact-resource-link::after {
   display: grid;
   gap: 4px;
 }
-.shell-fire3d-btn {
+/* The two ground switches under the toggle (Plant stress, Fuel risk) are the
+   same button: full width, same padding, so their hit target is the toggle's. */
+.shell-fire3d-btn,
+.shell-fire3d-layer {
   appearance: none;
   width: 100%;
   background: var(--bg-2);
@@ -8063,11 +8066,11 @@ a.impact-resource-link::after {
   cursor: pointer;
   transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
-.shell-fire3d-btn:hover {
+:is(.shell-fire3d-btn, .shell-fire3d-layer):hover {
   border-color: var(--line-strong);
   color: var(--fg-0);
 }
-.shell-fire3d-btn[aria-pressed='true'] {
+:is(.shell-fire3d-btn, .shell-fire3d-layer)[aria-pressed='true'] {
   background: var(--accent-soft);
   border-color: var(--accent);
   color: var(--accent);
@@ -9435,7 +9438,7 @@ a.impact-resource-link::after {
   .about-card a[href]:not([role='button']) { color: var(--link-on-light); }
   .about-card a[href]:not([role='button']):hover { color: var(--link-on-light-hover); }
 }
-:is(.view-switch button, .shell-cluster-btn, .shell-horizon-btn, .shell-fire3d-btn, .place-studio-type, .hazard-rail-btn)[aria-pressed='true']:not(:disabled):not([aria-disabled='true']),
+:is(.view-switch button, .shell-cluster-btn, .shell-horizon-btn, .shell-fire3d-btn, .shell-fire3d-layer, .place-studio-type, .hazard-rail-btn)[aria-pressed='true']:not(:disabled):not([aria-disabled='true']),
 .time-bar-mode.active:not(:disabled) {
   --selection-shadow: inset 2px 0 0 var(--ink-strong);
   background: var(--surface-hover);
@@ -9444,7 +9447,7 @@ a.impact-resource-link::after {
   font-weight: var(--fw-strong);
   box-shadow: var(--selection-shadow);
 }
-:is(.view-switch button, .shell-cluster-btn, .shell-horizon-btn, .shell-fire3d-btn, .place-studio-type, .hazard-rail-btn)[aria-pressed='true']:not(:disabled):not([aria-disabled='true']):focus-visible,
+:is(.view-switch button, .shell-cluster-btn, .shell-horizon-btn, .shell-fire3d-btn, .shell-fire3d-layer, .place-studio-type, .hazard-rail-btn)[aria-pressed='true']:not(:disabled):not([aria-disabled='true']):focus-visible,
 .time-bar-mode.active:not(:disabled):focus-visible {
   outline: 2px solid var(--focus-inner);
   outline-offset: 0;

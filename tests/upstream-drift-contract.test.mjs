@@ -200,6 +200,19 @@ test('candidate failures are warnings while runtime and build failures block', (
   ]);
 });
 
+test('the Wildfire 3D ground\'s NOAA STAR land-cover template, kept out of the catalog chunk, is still extracted and probed at the runtime tier', async () => {
+  const read = (path) => readFile(new URL(path, import.meta.url), 'utf8');
+  const entries = extractUrls(await read('../src/config/dryness-ground.ts'));
+  assert.deepEqual(entries.map(({ key, tier }) => ({ key, tier })),
+    [{ key: 'starLandCoverTileTemplate', tier: DRIFT_TIERS.RUNTIME }]);
+  // The probe substitutes {z}, {x} and {y}; nothing else is templated.
+  assert.equal(entries[0].url,
+    'https://www.star.nesdis.noaa.gov/smcd/emb/vci/VH/image_mapTile.php?type=ancillary//IGBPlandtype&Z={z}&X={x}&Y={y}');
+  // The monitor reads that file with the catalog, and the catalog does not carry the key a second time.
+  assert.match(await read('../scripts/check-upstream-drift.mjs'), /readFile\(DRYNESS_GROUND_URLS_PATH, 'utf8'\)/);
+  assert.ok(!extractUrls(await read('../src/config/urls.ts')).some(({ key }) => key === 'starLandCoverTileTemplate'));
+});
+
 test('the current URL registry keeps representative lifecycle tiers distinct', async () => {
   const source = await readFile(
     new URL('../src/config/urls.ts', import.meta.url),

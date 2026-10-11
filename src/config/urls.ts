@@ -1237,6 +1237,13 @@ export const URLS = Object.freeze({
   // publishing: never cache a week in the app (owner direction 2026-10-09).
   starVhiJ01TileTemplate:
     'https://www.star.nesdis.noaa.gov/smcd/emb/vci/VH/image_mapTile.php?type=/j01_500m_VHI/{week}&Z={z}&X={x}&Y={y}',
+  // STAR's land-cover tiles, which the same ground reads beside each of the
+  // tiles above, are NOT a key here: starLandCoverTileTemplate lives in
+  // src/config/dryness-ground.ts (DRYNESS_GROUND_URLS), because this
+  // catalog's chunk rides every feature's first activation and two rows of
+  // scripts/check-activation-budget.mjs had no room for one more entry
+  // (measured 2026-10-11: +29 B gzip; heatrisk-days had 12 B, the North
+  // American Drought Monitor 23 B). The upstream probe reads that file too.
   // USGS EROS eVIIRS weekly Relative Greenness WMS, layer rg_conus_week_data,
   // the automatic fallback ground. TIME labels the week's START Monday and
   // must match a capabilities value exactly (an off-list TIME answers a 200

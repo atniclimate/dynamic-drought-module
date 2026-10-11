@@ -15,6 +15,8 @@ export interface DrynessFrame {
   readonly qualification: string;
   readonly creditKey: string;
   readonly tileUrl: (z: number, x: number, y: number) => string;
+  /** The issuer's land-cover tile of the same z/x/y; a frame that names one draws no tile without it. */
+  readonly maskTileUrl?: (z: number, x: number, y: number) => string;
   readonly tileSize: number;
   readonly maxZoom: number;
   readonly bounds: readonly [number, number, number, number];
@@ -78,7 +80,7 @@ export function createDrynessGround(options: DrynessGroundOptions): {
     if (input.productKey !== productKey || !text(input.frame) || (frame !== undefined && input.frame !== frame) ||
         ![input.issuer, input.clockLabel, input.coverage, input.qualification, input.creditKey].every(text) ||
         !Array.isArray(input.legendRows) || input.legendRows.length === 0 || !input.legendRows.every(text) ||
-        typeof input.tileUrl !== 'function' ||
+        typeof input.tileUrl !== 'function' || !['undefined', 'function'].includes(typeof input.maskTileUrl) ||
         !Number.isSafeInteger(input.tileSize) || input.tileSize <= 0 || !Number.isSafeInteger(input.maxZoom) ||
         input.maxZoom < 5 || input.maxZoom > 30 || (productKey === 'star-vhi' && input.maxZoom > 7) ||
         input.bounds.length !== 4 || !input.bounds.every(Number.isFinite) ||
@@ -94,6 +96,10 @@ export function createDrynessGround(options: DrynessGroundOptions): {
   const previous = week === 1 ? `${String(year - 1).padStart(4, '0')}052` : `${currentWeek[1]}0${String(week - 1).padStart(2, '0')}`;
   if (star[1]!.frame !== previous) throw new Error('Invalid STAR predecessor');
   url(options.rg.capabilitiesUrl);
+  // One tile of a frame, with its land-cover tile when the frame names one; both URLs pass the origin check.
+  const read = (frame: DrynessFrame, z: number, x: number, y: number, owner: AbortController): Promise<ArrayBuffer> =>
+    readDrynessTile(url(frame.tileUrl(z, x, y)), frame.productKey === 'star-vhi' ? 'star-vhi' : 'relative-greenness', owner,
+      options.tileLimits, frame.maskTileUrl && url(frame.maskTileUrl(z, x, y)));
   let generation = 0;
   type Session = {
     generation: number; map: MapLibreMap; owner: AbortSignal; controller: AbortController;
@@ -190,8 +196,7 @@ export function createDrynessGround(options: DrynessGroundOptions): {
         if (!frame) break;
         s.attempted = frame;
         try {
-          await settle(s, readDrynessTile(url(frame.tileUrl(5, 5, 11)), frame.productKey === 'star-vhi' ? 'star-vhi' : 'relative-greenness',
-            s.controller, options.tileLimits));
+          await settle(s, read(frame, 5, 5, 11, s.controller));
           checkpoint(s);
           s.sourceId = `${options.layerId}-${s.generation}-${s.index}`;
           s.map.addSource(s.sourceId, { type: 'raster', tiles: [`${options.protocolName}://${s.generation}/${s.index}/{z}/{x}/{y}`],
@@ -248,7 +253,7 @@ export function createDrynessGround(options: DrynessGroundOptions): {
     try {
       if (owner.signal.aborted || !current(s)) throw abortError();
       const frame = selected;
-      const data = await readDrynessTile(url(frame.tileUrl(z, x, y)), frame.productKey === 'star-vhi' ? 'star-vhi' : 'relative-greenness', child, options.tileLimits);
+      const data = await read(frame, z, x, y, child);
       if (owner.signal.aborted || !current(s) || s.selected !== frame) throw abortError();
       return { data };
     } catch (error) {

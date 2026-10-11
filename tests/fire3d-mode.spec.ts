@@ -31,7 +31,6 @@ import {
   perimeterRibbonSlabOpacity
 } from '../src/config/fire3d-presentation';
 import {
-  DRAPE_OPACITY,
   HMS_VOLUME_QUALIFICATION,
   STRUCTURES_QUALIFICATION,
   WILDFIRE_STATIC_COLOR
@@ -496,8 +495,11 @@ test('activation builds terrain, sky, camera, and the smoke volume; deactivation
     expect(harness.layerSpecs.get('whp-2023')).toMatchObject({
       type: 'raster',
       source: 'whp-2023',
+      // DR-199: the console's "Fuel risk" switch is on by default.
+      layout: { visibility: 'visible' },
       paint: {
-        'raster-opacity': DRAPE_OPACITY,
+        // The shading table carries each class's effective white opacity.
+        'raster-opacity': 1,
         // A categorical raster must not blend two class colors into a
         // third that appears in no legend.
         'raster-resampling': 'nearest'

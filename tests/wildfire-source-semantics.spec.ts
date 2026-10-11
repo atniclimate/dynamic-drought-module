@@ -1,7 +1,7 @@
 import { expect, test } from './offline-test';
 
+import { WHP_3D_SHADE_CATEGORIES } from '../src/config/whp-shade';
 import {
-  DRAPE_OPACITY,
   FBFM40_PRESENTATION,
   POWER_LINE_COLOR,
   POWER_LINE_WIDTHS,
@@ -901,9 +901,9 @@ test('the WHP drape key mirrors the issuer legend exactly, including its two non
   // hazard rating of zero.
   expect(USFS_WHP_PRESENTATION.qualification).toMatch(/non-hazard classes/i);
 
-  // The drape stays translucent context under perimeters and smoke.
-  expect(DRAPE_OPACITY).toBeGreaterThan(0);
-  expect(DRAPE_OPACITY).toBeLessThanOrEqual(0.6);
+  // The Wildfire 3D drape stays translucent context under perimeters and
+  // smoke: its whitest class is 80% white (DR-199), never opaque.
+  expect(WHP_3D_SHADE_CATEGORIES.map((category) => category.opacity)).toEqual([0, 0.1, 0.2, 0.4, 0.8, 0, 0]);
 });
 
 test('the power context maps issuer voltage classes to width only, with the archive caveat pinned', () => {

@@ -13,11 +13,11 @@
 
 import type * as maplibregl from 'maplibre-gl';
 
-import { DRAPE_OPACITY } from '../config/wildfire-presentation';
-import { WHP_SHADE_CATEGORIES, WHP_SHADE_QUALIFICATION } from '../config/whp-shade';
+import { WHP_3D_SHADE_CATEGORIES, WHP_SHADE_QUALIFICATION } from '../config/whp-shade';
 import { registerWhpShadeProtocol } from './whp-shade-protocol';
 import { URLS } from '../config/urls';
 import { reassertLabelOrder, reassertThematicOrder } from '../map/layer-order';
+import { getFire3DGroundLayer, onFire3DGroundLayerChange } from '../state/fire3d-ground-layers';
 import { registry } from '../state/registry';
 import {
   LEGEND_ORDER,
@@ -36,6 +36,38 @@ const FLAT_WHP_LAYER_KEY = 'usfs-whp';
 
 /** Released when the drape is torn down; watches for the flat layer. */
 let releaseFlatLayerWatch: (() => void) | null = null;
+/** Released when the drape is torn down; follows the console's "Fuel risk" switch. */
+let releaseSwitchWatch: (() => void) | null = null;
+
+/** The drape's layout visibility under the console's "Fuel risk" switch (session only). */
+const fuelRiskVisibility = (): 'visible' | 'none' => (getFire3DGroundLayer('fuelRisk') ? 'visible' : 'none');
+
+/**
+ * The legend and the map key follow the switch with the drape: a key never
+ * describes a layer that is not drawn. Hidden, the layer and its source
+ * stay mounted, so switching back on needs no new activation.
+ */
+function announceFuelRisk(): void {
+  const on = getFire3DGroundLayer('fuelRisk');
+  if (on) {
+    showLegend(LEGEND_KEY, {
+      order: LEGEND_ORDER.surface + 5,
+      render: (body) =>
+        renderSwatchLegend(
+          body,
+          'Wildfire hazard potential (3D view)',
+          WHP_3D_SHADE_CATEGORIES.map((c) => ({
+            color: `rgba(255, 255, 255, ${c.opacity})`,
+            label: c.label
+          })),
+          WHP_SHADE_QUALIFICATION
+        )
+    });
+  } else {
+    hideLegend(LEGEND_KEY);
+  }
+  window.dispatchEvent(new CustomEvent('ddm:whp-shade', { detail: { layer: LAYER_ID, active: on } }));
+}
 
 /**
  * One issuer, one legend, per layer: never draw this drape while the flat
@@ -95,8 +127,11 @@ export async function activateWhpDrape(
         id: LAYER_ID,
         type: 'raster',
         source: SOURCE_ID,
+        layout: { visibility: fuelRiskVisibility() },
         paint: {
-          'raster-opacity': DRAPE_OPACITY,
+          // The shading table carries each class's effective white opacity
+          // (WHP_3D_SHADE_CATEGORIES), so the layer itself adds none.
+          'raster-opacity': 1,
           // NEAREST, not MapLibre's default linear. This is a categorical
           // raster of seven issuer classes, and the archive is over-zoomed
           // well past its bake depth at the scene's framing. Linear
@@ -138,20 +173,13 @@ export async function activateWhpDrape(
     return false;
   }
 
-  showLegend(LEGEND_KEY, {
-    order: LEGEND_ORDER.surface + 5,
-    render: (body) =>
-      renderSwatchLegend(
-        body,
-        'Wildfire hazard potential (3D view)',
-        WHP_SHADE_CATEGORIES.map((c) => ({
-          color: `rgba(255, 255, 255, ${c.opacity * DRAPE_OPACITY})`,
-          label: c.label
-        })),
-        WHP_SHADE_QUALIFICATION
-      )
+  announceFuelRisk();
+  releaseSwitchWatch?.();
+  releaseSwitchWatch = onFire3DGroundLayerChange((layer) => {
+    if (layer !== 'fuelRisk') return;
+    if (map.getLayer(LAYER_ID)) map.setLayoutProperty(LAYER_ID, 'visibility', fuelRiskVisibility());
+    announceFuelRisk();
   });
-  window.dispatchEvent(new CustomEvent('ddm:whp-shade', { detail: { layer: LAYER_ID, active: true } }));
 
   // The flat layer can be switched on AFTER the scene is up (the
   // season-ahead horizon does exactly that). Watch for it and stand down
@@ -175,6 +203,8 @@ export async function activateWhpDrape(
 export function deactivateWhpDrape(map: maplibregl.Map): void {
   releaseFlatLayerWatch?.();
   releaseFlatLayerWatch = null;
+  releaseSwitchWatch?.();
+  releaseSwitchWatch = null;
   if (map.getLayer(LAYER_ID)) map.removeLayer(LAYER_ID);
   if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);
   hideLegend(LEGEND_KEY);

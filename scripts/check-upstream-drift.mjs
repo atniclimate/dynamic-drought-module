@@ -47,14 +47,20 @@ const URLS_PATH = join(__dirname, '..', 'src', 'config', 'urls.ts');
  * are re-exported by urls.ts under their old keys, so extraction must read
  * both files or the basemap probe silently disappears. */
 const URLS_BOOT_PATH = join(__dirname, '..', 'src', 'config', 'urls-boot.ts');
+/** The Wildfire 3D ground's NOAA STAR land-cover tile template (2026-10-11):
+ * kept beside the ground's own config so the catalog chunk does not grow,
+ * written in the catalog's `key: 'https...'` form so it is extracted and
+ * probed here like any catalog key (runtime tier by default). */
+const DRYNESS_GROUND_URLS_PATH = join(__dirname, '..', 'src', 'config', 'dryness-ground.ts');
 
-/** The catalog and its boot slice as one extraction source. */
+/** The catalog, its boot slice and the ground's one address as one extraction source. */
 async function readUrlsSource() {
-  const [catalog, boot] = await Promise.all([
+  const [catalog, boot, ground] = await Promise.all([
     readFile(URLS_PATH, 'utf8'),
     readFile(URLS_BOOT_PATH, 'utf8'),
+    readFile(DRYNESS_GROUND_URLS_PATH, 'utf8'),
   ]);
-  return `${catalog}\n${boot}`;
+  return `${catalog}\n${boot}\n${ground}`;
 }
 
 const TIMEOUT_MS = 15_000;

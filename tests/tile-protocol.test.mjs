@@ -469,7 +469,7 @@ async function withDrynessBrowser(options, task) {
   }
 }
 
-test('dryness PNG operation uses real bounded reader and exact transform before returning encoded opaque grey output', async () => {
+test('dryness PNG operation uses real bounded reader and exact transform before returning encoded white-alpha output', async () => {
   for (const [product, source] of [
     ['star-vhi', drynessSource()],
     ['relative-greenness', drynessSource([115, 38, 0, 255, 255, 255, 255, 255])]
@@ -477,10 +477,53 @@ test('dryness PNG operation uses real bounded reader and exact transform before 
     const owner = new AbortController();
     const bytes = await readDrynessTile('https://example.test/vhi.png', product, owner, DRYNESS_LIMITS);
     const output = drynessPngJs.PNG.sync.read(Buffer.from(bytes));
-    assert.deepEqual([...output.data], [31, 31, 31, 255, 133, 133, 133, 255]);
+    // The most stressed class is 40% white; no value is fully transparent (DR-199).
+    assert.deepEqual([...output.data], [255, 255, 255, 102, 0, 0, 0, 0]);
     assert.deepEqual(events.bitmapOptions, [{ colorSpaceConversion: 'none', premultiplyAlpha: 'none' }]);
     assert.equal(events.closed, 1); assert.equal(events.encoded, 1);
     assert.equal(owner.signal.aborted, false);
+    assert.ok(events.canvases.every(canvas => canvas.width === 0 && canvas.height === 0));
+  });
+});
+
+/**
+ * Answers a plant-health URL (most stressed class, then healthiest) and a land-cover URL with their own PNGs.
+ * `mask` is the land-cover tile's RGBA, or null for a failed land-cover read.
+ */
+function drynessMaskedFetch(mask, requested = []) {
+  return async url => {
+    requested.push(String(url));
+    if (!String(url).includes('landcover')) return new Response(drynessSource([255, 0, 160, 255, 0, 0, 170, 255]), { headers: { 'content-type': 'image/png' } });
+    if (!mask) return new Response('failed', { status: 500 });
+    return new Response(drynessPngJs.PNG.sync.write({ width: mask.length / 4, height: 1, data: Buffer.from(mask) }),
+      { headers: { 'content-type': 'image/png' } });
+  };
+}
+
+test('dryness land-cover tile rides the same bounded reader: bare ground is knocked out, a drawn class keeps its plant stress', async () => {
+  const requested = [];
+  // Bare ground (class 16) over the most stressed class; evergreen needleleaf forest (class 1) over the healthiest.
+  await withDrynessBrowser({ fetch: drynessMaskedFetch([128, 128, 128, 255, 0, 128, 0, 255], requested) }, async events => {
+    const bytes = await readDrynessTile('https://example.test/vhi.png', 'star-vhi', new AbortController(), DRYNESS_LIMITS,
+      'https://example.test/landcover.png');
+    assert.deepEqual([...drynessPngJs.PNG.sync.read(Buffer.from(bytes)).data], [0, 0, 0, 0, 255, 255, 255, 10]);
+    assert.deepEqual(requested.sort(), ['https://example.test/landcover.png', 'https://example.test/vhi.png']);
+    assert.equal(events.bitmapOptions.length, 2); assert.equal(events.closed, 2); assert.equal(events.encoded, 1);
+    assert.ok(events.canvases.length === 2 && events.canvases.every(canvas => canvas.width === 0 && canvas.height === 0));
+  });
+});
+
+test('dryness land-cover tile fails closed: a failed read, an unknown colour or another size draws nothing', async () => {
+  for (const [mask, expected] of [
+    [null, error => !/land-cover/.test(error.message)],
+    [[128, 128, 128, 255, 18, 52, 86, 255], /Unrecognized land-cover class/],
+    [[128, 128, 128, 255], /Invalid dryness land-cover mask/]
+  ]) await withDrynessBrowser({ fetch: drynessMaskedFetch(mask) }, async events => {
+    await assert.rejects(readDrynessTile('https://example.test/vhi.png', 'star-vhi', new AbortController(), DRYNESS_LIMITS,
+      'https://example.test/landcover.png'), expected);
+    assert.equal(events.encoded, 0);
+    // Both tiles decoded before the pure check refused them: both bitmaps are closed.
+    if (mask) assert.equal(events.closed, 2);
     assert.ok(events.canvases.every(canvas => canvas.width === 0 && canvas.height === 0));
   });
 });
@@ -673,7 +716,7 @@ test('dryness selected STAR record is atomic, native owner cancellation does not
     assert.equal(snapshots.at(-1).state, 'live');
     assert.equal(snapshots.at(-1).selected.frame, '2026001');
     const tile = await adapter.protocol({ url: 'dryness-test://1/0/5/5/11' }, new AbortController());
-    assert.equal(drynessPngJs.PNG.sync.read(Buffer.from(tile.data)).data[0], 31);
+    assert.deepEqual([...drynessPngJs.PNG.sync.read(Buffer.from(tile.data)).data.subarray(0, 4)], [255, 255, 255, 102]);
     assert.equal(events.fetched, 2);
     const tileOwner = new AbortController(); tileOwner.abort();
     await assert.rejects(adapter.protocol({ url: 'dryness-test://1/0/5/5/11' }, tileOwner), { name: 'AbortError' });
@@ -703,6 +746,76 @@ test('dryness failed k reaches exact prior-year record through real PNG operatio
     assert.equal(snapshots.at(-1).selected.frame, '2025052');
     assert.deepEqual(snapshots.at(-1).failures, [{ productKey: 'star-vhi', frame: '2026001', reason: 'source-failed' }]);
     adapter.deactivate();
+  });
+});
+test('dryness failed land-cover tile fails its STAR frame like a failed tile, and a mounted frame reads both tiles at the same z/x/y', async () => {
+  const requested = [];
+  await withDrynessBrowser({ fetch: async url => {
+    requested.push(String(url));
+    if (String(url).includes('landcover-2026001')) return new Response('failed', { status: 500 });
+    // Evergreen needleleaf forest (class 1), then bare ground (class 16).
+    return new Response(drynessSource(String(url).includes('landcover') ? [0, 128, 0, 255, 128, 128, 128, 255] : undefined),
+      { headers: { 'content-type': 'image/png' } });
+  } }, async () => {
+    const map = drynessMap(), snapshots = [], options = drynessOptions(map, snapshots);
+    options.star = options.star.map(frame => ({ ...frame,
+      maskTileUrl: (z, x, y) => `https://fixture.invalid/landcover-${frame.frame}/${z}/${x}/${y}.png` }));
+    const adapter = createDrynessGround(options);
+    await adapter.activate(map, new AbortController().signal);
+    assert.equal(snapshots.at(-1).selected.frame, '2025052');
+    assert.deepEqual(snapshots.at(-1).failures, [{ productKey: 'star-vhi', frame: '2026001', reason: 'source-failed' }]);
+    const tile = await adapter.protocol({ url: 'dryness-test://1/1/6/10/22' }, new AbortController());
+    assert.deepEqual([...drynessPngJs.PNG.sync.read(Buffer.from(tile.data)).data], [255, 255, 255, 102, 0, 0, 0, 0]);
+    for (const path of ['2025052', 'landcover-2025052']) assert.ok(requested.includes(`https://fixture.invalid/${path}/6/10/22.png`), path);
+    adapter.deactivate();
+  });
+});
+test('the Plant stress switch removes the ground and restores it with fresh reads; the shipped STAR frame reads NOAA STAR land cover beside each tile', async () => {
+  const { activateWildfireDryness, getDrynessSourceId } = await import('../src/layers/wildfire-dryness.ts');
+  const { setFire3DGroundLayer } = await import('../src/state/fire3d-ground-layers.ts');
+  const requested = [];
+  const LAYER = 'wildfire-dryness-ground';
+  await withDrynessBrowser({ fetch: async url => {
+    requested.push(String(url));
+    // Land cover: evergreen needleleaf forest (class 1) under both pixels.
+    return new Response(drynessSource(String(url).includes('IGBPlandtype') ? [0, 128, 0, 255, 0, 128, 0, 255] : undefined),
+      { headers: { 'content-type': 'image/png' } });
+  } }, async () => {
+    document.documentElement = { dataset: {} };
+    const map = Object.assign(drynessMap(), { getStyle: () => ({ layers: [{ id: 'background' }, { id: 'hillshade' }] }) });
+    const mounted = async () => { for (let turn = 0; turn < 200 && !map.layers.has(LAYER); turn++) await new Promise(setImmediate); };
+    const scene = new AbortController();
+    try {
+      // Off before the scene opens: nothing is read and nothing is mounted.
+      setFire3DGroundLayer('plantStress', false);
+      await activateWildfireDryness(map, scene.signal);
+      assert.equal(requested.length, 0); assert.equal(map.layers.size, 0);
+      setFire3DGroundLayer('plantStress', true);
+      await mounted();
+      assert.equal(map.layers.get(LAYER).source, getDrynessSourceId());
+      const star = 'https://www.star.nesdis.noaa.gov/smcd/emb/vci/VH/image_mapTile.php?type=';
+      assert.deepEqual(requested.map(url => url.replace(/\d{7}/, 'WEEK')).sort(),
+        [`${star}/j01_500m_VHI/WEEK&Z=5&X=5&Y=11`, `${star}ancillary//IGBPlandtype&Z=5&X=5&Y=11`]);
+      // The other switch leaves this layer alone.
+      setFire3DGroundLayer('fuelRisk', false);
+      assert.equal(map.layers.size, 1);
+      setFire3DGroundLayer('plantStress', false);
+      assert.equal(map.layers.size, 0); assert.equal(map.sources.size, 0); assert.equal(getDrynessSourceId(), null);
+      assert.equal(document.documentElement.dataset.ddmDryness, undefined);
+      // Back on: read again, nothing was kept.
+      setFire3DGroundLayer('plantStress', true);
+      await mounted();
+      assert.equal(requested.length, 4);
+      // Leaving the scene releases the switch: a later change reads nothing.
+      scene.abort();
+      assert.equal(map.layers.size, 0);
+      setFire3DGroundLayer('plantStress', false); setFire3DGroundLayer('plantStress', true);
+      await new Promise(setImmediate);
+      assert.equal(requested.length, 4);
+    } finally {
+      scene.abort();
+      setFire3DGroundLayer('plantStress', true); setFire3DGroundLayer('fuelRisk', true);
+    }
   });
 });
 test('dryness incomplete disclosure or wrong predecessor is rejected before any request or publication', async () => {

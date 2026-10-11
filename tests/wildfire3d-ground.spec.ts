@@ -91,6 +91,12 @@ test.describe('Wildfire 3D dryness ground', () => {
     const star = drynessStub(page).log.filter((row) => row.host === 'star');
     expect(star.length).toBeGreaterThan(1);
     expect(star.filter((row) => row.z === null || row.z >= 8)).toEqual([]);
+    // DR-199: each plant-health tile is read with STAR's land-cover tile of the same z/x/y, never deeper than z7.
+    const landCover = drynessStub(page).log.filter((row) => row.host === 'landcover');
+    expect(landCover.length).toBeGreaterThan(1);
+    expect(landCover.filter((row) => row.z === null || row.z >= 8)).toEqual([]);
+    // The selection probe's tile, read from both (the pairing itself is proven in tests/tile-protocol.test.mjs).
+    for (const rows of [star, landCover]) expect(rows.some((row) => row.url.endsWith('&Z=5&X=5&Y=11'))).toBe(true);
     // Week k from STAR's own rule, read straight through: no fallback was needed.
     expect(drynessStub(page).weeks).toEqual([starCurrentWeek(new Date())]);
     await expect(dryKey(page)).toContainText(starWeekLine(starCurrentWeek(new Date())));
@@ -209,7 +215,7 @@ test.describe('Wildfire 3D dryness ground', () => {
     const firstEntry = drynessStub(page).log.length;
     await page.locator(TOGGLE).click();
     await reaches(page, 'ddmFire3d', 'inactive');
-    // The same week, revised: index 3 (STAR's driest run) becomes index 90 (its wettest).
+    // The same week, revised: index 3 (STAR's most stressed run, 40% white) becomes index 90 (its healthiest, 4% white).
     drynessStub(page).starFill = 90;
     await page.locator(TOGGLE).click();
     await reaches(page, 'ddmDryness', 'live');
@@ -218,6 +224,7 @@ test.describe('Wildfire 3D dryness ground', () => {
     const reread = drynessStub(page).log.slice(firstEntry).filter((row) => row.host === 'star');
     expect(new Set(reread.map((row) => row.frame))).toEqual(new Set([starCurrentWeek(new Date())]));
     expect(reread.length).toBeGreaterThan(1);
-    expect(second - first).toBeGreaterThan(10);
+    // Whiter is more stressed (DR-199), so the revised, healthier week draws darker.
+    expect(first - second).toBeGreaterThan(10);
   });
 });

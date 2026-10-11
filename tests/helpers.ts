@@ -1367,11 +1367,12 @@ export type StarArm = 'fixture' | 'unknown-colour' | 'abort' | 'corrupt' | 'wron
 export type RgArm = 'fixture' | 'service-exception' | 'abort' | 'hold';
 
 export interface DrynessStubEntry {
-  readonly host: 'star' | 'rg';
+  /** 'landcover' is STAR's land-cover tile, read beside each plant-health tile (src/config/dryness-ground.ts DRYNESS_GROUND_URLS). */
+  readonly host: 'star' | 'landcover' | 'rg';
   readonly url: string;
-  /** STAR: the requested zoom; RG: null. */
+  /** STAR and land cover: the requested zoom; RG: null. */
   readonly z: number | null;
-  /** STAR: the yyyy0WW week; RG: the TIME, or 'capabilities'. */
+  /** STAR: the yyyy0WW week; land cover: 'landcover'; RG: the TIME, or 'capabilities'. */
   readonly frame: string;
   readonly answer: string;
 }
@@ -1445,10 +1446,23 @@ const STAR_BAND_INDICES = [0, 3, 9, 18, 30, 42, 54, 66, 78, 90] as const;
 
 function starTile(fill: number | null, unknownColour: boolean): Buffer {
   const palette = starPalette();
-  // A tenth colour no class table names: the grey protocol must fail closed.
+  // A tenth colour no class table names: the pixel protocol must fail closed.
   if (unknownColour) palette.set([0x12, 0x34, 0x56], 3 * 3);
   return palettedPng(palette, Buffer.from([0]), (_x, y) =>
     unknownColour ? 3 : fill ?? STAR_BAND_INDICES[Math.floor((y * STAR_BAND_INDICES.length) / 256)]!);
+}
+
+/**
+ * STAR's land-cover palette as observed live 2026-10-11: index 0 transparent
+ * (Undefined), 1 to 14 drawn, 15 Snow and Ice, 16 Bare Ground, 17 Water Bodies.
+ * The fixture tile is class 1 everywhere, so it knocks out no plant stress.
+ */
+const STAR_LAND_COVER_PALETTE = ['#000080', '#008000', '#00FF00', '#99CC00', '#99FF99', '#339966', '#993366', '#FFCC99',
+  '#CCFFCC', '#FFCC00', '#FF9900', '#006699', '#FFFF00', '#FF0000', '#999966', '#FFFFFF', '#808080', '#000080'] as const;
+
+function starLandCoverTile(): Buffer {
+  const palette = Buffer.from(STAR_LAND_COVER_PALETTE.flatMap((hex) => [1, 3, 5].map((at) => Number.parseInt(hex.slice(at, at + 2), 16))));
+  return palettedPng(palette, Buffer.from([0]), () => 1);
 }
 
 /** RG's ten classes, then its white, No Data and Water (tests/fixtures/vhi/rg-legend.json). */
@@ -1483,8 +1497,15 @@ export async function installDefaultDrynessStub(page: Page): Promise<void> {
   drynessStubStates.set(context, state);
   await context.route((url) => url.href.startsWith(STAR_VHI_TILE_PATH), async (route) => {
     const url = new URL(route.request().url());
-    const frame = /\/j01_500m_VHI\/(\d{7})$/.exec(url.searchParams.get('type') ?? '')?.[1] ?? 'unparsed';
     const z = Number(url.searchParams.get('Z'));
+    if (url.searchParams.get('type') === 'ancillary//IGBPlandtype') {
+      // The land-cover tile on the same grid: one fixed tile, and Z=8 answers like STAR's CORS-less 500.
+      const answer = z >= 8 ? 'abort' : 'fixture';
+      state.log.push({ host: 'landcover', url: url.href, z, frame: 'landcover', answer });
+      if (answer === 'abort') return route.abort('failed').catch(() => undefined);
+      return route.fulfill({ status: 200, headers: CORS, contentType: 'image/png', body: starLandCoverTile() }).catch(() => undefined);
+    }
+    const frame = /\/j01_500m_VHI\/(\d{7})$/.exec(url.searchParams.get('type') ?? '')?.[1] ?? 'unparsed';
     if (frame !== 'unparsed' && !state.weeks.includes(frame)) state.weeks.push(frame);
     const failedWeek = state.weeks.indexOf(frame) < state.starFailWeeks;
     // STAR answers a missing week, an unparsed request and Z=8 with a 500 that carries no CORS header.

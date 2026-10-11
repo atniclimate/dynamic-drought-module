@@ -1,8 +1,11 @@
 /**
- * The Wildfire 3D dryness ground (DDM-P9-T13; DR-105): a greyscale NOAA STAR
- * weekly Vegetation Health Index under the hillshade and the white WHP drape,
- * USGS Relative Greenness as the automatic fallback. A lazy chunk the 3D scene
- * imports on entry (src/map/fire3d.ts); nothing here runs outside Wildfire 3D.
+ * The Wildfire 3D plant-stress ground (DDM-P9-T13; DR-105, redrawn by DR-199):
+ * NOAA STAR's weekly Vegetation Health Index as white at a per-class alpha
+ * (whiter is more stressed) under the hillshade and the white fuel-risk drape
+ * it adds to, USGS Relative Greenness as the automatic fallback. STAR's own
+ * land-cover tiles knock out snow and ice, bare ground and water (STAR only).
+ * A lazy chunk the 3D scene imports on entry (src/map/fire3d.ts); nothing
+ * here runs outside Wildfire 3D.
  *
  * Revised data (owner direction 2026-10-09): NOAA rewrites back-weeks after
  * publishing, so nothing here keeps a tile, a frame or a listing past one
@@ -12,9 +15,10 @@
 
 import { addProtocol, type Map as MapLibreMap } from 'maplibre-gl';
 
-import { DRYNESS_NOT_ASSESSED_COLOR, RG_DRYNESS_CLASSES, STAR_DRYNESS_CLASSES } from '../config/dryness-ground';
+import { DRYNESS_GROUND_URLS, RG_DRYNESS_CLASSES, STAR_DRYNESS_CLASSES } from '../config/dryness-ground';
 import { URLS } from '../config/urls';
 import { BOTTOM_STACK_IDS, firstLayerIdAbove } from '../map/layer-order';
+import { getFire3DGroundLayer, onFire3DGroundLayerChange } from '../state/fire3d-ground-layers';
 import { createDrynessGround, type DrynessFrame, type DrynessSnapshot } from './dryness-ground';
 
 /** Mirrored in src/map/layer-order.ts BOTTOM_STACK_IDS. */
@@ -32,14 +36,16 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
  * The key's wording, every string in this one place. Checked against the
  * issuers on 2026-10-11 and worded by the owner the same day (the references
  * ledger, entries star-vhi and usgs-relative-greenness): the feature reads
- * "Plant stress", and the key stays tight.
+ * "Plant stress", and the key stays tight. The two titles and the STAR
+ * no-value row are the owner's words of DR-199: the map carries as little
+ * text as possible and the Impact Briefing carries the meaning.
  */
 export const DRYNESS_KEY = {
-  starTitle: 'Plant stress (NOAA STAR Vegetation Health Index), darker is more stressed',
-  rgTitle: 'Relative Greenness (USGS), darker is less green',
+  starTitle: 'Plant stress (NOAA-STAR)',
+  rgTitle: 'Relative "Greenness" (USGS), whiter is less green',
   starRows: ['0 to 6', '6 to 12', '12 to 24', '24 to 36', '36 to 48', '48 to 60', '60 to 72', '72 to 84', '84 to 100'],
   rgRows: ['1 to 10%', '11 to 20%', '21 to 30%', '31 to 40%', '41 to 50%', '51 to 60%', '61 to 70%', '71 to 80%', '81 to 90%', '91 to 100%'],
-  starNoValue: 'No value shown (snow, ice, or missing data)',
+  starNoValue: 'No value shown (snow, ice, water, desert, or missing data)',
   rgNoValue: 'Not assessed (no data, water, clouds or bright surfaces)',
   starWeek: (week: number, first: string, last: string): string => `Week ${week}: ${first} to ${last}`,
   rgWeek: (first: string, last: string): string => `Week of ${first} to ${last}`,
@@ -60,13 +66,13 @@ export const DRYNESS_KEY = {
 export const DRYNESS_BRIEFING_NOTES = {
   starScope: 'Measures plant stress only, not fuel moisture or fire risk.',
   starRevision: 'Recent weeks may change after NOAA STAR publishes them.',
-  starDesert: 'Deserts may appear as the darkest grey.',
-  starMiddle: 'About 15% of land pixels read exactly 50 in the source data, which NOAA STAR does not explain; read mid-greys (48 to 60) with caution.',
+  starDesert: 'NOAA STAR: "For the area without vegetation (desert, high mountains, etc.), the displayed indices characterize surface conditions." Bare ground, snow and ice, and water, as NOAA STAR\'s land-cover layer marks them, are not drawn.',
+  starMiddle: 'About 15% of land pixels read exactly 50 in the source data, which NOAA STAR does not explain; read the 48 to 60 class with caution.',
   starMeaning: 'NOAA STAR: "The VH are indices, which range from 0 to 100 characterizing changes in vegetation conditions from extremely poor (0) to excellent (100)." "The VH values below 40 are used for identifying vegetation stress which is an indirect drought indicator."',
   starDisclaimer: 'NOAA STAR says: "Data and images hosted on the STAR webservers are not official NOAA operational products, and are provided only as examples for experimental use by remote sensing researchers, experienced meteorologists, or oceanographers. Although STAR provides "operational" data for some products, the STAR website primarily hosts examples of ongoing experimental product development. STAR pages and data sources may therefore be interrupted, changed, or canceled at any time without notice. STAR websites are not managed to meet operational data standards of uptime or redundant operations."',
   starDisclaimerUrl: 'https://www.star.nesdis.noaa.gov/star/productdisclaimer.php',
   rgLowValues: 'USGS: low values indicate "drought-stressed or dormant vegetation".',
-  fuelRiskOverlap: 'The Wildfire Hazard Potential classes Low and Moderate lighten the ground; compare with the Wildfire Hazard Potential legend.',
+  fuelRiskOverlap: 'Whiter ground means higher fuel risk, more plant stress, or both. They are two separate products drawn together; the brightness is not a combined fire-danger rating.',
   fuelRiskVintage:'Wildfire Hazard Potential 2023 reflects landscape conditions as of the end of 2020 (USFS), so areas burned since then still show their earlier class.',
   twoProducts: 'Two separate products drawn on top of each other; DDM combines no values and computes no score.'
 } as const;
@@ -115,6 +121,9 @@ function starFrame(frame: string): DrynessFrame {
     qualification: DRYNESS_KEY.starDefinition, creditKey: 'noaa-star',
     tileUrl: (z, x, y) => URLS.starVhiJ01TileTemplate.replace('{week}', frame)
       .replace('{z}', String(z)).replace('{x}', String(x)).replace('{y}', String(y)),
+    // STAR's land cover on the same grid: snow and ice, bare ground and water are not drawn (STAR only).
+    maskTileUrl: (z, x, y) => DRYNESS_GROUND_URLS.starLandCoverTileTemplate
+      .replace('{z}', String(z)).replace('{x}', String(x)).replace('{y}', String(y)),
     // z8 answers 500: maxZoom 7 keeps every request at z7 or shallower.
     tileSize: 256, maxZoom: 7, bounds: [-180, -85, 180, 85]
   };
@@ -146,7 +155,8 @@ export interface DrynessGroundDetail {
   readonly state: DrynessSnapshot['state'];
   readonly productKey: DrynessFrame['productKey'] | 'none';
   readonly title: string | null;
-  readonly rows: readonly { readonly grey: string; readonly label: string }[];
+  /** `alpha` is the white opacity the class draws at; 0 is the no-value row, drawn transparent. */
+  readonly rows: readonly { readonly alpha: number; readonly label: string }[];
   readonly lines: readonly string[];
   /** The Impact Briefing's full text for the mounted product; null when none is mounted. */
   readonly briefing: DrynessBriefing | null;
@@ -178,7 +188,7 @@ function describe(snapshot: DrynessSnapshot, map: MapLibreMap): DrynessGroundDet
     map.getSource(snapshot.sourceId) ? snapshot.selected : null;
   const shown = snapshot.selected ?? snapshot.attempted;
   const star = shown?.productKey === 'star-vhi';
-  const greys = star ? STAR_DRYNESS_CLASSES : RG_DRYNESS_CLASSES;
+  const classes = star ? STAR_DRYNESS_CLASSES : RG_DRYNESS_CLASSES;
   const starFailed = snapshot.failures.some(row => row.productKey === 'star-vhi');
   const lines = [
     ...(shown ? [shown.clockLabel] : []),
@@ -194,8 +204,8 @@ function describe(snapshot: DrynessSnapshot, map: MapLibreMap): DrynessGroundDet
     productKey: mounted?.productKey ?? 'none',
     title: shown ? (star ? DRYNESS_KEY.starTitle : DRYNESS_KEY.rgTitle) : null,
     rows: mounted
-      ? [...mounted.legendRows.map((label, index) => ({ grey: greys[index]!.grey, label })),
-        { grey: DRYNESS_NOT_ASSESSED_COLOR, label: star ? DRYNESS_KEY.starNoValue : DRYNESS_KEY.rgNoValue }]
+      ? [...mounted.legendRows.map((label, index) => ({ alpha: classes[index]!.alpha, label })),
+        { alpha: 0, label: star ? DRYNESS_KEY.starNoValue : DRYNESS_KEY.rgNoValue }]
       : [],
     lines,
     briefing: mounted ? drynessBriefing(mounted) : null
@@ -253,7 +263,8 @@ export async function activateWildfireDryness(map: MapLibreMap, signal: AbortSig
     layerId: LAYER_ID,
     // Under the hillshade and every drape, above the basemaps (BOTTOM_STACK_IDS order).
     beforeId: target => firstLayerIdAbove(target, BOTTOM_STACK_IDS.slice(0, BOTTOM_STACK_IDS.indexOf(LAYER_ID))),
-    allowedOrigins: [new URL(URLS.starVhiJ01TileTemplate).origin, new URL(URLS.usgsRgConusWeekWms).origin],
+    allowedOrigins: [new URL(URLS.starVhiJ01TileTemplate).origin, new URL(DRYNESS_GROUND_URLS.starLandCoverTileTemplate).origin,
+      new URL(URLS.usgsRgConusWeekWms).origin],
     star: [starFrame(week), starFrame(starPreviousWeek(week))],
     rg: {
       capabilitiesUrl: `${URLS.usgsRgConusWeekWms}?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetCapabilities`,
@@ -272,6 +283,12 @@ export async function activateWildfireDryness(map: MapLibreMap, signal: AbortSig
     }
   });
   ground = mine;
-  signal.addEventListener('abort', () => { if (ground === mine) ground = null; }, { once: true });
-  await mine.activate(map, signal);
+  // The console's "Plant stress" switch (session only): off removes the layer and aborts its reads, on reads again.
+  const release = onFire3DGroundLayerChange((layer) => {
+    if (layer !== 'plantStress') return;
+    if (getFire3DGroundLayer('plantStress')) void mine.activate(map, signal);
+    else mine.deactivate();
+  });
+  signal.addEventListener('abort', () => { release(); if (ground === mine) ground = null; }, { once: true });
+  if (getFire3DGroundLayer('plantStress')) await mine.activate(map, signal);
 }
