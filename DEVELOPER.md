@@ -454,8 +454,8 @@ runs no CI on push; start it by hand with `gh workflow run validate.yml --ref
 the change. When a piece of work is finished, run the focused tests again and
 the browser-free checks (`npm run verify:quick`; `npm run gate:nobuild` or
 `npm run gate` when the change is cross-cutting), then push the branch. The
-full browser suite runs on GitHub in eight shards and nobody waits on it
-locally. Before a release, the full suite must be green on GitHub for the
+full browser suite runs on GitHub in eight shards, once the release candidate
+is frozen rather than on every push. Before a release, the full suite must be green on GitHub for the
 frozen release candidate, and one independent review covers the release's whole
 diff. A local `npm run test:serial` is the fallback when GitHub is unavailable.
 `Validate` is the only check that must be green on the pull request, and

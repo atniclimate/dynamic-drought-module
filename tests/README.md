@@ -66,8 +66,8 @@ While developing, run `npm run typecheck` and the focused tests for the change
 (a single spec, or `-g` for the changed cases). When a piece of work is
 finished, run the focused tests again and the browser-free checks
 (`npm run verify:quick`, plus `npm run gate:nobuild` or `npm run gate` when the
-change is cross-cutting), then push the branch and let GitHub run the full
-suite. `npm run verify:smoke` is a useful local middle rung when a wider signal
+change is cross-cutting), then push the branch. The full suite runs on GitHub
+for the frozen release candidate, not on every push. `npm run verify:smoke` is a useful local middle rung when a wider signal
 is wanted before pushing; it is not required for each task. Before a release,
 the full suite must be green on GitHub for the frozen release candidate, and
 the release's whole diff gets one independent review.
@@ -84,7 +84,8 @@ the gate when build orchestration changes, and a focused execution of the change
 browser startup path. A tooling check does not establish application readiness.
 
 After shared navigation, map lifecycle or state changes, run affected browser
-cases locally and let the full suite run on GitHub. Do not repeat
+cases locally; the full suite on GitHub covers the rest once the release
+candidate is frozen. Do not repeat
 that release-scale suite for each intermediate edit. Fire/3D changes additionally
 need their focused pair:
 
@@ -261,7 +262,8 @@ deploying the optional Worker) beside the browser suite; the Pages workflow
 runs the root gate and build beside the same browser suite, and deploys only
 when both have passed. Run focused affected specs during development, and
 when a change affects shared navigation, map lifecycle, or state, run the
-affected specs locally and let the full suite run on GitHub. The verification
+affected specs locally; the full suite on GitHub covers the rest once the
+release candidate is frozen. The verification
 ladder above wraps that advice into scripts.
 
 ## How CI runs the suite
