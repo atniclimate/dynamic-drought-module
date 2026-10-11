@@ -92,8 +92,7 @@ state-curated set).
 
 - `us-states.geojson`: state boundaries (US Census, public domain).
 - `ecoregions-pnw.pmtiles`: EPA Omernik ecoregions, the served artifact
-  (built by `npm run build:ecoregion-tiles`); `ecoregions-pnw.geojson`
-  is the legacy placeholder retained for compatibility.
+  (built by `npm run build:ecoregion-tiles`).
 - `hillshade-dem-pnw.pmtiles`: retained terrain hillshade derived from USGS
   3DEP. The repository does not currently expose a supported rebuild command.
 - `whp-2023-pnw.pmtiles`: USFS Wildfire Hazard Potential 2023 drape for

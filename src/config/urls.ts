@@ -916,9 +916,7 @@ export const URLS = Object.freeze({
   // the pmtiles protocol (HTTP Range Requests, so only the header, directory,
   // and visible tiles download). The simplification tolerance, source vintage,
   // and retrieval date are baked into the archive attribution so the overlay
-  // never implies precision the source does not carry. The empty legacy
-  // placeholder `public/data/ecoregions-pnw.geojson` is still shipped, but no
-  // catalog entry names it and nothing reads it (release 0.7.3).
+  // never implies precision the source does not carry.
   ecoregionsPmtilesLocal: BASE_URL + 'data/ecoregions-pnw.pmtiles',
   // The PNW hillshade raster-dem archive (U4g, D-0.7.0-012/-029): terrarium
   // PNG tiles, 512 px, z0-8, whole-meter quantized, baked by
