@@ -9,7 +9,9 @@
  * documented in `data/README.md`. An empty placeholder is therefore the
  * expected first-run state, not an error; this module surfaces it as the
  * canonical `'no-data'` status (rendered by the sidebar as
- * "no data (see data/README.md)") and renders nothing visible.
+ * "no data (see data/README.md)") and renders nothing visible. The map's
+ * own Tribal boundaries are public data at T0 from public federal sources;
+ * the empty slot is about provenance and currency, not secrecy.
  *
  * Status reporting goes through the LayerRegistry (`registry.setStatus`,
  * wired below); the canonical states live in `src/types/layer.ts`. (An

@@ -410,7 +410,10 @@ alike, so a local green and a CI green mean the same thing; the bodies are
 the hand-authored rectangles with obviously synthetic names in
 `tests/tribal-fixtures.ts`, and no real sovereign-boundary polygon can enter
 a test artifact (the project's hard rule 1; see the NON-REDISTRIBUTION GUARD
-in `src/layers/aiannh.ts`). A spec that needs a different response (an empty
+in `src/layers/aiannh.ts`). These boundaries are public data at T0; the
+synthetic stand-in shapes keep every run repeatable and independent of the
+live services, and the operator slots must stay empty in the repository. A
+spec that needs a different response (an empty
 collection, an abort, a truncated body, an ArcGIS error, a geography-keyed
 answer) registers its own handler through `routeBoundary`, which wins because
 Playwright checks Page routes before context routes.
@@ -514,7 +517,8 @@ should be read before anything is added to what CI keeps.
 
 **Cannot appear.** Sovereign geometry of any kind: Census AIANNH, BIA
 AIAN-LAR, and the deployer-owned Tribal and Treaty slots. The first two are
-answered from synthetic rectangles on every boot; the last two are asserted
+answered from synthetic rectangles on every boot so runs are repeatable (the
+boundaries themselves are public data at T0); the last two are asserted
 empty by the gate. No rendered pixels, from any source, because trace frames,
 screenshots, and video are all off in CI. No spec source text (`sources:
 false`).

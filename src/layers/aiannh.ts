@@ -24,7 +24,9 @@
  * session cache below and the MapLibre source, and nowhere else: never
  * committed, never emitted by the default build, never written to disk, and
  * never copied into a test fixture. Live-fetch of a public federal product is
- * not redistribution (the 2026-07-15 tier assessment).
+ * not redistribution (the 2026-07-15 tier assessment). These boundaries are
+ * public data at T0 from a public federal source; the guard is about
+ * provenance and currency, not secrecy.
  *
  * Source: `URLS.censusAiannhMapServer` layer 47 (verified 2026-07-15; see
  * urls.ts for the full provenance receipt). CORS is reflected-origin; no

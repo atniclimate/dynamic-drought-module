@@ -139,6 +139,13 @@ empty `public/data/tribal-lands.geojson` and
 `public/data/treaty-areas.geojson` files must remain empty unless the
 relevant sovereign authority authorizes data for that deployment. Do not copy
 Tribal, Treaty, or other sovereign-jurisdiction polygons into the repository.
+The Tribal boundaries the map shows are public data, T0 under the Tiered
+Sovereignty Data Framework, from the Census AIANNH service, the Bureau of
+Indian Affairs AIAN-LAR service, and the Bureau's Federal Register roster of
+federally recognized Tribes. They are read live so the source stays the
+authority and no copy goes stale; the instruction not to copy them exists for
+provenance and currency, and because the two operator slots are for an
+operator's own data.
 
 Capitalize Tribe, Tribal, and Treaty when referring to Tribal Nations or
 Treaty rights. This is accuracy, not courtesy. Agency boundary products are

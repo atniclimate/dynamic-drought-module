@@ -13,7 +13,8 @@
  * handler. The repository ships an empty FeatureCollection placeholder
  * because the project never redistributes sovereign-jurisdiction polygons;
  * deployers populate `data/treaty-areas.geojson`
- * under their own authorizations.
+ * under their own authorizations. The repository ships no Treaty polygons,
+ * and an operator's agency polygons are shown as representations.
  *
  * Per-feature color: MapLibre data-driven property expressions cannot call
  * arbitrary JavaScript, so we precompute the per-feature outline color in
