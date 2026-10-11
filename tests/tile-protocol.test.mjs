@@ -585,11 +585,14 @@ test('dryness synchronous work cannot publish after owner cancellation between c
   });
 });
 
-test('dryness elapsed deadline rejects synchronous stage overrun before a timer callback can run', async () => {
+test('a frozen main thread is not a dryness source failure: the clock jumping past the limit mid-read still publishes', async () => {
+  // A heavy 3D frame or a backgrounded tab moves the clock without the page
+  // listening; the tick deadline (the timeoutMs cases above) is the limit.
   let now = 0;
   await withDrynessBrowser({ clock: () => now, draw() { now = DRYNESS_LIMITS.timeoutMs + 1; } }, async events => {
-    await assert.rejects(readDrynessTile('https://example.test/vhi.png', 'star-vhi', new AbortController(), DRYNESS_LIMITS), error => error.name === 'TimeoutError');
-    assert.equal(events.closed, 1); assert.equal(events.encoded, 0);
+    const bytes = await readDrynessTile('https://example.test/vhi.png', 'star-vhi', new AbortController(), DRYNESS_LIMITS);
+    assert.ok(bytes.byteLength > 0);
+    assert.equal(events.closed, 1); assert.equal(events.encoded, 1);
   });
 });
 

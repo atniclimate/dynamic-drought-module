@@ -143,7 +143,7 @@ import {
 } from '../config/framings';
 import type { FramingKey } from '../config/framings';
 import { OCEANS } from '../config/oceans';
-import { applyBasemapMode, requestBasemapMode } from '../map/basemap-switcher';
+import { applyBasemapMode, holdSatellite, requestBasemapMode } from '../map/basemap-switcher';
 import {
   cameraMatchesTarget,
   cameraStateUnchanged,
@@ -1548,6 +1548,12 @@ function applyUrlStateSync(map: maplibregl.Map): ParsedUrlParams {
   // visual switch is kicked off here and settles asynchronously (the
   // desaturated default paints first; the U1 boot-split precedent).
   setBasemapMode(params.basemap);
+  // DR-105: a `fire3d=true` boot at the 3D chunk's width (main.ts) holds the
+  // imagery until the scene's controller decides; it releases the hold when
+  // the scene does not open.
+  if (params.fire3d && window.matchMedia('(min-width: 721px)').matches) {
+    holdSatellite(map, true);
+  }
   if (params.basemap === 'satellite') {
     void applyBasemapMode(map, 'satellite');
   }

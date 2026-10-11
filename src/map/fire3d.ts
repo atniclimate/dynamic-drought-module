@@ -65,6 +65,7 @@ import { terrainCoverageFromHeader, FIRE3D_TERRAIN_COVERAGE,
 import { URLS } from '../config/urls';
 import { resolveHillshadeArchive } from '../layers/hillshade';
 import { probeArchiveHeader } from '../util/pmtiles-probe';
+import { holdSatellite } from './basemap-switcher';
 import { watchContextLoss, webGl2Capability } from './gl-capability';
 import {
   getCommittedSnapshot,
@@ -1067,5 +1068,12 @@ export function initFire3DController(map: maplibregl.Map): void {
       .matchMedia(FIRE3D_MIN_HEIGHT_QUERY)
       .addEventListener('change', evaluate);
   }
+  // DR-105: no satellite imagery while the scene is opening or open. Synced
+  // once after the first evaluation too, which releases a boot hold
+  // (src/ui/sidebar.ts) when the scene does not open.
+  const syncSatelliteHold = (): void =>
+    holdSatellite(map, status.state === 'checking' || status.state === 'active');
+  onFire3DStatusChange(syncSatelliteHold);
   evaluate();
+  syncSatelliteHold();
 }

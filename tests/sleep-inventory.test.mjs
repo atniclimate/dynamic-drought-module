@@ -580,6 +580,16 @@ const SITES = [
     class: 'absence-window',
     reason:
       'settle window giving the retained minimap analysis fetch a real chance to have started, before asserting it never did.'
+  },
+  {
+    file: 'wildfire3d-ground.spec.ts',
+    line: 199,
+    test: 'zero pending VHI or RG requests after leaving 3D',
+    text: 'await page.waitForTimeout(2_000);',
+    occurrence: 1,
+    class: 'absence-window',
+    reason:
+      'window after leaving Wildfire 3D, proving no further NOAA STAR or USGS dryness request is made.'
   }
 ];
 

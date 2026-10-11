@@ -43,6 +43,8 @@ export function shadeDrynessPixels(pixels: Uint8ClampedArray, product: DrynessPr
   }
 }
 
+const TIMEOUT_TICK_MS = 250;
+
 export interface DrynessTileLimits extends PngTileReadLimits {
   /** Encoded PNG output ceiling, separate from the decoded HTTP body ceiling. */
   readonly maxOutputBytes: number;
@@ -52,7 +54,8 @@ export interface DrynessTileLimits extends PngTileReadLimits {
  * Read and transform one PNG atomically. No source selection or registration.
  * Native image decode/encode cannot be physically canceled; abort/deadline
  * rejects the consumer promptly, discards late output, and closes late bitmaps.
- * Pixel limits bound synchronous work; elapsed checks prohibit late publication.
+ * Pixel limits bound synchronous work; the tick deadline prohibits late
+ * publication.
  */
 export async function readDrynessTile(
   url: string,
@@ -67,18 +70,20 @@ export async function readDrynessTile(
   const controller = new AbortController();
   const abortError = (): DOMException => new DOMException('Aborted', 'AbortError');
   const timeoutError = (): DOMException => new DOMException('Dryness tile timed out', 'TimeoutError');
-  const deadline = performance.now() + limits.timeoutMs;
   const cancel = (): void => controller.abort(abortError());
   if (owner.signal.aborted) cancel();
   else owner.signal.addEventListener('abort', cancel, { once: true });
-  const timer = setTimeout(() => controller.abort(timeoutError()), limits.timeoutMs);
+  // The limit counts time the page could listen, in ticks: a frozen main
+  // thread (a heavy 3D frame, a backgrounded tab) passes as one tick, so a
+  // stall is never read as a source failure that steps the week back.
+  const tickMs = Math.min(TIMEOUT_TICK_MS, limits.timeoutMs);
+  let ticksLeft = Math.ceil(limits.timeoutMs / tickMs);
+  const timer = setInterval(() => {
+    if (--ticksLeft <= 0) controller.abort(timeoutError());
+  }, tickMs);
   const checkpoint = (): void => {
     if (owner.signal.aborted) throw abortError();
     controller.signal.throwIfAborted();
-    if (performance.now() >= deadline) {
-      controller.abort(timeoutError());
-      controller.signal.throwIfAborted();
-    }
   };
   // This wrapper owns rejection even when a native promise ignores our signal.
   const settle = <T>(work: Promise<T>, discard?: (value: T) => void): Promise<T> =>
@@ -113,7 +118,17 @@ export async function readDrynessTile(
   let canvas: HTMLCanvasElement | undefined;
   try {
     checkpoint();
-    const png = await settle(readPngTile(url, controller.signal, limits));
+    // The shared reader's timer is wall-clock: after a stall it can fire on a
+    // read the source already answered. While ticks remain, read again.
+    let png: Awaited<ReturnType<typeof readPngTile>>;
+    for (;;) {
+      try {
+        png = await settle(readPngTile(url, controller.signal, limits));
+        break;
+      } catch (error) {
+        if (controller.signal.aborted || !(error instanceof DOMException) || error.name !== 'TimeoutError') throw error;
+      }
+    }
     checkpoint();
     bitmap = await settle(createImageBitmap(new Blob([png.data], { type: 'image/png' }), {
       colorSpaceConversion: 'none', premultiplyAlpha: 'none'
@@ -152,7 +167,7 @@ export async function readDrynessTile(
     }
     return bytes;
   } finally {
-    clearTimeout(timer);
+    clearInterval(timer);
     owner.signal.removeEventListener('abort', cancel);
     controller.abort(abortError());
     bitmap?.close();
