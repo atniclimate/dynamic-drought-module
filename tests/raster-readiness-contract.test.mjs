@@ -1429,7 +1429,9 @@ test('current view guard: a watch without a deadline (the Fire 3D terrain path) 
 // lives alone in src/util/raster-error-watch.ts, and raster-status.ts has no
 // no-deadline mode and does not import it, so the policy is written once,
 // the Fire 3D activation closure (scripts/check-activation-budget.mjs, the
-// fire3d-mode row) carries none of the completeness mode, and no
+// fire3d-mode row) carries none of the completeness mode through fire3d.ts
+// (since release 0.7.3 the row's dryness ground root, tile-proven by design,
+// brings raster-status.ts in as its own lazy chunk), and no
 // raster-status closure (the heatrisk-days row among them) carries the error
 // watch. A statement-level `import type` is erased at build and does not
 // count as reaching a module.

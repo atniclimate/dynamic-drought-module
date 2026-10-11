@@ -1,4 +1,5 @@
 import { readPngTile, type PngTileReadLimits } from '../map/tile-protocol';
+import { listeningTimeout, MAX_STALL_REREADS } from '../util/listening-timeout';
 import {
   DRYNESS_NOT_ASSESSED_COLOR,
   RG_DRYNESS_CLASSES,
@@ -43,8 +44,6 @@ export function shadeDrynessPixels(pixels: Uint8ClampedArray, product: DrynessPr
   }
 }
 
-const TIMEOUT_TICK_MS = 250;
-
 export interface DrynessTileLimits extends PngTileReadLimits {
   /** Encoded PNG output ceiling, separate from the decoded HTTP body ceiling. */
   readonly maxOutputBytes: number;
@@ -73,14 +72,8 @@ export async function readDrynessTile(
   const cancel = (): void => controller.abort(abortError());
   if (owner.signal.aborted) cancel();
   else owner.signal.addEventListener('abort', cancel, { once: true });
-  // The limit counts time the page could listen, in ticks: a frozen main
-  // thread (a heavy 3D frame, a backgrounded tab) passes as one tick, so a
-  // stall is never read as a source failure that steps the week back.
-  const tickMs = Math.min(TIMEOUT_TICK_MS, limits.timeoutMs);
-  let ticksLeft = Math.ceil(limits.timeoutMs / tickMs);
-  const timer = setInterval(() => {
-    if (--ticksLeft <= 0) controller.abort(timeoutError());
-  }, tickMs);
+  // A stall must never read as a source failure that steps the week back.
+  const stopTimeout = listeningTimeout(limits.timeoutMs, () => controller.abort(timeoutError()));
   const checkpoint = (): void => {
     if (owner.signal.aborted) throw abortError();
     controller.signal.throwIfAborted();
@@ -118,15 +111,15 @@ export async function readDrynessTile(
   let canvas: HTMLCanvasElement | undefined;
   try {
     checkpoint();
-    // The shared reader's timer is wall-clock: after a stall it can fire on a
-    // read the source already answered. While ticks remain, read again.
+    // The shared reader's wall-clock timer fired while ticks remain: read again.
     let png: Awaited<ReturnType<typeof readPngTile>>;
-    for (;;) {
+    for (let rereads = MAX_STALL_REREADS; ; rereads--) {
       try {
         png = await settle(readPngTile(url, controller.signal, limits));
         break;
       } catch (error) {
-        if (controller.signal.aborted || !(error instanceof DOMException) || error.name !== 'TimeoutError') throw error;
+        if (rereads === 0 || controller.signal.aborted ||
+            !(error instanceof DOMException) || error.name !== 'TimeoutError') throw error;
       }
     }
     checkpoint();
@@ -167,7 +160,7 @@ export async function readDrynessTile(
     }
     return bytes;
   } finally {
-    clearInterval(timer);
+    stopTimeout();
     owner.signal.removeEventListener('abort', cancel);
     controller.abort(abortError());
     bitmap?.close();

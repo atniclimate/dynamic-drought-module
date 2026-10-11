@@ -7,7 +7,7 @@ import type * as maplibregl from 'maplibre-gl';
 import { holdSatellite } from './map/basemap-switcher';
 import { createMap } from './map/init';
 import { loadFire3DController } from './map/fire3d-chunk';
-import { onFire3DPreferenceChange } from './state/fire3d-store';
+import { FIRE3D_CHUNK_WIDTH_QUERY, onFire3DPreferenceChange } from './state/fire3d-store';
 import { initInteractionCoordinator } from './map/interaction-coordinator';
 import { setMap } from './state/map-store';
 import { applyDeepLink } from './state/deep-link';
@@ -419,7 +419,7 @@ function wireMapDependentChrome(map: maplibregl.Map): void {
   // A boot below the breakpoint still arms a widen listener; the
   // same eligibility rule applies when it fires, so a later resize into
   // desktop width finds a live controller rather than an inert control.
-  const fire3dViewport = window.matchMedia('(min-width: 721px)');
+  const fire3dViewport = window.matchMedia(FIRE3D_CHUNK_WIDTH_QUERY);
   let fire3dLoaded = false;
   let unsubscribeFire3dEligibility: (() => void) | null = null;
   let unsubscribeFire3dPreference: (() => void) | null = null;

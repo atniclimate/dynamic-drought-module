@@ -596,6 +596,31 @@ test('a frozen main thread is not a dryness source failure: the clock jumping pa
   });
 });
 
+test('the shared reader\'s wall-clock timeout is read again while listening time remains, and at most twice', async () => {
+  let fetched = 0;
+  const hang = (_url, init) => new Promise((_, reject) => {
+    init.signal.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true });
+  });
+  // The first read hangs past the 300 ms wall-clock timer; the listening limit is two 250 ms ticks.
+  await withDrynessBrowser({ fetch: (url, init) => ++fetched === 1 ? hang(url, init)
+    : Promise.resolve(new Response(drynessSource(), { headers: { 'content-type': 'image/png' } })) }, async events => {
+    const bytes = await readDrynessTile('https://example.test/vhi.png', 'star-vhi', new AbortController(), { ...DRYNESS_LIMITS, timeoutMs: 300 });
+    assert.ok(bytes.byteLength > 0);
+    assert.equal(fetched, 2); assert.equal(events.encoded, 1);
+  });
+  // A hidden tab: ticks all but stop, the source hangs. One read and two re-reads, then a timeout.
+  fetched = 0;
+  const realSetInterval = globalThis.setInterval;
+  globalThis.setInterval = () => 0;
+  try {
+    await withDrynessBrowser({ fetch: (url, init) => { fetched++; return hang(url, init); } }, async events => {
+      await assert.rejects(readDrynessTile('https://example.test/vhi.png', 'star-vhi', new AbortController(), { ...DRYNESS_LIMITS, timeoutMs: 30 }),
+        error => error.name === 'TimeoutError');
+      assert.equal(fetched, 3); assert.equal(events.encoded, 0);
+    });
+  } finally { globalThis.setInterval = realSetInterval; }
+});
+
 const { createDrynessGround } = await import('../src/layers/dryness-ground.ts');
 const { parseRelativeGreennessTimes, readRelativeGreennessTimes } = await import('../src/layers/dryness-discovery.ts');
 function drynessMap() {

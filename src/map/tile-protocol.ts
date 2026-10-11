@@ -2,8 +2,11 @@ import { FetchSource, PMTiles, Protocol, ResolvedValueCache } from 'pmtiles';
 import type { Cache, Entry, Header, RangeResponse, Source } from 'pmtiles';
 import type { AddProtocolAction } from 'maplibre-gl';
 import { fetchBufferedWithBudget } from '../util/fetch';
+import { listeningTimeout } from '../util/listening-timeout';
 
 // Same read ceiling as the existing WHP protocol, now covering directory bodies.
+// Counted in listening time (src/util/listening-timeout.ts): a page frozen
+// while the 3D scene draws must not fail the terrain reads it could not hear.
 export const PMTILES_READ_TIMEOUT_MS = 15_000;
 
 function aborted(): DOMException {
@@ -46,14 +49,14 @@ class ReadSource implements Source {
       if (signal.aborted) controller.abort(signal.reason);
       else signal.addEventListener('abort', cancel, { once: true });
     }
-    const timer = setTimeout(() => controller.abort(timedOut()), this.timeoutMs);
+    const stopTimeout = listeningTimeout(this.timeoutMs, () => controller.abort(timedOut()));
     try {
       controller.signal.throwIfAborted();
       // FetchSource consumes arrayBuffer before resolving. The controller remains
       // live through that body, not just the arrival of response headers.
       return await waitFor(this.base.getBytes(offset, length, controller.signal, etag), controller.signal);
     } finally {
-      clearTimeout(timer);
+      stopTimeout();
       for (const signal of signals) signal.removeEventListener('abort', cancel);
       // Also release an unread HTTP error/ETag-mismatch response body.
       controller.abort();
@@ -148,7 +151,7 @@ export function createPmtilesTransport(timeoutMs = PMTILES_READ_TIMEOUT_MS): { t
       const controller = new AbortController();
       const cancel = (): void => controller.abort(owner.signal.reason);
       owner.signal.addEventListener('abort', cancel, { once: true });
-      const timer = setTimeout(() => controller.abort(timedOut()), timeoutMs);
+      const stopTimeout = listeningTimeout(timeoutMs, () => controller.abort(timedOut()));
       try {
         const source = new ReadSource(archive.base, controller.signal, timeoutMs);
         const protocol = new Protocol();
@@ -161,7 +164,7 @@ export function createPmtilesTransport(timeoutMs = PMTILES_READ_TIMEOUT_MS): { t
           ...(response.expires === undefined ? {} : { expires: response.expires })
         };
       } finally {
-        clearTimeout(timer);
+        stopTimeout();
         owner.signal.removeEventListener('abort', cancel);
         controller.abort();
       }

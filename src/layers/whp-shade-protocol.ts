@@ -1,6 +1,7 @@
 import { addProtocol, type AddProtocolAction } from 'maplibre-gl';
 import { pmtilesTransport, PMTILES_READ_TIMEOUT_MS } from '../map/tile-protocol';
 import { WHP_SHADE_CATEGORIES } from '../config/whp-shade';
+import { listeningTimeout } from '../util/listening-timeout';
 
 let registered = false;
 const SHADE_ALPHA_BY_RGB = new Map(WHP_SHADE_CATEGORIES.map((category) => [
@@ -45,7 +46,7 @@ export async function shadeImage(blob: Blob, signal: AbortSignal): Promise<Image
 /** Keep archive bounds/zooms in TileJSON; shade only requested image tiles. */
 export const loadWhpShade: AddProtocolAction = async (request, abortController) => {
     const signal = abortController.signal;
-    const timer = setTimeout(() => abortController.abort(new DOMException('PMTiles read timed out', 'TimeoutError')), PMTILES_READ_TIMEOUT_MS);
+    const stopTimeout = listeningTimeout(PMTILES_READ_TIMEOUT_MS, () => abortController.abort(new DOMException('PMTiles read timed out', 'TimeoutError')));
     try {
       const response = await pmtilesTransport.tilev4({
         ...request,
@@ -61,7 +62,7 @@ export const loadWhpShade: AddProtocolAction = async (request, abortController) 
       if (!(response.data instanceof Uint8Array)) return { data: response.data };
       return { data: await shadeImage(new Blob([response.data.slice()]), signal) };
     } finally {
-      clearTimeout(timer);
+      stopTimeout();
     }
 };
 

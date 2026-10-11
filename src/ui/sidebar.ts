@@ -120,7 +120,7 @@ import {
 } from '../state/view-mode';
 import { installPopupViewportContainment } from './popup-viewport';
 import { getBasemapMode, onBasemapChange, setBasemapMode } from '../state/basemap-store';
-import { seedFire3DPreference } from '../state/fire3d-store';
+import { FIRE3D_CHUNK_WIDTH_QUERY, seedFire3DPreference } from '../state/fire3d-store';
 import { getFraming, onFramingChange, setFraming } from '../state/framing-store';
 import {
   clearOceanFraming,
@@ -1551,7 +1551,7 @@ function applyUrlStateSync(map: maplibregl.Map): ParsedUrlParams {
   // DR-105: a `fire3d=true` boot at the 3D chunk's width (main.ts) holds the
   // imagery until the scene's controller decides; it releases the hold when
   // the scene does not open.
-  if (params.fire3d && window.matchMedia('(min-width: 721px)').matches) {
+  if (params.fire3d && window.matchMedia(FIRE3D_CHUNK_WIDTH_QUERY).matches) {
     holdSatellite(map, true);
   }
   if (params.basemap === 'satellite') {

@@ -1,6 +1,7 @@
 import type { AddProtocolAction, Map as MapLibreMap } from 'maplibre-gl';
 import { readDrynessTile, type DrynessTileLimits } from './dryness-grey-protocol';
 import { readRelativeGreennessTimes, isRelativeGreennessServiceException, type DrynessMetadataLimits } from './dryness-discovery';
+import { listeningTimeout } from '../util/listening-timeout';
 import { TILE_PROOF_WATCH } from '../util/raster-proof';
 import { watchRasterTiles, type RasterTileOutcome, type RasterTileWatch } from '../util/raster-status';
 
@@ -99,7 +100,7 @@ export function createDrynessGround(options: DrynessGroundOptions): {
     frames: DrynessFrame[]; rgRead: boolean; index: number; busy: boolean;
     selected: DrynessFrame | null; attempted: DrynessFrame | null; sourceId: string | null;
     requests: Set<AbortController>; watch: RasterTileWatch | null; outcome: RasterTileOutcome | null;
-    failures: DrynessFailure[]; timer: ReturnType<typeof setTimeout> | undefined; deadline: number;
+    failures: DrynessFailure[]; timer: (() => void) | undefined;
     cancel: () => void; view: () => void;
     error: (event: { sourceId?: string; error?: unknown }) => void;
   };
@@ -111,7 +112,7 @@ export function createDrynessGround(options: DrynessGroundOptions): {
     options.publish(Object.freeze({ state, selected: s.selected, attempted: s.attempted,
       sourceId: s.sourceId, failures: Object.freeze([...s.failures]) }));
   };
-  const disarm = (s: Session): void => { if (s.timer !== undefined) clearTimeout(s.timer); s.timer = undefined; };
+  const disarm = (s: Session): void => { s.timer?.(); s.timer = undefined; };
   const clear = (s: Session): void => {
     for (const controller of s.requests) controller.abort(abortError());
     s.requests.clear();
@@ -136,12 +137,11 @@ export function createDrynessGround(options: DrynessGroundOptions): {
   };
   const arm = (s: Session): void => {
     if (s.timer !== undefined) return;
-    s.deadline = performance.now() + options.selectionDeadlineMs;
-    s.timer = setTimeout(() => expire(s), options.selectionDeadlineMs);
+    // Counts time the page could listen: a frozen page is not a failed selection.
+    s.timer = listeningTimeout(options.selectionDeadlineMs, () => expire(s));
   };
   const checkpoint = (s: Session): void => {
     if (!current(s)) throw abortError();
-    if (s.timer !== undefined && performance.now() >= s.deadline) { expire(s); throw s.controller.signal.reason; }
   };
   const settle = <T>(s: Session, work: Promise<T>): Promise<T> => new Promise((resolve, reject) => {
     const cancel = (): void => { cleanup(); reject(s.controller.signal.reason); };
@@ -265,7 +265,7 @@ export function createDrynessGround(options: DrynessGroundOptions): {
       if (owner.aborted) return;
       if (active) stop(active);
       const s: Session = { generation: ++generation, map, owner, controller: new AbortController(), frames: [...star], rgRead: false,
-        index: 0, busy: false, selected: null, attempted: null, sourceId: null, failures: [], timer: undefined, deadline: 0,
+        index: 0, busy: false, selected: null, attempted: null, sourceId: null, failures: [], timer: undefined,
         requests: new Set(), watch: null, outcome: null,
         cancel: () => {}, view: () => {}, error: () => {} };
       s.cancel = () => stop(s);
