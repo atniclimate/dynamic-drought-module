@@ -121,6 +121,16 @@ const MEASURE_USE = process.env['DDM_MEASURE_NATIVE_GPU'] === '1' ? {
   }
 } : CHROMIUM_USE;
 
+// Local diagnosis only (owner, 2026-10-11): real graphics for the 3D project,
+// so a 3D red can be explained without the software renderer's multi-second
+// page freezes. Never evidence: GitHub runs the software path. Only the exact
+// token 1 selects it.
+const DIAGNOSE_3D_USE = process.env['DDM_3D_NATIVE_GPU'] === '1' ? {
+  browserName: 'chromium' as const,
+  headless: false,
+  launchOptions: { args: ['--use-gl=angle', '--use-angle=d3d11'] }
+} : CHROMIUM_USE;
+
 export default defineConfig({
   testDir: './tests',
 
@@ -262,7 +272,7 @@ export default defineConfig({
       name: 'chromium-3d',
       testMatch: FIRE3D_SPECS,
       testIgnore: ['**/*.test.mjs'],
-      use: CHROMIUM_USE
+      use: DIAGNOSE_3D_USE
     },
     {
       // The mode-switch cost measurement, alone: see MEASURE_SPECS above

@@ -35,7 +35,6 @@ Avoid copying spec counts and runtime estimates into several documents.
 | Source checks without a bundle | `npm run gate:nobuild` | Types and all source checks, including the pure lane |
 | A browser behavior | `npx playwright test --workers=1 tests/boot.spec.ts` | Fresh production build and the selected cases |
 | Cross-cutting build/configuration changes | `npm run gate` | Fresh build, artifact budgets and all source checks |
-| A wider local signal before pushing (optional) | `npm run verify:smoke` | Gate and the smoke roster, one fresh build, one owned preview |
 | Full suite locally, when GitHub is unavailable | `npm run test:serial` | All three assertion projects, one worker; excludes the measurement project |
 
 The full browser suite normally runs on GitHub, in the Validate workflow, which
@@ -62,15 +61,19 @@ each builder keeps its own fresh page and runs each fixture method once. Tests
 that require a live layer or date rail must install positive fixtures explicitly;
 the offline backstop's error response cannot establish those preconditions.
 
-While developing, run `npm run typecheck` and the focused tests for the change
-(a single spec, or `-g` for the changed cases). When a piece of work is
-finished, run the focused tests again and the browser-free checks
-(`npm run verify:quick`, plus `npm run gate:nobuild` or `npm run gate` when the
-change is cross-cutting), then push the branch. The full suite runs on GitHub
-for the frozen release candidate, not on every push. `npm run verify:smoke` is a useful local middle rung when a wider signal
-is wanted before pushing; it is not required for each task. Before a release,
-the full suite must be green on GitHub for the frozen release candidate, and
-the release's whole diff gets one independent review.
+While developing, run `npm run typecheck` and the one browser-free test that
+covers the change. When a piece of work is finished, run ONE of
+`npm run verify:quick`, `npm run gate:nobuild` (a cross-cutting change; it
+already includes everything verify:quick runs, about a minute) or `npm run gate`
+(the build or a size budget changed), then push the branch.
+
+A browser run only when nothing simpler can answer the question. A wording,
+configuration, size or pure-logic change never needs one. When one is needed:
+the fewest cases (`-g`), every diagnostic in the first run, at most one
+confirming run when the piece is finished. `verify:smoke`, whole Playwright
+projects, the Fire pair and repeat runs are not local steps: the full suite
+runs on GitHub once, for the frozen release candidate, and the release's whole
+diff gets one independent review.
 
 A session ending is not a new application verification event. Do not start
 `verify:smoke` or `test:serial` solely because the session is ending, or rerun
@@ -83,15 +86,28 @@ For verification-tooling work, run the relevant lane/configuration tests, types,
 the gate when build orchestration changes, and a focused execution of the changed
 browser startup path. A tooling check does not establish application readiness.
 
-After shared navigation, map lifecycle or state changes, run affected browser
-cases locally; the full suite on GitHub covers the rest once the release
-candidate is frozen. Do not repeat
-that release-scale suite for each intermediate edit. Fire/3D changes additionally
-need their focused pair:
+After shared navigation, map lifecycle or state changes, run only the affected
+browser cases locally, if any; the full suite on GitHub covers the rest once
+the release candidate is frozen.
+
+### 3D diagnosis
+
+The 3D specs run on a software renderer by default (it is what GitHub has),
+and under it the scene freezes the page for 8 to 26 seconds at a time. To
+explain a 3D red locally, use real graphics instead:
 
 ```powershell
-npx playwright test --workers=1 tests/fire3d-mode.spec.ts tests/view-contracts.spec.ts
+$env:DDM_3D_NATIVE_GPU = '1'
+npx playwright test --workers=1 --project=chromium-3d tests/wildfire3d-ground.spec.ts -g "<the case>"
+Remove-Item Env:DDM_3D_NATIVE_GPU
 ```
+
+It opens a browser window and uses Direct3D. Measured 2026-10-11 on two cases
+of `wildfire3d-ground.spec.ts`: 12 seconds, against about 2.5 minutes on the
+software renderer. It is for diagnosis only: timing-sensitive behavior can
+differ, so GitHub's software-renderer run remains the evidence. The Fire pair
+(`tests/fire3d-mode.spec.ts` with `tests/view-contracts.spec.ts`) is GitHub's
+to run, not a local step.
 
 ### One build per smoke invocation
 

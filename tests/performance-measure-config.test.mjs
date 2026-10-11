@@ -52,6 +52,26 @@ test('exact 1 selects only the headed native measure launch', () => {
   });
 });
 
+test('the 3D diagnosis opt-in changes only the 3D project, and only for the exact token 1', async () => {
+  const saved3d = process.env.DDM_3D_NATIVE_GPU;
+  try {
+    process.env.DDM_3D_NATIVE_GPU = 'true';
+    assert.deepEqual((await import(`${configUrl}?diagnose-proof=other`)).default, unset);
+    process.env.DDM_3D_NATIVE_GPU = '1';
+    const diagnose = (await import(`${configUrl}?diagnose-proof=native`)).default;
+    assert.deepEqual(project(diagnose, 'chromium-3d').use, {
+      browserName: 'chromium', headless: false,
+      launchOptions: { args: ['--use-gl=angle', '--use-angle=d3d11'] }
+    });
+    for (const name of ['chromium', 'chromium-interaction', 'chromium-measure']) {
+      assert.deepEqual(project(diagnose, name), project(unset, name));
+    }
+  } finally {
+    if (saved3d === undefined) delete process.env.DDM_3D_NATIVE_GPU;
+    else process.env.DDM_3D_NATIVE_GPU = saved3d;
+  }
+});
+
 test('native renderer admission requires an actual recognizable GPU identity', () => {
   // Execute the actual private predicate without importing a Playwright spec
   // into node:test and without copying the admission rule into this test.
