@@ -158,3 +158,28 @@ test('partial alpha and malformed RGBA fail before mutation instead of inventing
     assert.doesNotThrow(() => shadeDrynessPixels(new Uint8ClampedArray(), product));
   }
 });
+
+test('the Impact Briefing carries the plant-stress full text, with NOAA STAR\'s disclaimer whole only beside STAR data', async () => {
+  const { DRYNESS_BRIEFING_NOTES: notes, DRYNESS_KEY, drynessBriefing } = await import('../src/layers/wildfire-dryness.ts');
+  const { renderMapTechnicalInformation, setPlantStressBriefing } = await import('../src/ui/map-technical-information.ts');
+  const { escapeHtml } = await import('../src/util/escape.ts');
+  const frame = (productKey) => ({ productKey, clockLabel: 'Week 40: Oct 1 to Oct 7, 2026', qualification: 'definition', coverage: 'coverage' });
+  assert.ok(notes.starDisclaimer.includes('not official NOAA operational products') && notes.starDisclaimer.endsWith('redundant operations."'));
+
+  assert.ok(!renderMapTechnicalInformation().includes('Plant stress ground'));
+  setPlantStressBriefing(drynessBriefing(frame('star-vhi')));
+  const star = renderMapTechnicalInformation();
+  for (const line of [DRYNESS_KEY.starTitle, 'Week 40: Oct 1 to Oct 7, 2026', notes.starMeaning, notes.starScope, notes.starRevision,
+    notes.starDesert, notes.starMiddle, notes.fuelRiskVintage, notes.twoProducts, notes.starDisclaimer]) {
+    assert.ok(star.includes(`<p>${escapeHtml(line)}</p>`), line);
+  }
+  assert.ok(star.includes(`href="${notes.starDisclaimerUrl}"`));
+
+  setPlantStressBriefing(drynessBriefing(frame('usgs-relative-greenness')));
+  const rg = renderMapTechnicalInformation();
+  assert.ok(rg.includes(escapeHtml(notes.rgLowValues)) && rg.includes(escapeHtml(DRYNESS_KEY.rgTitle)));
+  assert.ok(!rg.includes('STAR says') && !rg.includes(notes.starDisclaimerUrl));
+
+  setPlantStressBriefing(null);
+  assert.ok(!renderMapTechnicalInformation().includes('Plant stress ground'));
+});

@@ -52,10 +52,10 @@ export const DRYNESS_KEY = {
 } as const;
 
 /**
- * The longer text the owner moved out of the key (2026-10-11): it belongs in
- * the Impact Briefing, which does not read it yet. The ground must not be
- * released before the briefing shows `starDisclaimer`, which the owner
- * accepted on the condition that it is quoted in full.
+ * The longer text the owner moved out of the key (2026-10-11): the Impact
+ * Briefing shows it under Technical information (`drynessBriefing`). The owner
+ * accepted NOAA STAR's data on the condition that `starDisclaimer` is quoted
+ * in full there.
  */
 export const DRYNESS_BRIEFING_NOTES = {
   starScope: 'Measures plant stress only, not fuel moisture or fire risk.',
@@ -147,6 +147,28 @@ export interface DrynessGroundDetail {
   readonly title: string | null;
   readonly rows: readonly { readonly grey: string; readonly label: string }[];
   readonly lines: readonly string[];
+  /** The Impact Briefing's full text for the mounted product; null when none is mounted. */
+  readonly briefing: DrynessBriefing | null;
+}
+
+export interface DrynessBriefing {
+  readonly lines: readonly string[];
+  readonly disclaimerUrl: string | null;
+}
+
+/** Everything the key leaves out, for the product on the map; STAR's disclaimer rides with STAR's data only. */
+export function drynessBriefing(frame: Pick<DrynessFrame, 'productKey' | 'clockLabel' | 'qualification' | 'coverage'>): DrynessBriefing {
+  const star = frame.productKey === 'star-vhi';
+  const notes = DRYNESS_BRIEFING_NOTES;
+  return {
+    lines: [
+      star ? DRYNESS_KEY.starTitle : DRYNESS_KEY.rgTitle, frame.clockLabel, frame.qualification, frame.coverage,
+      ...(star ? [notes.starMeaning, notes.starScope, notes.starRevision, notes.starDesert, notes.starMiddle] : [notes.rgLowValues]),
+      notes.fuelRiskVintage, notes.twoProducts,
+      ...(star ? [notes.starDisclaimer] : [])
+    ],
+    disclaimerUrl: star ? notes.starDisclaimerUrl : null
+  };
 }
 
 function describe(snapshot: DrynessSnapshot, map: MapLibreMap): DrynessGroundDetail {
@@ -174,7 +196,8 @@ function describe(snapshot: DrynessSnapshot, map: MapLibreMap): DrynessGroundDet
       ? [...mounted.legendRows.map((label, index) => ({ grey: greys[index]!.grey, label })),
         { grey: DRYNESS_NOT_ASSESSED_COLOR, label: star ? DRYNESS_KEY.starNoValue : DRYNESS_KEY.rgNoValue }]
       : [],
-    lines
+    lines,
+    briefing: mounted ? drynessBriefing(mounted) : null
   };
 }
 
