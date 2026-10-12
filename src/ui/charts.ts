@@ -49,8 +49,6 @@ export interface SparklineOptions {
   readonly title: string;
   /** Unit label appended to the current-value readout, for example "ft3/s". */
   readonly unit?: string;
-  /** Source attribution line. */
-  readonly source?: string;
 }
 
 /**
@@ -66,7 +64,7 @@ export function sparklineSvg(values: readonly number[], opts: SparklineOptions):
   const w = 240;
   const h = 56;
   const padX = 6;
-  const padTop = 6;
+  const padTop = 14;
   const padBottom = 16;
   const min = Math.min(...clean);
   const max = Math.max(...clean);
@@ -88,8 +86,7 @@ export function sparklineSvg(values: readonly number[], opts: SparklineOptions):
     `<circle cx="${x(lastIdx).toFixed(1)}" cy="${y(lastVal).toFixed(1)}" r="2.6" fill="${OBSERVATION_SERIES_COLOR}"/>` +
     `<text x="${padX}" y="${h - 4}" fill="var(--fg-3)" font-size="8">min ${min.toLocaleString()}</text>` +
     `<text x="${w - padX}" y="${h - 4}" fill="var(--fg-3)" font-size="8" text-anchor="end">max ${max.toLocaleString()}</text>` +
-    `<text x="${x(lastIdx).toFixed(1)}" y="${(y(lastVal) - 5).toFixed(1)}" fill="var(--fg-0)" font-size="9" text-anchor="end" font-weight="600">${lastVal.toLocaleString()}${escapeHtml(unit)}</text>` +
-    (opts.source ? attribution(padX, h - 4 + 9, opts.source) : '');
+    `<text x="${x(lastIdx).toFixed(1)}" y="${(y(lastVal) - 5).toFixed(1)}" fill="var(--fg-0)" font-size="9" text-anchor="end" font-weight="600">${lastVal.toLocaleString()}${escapeHtml(unit)}</text>`;
 
   return `<figure class="ddm-chart-fig">${svgWrap(w, h, opts.title, inner)}</figure>`;
 }

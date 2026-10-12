@@ -24,8 +24,7 @@
  * and passes every model string through `escapeHtml` exactly once, at the
  * point it is written; nothing else writes markup and no model field
  * carries markup. Every href goes through `checkPopupHref` (parsed, https,
- * no userinfo, the exact host where one is mandated). `renderPopupFrame` is
- * the thin DOM wrapper for a builder that wants an element.
+ * no userinfo, the exact host where one is mandated).
  *
  * WORDS: the four issuer role prefixes follow interface-chrome-popups-text.md
  * 3.3. The group head, notices and footer follow grouping-contract.md 12.1
@@ -1011,15 +1010,6 @@ export function serializePopupFrame(model: PopupModel): string {
   if (kind === 'group') return groupFrame([(model as GroupModel).group], 'group');
   if (kind === 'collection') return groupFrame((model as CollectionModel).sections, 'collection');
   return featureFrame(model as FeatureModel, kind);
-}
-
-/** The same frame as an element, for a builder that hands the coordinator a node. */
-export function renderPopupFrame(model: PopupModel): HTMLElement {
-  const template = document.createElement('template');
-  template.innerHTML = serializePopupFrame(model);
-  const root = template.content.firstElementChild;
-  if (!(root instanceof HTMLElement)) fail('the frame serialized to no element');
-  return root;
 }
 
 /** Paint the coordinator's validated adopted frame without loading DOM work eagerly. */

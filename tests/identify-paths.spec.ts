@@ -1499,7 +1499,7 @@ test.describe('identify paths: the telemetry station popup joins the frame (D1 M
       windGustSpeed: null,
       windGustDirection: null,
       fuelMoisture: null,
-      observedAtIso: '2026-10-04T17:00:00Z'
+      observedAtIso: '2026-10-05T15:00:00Z'
     };
     const happy = rawsMarkup(rawsStationRead(conditions, Date.UTC(2026, 9, 5, 16, 0)));
     expect(happy).toContain('Relative humidity 21 % NIFC RAWS');
