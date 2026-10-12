@@ -30,13 +30,19 @@ import base from './playwright.config';
 /** The browser-free spec files, alphabetical. */
 export const PURE_SPECS = [
   'tests/acknowledgements.spec.ts',
+  'tests/antimeridian.spec.ts',
   'tests/camera-region-fallbacks.spec.ts',
   'tests/capability-matrix.spec.ts',
+  'tests/cluster-service.spec.ts',
   'tests/config-key-authority.spec.ts',
   'tests/display-summary.spec.ts',
+  'tests/drought-semantics.spec.ts',
   'tests/enso-flow-data.spec.ts',
   'tests/fetch.spec.ts',
   'tests/gl-capability.spec.ts',
+  'tests/heat-h0-cancellation.spec.ts',
+  'tests/heat-h2-cancellation.spec.ts',
+  'tests/landscape-loader.spec.ts',
   'tests/layer-order.spec.ts',
   'tests/location-identity.spec.ts',
   'tests/minimap-drought.spec.ts',
@@ -44,14 +50,18 @@ export const PURE_SPECS = [
   'tests/nadm-shared-payload.spec.ts',
   'tests/overlap-engine.spec.ts',
   'tests/place-ref.spec.ts',
+  'tests/pmtiles-probe.spec.ts',
   'tests/point-in-polygon.spec.ts',
   'tests/polygon-overlap.spec.ts',
+  'tests/power-layer.spec.ts',
   'tests/product-catalog.spec.ts',
   'tests/s1-substrate.spec.ts',
   'tests/satellite-source.spec.ts',
   'tests/umbrella-config.spec.ts',
   'tests/usfs-whp.spec.ts',
   'tests/verification-config.spec.ts',
+  'tests/wildfire-basemap-policy.spec.ts',
+  'tests/wildfire-source-semantics.spec.ts',
   'tests/worker-proxy-policy.spec.ts'
 ] as const;
 

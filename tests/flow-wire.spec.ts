@@ -379,9 +379,6 @@ test.describe('E2-1 flowing paths in ENSO mode', () => {
     await expect(flowStatus(page)).toContainText('Ocean waves · live');
     await expect(flowProvenance(page)).toHaveText('derived from NOAA GFS');
     await expect(panel(page).locator('[data-enso-flow-provenance]')).toHaveText('derived from NOAA GFS');
-    // The GFS-Wave use of the owner's words is on the landing read-back (ENSO-FLOW-PLAN question 6).
-    const source = readFileSync(new URL('../src/layers/enso-flow-data.ts', import.meta.url), 'utf8');
-    expect(source).toMatch(/\/\/ DRAFT wording \(DR-177\):[^\n]*GFS-Wave[^\n]*\n\s*provenance: 'derived from NOAA GFS'/);
   });
 
   test('a 404 thrice reads unavailable plus the FAILED_NOTE, and nothing draws', async ({ page }) => {

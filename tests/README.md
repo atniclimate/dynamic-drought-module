@@ -127,8 +127,8 @@ Within `check:all`, adjacent compatible Node tests share a literal
 `node --test --test-concurrency=1` command. Each file retains its default
 subprocess isolation; Node orders files within each group. Non-Node checks
 remain between the same groups, and the NIFC model keeps its separate
-`--experimental-transform-types` invocation. Individual `test:*` scripts remain
-available for focused checks. A failed group stops the `&&` chain before later
+`--experimental-transform-types` invocation. A focused check is
+`node --test tests/<file>.test.mjs`. A failed group stops the `&&` chain before later
 checks or preview startup.
 
 As the local fallback when GitHub is unavailable, to run the gate and the full

@@ -40,8 +40,7 @@ test('vite.config.ts defines __DDM_VERSION__ from package.json, not a duplicated
 });
 
 test('src/main.ts stamps #footer-version from __DDM_VERSION__ at boot, never a runtime fetch', () => {
-  assert.match(mainTs, /__DDM_VERSION__/, 'boot() reads the build-time version constant');
-  assert.match(mainTs, /footer-version/, 'boot() targets the footer element by id');
+  // The stamp itself is asserted in the browser: tests/boot.spec.ts (#footer-version reads v<package version>).
   assert.doesNotMatch(
     mainTs,
     /fetch\(['"`][^'"`]*package\.json/,
