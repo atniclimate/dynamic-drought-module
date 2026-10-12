@@ -1,12 +1,12 @@
 {
   "1": {
-    "elevMeanM": 591.6,
-    "elevMinM": 580.8,
-    "elevMaxM": 599.5,
-    "slopeMeanDeg": 5.44,
-    "aspectMeanDeg": 205.0,
-    "aspectCardinal": "SW",
-    "coveragePct": 49.5,
+    "elevMeanM": 562.3,
+    "elevMinM": 505.2,
+    "elevMaxM": 623.1,
+    "slopeMeanDeg": 10.23,
+    "aspectMeanDeg": 290.8,
+    "aspectCardinal": "W",
+    "coveragePct": 92.8,
     "elevBands": [
       0.0,
       0.0,
@@ -20,16 +20,16 @@
       0.0
     ],
     "aspectDistribution": {
-      "N": 0.0,
+      "N": 0.086,
       "NE": 0.0,
-      "E": 0.002,
-      "SE": 0.161,
-      "S": 0.186,
-      "SW": 0.26,
-      "W": 0.041,
-      "NW": 0.0,
+      "E": 0.0,
+      "SE": 0.012,
+      "S": 0.028,
+      "SW": 0.084,
+      "W": 0.487,
+      "NW": 0.276,
       "flat": 0.0,
-      "excluded": 0.349
+      "excluded": 0.027
     }
   },
   "2": {

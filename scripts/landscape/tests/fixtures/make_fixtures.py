@@ -13,8 +13,7 @@ Outputs (committed to the repository; small on purpose):
   synthetic/ecoregions_l3.gpkg  five small Level III-shaped polygons exercising
                                 partial pixels, a nodata overlap, an interior
                                 ring, an empty geometry, and a duplicate code
-                                (the legacy last-write-wins behavior is pinned
-                                on purpose; fixing it must be a visible diff)
+                                (its rows are dissolved into one zone)
 
 Run: .venv/Scripts/python.exe scripts/landscape/tests/fixtures/make_fixtures.py
 """
@@ -81,8 +80,7 @@ def build_polygons() -> None:
             "geometry": box(X0 + 307.0, Y0 - 1211.0, X0 + 907.0, Y0 - 611.0),
         },
         {
-            # Duplicate code: legacy aggregation is last-write-wins per feature
-            # row; pinned as-is so a future dissolve fix is a visible diff.
+            # Duplicate code: the two rows are dissolved into one zone by code.
             "US_L3CODE": "1",
             "US_L3NAME": "Synthetic Flats North",
             "geometry": box(X0 + 1513.0, Y0 - 405.5, X0 + 1813.0, Y0 - 205.5),

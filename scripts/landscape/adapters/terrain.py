@@ -20,8 +20,9 @@ enumerated in tests/fixtures/delta-manifest.json:
   - coveragePct is the polygon-weighted valid-elevation fraction via
     exactextract partial-pixel weights (was the valid fraction of the
     rectangular read window)
-One legacy defect remains deliberately preserved (a later unit's scope):
-duplicate zonal codes are last-write-wins per feature row (no dissolve).
+Duplicate zonal codes are dissolved to one zone per code before the
+per-polygon loop (core.dissolve_by_code; the legacy read was
+last-write-wins per feature row).
 
 T-S1-2 (S1 terrain extension, lane contract rev 8 section 5.2) staged the
 extended output behind aggregate(..., extended=True). T-S1-4 flips the
@@ -446,38 +447,41 @@ def _polygon_stats(elev: np.ndarray, transform, one_row: gpd.GeoDataFrame,
             mf.close()
     del basic_rasters, slope, validity
 
-    aspect_rad = np.radians(aspect.astype("float64"))
-    for name, operation in (
-        ("aspect_sin", np.sin),
-        ("aspect_cos", np.cos),
-    ):
-        arr = operation(aspect_rad)
-        mf = core.memdataset(arr, transform, dtype="float64")
-        try:
-            with mf.open() as ds:
-                row = exact_extract(
-                    ds,
-                    one_row,
-                    ["mean"],
-                    output="pandas",
-                ).iloc[0]
-            extracted[f"{name}_mean"] = row["mean"]
-        finally:
-            mf.close()
-        del arr
-    del aspect, aspect_rad
-
-    sin_mean = extracted["aspect_sin_mean"]
-    cos_mean = extracted["aspect_cos_mean"]
     aspect_mean = None
     cardinal = None
-    try:
-        s, c = float(sin_mean), float(cos_mean)  # type: ignore[arg-type]
-        if math.isfinite(s) and math.isfinite(c) and math.hypot(s, c) >= ASPECT_CANCELLATION_EPSILON:
-            aspect_mean = math.degrees(math.atan2(s, c)) % 360.0
-            cardinal = aspect_cardinal(aspect_mean)
-    except (TypeError, ValueError):
-        pass
+    # The methodVersion 2 mean only: the extended path replaces it below.
+    if not extended:
+        aspect_rad = np.radians(aspect.astype("float64"))
+        for name, operation in (
+            ("aspect_sin", np.sin),
+            ("aspect_cos", np.cos),
+        ):
+            arr = operation(aspect_rad)
+            mf = core.memdataset(arr, transform, dtype="float64")
+            try:
+                with mf.open() as ds:
+                    row = exact_extract(
+                        ds,
+                        one_row,
+                        ["mean"],
+                        output="pandas",
+                    ).iloc[0]
+                extracted[f"{name}_mean"] = row["mean"]
+            finally:
+                mf.close()
+            del arr
+        del aspect_rad
+
+        sin_mean = extracted["aspect_sin_mean"]
+        cos_mean = extracted["aspect_cos_mean"]
+        try:
+            s, c = float(sin_mean), float(cos_mean)  # type: ignore[arg-type]
+            if math.isfinite(s) and math.isfinite(c) and math.hypot(s, c) >= ASPECT_CANCELLATION_EPSILON:
+                aspect_mean = math.degrees(math.atan2(s, c)) % 360.0
+                cardinal = aspect_cardinal(aspect_mean)
+        except (TypeError, ValueError):
+            pass
+    del aspect
 
     # Canonical azimuth form, part of method version 2's DEFINITION
     # (CANONICAL_SERIALIZATION[2], declared in the unit that introduced
@@ -689,6 +693,7 @@ def aggregate(
                 run_info["terrainRasterSha256"] = entry.get("sha256")
     dem_path = dem_path if dem_path is not None else DEM_VRT
     cache_dir = cache_dir if cache_dir is not None else core.CACHE_DIR
+    gdf = core.dissolve_by_code(gdf, code_field)
     out: dict = {}
     n = len(gdf)
     nonempty = gdf[~(gdf.geometry.is_empty | gdf.geometry.isna())]

@@ -1,6 +1,6 @@
 {
   "capturedFrom": "the working tree (the current scripts/landscape package)",
-  "headCommitAtCapture": "1194f53fb604fd56e0c890342b426f6036eba335",
+  "headCommitAtCapture": "c29d63e3dad0822e6935e97495cd06b7263c01d2",
   "fixedRetrievedDate": "2026-01-01",
   "python": "3.13.14 (tags/v3.13.14:fd17997, Jun 10 2026, 13:03:48) [MSC v.1944 64 bit (AMD64)]",
   "platform": "Windows-11-10.0.26200-SP0",
@@ -16,7 +16,7 @@
     "pyogrio": "0.12.1"
   },
   "sha256": {
-    "corrected/terrain_l3.json": "679230e5c9733cf7de02a6a2114bea5dfb2a9f12be281c414598cb24422f7c01",
-    "corrected/snapshot_terrain_l3.json": "084055a7b2e1533c0d0f8f8e88aaa50d9b71d9e4c3e723a41e26ef61f303ad52"
+    "corrected/terrain_l3.json": "f431e2b98ad577e06114ee31b97ca3c6b63e6141437a1172201a129414d82622",
+    "corrected/snapshot_terrain_l3.json": "564ecb7ccca960503636198c41c900510e48f2c9aea74bfafd1bc6e2c71573fd"
   }
 }

@@ -28,9 +28,8 @@ it for classed sources; the first real categorical adapter lands at
 T-S1-3). Every intentional output change is enumerated in
 tests/fixtures/delta-manifest.json and pinned by tests/fixtures/corrected/;
 any diff vs the immutable legacy/ baseline outside that manifest fails the
-parity suite. ONE legacy defect remains deliberately preserved (its fix is
-a later unit's scope per the WORKPLAN, and the parity test pins it):
-  - duplicate zonal codes are last-write-wins per feature row (no dissolve)
+parity suite. The last preserved legacy defect (duplicate zonal codes were
+last-write-wins per feature row) is fixed by dissolve_by_code below.
 
 This package is BUILD-TIME ONLY. It never ships to the browser; the client
 consumes only the compact snapshot it writes. See
@@ -180,6 +179,17 @@ def load_ecoregions(level: int) -> gpd.GeoDataFrame:
             f"expected {code_field}/{name_field} in {zip_name}; got {list(gdf.columns)}"
         )
     return gdf
+
+
+def dissolve_by_code(gdf: gpd.GeoDataFrame, code_field: str) -> gpd.GeoDataFrame:
+    """One row per zonal code: the EPA source carries several feature rows
+    for one ecoregion code, and a zone's statistics belong to their union.
+    Other columns (names, parent code) keep each code's first row, in
+    first-appearance order. A frame without duplicate codes is returned
+    untouched."""
+    if not gdf[code_field].duplicated().any():
+        return gdf
+    return gdf.dissolve(by=code_field, as_index=False, sort=False, dropna=False)
 
 
 # --------------------------------------------------------------------------
@@ -645,7 +655,10 @@ def _unavailable_ledger(
 def write_snapshot(snapshot: dict, out_path: Path) -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
     # Explicit LF newline policy so the artifact bytes are platform-stable
-    # (Windows text mode would otherwise write CRLF).
-    with open(out_path, "w", encoding="utf-8", newline="\n") as fh:
+    # (Windows text mode would otherwise write CRLF). Written beside the
+    # destination and renamed, so a failed write never truncates the artifact.
+    tmp = out_path.with_suffix(out_path.suffix + ".tmp")
+    with open(tmp, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(json.dumps(snapshot, indent=2) + "\n")
+    os.replace(tmp, out_path)
     log(f"wrote {out_path} ({len(snapshot.get('bundles', {}))} bundles)")
