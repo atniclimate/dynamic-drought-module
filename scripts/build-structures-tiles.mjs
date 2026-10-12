@@ -177,12 +177,7 @@ async function main() {
     );
   }
 
-  await writeFile(OUT_PATH, archive);
-  console.log(
-    `  wrote ${OUT_PATH} (${archive.length.toLocaleString()} bytes, ${tileCount} tiles, z${MIN_ZOOM}-${MAX_ZOOM})`
-  );
-
-  // Read-back validation through the runtime reader.
+  // Read-back validation through the runtime reader, before the write.
   const source = {
     getKey: () => 'build',
     getBytes: async (offset, length) => {
@@ -193,6 +188,10 @@ async function main() {
   const reader = new PMTiles(source);
   const header = await reader.getHeader();
   const archiveMeta = await reader.getMetadata();
+  await writeFile(OUT_PATH, archive);
+  console.log(
+    `  wrote ${OUT_PATH} (${archive.length.toLocaleString()} bytes, ${tileCount} tiles, z${MIN_ZOOM}-${MAX_ZOOM})`
+  );
   console.log('\nvalidation:');
   console.log(`  header zooms ${header.minZoom}..${header.maxZoom}, tileType ${header.tileType}`);
   console.log(`  vector_layers: ${archiveMeta.vector_layers.map((l) => `${l.id}(${Object.keys(l.fields).join(',') || 'no fields'})`).join(', ')}`);

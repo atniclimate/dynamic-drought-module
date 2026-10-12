@@ -28,6 +28,23 @@ test('two geographic windows of one local GeoTIFF read distinct source elevation
   }finally{await source?.close();await rm(directory,{recursive:true,force:true});}
 });
 
+test('source no-data cells read as 0 m and are not blended into valid neighbours',async()=>{
+  const directory=await mkdtemp(join(tmpdir(),'ddm-terrain-nodata-'));
+  let source;
+  try{
+    const path=join(directory,'nodata.tif');
+    await writeFile(path,Buffer.from(writeArrayBuffer(new Float32Array([10,11,-9999,21,12,13,22,23]),{
+      width:4,height:2,BitsPerSample:[32],SampleFormat:[3],GDAL_NODATA:'-9999',
+      ModelPixelScale:[1,1,0],ModelTiepoint:[0,0,0,-120,48,0],GTModelTypeGeoKey:2,GeographicTypeGeoKey:4326
+    })));
+    source=await openLocalDem(path);
+    const out=await readDemWindow(source.image,{bbox:[-120,46,-116,48],width:6,height:4,nodata:source.nodata});
+    assert.equal(source.nodata,-9999);
+    assert.equal(out[0][3],0);
+    assert.ok(Math.min(...out[0])>=0,'no pixel below the 0 m no-data value');
+  }finally{await source?.close();await rm(directory,{recursive:true,force:true});}
+});
+
 test('window conversion rejects rotated or reversed axes instead of inventing geography',async()=>{
   const image={getOrigin:()=>[0,0,0],getResolution:()=>[1,1,0],getWidth:()=>4,getHeight:()=>2,
     readRasters(){assert.fail('invalid source reached raster read');}};
