@@ -261,13 +261,16 @@ test('the Impact Briefing carries the plant-stress full text, with NOAA STAR\'s 
   assert.ok(notes.starMiddle.endsWith('read the 48 to 60 class with caution.') && !notes.starMiddle.includes('grey'));
   assert.equal(drynessBriefing(frame('star-vhi')).lines.at(-1), notes.starDisclaimer);
 
-  assert.ok(!renderMapTechnicalInformation().includes('Plant stress ground'));
+  // The fuel-risk vintage stays in the briefing whether or not Plant stress is switched on.
+  const vintage = '<p>Wildfire Hazard Potential 2023 reflects landscape conditions as of the end of 2020 (USFS), so areas burned since then still show their earlier class.</p>';
+  assert.ok(!renderMapTechnicalInformation().includes('Plant stress ground') && renderMapTechnicalInformation().includes(vintage));
   setPlantStressBriefing(drynessBriefing(frame('star-vhi')));
   const star = renderMapTechnicalInformation();
   for (const line of [DRYNESS_KEY.starTitle, 'Week 40: Oct 1 to Oct 7, 2026', notes.starMeaning, notes.starScope, notes.starRevision,
-    notes.starDesert, notes.starMiddle, notes.fuelRiskOverlap, notes.fuelRiskVintage, notes.twoProducts, notes.starDisclaimer]) {
+    notes.starDesert, notes.starMiddle, notes.fuelRiskOverlap, notes.twoProducts, notes.starDisclaimer]) {
     assert.ok(star.includes(`<p>${escapeHtml(line)}</p>`), line);
   }
+  assert.equal(star.split(vintage).length, 2);
   assert.ok(star.includes(`href="${notes.starDisclaimerUrl}"`));
 
   setPlantStressBriefing(drynessBriefing(frame('usgs-relative-greenness')));

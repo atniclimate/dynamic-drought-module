@@ -93,7 +93,7 @@ named path was confirmed to exist on 2026-09-01.
   token stays valid. Each mode has its own default view with a legend in real
   units (Drought and Wildfire GeoColor; Heat clean infrared; ENSO water vapour).
   The Wildfire 3D scene never requests imagery: its ground is the WHP drape over
-  a greyscale dryness layer. Drought, Heat and ENSO 3D drape a cloud-free image
+  a plant-stress layer. Drought, Heat and ENSO 3D drape a cloud-free image
   (`src/map/satellite.ts`, `src/state/basemap-store.ts`).
   - Amended 2026-09-26 (DR-124, DR-133; layered on the 2026-09-25 DR-105
     amendment above, which gives each mode its own default view with a legend in

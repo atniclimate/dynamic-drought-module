@@ -73,7 +73,6 @@ export const DRYNESS_BRIEFING_NOTES = {
   starDisclaimerUrl: 'https://www.star.nesdis.noaa.gov/star/productdisclaimer.php',
   rgLowValues: 'USGS: low values indicate "drought-stressed or dormant vegetation".',
   fuelRiskOverlap: 'Whiter ground means higher fuel risk, more plant stress, or both. They are two separate products drawn together; the brightness is not a combined fire-danger rating.',
-  fuelRiskVintage:'Wildfire Hazard Potential 2023 reflects landscape conditions as of the end of 2020 (USFS), so areas burned since then still show their earlier class.',
   twoProducts: 'Two separate products drawn on top of each other; DDM combines no values and computes no score.'
 } as const;
 
@@ -175,7 +174,7 @@ export function drynessBriefing(frame: Pick<DrynessFrame, 'productKey' | 'clockL
     lines: [
       star ? DRYNESS_KEY.starTitle : DRYNESS_KEY.rgTitle, frame.clockLabel, frame.qualification, frame.coverage,
       ...(star ? [notes.starMeaning, notes.starScope, notes.starRevision, notes.starDesert, notes.starMiddle] : [notes.rgLowValues]),
-      notes.fuelRiskOverlap, notes.fuelRiskVintage, notes.twoProducts,
+      notes.fuelRiskOverlap, notes.twoProducts,
       ...(star ? [notes.starDisclaimer] : [])
     ],
     disclaimerUrl: star ? notes.starDisclaimerUrl : null
