@@ -89,10 +89,31 @@ const NWS_GRIDPOINT_PATH =
 const NWS_LATEST_OBSERVATION_PATH =
   /^\/stations\/[a-z0-9-]+\/observations\/latest$/i;
 
+// The one image-export path serves 256x256 PNG tiles; any other size or format
+// would let a caller ask the agency for arbitrarily large renders. ArcGIS reads
+// parameter names case-insensitively, so keys are matched lower-cased.
+const EXPORT_IMAGE_PINS: ReadonlyMap<string, string> = new Map([
+  ["size", "256,256"],
+  ["format", "png"]
+]);
+
+function exportImageQueryPinned(upstreamUrl: URL): boolean {
+  for (const [name, value] of upstreamUrl.searchParams) {
+    const pinned = EXPORT_IMAGE_PINS.get(name.toLowerCase());
+    if (pinned !== undefined && value !== pinned) return false;
+  }
+  return true;
+}
+
 /** True only for an exact read route used by the current DDM runtime. */
 export function isAllowedRoute(upstreamUrl: URL): boolean {
   const exactPaths = EXACT_PATHS_BY_HOST.get(upstreamUrl.hostname);
-  if (exactPaths?.has(upstreamUrl.pathname)) return true;
+  if (exactPaths?.has(upstreamUrl.pathname)) {
+    return (
+      !upstreamUrl.pathname.endsWith("/exportImage") ||
+      exportImageQueryPinned(upstreamUrl)
+    );
+  }
   if (upstreamUrl.hostname !== "api.weather.gov") return false;
   return (
     NWS_POINT_PATH.test(upstreamUrl.pathname) ||
@@ -148,7 +169,9 @@ const HEALTH_CORS_HEADERS: Readonly<Record<string, string>> = {
 const CORS_HEADERS: Readonly<Record<string, string>> = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": PROXY_ALLOWED_METHODS,
-  "Access-Control-Allow-Headers": "Accept"
+  "Access-Control-Allow-Headers": "Accept",
+  // Not CORS, but set wherever these are: relayed bytes are never to be sniffed.
+  "X-Content-Type-Options": "nosniff"
 };
 
 // Headers from the upstream response that we deliberately do not pass through:

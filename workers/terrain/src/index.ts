@@ -76,7 +76,7 @@ function corsResponse(status: number, body: string | null = null): Response {
  * silently returned only the first part of a multi-range request would corrupt
  * a reader that did.
  */
-function parseRange(
+export function parseRange(
   header: string | null,
   size: number
 ): { offset: number; length: number } | null | 'unsatisfiable' {
