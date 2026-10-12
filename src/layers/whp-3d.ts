@@ -15,7 +15,7 @@
 import type * as maplibregl from 'maplibre-gl';
 import type { FeatureCollection, Position } from 'geojson';
 
-import { WHP_3D_SHADE_CATEGORIES, WHP_SHADE_QUALIFICATION } from '../config/whp-shade';
+import { WHP_3D_SHADE_CATEGORIES, WHP_3D_SHADE_QUALIFICATION } from '../config/whp-shade';
 import { registerWhpShadeProtocol, setWhpShadePerimeters } from './whp-shade-protocol';
 import { URLS } from '../config/urls';
 import { reassertLabelOrder, reassertThematicOrder } from '../map/layer-order';
@@ -107,13 +107,14 @@ function announceFuelRisk(): void {
             color: `rgba(255, 255, 255, ${c.opacity})`,
             label: c.label
           })),
-          WHP_SHADE_QUALIFICATION
+          WHP_3D_SHADE_QUALIFICATION
         )
     });
   } else {
     hideLegend(LEGEND_KEY);
   }
-  window.dispatchEvent(new CustomEvent('ddm:whp-shade', { detail: { layer: LAYER_ID, active: on } }));
+  // `mounted` tells the console its Fuel risk switch has a drape to act on.
+  window.dispatchEvent(new CustomEvent('ddm:whp-shade', { detail: { layer: LAYER_ID, active: on, mounted: true } }));
 }
 
 /**
@@ -270,5 +271,5 @@ export function deactivateWhpDrape(map: maplibregl.Map): void {
   if (map.getLayer(LAYER_ID)) map.removeLayer(LAYER_ID);
   if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);
   hideLegend(LEGEND_KEY);
-  window.dispatchEvent(new CustomEvent('ddm:whp-shade', { detail: { layer: LAYER_ID, active: false } }));
+  window.dispatchEvent(new CustomEvent('ddm:whp-shade', { detail: { layer: LAYER_ID, active: false, mounted: false } }));
 }

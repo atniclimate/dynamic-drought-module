@@ -64,7 +64,7 @@ import {
 import { watchDesktopMapSeat } from './map-control-seat';
 import { getTimeBarSpec, onTimeBarSpecChange } from './time-bar';
 import { MAP_GROUND_COLOR } from '../config/interface-tokens';
-import { WHP_3D_SHADE_CATEGORIES, WHP_SHADE_CATEGORIES, WHP_SHADE_QUALIFICATION, WHP_SURFACE_OPACITY } from '../config/whp-shade';
+import { WHP_3D_SHADE_CATEGORIES, WHP_3D_SHADE_QUALIFICATION, WHP_SHADE_CATEGORIES, WHP_SHADE_QUALIFICATION, WHP_SURFACE_OPACITY } from '../config/whp-shade';
 
 export interface KeySpec {
   readonly label: string;
@@ -1489,7 +1489,7 @@ export function initMapKey(): void {
       ? '<span class="map-key-scale" data-whp-shade-key><strong>3D wildfire potential</strong>' +
         WHP_3D_SHADE_CATEGORIES.map((category) => swatchItem(
           whiteShade(category.opacity), category.label
-        )).join('') + `<span class="map-key-qualification">${escapeHtml(WHP_SHADE_QUALIFICATION)}</span></span>`
+        )).join('') + `<span class="map-key-qualification">${escapeHtml(WHP_3D_SHADE_QUALIFICATION)}</span></span>`
       : '';
     const html =
       `<span class="map-key-label">${escapeHtml(spec.label)}</span>` + spec.itemsHtml + shadeKey + drynessKeyHtml();

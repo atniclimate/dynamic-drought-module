@@ -1126,7 +1126,7 @@ test('the Wildfire 3D drape protocol clears fuel risk by the share of each pixel
 test('the Wildfire 3D drape reads the perimeters before its source exists, reloads its tiles only when they change, and lets go on teardown', async () => {
   const { activateWhpDrape, deactivateWhpDrape } = await import('../src/layers/whp-3d.ts');
   const { registry } = await import('../src/state/registry.ts');
-  const events = [], sources = new Map(), layers = new Map();
+  const events = [], mounted = [], sources = new Map(), layers = new Map();
   const map = {
     getSource: id => sources.get(id), removeSource: id => sources.delete(id),
     addSource(id, spec) { events.push(`${id} added`); sources.set(id, spec); },
@@ -1148,7 +1148,10 @@ test('the Wildfire 3D drape reads the perimeters before its source exists, reloa
     try {
       sources.set('nifc-fires', flat);
       registry.activate('nifc-fires');
+      // The console offers its Fuel risk switch only while the drape says it is mounted.
+      window.dispatchEvent = event => { if (event.type === 'ddm:whp-shade') mounted.push(event.detail.mounted); };
       assert.equal(await activateWhpDrape(map, scene.signal), true);
+      assert.deepEqual(mounted, [true]);
       // Read first: the drape's first tile is already cut, and entering reloads nothing.
       assert.deepEqual(events, ['perimeters read', 'whp-2023 added']);
       assert.deepEqual(await drapeTileAlphas(), NW_CLEARED);
@@ -1188,6 +1191,7 @@ test('the Wildfire 3D drape reads the perimeters before its source exists, reloa
       assert.equal(flat.reads, readsWhileOn + 1);
       deactivateWhpDrape(map);
       assert.equal(sources.has('whp-2023'), false);
+      assert.equal(mounted.at(-1), false);
       release(); await turn();
       const readsAtExit = flat.reads;
       await report();

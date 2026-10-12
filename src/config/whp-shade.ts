@@ -23,3 +23,6 @@ export const WHP_3D_SHADE_CATEGORIES = USFS_WHP_PRESENTATION.categories.map((cat
 export const WHP_SHADE_QUALIFICATION =
   // vocab-allow: distinguishes static potential from a current condition or forecast
   'USFS Wildfire Hazard Potential 2023: whiter means higher risk. Transparent: Very Low, non-burnable, water, or missing coverage; not an all-clear. Static context, not current conditions or a forecast.';
+
+/** The Wildfire 3D drape's key: the same words, plus the one thing only that drape does (owner, 2026-10-12). */
+export const WHP_3D_SHADE_QUALIFICATION = `${WHP_SHADE_QUALIFICATION} Not drawn inside fire perimeters.`;

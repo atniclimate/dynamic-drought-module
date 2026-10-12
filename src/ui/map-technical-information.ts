@@ -54,6 +54,7 @@ export function renderMapTechnicalInformation(): string {
     <p id="impact-technical-fire3d">${escapeHtml(notes.fire3d)}</p>
     <p>The 3D view shows published source data as context. It computes no fire behavior and does not show or imply spread, ignition, or an all-clear.</p>
     <p>Wildfire Hazard Potential 2023 reflects landscape conditions as of the end of 2020 (USFS), so areas burned since then still show their earlier class.</p>
+    <p>In Wildfire 3D, fuel risk is not drawn inside current fire perimeters (NIFC).</p>
     <div id="impact-technical-plant-stress">${plantStressHtml()}</div>
   </details>`;
 }

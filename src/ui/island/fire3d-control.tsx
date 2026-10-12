@@ -250,6 +250,17 @@ export function Fire3DControl({
   // The ground switches render straight from their store; a change redraws.
   const [, redrawGroundSwitches] = useState(0);
   useEffect(() => onFire3DGroundLayerChange(() => redrawGroundSwitches((n) => n + 1)), []);
+  // Fuel risk is offered only while the 3D drape is mounted (src/layers/whp-3d.ts says so): when the
+  // flat fuel-risk layer covers the ground instead, the switch would act on nothing.
+  const [drapeMounted, setDrapeMounted] = useState(false);
+  useEffect(() => {
+    const onShade = (event: Event): void => {
+      const mounted = (event as CustomEvent<{ mounted?: boolean }>).detail?.mounted;
+      if (mounted !== undefined) setDrapeMounted(mounted);
+    };
+    window.addEventListener('ddm:whp-shade', onShade);
+    return () => window.removeEventListener('ddm:whp-shade', onShade);
+  }, []);
 
   // The smoke layer's own status is the single source for the empty-smoke
   // line, so the 3D control and the catalog pill can never disagree about
@@ -332,7 +343,7 @@ export function Fire3DControl({
         3D Fire view
       </button>
       {status?.state === 'active'
-        ? GROUND_SWITCHES.map(([layer, label]) => (
+        ? GROUND_SWITCHES.filter(([layer]) => layer !== 'fuelRisk' || drapeMounted).map(([layer, label]) => (
             <button
               key={layer}
               type="button"
