@@ -65,7 +65,7 @@
   },
   "dependencies": {
     "@preact/signals": "^2.9.3",
-    "maplibre-gl": "6.6.0",
+    "maplibre-gl": "6.14.0",
     "pmtiles": "^4.4.1",
     "polygon-clipping": "0.15.7",
     "preact": "^10.29.7"

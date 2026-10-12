@@ -454,7 +454,7 @@ floor; `vite.config.ts` and `DEVELOPER.md` point here, and
 `npm run check:renderer` fails when the build configuration and this
 section disagree.
 
-The map renderer is MapLibre GL JavaScript 6.6.0, pinned exactly in
+The map renderer is MapLibre GL JavaScript 6.14.0, pinned exactly in
 `package.json` and matched by the lockfile and the installed tree.
 
 Any evergreen desktop browser (Chrome, Edge, Firefox, Safari). The

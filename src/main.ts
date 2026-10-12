@@ -276,7 +276,27 @@ async function boot(): Promise<void> {
     return;
   }
 
-  const map = createMap('map');
+  // The one answer to "this browser cannot render the map", shared by the
+  // constructor throw and the `error` event below.
+  const failWithoutRenderer = (): void => {
+    showRendererNotice('no-webgl2');
+    bootMapFreeChrome();
+    setSidebarControlReason('no-map');
+    settleBootIdleWithoutMap();
+  };
+
+  // MapLibre 6.7+ THROWS GPUInitializationError from the constructor when the
+  // WebGL 2 context cannot be created (Map._setupPainter); anything else
+  // thrown is not ours to swallow.
+  let map: maplibregl.Map;
+  try {
+    map = createMap('map');
+  } catch (err) {
+    if (!isGpuInitializationError(err)) throw err;
+    console.warn('[boot] map constructor threw GPUInitializationError');
+    failWithoutRenderer();
+    return;
+  }
   // Publish the map so the frozen UI-service facades (the impact panel) can
   // resolve a selection's location identity without a map parameter (F3).
   setMap(map);
@@ -300,19 +320,16 @@ async function boot(): Promise<void> {
     };
   }
 
-  // MapLibre 6 reports a failed GPU context through the map's `error` event
-  // rather than a constructor throw (`Map._setupPainter` fires an ErrorEvent
-  // carrying a GPUInitializationError). Only that error means "this browser
-  // cannot render the map"; routine tile and source errors travel the same
-  // event and must not raise a renderer notice, so the classifier is narrow.
+  // A GPU context that cannot be recreated after a loss still reaches us as
+  // an `error` event carrying a GPUInitializationError (Map's
+  // webglcontextrestored path). Only that error means "this browser cannot
+  // render the map"; routine tile and source errors travel the same event and
+  // must not raise a renderer notice, so the classifier is narrow.
   let gpuInitializationFailed = false;
   map.on('error', (event) => {
     if (!isGpuInitializationError(event.error)) return;
     gpuInitializationFailed = true;
-    showRendererNotice('no-webgl2');
-    bootMapFreeChrome();
-    setSidebarControlReason('no-map');
-    settleBootIdleWithoutMap();
+    failWithoutRenderer();
   });
 
   const loadedInBound = await waitForMapLoad(map, MAP_LOAD_BOUND_MS);

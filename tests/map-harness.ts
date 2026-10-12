@@ -147,9 +147,9 @@ export function fakeMapHarness(initial?: {
     addSource: (id: string, spec: Record<string, unknown>) => {
       // Model the real GeoJSONSource read-back seam. MapLibre's own
       // `getData()` resolves with the object the source was given (it reads
-      // `_data.geojson`, not the worker's tiles), and a presentation
-      // companion that re-presents another layer's geometry uses it rather
-      // than importing that layer's module (src/layers/nifc-perimeter-ribbon.ts).
+      // `_data.geojson`, not the worker's tiles). No module in src/ calls it
+      // today: the perimeter ribbon reads the flat layer's geometry from
+      // src/state/fire-perimeter-snapshot.ts instead.
       // Defined non-enumerably so `toEqual`/`toMatchObject` assertions over
       // the recorded source specs are unaffected.
       if (spec['type'] === 'geojson' && !('getData' in spec)) {

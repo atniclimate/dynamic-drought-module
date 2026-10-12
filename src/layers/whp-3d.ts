@@ -196,16 +196,12 @@ export async function activateWhpDrape(
           // proves only that this module still SETS it; it cannot prove
           // the renderer honours it, because the test runs against a
           // fake map with no GPU draw path. That the shipped renderer
-          // DOES honour it rests on DR-009 (MapLibre 6.6.0, pinned at
-          // package.json:72) and on the 6.6.0 raster draw path itself:
-          // node_modules/maplibre-gl/dist/maplibre-gl-dev.mjs, function
-          // drawTiles, the line reading
-          // `layer.paint.get("resampling") === "nearest" ||
-          // layer.paint.get("raster-resampling") === "nearest" ? gl.NEAREST
-          // : gl.LINEAR` (line 18332 in the 6.6.0 package), which selects
-          // GL's nearest-texel filter when either the deprecated
-          // `resampling` or this `raster-resampling` property is 'nearest';
-          // this layer sets only the latter.
+          // DOES honour it rests on DR-009 (the exact maplibre-gl pin in
+          // package.json) and on the raster draw path itself:
+          // maplibre-gl/src/webgl/draw/draw_raster.ts, function drawTiles,
+          // which picks gl.NEAREST when either `resampling` or
+          // `raster-resampling` is 'nearest'; this layer sets only the
+          // latter.
           'raster-resampling': 'nearest'
         }
       });

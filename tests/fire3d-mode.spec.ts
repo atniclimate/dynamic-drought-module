@@ -1039,13 +1039,9 @@ test('the hazard drape module still SETS nearest-neighbour resampling (clause 3;
     // still sets the property; the fake map has no GPU draw path, so it
     // cannot prove the renderer HONOURS it. That the shipped renderer does
     // honour it rests on two facts outside this test: DR-009 pins
-    // maplibre-gl to 6.6.0 (package.json:72), and 6.6.0's own raster draw
-    // path (node_modules/maplibre-gl/dist/maplibre-gl-dev.mjs, function
-    // drawTiles, line 18332) reads
-    // `layer.paint.get("resampling") === "nearest" ||
-    // layer.paint.get("raster-resampling") === "nearest" ? gl.NEAREST :
-    // gl.LINEAR`, selecting GL's nearest-texel filter when either the
-    // deprecated `resampling` or this `raster-resampling` property is
+    // maplibre-gl exactly in package.json, and its raster draw path
+    // (maplibre-gl/src/webgl/draw/draw_raster.ts, function drawTiles) picks
+    // gl.NEAREST when either `resampling` or `raster-resampling` is
     // 'nearest'; this layer sets only the latter. See the comment beside
     // the value itself in src/layers/whp-3d.ts for the same citation.
     expect(harness.layerSpecs.get('whp-2023')?.paint).toMatchObject({

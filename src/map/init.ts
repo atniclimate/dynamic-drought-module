@@ -1,11 +1,11 @@
 import * as maplibregl from 'maplibre-gl';
-// Vite's `?worker&url` form: the worker and the shared chunk it imports
-// (`maplibre-gl-shared.mjs`) are bundled into ONE emitted asset and this
-// import resolves to that asset's URL. A plain `?url` would copy
-// `maplibre-gl-worker.mjs` alone without following its import, and the
-// shared chunk would 404 on a static host. `vite.config.ts` sets
-// `base: './'`, so the emitted URL stays relative and works both at a
-// domain root and at the `/dynamic-drought-module/` project subpath.
+// Vite's `?worker&url` form: the worker is bundled into one emitted asset and
+// this import resolves to that asset's URL. Since MapLibre 6.13 the worker
+// file is self-contained (`maplibre-gl-shared.mjs` ships empty and nothing
+// imports it), so a plain `?url` would also work; the `?worker&url` form is
+// kept as it was. `vite.config.ts` sets `base: './'`, so the emitted URL
+// stays relative and works both at a domain root and at the
+// `/dynamic-drought-module/` project subpath.
 import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import { pmtilesTransport } from './tile-protocol';
 import { buildBaseStyle } from './style';

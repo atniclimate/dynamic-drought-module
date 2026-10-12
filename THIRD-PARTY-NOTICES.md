@@ -23,7 +23,7 @@ build exists, against those source maps.
 | `preact` | 10.29.7 | MIT | Interface rendering. |
 | `@preact/signals` | 2.9.3 | MIT | Interface state. |
 | `@preact/signals-core` | 1.14.4 | MIT | Interface state. (installed by `@preact/signals`) |
-| `maplibre-gl` | 6.6.0 | BSD-3-Clause | The map renderer. |
+| `maplibre-gl` | 6.14.0 | BSD-3-Clause | The map renderer. |
 | `pmtiles` | 4.4.1 | BSD-3-Clause | Reading PMTiles archives. |
 | `fflate` | 0.8.3 | MIT | Decompression. (installed by `pmtiles`) |
 | `polygon-clipping` | 0.15.7 | MIT | Polygon intersection. |
@@ -122,7 +122,7 @@ SOFTWARE.
 
 ## maplibre-gl
 
-Version 6.6.0. Licence id: BSD-3-Clause.
+Version 6.14.0. Licence id: BSD-3-Clause.
 
 The text below is `LICENSE.txt` from the installed package, verbatim.
 

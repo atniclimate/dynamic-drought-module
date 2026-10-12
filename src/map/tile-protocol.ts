@@ -1,6 +1,6 @@
 import { FetchSource, PMTiles, Protocol, ResolvedValueCache } from 'pmtiles';
 import type { Cache, Entry, Header, RangeResponse, Source } from 'pmtiles';
-import type { AddProtocolAction } from 'maplibre-gl';
+import type { AddProtocolAction, AddProtocolResponseData } from 'maplibre-gl';
 import { fetchBufferedWithBudget } from '../util/fetch';
 import { listeningTimeout } from '../util/listening-timeout';
 
@@ -159,7 +159,8 @@ export function createPmtilesTransport(timeoutMs = PMTILES_READ_TIMEOUT_MS): { t
         const response = await waitFor(protocol.tilev4(request, controller), controller.signal);
         // MapLibre's exact optional fields omit absent cache metadata.
         return {
-          data: response.data,
+          // pmtiles types `data` as unknown: TileJSON (an object) or tile bytes (Uint8Array).
+          data: response.data as AddProtocolResponseData,
           ...(response.cacheControl === undefined ? {} : { cacheControl: response.cacheControl }),
           ...(response.expires === undefined ? {} : { expires: response.expires })
         };
