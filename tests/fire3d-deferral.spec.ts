@@ -32,7 +32,8 @@ import { stubDeepTerrainArchive, stubWildfireFeeds } from './wildfire-fixtures';
 // before only as an accident of `\w` rejecting their hyphen, so they are
 // excluded explicitly now that the hash class allows one.
 const FIRE3D_CHUNK_PATTERN =
-  /\/assets\/fire3d-(?!context-|presentation-)[A-Za-z0-9_-]+\.js(?:[?#]|$)/;
+  // `fire3d-ground-layers-<hash>.js` is the two ground switches' 0.2 kB store, which the console imports at boot.
+  /\/assets\/fire3d-(?!context-|presentation-|ground-layers-)[A-Za-z0-9_-]+\.js(?:[?#]|$)/;
 
 function fire3dStamp(page: import('./offline-test').Page): Promise<string | undefined> {
   return page.evaluate(() => document.documentElement.dataset['ddmFire3d']);

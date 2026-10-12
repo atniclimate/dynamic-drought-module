@@ -2425,7 +2425,8 @@ test('an embed without the flag never activates and never gains it', async ({
     const chunkRequests: string[] = [];
     page.on('request', (request) => {
       if (
-        /assets\/(?:fire3d-(?!presentation)|hms-smoke-volume-)/.test(
+        // `fire3d-ground-layers` is the two ground switches' 0.2 kB store, which the console imports at boot.
+        /assets\/(?:fire3d-(?!presentation|ground-layers)|hms-smoke-volume-)/.test(
           request.url()
         )
       ) {
@@ -2703,11 +2704,15 @@ async function bootW2Consumers(page: Page): Promise<void> {
   await stubDeepTerrainArchive(page);
   await routeBasemapTiles(page);
   await gotoApp(page, '?region=washington_state&cluster=wildfire&fire3d=true');
-  await expect.poll(() => fire3dStamp(page), { timeout: 30_000 }).toBe('active');
+  // On the answered-read clock, like the scene cases above: GitHub run
+  // 38304871630 failed five of these boots at a wall-clock 30 s still reading
+  // "checking" and passed every one on retry, the page frozen by the software
+  // renderer with the plant-stress ground mounting.
+  await stampReaches(page, fire3dStamp, 'active', 30_000, 'the scene never stamped active');
   // Fire3D registers whp-shade. Stop its scene before testing transport so its
   // rendering load does not obscure the native 15 s network deadline.
   await page.locator(TOGGLE).click();
-  await expect.poll(() => fire3dStamp(page), { timeout: 30_000 }).toBe('inactive');
+  await stampReaches(page, fire3dStamp, 'inactive', 30_000, 'the scene never stamped inactive');
   await page.evaluate(() => {
     const observed = window as unknown as W2Window;
     const map = observed.__w2Maps.find((candidate) => candidate.getContainer().id === 'map')!;
