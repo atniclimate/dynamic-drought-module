@@ -136,14 +136,14 @@ function parseAwdbPayload(payload: unknown): AwdbElementSeries[] {
 
 /**
  * Freshness for a daily-duration reading date (YYYY-MM-DD, no time
- * component): today or yesterday in local time is `fresh`, older is
- * `stale`. The caller maps "no readings at all" to `unavailable`.
+ * component): measured from the start of that day, `fresh` up to about 60
+ * hours old (a day's reading posts the next day), else `stale`, so the
+ * answer does not flip at the reader's local midnight. The caller maps "no
+ * readings at all" to `unavailable`.
  */
 export function dailyFreshness(latestDate: string): TelemetryFreshness {
-  const today = new Date();
-  const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
-  if (latestDate === isoDay(today) || latestDate === isoDay(yesterday)) return 'fresh';
-  return 'stale';
+  const t = Date.parse(`${latestDate}T00:00:00`);
+  return Date.now() - t <= 60 * 3_600_000 ? 'fresh' : 'stale';
 }
 
 /**

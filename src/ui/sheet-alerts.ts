@@ -86,6 +86,12 @@ function collectAlerts(map: maplibregl.Map): AlertRow[] {
 function render(): void {
   const body = document.getElementById('sheet-alerts-body');
   if (!body || !mapRef) return;
+  // The stylesheet's own gate: a hidden pane is not queried or rewritten on
+  // every pan; each Alerts tap renders once as it opens.
+  const app = document.getElementById('app');
+  const detent = app?.getAttribute('data-sheet-detent');
+  // vocab-allow: the sheet tab's DOM token, not surface copy
+  if (app?.getAttribute('data-sheet-tab') !== 'alerts' || (detent !== 'half' && detent !== 'full')) return;
 
   const status = registry.getStatus(LAYER_KEY);
   const active = registry.getActiveKeys().has(LAYER_KEY);

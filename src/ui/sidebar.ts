@@ -1181,9 +1181,9 @@ let stationValuesHydrated = false;
 /** Master abort for in-flight value fetches; fired on telemetry layer-off. */
 let stationValuesController: AbortController | null = null;
 
-/** Compact display date for a YYYY-MM-DD reading ("Jun 30"). */
+/** Compact display date ("Jun 30") for a YYYY-MM-DD day or a full timestamp, in the reader's local time. */
 function shortReadingDate(iso: string): string {
-  const d = new Date(`${iso}T00:00:00`);
+  const d = new Date(iso.length === 10 ? `${iso}T00:00:00` : iso);
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
@@ -1246,7 +1246,7 @@ function formatStationValue(value: StationValue): string {
     wantsThousands && value.value !== null
       ? value.value.toLocaleString('en-US', { maximumFractionDigits: 0 })
       : String(value.value);
-  const day = value.timestamp ? ` · ${shortReadingDate(value.timestamp.slice(0, 10))}` : '';
+  const day = value.timestamp ? ` · ${shortReadingDate(value.timestamp)}` : '';
   const staleNote = value.freshness === 'stale' ? ' (stale)' : '';
   return `${label} ${num} ${value.unit}${day}${staleNote}`;
 }

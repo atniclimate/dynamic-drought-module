@@ -306,9 +306,15 @@ export async function hydrateBriefing(
     fetcher: () => Promise<SourceResult>
   ): Promise<void> =>
     sourceMayRun(sourcePolicy, key)
-      ? fetcher().then((result) => {
-          settleLane(key, result);
-        })
+      ? fetcher()
+          .then((result) => {
+            settleLane(key, result);
+          })
+          .catch((err: unknown) => {
+            if (signal.aborted) return;
+            console.warn(`[impact] ${key} lane failed.`, err);
+            settleLane(key, { claims: [], ok: false, note: 'This source did not respond.' });
+          })
       : Promise.resolve();
 
   if (heatPending === 0) publishHeatSynthesis();

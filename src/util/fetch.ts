@@ -67,7 +67,8 @@ export async function fetchJsonWithBudget(
   url: string,
   opts: RequestInit | null,
   masterSignal: AbortSignal | null,
-  timeoutMs: number
+  timeoutMs: number,
+  maxDecodedBytes = 8 * 1024 * 1024
 ): Promise<unknown> {
   const ctrl = new AbortController();
   if (masterSignal && masterSignal.aborted) {
@@ -85,7 +86,7 @@ export async function fetchJsonWithBudget(
       ctrl.abort();
       throw new Error(`HTTP ${response.status} ${response.statusText}`);
     }
-    const bytes = await readBodyBytes(response, ctrl.signal);
+    const bytes = await readBodyBytes(response, ctrl.signal, maxDecodedBytes);
     return JSON.parse(new TextDecoder().decode(bytes ?? new Uint8Array())) as unknown;
   } finally {
     clearTimeout(timer);
