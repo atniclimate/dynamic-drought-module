@@ -566,6 +566,10 @@ async function main() {
       `STEWARDSHIP CHECK FAILED: ${JSON.stringify(stewardshipFindings)}`
     );
   }
+  // D0 contains every other class, so an archive without it is empty or truncated.
+  if (!present.has('D0')) {
+    throw new Error('archive has no D0 drought class file; refusing to publish an empty month');
+  }
 
   const combined = {
     type: 'FeatureCollection',
