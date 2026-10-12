@@ -288,8 +288,7 @@ let ribbonOn = false;
 let ribbonModule: typeof import('../layers/nifc-perimeter-ribbon') | null =
   null;
 /** The ribbon read in flight, or null. Every teardown, the perimeter layer
- * going off, and a newer read abort it: `getData()` answers with what the
- * flat source held when it was asked, so only the newest read is current. */
+ * going off, and a newer read abort it, so only the newest read is current. */
 let ribbonRead: AbortController | null = null;
 let contextModule: typeof import('./fire3d-context') | null = null;
 let contextKeys: readonly string[] = [];

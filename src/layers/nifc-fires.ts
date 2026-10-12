@@ -97,6 +97,7 @@ import {
 import { prefersReducedMotion } from '../util/motion';
 import { dateTok } from '../util/text-tokens';
 import { registry } from '../state/registry';
+import { getPerimeterSnapshot, setPerimeterSnapshot } from '../state/fire-perimeter-snapshot';
 import { showLegend, hideLegend, LEGEND_ORDER, renderSwatchLegend } from '../ui/legend-registry';
 import {
   clearTimeBar,
@@ -412,9 +413,6 @@ let refreshTimer: number | null = null;
  */
 let lastAppliedStatus: Extract<NifcStatus, 'ready' | 'degraded' | 'no-data'> | null = null;
 
-/** The collection the source currently holds; null when nothing is rendered. */
-let appliedData: FeatureCollection | null = null;
-
 /**
  * The layer's most recently loaded collection and the envelope it covers,
  * read-only (DDM-P1-T06). DDM-P14-T07's first reader: the minimap's
@@ -639,16 +637,15 @@ function applyFeatureCollection(
 ): void {
   const features = geojson.features ?? [];
   const existing = map.getSource(SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
-  if (existing && geojson === appliedData) {
-    // A pan inside the cached area: the source already holds this object,
-    // and a hand-off would make the 3D fuel-risk drape read every perimeter
-    // back. Only a status an abandoned re-query moved is put back.
+  if (existing && geojson === getPerimeterSnapshot().collection) {
+    // A pan inside the cached area: the source already holds this object
+    // (the snapshot names what it holds), and a hand-off would make the 3D
+    // consumers rebuild. Only a status an abandoned re-query moved is put back.
     if (lastAppliedStatus && registry.getStatus(LAYER_KEY) !== lastAppliedStatus) {
       reportStatus(lastAppliedStatus);
     }
     return;
   }
-  appliedData = geojson;
   if (existing) {
     existing.setData(geojson);
   } else {
@@ -661,6 +658,7 @@ function applyFeatureCollection(
     // statement stands for both (an empty current set is still the product).
     armTimeBar();
   }
+  setPerimeterSnapshot(geojson);
 
   ensureLayersAdded(map);
 
@@ -873,7 +871,7 @@ export function deactivate(map: maplibregl.Map): void {
   cache = null;
   lastLoaded = null;
   lastAppliedStatus = null;
-  appliedData = null;
+  setPerimeterSnapshot(null);
   disarmTimeBar();
   for (const id of [
     OTHER_OUTLINE_LAYER_ID,

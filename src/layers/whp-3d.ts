@@ -13,12 +13,13 @@
  */
 
 import type * as maplibregl from 'maplibre-gl';
-import type { FeatureCollection, Position } from 'geojson';
+import type { Position } from 'geojson';
 
 import { WHP_3D_SHADE_CATEGORIES, WHP_3D_SHADE_QUALIFICATION } from '../config/whp-shade';
 import { registerWhpShadeProtocol, setWhpShadePerimeters } from './whp-shade-protocol';
 import { URLS } from '../config/urls';
 import { reassertLabelOrder, reassertThematicOrder } from '../map/layer-order';
+import { getPerimeterSnapshot, onPerimeterSnapshotChange } from '../state/fire-perimeter-snapshot';
 import { getFire3DGroundLayer, onFire3DGroundLayerChange } from '../state/fire3d-ground-layers';
 import { registry } from '../state/registry';
 import {
@@ -41,48 +42,43 @@ let releaseFlatLayerWatch: (() => void) | null = null;
 /** Released when the drape is torn down; follows the console's "Fuel risk" switch. */
 let releaseSwitchWatch: (() => void) | null = null;
 
-/** The flat fire-perimeter layer's key and source id (mirrored literal from src/layers/nifc-fires.ts). */
-const PERIMETERS = 'nifc-fires';
 /** Released when the drape is torn down; follows the fire perimeters. */
 let releasePerimeterWatch: (() => void) | null = null;
-/** A signature of the perimeters the drape is shaded with; 0 for none. */
-let perimeterSignature = 0;
-/** Counts perimeter reads, so an older read, or one out at teardown, lands nowhere. */
-let perimeterRead = 0;
+/** The perimeter snapshot revision the drape is shaded with; 0 for none. */
+let shadedRevision = 0;
+/** The polygons of that revision, in an order-free form, which the mounted tiles were shaded with. */
+let shadedPolygons = '';
 
 /**
  * Fuel risk is fully transparent inside a fire perimeter (owner, 2026-10-11).
- * Read the perimeters the flat layer holds, the way the ribbon does
- * (`getData()`, no request), hand them to the shading protocol, and reload
- * the mounted drape's tiles when the set differs from the one they were
- * shaded with; loaded tiles stay drawn until their re-shaded copies arrive.
- * Every perimeter the layer holds counts, whatever its incident class. No
- * layer, no perimeters or a failed read all mean the same thing: fuel risk
- * draws whole.
+ * Take the perimeters the flat layer published (src/state/fire-perimeter-snapshot.ts),
+ * hand them to the shading protocol, and reload the mounted drape's tiles
+ * when the snapshot moved on from the one they were shaded with and the
+ * polygons differ; loaded tiles stay drawn until their re-shaded copies arrive. Every perimeter the
+ * layer holds counts, whatever its incident class. No layer, no perimeters
+ * or unreadable geometry all mean the same thing: fuel risk draws whole.
  */
-async function syncPerimeters(map: maplibregl.Map): Promise<void> {
-  const read = ++perimeterRead;
-  let polygons: Position[][][] = [];
-  let signature = 0;
+function syncPerimeters(map: maplibregl.Map): void {
+  const { collection, revision } = getPerimeterSnapshot();
+  if (revision === shadedRevision) return;
+  shadedRevision = revision;
+  const polygons: Position[][][] = [];
+  let key = '';
   try {
-    const source = map.getSource(PERIMETERS) as { getData?: () => Promise<FeatureCollection> } | undefined;
-    for (const { geometry } of (await source?.getData?.())?.features ?? []) {
-      for (const polygon of geometry?.type === 'Polygon' ? [geometry.coordinates]
-        : geometry?.type === 'MultiPolygon' ? geometry.coordinates : []) {
-        polygons.push(polygon);
-        for (const ring of polygon) {
-          for (const point of ring) signature = (Math.imul(signature, 31) + point[0]! * 1e5 + point[1]! * 7e5) | 0;
-        }
-      }
+    for (const { geometry } of collection?.features ?? []) {
+      if (geometry?.type === 'Polygon') polygons.push(geometry.coordinates);
+      else if (geometry?.type === 'MultiPolygon') polygons.push(...geometry.coordinates);
     }
+    key = polygons.map((polygon) => JSON.stringify(polygon)).sort().join();
   } catch (err) {
     console.warn('[whp-3d]', err);
-    polygons = [];
-    signature = 0;
+    polygons.length = 0;
   }
-  if (read !== perimeterRead || signature === perimeterSignature) return;
-  perimeterSignature = signature;
+  if (key === shadedPolygons) return;
+  shadedPolygons = key;
   setWhpShadePerimeters(polygons);
+  // Always the whole source: a tile list reloads only in-view tiles and leaves
+  // MapLibre's out-of-view cache holding tiles cut to the old perimeters.
   if (map.getSource(SOURCE_ID)) map.refreshTiles(SOURCE_ID);
 }
 
@@ -161,8 +157,7 @@ export async function activateWhpDrape(
   if (signal.aborted) return false;
   // Before the source exists, so its first tiles are already cut and
   // entering the scene reloads nothing.
-  await syncPerimeters(map);
-  if (signal.aborted) return false;
+  syncPerimeters(map);
 
   try {
     registerWhpShadeProtocol();
@@ -184,6 +179,9 @@ export async function activateWhpDrape(
           // The shading table carries each class's effective white opacity
           // (WHP_3D_SHADE_CATEGORIES), so the layer itself adds none.
           'raster-opacity': 1,
+          // On terrain every fade frame redraws the draped ground, and each
+          // perimeter-driven reload would repeat it.
+          'raster-fade-duration': 0,
           // NEAREST, not MapLibre's default linear. This is a categorical
           // raster of seven issuer classes, and the archive is over-zoomed
           // well past its bake depth at the scene's framing. Linear
@@ -242,15 +240,13 @@ export async function activateWhpDrape(
   releaseFlatLayerWatch?.();
   releaseFlatLayerWatch = registry.on('change', () => {
     if (flatWhpLayerIsOn()) deactivateWhpDrape(map);
-    // The perimeter layer going off takes its source, and the mask with it.
-    else void syncPerimeters(map);
   });
-  // The perimeter layer reports each time it puts a response on the map
-  // (its first, and again after each pan or zoom); a set that did not
-  // change reloads nothing.
+  // The perimeter layer publishes each different collection it puts on the
+  // map (its first, and after a pan or zoom), and null once it is off; the
+  // same collection again reloads nothing.
   releasePerimeterWatch?.();
-  releasePerimeterWatch = registry.on('status-change', (key) => {
-    if (key === PERIMETERS) void syncPerimeters(map);
+  releasePerimeterWatch = onPerimeterSnapshotChange(() => {
+    syncPerimeters(map);
   });
 
   return true;
@@ -267,7 +263,6 @@ export function deactivateWhpDrape(map: maplibregl.Map): void {
   releaseSwitchWatch = null;
   releasePerimeterWatch?.();
   releasePerimeterWatch = null;
-  perimeterRead += 1;
   if (map.getLayer(LAYER_ID)) map.removeLayer(LAYER_ID);
   if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);
   hideLegend(LEGEND_KEY);

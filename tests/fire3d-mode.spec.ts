@@ -72,6 +72,7 @@ import {
   stubWildfireFeeds
 } from './wildfire-fixtures';
 import { RAWS_ROUTE, RAWS_FIXTURE_MARKER_ID, rawsHappyBody } from './fixtures/raws-fixtures';
+import { setPerimeterSnapshot } from '../src/state/fire-perimeter-snapshot';
 
 /**
  * W3/W4 desktop 3D Fire mode.
@@ -1150,6 +1151,8 @@ test('the perimeter ribbon stands on the live perimeters and leaves with the sce
     type: 'geojson',
     data: RIBBON_PERIMETER_COLLECTION
   } as never);
+  // The ribbon reads what the fire layer published, not the map source.
+  setPerimeterSnapshot(RIBBON_PERIMETER_COLLECTION as never);
   map.addLayer({
     id: 'nifc-fires-fill',
     type: 'fill',
@@ -1222,6 +1225,7 @@ test('the perimeter ribbon stands on the live perimeters and leaves with the sce
     expect(registry.getStatus('nifc-fires')).toBe('ready');
   } finally {
     setFire3DActive(map, false);
+    setPerimeterSnapshot(null);
     registry.deactivate('nifc-fires');
     restoreFetch();
     browser.restore();

@@ -45,12 +45,12 @@ export async function shadeImage(blob: Blob, signal: AbortSignal, shade?: ShadeA
   const bitmap = await createImageBitmap(blob, {
     colorSpaceConversion: 'none', premultiplyAlpha: 'none'
   });
+  const canvas = document.createElement('canvas');
   try {
     signal.throwIfAborted();
-    const canvas = document.createElement('canvas');
     canvas.width = bitmap.width;
     canvas.height = bitmap.height;
-    const context = canvas.getContext('2d');
+    const context = canvas.getContext('2d', { willReadFrequently: true, colorSpace: 'srgb' });
     if (!context) throw new Error('WHP canvas unavailable');
     context.drawImage(bitmap, 0, 0);
     const image = context.getImageData(0, 0, bitmap.width, bitmap.height);
@@ -60,6 +60,7 @@ export async function shadeImage(blob: Blob, signal: AbortSignal, shade?: ShadeA
     return createImageBitmap(image);
   } finally {
     bitmap.close();
+    canvas.width = canvas.height = 0;
   }
 }
 

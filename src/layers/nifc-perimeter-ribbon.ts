@@ -18,8 +18,8 @@
  * it on a logarithmic curve, and pulsing in step with the flat outline.
  *
  * Where the geometry comes from. The ribbon derives its source from the
- * SAME GeoJSON the flat layer already holds, read back off the map through
- * `GeoJSONSource.getData()`. It issues no request of its own, so a scene
+ * SAME GeoJSON the flat layer already holds, which that layer publishes in
+ * src/state/fire-perimeter-snapshot.ts. It issues no request of its own, so a scene
  * with the ribbon transfers exactly what a scene without it does. Because
  * MapLibre extrudes polygons and never lines, each perimeter ring becomes a
  * thin closed band CENTERED on the published edge (see
@@ -50,15 +50,13 @@ import {
   classifyNifcIncidentType
 } from '../config/wildfire-presentation';
 import { reassertLabelOrder, reassertThematicOrder } from '../map/layer-order';
+import { getPerimeterSnapshot } from '../state/fire-perimeter-snapshot';
 import {
   LEGEND_ORDER,
   hideLegend,
   renderSwatchLegend,
   showLegend
 } from '../ui/legend-registry';
-
-/** Mirrored literal from src/layers/nifc-fires.ts (lazy-chunk independence). */
-const PERIMETER_SOURCE_ID = 'nifc-fires';
 
 const RIBBON_SOURCE_ID = 'nifc-perimeter-ribbon';
 const LEGEND_KEY = 'nifc-perimeter-ribbon';
@@ -254,32 +252,9 @@ export function buildPerimeterRibbonBands(
 // Scene lifecycle
 // ---------------------------------------------------------------------------
 
-function asFeatureCollection(data: unknown): FeatureCollection {
-  if (
-    data !== null &&
-    typeof data === 'object' &&
-    (data as { type?: unknown }).type === 'FeatureCollection' &&
-    Array.isArray((data as { features?: unknown }).features)
-  ) {
-    return data as FeatureCollection;
-  }
-  return { type: 'FeatureCollection', features: [] };
-}
-
-/** Read the flat layer's own collection back off the map, or null. */
-async function readPerimeterCollection(
-  map: maplibregl.Map
-): Promise<FeatureCollection | null> {
-  const source = map.getSource(PERIMETER_SOURCE_ID) as
-    | { getData?: () => Promise<unknown> }
-    | undefined;
-  if (!source || typeof source.getData !== 'function') return null;
-  return asFeatureCollection(await source.getData());
-}
-
-/** The collection the standing ribbon was built from. `getData()` answers
- * with the object the flat source holds, so identity says whether a refresh
- * changed the perimeters. */
+/** The collection the standing ribbon was built from. The snapshot holds the
+ * object the flat source holds, so identity says whether a refresh changed
+ * the perimeters. */
 let raised: FeatureCollection | null = null;
 
 /**
@@ -298,10 +273,7 @@ export async function activatePerimeterRibbon(
   signal: AbortSignal
 ): Promise<boolean> {
   if (signal.aborted) return false;
-  const collection = await readPerimeterCollection(map);
-  // A teardown, the layer going off, or a newer read while this one was in
-  // flight: do not render into a scene that no longer wants this answer.
-  if (signal.aborted) return false;
+  const { collection } = getPerimeterSnapshot();
   const standing = map.getSource(RIBBON_SOURCE_ID) as
     | { setData: (data: FeatureCollection) => void }
     | undefined;

@@ -17,11 +17,11 @@ import { fileURLToPath } from 'node:url';
  * browser and no network are needed (the audit proof of 2026-10-04,
  * finding 12, used the same shape).
  *
- * The one test seam is the perimeter source's `getData()`. MapLibre 6.6
- * resolves it with the object the source holds at the moment it is asked
- * (`_data.geojson`), so the fake captures the data at call time and, while
- * `held` is set, resolves only when the case releases it. That makes each
- * bad ordering deterministic instead of a matter of runner speed.
+ * The one test seam is the perimeter snapshot
+ * (src/state/fire-perimeter-snapshot.ts), which the flat layer publishes and
+ * the ribbon reads synchronously, so there is no read to hold: each bad
+ * ordering is driven by changing the snapshot, the layer toggle or the scene
+ * preference in the same turn.
  *
  * Runs under plain `node --test` (Node 24 strips types).
  */
@@ -108,9 +108,10 @@ globalThis.document = {
 const { initFire3DController, getFire3DStatus } = await import('../src/map/fire3d.ts');
 const { PERIMETER_RIBBON_LAYER_IDS } = await import('../src/layers/nifc-perimeter-ribbon.ts');
 const { registry } = await import('../src/state/registry.ts');
+const { setPerimeterSnapshot } = await import('../src/state/fire-perimeter-snapshot.ts');
 
 // ---------------------------------------------------------------------------
-// The fake map and its held perimeter reads
+// The fake map
 // ---------------------------------------------------------------------------
 
 const PERIMETER_KEY = 'nifc-fires';
@@ -148,12 +149,6 @@ const LIVE_PERIMETERS = {
 };
 const NO_PERIMETERS = { type: 'FeatureCollection', features: [] };
 
-const reads = {
-  held: false,
-  /** Every read asked while held, oldest first: { data, release }. */
-  pending: []
-};
-
 const sources = new Map();
 const layers = new Map();
 const map = {
@@ -186,22 +181,6 @@ const map = {
   isSourceLoaded: () => true
 };
 
-/** The flat layer's GeoJSON source, with MapLibre's read-back seam. */
-function perimeterSource(data) {
-  const source = {
-    type: 'geojson',
-    data,
-    getData() {
-      const captured = source.data;
-      if (!reads.held) return Promise.resolve(captured);
-      return new Promise((resolve) => {
-        reads.pending.push({ data: captured, release: () => resolve(captured) });
-      });
-    }
-  };
-  return source;
-}
-
 /** Let every queued continuation run (no timer: a macrotask turn). */
 async function settle() {
   for (let i = 0; i < 20; i += 1) {
@@ -223,26 +202,27 @@ function setPreference(next) {
   for (const fn of env.preferenceListeners) fn();
 }
 
-/** The layer controller's own order: loading, the module adds its source
- * and reports live, then the key registers active. */
+/** The layer controller's own order: loading, the module publishes its
+ * collection and reports live, then the key registers active. */
 function perimetersOn(data = LIVE_PERIMETERS) {
   registry.setStatus(PERIMETER_KEY, 'loading');
-  map.addSource(PERIMETER_KEY, perimeterSource(data));
+  setPerimeterSnapshot(data);
   registry.setStatus(PERIMETER_KEY, 'live');
   registry.activate(PERIMETER_KEY);
 }
 
-/** The controller's teardown order: the module removes its source, then the
- * key leaves the registry. */
+/** The controller's teardown order: the module withdraws its collection,
+ * then the key leaves the registry. */
 function perimetersOff() {
-  map.removeSource(PERIMETER_KEY);
+  setPerimeterSnapshot(null);
   registry.deactivate(PERIMETER_KEY);
 }
 
-function releaseOldestRead() {
-  const next = reads.pending.shift();
-  assert.ok(next, 'a ribbon read was pending');
-  next.release();
+/** A refresh: the layer puts another collection on the map and reports it. */
+function perimetersRefresh(data) {
+  registry.setStatus(PERIMETER_KEY, 'loading');
+  setPerimeterSnapshot(data);
+  registry.setStatus(PERIMETER_KEY, 'live');
 }
 
 function ribbonOnMap() {
@@ -266,12 +246,11 @@ async function enterScene() {
 }
 
 /** Leave every case as the next one expects: no scene, no perimeter layer,
- * no held read, and nothing on the map. */
+ * no published collection, and nothing on the map. */
 async function reset() {
-  reads.held = false;
-  while (reads.pending.length > 0) releaseOldestRead();
   setPreference(false);
   if (registry.getActiveKeys().has(PERIMETER_KEY)) perimetersOff();
+  setPerimeterSnapshot(null);
   await settle();
   sources.clear();
   layers.clear();
@@ -286,22 +265,18 @@ test.afterEach(reset);
 // The scene's own ribbon read
 // ---------------------------------------------------------------------------
 
-test('an exit during the scene\'s own ribbon read leaves no ribbon, and a re-entry builds it afresh', async () => {
+test('an exit while the scene is still opening leaves no ribbon, and a re-entry builds it afresh', async () => {
   perimetersOn();
-  reads.held = true;
+  // The activation is parked on its lazy import when the exit lands.
   setPreference(true);
-  await until(() => reads.pending.length === 1, 'the scene asked for the perimeters');
-
   setPreference(false);
   assert.equal(getFire3DStatus().state, 'inactive');
-  releaseOldestRead();
   await settle();
 
-  assert.deepEqual(ribbonOnMap(), NO_RIBBON, 'the late read raised no ribbon over the flat map');
+  assert.deepEqual(ribbonOnMap(), NO_RIBBON, 'the late activation raised no ribbon over the flat map');
   assert.equal(getFire3DStatus().perimeterRibbon, false);
   assert.equal(dataset.ddmFire3dRibbon, undefined);
 
-  reads.held = false;
   await enterScene();
   assert.deepEqual(ribbonOnMap(), FULL_RIBBON, 'the re-entry built the ribbon afresh');
   assert.equal(getFire3DStatus().perimeterRibbon, true);
@@ -312,15 +287,14 @@ test('an exit during the scene\'s own ribbon read leaves no ribbon, and a re-ent
 // The reconcile read (the perimeter layer's own seams)
 // ---------------------------------------------------------------------------
 
-test('the perimeter layer going off during a ribbon read leaves no ribbon, and the stamp reads off', async () => {
+test('the perimeter layer going off right after it reported leaves no ribbon, and the stamp reads off', async () => {
   await enterScene();
   assert.equal(dataset.ddmFire3dRibbon, 'off');
 
-  reads.held = true;
   perimetersOn();
-  await until(() => reads.pending.length >= 1, 'the reconcile asked for the perimeters');
+  // A refresh of the layer lands, then the person turns the layer off.
+  registry.setStatus(PERIMETER_KEY, 'live');
   perimetersOff();
-  while (reads.pending.length > 0) releaseOldestRead();
   await settle();
 
   assert.deepEqual(ribbonOnMap(), NO_RIBBON, 'no ribbon stands over a perimeter layer that is off');
@@ -329,40 +303,15 @@ test('the perimeter layer going off during a ribbon read leaves no ribbon, and t
   assert.equal(dataset.ddmFire3dRibbon, 'off');
 });
 
-test('a second ribbon read still in flight when the layer goes off never re-adds the ribbon the removal took down', async () => {
+test('a scene exit right after the perimeters landed leaves no ribbon on the flat map', async () => {
   await enterScene();
-  reads.held = true;
   perimetersOn();
-  await until(() => reads.pending.length >= 1, 'the first read was asked');
-  // A refresh of the perimeter layer lands while the first read is out: its
-  // status seam asks again.
-  registry.setStatus(PERIMETER_KEY, 'live');
-  await settle();
-  // The first read answers; then the person turns the layer off; then the
-  // second read answers.
-  releaseOldestRead();
-  await settle();
-  perimetersOff();
-  while (reads.pending.length > 0) releaseOldestRead();
-  await settle();
-
-  assert.deepEqual(ribbonOnMap(), NO_RIBBON, 'the later read raised no ribbon after the layer went off');
-  assert.equal(getFire3DStatus().perimeterRibbon, false);
-  assert.equal(dataset.ddmFire3dRibbon, 'off');
-});
-
-test('a scene exit during a reconcile read leaves no ribbon on the flat map', async () => {
-  await enterScene();
-  reads.held = true;
-  perimetersOn();
-  await until(() => reads.pending.length >= 1, 'the reconcile asked for the perimeters');
 
   setPreference(false);
   assert.equal(getFire3DStatus().state, 'inactive');
-  while (reads.pending.length > 0) releaseOldestRead();
   await settle();
 
-  assert.deepEqual(ribbonOnMap(), NO_RIBBON, 'the late read raised no ribbon after the exit');
+  assert.deepEqual(ribbonOnMap(), NO_RIBBON, 'the late answer raised no ribbon after the exit');
   assert.equal(dataset.ddmFire3dRibbon, undefined);
 });
 
@@ -370,63 +319,39 @@ test('a scene exit during a reconcile read leaves no ribbon on the flat map', as
 // What must not change
 // ---------------------------------------------------------------------------
 
-test('the layer off and on again during a read ends with exactly the ribbon the layer now holds', async () => {
+test('the layer off and on again ends with exactly the ribbon the layer now holds', async () => {
   await enterScene();
-  reads.held = true;
   perimetersOn();
-  await until(() => reads.pending.length >= 1, 'the first read was asked');
   perimetersOff();
   perimetersOn();
-  await until(() => reads.pending.length >= 2, 'the second read was asked');
-  while (reads.pending.length > 0) {
-    releaseOldestRead();
-    await settle();
-  }
+  await settle();
 
   assert.deepEqual(ribbonOnMap(), FULL_RIBBON);
   assert.equal(getFire3DStatus().perimeterRibbon, true);
   assert.equal(dataset.ddmFire3dRibbon, 'on');
 });
 
-test('perimeters that land while an earlier read is out still raise the ribbon', async () => {
+test('perimeters that land after an earlier empty answer still raise the ribbon', async () => {
   // The flat layer is on but its first answer held no wildfire perimeter.
-  map.addSource(PERIMETER_KEY, perimeterSource(NO_PERIMETERS));
+  setPerimeterSnapshot(NO_PERIMETERS);
   registry.setStatus(PERIMETER_KEY, 'live');
   registry.activate(PERIMETER_KEY);
   await enterScene();
   assert.equal(dataset.ddmFire3dRibbon, 'off');
 
-  reads.held = true;
-  // A viewport refresh starts: the status seam asks while the source still
-  // holds the empty answer; then the new perimeters land and it asks again.
-  registry.setStatus(PERIMETER_KEY, 'loading');
-  await until(() => reads.pending.length >= 1, 'a read of the empty answer was asked');
-  map.getSource(PERIMETER_KEY).data = LIVE_PERIMETERS;
-  registry.setStatus(PERIMETER_KEY, 'live');
-  await until(() => reads.pending.length >= 2, 'a read of the new perimeters was asked');
-  while (reads.pending.length > 0) {
-    releaseOldestRead();
-    await settle();
-  }
+  perimetersRefresh(LIVE_PERIMETERS);
+  await settle();
 
   assert.deepEqual(ribbonOnMap(), FULL_RIBBON);
   assert.equal(dataset.ddmFire3dRibbon, 'on');
 });
 
-test('when two reads are out, the ribbon stands over the newer answer, not the earlier one', async () => {
+test('when two answers land back to back, the ribbon stands over the newer one', async () => {
   const ONE_PERIMETER = { type: 'FeatureCollection', features: [LIVE_PERIMETERS.features[0]] };
   await enterScene();
-  reads.held = true;
   perimetersOn(ONE_PERIMETER);
-  await until(() => reads.pending.length >= 1, 'a read of the first answer was asked');
-  // A refresh lands a second perimeter before the first read answers.
-  map.getSource(PERIMETER_KEY).data = LIVE_PERIMETERS;
-  registry.setStatus(PERIMETER_KEY, 'live');
-  await until(() => reads.pending.length >= 2, 'a read of the newer answer was asked');
-  while (reads.pending.length > 0) {
-    releaseOldestRead();
-    await settle();
-  }
+  perimetersRefresh(LIVE_PERIMETERS);
+  await settle();
 
   assert.deepEqual(ribbonOnMap(), FULL_RIBBON);
   assert.equal(
@@ -443,9 +368,7 @@ test('a refresh that lands different perimeters rebuilds the standing ribbon ove
   assert.equal(sources.get(RIBBON_SOURCE_ID).data.features.length, 1);
 
   // A pan to other fires: the layer swaps new perimeters into its source.
-  registry.setStatus(PERIMETER_KEY, 'loading');
-  map.getSource(PERIMETER_KEY).data = LIVE_PERIMETERS;
-  registry.setStatus(PERIMETER_KEY, 'live');
+  perimetersRefresh(LIVE_PERIMETERS);
   await settle();
   assert.deepEqual(ribbonOnMap(), FULL_RIBBON);
   assert.equal(
@@ -454,10 +377,14 @@ test('a refresh that lands different perimeters rebuilds the standing ribbon ove
     'the ribbon follows the perimeters the layer holds now'
   );
 
+  // The same collection reported again changes nothing: the standing ribbon's data is the same object.
+  const standing = sources.get(RIBBON_SOURCE_ID).data;
+  perimetersRefresh(LIVE_PERIMETERS);
+  await settle();
+  assert.equal(sources.get(RIBBON_SOURCE_ID).data, standing);
+
   // A pan to a view with no wildfire perimeter takes the ribbon down.
-  registry.setStatus(PERIMETER_KEY, 'loading');
-  map.getSource(PERIMETER_KEY).data = NO_PERIMETERS;
-  registry.setStatus(PERIMETER_KEY, 'live');
+  perimetersRefresh(NO_PERIMETERS);
   await settle();
   assert.deepEqual(ribbonOnMap(), NO_RIBBON);
   assert.equal(dataset.ddmFire3dRibbon, 'off');

@@ -376,9 +376,9 @@ test('repeated directory 416 is bounded to one archive retry', async () => {
 });
 
 // D5 actual transport/transform orchestration with browser codec seams only.
-const { readDrynessTile } = await import('../src/layers/dryness-grey-protocol.ts');
+const { readDrynessTile, createDrynessMasks, isDrynessSourceFault, DrynessLocalError } = await import('../src/layers/dryness-grey-protocol.ts');
 const { default: drynessPngJs } = await import('pngjs');
-const DRYNESS_LIMITS = { timeoutMs: 500, maxDecodedBytes: 4096, maxPixels: 4, maxOutputBytes: 4096 };
+const DRYNESS_LIMITS = { timeoutMs: 500, maxDecodedBytes: 4096, maxPixels: 4 };
 function drynessDeferred() {
   let resolve;
   const promise = new Promise(done => { resolve = done; });
@@ -414,7 +414,8 @@ test('PNG wrong-content failures retain only the bounded response for source exc
 async function withDrynessBrowser(options, task) {
   const names = ['fetch', 'createImageBitmap', 'document', 'performance'];
   const originals = new Map(names.map(name => [name, Object.getOwnPropertyDescriptor(globalThis, name)]));
-  const events = { closed: 0, encoded: 0, fetched: 0, canvases: [], bitmapOptions: [] };
+  // `outputs` are the shaded bitmaps made from ImageData; `closed` counts every bitmap closed, source or output.
+  const events = { closed: 0, outputs: [], fetched: 0, canvases: [], bitmapOptions: [] };
   const set = (name, value) => Object.defineProperty(globalThis, name, { configurable: true, writable: true, value });
   if (options.clock) set('performance', { now: options.clock });
   const makeBitmap = async blob => {
@@ -426,12 +427,18 @@ async function withDrynessBrowser(options, task) {
     events.fetched++;
     return new Response(options.source ?? drynessSource(), { headers: { 'content-type': 'image/png' } });
   }));
-  set('createImageBitmap', async (blob, settings) => {
+  set('createImageBitmap', (input, settings) => {
+    if (!(input instanceof Blob)) {
+      const output = { width: input.width, height: input.height, pixels: input.data,
+        close() { events.closed++; options.closed?.resolve(); } };
+      events.outputs.push(output);
+      return options.output ? options.output(output) : Promise.resolve(output);
+    }
     events.bitmapOptions.push(settings);
-    const bitmap = await makeBitmap(blob);
-    if (options.dimensionMismatch) bitmap.width++;
-    if (options.decode) return options.decode(bitmap);
-    return bitmap;
+    return makeBitmap(input).then(bitmap => {
+      if (options.dimensionMismatch) bitmap.width++;
+      return options.decode ? options.decode(bitmap) : bitmap;
+    });
   });
   set('document', { createElement(tag) {
     assert.equal(tag, 'canvas');
@@ -443,17 +450,8 @@ async function withDrynessBrowser(options, task) {
         if (options.noContext) return null;
         return {
           drawImage(bitmap) { pixels = bitmap.pixels.slice(); options.draw?.(); },
-          getImageData() { return { data: pixels, width: canvas.width, height: canvas.height }; },
-          putImageData(image) { pixels = image.data; }
+          getImageData() { return { data: pixels, width: canvas.width, height: canvas.height }; }
         };
-      },
-      toBlob(callback, type) {
-        events.encoded++;
-        assert.equal(type, 'image/png');
-        const bytes = drynessPngJs.PNG.sync.write({ width: canvas.width, height: canvas.height, data: Buffer.from(pixels) });
-        const blob = new Blob([bytes], { type });
-        if (options.encode) options.encode(callback, blob);
-        else callback(blob);
       }
     };
     events.canvases.push(canvas);
@@ -469,18 +467,19 @@ async function withDrynessBrowser(options, task) {
   }
 }
 
-test('dryness PNG operation uses real bounded reader and exact transform before returning encoded white-alpha output', async () => {
+test('dryness PNG operation uses real bounded reader and exact transform before returning a decoded white-alpha bitmap', async () => {
   for (const [product, source] of [
     ['star-vhi', drynessSource()],
     ['relative-greenness', drynessSource([115, 38, 0, 255, 255, 255, 255, 255])]
   ]) await withDrynessBrowser({ source }, async events => {
     const owner = new AbortController();
-    const bytes = await readDrynessTile('https://example.test/vhi.png', product, owner, DRYNESS_LIMITS);
-    const output = drynessPngJs.PNG.sync.read(Buffer.from(bytes));
+    const bitmap = await readDrynessTile('https://example.test/vhi.png', product, owner, DRYNESS_LIMITS);
     // The most stressed class is 40% white; no value is fully transparent (DR-199).
-    assert.deepEqual([...output.data], [255, 255, 255, 102, 0, 0, 0, 0]);
+    assert.equal(bitmap, events.outputs[0]);
+    assert.deepEqual([...bitmap.pixels], [255, 255, 255, 102, 0, 0, 0, 0]);
     assert.deepEqual(events.bitmapOptions, [{ colorSpaceConversion: 'none', premultiplyAlpha: 'none' }]);
-    assert.equal(events.closed, 1); assert.equal(events.encoded, 1);
+    // Only the source bitmap is closed; the returned one is the caller's.
+    assert.equal(events.closed, 1); assert.equal(events.outputs.length, 1);
     assert.equal(owner.signal.aborted, false);
     assert.ok(events.canvases.every(canvas => canvas.width === 0 && canvas.height === 0));
   });
@@ -504,11 +503,11 @@ test('dryness land-cover tile rides the same bounded reader: bare ground is knoc
   const requested = [];
   // Bare ground (class 16) over the most stressed class; evergreen needleleaf forest (class 1) over the healthiest.
   await withDrynessBrowser({ fetch: drynessMaskedFetch([128, 128, 128, 255, 0, 128, 0, 255], requested) }, async events => {
-    const bytes = await readDrynessTile('https://example.test/vhi.png', 'star-vhi', new AbortController(), DRYNESS_LIMITS,
+    const bitmap = await readDrynessTile('https://example.test/vhi.png', 'star-vhi', new AbortController(), DRYNESS_LIMITS,
       'https://example.test/landcover.png');
-    assert.deepEqual([...drynessPngJs.PNG.sync.read(Buffer.from(bytes)).data], [0, 0, 0, 0, 255, 255, 255, 10]);
+    assert.deepEqual([...bitmap.pixels], [0, 0, 0, 0, 255, 255, 255, 10]);
     assert.deepEqual(requested.sort(), ['https://example.test/landcover.png', 'https://example.test/vhi.png']);
-    assert.equal(events.bitmapOptions.length, 2); assert.equal(events.closed, 2); assert.equal(events.encoded, 1);
+    assert.equal(events.bitmapOptions.length, 2); assert.equal(events.closed, 2); assert.equal(events.outputs.length, 1);
     assert.ok(events.canvases.length === 2 && events.canvases.every(canvas => canvas.width === 0 && canvas.height === 0));
   });
 });
@@ -521,22 +520,63 @@ test('dryness land-cover tile fails closed: a failed read, an unknown colour or 
   ]) await withDrynessBrowser({ fetch: drynessMaskedFetch(mask) }, async events => {
     await assert.rejects(readDrynessTile('https://example.test/vhi.png', 'star-vhi', new AbortController(), DRYNESS_LIMITS,
       'https://example.test/landcover.png'), expected);
-    assert.equal(events.encoded, 0);
+    assert.equal(events.outputs.length, 0);
     // Both tiles decoded before the pure check refused them: both bitmaps are closed.
     if (mask) assert.equal(events.closed, 2);
     assert.ok(events.canvases.every(canvas => canvas.width === 0 && canvas.height === 0));
   });
 });
 
-test('dryness unknown visible class fails atomically before encoding and releases bitmap/canvas', async () => {
+test('dryness land-cover tiles are shared and kept an hour: one read for two tiles, an aborted tile leaves the other\'s read alone, an expired or invalid mask is read again', async () => {
+  let now = 0; const reads = new Map(), signals = new Map(); const gate = drynessDeferred();
+  const png = pixels => drynessPngJs.PNG.sync.write({ width: 2, height: 1, data: Buffer.from(pixels) });
+  const fetch = async (url, init) => {
+    url = String(url);
+    if (!url.includes('landcover')) return new Response(drynessSource([255, 0, 160, 255, 0, 0, 170, 255]), { headers: { 'content-type': 'image/png' } });
+    reads.set(url, (reads.get(url) ?? 0) + 1); signals.set(url, init.signal);
+    if (url.includes('held')) await gate.promise;
+    const mask = url.includes('bad') ? [128, 128, 128, 255, 18, 52, 86, 255] : [128, 128, 128, 255, 0, 128, 0, 255];
+    return new Response(png(mask), { headers: { 'content-type': 'image/png' } });
+  };
+  await withDrynessBrowser({ fetch }, async () => {
+    const masks = createDrynessMasks(() => now);
+    const read = (owner, mask, name = 'a') => readDrynessTile(`https://example.test/${name}.png`, 'star-vhi', owner, DRYNESS_LIMITS,
+      `https://example.test/${mask}.png`, masks);
+    const settled = () => new Promise(resolve => setTimeout(resolve, 20));
+    const held = 'landcover-held', url = name => `https://example.test/${name}.png`;
+    // Two tiles, one read; the first tile's abort does not reach the shared read.
+    const a = new AbortController(), first = read(a, held), second = read(new AbortController(), held, 'b');
+    const aborted = assert.rejects(first, error => error.name === 'AbortError');
+    await settled(); a.abort(); await aborted;
+    assert.equal(reads.get(url(held)), 1); assert.equal(signals.get(url(held)).aborted, false);
+    gate.resolve();
+    assert.deepEqual([...(await second).pixels], [0, 0, 0, 0, 255, 255, 255, 10]);
+    // Kept: a later tile reads no mask. Expired after an hour: read again.
+    await read(new AbortController(), held, 'c'); assert.equal(reads.get(url(held)), 1);
+    now = 3_600_001; await read(new AbortController(), held, 'd'); assert.equal(reads.get(url(held)), 2);
+    // A mask that failed validation is not kept.
+    for (let tries = 1; tries <= 2; tries++) {
+      await assert.rejects(read(new AbortController(), 'landcover-bad'), /Unrecognized land-cover class/);
+      assert.equal(reads.get(url('landcover-bad')), tries);
+    }
+    // The shared read is abandoned when its last tile leaves.
+    gate.promise = new Promise(() => {});
+    const last = new AbortController(), only = read(last, 'landcover-held-2');
+    const gone = assert.rejects(only, error => error.name === 'AbortError');
+    await settled(); last.abort(); await gone; await settled();
+    assert.equal(signals.get(url('landcover-held-2')).aborted, true);
+  });
+});
+
+test('dryness unknown visible class fails atomically before any output bitmap and releases bitmap/canvas', async () => {
   await withDrynessBrowser({ source: drynessSource([255, 0, 160, 255, 18, 52, 86, 255]) }, async events => {
     await assert.rejects(readDrynessTile('https://example.test/vhi.png', 'star-vhi', new AbortController(), DRYNESS_LIMITS), /Unrecognized dryness class/);
-    assert.equal(events.encoded, 0); assert.equal(events.closed, 1);
+    assert.equal(events.outputs.length, 0); assert.equal(events.closed, 1);
     assert.ok(events.canvases.every(canvas => canvas.width === 0 && canvas.height === 0));
   });
 });
 
-test('dryness full deadline includes held decode and closes its eventual bitmap without late encoding', { timeout: 1500 }, async () => {
+test('dryness full deadline includes held decode and closes its eventual bitmap without a late output', { timeout: 1500 }, async () => {
   const held = drynessDeferred(), entered = drynessDeferred(), closed = drynessDeferred();
   let lateBitmap;
   await withDrynessBrowser({ closed, decode(bitmap) { lateBitmap = bitmap; entered.resolve(); return held.promise; } }, async events => {
@@ -547,7 +587,7 @@ test('dryness full deadline includes held decode and closes its eventual bitmap 
     assert.equal(events.closed, 0);
     held.resolve(lateBitmap);
     await closed.promise;
-    assert.equal(events.closed, 1); assert.equal(events.encoded, 0);
+    assert.equal(events.closed, 1); assert.equal(events.outputs.length, 0);
   });
 });
 
@@ -559,18 +599,14 @@ test('dryness owner off during decode rejects promptly, closes late bitmap and c
     const rejected = assert.rejects(work, error => error.name === 'AbortError');
     await entered.promise; owner.abort(); await rejected;
     held.resolve(lateBitmap); await closed.promise;
-    assert.equal(events.closed, 1); assert.equal(events.encoded, 0);
+    assert.equal(events.closed, 1); assert.equal(events.outputs.length, 0);
   });
 });
 
-test('dryness encode and encoded-buffer stages remain owner-cancellable and deadline-bounded', { timeout: 3000 }, async () => {
-  for (const stage of ['encode', 'buffer']) for (const reason of ['owner', 'deadline']) {
+test('dryness output bitmap stage remains owner-cancellable and deadline-bounded, and a late bitmap is closed', { timeout: 3000 }, async () => {
+  for (const reason of ['owner', 'deadline']) {
     const entered = drynessDeferred(), held = drynessDeferred(); const owner = new AbortController();
-    let finish;
-    await withDrynessBrowser({ encode(callback, blob) {
-      if (stage === 'encode') { finish = () => callback(blob); entered.resolve(); }
-      else callback({ type: 'image/png', size: blob.size, arrayBuffer() { entered.resolve(); return held.promise; } });
-    } }, async events => {
+    await withDrynessBrowser({ output(bitmap) { entered.resolve(); return held.promise.then(() => bitmap); } }, async events => {
       const work = readDrynessTile('https://example.test/vhi.png', 'star-vhi', owner,
         { ...DRYNESS_LIMITS, timeoutMs: reason === 'deadline' ? 40 : 500 });
       const rejected = assert.rejects(work, error => error.name === (reason === 'deadline' ? 'TimeoutError' : 'AbortError'));
@@ -578,8 +614,9 @@ test('dryness encode and encoded-buffer stages remain owner-cancellable and dead
       if (reason === 'owner') owner.abort();
       await rejected;
       assert.equal(events.closed, 1);
-      if (stage === 'encode') finish(); else held.resolve(new ArrayBuffer(1));
-      await Promise.resolve(); await Promise.resolve();
+      held.resolve();
+      await new Promise(setImmediate);
+      assert.equal(events.closed, 2); assert.equal(events.outputs.length, 1);
       assert.ok(events.canvases.every(canvas => canvas.width === 0 && canvas.height === 0));
     });
   }
@@ -601,21 +638,19 @@ test('dryness operation carries cancellation into real held fetch body and keeps
   }
 });
 
-test('dryness allocation/output guards and browser failures reject without an untransformed fallback', async () => {
+test('dryness allocation guards and browser failures reject without an untransformed fallback', async () => {
   for (const [options, overrides, expected] of [
     [{ dimensionMismatch: true }, {}, /dimensions mismatch/],
     [{ noContext: true }, {}, /canvas unavailable/],
-    [{ encode(callback) { callback(null); } }, {}, /encode failed/],
     [{}, { maxPixels: 1 }, /pixel limit/],
-    [{}, { maxDecodedBytes: 8 }, /limit|budget|byte/i],
-    [{}, { maxOutputBytes: 1 }, /Invalid dryness PNG output/]
+    [{}, { maxDecodedBytes: 8 }, /limit|budget|byte/i]
   ]) await withDrynessBrowser(options, async () => {
     await assert.rejects(readDrynessTile('https://example.test/vhi.png', 'star-vhi', new AbortController(), { ...DRYNESS_LIMITS, ...overrides }), expected);
   });
   await withDrynessBrowser({}, async events => {
     const owner = new AbortController(); owner.abort();
     await assert.rejects(readDrynessTile('https://example.test/vhi.png', 'star-vhi', owner, DRYNESS_LIMITS), error => error.name === 'AbortError');
-    await assert.rejects(readDrynessTile('https://example.test/vhi.png', 'star-vhi', new AbortController(), { ...DRYNESS_LIMITS, maxOutputBytes: 0 }), RangeError);
+    await assert.rejects(readDrynessTile('https://example.test/vhi.png', 'star-vhi', new AbortController(), { ...DRYNESS_LIMITS, maxPixels: 0 }), RangeError);
     assert.equal(events.fetched, 0);
   });
 });
@@ -624,7 +659,7 @@ test('dryness synchronous work cannot publish after owner cancellation between c
   const owner = new AbortController();
   await withDrynessBrowser({ draw() { owner.abort(); } }, async events => {
     await assert.rejects(readDrynessTile('https://example.test/vhi.png', 'star-vhi', owner, DRYNESS_LIMITS), error => error.name === 'AbortError');
-    assert.equal(events.closed, 1); assert.equal(events.encoded, 0);
+    assert.equal(events.closed, 1); assert.equal(events.outputs.length, 0);
   });
 });
 
@@ -633,9 +668,9 @@ test('a frozen main thread is not a dryness source failure: the clock jumping pa
   // listening; the tick deadline (the timeoutMs cases above) is the limit.
   let now = 0;
   await withDrynessBrowser({ clock: () => now, draw() { now = DRYNESS_LIMITS.timeoutMs + 1; } }, async events => {
-    const bytes = await readDrynessTile('https://example.test/vhi.png', 'star-vhi', new AbortController(), DRYNESS_LIMITS);
-    assert.ok(bytes.byteLength > 0);
-    assert.equal(events.closed, 1); assert.equal(events.encoded, 1);
+    const bitmap = await readDrynessTile('https://example.test/vhi.png', 'star-vhi', new AbortController(), DRYNESS_LIMITS);
+    assert.ok(bitmap.width > 0);
+    assert.equal(events.closed, 1); assert.equal(events.outputs.length, 1);
   });
 });
 
@@ -647,9 +682,9 @@ test('the shared reader\'s wall-clock timeout is read again while listening time
   // The first read hangs past the 300 ms wall-clock timer; the listening limit is two 250 ms ticks.
   await withDrynessBrowser({ fetch: (url, init) => ++fetched === 1 ? hang(url, init)
     : Promise.resolve(new Response(drynessSource(), { headers: { 'content-type': 'image/png' } })) }, async events => {
-    const bytes = await readDrynessTile('https://example.test/vhi.png', 'star-vhi', new AbortController(), { ...DRYNESS_LIMITS, timeoutMs: 300 });
-    assert.ok(bytes.byteLength > 0);
-    assert.equal(fetched, 2); assert.equal(events.encoded, 1);
+    const bitmap = await readDrynessTile('https://example.test/vhi.png', 'star-vhi', new AbortController(), { ...DRYNESS_LIMITS, timeoutMs: 300 });
+    assert.ok(bitmap.width > 0);
+    assert.equal(fetched, 2); assert.equal(events.outputs.length, 1);
   });
   // A hidden tab: ticks all but stop, the source hangs. One read and two re-reads, then a timeout.
   fetched = 0;
@@ -659,7 +694,7 @@ test('the shared reader\'s wall-clock timeout is read again while listening time
     await withDrynessBrowser({ fetch: (url, init) => { fetched++; return hang(url, init); } }, async events => {
       await assert.rejects(readDrynessTile('https://example.test/vhi.png', 'star-vhi', new AbortController(), { ...DRYNESS_LIMITS, timeoutMs: 30 }),
         error => error.name === 'TimeoutError');
-      assert.equal(fetched, 3); assert.equal(events.encoded, 0);
+      assert.equal(fetched, 3); assert.equal(events.outputs.length, 0);
     });
   } finally { globalThis.setInterval = realSetInterval; }
 });
@@ -711,13 +746,17 @@ test('dryness selected STAR record is atomic, native owner cancellation does not
     const adapter = createDrynessGround(drynessOptions(map, snapshots));
     await adapter.activate(map, owner.signal);
     assert.equal(events.fetched, 1);
+    // The probe's source and output bitmaps are both closed: its result is thrown away.
+    assert.equal(events.outputs.length, 1); assert.equal(events.closed, 2);
     assert.equal(snapshots.at(-1).state, 'loading');
     map.event('sourcedata', drynessTileProof(snapshots.at(-1).sourceId));
     assert.equal(snapshots.at(-1).state, 'live');
     assert.equal(snapshots.at(-1).selected.frame, '2026001');
     const tile = await adapter.protocol({ url: 'dryness-test://1/0/5/5/11' }, new AbortController());
-    assert.deepEqual([...drynessPngJs.PNG.sync.read(Buffer.from(tile.data)).data.subarray(0, 4)], [255, 255, 255, 102]);
+    assert.deepEqual([...tile.data.pixels.subarray(0, 4)], [255, 255, 255, 102]);
     assert.equal(events.fetched, 2);
+    // A tile handed to MapLibre stays open (only its source bitmap closed).
+    assert.equal(events.closed, 3);
     const tileOwner = new AbortController(); tileOwner.abort();
     await assert.rejects(adapter.protocol({ url: 'dryness-test://1/0/5/5/11' }, tileOwner), { name: 'AbortError' });
     assert.equal(events.fetched, 2);
@@ -730,6 +769,22 @@ test('dryness selected STAR record is atomic, native owner cancellation does not
     assert.equal(map.sources.size, 0); assert.equal(map.layers.size, 0);
     assert.equal([...map.listeners.values()].reduce((n, set) => n + set.size, 0), 0);
     assert.equal(snapshots.at(-1), null);
+  });
+});
+test('a tile that finishes just after its owner aborted is closed, never handed to MapLibre', async () => {
+  const tileOwner = new AbortController(); let armed = false;
+  await withDrynessBrowser({ output(bitmap) {
+    if (!armed) return Promise.resolve(bitmap);
+    // Settle the read, then abort in the gap before the protocol handler resumes.
+    return { then(resolve) { Promise.resolve().then(() => { resolve(bitmap); queueMicrotask(() => tileOwner.abort()); }); } };
+  } }, async events => {
+    const map = drynessMap(), snapshots = [], adapter = createDrynessGround(drynessOptions(map, snapshots));
+    await adapter.activate(map, new AbortController().signal);
+    armed = true;
+    const before = events.closed;
+    await assert.rejects(adapter.protocol({ url: 'dryness-test://1/0/5/5/11' }, tileOwner), { name: 'AbortError' });
+    assert.equal(events.closed, before + 2);
+    adapter.deactivate();
   });
 });
 test('dryness failed k reaches exact prior-year record through real PNG operation and retains source failure', async () => {
@@ -765,12 +820,12 @@ test('dryness failed land-cover tile fails its STAR frame like a failed tile, an
     assert.equal(snapshots.at(-1).selected.frame, '2025052');
     assert.deepEqual(snapshots.at(-1).failures, [{ productKey: 'star-vhi', frame: '2026001', reason: 'source-failed' }]);
     const tile = await adapter.protocol({ url: 'dryness-test://1/1/6/10/22' }, new AbortController());
-    assert.deepEqual([...drynessPngJs.PNG.sync.read(Buffer.from(tile.data)).data], [255, 255, 255, 102, 0, 0, 0, 0]);
+    assert.deepEqual([...tile.data.pixels], [255, 255, 255, 102, 0, 0, 0, 0]);
     for (const path of ['2025052', 'landcover-2025052']) assert.ok(requested.includes(`https://fixture.invalid/${path}/6/10/22.png`), path);
     adapter.deactivate();
   });
 });
-test('the Plant stress switch removes the ground and restores it with fresh reads; the shipped STAR frame reads NOAA STAR land cover beside each tile', async () => {
+test('the Plant stress switch removes the ground and restores it with fresh dryness reads; the shipped STAR frame reads NOAA STAR land cover beside each tile', async () => {
   const { activateWildfireDryness, getDrynessSourceId } = await import('../src/layers/wildfire-dryness.ts');
   const { setFire3DGroundLayer } = await import('../src/state/fire3d-ground-layers.ts');
   const requested = [];
@@ -802,16 +857,16 @@ test('the Plant stress switch removes the ground and restores it with fresh read
       setFire3DGroundLayer('plantStress', false);
       assert.equal(map.layers.size, 0); assert.equal(map.sources.size, 0); assert.equal(getDrynessSourceId(), null);
       assert.equal(document.documentElement.dataset.ddmDryness, undefined);
-      // Back on: read again, nothing was kept.
+      // Back on: the dryness tile is read again; only the week-free land cover was kept.
       setFire3DGroundLayer('plantStress', true);
       await mounted();
-      assert.equal(requested.length, 4);
+      assert.equal(requested.length, 3); assert.ok(!requested[2].includes('IGBPlandtype'));
       // Leaving the scene releases the switch: a later change reads nothing.
       scene.abort();
       assert.equal(map.layers.size, 0);
       setFire3DGroundLayer('plantStress', false); setFire3DGroundLayer('plantStress', true);
       await new Promise(setImmediate);
-      assert.equal(requested.length, 4);
+      assert.equal(requested.length, 3);
     } finally {
       scene.abort();
       setFire3DGroundLayer('plantStress', true); setFire3DGroundLayer('fuelRisk', true);
@@ -843,7 +898,7 @@ test('dryness whole-selection deadline interrupts held decode and discards its l
     assert.equal(snapshots.at(-1).state, 'unavailable');
     assert.equal(map.sources.size, 0); assert.equal(events.fetched, 1);
     held.resolve(bitmap); await closed.promise;
-    assert.equal(events.encoded, 0); assert.equal(map.sources.size, 0);
+    assert.equal(events.outputs.length, 0); assert.equal(map.sources.size, 0);
     adapter.deactivate();
   });
 });
@@ -922,6 +977,38 @@ test('dryness native source failure advances once and stale source events cannot
     map.event('error', { sourceId: oldSource, error: new Error('late native event') });
     assert.equal(snapshots.at(-1), replacement);
     assert.equal(map.sources.size, 1);
+    adapter.deactivate();
+  });
+});
+test('only a source fault steps the week back: a stall, a local failure or a cancellation does not', async () => {
+  const { PngTileResponseError } = await import('../src/map/tile-protocol.ts');
+  const dom = name => new DOMException('x', name);
+  for (const error of [dom('TimeoutError'), dom('AbortError'), new DrynessLocalError('canvas')]) assert.equal(isDrynessSourceFault(error), false);
+  for (const error of [new PngTileResponseError('HTTP 500', 500, '', new ArrayBuffer(0)), new RangeError('Decoded dryness dimensions mismatch'),
+    new Error('Unrecognized dryness class'), new Error('Unsupported dryness alpha'), new Error('Unrecognized land-cover class'), new TypeError('fetch failed')]) {
+    assert.equal(isDrynessSourceFault(error), true);
+  }
+});
+test('dryness local tile failure rejects that tile and keeps the selected week; a source failure still steps back', async () => {
+  const options = { noContext: false }; let failSource = false;
+  options.fetch = async () => failSource ? new Response('failed', { status: 500 })
+    : new Response(drynessSource(), { headers: { 'content-type': 'image/png' } });
+  await withDrynessBrowser(options, async () => {
+    const map = drynessMap(), snapshots = [], adapter = createDrynessGround(drynessOptions(map, snapshots));
+    await adapter.activate(map, new AbortController().signal);
+    const mounted = snapshots.at(-1);
+    assert.equal(mounted.selected.frame, '2026001');
+    options.noContext = true;
+    const local = await adapter.protocol({ url: 'dryness-test://1/0/5/5/11' }, new AbortController()).catch(error => error);
+    assert.match(local.message, /canvas unavailable/);
+    // MapLibre re-announces the rejected tile as a source error; it must not step the week back either.
+    map.event('error', { sourceId: mounted.sourceId, error: local });
+    await new Promise(setImmediate);
+    assert.equal(snapshots.at(-1), mounted); assert.deepEqual(mounted.failures, []);
+    options.noContext = false; failSource = true;
+    await assert.rejects(adapter.protocol({ url: 'dryness-test://1/0/5/5/11' }, new AbortController()), /HTTP 500/);
+    for (let turn = 0; turn < 50 && snapshots.at(-1).selected?.frame !== '2025052'; turn++) await new Promise(setImmediate);
+    assert.equal(snapshots.at(-1).failures[0]?.frame, '2026001');
     adapter.deactivate();
   });
 });
@@ -1123,83 +1210,68 @@ test('the Wildfire 3D drape protocol clears fuel risk by the share of each pixel
     /Unrecognized WHP class/);
 });
 
-test('the Wildfire 3D drape reads the perimeters before its source exists, reloads its tiles only when they change, and lets go on teardown', async () => {
+test('the Wildfire 3D drape takes the published perimeters before its source exists, reloads its tiles only when the snapshot changes, and lets go on teardown', async () => {
   const { activateWhpDrape, deactivateWhpDrape } = await import('../src/layers/whp-3d.ts');
   const { registry } = await import('../src/state/registry.ts');
+  const { setPerimeterSnapshot } = await import('../src/state/fire-perimeter-snapshot.ts');
   const events = [], mounted = [], sources = new Map(), layers = new Map();
   const map = {
     getSource: id => sources.get(id), removeSource: id => sources.delete(id),
     addSource(id, spec) { events.push(`${id} added`); sources.set(id, spec); },
     getLayer: id => layers.get(id), addLayer(layer) { layers.set(layer.id, layer); }, removeLayer: id => layers.delete(id),
     moveLayer() {}, setLayoutProperty() {}, getStyle: () => ({ layers: [...layers.keys()].map(id => ({ id })) }),
-    refreshTiles(id) { events.push(`${id} reloaded`); }
+    refreshTiles(id, tiles) { events.push(`${id} reloaded`); lastTiles = tiles; }
   };
+  let lastTiles;
   const reloads = () => events.filter(event => event === 'whp-2023 reloaded').length;
   const fires = polygons => ({ type: 'FeatureCollection',
     features: polygons.map(coordinates => ({ type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates } })) });
-  /** The flat perimeter layer's source with MapLibre's read-back seam; `data` is swapped as its `setData` would. */
-  const flat = { type: 'geojson', data: fires(NW_QUARTER), fail: false, reads: 0,
-    async getData() { flat.reads++; if (flat.fail) throw new Error('read failed'); events.push('perimeters read'); return flat.data; } };
-  const turn = () => new Promise(resolve => setImmediate(resolve));
-  /** The perimeter layer reports, as its own module does once a response is on the map. */
-  const report = async (status = 'ready') => { registry.setStatus('nifc-fires', status); await turn(); };
   await withWhpBrowser(async () => {
     const scene = new AbortController();
+    const nw = fires(NW_QUARTER);
     try {
-      sources.set('nifc-fires', flat);
-      registry.activate('nifc-fires');
+      // The perimeter layer has already published its collection when the scene opens.
+      setPerimeterSnapshot(nw);
       // The console offers its Fuel risk switch only while the drape says it is mounted.
       window.dispatchEvent = event => { if (event.type === 'ddm:whp-shade') mounted.push(event.detail.mounted); };
       assert.equal(await activateWhpDrape(map, scene.signal), true);
       assert.deepEqual(mounted, [true]);
-      // Read first: the drape's first tile is already cut, and entering reloads nothing.
-      assert.deepEqual(events, ['perimeters read', 'whp-2023 added']);
+      // Taken first: the drape's first tile is already cut, and entering reloads nothing.
+      assert.deepEqual(events, ['whp-2023 added']);
       assert.deepEqual(await drapeTileAlphas(), NW_CLEARED);
 
-      // The same perimeters reported again (a pan inside the fetched envelope does that), a change to another
-      // layer, and a fresh response holding the same geometry in a new object: no reload.
-      await report(); await report('loading');
-      registry.activate('unrelated'); registry.deactivate('unrelated'); await turn();
-      flat.data = fires(structuredClone(NW_QUARTER)); await report();
+      // The same collection published again (a pan inside the fetched envelope does that) and a change to
+      // another layer: no reload.
+      setPerimeterSnapshot(nw);
+      registry.activate('unrelated'); registry.deactivate('unrelated');
       assert.equal(reloads(), 0);
 
-      // Different perimeters: one reload, and the tile is cut to the new set.
-      flat.data = fires(SE_QUARTER); await report();
+      // A fresh response over the same geometry changes no tile: no reload, the same tile.
+      setPerimeterSnapshot(fires(structuredClone(NW_QUARTER)));
+      assert.equal(reloads(), 0);
+      assert.deepEqual(await drapeTileAlphas(), NW_CLEARED);
+
+      // Different perimeters: one reload of the whole source (a tile list would leave stale tiles in
+      // MapLibre's out-of-view cache), and the tile is cut to the new set.
+      setPerimeterSnapshot(fires(SE_QUARTER));
       assert.equal(reloads(), 1);
+      assert.equal(lastTiles, undefined);
       assert.deepEqual(await drapeTileAlphas(), SE_CLEARED);
 
-      // A failed read never blanks fuel risk: the drape draws whole until a read succeeds.
-      flat.fail = true; await report();
+      // The perimeter layer goes off (it publishes nothing): whole again.
+      setPerimeterSnapshot(null);
       assert.equal(reloads(), 2);
       assert.deepEqual(await drapeTileAlphas(), WHP_WHOLE);
-      flat.fail = false; await report();
-      assert.equal(reloads(), 3);
-      assert.deepEqual(await drapeTileAlphas(), SE_CLEARED);
 
-      // The perimeter layer goes off (its module removes the source, then the key leaves the registry):
-      // whole again, with nothing read.
-      const readsWhileOn = flat.reads;
-      sources.delete('nifc-fires'); registry.deactivate('nifc-fires'); await turn();
-      assert.equal(reloads(), 4);
-      assert.equal(flat.reads, readsWhileOn);
-      assert.deepEqual(await drapeTileAlphas(), WHP_WHOLE);
-
-      // Leaving the scene: a read still out lands nowhere, and later perimeter news is not followed.
-      let release;
-      flat.getData = () => { flat.reads++; return new Promise(resolve => { release = () => resolve(flat.data); }); };
-      sources.set('nifc-fires', flat); registry.activate('nifc-fires');
-      assert.equal(flat.reads, readsWhileOn + 1);
+      // Leaving the scene: later perimeter news is not followed.
       deactivateWhpDrape(map);
       assert.equal(sources.has('whp-2023'), false);
       assert.equal(mounted.at(-1), false);
-      release(); await turn();
-      const readsAtExit = flat.reads;
-      await report();
-      assert.equal(flat.reads, readsAtExit);
-      assert.equal(reloads(), 4);
+      setPerimeterSnapshot(fires(NW_QUARTER));
+      assert.equal(reloads(), 2);
       assert.deepEqual(await drapeTileAlphas(), WHP_WHOLE);
     } finally {
-      scene.abort(); deactivateWhpDrape(map); registry.deactivate('nifc-fires'); whpShade.setWhpShadePerimeters([]);
+      scene.abort(); deactivateWhpDrape(map); setPerimeterSnapshot(null); whpShade.setWhpShadePerimeters([]);
     }
   });
 });
