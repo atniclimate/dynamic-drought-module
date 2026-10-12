@@ -479,11 +479,12 @@ export async function expectPlaceFields(root: Locator, expected: PlaceExpectatio
  * visible one decides.
  */
 export async function expectStrictlyReachable(target: Locator, label: string): Promise<void> {
-  await target.evaluate((el) => el.scrollIntoView({ block: 'nearest', inline: 'nearest' }));
   await expect
     .poll(
       async () =>
         target.evaluate((el) => {
+          // Scrolled on every attempt: a re-clamp of the popup can put the body back at its top between two calls.
+          el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
           const region = el.closest('.coordinated-response-body, .coordinated-response-head');
           const boxes = Array.from(el.getClientRects());
           let verdict = 'not in view';

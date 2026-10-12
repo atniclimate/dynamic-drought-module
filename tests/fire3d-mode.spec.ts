@@ -2953,9 +2953,10 @@ test.describe('W2 registered native consumers', () => {
         const map = (window as unknown as W2Window).__w2Maps.find((candidate) => candidate.getContainer().id === 'map')!;
         return map.isSourceLoaded('w2-missing');
       }), { timeout: 20_000 }).toBe(true);
+      // Errors first: an errored source also reads as loaded, and its message says why the reads are missing.
+      expect(await page.evaluate(() => (window as unknown as W2Window).__w2Errors)).toEqual([]);
       expect(fixture.state.headerReads).toBe(1);
       expect(fixture.state.tileReads).toBe(0);
-      expect(await page.evaluate(() => (window as unknown as W2Window).__w2Errors)).toEqual([]);
       // Completed no-data imagery must neither invent a category nor obscure
       // the known underlying color, even with raster opacity set to one.
       expect(await framebufferPixel()).toEqual([18, 52, 86, 255]);
