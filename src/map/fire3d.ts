@@ -456,6 +456,13 @@ function publishStatus(
   });
 }
 
+/** Republish a change made while the scene is up. Between `active = true`
+ * and the scene's first 'active' publish this is a no-op: that publish reads
+ * the same module state, and 'active' must not be seen before it. */
+function republishActive(): void {
+  if (status.state === 'active') publishStatus('active', null);
+}
+
 function desktopViewport(): boolean {
   return (
     typeof window !== 'undefined' &&
@@ -812,7 +819,7 @@ async function activateScene(map: maplibregl.Map): Promise<void> {
       const next = readTerrainCoverage(map);
       if (next === terrainCoverage) return;
       terrainCoverage = next;
-      if (active) publishStatus('active', null);
+      republishActive();
     };
     map.on('moveend', coverageMoveListener);
   } catch (err) {
@@ -953,7 +960,7 @@ function reconcileSmokeVolume(map: maplibregl.Map): void {
     smokeModule.deactivateSmokeVolume(map);
     smokeModule.cleanupOrphanedSmokeSource(map);
     smokeVolumeOn = false;
-    publishStatus('active', null);
+    republishActive();
   } else if (!smokeVolumeOn && smokeLayerOn) {
     try {
       smokeVolumeOn = smokeModule.activateSmokeVolume(map);
@@ -961,7 +968,7 @@ function reconcileSmokeVolume(map: maplibregl.Map): void {
       smokeVolumeOn = false;
       warnComponent('smoke activation', err);
     }
-    publishStatus('active', null);
+    republishActive();
   }
 }
 
@@ -995,16 +1002,17 @@ function reconcilePerimeterRibbon(
     ribbon.deactivatePerimeterRibbon(map);
     if (!ribbonOn) return;
     ribbonOn = false;
-    publishStatus('active', null);
+    republishActive();
     return;
   }
-  if (ribbonOn) return;
   // A change that does not concern the perimeters (supersede false) leaves
-  // a read already out alone; a perimeter status change supersedes it, so
-  // the answer that lands is the one over the perimeters the layer holds now.
-  if (!supersede && ribbonRead !== null) return;
+  // a standing ribbon and a read already out alone; a perimeter status
+  // change supersedes it, so the answer that lands (and the ribbon that
+  // stands) is the one over the perimeters the layer holds now.
+  if (!supersede && (ribbonOn || ribbonRead !== null)) return;
+  const was = ribbonOn;
   void readRibbon(map, ribbon).then((current) => {
-    if (current && ribbonOn && active) publishStatus('active', null);
+    if (current && ribbonOn !== was) republishActive();
   });
 }
 

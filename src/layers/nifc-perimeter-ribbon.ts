@@ -277,9 +277,15 @@ async function readPerimeterCollection(
   return asFeatureCollection(await source.getData());
 }
 
+/** The collection the standing ribbon was built from. `getData()` answers
+ * with the object the flat source holds, so identity says whether a refresh
+ * changed the perimeters. */
+let raised: FeatureCollection | null = null;
+
 /**
- * Raise the ribbon over the perimeters already on the map. Idempotent.
- * Returns false (nothing added) when the perimeter source is absent or
+ * Raise the ribbon over the perimeters already on the map, or rebuild a
+ * standing one when the perimeters changed. Idempotent over the same data.
+ * Returns false (no ribbon stands) when the perimeter source is absent or
  * holds no wildfire-class geometry; the caller treats that as a non-fatal
  * partial degrade.
  *
@@ -292,16 +298,27 @@ export async function activatePerimeterRibbon(
   signal: AbortSignal
 ): Promise<boolean> {
   if (signal.aborted) return false;
-  if (map.getSource(RIBBON_SOURCE_ID)) return true;
   const collection = await readPerimeterCollection(map);
   // A teardown, the layer going off, or a newer read while this one was in
   // flight: do not render into a scene that no longer wants this answer.
   if (signal.aborted) return false;
-  if (!collection) return false;
-  if (map.getSource(RIBBON_SOURCE_ID)) return true;
+  const standing = map.getSource(RIBBON_SOURCE_ID) as
+    | { setData: (data: FeatureCollection) => void }
+    | undefined;
+  if (!collection) return Boolean(standing);
+  if (standing && collection === raised) return true;
 
   const bands = buildPerimeterRibbonBands(collection);
-  if (bands.features.length === 0) return false;
+  if (bands.features.length === 0) {
+    if (standing) deactivatePerimeterRibbon(map);
+    return false;
+  }
+  raised = collection;
+  // The perimeters changed under a standing ribbon (a pan to other fires).
+  if (standing) {
+    standing.setData(bands);
+    return true;
+  }
 
   map.addSource(RIBBON_SOURCE_ID, { type: 'geojson', data: bands });
   PERIMETER_RIBBON_LAYER_IDS.forEach((id, index) => {
@@ -348,5 +365,6 @@ export function deactivatePerimeterRibbon(map: maplibregl.Map): void {
     if (map.getLayer(id)) map.removeLayer(id);
   }
   if (map.getSource(RIBBON_SOURCE_ID)) map.removeSource(RIBBON_SOURCE_ID);
+  raised = null;
   hideLegend(LEGEND_KEY);
 }

@@ -159,6 +159,9 @@ const layers = new Map();
 const map = {
   getSource: (id) => sources.get(id),
   addSource: (id, spec) => {
+    spec.setData ??= (data) => {
+      spec.data = data;
+    };
     sources.set(id, spec);
   },
   removeSource: (id) => {
@@ -432,6 +435,32 @@ test('when two reads are out, the ribbon stands over the newer answer, not the e
     'the ribbon raised every perimeter of the newer answer'
   );
   assert.equal(dataset.ddmFire3dRibbon, 'on');
+});
+
+test('a refresh that lands different perimeters rebuilds the standing ribbon over them', async () => {
+  perimetersOn({ type: 'FeatureCollection', features: [LIVE_PERIMETERS.features[0]] });
+  await enterScene();
+  assert.equal(sources.get(RIBBON_SOURCE_ID).data.features.length, 1);
+
+  // A pan to other fires: the layer swaps new perimeters into its source.
+  registry.setStatus(PERIMETER_KEY, 'loading');
+  map.getSource(PERIMETER_KEY).data = LIVE_PERIMETERS;
+  registry.setStatus(PERIMETER_KEY, 'live');
+  await settle();
+  assert.deepEqual(ribbonOnMap(), FULL_RIBBON);
+  assert.equal(
+    sources.get(RIBBON_SOURCE_ID).data.features.length,
+    LIVE_PERIMETERS.features.length,
+    'the ribbon follows the perimeters the layer holds now'
+  );
+
+  // A pan to a view with no wildfire perimeter takes the ribbon down.
+  registry.setStatus(PERIMETER_KEY, 'loading');
+  map.getSource(PERIMETER_KEY).data = NO_PERIMETERS;
+  registry.setStatus(PERIMETER_KEY, 'live');
+  await settle();
+  assert.deepEqual(ribbonOnMap(), NO_RIBBON);
+  assert.equal(dataset.ddmFire3dRibbon, 'off');
 });
 
 test('a scene that stays up with its perimeter layer on keeps the ribbon, and the layer leads it off and on', async () => {
