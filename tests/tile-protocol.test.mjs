@@ -938,52 +938,128 @@ test('RG discovery whole deadline and owner cancellation bound held headers with
   } finally { globalThis.fetch = original; }
 });
 
-// Wildfire 3D: fuel risk is fully transparent inside a fire perimeter (owner, 2026-10-11).
+// Wildfire 3D: fuel risk is cleared inside a fire perimeter (owner, 2026-10-11), each pixel by the share of it inside (owner, 2026-10-12).
 const { tilePolygonMask } = await import('../src/util/tile-polygon-mask.ts');
 const { pointInPolygonGeometry } = await import('../src/util/point-in-polygon.ts');
 const { latOf, lonOf, mercX, mercY } = await import('../src/layers/flow/field.ts');
-test('tile polygon mask marks exactly the pixel centres inside: a hole, a ring across the tile edge, overlapping polygons, a tile outside', () => {
-  const z = 8, x = 41, y = 92, size = 32, n = 2 ** z;
-  /** A closed ring from fractions of the tile (0,0 is its north-west corner; outside 0..1 lies beyond it). */
-  const ring = (...fractions) => {
-    const open = fractions.map(([fx, fy]) => [lonOf((x + fx) / n), latOf((y + fy) / n)]);
-    return [...open, open[0]];
-  };
-  const fire = ring([0.2, 0.21], [0.71, 0.13], [0.83, 0.62], [0.44, 0.87], [0.13, 0.55]);
-  const unburnedIsland = ring([0.4, 0.35], [0.61, 0.41], [0.45, 0.6]);
-  const acrossTheEdge = ring([0.62, -0.3], [1.4, 0.52], [0.7, 0.93]);
-  const elsewhere = ring([3.1, 3.2], [3.9, 3.3], [3.5, 3.8]);
-  /** The pixel holding a fraction of the tile. */
-  const pixel = (fx, fy) => Math.floor(fy * size) * size + Math.floor(fx * size);
-  /** The product's own even-odd point test, asked at every pixel centre in the tile's pixel space. */
-  const expected = polygons => {
+/** The mask tests' tile: 32 pixels square. */
+const MASK_TILE = [8, 41, 92], MASK_SIZE = 32;
+/** A closed ring from points in the tile's own pixels (0,0 is its north-west corner; outside 0..32 lies beyond it). */
+const maskRing = (...points) => {
+  const [z, x, y] = MASK_TILE;
+  const open = points.map(([px, py]) => [lonOf((x + px / MASK_SIZE) / 2 ** z), latOf((y + py / MASK_SIZE) / 2 ** z)]);
+  return [...open, open[0]];
+};
+/** A box is its west, north, east and south edges in tile pixels. */
+const maskBox = ([west, north, east, south]) => maskRing([west, north], [east, north], [east, south], [west, south]);
+/** The share of one pixel inside a box, exactly. */
+const boxShare = ([west, north, east, south], column, row) =>
+  Math.max(0, Math.min(east, column + 1) - Math.max(west, column)) * Math.max(0, Math.min(south, row + 1) - Math.max(north, row));
+const maskOf = polygons => tilePolygonMask(polygons, MASK_TILE, MASK_SIZE);
+const maskSum = mask => mask.reduce((sum, value) => sum + value, 0);
+/** Every pixel's byte against `share(column, row)` (1 is all of the pixel, and more than 1 is still all of it), within `bytes`. */
+function assertMask(mask, share, bytes, name) {
+  assert.ok(mask instanceof Uint8ClampedArray, name);
+  for (let index = 0; index < MASK_SIZE ** 2; index++) {
+    const expected = 255 * Math.min(1, share(index % MASK_SIZE, Math.floor(index / MASK_SIZE)));
+    assert.ok(Math.abs(mask[index] - expected) <= bytes, `${name}: pixel ${index} is ${mask[index]}, expected ${expected.toFixed(2)}`);
+  }
+}
+
+test('the perimeter mask is the share of each pixel inside: exact across a row, to an eighth of a pixel down it, 255 inside and 0 outside', () => {
+  // North and south edges that fall between a row's four sample lines: exact both ways, to the byte.
+  const box = [5.3, 10.25, 20.75, 20.5];
+  const mask = maskOf([[maskBox(box)]]);
+  assertMask(mask, (column, row) => boxShare(box, column, row), 1, 'a box');
+  assert.equal(mask[15 * MASK_SIZE + 10], 255);
+  assert.equal(mask[15 * MASK_SIZE + 20], 191);
+  assert.equal(mask[10 * MASK_SIZE + 5], 134);
+  assert.equal(mask[2 * MASK_SIZE + 2], 0);
+  // Any other height: an edge that crosses a pixel is placed to within half a sample line, an eighth of the pixel.
+  const offTheLines = [5.3, 10.3, 20.75, 20.6];
+  assertMask(maskOf([[maskBox(offTheLines)]]), (column, row) => boxShare(offTheLines, column, row), 255 / 8 + 1, 'a box off the sample lines');
+});
+
+test('the perimeter mask: a hole is outside whichever way it is wound, overlapping perimeters add up to full and no further, a fire under one pixel clears a little', () => {
+  const fire = [4.5, 4.25, 27.5, 27.75], unburnedIsland = [10.25, 10.5, 20.5, 20.25];
+  const aroundTheIsland = (column, row) => boxShare(fire, column, row) - boxShare(unburnedIsland, column, row);
+  assertMask(maskOf([[maskBox(fire), maskBox(unburnedIsland)]]), aroundTheIsland, 1, 'a hole');
+  assertMask(maskOf([[maskBox(fire), maskBox(unburnedIsland).toReversed()]]), aroundTheIsland, 1, 'a hole wound the other way');
+  assert.equal(maskOf([[maskBox(fire), maskBox(unburnedIsland)]])[15 * MASK_SIZE + 15], 0);
+
+  const secondFire = [10.25, 10.5, 30.5, 30.25];
+  const both = maskOf([[maskBox(fire)], [maskBox(secondFire)]]);
+  assertMask(both, (column, row) => boxShare(fire, column, row) + boxShare(secondFire, column, row), 1, 'two overlapping perimeters');
+  // Inside both: all of it, not outside by parity. Half inside each: the halves add.
+  assert.equal(both[15 * MASK_SIZE + 15], 255);
+  assert.equal(both[10 * MASK_SIZE + 27], 255);
+
+  // 0.3 of a pixel wide over one sample line, missing the pixel's centre: 0.3 x 0.25 of the pixel, and nothing anywhere else.
+  const small = maskOf([[maskBox([12.6, 7.5, 12.9, 7.75])]]);
+  assert.equal(small[7 * MASK_SIZE + 12], 19);
+  assert.equal(maskSum(small), 19);
+});
+
+test('the perimeter mask against the product\'s own point test and against true area: slanted rings, a hole, a ring across the tile edge, a tile outside', () => {
+  const [z, x, y] = MASK_TILE, size = MASK_SIZE, n = 2 ** z;
+  const fire = maskRing([6.4, 6.72], [22.72, 4.16], [26.56, 19.84], [14.08, 27.84], [4.16, 17.6]);
+  const unburnedIsland = maskRing([12.8, 11.2], [19.52, 13.12], [14.4, 19.2]);
+  const acrossTheEdge = maskRing([19.84, -9.6], [44.8, 16.64], [22.4, 29.76]);
+  const elsewhere = maskRing([99.2, 102.4], [124.8, 105.6], [112, 121.6]);
+  /** The product's even-odd point test at 16 x 16 points in each pixel, in the tile's pixel space: the share of them inside, polygons added. */
+  const sampled = polygons => {
     const toPixels = ([lon, lat]) => [(mercX(lon) * n - x) * size, (mercY(lat) * n - y) * size];
-    return Uint8Array.from({ length: size * size }, (_, index) => Number(polygons.some(polygon =>
-      pointInPolygonGeometry((index % size) + 0.5, Math.floor(index / size) + 0.5,
-        { type: 'Polygon', coordinates: polygon.map(points => points.map(toPixels)) }))));
+    const geometries = polygons.map(polygon => ({ type: 'Polygon', coordinates: polygon.map(points => points.map(toPixels)) }));
+    return (column, row) => {
+      let inside = 0;
+      for (const geometry of geometries) {
+        for (let point = 0; point < 256; point++) {
+          if (pointInPolygonGeometry(column + ((point % 16) + 0.5) / 16, row + (Math.floor(point / 16) + 0.5) / 16, geometry)) inside++;
+        }
+      }
+      return inside / 256;
+    };
   };
   const masks = {};
   for (const [name, polygons] of Object.entries({ 'one perimeter': [[fire]], 'a hole': [[fire, unburnedIsland]],
     'across the tile edge': [[acrossTheEdge]], 'two overlapping perimeters': [[fire], [acrossTheEdge]] })) {
-    masks[name] = tilePolygonMask(polygons, [z, x, y], size);
-    assert.deepEqual(masks[name], expected(polygons), name);
+    masks[name] = maskOf(polygons);
+    // Within the sample lines' eighth of a pixel; the worst pixel of these shapes measures a twentieth.
+    assertMask(masks[name], sampled(polygons), 255 / 8, name);
   }
+  const at = (px, py) => Math.floor(py) * size + Math.floor(px);
   // Inside and outside.
-  assert.equal(masks['one perimeter'][pixel(0.45, 0.45)], 1);
-  assert.equal(masks['one perimeter'][pixel(0.05, 0.05)], 0);
+  assert.equal(masks['one perimeter'][at(14.4, 14.4)], 255);
+  assert.equal(masks['one perimeter'][at(1.6, 1.6)], 0);
   // The hole is outside; the burned ground around it is still inside.
-  assert.equal(masks['one perimeter'][pixel(0.48, 0.45)], 1);
-  assert.equal(masks['a hole'][pixel(0.48, 0.45)], 0);
-  assert.equal(masks['a hole'][pixel(0.3, 0.5)], 1);
+  assert.equal(masks['one perimeter'][at(15.36, 14.4)], 255);
+  assert.equal(masks['a hole'][at(15.36, 14.4)], 0);
+  assert.equal(masks['a hole'][at(9.6, 16)], 255);
   // A ring that leaves the tile fills up to its edge, and nothing wraps to the far side.
-  assert.equal(masks['across the tile edge'][pixel(0.99, 0.3)], 1);
-  assert.equal(masks['across the tile edge'][pixel(0.01, 0.3)], 0);
+  assert.equal(masks['across the tile edge'][at(31.68, 9.6)], 255);
+  assert.equal(masks['across the tile edge'][at(0.32, 9.6)], 0);
   // Ground inside two perimeters is inside, not outside by parity.
-  assert.equal(masks['two overlapping perimeters'][pixel(0.74, 0.5)], 1);
+  assert.equal(masks['two overlapping perimeters'][at(23.68, 16)], 255);
   // Nothing inside this tile: no mask at all.
-  assert.equal(tilePolygonMask([[elsewhere]], [z, x, y], size), null);
+  assert.equal(maskOf([[elsewhere]]), null);
   assert.equal(tilePolygonMask([[fire]], [z, x + 2, y], size), null);
-  assert.equal(tilePolygonMask([], [z, x, y], size), null);
+  assert.equal(maskOf([]), null);
+
+  // Twenty seeded 24-sided rings well inside the tile: the pixels cleared add up to the ring's area (shoelace), within 0.5%.
+  let seed = 20261012;
+  const random = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (let trial = 0; trial < 20; trial++) {
+    const points = Array.from({ length: 24 }, (_, index) => {
+      const radius = 4 + 10 * random();
+      return [16 + radius * Math.cos(index * Math.PI / 12), 16 + radius * Math.sin(index * Math.PI / 12)];
+    });
+    const area = Math.abs(points.reduce((sum, [px, py], index) => {
+      const [qx, qy] = points[(index + 1) % 24];
+      return sum + px * qy - qx * py;
+    }, 0)) / 2;
+    const cleared = maskSum(maskOf([[maskRing(...points)]])) / 255;
+    assert.ok(Math.abs(cleared - area) <= area / 200, `ring ${trial}: cleared ${cleared.toFixed(2)} of ${area.toFixed(2)} pixels`);
+  }
 });
 
 /** Canvas, bitmap, window and archive stand-ins for the drape. Its one tile, 0/0/0, is the whole world: 4 x 4 pixels of Very High. */
@@ -1019,28 +1095,31 @@ async function drapeTileAlphas() {
 }
 /** Very High is 80% white in Wildfire 3D. */
 const WHP_WHOLE = Array(16).fill(204);
-/** Perimeters over the north-west and the south-east quarter of the world, and the tile each leaves. */
-const NW_QUARTER = [[[[-179, 1], [-1, 1], [-1, 84], [-179, 84], [-179, 1]]]];
+/** Perimeters over exactly the north-west and the south-east quarter of the world, whole pixels of the tile, and the tile each leaves. */
+const NW_QUARTER = [[[[-180, 0], [0, 0], [0, 89], [-180, 89], [-180, 0]]]];
 const NW_CLEARED = WHP_WHOLE.map((alpha, index) => [0, 1, 4, 5].includes(index) ? 0 : alpha);
-const SE_QUARTER = [[[[1, -84], [179, -84], [179, -1], [1, -1], [1, -84]]]];
+const SE_QUARTER = [[[[0, -89], [180, -89], [180, 0], [0, 0], [0, -89]]]];
 const SE_CLEARED = WHP_WHOLE.map((alpha, index) => [10, 11, 14, 15].includes(index) ? 0 : alpha);
 
-test('the Wildfire 3D drape protocol draws no fuel risk inside the perimeters; the flat view\'s shading never reads them', async () => {
+test('the Wildfire 3D drape protocol clears fuel risk by the share of each pixel inside the perimeters; the flat view\'s shading never reads them', async () => {
   await withWhpBrowser(async () => {
     try {
       // No perimeters: the drape is the picture it was.
       assert.deepEqual(await drapeTileAlphas(), WHP_WHOLE);
       whpShade.setWhpShadePerimeters(NW_QUARTER);
       assert.deepEqual(await drapeTileAlphas(), NW_CLEARED);
+      // An edge a quarter of the way into the next column of pixels: a quarter of their fuel risk goes, 204 to 153.
+      whpShade.setWhpShadePerimeters([[[[-180, 0], [22.5, 0], [22.5, 89], [-180, 89], [-180, 0]]]]);
+      assert.deepEqual(await drapeTileAlphas(), NW_CLEARED.map((alpha, index) => [2, 6].includes(index) ? 153 : alpha));
       // The flat Wildfire view's own call (src/layers/whp-image-shade-protocol.ts): no tile, so no mask, and its own table.
       assert.deepEqual(whpAlphas(await whpShade.shadeImage(new Blob([]), new AbortController().signal)), Array(16).fill(255));
     } finally { whpShade.setWhpShadePerimeters([]); }
   });
-  // Only masked pixels are cleared, and a masked pixel is still checked against the issuer's classes.
-  const pixels = new Uint8ClampedArray([237, 30, 0, 255, 237, 30, 0, 255, 0, 0, 0, 0]);
-  whpShade.shadeWhpPixels(pixels, whpShade.WHP_3D_SHADE_ALPHA_BY_RGB, Uint8Array.of(1, 0, 1));
-  assert.deepEqual([...pixels], [255, 255, 255, 0, 255, 255, 255, 204, 0, 0, 0, 0]);
-  assert.throws(() => whpShade.shadeWhpPixels(new Uint8ClampedArray([255, 0, 0, 255]), whpShade.WHP_3D_SHADE_ALPHA_BY_RGB, Uint8Array.of(1)),
+  // All of a pixel inside, none of it, a quarter of it, and a pixel with no fuel risk; a cleared pixel is still checked against the issuer's classes.
+  const pixels = new Uint8ClampedArray([237, 30, 0, 255, 237, 30, 0, 255, 237, 30, 0, 255, 0, 0, 0, 0]);
+  whpShade.shadeWhpPixels(pixels, whpShade.WHP_3D_SHADE_ALPHA_BY_RGB, Uint8ClampedArray.of(255, 0, 64, 255));
+  assert.deepEqual([...pixels], [255, 255, 255, 0, 255, 255, 255, 204, 255, 255, 255, 153, 0, 0, 0, 0]);
+  assert.throws(() => whpShade.shadeWhpPixels(new Uint8ClampedArray([255, 0, 0, 255]), whpShade.WHP_3D_SHADE_ALPHA_BY_RGB, Uint8ClampedArray.of(255)),
     /Unrecognized WHP class/);
 });
 

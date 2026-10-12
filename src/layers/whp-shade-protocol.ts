@@ -26,8 +26,8 @@ const SHADE_ALPHA_BY_RGB = alphaByRgb(WHP_SHADE_CATEGORIES);
 /** The Wildfire 3D archive drape's own shading (src/layers/whp-3d.ts). */
 export const WHP_3D_SHADE_ALPHA_BY_RGB = alphaByRgb(WHP_3D_SHADE_CATEGORIES);
 
-/** Recolor only known issuer classes. Keep missing pixels transparent, and clear the pixels `mask` marks (one byte each). */
-export function shadeWhpPixels(pixels: Uint8ClampedArray, shade: ShadeAlphaByRgb = SHADE_ALPHA_BY_RGB, mask?: Uint8Array | null): void {
+/** Recolor only known issuer classes. Keep missing pixels transparent, and clear each pixel by the share of it `mask` gives (one byte each, 255 for all of it). */
+export function shadeWhpPixels(pixels: Uint8ClampedArray, shade: ShadeAlphaByRgb = SHADE_ALPHA_BY_RGB, mask?: Uint8ClampedArray | null): void {
   for (let offset = 0; offset < pixels.length; offset += 4) {
     if (pixels[offset + 3] === 0) continue;
     const rgb = (pixels[offset]! << 16) | (pixels[offset + 1]! << 8) | pixels[offset + 2]!;
@@ -36,7 +36,7 @@ export function shadeWhpPixels(pixels: Uint8ClampedArray, shade: ShadeAlphaByRgb
     pixels[offset] = 255;
     pixels[offset + 1] = 255;
     pixels[offset + 2] = 255;
-    pixels[offset + 3] = mask?.[offset >> 2] ? 0 : Math.round(pixels[offset + 3]! * opacity);
+    pixels[offset + 3] = Math.round(pixels[offset + 3]! * opacity * (1 - (mask?.[offset >> 2] ?? 0) / 255));
   }
 }
 
