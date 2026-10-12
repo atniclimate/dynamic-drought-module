@@ -207,7 +207,7 @@ function framingBbox(
   return [west, south, east, north];
 }
 
-/** Coverage-envelope containment for a plain bbox: `src/layers/nifc-fires.ts`'s
+/** Coverage-envelope containment for a plain bbox: `src/util/bbox.ts`'s
  * `envelopeCovers`, mirrored here for a framing's bbox rather than a live
  * map's current bounds. A `null` outer envelope is that layer's unscoped
  * national fallback and covers every bbox. */

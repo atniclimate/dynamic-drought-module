@@ -843,7 +843,7 @@ function serviceRectangle(
   return [round4(piece[0]), round4(piece[1]), round4(piece[2]), round4(piece[3])];
 }
 
-/** Coverage-envelope containment for a plain bbox: `src/layers/nifc-fires.ts`'s
+/** Coverage-envelope containment for a plain bbox: `src/util/bbox.ts`'s
  * `envelopeCovers`, mirrored here for a place's request bbox rather than a
  * live map's current bounds. A `null` outer envelope is that layer's
  * unscoped national fallback and covers every bbox. */
