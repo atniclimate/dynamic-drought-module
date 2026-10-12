@@ -23,7 +23,6 @@
  */
 
 export type FlowKind = 'wind' | 'waves';
-export type FlowInterpolation = 'bilinear-valid' | 'nearest-sample';
 
 export interface FlowGrid {
   /** Longitude of column 0, degrees east (any range; it is normalized on read). */
@@ -74,7 +73,6 @@ export interface FlowField {
   readonly magnitude: Float32Array;
   /** 1 valid, 0 masked or missing. */
   readonly mask: Uint8Array;
-  readonly interpolation: FlowInterpolation;
   readonly meta: FlowMeta;
 }
 
@@ -87,7 +85,6 @@ export interface FlowFieldInput {
   readonly magnitude?: Float32Array;
   /** Optional issuer mask (bitmap). A node is valid only if this is 1 AND u, v and magnitude are finite. */
   readonly mask?: Uint8Array;
-  readonly interpolation?: FlowInterpolation;
   readonly meta: FlowMeta;
 }
 
@@ -165,11 +162,7 @@ export function createFlowField(input: FlowFieldInput): FlowField {
       magnitude[i] = Number.NaN;
     }
   }
-  return {
-    kind, grid, u, v, magnitude, mask,
-    interpolation: input.interpolation ?? 'bilinear-valid',
-    meta
-  };
+  return { kind, grid, u, v, magnitude, mask, meta };
 }
 
 /** True when the frame is past its staleAfter at `time` (epoch ms) and must not draw. */
@@ -201,11 +194,9 @@ function columnOf(grid: FlowGrid, lon: number): number {
 }
 
 /**
- * Sample the field at (lon, lat), writing into `out`.
- *
- * - 'bilinear-valid': bilinear over the cell's four corners, and only when
- *   all four are valid; otherwise null (the caller kills the particle).
- * - 'nearest-sample': the nearest node's values, or null when it is masked.
+ * Sample the field at (lon, lat), writing into `out`: bilinear over the
+ * cell's four corners, and only when all four are valid; otherwise null (the
+ * caller kills the particle).
  *
  * Off the grid (a regional box, or beyond the first or last row) it returns
  * null: nothing is extrapolated. Components are blended, never angles.
@@ -219,16 +210,6 @@ export function sampleField(field: FlowField, lon: number, lat: number, out: Flo
   if (fx < 0) return null;
   const y = Math.min(Math.max(fy, 0), g.ny - 1);
   const { u, v, magnitude, mask } = field;
-  if (field.interpolation === 'nearest-sample') {
-    let xi = Math.round(fx);
-    if (xi >= g.nx) xi = g.wrapsLon ? 0 : g.nx - 1;
-    const i = Math.round(y) * g.nx + xi;
-    if (mask[i] !== 1) return null;
-    out.u = u[i] as number;
-    out.v = v[i] as number;
-    out.m = magnitude[i] as number;
-    return out;
-  }
   const x0 = Math.floor(fx);
   const y0 = Math.floor(y);
   const x1 = x0 + 1 < g.nx ? x0 + 1 : g.wrapsLon ? 0 : x0;

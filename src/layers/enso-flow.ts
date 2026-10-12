@@ -397,8 +397,9 @@ async function loadField(activeMap: maplibregl.Map, kind: FlowFieldKind, generat
       }
     });
     presentFieldState(kind, drawn, flowView.state);
-  } catch {
+  } catch (error) {
     if (!current()) return;
+    console.warn('[enso-flow]', error);
     disposeFlowView();
     setStatus('unavailable', `unavailable · ${FLOW_WORDS.unavailable[kind]}`, kind, [FAILED_NOTE]);
     if (detailNode) detailNode.textContent = FAILED_NOTE;

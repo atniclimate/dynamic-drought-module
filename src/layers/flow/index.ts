@@ -24,14 +24,14 @@
  */
 import type { GeoJSONSource, Map as MlMap } from 'maplibre-gl';
 import { reassertThematicOrder } from '../../map/layer-order';
-import { type FlowDensity, type ViewQuad, PHONE_MAX_WIDTH_PX, planForm } from './advect';
+import { type ViewQuad, PHONE_MAX_WIDTH_PX, planForm } from './advect';
 import { type FlowField, MERCATOR_MAX_LAT, isStale, latOf, lonOf, mercY } from './field';
 import type { FlowInkName } from './ink';
 import { type MotionHold, type MotionLoop, type MotionState, createMotionLoop, listenMotionRequests } from './motion-loop';
 import { FlowRibbonLayer, viewQuadOf } from './ribbon-layer';
 import { STILL_LAYER_IDS, STILL_SOURCE_ID, buildStillForm, hasModelNodeInView, nodeArrows, stillLayers } from './still';
 
-export { readFlowFrame, FlowUnavailableError, candidateCycle, forecastHourFor, MAX_CYCLE_TRIES } from './nodd';
+export { readFlowFrame, candidateCycle, forecastHourFor, MAX_CYCLE_TRIES } from './nodd';
 export { isStale } from './field';
 export type { FlowField, FlowKind } from './field';
 export type { MotionHold, MotionState } from './motion-loop';
@@ -83,7 +83,6 @@ export interface FlowViewOptions {
   readonly onRender?: (count: number, steps: number) => void;
   /** Epoch ms; defaults to Date.now. */
   readonly now?: () => number;
-  readonly density?: FlowDensity;
 }
 
 export interface FlowView {
@@ -347,7 +346,7 @@ export function mountFlowView(map: MlMap, field: FlowField, options: FlowViewOpt
     let nodesInView = true;
     if (coverage === 'covered' || coverage === 'partial') {
       // Where could the lines move in this view at all (past-grid arrows and the phone rule aside)?
-      const reach = planForm(field, view, { motionAllowed: canAnimate, playPressed: true, density: options.density ?? 'standard' });
+      const reach = planForm(field, view, { motionAllowed: canAnimate });
       if (reach.form === 'moving') activeLoop = startLoop();
       else stopLoop();
       form = activeLoop && activeLoop.motion === 'moving' ? 'moving' : reach.form === 'arrows' ? 'arrows' : 'still';

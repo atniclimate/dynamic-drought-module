@@ -153,8 +153,11 @@ function compile(gl: WebGL2RenderingContext, vs: string, fs: string): WebGLProgr
   }
 }
 
-/** The view of a MapLibre map as a ViewQuad, x unwrapped near `nearX`. */
-export function viewQuadOf(map: MlMap, nearX?: number): ViewQuad {
+/**
+ * The view of a MapLibre map as a ViewQuad, x unwrapped near the map's own
+ * (wrapped) centre: the matrix MapLibre hands render() follows that centre.
+ */
+export function viewQuadOf(map: MlMap): ViewQuad {
   const el = map.getCanvas();
   const w = el.clientWidth;
   const h = el.clientHeight;
@@ -163,7 +166,7 @@ export function viewQuadOf(map: MlMap, nearX?: number): ViewQuad {
     return [ll.lng, ll.lat] as const;
   });
   const center = map.getCenter();
-  return viewQuadFromCorners(corners, map.getZoom(), w, h, nearX ?? (center.lng + 180) / 360);
+  return viewQuadFromCorners(corners, map.getZoom(), w, h, (center.lng + 180) / 360);
 }
 
 /**
@@ -456,8 +459,7 @@ export class FlowRibbonLayer implements CustomLayerInterface {
   /** Fixed steps due by the clock (at most 2 of catch-up); false past the grid. */
   private advance(gl: WebGL2RenderingContext, map: MlMap): boolean {
     if (this.needsReset || Math.abs(map.getZoom() - this.lastZoom) > ZOOM_RESET) this.resetState(map);
-    const origin = this.particles ? this.particles.originX : this.marks ? this.marks.originX : undefined;
-    const view = viewQuadOf(map, origin);
+    const view = viewQuadOf(map);
     this.view = view;
     // Past the grid, node arrows draw instead and nothing advects.
     if (cellPx(this.field, view) > PAST_GRID_CELL_PX) return false;

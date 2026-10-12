@@ -445,12 +445,12 @@ function unpackComplex(s5: Uint8Array, s7: Uint8Array, n: number, nbits: number)
   const lengthBits = u8(s5, 46);
   const order = u8(s5, 47);
   const extra = u8(s5, 48);
-  if (order !== 1 && order !== 2) fail('unsupported-feature', `spatial differencing order ${order}`);
+  if (order !== 2) fail('unsupported-feature', `spatial differencing order ${order}`);
   if (extra < 1 || extra > 4) fail('unsupported-feature', `${extra} octets of extra descriptors`);
   if (ng < 1 || ng > n) fail('data', `${ng} groups for ${n} values`);
   if (widthBits > 31 || lengthBits > 31) fail('data', 'group descriptor widths');
   // A lower bound on the bits the descriptors need, checked before allocation.
-  const descriptorBits = 8 * extra * (order + 1) + ng * (nbits + widthBits + lengthBits);
+  const descriptorBits = 8 * extra * 3 + ng * (nbits + widthBits + lengthBits);
   if (descriptorBits > 8 * (s7.length - 5)) fail('data', 'section 7 is shorter than its group descriptors');
 
   const br = bitReader(s7, 5);
@@ -460,7 +460,7 @@ function unpackComplex(s5: Uint8Array, s7: Uint8Array, n: number, nbits: number)
     return v >= top ? -(v - top) : v;
   };
   const first = signMagnitude();
-  const second = order === 2 ? signMagnitude() : 0;
+  const second = signMagnitude();
   const minimum = signMagnitude();
 
   const groupRef = new Int32Array(ng);
@@ -499,15 +499,10 @@ function unpackComplex(s5: Uint8Array, s7: Uint8Array, n: number, nbits: number)
     fail('data', `structurally invalid: section 7 holds ${Math.floor(leftover / 8)} byte(s) after its packed values`);
   }
 
-  // Undo the spatial differencing (regulation 92.9.4, template 7.3).
-  if (order === 1) {
-    v[0] = first;
-    for (let i = 1; i < n; i++) v[i] = (v[i] as number) + minimum + (v[i - 1] as number);
-  } else {
-    v[0] = first;
-    if (n > 1) v[1] = second;
-    for (let i = 2; i < n; i++) v[i] = (v[i] as number) + minimum + 2 * (v[i - 1] as number) - (v[i - 2] as number);
-  }
+  // Undo the second-order spatial differencing (regulation 92.9.4, template 7.3).
+  v[0] = first;
+  if (n > 1) v[1] = second;
+  for (let i = 2; i < n; i++) v[i] = (v[i] as number) + minimum + 2 * (v[i - 1] as number) - (v[i - 2] as number);
   return v;
 }
 
