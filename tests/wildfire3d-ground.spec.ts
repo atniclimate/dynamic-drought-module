@@ -1,5 +1,6 @@
 import { PNG } from 'pngjs';
 
+import { untilAnswered } from './answered-read';
 import { expect, test, type Page } from './offline-test';
 import {
   RG_FIXTURE_TIMES,
@@ -36,7 +37,9 @@ function stamp(page: Page, key: 'ddmFire3d' | 'ddmDryness' | 'ddmDrynessProduct'
 }
 
 async function reaches(page: Page, key: 'ddmFire3d' | 'ddmDryness' | 'ddmDrynessProduct', expected: string | undefined, timeout = 60_000): Promise<void> {
-  await expect.poll(() => stamp(page, key), { timeout }).toBe(expected);
+  // On the answered-read clock: GitHub run 38308775016 read "unavailable" for a wall-clock 60 s on a second entry,
+  // the page frozen by the software renderer (the tile deadline's warning came 49 s after the click).
+  await untilAnswered(() => stamp(page, key), (value) => value === expected, timeout, `${key} never read ${String(expected)}`);
 }
 
 /** Arms set before navigation reach the first entry; `gotoApp` keeps them. */
@@ -207,6 +210,8 @@ test.describe('Wildfire 3D dryness ground', () => {
 
   test('re-entering Wildfire 3D after NOAA revises the same week draws the revised bytes', async ({ page }) => {
     // Owner direction 2026-10-09: no app cache may mask a revision.
+    // Two entries: on GitHub's software renderer each took about a minute (run 38308775016).
+    test.setTimeout(360_000);
     await bootWith(page, WA, { starFill: 3 });
     await page.locator(TOGGLE).click();
     await reaches(page, 'ddmDryness', 'live');

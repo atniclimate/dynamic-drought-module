@@ -485,7 +485,7 @@ test('activation builds terrain, sky, camera, and the smoke volume; deactivation
     // layer now, off by default, and this orchestrator only reports it when
     // a person has turned it on (tests/power-layer.spec.ts owns its truth).
     expect(getFire3DStatus().contextLayers).toEqual(['whp', 'structures']);
-    expect(shadeEvents.at(-1)).toEqual({ layer: 'whp-2023', active: true });
+    expect(shadeEvents.at(-1)).toEqual({ layer: 'whp-2023', active: true, mounted: true });
     expect(harness.sources.get('whp-2023')).toMatchObject({
       type: 'raster',
       url: `whp-shade://${URLS.whp2023PmtilesLocal}`,
@@ -542,7 +542,7 @@ test('activation builds terrain, sky, camera, and the smoke volume; deactivation
     setFire3DActive(map, false);
     expect(getFire3DStatus().state).toBe('inactive');
     expect(getFire3DStatus().contextLayers).toEqual([]);
-    expect(shadeEvents.at(-1)).toEqual({ layer: 'whp-2023', active: false });
+    expect(shadeEvents.at(-1)).toEqual({ layer: 'whp-2023', active: false, mounted: false });
     expect(harness.getTerrain()).toBeNull();
     expect(harness.sources.has('fire3d-terrain-dem')).toBe(false);
     expect(harness.sources.has('whp-2023')).toBe(false);
