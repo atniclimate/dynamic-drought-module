@@ -271,7 +271,7 @@ export async function activateWildfireDryness(map: MapLibreMap, signal: AbortSig
       frame: rgFrame
     },
     // 52 KB is the largest STAR tile measured; RG tiles measured 33 KB.
-    tileLimits: { timeoutMs: 15_000, maxDecodedBytes: 262_144, maxPixels: 65_536, maxOutputBytes: 524_288 },
+    tileLimits: { timeoutMs: 15_000, maxDecodedBytes: 262_144, maxPixels: 65_536 },
     // The capabilities document measured 237,421 B decoded with 501 times (2026-10-09).
     metadataLimits: { timeoutMs: 15_000, maxDecodedBytes: 1_048_576, maxTimes: 2_000 },
     selectionDeadlineMs: 60_000,

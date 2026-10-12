@@ -74,7 +74,7 @@ test('native XML parser admits exact RG domain and only parsed ServiceException 
           ...frame(time, 'usgs-relative-greenness'), ...(response === 'missing-metadata' ? { coverage: '' } : {}),
           ...(response === 'wrong-frame' ? { frame: '2026-09-14T00:00:00.000Z' } : {})
         }) },
-        tileLimits: { timeoutMs: 1000, maxDecodedBytes: 10000, maxOutputBytes: 10000, maxPixels: 1 },
+        tileLimits: { timeoutMs: 1000, maxDecodedBytes: 10000, maxPixels: 1 },
         metadataLimits: { timeoutMs: 1000, maxDecodedBytes: 10000, maxTimes: 2 }, selectionDeadlineMs: 5000,
         readyState: () => 'live (partial)', publish(snapshot) {
           if (snapshot?.selected && (!sources.has(snapshot.sourceId!) || layers.get('dryness-test')?.source !== snapshot.sourceId ||

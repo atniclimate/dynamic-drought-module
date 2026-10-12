@@ -1,4 +1,5 @@
 import { readPngTile, type PngTileReadLimits } from '../map/tile-protocol';
+import { ExpiringLruCache } from '../util/bounded-cache';
 import { listeningTimeout, MAX_STALL_REREADS } from '../util/listening-timeout';
 import {
   RG_DRYNESS_CLASSES,
@@ -54,31 +55,66 @@ export function shadeDrynessPixels(pixels: Uint8ClampedArray, product: DrynessPr
   }
 }
 
-export interface DrynessTileLimits extends PngTileReadLimits {
-  /** Encoded PNG output ceiling, separate from the decoded HTTP body ceiling. */
-  readonly maxOutputBytes: number;
-}
+export type DrynessTileLimits = PngTileReadLimits;
+
+/** The browser could not process bytes that passed the PNG header check: this tile's trouble, not the week's. */
+export class DrynessLocalError extends Error { override name = 'DrynessLocalError'; }
+/** Whether a failed tile says its frame is bad (step the week back). A stall, a local failure or a cancellation does not. */
+export const isDrynessSourceFault = (error: unknown): boolean =>
+  !(error instanceof DrynessLocalError) && !(error instanceof DOMException && ['TimeoutError', 'AbortError'].includes(error.name));
+const local = async <T>(work: Promise<T>): Promise<T> => {
+  try { return await work; } catch (error) { throw new DrynessLocalError(`Dryness bitmap failed: ${error}`); }
+};
+
+// 60 x 262,144 B (a 256 x 256 RGBA tile) is 15.7 MB at most.
+const MASK_ENTRIES = 60;
+const MASK_TTL_MS = 3_600_000;
 
 /**
- * Read and transform one PNG atomically. No source selection or registration.
- * Native image decode/encode cannot be physically canceled; abort/deadline
- * rejects the consumer promptly, discards late output, and closes late bitmaps.
- * Pixel limits bound synchronous work; the tick deadline prohibits late
- * publication. `maskUrl` is the land-cover tile of the same z/x/y, read beside
- * the source through the same reader, limits and deadline; if it fails, the
- * tile is not drawn.
+ * Decoded land-cover tiles by exact URL, and the reads in flight. The mask does
+ * not depend on the week, so a tile that validated is kept an hour (the
+ * freshness bound; an expired one is read again). Tiles asking for one URL
+ * share one read; each cancels only itself, and the read stops when none is
+ * left. Kept pixels are only ever read (shadeDrynessPixels does not write the mask).
  */
-export async function readDrynessTile(
-  url: string,
-  product: DrynessProduct,
-  owner: AbortController,
-  limits: DrynessTileLimits,
-  maskUrl?: string
-): Promise<ArrayBuffer> {
-  if (![limits.timeoutMs, limits.maxDecodedBytes, limits.maxPixels, limits.maxOutputBytes].every(
-    value => Number.isSafeInteger(value) && value > 0
-  ) || limits.timeoutMs > 15_000) throw new RangeError('Invalid dryness tile limits');
-  if (product !== 'star-vhi' && product !== 'relative-greenness') throw new Error('Unknown dryness product');
+export function createDrynessMasks(now?: () => number) {
+  const done = new ExpiringLruCache<string, Uint8ClampedArray>(MASK_ENTRIES, now);
+  const reads = new Map<string, { owner: AbortController; users: number; work: Promise<Uint8ClampedArray> }>();
+  return {
+    keep: (url: string, pixels: Uint8ClampedArray): void => done.set(url, pixels, MASK_TTL_MS),
+    /** `asker` is the caller's own signal: its abort leaves the read. */
+    join(url: string, asker: AbortSignal, start: (owner: AbortController) => Promise<Uint8ClampedArray>): Promise<Uint8ClampedArray> {
+      const kept = done.get(url);
+      if (kept) return Promise.resolve(kept);
+      let read = reads.get(url);
+      if (!read) {
+        const owner = new AbortController();
+        const made = { owner, users: 0, work: start(owner) };
+        read = made;
+        const forget = (): void => { if (reads.get(url) === made) reads.delete(url); };
+        made.work.then(forget, forget);
+        reads.set(url, made);
+      }
+      const joined = read;
+      joined.users++;
+      const leave = (): void => {
+        if (--joined.users > 0 || reads.get(url) !== joined) return;
+        reads.delete(url);
+        joined.owner.abort(new DOMException('Aborted', 'AbortError'));
+      };
+      if (asker.aborted) leave(); else asker.addEventListener('abort', leave, { once: true });
+      return joined.work;
+    }
+  };
+}
+export type DrynessMasks = ReturnType<typeof createDrynessMasks>;
+
+/**
+ * One cancellable, deadline-bound PNG reader: `decode` gives exact RGBA, `settle`
+ * lets a caller stop waiting on native work that ignores a signal, and `finish`
+ * (always called) releases the timer, listener and canvases.
+ */
+function drynessReader(owner: AbortController, limits: DrynessTileLimits) {
   const controller = new AbortController();
   const abortError = (): DOMException => new DOMException('Aborted', 'AbortError');
   const timeoutError = (): DOMException => new DOMException('Dryness tile timed out', 'TimeoutError');
@@ -121,8 +157,8 @@ export async function readDrynessTile(
       });
     });
   const canvases: HTMLCanvasElement[] = [];
-  // One PNG to exact RGBA. The bitmap never outlives this call; the canvas is released in the finally below.
-  const decode = async (target: string): Promise<{ canvas: HTMLCanvasElement; context: CanvasRenderingContext2D; image: ImageData }> => {
+  // One PNG to exact RGBA. The source bitmap never outlives this call; the canvas is released in the finally below.
+  const decode = async (target: string): Promise<ImageData> => {
     // The shared reader's wall-clock timer fired while ticks remain: read again.
     let png: Awaited<ReturnType<typeof readPngTile>>;
     for (let rereads = MAX_STALL_REREADS; ; rereads--) {
@@ -135,9 +171,9 @@ export async function readDrynessTile(
       }
     }
     checkpoint();
-    const bitmap = await settle(createImageBitmap(new Blob([png.data], { type: 'image/png' }), {
+    const bitmap = await settle(local(createImageBitmap(new Blob([png.data], { type: 'image/png' }), {
       colorSpaceConversion: 'none', premultiplyAlpha: 'none'
-    }), value => value.close());
+    })), value => value.close());
     try {
       checkpoint();
       if (bitmap.width !== png.width || bitmap.height !== png.height ||
@@ -149,39 +185,64 @@ export async function readDrynessTile(
       canvas.width = bitmap.width;
       canvas.height = bitmap.height;
       const context = canvas.getContext('2d', { willReadFrequently: true, colorSpace: 'srgb' });
-      if (!context) throw new Error('Dryness canvas unavailable');
+      if (!context) throw new DrynessLocalError('Dryness canvas unavailable');
       context.drawImage(bitmap, 0, 0);
       checkpoint();
-      return { canvas, context, image: context.getImageData(0, 0, bitmap.width, bitmap.height) };
+      return context.getImageData(0, 0, bitmap.width, bitmap.height);
     } finally {
       bitmap.close();
     }
   };
+  return {
+    signal: controller.signal, settle, checkpoint, decode,
+    finish(): void {
+      stopTimeout();
+      owner.signal.removeEventListener('abort', cancel);
+      controller.abort(abortError());
+      for (const canvas of canvases) { canvas.width = 0; canvas.height = 0; }
+    }
+  };
+}
+
+/**
+ * Read and transform one PNG atomically into a decoded bitmap that the caller
+ * closes or hands to MapLibre. No source selection or registration.
+ * Native image decode cannot be physically canceled; abort/deadline
+ * rejects the consumer promptly, discards late output, and closes late bitmaps.
+ * Pixel limits bound synchronous work; the tick deadline prohibits late
+ * publication. `maskUrl` is the land-cover tile of the same z/x/y, read beside
+ * the source through the same reader, limits and deadline (shared and kept by
+ * `masks`); if it fails, the tile is not drawn.
+ */
+export async function readDrynessTile(
+  url: string,
+  product: DrynessProduct,
+  owner: AbortController,
+  limits: DrynessTileLimits,
+  maskUrl?: string,
+  masks: DrynessMasks = createDrynessMasks()
+): Promise<ImageBitmap> {
+  if (![limits.timeoutMs, limits.maxDecodedBytes, limits.maxPixels].every(
+    value => Number.isSafeInteger(value) && value > 0
+  ) || limits.timeoutMs > 15_000) throw new RangeError('Invalid dryness tile limits');
+  if (product !== 'star-vhi' && product !== 'relative-greenness') throw new Error('Unknown dryness product');
+  const reader = drynessReader(owner, limits);
+  const { settle, checkpoint } = reader;
   try {
     checkpoint();
-    const [{ canvas, context, image }, mask] = await Promise.all([decode(url), maskUrl === undefined ? undefined : decode(maskUrl)]);
+    const [image, mask] = await Promise.all([reader.decode(url), maskUrl === undefined ? undefined :
+      settle(masks.join(maskUrl, reader.signal, shared => {
+        const read = drynessReader(shared, limits);
+        return read.decode(maskUrl).then(({ data }) => data).finally(read.finish);
+      }))]);
     checkpoint();
-    shadeDrynessPixels(image.data, product, mask?.image.data);
+    shadeDrynessPixels(image.data, product, mask);
     checkpoint();
-    context.putImageData(image, 0, 0);
-    checkpoint();
-    const output = await settle(new Promise<Blob>((resolve, reject) => {
-      canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('Dryness PNG encode failed')), 'image/png');
-    }));
-    checkpoint();
-    if (output.type !== 'image/png' || output.size === 0 || output.size > limits.maxOutputBytes) {
-      throw new RangeError('Invalid dryness PNG output');
-    }
-    const bytes = await settle(output.arrayBuffer());
-    checkpoint();
-    if (bytes.byteLength !== output.size || bytes.byteLength > limits.maxOutputBytes) {
-      throw new RangeError('Dryness PNG output limit exceeded');
-    }
-    return bytes;
+    // Kept only now: the pure check passed and the tile was not canceled.
+    if (maskUrl !== undefined && mask) masks.keep(maskUrl, mask);
+    // The caller owns the bitmap; one that completes after a cancel is closed here.
+    return await settle(local(createImageBitmap(image)), value => value.close());
   } finally {
-    stopTimeout();
-    owner.signal.removeEventListener('abort', cancel);
-    controller.abort(abortError());
-    for (const canvas of canvases) { canvas.width = 0; canvas.height = 0; }
+    reader.finish();
   }
 }
