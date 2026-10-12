@@ -309,7 +309,7 @@ test:serial` run all three projects, so coverage is the same in either seat.
 
 In CI (`.github/workflows/browser-suite.yml`, called by both Validate and the
 Pages deploy) each project is sliced with `--shard=i/n` onto its own runners,
-one worker each: four shards for `chromium`, two for `chromium-interaction`,
+one worker each: eight shards for `chromium` (four until 2026-10-12), two for `chromium-interaction`,
 two for `chromium-3d`. Each runner builds and serves its own `dist/`, so no
 shard reads another's state. Each page is its own software-GL MapLibre
 context, so more runners is the lever; more workers per runner is not (see
