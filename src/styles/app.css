@@ -6090,7 +6090,7 @@ a.impact-resource-link::after {
      at any line count. */
   :where(body:not(:has(> .app-shell.embed)))
     :where(p, li, dd, figcaption, [data-popup-slot='note'], .map-key-qualification, .shell-summary-primary,
-      .popup-description, .popup-condition-value, .shell-horizon-btn-sub) {
+      .popup-description, .popup-condition-value) {
     text-wrap: pretty;
   }
   /* T2 headings and short labels that may take two lines (README:157):

@@ -494,7 +494,8 @@ function Shell({ map, snap, framing, specTick, onMinimapNoteChange }: ShellProps
                 }}
               >
                 <span class="shell-horizon-btn-title">{chrome.title}</span>
-                <span class="shell-horizon-btn-sub">{chrome.subtitle}</span>
+                {/* The last two words stay together, so a wrap never leaves one word alone on a line. */}
+                <span class="shell-horizon-btn-sub">{chrome.subtitle.replace(/ (\S+)$/, '\u00a0$1')}</span>
               </button>
             );
           })}

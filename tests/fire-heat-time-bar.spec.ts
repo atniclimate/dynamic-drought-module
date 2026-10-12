@@ -370,7 +370,7 @@ async function expectChipsStillHonest(page: Page): Promise<void> {
     const chrome = HORIZON_CHROME[SHELL_HORIZON_KEY[key]];
     const btn = page.locator(`.shell-horizon-btn[data-horizon="${key}"]`);
     expect((await btn.locator('.shell-horizon-btn-title').innerText()).trim()).toBe(chrome.title);
-    expect((await btn.locator('.shell-horizon-btn-sub').innerText()).trim()).toBe(chrome.subtitle);
+    expect((await btn.locator('.shell-horizon-btn-sub').innerText()).replace(/\u00a0/g, ' ').trim()).toBe(chrome.subtitle);
   }
   const stray = await page.evaluate(() => {
     const clone = document.body.cloneNode(true) as HTMLElement;
