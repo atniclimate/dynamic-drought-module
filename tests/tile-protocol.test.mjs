@@ -772,11 +772,14 @@ test('dryness selected STAR record is atomic, native owner cancellation does not
   });
 });
 test('a tile that finishes just after its owner aborted is closed, never handed to MapLibre', async () => {
-  const tileOwner = new AbortController(); let armed = false;
+  // A flag that flips without firing an event: the reader sees no abort and
+  // only the protocol handler's own check can catch it.
+  const flag = { aborted: false, addEventListener() {}, removeEventListener() {} }, tileOwner = { signal: flag };
+  let armed = false;
   await withDrynessBrowser({ output(bitmap) {
     if (!armed) return Promise.resolve(bitmap);
-    // Settle the read, then abort in the gap before the protocol handler resumes.
-    return { then(resolve) { Promise.resolve().then(() => { resolve(bitmap); queueMicrotask(() => tileOwner.abort()); }); } };
+    flag.aborted = true;
+    return Promise.resolve(bitmap);
   } }, async events => {
     const map = drynessMap(), snapshots = [], adapter = createDrynessGround(drynessOptions(map, snapshots));
     await adapter.activate(map, new AbortController().signal);

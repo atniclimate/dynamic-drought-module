@@ -111,6 +111,24 @@ export function envelopeCovers(envelope: ViewEnvelope, view: ViewBounds): boolea
 }
 
 /**
+ * `envelopeCovers` for a plain bbox (a place's or framing's request box)
+ * rather than a live map's bounds. A `null` envelope is a layer's unscoped
+ * national fallback and covers every bbox.
+ */
+export function bboxCoveredByEnvelope(
+  envelope: ViewEnvelope | null,
+  bbox: ViewEnvelope
+): boolean {
+  if (envelope === null) return true;
+  return (
+    envelope[0] <= bbox[0] &&
+    envelope[1] <= bbox[1] &&
+    envelope[2] >= bbox[2] &&
+    envelope[3] >= bbox[3]
+  );
+}
+
+/**
  * Shrink a query envelope inward by one grid quantum to form the COVERAGE
  * envelope stored with a cached response. The binary64 value `k / 1e5` can
  * sit a sub-ULP outside the exact decimal the URL carried, so comparing

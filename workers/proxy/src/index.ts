@@ -125,7 +125,7 @@ export function isAllowedRoute(upstreamUrl: URL): boolean {
 
 const USER_AGENT =
   "DDM-Proxy/0.1.0 (+https://github.com/atniclimate/dynamic-drought-module)";
-const WORKER_REVISION = "2026-10-08-body-limit-v5";
+const WORKER_REVISION = "2026-10-12-export-pin-v6";
 
 const UPSTREAM_TIMEOUT_MS = 12_000;
 export const MAX_UPSTREAM_BYTES = 16 * 1024 * 1024;

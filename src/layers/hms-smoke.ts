@@ -166,7 +166,9 @@ export async function activate(
         buildQueryUrl(),
         null,
         signal,
-        FETCH_TIMEOUT_MS
+        FETCH_TIMEOUT_MS,
+        // shortcut: two days of whole-continent smoke polygons, size never measured on a heavy day; set from a measurement.
+        64 * 1024 * 1024
       ),
       'NOAA HMS smoke'
     );

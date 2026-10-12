@@ -72,8 +72,8 @@ const MASK_TTL_MS = 3_600_000;
 
 /**
  * Decoded land-cover tiles by exact URL, and the reads in flight. The mask does
- * not depend on the week, so a tile that validated is kept an hour (the
- * freshness bound; an expired one is read again). Tiles asking for one URL
+ * not depend on the week, so a tile that validated is kept an hour after its
+ * last use (an expired one is read again). Tiles asking for one URL
  * share one read; each cancels only itself, and the read stops when none is
  * left. Kept pixels are only ever read (shadeDrynessPixels does not write the mask).
  */

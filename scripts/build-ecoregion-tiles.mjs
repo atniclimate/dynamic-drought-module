@@ -195,16 +195,16 @@ async function main() {
   const sampleZ = Math.min(7, MAX_ZOOM);
   const sample = await reader.getZxy(sampleZ, lonX(PNW_CENTER[0], sampleZ), latY(PNW_CENTER[1], sampleZ));
   if (!sample) throw new Error('validation failed: center tile did not decode');
+  console.log('\nvalidation:');
+  console.log(`  header zooms ${header.minZoom}..${header.maxZoom}, tileType ${header.tileType}`);
+  console.log(`  vector_layers: ${meta.vector_layers.map((l) => `${l.id}(${Object.keys(l.fields).length} fields)`).join(', ')}`);
+  console.log(`  center tile z${sampleZ} decoded: ${sample.data.byteLength} bytes`);
   await Promise.all([
     writeFile(OUT_PATH, archive),
     writeFile(CATALOG_OUT_PATH, `${JSON.stringify(catalog, null, 2)}\n`)
   ]);
   console.log(`  wrote ${OUT_PATH}`);
   console.log(`  wrote ${CATALOG_OUT_PATH} (${catalog.entries.length} catalog members)`);
-  console.log('\nvalidation:');
-  console.log(`  header zooms ${header.minZoom}..${header.maxZoom}, tileType ${header.tileType}`);
-  console.log(`  vector_layers: ${meta.vector_layers.map((l) => `${l.id}(${Object.keys(l.fields).length} fields)`).join(', ')}`);
-  console.log(`  center tile z${sampleZ} decoded: ${sample.data.byteLength} bytes`);
   console.log('\nOK. Honesty note baked into attribution:');
   console.log(`  "${meta.attribution}"`);
 }

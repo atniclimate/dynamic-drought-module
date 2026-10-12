@@ -44,8 +44,8 @@ export function holdSatellite(map: maplibregl.Map, held: boolean): void {
 /**
  * Apply a basemap mode to the map. Lazy-imports the satellite module on
  * first use; idempotent per mode. On a chunk or source failure the mode
- * REVERTS to 'default' and says so (invariant 6, honest feedback): the
- * URL must never claim a satellite view that is not on screen.
+ * REVERTS to 'default' and says so (invariant 6, honest feedback): after a
+ * failed load the URL must not keep claiming satellite.
  */
 export async function applyBasemapMode(
   map: maplibregl.Map,

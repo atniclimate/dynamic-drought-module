@@ -281,7 +281,7 @@ function renderStations(map: maplibregl.Map, views: readonly TelemetryMarkerView
 
     const marker = new maplibregl.Marker({ element: el })
       .setLngLat([lng, lat])
-      // addTo removes an earlier keypress listener in MapLibre 6.6; bind
+      // addTo removes an earlier keypress listener in MapLibre; bind
       // the popup afterward so its native Enter/Space handler remains.
       .addTo(map)
       .setPopup(popup);

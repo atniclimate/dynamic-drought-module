@@ -825,7 +825,7 @@ test('gridded-index reads live (partial) when a stated subset of its tiles fails
 });
 
 /*
- * The order cases below follow MapLibre 6.6's own 404 path
+ * The order cases below follow MapLibre's own 404 path
  * (node_modules/maplibre-gl/src/tile/tile_manager.ts): a tile that answers
  * 404 is marked errored and fires NO event (`_loadTile`); MapLibre then
  * requests its parent as a fallback (`_updateRetainedTiles`), but skips that
@@ -1115,7 +1115,7 @@ test('gridded-index leaves no listener or timer behind after deactivate, and a l
 // -- the current view (review finding C1, DDM-P14-T04) -----------------------
 //
 // The verdict covers the tiles on the map NOW, not the requests a cycle saw.
-// MapLibre 6.6 (node_modules/maplibre-gl/src/tile/tile_manager.ts) restores a
+// MapLibre (node_modules/maplibre-gl/src/tile/tile_manager.ts) restores a
 // tile from its out-of-view cache with no event at all (`_addTile`), caches a
 // loaded tile that leaves the view with no event (`_removeTile`), fires
 // nothing for a 404 (`_loadTile`), and fires `dataabort` only when a tile

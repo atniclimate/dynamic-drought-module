@@ -284,4 +284,11 @@ test('the Impact Briefing carries the plant-stress full text, with NOAA STAR\'s 
 
   setPlantStressBriefing(null);
   assert.ok(!renderMapTechnicalInformation().includes('Plant stress ground'));
+
+  // An unavailable ground names no product, even when a frame was attempted.
+  const { describe: describeGround } = await import('../src/layers/wildfire-dryness.ts');
+  const none = describeGround({ state: 'unavailable', selected: null, attempted: frame('usgs-relative-greenness'), sourceId: null, failures: [] },
+    { getLayer: () => undefined });
+  assert.equal(none.title, null);
+  assert.deepEqual(none.lines, [DRYNESS_KEY.unavailable]);
 });

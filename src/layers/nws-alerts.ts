@@ -507,7 +507,9 @@ async function refreshSnapshot(
       buildQueryUrl(),
       null,
       signal,
-      FETCH_TIMEOUT_MS
+      FETCH_TIMEOUT_MS,
+      // shortcut: whole-country zone polygons at full detail, size never measured on a heavy day; set from a measurement, or simplify at the service.
+      64 * 1024 * 1024
     );
     if (signal.aborted) return;
     const payload = parseMapPayload(json);

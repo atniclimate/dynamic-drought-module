@@ -16,7 +16,7 @@ import { gotoApp, layerPill, noddStubLog, PILL, selectRegion } from './helpers';
  *
  * 1. The SST tile proof (src/util/raster-status.ts, M-009) closes a request
  *    cycle without MapLibre `'idle'`. A continuously repainting map never
- *    fires `'idle'` (MapLibre 6.6 `Map._render`: idle fires only when no
+ *    fires `'idle'` (MapLibre `Map._render`: idle fires only when no
  *    repaint is pending), and the flow loop is such a map.
  * 2. Every routine boot answers the NOAA NODD bucket from the E1-1 fixtures
  *    (tests/helpers.ts, `installDefaultNoddStub`), so no ENSO spec reads AWS.
@@ -153,7 +153,7 @@ async function stubSstDomains(page: Page): Promise<void> {
  * Keep every MapLibre map the page constructs, from before the first script
  * runs. The production build carries no map handle (src/main.ts), so the
  * case catches the map's own constructor assigning `_onWindowOnline` (a
- * property only `Map` sets, in its constructor, in MapLibre 6.6's built
+ * property only `Map` sets, in its constructor, in MapLibre's built
  * module) through a setter on `Object.prototype`, which then steps aside by
  * defining the property on the map itself.
  */

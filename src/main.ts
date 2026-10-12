@@ -256,6 +256,17 @@ async function boot(): Promise<void> {
   // that states its condition instead of an empty one that looks broken.
   buildSidebarShell();
 
+  // The one answer to "this browser cannot render the map", shared by the
+  // capability check, the constructor throw and the `error` event below. The
+  // controls exist, so they have to say why they cannot act (DDM-P14-T02), and
+  // nothing else will load: the boot is idle now, honestly.
+  const failWithoutRenderer = (): void => {
+    showRendererNotice('no-webgl2');
+    bootMapFreeChrome();
+    setSidebarControlReason('no-map');
+    settleBootIdleWithoutMap();
+  };
+
   // DR-025a / DR-035a: MapLibre 6 requires WebGL 2 and has no WebGL 1
   // fallback, so ask first. Without a context the constructor would build a
   // map that can never paint and would only report it through an error
@@ -266,24 +277,9 @@ async function boot(): Promise<void> {
     console.warn(
       `[boot] no WebGL 2 context: ${capability.reason ?? 'unknown'}`
     );
-    showRendererNotice('no-webgl2');
-    bootMapFreeChrome();
-    // The second surface of the same statement (DDM-P14-T02): the controls
-    // exist, so they have to say why they cannot act.
-    setSidebarControlReason('no-map');
-    // Nothing else will load: the boot is idle now, honestly.
-    settleBootIdleWithoutMap();
+    failWithoutRenderer();
     return;
   }
-
-  // The one answer to "this browser cannot render the map", shared by the
-  // constructor throw and the `error` event below.
-  const failWithoutRenderer = (): void => {
-    showRendererNotice('no-webgl2');
-    bootMapFreeChrome();
-    setSidebarControlReason('no-map');
-    settleBootIdleWithoutMap();
-  };
 
   // MapLibre 6.7+ THROWS GPUInitializationError from the constructor when the
   // WebGL 2 context cannot be created (Map._setupPainter); anything else

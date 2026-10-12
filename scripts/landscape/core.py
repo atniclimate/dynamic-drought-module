@@ -658,7 +658,8 @@ def write_snapshot(snapshot: dict, out_path: Path) -> None:
     # (Windows text mode would otherwise write CRLF). Written beside the
     # destination and renamed, so a failed write never truncates the artifact.
     tmp = out_path.with_suffix(out_path.suffix + ".tmp")
+    text = json.dumps(snapshot, indent=2) + "\n"
     with open(tmp, "w", encoding="utf-8", newline="\n") as fh:
-        fh.write(json.dumps(snapshot, indent=2) + "\n")
+        fh.write(text)
     os.replace(tmp, out_path)
     log(f"wrote {out_path} ({len(snapshot.get('bundles', {}))} bundles)")

@@ -33,6 +33,16 @@ class RoundOrNone(unittest.TestCase):
         self.assertIsNone(core.round_or_none(math.inf, 1))
 
 
+class WriteSnapshot(unittest.TestCase):
+    def test_unserializable_snapshot_leaves_no_temp_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            dest = Path(tmp) / "out.json"
+            with self.assertRaises(TypeError):
+                core.write_snapshot({"x": Path(".")}, dest)
+            self.assertFalse(dest.exists())
+            self.assertFalse(dest.with_suffix(".json.tmp").exists())
+
+
 class RetrievedDate(unittest.TestCase):
     def test_override_wins_over_env(self) -> None:
         with mock.patch.dict("os.environ", {core.RETRIEVED_ENV: "2025-12-31"}):

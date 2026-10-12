@@ -54,6 +54,8 @@ const STUBS = {
     'export function watchRasterTiles() { return { detach() {} }; }',
   '/layers/hms-smoke-volume':
     'export function activateSmokeVolume() { return false; } export function deactivateSmokeVolume() {} export function cleanupOrphanedSmokeSource() {}',
+  '/layers/wildfire-dryness':
+    'export async function activateWildfireDryness() {} export function getDrynessSourceId() { return null; }',
   './fire3d-context': [
     'export async function activateContextLayers(map) {',
     '  map.addSource("whp-2023", { type: "raster", tiles: [] });',
@@ -266,24 +268,6 @@ async function reset() {
 initFire3DController(map);
 
 test.afterEach(reset);
-
-test('a registry change that does not concern the perimeters leaves the ribbon alone', async () => {
-  await enterScene();
-  perimetersOn();
-  await settle();
-  const standing = sources.get(RIBBON_SOURCE_ID);
-  assert.deepEqual(ribbonOnMap(), FULL_RIBBON, 'the ribbon stands over the perimeters');
-
-  // A stream of unrelated layer changes.
-  for (const key of ['unrelated-a', 'unrelated-b', 'unrelated-c']) {
-    registry.activate(key);
-    registry.deactivate(key);
-  }
-  await settle();
-  assert.equal(sources.get(RIBBON_SOURCE_ID), standing, 'no unrelated change rebuilt the ribbon');
-  assert.deepEqual(ribbonOnMap(), FULL_RIBBON);
-  assert.equal(dataset.ddmFire3dRibbon, 'on');
-});
 
 const SCENE_SOURCE_IDS = ['fire3d-terrain-dem', 'whp-2023', 'structures-3d'];
 

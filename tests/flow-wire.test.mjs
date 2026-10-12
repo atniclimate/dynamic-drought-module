@@ -190,7 +190,7 @@ function fakeMap(lon, lat, zoom, { w = 1440, h = 900, gl = fakeGl(), throwOnLaye
     layerIds: () => layers.map((l) => l.id),
     canvasListenerCount: () => [...canvasListeners.values()].reduce((n, set) => n + set.size, 0),
     eventCount: () => [...events.values()].reduce((n, set) => n + set.size, 0),
-    /** MapLibre 6.6 on a lost context: the style goes, custom layers with it, onRemove never runs. */
+    /** MapLibre on a lost context: the style goes, custom layers with it, onRemove never runs. */
     dropStyle: () => { layers = []; sources.clear(); },
     /** Installed MapLibre map.ts:4125-4172 serializes native data before dropping the style. */
     loseContext: () => {

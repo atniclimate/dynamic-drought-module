@@ -181,11 +181,12 @@ export function drynessBriefing(frame: Pick<DrynessFrame, 'productKey' | 'clockL
   };
 }
 
-function describe(snapshot: DrynessSnapshot, map: MapLibreMap): DrynessGroundDetail {
+export function describe(snapshot: DrynessSnapshot, map: MapLibreMap): DrynessGroundDetail {
   const layer = map.getLayer(LAYER_ID) as { source?: string } | undefined;
   const mounted = snapshot.selected && snapshot.sourceId && layer?.source === snapshot.sourceId &&
     map.getSource(snapshot.sourceId) ? snapshot.selected : null;
-  const shown = snapshot.selected ?? snapshot.attempted;
+  // An unavailable ground names no product: the last frame tried is not on the map.
+  const shown = snapshot.selected ?? (snapshot.state === 'unavailable' ? null : snapshot.attempted);
   const star = shown?.productKey === 'star-vhi';
   const classes = star ? STAR_DRYNESS_CLASSES : RG_DRYNESS_CLASSES;
   const starFailed = snapshot.failures.some(row => row.productKey === 'star-vhi');

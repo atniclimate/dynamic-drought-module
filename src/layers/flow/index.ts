@@ -395,7 +395,7 @@ export function mountFlowView(map: MlMap, field: FlowField, options: FlowViewOpt
     options.onRender?.(renders, ribbon?.stats.steps ?? 0);
   };
   /**
-   * MapLibre 6.6 drops its whole style on a lost context and, on restore,
+   * MapLibre drops its whole style on a lost context and, on restore,
    * sets the style back from its serialized form: the native still layers
    * come back, the custom ribbon layer does not ("cannot be restored after
    * WebGL context loss"). Once the restored style has loaded, the still

@@ -59,7 +59,9 @@ const STUBS = {
   '/util/raster-error-watch':
     'export function watchRasterTiles() { return { detach() {} }; }',
   '/layers/hms-smoke-volume':
-    'export function activateSmokeVolume() { return false; } export function deactivateSmokeVolume() {} export function cleanupOrphanedSmokeSource() {}',
+    'export function activateSmokeVolume() { globalThis.__ribbonLifecycleEnv.onSmoke?.(); return false; } export function deactivateSmokeVolume() {} export function cleanupOrphanedSmokeSource() {}',
+  '/layers/wildfire-dryness':
+    'export async function activateWildfireDryness() {} export function getDrynessSourceId() { return null; }',
   './fire3d-context':
     'export async function activateContextLayers() { return { keys: [], embedLines: [] }; } export function deactivateContextLayers() {}',
   '/map/layer-order':
@@ -248,6 +250,7 @@ async function enterScene() {
 /** Leave every case as the next one expects: no scene, no perimeter layer,
  * no published collection, and nothing on the map. */
 async function reset() {
+  env.onSmoke = null;
   setPreference(false);
   if (registry.getActiveKeys().has(PERIMETER_KEY)) perimetersOff();
   setPerimeterSnapshot(null);
@@ -267,11 +270,16 @@ test.afterEach(reset);
 
 test('an exit while the scene is still opening leaves no ribbon, and a re-entry builds it afresh', async () => {
   perimetersOn();
-  // The activation is parked on its lazy import when the exit lands.
+  // The exit lands in the smoke step, after the scene's own checks and before
+  // the ribbon is raised: only the check after the ribbon import stops it.
+  env.onSmoke = () => {
+    env.onSmoke = null;
+    setPreference(false);
+  };
   setPreference(true);
-  setPreference(false);
-  assert.equal(getFire3DStatus().state, 'inactive');
   await settle();
+  assert.equal(env.onSmoke, null, 'the exit landed in the smoke step');
+  assert.equal(getFire3DStatus().state, 'inactive');
 
   assert.deepEqual(ribbonOnMap(), NO_RIBBON, 'the late activation raised no ribbon over the flat map');
   assert.equal(getFire3DStatus().perimeterRibbon, false);

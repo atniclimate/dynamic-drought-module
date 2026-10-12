@@ -201,7 +201,7 @@ test('deriveSceneTransport goes back to streaming the moment any settled source 
  * distributed bundle for the object literal containing
  * "sky-color":"transparent" (the fallback the library constructs a Sky with
  * when a style declares none) and MUST record the result in the bump commit.
- * Last such inspection: maplibre-gl 6.6.0 on 2026-09-03, unchanged from the
+ * Last such inspection: maplibre-gl 6.14.0 on 2026-10-12, unchanged from the
  * 4.7 values: `dist/maplibre-gl.mjs` still constructs the fallback Sky from
  * the literal {"sky-color":"transparent","horizon-color":"transparent",
  * "fog-color":"transparent","fog-ground-blend":1,"atmosphere-blend":0}.
@@ -1923,7 +1923,7 @@ test.describe('W3/W4 browser truth', () => {
    * and `map.on('terrain', ...)` (:27004-27006), and neither fires between
    * the test's two reads, so the assertion was a tautology, not a
    * measurement. Its claim that `Map.project()` is a flat 2D projection is
-   * also false for MapLibre 6.6.0: `Map.project` calls
+   * also false for MapLibre: `Map.project` calls
    * `locationToScreenPoint(lnglat, this.style && this.terrain)`
    * (maplibre-gl-dev.mjs; the source-level location is
    * node_modules/maplibre-gl/src/ui/map.ts:2024-2026), which is

@@ -254,14 +254,14 @@ export async function main() {
   const reader = new PMTiles(source);
   const header = await reader.getHeader();
   const meta = await reader.getMetadata();
-  await writeFile(OUT_PATH, archive);
-  console.log(
-    `  wrote ${OUT_PATH} (${archive.length.toLocaleString()} bytes, ${tileCount} tiles, ${features.length} features)`
-  );
   console.log('\nvalidation:');
   console.log(`  header zooms ${header.minZoom}..${header.maxZoom}, tileType ${header.tileType}`);
   console.log(`  vector_layers: ${meta.vector_layers.map((l) => l.id).join(', ')}`);
   console.log(`  attribution: "${meta.attribution}"`);
+  await writeFile(OUT_PATH, archive);
+  console.log(
+    `  wrote ${OUT_PATH} (${archive.length.toLocaleString()} bytes, ${tileCount} tiles, ${features.length} features)`
+  );
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

@@ -55,7 +55,7 @@ export interface DrynessGroundOptions {
  * protocol registration (src/layers/wildfire-dryness.ts wires it into Wildfire
  * 3D). Every activation re-reads the RG listing and every dryness tile, so a
  * week NOAA revises reaches the next entry; only the land-cover tiles, which
- * do not depend on the week, are kept (an hour at most, bounded).
+ * do not depend on the week, are kept (an hour after last use, bounded).
  */
 export function createDrynessGround(options: DrynessGroundOptions): {
   protocol: AddProtocolAction;
@@ -65,10 +65,10 @@ export function createDrynessGround(options: DrynessGroundOptions): {
   if (!/^[a-z][a-z0-9-]*$/.test(options.protocolName) || !options.layerId || typeof options.beforeId !== 'function' ||
       !Number.isSafeInteger(options.selectionDeadlineMs) || options.selectionDeadlineMs <= 0 ||
       options.selectionDeadlineMs > 2_147_483_647) throw new RangeError('Invalid dryness selection options');
-  if (![options.tileLimits.timeoutMs, options.tileLimits.maxDecodedBytes, options.tileLimits.maxPixels,
-    options.metadataLimits.timeoutMs, options.metadataLimits.maxDecodedBytes,
+  // The tile limits are validated by readDrynessTile.
+  if (![options.metadataLimits.timeoutMs, options.metadataLimits.maxDecodedBytes,
     options.metadataLimits.maxTimes].every(n => Number.isSafeInteger(n) && n > 0) ||
-    options.tileLimits.timeoutMs > 15_000 || options.metadataLimits.timeoutMs > 15_000) throw new RangeError('Invalid dryness reader limits');
+    options.metadataLimits.timeoutMs > 15_000) throw new RangeError('Invalid dryness reader limits');
   const permitted = new Set(options.allowedOrigins);
   const url = (value: string): string => {
     const parsed = new URL(value);
