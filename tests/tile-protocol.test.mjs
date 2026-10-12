@@ -937,3 +937,186 @@ test('RG discovery whole deadline and owner cancellation bound held headers with
     owner.abort(); await assert.rejects(pending, { name: 'AbortError' });
   } finally { globalThis.fetch = original; }
 });
+
+// Wildfire 3D: fuel risk is fully transparent inside a fire perimeter (owner, 2026-10-11).
+const { tilePolygonMask } = await import('../src/util/tile-polygon-mask.ts');
+const { pointInPolygonGeometry } = await import('../src/util/point-in-polygon.ts');
+const { latOf, lonOf, mercX, mercY } = await import('../src/layers/flow/field.ts');
+test('tile polygon mask marks exactly the pixel centres inside: a hole, a ring across the tile edge, overlapping polygons, a tile outside', () => {
+  const z = 8, x = 41, y = 92, size = 32, n = 2 ** z;
+  /** A closed ring from fractions of the tile (0,0 is its north-west corner; outside 0..1 lies beyond it). */
+  const ring = (...fractions) => {
+    const open = fractions.map(([fx, fy]) => [lonOf((x + fx) / n), latOf((y + fy) / n)]);
+    return [...open, open[0]];
+  };
+  const fire = ring([0.2, 0.21], [0.71, 0.13], [0.83, 0.62], [0.44, 0.87], [0.13, 0.55]);
+  const unburnedIsland = ring([0.4, 0.35], [0.61, 0.41], [0.45, 0.6]);
+  const acrossTheEdge = ring([0.62, -0.3], [1.4, 0.52], [0.7, 0.93]);
+  const elsewhere = ring([3.1, 3.2], [3.9, 3.3], [3.5, 3.8]);
+  /** The pixel holding a fraction of the tile. */
+  const pixel = (fx, fy) => Math.floor(fy * size) * size + Math.floor(fx * size);
+  /** The product's own even-odd point test, asked at every pixel centre in the tile's pixel space. */
+  const expected = polygons => {
+    const toPixels = ([lon, lat]) => [(mercX(lon) * n - x) * size, (mercY(lat) * n - y) * size];
+    return Uint8Array.from({ length: size * size }, (_, index) => Number(polygons.some(polygon =>
+      pointInPolygonGeometry((index % size) + 0.5, Math.floor(index / size) + 0.5,
+        { type: 'Polygon', coordinates: polygon.map(points => points.map(toPixels)) }))));
+  };
+  const masks = {};
+  for (const [name, polygons] of Object.entries({ 'one perimeter': [[fire]], 'a hole': [[fire, unburnedIsland]],
+    'across the tile edge': [[acrossTheEdge]], 'two overlapping perimeters': [[fire], [acrossTheEdge]] })) {
+    masks[name] = tilePolygonMask(polygons, [z, x, y], size);
+    assert.deepEqual(masks[name], expected(polygons), name);
+  }
+  // Inside and outside.
+  assert.equal(masks['one perimeter'][pixel(0.45, 0.45)], 1);
+  assert.equal(masks['one perimeter'][pixel(0.05, 0.05)], 0);
+  // The hole is outside; the burned ground around it is still inside.
+  assert.equal(masks['one perimeter'][pixel(0.48, 0.45)], 1);
+  assert.equal(masks['a hole'][pixel(0.48, 0.45)], 0);
+  assert.equal(masks['a hole'][pixel(0.3, 0.5)], 1);
+  // A ring that leaves the tile fills up to its edge, and nothing wraps to the far side.
+  assert.equal(masks['across the tile edge'][pixel(0.99, 0.3)], 1);
+  assert.equal(masks['across the tile edge'][pixel(0.01, 0.3)], 0);
+  // Ground inside two perimeters is inside, not outside by parity.
+  assert.equal(masks['two overlapping perimeters'][pixel(0.74, 0.5)], 1);
+  // Nothing inside this tile: no mask at all.
+  assert.equal(tilePolygonMask([[elsewhere]], [z, x, y], size), null);
+  assert.equal(tilePolygonMask([[fire]], [z, x + 2, y], size), null);
+  assert.equal(tilePolygonMask([], [z, x, y], size), null);
+});
+
+/** Canvas, bitmap, window and archive stand-ins for the drape. Its one tile, 0/0/0, is the whole world: 4 x 4 pixels of Very High. */
+async function withWhpBrowser(task) {
+  const names = ['fetch', 'createImageBitmap', 'document', 'window'];
+  const originals = new Map(names.map(name => [name, Object.getOwnPropertyDescriptor(globalThis, name)]));
+  const set = (name, value) => Object.defineProperty(globalThis, name, { configurable: true, writable: true, value });
+  // The one-tile archive answers the header probe and the protocol's own range reads.
+  set('fetch', async (_url, init) => {
+    const [, start, end] = /^bytes=(\d+)-(\d+)$/.exec(new Headers(init.headers).get('range'));
+    return new Response(archive().bytes.slice(Number(start), Number(end) + 1), { status: 206,
+      headers: { ETag: 'whp', 'Content-Range': `bytes ${start}-${end}/16393` } });
+  });
+  set('createImageBitmap', async input => input instanceof Blob ? { width: 4, height: 4, close() {} } : input);
+  set('document', { getElementById: () => null, createElement: () => ({ getContext: () => ({ drawImage() {},
+    getImageData: () => ({ data: new Uint8ClampedArray(Array(16).fill([237, 30, 0, 255]).flat()) }) }) }) });
+  set('window', { dispatchEvent() {} });
+  try { return await task(); }
+  finally {
+    for (const name of names) {
+      const descriptor = originals.get(name);
+      if (descriptor) Object.defineProperty(globalThis, name, descriptor);
+      else delete globalThis[name];
+    }
+  }
+}
+const whpShade = await import('../src/layers/whp-shade-protocol.ts');
+const whpAlphas = image => [...image.data].filter((_, index) => index % 4 === 3);
+/** The drape's tile through the real protocol: its sixteen alpha bytes, row by row. */
+async function drapeTileAlphas() {
+  const tile = await whpShade.loadWhpShade({ url: 'whp-shade://https://example.test/whp.pmtiles/0/0/0', type: 'image' }, new AbortController());
+  return whpAlphas(tile.data);
+}
+/** Very High is 80% white in Wildfire 3D. */
+const WHP_WHOLE = Array(16).fill(204);
+/** Perimeters over the north-west and the south-east quarter of the world, and the tile each leaves. */
+const NW_QUARTER = [[[[-179, 1], [-1, 1], [-1, 84], [-179, 84], [-179, 1]]]];
+const NW_CLEARED = WHP_WHOLE.map((alpha, index) => [0, 1, 4, 5].includes(index) ? 0 : alpha);
+const SE_QUARTER = [[[[1, -84], [179, -84], [179, -1], [1, -1], [1, -84]]]];
+const SE_CLEARED = WHP_WHOLE.map((alpha, index) => [10, 11, 14, 15].includes(index) ? 0 : alpha);
+
+test('the Wildfire 3D drape protocol draws no fuel risk inside the perimeters; the flat view\'s shading never reads them', async () => {
+  await withWhpBrowser(async () => {
+    try {
+      // No perimeters: the drape is the picture it was.
+      assert.deepEqual(await drapeTileAlphas(), WHP_WHOLE);
+      whpShade.setWhpShadePerimeters(NW_QUARTER);
+      assert.deepEqual(await drapeTileAlphas(), NW_CLEARED);
+      // The flat Wildfire view's own call (src/layers/whp-image-shade-protocol.ts): no tile, so no mask, and its own table.
+      assert.deepEqual(whpAlphas(await whpShade.shadeImage(new Blob([]), new AbortController().signal)), Array(16).fill(255));
+    } finally { whpShade.setWhpShadePerimeters([]); }
+  });
+  // Only masked pixels are cleared, and a masked pixel is still checked against the issuer's classes.
+  const pixels = new Uint8ClampedArray([237, 30, 0, 255, 237, 30, 0, 255, 0, 0, 0, 0]);
+  whpShade.shadeWhpPixels(pixels, whpShade.WHP_3D_SHADE_ALPHA_BY_RGB, Uint8Array.of(1, 0, 1));
+  assert.deepEqual([...pixels], [255, 255, 255, 0, 255, 255, 255, 204, 0, 0, 0, 0]);
+  assert.throws(() => whpShade.shadeWhpPixels(new Uint8ClampedArray([255, 0, 0, 255]), whpShade.WHP_3D_SHADE_ALPHA_BY_RGB, Uint8Array.of(1)),
+    /Unrecognized WHP class/);
+});
+
+test('the Wildfire 3D drape reads the perimeters before its source exists, reloads its tiles only when they change, and lets go on teardown', async () => {
+  const { activateWhpDrape, deactivateWhpDrape } = await import('../src/layers/whp-3d.ts');
+  const { registry } = await import('../src/state/registry.ts');
+  const events = [], sources = new Map(), layers = new Map();
+  const map = {
+    getSource: id => sources.get(id), removeSource: id => sources.delete(id),
+    addSource(id, spec) { events.push(`${id} added`); sources.set(id, spec); },
+    getLayer: id => layers.get(id), addLayer(layer) { layers.set(layer.id, layer); }, removeLayer: id => layers.delete(id),
+    moveLayer() {}, setLayoutProperty() {}, getStyle: () => ({ layers: [...layers.keys()].map(id => ({ id })) }),
+    refreshTiles(id) { events.push(`${id} reloaded`); }
+  };
+  const reloads = () => events.filter(event => event === 'whp-2023 reloaded').length;
+  const fires = polygons => ({ type: 'FeatureCollection',
+    features: polygons.map(coordinates => ({ type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates } })) });
+  /** The flat perimeter layer's source with MapLibre's read-back seam; `data` is swapped as its `setData` would. */
+  const flat = { type: 'geojson', data: fires(NW_QUARTER), fail: false, reads: 0,
+    async getData() { flat.reads++; if (flat.fail) throw new Error('read failed'); events.push('perimeters read'); return flat.data; } };
+  const turn = () => new Promise(resolve => setImmediate(resolve));
+  /** The perimeter layer reports, as its own module does once a response is on the map. */
+  const report = async (status = 'ready') => { registry.setStatus('nifc-fires', status); await turn(); };
+  await withWhpBrowser(async () => {
+    const scene = new AbortController();
+    try {
+      sources.set('nifc-fires', flat);
+      registry.activate('nifc-fires');
+      assert.equal(await activateWhpDrape(map, scene.signal), true);
+      // Read first: the drape's first tile is already cut, and entering reloads nothing.
+      assert.deepEqual(events, ['perimeters read', 'whp-2023 added']);
+      assert.deepEqual(await drapeTileAlphas(), NW_CLEARED);
+
+      // The same perimeters reported again (a pan inside the fetched envelope does that), a change to another
+      // layer, and a fresh response holding the same geometry in a new object: no reload.
+      await report(); await report('loading');
+      registry.activate('unrelated'); registry.deactivate('unrelated'); await turn();
+      flat.data = fires(structuredClone(NW_QUARTER)); await report();
+      assert.equal(reloads(), 0);
+
+      // Different perimeters: one reload, and the tile is cut to the new set.
+      flat.data = fires(SE_QUARTER); await report();
+      assert.equal(reloads(), 1);
+      assert.deepEqual(await drapeTileAlphas(), SE_CLEARED);
+
+      // A failed read never blanks fuel risk: the drape draws whole until a read succeeds.
+      flat.fail = true; await report();
+      assert.equal(reloads(), 2);
+      assert.deepEqual(await drapeTileAlphas(), WHP_WHOLE);
+      flat.fail = false; await report();
+      assert.equal(reloads(), 3);
+      assert.deepEqual(await drapeTileAlphas(), SE_CLEARED);
+
+      // The perimeter layer goes off (its module removes the source, then the key leaves the registry):
+      // whole again, with nothing read.
+      const readsWhileOn = flat.reads;
+      sources.delete('nifc-fires'); registry.deactivate('nifc-fires'); await turn();
+      assert.equal(reloads(), 4);
+      assert.equal(flat.reads, readsWhileOn);
+      assert.deepEqual(await drapeTileAlphas(), WHP_WHOLE);
+
+      // Leaving the scene: a read still out lands nowhere, and later perimeter news is not followed.
+      let release;
+      flat.getData = () => { flat.reads++; return new Promise(resolve => { release = () => resolve(flat.data); }); };
+      sources.set('nifc-fires', flat); registry.activate('nifc-fires');
+      assert.equal(flat.reads, readsWhileOn + 1);
+      deactivateWhpDrape(map);
+      assert.equal(sources.has('whp-2023'), false);
+      release(); await turn();
+      const readsAtExit = flat.reads;
+      await report();
+      assert.equal(flat.reads, readsAtExit);
+      assert.equal(reloads(), 4);
+      assert.deepEqual(await drapeTileAlphas(), WHP_WHOLE);
+    } finally {
+      scene.abort(); deactivateWhpDrape(map); registry.deactivate('nifc-fires'); whpShade.setWhpShadePerimeters([]);
+    }
+  });
+});

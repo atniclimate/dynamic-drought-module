@@ -3,6 +3,7 @@
  * The archive contains the published 2023 classes and stays unchanged.
  * Requested tiles map those known classes to increasing white opacity,
  * keeping the landscape visible and the orange fire perimeters legible.
+ * Inside a mapped fire perimeter the drape draws nothing (`syncPerimeters`).
  * The companion legend carries the matching opacity scale and source limits.
  *
  * This presentation companion is owned by the lazy fire3d context module,
@@ -12,9 +13,10 @@
  */
 
 import type * as maplibregl from 'maplibre-gl';
+import type { FeatureCollection, Position } from 'geojson';
 
 import { WHP_3D_SHADE_CATEGORIES, WHP_SHADE_QUALIFICATION } from '../config/whp-shade';
-import { registerWhpShadeProtocol } from './whp-shade-protocol';
+import { registerWhpShadeProtocol, setWhpShadePerimeters } from './whp-shade-protocol';
 import { URLS } from '../config/urls';
 import { reassertLabelOrder, reassertThematicOrder } from '../map/layer-order';
 import { getFire3DGroundLayer, onFire3DGroundLayerChange } from '../state/fire3d-ground-layers';
@@ -38,6 +40,51 @@ const FLAT_WHP_LAYER_KEY = 'usfs-whp';
 let releaseFlatLayerWatch: (() => void) | null = null;
 /** Released when the drape is torn down; follows the console's "Fuel risk" switch. */
 let releaseSwitchWatch: (() => void) | null = null;
+
+/** The flat fire-perimeter layer's key and source id (mirrored literal from src/layers/nifc-fires.ts). */
+const PERIMETERS = 'nifc-fires';
+/** Released when the drape is torn down; follows the fire perimeters. */
+let releasePerimeterWatch: (() => void) | null = null;
+/** A signature of the perimeters the drape is shaded with; 0 for none. */
+let perimeterSignature = 0;
+/** Counts perimeter reads, so an older read, or one out at teardown, lands nowhere. */
+let perimeterRead = 0;
+
+/**
+ * Fuel risk is fully transparent inside a fire perimeter (owner, 2026-10-11).
+ * Read the perimeters the flat layer holds, the way the ribbon does
+ * (`getData()`, no request), hand them to the shading protocol, and reload
+ * the mounted drape's tiles when the set differs from the one they were
+ * shaded with; loaded tiles stay drawn until their re-shaded copies arrive.
+ * Every perimeter the layer holds counts, whatever its incident class. No
+ * layer, no perimeters or a failed read all mean the same thing: fuel risk
+ * draws whole.
+ */
+async function syncPerimeters(map: maplibregl.Map): Promise<void> {
+  const read = ++perimeterRead;
+  let polygons: Position[][][] = [];
+  let signature = 0;
+  try {
+    const source = map.getSource(PERIMETERS) as { getData?: () => Promise<FeatureCollection> } | undefined;
+    for (const { geometry } of (await source?.getData?.())?.features ?? []) {
+      for (const polygon of geometry?.type === 'Polygon' ? [geometry.coordinates]
+        : geometry?.type === 'MultiPolygon' ? geometry.coordinates : []) {
+        polygons.push(polygon);
+        for (const ring of polygon) {
+          for (const point of ring) signature = (Math.imul(signature, 31) + point[0]! * 1e5 + point[1]! * 7e5) | 0;
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[whp-3d]', err);
+    polygons = [];
+    signature = 0;
+  }
+  if (read !== perimeterRead || signature === perimeterSignature) return;
+  perimeterSignature = signature;
+  setWhpShadePerimeters(polygons);
+  if (map.getSource(SOURCE_ID)) map.refreshTiles(SOURCE_ID);
+}
 
 /** The drape's layout visibility under the console's "Fuel risk" switch (session only). */
 const fuelRiskVisibility = (): 'visible' | 'none' => (getFire3DGroundLayer('fuelRisk') ? 'visible' : 'none');
@@ -110,6 +157,10 @@ export async function activateWhpDrape(
     }
     return false;
   }
+  if (signal.aborted) return false;
+  // Before the source exists, so its first tiles are already cut and
+  // entering the scene reloads nothing.
+  await syncPerimeters(map);
   if (signal.aborted) return false;
 
   try {
@@ -189,8 +240,16 @@ export async function activateWhpDrape(
   // under-claims rather than over-claims and needs no disclosure.
   releaseFlatLayerWatch?.();
   releaseFlatLayerWatch = registry.on('change', () => {
-    if (!flatWhpLayerIsOn()) return;
-    deactivateWhpDrape(map);
+    if (flatWhpLayerIsOn()) deactivateWhpDrape(map);
+    // The perimeter layer going off takes its source, and the mask with it.
+    else void syncPerimeters(map);
+  });
+  // The perimeter layer reports each time it puts a response on the map
+  // (its first, and again after each pan or zoom); a set that did not
+  // change reloads nothing.
+  releasePerimeterWatch?.();
+  releasePerimeterWatch = registry.on('status-change', (key) => {
+    if (key === PERIMETERS) void syncPerimeters(map);
   });
 
   return true;
@@ -205,6 +264,9 @@ export function deactivateWhpDrape(map: maplibregl.Map): void {
   releaseFlatLayerWatch = null;
   releaseSwitchWatch?.();
   releaseSwitchWatch = null;
+  releasePerimeterWatch?.();
+  releasePerimeterWatch = null;
+  perimeterRead += 1;
   if (map.getLayer(LAYER_ID)) map.removeLayer(LAYER_ID);
   if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);
   hideLegend(LEGEND_KEY);
