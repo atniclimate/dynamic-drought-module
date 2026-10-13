@@ -1,5 +1,5 @@
 import type * as maplibregl from 'maplibre-gl';
-import { FIRE3D_TERRAIN_COVERAGE, type TerrainCoverage } from './terrain-coverage';
+import { FIRE3D_TERRAIN_COVERAGE, terrainCoverageSentence, type TerrainCoverage } from './terrain-coverage';
 
 import { HILLSHADE_SHADOW, MAP_GROUND_COLOR } from './interface-tokens';
 import {
@@ -104,8 +104,8 @@ export { FIRE3D_TERRAIN_COVERAGE } from './terrain-coverage';
  * FIRE3D_TERRAIN_COVERAGE.maxZoom plays no part here: this answers ONLY the
  * geographic question (is there any baked elevation here at all), never the
  * separate and non-boundary question of how deep the bake goes once inside
- * the box (see FIRE3D_TERRAIN_COVERAGE_SENTENCE's own comment on why the two
- * must stay apart).
+ * the box (see terrainCoverageSentence's own comment on why the two must
+ * stay apart).
  */
 export function isWithinTerrainCoverage(
   lng: number, lat: number, coverage: TerrainCoverage = FIRE3D_TERRAIN_COVERAGE
@@ -177,62 +177,61 @@ export function classifyTerrainCoverage(
   return contained ? 'full' : 'partial';
 }
 
-/**
- * Exported (not just an internal helper) so the header-vs-sentence test in
- * tests/fire3d-mode.spec.ts asserts against the exact same formatting the
- * sentence uses, rather than a second hand-written copy that could drift
- * from it silently.
- */
-export function formatLatitudeDeg(value: number): string {
-  return `${Math.abs(value)}°${value >= 0 ? 'N' : 'S'}`;
-}
-
-/** See formatLatitudeDeg. */
-export function formatLongitudeDeg(value: number): string {
-  return `${Math.abs(value)}°${value >= 0 ? 'E' : 'W'}`;
-}
+export { formatLatitudeDeg, formatLongitudeDeg } from './terrain-coverage';
 
 /**
- * The terrain-only clause: the geographic extent is the coverage claim
- * (outside the box there is no archive at all, so the ground renders
- * flat); the zoom figure is stated separately as a DETAIL, never folded
- * into the same clause as "outside it...flat", because it is not a
- * coverage boundary. Above zoom 8 MapLibre overzooms the archive's
- * deepest level rather than going flat (src/layers/hillshade.ts:7-11),
- * and the 3D scene builds its own raster-dem from this same archive
- * (src/map/fire3d.ts), so relief persists, softened, at every zoom; a
- * sentence that read "through zoom 8; outside it...flat" would have let
- * "outside" be misread as "past zoom 8", which is false.
- *
- * Exported so src/ui/map-key.ts's flat-hillshade coverage entry can mirror
- * it verbatim (that module is in the eager graph and must not import this
- * chunk); tests/fire3d-mode.spec.ts pins the two against drift.
+ * The 3D scene's terrain clause (src/config/terrain-coverage.ts holds the
+ * shared formatter and the flat Terrain Shading's own form). Formatted from
+ * the archive that actually resolved (DR-083): the bundled zoom 8 depth
+ * before activation, the deep archive's own header depth once it answers. A
+ * bare number keeps the bundled box at that depth.
  */
 export function fire3dTerrainCoverageSentence(terrain: number | TerrainCoverage): string {
   const coverage = typeof terrain === 'number'
     ? { ...FIRE3D_TERRAIN_COVERAGE, maxZoom: terrain } : terrain;
-  return (
-    `Terrain relief uses the ${coverage.issuer}'s elevation data for ` +
-    `${formatLongitudeDeg(coverage.west)} to ${formatLongitudeDeg(coverage.east)}, ` +
-    `${formatLatitudeDeg(coverage.south)} to ${formatLatitudeDeg(coverage.north)}; ` +
-    'outside that box the ground renders flat. ' +
-    `The archive's detail ends at zoom ${coverage.maxZoom}; closer views stretch its deepest tiles.`
-  );
+  return terrainCoverageSentence('3D relief', coverage);
 }
 
 /**
- * The sentence for the BUNDLED archive, the one every deployer ships. Since
- * DR-083 (2026-09-10) this is the sentence's constant form only: the 3D
- * scene may resolve the deep archive instead (src/config/urls.ts,
- * `terrainPmtilesDeep`, zoom 10), and its own note is then formatted from
- * the depth the resolved archive's header declares, through
- * `fire3dCoverageNote`. This constant describes the bundled archive and the
- * flat hillshade, which reads only that one, and tests/fire3d-mode.spec.ts
- * pins it to the committed header.
+ * The 3D scene's edge fade. Outside the archive box MapLibre has no
+ * elevation, so relief and its shading stop on a straight line. MapLibre has
+ * no spatially varying terrain exaggeration, hillshade or DEM alpha, so the
+ * cheapest soft transition is a draped veil: bands of the scene's own fog
+ * colour straddling the box edge, most opaque at the edge and clearing to
+ * nothing half a degree either side. It hides the seam, not the geometric
+ * step; nothing about the elevation changes.
  */
-export const FIRE3D_TERRAIN_COVERAGE_SENTENCE = fire3dTerrainCoverageSentence(
-  FIRE3D_TERRAIN_COVERAGE.maxZoom
-);
+export const TERRAIN_EDGE_BAND_COUNT = 6; // per side; the ribbon ladder's count, a fade not stripes
+export const TERRAIN_EDGE_HALF_WIDTH_DEG = 0.5;
+export const TERRAIN_EDGE_PEAK_OPACITY = 0.7;
+export const TERRAIN_EDGE_COLOR = MAP_GROUND_COLOR;
+
+/** The box inset by `d` degrees (negative grows it), as a counter-clockwise ring. */
+function insetRing(box: TerrainCoverage, d: number): GeoJSON.Position[] {
+  const w = box.west + d, s = box.south + d, e = box.east - d, n = box.north - d;
+  return [[w, s], [e, s], [e, n], [w, n], [w, s]];
+}
+
+/** The fade's bands, outermost first: each a ring with a clockwise hole and a linear opacity at its midpoint. */
+export function terrainEdgeBands(
+  box: TerrainCoverage
+): GeoJSON.FeatureCollection<GeoJSON.Polygon, { opacity: number }> {
+  const step = TERRAIN_EDGE_HALF_WIDTH_DEG / TERRAIN_EDGE_BAND_COUNT;
+  const features: GeoJSON.Feature<GeoJSON.Polygon, { opacity: number }>[] = [];
+  for (let i = -TERRAIN_EDGE_BAND_COUNT; i < TERRAIN_EDGE_BAND_COUNT; i += 1) {
+    const distance = Math.abs(i + 0.5) / TERRAIN_EDGE_BAND_COUNT;
+    const opacity = Math.round(TERRAIN_EDGE_PEAK_OPACITY * (1 - distance) * 1000) / 1000;
+    features.push({
+      type: 'Feature',
+      properties: { opacity },
+      geometry: {
+        type: 'Polygon',
+        coordinates: [insetRing(box, i * step), insetRing(box, (i + 1) * step).reverse()]
+      }
+    });
+  }
+  return { type: 'FeatureCollection', features };
+}
 
 /**
  * Honest coverage statement rendered beside the toggle whenever the control

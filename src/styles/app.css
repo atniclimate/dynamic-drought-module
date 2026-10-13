@@ -8285,9 +8285,15 @@ a.impact-resource-link::after {
   transform: translateX(-50%);
 }
 
+/* Two lines (ATLANTIC / OCEAN) keep the label inside the open water, about
+   lon -68 to -54. A 24px box at top 61% of the 348 plane centres its text
+   near 37N (y ~ 228), clear of the coast and about 60px above ALL. */
 .shell-minimap-ocean-door-atlantic {
   right: 1.5%;
-  top: 48%;
+  top: 61%;
+  max-width: min-content;
+  text-align: center;
+  line-height: 1.1;
 }
 
 .shell-minimap-drawing {

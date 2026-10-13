@@ -55,9 +55,11 @@ import {
   FIRE3D_SKY_CLEAR_SPECIFICATION,
   FIRE3D_SKY_SPECIFICATION,
   FIRE3D_TERRAIN_EXAGGERATION,
+  TERRAIN_EDGE_COLOR,
   classifyTerrainCoverage,
   fire3dCoverageNote,
-  isWithinTerrainCoverage
+  isWithinTerrainCoverage,
+  terrainEdgeBands
 } from '../config/fire3d-presentation';
 import type { TerrainCoverageReading } from '../config/fire3d-presentation';
 import { terrainCoverageFromHeader, FIRE3D_TERRAIN_COVERAGE,
@@ -66,6 +68,7 @@ import { URLS } from '../config/urls';
 import { resolveHillshadeArchive } from '../layers/hillshade';
 import { probeArchiveHeader } from '../util/pmtiles-probe';
 import { holdSatellite } from './basemap-switcher';
+import { BOTTOM_STACK_IDS, firstLayerIdAbove } from './layer-order';
 import { watchContextLoss, webGl2Capability } from './gl-capability';
 import {
   getCommittedSnapshot,
@@ -85,6 +88,8 @@ import type { RasterTileWatch } from '../util/raster-status';
 
 /** Own terrain source; never the hillshade layer's 'hillshade-dem'. */
 const TERRAIN_SOURCE_ID = 'fire3d-terrain-dem';
+/** The edge fade's source and layer (mirrored in layer-order.ts BOTTOM_STACK_IDS). */
+const TERRAIN_EDGE_ID = 'fire3d-terrain-edge';
 
 /** The fire event layers whose presence keeps an ACTIVE mode alive across
  * an honest 'custom' demotion (the IC refinement to the entry gate). */
@@ -620,6 +625,8 @@ function rollbackScene(map: maplibregl.Map): void {
     }
   }
   smokeVolumeOn = false;
+  if (map.getLayer(TERRAIN_EDGE_ID)) map.removeLayer(TERRAIN_EDGE_ID);
+  if (map.getSource(TERRAIN_EDGE_ID)) map.removeSource(TERRAIN_EDGE_ID);
   map.setTerrain(null);
   map.setSky(FIRE3D_SKY_CLEAR_SPECIFICATION);
   if (map.getSource(TERRAIN_SOURCE_ID)) map.removeSource(TERRAIN_SOURCE_ID);
@@ -797,6 +804,25 @@ async function activateScene(map: maplibregl.Map): Promise<void> {
   } catch (err) {
     failScene(map, 'Terrain setup failed.', err);
     return;
+  }
+  // The edge fade over the archive box that resolved (terrainEdgeBands). It
+  // is cosmetic and non-fatal: a failure leaves the hard seam and nothing else.
+  try {
+    const beforeId = firstLayerIdAbove(map, BOTTOM_STACK_IDS);
+    map.addSource(TERRAIN_EDGE_ID, { type: 'geojson', data: terrainEdgeBands(resolved.coverage) });
+    map.addLayer({
+      id: TERRAIN_EDGE_ID,
+      type: 'fill',
+      source: TERRAIN_EDGE_ID,
+      paint: {
+        'fill-color': TERRAIN_EDGE_COLOR,
+        'fill-opacity': ['get', 'opacity'],
+        // No outline pass: it would double the veil along every band seam.
+        'fill-antialias': false
+      }
+    }, beforeId);
+  } catch (err) {
+    warnComponent('terrain edge fade', err);
   }
 
   active = true;

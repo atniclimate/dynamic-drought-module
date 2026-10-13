@@ -28,13 +28,16 @@ import type * as maplibregl from 'maplibre-gl';
 
 /** The permanent bottom-stack ids, in stacking order. The Wildfire 3D
  * dryness ground (DDM-P9-T13; src/layers/wildfire-dryness.ts, mirrored
- * literal) sits under the hillshade and every drape, present only in that scene. */
+ * literal) sits under the hillshade and every drape, present only in that scene.
+ * The 3D scene's edge fade (src/map/fire3d.ts, mirrored literal) veils the
+ * terrain box's seam over the whole stack and under every data layer. */
 export const BOTTOM_STACK_IDS: readonly string[] = [
   'background',
   'basemap',
   'basemap-satellite',
   'wildfire-dryness-ground',
-  'hillshade'
+  'hillshade',
+  'fire3d-terrain-edge'
 ];
 
 /** Reference label layers that always read above every data layer. */

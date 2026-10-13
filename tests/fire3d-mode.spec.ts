@@ -18,7 +18,6 @@ import {
   FIRE3D_SKY_CLEAR_SPECIFICATION,
   FIRE3D_SKY_SPECIFICATION,
   FIRE3D_TERRAIN_COVERAGE,
-  FIRE3D_TERRAIN_COVERAGE_SENTENCE,
   FIRE3D_TERRAIN_EXAGGERATION,
   PERIMETER_RIBBON_QUALIFICATION,
   PERIMETER_RIBBON_SLAB_COUNT,
@@ -958,35 +957,9 @@ test('the terrain coverage constant matches the committed archive header, so a r
   expect(FIRE3D_COVERAGE_NOTE).not.toContain('terrarium');
 });
 
-const MAP_KEY_SOURCE_PATH = join(process.cwd(), 'src', 'ui', 'map-key.ts');
-
-/**
- * src/ui/map-key.ts sits in the eager graph and therefore mirrors
- * FIRE3D_TERRAIN_COVERAGE_SENTENCE as a LITERAL string rather than
- * importing the 3D Fire chunk (protocol item 10). Read the literal back
- * out of the source text itself (map-key.ts does not export the constant)
- * so the two cannot drift silently.
- */
-function readMapKeyHillshadeCoverageLiteral(): string {
-  const source = readFileSync(MAP_KEY_SOURCE_PATH, 'utf8');
-  const match = source.match(
-    /const HILLSHADE_COVERAGE_NOTE =\s*\n?\s*(['"])([\s\S]*?)\1;/
-  );
-  if (!match) {
-    throw new Error(
-      'src/ui/map-key.ts no longer declares HILLSHADE_COVERAGE_NOTE as a single string literal'
-    );
-  }
-  // Reverse the minimal JS escaping the literal can carry (only the quote
-  // character used to delimit it needs unescaping here).
-  return match[2]!.replace(new RegExp(`\\\\${match[1]}`, 'g'), match[1]!);
-}
-
-test('the flat hillshade key mirrors the 3D scene\'s terrain sentence literally, so the two cannot drift', () => {
-  expect(readMapKeyHillshadeCoverageLiteral()).toBe(
-    FIRE3D_TERRAIN_COVERAGE_SENTENCE
-  );
-});
+// The map key's flat Terrain Shading sentence is no longer a hand-typed
+// mirror: it imports HILLSHADE_COVERAGE_SENTENCE from the eager-safe
+// src/config/terrain-coverage.ts, pinned by tests/terrain-coverage.test.mjs.
 
 test('the perimeter layer sits above the hazard drape in the style order while the scene is active (clause 2, read-only proof)', async () => {
   const browser = installFakeBrowser({ desktop: true, reducedMotion: false });

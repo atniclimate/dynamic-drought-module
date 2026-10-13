@@ -49,7 +49,8 @@ import {
   USFS_WHP_PRESENTATION,
   NIFC_KEY_GENERALIZATION_NOTE
 } from '../config/wildfire-presentation';
-import { FRAMINGS } from '../config/framings';
+import { FRAMINGS, framingMinimapProvenance } from '../config/framings';
+import { HILLSHADE_COVERAGE_SENTENCE } from '../config/terrain-coverage';
 import { getFraming, onFramingChange } from '../state/framing-store';
 import { getHazardCluster, getOceanFraming, onHazardClusterChange } from '../state/cluster-store';
 import { getViewMode, onViewModeChange } from '../state/view-mode';
@@ -934,21 +935,6 @@ function loadingKeySpec(key: string): KeySpec {
 const HILLSHADE_COVERAGE_LABEL = 'Terrain: Pacific Northwest only';
 
 /**
- * `FIRE3D_TERRAIN_COVERAGE_SENTENCE` (src/config/fire3d-presentation.ts)
- * mirrored here as a LITERAL, not an import: this module sits in the eager
- * graph (loaded at first paint), and that constant's owning file is reached
- * only through the 3D Fire mode's dynamic-import chain, so importing it here
- * would pull that chunk into first paint. The full `FIRE3D_COVERAGE_NOTE` is
- * not mirrored because its trailing sentence describes the 3D view's bundled
- * structure bake (the central Oregon pilot area), which says nothing about
- * the flat hillshade and would broaden the claim made here.
- * tests/fire3d-mode.spec.ts asserts this string equals the source constant,
- * so the two cannot drift silently.
- */
-const HILLSHADE_COVERAGE_NOTE =
-  "Terrain relief uses the USGS 3D Elevation Program's elevation data for 125°W to 110.5°W, 41.5°N to 49.5°N; outside that box the ground renders flat. The archive's detail ends at zoom 8; closer views stretch its deepest tiles.";
-
-/**
  * Append the terrain coverage entry when Terrain Shading is on. It rides an
  * existing key rather than earning one: the hillshade is reference relief,
  * not a condition surface, so it must never materialize a key strip on a map
@@ -962,12 +948,12 @@ function withTerrainCoverage(
   const clamped = window.matchMedia(MOBILE_MAP_KEY_QUERY).matches;
   return {
     ...spec,
-    ariaLabel: `${spec.ariaLabel} ${HILLSHADE_COVERAGE_NOTE}`,
+    ariaLabel: `${spec.ariaLabel} ${HILLSHADE_COVERAGE_SENTENCE}`,
     itemsHtml: clamped
       ? spec.itemsHtml
       : spec.itemsHtml +
         '<span class="map-key-qualification" data-hillshade-coverage title="' +
-        `${escapeHtml(HILLSHADE_COVERAGE_NOTE)}">` +
+        `${escapeHtml(HILLSHADE_COVERAGE_SENTENCE)}">` +
         `${escapeHtml(HILLSHADE_COVERAGE_LABEL)}</span>`
   };
 }
@@ -1031,8 +1017,15 @@ function frameCoverageNote(): string {
   const framing = selection === null || selection === 'all' ? null : selection;
   const def = framing !== null ? FRAMINGS[framing] : undefined;
   const coverage = def?.coverage;
-  if (coverage === undefined) return '';
   if (!landFramingGovernsCamera()) return '';
+  // Per mode, and before the coverage early return: arid-west and
+  // southeast-gulf have no coverage block but still earn the Wildfire, Heat
+  // and ENSO clauses.
+  // With no framing selected the key stays as quiet as it always was.
+  const minimapProvenance = framing !== null && minimapInScene()
+    ? framingMinimapProvenance(framing, getHazardCluster())
+    : undefined;
+  if (coverage === undefined) return minimapProvenance?.replace(/\.\s*$/, '') ?? '';
 
   const clauses: string[] = [];
 
@@ -1053,9 +1046,7 @@ function frameCoverageNote(): string {
     if (earned) clauses.push(coverage.displayScope);
   }
 
-  if (coverage.minimapProvenance !== undefined && minimapInScene()) {
-    clauses.push(coverage.minimapProvenance);
-  }
+  if (minimapProvenance !== undefined) clauses.push(minimapProvenance);
 
   // Ungated: the place catalog ends where it ends, whatever is displayed.
   if (coverage.briefingScope !== undefined) clauses.push(coverage.briefingScope);
