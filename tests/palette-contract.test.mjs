@@ -298,7 +298,7 @@ test('S4 BC levels and no-update stay a separate numeric scale', () => {
 });
 test('S5 HeatRisk retains issuer class identity and colors', () => {
   assert.deepEqual(palette.HEATRISK_CATEGORIES.map(({ value, label, color }) => [value, label, color]), [
-    [0, 'Little to no risk', '#E8F9E7'], [1, 'Minor', '#F4F257'],
+    [0, 'Little to None', '#E8F9E7'], [1, 'Minor', '#F4F257'],
     [2, 'Moderate', '#F69632'], [3, 'Major', '#E22F33'], [4, 'Extreme', '#7A0E7F']
   ]);
 });

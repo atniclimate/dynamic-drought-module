@@ -94,9 +94,11 @@ export const DROUGHT_COLORS: Readonly<Record<string, string>> = {
 /* ---------------------------------------------------------------------------
  * National Weather Service (NWS) HeatRisk categories
  *
- * The NWS ImageServer publishes these issuer-owned class colors and meanings.
- * Source: https://mapservices.weather.noaa.gov/experimental/rest/services/
- * NWS_HeatRisk/ImageServer/legend and /info/iteminfo (verified 2026-07-28).
+ * Class colors come from the NWS ImageServer legend (verified 2026-07-28):
+ * https://mapservices.weather.noaa.gov/experimental/rest/services/
+ * NWS_HeatRisk/ImageServer/legend. Class names and meanings come from the WPC
+ * explainer, https://www.wpc.ncep.noaa.gov/heatrisk/pdf/HeatRisk-v2.6-Understanding-HeatRisk.pdf
+ * (verified 2026-10-13); the legend's own labels ("Minor risk") differ.
  * The raster remains colorized by the issuer. This table is the one mirror
  * used by every DDM surface that names a HeatRisk class.
  * ------------------------------------------------------------------------- */
@@ -113,9 +115,9 @@ export interface HeatRiskCategory {
 export const HEATRISK_CATEGORIES: readonly HeatRiskCategory[] = [
   {
     value: 0,
-    label: 'Little to no risk',
+    label: 'Little to None',
     color: '#E8F9E7',
-    meaning: 'Little to no risk from expected heat.'
+    meaning: 'This level of heat poses little to no risk from expected heat.'
   },
   {
     value: 1,

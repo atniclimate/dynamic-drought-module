@@ -329,9 +329,9 @@ test('the issuer HeatRisk table and the near-term horizon heading are exact and 
   expect(HEATRISK_CATEGORIES).toEqual([
     {
       value: 0,
-      label: 'Little to no risk',
+      label: 'Little to None',
       color: '#E8F9E7',
-      meaning: 'Little to no risk from expected heat.'
+      meaning: 'This level of heat poses little to no risk from expected heat.'
     },
     {
       value: 1,
