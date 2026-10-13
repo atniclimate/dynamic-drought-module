@@ -8109,6 +8109,11 @@ a.impact-resource-link::after {
   line-height: 1.35;
 }
 
+/* The 3D information paragraphs each set margin 0; space the run of them. */
+.shell-fire3d-details > p + p {
+  margin-top: 6px;
+}
+
 /* The empty-smoke answer (2026-08-19). Same type as the notes beside it,
    one step brighter, because it reports the state of a live source rather
    than a standing caveat: a person who just turned the volume on and sees

@@ -330,10 +330,21 @@ function droughtImpactStrokeWidth(
   return 1.6 + Math.sqrt(summary.droughtPercent / 100) * 5.4;
 }
 
+/** The partial-coverage sentence: the mask share, or the mask-did-not-load truth (0% would mislead). */
+export function droughtMaskSentence(
+  notAnalyzedPercent: number,
+  analysisMaskMissing: boolean | undefined,
+): string {
+  return analysisMaskMissing
+    ? "The Nunavut analysis mask did not load, so Nunavut is counted in this framing's land."
+    : `The Nunavut analysis-mask proxy excludes approximately ${notAnalyzedPercent}% of this framing's land.`;
+}
+
 function droughtDescription(
   status: MinimapDroughtSnapshot['status'],
   summary: FramingDroughtSummary | undefined,
   month: string | null,
+  analysisMaskMissing?: boolean,
 ): string {
   if (status === 'loading' || status === 'idle') {
     return 'North American drought summary loading.';
@@ -343,8 +354,7 @@ function droughtDescription(
   }
   const partial =
     summary.coverage === 'live-partial'
-      ? ` Coverage is partial. The Nunavut analysis-mask proxy excludes ` +
-        `approximately ${summary.notAnalyzedPercent}% of this framing's land.`
+      ? ` Coverage is partial. ${droughtMaskSentence(summary.notAnalyzedPercent, analysisMaskMissing)}`
       : '';
   return (
     `Approximate area-weighted mean category index: ${droughtClassLabel(summary.averageClass)}, ` +
@@ -506,7 +516,10 @@ function droughtMetricNote(snapshot: MinimapDroughtSnapshot): string {
   return (
     `North American Drought Monitor monthly consensus, ${monthLabel(snapshot.month)}. ` +
     'Fill is an approximate area-weighted mean category index over assessed land, and outline width is the D1 through D4 share. ' +
-    'This navigation overview is inferred from NADM polygons, not an NADM-issued regional category; hatching marks partial coverage.'
+    'This navigation overview is inferred from NADM polygons, not an NADM-issued regional category; hatching marks partial coverage.' +
+    (snapshot.analysisMaskMissing
+      ? ' The Nunavut analysis mask did not load, so Nunavut is counted in land.'
+      : '')
   );
 }
 
@@ -673,6 +686,7 @@ function accessibleName(
           drought.status,
           drought.summaries[key],
           drought.month,
+          drought.analysisMaskMissing,
         )
       : metricContext === 'wildfire'
         ? wildfireDescription(
@@ -941,7 +955,7 @@ export function Minimap({
       : ensoScaleAccessibleText ?? unshadedNote(metricContext);
   const activePartialNote =
     activeDrought?.coverage === 'live-partial'
-      ? ` The Nunavut analysis-mask proxy excludes approximately ${activeDrought.notAnalyzedPercent}% of this framing's land.`
+      ? ` ${droughtMaskSentence(activeDrought.notAnalyzedPercent, drought.analysisMaskMissing)}`
       : '';
   const activeWildfireNote =
     activeWildfire?.status === 'live-partial'
