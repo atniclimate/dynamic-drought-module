@@ -478,6 +478,8 @@ test.describe('DDM-P8-T02: the Wildfire screen has a time control at every horiz
   test('near term: the SPC Day 1 outlook stamp is an outlook with the issuance window, and the current recipe takes the bar back', async ({
     page
   }) => {
+    // The fixture outlook's expire time is in September; the layer shows no outlook past it.
+    await page.clock.setFixedTime(new Date('2026-09-08T18:00:00Z'));
     await stubCommon(page);
     await stubFire(page, { spc: 'outlined' });
     await gotoApp(page, '?view=console&cluster=wildfire&horizon=weeks-ahead');

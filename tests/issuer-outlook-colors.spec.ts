@@ -167,7 +167,7 @@ function polygon(index: number, properties: Record<string, unknown>) {
 
 test('D3 S7 SPC three rendered classes retain exact issuer map and key colors', async ({ page }) => {
   await stubSpcFireOutlook(page, { 1: [5, 8, 10].map((dn, index) =>
-    polygon(index, { dn, valid: '202610071200', expire: '202610081200' })) });
+    polygon(index, { dn, valid: '202610071200', expire: '209912312359' })) });
   await gotoApp(page, '?embed=true&region=washington_state&layers=spc-fire-weather');
   await expect(layerPill(page, 'spc-fire-weather')).toHaveText('live');
   await page.locator('#map-key-details-toggle').click();

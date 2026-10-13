@@ -90,7 +90,8 @@ import { URLS } from '../config/urls';
 import { WHP_SURFACE_OPACITY } from '../config/whp-shade';
 import { registry } from '../state/registry';
 import { clearTimeBar, setTimeBar } from '../ui/time-bar';
-import { watchRasterTiles, type RasterTileWatch } from '../util/raster-status';
+import { watchRasterTiles, type RasterTileOutcome, type RasterTileWatch } from '../util/raster-status';
+import { pointHasHeatRiskCoverage } from './heatrisk-coverage';
 import { registerWhpImageShadeProtocol } from './whp-image-shade-protocol';
 
 const LAYER_KEY = 'usfs-whp';
@@ -104,6 +105,7 @@ export const fadeLayerIds = [LAYER_ID] as const;
 /** The tile-load honesty watcher (util/raster-status.ts); null when inactive. */
 let tileWatch: RasterTileWatch | null = null;
 let releaseTerrainWatch: (() => void) | null = null;
+let releaseCoverageWatch: (() => void) | null = null;
 let shadeOn = false;
 
 function hasTerrain(map: maplibregl.Map): boolean {
@@ -134,10 +136,31 @@ function watchTerrainPresentation(map: maplibregl.Map): void {
   releaseTerrainWatch = () => map.off('terrain', sync);
 }
 
-type WhpStatus = 'loading' | 'ready' | 'degraded' | 'error';
+type WhpStatus = 'loading' | 'ready' | 'degraded' | 'error' | 'no-data';
 
 function reportStatus(state: WhpStatus): void {
   registry.setStatus(LAYER_KEY, state);
+}
+
+/**
+ * Outside the conterminous United States the service answers 200 with
+ * transparent tiles, which the watcher reads as ready, so the map centre
+ * decides (the coverage ring HeatRisk uses). Returns the watcher's reporter.
+ */
+function watchCoverage(map: maplibregl.Map): (tile: RasterTileOutcome) => void {
+  releaseCoverageWatch?.();
+  let tile: WhpStatus = 'loading';
+  const sync = (): void => {
+    const { lng, lat } = map.getCenter();
+    const next = pointHasHeatRiskCoverage(lng, lat) ? tile : 'no-data';
+    if (registry.getStatus(LAYER_KEY) !== next) reportStatus(next);
+  };
+  map.on('moveend', sync);
+  releaseCoverageWatch = () => map.off('moveend', sync);
+  return (state) => {
+    tile = state;
+    sync();
+  };
 }
 
 /**
@@ -255,7 +278,7 @@ export async function activate(map: maplibregl.Map): Promise<void> {
     }
 
     tileWatch?.detach();
-    tileWatch = watchRasterTiles(map, SOURCE_ID, reportStatus, {
+    tileWatch = watchRasterTiles(map, SOURCE_ID, watchCoverage(map), {
       reportInitialSuccess: true,
       requestCompletenessDeadlineMs: TILE_SUCCESS_DEADLINE_MS
     });
@@ -278,6 +301,8 @@ export async function activate(map: maplibregl.Map): Promise<void> {
 export function deactivate(map: maplibregl.Map): void {
   releaseTerrainWatch?.();
   releaseTerrainWatch = null;
+  releaseCoverageWatch?.();
+  releaseCoverageWatch = null;
   shadeOn = false;
   publishShadeState();
   tileWatch?.detach();

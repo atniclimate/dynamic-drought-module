@@ -561,7 +561,7 @@ test.describe('DDM-P8-T03 clause 1: every horizon chip either changes the map or
             features: [
               {
                 type: 'Feature',
-                properties: { dn: 8, valid: '202609081200', expire: '202609091200' },
+                properties: { dn: 8, valid: '202609081200', expire: '209912312359' },
                 geometry: {
                   type: 'Polygon',
                   coordinates: [

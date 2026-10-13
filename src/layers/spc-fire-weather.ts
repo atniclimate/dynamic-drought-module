@@ -111,14 +111,8 @@ function buildQueryUrl(): string {
 // The time statement (DDM-P8-T02)
 // ---------------------------------------------------------------------------
 
-/**
- * "Sep 8, 2026, 12:00 UTC" from the SPC `valid` / `expire` field
- * (`YYYYMMDDHHMM`, UTC). Pinned to UTC, unlike the popup's local-time
- * rendering, so the stamp reads the same for every viewer and matches the
- * other UTC-pinned stamps. Null when the field does not parse: the stamp
- * then says the period is not stated rather than printing a raw string.
- */
-function spcMomentUtc(value: unknown): string | null {
+/** The SPC `valid` / `expire` field (`YYYYMMDDHHMM`, UTC) as epoch ms, or null when it does not parse. */
+function spcMs(value: unknown): number | null {
   if (typeof value !== 'string' || !/^\d{12}$/.test(value)) return null;
   const ms = Date.UTC(
     Number(value.slice(0, 4)),
@@ -127,7 +121,19 @@ function spcMomentUtc(value: unknown): string | null {
     Number(value.slice(8, 10)),
     Number(value.slice(10, 12))
   );
-  if (Number.isNaN(ms)) return null;
+  return Number.isNaN(ms) ? null : ms;
+}
+
+/**
+ * "Sep 8, 2026, 12:00 UTC" from the SPC `valid` / `expire` field
+ * (`YYYYMMDDHHMM`, UTC). Pinned to UTC, unlike the popup's local-time
+ * rendering, so the stamp reads the same for every viewer and matches the
+ * other UTC-pinned stamps. Null when the field does not parse: the stamp
+ * then says the period is not stated rather than printing a raw string.
+ */
+function spcMomentUtc(value: unknown): string | null {
+  const ms = spcMs(value);
+  if (ms === null) return null;
   return new Intl.DateTimeFormat('en-US', {
     month: 'short',
     day: 'numeric',
@@ -234,15 +240,33 @@ function installTimeBar(
  */
 export async function activate(map: maplibregl.Map): Promise<void> {
   if (map.getSource(SOURCE_ID)) {
+    scheduleRefresh(map);
     return;
   }
+  await load(map, true);
+}
 
+/** The outlook is reissued up to five times daily; a tab left open must re-ask. */
+const REFRESH_INTERVAL_MS = 30 * 60 * 1000;
+let refreshTimer: number | null = null;
+
+function scheduleRefresh(map: maplibregl.Map): void {
+  if (refreshTimer !== null) window.clearTimeout(refreshTimer);
+  refreshTimer = window.setTimeout(() => {
+    refreshTimer = null;
+    void load(map, false);
+  }, REFRESH_INTERVAL_MS);
+}
+
+const EMPTY: FeatureCollection = { type: 'FeatureCollection', features: [] };
+
+async function load(map: maplibregl.Map, initial: boolean): Promise<void> {
   // Supersede any prior in-flight fetch before starting a new one.
   if (masterController) masterController.abort();
   masterController = new AbortController();
   const signal = masterController.signal;
 
-  reportStatus('loading');
+  if (initial) reportStatus('loading');
 
   let geojson: FeatureCollection;
   let truncated = false;
@@ -259,7 +283,7 @@ export async function activate(map: maplibregl.Map): Promise<void> {
     // geometry for NIFC, HMS, and every other SPC body).
     noArea = readNoAreaAnswer(body);
     if (noArea !== null) {
-      geojson = { type: 'FeatureCollection', features: [] };
+      geojson = EMPTY;
     } else {
       const parsed = parseArcGisPolygonFeatureCollection(
         body,
@@ -272,7 +296,11 @@ export async function activate(map: maplibregl.Map): Promise<void> {
     // Aborted means superseded or deactivated; drop silently per invariant 5.
     if (signal.aborted) return;
     console.warn('[spc-fire-weather] outlook fetch failed.', err);
+    // The last good outlook must not stay up as current beside an error.
+    (map.getSource(SOURCE_ID) as maplibregl.GeoJSONSource | undefined)?.setData(EMPTY);
+    clearTimeBar(LAYER_KEY);
     reportStatus('error');
+    scheduleRefresh(map);
     return;
   }
 
@@ -280,63 +308,76 @@ export async function activate(map: maplibregl.Map): Promise<void> {
   if (signal.aborted) return;
 
   const features = geojson?.features ?? [];
+  // An outlook past its own expire time is not today's answer: nothing is
+  // drawn and the status is the no-data one; the stamp still states its period.
+  const expireMs = spcMs(features[0]?.properties?.['expire']);
+  const expired = expireMs !== null && expireMs <= Date.now();
+  const drawn = expired ? EMPTY : geojson;
 
-  map.addSource(SOURCE_ID, {
-    type: 'geojson',
-    data: geojson,
-    attribution: 'NOAA SPC'
-  });
+  const source = map.getSource(SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
+  if (source) {
+    source.setData(drawn);
+  } else {
+    map.addSource(SOURCE_ID, {
+      type: 'geojson',
+      data: drawn,
+      attribution: 'NOAA SPC'
+    });
+  }
+  scheduleRefresh(map);
 
   // The outlook is the displayed surface from here on, outlined areas or
   // none; its time statement stands for both.
   installTimeBar(features, noArea);
 
-  if (features.length === 0) {
-    reportStatus(truncated ? 'degraded' : 'no-data');
+  if (drawn.features.length === 0) {
+    reportStatus(truncated && !expired ? 'degraded' : 'no-data');
     return;
   }
 
-  const beforeId = resolveBeforeId(map);
+  if (!map.getLayer(FILL_LAYER_ID)) {
+    const beforeId = resolveBeforeId(map);
 
-  // Color by category via a `match` expression on the integer `dn` field.
-  // `matchExpression` does the head-pair/tail split the Style Spec tuple type
-  // requires. For every non-empty palette, and so for SPC_FIREWX_CATEGORIES as
-  // shipped, the emitted array is the same one the older cast-and-spread form
-  // produced; for an empty palette the two disagree and both are invalid, so
-  // the helper throws instead of emitting either.
-  const colorExpression = matchExpression(
-    ['get', 'dn'],
-    SPC_FIREWX_CATEGORIES.map((c) => [c.dn, c.color] as const),
-    SPC_FIREWX_DEFAULT_COLOR,
-    'SPC_FIREWX_CATEGORIES'
-  );
+    // Color by category via a `match` expression on the integer `dn` field.
+    // `matchExpression` does the head-pair/tail split the Style Spec tuple type
+    // requires. For every non-empty palette, and so for SPC_FIREWX_CATEGORIES as
+    // shipped, the emitted array is the same one the older cast-and-spread form
+    // produced; for an empty palette the two disagree and both are invalid, so
+    // the helper throws instead of emitting either.
+    const colorExpression = matchExpression(
+      ['get', 'dn'],
+      SPC_FIREWX_CATEGORIES.map((c) => [c.dn, c.color] as const),
+      SPC_FIREWX_DEFAULT_COLOR,
+      'SPC_FIREWX_CATEGORIES'
+    );
 
-  map.addLayer(
-    {
-      id: FILL_LAYER_ID,
-      type: 'fill',
-      source: SOURCE_ID,
-      paint: {
-        'fill-color': colorExpression,
-        'fill-opacity': 0.3
-      }
-    },
-    beforeId
-  );
+    map.addLayer(
+      {
+        id: FILL_LAYER_ID,
+        type: 'fill',
+        source: SOURCE_ID,
+        paint: {
+          'fill-color': colorExpression,
+          'fill-opacity': 0.3
+        }
+      },
+      beforeId
+    );
 
-  map.addLayer(
-    {
-      id: OUTLINE_LAYER_ID,
-      type: 'line',
-      source: SOURCE_ID,
-      paint: {
-        'line-color': colorExpression,
-        'line-width': 1.2,
-        'line-opacity': 0.9
-      }
-    },
-    beforeId
-  );
+    map.addLayer(
+      {
+        id: OUTLINE_LAYER_ID,
+        type: 'line',
+        source: SOURCE_ID,
+        paint: {
+          'line-color': colorExpression,
+          'line-width': 1.2,
+          'line-opacity': 0.9
+        }
+      },
+      beforeId
+    );
+  }
 
   if (truncated) {
     console.warn(
@@ -353,6 +394,8 @@ export async function activate(map: maplibregl.Map): Promise<void> {
  */
 export function cancelActivation(): void {
   masterController?.abort();
+  if (refreshTimer !== null) window.clearTimeout(refreshTimer);
+  refreshTimer = null;
 }
 
 export function deactivate(map: maplibregl.Map): void {

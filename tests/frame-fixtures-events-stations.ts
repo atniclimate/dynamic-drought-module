@@ -91,7 +91,7 @@ export async function routeNwsAlert(page: Page, variant: EventStationVariant = '
 
 /** The Day 1 outlook period in the issuer's own format (UTC). */
 export const SPC_FIXTURE_VALID = '202610051200';
-export const SPC_FIXTURE_EXPIRE = '202610061200';
+export const SPC_FIXTURE_EXPIRE = '209912312359';
 
 /**
  * Route the layer's Day 1 outlook query (layer 1, `outFields=dn,valid,expire`,
