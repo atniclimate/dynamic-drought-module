@@ -1004,16 +1004,11 @@ async function reachableTargets(page: Page): Promise<Target[]> {
         typeof element.className === 'string' && element.className.trim()
           ? `.${element.className.trim().split(/\s+/).slice(0, 2).join('.')}`
           : '';
-      // A minimap ocean door is the one control in this application whose
-      // hit area is deliberately larger than its box: EF-5 / MM-08 gave it
-      // a transparent 44px `::before` band so the 8px label could stay
-      // exactly where the minimap's authored geometry puts it. Measure the
-      // band, which is what a finger presses.
-      const band = element.classList.contains('shell-minimap-ocean-door')
-        ? getComputedStyle(element, '::before')
-        : null;
-      const hitWidth = Math.max(box.width, band ? Number.parseFloat(band.width) || 0 : 0);
-      const hitHeight = Math.max(box.height, band ? Number.parseFloat(band.height) || 0 : 0);
+      // The hit area is the box: the minimap ocean doors, whose 44px
+      // `::before` band was the one exception, moved to the framing
+      // dropdown on 2026-10-13.
+      const hitWidth = box.width;
+      const hitHeight = box.height;
       const eff = effectiveRect(element, box);
       // Nothing of it is painted: reachable by centre, but no pixels to
       // collide with and none to press. It is not a target.
@@ -1348,8 +1343,7 @@ test.describe('the tablet band sidebar is fluid, not a 340px constant', () => {
     const at1024 = await sidebarWidthAt(1024);
     const at1280 = await sidebarWidthAt(1280);
 
-    // The floor the minimap's canvas needs to keep the Atlantic door clear
-    // of ALL on a coarse pointer; see the band block in src/styles/app.css.
+    // The sidebar floor of the band block in src/styles/app.css.
     expect(at721).toBeGreaterThanOrEqual(300);
     // Fluid: the column is strictly wider as the viewport grows inside the
     // band. This is the clause a fixed --sidebar-w fails.

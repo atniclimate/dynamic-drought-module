@@ -61,8 +61,8 @@ test.describe('U3i region demotion (D-0.7.0-009)', () => {
     await expect(page.locator('#panel-region')).toBeVisible();
     await expect(regionSelect(page)).toHaveAttribute('aria-label', /region/i);
 
-    // Every detailed region renders in the second option group.
-    await expect(page.locator('#region-select optgroup').nth(1).locator('option')).toHaveCount(
+    // Every detailed region renders in the 'Detailed regions' option group.
+    await expect(page.locator('#region-select optgroup[label="Detailed regions"] option')).toHaveCount(
       REGION_KEYS.length
     );
 

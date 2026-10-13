@@ -7,8 +7,8 @@
  * framings keep the verified, edge-matched masks promoted from the S4 shell
  * kit, clipped to bundled Natural Earth 1:50m physical coastline linework;
  * Hawaii is the enlarged inset whose whole frame is its hit target. The
- * drawing itself uses only quiet ocean affordance labels for pointer users
- * (D-0.7.0-054); names and provenance framing ride the accessible name
+ * drawing itself carries no visible labels (D-0.7.0-054; the ocean labels
+ * moved to the framing dropdown 2026-10-13); names and provenance framing ride the accessible name
  * and the selected-framing caption below. Pointer hover is deliberately
  * visual-only: a soft glow marks the target without covering the map
  * with a description popup.
@@ -25,11 +25,9 @@
  * that describe THIS control: that is inherent control labeling read before
  * a commit, not a rendered popup, so it was left in place.
  *
- * The three ocean zones are schematic controls, not geographic boundaries.
- * Each enters the shipped ENSO display and fits its configured ocean camera
- * in one explicit gesture. They retain normal Tab stops outside the framing
- * radiogroup because they change both display and camera, while the land
- * framings remain camera-only deferred-commit radios.
+ * The three ocean zones are schematic shapes, not geographic boundaries.
+ * Since 2026-10-13 an ocean view is chosen from the framing dropdown under
+ * the minimap (src/ui/sidebar.ts); this card only highlights the active one.
  *
  * Keyboard model: one radiogroup (ALL plus the nine framings) with the
  * repository's roving-tabindex idiom (the region radiogroup pattern),
@@ -79,7 +77,6 @@ import {
   getOceanFraming,
   onHazardClusterChange,
 } from '../../state/cluster-store';
-import { requestOcean } from '../../state/cluster-service';
 import { getViewMode, onViewModeChange } from '../../state/view-mode';
 import {
   getMinimapDroughtSnapshot,
@@ -100,7 +97,7 @@ import type {
   MinimapWildfireSummary,
 } from '../../state/minimap-wildfire';
 import type { EnsoPhaseLabel } from '../../impact/enso';
-import { fitAll, fitFraming, fitOcean } from '../../map/camera-fit';
+import { fitAll, fitFraming } from '../../map/camera-fit';
 import { setMapTechnicalNote } from '../map-technical-information';
 
 /** The kit's ratified equirectangular drawing plane. The final 8 units
@@ -637,22 +634,6 @@ function choose(map: maplibregl.Map, key: FramingKey | null): void {
   else fitFraming(map, key);
 }
 
-/** One explicit ocean gesture enters ENSO and moves the camera. The framing
- * store is intentionally untouched; `ocean=` has camera precedence while it
- * is present and the prior authored framing remains available when cleared. */
-function chooseOcean(map: maplibregl.Map, key: OceanKey): void {
-  requestOcean(key);
-  fitOcean(map, key);
-}
-
-function oceanAccessibleName(key: OceanKey): string {
-  const ocean = OCEANS[key];
-  return (
-    `${ocean.label}. Switch to the El Nino / Southern Oscillation sea-surface-temperature anomaly display and fit this ocean camera. ` +
-    ocean.provenance
-  );
-}
-
 function accessibleName(
   key: FramingKey,
   drought: MinimapDroughtSnapshot,
@@ -789,7 +770,7 @@ export function Minimap({
 
   // Clause 2: a live footprint of the main map's own camera, independent
   // of the committed framing selection. `map` is the SAME instance the
-  // fit* helpers already fly (choose/chooseOcean above); this is the only
+  // fit* helpers already fly (choose above); this is the only
   // place anything in this module listens to it move, so there is no
   // second map-listener store to invent.
   const [viewportBounds, setViewportBounds] = useState<maplibregl.LngLatBounds | null>(
@@ -861,12 +842,6 @@ export function Minimap({
     if (event.key !== 'Enter' && event.key !== ' ') return;
     event.preventDefault();
     choose(map, key);
-  };
-
-  const onOceanKeyDown = (event: KeyboardEvent, key: OceanKey): void => {
-    if (event.key !== 'Enter' && event.key !== ' ') return;
-    event.preventDefault();
-    chooseOcean(map, key);
   };
 
   const onKeyDown = (event: KeyboardEvent): void => {
@@ -1061,23 +1036,6 @@ export function Minimap({
             })}
           </svg>
         )}
-
-        <div class="shell-minimap-ocean-doors" role="group" aria-label="Ocean views">
-          {OCEAN_KEYS.map((key) => (
-            <button
-              type="button"
-              id={`${idPrefix}-ocean-${key}`}
-              class={`shell-minimap-ocean-door shell-minimap-ocean-door-${key}`}
-              aria-pressed={activeOcean === key}
-              aria-label={oceanAccessibleName(key)}
-              data-ocean={key}
-              onClick={() => chooseOcean(map, key)}
-              onKeyDown={(event) => onOceanKeyDown(event, key)}
-            >
-              {OCEANS[key].label}
-            </button>
-          ))}
-        </div>
 
         <div
           class="shell-minimap-region-group"

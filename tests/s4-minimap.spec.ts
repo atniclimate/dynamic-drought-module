@@ -178,7 +178,8 @@ test.describe('S4b minimap', () => {
     ).toHaveCount(1);
     await expect(page.locator('#shell-region-host + #shell-refine-host')).toHaveCount(1);
     await expect(page.locator('#region-select')).toHaveValue('region:washington_state');
-    await expect(page.locator('#region-select optgroup')).toHaveCount(2);
+    // Overview, Ocean views (moved off the card 2026-10-13), Detailed regions.
+    await expect(page.locator('#region-select optgroup')).toHaveCount(3);
     await expect(page.locator('.shell-minimap-map [role="radiogroup"]')).toHaveCount(1);
     await expect(
       page.locator('.shell-minimap-map [data-framing="boreal-arctic"]'),
@@ -268,12 +269,6 @@ test.describe('S4b minimap', () => {
       'title',
       /Orange-red marks current mapped wildfire perimeters, deeper for more: 1, 2 to 9, 10 to 49, 50 or more per framing/,
     );
-    // The Atlantic door label never touches the ALL button (6px gap floor).
-    const door = await minimap.locator('[data-ocean="atlantic"]').boundingBox();
-    const allBox = await minimap.locator('.shell-minimap-all').boundingBox();
-    expect(door).not.toBeNull();
-    expect(allBox).not.toBeNull();
-    expect(allBox!.y - (door!.y + door!.height)).toBeGreaterThanOrEqual(5.5);
     await expect(
       minimap.locator('[data-framing="plains-prairies"]'),
     ).toHaveAttribute('data-wildfire-condition', 'below-threshold');
@@ -529,23 +524,30 @@ test.describe('S4b minimap', () => {
     expect(await search(page)).toContain('framing=arid-west');
   });
 
-  test('ocean controls enter ENSO, fit one schematic ocean, and preserve the authored framing', async ({
+  test('ocean views in the framing dropdown enter ENSO, fit one schematic ocean, and preserve the authored framing', async ({
     page,
   }) => {
     await gotoApp(page, '?view=brief&framing=pacific-coast');
     const minimap = page.locator('.shell-minimap-map');
-    await expect(minimap.locator('[data-ocean]')).toHaveCount(3);
+    const select = page.locator('#region-select');
+    // The card no longer carries ocean buttons (2026-10-13); it only
+    // highlights the active ocean shape, in OCEAN_KEYS order.
+    await expect(minimap.locator('button[data-ocean]')).toHaveCount(0);
+    const oceanShape = (key: string) =>
+      minimap.locator('.shell-minimap-ocean').nth(['pacific', 'arctic', 'atlantic'].indexOf(key));
+    await expect(
+      select.locator('optgroup[label="Ocean views"] option'),
+    ).toHaveText(['Pacific Ocean', 'Arctic Ocean', 'Atlantic Ocean']);
+    // Dispatched in the page because the select can sit in a collapsed column.
+    const chooseOceanView = (key: string) =>
+      page.evaluate((value: string) => {
+        const el = document.getElementById('region-select');
+        if (!(el instanceof HTMLSelectElement)) throw new Error('no #region-select');
+        el.value = value;
+        el.dispatchEvent(new Event('change'));
+      }, `ocean:${key}`);
 
-    const atlantic = minimap.locator('[data-ocean="atlantic"]');
-    await expect(atlantic).toHaveAttribute(
-      'aria-label',
-      /Switch to the El Nino \/ Southern Oscillation sea-surface-temperature anomaly display/,
-    );
-    await expect(atlantic).toHaveAttribute(
-      'aria-label',
-      /Schematic click affordance for camera navigation; not a boundary/,
-    );
-    await atlantic.click();
+    await chooseOceanView('atlantic');
     await expect
       .poll(async () => {
         const params = new URLSearchParams(await search(page));
@@ -560,7 +562,9 @@ test.describe('S4b minimap', () => {
         ocean: 'atlantic',
         framing: 'pacific-coast',
       });
-    await expect(atlantic).toHaveAttribute('aria-pressed', 'true');
+    await expect(select).toHaveValue('ocean:atlantic');
+    await expect(oceanShape('atlantic')).toHaveClass(/\bactive\b/);
+    await expect(minimap.locator('.shell-minimap-ocean.active')).toHaveCount(1);
     await expect(page.locator('input[data-layer-key="sst-anomaly"]')).toBeChecked();
     await expect(page.locator('#shell-framing-note')).toContainText(
       'Ocean view: Atlantic Ocean',
@@ -572,18 +576,16 @@ test.describe('S4b minimap', () => {
       minimap.locator('[data-framing="pacific-coast"]'),
     ).toHaveAttribute('aria-checked', 'false');
 
-    const arctic = minimap.locator('[data-ocean="arctic"]');
-    await arctic.focus();
-    await page.keyboard.press('Space');
+    await chooseOceanView('arctic');
     await expect
       .poll(async () => new URLSearchParams(await search(page)).get('ocean'))
       .toBe('arctic');
-    await expect(arctic).toHaveAttribute('aria-pressed', 'true');
+    await expect(select).toHaveValue('ocean:arctic');
+    await expect(oceanShape('arctic')).toHaveClass(/\bactive\b/);
 
     await page.reload({ waitUntil: 'domcontentloaded' });
-    await expect(
-      page.locator('.shell-minimap-map [data-ocean="arctic"]'),
-    ).toHaveAttribute('aria-pressed', 'true');
+    await expect(select).toHaveValue('ocean:arctic');
+    await expect(oceanShape('arctic')).toHaveClass(/\bactive\b/);
     const restored = new URLSearchParams(await search(page));
     expect(restored.get('cluster')).toBe('enso');
     expect(restored.get('ocean')).toBe('arctic');

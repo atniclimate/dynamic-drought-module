@@ -437,9 +437,6 @@ a:hover {
     --sidebar-w: clamp(300px, calc(30vw + 64px), 340px);
   }
 }
-/* The band's second minimap rule lives beside .shell-minimap-ocean-door
-   itself, further down this file, because it has to follow that rule in
-   source order to win at equal specificity. */
 
 /* embed mode: sidebar is hidden by URL param, but expand button still surfaces */
 .app-shell.embed {
@@ -8204,132 +8201,6 @@ a.impact-resource-link::after {
   filter: drop-shadow(0 0 5px rgba(34, 211, 238, 0.34));
 }
 
-.shell-minimap-ocean-doors {
-  position: absolute;
-  inset: 0;
-  z-index: 3;
-  pointer-events: none;
-}
-
-.shell-minimap-ocean-door {
-  position: absolute;
-  appearance: none;
-  min-width: 64px;
-  min-height: 24px;
-  padding: 3px 4px;
-  background: transparent;
-  color: var(--fg-3);
-  border: 0;
-  border-radius: 0;
-  font-family: var(--font-display);
-  font-size: 8px;
-  font-weight: var(--fw-subtitle);
-  letter-spacing: var(--track-caps-sm);
-  text-transform: uppercase;
-  cursor: pointer;
-  pointer-events: auto;
-  transition:
-    background 0.12s ease,
-    border-color 0.12s ease,
-    color 0.12s ease,
-    box-shadow 0.12s ease;
-}
-
-/* EF-5 (11-minimap-and-popups MM-08, planning/qa/feature-errors.yaml
-   FE-19): the painted ocean zone is pointer-events:none, so the whole
-   affordance is this button, and it measured 70x24 -- 24px on the short
-   axis, well under the 44px pointer floor the phone chrome already
-   holds itself to. Growing the button would move the label, so the HIT
-   AREA grows instead: a transparent band that is part of the button's
-   own box, so a press anywhere in it activates the button and not one
-   pixel of the label moves. .shell-minimap-canvas clips overflow, so
-   the band is anchored per door to stay inside the canvas. */
-.shell-minimap-ocean-door::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 50%;
-  height: 44px;
-  transform: translateY(-50%);
-}
-/* The arctic door sits 1.5% from the canvas top, so a band centred on
-   it would lose its upper half to the canvas clip and land back under
-   44px. Anchor this one to the door's top edge and grow downward. */
-.shell-minimap-ocean-door-arctic::before {
-  top: 0;
-  transform: none;
-}
-
-.shell-minimap-ocean-door:hover,
-.shell-minimap-ocean-door:focus-visible,
-.shell-minimap-ocean-door[aria-pressed='true'] {
-  background: transparent;
-  color: var(--fg-0);
-  border-color: transparent;
-  box-shadow: none;
-  outline: 1px dotted var(--accent);
-  outline-offset: 1px;
-  text-shadow: 0 0 7px rgba(34, 211, 238, 0.5);
-}
-
-/* THE TABLET BAND (DDM-P10-T01; see the band block beside .app-shell).
-   With a fluid column the canvas is up to 20% shorter than the 660x348
-   frame these doors were authored against, and the 24px box floor is the
-   only piece of the composition that does not shrink with it: at a 300px
-   column the Pacific box reached into the Hawaii inset and the Atlantic
-   box into ALL. The floor comes off inside the band so the box hugs its
-   own 8px label, which is what EF-5 built the transparent 44px `::before`
-   band for in the first place: the band, not the box, is the target, and
-   it is measured unchanged at 44px. The min-width floor is inert here
-   (the three labels already measure 70.1, 68.6 and 78.2px) and stays.
-
-   Measured after: the box is 14px in the band and the unchanged 24px at
-   1025px and wider, so the Pacific box clears Hawaii by 10.2px and the
-   Atlantic box clears ALL by 5.4px at 721. KNOWN SEAM, for the owner's
-   visual pass: because the box is centred on its label, the label sits
-   about 5px higher at 1024px than at 1025px. Keeping it continuous
-   instead would need either a 315px sidebar floor (which leaves almost no
-   fluid range) or the same 14px box on desktop (an unreviewed change to a
-   surface this task was not asked to move). The band-scoped step keeps
-   desktop byte-identical; say the word and it goes the other way. */
-@media (min-width: 721px) and (max-width: 1024px) {
-  .shell-minimap-ocean-door {
-    min-height: 0;
-  }
-}
-
-.shell-minimap-ocean-door-pacific {
-  left: 1.5%;
-  top: 39%;
-}
-
-.shell-minimap-ocean-door-arctic {
-  left: 50%;
-  top: 1.5%;
-  transform: translateX(-50%);
-}
-
-/* The open water east of the US coast is a small triangle: at the card's
-   ~293px canvas (2.16px per degree) Cape Hatteras (35.2N 75.5W) is at x 243,
-   Cape Cod (41.7N 70W) at x 254 y 91, Cape Sable (43.4N 65.6W) at y 88, and
-   ALL's top is at y 116. That leaves about x 252 to 289, y 94 to 110 clear:
-   37px wide, 16px tall. So two 7px lines (ATLANTIC / OCEAN, ~37px wide,
-   15.4px tall), no padding, no box floors, and the bottom edge is anchored
-   6px above ALL's top (ALL: bottom 5.61%, 30px tall) so the two can never
-   touch whatever the canvas height. Bermuda is a speck and sits under it. */
-.shell-minimap-ocean-door-atlantic {
-  right: 1.5%;
-  bottom: calc(5.61% + 36px);
-  min-width: 0;
-  min-height: 0;
-  padding: 0;
-  font-size: 7px;
-  max-width: min-content;
-  text-align: center;
-  line-height: 1.1;
-}
-
 /* ENSO's scale label names the RONI phase, so this line says why the
    framings carry no fill (the full wording is in each framing's name). */
 .shell-minimap-unshaded-line {
@@ -8561,7 +8432,6 @@ a.impact-resource-link::after {
 @media (prefers-reduced-motion: reduce) {
   .shell-minimap-mainland,
   .shell-minimap-ocean,
-  .shell-minimap-ocean-door,
   .shell-minimap-hawaii,
   .shell-minimap-island,
   .shell-minimap-all,
