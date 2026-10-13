@@ -1,5 +1,6 @@
 import type * as maplibregl from 'maplibre-gl';
 
+import { CHIP_STATE_WORDS, imageryFailureState } from '../config/chip-state';
 import { URLS } from '../config/urls';
 import { setBasemapMode } from '../state/basemap-store';
 import { showToast } from '../ui/overlay';
@@ -111,6 +112,9 @@ export function isSatelliteFrameRecent(
   return age >= -MAX_FUTURE_SKEW_MS && age <= MAX_FRAME_AGE_MS;
 }
 
+/** The service answered and holds no recent frame: a verified absence. */
+class NoRecentFrameError extends Error {}
+
 /**
  * Validate and sort the bounded ArcGIS candidate response. A malformed,
  * stale, or future-dated newest feature does not hide a usable earlier frame.
@@ -125,7 +129,7 @@ export function parseSatelliteFrames(
   }
   const features = value.features;
   if (!Array.isArray(features) || features.length === 0) {
-    throw new Error('Satellite metadata has no recent frame.');
+    throw new NoRecentFrameError('Satellite metadata has no recent frame.');
   }
 
   const seen = new Set<number>();
@@ -141,7 +145,7 @@ export function parseSatelliteFrames(
     });
 
   if (frames.length === 0) {
-    throw new Error('Satellite metadata has no valid recent frame.');
+    throw new NoRecentFrameError('Satellite metadata has no valid recent frame.');
   }
   return frames;
 }
@@ -361,7 +365,7 @@ function observationRange(frame: SatelliteFrame): string {
     : `${formatUtc(frame.startTime, true)} to ${formatUtc(frame.endTime, true)} UTC`;
 }
 
-type ImageryStatus = 'loading' | 'live' | 'live-partial';
+type ImageryStatus = 'loading' | 'live' | 'live-partial' | 'no-data' | 'unavailable';
 
 /**
  * What this imagery covers, and what its edges are.
@@ -395,6 +399,10 @@ function showChip(
   if (!chip) return;
   chip.hidden = false;
   chip.dataset.status = status;
+  if (status === 'no-data' || status === 'unavailable') {
+    chip.textContent = `Recent NOAA satellite imagery · ${CHIP_STATE_WORDS[status]}`;
+    return;
+  }
   if (status === 'loading' || frame === null) {
     chip.textContent = 'Recent NOAA satellite imagery · loading';
     return;
@@ -441,12 +449,23 @@ function deactivate(map: maplibregl.Map): void {
   frameStatus = null;
 }
 
-function revertToDefault(map: maplibregl.Map, reason: string): void {
+function revertToDefault(
+  map: maplibregl.Map,
+  reason: string,
+  state: 'no-data' | 'unavailable' = 'unavailable'
+): void {
   if (activeMap !== map) return;
   console.warn(`[basemap] recent satellite imagery reverted: ${reason}`);
+  // Write the terminal state first: the hidden chip is the SAT button's
+  // accessible description and must not keep reading "loading".
+  showChip(state, null);
   deactivate(map);
   setBasemapMode('default');
-  showToast('Recent satellite imagery is unavailable. Default map restored.');
+  showToast(
+    state === 'no-data'
+      ? 'No recent satellite imagery is available. Default map restored.'
+      : 'Recent satellite imagery is unavailable. Default map restored.'
+  );
 }
 
 interface InstalledFrame {
@@ -724,7 +743,11 @@ async function refreshFrame(
     // an initial failure, a missing source, or an installed frame that has
     // aged beyond the rolling-catalog policy. Do not leave stale imagery
     // mounted merely because its MapLibre source still exists.
-    revertToDefault(map, `frame lookup failed (${String(error)})`);
+    revertToDefault(
+      map,
+      `frame lookup failed (${String(error)})`,
+      imageryFailureState(error instanceof NoRecentFrameError)
+    );
   } finally {
     clearTimeout(selectionTimer);
     if (metadataController === controller) metadataController = null;

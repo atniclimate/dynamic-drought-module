@@ -57,7 +57,7 @@ const { HAZARD_CLUSTER_KEYS, HAZARD_CLUSTERS } = await import(
 const { KEY_ELIGIBLE_LABELS, chipFallbackLabel } = await import(
   new URL('src/config/chip-labels.ts', ROOT).href
 );
-const { chipStateForStatus, aggregateChipState, chipStateFromStatuses } = await import(
+const { chipStateForStatus, aggregateChipState, chipStateFromStatuses, imageryFailureState } = await import(
   new URL('src/config/chip-state.ts', ROOT).href
 );
 
@@ -138,6 +138,19 @@ test('chipStateForStatus maps every LayerStatus to its chip state', () => {
   // An unset status (activated, no setStatus call yet) reads as 'loading',
   // never a silent 'live'.
   assert.equal(chipStateForStatus(undefined), 'loading');
+});
+
+test('imageryFailureState: a finished satellite lookup never reads loading', async () => {
+  // Verified absence (service answered, no recent frame) -> no data;
+  // failed fetch, error envelope, timeout or probe -> unavailable.
+  assert.equal(imageryFailureState(true), 'no-data');
+  assert.equal(imageryFailureState(false), 'unavailable');
+  // The wiring: both parse throws are the absence class, the revert writes
+  // the terminal chip text before it hides the chip.
+  const src = await readFile(new URL('src/map/satellite.ts', ROOT), 'utf8');
+  assert.equal((src.match(/new NoRecentFrameError\(/g) ?? []).length, 2);
+  assert.match(src, /imageryFailureState\(error instanceof NoRecentFrameError\)/);
+  assert.match(src, /showChip\(state, null\);\s+deactivate\(map\);/);
 });
 
 test('aggregateChipState: all ready -> live', () => {
