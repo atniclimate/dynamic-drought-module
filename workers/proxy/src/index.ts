@@ -387,9 +387,14 @@ export function buildClientResponse(upstream: Response, upstreamUrl: URL): Respo
   for (const [name, value] of Object.entries(CORS_HEADERS)) {
     responseHeaders.set(name, value);
   }
-  if (upstream.status === 200 && isExportImageRoute(upstreamUrl)) {
+  if (
+    upstream.status === 200 &&
+    isExportImageRoute(upstreamUrl) &&
+    (upstream.headers.get("Content-Type") ?? "").startsWith("image/")
+  ) {
     // WHP is a fixed 2023 map and the tile query is pinned, so a browser
-    // never needs to ask the Worker twice for the same tile.
+    // never needs to ask the Worker twice for the same tile. Image bodies
+    // only: ArcGIS reports some failures as 200 with a JSON error body.
     responseHeaders.set("Cache-Control", EXPORT_IMAGE_CACHE_CONTROL);
   } else if (!responseHeaders.has("Cache-Control")) {
     responseHeaders.set("Cache-Control", EDGE_CACHE_CONTROL);

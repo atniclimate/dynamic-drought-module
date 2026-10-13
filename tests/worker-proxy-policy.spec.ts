@@ -2,6 +2,7 @@ import { expect, test } from './offline-test';
 
 import worker, {
   buildCacheKey,
+  buildClientResponse,
   buildUpstreamRequest,
   fetchUpstreamWithTimeout,
   MAX_UPSTREAM_BYTES,
@@ -865,6 +866,19 @@ test('a full proxy read preserves bytes and swallows cache.put rejection', async
       Reflect.deleteProperty(globalThis, 'caches');
     }
   }
+});
+
+test('exportImage 200 with a JSON error body keeps the short cache header', () => {
+  const url = new URL(
+    'https://imagery.geoplatform.gov/iipp/rest/services/Fire_Aviation/USFS_EDW_RMRS_WildfireHazardPotentialClassified/ImageServer/exportImage?f=image'
+  );
+  const json = new Response('{"error":{"code":500}}', {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' }
+  });
+  expect(buildClientResponse(json, url).headers.get('Cache-Control')).toBe(
+    'public, max-age=60'
+  );
 });
 
 test('the cache key carries normalized Accept', () => {

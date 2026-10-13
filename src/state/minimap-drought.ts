@@ -568,20 +568,20 @@ async function load(): Promise<void> {
       fetchSharedJsonWithBudget(
         'nadm-current',
         URLS.nadmCurrentGeojson,
-        { cache: 'no-store' },
+        { cache: 'no-cache' },
         signal,
         FETCH_TIMEOUT_MS,
       ),
       fetchJsonWithBudget(
         URLS.nadmNorthAmericaBaseGeojson,
-        { cache: 'no-store' },
+        null,
         signal,
         FETCH_TIMEOUT_MS,
       ),
       // Optional mask: its failure must not fail the summary (null = missing).
       fetchJsonWithBudget(
         URLS.statsCanNunavutBoundaryGeojson,
-        { cache: 'no-store' },
+        null,
         signal,
         FETCH_TIMEOUT_MS,
       ).catch((): unknown => null),
