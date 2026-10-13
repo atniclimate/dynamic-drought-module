@@ -1,6 +1,9 @@
 import type { AddProtocolAction, Map as MapLibreMap } from 'maplibre-gl';
-import { readDrynessTile, type DrynessTileLimits } from './dryness-grey-protocol';
+import { createDrynessMasks, isDrynessSourceFault, readDrynessTile, type DrynessTileLimits } from './dryness-grey-protocol';
 import { readRelativeGreennessTimes, isRelativeGreennessServiceException, type DrynessMetadataLimits } from './dryness-discovery';
+import { listeningTimeout } from '../util/listening-timeout';
+import { TILE_PROOF_WATCH } from '../util/raster-proof';
+import { watchRasterTiles, type RasterTileOutcome, type RasterTileWatch } from '../util/raster-status';
 
 export interface DrynessFrame {
   readonly productKey: 'star-vhi' | 'usgs-relative-greenness';
@@ -12,6 +15,8 @@ export interface DrynessFrame {
   readonly qualification: string;
   readonly creditKey: string;
   readonly tileUrl: (z: number, x: number, y: number) => string;
+  /** The issuer's land-cover tile of the same z/x/y; a frame that names one draws no tile without it. */
+  readonly maskTileUrl?: (z: number, x: number, y: number) => string;
   readonly tileSize: number;
   readonly maxZoom: number;
   readonly bounds: readonly [number, number, number, number];
@@ -32,7 +37,8 @@ export interface DrynessSnapshot {
 export interface DrynessGroundOptions {
   readonly protocolName: string;
   readonly layerId: string;
-  readonly beforeId: string;
+  /** The layer the ground inserts under, read at mount (the stack can change between entries). */
+  readonly beforeId: (map: MapLibreMap) => string | undefined;
   readonly allowedOrigins: readonly string[];
   readonly star: readonly [DrynessFrame, DrynessFrame];
   readonly rg: { readonly capabilitiesUrl: string; readonly layerName: string; readonly frame: (time: string) => DrynessFrame };
@@ -44,19 +50,25 @@ export interface DrynessGroundOptions {
   readonly readyState: (frame: DrynessFrame, map: MapLibreMap) => 'live' | 'live (partial)' | 'no data' | 'zoom in to load';
 }
 
-/** Dormant factory. Caller owns protocol registration; no application/global registration occurs here. */
+/**
+ * The ground adapter: frames, sessions, the k, k-1, RG ladder. The caller owns
+ * protocol registration (src/layers/wildfire-dryness.ts wires it into Wildfire
+ * 3D). Every activation re-reads the RG listing and every dryness tile, so a
+ * week NOAA revises reaches the next entry; only the land-cover tiles, which
+ * do not depend on the week, are kept (an hour after last use, bounded).
+ */
 export function createDrynessGround(options: DrynessGroundOptions): {
   protocol: AddProtocolAction;
   activate(map: MapLibreMap, owner: AbortSignal): Promise<void>;
   deactivate(): void;
 } {
-  if (!/^[a-z][a-z0-9-]*$/.test(options.protocolName) || !options.layerId || !options.beforeId ||
+  if (!/^[a-z][a-z0-9-]*$/.test(options.protocolName) || !options.layerId || typeof options.beforeId !== 'function' ||
       !Number.isSafeInteger(options.selectionDeadlineMs) || options.selectionDeadlineMs <= 0 ||
       options.selectionDeadlineMs > 2_147_483_647) throw new RangeError('Invalid dryness selection options');
-  if (![options.tileLimits.timeoutMs, options.tileLimits.maxDecodedBytes, options.tileLimits.maxPixels,
-    options.tileLimits.maxOutputBytes, options.metadataLimits.timeoutMs, options.metadataLimits.maxDecodedBytes,
+  // The tile limits are validated by readDrynessTile.
+  if (![options.metadataLimits.timeoutMs, options.metadataLimits.maxDecodedBytes,
     options.metadataLimits.maxTimes].every(n => Number.isSafeInteger(n) && n > 0) ||
-    options.tileLimits.timeoutMs > 15_000 || options.metadataLimits.timeoutMs > 15_000) throw new RangeError('Invalid dryness reader limits');
+    options.metadataLimits.timeoutMs > 15_000) throw new RangeError('Invalid dryness reader limits');
   const permitted = new Set(options.allowedOrigins);
   const url = (value: string): string => {
     const parsed = new URL(value);
@@ -69,7 +81,7 @@ export function createDrynessGround(options: DrynessGroundOptions): {
     if (input.productKey !== productKey || !text(input.frame) || (frame !== undefined && input.frame !== frame) ||
         ![input.issuer, input.clockLabel, input.coverage, input.qualification, input.creditKey].every(text) ||
         !Array.isArray(input.legendRows) || input.legendRows.length === 0 || !input.legendRows.every(text) ||
-        typeof input.tileUrl !== 'function' ||
+        typeof input.tileUrl !== 'function' || !['undefined', 'function'].includes(typeof input.maskTileUrl) ||
         !Number.isSafeInteger(input.tileSize) || input.tileSize <= 0 || !Number.isSafeInteger(input.maxZoom) ||
         input.maxZoom < 5 || input.maxZoom > 30 || (productKey === 'star-vhi' && input.maxZoom > 7) ||
         input.bounds.length !== 4 || !input.bounds.every(Number.isFinite) ||
@@ -85,14 +97,19 @@ export function createDrynessGround(options: DrynessGroundOptions): {
   const previous = week === 1 ? `${String(year - 1).padStart(4, '0')}052` : `${currentWeek[1]}0${String(week - 1).padStart(2, '0')}`;
   if (star[1]!.frame !== previous) throw new Error('Invalid STAR predecessor');
   url(options.rg.capabilitiesUrl);
+  // One tile of a frame, with its land-cover tile when the frame names one; both URLs pass the origin check.
+  const masks = createDrynessMasks();
+  const read = (frame: DrynessFrame, z: number, x: number, y: number, owner: AbortController): Promise<ImageBitmap> =>
+    readDrynessTile(url(frame.tileUrl(z, x, y)), frame.productKey === 'star-vhi' ? 'star-vhi' : 'relative-greenness', owner,
+      options.tileLimits, frame.maskTileUrl && url(frame.maskTileUrl(z, x, y)), masks);
   let generation = 0;
   type Session = {
     generation: number; map: MapLibreMap; owner: AbortSignal; controller: AbortController;
     frames: DrynessFrame[]; rgRead: boolean; index: number; busy: boolean;
     selected: DrynessFrame | null; attempted: DrynessFrame | null; sourceId: string | null;
-    requests: Set<AbortController>;
-    failures: DrynessFailure[]; timer: ReturnType<typeof setTimeout> | undefined; deadline: number;
-    cancel: () => void; view: () => void; data: (event: { sourceId?: string }) => void;
+    requests: Set<AbortController>; watch: RasterTileWatch | null; outcome: RasterTileOutcome | null;
+    failures: DrynessFailure[]; timer: (() => void) | undefined;
+    cancel: () => void; view: () => void;
     error: (event: { sourceId?: string; error?: unknown }) => void;
   };
   let active: Session | undefined;
@@ -103,10 +120,11 @@ export function createDrynessGround(options: DrynessGroundOptions): {
     options.publish(Object.freeze({ state, selected: s.selected, attempted: s.attempted,
       sourceId: s.sourceId, failures: Object.freeze([...s.failures]) }));
   };
-  const disarm = (s: Session): void => { if (s.timer !== undefined) clearTimeout(s.timer); s.timer = undefined; };
+  const disarm = (s: Session): void => { s.timer?.(); s.timer = undefined; };
   const clear = (s: Session): void => {
     for (const controller of s.requests) controller.abort(abortError());
     s.requests.clear();
+    s.watch?.detach(); s.watch = null; s.outcome = null;
     // Each operation is independent because a removed map may reject cleanup.
     try { if (s.map.getLayer(options.layerId)) s.map.removeLayer(options.layerId); } catch { /* Removed map. */ }
     try { if (s.sourceId && s.map.getSource(s.sourceId)) s.map.removeSource(s.sourceId); } catch { /* Removed map. */ }
@@ -116,7 +134,7 @@ export function createDrynessGround(options: DrynessGroundOptions): {
     if (active !== s) return;
     active = undefined; disarm(s); s.controller.abort(abortError());
     s.owner.removeEventListener('abort', s.cancel);
-    try { s.map.off('sourcedata', s.data); s.map.off('error', s.error); s.map.off('moveend', s.view); } catch { /* Removed map. */ }
+    try { s.map.off('error', s.error); s.map.off('moveend', s.view); } catch { /* Removed map. */ }
     clear(s); options.publish(null);
   };
   const expire = (s: Session): void => {
@@ -127,12 +145,11 @@ export function createDrynessGround(options: DrynessGroundOptions): {
   };
   const arm = (s: Session): void => {
     if (s.timer !== undefined) return;
-    s.deadline = performance.now() + options.selectionDeadlineMs;
-    s.timer = setTimeout(() => expire(s), options.selectionDeadlineMs);
+    // Counts time the page could listen: a frozen page is not a failed selection.
+    s.timer = listeningTimeout(options.selectionDeadlineMs, () => expire(s));
   };
   const checkpoint = (s: Session): void => {
     if (!current(s)) throw abortError();
-    if (s.timer !== undefined && performance.now() >= s.deadline) { expire(s); throw s.controller.signal.reason; }
   };
   const settle = <T>(s: Session, work: Promise<T>): Promise<T> => new Promise((resolve, reject) => {
     const cancel = (): void => { cleanup(); reject(s.controller.signal.reason); };
@@ -181,8 +198,8 @@ export function createDrynessGround(options: DrynessGroundOptions): {
         if (!frame) break;
         s.attempted = frame;
         try {
-          await settle(s, readDrynessTile(url(frame.tileUrl(5, 5, 11)), frame.productKey === 'star-vhi' ? 'star-vhi' : 'relative-greenness',
-            s.controller, options.tileLimits));
+          // The probe's bitmap is thrown away, even one that completes after a cancel.
+          await settle(s, read(frame, 5, 5, 11, s.controller).then(bitmap => bitmap.close()));
           checkpoint(s);
           s.sourceId = `${options.layerId}-${s.generation}-${s.index}`;
           s.map.addSource(s.sourceId, { type: 'raster', tiles: [`${options.protocolName}://${s.generation}/${s.index}/{z}/{x}/{y}`],
@@ -190,12 +207,24 @@ export function createDrynessGround(options: DrynessGroundOptions): {
           // This narrow internal setting controls actual categorical request resolution.
           const source = s.map.getSource(s.sourceId);
           if (source) (source as typeof source & { roundZoom: boolean }).roundZoom = false;
+          // Tile-proven (DDM-P14-T04): live only from a loaded tile of THIS frame.
+          // No tile by the shared deadline reads unavailable but keeps the frame
+          // (a slow tile is not a missing week; a tile the source fails already
+          // advances through the protocol), and the selection deadline still bounds it.
+          // A view holding none of the frame's coverage is no data.
+          s.watch = watchRasterTiles(s.map, s.sourceId, outcome => {
+            if (!current(s) || s.busy || s.selected !== frame) return;
+            const coverage = options.readyState(frame, s.map);
+            s.outcome = outcome;
+            if (outcome === 'error' && coverage !== 'no data') { emit(s, 'unavailable'); return; }
+            disarm(s);
+            emit(s, outcome === 'degraded' && coverage === 'live' ? 'live (partial)' : coverage);
+          }, TILE_PROOF_WATCH);
           s.map.addLayer({ id: options.layerId, type: 'raster', source: s.sourceId,
-            paint: { 'raster-opacity': 1, 'raster-fade-duration': 0, 'raster-resampling': 'nearest' } }, options.beforeId);
+            paint: { 'raster-opacity': 1, 'raster-fade-duration': 0, 'raster-resampling': 'nearest' } }, options.beforeId(s.map));
           s.selected = frame;
           emit(s, 'loading');
           s.busy = false;
-          s.data({ sourceId: s.sourceId });
           return;
         } catch (failure) {
           checkpoint(s);
@@ -227,11 +256,11 @@ export function createDrynessGround(options: DrynessGroundOptions): {
     try {
       if (owner.signal.aborted || !current(s)) throw abortError();
       const frame = selected;
-      const data = await readDrynessTile(url(frame.tileUrl(z, x, y)), frame.productKey === 'star-vhi' ? 'star-vhi' : 'relative-greenness', child, options.tileLimits);
-      if (owner.signal.aborted || !current(s) || s.selected !== frame) throw abortError();
+      const data = await read(frame, z, x, y, child);
+      if (owner.signal.aborted || !current(s) || s.selected !== frame) { data.close(); throw abortError(); }
       return { data };
     } catch (error) {
-      if (!owner.signal.aborted && current(s) && s.selected === selected && s.index === index) void advance(s, error);
+      if (!owner.signal.aborted && current(s) && s.selected === selected && s.index === index && isDrynessSourceFault(error)) void advance(s, error);
       throw error;
     } finally {
       owner.signal.removeEventListener('abort', cancel); s.controller.signal.removeEventListener('abort', cancel); child.abort();
@@ -244,21 +273,21 @@ export function createDrynessGround(options: DrynessGroundOptions): {
       if (owner.aborted) return;
       if (active) stop(active);
       const s: Session = { generation: ++generation, map, owner, controller: new AbortController(), frames: [...star], rgRead: false,
-        index: 0, busy: false, selected: null, attempted: null, sourceId: null, failures: [], timer: undefined, deadline: 0,
-        requests: new Set(),
-        cancel: () => {}, view: () => {}, data: () => {}, error: () => {} };
+        index: 0, busy: false, selected: null, attempted: null, sourceId: null, failures: [], timer: undefined,
+        requests: new Set(), watch: null, outcome: null,
+        cancel: () => {}, view: () => {}, error: () => {} };
       s.cancel = () => stop(s);
-      s.data = event => {
-        if (!current(s) || s.busy || !s.selected || event.sourceId !== s.sourceId) return;
-        try {
-          if (s.map.isSourceLoaded(s.sourceId!)) { disarm(s); emit(s, options.readyState(s.selected, s.map)); }
-        } catch (error) { void advance(s, error); }
+      // MapLibre re-announces a rejected protocol tile here; only a source fault steps the week back.
+      s.error = event => { if (current(s) && event.sourceId === s.sourceId && isDrynessSourceFault(event.error)) void advance(s, event.error ?? new Error('Dryness source failed')); };
+      // A pan can change coverage without changing the tile verdict, so the proven state is re-read.
+      s.view = () => {
+        if (!current(s) || s.busy || !s.selected || s.outcome === null || s.outcome === 'error') return;
+        const coverage = options.readyState(s.selected, s.map);
+        emit(s, s.outcome === 'degraded' && coverage === 'live' ? 'live (partial)' : coverage);
       };
-      s.error = event => { if (current(s) && event.sourceId === s.sourceId) void advance(s, event.error ?? new Error('Dryness source failed')); };
-      s.view = () => { if (s.sourceId) s.data({ sourceId: s.sourceId }); };
       active = s;
       owner.addEventListener('abort', s.cancel, { once: true });
-      map.on('sourcedata', s.data); map.on('error', s.error); map.on('moveend', s.view);
+      map.on('error', s.error); map.on('moveend', s.view);
       if (owner.aborted) { stop(s); return; }
       await advance(s);
     },

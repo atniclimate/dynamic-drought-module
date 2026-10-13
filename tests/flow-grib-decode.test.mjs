@@ -546,6 +546,16 @@ test('refuses DRT 5.0, 5.41, 5.42 and grid 3.20 by name', () => {
   }
 });
 
+test('first-order spatial differencing, which no committed fixture carries, is refused', () => {
+  const wind = fixture('gfs1p00-UGRD-10m-f006').bytes;
+  const s5 = sectionOf(wind, 5);
+  assert.equal(wind[s5.start + 47], 2, 'the fixture is second order');
+  assert.throws(
+    () => decodeGrib2(patched(wind, [[s5.start + 47, 1]]), { grid: GLOBAL_1P00 }),
+    (e) => e instanceof GribError && e.code === 'unsupported-feature' && /order 1/.test(e.message)
+  );
+});
+
 test('a truncated message, a missing 7777 or a section-0 length mismatch throws and does not hang', async () => {
   const jobs = [];
   for (const name of ['gfs1p00-UGRD-10m-f006', 'wcoast0p16-HTSGW-f006', 'global0p25-HTSGW-f006']) {

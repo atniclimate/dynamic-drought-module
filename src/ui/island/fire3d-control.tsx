@@ -70,6 +70,12 @@ import { loadFire3DController } from '../../map/fire3d-chunk';
 // main.ts, so reading it here adds no eager weight and no second context).
 import { webGl2Capability } from '../../map/gl-capability';
 import {
+  getFire3DGroundLayer,
+  onFire3DGroundLayerChange,
+  setFire3DGroundLayer,
+  type Fire3DGroundLayer
+} from '../../state/fire3d-ground-layers';
+import {
   getFire3DPreference,
   onFire3DPreferenceChange,
   setFire3DPreference
@@ -79,6 +85,17 @@ import { setMapTechnicalNote } from '../map-technical-information';
 
 /** The catalog key whose emptiness the 3D control reports. */
 const HMS_SMOKE_LAYER_KEY = 'hms-smoke';
+
+/**
+ * The two ground switches (owner, DR-199), offered only while the scene is
+ * up: each removes or restores its own white layer and nothing else. They
+ * mirror session state (src/state/fire3d-ground-layers.ts), on by default,
+ * and are buttons of the same family and size as the 3D toggle above them.
+ */
+const GROUND_SWITCHES: readonly (readonly [Fire3DGroundLayer, string])[] = [
+  ['plantStress', 'Plant stress'],
+  ['fuelRisk', 'Fuel risk']
+];
 
 /**
  * The status line speaks the six honest layer states (AGENTS.md invariant
@@ -230,6 +247,21 @@ export function Fire3DControl({
     []
   );
 
+  // The ground switches render straight from their store; a change redraws.
+  const [, redrawGroundSwitches] = useState(0);
+  useEffect(() => onFire3DGroundLayerChange(() => redrawGroundSwitches((n) => n + 1)), []);
+  // Fuel risk is offered only while the 3D drape is mounted (src/layers/whp-3d.ts says so): when the
+  // flat fuel-risk layer covers the ground instead, the switch would act on nothing.
+  const [drapeMounted, setDrapeMounted] = useState(false);
+  useEffect(() => {
+    const onShade = (event: Event): void => {
+      const mounted = (event as CustomEvent<{ mounted?: boolean }>).detail?.mounted;
+      if (mounted !== undefined) setDrapeMounted(mounted);
+    };
+    window.addEventListener('ddm:whp-shade', onShade);
+    return () => window.removeEventListener('ddm:whp-shade', onShade);
+  }, []);
+
   // The smoke layer's own status is the single source for the empty-smoke
   // line, so the 3D control and the catalog pill can never disagree about
   // whether the issuer returned anything.
@@ -310,6 +342,19 @@ export function Fire3DControl({
       >
         3D Fire view
       </button>
+      {status?.state === 'active'
+        ? GROUND_SWITCHES.filter(([layer]) => layer !== 'fuelRisk' || drapeMounted).map(([layer, label]) => (
+            <button
+              key={layer}
+              type="button"
+              class="shell-fire3d-layer"
+              aria-pressed={getFire3DGroundLayer(layer)}
+              onClick={() => setFire3DGroundLayer(layer, !getFire3DGroundLayer(layer))}
+            >
+              {label}
+            </button>
+          ))
+        : null}
       <details class="shell-fire3d-details">
         <summary>
           3D information

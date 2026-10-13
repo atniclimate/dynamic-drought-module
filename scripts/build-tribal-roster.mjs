@@ -305,6 +305,13 @@ async function main() {
   if (larJson.exceededTransferLimit) {
     throw new Error('AIAN-LAR distinct query hit the transfer limit; paginate before trusting it');
   }
+  // ArcGIS reports failures as HTTP 200 with {"error":...}; the committed index holds 335 land areas.
+  if (larJson.error || larNames.length < 300) {
+    throw new Error(
+      `AIAN-LAR land-area count ${larNames.length} is below the expected floor of 300` +
+        (larJson.error ? `; service error: ${JSON.stringify(larJson.error)}` : '')
+    );
+  }
   console.log(`[tribal-roster] land areas: ${larNames.length} distinct LARNAME values`);
 
   // Pre-normalize the roster for phrase matching.

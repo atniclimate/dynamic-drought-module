@@ -31,6 +31,15 @@
 # concurrency cap on a free public repo. Wall-clock timing for this new
 # composition is this PR's own Validate run; re-fit these when the suite
 # grows.
+#
+# Re-fit 2026-10-12 (owner): `chromium` had grown to about 1,630 tests and
+# its four shards ran 23 to 27 minutes each against the 26-minute step
+# budget below (one run was killed with 408 of 409 passed and none failed).
+# It now runs over 8 shards. Run 38304871630 measured them at 6 to 15
+# minutes each. The same run killed `chromium-3d` 2/2 on the step budget:
+# 84 tests against the 32 its two shards were sized for, 19.9 minutes on
+# main two days earlier. It now runs over 4 shards; 14 shard jobs in all,
+# still inside the 20-job cap.
 
 # The CI gap this file closes (report 18 section 6, 2026-09-02). With the
 # suite ADVISORY on a push to main (deploy.yml) and every daily cron snoozed
@@ -154,14 +163,20 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { project: chromium, shard: 1, total: 4 }
-          - { project: chromium, shard: 2, total: 4 }
-          - { project: chromium, shard: 3, total: 4 }
-          - { project: chromium, shard: 4, total: 4 }
+          - { project: chromium, shard: 1, total: 8 }
+          - { project: chromium, shard: 2, total: 8 }
+          - { project: chromium, shard: 3, total: 8 }
+          - { project: chromium, shard: 4, total: 8 }
+          - { project: chromium, shard: 5, total: 8 }
+          - { project: chromium, shard: 6, total: 8 }
+          - { project: chromium, shard: 7, total: 8 }
+          - { project: chromium, shard: 8, total: 8 }
           - { project: chromium-interaction, shard: 1, total: 2 }
           - { project: chromium-interaction, shard: 2, total: 2 }
-          - { project: chromium-3d, shard: 1, total: 2 }
-          - { project: chromium-3d, shard: 2, total: 2 }
+          - { project: chromium-3d, shard: 1, total: 4 }
+          - { project: chromium-3d, shard: 2, total: 4 }
+          - { project: chromium-3d, shard: 3, total: 4 }
+          - { project: chromium-3d, shard: 4, total: 4 }
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -186,7 +201,7 @@ jobs:
       # ceiling). Reporters come from the config: a named line per test,
       # GitHub annotations on failure, an HTML report, and a JSON report
       # for the summary below. The step budget covers the measured shard
-      # (about 11 minutes) plus one CI retry (playwright.config.ts, dropped
+      # (about 11 minutes when set; see the 2026-10-12 re-fit above) plus one CI retry (playwright.config.ts, dropped
       # from two on 2026-08-29: nothing ever passed on retry 2) of the
       # slowest 3D tests.
       - name: Run the browser shard

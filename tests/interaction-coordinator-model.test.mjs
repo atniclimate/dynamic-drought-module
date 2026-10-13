@@ -61,7 +61,7 @@ const STUBS = {
   impactPanel: 'export function openImpactPanel(context) { globalThis.__ddmPanelOpens.push(context); }',
   mobileSheet: 'export function isSheetActive() { return globalThis.__ddmSheetActive === true; }',
   studioRoute:
-    'export function getStudioRoute() { return null; } export function onStudioRouteChange(fn) { globalThis.__ddmStudioListeners.push(fn); return () => {}; }'
+    'export function studioOwnsScreen() { return false; } export function onStudioRouteChange(fn) { globalThis.__ddmStudioListeners.push(fn); return () => {}; }'
 };
 
 const stubUrl = (source) => `data:text/javascript,${encodeURIComponent(source)}`;

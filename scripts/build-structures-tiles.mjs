@@ -177,12 +177,7 @@ async function main() {
     );
   }
 
-  await writeFile(OUT_PATH, archive);
-  console.log(
-    `  wrote ${OUT_PATH} (${archive.length.toLocaleString()} bytes, ${tileCount} tiles, z${MIN_ZOOM}-${MAX_ZOOM})`
-  );
-
-  // Read-back validation through the runtime reader.
+  // Read-back validation through the runtime reader, before the write.
   const source = {
     getKey: () => 'build',
     getBytes: async (offset, length) => {
@@ -197,6 +192,10 @@ async function main() {
   console.log(`  header zooms ${header.minZoom}..${header.maxZoom}, tileType ${header.tileType}`);
   console.log(`  vector_layers: ${archiveMeta.vector_layers.map((l) => `${l.id}(${Object.keys(l.fields).join(',') || 'no fields'})`).join(', ')}`);
   console.log(`  attribution: "${archiveMeta.attribution}"`);
+  await writeFile(OUT_PATH, archive);
+  console.log(
+    `  wrote ${OUT_PATH} (${archive.length.toLocaleString()} bytes, ${tileCount} tiles, z${MIN_ZOOM}-${MAX_ZOOM})`
+  );
 }
 
 main().catch((err) => {

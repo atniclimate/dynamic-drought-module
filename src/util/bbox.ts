@@ -50,6 +50,100 @@ export function leafletBoundsToMapLibre(
 }
 
 /*
+ * The view-envelope rule shared by the live viewport-scoped layers (AIANNH,
+ * BIA reservations, NIFC fires): how far past the view a layer queries, and
+ * when a cached answer still covers the view.
+ */
+
+/** `[west, south, east, north]`, EPSG:4326. */
+export type ViewEnvelope = readonly [number, number, number, number];
+
+/** The part of MapLibre's `LngLatBounds` the rule reads. */
+interface ViewBounds {
+  getWest(): number;
+  getSouth(): number;
+  getEast(): number;
+  getNorth(): number;
+}
+
+/**
+ * Overscan margin, as a fraction of the view's width and height on each
+ * side, so small pans render correctly at their edges and are more likely to
+ * hit a layer's response cache.
+ */
+const OVERSCAN_FACTOR = 0.25;
+
+/**
+ * Inverse of the five-decimal precision the query URLs serialize envelope
+ * coordinates at. The envelope is quantized OUTWARD to this grid (floor the
+ * west/south edges, ceil the east/north edges) so the cached envelope and
+ * the envelope actually sent to the service are the same numbers: a
+ * coverage hit then proves the service was really asked for the whole
+ * visible view, with no sliver between the raw and serialized edges (Codex
+ * Unit B re-verify, finding 3 residual, 2026-07-15).
+ */
+const ENVELOPE_QUANTUM = 1e5;
+
+/** The overscanned query envelope for a view. */
+export function buildQueryEnvelope(view: ViewBounds): [number, number, number, number] {
+  const west = view.getWest();
+  const south = view.getSouth();
+  const east = view.getEast();
+  const north = view.getNorth();
+  const marginX = (east - west) * OVERSCAN_FACTOR;
+  const marginY = (north - south) * OVERSCAN_FACTOR;
+  return [
+    Math.floor((west - marginX) * ENVELOPE_QUANTUM) / ENVELOPE_QUANTUM,
+    Math.floor((south - marginY) * ENVELOPE_QUANTUM) / ENVELOPE_QUANTUM,
+    Math.ceil((east + marginX) * ENVELOPE_QUANTUM) / ENVELOPE_QUANTUM,
+    Math.ceil((north + marginY) * ENVELOPE_QUANTUM) / ENVELOPE_QUANTUM
+  ];
+}
+
+/** Whether a cached coverage envelope fully contains the visible view. */
+export function envelopeCovers(envelope: ViewEnvelope, view: ViewBounds): boolean {
+  return (
+    envelope[0] <= view.getWest() &&
+    envelope[1] <= view.getSouth() &&
+    envelope[2] >= view.getEast() &&
+    envelope[3] >= view.getNorth()
+  );
+}
+
+/**
+ * `envelopeCovers` for a plain bbox (a place's or framing's request box)
+ * rather than a live map's bounds. A `null` envelope is a layer's unscoped
+ * national fallback and covers every bbox.
+ */
+export function bboxCoveredByEnvelope(
+  envelope: ViewEnvelope | null,
+  bbox: ViewEnvelope
+): boolean {
+  if (envelope === null) return true;
+  return (
+    envelope[0] <= bbox[0] &&
+    envelope[1] <= bbox[1] &&
+    envelope[2] >= bbox[2] &&
+    envelope[3] >= bbox[3]
+  );
+}
+
+/**
+ * Shrink a query envelope inward by one grid quantum to form the COVERAGE
+ * envelope stored with a cached response. The binary64 value `k / 1e5` can
+ * sit a sub-ULP outside the exact decimal the URL carried, so comparing
+ * against the query envelope itself left an equality-edge false-positive
+ * path (Codex Unit B second re-verify, LOW, 2026-07-15). One quantum
+ * (about one meter) of lost cache reuse is an acceptable false negative; a
+ * passing coverage check now can never claim area outside the service
+ * request.
+ */
+export function toCoverageEnvelope(envelope: ViewEnvelope): [number, number, number, number] {
+  const q = 1 / ENVELOPE_QUANTUM;
+  return [envelope[0] + q, envelope[1] + q, envelope[2] - q, envelope[3] - q];
+}
+
+/*
  * Shared selection-bbox seams (N2-A). Everything below operates on
  * MapLibre-order `[west, south, east, north]` boxes and accepts both encoded
  * crossings (`west > east`) and naive geometry walks (`east - west > 180`).

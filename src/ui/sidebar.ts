@@ -120,7 +120,7 @@ import {
 } from '../state/view-mode';
 import { installPopupViewportContainment } from './popup-viewport';
 import { getBasemapMode, onBasemapChange, setBasemapMode } from '../state/basemap-store';
-import { seedFire3DPreference } from '../state/fire3d-store';
+import { FIRE3D_CHUNK_WIDTH_QUERY, seedFire3DPreference } from '../state/fire3d-store';
 import { getFraming, onFramingChange, setFraming } from '../state/framing-store';
 import {
   clearOceanFraming,
@@ -143,7 +143,7 @@ import {
 } from '../config/framings';
 import type { FramingKey } from '../config/framings';
 import { OCEANS } from '../config/oceans';
-import { applyBasemapMode, requestBasemapMode } from '../map/basemap-switcher';
+import { applyBasemapMode, holdSatellite, requestBasemapMode } from '../map/basemap-switcher';
 import {
   cameraMatchesTarget,
   cameraStateUnchanged,
@@ -1181,9 +1181,9 @@ let stationValuesHydrated = false;
 /** Master abort for in-flight value fetches; fired on telemetry layer-off. */
 let stationValuesController: AbortController | null = null;
 
-/** Compact display date for a YYYY-MM-DD reading ("Jun 30"). */
+/** Compact display date ("Jun 30") for a YYYY-MM-DD day or a full timestamp, in the reader's local time. */
 function shortReadingDate(iso: string): string {
-  const d = new Date(`${iso}T00:00:00`);
+  const d = new Date(iso.length === 10 ? `${iso}T00:00:00` : iso);
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
@@ -1246,7 +1246,7 @@ function formatStationValue(value: StationValue): string {
     wantsThousands && value.value !== null
       ? value.value.toLocaleString('en-US', { maximumFractionDigits: 0 })
       : String(value.value);
-  const day = value.timestamp ? ` · ${shortReadingDate(value.timestamp.slice(0, 10))}` : '';
+  const day = value.timestamp ? ` · ${shortReadingDate(value.timestamp)}` : '';
   const staleNote = value.freshness === 'stale' ? ' (stale)' : '';
   return `${label} ${num} ${value.unit}${day}${staleNote}`;
 }
@@ -1324,6 +1324,8 @@ function onActiveChangeForStationValues(
   } else if (!active.has('telemetry') && stationValuesController) {
     stationValuesController.abort();
     stationValuesController = null;
+    // Aborted rows are left at "loading..."; the next activation must refetch.
+    stationValuesHydrated = false;
   }
 }
 
@@ -1548,6 +1550,12 @@ function applyUrlStateSync(map: maplibregl.Map): ParsedUrlParams {
   // visual switch is kicked off here and settles asynchronously (the
   // desaturated default paints first; the U1 boot-split precedent).
   setBasemapMode(params.basemap);
+  // DR-105: a `fire3d=true` boot at the 3D chunk's width (main.ts) holds the
+  // imagery until the scene's controller decides; it releases the hold when
+  // the scene does not open.
+  if (params.fire3d && window.matchMedia(FIRE3D_CHUNK_WIDTH_QUERY).matches) {
+    holdSatellite(map, true);
+  }
   if (params.basemap === 'satellite') {
     void applyBasemapMode(map, 'satellite');
   }

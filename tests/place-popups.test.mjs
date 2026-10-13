@@ -516,6 +516,22 @@ test('an alert window end is an instant only with its zone; anything else is sho
   }
   assert.equal(alert(null).rows[0].text, 'Red Flag Warning in this area (NOAA NWS)');
   assert.equal(alert(null).rows[0].clock, undefined);
+  // Two alerts of one product with different ends share a row that states neither end.
+  const twin = withLayers(['nws-alerts'], () =>
+    buildPlaceConditionsHtml(
+      fakeMap({
+        'nws-alerts-fill': [
+          { properties: { prod_type: 'Red Flag Warning', ends: '2026-09-30T18:00:00-07:00' }, geometry: square(-122, 47) },
+          { properties: { prod_type: 'Red Flag Warning', ends: '2026-10-01T18:00:00-07:00' }, geometry: square(-122, 47) }
+        ]
+      }),
+      [0, 0],
+      PLACE
+    )
+  );
+  assert.equal(twin.rows.length, 1);
+  assert.equal(twin.rows[0].text, 'Red Flag Warning in this area (NOAA NWS)');
+  assert.equal(twin.rows[0].clock, undefined);
 });
 
 const SUPPLIED = 'As the issuer states it; DDM does not read it as a full date.';
@@ -1010,4 +1026,13 @@ test('in a mode with no place row the nothing-on head reads the interim line; th
   } finally {
     setHazardCluster(before);
   }
+});
+
+test('a RAWS reading past its network window is stale; a fresh or timeless one is not', () => {
+  const base = { relativeHumidity: '21 %', windSpeed: '5 mph', windDirection: '295 degrees', windGustSpeed: null, windGustDirection: null, fuelMoisture: null };
+  const now = Date.UTC(2026, 9, 5, 16, 0);
+  const stale = (observedAtIso) => popups.rawsStationRead({ ...base, observedAtIso }, now).readings.map((r) => r.stale);
+  assert.deepEqual(stale('2026-10-04T17:00:00Z'), [true, true, true]);
+  assert.deepEqual(stale('2026-10-05T15:00:00Z'), [false, false, false]);
+  assert.deepEqual(stale(null), [false, false, false]);
 });

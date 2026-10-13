@@ -490,6 +490,7 @@ export function decodeJpeg2000(cs: Uint8Array, expectedSamples: number): JpxImag
   if (X1 * Y1 !== expectedSamples || X1 === 0 || Y1 === 0) {
     fail('size', `Xsiz x Ysiz = ${X1} x ${Y1} does not equal the ${expectedSamples} packed points`);
   }
+  if (Y1 !== 1) fail('unsupported', `${Y1} rows (one is supported)`);
   if (u32(siz, 26) !== 0 || u32(siz, 30) !== 0 || u32(siz, 18) < X1 || u32(siz, 22) < Y1) {
     fail('unsupported', 'more than one tile');
   }
@@ -506,7 +507,8 @@ export function decodeJpeg2000(cs: Uint8Array, expectedSamples: number): JpxImag
   const levels = cod[5] as number;
   const xcb = (cod[6] as number) + 2;
   const ycb = (cod[7] as number) + 2;
-  if (scod & ~1) fail('unsupported', 'SOP or EPH markers');
+  if (scod & 1) fail('unsupported', 'explicit precinct sizes');
+  if (scod) fail('unsupported', 'SOP or EPH markers');
   // With one layer and one component, LRCP, RLCP and RPCL visit packets in the same order.
   if (progression > 2) fail('unsupported', `progression order ${progression}`);
   if (layers !== 1) fail('unsupported', `${layers} quality layers`);
@@ -515,7 +517,6 @@ export function decodeJpeg2000(cs: Uint8Array, expectedSamples: number): JpxImag
   if (xcb > 10 || ycb > 10 || xcb + ycb > 12) fail('corrupt', 'code-block size');
   if (cod[8] !== 0) fail('unsupported', `code-block style 0x${(cod[8] as number).toString(16)}`);
   if (cod[9] !== 1) fail('unsupported', 'the irreversible 9/7 transform');
-  if (scod & 1 && cod.length < 10 + levels + 1) fail('corrupt', 'precinct sizes');
 
   // QCD (T.800 A.6.4): no quantization, one exponent per sub-band.
   if (((qcd[0] as number) & 0x1f) !== 0) fail('unsupported', 'quantization');
@@ -549,20 +550,13 @@ export function decodeJpeg2000(cs: Uint8Array, expectedSamples: number): JpxImag
     p = end;
   }
   if (bodies.length === 0) fail('corrupt', 'no tile-part');
+  if (bodies.length > 1) fail('unsupported', `${bodies.length} tile-parts`);
   // T.800 A.4.4: the codestream closes with EOC, directly after its last tile-part.
   if (p !== cs.length - 2 || u16(cs, p) !== 0xffd9) {
     fail('corrupt', 'structurally invalid: the codestream does not close with EOC after its last tile-part');
   }
   if (exponents.length !== 3 * levels + 1) fail('corrupt', 'quantization exponents do not match the levels');
-  let body = bodies[0] as Uint8Array;
-  if (bodies.length > 1) {
-    body = new Uint8Array(bodies.reduce((a, b) => a + b.length, 0));
-    let o = 0;
-    for (const b of bodies) {
-      body.set(b, o);
-      o += b.length;
-    }
-  }
+  const body = bodies[0] as Uint8Array;
 
   // Count precincts and code-blocks before allocating any of them.
   let precinctCount = 0;
@@ -574,10 +568,9 @@ export function decodeJpeg2000(cs: Uint8Array, expectedSamples: number): JpxImag
     const rx1 = ceilDiv(X1, sh);
     const ry0 = ceilDiv(Y0, sh);
     const ry1 = ceilDiv(Y1, sh);
-    const sp = cod[10 + r] as number;
-    const PPx = scod & 1 ? sp & 15 : 15;
-    const PPy = scod & 1 ? sp >> 4 : 15;
-    if (r > 0 && (PPx === 0 || PPy === 0)) fail('corrupt', 'precinct size');
+    // The default precinct exponent: explicit sizes are refused above.
+    const PPx = 15;
+    const PPy = 15;
     const px = r ? PPx - 1 : PPx;
     const py = r ? PPy - 1 : PPy;
     const cbw = 2 ** Math.min(xcb, px);
@@ -791,17 +784,8 @@ export function decodeJpeg2000(cs: Uint8Array, expectedSamples: number): JpxImag
         out[y * w + x] = src[((v >> 1) - (by[t] as number)) * (bww[t] as number) + ((u >> 1) - (bx[t] as number))] as number;
       }
     }
+    // One row at an even origin (Ysiz 1, no offset): VER_SR changes nothing.
     for (let y = 0; y < h; y++) lift(out.subarray(y * w, y * w + w), w, R.x0);
-    if (h > 1) {
-      const column = new Int32Array(h);
-      for (let x = 0; x < w; x++) {
-        for (let y = 0; y < h; y++) column[y] = out[y * w + x] as number;
-        lift(column, h, R.y0);
-        for (let y = 0; y < h; y++) out[y * w + x] = column[y] as number;
-      }
-    } else if (R.y0 & 1) {
-      for (let x = 0; x < w; x++) out[x] = Math.trunc((out[x] as number) / 2);
-    }
     cur = out;
   }
   if (cur.length !== expectedSamples) fail('corrupt', 'decoded sample count');

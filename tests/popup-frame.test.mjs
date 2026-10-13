@@ -925,7 +925,7 @@ test('a chart detail carries its data, unit and attribution into the frame for t
           chartKey: 'flow',
           summary: 'Fixture summary.',
           data: [12, 3.5, -0.25, 1e3],
-          options: { title: 'Streamflow', unit: 'ft3/s', source: 'Fixture source line' },
+          options: { title: 'Streamflow', unit: 'ft3/s' },
           unit: 'ft3/s',
           attribution: `Fixture attribution ${PAYLOAD}`
         }

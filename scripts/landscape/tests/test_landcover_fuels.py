@@ -625,6 +625,43 @@ class HandWorkedKnownAnswerTests(unittest.TestCase):
             self.assertEqual(forbidden_calls, [])
             self.assertEqual(no_budget.counts["lfps-exportimage"], 0)
 
+    def test_returned_tile_off_its_requested_corner_is_refused(self) -> None:
+        bounds = (
+            core.GRID_ANCHOR_X,
+            core.GRID_ANCHOR_Y - 30.0,
+            core.GRID_ANCHOR_X + 60.0,
+            core.GRID_ANCHOR_Y,
+        )
+
+        def request(tile_bounds, width, height) -> bytes:
+            # The second tile comes back one cell east of where it was asked.
+            shift = 30.0 if tile_bounds[0] > bounds[0] else 0.0
+            with rasterio.io.MemoryFile() as mem:
+                with mem.open(
+                    driver="GTiff", width=width, height=height, count=1,
+                    dtype="int16", crs=core.ANALYSIS_CRS,
+                    transform=from_origin(
+                        tile_bounds[0] + shift, tile_bounds[3],
+                        30.0, 30.0), nodata=0,
+                ) as out:
+                    out.write(np.ones((height, width), dtype="int16"), 1)
+                return mem.read()
+
+        identity = lf._canonical_request_identity(
+            "https://example.invalid/exportImage",
+            query={"f": "image"},
+            selectors={"product": "fuels-fbfm40", "releaseCode": "240"},
+        )
+        with _cache_tempdir() as tmp_name, patch.object(
+                lf, "DOWNLOAD_CACHE", Path(tmp_name)), patch.object(
+                core, "log", lambda msg: None):
+            with self.assertRaisesRegex(
+                    lf.GridCongruenceError, "requested"):
+                lf._download_tiled_window(
+                    "fuels-fbfm40", bounds,
+                    lf.RequestBudget({"lfps-exportimage": 2}), 1,
+                    request, identity)
+
     def test_legacy_whp_sidecar_accepts_exact_url_only_identity(self) -> None:
         """The retained edition-4 ZIP predates requestIdentity. Its recorded
         URL plus digest is the deliberately narrow compatibility proof."""

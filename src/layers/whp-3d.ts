@@ -3,6 +3,7 @@
  * The archive contains the published 2023 classes and stays unchanged.
  * Requested tiles map those known classes to increasing white opacity,
  * keeping the landscape visible and the orange fire perimeters legible.
+ * Inside a mapped fire perimeter the drape draws nothing (`syncPerimeters`).
  * The companion legend carries the matching opacity scale and source limits.
  *
  * This presentation companion is owned by the lazy fire3d context module,
@@ -12,12 +13,14 @@
  */
 
 import type * as maplibregl from 'maplibre-gl';
+import type { Position } from 'geojson';
 
-import { DRAPE_OPACITY } from '../config/wildfire-presentation';
-import { WHP_SHADE_CATEGORIES, WHP_SHADE_QUALIFICATION } from '../config/whp-shade';
-import { registerWhpShadeProtocol } from './whp-shade-protocol';
+import { WHP_3D_SHADE_CATEGORIES, WHP_3D_SHADE_QUALIFICATION } from '../config/whp-shade';
+import { registerWhpShadeProtocol, setWhpShadePerimeters } from './whp-shade-protocol';
 import { URLS } from '../config/urls';
 import { reassertLabelOrder, reassertThematicOrder } from '../map/layer-order';
+import { getPerimeterSnapshot, onPerimeterSnapshotChange } from '../state/fire-perimeter-snapshot';
+import { getFire3DGroundLayer, onFire3DGroundLayerChange } from '../state/fire3d-ground-layers';
 import { registry } from '../state/registry';
 import {
   LEGEND_ORDER,
@@ -36,6 +39,79 @@ const FLAT_WHP_LAYER_KEY = 'usfs-whp';
 
 /** Released when the drape is torn down; watches for the flat layer. */
 let releaseFlatLayerWatch: (() => void) | null = null;
+/** Released when the drape is torn down; follows the console's "Fuel risk" switch. */
+let releaseSwitchWatch: (() => void) | null = null;
+
+/** Released when the drape is torn down; follows the fire perimeters. */
+let releasePerimeterWatch: (() => void) | null = null;
+/** The perimeter snapshot revision the drape is shaded with; 0 for none. */
+let shadedRevision = 0;
+/** The polygons of that revision, in an order-free form, which the mounted tiles were shaded with. */
+let shadedPolygons = '';
+
+/**
+ * Fuel risk is fully transparent inside a fire perimeter (owner, 2026-10-11).
+ * Take the perimeters the flat layer published (src/state/fire-perimeter-snapshot.ts),
+ * hand them to the shading protocol, and reload the mounted drape's tiles
+ * when the snapshot moved on from the one they were shaded with and the
+ * polygons differ; loaded tiles stay drawn until their re-shaded copies arrive. Every perimeter the
+ * layer holds counts, whatever its incident class. No layer, no perimeters
+ * or unreadable geometry all mean the same thing: fuel risk draws whole.
+ */
+function syncPerimeters(map: maplibregl.Map): void {
+  const { collection, revision } = getPerimeterSnapshot();
+  if (revision === shadedRevision) return;
+  shadedRevision = revision;
+  const polygons: Position[][][] = [];
+  let key = '';
+  try {
+    for (const { geometry } of collection?.features ?? []) {
+      if (geometry?.type === 'Polygon') polygons.push(geometry.coordinates);
+      else if (geometry?.type === 'MultiPolygon') polygons.push(...geometry.coordinates);
+    }
+    key = polygons.map((polygon) => JSON.stringify(polygon)).sort().join();
+  } catch (err) {
+    console.warn('[whp-3d]', err);
+    polygons.length = 0;
+  }
+  if (key === shadedPolygons) return;
+  shadedPolygons = key;
+  setWhpShadePerimeters(polygons);
+  // Always the whole source: a tile list reloads only in-view tiles and leaves
+  // MapLibre's out-of-view cache holding tiles cut to the old perimeters.
+  if (map.getSource(SOURCE_ID)) map.refreshTiles(SOURCE_ID);
+}
+
+/** The drape's layout visibility under the console's "Fuel risk" switch (session only). */
+const fuelRiskVisibility = (): 'visible' | 'none' => (getFire3DGroundLayer('fuelRisk') ? 'visible' : 'none');
+
+/**
+ * The legend and the map key follow the switch with the drape: a key never
+ * describes a layer that is not drawn. Hidden, the layer and its source
+ * stay mounted, so switching back on needs no new activation.
+ */
+function announceFuelRisk(): void {
+  const on = getFire3DGroundLayer('fuelRisk');
+  if (on) {
+    showLegend(LEGEND_KEY, {
+      order: LEGEND_ORDER.surface + 5,
+      render: (body) =>
+        renderSwatchLegend(
+          body,
+          'Wildfire hazard potential (3D view)',
+          WHP_3D_SHADE_CATEGORIES.map((c) => ({
+            color: `rgba(255, 255, 255, ${c.opacity})`,
+            label: c.label
+          })),
+          WHP_3D_SHADE_QUALIFICATION
+        )
+    });
+  } else {
+    hideLegend(LEGEND_KEY);
+  }
+  // `mounted` tells the console its Fuel risk switch has a drape to act on.
+  window.dispatchEvent(new CustomEvent('ddm:whp-shade', { detail: { layer: LAYER_ID, active: on, mounted: true } }));
+}
 
 /**
  * One issuer, one legend, per layer: never draw this drape while the flat
@@ -79,6 +155,9 @@ export async function activateWhpDrape(
     return false;
   }
   if (signal.aborted) return false;
+  // Before the source exists, so its first tiles are already cut and
+  // entering the scene reloads nothing.
+  syncPerimeters(map);
 
   try {
     registerWhpShadeProtocol();
@@ -95,8 +174,14 @@ export async function activateWhpDrape(
         id: LAYER_ID,
         type: 'raster',
         source: SOURCE_ID,
+        layout: { visibility: fuelRiskVisibility() },
         paint: {
-          'raster-opacity': DRAPE_OPACITY,
+          // The shading table carries each class's effective white opacity
+          // (WHP_3D_SHADE_CATEGORIES), so the layer itself adds none.
+          'raster-opacity': 1,
+          // On terrain every fade frame redraws the draped ground, and each
+          // perimeter-driven reload would repeat it.
+          'raster-fade-duration': 0,
           // NEAREST, not MapLibre's default linear. This is a categorical
           // raster of seven issuer classes, and the archive is over-zoomed
           // well past its bake depth at the scene's framing. Linear
@@ -111,16 +196,12 @@ export async function activateWhpDrape(
           // proves only that this module still SETS it; it cannot prove
           // the renderer honours it, because the test runs against a
           // fake map with no GPU draw path. That the shipped renderer
-          // DOES honour it rests on DR-009 (MapLibre 6.6.0, pinned at
-          // package.json:72) and on the 6.6.0 raster draw path itself:
-          // node_modules/maplibre-gl/dist/maplibre-gl-dev.mjs, function
-          // drawTiles, the line reading
-          // `layer.paint.get("resampling") === "nearest" ||
-          // layer.paint.get("raster-resampling") === "nearest" ? gl.NEAREST
-          // : gl.LINEAR` (line 18332 in the 6.6.0 package), which selects
-          // GL's nearest-texel filter when either the deprecated
-          // `resampling` or this `raster-resampling` property is 'nearest';
-          // this layer sets only the latter.
+          // DOES honour it rests on DR-009 (the exact maplibre-gl pin in
+          // package.json) and on the raster draw path itself:
+          // maplibre-gl/src/webgl/draw/draw_raster.ts, function drawTiles,
+          // which picks gl.NEAREST when either `resampling` or
+          // `raster-resampling` is 'nearest'; this layer sets only the
+          // latter.
           'raster-resampling': 'nearest'
         }
       });
@@ -138,20 +219,13 @@ export async function activateWhpDrape(
     return false;
   }
 
-  showLegend(LEGEND_KEY, {
-    order: LEGEND_ORDER.surface + 5,
-    render: (body) =>
-      renderSwatchLegend(
-        body,
-        'Wildfire hazard potential (3D view)',
-        WHP_SHADE_CATEGORIES.map((c) => ({
-          color: `rgba(255, 255, 255, ${c.opacity * DRAPE_OPACITY})`,
-          label: c.label
-        })),
-        WHP_SHADE_QUALIFICATION
-      )
+  announceFuelRisk();
+  releaseSwitchWatch?.();
+  releaseSwitchWatch = onFire3DGroundLayerChange((layer) => {
+    if (layer !== 'fuelRisk') return;
+    if (map.getLayer(LAYER_ID)) map.setLayoutProperty(LAYER_ID, 'visibility', fuelRiskVisibility());
+    announceFuelRisk();
   });
-  window.dispatchEvent(new CustomEvent('ddm:whp-shade', { detail: { layer: LAYER_ID, active: true } }));
 
   // The flat layer can be switched on AFTER the scene is up (the
   // season-ahead horizon does exactly that). Watch for it and stand down
@@ -161,8 +235,14 @@ export async function activateWhpDrape(
   // under-claims rather than over-claims and needs no disclosure.
   releaseFlatLayerWatch?.();
   releaseFlatLayerWatch = registry.on('change', () => {
-    if (!flatWhpLayerIsOn()) return;
-    deactivateWhpDrape(map);
+    if (flatWhpLayerIsOn()) deactivateWhpDrape(map);
+  });
+  // The perimeter layer publishes each different collection it puts on the
+  // map (its first, and after a pan or zoom), and null once it is off; the
+  // same collection again reloads nothing.
+  releasePerimeterWatch?.();
+  releasePerimeterWatch = onPerimeterSnapshotChange(() => {
+    syncPerimeters(map);
   });
 
   return true;
@@ -175,8 +255,12 @@ export async function activateWhpDrape(
 export function deactivateWhpDrape(map: maplibregl.Map): void {
   releaseFlatLayerWatch?.();
   releaseFlatLayerWatch = null;
+  releaseSwitchWatch?.();
+  releaseSwitchWatch = null;
+  releasePerimeterWatch?.();
+  releasePerimeterWatch = null;
   if (map.getLayer(LAYER_ID)) map.removeLayer(LAYER_ID);
   if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);
   hideLegend(LEGEND_KEY);
-  window.dispatchEvent(new CustomEvent('ddm:whp-shade', { detail: { layer: LAYER_ID, active: false } }));
+  window.dispatchEvent(new CustomEvent('ddm:whp-shade', { detail: { layer: LAYER_ID, active: false, mounted: false } }));
 }

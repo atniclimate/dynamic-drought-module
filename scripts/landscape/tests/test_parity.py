@@ -94,24 +94,33 @@ class TerrainAggregateParity(unittest.TestCase):
         want = (CORRECTED / "terrain_l3.json").read_bytes()
         self.assertEqual(got, want)
 
-    def test_duplicate_code_is_last_write_wins(self) -> None:
-        """The legacy per-feature aggregation overwrites duplicate zonal
-        codes; the fixture pins it (code '1' appears twice). This defect is
-        DELIBERATELY still preserved after T-M0-2 (the dissolve fix is a
-        later unit's scope), so the future fix must be a visible diff."""
+    def test_duplicate_code_is_dissolved(self) -> None:
+        """A zonal code carried by several feature rows (code '1' appears
+        twice in the fixture) is one zone: its statistics are those of the
+        union geometry, not of whichever row happened to come last."""
         gdf = load_fixture_gdf()
         dupes = gdf[gdf["US_L3CODE"] == "1"]
         self.assertEqual(len(dupes), 2)
+        union = gpd.GeoDataFrame(
+            {"US_L3CODE": ["1"]},
+            geometry=[dupes.geometry.union_all()],
+            crs=gdf.crs,
+        )
         with tempfile.TemporaryDirectory() as tmp:
             result = terrain.aggregate(
                 gdf, "US_L3CODE",
+                dem_path=str(SYNTH / "dem.tif"), cache_dir=Path(tmp),
+            )
+            union_only = terrain.aggregate(
+                union, "US_L3CODE",
                 dem_path=str(SYNTH / "dem.tif"), cache_dir=Path(tmp),
             )
             second_only = terrain.aggregate(
                 gdf.iloc[[1]], "US_L3CODE",
                 dem_path=str(SYNTH / "dem.tif"), cache_dir=Path(tmp),
             )
-        self.assertEqual(result["1"], second_only["1"])
+        self.assertEqual(result["1"], union_only["1"])
+        self.assertNotEqual(result["1"], second_only["1"])
 
 
 def _leaf_diffs(a, b, path: str, out: list[dict]) -> None:
@@ -369,17 +378,36 @@ class MainLevelFailureIsOneAttempt(unittest.TestCase):
                  mock.patch.object(terrain, "DEM_VRT",
                                    str(Path(tmp) / "missing.tif")), \
                  mock.patch.object(core, "CACHE_DIR", Path(tmp)), \
-                 mock.patch.object(core, "OUT_PATH", out_path), \
                  mock.patch.object(core, "materialize_raster", counting), \
                  mock.patch.object(core, "log", lambda msg: None):
+                # An explicit --output: the public default path refuses a
+                # failed acquisition (the test below).
                 rc = main(["--only", "terrain", "--level", "both",
-                           "--retrieved", "2026-01-01"])
+                           "--retrieved", "2026-01-01",
+                           "--output", str(out_path)])
             self.assertEqual(rc, 0)
             snapshot = json.loads(out_path.read_text(encoding="utf-8"))
         self.assertEqual(len(calls), 1)
         for code, entry in snapshot["bundles"].items():
             terrain_block = entry["terrain"]
             self.assertTrue(terrain_block["unavailable"], code)
+
+    def test_failed_acquisition_never_replaces_the_public_artifact(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            out_path = Path(tmp) / "snapshot.json"
+            out_path.write_bytes(b"the good artifact\n")
+            from scripts.landscape.__main__ import main
+            with mock.patch.object(core, "load_ecoregions",
+                                   lambda level: load_fixture_gdf()), \
+                 mock.patch.object(terrain, "DEM_VRT",
+                                   str(Path(tmp) / "missing.tif")), \
+                 mock.patch.object(core, "CACHE_DIR", Path(tmp)), \
+                 mock.patch.object(core, "OUT_PATH", out_path), \
+                 mock.patch.object(core, "log", lambda msg: None):
+                with self.assertRaisesRegex(RuntimeError, "terrain"):
+                    main(["--only", "terrain", "--level", "3",
+                          "--retrieved", "2026-01-01"])
+            self.assertEqual(out_path.read_bytes(), b"the good artifact\n")
 
 
 class MaterializationFailureHonesty(unittest.TestCase):

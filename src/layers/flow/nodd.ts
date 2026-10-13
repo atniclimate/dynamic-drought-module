@@ -51,7 +51,7 @@ const CYCLE_MS = 6 * HOUR;
 /** The newest cycle's earliest observed arrival on NODD (B-grib.md section 2.3). */
 const PUBLISH_LAG_MS = 3.5 * HOUR;
 
-/** The budget of each complete-body read and decoder completion (the existing 12 s ENSO read budget). */
+/** The base budget of each complete-body read, and the decoder completion budget (the existing 12 s ENSO read budget). */
 export const FLOW_READ_BUDGET_MS = 12_000;
 /** Cycle tries in all: the candidate and two 6 h step-backs. */
 export const MAX_CYCLE_TRIES = 3;
@@ -253,12 +253,14 @@ export async function fetchBoundedWithBudget(
 }
 
 function ranged(url: string, start: number, end: number, signal: AbortSignal, exact: boolean): Promise<Response> {
+  const maxBytes = end - start + 1;
   return fetchBoundedWithBudget(
     url,
     { credentials: 'omit', headers: { Range: `bytes=${start}-${end}` } },
     signal,
-    FLOW_READ_BUDGET_MS,
-    exact ? { expectStatus: 206, maxBytes: end - start + 1 } : { maxBytes: end - start + 1 }
+    // The budget grows with the span: a link slower than 32 kB/s still fails.
+    FLOW_READ_BUDGET_MS + maxBytes / 32,
+    exact ? { expectStatus: 206, maxBytes } : { maxBytes }
   );
 }
 

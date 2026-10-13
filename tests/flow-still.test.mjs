@@ -197,23 +197,18 @@ test('the still-form build of a 1440x900 Pacific view is under 50 ms (Node media
   t.diagnostic(`median still-form build ${median.toFixed(1)} ms`);
 });
 
-test('on a phone-width view (720 CSS px or less) the form starts still at half density', () => {
+test('a phone-width view (720 CSS px or less) draws at half density', () => {
   const f = windField();
   const phone = view(-125, 45, 4, 390, 844);
   const edge = view(-125, 45, 4, 720, 900);
   const desk = view(-125, 45, 4, 721, 900);
   const p = planForm(f, phone, { motionAllowed: true });
-  assert.equal(p.form, 'still');
-  assert.equal(p.densityFactor, PHONE_DENSITY_FACTOR);
+  assert.deepEqual(p, { form: 'moving', densityFactor: PHONE_DENSITY_FACTOR });
   assert.equal(PHONE_DENSITY_FACTOR, 0.5);
-  assert.equal(planForm(f, edge, { motionAllowed: true }).form, 'still', '720 px is the phone rail');
-  assert.equal(planForm(f, desk, { motionAllowed: true }).form, 'moving');
-  assert.equal(planForm(f, desk, { motionAllowed: true }).densityFactor, 1);
-  // Play is the viewer's choice: moving, still at half density.
-  const played = planForm(f, phone, { motionAllowed: true, playPressed: true });
-  assert.deepEqual(played, { form: 'moving', densityFactor: 0.5 });
-  // Reduced motion or Pause keeps it still even after Play.
-  assert.equal(planForm(f, phone, { motionAllowed: false, playPressed: true }).form, 'still');
+  assert.equal(planForm(f, edge, { motionAllowed: true }).densityFactor, 0.5, '720 px is the phone rail');
+  assert.deepEqual(planForm(f, desk, { motionAllowed: true }), { form: 'moving', densityFactor: 1 });
+  // Reduced motion or Pause keeps it still.
+  assert.equal(planForm(f, phone, { motionAllowed: false }).form, 'still');
   // The still seeds follow the half density.
   const full = still.buildStillForm(f, phone, 'still', { densityFactor: 1 }).features.length;
   const half = still.buildStillForm(f, phone, 'still', { densityFactor: p.densityFactor }).features.length;

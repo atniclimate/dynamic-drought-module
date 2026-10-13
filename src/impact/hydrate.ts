@@ -228,26 +228,30 @@ export async function hydrateBriefing(
   const pointHeat = sourceMayRun(sourcePolicy, 'pointHeat')
     ? import('./point-heat')
         .then(({ fetchPointHeat }) => fetchPointHeat(context, nwsSession))
-        .then((pointHeatResult) => {
-          if (signal.aborted) return;
-          briefing.pointHeat = pointHeatResult;
-          heatPending = Math.max(0, heatPending - 1);
-          publishHeatSynthesis();
-        })
-        .catch((err: unknown) => {
-          if (signal.aborted) return;
-          console.warn('[impact] point heat hydration failed.', err);
-          const note = 'The NWS point heat source did not respond.';
-          briefing.pointHeat = {
-            status: 'error',
-            note,
-            point: { ...context.lngLat },
-            observation: { status: 'error', note, metrics: [] },
-            grid: { status: 'error', note, metrics: [] }
-          };
-          heatPending = Math.max(0, heatPending - 1);
-          publishHeatSynthesis();
-        })
+        .then(
+          (pointHeatResult) => {
+            if (signal.aborted) return;
+            briefing.pointHeat = pointHeatResult;
+            heatPending = Math.max(0, heatPending - 1);
+            publishHeatSynthesis();
+          },
+          // Two-argument form: a repaint throw above must not overwrite a good
+          // answer with this failure note.
+          (err: unknown) => {
+            if (signal.aborted) return;
+            console.warn('[impact] point heat hydration failed.', err);
+            const note = 'The NWS point heat source did not respond.';
+            briefing.pointHeat = {
+              status: 'error',
+              note,
+              point: { ...context.lngLat },
+              observation: { status: 'error', note, metrics: [] },
+              grid: { status: 'error', note, metrics: [] }
+            };
+            heatPending = Math.max(0, heatPending - 1);
+            publishHeatSynthesis();
+          }
+        )
     : Promise.resolve();
 
   const refreshHeatRisk = (generation: number): void => {
@@ -306,9 +310,18 @@ export async function hydrateBriefing(
     fetcher: () => Promise<SourceResult>
   ): Promise<void> =>
     sourceMayRun(sourcePolicy, key)
-      ? fetcher().then((result) => {
-          settleLane(key, result);
-        })
+      ? fetcher().then(
+          (result) => {
+            settleLane(key, result);
+          },
+          // Two-argument form: a repaint throw in settleLane above must not
+          // overwrite a good answer with this failure note.
+          (err: unknown) => {
+            if (signal.aborted) return;
+            console.warn(`[impact] ${key} lane failed.`, err);
+            settleLane(key, { claims: [], ok: false, note: 'This source did not respond.' });
+          }
+        )
       : Promise.resolve();
 
   if (heatPending === 0) publishHeatSynthesis();

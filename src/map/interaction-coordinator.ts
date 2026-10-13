@@ -38,7 +38,7 @@ import { getEmphasisTargets, emphasizePlaces } from '../state/place-emphasis';
 import type { EmphasisTarget } from '../state/place-emphasis';
 import { getPlaceSelection, setPlaceSelection } from '../state/place-selection';
 import type { PlaceSelection } from '../state/place-selection';
-import { getStudioRoute, onStudioRouteChange } from '../state/studio-route';
+import { onStudioRouteChange, studioOwnsScreen } from '../state/studio-route';
 import { getViewMode, onViewModeChange } from '../state/view-mode';
 import type { LocationIdentity } from '../state/location-identity';
 import { openImpactPanel } from '../ui/impact-panel';
@@ -496,7 +496,7 @@ function bindKeyboardIdentify(map: maplibregl.Map): void {
       return;
     }
     e.preventDefault();
-    if (getStudioRoute() !== null) return;
+    if (studioOwnsScreen()) return;
     noteFocusBeforeCommit();
     const point = new maplibregl.Point(canvas.clientWidth / 2, canvas.clientHeight / 2);
     const hits = collectHits(map, point);
@@ -506,7 +506,7 @@ function bindKeyboardIdentify(map: maplibregl.Map): void {
 }
 
 function handleClick(map: maplibregl.Map, e: maplibregl.MapMouseEvent): void {
-  if (getStudioRoute() !== null) return;
+  if (studioOwnsScreen()) return;
   noteFocusBeforeCommit();
   const hits = collectHits(map, e.point);
   const click: CoordinatorClick = { lngLat: e.lngLat, point: e.point };

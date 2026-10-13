@@ -140,6 +140,19 @@ export function getStudioRoute(): StudioRoute {
   return route;
 }
 
+/**
+ * Whether a studio actually owns the screen. The route is set from the URL even
+ * where no studio ever mounts (an embed, a frame), so gates that wait on the
+ * studio must ask this, not `getStudioRoute() !== null`.
+ */
+export function studioOwnsScreen(): boolean {
+  return (
+    route !== null &&
+    !physicallyFramed &&
+    !(document.getElementById('app')?.classList.contains('embed') ?? false)
+  );
+}
+
 export function onStudioRouteChange(listener: StudioRouteListener): () => void {
   listeners.add(listener);
   return () => {

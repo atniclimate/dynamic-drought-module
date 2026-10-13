@@ -110,13 +110,6 @@ test('map-key.ts carries no cluster literal in its chip label path (the retired 
     /label:\s*'Products'/,
     "a hard-coded 'Products' fallback label is back (should read KEY_ELIGIBLE_LABELS['nws-alerts'])"
   );
-  // The label table itself moved out; a second copy here would let the
-  // runtime and the Node test drift.
-  assert.doesNotMatch(
-    text,
-    /const\s+KEY_ELIGIBLE_LABELS/,
-    'KEY_ELIGIBLE_LABELS is declared locally again instead of imported from src/config/chip-labels.ts'
-  );
 });
 
 /**

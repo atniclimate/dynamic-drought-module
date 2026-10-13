@@ -30,6 +30,7 @@ import { MINIMAP_WHP } from '../config/minimap-whp';
 import type { MinimapWhpFramingSummary } from '../config/minimap-whp';
 import { MINIMAP_ACTIVE_WILDFIRE_FILTER } from '../config/wildfire-presentation';
 import { URLS } from '../config/urls';
+import { bboxCoveredByEnvelope } from '../util/bbox';
 import { fetchJsonWithBudget } from '../util/fetch';
 import { geometriesOverlap } from '../util/polygon-overlap';
 import { registry } from './registry';
@@ -205,23 +206,6 @@ function framingBbox(
     return null;
   }
   return [west, south, east, north];
-}
-
-/** Coverage-envelope containment for a plain bbox: `src/layers/nifc-fires.ts`'s
- * `envelopeCovers`, mirrored here for a framing's bbox rather than a live
- * map's current bounds. A `null` outer envelope is that layer's unscoped
- * national fallback and covers every bbox. */
-function bboxCoveredByEnvelope(
-  envelope: readonly [number, number, number, number] | null,
-  bbox: readonly [number, number, number, number],
-): boolean {
-  if (envelope === null) return true;
-  return (
-    envelope[0] <= bbox[0] &&
-    envelope[1] <= bbox[1] &&
-    envelope[2] >= bbox[2] &&
-    envelope[3] >= bbox[3]
-  );
 }
 
 /**

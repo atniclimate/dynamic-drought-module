@@ -47,14 +47,20 @@ const URLS_PATH = join(__dirname, '..', 'src', 'config', 'urls.ts');
  * are re-exported by urls.ts under their old keys, so extraction must read
  * both files or the basemap probe silently disappears. */
 const URLS_BOOT_PATH = join(__dirname, '..', 'src', 'config', 'urls-boot.ts');
+/** The Wildfire 3D ground's NOAA STAR land-cover tile template (2026-10-11):
+ * kept beside the ground's own config so the catalog chunk does not grow,
+ * written in the catalog's `key: 'https...'` form so it is extracted and
+ * probed here like any catalog key (runtime tier by default). */
+const DRYNESS_GROUND_URLS_PATH = join(__dirname, '..', 'src', 'config', 'dryness-ground.ts');
 
-/** The catalog and its boot slice as one extraction source. */
+/** The catalog, its boot slice and the ground's one address as one extraction source. */
 async function readUrlsSource() {
-  const [catalog, boot] = await Promise.all([
+  const [catalog, boot, ground] = await Promise.all([
     readFile(URLS_PATH, 'utf8'),
     readFile(URLS_BOOT_PATH, 'utf8'),
+    readFile(DRYNESS_GROUND_URLS_PATH, 'utf8'),
   ]);
-  return `${catalog}\n${boot}`;
+  return `${catalog}\n${boot}\n${ground}`;
 }
 
 const TIMEOUT_MS = 15_000;
@@ -212,13 +218,19 @@ const TEMPLATE_SUBSTITUTIONS = [
   // GIBS WMTS accepts the literal keyword 'default' in the TIME position
   // (the most recent granule). Without this the timed template 400s on the
   // literal token and the monitor cries wolf (verified 2026-07-09).
-  ['{TIME}', 'default']
+  ['{TIME}', 'default'],
+  // NOAA STAR's weekly tiles answer 500 for an unpublished week, and the newest
+  // week lags by days: probe a week that is long published (200 with ACAO *
+  // on 2026-10-11). Liveness of the endpoint, not of the current week.
+  ['{week}', '2026040']
 ];
 
 /** Keys whose bare root answers 4xx by design; probed with the consumer's
  * real form (or the documented health check) so a healthy service reads ok
  * and a FAIL means genuine drift, not a probe artifact. */
 const PROBE_SUFFIXES = new Map([
+  // The Wildfire 3D ground's fallback: the capabilities read the runtime makes first.
+  ['usgsRgConusWeekWms', '?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetCapabilities'],
   // ESRI service roots: ?f=json is the canonical liveness form.
   ['nifcRawsFeatureServer', '?f=json'],
   ['cpcWeeklySstAnomalyMapServer', '?f=json'],

@@ -67,9 +67,6 @@ const harnessController: LayerController = {
   },
   applyLayerSet(): Promise<void> {
     throw new Error('applyLayerSet is not part of the S3 path');
-  },
-  ensureActive(): void {
-    throw new Error('ensureActive is not part of the S3 path');
   }
 };
 
@@ -556,9 +553,6 @@ test.describe('S3 snapshot revisions and honesty under later changes', () => {
       },
       applyLayerSet(): Promise<void> {
         throw new Error('applyLayerSet is not part of the S3 path');
-      },
-      ensureActive(): void {
-        throw new Error('ensureActive is not part of the S3 path');
       }
     };
     const settle = (op: PendingOp): void => {

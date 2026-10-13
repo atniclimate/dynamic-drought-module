@@ -79,7 +79,6 @@ export interface LayerControllerView {
  *     boot-only and called once. It skips every key any command has ever
  *     set (`desiredOn` is only ever added to), so a later caller would
  *     silently skip every layer a person has touched.
- *   - `ensureActive` is fire-and-forget activation (void, not awaited).
  */
 export interface LayerController {
   activate(key: string, cascade?: boolean): Promise<void>;
@@ -87,7 +86,6 @@ export interface LayerController {
   applyPreset(preset: ViewPreset): void;
   /** Boot-only, call once (a second call rejects): skips every key a command has already set. */
   applyLayerSet(keys: Iterable<string>): Promise<void>;
-  ensureActive(key: string): void;
 }
 
 /**
@@ -595,10 +593,5 @@ export function createLayerController(
     await Promise.allSettled(tasks);
   }
 
-  /** Fire-and-forget activation (void, not awaited). */
-  function ensureActive(key: string): void {
-    void activate(key);
-  }
-
-  return { activate, deactivate, applyPreset, applyLayerSet, ensureActive };
+  return { activate, deactivate, applyPreset, applyLayerSet };
 }

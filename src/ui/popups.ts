@@ -1,6 +1,6 @@
 import type { GeoJsonProperties } from 'geojson';
 import { pickTreatyEntry } from '../config/palette';
-import { stationCustody, fetchRawsStationConditions } from '../config/station-registry';
+import { stationCustody, fetchRawsStationConditions, freshnessForNetwork } from '../config/station-registry';
 import type { RawsStationConditions } from '../config/station-registry';
 import type { TelemetryStation } from '../types/station';
 import {
@@ -34,7 +34,8 @@ import {
   readVariableCode,
   readUnitCode,
   readVariableName,
-  readValueArray
+  readValueArray,
+  readLatestUsgsReading
 } from '../util/usgs';
 import type { UsgsSeries } from '../util/usgs';
 import { sparklineSvg } from './charts';
@@ -737,8 +738,9 @@ function stationChart(chart: StationChart): ChartDetail[] {
       // DRAFT wording (DR-177): the sparkline's text alternative, in the chart's own min/max words.
       summary: `min ${n(Math.min(...data))}, max ${n(Math.max(...data))}, latest ${n(data[data.length - 1]!)}`,
       data,
-      options: { title: chart.title, unit, source: chart.source },
-      unit
+      options: { title: chart.title, unit },
+      unit,
+      attribution: chart.source
     }
   ];
 }
@@ -826,7 +828,7 @@ export async function hydrateTelemetryPopup(station: TelemetryStation, signal: A
         mount: (root) =>
           root
             .querySelector(`[data-popup-chart="${STATION_CHART_KEY}"]`)
-            ?.insertAdjacentHTML('beforeend', sparklineSvg(chart.data, { title: chart.title, unit: chart.unit, source: chart.source }))
+            ?.insertAdjacentHTML('beforeend', sparklineSvg(chart.data, { title: chart.title, unit: chart.unit }))
       };
 }
 
@@ -988,11 +990,13 @@ function rawsWindText(conditions: RawsStationConditions): string | null {
 export function rawsStationRead(conditions: RawsStationConditions | null, retrievedAt: number): StationRead {
   if (!conditions) return { kind: 'no data', text: 'No recent NIFC RAWS values for this station.' };
   const observed = observedAt(conditions.observedAtIso);
+  const stale = conditions.observedAtIso !== null && freshnessForNetwork('raws', conditions.observedAtIso, retrievedAt) === 'stale';
   const reading = (label: string, served: string | null): StationReading => ({
     label,
     text: served === null ? 'Station reported none' : served,
     issuer: 'NIFC RAWS',
-    observed
+    observed,
+    stale
   });
   return {
     kind: 'live',
@@ -1025,8 +1029,12 @@ function usgsChart(series: UsgsSeries[]): StationChart | null {
   const unit = readUnitCode(chosen) ?? '';
   const label = code === '00060' ? 'Discharge' : code === '00065' ? 'Gage height' : readVariableName(chosen) || 'Value';
 
+  // usgsRead drops a series with no real value; its chart goes with it.
+  if (!readLatestUsgsReading(chosen)) return null;
+
+  const raw = readValueArray(chosen);
   const nums: number[] = [];
-  for (const r of readValueArray(chosen)) {
+  for (const r of raw) {
     if (r.value === '-999999') continue;
     const n = Number(r.value);
     if (Number.isFinite(n)) nums.push(n);
@@ -1054,15 +1062,15 @@ function usgsRead(payload: unknown, retrievedAt: number): StationRead {
   const readings: StationReading[] = [];
   for (const s of series) {
     const code = readVariableCode(s);
-    const values = readValueArray(s);
-    const last = values[values.length - 1];
-    if (!last || last.value === '-999999' || last.value.trim() === '') continue;
+    const last = readLatestUsgsReading(s);
+    if (!last) continue;
     const label = code === '00060' ? 'Discharge' : code === '00065' ? 'Gage height' : readVariableName(s) || code || '';
     readings.push({
       label,
       text: `${last.value} ${readUnitCode(s) ?? ''}`.trim(),
       issuer: 'USGS Water Services',
-      observed: observedAt(last.dateTime)
+      observed: observedAt(last.dateTime),
+      stale: !!last.dateTime && freshnessForNetwork('usgs-iv', last.dateTime, retrievedAt) === 'stale'
     });
   }
   return liveRead(readings, 'No active sensors at this site.', retrievedAt, usgsChart(series));

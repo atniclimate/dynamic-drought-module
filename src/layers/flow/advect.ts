@@ -40,9 +40,6 @@ export const PAST_GRID_CELL_PX = 384;
 export const PHONE_MAX_WIDTH_PX = 720;
 export const PHONE_DENSITY_FACTOR = 0.5;
 
-export const DENSITY_FACTORS = { sparse: 0.5, standard: 1, dense: 2 } as const;
-export type FlowDensity = keyof typeof DENSITY_FACTORS;
-
 /** Wave crest marks (moving-paths section 9). */
 export const MAX_MARKS = 600;
 export const MARK_LIFE_S = 2;
@@ -84,8 +81,8 @@ export interface ViewQuad {
 /**
  * A ViewQuad from the longitude/latitude of the four screen corners (TL, TR,
  * BR, BL). Each corner's x is unwrapped to lie within half a world of
- * `nearX` (the previous origin, or the view centre), so a view across the
- * antimeridian is one continuous quad.
+ * `nearX` (the view centre), so a view across the antimeridian is one
+ * continuous quad.
  */
 export function viewQuadFromCorners(
   corners: readonly (readonly [number, number])[], zoom: number, cssW: number, cssH: number, nearX: number
@@ -169,9 +166,6 @@ export type FlowForm = 'moving' | 'still' | 'arrows';
 export interface FormOptions {
   /** False under Pause, reduced motion, a hidden tab, SST playback, 3D or no WebGL2. */
   readonly motionAllowed: boolean;
-  /** The viewer pressed Play (the phone rail starts still until then). */
-  readonly playPressed?: boolean;
-  readonly density?: FlowDensity;
 }
 
 export interface FormPlan {
@@ -182,15 +176,13 @@ export interface FormPlan {
 
 /**
  * Which form draws for this field and view (moving-paths sections 4, 5, 13).
- * Past 384 CSS px per cell it is always arrows at the nodes. On a phone-width
- * view it is still, at half density, until Play is pressed.
+ * Past 384 CSS px per cell it is always arrows at the nodes. A phone-width
+ * view draws at half density.
  */
 export function planForm(field: FlowField, view: ViewQuad, options: FormOptions): FormPlan {
-  const phone = view.cssW <= PHONE_MAX_WIDTH_PX;
-  const densityFactor = DENSITY_FACTORS[options.density ?? 'standard'] * (phone ? PHONE_DENSITY_FACTOR : 1);
+  const densityFactor = view.cssW <= PHONE_MAX_WIDTH_PX ? PHONE_DENSITY_FACTOR : 1;
   if (cellPx(field, view) > PAST_GRID_CELL_PX) return { form: 'arrows', densityFactor };
   if (!options.motionAllowed) return { form: 'still', densityFactor };
-  if (phone && !options.playPressed) return { form: 'still', densityFactor };
   return { form: 'moving', densityFactor };
 }
 

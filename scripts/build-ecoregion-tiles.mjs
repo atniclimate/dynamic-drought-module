@@ -25,7 +25,7 @@
  * Usage: npm run build:ecoregion-tiles
  */
 
-import { mkdir, writeFile, readFile, stat } from 'node:fs/promises';
+import { mkdir, writeFile, readFile, stat, rename } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -39,7 +39,6 @@ const PNW_CENTER = [-119, 45.5, 5];
 const MAX_ZOOM = 10;
 const SIMPLIFY = '18%';
 const SOURCE_VINTAGE = '2012 (EPA Region 10 Omernik delineation)';
-const RETRIEVED = '2026-05-30';
 const ATTRIBUTION = 'EPA Omernik Ecoregions (Level III and IV), Region 10';
 
 const S3_ROOT = 'https://dmap-prod-oms-edc.s3.us-east-1.amazonaws.com/ORD/Ecoregions/reg10';
@@ -62,14 +61,15 @@ const CATALOG_OUT_PATH = fileURLToPath(
 );
 const CACHE_DIR = join(tmpdir(), 'ddm-ecoregion-cache');
 
-/** Download a URL to a cache file, reusing the cached copy when present. */
+/** Download a URL to a cache file, reusing the cached copy when present.
+ * Returns the bytes and the file's UTC date, which is the retrieval date. */
 async function fetchCached(url) {
   const cachePath = join(CACHE_DIR, basename(url));
   try {
     const s = await stat(cachePath);
     if (s.size > 0) {
       console.log(`  cache hit:  ${basename(url)} (${s.size.toLocaleString()} bytes)`);
-      return readFile(cachePath);
+      return { buf: await readFile(cachePath), retrieved: s.mtime.toISOString().slice(0, 10) };
     }
   } catch {
     // not cached yet
@@ -78,9 +78,11 @@ async function fetchCached(url) {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`download failed: ${url} -> HTTP ${res.status}`);
   const buf = Buffer.from(await res.arrayBuffer());
-  await writeFile(cachePath, buf);
+  // A .part file keeps an interrupted write from passing as a cached zip.
+  await writeFile(`${cachePath}.part`, buf);
+  await rename(`${cachePath}.part`, cachePath);
   console.log(`  saved:      ${basename(url)} (${buf.length.toLocaleString()} bytes)`);
-  return buf;
+  return { buf, retrieved: (await stat(cachePath)).mtime.toISOString().slice(0, 10) };
 }
 
 /** Unzip a shapefile bundle into a filename -> Buffer dict (basenames only). */
@@ -154,9 +156,11 @@ async function main() {
   await mkdir(CACHE_DIR, { recursive: true });
 
   const layers = {};
+  const retrievedDates = [];
   for (const [layerName, src] of Object.entries(SOURCES)) {
     console.log(`\n${layerName}:`);
-    const zipBuffer = await fetchCached(src.zip);
+    const { buf: zipBuffer, retrieved } = await fetchCached(src.zip);
+    retrievedDates.push(retrieved);
     const input = unzipShapefile(zipBuffer);
     const fc = await mapshaperToGeoJson(input, src.shp, src.fields);
     console.log(`  features after clip/simplify: ${fc.features.length}`);
@@ -165,6 +169,7 @@ async function main() {
 
   console.log('\nbaking PMTiles ...');
   const catalog = buildCatalogManifest(layers);
+  const RETRIEVED = retrievedDates.sort()[0]; // the older zip bounds how fresh the data is
   const { archive, tileCount, vectorLayers } = geojsonLayersToPmtiles(layers, {
     minZoom: 0,
     maxZoom: MAX_ZOOM,
@@ -174,15 +179,9 @@ async function main() {
     attribution: `${ATTRIBUTION}; vintage ${SOURCE_VINTAGE}; simplified ${SIMPLIFY}; retrieved ${RETRIEVED}`
   });
 
-  await Promise.all([
-    writeFile(OUT_PATH, archive),
-    writeFile(CATALOG_OUT_PATH, `${JSON.stringify(catalog, null, 2)}\n`)
-  ]);
-  console.log(`  wrote ${OUT_PATH}`);
-  console.log(`  wrote ${CATALOG_OUT_PATH} (${catalog.entries.length} catalog members)`);
   console.log(`  tiles: ${tileCount}, size: ${(archive.length / 1024).toFixed(1)} KiB`);
 
-  // Validate: read the archive back through the runtime pmtiles reader.
+  // Validate before writing: read the archive back through the runtime pmtiles reader.
   const source = {
     getKey: () => 'build',
     getBytes: async (offset, length) => {
@@ -200,6 +199,12 @@ async function main() {
   console.log(`  header zooms ${header.minZoom}..${header.maxZoom}, tileType ${header.tileType}`);
   console.log(`  vector_layers: ${meta.vector_layers.map((l) => `${l.id}(${Object.keys(l.fields).length} fields)`).join(', ')}`);
   console.log(`  center tile z${sampleZ} decoded: ${sample.data.byteLength} bytes`);
+  await Promise.all([
+    writeFile(OUT_PATH, archive),
+    writeFile(CATALOG_OUT_PATH, `${JSON.stringify(catalog, null, 2)}\n`)
+  ]);
+  console.log(`  wrote ${OUT_PATH}`);
+  console.log(`  wrote ${CATALOG_OUT_PATH} (${catalog.entries.length} catalog members)`);
   console.log('\nOK. Honesty note baked into attribution:');
   console.log(`  "${meta.attribution}"`);
 }

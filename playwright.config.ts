@@ -48,7 +48,7 @@ const isCI = !!process.env['CI'];
 // timing on these specs, not product behavior) instead of inflating the
 // global budget, and so a general shard never waits behind a scene build.
 // Locally `npm test` and `npm run test:serial` still run both projects.
-const FIRE3D_SPECS = ['**/fire3d-mode.spec.ts', '**/view-contracts.spec.ts'];
+const FIRE3D_SPECS = ['**/fire3d-mode.spec.ts', '**/view-contracts.spec.ts', '**/wildfire3d-ground.spec.ts'];
 
 // The interaction cluster (R1/R3, 2026-08-29): these four files carry about
 // 35 of the 53 named flake events tallied in the per-test table (section 3)
@@ -119,6 +119,16 @@ const MEASURE_USE = process.env['DDM_MEASURE_NATIVE_GPU'] === '1' ? {
   launchOptions: {
     args: ['--use-gl=angle', '--use-angle=d3d11', '--disable-frame-rate-limit']
   }
+} : CHROMIUM_USE;
+
+// Local diagnosis only (owner, 2026-10-11): real graphics for the 3D project,
+// so a 3D red can be explained without the software renderer's multi-second
+// page freezes. Never evidence: GitHub runs the software path. Only the exact
+// token 1 selects it.
+const DIAGNOSE_3D_USE = process.env['DDM_3D_NATIVE_GPU'] === '1' ? {
+  browserName: 'chromium' as const,
+  headless: false,
+  launchOptions: { args: ['--use-gl=angle', '--use-angle=d3d11'] }
 } : CHROMIUM_USE;
 
 export default defineConfig({
@@ -262,7 +272,7 @@ export default defineConfig({
       name: 'chromium-3d',
       testMatch: FIRE3D_SPECS,
       testIgnore: ['**/*.test.mjs'],
-      use: CHROMIUM_USE
+      use: DIAGNOSE_3D_USE
     },
     {
       // The mode-switch cost measurement, alone: see MEASURE_SPECS above

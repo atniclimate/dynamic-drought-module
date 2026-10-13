@@ -7,11 +7,11 @@ import { gotoApp, layerPill, PILL, selectRegion } from './helpers';
  * A tile-proven raster's pill follows the view MapLibre shows, including a
  * view it restores from its own tile cache (DDM-P14-T04; Codex round 3, J3).
  *
- * MapLibre 6.6 moves a loaded tile that leaves the view into an out-of-view
- * cache (node_modules/maplibre-gl/src/tile/tile_manager.ts:781-794) and puts
- * it back when the view returns (`_addTile`, :694-723): no network request,
- * no `dataloading` event (:721-722 fire it only for a NEW tile) and no `data`
- * event. A verdict built only from request and load events cannot see that
+ * MapLibre moves a loaded tile that leaves the view into an out-of-view
+ * cache (maplibre-gl/src/tile/tile_manager.ts, `TileManager._removeTile`) and
+ * puts it back when the view returns (`TileManager._addTile`): no network
+ * request, no `dataloading` event (`_addTile` fires it only for a NEW tile)
+ * and no `data` event. A verdict built only from request and load events cannot see that
  * return; a reader of the tile manager's current view can. This case drives
  * the real tile manager in the production build, every request routed:
  *

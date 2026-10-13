@@ -2,12 +2,27 @@
   "_comment": "The machine-readable record of every INTENTIONAL output difference between the immutable legacy/ baseline and the corrected/ baseline (WORKPLAN T-M0-2). Two layers: 'fields' is the intent record (why each field changed); 'occurrences' pins every individual difference by file, JSON pointer, change kind, and the exact legacy and corrected values. tests/test_parity.py enforces the occurrences EXACTLY in both directions: any legacy-vs-corrected difference not pinned here fails (including a different VALUE at a pinned pointer), and any pinned occurrence that no longer matches fails. Quietly regenerating corrected/ therefore cannot hide a behavior change: the new values would disagree with the hand-committed pins below.",
   "baseline": "legacy/",
   "corrected": "corrected/",
-  "unit": "T-M0-2 (methods) + T-M0-3 (provenance) + T-S1-4 (terrain methodVersion 3 activation)",
+  "unit": "T-M0-2 (methods) + T-M0-3 (provenance) + T-S1-4 (terrain methodVersion 3 activation) + audit finding 21 (duplicate zonal codes dissolved)",
   "fields": [
+    {
+      "field": "elevMeanM",
+      "change": "value",
+      "reason": "duplicate zonal codes are dissolved to one zone per code before aggregation (core.dissolve_by_code, audit finding 21); the legacy value was last-write-wins per feature row, so fixture code 1 carried only its second row. Codes with a single row are unchanged."
+    },
+    {
+      "field": "elevMinM",
+      "change": "value",
+      "reason": "duplicate zonal codes are dissolved to one zone per code before aggregation (core.dissolve_by_code, audit finding 21); the legacy value was last-write-wins per feature row, so fixture code 1 carried only its second row. Codes with a single row are unchanged."
+    },
+    {
+      "field": "elevMaxM",
+      "change": "value",
+      "reason": "duplicate zonal codes are dissolved to one zone per code before aggregation (core.dissolve_by_code, audit finding 21); the legacy value was last-write-wins per feature row, so fixture code 1 carried only its second row. Codes with a single row are unchanged."
+    },
     {
       "field": "slopeMeanDeg",
       "change": "value",
-      "reason": "slope is now a true Horn 3x3 kernel; the legacy value was numpy.gradient magnitude (one-sided at edges, different stencil weights). Cells without a full 3x3 neighborhood are now excluded rather than estimated."
+      "reason": "slope is now a true Horn 3x3 kernel; the legacy value was numpy.gradient magnitude (one-sided at edges, different stencil weights). Cells without a full 3x3 neighborhood are now excluded rather than estimated. Fixture code 1 (two feature rows) additionally moves because its rows are now dissolved into one zone (audit finding 21)."
     },
     {
       "field": "aspectMeanDeg",
@@ -32,7 +47,7 @@
     {
       "field": "coveragePct",
       "change": "value",
-      "reason": "now the polygon-weighted valid-elevation fraction via exactextract partial-pixel weights; the legacy value was the valid fraction of the rectangular read window, which misstates coverage whenever invalid cells fall unevenly between the window and the polygon (fixture polygon 3, fully valid ground under a non-rectangular shape, is unchanged at 100.0 in both baselines)."
+      "reason": "now the polygon-weighted valid-elevation fraction via exactextract partial-pixel weights; the legacy value was the valid fraction of the rectangular read window, which misstates coverage whenever invalid cells fall unevenly between the window and the polygon (fixture polygon 3, fully valid ground under a non-rectangular shape, is unchanged at 100.0 in both baselines). Fixture code 1 (two feature rows) additionally moves because its rows are now dissolved into one zone (audit finding 21)."
     },
     {
       "field": "method",
@@ -70,34 +85,34 @@
       {
         "pointer": "/1/aspectCardinal",
         "change": "added",
-        "corrected": "SW"
+        "corrected": "W"
       },
       {
         "pointer": "/1/aspectDistribution",
         "change": "added",
         "corrected": {
-          "N": 0.0,
+          "N": 0.086,
           "NE": 0.0,
-          "E": 0.002,
-          "SE": 0.161,
-          "S": 0.186,
-          "SW": 0.26,
-          "W": 0.041,
-          "NW": 0.0,
+          "E": 0.0,
+          "SE": 0.012,
+          "S": 0.028,
+          "SW": 0.084,
+          "W": 0.487,
+          "NW": 0.276,
           "flat": 0.0,
-          "excluded": 0.349
+          "excluded": 0.027
         }
       },
       {
         "pointer": "/1/aspectMeanDeg",
         "change": "added",
-        "corrected": 205.0
+        "corrected": 290.8
       },
       {
         "pointer": "/1/coveragePct",
         "change": "value",
         "legacy": 67.5,
-        "corrected": 49.5
+        "corrected": 92.8
       },
       {
         "pointer": "/1/elevBands",
@@ -105,10 +120,28 @@
         "corrected": [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
       },
       {
+        "pointer": "/1/elevMaxM",
+        "change": "value",
+        "legacy": 599.5,
+        "corrected": 623.1
+      },
+      {
+        "pointer": "/1/elevMeanM",
+        "change": "value",
+        "legacy": 591.6,
+        "corrected": 562.3
+      },
+      {
+        "pointer": "/1/elevMinM",
+        "change": "value",
+        "legacy": 580.8,
+        "corrected": 505.2
+      },
+      {
         "pointer": "/1/slopeMeanDeg",
         "change": "value",
         "legacy": 5.46,
-        "corrected": 5.44
+        "corrected": 10.23
       },
       {
         "pointer": "/2/aspectCardinal",
@@ -195,34 +228,34 @@
       {
         "pointer": "/bundles/1/terrain/aspectCardinal",
         "change": "added",
-        "corrected": "SW"
+        "corrected": "W"
       },
       {
         "pointer": "/bundles/1/terrain/aspectDistribution",
         "change": "added",
         "corrected": {
-          "N": 0.0,
+          "N": 0.086,
           "NE": 0.0,
-          "E": 0.002,
-          "SE": 0.161,
-          "S": 0.186,
-          "SW": 0.26,
-          "W": 0.041,
-          "NW": 0.0,
+          "E": 0.0,
+          "SE": 0.012,
+          "S": 0.028,
+          "SW": 0.084,
+          "W": 0.487,
+          "NW": 0.276,
           "flat": 0.0,
-          "excluded": 0.349
+          "excluded": 0.027
         }
       },
       {
         "pointer": "/bundles/1/terrain/aspectMeanDeg",
         "change": "added",
-        "corrected": 205.0
+        "corrected": 290.8
       },
       {
         "pointer": "/bundles/1/terrain/coveragePct",
         "change": "value",
         "legacy": 67.5,
-        "corrected": 49.5
+        "corrected": 92.8
       },
       {
         "pointer": "/bundles/1/terrain/elevBands",
@@ -230,10 +263,28 @@
         "corrected": [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
       },
       {
+        "pointer": "/bundles/1/terrain/elevMaxM",
+        "change": "value",
+        "legacy": 599.5,
+        "corrected": 623.1
+      },
+      {
+        "pointer": "/bundles/1/terrain/elevMeanM",
+        "change": "value",
+        "legacy": 591.6,
+        "corrected": 562.3
+      },
+      {
+        "pointer": "/bundles/1/terrain/elevMinM",
+        "change": "value",
+        "legacy": 580.8,
+        "corrected": 505.2
+      },
+      {
         "pointer": "/bundles/1/terrain/slopeMeanDeg",
         "change": "value",
         "legacy": 5.46,
-        "corrected": 5.44
+        "corrected": 10.23
       },
       {
         "pointer": "/bundles/1/unavailable",

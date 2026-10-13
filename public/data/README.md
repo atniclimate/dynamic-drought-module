@@ -28,8 +28,10 @@ entering this repository. When the file is empty the layer reports
 reports `unavailable`.
 
 > **Stewardship note.** Anyone populating these files is responsible for
-> the underlying authorizations. Tribal Lands, Treaty Areas, and any
-> sovereign-jurisdiction polygons must be redistributed only with the
+> the underlying authorizations. The map's default Tribal geography is public
+> data (T0) from the federal services named above and needs nothing from this
+> folder. For data an operator supplies here, Tribal Lands, Treaty Areas, and
+> any sovereign-jurisdiction polygons must be redistributed only with the
 > relevant Tribal Nation's consent. The empty-placeholder pattern is a
 > deliberate part of this module's design; please preserve it on
 > contributions back upstream.
@@ -90,8 +92,7 @@ state-curated set).
 
 - `us-states.geojson`: state boundaries (US Census, public domain).
 - `ecoregions-pnw.pmtiles`: EPA Omernik ecoregions, the served artifact
-  (built by `npm run build:ecoregion-tiles`); `ecoregions-pnw.geojson`
-  is the legacy placeholder retained for compatibility.
+  (built by `npm run build:ecoregion-tiles`).
 - `hillshade-dem-pnw.pmtiles`: retained terrain hillshade derived from USGS
   3DEP. The repository does not currently expose a supported rebuild command.
 - `whp-2023-pnw.pmtiles`: USFS Wildfire Hazard Potential 2023 drape for

@@ -24,6 +24,13 @@ export function wireShellPopover(
   getFallbackFocus?: () => HTMLElement | null
 ): () => void {
   let swallowNextClick = false;
+  let swallowTimer: ReturnType<typeof setTimeout> | undefined;
+  // A dismissing press that becomes a pan fires no click: the flag must not
+  // outlive the gesture and cancel the next real tap.
+  const clearSwallow = (): void => {
+    swallowNextClick = false;
+    clearTimeout(swallowTimer);
+  };
 
   const onToggle = (event: Event): void => {
     const state = (event as ToggleEvent).newState;
@@ -45,6 +52,7 @@ export function wireShellPopover(
   };
 
   const onPointerDown = (event: Event): void => {
+    clearSwallow();
     if (!pop.matches(':popover-open')) return;
     const target = event.target instanceof Node ? event.target : null;
     const door = getDoor();
@@ -55,22 +63,26 @@ export function wireShellPopover(
     event.preventDefault();
     event.stopPropagation();
     swallowNextClick = true;
+    swallowTimer = setTimeout(clearSwallow, 400);
     pop.hidePopover();
   };
 
   const onClick = (event: Event): void => {
     if (!swallowNextClick) return;
-    swallowNextClick = false;
+    clearSwallow();
     event.preventDefault();
     event.stopPropagation();
   };
 
   pop.addEventListener('toggle', onToggle);
   document.addEventListener('pointerdown', onPointerDown, true);
+  document.addEventListener('pointercancel', clearSwallow, true);
   document.addEventListener('click', onClick, true);
   return () => {
+    clearSwallow();
     pop.removeEventListener('toggle', onToggle);
     document.removeEventListener('pointerdown', onPointerDown, true);
+    document.removeEventListener('pointercancel', clearSwallow, true);
     document.removeEventListener('click', onClick, true);
   };
 }

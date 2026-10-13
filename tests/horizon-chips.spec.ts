@@ -136,7 +136,8 @@ test.describe('DDM-P8-T03: the shell horizon chips read HORIZON_CHROME', () => {
       const chrome = HORIZON_CHROME[SHELL_HORIZON_KEY[key]];
       const btn = page.locator(`.shell-horizon-btn[data-horizon="${key}"]`);
       const title = (await btn.locator('.shell-horizon-btn-title').innerText()).trim();
-      const subtitle = (await btn.locator('.shell-horizon-btn-sub').innerText()).trim();
+      // The chip joins its last two words with a no-break space so a wrap never orphans one; the words are the same.
+      const subtitle = (await btn.locator('.shell-horizon-btn-sub').innerText()).replace(/\u00a0/g, ' ').trim();
       expect(title, `${key} chip title`).toBe(chrome.title);
       expect(subtitle, `${key} chip subtitle`).toBe(chrome.subtitle);
     }
@@ -560,7 +561,7 @@ test.describe('DDM-P8-T03 clause 1: every horizon chip either changes the map or
             features: [
               {
                 type: 'Feature',
-                properties: { dn: 8, valid: '202609081200', expire: '202609091200' },
+                properties: { dn: 8, valid: '202609081200', expire: '209912312359' },
                 geometry: {
                   type: 'Polygon',
                   coordinates: [

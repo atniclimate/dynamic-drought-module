@@ -43,6 +43,7 @@ import { requestLayerOn } from '../ui/layer-toggle-command';
 import { timeline, horizonForOutlookRange, type OutlookRange } from '../state/timeline';
 import { requestHorizon } from '../state/cluster-service';
 import { fetchJsonWithBudget } from '../util/fetch';
+import { ExpiringLruCache } from '../util/bounded-cache';
 import type { ClockValue, IssuedModel, PopupClock } from '../ui/popup-frame';
 import { ensureHatchImages, hatchImageId } from '../util/hatch';
 import { hideLoading, showLoading } from '../ui/overlay';
@@ -94,8 +95,12 @@ let unsubscribeTimeline: (() => void) | null = null;
  * cleared on deactivate. */
 let latestRangeRun: Promise<void> | null = null;
 
-/** Session cache per range; an outlook re-issue lands on the next boot. */
-const outlookCache = new Map<OutlookRange, GeoJSON.FeatureCollection>();
+/** Session cache per range; an outlook re-issue lands within the hour. An
+ * expired range refetches behind the polygons already on the map. */
+const OUTLOOK_CACHE_TTL_MS = 60 * 60 * 1000;
+const outlookCache = new ExpiringLruCache<OutlookRange, GeoJSON.FeatureCollection>(2);
+/** Whether the rendered range drew no polygons, for the failure rollback. */
+let renderedEmpty = false;
 
 type OutlookStatus = 'loading' | 'ready' | 'error' | 'no-data';
 
@@ -293,16 +298,14 @@ function outlookOnly(fc: GeoJSON.FeatureCollection): GeoJSON.FeatureCollection {
  * URL claiming a range the old polygons still render. Re-commit the
  * DISPLAYED range's horizon and register in one synchronous pass (the
  * sidebar's timeline subscription re-serializes the URL from the same
- * writes) and restore the honest status of what is on screen. The
- * rendered range's features are in the session cache by construction
- * (they rendered), so the status mirrors the render-time report.
+ * writes) and restore the honest status of what is on screen, as
+ * recorded at render time (the session cache may have expired since).
  */
 function rollBackToRenderedRange(range: OutlookRange): void {
   requestedRange = range;
   timeline.setHorizon(horizonForOutlookRange(range));
   timeline.setOutlookRange(range);
-  const fc = outlookCache.get(range);
-  reportStatus(fc !== undefined && fc.features.length === 0 ? 'no-data' : 'ready');
+  reportStatus(renderedEmpty ? 'no-data' : 'ready');
 }
 
 /**
@@ -410,7 +413,7 @@ async function runShowRange(map: maplibregl.Map, range: OutlookRange): Promise<v
           FETCH_TIMEOUT_MS
         );
         fc = outlookOnly(parsed as GeoJSON.FeatureCollection);
-        outlookCache.set(range, fc);
+        outlookCache.set(range, fc, OUTLOOK_CACHE_TTL_MS);
       } catch (err) {
         // Aborted (layer-off or a newer range request) or superseded:
         // the newer owner holds the claim; do not touch it.
@@ -437,8 +440,9 @@ async function runShowRange(map: maplibregl.Map, range: OutlookRange): Promise<v
     const src = map.getSource(SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
     src?.setData(fc);
     renderedRange = range;
+    renderedEmpty = fc.features.length === 0;
 
-    if (fc.features.length === 0) {
+    if (renderedEmpty) {
       // A whole-country outlook with no forecast-class polygons would be
       // extraordinary; surface it honestly rather than as a blank surprise.
       reportStatus('no-data');

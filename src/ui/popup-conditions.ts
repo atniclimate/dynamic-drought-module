@@ -585,7 +585,9 @@ function alertRows(
     const prodType = propText(f.properties?.['prod_type']).trim();
     if (prodType === '') continue;
     const endsRaw: unknown = f.properties?.['ends'] ?? f.properties?.['expiration'] ?? null;
-    seen.set(prodType, { prodType, ends: endsRaw });
+    // Two alerts of one product share a row; with different ends no one end is true, so none is stated.
+    const prior = seen.get(prodType);
+    seen.set(prodType, { prodType, ends: prior !== undefined && prior.ends !== endsRaw ? null : endsRaw });
   }
 
   if (seen.size === 0) {

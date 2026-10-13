@@ -58,6 +58,8 @@ class FakeWhpMap {
 
   getTerrain(): object | null { return this.terrain ? {} : null; }
 
+  getCenter(): { lng: number; lat: number } { return { lng: -120.5, lat: 44 }; }
+
   getSource(): FakeSource | undefined {
     return this.source;
   }

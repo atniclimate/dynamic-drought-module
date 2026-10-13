@@ -406,7 +406,13 @@ def _full_build(
     if soil_manifest is not None:
         _prime_epa_cache(soil_manifest)
 
-    gdfs = {level: core.load_ecoregions(level) for level in levels}
+    gdfs = {
+        level: core.dissolve_by_code(
+            core.load_ecoregions(level),
+            "US_L3CODE" if level == 3 else "US_L4CODE",
+        )
+        for level in levels
+    }
     union_bounds = _union_bounds(gdfs.values())
     if union_bounds is None:
         raise RuntimeError("selected ecoregions have no nonempty geometry")
@@ -450,6 +456,22 @@ def _full_build(
             core.CACHE_DIR,
             landcover_budget,
         )
+    # A failed acquisition may still be written to a scratch --output as
+    # explicit unavailability, but it never replaces the public artifact.
+    # Rasters only: a missing EVT attribute table is the contract 4.6
+    # dominantName-null path, not a failed build.
+    if output.resolve() == core.OUT_PATH.resolve():
+        failed = [
+            f"{key}: {entry['error']}"
+            for prepared in (prepared_terrain, prepared_landcover)
+            for key, entry in (prepared or {}).items()
+            if entry.get("kind") == "raster" and entry.get("error") is not None
+        ]
+        if failed:
+            raise RuntimeError(
+                "acquisition failed; the public artifact is left untouched: "
+                + "; ".join(failed)
+            )
     if "soil" in families:
         drift = soil.drift_check(SOIL_INTERMEDIATES, soil_budget)
         if drift["drift"]:
@@ -497,8 +519,6 @@ def _full_build(
         diagnostics=run_info,
     )
     validate_snapshot_invariants(snapshot, families)
-    core.write_snapshot(snapshot, output)
-
     spend_counts = _combined_spend_counts(
         terrain_budget,
         soil_budget,
@@ -509,6 +529,8 @@ def _full_build(
             "soilweb-wcs count is nonzero; section 5.1.7 requires the "
             "zero-refetch intermediates path"
         )
+    core.write_snapshot(snapshot, output)
+
     if receipt_path is not None:
         ledger_entries = sum(
             len(bundle["unavailable"])

@@ -156,7 +156,7 @@ export function watchRasterTiles(
 
   // [tiles, loaded, in flight] for this source on the map now, or undefined.
   // MapLibre INTERNAL, read behind a guard: `map.style.tileManagers`
-  // (MapLibre 6.6, node_modules/maplibre-gl/src/tile/tile_manager.ts). Its
+  // (MapLibre 6, maplibre-gl/src/tile/tile_manager.ts, class TileManager). Its
   // ids are the view's ideal tiles and the fallbacks retained for them,
   // whether fetched or restored from the out-of-view cache, which fires no
   // event; a loaded tile that leaves goes to that cache silently. In flight

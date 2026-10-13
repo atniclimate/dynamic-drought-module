@@ -31,7 +31,6 @@ import {
   perimeterRibbonSlabOpacity
 } from '../src/config/fire3d-presentation';
 import {
-  DRAPE_OPACITY,
   HMS_VOLUME_QUALIFICATION,
   STRUCTURES_QUALIFICATION,
   WILDFIRE_STATIC_COLOR
@@ -73,6 +72,7 @@ import {
   stubWildfireFeeds
 } from './wildfire-fixtures';
 import { RAWS_ROUTE, RAWS_FIXTURE_MARKER_ID, rawsHappyBody } from './fixtures/raws-fixtures';
+import { setPerimeterSnapshot } from '../src/state/fire-perimeter-snapshot';
 
 /**
  * W3/W4 desktop 3D Fire mode.
@@ -201,7 +201,7 @@ test('deriveSceneTransport goes back to streaming the moment any settled source 
  * distributed bundle for the object literal containing
  * "sky-color":"transparent" (the fallback the library constructs a Sky with
  * when a style declares none) and MUST record the result in the bump commit.
- * Last such inspection: maplibre-gl 6.6.0 on 2026-09-03, unchanged from the
+ * Last such inspection: maplibre-gl 6.14.0 on 2026-10-12, unchanged from the
  * 4.7 values: `dist/maplibre-gl.mjs` still constructs the fallback Sky from
  * the literal {"sky-color":"transparent","horizon-color":"transparent",
  * "fog-color":"transparent","fog-ground-blend":1,"atmosphere-blend":0}.
@@ -486,7 +486,7 @@ test('activation builds terrain, sky, camera, and the smoke volume; deactivation
     // layer now, off by default, and this orchestrator only reports it when
     // a person has turned it on (tests/power-layer.spec.ts owns its truth).
     expect(getFire3DStatus().contextLayers).toEqual(['whp', 'structures']);
-    expect(shadeEvents.at(-1)).toEqual({ layer: 'whp-2023', active: true });
+    expect(shadeEvents.at(-1)).toEqual({ layer: 'whp-2023', active: true, mounted: true });
     expect(harness.sources.get('whp-2023')).toMatchObject({
       type: 'raster',
       url: `whp-shade://${URLS.whp2023PmtilesLocal}`,
@@ -496,8 +496,11 @@ test('activation builds terrain, sky, camera, and the smoke volume; deactivation
     expect(harness.layerSpecs.get('whp-2023')).toMatchObject({
       type: 'raster',
       source: 'whp-2023',
+      // DR-199: the console's "Fuel risk" switch is on by default.
+      layout: { visibility: 'visible' },
       paint: {
-        'raster-opacity': DRAPE_OPACITY,
+        // The shading table carries each class's effective white opacity.
+        'raster-opacity': 1,
         // A categorical raster must not blend two class colors into a
         // third that appears in no legend.
         'raster-resampling': 'nearest'
@@ -540,7 +543,7 @@ test('activation builds terrain, sky, camera, and the smoke volume; deactivation
     setFire3DActive(map, false);
     expect(getFire3DStatus().state).toBe('inactive');
     expect(getFire3DStatus().contextLayers).toEqual([]);
-    expect(shadeEvents.at(-1)).toEqual({ layer: 'whp-2023', active: false });
+    expect(shadeEvents.at(-1)).toEqual({ layer: 'whp-2023', active: false, mounted: false });
     expect(harness.getTerrain()).toBeNull();
     expect(harness.sources.has('fire3d-terrain-dem')).toBe(false);
     expect(harness.sources.has('whp-2023')).toBe(false);
@@ -1036,13 +1039,9 @@ test('the hazard drape module still SETS nearest-neighbour resampling (clause 3;
     // still sets the property; the fake map has no GPU draw path, so it
     // cannot prove the renderer HONOURS it. That the shipped renderer does
     // honour it rests on two facts outside this test: DR-009 pins
-    // maplibre-gl to 6.6.0 (package.json:72), and 6.6.0's own raster draw
-    // path (node_modules/maplibre-gl/dist/maplibre-gl-dev.mjs, function
-    // drawTiles, line 18332) reads
-    // `layer.paint.get("resampling") === "nearest" ||
-    // layer.paint.get("raster-resampling") === "nearest" ? gl.NEAREST :
-    // gl.LINEAR`, selecting GL's nearest-texel filter when either the
-    // deprecated `resampling` or this `raster-resampling` property is
+    // maplibre-gl exactly in package.json, and its raster draw path
+    // (maplibre-gl/src/webgl/draw/draw_raster.ts, function drawTiles) picks
+    // gl.NEAREST when either `resampling` or `raster-resampling` is
     // 'nearest'; this layer sets only the latter. See the comment beside
     // the value itself in src/layers/whp-3d.ts for the same citation.
     expect(harness.layerSpecs.get('whp-2023')?.paint).toMatchObject({
@@ -1148,6 +1147,8 @@ test('the perimeter ribbon stands on the live perimeters and leaves with the sce
     type: 'geojson',
     data: RIBBON_PERIMETER_COLLECTION
   } as never);
+  // The ribbon reads what the fire layer published, not the map source.
+  setPerimeterSnapshot(RIBBON_PERIMETER_COLLECTION as never);
   map.addLayer({
     id: 'nifc-fires-fill',
     type: 'fill',
@@ -1220,6 +1221,7 @@ test('the perimeter ribbon stands on the live perimeters and leaves with the sce
     expect(registry.getStatus('nifc-fires')).toBe('ready');
   } finally {
     setFire3DActive(map, false);
+    setPerimeterSnapshot(null);
     registry.deactivate('nifc-fires');
     restoreFetch();
     browser.restore();
@@ -1451,6 +1453,7 @@ test('post-probe terrain tile failures roll the scene back transactionally', asy
     for (let i = 0; i < 3; i += 1) {
       harness.emit('error', {
         sourceId: 'fire3d-terrain-dem',
+        tile: {},
         error: new Error(`synthetic tile failure ${i}`)
       });
     }
@@ -1921,7 +1924,7 @@ test.describe('W3/W4 browser truth', () => {
    * and `map.on('terrain', ...)` (:27004-27006), and neither fires between
    * the test's two reads, so the assertion was a tautology, not a
    * measurement. Its claim that `Map.project()` is a flat 2D projection is
-   * also false for MapLibre 6.6.0: `Map.project` calls
+   * also false for MapLibre: `Map.project` calls
    * `locationToScreenPoint(lnglat, this.style && this.terrain)`
    * (maplibre-gl-dev.mjs; the source-level location is
    * node_modules/maplibre-gl/src/ui/map.ts:2024-2026), which is
@@ -2423,7 +2426,8 @@ test('an embed without the flag never activates and never gains it', async ({
     const chunkRequests: string[] = [];
     page.on('request', (request) => {
       if (
-        /assets\/(?:fire3d-(?!presentation)|hms-smoke-volume-)/.test(
+        // `fire3d-ground-layers` is the two ground switches' 0.2 kB store, which the console imports at boot.
+        /assets\/(?:fire3d-(?!presentation|ground-layers)|hms-smoke-volume-)/.test(
           request.url()
         )
       ) {
@@ -2701,11 +2705,15 @@ async function bootW2Consumers(page: Page): Promise<void> {
   await stubDeepTerrainArchive(page);
   await routeBasemapTiles(page);
   await gotoApp(page, '?region=washington_state&cluster=wildfire&fire3d=true');
-  await expect.poll(() => fire3dStamp(page), { timeout: 30_000 }).toBe('active');
+  // On the answered-read clock, like the scene cases above: GitHub run
+  // 38304871630 failed five of these boots at a wall-clock 30 s still reading
+  // "checking" and passed every one on retry, the page frozen by the software
+  // renderer with the plant-stress ground mounting.
+  await stampReaches(page, fire3dStamp, 'active', 30_000, 'the scene never stamped active');
   // Fire3D registers whp-shade. Stop its scene before testing transport so its
   // rendering load does not obscure the native 15 s network deadline.
   await page.locator(TOGGLE).click();
-  await expect.poll(() => fire3dStamp(page), { timeout: 30_000 }).toBe('inactive');
+  await stampReaches(page, fire3dStamp, 'inactive', 30_000, 'the scene never stamped inactive');
   await page.evaluate(() => {
     const observed = window as unknown as W2Window;
     const map = observed.__w2Maps.find((candidate) => candidate.getContainer().id === 'map')!;
@@ -2854,12 +2862,14 @@ test.describe('W2 registered native consumers', () => {
         try {
           await addW2Source(page, 'w2-deadline', `${protocol}://${fixture.url}`);
           await expect.poll(() => fixture.state.held).toBe(1);
-          // Allow scheduling slack around the existing 15 s ceiling. This does
+          // The product deadline is 60 listening ticks of 250 ms, counted in
+          // page time, not wall-clock time: a busy software-renderer page
+          // stretches the ticks, so the wall-clock wait is generous. This does
           // not amend the product budget, and cannot pass by merely aborting:
           // MapLibre suppresses AbortError instead of emitting a source error.
           await expect.poll(() => page.evaluate(() =>
             (window as unknown as W2Window).__w2Errors.filter((event) => event.sourceId === 'w2-deadline')
-          ), { timeout: 20_000 }).toEqual([
+          ), { timeout: 45_000 }).toEqual([
             expect.objectContaining({ sourceId: 'w2-deadline', message: expect.stringContaining('PMTiles read timed out') })
           ]);
           // ensureError may wrap a DOMException. Event delivery is the contract:
@@ -2951,9 +2961,10 @@ test.describe('W2 registered native consumers', () => {
         const map = (window as unknown as W2Window).__w2Maps.find((candidate) => candidate.getContainer().id === 'map')!;
         return map.isSourceLoaded('w2-missing');
       }), { timeout: 20_000 }).toBe(true);
+      // Errors first: an errored source also reads as loaded, and its message says why the reads are missing.
+      expect(await page.evaluate(() => (window as unknown as W2Window).__w2Errors)).toEqual([]);
       expect(fixture.state.headerReads).toBe(1);
       expect(fixture.state.tileReads).toBe(0);
-      expect(await page.evaluate(() => (window as unknown as W2Window).__w2Errors)).toEqual([]);
       // Completed no-data imagery must neither invent a category nor obscure
       // the known underlying color, even with raster opacity set to one.
       expect(await framebufferPixel()).toEqual([18, 52, 86, 255]);

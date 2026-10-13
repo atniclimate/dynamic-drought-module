@@ -139,6 +139,13 @@ empty `public/data/tribal-lands.geojson` and
 `public/data/treaty-areas.geojson` files must remain empty unless the
 relevant sovereign authority authorizes data for that deployment. Do not copy
 Tribal, Treaty, or other sovereign-jurisdiction polygons into the repository.
+The Tribal boundaries the map shows are public data, T0 under the Tiered
+Sovereignty Data Framework, from the Census AIANNH service, the Bureau of
+Indian Affairs AIAN-LAR service, and the Bureau's Federal Register roster of
+federally recognized Tribes. They are read live so the source stays the
+authority and no copy goes stale; the instruction not to copy them exists for
+provenance and currency, and because the two operator slots are for an
+operator's own data.
 
 Capitalize Tribe, Tribal, and Treaty when referring to Tribal Nations or
 Treaty rights. This is accuracy, not courtesy. Agency boundary products are
@@ -237,14 +244,16 @@ as intended, and it closes automatically on the first run after the publish.
 
 Choose checks using the [local verification ladder](tests/README.md#the-local-verification-ladder).
 Run focused source or browser tests while editing, `npm run gate` for build and
-cross-cutting configuration changes, and `npm run verify:smoke` for an integration
-block. Smoke owns its gate and serves that gate's single fresh build.
+cross-cutting configuration changes, and optionally `npm run verify:smoke` when a
+wider local signal is wanted before pushing. Smoke owns its gate and serves that
+gate's single fresh build.
 
-Reserve `npm run test:serial` for the assembled integration/release candidate
-after shared navigation, map lifecycle or state changes. A routine session
-handoff records existing results and remaining work; it does not trigger another
-full suite. Documentation-only and verification-tooling checks are scoped in the
-same ladder. Report exactly what ran and what remains unverified.
+The full browser suite runs on GitHub in the `Validate` workflow; start it on a
+branch without an open pull request with `gh workflow run validate.yml --ref
+<branch>`. Reserve a local `npm run test:serial` (more than an hour) for when
+GitHub is unavailable. Ending a session does not trigger another full suite.
+Documentation-only and verification-tooling checks are scoped in the same
+ladder. Report exactly what ran and what remains unverified.
 
 `check:all` is the source-check list shared by `gate` and `gate:nobuild`.
 `gate` adds the build, bundle and activation checks. `gate:nobuild` runs
@@ -283,7 +292,8 @@ Stop-Process -Id <pid> -Force
 workflow; run it by hand when documentation links change.
 
 Shared navigation, map lifecycle, state, responsive behavior, and release
-readiness changes require the serial suite. A narrow documentation-only change
+readiness changes require the full suite to be green on GitHub, with the
+affected specs run locally first. A narrow documentation-only change
 normally needs documentation checks, YAML validation when applicable, the
 public-tree gate, and a clean Git diff rather than the full browser suite.
 
@@ -443,16 +453,21 @@ weekly `refresh-snapshots` cron was never snoozed. Until the restore, a
 deploy that fails or is cancelled goes unnoticed by CI; GitHub still emails
 the owner about the red run.
 
-Integration-branch workflow (September 2026 window): product work lands on
-one long-lived branch, `integration/2026-09`, which is pushed to origin with
-NO pull request open, because `validate.yml` is `on: pull_request` and a
-branch without one runs zero CI on every push (a draft pull request still
-triggers the event, so a draft is not the escape hatch). Verification is
-local-first: `npm run typecheck` per edit, the narrowest Playwright spec plus
-`npm run gate` per session, and `npm run test:serial` before landing. When
-the owner says go, rebase on `origin/main`, re-run the gate, and open ONE
-pull request; `Validate` is the only check that must be green, and `deploy`
-and `verify-live` are consequences of the merge rather than gates on it.
+Branch workflow: each release is built on a short-lived branch cut from
+`main`, and `main` changes only when the maintainer lands a release.
+`validate.yml` is `on: pull_request`, so a branch without an open pull request
+runs no CI on push; start it by hand with `gh workflow run validate.yml --ref
+<branch>`. While developing, run `npm run typecheck` and the focused tests for
+the change. When a piece of work is finished, run the focused tests again and
+the browser-free checks (`npm run verify:quick`; `npm run gate:nobuild` or
+`npm run gate` when the change is cross-cutting), then push the branch. The
+full browser suite runs on GitHub in eight shards, once the release candidate
+is frozen rather than on every push. Before a release, the full suite must be green on GitHub for the
+frozen release candidate, and one independent review covers the release's whole
+diff. A local `npm run test:serial` is the fallback when GitHub is unavailable.
+`Validate` is the only check that must be green on the pull request, and
+`deploy` and `verify-live` are consequences of the merge rather than gates on
+it.
 
 `scripts/resolve-live-expectation.mjs`, whose
 judgment is the pure `resolveLiveExpectation` in

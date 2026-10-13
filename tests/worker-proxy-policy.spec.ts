@@ -104,6 +104,48 @@ test('the exact current DDM read routes are allowed', () => {
   }
 });
 
+test('the image-export route is pinned to 256x256 PNG tiles', () => {
+  const base =
+    'https://imagery.geoplatform.gov/iipp/rest/services/Fire_Aviation/USFS_EDW_RMRS_WildfireHazardPotentialClassified/ImageServer/exportImage';
+  const appQuery =
+    'bbox=-1,-1,1,1&bboxSR=3857&imageSR=3857&size=256,256&format=png&transparent=true&f=image';
+  expect(isAllowedRoute(new URL(`${base}?${appQuery}`))).toBe(true);
+  for (const query of [
+    'size=4000,4000&f=image',
+    'SIZE=4000,4000&f=image',
+    'size=256,256&size=4000,4000&f=image',
+    'format=tiff&f=image'
+  ]) {
+    expect(isAllowedRoute(new URL(`${base}?${query}`)), query).toBe(false);
+  }
+});
+
+test('the rate limiter refuses with 429 and a Retry-After', async () => {
+  let keyed: string | undefined;
+  const response = await worker.fetch(
+    proxyRequest(['https://api.weather.gov/points/38.5,-97.5'], {
+      headers: { 'CF-Connecting-IP': '203.0.113.7' }
+    }),
+    {
+      RATE_LIMITER: {
+        async limit({ key }: { key: string }) {
+          keyed = key;
+          return { success: false };
+        }
+      }
+    },
+    {} as WorkerContext
+  );
+  expect(keyed).toBe('203.0.113.7');
+  expect(response.status).toBe(429);
+  expect(response.headers.get('Retry-After')).toBe('60');
+  expect(response.headers.get('Cache-Control')).toBe('no-store');
+  expect(response.headers.get('Access-Control-Allow-Origin')).toBe('*');
+  await expect(response.json()).resolves.toMatchObject({
+    error: 'rate_limited'
+  });
+});
+
 test('former host-wide and off-path routes are rejected', async () => {
   const disallowed = [
     'https://other.sc.egov.usda.gov/awdbRestApi/services/v1/data',
@@ -745,6 +787,7 @@ test('a full proxy read preserves bytes and swallows cache.put rejection', async
     expect(response.headers.get('Set-Cookie')).toBeNull();
     expect(response.headers.get('Access-Control-Allow-Origin')).toBe('*');
     expect(response.headers.get('Access-Control-Allow-Credentials')).toBeNull();
+    expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff');
     expect(Array.from(new Uint8Array(await response.arrayBuffer()))).toEqual(
       Array.from(bytes)
     );
@@ -865,8 +908,9 @@ test('the edge cache refuses non-200, Vary star, and private responses', () => {
  * byte-transparency assertions deterministic.
  *
  * NOT COVERED. Nothing here starts miniflare, `wrangler dev`, or the deployed
- * edge, so the platform layer is untested by this file: the `RATE_LIMITER`
- * binding and its fail-open path, the real `caches.default` storage and its
+ * edge, so the platform layer is untested by this file: the real `RATE_LIMITER`
+ * binding (only the refusal branch is run, against a fake) and its fail-open
+ * path, the real `caches.default` storage and its
  * time-to-live, Cloudflare's own header handling, and whether the published
  * Worker is these bytes at all. That last question is a live probe, not a unit
  * test; the Worker's `WORKER_REVISION` is a claim by the source, not evidence

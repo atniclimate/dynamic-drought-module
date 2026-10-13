@@ -225,6 +225,22 @@ test('fetchJsonWithBudget: a non-OK status aborts the unused body and preserves 
   });
 });
 
+test('fetchJsonWithBudget: a body past the default size cap is cancelled, and a caller can raise the cap', async () => {
+  const mib = 'x'.repeat(1024 * 1024);
+  const stalled = stubFetch({ chunks: ['"', ...Array(9).fill(mib)], close: false });
+  await withFetch(stalled, async () => {
+    await assert.rejects(raced(fetchJsonWithBudget('/huge.json', null, null, 10_000), 2000, 'the capped read'), {
+      name: 'RangeError'
+    });
+    await raced(stalled.cancelled, 2000, 'stream cancel');
+  });
+  const big = stubFetch({ chunks: ['"', ...Array(9).fill(mib), '"'] });
+  await withFetch(big, async () => {
+    const value = await raced(fetchJsonWithBudget('/huge.json', null, null, 10_000, 16 * 1024 * 1024), 5000, 'raised');
+    assert.equal(value.length, 9 * 1024 * 1024);
+  });
+});
+
 // NODD Range admission stays in the lazy flow chunk (found-147): its 206
 // and exact-length checks are tested in flow-nodd.test.mjs. The shared reader
 // now accepts an optional decoded-byte ceiling for bounded polygon paging.

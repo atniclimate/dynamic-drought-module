@@ -161,9 +161,6 @@ test('a masked cell is absent, never 0, and never read as calm', () => {
   const good = sampleField(f, -127.5, 49.5, newSample());
   assert.ok(good);
   assert.ok(Math.abs(good.m - 5) < 1e-6, 'hypot(3, 4) = 5 where valid');
-  // Nearest-sample mode: a masked node is absent too.
-  const near = createFlowField({ kind: 'wind', grid, u: new Float32Array(u), v: new Float32Array(v), mask, interpolation: 'nearest-sample', meta: META });
-  assert.equal(sampleField(near, -129, 49, newSample()), null);
 });
 
 test('a step into a masked or out-of-grid cell kills the particle before the step commits', () => {
@@ -333,12 +330,11 @@ test('every wave mark moves at 24 px/s', () => {
 
 test('density is capped at 4,096 and coverage at 8 percent', () => {
   assert.equal(particleCount(view(0, 0, 3), 1), 1266, 'Standard at 1440x900');
-  assert.equal(particleCount(view(0, 0, 3), 0.5), 633, 'Sparse');
-  assert.equal(particleCount(view(0, 0, 3), 2), 2531, 'Dense');
-  assert.equal(particleCount(view(0, 0, 3, 3840, 2160), 2), MAX_PARTICLES, 'Dense on a 4K view is capped');
+  assert.equal(particleCount(view(0, 0, 3), 0.5), 633, 'half density (the phone rail)');
+  assert.equal(particleCount(view(0, 0, 3, 3840, 2160), 1), MAX_PARTICLES, 'a 4K view is capped');
   assert.equal(MAX_PARTICLES, 4096);
   const big = new Particles(windField(), WIND_PACE, mulberry32(1));
-  big.setCount(view(-145, 26, 3, 3840, 2160), 2);
+  big.setCount(view(-145, 26, 3, 3840, 2160), 1);
   assert.equal(big.count, 4096);
   assert.ok(big.capacity <= 4096);
   // Coverage at Standard over the Pacific framing (the view crosses 180).
@@ -497,6 +493,34 @@ test('after a context loss the ribbon layer rebuilds from CPU state with the sam
   assert.equal(layer.particles.count, count, 'the same particle count');
   assert.equal(layer.field, f, 'the same field: no refetch');
   assert.ok(restored.calls.some((c) => c[0] === 'drawArraysInstanced'));
+});
+
+test('after the centre wraps across the date line the particles sit in the view the map reports', () => {
+  let t = 0;
+  const layer = new ribbon.FlowRibbonLayer({ id: 'flow-paths', field: windField(), now: () => t });
+  const map = fakeMap(179, 26, 3);
+  const gl = fakeGl();
+  layer.onAdd(map, gl);
+  layer.setRunning(true);
+  const run = () => {
+    for (let i = 0; i < 5; i++) {
+      t += STEP_S;
+      layer.render(gl, RENDER_INPUT);
+    }
+  };
+  run();
+  // MapLibre wraps the centre to -180..180, and its matrix follows the wrapped centre.
+  map.state.lon = -179;
+  run();
+  const vq = ribbon.viewQuadOf(map);
+  const p = layer.particles;
+  let alive = 0;
+  for (let i = 0; i < p.count; i++) {
+    if (!p.alive[i]) continue;
+    alive++;
+    assert.ok(advect.insideView(vq, p.x[i], p.y[i]), `particle ${i} at x ${p.x[i]} is outside the reported view`);
+  }
+  assert.ok(alive > 1000, `${alive} particles alive`);
 });
 
 test('past 384 CSS px per cell, nodes draw arrows and nothing advects', () => {

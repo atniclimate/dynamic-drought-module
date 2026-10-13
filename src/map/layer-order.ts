@@ -8,7 +8,7 @@ import type * as maplibregl from 'maplibre-gl';
  * The contract, bottom to top:
  *
  *   background -> basemap (OSM fallback)
- *     -> basemap-satellite (recent NOAA) -> hillshade
+ *     -> basemap-satellite (recent NOAA) -> wildfire-dryness-ground -> hillshade
  *     -> condition surfaces -> event overlays -> reference boundaries
  *     -> reference labels
  *
@@ -26,11 +26,14 @@ import type * as maplibregl from 'maplibre-gl';
  *      them.
  */
 
-/** The permanent bottom-stack ids, in stacking order. */
+/** The permanent bottom-stack ids, in stacking order. The Wildfire 3D
+ * dryness ground (DDM-P9-T13; src/layers/wildfire-dryness.ts, mirrored
+ * literal) sits under the hillshade and every drape, present only in that scene. */
 export const BOTTOM_STACK_IDS: readonly string[] = [
   'background',
   'basemap',
   'basemap-satellite',
+  'wildfire-dryness-ground',
   'hillshade'
 ];
 

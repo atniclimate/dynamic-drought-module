@@ -243,12 +243,7 @@ export async function main() {
     );
     return;
   }
-  await writeFile(OUT_PATH, archive);
-  console.log(
-    `  wrote ${OUT_PATH} (${archive.length.toLocaleString()} bytes, ${tileCount} tiles, ${features.length} features)`
-  );
-
-  // Read-back validation through the runtime reader.
+  // Read-back validation through the runtime reader, before the write.
   const source = {
     getKey: () => 'build',
     getBytes: async (offset, length) => {
@@ -263,6 +258,10 @@ export async function main() {
   console.log(`  header zooms ${header.minZoom}..${header.maxZoom}, tileType ${header.tileType}`);
   console.log(`  vector_layers: ${meta.vector_layers.map((l) => l.id).join(', ')}`);
   console.log(`  attribution: "${meta.attribution}"`);
+  await writeFile(OUT_PATH, archive);
+  console.log(
+    `  wrote ${OUT_PATH} (${archive.length.toLocaleString()} bytes, ${tileCount} tiles, ${features.length} features)`
+  );
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

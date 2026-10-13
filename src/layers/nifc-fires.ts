@@ -88,9 +88,16 @@ import { mapRendererClass, type RendererClass } from '../map/gl-capability';
 import { registerClickTarget } from '../map/interaction-coordinator';
 import type { IssuedModel, IssuerSwatch, PopupClock, PopupDetail, RecordBlock, RecordSize } from '../ui/popup-frame';
 import { fetchJsonWithBudget } from '../util/fetch';
+import {
+  buildQueryEnvelope,
+  envelopeCovers,
+  toCoverageEnvelope,
+  type ViewEnvelope as QueryEnvelope
+} from '../util/bbox';
 import { prefersReducedMotion } from '../util/motion';
 import { dateTok } from '../util/text-tokens';
 import { registry } from '../state/registry';
+import { getPerimeterSnapshot, setPerimeterSnapshot } from '../state/fire-perimeter-snapshot';
 import { showLegend, hideLegend, LEGEND_ORDER, renderSwatchLegend } from '../ui/legend-registry';
 import {
   clearTimeBar,
@@ -353,50 +360,13 @@ function reportStatus(state: NifcStatus): void {
 
 // ---------------------------------------------------------------------------
 // Viewport scope (DDM-P1-T06): the overscanned envelope, the coverage cache,
-// and the while-active re-query. Copies aiannh.ts's precedent (its module
-// docblock and buildQueryEnvelope/envelopeCovers/toCoverageEnvelope), sized
-// down to a single cached response since this layer does not zoom-bucket its
-// generalization the way AIANNH's does.
+// and the while-active re-query. The envelope rule is the one aiannh.ts uses
+// (src/util/bbox.ts), sized down here to a single cached response since this
+// layer does not zoom-bucket its generalization the way AIANNH's does.
 // ---------------------------------------------------------------------------
-
-/** `[west, south, east, north]`, EPSG:4326. */
-type QueryEnvelope = readonly [number, number, number, number];
-
-/**
- * Overscan margin applied to the query envelope, as a fraction of the
- * viewport's width and height on each side (aiannh.ts's OVERSCAN_FACTOR),
- * so small pans render correctly at their edges and are more likely to hit
- * the coverage cache.
- */
-const OVERSCAN_FACTOR = 0.25;
-
-/**
- * Inverse of the five-decimal precision the query URL serializes envelope
- * coordinates at (aiannh.ts's ENVELOPE_QUANTUM): the envelope is quantized
- * outward to this grid so the cached coverage envelope and the envelope
- * actually sent to the service are the same numbers.
- */
-const ENVELOPE_QUANTUM = 1e5;
 
 /** Debounce for the while-active viewport refresh (aiannh.ts's precedent). */
 const REFRESH_DEBOUNCE_MS = 400;
-
-/** The overscanned query envelope for the current viewport (aiannh.ts's buildQueryEnvelope). */
-function buildQueryEnvelope(map: maplibregl.Map): QueryEnvelope {
-  const b = map.getBounds();
-  const west = b.getWest();
-  const south = b.getSouth();
-  const east = b.getEast();
-  const north = b.getNorth();
-  const marginX = (east - west) * OVERSCAN_FACTOR;
-  const marginY = (north - south) * OVERSCAN_FACTOR;
-  return [
-    Math.floor((west - marginX) * ENVELOPE_QUANTUM) / ENVELOPE_QUANTUM,
-    Math.floor((south - marginY) * ENVELOPE_QUANTUM) / ENVELOPE_QUANTUM,
-    Math.ceil((east + marginX) * ENVELOPE_QUANTUM) / ENVELOPE_QUANTUM,
-    Math.ceil((north + marginY) * ENVELOPE_QUANTUM) / ENVELOPE_QUANTUM
-  ];
-}
 
 /**
  * The current view's query envelope, or `null` for a map double without
@@ -406,24 +376,7 @@ function buildQueryEnvelope(map: maplibregl.Map): QueryEnvelope {
  * filter and is never cached, so those callers see unchanged behavior.
  */
 function resolveQueryEnvelope(map: maplibregl.Map): QueryEnvelope | null {
-  return typeof map.getBounds === 'function' ? buildQueryEnvelope(map) : null;
-}
-
-/** Whether a cached query envelope fully contains the current visible view (aiannh.ts's envelopeCovers). */
-function envelopeCovers(envelope: QueryEnvelope, map: maplibregl.Map): boolean {
-  const b = map.getBounds();
-  return (
-    envelope[0] <= b.getWest() &&
-    envelope[1] <= b.getSouth() &&
-    envelope[2] >= b.getEast() &&
-    envelope[3] >= b.getNorth()
-  );
-}
-
-/** Shrink a query envelope inward by one grid quantum for the coverage cache (aiannh.ts's toCoverageEnvelope). */
-function toCoverageEnvelope(envelope: QueryEnvelope): QueryEnvelope {
-  const q = 1 / ENVELOPE_QUANTUM;
-  return [envelope[0] + q, envelope[1] + q, envelope[2] - q, envelope[3] - q];
+  return typeof map.getBounds === 'function' ? buildQueryEnvelope(map.getBounds()) : null;
 }
 
 /**
@@ -684,6 +637,15 @@ function applyFeatureCollection(
 ): void {
   const features = geojson.features ?? [];
   const existing = map.getSource(SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
+  if (existing && geojson === getPerimeterSnapshot().collection) {
+    // A pan inside the cached area: the source already holds this object
+    // (the snapshot names what it holds), and a hand-off would make the 3D
+    // consumers rebuild. Only a status an abandoned re-query moved is put back.
+    if (lastAppliedStatus && registry.getStatus(LAYER_KEY) !== lastAppliedStatus) {
+      reportStatus(lastAppliedStatus);
+    }
+    return;
+  }
   if (existing) {
     existing.setData(geojson);
   } else {
@@ -696,6 +658,7 @@ function applyFeatureCollection(
     // statement stands for both (an empty current set is still the product).
     armTimeBar();
   }
+  setPerimeterSnapshot(geojson);
 
   ensureLayersAdded(map);
 
@@ -775,7 +738,7 @@ async function fetchAndApply(map: maplibregl.Map): Promise<void> {
 
   const envelope = resolveQueryEnvelope(map);
 
-  if (envelope && cache && envelopeCovers(cache.envelope, map) &&
+  if (envelope && cache && envelopeCovers(cache.envelope, map.getBounds()) &&
     lastLoaded && Date.now() - lastLoaded.fetchedAt < CURRENT_CHECK_WINDOW_MS) {
     freshnessState = 'current';
     applyFeatureCollection(map, cache.geojson, { truncated: cache.truncated });
@@ -810,7 +773,7 @@ async function fetchAndApply(map: maplibregl.Map): Promise<void> {
     console.warn('[nifc-fires] WFIGS perimeters fetch failed.', err);
     freshnessState = lastLoaded ? 'stale' : 'unavailable';
     installPerimeterTimeBar();
-    if (envelope && cache && envelopeCovers(cache.envelope, map)) {
+    if (envelope && cache && envelopeCovers(cache.envelope, map.getBounds())) {
       // The last covering collection is still honest for this view (design
       // clause 4): restore its status rather than stranding the pill at
       // 'loading' or overclaiming 'error' over data that is still good.
@@ -908,6 +871,7 @@ export function deactivate(map: maplibregl.Map): void {
   cache = null;
   lastLoaded = null;
   lastAppliedStatus = null;
+  setPerimeterSnapshot(null);
   disarmTimeBar();
   for (const id of [
     OTHER_OUTLINE_LAYER_ID,

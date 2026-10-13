@@ -35,12 +35,21 @@ view is a shareable URL.
 
 **Stewardship comes first.** Each deployer (Tribal Nation, state agency,
 partner) controls its own copy on its own infrastructure.
-Sovereign-jurisdiction data is never redistributed by this repository; the
-live Tribal-geography layers are fetched from their publishing federal
-services at view time, a governance decision detailed under Live Tribal
-geography below. Two deployer-owned slots (`tribal`, `treaty`) ship as
-empty placeholders a deployer may populate with its own authorized data;
-they appear only when turned on by URL.
+Tribal boundaries and Tribal place names on this map are public data, T0
+under the Tiered Sovereignty Data Framework. Every one comes from a public
+source: Tribal Lands from the U.S. Census Bureau's AIANNH service,
+Reservation Boundaries from the Bureau of Indian Affairs AIAN-LAR service,
+and the names of federally recognized Tribes from the Bureau's Federal
+Register roster. They are open for all to see and are shown with respect for
+where they come from: the source is named, and each boundary is described as
+a representation, not a definitive depiction of Tribal jurisdiction. The map
+reads them live from the publishing service at view time rather than keeping
+its own copy, so the source stays the authority (see Live Tribal geography
+below). The more protected tiers are for what describes sacred sites or
+places that could be harmed; this project holds no such data and does not
+seek it. Two deployer-owned slots (`tribal`, `treaty`) ship as empty
+placeholders a deployer may populate with its own authorized data; they
+appear only when turned on by URL.
 
 > **Treaty boundaries.** Agency polygons are a representation of Treaty
 > cession areas, not a definitive depiction of Tribal jurisdiction. Treaty
@@ -374,8 +383,9 @@ deployer keeps control of the deployment.
 - **Cancellable network operations.** Master abort signal plus per-call
   timeout on every non-trivial fetch; late responses to superseded
   operations are dropped, not rendered.
-- **Live-fetch stewardship.** Sovereign-jurisdiction geometry is fetched
-  live per session, never redistributed; deployer slots ship empty.
+- **Live-fetch stewardship.** Tribal boundaries are public data (T0), read
+  live from their public sources each session; the two operator slots ship
+  empty.
 - **Mobile and accessibility.** Outside embed mode, the map-first phone
   view at 720 pixels and narrower uses footer navigation and a three-detent
   bottom sheet. Controls retain 44-pixel targets, accessible names,
@@ -444,7 +454,7 @@ floor; `vite.config.ts` and `DEVELOPER.md` point here, and
 `npm run check:renderer` fails when the build configuration and this
 section disagree.
 
-The map renderer is MapLibre GL JavaScript 6.6.0, pinned exactly in
+The map renderer is MapLibre GL JavaScript 6.14.0, pinned exactly in
 `package.json` and matched by the lockfile and the installed tree.
 
 Any evergreen desktop browser (Chrome, Edge, Firefox, Safari). The

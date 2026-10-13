@@ -24,12 +24,14 @@
  * session cache below and the MapLibre source, and nowhere else: never
  * committed, never emitted by the default build, never written to disk, and
  * never copied into a test fixture. Live-fetch of a public federal product is
- * not redistribution (the 2026-07-15 tier assessment).
+ * not redistribution (the 2026-07-15 tier assessment). These boundaries are
+ * public data at T0 from a public federal source; the guard is about
+ * provenance and currency, not secrecy.
  *
  * Source: `URLS.censusAiannhMapServer` layer 47 (verified 2026-07-15; see
  * urls.ts for the full provenance receipt). CORS is reflected-origin; no
  * proxy. The query is viewport-clipped with an Environmental Systems Research
- * Institute (ESRI) envelope, overscanned by OVERSCAN_FACTOR, with
+ * Institute (ESRI) envelope, overscanned (src/util/bbox.ts), with
  * `maxAllowableOffset` and `geometryPrecision` keyed to the current zoom so
  * the multi-megabyte full-precision geometries (an Oklahoma OTSA is 4.18 MB
  * raw) arrive generalized for display. The tolerance is deliberately
@@ -66,6 +68,7 @@ import { buildBoundaryContext, resolveBoundaryTitle } from '../impact/context';
 import { registerClickTarget } from '../map/interaction-coordinator';
 import type { LayerActivation } from '../config/layers';
 import { fetchBufferedWithBudget, linkAbort } from '../util/fetch';
+import { buildQueryEnvelope, envelopeCovers, toCoverageEnvelope } from '../util/bbox';
 import { registry } from '../state/registry';
 
 const LAYER_KEY = 'aiannh';
@@ -85,13 +88,6 @@ const BEFORE_ID = 'first-symbol';
 
 /** Per-call network budget for the AIANNH query. */
 const FETCH_TIMEOUT_MS = 15_000;
-
-/**
- * Overscan margin applied to the query envelope, as a fraction of the
- * viewport's width and height on each side, so small pans render correctly at
- * their edges and are more likely to hit the response cache.
- */
-const OVERSCAN_FACTOR = 0.25;
 
 /**
  * Cache-key bounds precision in decimal degrees (see bia-reservations.ts for
@@ -189,6 +185,9 @@ let refreshTimer: number | null = null;
  */
 let lastAppliedStatus: Extract<Status, 'ready' | 'no-data' | 'degraded'> | null = null;
 
+/** The collection the source currently holds; null when nothing is rendered. */
+let appliedData: FeatureCollection | null = null;
+
 /**
  * One cached response: the validated collection plus the COVERAGE envelope
  * (the queried envelope shrunk inward one grid quantum; see
@@ -254,65 +253,6 @@ function buildCacheKey(map: maplibregl.Map, zoomBucket: number): string {
     .map((n) => n.toFixed(CACHE_KEY_PRECISION))
     .join(',');
   return `z${zoomBucket}:${bounds}`;
-}
-
-/**
- * Inverse of the five-decimal precision the query URL serializes envelope
- * coordinates at. The envelope is quantized OUTWARD to this grid (floor the
- * west/south edges, ceil the east/north edges) so the cached envelope and
- * the envelope actually sent to the service are the same numbers: a
- * coverage hit then proves the service was really asked for the whole
- * visible view, with no sliver between the raw and serialized edges (Codex
- * Unit B re-verify, finding 3 residual, 2026-07-15).
- */
-const ENVELOPE_QUANTUM = 1e5;
-
-/** The overscanned query envelope for the current viewport, `[w, s, e, n]`. */
-function buildQueryEnvelope(map: maplibregl.Map): [number, number, number, number] {
-  const b = map.getBounds();
-  const west = b.getWest();
-  const south = b.getSouth();
-  const east = b.getEast();
-  const north = b.getNorth();
-  const marginX = (east - west) * OVERSCAN_FACTOR;
-  const marginY = (north - south) * OVERSCAN_FACTOR;
-  return [
-    Math.floor((west - marginX) * ENVELOPE_QUANTUM) / ENVELOPE_QUANTUM,
-    Math.floor((south - marginY) * ENVELOPE_QUANTUM) / ENVELOPE_QUANTUM,
-    Math.ceil((east + marginX) * ENVELOPE_QUANTUM) / ENVELOPE_QUANTUM,
-    Math.ceil((north + marginY) * ENVELOPE_QUANTUM) / ENVELOPE_QUANTUM
-  ];
-}
-
-/** Whether a cached query envelope fully contains the current visible view. */
-function envelopeCovers(
-  envelope: readonly [number, number, number, number],
-  map: maplibregl.Map
-): boolean {
-  const b = map.getBounds();
-  return (
-    envelope[0] <= b.getWest() &&
-    envelope[1] <= b.getSouth() &&
-    envelope[2] >= b.getEast() &&
-    envelope[3] >= b.getNorth()
-  );
-}
-
-/**
- * Shrink a query envelope inward by one grid quantum to form the COVERAGE
- * envelope stored with the cached response. The binary64 value `k / 1e5` can
- * sit a sub-ULP outside the exact decimal the URL carried, so comparing
- * against the query envelope itself left an equality-edge false-positive
- * path (Codex Unit B second re-verify, LOW, 2026-07-15). One quantum
- * (about one meter) of lost cache reuse is an acceptable false negative; a
- * passing coverage check now can never claim area outside the service
- * request.
- */
-function toCoverageEnvelope(
-  envelope: readonly [number, number, number, number]
-): [number, number, number, number] {
-  const q = 1 / ENVELOPE_QUANTUM;
-  return [envelope[0] + q, envelope[1] + q, envelope[2] - q, envelope[3] - q];
 }
 
 /** Store a response in the cache, evicting the oldest entry if at capacity. */
@@ -414,6 +354,7 @@ function clearRenderedFeatures(map: maplibregl.Map): void {
   const existing = map.getSource(SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
   if (existing) existing.setData(EMPTY_FEATURE_COLLECTION);
   lastAppliedStatus = null;
+  appliedData = null;
 }
 
 /**
@@ -437,7 +378,7 @@ async function fetchAndApply(map: maplibregl.Map): Promise<void> {
   const zoomBucket = resolveZoomBucket(map);
   const cacheKey = buildCacheKey(map, zoomBucket);
   const cached = responseCache.get(cacheKey);
-  if (cached && envelopeCovers(cached.envelope, map)) {
+  if (cached && envelopeCovers(cached.envelope, map.getBounds())) {
     applyFeatureCollection(map, cached.geojson);
     return;
   }
@@ -448,7 +389,7 @@ async function fetchAndApply(map: maplibregl.Map): Promise<void> {
 
   reportStatus('loading');
 
-  const envelope = buildQueryEnvelope(map);
+  const envelope = buildQueryEnvelope(map.getBounds());
   let geojson: FeatureCollection;
   let truncated = false;
   try {
@@ -515,11 +456,20 @@ function applyFeatureCollection(
   opts?: { partial?: boolean }
 ): void {
   const existing = map.getSource(SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
+  if (existing && geojson === appliedData) {
+    // A pan inside the cached area: the source already holds this object.
+    // Only a status a cancelled fetch moved is put back.
+    if (lastAppliedStatus && registry.getStatus(LAYER_KEY) !== lastAppliedStatus) {
+      reportStatus(lastAppliedStatus);
+    }
+    return;
+  }
   if (existing) {
     existing.setData(geojson);
   } else {
     addSourceAndLayers(map, geojson);
   }
+  appliedData = geojson;
   lastAppliedStatus = opts?.partial
     ? 'degraded'
     : (geojson.features ?? []).length === 0
@@ -688,6 +638,7 @@ export function deactivate(map: maplibregl.Map): void {
   // Invalidate any response that already raced past its abort check.
   requestSeq++;
   lastAppliedStatus = null;
+  appliedData = null;
   if (map.getLayer(FILL_LAYER_ID)) map.removeLayer(FILL_LAYER_ID);
   if (map.getLayer(OUTLINE_LAYER_ID)) map.removeLayer(OUTLINE_LAYER_ID);
   if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);

@@ -665,7 +665,7 @@ export const USFS_WHP_PRESENTATION = {
  * (the bake's own retrieval clock; scripts/build-fuels-tiles.mjs re-fetches
  * the legend on every rebake and HARD-FAILS when this table and the served
  * legend disagree, so the archive's pixels and this key cannot drift
- * apart). The drape drew these colors translucent (DRAPE_OPACITY) so
+ * apart). The drape drew these colors translucent (half opacity) so
  * terrain and incident layers stayed legible; the qualification below
  * discloses that. RETIRED FROM THE SCENE 2026-08-19: the hazard drape
  * replaced it, and this table now serves the builder's cross-check and a
@@ -724,17 +724,6 @@ export const FBFM40_PRESENTATION = {
     // vocab-allow: honesty disclaimer distinguishes the static fuel snapshot from a forecast
     'LANDFIRE 2024 fuel model classes (Scott and Burgan 40), shown with LANDFIRE\'s published class colors, drawn translucent at reduced resolution from the 30 m source; a static classified snapshot of vegetation as fuel, not current conditions, fire behavior, or a forecast.'
 } as const;
-
-/**
- * Drape opacity for the 3D scene's landscape surface.
- *
- * Named for the role rather than the layer since 2026-08-19, when the
- * fuel-model drape was replaced by the hazard drape: half opacity is what
- * keeps a full-viewport classified surface as CONTEXT beneath the
- * perimeters, smoke, and infrastructure that carry the incident, rather
- * than a wall of color the eye reads first. The value is unchanged.
- */
-export const DRAPE_OPACITY = 0.5;
 
 /**
  * Power infrastructure context for the desktop 3D Fire mode.

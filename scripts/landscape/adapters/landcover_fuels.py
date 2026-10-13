@@ -1156,6 +1156,23 @@ def _download_tiled_window(
                     ),
                     service_returned=True,
                 )
+                # Congruent is not enough: the mosaic places this tile at
+                # the REQUESTED offset, so it must be the requested window.
+                if (
+                    returned.width != tile_w
+                    or returned.height != tile_h
+                    or abs(returned.transform.c - t_minx)
+                    > GRID_RETURNED_ORIGIN_TOL_M
+                    or abs(returned.transform.f - t_maxy)
+                    > GRID_RETURNED_ORIGIN_TOL_M
+                ):
+                    raise GridCongruenceError(
+                        f"{key} service-returned tile at row {row_off}, "
+                        f"column {col_off} is {returned.width}x"
+                        f"{returned.height} at ({returned.transform.c!r}, "
+                        f"{returned.transform.f!r}), not the requested "
+                        f"{tile_w}x{tile_h} at ({t_minx!r}, {t_maxy!r})"
+                    )
                 facts = grid_deviation_facts_30m(
                     returned.crs, returned.transform)
                 core.log(
@@ -2127,7 +2144,8 @@ def aggregate(
     its required artifacts). NEVER fetches and NEVER materializes;
     prepared is exactly the acquire() return shape (the orchestrator
     path and the fixture path go through the same validation). Returns a
-    dict keyed by code_field values, one entry per input row."""
+    dict keyed by code_field values, one entry per code (rows sharing a
+    code are dissolved first)."""
     if run_info is not None:
         for key, stem in RUN_INFO_STEMS.items():
             entry = prepared.get(key)
@@ -2152,6 +2170,7 @@ def aggregate(
             if err is None:
                 datasets[key] = rasterio.open(prepared[key]["path"])
 
+        gdf = core.dissolve_by_code(gdf, code_field)
         out: dict = {}
         n = len(gdf)
         for i, (_, row) in enumerate(gdf.iterrows(), start=1):

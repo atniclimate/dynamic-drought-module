@@ -25,6 +25,7 @@ import {
   type StudioBoundaryGeometry
 } from './studio-boundary';
 import { registry } from './registry';
+import { holdStudioReturnDisplay } from './url';
 import type { TypedPlaceKind, TypedPlaceRef } from './typed-place';
 
 /**
@@ -76,7 +77,7 @@ const failedKeys = new Set<string>();
 let ecoregionLevelBeforeStudio: 'ecoregions-l3' | 'ecoregions-l4' | null = null;
 
 /** Capture the current checkbox intent and the registry's honest statuses. */
-export function captureDisplaySnapshot(): DisplaySnapshot {
+function captureDisplaySnapshot(): DisplaySnapshot {
   const intentKeys = new Set<string>();
   for (const [key, checked] of checkedSnapshot()) {
     if (checked) intentKeys.add(key);
@@ -104,6 +105,7 @@ export function captureDisplaySnapshot(): DisplaySnapshot {
 export function beginPlaceStudioDisplay(kind: TypedPlaceKind): DisplaySnapshot {
   if (!activeSnapshot) {
     activeSnapshot = captureDisplaySnapshot();
+    holdStudioReturnDisplay(activeSnapshot);
     failedKeys.clear();
     unsubscribeIntent = onCheckedChange(() => queueCleanIntentEnforcement());
     unsubscribeRegistry = registry.on('change', () => reapplyEmphasisWhenReady());
@@ -250,6 +252,7 @@ export function restoreDisplaySnapshot(): DisplaySnapshot | null {
   if (!snapshot) return null;
 
   activeSnapshot = null;
+  holdStudioReturnDisplay(null);
   unsubscribeIntent?.();
   unsubscribeIntent = null;
   unsubscribeRegistry?.();

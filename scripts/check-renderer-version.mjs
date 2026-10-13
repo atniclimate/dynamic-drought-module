@@ -19,7 +19,7 @@
  *      `npm install <pkg>@next`, a half-applied upgrade branch, or a stale
  *      worktree does not.
  *
- *      The pin is deliberately EXACT ("6.6.0", no range operator):
+ *      The pin is deliberately EXACT ("6.14.0", no range operator):
  *      MapLibre is the whole map, its minor releases have moved WebGL and
  *      style-spec behavior the app asserts on, and a caret would let a
  *      machine-local install change the renderer under a green gate.

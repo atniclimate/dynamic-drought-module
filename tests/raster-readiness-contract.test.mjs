@@ -314,6 +314,7 @@ function sharedProofDeadlineMs() {
  */
 const TILE_PROVEN = new Map([
   ['src/layers/gridded-index.ts', 'C3 gridded index (NIDIS SPI), DDM-P14-T04'],
+  ['src/layers/dryness-ground.ts', 'the Wildfire 3D dryness ground (NOAA STAR VHI, USGS Relative Greenness), DDM-P9-T13: every frame it mounts'],
   ['src/layers/sst-anomaly.ts', 'C1 SST anomaly (GIBS GHRSST MUR, default and every dated frame), DDM-P14-T04']
 ]);
 
@@ -325,10 +326,6 @@ const TILE_PROVEN = new Map([
  * its own disposition.
  */
 const EXCEPTIONS = new Map([
-  [
-    'src/layers/dryness-ground.ts#s.sourceId',
-    'dormant: dryness-ground is reached only through dryness-grey-protocol, which no shipped module imports, so no build carries it (checked 2026-10-08 for release 0.7.1); it must become tile-proven before its admission activates it, and this exception is removed then'
-  ],
   [
     'src/layers/hillshade.ts#SOURCE_ID',
     'C2 hillshade (bundled PNW raster-dem PMTiles): a director\'s-ruling exception at DDM-P14-T04, decided on a measured build-time profile. With the shared completeness watcher wired here, the Fire 3D pair (fire3d-mode.spec.ts, view-contracts.spec.ts) fell from 57/59 to 47/59 (I:/claude-temp/ddm-s30d/gates/c4-bisect-fire3d.log): the 3D scene\'s own animation suppresses map idle, so every 3D boot waited out the tile-proof deadline. Restoring the probe-then-add design with no tile wait (c4-hillshade-probe.log) returned the pair to 58/59. The archive is bundled, same-origin and deterministic, so the residual risk a tile proof would catch is small next to the 3D cost it imposes'
@@ -828,7 +825,7 @@ test('gridded-index reads live (partial) when a stated subset of its tiles fails
 });
 
 /*
- * The order cases below follow MapLibre 6.6's own 404 path
+ * The order cases below follow MapLibre's own 404 path
  * (node_modules/maplibre-gl/src/tile/tile_manager.ts): a tile that answers
  * 404 is marked errored and fires NO event (`_loadTile`); MapLibre then
  * requests its parent as a fallback (`_updateRetainedTiles`), but skips that
@@ -1118,7 +1115,7 @@ test('gridded-index leaves no listener or timer behind after deactivate, and a l
 // -- the current view (review finding C1, DDM-P14-T04) -----------------------
 //
 // The verdict covers the tiles on the map NOW, not the requests a cycle saw.
-// MapLibre 6.6 (node_modules/maplibre-gl/src/tile/tile_manager.ts) restores a
+// MapLibre (node_modules/maplibre-gl/src/tile/tile_manager.ts) restores a
 // tile from its out-of-view cache with no event at all (`_addTile`), caches a
 // loaded tile that leaves the view with no event (`_removeTile`), fires
 // nothing for a 404 (`_loadTile`), and fires `dataabort` only when a tile
@@ -1432,7 +1429,9 @@ test('current view guard: a watch without a deadline (the Fire 3D terrain path) 
 // lives alone in src/util/raster-error-watch.ts, and raster-status.ts has no
 // no-deadline mode and does not import it, so the policy is written once,
 // the Fire 3D activation closure (scripts/check-activation-budget.mjs, the
-// fire3d-mode row) carries none of the completeness mode, and no
+// fire3d-mode row) carries none of the completeness mode through fire3d.ts
+// (since release 0.7.3 the row's dryness ground root, tile-proven by design,
+// brings raster-status.ts in as its own lazy chunk), and no
 // raster-status closure (the heatrisk-days row among them) carries the error
 // watch. A statement-level `import type` is erased at build and does not
 // count as reaching a module.

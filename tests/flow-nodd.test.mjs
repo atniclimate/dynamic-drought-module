@@ -286,6 +286,22 @@ test('a decoder factory failure releases the activation link without starting a 
   }
 });
 
+test('a ranged read gets the base budget plus 1 ms per 32 bytes asked for', async () => {
+  const original = globalThis.setTimeout;
+  const delays = [];
+  globalThis.setTimeout = (callback, delay, ...rest) => {
+    delays.push(delay);
+    return original(callback, delay, ...rest);
+  };
+  try {
+    await read('wind', noddStub());
+  } finally {
+    globalThis.setTimeout = original;
+  }
+  const bytes = fixture('gfs1p00-UGRD-10m-f006.grib2').byteLength;
+  assert.ok(delays.includes(nodd.FLOW_READ_BUDGET_MS + bytes / 32), `no ${bytes} B budget among ${delays}`);
+});
+
 test('a silent decoder reaches the existing read deadline and releases all handlers', async () => {
   await controlledDecode(async (probe) => {
     assert.equal(probe.timers.size, 1, 'one completion deadline follows the completed network reads');

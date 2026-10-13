@@ -4,15 +4,20 @@ import './styles/hazard-indicators.css';
 import './styles/mobile-panels.css';
 
 import type * as maplibregl from 'maplibre-gl';
+import { holdSatellite } from './map/basemap-switcher';
 import { createMap } from './map/init';
 import { loadFire3DController } from './map/fire3d-chunk';
-import { onFire3DPreferenceChange } from './state/fire3d-store';
+import { FIRE3D_CHUNK_WIDTH_QUERY, onFire3DPreferenceChange } from './state/fire3d-store';
 import { initInteractionCoordinator } from './map/interaction-coordinator';
 import { setMap } from './state/map-store';
 import { applyDeepLink } from './state/deep-link';
-import { parseSelectParam } from './state/url';
+import { parseFire3dParam, parseSelectParam } from './state/url';
 import type { SelectParam } from './state/url';
-import { getStudioRoute, onStudioRouteChange } from './state/studio-route';
+import {
+  getStudioRoute,
+  onStudioRouteChange,
+  studioOwnsScreen
+} from './state/studio-route';
 import {
   getCommittedSnapshot,
   onCommittedSnapshotChange
@@ -86,7 +91,7 @@ function prepareStudioAwareDeepLink(
   };
 
   const runHeld = (): void => {
-    if (!started || disposed || getStudioRoute() !== null || !heldSelect) return;
+    if (!started || disposed || studioOwnsScreen() || !heldSelect) return;
     const command: InFlightCommand = {
       select: heldSelect,
       routeGeneration
@@ -97,11 +102,11 @@ function prepareStudioAwareDeepLink(
       map,
       command.select,
       () =>
-        getStudioRoute() === null &&
+        !studioOwnsScreen() &&
         routeGeneration === command.routeGeneration
     ).finally(() => {
       if (inFlight === command) inFlight = null;
-      if (heldSelect && getStudioRoute() === null) {
+      if (heldSelect && !studioOwnsScreen()) {
         runHeld();
       } else if (!heldSelect && !inFlight) {
         cleanup();
@@ -124,7 +129,7 @@ function prepareStudioAwareDeepLink(
       if (navigationSelect) heldSelect = navigationSelect;
     }
 
-    if (route === null) runHeld();
+    runHeld();
   });
 
   unsubscribeTypedPlace = onTypedPlaceChange((place) => {
@@ -138,7 +143,7 @@ function prepareStudioAwareDeepLink(
   return () => {
     if (started) return;
     started = true;
-    if (getStudioRoute() === null) {
+    if (!studioOwnsScreen()) {
       cleanup();
       void applyDeepLink(map, initialSelect);
       return;
@@ -255,6 +260,17 @@ async function boot(): Promise<void> {
   // that states its condition instead of an empty one that looks broken.
   buildSidebarShell();
 
+  // The one answer to "this browser cannot render the map", shared by the
+  // capability check, the constructor throw and the `error` event below. The
+  // controls exist, so they have to say why they cannot act (DDM-P14-T02), and
+  // nothing else will load: the boot is idle now, honestly.
+  const failWithoutRenderer = (): void => {
+    showRendererNotice('no-webgl2');
+    bootMapFreeChrome();
+    setSidebarControlReason('no-map');
+    settleBootIdleWithoutMap();
+  };
+
   // DR-025a / DR-035a: MapLibre 6 requires WebGL 2 and has no WebGL 1
   // fallback, so ask first. Without a context the constructor would build a
   // map that can never paint and would only report it through an error
@@ -265,17 +281,22 @@ async function boot(): Promise<void> {
     console.warn(
       `[boot] no WebGL 2 context: ${capability.reason ?? 'unknown'}`
     );
-    showRendererNotice('no-webgl2');
-    bootMapFreeChrome();
-    // The second surface of the same statement (DDM-P14-T02): the controls
-    // exist, so they have to say why they cannot act.
-    setSidebarControlReason('no-map');
-    // Nothing else will load: the boot is idle now, honestly.
-    settleBootIdleWithoutMap();
+    failWithoutRenderer();
     return;
   }
 
-  const map = createMap('map');
+  // MapLibre 6.7+ THROWS GPUInitializationError from the constructor when the
+  // WebGL 2 context cannot be created (Map._setupPainter); anything else
+  // thrown is not ours to swallow.
+  let map: maplibregl.Map;
+  try {
+    map = createMap('map');
+  } catch (err) {
+    if (!isGpuInitializationError(err)) throw err;
+    console.warn('[boot] map constructor threw GPUInitializationError');
+    failWithoutRenderer();
+    return;
+  }
   // Publish the map so the frozen UI-service facades (the impact panel) can
   // resolve a selection's location identity without a map parameter (F3).
   setMap(map);
@@ -299,19 +320,16 @@ async function boot(): Promise<void> {
     };
   }
 
-  // MapLibre 6 reports a failed GPU context through the map's `error` event
-  // rather than a constructor throw (`Map._setupPainter` fires an ErrorEvent
-  // carrying a GPUInitializationError). Only that error means "this browser
-  // cannot render the map"; routine tile and source errors travel the same
-  // event and must not raise a renderer notice, so the classifier is narrow.
+  // A GPU context that cannot be recreated after a loss still reaches us as
+  // an `error` event carrying a GPUInitializationError (Map's
+  // webglcontextrestored path). Only that error means "this browser cannot
+  // render the map"; routine tile and source errors travel the same event and
+  // must not raise a renderer notice, so the classifier is narrow.
   let gpuInitializationFailed = false;
   map.on('error', (event) => {
     if (!isGpuInitializationError(event.error)) return;
     gpuInitializationFailed = true;
-    showRendererNotice('no-webgl2');
-    bootMapFreeChrome();
-    setSidebarControlReason('no-map');
-    settleBootIdleWithoutMap();
+    failWithoutRenderer();
   });
 
   const loadedInBound = await waitForMapLoad(map, MAP_LOAD_BOUND_MS);
@@ -418,7 +436,7 @@ function wireMapDependentChrome(map: maplibregl.Map): void {
   // A boot below the breakpoint still arms a widen listener; the
   // same eligibility rule applies when it fires, so a later resize into
   // desktop width finds a live controller rather than an inert control.
-  const fire3dViewport = window.matchMedia('(min-width: 721px)');
+  const fire3dViewport = window.matchMedia(FIRE3D_CHUNK_WIDTH_QUERY);
   let fire3dLoaded = false;
   let unsubscribeFire3dEligibility: (() => void) | null = null;
   let unsubscribeFire3dPreference: (() => void) | null = null;
@@ -432,17 +450,13 @@ function wireMapDependentChrome(map: maplibregl.Map): void {
       fire3dViewport.removeEventListener('change', maybeLoadFire3D);
     }).catch((error: unknown) => {
       fire3dLoaded = false;
+      // No controller will release a boot hold on the imagery (DR-105).
+      holdSatellite(map, false);
       console.warn('Fire 3D controller could not load:', error);
     });
   };
-  const fire3dParamRequested = (): boolean => {
-    const values = new URLSearchParams(window.location.search).getAll(
-      'fire3d'
-    );
-    return values.length === 1 && values[0] === 'true';
-  };
   const fire3dEligible = (): boolean =>
-    getCommittedSnapshot().cluster === 'wildfire' || fire3dParamRequested();
+    getCommittedSnapshot().cluster === 'wildfire' || parseFire3dParam();
   const maybeLoadFire3D = (): void => {
     if (fire3dViewport.matches && fire3dEligible()) loadFire3D();
   };

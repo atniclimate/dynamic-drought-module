@@ -233,6 +233,11 @@ test('S14 actual consumer observes a source-table mutation and independent pins 
     else delete actual['Above,70'];
   }
 });
+test('sparkline current-value label stays inside the box when the last value is the maximum', () => {
+  const svg = charts.sparklineSvg([1, 2, 3], { title: 'Fixture' });
+  const y = Number(/<text x="[\d.]+" y="([\d.]+)"[^>]*font-size="9"/.exec(svg)?.[1]);
+  assert.ok(y >= 9, `label y ${y}`);
+});
 test('observation sparkline and index trend retain cyan independent of interface accent', () => {
   for (const svg of [
     charts.sparklineSvg([1, 2, 3], { title: 'Fixture' }),

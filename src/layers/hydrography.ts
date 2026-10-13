@@ -303,7 +303,8 @@ export function deactivate(map: maplibregl.Map): void {
  * Mirror cycling. Tries `URLS.overpassMirrors` in order, with a 12-second
  * per-call timeout via `fetchBufferedWithBudget` and a 350 ms backoff between
  * failures (`sleepUnlessAborted`, so layer-off short-circuits the wait).
- * On HTTP non-OK or network error, advances to the next mirror; if the
+ * On HTTP non-OK, a remark or element-less body, an over-size body or network
+ * error, advances to the next mirror; if the
  * abort signal fires at any point, returns an empty collection.
  *
  * Returns an empty FeatureCollection rather than throwing on abort or
@@ -362,7 +363,8 @@ export async function fetchOSMWaterways(
           body: 'data=' + encodeURIComponent(query)
         },
         signal,
-        PER_MIRROR_TIMEOUT_MS
+        PER_MIRROR_TIMEOUT_MS,
+        32 * 1024 * 1024
       );
       if (signal.aborted) return emptyFeatureCollection();
 
@@ -373,8 +375,14 @@ export async function fetchOSMWaterways(
         }
         continue;
       }
-      payload = (await resp.json()) as OverpassPayload;
+      const body = (await resp.json()) as OverpassPayload;
       if (signal.aborted) return emptyFeatureCollection();
+      // A timed-out or out-of-memory query is HTTP 200 with a remark and no
+      // elements; that is a mirror failure, never "no rivers here".
+      if (!Array.isArray(body.elements) || typeof body.remark === 'string') {
+        throw new Error(`Overpass ${endpoint}: ${body.remark ?? 'no elements'}`);
+      }
+      payload = body;
       break;
     } catch (err) {
       // User-cancel or supersede: bail entirely without touching status.
@@ -392,8 +400,7 @@ export async function fetchOSMWaterways(
   }
 
   const features: Feature<LineString>[] = [];
-  const elements = Array.isArray(payload.elements) ? payload.elements : [];
-  for (const el of elements) {
+  for (const el of payload.elements ?? []) {
     const feature = featureFromWay(el);
     if (feature) features.push(feature);
   }
@@ -591,6 +598,7 @@ function setStatus(status: HydroStatus): void {
  */
 interface OverpassPayload {
   elements?: OverpassElement[];
+  remark?: string;
 }
 
 interface OverpassElement {

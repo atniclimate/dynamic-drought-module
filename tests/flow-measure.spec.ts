@@ -51,10 +51,9 @@ import { gotoApp, NODD_FIXTURES, noddStubLog } from './helpers';
  *   is the window's flow time over the steps the view counted
  *   (`data-flow-steps`). The sampler adds its own overhead, so the profiled
  *   window is a separate window from the frame-rate one.
- * - Density. Production passes no density to the view (Standard always), so
- *   Sparse and Dense are emulated by the particle count: the count is
- *   canvas CSS area / 1024 times the factor (src/layers/flow/advect.ts), so
- *   the viewport is resized to half and double the Standard canvas area.
+ * - Density. The particle count is canvas CSS area / 1024 (halved on a
+ *   phone-width view; src/layers/flow/advect.ts), so half and double counts
+ *   are emulated by resizing the viewport to half and double the canvas area.
  *   Step CPU is comparable (it scales with the count); frame rate is not
  *   (the canvas changes size too).
  * - "Today's arrows". The static wind and wave arrows of 4c2afb4 were removed
@@ -958,9 +957,9 @@ const CONDITIONS: readonly ConditionSpec[] = [
     id: 'currents-arrows', describe: "today's interim arrows: ocean currents, Open-Meteo stubbed (the wind and wave arrows of 4c2afb4 were removed by E2-1)",
     boot: { flow: 'currents' }, profiled: false
   },
-  { id: 'wind-sparse', describe: 'wind, Sparse (canvas area halved: half the particles)', boot: { flow: 'wind' }, prepare: (page) => resizeForDensity(page, 0.5), note: 'density emulated by canvas area; frame rate not comparable' },
+  { id: 'wind-sparse', describe: 'wind, half the particles (canvas area halved)', boot: { flow: 'wind' }, prepare: (page) => resizeForDensity(page, 0.5), note: 'density emulated by canvas area; frame rate not comparable' },
   { id: 'wind-standard', describe: 'wind, Standard', boot: { flow: 'wind' } },
-  { id: 'wind-dense', describe: 'wind, Dense (canvas area doubled: double the particles)', boot: { flow: 'wind' }, prepare: (page) => resizeForDensity(page, 2), note: 'density emulated by canvas area; frame rate not comparable' },
+  { id: 'wind-dense', describe: 'wind, double the particles (canvas area doubled)', boot: { flow: 'wind' }, prepare: (page) => resizeForDensity(page, 2), note: 'density emulated by canvas area; frame rate not comparable' },
   { id: 'waves', describe: 'waves (crest marks)', boot: { flow: 'waves' } },
   { id: 'still', describe: 'still form from a stored Pause choice', boot: { flow: 'wind', storedPause: true } },
   { id: 'paused-keyboard', describe: 'wind, paused with the keyboard after boot', boot: { flow: 'wind' }, prepare: async (page) => { await pauseByKeyboard(page); await hold(page, 3000); } },

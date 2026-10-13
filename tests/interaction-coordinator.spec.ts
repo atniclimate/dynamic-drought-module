@@ -333,7 +333,7 @@ test.describe('InteractionCoordinator: one click, one response', () => {
             {
               type: 'Feature',
               id: 1,
-              properties: { dn: 2, valid: '202607171200', expire: '202607180000' },
+              properties: { dn: 2, valid: '202607171200', expire: '209912312359' },
               geometry: {
                 type: 'Polygon',
                 coordinates: [

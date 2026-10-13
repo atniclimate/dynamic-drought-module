@@ -104,7 +104,7 @@ function view(lon, lat, zoom, w, h) {
 test('wind (global 1.0 deg, every node valid): a z10 view of 45.4 N 120.4 W at 1440x900 is covered, never outside', () => {
   const field = uniform('wind', GLOBAL_1P00);
   const v = view(-120.4, 45.4, 10, 1440, 900);
-  assert.equal(planForm(field, v, { motionAllowed: true, playPressed: true }).form, 'arrows');
+  assert.equal(planForm(field, v, { motionAllowed: true }).form, 'arrows');
   assert.notEqual(viewCoverage(field, v), 'outside', 'a global wind field with every node valid must never read outside the field');
   assert.equal(viewCoverage(field, v), 'covered');
 });
@@ -190,7 +190,7 @@ function fakeMap(lon, lat, zoom, { w = 1440, h = 900, gl = fakeGl(), throwOnLaye
     layerIds: () => layers.map((l) => l.id),
     canvasListenerCount: () => [...canvasListeners.values()].reduce((n, set) => n + set.size, 0),
     eventCount: () => [...events.values()].reduce((n, set) => n + set.size, 0),
-    /** MapLibre 6.6 on a lost context: the style goes, custom layers with it, onRemove never runs. */
+    /** MapLibre on a lost context: the style goes, custom layers with it, onRemove never runs. */
     dropStyle: () => { layers = []; sources.clear(); },
     /** Installed MapLibre map.ts:4125-4172 serializes native data before dropping the style. */
     loseContext: () => {

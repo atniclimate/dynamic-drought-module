@@ -32,7 +32,7 @@ const STUBS = {
     'export class Popup { constructor(options) { globalThis.__ddmPopupOptions = options; throw new Error("RENDER_REACHED at Popup"); } }',
   impactPanel: 'export function openImpactPanel() { throw new Error("stub openImpactPanel"); }',
   mobileSheet: 'export function isSheetActive() { return false; }',
-  studioRoute: 'export function getStudioRoute() { return null; } export function onStudioRouteChange() { return () => {}; }'
+  studioRoute: 'export function studioOwnsScreen() { return false; } export function onStudioRouteChange() { return () => {}; }'
 };
 
 const stubUrl = (source) => `data:text/javascript,${encodeURIComponent(source)}`;

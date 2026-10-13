@@ -1,4 +1,5 @@
 import { fetchBufferedWithBudget } from '../util/fetch';
+import { listeningTimeout, MAX_STALL_REREADS } from '../util/listening-timeout';
 import { PngTileResponseError } from '../map/tile-protocol';
 
 export interface DrynessMetadataLimits {
@@ -78,31 +79,33 @@ export async function readRelativeGreennessTimes(
   const abort = (): DOMException => new DOMException('Aborted', 'AbortError');
   const timeout = (): DOMException => new DOMException('Dryness metadata timed out', 'TimeoutError');
   const cancel = (): void => controller.abort(abort());
-  const deadline = performance.now() + limits.timeoutMs;
   if (owner.aborted) throw abort();
   owner.addEventListener('abort', cancel, { once: true });
-  const timer = setTimeout(() => controller.abort(timeout()), limits.timeoutMs);
+  // A stall must never read as USGS not answering (src/util/listening-timeout.ts).
+  const stopTimeout = listeningTimeout(limits.timeoutMs, () => controller.abort(timeout()));
   let detach = (): void => {};
   try {
     const work = (async () => {
       let response: Response;
-      try {
-        response = await fetchBufferedWithBudget(url, null, controller.signal, limits.timeoutMs, limits.maxDecodedBytes);
-      } catch (error) {
-        if (owner.aborted) throw abort();
-        if (controller.signal.aborted) throw controller.signal.reason;
-        if (error instanceof DOMException && error.name === 'AbortError') throw timeout();
-        throw error;
+      for (let rereads = MAX_STALL_REREADS; ; rereads--) {
+        try {
+          response = await fetchBufferedWithBudget(url, null, controller.signal, limits.timeoutMs, limits.maxDecodedBytes);
+          break;
+        } catch (error) {
+          if (owner.aborted) throw abort();
+          if (controller.signal.aborted) throw controller.signal.reason;
+          if (!(error instanceof DOMException) || error.name !== 'AbortError') throw error;
+          // The shared helper's wall-clock timer fired while ticks remain: read again.
+          if (rereads === 0) throw timeout();
+        }
       }
       if (!response.ok) throw new Error('RG capabilities HTTP failure');
       const mime = response.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase();
       if (!['text/xml', 'application/xml', 'application/vnd.ogc.wms_xml'].includes(mime ?? '')) throw new Error('RG capabilities MIME failure');
       const text = await response.text();
       controller.signal.throwIfAborted();
-      if (performance.now() >= deadline) throw timeout();
       const times = parseRelativeGreennessCapabilities(text, layerName, limits.maxTimes);
       controller.signal.throwIfAborted();
-      if (performance.now() >= deadline) throw timeout();
       return times;
     })();
     const stopped = new Promise<never>((_, reject) => {
@@ -113,6 +116,6 @@ export async function readRelativeGreennessTimes(
     });
     return await Promise.race([work, stopped]);
   } finally {
-    detach(); clearTimeout(timer); owner.removeEventListener('abort', cancel); controller.abort();
+    detach(); stopTimeout(); owner.removeEventListener('abort', cancel); controller.abort();
   }
 }

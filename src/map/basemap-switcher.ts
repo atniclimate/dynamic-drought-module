@@ -27,11 +27,25 @@ import { showToast } from '../ui/overlay';
  * renders without the control being clicked.
  */
 
+let satelliteHeld = false;
+
+/**
+ * DR-105: Wildfire 3D never requests satellite imagery. The scene holds the
+ * imagery off while it is opening or open; the store keeps the visitor's
+ * choice (the button and the URL still say satellite), and releasing the
+ * hold brings the imagery back.
+ */
+export function holdSatellite(map: maplibregl.Map, held: boolean): void {
+  if (held === satelliteHeld) return;
+  satelliteHeld = held;
+  if (getBasemapMode() === 'satellite') void applyBasemapMode(map, 'satellite');
+}
+
 /**
  * Apply a basemap mode to the map. Lazy-imports the satellite module on
  * first use; idempotent per mode. On a chunk or source failure the mode
- * REVERTS to 'default' and says so (invariant 6, honest feedback): the
- * URL must never claim a satellite view that is not on screen.
+ * REVERTS to 'default' and says so (invariant 6, honest feedback): after a
+ * failed load the URL must not keep claiming satellite.
  */
 export async function applyBasemapMode(
   map: maplibregl.Map,
@@ -39,7 +53,7 @@ export async function applyBasemapMode(
 ): Promise<void> {
   try {
     const { setSatelliteActive } = await import('./satellite');
-    await setSatelliteActive(map, mode === 'satellite');
+    await setSatelliteActive(map, mode === 'satellite' && !satelliteHeld);
   } catch (err) {
     console.error('[basemap] satellite module failed to load:', err);
     if (mode === 'satellite') {

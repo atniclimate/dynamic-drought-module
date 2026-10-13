@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
  * fire3d-ribbon-lifecycle.test.mjs, with the same stubs.
  *
  * found-127: a registry change that does not concern the perimeter layer
- * leaves a ribbon read in flight alone.
+ * leaves a standing ribbon alone.
  * found-130: the transport stamp settles within a bounded time after the
  * scene's sources finish loading, even when no sourcedata or idle event
  * follows (a frozen main thread coalesces them away).
@@ -54,6 +54,8 @@ const STUBS = {
     'export function watchRasterTiles() { return { detach() {} }; }',
   '/layers/hms-smoke-volume':
     'export function activateSmokeVolume() { return false; } export function deactivateSmokeVolume() {} export function cleanupOrphanedSmokeSource() {}',
+  '/layers/wildfire-dryness':
+    'export async function activateWildfireDryness() {} export function getDrynessSourceId() { return null; }',
   './fire3d-context': [
     'export async function activateContextLayers(map) {',
     '  map.addSource("whp-2023", { type: "raster", tiles: [] });',
@@ -110,9 +112,10 @@ globalThis.document = {
 const { initFire3DController, getFire3DStatus } = await import('../src/map/fire3d.ts');
 const { PERIMETER_RIBBON_LAYER_IDS } = await import('../src/layers/nifc-perimeter-ribbon.ts');
 const { registry } = await import('../src/state/registry.ts');
+const { setPerimeterSnapshot } = await import('../src/state/fire-perimeter-snapshot.ts');
 
 // ---------------------------------------------------------------------------
-// The fake map and its held perimeter reads
+// The fake map
 // ---------------------------------------------------------------------------
 
 const PERIMETER_KEY = 'nifc-fires';
@@ -148,14 +151,6 @@ const LIVE_PERIMETERS = {
     }
   ]
 };
-const NO_PERIMETERS = { type: 'FeatureCollection', features: [] };
-
-const reads = {
-  held: false,
-  /** Every read asked while held, oldest first: { data, release }. */
-  pending: []
-};
-
 const listeners = [];
 /** Scene requests: while `held`, every source the scene adds has a request
  * in flight (MapLibre's isSourceLoaded reads false) until it is released. */
@@ -199,22 +194,6 @@ const map = {
   isSourceLoaded: (id) => !requests.inFlight.has(id)
 };
 
-/** The flat layer's GeoJSON source, with MapLibre's read-back seam. */
-function perimeterSource(data) {
-  const source = {
-    type: 'geojson',
-    data,
-    getData() {
-      const captured = source.data;
-      if (!reads.held) return Promise.resolve(captured);
-      return new Promise((resolve) => {
-        reads.pending.push({ data: captured, release: () => resolve(captured) });
-      });
-    }
-  };
-  return source;
-}
-
 /** Let every queued continuation run (no timer: a macrotask turn). */
 async function settle() {
   for (let i = 0; i < 20; i += 1) {
@@ -236,26 +215,20 @@ function setPreference(next) {
   for (const fn of env.preferenceListeners) fn();
 }
 
-/** The layer controller's own order: loading, the module adds its source
- * and reports live, then the key registers active. */
+/** The layer controller's own order: loading, the module publishes its
+ * collection and reports live, then the key registers active. */
 function perimetersOn(data = LIVE_PERIMETERS) {
   registry.setStatus(PERIMETER_KEY, 'loading');
-  map.addSource(PERIMETER_KEY, perimeterSource(data));
+  setPerimeterSnapshot(data);
   registry.setStatus(PERIMETER_KEY, 'live');
   registry.activate(PERIMETER_KEY);
 }
 
-/** The controller's teardown order: the module removes its source, then the
- * key leaves the registry. */
+/** The controller's teardown order: the module withdraws its collection,
+ * then the key leaves the registry. */
 function perimetersOff() {
-  map.removeSource(PERIMETER_KEY);
+  setPerimeterSnapshot(null);
   registry.deactivate(PERIMETER_KEY);
-}
-
-function releaseOldestRead() {
-  const next = reads.pending.shift();
-  assert.ok(next, 'a ribbon read was pending');
-  next.release();
 }
 
 function ribbonOnMap() {
@@ -279,14 +252,13 @@ async function enterScene() {
 }
 
 /** Leave every case as the next one expects: no scene, no perimeter layer,
- * no held read, and nothing on the map. */
+ * no published collection, and nothing on the map. */
 async function reset() {
-  reads.held = false;
   requests.held = false;
   requests.inFlight.clear();
-  while (reads.pending.length > 0) releaseOldestRead();
   setPreference(false);
   if (registry.getActiveKeys().has(PERIMETER_KEY)) perimetersOff();
+  setPerimeterSnapshot(null);
   await settle();
   sources.clear();
   layers.clear();
@@ -296,26 +268,6 @@ async function reset() {
 initFire3DController(map);
 
 test.afterEach(reset);
-
-test('a registry change that does not concern the perimeters leaves an in-flight ribbon read alone', async () => {
-  await enterScene();
-  reads.held = true;
-  perimetersOn();
-  await until(() => reads.pending.length === 1, 'the reconcile asked for the perimeters');
-
-  // A stream of unrelated layer changes while the read is out.
-  for (const key of ['unrelated-a', 'unrelated-b', 'unrelated-c']) {
-    registry.activate(key);
-    registry.deactivate(key);
-  }
-  await settle();
-  assert.equal(reads.pending.length, 1, 'no new read was started by an unrelated change');
-
-  releaseOldestRead();
-  await settle();
-  assert.deepEqual(ribbonOnMap(), FULL_RIBBON, 'the one read landed and raised the ribbon');
-  assert.equal(dataset.ddmFire3dRibbon, 'on');
-});
 
 const SCENE_SOURCE_IDS = ['fire3d-terrain-dem', 'whp-2023', 'structures-3d'];
 

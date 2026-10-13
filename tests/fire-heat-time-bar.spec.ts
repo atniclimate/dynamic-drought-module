@@ -370,7 +370,7 @@ async function expectChipsStillHonest(page: Page): Promise<void> {
     const chrome = HORIZON_CHROME[SHELL_HORIZON_KEY[key]];
     const btn = page.locator(`.shell-horizon-btn[data-horizon="${key}"]`);
     expect((await btn.locator('.shell-horizon-btn-title').innerText()).trim()).toBe(chrome.title);
-    expect((await btn.locator('.shell-horizon-btn-sub').innerText()).trim()).toBe(chrome.subtitle);
+    expect((await btn.locator('.shell-horizon-btn-sub').innerText()).replace(/\u00a0/g, ' ').trim()).toBe(chrome.subtitle);
   }
   const stray = await page.evaluate(() => {
     const clone = document.body.cloneNode(true) as HTMLElement;
@@ -478,6 +478,8 @@ test.describe('DDM-P8-T02: the Wildfire screen has a time control at every horiz
   test('near term: the SPC Day 1 outlook stamp is an outlook with the issuance window, and the current recipe takes the bar back', async ({
     page
   }) => {
+    // The fixture outlook's expire time is in September; the layer shows no outlook past it.
+    await page.clock.setFixedTime(new Date('2026-09-08T18:00:00Z'));
     await stubCommon(page);
     await stubFire(page, { spc: 'outlined' });
     await gotoApp(page, '?view=console&cluster=wildfire&horizon=weeks-ahead');

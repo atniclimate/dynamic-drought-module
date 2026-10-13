@@ -35,8 +35,12 @@ Avoid copying spec counts and runtime estimates into several documents.
 | Source checks without a bundle | `npm run gate:nobuild` | Types and all source checks, including the pure lane |
 | A browser behavior | `npx playwright test --workers=1 tests/boot.spec.ts` | Fresh production build and the selected cases |
 | Cross-cutting build/configuration changes | `npm run gate` | Fresh build, artifact budgets and all source checks |
-| Integration block smoke verification | `npm run verify:smoke` | Gate and the smoke roster, one fresh build, one owned preview |
-| Final integration/release candidate | `npm run test:serial` | All three assertion projects, one worker; excludes the measurement project |
+| Full suite locally, when GitHub is unavailable | `npm run test:serial` | All three assertion projects, one worker; excludes the measurement project |
+
+The full browser suite normally runs on GitHub, in the Validate workflow, which
+slices it into eight shards. On a branch without an open pull request, start it
+with `gh workflow run validate.yml --ref <branch>`. A local `test:serial` takes
+more than an hour and is the fallback, not a routine step.
 
 `npm test` runs the same three assertion projects with the configured worker
 count. Keep one browser runner at a time. The pure lane starts no browser or
@@ -57,26 +61,53 @@ each builder keeps its own fresh page and runs each fixture method once. Tests
 that require a live layer or date rail must install positive fixtures explicitly;
 the offline backstop's error response cannot establish those preconditions.
 
-A session handoff is a record of work, not a new application verification event.
-Do not start `verify:smoke` or `test:serial` solely because the session is ending,
-or rerun an unchanged candidate just to recover context. Preserve the prior
-command, result, candidate identity and evidence path. Record unfinished checks
-and failures explicitly; they remain required before the corresponding task,
-integration block or release can be declared complete.
+While developing, run `npm run typecheck` and the one browser-free test that
+covers the change. When a piece of work is finished, run ONE of
+`npm run verify:quick`, `npm run gate:nobuild` (a cross-cutting change; it
+already includes everything verify:quick runs, about a minute) or `npm run gate`
+(the build or a size budget changed), then push the branch.
+
+A browser run only when nothing simpler can answer the question. A wording,
+configuration, size or pure-logic change never needs one. When one is needed:
+the fewest cases (`-g`), every diagnostic in the first run, at most one
+confirming run when the piece is finished. `verify:smoke`, whole Playwright
+projects, the Fire pair and repeat runs are not local steps: the full suite
+runs on GitHub once, for the frozen release candidate, and the release's whole
+diff gets one independent review.
+
+A session ending is not a new application verification event. Do not start
+`verify:smoke` or `test:serial` solely because the session is ending, or rerun
+an unchanged candidate just to recover context. A report says what ran and what
+happened, including unfinished checks and failures. The detailed record (commit,
+build SHA, run id) is kept for the release candidate only.
 
 For documentation-only work, check the changed text and public-tree policy.
 For verification-tooling work, run the relevant lane/configuration tests, types,
 the gate when build orchestration changes, and a focused execution of the changed
 browser startup path. A tooling check does not establish application readiness.
 
-After shared navigation, map lifecycle or state changes, run affected browser
-cases first and the full serial suite on the assembled candidate. Do not repeat
-that release-scale suite for each intermediate edit. Fire/3D changes additionally
-need their focused pair:
+After shared navigation, map lifecycle or state changes, run only the affected
+browser cases locally, if any; the full suite on GitHub covers the rest once
+the release candidate is frozen.
+
+### 3D diagnosis
+
+The 3D specs run on a software renderer by default (it is what GitHub has),
+and under it the scene freezes the page for 8 to 26 seconds at a time. To
+explain a 3D red locally, use real graphics instead:
 
 ```powershell
-npx playwright test --workers=1 tests/fire3d-mode.spec.ts tests/view-contracts.spec.ts
+$env:DDM_3D_NATIVE_GPU = '1'
+npx playwright test --workers=1 --project=chromium-3d tests/wildfire3d-ground.spec.ts -g "<the case>"
+Remove-Item Env:DDM_3D_NATIVE_GPU
 ```
+
+It opens a browser window and uses Direct3D. Measured 2026-10-11 on two cases
+of `wildfire3d-ground.spec.ts`: 12 seconds, against about 2.5 minutes on the
+software renderer. It is for diagnosis only: timing-sensitive behavior can
+differ, so GitHub's software-renderer run remains the evidence. The Fire pair
+(`tests/fire3d-mode.spec.ts` with `tests/view-contracts.spec.ts`) is GitHub's
+to run, not a local step.
 
 ### One build per smoke invocation
 
@@ -96,21 +127,19 @@ Within `check:all`, adjacent compatible Node tests share a literal
 `node --test --test-concurrency=1` command. Each file retains its default
 subprocess isolation; Node orders files within each group. Non-Node checks
 remain between the same groups, and the NIFC model keeps its separate
-`--experimental-transform-types` invocation. Individual `test:*` scripts remain
-available for focused checks. A failed group stops the `&&` chain before later
+`--experimental-transform-types` invocation. A focused check is
+`node --test tests/<file>.test.mjs`. A failed group stops the `&&` chain before later
 checks or preview startup.
 
-When the gate and full serial suite are required together for the same frozen
-candidate, run `npm run test:serial -- --config=playwright.smoke.config.ts`.
+As the local fallback when GitHub is unavailable, to run the gate and the full
+serial suite together on one build, run
+`npm run test:serial -- --config=playwright.smoke.config.ts`.
 This runs all three assertion projects and serves the gate's checked build.
-A separate preparatory gate is unnecessary for that same frozen candidate
-unless independently required by the task.
+A separate preparatory gate is unnecessary for the same candidate.
 
-A build SHA or dirty marker alone does not establish equivalent inputs. Preserve
-the recorded commit, tracked diff, untracked inventory and relevant input
-identities; review intervening source, generated-data, fixture and configuration
-changes before carrying a result. Attribute each result to the candidate that
-actually ran it and record later documentation changes separately.
+A build SHA or dirty marker alone does not establish equivalent inputs. For a
+release candidate, record the commit, build SHA and GitHub run id of the run
+that passed, and attribute the result to the candidate that actually ran it.
 
 `npm run check:links` is outside these gates and can reach the network. It is
 not a substitute for any assigned verification.
@@ -247,10 +276,11 @@ regression would actually break.
 Pull requests run the deterministic root gate and Worker typecheck (without
 deploying the optional Worker) beside the browser suite; the Pages workflow
 runs the root gate and build beside the same browser suite, and deploys only
-when both have passed. Run focused affected specs during development and
-`npm run test:serial` when a change affects shared navigation, map lifecycle,
-state, or release readiness. The verification ladder above wraps that advice
-into four named scripts.
+when both have passed. Run focused affected specs during development, and
+when a change affects shared navigation, map lifecycle, or state, run the
+affected specs locally; the full suite on GitHub covers the rest once the
+release candidate is frozen. The verification
+ladder above wraps that advice into scripts.
 
 ## How CI runs the suite
 
@@ -279,8 +309,8 @@ test:serial` run all three projects, so coverage is the same in either seat.
 
 In CI (`.github/workflows/browser-suite.yml`, called by both Validate and the
 Pages deploy) each project is sliced with `--shard=i/n` onto its own runners,
-one worker each: four shards for `chromium`, two for `chromium-interaction`,
-two for `chromium-3d`. Each runner builds and serves its own `dist/`, so no
+one worker each: eight shards for `chromium` (four until 2026-10-12), two for `chromium-interaction`,
+four for `chromium-3d` (two until 2026-10-12). Each runner builds and serves its own `dist/`, so no
 shard reads another's state. Each page is its own software-GL MapLibre
 context, so more runners is the lever; more workers per runner is not (see
 the `workers` note in the config, and the `workers`/`retries` experiment
@@ -310,8 +340,8 @@ shard and five to eight times the cheapest. The split is by file order over 32
 tests whose first 10 run in milliseconds, so shard 1 is nearly free by
 construction. Splitting `chromium-3d` three ways again, or moving
 `view-contracts.spec.ts` into its own project so the split is by cost rather
-than by file order, would rebalance it. Not done here: it is a CI-shape change
-and CI is being demoted to a confirmation lane.
+than by file order, would rebalance it. Not done here: it is a CI-shape change,
+and GitHub's Validate run is where the full browser suite runs.
 
 `browser-suite.yml` also takes `workers` and `retries` experiment inputs
 (mirrored as `workflow_dispatch` inputs on `validate.yml`), both defaulted to
@@ -396,7 +426,10 @@ alike, so a local green and a CI green mean the same thing; the bodies are
 the hand-authored rectangles with obviously synthetic names in
 `tests/tribal-fixtures.ts`, and no real sovereign-boundary polygon can enter
 a test artifact (the project's hard rule 1; see the NON-REDISTRIBUTION GUARD
-in `src/layers/aiannh.ts`). A spec that needs a different response (an empty
+in `src/layers/aiannh.ts`). These boundaries are public data at T0; the
+synthetic stand-in shapes keep every run repeatable and independent of the
+live services, and the operator slots must stay empty in the repository. A
+spec that needs a different response (an empty
 collection, an abort, a truncated body, an ArcGIS error, a geography-keyed
 answer) registers its own handler through `routeBoundary`, which wins because
 Playwright checks Page routes before context routes.
@@ -500,7 +533,8 @@ should be read before anything is added to what CI keeps.
 
 **Cannot appear.** Sovereign geometry of any kind: Census AIANNH, BIA
 AIAN-LAR, and the deployer-owned Tribal and Treaty slots. The first two are
-answered from synthetic rectangles on every boot; the last two are asserted
+answered from synthetic rectangles on every boot so runs are repeatable (the
+boundaries themselves are public data at T0); the last two are asserted
 empty by the gate. No rendered pixels, from any source, because trace frames,
 screenshots, and video are all off in CI. No spec source text (`sources:
 false`).

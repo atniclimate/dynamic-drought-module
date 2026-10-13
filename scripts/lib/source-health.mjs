@@ -29,8 +29,6 @@
 export const STUBBED_HOSTS = Object.freeze([
   'tile.openstreetmap.org',
   'a.tile.opentopomap.org',
-  'b.tile.opentopomap.org',
-  'c.tile.opentopomap.org',
 ]);
 
 /** Tile paths stubbed on hosts that also serve a metadata query the runtime

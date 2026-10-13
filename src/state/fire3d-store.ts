@@ -19,6 +19,15 @@ import { syncFire3dParam } from './url';
  * the basemap seed's no-redundant-write behavior.
  */
 
+/**
+ * The width at which the 3D chunk loads (src/main.ts) and a `fire3d=true`
+ * boot holds satellite imagery for it (src/ui/sidebar.ts): one value, or a
+ * boot hold is taken that no controller ever releases. Equal to
+ * FIRE3D_MIN_WIDTH_QUERY in src/config/fire3d-presentation.ts, which rides
+ * the lazy chunk and so cannot be imported here.
+ */
+export const FIRE3D_CHUNK_WIDTH_QUERY = '(min-width: 721px)';
+
 let preference = false;
 
 const listeners = new Set<() => void>();

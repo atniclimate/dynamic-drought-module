@@ -53,7 +53,7 @@
  */
 
 import { writeFile, mkdir } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
 import { rejectEnsoSnapshot, CPC_RULE_URLS } from './lib/enso-snapshot-contract.mjs';
 
@@ -169,7 +169,7 @@ function assertChronologicalKeys(records, keyOf, ordinalOf, label) {
  * checks make an upstream schema change fail the build instead of quietly
  * emitting a partial series.
  */
-function parseSeasonIndex(text, expectedHeader, label) {
+export function parseSeasonIndex(text, expectedHeader, label) {
   const lines = text.replace(/\r/g, '').split('\n');
   const headerIndex = lines.findIndex((line) => normalized(line) === expectedHeader);
   if (headerIndex < 0) {
@@ -377,7 +377,7 @@ async function fetchNino34() {
  * centered on 2Sept1981", so each date is the CENTRE of its week, not its
  * start. The emitted field is documented as the centred date.
  */
-function parseNino34Weekly(text) {
+export function parseNino34Weekly(text) {
   const lines = text.replace(/\r/g, '').split('\n');
   const regionHeader = 'Nino1+2 Nino3 Nino34 Nino4';
   const columnHeader = 'Week SST SSTA SST SSTA SST SSTA SST SSTA';
@@ -487,7 +487,7 @@ function parseSoiBlock(lines, start, end, label) {
   return rows;
 }
 
-function parseSoi(text) {
+export function parseSoi(text) {
   const lines = text.replace(/\r/g, '').split('\n');
   const headerIndexes = [];
   for (let index = 0; index < lines.length; index += 1) {
@@ -734,7 +734,9 @@ async function main() {
   );
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

@@ -216,11 +216,11 @@ export function mapRendererClass(map: maplibregl.Map): RendererClass {
 /**
  * True when `err` is MapLibre 6's `GPUInitializationError`.
  *
- * MapLibre fires this through the map's `error` event (it does not throw
- * from the constructor): `Map._setupPainter` requests a `webgl2` context
- * and, on null, fires an `ErrorEvent` carrying a `GPUInitializationError`
- * (`node_modules/maplibre-gl/dist/maplibre-gl.mjs`, `_setupPainter`; the
- * class is declared at `maplibre-gl.d.ts` "src/util/gpu_initialization_error").
+ * `Map._setupPainter` requests a `webgl2` context and, on null, throws a
+ * `GPUInitializationError`: from the constructor (MapLibre 6.7 and later;
+ * src/main.ts catches it around `createMap`) and, after a context loss that
+ * cannot be recreated, through the map's `error` event. The class is declared
+ * in `maplibre-gl/src/util/gpu_initialization_error.ts`.
  *
  * Identified by `name` and shape rather than `instanceof`, both because the
  * v6 migration guide asks consumers to stop branching on identity across the

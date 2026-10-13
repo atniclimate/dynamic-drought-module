@@ -553,6 +553,10 @@ function render(preserveFeedDisclosure = false): void {
   }
 
   if (restoreFocus) {
-    el.querySelector<HTMLElement>(restoreFocus)?.focus({ preventScroll: true });
+    const target = el.querySelector<HTMLElement>(restoreFocus);
+    // focus() on a now-disabled control (Next at the newest stop) is a no-op
+    // and drops focus to the body; the rail stays focusable.
+    const seat = target?.matches(':disabled') ? el.querySelector<HTMLElement>('.time-bar-rail') : target;
+    seat?.focus({ preventScroll: true });
   }
 }

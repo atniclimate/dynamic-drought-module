@@ -34,15 +34,9 @@ export const URLS = Object.freeze({
   // ---------- Basemaps (raster tiles) ----------
   // MapLibre GL JavaScript raster sources do not natively expand the `{s}`
   // subdomain placeholder used by Leaflet templates. Pin a single subdomain
-  // (`a`) for the primary template; callers wanting round-robin can read
-  // the `basemapTopoVariants` array and rotate themselves. If a future
-  // migration moves to a hosted vector tile bundle, this comment can go.
+  // (`a`) for the primary template. If a future migration moves to a hosted
+  // vector tile bundle, this comment can go.
   basemapTopo: 'https://a.tile.opentopomap.org/{z}/{x}/{y}.png',
-  basemapTopoVariants: [
-    'https://a.tile.opentopomap.org/{z}/{x}/{y}.png',
-    'https://b.tile.opentopomap.org/{z}/{x}/{y}.png',
-    'https://c.tile.opentopomap.org/{z}/{x}/{y}.png'
-  ],
 
   // OSM standard tiles: the active basemap, subdued via raster paint in
   // `src/map/style.ts`. The bare hostname is the OSM tile policy's ONLY
@@ -915,7 +909,6 @@ export const URLS = Object.freeze({
   // both locally and on Pages; that was a latent bug (the empty-placeholder
   // layers surfaced as `error` instead of `no-data`). BASE_URL ends with a
   // slash, so the path segment must not start with one.
-  ecoregionsLocal: BASE_URL + 'data/ecoregions-pnw.geojson',
   // EPA Omernik Level III and Level IV ecoregion polygons for the PNW, baked
   // into a PMTiles vector bundle by scripts/build-ecoregion-tiles.mjs
   // (`npm run build:ecoregion-tiles`) from the EPA Region 10 shapefiles. Two
@@ -923,9 +916,7 @@ export const URLS = Object.freeze({
   // the pmtiles protocol (HTTP Range Requests, so only the header, directory,
   // and visible tiles download). The simplification tolerance, source vintage,
   // and retrieval date are baked into the archive attribution so the overlay
-  // never implies precision the source does not carry. The empty
-  // `ecoregions-pnw.geojson` above is the legacy placeholder, retained until the
-  // ecoregion layer module consumes this bundle.
+  // never implies precision the source does not carry.
   ecoregionsPmtilesLocal: BASE_URL + 'data/ecoregions-pnw.pmtiles',
   // The PNW hillshade raster-dem archive (U4g, D-0.7.0-012/-029): terrarium
   // PNG tiles, 512 px, z0-8, whole-meter quantized, baked by
@@ -1236,6 +1227,29 @@ export const URLS = Object.freeze({
   // product). NOT yet wired.
   usgsQuickdriWeeklyWms:
     'https://dmsdata.cr.usgs.gov/geoserver/quickdri_quickdri_conus_week_data/wms',
+
+  // ---------- Wildfire 3D dryness ground (DDM-P9-T13; admissions star-vhi, usgs-relative-greenness) ----------
+  // NOAA NESDIS STAR VIIRS 500 m Vegetation Health Index map tiles (j01,
+  // NOAA-20), wildcard CORS on 200; a missing week or Z=8 answers 500 with
+  // no CORS header, so the two cannot be told apart. {week} is yyyy0WW,
+  // weeks 1 to 52 only; tiles z0 to z7 only. Cache-Control private,
+  // max-age=0 with no validator, and STAR rewrites back-weeks after
+  // publishing: never cache a week in the app (owner direction 2026-10-09).
+  starVhiJ01TileTemplate:
+    'https://www.star.nesdis.noaa.gov/smcd/emb/vci/VH/image_mapTile.php?type=/j01_500m_VHI/{week}&Z={z}&X={x}&Y={y}',
+  // STAR's land-cover tiles, which the same ground reads beside each of the
+  // tiles above, are NOT a key here: starLandCoverTileTemplate lives in
+  // src/config/dryness-ground.ts (DRYNESS_GROUND_URLS), because this
+  // catalog's chunk rides every feature's first activation and two rows of
+  // scripts/check-activation-budget.mjs had no room for one more entry
+  // (measured 2026-10-11: +29 B gzip; heatrisk-days had 12 B, the North
+  // American Drought Monitor 23 B). The upstream probe reads that file too.
+  // USGS EROS eVIIRS weekly Relative Greenness WMS, layer rg_conus_week_data,
+  // the automatic fallback ground. TIME labels the week's START Monday and
+  // must match a capabilities value exactly (an off-list TIME answers a 200
+  // ServiceException); bbox -128.54 to -65.37, 22.47 to 51.78 N, no Alaska.
+  usgsRgConusWeekWms:
+    'https://dmsdata.cr.usgs.gov/geoserver/firedanger_rg_conus_week_data/wms',
 
   // ---------- B4 transboundary slate (verified 2026-07-06; 0.7.0 wiring) ----------
   // Per the ratified B4 scope these are VERIFIED, NOT WIRED; region-config

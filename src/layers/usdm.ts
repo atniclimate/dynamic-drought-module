@@ -49,6 +49,7 @@ import { URLS } from '../config/urls';
 import { registerClickTarget } from '../map/interaction-coordinator';
 import type { ClockValue, IssuedModel, IssuerSwatch, PopupClock } from '../ui/popup-frame';
 import { fetchBufferedWithBudget } from '../util/fetch';
+import { ExpiringLruCache } from '../util/bounded-cache';
 import { registry } from '../state/registry';
 import { getCurrentRegion, onRegionChange } from '../state/region-store';
 import {
@@ -144,7 +145,10 @@ let stepEpoch = 0;
 
 /** Session cache of weekly frames (survives toggle-off, like HYDRO_CACHE). */
 const frameCache = new FrameCache<GeoJSON.FeatureCollection>(12);
-const changeCache = new Map<UsdmViewMode, GeoJSON.FeatureCollection>();
+/** Change maps expire so a new weekly issue lands within the hour; an expired
+ * one refetches behind the view already on the map. */
+const CHANGE_CACHE_TTL_MS = 60 * 60 * 1000;
+const changeCache = new ExpiringLruCache<UsdmViewMode, GeoJSON.FeatureCollection>(2);
 
 const USDM_COLORS: ReadonlyArray<string> = USDM_CATEGORIES.map((c) => c.color);
 
@@ -675,7 +679,7 @@ async function setMode(map: maplibregl.Map, mode: UsdmViewMode): Promise<void> {
       fc = stampChangeFeatures(
         (await response.json()) as GeoJSON.FeatureCollection & { date?: unknown }
       );
-      changeCache.set(mode, fc);
+      changeCache.set(mode, fc, CHANGE_CACHE_TTL_MS);
     } catch (err) {
       if (signal.aborted || myEpoch !== stepEpoch) return;
       console.warn(`[usdm] change map (${mode}) fetch failed.`, err);

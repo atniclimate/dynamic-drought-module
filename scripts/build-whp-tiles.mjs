@@ -250,10 +250,7 @@ async function main() {
   const archive = result.archives.get(fit.zoom);
   if (!archive) throw new Error(`no archive emitted for max zoom ${fit.zoom}`);
 
-  await writeFile(OUT_PATH, archive);
-  console.log(`  wrote ${OUT_PATH} (${archive.length.toLocaleString()} bytes)`);
-
-  // Validate: read the archive back through the runtime pmtiles reader.
+  // Validate before writing: read the archive back through the runtime pmtiles reader.
   const source = {
     getKey: () => 'build',
     getBytes: async (offset, length) => {
@@ -271,6 +268,8 @@ async function main() {
     latToTileY(43.8, sampleZ)
   );
   if (!sample) throw new Error('validation failed: sample tile did not decode');
+  await writeFile(OUT_PATH, archive);
+  console.log(`  wrote ${OUT_PATH} (${archive.length.toLocaleString()} bytes)`);
   console.log('\nvalidation:');
   console.log(`  header zooms ${header.minZoom}..${header.maxZoom}, tileType ${header.tileType}`);
   console.log(`  sample tile z${sampleZ} decoded: ${sample.data.byteLength} bytes`);

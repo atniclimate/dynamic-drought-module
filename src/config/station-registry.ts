@@ -16,6 +16,7 @@ import type {
 import { fetchBufferedWithBudget } from '../util/fetch';
 import { quantizeBbox } from '../util/bbox';
 import { isObject } from '../util/guards';
+import { readLatestUsgsReading, readUnitCode, readVariableCode } from '../util/usgs';
 import { ExpiringLruCache } from '../util/bounded-cache';
 
 const MINUTE_MS = 60 * 1000;
@@ -129,16 +130,6 @@ interface AwdbStationMetadata {
   readonly network: AwdbDiscoveryNetwork;
 }
 
-interface AwdbStationCacheInflight {
-  readonly controller: AbortController;
-  readonly promise: Promise<readonly AwdbStationMetadata[]>;
-  readonly waiters: Set<AbortSignal>;
-  hasEverHadWaiter: boolean;
-}
-
-let awdbStationCache: readonly AwdbStationMetadata[] | null = null;
-let awdbStationCacheInflight: AwdbStationCacheInflight | null = null;
-
 interface CoopsStationMetadata {
   readonly id: string;
   readonly name: string;
@@ -147,16 +138,6 @@ interface CoopsStationMetadata {
   readonly state: string | null;
   readonly productsSelf: string | null;
 }
-
-interface CoopsStationCacheInflight {
-  readonly controller: AbortController;
-  readonly promise: Promise<readonly CoopsStationMetadata[]>;
-  readonly waiters: Set<AbortSignal>;
-  hasEverHadWaiter: boolean;
-}
-
-let coopsStationCache: readonly CoopsStationMetadata[] | null = null;
-let coopsStationCacheInflight: CoopsStationCacheInflight | null = null;
 
 interface AgrimetStationMetadata {
   readonly id: string;
@@ -1000,56 +981,23 @@ function readUsgsStationValue(
   series: Record<string, unknown>
 ): StationValue | null {
   if (!siteCode) return null;
-  const code = readUsgsVariableCode(series);
+  const code = readVariableCode(series);
   const latest = readLatestUsgsReading(series);
   if (!latest) return null;
   const value = Number(latest.value);
-  if (!Number.isFinite(value)) return null;
 
-  const timestamp = latest.dateTime;
+  const timestamp = latest.dateTime ?? '';
   const freshness = usgsDiscoveryFreshness(timestamp);
   return {
     stationId: `usgs-${siteCode}`,
     parameter: code === '00065' ? 'gage_height_ft' : 'discharge_cfs',
     label: code === '00065' ? 'Gage height' : 'Discharge',
     value: Math.round(value * 100) / 100,
-    unit: readUsgsUnitCode(series) ?? '',
+    unit: readUnitCode(series) ?? '',
     timestamp,
     freshness,
     source: 'usgs-iv'
   };
-}
-
-function readLatestUsgsReading(
-  series: Record<string, unknown>
-): { readonly value: string; readonly dateTime: string } | null {
-  const values = series.values;
-  if (!Array.isArray(values) || values.length === 0) return null;
-  const first = values[0];
-  if (!isObject(first) || !Array.isArray(first.value)) return null;
-
-  for (let i = first.value.length - 1; i >= 0; i--) {
-    const reading = first.value[i];
-    if (!isObject(reading)) continue;
-    if (reading.value === '-999999') continue;
-    if (typeof reading.value !== 'string' || typeof reading.dateTime !== 'string') continue;
-    return { value: reading.value, dateTime: reading.dateTime };
-  }
-  return null;
-}
-
-function readUsgsVariableCode(series: Record<string, unknown>): string | null {
-  const variable = series.variable;
-  if (!isObject(variable) || !Array.isArray(variable.variableCode)) return null;
-  const first = variable.variableCode[0];
-  if (!isObject(first)) return null;
-  return typeof first.value === 'string' ? first.value : null;
-}
-
-function readUsgsUnitCode(series: Record<string, unknown>): string | null {
-  const variable = series.variable;
-  if (!isObject(variable) || !isObject(variable.unit)) return null;
-  return typeof variable.unit.unitCode === 'string' ? variable.unit.unitCode : null;
 }
 
 function preferredUsgsValue(values: readonly StationValue[]): StationValue | null {
@@ -1079,72 +1027,14 @@ function formatBboxNumber(value: number): string {
 async function discoverAwdbStations(
   request: StationViewportDiscoveryRequest
 ): Promise<readonly StationDiscoveryRecord[]> {
-  const stations = await getAwdbStationCache(request.signal);
+  const stations = await awdbStationListCache.get(request.signal);
   if (request.signal?.aborted) return [];
   return stations
     .filter((station) => isCoordinateInBounds(station.latitude, station.longitude, request.bounds))
     .map(awdbDiscoveryRecord);
 }
 
-async function getAwdbStationCache(
-  signal: AbortSignal | null
-): Promise<readonly AwdbStationMetadata[]> {
-  if (awdbStationCache) return awdbStationCache;
-  const inflight =
-    awdbStationCacheInflight && !awdbStationCacheInflight.controller.signal.aborted
-      ? awdbStationCacheInflight
-      : startAwdbStationCacheFetch();
-  if (signal) addAwdbCacheWaiter(inflight, signal);
-
-  try {
-    if (!signal) return await inflight.promise;
-    return await Promise.race([inflight.promise, abortPromise(signal)]);
-  } finally {
-    if (signal) removeAwdbCacheWaiter(inflight, signal);
-  }
-}
-
-function startAwdbStationCacheFetch(): AwdbStationCacheInflight {
-  const controller = new AbortController();
-  const waiters = new Set<AbortSignal>();
-  const promise = fetchAwdbStationLists(controller.signal)
-    .then((stations) => {
-      awdbStationCache = stations;
-      return stations;
-    })
-    .finally(() => {
-      awdbStationCacheInflight = null;
-    });
-  const inflight = { controller, promise, waiters, hasEverHadWaiter: false };
-  awdbStationCacheInflight = inflight;
-  return inflight;
-}
-
-function addAwdbCacheWaiter(inflight: AwdbStationCacheInflight, signal: AbortSignal): void {
-  if (signal.aborted) {
-    maybeAbortAwdbCacheFetch(inflight);
-    return;
-  }
-  inflight.hasEverHadWaiter = true;
-  inflight.waiters.add(signal);
-  signal.addEventListener('abort', () => removeAwdbCacheWaiter(inflight, signal), { once: true });
-}
-
-function removeAwdbCacheWaiter(inflight: AwdbStationCacheInflight, signal: AbortSignal): void {
-  inflight.waiters.delete(signal);
-  maybeAbortAwdbCacheFetch(inflight);
-}
-
-function maybeAbortAwdbCacheFetch(inflight: AwdbStationCacheInflight): void {
-  if (awdbStationCacheInflight !== inflight) return;
-  if (
-    inflight.hasEverHadWaiter &&
-    inflight.waiters.size === 0 &&
-    !inflight.controller.signal.aborted
-  ) {
-    inflight.controller.abort();
-  }
-}
+const awdbStationListCache = createStationListCache(fetchAwdbStationLists);
 
 function abortPromise(signal: AbortSignal): Promise<never> {
   return new Promise<never>((_resolve, reject) => {
@@ -1165,11 +1055,10 @@ interface StationListCache<T> {
 }
 
 // Reference-counted, single-flight cache for a national or multi-state station
-// list. It generalizes the hand-rolled AWDB and CO-OPS caches above: at most
-// one fetch is in flight; concurrent callers share it; and if every waiter
-// aborts before it resolves, the shared fetch is aborted too. The AWDB and
-// CO-OPS caches predate this helper and are left in place; the newer AgriMet
-// and CoCoRaHS lists share it so the waiter bookkeeping lives in one spot.
+// list: at most one fetch is in flight; concurrent callers share it; and if
+// every waiter aborts before it resolves, the shared fetch is aborted too. A
+// completed list lives for an hour, so a roster that is bad or has changed is
+// read again rather than kept for the whole session.
 function createStationListCache<T>(
   fetcher: (signal: AbortSignal) => Promise<readonly T[]>
 ): StationListCache<T> {
@@ -1180,7 +1069,7 @@ function createStationListCache<T>(
     hasEverHadWaiter: boolean;
   }
 
-  let cache: readonly T[] | null = null;
+  const cache = new ExpiringLruCache<'list', readonly T[]>(1);
   let inflight: Inflight | null = null;
 
   function maybeAbort(target: Inflight): void {
@@ -1217,7 +1106,7 @@ function createStationListCache<T>(
       hasEverHadWaiter: false,
       promise: fetcher(controller.signal)
         .then((list) => {
-          cache = list;
+          cache.set('list', list, HOUR_MS);
           return list;
         })
         .finally(() => {
@@ -1230,8 +1119,9 @@ function createStationListCache<T>(
 
   return {
     async get(signal: AbortSignal | null): Promise<readonly T[]> {
-      if (cache) return cache;
-      const target = inflight && !inflight.controller.signal.aborted ? inflight : start();
+      const cached = cache.get('list');
+      if (cached) return cached;
+      const target =inflight && !inflight.controller.signal.aborted ? inflight : start();
       if (signal) addWaiter(target, signal);
       try {
         if (!signal) return await target.promise;
@@ -1290,7 +1180,14 @@ async function fetchAwdbStationsForNetwork(
     throw new Error(`NRCS AWDB station discovery HTTP ${response.status}`);
   }
   const payload: unknown = await response.json();
-  return readAwdbStationList(payload, network);
+  return requireRoster(readAwdbStationList(payload, network), 'NRCS AWDB');
+}
+
+// A readable answer with no stations is a failed read: throwing lets the settle
+// path record it and keeps the cache from holding an empty roster.
+function requireRoster<T>(list: readonly T[], label: string): readonly T[] {
+  if (!list.length) throw new Error(`${label} station list was empty or malformed`);
+  return list;
 }
 
 function readAwdbStationList(
@@ -1616,7 +1513,7 @@ export async function fetchRawsStationConditions(
 async function discoverCoopsStations(
   request: StationViewportDiscoveryRequest
 ): Promise<readonly StationDiscoveryRecord[]> {
-  const stations = await getCoopsStationCache(request.signal);
+  const stations = await coopsStationListCache.get(request.signal);
   if (request.signal?.aborted) return [];
   return stations
     .filter((station) => isCoordinateInBounds(station.latitude, station.longitude, request.bounds))
@@ -1624,65 +1521,7 @@ async function discoverCoopsStations(
     .filter(isDiscoveryRecord);
 }
 
-async function getCoopsStationCache(
-  signal: AbortSignal | null
-): Promise<readonly CoopsStationMetadata[]> {
-  if (coopsStationCache) return coopsStationCache;
-  const inflight =
-    coopsStationCacheInflight && !coopsStationCacheInflight.controller.signal.aborted
-      ? coopsStationCacheInflight
-      : startCoopsStationCacheFetch();
-  if (signal) addCoopsCacheWaiter(inflight, signal);
-
-  try {
-    if (!signal) return await inflight.promise;
-    return await Promise.race([inflight.promise, abortPromise(signal)]);
-  } finally {
-    if (signal) removeCoopsCacheWaiter(inflight, signal);
-  }
-}
-
-function startCoopsStationCacheFetch(): CoopsStationCacheInflight {
-  const controller = new AbortController();
-  const waiters = new Set<AbortSignal>();
-  const promise = fetchCoopsStationList(controller.signal)
-    .then((stations) => {
-      coopsStationCache = stations;
-      return stations;
-    })
-    .finally(() => {
-      coopsStationCacheInflight = null;
-    });
-  const inflight = { controller, promise, waiters, hasEverHadWaiter: false };
-  coopsStationCacheInflight = inflight;
-  return inflight;
-}
-
-function addCoopsCacheWaiter(inflight: CoopsStationCacheInflight, signal: AbortSignal): void {
-  if (signal.aborted) {
-    maybeAbortCoopsCacheFetch(inflight);
-    return;
-  }
-  inflight.hasEverHadWaiter = true;
-  inflight.waiters.add(signal);
-  signal.addEventListener('abort', () => removeCoopsCacheWaiter(inflight, signal), { once: true });
-}
-
-function removeCoopsCacheWaiter(inflight: CoopsStationCacheInflight, signal: AbortSignal): void {
-  inflight.waiters.delete(signal);
-  maybeAbortCoopsCacheFetch(inflight);
-}
-
-function maybeAbortCoopsCacheFetch(inflight: CoopsStationCacheInflight): void {
-  if (coopsStationCacheInflight !== inflight) return;
-  if (
-    inflight.hasEverHadWaiter &&
-    inflight.waiters.size === 0 &&
-    !inflight.controller.signal.aborted
-  ) {
-    inflight.controller.abort();
-  }
-}
+const coopsStationListCache = createStationListCache(fetchCoopsStationList);
 
 async function fetchCoopsStationList(signal: AbortSignal): Promise<readonly CoopsStationMetadata[]> {
   const params = new URLSearchParams({ type: 'waterlevels' });
@@ -1696,7 +1535,7 @@ async function fetchCoopsStationList(signal: AbortSignal): Promise<readonly Coop
     throw new Error(`NOAA CO-OPS station discovery HTTP ${response.status}`);
   }
   const payload: unknown = await response.json();
-  return readCoopsStationList(payload);
+  return requireRoster(readCoopsStationList(payload), 'NOAA CO-OPS');
 }
 
 function readCoopsStationList(payload: unknown): readonly CoopsStationMetadata[] {
@@ -1820,7 +1659,7 @@ async function fetchAgrimetStationList(
     throw new Error(`USBR AgriMet station discovery HTTP ${response.status}`);
   }
   const text = await response.text();
-  return readAgrimetStationList(text);
+  return requireRoster(readAgrimetStationList(text), 'USBR AgriMet');
 }
 
 function readAgrimetStationList(text: string): readonly AgrimetStationMetadata[] {
@@ -1967,7 +1806,7 @@ async function fetchCocorahsStationsForState(
     throw new Error(`CoCoRaHS station discovery HTTP ${response.status} (${state})`);
   }
   const payload: unknown = await response.json();
-  return readCocorahsStationList(payload);
+  return requireRoster(readCocorahsStationList(payload), 'CoCoRaHS');
 }
 
 function readCocorahsStationList(payload: unknown): readonly CocorahsStationMetadata[] {

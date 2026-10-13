@@ -250,13 +250,13 @@ export async function fetchWaterSupplyClaims(
 
   const location = titleCase(row.location);
   const stationUrl = `https://www.nwrfc.noaa.gov/water_supply/ws_forecasts.php?id=${encodeURIComponent(point)}`;
-  // Shared contract fields: `FcstDate` echoes the requested date (ISO), so it
-  // is the issue date of the report both claims read from.
+  // `FcstDate` echoes the requested date, so it is not an issue date: only
+  // `retrieved` is stated.
   const wsShared = {
     source: 'NWRFC Water Supply Forecast', // vocab-allow: names the NWRFC Water Supply Forecast and its forecast points, upstream product
     sourceUrl: stationUrl,
     product: 'waterSupply' as const,
-    dates: { issued: row.fcstDate, retrieved: todayIso() },
+    dates: { retrieved: todayIso() },
     // vocab-allow: names the NWRFC Water Supply Forecast and its forecast points, upstream product
     support: { reporting: `the ${location} basin forecast point (${point})` },
     method: { baseline: '1991-2020 normal' }
@@ -278,7 +278,7 @@ export async function fetchWaterSupplyClaims(
     makeClaim({
       text: // vocab-allow: names the NWRFC Water Supply Forecast and its forecast points, upstream product
         `The NWRFC April-September water-supply forecast at ${location} is ${row.pctOfNormal} percent of the 1991-2020 normal ` + // vocab-allow: names the NWRFC Water Supply Forecast and its forecast points, upstream product
-        `(50 percent exceedance, issued ${row.fcstDate}). This is a basin-scale read at a named forecast point, not a site-specific value. ` +
+        `(50 percent exceedance). This is a basin-scale read at a named forecast point, not a site-specific value. ` +
         supplyTilt(row.pctOfNormal),
       ...wsShared,
       evidence: 'outlook',
