@@ -289,6 +289,30 @@ async function countFromLoadedNifcCollection(
 }
 
 /**
+ * The mapped-wildfire mark's fill opacity by intersecting perimeter count,
+ * ascending lower bounds, roughly log-spaced so one perimeter and a busy
+ * framing read differently. The hue stays the one borrowed NIFC mark; only
+ * its depth over the dark card follows the count.
+ */
+export const MINIMAP_WILDFIRE_COUNT_TIERS: readonly {
+  readonly min: number;
+  readonly opacity: number;
+}[] = [
+  { min: 1, opacity: 0.4 },
+  { min: 2, opacity: 0.6 },
+  { min: 10, opacity: 0.8 },
+  { min: 50, opacity: 1 },
+];
+
+export function mappedWildfireFillOpacity(count: number): number {
+  let opacity = MINIMAP_WILDFIRE_COUNT_TIERS[0]!.opacity;
+  for (const tier of MINIMAP_WILDFIRE_COUNT_TIERS) {
+    if (count >= tier.min) opacity = tier.opacity;
+  }
+  return opacity;
+}
+
+/**
  * Apply strict red, then orange, then yellow precedence to one framing.
  * Exact 50 and 30 percent values do not pass their respective thresholds.
  */

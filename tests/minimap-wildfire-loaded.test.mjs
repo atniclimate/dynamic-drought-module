@@ -247,3 +247,37 @@ test('no loaded snapshot at all (the layer says ready but nothing is loaded) tak
   const { posts } = await runFeed({ status: 'ready', snapshot: null });
   assert.equal(posts.length, FRAMING_KEYS.length);
 });
+
+// ---------------------------------------------------------------------------
+// The minimap read wrong outside Drought (owner look, 2026-10-12): one orange
+// whatever the fire count, and Drought Monitor wording in every mode.
+// ---------------------------------------------------------------------------
+
+test('the mapped-wildfire fill deepens with the perimeter count: one, a few and many perimeters read differently', () => {
+  const opacity = minimap.mappedWildfireFillOpacity;
+  assert.ok(opacity(1) > 0, 'a single perimeter is still drawn');
+  assert.ok(opacity(1) < opacity(5), 'five reads deeper than one');
+  assert.ok(opacity(5) < opacity(300), 'three hundred reads deeper than five');
+  assert.equal(opacity(300), 1, 'the busiest tier is the full mark');
+  let previous = 0;
+  for (const tier of minimap.MINIMAP_WILDFIRE_COUNT_TIERS) {
+    assert.ok(tier.opacity > previous, `tier from ${tier.min} is deeper than the one below it`);
+    assert.equal(opacity(tier.min), tier.opacity, `a count of ${tier.min} lands in its own tier`);
+    previous = tier.opacity;
+  }
+});
+
+test('each mode cites its own minimap source, enumerated from the cluster table: only Drought names the Drought Monitor', async () => {
+  const { HAZARD_CLUSTER_KEYS } = await import('../src/config/clusters.ts');
+  const { framingMinimapProvenance } = await import('../src/config/framings.ts');
+  assert.match(framingMinimapProvenance('pacific-coast', 'drought'), /North American Drought Monitor/);
+  for (const mode of HAZARD_CLUSTER_KEYS.filter((key) => key !== 'drought')) {
+    for (const key of FRAMING_KEYS) {
+      const clause = framingMinimapProvenance(key, mode);
+      assert.equal(typeof clause, 'string', `${mode} names a source for ${key}`);
+      assert.ok(clause.length > 0, `${mode} clause for ${key} is not empty`);
+      assert.doesNotMatch(clause, /Drought Monitor|drought/i, `${mode} clause for ${key} cites no drought source`);
+      assert.doesNotMatch(clause, /Navigation only/, `${mode} clause for ${key} says what the minimap shows`);
+    }
+  }
+});

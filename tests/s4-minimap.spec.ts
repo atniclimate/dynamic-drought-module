@@ -286,22 +286,24 @@ test.describe('S4b minimap', () => {
     // remain on the controls, without a paragraph below the minimap.
     await page.locator('.shell-cluster-btn[data-cluster="heat"]').click();
     await expect(minimap.locator('.shell-minimap-metric-note')).toHaveCount(0);
-    // DR-040 c clause 1: the visible note AND every framing target's
-    // accessible name say the same "navigation only" thing (both read
-    // NEUTRAL_METRIC_NOTES), and the canvas carries no status word at all
+    // DR-040 c clause 1: every framing target's accessible name says the
+    // framings are unshaded and why, citing the mode's own source and never
+    // the Drought Monitor, and the canvas carries no status word at all
     // (absent, not the retired 'neutral' sentinel) since none of the six
     // states apply to a metric-free context.
-    await expect(
-      minimap.locator('[data-framing="pacific-coast"]'),
-    ).toHaveAttribute('aria-label', /Navigation only:/);
+    // `pacific` is the pacific-coast framing locator declared above.
+    await expect(pacific).toHaveAttribute('aria-label', /Framings are unshaded/);
+    await expect(pacific).toHaveAttribute('aria-label', /HeatRisk/);
+    await expect(pacific).not.toHaveAttribute('aria-label', /Drought Monitor/);
+    await expect(minimap.locator('.shell-minimap-scale')).toHaveText('Unshaded · see main map');
     expect(
       await minimap.locator('.shell-minimap-canvas').getAttribute('data-minimap-status'),
     ).toBeNull();
     await page.locator('.shell-cluster-btn[data-cluster="enso"]').click();
     await expect(minimap.locator('.shell-minimap-metric-note')).toHaveCount(0);
-    await expect(
-      minimap.locator('[data-framing="pacific-coast"]'),
-    ).toHaveAttribute('aria-label', /Navigation only:/);
+    await expect(pacific).toHaveAttribute('aria-label', /Framings are unshaded/);
+    await expect(pacific).toHaveAttribute('aria-label', /Relative Oceanic Nino Index/);
+    await expect(pacific).not.toHaveAttribute('aria-label', /Drought Monitor/);
     expect(
       await minimap.locator('.shell-minimap-canvas').getAttribute('data-minimap-status'),
     ).toBeNull();
@@ -741,6 +743,8 @@ test.describe('S4b minimap', () => {
       await expect(shapes).toHaveCount(key === 'hawaii' ? 4 : 1);
       for (const shape of await shapes.all()) {
         await expect(shape).toHaveCSS('fill', 'rgb(255, 76, 0)');
+        // One perimeter reads in the lowest count tier, not the full mark.
+        await expect(shape).toHaveCSS('fill-opacity', '0.4');
       }
     }
   });
