@@ -1453,6 +1453,7 @@ test('post-probe terrain tile failures roll the scene back transactionally', asy
     for (let i = 0; i < 3; i += 1) {
       harness.emit('error', {
         sourceId: 'fire3d-terrain-dem',
+        tile: {},
         error: new Error(`synthetic tile failure ${i}`)
       });
     }
@@ -2861,12 +2862,14 @@ test.describe('W2 registered native consumers', () => {
         try {
           await addW2Source(page, 'w2-deadline', `${protocol}://${fixture.url}`);
           await expect.poll(() => fixture.state.held).toBe(1);
-          // Allow scheduling slack around the existing 15 s ceiling. This does
+          // The product deadline is 60 listening ticks of 250 ms, counted in
+          // page time, not wall-clock time: a busy software-renderer page
+          // stretches the ticks, so the wall-clock wait is generous. This does
           // not amend the product budget, and cannot pass by merely aborting:
           // MapLibre suppresses AbortError instead of emitting a source error.
           await expect.poll(() => page.evaluate(() =>
             (window as unknown as W2Window).__w2Errors.filter((event) => event.sourceId === 'w2-deadline')
-          ), { timeout: 20_000 }).toEqual([
+          ), { timeout: 45_000 }).toEqual([
             expect.objectContaining({ sourceId: 'w2-deadline', message: expect.stringContaining('PMTiles read timed out') })
           ]);
           // ensureError may wrap a DOMException. Event delivery is the contract:

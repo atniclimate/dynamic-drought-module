@@ -78,6 +78,7 @@ import {
 } from '../state/fire3d-store';
 import { registry } from '../state/registry';
 import { showToast } from '../ui/overlay';
+import { isObject } from '../util/guards';
 import { prefersReducedMotion } from '../util/motion';
 import { watchRasterTiles } from '../util/raster-error-watch';
 import type { RasterTileWatch } from '../util/raster-status';
@@ -281,15 +282,12 @@ let coverageMoveListener: (() => void) | null = null;
 let generation = 0;
 let savedCamera: { readonly pitch: number; readonly bearing: number } | null =
   null;
-let tileWatch: RasterTileWatch | null = null;
+let tileWatch: Pick<RasterTileWatch, 'detach'> | null = null;
 let smokeVolumeOn = false;
 let smokeModule: typeof import('../layers/hms-smoke-volume') | null = null;
 let ribbonOn = false;
 let ribbonModule: typeof import('../layers/nifc-perimeter-ribbon') | null =
   null;
-/** The ribbon read in flight, or null. Every teardown, the perimeter layer
- * going off, and a newer read abort it, so only the newest read is current. */
-let ribbonRead: AbortController | null = null;
 let contextModule: typeof import('./fire3d-context') | null = null;
 let contextKeys: readonly string[] = [];
 /** Mirrors Fire3DStatus.transport; null while inactive, set from the first
@@ -568,7 +566,7 @@ let transportPoll: ReturnType<typeof setInterval> | undefined;
 function attachTransportWatch(map: maplibregl.Map): void {
   if (transportSourceDataListener) return;
   transportSourceDataListener = () => recomputeSceneTransport(map);
-  transportIdleListener = () => recomputeSceneTransport(map);
+  transportIdleListener = transportSourceDataListener;
   // found-130: sourcedata and idle can be coalesced away on a stalled main
   // thread after the last request ends, so the stamp is also re-read every
   // 250 ms while the scene is up; it republishes only on a change.
@@ -601,14 +599,10 @@ function rollbackScene(map: maplibregl.Map): void {
   terrainCoverage = 'full';
   resolvedTerrainMaxZoom = null;
   resolvedTerrainExtent = null;
-  if (tileWatch) {
-    tileWatch.detach();
-    tileWatch = null;
-  }
-  if (contextAbort) {
-    contextAbort.abort();
-    contextAbort = null;
-  }
+  tileWatch?.detach();
+  tileWatch = null;
+  contextAbort?.abort();
+  contextAbort = null;
   if (contextModule) contextModule.deactivateContextLayers(map);
   // Aborting the ground's activation aborts its reads and removes its layer.
   drynessAbort?.abort();
@@ -616,9 +610,7 @@ function rollbackScene(map: maplibregl.Map): void {
   contextKeys = [];
   contextEmbedLines = [];
   // The ribbon owns its own derived source, so its teardown cannot strand
-  // the flat perimeter layer's; the guard is defensive only. A read still
-  // out is withdrawn first, so it cannot raise the ribbon after this.
-  cancelRibbonRead();
+  // the flat perimeter layer's; the guard is defensive only.
   if (ribbonModule) ribbonModule.deactivatePerimeterRibbon(map);
   ribbonOn = false;
   if (smokeVolumeOn && smokeModule) {
@@ -695,37 +687,18 @@ function warnComponent(component: string, error: unknown): void {
   console.warn(`[fire3d] ${component} failed.`, error);
 }
 
-function cancelRibbonRead(): void {
-  if (ribbonRead) {
-    ribbonRead.abort();
-    ribbonRead = null;
-  }
-}
-
-/**
- * One ribbon read, superseding any read still out. Returns true when this
- * read was still the current one after its await (`ribbonOn` then holds its
- * answer), false when a teardown, the perimeter layer going off, or a newer
- * read took over; the ribbon module itself writes nothing to the map once
- * the signal is aborted.
- */
-async function readRibbon(
+/** One ribbon read: the ribbon module reads the perimeter snapshot
+ * synchronously, so `ribbonOn` holds its answer on return. */
+function readRibbon(
   map: maplibregl.Map,
   ribbon: typeof import('../layers/nifc-perimeter-ribbon')
-): Promise<boolean> {
-  cancelRibbonRead();
-  const read = new AbortController();
-  ribbonRead = read;
-  let on = false;
+): void {
   try {
-    on = await ribbon.activatePerimeterRibbon(map, read.signal);
+    ribbonOn = ribbon.activatePerimeterRibbon(map);
   } catch (err) {
+    ribbonOn = false;
     warnComponent('ribbon activation', err);
   }
-  if (ribbonRead !== read) return false;
-  ribbonRead = null;
-  ribbonOn = on;
-  return true;
 }
 
 async function activateScene(map: maplibregl.Map): Promise<void> {
@@ -830,10 +803,24 @@ async function activateScene(map: maplibregl.Map): Promise<void> {
   // Post-probe honesty: a truncated archive or ranged-read failure surfaces
   // as tile errors after a clean header probe; degrade transactionally
   // instead of leaving a silently flat or torn scene.
-  tileWatch = watchRasterTiles(map, TERRAIN_SOURCE_ID, (state) => {
+  const watch = watchRasterTiles(map, TERRAIN_SOURCE_ID, (state) => {
     if (state !== 'error') return;
     failScene(map, 'Terrain tiles failed to load.');
   });
+  // A failed header or directory read fires ONE source-level error with no
+  // tile, which the three-tile watch never counts: roll back on it directly.
+  const onSourceError = (e: maplibregl.ErrorEvent): void => {
+    if (isObject(e) && e.sourceId === TERRAIN_SOURCE_ID && !e.tile) {
+      failScene(map, 'Terrain tiles failed to load.');
+    }
+  };
+  map.on('error', onSourceError);
+  tileWatch = {
+    detach() {
+      watch.detach();
+      map.off('error', onSourceError);
+    }
+  };
 
   // DDM-P9-T13: the dryness ground rides its own lazy chunk, loaded only here,
   // and is non-fatal: its own six states say what it shows, and a failure
@@ -876,8 +863,7 @@ async function activateScene(map: maplibregl.Map): Promise<void> {
     warnComponent('ribbon import', err);
   }
   if (myGeneration !== generation || !active) return;
-  if (ribbonModule) await readRibbon(map, ribbonModule);
-  if (myGeneration !== generation || !active) return;
+  if (ribbonModule) readRibbon(map, ribbonModule);
 
   // W-CTX: the issuer-published context layers ride their own lazy chunk
   // and are non-fatal by contract; each missing layer degrades alone.
@@ -955,20 +941,20 @@ export function setFire3DActive(map: maplibregl.Map, next: boolean): void {
 function reconcileSmokeVolume(map: maplibregl.Map): void {
   if (!active || !smokeModule) return;
   const smokeLayerOn = registry.getActiveKeys().has('hms-smoke');
-  if (smokeVolumeOn && !smokeLayerOn) {
+  if (smokeVolumeOn === smokeLayerOn) return;
+  if (smokeVolumeOn) {
     smokeModule.deactivateSmokeVolume(map);
     smokeModule.cleanupOrphanedSmokeSource(map);
     smokeVolumeOn = false;
-    republishActive();
-  } else if (!smokeVolumeOn && smokeLayerOn) {
+  } else {
     try {
       smokeVolumeOn = smokeModule.activateSmokeVolume(map);
     } catch (err) {
       smokeVolumeOn = false;
       warnComponent('smoke activation', err);
     }
-    republishActive();
   }
+  republishActive();
 }
 
 /**
@@ -993,26 +979,19 @@ function reconcilePerimeterRibbon(
   const ribbon = ribbonModule;
   const perimetersOn = registry.getActiveKeys().has(PERIMETER_LAYER_KEY);
   if (!perimetersOn) {
-    // A read still out would otherwise land after this and raise the ribbon
-    // over a layer that is gone: withdraw it, then take down what stands.
-    const readOut = ribbonRead !== null;
-    cancelRibbonRead();
-    if (!ribbonOn && !readOut) return;
-    ribbon.deactivatePerimeterRibbon(map);
     if (!ribbonOn) return;
+    ribbon.deactivatePerimeterRibbon(map);
     ribbonOn = false;
     republishActive();
     return;
   }
   // A change that does not concern the perimeters (supersede false) leaves
-  // a standing ribbon and a read already out alone; a perimeter status
-  // change supersedes it, so the answer that lands (and the ribbon that
-  // stands) is the one over the perimeters the layer holds now.
-  if (!supersede && (ribbonOn || ribbonRead !== null)) return;
+  // a standing ribbon alone; a perimeter status change re-reads it, so the
+  // ribbon that stands is the one over the perimeters the layer holds now.
+  if (!supersede && ribbonOn) return;
   const was = ribbonOn;
-  void readRibbon(map, ribbon).then((current) => {
-    if (current && ribbonOn !== was) republishActive();
-  });
+  readRibbon(map, ribbon);
+  if (ribbonOn !== was) republishActive();
 }
 
 /**
@@ -1063,9 +1042,11 @@ export function initFire3DController(map: maplibregl.Map): void {
   onCommittedSnapshotChange(evaluate);
   registry.on('change', evaluate);
   // The perimeter layer's DATA lands after its registry membership does, so
-  // the ribbon needs the status seam as well as the change seam (DR-064).
+  // the ribbon needs the status seam as well as the change seam (DR-064);
+  // the smoke source is added only after its fetch, so the volume does too.
   registry.on('status-change', (key) => {
     if (key === PERIMETER_LAYER_KEY) reconcilePerimeterRibbon(map);
+    else if (key === 'hms-smoke') reconcileSmokeVolume(map);
   });
   if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
     window.matchMedia(FIRE3D_MIN_WIDTH_QUERY).addEventListener('change', evaluate);

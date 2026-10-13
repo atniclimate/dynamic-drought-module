@@ -153,6 +153,7 @@ const NO_PERIMETERS = { type: 'FeatureCollection', features: [] };
 
 const sources = new Map();
 const layers = new Map();
+const mapListeners = {};
 const map = {
   getSource: (id) => sources.get(id),
   addSource: (id, spec) => {
@@ -178,8 +179,12 @@ const map = {
   setSky() {},
   jumpTo() {},
   easeTo() {},
-  on() {},
-  off() {},
+  on: (type, fn) => {
+    (mapListeners[type] ??= []).push(fn);
+  },
+  off: (type, fn) => {
+    mapListeners[type] = (mapListeners[type] ?? []).filter((held) => held !== fn);
+  },
   isSourceLoaded: () => true
 };
 
@@ -252,6 +257,7 @@ async function enterScene() {
 async function reset() {
   env.onSmoke = null;
   setPreference(false);
+  registry.deactivate('hms-smoke');
   if (registry.getActiveKeys().has(PERIMETER_KEY)) perimetersOff();
   setPerimeterSnapshot(null);
   await settle();
@@ -321,6 +327,46 @@ test('a scene exit right after the perimeters landed leaves no ribbon on the fla
 
   assert.deepEqual(ribbonOnMap(), NO_RIBBON, 'the late answer raised no ribbon after the exit');
   assert.equal(dataset.ddmFire3dRibbon, undefined);
+});
+
+test('smoke whose source lands after the layer registered gets its volume on the status report', async () => {
+  await enterScene();
+  let attempts = 0;
+  env.onSmoke = () => {
+    attempts += 1;
+  };
+  // The smoke layer registers before its fetch returns: no source yet.
+  registry.activate('hms-smoke');
+  const early = attempts;
+
+  // The fetch lands, the source is added, then the layer reports.
+  registry.setStatus('hms-smoke', 'ready');
+  assert.ok(attempts > early, 'the status report retried the volume');
+});
+
+// ---------------------------------------------------------------------------
+// The terrain source's own failures
+// ---------------------------------------------------------------------------
+
+test('a terrain archive failure with no tile rolls the scene back, and a tile error alone does not', async () => {
+  await enterScene();
+  const emitError = (event) => {
+    for (const fn of [...(mapListeners.error ?? [])]) fn(event);
+  };
+
+  // A failed tile is the three-tile watch's evidence, not this listener's.
+  emitError({ sourceId: 'fire3d-terrain-dem', tile: {}, error: new Error('one tile') });
+  assert.equal(getFire3DStatus().state, 'active');
+
+  // Another source's header failure is not the scene's.
+  emitError({ sourceId: 'hillshade', error: new Error('other source') });
+  assert.equal(getFire3DStatus().state, 'active');
+
+  // A header or directory read failed: one source-level error, no tile.
+  emitError({ sourceId: 'fire3d-terrain-dem', error: new Error('PMTiles read timed out') });
+  assert.equal(getFire3DStatus().state, 'unavailable');
+  assert.equal(sources.has('fire3d-terrain-dem'), false);
+  assert.equal(mapListeners.error?.length ?? 0, 0, 'the listener left with the scene');
 });
 
 // ---------------------------------------------------------------------------

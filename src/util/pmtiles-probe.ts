@@ -29,7 +29,8 @@
  * The budget covers the body. `fetchWithBudget` ends at headers (Codex
  * finding S2); a server that answered 206 and then stalled would have held
  * this probe open for as long as the stream stayed silent. The timer here
- * spans the whole read, and an abort of the owning signal cancels the
+ * (a listening timeout, so a frozen page is not read as silence) spans the
+ * whole read, and an abort of the owning signal cancels the
  * stream.
  *
  * A 206 is the expected shape; a 200 is tolerated (some dev servers ignore
@@ -39,6 +40,7 @@
  */
 
 import { linkAbort } from './fetch';
+import { listeningTimeout } from './listening-timeout';
 
 /** Budget for the archive-header probe (same-origin, first bytes only). */
 const PROBE_TIMEOUT_MS = 10_000;
@@ -169,7 +171,7 @@ export async function probeArchiveHeader(
     unlink();
     throw new DOMException('Aborted', 'AbortError');
   }
-  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  const stopTimer = listeningTimeout(timeoutMs, () => ctrl.abort());
   try {
     const response = await fetch(url, {
       headers: { Range: `bytes=0-${PMTILES_HEADER_BYTES - 1}` },
@@ -189,7 +191,7 @@ export async function probeArchiveHeader(
     }
     return header;
   } finally {
-    clearTimeout(timer);
+    stopTimer();
     unlink();
   }
 }

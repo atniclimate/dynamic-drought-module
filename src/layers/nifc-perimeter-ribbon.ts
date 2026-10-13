@@ -262,17 +262,10 @@ let raised: FeatureCollection | null = null;
  * standing one when the perimeters changed. Idempotent over the same data.
  * Returns false (no ribbon stands) when the perimeter source is absent or
  * holds no wildfire-class geometry; the caller treats that as a non-fatal
- * partial degrade.
- *
- * The signal is required: the caller aborts it on a scene exit, on the
- * perimeter layer going off, and on a newer read, and nothing here writes
- * to the map once it is aborted.
+ * partial degrade. Synchronous: it reads the snapshot and writes the map in
+ * one turn, so there is no read for a caller to withdraw.
  */
-export async function activatePerimeterRibbon(
-  map: maplibregl.Map,
-  signal: AbortSignal
-): Promise<boolean> {
-  if (signal.aborted) return false;
+export function activatePerimeterRibbon(map: maplibregl.Map): boolean {
   const { collection } = getPerimeterSnapshot();
   const standing = map.getSource(RIBBON_SOURCE_ID) as
     | { setData: (data: FeatureCollection) => void }

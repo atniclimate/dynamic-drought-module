@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
  * fire3d-ribbon-lifecycle.test.mjs, with the same stubs.
  *
  * found-127: a registry change that does not concern the perimeter layer
- * leaves a ribbon read in flight alone.
+ * leaves a standing ribbon alone.
  * found-130: the transport stamp settles within a bounded time after the
  * scene's sources finish loading, even when no sourcedata or idle event
  * follows (a frozen main thread coalesces them away).
