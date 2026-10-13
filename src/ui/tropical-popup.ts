@@ -21,7 +21,9 @@ import {
 } from '../config/tropical-presentation';
 
 const PRODUCT_KEY = 'tropical-cyclones';
-const SUPPLIED = 'As the issuer states it; DDM does not read it as a full date.';
+// The frame requires a per-time explanation; the full note is stated once, as a qualification.
+const SUPPLIED = '(as stated)';
+const SUPPLIED_NOTE = 'Times are as the issuer states them; DDM does not read them as full dates.';
 
 const str = (v: unknown): string | null => (typeof v === 'string' && v.trim() !== '' ? v.trim() : null);
 const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) && v !== TROPICAL_MISSING ? v : null);
@@ -45,6 +47,11 @@ function advisoryRow(p: Record<string, unknown>): ValueRow {
 
 function issuerFor(p: Record<string, unknown>) {
   return TROPICAL_ISSUERS[tropicalCentre(p['binnumber'])];
+}
+
+/** The points layer's `stormname` (classification and name), carried to every part by the read. */
+function titleFor(p: Record<string, unknown>): string {
+  return str(p['ddmTitle']) ?? str(p['stormname']) ?? 'Tropical cyclone';
 }
 
 /** The forecast point (tau 0 is the advisory's current position). */
@@ -87,16 +94,17 @@ export function buildTropicalPointPopupModel(props: GeoJsonProperties): IssuedMo
   row('Storm Direction', dir === null ? null : `${dir} degrees`);
   const spd = num(p['tcspd']);
   row('Storm Speed', spd === null ? null : `${spd} knots`);
-  // vocab-allow: the issuer's own field alias for tau
-  row('Forecast hour (tau)', tau === null ? null : String(tau));
+  // vocab-allow: the issuer's own field alias for tau; tau 0 is the advisory position, not a forecast hour
+  row('Forecast hour (tau)', tau === null || tau === 0 ? null : String(tau));
   return {
     kind: 'event',
-    title: str(p['stormname']) ?? 'Tropical cyclone',
+    title: titleFor(p),
     issuer: { role: 'issued-by', name: issuer.name, productKey: PRODUCT_KEY },
     value: [{ text: `${classification}${category}` }, advisoryRow(p)],
     clocks,
     source: { link: issuer.link },
-    details
+    details,
+    qualifications: [SUPPLIED_NOTE]
   };
 }
 
@@ -117,11 +125,12 @@ export function buildTropicalAreaPopupModel(props: GeoJsonProperties): IssuedMod
   }
   return {
     kind: 'event',
-    title: str(p['stormname']) ?? 'Tropical cyclone',
+    title: titleFor(p),
     issuer: { role: 'issued-by', name: issuer.name, productKey: PRODUCT_KEY },
     value: [value, advisoryRow(p)],
     clocks: [issuedClock(p)],
     source: { link: issuer.link },
-    details: [{ kind: 'row', label: 'Basin', text: basinText(p['basin']) }]
+    details: [{ kind: 'row', label: 'Basin', text: basinText(p['basin']) }],
+    qualifications: [SUPPLIED_NOTE]
   };
 }

@@ -169,6 +169,8 @@ async function readPart(
     const json = await fetchJsonWithBudget(tropicalQueryUrl(baseUrl, slot, part), null, signal, limits.requestTimeoutMs, limits.maxDecodedBytes);
     return parsePart(json, part);
   } catch (err) {
+    // A caller abort discards the sweep, so an aborted sweep signal here is the deadline: say so in the console.
+    if (signal.aborted) return { ok: false, why: `no answer before the ${limits.sweepDeadlineMs} ms sweep deadline` };
     return { ok: false, why: err instanceof Error ? err.message : String(err) };
   } finally {
     pendingReads -= 1;
@@ -217,6 +219,9 @@ export async function readTropicalSweep(
 
     occupied.forEach(({ slot, points }, i) => {
       const advisory = text(points.features[0]?.properties?.['advisnum']);
+      // The points layer names the storm with its classification ("Hurricane Simon"); the
+      // track, cone and watch-warning layers carry the bare name, so every part takes the points title.
+      const ddmTitle = text(points.features[0]?.properties?.['stormname']);
       const reads: [TropicalPart, Outcome][] = [
         ['points', { ok: true, read: points }],
         ...(['track', 'cone', 'ww'] as const).map((part, j): [TropicalPart, Outcome] => [part, rest[i]![j]!])
@@ -238,7 +243,7 @@ export async function readTropicalSweep(
           partial = true;
           problems.push(`${slot.bin} ${part}: advisory number differs from the points advisory ${advisory}`);
         }
-        features.push(...same);
+        features.push(...same.map((f) => ({ ...f, properties: { ...f.properties, ddmTitle } })));
       }
       const first = points.features[0]?.properties;
       if (first) {

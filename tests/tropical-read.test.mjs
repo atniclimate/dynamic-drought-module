@@ -211,6 +211,7 @@ test('a stalled presence read is cut by the sweep deadline: the rest draws as li
   });
   assert.equal(sweep.state, 'live (partial)');
   assert.equal(parts(sweep, 'points').length, 9);
+  assert.ok(sweep.problems.includes('AT1 points: no answer before the 50 ms sweep deadline'), 'the console names the deadline');
   assert.equal(pendingTropicalReads(), 0);
 });
 
@@ -281,6 +282,35 @@ test('popup: a watch-warning line carries the renderer label and colour; an unkn
   assert.equal(unknown.value[0].swatch, undefined);
   const cone = serializePopupFrame(popup.buildTropicalAreaPopupModel({ ...fixtures.EP5_CONE.features[0].properties, ddmPart: 'cone' }));
   assert.ok(cone.includes('Forecast Cone') && cone.includes('Simon'));
+});
+
+test('popup: the point, cone and watch-warning popups of one storm share the points layer title', async () => {
+  installFetch('occupiedOne');
+  const sweep = await readTropicalSweep(BASE, new AbortController().signal);
+  const point = popup.buildTropicalPointPopupModel(parts(sweep, 'points')[0].properties);
+  const cone = popup.buildTropicalAreaPopupModel(parts(sweep, 'cone')[0].properties);
+  const ww = popup.buildTropicalAreaPopupModel(parts(sweep, 'ww')[0].properties);
+  assert.deepEqual([point.title, cone.title, ww.title], ['Hurricane Simon', 'Hurricane Simon', 'Hurricane Simon']);
+});
+
+test('popup: the advisory position has no forecast-hour row; a later point keeps it', () => {
+  const now = serializePopupFrame(popup.buildTropicalPointPopupModel(fixtures.EP5_POINTS.features[0].properties));
+  const later = serializePopupFrame(popup.buildTropicalPointPopupModel(fixtures.EP5_POINTS.features[1].properties));
+  assert.ok(!now.includes('Forecast hour'), 'tau 0 is the advisory position, not a forecast hour');
+  assert.ok(later.includes('Forecast hour'));
+});
+
+test('popup: the issuer-wording note is stated once, as a qualification, not after each time', () => {
+  for (const model of [
+    popup.buildTropicalPointPopupModel(fixtures.EP5_POINTS.features[1].properties),
+    popup.buildTropicalAreaPopupModel({ ...fixtures.EP5_CONE.features[0].properties, ddmPart: 'cone' })
+  ]) {
+    assert.equal(model.qualifications?.length, 1);
+    const note = model.qualifications[0];
+    const html = serializePopupFrame(model);
+    assert.equal(html.split(note).length - 1, 1, 'the note prints once');
+    for (const clock of model.clocks) if (clock.kind === 'point') assert.notEqual(clock.at.explanation, note);
+  }
 });
 
 test('popup: a CP slot is issued by the Central Pacific Hurricane Center', () => {
@@ -367,4 +397,28 @@ test('layer: a late answer after deactivate draws nothing, sets no status and le
   assert.equal(net.calls.length, 15, 'no sublayer read follows the late presence answers');
   assert.equal(pendingTropicalReads(), 0);
   assert.equal(layer.pendingRefresh(), false, 'no refresh is scheduled after deactivate');
+});
+
+test('layer: a sweep cancelled mid-flight by its activation publishes nothing and leaves zero pending work', async (t) => {
+  events.length = 0;
+  const net = installFetch('occupiedOne', { hold: [EP5_LAYERS.track, EP5_LAYERS.cone, EP5_LAYERS.ww] });
+  const map = fakeMap();
+  t.after(() => layer.deactivate(map));
+  const statuses = [];
+  const unsubscribe = registry.on('status-change', (key, status) => {
+    if (key === 'tropical-cyclones') statuses.push(status);
+  });
+  const activation = new AbortController();
+  const pending = layer.activate(map, { signal: activation.signal, generation: 1 });
+  await settle();
+  assert.equal(net.calls.length, 18, 'cancelled while the sublayer reads are open');
+  activation.abort();
+  await pending;
+  await settle();
+  unsubscribe();
+  assert.deepEqual(statuses, ['loading'], 'the cancelled sweep writes no terminal status');
+  assert.deepEqual(snapshots(), ['loading'], 'and tells the key nothing');
+  assert.deepEqual(map.added.sources, []);
+  assert.equal(pendingTropicalReads(), 0);
+  assert.equal(layer.pendingRefresh(), false);
 });
