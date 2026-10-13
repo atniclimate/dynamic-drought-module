@@ -179,6 +179,9 @@ function installAnimationBrowser(reducedMotion: boolean): {
     configurable: true,
     value: {
       matchMedia: () => ({ matches: reducedMotion }),
+      // The smoke and outlook layers schedule a refresh; no case here waits for one.
+      setTimeout: () => 0,
+      clearTimeout: () => undefined,
       requestAnimationFrame: (callback: (timestamp: number) => void) => {
         const id = nextFrameId++;
         frames.set(id, callback);
@@ -1232,10 +1235,7 @@ test('ArcGIS polygon parser preserves both transfer-limit placements without mas
 
 test('NIFC, HMS, and SPC map invalid responses to unavailable and truncation to live partial', async () => {
   const originalFetch = globalThis.fetch;
-  const documentDescriptor = Object.getOwnPropertyDescriptor(
-    globalThis,
-    'document'
-  );
+  const browser = installAnimationBrowser(false);
   // `label` is the source name each module hands the shared ArcGIS parser,
   // so it is the name that reaches the log when the parse rejects a body.
   const modules = [
@@ -1319,10 +1319,6 @@ test('NIFC, HMS, and SPC map invalid responses to unavailable and truncation to 
 
   try {
     warnings = captureWarnings();
-    Object.defineProperty(globalThis, 'document', {
-      configurable: true,
-      value: { getElementById: () => null }
-    });
 
     for (const module of modules) {
       for (const response of responses) {
@@ -1369,22 +1365,15 @@ test('NIFC, HMS, and SPC map invalid responses to unavailable and truncation to 
       module.deactivate(fakeMapHarness().map);
       registry.deactivate(module.key);
     }
-    if (documentDescriptor) {
-      Object.defineProperty(globalThis, 'document', documentDescriptor);
-    } else {
-      Reflect.deleteProperty(globalThis, 'document');
-    }
+    browser.restore();
   }
 });
 
 test('SPC complete no-area singleton accepts absent or false transfer flags at either location', async () => {
   const originalFetch = globalThis.fetch;
-  const documentDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'document');
+  const browser = installAnimationBrowser(false);
   const harness = fakeMapHarness();
   try {
-    Object.defineProperty(globalThis, 'document', {
-      configurable: true, value: { getElementById: () => null }
-    });
     for (const fields of [
       {},
       { exceededTransferLimit: false },
@@ -1407,13 +1396,13 @@ test('SPC complete no-area singleton accepts absent or false transfer flags at e
     globalThis.fetch = originalFetch;
     deactivateSpc(harness.map);
     registry.deactivate('spc-fire-weather');
-    if (documentDescriptor) Object.defineProperty(globalThis, 'document', documentDescriptor);
-    else Reflect.deleteProperty(globalThis, 'document');
+    browser.restore();
   }
 });
 
 test('Wildfire network layers synchronously cancel pending activation', async () => {
   const originalFetch = globalThis.fetch;
+  const browser = installAnimationBrowser(false);
   const fakeMap = {
     getSource: () => undefined,
     getLayer: () => undefined,
@@ -1484,5 +1473,6 @@ test('Wildfire network layers synchronously cancel pending activation', async ()
       module.cancel();
       registry.deactivate(module.key);
     }
+    browser.restore();
   }
 });

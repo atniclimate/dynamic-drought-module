@@ -65,18 +65,14 @@ test('Layers studio retains the existing equality-only baseline by default', asy
   assert.equal(h.reads(), 1);
 });
 
-test('the actual Place baseline call supplies the shipped reference group', async () => {
+// Since 046e945 the Place studio URL holds the set-aside display, so the Place
+// case cannot wait for rows to equal the URL; it waits for the shipped group.
+test('the actual Place baseline is captured only after the shipped reference group is checked', () => {
   const place = source.slice(source.indexOf('    const placeRailWrites = async'));
-  const call = place.match(/const before = await settledLayers\([\s\S]*?\);/)?.[0];
-  assert.ok(call, 'the Place baseline call remains present');
-  let received;
-  const run = Function('settledLayers', 'TRIBAL_NATIONS_GROUP', 'sidebarRows', 'moment',
-    `return async () => { ${stripTypeScriptTypes(call)} return before; };`)(
-    async (...args) => { received = args; return complete; },
-    TRIBAL_NATIONS_GROUP, 'fixture checked rows', 'in Place'
-  );
-  assert.deepEqual(await run(), complete);
-  assert.deepEqual(received, ['fixture checked rows', 'in Place: before', requiredKeys]);
+  const wait = place.indexOf('TRIBAL_NATIONS_GROUP.members.every((key) => rows.includes(key))');
+  const capture = place.indexOf('const before = await checkedKeys(sidebarRows);');
+  assert.ok(wait > 0, 'the Place case waits for the shipped reference group');
+  assert.ok(capture > wait, 'the baseline is captured after that wait');
 });
 
 test('the shipped group used by the precondition matches the actual tribe rail reference keys', () => {
