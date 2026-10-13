@@ -18,6 +18,7 @@ const { HAZARD_CLUSTERS, HAZARD_CLUSTER_KEYS, TEMPORAL_HORIZON_KEYS } =
   await import('../src/config/clusters.ts');
 const palette = await import('../src/config/palette.ts');
 const wildfire = await import('../src/config/wildfire-presentation.ts');
+const tropical = await import('../src/config/tropical-presentation.ts');
 
 // D3 palette-tokens section 9 T1 F/G vocabulary. "issuer" identifies a
 // source-table role, not a scientific receipt or verification of its colors.
@@ -32,7 +33,10 @@ const ENTRIES = {
   USFS_WHP_PRESENTATION: { module: wildfire, classification: 'issuer' },
   HEATRISK_CATEGORIES: { module: palette, classification: 'issuer' },
   NWS_ALERT_COLORS: { module: palette, classification: 'issuer' },
-  SST_ANOMALY_SCALE: { module: palette, classification: 'issuer' }
+  SST_ANOMALY_SCALE: { module: palette, classification: 'issuer' },
+  // The coloured parts (watch-warning, track, cone) are the issuer renderer's;
+  // the points are neutral circles sized by the issuer's classes (no colour).
+  TROPICAL_WW_CLASSES: { module: tropical, classification: 'issuer' }
 };
 const MEMBERS = {
   'nadm-drought': { entry: 'NADM_CATEGORIES', classification: 'issuer' },
@@ -43,7 +47,8 @@ const MEMBERS = {
   'usfs-whp': { entry: 'USFS_WHP_PRESENTATION', classification: 'issuer' },
   heatrisk: { entry: 'HEATRISK_CATEGORIES', classification: 'issuer' },
   'nws-alerts': { entry: 'NWS_ALERT_COLORS', classification: 'issuer' },
-  'sst-anomaly': { entry: 'SST_ANOMALY_SCALE', classification: 'issuer' }
+  'sst-anomaly': { entry: 'SST_ANOMALY_SCALE', classification: 'issuer' },
+  'tropical-cyclones': { entry: 'TROPICAL_WW_CLASSES', classification: 'issuer' }
 };
 
 function classifyRecipes(clusters, keys, horizons, members = MEMBERS) {

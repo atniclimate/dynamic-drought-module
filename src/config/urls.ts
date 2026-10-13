@@ -430,6 +430,20 @@ export const URLS = Object.freeze({
   nwsWwaMapServer:
     'https://mapservices.weather.noaa.gov/eventdriven/rest/services/WWA/watch_warn_adv/MapServer/1',
 
+  // NOAA NHC and CPHC Tropical Weather MapServer (ENSO block B3; admission
+  // planning/2026-09-25-desktop-pass/admissions/noaa-tropical-cyclones.md).
+  // Fifteen storm slots AT1-5, EP1-5, CP1-5 at base = 4 + 26n; per slot the
+  // tropical cyclones layer queries Forecast Points (base+2), Forecast Track
+  // (base+3), Forecast Cone (base+4) and Watch-Warning (base+5) as
+  // `${nhcTropicalMapServer}/<id>/query?where=1%3D1&outFields=<fields>&returnGeometry=true&outSR=4326&f=geojson`.
+  // Probed 2026-10-13 09:26 to 09:28 UTC with Origin https://atniclimate.github.io:
+  // HTTP 200, application/geo+json, Access-Control-Allow-Origin reflected the
+  // origin with Vary: Origin; errors arrive as HTTP 200 envelopes;
+  // maxRecordCount 2000; not time enabled (current issuance only). Direct
+  // browser fetch; no Worker route is needed.
+  nhcTropicalMapServer:
+    'https://mapservices.weather.noaa.gov/tropical/rest/services/tropical/NHC_tropical_weather/MapServer',
+
   // ---------- NOAA Storm Prediction Center (SPC) Fire Weather Outlook ------
   // The SPC Fire Weather Outlooks MapServer, same NOAA mapservices cloud host
   // as `nwsWwaMapServer`. Layer 1 ("Day 1 Outlook") and layer 4 ("Day 2

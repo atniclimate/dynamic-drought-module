@@ -201,12 +201,13 @@ export const HAZARD_CLUSTERS: Record<HazardClusterKey, HazardClusterDef> = {
     description: 'The sea-surface-temperature anomaly display with the current El Nino / Southern Oscillation (ENSO) index snapshot.',
     defaultBasemap: 'satellite',
     recipes: {
-      // v1 is the shipped SST anomaly surface at every horizon; the
-      // ENSO snapshot line is a UI surface, not a map layer. Richer
-      // products are a later phase (D-0.7.0-042 honesty boundary).
-      current: ['sst-anomaly'],
-      'weeks-ahead': ['sst-anomaly'],
-      'season-ahead': ['sst-anomaly']
+      // The shipped SST anomaly surface at every horizon; the ENSO snapshot
+      // line is a UI surface, not a map layer. The active tropical cyclones
+      // (ENSO block B3, an event overlay) ride every horizon: the issuer
+      // serves only the current advisories, which run five days ahead.
+      current: ['sst-anomaly', 'tropical-cyclones'],
+      'weeks-ahead': ['sst-anomaly', 'tropical-cyclones'],
+      'season-ahead': ['sst-anomaly', 'tropical-cyclones']
     },
     // Deferred, not absent: ENSO's place row (the sea surface temperature
     // anomaly) moves to the ocean sprint the owner asked for on 2026-10-01

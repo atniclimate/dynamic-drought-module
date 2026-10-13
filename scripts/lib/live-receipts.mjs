@@ -191,7 +191,7 @@ export function evaluateRange(row) {
  * and a bare URL is the default-on set exactly. No boot below passes
  * `?layers=`, and none passes `?horizon=`, so every cluster boot composes
  * at the `current` horizon: wildfire is nifc-fires plus hms-smoke, heat is
- * heatrisk plus nws-alerts, enso is sst-anomaly, and drought (the bare
+ * heatrisk plus nws-alerts, enso is sst-anomaly plus tropical-cyclones, and drought (the bare
  * root boot) is nadm-drought, which composes back to exactly the
  * default-on set.
  *
@@ -206,7 +206,7 @@ export const EXPECTED_BOOT_LAYERS = Object.freeze({
   root: [...PERSISTENT_REFERENCE, 'nadm-drought'],
   wildfire: WILDFIRE_BOOT,
   heat: [...PERSISTENT_REFERENCE, 'heatrisk', 'nws-alerts'],
-  enso: [...PERSISTENT_REFERENCE, 'sst-anomaly'],
+  enso: [...PERSISTENT_REFERENCE, 'sst-anomaly', 'tropical-cyclones'],
   // Both embed boots carry `?embed=true&cluster=wildfire`; embed changes
   // the chrome, not the composed layer set.
   'embed-1280': WILDFIRE_BOOT,

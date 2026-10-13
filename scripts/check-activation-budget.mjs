@@ -482,6 +482,15 @@ const FEATURE_BUDGETS = [
     requestCount: 3,
     dataAssets: [],
   },
+  {
+    key: 'tropical-cyclones',
+    label: 'NEW 2026-10-13 with ENSO block B3, measured at the build of the first commit (7.9 kB gzip across tropical-cyclones, urls, guards, style-expressions and tropical-presentation; the admission noaa-tropical-cyclones.md line 10 estimate was 11 kB): the active tropical cyclones layer (src/layers/tropical-cyclones.ts with its reader, popup builder and presentation tables) as its own first-use cost. Network, from the admission, not yet measured live: the worst case of fifteen occupied slots, 15 presence reads plus 3 per occupied slot = 60 requests and about 261,690 bytes gzip on the wire (one measured slot, Hurricane Simon EP5, 17,446 bytes, times fifteen), rounded to 300,000; a typical day is 18 requests, an empty season 15 requests of 42 bytes each.',
+    rootModules: ['src/layers/tropical-cyclones.ts'],
+    measuredJsGzipKb: 7.9,
+    networkBytes: 300_000,
+    requestCount: 60,
+    dataAssets: [],
+  },
 ];
 
 /* ------------------------------------------------------------------ */

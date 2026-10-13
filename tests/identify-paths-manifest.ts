@@ -52,6 +52,7 @@ export const BUILDERS: readonly BuilderEntry[] = [
   { id: 'power-line', layerKey: 'power-infrastructure', path: 'coordinated', targets: ['point-event:power-lines,power-lines-unknown'] },
   { id: 'places', layerKey: 'places', path: 'coordinated', targets: ['point-event:us-places-labels'] },
   { id: 'enso-box', layerKey: 'sst-anomaly', path: 'coordinated', targets: ['point-event:nino34-box-fill,nino34-box-line'] },
+  { id: 'tropical', layerKey: 'tropical-cyclones', path: 'coordinated', targets: ['point-event:tropical-cyclones-points,tropical-cyclones-ww,tropical-cyclones-cone-fill'] },
   { id: 'telemetry', layerKey: 'telemetry', path: 'external', targets: [] }
 ];
 

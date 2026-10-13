@@ -582,7 +582,8 @@ const CENSUS_BOOTS: readonly (readonly string[])[] = [
   ['cdm-drought'],
   ['drought'],
   ['spc-fire-weather'],
-  ['sst-anomaly']
+  ['sst-anomaly'],
+  ['tropical-cyclones']
 ];
 
 /** The adopted station popup's displayed frame root. */

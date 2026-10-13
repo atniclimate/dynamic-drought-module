@@ -42,6 +42,7 @@ export const ACKNOWLEDGEMENT_IDS = [
   'noaa-cpc',
   'noaa-wpc',
   'noaa-spc',
+  'noaa-nhc',
   'noaa-nwrfc',
   'noaa-ncep',
   'noaa-ospo',
@@ -192,6 +193,12 @@ export const ACKNOWLEDGEMENTS: Readonly<Record<AcknowledgementId, Acknowledgemen
   'noaa-cpc': { ...nameOnly('noaa-cpc', 'NOAA Climate Prediction Center'), credits: [NWS_FAMILY_LINE] },
   'noaa-wpc': { ...nameOnly('noaa-wpc', 'NOAA Weather Prediction Center'), credits: [NWS_FAMILY_LINE] },
   'noaa-spc': { ...nameOnly('noaa-spc', 'NOAA Storm Prediction Center'), credits: [NWS_FAMILY_LINE] },
+  // The tropical cyclones layer (ENSO B3): NHC and CPHC are NWS centres under
+  // the same weather.gov disclaimer the shared line cites.
+  'noaa-nhc': {
+    ...nameOnly('noaa-nhc', 'NOAA National Hurricane Center and Central Pacific Hurricane Center'),
+    credits: [NWS_FAMILY_LINE]
+  },
   'noaa-nwrfc': {
     // vocab-allow: the issuing office's own name (NOAA NWS Northwest River Forecast Center), an upstream name
     ...nameOnly('noaa-nwrfc', 'NOAA NWS Northwest River Forecast Center'),
@@ -405,6 +412,7 @@ export const PRODUCT_CREDITS: Readonly<Record<ProductKey, CreditRows>> = {
   'spc-fire-weather': ['noaa-spc'],
   'usfs-whp': ['usfs'],
   'sst-anomaly': ['nasa'],
+  'tropical-cyclones': ['noaa-nhc'],
   telemetry: ['usgs', 'usda-nrcs', 'usbr', 'usace', 'nifc', 'noaa-coops', 'cocorahs-iem', 'noaa-nwrfc'],
   dsci: ['usdm-partners'],
   nwsForecast: ['noaa-nws'],

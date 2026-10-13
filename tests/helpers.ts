@@ -17,6 +17,7 @@ import { installMinimapAnalysisStubs } from './minimap-fixtures';
 import { installBoundaryStubs, type BoundaryStubMode } from './tribal-fixtures';
 import { installDefaultNifcStub, type NifcStubMode } from './wildfire-fixtures';
 import { installDefaultNwsWwaStub, type NwsWwaStubMode } from './nws-wwa-fixtures';
+import { installDefaultTropicalStub, type TropicalStubMode } from './tropical-fixtures';
 import { untilAnswered } from './answered-read';
 
 const TEST_NADM_SNAPSHOT = {
@@ -302,6 +303,16 @@ export interface GotoAppOptions {
    */
   readonly nwsWwa?: NwsWwaStubMode;
   /**
+   * How this boot answers the NOAA NHC and CPHC Tropical Weather MapServer
+   * (ENSO block B3). Defaults to `allEmpty`: a fail-closed CONTEXT route in
+   * `tests/tropical-fixtures.ts` (`installDefaultTropicalStub`) answers every
+   * slot query with a valid empty collection, so an ENSO boot (the layer is in
+   * every ENSO recipe) never reads NOAA. A spec names another fixture arm
+   * (`occupiedOne`, `arcgisError`, ...) here, never its own `page.route` for
+   * the service; `live` passes through.
+   */
+  readonly tropical?: TropicalStubMode;
+  /**
    * Wait for the boot-idle seam (`<html data-ddm-boot="idle">`, DR-052
    * follow-up): the map has loaded, every layer the URL asked for has left
    * `loading`, and no shared transport is in flight. Defaults to true, so
@@ -426,6 +437,9 @@ export async function gotoApp(
   // boot never waits on NOAA's answer. See `installDefaultNwsWwaStub`'s own
   // comment for the opt-out and why a spec's own `page.route` still wins.
   await installDefaultNwsWwaStub(page, options.nwsWwa ?? 'fixture');
+  // ENSO block B3: every routine boot answers the tropical MapServer from
+  // tests/tropical-fixtures.ts (an empty season unless the spec names an arm).
+  await installDefaultTropicalStub(page, options.tropical ?? 'allEmpty');
   // ENSO-FLOW-PLAN E1-5: every routine boot answers the NOAA NODD GFS bucket
   // from tests/fixtures/flow/, and an unstubbed NODD read is answered 404 and
   // fails the spec (`installDefaultNoddStub`'s own comment). The ENSO flowing

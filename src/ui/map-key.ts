@@ -67,6 +67,18 @@ import { getTimeBarSpec, onTimeBarSpecChange } from './time-bar';
 import { MAP_GROUND_COLOR } from '../config/interface-tokens';
 import { WHP_3D_SHADE_CATEGORIES, WHP_3D_SHADE_QUALIFICATION, WHP_SHADE_CATEGORIES, WHP_SHADE_QUALIFICATION, WHP_SURFACE_OPACITY } from '../config/whp-shade';
 import { FUEL_RISK_TITLE, fireKeySections } from './fire3d-fuel-risk';
+import {
+  TROPICAL_CONE,
+  TROPICAL_COVERAGE_TEXT,
+  TROPICAL_EMPTY_TEXT,
+  TROPICAL_ISSUERS,
+  TROPICAL_POINT_CLASSES,
+  TROPICAL_POINT_INK,
+  TROPICAL_PART_NAMES,
+  TROPICAL_TRACK,
+  TROPICAL_WW_CLASSES,
+  tropicalBasinName
+} from '../config/tropical-presentation';
 
 export interface KeySpec {
   readonly label: string;
@@ -138,6 +150,23 @@ interface EnsoFlowSnapshotEventDetail {
   /** E1-4: the issuer credit, in the publisher's words, shown as its own item. */
   readonly provenance?: string;
 }
+
+/** The tropical cyclones layer's snapshot (src/layers/tropical-cyclones.ts TropicalSnapshot). */
+interface TropicalSnapshotEventDetail {
+  readonly status: 'inactive' | 'loading' | 'live' | 'live (partial)' | 'unavailable' | 'no data';
+  readonly storms: readonly {
+    readonly bin: string;
+    readonly name: string;
+    readonly basin: string;
+    readonly advisory: string;
+    readonly issued: string;
+  }[];
+}
+
+const TROPICAL_KEY = 'tropical-cyclones';
+const TROPICAL_SNAPSHOT_EVENT = 'ddm:tropical-snapshot';
+const TROPICAL_SNAPSHOT_REQUEST_EVENT = 'ddm:tropical-snapshot-request';
+let tropicalSnapshot: TropicalSnapshotEventDetail | null = null;
 
 const HEATRISK_FRAMES_EVENT = 'ddm:heatrisk-frames';
 const HEATRISK_DAY_SELECT_EVENT = 'ddm:heatrisk-day-select';
@@ -1115,8 +1144,95 @@ function fireProductKeys(eligible: ReadonlySet<string>): readonly string[] {
   return (['spc-fire-weather', 'nifc-fires'] as const).filter((key) => eligible.has(key));
 }
 
-/** The condition-surface key, before shared reference qualifications. */
+/** A neutral circle at a renderer class's size (the issuer's points are icons, not colours). */
+function tropicalCircle(radius: number, label: string): string {
+  const size = Math.round(radius * 2);
+  return (
+    '<span class="map-key-item"><span class="map-key-swatch" style="' +
+    `background:#ffffff;border:1.5px solid ${TROPICAL_POINT_INK};border-radius:50%;width:${size}px;height:${size}px` +
+    `"></span>${escapeHtml(label)}</span>`
+  );
+}
+
+/**
+ * The tropical cyclones row (ENSO block B3), an event overlay appended to
+ * whichever key the surface earned, like the NWS products row. Its state is
+ * the registry's (a refresh that fails reads unavailable; an empty season
+ * reads the owner's words, "No active tropical cyclones", with the basins the
+ * issuer covers); its storms and classes are the layer snapshot's and the
+ * issuer renderer's labels, verbatim.
+ */
+function tropicalRow(): { readonly html: string; readonly ariaLabel: string } | null {
+  const status = registry.getStatus(TROPICAL_KEY);
+  const on = registry.getActiveKeys().has(TROPICAL_KEY);
+  // A failed first read leaves the key inactive with 'error' kept for the
+  // committed mode's summary; say unavailable only while that mode shows it.
+  const committed = Object.values(HAZARD_CLUSTERS[getHazardCluster()].recipes).some((r) => r.includes(TROPICAL_KEY));
+  if (!on && status !== 'loading' && !(status === 'error' && committed)) return null;
+  const issuer = TROPICAL_ISSUERS.both.name;
+  const parts: string[] = ['<strong class="map-key-scale-label">Tropical cyclones</strong>'];
+  let aria = 'Tropical cyclones:';
+  const coverage = `<span class="map-key-qualification" data-tropical-coverage>${escapeHtml(TROPICAL_COVERAGE_TEXT)}</span>`;
+  let state: string;
+  if (status === 'loading' || status === undefined) {
+    state = 'loading';
+    parts.push(`<span class="map-key-qualification map-key-loading" data-key-loading="${TROPICAL_KEY}"><strong>loading</strong></span>`);
+    aria += ' loading.';
+  } else if (status === 'error') {
+    state = 'unavailable';
+    parts.push('<span class="map-key-qualification" data-tropical-status><strong>unavailable</strong> The NHC and CPHC advisories could not be read.</span>', coverage);
+    aria += ' unavailable. The NHC and CPHC advisories could not be read.';
+  } else if (status === 'no-data') {
+    state = 'no data';
+    parts.push(`<span class="map-key-item" data-tropical-empty>${escapeHtml(TROPICAL_EMPTY_TEXT)}</span>`, coverage);
+    aria += ` ${TROPICAL_EMPTY_TEXT}. ${TROPICAL_COVERAGE_TEXT}`;
+  } else {
+    state = status === 'degraded' ? 'live (partial)' : 'live';
+    for (const storm of tropicalSnapshot?.storms ?? []) {
+      const basin = tropicalBasinName(storm.basin) ?? `basin ${storm.basin || 'not given'} (not recognised)`;
+      const line = `${storm.name}, ${basin}, advisory ${storm.advisory}, issued ${storm.issued}`;
+      parts.push(`<span class="map-key-item" data-tropical-storm="${escapeHtml(storm.bin)}">${escapeHtml(line)}</span>`);
+      aria += ` ${line}.`;
+    }
+    if (status === 'degraded') {
+      parts.push('<span class="map-key-qualification" data-tropical-status><strong>live (partial)</strong> Some storm layers could not be read or name another advisory; those are not drawn.</span>');
+      aria += ' live (partial).';
+    }
+    for (const src of ['Tropical Cyclone', 'Post-Tropical Cyclone'] as const) {
+      parts.push(`<span class="map-key-item" data-tropical-points="${src}">${escapeHtml(src)}</span>`);
+      for (const c of TROPICAL_POINT_CLASSES) if (c.key.endsWith(`,${src}`)) parts.push(tropicalCircle(c.radius, c.label));
+    }
+    parts.push(
+      swatchItem(TROPICAL_TRACK.color, TROPICAL_PART_NAMES.track),
+      swatchItem(TROPICAL_CONE.fill, TROPICAL_PART_NAMES.cone),
+      ...TROPICAL_WW_CLASSES.map((c) => swatchItem(c.color, c.label)),
+      '<span class="map-key-qualification" data-tropical-icons>Circles are sized by the issuer\'s wind classes; the issuer\'s icons are not reproduced. Filled: the advisory position; hollow: later positions.</span>'
+    );
+    aria += ` ${TROPICAL_POINT_CLASSES.map((c) => c.label).join(', ')}; ${TROPICAL_WW_CLASSES.map((c) => c.label).join(', ')}.`;
+  }
+  parts.push(`<span class="map-key-item" data-tropical-issuer>${escapeHtml(issuer)}</span>`);
+  return {
+    html: `<span class="map-key-scale" data-tropical-key data-tropical-state="${state}">${parts.join('')}</span>`,
+    ariaLabel: `${aria} ${issuer}.`
+  };
+}
+
+/** The surface key with the tropical cyclones row appended when that layer is on. */
 function hazardKey(): HazardKeyResult | null {
+  const base = surfaceKey();
+  const row = tropicalRow();
+  if (!row) return base;
+  if (base) {
+    return {
+      spec: { ...base.spec, ariaLabel: `${base.spec.ariaLabel} ${row.ariaLabel}`, itemsHtml: base.spec.itemsHtml + row.html },
+      productKeys: base.productKeys
+    };
+  }
+  return { spec: { label: KEY_ELIGIBLE_LABELS[TROPICAL_KEY]!, ariaLabel: row.ariaLabel, itemsHtml: row.html }, productKeys: [] };
+}
+
+/** The condition-surface key, before shared reference qualifications. */
+function surfaceKey(): HazardKeyResult | null {
   const { active, loading, eligible } = keyEligibility();
   let spec: KeySpec | null = null;
   let productKeys: readonly string[] = [];
@@ -1663,6 +1779,12 @@ export function initMapKey(): void {
     update();
   };
   window.addEventListener(ENSO_FLOW_SNAPSHOT_EVENT, onEnsoFlowSnapshot);
+  window.addEventListener(TROPICAL_SNAPSHOT_EVENT, (event) => {
+    const detail = (event as CustomEvent<TropicalSnapshotEventDetail>).detail;
+    if (!detail) return;
+    tropicalSnapshot = detail;
+    update();
+  });
   disposeMapKeyTimeBarSpec = onTimeBarSpecChange(update);
   // A framing click never fires a registry event (D-0.7.0-039: camera-only,
   // no layer write), so without this the coverage caution above would only
@@ -1692,5 +1814,7 @@ export function initMapKey(): void {
   window.dispatchEvent(new Event(ENSO_FLOW_SNAPSHOT_REQUEST_EVENT));
   drynessGround = null;
   window.dispatchEvent(new Event(DRYNESS_GROUND_REQUEST_EVENT));
+  tropicalSnapshot = null;
+  window.dispatchEvent(new Event(TROPICAL_SNAPSHOT_REQUEST_EVENT));
   update();
 }

@@ -129,7 +129,14 @@ export const EVENT_OVERLAY_IDS: readonly string[] = [
   'nifc-prescribed-outline',
   'nifc-other-outline',
   'nws-alerts-fill',
-  'nws-alerts-outline'
+  'nws-alerts-outline',
+  // ENSO block B3, above the SST frames, the Nino 3.4 box and the flow
+  // paths, below every reference boundary (src/layers/tropical-cyclones.ts).
+  'tropical-cyclones-cone-fill',
+  'tropical-cyclones-cone-line',
+  'tropical-cyclones-track',
+  'tropical-cyclones-ww',
+  'tropical-cyclones-points'
 ];
 
 /**

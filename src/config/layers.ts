@@ -53,6 +53,7 @@ export const LAYER_KEYS = Object.freeze([
   'spc-fire-weather',
   'usfs-whp',
   'sst-anomaly',
+  'tropical-cyclones',
   'telemetry'
 ] as const);
 
@@ -341,6 +342,9 @@ export const LAYER_DEFS: readonly LayerDef[] = [
   { key: 'spc-fire-weather', product: 'spc-fire-weather', name: 'Fire Weather Outlook (Day 1)', source: 'NOAA SPC · MapServer', role: 'surface', defaultOn: false, noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/spc-fire-weather') },
   { key: 'usfs-whp', product: 'usfs-whp', name: 'Wildfire Hazard Potential', source: 'USFS · GeoPlatform', role: 'surface', defaultOn: false, load: () => import('../layers/usfs-whp') },
   { key: 'sst-anomaly', product: 'sst-anomaly', name: 'Ocean Temperature Anomaly', source: 'NASA GIBS · GHRSST MUR', role: 'surface', defaultOn: false, load: () => import('../layers/sst-anomaly') },
+  // ENSO block B3: on in the ENSO mode's recipe only. Its coverage is the
+  // issuer's three basins, so its zero state names them, never "this view".
+  { key: 'tropical-cyclones', product: 'tropical-cyclones', name: 'Active Tropical Cyclones', source: 'NOAA NHC and CPHC · MapServer', searchTerms: ['hurricane', 'tropical storm', 'cyclone', 'NHC', 'CPHC'], role: 'event', defaultOn: false, noDataLabel: 'no active tropical cyclones in the Atlantic, Eastern North Pacific or Central North Pacific', load: () => import('../layers/tropical-cyclones') },
   // Monitoring stations left the default-on set 2026-07-09 (D-0.7.0-018
   // item 1, strengthening the D-0.7.0-007 zoom threshold): at region zoom
   // the layer could only say "zoom in to load", so opening with it on
