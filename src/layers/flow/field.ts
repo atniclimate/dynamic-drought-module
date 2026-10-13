@@ -15,15 +15,18 @@
  *   waves the adapter ships the unit vector (sin TO, cos TO) so a blend across
  *   350 and 10 degrees passes through 0, never 180. Components are
  *   interpolated, never angles.
- * - `magnitude` is in real units (m/s for wind at either level, m of
- *   significant height for waves) and only picks the display class.
+ * - `magnitude` is in real units (m/s for wind at either level and for
+ *   currents, m of significant height for waves) and only picks the display class.
  * - `mask` is 1 for a valid node and 0 for a masked or missing one. It is
  *   never zero-filled: the constructor writes NaN into every masked node's
  *   u, v and magnitude, so a masked node can never be read back as calm.
  */
 
-/** `wind` is GFS 10 m wind, `jet` GFS 250 hPa wind, `waves` GFS-Wave. Every table keyed by FlowKind needs a row per kind. */
-export type FlowKind = 'wind' | 'jet' | 'waves';
+/**
+ * `wind` is GFS 10 m wind, `jet` GFS 250 hPa wind, `waves` GFS-Wave, `currents` the committed RTOFS
+ * surface-current frame (./currents). Every table keyed by FlowKind needs a row per kind.
+ */
+export type FlowKind = 'wind' | 'jet' | 'waves' | 'currents';
 
 export interface FlowGrid {
   /** Longitude of column 0, degrees east (any range; it is normalized on read). */
@@ -97,12 +100,17 @@ export interface FlowFieldInput {
  * of the globe by area, against 43, 42 and 16 percent for 10 m wind, so the
  * top class is as rare aloft as it is near the surface. A design choice, not
  * an issuer legend and not a definition of a jet (admission gfs-runtime-nodd,
- * 2026-10-13).
+ * 2026-10-13). Surface currents 0.25 and 0.5 m/s: on the committed
+ * 2026-10-13 00Z frame the classes hold 57, 32 and 11 percent of the sea
+ * area of the two grids together (53, 34 and 13 on the tropical Pacific
+ * grid; 76, 20 and 4 on the northern one). Also a design choice, not an
+ * issuer legend.
  */
 export const FLOW_BINS: Readonly<Record<FlowKind, readonly [number, number]>> = {
   wind: [5, 10],
   jet: [20, 40],
-  waves: [2, 4]
+  waves: [2, 4],
+  currents: [0.25, 0.5]
 };
 
 export type FlowClass = 0 | 1 | 2;

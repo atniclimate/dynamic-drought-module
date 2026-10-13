@@ -10,7 +10,10 @@
  * DIRPW pair (DRT 5.40 with a bitmap, its own grid header) and one
  * global.0p25 HTSGW (DRT 5.40, a 568,995-wide single-row codestream). The
  * 1p00 250 hPa UGRD/VGRD pair of the same file was cut on 2026-10-13 for the
- * jet-level kind (DRT 5.3, isobaric surface, tenths of m/s).
+ * jet-level kind (DRT 5.3, isobaric surface, tenths of m/s). Two NOAA RTOFS
+ * surface-current messages (u and v at forecast hour 1 of the 2026-10-13 00Z
+ * run, cut from the 1.0 degree tropical Pacific file on NOMADS) carry the
+ * landing producer's forms: DRT 5.0, a bitmap, rows south to north.
  * eccodes values are kept as sampled points (every 97th point, float64),
  * never whole arrays, with the masked count and a SHA-256 of the full
  * validity mask (reference.json says how each was made).
@@ -950,4 +953,101 @@ test('a 5.40 codestream without its closing EOC is refused', () => {
     const f = decodeGrib2(withSection(msg, 7, withTileBody(cs, padded)), { grid });
     assert.deepEqual(f.values, good.values, `${name} with one byte of tile-data padding decodes unchanged`);
   }
+});
+
+// ---------------------------------------------------------------------------
+// The landing producer's forms: template 5.0, a bitmap, rows south to north
+// (NOAA RTOFS surface currents; scripts/build-rtofs-currents.mjs)
+// ---------------------------------------------------------------------------
+
+const RTOFS_RUN = Date.UTC(2026, 9, 13, 0);
+const RTOFS_TROP = { ni: 120, nj: 80, la1: -40, lo1: 130, di: 1, dj: 1 };
+/** What the producer asks for; `packing: 0` and `scanMode: 0x40` are the two forms a call must name. */
+const RTOFS_EXPECT = (number) => ({
+  grid: RTOFS_TROP,
+  surface: { type: 160, value: 0 },
+  parameter: { discipline: 10, category: 1, number },
+  refTime: RTOFS_RUN,
+  forecastHours: 1,
+  packing: 0,
+  bitmap: true,
+  scanMode: 0x40
+});
+
+test('decodes RTOFS surface u and v (5.0, bitmap, rows south to north) to eccodes within 2e-5', () => {
+  for (const [name, number] of [
+    ['rtofs-trop-UOGRD-0m-f001', 2],
+    ['rtofs-trop-VOGRD-0m-f001', 3]
+  ]) {
+    const fx = fixture(name);
+    assert.equal(fx.info.packingType, 'grid_simple');
+    assert.equal(fx.info.scanningMode, 64);
+    const f = decodeGrib2(fx.bytes, RTOFS_EXPECT(number));
+    assert.equal(f.packing.template, 0);
+    assert.equal(f.packing.reference, fx.info.referenceValue);
+    assert.equal(f.packing.bitsPerValue, fx.info.bitsPerValue);
+    assert.equal(f.packing.decimalScale, 2, 'the issuer packs to 0.01 m/s');
+    assert.equal(f.bitmap, true);
+    // Scan order is kept: row 0 is the grid's first (southern) row.
+    assert.deepEqual(
+      [f.grid.ni, f.grid.nj, f.grid.la1, f.grid.lo1, f.grid.di, f.grid.dj, f.grid.scanMode],
+      [120, 80, -40, 130, 1, 1, 0x40]
+    );
+    assert.deepEqual([f.surface.type, f.surface.value], [160, 0]);
+    assert.equal(f.refTime, RTOFS_RUN);
+    assert.equal(f.validTime, RTOFS_RUN + 3600_000);
+    assert.equal(f.missingCount, fx.info.numberOfMissing);
+    assert.equal(nanCount(f.values), fx.info.nanCount);
+    assert.equal(maskSha256(f.values), fx.info.maskSha256, `${name}: the land mask is eccodes's`);
+    const { maxDiff, nanMismatch, compared } = compareSampled(f.values, fx);
+    assert.equal(nanMismatch, 0);
+    assert.equal(compared, fx.info.sampledCount - fx.info.sampledNaN);
+    assert.ok(maxDiff <= 2e-5, `${name}: max |decoded - eccodes| = ${maxDiff}`);
+    let lo = Infinity;
+    let hi = -Infinity;
+    for (const x of f.values) {
+      if (Number.isNaN(x)) continue;
+      lo = Math.min(lo, x);
+      hi = Math.max(hi, x);
+    }
+    assert.ok(Math.abs(lo - fx.info.min) <= 2e-5 && Math.abs(hi - fx.info.max) <= 2e-5, `${name}: range ${lo} to ${hi}`);
+  }
+});
+
+test('template 5.0 and scanning mode 0x40 decode only for a call that names them', () => {
+  const { bytes } = fixture('rtofs-trop-UOGRD-0m-f001');
+  const ask = RTOFS_EXPECT(2);
+  const refusedAs = (code, words) => (e) => e instanceof GribError && e.code === code && words.test(e.message);
+  // Every browser read: neither form is named, and the message is refused at the scan mode.
+  assert.throws(() => decodeGrib2(bytes, { grid: RTOFS_TROP }), refusedAs('unsupported-feature', /scanning mode 0x40/));
+  assert.throws(() => readGrib2Header(bytes), refusedAs('unsupported-feature', /scanning mode 0x40/));
+  // One form named is not the other.
+  assert.throws(() => decodeGrib2(bytes, { ...ask, scanMode: undefined }), refusedAs('unsupported-feature', /scanning mode 0x40/));
+  assert.throws(() => decodeGrib2(bytes, { ...ask, packing: undefined }), refusedAs('unsupported-template', /template 5\.0\b/));
+  assert.throws(() => decodeGrib2(bytes, { ...ask, packing: 3 }), refusedAs('unsupported-template', /template 5\.0\b/));
+  assert.equal(readGrib2Header(bytes, { packing: 0, scanMode: 0x40 }).packing.template, 0);
+  // Naming a form does not make another message pass for it: a north-first 5.3 message is refused.
+  const wind = fixture('gfs1p00-UGRD-10m-f006').bytes;
+  assert.throws(() => decodeGrib2(wind, { grid: GLOBAL_1P00, scanMode: 0x40 }), refusedAs('expectation', /scanning mode 0x0/));
+  assert.throws(() => decodeGrib2(wind, { grid: GLOBAL_1P00, packing: 0 }), refusedAs('expectation', /template 5\.3/));
+});
+
+test('an RTOFS message read without its bitmap, or with section 7 short or padded, is refused', () => {
+  const { bytes } = fixture('rtofs-trop-UOGRD-0m-f001');
+  const ask = RTOFS_EXPECT(2);
+  const s6 = sectionOf(bytes, 6);
+  assert.equal(bytes[s6.start + 5], 0, 'the message carries a bitmap');
+  // The negative control: 8,882 packed sea values laid over 9,600 nodes as if none were land.
+  assert.throws(
+    () => decodeGrib2(patched(bytes, [[s6.start + 5, 255]]), { ...ask, bitmap: undefined }),
+    (e) => e instanceof GribError && e.code === 'bitmap'
+  );
+  const s7 = sectionOf(bytes, 7);
+  const cut = withSection(bytes, 7, bytes.slice(s7.start + 5, s7.start + s7.length - 1));
+  assert.throws(() => decodeGrib2(cut, ask), (e) => e instanceof GribError && e.code === 'data', 'one byte short');
+  assert.throws(
+    () => decodeGrib2(padSection7(bytes, 1), ask),
+    (e) => e instanceof GribError && e.code === 'data' && /structurally invalid/.test(e.message),
+    'one byte left over'
+  );
 });

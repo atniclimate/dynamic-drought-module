@@ -69,7 +69,12 @@ const NHC_CONE_DEFINITION = 'The cone represents the probable track of the cente
 export const FLOW_TECHNICAL_NOTES: readonly string[] = [
   'Line pace shows relative speed within this field; it is not real time. Lines show the modeled flow at one instant, not the path of anything carried by it.',
   'Marks move the way the primary waves travel, all at one display speed; wave speed is not shown. The water does not travel with the marks. No marks within one grid cell of the coast or where the model has no water value; no marks does not mean calm water.',
-  'Model output, not an observation. Line width and brightness, and mark length and brightness, are display bins, not thresholds. This is model context, independently timed from the observed SST map.'
+  'Model output, not an observation. Line width and brightness, and mark length and brightness, are display bins, not thresholds. This is model context, independently timed from the observed SST map.',
+  // ledger: rtofs-currents-producer (the admission's stub; ddm-cite pending)
+  // DRAFT wording (DR-177): the currents credit and coverage, from admission rtofs-currents-producer line 11 and its
+  // 2026-09-26 true-up (the seam and the gaps stated, a dated frame, not for navigation). The two boxes are the committed
+  // frame's own grids; tests/terrain-coverage.test.mjs holds them to public/data/rtofs-surface-currents.json.
+  'Ocean currents are surface currents from the NOAA/NCEP Global RTOFS ocean model, re-encoded by DDM (model). The map holds one dated frame, as old as its last update: the state line gives the model run, the instant the frame is valid at and its age. Two model grids are held, each on its own spacing and never joined: 1.0 degree from 40 S to 39 N and 130 E to 111 W, and 0.3 degree from 40 N to 84.7 N and 140 E to 115.3 W. The grid under the centre of the view is drawn. Nothing is drawn between 39 N and 40 N, east of 111 W south of 40 N (the coasts of mainland Mexico and Central America) or west of 130 E. Not for navigation.'
 ];
 
 export function renderMapTechnicalInformation(): string {

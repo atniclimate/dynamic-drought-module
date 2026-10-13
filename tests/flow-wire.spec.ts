@@ -12,9 +12,12 @@ import { gotoApp, layerCheckbox, noddStubLog } from './helpers';
 /*
  * ENSO-FLOW-PLAN block E2, unit E2-1 (FLOW-WIRE): in ENSO mode, Wind and
  * Waves draw NOAA GFS 10 m wind and GFS-Wave peak direction as flowing paths
- * (or their still form), read from NOAA's public NODD bucket, in place of
- * the static Open-Meteo arrows. Ocean currents keep the interim arrows and
- * their DR-161 credits.
+ * (or their still form), read from NOAA's public NODD bucket. Ocean currents
+ * draw the same paths from the committed NOAA RTOFS frame, a file of the
+ * app's own origin (public/data/rtofs-surface-currents*; admission
+ * rtofs-currents-producer), served by the preview like any other asset: its
+ * cases read the frame's run and valid instant from the committed header
+ * and never pin a date of their own, since a landing replaces the frame.
  *
  * Every NODD read is answered by tests/helpers.ts `installDefaultNoddStub`
  * from the 2026-10-05 06Z f006 fixtures (or by a route of the case's own),
@@ -32,8 +35,17 @@ import { gotoApp, layerCheckbox, noddStubLog } from './helpers';
  */
 
 const PIXEL = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
-const OPEN_METEO = /^https:\/\/(?:marine-api|api)\.open-meteo\.com\//;
-const NODD = /^https:\/\/noaa-gfs-bdp-pds\.s3\.amazonaws\.com\//;
+/** The committed currents frame: its header, and the header with its grid files. */
+const CURRENTS_HEADER = /\/data\/rtofs-surface-currents\.json(?:\?|$)/;
+const CURRENTS_FRAME = /\/data\/rtofs-surface-currents[^/]*$/;
+const FRAME = JSON.parse(readFileSync(new URL('../public/data/rtofs-surface-currents.json', import.meta.url), 'utf8')) as {
+  readonly run: string; readonly valid: string; readonly grids: readonly { readonly file: string }[];
+};
+const FRAME_RUN = Date.parse(FRAME.run);
+const FRAME_VALID = Date.parse(FRAME.valid);
+/** Three and a half days after the frame's valid instant: its line ends "frame 3 days old". */
+const FRAME_CLOCK = FRAME_VALID + 3.5 * 24 * 3_600_000;
+const NODD =/^https:\/\/noaa-gfs-bdp-pds\.s3\.amazonaws\.com\//;
 const FIXTURE_CYCLE = Date.UTC(2026, 9, 5, 6);
 const FIXTURE_VALID = Date.UTC(2026, 9, 5, 12);
 /** Candidate cycle 06Z; wind (3-hourly) and waves (hourly) both at f006. */
@@ -66,21 +78,12 @@ async function stubSst(page: Page): Promise<void> {
     (route) => route.fulfill({ status: 200, contentType: 'image/png', body: PIXEL }));
 }
 
-/** Record every Open-Meteo request; answer currents with a 40-cell live sample at the page clock. */
-async function stubOpenMeteo(page: Page, clock: number): Promise<URL[]> {
+/** Record every read of the committed currents frame: only the currents kind reads it. */
+function recordCurrentsFrame(page: Page): URL[] {
   const calls: URL[] = [];
-  await page.route(OPEN_METEO, async (route) => {
-    const url = new URL(route.request().url());
-    calls.push(url);
-    const latitudes = url.searchParams.get('latitude')!.split(',').map(Number);
-    const longitudes = url.searchParams.get('longitude')!.split(',').map(Number);
-    const time = Math.floor(clock / 900_000) * 900;
-    const body = latitudes.map((latitude, i) => ({
-      latitude, longitude: longitudes[i],
-      current_units: { time: 'unixtime', ocean_current_velocity: 'm/s', ocean_current_direction: '°' },
-      current: { time, interval: 900, ocean_current_velocity: 0.4, ocean_current_direction: 90 }
-    }));
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+  page.on('request', (request) => {
+    const url = new URL(request.url());
+    if (CURRENTS_FRAME.test(url.pathname)) calls.push(url);
   });
   return calls;
 }
@@ -90,12 +93,13 @@ async function stubOpenMeteo(page: Page, clock: number): Promise<URL[]> {
  * adds `flow=off`: every case below starts from off and chooses its kind, as
  * it did before the default. `motion: 'live'` leaves the motion loop to the
  * page (the cases that read the moving form); the rest take `gotoApp`'s hold
- * and read the same paths in their still form.
+ * and read the same paths in their still form. Resolves to the reads of the
+ * currents frame, which wind and waves must never make.
  */
 async function bootEnso(page: Page, query = '', clock = LIVE_CLOCK, motion: 'hold' | 'live' = 'hold'): Promise<URL[]> {
   await page.clock.setFixedTime(clock);
   await stubSst(page);
-  const calls = await stubOpenMeteo(page, clock);
+  const calls = recordCurrentsFrame(page);
   const named = /(?:^|&)flow=/.test(query) ? query : `${query}&flow=off`;
   await gotoApp(page, `?cluster=enso&ocean=pacific${named}`, { flowMotion: motion });
   return calls;
@@ -214,6 +218,9 @@ test.describe('E2-1 flow words', () => {
     walk(FLOW_WORDS);
     out.push(flowLiveLine('live', FIXTURE_CYCLE, FIXTURE_VALID), flowLiveLine('live (partial)', FIXTURE_CYCLE, FIXTURE_VALID));
     for (const kind of Object.keys(FLOW_SOURCES) as (keyof typeof FLOW_SOURCES)[]) out.push(flowStaleLine(kind, FIXTURE_CYCLE));
+    // The currents frame's own lines: its dated line with its age, and the box of the grid under the view.
+    out.push(flowLiveLine('live', FRAME_RUN, FRAME_VALID, FRAME_CLOCK), flowLiveLine('live (partial)', FRAME_RUN, FRAME_VALID, FRAME_VALID));
+    out.push(ensoFlowData.currentsBoxNote({ lon0: 130, lat0: 39, dlon: 1, dlat: 1, nx: 120, ny: 80 }));
     return out;
   }
 
@@ -297,10 +304,8 @@ test.describe('E2-1 flowing paths in ENSO mode', () => {
     await expect(panel(page)).toHaveAttribute('data-flow-drawn', 'wind');
   });
 
-  for (const [kind, label] of [['wind', 'Atmospheric currents'], ['jet', 'Jet-level wind']] as const) test(`ENSO ${kind} reads only the NODD .idx and two ranges, and no Open-Meteo host`, async ({ page }) => {
+  for (const [kind, label] of [['wind', 'Atmospheric currents'], ['jet', 'Jet-level wind']] as const) test(`ENSO ${kind} reads only the NODD .idx and two ranges, and no currents frame`, async ({ page }) => {
     const calls = await bootEnso(page);
-    const requested: string[] = [];
-    page.on('request', (request) => { if (OPEN_METEO.test(request.url())) requested.push(request.url()); });
     await choose(page, kind);
     await expect(panel(page)).toHaveAttribute('data-status', 'live');
     await expect(panel(page)).toHaveAttribute('data-flow-drawn', kind);
@@ -318,8 +323,7 @@ test.describe('E2-1 flowing paths in ENSO mode', () => {
       { method: 'GET', url: key, range: ugrd, answer: 'fixture' },
       { method: 'GET', url: key, range: vgrd, answer: 'fixture' }
     ].sort((a, b) => a.range.localeCompare(b.range)));
-    expect(calls, `no Open-Meteo read for ${kind}`).toHaveLength(0);
-    expect(requested).toEqual([]);
+    expect(calls, `no currents frame read for ${kind}`).toHaveLength(0);
   });
 
   test('waves read the .idx, DIRPW and HTSGW, and never PERPW', async ({ page }) => {
@@ -368,12 +372,11 @@ test.describe('E2-1 flowing paths in ENSO mode', () => {
     const credit = panel(page).locator('[data-enso-flow-provenance]');
     await expect(credit).toHaveText('derived from NOAA GFS');
     await expect(credit.locator('img, svg, a')).toHaveCount(0);
-    const panelText = (await panel(page).textContent())!;
-    expect(panelText).not.toContain('Open-Meteo');
-    expect(panelText).not.toContain('Copernicus');
+    // The credit is text and only text: the panel links nowhere, and the map's attribution line names no model.
+    await expect(panel(page).locator('a[href]')).toHaveCount(0);
     const attribution = page.locator('.maplibregl-ctrl-attrib');
     for (const text of await attribution.allTextContents()) {
-      expect(text).not.toMatch(/Open-Meteo|GFS/);
+      expect(text).not.toMatch(/GFS|RTOFS/);
     }
   });
 
@@ -521,20 +524,88 @@ test.describe('E2-1 flowing paths in ENSO mode', () => {
     expect(seen.every((s) => !s.startsWith('wind|'))).toBe(true);
   });
 
-  test('currents still draw the interim arrows with the DR-161 credits', async ({ page }) => {
-    const calls = await bootEnso(page);
+  test('currents draw the committed NOAA RTOFS frame as paths: three same-origin reads, a dated line and its credit as text', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    const calls = await bootEnso(page, '', FRAME_CLOCK);
     await choose(page, 'currents');
-    await expect(panel(page)).toHaveAttribute('data-status', 'live');
-    await expect(panel(page).locator('.enso-flow-status')).toContainText('Model valid');
-    expect(calls).toHaveLength(1);
-    expect(calls[0]!.searchParams.get('models')).toBe('meteofrance_currents');
-    expect(calls[0]!.searchParams.get('latitude')!.split(',').length).toBeLessThanOrEqual(40);
-    await expect(panel(page).getByRole('link', { name: 'Weather data by Open-Meteo.com' })).toBeVisible();
-    await expect(panel(page)).toContainText('Generated using E.U. Copernicus Marine Service Information');
-    await expect(panel(page).getByRole('button', { name: 'Update area' })).toBeVisible();
-    await expect(panel(page)).toHaveAttribute('data-flow-drawn', '');
-    await expect(panel(page).locator('[data-enso-flow-provenance]')).toHaveCount(0);
+    // The Pacific view runs past the grid under its centre, so the state may be live (partial).
+    await expect(panel(page)).toHaveAttribute('data-status', /^live/);
+    await expect(panel(page)).toHaveAttribute('data-flow-drawn', 'currents');
+    expect(Number(await panel(page).getAttribute('data-flow-features'))).toBeGreaterThan(0);
+    // The header and its grid files, each once, all from the app's own origin; nothing from NODD.
+    const origin = new URL(page.url()).origin;
+    expect(calls.map((url) => url.origin)).toEqual([origin, origin, origin]);
+    expect(calls.map((url) => url.pathname.split('/').pop()).sort())
+      .toEqual(['rtofs-surface-currents.json', ...FRAME.grids.map((grid) => grid.file)].sort());
     expect(noddStubLog(page)).toHaveLength(0);
+    // A dated frame: its run, its valid instant and its age, never a limit and never "now".
+    const state = (await panel(page).getAttribute('data-status'))!;
+    const line = `${state} · Model run ${await pageDate(page, FRAME_RUN)} · Model valid ${await pageDate(page, FRAME_VALID)} · frame 3 days old`;
+    await expect(panel(page).locator('.enso-flow-status')).toHaveText(line);
+    await openKeyDrawer(page);
+    await expect(flowStatus(page)).toHaveText(`Ocean currents · ${line}`);
+    await expect(flowNotes(page)).toContainText(FLOW_WORDS.bins.currents);
+    // The key keeps the bins and the state; the credit's long form, the coverage and the disclaimer read in the Impact Briefing.
+    await expect(flowNotes(page)).not.toContainText('Not for navigation');
+    await expect(flowProvenance(page)).toHaveText(FLOW_WORDS.currentsProvenance);
+    await expect(flowProvenance(page).locator('img, svg, a')).toHaveCount(0);
+    const credit = panel(page).locator('[data-enso-flow-provenance]');
+    await expect(credit).toHaveText(FLOW_WORDS.currentsProvenance);
+    await expect(panel(page).locator('a[href]')).toHaveCount(0);
+    // A pan reads nothing again.
+    await dragMap(page, -60, -20);
+    await expect(panel(page)).toHaveAttribute('data-status', /^live/);
+    expect(calls).toHaveLength(3);
+  });
+
+  for (const fault of ['a missing header', 'a grid file that is not a frame'] as const) {
+    test(`currents with ${fault} read unavailable, and nothing draws`, async ({ page }) => {
+      await page.setViewportSize({ width: 1280, height: 800 });
+      await bootEnso(page, '', FRAME_CLOCK);
+      if (fault === 'a missing header') await page.route(CURRENTS_HEADER, (route) => route.fulfill({ status: 404, contentType: 'text/plain', body: 'Not Found' }));
+      else await page.route((url) => url.pathname.endsWith(`/data/${FRAME.grids[0]!.file}`), (route) => route.fulfill({ status: 200, contentType: 'application/octet-stream', body: 'not a frame' }));
+      await choose(page, 'currents');
+      await expect(panel(page)).toHaveAttribute('data-status', 'unavailable');
+      await expect(panel(page).locator('.enso-flow-status')).toHaveText(`unavailable · ${FLOW_WORDS.unavailable.currents}`);
+      await expect(panel(page)).toHaveAttribute('data-flow-drawn', '');
+      await expect(panel(page)).toHaveAttribute('data-flow-form', 'none');
+      await openKeyDrawer(page);
+      await expect(flowStatus(page)).toHaveText(`Ocean currents · unavailable · ${FLOW_WORDS.unavailable.currents}`);
+      await expect(flowNotes(page)).toHaveText(FAILED_NOTE);
+      await expect(flowProvenance(page)).toHaveCount(0);
+      await expect(page.locator('#map-key-flow-pause')).toBeHidden();
+    });
+  }
+
+  test('a currents view off the grid under it reads no data, never calm', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.clock.setFixedTime(FRAME_CLOCK);
+    await stubSst(page);
+    // Utah, framed by the state deep link: inland, east of both grids' sea nodes, so no node in view holds a value.
+    await gotoApp(page, '?cluster=enso&select=state:UT&flow=currents');
+    await expect(panel(page)).toHaveAttribute('data-status', 'no data');
+    await expect(panel(page)).toHaveAttribute('data-flow-form', 'none');
+    await expect(panel(page)).toHaveAttribute('data-flow-features', '0');
+    await expect(panel(page).locator('.enso-flow-status')).toHaveText(/^no data · (?:No ocean values in this view|This view is outside the area this ocean current grid covers)$/);
+    await openKeyDrawer(page);
+    await expect(flowStatus(page)).toContainText('Ocean currents · no data · ');
+    await expect(flowStatus(page)).not.toContainText(/calm/i);
+    await expect(page.locator('#map-key-flow-pause')).toBeHidden();
+  });
+
+  test('under reduced motion, currents show the still paths and 0 repaints in 2 s', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await bootEnso(page, '', FRAME_CLOCK);
+    await choose(page, 'currents');
+    await expect(panel(page)).toHaveAttribute('data-flow-form', 'still');
+    await expect(panel(page)).toHaveAttribute('data-flow-motion', 'reduced');
+    await expect(panel(page)).toHaveAttribute('data-flow-drawn', 'currents');
+    expect(Number(await panel(page).getAttribute('data-flow-features'))).toBeGreaterThan(0);
+    await openKeyDrawer(page);
+    await expect(flowNotes(page)).toContainText(FLOW_WORDS.reduced);
+    await expect.poll(() => rendersOver(page, 500), { timeout: 15_000 }).toBe(0);
+    expect(await rendersOver(page, 2000), 'MapLibre renders in 2 s under reduced motion').toBe(0);
   });
 
   test('under reduced motion, wind shows the still streaks and 0 repaints in 2 s', async ({ page }) => {
@@ -554,20 +625,20 @@ test.describe('E2-1 flowing paths in ENSO mode', () => {
     expect(await rendersOver(page, 2000), 'MapLibre renders in 2 s under reduced motion').toBe(0);
   });
 
-  test('Update area is hidden for wind and waves', async ({ page }) => {
-    await bootEnso(page);
-    const update = panel(page).getByRole('button', { name: 'Update area', includeHidden: true });
-    await choose(page, 'wind');
-    await expect(update).toBeHidden();
-    await expect(panel(page)).toHaveAttribute('data-status', 'live');
-    await expect(panel(page).locator('.enso-flow-status')).not.toContainText('Update area');
-    await choose(page, 'waves');
-    await expect(update).toBeHidden();
-    await expect(panel(page)).toHaveAttribute('data-status', /^live/);
+  test('no kind is sampled by hand: the panel offers its kinds and its ink, and a pan reads nothing', async ({ page }) => {
+    const calls = await bootEnso(page);
+    for (const kind of ['wind', 'waves', 'currents'] as const) {
+      await choose(page, kind);
+      await expect(panel(page)).toHaveAttribute('data-status', /^live/);
+      // Every button of the panel is a kind: nothing asks for a resample.
+      await expect(panel(page).locator('button:not([data-flow-kind])')).toHaveCount(0);
+    }
+    const frameReads = calls.length;
+    const noddReads = noddStubLog(page).length;
     await dragMap(page, -60, -20);
-    await expect(panel(page).locator('.enso-flow-status')).not.toContainText('Update area');
-    await choose(page, 'currents');
-    await expect(update).toBeVisible();
+    await expect(panel(page)).toHaveAttribute('data-status', /^live/);
+    expect(calls).toHaveLength(frameReads);
+    expect(noddStubLog(page)).toHaveLength(noddReads);
   });
 
   test('after webglcontextlost the status stays, the still form draws, the detail says so, and restore rebuilds from CPU state with no refetch', async ({ page }) => {

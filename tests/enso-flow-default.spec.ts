@@ -29,7 +29,8 @@ import { FLOW_MOTION_STORAGE_KEY, gotoApp, layerCheckbox, noddStubLog, search } 
  */
 
 const PIXEL = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
-const OPEN_METEO = /^https:\/\/(?:marine-api|api)\.open-meteo\.com\//;
+/** The committed ocean-current frame (public/data/rtofs-surface-currents*), a file of the app's own origin. */
+const CURRENTS_FRAME = /\/data\/rtofs-surface-currents[^/]*$/;
 /** Candidate cycle 06Z, wind (3-hourly) and waves (hourly) both at f006. */
 const LIVE_CLOCK = Date.UTC(2026, 9, 5, 12, 30);
 
@@ -42,12 +43,11 @@ async function stubSst(page: Page): Promise<void> {
     (route) => route.fulfill({ status: 200, contentType: 'image/png', body: PIXEL }));
 }
 
-/** Record every Open-Meteo request; wind and waves must make none. */
-async function recordOpenMeteo(page: Page): Promise<string[]> {
+/** Record every read of the currents frame; only the currents kind reads it, so wind, waves and off must make none. */
+function recordCurrentsFrame(page: Page): string[] {
   const calls: string[] = [];
-  await page.route(OPEN_METEO, async (route) => {
-    calls.push(route.request().url());
-    await route.abort('blockedbyclient');
+  page.on('request', (request) => {
+    if (CURRENTS_FRAME.test(new URL(request.url()).pathname)) calls.push(request.url());
   });
   return calls;
 }
@@ -56,7 +56,7 @@ async function prepare(page: Page): Promise<string[]> {
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.clock.setFixedTime(LIVE_CLOCK);
   await stubSst(page);
-  return recordOpenMeteo(page);
+  return recordCurrentsFrame(page);
 }
 
 function panel(page: Page): Locator {
@@ -166,7 +166,7 @@ test.describe('E2-4 pure: the default is the cluster field, and the hold names t
 
 test.describe('E2-4 ENSO opens with wind', () => {
   test('an ENSO boot with no flow key draws wind and writes no flow key', async ({ page }) => {
-    const openMeteo = await prepare(page);
+    const currentsReads = await prepare(page);
     await gotoApp(page, '?cluster=enso&ocean=pacific');
     await expect(panel(page)).toHaveAttribute('data-status', 'live');
     await expect(panel(page)).toHaveAttribute('data-flow-drawn', 'wind');
@@ -174,7 +174,7 @@ test.describe('E2-4 ENSO opens with wind', () => {
     // The one .idx and the two ranges (U and V), from the fixtures; nothing else.
     const log = noddStubLog(page);
     expect(log.map((entry) => entry.answer)).toEqual(['fixture', 'fixture', 'fixture']);
-    expect(openMeteo, 'wind reads no Open-Meteo host').toEqual([]);
+    expect(currentsReads, 'wind reads no currents frame').toEqual([]);
     // The default is the absence of the key, and it stays absent after the boot's own writes.
     await expect.poll(async () => (await flowParams(page)).flow).toBeNull();
     await expect(panel(page)).toHaveAttribute('data-flow-drawn', 'wind');
@@ -182,13 +182,13 @@ test.describe('E2-4 ENSO opens with wind', () => {
   });
 
   test('flow=off in an ENSO link stays off and round-trips', async ({ page }) => {
-    const openMeteo = await prepare(page);
+    const currentsReads = await prepare(page);
     await gotoApp(page, '?cluster=enso&ocean=pacific&flow=off');
     await expect(panel(page)).toHaveAttribute('data-status', 'off');
     await expect(panel(page)).toHaveAttribute('data-flow-drawn', '');
     await expect(panel(page).locator('[data-flow-kind="off"]')).toHaveAttribute('aria-pressed', 'true');
     expect(noddStubLog(page), 'off reads nothing').toHaveLength(0);
-    expect(openMeteo).toEqual([]);
+    expect(currentsReads).toEqual([]);
     await expect.poll(async () => (await flowParams(page)).flow).toBe('off');
 
     // Reload: still off, still written.
@@ -230,14 +230,14 @@ test.describe('E2-4 ENSO opens with wind', () => {
     { query: 'flow=waves&flowink=dark', kind: 'waves', written: 'waves', ink: 'dark' }
   ] as const) {
     test(`every 2026-09-13 flow=wind and flow=waves link still opens its kind (${link.query})`, async ({ page }) => {
-      const openMeteo = await prepare(page);
+      const currentsReads = await prepare(page);
       await gotoApp(page, `?cluster=enso&ocean=pacific&${link.query}`);
       await expect(panel(page)).toHaveAttribute('data-status', link.kind === 'waves' ? /^live/ : 'live');
       await expect(panel(page)).toHaveAttribute('data-flow-drawn', link.kind);
       await expect(panel(page).locator(`[data-flow-kind="${link.kind}"]`)).toHaveAttribute('aria-pressed', 'true');
       await expect.poll(async () => (await flowParams(page)).flow).toBe(link.written);
       expect((await flowParams(page)).flowink).toBe(link.ink);
-      expect(openMeteo).toEqual([]);
+      expect(currentsReads).toEqual([]);
     });
   }
 
@@ -261,7 +261,7 @@ test.describe('E2-4 ENSO opens with wind', () => {
   });
 
   test('switching into ENSO from another mode opens wind and writes no flow key', async ({ page }) => {
-    const openMeteo = await prepare(page);
+    const currentsReads = await prepare(page);
     await gotoApp(page, bootQuery({ urlToken: null, profile: 'wa' }));
     await page.locator('.shell-cluster-btn[data-cluster="enso"]').click();
     await expect(page.locator('.shell-cluster-btn[data-cluster="enso"]')).toHaveAttribute('aria-pressed', 'true');
@@ -269,7 +269,7 @@ test.describe('E2-4 ENSO opens with wind', () => {
     await expect(panel(page)).toHaveAttribute('data-flow-drawn', 'wind');
     expect(new URLSearchParams(await search(page)).get('cluster')).toBe('enso');
     await expect.poll(async () => (await flowParams(page)).flow).toBeNull();
-    expect(openMeteo).toEqual([]);
+    expect(currentsReads).toEqual([]);
   });
 });
 

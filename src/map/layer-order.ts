@@ -53,12 +53,10 @@ export const CONDITION_SURFACE_IDS: readonly string[] = [
   'nino34-box-fill',
   'nino34-box-line',
   'nino34-box-label',
-  // The ENSO direction overlay's seat: the interim ocean-current arrows
-  // (src/layers/enso-flow.ts), then the wind and wave paths' still form and
-  // node arrows and their moving ribbons (src/layers/flow/still.ts and
-  // index.ts; ENSO-FLOW-PLAN E2-1). One kind draws at a time.
-  'enso-flow-casing',
-  'enso-flow-arrows',
+  // The ENSO direction overlay's seat (src/layers/enso-flow.ts): the wind,
+  // wave and current paths' still form and node arrows, then their moving
+  // ribbons (src/layers/flow/still.ts and index.ts; ENSO-FLOW-PLAN E2-1).
+  // One kind draws at a time.
   'flow-still-casing',
   'flow-still',
   'flow-still-marks',

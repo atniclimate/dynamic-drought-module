@@ -3,9 +3,9 @@ import { readFileSync } from 'node:fs';
 
 import { expect, test, type Page, type Route } from './offline-test';
 
-import type { FlowKind } from '../src/layers/flow/field';
 import { locateMessage } from '../src/layers/flow/nodd';
-import { FLOW_SOURCES, frameMeta } from '../src/layers/flow/source';
+// This spec is the NODD plumbing: its kinds are the ones read from NODD (currents read a same-origin frame).
+import { FLOW_SOURCES, frameMeta, type NoddKind as FlowKind } from '../src/layers/flow/source';
 import { RASTER_PROOF_DEADLINE_MS } from '../src/util/raster-status';
 import { gotoApp, layerPill, noddStubLog, PILL, selectRegion } from './helpers';
 

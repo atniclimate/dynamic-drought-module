@@ -480,7 +480,17 @@ const FEATURE_BUDGETS = [
     measuredJsGzipKb: 26.4,
     networkBytes: 1_316_519,
     requestCount: 3,
-    dataAssets: [],
+    // The committed NOAA RTOFS surface-current frame (admission rtofs-currents-producer line 10), written by
+    // scripts/build-rtofs-currents.mjs and read same-origin by src/layers/flow/currents.ts: ocean currents are three
+    // requests and 74,399 bytes (the header 1,772, the 1.0 degree grid 19,938 and the 0.3 degree grid 52,689 as gzip;
+    // 248,400 bytes of Int16 inflated), measured 2026-10-13 on the 2026-10-13 00Z frame, so under the network columns
+    // above, which stay the larger kind. Each line is that measurement plus ACTIVATION_HEADROOM; a landing replaces the
+    // frame, and one that crosses a line re-records it here.
+    dataAssets: [
+      { path: 'data/rtofs-surface-currents.json', maxBytes: 2_658 },
+      { path: 'data/rtofs-surface-currents-trop-paci.i16.gz', maxBytes: 29_907 },
+      { path: 'data/rtofs-surface-currents-alaska.i16.gz', maxBytes: 79_033 },
+    ],
   },
   {
     key: 'tropical-cyclones',

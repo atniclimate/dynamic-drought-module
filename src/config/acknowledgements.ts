@@ -435,8 +435,10 @@ export const PROVIDERS: Readonly<
   // The OSM raster ground, drawn by default and under satellite.
   'basemap-ground': ['osm'],
   'satellite-geocolor': ['noaa-nesdis'],
-  // The ENSO flow overlay keeps its interim credits in its own key (DR-161,
-  // src/layers/enso-flow.ts); DR-115 allows no Open-Meteo or Copernicus row.
+  // The ENSO flow overlay (src/layers/enso-flow.ts): NOAA GFS and GFS-Wave
+  // read at runtime, and the committed NOAA RTOFS surface-current frame, all
+  // NCEP products (admission rtofs-currents-producer line 11). The overlay
+  // declares no map attribution: its credit is text in its own panel and key.
   'enso-flow': ['noaa-ncep'],
   structures: ['overture'],
   'terrain-archive': ['usgs'],

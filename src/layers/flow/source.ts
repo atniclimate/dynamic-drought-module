@@ -37,6 +37,9 @@ import { createFlowField, type FlowField, type FlowGrid, type FlowKind, type Flo
 
 const HOUR = 3_600_000;
 
+/** The kinds read from NODD at runtime: every kind but the committed currents frame (./currents). */
+export type NoddKind = Exclude<FlowKind, 'currents'>;
+
 /** The NODD bucket, virtual-hosted: the only form the reader requests. */
 export const NODD_ORIGIN = 'https://noaa-gfs-bdp-pds.s3.amazonaws.com';
 
@@ -59,7 +62,7 @@ export interface FlowCrop {
 }
 
 export interface FlowSource {
-  readonly kind: FlowKind;
+  readonly kind: NoddKind;
   /** Issuer and model words, verbatim. */
   readonly issuer: string;
   readonly model: string;
@@ -96,7 +99,7 @@ const fff = (fh: number): string => String(fh).padStart(3, '0');
  * One level of GFS `pgrb2.1p00` wind: UGRD and VGRD at the `.idx` LEVEL
  * words `level`, whose GRIB fixed surface is `surface`. Global, uncropped.
  */
-function gfsWind(kind: FlowKind, level: string, surface: FlowSource['surface']): FlowSource {
+function gfsWind(kind: NoddKind, level: string, surface: FlowSource['surface']): FlowSource {
   return {
     kind,
     issuer: 'NOAA',
@@ -122,7 +125,7 @@ function gfsWind(kind: FlowKind, level: string, surface: FlowSource['surface']):
   };
 }
 
-export const FLOW_SOURCES: Readonly<Record<FlowKind, FlowSource>> = {
+export const FLOW_SOURCES: Readonly<Record<NoddKind, FlowSource>> = {
   // Fixed surface 103: a height above ground, in metres.
   wind: gfsWind('wind', '10 m above ground', { type: 103, value: 10 }),
   // Fixed surface 100: an isobaric surface, in pascals (250 hPa).
@@ -165,7 +168,7 @@ export function waveToVector(dirFromDegrees: number): [number, number] {
 }
 
 /** The FlowField grid of a kind after its crop. */
-export function frameGrid(kind: FlowKind): FlowGrid {
+export function frameGrid(kind: NoddKind): FlowGrid {
   const s = FLOW_SOURCES[kind];
   const c = s.crop ?? { column0: 0, row0: 0, nx: s.grid.ni, ny: s.grid.nj };
   return {
@@ -180,7 +183,7 @@ export function frameGrid(kind: FlowKind): FlowGrid {
 }
 
 /** The frame's clocks and issuer words: run, valid time and staleAfter. */
-export function frameMeta(kind: FlowKind, cycle: number, forecastHour: number): FlowMeta {
+export function frameMeta(kind: NoddKind, cycle: number, forecastHour: number): FlowMeta {
   const s = FLOW_SOURCES[kind];
   const key = s.key(cycle, forecastHour);
   return {
@@ -207,7 +210,7 @@ export const PACKET_NO_VALUE = -32768;
  * vector and the significant height; wind at either level carries u and v only.
  */
 export interface FlowPacket {
-  readonly kind: FlowKind;
+  readonly kind: NoddKind;
   readonly cycle: number;
   readonly forecastHour: number;
   readonly u: Int16Array;
@@ -218,7 +221,7 @@ export interface FlowPacket {
 
 /** The request posted to the decode Worker: one buffer per source message, in order. */
 export interface DecodeRequest {
-  readonly kind: FlowKind;
+  readonly kind: NoddKind;
   readonly cycle: number;
   readonly forecastHour: number;
   readonly messages: readonly ArrayBuffer[];

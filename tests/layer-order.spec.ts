@@ -246,10 +246,9 @@ test.describe('layer-order: thematic reassert (E1 deliverable 2)', () => {
       expect(idx(id), `${id} sits above the SST and the Nino box`).toBeGreaterThan(idx('nino34-box-label'));
       expect(idx(id), `${id} sits below heatrisk, as the old arrows did`).toBeLessThan(idx('heatrisk'));
     }
-    // The still layers paint casing first, and the interim current arrows keep their seat.
+    // The still layers paint casing first. The sampled current arrows are gone: currents draw through these ids too.
     expect(flowIds.map(idx)).toEqual([...flowIds.map(idx)].sort((a, b) => a - b));
-    expect(idx('enso-flow-arrows')).toBeGreaterThan(idx('nino34-box-label'));
-    expect(idx('enso-flow-arrows')).toBeLessThan(idx('heatrisk'));
+    expect(CONDITION_SURFACE_IDS.filter((id) => id.startsWith('enso-flow'))).toEqual([]);
     // A late custom layer is re-seated under the Tribal outlines and the labels.
     const map = fakeMap(['background', 'basemap', 'sst-anomaly', 'tribal-lands-outline', 'us-places-labels', 'flow-paths', 'flow-still']);
     reassertThematicOrder(map as never);

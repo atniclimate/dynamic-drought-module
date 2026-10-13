@@ -21,7 +21,6 @@ import { gotoApp } from './helpers';
  */
 
 const PIXEL = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
-const FLOW_ROUTE = /^https:\/\/(?:marine-api|api)\.open-meteo\.com\/v1\//;
 const SNAPSHOT_EVENT = 'ddm:enso-flow-snapshot';
 const REQUEST_EVENT = 'ddm:enso-flow-motion-request';
 const PAUSE_NAME = 'Pause motion';
@@ -42,8 +41,6 @@ async function stubSst(page: Page): Promise<void> {
   }));
   await page.route((url) => url.href.includes('GHRSST_L4_MUR') && url.pathname.endsWith('.png'),
     (route) => route.fulfill({ status: 200, contentType: 'image/png', body: PIXEL }));
-  // No case here asks for the sampled arrows; a stray read fails loudly.
-  await page.route(FLOW_ROUTE, (route) => route.abort('blockedbyclient'));
 }
 
 /** Boot ENSO with the arrows off, so only the synthetic snapshots speak. */

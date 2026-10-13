@@ -29,8 +29,8 @@ import { gotoApp, NODD_FIXTURES, noddStubLog } from './helpers';
  * Fixtures only, zero egress. Every NODD read is answered by
  * tests/helpers.ts `installDefaultNoddStub` from the committed 2026-10-05 06Z
  * f006 messages (the real wave pair is 1.3 MB, so the bytes are real);
- * Open-Meteo (ocean currents, the interim arrows) and the OSM basemap are
- * answered from here; a context backstop aborts and logs any other host.
+ * ocean currents read the app's own committed frame (public/data/); the OSM
+ * basemap is answered from here; a context backstop aborts and logs any other host.
  *
  * WHAT THE NUMBERS ARE, and are not (the plan's labels):
  * - Headless Chromium here runs ANGLE over SwiftShader, a software GL. When
@@ -56,9 +56,9 @@ import { gotoApp, NODD_FIXTURES, noddStubLog } from './helpers';
  *   are emulated by resizing the viewport to half and double the canvas area.
  *   Step CPU is comparable (it scales with the count); frame rate is not
  *   (the canvas changes size too).
- * - "Today's arrows". The static wind and wave arrows of 4c2afb4 were removed
- *   by E2-1; the interim arrows that remain are ocean currents, measured
- *   here (Open-Meteo stubbed) as the closest comparison the tree can run.
+ * - "Today's arrows". The static arrows of 4c2afb4 are gone from the tree (wind
+ *   and waves by E2-1, ocean currents with the NOAA RTOFS frame), so the row
+ *   that compared against them now measures ocean currents drawn as paths.
  * - Pan, zoom: the zoom of a production build is not readable, so the pan is
  *   500 px drags (about 25 degrees of longitude at zoom 3.8) and the zoom is
  *   wheel notches in and out; the recorded fields say what was driven.
@@ -71,8 +71,7 @@ const ONE_PIXEL_PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
   'base64'
 );
-const OPEN_METEO = /^https:\/\/(?:marine-api|api)\.open-meteo\.com\//;
-const NODD = /^https:\/\/noaa-gfs-bdp-pds\.s3\.amazonaws\.com\//;
+const NODD =/^https:\/\/noaa-gfs-bdp-pds\.s3\.amazonaws\.com\//;
 /** Candidate cycle 06Z; wind (3-hourly) and waves (hourly) both at f006: the fixtures are the frame it asks for. */
 const LIVE_CLOCK = Date.UTC(2026, 9, 5, 12, 30);
 
@@ -148,25 +147,6 @@ async function stubSst(page: Page): Promise<void> {
   }));
   await page.route((url) => url.href.includes('GHRSST_L4_MUR') && url.pathname.endsWith('.png'),
     (route) => route.fulfill({ status: 200, contentType: 'image/png', body: ONE_PIXEL_PNG }));
-}
-
-/** Ocean currents (the interim arrows): a 40-cell live sample at the page clock. */
-async function stubOpenMeteo(page: Page): Promise<URL[]> {
-  const calls: URL[] = [];
-  await page.route(OPEN_METEO, async (route) => {
-    const url = new URL(route.request().url());
-    calls.push(url);
-    const latitudes = url.searchParams.get('latitude')!.split(',').map(Number);
-    const longitudes = url.searchParams.get('longitude')!.split(',').map(Number);
-    const time = Math.floor(LIVE_CLOCK / 900_000) * 900;
-    const body = latitudes.map((latitude, i) => ({
-      latitude, longitude: longitudes[i],
-      current_units: { time: 'unixtime', ocean_current_velocity: 'm/s', ocean_current_direction: '°' },
-      current: { time, interval: 900, ocean_current_velocity: 0.4, ocean_current_direction: 90 }
-    }));
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
-  });
-  return calls;
 }
 
 /** What the in-page collector returns for one window. */
@@ -269,7 +249,6 @@ interface Booted {
   readonly page: Page;
   readonly cdp: CDPSession;
   readonly aborted: string[];
-  readonly openMeteoCalls: URL[];
 }
 
 const panelOf = (page: Page): Locator => page.locator('.enso-flow');
@@ -278,8 +257,7 @@ async function waitFlowReady(page: Page, flow: BootOptions['flow']): Promise<voi
   const panel = panelOf(page);
   if (flow === 'off') return;
   await expect(panel).toHaveAttribute('data-status', /^live/, { timeout: 30_000 });
-  // Currents are the interim arrows (no flow view), so nothing stamps data-flow-drawn for them.
-  if (flow !== 'currents') await expect(panel).toHaveAttribute('data-flow-drawn', flow, { timeout: 30_000 });
+  await expect(panel).toHaveAttribute('data-flow-drawn', flow, { timeout: 30_000 });
 }
 
 /**
@@ -300,9 +278,9 @@ async function installBackstop(context: BrowserContext): Promise<string[]> {
   return aborted;
 }
 
-/** Zero egress: nothing aimed at the NODD bucket or Open-Meteo reached the backstop (each has its own stub). */
+/** Zero egress: nothing aimed at the NODD bucket reached the backstop (it has its own stub). */
 function expectNoEscape(aborted: readonly string[], label: string): void {
-  expect(aborted.filter((url) => NODD.test(url) || OPEN_METEO.test(url)), `${label}: no NODD or Open-Meteo request escaped its stub`).toEqual([]);
+  expect(aborted.filter((url) => NODD.test(url)), `${label}: no NODD request escaped its stub`).toEqual([]);
 }
 
 /** A fresh context booted into ENSO with `flow`, every host routed, the instruments armed. */
@@ -319,7 +297,6 @@ async function boot(browser: Browser, options: BootOptions): Promise<Booted> {
     route.fulfill({ status: 200, contentType: 'image/png', body: ONE_PIXEL_PNG }));
   await page.clock.setFixedTime(LIVE_CLOCK);
   await stubSst(page);
-  const openMeteoCalls = await stubOpenMeteo(page);
   await page.addInitScript(INSTRUMENTS);
   if (options.pairedPan) await page.addInitScript(PAN_INSTRUMENTS);
   if (options.storedPause) {
@@ -346,7 +323,7 @@ async function boot(browser: Browser, options: BootOptions): Promise<Booted> {
       throw error;
     }
   }
-  return { context, page, cdp, aborted, openMeteoCalls };
+  return { context, page, cdp, aborted };
 }
 
 interface MapRenderer {
@@ -954,7 +931,7 @@ async function resizeForDensity(page: Page, factor: number): Promise<void> {
 const CONDITIONS: readonly ConditionSpec[] = [
   { id: 'flow-off', describe: 'flow off', boot: { flow: 'off' }, profiled: false },
   {
-    id: 'currents-arrows', describe: "today's interim arrows: ocean currents, Open-Meteo stubbed (the wind and wave arrows of 4c2afb4 were removed by E2-1)",
+    id: 'currents-paths', describe: 'ocean currents drawn as paths from the committed NOAA RTOFS frame (the static arrows this row once measured are gone from the tree)',
     boot: { flow: 'currents' }, profiled: false
   },
   { id: 'wind-sparse', describe: 'wind, half the particles (canvas area halved)', boot: { flow: 'wind' }, prepare: (page) => resizeForDensity(page, 0.5), note: 'density emulated by canvas area; frame rate not comparable' },
@@ -1004,7 +981,6 @@ test.describe('flow measure (ENSO-FLOW-PLAN 4.2 and 4.4)', () => {
           route.fulfill({ status: 200, contentType: 'image/png', body: ONE_PIXEL_PNG }));
         await page.clock.setFixedTime(LIVE_CLOCK);
         await stubSst(page);
-        await stubOpenMeteo(page);
         const cdp = await context.newCDPSession(page);
         const requests = new Map<string, Seen>();
         cdp.on('Network.requestWillBeSent', (event: { requestId: string; request: { url: string } }) => {
@@ -1108,7 +1084,6 @@ test.describe('flow measure (ENSO-FLOW-PLAN 4.2 and 4.4)', () => {
           route.fulfill({ status: 200, contentType: 'image/png', body: ONE_PIXEL_PNG }));
         await page.clock.setFixedTime(LIVE_CLOCK);
         await stubSst(page);
-        await stubOpenMeteo(page);
         // One shared link: each request waits its latency, then queues behind the bytes already on the wire.
         let linkFreeAt = 0;
         let bytes = 0;

@@ -4,7 +4,8 @@
  * one dynamic `import()` of this file, so nothing here enters the eager
  * closure or the sst-anomaly chunk.
  *
- * It exports the NODD reader and one view controller, `mountFlowView`, that
+ * It exports the NODD reader, the reader of the committed currents frame
+ * (./currents) and one view controller, `mountFlowView`, that
  * puts a decoded FlowField on the map and keeps it honest:
  * - the moving form: the WebGL2 ribbon custom layer `flow-paths`, driven by
  *   the 30 Hz motion loop (Pause, reduced motion, a hidden tab, the map off
@@ -32,6 +33,7 @@ import { FlowRibbonLayer, viewQuadOf } from './ribbon-layer';
 import { STILL_LAYER_IDS, STILL_SOURCE_ID, buildStillForm, hasModelNodeInView, nodeArrows, stillLayers } from './still';
 
 export { readFlowFrame, candidateCycle, forecastHourFor, MAX_CYCLE_TRIES } from './nodd';
+export { readCurrentsFrame, fieldNearestLatitude } from './currents';
 export { isStale } from './field';
 export type { FlowField, FlowKind } from './field';
 export type { MotionHold, MotionState } from './motion-loop';

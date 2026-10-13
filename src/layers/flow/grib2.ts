@@ -9,6 +9,12 @@
  *   regional grids): grid 3.0, product 4.0, template 5.40 (JPEG 2000, see
  *   ./jpx), with a section 6 bitmap.
  *
+ * A third form is decoded only for a caller that asks for it by name, the
+ * landing-time RTOFS producer (scripts/build-rtofs-currents.mjs): template
+ * 5.0 (simple packing) and scanning mode 0x40 (rows south to north). A call
+ * that does not ask (every browser read) still refuses both, as before.
+ * Values come back in the message's own scan order; nothing is reordered.
+ *
  * Values are Y = (R + X * 2^E) * 10^-D (GRIB2 regulation 92.9.4), with every
  * point the bitmap masks set to NaN. Direction fields are returned exactly
  * as the issuer encodes them: this module never rotates a direction.
@@ -82,7 +88,7 @@ export interface GribGrid {
   lo2: number;
   di: number;
   dj: number;
-  /** Flag table 3.4; only 0 (i east, j south, rows consecutive) is accepted. */
+  /** Flag table 3.4: 0 (i east, j south, rows consecutive), or 0x40 (j north) for a caller that asked for it. */
   scanMode: number;
   /** Code table 3.2 (6 = sphere of radius 6,371,229 m for GFS). */
   shapeOfEarth: number;
@@ -96,8 +102,8 @@ export interface GribParameter {
 }
 
 export interface GribPacking {
-  /** Data representation template: 3 (complex, spatial differencing) or 40 (JPEG 2000). */
-  template: 3 | 40;
+  /** Data representation template: 3 (complex, spatial differencing), 40 (JPEG 2000), or 0 (simple) for a caller that asked for it. */
+  template: 0 | 3 | 40;
   /** Number of packed values (section 5); equals the grid points when there is no bitmap. */
   packedCount: number;
   /** R, the IEEE float reference value (may be negative). */
@@ -143,10 +149,15 @@ export interface GribExpect {
   /** Reference time (cycle), ms since the epoch, UTC. */
   refTime?: number;
   forecastHours?: number;
-  /** Data representation template. */
-  packing?: 3 | 40;
+  /** Data representation template. 0 (simple packing) is decoded only when asked for here. */
+  packing?: 0 | 3 | 40;
   bitmap?: boolean;
+  /** Flag table 3.4. 0x40 (rows south to north) is decoded only when asked for here; unset means 0. */
+  scanMode?: 0 | 0x40;
 }
+
+/** The two forms a call must ask for by name (GribExpect `packing: 0`, `scanMode: 0x40`). */
+type GribAllow = Pick<GribExpect, 'packing' | 'scanMode'>;
 
 /** Largest grid accepted (a 0.25 degree global grid is 1,038,240 points). */
 export const GRIB_MAX_POINTS = 1 << 22;
@@ -236,7 +247,7 @@ function splitSections(b: Uint8Array): Sections {
   return { discipline: u8(b, 6), s1, s3, s4, s5, s6, s7 };
 }
 
-function parseHeader(sec: Sections): GribHeader {
+function parseHeader(sec: Sections, allow: GribAllow = {}): GribHeader {
   const { s1, s3, s4, s5, s6 } = sec;
 
   // Section 1: reference time.
@@ -267,7 +278,9 @@ function parseHeader(sec: Sections): GribHeader {
     fail('unsupported-feature', 'a basic angle other than micro-degrees');
   }
   const scanMode = u8(s3, 71);
-  if (scanMode !== 0) fail('unsupported-feature', `scanning mode 0x${scanMode.toString(16)}`);
+  if (scanMode !== 0 && !(scanMode === 0x40 && allow.scanMode === 0x40)) {
+    fail('unsupported-feature', `scanning mode 0x${scanMode.toString(16)}`);
+  }
   const grid: GribGrid = {
     ni,
     nj,
@@ -297,15 +310,17 @@ function parseHeader(sec: Sections): GribHeader {
         : s32(s4, 24) / 10 ** (surfaceScale & 0x80 ? -(surfaceScale & 0x7f) : surfaceScale)
   };
 
-  // Section 5: data representation template 5.3 or 5.40.
+  // Section 5: data representation template 5.3 or 5.40, or 5.0 when asked for.
   if (s5.length < 11) fail('section-bounds', 'section 5 is too short');
   const packingTemplate = u16(s5, 9);
-  if (packingTemplate !== 3 && packingTemplate !== 40) unsupportedTemplate(`5.${packingTemplate}`);
-  const need = packingTemplate === 3 ? 49 : 23;
+  if (packingTemplate !== 3 && packingTemplate !== 40 && !(packingTemplate === 0 && allow.packing === 0)) {
+    unsupportedTemplate(`5.${packingTemplate}`);
+  }
+  const need = packingTemplate === 3 ? 49 : packingTemplate === 40 ? 23 : 21;
   if (s5.length < need) fail('section-bounds', `section 5 is ${s5.length} bytes; template 5.${packingTemplate} needs ${need}`);
   if (u8(s5, 20) !== 0) fail('unsupported-feature', `original field type ${u8(s5, 20)} (0 = floating point is supported)`);
   const packing: GribPacking = {
-    template: packingTemplate as 3 | 40,
+    template: packingTemplate as 0 | 3 | 40,
     packedCount: u32(s5, 5),
     reference: f32(s5, 11),
     binaryScale: s16(s5, 15),
@@ -340,10 +355,11 @@ function parseHeader(sec: Sections): GribHeader {
 /**
  * Parse and check sections 0 to 6 without unpacking any data: the grid,
  * parameter, clocks and packing of one message. Throws GribError on any
- * structural fault or unsupported template.
+ * structural fault or unsupported template. `allow` names the forms only
+ * the landing producer reads (template 5.0, scanning mode 0x40).
  */
-export function readGrib2Header(bytes: Uint8Array): GribHeader {
-  return parseHeader(splitSections(bytes));
+export function readGrib2Header(bytes: Uint8Array, allow: GribAllow = {}): GribHeader {
+  return parseHeader(splitSections(bytes), allow);
 }
 
 const sameLongitude = (a: number, b: number): boolean => {
@@ -386,6 +402,9 @@ function checkExpect(h: GribHeader, expect: GribExpect): void {
   }
   if (expect.bitmap !== undefined && h.bitmap !== expect.bitmap) {
     fail('expectation', h.bitmap ? 'a bitmap where none was expected' : 'no bitmap where one was expected');
+  }
+  if (expect.scanMode !== undefined && h.grid.scanMode !== expect.scanMode) {
+    fail('expectation', `scanning mode 0x${h.grid.scanMode.toString(16)}, expected 0x${expect.scanMode.toString(16)}`);
   }
 }
 
@@ -506,13 +525,26 @@ function unpackComplex(s5: Uint8Array, s7: Uint8Array, n: number, nbits: number)
   return v;
 }
 
+/** Template 5.0 (data template 7.0): `n` unsigned values of `nbits` bits each, end to end. */
+function unpackSimple(s7: Uint8Array, n: number, nbits: number): Int32Array {
+  if (n * nbits > 8 * (s7.length - 5)) fail('data', 'section 7 is shorter than its packed values');
+  const br = bitReader(s7, 5);
+  const v = new Int32Array(n);
+  for (let k = 0; k < n; k++) v[k] = br.read(nbits);
+  const leftover = 8 * s7.length - br.position();
+  if (leftover >= 8) {
+    fail('data', `structurally invalid: section 7 holds ${Math.floor(leftover / 8)} byte(s) after its packed values`);
+  }
+  return v;
+}
+
 /**
  * Decode one GRIB2 message (the bytes of one Range GET) into a field of
  * Float32 values, NaN where masked. The message must match `expect`.
  */
 export function decodeGrib2(bytes: Uint8Array, expect: GribExpect): GribField {
   const sec = splitSections(bytes);
-  const header = parseHeader(sec);
+  const header = parseHeader(sec, expect);
   checkExpect(header, expect);
 
   const { packing, points } = header;
@@ -526,6 +558,8 @@ export function decodeGrib2(bytes: Uint8Array, expect: GribExpect): GribField {
     ints = new Int32Array(n);
   } else if (packing.template === 3) {
     ints = unpackComplex(sec.s5, sec.s7, n, packing.bitsPerValue);
+  } else if (packing.template === 0) {
+    ints = unpackSimple(sec.s7, n, packing.bitsPerValue);
   } else {
     if (u8(sec.s5, 21) !== 0) fail('unsupported-feature', 'lossy JPEG 2000 compression');
     try {

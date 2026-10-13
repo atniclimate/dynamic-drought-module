@@ -207,8 +207,23 @@ test('the flow explanations taken off the ENSO key read in the Impact Briefing u
   assert.equal(FLOW_TECHNICAL_NOTES.join(' ').match(/path of/gi).length, 1, 'one "path of", inside its negation');
   assert.ok(FLOW_TECHNICAL_NOTES.join(' ').includes('not the path of anything carried by it'));
   // The key keeps what decodes its symbols: one bins sentence per drawn kind, in real units.
-  for (const bins of Object.values(FLOW_WORDS.bins)) assert.match(bins, /: under [0-9]+, [0-9]+ to [0-9]+, [0-9]+ or more m/);
-  assert.ok(!section.includes('under 5'), 'the bins stay in the key');
-  const flowWords = readFileSync(join(ROOT, 'src', 'layers', 'enso-flow-data.ts'), 'utf8');
-  assert.doesNotMatch(flowWords, /Line pace shows|Lines show the modeled flow|Model output, not an observation|Display bins, not thresholds|Marks move the way/);
+  for (const bins of Object.values(FLOW_WORDS.bins)) assert.match(bins, /: under [0-9.]+, [0-9.]+ to [0-9.]+, [0-9.]+ or more m/);
+  assert.ok(!section.includes('under 5') && !section.includes('under 0.25'), 'the bins stay in the key');
+  // The currents credit, its dated-frame sentence and its disclaimer read here, never in the key; the two boxes
+  // it states are the committed frame's own grids, so a landing that changes a grid fails here.
+  const { gridBoxWords } = await import('../src/layers/enso-flow-data.ts');
+  const frame = JSON.parse(readFileSync(join(ROOT, 'public', 'data', 'rtofs-surface-currents.json'), 'utf8'));
+  assert.equal(frame.grids.length, 2);
+  for (const grid of frame.grids) assert.ok(section.includes(`${grid.dlat} degree from ${gridBoxWords(grid)}`.replace(/^1 /, '1.0 ')), grid.id);
+  for (const sentence of [
+    'NOAA/NCEP Global RTOFS ocean model, re-encoded by DDM (model).',
+    'one dated frame',
+    'never joined',
+    'Not for navigation.'
+  ]) {
+    assert.ok(section.includes(sentence), sentence);
+  }
+  const flowWords = () => readFileSync(join(ROOT, 'src', 'layers', 'enso-flow-data.ts'), 'utf8');
+  assert.doesNotMatch(flowWords(), /Not for navigation|never joined/, 'the key keeps only the short credit');
+  assert.doesNotMatch(flowWords(), /Line pace shows|Lines show the modeled flow|Model output, not an observation|Display bins, not thresholds|Marks move the way/);
 });

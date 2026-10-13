@@ -252,7 +252,7 @@ const SECOND_PAGE_REASONS = {
   },
   'tests/flow-measure.spec.ts': {
     reason:
-      'the ENSO-FLOW-PLAN E2-2 flow measurement (section 4.2): one page per FRESH browser.newContext(), not a popup in an existing context, because every condition is measured three times from a cold page and one condition must not pay for the previous one. Every page boots through gotoApp, so it installs the same satellite, boundary, minimap, NADM, NIFC, NWS and NOAA NODD suite stubs as any boot here; the spec adds its own Open-Meteo, SST and basemap-tile routes and a context backstop that aborts and logs any other host, so no page reaches a live service. The spec runs only in the chromium-measure project, which CI never invokes.'
+      'the ENSO-FLOW-PLAN E2-2 flow measurement (section 4.2): one page per FRESH browser.newContext(), not a popup in an existing context, because every condition is measured three times from a cold page and one condition must not pay for the previous one. Every page boots through gotoApp, so it installs the same satellite, boundary, minimap, NADM, NIFC, NWS and NOAA NODD suite stubs as any boot here; the spec adds its own SST and basemap-tile routes and a context backstop that aborts and logs any other host, so no page reaches a live service. The spec runs only in the chromium-measure project, which CI never invokes.'
   }
 };
 

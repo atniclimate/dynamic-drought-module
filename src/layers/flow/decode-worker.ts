@@ -21,8 +21,10 @@
  */
 
 import { decodeGrib2 } from './grib2';
-import type { FlowKind } from './field';
-import { FLOW_SOURCES, PACKET_NO_VALUE, waveToVector, type DecodeReply, type DecodeRequest, type FlowPacket } from './source';
+import {
+  FLOW_SOURCES, PACKET_NO_VALUE, waveToVector,
+  type DecodeReply, type DecodeRequest, type FlowPacket, type NoddKind
+} from './source';
 
 const HOUR = 3_600_000;
 
@@ -93,7 +95,7 @@ function quantize(src: Float32Array, step: number, what: string): Int16Array {
  * Build the transfer packet from decoded full-grid values (scan order, NaN
  * where masked), one array per source message. Exported for the tests.
  */
-export function buildPacket(kind: FlowKind, values: readonly Float32Array[], cycle: number, forecastHour: number): FlowPacket {
+export function buildPacket(kind: NoddKind, values: readonly Float32Array[], cycle: number, forecastHour: number): FlowPacket {
   const s = FLOW_SOURCES[kind];
   const { ni, nj } = s.grid;
   if (values.length !== s.messages.length || values.some((a) => a.length !== ni * nj)) {

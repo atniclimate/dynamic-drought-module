@@ -35,7 +35,7 @@
  */
 
 import { linkAbort } from '../../util/fetch';
-import { isStale, type FlowField, type FlowKind } from './field';
+import { isStale, type FlowField } from './field';
 import {
   FLOW_SOURCES,
   fieldFromPacket,
@@ -43,7 +43,8 @@ import {
   type DecodeReply,
   type DecodeRequest,
   type FlowMessage,
-  type FlowPacket
+  type FlowPacket,
+  type NoddKind
 } from './source';
 
 const HOUR = 3_600_000;
@@ -64,7 +65,7 @@ export const MAX_CYCLE_TRIES = 3;
  * variation while bounding each read and their sum.
  */
 const MAX_FLOW_READ_BYTES = 4 * 1024 * 1024;
-const FLOW_BYTE_LIMITS: Readonly<Record<FlowKind, { readonly message: number; readonly frame: number }>> = {
+const FLOW_BYTE_LIMITS: Readonly<Record<NoddKind, { readonly message: number; readonly frame: number }>> = {
   wind: { message: 512 * 1024, frame: 768 * 1024 },
   jet: { message: 512 * 1024, frame: 768 * 1024 },
   waves: { message: MAX_FLOW_READ_BYTES, frame: 6 * 1024 * 1024 }
@@ -104,7 +105,7 @@ export function candidateCycle(now: number): number {
 }
 
 /** The latest forecast hour of `cycle`, on the kind's cadence, whose valid time is not after `now`. */
-export function forecastHourFor(kind: FlowKind, cycle: number, now: number): number {
+export function forecastHourFor(kind: NoddKind, cycle: number, now: number): number {
   const cadence = FLOW_SOURCES[kind].cadenceHours;
   return Math.max(0, Math.floor((now - cycle) / (cadence * HOUR)) * cadence);
 }
@@ -309,7 +310,7 @@ function decodeIn(worker: DecodeWorkerLike, request: DecodeRequest, signal: Abor
  * FlowField (wind at either level uncropped, waves cropped, all TO); rejects with an
  * AbortError when the activation signal aborts, or a FlowUnavailableError.
  */
-export async function readFlowFrame(kind: FlowKind, options: FlowReadOptions): Promise<FlowField> {
+export async function readFlowFrame(kind: NoddKind, options: FlowReadOptions): Promise<FlowField> {
   const { signal } = options;
   if (signal.aborted) throw abortError();
   const now = options.now ?? Date.now;

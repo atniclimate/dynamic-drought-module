@@ -66,16 +66,20 @@ export const WAVE_RATE_PX_PER_S = 24;
 export const WAVE_PACE: Pace = { pxPerSecPerUnit: WAVE_RATE_PX_PER_S, uniform: true };
 
 /**
- * Jet-level wind is several times faster than 10 m wind, so its pace is
- * scaled by the upper bins of the two kinds: a wind at the jet-level upper
- * bin crosses the screen as fast as a 10 m wind at its own upper bin. The
- * pace stays linear in the speed of the field.
+ * Jet-level wind is several times faster than 10 m wind, and a surface
+ * current far slower, so each pace is scaled by the upper bins of the two
+ * kinds: a flow at its own upper bin crosses the screen as fast as a 10 m
+ * wind at its upper bin. The pace stays linear in the speed of the field.
  */
-export const JET_PACE: Pace = {
-  pxPerSecPerUnit: (WIND_PACE.pxPerSecPerUnit * FLOW_BINS.wind[1]) / FLOW_BINS.jet[1],
+const scaledPace = (kind: FlowKind): Pace => ({
+  pxPerSecPerUnit: (WIND_PACE.pxPerSecPerUnit * FLOW_BINS.wind[1]) / FLOW_BINS[kind][1],
   uniform: false
+});
+export const JET_PACE: Pace = scaledPace('jet');
+export const CURRENT_PACE: Pace = scaledPace('currents');
+const PACES: Readonly<Record<FlowKind, Pace>> = {
+  wind: WIND_PACE, jet: JET_PACE, waves: WAVE_PACE, currents: CURRENT_PACE
 };
-const PACES: Readonly<Record<FlowKind, Pace>> = { wind: WIND_PACE, jet: JET_PACE, waves: WAVE_PACE };
 
 export function paceFor(kind: FlowKind): Pace {
   return PACES[kind];
