@@ -224,8 +224,8 @@ export function syncHeatRiskDayParam(day: number | null): void {
  * surface's default and is therefore ABSENCE in the URL, so an untouched
  * link stays clean (the same rule the temporal parameters follow).
  */
-export const SPI_WINDOW_DAYS: readonly number[] = [30, 60, 90, 180, 365];
-export const DEFAULT_SPI_WINDOW_DAYS = 90;
+const SPI_WINDOW_DAYS: readonly number[] = [30, 60, 90, 180, 365];
+const DEFAULT_SPI_WINDOW_DAYS = 90;
 
 /**
  * Parse the additive gridded-index accumulation window (`spi=`), the value
@@ -520,6 +520,17 @@ function ensoFlowPanelMounted(): boolean {
   );
 }
 
+let studioReturn: {
+  readonly intentKeys: ReadonlySet<string>;
+  readonly cluster: HazardClusterKey;
+  readonly ocean: OceanKey | null;
+} | null = null;
+
+/** Hold (or release, with null) the display the Place studio set aside. */
+export function holdStudioReturnDisplay(copy: typeof studioReturn): void {
+  studioReturn = copy;
+}
+
 /**
  * Replace the current history entry with a URL that encodes `state`.
  *
@@ -534,6 +545,11 @@ function ensoFlowPanelMounted(): boolean {
  * polluted by every layer toggle, or by a sidebar toggle (ruling R5 a).
  */
 export function syncUrl(state: UrlSyncState): void {
+  // While the Place studio holds the map's display aside, the URL names that
+  // display, so a reload or a shared link restores the real map.
+  if (studioReturn) {
+    state = { ...state, layers: studioReturn.intentKeys, cluster: studioReturn.cluster, ocean: studioReturn.ocean };
+  }
   // HeatRisk owns its additive day position, but only while the HeatRisk
   // layer is on (the heatday rule): preserve it across every ordinary state
   // write so embed changes and OTHER layers' toggles cannot erase the

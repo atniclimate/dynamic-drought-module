@@ -435,11 +435,12 @@ test.describe('studio URL precedence matrix', () => {
     /** Place studio: two canonical writes through the studio's own type rail
      * (src/ui/island/place-studio.tsx #place-type-*, setKind, then
      * setPlaceStudioDisplayKind swaps the rail's reference layers through
-     * syncIntent, and the registry change drives pushUrl). The first write
-     * must move layers= off the list read just before it; the second must
-     * return it to that list. The rail's reference keys are the runtime's,
-     * never typed here. */
-    const placeRailWrites = async (moment: string): Promise<void> => {
+     * syncIntent). The studio shows its own clean display, so the checked
+     * rows move with the rail, while layers= keeps the display the studio set
+     * aside (src/state/url.ts holdStudioReturnDisplay): `held`, the list read
+     * just before entering, on every write. The rail's reference keys are the
+     * runtime's, never typed here. */
+    const placeRailWrites = async (moment: string, held: string[]): Promise<void> => {
       const sidebarRows = 'input[id^="layer-toggle-"]:checked';
       const tribe = page.locator('#place-type-tribe');
       const state = page.locator('#place-type-state');
@@ -448,45 +449,59 @@ test.describe('studio URL precedence matrix', () => {
         'true'
       );
       // The pressed rail renders before its effects install the reference
-      // intent. URL and checked rows can still agree on the old display.
-      // Capture only after the tribe rail's shipped members reach both.
-      const before = await settledLayers(
-        sidebarRows,
-        `${moment}: before`,
-        TRIBAL_NATIONS_GROUP.members
-      );
+      // intent. Capture only after the tribe rail's shipped members are checked.
+      await expect
+        .poll(
+          async () => {
+            const rows = await checkedKeys(sidebarRows);
+            return TRIBAL_NATIONS_GROUP.members.every((key) => rows.includes(key));
+          },
+          { message: `${moment}: the tribe rail's members are checked` }
+        )
+        .toBe(true);
+      const before = await checkedKeys(sidebarRows);
       expect(before, `${moment}: places is on before the writes`).toContain('places');
+      await expect
+        .poll(urlLayers, { message: `${moment}: layers= names the set-aside display` })
+        .toEqual(held);
       await state.click();
       await expect(state, `${moment}: the state rail is pressed`).toHaveAttribute(
         'aria-pressed',
         'true'
       );
       await expect
-        .poll(
-          async () => {
-            const url = JSON.stringify(urlLayers());
-            return url === JSON.stringify(await checkedKeys(sidebarRows)) &&
-              url !== JSON.stringify(before);
-          },
-          { message: `${moment}: the state rail rewrote layers=` }
-        )
-        .toBe(true);
+        .poll(() => checkedKeys(sidebarRows), {
+          message: `${moment}: the state rail changed the checked rows`
+        })
+        .not.toEqual(before);
+      await expect
+        .poll(urlLayers, { message: `${moment}: layers= is unchanged by the state rail` })
+        .toEqual(held);
       await tribe.click();
       await expect(tribe, `${moment}: the tribe rail is pressed again`).toHaveAttribute(
         'aria-pressed',
         'true'
       );
       await expect
-        .poll(urlLayers, { message: `${moment}: the tribe rail restored layers=` })
+        .poll(() => checkedKeys(sidebarRows), {
+          message: `${moment}: the tribe rail restored the checked rows`
+        })
         .toEqual(before);
+      await expect
+        .poll(urlLayers, { message: `${moment}: layers= is unchanged by the tribe rail` })
+        .toEqual(held);
     };
 
     await enter('layers');
     await expectStudioEntry('layers', 'map to Layers');
 
+    const heldByPlace = await settledLayers(
+      '#layers-studio-root input[id^="studio-layer-toggle-"]:checked',
+      'before Place'
+    );
     await enter('place');
     await expectStudioEntry('place', 'Layers to Place');
-    await placeRailWrites('in Place');
+    await placeRailWrites('in Place', heldByPlace);
     await expectStudioEntry('place', 'Place after canonical writes');
     await page.reload({ waitUntil: 'domcontentloaded' });
     await expectStudioEntry('place', 'Place after a reload');

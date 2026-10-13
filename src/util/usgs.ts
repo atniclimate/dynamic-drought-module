@@ -135,6 +135,16 @@ export function readValueArray(series: UsgsSeries): UsgsReading[] {
   return out;
 }
 
+/** Newest real reading: walks from the tail past the -999999 marker, blanks and non-numbers. */
+export function readLatestUsgsReading(series: UsgsSeries): UsgsReading | null {
+  const values = readValueArray(series);
+  for (let i = values.length - 1; i >= 0; i--) {
+    const r = values[i];
+    if (r && r.value !== '-999999' && r.value.trim() !== '' && Number.isFinite(Number(r.value))) return r;
+  }
+  return null;
+}
+
 /** Freshness for an instantaneous reading: within 6 hours is fresh. */
 export function ivFreshness(timestampIso: string): TelemetryFreshness {
   const t = Date.parse(timestampIso);
@@ -159,40 +169,33 @@ export function usgsLatestStationValue(
     ...series
   ];
   for (const s of ranked) {
-    if (!s) continue;
-    const values = readValueArray(s);
-    for (let i = values.length - 1; i >= 0; i--) {
-      const r = values[i];
-      if (!r || r.value === '-999999') continue;
-      const n = Number(r.value);
-      if (!Number.isFinite(n)) continue;
+    const r = s && readLatestUsgsReading(s);
+    if (!r) continue;
+    const code = readVariableCode(s);
+    const label =
+      code === '00060'
+        ? 'Discharge'
+        : code === '00065'
+          ? 'Gage height'
+          : readVariableName(s) || 'Value';
+    const parameter =
+      code === '00060'
+        ? 'discharge_cfs'
+        : code === '00065'
+          ? 'gage_height_ft'
+          : 'usgs_iv';
+    const timestamp = r.dateTime ?? '';
 
-      const code = readVariableCode(s);
-      const label =
-        code === '00060'
-          ? 'Discharge'
-          : code === '00065'
-            ? 'Gage height'
-            : readVariableName(s) || 'Value';
-      const parameter =
-        code === '00060'
-          ? 'discharge_cfs'
-          : code === '00065'
-            ? 'gage_height_ft'
-            : 'usgs_iv';
-      const timestamp = typeof r.dateTime === 'string' ? r.dateTime : '';
-
-      return {
-        stationId,
-        parameter,
-        label,
-        value: Math.round(n * 100) / 100,
-        unit: readUnitCode(s) ?? '',
-        timestamp,
-        freshness: timestamp ? ivFreshness(timestamp) : 'stale',
-        source: 'usgs-iv'
-      };
-    }
+    return {
+      stationId,
+      parameter,
+      label,
+      value: Math.round(Number(r.value) * 100) / 100,
+      unit: readUnitCode(s) ?? '',
+      timestamp,
+      freshness: timestamp ? ivFreshness(timestamp) : 'stale',
+      source: 'usgs-iv'
+    };
   }
   return null;
 }

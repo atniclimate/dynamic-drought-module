@@ -11,9 +11,13 @@ import { FIRE3D_CHUNK_WIDTH_QUERY, onFire3DPreferenceChange } from './state/fire
 import { initInteractionCoordinator } from './map/interaction-coordinator';
 import { setMap } from './state/map-store';
 import { applyDeepLink } from './state/deep-link';
-import { parseSelectParam } from './state/url';
+import { parseFire3dParam, parseSelectParam } from './state/url';
 import type { SelectParam } from './state/url';
-import { getStudioRoute, onStudioRouteChange } from './state/studio-route';
+import {
+  getStudioRoute,
+  onStudioRouteChange,
+  studioOwnsScreen
+} from './state/studio-route';
 import {
   getCommittedSnapshot,
   onCommittedSnapshotChange
@@ -87,7 +91,7 @@ function prepareStudioAwareDeepLink(
   };
 
   const runHeld = (): void => {
-    if (!started || disposed || getStudioRoute() !== null || !heldSelect) return;
+    if (!started || disposed || studioOwnsScreen() || !heldSelect) return;
     const command: InFlightCommand = {
       select: heldSelect,
       routeGeneration
@@ -98,11 +102,11 @@ function prepareStudioAwareDeepLink(
       map,
       command.select,
       () =>
-        getStudioRoute() === null &&
+        !studioOwnsScreen() &&
         routeGeneration === command.routeGeneration
     ).finally(() => {
       if (inFlight === command) inFlight = null;
-      if (heldSelect && getStudioRoute() === null) {
+      if (heldSelect && !studioOwnsScreen()) {
         runHeld();
       } else if (!heldSelect && !inFlight) {
         cleanup();
@@ -125,7 +129,7 @@ function prepareStudioAwareDeepLink(
       if (navigationSelect) heldSelect = navigationSelect;
     }
 
-    if (route === null) runHeld();
+    runHeld();
   });
 
   unsubscribeTypedPlace = onTypedPlaceChange((place) => {
@@ -139,7 +143,7 @@ function prepareStudioAwareDeepLink(
   return () => {
     if (started) return;
     started = true;
-    if (getStudioRoute() === null) {
+    if (!studioOwnsScreen()) {
       cleanup();
       void applyDeepLink(map, initialSelect);
       return;
@@ -451,14 +455,8 @@ function wireMapDependentChrome(map: maplibregl.Map): void {
       console.warn('Fire 3D controller could not load:', error);
     });
   };
-  const fire3dParamRequested = (): boolean => {
-    const values = new URLSearchParams(window.location.search).getAll(
-      'fire3d'
-    );
-    return values.length === 1 && values[0] === 'true';
-  };
   const fire3dEligible = (): boolean =>
-    getCommittedSnapshot().cluster === 'wildfire' || fire3dParamRequested();
+    getCommittedSnapshot().cluster === 'wildfire' || parseFire3dParam();
   const maybeLoadFire3D = (): void => {
     if (fire3dViewport.matches && fire3dEligible()) loadFire3D();
   };

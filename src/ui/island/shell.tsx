@@ -59,7 +59,8 @@ import { requestBasemapMode } from '../../map/basemap-switcher';
 import {
   backToMap,
   getStudioRoute,
-  setPlaceStudioReturnDisplayCommand
+  setPlaceStudioReturnDisplayCommand,
+  studioOwnsScreen
 } from '../../state/studio-route';
 import { onTimeBarSpecChange } from '../time-bar';
 import { Fire3DControl } from './fire3d-control';
@@ -407,7 +408,7 @@ function Shell({ map, snap, framing, specTick, onMinimapNoteChange }: ShellProps
    * edits there are meant to persist and it captures no snapshot to reassert.
    */
   const runDisplayCommand = (apply: () => void): void => {
-    if (getStudioRoute() === 'place') {
+    if (studioOwnsScreen() && getStudioRoute() === 'place') {
       setPlaceStudioReturnDisplayCommand(apply);
       backToMap();
       return;

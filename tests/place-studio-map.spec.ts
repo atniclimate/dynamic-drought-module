@@ -104,7 +104,9 @@ test.describe('PS-MAP clean-selection display', () => {
 
     const params = new URLSearchParams(await search(page));
     expect(params.get('studio')).toBe('place');
-    expect(params.get('layers') ?? '').not.toContain('usdm');
+    // The studio display is trimmed, but the URL names the display it set
+    // aside so a reload or a shared link restores the real map.
+    expect(params.get('layers') ?? '').toContain('usdm');
     expect(params.has('place')).toBe(false);
     expect(params.has('typed-place')).toBe(false);
   });

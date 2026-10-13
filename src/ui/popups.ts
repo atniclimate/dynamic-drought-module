@@ -34,7 +34,8 @@ import {
   readVariableCode,
   readUnitCode,
   readVariableName,
-  readValueArray
+  readValueArray,
+  readLatestUsgsReading
 } from '../util/usgs';
 import type { UsgsSeries } from '../util/usgs';
 import { sparklineSvg } from './charts';
@@ -1028,11 +1029,10 @@ function usgsChart(series: UsgsSeries[]): StationChart | null {
   const unit = readUnitCode(chosen) ?? '';
   const label = code === '00060' ? 'Discharge' : code === '00065' ? 'Gage height' : readVariableName(chosen) || 'Value';
 
-  // usgsRead drops a series whose newest value is the marker or blank; its chart goes with it.
-  const raw = readValueArray(chosen);
-  const newest = raw[raw.length - 1];
-  if (!newest || newest.value === '-999999' || newest.value.trim() === '') return null;
+  // usgsRead drops a series with no real value; its chart goes with it.
+  if (!readLatestUsgsReading(chosen)) return null;
 
+  const raw = readValueArray(chosen);
   const nums: number[] = [];
   for (const r of raw) {
     if (r.value === '-999999') continue;
@@ -1062,9 +1062,8 @@ function usgsRead(payload: unknown, retrievedAt: number): StationRead {
   const readings: StationReading[] = [];
   for (const s of series) {
     const code = readVariableCode(s);
-    const values = readValueArray(s);
-    const last = values[values.length - 1];
-    if (!last || last.value === '-999999' || last.value.trim() === '') continue;
+    const last = readLatestUsgsReading(s);
+    if (!last) continue;
     const label = code === '00060' ? 'Discharge' : code === '00065' ? 'Gage height' : readVariableName(s) || code || '';
     readings.push({
       label,

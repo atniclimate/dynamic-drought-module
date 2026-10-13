@@ -1324,6 +1324,8 @@ function onActiveChangeForStationValues(
   } else if (!active.has('telemetry') && stationValuesController) {
     stationValuesController.abort();
     stationValuesController = null;
+    // Aborted rows are left at "loading..."; the next activation must refetch.
+    stationValuesHydrated = false;
   }
 }
 

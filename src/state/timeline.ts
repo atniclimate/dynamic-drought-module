@@ -226,7 +226,7 @@ export function parseHorizonParam(raw: string | null): TemporalHorizonKey {
  * which reads the observed registers (usdmWeek / usdmMode / sstDate)
  * and leaves the outlook register untouched.
  */
-export function outlookRangeForHorizon(
+function outlookRangeForHorizon(
   horizon: TemporalHorizonKey
 ): OutlookRange | null {
   if (horizon === 'weeks-ahead') return 'monthly';
