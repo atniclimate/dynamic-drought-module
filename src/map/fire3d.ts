@@ -55,6 +55,7 @@ import {
   FIRE3D_SKY_CLEAR_SPECIFICATION,
   FIRE3D_SKY_SPECIFICATION,
   FIRE3D_TERRAIN_EXAGGERATION,
+  TERRAIN_EDGE_BUFFER,
   TERRAIN_EDGE_PAINT,
   classifyTerrainCoverage,
   fire3dCoverageNote,
@@ -68,7 +69,7 @@ import { URLS } from '../config/urls';
 import { resolveHillshadeArchive } from '../layers/hillshade';
 import { probeArchiveHeader } from '../util/pmtiles-probe';
 import { holdSatellite } from './basemap-switcher';
-import { BOTTOM_STACK_IDS, firstLayerIdAbove } from './layer-order';
+import { BOTTOM_STACK_IDS, firstLayerIdAbove, reassertLabelOrder, reassertThematicOrder } from './layer-order';
 import { watchContextLoss, webGl2Capability } from './gl-capability';
 import {
   getCommittedSnapshot,
@@ -88,7 +89,7 @@ import type { RasterTileWatch } from '../util/raster-status';
 
 /** Own terrain source; never the hillshade layer's 'hillshade-dem'. */
 const TERRAIN_SOURCE_ID = 'fire3d-terrain-dem';
-/** The edge fade's source and layer (mirrored in layer-order.ts BOTTOM_STACK_IDS). */
+/** The edge fade's source and layer (a mirrored literal in layer-order.ts). */
 const TERRAIN_EDGE_ID = 'fire3d-terrain-edge';
 
 /** The fire event layers whose presence keeps an ACTIVE mode alive across
@@ -809,13 +810,21 @@ async function activateScene(map: maplibregl.Map): Promise<void> {
   // is cosmetic and non-fatal: a failure leaves the hard seam and nothing else.
   try {
     const beforeId = firstLayerIdAbove(map, BOTTOM_STACK_IDS);
-    map.addSource(TERRAIN_EDGE_ID, { type: 'geojson', data: terrainEdgeLine(resolved.coverage) });
+    map.addSource(TERRAIN_EDGE_ID, {
+      type: 'geojson',
+      data: terrainEdgeLine(resolved.coverage),
+      buffer: TERRAIN_EDGE_BUFFER
+    });
     map.addLayer({
       id: TERRAIN_EDGE_ID,
       type: 'line',
       source: TERRAIN_EDGE_ID,
       paint: TERRAIN_EDGE_PAINT
     }, beforeId);
+    // Re-seat the ruled chain: the veil must sit wherever layer-order.ts rules
+    // (above the drapes, whose stretched texels are what climb the edge face).
+    reassertThematicOrder(map);
+    reassertLabelOrder(map);
   } catch (err) {
     warnComponent('terrain edge fade', err);
   }

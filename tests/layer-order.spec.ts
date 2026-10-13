@@ -138,6 +138,9 @@ test.describe('layer-order: thematic reassert (E1 deliverable 2)', () => {
       ...EVENT_OVERLAY_IDS,
       ...REFERENCE_BOUNDARY_IDS
     ]);
+    // The 3D edge fade veils the seam above every drape, below the context overlays.
+    expect(CONDITION_SURFACE_IDS.at(-1)).toBe('fire3d-terrain-edge');
+    expect(BOTTOM_STACK_IDS).not.toContain('fire3d-terrain-edge');
     expect(CONDITION_SURFACE_IDS).toEqual(
       expect.arrayContaining([
         'gridded-index-raster',

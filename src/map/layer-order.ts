@@ -9,7 +9,7 @@ import type * as maplibregl from 'maplibre-gl';
  *
  *   background -> basemap (OSM fallback)
  *     -> basemap-satellite (recent NOAA) -> wildfire-dryness-ground -> hillshade
- *     -> condition surfaces -> event overlays -> reference boundaries
+ *     -> condition surfaces (the 3D edge fade last) -> event overlays -> reference boundaries
  *     -> reference labels
  *
  * Three mechanisms enforce it:
@@ -28,16 +28,13 @@ import type * as maplibregl from 'maplibre-gl';
 
 /** The permanent bottom-stack ids, in stacking order. The Wildfire 3D
  * dryness ground (DDM-P9-T13; src/layers/wildfire-dryness.ts, mirrored
- * literal) sits under the hillshade and every drape, present only in that scene.
- * The 3D scene's edge fade (src/map/fire3d.ts, mirrored literal) veils the
- * terrain box's seam over the whole stack and under every data layer. */
+ * literal) sits under the hillshade and every drape, present only in that scene. */
 export const BOTTOM_STACK_IDS: readonly string[] = [
   'background',
   'basemap',
   'basemap-satellite',
   'wildfire-dryness-ground',
-  'hillshade',
-  'fire3d-terrain-edge'
+  'hillshade'
 ];
 
 /** Reference label layers that always read above every data layer. */
@@ -82,7 +79,11 @@ export const CONDITION_SURFACE_IDS: readonly string[] = [
   'usdm-frame-b-fill',
   'usdm-frame-b-outline',
   'usdm-change-fill',
-  'usdm-change-outline'
+  'usdm-change-outline',
+  // The 3D scene's edge fade (src/map/fire3d.ts, mirrored literal): last, so it
+  // veils the seam above the drapes whose stretched texels climb the terrain
+  // box's edge face, still below power lines, fires, boundaries and labels.
+  'fire3d-terrain-edge'
 ];
 
 /**

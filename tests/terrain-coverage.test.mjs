@@ -41,6 +41,7 @@ const {
 } = await import('../src/config/terrain-coverage.ts');
 const {
   FIRE3D_COVERAGE_NOTE,
+  TERRAIN_EDGE_BUFFER,
   TERRAIN_EDGE_PAINT,
   fire3dCoverageNote,
   fire3dTerrainCoverageSentence,
@@ -102,20 +103,32 @@ test('the edge fade is one blurred line on the archive box: a true gradient, no 
     [box.west, box.north], [box.west, box.south]
   ]);
   const paint = TERRAIN_EDGE_PAINT;
-  for (const zoom of [5, 6, 7, 8, 9, 11]) {
+  for (const zoom of [3, 4, 5, 6, 7, 8, 9, 11]) {
     const width = evaluateZoom(paint['line-width'], zoom);
     // Blur of half the width: alpha falls linearly from the seam to zero at both sides.
-    assert.equal(evaluateZoom(paint['line-blur'], zoom), width / 2);
+    assert.ok(Math.abs(evaluateZoom(paint['line-blur'], zoom) - width / 2) < 1e-9);
   }
-  // Close in, about half a degree across; the seam carries the peak.
-  const close = evaluateZoom(paint['line-width'], 9) / pxPerDegree(9);
-  assert.ok(Math.abs(close - 0.5) < 0.01, `half a degree at zoom 9, got ${close}`);
-  assert.ok(evaluateZoom(paint['line-opacity'], 9) >= 0.9, 'opaque enough at the seam to hide it');
-  // At regional zoom it is narrow in screen space and nearly clear: no picture frame.
-  assert.ok(evaluateZoom(paint['line-width'], 5) <= 8);
-  assert.equal(evaluateZoom(paint['line-opacity'], 4), 0);
-  // Held in screen space past the archive's depth instead of swallowing the view.
+  // Half a degree of ground from regional zoom to close in, so the regional
+  // view gets a soft edge rather than a hairline; the seam carries the peak.
+  for (const zoom of [3, 4, 5, 6.5, 9]) {
+    const deg = evaluateZoom(paint['line-width'], zoom) / pxPerDegree(zoom);
+    assert.ok(Math.abs(deg - 0.5) < 0.02, `half a degree at zoom ${zoom}, got ${deg}`);
+  }
+  // Present at regional zoom (the screenshots' zoom 5), clear only at continental zoom.
+  assert.ok(evaluateZoom(paint['line-opacity'], 5) >= 0.9, 'opaque enough at the seam to hide it');
+  assert.equal(evaluateZoom(paint['line-opacity'], 3), 0);
+  // Held in screen space past zoom 9, and the half width stays inside the
+  // GeoJSON tile buffer at every zoom (a tile edge would cut the fade).
   assert.equal(evaluateZoom(paint['line-width'], 14), evaluateZoom(paint['line-width'], 9));
+  assert.ok(evaluateZoom(paint['line-width'], 9) / 2 <= TERRAIN_EDGE_BUFFER);
+  assert.ok(TERRAIN_EDGE_BUFFER <= 512, 'the style spec caps the buffer at 512');
+});
+
+test('the scene adds the veil with that buffer and re-seats the ruled chain after it', () => {
+  const source = readFileSync(join(ROOT, 'src', 'map', 'fire3d.ts'), 'utf8');
+  const block = source.slice(source.indexOf('terrainEdgeLine(resolved.coverage)'));
+  assert.match(block.slice(0, 600), /buffer: TERRAIN_EDGE_BUFFER/);
+  assert.match(block.slice(0, 900), /reassertThematicOrder\(map\);\s*reassertLabelOrder\(map\);/);
 });
 
 test('the Impact Briefing never prints the 3D scene\'s unresolved zoom 8 as a 3D relief claim', async () => {

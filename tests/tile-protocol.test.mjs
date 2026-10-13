@@ -1167,8 +1167,11 @@ async function withWhpBrowser(task) {
   set('document', { getElementById: () => null, createElement: () => ({ getContext: () => ({ drawImage() {},
     getImageData: () => ({ data: new Uint8ClampedArray(Array(16).fill([237, 30, 0, 255]).flat()) }) }) }) });
   set('window', { dispatchEvent() {} });
+  // The one-tile stand-in is the whole world, so it is drawn with the whole world as the archive's box.
+  whpShade.setWhpShadeBounds({ west: -180, south: -90, east: 180, north: 90 });
   try { return await task(); }
   finally {
+    whpShade.setWhpShadeBounds(FIRE3D_TERRAIN_COVERAGE);
     for (const name of names) {
       const descriptor = originals.get(name);
       if (descriptor) Object.defineProperty(globalThis, name, descriptor);
@@ -1177,6 +1180,7 @@ async function withWhpBrowser(task) {
   }
 }
 const whpShade = await import('../src/layers/whp-shade-protocol.ts');
+const { FIRE3D_TERRAIN_COVERAGE } = await import('../src/config/terrain-coverage.ts');
 const whpAlphas = image => [...image.data].filter((_, index) => index % 4 === 3);
 /** The drape's tile through the real protocol: its sixteen alpha bytes, row by row. */
 async function drapeTileAlphas() {
@@ -1211,6 +1215,29 @@ test('the Wildfire 3D drape protocol clears fuel risk by the share of each pixel
   assert.deepEqual([...pixels], [255, 255, 255, 0, 255, 255, 255, 204, 255, 255, 255, 153, 0, 0, 0, 0]);
   assert.throws(() => whpShade.shadeWhpPixels(new Uint8ClampedArray([255, 0, 0, 255]), whpShade.WHP_3D_SHADE_ALPHA_BY_RGB, Uint8ClampedArray.of(255)),
     /Unrecognized WHP class/);
+});
+
+test('the Wildfire 3D drape clears the pixels outside the archive box: an edge tile at z8 keeps its north of 41.5 N, an interior tile is unchanged', () => {
+  const tileRow = lat => Math.floor((1 - Math.asinh(Math.tan(lat * Math.PI / 180)) / Math.PI) / 2 * 256);
+  const size = 8, x = Math.floor((-120 + 180) / 360 * 256);
+  const rowLat = (y, py) => Math.atan(Math.sinh(Math.PI * (1 - 2 * (y + (py + 0.5) / size) / 256))) * 180 / Math.PI;
+  const whole = () => new Uint8ClampedArray(Array(size * size).fill([255, 255, 255, 204]).flat());
+  const alphaRows = pixels => Array.from({ length: size }, (_, py) => pixels[py * size * 4 + 3]);
+  const edgeY = tileRow(41.5);
+  const edge = whole();
+  whpShade.clearWhpOutsideBounds(edge, [8, x, edgeY], size, FIRE3D_TERRAIN_COVERAGE);
+  const expected = Array.from({ length: size }, (_, py) => rowLat(edgeY, py) >= 41.5 ? 204 : 0);
+  assert.deepEqual(alphaRows(edge), expected);
+  assert.ok(expected.includes(0) && expected.includes(204), 'the tile straddles the line');
+  // Only alpha moves: the colours stay the issuer's.
+  assert.ok([...edge].every((value, index) => index % 4 === 3 || value === 255));
+  const interior = whole();
+  whpShade.clearWhpOutsideBounds(interior, [8, x, tileRow(45)], size, FIRE3D_TERRAIN_COVERAGE);
+  assert.deepEqual([...interior], [...whole()]);
+  // A tile east of the box loses every pixel.
+  const east = whole();
+  whpShade.clearWhpOutsideBounds(east, [8, Math.floor((-100 + 180) / 360 * 256), tileRow(45)], size, FIRE3D_TERRAIN_COVERAGE);
+  assert.ok(alphaRows(east).every(alpha => alpha === 0));
 });
 
 test('the Wildfire 3D drape takes the published perimeters before its source exists, reloads its tiles only when the snapshot changes, and lets go on teardown', async () => {

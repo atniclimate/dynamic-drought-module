@@ -199,22 +199,29 @@ export function fire3dTerrainCoverageSentence(terrain: number | TerrainCoverage)
  * cheapest soft transition is a draped veil: one line of the scene's own fog
  * colour on the box edge, blurred by half its width so its alpha falls
  * linearly from the seam to nothing at both sides (a true gradient, no
- * bands). Its width is screen pixels by zoom: a few pixels and clear while
- * the whole region is in view (no picture frame), about half a degree across
- * close in, held there past zoom 9. It hides the seam, not the geometric
- * step; nothing about the elevation changes.
+ * bands). The seam it hides is the box itself: the bake zero-fills each
+ * edge tile beyond the box, so the ground drops from about 1,500 m to sea
+ * level there and the drape stretches up that face. Further out, where the
+ * edge tiles end (40.98N at zooms 4 to 9), both sides are sea level and
+ * Terrain Shading draws nothing on flat ground, so no terrain seam remains
+ * there. Its width is half a degree of ground from zoom 3 to 9 (a soft edge,
+ * not a hairline, while the whole region is in view), held in screen pixels
+ * past zoom 9 so the half width stays inside the source tile buffer. It
+ * hides the seam, not the geometric step; nothing about the elevation changes.
  */
-const TERRAIN_EDGE_FULL_ZOOM = 9;
-// Half a degree in 512-pixel-tile screen pixels at the full zoom (364).
-const TERRAIN_EDGE_FULL_PX = Math.round((0.5 * 512 * 2 ** TERRAIN_EDGE_FULL_ZOOM) / 360);
+const TERRAIN_EDGE_DEG = 0.5;
+const edgePx = (zoom: number): number => (TERRAIN_EDGE_DEG * 512 * 2 ** zoom) / 360;
 const edgeWidth = (scale: number): maplibregl.ExpressionSpecification =>
-  ['interpolate', ['exponential', 2], ['zoom'], 5, 6 * scale, TERRAIN_EDGE_FULL_ZOOM, TERRAIN_EDGE_FULL_PX * scale];
+  ['interpolate', ['exponential', 2], ['zoom'], 3, edgePx(3) * scale, 9, edgePx(9) * scale];
+
+/** GeoJSON tile buffer (512 is a whole tile): above the 182 px half width at zoom 9, so no tile edge cuts the fade. */
+export const TERRAIN_EDGE_BUFFER = 256;
 
 export const TERRAIN_EDGE_PAINT: NonNullable<maplibregl.LineLayerSpecification['paint']> = {
   'line-color': MAP_GROUND_COLOR,
   'line-width': edgeWidth(1),
   'line-blur': edgeWidth(0.5),
-  'line-opacity': ['interpolate', ['linear'], ['zoom'], 4, 0, 6, 0.9]
+  'line-opacity': ['interpolate', ['linear'], ['zoom'], 3, 0, 5, 0.9]
 };
 
 /** The archive box's edge as one closed line. */
