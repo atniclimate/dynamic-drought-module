@@ -65,6 +65,9 @@ let metadataController: AbortController | null = null;
 let tileWatch: RasterTileWatch | null = null;
 let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 let activationEpoch = 0;
+// A revert toasts only when a person asked for imagery (SAT or a mode's
+// preferred basemap); the boot and URL restore path stays silent.
+let announceRevert = false;
 let currentFrame: SatelliteFrame | null = null;
 type FrameStatus = 'live' | 'live-partial';
 let frameStatus: FrameStatus | null = null;
@@ -461,6 +464,7 @@ function revertToDefault(
   showChip(state, null);
   deactivate(map);
   setBasemapMode('default');
+  if (!announceRevert) return;
   showToast(
     state === 'no-data'
       ? 'No recent satellite imagery is available. Default map restored.'
@@ -774,8 +778,10 @@ function scheduleRefresh(map: maplibregl.Map, epoch: number): void {
  */
 export async function setSatelliteActive(
   map: maplibregl.Map,
-  active: boolean
+  active: boolean,
+  announce = false
 ): Promise<void> {
+  if (active && announce) announceRevert = true;
   if (!active) {
     if (activeMap === map) {
       deactivate(map);
@@ -792,6 +798,7 @@ export async function setSatelliteActive(
   activationEpoch++;
   const epoch = activationEpoch;
   activeMap = map;
+  announceRevert = announce;
   showChip('loading', null);
   await refreshFrame(map, epoch, true);
   if (epoch === activationEpoch && activeMap === map) {

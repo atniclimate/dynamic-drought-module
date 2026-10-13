@@ -153,6 +153,21 @@ test('imageryFailureState: a finished satellite lookup never reads loading', asy
   assert.match(src, /showChip\(state, null\);\s+deactivate\(map\);/);
 });
 
+test('satellite revert is silent on boot and toasts only for a pressed SAT', async () => {
+  const sat = await readFile(new URL('src/map/satellite.ts', ROOT), 'utf8');
+  const sw = await readFile(new URL('src/map/basemap-switcher.ts', ROOT), 'utf8');
+  // The chip and store still land on the terminal state; only the toast is gated.
+  assert.match(sat, /setBasemapMode\('default'\);\s+if \(!announceRevert\) return;\s+showToast\(/);
+  assert.match(sat, /announceRevert = announce;/);
+  // A visitor request announces; the default (boot, URL restore, 3D release) does not.
+  assert.match(sw, /announce = false/);
+  assert.match(sw, /void applyBasemapMode\(map, mode, true\);/);
+  assert.equal((sw.match(/applyBasemapMode\(map, 'satellite'\)/g) ?? []).length, 1);
+  assert.match(sw, /if \(announce\) showToast\(/);
+  const sidebar = await readFile(new URL('src/ui/sidebar.ts', ROOT), 'utf8');
+  assert.match(sidebar, /void applyBasemapMode\(map, 'satellite'\);/);
+});
+
 test('aggregateChipState: all ready -> live', () => {
   assert.equal(aggregateChipState(['live', 'live']), 'live');
 });
