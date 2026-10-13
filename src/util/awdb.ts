@@ -31,6 +31,8 @@ const FETCH_TIMEOUT_MS = 8000;
 export interface AwdbElementSeries {
   readonly element: string;
   readonly unit: string;
+  /** Sensor depth below the surface in inches (AWDB `heightDepth`, negated), when the element has one. */
+  readonly depthIn?: number;
   readonly readings: ReadonlyArray<{ date: string; value: number }>;
 }
 
@@ -128,6 +130,7 @@ function parseAwdbPayload(payload: unknown): AwdbElementSeries[] {
     out.push({
       element: el.elementCode,
       unit: typeof el.storedUnitCode === 'string' ? el.storedUnitCode : '',
+      ...(typeof el.heightDepth === 'number' && el.heightDepth < 0 ? { depthIn: -el.heightDepth } : {}),
       readings
     });
   }
@@ -156,8 +159,10 @@ export function toStationValue(
   stationId: string,
   series: AwdbElementSeries
 ): StationValue | null {
-  const meta = ELEMENT_LABELS[series.element];
-  if (!meta) return null;
+  const base = ELEMENT_LABELS[series.element];
+  if (!base) return null;
+  // A SCAN station reports soil moisture at several depths; each row names its own.
+  const meta = series.depthIn === undefined ? base : { ...base, label: `${base.label} at ${series.depthIn} in` };
   const latest = series.readings[series.readings.length - 1];
   if (!latest) {
     return {
@@ -186,8 +191,12 @@ export function toStationValue(
 /** The elements DDM requests for a SNOTEL station, in display order. */
 export const SNOTEL_ELEMENTS: readonly string[] = ['WTEQ', 'SNWD', 'PREC'];
 
-/** The elements DDM requests for a SCAN station, in display order. */
-export const SCAN_ELEMENTS: readonly string[] = ['SMS'];
+/**
+ * The elements DDM requests for a SCAN station. AWDB answers a bare `SMS`
+ * with an empty list (observed live 2026-10-12): soil moisture must name a
+ * depth, and `:*` asks for every depth the station has, shallowest first.
+ */
+export const SCAN_ELEMENTS: readonly string[] = ['SMS:*'];
 
 export function elementsForAwdbStationTriplet(triplet: string): readonly string[] {
   return triplet.endsWith(':SCAN') ? SCAN_ELEMENTS : SNOTEL_ELEMENTS;

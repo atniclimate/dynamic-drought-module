@@ -218,9 +218,12 @@ export async function fetchWaterSupplyClaims(
   }
 
   const today = new Date();
+  // Named in the claim: from October the report forecasts the coming
+  // April-September, which a reader would otherwise take for the one just ended.
+  const wy = waterYearOf(today);
   const upstream =
     `${URLS.nwrfcWsReportCsv}?Type=ALL&Source=ALL` +
-    `&Wyr=${waterYearOf(today)}&WyrDate=${isoDay(today)}&Flavor=ESP10`;
+    `&Wyr=${wy}&WyrDate=${isoDay(today)}&Flavor=ESP10`;
   const proxied = `${URLS.workerProxy}/proxy?url=${encodeURIComponent(upstream)}`;
 
   let rows: WsRow[];
@@ -277,7 +280,7 @@ export async function fetchWaterSupplyClaims(
   claims.push(
     makeClaim({
       text: // vocab-allow: names the NWRFC Water Supply Forecast and its forecast points, upstream product
-        `The NWRFC April-September water-supply forecast at ${location} is ${row.pctOfNormal} percent of the 1991-2020 normal ` + // vocab-allow: names the NWRFC Water Supply Forecast and its forecast points, upstream product
+        `The NWRFC April-September ${wy} water-supply forecast at ${location} is ${row.pctOfNormal} percent of the 1991-2020 normal ` + // vocab-allow: names the NWRFC Water Supply Forecast and its forecast points, upstream product
         `(50 percent exceedance). This is a basin-scale read at a named forecast point, not a site-specific value. ` +
         supplyTilt(row.pctOfNormal),
       ...wsShared,

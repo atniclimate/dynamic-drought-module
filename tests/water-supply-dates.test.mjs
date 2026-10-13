@@ -53,6 +53,8 @@ test('water-supply claims never present the echoed FcstDate as an issue date', a
       assert.match(claim.dates.retrieved, /^\d{4}-\d{2}-\d{2}$/);
     }
     assert.match(result.claims[1].text, /\(50 percent exceedance\)\./);
+    // The forecast names its water year: from October it is the coming season.
+    assert.match(result.claims[1].text, /April-September 20\d\d water-supply forecast/);
   } finally {
     globalThis.fetch = originalFetch;
   }
