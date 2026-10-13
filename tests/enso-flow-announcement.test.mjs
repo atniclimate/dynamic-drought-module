@@ -297,3 +297,44 @@ for (const [attribute, value] of [['inert', ''], ['aria-hidden', 'true']]) {
     }
   });
 }
+
+test('the control lists every kind by its label, with jet-level wind beside the 10 m wind', () => {
+  boot('off');
+  assert.deepEqual(
+    host.querySelectorAll('[data-flow-kind]').map((button) => [button.dataset.flowKind, button.textContent]),
+    [['off', 'Off'], ['currents', 'Ocean currents'], ['wind', 'Atmospheric currents'], ['jet', 'Jet-level wind'], ['waves', 'Ocean waves']]
+  );
+});
+
+for (const [kind, label, loading, bins] of [
+  ['wind', 'Atmospheric currents', 'NOAA GFS wind', 'Line width and brightness: under 5, 5 to 10, 10 or more m/s.'],
+  ['jet', 'Jet-level wind', 'NOAA GFS 250 hPa wind', 'Line width and brightness: under 20, 20 to 40, 40 or more m/s.'],
+  ['waves', 'Ocean waves', 'NOAA GFS-Wave', 'Mark length and brightness: under 2, 2 to 4, 4 or more m significant wave height.']
+]) {
+  test(`a live ${kind} frame gives the key its state line and its bins, and no explanation`, async () => {
+    const snapshots = [];
+    const record = (event) => snapshots.push(event.detail);
+    window.addEventListener('ddm:enso-flow-snapshot', record);
+    const field = globalThis.__field;
+    globalThis.__field = { ...field, kind };
+    try {
+      boot(kind);
+      assert.deepEqual(live.writes, [`${label} · loading · ${loading}`]);
+      await until(() => panel().dataset.status === 'live');
+      const drawn = snapshots.at(-1);
+      assert.equal(drawn.label, label);
+      assert.match(drawn.line, /^live · Model run .+ · Model valid .+$/);
+      assert.deepEqual(drawn.notes, [bins]);
+      assert.equal(drawn.provenance, 'derived from NOAA GFS');
+      // Resampling is for the sampled currents only.
+      assert.equal(host.querySelectorAll('button').find((button) => button.textContent === 'Update area').hidden, true);
+      if (kind === 'jet') assert.ok(host.textContent.includes('NOAA GFS 250 hPa wind; global model output, updated every six hours.'));
+      // The still form keeps the sentence that says why the lines hold still, ahead of the bins.
+      globalThis.__fieldState({ ...globalThis.__state, form: 'still', motion: 'reduced' });
+      assert.deepEqual(snapshots.at(-1).notes, ['The lines hold still because this device asks for reduced motion.', bins]);
+    } finally {
+      window.removeEventListener('ddm:enso-flow-snapshot', record);
+      globalThis.__field = field;
+    }
+  });
+}

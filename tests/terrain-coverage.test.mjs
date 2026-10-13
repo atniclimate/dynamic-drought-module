@@ -178,3 +178,37 @@ test('the notes taken off the key, the storm popup and the smoke legend read in 
   assert.doesNotMatch(source('ui', 'map-key.ts'), /Basins covered|Circles are sized/);
   assert.doesNotMatch(source('layers', 'hms-smoke.ts'), /HMS_OVERVIEW_QUALIFICATION/);
 });
+
+test('the flow explanations taken off the ENSO key read in the Impact Briefing under the name of their control', async () => {
+  const { renderMapTechnicalInformation, FLOW_TECHNICAL_NOTES } = await import('../src/ui/map-technical-information.ts');
+  const { FLOW_WORDS } = await import('../src/layers/enso-flow-data.ts');
+  const html = renderMapTechnicalInformation();
+  const heading = '<h4>Ocean &amp; atmosphere</h4>';
+  assert.ok(html.includes(heading), 'a heading named for the control');
+  const section = html.slice(html.indexOf(heading), html.indexOf('<h4>', html.indexOf(heading) + heading.length));
+  for (const sentence of [
+    'Line pace shows relative speed within this field; it is not real time.',
+    'Lines show the modeled flow at one instant, not the path of anything carried by it.',
+    'Marks move the way the primary waves travel, all at one display speed; wave speed is not shown. The water does not travel with the marks.',
+    FLOW_WORDS.mask,
+    'Model output, not an observation.',
+    'display bins, not thresholds.',
+    'This is model context, independently timed from the observed SST map.'
+  ]) {
+    assert.ok(section.includes(sentence), sentence);
+  }
+  // The rules tests/flow-wire.spec.ts holds every flow string to still bind the sentences that moved here.
+  const word = (list) => new RegExp(`(^|[^a-z])(${list})([^a-z]|$)`, 'i');
+  for (const note of FLOW_TECHNICAL_NOTES) {
+    assert.doesNotMatch(note, word('now|right now|currently|real-time|latest|today|forecasts?|will|expected'), note);
+    assert.doesNotMatch(note, word('trajectory|trajectories|carries|travels to'), note);
+    assert.doesNotMatch(note, /predict|drift|where the wind goes/i, note);
+  }
+  assert.equal(FLOW_TECHNICAL_NOTES.join(' ').match(/path of/gi).length, 1, 'one "path of", inside its negation');
+  assert.ok(FLOW_TECHNICAL_NOTES.join(' ').includes('not the path of anything carried by it'));
+  // The key keeps what decodes its symbols: one bins sentence per drawn kind, in real units.
+  for (const bins of Object.values(FLOW_WORDS.bins)) assert.match(bins, /: under [0-9]+, [0-9]+ to [0-9]+, [0-9]+ or more m/);
+  assert.ok(!section.includes('under 5'), 'the bins stay in the key');
+  const flowWords = readFileSync(join(ROOT, 'src', 'layers', 'enso-flow-data.ts'), 'utf8');
+  assert.doesNotMatch(flowWords, /Line pace shows|Lines show the modeled flow|Model output, not an observation|Display bins, not thresholds|Marks move the way/);
+});

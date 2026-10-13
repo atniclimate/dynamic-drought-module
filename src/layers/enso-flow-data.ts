@@ -2,8 +2,10 @@ import type { EnsoFlowKind } from '../state/enso-flow';
 import { isObject } from '../util/guards';
 
 export type ActiveFlowKind = Exclude<EnsoFlowKind, 'off'>;
-/** The kinds drawn from NOAA NODD as flowing paths (ENSO-FLOW-PLAN E2-1). */
+/** The kinds drawn from NOAA NODD as flowing paths (ENSO-FLOW-PLAN E2-1): every kind but the sampled currents. */
 export type FlowFieldKind = Exclude<ActiveFlowKind, 'currents'>;
+/** One string per NODD kind: a kind without its words does not compile. */
+type FlowKindWords = Readonly<Record<FlowFieldKind, string>>;
 export interface FlowPoint {
   readonly longitude: number;
   readonly latitude: number;
@@ -90,8 +92,10 @@ export function dateLabel(time: number): string {
  * section 3). Every entry but `provenance` for wind is DDM's own wording and
  * waits for the owner's read-back (DR-177 (5)); each carries its C-fit.md
  * DRAFT number. A flow string never says now, right now, currently,
- * real-time, latest or today, claims no forecast and no transport, and uses
- * "path of" only inside the one negation of DRAFT 7 (tests/flow-wire.spec.ts).
+ * real-time, latest or today, and claims no forecast and no transport
+ * (tests/flow-wire.spec.ts). The key keeps what decodes its symbols (the
+ * bins) and the live state; the sentences that explain the paths read in the
+ * Impact Briefing (src/ui/map-technical-information.ts FLOW_TECHNICAL_NOTES).
  */
 export const FLOW_WORDS = {
   // The owner's words (RATIFICATION-11 row 15), verbatim, as text: never an
@@ -101,11 +105,13 @@ export const FLOW_WORDS = {
   // DRAFT wording (DR-177): C-fit DRAFT 1, "Model run <date>" in the line.
   modelRun: 'Model run',
   // DRAFT wording (DR-177): C-fit DRAFT 2, the loading words (C-fit.md 1.5).
-  loading: { wind: 'NOAA GFS wind', waves: 'NOAA GFS-Wave' },
+  loading: { wind: 'NOAA GFS wind', jet: 'NOAA GFS 250 hPa wind', waves: 'NOAA GFS-Wave' } satisfies FlowKindWords,
   // DRAFT wording (DR-177): C-fit DRAFT 3, the unavailable words.
-  unavailable: { wind: 'NOAA GFS wind did not load', waves: 'NOAA GFS-Wave did not load' },
+  unavailable: {
+    wind: 'NOAA GFS wind did not load', jet: 'NOAA GFS 250 hPa wind did not load', waves: 'NOAA GFS-Wave did not load'
+  } satisfies FlowKindWords,
   // DRAFT wording (DR-177): C-fit DRAFT 4, the past-24-hour stale words (moving-paths section 11).
-  staleModel: { wind: 'NOAA GFS', waves: 'NOAA GFS-Wave' },
+  staleModel: { wind: 'NOAA GFS', jet: 'NOAA GFS', waves: 'NOAA GFS-Wave' } satisfies FlowKindWords,
   // DRAFT wording (DR-177): C-fit DRAFT 4, the stale words around the model name and run date.
   stale: { lead: 'The held', from: 'frame from', tail: 'is past its 24-hour limit' },
   // DRAFT wording (DR-177): C-fit DRAFT 5 (moving-paths section 11).
@@ -114,13 +120,7 @@ export const FLOW_WORDS = {
   outside: 'This view is outside the area the wave marks cover',
   // DRAFT wording (DR-177): C-fit.md 1.5, the live (partial) row's uncovered part named (the wave box).
   waveBox: 'Wave marks cover 10 S to 62 N and 165 E to 100 W only; nothing is drawn outside that area.',
-  // DRAFT wording (DR-177): C-fit DRAFT 6 (moving-paths section 7).
-  pace: 'Line pace shows relative speed within this field; it is not real time.',
-  // DRAFT wording (DR-177): C-fit DRAFT 7, scientific (moving-paths section 7); the one "path of".
-  instant: 'Lines show the modeled flow at one instant, not the path of anything carried by it.',
-  // DRAFT wording (DR-177): C-fit DRAFT 8, scientific (moving-paths section 7).
-  modelOutput: 'Model output, not an observation.',
-  // DRAFT wording (DR-177): C-fit DRAFT 9, the mask sentence ending "does not mean calm water".
+  // DRAFT wording (DR-177): C-fit DRAFT 9, the mask sentence ending "does not mean calm water" (the no-data state's reason).
   mask: 'No marks within one grid cell of the coast or where the model has no water value; no marks does not mean calm water.',
   // DRAFT wording (DR-177): C-fit DRAFT 10, the form notes.
   paused: 'Motion is paused, so the lines hold still.',
@@ -132,15 +132,12 @@ export const FLOW_WORDS = {
   context: 'The lines hold still because the browser reset graphics.',
   // DRAFT wording (DR-177): the failed-rebuild detail (moving-paths section 14: "fall to the still form and say so").
   rebuildFailed: 'The lines hold still because the browser could not rebuild their graphics.',
-  // DRAFT wording (DR-177): C-fit DRAFT 11, the bins in real units.
+  // DRAFT wording (DR-177): C-fit DRAFT 11, the bins in real units (src/layers/flow/field.ts FLOW_BINS; tests/flow-advect.test.mjs).
   bins: {
     wind: 'Line width and brightness: under 5, 5 to 10, 10 or more m/s.',
+    jet: 'Line width and brightness: under 20, 20 to 40, 40 or more m/s.',
     waves: 'Mark length and brightness: under 2, 2 to 4, 4 or more m significant wave height.'
-  },
-  // DRAFT wording (DR-177): C-fit DRAFT 11.
-  binsNote: 'Display bins, not thresholds.',
-  // DRAFT wording (DR-177): C-fit DRAFT 12, the R5 (a) wave sentences, scientific (moving-paths section 9).
-  waves: 'Marks move the way the primary waves travel, all at one display speed; wave speed is not shown. The water does not travel with the marks.',
+  } satisfies FlowKindWords,
   // DRAFT wording (DR-177): C-fit DRAFT 13 (moving-paths section 7).
   pastGrid: "Zoomed in past the model grid: showing the values at the model's own points.",
   // DRAFT wording (DR-177): past the grid with no model node inside the view (block E2b review P1); nothing is drawn.

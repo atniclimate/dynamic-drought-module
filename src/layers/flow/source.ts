@@ -5,6 +5,10 @@
  * - Wind: NOAA GFS `pgrb2.1p00`, UGRD and VGRD at `10 m above ground`; grid
  *   3.0, 360 x 181, 1.0 degree, DRT 5.3, no bitmap. Not cropped: the global
  *   grid covers the whole United States (DR-116 coverage).
+ * - Jet-level wind: the same file and `.idx`, UGRD and VGRD at `250 mb`
+ *   (fixed surface 100, 25,000 Pa), same grid and packing; 53 to 57 kB per
+ *   message (admission gfs-runtime-nodd, 2026-10-13). Another level of the
+ *   file is one more `gfsWind` row.
  * - Waves: NOAA GFS-Wave `global.0p25`, DIRPW and HTSGW at `surface`; grid
  *   3.0, 1440 x 721, 0.25 degree, DRT 5.40 with a bitmap. Cropped to 10 S to
  *   62 N and 165 E to 100 W, across the antimeridian (0.25 degree columns 660
@@ -13,9 +17,10 @@
  *   PERPW, the 0p50 wind and the regional wave grids are not read (owner
  *   question 9, Q15): adding one later is a row here.
  *
- * Direction (A-direction.md, CONFIRMED-FROM; admission line 15). GFS 10 m
- * UGRD/VGRD are earth-relative and point the way the air moves (TO); they
- * pass through unchanged. GFS-Wave DIRPW is in degrees true, clockwise from
+ * Direction (A-direction.md, CONFIRMED-FROM; admission line 15). GFS
+ * UGRD/VGRD, at 10 m and at 250 hPa, are earth-relative and point the way
+ * the air moves (TO); they pass through unchanged. GFS-Wave DIRPW is in
+ * degrees true, clockwise from
  * north, and gives the direction the waves come FROM, so they travel toward
  * (DIRPW + 180) mod 360. THIS MODULE IS THE ONE PLACE THAT ROTATES
  * (`waveToVector`, called by the decode Worker); `field.ts` never does. The
@@ -87,22 +92,26 @@ function stamp(cycle: number): { day: string; hh: string } {
 
 const fff = (fh: number): string => String(fh).padStart(3, '0');
 
-export const FLOW_SOURCES: Readonly<Record<FlowKind, FlowSource>> = {
-  wind: {
-    kind: 'wind',
+/**
+ * One level of GFS `pgrb2.1p00` wind: UGRD and VGRD at the `.idx` LEVEL
+ * words `level`, whose GRIB fixed surface is `surface`. Global, uncropped.
+ */
+function gfsWind(kind: FlowKind, level: string, surface: FlowSource['surface']): FlowSource {
+  return {
+    kind,
     issuer: 'NOAA',
     model: 'GFS',
-    level: '10 m above ground',
+    level,
     units: 'm s-1',
     cadenceHours: 3,
     idxMaxBytes: 65_536,
     grid: { ni: 360, nj: 181, la1: 90, lo1: 0, la2: -90, lo2: 359, di: 1, dj: 1 },
-    surface: { type: 103, value: 10 },
+    surface,
     packing: 3,
     bitmap: false,
     messages: [
-      { variable: 'UGRD', level: '10 m above ground', parameter: { discipline: 0, category: 2, number: 2 } },
-      { variable: 'VGRD', level: '10 m above ground', parameter: { discipline: 0, category: 2, number: 3 } }
+      { variable: 'UGRD', level, parameter: { discipline: 0, category: 2, number: 2 } },
+      { variable: 'VGRD', level, parameter: { discipline: 0, category: 2, number: 3 } }
     ],
     crop: null,
     step: { uv: 0.01, m: 0.01 },
@@ -110,7 +119,14 @@ export const FLOW_SOURCES: Readonly<Record<FlowKind, FlowSource>> = {
       const { day, hh } = stamp(cycle);
       return `gfs.${day}/${hh}/atmos/gfs.t${hh}z.pgrb2.1p00.f${fff(fh)}`;
     }
-  },
+  };
+}
+
+export const FLOW_SOURCES: Readonly<Record<FlowKind, FlowSource>> = {
+  // Fixed surface 103: a height above ground, in metres.
+  wind: gfsWind('wind', '10 m above ground', { type: 103, value: 10 }),
+  // Fixed surface 100: an isobaric surface, in pascals (250 hPa).
+  jet: gfsWind('jet', '250 mb', { type: 100, value: 25_000 }),
   waves: {
     kind: 'waves',
     issuer: 'NOAA',
@@ -188,7 +204,7 @@ export const PACKET_NO_VALUE = -32768;
 /**
  * What the decode Worker transfers back: the cropped grid as Int16 steps
  * (`step` from the source row), with a byte mask. Waves carry the TO unit
- * vector and the significant height; wind carries u and v only.
+ * vector and the significant height; wind at either level carries u and v only.
  */
 export interface FlowPacket {
   readonly kind: FlowKind;

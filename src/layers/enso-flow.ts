@@ -1,13 +1,14 @@
 /**
  * Opt-in ENSO model context (ENSO-FLOW-PLAN E2-1; C-fit.md 1.2).
  *
- * - Wind and waves draw NOAA GFS 10 m wind and GFS-Wave peak direction as
- *   flowing paths (or their still form), read at runtime from NOAA's public
- *   NODD bucket by the lazy flow chunk (src/layers/flow/index.ts), which
- *   this module reaches through one dynamic import() and nothing else. A
- *   decoded frame is kept on the CPU for ten minutes, keyed by kind, grid,
- *   cycle and forecast hour, so an SST re-activate reads nothing again.
- *   Past cycle + 24 h a frame is never drawn. Panning never fetches.
+ * - Wind, jet-level wind and waves draw NOAA GFS 10 m wind, GFS 250 hPa wind
+ *   and GFS-Wave peak direction as flowing paths (or their still form), read
+ *   at runtime from NOAA's public NODD bucket by the lazy flow chunk
+ *   (src/layers/flow/index.ts), which this module reaches through one dynamic
+ *   import() and nothing else. A decoded frame is kept on the CPU for ten
+ *   minutes, keyed by kind, grid, cycle and forecast hour, so an SST
+ *   re-activate reads nothing again. Past cycle + 24 h a frame is never
+ *   drawn. Panning never fetches.
  * - Ocean currents keep the interim Open-Meteo sample: at most 40 fixed grid
  *   cells per user action, a complete-body 12 s budget, static arrows, and
  *   the DR-161 credits (owner question 4).
@@ -33,16 +34,21 @@ const ARROWS = 'enso-flow-arrows';
 const CACHE_MS = 10 * 60 * 1000;
 /** Decoded frames kept at once (a wave frame is about 1.3 MB on the CPU). */
 const FIELD_CACHE_SIZE = 4;
+/** The control's buttons, in this order: a kind without a label does not compile. */
 const LABELS: Record<EnsoFlowKind, string> = {
-  off: 'Off', currents: 'Ocean currents', wind: 'Atmospheric currents', waves: 'Ocean waves'
+  off: 'Off', currents: 'Ocean currents', wind: 'Atmospheric currents', jet: 'Jet-level wind', waves: 'Ocean waves'
 };
 const SOURCES: Record<ActiveFlowKind, string> = {
   // ledger: copernicus-marine-smoc (cite sheet c23; DR-161): the producer
   // is Mercator Ocean International, per the product's STAC record.
   currents: 'Copernicus Marine SMOC (Mercator Ocean International), about 8 km; hourly model output, updated daily',
   wind: 'NOAA GFS, 10 m winds; global model output, updated every six hours',
+  // DRAFT wording (DR-177): the issuer's own field, UGRD and VGRD at 250 mb (admission gfs-runtime-nodd, 2026-10-13).
+  jet: 'NOAA GFS 250 hPa wind; global model output, updated every six hours',
   waves: 'NOAA GFS Wave, 0.25°; hourly model output, updated every six hours'
 };
+/** The kinds read from NOAA NODD as a field: every kind but off and the sampled currents. */
+const isFieldKind = (kind: EnsoFlowKind): kind is FlowFieldKind => kind !== 'off' && kind !== 'currents';
 /** Sentences the panel and the map key's drawer row share, one source each. */
 const CALM_NOTE = 'Arrows show travel direction only, with equal lengths; still water or calm wind has no arrow. Missing cells have no arrow and do not imply calm conditions.';
 const TIMING_NOTE = 'This is model context, independently timed from the observed SST map.';
@@ -295,7 +301,7 @@ function loadFlowModule(signal: AbortSignal): Promise<FlowModule> {
 }
 
 const fieldKey = (kind: FlowFieldKind, cycle: number, forecastHour: number): string =>
-  `${kind}|${kind === 'wind' ? 'gfs-1p00' : 'gfswave-global-0p25'}|${cycle}|${forecastHour}`;
+  `${kind}|${kind === 'waves' ? 'gfswave-global-0p25' : 'gfs-1p00'}|${cycle}|${forecastHour}`;
 
 /**
  * A held frame the reader would read now: one of the cycles it would try
@@ -321,12 +327,14 @@ function storeField(field: FlowField): void {
   while (fieldCache.size > FIELD_CACHE_SIZE) fieldCache.delete(fieldCache.keys().next().value!);
 }
 
-/** The notes of a drawn wind or wave frame, in the order the drawer reads them. */
+/**
+ * The notes of a drawn field frame, in the order the drawer reads them: any
+ * live-state sentence first, then the kind's bins, which decode the marks.
+ * The explanations read in the Impact Briefing (src/ui/map-technical-information.ts).
+ */
 function fieldNotes(kind: FlowFieldKind, state: FlowViewState): string[] {
   const form = flowFormNote(state);
-  const notes: string[] = kind === 'wind'
-    ? [FLOW_WORDS.pace, FLOW_WORDS.instant, FLOW_WORDS.modelOutput, FLOW_WORDS.bins.wind, FLOW_WORDS.binsNote, TIMING_NOTE]
-    : [FLOW_WORDS.waves, FLOW_WORDS.mask, FLOW_WORDS.modelOutput, FLOW_WORDS.bins.waves, FLOW_WORDS.binsNote, TIMING_NOTE];
+  const notes: string[] = [FLOW_WORDS.bins[kind]];
   // The wave crop's box sentence is the waves' alone; a global grid has no outside.
   if (kind === 'waves' && state.coverage === 'partial') notes.unshift(FLOW_WORDS.waveBox);
   if (form) notes.unshift(form);
@@ -352,7 +360,7 @@ function presentFieldState(kind: FlowFieldKind, field: FlowField, state: FlowVie
     // "Outside the area the wave marks cover" is said for waves only (the
     // wave crop); src/layers/flow/index.ts never reports it for a global grid.
     const masked = state.coverage === 'masked' || kind !== 'waves';
-    const notes = [masked ? FLOW_WORDS.mask : FLOW_WORDS.waveBox, TIMING_NOTE];
+    const notes = [masked ? FLOW_WORDS.mask : FLOW_WORDS.waveBox];
     setStatus('no data', `no data · ${masked ? FLOW_WORDS.noOcean : FLOW_WORDS.outside}`, kind, notes, { motion: 'none', provenance });
     if (detailNode) detailNode.textContent = notes.join(' ');
     return;
@@ -419,7 +427,7 @@ function renderCredits(kind: EnsoFlowKind): void {
     anchor.textContent = text;
     return anchor;
   };
-  if (kind === 'wind' || kind === 'waves') {
+  if (isFieldKind(kind)) {
     // The owner's credit as text (RATIFICATION-11 row 15): no link, no emblem, no attribution line.
     const provenance = document.createElement('p');
     provenance.className = 'enso-flow-credit';
@@ -485,7 +493,7 @@ function updateSelection(): void {
   if (updateButton) {
     updateButton.disabled = preference.kind === 'off';
     // A global grid needs no resampling on pan (C-fit.md 1.2): currents only.
-    updateButton.hidden = preference.kind === 'wind' || preference.kind === 'waves';
+    updateButton.hidden = isFieldKind(preference.kind);
   }
   const details = panel?.querySelector('details');
   if (details) details.hidden = preference.kind === 'off';
@@ -515,7 +523,7 @@ function mountControls(): boolean {
   heading.textContent = 'Ocean & atmosphere';
   const options = document.createElement('div');
   options.className = 'enso-flow-options';
-  for (const kind of ['off', 'currents', 'wind', 'waves'] as const) {
+  for (const kind of Object.keys(LABELS) as EnsoFlowKind[]) {
     const button = document.createElement('button');
     button.type = 'button';
     button.textContent = LABELS[kind];

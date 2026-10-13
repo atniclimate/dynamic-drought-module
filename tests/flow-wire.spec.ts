@@ -6,6 +6,7 @@ import { expect, test, type Locator, type Page, type Route } from './offline-tes
 import * as ensoFlowData from '../src/layers/enso-flow-data';
 import { locateMessage } from '../src/layers/flow/nodd';
 import { FLOW_SOURCES, frameGrid } from '../src/layers/flow/source';
+import type { EnsoFlowKind } from '../src/state/enso-flow';
 import { gotoApp, layerCheckbox, noddStubLog } from './helpers';
 
 /*
@@ -104,7 +105,7 @@ function panel(page: Page): Locator {
   return page.locator('.enso-flow');
 }
 
-async function choose(page: Page, kind: 'off' | 'currents' | 'wind' | 'waves'): Promise<void> {
+async function choose(page: Page, kind: EnsoFlowKind): Promise<void> {
   await panel(page).locator(`[data-flow-kind="${kind}"]`).click();
 }
 
@@ -212,7 +213,7 @@ test.describe('E2-1 flow words', () => {
     };
     walk(FLOW_WORDS);
     out.push(flowLiveLine('live', FIXTURE_CYCLE, FIXTURE_VALID), flowLiveLine('live (partial)', FIXTURE_CYCLE, FIXTURE_VALID));
-    out.push(flowStaleLine('wind', FIXTURE_CYCLE), flowStaleLine('waves', FIXTURE_CYCLE));
+    for (const kind of Object.keys(FLOW_SOURCES) as (keyof typeof FLOW_SOURCES)[]) out.push(flowStaleLine(kind, FIXTURE_CYCLE));
     return out;
   }
 
@@ -225,15 +226,15 @@ test.describe('E2-1 flow words', () => {
     }
   });
 
-  test("no flow string contains trajectory, carries, drift, where the wind goes or travels to, and 'path of' appears only inside the one DRAFT negation 'not the path of anything carried by it'", () => {
+  test("no flow string contains trajectory, carries, drift, where the wind goes, travels to or path of", () => {
     const strings = flowStrings();
     for (const s of strings) {
       expect(s, s).not.toMatch(/\btrajector(?:y|ies)\b|\bcarries\b|\bdrift|where the wind goes|\btravels to\b/i);
     }
     const pathOf = strings.filter((s) => /\bpath of\b/i.test(s));
-    expect(pathOf).toEqual([FLOW_WORDS.instant]);
-    expect(FLOW_WORDS.instant).toContain('not the path of anything carried by it');
-    expect(FLOW_WORDS.instant.match(/\bpath of\b/gi)).toHaveLength(1);
+    // The one negation that holds "path of" left the key for the Impact Briefing, where
+    // tests/terrain-coverage.test.mjs holds it to this rule; no panel or key string has the words.
+    expect(pathOf).toEqual([]);
   });
 });
 
@@ -296,13 +297,17 @@ test.describe('E2-1 flowing paths in ENSO mode', () => {
     await expect(panel(page)).toHaveAttribute('data-flow-drawn', 'wind');
   });
 
-  test('ENSO wind reads only the NODD .idx and two ranges, and no Open-Meteo host', async ({ page }) => {
+  for (const [kind, label] of [['wind', 'Atmospheric currents'], ['jet', 'Jet-level wind']] as const) test(`ENSO ${kind} reads only the NODD .idx and two ranges, and no Open-Meteo host`, async ({ page }) => {
     const calls = await bootEnso(page);
     const requested: string[] = [];
     page.on('request', (request) => { if (OPEN_METEO.test(request.url())) requested.push(request.url()); });
-    await choose(page, 'wind');
+    await choose(page, kind);
     await expect(panel(page)).toHaveAttribute('data-status', 'live');
-    await expect(panel(page)).toHaveAttribute('data-flow-drawn', 'wind');
+    await expect(panel(page)).toHaveAttribute('data-flow-drawn', kind);
+    await expect(panel(page).locator(`[data-flow-kind="${kind}"]`)).toHaveText(label);
+    await expect(flowStatus(page)).toContainText(`${label} · live · Model run `);
+    await expect(flowNotes(page)).toContainText(FLOW_WORDS.bins[kind]);
+    const [ugrd, vgrd] = FLOW_SOURCES[kind].messages.map((m) => spanRange('gfs.t06z.pgrb2.1p00.f006.idx', m.variable, m.level)) as [string, string];
     const log = noddStubLog(page).map(({ method, url, range, answer }) => ({ method, url, range, answer }));
     const key = `https://noaa-gfs-bdp-pds.s3.amazonaws.com/${WIND_IDX.replace(/\.idx$/, '')}`;
     expect(log).toHaveLength(3);
@@ -310,10 +315,10 @@ test.describe('E2-1 flowing paths in ENSO mode', () => {
     // The two message reads run together, so their order is not fixed.
     const messages = log.slice(1).sort((a, b) => (a.range ?? '').localeCompare(b.range ?? ''));
     expect(messages).toEqual([
-      { method: 'GET', url: key, range: spanRange('gfs.t06z.pgrb2.1p00.f006.idx', 'UGRD', '10 m above ground'), answer: 'fixture' },
-      { method: 'GET', url: key, range: spanRange('gfs.t06z.pgrb2.1p00.f006.idx', 'VGRD', '10 m above ground'), answer: 'fixture' }
+      { method: 'GET', url: key, range: ugrd, answer: 'fixture' },
+      { method: 'GET', url: key, range: vgrd, answer: 'fixture' }
     ].sort((a, b) => a.range.localeCompare(b.range)));
-    expect(calls, 'no Open-Meteo read for wind').toHaveLength(0);
+    expect(calls, `no Open-Meteo read for ${kind}`).toHaveLength(0);
     expect(requested).toEqual([]);
   });
 
@@ -343,8 +348,10 @@ test.describe('E2-1 flowing paths in ENSO mode', () => {
     await expect(flowStatus(page)).toHaveText(`Atmospheric currents · live · Model run ${run} · Model valid ${valid}`);
     const text = `${await flowStatus(page).textContent()} ${await flowNotes(page).textContent()}`;
     expect(text).not.toMatch(/\bnow\b|\bforecast/i);
-    await expect(flowNotes(page)).toContainText(FLOW_WORDS.instant);
-    await expect(flowNotes(page)).toContainText('This is model context, independently timed from the observed SST map.');
+    // The key keeps what decodes the lines; the explanations read in the Impact Briefing.
+    await expect(flowNotes(page)).toContainText(FLOW_WORDS.bins.wind);
+    await expect(flowNotes(page)).not.toContainText('independently timed');
+    await expect(flowNotes(page)).not.toContainText('Display bins');
     // Two products, two clocks: the SST date keeps its own node.
     await expect(page.locator('#map-key [data-sst-observed]')).not.toContainText('Model');
     await expect(flowStatus(page)).not.toContainText('Observed');

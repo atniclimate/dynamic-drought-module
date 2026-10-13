@@ -112,10 +112,10 @@ test('all three ENSO overlays remain bounded, independently timed, and preserve 
   // read from the cluster definition, never a literal of this case).
   const flowDefault = Object.values(HAZARD_CLUSTERS).find((def) => def.urlToken === 'enso')?.flowDefault;
   expect(noddStubLog(page).length > 0, `NODD reads at an ENSO boot with flowDefault ${flowDefault ?? 'unset'}`)
-    .toBe(flowDefault === 'wind' || flowDefault === 'waves');
+    .toBe(flowDefault !== undefined && flowDefault !== 'currents');
   expect(calls).toHaveLength(flowDefault === 'currents' ? 1 : 0);
   const before = calls.length;
-  for (const kind of ['currents', 'wind', 'waves']) {
+  for (const kind of ['currents', 'wind', 'jet', 'waves']) {
     await panel.locator(`[data-flow-kind="${kind}"]`).click();
     // The wave crop ends at 165 E and 100 W, inside this Pacific view's edges.
     await expect(panel).toHaveAttribute('data-status', kind === 'waves' ? /^live/ : 'live');
@@ -123,7 +123,7 @@ test('all three ENSO overlays remain bounded, independently timed, and preserve 
     // Wind is ENSO's default since E2-4, written as the absence of the key.
     expect(new URLSearchParams(await search(page)).get('flow')).toBe(kind === 'wind' ? null : kind);
   }
-  // Only ocean currents read Open-Meteo; wind and waves read the NODD fixtures.
+  // Only ocean currents read Open-Meteo; wind, jet-level wind and waves read the NODD fixtures.
   expect(calls).toHaveLength(before + 1);
   expect(calls.map((url) => url.searchParams.get('models')).slice(before)).toEqual(['meteofrance_currents']);
   for (const url of calls) expect(url.searchParams.get('latitude')!.split(',').length).toBeLessThanOrEqual(40);

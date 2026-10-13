@@ -1130,11 +1130,13 @@ interface NoddFixture {
 }
 
 /**
- * Every NODD read with a fixture: the three `.idx` files and the six
- * messages cut on 2026-10-05 (cycle 2026-10-05 06Z, f006; five by E1-1, the
- * global.0p25 DIRPW by E2a for found-146), each with the key and range its
- * tests/fixtures/flow/reference.json `source` records. Both kinds of
- * src/layers/flow/source.ts read here in full: wind (UGRD and VGRD) and
+ * Every NODD read with a fixture: the three `.idx` files and the eight
+ * messages of cycle 2026-10-05 06Z, f006 (five cut on 2026-10-05 by E1-1,
+ * the global.0p25 DIRPW by E2a for found-146, the 250 mb UGRD and VGRD on
+ * 2026-10-13 for the jet-level kind), each with the key and range its
+ * tests/fixtures/flow/reference.json `source` records. Every kind of
+ * src/layers/flow/source.ts reads here in full: wind and jet-level wind
+ * (UGRD and VGRD, at 10 m and at 250 mb, from the one atmos file) and
  * waves (DIRPW and HTSGW on global.0p25). A read not listed here is
  * unstubbed (`installDefaultNoddStub`).
  */
@@ -1142,6 +1144,8 @@ export const NODD_FIXTURES: readonly NoddFixture[] = [
   { key: 'gfs.20261005/06/atmos/gfs.t06z.pgrb2.1p00.f006.idx', range: null, file: 'gfs.t06z.pgrb2.1p00.f006.idx' },
   { key: 'gfs.20261005/06/atmos/gfs.t06z.pgrb2.1p00.f006', range: 'bytes=34998139-35077224', file: 'gfs1p00-UGRD-10m-f006.grib2' },
   { key: 'gfs.20261005/06/atmos/gfs.t06z.pgrb2.1p00.f006', range: 'bytes=35077225-35156831', file: 'gfs1p00-VGRD-10m-f006.grib2' },
+  { key: 'gfs.20261005/06/atmos/gfs.t06z.pgrb2.1p00.f006', range: 'bytes=17851986-17905646', file: 'gfs1p00-UGRD-250mb-f006.grib2' },
+  { key: 'gfs.20261005/06/atmos/gfs.t06z.pgrb2.1p00.f006', range: 'bytes=17905647-17960139', file: 'gfs1p00-VGRD-250mb-f006.grib2' },
   { key: 'gfs.20261005/06/wave/gridded/gfswave.t06z.global.0p25.f006.grib2.idx', range: null, file: 'gfswave.t06z.global.0p25.f006.grib2.idx' },
   { key: 'gfs.20261005/06/wave/gridded/gfswave.t06z.global.0p25.f006.grib2', range: 'bytes=3029161-3457288', file: 'global0p25-HTSGW-f006.grib2' },
   { key: 'gfs.20261005/06/wave/gridded/gfswave.t06z.global.0p25.f006.grib2', range: 'bytes=3968286-4855671', file: 'global0p25-DIRPW-f006.grib2' },
@@ -1161,7 +1165,7 @@ export type NoddStubAnswer = 'fixture' | 'unsatisfiable' | 'absent' | 'unstubbed
 
 /**
  * The `.idx` keys the ENSO reader asks for (src/layers/flow/source.ts): the
- * atmos 1.00 degree index (wind) and the global 0.25 degree wave index, for any
+ * atmos 1.00 degree index (wind at either level) and the global 0.25 degree wave index, for any
  * cycle and forecast hour. A GET for one with no fixture is `absent`.
  */
 const NODD_READER_INDEX_KEYS: readonly RegExp[] = [

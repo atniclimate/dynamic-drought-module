@@ -76,7 +76,10 @@ const OBJECTS = new Map([
     {
       ranges: new Map([
         [34998139, fixture('gfs1p00-UGRD-10m-f006.grib2')],
-        [35077225, fixture('gfs1p00-VGRD-10m-f006.grib2')]
+        [35077225, fixture('gfs1p00-VGRD-10m-f006.grib2')],
+        // The jet-level kind reads the same file: the 250 mb lines of the same .idx.
+        [17851986, fixture('gfs1p00-UGRD-250mb-f006.grib2')],
+        [17905647, fixture('gfs1p00-VGRD-250mb-f006.grib2')]
       ])
     }
   ],
@@ -385,9 +388,9 @@ test('the forecast hour is the latest valid time not after now (3-hourly 1p00, h
   assert.equal(forecastHourFor('wind', CYCLE_06Z - 6 * HOUR, at(9, 29)), 15);
   assert.equal(forecastHourFor('waves', CYCLE_06Z - 6 * HOUR, at(3, 30)), 9);
   for (let t = at(3, 30); t < at(15, 30); t += 11 * 60_000) {
-    for (const kind of ['wind', 'waves']) {
+    for (const kind of Object.keys(FLOW_SOURCES)) {
       const fh = forecastHourFor(kind, CYCLE_06Z, t);
-      const step = kind === 'wind' ? 3 : 1;
+      const step = FLOW_SOURCES[kind].cadenceHours;
       assert.equal(fh % step, 0, `${kind} f${fh} is on its cadence`);
       const valid = CYCLE_06Z + fh * HOUR;
       assert.ok(valid <= t, 'the valid time is not after now');
@@ -489,8 +492,13 @@ test('invalid index offsets are refused before any message fetch or decode', asy
 // bounding concurrent bodies independently of every number supplied by the index.
 const READ_LIMITS = {
   wind: { message: 512 * 1024, frame: 768 * 1024 },
+  jet: { message: 512 * 1024, frame: 768 * 1024 },
   waves: { message: 4 * 1024 * 1024, frame: 6 * 1024 * 1024 }
 };
+
+test('every kind of the source table has its own read ceilings', () => {
+  assert.deepEqual(Object.keys(READ_LIMITS).sort(), Object.keys(FLOW_SOURCES).sort());
+});
 
 test('each kind refuses an oversized message before any range fetch or decode', async () => {
   for (const [kind, limit] of Object.entries(READ_LIMITS)) {
@@ -783,6 +791,50 @@ test('the wind frame is the uncropped 360x181 global grid', async () => {
       assert.ok(Math.abs(arr[k * stride] - ref[k]) <= 0.005 + 2e-5, `${name} point ${k * stride}`);
     }
   }
+});
+
+test('the jet-level frame is the 250 hPa wind of the same file and .idx as the 10 m wind', async () => {
+  const stub = noddStub();
+  const field = await read('jet', stub);
+  assert.equal(field.kind, 'jet');
+  assert.deepEqual(field.grid, { lon0: 0, lat0: 90, dlon: 1, dlat: 1, nx: 360, ny: 181, wrapsLon: true });
+  assert.equal(field.mask.reduce((a, b) => a + b, 0), 360 * 181, 'no jet-level node is masked');
+  assert.equal(field.meta.cycle, CYCLE_06Z);
+  assert.equal(field.meta.forecastHour, 6);
+  assert.equal(field.meta.validTime, CYCLE_06Z + 6 * HOUR);
+  assert.equal(field.meta.staleAfter, CYCLE_06Z + 24 * HOUR);
+  assert.equal(field.meta.issuer, 'NOAA');
+  assert.equal(field.meta.model, 'GFS');
+  assert.equal(field.meta.level, '250 mb');
+  assert.equal(field.meta.units, 'm s-1');
+  assert.equal(field.meta.sourceUrl, `${NODD_ORIGIN}/${WIND_KEY}`);
+  // First activation: the .idx and the two 250 mb spans (its lines 276 and 277), three GETs.
+  assert.deepEqual(
+    stub.calls.map((c) => [c.method, c.credentials, c.url, c.range]),
+    [
+      ['GET', 'omit', `${NODD_ORIGIN}/${WIND_KEY}.idx`, 'bytes=0-65535'],
+      ['GET', 'omit', `${NODD_ORIGIN}/${WIND_KEY}`, 'bytes=17851986-17905646'],
+      ['GET', 'omit', `${NODD_ORIGIN}/${WIND_KEY}`, 'bytes=17905647-17960139']
+    ]
+  );
+  const served = [fixture('gfs.t06z.pgrb2.1p00.f006.idx'), fixture('gfs1p00-UGRD-250mb-f006.grib2'), fixture('gfs1p00-VGRD-250mb-f006.grib2')];
+  assert.deepEqual(served.map((b) => b.byteLength), [39_706, 53_661, 54_493]);
+  assert.equal(served.reduce((sum, b) => sum + b.byteLength, 0), 147_860, 'the first-activation bytes of this cycle');
+  // Values match eccodes at every sampled point, within the Int16 step (0.01 m/s).
+  for (const [name, arr] of [
+    ['gfs1p00-UGRD-250mb-f006', field.u],
+    ['gfs1p00-VGRD-250mb-f006', field.v]
+  ]) {
+    const ref = refValues(name);
+    const stride = reference[name].stride;
+    assert.equal(reference[name].level, 250);
+    for (let k = 0; k < ref.length; k++) {
+      assert.ok(Math.abs(arr[k * stride] - ref[k]) <= 0.005 + 2e-5, `${name} point ${k * stride}`);
+    }
+  }
+  // The magnitude is the wind speed: the fastest node of this cycle is 91.2 m/s (eccodes), far above the 10 m classes.
+  const fastest = field.magnitude.reduce((a, b) => Math.max(a, b), 0);
+  assert.ok(Math.abs(fastest - 91.23) < 0.02, `fastest node ${fastest}`);
 });
 
 test('the wave crop spans 165 E to 100 W across the antimeridian and contains Attu (52.9 N, 172.9 E), Guaymas (27.9 N, 110.9 W) and Hilo (19.7 N, 155.1 W)', () => {

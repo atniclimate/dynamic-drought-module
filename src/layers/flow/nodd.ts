@@ -58,13 +58,15 @@ export const MAX_CYCLE_TRIES = 3;
 
 /**
  * Fixed transport ceilings, independent of the untrusted index. The committed
- * 2026-10-05 06Z fixtures carry 79,086/79,607 B wind messages and
- * 887,386/428,128 B global wave messages. These ceilings leave several times
- * those sizes for packing variation while bounding each read and their sum.
+ * 2026-10-05 06Z fixtures carry 79,086/79,607 B wind messages,
+ * 53,661/54,493 B jet-level (250 mb) messages and 887,386/428,128 B global
+ * wave messages. These ceilings leave several times those sizes for packing
+ * variation while bounding each read and their sum.
  */
 const MAX_FLOW_READ_BYTES = 4 * 1024 * 1024;
 const FLOW_BYTE_LIMITS: Readonly<Record<FlowKind, { readonly message: number; readonly frame: number }>> = {
   wind: { message: 512 * 1024, frame: 768 * 1024 },
+  jet: { message: 512 * 1024, frame: 768 * 1024 },
   waves: { message: MAX_FLOW_READ_BYTES, frame: 6 * 1024 * 1024 }
 };
 
@@ -304,7 +306,7 @@ function decodeIn(worker: DecodeWorkerLike, request: DecodeRequest, signal: Abor
 
 /**
  * Read, decode and stamp one frame of `kind` from NODD. Resolves to a
- * FlowField (wind uncropped, waves cropped, both TO); rejects with an
+ * FlowField (wind at either level uncropped, waves cropped, all TO); rejects with an
  * AbortError when the activation signal aborts, or a FlowUnavailableError.
  */
 export async function readFlowFrame(kind: FlowKind, options: FlowReadOptions): Promise<FlowField> {

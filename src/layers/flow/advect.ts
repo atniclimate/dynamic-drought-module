@@ -9,7 +9,8 @@
  *   y south), x unwrapped so a path across 180 degrees stays continuous.
  * - A fixed 1/30 s step with at most 2 catch-up steps, so pace never depends
  *   on the display rate.
- * - Pace is linear in the field's own speed for wind (4 CSS px/s per m/s) and
+ * - Pace is linear in the field's own speed for wind (4 CSS px/s per m/s at
+ *   10 m, 1 at 250 hPa, `JET_PACE`) and
  *   one uniform display rate for waves (24 CSS px/s; ruling R5 a). Wave
  *   height sets only the class and the mark length, never the rate.
  * - A step is sub-stepped when it would move more than half a cell. It is
@@ -19,7 +20,7 @@
  */
 import {
   type FlowClass, type FlowField, type FlowKind, type FlowSample,
-  cellValid, classOf, gridPosition, latOf, lonOf, newSample, sampleField
+  FLOW_BINS, cellValid, classOf, gridPosition, latOf, lonOf, newSample, sampleField
 } from './field';
 
 export const STEP_S = 1 / 30;
@@ -64,8 +65,20 @@ export const WIND_PACE: Pace = { pxPerSecPerUnit: 4, uniform: false };
 export const WAVE_RATE_PX_PER_S = 24;
 export const WAVE_PACE: Pace = { pxPerSecPerUnit: WAVE_RATE_PX_PER_S, uniform: true };
 
+/**
+ * Jet-level wind is several times faster than 10 m wind, so its pace is
+ * scaled by the upper bins of the two kinds: a wind at the jet-level upper
+ * bin crosses the screen as fast as a 10 m wind at its own upper bin. The
+ * pace stays linear in the speed of the field.
+ */
+export const JET_PACE: Pace = {
+  pxPerSecPerUnit: (WIND_PACE.pxPerSecPerUnit * FLOW_BINS.wind[1]) / FLOW_BINS.jet[1],
+  uniform: false
+};
+const PACES: Readonly<Record<FlowKind, Pace>> = { wind: WIND_PACE, jet: JET_PACE, waves: WAVE_PACE };
+
 export function paceFor(kind: FlowKind): Pace {
-  return kind === 'waves' ? WAVE_PACE : WIND_PACE;
+  return PACES[kind];
 }
 
 /** The view as the Mercator positions of its four screen corners (TL, TR, BR, BL), x unwrapped. */

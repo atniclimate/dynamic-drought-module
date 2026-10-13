@@ -57,6 +57,21 @@ if (typeof window !== 'undefined' && typeof window.addEventListener === 'functio
 // vocab-allow: the National Hurricane Center's own definition of its cone, verbatim (nhc.noaa.gov/aboutcone.shtml, read 2026-10-13)
 const NHC_CONE_DEFINITION = 'The cone represents the probable track of the center of a tropical cyclone, and is formed by enclosing the area swept out by a set of circles (not shown) along the forecast track (at 12, 24, 36, 48, 60, 72, 96, 120 hours). The size of each circle is set so that two-thirds of historical official forecast errors over a 5-year sample fall within the circle.';
 
+/**
+ * What the ENSO "Ocean & atmosphere" control's lines and marks mean
+ * (src/layers/enso-flow.ts). The map key keeps the bins and the live state
+ * line; these sentences left it for the briefing. Typed here so the briefing
+ * imports no flow table into another chunk; tests/terrain-coverage.test.mjs
+ * holds the mask sentence to the key's own (FLOW_WORDS.mask).
+ */
+// DRAFT wording (DR-177): the key's own sentences, unchanged (C-fit DRAFT 6 to 9, 11 and 12), except that the
+// bins sentence names the marks it speaks of, since the bins themselves stay in the key.
+export const FLOW_TECHNICAL_NOTES: readonly string[] = [
+  'Line pace shows relative speed within this field; it is not real time. Lines show the modeled flow at one instant, not the path of anything carried by it.',
+  'Marks move the way the primary waves travel, all at one display speed; wave speed is not shown. The water does not travel with the marks. No marks within one grid cell of the coast or where the model has no water value; no marks does not mean calm water.',
+  'Model output, not an observation. Line width and brightness, and mark length and brightness, are display bins, not thresholds. This is model context, independently timed from the observed SST map.'
+];
+
 export function renderMapTechnicalInformation(): string {
   return `<details class="impact-technical-information">
     <summary>Technical information</summary>
@@ -78,6 +93,8 @@ export function renderMapTechnicalInformation(): string {
     <h4>Ocean Temperature Anomaly</h4>
     <p>Surface temperature anomalies are shown for large lakes and inland seas as well as the ocean.</p>
     <p>"The Sea Surface Temperature Anomalies (L4, MUR) layer is created from the Group for High Resolution Sea Surface Temperature (GHRSST) Sea Surface Temperature Level 4, MUR sea surface temperature analysis product, which uses wavelets as basis functions in an optimal interpolation approach on a global 0.011 degree grid." <a href="https://www.earthdata.nasa.gov/news/worldview-image-archive/global-sea-surface-temperature-anomalies" target="_blank" rel="noopener">NASA Earthdata</a></p>
+    <h4>Ocean &amp; atmosphere</h4>
+    ${FLOW_TECHNICAL_NOTES.map((note) => `<p>${escapeHtml(note)}</p>`).join('')}
     <h4>Active Tropical Cyclones</h4>
     <p>"${NHC_CONE_DEFINITION}" <a href="https://www.nhc.noaa.gov/aboutcone.shtml" target="_blank" rel="noopener">National Hurricane Center, definition of the cone</a></p>
     <p>Basins covered: Atlantic, Eastern North Pacific, Central North Pacific.</p>

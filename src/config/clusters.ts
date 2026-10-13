@@ -120,7 +120,7 @@ export interface HazardClusterDef {
    * (DR-113); `flow=off` keeps such a mode off. Unset means off. ENSO sets it
    * to 'wind' (ENSO-FLOW-PLAN block E2, unit E2-4); no other mode sets it.
    */
-  readonly flowDefault?: 'currents' | 'wind' | 'waves';
+  readonly flowDefault?: Exclude<import('../state/enso-flow').EnsoFlowKind, 'off'>;
 }
 
 export const HAZARD_CLUSTERS: Record<HazardClusterKey, HazardClusterDef> = {

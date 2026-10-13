@@ -1,8 +1,14 @@
 import { HAZARD_CLUSTERS, type HazardClusterDef } from '../config/clusters';
 import { normalizeSidebarParam } from './url';
 
+/**
+ * Every flow kind, each its own `flow=` token: `jet` is GFS wind at 250 hPa.
+ * A new kind is one entry here; the tables keyed by kind then fail to
+ * compile until they carry it.
+ */
+export const ENSO_FLOW_KINDS = ['off', 'currents', 'wind', 'jet', 'waves'] as const;
 /** Additive ENSO context preferences, independent of the SST date rail. */
-export type EnsoFlowKind = 'off' | 'currents' | 'wind' | 'waves';
+export type EnsoFlowKind = (typeof ENSO_FLOW_KINDS)[number];
 export type EnsoFlowInk = 'light' | 'dark';
 
 export interface EnsoFlowPreference {
@@ -41,7 +47,7 @@ export function parseEnsoFlowParams(
   const values = params.getAll('flow');
   // No key reads as the mode default, which is itself a kind or off.
   const value = values.length > 1 ? null : (values[0] ?? modeDefault);
-  const kind = value === 'currents' || value === 'wind' || value === 'waves' ? value : 'off';
+  const kind = ENSO_FLOW_KINDS.find((known) => known === value) ?? 'off';
   const inks = params.getAll('flowink');
   return { kind, ink: inks.length === 1 && inks[0] === 'dark' ? 'dark' : 'light' };
 }

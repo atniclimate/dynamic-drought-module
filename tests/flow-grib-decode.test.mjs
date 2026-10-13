@@ -8,7 +8,9 @@
  * Range GET from its .idx line: the 1p00 10 m UGRD/VGRD pair (DRT 5.3, a
  * negative reference value, no bitmap), the GFS-Wave wcoast.0p16 HTSGW and
  * DIRPW pair (DRT 5.40 with a bitmap, its own grid header) and one
- * global.0p25 HTSGW (DRT 5.40, a 568,995-wide single-row codestream).
+ * global.0p25 HTSGW (DRT 5.40, a 568,995-wide single-row codestream). The
+ * 1p00 250 hPa UGRD/VGRD pair of the same file was cut on 2026-10-13 for the
+ * jet-level kind (DRT 5.3, isobaric surface, tenths of m/s).
  * eccodes values are kept as sampled points (every 97th point, float64),
  * never whole arrays, with the masked count and a SHA-256 of the full
  * validity mask (reference.json says how each was made).
@@ -369,6 +371,38 @@ test('decodes 1p00 10 m UGRD with a negative reference value to eccodes within 2
     assert.equal(nanMismatch, 0);
     assert.equal(compared, fx.info.sampledCount);
     assert.ok(maxDiff <= 2e-5, `${name}: max |decoded - eccodes| = ${maxDiff}`);
+  }
+});
+
+test('decodes 1p00 250 hPa UGRD and VGRD to eccodes within 2e-5, and only as the isobaric surface asked for', () => {
+  const JET_SURFACE = { type: 100, value: 25000 };
+  const TEN_METRE = { type: 103, value: 10 };
+  const refused = (e) => e instanceof GribError && e.code === 'expectation';
+  for (const [name, number] of [
+    ['gfs1p00-UGRD-250mb-f006', 2],
+    ['gfs1p00-VGRD-250mb-f006', 3]
+  ]) {
+    const fx = fixture(name);
+    assert.equal(fx.info.typeOfLevel, 'isobaricInhPa');
+    assert.equal(fx.info.level, 250);
+    const expect = { ...WIND_EXPECT(number), surface: JET_SURFACE };
+    const f = decodeGrib2(fx.bytes, expect);
+    assert.equal(f.packing.template, 3);
+    assert.equal(f.packing.reference, fx.info.referenceValue);
+    assert.equal(f.packing.bitsPerValue, fx.info.bitsPerValue);
+    assert.equal(f.bitmap, false);
+    assert.deepEqual([f.surface.type, f.surface.value], [100, 25000]);
+    assert.deepEqual([f.grid.ni, f.grid.nj, f.grid.la1, f.grid.lo1, f.grid.scanMode], [360, 181, 90, 0, 0]);
+    assert.equal(f.refTime, CYCLE);
+    assert.equal(f.validTime, CYCLE + 6 * 3600_000);
+    assert.equal(nanCount(f.values), 0);
+    const { maxDiff, nanMismatch, compared } = compareSampled(f.values, fx);
+    assert.equal(nanMismatch, 0);
+    assert.equal(compared, fx.info.sampledCount);
+    assert.ok(maxDiff <= 2e-5, `${name}: max |decoded - eccodes| = ${maxDiff}`);
+    // Same variable at another level: neither message can stand in for the other.
+    assert.throws(() => decodeGrib2(fx.bytes, { ...expect, surface: TEN_METRE }), refused, `${name} read as 10 m`);
+    assert.throws(() => decodeGrib2(fixture(name.replace('250mb', '10m')).bytes, expect), refused, `${name}: the 10 m message read as 250 hPa`);
   }
 });
 
@@ -868,7 +902,9 @@ test('a 5.3 message whose section 7 is not consumed to its last byte is refused'
 test('every committed 5.3 fixture consumes section 7 to its last byte', (t) => {
   for (const [name, number] of [
     ['gfs1p00-UGRD-10m-f006', 2],
-    ['gfs1p00-VGRD-10m-f006', 3]
+    ['gfs1p00-VGRD-10m-f006', 3],
+    ['gfs1p00-UGRD-250mb-f006', 2],
+    ['gfs1p00-VGRD-250mb-f006', 3]
   ]) {
     const msg = fixture(name).bytes;
     const { usedBits, sectionBits } = complexBitsUsed(msg);

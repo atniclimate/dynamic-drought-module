@@ -29,7 +29,24 @@ function synced(search, state, panelMounted = false) {
   } finally { browser.restore(); }
 }
 
-for (const kind of ['off', 'waves', 'currents']) {
+const { ENSO_FLOW_KINDS, parseEnsoFlowParams, writeEnsoFlowParams } = await import('../src/state/enso-flow.ts');
+
+test('every flow kind is its own flow= token, read and written back unchanged', () => {
+  assert.deepEqual(ENSO_FLOW_KINDS.slice(0, 1), ['off']);
+  assert.ok(ENSO_FLOW_KINDS.includes('jet'), 'jet-level wind is a kind');
+  for (const kind of ENSO_FLOW_KINDS) {
+    assert.deepEqual(parseEnsoFlowParams(new URLSearchParams(`flow=${kind}`), 'off'), { kind, ink: 'light' });
+    const params = new URLSearchParams('flow=stale');
+    writeEnsoFlowParams(params, { kind, ink: 'dark' }, 'off');
+    assert.equal(params.get('flow'), kind === 'off' ? null : kind);
+    assert.equal(params.get('flowink'), kind === 'off' ? null : 'dark');
+  }
+  assert.equal(parseEnsoFlowParams(new URLSearchParams('flow=jetstream'), 'wind').kind, 'off', 'an unknown token is off');
+  assert.equal(parseEnsoFlowParams(new URLSearchParams('flow=jet&flow=wind'), 'wind').kind, 'off', 'a duplicate is off');
+  assert.equal(parseEnsoFlowParams(new URLSearchParams(), 'jet').kind, 'jet', 'no key reads the mode default');
+});
+
+for (const kind of ENSO_FLOW_KINDS.filter((kind) => kind !== 'wind')) {
   test(`a newly configured flow mode preserves explicit ${kind} before its surface mounts`, () => {
     const key = 'test-future-flow-mode';
     HAZARD_CLUSTERS[key] = { ...HAZARD_CLUSTERS.enso, urlToken: key, flowDefault: 'wind' };

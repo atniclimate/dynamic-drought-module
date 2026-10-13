@@ -502,7 +502,10 @@ function sstKey(): KeySpec {
  * The direction arrows' own row, after the SST attribution and apart from
  * the SST "Observed" row: two products, two clocks (docs/design/README.md,
  * DDM-UI-007). Every word is the arrows' module's own; this only joins them.
- * No row while the arrows are off or their layer is inactive.
+ * For the NODD kinds the notes are the bins and any live-state sentence; what
+ * the lines and marks mean reads in the Impact Briefing
+ * (src/ui/map-technical-information.ts). No row while the arrows are off or
+ * their layer is inactive.
  */
 function ensoFlowRow(): { readonly html: string; readonly ariaLabel: string } {
   const flow = ensoFlowSnapshot;

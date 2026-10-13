@@ -268,9 +268,10 @@ export class FlowRibbonLayer implements CustomLayerInterface {
       this.gpu = null;
       this.gpuEpoch++;
     };
-    const pace = paceFor(this.field.kind);
-    this.particles = this.field.kind === 'wind' ? new Particles(this.field, pace) : null;
-    this.marks = this.field.kind === 'waves' ? new CrestMarks(this.field) : null;
+    // Waves draw crest marks; every wind kind draws ribbons at its own pace.
+    const waves = this.field.kind === 'waves';
+    this.particles = waves ? null : new Particles(this.field, paceFor(this.field.kind));
+    this.marks = waves ? new CrestMarks(this.field) : null;
   }
 
   get isRunning(): boolean {

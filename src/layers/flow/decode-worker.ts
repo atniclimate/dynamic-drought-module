@@ -28,26 +28,40 @@ const HOUR = 3_600_000;
 
 /** GFS 10 m UGRD and VGRD, m/s: above the strongest sustained surface wind estimated in any tropical cyclone (about 96 m/s). */
 export const WIND_COMPONENT_MAX_MS = 100;
+/**
+ * GFS 250 hPa UGRD and VGRD, m/s. The 10 m bound would refuse real fields:
+ * the fastest component decoded so far is 92.3 m/s (the 2026-10-13 12Z cycle,
+ * in autumn; admission gfs-runtime-nodd) and winter jets are stronger. 150
+ * leaves about half again that for a model peak.
+ */
+export const JET_COMPONENT_MAX_MS = 150;
 /** GFS-Wave HTSGW, m: the largest buoy-measured significant wave height is about 19 m; 30 m leaves room for a model peak. */
 export const WAVE_HEIGHT_MAX_M = 30;
 /** GFS-Wave DIRPW, degrees true clockwise from north: 360 is accepted in case the issuer writes north as 360. */
 export const WAVE_DIRECTION_MAX_DEG = 360;
 
-/** The inclusive range each source message's unmasked values must lie in, by `.idx` variable. */
+/**
+ * The inclusive range each source message's unmasked values must lie in, by
+ * `.idx` variable, or by `VAR:LEVEL` where one level of a variable needs its
+ * own range (a level with no row of its own takes the variable's).
+ */
 export const PLAUSIBLE_RANGE: Readonly<Record<string, readonly [number, number]>> = {
   UGRD: [-WIND_COMPONENT_MAX_MS, WIND_COMPONENT_MAX_MS],
   VGRD: [-WIND_COMPONENT_MAX_MS, WIND_COMPONENT_MAX_MS],
+  'UGRD:250 mb': [-JET_COMPONENT_MAX_MS, JET_COMPONENT_MAX_MS],
+  'VGRD:250 mb': [-JET_COMPONENT_MAX_MS, JET_COMPONENT_MAX_MS],
   HTSGW: [0, WAVE_HEIGHT_MAX_M],
   DIRPW: [0, WAVE_DIRECTION_MAX_DEG]
 };
 
 /**
  * Refuse (RangeError) a decoded field holding any unmasked value outside its
- * variable's range, anywhere on the grid; only wave fields allow masked NaNs. A variable
+ * variable's range (its level's, where the level has one), anywhere on the
+ * grid; only wave fields allow masked NaNs. A variable
  * with no range is refused too. Exported for the tests.
  */
-export function checkPlausible(variable: string, values: Float32Array): void {
-  const range = PLAUSIBLE_RANGE[variable];
+export function checkPlausible(variable: string, values: Float32Array, level?: string): void {
+  const range = PLAUSIBLE_RANGE[`${variable}:${level}`] ?? PLAUSIBLE_RANGE[variable];
   if (!range) throw new RangeError(`${variable} has no plausibility bound`);
   const [lo, hi] = range;
   const allowsMask = variable === 'DIRPW' || variable === 'HTSGW';
@@ -86,7 +100,7 @@ export function buildPacket(kind: FlowKind, values: readonly Float32Array[], cyc
     throw new Error(`${kind}: expected ${s.messages.length} fields of ${ni}x${nj}`);
   }
   // The whole grid, not only the crop: a value out of bound anywhere marks the message as damaged.
-  s.messages.forEach((message, k) => checkPlausible(message.variable, values[k] as Float32Array));
+  s.messages.forEach((message, k) => checkPlausible(message.variable, values[k] as Float32Array, message.level));
   const c = s.crop ?? { column0: 0, row0: 0, nx: ni, ny: nj };
   if (c.row0 < 0 || c.row0 + c.ny > nj || c.nx > ni) throw new Error(`${kind}: the crop leaves the grid`);
   const n = c.nx * c.ny;
@@ -114,7 +128,7 @@ export function buildPacket(kind: FlowKind, values: readonly Float32Array[], cyc
         v[i] = to[1];
         m[i] = y;
       } else {
-        // Wind: a = UGRD, b = VGRD, already TO; never rotated.
+        // Wind at either level: a = UGRD, b = VGRD, already TO; never rotated.
         u[i] = x;
         v[i] = y;
       }
