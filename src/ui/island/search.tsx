@@ -275,7 +275,8 @@ export function Search(props: SearchProps): preact.JSX.Element {
       event.preventDefault();
       const chosen = activeRow ?? flatRows[0];
       if (chosen) selectItem(chosen.item);
-    } else if (event.key === 'Escape') {
+    } else if (event.key === 'Escape' && query) {
+      // An empty box leaves Escape unhandled so the sheet and studio close on it.
       event.preventDefault();
       setQuery('');
       setHighlightedKey(null);
