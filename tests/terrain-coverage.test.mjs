@@ -41,10 +41,10 @@ const {
 } = await import('../src/config/terrain-coverage.ts');
 const {
   FIRE3D_COVERAGE_NOTE,
-  TERRAIN_EDGE_BAND_COUNT,
-  TERRAIN_EDGE_HALF_WIDTH_DEG,
+  TERRAIN_EDGE_PAINT,
+  fire3dCoverageNote,
   fire3dTerrainCoverageSentence,
-  terrainEdgeBands
+  terrainEdgeLine
 } = await import('../src/config/fire3d-presentation.ts');
 
 test('each sentence carries its own zoom and never the other', () => {
@@ -73,37 +73,66 @@ test('the map key derives its terrain sentence instead of typing a zoom by hand'
   assert.ok(!/detail ends at zoom \d/.test(source), 'map-key.ts types no zoom figure by hand');
 });
 
-function ringArea(ring) {
-  let sum = 0;
-  for (let i = 0; i < ring.length - 1; i += 1) {
-    sum += ring[i][0] * ring[i + 1][1] - ring[i + 1][0] * ring[i][1];
+/** A zoom-only `interpolate` expression's value at `zoom` (linear or exponential). */
+function evaluateZoom(expr, zoom) {
+  const [op, [kind, base = 1], input, ...stops] = expr;
+  assert.equal(op, 'interpolate');
+  assert.deepEqual(input, ['zoom']);
+  if (zoom <= stops[0]) return stops[1];
+  for (let i = 2; i < stops.length; i += 2) {
+    const z0 = stops[i - 2], z1 = stops[i], v0 = stops[i - 1], v1 = stops[i + 1];
+    if (zoom > z1) continue;
+    const t = kind === 'linear' || base === 1
+      ? (zoom - z0) / (z1 - z0)
+      : (base ** (zoom - z0) - 1) / (base ** (z1 - z0) - 1);
+    return v0 + t * (v1 - v0);
   }
-  return sum / 2;
+  return stops[stops.length - 1];
 }
 
-test('the edge fade straddles the archive box and peaks at its edge', () => {
+const pxPerDegree = (zoom) => (512 * 2 ** zoom) / 360;
+
+test('the edge fade is one blurred line on the archive box: a true gradient, no bands', () => {
   const box = FIRE3D_TERRAIN_COVERAGE;
-  const { features } = terrainEdgeBands(box);
-  assert.equal(features.length, 2 * TERRAIN_EDGE_BAND_COUNT);
-  const opacities = features.map((f) => f.properties.opacity);
-  // Outermost band first, innermost last: rising to the edge, then falling.
-  assert.deepEqual(opacities, [...opacities].reverse());
-  const peak = Math.max(...opacities);
-  assert.equal(opacities[TERRAIN_EDGE_BAND_COUNT - 1], peak);
-  assert.equal(opacities[TERRAIN_EDGE_BAND_COUNT], peak);
-  for (const o of opacities) assert.ok(o > 0 && o < 1);
-  assert.ok(opacities[0] < 0.1, 'the outermost band is nearly clear');
-  for (const f of features) {
-    const [outer, hole] = f.geometry.coordinates;
-    assert.equal(f.geometry.coordinates.length, 2);
-    assert.ok(ringArea(outer) > 0 && ringArea(hole) < 0, 'hole wound against the outer ring');
+  const line = terrainEdgeLine(box);
+  assert.equal(line.geometry.type, 'LineString');
+  // Closed on the box itself, so the peak sits on the seam.
+  assert.deepEqual(line.geometry.coordinates, [
+    [box.west, box.south], [box.east, box.south], [box.east, box.north],
+    [box.west, box.north], [box.west, box.south]
+  ]);
+  const paint = TERRAIN_EDGE_PAINT;
+  for (const zoom of [5, 6, 7, 8, 9, 11]) {
+    const width = evaluateZoom(paint['line-width'], zoom);
+    // Blur of half the width: alpha falls linearly from the seam to zero at both sides.
+    assert.equal(evaluateZoom(paint['line-blur'], zoom), width / 2);
   }
-  // The band just outside the box ends exactly on its edge, and the band
-  // just inside starts there: the edge itself sits under the peak.
-  const outside = features[TERRAIN_EDGE_BAND_COUNT - 1].geometry.coordinates[1];
-  const inside = features[TERRAIN_EDGE_BAND_COUNT].geometry.coordinates[0];
-  assert.deepEqual(outside[0], [box.west, box.south]);
-  assert.deepEqual(inside[0], [box.west, box.south]);
-  const far = features[0].geometry.coordinates[0][0];
-  assert.deepEqual(far, [box.west - TERRAIN_EDGE_HALF_WIDTH_DEG, box.south - TERRAIN_EDGE_HALF_WIDTH_DEG]);
+  // Close in, about half a degree across; the seam carries the peak.
+  const close = evaluateZoom(paint['line-width'], 9) / pxPerDegree(9);
+  assert.ok(Math.abs(close - 0.5) < 0.01, `half a degree at zoom 9, got ${close}`);
+  assert.ok(evaluateZoom(paint['line-opacity'], 9) >= 0.9, 'opaque enough at the seam to hide it');
+  // At regional zoom it is narrow in screen space and nearly clear: no picture frame.
+  assert.ok(evaluateZoom(paint['line-width'], 5) <= 8);
+  assert.equal(evaluateZoom(paint['line-opacity'], 4), 0);
+  // Held in screen space past the archive's depth instead of swallowing the view.
+  assert.equal(evaluateZoom(paint['line-width'], 14), evaluateZoom(paint['line-width'], 9));
+});
+
+test('the Impact Briefing never prints the 3D scene\'s unresolved zoom 8 as a 3D relief claim', async () => {
+  const { renderMapTechnicalInformation, setMapTechnicalNote } =
+    await import('../src/ui/map-technical-information.ts');
+  const briefing = () => /<p id="impact-technical-fire3d">([^<]*)<\/p>/.exec(renderMapTechnicalInformation())[1];
+  const decode = (s) => s.replace(/&#039;/g, "'").replace(/&amp;/g, '&');
+  // Before any scene: the flat Terrain Shading's own sentence, zoom 8, by name.
+  assert.ok(decode(briefing()).startsWith(HILLSHADE_COVERAGE_SENTENCE));
+  assert.doesNotMatch(briefing(), /3D relief uses/);
+  // The control hands over its unresolved bundled form while no scene is active.
+  setMapTechnicalNote('fire3d', FIRE3D_COVERAGE_NOTE);
+  assert.ok(decode(briefing()).startsWith(HILLSHADE_COVERAGE_SENTENCE));
+  assert.doesNotMatch(briefing(), /3D relief uses/);
+  // An active scene on the deep archive: the sidebar's own sentence, verbatim.
+  const deep = fire3dCoverageNote({ ...FIRE3D_TERRAIN_COVERAGE, maxZoom: 10 });
+  setMapTechnicalNote('fire3d', deep);
+  assert.equal(decode(briefing()), deep);
+  assert.match(briefing(), /^3D relief uses .*zoom 10;/);
 });

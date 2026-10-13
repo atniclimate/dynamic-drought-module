@@ -196,41 +196,35 @@ export function fire3dTerrainCoverageSentence(terrain: number | TerrainCoverage)
  * The 3D scene's edge fade. Outside the archive box MapLibre has no
  * elevation, so relief and its shading stop on a straight line. MapLibre has
  * no spatially varying terrain exaggeration, hillshade or DEM alpha, so the
- * cheapest soft transition is a draped veil: bands of the scene's own fog
- * colour straddling the box edge, most opaque at the edge and clearing to
- * nothing half a degree either side. It hides the seam, not the geometric
+ * cheapest soft transition is a draped veil: one line of the scene's own fog
+ * colour on the box edge, blurred by half its width so its alpha falls
+ * linearly from the seam to nothing at both sides (a true gradient, no
+ * bands). Its width is screen pixels by zoom: a few pixels and clear while
+ * the whole region is in view (no picture frame), about half a degree across
+ * close in, held there past zoom 9. It hides the seam, not the geometric
  * step; nothing about the elevation changes.
  */
-export const TERRAIN_EDGE_BAND_COUNT = 6; // per side; the ribbon ladder's count, a fade not stripes
-export const TERRAIN_EDGE_HALF_WIDTH_DEG = 0.5;
-export const TERRAIN_EDGE_PEAK_OPACITY = 0.7;
-export const TERRAIN_EDGE_COLOR = MAP_GROUND_COLOR;
+const TERRAIN_EDGE_FULL_ZOOM = 9;
+// Half a degree in 512-pixel-tile screen pixels at the full zoom (364).
+const TERRAIN_EDGE_FULL_PX = Math.round((0.5 * 512 * 2 ** TERRAIN_EDGE_FULL_ZOOM) / 360);
+const edgeWidth = (scale: number): maplibregl.ExpressionSpecification =>
+  ['interpolate', ['exponential', 2], ['zoom'], 5, 6 * scale, TERRAIN_EDGE_FULL_ZOOM, TERRAIN_EDGE_FULL_PX * scale];
 
-/** The box inset by `d` degrees (negative grows it), as a counter-clockwise ring. */
-function insetRing(box: TerrainCoverage, d: number): GeoJSON.Position[] {
-  const w = box.west + d, s = box.south + d, e = box.east - d, n = box.north - d;
-  return [[w, s], [e, s], [e, n], [w, n], [w, s]];
-}
+export const TERRAIN_EDGE_PAINT: NonNullable<maplibregl.LineLayerSpecification['paint']> = {
+  'line-color': MAP_GROUND_COLOR,
+  'line-width': edgeWidth(1),
+  'line-blur': edgeWidth(0.5),
+  'line-opacity': ['interpolate', ['linear'], ['zoom'], 4, 0, 6, 0.9]
+};
 
-/** The fade's bands, outermost first: each a ring with a clockwise hole and a linear opacity at its midpoint. */
-export function terrainEdgeBands(
-  box: TerrainCoverage
-): GeoJSON.FeatureCollection<GeoJSON.Polygon, { opacity: number }> {
-  const step = TERRAIN_EDGE_HALF_WIDTH_DEG / TERRAIN_EDGE_BAND_COUNT;
-  const features: GeoJSON.Feature<GeoJSON.Polygon, { opacity: number }>[] = [];
-  for (let i = -TERRAIN_EDGE_BAND_COUNT; i < TERRAIN_EDGE_BAND_COUNT; i += 1) {
-    const distance = Math.abs(i + 0.5) / TERRAIN_EDGE_BAND_COUNT;
-    const opacity = Math.round(TERRAIN_EDGE_PEAK_OPACITY * (1 - distance) * 1000) / 1000;
-    features.push({
-      type: 'Feature',
-      properties: { opacity },
-      geometry: {
-        type: 'Polygon',
-        coordinates: [insetRing(box, i * step), insetRing(box, (i + 1) * step).reverse()]
-      }
-    });
-  }
-  return { type: 'FeatureCollection', features };
+/** The archive box's edge as one closed line. */
+export function terrainEdgeLine(box: TerrainCoverage): GeoJSON.Feature<GeoJSON.LineString> {
+  const { west: w, south: s, east: e, north: n } = box;
+  return {
+    type: 'Feature',
+    properties: {},
+    geometry: { type: 'LineString', coordinates: [[w, s], [e, s], [e, n], [w, n], [w, s]] }
+  };
 }
 
 /**

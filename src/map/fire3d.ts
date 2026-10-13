@@ -55,11 +55,11 @@ import {
   FIRE3D_SKY_CLEAR_SPECIFICATION,
   FIRE3D_SKY_SPECIFICATION,
   FIRE3D_TERRAIN_EXAGGERATION,
-  TERRAIN_EDGE_COLOR,
+  TERRAIN_EDGE_PAINT,
   classifyTerrainCoverage,
   fire3dCoverageNote,
   isWithinTerrainCoverage,
-  terrainEdgeBands
+  terrainEdgeLine
 } from '../config/fire3d-presentation';
 import type { TerrainCoverageReading } from '../config/fire3d-presentation';
 import { terrainCoverageFromHeader, FIRE3D_TERRAIN_COVERAGE,
@@ -805,21 +805,16 @@ async function activateScene(map: maplibregl.Map): Promise<void> {
     failScene(map, 'Terrain setup failed.', err);
     return;
   }
-  // The edge fade over the archive box that resolved (terrainEdgeBands). It
+  // The edge fade over the archive box that resolved (TERRAIN_EDGE_PAINT). It
   // is cosmetic and non-fatal: a failure leaves the hard seam and nothing else.
   try {
     const beforeId = firstLayerIdAbove(map, BOTTOM_STACK_IDS);
-    map.addSource(TERRAIN_EDGE_ID, { type: 'geojson', data: terrainEdgeBands(resolved.coverage) });
+    map.addSource(TERRAIN_EDGE_ID, { type: 'geojson', data: terrainEdgeLine(resolved.coverage) });
     map.addLayer({
       id: TERRAIN_EDGE_ID,
-      type: 'fill',
+      type: 'line',
       source: TERRAIN_EDGE_ID,
-      paint: {
-        'fill-color': TERRAIN_EDGE_COLOR,
-        'fill-opacity': ['get', 'opacity'],
-        // No outline pass: it would double the veil along every band seam.
-        'fill-antialias': false
-      }
+      paint: TERRAIN_EDGE_PAINT
     }, beforeId);
   } catch (err) {
     warnComponent('terrain edge fade', err);

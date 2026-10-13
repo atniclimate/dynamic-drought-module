@@ -1,7 +1,19 @@
+import { FIRE3D_COVERAGE_NOTE } from '../config/fire3d-presentation';
+import { HILLSHADE_COVERAGE_SENTENCE } from '../config/terrain-coverage';
 import { escapeHtml } from '../util/escape';
 
 type Overview = 'drought' | 'wildfire' | 'fire3d';
 type PlantStress = import('../layers/wildfire-dryness').DrynessBriefing | null;
+
+/**
+ * The 3D paragraph while no scene has resolved an archive: the flat Terrain
+ * Shading's own sentence (bundled, zoom 8), never a 3D relief depth the
+ * scene may not read (it resolves the deep archive's header on entry).
+ */
+const FIRE3D_IDLE_NOTE =
+  `${HILLSHADE_COVERAGE_SENTENCE} The 3D scene lists its own archive and that archive's detail ` +
+  'under 3D information while it is open. Bundled structure data covers the central Oregon ' +
+  'pilot area only, from zoom 13.';
 
 /** Methodology lives with the briefing; updating it never fetches a source. */
 const notes: Record<Overview, string> = {
@@ -9,16 +21,18 @@ const notes: Record<Overview, string> = {
     'The North American Drought Monitor navigation overview uses an approximate area-weighted mean category index over assessed land. Outline width represents the D1 through D4 share. The overview is inferred from NADM polygons, not an NADM-issued regional category; hatching marks partial coverage.',
   wildfire:
     'The wildfire navigation overview first checks current mapped NIFC wildfire perimeters. A zero count does not establish no active wildfire. Only a successful zero-count check permits the USFS Wildfire Hazard Potential 2023 static overview; failed checks remain unavailable. WHP percentages cover classified land in the covered United States portion. Hatching marks partial coverage; desaturation and stippling identify static potential.',
-  fire3d:
-    'Terrain relief uses USGS 3D Elevation Program data for the Pacific Northwest. Outside the active archive extent the ground renders flat, a coverage gap. Closer views stretch the deepest archived tiles. Active archive detail and coverage are listed under 3D information. Bundled structures cover the central Oregon pilot area only.'
+  fire3d: FIRE3D_IDLE_NOTE
 };
 /** The Wildfire 3D plant-stress ground's full text, while a product is on the map (src/layers/wildfire-dryness.ts). */
 let plantStress: PlantStress = null;
 
 export function setMapTechnicalNote(overview: Overview, text: string): void {
-  notes[overview] = text;
-  const node = document.getElementById(`impact-technical-${overview}`);
-  if (node) node.textContent = text;
+  // shortcut: the 3D control sends its unresolved bundled form whenever no scene is
+  // active; an active scene on the bundled archive matches too and reads the idle
+  // form, which stays true. Upgrade if the control passes the scene state itself.
+  notes[overview] = overview === 'fire3d' && text === FIRE3D_COVERAGE_NOTE ? FIRE3D_IDLE_NOTE : text;
+  const node = typeof document === 'undefined' ? null : document.getElementById(`impact-technical-${overview}`);
+  if (node) node.textContent = notes[overview];
 }
 
 function plantStressHtml(): string {
