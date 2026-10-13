@@ -176,6 +176,14 @@ let moveendHandler: (() => void) | null = null;
 let refreshTimer: number | null = null;
 
 /**
+ * The cache key and request token of the network fetch now in flight, or null.
+ * A `moveend` that lands on the same bucketed view while it runs (the boot
+ * camera settling) must not abort and repeat the slow national query; a token
+ * the module has moved past (cancel, teardown) no longer counts.
+ */
+let inFlight: { readonly key: string; readonly token: number } | null = null;
+
+/**
  * The status last reported for actually-rendered data (`ready` or
  * `no-data`), or null when nothing is rendered (never activated, or torn
  * down). Lets `cancelActivation` restore the honest status of what is still
@@ -386,6 +394,7 @@ async function fetchAndApply(map: maplibregl.Map): Promise<void> {
   masterController = new AbortController();
   const signal = masterController.signal;
   const unlink = linkAbort(masterController, activationSignal);
+  inFlight = { key: cacheKey, token };
 
   reportStatus('loading');
 
@@ -411,6 +420,7 @@ async function fetchAndApply(map: maplibregl.Map): Promise<void> {
     truncated = isTruncated(raw);
   } catch (err) {
     unlink();
+    if (inFlight?.token === token) inFlight = null;
     // Aborted or superseded means a newer request owns the view; drop it
     // per invariant 5, saying so once at debug level and nowhere louder.
     if (signal.aborted || token !== requestSeq) {
@@ -424,6 +434,7 @@ async function fetchAndApply(map: maplibregl.Map): Promise<void> {
   }
 
   unlink();
+  if (inFlight?.token === token) inFlight = null;
   // A late response to a superseded or torn-down request must not render.
   if (signal.aborted || token !== requestSeq) {
     console.debug(`[aiannh] request ${token} dropped: a late response after intent changed`);
@@ -560,6 +571,14 @@ function attachRefresh(map: maplibregl.Map): void {
     if (refreshTimer !== null) window.clearTimeout(refreshTimer);
     refreshTimer = window.setTimeout(() => {
       refreshTimer = null;
+      // Same view as the fetch already running: let it finish, do not abort it.
+      if (
+        inFlight &&
+        inFlight.token === requestSeq &&
+        inFlight.key === buildCacheKey(map, resolveZoomBucket(map))
+      ) {
+        return;
+      }
       void fetchAndApply(map);
     }, REFRESH_DEBOUNCE_MS);
   };
