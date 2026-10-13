@@ -237,7 +237,7 @@ function isPending(snap: CommittedShellSnapshot): boolean {
 const DUPLICATE_SURFACE_DETAIL: Partial<Record<HazardClusterKey, string>> = {
   heat:
     'the National Weather Service HeatRisk sequence publishes seven daily ' +
-    'periods on one surface, and the day control selects the day.',
+    'periods on one surface, and the Valid date control in the key selects the day.',
   enso:
     'the sea-surface-temperature anomaly field is one analysed daily ' +
     'surface at every horizon.'
@@ -287,7 +287,11 @@ function horizonDisabledReason(
 
   const signature = horizonSurfaceSignature(snap.cluster, key);
   if (signature === null) {
-    return `No verified ${key} ${HAZARD_CLUSTERS[snap.cluster].title} map surface exists yet.`;
+    return (
+      `${HORIZON_CHROME[SHELL_HORIZON_KEY[key]].title} is off for ` +
+      `${HAZARD_CLUSTERS[snap.cluster].title}: no verified map source for ` +
+      'this time horizon exists yet, so none is shown rather than a guess.'
+    );
   }
 
   const idx = TEMPORAL_HORIZON_KEYS.indexOf(key);
@@ -530,6 +534,11 @@ function ShellDetails({ snap, framingNote }: {
   readonly framingNote: ReadonlySignal<string>;
 }) {
   const snapshot = snap.value;
+  const horizonNote = snapshot.cluster === 'custom'
+    ? ''
+    : TEMPORAL_HORIZON_KEYS.map((key) => horizonDisabledReason(snapshot, key))
+        .filter((reason) => reason !== null)
+        .join(' ');
   return (
     <>
       <Fire3DControl cluster={snapshot.cluster} />
@@ -542,6 +551,8 @@ function ShellDetails({ snap, framingNote }: {
         </p>
       </section>
       <p class="shell-minimap-note" id="shell-framing-note" aria-live="polite">{framingNote.value}</p>
+      {/* The disabled chips' reasons, visible: a hover title alone never reaches touch or the eye. */}
+      {horizonNote !== '' && <p class="shell-minimap-note" id="shell-horizon-note">{horizonNote}</p>}
     </>
   );
 }

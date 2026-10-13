@@ -532,6 +532,11 @@ function textAlternative(read: SequenceRead): string {
     .join('; ');
 }
 
+/** Every day read and every value 0: a verified absence, not a missing read (null stays unstated). */
+function allZero(values: readonly (HeatRiskValue | null)[]): boolean {
+  return values.length > 0 && values.every((value) => value === 0);
+}
+
 function selectedReadHtml(read: SequenceRead): string {
   const index = read.frames.findIndex((frame) => frame.day === selectedDay);
   const frame = read.frames[index];
@@ -582,6 +587,10 @@ function renderRead(read: SequenceRead): void {
       .join('') +
     '</div>' +
     selectedReadHtml(read) +
+    (allZero(read.values)
+      ? '<p class="heatrisk-sequence-selected" data-heatrisk-no-elevated>' +
+        '<strong>no elevated heat risk</strong> at this point in any of the seven days.</p>'
+      : '') +
     `<p id="heatrisk-sequence-alt" class="sr-only">Seven-day HeatRisk text alternative. ${escapeHtml(alternative)}.</p>` +
     '<p class="heatrisk-sequence-source">' +
     `<a href="${escapeHtml(URLS.nwsHeatRisk)}/info/iteminfo" target="_blank" rel="noopener">National Weather Service HeatRisk</a> · ` +
