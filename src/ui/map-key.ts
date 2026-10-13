@@ -73,6 +73,7 @@ import {
   TROPICAL_ISSUERS,
   TROPICAL_POINT_CLASSES,
   TROPICAL_POINT_INK,
+  TROPICAL_POINT_PAPER,
   TROPICAL_PART_NAMES,
   TROPICAL_TRACK,
   TROPICAL_WW_CLASSES,
@@ -1143,12 +1144,16 @@ function fireProductKeys(eligible: ReadonlySet<string>): readonly string[] {
   return (['spc-fire-weather', 'nifc-fires'] as const).filter((key) => eligible.has(key));
 }
 
-/** A neutral circle at a renderer class's size (the issuer's points are icons, not colours). */
+/**
+ * A neutral circle at a renderer class's size (the issuer's points are icons, not colours).
+ * The map draws the ink over a bright raster; the key panel is dark, so here the ink sits
+ * on a paper chip: a paper centre for a hollow circle and a paper ring around every circle.
+ */
 function tropicalCircle(radius: number, label: string, filled = false): string {
   const size = Math.round(radius * 2);
   return (
     '<span class="map-key-item"><span class="map-key-swatch" style="' +
-    `background:${filled ? TROPICAL_POINT_INK : 'transparent'};border:1.5px solid ${TROPICAL_POINT_INK};border-radius:50%;width:${size}px;height:${size}px` +
+    `background:${filled ? TROPICAL_POINT_INK : TROPICAL_POINT_PAPER};border:1.5px solid ${TROPICAL_POINT_INK};box-shadow:0 0 0 1px ${TROPICAL_POINT_PAPER};border-radius:50%;width:${size}px;height:${size}px` +
     `"></span>${escapeHtml(label)}</span>`
   );
 }
@@ -1215,11 +1220,11 @@ function tropicalRow(): { readonly html: string; readonly ariaLabel: string } | 
       tropicalGroup([
         tropicalCircle(7.5, 'Advisory position', true),
         tropicalCircle(7.5, 'Later positions'),
-        swatchItem(TROPICAL_TRACK.color, TROPICAL_PART_NAMES.track),
+        // The track is black on the map; the same paper ring as the circles keeps it visible on the dark panel.
+        swatchItem(TROPICAL_TRACK.color, TROPICAL_PART_NAMES.track).replace('style="', `style="box-shadow:0 0 0 1px ${TROPICAL_POINT_PAPER};`),
         swatchItem(TROPICAL_CONE.fill, TROPICAL_PART_NAMES.cone),
         ...TROPICAL_WW_CLASSES.map((c) => swatchItem(c.color, c.label))
-      ]),
-      '<span class="map-key-qualification" data-tropical-icons>Filled: the advisory position; hollow: later positions.</span>'
+      ])
     );
     aria += ` ${TROPICAL_POINT_CLASSES.map((c) => c.label).join(', ')}; ${TROPICAL_WW_CLASSES.map((c) => c.label).join(', ')}.`;
   }

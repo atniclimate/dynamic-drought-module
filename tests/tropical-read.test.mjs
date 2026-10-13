@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { registerHooks } from 'node:module';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -61,7 +61,7 @@ const fixtures = await import('./tropical-fixtures.ts');
 const reader = await import('../src/layers/tropical-read.ts');
 const { registry } = await import('../src/state/registry.ts');
 const layer = await import('../src/layers/tropical-cyclones.ts');
-const { TROPICAL_SLOTS } = await import('../src/config/tropical-presentation.ts');
+const { TROPICAL_SLOTS, TROPICAL_POINT_INK, TROPICAL_POINT_PAPER } = await import('../src/config/tropical-presentation.ts');
 
 const { tropicalAnswer, tropicalLayerId, EP5_LAYERS } = fixtures;
 const { readTropicalSweep, pendingTropicalReads } = reader;
@@ -314,6 +314,28 @@ test('popup: no qualification; the issuer-wording time note lives in the Impact 
 test('popup: a CP slot is issued by the Central Pacific Hurricane Center', () => {
   const model = popup.buildTropicalPointPopupModel({ ...fixtures.EP5_POINTS.features[0].properties, binnumber: 'CP2' });
   assert.equal(model.issuer.name, 'NOAA Central Pacific Hurricane Center');
+});
+
+const MAP_KEY_SOURCE = readFileSync(new URL('../src/ui/map-key.ts', import.meta.url), 'utf8');
+
+test('key: the point circles are ink on a paper chip that reads on the dark key panel', () => {
+  const circle = MAP_KEY_SOURCE.slice(MAP_KEY_SOURCE.indexOf('function tropicalCircle('), MAP_KEY_SOURCE.indexOf('function tropicalGroup('));
+  assert.ok(circle.includes('TROPICAL_POINT_PAPER'), 'the key circle has no paper chip behind its ink');
+  const luminance = (rgb) =>
+    rgb
+      .map((v) => (v / 255 <= 0.04045 ? v / 255 / 12.92 : ((v / 255 + 0.055) / 1.055) ** 2.4))
+      .reduce((sum, v, i) => sum + v * [0.2126, 0.7152, 0.0722][i], 0);
+  const hex = (color) => [1, 3, 5].map((i) => parseInt(color.slice(i, i + 2), 16));
+  const contrast = (a, b) => (Math.max(luminance(a), luminance(b)) + 0.05) / (Math.min(luminance(a), luminance(b)) + 0.05);
+  // The key panel is --glass-read, rgba(1,11,19,0.72); a white map behind it is its brightest case.
+  const panel = [1, 11, 19].map((v) => v * 0.72 + 255 * 0.28);
+  assert.ok(contrast(hex(TROPICAL_POINT_PAPER), panel) >= 3, 'the chip does not read on the key panel');
+  assert.ok(contrast(hex(TROPICAL_POINT_INK), hex(TROPICAL_POINT_PAPER)) >= 3, 'the ink does not read on its chip');
+});
+
+test('key: the filled and hollow swatches carry their own labels, with no sentence under them', () => {
+  assert.ok(!MAP_KEY_SOURCE.includes('data-tropical-icons'));
+  assert.ok(!/Filled: /.test(MAP_KEY_SOURCE));
 });
 
 test('popup: the one door names the selected place, else the place the region briefing describes; with neither there is no door', async () => {
