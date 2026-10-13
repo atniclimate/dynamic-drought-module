@@ -262,6 +262,18 @@ test.describe('S4b minimap', () => {
       MINIMAP_WHP.source.edition.match(/^\d{4}/)?.[0] ?? '',
     );
     await expect(minimap.locator('.shell-minimap-metric-note')).toHaveCount(0);
+    // The card's own label teaches the count-depth rule (hover), from the
+    // same sentence the briefing's Technical information reads.
+    await expect(minimap.locator('.shell-minimap-scale')).toHaveAttribute(
+      'title',
+      /Orange-red marks current mapped wildfire perimeters, deeper for more: 1, 2 to 9, 10 to 49, 50 or more per framing/,
+    );
+    // The Atlantic door label never touches the ALL button (6px gap floor).
+    const door = await minimap.locator('[data-ocean="atlantic"]').boundingBox();
+    const allBox = await minimap.locator('.shell-minimap-all').boundingBox();
+    expect(door).not.toBeNull();
+    expect(allBox).not.toBeNull();
+    expect(allBox!.y - (door!.y + door!.height)).toBeGreaterThanOrEqual(5.5);
     await expect(
       minimap.locator('[data-framing="plains-prairies"]'),
     ).toHaveAttribute('data-wildfire-condition', 'below-threshold');
@@ -301,6 +313,11 @@ test.describe('S4b minimap', () => {
     ).toBeNull();
     await page.locator('.shell-cluster-btn[data-cluster="enso"]').click();
     await expect(minimap.locator('.shell-minimap-metric-note')).toHaveCount(0);
+    // A sighted person learns why the card is dark: the visible line, not
+    // only the aria-label, says the framings are unshaded.
+    await expect(minimap.locator('.shell-minimap-unshaded-line')).toHaveText(
+      'Unshaded · see main map',
+    );
     await expect(pacific).toHaveAttribute('aria-label', /Framings are unshaded/);
     await expect(pacific).toHaveAttribute('aria-label', /Relative Oceanic Nino Index/);
     await expect(pacific).not.toHaveAttribute('aria-label', /Drought Monitor/);

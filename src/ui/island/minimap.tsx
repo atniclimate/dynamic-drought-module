@@ -463,6 +463,10 @@ const COUNT_TIER_TEXT = MINIMAP_WILDFIRE_COUNT_TIERS.map((tier, index) => {
   return next.min - 1 === tier.min ? `${tier.min}` : `${tier.min} to ${next.min - 1}`;
 }).join(', ');
 
+/** The count-depth rule, one sentence: the briefing note and the card's own
+ * label tooltip both read this constant so they cannot disagree. */
+const COUNT_DEPTH_NOTE = `Orange-red marks current mapped wildfire perimeters, deeper for more: ${COUNT_TIER_TEXT} per framing; a zero count does not establish no active wildfire.`;
+
 function wildfireMetricNote(snapshot: MinimapWildfireSnapshot): string {
   if (snapshot.status === 'loading' || snapshot.status === 'idle') {
     return (
@@ -478,7 +482,7 @@ function wildfireMetricNote(snapshot: MinimapWildfireSnapshot): string {
   }
   return (
     `NIFC browser check: ${checkedTimeLabel(snapshot.checkedAtUtc)}. ` +
-    `Orange-red marks current mapped wildfire perimeters, deeper for more: ${COUNT_TIER_TEXT} per framing; a zero count does not establish no active wildfire. ` +
+    `${COUNT_DEPTH_NOTE} ` +
     'Otherwise, WHP 2023 fills are orange above 50% High or Very High, yellow above 30% Moderate or higher, light below both thresholds, and dark for no data or an unavailable current check. ' +
     // vocab-allow: honesty disclaimer denying that static WHP is a forecast
     'Percentages are approximate shares of classified WHP land in the covered United States portion. WHP is static strategic context, not a forecast; hatching marks partial coverage. ' +
@@ -976,13 +980,16 @@ export function Minimap({
               : showWildfireMetric
                 ? wildfire.checkedAtUtc === null
                   ? scaleAccessibleText
-                  : `${scaleAccessibleText} ${checkedTimeLabel(wildfire.checkedAtUtc)} is the browser check time, not a source observation time.`
+                  : `${scaleAccessibleText} ${COUNT_DEPTH_NOTE} ${checkedTimeLabel(wildfire.checkedAtUtc)} is the browser check time, not a source observation time.`
               : scaleAccessibleText
           }
         >
           {scaleText}
         </span>
       </div>
+      {ensoScaleText !== null && (
+        <span class="shell-minimap-unshaded-line">{UNSHADED_SCALE_TEXT}</span>
+      )}
       <div
         class="shell-minimap-canvas"
         data-drought-status={showDroughtMetric ? drought.status : 'neutral'}
