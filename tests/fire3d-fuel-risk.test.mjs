@@ -1,8 +1,23 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-const { FLAT_FUEL_RISK_KEY, fuelRiskKeepsConsole, fuelRiskSwitch, revealScroll } =
+const { FLAT_FUEL_RISK_KEY, FUEL_RISK_TITLE, fireKeySections, fuelRiskKeepsConsole, fuelRiskSwitch, revealScroll } =
   await import('../src/ui/fire3d-fuel-risk.ts');
+
+test('Fuel risk on adds its section to the Wildfire key instead of replacing it', () => {
+  const keys = (...k) => new Set(k);
+  // Wildfire plus Fuel risk: the perimeters stay in the key beside the fuel risk section.
+  assert.deepEqual(fireKeySections(keys('nifc-fires', 'hms-smoke', 'usfs-whp')), { fire: true, whp: true });
+  assert.deepEqual(fireKeySections(keys('spc-fire-weather', 'nifc-fires', 'usfs-whp')), { fire: true, whp: true });
+  // Long Range: the potential layer alone keeps its own key.
+  assert.deepEqual(fireKeySections(keys('usfs-whp')), { fire: false, whp: true });
+  assert.deepEqual(fireKeySections(keys('spc-fire-weather')), { fire: true, whp: false });
+  // Neither the outlook nor the potential layer: the later surfaces keep their precedence.
+  assert.equal(fireKeySections(keys('nifc-fires', 'hms-smoke')), null);
+  assert.equal(fireKeySections(keys('usdm', 'nifc-fires')), null);
+  // One feature, one name a person can follow from the button to the key and the layer list.
+  assert.match(FUEL_RISK_TITLE, /^Fuel risk: .*Wildfire Hazard Potential$/);
+});
 
 test('the one Fuel risk switch acts on the 3D drape only while it is mounted, else on the flat issuer layer', () => {
   const base = { sceneActive: false, drapeMounted: false, cluster: 'wildfire', flatOn: false };

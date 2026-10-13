@@ -11,6 +11,28 @@
 /** The flat USFS Wildfire Hazard Potential surface (src/config/layers.ts). */
 export const FLAT_FUEL_RISK_KEY = 'usfs-whp';
 
+/**
+ * One name for one feature: the button's word ("Fuel risk") joined to the
+ * catalog's layer name, on the button's tooltip and on the key section the
+ * button adds, so a person can follow it to the layer list.
+ */
+export const FUEL_RISK_TITLE = 'Fuel risk: USFS Wildfire Hazard Potential';
+
+/**
+ * Which fire-family sections the map key draws, or null when neither the
+ * SPC outlook nor the potential layer is eligible (the later surfaces, and
+ * the NIFC-only Fire key, keep their own precedence in src/ui/map-key.ts).
+ * Fuel risk turned on over Wildfire adds the potential section to the Fire
+ * key rather than replacing it, since the display is Wildfire plus one layer.
+ */
+export function fireKeySections(
+  eligible: ReadonlySet<string>
+): { readonly fire: boolean; readonly whp: boolean } | null {
+  const whp = eligible.has(FLAT_FUEL_RISK_KEY);
+  if (!whp && !eligible.has('spc-fire-weather')) return null;
+  return { fire: eligible.has('spc-fire-weather') || eligible.has('nifc-fires'), whp };
+}
+
 /** What the switch acts on, or null when there is nothing to switch. */
 export type FuelRiskSwitch = 'drape' | 'flat' | null;
 

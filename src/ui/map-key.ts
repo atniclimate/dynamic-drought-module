@@ -66,6 +66,7 @@ import { watchDesktopMapSeat } from './map-control-seat';
 import { getTimeBarSpec, onTimeBarSpecChange } from './time-bar';
 import { MAP_GROUND_COLOR } from '../config/interface-tokens';
 import { WHP_3D_SHADE_CATEGORIES, WHP_3D_SHADE_QUALIFICATION, WHP_SHADE_CATEGORIES, WHP_SHADE_QUALIFICATION, WHP_SURFACE_OPACITY } from '../config/whp-shade';
+import { FUEL_RISK_TITLE, fireKeySections } from './fire3d-fuel-risk';
 
 export interface KeySpec {
   readonly label: string;
@@ -842,7 +843,7 @@ export function buildFireKey(
   };
 }
 
-export function buildWhpKey(): KeySpec {
+export function buildWhpKey(scaleLabel = 'USFS Wildfire Hazard Potential'): KeySpec {
   const categories = flatWhpShadeActive
     ? WHP_SHADE_CATEGORIES.map((category) => ({ ...category, color: `rgba(255,255,255,${category.opacity * WHP_SURFACE_OPACITY})` }))
     : USFS_WHP_PRESENTATION.categories;
@@ -852,7 +853,7 @@ export function buildWhpKey(): KeySpec {
     ariaLabel: qualification,
     itemsHtml:
       '<span class="map-key-scale" data-usfs-whp-key>' +
-      '<strong class="map-key-scale-label">USFS Wildfire Hazard Potential</strong>' +
+      `<strong class="map-key-scale-label">${escapeHtml(scaleLabel)}</strong>` +
       categories
         .map((category) => swatchItem(category.color, category.label))
         .join('') +
@@ -1119,15 +1120,35 @@ function hazardKey(): HazardKeyResult | null {
   const { active, loading, eligible } = keyEligibility();
   let spec: KeySpec | null = null;
   let productKeys: readonly string[] = [];
+  const fireSections = fireKeySections(eligible);
   if (eligible.has('heatrisk')) {
     spec = active.has('heatrisk') ? heatKey() : loadingKeySpec('heatrisk');
     productKeys = ['heatrisk'];
-  } else if (eligible.has('spc-fire-weather')) {
-    spec = buildFireKey(active, loading);
-    productKeys = fireProductKeys(eligible);
-  } else if (eligible.has('usfs-whp')) {
+  } else if (fireSections && !fireSections.fire) {
     spec = active.has('usfs-whp') ? buildWhpKey() : loadingKeySpec('usfs-whp');
     productKeys = ['usfs-whp'];
+  } else if (fireSections) {
+    // Fuel risk over Wildfire: the Fire key keeps every section and gains the potential one.
+    const fire = buildFireKey(active, loading);
+    spec = fire;
+    productKeys = fireProductKeys(eligible);
+    if (fireSections.whp) {
+      const whp = active.has('usfs-whp')
+        ? buildWhpKey(FUEL_RISK_TITLE)
+        : {
+            ariaLabel: 'loading.',
+            itemsHtml:
+              '<span class="map-key-scale" data-usfs-whp-key>' +
+              `<strong class="map-key-scale-label">${escapeHtml(FUEL_RISK_TITLE)}</strong>` +
+              `${loadingSectionRow('usfs-whp')}</span>`
+          };
+      spec = {
+        ...fire,
+        ariaLabel: `${fire.ariaLabel} ${FUEL_RISK_TITLE}, ${whp.ariaLabel}`,
+        itemsHtml: fire.itemsHtml + whp.itemsHtml
+      };
+      productKeys = [...productKeys, 'usfs-whp'];
+    }
   } else if (eligible.has('cdm-drought')) {
     spec = active.has('cdm-drought') ? cdmKey() : loadingKeySpec('cdm-drought');
     productKeys = ['cdm-drought'];

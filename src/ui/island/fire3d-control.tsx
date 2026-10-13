@@ -53,7 +53,6 @@
 
 import { useEffect, useRef, useState } from 'preact/hooks';
 
-import { getLayerDef } from '../../config/layers';
 import {
   FIRE3D_COVERAGE_NOTE,
   FIRE3D_MIN_HEIGHT_QUERY,
@@ -86,6 +85,7 @@ import {
 import { registry } from '../../state/registry';
 import {
   FLAT_FUEL_RISK_KEY,
+  FUEL_RISK_TITLE,
   fuelRiskKeepsConsole,
   fuelRiskSwitch,
   revealScroll
@@ -394,7 +394,7 @@ export function Fire3DControl({
           class="shell-fire3d-layer"
           data-fuel-risk="flat"
           aria-pressed={flatFuelOn}
-          title={`${getLayerDef(FLAT_FUEL_RISK_KEY)?.name ?? ''} (${getLayerDef(FLAT_FUEL_RISK_KEY)?.source ?? ''})`}
+          title={FUEL_RISK_TITLE}
           // Off is the Wildfire recipe again, so the display reads Wildfire, not a custom set.
           onClick={() => (flatFuelOn ? requestCluster('wildfire') : requestLayerOn(FLAT_FUEL_RISK_KEY))}
         >
