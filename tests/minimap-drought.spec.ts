@@ -3,7 +3,11 @@ import { expect, test } from './offline-test';
 import {
   deriveMinimapDroughtSnapshot,
   droughtAverageClassForScore,
+  getMinimapDroughtSnapshot,
+  retainMinimapDrought,
+  type MinimapDroughtSnapshot,
 } from '../src/state/minimap-drought';
+import { URLS } from '../src/config/urls';
 import {
   FRAMING_ANALYSIS_AREAS,
   FRAMING_SHAPES,
@@ -332,5 +336,74 @@ test.describe('North American minimap drought summaries', () => {
     expect(canadaNorth).toBeGreaterThanOrEqual(71);
     expect(canadaNorth).toBeLessThanOrEqual(72);
     expect(canadaEast).toBeGreaterThanOrEqual(-52);
+  });
+});
+
+test.describe.serial('minimap drought load with an optional Nunavut mask', () => {
+  const NADM = {
+    type: 'FeatureCollection',
+    features: [
+      feature('d4', '202607', [
+        [
+          [-100, 68],
+          [-90, 68],
+          [-90, 75],
+          [-100, 75],
+          [-100, 68],
+        ],
+      ]),
+    ],
+  };
+
+  async function runLoad(
+    answer: (url: string) => Response | Promise<Response>,
+  ): Promise<MinimapDroughtSnapshot> {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (input) => answer(String(input));
+    const release = retainMinimapDrought(() => undefined);
+    try {
+      for (let i = 0; i < 200; i++) {
+        const { status } = getMinimapDroughtSnapshot();
+        if (status !== 'idle' && status !== 'loading') break;
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      return getMinimapDroughtSnapshot();
+    } finally {
+      release();
+      globalThis.fetch = originalFetch;
+    }
+  }
+
+  const json = (body: unknown) =>
+    new Response(JSON.stringify(body), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+  test('NADM failing leaves the minimap unavailable with no fills', async () => {
+    const snapshot = await runLoad((url) =>
+      url === URLS.nadmNorthAmericaBaseGeojson
+        ? json(LAND_FIXTURE)
+        : url === URLS.statsCanNunavutBoundaryGeojson
+          ? json(ANALYSIS_EXCLUSION_FIXTURE)
+          : new Response('down', { status: 500 }),
+    );
+    expect(snapshot.status).toBe('unavailable');
+    expect(Object.keys(snapshot.summaries)).toHaveLength(0);
+  });
+
+  test('NADM loading while the StatCan mask rejects publishes a partial summary', async () => {
+    const snapshot = await runLoad((url) => {
+      if (url === URLS.nadmCurrentGeojson) return json(NADM);
+      if (url === URLS.nadmNorthAmericaBaseGeojson) return json(LAND_FIXTURE);
+      throw new TypeError('Failed to fetch');
+    });
+    expect(snapshot.status).toBe('live');
+    expect(snapshot.analysisMaskMissing).toBe(true);
+    const summaries = Object.values(snapshot.summaries);
+    expect(summaries.length).toBeGreaterThan(0);
+    expect(summaries.every((s) => s.coverage === 'live-partial')).toBe(true);
+    expect(summaries.some((s) => s.samples > 0)).toBe(true);
+    expect(summaries.every((s) => s.excludedSamples === 0)).toBe(true);
   });
 });

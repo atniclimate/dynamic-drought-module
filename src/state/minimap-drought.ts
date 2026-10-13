@@ -106,6 +106,11 @@ export interface MinimapDroughtSnapshot {
   readonly summaries: Readonly<
     Partial<Record<FramingKey, FramingDroughtSummary>>
   >;
+  /**
+   * Set when the Nunavut analysis-mask proxy did not load: every summary is
+   * then `live-partial` and Nunavut is counted in the land denominator.
+   */
+  readonly analysisMaskMissing?: true;
 }
 
 interface PreparedPolygon {
@@ -127,6 +132,8 @@ interface PreparedNadm {
   readonly categories: ReadonlyMap<NadmDroughtCode, PreparedCategory>;
   readonly landPolygons: readonly PreparedLandPolygon[];
   readonly analysisExclusionPolygons: readonly PreparedPolygon[];
+  /** True when the Nunavut analysis-mask proxy was absent or unusable. */
+  readonly analysisMaskMissing: boolean;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -292,13 +299,25 @@ function prepareNadm(
     const polygons = polygonsByCode.get(code);
     if (polygons) categories.set(code, { code, polygons });
   }
+  // The mask is an optional proxy: a failed fetch (null), an ArcGIS error
+  // envelope or a malformed body degrades the summary to partial instead of
+  // discarding NADM, which loaded fine. The land base stays required.
+  let analysisExclusionPolygons: readonly PreparedPolygon[] = [];
+  let analysisMaskMissing = false;
+  try {
+    analysisExclusionPolygons = prepareAnalysisExclusions(
+      analysisExclusionValue,
+    );
+  } catch (error) {
+    analysisMaskMissing = true;
+    console.warn('[minimap-drought] Nunavut analysis mask unusable.', error);
+  }
   return {
     month,
     categories,
     landPolygons: prepareLandPolygons(landValue),
-    analysisExclusionPolygons: prepareAnalysisExclusions(
-      analysisExclusionValue,
-    ),
+    analysisExclusionPolygons,
+    analysisMaskMissing,
   };
 }
 
@@ -477,7 +496,10 @@ function summarizeShape(
     distribution,
     samples,
     excludedSamples,
-    coverage: excludedWeight > 0 ? 'live-partial' : 'live',
+    coverage:
+      excludedWeight > 0 || prepared.analysisMaskMissing
+        ? 'live-partial'
+        : 'live',
   };
 }
 
@@ -510,7 +532,12 @@ export function deriveMinimapDroughtSnapshot(
       MAINLAND_SAMPLE_STEP_DEGREES,
     );
   }
-  return { status: 'live', month: prepared.month, summaries };
+  return {
+    status: 'live',
+    month: prepared.month,
+    summaries,
+    ...(prepared.analysisMaskMissing ? { analysisMaskMissing: true as const } : {}),
+  };
 }
 
 const EMPTY_SUMMARIES: Readonly<
@@ -551,12 +578,13 @@ async function load(): Promise<void> {
         signal,
         FETCH_TIMEOUT_MS,
       ),
+      // Optional mask: its failure must not fail the summary (null = missing).
       fetchJsonWithBudget(
         URLS.statsCanNunavutBoundaryGeojson,
         { cache: 'no-store' },
         signal,
         FETCH_TIMEOUT_MS,
-      ),
+      ).catch((): unknown => null),
     ]);
     if (signal.aborted) return;
 
