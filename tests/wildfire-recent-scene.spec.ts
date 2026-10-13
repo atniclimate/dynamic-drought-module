@@ -47,73 +47,71 @@ test.describe('explicit Wildfire and Fire recent scenes', () => {
     await stubRecentSatellite(page);
   });
 
-  test('desktop Wildfire selection adds recent GeoColor and independently timed smoke', async ({
+  test('desktop Wildfire selection opens on the plain map with independently timed smoke', async ({
     page
   }) => {
     await gotoApp(page);
     await page.locator(WILDFIRE).click();
 
-    await expect(page.locator(SWITCHER)).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator(SWITCHER)).toHaveAttribute('aria-pressed', 'false');
     await expect.poll(async () => search(page)).not.toContain('basemap=');
     await expect.poll(async () => search(page)).toContain('cluster=wildfire');
     await expect(layerCheckbox(page, 'nifc-fires')).toBeChecked();
     await expect(layerCheckbox(page, 'hms-smoke')).toBeChecked();
-
-    const chip = page.locator(CHIP);
-    await expect(chip).not.toBeInViewport();
-    await expect(chip).toHaveAttribute('role', 'status');
-    await expect(chip).toHaveAttribute('aria-live', 'polite');
-    await expect(chip).toHaveAttribute('aria-atomic', 'true');
-    await expect(chip).toContainText('NOAA GOES GeoColor');
+    await expect(page.locator(CHIP)).toBeHidden();
     await expect(page.locator(WILDFIRE)).toHaveAttribute(
       'title',
       /independently timed NOAA Hazard Mapping System \(HMS\) smoke plumes/
     );
   });
 
-  test('a bare Wildfire deep link retains the satellite default', async ({
+  test('a bare Wildfire deep link opens on the plain map', async ({
     page
   }) => {
     await gotoApp(page, '?cluster=wildfire');
 
     await expect(page.locator(WILDFIRE)).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.locator(SWITCHER)).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator(SWITCHER)).toHaveAttribute('aria-pressed', 'false');
     expect(await search(page)).not.toContain('basemap=');
-    await expect(page.locator(CHIP)).not.toBeInViewport();
+    await expect(page.locator(CHIP)).toBeHidden();
   });
 
-  test('manual Recent off survives Wildfire horizon and layer-status changes', async ({
+  test('a SAT press on Wildfire survives horizon changes and lasts only within the mode', async ({
     page
   }) => {
     await gotoApp(page);
     await page.locator(WILDFIRE).click();
-    await expect(page.locator(SWITCHER)).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.locator(CHIP)).not.toBeInViewport();
+    await expect(page.locator(SWITCHER)).toHaveAttribute('aria-pressed', 'false');
 
     await page.locator(SWITCHER).click();
-    await expect(page.locator(SWITCHER)).toHaveAttribute('aria-pressed', 'false');
-    await expect.poll(async () => search(page)).toContain('basemap=default');
+    await expect(page.locator(SWITCHER)).toHaveAttribute('aria-pressed', 'true');
+    await expect.poll(async () => search(page)).toContain('basemap=satellite');
 
     await page.locator('.shell-horizon-btn[data-horizon="weeks-ahead"]').click();
     await waitForLayerSettled(page, 'spc-fire-weather');
 
     await expect(page.locator(WILDFIRE)).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.locator(SWITCHER)).toHaveAttribute('aria-pressed', 'false');
-    expect(await search(page)).toContain('basemap=default');
-    await expect(page.locator(CHIP)).toBeHidden();
+    await expect(page.locator(SWITCHER)).toHaveAttribute('aria-pressed', 'true');
+    expect(await search(page)).toContain('basemap=satellite');
+
+    // Choosing Drought applies Drought's own default (satellite), so the URL is clean again.
+    await page.locator('.shell-cluster-btn[data-cluster="drought"]').click();
+    await expect(page.locator(SWITCHER)).toHaveAttribute('aria-pressed', 'true');
+    await expect.poll(async () => search(page)).not.toContain('basemap=');
   });
 
-  test('imagery failure restores default without dropping Wildfire intent', async ({
+  test('imagery failure restores the plain map without dropping Wildfire intent', async ({
     page
   }) => {
     await failRecentSatelliteTiles(page);
     await gotoApp(page);
     await page.locator(WILDFIRE).click();
+    await page.locator(SWITCHER).click();
 
     await expect(page.locator(SWITCHER)).toHaveAttribute('aria-pressed', 'false', {
       timeout: 30_000
     });
-    await expect.poll(async () => search(page)).toContain('basemap=default');
+    await expect.poll(async () => search(page)).not.toContain('basemap=');
     await expect(page.locator(WILDFIRE)).toHaveAttribute('aria-pressed', 'true');
     await expect.poll(async () => search(page)).toContain('cluster=wildfire');
     await expect(layerCheckbox(page, 'nifc-fires')).toBeChecked();

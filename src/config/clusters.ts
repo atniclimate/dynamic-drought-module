@@ -39,6 +39,7 @@
 import type { LayerKey } from './layers';
 import type { DetailSectionKey } from './detail-sections';
 import type { PlaceConditionRowKey } from './place-condition-rows';
+import type { BasemapMode } from '../state/basemap-store';
 
 export type HazardClusterKey = 'drought' | 'wildfire' | 'heat' | 'enso';
 
@@ -83,9 +84,11 @@ export interface HazardClusterDef {
   /** Accessible description of what the cluster shows today; honest
    * about v1 scope. */
   readonly description: string;
-  /** Basemap requested only when a visitor explicitly chooses this cluster.
-   * Boot restore and service-internal recipe changes must not consume it. */
-  readonly preferredBasemap?: 'satellite';
+  /** The basemap this mode opens on (owner, 2026-10-13). REQUIRED, so a new
+   * mode cannot be added without deciding it. Applied when a visitor chooses
+   * the mode; a SAT press lasts only within the mode. The URL carries
+   * `basemap=` only when the live basemap differs from this value. */
+  readonly defaultBasemap: BasemapMode;
   /**
    * Explicit hazard-layer recipe per temporal horizon, in activation
    * order; keys are LAYER_DEFS keys. At most one surface-role layer per
@@ -129,6 +132,7 @@ export const HAZARD_CLUSTERS: Record<HazardClusterKey, HazardClusterDef> = {
     // so both acronyms are spelled out here; later uses stay compact.
     description:
       'Current North American Drought Monitor conditions and the National Oceanic and Atmospheric Administration (NOAA) Climate Prediction Center (CPC) drought outlooks.',
+    defaultBasemap: 'satellite',
     recipes: {
       // The monthly tri-national product is the current continental read.
       current: ['nadm-drought'],
@@ -144,8 +148,8 @@ export const HAZARD_CLUSTERS: Record<HazardClusterKey, HazardClusterDef> = {
     title: 'Wildfire',
     urlToken: 'wildfire',
     description:
-      'Recent NOAA GOES GeoColor context; current mapped fire perimeters (NIFC), distinguishing Wildfire and Prescribed fire, plus independently timed NOAA Hazard Mapping System (HMS) smoke plumes; outlook and potential reads at longer horizons.',
-    preferredBasemap: 'satellite',
+      'Current mapped fire perimeters (NIFC), distinguishing Wildfire and Prescribed fire, plus independently timed NOAA Hazard Mapping System (HMS) smoke plumes; outlook and potential reads at longer horizons. Recent NOAA GOES GeoColor context on request (SAT).',
+    defaultBasemap: 'default',
     recipes: {
       // D-0.7.0-043 part 1: at the current register, perimeters plus
       // smoke ONLY; the potential read (WHP) stays out of the
@@ -166,6 +170,7 @@ export const HAZARD_CLUSTERS: Record<HazardClusterKey, HazardClusterDef> = {
     title: 'Extreme Heat',
     urlToken: 'heat',
     description: 'Published National Weather Service HeatRisk heat-impact levels for the selected date with active heat notices.',
+    defaultBasemap: 'default',
     recipes: {
       // Alerts ride the count-first, hazard-filtered model
       // (D-0.7.0-043 part 2); the nws-alerts layer is the map face of
@@ -194,6 +199,7 @@ export const HAZARD_CLUSTERS: Record<HazardClusterKey, HazardClusterDef> = {
     // 7): the ruled compact button title stays 'ENSO'; the description
     // (the button's title text) spells the acronym out.
     description: 'The sea-surface-temperature anomaly display with the current El Nino / Southern Oscillation (ENSO) index snapshot.',
+    defaultBasemap: 'satellite',
     recipes: {
       // v1 is the shipped SST anomaly surface at every horizon; the
       // ENSO snapshot line is a UI surface, not a map layer. Richer

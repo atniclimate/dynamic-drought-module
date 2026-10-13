@@ -73,6 +73,15 @@ test('every HAZARD_CLUSTER_KEYS entry resolves a chip label (DR-113, N modes)', 
   }
 });
 
+test('every HAZARD_CLUSTER_KEYS entry declares a defaultBasemap (N modes)', () => {
+  for (const mode of HAZARD_CLUSTER_KEYS) {
+    assert.ok(
+      ['satellite', 'default'].includes(HAZARD_CLUSTERS[mode].defaultBasemap),
+      `${mode} declares no defaultBasemap of 'satellite' or 'default'`
+    );
+  }
+});
+
 test('KEY_ELIGIBLE_LABELS names every value-carrying key with a non-empty word, and NWS alerts replaced Products', () => {
   assert.ok(Object.keys(KEY_ELIGIBLE_LABELS).length > 0);
   for (const [key, label] of Object.entries(KEY_ELIGIBLE_LABELS)) {

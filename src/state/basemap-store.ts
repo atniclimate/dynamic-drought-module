@@ -10,18 +10,29 @@
  * switcher control (src/map/basemap-switcher.ts) owns the map side.
  *
  * The mode vocabulary is the stable URL token set: 'default' (the subdued
- * OpenStreetMap ground) and 'satellite' (recent NOAA imagery context). Recent
- * satellite is the product default and is therefore omitted from canonical
- * URLs; `basemap=default` records an explicit off choice.
+ * OpenStreetMap ground) and 'satellite' (recent NOAA imagery context). Each
+ * hazard mode declares the basemap it opens on (`defaultBasemap` in
+ * src/config/clusters.ts, owner 2026-10-13). The canonical URL carries
+ * `basemap=` only when the live mode differs from the active mode's default.
  */
+
+import { HAZARD_CLUSTERS } from '../config/clusters';
+import type { HazardClusterKey } from '../config/clusters';
 
 export type BasemapMode = 'default' | 'satellite';
 
-let mode: BasemapMode = 'satellite';
+/** The basemap a hazard mode opens on; the one table read the URL code and
+ * the mode switch share. */
+export function defaultBasemapFor(cluster: HazardClusterKey): BasemapMode {
+  return HAZARD_CLUSTERS[cluster].defaultBasemap;
+}
+
+// Drought is the boot mode when the link names none.
+let mode: BasemapMode = defaultBasemapFor('drought');
 
 const listeners = new Set<() => void>();
 
-/** The active basemap mode; 'satellite' until a switch or URL seed. */
+/** The active basemap mode; the boot mode's default until a switch or URL seed. */
 export function getBasemapMode(): BasemapMode {
   return mode;
 }
@@ -49,11 +60,13 @@ export function onBasemapChange(fn: () => void): () => void {
 }
 
 /**
- * Parse a raw `basemap=` parameter value to a mode. Only the exact token
- * 'default' turns satellite imagery off. The established `satellite` token,
- * an absent parameter, and malformed values all resolve to the product
- * default.
+ * Parse a raw `basemap=` parameter value for the mode being parsed. Only the
+ * exact tokens 'satellite' and 'default' are honored; an absent parameter and
+ * malformed values resolve to that mode's default.
  */
-export function parseBasemapParam(raw: string | null): BasemapMode {
-  return raw === 'default' ? 'default' : 'satellite';
+export function parseBasemapParam(
+  raw: string | null,
+  cluster: HazardClusterKey
+): BasemapMode {
+  return raw === 'satellite' || raw === 'default' ? raw : defaultBasemapFor(cluster);
 }

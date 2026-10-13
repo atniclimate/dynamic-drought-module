@@ -64,8 +64,11 @@ import {
   fire3dControlOffer,
   fire3dCoverageNote
 } from '../../config/fire3d-presentation';
+import type * as maplibregl from 'maplibre-gl';
 import type { HazardClusterKey } from '../../config/clusters';
 import type { Fire3DStatus } from '../../map/fire3d';
+import { requestBasemapMode } from '../../map/basemap-switcher';
+import { defaultBasemapFor } from '../../state/basemap-store';
 import { loadFire3DController } from '../../map/fire3d-chunk';
 // The shared, once-per-page probe result (already in the entry chunk through
 // main.ts, so reading it here adds no eager weight and no second context).
@@ -211,9 +214,11 @@ function outOfCoverageLine(status: Fire3DStatus | null): string {
 }
 
 export function Fire3DControl({
-  cluster
+  cluster,
+  map
 }: {
   readonly cluster: HazardClusterKey | 'custom';
+  readonly map: maplibregl.Map;
 }) {
   // The geometry half of the entry gate (DR-025a): wide enough AND tall
   // enough, watched as two media queries so a phone rotating into landscape
@@ -305,7 +310,7 @@ export function Fire3DControl({
   const visible = offer === 'control';
   const [chunkUnavailable, setChunkUnavailable] = useState(false);
   useEffect(() => {
-    setMapTechnicalNote('fire3d', coverageNote(status));
+    setMapTechnicalNote('fire3d', coverageNote(status), status?.state === 'active' && status.terrainMaxZoom !== null);
   }, [status]);
 
   // The sidebar scrolls; bring the control up when it appears or gains a row
@@ -376,7 +381,11 @@ export function Fire3DControl({
         title="Tilt the Fire view over 3D terrain relief with a volumetric smoke read. Presentation only: it changes how the same mapped data is seen, not what any layer claims."
         onClick={() => {
           // The scene enters only from the Wildfire recipe, and draws its own fuel risk drape.
-          if (!preference && cluster !== 'wildfire') requestCluster('wildfire');
+          if (!preference && cluster !== 'wildfire') {
+            requestCluster('wildfire');
+            // A mode switch applies the mode's basemap default, like the shell's chooser.
+            requestBasemapMode(map, defaultBasemapFor('wildfire'));
+          }
           setFire3DPreference(!preference);
         }}
       >

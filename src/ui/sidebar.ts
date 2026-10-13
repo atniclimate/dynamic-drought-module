@@ -119,7 +119,7 @@ import {
   setViewMode
 } from '../state/view-mode';
 import { installPopupViewportContainment } from './popup-viewport';
-import { getBasemapMode, onBasemapChange, setBasemapMode } from '../state/basemap-store';
+import { defaultBasemapFor, getBasemapMode, onBasemapChange, setBasemapMode } from '../state/basemap-store';
 import { FIRE3D_CHUNK_WIDTH_QUERY, seedFire3DPreference } from '../state/fire3d-store';
 import { getFraming, onFramingChange, setFraming } from '../state/framing-store';
 import {
@@ -133,7 +133,8 @@ import {
   getCommittedSnapshot,
   onCommittedSnapshotChange,
   reconcileClusterWithLayerIntent,
-  requestHorizon
+  requestHorizon,
+  requestOcean
 } from '../state/cluster-service';
 import {
   ALL_FRAMING_BOUNDS,
@@ -142,13 +143,15 @@ import {
   framingFitBounds
 } from '../config/framings';
 import type { FramingKey } from '../config/framings';
-import { OCEANS } from '../config/oceans';
+import { OCEAN_KEYS, OCEANS } from '../config/oceans';
+import type { OceanKey } from '../config/oceans';
 import { applyBasemapMode, holdSatellite, requestBasemapMode } from '../map/basemap-switcher';
 import {
   cameraMatchesTarget,
   cameraStateUnchanged,
   committedCameraTarget,
   fitCameraTarget,
+  fitOcean,
   fitRegion,
   readCameraState
 } from '../map/camera-fit';
@@ -729,10 +732,14 @@ function pushUrl(): void {
 function syncRegionSelect(): void {
   const select = document.getElementById('region-select');
   if (!(select instanceof HTMLSelectElement)) return;
+  const ocean = getOceanFraming();
   const framing = getFraming();
-  select.value = framing !== null
-    ? `framing:${framing}`
-    : `region:${STATE.currentRegion ?? DEFAULT_REGION}`;
+  // An ocean camera has precedence over the framing it leaves in the store.
+  select.value = ocean !== null
+    ? `ocean:${ocean}`
+    : framing !== null
+      ? `framing:${framing}`
+      : `region:${STATE.currentRegion ?? DEFAULT_REGION}`;
 }
 
 /** Build one dropdown that follows minimap choices while preserving every
@@ -778,7 +785,16 @@ function buildRegionSelect(): void {
     option.title = region.description;
     detailGroup.appendChild(option);
   }
-  select.append(overviewGroup, detailGroup);
+
+  const oceanGroup = document.createElement('optgroup');
+  oceanGroup.label = 'Ocean views';
+  for (const key of OCEAN_KEYS) {
+    const option = document.createElement('option');
+    option.value = `ocean:${key}`;
+    option.textContent = OCEANS[key].label;
+    oceanGroup.appendChild(option);
+  }
+  select.append(overviewGroup, oceanGroup, detailGroup);
 
   select.addEventListener('change', () => {
     const map = mapRef;
@@ -786,6 +802,15 @@ function buildRegionSelect(): void {
     const [kind, rawKey] = select.value.split(':', 2);
     if (kind === 'region' && rawKey && rawKey in REGIONS) {
       handleRegionChoice(rawKey as RegionKey);
+      return;
+    }
+    if (kind === 'ocean' && rawKey && rawKey in OCEANS) {
+      // One gesture enters ENSO and fits the ocean camera (D-0.7.0-053); the
+      // framing store is untouched so the prior land framing survives a clear.
+      const key = rawKey as OceanKey;
+      requestOcean(key);
+      requestBasemapMode(map, defaultBasemapFor('enso'));
+      fitOcean(map, key);
       return;
     }
     if (kind !== 'framing') return;
@@ -1358,6 +1383,8 @@ function wireTopLevelEvents(map: maplibregl.Map): void {
   const resetBtn = document.getElementById('reset-btn');
   if (resetBtn) {
     resetBtn.addEventListener('click', () => {
+      // Reset returns the basemap to the current mode's default.
+      requestBasemapMode(map, defaultBasemapFor(getHazardCluster()));
       if (STATE.currentRegion) {
         selectRegion(map, STATE.currentRegion);
       }
@@ -1956,7 +1983,11 @@ function wireSidebar(map: maplibregl.Map, onRegionSelect: (key: RegionKey) => vo
     updateRegionBriefingTrigger(STATE.currentRegion);
     pushUrl();
   });
-  onHazardClusterChange(pushUrl);
+  onHazardClusterChange(() => {
+    // The ocean framing rides the cluster store; keep the dropdown on it.
+    syncRegionSelect();
+    pushUrl();
+  });
 
   // The front-door trigger (F3): when a map place is selected or cleared, the
   // region-briefing button relabels to "See what this means" for that place, or

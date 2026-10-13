@@ -56,6 +56,7 @@ import {
 } from '../../state/cluster-service';
 import type { CommittedShellSnapshot } from '../../state/cluster-service';
 import { requestBasemapMode } from '../../map/basemap-switcher';
+import { defaultBasemapFor } from '../../state/basemap-store';
 import {
   backToMap,
   getStudioRoute,
@@ -428,8 +429,8 @@ function Shell({ map, snap, framing, specTick, onMinimapNoteChange }: ShellProps
   const chooseCluster = (key: HazardClusterKey): void => {
     runDisplayCommand(() => {
       requestCluster(key);
-      const preferredBasemap = HAZARD_CLUSTERS[key].preferredBasemap;
-      if (preferredBasemap) requestBasemapMode(map, preferredBasemap);
+      // Every switch applies the new mode's default; a SAT press does not outlive its mode.
+      requestBasemapMode(map, defaultBasemapFor(key));
     });
   };
 
@@ -536,14 +537,15 @@ function Shell({ map, snap, framing, specTick, onMinimapNoteChange }: ShellProps
 }
 
 /** Variable claims and optional controls do not displace shared navigation. */
-function ShellDetails({ snap, framingNote }: {
+function ShellDetails({ map, snap, framingNote }: {
+  readonly map: maplibregl.Map;
   readonly snap: ReadonlySignal<CommittedShellSnapshot>;
   readonly framingNote: ReadonlySignal<string>;
 }) {
   const snapshot = snap.value;
   return (
     <>
-      <Fire3DControl cluster={snapshot.cluster} />
+      <Fire3DControl cluster={snapshot.cluster} map={map} />
       <section class="shell-summary" id="shell-conditions-summary" aria-labelledby="shell-conditions-heading">
         <h2 class="panel-title sr-only" id="shell-conditions-heading">Conditions in view</h2>
         <p class="shell-summary-primary sr-only" id="shell-summary-primary">{snapshot.summary.primary}</p>
@@ -588,5 +590,5 @@ export function mountShell(host: HTMLElement, map: maplibregl.Map): void {
     host
   );
   const detailsHost = document.getElementById('shell-details-island');
-  if (detailsHost) render(<ShellDetails snap={snap} framingNote={framingNote} />, detailsHost);
+  if (detailsHost) render(<ShellDetails map={map} snap={snap} framingNote={framingNote} />, detailsHost);
 }
