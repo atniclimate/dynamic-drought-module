@@ -129,7 +129,10 @@ const PENDING = 'pending-measurement';
 // force a written reason. Not a latency target; no network profile has
 // been stated for this gate, and a ceiling derived from one would be an
 // owner decision recorded here when it exists.
-const ACTIVATION_HEADROOM = 0.08;
+// Fifty percent by the owner's word of 2026-10-12 ("loosen them up so
+// that we can get a fully functioning tool"): 0.8.0 is every feature
+// working, and 0.8.x re-measures and tightens this back (it was 0.08).
+const ACTIVATION_HEADROOM = 0.5;
 
 /** The enforced budget for a ratified measurement, in kB to one decimal. */
 function budgetForMeasurement(measuredKb) {
@@ -1745,9 +1748,9 @@ function runSelfTest() {
     }
   }
   // Pure-function directions that need no dist tree.
-  // The derived budget: 8% headroom to one decimal, on the two rows that
+  // The derived budget: 50% headroom to one decimal, on the two rows that
   // share the pmtiles-probe chunk, so the rule is proven by its own numbers.
-  if (budgetForMeasurement(19.3) !== 20.8 || budgetForMeasurement(12.1) !== 13.1 || budgetForMeasurement(0) !== 0) {
+  if (budgetForMeasurement(19.3) !== 29 || budgetForMeasurement(12.1) !== 18.2 || budgetForMeasurement(0) !== 0) {
     console.error(`  self-test FAIL: budgetForMeasurement direction broken (19.3 -> ${budgetForMeasurement(19.3)}, 12.1 -> ${budgetForMeasurement(12.1)})`);
     ok = false;
   }
