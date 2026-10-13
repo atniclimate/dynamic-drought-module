@@ -72,6 +72,8 @@
   /* D3 M5 additions. Existing D1 tokens below keep their adopted values. */
   --surface-base: #010B13;
   --brand-wordmark-red: #E13D33;
+  /* The fresh-feed dot. 5.7:1 on --surface-base and 3.4:1 on white (a graphic needs 3:1). */
+  --status-fresh: #2E9E5B;
   --surface-band: #171C20;
   --rule: #3B3B3B;
   --rule-control: #8A94A6;
@@ -7975,8 +7977,10 @@ a.impact-resource-link::after {
   background: var(--fg-3);
 }
 .feed-freshness-dot { box-sizing: border-box; border: 1px solid currentColor; border-radius: 0; color: var(--ink-soft); background: transparent; }
-.feed-freshness-dot[data-freshness='current'] { color: var(--ink); background: currentColor; }
-.feed-freshness-dot[data-freshness='stale'] { background: linear-gradient(90deg, currentColor 50%, transparent 50%); }
+/* Owner, 2026-09-13 and 2026-10-13: green when fresh, red when stale. The shapes stay
+   (filled, half), so the state never rests on colour alone. */
+.feed-freshness-dot[data-freshness='current'] { color: var(--status-fresh); background: currentColor; }
+.feed-freshness-dot[data-freshness='stale'] { color: var(--brand-wordmark-red); background: linear-gradient(90deg, currentColor 50%, transparent 50%); }
 .feed-freshness-dot[data-freshness='unavailable'] { color: var(--ink-strong); background: linear-gradient(135deg, transparent 40%, currentColor 40% 60%, transparent 60%); }
 .feed-freshness-dot[data-freshness='loading'] { background: transparent; }
 .time-bar-feed-details { padding: 8px 10px; }
