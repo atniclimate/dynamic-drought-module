@@ -1,0 +1,38 @@
+/**
+ * What the camera does when the hazard cluster changes into or out of ENSO
+ * (owner's F9, desktop): entering fits the Pacific, which holds the Nino 3.4
+ * box and the broad anomaly pattern; leaving restores the view the person had
+ * before entering. Pure on purpose, so a node test pins the four cases; the
+ * caller in src/ui/sidebar.ts owns the map, the capture and the motion rule.
+ */
+
+import type { HazardClusterKey } from '../config/clusters';
+
+export interface EnsoCameraAction {
+  /** Save the live camera before anything moves it. */
+  readonly capture: boolean;
+  /** Fit the Pacific. False when the ocean dropdown already fits its own ocean. */
+  readonly fitPacific: boolean;
+  /** Put the saved camera back, then drop it. */
+  readonly restore: boolean;
+}
+
+const NONE: EnsoCameraAction = { capture: false, fitPacific: false, restore: false };
+
+export function ensoCameraAction(
+  previous: HazardClusterKey,
+  next: HazardClusterKey,
+  hasCaptured: boolean,
+  oceanSet: boolean,
+  customized = false
+): EnsoCameraAction {
+  if (previous !== 'enso' && next === 'enso') {
+    return { capture: true, fitPacific: !oceanSet, restore: false };
+  }
+  // Ticking a layer box in ENSO flips the store to drought with a custom
+  // composition; the person did not leave, so the view stays where it is.
+  if (previous === 'enso' && next !== 'enso' && hasCaptured && !customized) {
+    return { capture: false, fitPacific: false, restore: true };
+  }
+  return NONE;
+}

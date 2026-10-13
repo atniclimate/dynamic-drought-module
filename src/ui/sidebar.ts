@@ -131,6 +131,7 @@ import {
 } from '../state/cluster-store';
 import {
   getCommittedSnapshot,
+  isCustomComposition,
   onCommittedSnapshotChange,
   reconcileClusterWithLayerIntent,
   requestHorizon,
@@ -153,8 +154,10 @@ import {
   fitCameraTarget,
   fitOcean,
   fitRegion,
-  readCameraState
+  readCameraState,
+  restoreCameraState
 } from '../map/camera-fit';
+import { ensoCameraAction } from '../map/enso-camera';
 import type { CameraState, CameraTarget } from '../map/camera-fit';
 import { timeline } from '../state/timeline';
 import { resolveStatusPillText } from './island/pill-text';
@@ -1983,7 +1986,29 @@ function wireSidebar(map: maplibregl.Map, onRegionSelect: (key: RegionKey) => vo
     updateRegionBriefingTrigger(STATE.currentRegion);
     pushUrl();
   });
+  // ENSO camera (F9): entering fits the Pacific, leaving restores the view from
+  // before entering. The boot seed runs with no map, so it never reaches here.
+  let previousCluster = getHazardCluster();
+  let cameraBeforeEnso: CameraState | null = null;
   onHazardClusterChange(() => {
+    const next = getHazardCluster();
+    const map = mapRef;
+    if (map) {
+      const action = ensoCameraAction(
+        previousCluster,
+        next,
+        cameraBeforeEnso !== null,
+        getOceanFraming() !== null,
+        isCustomComposition()
+      );
+      if (action.capture) cameraBeforeEnso = readCameraState(map);
+      if (action.fitPacific) fitOcean(map, 'pacific');
+      if (action.restore && cameraBeforeEnso) {
+        restoreCameraState(map, cameraBeforeEnso);
+        cameraBeforeEnso = null;
+      }
+    }
+    previousCluster = next;
     // The ocean framing rides the cluster store; keep the dropdown on it.
     syncRegionSelect();
     pushUrl();

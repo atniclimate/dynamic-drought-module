@@ -183,6 +183,17 @@ export function readCameraState(map: maplibregl.Map): CameraState {
   };
 }
 
+/** Put a captured camera back; `animate` false jumps (the reduced-motion house rule). */
+export function restoreCameraState(
+  map: maplibregl.Map,
+  state: CameraState,
+  animate: boolean = !prefersReducedMotion()
+): void {
+  const { center, zoom, pitch, bearing } = state;
+  if (animate) map.easeTo({ center, zoom, pitch, bearing });
+  else map.jumpTo({ center, zoom, pitch, bearing });
+}
+
 /**
  * Whether the live camera still equals `state`: a pan, zoom, pitch or
  * rotation since reads as changed. A canvas resize alone keeps the camera.

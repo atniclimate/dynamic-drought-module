@@ -8,7 +8,8 @@
  * the camera to that ocean in one gesture (the only gesture that pairs
  * display with camera; D-0.7.0-053). Framing context and briefing place
  * are untouched; a hazard-cluster button switches back; returning to
- * ENSO later restores the temporal register, never the camera.
+ * ENSO later restores the temporal register; leaving ENSO restores the
+ * camera from before entering (F9, src/map/enso-camera.ts).
  *
  * Since 2026-10-13 the ocean views are chosen from the 'Ocean views' group
  * of the framing dropdown under the minimap (src/ui/sidebar.ts); the

@@ -438,6 +438,11 @@ function applyCluster(
   publish();
 }
 
+/** True while the committed composition is a person's custom layer set rather than a mode. */
+export function isCustomComposition(): boolean {
+  return committedCluster === 'custom';
+}
+
 export function requestCluster(key: HazardClusterKey): void {
   applyCluster(key, key === 'enso' ? getOceanFraming() : null);
 }
