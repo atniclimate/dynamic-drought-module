@@ -124,7 +124,8 @@ function ensureLayers(map: maplibregl.Map, data: FeatureCollection): void {
       filter: part('points'),
       paint: {
         'circle-radius': radius,
-        'circle-color': ['case', isNow, TROPICAL_POINT_INK, TROPICAL_POINT_PAPER],
+        // Later positions are hollow: a white fill read as solid over the SST raster.
+        'circle-color': ['case', isNow, TROPICAL_POINT_INK, 'rgba(255,255,255,0)'],
         'circle-stroke-color': ['case', isNow, TROPICAL_POINT_PAPER, TROPICAL_POINT_INK],
         'circle-stroke-width': 1.5
       }
@@ -201,7 +202,8 @@ export function bindPopups(map: maplibregl.Map): void {
     kind: 'point-event',
     layerIds: [POINTS_ID, WW_ID, CONE_FILL_ID],
     label: (feature) => {
-      const name = feature.properties?.['stormname'];
+      // The popup's title (the points layer's classification and name) names the target too.
+      const name = feature.properties?.['ddmTitle'] ?? feature.properties?.['stormname'];
       return typeof name === 'string' && name.trim() !== '' ? name : 'Tropical cyclone';
     },
     respond: (feature) => ({

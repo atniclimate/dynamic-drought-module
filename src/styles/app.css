@@ -6355,6 +6355,13 @@ a.impact-resource-link::after {
   gap: 4px 6px;
   min-width: 0;
 }
+.map-key-tropical-group {
+  display: flex;
+  flex: 1 1 100%;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+}
 .map-key-scale-label {
   flex: 0 0 auto;
   color: var(--fg-1);

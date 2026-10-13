@@ -1145,13 +1145,19 @@ function fireProductKeys(eligible: ReadonlySet<string>): readonly string[] {
 }
 
 /** A neutral circle at a renderer class's size (the issuer's points are icons, not colours). */
-function tropicalCircle(radius: number, label: string): string {
+function tropicalCircle(radius: number, label: string, filled = false): string {
   const size = Math.round(radius * 2);
   return (
     '<span class="map-key-item"><span class="map-key-swatch" style="' +
-    `background:#ffffff;border:1.5px solid ${TROPICAL_POINT_INK};border-radius:50%;width:${size}px;height:${size}px` +
+    `background:${filled ? TROPICAL_POINT_INK : 'transparent'};border:1.5px solid ${TROPICAL_POINT_INK};border-radius:50%;width:${size}px;height:${size}px` +
     `"></span>${escapeHtml(label)}</span>`
   );
+}
+
+/** One stacked key group: a heading on its own line, then one row per line (CSS .map-key-tropical-group). */
+function tropicalGroup(rows: readonly string[], heading?: string): string {
+  const head = heading ? `<strong class="map-key-scale-label" data-tropical-points="${escapeHtml(heading)}">${escapeHtml(heading)}</strong>` : '';
+  return `<span class="map-key-tropical-group">${head}${rows.join('')}</span>`;
 }
 
 /**
@@ -1199,13 +1205,21 @@ function tropicalRow(): { readonly html: string; readonly ariaLabel: string } | 
       aria += ' live (partial).';
     }
     for (const src of ['Tropical Cyclone', 'Post-Tropical Cyclone'] as const) {
-      parts.push(`<span class="map-key-item" data-tropical-points="${src}">${escapeHtml(src)}</span>`);
-      for (const c of TROPICAL_POINT_CLASSES) if (c.key.endsWith(`,${src}`)) parts.push(tropicalCircle(c.radius, c.label));
+      parts.push(
+        tropicalGroup(
+          TROPICAL_POINT_CLASSES.filter((c) => c.key.endsWith(`,${src}`)).map((c) => tropicalCircle(c.radius, c.label)),
+          src
+        )
+      );
     }
     parts.push(
-      swatchItem(TROPICAL_TRACK.color, TROPICAL_PART_NAMES.track),
-      swatchItem(TROPICAL_CONE.fill, TROPICAL_PART_NAMES.cone),
-      ...TROPICAL_WW_CLASSES.map((c) => swatchItem(c.color, c.label)),
+      tropicalGroup([
+        tropicalCircle(7.5, 'Advisory position', true),
+        tropicalCircle(7.5, 'Later positions'),
+        swatchItem(TROPICAL_TRACK.color, TROPICAL_PART_NAMES.track),
+        swatchItem(TROPICAL_CONE.fill, TROPICAL_PART_NAMES.cone),
+        ...TROPICAL_WW_CLASSES.map((c) => swatchItem(c.color, c.label))
+      ]),
       '<span class="map-key-qualification" data-tropical-icons>Circles are sized by the issuer\'s wind classes; the issuer\'s icons are not reproduced. Filled: the advisory position; hollow: later positions.</span>'
     );
     aria += ` ${TROPICAL_POINT_CLASSES.map((c) => c.label).join(', ')}; ${TROPICAL_WW_CLASSES.map((c) => c.label).join(', ')}.`;
