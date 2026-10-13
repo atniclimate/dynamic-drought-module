@@ -34,3 +34,41 @@ test('garbage and multi-range headers are unsatisfiable', () => {
     assert.equal(parseRange(header, SIZE), 'unsatisfiable', header);
   }
 });
+
+// A stand-in bucket of SIZE bytes that counts its reads and, like R2, refuses a range past the end.
+function fakeBucket() {
+  const calls = { head: 0, get: 0 };
+  const meta = { size: SIZE, httpEtag: '"t"' };
+  return {
+    calls,
+    env: {
+      ddm_terrain: {
+        async head() { calls.head += 1; return meta; },
+        async get(_key, options) {
+          calls.get += 1;
+          if (options?.range && options.range.offset >= SIZE) throw new Error('range not satisfiable');
+          return { ...meta, body: new Blob(['x']).stream() };
+        }
+      }
+    }
+  };
+}
+
+const ARCHIVE = 'https://terrain.test/pnw-z10-2026-09-10.pmtiles';
+
+test("the reader's exact range costs one storage read", async () => {
+  const { default: worker } = await import('../workers/terrain/src/index.ts');
+  const bucket = fakeBucket();
+  const response = await worker.fetch(new Request(ARCHIVE, { headers: { Range: 'bytes=0-99' } }), bucket.env);
+  assert.equal(response.status, 206);
+  assert.equal(response.headers.get('content-range'), `bytes 0-99/${SIZE}`);
+  assert.deepEqual(bucket.calls, { head: 0, get: 1 });
+});
+
+test('a range past the end still answers 416 with the size', async () => {
+  const { default: worker } = await import('../workers/terrain/src/index.ts');
+  const bucket = fakeBucket();
+  const response = await worker.fetch(new Request(ARCHIVE, { headers: { Range: 'bytes=2000-3000' } }), bucket.env);
+  assert.equal(response.status, 416);
+  assert.equal(response.headers.get('content-range'), `bytes */${SIZE}`);
+});

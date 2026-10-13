@@ -1208,7 +1208,8 @@ async function fetchPrimaryStationValue(
       await import('../util/awdb');
     const elements = elementsForAwdbStationTriplet(station.awdbStation);
     const series = await fetchAwdbDailySeries(station.awdbStation, elements, 7, signal);
-    const primary = series.find((s) => s.element === elements[0]);
+    // The request may carry a depth selector (`SMS:*`); the payload's element code does not.
+    const primary = series.find((s) => s.element === elements[0]?.split(':')[0]);
     return primary ? toStationValue(station.id, primary) : null;
   }
   if (station.hydrometParams && station.hydrometParams.length > 0) {

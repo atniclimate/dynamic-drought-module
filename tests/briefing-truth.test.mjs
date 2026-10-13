@@ -196,6 +196,22 @@ test('AWDB missing readings stay unavailable; numeric zero remains an observatio
   }
 });
 
+test('SCAN soil moisture asks for every depth and each row names its own', async () => {
+  let requested = '';
+  await withFetch((url) => {
+    requested = String(url);
+    return jsonResponse([{ data: [-2, -20].map((heightDepth) => ({
+      stationElement: { elementCode: 'SMS', heightDepth, storedUnitCode: 'pct' },
+      values: [{ date: '2026-10-11', value: 12.1 }]
+    })) }]);
+  }, async () => {
+    const { elementsForAwdbStationTriplet } = await import('../src/util/awdb.ts');
+    const series = await fetchAwdbDailySeries('2198:WA:SCAN', elementsForAwdbStationTriplet('2198:WA:SCAN'), 7, signal());
+    assert.match(decodeURIComponent(requested), /elements=SMS:\*/);
+    assert.deepEqual(series.map((s) => toStationValue('test', s).label), ['Soil moisture at 2 in', 'Soil moisture at 20 in']);
+  });
+});
+
 test('malformed feature responses are unavailable, while a valid empty collection establishes absence', async (t) => {
   t.mock.method(console, 'warn', () => {});
   for (const payload of [null, {}, { features: null }, { features: {} }, collection([])]) {
