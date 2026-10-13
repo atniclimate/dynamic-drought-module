@@ -89,6 +89,14 @@ export interface LayerController {
 }
 
 /**
+ * Layers re-requested once, this many ms after an unavailable first read.
+ * Tropical cyclones: all 15 presence reads can end together at the 10 s
+ * sweep deadline, and the failure teardown below would otherwise leave the
+ * layer off until the reader presses the mode again.
+ */
+const RETRY_ONCE_MS: Readonly<Record<string, number>> = { 'tropical-cyclones': 30_000 };
+
+/**
  * Build the layer controller for a map, driving DOM through `view`. One
  * controller instance per app; its intent map, per-key operation chains, and
  * popup-bound set are private to the closure (they were module-level globals
@@ -123,8 +131,17 @@ export function createLayerController(
    */
   const intentGen = new Map<string, number>();
 
+  /**
+   * The one delayed retry after an unavailable first read, for the layers
+   * listed in RETRY_ONCE_MS. Any later intent flip (off, a re-press, the
+   * retry itself) clears it, so a retry never outlives the intent it served.
+   */
+  const retryTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
   /** Record an intent flip: bump the key's generation, set the boolean. */
   function bumpIntent(key: string, on: boolean): number {
+    clearTimeout(retryTimers.get(key));
+    retryTimers.delete(key);
     const gen = (intentGen.get(key) ?? 0) + 1;
     intentGen.set(key, gen);
     desiredOn.set(key, on);
@@ -288,7 +305,7 @@ export function createLayerController(
    * deactivation (there is always one; only `deactivate` flips the intent off)
    * then clears the pill and announces the off state.
    */
-  function activateWithIndicator(def: LayerDef): Promise<void> {
+  function activateWithIndicator(def: LayerDef, isRetry = false): Promise<void> {
     const gen = bumpIntent(def.key, true);
     // This activation owns the outcome only while BOTH hold: the latest
     // intent is on AND no newer flip has occurred since this op was born.
@@ -352,6 +369,18 @@ export function createLayerController(
           // self-reported 'error', so failActivation keeps that status
           // instead of re-asserting it. See failActivation above.
           failActivation(def.key);
+          // One retry, and only while the checkbox stays on (a committed
+          // member); a failed retry is final.
+          const retryMs = RETRY_ONCE_MS[def.key];
+          if (!isRetry && retryMs !== undefined && desiredOn.get(def.key) === true) {
+            retryTimers.set(
+              def.key,
+              setTimeout(() => {
+                retryTimers.delete(def.key);
+                void activateWithIndicator(def, true);
+              }, retryMs)
+            );
+          }
           return;
         }
         // Ease the just-added layers in (no-op for reduced-motion users and
