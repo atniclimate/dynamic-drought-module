@@ -468,8 +468,9 @@ export const HMS_DENSITY_PRESENTATION = {
   }
 } as const;
 
+/** The smoke plumes' note; reads in the Impact Briefing (src/ui/map-technical-information.ts), not in the legend. */
 export const HMS_OVERVIEW_QUALIFICATION =
-  'NOAA Hazard Mapping System, analyst-drawn from GOES imagery; current or previous UTC day. Its plume observation window is independent of the recent NOAA GeoColor basemap frame. Density opacity is presentation, not ground-level air quality.';
+  'NOAA Hazard Mapping System, analyst-drawn from GOES imagery; current or previous UTC day. Its plume observation window is independent of any satellite basemap frame shown. Density opacity is presentation, not ground-level air quality.';
 
 export function resolveHmsDensityClass(value: unknown): HmsDensityClass {
   if (typeof value !== 'string') return 'Unknown';

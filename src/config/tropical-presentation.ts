@@ -68,7 +68,6 @@ export function tropicalBasinName(code: unknown): string | null {
 
 /** The empty state, in the owner's words (enso-mode-expansion.yaml F2). */
 export const TROPICAL_EMPTY_TEXT = 'No active tropical cyclones';
-export const TROPICAL_COVERAGE_TEXT = 'Basins covered: Atlantic, Eastern North Pacific, Central North Pacific.';
 
 /** Layer 240's renderer: `dvlbl,stormsrc` to its label, verbatim, with the circle size DDM gives each class. */
 export const TROPICAL_POINT_CLASSES = [

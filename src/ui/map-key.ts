@@ -69,7 +69,6 @@ import { WHP_3D_SHADE_CATEGORIES, WHP_3D_SHADE_QUALIFICATION, WHP_SHADE_CATEGORI
 import { FUEL_RISK_TITLE, fireKeySections } from './fire3d-fuel-risk';
 import {
   TROPICAL_CONE,
-  TROPICAL_COVERAGE_TEXT,
   TROPICAL_EMPTY_TEXT,
   TROPICAL_ISSUERS,
   TROPICAL_POINT_CLASSES,
@@ -1164,9 +1163,10 @@ function tropicalGroup(rows: readonly string[], heading?: string): string {
  * The tropical cyclones row (ENSO block B3), an event overlay appended to
  * whichever key the surface earned, like the NWS products row. Its state is
  * the registry's (a refresh that fails reads unavailable; an empty season
- * reads the owner's words, "No active tropical cyclones", with the basins the
- * issuer covers); its storms and classes are the layer snapshot's and the
- * issuer renderer's labels, verbatim.
+ * reads the owner's words, "No active tropical cyclones"); its storms and
+ * classes are the layer snapshot's and the issuer renderer's labels, verbatim.
+ * The basins and circle-sizing notes read in the Impact Briefing
+ * (src/ui/map-technical-information.ts), not here.
  */
 function tropicalRow(): { readonly html: string; readonly ariaLabel: string } | null {
   const status = registry.getStatus(TROPICAL_KEY);
@@ -1178,7 +1178,6 @@ function tropicalRow(): { readonly html: string; readonly ariaLabel: string } | 
   const issuer = TROPICAL_ISSUERS.both.name;
   const parts: string[] = ['<strong class="map-key-scale-label">Tropical cyclones</strong>'];
   let aria = 'Tropical cyclones:';
-  const coverage = `<span class="map-key-qualification" data-tropical-coverage>${escapeHtml(TROPICAL_COVERAGE_TEXT)}</span>`;
   let state: string;
   if (status === 'loading' || status === undefined) {
     state = 'loading';
@@ -1186,12 +1185,12 @@ function tropicalRow(): { readonly html: string; readonly ariaLabel: string } | 
     aria += ' loading.';
   } else if (status === 'error') {
     state = 'unavailable';
-    parts.push('<span class="map-key-qualification" data-tropical-status><strong>unavailable</strong> The NHC and CPHC advisories could not be read.</span>', coverage);
+    parts.push('<span class="map-key-qualification" data-tropical-status><strong>unavailable</strong> The NHC and CPHC advisories could not be read.</span>');
     aria += ' unavailable. The NHC and CPHC advisories could not be read.';
   } else if (status === 'no-data') {
     state = 'no data';
-    parts.push(`<span class="map-key-item" data-tropical-empty>${escapeHtml(TROPICAL_EMPTY_TEXT)}</span>`, coverage);
-    aria += ` ${TROPICAL_EMPTY_TEXT}. ${TROPICAL_COVERAGE_TEXT}`;
+    parts.push(`<span class="map-key-item" data-tropical-empty>${escapeHtml(TROPICAL_EMPTY_TEXT)}</span>`);
+    aria += ` ${TROPICAL_EMPTY_TEXT}.`;
   } else {
     state = status === 'degraded' ? 'live (partial)' : 'live';
     for (const storm of tropicalSnapshot?.storms ?? []) {
@@ -1220,7 +1219,7 @@ function tropicalRow(): { readonly html: string; readonly ariaLabel: string } | 
         swatchItem(TROPICAL_CONE.fill, TROPICAL_PART_NAMES.cone),
         ...TROPICAL_WW_CLASSES.map((c) => swatchItem(c.color, c.label))
       ]),
-      '<span class="map-key-qualification" data-tropical-icons>Circles are sized by the issuer\'s wind classes; the issuer\'s icons are not reproduced. Filled: the advisory position; hollow: later positions.</span>'
+      '<span class="map-key-qualification" data-tropical-icons>Filled: the advisory position; hollow: later positions.</span>'
     );
     aria += ` ${TROPICAL_POINT_CLASSES.map((c) => c.label).join(', ')}; ${TROPICAL_WW_CLASSES.map((c) => c.label).join(', ')}.`;
   }

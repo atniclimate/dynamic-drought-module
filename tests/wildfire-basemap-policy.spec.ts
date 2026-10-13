@@ -39,7 +39,7 @@ test.describe('Wildfire recent-scene configuration', () => {
       'independently timed NOAA Hazard Mapping System (HMS) smoke plumes'
     );
     expect(HMS_OVERVIEW_QUALIFICATION).toContain(
-      'independent of the recent NOAA GeoColor basemap frame'
+      'independent of any satellite basemap frame shown'
     );
     expect(HMS_OVERVIEW_QUALIFICATION).toContain(
       'not ground-level air quality'

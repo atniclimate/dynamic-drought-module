@@ -12,15 +12,14 @@ import { EP5_LAYERS, tropicalStubLog } from './tropical-fixtures';
 import { bootStorm, clickStorm } from './frame-fixtures-tropical';
 import { gotoApp, waitForLayerSettled } from './helpers';
 
-test('an empty season: the ENSO key reads "No active tropical cyclones" and names the three basins', async ({ page }) => {
+test('an empty season: the ENSO key reads "No active tropical cyclones" and carries no basins note', async ({ page }) => {
   await gotoApp(page, '?cluster=enso&view=console');
   await waitForLayerSettled(page, 'tropical-cyclones');
   const row = page.locator('#map-key [data-tropical-key]');
   await expect(row).toHaveAttribute('data-tropical-state', 'no data');
   await expect(row.locator('[data-tropical-empty]')).toHaveText('No active tropical cyclones');
-  await expect(row.locator('[data-tropical-coverage]')).toHaveText(
-    'Basins covered: Atlantic, Eastern North Pacific, Central North Pacific.'
-  );
+  // The basins sentence reads in the Impact Briefing's Technical information (tests/terrain-coverage.test.mjs).
+  await expect(row).not.toContainText('Basins covered');
   await expect(row.locator('[data-tropical-issuer]')).toHaveText(
     'NOAA National Hurricane Center and Central Pacific Hurricane Center'
   );

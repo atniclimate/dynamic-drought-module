@@ -153,3 +153,28 @@ test('the Impact Briefing never prints the 3D scene\'s unresolved zoom 8 as a 3D
   setMapTechnicalNote('fire3d', FIRE3D_COVERAGE_NOTE, true);
   assert.equal(decode(briefing()), FIRE3D_COVERAGE_NOTE);
 });
+
+test('the notes taken off the key, the storm popup and the smoke legend read in the Impact Briefing instead', async () => {
+  const { renderMapTechnicalInformation } = await import('../src/ui/map-technical-information.ts');
+  const html = renderMapTechnicalInformation().replace(/&#039;/g, "'");
+  for (const note of [
+    'NOAA Hazard Mapping System, analyst-drawn from GOES imagery; current or previous UTC day. Its plume observation window is independent of any satellite basemap frame shown. Density opacity is presentation, not ground-level air quality.',
+    'Surface temperature anomalies are shown for large lakes and inland seas as well as the ocean.',
+    'Basins covered: Atlantic, Eastern North Pacific, Central North Pacific.',
+    "Circles are sized by the issuer's wind classes; the issuer's icons are not reproduced.",
+    'Times are as the issuer states them; DDM does not read them as full dates.'
+  ]) {
+    assert.ok(html.includes(`<p>${note}</p>`), note);
+  }
+  // The three issuer passages, verbatim as read on the issuers' pages 2026-10-13, each with its link.
+  for (const [quote, url] of [
+    ['It is inaccurate to label individual storms or events as a La Niña or El Niño event.', 'https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/ensostuff/ensofaq.shtml'],
+    ['The Sea Surface Temperature Anomalies (L4, MUR) layer is created from the Group for High Resolution Sea Surface Temperature (GHRSST)', 'https://www.earthdata.nasa.gov/news/worldview-image-archive/global-sea-surface-temperature-anomalies'],
+    ['The cone represents the probable track of the center of a tropical cyclone', 'https://www.nhc.noaa.gov/aboutcone.shtml']
+  ]) {
+    assert.ok(html.includes(quote) && html.includes(`href="${url}"`), quote);
+  }
+  const source = (...path) => readFileSync(join(ROOT, 'src', ...path), 'utf8');
+  assert.doesNotMatch(source('ui', 'map-key.ts'), /Basins covered|Circles are sized/);
+  assert.doesNotMatch(source('layers', 'hms-smoke.ts'), /HMS_OVERVIEW_QUALIFICATION/);
+});
