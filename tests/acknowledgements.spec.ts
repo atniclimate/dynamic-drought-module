@@ -210,7 +210,6 @@ const ATTRIBUTION_SITES: Readonly<Record<string, ProductKey | ProviderKey>> = {
   'src/layers/spc-fire-weather.ts': 'spc-fire-weather',
   'src/layers/sst-anomaly.ts': 'sst-anomaly',
   'src/layers/states.ts': 'states',
-  'src/layers/tropical-cyclones.ts': 'tropical-cyclones',
   'src/layers/usdm.ts': 'usdm',
   'src/layers/usfs-whp.ts': 'usfs-whp',
   'src/layers/whp-3d.ts': 'whp-3d',
