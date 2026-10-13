@@ -1,4 +1,3 @@
-import { FIRE3D_COVERAGE_NOTE } from '../config/fire3d-presentation';
 import { HILLSHADE_COVERAGE_SENTENCE } from '../config/terrain-coverage';
 import { escapeHtml } from '../util/escape';
 
@@ -26,11 +25,8 @@ const notes: Record<Overview, string> = {
 /** The Wildfire 3D plant-stress ground's full text, while a product is on the map (src/layers/wildfire-dryness.ts). */
 let plantStress: PlantStress = null;
 
-export function setMapTechnicalNote(overview: Overview, text: string): void {
-  // shortcut: the 3D control sends its unresolved bundled form whenever no scene is
-  // active; an active scene on the bundled archive matches too and reads the idle
-  // form, which stays true. Upgrade if the control passes the scene state itself.
-  notes[overview] = overview === 'fire3d' && text === FIRE3D_COVERAGE_NOTE ? FIRE3D_IDLE_NOTE : text;
+export function setMapTechnicalNote(overview: Overview, text: string, sceneActive = false): void {
+  notes[overview] = overview === 'fire3d' && !sceneActive ? FIRE3D_IDLE_NOTE : text;
   const node = typeof document === 'undefined' ? null : document.getElementById(`impact-technical-${overview}`);
   if (node) node.textContent = notes[overview];
 }

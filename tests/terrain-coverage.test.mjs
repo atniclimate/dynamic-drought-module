@@ -146,7 +146,10 @@ test('the Impact Briefing never prints the 3D scene\'s unresolved zoom 8 as a 3D
   assert.doesNotMatch(briefing(), /3D relief uses/);
   // An active scene on the deep archive: the sidebar's own sentence, verbatim.
   const deep = fire3dCoverageNote({ ...FIRE3D_TERRAIN_COVERAGE, maxZoom: 10 });
-  setMapTechnicalNote('fire3d', deep);
+  setMapTechnicalNote('fire3d', deep, true);
   assert.equal(decode(briefing()), deep);
   assert.match(briefing(), /^3D relief uses .*zoom 10;/);
+  // An active scene that fell back to the bundled archive reads its own line, not the idle one.
+  setMapTechnicalNote('fire3d', FIRE3D_COVERAGE_NOTE, true);
+  assert.equal(decode(briefing()), FIRE3D_COVERAGE_NOTE);
 });
