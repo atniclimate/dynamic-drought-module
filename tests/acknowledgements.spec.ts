@@ -216,7 +216,9 @@ const ATTRIBUTION_SITES: Readonly<Record<string, ProductKey | ProviderKey>> = {
   'src/map/satellite.ts': 'satellite-geocolor',
   'src/map/style.ts': 'basemap-ground',
   // The station chart's source line, printed by the popup frame.
-  'src/ui/popups.ts': 'telemetry'
+  'src/ui/popups.ts': 'telemetry',
+  // The Nino 3.4 box popup's RONI chart, from the bundled CPC snapshot.
+  'src/ui/enso-box-popup.ts': 'ensoIndex'
 };
 
 async function listSourceFiles(dir: string): Promise<string[]> {
