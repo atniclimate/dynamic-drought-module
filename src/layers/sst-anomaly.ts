@@ -63,6 +63,14 @@ import { setTimeBar, clearTimeBar } from '../ui/time-bar';
 import { showLegend, hideLegend, LEGEND_ORDER } from '../ui/legend-registry';
 import { showToast } from '../ui/overlay';
 import { activateEnsoFlow, cancelEnsoFlowLoad, deactivateEnsoFlow } from './enso-flow';
+import { registerClickTarget } from '../map/interaction-coordinator';
+import {
+  buildEnsoBoxPopupModel,
+  cancelEnsoBoxRead,
+  currentEnsoBoxRead,
+  mountEnsoBoxChart,
+  startEnsoBoxRead
+} from '../ui/enso-box-popup';
 
 const LAYER_KEY = 'sst-anomaly';
 /**
@@ -77,6 +85,8 @@ const SST_SNAPSHOT_EVENT = 'ddm:sst-snapshot';
 const SOURCE_ID = 'sst-anomaly';
 const LAYER_ID = 'sst-anomaly';
 const NINO_SOURCE_ID = 'nino34-box';
+/** Invisible fill: the click and hover target for the whole box interior. */
+const NINO_FILL_ID = 'nino34-box-fill';
 const NINO_LINE_ID = 'nino34-box-line';
 const NINO_LABEL_ID = 'nino34-box-label';
 
@@ -85,7 +95,7 @@ const frameSourceId = (date: string): string => `sst-frame-${date}`;
 
 /** Fade targets for the sidebar's toggle transitions (LayerModule contract).
  * Dated frame layers are dynamic and clean themselves up in deactivate. */
-export const fadeLayerIds = [LAYER_ID, NINO_LINE_ID, NINO_LABEL_ID] as const;
+export const fadeLayerIds = [LAYER_ID, NINO_FILL_ID, NINO_LINE_ID, NINO_LABEL_ID] as const;
 
 const RASTER_OPACITY = 0.78;
 /** How many most-recent dates the rail and loop cover. */
@@ -167,9 +177,11 @@ function emitSstSnapshot(
   );
 }
 
+const NINO34_LABEL = 'Nino 3.4 (the ENSO index region)';
+
 const NINO34_BOX: GeoJSON.Feature = {
   type: 'Feature',
-  properties: { label: 'Nino 3.4 (the ENSO index region)' },
+  properties: { label: NINO34_LABEL },
   geometry: {
     type: 'Polygon',
     coordinates: [
@@ -674,6 +686,15 @@ export async function activate(map: maplibregl.Map): Promise<void> {
       });
     }
 
+    if (!map.getLayer(NINO_FILL_ID)) {
+      map.addLayer({
+        id: NINO_FILL_ID,
+        type: 'fill',
+        source: NINO_SOURCE_ID,
+        paint: { 'fill-color': '#e2e8f0', 'fill-opacity': 0 }
+      });
+    }
+
     if (!map.getLayer(NINO_LINE_ID)) {
       map.addLayer({
         id: NINO_LINE_ID,
@@ -888,7 +909,8 @@ export function deactivate(map: maplibregl.Map): void {
   }
   displayedFrame = null;
   prefetchedFrame = null;
-  for (const id of [NINO_LABEL_ID, NINO_LINE_ID, LAYER_ID]) {
+  cancelEnsoBoxRead();
+  for (const id of [NINO_LABEL_ID, NINO_LINE_ID, NINO_FILL_ID, LAYER_ID]) {
     if (map.getLayer(id)) map.removeLayer(id);
   }
   for (const id of [NINO_SOURCE_ID, SOURCE_ID]) {
@@ -903,10 +925,30 @@ export function deactivate(map: maplibregl.Map): void {
 }
 
 /**
- * No-op popup binder: the anomaly is a server-rendered raster with no
- * per-pixel attributes on the client. Same uniform-shape rationale as
- * usfs-whp.ts.
+ * The Nino 3.4 box is the one click target: the anomaly raster has no
+ * per-pixel attributes on the client. The coordinator's respond is
+ * synchronous, so the bundled ENSO snapshot is read from registration (the
+ * first activation) and the popup says loading until it arrives; a click
+ * after a failed or cancelled read starts it again.
  */
-export function bindPopups(_map: maplibregl.Map): void {
-  // Intentionally empty; see JSDoc above.
+export function bindPopups(map: maplibregl.Map): void {
+  startEnsoBoxRead();
+  registerClickTarget({
+    kind: 'point-event',
+    layerIds: [NINO_FILL_ID, NINO_LINE_ID],
+    label: () => NINO34_LABEL,
+    respond: (_feature, _click, m) => {
+      const model = buildEnsoBoxPopupModel(currentEnsoBoxRead());
+      startEnsoBoxRead();
+      // shortcut: a click before the frame chunk resolves paints the chart's text alternative only; fine while the frame is warmed at registration.
+      requestAnimationFrame(() => void mountEnsoBoxChart(m.getContainer(), model).catch(() => undefined));
+      return { model };
+    }
+  });
+  map.on('mouseenter', NINO_FILL_ID, () => {
+    map.getCanvas().style.cursor = 'pointer';
+  });
+  map.on('mouseleave', NINO_FILL_ID, () => {
+    map.getCanvas().style.cursor = '';
+  });
 }

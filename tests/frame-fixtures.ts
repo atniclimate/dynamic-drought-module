@@ -14,6 +14,7 @@ import { SURFACE_CENSUS_FIXTURES, SURFACE_TIER_FIXTURES } from './frame-fixtures
 import { FIRE_LABEL_CENSUS_FIXTURES, FIRE_LABEL_TIER_FIXTURES } from './frame-fixtures-fires-labels';
 import { EVENT_STATION_CENSUS_FIXTURES, EVENT_STATION_TIER_FIXTURES } from './frame-fixtures-events-stations';
 import { TELEMETRY_TIER_FIXTURES } from './frame-fixtures-telemetry';
+import { ENSO_CENSUS_FIXTURES, ENSO_TIER_FIXTURES } from './frame-fixtures-enso';
 
 /**
  * The census spec's own helpers, handed to each fixture (a spec file exports
@@ -47,7 +48,8 @@ export const CENSUS_FIXTURES: Readonly<Record<string, CensusFixture>> = {
   ...PLACE_CENSUS_FIXTURES,
   ...SURFACE_CENSUS_FIXTURES,
   ...FIRE_LABEL_CENSUS_FIXTURES,
-  ...EVENT_STATION_CENSUS_FIXTURES
+  ...EVENT_STATION_CENSUS_FIXTURES,
+  ...ENSO_CENSUS_FIXTURES
 };
 
 export const TIER_FIXTURES: Readonly<Record<string, TierFixture>> = {
@@ -55,6 +57,7 @@ export const TIER_FIXTURES: Readonly<Record<string, TierFixture>> = {
   ...SURFACE_TIER_FIXTURES,
   ...FIRE_LABEL_TIER_FIXTURES,
   ...EVENT_STATION_TIER_FIXTURES,
+  ...ENSO_TIER_FIXTURES,
   // The station popup (M26c): an adopted external popup with no click
   // target, so it has a tier fixture here and its census fixture beside the
   // census (tests/identify-paths.spec.ts EXTERNAL_CENSUS_FIXTURES).

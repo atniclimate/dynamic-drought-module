@@ -50,6 +50,7 @@ export const CONDITION_SURFACE_IDS: readonly string[] = [
   'whp-2023',
   'gridded-index-raster',
   'sst-anomaly',
+  'nino34-box-fill',
   'nino34-box-line',
   'nino34-box-label',
   // The ENSO direction overlay's seat: the interim ocean-current arrows
