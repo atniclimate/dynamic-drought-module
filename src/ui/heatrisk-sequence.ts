@@ -589,7 +589,7 @@ function renderRead(read: SequenceRead): void {
     selectedReadHtml(read) +
     (allZero(read.values)
       ? '<p class="heatrisk-sequence-selected" data-heatrisk-no-elevated>' +
-        '<strong>no elevated heat risk</strong> at this point in any of the seven days.</p>'
+        '<strong>No elevated heat risk</strong> at this point on any of the seven days.</p>'
       : '') +
     `<p id="heatrisk-sequence-alt" class="sr-only">Seven-day HeatRisk text alternative. ${escapeHtml(alternative)}.</p>` +
     '<p class="heatrisk-sequence-source">' +
@@ -620,6 +620,20 @@ function renderState(copy: string): void {
 
 function hide(): void {
   if (host) host.hidden = true;
+}
+
+/**
+ * A read that failed because a newer read replaced it (its controller aborted,
+ * or the point, frames or activation moved on) says nothing about the issuer:
+ * the newer read owns the panel, so a stale AbortError never lands on
+ * "unavailable". A current read that fails on its own is a real failure.
+ */
+export function readFailureIsSuperseded(
+  controllerAborted: boolean,
+  readKeyValue: string,
+  currentKey: string | null
+): boolean {
+  return controllerAborted || currentKey !== readKeyValue;
 }
 
 async function refreshRead(): Promise<void> {
@@ -679,7 +693,17 @@ async function refreshRead(): Promise<void> {
     if (pendingRead?.promise === promise) pendingRead = null;
     renderRead(read);
   } catch (err) {
-    if (controller.signal.aborted) return;
+    const currentKey = selection
+      ? readKey(
+          frames,
+          selection.context.lngLat.lng,
+          selection.context.lngLat.lat,
+          activationGeneration
+        )
+      : null;
+    if (readFailureIsSuperseded(controller.signal.aborted, key, currentKey)) {
+      return;
+    }
     console.warn('[heatrisk-sequence] identify failed.', err);
     if (pendingRead?.promise === promise) pendingRead = null;
     renderState('unavailable');

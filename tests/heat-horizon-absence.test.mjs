@@ -61,3 +61,24 @@ test('the sequence states an all-zero week only when every day was read as 0', (
   assert.match(sequenceSource, /values\.length > 0 && values\.every\(\(value\) => value === 0\)/);
   assert.match(sequenceSource, /data-heatrisk-no-elevated/);
 });
+
+test('the all-zero line is a sentence', () => {
+  assert.match(sequenceSource, /<strong>No elevated heat risk<\/strong> at this point on any of the seven days\./);
+});
+
+test('the horizon note sits in the time block under the chips, not in the details host', () => {
+  const whenBlock = shellSource.slice(
+    shellSource.indexOf('class="shell-when"'),
+    shellSource.indexOf('class="shell-minimap-map"')
+  );
+  assert.match(whenBlock, /id="shell-horizon-note"/);
+  assert.ok(whenBlock.indexOf('shell-horizon-note') > whenBlock.indexOf('shell-horizons'));
+});
+
+test('a superseded read never lands on unavailable; a current failed read still does', async () => {
+  const { readFailureIsSuperseded } = await import('../src/ui/heatrisk-sequence.ts');
+  assert.equal(readFailureIsSuperseded(true, 'k1', 'k1'), true, 'aborted controller');
+  assert.equal(readFailureIsSuperseded(false, 'k1', 'k2'), true, 'a newer point or frame set owns the panel');
+  assert.equal(readFailureIsSuperseded(false, 'k1', null), true, 'selection cleared');
+  assert.equal(readFailureIsSuperseded(false, 'k1', 'k1'), false, 'a current read that failed is unavailable');
+});
