@@ -73,6 +73,7 @@ import {
   NADM_CATEGORIES,
 } from '../../config/palette';
 import { setFraming } from '../../state/framing-store';
+import { framingMayContainNunavut } from './minimap-nunavut';
 import {
   clearOceanFraming,
   getOceanFraming,
@@ -334,16 +335,22 @@ function droughtImpactStrokeWidth(
 export function droughtMaskSentence(
   notAnalyzedPercent: number,
   analysisMaskMissing: boolean | undefined,
+  key: FramingKey,
 ): string {
-  return analysisMaskMissing
-    ? "The Nunavut analysis mask did not load, so Nunavut is counted in this framing's land."
-    : `The Nunavut analysis-mask proxy excludes approximately ${notAnalyzedPercent}% of this framing's land.`;
+  if (analysisMaskMissing) {
+    // A framing that cannot contain Nunavut has nothing to say about the mask.
+    return framingMayContainNunavut(key)
+      ? "The Nunavut analysis mask did not load, so Nunavut is counted in this framing's land."
+      : '';
+  }
+  return `The Nunavut analysis-mask proxy excludes approximately ${notAnalyzedPercent}% of this framing's land.`;
 }
 
 function droughtDescription(
   status: MinimapDroughtSnapshot['status'],
   summary: FramingDroughtSummary | undefined,
   month: string | null,
+  key: FramingKey,
   analysisMaskMissing?: boolean,
 ): string {
   if (status === 'loading' || status === 'idle') {
@@ -354,7 +361,7 @@ function droughtDescription(
   }
   const partial =
     summary.coverage === 'live-partial'
-      ? ` Coverage is partial. ${droughtMaskSentence(summary.notAnalyzedPercent, analysisMaskMissing)}`
+      ? ` Coverage is partial. ${droughtMaskSentence(summary.notAnalyzedPercent, analysisMaskMissing, key)}`.trimEnd()
       : '';
   return (
     `Approximate area-weighted mean category index: ${droughtClassLabel(summary.averageClass)}, ` +
@@ -686,6 +693,7 @@ function accessibleName(
           drought.status,
           drought.summaries[key],
           drought.month,
+          key,
           drought.analysisMaskMissing,
         )
       : metricContext === 'wildfire'
@@ -955,7 +963,7 @@ export function Minimap({
       : ensoScaleAccessibleText ?? unshadedNote(metricContext);
   const activePartialNote =
     activeDrought?.coverage === 'live-partial'
-      ? ` ${droughtMaskSentence(activeDrought.notAnalyzedPercent, drought.analysisMaskMissing)}`
+      ? ` ${droughtMaskSentence(activeDrought.notAnalyzedPercent, drought.analysisMaskMissing, active!)}`.trimEnd()
       : '';
   const activeWildfireNote =
     activeWildfire?.status === 'live-partial'
@@ -990,11 +998,15 @@ export function Minimap({
           aria-label={scaleAccessibleText}
           title={
             showDroughtMetric
-              ? 'North American Drought Monitor monthly consensus; approximate area-weighted mean category index; Nunavut analysis exclusion adapted from Statistics Canada 2021 Digital Boundary Files'
+              ? `North American Drought Monitor monthly consensus; approximate area-weighted mean category index; ${
+                  drought.analysisMaskMissing
+                    ? 'the Nunavut analysis exclusion (adapted from Statistics Canada 2021 Digital Boundary Files) did not load'
+                    : 'Nunavut analysis exclusion adapted from Statistics Canada 2021 Digital Boundary Files'
+                }`
               : showWildfireMetric
                 ? wildfire.checkedAtUtc === null
                   ? scaleAccessibleText
-                  : `${scaleAccessibleText} ${COUNT_DEPTH_NOTE} ${checkedTimeLabel(wildfire.checkedAtUtc)} is the browser check time, not a source observation time.`
+                  : `${COUNT_DEPTH_NOTE} ${scaleAccessibleText} ${checkedTimeLabel(wildfire.checkedAtUtc)} is the browser check time, not a source observation time.`
               : scaleAccessibleText
           }
         >
