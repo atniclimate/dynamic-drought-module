@@ -137,11 +137,31 @@ export default {
       });
     }
 
-    const meta = await env.ddm_terrain.head(key);
+    // The reader's own shape (`bytes=a-b`, the only one PMTiles sends) is
+    // answered with ONE storage read: the object's size arrives with its
+    // body. A storage read measured about 0.18 s (2026-10-12) and the checked
+    // path below spends two. A range R2 refuses throws here and falls through
+    // to that path, which answers 416.
+    const header = request.headers.get('Range');
+    const exact = /^bytes=(\d+)-(\d+)$/.exec(header?.trim() ?? '');
+    let object: R2ObjectBody | null = null;
+    if (exact && Number(exact[2]) >= Number(exact[1])) {
+      const offset = Number(exact[1]);
+      try {
+        object = await env.ddm_terrain.get(key, {
+          range: { offset, length: Number(exact[2]) - offset + 1 }
+        });
+      } catch {
+        object = null;
+      }
+    }
+
+    const meta = object ?? (await env.ddm_terrain.head(key));
     if (meta === null) return corsResponse(404, 'No such archive.\n');
 
-    const range = parseRange(request.headers.get('Range'), meta.size);
+    const range = parseRange(header, meta.size);
     if (range === 'unsatisfiable') {
+      void object?.body.cancel();
       return new Response(null, {
         status: 416,
         headers: {
@@ -152,7 +172,7 @@ export default {
       });
     }
 
-    const object =
+    object ??=
       range === null
         ? await env.ddm_terrain.get(key)
         : await env.ddm_terrain.get(key, { range });
