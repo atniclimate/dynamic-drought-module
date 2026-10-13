@@ -45,7 +45,8 @@ import type { TemporalHorizonKey } from '../config/clusters';
  *   dmode    'chg1' | 'chg4', the USDM change-map view mode
  *   sst      YYYY-MM-DD selected SST anomaly frame (always paused on load;
  *            playback state is deliberately never serialized)
- *   flow     currents | wind | jet | waves, optional ENSO model direction paths
+ *   flow     currents | wind | jet | waves | pwat, optional ENSO model overlay
+ *            (direction paths, or the precipitable water shade)
  *   flowink  dark, optional high-contrast dark arrows (default light)
  *   heatday  one-based HeatRisk frame position; the layer resolves that
  *            position only against the service's advertised granule list

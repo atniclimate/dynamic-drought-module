@@ -122,6 +122,7 @@ const UGRD = fixture('gfs1p00-UGRD-10m-f006.grib2');
 const VGRD = fixture('gfs1p00-VGRD-10m-f006.grib2');
 const JET_UGRD = fixture('gfs1p00-UGRD-250mb-f006.grib2');
 const JET_VGRD = fixture('gfs1p00-VGRD-250mb-f006.grib2');
+const PWAT = fixture('gfs1p00-PWAT-atmos-f006.grib2');
 
 const refusedByBound = (variable) => (e) =>
   e instanceof RangeError && new RegExp(`^${variable} `).test(e.message) && /outside the plausible range/.test(e.message);
@@ -334,6 +335,49 @@ test('jet-level wind has its own bound, 150 m/s at 250 mb, and the 10 m bound st
   assert.deepEqual(PLAUSIBLE_RANGE.UGRD, [-100, 100]);
 });
 
+test('precipitable water is refused outside 0 to 120 kg m-2, with a missing value, or as one value everywhere', () => {
+  const field = () => Float32Array.from({ length: WIND_POINTS }, (_, i) => 10 + (i % 50));
+  const edge = field();
+  edge[123] = 120;
+  edge[124] = 0;
+  const packet = buildPacket('pwat', [edge], CYCLE, 6);
+  // A scalar packet: the values as `m`, no direction, every node valid.
+  assert.deepEqual([packet.kind, packet.u, packet.v], ['pwat', null, null]);
+  assert.equal(packet.m.length, WIND_POINTS);
+  assert.deepEqual([packet.m[123], packet.m[124], packet.m[0]], [12_000, 0, 1_000], 'steps of 0.01 kg m-2');
+  assert.ok(packet.mask.every((value) => value === 1));
+  for (const x of [120.01, 150, -0.01, -5, NaN, Number.POSITIVE_INFINITY]) {
+    const bad = field();
+    bad[40_000] = x;
+    assert.throws(() => buildPacket('pwat', [bad], CYCLE, 6), refusedByBound('PWAT'), `PWAT ${x}`);
+  }
+  // A field that decodes to one value at every point claims nothing about the air: refused, never shaded.
+  for (const x of [0, 20, 60]) {
+    assert.throws(
+      () => buildPacket('pwat', [new Float32Array(WIND_POINTS).fill(x)], CYCLE, 6),
+      (e) => e instanceof RangeError && /^PWAT holds one value at every point/.test(e.message),
+      `constant ${x}`
+    );
+  }
+  // One message, never two.
+  assert.throws(() => buildPacket('pwat', [field(), field()], CYCLE, 6), /expected 1 fields/);
+  // The real message passes whole through the Worker core.
+  const frame = (kind, ...messages) => decodeFrame({ kind, cycle: CYCLE, forecastHour: 6, messages: messages.map(buffer) });
+  const real = frame('pwat', PWAT);
+  assert.equal(real.m.length, WIND_POINTS);
+  assert.ok(real.m.every((q) => q >= 0 && q <= 12_000));
+  // The same message with every value moved up 40 kg m-2 (to about 124) still parses, and the Worker refuses it.
+  const shifted = shiftedReference(PWAT, 400_000); // D = 4: R is in ten-thousandths of kg m-2
+  const decoded = decodeGrib2(shifted, { grid: GLOBAL_1P00 }).values;
+  assert.ok(decoded.some((x) => x > 120), 'the shifted message decodes to values above 120 kg m-2');
+  assert.throws(() => frame('pwat', shifted), refusedByBound('PWAT'));
+  // A wind message is refused as precipitable water by its field and surface, before any value is read, and the reverse.
+  const wrongField = (e) => e.name === 'GribError' && e.code === 'expectation';
+  assert.throws(() => frame('pwat', UGRD), wrongField, 'UGRD is not precipitable water');
+  assert.throws(() => frame('wind', PWAT, VGRD), wrongField, 'precipitable water is not a wind component');
+  assert.deepEqual(PLAUSIBLE_RANGE.PWAT, [0, 120]);
+});
+
 test('an HTSGW value over 30 m is refused', () => {
   const dir = () => new Float32Array(WAVE_POINTS).fill(270);
   const hs = () => new Float32Array(WAVE_POINTS).fill(1.5);
@@ -387,6 +431,7 @@ test('the committed fixtures pass the plausibility bounds', (t) => {
     ['gfs1p00-VGRD-10m-f006.grib2', 'VGRD', GLOBAL_1P00],
     ['gfs1p00-UGRD-250mb-f006.grib2', 'UGRD', GLOBAL_1P00, '250 mb'],
     ['gfs1p00-VGRD-250mb-f006.grib2', 'VGRD', GLOBAL_1P00, '250 mb'],
+    ['gfs1p00-PWAT-atmos-f006.grib2', 'PWAT', GLOBAL_1P00, 'entire atmosphere (considered as a single layer)'],
     ['wcoast0p16-HTSGW-f006.grib2', 'HTSGW', WCOAST_0P16],
     ['wcoast0p16-DIRPW-f006.grib2', 'DIRPW', WCOAST_0P16],
     ['global0p25-HTSGW-f006.grib2', 'HTSGW', GLOBAL_0P25],
@@ -405,7 +450,7 @@ test('the committed fixtures pass the plausibility bounds', (t) => {
       lo = Math.min(lo, x);
       hi = Math.max(hi, x);
     }
-    const bound = PLAUSIBLE_RANGE[level ? `${variable}:${level}` : variable];
+    const bound = PLAUSIBLE_RANGE[`${variable}:${level}`] ?? PLAUSIBLE_RANGE[variable];
     t.diagnostic(`${name}: ${variable} ${lo} to ${hi}, bound ${bound.join(' to ')}`);
     assert.doesNotThrow(() => checkPlausible(variable, values, level), name);
   }

@@ -44,8 +44,10 @@ import {
   type DecodeRequest,
   type FlowMessage,
   type FlowPacket,
-  type NoddKind
+  type NoddKind,
+  type VectorNoddKind
 } from './source';
+import type { ScalarField, ScalarKind } from './shade';
 
 const HOUR = 3_600_000;
 const CYCLE_MS = 6 * HOUR;
@@ -60,14 +62,16 @@ export const MAX_CYCLE_TRIES = 3;
 /**
  * Fixed transport ceilings, independent of the untrusted index. The committed
  * 2026-10-05 06Z fixtures carry 79,086/79,607 B wind messages,
- * 53,661/54,493 B jet-level (250 mb) messages and 887,386/428,128 B global
- * wave messages. These ceilings leave several times those sizes for packing
- * variation while bounding each read and their sum.
+ * 53,661/54,493 B jet-level (250 mb) messages, a 97,690 B precipitable
+ * water message (one message is its whole frame) and 887,386/428,128 B
+ * global wave messages. These ceilings leave several times those sizes for
+ * packing variation while bounding each read and their sum.
  */
 const MAX_FLOW_READ_BYTES = 4 * 1024 * 1024;
 const FLOW_BYTE_LIMITS: Readonly<Record<NoddKind, { readonly message: number; readonly frame: number }>> = {
   wind: { message: 512 * 1024, frame: 768 * 1024 },
   jet: { message: 512 * 1024, frame: 768 * 1024 },
+  pwat: { message: 512 * 1024, frame: 512 * 1024 },
   waves: { message: MAX_FLOW_READ_BYTES, frame: 6 * 1024 * 1024 }
 };
 
@@ -307,10 +311,14 @@ function decodeIn(worker: DecodeWorkerLike, request: DecodeRequest, signal: Abor
 
 /**
  * Read, decode and stamp one frame of `kind` from NODD. Resolves to a
- * FlowField (wind at either level uncropped, waves cropped, all TO); rejects with an
+ * FlowField (wind at either level uncropped, waves cropped, all TO), or to a
+ * ScalarField for a scalar kind (precipitable water, uncropped); rejects with an
  * AbortError when the activation signal aborts, or a FlowUnavailableError.
  */
-export async function readFlowFrame(kind: NoddKind, options: FlowReadOptions): Promise<FlowField> {
+export function readFlowFrame(kind: ScalarKind, options: FlowReadOptions): Promise<ScalarField>;
+export function readFlowFrame(kind: VectorNoddKind, options: FlowReadOptions): Promise<FlowField>;
+export function readFlowFrame(kind: NoddKind, options: FlowReadOptions): Promise<FlowField | ScalarField>;
+export async function readFlowFrame(kind: NoddKind, options: FlowReadOptions): Promise<FlowField | ScalarField> {
   const { signal } = options;
   if (signal.aborted) throw abortError();
   const now = options.now ?? Date.now;

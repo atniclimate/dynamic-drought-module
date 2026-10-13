@@ -7,7 +7,9 @@
  * FROM into its TO unit vector through `waveToVector` (./source, the one
  * rotation), crops to the kind's coverage box, quantizes to Int16 steps and
  * transfers the result. A global 0.25 degree field is 4.15 MB as Float32;
- * the wave crop as Int16 plus a byte mask is about 0.77 MB.
+ * the wave crop as Int16 plus a byte mask is about 0.77 MB. A scalar kind
+ * (precipitable water) is one message with no direction: its whole grid is
+ * quantized and transferred as it is.
  *
  * Any refusal (a template the decoder does not implement, a structurally
  * invalid message, a message that is not the one asked for, an unmasked
@@ -21,9 +23,10 @@
  */
 
 import { decodeGrib2 } from './grib2';
+import { isScalarKind } from './shade';
 import {
   FLOW_SOURCES, PACKET_NO_VALUE, waveToVector,
-  type DecodeReply, type DecodeRequest, type FlowPacket, type NoddKind
+  type DecodeReply, type DecodeRequest, type FlowMessage, type FlowPacket, type NoddKind
 } from './source';
 
 const HOUR = 3_600_000;
@@ -37,6 +40,13 @@ export const WIND_COMPONENT_MAX_MS = 100;
  * leaves about half again that for a model peak.
  */
 export const JET_COMPONENT_MAX_MS = 150;
+/**
+ * GFS PWAT, kg m-2: a column cannot hold less than no water. The wettest
+ * column decoded so far is 83.9 kg m-2 (the 2026-10-05 06Z cycle; 70.6 on
+ * 2026-10-13 12Z; admission gfs-runtime-nodd). 120 leaves about half again
+ * that for a model peak.
+ */
+export const PRECIPITABLE_WATER_MAX_KG_M2 = 120;
 /** GFS-Wave HTSGW, m: the largest buoy-measured significant wave height is about 19 m; 30 m leaves room for a model peak. */
 export const WAVE_HEIGHT_MAX_M = 30;
 /** GFS-Wave DIRPW, degrees true clockwise from north: 360 is accepted in case the issuer writes north as 360. */
@@ -52,6 +62,7 @@ export const PLAUSIBLE_RANGE: Readonly<Record<string, readonly [number, number]>
   VGRD: [-WIND_COMPONENT_MAX_MS, WIND_COMPONENT_MAX_MS],
   'UGRD:250 mb': [-JET_COMPONENT_MAX_MS, JET_COMPONENT_MAX_MS],
   'VGRD:250 mb': [-JET_COMPONENT_MAX_MS, JET_COMPONENT_MAX_MS],
+  PWAT: [0, PRECIPITABLE_WATER_MAX_KG_M2],
   HTSGW: [0, WAVE_HEIGHT_MAX_M],
   DIRPW: [0, WAVE_DIRECTION_MAX_DEG]
 };
@@ -103,6 +114,16 @@ export function buildPacket(kind: NoddKind, values: readonly Float32Array[], cyc
   }
   // The whole grid, not only the crop: a value out of bound anywhere marks the message as damaged.
   s.messages.forEach((message, k) => checkPlausible(message.variable, values[k] as Float32Array, message.level));
+  if (isScalarKind(kind)) {
+    // One message and no direction: the values travel as `m`, every node valid (the bound refuses a NaN).
+    // shortcut: a scalar kind is read whole; a cropped scalar row needs the crop loop below.
+    const only = values[0] as Float32Array;
+    // One value at every point would shade the whole map, or none of it, as if that were the field.
+    if (only.every((x) => x === only[0])) {
+      throw new RangeError(`${(s.messages[0] as FlowMessage).variable} holds one value at every point; the frame is refused`);
+    }
+    return { kind, cycle, forecastHour, u: null, v: null, m: quantize(only, s.step.m, 'value'), mask: new Uint8Array(only.length).fill(1) };
+  }
   const c = s.crop ?? { column0: 0, row0: 0, nx: ni, ny: nj };
   if (c.row0 < 0 || c.row0 + c.ny > nj || c.nx > ni) throw new Error(`${kind}: the crop leaves the grid`);
   const n = c.nx * c.ny;
@@ -182,8 +203,8 @@ if (typeof (globalThis as { WorkerGlobalScope?: unknown }).WorkerGlobalScope !==
     try {
       const packet = decodeFrame(event.data);
       reply = { ok: true, packet };
-      transfer = [packet.u.buffer, packet.v.buffer, packet.mask.buffer];
-      if (packet.m) transfer.push(packet.m.buffer);
+      transfer = [packet.mask.buffer];
+      for (const part of [packet.u, packet.v, packet.m]) if (part) transfer.push(part.buffer);
     } catch (e) {
       reply = { ok: false, error: e instanceof Error ? `${e.name}: ${e.message}` : String(e) };
     }

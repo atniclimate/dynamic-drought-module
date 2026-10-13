@@ -21,7 +21,16 @@ registerHooks({
       export const candidateCycle = () => globalThis.__field.meta.cycle;
       export const forecastHourFor = () => 6;
       export const isStale = () => false;
-      export const readFlowFrame = async () => globalThis.__field;
+      export const readFlowFrame = async () => {
+        if (globalThis.__readError) throw globalThis.__readError;
+        return globalThis.__field;
+      };
+      // A scalar field mounts as a still shade: no state callback, only the 24-hour limit.
+      export function mountShadeView(map, field, options) {
+        globalThis.__shadeStale = options.onStale;
+        globalThis.__mounts.push(field);
+        return { field, dispose() { globalThis.__shadeDisposed = (globalThis.__shadeDisposed ?? 0) + 1; }, halt() {} };
+      }
       // The committed currents frame: the read is held open by the test, and the grid is picked by latitude.
       export const readCurrentsFrame = ({ signal }) => globalThis.__flowRead(signal);
       export const fieldNearestLatitude = (fields, lat) => fields[lat > 39.5 ? 1 : 0];
@@ -337,15 +346,91 @@ test('a held currents frame is read once: a second choice inside ten minutes ask
 test('with the overlay off the panel carries no credit', () => {
   boot('off');
   assert.equal(host.querySelector('.enso-flow-credit'), null);
-  assert.equal(line().textContent, 'Direction overlay off');
+  // True of every kind: the shade is no direction overlay.
+  assert.equal(line().textContent, 'Overlay off');
+  assert.deepEqual(live.writes, ['Overlay off']);
 });
 
 test('the control lists every kind by its label, with jet-level wind beside the 10 m wind', () => {
   boot('off');
   assert.deepEqual(
     host.querySelectorAll('[data-flow-kind]').map((button) => [button.dataset.flowKind, button.textContent]),
-    [['off', 'Off'], ['currents', 'Ocean currents'], ['wind', 'Atmospheric currents'], ['jet', 'Jet-level wind'], ['waves', 'Ocean waves']]
+    [
+      ['off', 'Off'], ['currents', 'Ocean currents'], ['wind', 'Atmospheric currents'], ['jet', 'Jet-level wind'], ['waves', 'Ocean waves'],
+      ['pwat', 'Precipitable water']
+    ]
   );
+  assert.equal(panel().getAttribute('aria-label'), 'Ocean and atmosphere overlays');
+  assert.equal(host.querySelector('.enso-flow-toolbar').hidden, false, 'the arrow colour shows for the line kinds');
+});
+
+test('live precipitable water is a still shade: a state line and bins for the key, nothing to pause, no arrow colour', async () => {
+  const snapshots = [];
+  const record = (event) => snapshots.push(event.detail);
+  window.addEventListener('ddm:enso-flow-snapshot', record);
+  const wind = globalThis.__field;
+  // A ScalarField as the reader hands it over (src/layers/flow/shade.ts): values, no direction.
+  const water = { kind: 'pwat', values: new Float32Array(4), meta: wind.meta };
+  globalThis.__field = water;
+  globalThis.__shadeDisposed = 0;
+  try {
+    boot('pwat');
+    assert.deepEqual(live.writes, ['Precipitable water · loading · NOAA GFS precipitable water']);
+    assert.equal(host.querySelector('.enso-flow-toolbar').hidden, true, 'a shade has no arrows to colour');
+    await until(() => panel().dataset.status === 'live');
+    assert.deepEqual(globalThis.__mounts, [water], 'one shade, mounted once');
+    const drawn = snapshots.at(-1);
+    assert.equal(drawn.label, 'Precipitable water');
+    assert.match(drawn.line, /^live · Model run .+ UTC · Model valid .+ UTC$/);
+    assert.deepEqual(drawn.notes, ['Shade deepens in steps: none under 15, then 15 to 30, 30 to 45, 45 or more kg m-2.']);
+    assert.equal(drawn.provenance, 'derived from NOAA GFS');
+    // The key offers Pause only where `motion` says something can move (src/ui/map-key.ts syncFlowPause).
+    assert.equal(drawn.motion, 'none');
+    assert.equal(live.writes.at(-1), `Precipitable water · ${drawn.line}`);
+    assert.deepEqual({ ...panel().dataset }, { status: 'live', flowForm: 'shade', flowMotion: 'none', flowFeatures: '0', flowDrawn: 'pwat' });
+    // The source line names the issuer's field; the sentences about lines, direction and navigation do not apply.
+    assert.ok(host.textContent.includes(
+      'NOAA GFS precipitable water (entire atmosphere); global model output, updated every six hours. This is model context, independently timed from the observed SST map.'
+    ));
+    for (const words of [host.textContent, ...live.writes, ...snapshots.flatMap((s) => [s.label, s.line, ...s.notes])]) {
+      assert.doesNotMatch(words, /navigation|calm|hold still|atmospheric river|forecast|transport|warning|\bmm\b/i, words);
+    }
+    // A pan reads and mounts nothing: the image was made once from the frame.
+    mapEvents.get('moveend')();
+    assert.deepEqual(globalThis.__mounts, [water]);
+    // Past cycle + 24 h while mounted, the shade leaves and the panel says which frame it held.
+    globalThis.__shadeStale();
+    assert.equal(panel().dataset.status, 'unavailable');
+    assert.match(snapshots.at(-1).line, /^unavailable · The held NOAA GFS frame from .+ UTC is past its 24-hour limit$/);
+    assert.deepEqual(snapshots.at(-1).notes, ['No moist or dry condition is inferred from a failed request.']);
+    assert.equal(panel().dataset.flowDrawn, '');
+    assert.ok(globalThis.__shadeDisposed >= 1, 'the shade is taken down');
+  } finally {
+    window.removeEventListener('ddm:enso-flow-snapshot', record);
+    globalThis.__field = wind;
+  }
+});
+
+test('a failed precipitable water read says so in words fit for a field with no direction', async () => {
+  const snapshots = [];
+  const record = (event) => snapshots.push(event.detail);
+  window.addEventListener('ddm:enso-flow-snapshot', record);
+  globalThis.__readError = new Error('synthetic refusal');
+  try {
+    boot('pwat');
+    await until(() => panel().dataset.status === 'unavailable');
+    assert.equal(line().textContent, 'unavailable · NOAA GFS precipitable water did not load');
+    assert.deepEqual(snapshots.at(-1).notes, ['No moist or dry condition is inferred from a failed request.']);
+    assert.equal(snapshots.at(-1).motion, undefined);
+    assert.deepEqual(globalThis.__mounts, [], 'nothing is drawn from a failed read');
+    // A line kind keeps its own sentence.
+    boot('wind');
+    await until(() => panel().dataset.status === 'unavailable');
+    assert.deepEqual(snapshots.at(-1).notes, ['No direction or calm condition is inferred from a failed request.']);
+  } finally {
+    window.removeEventListener('ddm:enso-flow-snapshot', record);
+    globalThis.__readError = null;
+  }
 });
 
 for (const [kind, label, loading, bins] of [

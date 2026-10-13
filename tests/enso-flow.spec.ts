@@ -120,7 +120,7 @@ test('all three ENSO overlays remain bounded, independently timed, and preserve 
     .toBe(flowDefault !== undefined && flowDefault !== 'currents');
   expect(calls.length > 0, 'the currents frame is read at boot only where currents are the default').toBe(flowDefault === 'currents');
   const before = calls.length;
-  for (const kind of ['currents', 'wind', 'jet', 'waves']) {
+  for (const kind of ['currents', 'wind', 'jet', 'pwat', 'waves']) {
     await panel.locator(`[data-flow-kind="${kind}"]`).click();
     // The wave crop ends at 165 E and 100 W, and the currents grid at 39 N and 130 E, inside this Pacific view's edges.
     await expect(panel).toHaveAttribute('data-status', kind === 'waves' || kind === 'currents' ? /^live/ : 'live');
@@ -129,7 +129,7 @@ test('all three ENSO overlays remain bounded, independently timed, and preserve 
     expect(new URLSearchParams(await search(page)).get('flow')).toBe(kind === 'wind' ? null : kind);
   }
   // Only ocean currents read the committed frame: its header and its grid files, once each, from the
-  // app's own origin. Wind, jet-level wind and waves read the NODD fixtures.
+  // app's own origin. Wind, jet-level wind, precipitable water and waves read the NODD fixtures.
   const origin = new URL(page.url()).origin;
   expect(calls.slice(before).map((url) => url.origin)).toEqual(FRAME.grids.map(() => origin).concat(origin));
   expect(calls.slice(before).map((url) => url.pathname.split('/').pop()).sort())
@@ -168,7 +168,7 @@ test('turning an ENSO overlay off aborts its held request and drops the late res
   await failed;
   await expect(panel).toHaveAttribute('data-status', 'off');
   await continueLocalRoute(held!).catch(() => undefined);
-  await expect(panel.locator('.enso-flow-status')).toHaveText('Direction overlay off');
+  await expect(panel.locator('.enso-flow-status')).toHaveText('Overlay off');
   expect(new URLSearchParams(await search(page)).get('flow')).toBe('off');
 });
 

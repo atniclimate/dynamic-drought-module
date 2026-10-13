@@ -5,7 +5,8 @@
  * closure or the sst-anomaly chunk.
  *
  * It exports the NODD reader, the reader of the committed currents frame
- * (./currents) and one view controller, `mountFlowView`, that
+ * (./currents), `mountShadeView` for a scalar field (precipitable water: a
+ * still shade, ./shade) and one view controller, `mountFlowView`, that
  * puts a decoded FlowField on the map and keeps it honest:
  * - the moving form: the WebGL2 ribbon custom layer `flow-paths`, driven by
  *   the 30 Hz motion loop (Pause, reduced motion, a hidden tab, the map off
@@ -23,13 +24,14 @@
  * `halt()` is the off-intent half (it stops the loop and every repaint and
  * touches no map layer); `dispose()` removes the layers and the source.
  */
-import type { GeoJSONSource, Map as MlMap } from 'maplibre-gl';
+import type { GeoJSONSource, ImageSource, Map as MlMap } from 'maplibre-gl';
 import { reassertThematicOrder } from '../../map/layer-order';
 import { type ViewQuad, PHONE_MAX_WIDTH_PX, planForm } from './advect';
 import { type FlowField, MERCATOR_MAX_LAT, isStale, latOf, lonOf, mercY } from './field';
 import type { FlowInkName } from './ink';
 import { type MotionHold, type MotionLoop, type MotionState, createMotionLoop, listenMotionRequests } from './motion-loop';
 import { FlowRibbonLayer, viewQuadOf } from './ribbon-layer';
+import { SHADE_COORDINATES, SHADE_IMAGE_SIZE, shadePixels, type ScalarField } from './shade';
 import { STILL_LAYER_IDS, STILL_SOURCE_ID, buildStillForm, hasModelNodeInView, nodeArrows, stillLayers } from './still';
 
 export { readFlowFrame, candidateCycle, forecastHourFor, MAX_CYCLE_TRIES } from './nodd';
@@ -37,12 +39,15 @@ export { readCurrentsFrame, fieldNearestLatitude } from './currents';
 export { isStale } from './field';
 export type { FlowField, FlowKind } from './field';
 export type { MotionHold, MotionState } from './motion-loop';
+export type { ScalarField } from './shade';
 
 /** The moving form's custom layer id (src/map/layer-order.ts seats it). */
 export const FLOW_PATHS_ID = 'flow-paths';
-/** Every map layer id the view adds, bottom to top. */
+/** A scalar field's shade: its raster layer and its image source share this id (src/map/layer-order.ts seats it). */
+export const FLOW_SHADE_ID = 'flow-shade';
+/** Every map layer id the views add, bottom to top. */
 export const FLOW_LAYER_IDS: readonly string[] = [
-  STILL_LAYER_IDS.casing, STILL_LAYER_IDS.paths, STILL_LAYER_IDS.marks, FLOW_PATHS_ID
+  FLOW_SHADE_ID, STILL_LAYER_IDS.casing, STILL_LAYER_IDS.paths, STILL_LAYER_IDS.marks, FLOW_PATHS_ID
 ];
 /** The still-form rebuild debounce after moveend and resize (moving-paths section 14). */
 export const REBUILD_DEBOUNCE_MS = 150;
@@ -108,7 +113,7 @@ function graphicsAreLost(map: MlMap): boolean {
 
 function removeFlowLayers(map: MlMap): void {
   for (const id of [...FLOW_LAYER_IDS].reverse()) if (map.getLayer(id)) map.removeLayer(id);
-  if (map.getSource(STILL_SOURCE_ID)) map.removeSource(STILL_SOURCE_ID);
+  for (const id of [STILL_SOURCE_ID, FLOW_SHADE_ID]) if (map.getSource(id)) map.removeSource(id);
 }
 
 /** This closure retains only the map and layer ids, never a disposed field or ribbon. */
@@ -211,6 +216,104 @@ function widenedQuad(field: FlowField, view: ViewQuad): ViewQuad {
   const x0 = minX - dx;
   const x1 = maxX + dx;
   return { ...view, c: Float64Array.from([x0, north, x1, north, x1, south, x0, south]) };
+}
+
+export interface ShadeViewOptions {
+  /** The frame passed its 24-hour limit while mounted; the shade has already left the map. */
+  readonly onStale: () => void;
+  /** Epoch ms; defaults to Date.now. */
+  readonly now?: () => number;
+}
+
+export interface ShadeView {
+  readonly field: ScalarField;
+  /** Off intent: drop the timer and every listener now; no map layer is touched. */
+  halt(): void;
+  /** Teardown: halt, then remove the layer and the source. */
+  dispose(): void;
+}
+
+/** One picture for each frame: a frame mounted again inside the panel's ten-minute hold is not drawn again. */
+const shadeImages = new WeakMap<ScalarField, ImageData>();
+
+/**
+ * Put a scalar `field` on `map` as a still shade: one image made from the
+ * frame (./shade), handed to an image source with no URL (so nothing is
+ * requested) and drawn by one raster layer with linear resampling. A pan or
+ * a zoom makes nothing again. The shade never moves, so it runs no loop and
+ * asks for no repaint of its own. Past cycle + 24 h it leaves the map.
+ */
+export function mountShadeView(map: MlMap, field: ScalarField, options: ShadeViewOptions): ShadeView {
+  // A new view now owns these ids. An old deferred teardown must not erase it.
+  pendingRemovals.get(map)?.();
+  const now = options.now ?? Date.now;
+  const image = shadeImages.get(field) ?? new ImageData(shadePixels(field, SHADE_IMAGE_SIZE), SHADE_IMAGE_SIZE, SHADE_IMAGE_SIZE);
+  shadeImages.set(field, image);
+  let halted = false;
+  let disposed = false;
+  let staleTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const attach = (): void => {
+    if (!map.getSource(FLOW_SHADE_ID)) map.addSource(FLOW_SHADE_ID, { type: 'image', coordinates: SHADE_COORDINATES });
+    // Always handed over again: a style restored after a lost context brings the source back without its pixels.
+    (map.getSource(FLOW_SHADE_ID) as ImageSource).updateImage({ image });
+    if (!map.getLayer(FLOW_SHADE_ID)) {
+      map.addLayer({
+        id: FLOW_SHADE_ID, type: 'raster', source: FLOW_SHADE_ID,
+        paint: { 'raster-resampling': 'linear', 'raster-fade-duration': 0 }
+      });
+    }
+    reassertThematicOrder(map);
+  };
+  const reattach = (): void => {
+    if (halted) return;
+    try {
+      attach();
+    } catch {
+      // The restored style is not done loading; its 'style.load' calls this again.
+    }
+  };
+  const onRestored = (): void => {
+    map.off('style.load', reattach);
+    map.once('style.load', reattach);
+    reattach();
+  };
+
+  function halt(): void {
+    if (halted) return;
+    halted = true;
+    if (staleTimer !== null) clearTimeout(staleTimer);
+    staleTimer = null;
+    map.off('webglcontextrestored', onRestored);
+    map.off('style.load', reattach);
+  }
+  function dispose(): void {
+    if (disposed) return;
+    disposed = true;
+    halt();
+    removeFlowLayers(map);
+    if (!map.getStyle() || graphicsAreLost(map)) removeFlowAfterRestore(map);
+  }
+
+  // A mount that throws part way takes back what it added and rethrows, as mountFlowView does.
+  try {
+    attach();
+    map.on('webglcontextrestored', onRestored);
+    // The frame's 24-hour limit falls due on its own, without a pan.
+    if (field.meta.staleAfter !== null) {
+      const due = field.meta.staleAfter - now() + 1;
+      if (due > 0 && due < 2 ** 31 - 1) {
+        staleTimer = setTimeout(() => {
+          dispose();
+          options.onStale();
+        }, due);
+      }
+    }
+  } catch (error) {
+    dispose();
+    throw error;
+  }
+  return { field, halt, dispose };
 }
 
 /** Put `field` on `map` in the form the view and the motion state allow. */

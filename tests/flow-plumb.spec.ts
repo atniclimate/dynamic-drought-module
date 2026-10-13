@@ -96,6 +96,8 @@ const INDEX_FIXTURE: Readonly<Record<FlowKind, { readonly file: string; readonly
   wind: { file: 'gfs.t06z.pgrb2.1p00.f006.idx', bytes: 39_706 },
   // Jet-level wind reads the same atmos index as the 10 m wind.
   jet: { file: 'gfs.t06z.pgrb2.1p00.f006.idx', bytes: 39_706 },
+  // Precipitable water is one more message of the same file.
+  pwat: { file: 'gfs.t06z.pgrb2.1p00.f006.idx', bytes: 39_706 },
   waves: { file: 'gfswave.t06z.global.0p25.f006.grib2.idx', bytes: 1_005 }
 };
 
@@ -463,7 +465,7 @@ test.describe('E1-5 flow plumbing (ENSO-FLOW-PLAN block E1)', () => {
     // reader's own init: the `.idx` by the kind's capped Range, then each
     // message of FLOW_SOURCES by the span the reader's own `locateMessage`
     // finds in the index the stub answered.
-    const served: Record<FlowKind, string[]> = { wind: [], jet: [], waves: [] };
+    const served: Record<FlowKind, string[]> = { wind: [], jet: [], pwat: [], waves: [] };
     for (const kind of Object.keys(FLOW_SOURCES) as FlowKind[]) {
       const meta = frameMeta(kind, FIXTURE_CYCLE, FIXTURE_HOUR);
       const read = readerIndexRead(kind);
@@ -494,6 +496,7 @@ test.describe('E1-5 flow plumbing (ENSO-FLOW-PLAN block E1)', () => {
     expect(served).toEqual({
       wind: ['gfs1p00-UGRD-10m-f006', 'gfs1p00-VGRD-10m-f006'],
       jet: ['gfs1p00-UGRD-250mb-f006', 'gfs1p00-VGRD-250mb-f006'],
+      pwat: ['gfs1p00-PWAT-atmos-f006'],
       waves: ['global0p25-DIRPW-f006', 'global0p25-HTSGW-f006']
     });
     expect(noddStubLog(page).filter((entry) => entry.answer === 'unstubbed')).toEqual([]);

@@ -2,11 +2,12 @@ import { HAZARD_CLUSTERS, type HazardClusterDef } from '../config/clusters';
 import { normalizeSidebarParam } from './url';
 
 /**
- * Every flow kind, each its own `flow=` token: `jet` is GFS wind at 250 hPa.
+ * Every flow kind, each its own `flow=` token: `jet` is GFS wind at 250 hPa,
+ * `pwat` GFS precipitable water (a still shade, the one kind with no lines).
  * A new kind is one entry here; the tables keyed by kind then fail to
  * compile until they carry it.
  */
-export const ENSO_FLOW_KINDS = ['off', 'currents', 'wind', 'jet', 'waves'] as const;
+export const ENSO_FLOW_KINDS = ['off', 'currents', 'wind', 'jet', 'waves', 'pwat'] as const;
 /** Additive ENSO context preferences, independent of the SST date rail. */
 export type EnsoFlowKind = (typeof ENSO_FLOW_KINDS)[number];
 export type EnsoFlowInk = 'light' | 'dark';

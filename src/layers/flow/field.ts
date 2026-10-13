@@ -181,7 +181,7 @@ export function createFlowField(input: FlowFieldInput): FlowField {
 }
 
 /** True when the frame is past its staleAfter at `time` (epoch ms) and must not draw. */
-export function isStale(field: FlowField, time: number): boolean {
+export function isStale(field: Pick<FlowField, 'meta'>, time: number): boolean {
   return field.meta.staleAfter !== null && time > field.meta.staleAfter;
 }
 

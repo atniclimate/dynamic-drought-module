@@ -15,6 +15,10 @@
  *   line, with no age limit. It holds one grid per region on its native
  *   spacing; the grid under the view's centre draws, and a pan across the
  *   seam swaps grids without a read.
+ * - Precipitable water is NOAA GFS PWAT, one more message of the wind's own
+ *   file by the same read, cache and 24-hour limit. It is a scalar, so it
+ *   draws as a still shade (src/layers/flow/shade.ts) with no lines: no ink,
+ *   no motion, and so no Pause in the key.
  */
 import type * as maplibregl from 'maplibre-gl';
 import {
@@ -22,10 +26,10 @@ import {
   type EnsoFlowKind, type EnsoFlowPreference
 } from '../state/enso-flow';
 import {
-  FLOW_WORDS, currentsBoxNote, flowFormNote, flowLiveLine, flowStaleLine,
+  FLOW_WORDS, currentsBoxNote, flowFormNote, flowLiveLine, flowStaleLine, isShadeKind,
   type ActiveFlowKind, type FlowFieldKind
 } from './enso-flow-data';
-import type { FlowField, FlowView, FlowViewState } from './flow/index';
+import type { FlowField, FlowView, FlowViewState, ScalarField, ShadeView } from './flow/index';
 import '../ui/enso-flow.css';
 
 const CACHE_MS = 10 * 60 * 1000;
@@ -33,7 +37,9 @@ const CACHE_MS = 10 * 60 * 1000;
 const FIELD_CACHE_SIZE = 4;
 /** The control's buttons, in this order: a kind without a label does not compile. */
 const LABELS: Record<EnsoFlowKind, string> = {
-  off: 'Off', currents: 'Ocean currents', wind: 'Atmospheric currents', jet: 'Jet-level wind', waves: 'Ocean waves'
+  off: 'Off', currents: 'Ocean currents', wind: 'Atmospheric currents', jet: 'Jet-level wind', waves: 'Ocean waves',
+  // DRAFT wording (DR-177): the issuer's field name (NCEP GRIB2 table 4.2-0-1, "Precipitable Water").
+  pwat: 'Precipitable water'
 };
 const SOURCES: Record<ActiveFlowKind, string> = {
   // DRAFT wording (DR-177): the issuer's field, UOGRD and VOGRD at 0 m (admission rtofs-currents-producer, 2026-10-13).
@@ -41,7 +47,9 @@ const SOURCES: Record<ActiveFlowKind, string> = {
   wind: 'NOAA GFS, 10 m winds; global model output, updated every six hours',
   // DRAFT wording (DR-177): the issuer's own field, UGRD and VGRD at 250 mb (admission gfs-runtime-nodd, 2026-10-13).
   jet: 'NOAA GFS 250 hPa wind; global model output, updated every six hours',
-  waves: 'NOAA GFS Wave, 0.25°; hourly model output, updated every six hours'
+  waves: 'NOAA GFS Wave, 0.25°; hourly model output, updated every six hours',
+  // DRAFT wording (DR-177): the issuer's field and its `.idx` level words (admission gfs-runtime-nodd, 2026-10-13).
+  pwat: 'NOAA GFS precipitable water (entire atmosphere); global model output, updated every six hours'
 };
 /** The owner's GFS credit, or the currents frame's own: text, never a link or an emblem. */
 const provenanceOf = (kind: ActiveFlowKind): string =>
@@ -49,6 +57,9 @@ const provenanceOf = (kind: ActiveFlowKind): string =>
 /** Sentences the panel and the map key's drawer row share, one source each. */
 const TIMING_NOTE = 'This is model context, independently timed from the observed SST map.';
 const FAILED_NOTE = 'No direction or calm condition is inferred from a failed request.';
+// DRAFT wording (DR-177): the same sentence for a kind with no direction.
+const SHADE_FAILED_NOTE = 'No moist or dry condition is inferred from a failed request.';
+const failedNote = (kind: ActiveFlowKind): string => (isShadeKind(kind) ? SHADE_FAILED_NOTE : FAILED_NOTE);
 const NAVIGATION_NOTE = 'It is unsuitable for coastal navigation.';
 type FlowStatus = 'off' | 'loading' | 'live' | 'live (partial)' | 'no data' | 'unavailable';
 type FlowModule = typeof import('./flow/index');
@@ -76,13 +87,13 @@ const SNAPSHOT_EVENT = 'ddm:enso-flow-snapshot';
 const SNAPSHOT_REQUEST_EVENT = 'ddm:enso-flow-snapshot-request';
 const INACTIVE: FlowSnapshot = { status: 'inactive', label: '', line: '', notes: [] };
 let snapshot: FlowSnapshot = INACTIVE;
-const fieldCache = new Map<string, { stored: number; field: FlowField }>();
+const fieldCache = new Map<string, { stored: number; field: FlowField | ScalarField }>();
 /** The currents frame's grids, held like a NODD frame so a pan or an SST re-activate reads nothing again. */
 let heldCurrents: { stored: number; fields: readonly FlowField[] } | null = null;
 /** Currents only: mount the grid under the view's centre, after a pan. */
 let repick: (() => void) | null = null;
 let flowModule: Promise<FlowModule> | null = null;
-let flowView: FlowView | null = null;
+let flowView: FlowView | ShadeView | null = null;
 let map: maplibregl.Map | null = null;
 let controller: AbortController | null = null;
 let observer: MutationObserver | null = null;
@@ -97,12 +108,15 @@ let mobileQuery: MediaQueryList | null = null;
 let preference: EnsoFlowPreference = { kind: 'off', ink: 'light' };
 let epoch = 0;
 
+/** What a view draws: a path view's own state, or the still shade of a scalar kind. */
+type DrawnState = Pick<FlowViewState, 'motion' | 'features'> & { readonly form: FlowViewState['form'] | 'shade' };
+
 /** The panel's stamps of what the flow view draws, for the specs and the key. */
-function stampForm(state: FlowViewState | null, kind: EnsoFlowKind): void {
+function stampForm(state: DrawnState | null, kind: EnsoFlowKind): void {
   if (!panel) return;
   const form = state?.form ?? 'none';
-  // Moving paths draw on the GPU; only native forms require GeoJSON features.
-  const drawn = form === 'moving' || (form !== 'none' && (state?.features ?? 0) > 0);
+  // Moving paths and the shade draw on the GPU; only native forms require GeoJSON features.
+  const drawn = form === 'moving' || form === 'shade' || (form !== 'none' && (state?.features ?? 0) > 0);
   panel.dataset['flowForm'] = drawn ? form : 'none';
   panel.dataset['flowMotion'] = state?.motion ?? 'none';
   panel.dataset['flowFeatures'] = String(state?.features ?? 0);
@@ -183,7 +197,7 @@ const fieldKey = (kind: FlowFieldKind, cycle: number, forecastHour: number): str
  * (the candidate and its step-backs, each at its own forecast hour), kept
  * less than ten minutes, and inside its 24-hour limit.
  */
-function cachedField(flow: FlowModule, kind: FlowFieldKind, now: number): FlowField | null {
+function cachedField(flow: FlowModule, kind: FlowFieldKind, now: number): FlowField | ScalarField | null {
   let cycle = flow.candidateCycle(now);
   for (let tries = 0; tries < flow.MAX_CYCLE_TRIES; tries++, cycle -= 6 * 3_600_000) {
     const key = fieldKey(kind, cycle, flow.forecastHourFor(kind, cycle, now));
@@ -195,7 +209,7 @@ function cachedField(flow: FlowModule, kind: FlowFieldKind, now: number): FlowFi
   return null;
 }
 
-function storeField(kind: FlowFieldKind, field: FlowField): void {
+function storeField(kind: FlowFieldKind, field: FlowField | ScalarField): void {
   const { cycle, forecastHour } = field.meta;
   if (cycle === null || forecastHour === null) return;
   fieldCache.set(fieldKey(kind, cycle, forecastHour), { stored: Date.now(), field });
@@ -216,19 +230,33 @@ function fieldNotes(kind: ActiveFlowKind, state: FlowViewState, box: string | nu
   return notes;
 }
 
-function presentStale(kind: FlowFieldKind, field: FlowField): void {
+function presentStale(kind: FlowFieldKind, field: Pick<FlowField, 'meta'>): void {
   disposeFlowView();
   const { cycle, forecastHour } = field.meta;
   if (cycle !== null && forecastHour !== null) fieldCache.delete(fieldKey(kind, cycle, forecastHour));
-  setStatus('unavailable', flowStaleLine(kind, field.meta.cycle ?? field.meta.validTime), kind, [FAILED_NOTE]);
-  if (detailNode) detailNode.textContent = FAILED_NOTE;
+  setStatus('unavailable', flowStaleLine(kind, field.meta.cycle ?? field.meta.validTime), kind, [failedNote(kind)]);
+  if (detailNode) detailNode.textContent = failedNote(kind);
 }
 
 function presentFailure(kind: ActiveFlowKind, error: unknown): void {
   console.warn('[enso-flow]', error);
   disposeFlowView();
-  setStatus('unavailable', `unavailable · ${FLOW_WORDS.unavailable[kind]}`, kind, [FAILED_NOTE]);
-  if (detailNode) detailNode.textContent = FAILED_NOTE;
+  setStatus('unavailable', `unavailable · ${FLOW_WORDS.unavailable[kind]}`, kind, [failedNote(kind)]);
+  if (detailNode) detailNode.textContent = failedNote(kind);
+}
+
+/**
+ * A drawn shade: live with its run and valid instant, and the bins that decode
+ * it. A global field with a value at every node has no partial and no masked
+ * view, and a still field has no form note; `motion: 'none'` keeps the key's
+ * Pause away.
+ */
+function presentShade(kind: ActiveFlowKind, field: ScalarField): void {
+  stampForm({ form: 'shade', motion: 'none', features: 0 }, kind);
+  const notes = [FLOW_WORDS.bins[kind]];
+  const { cycle, validTime } = field.meta;
+  setStatus('live', flowLiveLine('live', cycle ?? validTime, validTime), kind, notes, { motion: 'none', provenance: provenanceOf(kind) });
+  if (detailNode) detailNode.textContent = notes.join(' ');
 }
 
 function presentFieldState(kind: ActiveFlowKind, field: FlowField, state: FlowViewState): void {
@@ -261,7 +289,7 @@ function presentFieldState(kind: ActiveFlowKind, field: FlowField, state: FlowVi
 }
 
 async function loadField(activeMap: maplibregl.Map, kind: ActiveFlowKind, generation: number): Promise<void> {
-  if (sourceNode) sourceNode.textContent = `${SOURCES[kind]}. ${TIMING_NOTE} ${NAVIGATION_NOTE}`;
+  if (sourceNode) sourceNode.textContent = `${SOURCES[kind]}. ${TIMING_NOTE}${isShadeKind(kind) ? '' : ` ${NAVIGATION_NOTE}`}`;
   const owned = new AbortController();
   controller = owned;
   setStatus('loading', `loading · ${FLOW_WORDS.loading[kind]}`, kind);
@@ -290,6 +318,16 @@ async function loadField(activeMap: maplibregl.Map, kind: ActiveFlowKind, genera
         presentStale(kind, field);
         return;
       }
+      if ('values' in field) {
+        // A scalar field: one still shade, made once from the frame; a pan reads and rebuilds nothing.
+        const shade = field;
+        if (controller === owned) controller = null;
+        flowView = flow.mountShadeView(activeMap, shade, {
+          onStale: () => { if (generation === epoch) presentStale(kind, shade); }
+        });
+        presentShade(kind, shade);
+        return;
+      }
       fields = [field];
     }
     if (controller === owned) controller = null;
@@ -301,7 +339,7 @@ async function loadField(activeMap: maplibregl.Map, kind: ActiveFlowKind, genera
       const field = fields.length > 1 ? flow.fieldNearestLatitude(fields, activeMap.getCenter().lat) : (fields[0] as FlowField);
       if (flowView?.field === field) return;
       disposeFlowView();
-      flowView = flow.mountFlowView(activeMap, field, {
+      const view = flow.mountFlowView(activeMap, field, {
         ink: preference.ink,
         onState: (state) => { if (generation === epoch) presentFieldState(kind, field, state); },
         onRender: (count, steps) => {
@@ -310,7 +348,8 @@ async function loadField(activeMap: maplibregl.Map, kind: ActiveFlowKind, genera
           panel.dataset['flowSteps'] = String(steps);
         }
       });
-      presentFieldState(kind, field, flowView.state);
+      flowView = view;
+      presentFieldState(kind, field, view.state);
     };
     mount();
     if (fields.length > 1) repick = mount;
@@ -348,7 +387,7 @@ async function loadArea(): Promise<void> {
   renderCredits(kind);
   updateSelection();
   if (!activeMap || kind === 'off') {
-    setStatus('off', 'Direction overlay off', kind);
+    setStatus('off', 'Overlay off', kind);
     return;
   }
   await loadField(activeMap, kind, generation);
@@ -360,6 +399,9 @@ function updateSelection(): void {
   }
   const details = panel?.querySelector('details');
   if (details) details.hidden = preference.kind === 'off';
+  // The arrow colour is for lines; a shade has none.
+  const toolbar = panel?.querySelector<HTMLElement>('.enso-flow-toolbar');
+  if (toolbar) toolbar.hidden = isShadeKind(preference.kind);
 }
 
 /** Keep one set of controls and listeners as the shell changes its seat. */
@@ -381,7 +423,7 @@ function mountControls(): boolean {
   seatControls();
   panel = document.createElement('section');
   panel.className = 'enso-flow';
-  panel.setAttribute('aria-label', 'Ocean and atmospheric direction overlays');
+  panel.setAttribute('aria-label', 'Ocean and atmosphere overlays');
   const heading = document.createElement('h3');
   heading.textContent = 'Ocean & atmosphere';
   const options = document.createElement('div');
@@ -415,7 +457,7 @@ function mountControls(): boolean {
   ink.addEventListener('change', () => {
     preference = { ...preference, ink: ink.value === 'dark' ? 'dark' : 'light' };
     syncEnsoFlowParams(preference);
-    flowView?.setInk(preference.ink);
+    if (flowView && 'setInk' in flowView) flowView.setInk(preference.ink);
   });
   label.append(ink);
   toolbar.append(label);

@@ -79,7 +79,9 @@ const OBJECTS = new Map([
         [35077225, fixture('gfs1p00-VGRD-10m-f006.grib2')],
         // The jet-level kind reads the same file: the 250 mb lines of the same .idx.
         [17851986, fixture('gfs1p00-UGRD-250mb-f006.grib2')],
-        [17905647, fixture('gfs1p00-VGRD-250mb-f006.grib2')]
+        [17905647, fixture('gfs1p00-VGRD-250mb-f006.grib2')],
+        // Precipitable water is one more line of the same .idx (its line 626).
+        [36424556, fixture('gfs1p00-PWAT-atmos-f006.grib2')]
       ])
     }
   ],
@@ -493,6 +495,8 @@ test('invalid index offsets are refused before any message fetch or decode', asy
 const READ_LIMITS = {
   wind: { message: 512 * 1024, frame: 768 * 1024 },
   jet: { message: 512 * 1024, frame: 768 * 1024 },
+  // One message is the whole frame.
+  pwat: { message: 512 * 1024, frame: 512 * 1024 },
   waves: { message: 4 * 1024 * 1024, frame: 6 * 1024 * 1024 }
 };
 
@@ -528,10 +532,11 @@ test('each kind admits the exact message and aggregate boundaries without alloca
     const probe = offsetProbe(kind, [0, limit.message, limit.frame]);
     await assert.rejects(read(kind, probe.stub),
       (e) => e instanceof FlowUnavailableError && e.reason === 'refused');
-    assert.deepEqual(probe.ranges, [
+    // A one-message kind's frame is that message: one span, up to the ceiling.
+    assert.deepEqual(probe.ranges, FLOW_SOURCES[kind].messages.length === 1 ? [`bytes=0-${limit.frame - 1}`] : [
       `bytes=0-${limit.message - 1}`,
       `bytes=${limit.message}-${limit.frame - 1}`
-    ], `${kind} inclusive ceilings allow both bounded requests`);
+    ], `${kind} inclusive ceilings allow every bounded request`);
   }
 });
 
@@ -835,6 +840,103 @@ test('the jet-level frame is the 250 hPa wind of the same file and .idx as the 1
   // The magnitude is the wind speed: the fastest node of this cycle is 91.2 m/s (eccodes), far above the 10 m classes.
   const fastest = field.magnitude.reduce((a, b) => Math.max(a, b), 0);
   assert.ok(Math.abs(fastest - 91.23) < 0.02, `fastest node ${fastest}`);
+});
+
+test('the precipitable water frame is one more message of the wind file and .idx: a scalar field, no direction', async () => {
+  const stub = noddStub();
+  const field = await read('pwat', stub);
+  assert.equal(field.kind, 'pwat');
+  assert.deepEqual(field.grid, { lon0: 0, lat0: 90, dlon: 1, dlat: 1, nx: 360, ny: 181, wrapsLon: true });
+  // A ScalarField: values only. It is no FlowField, so nothing can draw it as paths or read it as calm air.
+  assert.deepEqual(Object.keys(field).sort(), ['grid', 'kind', 'meta', 'values']);
+  assert.equal(field.values.length, 360 * 181);
+  assert.ok(field.values.every(Number.isFinite), 'every node holds a value');
+  assert.equal(field.meta.cycle, CYCLE_06Z);
+  assert.equal(field.meta.forecastHour, 6);
+  assert.equal(field.meta.validTime, CYCLE_06Z + 6 * HOUR);
+  assert.equal(field.meta.staleAfter, CYCLE_06Z + 24 * HOUR);
+  assert.equal(field.meta.issuer, 'NOAA');
+  assert.equal(field.meta.model, 'GFS');
+  assert.equal(field.meta.level, 'entire atmosphere (considered as a single layer)');
+  assert.equal(field.meta.units, 'kg m-2');
+  assert.equal(field.meta.sourceUrl, `${NODD_ORIGIN}/${WIND_KEY}`);
+  assert.deepEqual(FLOW_SOURCES.pwat.messages.map((m) => [m.variable, m.level]), [['PWAT', 'entire atmosphere (considered as a single layer)']]);
+  assert.deepEqual(FLOW_SOURCES.pwat.surface, { type: 200, value: 0 });
+  assert.equal(FLOW_SOURCES.pwat.key(CYCLE_06Z, 6), FLOW_SOURCES.wind.key(CYCLE_06Z, 6), 'the same file as the wind');
+  // First activation: the .idx and the one PWAT span (its line 626), two GETs.
+  assert.deepEqual(
+    stub.calls.map((c) => [c.method, c.credentials, c.url, c.range]),
+    [
+      ['GET', 'omit', `${NODD_ORIGIN}/${WIND_KEY}.idx`, 'bytes=0-65535'],
+      ['GET', 'omit', `${NODD_ORIGIN}/${WIND_KEY}`, 'bytes=36424556-36522245']
+    ]
+  );
+  const served = [fixture('gfs.t06z.pgrb2.1p00.f006.idx'), fixture('gfs1p00-PWAT-atmos-f006.grib2')];
+  assert.deepEqual(served.map((b) => b.byteLength), [39_706, 97_690]);
+  assert.equal(served.reduce((sum, b) => sum + b.byteLength, 0), 137_396, 'the first-activation bytes of this cycle');
+  // Values match eccodes at every sampled point, within the Int16 step (0.01 kg m-2).
+  const name = 'gfs1p00-PWAT-atmos-f006';
+  const ref = refValues(name);
+  const stride = reference[name].stride;
+  assert.equal(reference[name].typeOfLevel, 'atmosphereSingleLayer');
+  assert.equal(ref.length, reference[name].sampledCount);
+  for (let k = 0; k < ref.length; k++) {
+    assert.ok(Math.abs(field.values[k * stride] - ref[k]) <= 0.005 + 2e-5, `${name} point ${k * stride}`);
+  }
+  // The wettest and the driest column of this cycle, as eccodes reads them: 83.9 and 0.1 kg m-2.
+  const wettest = field.values.reduce((a, b) => Math.max(a, b), 0);
+  const driest = field.values.reduce((a, b) => Math.min(a, b), Infinity);
+  assert.ok(Math.abs(wettest - reference[name].max) <= 0.005 + 2e-5, `wettest ${wettest}`);
+  assert.ok(Math.abs(driest - reference[name].min) <= 0.005 + 2e-5, `driest ${driest}`);
+});
+
+test('a precipitable water read fails as the wind read does: no .idx line, a short body, a superseded activation', async () => {
+  // The .idx of another product holds no PWAT line: refused before any message read.
+  const original = globalThis.fetch;
+  const ranges = [];
+  globalThis.fetch = async (url, init = {}) => {
+    const range = new Headers(init.headers ?? {}).get('range');
+    if (String(url).endsWith('.idx')) return new Response(WAVE_IDX, { status: 206 });
+    ranges.push(range);
+    return new Response(null, { status: 404 });
+  };
+  try {
+    await assert.rejects(
+      readFlowFrame('pwat', { signal: new AbortController().signal, now: () => NOW, createWorker: inProcessWorker().make }),
+      (e) => e instanceof FlowUnavailableError && e.reason === 'refused' && /PWAT/.test(e.message)
+    );
+    assert.deepEqual(ranges, []);
+    // A 200 with the whole message is not the 206 asked for; a 206 one byte short is not the span.
+    const message = fixture('gfs1p00-PWAT-atmos-f006.grib2');
+    for (const [status, body] of [[200, message], [206, message.subarray(0, message.byteLength - 1)]]) {
+      globalThis.fetch = async (url) => (String(url).endsWith('.idx')
+        ? new Response(WIND_IDX, { status: 206 })
+        : new Response(streamOf(body), { status }));
+      const w = inProcessWorker();
+      await assert.rejects(
+        readFlowFrame('pwat', { signal: new AbortController().signal, now: () => NOW, createWorker: w.make }),
+        (e) => e instanceof FlowUnavailableError && e.reason === 'refused',
+        `HTTP ${status} with ${body.byteLength} B`
+      );
+      assert.equal(w.record.posted, 0, 'nothing reaches the decoder');
+      assert.equal(w.record.terminated, true);
+    }
+  } finally {
+    globalThis.fetch = original;
+  }
+  // Off intent while the message is still arriving: the read is cancelled and the Worker ended.
+  const stalled = noddStub({ stallRanges: true });
+  const activation = new AbortController();
+  const w = inProcessWorker();
+  const pending = withFetch(stalled, () => readFlowFrame('pwat', { signal: activation.signal, now: () => NOW, createWorker: w.make }));
+  const outcome = pending.then(() => 'resolved', (e) => e.name);
+  while (stalled.calls.length < 2) await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  activation.abort();
+  assert.equal(await raced(outcome, 2000, 'the aborted read'), 'AbortError');
+  assert.equal(w.record.posted, 0);
+  assert.equal(w.record.terminated, true);
+  assert.deepEqual(stalled.cancelled, [`${NODD_ORIGIN}/${WIND_KEY} bytes=36424556-36522245`]);
 });
 
 test('the wave crop spans 165 E to 100 W across the antimeridian and contains Attu (52.9 N, 172.9 E), Guaymas (27.9 N, 110.9 W) and Hilo (19.7 N, 155.1 W)', () => {

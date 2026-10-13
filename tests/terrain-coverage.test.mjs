@@ -207,8 +207,29 @@ test('the flow explanations taken off the ENSO key read in the Impact Briefing u
   assert.equal(FLOW_TECHNICAL_NOTES.join(' ').match(/path of/gi).length, 1, 'one "path of", inside its negation');
   assert.ok(FLOW_TECHNICAL_NOTES.join(' ').includes('not the path of anything carried by it'));
   // The key keeps what decodes its symbols: one bins sentence per drawn kind, in real units.
-  for (const bins of Object.values(FLOW_WORDS.bins)) assert.match(bins, /: under [0-9.]+, [0-9.]+ to [0-9.]+, [0-9.]+ or more m/);
+  for (const bins of Object.values(FLOW_WORDS.bins)) {
+    assert.match(bins, /: (?:none )?under [0-9.]+,(?: then)?(?: [0-9.]+ to [0-9.]+,)+ [0-9.]+ or more (?:m|kg m-2)/);
+  }
   assert.ok(!section.includes('under 5') && !section.includes('under 0.25'), 'the bins stay in the key');
+  // Precipitable water: the issuer's field name, level words and unit, what the shade is and is not. It is never
+  // named as a weather feature, a rain amount or a movement of moisture, and no definition of it ships without the
+  // issuer's own sentence and link.
+  const water = FLOW_TECHNICAL_NOTES.find((note) => note.startsWith('Precipitable water'));
+  for (const sentence of [
+    'Precipitable water is the NOAA GFS field "PWAT: entire atmosphere (considered as a single layer)", in kg m-2 as the issuer gives it: a column total at one model instant, on a 1.0 degree grid.',
+    'Model output, not an observation.',
+    'The white shade is drawn by DDM from those values and is not a NOAA image.',
+    'Its steps are display bins chosen by DDM, not thresholds and not issuer classes.',
+    'The shade holds still: it does not show rain, and it does not show which way moisture is moving.'
+  ]) {
+    assert.ok(water.includes(sentence), sentence);
+  }
+  assert.ok(section.includes(water.replace(/"/g, '&quot;')), 'the paragraph reads under the control\'s heading');
+  assert.doesNotMatch(water, /atmospheric river|\briver\b|transport|warning|forecast|plume|\bmm\b|millimet|flood|storm/i);
+  assert.doesNotMatch(water, /under 15|15 to 30|45 or more/, 'the bins stay in the key');
+  for (const words of [FLOW_WORDS.bins.pwat, FLOW_WORDS.loading.pwat, FLOW_WORDS.unavailable.pwat]) {
+    assert.doesNotMatch(words, /atmospheric river|transport|warning|forecast|\bmm\b/i, words);
+  }
   // The currents credit, its dated-frame sentence and its disclaimer read here, never in the key; the two boxes
   // it states are the committed frame's own grids, so a landing that changes a grid fails here.
   const { gridBoxWords } = await import('../src/layers/enso-flow-data.ts');

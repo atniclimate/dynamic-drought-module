@@ -256,6 +256,24 @@ test.describe('layer-order: thematic reassert (E1 deliverable 2)', () => {
     expect(map.order()).toEqual(['background', 'basemap', 'sst-anomaly', 'flow-still', 'flow-paths', 'tribal-lands-outline', 'us-places-labels']);
   });
 
+  test('the precipitable water shade seats above the SST and the Nino box, under the paths, the storms, every outline and the labels', () => {
+    const idx = (id: string): number => CONDITION_SURFACE_IDS.indexOf(id);
+    // A dated SST frame inserts directly under the Nino box's line, so the shade must sit above the box to stay above it.
+    expect(idx('flow-shade')).toBe(idx('nino34-box-label') + 1);
+    expect(idx('flow-shade')).toBe(idx('flow-still-casing') - 1);
+    expect(idx('flow-shade')).toBeGreaterThan(idx('sst-anomaly'));
+    const map = fakeMap(['background', 'basemap', 'sst-anomaly', 'nino34-box-line', 'tropical-cyclones-points', 'us-states-outline', 'us-places-labels', 'flow-shade']);
+    reassertThematicOrder(map as never);
+    reassertLabelOrder(map as never);
+    expect(map.order()).toEqual(['background', 'basemap', 'sst-anomaly', 'nino34-box-line', 'flow-shade', 'tropical-cyclones-points', 'us-states-outline', 'us-places-labels']);
+    // A dated SST frame (inserted under the Nino box's line by its own module) is never the anchor: it stays put
+    // and the chain, outlines included, re-seats above it.
+    const dated = fakeMap(['background', 'basemap', 'sst-anomaly', 'nino34-box-fill', 'sst-frame-2026-09-06', 'nino34-box-line', 'us-states-outline', 'us-places-labels', 'flow-shade']);
+    reassertThematicOrder(dated as never);
+    reassertLabelOrder(dated as never);
+    expect(dated.order()).toEqual(['background', 'basemap', 'sst-frame-2026-09-06', 'sst-anomaly', 'nino34-box-fill', 'nino34-box-line', 'flow-shade', 'us-states-outline', 'us-places-labels']);
+  });
+
   test('idempotent: a second pass changes nothing', () => {
     const map = fakeMap([
       'background',

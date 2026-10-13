@@ -1,6 +1,13 @@
 import type { EnsoFlowKind } from '../state/enso-flow';
+import type { ScalarKind } from './flow/shade';
 
 export type ActiveFlowKind = Exclude<EnsoFlowKind, 'off'>;
+/**
+ * The kinds drawn as a still shade and never as lines (src/layers/flow/shade.ts):
+ * no ink, no motion and no direction. Typed here because the panel asks before
+ * the lazy flow chunk is in.
+ */
+export const isShadeKind = (kind: EnsoFlowKind): kind is ScalarKind => kind === 'pwat';
 /** The kinds read from NOAA NODD at runtime (ENSO-FLOW-PLAN E2-1): every kind but the committed currents frame. */
 export type FlowFieldKind = Exclude<ActiveFlowKind, 'currents'>;
 /** One string per kind: a kind without its words does not compile. */
@@ -23,6 +30,9 @@ export function dateLabel(time: number): string {
  * (tests/flow-wire.spec.ts). The key keeps what decodes its symbols (the
  * bins) and the live state; the sentences that explain the paths read in the
  * Impact Briefing (src/ui/map-technical-information.ts FLOW_TECHNICAL_NOTES).
+ * Precipitable water is named by the issuer's field name and never as a
+ * weather feature, a rain amount or a movement of moisture: it is a column
+ * total at one model instant (admission gfs-runtime-nodd, 2026-10-13).
  */
 export const FLOW_WORDS = {
   // The owner's words (RATIFICATION-11 row 15), verbatim, as text: never an
@@ -37,16 +47,19 @@ export const FLOW_WORDS = {
   modelRun: 'Model run',
   // DRAFT wording (DR-177): C-fit DRAFT 2, the loading words (C-fit.md 1.5).
   loading: {
-    wind: 'NOAA GFS wind', jet: 'NOAA GFS 250 hPa wind', waves: 'NOAA GFS-Wave', currents: 'NOAA RTOFS surface currents'
+    wind: 'NOAA GFS wind', jet: 'NOAA GFS 250 hPa wind', waves: 'NOAA GFS-Wave', currents: 'NOAA RTOFS surface currents',
+    pwat: 'NOAA GFS precipitable water'
   } satisfies FlowKindWords,
   // DRAFT wording (DR-177): C-fit DRAFT 3, the unavailable words.
   unavailable: {
     wind: 'NOAA GFS wind did not load', jet: 'NOAA GFS 250 hPa wind did not load', waves: 'NOAA GFS-Wave did not load',
-    currents: 'NOAA RTOFS surface currents did not load'
+    currents: 'NOAA RTOFS surface currents did not load', pwat: 'NOAA GFS precipitable water did not load'
   } satisfies FlowKindWords,
   // DRAFT wording (DR-177): C-fit DRAFT 4, the past-24-hour stale words (moving-paths section 11).
   // The currents frame has no such limit: it is a dated frame whose age is stated (CONTRADICTIONS-4 Q3 a).
-  staleModel: { wind: 'NOAA GFS', jet: 'NOAA GFS', waves: 'NOAA GFS-Wave' } satisfies Readonly<Record<FlowFieldKind, string>>,
+  staleModel: {
+    wind: 'NOAA GFS', jet: 'NOAA GFS', waves: 'NOAA GFS-Wave', pwat: 'NOAA GFS'
+  } satisfies Readonly<Record<FlowFieldKind, string>>,
   // DRAFT wording (DR-177): C-fit DRAFT 4, the stale words around the model name and run date.
   stale: { lead: 'The held', from: 'frame from', tail: 'is past its 24-hour limit' },
   // DRAFT wording (DR-177): C-fit DRAFT 5 (moving-paths section 11).
@@ -74,7 +87,9 @@ export const FLOW_WORDS = {
     wind: 'Line width and brightness: under 5, 5 to 10, 10 or more m/s.',
     jet: 'Line width and brightness: under 20, 20 to 40, 40 or more m/s.',
     waves: 'Mark length and brightness: under 2, 2 to 4, 4 or more m significant wave height.',
-    currents: 'Line width and brightness: under 0.25, 0.25 to 0.5, 0.5 or more m/s.'
+    currents: 'Line width and brightness: under 0.25, 0.25 to 0.5, 0.5 or more m/s.',
+    // DRAFT wording (DR-177): the shade's steps in the issuer's unit (src/layers/flow/shade.ts SHADE_BINS; tests/flow-shade.test.mjs).
+    pwat: 'Shade deepens in steps: none under 15, then 15 to 30, 30 to 45, 45 or more kg m-2.'
   } satisfies FlowKindWords,
   // DRAFT wording (DR-177): C-fit DRAFT 13 (moving-paths section 7).
   pastGrid: "Zoomed in past the model grid: showing the values at the model's own points.",

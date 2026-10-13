@@ -74,6 +74,11 @@ export const FLOW_TECHNICAL_NOTES: readonly string[] = [
   // DRAFT wording (DR-177): the currents credit and coverage, from admission rtofs-currents-producer line 11 and its
   // 2026-09-26 true-up (the seam and the gaps stated, a dated frame, not for navigation). The two boxes are the committed
   // frame's own grids; tests/terrain-coverage.test.mjs holds them to public/data/rtofs-surface-currents.json.
+  // DRAFT wording (DR-177): admission gfs-runtime-nodd, 2026-10-13, product (b). The field is named by the issuer's own
+  // `.idx` words and unit (NCEP GRIB2 table 4.2-0-1: "Precipitable Water", kg m-2). No definition of it is given here: one
+  // ships only as the issuer's own sentence with its link. It is never called a weather feature, a rain amount or a
+  // movement of moisture.
+  'Precipitable water is the NOAA GFS field "PWAT: entire atmosphere (considered as a single layer)", in kg m-2 as the issuer gives it: a column total at one model instant, on a 1.0 degree grid. Model output, not an observation. The white shade is drawn by DDM from those values and is not a NOAA image. Its steps are display bins chosen by DDM, not thresholds and not issuer classes. The shade holds still: it does not show rain, and it does not show which way moisture is moving.',
   'Ocean currents are surface currents from the NOAA/NCEP Global RTOFS ocean model, re-encoded by DDM (model). The map holds one dated frame, as old as its last update: the state line gives the model run, the instant the frame is valid at and its age. Two model grids are held, each on its own spacing and never joined: 1.0 degree from 40 S to 39 N and 130 E to 111 W, and 0.3 degree from 40 N to 84.7 N and 140 E to 115.3 W. The grid under the centre of the view is drawn. Nothing is drawn between 39 N and 40 N, east of 111 W south of 40 N (the coasts of mainland Mexico and Central America) or west of 130 E. Not for navigation.'
 ];
 

@@ -34,6 +34,8 @@ const { ENSO_FLOW_KINDS, parseEnsoFlowParams, writeEnsoFlowParams } = await impo
 test('every flow kind is its own flow= token, read and written back unchanged', () => {
   assert.deepEqual(ENSO_FLOW_KINDS.slice(0, 1), ['off']);
   assert.ok(ENSO_FLOW_KINDS.includes('jet'), 'jet-level wind is a kind');
+  assert.ok(ENSO_FLOW_KINDS.includes('pwat'), 'precipitable water is a kind');
+  assert.equal(parseEnsoFlowParams(new URLSearchParams('flow=PWAT'), 'wind').kind, 'off', 'the token is matched exactly');
   for (const kind of ENSO_FLOW_KINDS) {
     assert.deepEqual(parseEnsoFlowParams(new URLSearchParams(`flow=${kind}`), 'off'), { kind, ink: 'light' });
     const params = new URLSearchParams('flow=stale');

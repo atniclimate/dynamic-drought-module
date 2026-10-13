@@ -326,6 +326,33 @@ test.describe('E2-1 flowing paths in ENSO mode', () => {
     expect(calls, `no currents frame read for ${kind}`).toHaveLength(0);
   });
 
+  test('ENSO precipitable water reads only the NODD .idx and one range, and draws a still shade with nothing to pause', async ({ page }) => {
+    const calls = await bootEnso(page);
+    await choose(page, 'pwat');
+    await expect(panel(page)).toHaveAttribute('data-status', 'live');
+    await expect(panel(page)).toHaveAttribute('data-flow-drawn', 'pwat');
+    await expect(panel(page)).toHaveAttribute('data-flow-form', 'shade');
+    await expect(panel(page)).toHaveAttribute('data-flow-motion', 'none');
+    await expect(panel(page).locator('[data-flow-kind="pwat"]')).toHaveText('Precipitable water');
+    // A shade has no arrows to colour and nothing that moves.
+    await expect(panel(page).locator('.enso-flow-toolbar')).toBeHidden();
+    await expect(page.locator('#map-key-flow-pause')).toBeHidden();
+    await expect(flowStatus(page)).toContainText('Precipitable water · live · Model run ');
+    await expect(flowNotes(page)).toHaveText(FLOW_WORDS.bins.pwat);
+    await expect(flowProvenance(page)).toHaveText(FLOW_WORDS.provenance);
+    const [pwat] = FLOW_SOURCES.pwat.messages.map((m) => spanRange(WIND_IDX, m.variable, m.level)) as [string];
+    const key = `https://noaa-gfs-bdp-pds.s3.amazonaws.com/${WIND_IDX.replace(/\.idx$/, '')}`;
+    expect(noddStubLog(page).map(({ method, url, range, answer }) => ({ method, url, range, answer }))).toEqual([
+      { method: 'GET', url: `${key}.idx`, range: 'bytes=0-65535', answer: 'fixture' },
+      { method: 'GET', url: key, range: pwat, answer: 'fixture' }
+    ]);
+    expect(calls, 'no currents frame read for precipitable water').toHaveLength(0);
+    // A line kind brings the arrow colour back.
+    await choose(page, 'wind');
+    await expect(panel(page)).toHaveAttribute('data-flow-drawn', 'wind');
+    await expect(panel(page).locator('.enso-flow-toolbar')).toBeVisible();
+  });
+
   test('waves read the .idx, DIRPW and HTSGW, and never PERPW', async ({ page }) => {
     const calls = await bootEnso(page);
     await choose(page, 'waves');
