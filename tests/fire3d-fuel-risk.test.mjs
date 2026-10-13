@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-const { FLAT_FUEL_RISK_KEY, FUEL_RISK_TITLE, fireKeySections, fuelRiskKeepsConsole, fuelRiskSwitch, revealScroll } =
+const { FLAT_FUEL_RISK_KEY, FUEL_RISK_TITLE, fireKeySections, fuelRiskKeepsConsole, fuelRiskSwitch, revealScroll, shouldRevealScroll } =
   await import('../src/ui/fire3d-fuel-risk.ts');
 
 test('Fuel risk on adds its section to the Wildfire key instead of replacing it', () => {
@@ -55,4 +55,19 @@ test('revealing the console scrolls its panel just enough to show the bottom, ne
   assert.equal(revealScroll({ top: 700, bottom: 1700 }, box), 575);
   // Above the panel's top: this helper never scrolls up.
   assert.equal(revealScroll({ top: 50, bottom: 100 }, box), 0);
+});
+
+test('the block never reveal-scrolls on its first run, so page load leaves the horizon chips in view', () => {
+  const quiet = { firstRun: false, sceneRequested: false, fuelRowChanged: false };
+  // Page load, with or without a stored 3D choice or a Fuel risk row.
+  for (const sceneRequested of [false, true]) {
+    for (const fuelRowChanged of [false, true]) {
+      assert.equal(shouldRevealScroll({ firstRun: true, sceneRequested, fuelRowChanged }), false);
+    }
+  }
+  // After load: the person turned 3D on, or Fuel risk changed a row.
+  assert.equal(shouldRevealScroll({ ...quiet, sceneRequested: true }), true);
+  assert.equal(shouldRevealScroll({ ...quiet, fuelRowChanged: true }), true);
+  // Without 3D, a block that merely appears or changes status stays where it is.
+  assert.equal(shouldRevealScroll(quiet), false);
 });

@@ -7922,10 +7922,12 @@ a.impact-resource-link::after {
      controls; the padding and matching negative margin cover the scroll
      box's edge without moving the layout. Above the minimap's own overlays. */
   position: sticky;
-  top: 0;
+  /* -4px reaches the scroller's own 4px padding strip; the padding fills the
+     row's 10px gap so scrolled text never shows above or below it. */
+  top: -4px;
   z-index: 4;
-  padding-block: 4px 6px;
-  margin-block: -4px -6px;
+  padding-block: 8px 10px;
+  margin-block: -8px -10px;
   background: var(--bg-1);
 }
 

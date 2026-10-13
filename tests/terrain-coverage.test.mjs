@@ -114,9 +114,10 @@ test('the edge fade is one blurred line on the archive box: a true gradient, no 
     const deg = evaluateZoom(paint['line-width'], zoom) / pxPerDegree(zoom);
     assert.ok(Math.abs(deg - 0.5) < 0.02, `half a degree at zoom ${zoom}, got ${deg}`);
   }
-  // Present at regional zoom (the screenshots' zoom 5), clear only at continental zoom.
-  assert.ok(evaluateZoom(paint['line-opacity'], 5) >= 0.9, 'opaque enough at the seam to hide it');
-  assert.equal(evaluateZoom(paint['line-opacity'], 3), 0);
+  // Nothing can frame the archive box at regional zoom: transparent at zoom 6
+  // and below, opaque enough to hide the seam by zoom 8.
+  for (const zoom of [3, 5, 6]) assert.equal(evaluateZoom(paint['line-opacity'], zoom), 0);
+  assert.ok(evaluateZoom(paint['line-opacity'], 8) >= 0.9, 'opaque enough at the seam to hide it');
   // Held in screen space past zoom 9, and the half width stays inside the
   // GeoJSON tile buffer at every zoom (a tile edge would cut the fade).
   assert.equal(evaluateZoom(paint['line-width'], 14), evaluateZoom(paint['line-width'], 9));

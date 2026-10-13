@@ -88,7 +88,8 @@ import {
   FUEL_RISK_TITLE,
   fuelRiskKeepsConsole,
   fuelRiskSwitch,
-  revealScroll
+  revealScroll,
+  shouldRevealScroll
 } from '../fire3d-fuel-risk';
 import { requestLayerOn } from '../layer-toggle-command';
 import { setMapTechnicalNote } from '../map-technical-information';
@@ -307,11 +308,17 @@ export function Fire3DControl({
     setMapTechnicalNote('fire3d', coverageNote(status));
   }, [status]);
 
-  // The sidebar scrolls; bring the control up whenever it appears or gains a row.
+  // The sidebar scrolls; bring the control up when it appears or gains a row
+  // after load, never on the first run (see shouldRevealScroll).
   const root = useRef<HTMLDivElement>(null);
+  const lastFuelTarget = useRef<typeof fuelTarget | undefined>(undefined);
   useEffect(() => {
+    const firstRun = lastFuelTarget.current === undefined;
+    const fuelRowChanged = !firstRun && lastFuelTarget.current !== fuelTarget;
+    lastFuelTarget.current = fuelTarget;
     const box = root.current?.closest('.sidebar-scroll');
     if (!root.current || !box) return;
+    if (!shouldRevealScroll({ firstRun, sceneRequested: preference, fuelRowChanged })) return;
     box.scrollTop += revealScroll(root.current.getBoundingClientRect(), box.getBoundingClientRect());
   }, [visible, status?.state, fuelTarget]);
 

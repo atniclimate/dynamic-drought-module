@@ -221,7 +221,7 @@ export const TERRAIN_EDGE_PAINT: NonNullable<maplibregl.LineLayerSpecification['
   'line-color': MAP_GROUND_COLOR,
   'line-width': edgeWidth(1),
   'line-blur': edgeWidth(0.5),
-  'line-opacity': ['interpolate', ['linear'], ['zoom'], 3, 0, 5, 0.9]
+  'line-opacity': ['interpolate', ['linear'], ['zoom'], 6, 0, 8, 0.9]
 };
 
 /** The archive box's edge as one closed line. */
