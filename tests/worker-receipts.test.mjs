@@ -376,6 +376,16 @@ test('evaluateTransparency passes byte-identical legs and fails a changed body',
   assert.ok(truncated.reasons.some((r) => r.includes('relayed 12 bytes')));
 });
 
+test('the transparency pair relays the bare upstream URL, which the Worker route pin allows', async () => {
+  const { isAllowedRoute } = await import('../workers/proxy/src/index.ts');
+  const relayed = new URL(probeUrl('https://worker.example', { path: '/proxy', upstream: TRANSPARENCY_UPSTREAM }));
+  assert.equal(relayed.searchParams.get('url'), TRANSPARENCY_UPSTREAM);
+  assert.equal(new URL(TRANSPARENCY_UPSTREAM).search, '');
+  assert.equal(isAllowedRoute(new URL(TRANSPARENCY_UPSTREAM)), true);
+  // The old nonce is what the route pin refuses.
+  assert.equal(isAllowedRoute(new URL(`${TRANSPARENCY_UPSTREAM}?ddm_cache_bust=x`)), false);
+});
+
 test('evaluateTransparency calls a non-200 direct leg inconclusive and warns when an edge copy answered', () => {
   // An agency having a bad minute leaves the question unanswered. It is
   // recorded, not failed: a receipt that exits 1 on upstream weather would

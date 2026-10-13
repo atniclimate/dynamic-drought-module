@@ -33,7 +33,10 @@ import {
   mergeByStableIdentifier
 } from '../../util/bbox';
 import { geometryBboxAcrossAntimeridian } from '../../util/antimeridian';
-import { hydrateBriefing } from '../../impact/hydrate';
+import { applyMatrix } from '../../impact/matrix';
+import { createNwsRequestSession } from '../../impact/nws-point';
+import { sourceMayRun } from '../../impact/source-policy';
+import { fetchUsdmClaims } from '../../impact/sources';
 import { computeOverlapRows } from './overlap-engine';
 import type { OverlapRelationship } from './overlap-engine';
 import type { BoundaryKind, BoundarySelectionContext } from '../../impact/types';
@@ -286,6 +289,11 @@ function featureIntersectsBbox(
   return candidateBbox ? bboxIntersects(candidateBbox, bbox) : false;
 }
 
+// About 55 m, far below what the 2 percent sliver rule can show; keeps the
+// main-thread overlap geometry (quadratic in vertices) bounded, as the
+// watershed loader's watershedMaxAllowableOffset does for its queries.
+const OVERLAP_MAX_ALLOWABLE_OFFSET = '0.0005';
+
 function arcGisEnvelopeParams(
   envelope: string,
   outFields: string
@@ -299,6 +307,7 @@ function arcGisEnvelopeParams(
     spatialRel: 'esriSpatialRelIntersects',
     outFields,
     returnGeometry: 'true',
+    maxAllowableOffset: OVERLAP_MAX_ALLOWABLE_OFFSET,
     geometryPrecision: '5',
     resultRecordCount: '2000',
     f: 'geojson'
@@ -371,6 +380,8 @@ async function resolveTribeSelection(
     outFields: 'LARID,LARNAME,CLASSIFICATION,GISACRES,REGION',
     returnGeometry: 'true',
     outSR: '4326',
+    // Full resolution: this response also seeds the emphasis cache that draws
+    // the Tribal boundary on the map, so it is never generalized.
     geometryPrecision: '5',
     f: 'geojson'
   });
@@ -413,6 +424,7 @@ async function resolveEcoregionSelection(
     outFields,
     returnGeometry: 'true',
     outSR: '4326',
+    maxAllowableOffset: OVERLAP_MAX_ALLOWABLE_OFFSET,
     geometryPrecision: '5',
     f: 'geojson'
   });
@@ -1106,30 +1118,49 @@ function PlaceStudio() {
         }
 
         if (coverage.briefable.state === 'available') {
+          // The line reads only point heat and the USDM claim, so fetch those
+          // two under the briefing's own source policy, not the whole briefing.
           const briefing = createBriefingSkeleton(resolved.context);
+          const { context } = resolved;
+          const { signal } = masterAbort;
           setNarrativeKindLabel(briefing.landKind);
-          void hydrateBriefing(briefing, masterAbort.signal, () => {
-            if (masterAbort.signal.aborted) return;
+          const publish = (): void => {
+            if (signal.aborted) return;
             const line = selectBriefNarrativeLine(briefing);
             if (line) {
               setNarrativeLine(line);
               setNarrativeStatus('ready');
             }
-          })
-            .then(() => {
-              if (
-                !masterAbort.signal.aborted &&
-                !selectBriefNarrativeLine(briefing)
-              ) {
-                setNarrativeStatus('unavailable');
-              }
-            })
-            .catch((err: unknown) => {
-              if (!masterAbort.signal.aborted) {
-                console.warn('[place-studio] brief narrative failed.', err);
-                setNarrativeStatus('unavailable');
-              }
-            });
+          };
+          const warn = (err: unknown): void => {
+            if (!signal.aborted) console.warn('[place-studio] brief narrative failed.', err);
+          };
+          const heat = sourceMayRun(briefing.sourcePolicy, 'pointHeat')
+            ? import('../../impact/point-heat')
+                .then(({ fetchPointHeat }) =>
+                  fetchPointHeat(context, createNwsRequestSession(signal))
+                )
+                .then((result) => {
+                  briefing.pointHeat = result;
+                  publish();
+                })
+                .catch(warn)
+            : Promise.resolve();
+          const drought =
+            briefing.sourcePolicy.droughtImpact.enabled &&
+            sourceMayRun(briefing.sourcePolicy, 'usdm')
+              ? fetchUsdmClaims(context, signal)
+                  .then((result) => {
+                    applyMatrix(briefing.horizons, new Map([['usdm', result]]));
+                    publish();
+                  })
+                  .catch(warn)
+              : Promise.resolve();
+          void Promise.all([heat, drought]).then(() => {
+            if (!signal.aborted && !selectBriefNarrativeLine(briefing)) {
+              setNarrativeStatus('unavailable');
+            }
+          });
         } else {
           setNarrativeStatus('unavailable');
         }

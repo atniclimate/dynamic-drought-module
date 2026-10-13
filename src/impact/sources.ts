@@ -479,7 +479,8 @@ const USDM_PERCENTILE_BASIS =
  * into claims: the analyzed drought state, then the derived wildfire
  * implication. (The former extreme-heat companion was removed by ruling
  * D-0.8.0-047 and is not rebuilt here.) If no polygon contains the point, the
- * location is better than D0 on that map, which is itself a plain reading.
+ * claim says only that, in the popup's own words: with no analyzed-area mask
+ * in the client, no polygon does not confirm no drought.
  */
 export async function fetchUsdmClaims(
   context: BoundarySelectionContext,
@@ -534,7 +535,8 @@ export async function fetchUsdmClaims(
         ok: true,
         claims: [
           makeClaim({
-            text: `No drought category is mapped at this location in ${asOfMap} (conditions are better than D0, Abnormally Dry).`,
+            // The popup's no-polygon sentence (popup-conditions.ts), word for word.
+            text: 'No D0-D4 category polygon here (U.S. Drought Monitor). This client has no analyzed-area mask, so this does not confirm no drought.',
             ...usdmShared
           })
         ]

@@ -220,9 +220,21 @@ test('malformed feature responses are unavailable, while a valid empty collectio
       const valid = Array.isArray(payload?.features);
       assert.equal(result.ok, valid);
       assert.equal(result.claims.length, valid ? 1 : 0);
-      if (valid) assert.match(result.claims[0].text, /No drought category/);
+      if (valid) assert.match(result.claims[0].text, /No D0-D4 category polygon/);
     });
   }
+});
+
+test('a USDM point with no polygon says the popup sentence and never rules drought out', async () => {
+  await withFetch(() => jsonResponse(collection([])), async () => {
+    const [claim] = (await sources.fetchUsdmClaims(place(-120, 47), signal())).claims;
+    assert.equal(
+      claim.text,
+      'No D0-D4 category polygon here (U.S. Drought Monitor). This client has no analyzed-area mask, so this does not confirm no drought.'
+    );
+    assert.doesNotMatch(claim.text, /better than D0/);
+    assert.equal(claim.product, 'usdm');
+  });
 });
 
 test('USDM missing or invalid categories cannot become D0 or an absence claim', async (t) => {

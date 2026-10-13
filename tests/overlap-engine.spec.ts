@@ -440,6 +440,21 @@ test.describe('computeOverlapRows', () => {
     expect(result.rows[0]?.evidence.shareOfSelectedArea).toBeCloseTo(0.25, 12);
   });
 
+  test('skips a candidate whose bounding box misses the selection before preparing it', () => {
+    // A malformed candidate would be rejected if prepared; far away, it is
+    // never prepared, so it leaves no rejection row.
+    const farMalformed = feature('far', {
+      type: 'Polygon',
+      coordinates: [[[60, 50], [64, 50], [64, 54], [62, 52], [60, 54], [62, 52], [60, 50]]]
+    });
+    const near = feature('near', rectangle(1, 1, 3, 3));
+
+    const result = computeOverlapRows(rectangle(0, 0, 10, 10), collection(farMalformed, near));
+
+    expect(result.rows.map((row) => row.candidate.id)).toEqual(['near']);
+    expect(result.rejections).toBeUndefined();
+  });
+
   test('does not treat edge or point contact as overlap or as a suppressed sliver', () => {
     const selected = rectangle(0, 0, 10, 10);
     const edge = feature('edge', rectangle(10, 0, 20, 10));

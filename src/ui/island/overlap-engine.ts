@@ -20,6 +20,9 @@ import type {
   Position
 } from 'geojson';
 
+import { geometryBboxAcrossAntimeridian } from '../../util/antimeridian';
+import { bboxIntersects } from '../../util/bbox';
+
 /** D-0.7.0-050: overlaps below this share of the smaller area are slivers. */
 export const OVERLAP_SLIVER_SHARE = 0.02 as const;
 
@@ -535,12 +538,19 @@ export function computeOverlapRows<
     };
   }
   const selected = selectedPreparation.geometry;
+  const selectedBbox = geometryBboxAcrossAntimeridian(selectedGeometry);
 
   const rows: Array<OverlapRow<G, P>> = [];
   const rejections: Array<OverlapGeometryRejection<G, P>> = [];
   let hasSuppressedSlivers = false;
 
   for (const candidate of candidates.features) {
+    // Preparation and clipping are quadratic in vertices; a candidate whose
+    // box misses the selection's box cannot overlap, so skip it unprepared.
+    const candidateBbox = isArealGeometry(candidate.geometry)
+      ? geometryBboxAcrossAntimeridian(candidate.geometry)
+      : null;
+    if (selectedBbox && candidateBbox && !bboxIntersects(selectedBbox, candidateBbox)) continue;
     const candidatePreparation = prepareGeometry(candidate.geometry, selected.referenceLongitude);
     if (candidatePreparation.status === 'omitted') continue;
     if (candidatePreparation.status === 'rejected') {
