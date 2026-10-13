@@ -44,11 +44,34 @@ export function getBasemapMode(): BasemapMode {
  * URL write.
  */
 export function setBasemapMode(next: BasemapMode): void {
-  if (next === mode) return;
+  const wasFallback = imageryUnavailable;
+  imageryUnavailable = false;
+  if (next === mode && !wasFallback) return;
   mode = next;
+  notify();
+}
+
+// True while 'default' is a failure fallback, not a choice: the URL must not
+// freeze a transient feed outage into a shareable link.
+let imageryUnavailable = false;
+
+function notify(): void {
   listeners.forEach((fn) => {
     fn();
   });
+}
+
+/** Fall back to the plain map after a failed imagery load; not a choice. */
+export function revertBasemapForFailure(): void {
+  const changed = mode !== 'default' || !imageryUnavailable;
+  mode = 'default';
+  imageryUnavailable = true;
+  if (changed) notify();
+}
+
+/** True when the plain map is showing because imagery failed to load. */
+export function isImageryUnavailable(): boolean {
+  return imageryUnavailable;
 }
 
 /** Subscribe to basemap-mode changes. Returns an unsubscribe function. */

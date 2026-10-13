@@ -166,7 +166,7 @@ test('satellite revert is silent on boot and toasts only for a pressed SAT', asy
   const sat = await readFile(new URL('src/map/satellite.ts', ROOT), 'utf8');
   const sw = await readFile(new URL('src/map/basemap-switcher.ts', ROOT), 'utf8');
   // The chip and store still land on the terminal state; only the toast is gated.
-  assert.match(sat, /setBasemapMode\('default'\);\s+if \(!announceRevert\) return;\s+showToast\(/);
+  assert.match(sat, /revertBasemapForFailure\(\);\s+if \(!announceRevert\) return;\s+showToast\(/);
   assert.match(sat, /announceRevert = announce;/);
   // A visitor request announces; the default (boot, URL restore, 3D release) does not.
   assert.match(sw, /announce = false/);
@@ -175,6 +175,28 @@ test('satellite revert is silent on boot and toasts only for a pressed SAT', asy
   assert.match(sw, /if \(announce\) showToast\(/);
   const sidebar = await readFile(new URL('src/ui/sidebar.ts', ROOT), 'utf8');
   assert.match(sidebar, /void applyBasemapMode\(map, 'satellite'\);/);
+});
+
+test('a failed imagery load leaves basemap= out of the URL; an explicit plain choice writes it', async () => {
+  globalThis.fetch = () => { throw new Error('unexpected network in URL unit test'); };
+  const { syncUrl } = await import(new URL('src/state/url.ts', ROOT).href);
+  const store = await import(new URL('src/state/basemap-store.ts', ROOT).href);
+  const { installFakeBrowser } = await import('./map-harness.ts');
+  const cluster = HAZARD_CLUSTER_KEYS.find((key) => HAZARD_CLUSTERS[key].defaultBasemap === 'satellite');
+  assert.ok(cluster, 'no mode opens on satellite');
+  const written = () => {
+    const browser = installFakeBrowser({ search: '' });
+    try {
+      syncUrl({ region: null, layers: new Set(), embed: false, view: 'console', cluster, basemap: store.getBasemapMode() });
+      return new URLSearchParams(browser.search()).get('basemap');
+    } finally { browser.restore(); }
+  };
+  store.setBasemapMode('satellite');
+  store.revertBasemapForFailure();
+  assert.equal(store.getBasemapMode(), 'default');
+  assert.equal(written(), null);
+  store.setBasemapMode('default');
+  assert.equal(written(), 'default');
 });
 
 test('aggregateChipState: all ready -> live', () => {

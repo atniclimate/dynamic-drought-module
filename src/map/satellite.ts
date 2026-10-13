@@ -2,7 +2,7 @@ import type * as maplibregl from 'maplibre-gl';
 
 import { CHIP_STATE_WORDS, imageryFailureState } from '../config/chip-state';
 import { URLS } from '../config/urls';
-import { setBasemapMode } from '../state/basemap-store';
+import { revertBasemapForFailure } from '../state/basemap-store';
 import { showToast } from '../ui/overlay';
 import { fetchJsonWithBudget } from '../util/fetch';
 import { isObject } from '../util/guards';
@@ -463,7 +463,7 @@ function revertToDefault(
   // accessible description and must not keep reading "loading".
   showChip(state, null);
   deactivate(map);
-  setBasemapMode('default');
+  revertBasemapForFailure();
   if (!announceRevert) return;
   showToast(
     state === 'no-data'

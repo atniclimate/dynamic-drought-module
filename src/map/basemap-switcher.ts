@@ -1,6 +1,7 @@
 import type * as maplibregl from 'maplibre-gl';
 import {
   getBasemapMode,
+  revertBasemapForFailure,
   setBasemapMode,
   onBasemapChange
 } from '../state/basemap-store';
@@ -58,7 +59,7 @@ export async function applyBasemapMode(
   } catch (err) {
     console.error('[basemap] satellite module failed to load:', err);
     if (mode === 'satellite') {
-      setBasemapMode('default');
+      revertBasemapForFailure();
       if (announce) showToast('Recent satellite imagery is unavailable. Default map restored.');
     }
   }

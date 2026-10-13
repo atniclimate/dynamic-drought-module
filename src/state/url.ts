@@ -8,7 +8,7 @@ import type { OceanKey } from '../config/oceans';
 import { deriveViewMode } from './view-mode';
 import { ensoFlowModeDefault, parseEnsoFlowParams, writeEnsoFlowParams } from './enso-flow';
 import type { ViewMode } from './view-mode';
-import { defaultBasemapFor, parseBasemapParam } from './basemap-store';
+import { defaultBasemapFor, isImageryUnavailable, parseBasemapParam } from './basemap-store';
 import type { BasemapMode } from './basemap-store';
 import { parseFramingParam } from './framing-store';
 import { parseClusterParam, parseOceanParam } from './cluster-store';
@@ -641,7 +641,7 @@ export function syncUrl(state: UrlSyncState): void {
   if (spiWindow !== null) {
     params.set('spi', String(spiWindow));
   }
-  if (state.basemap !== undefined && state.basemap !== defaultBasemapFor(cluster)) {
+  if (state.basemap !== undefined && state.basemap !== defaultBasemapFor(cluster) && !isImageryUnavailable()) {
     params.set('basemap', state.basemap);
   }
   if (state.studio === 'layers' || state.studio === 'place') {
