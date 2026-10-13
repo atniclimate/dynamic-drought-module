@@ -19,11 +19,11 @@ import {
   tropicalBasinName,
   tropicalCentre
 } from '../config/tropical-presentation';
+import { standingBriefingDoor } from '../state/place-selection';
 
 const PRODUCT_KEY = 'tropical-cyclones';
-// The frame requires a per-time explanation; the full note is stated once, as a qualification.
+// The frame requires a per-time explanation; the full note reads in the Impact Briefing (src/ui/map-technical-information.ts).
 const SUPPLIED = '(as stated)';
-const SUPPLIED_NOTE = 'Times are as the issuer states them; DDM does not read them as full dates.';
 
 const str = (v: unknown): string | null => (typeof v === 'string' && v.trim() !== '' ? v.trim() : null);
 const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) && v !== TROPICAL_MISSING ? v : null);
@@ -104,7 +104,8 @@ export function buildTropicalPointPopupModel(props: GeoJsonProperties): IssuedMo
     clocks,
     source: { link: issuer.link },
     details,
-    qualifications: [SUPPLIED_NOTE]
+    // A storm is no place: its door opens the briefing for the selected place, else the region's.
+    actions: standingBriefingDoor()
   };
 }
 
@@ -131,6 +132,6 @@ export function buildTropicalAreaPopupModel(props: GeoJsonProperties): IssuedMod
     clocks: [issuedClock(p)],
     source: { link: issuer.link },
     details: [{ kind: 'row', label: 'Basin', text: basinText(p['basin']) }],
-    qualifications: [SUPPLIED_NOTE]
+    actions: standingBriefingDoor()
   };
 }

@@ -30,7 +30,9 @@ const STUBS = {
   // the render stops here.
   'maplibre-gl':
     'export class Popup { constructor(options) { globalThis.__ddmPopupOptions = options; throw new Error("RENDER_REACHED at Popup"); } }',
-  impactPanel: 'export function openImpactPanel() { throw new Error("stub openImpactPanel"); }',
+  impactPanel:
+    'export function openImpactPanel() { throw new Error("stub openImpactPanel"); } export function nextBriefingIntent() { return 0; } export function isCurrentBriefingIntent() { return false; }',
+  deepLink: 'export function openStateBriefing() { throw new Error("stub openStateBriefing"); }',
   mobileSheet: 'export function isSheetActive() { return false; }',
   studioRoute: 'export function studioOwnsScreen() { return false; } export function onStudioRouteChange() { return () => {}; }'
 };
@@ -42,6 +44,7 @@ registerHooks({
     const fromTs = typeof context.parentURL === 'string' && context.parentURL.endsWith('.ts');
     if (specifier === 'maplibre-gl' && fromTs) return { url: stubUrl(STUBS['maplibre-gl']), shortCircuit: true };
     if (fromTs && /\/ui\/impact-panel$/.test(specifier)) return { url: stubUrl(STUBS.impactPanel), shortCircuit: true };
+    if (fromTs && /\/state\/deep-link$/.test(specifier)) return { url: stubUrl(STUBS.deepLink), shortCircuit: true };
     if (fromTs && /\/ui\/mobile-sheet$/.test(specifier)) return { url: stubUrl(STUBS.mobileSheet), shortCircuit: true };
     if (fromTs && /\/state\/studio-route$/.test(specifier)) return { url: stubUrl(STUBS.studioRoute), shortCircuit: true };
     // The extensionless relative specifiers the bundler resolves

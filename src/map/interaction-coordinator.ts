@@ -36,12 +36,13 @@ import type { BoundaryKind, BoundarySelectionContext, ContainingPlaces } from '.
 import { isStateCode } from '../config/state-codes';
 import { getEmphasisTargets, emphasizePlaces } from '../state/place-emphasis';
 import type { EmphasisTarget } from '../state/place-emphasis';
-import { getPlaceSelection, setPlaceSelection } from '../state/place-selection';
+import { openStateBriefing } from '../state/deep-link';
+import { getPlaceSelection, setPlaceSelection, standingBriefing } from '../state/place-selection';
 import type { PlaceSelection } from '../state/place-selection';
 import { onStudioRouteChange, studioOwnsScreen } from '../state/studio-route';
 import { getViewMode, onViewModeChange } from '../state/view-mode';
 import type { LocationIdentity } from '../state/location-identity';
-import { openImpactPanel } from '../ui/impact-panel';
+import { isCurrentBriefingIntent, nextBriefingIntent, openImpactPanel } from '../ui/impact-panel';
 import { isSheetActive } from '../ui/mobile-sheet';
 // Types only (zero bytes): the frame itself is loaded by the one dynamic
 // import below (S30D P1-FRAME), never statically, since this module sits in
@@ -879,14 +880,26 @@ function renderPopup(
   // The sink's title: the frame's title slot (.popup-title).
   const titleNode = head.querySelector('.popup-title');
 
-  if (selection) {
-    const context = selection.context;
-    container
-      .querySelector<HTMLButtonElement>('[data-ddm-impact-trigger]')
-      ?.addEventListener('click', () => {
-        openImpactPanel(context);
-        dismissResponse();
-      });
+  // The frame's door opens the response's own place. On a popup that is not
+  // about a place (the Nino 3.4 box, a tropical storm) it opens what its
+  // builder named from the same read (`standingBriefing`): the selected
+  // place, else the region's briefing as the sidebar's trigger opens it.
+  let door = container.querySelector<HTMLButtonElement>('[data-ddm-impact-trigger]');
+  const briefing = selection ?? standingBriefing();
+  if (door && briefing) {
+    door.addEventListener('click', () => {
+      if ('context' in briefing) {
+        openImpactPanel(briefing.context);
+      } else {
+        const intent = nextBriefingIntent();
+        void openStateBriefing(map, briefing.id, { fit: false, guard: () => isCurrentBriefingIntent(intent) });
+      }
+      dismissResponse();
+    });
+  } else if (door) {
+    // Nothing to open any more (the selection cleared while the frame loaded): no dead control.
+    door.remove();
+    door = null;
   }
 
   // The swappable sink (S4c): a PLACE-BEARING response offers itself to
@@ -944,7 +957,9 @@ function renderPopup(
   // place, which is no briefing subject, so the door would open the
   // briefing for the containing Tribal land or state: a door to a place
   // the label does not name ("for Washington" on a Washington town).
-  if (!selection && container.getAttribute('data-popup-kind') !== 'label') {
+  //
+  // Never beside a door the frame already carries: a popup has one door.
+  if (!selection && !door && container.getAttribute('data-popup-kind') !== 'label') {
     void attachConditionDoor(map, popup, head, click);
   }
 }

@@ -17,7 +17,9 @@
  *
  * The click is on the open ocean, outside every supported place, so the
  * coordinator offers no late briefing door and the response never routes to
- * the panel-foot sink.
+ * the panel-foot sink. These boots select no place and keep the national
+ * view, which has no briefing of its own, so the popup's own door (the
+ * selected place, else the region's briefing) is absent here too.
  */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';

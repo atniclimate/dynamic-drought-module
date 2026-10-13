@@ -12,7 +12,10 @@
  * the resolved location identity once R1 wiring sets it.
  */
 
+import { REGIONS } from '../config/regions';
 import type { BoundarySelectionContext } from '../impact/types';
+import type { RegionBriefingAnchor } from '../types/region';
+import { getCurrentRegion } from './region-store';
 
 export interface PlaceSelection {
   /** Short label for the selection, for example the boundary title. */
@@ -27,6 +30,24 @@ const listeners = new Set<(selection: PlaceSelection | null) => void>();
 /** The current place selection, or null if none is active. */
 export function getPlaceSelection(): PlaceSelection | null {
   return current;
+}
+
+/**
+ * What a briefing door opens on a popup that is not about a place (the Nino
+ * 3.4 box, a tropical storm): the selected place, else the boundary the
+ * current region's briefing describes (the sidebar's region-briefing trigger),
+ * else null. Both carry the `label` the door names.
+ */
+export function standingBriefing(): PlaceSelection | RegionBriefingAnchor | null {
+  if (current) return current;
+  const region = getCurrentRegion();
+  return (region ? REGIONS[region]?.briefing : undefined) ?? null;
+}
+
+/** That door for a popup model's `actions`: one door, or none when there is nothing to open. */
+export function standingBriefingDoor(): readonly { readonly kind: 'briefing'; readonly place: string }[] {
+  const briefing = standingBriefing();
+  return briefing ? [{ kind: 'briefing', place: briefing.label }] : [];
 }
 
 /**

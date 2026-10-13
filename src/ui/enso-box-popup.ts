@@ -11,6 +11,7 @@
 
 import type { ChartDetail, IssuedModel, PopupClock, ValueRow } from './popup-frame';
 import { URLS } from '../config/urls';
+import { standingBriefingDoor } from '../state/place-selection';
 import { ENSO_INDICES_SHARED_KEY, fetchSharedJsonWithBudget } from '../util/fetch';
 
 const TITLE = 'Nino 3.4 (the ENSO index region)';
@@ -172,6 +173,8 @@ function seasonalRow(label: string, index: SeasonalIndex): ValueRow {
 /** The popup's model for the current read (the chart SVG is mounted later by `mountEnsoBoxChart`). */
 export function buildEnsoBoxPopupModel(read: EnsoBoxRead): IssuedModel {
   const issuer = { role: 'issued-by', name: ISSUER, productKey: 'ensoIndex' } as const;
+  // The box is no place: its door opens the briefing for the selected place, else the region's.
+  const actions = standingBriefingDoor();
   if (read.kind !== 'ready') {
     return {
       kind: 'event',
@@ -179,7 +182,8 @@ export function buildEnsoBoxPopupModel(read: EnsoBoxRead): IssuedModel {
       issuer,
       value: [{ text: 'ENSO indices', state: read.kind }],
       clocks: [{ kind: 'not-stated', label: 'Retrieved', reason: read.kind }],
-      source: { none: read.kind }
+      source: { none: read.kind },
+      actions
     };
   }
   const snap = read.snapshot;
@@ -231,7 +235,8 @@ export function buildEnsoBoxPopupModel(read: EnsoBoxRead): IssuedModel {
     clocks: [{ kind: 'point', meaning: 'retrieved', label: 'Retrieved', at: { precision: 'date', date: snap.retrieved } }],
     details: data.length >= 2 ? [chart] : [],
     qualifications,
-    source: { link: { label: snap.roni.source, href: snap.roni.sourceUrl } }
+    source: { link: { label: snap.roni.source, href: snap.roni.sourceUrl } },
+    actions
   };
 }
 

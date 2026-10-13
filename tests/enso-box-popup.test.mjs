@@ -37,6 +37,8 @@ const {
 const { ENSO_INDICES_SHARED_KEY, invalidateSharedJsonRequest, pendingSharedTransportCount } = await import('../src/util/fetch.ts');
 const { serializePopupFrame } = await import('../src/ui/popup-frame.ts');
 const { sparklineSvg } = await import('../src/ui/charts.ts');
+const { setPlaceSelection } = await import('../src/state/place-selection.ts');
+const { setCurrentRegion } = await import('../src/state/region-store.ts');
 
 const seasonal = (name, file, anoms, preliminary) => ({
   source: `NOAA CPC ${name}`,
@@ -120,6 +122,39 @@ test('the frame serializer accepts the ready, loading and unavailable models', (
     const model = buildEnsoBoxPopupModel({ kind });
     assert.equal(model.value[0].state, kind);
     assert.match(serializePopupFrame(model), new RegExp(`<span data-state>${kind}</span>`));
+  }
+});
+
+test('the one door names the selected place, else the place the region briefing describes; with neither there is no door', () => {
+  const doors = (model) => serializePopupFrame(model).match(/<button[^>]*data-ddm-impact-trigger[^>]*>[^<]*<\/button>/g) ?? [];
+  const models = () => [ready(snapshot()), buildEnsoBoxPopupModel({ kind: 'loading' }), buildEnsoBoxPopupModel({ kind: 'unavailable' })];
+  try {
+    // The national view has no briefing of its own and no place is selected: nothing to open.
+    setCurrentRegion('national');
+    for (const model of models()) assert.deepEqual(doors(model), []);
+
+    // No place selected: the regional briefing, named by the place it describes.
+    setCurrentRegion('washington_state');
+    for (const model of models()) {
+      assert.deepEqual(model.actions, [{ kind: 'briefing', place: 'Washington' }]);
+      assert.deepEqual(doors(model), [
+        '<button type="button" class="popup-impact-btn" data-ddm-impact-trigger>Open the Impact Briefing for Washington</button>'
+      ]);
+    }
+
+    // A selected place wins over the region.
+    setPlaceSelection({
+      label: 'Fixture Place',
+      context: { kind: 'state', title: 'Fixture Place', properties: null, lngLat: { lng: -120, lat: 47 }, regionKey: 'washington_state', containing: { state: null, basis: 'none' } }
+    });
+    for (const model of models()) {
+      assert.deepEqual(doors(model), [
+        '<button type="button" class="popup-impact-btn" data-ddm-impact-trigger>Open the Impact Briefing for Fixture Place</button>'
+      ]);
+    }
+  } finally {
+    setPlaceSelection(null);
+    setCurrentRegion('national');
   }
 });
 

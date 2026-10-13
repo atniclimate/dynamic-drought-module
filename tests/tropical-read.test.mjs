@@ -300,22 +300,59 @@ test('popup: the advisory position has no forecast-hour row; a later point keeps
   assert.ok(later.includes('Forecast hour'));
 });
 
-test('popup: the issuer-wording note is stated once, as a qualification, not after each time', () => {
+test('popup: no qualification; the issuer-wording time note lives in the Impact Briefing', () => {
   for (const model of [
     popup.buildTropicalPointPopupModel(fixtures.EP5_POINTS.features[1].properties),
     popup.buildTropicalAreaPopupModel({ ...fixtures.EP5_CONE.features[0].properties, ddmPart: 'cone' })
   ]) {
-    assert.equal(model.qualifications?.length, 1);
-    const note = model.qualifications[0];
-    const html = serializePopupFrame(model);
-    assert.equal(html.split(note).length - 1, 1, 'the note prints once');
-    for (const clock of model.clocks) if (clock.kind === 'point') assert.notEqual(clock.at.explanation, note);
+    assert.equal(model.qualifications, undefined);
+    assert.ok(!serializePopupFrame(model).includes('DDM does not read them as full dates'));
+    for (const clock of model.clocks) if (clock.kind === 'point') assert.equal(clock.at.explanation, '(as stated)');
   }
 });
 
 test('popup: a CP slot is issued by the Central Pacific Hurricane Center', () => {
   const model = popup.buildTropicalPointPopupModel({ ...fixtures.EP5_POINTS.features[0].properties, binnumber: 'CP2' });
   assert.equal(model.issuer.name, 'NOAA Central Pacific Hurricane Center');
+});
+
+test('popup: the one door names the selected place, else the place the region briefing describes; with neither there is no door', async () => {
+  const { setPlaceSelection } = await import('../src/state/place-selection.ts');
+  const { setCurrentRegion } = await import('../src/state/region-store.ts');
+  const doors = (model) => serializePopupFrame(model).match(/<button[^>]*data-ddm-impact-trigger[^>]*>[^<]*<\/button>/g) ?? [];
+  const models = () => [
+    popup.buildTropicalPointPopupModel(fixtures.EP5_POINTS.features[0].properties),
+    popup.buildTropicalAreaPopupModel({ ...fixtures.EP5_CONE.features[0].properties, ddmPart: 'cone' }),
+    popup.buildTropicalAreaPopupModel({ ...fixtures.EP5_WW.features[2].properties, ddmPart: 'ww' })
+  ];
+  try {
+    // The national view has no briefing of its own and no place is selected: nothing to open.
+    setCurrentRegion('national');
+    for (const model of models()) assert.deepEqual(doors(model), []);
+
+    // No place selected: the regional briefing, named by the place it describes.
+    setCurrentRegion('washington_state');
+    for (const model of models()) {
+      assert.deepEqual(model.actions, [{ kind: 'briefing', place: 'Washington' }]);
+      assert.deepEqual(doors(model), [
+        '<button type="button" class="popup-impact-btn" data-ddm-impact-trigger>Open the Impact Briefing for Washington</button>'
+      ]);
+    }
+
+    // A selected place wins over the region.
+    setPlaceSelection({
+      label: 'Fixture Place',
+      context: { kind: 'state', title: 'Fixture Place', properties: null, lngLat: { lng: -120, lat: 47 }, regionKey: 'washington_state', containing: { state: null, basis: 'none' } }
+    });
+    for (const model of models()) {
+      assert.deepEqual(doors(model), [
+        '<button type="button" class="popup-impact-btn" data-ddm-impact-trigger>Open the Impact Briefing for Fixture Place</button>'
+      ]);
+    }
+  } finally {
+    setPlaceSelection(null);
+    setCurrentRegion('national');
+  }
 });
 
 // ---------------------------------------------------------------------------
