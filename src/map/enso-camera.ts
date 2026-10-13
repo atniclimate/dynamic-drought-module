@@ -62,3 +62,19 @@ export function ensoCameraAction(
   }
   return NONE;
 }
+
+/**
+ * Whether a boot into ENSO fits the Pacific the way the mode button does: only
+ * when the URL names no camera of its own. `ocean=` and `framing=` are cameras;
+ * so are a `select=` place (the deep link fits its boundary) and a `region=`
+ * other than the default, which every bare URL resolves to.
+ */
+export function ensoBootFitsPacific(
+  cluster: HazardClusterKey,
+  oceanSet: boolean,
+  framingSet: boolean,
+  defaultRegion: boolean,
+  placeSelected: boolean
+): boolean {
+  return cluster === 'enso' && !oceanSet && !framingSet && defaultRegion && !placeSelected;
+}

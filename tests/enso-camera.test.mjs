@@ -6,7 +6,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { ensoCameraAction } from '../src/map/enso-camera.ts';
+import { HAZARD_CLUSTER_KEYS } from '../src/config/clusters.ts';
+import { ensoBootFitsPacific, ensoCameraAction } from '../src/map/enso-camera.ts';
 
 test('entering ENSO with no ocean captures the camera and fits the Pacific', () => {
   assert.deepEqual(ensoCameraAction('drought', 'enso', false, false), {
@@ -53,4 +54,16 @@ test('leaving ENSO with nothing captured, or any other change, does nothing', ()
   assert.deepEqual(ensoCameraAction('enso', 'heat', false, false), none);
   assert.deepEqual(ensoCameraAction('drought', 'wildfire', true, false), none);
   assert.deepEqual(ensoCameraAction('enso', 'enso', true, true), none);
+});
+
+test('a boot into ENSO fits the Pacific only when the URL names no camera of its own', () => {
+  // ?region=national&cluster=enso, and the same with no region= at all.
+  assert.equal(ensoBootFitsPacific('enso', false, false, true, false), true);
+  assert.equal(ensoBootFitsPacific('enso', true, false, true, false), false, 'ocean= fits its own ocean');
+  assert.equal(ensoBootFitsPacific('enso', false, true, true, false), false, 'framing= keeps its camera');
+  assert.equal(ensoBootFitsPacific('enso', false, false, false, false), false, 'a chosen region= keeps its camera');
+  assert.equal(ensoBootFitsPacific('enso', false, false, true, true), false, 'select= fits its own place');
+  for (const cluster of HAZARD_CLUSTER_KEYS.filter((key) => key !== 'enso')) {
+    assert.equal(ensoBootFitsPacific(cluster, false, false, true, false), false, `${cluster} boots on its region`);
+  }
 });

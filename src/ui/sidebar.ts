@@ -100,7 +100,7 @@ import { bindStudioEscape, trapStudioTabFocus } from './island/studio-inert';
 import type { StationValue, TelemetryStation } from '../types/station';
 import { setCurrentRegion } from '../state/region-store';
 import type { LayerStatus } from '../types/layer';
-import { SIDEBAR_DESKTOP_QUERY, parseUrlParams, syncUrl } from '../state/url';
+import { SIDEBAR_DESKTOP_QUERY, parseSelectParam, parseUrlParams, syncUrl } from '../state/url';
 import type { ParsedUrlParams } from '../state/url';
 import {
   backToMap,
@@ -157,7 +157,7 @@ import {
   readCameraState,
   restoreCameraState
 } from '../map/camera-fit';
-import { ensoCameraAction, hasHeldEnsoCamera, holdEnsoCamera, takeEnsoCamera } from '../map/enso-camera';
+import { ensoBootFitsPacific, ensoCameraAction, hasHeldEnsoCamera, holdEnsoCamera, takeEnsoCamera } from '../map/enso-camera';
 import type { CameraState, CameraTarget } from '../map/camera-fit';
 import { timeline } from '../state/timeline';
 import { resolveStatusPillText } from './island/pill-text';
@@ -913,7 +913,8 @@ function updateRegionBriefingTrigger(regionKey: RegionKey | null | undefined): v
   if (place) {
     btn.hidden = false;
     btn.textContent = 'See what this means';
-    btn.setAttribute('aria-label', `See what the drought means for ${place.label}`);
+    // Mode-neutral on purpose: the door opens the same briefing in every mode.
+    btn.setAttribute('aria-label', `See what this means for ${place.label}`);
     if (note) note.hidden = true;
     return;
   }
@@ -1541,6 +1542,8 @@ function wireTopLevelEvents(map: maplibregl.Map): void {
  */
 function applyUrlStateSync(map: maplibregl.Map): ParsedUrlParams {
   const params = parseUrlParams();
+  // Read now: the first canonical write below drops the one-shot `select=`.
+  const placeSelected = parseSelectParam() !== null;
   STATE.embed = params.embed;
   // Seed the desktop sidebar preference FIRST (D1 M7, S2): the store seeds
   // below can each fire a canonical write through listeners registered
@@ -1621,6 +1624,19 @@ function applyUrlStateSync(map: maplibregl.Map): ParsedUrlParams {
   // winning camera ever paints.
   selectRegion(map, params.region, true);
 
+  // A boot into ENSO whose URL names no camera of its own enters the way the
+  // mode button does (F9): hold the region view just fitted, so leaving ENSO
+  // returns to it, then fit the Pacific. The hold replaces the one the cluster
+  // subscriber took at the seed above, before the region fit.
+  const ensoBoot = ensoBootFitsPacific(
+    params.cluster,
+    params.ocean !== null,
+    params.framing !== null,
+    params.region === DEFAULT_REGION,
+    placeSelected
+  );
+  if (ensoBoot) holdEnsoCamera(readCameraState(map));
+
   // The boot camera precedence (S2): `ocean=` (the most specific gesture,
   // pairing display with camera, D-0.7.0-053) wins over `framing=`
   // (D-0.7.0-039/041), which wins over the legacy `region=` fit above.
@@ -1631,7 +1647,9 @@ function applyUrlStateSync(map: maplibregl.Map): ParsedUrlParams {
       ? { bounds: ALL_FRAMING_BOUNDS, padding: 0 }
       : params.framing
         ? FRAMINGS[params.framing]
-        : null;
+        : ensoBoot
+          ? OCEANS.pacific
+          : null;
   if (cameraDef) {
     map.fitBounds(
       framingFitBounds(cameraDef),
@@ -1987,7 +2005,8 @@ function wireSidebar(map: maplibregl.Map, onRegionSelect: (key: RegionKey) => vo
     pushUrl();
   });
   // ENSO camera (F9): entering fits the Pacific, leaving restores the view from
-  // before entering. The boot seed runs with no map, so it never reaches here.
+  // before entering. The boot seed fires this too, but the boot's own fits
+  // follow it in the same task, so applyUrlStateSync owns the boot camera.
   let previousCluster = getHazardCluster();
   onHazardClusterChange(() => {
     const next = getHazardCluster();

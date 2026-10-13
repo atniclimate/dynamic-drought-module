@@ -388,3 +388,10 @@ test('every HAZARD_CLUSTER_KEYS entry resolves a placeConditionRow (DR-113)', as
   }
   assert.match(code, /placeConditionRowKeys\(/, 'popup-conditions.ts does not assemble its rows from placeConditionRowKeys');
 });
+
+test('the place briefing door is named without a mode word (DR-113)', async () => {
+  const text = await readFile(new URL('src/ui/sidebar.ts', ROOT), 'utf8');
+  // assert.ok, not doesNotMatch: a failure must not print the whole file.
+  assert.ok(!/See what the \w+ means/.test(text), 'the door names one mode in every mode');
+  assert.ok(text.includes("'aria-label', `See what this means for ${place.label}`"));
+});
