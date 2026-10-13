@@ -8,6 +8,7 @@ import worker, {
   isAllowedRoute,
   normalizeAccept,
   parseAndValidateUpstream,
+  rateLimitKey,
   permitsEdgeCaching,
   prepareResponseForEdgeCache,
   restoreResponseFromEdgeCache
@@ -114,10 +115,44 @@ test('the image-export route is pinned to 256x256 PNG tiles', () => {
     'size=4000,4000&f=image',
     'SIZE=4000,4000&f=image',
     'size=256,256&size=4000,4000&f=image',
-    'format=tiff&f=image'
+    'format=tiff&f=image',
+    `${appQuery}&x=1`
   ]) {
     expect(isAllowedRoute(new URL(`${base}?${query}`)), query).toBe(false);
   }
+});
+
+test('each route accepts only the query parameter names the client sends', () => {
+  const refused = [
+    'https://api.weather.gov/alerts/active?point=38.5,-97.5&x=1',
+    'https://api.weather.gov/points/38.5,-97.5?x=1',
+    'https://api.weather.gov/gridpoints/TOP/31,80/forecast?units=si',
+    'https://www.usbr.gov/gp/agrimet/data_files/AgrimetSites.js?v=2',
+    'https://www.nwrfc.noaa.gov/water_supply/ws_report_csv.cgi?Type=ALL&type=ALL',
+    'https://usdmdataservices.unl.edu/api/StateStatistics/GetDSCI?aoi=53&cb=1'
+  ];
+  for (const target of refused) {
+    expect(isAllowedRoute(new URL(target)), target).toBe(false);
+  }
+  const clientShaped = [
+    'https://wcc.sc.egov.usda.gov/awdbRestApi/services/v1/data?stationTriplets=679:WA:SNTL&elements=WTEQ&duration=DAILY&beginDate=2026-01-01&endDate=2026-01-02',
+    'https://wcc.sc.egov.usda.gov/awdbRestApi/services/v1/stations?stationTriplets=*:*:SNTL&activeOnly=true&returnStationElements=false',
+    'https://www.usbr.gov/pn-bin/webarccsv.pl?parameter=OWY%20AF&syer=2026&smnth=1&sdy=1&eyer=2026&emnth=1&edy=2&format=2',
+    'https://www.nwrfc.noaa.gov/water_supply/ws_report_csv.cgi?Type=ALL&Source=ALL&Wyr=2026&WyrDate=2026-01-02&Flavor=ESP10',
+    'https://usdmdataservices.unl.edu/api/StateStatistics/GetDSCI?aoi=53&startdate=1/1/2026&enddate=1/7/2026&statisticsType=1',
+    'https://imagery.geoplatform.gov/iipp/rest/services/Fire_Aviation/USFS_EDW_RMRS_WildfireHazardPotentialClassified/ImageServer/exportImage?bbox=1,2,3,4&bboxSR=3857&imageSR=3857&size=256,256&format=png&transparent=true&f=image&interpolation=RSP_NearestNeighbor'
+  ];
+  for (const target of clientShaped) {
+    expect(isAllowedRoute(new URL(target)), target).toBe(true);
+  }
+});
+
+test('the rate limit keys an IPv6 client on its /64', () => {
+  expect(rateLimitKey('203.0.113.7')).toBe('203.0.113.7');
+  expect(rateLimitKey('2001:db8:aa:bb:1:2:3:4')).toBe('2001:db8:aa:bb::/64');
+  expect(rateLimitKey('2001:DB8:aa:bb::9')).toBe('2001:db8:aa:bb::/64');
+  expect(rateLimitKey('2001:db8::1')).toBe('2001:db8:0:0::/64');
+  expect(rateLimitKey('::ffff:203.0.113.7')).toBe('::ffff:203.0.113.7');
 });
 
 test('the rate limiter refuses with 429 and a Retry-After', async () => {
@@ -562,6 +597,18 @@ test('the upstream request forwards only normalized Accept and the fixed User-Ag
     { headers: { Accept: `application/json,${'x'.repeat(600)}` } }
   );
   expect(normalizeAccept(oversizedAccept)).toBe('*/*');
+
+  // Accept collapses to a fixed set, so it cannot be a cache-busting key.
+  const acceptOf = (accept: string) =>
+    normalizeAccept(
+      proxyRequest(['https://api.weather.gov/points/38.5,-97.5'], {
+        headers: { Accept: accept }
+      })
+    );
+  expect(acceptOf('application/json')).toBe('application/json');
+  expect(acceptOf('application/json; x=1')).toBe('application/json');
+  expect(acceptOf('image/png')).toBe('image/png');
+  expect(acceptOf('text/x-random-1')).toBe('*/*');
 });
 
 test('allowed redirects are followed with exact bytes and safe headers', async () => {
@@ -784,6 +831,10 @@ test('a full proxy read preserves bytes and swallows cache.put rejection', async
     );
 
     expect(response.status).toBe(200);
+    // The pinned WHP tile is a fixed map: the browser keeps it for a day.
+    expect(response.headers.get('Cache-Control')).toBe(
+      'public, max-age=86400, immutable'
+    );
     expect(response.headers.get('Set-Cookie')).toBeNull();
     expect(response.headers.get('Access-Control-Allow-Origin')).toBe('*');
     expect(response.headers.get('Access-Control-Allow-Credentials')).toBeNull();

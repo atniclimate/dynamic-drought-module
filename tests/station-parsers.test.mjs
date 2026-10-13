@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
 import { registerHooks } from 'node:module';
-import test from 'node:test';
+import test, { mock } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 /**
@@ -28,6 +28,9 @@ registerHooks({
   }
 });
 
+// Mock Date (only Date) before the import so the roster caches read a clock
+// the partial-list test can advance; it stays at the real time otherwise.
+mock.timers.enable({ apis: ['Date'], now: Date.now() });
 const { discoverStationsForViewport } = await import('../src/config/station-registry.ts');
 
 const ROSTERS = [
@@ -112,6 +115,59 @@ test('a roster answered with an error object is failed and not cached', async ()
 });
 
 /**
+ * When one AWDB network fails and the other answers, the stations that came
+ * back still render, the source is recorded as failed (the pill reads
+ * "live (partial)"), and the partial list is cached only briefly, so the
+ * failed network is asked again about 30 seconds later.
+ */
+test('one failed AWDB network is reported as partial and retried soon', async () => {
+  const LABEL = 'NRCS AWDB station discovery';
+  const originalFetch = globalThis.fetch;
+  const originalWarn = console.warn;
+  console.warn = () => {};
+  // Expire the complete roster the previous test cached for an hour.
+  mock.timers.tick(61 * 60 * 1000);
+  let sntlUp = false;
+  let sntlCalls = 0;
+  globalThis.fetch = async (input) => {
+    const url = decodeURIComponent(String(input));
+    if (url.includes('wcc.sc.egov.usda.gov') && url.includes(':SNTL')) {
+      sntlCalls += 1;
+      if (!sntlUp) throw new TypeError('network down');
+      const body = [{ stationTriplet: '1:WA:SNTL', name: 'Test Pass', latitude: 46.5, longitude: -120.5 }];
+      return new Response(JSON.stringify(body), { status: 200 });
+    }
+    if (url.includes('wcc.sc.egov.usda.gov') && url.includes(':SCAN')) {
+      const body = [{ stationTriplet: '2:WA:SCAN', name: 'Test Field', latitude: 46.6, longitude: -120.6 }];
+      return new Response(JSON.stringify(body), { status: 200 });
+    }
+    throw new TypeError('network down');
+  };
+  const awdbIds = (result) =>
+    result.records.filter((r) => r.network === 'nrcs-awdb').map((r) => r.station.id);
+  try {
+    const partial = await discoverStationsForViewport(REQUEST);
+    assert.equal(partial.status, 'ok');
+    assert.ok(partial.failedSources.includes(LABEL), 'a partial roster is a failed source');
+    assert.deepEqual(awdbIds(partial), ['scan-2:wa:scan'], 'the SCAN stations still render');
+
+    sntlUp = true;
+    const cached = await discoverStationsForViewport(REQUEST);
+    assert.equal(sntlCalls, 1, 'the partial list is served from cache at first');
+    assert.ok(cached.failedSources.includes(LABEL), 'and still reads as partial');
+
+    mock.timers.tick(31 * 1000);
+    const whole = await discoverStationsForViewport(REQUEST);
+    assert.equal(sntlCalls, 2, 'the failed network is asked again after 30 s');
+    assert.ok(!whole.failedSources.includes(LABEL), 'the complete roster reads as healthy');
+    assert.equal(awdbIds(whole).length, 2);
+  } finally {
+    globalThis.fetch = originalFetch;
+    console.warn = originalWarn;
+  }
+});
+
+/**
  * The latest-value readers skip a source's "no reading" marker and walk back
  * to the newest real value, so a gauge never reads as dead because its
  * newest row is a placeholder.
@@ -178,6 +234,22 @@ test('a Hydromet NO RECORD on the newest day is skipped for the last posted day'
   const value = hydrometStationValue('hm-1', storage);
   assert.equal(value?.value, 1234);
   assert.equal(value?.timestamp, '2026-06-29');
+
+  // The shared fetch helper bounds the body: a runaway page is refused, and a
+  // non-OK answer still throws the Hydromet error.
+  await assert.rejects(
+    withFetch(
+      () => new Response('x'.repeat(2 * 1024 * 1024 + 1), { status: 200 }),
+      () => fetchHydrometDaily(['WIC AF'], 3, null)
+    )
+  );
+  await assert.rejects(
+    withFetch(
+      () => new Response('down', { status: 503 }),
+      () => fetchHydrometDaily(['WIC AF'], 3, null)
+    ),
+    /Hydromet HTTP 503/
+  );
 });
 
 test('a CWMS series with a trailing null returns the newest real value', async () => {

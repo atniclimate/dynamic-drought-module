@@ -30,11 +30,14 @@ const { fetchWaterSupplyClaims } = await import('../src/impact/water-supply.ts')
 
 test('water-supply claims never present the echoed FcstDate as an issue date', async () => {
   const originalFetch = globalThis.fetch;
-  globalThis.fetch = async () =>
-    new Response(
+  const requested = [];
+  globalThis.fetch = async (input) => {
+    requested.push(decodeURIComponent(String(input)));
+    return new Response(
       'ID,Location,FcstPeriod,50PerAvg,CurPerAvg,FcstDate\n' +
         'BONO3,COLUMBIA - BONNEVILLE DAM,APR-SEP,88,95,2026-10-08'
     );
+  };
   try {
     const selection = {
       kind: 'ecoregion',
@@ -55,6 +58,13 @@ test('water-supply claims never present the echoed FcstDate as an issue date', a
     assert.match(result.claims[1].text, /\(50 percent exceedance\)\./);
     // The forecast names its water year: from October it is the coming season.
     assert.match(result.claims[1].text, /April-September 20\d\d water-supply forecast/);
+    // The request date and the claim's retrieval date are the same local day.
+    assert.ok(requested[0].includes(`WyrDate=${result.claims[0].dates.retrieved}&`));
+
+    // A second briefing reuses the day's report instead of downloading it again.
+    const again = await fetchWaterSupplyClaims(selection, new AbortController().signal);
+    assert.equal(again.claims.length, 2);
+    assert.equal(requested.length, 1);
   } finally {
     globalThis.fetch = originalFetch;
   }

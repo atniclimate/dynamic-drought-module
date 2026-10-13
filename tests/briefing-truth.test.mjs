@@ -244,6 +244,7 @@ test('DSCI missing readings do not invent easing; numeric zero remains valid', a
     containing: { state: { code: 'WA', name: 'Washington', basis: 'feature-property' } }
   };
   for (const dsci of [null, '', '  ', false, true, [], {}, 'invalid', 0, '0', 25]) {
+    sources.clearDsciResponseCache();
     await withFetch(() => jsonResponse([
       { mapDate: '2026-07-14', dsci: 200 },
       { mapDate: '2026-10-06', dsci }
@@ -270,6 +271,29 @@ test('DSCI sends a single-digit state FIPS code zero-padded', async () => {
   }, () => sources.fetchDsciTrendClaims(context, signal()));
   assert.equal(seen.length, 1);
   assert.match(seen[0], /[?&]aoi=02(&|$)/);
+});
+
+test('DSCI reuses a clean series for the next briefing, and never keeps a bad one', async () => {
+  sources.clearDsciResponseCache();
+  const context = {
+    ...place(-120, 47),
+    properties: { STUSPS: 'WA', NAME: 'Washington' },
+    containing: { state: { code: 'WA', name: 'Washington', basis: 'feature-property' } }
+  };
+  let calls = 0;
+  const answer = (rows) => () => {
+    calls += 1;
+    return jsonResponse(rows);
+  };
+  await withFetch(answer([]), () => sources.fetchDsciTrendClaims(context, signal()));
+  const good = [{ mapDate: '2026-07-14', dsci: 200 }, { mapDate: '2026-10-06', dsci: 150 }];
+  const first = await withFetch(answer(good), () => sources.fetchDsciTrendClaims(context, signal()));
+  assert.equal(calls, 2, 'an empty series was not cached');
+  const second = await withFetch(answer(good), () => sources.fetchDsciTrendClaims(context, signal()));
+  assert.equal(calls, 2, 'the clean series was reused');
+  assert.equal(first.ok, true);
+  assert.deepEqual(second.claims, first.claims);
+  sources.clearDsciResponseCache();
 });
 
 /** Yield to the event loop `ticks` times through `setImmediate`, which no

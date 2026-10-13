@@ -24,6 +24,7 @@
 
 import type { EvidenceClass, SourcedClaim } from './types';
 import { PRODUCT_KEYS } from '../config/products';
+import { isoDayLocal } from '../util/iso-day';
 
 /**
  * The presentation for one evidence class: visible label, CSS class token,
@@ -165,10 +166,7 @@ export function makeClaim(input: SourcedClaimInput): SourcedClaim {
 
 /** Today as an ISO 8601 date, for `dates.retrieved` on live fetches. */
 export function todayIso(): string {
-  const d = new Date();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${d.getFullYear()}-${m}-${day}`;
+  return isoDayLocal(new Date());
 }
 
 /**

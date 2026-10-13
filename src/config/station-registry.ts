@@ -497,7 +497,8 @@ async function settleDiscoverySource(
   } catch (err) {
     if (isAbortError(err) || signal?.aborted) throw err;
     console.warn(`[telemetry] ${label} failed.`, err);
-    return { label, records: [], failed: true };
+    const records = err instanceof PartialDiscoveryError ? err.records : [];
+    return { label, records, failed: true };
   }
 }
 
@@ -1027,11 +1028,13 @@ function formatBboxNumber(value: number): string {
 async function discoverAwdbStations(
   request: StationViewportDiscoveryRequest
 ): Promise<readonly StationDiscoveryRecord[]> {
-  const stations = await awdbStationListCache.get(request.signal);
+  const { stations, complete } = await awdbStationListCache.get(request.signal);
   if (request.signal?.aborted) return [];
-  return stations
+  const records = stations
     .filter((station) => isCoordinateInBounds(station.latitude, station.longitude, request.bounds))
     .map(awdbDiscoveryRecord);
+  if (!complete) throw new PartialDiscoveryError(records);
+  return records;
 }
 
 const awdbStationListCache = createStationListCache(fetchAwdbStationLists);
@@ -1050,26 +1053,45 @@ function abortPromise(signal: AbortSignal): Promise<never> {
   });
 }
 
+// A roster plus whether every network or state behind it answered.
+interface StationList<T> {
+  readonly stations: readonly T[];
+  readonly complete: boolean;
+}
+
 interface StationListCache<T> {
-  get(signal: AbortSignal | null): Promise<readonly T[]>;
+  get(signal: AbortSignal | null): Promise<StationList<T>>;
+}
+
+// A partial list is retried soon instead of standing in for the whole roster.
+const PARTIAL_STATION_LIST_TTL_MS = 30 * 1000;
+
+// Records from a roster where some network failed: the source is reported as
+// failed (so the pill reads "live (partial)") but its stations still render.
+class PartialDiscoveryError extends Error {
+  readonly records: readonly StationDiscoveryRecord[];
+  constructor(records: readonly StationDiscoveryRecord[]) {
+    super('station discovery returned a partial list');
+    this.records = records;
+  }
 }
 
 // Reference-counted, single-flight cache for a national or multi-state station
 // list: at most one fetch is in flight; concurrent callers share it; and if
 // every waiter aborts before it resolves, the shared fetch is aborted too. A
-// completed list lives for an hour, so a roster that is bad or has changed is
-// read again rather than kept for the whole session.
+// complete list lives for an hour, so a roster that is bad or has changed is
+// read again rather than kept for the whole session; a partial one for 30 s.
 function createStationListCache<T>(
-  fetcher: (signal: AbortSignal) => Promise<readonly T[]>
+  fetcher: (signal: AbortSignal) => Promise<StationList<T>>
 ): StationListCache<T> {
   interface Inflight {
     readonly controller: AbortController;
-    readonly promise: Promise<readonly T[]>;
+    readonly promise: Promise<StationList<T>>;
     readonly waiters: Set<AbortSignal>;
     hasEverHadWaiter: boolean;
   }
 
-  const cache = new ExpiringLruCache<'list', readonly T[]>(1);
+  const cache = new ExpiringLruCache<'list', StationList<T>>(1);
   let inflight: Inflight | null = null;
 
   function maybeAbort(target: Inflight): void {
@@ -1106,7 +1128,7 @@ function createStationListCache<T>(
       hasEverHadWaiter: false,
       promise: fetcher(controller.signal)
         .then((list) => {
-          cache.set('list', list, HOUR_MS);
+          cache.set('list', list, list.complete ? HOUR_MS : PARTIAL_STATION_LIST_TTL_MS);
           return list;
         })
         .finally(() => {
@@ -1118,7 +1140,7 @@ function createStationListCache<T>(
   }
 
   return {
-    async get(signal: AbortSignal | null): Promise<readonly T[]> {
+    async get(signal: AbortSignal | null): Promise<StationList<T>> {
       const cached = cache.get('list');
       if (cached) return cached;
       const target =inflight && !inflight.controller.signal.aborted ? inflight : start();
@@ -1135,7 +1157,7 @@ function createStationListCache<T>(
 
 async function fetchAwdbStationLists(
   signal: AbortSignal
-): Promise<readonly AwdbStationMetadata[]> {
+): Promise<StationList<AwdbStationMetadata>> {
   const settled = await Promise.allSettled(
     AWDB_DISCOVERY_NETWORKS.map((network) => fetchAwdbStationsForNetwork(network, signal))
   );
@@ -1158,7 +1180,7 @@ async function fetchAwdbStationLists(
   if (failures.length > 0) {
     console.warn('[telemetry] partial NRCS AWDB station discovery failed.', failures);
   }
-  return stations;
+  return { stations, complete: failures.length === 0 };
 }
 
 async function fetchAwdbStationsForNetwork(
@@ -1513,7 +1535,7 @@ export async function fetchRawsStationConditions(
 async function discoverCoopsStations(
   request: StationViewportDiscoveryRequest
 ): Promise<readonly StationDiscoveryRecord[]> {
-  const stations = await coopsStationListCache.get(request.signal);
+  const { stations } = await coopsStationListCache.get(request.signal);
   if (request.signal?.aborted) return [];
   return stations
     .filter((station) => isCoordinateInBounds(station.latitude, station.longitude, request.bounds))
@@ -1521,7 +1543,10 @@ async function discoverCoopsStations(
     .filter(isDiscoveryRecord);
 }
 
-const coopsStationListCache = createStationListCache(fetchCoopsStationList);
+const coopsStationListCache = createStationListCache(async (signal) => ({
+  stations: await fetchCoopsStationList(signal),
+  complete: true
+}));
 
 async function fetchCoopsStationList(signal: AbortSignal): Promise<readonly CoopsStationMetadata[]> {
   const params = new URLSearchParams({ type: 'waterlevels' });
@@ -1621,12 +1646,15 @@ function coopsDiscoveryRecord(station: CoopsStationMetadata): StationDiscoveryRe
   };
 }
 
-const agrimetStationListCache = createStationListCache(fetchAgrimetStationList);
+const agrimetStationListCache = createStationListCache(async (signal) => ({
+  stations: await fetchAgrimetStationList(signal),
+  complete: true
+}));
 
 async function discoverAgrimetStations(
   request: StationViewportDiscoveryRequest
 ): Promise<readonly StationDiscoveryRecord[]> {
-  const stations = await agrimetStationListCache.get(request.signal);
+  const { stations } = await agrimetStationListCache.get(request.signal);
   if (request.signal?.aborted) return [];
   return stations
     .filter((station) =>
@@ -1750,19 +1778,21 @@ const cocorahsStationListCache = createStationListCache(fetchCocorahsStationList
 async function discoverCocorahsStations(
   request: StationViewportDiscoveryRequest
 ): Promise<readonly StationDiscoveryRecord[]> {
-  const stations = await cocorahsStationListCache.get(request.signal);
+  const { stations, complete } = await cocorahsStationListCache.get(request.signal);
   if (request.signal?.aborted) return [];
-  return stations
+  const records = stations
     .filter((station) =>
       isCoordinateInBounds(station.latitude, station.longitude, request.bounds)
     )
     .map((station) => COCORAHS_STATION_ADAPTER.toDiscoveryRecord(station))
     .filter(isDiscoveryRecord);
+  if (!complete) throw new PartialDiscoveryError(records);
+  return records;
 }
 
 async function fetchCocorahsStationLists(
   signal: AbortSignal
-): Promise<readonly CocorahsStationMetadata[]> {
+): Promise<StationList<CocorahsStationMetadata>> {
   // The IEM mirror has no combined-region endpoint, so fetch each state and
   // merge; a per-state failure is contained the same way the AWDB per-network
   // fan-out is (partial results survive, a total failure throws).
@@ -1788,7 +1818,7 @@ async function fetchCocorahsStationLists(
   if (failures.length > 0) {
     console.warn('[telemetry] partial CoCoRaHS station discovery failed.', failures);
   }
-  return stations;
+  return { stations, complete: failures.length === 0 };
 }
 
 async function fetchCocorahsStationsForState(
