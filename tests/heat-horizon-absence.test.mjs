@@ -66,6 +66,13 @@ test('the all-zero line is a sentence', () => {
   assert.match(sequenceSource, /<strong>No elevated heat risk<\/strong> at this point on any of the seven days\./);
 });
 
+test('the all-zero line is read before the day cells, under the heading', () => {
+  const heading = sequenceSource.indexOf('class="heatrisk-sequence-heading"');
+  const line = sequenceSource.indexOf('data-heatrisk-no-elevated');
+  const grid = sequenceSource.indexOf('class="heatrisk-sequence-grid"');
+  assert.ok(heading < line && line < grid);
+});
+
 test('the horizon note sits in the time block under the chips, not in the details host', () => {
   const whenBlock = shellSource.slice(
     shellSource.indexOf('class="shell-when"'),

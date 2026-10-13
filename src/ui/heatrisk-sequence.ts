@@ -581,16 +581,17 @@ function renderRead(read: SequenceRead): void {
     '<div class="heatrisk-sequence-heading">' +
     `<strong>HeatRisk at the selected point for ${escapeHtml(selection.label)}</strong>` +
     '<span>7 days</span></div>' +
+    // The all-zero statement sits above the cells so it is read before the fold.
+    (allZero(read.values)
+      ? '<p class="heatrisk-sequence-selected" data-heatrisk-no-elevated>' +
+        '<strong>No elevated heat risk</strong> at this point on any of the seven days.</p>'
+      : '') +
     '<div class="heatrisk-sequence-grid" role="list">' +
     read.frames
       .map((frame, index) => sequenceCell(frame, read.values[index] ?? null))
       .join('') +
     '</div>' +
     selectedReadHtml(read) +
-    (allZero(read.values)
-      ? '<p class="heatrisk-sequence-selected" data-heatrisk-no-elevated>' +
-        '<strong>No elevated heat risk</strong> at this point on any of the seven days.</p>'
-      : '') +
     `<p id="heatrisk-sequence-alt" class="sr-only">Seven-day HeatRisk text alternative. ${escapeHtml(alternative)}.</p>` +
     '<p class="heatrisk-sequence-source">' +
     `<a href="${escapeHtml(URLS.nwsHeatRisk)}/info/iteminfo" target="_blank" rel="noopener">National Weather Service HeatRisk</a> · ` +
