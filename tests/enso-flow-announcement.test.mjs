@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { registerHooks } from 'node:module';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -267,12 +267,12 @@ test('a live currents frame is dated: run, valid instant and age in the line, bi
   try {
     const drawn = snapshots.at(-1);
     assert.equal(drawn.label, 'Ocean currents');
-    assert.equal(drawn.line, 'live · Model run Oct 13, 12:00 AM UTC · Model valid Oct 13, 1:00 AM UTC · frame 3 days old');
+    assert.equal(drawn.line, 'live · NOAA RTOFS surface currents · Model run Oct 13, 12:00 AM UTC · Model valid Oct 13, 1:00 AM UTC · frame 3 days old');
     assert.deepEqual(drawn.notes, ['Line width and brightness: under 0.25, 0.25 to 0.5, 0.5 or more m/s.']);
     assert.equal(drawn.provenance, 'NOAA Global RTOFS, re-encoded by DDM');
     assert.equal(drawn.motion, 'moving');
     assert.ok(host.textContent.includes('NOAA Global RTOFS surface currents; ocean model output, one dated frame.'));
-    assert.doesNotMatch(host.textContent, /Not for navigation|never joined/, 'the briefing explains; the panel does not');
+    assert.doesNotMatch(host.textContent, /navigation|never joined/i, 'the briefing explains and disclaims; the panel does not');
     // The frame has no age limit: a state that says stale (a NODD frame's 24 hours) does not take it down.
     globalThis.__fieldState({ ...globalThis.__state, stale: true });
     assert.equal(panel().dataset.status, 'live');
@@ -308,7 +308,7 @@ test('a currents view the grid does not fill says so: partial, all land, and out
   const bins = 'Line width and brightness: under 0.25, 0.25 to 0.5, 0.5 or more m/s.';
   try {
     globalThis.__fieldState({ ...globalThis.__state, coverage: 'partial' });
-    assert.match(snapshots.at(-1).line, /^live \(partial\) · Model run .+ · Model valid .+ · frame 3 days old$/);
+    assert.match(snapshots.at(-1).line, /^live \(partial\) · NOAA RTOFS surface currents · Model run .+ · Model valid .+ · frame 3 days old$/);
     assert.deepEqual(snapshots.at(-1).notes, [box, bins]);
     globalThis.__fieldState({ ...globalThis.__state, coverage: 'masked', form: 'none', motion: 'none' });
     assert.equal(snapshots.at(-1).line, 'no data · No ocean values in this view');
@@ -343,9 +343,10 @@ test('a held currents frame is read once: a second choice inside ten minutes ask
   }
 });
 
-test('with the overlay off the panel carries no credit', () => {
+test('with the overlay off the panel carries no credit and no arrow colour', () => {
   boot('off');
   assert.equal(host.querySelector('.enso-flow-credit'), null);
+  assert.equal(host.querySelector('.enso-flow-toolbar').hidden, true, 'nothing is drawn, so there are no arrows to colour');
   // True of every kind: the shade is no direction overlay.
   assert.equal(line().textContent, 'Overlay off');
   assert.deepEqual(live.writes, ['Overlay off']);
@@ -361,7 +362,6 @@ test('the control lists every kind by its label, with jet-level wind beside the 
     ]
   );
   assert.equal(panel().getAttribute('aria-label'), 'Ocean and atmosphere overlays');
-  assert.equal(host.querySelector('.enso-flow-toolbar').hidden, false, 'the arrow colour shows for the line kinds');
 });
 
 test('live precipitable water is a still shade: a state line and bins for the key, nothing to pause, no arrow colour', async () => {
@@ -381,9 +381,9 @@ test('live precipitable water is a still shade: a state line and bins for the ke
     assert.deepEqual(globalThis.__mounts, [water], 'one shade, mounted once');
     const drawn = snapshots.at(-1);
     assert.equal(drawn.label, 'Precipitable water');
-    assert.match(drawn.line, /^live · Model run .+ UTC · Model valid .+ UTC$/);
+    assert.match(drawn.line, /^live · NOAA GFS precipitable water · Model run .+ UTC · Model valid .+ UTC$/);
     assert.deepEqual(drawn.notes, ['Shade deepens in steps: none under 15, then 15 to 30, 30 to 45, 45 or more kg m-2.']);
-    assert.equal(drawn.provenance, 'derived from NOAA GFS');
+    assert.equal(drawn.provenance, 'derived from NOAA GFS precipitable water');
     // The key offers Pause only where `motion` says something can move (src/ui/map-key.ts syncFlowPause).
     assert.equal(drawn.motion, 'none');
     assert.equal(live.writes.at(-1), `Precipitable water · ${drawn.line}`);
@@ -433,8 +433,8 @@ test('a failed precipitable water read says so in words fit for a field with no 
   }
 });
 
-for (const [kind, label, loading, bins] of [
-  ['wind', 'Atmospheric currents', 'NOAA GFS wind', 'Line width and brightness: under 5, 5 to 10, 10 or more m/s.'],
+for (const [kind, label, source, bins] of [
+  ['wind', 'Atmospheric currents', 'NOAA GFS 10 m wind', 'Line width and brightness: under 5, 5 to 10, 10 or more m/s.'],
   ['jet', 'Jet-level wind', 'NOAA GFS 250 hPa wind', 'Line width and brightness: under 20, 20 to 40, 40 or more m/s.'],
   ['waves', 'Ocean waves', 'NOAA GFS-Wave', 'Mark length and brightness: under 2, 2 to 4, 4 or more m significant wave height.']
 ]) {
@@ -446,13 +446,18 @@ for (const [kind, label, loading, bins] of [
     globalThis.__field = { ...field, kind };
     try {
       boot(kind);
-      assert.deepEqual(live.writes, [`${label} · loading · ${loading}`]);
+      assert.deepEqual(live.writes, [`${label} · loading · ${source}`]);
+      assert.equal(host.querySelector('.enso-flow-toolbar').hidden, false, 'the arrow colour shows for the line kinds');
       await until(() => panel().dataset.status === 'live');
       const drawn = snapshots.at(-1);
       assert.equal(drawn.label, label);
-      assert.match(drawn.line, /^live · Model run .+ · Model valid .+$/);
+      // The live line and the credit name the kind's own source, as the loading line does.
+      assert.ok(drawn.line.startsWith(`live · ${source} · Model run `) && drawn.line.includes(' · Model valid '), drawn.line);
       assert.deepEqual(drawn.notes, [bins]);
-      assert.equal(drawn.provenance, 'derived from NOAA GFS');
+      assert.equal(drawn.provenance, `derived from ${source}`);
+      assert.equal(host.querySelector('.enso-flow-credit').textContent, drawn.provenance);
+      // The navigation disclaimer reads in the Impact Briefing, for the ocean kinds only (tests/terrain-coverage.test.mjs).
+      assert.doesNotMatch(host.textContent, /navigation/i);
       // No kind is sampled by hand any more: the panel offers its kinds and nothing else to press.
       assert.deepEqual(host.querySelectorAll('button').filter((button) => button.dataset.flowKind === undefined), []);
       if (kind === 'jet') assert.ok(host.textContent.includes('NOAA GFS 250 hPa wind; global model output, updated every six hours.'));
@@ -465,3 +470,13 @@ for (const [kind, label, loading, bins] of [
     }
   });
 }
+
+test('the key motion button is named for what a press does, in both states', () => {
+  const key = readFileSync(new URL('../src/ui/map-key.ts', import.meta.url), 'utf8');
+  const button = key.slice(key.indexOf('function buildFlowPauseButton('), key.indexOf('function formatHeatRiskDate('));
+  // Lines that hold still (a pause, or reduced motion) offer Play; moving or held lines offer Pause.
+  assert.ok(button.includes("const paused = motion === 'paused' || motion === 'reduced';"));
+  assert.ok(button.includes("paused ? 'Play motion' : 'Pause motion'"));
+  // A name that changes with the state carries no aria-pressed beside it (APG button pattern).
+  assert.ok(!button.includes('aria-pressed'));
+});

@@ -51,16 +51,12 @@ const SOURCES: Record<ActiveFlowKind, string> = {
   // DRAFT wording (DR-177): the issuer's field and its `.idx` level words (admission gfs-runtime-nodd, 2026-10-13).
   pwat: 'NOAA GFS precipitable water (entire atmosphere); global model output, updated every six hours'
 };
-/** The owner's GFS credit, or the currents frame's own: text, never a link or an emblem. */
-const provenanceOf = (kind: ActiveFlowKind): string =>
-  kind === 'currents' ? FLOW_WORDS.currentsProvenance : FLOW_WORDS.provenance;
 /** Sentences the panel and the map key's drawer row share, one source each. */
 const TIMING_NOTE = 'This is model context, independently timed from the observed SST map.';
 const FAILED_NOTE = 'No direction or calm condition is inferred from a failed request.';
 // DRAFT wording (DR-177): the same sentence for a kind with no direction.
 const SHADE_FAILED_NOTE = 'No moist or dry condition is inferred from a failed request.';
 const failedNote = (kind: ActiveFlowKind): string => (isShadeKind(kind) ? SHADE_FAILED_NOTE : FAILED_NOTE);
-const NAVIGATION_NOTE = 'It is unsuitable for coastal navigation.';
 type FlowStatus = 'off' | 'loading' | 'live' | 'live (partial)' | 'no data' | 'unavailable';
 type FlowModule = typeof import('./flow/index');
 /**
@@ -255,7 +251,7 @@ function presentShade(kind: ActiveFlowKind, field: ScalarField): void {
   stampForm({ form: 'shade', motion: 'none', features: 0 }, kind);
   const notes = [FLOW_WORDS.bins[kind]];
   const { cycle, validTime } = field.meta;
-  setStatus('live', flowLiveLine('live', cycle ?? validTime, validTime), kind, notes, { motion: 'none', provenance: provenanceOf(kind) });
+  setStatus('live', flowLiveLine('live', kind, cycle ?? validTime, validTime), kind, notes, { motion: 'none', provenance: FLOW_WORDS.provenance[kind] });
   if (detailNode) detailNode.textContent = notes.join(' ');
 }
 
@@ -266,7 +262,7 @@ function presentFieldState(kind: ActiveFlowKind, field: FlowField, state: FlowVi
     presentStale(kind, field);
     return;
   }
-  const provenance = provenanceOf(kind);
+  const provenance = FLOW_WORDS.provenance[kind];
   // Only a regional grid has an outside (the wave crop, each currents grid);
   // src/layers/flow/index.ts never reports one for a global grid.
   const regional = kind === 'waves' || kind === 'currents';
@@ -283,16 +279,16 @@ function presentFieldState(kind: ActiveFlowKind, field: FlowField, state: FlowVi
   const notes = fieldNotes(kind, state, status === 'live (partial)' ? box() : null);
   const { cycle, validTime } = field.meta;
   // The currents frame is dated, never "now": its line ends with its age.
-  const line = flowLiveLine(status, cycle ?? validTime, validTime, kind === 'currents' ? Date.now() : undefined);
+  const line = flowLiveLine(status, kind, cycle ?? validTime, validTime, kind === 'currents' ? Date.now() : undefined);
   setStatus(status, line, kind, notes, { motion: state.motion, provenance });
   if (detailNode) detailNode.textContent = notes.join(' ');
 }
 
 async function loadField(activeMap: maplibregl.Map, kind: ActiveFlowKind, generation: number): Promise<void> {
-  if (sourceNode) sourceNode.textContent = `${SOURCES[kind]}. ${TIMING_NOTE}${isShadeKind(kind) ? '' : ` ${NAVIGATION_NOTE}`}`;
+  if (sourceNode) sourceNode.textContent = `${SOURCES[kind]}. ${TIMING_NOTE}`;
   const owned = new AbortController();
   controller = owned;
-  setStatus('loading', `loading · ${FLOW_WORDS.loading[kind]}`, kind);
+  setStatus('loading', `loading · ${FLOW_WORDS.source[kind]}`, kind);
   if (detailNode) detailNode.textContent = TIMING_NOTE;
   const current = (): boolean => !owned.signal.aborted && generation === epoch && map === activeMap;
   try {
@@ -371,7 +367,7 @@ function renderCredits(kind: EnsoFlowKind): void {
   const provenance = document.createElement('p');
   provenance.className = 'enso-flow-credit';
   provenance.dataset['ensoFlowProvenance'] = '';
-  provenance.textContent = provenanceOf(kind);
+  provenance.textContent = FLOW_WORDS.provenance[kind];
   creditNode.replaceChildren(provenance);
 }
 
@@ -399,9 +395,9 @@ function updateSelection(): void {
   }
   const details = panel?.querySelector('details');
   if (details) details.hidden = preference.kind === 'off';
-  // The arrow colour is for lines; a shade has none.
+  // The arrow colour is for lines: Off draws none, and a shade has none.
   const toolbar = panel?.querySelector<HTMLElement>('.enso-flow-toolbar');
-  if (toolbar) toolbar.hidden = isShadeKind(preference.kind);
+  if (toolbar) toolbar.hidden = preference.kind === 'off' || isShadeKind(preference.kind);
 }
 
 /** Keep one set of controls and listeners as the shell changes its seat. */

@@ -216,10 +216,10 @@ test.describe('E2-1 flow words', () => {
       else if (value && typeof value === 'object') for (const v of Object.values(value)) walk(v);
     };
     walk(FLOW_WORDS);
-    out.push(flowLiveLine('live', FIXTURE_CYCLE, FIXTURE_VALID), flowLiveLine('live (partial)', FIXTURE_CYCLE, FIXTURE_VALID));
+    for (const kind of Object.keys(FLOW_SOURCES) as (keyof typeof FLOW_SOURCES)[]) out.push(flowLiveLine('live', kind, FIXTURE_CYCLE, FIXTURE_VALID), flowLiveLine('live (partial)', kind, FIXTURE_CYCLE, FIXTURE_VALID));
     for (const kind of Object.keys(FLOW_SOURCES) as (keyof typeof FLOW_SOURCES)[]) out.push(flowStaleLine(kind, FIXTURE_CYCLE));
     // The currents frame's own lines: its dated line with its age, and the box of the grid under the view.
-    out.push(flowLiveLine('live', FRAME_RUN, FRAME_VALID, FRAME_CLOCK), flowLiveLine('live (partial)', FRAME_RUN, FRAME_VALID, FRAME_VALID));
+    out.push(flowLiveLine('live', 'currents', FRAME_RUN, FRAME_VALID, FRAME_CLOCK), flowLiveLine('live (partial)', 'currents', FRAME_RUN, FRAME_VALID, FRAME_VALID));
     out.push(ensoFlowData.currentsBoxNote({ lon0: 130, lat0: 39, dlon: 1, dlat: 1, nx: 120, ny: 80 }));
     return out;
   }
@@ -310,7 +310,8 @@ test.describe('E2-1 flowing paths in ENSO mode', () => {
     await expect(panel(page)).toHaveAttribute('data-status', 'live');
     await expect(panel(page)).toHaveAttribute('data-flow-drawn', kind);
     await expect(panel(page).locator(`[data-flow-kind="${kind}"]`)).toHaveText(label);
-    await expect(flowStatus(page)).toContainText(`${label} · live · Model run `);
+    await expect(flowStatus(page)).toContainText(`${label} · live · ${FLOW_WORDS.source[kind]} · Model run `);
+    await expect(flowProvenance(page)).toHaveText(FLOW_WORDS.provenance[kind]);
     await expect(flowNotes(page)).toContainText(FLOW_WORDS.bins[kind]);
     const [ugrd, vgrd] = FLOW_SOURCES[kind].messages.map((m) => spanRange('gfs.t06z.pgrb2.1p00.f006.idx', m.variable, m.level)) as [string, string];
     const log = noddStubLog(page).map(({ method, url, range, answer }) => ({ method, url, range, answer }));
@@ -337,9 +338,9 @@ test.describe('E2-1 flowing paths in ENSO mode', () => {
     // A shade has no arrows to colour and nothing that moves.
     await expect(panel(page).locator('.enso-flow-toolbar')).toBeHidden();
     await expect(page.locator('#map-key-flow-pause')).toBeHidden();
-    await expect(flowStatus(page)).toContainText('Precipitable water · live · Model run ');
+    await expect(flowStatus(page)).toContainText(`Precipitable water · live · ${FLOW_WORDS.source.pwat} · Model run `);
     await expect(flowNotes(page)).toHaveText(FLOW_WORDS.bins.pwat);
-    await expect(flowProvenance(page)).toHaveText(FLOW_WORDS.provenance);
+    await expect(flowProvenance(page)).toHaveText(FLOW_WORDS.provenance.pwat);
     const [pwat] = FLOW_SOURCES.pwat.messages.map((m) => spanRange(WIND_IDX, m.variable, m.level)) as [string];
     const key = `https://noaa-gfs-bdp-pds.s3.amazonaws.com/${WIND_IDX.replace(/\.idx$/, '')}`;
     expect(noddStubLog(page).map(({ method, url, range, answer }) => ({ method, url, range, answer }))).toEqual([
@@ -369,14 +370,14 @@ test.describe('E2-1 flowing paths in ENSO mode', () => {
     expect(calls).toHaveLength(0);
   });
 
-  test('the drawer line reads live · Model run <date> · Model valid <date>, with no now and no forecast', async ({ page }) => {
+  test('the drawer line reads live · <source> · Model run <date> · Model valid <date>, with no now and no forecast', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await bootEnso(page, '&embed=true&flow=wind');
     await expect(panel(page)).toHaveAttribute('data-status', 'live');
     await openKeyDrawer(page);
     const run = await pageDate(page, FIXTURE_CYCLE);
     const valid = await pageDate(page, FIXTURE_VALID);
-    await expect(flowStatus(page)).toHaveText(`Atmospheric currents · live · Model run ${run} · Model valid ${valid}`);
+    await expect(flowStatus(page)).toHaveText(`Atmospheric currents · live · ${FLOW_WORDS.source.wind} · Model run ${run} · Model valid ${valid}`);
     const text = `${await flowStatus(page).textContent()} ${await flowNotes(page).textContent()}`;
     expect(text).not.toMatch(/\bnow\b|\bforecast/i);
     // The key keeps what decodes the lines; the explanations read in the Impact Briefing.
@@ -388,16 +389,17 @@ test.describe('E2-1 flowing paths in ENSO mode', () => {
     await expect(flowStatus(page)).not.toContainText('Observed');
   });
 
-  test('derived from NOAA GFS shows as text in the drawer and the panel; there is no attribution line', async ({ page }) => {
+  test('the credit (derived from NOAA GFS, then the 10 m wind) shows as text in the drawer and the panel; there is no attribution line', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await bootEnso(page);
     await choose(page, 'wind');
     await expect(panel(page)).toHaveAttribute('data-status', 'live');
     await openKeyDrawer(page);
-    await expect(flowProvenance(page)).toHaveText('derived from NOAA GFS');
+    expect(FLOW_WORDS.provenance.wind).toBe('derived from NOAA GFS 10 m wind');
+    await expect(flowProvenance(page)).toHaveText(FLOW_WORDS.provenance.wind);
     await expect(flowProvenance(page).locator('img, svg, a')).toHaveCount(0);
     const credit = panel(page).locator('[data-enso-flow-provenance]');
-    await expect(credit).toHaveText('derived from NOAA GFS');
+    await expect(credit).toHaveText(FLOW_WORDS.provenance.wind);
     await expect(credit.locator('img, svg, a')).toHaveCount(0);
     // The credit is text and only text: the panel links nowhere, and the map's attribution line names no model.
     await expect(panel(page).locator('a[href]')).toHaveCount(0);
@@ -407,15 +409,15 @@ test.describe('E2-1 flowing paths in ENSO mode', () => {
     }
   });
 
-  test('the provenance item reads derived from NOAA GFS for waves too, marked for read-back', async ({ page }) => {
+  test('the provenance item reads derived from NOAA GFS-Wave for waves, marked for read-back', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await bootEnso(page);
     await choose(page, 'waves');
     await expect(panel(page)).toHaveAttribute('data-status', /^live/);
     await openKeyDrawer(page);
     await expect(flowStatus(page)).toContainText('Ocean waves · live');
-    await expect(flowProvenance(page)).toHaveText('derived from NOAA GFS');
-    await expect(panel(page).locator('[data-enso-flow-provenance]')).toHaveText('derived from NOAA GFS');
+    await expect(flowProvenance(page)).toHaveText('derived from NOAA GFS-Wave');
+    await expect(panel(page).locator('[data-enso-flow-provenance]')).toHaveText('derived from NOAA GFS-Wave');
   });
 
   test('a 404 thrice reads unavailable plus the FAILED_NOTE, and nothing draws', async ({ page }) => {
@@ -428,7 +430,7 @@ test.describe('E2-1 flowing paths in ENSO mode', () => {
     await bootEnso(page);
     await choose(page, 'wind');
     await expect(panel(page)).toHaveAttribute('data-status', 'unavailable');
-    await expect(panel(page).locator('.enso-flow-status')).toHaveText('unavailable · NOAA GFS wind did not load');
+    await expect(panel(page).locator('.enso-flow-status')).toHaveText('unavailable · NOAA GFS 10 m wind did not load');
     expect(asked.map((a) => a.url.replace('https://noaa-gfs-bdp-pds.s3.amazonaws.com/', ''))).toEqual([
       'gfs.20261005/06/atmos/gfs.t06z.pgrb2.1p00.f006.idx',
       'gfs.20261005/00/atmos/gfs.t00z.pgrb2.1p00.f012.idx',
@@ -437,7 +439,7 @@ test.describe('E2-1 flowing paths in ENSO mode', () => {
     await expect(panel(page)).toHaveAttribute('data-flow-drawn', '');
     await expect(panel(page)).toHaveAttribute('data-flow-form', 'none');
     await openKeyDrawer(page);
-    await expect(flowStatus(page)).toHaveText('Atmospheric currents · unavailable · NOAA GFS wind did not load');
+    await expect(flowStatus(page)).toHaveText('Atmospheric currents · unavailable · NOAA GFS 10 m wind did not load');
     await expect(flowNotes(page)).toHaveText(FAILED_NOTE);
     await expect(flowProvenance(page)).toHaveCount(0);
     await expect(page.locator('#map-key-flow-pause')).toBeHidden();
@@ -567,17 +569,17 @@ test.describe('E2-1 flowing paths in ENSO mode', () => {
     expect(noddStubLog(page)).toHaveLength(0);
     // A dated frame: its run, its valid instant and its age, never a limit and never "now".
     const state = (await panel(page).getAttribute('data-status'))!;
-    const line = `${state} · Model run ${await pageDate(page, FRAME_RUN)} · Model valid ${await pageDate(page, FRAME_VALID)} · frame 3 days old`;
+    const line = `${state} · ${FLOW_WORDS.source.currents} · Model run ${await pageDate(page, FRAME_RUN)} · Model valid ${await pageDate(page, FRAME_VALID)} · frame 3 days old`;
     await expect(panel(page).locator('.enso-flow-status')).toHaveText(line);
     await openKeyDrawer(page);
     await expect(flowStatus(page)).toHaveText(`Ocean currents · ${line}`);
     await expect(flowNotes(page)).toContainText(FLOW_WORDS.bins.currents);
     // The key keeps the bins and the state; the credit's long form, the coverage and the disclaimer read in the Impact Briefing.
     await expect(flowNotes(page)).not.toContainText('Not for navigation');
-    await expect(flowProvenance(page)).toHaveText(FLOW_WORDS.currentsProvenance);
+    await expect(flowProvenance(page)).toHaveText(FLOW_WORDS.provenance.currents);
     await expect(flowProvenance(page).locator('img, svg, a')).toHaveCount(0);
     const credit = panel(page).locator('[data-enso-flow-provenance]');
-    await expect(credit).toHaveText(FLOW_WORDS.currentsProvenance);
+    await expect(credit).toHaveText(FLOW_WORDS.provenance.currents);
     await expect(panel(page).locator('a[href]')).toHaveCount(0);
     // A pan reads nothing again.
     await dragMap(page, -60, -20);
@@ -645,7 +647,8 @@ test.describe('E2-1 flowing paths in ENSO mode', () => {
     expect(Number(await panel(page).getAttribute('data-flow-features'))).toBeGreaterThan(20);
     const pause = page.locator('#map-key-flow-pause');
     await expect(pause).toBeVisible();
-    await expect(pause).toHaveAttribute('aria-pressed', 'true');
+    await expect(pause).toHaveAttribute('data-paused', 'true');
+    await expect(pause).toHaveAccessibleName('Play motion');
     await openKeyDrawer(page);
     await expect(flowNotes(page)).toContainText(FLOW_WORDS.reduced);
     await expect.poll(() => rendersOver(page, 500), { timeout: 15_000 }).toBe(0);
@@ -685,7 +688,7 @@ test.describe('E2-1 flowing paths in ENSO mode', () => {
     await expect(panel(page)).toHaveAttribute('data-status', 'live');
     expect(Number(await panel(page).getAttribute('data-flow-features'))).toBeGreaterThan(20);
     await openKeyDrawer(page);
-    await expect(flowStatus(page)).toContainText('Atmospheric currents · live · Model run ');
+    await expect(flowStatus(page)).toContainText(`Atmospheric currents · live · ${FLOW_WORDS.source.wind} · Model run `);
     await expect(flowNotes(page)).toContainText(FLOW_WORDS.context);
     await page.evaluate(() => (window as unknown as { __lose: WEBGL_lose_context }).__lose.restoreContext());
     await expect(panel(page)).toHaveAttribute('data-flow-form', 'moving');
@@ -785,10 +788,10 @@ test.describe('E2-1 flowing paths in ENSO mode', () => {
     const features = Number(featureStamp);
     expect(Number.isInteger(features) && features >= 0).toBe(true);
     const status = panel(page).locator('.enso-flow-status');
-    await expect(status).toContainText('live · Model run ');
+    await expect(status).toContainText(`live · ${FLOW_WORDS.source.wind} · Model run `);
     await expect(status).not.toContainText('wave marks');
     await openKeyDrawer(page);
-    await expect(flowStatus(page)).toContainText('Atmospheric currents · live · Model run ');
+    await expect(flowStatus(page)).toContainText(`Atmospheric currents · live · ${FLOW_WORDS.source.wind} · Model run `);
     if (features > 0) {
       expect(nodes).toBeGreaterThan(0);
       await expect(panel(page)).toHaveAttribute('data-flow-form', 'arrows');
@@ -824,9 +827,9 @@ test.describe('E2-1 flowing paths in ENSO mode', () => {
     await expect(panel(page)).toHaveAttribute('data-status', 'live');
     const status = panel(page).locator('.enso-flow-status');
     await expect(status).not.toContainText(FLOW_WORDS.outside);
-    await expect(status).toContainText('live · Model run ');
+    await expect(status).toContainText(`live · ${FLOW_WORDS.source.waves} · Model run `);
     await openKeyDrawer(page);
-    await expect(flowStatus(page)).toContainText('Ocean waves · live · Model run ');
+    await expect(flowStatus(page)).toContainText(`Ocean waves · live · ${FLOW_WORDS.source.waves} · Model run `);
     if (features > 0) {
       expect(nodes).toBeGreaterThan(0);
       await expect(flowNotes(page)).toContainText(FLOW_WORDS.pastGrid);

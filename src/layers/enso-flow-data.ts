@@ -23,9 +23,9 @@ export function dateLabel(time: number): string {
 /**
  * Every sentence the ENSO wind, wave and current paths show, in the panel and the
  * map key's drawer row, from this one table (ENSO-FLOW-PLAN E2-1; C-fit.md
- * section 3). Every entry but `provenance` for wind is DDM's own wording and
- * waits for the owner's read-back (DR-177 (5)); each carries its C-fit.md
- * DRAFT number. A flow string never says now, right now, currently,
+ * section 3). Every entry is DDM's own wording and waits for the owner's
+ * read-back (DR-177 (5)); each carries its C-fit.md DRAFT number. The GFS
+ * credits open with the owner's own words. A flow string never says now, right now, currently,
  * real-time, latest or today, and claims no forecast and no transport
  * (tests/flow-wire.spec.ts). The key keeps what decodes its symbols (the
  * bins) and the live state; the sentences that explain the paths read in the
@@ -35,24 +35,25 @@ export function dateLabel(time: number): string {
  * total at one model instant (admission gfs-runtime-nodd, 2026-10-13).
  */
 export const FLOW_WORDS = {
-  // The owner's words (RATIFICATION-11 row 15), verbatim, as text: never an
-  // attribution line or an emblem.
-  // DRAFT wording (DR-177): the same words for GFS-Wave (C-fit.md 1.11; ENSO-FLOW-PLAN question 6).
-  provenance: 'derived from NOAA GFS',
-  // DRAFT wording (DR-177): the currents credit, short for admission rtofs-currents-producer line 11
-  // ("Surface currents: NOAA/NCEP Global RTOFS, run <date> 00Z, valid <UTC>, re-encoded by DDM (model)");
-  // the run and the valid instant read in the state line beside it.
-  currentsProvenance: 'NOAA Global RTOFS, re-encoded by DDM',
+  // The credit under the state line, as text: never an attribution line or an emblem.
+  // DRAFT wording (DR-177): the owner's words (RATIFICATION-11 row 15, "derived from NOAA GFS"), each followed by
+  // the kind's own field, so the wind at 10 m and at 250 hPa do not read alike (C-fit.md 1.11 for GFS-Wave). The
+  // currents credit is short for admission rtofs-currents-producer line 11 ("Surface currents: NOAA/NCEP Global
+  // RTOFS, run <date> 00Z, valid <UTC>, re-encoded by DDM (model)"); its run and valid instant read in the state line.
+  provenance: {
+    wind: 'derived from NOAA GFS 10 m wind', jet: 'derived from NOAA GFS 250 hPa wind', waves: 'derived from NOAA GFS-Wave',
+    currents: 'NOAA Global RTOFS, re-encoded by DDM', pwat: 'derived from NOAA GFS precipitable water'
+  } satisfies FlowKindWords,
   // DRAFT wording (DR-177): C-fit DRAFT 1, "Model run <date>" in the line.
   modelRun: 'Model run',
-  // DRAFT wording (DR-177): C-fit DRAFT 2, the loading words (C-fit.md 1.5).
-  loading: {
-    wind: 'NOAA GFS wind', jet: 'NOAA GFS 250 hPa wind', waves: 'NOAA GFS-Wave', currents: 'NOAA RTOFS surface currents',
+  // DRAFT wording (DR-177): C-fit DRAFT 2, the kind's source by name: the loading line and the live line read it (C-fit.md 1.5).
+  source: {
+    wind: 'NOAA GFS 10 m wind', jet: 'NOAA GFS 250 hPa wind', waves: 'NOAA GFS-Wave', currents: 'NOAA RTOFS surface currents',
     pwat: 'NOAA GFS precipitable water'
   } satisfies FlowKindWords,
   // DRAFT wording (DR-177): C-fit DRAFT 3, the unavailable words.
   unavailable: {
-    wind: 'NOAA GFS wind did not load', jet: 'NOAA GFS 250 hPa wind did not load', waves: 'NOAA GFS-Wave did not load',
+    wind: 'NOAA GFS 10 m wind did not load', jet: 'NOAA GFS 250 hPa wind did not load', waves: 'NOAA GFS-Wave did not load',
     currents: 'NOAA RTOFS surface currents did not load', pwat: 'NOAA GFS precipitable water did not load'
   } satisfies FlowKindWords,
   // DRAFT wording (DR-177): C-fit DRAFT 4, the past-24-hour stale words (moving-paths section 11).
@@ -139,11 +140,14 @@ export function flowAgeWords(validTime: number, now: number): string {
 }
 
 /**
- * `<status> · Model run <date> · Model valid <date>`: no forecast hour, no
- * "now". A dated frame (currents) passes the clock as `ageAt` and gains its age.
+ * `<status> · <the kind's source> · Model run <date> · Model valid <date>`: no
+ * forecast hour, no "now". A dated frame (currents) passes the clock as
+ * `ageAt` and gains its age.
  */
-export function flowLiveLine(status: 'live' | 'live (partial)', cycle: number, validTime: number, ageAt?: number): string {
-  const line = `${status} · ${FLOW_WORDS.modelRun} ${dateLabel(cycle)} · Model valid ${dateLabel(validTime)}`;
+export function flowLiveLine(
+  status: 'live' | 'live (partial)', kind: ActiveFlowKind, cycle: number, validTime: number, ageAt?: number
+): string {
+  const line = `${status} · ${FLOW_WORDS.source[kind]} · ${FLOW_WORDS.modelRun} ${dateLabel(cycle)} · Model valid ${dateLabel(validTime)}`;
   return ageAt === undefined ? line : `${line} · ${flowAgeWords(validTime, ageAt)}`;
 }
 

@@ -72,7 +72,6 @@ import {
   TROPICAL_EMPTY_TEXT,
   TROPICAL_ISSUERS,
   TROPICAL_POINT_CLASSES,
-  TROPICAL_POINT_INK,
   TROPICAL_POINT_PAPER,
   TROPICAL_PART_NAMES,
   TROPICAL_TRACK,
@@ -528,10 +527,12 @@ function ensoFlowRow(): { readonly html: string; readonly ariaLabel: string } {
 
 /**
  * The flowing paths' Pause toggle (E1-4). Built once by initMapKey and only
- * shown, hidden and re-pressed here, never re-created. The icon swaps
- * (two bars while the lines move, a play triangle while they hold still);
- * the accessible name stays constant (APG button pattern) and stays apart
- * from the time bar's own "Pause" and "Play" for the SST days.
+ * shown, hidden and renamed here, never re-created. The icon and the
+ * accessible name swap together and say what a press does (two bars and
+ * "Pause motion" while the lines move, a play triangle and "Play motion"
+ * while they hold still), so the button carries no aria-pressed (APG button
+ * pattern: a name that changes, or a pressed state, never both). The names
+ * stay apart from the time bar's own "Pause" and "Play" for the SST days.
  */
 function buildFlowPauseButton(): HTMLButtonElement {
   const button = document.createElement('button');
@@ -542,7 +543,7 @@ function buildFlowPauseButton(): HTMLButtonElement {
   // DRAFT wording (DR-177): "Pause motion", the flowing paths' toggle name,
   // on ENSO-FLOW-PLAN.md question 6's read-back list.
   button.setAttribute('aria-label', 'Pause motion');
-  button.setAttribute('aria-pressed', 'false');
+  button.dataset.paused = 'false';
   button.hidden = true;
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   svg.setAttribute('viewBox', '0 0 16 16');
@@ -562,9 +563,9 @@ function buildFlowPauseButton(): HTMLButtonElement {
 }
 
 /**
- * Show the toggle only while the paths' snapshot reports motion, and press
- * it while they are paused or still under reduced motion. `held` (the SST
- * days playing, a hidden tab) is no one's pause, so it reads unpressed.
+ * Show the toggle only while the paths' snapshot reports motion, and offer
+ * Play while they are paused or still under reduced motion. `held` (the SST
+ * days playing, a hidden tab) is no one's pause, so it still offers Pause.
  */
 function syncFlowPause(
   host: HTMLElement,
@@ -581,7 +582,10 @@ function syncFlowPause(
     return;
   }
   host.dataset.flowMotion = motion;
-  button.setAttribute('aria-pressed', String(motion === 'paused' || motion === 'reduced'));
+  const paused = motion === 'paused' || motion === 'reduced';
+  button.dataset.paused = String(paused);
+  // DRAFT wording (DR-177): "Play motion", the same toggle's name while the lines hold still.
+  button.setAttribute('aria-label', paused ? 'Play motion' : 'Pause motion');
 }
 
 function formatHeatRiskDate(validTime: number): string {
@@ -1149,14 +1153,15 @@ function fireProductKeys(eligible: ReadonlySet<string>): readonly string[] {
 
 /**
  * A neutral circle at a renderer class's size (the issuer's points are icons, not colours).
- * The map draws the ink over a bright raster; the key panel is dark, so here the ink sits
- * on a paper chip: a paper centre for a hollow circle and a paper ring around every circle.
+ * The map draws dark ink over a bright raster; the key panel is dark, so here the circle is
+ * paper alone: a solid paper disc for a filled point, a paper ring with a clear centre for a
+ * hollow one and for the size examples.
  */
 function tropicalCircle(radius: number, label: string, filled = false): string {
   const size = Math.round(radius * 2);
   return (
     '<span class="map-key-item"><span class="map-key-swatch" style="' +
-    `background:${filled ? TROPICAL_POINT_INK : TROPICAL_POINT_PAPER};border:1.5px solid ${TROPICAL_POINT_INK};box-shadow:0 0 0 1px ${TROPICAL_POINT_PAPER};border-radius:50%;width:${size}px;height:${size}px` +
+    `background:${filled ? TROPICAL_POINT_PAPER : 'transparent'};border:1.5px solid ${TROPICAL_POINT_PAPER};box-shadow:none;border-radius:50%;width:${size}px;height:${size}px` +
     `"></span>${escapeHtml(label)}</span>`
   );
 }
@@ -1223,7 +1228,7 @@ function tropicalRow(): { readonly html: string; readonly ariaLabel: string } | 
       tropicalGroup([
         tropicalCircle(7.5, 'Advisory position', true),
         tropicalCircle(7.5, 'Later positions'),
-        // The track is black on the map; the same paper ring as the circles keeps it visible on the dark panel.
+        // The track is black on the map; a paper ring keeps it visible on the dark panel.
         swatchItem(TROPICAL_TRACK.color, TROPICAL_PART_NAMES.track).replace('style="', `style="box-shadow:0 0 0 1px ${TROPICAL_POINT_PAPER};`),
         swatchItem(TROPICAL_CONE.fill, TROPICAL_PART_NAMES.cone),
         ...TROPICAL_WW_CLASSES.map((c) => swatchItem(c.color, c.label))
@@ -1482,8 +1487,8 @@ export function initMapKey(): void {
   // E1-4 (ENSO-FLOW-PLAN.md; C-fit.md 1.8; WCAG 2.2.2): the flowing paths'
   // Pause, one native toggle in the collapsed header right after the chip,
   // outside #map-key-legend (rewritten on every update) so it is built once
-  // and keeps focus across key updates. Its name never changes; aria-pressed
-  // carries the state, read only from the paths' own snapshot. Hidden until
+  // and keeps focus across key updates. Its name says what a press does,
+  // from the paths' own snapshot and nothing else. Hidden until
   // a snapshot reports motion (nothing does before E2-1 wires the paths).
   const pauseButton = buildFlowPauseButton();
 
@@ -1536,7 +1541,7 @@ export function initMapKey(): void {
   detailsButton.addEventListener('click', toggleDetails);
   pauseButton.addEventListener('click', () => {
     window.dispatchEvent(new CustomEvent(ENSO_FLOW_MOTION_REQUEST_EVENT, {
-      detail: { paused: pauseButton.getAttribute('aria-pressed') !== 'true' }
+      detail: { paused: pauseButton.dataset.paused !== 'true' }
     }));
   });
   window.addEventListener('ddm:toggle-map-key-details', toggleDetails);

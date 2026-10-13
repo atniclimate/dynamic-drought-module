@@ -1389,9 +1389,17 @@ function wireTopLevelEvents(map: maplibregl.Map): void {
     resetBtn.addEventListener('click', () => {
       // Reset returns the basemap to the current mode's default.
       requestBasemapMode(map, defaultBasemapFor(getHazardCluster()));
-      if (STATE.currentRegion) {
-        selectRegion(map, STATE.currentRegion);
+      if (!STATE.currentRegion) return;
+      // Reset in ENSO is the boot with no camera in the URL (F9): it drops the
+      // ocean and framing cameras, as the region choice below does, and fits
+      // the Pacific instead of the region under it. Reset never fits a place.
+      if (ensoBootFitsPacific(getHazardCluster(), false, false, STATE.currentRegion === DEFAULT_REGION, false)) {
+        setFraming(null);
+        clearOceanFraming();
+        fitOcean(map, 'pacific');
+        return;
       }
+      selectRegion(map, STATE.currentRegion);
     });
   }
 

@@ -242,9 +242,9 @@ async function pageDate(page: Page, time: number): Promise<string> {
   }).format(ms), time);
 }
 
-/** The currents frame's dated words after its state: run, valid instant and age, at a page clock of FRAME_CLOCK. */
+/** The currents frame's words after its state: its source, run, valid instant and age, at a page clock of FRAME_CLOCK. */
 async function frameWords(page: Page): Promise<string> {
-  return `Model run ${await pageDate(page, FRAME_RUN)} · Model valid ${await pageDate(page, FRAME_VALID)} · ${FRAME_AGE}`;
+  return `${FLOW_WORDS.source.currents} · Model run ${await pageDate(page, FRAME_RUN)} · Model valid ${await pageDate(page, FRAME_VALID)} · ${FRAME_AGE}`;
 }
 
 /** `text`, as a pattern that takes either live state: the Pacific view may or may not run past the grid under it. */
@@ -276,7 +276,7 @@ for (const surface of DRAWER_SURFACES) {
     await expect(flowStatus(page)).toHaveText(eitherLive(`Ocean currents · LIVE · ${await frameWords(page)}`));
     await expect(flowNotes(page)).toBeVisible();
     await expect(flowNotes(page)).toContainText(FLOW_WORDS.bins.currents);
-    await expect(page.locator('#map-key [data-enso-flow="provenance"]')).toHaveText(FLOW_WORDS.currentsProvenance);
+    await expect(page.locator('#map-key [data-enso-flow="provenance"]')).toHaveText(FLOW_WORDS.provenance.currents);
     // The key keeps the bins and the state; the explanations and the disclaimer read in the Impact Briefing.
     await expect(flowNotes(page)).not.toContainText('independently timed');
     await expect(flowNotes(page)).not.toContainText('Not for navigation');
@@ -348,7 +348,7 @@ for (const surface of ANNOUNCEMENT_SURFACES) {
       else await expect(panel).toBeHidden();
       await expect(page.locator('#map-key-content')).toBeHidden();
 
-      const loading = `loading · ${FLOW_WORDS.loading.currents}`;
+      const loading = `loading · ${FLOW_WORDS.source.currents}`;
       await expect.poll(async () => (await flowAnnouncements(page, loading)).length).toBeGreaterThan(0);
       expect.soft(await flowAnnouncements(page, loading)).toEqual([
         { id: 'layer-status-live', text: `Ocean currents · ${loading}`, exposed: true }
@@ -416,7 +416,7 @@ test("found-115 the Key drawer reads the currents' loading and failed words whil
   await gotoApp(page, '?cluster=enso&ocean=pacific&flow=currents&embed=true');
   await expect.poll(() => held !== null).toBe(true);
   await openKeyDrawer(page);
-  await expect(flowStatus(page)).toHaveText(`Ocean currents · loading · ${FLOW_WORDS.loading.currents}`);
+  await expect(flowStatus(page)).toHaveText(`Ocean currents · loading · ${FLOW_WORDS.source.currents}`);
   // Loading has a state line and nothing to decode yet.
   await expect(flowNotes(page)).toHaveCount(0);
   await held!.abort('failed');
@@ -439,7 +439,7 @@ test("found-115 the arrows' Key drawer row follows the open panel: none while of
   await panel.locator('[data-flow-kind="currents"]').click();
   await expect(panel).toHaveAttribute('data-status', /^live/);
   const line = (await panelStatus.textContent())!;
-  expect(line).toMatch(/^live(?: \(partial\))? · Model run .+ · Model valid .+ · frame .+ old$/);
+  expect(line).toMatch(/^live(?: \(partial\))? · NOAA RTOFS surface currents · Model run .+ · Model valid .+ · frame .+ old$/);
   await expect(flowStatus(page)).toHaveText(`Ocean currents · ${line}`);
   const panelText = (await panel.textContent())!;
   const notes = (await flowNotes(page).textContent())!;
@@ -452,13 +452,13 @@ test("found-115 the arrows' Key drawer row follows the open panel: none while of
   await page.mouse.move(cx - 60, cy - 30, { steps: 5 });
   await page.mouse.up();
   // A pan asks for nothing: the row is still the panel's own line, and no prompt joins it.
-  await expect(panelStatus).toHaveText(/^live(?: \(partial\))? · Model run .+ old$/);
+  await expect(panelStatus).toHaveText(/^live(?: \(partial\))? · NOAA RTOFS surface currents · Model run .+ old$/);
   await expect(flowStatus(page)).toHaveText(`Ocean currents · ${(await panelStatus.textContent())!}`);
   await panel.locator('[data-flow-kind="off"]').click();
   await expect(panel).toHaveAttribute('data-status', 'off');
   await expect(page.locator(FLOW_ROW)).toHaveCount(0);
   await panel.locator('[data-flow-kind="wind"]').click();
-  await expect(flowStatus(page)).toContainText('Atmospheric currents · live · Model run ');
+  await expect(flowStatus(page)).toContainText(`Atmospheric currents · live · ${FLOW_WORDS.source.wind} · Model run `);
   await expect(flowStatus(page)).toContainText(' · Model valid ');
   await layerCheckbox(page, 'sst-anomaly').uncheck();
   await expect(page.locator(FLOW_ROW)).toHaveCount(0);

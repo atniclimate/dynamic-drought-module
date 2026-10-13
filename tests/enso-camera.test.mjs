@@ -4,6 +4,7 @@
  */
 
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import { HAZARD_CLUSTER_KEYS } from '../src/config/clusters.ts';
@@ -66,4 +67,12 @@ test('a boot into ENSO fits the Pacific only when the URL names no camera of its
   for (const cluster of HAZARD_CLUSTER_KEYS.filter((key) => key !== 'enso')) {
     assert.equal(ensoBootFitsPacific(cluster, false, false, true, false), false, `${cluster} boots on its region`);
   }
+});
+
+test('Reset in ENSO asks the boot rule and fits the Pacific; the other modes keep the region fit', () => {
+  const sidebar = readFileSync(new URL('../src/ui/sidebar.ts', import.meta.url), 'utf8');
+  const reset = sidebar.slice(sidebar.indexOf("getElementById('reset-btn')"), sidebar.indexOf('// The refit on a sidebar toggle'));
+  assert.ok(reset.includes('ensoBootFitsPacific(getHazardCluster(), false, false, STATE.currentRegion === DEFAULT_REGION, false)'));
+  assert.ok(reset.includes("fitOcean(map, 'pacific')"));
+  assert.ok(reset.includes('selectRegion(map, STATE.currentRegion)'));
 });

@@ -224,10 +224,17 @@ test('the state line dates the frame and states its age, and never calls it now'
   const run = Date.UTC(2026, 9, 13);
   const valid = run + HOUR;
   assert.equal(
-    flowLiveLine('live', run, valid, valid + 3.5 * DAY),
-    'live · Model run Oct 13, 12:00 AM UTC · Model valid Oct 13, 1:00 AM UTC · frame 3 days old'
+    flowLiveLine('live', 'currents', run, valid, valid + 3.5 * DAY),
+    'live · NOAA RTOFS surface currents · Model run Oct 13, 12:00 AM UTC · Model valid Oct 13, 1:00 AM UTC · frame 3 days old'
   );
-  assert.equal(flowLiveLine('live (partial)', run, valid), 'live (partial) · Model run Oct 13, 12:00 AM UTC · Model valid Oct 13, 1:00 AM UTC');
+  // Every kind's line names its own source, so the wind at 10 m and at 250 hPa never read alike.
+  const lines = Object.keys(FLOW_WORDS.source).map((kind) => flowLiveLine('live (partial)', kind, run, valid));
+  assert.equal(new Set(lines).size, lines.length, 'two kinds share a live line');
+  assert.ok(lines.includes('live (partial) · NOAA GFS 250 hPa wind · Model run Oct 13, 12:00 AM UTC · Model valid Oct 13, 1:00 AM UTC'));
+  assert.ok(lines.includes('live (partial) · NOAA GFS 10 m wind · Model run Oct 13, 12:00 AM UTC · Model valid Oct 13, 1:00 AM UTC'));
+  // So does every kind's credit.
+  assert.deepEqual(Object.keys(FLOW_WORDS.provenance).sort(), Object.keys(FLOW_WORDS.source).sort());
+  assert.equal(new Set(Object.values(FLOW_WORDS.provenance)).size, lines.length, 'two kinds share a credit');
   assert.equal(flowAgeWords(valid, valid + 5 * HOUR), 'frame under 1 day old');
   assert.equal(flowAgeWords(valid, valid + DAY), 'frame 1 day old');
   assert.equal(flowAgeWords(valid, valid + 40 * DAY), 'frame 40 days old', 'weeks old still draws, with its age');
@@ -238,8 +245,8 @@ test('the state line dates the frame and states its age, and never calls it now'
   assert.equal(gridBoxWords(north), '40 N to 84.7 N and 140 E to 115.3 W');
   assert.equal(currentsBoxNote(tropics), 'Ocean current lines in this view cover 40 S to 39 N and 130 E to 111 W only; nothing is drawn outside that area.');
   const words = [
-    FLOW_WORDS.loading.currents, FLOW_WORDS.unavailable.currents, FLOW_WORDS.bins.currents, FLOW_WORDS.currentsProvenance,
-    FLOW_WORDS.currentsOutside, currentsBoxNote(north), flowLiveLine('live', run, valid, valid + DAY)
+    FLOW_WORDS.source.currents, FLOW_WORDS.unavailable.currents, FLOW_WORDS.bins.currents, FLOW_WORDS.provenance.currents,
+    FLOW_WORDS.currentsOutside, currentsBoxNote(north), flowLiveLine('live', 'currents', run, valid, valid + DAY)
   ];
   for (const text of words) assert.doesNotMatch(text, /\b(?:now|currently|current conditions|real-time|latest|today)\b/i, text);
   assert.equal(FLOW_WORDS.staleModel.currents, undefined, 'the dated frame has no 24-hour limit to name');

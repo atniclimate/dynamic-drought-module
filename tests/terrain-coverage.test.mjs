@@ -189,7 +189,7 @@ test('the flow explanations taken off the ENSO key read in the Impact Briefing u
   for (const sentence of [
     'Line pace shows relative speed within this field; it is not real time.',
     'Lines show the modeled flow at one instant, not the path of anything carried by it.',
-    'Marks move the way the primary waves travel, all at one display speed; wave speed is not shown. The water does not travel with the marks.',
+    'Ocean waves are drawn as marks, from NOAA GFS-Wave. The marks move in the direction the primary waves travel, all at one display speed; wave speed is not shown. The water does not travel with the marks.',
     FLOW_WORDS.mask,
     'Model output, not an observation.',
     'display bins, not thresholds.',
@@ -211,6 +211,18 @@ test('the flow explanations taken off the ENSO key read in the Impact Briefing u
     assert.match(bins, /: (?:none )?under [0-9.]+,(?: then)?(?: [0-9.]+ to [0-9.]+,)+ [0-9.]+ or more (?:m|kg m-2)/);
   }
   assert.ok(!section.includes('under 5') && !section.includes('under 0.25'), 'the bins stay in the key');
+  // Every kind the control offers is named here by its button's own label, and the two winds by the
+  // names their state lines give them.
+  const panelSource = readFileSync(join(ROOT, 'src', 'layers', 'enso-flow.ts'), 'utf8');
+  const labels = panelSource.slice(panelSource.indexOf('const LABELS'), panelSource.indexOf('const SOURCES'));
+  const kinds = [...labels.matchAll(/([a-z]+): '([^']+)'/g)].filter(([, kind]) => kind !== 'off');
+  assert.deepEqual(kinds.map(([, kind]) => kind).sort(), Object.keys(FLOW_WORDS.source).sort());
+  for (const [, , label] of kinds) assert.ok(section.includes(label), `the briefing never names ${label}`);
+  for (const source of [FLOW_WORDS.source.wind, FLOW_WORDS.source.jet]) assert.ok(section.includes(source), source);
+  // The navigation disclaimer is the briefing's, for the ocean kinds only; the panel carries none.
+  assert.ok(section.includes('The wave marks are unsuitable for coastal navigation.'));
+  assert.doesNotMatch(panelSource, /navigation/i);
+  assert.doesNotMatch(section, /wind[^.]*navigation|navigation[^.]*wind/i);
   // Precipitable water: the issuer's field name, level words and unit, what the shade is and is not. It is never
   // named as a weather feature, a rain amount or a movement of moisture, and no definition of it ships without the
   // issuer's own sentence and link.
@@ -227,7 +239,7 @@ test('the flow explanations taken off the ENSO key read in the Impact Briefing u
   assert.ok(section.includes(water.replace(/"/g, '&quot;')), 'the paragraph reads under the control\'s heading');
   assert.doesNotMatch(water, /atmospheric river|\briver\b|transport|warning|forecast|plume|\bmm\b|millimet|flood|storm/i);
   assert.doesNotMatch(water, /under 15|15 to 30|45 or more/, 'the bins stay in the key');
-  for (const words of [FLOW_WORDS.bins.pwat, FLOW_WORDS.loading.pwat, FLOW_WORDS.unavailable.pwat]) {
+  for (const words of [FLOW_WORDS.bins.pwat, FLOW_WORDS.source.pwat, FLOW_WORDS.provenance.pwat, FLOW_WORDS.unavailable.pwat]) {
     assert.doesNotMatch(words, /atmospheric river|transport|warning|forecast|\bmm\b/i, words);
   }
   // The currents credit, its dated-frame sentence and its disclaimer read here, never in the key; the two boxes
@@ -237,7 +249,7 @@ test('the flow explanations taken off the ENSO key read in the Impact Briefing u
   assert.equal(frame.grids.length, 2);
   for (const grid of frame.grids) assert.ok(section.includes(`${grid.dlat} degree from ${gridBoxWords(grid)}`.replace(/^1 /, '1.0 ')), grid.id);
   for (const sentence of [
-    'NOAA/NCEP Global RTOFS ocean model, re-encoded by DDM (model).',
+    'Ocean currents are model output: surface currents from the NOAA/NCEP Global RTOFS ocean model, re-encoded by DDM.',
     'one dated frame',
     'never joined',
     'Not for navigation.'
@@ -246,5 +258,5 @@ test('the flow explanations taken off the ENSO key read in the Impact Briefing u
   }
   const flowWords = () => readFileSync(join(ROOT, 'src', 'layers', 'enso-flow-data.ts'), 'utf8');
   assert.doesNotMatch(flowWords(), /Not for navigation|never joined/, 'the key keeps only the short credit');
-  assert.doesNotMatch(flowWords(), /Line pace shows|Lines show the modeled flow|Model output, not an observation|Display bins, not thresholds|Marks move the way/);
+  assert.doesNotMatch(flowWords(), /Line pace shows|Lines show the modeled flow|Model output, not an observation|Display bins, not thresholds|The marks move in the direction/);
 });

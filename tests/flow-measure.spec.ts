@@ -785,7 +785,7 @@ async function pauseByKeyboard(page: Page): Promise<void> {
   await expect(button).toBeVisible();
   await button.focus();
   await page.keyboard.press('Enter');
-  await expect(button).toHaveAttribute('aria-pressed', 'true');
+  await expect(button).toHaveAttribute('data-paused', 'true');
 }
 
 // ---------------------------------------------------------------------------

@@ -61,7 +61,7 @@ const fixtures = await import('./tropical-fixtures.ts');
 const reader = await import('../src/layers/tropical-read.ts');
 const { registry } = await import('../src/state/registry.ts');
 const layer = await import('../src/layers/tropical-cyclones.ts');
-const { TROPICAL_SLOTS, TROPICAL_POINT_INK, TROPICAL_POINT_PAPER } = await import('../src/config/tropical-presentation.ts');
+const { TROPICAL_SLOTS, TROPICAL_POINT_PAPER } = await import('../src/config/tropical-presentation.ts');
 
 const { tropicalAnswer, tropicalLayerId, EP5_LAYERS } = fixtures;
 const { readTropicalSweep, pendingTropicalReads } = reader;
@@ -318,9 +318,12 @@ test('popup: a CP slot is issued by the Central Pacific Hurricane Center', () =>
 
 const MAP_KEY_SOURCE = readFileSync(new URL('../src/ui/map-key.ts', import.meta.url), 'utf8');
 
-test('key: the point circles are ink on a paper chip that reads on the dark key panel', () => {
+test('key: on the dark key panel a filled point is a solid paper disc and a hollow one a paper ring', () => {
   const circle = MAP_KEY_SOURCE.slice(MAP_KEY_SOURCE.indexOf('function tropicalCircle('), MAP_KEY_SOURCE.indexOf('function tropicalGroup('));
-  assert.ok(circle.includes('TROPICAL_POINT_PAPER'), 'the key circle has no paper chip behind its ink');
+  // The map's dark ink is for a bright raster; on the dark panel it made the filled point look hollow and the hollow one filled.
+  assert.ok(circle.includes("background:${filled ? TROPICAL_POINT_PAPER : 'transparent'}"), 'a filled point is not solid paper, or a hollow one has a centre');
+  assert.ok(circle.includes('border:1.5px solid ${TROPICAL_POINT_PAPER}'), 'the ring is not paper');
+  assert.ok(!circle.includes('TROPICAL_POINT_INK'), 'dark ink on the dark panel');
   const luminance = (rgb) =>
     rgb
       .map((v) => (v / 255 <= 0.04045 ? v / 255 / 12.92 : ((v / 255 + 0.055) / 1.055) ** 2.4))
@@ -329,8 +332,7 @@ test('key: the point circles are ink on a paper chip that reads on the dark key 
   const contrast = (a, b) => (Math.max(luminance(a), luminance(b)) + 0.05) / (Math.min(luminance(a), luminance(b)) + 0.05);
   // The key panel is --glass-read, rgba(1,11,19,0.72); a white map behind it is its brightest case.
   const panel = [1, 11, 19].map((v) => v * 0.72 + 255 * 0.28);
-  assert.ok(contrast(hex(TROPICAL_POINT_PAPER), panel) >= 3, 'the chip does not read on the key panel');
-  assert.ok(contrast(hex(TROPICAL_POINT_INK), hex(TROPICAL_POINT_PAPER)) >= 3, 'the ink does not read on its chip');
+  assert.ok(contrast(hex(TROPICAL_POINT_PAPER), panel) >= 3, 'the paper does not read on the key panel');
 });
 
 test('key: the filled and hollow swatches carry their own labels, with no sentence under them', () => {

@@ -8,7 +8,8 @@ import { gotoApp } from './helpers';
  * The flowing paths start on their own and run longer than 5 s beside other
  * content, so WCAG 2.2.2 needs a pause reachable without opening anything:
  * one persistent native button in the map key's collapsed header, beside
- * the key's own toggle, with a constant name and aria-pressed.
+ * the key's own toggle, named for what a press does ("Pause motion" while
+ * the lines move, "Play motion" while they hold still), with no aria-pressed.
  *
  * Nothing publishes the snapshot's `motion` field until E2-1 wires the
  * paths, so these cases drive the key with a synthetic
@@ -23,7 +24,8 @@ import { gotoApp } from './helpers';
 const PIXEL = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
 const SNAPSHOT_EVENT = 'ddm:enso-flow-snapshot';
 const REQUEST_EVENT = 'ddm:enso-flow-motion-request';
-const PAUSE_NAME = 'Pause motion';
+/** Either name: the button is one node whose name follows the lines' state. */
+const PAUSE_NAME = /^(?:Pause|Play) motion$/;
 const PROVENANCE = 'derived from NOAA GFS';
 /** A synthetic live frame, in P3-ENSOKEY's detail shape. Test data, not app text. */
 const BASE = {
@@ -177,7 +179,7 @@ test.describe('E1-4 Pause motion in the map key header', () => {
     await page.setViewportSize({ width: 1280, height: 800 });
   });
 
-  test('Pause motion is one native button in the key\'s collapsed header with a constant name and aria-pressed', async ({ page }) => {
+  test('Pause motion is one native button in the key\'s collapsed header, named for what a press does', async ({ page }) => {
     await bootEnso(page);
     await publish(page, { motion: 'moving' });
     const button = pauseButton(page);
@@ -194,16 +196,20 @@ test.describe('E1-4 Pause motion in the map key header', () => {
       inDrawer: Boolean(node.closest('#map-key-content'))
     }));
     expect(shape).toEqual({ tag: 'BUTTON', type: 'button', parentId: 'map-key', afterToggle: 'map-key-details-toggle', inLegend: false, inDrawer: false });
-    await expect(page.locator('#map-key button[aria-pressed]')).toHaveCount(1);
-    await expect(button).toHaveAttribute('aria-pressed', 'false');
-    await publish(page, { motion: 'paused' });
-    await expect(pauseButton(page)).toHaveAttribute('aria-pressed', 'true');
-    await publish(page, { motion: 'reduced' });
-    await expect(pauseButton(page)).toHaveAttribute('aria-pressed', 'true');
+    await expect(button).toHaveAccessibleName('Pause motion');
+    await expect(button).toHaveAttribute('data-paused', 'false');
+    // Lines that hold still, by a pause or by reduced motion, offer Play: a press starts them.
+    for (const motion of ['paused', 'reduced']) {
+      await publish(page, { motion });
+      await expect(button).toHaveAccessibleName('Play motion');
+      await expect(button).toHaveAttribute('data-paused', 'true');
+    }
+    // Held lines (the SST days playing, a hidden tab) are no one's pause: a press pauses them.
     await publish(page, { motion: 'held' });
-    await expect(pauseButton(page)).toHaveAttribute('aria-pressed', 'false');
-    // The name never changes with the state (APG button pattern).
-    await expect(page.locator('#map-key').getByRole('button', { name: /Play/ })).toHaveCount(0);
+    await expect(button).toHaveAccessibleName('Pause motion');
+    await expect(button).toHaveAttribute('data-paused', 'false');
+    // The name changes with the state, so no pressed state rides beside it (APG button pattern).
+    await expect(page.locator('#map-key button[aria-pressed]')).toHaveCount(0);
     // The time bar's own Pause and Play drive the SST days, not this.
     await expect(button).not.toHaveAccessibleName('Pause');
   });
@@ -220,11 +226,11 @@ test.describe('E1-4 Pause motion in the map key header', () => {
     await page.keyboard.press('Tab');
     await expect(button).toBeFocused();
     await page.keyboard.press('Enter');
-    await expect(button).toHaveAttribute('aria-pressed', 'true');
+    await expect(button).toHaveAttribute('data-paused', 'true');
     expect(await requests(page)).toEqual([true]);
     expect(await focusedIsTagged(page)).toBe(true);
     await page.keyboard.press('Space');
-    await expect(button).toHaveAttribute('aria-pressed', 'false');
+    await expect(button).toHaveAttribute('data-paused', 'false');
     expect(await requests(page)).toEqual([true, false]);
     expect(await focusedIsTagged(page)).toBe(true);
     // A key update that rewrites the legend leaves the button node alone.
@@ -233,7 +239,7 @@ test.describe('E1-4 Pause motion in the map key header', () => {
     await expect(button).toBeFocused();
     expect(await focusedIsTagged(page)).toBe(true);
     await page.keyboard.press('Enter');
-    await expect(button).toHaveAttribute('aria-pressed', 'true');
+    await expect(button).toHaveAttribute('data-paused', 'true');
     expect(await focusedIsTagged(page)).toBe(true);
   });
 
@@ -251,7 +257,7 @@ test.describe('E1-4 Pause motion in the map key header', () => {
     await expect(toggle).toHaveAttribute('aria-expanded', 'false');
     // Escape is never a pause request.
     expect(await requests(page)).toEqual([]);
-    await expect(button).toHaveAttribute('aria-pressed', 'false');
+    await expect(button).toHaveAttribute('data-paused', 'false');
   });
 
   test('the target is at least 24x24 CSS px', async ({ page }) => {
@@ -280,7 +286,7 @@ test.describe('E1-4 Pause motion in the map key header', () => {
       // Nothing covers it: the topmost node at its centre is the button.
       const hit = await page.evaluate(({ x, y }) => {
         const node = document.elementFromPoint(x, y);
-        return Boolean(node?.closest('#map-key button[aria-pressed]'));
+        return Boolean(node?.closest('#map-key-flow-pause'));
       }, { x: box.x + box.width / 2, y: box.y + box.height / 2 });
       expect(hit).toBe(true);
       // No overlap with the key toggle beside it.
@@ -294,18 +300,20 @@ test.describe('E1-4 Pause motion in the map key header', () => {
     });
   }
 
-  test('under emulated reduced motion it starts pressed', async ({ page }) => {
+  test('under emulated reduced motion it starts by offering Play', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await bootEnso(page);
     await installLoop(page);
     const button = pauseButton(page);
-    await expect(button).toHaveAttribute('aria-pressed', 'true');
+    await expect(button).toHaveAttribute('data-paused', 'true');
+    await expect(button).toHaveAccessibleName('Play motion');
     expect(await harness(page, (h) => h.motion)).toBe('reduced');
     expect(await harness(page, (h) => h.frames(30))).toBe(0);
     // An explicit Play is honoured as the viewer's choice.
     await button.focus();
     await page.keyboard.press('Enter');
-    await expect(button).toHaveAttribute('aria-pressed', 'false');
+    await expect(button).toHaveAttribute('data-paused', 'false');
+    await expect(button).toHaveAccessibleName('Pause motion');
     expect(await harness(page, (h) => h.motion)).toBe('moving');
     expect(await harness(page, (h) => h.frames(30))).toBeGreaterThan(0);
   });
@@ -315,7 +323,7 @@ test.describe('E1-4 Pause motion in the map key header', () => {
     await bootEnso(page);
     await installLoop(page);
     const button = pauseButton(page);
-    await expect(button).toHaveAttribute('aria-pressed', 'false');
+    await expect(button).toHaveAttribute('data-paused', 'false');
     // Running, and capped at 30 Hz: never more than one repaint per 1/30 s.
     const first = await harness(page, (h) => h.frames(60));
     expect(first).toBeGreaterThan(0);
@@ -324,11 +332,11 @@ test.describe('E1-4 Pause motion in the map key header', () => {
     // Pause, by keyboard.
     await button.focus();
     await page.keyboard.press('Enter');
-    await expect(button).toHaveAttribute('aria-pressed', 'true');
+    await expect(button).toHaveAttribute('data-paused', 'true');
     expect(await harness(page, (h) => h.motion)).toBe('paused');
     expect(await harness(page, async (h) => { const at = h.stoppedAt!; await h.frames(30); return h.repaints - at; })).toBe(0);
     await page.keyboard.press('Space');
-    await expect(button).toHaveAttribute('aria-pressed', 'false');
+    await expect(button).toHaveAttribute('data-paused', 'false');
     expect(await harness(page, (h) => h.frames(30))).toBeGreaterThan(0);
     expect(await harness(page, (h) => h.resumes)).toBe(1);
 
@@ -336,7 +344,7 @@ test.describe('E1-4 Pause motion in the map key header', () => {
     await harness(page, (h) => h.setHidden(true));
     expect(await harness(page, (h) => h.motion)).toBe('held');
     expect(await harness(page, async (h) => { const at = h.stoppedAt!; await h.frames(30); return h.repaints - at; })).toBe(0);
-    await expect(button).toHaveAttribute('aria-pressed', 'false');
+    await expect(button).toHaveAttribute('data-paused', 'false');
     await harness(page, (h) => h.setHidden(false));
     expect(await harness(page, (h) => h.frames(30))).toBeGreaterThan(0);
     expect(await harness(page, (h) => h.resumes)).toBe(2);
@@ -348,7 +356,7 @@ test.describe('E1-4 Pause motion in the map key header', () => {
     // The button still works while the SST days play, and a pause outlasts them.
     await button.focus();
     await page.keyboard.press('Enter');
-    await expect(button).toHaveAttribute('aria-pressed', 'true');
+    await expect(button).toHaveAttribute('data-paused', 'true');
     await harness(page, (h) => h.setSst(false));
     expect(await harness(page, (h) => h.motion)).toBe('paused');
     expect(await harness(page, (h) => h.frames(30))).toBe(0);
@@ -379,7 +387,7 @@ test.describe('E1-4 Pause motion in the map key header', () => {
     await publish(page, { motion: undefined });
     await expect(page.locator('#map-key [data-enso-flow="status"]')).toHaveCount(1);
     await expect(pauseButton(page)).toHaveCount(0);
-    await expect(page.locator('#map-key button[aria-pressed]')).toBeHidden();
+    await expect(page.locator('#map-key-flow-pause')).toBeHidden();
     // It appears once motion is reported, and leaves again with it.
     await publish(page, { motion: 'moving' });
     await expect(pauseButton(page)).toBeVisible();
