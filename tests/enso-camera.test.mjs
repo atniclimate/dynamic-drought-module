@@ -32,6 +32,14 @@ test('leaving ENSO with a captured camera restores it', () => {
   });
 });
 
+test('re-entering ENSO with a capture still held keeps the earlier view as the one to restore', () => {
+  assert.deepEqual(ensoCameraAction('drought', 'enso', true, false), {
+    capture: false,
+    fitPacific: true,
+    restore: false
+  });
+});
+
 test('a custom layer set in ENSO is not a leave: the view stays', () => {
   assert.deepEqual(ensoCameraAction('enso', 'drought', true, false, true), {
     capture: false,

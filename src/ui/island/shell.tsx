@@ -57,6 +57,8 @@ import {
 import type { CommittedShellSnapshot } from '../../state/cluster-service';
 import { requestBasemapMode } from '../../map/basemap-switcher';
 import { defaultBasemapFor } from '../../state/basemap-store';
+import { takeEnsoCamera } from '../../map/enso-camera';
+import { restoreCameraState } from '../../map/camera-fit';
 import {
   backToMap,
   getStudioRoute,
@@ -431,6 +433,12 @@ function Shell({ map, snap, framing, specTick, onMinimapNoteChange }: ShellProps
       requestCluster(key);
       // Every switch applies the new mode's default; a SAT press does not outlive its mode.
       requestBasemapMode(map, defaultBasemapFor(key));
+      // Leaving ENSO from a custom composition: the store already said drought, so
+      // the cluster subscriber saw no change; the held camera is restored here.
+      if (key !== 'enso') {
+        const heldCamera = takeEnsoCamera();
+        if (heldCamera) restoreCameraState(map, heldCamera);
+      }
     });
   };
 

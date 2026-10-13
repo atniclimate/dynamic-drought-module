@@ -157,7 +157,7 @@ import {
   readCameraState,
   restoreCameraState
 } from '../map/camera-fit';
-import { ensoCameraAction } from '../map/enso-camera';
+import { ensoCameraAction, hasHeldEnsoCamera, holdEnsoCamera, takeEnsoCamera } from '../map/enso-camera';
 import type { CameraState, CameraTarget } from '../map/camera-fit';
 import { timeline } from '../state/timeline';
 import { resolveStatusPillText } from './island/pill-text';
@@ -1989,7 +1989,6 @@ function wireSidebar(map: maplibregl.Map, onRegionSelect: (key: RegionKey) => vo
   // ENSO camera (F9): entering fits the Pacific, leaving restores the view from
   // before entering. The boot seed runs with no map, so it never reaches here.
   let previousCluster = getHazardCluster();
-  let cameraBeforeEnso: CameraState | null = null;
   onHazardClusterChange(() => {
     const next = getHazardCluster();
     const map = mapRef;
@@ -1997,15 +1996,15 @@ function wireSidebar(map: maplibregl.Map, onRegionSelect: (key: RegionKey) => vo
       const action = ensoCameraAction(
         previousCluster,
         next,
-        cameraBeforeEnso !== null,
+        hasHeldEnsoCamera(),
         getOceanFraming() !== null,
         isCustomComposition()
       );
-      if (action.capture) cameraBeforeEnso = readCameraState(map);
+      if (action.capture) holdEnsoCamera(readCameraState(map));
       if (action.fitPacific) fitOcean(map, 'pacific');
-      if (action.restore && cameraBeforeEnso) {
-        restoreCameraState(map, cameraBeforeEnso);
-        cameraBeforeEnso = null;
+      if (action.restore) {
+        const heldCamera = takeEnsoCamera();
+        if (heldCamera) restoreCameraState(map, heldCamera);
       }
     }
     previousCluster = next;

@@ -7,6 +7,30 @@
  */
 
 import type { HazardClusterKey } from '../config/clusters';
+import type { CameraState } from './camera-fit';
+
+/**
+ * The camera held from before ENSO was entered. One holder, so the cluster
+ * subscriber (the normal leave) and the shell's explicit mode press (a leave
+ * from a custom composition, where the store already says drought and no
+ * change fires) restore the same capture and the second caller finds nothing.
+ */
+let held: CameraState | null = null;
+
+export function holdEnsoCamera(state: CameraState): void {
+  held = state;
+}
+
+export function hasHeldEnsoCamera(): boolean {
+  return held !== null;
+}
+
+/** Return the held camera and drop it, or null. */
+export function takeEnsoCamera(): CameraState | null {
+  const state = held;
+  held = null;
+  return state;
+}
 
 export interface EnsoCameraAction {
   /** Save the live camera before anything moves it. */
@@ -27,7 +51,9 @@ export function ensoCameraAction(
   customized = false
 ): EnsoCameraAction {
   if (previous !== 'enso' && next === 'enso') {
-    return { capture: true, fitPacific: !oceanSet, restore: false };
+    // A capture still held means the person never left ENSO's view (a custom
+    // composition flipped the store); the earlier view is the one to go back to.
+    return { capture: !hasCaptured, fitPacific: !oceanSet, restore: false };
   }
   // Ticking a layer box in ENSO flips the store to drought with a custom
   // composition; the person did not leave, so the view stays where it is.
