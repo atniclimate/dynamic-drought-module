@@ -462,6 +462,10 @@ a:hover {
   /* Clip, not hidden: the sr-only helpers positioned against the sidebar
      extend its scroll height, and a focus jump scrolled the header away. */
   overflow: clip;
+  /* A clipped box is not a scroll container, so its grid minimum falls back
+     to its content height; 0 keeps the sidebar window-tall and lets
+     .sidebar-scroll be the one that scrolls. */
+  min-height: 0;
   min-width: 0;
   transition: width 0.2s ease;
 }
