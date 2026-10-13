@@ -684,7 +684,7 @@ export async function fetchDsciTrendClaims(
   const start = new Date(end);
   start.setMonth(start.getMonth() - 14);
   const params = new URLSearchParams({
-    aoi: String(fips),
+    aoi: String(fips).padStart(2, '0'),
     startdate: fmtUsdmDate(start),
     enddate: fmtUsdmDate(end),
     statisticsType: '1'

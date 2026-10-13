@@ -241,6 +241,21 @@ test('DSCI missing readings do not invent easing; numeric zero remains valid', a
   }
 });
 
+test('DSCI sends a single-digit state FIPS code zero-padded', async () => {
+  const context = {
+    ...place(-150, 64),
+    properties: { STUSPS: 'AK', NAME: 'Alaska' },
+    containing: { state: { code: 'AK', name: 'Alaska', basis: 'feature-property' } }
+  };
+  const seen = [];
+  await withFetch((url) => {
+    seen.push(decodeURIComponent(url));
+    return jsonResponse([]);
+  }, () => sources.fetchDsciTrendClaims(context, signal()));
+  assert.equal(seen.length, 1);
+  assert.match(seen[0], /[?&]aoi=02(&|$)/);
+});
+
 /** Yield to the event loop `ticks` times through `setImmediate`, which no
  * case mocks (the deadline cases mock only `setTimeout`). */
 async function yieldTicks(ticks) {

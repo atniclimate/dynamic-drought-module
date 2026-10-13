@@ -1055,9 +1055,12 @@ export async function fetchEnsoClaims(
     const age = snapshotAge(snap);
     const state = readState(snap.roni);
     const stale = age !== null && age.days > HARD_STALE_DAYS;
+    // Past the cutoff the state sentence is dated past tense, so the present
+    // tense continuity and agreement sentences are dropped with it.
     const text =
-      `${observedStateText(state, snap.roni.latest, snap.retrieved, age)} ${oniContinuity(snap.roni, snap.oni)}` +
-      (snap.soi ? ` ${soiAgreementText(snap.roni, snap.soi)}` : '') +
+      observedStateText(state, snap.roni.latest, snap.retrieved, age) +
+      (stale ? '' : ` ${oniContinuity(snap.roni, snap.oni)}`) +
+      (snap.soi && !stale ? ` ${soiAgreementText(snap.roni, snap.soi)}` : '') +
       snapshotProvenance(snap);
 
     const chartSvg = oniLineSvg(snap.roni.values, {
@@ -1126,7 +1129,7 @@ export async function fetchEnsoClaims(
           })
         ];
 
-    const observedCompanionClaims = snap.nino34
+    const observedCompanionClaims = snap.nino34 && !stale
       ? [
           makeClaim({
             text: nino34Text(snap.nino34, snap.retrieved),
