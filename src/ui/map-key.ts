@@ -32,9 +32,11 @@ import {
   BC_DROUGHT_LEVELS,
   BC_DROUGHT_NO_UPDATE,
   CDM_CATEGORIES,
+  GRIDDED_INDEX_RAMP,
   HEATRISK_CATEGORIES,
   NADM_CATEGORIES,
   NWS_ALERT_COLORS,
+  OUTLOOK_LEGEND,
   SST_ANOMALY_LABELS,
   USDM_CATEGORIES,
   USDM_NONE_SWATCH,
@@ -381,7 +383,9 @@ export function resolveMapKeyFamily(
   if (
     active.has('usdm') ||
     active.has('nadm-drought') ||
-    active.has('cdm-drought')
+    active.has('cdm-drought') ||
+    active.has('drought') ||
+    active.has('gridded-index')
   ) {
     return 'drought';
   }
@@ -797,6 +801,24 @@ function nadmKey(): KeySpec {
       `<span class="map-key-item">${escapeHtml(month)} · tri-national consensus</span>` +
       NADM_CATEGORIES.map((entry) => swatchItem(entry.color, entry.code)).join('') +
       '<span class="map-key-item">No polygon: no source coverage</span>'
+  };
+}
+
+/** The CPC outlook classes, from the same table the sidebar legend draws. */
+function outlookKey(): KeySpec {
+  return {
+    label: KEY_ELIGIBLE_LABELS['drought']!,
+    ariaLabel: 'NOAA Climate Prediction Center drought outlook key. Hatched fills mark an outlook, not an observed condition.',
+    itemsHtml: OUTLOOK_LEGEND.map((entry) => swatchItem(entry.color, entry.label)).join('')
+  };
+}
+
+/** The gridded index ramp, drier to wetter; the unlabeled white slot is left out. */
+function griddedKey(): KeySpec {
+  return {
+    label: KEY_ELIGIBLE_LABELS['gridded-index']!,
+    ariaLabel: 'Gridded drought index key, drier to wetter. NOAA NIDIS.',
+    itemsHtml: GRIDDED_INDEX_RAMP.flatMap((entry) => (entry.code ? [swatchItem(entry.color, entry.code)] : [])).join('')
   };
 }
 
@@ -1300,6 +1322,12 @@ function surfaceKey(): HazardKeyResult | null {
   } else if (eligible.has('usdm')) {
     spec = active.has('usdm') ? droughtKey() : loadingKeySpec('usdm');
     productKeys = ['usdm'];
+  } else if (eligible.has('drought')) {
+    spec = active.has('drought') ? outlookKey() : loadingKeySpec('drought');
+    productKeys = ['drought'];
+  } else if (eligible.has('gridded-index')) {
+    spec = active.has('gridded-index') ? griddedKey() : loadingKeySpec('gridded-index');
+    productKeys = ['gridded-index'];
   } else if (eligible.has('sst-anomaly')) {
     spec = active.has('sst-anomaly') ? sstKey() : loadingKeySpec('sst-anomaly');
     productKeys = ['sst-anomaly'];

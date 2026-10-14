@@ -197,13 +197,14 @@ async function fetchJson(
   url: string,
   signal: AbortSignal,
   init: RequestInit | null = null,
-  maxDecodedBytes?: number
+  maxDecodedBytes?: number,
+  timeoutMs = PLACE_DATA_TIMEOUT_MS
 ): Promise<unknown> {
   return fetchJsonWithBudget(
     url,
     init,
     signal,
-    PLACE_DATA_TIMEOUT_MS,
+    timeoutMs,
     maxDecodedBytes
   );
 }
@@ -325,6 +326,8 @@ function ecoregionCandidateParams(
 
 // Full-resolution Middle Rockies candidates are 11.4 MB, over the 8 MiB default.
 const ECOREGION_CANDIDATE_MAX_BYTES = 24 * 1024 * 1024;
+// EPA streams that answer in 4 to 6 s on a good day; 8 s is too thin for headers plus body.
+const ECOREGION_CANDIDATE_TIMEOUT_MS = 20_000;
 
 // The overlap words must not change with the visitor's map, so Studio
 // watershed reads generalize as at zoom 9 (about 0.0014 degrees).
@@ -555,7 +558,8 @@ async function loadEcoregionCandidates(
         `${URLS.epaEcoregionsMapServer}/${layer}/query?${params.toString()}`,
         siblingSignal,
         { cache: 'no-store' },
-        ECOREGION_CANDIDATE_MAX_BYTES
+        ECOREGION_CANDIDATE_MAX_BYTES,
+        ECOREGION_CANDIDATE_TIMEOUT_MS
       )
     ).features;
   };

@@ -21,7 +21,7 @@
 import type * as maplibregl from 'maplibre-gl';
 import type { GeoJsonProperties } from 'geojson';
 
-import { USDM_CATEGORIES } from '../config/palette';
+import { NADM_CATEGORIES, USDM_CATEGORIES } from '../config/palette';
 import { escapeHtml } from '../util/escape';
 
 const READOUT_ID = 'hover-inspector';
@@ -38,6 +38,8 @@ const ECOREGION_FILLS = ['ecoregions-l4-fill', 'ecoregions-l3-fill'] as const;
 // Both frame-slot fills of the 0.5.0b week scrubber; the hidden slot is
 // visibility 'none' and never matches, so the read is the on-screen week.
 const USDM_FILLS = ['usdm-frame-a-fill', 'usdm-frame-b-fill'] as const;
+// The default-on North American Drought Monitor fill (the click popup reads it too).
+const NADM_FILL = 'nadm-drought-fill';
 const HYDRO_LINE = 'hydrography';
 
 /** Half-size of the query box in pixels. */
@@ -101,7 +103,18 @@ function collectItems(map: maplibregl.Map, point: maplibregl.Point): InspectItem
     }
   }
 
-  const usdmFills = USDM_FILLS.filter((id) => map.getLayer(id));
+  // NADM is preferred when both answer, matching the click popup's droughtRow.
+  let nadmIndex = -1;
+  if (map.getLayer(NADM_FILL)) {
+    for (const f of map.queryRenderedFeatures(box, { layers: [NADM_FILL] })) {
+      const raw = String(f.properties?.['DROUGHTCAT'] ?? '').toUpperCase();
+      nadmIndex = Math.max(nadmIndex, NADM_CATEGORIES.findIndex((c) => c.code === raw));
+    }
+  }
+  const nadm = NADM_CATEGORIES[nadmIndex];
+  if (nadm) items.push({ label: 'Drought', value: `${nadm.code} ${nadm.label}` });
+
+  const usdmFills = nadm ? [] : USDM_FILLS.filter((id) => map.getLayer(id));
   if (usdmFills.length > 0) {
     const f = map.queryRenderedFeatures(box, { layers: [...usdmFills] })[0];
     const dm = readDm(f?.properties ?? null);

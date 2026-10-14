@@ -91,6 +91,14 @@ export const DROUGHT_COLORS: Readonly<Record<string, string>> = {
   REMOVAL: '#B2AD69'
 };
 
+/** The outlook classes as the sidebar legend and the map key both name them. */
+export const OUTLOOK_LEGEND: ReadonlyArray<{ color: string; label: string }> = [
+  { color: DROUGHT_COLORS['PERSISTS']!, label: 'Drought persists' },
+  { color: DROUGHT_COLORS['DEVELOPS']!, label: 'Drought develops' },
+  { color: DROUGHT_COLORS['IMPROVES']!, label: 'Drought improves' },
+  { color: DROUGHT_COLORS['REMOVAL']!, label: 'Drought removal likely' }
+];
+
 /* ---------------------------------------------------------------------------
  * National Weather Service (NWS) HeatRisk categories
  *

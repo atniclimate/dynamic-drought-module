@@ -47,7 +47,7 @@ import { ExpiringLruCache } from '../util/bounded-cache';
 import type { ClockValue, IssuedModel, PopupClock } from '../ui/popup-frame';
 import { ensureHatchImages, hatchImageId } from '../util/hatch';
 import { hideLoading, showLoading } from '../ui/overlay';
-import { DROUGHT_COLORS } from '../config/palette';
+import { DROUGHT_COLORS, OUTLOOK_LEGEND } from '../config/palette';
 import { setTimeBar, clearTimeBar } from '../ui/time-bar';
 import { SHELL_HORIZON_KEY } from '../impact/horizon-chrome';
 import { showLegend, hideLegend, LEGEND_ORDER, renderSwatchLegend } from '../ui/legend-registry';
@@ -107,13 +107,6 @@ type OutlookStatus = 'loading' | 'ready' | 'error' | 'no-data';
 function reportStatus(state: OutlookStatus): void {
   registry.setStatus(LAYER_KEY, state);
 }
-
-const OUTLOOK_LEGEND: ReadonlyArray<{ color: string; label: string }> = [
-  { color: DROUGHT_COLORS['PERSISTS']!, label: 'Drought persists' },
-  { color: DROUGHT_COLORS['DEVELOPS']!, label: 'Drought develops' },
-  { color: DROUGHT_COLORS['IMPROVES']!, label: 'Drought improves' },
-  { color: DROUGHT_COLORS['REMOVAL']!, label: 'Drought removal likely' }
-];
 
 function buildQueryUrl(range: OutlookRange): string {
   const params = new URLSearchParams({

@@ -49,7 +49,7 @@ test('an ecoregion selection reads its candidates under the 24 MiB cap', async (
     'URLS',
     'fetchJson',
     `${body('arcGisEnvelopeParams')}\n${body('ecoregionCandidateParams')}\n` +
-      `${constant('ECOREGION_CANDIDATE_MAX_BYTES')}\n` +
+      `${constant('ECOREGION_CANDIDATE_MAX_BYTES')}\n${constant('ECOREGION_CANDIDATE_TIMEOUT_MS')}\n` +
       'const assertFeatureCollection = (raw) => raw;\n' +
       'const loadServiceEnvelopePieces = async (bbox, signal, run) => [await run(bbox, signal)];\n' +
       'const mergeByStableIdentifier = (groups) => groups.flat();\n' +
@@ -57,14 +57,15 @@ test('an ecoregion selection reads its candidates under the 24 MiB cap', async (
       'const normalizedFeature = () => null;\n' +
       'const abortIfNeeded = () => {};\n' +
       `${asyncBody('loadEcoregionCandidates')}\nreturn loadEcoregionCandidates;`
-  )({ epaEcoregionsMapServer: 'https://epa.test' }, async (url, signal, init, maxBytes) => {
-    caps.push([url.includes('maxAllowableOffset'), maxBytes]);
+  )({ epaEcoregionsMapServer: 'https://epa.test' }, async (url, signal, init, maxBytes, timeoutMs) => {
+    caps.push([url.includes('maxAllowableOffset'), maxBytes, timeoutMs]);
     return { type: 'FeatureCollection', features: [] };
   });
   await load([-117, 42, -111, 49], new AbortController().signal, 'ecoregion');
+  // Audit 7 finding 3: the same two reads also get a 20 s budget, not the 8 s default.
   assert.deepEqual(caps, [
-    [false, 24 * 1024 * 1024],
-    [false, 24 * 1024 * 1024]
+    [false, 24 * 1024 * 1024, 20_000],
+    [false, 24 * 1024 * 1024, 20_000]
   ]);
 });
 

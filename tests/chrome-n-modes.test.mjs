@@ -395,3 +395,21 @@ test('the place briefing door is named without a mode word (DR-113)', async () =
   assert.ok(!/See what the \w+ means/.test(text), 'the door names one mode in every mode');
   assert.ok(text.includes("'aria-label', `See what this means for ${place.label}`"));
 });
+
+// Audit 7 finding 2: the chip's fallback sentence ("No classed layer is drawn")
+// is true only when no surface layer is drawn, so every surface layer a recipe
+// can draw must have a label and a branch in map-key.ts.
+test('every surface-role layer in a cluster recipe has a key label and branch', async () => {
+  const { LAYER_DEFS } = await import(new URL('src/config/layers.ts', ROOT).href);
+  const surfaces = new Set(LAYER_DEFS.filter((d) => d.role === 'surface').map((d) => d.key));
+  const mapKey = await readFile(new URL('src/ui/map-key.ts', ROOT), 'utf8');
+  const recipeKeys = new Set(
+    HAZARD_CLUSTER_KEYS.flatMap((mode) => Object.values(HAZARD_CLUSTERS[mode].recipes).flat())
+  );
+  const drawn = [...recipeKeys].filter((key) => surfaces.has(key));
+  assert.ok(drawn.includes('drought'), 'the CPC outlook is a recipe surface');
+  for (const key of drawn) {
+    assert.ok(KEY_ELIGIBLE_LABELS[key], `${key} is a recipe surface with no KEY_ELIGIBLE_LABELS entry`);
+    assert.ok(mapKey.includes(`'${key}'`), `${key} is a recipe surface with no branch in map-key.ts`);
+  }
+});
