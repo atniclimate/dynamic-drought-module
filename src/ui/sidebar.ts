@@ -155,6 +155,7 @@ import {
   fitCameraTarget,
   fitOcean,
   fitRegion,
+  oceanTarget,
   readCameraState,
   restoreCameraState
 } from '../map/camera-fit';
@@ -1644,16 +1645,16 @@ function applyUrlStateSync(map: maplibregl.Map): ParsedUrlParams {
   // pairing display with camera, D-0.7.0-053) wins over `framing=`
   // (D-0.7.0-039/041), which wins over the legacy `region=` fit above.
   // Both are camera-only: they select nothing and brief nothing.
-  const cameraDef = params.ocean
-    ? OCEANS[params.ocean]
-    : params.framing === 'all'
-      ? { bounds: ALL_FRAMING_BOUNDS, padding: 0 }
-      : params.framing
-        ? FRAMINGS[params.framing]
-        : ensoBoot
-          ? OCEANS.pacific
-          : null;
-  if (cameraDef) {
+  const oceanBoot = params.ocean ?? (ensoBoot ? 'pacific' : null);
+  const cameraDef = params.framing === 'all'
+    ? { bounds: ALL_FRAMING_BOUNDS, padding: 0 }
+    : params.framing
+      ? FRAMINGS[params.framing]
+      : null;
+  if (oceanBoot) {
+    // The shared ocean fit, so a small map keeps the zoom floor on the Nino 3.4 box.
+    fitCameraTarget(map, oceanTarget(oceanBoot), false);
+  } else if (cameraDef) {
     map.fitBounds(
       framingFitBounds(cameraDef),
       { padding: 20, animate: false }

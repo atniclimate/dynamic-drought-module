@@ -64,6 +64,19 @@ export function ensoCameraAction(
 }
 
 /**
+ * The centre a fit lands on when its zoom would fall below the map's floor (a
+ * small embed): the floor centre, so the Nino 3.4 box stays in frame. Null when
+ * the fit clears the floor or reports no zoom, and the plain fit applies.
+ */
+export function floorCentreOrNull(
+  fitZoom: number | undefined,
+  minZoom: number,
+  floorCentre: readonly [number, number]
+): [number, number] | null {
+  return fitZoom !== undefined && fitZoom < minZoom ? [floorCentre[0], floorCentre[1]] : null;
+}
+
+/**
  * Whether a boot into ENSO fits the Pacific the way the mode button does: only
  * when the URL names no camera of its own. `ocean=` and `framing=` are cameras;
  * so are a `select=` place (the deep link fits its boundary) and a `region=`

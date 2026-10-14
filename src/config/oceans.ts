@@ -40,6 +40,12 @@ export interface OceanDef {
   readonly bounds: readonly [readonly [number, number], readonly [number, number]];
   /** Symmetric fit padding in degrees. */
   readonly padding: number;
+  /**
+   * [lng, lat] the camera centres on when the fit would need a zoom below the
+   * map's floor (a small embed): MapLibre would otherwise clamp around the
+   * bounds' centre and push the Nino 3.4 box off the frame.
+   */
+  readonly floorCentre?: readonly [number, number];
   /** The honest label consumers must carry (D-0.7.0-051). */
   readonly provenance: string;
 }
@@ -57,6 +63,8 @@ export const OCEANS: Record<OceanKey, OceanDef> = {
     // normalization gap documented at REGIONS.alaska.
     bounds: [[-10.0, -179.9], [62.0, -110.0]],
     padding: 1.0,
+    // Nino 3.4 centre, nudged to 8N so the equator band and Hawaii both show.
+    floorCentre: [-145, 8],
     provenance: SCHEMATIC_NOTE
   },
   arctic: {
