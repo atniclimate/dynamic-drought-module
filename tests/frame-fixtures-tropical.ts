@@ -162,13 +162,10 @@ const tierFixture: TierFixture = {
       { width: 1920, height: 1080 },
       { width: 2560, height: 1440 }
     ] as const;
-    await page.setViewportSize(seats[0]);
-    await bootStorm(page);
-    const popup = page.locator('.maplibregl-popup');
     for (const seat of seats) {
+      // Boot at each seat: a resize keeps the first seat's camera, and the storm drifts out of the probe search.
       await page.setViewportSize(seat);
-      await page.keyboard.press('Escape');
-      await expect(popup).toHaveCount(0);
+      await bootStorm(page);
       await clickStorm(page);
       const at = `${ID} at ${seat.width}x${seat.height}`;
       await expect(page.locator('.maplibregl-popup [data-popup-frame]'), `${at}: the response is a framed card`).toHaveCount(1);
