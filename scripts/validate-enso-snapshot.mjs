@@ -56,11 +56,25 @@ const SERIES = (over = {}) => ({
   state: STATE(),
   phase: 'neutral',
   latest: P(),
-  values: [P(), P(), P(), P(), P()],
+  values: ['DJF', 'JFM', 'FMA', 'MAM', 'AMJ'].map((seas) => P({ seas })),
   ...over
 });
 /** A minimal fully valid snapshot (indices-only; optional blocks absent). */
 const VALID = () => ({ retrieved: '2026-07-28', oni: SERIES(), roni: SERIES() });
+/** Three consecutive weekly points, seven days apart, ending on `latest`. */
+const W = (month, day, anom) => ({ year: 2026, month, day, total: 29.4, anom });
+const WEEKLY = () => ({
+  sourceUrl: 'https://www.cpc.ncep.noaa.gov/data/indices/wksst9120.for',
+  latest: W(9, 2, 2.7),
+  values: [W(8, 19, 2.5), W(8, 26, 2.6), W(9, 2, 2.7)]
+});
+/** Standardized SOI: the rest of the latest year is null, as the builder emits it. */
+const SOI = () => ({
+  sourceUrl: 'https://www.cpc.ncep.noaa.gov/example',
+  block: 'standardized',
+  latest: { year: 2026, month: 6, value: -1.4 },
+  values: [{ year: 2026, month: 5, value: -1.1 }, { year: 2026, month: 6, value: -1.4 }, { year: 2026, month: 7, value: null }]
+});
 
 const SELF_TEST = [
   // Pass cases.
@@ -184,7 +198,13 @@ const SELF_TEST = [
         s[key] = SERIES({
           state: STATE({ conditions: 'el-nino', direction: 'strengthening', emerging: true }),
           latest,
-          values: [P({ anom: -0.9 }), P({ anom: -0.4 }), P({ anom: -0.04 }), P({ anom: 0.49 }), latest]
+          values: [
+            P({ seas: 'JFM', anom: -0.9 }),
+            P({ seas: 'FMA', anom: -0.4 }),
+            P({ seas: 'MAM', anom: -0.04 }),
+            P({ anom: 0.49 }),
+            latest
+          ]
         });
       }
       return s;
@@ -281,6 +301,68 @@ const SELF_TEST = [
       s.roni = SERIES({ authority: { product: 'x', url: CPC_RULE_URLS.discussion, cadence: 'monthly' } });
       return s;
     }
+  },
+  // Audit 6 finding 3: one-change copies the shape checks accepted. Each
+  // number the headline reads must agree with the series under it.
+  {
+    name: 'valid snapshot with weekly Nino 3.4, SOI and published days',
+    mustPass: true,
+    make: () => ({ ...VALID(), roni: SERIES({ published: '2026-07-28' }), nino34Weekly: WEEKLY(), soi: SOI() })
+  },
+  {
+    name: 'roni.latest is not the last value',
+    mustPass: false,
+    make: () => { const s = VALID(); s.roni.latest = P({ seas: 'MAM' }); return s; }
+  },
+  {
+    name: 'roni.values in reverse order',
+    mustPass: false,
+    make: () => { const s = VALID(); s.roni.values.reverse(); s.roni.latest = s.roni.values.at(-1); return s; }
+  },
+  {
+    name: 'roni.values missing a season',
+    mustPass: false,
+    make: () => { const s = VALID(); s.roni.values.splice(2, 1); s.roni.values.unshift(P({ seas: 'NDJ', year: 2025 })); return s; }
+  },
+  {
+    name: 'roni.values with a duplicated season',
+    mustPass: false,
+    make: () => { const s = VALID(); s.roni.values[2] = { ...s.roni.values[1] }; return s; }
+  },
+  {
+    name: 'roni seas is not one of the twelve season names',
+    mustPass: false,
+    make: () => { const s = VALID(); s.roni.values[1].seas = 'XYZ'; return s; }
+  },
+  {
+    name: 'roni.state.direction disagrees with the last three seasons',
+    mustPass: false,
+    make: () => { const s = VALID(); s.roni.state.direction = 'strengthening'; return s; }
+  },
+  {
+    name: 'nino34Weekly missing a week',
+    mustPass: false,
+    make: () => { const w = WEEKLY(); w.values.splice(1, 1); return { ...VALID(), nino34Weekly: w }; }
+  },
+  {
+    name: 'nino34Weekly.latest year 2019',
+    mustPass: false,
+    make: () => { const w = WEEKLY(); w.latest = { ...w.latest, year: 2019 }; return { ...VALID(), nino34Weekly: w }; }
+  },
+  {
+    name: 'soi.latest dated 2030, after every value',
+    mustPass: false,
+    make: () => ({ ...VALID(), soi: { ...SOI(), latest: { year: 2030, month: 1, value: 1 } } })
+  },
+  {
+    name: 'roni published 2099, after retrieved',
+    mustPass: false,
+    make: () => ({ ...VALID(), roni: SERIES({ published: '2099-01-01' }) })
+  },
+  {
+    name: 'retrieved 2020, before every published day',
+    mustPass: false,
+    make: () => ({ ...VALID(), retrieved: '2020-01-01', roni: SERIES({ published: '2026-07-28' }) })
   }
 ];
 

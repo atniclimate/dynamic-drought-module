@@ -55,7 +55,14 @@
 import { writeFile, mkdir } from 'node:fs/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
-import { rejectEnsoSnapshot, CPC_RULE_URLS } from './lib/enso-snapshot-contract.mjs';
+import {
+  rejectEnsoSnapshot,
+  CPC_RULE_URLS,
+  RUN_LENGTH,
+  DIRECTION_BAND,
+  DIRECTION_SPAN,
+  SEASON_NAMES
+} from './lib/enso-snapshot-contract.mjs';
 
 const ONI_URL = 'https://www.cpc.ncep.noaa.gov/data/indices/oni.ascii.txt';
 const RONI_URL = 'https://www.cpc.ncep.noaa.gov/data/indices/RONI.ascii.txt';
@@ -91,29 +98,10 @@ const RECENT_MONTHS = 36;
 // trajectory without carrying the whole 1981-to-now file into the bundle.
 const RECENT_WEEKS = 52;
 const THRESHOLD = 0.5;
-const RUN_LENGTH = 5;
-// The trailing-three-season change that counts as a trajectory rather than
-// noise. Not a CPC number: it is this application's own band, chosen so a
-// season-over-season wobble inside the preliminary revision window does not
-// flip the word. Stated here so it is auditable, and never presented to a
-// reader as an issuer rule.
-const DIRECTION_BAND = 0.2;
-const DIRECTION_SPAN = 3;
+// RUN_LENGTH, DIRECTION_BAND (this application's own trajectory band, not a
+// CPC number), DIRECTION_SPAN and SEASON_NAMES live in the contract, which
+// recomputes the state block from them.
 const SOI_MISSING = -999.9;
-const SEASON_NAMES = [
-  'DJF',
-  'JFM',
-  'FMA',
-  'MAM',
-  'AMJ',
-  'MJJ',
-  'JJA',
-  'JAS',
-  'ASO',
-  'SON',
-  'OND',
-  'NDJ'
-];
 const SEASONS = new Set(SEASON_NAMES);
 const MONTH_NAMES = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
 const SOI_HEADER = `YEAR ${MONTH_NAMES.join(' ')}`;

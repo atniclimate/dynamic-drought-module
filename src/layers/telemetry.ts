@@ -444,6 +444,17 @@ function windGlyphShaftLengthPx(speedMph: number): number {
 }
 
 /**
+ * A wind marker turns with the map (MapLibre applies `rotation - bearing`)
+ * but stays facing the viewer: `pitchAlignment` would otherwise follow
+ * `rotationAlignment` and lay the arrow flat in Fire 3D.
+ */
+function telemetryMarkerOptions(element: HTMLElement, wind: RawsWindGlyphFields | null): maplibregl.MarkerOptions {
+  return wind
+    ? { element, rotationAlignment: 'map', pitchAlignment: 'viewport', rotation: wind.windDirectionDeg }
+    : { element };
+}
+
+/**
  * The sustained-wind symbol: an inline-styled SVG child of the marker
  * element (no CSS class whose appearance depends on src/styles/app.css;
  * that grant does not exist for this task). The caller (`renderStations`,
@@ -455,10 +466,10 @@ function windGlyphShaftLengthPx(speedMph: number): number {
  * `WindDirDegrees` is the direction the wind is blowing FROM, in degrees
  * clockwise from true north (NWCG PMS 426-3, verified against the NIFC
  * PublicView_RAWS FeatureServer's own field description). The glyph is a
- * wind-vane arrowhead that points INTO the wind, so rotating an
- * upward-pointing (north-pointing) shaft clockwise by exactly the served
- * number of degrees draws it correctly with no sign inversion and no
- * re-derivation of the served value.
+ * wind-vane arrowhead that points INTO the wind. The SVG draws it pointing
+ * up (north) and never rotates it; the marker's `rotation` carries it,
+ * clockwise by exactly the served number of degrees, with no sign inversion
+ * and no re-derivation of the served value.
  *
  * `color` is `station.color`, the SAME network color the unified legend
  * already keys on (fix F10: the glyph no longer carries its own hardcoded
@@ -470,17 +481,6 @@ function windGlyphShaftLengthPx(speedMph: number): number {
  * is a representative check against the lightest plausible background, not
  * an exhaustive one.
  */
-/**
- * A wind marker turns with the map (MapLibre applies `rotation - bearing`)
- * but stays facing the viewer: `pitchAlignment` would otherwise follow
- * `rotationAlignment` and lay the arrow flat in Fire 3D.
- */
-function telemetryMarkerOptions(element: HTMLElement, wind: RawsWindGlyphFields | null): maplibregl.MarkerOptions {
-  return wind
-    ? { element, rotationAlignment: 'map', pitchAlignment: 'viewport', rotation: wind.windDirectionDeg }
-    : { element };
-}
-
 function buildRawsWindGlyph(wind: RawsWindGlyphFields, color: string): SVGSVGElement {
   const accessibleName = buildRawsWindAccessibleName(wind);
   const parsedSpeedMph = parseServedWindSpeedMph(wind.windSpeedServed);

@@ -54,7 +54,6 @@ import {
   setPlaceStudioDisplayKind,
   setStudioWatershedBoundary
 } from '../../state/display-snapshot';
-import { getMap } from '../../state/map-store';
 import {
   backToMap,
   setPlaceStudioReturnAction,
@@ -197,13 +196,15 @@ function abortIfNeeded(signal: AbortSignal): void {
 async function fetchJson(
   url: string,
   signal: AbortSignal,
-  init: RequestInit | null = null
+  init: RequestInit | null = null,
+  maxDecodedBytes?: number
 ): Promise<unknown> {
   return fetchJsonWithBudget(
     url,
     init,
     signal,
-    PLACE_DATA_TIMEOUT_MS
+    PLACE_DATA_TIMEOUT_MS,
+    maxDecodedBytes
   );
 }
 
@@ -321,6 +322,13 @@ function ecoregionCandidateParams(
   if (selectionKind !== 'ecoregion') params.set('maxAllowableOffset', '0.0005');
   return params;
 }
+
+// Full-resolution Middle Rockies candidates are 11.4 MB, over the 8 MiB default.
+const ECOREGION_CANDIDATE_MAX_BYTES = 24 * 1024 * 1024;
+
+// The overlap words must not change with the visitor's map, so Studio
+// watershed reads generalize as at zoom 9 (about 0.0014 degrees).
+const STUDIO_WATERSHED_ZOOM = 9;
 
 function resolvedSelection(
   kind: BoundaryKind,
@@ -459,7 +467,7 @@ async function resolveWatershedSelection(
 ): Promise<ResolvedPlaceSelection | null> {
   const feature = await loadWatershedSelectionGeometry(
     entry,
-    getMap()?.getZoom() ?? 0,
+    STUDIO_WATERSHED_ZOOM,
     signal
   );
   if (!feature) return null;
@@ -546,7 +554,8 @@ async function loadEcoregionCandidates(
       await fetchJson(
         `${URLS.epaEcoregionsMapServer}/${layer}/query?${params.toString()}`,
         siblingSignal,
-        { cache: 'no-store' }
+        { cache: 'no-store' },
+        ECOREGION_CANDIDATE_MAX_BYTES
       )
     ).features;
   };
@@ -674,7 +683,7 @@ async function loadWatershedOverlapCandidates(
     (piece, siblingSignal) =>
       loadWatershedCandidates(
         piece,
-        getMap()?.getZoom() ?? 0,
+        STUDIO_WATERSHED_ZOOM,
         siblingSignal
       )
   );

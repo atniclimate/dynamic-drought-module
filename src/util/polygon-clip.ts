@@ -1,8 +1,7 @@
 /**
  * DR-136: polygon-clipping importer for the clip Worker (the Place Studio
  * overlap engine in src/ui/island also imports the library, on the main thread).
- * Execute only inside the clip Worker,
- * created after M17 has a cross-issuer/year-compatible bounding-box candidate.
+ * The clip Worker is created after M17 has a cross-issuer/year-compatible bounding-box candidate.
  * No M22 reuse. Planar WGS84 geometry only; no area/link decision is made here.
  */
 import polygonClipping from 'polygon-clipping';
