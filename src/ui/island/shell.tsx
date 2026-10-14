@@ -377,11 +377,6 @@ function Shell({ map, snap, framing, specTick, onMinimapNoteChange }: ShellProps
 
   const snapshot = snap.value;
   const pending = isPending(snapshot);
-  const horizonNote = snapshot.cluster === 'custom'
-    ? ''
-    : TEMPORAL_HORIZON_KEYS.map((key) => horizonDisabledReason(snapshot, key))
-        .filter((reason) => reason !== null)
-        .join(' ');
 
   /**
    * Run a display command that the Place studio would otherwise reverse
@@ -519,8 +514,6 @@ function Shell({ map, snap, framing, specTick, onMinimapNoteChange }: ShellProps
             );
           })}
         </div>
-        {/* The disabled chips' reasons, visible under the chips they explain: a hover title alone never reaches touch or the eye. */}
-        {horizonNote !== '' && <p class="shell-minimap-note" id="shell-horizon-note">{horizonNote}</p>}
         <TimeCompact specTick={specTick} pressedHorizon={snapshot.horizon} />
       </div>
 
@@ -551,6 +544,11 @@ function ShellDetails({ map, snap, framingNote }: {
   readonly framingNote: ReadonlySignal<string>;
 }) {
   const snapshot = snap.value;
+  const horizonNote = snapshot.cluster === 'custom'
+    ? ''
+    : TEMPORAL_HORIZON_KEYS.map((key) => horizonDisabledReason(snapshot, key))
+        .filter((reason) => reason !== null)
+        .join(' ');
   return (
     <>
       <Fire3DControl cluster={snapshot.cluster} map={map} />
@@ -563,6 +561,8 @@ function ShellDetails({ map, snap, framingNote }: {
         </p>
       </section>
       <p class="shell-minimap-note" id="shell-framing-note" aria-live="polite">{framingNote.value}</p>
+      {/* The disabled chips' reasons, visible but outside the time block: its height varies by mode and must not displace the minimap, search and layers. */}
+      {horizonNote !== '' && <p class="shell-minimap-note" id="shell-horizon-note">{horizonNote}</p>}
     </>
   );
 }

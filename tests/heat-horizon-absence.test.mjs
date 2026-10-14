@@ -73,13 +73,14 @@ test('the all-zero line is read before the day cells, under the heading', () => 
   assert.ok(heading < line && line < grid);
 });
 
-test('the horizon note sits in the time block under the chips, not in the details host', () => {
+test('the horizon note sits in the details host after the framing note, not in the time block', () => {
   const whenBlock = shellSource.slice(
     shellSource.indexOf('class="shell-when"'),
     shellSource.indexOf('class="shell-minimap-map"')
   );
-  assert.match(whenBlock, /id="shell-horizon-note"/);
-  assert.ok(whenBlock.indexOf('shell-horizon-note') > whenBlock.indexOf('shell-horizons'));
+  assert.doesNotMatch(whenBlock, /id="shell-horizon-note"/);
+  const framing = shellSource.indexOf('id="shell-framing-note"');
+  assert.ok(framing > 0 && shellSource.indexOf('id="shell-horizon-note"') > framing);
 });
 
 test('a superseded read never lands on unavailable; a current failed read still does', async () => {
