@@ -33,7 +33,6 @@ import { isStateCode } from '../config/state-codes';
 // resolver runs at boot and needs one bundled file.
 import { BOOT_URLS } from '../config/urls-boot';
 import { bboxToContinuousBounds } from '../util/bbox';
-import { representativePoint } from '../util/point-in-polygon';
 import { geometryBboxAcrossAntimeridian } from '../util/antimeridian';
 import { fetchSharedJsonWithBudget, US_STATES_SHARED_KEY } from '../util/fetch';
 import {
@@ -207,6 +206,9 @@ export async function openStateBriefing(
   if (opts.guard && !opts.guard()) return;
 
   const bbox = geometryBboxAcrossAntimeridian(feature.geometry);
+  // Dynamic import: point-in-polygon is briefing-cluster code the activation
+  // gate keeps out of the eager bundle.
+  const { representativePoint } = await import('../util/point-in-polygon');
   const lngLat = bbox ? representativePoint(feature.geometry, bbox) : { lng: 0, lat: 0 };
   let buildBoundaryContext: typeof import('../impact/context').buildBoundaryContext;
   try {

@@ -33,7 +33,6 @@ import { STATE_LABEL } from '../impact/resources';
 import type { StateCode } from '../impact/resources';
 import { buildBoundaryContext } from '../impact/context';
 import { bboxToContinuousBounds } from '../util/bbox';
-import { representativePoint } from '../util/point-in-polygon';
 import { geometryBboxAcrossAntimeridian } from '../util/antimeridian';
 import { openStateBriefing } from '../state/deep-link';
 import { showLocatedBoundary } from '../state/located-boundary';
@@ -231,6 +230,9 @@ async function locateTribalLandArea(map: maplibregl.Map, larName: string): Promi
   requestLayerOn('bia-reservations');
 
   const primary = features[0]!;
+  // Dynamic import: point-in-polygon is briefing-cluster code the activation
+  // gate keeps out of the eager bundle.
+  const { representativePoint } = await import('../util/point-in-polygon');
   const lngLat = bbox ? representativePoint(aggregateGeometry, bbox) : { lng: 0, lat: 0 };
   // ORDER MATTERS: the located-boundary module clears its highlight on
   // EVERY selection change (the stage-5 major 4 fix), so the selection is
