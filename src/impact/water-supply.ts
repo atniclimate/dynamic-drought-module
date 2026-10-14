@@ -83,6 +83,11 @@ function waterYearOf(d: Date): number {
 const WS_CACHE_TTL_MS = 30 * 60_000;
 const WS_ROWS_CACHE = new ExpiringLruCache<string, WsRow[]>(4);
 
+/** Test-only hook for deterministic cache assertions (as clearDsciResponseCache). */
+export function clearWaterSupplyRowsCache(): void {
+  WS_ROWS_CACHE.clear();
+}
+
 interface WsRow {
   readonly id: string;
   readonly location: string;
