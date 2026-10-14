@@ -426,7 +426,7 @@ test.describe('DDM-P8-T02: the Wildfire screen has a time control at every horiz
     const dot = page.locator('#time-bar .feed-freshness-dot');
     const summary = page.locator('#time-bar .feed-current');
     await expect(dot).toHaveAttribute('data-freshness', 'current');
-    await expect(dot).toHaveCSS('background-color', 'rgb(232, 236, 240)');
+    await expect(dot).toHaveCSS('background-color', 'rgb(46, 158, 91)');
     await expect(dot).toHaveCSS('border-radius', '0px');
     await expect(dot).toHaveCSS('border-width', '1px');
     await expect(dot).toHaveCSS('width', '8px');

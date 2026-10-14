@@ -252,7 +252,7 @@ test.describe('S4a desktop shell boot', () => {
     // custom-composition case above already uses.
     await expect(season).toHaveAttribute(
       'title',
-      'No verified season-ahead Extreme Heat map surface exists yet.'
+      'Long Range is off for Extreme Heat: no verified map source for this time horizon exists yet, so none is shown rather than a guess.'
     );
   });
 

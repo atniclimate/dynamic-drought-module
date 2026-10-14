@@ -2400,7 +2400,8 @@ test('an embed without the flag never activates and never gains it', async ({
     page.on('request', (request) => {
       if (
         // `fire3d-ground-layers` is the two ground switches' 0.2 kB store, which the console imports at boot.
-        /assets\/(?:fire3d-(?!presentation|ground-layers)|hms-smoke-volume-)/.test(
+        // `fire3d-fuel-risk` is the pure 0.3 kB fuel-risk helper the map key imports at boot.
+        /assets\/(?:fire3d-(?!presentation|ground-layers|fuel-risk)|hms-smoke-volume-)/.test(
           request.url()
         )
       ) {

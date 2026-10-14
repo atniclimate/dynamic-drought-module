@@ -1432,7 +1432,7 @@ test.describe('DDM-P7-T07: the season-ahead heat cell', () => {
     await expect(chip).toHaveAttribute('aria-disabled', 'true');
     await expect(chip).toHaveAttribute(
       'title',
-      'No verified season-ahead Extreme Heat map surface exists yet.'
+      'Long Range is off for Extreme Heat: no verified map source for this time horizon exists yet, so none is shown rather than a guess.'
     );
     await expect(page.locator('#map-key')).not.toContainText(
       'seasonal temperature outlook'

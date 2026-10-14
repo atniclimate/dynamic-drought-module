@@ -203,7 +203,7 @@ test.describe('U4d: the switcher control and assistive observation status', () =
       'aria-pressed',
       'false'
     );
-    await expect.poll(async () => search(page)).toContain('basemap=default');
+    await expect.poll(async () => search(page)).not.toContain('basemap=');
     await expect(chip).toBeHidden();
   });
 
@@ -249,7 +249,7 @@ test.describe('U4d: the switcher control and assistive observation status', () =
 
     const btn = page.locator(SWITCHER);
     await expect(btn).toHaveAttribute('aria-pressed', 'false', { timeout: 30_000 });
-    await expect.poll(async () => search(page)).toContain('basemap=default');
+    await expect.poll(async () => search(page)).not.toContain('basemap=');
     await expect(page.locator(IMAGERY_CHIP)).toBeHidden();
     // The default basemap is back on screen (its credit returns).
     // Value-only migration (S30D D1 M22, DR-162): that credit is on the map.
