@@ -8955,7 +8955,7 @@ a.impact-resource-link::after {
   .conditions-metric,
   .brief-full-report-link,
   .layer-umbrella-details-toggle,
-  .layer-toggle,
+  .layer-toggle {
     min-height: var(--touch-target);
   }
 
