@@ -255,7 +255,8 @@ export const PROBES = Object.freeze([
     name: 'HEAD on an allowed route',
     method: 'HEAD',
     path: '/proxy',
-    upstream: AGRIMET_SITES,
+    // usbr.gov resets HEAD connections (GET answers), so this row uses an upstream that serves HEAD.
+    upstream: NWS_POINT,
     expect: {
       status: '2xx',
       cors: RELAY_CORS,
