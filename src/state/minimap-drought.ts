@@ -39,7 +39,7 @@ import type {
   NadmCountryCode,
 } from '../config/framing-shapes';
 import type { FramingKey } from '../config/framings';
-import { FRAMING_KEYS } from '../config/framings';
+import { FRAMING_KEYS, framingMayContainNunavut } from '../config/framings';
 import type { DroughtSeverityCode } from '../config/palette';
 import { URLS } from '../config/urls';
 import {
@@ -411,6 +411,7 @@ function summarizeShape(
   areas: readonly FramingAnalysisArea[],
   prepared: PreparedNadm,
   step: number,
+  key: FramingKey,
 ): FramingDroughtSummary {
   let west = Infinity;
   let south = Infinity;
@@ -498,8 +499,9 @@ function summarizeShape(
     samples,
     excludedSamples,
     coverage:
-      excludedWeight > 0 || prepared.analysisMaskMissing
-        ? 'live-partial'
+      excludedWeight > 0 ||
+      (prepared.analysisMaskMissing && framingMayContainNunavut(key))
+        ?'live-partial'
         : 'live',
   };
 }
@@ -521,6 +523,7 @@ export function deriveMinimapDroughtSnapshot(
         })),
         prepared,
         HAWAII_SAMPLE_STEP_DEGREES,
+        key,
       );
       continue;
     }
@@ -531,6 +534,7 @@ export function deriveMinimapDroughtSnapshot(
       areas,
       prepared,
       MAINLAND_SAMPLE_STEP_DEGREES,
+      key,
     );
   }
   return {

@@ -283,7 +283,7 @@ test('each mode cites its own minimap source, enumerated from the cluster table:
 });
 
 test('the missing Nunavut mask sentence is only for framings that can contain Nunavut', async () => {
-  const { framingMayContainNunavut } = await import('../src/ui/island/minimap-nunavut.ts');
+  const { framingMayContainNunavut } = await import('../src/config/framings.ts');
   const reach = Object.fromEntries(FRAMING_KEYS.map((key) => [key, framingMayContainNunavut(key)]));
   assert.equal(reach['boreal-arctic'], true);
   for (const key of ['hawaii', 'mexico', 'southeast-gulf', 'alaska-northwest']) {

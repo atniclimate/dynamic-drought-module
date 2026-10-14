@@ -48,6 +48,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import {
   FRAMINGS,
   FRAMING_KEYS,
+  framingMayContainNunavut,
   framingMinimapProvenance,
 } from '../../config/framings';
 import type { FramingKey, FramingSelection } from '../../config/framings';
@@ -71,7 +72,6 @@ import {
   NADM_CATEGORIES,
 } from '../../config/palette';
 import { setFraming } from '../../state/framing-store';
-import { framingMayContainNunavut } from './minimap-nunavut';
 import {
   clearOceanFraming,
   getOceanFraming,

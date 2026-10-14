@@ -8,6 +8,7 @@ import {
   type MinimapDroughtSnapshot,
 } from '../src/state/minimap-drought';
 import { URLS } from '../src/config/urls';
+import { FRAMING_KEYS, framingMayContainNunavut } from '../src/config/framings';
 import {
   FRAMING_ANALYSIS_AREAS,
   FRAMING_SHAPES,
@@ -402,7 +403,15 @@ test.describe.serial('minimap drought load with an optional Nunavut mask', () =>
     expect(snapshot.analysisMaskMissing).toBe(true);
     const summaries = Object.values(snapshot.summaries);
     expect(summaries.length).toBeGreaterThan(0);
-    expect(summaries.every((s) => s.coverage === 'live-partial')).toBe(true);
+    for (const key of FRAMING_KEYS) {
+      const summary = snapshot.summaries[key];
+      if (!summary) continue;
+      expect(summary.coverage, key).toBe(
+        framingMayContainNunavut(key) ? 'live-partial' : 'live',
+      );
+    }
+    expect(snapshot.summaries.hawaii?.coverage).toBe('live');
+    expect(summaries.some((s) => s.coverage === 'live-partial')).toBe(true);
     expect(summaries.some((s) => s.samples > 0)).toBe(true);
     expect(summaries.every((s) => s.excludedSamples === 0)).toBe(true);
   });
