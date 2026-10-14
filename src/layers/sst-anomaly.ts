@@ -756,6 +756,8 @@ export async function activate(map: maplibregl.Map): Promise<void> {
       );
     }
     activateEnsoFlow(map);
+    // deactivate cancels the box read and bindPopups runs once, so start it again on every entry.
+    startEnsoBoxRead();
 
     showLegend(LAYER_KEY, {
       order: LEGEND_ORDER.surface,
