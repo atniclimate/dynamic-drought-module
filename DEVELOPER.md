@@ -376,7 +376,7 @@ for an allow-listed target; an unknown path, an off-route path of an allowed
 host, a host that was never allow-listed, and a host the reviewed revision
 removed are all refused; a POST is refused by the method gate; the request
 bounds hold; and the relay hands back upstream bytes unchanged on one
-static, cache-busted endpoint.
+static endpoint.
 
 Two design points are load-bearing. Each row asserts the HTTP status AND the
 Worker's own JSON error code, because a 403 that arrives from somewhere
@@ -384,9 +384,10 @@ further along is not the same answer as a 403 the route policy produced, and
 a receipt that read only the status would score that as a pass. And byte
 transparency is proved across the whole table before publishing, on
 synthetic bytes in `tests/worker-proxy-policy.spec.ts`; live it is one
-static endpoint with a fresh cache-busting query on both legs, because a
-direct-versus-relay hash false-fails on a dynamic upstream or on a response
-held in the Worker's 60-second edge cache.
+static endpoint fetched at its bare URL on both legs (the Worker pins that
+route to no query names and refuses a cache-busting nonce), because a
+direct-versus-relay hash false-fails on a dynamic upstream; a response held in
+the Worker's 60-second edge cache is a byte copy, so it is still comparable.
 
 Exit 0 when every row passed, 1 when any failed, 2 on a usage error. The
 receipt holds statuses, header values, byte counts, digests, and

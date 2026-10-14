@@ -4,10 +4,9 @@
  *
  * Source: `URLS.usaceCwmsData` (scout-proposed, verifier-confirmed
  * 2026-07-01). The host serves a genuine wildcard
- * `Access-Control-Allow-Origin: *`, so the DIRECT fetch is the route; the
- * Worker remains a verified resilience path but is not wired here because
- * the direct route needs a custom `Accept` header that the Worker forwards
- * anyway if ever needed.
+ * `Access-Control-Allow-Origin: *`, so the DIRECT fetch is the route. The
+ * Worker is not a path for CWMS: it has no CWMS route, and its
+ * `normalizeAccept` would reduce the version-2 `Accept` to a plain variant.
  *
  * Load-bearing caveats from verification, handled here:
  *   - Every request needs `Accept: application/json;version=2`.

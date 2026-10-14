@@ -3,3 +3,4 @@
 export const warns = 'DDM warns that the drought deepens here.';
 export const alerting = 'The map is alerting you to heat.';
 export const forecasting = 'We are forecasting a dry September.';
+export const forecastingLabel = 'Forecasting';
