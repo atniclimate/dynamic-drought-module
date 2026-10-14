@@ -341,7 +341,7 @@ test.describe('E2-1 flowing paths in ENSO mode', () => {
     await expect(flowStatus(page)).toContainText(`Precipitable water · live · ${FLOW_WORDS.source.pwat} · Model run `);
     await expect(flowNotes(page)).toHaveText(FLOW_WORDS.bins.pwat);
     await expect(flowProvenance(page)).toHaveText(FLOW_WORDS.provenance.pwat);
-    const [pwat] = FLOW_SOURCES.pwat.messages.map((m) => spanRange(WIND_IDX, m.variable, m.level)) as [string];
+    const [pwat] = FLOW_SOURCES.pwat.messages.map((m) => spanRange('gfs.t06z.pgrb2.1p00.f006.idx', m.variable, m.level)) as [string];
     const key = `https://noaa-gfs-bdp-pds.s3.amazonaws.com/${WIND_IDX.replace(/\.idx$/, '')}`;
     expect(noddStubLog(page).map(({ method, url, range, answer }) => ({ method, url, range, answer }))).toEqual([
       { method: 'GET', url: `${key}.idx`, range: 'bytes=0-65535', answer: 'fixture' },
