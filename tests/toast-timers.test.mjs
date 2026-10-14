@@ -101,3 +101,12 @@ test('a long message is held about 55 ms a character', () => {
   advanceTo(start + 55 * 107 + 1);
   assert.equal(toast.classList.shown, false);
 });
+
+test('a very long message (a crafted link) is held at most 8 s', () => {
+  const start = now;
+  showToast('x'.repeat(2035));
+  advanceTo(start + 7999);
+  assert.ok(visible());
+  advanceTo(start + 8001);
+  assert.equal(toast.classList.shown, false, 'not the 112 s a 2,035-character hold would be');
+});

@@ -148,7 +148,10 @@ function renderSetup() {
 
 test('an unchanged station keeps its open popup, pending read and single binding through refresh', () => {
   const h = renderSetup();
-  h.render([{ ...h.view }]);
+  // Discovery rebuilds every station object per refresh: equal content, new identity.
+  const rebuilt = { ...h.view.station, coords: [...h.view.station.coords] };
+  assert.notEqual(rebuilt, h.view.station);
+  h.render([{ ...h.view, station: rebuilt }]);
   assert.ok(h.markersByStationId.get('fixture') === h.marker);
   assert.equal(h.marker.popup.open, true);
   assert.equal(h.controller.signal.aborted, false);

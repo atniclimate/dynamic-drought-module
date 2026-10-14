@@ -47,6 +47,7 @@ import {
 } from '../config/station-registry';
 import type {
   PrimaryParameterCategory,
+  StationDiscoveryRecord,
   StationRegistryEntry,
   ViewportBounds
 } from '../types/station-network';
@@ -194,7 +195,8 @@ function renderStations(map: maplibregl.Map, views: readonly TelemetryMarkerView
     const marker = activeMarkers[index]!;
     const previous = markerViews.get(marker)!;
     const next = nextViews.get(previous.station.id);
-    if (next && next.station === previous.station &&
+    // By content: each refresh rebuilds every discovered station as a new object.
+    if (next && JSON.stringify(next.station) === JSON.stringify(previous.station) &&
         next.freshness === previous.freshness &&
         next.primaryParameterCategory === previous.primaryParameterCategory &&
         next.networkLabel === previous.networkLabel) continue;
@@ -710,37 +712,41 @@ async function runDiscoveryForCurrentViewport(map: maplibregl.Map): Promise<void
   reportStatus('loading');
 
   const curatedEntries = curatedTelemetryEntries();
+  const isCurrent = (): boolean =>
+    !controller.signal.aborted && controller === currentDiscoveryController;
+  const renderMerged = (records: readonly StationDiscoveryRecord[]) => {
+    const merged = mergeTelemetryStations(
+      curatedEntries.map((entry) => entry.station),
+      records
+    );
+    const capped = capDiscoveredStations(merged, viewportCenter(map));
+    renderStations(map, capped.entries.map(markerViewForEntry));
+    updateCapNote(map, capped.totalDiscovered);
+    return capped;
+  };
   try {
     const result = await discoverStationsForViewport({
       bounds: viewportBounds(map),
       center: viewportCenter(map),
-      signal: controller.signal
+      signal: controller.signal,
+      // Paint each source as it settles; the status waits for the final answer.
+      onProgress: (records) => {
+        if (isCurrent()) renderMerged(records);
+      }
     });
-    if (controller.signal.aborted || controller !== currentDiscoveryController) return;
+    if (!isCurrent()) return;
 
     if (result.status === 'zoom-in') {
       // The viewport is wider than the discovery area cap (D-0.7.0-007):
       // no discovery ran. The curated seeds still render so the layer is
       // not empty, and the pill reads "zoom in to load" honestly. No cap
       // note at region zoom, per the ruling.
-      const merged = mergeTelemetryStations(
-        curatedEntries.map((entry) => entry.station),
-        result.records
-      );
-      const capped = capDiscoveredStations(merged, viewportCenter(map));
-      renderStations(map, capped.entries.map(markerViewForEntry));
-      updateCapNote(map, capped.totalDiscovered);
+      renderMerged(result.records);
       reportStatus('zoom-in');
       return;
     }
 
-    const merged = mergeTelemetryStations(
-      curatedEntries.map((entry) => entry.station),
-      result.records
-    );
-    const capped = capDiscoveredStations(merged, viewportCenter(map));
-    renderStations(map, capped.entries.map(markerViewForEntry));
-    updateCapNote(map, capped.totalDiscovered);
+    const capped = renderMerged(result.records);
     // Honest aggregate status (0.7.0 H4): any source failure reads
     // "live (partial)" instead of an unqualified "live". This includes the
     // every-source-failed case, because the curated seed markers are
@@ -757,7 +763,7 @@ async function runDiscoveryForCurrentViewport(map: maplibregl.Map): Promise<void
       reportStatus(capped.entries.length > 0 ? 'ready' : 'no-data');
     }
   } catch (err) {
-    if (controller.signal.aborted || controller !== currentDiscoveryController) return;
+    if (!isCurrent()) return;
     console.warn('[telemetry] station discovery failed.', err);
     renderStations(map, curatedEntries.map(markerViewForEntry));
     hideCapNote();

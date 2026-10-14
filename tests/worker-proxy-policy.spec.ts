@@ -102,6 +102,8 @@ test('the exact current DDM read routes are allowed', () => {
     expect(isAllowedRoute(parsed), target).toBe(true);
     const result = parseAndValidateUpstream(proxyRequest([target]));
     expect(result, target).toBeInstanceOf(URL);
+    // The one normalization is a sorted, form-encoded query (%20 reads as +).
+    parsed.searchParams.sort();
     expect((result as URL).toString()).toBe(parsed.toString());
   }
 });
@@ -239,6 +241,23 @@ test('the proxy requires exactly one URL and rejects unsafe URL components', asy
   );
   expect(defaultPort).toBeInstanceOf(URL);
   expect((defaultPort as URL).port).toBe('');
+});
+
+test('a fragment, a parameter order or a repeated name cannot open a new cache slot', async () => {
+  const keyOf = (target: string): string =>
+    buildCacheKey(parseAndValidateUpstream(proxyRequest([target])) as URL, '*/*').url;
+  const plain = keyOf('https://api.weather.gov/points/45.6,-118.7');
+  expect(keyOf('https://api.weather.gov/points/45.6,-118.7#x1')).toBe(plain);
+  expect(keyOf('https://api.weather.gov/points/45.6,-118.7#x2')).toBe(plain);
+  const awdb = 'https://wcc.sc.egov.usda.gov/awdbRestApi/services/v1/stations';
+  expect(keyOf(`${awdb}?activeOnly=true&stationTriplets=*:*:SNTL`)).toBe(
+    keyOf(`${awdb}?stationTriplets=*:*:SNTL&activeOnly=true`)
+  );
+  await expectPolicyError(
+    proxyRequest(['https://api.weather.gov/alerts/active?point=44.1,-117.3&point=44.1,-117.3']),
+    400,
+    'repeated_query_name'
+  );
 });
 
 test('only GET, HEAD, and OPTIONS are exposed through CORS', async () => {

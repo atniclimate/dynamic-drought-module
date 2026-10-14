@@ -457,7 +457,8 @@ export function parseSelectParam(): SelectParam | null {
   if (idx <= 0) return null;
   const kind = raw.slice(0, idx).trim().toLowerCase();
   const id = raw.slice(idx + 1).trim();
-  if (kind !== 'state' || id === '') return null;
+  // A state is a two-letter code; anything else is no select, so a link cannot set toast text.
+  if (kind !== 'state' || !/^[A-Za-z]{2}$/.test(id)) return null;
   return { kind: 'state', id };
 }
 

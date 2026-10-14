@@ -17,7 +17,7 @@ registerHooks({
 
 globalThis.fetch = () => { throw new Error('unexpected network in URL unit test'); };
 const { HAZARD_CLUSTERS } = await import('../src/config/clusters.ts');
-const { syncUrl } = await import('../src/state/url.ts');
+const { syncUrl, parseSelectParam } = await import('../src/state/url.ts');
 const { installFakeBrowser } = await import('./map-harness.ts');
 
 function synced(search, state, panelMounted = false) {
@@ -84,4 +84,16 @@ test('a custom SST display retains its mounted flow preference independently of 
   assert.equal(params.get('cluster'), null);
   assert.equal(params.get('flow'), 'waves');
   assert.equal(params.get('flowink'), 'dark');
+});
+
+test('select=state takes only a two-letter code, so a link cannot set the toast text', () => {
+  const read = (search) => {
+    const browser = installFakeBrowser({ search });
+    try { return parseSelectParam(); } finally { browser.restore(); }
+  };
+  assert.deepEqual(read('?select=state:WA'), { kind: 'state', id: 'WA' });
+  assert.deepEqual(read('?select=State: or '), { kind: 'state', id: 'or' });
+  for (const bad of ['state:WAS', 'state:W', `state:${'A'.repeat(2000)}`, 'state:W1', 'state:Your account is locked']) {
+    assert.equal(read(`?select=${encodeURIComponent(bad)}`), null, bad.slice(0, 30));
+  }
 });

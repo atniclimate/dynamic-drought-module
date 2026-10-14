@@ -14,7 +14,13 @@ import type {
   ViewportBounds
 } from '../types/station-network';
 import { fetchBufferedWithBudget } from '../util/fetch';
-import { bboxCoveredByEnvelope, quantizeBbox, type ViewEnvelope } from '../util/bbox';
+import {
+  bboxCoveredByEnvelope,
+  buildQueryEnvelope,
+  quantizeBbox,
+  toCoverageEnvelope,
+  type ViewEnvelope
+} from '../util/bbox';
 import { isObject } from '../util/guards';
 import { readLatestUsgsReading, readUnitCode, readVariableCode } from '../util/usgs';
 import { ExpiringLruCache } from '../util/bounded-cache';
@@ -384,37 +390,61 @@ function viewportAreaDeg(
   return width * latitudeFactor * height;
 }
 
-/** USGS Instantaneous Values discovery, served from the per-viewport cache. */
-async function discoverUsgsStationsCached(
-  queryBounds: StationViewportDiscoveryRequest['bounds'],
-  signal: AbortSignal | null
+// Also checked under this key: the last box queried, so a small pan that
+// crosses a snapped-key edge is still served by the overscan that covers it.
+const LAST_DISCOVERY_KEY = 'last';
+
+/**
+ * Per-viewport cached discovery. The query box is the view plus the 25%
+ * overscan AIANNH, BIA and NIFC use, while that box's raw area stays within
+ * `overscanAreaCap`; above it the raw view is queried. A hit needs the
+ * queried box to contain the view.
+ */
+async function discoverCached(
+  cache: ExpiringLruCache<string, DiscoveryCacheEntry>,
+  view: ViewportBounds,
+  overscanAreaCap: number,
+  query: (bounds: ViewportBounds) => Promise<readonly StationDiscoveryRecord[]>
 ): Promise<readonly StationDiscoveryRecord[]> {
-  const key = discoveryCacheKey(queryBounds);
-  const asked: ViewEnvelope = [
-    queryBounds.south,
-    queryBounds.west,
-    queryBounds.north,
-    queryBounds.east
-  ];
-  const cached = USGS_DISCOVERY_CACHE.get(key);
-  if (cached && bboxCoveredByEnvelope(cached.bounds, asked)) return cached.records;
-  const records = await discoverUsgsStations(queryBounds, signal);
-  USGS_DISCOVERY_CACHE.set(key, { bounds: asked, records }, DISCOVERY_CACHE_TTL_MS);
+  const asked: ViewEnvelope = [view.west, view.south, view.east, view.north];
+  for (const key of [discoveryCacheKey(view), LAST_DISCOVERY_KEY]) {
+    const cached = cache.get(key);
+    if (cached && bboxCoveredByEnvelope(cached.bounds, asked)) return cached.records;
+  }
+  const envelope = buildQueryEnvelope({
+    getWest: () => view.west,
+    getSouth: () => view.south,
+    getEast: () => view.east,
+    getNorth: () => view.north
+  });
+  const [west, south, east, north] = envelope;
+  const overscan = (east - west) * (north - south) <= overscanAreaCap;
+  const records = await query(overscan ? { west, south, east, north } : view);
+  const entry = { bounds: overscan ? toCoverageEnvelope(envelope) : asked, records };
+  cache.set(discoveryCacheKey(view), entry, DISCOVERY_CACHE_TTL_MS);
+  cache.set(LAST_DISCOVERY_KEY, entry, DISCOVERY_CACHE_TTL_MS);
   return records;
 }
 
+/** USGS Instantaneous Values discovery, served from the per-viewport cache. */
+function discoverUsgsStationsCached(
+  queryBounds: StationViewportDiscoveryRequest['bounds'],
+  signal: AbortSignal | null
+): Promise<readonly StationDiscoveryRecord[]> {
+  // The overscan must keep the bBox inside the USGS 25-square-degree rule.
+  return discoverCached(USGS_DISCOVERY_CACHE, queryBounds, USGS_BBOX_AREA_CAP, (bounds) =>
+    discoverUsgsStations(bounds, signal)
+  );
+}
+
 /** NIFC RAWS discovery, served from the per-viewport cache. */
-async function discoverRawsStationsCached(
+function discoverRawsStationsCached(
   bounds: StationViewportDiscoveryRequest['bounds'],
   signal: AbortSignal | null
 ): Promise<readonly StationDiscoveryRecord[]> {
-  const key = discoveryCacheKey(bounds);
-  const asked: ViewEnvelope = [bounds.south, bounds.west, bounds.north, bounds.east];
-  const cached = RAWS_DISCOVERY_CACHE.get(key);
-  if (cached && bboxCoveredByEnvelope(cached.bounds, asked)) return cached.records;
-  const records = await discoverRawsStations(bounds, signal);
-  RAWS_DISCOVERY_CACHE.set(key, { bounds: asked, records }, DISCOVERY_CACHE_TTL_MS);
-  return records;
+  return discoverCached(RAWS_DISCOVERY_CACHE, bounds, Infinity, (box) =>
+    discoverRawsStations(box, signal)
+  );
 }
 
 export async function discoverStationsForViewport(
@@ -465,10 +495,15 @@ export async function discoverStationsForViewport(
     { label: 'CoCoRaHS station discovery', run: () => discoverCocorahsStations(request) }
   ];
 
+  // Each settled source is reported at once, so a slow USGS read does not hold back the rest.
+  const settled: DiscoverySourceOutcome[] = [];
   const outcomes = await Promise.all(
-    sources.map((source) =>
-      settleDiscoverySource(source.label, source.run(), request.signal)
-    )
+    sources.map(async (source, index) => {
+      const outcome = await settleDiscoverySource(source.label, source.run(), request.signal);
+      settled[index] = outcome;
+      if (!request.signal?.aborted) request.onProgress?.(settled.flatMap((o) => o.records));
+      return outcome;
+    })
   );
 
   const records = outcomes.flatMap((outcome) => outcome.records);
@@ -1327,6 +1362,8 @@ async function discoverRawsStations(
 }
 
 function readRawsFeatures(payload: unknown): readonly Record<string, unknown>[] {
+  // ArcGIS answers an outage as HTTP 200 with an `error` body: a failure, not an empty roster.
+  if (isObject(payload) && 'error' in payload) throw new Error('NIFC RAWS ArcGIS error body');
   if (!isObject(payload) || !Array.isArray(payload.features)) return [];
   return payload.features.filter(isObject);
 }

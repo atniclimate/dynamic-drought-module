@@ -202,8 +202,9 @@ test('a provider timeout (AbortError, caller not aborted) gives a partial list',
 });
 
 /**
- * Two views share one snapped cache key but the second reaches 0.2 degrees
- * further west: it must ask for its own box. A view inside the first is a hit.
+ * The query box is the view plus a 25% overscan, so a view 0.2 degrees west
+ * is still inside it; a view 0.6 degrees west is not and asks for its own
+ * overscanned box. A view inside that one is a hit.
  */
 test('a cached USGS answer is served only to a view its queried box contains', async () => {
   const originalFetch = globalThis.fetch;
@@ -224,12 +225,103 @@ test('a cached USGS answer is served only to a view its queried box contains', a
   });
   try {
     await discoverStationsForViewport(view(-119.9, -118.4));
+    assert.deepEqual(boxes, ['-120.275,45.625,-118.025,47.875'], 'the view plus 0.375 degrees a side');
     await discoverStationsForViewport(view(-120.1, -118.6));
-    assert.equal(boxes.length, 2, 'the wider-west view is not answered from the first box');
-    assert.match(boxes[1], /^-120\.1,/, 'and its request starts at its own west edge');
-    // Same snapped key as the second view, and inside the box it queried.
-    await discoverStationsForViewport(view(-120.05, -118.62));
+    assert.equal(boxes.length, 1, 'a 0.2-degree pan is inside the overscanned box');
+    await discoverStationsForViewport(view(-120.5, -119));
+    assert.equal(boxes.length, 2, 'a view past the overscan is not answered from the first box');
+    assert.match(boxes[1], /^-120\.875,/, 'and its request starts at its own overscanned west edge');
+    await discoverStationsForViewport(view(-120.45, -118.95));
     assert.equal(boxes.length, 2, 'a view inside the cached box is a hit');
+    // A 4 x 4 view would overscan to 36 square degrees, past the USGS bBox
+    // rule: it asks for the raw view.
+    await discoverStationsForViewport({
+      bounds: { south: 40, west: -110, north: 44, east: -106 },
+      center: [42, -108],
+      signal: null
+    });
+    assert.equal(boxes[2], '-110,40,-106,44');
+  } finally {
+    globalThis.fetch = originalFetch;
+    console.warn = originalWarn;
+  }
+});
+
+/** ArcGIS answers an outage as HTTP 200 with an `error` body: RAWS failed, nothing cached. */
+test('a RAWS answer with an ArcGIS error body is a failed source and is not cached', async () => {
+  const LABEL = 'NIFC RAWS station discovery';
+  const originalFetch = globalThis.fetch;
+  const originalWarn = console.warn;
+  console.warn = () => {};
+  mock.timers.tick(61 * 60 * 1000);
+  let rawsCalls = 0;
+  globalThis.fetch = async (input) => {
+    if (!String(input).includes('PublicView_RAWS')) throw new TypeError('network down');
+    rawsCalls += 1;
+    const body = { error: { code: 500, message: 'Unable to complete operation.' } };
+    return new Response(JSON.stringify(body), { status: 200 });
+  };
+  try {
+    const first = await discoverStationsForViewport(REQUEST);
+    assert.ok(first.failedSources.includes(LABEL), 'RAWS is named as failed');
+    const second = await discoverStationsForViewport(REQUEST);
+    assert.ok(second.failedSources.includes(LABEL));
+    assert.equal(rawsCalls, 2, 'the error body was not cached as an empty roster');
+  } finally {
+    globalThis.fetch = originalFetch;
+    console.warn = originalWarn;
+  }
+});
+
+/**
+ * Each source is reported as it settles: the fast rosters reach onProgress
+ * while USGS is still waiting, and an aborted run reports nothing more.
+ */
+test('fast sources are painted before a slow USGS read settles, and not after an abort', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalWarn = console.warn;
+  console.warn = () => {};
+  mock.timers.tick(61 * 60 * 1000);
+  let releaseUsgs;
+  const usgsHeld = new Promise((resolve) => { releaseUsgs = resolve; });
+  const fast = GOOD;
+  installFetch(fast);
+  const answerFast = globalThis.fetch;
+  globalThis.fetch = async (input, init) => {
+    if (String(input).includes('waterservices.usgs.gov')) {
+      await usgsHeld;
+      if (init?.signal?.aborted) throw new DOMException('aborted', 'AbortError');
+      return new Response(JSON.stringify({ value: { timeSeries: [] } }), { status: 200 });
+    }
+    return answerFast(input);
+  };
+  const view = (signal, progress) => ({ ...REQUEST, bounds: { ...REQUEST.bounds, west: -121.3 }, signal, onProgress: (records) => progress.push(records.map((r) => r.network)) });
+  try {
+    const progress = [];
+    const run = discoverStationsForViewport(view(null, progress));
+    await new Promise((resolve) => setImmediate(resolve));
+    for (let i = 0; i < 20 && !progress.at(-1)?.includes('cocorahs'); i += 1) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    assert.ok(progress.length > 0, 'something was painted while USGS was held');
+    for (const network of ['nrcs-awdb', 'noaa-coops', 'usbr-agrimet', 'cocorahs']) {
+      assert.ok(progress.at(-1).includes(network), `${network} painted before USGS settled`);
+    }
+    const beforeUsgs = progress.length;
+    releaseUsgs();
+    const result = await run;
+    assert.equal(progress.length, beforeUsgs + 1, 'USGS settling reports once more');
+    assert.deepEqual(progress.at(-1), result.records.map((r) => r.network));
+
+    // A superseded run: nothing is reported after its signal aborts.
+    mock.timers.tick(61 * 60 * 1000);
+    const late = [];
+    const controller = new AbortController();
+    const aborted = discoverStationsForViewport({ ...view(controller.signal, late), bounds: { south: 40, west: -110, north: 41, east: -109 }, center: [40.5, -109.5] });
+    controller.abort();
+    await aborted.catch(() => undefined);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(late, [], 'no progress after abort');
   } finally {
     globalThis.fetch = originalFetch;
     console.warn = originalWarn;

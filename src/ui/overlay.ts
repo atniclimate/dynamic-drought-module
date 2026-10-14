@@ -160,7 +160,7 @@ export function showToast(message: string): void {
     toastHideTimer = window.setTimeout(() => {
       el.hidden = true;
     }, 250);
-  }, Math.max(1700, 55 * message.length));
+  }, Math.min(8000, Math.max(1700, 55 * message.length)));
 }
 
 /**

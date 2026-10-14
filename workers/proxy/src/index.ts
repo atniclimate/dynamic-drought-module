@@ -475,6 +475,18 @@ export function parseAndValidateUpstream(request: Request): URL | Response {
     );
   }
 
+  // One request, one edge-cache slot: no fragment, one parameter order, no repeated name.
+  upstreamUrl.hash = "";
+  upstreamUrl.searchParams.sort();
+  const names = [...upstreamUrl.searchParams.keys()];
+  if (new Set(names).size !== names.length) {
+    return jsonError(
+      400,
+      "repeated_query_name",
+      "Upstream URLs must not repeat a query parameter name."
+    );
+  }
+
   if (!isAllowedRoute(upstreamUrl)) {
     return jsonError(
       403,

@@ -82,6 +82,8 @@ export interface StationViewportDiscoveryRequest {
   readonly bounds: ViewportBounds;
   readonly center: readonly [number, number];
   readonly signal: AbortSignal | null;
+  /** Called with every record settled so far each time one source settles. */
+  readonly onProgress?: (records: readonly StationDiscoveryRecord[]) => void;
 }
 
 export type StationViewportDiscoveryResult =
