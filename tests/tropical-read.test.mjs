@@ -284,6 +284,15 @@ test('popup: a watch-warning line carries the renderer label and colour; an unkn
   assert.ok(cone.includes('Forecast Cone') && cone.includes('Simon'));
 });
 
+test('popup: every STORMTYPE code the issuer lists (TD, TS, HU, SS, SD) is recognised; others stay marked', () => {
+  for (const code of ['TD', 'TS', 'HU', 'SS', 'SD']) {
+    const html = serializePopupFrame(popup.buildTropicalPointPopupModel({ ...fixtures.EP5_POINTS.features[0].properties, stormtype: code }));
+    assert.ok(!html.includes('not recognised'), code);
+  }
+  const html = serializePopupFrame(popup.buildTropicalPointPopupModel({ ...fixtures.EP5_POINTS.features[0].properties, stormtype: 'XYZ' }));
+  assert.ok(html.includes('XYZ (code not recognised)'));
+});
+
 test('popup: the point, cone and watch-warning popups of one storm share the points layer title', async () => {
   installFetch('occupiedOne');
   const sweep = await readTropicalSweep(BASE, new AbortController().signal);

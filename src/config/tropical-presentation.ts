@@ -113,8 +113,10 @@ export const TROPICAL_PART_NAMES: Readonly<Record<TropicalPart, string>> = {
 };
 
 /**
- * `tcdvlp` values the earlier dossier and the 2026-10-13 probe saw; any other
- * value, or none, is shown as the issuer's raw code marked unrecognised.
+ * `tcdvlp` values: the issuer's metadata lists Tropical Depression, Tropical
+ * Storm, Hurricane, Subtropical Storm and Subtropical Depression (TCDVLP,
+ * https://www.nhc.noaa.gov/gis/); the live service also carries Major Hurricane.
+ * Any other value, or none, is shown as the issuer's raw code marked unrecognised.
  */
 export const TROPICAL_CLASSIFICATIONS: readonly string[] = [
   'Major Hurricane',
@@ -125,8 +127,12 @@ export const TROPICAL_CLASSIFICATIONS: readonly string[] = [
   'Subtropical Depression'
 ];
 
-/** `stormtype` codes seen (TS, TD, STD, STS, HU, MH). */
-export const TROPICAL_STORM_TYPES: readonly string[] = ['TS', 'TD', 'STD', 'STS', 'HU', 'MH'];
+/**
+ * `stormtype` codes: the five the issuer's shapefile metadata lists (TD, TS, HU,
+ * SS, SD; https://www.nhc.noaa.gov/gis/ forecast `_5day_pts.shp.xml`, STORMTYPE)
+ * plus MH and STD, which the live service carries and that metadata does not list.
+ */
+export const TROPICAL_STORM_TYPES: readonly string[] = ['TD', 'TS', 'HU', 'SS', 'SD', 'MH', 'STD', 'STS'];
 
 /** The issuer's missing-value sentinel on forecast positions (mslp, tcdir, tcspd). */
 export const TROPICAL_MISSING = 9999;
