@@ -486,11 +486,16 @@ function onMoveEnd(): void {
 }
 
 function onPopState(): void {
-  preference = parseEnsoFlowParams(new URLSearchParams(window.location.search));
+  const next = parseEnsoFlowParams(new URLSearchParams(window.location.search));
+  // A studio's history step pops with the same flow=; keep the drawn field.
+  if (next.kind === preference.kind && next.ink === preference.ink) return;
+  const kindChanged = next.kind !== preference.kind;
+  preference = next;
   updateSelection();
   const ink = panel?.querySelector('select');
   if (ink) ink.value = preference.ink;
-  void loadArea();
+  if (kindChanged) void loadArea();
+  else if (flowView && 'setInk' in flowView) flowView.setInk(preference.ink);
 }
 
 export function activateEnsoFlow(activeMap: maplibregl.Map): void {

@@ -14,6 +14,8 @@
  *      ships under public/fonts/glyphs/Noto Sans Regular/.
  *   3. The bundle is non-trivial (over 500 places; a truncated artifact
  *      fails loudly, not as a quietly empty layer).
+ *   4. Every place has a finite longitude and latitude, and no place
+ *      (name at its point) appears twice.
  *
  * Wired into `npm run gate`. Run directly: node scripts/check-places-artifact.mjs
  */
@@ -39,8 +41,16 @@ const problems = [];
 if (places.length <= 500) {
   problems.push(`bundle carries only ${places.length} places (truncated artifact?)`);
 }
+// Places carry no id field (gnis is on two), so identity is the name at its point.
+const seen = new Set();
 for (const p of places) {
   const name = String(p.name ?? '');
+  if (!Number.isFinite(p.lon) || !Number.isFinite(p.lat) || Math.abs(p.lon) > 180 || Math.abs(p.lat) > 90) {
+    problems.push(`${name}: coordinate ${p.lon}, ${p.lat} is not a finite longitude and latitude`);
+  }
+  const key = `${name}|${p.lon}|${p.lat}`;
+  if (seen.has(key)) problems.push(`${name}: duplicate place at ${p.lon}, ${p.lat}`);
+  seen.add(key);
   if (name !== name.normalize('NFC')) {
     problems.push(`${name}: not NFC-normalized`);
     continue;

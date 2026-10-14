@@ -247,7 +247,8 @@ export function parseTimeDomain(xml: string, loopDays: number = LOOP_DAYS): stri
     const start = isoToMs(parts[0]!);
     const end = isoToMs(parts[1]!);
     if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) continue;
-    for (let ms = start; ms <= end; ms += DAY_MS) {
+    // Only a range's last loopDays days can survive the final slice.
+    for (let ms = Math.max(start, end - (loopDays - 1) * DAY_MS); ms <= end; ms += DAY_MS) {
       all.push(msToIso(ms));
     }
   }

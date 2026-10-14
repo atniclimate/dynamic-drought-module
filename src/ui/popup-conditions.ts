@@ -83,7 +83,7 @@ import type { GeoJsonProperties, Geometry } from 'geojson';
 import { registry } from '../state/registry';
 import { timeline } from '../state/timeline';
 import { getHazardCluster } from '../state/cluster-store';
-import { USDM_CATEGORIES, NADM_CATEGORIES } from '../config/palette';
+import { USDM_CATEGORIES, NADM_CATEGORIES, readUsdmDm } from '../config/palette';
 import { HAZARD_CLUSTERS, HAZARD_CLUSTER_KEYS } from '../config/clusters';
 import { getLayerDef } from '../config/layers';
 import { PLACE_CONDITION_ROW_DEFERRED, PLACE_CONDITION_ROWS, placeConditionRowKeys } from '../config/place-condition-rows';
@@ -385,13 +385,6 @@ function usdmMapDateClock(raw: unknown): PopupClock | undefined {
   };
 }
 
-function readDm(props: GeoJsonProperties): number | null {
-  if (!props) return null;
-  const raw = props['DM'] ?? props['dm'];
-  const n = typeof raw === 'number' ? raw : typeof raw === 'string' ? Number(raw) : NaN;
-  return Number.isInteger(n) ? n : null;
-}
-
 /** A row with its clock only when there is one (exact optional properties). */
 function withClock(row: ValueRow, clock: PopupClock | undefined): ValueRow {
   return clock === undefined ? row : { ...row, clock };
@@ -466,10 +459,10 @@ function droughtRow(map: maplibregl.Map, point: maplibregl.PointLike): MarkedRow
     let maxDm = -1;
     let maxProps: GeoJsonProperties = null;
     for (const f of feats) {
-      const dm = readDm(f.properties);
+      const dm = readUsdmDm(f.properties);
       // Only a D0-D4 index is a category; any other DM is not one, so a
       // switched-on layer always answers a row (never the nothing-on line).
-      if (dm !== null && dm < USDM_CATEGORIES.length && dm > maxDm) {
+      if (dm !== null && dm > maxDm) {
         maxDm = dm;
         maxProps = f.properties ?? null;
       }

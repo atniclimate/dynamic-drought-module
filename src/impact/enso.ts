@@ -168,6 +168,8 @@ export interface EnsoPhaseLabel {
   readonly emerging: boolean;
   /** The RONI season the state is read from, for example 'MJJ'. */
   readonly season: string;
+  /** The snapshot's retrieved date when it is past HARD_STALE_DAYS (the briefing's dated past-tense rule), else null. */
+  readonly staleAsOf: string | null;
   /** The calendar year that season ends in. */
   readonly year: number;
 }
@@ -188,12 +190,14 @@ export async function readEnsoPhaseLabel(
   try {
     const snap = await loadEnsoSnapshot(signal);
     const state = readState(snap.roni);
+    const age = snapshotAge(snap);
     return {
       conditionsName: PHASE_NAME[state.conditions],
       phaseName: PHASE_NAME[state.episode],
       emerging: state.emerging,
       season: snap.roni.latest.seas,
-      year: snap.roni.latest.year
+      year: snap.roni.latest.year,
+      staleAsOf: age !== null && age.days > HARD_STALE_DAYS ? snap.retrieved : null
     };
   } catch {
     return null;

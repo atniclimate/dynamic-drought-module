@@ -21,7 +21,7 @@
 import type * as maplibregl from 'maplibre-gl';
 import type { GeoJsonProperties } from 'geojson';
 
-import { NADM_CATEGORIES, USDM_CATEGORIES } from '../config/palette';
+import { CDM_CATEGORIES, NADM_CATEGORIES, USDM_CATEGORIES, readUsdmDm } from '../config/palette';
 import { escapeHtml } from '../util/escape';
 
 const READOUT_ID = 'hover-inspector';
@@ -40,6 +40,7 @@ const ECOREGION_FILLS = ['ecoregions-l4-fill', 'ecoregions-l3-fill'] as const;
 const USDM_FILLS = ['usdm-frame-a-fill', 'usdm-frame-b-fill'] as const;
 // The default-on North American Drought Monitor fill (the click popup reads it too).
 const NADM_FILL = 'nadm-drought-fill';
+const CDM_FILL = 'cdm-drought-fill';
 const HYDRO_LINE = 'hydrography';
 
 /** Half-size of the query box in pixels. */
@@ -57,13 +58,6 @@ function firstString(props: GeoJsonProperties, keys: readonly string[]): string 
     if (typeof v === 'string' && v.trim() !== '') return v;
   }
   return null;
-}
-
-function readDm(props: GeoJsonProperties): number | null {
-  if (!props) return null;
-  const raw = props['DM'] ?? props['dm'];
-  const n = typeof raw === 'number' ? raw : Number(raw);
-  return Number.isInteger(n) && n >= 0 && n <= 4 ? n : null;
 }
 
 function boxAround(point: maplibregl.Point): [maplibregl.PointLike, maplibregl.PointLike] {
@@ -114,10 +108,21 @@ function collectItems(map: maplibregl.Map, point: maplibregl.Point): InspectItem
   const nadm = NADM_CATEGORIES[nadmIndex];
   if (nadm) items.push({ label: 'Drought', value: `${nadm.code} ${nadm.label}` });
 
-  const usdmFills = nadm ? [] : USDM_FILLS.filter((id) => map.getLayer(id));
+  // The Canadian Drought Monitor surface: the class code alone, as its popup prints it.
+  let cdmIndex = -1;
+  if (!nadm && map.getLayer(CDM_FILL)) {
+    for (const f of map.queryRenderedFeatures(box, { layers: [CDM_FILL] })) {
+      const dm = Number(f.properties?.['dm']);
+      if (Number.isInteger(dm) && dm < CDM_CATEGORIES.length) cdmIndex = Math.max(cdmIndex, dm);
+    }
+  }
+  const cdm = CDM_CATEGORIES[cdmIndex];
+  if (cdm) items.push({ label: 'Drought', value: cdm.code });
+
+  const usdmFills = nadm || cdm ? [] : USDM_FILLS.filter((id) => map.getLayer(id));
   if (usdmFills.length > 0) {
     const f = map.queryRenderedFeatures(box, { layers: [...usdmFills] })[0];
-    const dm = readDm(f?.properties ?? null);
+    const dm = readUsdmDm(f?.properties ?? null);
     if (dm !== null) {
       const cat = USDM_CATEGORIES[dm]!;
       items.push({ label: 'Drought', value: `${cat.code} ${cat.label}` });

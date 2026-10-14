@@ -225,6 +225,14 @@ export const USDM_CATEGORIES: ReadonlyArray<UsdmCategory> = [
   }
 ];
 
+/** A USDM feature's class index (0 = D0 to 4 = D4); null for a blank, non-integer or out-of-range DM. */
+export function readUsdmDm(props: { readonly [key: string]: unknown } | null | undefined): number | null {
+  if (!props) return null;
+  const raw = props['DM'] ?? props['dm'];
+  const n = typeof raw === 'number' ? raw : typeof raw === 'string' && raw.trim() !== '' ? Number(raw) : NaN;
+  return Number.isInteger(n) && n >= 0 && n < USDM_CATEGORIES.length ? n : null;
+}
+
 /**
  * The no-polygon swatch. USDM publishes D0 through D4 polygons but does not
  * provide an analyzed-area mask in this client, so bare ground cannot be

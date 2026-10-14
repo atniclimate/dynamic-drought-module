@@ -51,3 +51,9 @@ test('NADM wins over USDM when both answer; USDM alone still reads', () => {
   assert.doesNotMatch(both, /D2/);
   assert.match(hoverText({ 'usdm-frame-a-fill': [{ properties: { DM: 2 } }] }), /D2 /);
 });
+
+test('the Canadian Drought Monitor surface names its class code; a blank USDM DM reads nothing', () => {
+  const cdm = hoverText({ 'cdm-drought-fill': [{ properties: { dm: 1 } }, { properties: { dm: 3 } }, { properties: { dm: 9 } }] });
+  assert.match(cdm, /Drought\|D3/);
+  assert.doesNotMatch(hoverText({ 'usdm-frame-a-fill': [{ properties: { DM: '' } }] }), /Drought/);
+});

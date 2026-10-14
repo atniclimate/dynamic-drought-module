@@ -154,7 +154,10 @@ def download(url: str, dest: Path) -> Path:
     log(f"  downloading {url}")
     resp = requests.get(url, headers={"User-Agent": USER_AGENT}, timeout=120)
     resp.raise_for_status()
-    dest.write_bytes(resp.content)
+    # A .part file keeps an interrupted write from passing as a cached download.
+    part = dest.with_name(dest.name + ".part")
+    part.write_bytes(resp.content)
+    os.replace(part, dest)
     return dest
 
 

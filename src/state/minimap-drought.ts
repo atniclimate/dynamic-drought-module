@@ -481,7 +481,8 @@ function summarizeShape(
 
   return {
     averageSeverityScore: roundedScore(averageSeverityScore),
-    averageClass: droughtAverageClassForScore(averageSeverityScore),
+    // Classify the printed score, so two framings that print the same score share a class.
+    averageClass: droughtAverageClassForScore(roundedScore(averageSeverityScore)),
     dominant,
     dominantPercent: distribution[dominant],
     droughtPercent: roundedPercent(

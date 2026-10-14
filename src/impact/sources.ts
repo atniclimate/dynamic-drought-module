@@ -38,7 +38,7 @@ import {
 import { naiveBboxSuggestsAntimeridianCrossing } from '../util/antimeridian';
 import { ExpiringLruCache } from '../util/bounded-cache';
 import { fetchJsonWithBudget } from '../util/fetch';
-import { isoDayLocal } from '../util/iso-day';
+import { heatRiskMoment, isoDayLocal } from '../util/iso-day';
 import { isObject } from '../util/guards';
 import { trendLineSvg, type TrendPoint } from '../ui/charts';
 import { categoryImpact } from './category-impacts';
@@ -283,21 +283,6 @@ export function humanDayUtcNoYear(time: number): string {
 // ---------------------------------------------------------------------------
 // Current: issuer-published HeatRisk class at the selected frame and point
 // ---------------------------------------------------------------------------
-
-function heatRiskMoment(time: number): string {
-  // found-104: U+00A0 between the time and its zone word, so the zone never wraps alone.
-  return new Intl.DateTimeFormat('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-    timeZone: 'UTC',
-    timeZoneName: 'short'
-  }).format(new Date(time))
-    .replace(/(\d) (?=[A-Z]{2,5}$)/, '$1\u00a0');
-}
 
 /**
  * Read the selected HeatRisk frame at the selected point. The identify helper

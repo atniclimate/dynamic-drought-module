@@ -682,13 +682,10 @@ export function buildOutlookPopupModel(props: GeoJsonProperties, range: OutlookR
   const issued = statedText(p['fcst_date']);
   const target = statedText(p['target']);
   const copy = Object.hasOwn(OUTLOOK_CLASS_COPY, cls) ? OUTLOOK_CLASS_COPY[cls]! : 'CPC drought outlook class.';
-  const title = cls === 'Persistence' ? 'Drought persists'
-    : cls === 'Development' ? 'Drought develops'
-    : cls === 'Improvement' ? 'Drought improves'
-    : cls === 'Removal' ? 'Drought removal likely'
-    : 'Drought outlook';
   const colorKey = Object.hasOwn(OUTLOOK_CLASS_COLOR_KEY, cls) ? OUTLOOK_CLASS_COLOR_KEY[cls]! : null;
   const color = colorKey !== null && Object.hasOwn(DROUGHT_COLORS, colorKey) ? DROUGHT_COLORS[colorKey]! : null;
+  // The key's own words (OUTLOOK_LEGEND pairs each class colour with its label).
+  const title = OUTLOOK_LEGEND.find((entry) => entry.color === color)?.label ?? 'Drought outlook';
   const clocks: [PopupClock, ...PopupClock[]] = [
     issued === null
       ? { kind: 'not-stated', label: 'Issued', reason: 'unavailable' }

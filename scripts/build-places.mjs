@@ -41,7 +41,8 @@ import { fileURLToPath } from 'node:url';
 
 const SOURCE_URL =
   'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_populated_places_simple.geojson';
-const RETRIEVED = '2026-07-12';
+// The source is a moving branch, so the stamp is the day this build read it.
+const RETRIEVED = new Date().toISOString().slice(0, 10);
 
 const CROSSWALK_PATH = fileURLToPath(
   new URL('./data/hi-gnis-crosswalk.json', import.meta.url)

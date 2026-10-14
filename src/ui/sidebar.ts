@@ -98,6 +98,7 @@ import { bindStudioEscape, trapStudioTabFocus } from './island/studio-inert';
 // user reveals the telemetry list, and each station uses exactly one of the
 // four, so a boot now pays for none of them.
 import type { StationValue, TelemetryStation } from '../types/station';
+import { formatStationNumber } from '../util/station-format';
 import { setCurrentRegion } from '../state/region-store';
 import type { LayerStatus } from '../types/layer';
 import { SIDEBAR_DESKTOP_QUERY, parseSelectParam, parseUrlParams, syncUrl } from '../state/url';
@@ -1270,14 +1271,7 @@ async function fetchPrimaryStationValue(
  */
 function formatStationValue(value: StationValue): string {
   const label = value.parameter === 'snow_water_equivalent_in' ? 'SWE' : value.label;
-  // Storage rounds to whole acre-feet; discharge keeps USGS's 0.01 cfs so a
-  // low creek never reads "0 cfs".
-  const fractionDigits =
-    value.parameter === 'reservoir_storage_acft' ? 0 : value.parameter === 'discharge_cfs' ? 2 : null;
-  const num =
-    fractionDigits !== null && value.value !== null
-      ? value.value.toLocaleString('en-US', { maximumFractionDigits: fractionDigits })
-      : String(value.value);
+  const num = formatStationNumber(value.value, value.parameter);
   const day = value.timestamp ? ` · ${shortReadingDate(value.timestamp)}` : '';
   const staleNote = value.freshness === 'stale' ? ' (stale)' : '';
   return `${label} ${num} ${value.unit}${day}${staleNote}`;

@@ -450,7 +450,8 @@ async function resolveEcoregionSelection(
     await fetchJson(
       `${URLS.epaEcoregionsMapServer}/${layer}/query?${params.toString()}`,
       signal,
-      { cache: 'no-store' }
+      // EPA sends an ETag; revalidating spares a repeat 3 to 13 MB read.
+      { cache: 'no-cache' }
     )
   );
   abortIfNeeded(signal);
@@ -557,7 +558,7 @@ async function loadEcoregionCandidates(
       await fetchJson(
         `${URLS.epaEcoregionsMapServer}/${layer}/query?${params.toString()}`,
         siblingSignal,
-        { cache: 'no-store' },
+        { cache: 'no-cache' },
         ECOREGION_CANDIDATE_MAX_BYTES,
         ECOREGION_CANDIDATE_TIMEOUT_MS
       )

@@ -900,14 +900,19 @@ export function Minimap({
   // lags an event by months. It replaces a label, not a metric: the framings
   // stay neutral (DDM-UI-004), and the accessible name keeps saying so
   // before it names the basin-wide state.
+  // Past the hard staleness cutoff the slot is dated with the briefing's own
+  // stale phrase and drops the present-tense "emerging" tendency.
+  const ensoStaleAsOf = ensoPhase?.staleAsOf ?? null;
   const ensoScaleText =
     metricContext === 'enso' && ensoPhase !== null
-      ? `RONI ${ensoPhase.conditionsName}${ensoPhase.emerging ? ' emerging' : ''} · ${ensoPhase.season} ${ensoPhase.year}`
+      ? ensoStaleAsOf !== null
+        ? `As of the CPC snapshot dated ${ensoStaleAsOf}: RONI ${ensoPhase.conditionsName} · ${ensoPhase.season} ${ensoPhase.year}`
+        : `RONI ${ensoPhase.conditionsName}${ensoPhase.emerging ? ' emerging' : ''} · ${ensoPhase.season} ${ensoPhase.year}`
       : null;
   const ensoScaleAccessibleText =
     metricContext === 'enso' && ensoPhase !== null
-      ? `${UNSHADED_NOTE} The operational Relative Oceanic Nino Index reads ${ensoPhase.conditionsName} conditions for the ${ensoPhase.season} ${ensoPhase.year} season` +
-        (ensoPhase.emerging
+      ? `${UNSHADED_NOTE} ${ensoStaleAsOf !== null ? `As of the CPC snapshot dated ${ensoStaleAsOf}, the` : 'The'} operational Relative Oceanic Nino Index ${ensoStaleAsOf !== null ? 'read' : 'reads'} ${ensoPhase.conditionsName} conditions for the ${ensoPhase.season} ${ensoPhase.year} season` +
+        (ensoPhase.emerging && ensoStaleAsOf === null
           ? `, with the historical five-season episode classification still reading ${ensoPhase.phaseName}`
           : '') +
         '. It is a basin-wide index label rather than a condition in any framing.'

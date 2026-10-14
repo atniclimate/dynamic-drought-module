@@ -14,6 +14,7 @@ import type { CwmsLatest } from '../util/cwms';
 import { fetchHydrometDaily, hydrometStationValue } from '../util/hydromet';
 import type { HydrometSeries } from '../util/hydromet';
 import { escapeHtml } from '../util/escape';
+import { formatStationNumber } from '../util/station-format';
 import { briefingDoorColor } from './briefing-door-color';
 import type { PlaceConditions } from './popup-conditions';
 import type {
@@ -636,6 +637,8 @@ export interface StationChart {
   readonly title: string;
   readonly unit: string;
   readonly source: string;
+  /** The canonical parameter key, so the summary uses the station number rule. */
+  readonly parameter?: string | undefined;
 }
 
 /** What one live read of a station found. */
@@ -729,7 +732,7 @@ function stationChart(chart: StationChart): ChartDetail[] {
   const data = chart.data.filter((v) => Number.isFinite(v));
   const unit = chart.unit.trim();
   if (data.length < 2 || unit === '') return [];
-  const n = (v: number): string => `${v.toLocaleString()} ${unit}`;
+  const n = (v: number): string => `${formatStationNumber(v, chart.parameter)} ${unit}`;
   return [
     {
       kind: 'chart',
@@ -884,7 +887,7 @@ function awdbRead(station: TelemetryStation, series: AwdbElementSeries[], retrie
     .filter((v): v is NonNullable<typeof v> => v !== null && v.value !== null)
     .map((v) => ({
       label: v.label,
-      text: `${String(v.value)} ${v.unit}`.trim(),
+      text: `${formatStationNumber(v.value, v.parameter)} ${v.unit}`.trim(),
       issuer: 'NRCS AWDB',
       observed: observedAt(v.timestamp),
       stale: v.freshness === 'stale'
@@ -908,7 +911,7 @@ function hydrometRead(station: TelemetryStation, series: HydrometSeries[], retri
     .filter((v): v is NonNullable<typeof v> => v !== null && v.value !== null);
   const readings = values.map((v) => ({
     label: v.label,
-    text: `${v.parameter === 'reservoir_storage_acft' && v.value !== null ? v.value.toLocaleString('en-US', { maximumFractionDigits: 0 }) : String(v.value)} ${v.unit}`.trim(),
+    text: `${formatStationNumber(v.value, v.parameter)} ${v.unit}`.trim(),
     issuer: 'USBR Hydromet',
     observed: observedAt(v.timestamp),
     stale: v.freshness === 'stale'
@@ -921,7 +924,8 @@ function hydrometRead(station: TelemetryStation, series: HydrometSeries[], retri
           data: primary.readings.map((r) => r.value),
           title: `${latest.label} over the past 7 days (USBR Hydromet)`,
           unit: latest.unit,
-          source: 'USBR Hydromet, past 7 days'
+          source: 'USBR Hydromet, past 7 days',
+          parameter: latest.parameter
         }
       : null;
   return liveRead(readings, 'No recent USBR values for this station.', retrievedAt, chart);
@@ -936,7 +940,7 @@ function cwmsRead(station: TelemetryStation, label: string, latest: CwmsLatest |
       : [
           {
             label: value.label,
-            text: `${String(value.value)} ${value.unit}`.trim(),
+            text: `${formatStationNumber(value.value, value.parameter)} ${value.unit}`.trim(),
             issuer: 'USACE CWMS',
             observed: observedAt(value.timestamp),
             stale: value.freshness === 'stale'
@@ -1044,7 +1048,13 @@ function usgsChart(series: UsgsSeries[]): StationChart | null {
   const maxPoints = 120;
   const step = Math.max(1, Math.ceil(nums.length / maxPoints));
   const sampled = nums.filter((_, i) => i % step === 0 || i === nums.length - 1);
-  return { data: sampled, title: `${label} over the past 7 days (USGS)`, unit, source: 'USGS Water Services, past 7 days' };
+  return {
+    data: sampled,
+    title: `${label} over the past 7 days (USGS)`,
+    unit,
+    source: 'USGS Water Services, past 7 days',
+    parameter: code === '00060' ? 'discharge_cfs' : undefined
+  };
 }
 
 /**
@@ -1067,7 +1077,7 @@ function usgsRead(payload: unknown, retrievedAt: number): StationRead {
     const label = code === '00060' ? 'Discharge' : code === '00065' ? 'Gage height' : readVariableName(s) || code || '';
     readings.push({
       label,
-      text: `${last.value} ${readUnitCode(s) ?? ''}`.trim(),
+      text: `${formatStationNumber(Number(last.value), code === '00060' ? 'discharge_cfs' : undefined)} ${readUnitCode(s) ?? ''}`.trim(),
       issuer: 'USGS Water Services',
       observed: observedAt(last.dateTime),
       stale: !!last.dateTime && freshnessForNetwork('usgs-iv', last.dateTime, retrievedAt) === 'stale'

@@ -48,6 +48,7 @@ import { hideLoading, showLoading } from '../ui/overlay';
 import { clearTimeBar, setTimeBar, type TimeBarStamp } from '../ui/time-bar';
 import { fetchJsonWithBudget, linkAbort } from '../util/fetch';
 import { isObject } from '../util/guards';
+import { heatRiskMoment } from '../util/iso-day';
 import {
   watchRasterTiles,
   type RasterTileWatch
@@ -149,26 +150,6 @@ function replaceMasterController(): AbortController {
 // ---------------------------------------------------------------------------
 // The time bar (DDM-P8-T02): the Extreme Heat screen's time control
 // ---------------------------------------------------------------------------
-
-/**
- * "Jul 30, 2026, 12:00 UTC": the same rendering the briefing's HeatRisk
- * claim uses (src/impact/sources.ts, heatRiskMoment), so the stamp on the
- * map and the claim in the panel state one period in one form.
- */
-function heatRiskMoment(time: number): string {
-  // found-104: U+00A0 between the time and its zone word, so the zone never wraps alone.
-  return new Intl.DateTimeFormat('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-    timeZone: 'UTC',
-    timeZoneName: 'short'
-  }).format(new Date(time))
-    .replace(/(\d) (?=[A-Z]{2,5}$)/, '$1\u00a0');
-}
 
 /**
  * What the map says about the selected frame's raster, appended to the

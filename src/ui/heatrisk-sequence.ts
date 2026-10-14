@@ -19,6 +19,7 @@ import { registry } from '../state/registry';
 import { escapeHtml } from '../util/escape';
 import { fetchJsonWithBudget } from '../util/fetch';
 import { isObject } from '../util/guards';
+import { heatRiskMoment as formatMoment } from '../util/iso-day';
 import { watchDesktopMapSeat } from './map-control-seat';
 import { DETAIL_SECTIONS } from '../config/detail-sections';
 import { getDetailSectionHost } from './detail-section-hosts';
@@ -188,19 +189,6 @@ function formatDate(validTime: number): string {
     year: 'numeric',
     timeZone: 'UTC'
   }).format(new Date(validTime));
-}
-
-function formatMoment(time: number): string {
-  return new Intl.DateTimeFormat('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-    timeZone: 'UTC',
-    timeZoneName: 'short'
-  }).format(new Date(time));
 }
 
 function readKey(
