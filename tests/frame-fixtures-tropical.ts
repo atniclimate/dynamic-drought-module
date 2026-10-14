@@ -143,9 +143,10 @@ const tierFixture: TierFixture = {
       // The last body content: the issuer's rows (basin, wind, pressure, movement).
       const rows = body.locator(':scope > [data-popup-slot="rows"]');
       await expect(rows, `${ID}: the popup carries its issuer rows`).toHaveCount(1);
-      // The last row's label: the width tier buys a narrow text column, not the row grid's value cell (src/ui/popup-viewport.ts, the FULL row).
+      // At the width tier, the last row's label: that tier buys a narrow text column, not the row grid's value cell (src/ui/popup-viewport.ts, the FULL row).
+      const lastLine = tier.axis === 'width' ? rows.locator('dt').last() : rows;
       await expect
-        .poll(() => bodyLineReachable(rows.locator('dt').last(), 'last'), { message: `${ID} ${tier.name}: the last row is scroll-reachable`, timeout: 7_000 })
+        .poll(() => bodyLineReachable(lastLine, 'last'), { message: `${ID} ${tier.name}: the last row is scroll-reachable`, timeout: 7_000 })
         .toBe('ok');
       await expect
         .poll(() => strictHit(content.locator(':scope > .maplibregl-popup-close-button')), {
