@@ -756,8 +756,6 @@ export async function activate(map: maplibregl.Map): Promise<void> {
       );
     }
     activateEnsoFlow(map);
-    // deactivate cancels the box read and bindPopups runs once, so start it again on every entry.
-    startEnsoBoxRead();
 
     showLegend(LAYER_KEY, {
       order: LEGEND_ORDER.surface,
@@ -949,6 +947,8 @@ export function bindPopups(map: maplibregl.Map): void {
     }
   });
   map.on('mouseenter', NINO_FILL_ID, () => {
+    // A deactivate cancels the read; restart it on hover so a mouse click after re-entry is not "loading".
+    startEnsoBoxRead();
     map.getCanvas().style.cursor = 'pointer';
   });
   map.on('mouseleave', NINO_FILL_ID, () => {
