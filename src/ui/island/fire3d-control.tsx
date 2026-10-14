@@ -325,7 +325,7 @@ export function Fire3DControl({
     lastFuelTarget.current = fuelTarget;
     const box = root.current?.closest('.sidebar-scroll');
     if (!root.current || !box) return;
-    if (!shouldRevealScroll({ firstRun, sceneRequested: turnedOn3D.current, fuelRowChanged })) return;
+    if (!shouldRevealScroll({ firstRun, sceneRequested: turnedOn3D.current && preference, fuelRowChanged })) return;
     box.scrollTop += revealScroll(root.current.getBoundingClientRect(), box.getBoundingClientRect());
   }, [visible, status?.state, fuelTarget]);
 
