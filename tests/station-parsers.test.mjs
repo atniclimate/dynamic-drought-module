@@ -247,6 +247,36 @@ test('a cached USGS answer is served only to a view its queried box contains', a
   }
 });
 
+/** The cache keeps the overscanned list, but a caller is only given what is in its own view. */
+test('a USGS answer is cut to the requested view, and the margin station is served from cache to a wider view', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalWarn = console.warn;
+  console.warn = () => {};
+  mock.timers.tick(61 * 60 * 1000);
+  let requests = 0;
+  const site = (code, longitude) => ({
+    sourceInfo: { siteCode: [{ value: code }], siteName: code, geoLocation: { geogLocation: { latitude: 46.5, longitude } } },
+    variable: { variableCode: [{ value: '00060' }], unit: { unitCode: 'ft3/s' } },
+    values: [{ value: [{ value: '5', dateTime: '2026-10-13T00:00:00.000Z' }] }]
+  });
+  globalThis.fetch = async (input) => {
+    if (!String(input).includes('waterservices.usgs.gov')) throw new TypeError('network down');
+    requests += 1;
+    // -119 is inside the view below; -120.1 is only inside its 0.375-degree overscan margin.
+    return new Response(JSON.stringify({ value: { timeSeries: [site('IN', -119), site('MARGIN', -120.1)] } }), { status: 200 });
+  };
+  const view = (west, east) => ({ bounds: { south: 46, west, north: 47.5, east }, center: [46.75, (west + east) / 2], signal: null });
+  const usgs = (result) => result.records.filter((r) => r.network === 'usgs-iv').map((r) => r.station.id);
+  try {
+    assert.deepEqual(usgs(await discoverStationsForViewport(view(-119.9, -118.4))), ['usgs-IN']);
+    assert.deepEqual(usgs(await discoverStationsForViewport(view(-120.2, -118.7))).sort(), ['usgs-IN', 'usgs-MARGIN']);
+    assert.equal(requests, 1, 'the wider view is answered from the cached overscan');
+  } finally {
+    globalThis.fetch = originalFetch;
+    console.warn = originalWarn;
+  }
+});
+
 /** ArcGIS answers an outage as HTTP 200 with an `error` body: RAWS failed, nothing cached. */
 test('a RAWS answer with an ArcGIS error body is a failed source and is not cached', async () => {
   const LABEL = 'NIFC RAWS station discovery';

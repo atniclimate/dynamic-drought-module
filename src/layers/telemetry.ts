@@ -108,6 +108,8 @@ interface TelemetryMarkerView {
 let currentDiscoveryController: AbortController | null = null;
 let moveendDebounce: ReturnType<typeof setTimeout> | null = null;
 let moveendHandler: (() => void) | null = null;
+// The last final discovery answer: a progress paint merges it in, so only a final answer removes markers.
+let lastFinalRecords: readonly StationDiscoveryRecord[] = [];
 
 function reportStatus(state: TelemetryStatus): void {
   registry.setStatus(LAYER_KEY, state);
@@ -598,6 +600,7 @@ export function cancelActivation(): void {
     currentDiscoveryController.abort();
     currentDiscoveryController = null;
   }
+  lastFinalRecords = [];
 }
 
 function removeMarker(marker: maplibregl.Marker): void {
@@ -731,7 +734,7 @@ async function runDiscoveryForCurrentViewport(map: maplibregl.Map): Promise<void
       signal: controller.signal,
       // Paint each source as it settles; the status waits for the final answer.
       onProgress: (records) => {
-        if (isCurrent()) renderMerged(records);
+        if (isCurrent()) renderMerged([...records, ...lastFinalRecords]);
       }
     });
     if (!isCurrent()) return;
@@ -742,11 +745,13 @@ async function runDiscoveryForCurrentViewport(map: maplibregl.Map): Promise<void
       // not empty, and the pill reads "zoom in to load" honestly. No cap
       // note at region zoom, per the ruling.
       renderMerged(result.records);
+      lastFinalRecords = result.records;
       reportStatus('zoom-in');
       return;
     }
 
     const capped = renderMerged(result.records);
+    lastFinalRecords = result.records;
     // Honest aggregate status (0.7.0 H4): any source failure reads
     // "live (partial)" instead of an unqualified "live". This includes the
     // every-source-failed case, because the curated seed markers are
@@ -766,6 +771,7 @@ async function runDiscoveryForCurrentViewport(map: maplibregl.Map): Promise<void
     if (!isCurrent()) return;
     console.warn('[telemetry] station discovery failed.', err);
     renderStations(map, curatedEntries.map(markerViewForEntry));
+    lastFinalRecords = [];
     hideCapNote();
     reportStatus('error');
   }

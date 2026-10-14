@@ -8,7 +8,7 @@ import test from 'node:test';
 // the real browser cases cover MapLibre's event and camera ordering.
 function functionBody(path, name) {
   const source = readFileSync(new URL(path, import.meta.url), 'utf8');
-  const body = source.match(new RegExp(`^(?:export )?function ${name}\\([\\s\\S]*?^}`, 'm'))?.[0];
+  const body = source.match(new RegExp(`^(?:export )?(?:async )?function ${name}\\([\\s\\S]*?^}`, 'm'))?.[0];
   assert.ok(body, `${name} is still a source function with its own closing line`);
   return stripTypeScriptTypes(body.replace(/^export\s+/, ''));
 }
@@ -195,4 +195,52 @@ test('a wind marker turns with the map: map-aligned, upright, rotated by the ser
   const source = readFileSync(new URL('../src/layers/telemetry.ts', import.meta.url), 'utf8');
   assert.match(source, /new maplibregl\.Marker\(telemetryMarkerOptions\(el, glyphWind\)\)/);
   assert.ok(!source.includes('rotate(${wind.windDirectionDeg}deg)'), 'the glyph no longer rotates itself');
+});
+
+test('a progress paint never removes a marker: only the final answer does, and teardown forgets it', async () => {
+  const h = renderSetup();
+  const record = (id) => ({ station: { id, coords: [47, -120], color: '#000' } });
+  let discover;
+  const dependencies = {
+    renderStations: h.renderStations, AbortController, console, clearTimeout,
+    reportStatus() {}, curatedTelemetryEntries: () => [], updateCapNote() {}, hideCapNote() {},
+    viewportBounds: () => ({}), viewportCenter: () => [47, -120],
+    mergeTelemetryStations: (_curated, records) => [...new Map(records.map((r) => [r.station.id, r])).values()],
+    capDiscoveredStations: (entries) => ({ entries, totalDiscovered: entries.length }),
+    markerViewForEntry: (entry) => ({ station: entry.station, freshness: 'unknown', primaryParameterCategory: 'water', networkLabel: 'Fixture' }),
+    discoverStationsForViewport: (request) => discover(request)
+  };
+  // One instance: the module variable spans runs, as it does in the browser.
+  const { run, cancelActivation } = new Function(...Object.keys(dependencies), `let currentDiscoveryController = null; let moveendDebounce = null; let lastFinalRecords = [];
+${functionBody('../src/layers/telemetry.ts', 'runDiscoveryForCurrentViewport')}
+${functionBody('../src/layers/telemetry.ts', 'cancelActivation')}
+return { run: runDiscoveryForCurrentViewport, cancelActivation };`)(...Object.values(dependencies));
+  const progressThenFinal = async (progress, final, check) => {
+    let failure = null;
+    discover = async (request) => {
+      request.onProgress(progress);
+      // run() catches a throw from here, so carry the failure out instead.
+      try { check(); } catch (error) { failure = error; }
+      return { status: 'ok', records: final, failedSources: [] };
+    };
+    await run({});
+    if (failure) throw failure;
+  };
+  discover = async () => ({ status: 'ok', records: [record('fixture'), record('other')], failedSources: [] });
+  await run({});
+  assert.equal(h.markersByStationId.size, 2);
+  const other = h.markersByStationId.get('other');
+  await progressThenFinal([record('other')], [record('fixture'), record('other')], () => {
+    assert.ok(h.markersByStationId.get('fixture') === h.marker, 'the source that has not answered keeps its marker');
+    assert.equal(h.marker.popup.open, true);
+    assert.equal(h.controller.signal.aborted, false);
+    assert.deepEqual(h.bound, [h.marker, other], 'and no marker is bound twice');
+  });
+  await progressThenFinal([record('other')], [record('other')], () => {});
+  assert.equal(h.marker.removed, true, 'the final answer removes the marker it no longer holds');
+  assert.equal(h.markersByStationId.has('fixture'), false);
+  cancelActivation();
+  await progressThenFinal([record('third')], [record('third')], () => {
+    assert.equal(h.markersByStationId.has('other'), false, 'after teardown a progress paint does not resurrect the old answer');
+  });
 });

@@ -407,9 +407,12 @@ async function discoverCached(
   query: (bounds: ViewportBounds) => Promise<readonly StationDiscoveryRecord[]>
 ): Promise<readonly StationDiscoveryRecord[]> {
   const asked: ViewEnvelope = [view.west, view.south, view.east, view.north];
+  // The cache keeps the whole overscanned list; callers get only what is in view.
+  const inView = (records: readonly StationDiscoveryRecord[]) =>
+    records.filter((r) => isCoordinateInBounds(r.station.coords[0], r.station.coords[1], view));
   for (const key of [discoveryCacheKey(view), LAST_DISCOVERY_KEY]) {
     const cached = cache.get(key);
-    if (cached && bboxCoveredByEnvelope(cached.bounds, asked)) return cached.records;
+    if (cached && bboxCoveredByEnvelope(cached.bounds, asked)) return inView(cached.records);
   }
   const envelope = buildQueryEnvelope({
     getWest: () => view.west,
@@ -423,7 +426,7 @@ async function discoverCached(
   const entry = { bounds: overscan ? toCoverageEnvelope(envelope) : asked, records };
   cache.set(discoveryCacheKey(view), entry, DISCOVERY_CACHE_TTL_MS);
   cache.set(LAST_DISCOVERY_KEY, entry, DISCOVERY_CACHE_TTL_MS);
-  return records;
+  return inView(records);
 }
 
 /** USGS Instantaneous Values discovery, served from the per-viewport cache. */
