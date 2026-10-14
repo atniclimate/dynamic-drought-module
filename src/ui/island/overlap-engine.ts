@@ -148,16 +148,17 @@ function clipArea(polygons: ClipMultiPolygon): number {
 }
 
 /**
- * Unwrap a ring across the antimeridian and project it. Rejects non-finite or
- * out-of-range coordinates, fewer than three vertices, and rings with zero
- * area in RAW longitude/latitude: the sine projection would give an authored
- * collinear ring a tiny curvature-induced area, a full-share row the relative
- * sliver rule cannot suppress.
+ * Unwrap a ring across the antimeridian and project it. Returns null for
+ * non-finite or out-of-range coordinates (reject), and 'empty' for fewer than
+ * three vertices or zero area in RAW longitude/latitude (skip): real agency
+ * shapes carry such pieces (Lummi, Navajo), and the sine projection would
+ * give an authored collinear ring a tiny curvature-induced area, a
+ * full-share row the relative sliver rule cannot suppress.
  */
 function projectRing(
   coordinates: readonly Position[],
   referenceLongitude: number | undefined
-): { ring: ClipRing; referenceLongitude: number } | null {
+): { ring: ClipRing; referenceLongitude: number } | 'empty' | null {
   const unwrapped: ClipRing = [];
   let previousLongitude = referenceLongitude;
 
@@ -180,7 +181,7 @@ function projectRing(
   if (unwrapped.length > 1 && first && last && first[0] === last[0] && first[1] === last[1]) {
     unwrapped.pop();
   }
-  if (unwrapped.length < 3 || Math.abs(signedArea(unwrapped)) <= AREA_EPSILON) return null;
+  if (unwrapped.length < 3 || Math.abs(signedArea(unwrapped)) <= AREA_EPSILON) return 'empty';
 
   const meanLongitude = unwrapped.reduce((sum, point) => sum + point[0], 0) / unwrapped.length;
   const longitudeShift = referenceLongitude === undefined
@@ -198,17 +199,22 @@ function projectRing(
 function projectPolygon(
   coordinates: Polygon['coordinates'],
   referenceLongitude: number | undefined
-): { polygon: ClipPolygon; referenceLongitude: number } | null {
+): { polygon: ClipPolygon; referenceLongitude: number } | 'empty' | null {
   const outerCoordinates = coordinates[0];
   if (!outerCoordinates) return null;
   const outer = projectRing(outerCoordinates, referenceLongitude);
-  if (!outer) return null;
-  const polygon: ClipPolygon = [outer.ring];
+  if (outer === null) return null;
+  // A zero-area outer ring still has its holes checked for bad coordinates.
+  const polygon: ClipPolygon = outer === 'empty' ? [] : [outer.ring];
   for (const holeCoordinates of coordinates.slice(1)) {
-    const hole = projectRing(holeCoordinates, outer.referenceLongitude);
-    if (!hole) return null;
-    polygon.push(hole.ring);
+    const hole = projectRing(
+      holeCoordinates,
+      outer === 'empty' ? referenceLongitude : outer.referenceLongitude
+    );
+    if (hole === null) return null;
+    if (hole !== 'empty') polygon.push(hole.ring);
   }
+  if (outer === 'empty') return 'empty';
   return { polygon, referenceLongitude: outer.referenceLongitude };
 }
 
@@ -227,13 +233,16 @@ function prepareGeometry(
     const projected = projectPolygon(coordinates, referenceLongitude);
     // A malformed component is always reported, including the case where
     // EVERY component failed (IB-10), so a wholly malformed geometry never
-    // reads like a non-areal one.
+    // reads like a non-areal one. A zero-area component is skipped, but a
+    // geometry with no real area left is rejected the same way.
     if (!projected) return REJECTED;
+    if (projected === 'empty') continue;
     polygons.push(projected.polygon);
     referenceLongitude = referenceLongitude === undefined
       ? projected.referenceLongitude
       : (referenceLongitude * (polygons.length - 1) + projected.referenceLongitude) / polygons.length;
   }
+  if (polygons.length === 0 && polygonCoordinates.length > 0) return REJECTED;
   if (polygons.length === 0 || referenceLongitude === undefined) return { status: 'omitted' };
 
   let normalized: ClipMultiPolygon;

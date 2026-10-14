@@ -112,6 +112,14 @@ test('R4-1: a GNIS-renamed place label does not credit its name form to Natural 
   assert.equal(slot(keptHtml, 'issuer'), 'Issued by: Natural Earth (populated places)');
 });
 
+test('audit 5 finding 4: a sub-acre fire reads "under 1 acre", never "0 acres"; the unit follows the count', () => {
+  const context = { drought: { label: 'Drought beneath', text: 'x' }, details: [], note: 'n' };
+  const size = (acres) => nifc.buildNifcPopupModel({ attr_IncidentName: 'Cedar Creek', attr_IncidentSize: acres }, context, null).records[0].sizes[0].text;
+  assert.equal(size(0.1), 'under 1 acre (under 1 ha)');
+  assert.equal(size(1), '1 acre (under 1 ha)');
+  assert.equal(size(1234), '1,234 acres (about 499 ha)');
+});
+
 test('R4-2: a NIFC record with no UniqueFireIdentifier and no IRWIN id is not keyed by its name (grouping-contract item 3)', () => {
   const context = { drought: { label: 'Drought beneath', text: 'x' }, details: [], note: 'n' };
   const model = nifc.buildNifcPopupModel({ attr_IncidentName: 'Cedar Creek', attr_IncidentSize: 10 }, context, null);

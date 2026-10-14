@@ -298,59 +298,88 @@ test.describe('computeOverlapRows', () => {
     expect(result.rejections).toBeUndefined();
   });
 
-  for (const invalidComponent of invalidPolygonComponents) {
-    test(`rejects a mixed-validity selection containing ${invalidComponent.name}`, () => {
+  // Audit 5 finding 3: real agency shapes carry zero-area pieces (Lummi's
+  // 5-point outer ring, Navajo's two empty holes). Such a piece is skipped and
+  // the real remainder is classified; only bad coordinates reject.
+  for (const zeroAreaComponent of invalidPolygonComponents) {
+    test(`skips ${zeroAreaComponent.name} in a selection and classifies the remainder`, () => {
       const selected: MultiPolygon = {
         type: 'MultiPolygon',
         coordinates: [
           rectangle(0, 0, 4, 4).coordinates,
-          invalidComponent.coordinates
+          zeroAreaComponent.coordinates
         ]
       };
       const candidate = feature('inside-valid-remainder', rectangle(1, 1, 3, 3));
 
       const result = computeOverlapRows(selected, collection(candidate));
 
-      expect(result).toEqual({
-        rows: [],
-        hasSuppressedSlivers: false,
-        rejections: [{
-          source: 'selection',
-          reason: 'invalid-polygon-component'
-        }]
-      });
+      expect(result.rows.map((row) => row.relationship)).toEqual(['contains']);
+      expect(result.rejections).toBeUndefined();
     });
 
-    test(`rejects a mixed-validity candidate containing ${invalidComponent.name}`, () => {
+    test(`skips ${zeroAreaComponent.name} in a candidate and classifies the remainder`, () => {
       const selected = rectangle(-1, -1, 5, 5);
       const candidateGeometry: MultiPolygon = {
         type: 'MultiPolygon',
         coordinates: [
           rectangle(0, 0, 4, 4).coordinates,
-          invalidComponent.coordinates
+          zeroAreaComponent.coordinates
         ]
       };
       const candidate = feature('mixed-validity', candidateGeometry);
 
       const result = computeOverlapRows(selected, collection(candidate));
 
-      expect(result).toEqual({
-        rows: [],
-        hasSuppressedSlivers: false,
-        rejections: [{
-          source: 'candidate',
-          reason: 'invalid-polygon-component',
-          candidate
-        }]
-      });
+      expect(result.rows.map((row) => [row.candidate.id, row.relationship])).toEqual([
+        ['mixed-validity', 'contains']
+      ]);
+      expect(result.rows[0]?.evidence.shareOfCandidateArea).toBeCloseTo(1, 12);
+      expect(result.rejections).toBeUndefined();
     });
   }
 
+  test('rejects a mixed-validity selection or candidate with a non-finite coordinate', () => {
+    const badComponent: Polygon['coordinates'] = [[[10, 0], [12, Number.NaN], [14, 0], [10, 0]]];
+    const mixed: MultiPolygon = {
+      type: 'MultiPolygon',
+      coordinates: [rectangle(0, 0, 4, 4).coordinates, badComponent]
+    };
+    const candidate = feature('mixed-validity', mixed);
+
+    expect(computeOverlapRows(mixed, collection(feature('inside', rectangle(1, 1, 3, 3))))).toEqual({
+      rows: [],
+      hasSuppressedSlivers: false,
+      rejections: [{ source: 'selection', reason: 'invalid-polygon-component' }]
+    });
+    expect(computeOverlapRows(rectangle(-1, -1, 5, 5), collection(candidate))).toEqual({
+      rows: [],
+      hasSuppressedSlivers: false,
+      rejections: [{ source: 'candidate', reason: 'invalid-polygon-component', candidate }]
+    });
+  });
+
+  test('skips a 4-point zero-area hole without changing the area', () => {
+    const withHole: Polygon = {
+      type: 'Polygon',
+      coordinates: [...rectangle(0, 0, 10, 10).coordinates, [[2, 2], [3, 3], [4, 4], [2, 2]]]
+    };
+    const candidate = feature('holed', withHole);
+
+    const result = computeOverlapRows(rectangle(0, 0, 20, 10), collection(candidate));
+
+    expect(result.rows.map((row) => row.relationship)).toEqual(['contains']);
+    expect(result.rows[0]?.evidence.shareOfCandidateArea).toBeCloseTo(1, 12);
+    expect(result.rows[0]?.evidence.shareOfSelectedArea).toBeCloseTo(0.5, 3);
+    expect(result.rejections).toBeUndefined();
+  });
+
   test('rejects mixed-validity component pairs spanning the antimeridian on both sides', () => {
     const validComponent = rectangle(170, 50, -175, 60).coordinates;
+    // A non-finite coordinate: a zero-area piece would now be skipped instead.
     const invalidComponent: Polygon['coordinates'] = [[
       [-174, 51],
-      [-171, 55],
+      [-171, Number.NaN],
       [-168, 59],
       [-174, 51]
     ]];

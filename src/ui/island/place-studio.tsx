@@ -308,6 +308,20 @@ function arcGisEnvelopeParams(
   });
 }
 
+// About 55 m, far below what the 2 percent sliver rule can show; keeps a
+// state's or Tribe's ecoregion candidates under the 8 MiB body cap (Idaho is
+// 12.7 MB at full resolution). An ecoregion selection stays full resolution:
+// simplifying both levels separately flips `contains` rows to `overlaps`.
+function ecoregionCandidateParams(
+  envelope: string,
+  outFields: string,
+  selectionKind: TypedPlaceKind
+): URLSearchParams {
+  const params = arcGisEnvelopeParams(envelope, outFields);
+  if (selectionKind !== 'ecoregion') params.set('maxAllowableOffset', '0.0005');
+  return params;
+}
+
 function resolvedSelection(
   kind: BoundaryKind,
   title: string,
@@ -515,7 +529,8 @@ async function loadStateCandidates(
 
 async function loadEcoregionCandidates(
   bbox: readonly [number, number, number, number],
-  signal: AbortSignal
+  signal: AbortSignal,
+  selectionKind: TypedPlaceKind
 ): Promise<FeatureCollection<ArealGeometry, PlaceOverlapProperties>> {
   const query = async (
     layer: 7 | 11,
@@ -526,7 +541,7 @@ async function loadEcoregionCandidates(
       layer === 7
         ? 'US_L4CODE,US_L4NAME,US_L3CODE,US_L3NAME'
         : 'US_L3CODE,US_L3NAME';
-    const params = arcGisEnvelopeParams(envelope, outFields);
+    const params = ecoregionCandidateParams(envelope, outFields, selectionKind);
     return assertFeatureCollection(
       await fetchJson(
         `${URLS.epaEcoregionsMapServer}/${layer}/query?${params.toString()}`,
@@ -708,7 +723,8 @@ function overlapPairAvailable(
 async function loadCandidateKind(
   kind: TypedPlaceKind,
   bbox: readonly [number, number, number, number],
-  signal: AbortSignal
+  signal: AbortSignal,
+  selectionKind: TypedPlaceKind
 ): Promise<FeatureCollection<ArealGeometry, PlaceOverlapProperties>> {
   switch (kind) {
     case 'tribe':
@@ -718,7 +734,7 @@ async function loadCandidateKind(
     case 'ecoregion': {
       const scopedBbox = bboxIntersection(bbox, PNW_BOUNDS);
       return scopedBbox
-        ? loadEcoregionCandidates(scopedBbox, signal)
+        ? loadEcoregionCandidates(scopedBbox, signal, selectionKind)
         : { type: 'FeatureCollection', features: [] };
     }
     case 'watershed':
@@ -746,7 +762,7 @@ async function loadOverlapView(
       try {
         return {
           kind,
-          candidates: await loadCandidateKind(kind, requestBbox, signal)
+          candidates: await loadCandidateKind(kind, requestBbox, signal, entry.kind)
         } as const;
       } catch (err) {
         if (signal.aborted) throw err;

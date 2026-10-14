@@ -1264,17 +1264,19 @@ async function fetchPrimaryStationValue(
 
 /**
  * Compact display label for a station's primary value. Snow Water
- * Equivalent keeps its conventional SWE shorthand; storage readings get a
- * thousands separator; everything else renders label, value, and unit as
+ * Equivalent keeps its conventional SWE shorthand; storage and discharge
+ * readings get a thousands separator; everything else renders label, value, and unit as
  * the source reported them.
  */
 function formatStationValue(value: StationValue): string {
   const label = value.parameter === 'snow_water_equivalent_in' ? 'SWE' : value.label;
-  const wantsThousands =
-    value.parameter === 'reservoir_storage_acft' || value.parameter === 'discharge_cfs';
+  // Storage rounds to whole acre-feet; discharge keeps USGS's 0.01 cfs so a
+  // low creek never reads "0 cfs".
+  const fractionDigits =
+    value.parameter === 'reservoir_storage_acft' ? 0 : value.parameter === 'discharge_cfs' ? 2 : null;
   const num =
-    wantsThousands && value.value !== null
-      ? value.value.toLocaleString('en-US', { maximumFractionDigits: 0 })
+    fractionDigits !== null && value.value !== null
+      ? value.value.toLocaleString('en-US', { maximumFractionDigits: fractionDigits })
       : String(value.value);
   const day = value.timestamp ? ` · ${shortReadingDate(value.timestamp)}` : '';
   const staleNote = value.freshness === 'stale' ? ' (stale)' : '';

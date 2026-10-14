@@ -134,7 +134,7 @@ function renderSetup() {
   const source = readFileSync(new URL('../src/layers/telemetry.ts', import.meta.url), 'utf8');
   // On the red base removal is inline in clearMarkers; after the repair it is shared.
   const remove = source.includes('function removeMarker(') ? functionBody('../src/layers/telemetry.ts', 'removeMarker') : '';
-  const functions = new Function(...Object.keys(dependencies), `${remove}\n${functionBody('../src/layers/telemetry.ts', 'clearMarkers')}\n${functionBody('../src/layers/telemetry.ts', 'renderStations')}\nreturn { renderStations, clearMarkers };`)(...Object.values(dependencies));
+  const functions = new Function(...Object.keys(dependencies), `${remove}\n${functionBody('../src/layers/telemetry.ts', 'telemetryMarkerOptions')}\n${functionBody('../src/layers/telemetry.ts', 'clearMarkers')}\n${functionBody('../src/layers/telemetry.ts', 'renderStations')}\nreturn { renderStations, clearMarkers };`)(...Object.values(dependencies));
   const station = { id: 'fixture', coords: [47, -120], color: '#000' };
   const view = { station, freshness: 'unknown', primaryParameterCategory: 'water', networkLabel: 'Fixture' };
   const render = (views) => functions.renderStations({}, views);
@@ -182,3 +182,14 @@ for (const change of ['station', 'freshness', 'primaryParameterCategory', 'netwo
     assert.deepEqual(h.bound, [h.marker, replacement]);
   });
 }
+
+test('a wind marker turns with the map: map-aligned, upright, rotated by the served direction', () => {
+  // MapLibre then draws rotateZ(rotation - bearing) on every map turn.
+  const options = new Function(`${functionBody('../src/layers/telemetry.ts', 'telemetryMarkerOptions')}\nreturn telemetryMarkerOptions;`)();
+  const element = { kind: 'marker' };
+  assert.deepEqual(options(element, { windDirectionDeg: 295 }), { element, rotationAlignment: 'map', pitchAlignment: 'viewport', rotation: 295 });
+  assert.deepEqual(options(element, null), { element });
+  const source = readFileSync(new URL('../src/layers/telemetry.ts', import.meta.url), 'utf8');
+  assert.match(source, /new maplibregl\.Marker\(telemetryMarkerOptions\(el, glyphWind\)\)/);
+  assert.ok(!source.includes('rotate(${wind.windDirectionDeg}deg)'), 'the glyph no longer rotates itself');
+});

@@ -279,7 +279,7 @@ function renderStations(map: maplibregl.Map, views: readonly TelemetryMarkerView
       closeOnClick: true
     });
 
-    const marker = new maplibregl.Marker({ element: el })
+    const marker = new maplibregl.Marker(telemetryMarkerOptions(el, glyphWind))
       .setLngLat([lng, lat])
       // addTo removes an earlier keypress listener in MapLibre; bind
       // the popup afterward so its native Enter/Space handler remains.
@@ -470,6 +470,17 @@ function windGlyphShaftLengthPx(speedMph: number): number {
  * is a representative check against the lightest plausible background, not
  * an exhaustive one.
  */
+/**
+ * A wind marker turns with the map (MapLibre applies `rotation - bearing`)
+ * but stays facing the viewer: `pitchAlignment` would otherwise follow
+ * `rotationAlignment` and lay the arrow flat in Fire 3D.
+ */
+function telemetryMarkerOptions(element: HTMLElement, wind: RawsWindGlyphFields | null): maplibregl.MarkerOptions {
+  return wind
+    ? { element, rotationAlignment: 'map', pitchAlignment: 'viewport', rotation: wind.windDirectionDeg }
+    : { element };
+}
+
 function buildRawsWindGlyph(wind: RawsWindGlyphFields, color: string): SVGSVGElement {
   const accessibleName = buildRawsWindAccessibleName(wind);
   const parsedSpeedMph = parseServedWindSpeedMph(wind.windSpeedServed);
@@ -502,7 +513,9 @@ function buildRawsWindGlyph(wind: RawsWindGlyphFields, color: string): SVGSVGEle
   svg.style.left = '50%';
   svg.style.top = '50%';
   svg.style.pointerEvents = 'none';
-  svg.style.transform = `translate(-50%, -50%) rotate(${wind.windDirectionDeg}deg)`;
+  // The direction is the marker's own `rotation` (telemetryMarkerOptions),
+  // so MapLibre subtracts the map bearing on every turn.
+  svg.style.transform = 'translate(-50%, -50%)';
 
   // An SVG `<title>` is the element's native tooltip-on-hover text, but
   // `pointer-events: none` above means this element is never itself the
