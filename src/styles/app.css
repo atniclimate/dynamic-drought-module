@@ -8111,6 +8111,7 @@ a.impact-resource-link::after {
    framings carry no fill (the full wording is in each framing's name). */
 .shell-minimap-unshaded-line {
   display: block;
+  min-height: 8px;
   margin: -3px 0 6px;
   color: var(--fg-3);
   font-family: var(--font-display);

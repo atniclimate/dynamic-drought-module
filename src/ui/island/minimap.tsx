@@ -993,9 +993,10 @@ export function Minimap({
           {scaleText}
         </span>
       </div>
-      {ensoScaleText !== null && (
-        <span class="shell-minimap-unshaded-line">{UNSHADED_SCALE_TEXT}</span>
-      )}
+      {/* Mounted in every mode so ENSO's extra line never resizes the card. */}
+      <span class="shell-minimap-unshaded-line">
+        {ensoScaleText !== null ? UNSHADED_SCALE_TEXT : ''}
+      </span>
       <div
         class="shell-minimap-canvas"
         data-drought-status={showDroughtMetric ? drought.status : 'neutral'}
