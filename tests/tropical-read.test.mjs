@@ -67,6 +67,10 @@ const { tropicalAnswer, tropicalLayerId, EP5_LAYERS } = fixtures;
 const { readTropicalSweep, pendingTropicalReads } = reader;
 const POINT_IDS = TROPICAL_SLOTS.map((slot) => slot.base + 2);
 
+let skew = 0;
+const realNow = Date.now;
+Date.now = () => realNow() + skew;
+
 async function settle() {
   for (let i = 0; i < 8; i += 1) await new Promise((resolve) => setImmediate(resolve));
 }
@@ -79,6 +83,7 @@ async function settle() {
  * unexpected egress fails the test.
  */
 function installFetch(arm, { hold = [], ignoreAbort = false, stall = [] } = {}) {
+  skew += 10 * 60 * 1000; // each test starts past the layer's five-minute reuse of its last sweep
   const calls = [];
   const held = [];
   globalThis.fetch = (url, options) => {
@@ -431,6 +436,24 @@ test('layer: one occupied slot draws the source and five layers, reports ready a
   assert.equal(map.getSource('tropical-cyclones').data.features.length, 14);
   assert.equal(registry.getStatus('tropical-cyclones'), 'ready');
   assert.deepEqual(snapshots(), ['loading', 'live']);
+});
+
+test('layer: a sweep under five minutes old is drawn again on re-entry without a read; an older one is read again', async (t) => {
+  events.length = 0;
+  const net = installFetch('occupiedOne');
+  const map = fakeMap();
+  t.after(() => layer.deactivate(map));
+  await layer.activate(map);
+  const reads = net.calls.length;
+  layer.deactivate(map);
+  await layer.activate(map);
+  assert.equal(net.calls.length, reads, 'the young sweep is not read again');
+  assert.equal(map.getSource('tropical-cyclones').data.features.length, 14);
+  assert.equal(registry.getStatus('tropical-cyclones'), 'ready');
+  layer.deactivate(map);
+  skew += 6 * 60 * 1000;
+  await layer.activate(map);
+  assert.ok(net.calls.length > reads, 'a sweep past five minutes is read again');
 });
 
 test('layer: an empty season reports no-data and tells the key no data', async (t) => {

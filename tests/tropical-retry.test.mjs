@@ -126,7 +126,13 @@ async function settle() {
   for (let i = 0; i < 8; i += 1) await new Promise((resolve) => setImmediate(resolve));
 }
 
+// Each test starts past the layer's five-minute reuse of its last sweep.
+let skew = 0;
+const realNow = Date.now;
+Date.now = () => realNow() + skew;
+
 function reset(nextArm) {
+  skew += 10 * 60 * 1000;
   arm = nextArm;
   reads = 0;
   retries.clear();

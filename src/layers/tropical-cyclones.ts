@@ -43,7 +43,7 @@ import { registry } from '../state/registry';
 import type { LayerStatus } from '../types/layer';
 import { buildTropicalAreaPopupModel, buildTropicalPointPopupModel } from '../ui/tropical-popup';
 import { linkAbort } from '../util/fetch';
-import { readTropicalSweep, type TropicalState, type TropicalStorm } from './tropical-read';
+import { readTropicalSweep, type TropicalState, type TropicalStorm, type TropicalSweep } from './tropical-read';
 
 const LAYER_KEY = 'tropical-cyclones';
 const SOURCE_ID = 'tropical-cyclones';
@@ -55,6 +55,7 @@ const POINTS_ID = 'tropical-cyclones-points';
 const SNAPSHOT_EVENT = 'ddm:tropical-snapshot';
 const SNAPSHOT_REQUEST_EVENT = 'ddm:tropical-snapshot-request';
 const REFRESH_MS = 30 * 60 * 1000;
+const SWEEP_REUSE_MS = 5 * 60 * 1000;
 
 /** Fade targets for the sidebar's toggle transitions, in drawing order. */
 export const fadeLayerIds = [CONE_FILL_ID, CONE_LINE_ID, TRACK_ID, WW_ID, POINTS_ID] as const;
@@ -77,6 +78,7 @@ let activeMap: maplibregl.Map | null = null;
 let generation = 0;
 let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 let snapshot: TropicalSnapshot = { status: 'inactive', storms: [] };
+let lastSweep: { readonly at: number; readonly result: TropicalSweep } | null = null;
 
 function emit(next: TropicalSnapshot): void {
   snapshot = next;
@@ -147,13 +149,16 @@ function clearDrawn(map: maplibregl.Map): void {
 
 async function sweep(map: maplibregl.Map, signal: AbortSignal, first: boolean): Promise<void> {
   const mine = ++generation;
-  if (first) {
+  // Flipping modes re-enters within minutes; the issuer updates every 3 to 6 hours, so a young sweep is drawn again as it was read.
+  const reused = first && lastSweep !== null && Date.now() - lastSweep.at < SWEEP_REUSE_MS ? lastSweep.result : null;
+  if (first && reused === null) {
     registry.setStatus(LAYER_KEY, 'loading');
     emit({ status: 'loading', storms: [] });
   }
-  const result = await readTropicalSweep(URLS.nhcTropicalMapServer, signal);
+  const result = reused ?? (await readTropicalSweep(URLS.nhcTropicalMapServer, signal));
   // A late answer: superseded, deactivated, or the map changed under it.
   if (result === null || signal.aborted || mine !== generation || activeMap !== map) return;
+  if (reused === null) lastSweep = result.state === 'unavailable' ? null : { at: Date.now(), result };
   if (result.problems.length > 0) console.warn('[tropical-cyclones] read problems:', result.problems);
   if (result.features.length > 0) ensureLayers(map, { type: 'FeatureCollection', features: [...result.features] });
   else clearDrawn(map);
