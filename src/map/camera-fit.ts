@@ -131,7 +131,8 @@ export function fitCameraTarget(
   const centre = floorCentreFor(map, target);
   if (centre) {
     // The fit is below the zoom floor: keep the floor, centre on the target's own focus.
-    const view = { center: centre, zoom: map.getMinZoom() };
+    // bearing 0: fitBounds always turned the map north-up, and this path must too.
+    const view = { center: centre, zoom: map.getMinZoom(), bearing: 0 };
     if (animate) map.easeTo(view);
     else map.jumpTo(view);
     return;
