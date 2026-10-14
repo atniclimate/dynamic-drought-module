@@ -32,7 +32,8 @@ import { URLS } from '../config/urls';
 import { STATE_LABEL } from '../impact/resources';
 import type { StateCode } from '../impact/resources';
 import { buildBoundaryContext } from '../impact/context';
-import { bboxCenter, bboxToContinuousBounds } from '../util/bbox';
+import { bboxToContinuousBounds } from '../util/bbox';
+import { representativePoint } from '../util/point-in-polygon';
 import { geometryBboxAcrossAntimeridian } from '../util/antimeridian';
 import { openStateBriefing } from '../state/deep-link';
 import { showLocatedBoundary } from '../state/located-boundary';
@@ -230,7 +231,7 @@ async function locateTribalLandArea(map: maplibregl.Map, larName: string): Promi
   requestLayerOn('bia-reservations');
 
   const primary = features[0]!;
-  const lngLat = bbox ? bboxCenter(bbox) : { lng: 0, lat: 0 };
+  const lngLat = bbox ? representativePoint(aggregateGeometry, bbox) : { lng: 0, lat: 0 };
   // ORDER MATTERS: the located-boundary module clears its highlight on
   // EVERY selection change (the stage-5 major 4 fix), so the selection is
   // set first and the highlight for THIS subject renders after; any prior

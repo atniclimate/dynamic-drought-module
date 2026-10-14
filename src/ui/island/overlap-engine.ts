@@ -8,6 +8,11 @@
  * listing, so keeping it here leaves the briefing's dependency graph readable
  * while the entry chunk sits near its line. Pure: geometry in, rows out, no
  * DOM and no application state.
+ *
+ * Areas are planar in (longitude in radians, sine of latitude), which is
+ * equal-area on the sphere; the sweep-line clipper `polygon-clipping` does the
+ * intersections and also normalizes each geometry once (self-crossing rings
+ * and overlapping parts), so its area agrees with the intersection's.
  */
 
 import type {
@@ -19,6 +24,11 @@ import type {
   Polygon,
   Position
 } from 'geojson';
+import polygonClipping, {
+  type MultiPolygon as ClipMultiPolygon,
+  type Polygon as ClipPolygon,
+  type Ring as ClipRing
+} from 'polygon-clipping';
 
 import { geometryBboxAcrossAntimeridian } from '../../util/antimeridian';
 import { bboxIntersects } from '../../util/bbox';
@@ -79,24 +89,12 @@ export interface OverlapResult<
 }
 
 type ArealGeometry = Polygon | MultiPolygon;
-type Point = readonly [number, number];
-type Triangle = readonly [Point, Point, Point];
-
-interface PreparedRing {
-  readonly area: number;
-  readonly triangles: ReadonlyArray<Triangle>;
-  readonly weight: 1 | -1;
-}
-
-interface PreparedPolygon {
-  readonly area: number;
-  readonly rings: ReadonlyArray<PreparedRing>;
-  readonly referenceLongitude: number;
-}
 
 interface PreparedGeometry {
   readonly area: number;
-  readonly polygons: ReadonlyArray<PreparedPolygon>;
+  readonly polygons: ClipMultiPolygon;
+  /** Projected `[west, south, east, north]` of each polygon's outer ring. */
+  readonly boxes: ReadonlyArray<readonly [number, number, number, number]>;
   readonly referenceLongitude: number;
 }
 
@@ -110,9 +108,9 @@ type GeometryPreparation =
 
 const EARTH_RADIUS_METRES = 6_371_008.8;
 const SQUARE_METRES_PER_UNIT_AREA = EARTH_RADIUS_METRES * EARTH_RADIUS_METRES;
-const COORDINATE_EPSILON = 1e-14;
 const AREA_EPSILON = 1e-18;
 const COVERAGE_EPSILON = 1e-10;
+const REJECTED: GeometryPreparation = { status: 'rejected', reason: 'invalid-polygon-component' };
 
 function isArealGeometry(geometry: Geometry | null | undefined): geometry is ArealGeometry {
   return geometry?.type === 'Polygon' || geometry?.type === 'MultiPolygon';
@@ -127,16 +125,7 @@ function alignLongitudeToReference(longitude: number, reference: number): number
   return longitude + 360 * Math.round((reference - longitude) / 360);
 }
 
-function samePoint(a: Point, b: Point): boolean {
-  return Math.abs(a[0] - b[0]) <= COORDINATE_EPSILON &&
-    Math.abs(a[1] - b[1]) <= COORDINATE_EPSILON;
-}
-
-function cross(a: Point, b: Point, c: Point): number {
-  return (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
-}
-
-function signedArea(points: readonly Point[]): number {
+function signedArea(points: readonly ClipRing[number][]): number {
   let twiceArea = 0;
   for (let index = 0; index < points.length; index += 1) {
     const current = points[index];
@@ -147,172 +136,32 @@ function signedArea(points: readonly Point[]): number {
   return twiceArea / 2;
 }
 
-function pointOnSegment(point: Point, start: Point, end: Point): boolean {
-  if (Math.abs(cross(start, end, point)) > COORDINATE_EPSILON) return false;
-  return point[0] >= Math.min(start[0], end[0]) - COORDINATE_EPSILON &&
-    point[0] <= Math.max(start[0], end[0]) + COORDINATE_EPSILON &&
-    point[1] >= Math.min(start[1], end[1]) - COORDINATE_EPSILON &&
-    point[1] <= Math.max(start[1], end[1]) + COORDINATE_EPSILON;
-}
-
-function segmentsIntersect(a: Point, b: Point, c: Point, d: Point): boolean {
-  const abC = cross(a, b, c);
-  const abD = cross(a, b, d);
-  const cdA = cross(c, d, a);
-  const cdB = cross(c, d, b);
-
-  if (((abC > COORDINATE_EPSILON && abD < -COORDINATE_EPSILON) ||
-      (abC < -COORDINATE_EPSILON && abD > COORDINATE_EPSILON)) &&
-    ((cdA > COORDINATE_EPSILON && cdB < -COORDINATE_EPSILON) ||
-      (cdA < -COORDINATE_EPSILON && cdB > COORDINATE_EPSILON))) {
-    return true;
+/** Area of clipper output: outer rings add, holes subtract. */
+function clipArea(polygons: ClipMultiPolygon): number {
+  let area = 0;
+  for (const polygon of polygons) {
+    polygon.forEach((ring, index) => {
+      area += (index === 0 ? 1 : -1) * Math.abs(signedArea(ring));
+    });
   }
-
-  return (Math.abs(abC) <= COORDINATE_EPSILON && pointOnSegment(c, a, b)) ||
-    (Math.abs(abD) <= COORDINATE_EPSILON && pointOnSegment(d, a, b)) ||
-    (Math.abs(cdA) <= COORDINATE_EPSILON && pointOnSegment(a, c, d)) ||
-    (Math.abs(cdB) <= COORDINATE_EPSILON && pointOnSegment(b, c, d));
+  return area;
 }
 
 /**
- * A ring that visits the same vertex twice (a pinch point) is
- * self-touching even when no two segments properly cross:
- * segmentsIntersect deliberately ignores endpoint contact, so the
- * simplicity scan alone cannot see it.
+ * Unwrap a ring across the antimeridian and project it. Rejects non-finite or
+ * out-of-range coordinates, fewer than three vertices, and rings with zero
+ * area in RAW longitude/latitude: the sine projection would give an authored
+ * collinear ring a tiny curvature-induced area, a full-share row the relative
+ * sliver rule cannot suppress.
  */
-/** Collapse runs of consecutive equal vertices (cyclically). */
-function removeAdjacentDuplicates(points: readonly Point[]): Point[] {
-  const result: Point[] = [];
-  for (const point of points) {
-    const last = result[result.length - 1];
-    if (last && samePoint(last, point)) continue;
-    result.push(point);
-  }
-  const first = result[0];
-  const last = result[result.length - 1];
-  if (result.length > 1 && first && last && samePoint(first, last)) result.pop();
-  return result;
-}
-
-function hasRepeatedVertex(points: readonly Point[]): boolean {
-  for (let first = 0; first < points.length; first += 1) {
-    const a = points[first];
-    if (!a) continue;
-    for (let second = first + 1; second < points.length; second += 1) {
-      const b = points[second];
-      if (b && samePoint(a, b)) return true;
-    }
-  }
-  return false;
-}
-
-function isSimpleRing(points: readonly Point[]): boolean {
-  for (let first = 0; first < points.length; first += 1) {
-    const a = points[first];
-    const b = points[(first + 1) % points.length];
-    if (!a || !b) return false;
-    for (let second = first + 1; second < points.length; second += 1) {
-      const adjacent = second === first + 1 || (first === 0 && second === points.length - 1);
-      if (adjacent) continue;
-      const c = points[second];
-      const d = points[(second + 1) % points.length];
-      if (!c || !d || segmentsIntersect(a, b, c, d)) return false;
-    }
-  }
-  return true;
-}
-
-function removeCollinearPoints(points: readonly Point[]): Point[] {
-  const result = [...points];
-  let changed = true;
-  while (changed && result.length >= 3) {
-    changed = false;
-    for (let index = 0; index < result.length; index += 1) {
-      const previous = result[(index + result.length - 1) % result.length];
-      const current = result[index];
-      const next = result[(index + 1) % result.length];
-      if (!previous || !current || !next) continue;
-      if (samePoint(previous, current) || Math.abs(cross(previous, current, next)) <= AREA_EPSILON) {
-        result.splice(index, 1);
-        changed = true;
-        break;
-      }
-    }
-  }
-  return result;
-}
-
-function pointInTriangle(point: Point, triangle: Triangle): boolean {
-  const [a, b, c] = triangle;
-  return cross(a, b, point) >= -COORDINATE_EPSILON &&
-    cross(b, c, point) >= -COORDINATE_EPSILON &&
-    cross(c, a, point) >= -COORDINATE_EPSILON;
-}
-
-function triangulate(points: readonly Point[]): Triangle[] | null {
-  const vertices = signedArea(points) > 0 ? [...points] : [...points].reverse();
-  const indices = vertices.map((_, index) => index);
-  const triangles: Triangle[] = [];
-  let attemptsWithoutEar = 0;
-
-  while (indices.length > 3) {
-    let clipped = false;
-    for (let offset = 0; offset < indices.length; offset += 1) {
-      const previousIndex = indices[(offset + indices.length - 1) % indices.length];
-      const currentIndex = indices[offset];
-      const nextIndex = indices[(offset + 1) % indices.length];
-      if (previousIndex === undefined || currentIndex === undefined || nextIndex === undefined) continue;
-      const previous = vertices[previousIndex];
-      const current = vertices[currentIndex];
-      const next = vertices[nextIndex];
-      if (!previous || !current || !next || cross(previous, current, next) <= AREA_EPSILON) continue;
-
-      const triangle: Triangle = [previous, current, next];
-      const containsVertex = indices.some((vertexIndex) => {
-        if (vertexIndex === previousIndex || vertexIndex === currentIndex || vertexIndex === nextIndex) {
-          return false;
-        }
-        const vertex = vertices[vertexIndex];
-        return vertex ? pointInTriangle(vertex, triangle) : false;
-      });
-      if (containsVertex) continue;
-
-      triangles.push(triangle);
-      indices.splice(offset, 1);
-      clipped = true;
-      attemptsWithoutEar = 0;
-      break;
-    }
-
-    if (!clipped) {
-      attemptsWithoutEar += 1;
-      if (attemptsWithoutEar > indices.length) return null;
-    }
-  }
-
-  const aIndex = indices[0];
-  const bIndex = indices[1];
-  const cIndex = indices[2];
-  if (aIndex === undefined || bIndex === undefined || cIndex === undefined) return null;
-  const a = vertices[aIndex];
-  const b = vertices[bIndex];
-  const c = vertices[cIndex];
-  if (!a || !b || !c || cross(a, b, c) <= AREA_EPSILON) return null;
-  triangles.push([a, b, c]);
-  return triangles;
-}
-
-function prepareRing(
+function projectRing(
   coordinates: readonly Position[],
-  referenceLongitude: number | undefined,
-  weight: 1 | -1
-): { ring: PreparedRing; referenceLongitude: number } | null {
-  const unwrapped: Array<readonly [number, number]> = [];
+  referenceLongitude: number | undefined
+): { ring: ClipRing; referenceLongitude: number } | null {
+  const unwrapped: ClipRing = [];
   let previousLongitude = referenceLongitude;
 
-  for (const position of coordinates) {
-    const longitude = position[0];
-    const latitude = position[1];
+  for (const [longitude, latitude] of coordinates) {
     if (longitude === undefined || latitude === undefined ||
       !Number.isFinite(longitude) || !Number.isFinite(latitude) ||
       latitude < -90 || latitude > 90) {
@@ -326,69 +175,41 @@ function prepareRing(
     previousLongitude = unwrappedLongitude;
   }
 
-  if (unwrapped.length > 1) {
-    const first = unwrapped[0];
-    const last = unwrapped[unwrapped.length - 1];
-    if (first && last && first[0] === last[0] && first[1] === last[1]) unwrapped.pop();
+  const first = unwrapped[0];
+  const last = unwrapped[unwrapped.length - 1];
+  if (unwrapped.length > 1 && first && last && first[0] === last[0] && first[1] === last[1]) {
+    unwrapped.pop();
   }
-  if (unwrapped.length < 3) return null;
-  // Reject rings that are degenerate in RAW coordinate space before
-  // projecting: the sin(latitude) projection is nonlinear, so a ring of
-  // exactly collinear longitude/latitude points (zero-area as authored)
-  // acquires a tiny curvature-induced area that clears AREA_EPSILON and
-  // would otherwise classify as a full-share row the relative sliver
-  // rule cannot suppress.
-  if (removeCollinearPoints(unwrapped).length < 3) return null;
+  if (unwrapped.length < 3 || Math.abs(signedArea(unwrapped)) <= AREA_EPSILON) return null;
 
   const meanLongitude = unwrapped.reduce((sum, point) => sum + point[0], 0) / unwrapped.length;
   const longitudeShift = referenceLongitude === undefined
     ? 0
     : 360 * Math.round((referenceLongitude - meanLongitude) / 360);
-  const projected: Point[] = unwrapped.map(([longitude, latitude]) => [
-    ((longitude + longitudeShift) * Math.PI) / 180,
-    Math.sin((latitude * Math.PI) / 180)
-  ]);
-  // Order matters: collapse harmless ADJACENT duplicates first (common
-  // in real agency data), then reject any surviving repeated vertex as
-  // a true pinch BEFORE the collinear cleaning runs. A self-touching
-  // spike arm (A -> B -> A) has an exactly-zero cross product at B, so
-  // removeCollinearPoints would amputate the spike and silently repair
-  // an authored-degenerate ring into a valid polygon.
-  const deduped = removeAdjacentDuplicates(projected);
-  if (deduped.length < 3 || hasRepeatedVertex(deduped)) return null;
-  const cleaned = removeCollinearPoints(deduped);
-  if (cleaned.length < 3 || !isSimpleRing(cleaned)) return null;
-  const area = Math.abs(signedArea(cleaned));
-  if (area <= AREA_EPSILON) return null;
-  const triangles = triangulate(cleaned);
-  if (!triangles) return null;
-
   return {
-    ring: { area, triangles, weight },
+    ring: unwrapped.map(([longitude, latitude]) => [
+      ((longitude + longitudeShift) * Math.PI) / 180,
+      Math.sin((latitude * Math.PI) / 180)
+    ]),
     referenceLongitude: meanLongitude + longitudeShift
   };
 }
 
-function preparePolygon(
+function projectPolygon(
   coordinates: Polygon['coordinates'],
   referenceLongitude: number | undefined
-): PreparedPolygon | null {
+): { polygon: ClipPolygon; referenceLongitude: number } | null {
   const outerCoordinates = coordinates[0];
   if (!outerCoordinates) return null;
-  const outer = prepareRing(outerCoordinates, referenceLongitude, 1);
+  const outer = projectRing(outerCoordinates, referenceLongitude);
   if (!outer) return null;
-
-  const rings: PreparedRing[] = [outer.ring];
-  let area = outer.ring.area;
+  const polygon: ClipPolygon = [outer.ring];
   for (const holeCoordinates of coordinates.slice(1)) {
-    const hole = prepareRing(holeCoordinates, outer.referenceLongitude, -1);
+    const hole = projectRing(holeCoordinates, outer.referenceLongitude);
     if (!hole) return null;
-    rings.push(hole.ring);
-    area -= hole.ring.area;
+    polygon.push(hole.ring);
   }
-  if (area <= AREA_EPSILON) return null;
-
-  return { area, rings, referenceLongitude: outer.referenceLongitude };
+  return { polygon, referenceLongitude: outer.referenceLongitude };
 }
 
 function prepareGeometry(
@@ -399,97 +220,44 @@ function prepareGeometry(
   const polygonCoordinates = geometry.type === 'Polygon'
     ? [geometry.coordinates]
     : geometry.coordinates;
-  const polygons: PreparedPolygon[] = [];
-  let invalidPolygonCount = 0;
-  let area = 0;
+  const polygons: ClipPolygon[] = [];
   let referenceLongitude = alignmentReference;
 
   for (const coordinates of polygonCoordinates) {
-    const polygon = preparePolygon(coordinates, referenceLongitude);
-    if (!polygon) {
-      invalidPolygonCount += 1;
-      continue;
-    }
-    polygons.push(polygon);
-    area += polygon.area;
+    const projected = projectPolygon(coordinates, referenceLongitude);
+    // A malformed component is always reported, including the case where
+    // EVERY component failed (IB-10), so a wholly malformed geometry never
+    // reads like a non-areal one.
+    if (!projected) return REJECTED;
+    polygons.push(projected.polygon);
     referenceLongitude = referenceLongitude === undefined
-      ? polygon.referenceLongitude
-      : (referenceLongitude * (polygons.length - 1) + polygon.referenceLongitude) / polygons.length;
+      ? projected.referenceLongitude
+      : (referenceLongitude * (polygons.length - 1) + projected.referenceLongitude) / polygons.length;
   }
+  if (polygons.length === 0 || referenceLongitude === undefined) return { status: 'omitted' };
 
-  // A malformed component is always reported, including the case where EVERY
-  // component failed (IB-10). Gating this on `polygons.length > 0` made a
-  // wholly malformed candidate indistinguishable from a non-areal one: it
-  // fell through to `omitted` and left no rejection row.
-  if (invalidPolygonCount > 0) {
-    return { status: 'rejected', reason: 'invalid-polygon-component' };
+  let normalized: ClipMultiPolygon;
+  try {
+    normalized = polygonClipping.union(polygons);
+  } catch {
+    return REJECTED;
   }
-  if (polygons.length === 0 || area <= AREA_EPSILON || referenceLongitude === undefined) {
-    return { status: 'omitted' };
-  }
-  return { status: 'prepared', geometry: { area, polygons, referenceLongitude } };
+  const area = clipArea(normalized);
+  if (area <= AREA_EPSILON) return { status: 'omitted' };
+  const boxes = normalized.map(([outer = []]) => outer.reduce<[number, number, number, number]>(
+    (box, [x, y]) => [Math.min(box[0], x), Math.min(box[1], y), Math.max(box[2], x), Math.max(box[3], y)],
+    [Infinity, Infinity, -Infinity, -Infinity]
+  ));
+  return { status: 'prepared', geometry: { area, polygons: normalized, boxes, referenceLongitude } };
 }
 
-function lineIntersection(start: Point, end: Point, clipStart: Point, clipEnd: Point): Point {
-  const startDistance = cross(clipStart, clipEnd, start);
-  const endDistance = cross(clipStart, clipEnd, end);
-  const denominator = startDistance - endDistance;
-  if (Math.abs(denominator) <= AREA_EPSILON) return end;
-  const fraction = startDistance / denominator;
-  return [
-    start[0] + fraction * (end[0] - start[0]),
-    start[1] + fraction * (end[1] - start[1])
-  ];
-}
-
-function triangleIntersectionArea(subject: Triangle, clip: Triangle): number {
-  let output: Point[] = [...subject];
-  for (let edge = 0; edge < clip.length; edge += 1) {
-    const clipStart = clip[edge];
-    const clipEnd = clip[(edge + 1) % clip.length];
-    if (!clipStart || !clipEnd || output.length === 0) return 0;
-    const input = output;
-    output = [];
-    let start = input[input.length - 1];
-    if (!start) return 0;
-    for (const end of input) {
-      const startInside = cross(clipStart, clipEnd, start) >= -COORDINATE_EPSILON;
-      const endInside = cross(clipStart, clipEnd, end) >= -COORDINATE_EPSILON;
-      if (endInside) {
-        if (!startInside) output.push(lineIntersection(start, end, clipStart, clipEnd));
-        output.push(end);
-      } else if (startInside) {
-        output.push(lineIntersection(start, end, clipStart, clipEnd));
-      }
-      start = end;
-    }
-  }
-  return output.length < 3 ? 0 : Math.abs(signedArea(output));
-}
-
-function polygonIntersectionArea(first: PreparedPolygon, second: PreparedPolygon): number {
-  let area = 0;
-  for (const firstRing of first.rings) {
-    for (const secondRing of second.rings) {
-      const weight = firstRing.weight * secondRing.weight;
-      for (const firstTriangle of firstRing.triangles) {
-        for (const secondTriangle of secondRing.triangles) {
-          area += weight * triangleIntersectionArea(firstTriangle, secondTriangle);
-        }
-      }
-    }
-  }
-  return area;
-}
-
-function geometryIntersectionArea(first: PreparedGeometry, second: PreparedGeometry): number {
-  let area = 0;
-  for (const firstPolygon of first.polygons) {
-    for (const secondPolygon of second.polygons) {
-      area += polygonIntersectionArea(firstPolygon, secondPolygon);
-    }
-  }
-  return Math.min(Math.max(area, 0), Math.min(first.area, second.area));
+/** Intersection area, clipping only the selected parts whose box meets one of the candidate's. */
+function clippedArea(selected: PreparedGeometry, candidate: PreparedGeometry): number {
+  const nearby = selected.polygons.filter((_, index) => {
+    const a = selected.boxes[index];
+    return a !== undefined && candidate.boxes.some((b) => a[0] <= b[2] && b[0] <= a[2] && a[1] <= b[3] && b[1] <= a[3]);
+  });
+  return nearby.length === 0 ? 0 : clipArea(polygonClipping.intersection(nearby, candidate.polygons));
 }
 
 function areasAreEqual(first: number, second: number): boolean {
@@ -545,24 +313,32 @@ export function computeOverlapRows<
   let hasSuppressedSlivers = false;
 
   for (const candidate of candidates.features) {
-    // Preparation and clipping are quadratic in vertices; a candidate whose
-    // box misses the selection's box cannot overlap, so skip it unprepared.
+    // A candidate whose box misses the selection's box cannot overlap, so
+    // skip it before projecting and clipping.
     const candidateBbox = isArealGeometry(candidate.geometry)
       ? geometryBboxAcrossAntimeridian(candidate.geometry)
       : null;
     if (selectedBbox && candidateBbox && !bboxIntersects(selectedBbox, candidateBbox)) continue;
     const candidatePreparation = prepareGeometry(candidate.geometry, selected.referenceLongitude);
     if (candidatePreparation.status === 'omitted') continue;
-    if (candidatePreparation.status === 'rejected') {
-      rejections.push({
-        source: 'candidate',
-        reason: candidatePreparation.reason,
-        candidate
-      });
+    let preparedCandidate: PreparedGeometry | null = null;
+    let rawIntersectionArea = 0;
+    if (candidatePreparation.status === 'prepared') {
+      preparedCandidate = candidatePreparation.geometry;
+      try {
+        rawIntersectionArea = clippedArea(selected, preparedCandidate);
+      } catch {
+        preparedCandidate = null;
+      }
+    }
+    if (!preparedCandidate) {
+      rejections.push({ source: 'candidate', reason: 'invalid-polygon-component', candidate });
       continue;
     }
-    const preparedCandidate = candidatePreparation.geometry;
-    const intersectionArea = geometryIntersectionArea(selected, preparedCandidate);
+    const intersectionArea = Math.min(
+      Math.max(rawIntersectionArea, 0),
+      Math.min(selected.area, preparedCandidate.area)
+    );
     if (intersectionArea <= AREA_EPSILON) continue;
 
     const smallerArea = Math.min(selected.area, preparedCandidate.area);

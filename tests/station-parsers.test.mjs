@@ -168,6 +168,40 @@ test('one failed AWDB network is reported as partial and retried soon', async ()
 });
 
 /**
+ * A fetch-helper timeout rejects with an AbortError too. While the caller's
+ * own signal is live it is a provider failure, so the rest still renders.
+ */
+test('a provider timeout (AbortError, caller not aborted) gives a partial list', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalWarn = console.warn;
+  console.warn = () => {};
+  // Expire the rosters the previous tests cached.
+  mock.timers.tick(61 * 60 * 1000);
+  globalThis.fetch = async (input) => {
+    const url = decodeURIComponent(String(input));
+    if (url.includes('wcc.sc.egov.usda.gov') && url.includes(':SCAN')) {
+      const body = [{ stationTriplet: '2:WA:SCAN', name: 'Test Field', latitude: 46.6, longitude: -120.6 }];
+      return new Response(JSON.stringify(body), { status: 200 });
+    }
+    throw new DOMException('timed out', 'AbortError');
+  };
+  try {
+    const result = await discoverStationsForViewport(REQUEST);
+    assert.equal(result.status, 'ok');
+    for (const { label } of ROSTERS) {
+      assert.ok(result.failedSources.includes(label), `${label} is recorded as failed`);
+    }
+    assert.ok(
+      result.records.some((r) => r.network === 'nrcs-awdb'),
+      'the SCAN stations still render'
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+    console.warn = originalWarn;
+  }
+});
+
+/**
  * The latest-value readers skip a source's "no reading" marker and walk back
  * to the newest real value, so a gauge never reads as dead because its
  * newest row is a placeholder.

@@ -557,6 +557,24 @@ function buildRawsWindGlyph(wind: RawsWindGlyphFields, color: string): SVGSVGEle
  * via `Marker.remove()` so we do not need it today.
  */
 export function deactivate(map: maplibregl.Map): void {
+  cancelActivation();
+  if (moveendHandler) {
+    map.off('moveend', moveendHandler);
+    moveendHandler = null;
+  }
+  hideCapNote();
+  hideLegend(LAYER_KEY);
+  clearMarkers();
+}
+
+/**
+ * Synchronous cancellation seam (the optional LayerModule hook): the layer
+ * controller calls it the moment off intent is recorded, before the queued
+ * teardown, so an in-flight viewport discovery aborts at once instead of
+ * running out its provider budget (DDM-P1-T02). The aborted discovery returns
+ * quietly; `deactivate` still owns marker and handler removal.
+ */
+export function cancelActivation(): void {
   if (moveendDebounce) {
     clearTimeout(moveendDebounce);
     moveendDebounce = null;
@@ -565,13 +583,6 @@ export function deactivate(map: maplibregl.Map): void {
     currentDiscoveryController.abort();
     currentDiscoveryController = null;
   }
-  if (moveendHandler) {
-    map.off('moveend', moveendHandler);
-    moveendHandler = null;
-  }
-  hideCapNote();
-  hideLegend(LAYER_KEY);
-  clearMarkers();
 }
 
 function removeMarker(marker: maplibregl.Marker): void {

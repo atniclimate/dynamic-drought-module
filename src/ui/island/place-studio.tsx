@@ -26,13 +26,13 @@ import { createBriefingSkeleton } from '../../impact/briefing';
 import { selectBriefNarrativeLine } from '../../impact/brief-narrative-selector';
 import { buildBoundaryContext, caveatFor } from '../../impact/context';
 import {
-  bboxCenter,
   bboxIntersection,
   bboxIntersects,
   loadServiceEnvelopePieces,
   mergeByStableIdentifier
 } from '../../util/bbox';
 import { geometryBboxAcrossAntimeridian } from '../../util/antimeridian';
+import { representativePoint } from '../../util/point-in-polygon';
 import { applyMatrix } from '../../impact/matrix';
 import { createNwsRequestSession } from '../../impact/nws-point';
 import { sourceMayRun } from '../../impact/source-policy';
@@ -278,7 +278,7 @@ function escapeSql(value: string): string {
   return value.replace(/'/g, "''");
 }
 
-// bboxCenter/bboxIntersects/bboxIntersection share the N2-A circular
+// bboxIntersects/bboxIntersection share the N2-A circular
 // longitude contract with deep links and search.
 
 function featureIntersectsBbox(
@@ -288,11 +288,6 @@ function featureIntersectsBbox(
   const candidateBbox = geometryBboxAcrossAntimeridian(feature.geometry);
   return candidateBbox ? bboxIntersects(candidateBbox, bbox) : false;
 }
-
-// About 55 m, far below what the 2 percent sliver rule can show; keeps the
-// main-thread overlap geometry (quadratic in vertices) bounded, as the
-// watershed loader's watershedMaxAllowableOffset does for its queries.
-const OVERLAP_MAX_ALLOWABLE_OFFSET = '0.0005';
 
 function arcGisEnvelopeParams(
   envelope: string,
@@ -307,7 +302,6 @@ function arcGisEnvelopeParams(
     spatialRel: 'esriSpatialRelIntersects',
     outFields,
     returnGeometry: 'true',
-    maxAllowableOffset: OVERLAP_MAX_ALLOWABLE_OFFSET,
     geometryPrecision: '5',
     resultRecordCount: '2000',
     f: 'geojson'
@@ -326,7 +320,7 @@ function resolvedSelection(
     kind,
     properties,
     geometry,
-    bboxCenter(bbox),
+    representativePoint(geometry, bbox),
     title
   );
   return {
@@ -424,7 +418,6 @@ async function resolveEcoregionSelection(
     outFields,
     returnGeometry: 'true',
     outSR: '4326',
-    maxAllowableOffset: OVERLAP_MAX_ALLOWABLE_OFFSET,
     geometryPrecision: '5',
     f: 'geojson'
   });

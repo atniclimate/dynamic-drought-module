@@ -495,7 +495,8 @@ async function settleDiscoverySource(
   try {
     return { label, records: await promise, failed: false };
   } catch (err) {
-    if (isAbortError(err) || signal?.aborted) throw err;
+    // A fetch-helper timeout is also an AbortError; only the caller's own cancel is a cancel.
+    if (signal?.aborted) throw err;
     console.warn(`[telemetry] ${label} failed.`, err);
     const records = err instanceof PartialDiscoveryError ? err.records : [];
     return { label, records, failed: true };
@@ -1170,10 +1171,7 @@ async function fetchAwdbStationLists(
       failures.push(result.reason);
     }
   }
-  const abortFailure = failures.find(isAbortError);
-  if (abortFailure || signal.aborted) {
-    throw abortFailure ?? new DOMException('Aborted', 'AbortError');
-  }
+  if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
   if (failures.length === AWDB_DISCOVERY_NETWORKS.length) {
     throw new Error('NRCS AWDB station discovery failed for all requested networks');
   }
@@ -1808,10 +1806,7 @@ async function fetchCocorahsStationLists(
       failures.push(result.reason);
     }
   }
-  const abortFailure = failures.find(isAbortError);
-  if (abortFailure || signal.aborted) {
-    throw abortFailure ?? new DOMException('Aborted', 'AbortError');
-  }
+  if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
   if (failures.length === COCORAHS_DISCOVERY_STATES.length) {
     throw new Error('CoCoRaHS station discovery failed for all requested states');
   }
@@ -1981,10 +1976,6 @@ function normalizeLongitude(value: number): number {
     return ((((value + 180) % 360) + 360) % 360) - 180;
   }
   return value;
-}
-
-function isAbortError(err: unknown): boolean {
-  return err instanceof DOMException && err.name === 'AbortError';
 }
 
 function clamp(value: number, min: number, max: number): number {

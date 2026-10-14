@@ -32,7 +32,8 @@ import { isStateCode } from '../config/state-codes';
 // The boot slice of the URL catalog, not the catalog (DR-008a): this
 // resolver runs at boot and needs one bundled file.
 import { BOOT_URLS } from '../config/urls-boot';
-import { bboxCenter, bboxToContinuousBounds } from '../util/bbox';
+import { bboxToContinuousBounds } from '../util/bbox';
+import { representativePoint } from '../util/point-in-polygon';
 import { geometryBboxAcrossAntimeridian } from '../util/antimeridian';
 import { fetchSharedJsonWithBudget, US_STATES_SHARED_KEY } from '../util/fetch';
 import {
@@ -206,7 +207,7 @@ export async function openStateBriefing(
   if (opts.guard && !opts.guard()) return;
 
   const bbox = geometryBboxAcrossAntimeridian(feature.geometry);
-  const lngLat = bbox ? bboxCenter(bbox) : { lng: 0, lat: 0 };
+  const lngLat = bbox ? representativePoint(feature.geometry, bbox) : { lng: 0, lat: 0 };
   let buildBoundaryContext: typeof import('../impact/context').buildBoundaryContext;
   try {
     ({ buildBoundaryContext } = await import('../impact/context'));
