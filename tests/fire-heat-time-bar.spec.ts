@@ -447,7 +447,7 @@ test.describe('DDM-P8-T02: the Wildfire screen has a time control at every horiz
     await expect(dot).toHaveAttribute('data-freshness', 'current');
     await page.clock.fastForward(70_000);
     await expect(dot).toHaveAttribute('data-freshness', 'stale');
-    await expect(dot).toHaveCSS('color', 'rgb(198, 203, 212)');
+    await expect(dot).toHaveCSS('color', 'rgb(225, 61, 51)');
     await expect(dot).toHaveCSS('background-image', /linear-gradient\(90deg,.*50%/);
     await expect(dot).toHaveCSS('animation-name', 'none');
     await expect(dot).toHaveAttribute('aria-label', `Last successful feed check ${checkedDate}`);
