@@ -158,7 +158,8 @@ async function sweep(map: maplibregl.Map, signal: AbortSignal, first: boolean): 
   const result = reused ?? (await readTropicalSweep(URLS.nhcTropicalMapServer, signal));
   // A late answer: superseded, deactivated, or the map changed under it.
   if (result === null || signal.aborted || mine !== generation || activeMap !== map) return;
-  if (reused === null) lastSweep = result.state === 'unavailable' ? null : { at: Date.now(), result };
+  // Only a complete answer is reused; a partial one is read again on re-entry.
+  if (reused === null) lastSweep = result.state === 'live' || result.state === 'no data' ? { at: Date.now(), result } : null;
   if (result.problems.length > 0) console.warn('[tropical-cyclones] read problems:', result.problems);
   if (result.features.length > 0) ensureLayers(map, { type: 'FeatureCollection', features: [...result.features] });
   else clearDrawn(map);

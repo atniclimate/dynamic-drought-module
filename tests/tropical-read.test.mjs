@@ -456,6 +456,18 @@ test('layer: a sweep under five minutes old is drawn again on re-entry without a
   assert.ok(net.calls.length > reads, 'a sweep past five minutes is read again');
 });
 
+test('layer: a partial sweep is read again on re-entry, never reused', async (t) => {
+  events.length = 0;
+  const net = installFetch('oneSublayer503');
+  const map = fakeMap();
+  t.after(() => layer.deactivate(map));
+  await layer.activate(map);
+  const reads = net.calls.length;
+  layer.deactivate(map);
+  await layer.activate(map);
+  assert.ok(net.calls.length > reads, 'a partial sweep is not reused');
+});
+
 test('layer: an empty season reports no-data and tells the key no data', async (t) => {
   events.length = 0;
   installFetch('allEmpty');
