@@ -292,16 +292,6 @@ export function chipSeatRect(
   return { x, y: chromeInset, width: chipW, height };
 }
 
-/**
- * The pill's max-width formula (section 2.2): `calc(100% - 2 * (chip x +
- * chip width + 8px))`, so it stays clear of the chip on both sides
- * whichever side the chip is narrower against. `chipX` is the chip's
- * current left offset (12 open, 60/64 collapsed, `chipSeatRect`'s `x`).
- */
-export function pillMaxWidth(containerWidth: number, chipX: number): number {
-  return containerWidth - 2 * (chipX + MAP_CHROME_TOKENS.chipW + 8);
-}
-
 /*
  * ----------------------------------------------------------------------
  * M28: KEYBOARD IDENTIFY (interface-chrome-popups-text.md section 2.7,

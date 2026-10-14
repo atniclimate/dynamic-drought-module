@@ -21,9 +21,8 @@ export interface WatershedCandidateProperties extends Record<string, unknown> {
 }
 
 const WATERSHED_TIMEOUT_MS = 8_000;
-const MAP_TILE_SIZE = 512;
-const MIN_OFFSET_DEGREES = 0.0001;
-const MAX_OFFSET_DEGREES = 0.05;
+// Fixed so overlap words never change with the visitor's map: one 512-tile world pixel at zoom 9 (360 / (512 * 2 ** 9)), rounded to 6 places.
+const WATERSHED_MAX_ALLOWABLE_OFFSET = 0.001373;
 
 interface WatershedLayer {
   readonly level: 2 | 4;
@@ -91,29 +90,14 @@ function layerForEntry(entry: PlaceCatalogEntry): WatershedLayer {
   return layer;
 }
 
-/**
- * Generalize to approximately one 512-tile world pixel at the current zoom.
- * The clamps keep national views bounded and high zooms from becoming an
- * accidental full-resolution request.
- */
-export function watershedMaxAllowableOffset(zoom: number): number {
-  const safeZoom = Number.isFinite(zoom) ? Math.max(0, zoom) : 0;
-  const worldPixelDegrees = 360 / (MAP_TILE_SIZE * 2 ** safeZoom);
-  const clamped = Math.min(
-    MAX_OFFSET_DEGREES,
-    Math.max(MIN_OFFSET_DEGREES, worldPixelDegrees)
-  );
-  return Number(clamped.toFixed(6));
-}
-
-function geometryParams(zoom: number, outFields: string): URLSearchParams {
+function geometryParams(outFields: string): URLSearchParams {
   return new URLSearchParams({
     outFields,
     returnGeometry: 'true',
     returnZ: 'false',
     returnM: 'false',
     outSR: '4326',
-    maxAllowableOffset: String(watershedMaxAllowableOffset(zoom)),
+    maxAllowableOffset: String(WATERSHED_MAX_ALLOWABLE_OFFSET),
     geometryPrecision: '6',
     resultRecordCount: '2000',
     f: 'geojson'
@@ -139,14 +123,10 @@ async function queryLayer(
 /** Fetch one selected HUC2 or HUC4 boundary by its catalog code. */
 export async function loadWatershedSelectionGeometry(
   entry: PlaceCatalogEntry,
-  zoom: number,
   signal: AbortSignal
 ): Promise<Feature<WatershedGeometry, GeoJsonProperties> | null> {
   const layer = layerForEntry(entry);
-  const params = geometryParams(
-    zoom,
-    `${layer.codeField},name,areasqkm,states`
-  );
+  const params = geometryParams(`${layer.codeField},name,areasqkm,states`);
   params.set('where', `${layer.codeField}='${entry.id}'`);
   params.set('resultRecordCount', '1');
   const collection = await queryLayer(layer, params, signal);
@@ -169,17 +149,13 @@ export async function loadWatershedSelectionGeometry(
  */
 export async function loadWatershedCandidates(
   bbox: readonly [number, number, number, number],
-  zoom: number,
   signal: AbortSignal
 ): Promise<
   FeatureCollection<WatershedGeometry, WatershedCandidateProperties>
 > {
   const collections = await Promise.all(
     WATERSHED_LAYERS.map(async (layer) => {
-      const params = geometryParams(
-        zoom,
-        `${layer.codeField},name,areasqkm,states`
-      );
+      const params = geometryParams(`${layer.codeField},name,areasqkm,states`);
       params.set('where', '1=1');
       // Antimeridian-naive on purpose: one raw envelope (T-M0-4 pin; N2
       // owns the split; see arcGisEnvelopeValue in src/util/bbox.ts).

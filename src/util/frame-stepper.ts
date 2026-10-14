@@ -160,12 +160,6 @@ export class FrameCache<T> {
     })();
   }
 
-  /** Drop every cached frame and forget in-flight bookkeeping. */
-  clear(): void {
-    this.frames.clear();
-    this.inFlight.clear();
-  }
-
   private store(key: string, frame: T): void {
     this.frames.set(key, frame);
     while (this.frames.size > this.capacity) {

@@ -239,26 +239,6 @@ const NW_HUB_LA_NINA_URL =
   'https://www.climatehubs.usda.gov/hubs/northwest/topic/la-nina-northwest-what-can-we-expect';
 const CPC_COMPOSITES_URL =
   'https://www.cpc.ncep.noaa.gov/products/precip/CWlink/ENSO/composites/';
-/**
- * The page where the Washington State Climate Office states the snowpack
- * counter-evidence the El Nino branch carries. It is a University of
- * Washington College of the Environment article quoting the Deputy Washington
- * State Climatologist, and it names the Office as housed within that College,
- * which is what `WA_CLIMATE_OFFICE_LINEAGE` already says. The Office's own
- * site corroborates the 2015-16 half of the claim and supplies the "since
- * 1950" bound, but states near-normal SNOWPACK for 2015-16 only, so it is
- * recorded in the register as corroboration rather than cited here.
- */
-const WA_CLIMATE_OFFICE_URL =
-  'https://environment.uw.edu/news/2026/08/what-to-expect-from-a-very-strong-el-nino-in-the-pacific-northwest/';
-/**
- * The CPC Seasonal Drought Outlook product page, the same (label, URL) pair
- * this application already uses at `src/impact/hydrate.ts:72-73`. The neutral
- * branch names the product and asserts nothing about what this rolling page
- * currently says, so the citation does not go stale on each reissuance.
- */
-const CPC_SEASONAL_DROUGHT_OUTLOOK_URL =
-  'https://www.cpc.ncep.noaa.gov/products/expert_assessment/sdo_summary.php';
 
 /**
  * The same rule constants the builder applies
@@ -547,23 +527,10 @@ const NW_HUB_LINEAGE = 'USDA Northwest Climate Hub ENSO regional tendency summar
  */
 const CPC_COMPOSITE_LINEAGE =
   'NOAA CPC ENSO Temperature and Precipitation Composites';
+// Source page for the El Nino snowpack counter-evidence (UW College of the Environment article quoting the Deputy State Climatologist):
+// https://environment.uw.edu/news/2026/08/what-to-expect-from-a-very-strong-el-nino-in-the-pacific-northwest/
 const WA_CLIMATE_OFFICE_LINEAGE =
   'Washington State Climate Office, University of Washington College of the Environment';
-
-/**
- * Where each lineage label above can be read, for the surfaces that will make
- * a lineage line reachable. Recorded here so a label and its page cannot drift
- * apart: before 2026-09-07 the Washington State Climate Office and the CPC
- * Seasonal Drought Outlook were named in prose with no link anywhere in the
- * codebase (DDM-P12-T03, DR-030). The labels themselves are unchanged; this
- * table only says where each one is published.
- */
-export const LINEAGE_SOURCE_URLS: Readonly<Record<string, string>> = {
-  [NW_HUB_LINEAGE]: NW_HUB_EL_NINO_URL,
-  [CPC_COMPOSITE_LINEAGE]: CPC_COMPOSITES_URL,
-  [WA_CLIMATE_OFFICE_LINEAGE]: WA_CLIMATE_OFFICE_URL,
-  'NOAA CPC Seasonal Drought Outlook': CPC_SEASONAL_DROUGHT_OUTLOOK_URL
-};
 
 /**
  * What past events of this phase did in the Pacific Northwest.

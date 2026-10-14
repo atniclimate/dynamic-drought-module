@@ -70,32 +70,31 @@ test('an ecoregion selection reads its candidates under the 24 MiB cap', async (
 });
 
 // Audit 6 finding 2: the overlap words must not flip with the live map zoom.
-test('Studio watershed reads use a fixed zoom, never the map', async () => {
+test('Studio watershed reads take no zoom and never read the map', async () => {
   assert.equal(/\bgetMap\b/.test(source), false, 'place-studio.tsx no longer reads the map');
-  const zooms = [];
+  const seen = [];
   const fns = new Function(
     'loadWatershedSelectionGeometry',
     'loadWatershedCandidates',
-    `${constant('STUDIO_WATERSHED_ZOOM')}\n` +
-      'const resolvedSelection = () => null;\n' +
+    'const resolvedSelection = () => null;\n' +
       'const loadServiceEnvelopePieces = async (bbox, signal, run) => [await run(bbox, signal)];\n' +
       'const mergeByStableIdentifier = () => [];\n' +
       `${asyncBody('resolveWatershedSelection')}\n${asyncBody('loadWatershedOverlapCandidates')}\n` +
       'return { resolveWatershedSelection, loadWatershedOverlapCandidates };'
   )(
-    async (entry, zoom) => {
-      zooms.push(zoom);
+    async (entry, signal) => {
+      seen.push(signal);
       return null;
     },
-    async (piece, zoom) => {
-      zooms.push(zoom);
+    async (piece, signal) => {
+      seen.push(signal);
       return { type: 'FeatureCollection', features: [] };
     }
   );
   const signal = new AbortController().signal;
   await fns.resolveWatershedSelection({ id: '1709' }, signal);
   await fns.loadWatershedOverlapCandidates([-124, 42, -116, 46], signal);
-  assert.deepEqual(zooms, [9, 9]);
+  assert.deepEqual(seen, [signal, signal]);
 });
 
 test('Tribe candidates and the shared envelope builder stay at full resolution', () => {

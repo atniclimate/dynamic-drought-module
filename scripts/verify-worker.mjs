@@ -224,28 +224,21 @@ async function runProbeTable() {
  * upstream cache. Both legs use the bare URL with no cache-busting query,
  * because the Worker pins this route to no query names and would refuse a
  * nonce with 403; a 60-second edge copy is a byte copy of the upstream, so
- * it does not weaken the comparison. One retry before failing, because a
- * single mismatch on a static file is more likely a mid-flight change than
- * a transparency breach.
+ * it does not weaken the comparison. There is no retry: without a nonce a
+ * second attempt would read the same 60-second edge copy and change nothing.
  */
 async function runTransparency() {
   const probe = { id: 'body-transparency', row: 12, name: 'body transparency, static endpoint', method: 'GET' };
-  let pair = null;
-  let verdict = null;
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    // The direct leg follows redirects the way a browser would, so an
-    // upstream that moved the file still yields comparable bytes; the
-    // relayed leg does not, because a redirect reaching the client would
-    // itself be a policy anomaly worth seeing.
-    const direct = await probeOnce(TRANSPARENCY_UPSTREAM, { hash: true, redirect: 'follow' });
-    const proxied = await probeOnce(probeUrl(args.base, { path: '/proxy', upstream: TRANSPARENCY_UPSTREAM }), {
-      hash: true,
-    });
-    pair = { direct, proxied };
-    verdict = evaluateTransparency(pair);
-    if (verdict.ok) break;
-    if (attempt === 0) console.log('retrying the transparency pair once');
-  }
+  // The direct leg follows redirects the way a browser would, so an
+  // upstream that moved the file still yields comparable bytes; the
+  // relayed leg does not, because a redirect reaching the client would
+  // itself be a policy anomaly worth seeing.
+  const direct = await probeOnce(TRANSPARENCY_UPSTREAM, { hash: true, redirect: 'follow' });
+  const proxied = await probeOnce(probeUrl(args.base, { path: '/proxy', upstream: TRANSPARENCY_UPSTREAM }), {
+    hash: true,
+  });
+  const pair = { direct, proxied };
+  const verdict = evaluateTransparency(pair);
   receipt.transparency = pair;
   record(probe, { status: pair.proxied.status, error: pair.proxied.error }, verdict);
 }

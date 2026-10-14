@@ -7,8 +7,8 @@
  * to superseded operations are dropped rather than rendered.
  *
  * Browser support note. Modern browsers expose `AbortSignal.any()` for
- * composing multiple signals, but Safari 14 and older WebKit builds do
- * not. README declares Safari 14 as the floor, so the master signal is
+ * composing multiple signals, but WebKit before Safari 17.4 does not.
+ * README declares Safari 15.5 as the floor, so the master signal is
  * composed manually with `addEventListener('abort', ...)` and a hand-
  * rolled timer rather than via `AbortSignal.any()`.
  */

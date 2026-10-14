@@ -1202,9 +1202,8 @@ function wireTelemetryReveal(map: maplibregl.Map): void {
 // ---------------------------------------------------------------------------
 
 /**
- * One-shot-per-session guard for the station-value hydration. The skill
- * vocabulary's `unknown` state is "not yet fetched in this session"; the
- * first telemetry-layer activation triggers the fetch round trip.
+ * Guard against a second hydration while telemetry stays on. Every
+ * telemetry layer-off clears it, so each activation fetches again.
  */
 let stationValuesHydrated = false;
 
@@ -1334,11 +1333,11 @@ function hydrateStationValues(map: maplibregl.Map): void {
 }
 
 /**
- * Registry hook for the value lifecycle: first telemetry activation
- * hydrates once per session; a telemetry layer-off aborts anything still
- * in flight (the cancellation invariant). Values already rendered
- * stay rendered; the list is catalog metadata plus last-known readings,
- * not something to blank on toggle.
+ * Registry hook for the value lifecycle: each telemetry activation
+ * hydrates; a telemetry layer-off aborts anything still in flight (the
+ * cancellation invariant) and re-arms the next activation. Values already
+ * rendered stay rendered; the list is catalog metadata plus last-known
+ * readings, not something to blank on toggle.
  */
 function onActiveChangeForStationValues(
   map: maplibregl.Map,

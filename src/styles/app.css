@@ -241,8 +241,7 @@
      z-index in JavaScript, so these are the whole stack.
      Deliberately NOT tokenized, because they are local stacking inside
      one component rather than app-level order: the minimap SVG's 0-3,
-     the sheet search results' 1, .sidebar-key-host's 20, and
-     .fire3d-embed-note's 30. */
+     the sheet search results' 1, and .fire3d-embed-note's 30. */
   --z-map-chrome: 600;    /* +10 bottom dock, +40 the sheet's on-map key */
   --z-map-readout: 900;   /* hover inspector, the sheet's map-info panel */
   --z-map-control: 1000;  /* overlay controls and the loading pulse;
@@ -2116,11 +2115,6 @@ button.conditions-metric:hover .conditions-action-hide {
   margin: 0 0 8px;
   text-transform: uppercase;
 }
-.popup-description {
-  font-size: 12px;
-  color: var(--fg-1);
-  margin: 0 0 10px;
-}
 
 /* Fire-in-context block (0.4.0 B1): a composed read appended to a NIFC
    perimeter popup (drought class beneath, nearest stations). Composition only,
@@ -2131,15 +2125,6 @@ button.conditions-metric:hover .conditions-action-hide {
   border-top: 1px solid var(--line);
   font-family: var(--font-body);
   font-size: 11.5px;
-}
-.fire-context-heading {
-  font-family: var(--font-display);
-  font-weight: var(--fw-title);
-  font-size: 11px;
-  letter-spacing: var(--track-caps-sm);
-  text-transform: uppercase;
-  color: var(--fg-2);
-  margin-bottom: 6px;
 }
 .fire-context-block {
   display: flex;
@@ -2169,11 +2154,6 @@ button.conditions-metric:hover .conditions-action-hide {
   gap: 8px;
   color: var(--fg-1);
   padding: 1px 0;
-}
-.fire-context-distance {
-  color: var(--fg-3);
-  font-feature-settings: 'tnum' 1;
-  font-variant-numeric: tabular-nums lining-nums;
 }
 .fire-context-note {
   margin: 6px 0 0;
@@ -2218,77 +2198,6 @@ button.conditions-metric:hover .conditions-action-hide {
   to {
     transform: translateX(100%);
   }
-}
-.popup-links {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px solid var(--line);
-  /* Anchors size to their text (U-UX-FIX-1, DG-080-REVIEW finding 2
-     hardening): a stretched full-width anchor ran under the map's
-     attribution control, so the dead right half of the strip was not
-     hit-testable. That control was removed on 2026-08-31 (PR 54), but
-     the rule stays: other persistent map chrome (the scale bar, the (?)
-     disclosure, the embed linkouts) can still legitimately overlay a
-     card's right edge on a short viewport. The visible link text IS the
-     hit area. */
-  align-items: flex-start;
-}
-.popup-links a {
-  font-size: 11.5px;
-  color: var(--accent);
-  border-bottom: none;
-}
-.popup-links a:hover { color: var(--fg-0); }
-.popup-links a::after {
-  content: ' ↗';
-  font-size: 10px;
-  opacity: 0.7;
-}
-.popup-treaty-meta {
-  font-family: var(--font-body);
-  font-feature-settings: 'tnum' 1;
-  font-size: 11px;
-  font-weight: var(--fw-body);
-  color: var(--fg-2);
-  margin-top: 6px;
-  letter-spacing: 0.01em;
-}
-
-/* The place-popup Conditions block (owner amendment, 2026-09-10;
-   src/ui/popup-conditions.ts). Sits in the frozen head between the "kind
-   of place" agency line and the briefing door, so it reads at a glance
-   with no scrolling. Deliberately plainer than .fire-context (no heading,
-   tighter rule): this card is meant to be very simple. */
-.popup-conditions {
-  margin: 6px 0 8px;
-  padding: 6px 0 2px;
-  border-top: 1px solid var(--line);
-  font-family: var(--font-body);
-  font-size: 11.5px;
-}
-.popup-condition-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 10px;
-  padding: 3px 0;
-}
-.popup-condition-row + .popup-condition-row {
-  border-top: 1px dashed var(--line);
-}
-.popup-condition-label {
-  flex-shrink: 0;
-  color: var(--fg-2);
-  letter-spacing: 0.02em;
-}
-.popup-condition-value {
-  color: var(--fg-0);
-  font-weight: var(--fw-body);
-  text-align: right;
-  line-height: 1.35;
 }
 
 /* The briefing-door pulse (director ruling, 2026-09-10, "Emphasis must be
@@ -4217,9 +4126,6 @@ button.conditions-metric:hover .conditions-action-hide {
        2026-07-10). */
     overflow: visible;
   }
-  /* Grabber drags set an inline --sheet-height per frame; the transition
-     would fight the pointer, so it drops for the duration of the drag. */
-  #app.sheet-dragging .sidebar { transition: none; }
 
   /* Closed: the edgeless map-first state (the mockup's rule 3: with no
      active door, no grabber or sheet edge peeks above the footer). The
@@ -4765,7 +4671,6 @@ button.conditions-metric:hover .conditions-action-hide {
   background: var(--line-strong);
 }
 .sheet-grabber:hover .sheet-grabber-bar { background: var(--fg-3); }
-#app.sheet-dragging .sheet-grabber { cursor: grabbing; }
 
 /* The one-time first-peek hint (product lens): dismissible, floats above
    the sheet's top edge, never repeats once dismissed. Offset high enough
@@ -4787,17 +4692,6 @@ button.conditions-metric:hover .conditions-action-hide {
   color: var(--fg-1);
   white-space: nowrap;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
-}
-.sheet-hint-dismiss {
-  appearance: none;
-  background: transparent;
-  border: none;
-  color: var(--fg-2);
-  font-size: 14px;
-  line-height: 1;
-  min-width: 24px;
-  min-height: 24px;
-  cursor: pointer;
 }
 
 /* The at-hand block (the half detent's Brief content). */
@@ -6090,13 +5984,10 @@ a.impact-resource-link::after {
    embed layouts are unchanged. The briefing mounts on <body>, outside
    #app, so the embed test reads the body's direct child. */
 @media (min-width: 721px) {
-  /* T1 prose: no single-word last line (ATNI README:157). The popup
-     description and a condition row's value are sentences of any length
-     (a value can list every fire name), so they take pretty, which holds
-     at any line count. */
+  /* T1 prose: no single-word last line (ATNI README:157). Sentences of
+     any length take pretty, which holds at any line count. */
   :where(body:not(:has(> .app-shell.embed)))
-    :where(p, li, dd, figcaption, [data-popup-slot='note'], .map-key-qualification, .shell-summary-primary,
-      .popup-description, .popup-condition-value) {
+    :where(p, li, dd, figcaption, [data-popup-slot='note'], .map-key-qualification, .shell-summary-primary) {
     text-wrap: pretty;
   }
   /* T2 headings and short labels that may take two lines (README:157):
@@ -8683,23 +8574,6 @@ a.impact-resource-link::after {
    just collapses its margin. */
 .shell-summary-caveat:empty { margin: 0; }
 
-/* Desktop Brief replaces the former long legend footer with one frozen
-   rendered-condition receipt. The same full legend remains reachable through
-   a compact Key disclosure and returns to its ordinary Console/mobile seat. */
-.sidebar-bottom-dock {
-  position: relative;
-  display: flex;
-  align-items: flex-end;
-  gap: 7px;
-  flex-shrink: 0;
-  padding: 8px 10px 10px;
-  background: var(--bg-1);
-  border-top: 1px solid var(--line-strong);
-  box-shadow: 0 -8px 20px rgba(0, 0, 0, 0.18);
-}
-.sidebar-bottom-dock:not(:has(#conditions-strip:not([hidden]), #legend-panel:not([hidden]))) {
-  display: none;
-}
 .conditions-strip-dock {
   flex: 1 1 auto;
   min-width: 0;
@@ -8770,58 +8644,6 @@ a.impact-resource-link::after {
   margin-left: auto;
   padding-left: 4px;
 }
-.sidebar-key-disclosure {
-  position: relative;
-  flex: 0 0 auto;
-}
-.sidebar-key-disclosure:not(:has(#legend-panel:not([hidden]))) {
-  display: none;
-}
-.sidebar-key-disclosure > summary {
-  min-width: 44px;
-  min-height: 38px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  list-style: none;
-  cursor: pointer;
-  background: var(--bg-2);
-  color: var(--fg-1);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-md);
-  font-family: var(--font-display);
-  font-size: 10px;
-  font-weight: var(--fw-subtitle);
-  letter-spacing: var(--track-caps-sm);
-  text-transform: uppercase;
-}
-.sidebar-key-disclosure > summary::-webkit-details-marker { display: none; }
-.sidebar-key-disclosure > summary:hover,
-.sidebar-key-disclosure > summary:focus-visible,
-.sidebar-key-disclosure[open] > summary {
-  color: var(--accent);
-  border-color: var(--accent);
-}
-.sidebar-key-host {
-  position: absolute;
-  right: 0;
-  bottom: calc(100% + 7px);
-  z-index: 20;
-  width: calc(var(--sidebar-w) - 20px);
-  max-width: calc(100vw - 20px);
-  max-height: min(52vh, 480px);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  background: var(--bg-1);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-md);
-  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.55);
-}
-.sidebar-key-host > #legend-panel {
-  padding: 12px;
-  border: 0;
-}
-.sidebar-key-host > #legend-panel > .panel-title { display: none; }
 
 /* ----------------------------------------------------------------------------
    S4c: the panel-foot response. Outside .sidebar-scroll, so the frozen
@@ -9134,7 +8956,6 @@ a.impact-resource-link::after {
   .brief-full-report-link,
   .layer-umbrella-details-toggle,
   .layer-toggle,
-  .sidebar-key-disclosure > summary {
     min-height: var(--touch-target);
   }
 

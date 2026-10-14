@@ -329,10 +329,6 @@ const ECOREGION_CANDIDATE_MAX_BYTES = 24 * 1024 * 1024;
 // EPA streams that answer in 4 to 6 s on a good day; 8 s is too thin for headers plus body.
 const ECOREGION_CANDIDATE_TIMEOUT_MS = 20_000;
 
-// The overlap words must not change with the visitor's map, so Studio
-// watershed reads generalize as at zoom 9 (about 0.0014 degrees).
-const STUDIO_WATERSHED_ZOOM = 9;
-
 function resolvedSelection(
   kind: BoundaryKind,
   title: string,
@@ -469,11 +465,7 @@ async function resolveWatershedSelection(
   entry: PlaceCatalogEntry,
   signal: AbortSignal
 ): Promise<ResolvedPlaceSelection | null> {
-  const feature = await loadWatershedSelectionGeometry(
-    entry,
-    STUDIO_WATERSHED_ZOOM,
-    signal
-  );
+  const feature = await loadWatershedSelectionGeometry(entry, signal);
   if (!feature) return null;
   return resolvedSelection(
     'watershed',
@@ -685,12 +677,7 @@ async function loadWatershedOverlapCandidates(
   const collections = await loadServiceEnvelopePieces(
     bbox,
     signal,
-    (piece, siblingSignal) =>
-      loadWatershedCandidates(
-        piece,
-        STUDIO_WATERSHED_ZOOM,
-        siblingSignal
-      )
+    (piece, siblingSignal) => loadWatershedCandidates(piece, siblingSignal)
   );
   const candidates = mergeByStableIdentifier(
     collections.map((collection) => collection.features),

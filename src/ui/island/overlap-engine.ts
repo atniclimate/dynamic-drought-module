@@ -327,7 +327,9 @@ export function computeOverlapRows<
     const candidateBbox = isArealGeometry(candidate.geometry)
       ? geometryBboxAcrossAntimeridian(candidate.geometry)
       : null;
-    if (selectedBbox && candidateBbox && !bboxIntersects(selectedBbox, candidateBbox)) continue;
+    // A latitude beyond 90 skips the prefilter (bboxIntersects throws on it); prepareGeometry then rejects it.
+    if (selectedBbox && candidateBbox && candidateBbox[1] >= -90 && candidateBbox[3] <= 90 &&
+      !bboxIntersects(selectedBbox, candidateBbox)) continue;
     const candidatePreparation = prepareGeometry(candidate.geometry, selected.referenceLongitude);
     if (candidatePreparation.status === 'omitted') continue;
     let preparedCandidate: PreparedGeometry | null = null;
