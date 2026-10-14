@@ -202,6 +202,41 @@ test('a provider timeout (AbortError, caller not aborted) gives a partial list',
 });
 
 /**
+ * Two views share one snapped cache key but the second reaches 0.2 degrees
+ * further west: it must ask for its own box. A view inside the first is a hit.
+ */
+test('a cached USGS answer is served only to a view its queried box contains', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalWarn = console.warn;
+  console.warn = () => {};
+  mock.timers.tick(61 * 60 * 1000);
+  const boxes = [];
+  globalThis.fetch = async (input) => {
+    const url = decodeURIComponent(String(input));
+    if (!url.includes('waterservices.usgs.gov')) throw new TypeError('network down');
+    boxes.push(url.match(/bBox=([^&]+)/)?.[1]);
+    return new Response(JSON.stringify({ value: { timeSeries: [] } }), { status: 200 });
+  };
+  const view = (west, east) => ({
+    bounds: { south: 46, west, north: 47.5, east },
+    center: [46.75, (west + east) / 2],
+    signal: null
+  });
+  try {
+    await discoverStationsForViewport(view(-119.9, -118.4));
+    await discoverStationsForViewport(view(-120.1, -118.6));
+    assert.equal(boxes.length, 2, 'the wider-west view is not answered from the first box');
+    assert.match(boxes[1], /^-120\.1,/, 'and its request starts at its own west edge');
+    // Same snapped key as the second view, and inside the box it queried.
+    await discoverStationsForViewport(view(-120.05, -118.62));
+    assert.equal(boxes.length, 2, 'a view inside the cached box is a hit');
+  } finally {
+    globalThis.fetch = originalFetch;
+    console.warn = originalWarn;
+  }
+});
+
+/**
  * The latest-value readers skip a source's "no reading" marker and walk back
  * to the newest real value, so a gauge never reads as dead because its
  * newest row is a placeholder.

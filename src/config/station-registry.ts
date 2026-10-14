@@ -14,7 +14,7 @@ import type {
   ViewportBounds
 } from '../types/station-network';
 import { fetchBufferedWithBudget } from '../util/fetch';
-import { quantizeBbox } from '../util/bbox';
+import { bboxCoveredByEnvelope, quantizeBbox, type ViewEnvelope } from '../util/bbox';
 import { isObject } from '../util/guards';
 import { readLatestUsgsReading, readUnitCode, readVariableCode } from '../util/usgs';
 import { ExpiringLruCache } from '../util/bounded-cache';
@@ -53,7 +53,7 @@ const HANDLE_MATCH_FIELDS: readonly (keyof StationNetworkHandles)[] = [
   'cocorahsSid',
   'nwrfcId'
 ];
-const USGS_DISCOVERY_TIMEOUT_MS = 8_000;
+const USGS_DISCOVERY_TIMEOUT_MS = 20_000;
 const AWDB_DISCOVERY_TIMEOUT_MS = 12_000;
 const RAWS_DISCOVERY_TIMEOUT_MS = 10_000;
 const COOPS_DISCOVERY_TIMEOUT_MS = 12_000;
@@ -352,14 +352,18 @@ export function freshnessForNetwork(
 const DISCOVERY_CACHE_MAX_ENTRIES = 32;
 const DISCOVERY_CACHE_TTL_MS = 15 * MINUTE_MS;
 
-const USGS_DISCOVERY_CACHE = new ExpiringLruCache<
-  string,
-  readonly StationDiscoveryRecord[]
->(DISCOVERY_CACHE_MAX_ENTRIES);
-const RAWS_DISCOVERY_CACHE = new ExpiringLruCache<
-  string,
-  readonly StationDiscoveryRecord[]
->(DISCOVERY_CACHE_MAX_ENTRIES);
+// The key is snapped but the request is not: serve a hit only when the box
+// that was actually queried contains the box now asked for.
+interface DiscoveryCacheEntry {
+  readonly bounds: ViewEnvelope;
+  readonly records: readonly StationDiscoveryRecord[];
+}
+const USGS_DISCOVERY_CACHE = new ExpiringLruCache<string, DiscoveryCacheEntry>(
+  DISCOVERY_CACHE_MAX_ENTRIES
+);
+const RAWS_DISCOVERY_CACHE = new ExpiringLruCache<string, DiscoveryCacheEntry>(
+  DISCOVERY_CACHE_MAX_ENTRIES
+);
 
 /** Quantized cache key for a viewport bbox (mirrors hydrography's HYDRO_CACHE). */
 function discoveryCacheKey(bounds: ViewportBounds): string {
@@ -386,10 +390,16 @@ async function discoverUsgsStationsCached(
   signal: AbortSignal | null
 ): Promise<readonly StationDiscoveryRecord[]> {
   const key = discoveryCacheKey(queryBounds);
+  const asked: ViewEnvelope = [
+    queryBounds.south,
+    queryBounds.west,
+    queryBounds.north,
+    queryBounds.east
+  ];
   const cached = USGS_DISCOVERY_CACHE.get(key);
-  if (cached) return cached;
+  if (cached && bboxCoveredByEnvelope(cached.bounds, asked)) return cached.records;
   const records = await discoverUsgsStations(queryBounds, signal);
-  USGS_DISCOVERY_CACHE.set(key, records, DISCOVERY_CACHE_TTL_MS);
+  USGS_DISCOVERY_CACHE.set(key, { bounds: asked, records }, DISCOVERY_CACHE_TTL_MS);
   return records;
 }
 
@@ -399,10 +409,11 @@ async function discoverRawsStationsCached(
   signal: AbortSignal | null
 ): Promise<readonly StationDiscoveryRecord[]> {
   const key = discoveryCacheKey(bounds);
+  const asked: ViewEnvelope = [bounds.south, bounds.west, bounds.north, bounds.east];
   const cached = RAWS_DISCOVERY_CACHE.get(key);
-  if (cached) return cached;
+  if (cached && bboxCoveredByEnvelope(cached.bounds, asked)) return cached.records;
   const records = await discoverRawsStations(bounds, signal);
-  RAWS_DISCOVERY_CACHE.set(key, records, DISCOVERY_CACHE_TTL_MS);
+  RAWS_DISCOVERY_CACHE.set(key, { bounds: asked, records }, DISCOVERY_CACHE_TTL_MS);
   return records;
 }
 
