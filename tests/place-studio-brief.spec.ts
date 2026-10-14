@@ -39,6 +39,8 @@ function rectangle(
   };
 }
 
+// A collinear (zero-area) part is skipped since the engine moved to
+// polygon-clipping; only a non-finite coordinate still rejects the shape.
 function mixedValidityGeometry(valid: Polygon): MultiPolygon {
   return {
     type: 'MultiPolygon',
@@ -46,8 +48,8 @@ function mixedValidityGeometry(valid: Polygon): MultiPolygon {
       valid.coordinates,
       [[
         [-120, 46],
-        [-119, 46],
-        [-118, 46],
+        [-119, Number.NaN],
+        [-118, 47],
         [-120, 46]
       ]]
     ]
