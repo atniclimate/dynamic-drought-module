@@ -817,7 +817,7 @@ function outlookKey(): KeySpec {
 function griddedKey(): KeySpec {
   return {
     label: KEY_ELIGIBLE_LABELS['gridded-index']!,
-    ariaLabel: 'Gridded drought index key, drier to wetter. NOAA NIDIS.',
+    ariaLabel: 'Gridded Standardized Precipitation Index key, drier to wetter. NOAA NIDIS.',
     itemsHtml: GRIDDED_INDEX_RAMP.flatMap((entry) => (entry.code ? [swatchItem(entry.color, entry.code)] : [])).join('')
   };
 }

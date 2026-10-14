@@ -32,7 +32,7 @@ export const KEY_ELIGIBLE_LABELS: Readonly<Record<string, string>> = {
   'nadm-drought': 'North America drought',
   usdm: 'Drought',
   drought: 'Drought outlook',
-  'gridded-index': 'Gridded drought index',
+  'gridded-index': 'Gridded SPI',
   'sst-anomaly': 'Ocean temperature',
   'nifc-fires': 'Fire',
   // vocab-allow: the National Weather Service's own product name, not DDM's own read calling itself an alert (BRIEF L4).
