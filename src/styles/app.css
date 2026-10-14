@@ -6272,6 +6272,10 @@ a.impact-resource-link::after {
     text-wrap: balance;
   }
 }
+/* The long hurricane centre credit never leaves "Center" alone, at any width or in an embed. */
+.map-key-item[data-tropical-issuer] {
+  text-wrap: balance;
+}
 .map-key-nws-products .map-key-item {
   flex: 1 1 132px;
   min-width: 0;
