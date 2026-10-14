@@ -317,13 +317,15 @@ export function Fire3DControl({
   // after load, never on the first run (see shouldRevealScroll).
   const root = useRef<HTMLDivElement>(null);
   const lastFuelTarget = useRef<typeof fuelTarget | undefined>(undefined);
+  // Set by the button, not read from the URL: a shared 3D link must not scroll at load.
+  const turnedOn3D = useRef(false);
   useEffect(() => {
     const firstRun = lastFuelTarget.current === undefined;
     const fuelRowChanged = !firstRun && lastFuelTarget.current !== fuelTarget;
     lastFuelTarget.current = fuelTarget;
     const box = root.current?.closest('.sidebar-scroll');
     if (!root.current || !box) return;
-    if (!shouldRevealScroll({ firstRun, sceneRequested: preference, fuelRowChanged })) return;
+    if (!shouldRevealScroll({ firstRun, sceneRequested: turnedOn3D.current, fuelRowChanged })) return;
     box.scrollTop += revealScroll(root.current.getBoundingClientRect(), box.getBoundingClientRect());
   }, [visible, status?.state, fuelTarget]);
 
@@ -386,6 +388,7 @@ export function Fire3DControl({
             // A mode switch applies the mode's basemap default, like the shell's chooser.
             requestBasemapMode(map, defaultBasemapFor('wildfire'));
           }
+          turnedOn3D.current = !preference;
           setFire3DPreference(!preference);
         }}
       >
