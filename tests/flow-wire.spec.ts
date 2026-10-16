@@ -741,11 +741,13 @@ test.describe('E2-1 flowing paths in ENSO mode', () => {
         const map = state.__flowRestoreMaps!.find((candidate) => candidate.getContainer().id === 'map')!;
         state.__flowRestoreComplete = false;
         // A mode's adapter can load an empty stand-in style while graphics are lost; count only the style that restoration loads.
-        map.once('webglcontextrestored', () => { map.once('style.load', () => { state.__flowRestoreComplete = true; }); });
+        // Complete at the map's next idle after that style.load, so a flow layer re-added a tick later is caught by the one absence check below.
+        map.once('webglcontextrestored', () => { map.once('style.load', () => { map.once('idle', () => { state.__flowRestoreComplete = true; }); }); });
         state.__flowRestoreExtension!.restoreContext();
       });
       await expect.poll(() => page.evaluate(() => (window as FlowRestoreWindow).__flowRestoreComplete)).toBe(true);
-      await expect.poll(() => page.evaluate(() => {
+      // Asserted once: the idle above is the settle point, so an absence that holds here is not a first-sample pass.
+      expect(await page.evaluate(() => {
         const map = (window as FlowRestoreWindow).__flowRestoreMaps!.find((candidate) => candidate.getContainer().id === 'map')!;
         return {
           source: Boolean(map.getSource('flow-still')),

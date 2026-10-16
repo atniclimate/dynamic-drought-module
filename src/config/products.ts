@@ -143,7 +143,8 @@ export const PRODUCTS: Readonly<Record<ProductKey, ProductDef>> = Object.freeze(
   },
   ecoregions: {
     key: 'ecoregions',
-    issuer: 'EPA Omernik · PMTiles',
+    // Matches the layer's source line in layers.ts. DRAFT wording (DR-177).
+    issuer: 'EPA Omernik · PMTiles · Pacific Northwest bundle only',
     endpointKey: 'ecoregionsPmtilesLocal',
     layerKey: 'ecoregions',
     lane: null,
