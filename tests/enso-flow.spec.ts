@@ -20,7 +20,8 @@ const LIVE_CLOCK = Date.UTC(2026, 9, 5, 12, 30);
  * origin that the preview serves (public/data/rtofs-surface-currents*;
  * admission rtofs-currents-producer). A landing replaces the frame, so its run
  * and valid instant are read from the committed header, never typed here; a
- * case that reads the frame's age fixes the page clock three and a half days
+ * case that reads the frame's age, or needs it drawn at all (a frame past 14
+ * days is refused), fixes the page clock three and a half days
  * after its valid instant, where the line ends "frame 3 days old".
  */
 const CURRENTS_HEADER = /\/data\/rtofs-surface-currents\.json(?:\?|$)/;
@@ -173,6 +174,7 @@ test('turning an ENSO overlay off aborts its held request and drops the late res
 });
 
 test('marine no-data and network failure remain separate from a successful direction field', async ({ page }) => {
+  await page.clock.setFixedTime(FRAME_CLOCK);
   await stubSst(page);
   // Utah, framed by the state deep link: inland, so no node of the currents grid under the view holds a value.
   await gotoApp(page, '?cluster=enso&select=state:UT&flow=currents');

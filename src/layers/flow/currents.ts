@@ -11,10 +11,11 @@
  * centre (`fieldNearestLatitude`).
  *
  * It is a dated model frame: the header's run and valid instant go to the
- * state line with the frame's age, and `staleAfter` is null, because the
- * frame is as old as the last landing (CONTRADICTIONS-4 Q3 a). A missing,
- * truncated or unparseable frame, or one holding a speed no ocean has,
- * throws, and the panel reads unavailable.
+ * state line with the frame's age, and `staleAfter` is null (no 24-hour
+ * limit), because the frame is as old as the last landing (CONTRADICTIONS-4
+ * Q3 a). A missing, truncated or unparseable frame, one valid more than 14
+ * days ago, or one holding a speed no ocean has, throws, and the panel reads
+ * unavailable.
  */
 import { BASE_URL } from '../../config/urls-boot';
 import { fetchBufferedWithBudget, fetchJsonWithBudget } from '../../util/fetch';
@@ -35,6 +36,8 @@ export const CURRENTS_NO_DATA = -32768;
 export const CURRENT_COMPONENT_MAX_MS = 5;
 const READ_BUDGET_MS = 12_000;
 const HOUR = 3_600_000;
+/** A frame valid more than 14 days before the clock is refused; each ENSO landing rebuilds it well inside that. */
+export const CURRENTS_MAX_AGE_MS = 14 * 24 * HOUR;
 
 export interface CurrentsGrid extends FlowGrid {
   /** The producer's name for the grid (the issuer's region word). */
@@ -127,7 +130,7 @@ export async function decodeCurrentsFrame(
       meta: {
         issuer: 'NOAA', model: 'Global RTOFS', transport: 'same-origin-frame',
         cycle: header.run, forecastHour: header.forecastHour, validTime: header.valid,
-        // A dated frame, as old as the last landing: its age is stated, never a limit.
+        // A dated frame, as old as the last landing: its age is stated; readCurrentsFrame refuses one past 14 days.
         staleAfter: null,
         level: header.level, units: 'm s-1', sourceUrl, productKey: id
       }
@@ -135,10 +138,13 @@ export async function decodeCurrentsFrame(
   }));
 }
 
-/** Read the committed frame: the header, then every grid file, each inside the 12 s complete-body budget. */
-export async function readCurrentsFrame(options: { readonly signal: AbortSignal }): Promise<FlowField[]> {
+/** Read the committed frame: the header, then every grid file, each inside the 12 s complete-body budget; a frame valid more than 14 days ago is refused before its grids are read. */
+export async function readCurrentsFrame(
+  options: { readonly signal: AbortSignal; readonly now?: () => number }
+): Promise<FlowField[]> {
   const url = DATA_URL + CURRENTS_HEADER_FILE;
   const header = parseCurrentsHeader(await fetchJsonWithBudget(url, null, options.signal, READ_BUDGET_MS, 16_384));
+  if ((options.now ?? Date.now)() - header.valid > CURRENTS_MAX_AGE_MS) refuse('valid more than 14 days ago');
   const bodies = await Promise.all(header.grids.map(async (grid) => {
     // A gzip file is never longer than its Int16 bytes plus a small wrapper.
     const cap = grid.nx * grid.ny * 4 + 1_024;

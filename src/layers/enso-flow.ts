@@ -12,7 +12,8 @@
  * - Ocean currents draw the same paths from the committed NOAA RTOFS
  *   surface-current frame (src/layers/flow/currents.ts), read same-origin:
  *   a dated model frame whose run, valid instant and age read in the state
- *   line, with no age limit. It holds one grid per region on its native
+ *   line; one valid more than 14 days ago is refused by its reader and
+ *   reads unavailable. It holds one grid per region on its native
  *   spacing; the grid under the view's centre draws, and a pan across the
  *   seam swaps grids without a read.
  * - Precipitable water is NOAA GFS PWAT, one more message of the wind's own
@@ -257,7 +258,7 @@ function presentShade(kind: ActiveFlowKind, field: ScalarField): void {
 
 function presentFieldState(kind: ActiveFlowKind, field: FlowField, state: FlowViewState): void {
   stampForm(state, kind);
-  // The currents frame has no age limit, so only a NODD frame falls stale.
+  // The currents frame never falls stale (its reader refuses one past 14 days), so only a NODD frame does.
   if (state.stale && kind !== 'currents') {
     presentStale(kind, field);
     return;

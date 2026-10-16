@@ -273,7 +273,7 @@ test('a live currents frame is dated: run, valid instant and age in the line, bi
     assert.equal(drawn.motion, 'moving');
     assert.ok(host.textContent.includes('NOAA Global RTOFS surface currents; ocean model output, one dated frame.'));
     assert.doesNotMatch(host.textContent, /navigation|never joined/i, 'the briefing explains and disclaims; the panel does not');
-    // The frame has no age limit: a state that says stale (a NODD frame's 24 hours) does not take it down.
+    // The frame never falls stale (its reader refuses one past 14 days): a state that says stale (a NODD frame's 24 hours) does not take it down.
     globalThis.__fieldState({ ...globalThis.__state, stale: true });
     assert.equal(panel().dataset.status, 'live');
   } finally {

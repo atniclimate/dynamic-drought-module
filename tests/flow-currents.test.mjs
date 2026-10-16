@@ -42,7 +42,8 @@ registerHooks({
 
 const { decodeGrib2 } = await import('../src/layers/flow/grib2.ts');
 const {
-  CURRENT_COMPONENT_MAX_MS, CURRENTS_HEADER_FILE, decodeCurrentsFrame, fieldNearestLatitude, parseCurrentsHeader
+  CURRENT_COMPONENT_MAX_MS, CURRENTS_HEADER_FILE, CURRENTS_MAX_AGE_MS, decodeCurrentsFrame, fieldNearestLatitude,
+  parseCurrentsHeader, readCurrentsFrame
 } = await import('../src/layers/flow/currents.ts');
 const { FLOW_BINS, classOf, newSample, sampleField } = await import('../src/layers/flow/field.ts');
 const { WIND_PACE, paceFor } = await import('../src/layers/flow/advect.ts');
@@ -90,7 +91,7 @@ test('the producer writes the issuer values unchanged, north first, and the read
     assert.deepEqual(
       [field.meta.cycle, field.meta.forecastHour, field.meta.validTime, field.meta.staleAfter, field.meta.units],
       [u.refTime, 1, u.refTime + HOUR, null, 'm s-1'],
-      'a dated frame: run, valid instant, and no age limit'
+      'a dated frame: run, valid instant, and no stale limit'
     );
     let valid = 0;
     for (let row = 0; row < 80; row++) {
@@ -167,6 +168,32 @@ test('a frame the reader cannot trust is refused: a wrong header, a short body, 
   await assert.rejects(decodeCurrentsFrame(polar, [body]), /90 N to 90 S/);
 });
 
+test('a frame valid more than 14 days before the clock is refused before its grids are read; a fresher one reads', async () => {
+  const run = Date.UTC(2026, 9, 13);
+  const valid = run + HOUR;
+  const body = new Uint8Array(new Int16Array(120 * 80 * 2).buffer);
+  const reads = [];
+  const offline = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    const file = String(url).split('/').pop();
+    reads.push(file);
+    return new Response(file === CURRENTS_HEADER_FILE ? JSON.stringify(headerFor(run)) : body);
+  };
+  try {
+    const { signal } = new AbortController();
+    assert.equal(CURRENTS_MAX_AGE_MS, 14 * DAY);
+    assert.equal((await readCurrentsFrame({ signal, now: () => valid + 14 * DAY })).length, 1, 'exactly 14 days old still draws');
+    assert.deepEqual(reads, [CURRENTS_HEADER_FILE, 'grid.i16.gz']);
+    reads.length = 0;
+    await assert.rejects(readCurrentsFrame({ signal, now: () => valid + 14 * DAY + 1 }), /currents frame: valid more than 14 days ago/);
+    assert.deepEqual(reads, [CURRENTS_HEADER_FILE], 'a refused frame reads no grid file');
+    // A clock behind the frame is no age (flowAgeWords claims none either).
+    assert.equal((await readCurrentsFrame({ signal, now: () => valid - DAY })).length, 1);
+  } finally {
+    globalThis.fetch = offline;
+  }
+});
+
 test('the committed frame is the two grids of the admission, dated, inside the bound and small', async () => {
   const json = JSON.parse(readFileSync(new URL(CURRENTS_HEADER_FILE, DATA), 'utf8'));
   const header = parseCurrentsHeader(json);
@@ -237,7 +264,7 @@ test('the state line dates the frame and states its age, and never calls it now'
   assert.equal(new Set(Object.values(FLOW_WORDS.provenance)).size, lines.length, 'two kinds share a credit');
   assert.equal(flowAgeWords(valid, valid + 5 * HOUR), 'frame under 1 day old');
   assert.equal(flowAgeWords(valid, valid + DAY), 'frame 1 day old');
-  assert.equal(flowAgeWords(valid, valid + 40 * DAY), 'frame 40 days old', 'weeks old still draws, with its age');
+  assert.equal(flowAgeWords(valid, valid + 14 * DAY), 'frame 14 days old', 'the oldest frame the reader keeps reads its age');
   assert.equal(flowAgeWords(valid, valid - HOUR), 'frame under 1 day old', 'a clock behind the frame claims no negative age');
   const tropics = { lon0: 130, lat0: 39, dlon: 1, dlat: 1, nx: 120, ny: 80 };
   const north = { lon0: 140, lat0: 84.7, dlon: 0.3, dlat: 0.3, nx: 350, ny: 150 };
