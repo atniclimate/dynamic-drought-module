@@ -606,6 +606,7 @@ function alertRows(
     // withhold the claim, and so does a layer with no fill yet.
     if (!complete) {
       // A complete read, but only part of the place was on screen: its state word answers, not a failure sentence.
+      // vocab-allow: names the NWS alert product category (src/layers/nws-alerts.ts), the alert rows' own label
       if (readComplete) return { rows: [unreadRow('NWS alert', ALERTS_KEY)], hasWarning: false, warningLabel: null };
       const where = scopePhrase(scope);
       const value =
