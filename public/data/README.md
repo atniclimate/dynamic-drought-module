@@ -217,6 +217,39 @@ climate data.
 
 ---
 
+## `rtofs-surface-currents*` (committed model frame, not a placeholder)
+
+One dated frame of ocean surface currents from the NOAA/NCEP Global RTOFS
+ocean model, drawn by the ENSO "Ocean currents" choice: a JSON header
+(`rtofs-surface-currents.json`: model run, valid instant, grids, scale)
+and one gzip file per model grid, each on its own spacing and never
+joined:
+
+- `rtofs-surface-currents-trop-paci.i16.gz`: 1.0 degree, 40 S to 39 N and
+  130 E to 111 W;
+- `rtofs-surface-currents-alaska.i16.gz`: 0.3 degree, 40 N to 84.7 N and
+  140 E to 115.3 W.
+
+Each file is Int16 little-endian counts of 0.01 m/s (the model's own
+precision), all eastward values then all northward values, rows north to
+south, with -32768 where the model's own mask marks land. The values are
+the issuer's, re-encoded and unchanged; this is not an official NOAA
+product. The frame is as old as the last time it was built, and the map
+states its run, valid instant and age.
+
+NOAA serves these files without Cross-Origin Resource Sharing (CORS)
+headers and keeps two days of them, so a browser cannot read them. Build
+a new frame by hand, then commit the three files:
+
+```bash
+node scripts/build-rtofs-currents.mjs
+```
+
+There is no schedule and no deployer authorization concern here; this is
+public federal model output (https://www.weather.gov/disclaimer).
+
+---
+
 ## British Columbia basin drought levels (live, not bundled)
 
 The British Columbia drought framing fetches basin geometry directly from

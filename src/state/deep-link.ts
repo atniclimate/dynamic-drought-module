@@ -206,7 +206,15 @@ export async function openStateBriefing(
   if (opts.guard && !opts.guard()) return;
 
   const bbox = geometryBboxAcrossAntimeridian(feature.geometry);
-  const lngLat = bbox ? bboxCenter(bbox) : { lng: 0, lat: 0 };
+  // Dynamic import: point-in-polygon is briefing-cluster code the activation
+  // gate keeps out of the eager bundle. A failed chunk load falls back to the
+  // box centre so the briefing (and its toast fallback) still opens.
+  const lngLat = bbox
+    ? await import('../util/point-in-polygon').then(
+        (m) => m.representativePoint(feature.geometry, bbox),
+        () => bboxCenter(bbox)
+      )
+    : { lng: 0, lat: 0 };
   let buildBoundaryContext: typeof import('../impact/context').buildBoundaryContext;
   try {
     ({ buildBoundaryContext } = await import('../impact/context'));
@@ -266,7 +274,7 @@ export async function openStateBriefing(
     feature.geometry,
     lngLat
   );
-  const context = bbox ? { ...rawContext, bbox } : rawContext;
+  const context = bbox ? { ...rawContext, bbox, pointInsidePlace: true } : rawContext;
   if (opts.summaryFirst) {
     setPlaceSelection({ label: context.title, context });
     // The shared decision: on this branch `panelWillOpen` is exactly

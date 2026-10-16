@@ -39,7 +39,7 @@ import type {
   NadmCountryCode,
 } from '../config/framing-shapes';
 import type { FramingKey } from '../config/framings';
-import { FRAMING_KEYS } from '../config/framings';
+import { FRAMING_KEYS, framingMayContainNunavut } from '../config/framings';
 import type { DroughtSeverityCode } from '../config/palette';
 import { URLS } from '../config/urls';
 import {
@@ -106,6 +106,11 @@ export interface MinimapDroughtSnapshot {
   readonly summaries: Readonly<
     Partial<Record<FramingKey, FramingDroughtSummary>>
   >;
+  /**
+   * Set when the Nunavut analysis-mask proxy did not load: every summary is
+   * then `live-partial` and Nunavut is counted in the land denominator.
+   */
+  readonly analysisMaskMissing?: true;
 }
 
 interface PreparedPolygon {
@@ -127,6 +132,8 @@ interface PreparedNadm {
   readonly categories: ReadonlyMap<NadmDroughtCode, PreparedCategory>;
   readonly landPolygons: readonly PreparedLandPolygon[];
   readonly analysisExclusionPolygons: readonly PreparedPolygon[];
+  /** True when the Nunavut analysis-mask proxy was absent or unusable. */
+  readonly analysisMaskMissing: boolean;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -292,13 +299,25 @@ function prepareNadm(
     const polygons = polygonsByCode.get(code);
     if (polygons) categories.set(code, { code, polygons });
   }
+  // The mask is an optional proxy: a failed fetch (null), an ArcGIS error
+  // envelope or a malformed body degrades the summary to partial instead of
+  // discarding NADM, which loaded fine. The land base stays required.
+  let analysisExclusionPolygons: readonly PreparedPolygon[] = [];
+  let analysisMaskMissing = false;
+  try {
+    analysisExclusionPolygons = prepareAnalysisExclusions(
+      analysisExclusionValue,
+    );
+  } catch (error) {
+    analysisMaskMissing = true;
+    console.warn('[minimap-drought] Nunavut analysis mask unusable.', error);
+  }
   return {
     month,
     categories,
     landPolygons: prepareLandPolygons(landValue),
-    analysisExclusionPolygons: prepareAnalysisExclusions(
-      analysisExclusionValue,
-    ),
+    analysisExclusionPolygons,
+    analysisMaskMissing,
   };
 }
 
@@ -392,6 +411,7 @@ function summarizeShape(
   areas: readonly FramingAnalysisArea[],
   prepared: PreparedNadm,
   step: number,
+  key: FramingKey,
 ): FramingDroughtSummary {
   let west = Infinity;
   let south = Infinity;
@@ -462,7 +482,8 @@ function summarizeShape(
 
   return {
     averageSeverityScore: roundedScore(averageSeverityScore),
-    averageClass: droughtAverageClassForScore(averageSeverityScore),
+    // Classify the printed score, so two framings that print the same score share a class.
+    averageClass: droughtAverageClassForScore(roundedScore(averageSeverityScore)),
     dominant,
     dominantPercent: distribution[dominant],
     droughtPercent: roundedPercent(
@@ -477,7 +498,11 @@ function summarizeShape(
     distribution,
     samples,
     excludedSamples,
-    coverage: excludedWeight > 0 ? 'live-partial' : 'live',
+    coverage:
+      excludedWeight > 0 ||
+      (prepared.analysisMaskMissing && framingMayContainNunavut(key))
+        ?'live-partial'
+        : 'live',
   };
 }
 
@@ -498,6 +523,7 @@ export function deriveMinimapDroughtSnapshot(
         })),
         prepared,
         HAWAII_SAMPLE_STEP_DEGREES,
+        key,
       );
       continue;
     }
@@ -508,9 +534,15 @@ export function deriveMinimapDroughtSnapshot(
       areas,
       prepared,
       MAINLAND_SAMPLE_STEP_DEGREES,
+      key,
     );
   }
-  return { status: 'live', month: prepared.month, summaries };
+  return {
+    status: 'live',
+    month: prepared.month,
+    summaries,
+    ...(prepared.analysisMaskMissing ? { analysisMaskMissing: true as const } : {}),
+  };
 }
 
 const EMPTY_SUMMARIES: Readonly<
@@ -541,22 +573,23 @@ async function load(): Promise<void> {
       fetchSharedJsonWithBudget(
         'nadm-current',
         URLS.nadmCurrentGeojson,
-        { cache: 'no-store' },
+        { cache: 'no-cache' },
         signal,
         FETCH_TIMEOUT_MS,
       ),
       fetchJsonWithBudget(
         URLS.nadmNorthAmericaBaseGeojson,
-        { cache: 'no-store' },
+        null,
         signal,
         FETCH_TIMEOUT_MS,
       ),
+      // Optional mask: its failure must not fail the summary (null = missing).
       fetchJsonWithBudget(
         URLS.statsCanNunavutBoundaryGeojson,
-        { cache: 'no-store' },
+        null,
         signal,
         FETCH_TIMEOUT_MS,
-      ),
+      ).catch((): unknown => null),
     ]);
     if (signal.aborted) return;
 

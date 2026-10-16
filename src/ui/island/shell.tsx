@@ -56,6 +56,9 @@ import {
 } from '../../state/cluster-service';
 import type { CommittedShellSnapshot } from '../../state/cluster-service';
 import { requestBasemapMode } from '../../map/basemap-switcher';
+import { defaultBasemapFor } from '../../state/basemap-store';
+import { takeEnsoCamera } from '../../map/enso-camera';
+import { restoreCameraState } from '../../map/camera-fit';
 import {
   backToMap,
   getStudioRoute,
@@ -237,7 +240,7 @@ function isPending(snap: CommittedShellSnapshot): boolean {
 const DUPLICATE_SURFACE_DETAIL: Partial<Record<HazardClusterKey, string>> = {
   heat:
     'the National Weather Service HeatRisk sequence publishes seven daily ' +
-    'periods on one surface, and the day control selects the day.',
+    'periods on one surface, and the Valid date control in the key selects the day.',
   enso:
     'the sea-surface-temperature anomaly field is one analysed daily ' +
     'surface at every horizon.'
@@ -287,7 +290,11 @@ function horizonDisabledReason(
 
   const signature = horizonSurfaceSignature(snap.cluster, key);
   if (signature === null) {
-    return `No verified ${key} ${HAZARD_CLUSTERS[snap.cluster].title} map surface exists yet.`;
+    return (
+      `${HORIZON_CHROME[SHELL_HORIZON_KEY[key]].title} is off for ` +
+      `${HAZARD_CLUSTERS[snap.cluster].title}: no verified map source for ` +
+      'this time horizon exists yet, so none is shown rather than a guess.'
+    );
   }
 
   const idx = TEMPORAL_HORIZON_KEYS.indexOf(key);
@@ -419,8 +426,14 @@ function Shell({ map, snap, framing, specTick, onMinimapNoteChange }: ShellProps
   const chooseCluster = (key: HazardClusterKey): void => {
     runDisplayCommand(() => {
       requestCluster(key);
-      const preferredBasemap = HAZARD_CLUSTERS[key].preferredBasemap;
-      if (preferredBasemap) requestBasemapMode(map, preferredBasemap);
+      // Every switch applies the new mode's default; a SAT press does not outlive its mode.
+      requestBasemapMode(map, defaultBasemapFor(key));
+      // Leaving ENSO from a custom composition: the store already said drought, so
+      // the cluster subscriber saw no change; the held camera is restored here.
+      if (key !== 'enso') {
+        const heldCamera = takeEnsoCamera();
+        if (heldCamera) restoreCameraState(map, heldCamera);
+      }
     });
   };
 
@@ -525,14 +538,20 @@ function Shell({ map, snap, framing, specTick, onMinimapNoteChange }: ShellProps
 }
 
 /** Variable claims and optional controls do not displace shared navigation. */
-function ShellDetails({ snap, framingNote }: {
+function ShellDetails({ map, snap, framingNote }: {
+  readonly map: maplibregl.Map;
   readonly snap: ReadonlySignal<CommittedShellSnapshot>;
   readonly framingNote: ReadonlySignal<string>;
 }) {
   const snapshot = snap.value;
+  const horizonNote = snapshot.cluster === 'custom'
+    ? ''
+    : TEMPORAL_HORIZON_KEYS.map((key) => horizonDisabledReason(snapshot, key))
+        .filter((reason) => reason !== null)
+        .join(' ');
   return (
     <>
-      <Fire3DControl cluster={snapshot.cluster} />
+      <Fire3DControl cluster={snapshot.cluster} map={map} />
       <section class="shell-summary" id="shell-conditions-summary" aria-labelledby="shell-conditions-heading">
         <h2 class="panel-title sr-only" id="shell-conditions-heading">Conditions in view</h2>
         <p class="shell-summary-primary sr-only" id="shell-summary-primary">{snapshot.summary.primary}</p>
@@ -542,6 +561,8 @@ function ShellDetails({ snap, framingNote }: {
         </p>
       </section>
       <p class="shell-minimap-note" id="shell-framing-note" aria-live="polite">{framingNote.value}</p>
+      {/* The disabled chips' reasons, visible but outside the time block: its height varies by mode and must not displace the minimap, search and layers. */}
+      {horizonNote !== '' && <p class="shell-minimap-note" id="shell-horizon-note">{horizonNote}</p>}
     </>
   );
 }
@@ -577,5 +598,5 @@ export function mountShell(host: HTMLElement, map: maplibregl.Map): void {
     host
   );
   const detailsHost = document.getElementById('shell-details-island');
-  if (detailsHost) render(<ShellDetails snap={snap} framingNote={framingNote} />, detailsHost);
+  if (detailsHost) render(<ShellDetails map={map} snap={snap} framingNote={framingNote} />, detailsHost);
 }

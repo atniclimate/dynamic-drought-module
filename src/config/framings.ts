@@ -42,6 +42,8 @@
  * symmetrically at fit time.
  */
 
+import type { HazardClusterKey } from './clusters';
+
 /** The nine editorial framing keys (round-4 rebalance: the six
  * eco-climatic regions with Alaska & Northwest split out of Boreal &
  * Arctic along the northern Rockies / Mackenzie Mountains trend, plus
@@ -120,9 +122,11 @@ export interface FramingCoverage {
    */
   readonly displayScope?: string;
   /**
-   * Where the minimap's own monthly drought read comes from. Rendered only
-   * in a scene that HAS a minimap: Console hides it and stops its fetches,
-   * so the sentence has no referent there.
+   * Where the minimap's own monthly drought read comes from: the Drought
+   * mode's clause only. Every mode's clause is read through
+   * `framingMinimapProvenance`. Rendered only in a scene that HAS a
+   * minimap: Console hides it and stops its fetches, so the sentence has no
+   * referent there.
    */
   readonly minimapProvenance?: string;
   /**
@@ -316,6 +320,33 @@ export const FRAMINGS: Record<FramingKey, FramingDef> = {
   },
 };
 
+/**
+ * What informs the minimap for one framing, per mode, so each mode cites its
+ * own source and never another mode's (the Drought Monitor clause used to
+ * read in every mode). A new mode in `HAZARD_CLUSTERS` must add its entry.
+ * Heat and ENSO shade no framing, so their clause says why. A null key asks
+ * for the mode-wide clause, which Drought, read per framing, does not have.
+ */
+const MINIMAP_PROVENANCE: Readonly<
+  Record<HazardClusterKey, (key: FramingKey | null) => string | undefined>
+> = {
+  drought: (key) =>
+    key === null ? undefined : FRAMINGS[key].coverage?.minimapProvenance,
+  wildfire: () =>
+    'Current mapped NIFC wildfire perimeters, with the static United States Forest Service Wildfire Hazard Potential 2023 fallback, inform this minimap.',
+  heat: () =>
+    'National Weather Service HeatRisk is drawn on the main map and is not summarized per framing, so this minimap shades no framing.',
+  enso: () =>
+    'The Relative Oceanic Nino Index is a basin-wide index rather than a condition in any framing, so this minimap shades no framing.',
+};
+
+export function framingMinimapProvenance(
+  key: FramingKey | null,
+  mode: HazardClusterKey,
+): string | undefined {
+  return MINIMAP_PROVENANCE[mode](key);
+}
+
 /** The framing keys in the minimap's presentation order (spike round 4:
  * north to south, west to east; Mexico below Arid West and the Plains,
  * Hawaii as the bottom-left inset). */
@@ -330,3 +361,14 @@ export const FRAMING_KEYS: readonly FramingKey[] = [
   'mexico',
   'hawaii',
 ];
+
+/** Whether a framing's authored extent can contain Nunavut land: it reaches
+ * north of 60 N and overlaps 120 W to 60 W. Hawaii, Mexico and Southeast and
+ * Gulf cannot, so a missing Nunavut mask says nothing about their land.
+ * shortcut: camera bounds, not land geometry; revisit if a framing is redrawn. */
+export function framingMayContainNunavut(key: FramingKey): boolean {
+  const [[, west], [north, encodedEast]] = FRAMINGS[key].bounds;
+  const east = encodedEast < west ? encodedEast + 360 : encodedEast;
+  if (north <= 60) return false;
+  return (west <= -60 && east >= -120) || (west <= 300 && east >= 240);
+}

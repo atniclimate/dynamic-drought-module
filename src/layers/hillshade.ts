@@ -142,7 +142,8 @@ function addHillshadeLayer(map: maplibregl.Map): void {
         'hillshade-highlight-color': HILLSHADE_HIGHLIGHT
       }
     },
-    firstLayerIdAbove(map, BOTTOM_STACK_IDS)
+    // Its own slot in the stack, so a late add still lands under the 3D edge fade.
+    firstLayerIdAbove(map, BOTTOM_STACK_IDS.slice(0, BOTTOM_STACK_IDS.indexOf(LAYER_ID)))
   );
 }
 

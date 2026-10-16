@@ -36,7 +36,9 @@ import {
   serviceBboxPieces
 } from '../util/bbox';
 import { naiveBboxSuggestsAntimeridianCrossing } from '../util/antimeridian';
+import { ExpiringLruCache } from '../util/bounded-cache';
 import { fetchJsonWithBudget } from '../util/fetch';
+import { heatRiskMoment, isoDayLocal } from '../util/iso-day';
 import { isObject } from '../util/guards';
 import { trendLineSvg, type TrendPoint } from '../ui/charts';
 import { categoryImpact } from './category-impacts';
@@ -282,21 +284,6 @@ export function humanDayUtcNoYear(time: number): string {
 // Current: issuer-published HeatRisk class at the selected frame and point
 // ---------------------------------------------------------------------------
 
-function heatRiskMoment(time: number): string {
-  // found-104: U+00A0 between the time and its zone word, so the zone never wraps alone.
-  return new Intl.DateTimeFormat('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-    timeZone: 'UTC',
-    timeZoneName: 'short'
-  }).format(new Date(time))
-    .replace(/(\d) (?=[A-Z]{2,5}$)/, '$1\u00a0');
-}
-
 /**
  * Read the selected HeatRisk frame at the selected point. The identify helper
  * sends that frame's exact epoch and verifies the returned catalog time before
@@ -477,7 +464,8 @@ const USDM_PERCENTILE_BASIS =
  * into claims: the analyzed drought state, then the derived wildfire
  * implication. (The former extreme-heat companion was removed by ruling
  * D-0.8.0-047 and is not rebuilt here.) If no polygon contains the point, the
- * location is better than D0 on that map, which is itself a plain reading.
+ * claim says only that, in the popup's own words: with no analyzed-area mask
+ * in the client, no polygon does not confirm no drought.
  */
 export async function fetchUsdmClaims(
   context: BoundarySelectionContext,
@@ -487,6 +475,8 @@ export async function fetchUsdmClaims(
   const url = `${URLS.usdmFeatureServer}/query?${esriPointQuery(lng, lat, USDM_OUT_FIELDS).toString()}`;
   const source = 'U.S. Drought Monitor (NDMC / NOAA / USDA)';
   const sourceUrl = 'https://droughtmonitor.unl.edu/';
+  // Where the read is: the user's click, or a point the app chose inside a selected place.
+  const at = context.pointInsidePlace ? 'at a point inside the selected place' : 'at the clicked point';
 
   try {
     const json: unknown = await fetchJson(url, GEOJSON_ACCEPT, signal);
@@ -517,7 +507,7 @@ export async function fetchUsdmClaims(
         mapDate === null
           ? { retrieved: todayIso() }
           : { valid: isoDayUtc(mapDate), retrieved: todayIso() },
-      support: { reporting: 'the USDM polygon at the clicked point' }
+      support: { reporting: `the USDM polygon ${at}` }
     };
     // "this week's map" is only true until Thursday's release: NDMC publishes
     // on Thursday using data through the previous Tuesday morning, so the map
@@ -532,7 +522,8 @@ export async function fetchUsdmClaims(
         ok: true,
         claims: [
           makeClaim({
-            text: `No drought category is mapped at this location in ${asOfMap} (conditions are better than D0, Abnormally Dry).`,
+            // For a click, the popup's no-polygon sentence (popup-conditions.ts), word for word.
+            text: `No D0-D4 category polygon ${context.pointInsidePlace ? at : 'here'} (U.S. Drought Monitor). This client has no analyzed-area mask, so this does not confirm no drought.`,
             ...usdmShared
           })
         ]
@@ -583,7 +574,7 @@ export async function fetchUsdmClaims(
           // attribute (DR-058 a): "ddm-drought-impact-modeling causal-chain
           // reads" was internal vocabulary inside a public claim.
           lineage: [
-            'USDM category at the clicked point',
+            `USDM category ${at}`,
             'the documented USDM impact profile for that category, read through the DDM drought-impact model'
           ],
           lineageRef: 'ddm-drought-impact-modeling',
@@ -608,6 +599,17 @@ function fmtUsdmDate(d: Date): string {
 
 /** One week in milliseconds; the DSCI series is weekly. */
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+// The weekly DSCI series changes once a week; a briefing click in the same
+// state reuses it instead of spending another Worker request. Keyed on the
+// final request URL, so a new day (a new enddate) is a new entry.
+const DSCI_CACHE_TTL_MS = 30 * 60_000;
+const DSCI_RESPONSE_CACHE = new ExpiringLruCache<string, unknown>(8);
+
+/** Test-only hook for deterministic cache assertions (as clearNwsResponseCache). */
+export function clearDsciResponseCache(): void {
+  DSCI_RESPONSE_CACHE.clear();
+}
 
 /** A calendar day, free of any timezone interpretation. */
 interface CalendarDay {
@@ -707,7 +709,9 @@ export async function fetchDsciTrendClaims(
   const sourceUrl = 'https://droughtmonitor.unl.edu/About/AbouttheData/DSCI.aspx';
 
   try {
-    const json: unknown = await fetchJson(url, { Accept: 'application/json' }, signal);
+    const cachedJson = DSCI_RESPONSE_CACHE.get(url);
+    const json: unknown =
+      cachedJson ?? (await fetchJson(url, { Accept: 'application/json' }, signal));
     if (signal.aborted) return { claims: [], ok: false };
 
     const rows = Array.isArray(json) ? json : [];
@@ -749,6 +753,8 @@ export async function fetchDsciTrendClaims(
     if (!lastCal) {
       return { claims: [], ok: false, note: 'The USDM Data Services drought-severity series was unavailable.' };
     }
+    // Only a series that reads cleanly is kept for the next briefing.
+    if (cachedJson === undefined) DSCI_RESPONSE_CACHE.set(url, json, DSCI_CACHE_TTL_MS);
     const asOf = calendarToProse(lastCal);
     // The comparison map's own date, read the same textual way, so the span
     // the sentence claims is the span the data actually covers.
@@ -822,19 +828,6 @@ export async function fetchDsciTrendClaims(
  * different sources for the same NIFC observation. */
 const NIFC_AREA_CLAIM_SOURCE = 'NIFC current mapped fire perimeters (WFIGS)';
 const NIFC_AREA_CLAIM_SOURCE_URL = 'https://data-nifc.opendata.arcgis.com/';
-
-/** Local calendar day of an epoch instant, `evidence.ts`'s `todayIso()`
- * convention applied to a past instant rather than the current moment: the
- * collection-read path (DDM-P14-T07) reports the perimeters layer's own
- * `fetchedAt`, not today, so a several-minutes-old collection is dated
- * honestly (design clause 4) instead of claiming a fresher retrieval than
- * actually happened. */
-function localDayFromEpoch(epochMs: number): string {
-  const d = new Date(epochMs);
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${d.getFullYear()}-${m}-${day}`;
-}
 
 /** One service piece as the NIFC envelope query sends it, rounded to 4
  * decimals; the loaded-collection read tests this same rectangle. */
@@ -937,7 +930,9 @@ async function nifcClaimFromLoadedCollection(
 
   return {
     ok: true,
-    claims: [nifcAreaClaim(text, localDayFromEpoch(loaded.fetchedAt))]
+    // Dated by the collection's own fetchedAt, not today, so an older
+    // collection never claims a fresher retrieval (DDM-P14-T07).
+    claims: [nifcAreaClaim(text, isoDayLocal(new Date(loaded.fetchedAt)))]
   };
 }
 

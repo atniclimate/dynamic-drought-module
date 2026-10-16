@@ -33,7 +33,8 @@ import { stubDeepTerrainArchive, stubWildfireFeeds } from './wildfire-fixtures';
 // excluded explicitly now that the hash class allows one.
 const FIRE3D_CHUNK_PATTERN =
   // `fire3d-ground-layers-<hash>.js` is the two ground switches' 0.2 kB store, which the console imports at boot.
-  /\/assets\/fire3d-(?!context-|presentation-|ground-layers-)[A-Za-z0-9_-]+\.js(?:[?#]|$)/;
+  // `fire3d-fuel-risk-<hash>.js` is the pure fuel-risk helper (0.3 kB) the map key imports at boot.
+  /\/assets\/fire3d-(?!context-|presentation-|ground-layers-|fuel-risk-)[A-Za-z0-9_-]+\.js(?:[?#]|$)/;
 
 function fire3dStamp(page: import('./offline-test').Page): Promise<string | undefined> {
   return page.evaluate(() => document.documentElement.dataset['ddmFire3d']);

@@ -67,11 +67,14 @@ const SENTENCE_ROLE_ORDER: readonly LayerRole[] = [
 /**
  * Display layers for which the framing's generic US-scope caution does not
  * apply. The ocean anomaly is global; NADM is the tri-national continental
- * product. Every other exception needs an explicit coverage contract.
+ * product; the tropical cyclones cover the NHC and CPHC basins, which reach
+ * Mexico and the open ocean, and name those basins in their own key. Every
+ * other exception needs an explicit coverage contract.
  */
 const US_SCOPE_CAUTION_EXEMPT_KEYS: ReadonlySet<string> = new Set([
   'sst-anomaly',
-  'nadm-drought'
+  'nadm-drought',
+  'tropical-cyclones'
 ]);
 
 /**

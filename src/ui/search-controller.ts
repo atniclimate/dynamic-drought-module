@@ -230,7 +230,15 @@ async function locateTribalLandArea(map: maplibregl.Map, larName: string): Promi
   requestLayerOn('bia-reservations');
 
   const primary = features[0]!;
-  const lngLat = bbox ? bboxCenter(bbox) : { lng: 0, lat: 0 };
+  // Dynamic import: point-in-polygon is briefing-cluster code the activation
+  // gate keeps out of the eager bundle. A failed chunk load falls back to the
+  // box centre so the search still selects the land area.
+  const lngLat = bbox
+    ? await import('../util/point-in-polygon').then(
+        (m) => m.representativePoint(aggregateGeometry, bbox),
+        () => bboxCenter(bbox)
+      )
+    : { lng: 0, lat: 0 };
   // ORDER MATTERS: the located-boundary module clears its highlight on
   // EVERY selection change (the stage-5 major 4 fix), so the selection is
   // set first and the highlight for THIS subject renders after; any prior
@@ -244,7 +252,7 @@ async function locateTribalLandArea(map: maplibregl.Map, larName: string): Promi
     aggregateGeometry,
     lngLat
   );
-  const context = bbox ? { ...rawContext, bbox } : rawContext;
+  const context = bbox ? { ...rawContext, bbox, pointInsidePlace: true } : rawContext;
   setPlaceSelection({ label: context.title, context });
   if (isSheetActive() && getViewMode() === 'brief') openImpactPanel(context);
   showLocatedBoundary(map, aggregateGeometry);

@@ -14,7 +14,9 @@
  *
  * Hard rules from the project stewardship policy:
  *   - The Worker MUST NOT transform response bodies.
- *   - The Worker MUST NOT cache aggressively (default time-to-live 60 seconds).
+ *   - The Worker MUST NOT cache aggressively (default time-to-live 60 seconds;
+ *     the one exception is the pinned WHP exportImage tile, which tells the
+ *     browser to keep it a day, because that map is a fixed 2023 product).
  *   - The Worker MUST NOT log request bodies, headers, or query strings.
  *   - The Worker MUST NOT add tracking, analytics, or telemetry collection.
  *   - The Worker MUST forward only normalized Accept plus its fixed User-Agent.
@@ -55,33 +57,83 @@
  *     adds state beyond the platform primitives, so the shim contract holds.
  */
 
-const EXACT_PATHS_BY_HOST: ReadonlyMap<string, ReadonlySet<string>> = new Map([
+// Each exact path maps to the query parameter names the DDM client sends on it
+// (exact case). Any other name is refused, so a caller cannot bust the edge
+// cache with junk parameters and push every request through to the agency.
+const EXACT_PATHS_BY_HOST: ReadonlyMap<
+  string,
+  ReadonlyMap<string, ReadonlySet<string>>
+> = new Map([
   [
     "wcc.sc.egov.usda.gov",
-    new Set([
-      "/awdbRestApi/services/v1/data",
-      "/awdbRestApi/services/v1/stations"
+    new Map([
+      [
+        "/awdbRestApi/services/v1/data",
+        new Set(["stationTriplets", "elements", "duration", "beginDate", "endDate"])
+      ],
+      [
+        "/awdbRestApi/services/v1/stations",
+        new Set(["stationTriplets", "activeOnly", "returnStationElements"])
+      ]
     ])
   ],
   [
     "www.usbr.gov",
-    new Set([
-      "/gp/agrimet/data_files/AgrimetSites.js",
-      "/pn-bin/webarccsv.pl"
+    new Map([
+      ["/gp/agrimet/data_files/AgrimetSites.js", new Set<string>()],
+      [
+        "/pn-bin/webarccsv.pl",
+        new Set(["parameter", "syer", "smnth", "sdy", "eyer", "emnth", "edy", "format"])
+      ]
     ])
   ],
-  ["www.nwrfc.noaa.gov", new Set(["/water_supply/ws_report_csv.cgi"])],
+  [
+    "www.nwrfc.noaa.gov",
+    new Map([
+      [
+        "/water_supply/ws_report_csv.cgi",
+        new Set(["Type", "Source", "Wyr", "WyrDate", "Flavor"])
+      ]
+    ])
+  ],
   [
     "usdmdataservices.unl.edu",
-    new Set(["/api/StateStatistics/GetDSCI"])
+    new Map([
+      [
+        "/api/StateStatistics/GetDSCI",
+        new Set(["aoi", "startdate", "enddate", "statisticsType"])
+      ]
+    ])
   ],
   [
     "imagery.geoplatform.gov",
-    new Set([
-      "/iipp/rest/services/Fire_Aviation/USFS_EDW_RMRS_WildfireHazardPotentialClassified/ImageServer/exportImage"
+    new Map([
+      [
+        "/iipp/rest/services/Fire_Aviation/USFS_EDW_RMRS_WildfireHazardPotentialClassified/ImageServer/exportImage",
+        new Set([
+          "bbox",
+          "bboxSR",
+          "imageSR",
+          "size",
+          "format",
+          "transparent",
+          "f",
+          "interpolation"
+        ])
+      ]
     ])
   ]
 ]);
+
+const NO_QUERY: ReadonlySet<string> = new Set();
+const NWS_ALERTS_QUERY: ReadonlySet<string> = new Set(["point"]);
+
+function queryNamesAllowed(upstreamUrl: URL, allowed: ReadonlySet<string>): boolean {
+  for (const name of upstreamUrl.searchParams.keys()) {
+    if (!allowed.has(name)) return false;
+  }
+  return true;
+}
 
 const NWS_POINT_PATH = /^\/points\/-?\d{1,2}(?:\.\d{1,4})?,-?\d{1,3}(?:\.\d{1,4})?$/;
 const NWS_GRIDPOINT_PATH =
@@ -107,31 +159,41 @@ function exportImageQueryPinned(upstreamUrl: URL): boolean {
 
 /** True only for an exact read route used by the current DDM runtime. */
 export function isAllowedRoute(upstreamUrl: URL): boolean {
-  const exactPaths = EXACT_PATHS_BY_HOST.get(upstreamUrl.hostname);
-  if (exactPaths?.has(upstreamUrl.pathname)) {
+  const exactQuery = EXACT_PATHS_BY_HOST.get(upstreamUrl.hostname)?.get(
+    upstreamUrl.pathname
+  );
+  if (exactQuery) {
     return (
-      !upstreamUrl.pathname.endsWith("/exportImage") ||
-      exportImageQueryPinned(upstreamUrl)
+      queryNamesAllowed(upstreamUrl, exactQuery) &&
+      (!isExportImageRoute(upstreamUrl) || exportImageQueryPinned(upstreamUrl))
     );
   }
   if (upstreamUrl.hostname !== "api.weather.gov") return false;
+  if (upstreamUrl.pathname === "/alerts/active") {
+    return queryNamesAllowed(upstreamUrl, NWS_ALERTS_QUERY);
+  }
   return (
-    NWS_POINT_PATH.test(upstreamUrl.pathname) ||
-    NWS_GRIDPOINT_PATH.test(upstreamUrl.pathname) ||
-    NWS_LATEST_OBSERVATION_PATH.test(upstreamUrl.pathname) ||
-    upstreamUrl.pathname === "/alerts/active"
+    (NWS_POINT_PATH.test(upstreamUrl.pathname) ||
+      NWS_GRIDPOINT_PATH.test(upstreamUrl.pathname) ||
+      NWS_LATEST_OBSERVATION_PATH.test(upstreamUrl.pathname)) &&
+    queryNamesAllowed(upstreamUrl, NO_QUERY)
   );
+}
+
+function isExportImageRoute(upstreamUrl: URL): boolean {
+  return upstreamUrl.pathname.endsWith("/exportImage");
 }
 
 const USER_AGENT =
   "DDM-Proxy/0.1.0 (+https://github.com/atniclimate/dynamic-drought-module)";
-const WORKER_REVISION = "2026-10-12-export-pin-v6";
+const WORKER_REVISION = "2026-10-13-query-pin-v7";
 
 const UPSTREAM_TIMEOUT_MS = 12_000;
 export const MAX_UPSTREAM_BYTES = 16 * 1024 * 1024;
 const EDGE_CACHE_MAX_AGE_SECONDS = 60;
 const EDGE_CACHE_CONTROL = `public, max-age=${EDGE_CACHE_MAX_AGE_SECONDS}`;
 const CACHED_ORIGIN_CACHE_CONTROL = "X-DDM-Origin-Cache-Control";
+const EXPORT_IMAGE_CACHE_CONTROL = "public, max-age=86400, immutable";
 
 // Abuse-throttle bounds (critical-review #4). The rate limit itself lives in the
 // platform binding (wrangler.toml [[ratelimits]]); these cap a single request's
@@ -247,11 +309,43 @@ function healthResponse(): Response {
  * Workers runtime; no inbound authentication, forwarding, or browser metadata
  * crosses the proxy boundary.
  */
+// The Accept values the DDM client actually sends (NWS, the DSCI JSON read, a
+// tile). Collapsing to this fixed set keeps Accept from being a free-form
+// cache-busting key; anything else is forwarded as */*.
+const ACCEPT_VARIANTS: readonly string[] = [
+  "application/geo+json, application/json",
+  "application/json",
+  "image/png"
+];
+
 export function normalizeAccept(inbound: Request): string {
-  const accept = inbound.headers.get("Accept")?.trim();
-  return accept && accept.length > 0 && accept.length <= MAX_ACCEPT_LENGTH
-    ? accept
-    : "*/*";
+  const accept = inbound.headers.get("Accept")?.toLowerCase() ?? "";
+  if (accept.length > MAX_ACCEPT_LENGTH) return "*/*";
+  return (
+    ACCEPT_VARIANTS.find((variant) => accept.includes(variant.split(",")[0])) ??
+    "*/*"
+  );
+}
+
+/**
+ * Rate-limit key for one client. An IPv6 home connection usually owns a whole
+ * /64, so keying on the full address would let it rotate past the limit.
+ */
+export function rateLimitKey(clientIp: string): string {
+  // IPv4 (and an IPv4-mapped IPv6 form) is keyed on the whole address.
+  if (!clientIp.includes(":") || clientIp.includes(".")) return clientIp;
+  const [head, tail = ""] = clientIp.toLowerCase().split("::", 2);
+  const headGroups = head ? head.split(":") : [];
+  const tailGroups = tail ? tail.split(":") : [];
+  const groups = [
+    ...headGroups,
+    ...Array<string>(Math.max(0, 8 - headGroups.length - tailGroups.length)).fill("0"),
+    ...tailGroups
+  ];
+  return `${groups
+    .slice(0, 4)
+    .map((group) => group.replace(/^0+(?=.)/, ""))
+    .join(":")}::/64`;
 }
 
 export function buildUpstreamRequest(
@@ -278,7 +372,7 @@ export function buildUpstreamRequest(
  * the body is passed through unchanged; the upstream `Cache-Control` is kept
  * if present, otherwise a short default time-to-live is applied.
  */
-export function buildClientResponse(upstream: Response): Response {
+export function buildClientResponse(upstream: Response, upstreamUrl: URL): Response {
   const responseHeaders = new Headers();
   for (const [name, value] of upstream.headers) {
     const normalizedName = name.toLowerCase();
@@ -293,7 +387,16 @@ export function buildClientResponse(upstream: Response): Response {
   for (const [name, value] of Object.entries(CORS_HEADERS)) {
     responseHeaders.set(name, value);
   }
-  if (!responseHeaders.has("Cache-Control")) {
+  if (
+    upstream.status === 200 &&
+    isExportImageRoute(upstreamUrl) &&
+    (upstream.headers.get("Content-Type") ?? "").startsWith("image/")
+  ) {
+    // WHP is a fixed 2023 map and the tile query is pinned, so a browser
+    // never needs to ask the Worker twice for the same tile. Image bodies
+    // only: ArcGIS reports some failures as 200 with a JSON error body.
+    responseHeaders.set("Cache-Control", EXPORT_IMAGE_CACHE_CONTROL);
+  } else if (!responseHeaders.has("Cache-Control")) {
     responseHeaders.set("Cache-Control", EDGE_CACHE_CONTROL);
   }
   // Pass an upstream 429 through honestly (critical-review #4): keep its status
@@ -369,6 +472,18 @@ export function parseAndValidateUpstream(request: Request): URL | Response {
       400,
       "port_not_allowed",
       "Upstream URLs must use the default HTTPS port."
+    );
+  }
+
+  // One request, one edge-cache slot: no fragment, one parameter order, no repeated name.
+  upstreamUrl.hash = "";
+  upstreamUrl.searchParams.sort();
+  const names = [...upstreamUrl.searchParams.keys()];
+  if (new Set(names).size !== names.length) {
+    return jsonError(
+      400,
+      "repeated_query_name",
+      "Upstream URLs must not repeat a query parameter name."
     );
   }
 
@@ -669,7 +784,7 @@ export default {
     // monitors are never throttled.
     if (env.RATE_LIMITER) {
       const clientIp = request.headers.get("CF-Connecting-IP") ?? "unknown";
-      const { success } = await env.RATE_LIMITER.limit({ key: clientIp });
+      const { success } = await env.RATE_LIMITER.limit({ key: rateLimitKey(clientIp) });
       if (!success) {
         return jsonError(
           429,
@@ -721,7 +836,7 @@ export default {
       return jsonError(502, "upstream_unreachable", message);
     }
 
-    const clientResponse = buildClientResponse(upstreamResponse);
+    const clientResponse = buildClientResponse(upstreamResponse, upstreamUrl);
 
     // Cache only status-200 idempotent reads. We clone before handing back so
     // the body stream can be consumed twice (once by the cache, once by the

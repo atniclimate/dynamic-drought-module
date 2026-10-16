@@ -207,6 +207,30 @@ test.describe('the acknowledgements pointer and section (D1 M22)', () => {
     expect(reads).toEqual([]);
   });
 
+  test("with no place selected the map key's Technical information link opens the notes alone, expanded, with focus on their summary", async ({
+    page
+  }) => {
+    // ENSO: no drought tile, which hides the key's details toggle.
+    await gotoApp(page, '?cluster=enso&view=console');
+    await page.locator('#map-key-details-toggle').click();
+    const link = page.locator('#map-key-content button[data-open-technical-information]');
+    await link.click();
+
+    const panel = page.locator('#impact-panel');
+    await expect(panel).toBeVisible();
+    await expect(panel.locator('#impact-panel-title')).toHaveText('Technical information');
+    await expect(panel.locator('.impact-technical-information')).toHaveJSProperty('open', true);
+    await expect(panel.locator('.impact-technical-information > summary')).toBeFocused();
+    // No place, no matrix, no resources, no acknowledgements: the notes alone.
+    await expect(panel.locator('.impact-horizons, .impact-resources, .impact-acknowledgements')).toHaveCount(0);
+    await expect(panel.locator('.impact-panel-action-mail')).toHaveAttribute('aria-disabled', 'true');
+
+    // Close returns focus to the link.
+    await page.keyboard.press('Escape');
+    await expect(panel).toBeHidden();
+    await expect(link).toBeFocused();
+  });
+
   test('with a place briefing open, the Acknowledgements section at its end opens from its summary and takes focus', async ({
     page
   }) => {

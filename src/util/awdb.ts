@@ -22,6 +22,7 @@
 import { URLS } from '../config/urls';
 import { fetchBufferedWithBudget } from './fetch';
 import { isObject } from './guards';
+import { isoDayLocal } from './iso-day';
 import type { StationValue, TelemetryFreshness } from '../types/station';
 
 /** Per-call network budget, matching the popup hydration budget. */
@@ -44,14 +45,6 @@ const ELEMENT_LABELS: Readonly<Record<string, { parameter: string; label: string
   SMS: { parameter: 'soil_moisture_pct', label: 'Soil moisture' }
 };
 
-/** Format a Date as the YYYY-MM-DD string the AWDB REST API expects. */
-function isoDay(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
-
 function buildDataUrl(triplet: string, elements: readonly string[], days: number): string {
   const end = new Date();
   const begin = new Date(end.getTime() - days * 24 * 60 * 60 * 1000);
@@ -59,8 +52,8 @@ function buildDataUrl(triplet: string, elements: readonly string[], days: number
     stationTriplets: triplet,
     elements: elements.join(','),
     duration: 'DAILY',
-    beginDate: isoDay(begin),
-    endDate: isoDay(end)
+    beginDate: isoDayLocal(begin),
+    endDate: isoDayLocal(end)
   });
   return `${URLS.nrcsAwdbRest}?${params.toString()}`;
 }

@@ -91,12 +91,22 @@ export const DROUGHT_COLORS: Readonly<Record<string, string>> = {
   REMOVAL: '#B2AD69'
 };
 
+/** The outlook classes as the sidebar legend and the map key both name them. */
+export const OUTLOOK_LEGEND: ReadonlyArray<{ color: string; label: string }> = [
+  { color: DROUGHT_COLORS['PERSISTS']!, label: 'Drought persists' },
+  { color: DROUGHT_COLORS['DEVELOPS']!, label: 'Drought develops' },
+  { color: DROUGHT_COLORS['IMPROVES']!, label: 'Drought improves' },
+  { color: DROUGHT_COLORS['REMOVAL']!, label: 'Drought removal likely' }
+];
+
 /* ---------------------------------------------------------------------------
  * National Weather Service (NWS) HeatRisk categories
  *
- * The NWS ImageServer publishes these issuer-owned class colors and meanings.
- * Source: https://mapservices.weather.noaa.gov/experimental/rest/services/
- * NWS_HeatRisk/ImageServer/legend and /info/iteminfo (verified 2026-07-28).
+ * Class colors come from the NWS ImageServer legend (verified 2026-07-28):
+ * https://mapservices.weather.noaa.gov/experimental/rest/services/
+ * NWS_HeatRisk/ImageServer/legend. Class names and meanings come from the WPC
+ * explainer, https://www.wpc.ncep.noaa.gov/heatrisk/pdf/HeatRisk-v2.6-Understanding-HeatRisk.pdf
+ * (verified 2026-10-13); the legend's own labels ("Minor risk") differ.
  * The raster remains colorized by the issuer. This table is the one mirror
  * used by every DDM surface that names a HeatRisk class.
  * ------------------------------------------------------------------------- */
@@ -113,9 +123,9 @@ export interface HeatRiskCategory {
 export const HEATRISK_CATEGORIES: readonly HeatRiskCategory[] = [
   {
     value: 0,
-    label: 'Little to no risk',
+    label: 'Little to None',
     color: '#E8F9E7',
-    meaning: 'Little to no risk from expected heat.'
+    meaning: 'This level of heat poses little to no risk from expected heat.'
   },
   {
     value: 1,
@@ -214,6 +224,14 @@ export const USDM_CATEGORIES: ReadonlyArray<UsdmCategory> = [
       'Exceptional and widespread crop and pasture losses, with water emergencies from depleted reservoirs, streams, and wells. Fire danger is extreme.'
   }
 ];
+
+/** A USDM feature's class index (0 = D0 to 4 = D4); null for a blank, non-integer or out-of-range DM. */
+export function readUsdmDm(props: { readonly [key: string]: unknown } | null | undefined): number | null {
+  if (!props) return null;
+  const raw = props['DM'] ?? props['dm'];
+  const n = typeof raw === 'number' ? raw : typeof raw === 'string' && raw.trim() !== '' ? Number(raw) : NaN;
+  return Number.isInteger(n) && n >= 0 && n < USDM_CATEGORIES.length ? n : null;
+}
 
 /**
  * The no-polygon swatch. USDM publishes D0 through D4 polygons but does not

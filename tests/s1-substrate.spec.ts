@@ -123,9 +123,9 @@ test.describe('S1 hazard clusters (D-0.7.0-042/043/044)', () => {
     expect(current).not.toContain('usfs-whp');
   });
 
-  test('ENSO v1 is the shipped SST anomaly surface at every horizon (D-0.7.0-042 honesty boundary)', () => {
+  test('ENSO is the shipped SST anomaly surface plus the active tropical cyclones at every horizon (D-0.7.0-042; ENSO B3)', () => {
     for (const horizon of TEMPORAL_HORIZON_KEYS) {
-      expect(HAZARD_CLUSTERS.enso.recipes[horizon]).toEqual(['sst-anomaly']);
+      expect(HAZARD_CLUSTERS.enso.recipes[horizon]).toEqual(['sst-anomaly', 'tropical-cyclones']);
     }
   });
 });

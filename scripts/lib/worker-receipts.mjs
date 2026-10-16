@@ -194,8 +194,8 @@ const relay = (id, name, upstream) => ({
 /**
  * Every probe the driver runs, in order, keyed to the plan's 14 rows. Row 1
  * and row 2 are the health probe, evaluated by evaluateHealthz. Row 12 is
- * the transparency pair, which the driver builds with a fresh cache-busting
- * nonce and evaluateTransparency judges. Row 14 is the elapsed budget
+ * the transparency pair, which the driver builds on the bare
+ * TRANSPARENCY_UPSTREAM URL and evaluateTransparency judges. Row 14 is the elapsed budget
  * carried on each relay row rather than a probe of its own.
  */
 export const PROBES = Object.freeze([
@@ -255,7 +255,8 @@ export const PROBES = Object.freeze([
     name: 'HEAD on an allowed route',
     method: 'HEAD',
     path: '/proxy',
-    upstream: AGRIMET_SITES,
+    // usbr.gov resets HEAD connections (GET answers), so this row uses an upstream that serves HEAD.
+    upstream: NWS_POINT,
     expect: {
       status: '2xx',
       cors: RELAY_CORS,
@@ -624,10 +625,11 @@ export function evaluateProbe(row, expectation) {
  * relayed response can be served from the 60-second edge cache while the
  * direct leg is not, so a general direct-versus-relay hash false-fails on
  * timing rather than on transparency. The pair is therefore run against a
- * fixed, published site registry, with a fresh cache-busting query on both
- * legs so neither the edge cache nor an intermediary can answer from a
- * stored copy, and the direct leg goes first so the relay cannot be the
- * thing that warmed an upstream cache. Byte transparency across the rest of
+ * fixed, published site registry on its bare URL (the Worker pins this
+ * route to no query names, so a cache-busting query would be refused), and
+ * the direct leg goes first so the relay cannot be the thing that warmed an
+ * upstream cache. An edge copy is a byte copy of the upstream, so a relayed
+ * answer from the 60-second edge cache is still comparable. Byte transparency across the rest of
  * the table is proved before publishing, on synthetic bytes, in
  * tests/worker-proxy-policy.spec.ts. A non-200 direct leg is inconclusive
  * rather than proof, and says so.
@@ -668,7 +670,7 @@ export function evaluateTransparency({ direct, proxied } = {}) {
   }
   const age = Number(proxied?.headers?.age ?? 0);
   if (Number.isFinite(age) && age > 0) {
-    warnings.push(`the relayed leg carried Age ${age}, so an edge copy answered despite the cache-busting query`);
+    warnings.push(`the relayed leg carried Age ${age}, so an edge copy answered`);
   }
   return { ok: reasons.length === 0, reasons, warnings };
 }

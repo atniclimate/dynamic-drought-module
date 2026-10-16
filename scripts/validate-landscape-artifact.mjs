@@ -10,16 +10,23 @@
  * inventory red-proves every family branch, the unavailable ledger, the
  * level branches, provenance, and every numeric bound used below.
  *
+ * A file named landscape-signature-pnw.json (the shipped artifact) must also
+ * carry exactly one bundle per code in public/data/ecoregions-pnw-catalog.json.
+ *
  * Exit codes: 0 = valid; 1 = invalid or self-test failure; 2 = usage,
  * file, parse, or schema compilation error.
  */
 import { readFileSync } from 'node:fs';
+import { basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import Ajv2020 from 'ajv/dist/2020.js';
 
 const SCHEMA_PATH = fileURLToPath(
   new URL('../schema/landscape-signature.schema.json', import.meta.url)
+);
+const CATALOG_PATH = fileURLToPath(
+  new URL('../public/data/ecoregions-pnw-catalog.json', import.meta.url)
 );
 
 function rasterSource(methodVersion, resolutionMeters) {
@@ -376,6 +383,29 @@ function main() {
       console.error(`  ${err.instancePath || '/'}: ${err.message}`);
     }
     return 1;
+  }
+  // The schema only needs one bundle; the shipped artifact must carry exactly
+  // one per catalog ecoregion, or a short bake ships with the gate green.
+  if (basename(artifactPath) === 'landscape-signature-pnw.json') {
+    let codes;
+    try {
+      codes = JSON.parse(readFileSync(CATALOG_PATH, 'utf8')).entries.map((entry) => entry.code);
+    } catch (err) {
+      console.error(`cannot read or parse the ecoregion catalog at ${CATALOG_PATH}:`);
+      console.error(`  ${err instanceof Error ? err.message : String(err)}`);
+      return 2;
+    }
+    const keys = new Set(Object.keys(artifact.bundles));
+    const missing = codes.filter((code) => !keys.has(code));
+    const extra = [...keys].filter((key) => !codes.includes(key));
+    if (missing.length > 0 || extra.length > 0) {
+      console.error(
+        `${artifactPath} bundles do not match the ${codes.length} catalog codes: ` +
+          `missing ${missing.length} (${missing.slice(0, 10).join(', ')}), ` +
+          `extra ${extra.length} (${extra.slice(0, 10).join(', ')})`
+      );
+      return 1;
+    }
   }
   const bundleCount = Object.keys(artifact.bundles ?? {}).length;
   console.log(

@@ -57,7 +57,7 @@ const { HAZARD_CLUSTER_KEYS, HAZARD_CLUSTERS } = await import(
 const { KEY_ELIGIBLE_LABELS, chipFallbackLabel } = await import(
   new URL('src/config/chip-labels.ts', ROOT).href
 );
-const { chipStateForStatus, aggregateChipState, chipStateFromStatuses } = await import(
+const { chipStateForStatus, aggregateChipState, chipStateFromStatuses, imageryFailureState } = await import(
   new URL('src/config/chip-state.ts', ROOT).href
 );
 
@@ -70,6 +70,15 @@ test('every HAZARD_CLUSTER_KEYS entry resolves a chip label (DR-113, N modes)', 
     // The fallback label is the committed mode's own button word
     // (D-0.7.0-042): the chip never has to invent one.
     assert.equal(label, HAZARD_CLUSTERS[mode].title);
+  }
+});
+
+test('every HAZARD_CLUSTER_KEYS entry declares a defaultBasemap (N modes)', () => {
+  for (const mode of HAZARD_CLUSTER_KEYS) {
+    assert.ok(
+      ['satellite', 'default'].includes(HAZARD_CLUSTERS[mode].defaultBasemap),
+      `${mode} declares no defaultBasemap of 'satellite' or 'default'`
+    );
   }
 });
 
@@ -138,6 +147,56 @@ test('chipStateForStatus maps every LayerStatus to its chip state', () => {
   // An unset status (activated, no setStatus call yet) reads as 'loading',
   // never a silent 'live'.
   assert.equal(chipStateForStatus(undefined), 'loading');
+});
+
+test('imageryFailureState: a finished satellite lookup never reads loading', async () => {
+  // Verified absence (service answered, no recent frame) -> no data;
+  // failed fetch, error envelope, timeout or probe -> unavailable.
+  assert.equal(imageryFailureState(true), 'no-data');
+  assert.equal(imageryFailureState(false), 'unavailable');
+  // The wiring: both parse throws are the absence class, the revert writes
+  // the terminal chip text before it hides the chip.
+  const src = await readFile(new URL('src/map/satellite.ts', ROOT), 'utf8');
+  assert.equal((src.match(/new NoRecentFrameError\(/g) ?? []).length, 2);
+  assert.match(src, /imageryFailureState\(error instanceof NoRecentFrameError\)/);
+  assert.match(src, /showChip\(state, null\);\s+deactivate\(map\);/);
+});
+
+test('satellite revert is silent on boot and toasts only for a pressed SAT', async () => {
+  const sat = await readFile(new URL('src/map/satellite.ts', ROOT), 'utf8');
+  const sw = await readFile(new URL('src/map/basemap-switcher.ts', ROOT), 'utf8');
+  // The chip and store still land on the terminal state; only the toast is gated.
+  assert.match(sat, /revertBasemapForFailure\(\);\s+if \(!announceRevert\) return;\s+showToast\(/);
+  assert.match(sat, /announceRevert = announce;/);
+  // A visitor request announces; the default (boot, URL restore, 3D release) does not.
+  assert.match(sw, /announce = false/);
+  assert.match(sw, /void applyBasemapMode\(map, mode, true\);/);
+  assert.equal((sw.match(/applyBasemapMode\(map, 'satellite'\)/g) ?? []).length, 1);
+  assert.match(sw, /if \(announce\) showToast\(/);
+  const sidebar = await readFile(new URL('src/ui/sidebar.ts', ROOT), 'utf8');
+  assert.match(sidebar, /void applyBasemapMode\(map, 'satellite'\);/);
+});
+
+test('a failed imagery load leaves basemap= out of the URL; an explicit plain choice writes it', async () => {
+  globalThis.fetch = () => { throw new Error('unexpected network in URL unit test'); };
+  const { syncUrl } = await import(new URL('src/state/url.ts', ROOT).href);
+  const store = await import(new URL('src/state/basemap-store.ts', ROOT).href);
+  const { installFakeBrowser } = await import('./map-harness.ts');
+  const cluster = HAZARD_CLUSTER_KEYS.find((key) => HAZARD_CLUSTERS[key].defaultBasemap === 'satellite');
+  assert.ok(cluster, 'no mode opens on satellite');
+  const written = () => {
+    const browser = installFakeBrowser({ search: '' });
+    try {
+      syncUrl({ region: null, layers: new Set(), embed: false, view: 'console', cluster, basemap: store.getBasemapMode() });
+      return new URLSearchParams(browser.search()).get('basemap');
+    } finally { browser.restore(); }
+  };
+  store.setBasemapMode('satellite');
+  store.revertBasemapForFailure();
+  assert.equal(store.getBasemapMode(), 'default');
+  assert.equal(written(), null);
+  store.setBasemapMode('default');
+  assert.equal(written(), 'default');
 });
 
 test('aggregateChipState: all ready -> live', () => {
@@ -328,4 +387,29 @@ test('every HAZARD_CLUSTER_KEYS entry resolves a placeConditionRow (DR-113)', as
     );
   }
   assert.match(code, /placeConditionRowKeys\(/, 'popup-conditions.ts does not assemble its rows from placeConditionRowKeys');
+});
+
+test('the place briefing door is named without a mode word (DR-113)', async () => {
+  const text = await readFile(new URL('src/ui/sidebar.ts', ROOT), 'utf8');
+  // assert.ok, not doesNotMatch: a failure must not print the whole file.
+  assert.ok(!/See what the \w+ means/.test(text), 'the door names one mode in every mode');
+  assert.ok(text.includes("'aria-label', `See what this means for ${place.label}`"));
+});
+
+// Audit 7 finding 2: the chip's fallback sentence ("No classed layer is drawn")
+// is true only when no surface layer is drawn, so every surface layer a recipe
+// can draw must have a label and a branch in map-key.ts.
+test('every surface-role layer in a cluster recipe has a key label and branch', async () => {
+  const { LAYER_DEFS } = await import(new URL('src/config/layers.ts', ROOT).href);
+  const surfaces = new Set(LAYER_DEFS.filter((d) => d.role === 'surface').map((d) => d.key));
+  const mapKey = await readFile(new URL('src/ui/map-key.ts', ROOT), 'utf8');
+  const recipeKeys = new Set(
+    HAZARD_CLUSTER_KEYS.flatMap((mode) => Object.values(HAZARD_CLUSTERS[mode].recipes).flat())
+  );
+  const drawn = [...recipeKeys].filter((key) => surfaces.has(key));
+  assert.ok(drawn.includes('drought'), 'the CPC outlook is a recipe surface');
+  for (const key of drawn) {
+    assert.ok(KEY_ELIGIBLE_LABELS[key], `${key} is a recipe surface with no KEY_ELIGIBLE_LABELS entry`);
+    assert.ok(mapKey.includes(`'${key}'`), `${key} is a recipe surface with no branch in map-key.ts`);
+  }
 });

@@ -14,7 +14,13 @@ import type {
   ViewportBounds
 } from '../types/station-network';
 import { fetchBufferedWithBudget } from '../util/fetch';
-import { quantizeBbox } from '../util/bbox';
+import {
+  bboxCoveredByEnvelope,
+  buildQueryEnvelope,
+  quantizeBbox,
+  toCoverageEnvelope,
+  type ViewEnvelope
+} from '../util/bbox';
 import { isObject } from '../util/guards';
 import { readLatestUsgsReading, readUnitCode, readVariableCode } from '../util/usgs';
 import { ExpiringLruCache } from '../util/bounded-cache';
@@ -53,7 +59,7 @@ const HANDLE_MATCH_FIELDS: readonly (keyof StationNetworkHandles)[] = [
   'cocorahsSid',
   'nwrfcId'
 ];
-const USGS_DISCOVERY_TIMEOUT_MS = 8_000;
+const USGS_DISCOVERY_TIMEOUT_MS = 20_000;
 const AWDB_DISCOVERY_TIMEOUT_MS = 12_000;
 const RAWS_DISCOVERY_TIMEOUT_MS = 10_000;
 const COOPS_DISCOVERY_TIMEOUT_MS = 12_000;
@@ -352,14 +358,18 @@ export function freshnessForNetwork(
 const DISCOVERY_CACHE_MAX_ENTRIES = 32;
 const DISCOVERY_CACHE_TTL_MS = 15 * MINUTE_MS;
 
-const USGS_DISCOVERY_CACHE = new ExpiringLruCache<
-  string,
-  readonly StationDiscoveryRecord[]
->(DISCOVERY_CACHE_MAX_ENTRIES);
-const RAWS_DISCOVERY_CACHE = new ExpiringLruCache<
-  string,
-  readonly StationDiscoveryRecord[]
->(DISCOVERY_CACHE_MAX_ENTRIES);
+// The key is snapped but the request is not: serve a hit only when the box
+// that was actually queried contains the box now asked for.
+interface DiscoveryCacheEntry {
+  readonly bounds: ViewEnvelope;
+  readonly records: readonly StationDiscoveryRecord[];
+}
+const USGS_DISCOVERY_CACHE = new ExpiringLruCache<string, DiscoveryCacheEntry>(
+  DISCOVERY_CACHE_MAX_ENTRIES
+);
+const RAWS_DISCOVERY_CACHE = new ExpiringLruCache<string, DiscoveryCacheEntry>(
+  DISCOVERY_CACHE_MAX_ENTRIES
+);
 
 /** Quantized cache key for a viewport bbox (mirrors hydrography's HYDRO_CACHE). */
 function discoveryCacheKey(bounds: ViewportBounds): string {
@@ -380,30 +390,64 @@ function viewportAreaDeg(
   return width * latitudeFactor * height;
 }
 
+// Also checked under this key: the last box queried, so a small pan that
+// crosses a snapped-key edge is still served by the overscan that covers it.
+const LAST_DISCOVERY_KEY = 'last';
+
+/**
+ * Per-viewport cached discovery. The query box is the view plus the 25%
+ * overscan AIANNH, BIA and NIFC use, while that box's raw area stays within
+ * `overscanAreaCap`; above it the raw view is queried. A hit needs the
+ * queried box to contain the view.
+ */
+async function discoverCached(
+  cache: ExpiringLruCache<string, DiscoveryCacheEntry>,
+  view: ViewportBounds,
+  overscanAreaCap: number,
+  query: (bounds: ViewportBounds) => Promise<readonly StationDiscoveryRecord[]>
+): Promise<readonly StationDiscoveryRecord[]> {
+  const asked: ViewEnvelope = [view.west, view.south, view.east, view.north];
+  // The cache keeps the whole overscanned list; callers get only what is in view.
+  const inView = (records: readonly StationDiscoveryRecord[]) =>
+    records.filter((r) => isCoordinateInBounds(r.station.coords[0], r.station.coords[1], view));
+  for (const key of [discoveryCacheKey(view), LAST_DISCOVERY_KEY]) {
+    const cached = cache.get(key);
+    if (cached && bboxCoveredByEnvelope(cached.bounds, asked)) return inView(cached.records);
+  }
+  const envelope = buildQueryEnvelope({
+    getWest: () => view.west,
+    getSouth: () => view.south,
+    getEast: () => view.east,
+    getNorth: () => view.north
+  });
+  const [west, south, east, north] = envelope;
+  const overscan = (east - west) * (north - south) <= overscanAreaCap;
+  const records = await query(overscan ? { west, south, east, north } : view);
+  const entry = { bounds: overscan ? toCoverageEnvelope(envelope) : asked, records };
+  cache.set(discoveryCacheKey(view), entry, DISCOVERY_CACHE_TTL_MS);
+  cache.set(LAST_DISCOVERY_KEY, entry, DISCOVERY_CACHE_TTL_MS);
+  return inView(records);
+}
+
 /** USGS Instantaneous Values discovery, served from the per-viewport cache. */
-async function discoverUsgsStationsCached(
+function discoverUsgsStationsCached(
   queryBounds: StationViewportDiscoveryRequest['bounds'],
   signal: AbortSignal | null
 ): Promise<readonly StationDiscoveryRecord[]> {
-  const key = discoveryCacheKey(queryBounds);
-  const cached = USGS_DISCOVERY_CACHE.get(key);
-  if (cached) return cached;
-  const records = await discoverUsgsStations(queryBounds, signal);
-  USGS_DISCOVERY_CACHE.set(key, records, DISCOVERY_CACHE_TTL_MS);
-  return records;
+  // The overscan must keep the bBox inside the USGS 25-square-degree rule.
+  return discoverCached(USGS_DISCOVERY_CACHE, queryBounds, USGS_BBOX_AREA_CAP, (bounds) =>
+    discoverUsgsStations(bounds, signal)
+  );
 }
 
 /** NIFC RAWS discovery, served from the per-viewport cache. */
-async function discoverRawsStationsCached(
+function discoverRawsStationsCached(
   bounds: StationViewportDiscoveryRequest['bounds'],
   signal: AbortSignal | null
 ): Promise<readonly StationDiscoveryRecord[]> {
-  const key = discoveryCacheKey(bounds);
-  const cached = RAWS_DISCOVERY_CACHE.get(key);
-  if (cached) return cached;
-  const records = await discoverRawsStations(bounds, signal);
-  RAWS_DISCOVERY_CACHE.set(key, records, DISCOVERY_CACHE_TTL_MS);
-  return records;
+  return discoverCached(RAWS_DISCOVERY_CACHE, bounds, Infinity, (box) =>
+    discoverRawsStations(box, signal)
+  );
 }
 
 export async function discoverStationsForViewport(
@@ -454,10 +498,15 @@ export async function discoverStationsForViewport(
     { label: 'CoCoRaHS station discovery', run: () => discoverCocorahsStations(request) }
   ];
 
+  // Each settled source is reported at once, so a slow USGS read does not hold back the rest.
+  const settled: DiscoverySourceOutcome[] = [];
   const outcomes = await Promise.all(
-    sources.map((source) =>
-      settleDiscoverySource(source.label, source.run(), request.signal)
-    )
+    sources.map(async (source, index) => {
+      const outcome = await settleDiscoverySource(source.label, source.run(), request.signal);
+      settled[index] = outcome;
+      if (!request.signal?.aborted) request.onProgress?.(settled.flatMap((o) => o.records));
+      return outcome;
+    })
   );
 
   const records = outcomes.flatMap((outcome) => outcome.records);
@@ -495,9 +544,11 @@ async function settleDiscoverySource(
   try {
     return { label, records: await promise, failed: false };
   } catch (err) {
-    if (isAbortError(err) || signal?.aborted) throw err;
+    // A fetch-helper timeout is also an AbortError; only the caller's own cancel is a cancel.
+    if (signal?.aborted) throw err;
     console.warn(`[telemetry] ${label} failed.`, err);
-    return { label, records: [], failed: true };
+    const records = err instanceof PartialDiscoveryError ? err.records : [];
+    return { label, records, failed: true };
   }
 }
 
@@ -1027,11 +1078,13 @@ function formatBboxNumber(value: number): string {
 async function discoverAwdbStations(
   request: StationViewportDiscoveryRequest
 ): Promise<readonly StationDiscoveryRecord[]> {
-  const stations = await awdbStationListCache.get(request.signal);
+  const { stations, complete } = await awdbStationListCache.get(request.signal);
   if (request.signal?.aborted) return [];
-  return stations
+  const records = stations
     .filter((station) => isCoordinateInBounds(station.latitude, station.longitude, request.bounds))
     .map(awdbDiscoveryRecord);
+  if (!complete) throw new PartialDiscoveryError(records);
+  return records;
 }
 
 const awdbStationListCache = createStationListCache(fetchAwdbStationLists);
@@ -1050,26 +1103,45 @@ function abortPromise(signal: AbortSignal): Promise<never> {
   });
 }
 
+// A roster plus whether every network or state behind it answered.
+interface StationList<T> {
+  readonly stations: readonly T[];
+  readonly complete: boolean;
+}
+
 interface StationListCache<T> {
-  get(signal: AbortSignal | null): Promise<readonly T[]>;
+  get(signal: AbortSignal | null): Promise<StationList<T>>;
+}
+
+// A partial list is retried soon instead of standing in for the whole roster.
+const PARTIAL_STATION_LIST_TTL_MS = 30 * 1000;
+
+// Records from a roster where some network failed: the source is reported as
+// failed (so the pill reads "live (partial)") but its stations still render.
+class PartialDiscoveryError extends Error {
+  readonly records: readonly StationDiscoveryRecord[];
+  constructor(records: readonly StationDiscoveryRecord[]) {
+    super('station discovery returned a partial list');
+    this.records = records;
+  }
 }
 
 // Reference-counted, single-flight cache for a national or multi-state station
 // list: at most one fetch is in flight; concurrent callers share it; and if
 // every waiter aborts before it resolves, the shared fetch is aborted too. A
-// completed list lives for an hour, so a roster that is bad or has changed is
-// read again rather than kept for the whole session.
+// complete list lives for an hour, so a roster that is bad or has changed is
+// read again rather than kept for the whole session; a partial one for 30 s.
 function createStationListCache<T>(
-  fetcher: (signal: AbortSignal) => Promise<readonly T[]>
+  fetcher: (signal: AbortSignal) => Promise<StationList<T>>
 ): StationListCache<T> {
   interface Inflight {
     readonly controller: AbortController;
-    readonly promise: Promise<readonly T[]>;
+    readonly promise: Promise<StationList<T>>;
     readonly waiters: Set<AbortSignal>;
     hasEverHadWaiter: boolean;
   }
 
-  const cache = new ExpiringLruCache<'list', readonly T[]>(1);
+  const cache = new ExpiringLruCache<'list', StationList<T>>(1);
   let inflight: Inflight | null = null;
 
   function maybeAbort(target: Inflight): void {
@@ -1106,7 +1178,7 @@ function createStationListCache<T>(
       hasEverHadWaiter: false,
       promise: fetcher(controller.signal)
         .then((list) => {
-          cache.set('list', list, HOUR_MS);
+          cache.set('list', list, list.complete ? HOUR_MS : PARTIAL_STATION_LIST_TTL_MS);
           return list;
         })
         .finally(() => {
@@ -1118,7 +1190,7 @@ function createStationListCache<T>(
   }
 
   return {
-    async get(signal: AbortSignal | null): Promise<readonly T[]> {
+    async get(signal: AbortSignal | null): Promise<StationList<T>> {
       const cached = cache.get('list');
       if (cached) return cached;
       const target =inflight && !inflight.controller.signal.aborted ? inflight : start();
@@ -1135,7 +1207,7 @@ function createStationListCache<T>(
 
 async function fetchAwdbStationLists(
   signal: AbortSignal
-): Promise<readonly AwdbStationMetadata[]> {
+): Promise<StationList<AwdbStationMetadata>> {
   const settled = await Promise.allSettled(
     AWDB_DISCOVERY_NETWORKS.map((network) => fetchAwdbStationsForNetwork(network, signal))
   );
@@ -1148,17 +1220,14 @@ async function fetchAwdbStationLists(
       failures.push(result.reason);
     }
   }
-  const abortFailure = failures.find(isAbortError);
-  if (abortFailure || signal.aborted) {
-    throw abortFailure ?? new DOMException('Aborted', 'AbortError');
-  }
+  if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
   if (failures.length === AWDB_DISCOVERY_NETWORKS.length) {
     throw new Error('NRCS AWDB station discovery failed for all requested networks');
   }
   if (failures.length > 0) {
     console.warn('[telemetry] partial NRCS AWDB station discovery failed.', failures);
   }
-  return stations;
+  return { stations, complete: failures.length === 0 };
 }
 
 async function fetchAwdbStationsForNetwork(
@@ -1296,6 +1365,8 @@ async function discoverRawsStations(
 }
 
 function readRawsFeatures(payload: unknown): readonly Record<string, unknown>[] {
+  // ArcGIS answers an outage as HTTP 200 with an `error` body: a failure, not an empty roster.
+  if (isObject(payload) && 'error' in payload) throw new Error('NIFC RAWS ArcGIS error body');
   if (!isObject(payload) || !Array.isArray(payload.features)) return [];
   return payload.features.filter(isObject);
 }
@@ -1513,7 +1584,7 @@ export async function fetchRawsStationConditions(
 async function discoverCoopsStations(
   request: StationViewportDiscoveryRequest
 ): Promise<readonly StationDiscoveryRecord[]> {
-  const stations = await coopsStationListCache.get(request.signal);
+  const { stations } = await coopsStationListCache.get(request.signal);
   if (request.signal?.aborted) return [];
   return stations
     .filter((station) => isCoordinateInBounds(station.latitude, station.longitude, request.bounds))
@@ -1521,7 +1592,10 @@ async function discoverCoopsStations(
     .filter(isDiscoveryRecord);
 }
 
-const coopsStationListCache = createStationListCache(fetchCoopsStationList);
+const coopsStationListCache = createStationListCache(async (signal) => ({
+  stations: await fetchCoopsStationList(signal),
+  complete: true
+}));
 
 async function fetchCoopsStationList(signal: AbortSignal): Promise<readonly CoopsStationMetadata[]> {
   const params = new URLSearchParams({ type: 'waterlevels' });
@@ -1621,12 +1695,15 @@ function coopsDiscoveryRecord(station: CoopsStationMetadata): StationDiscoveryRe
   };
 }
 
-const agrimetStationListCache = createStationListCache(fetchAgrimetStationList);
+const agrimetStationListCache = createStationListCache(async (signal) => ({
+  stations: await fetchAgrimetStationList(signal),
+  complete: true
+}));
 
 async function discoverAgrimetStations(
   request: StationViewportDiscoveryRequest
 ): Promise<readonly StationDiscoveryRecord[]> {
-  const stations = await agrimetStationListCache.get(request.signal);
+  const { stations } = await agrimetStationListCache.get(request.signal);
   if (request.signal?.aborted) return [];
   return stations
     .filter((station) =>
@@ -1750,19 +1827,21 @@ const cocorahsStationListCache = createStationListCache(fetchCocorahsStationList
 async function discoverCocorahsStations(
   request: StationViewportDiscoveryRequest
 ): Promise<readonly StationDiscoveryRecord[]> {
-  const stations = await cocorahsStationListCache.get(request.signal);
+  const { stations, complete } = await cocorahsStationListCache.get(request.signal);
   if (request.signal?.aborted) return [];
-  return stations
+  const records = stations
     .filter((station) =>
       isCoordinateInBounds(station.latitude, station.longitude, request.bounds)
     )
     .map((station) => COCORAHS_STATION_ADAPTER.toDiscoveryRecord(station))
     .filter(isDiscoveryRecord);
+  if (!complete) throw new PartialDiscoveryError(records);
+  return records;
 }
 
 async function fetchCocorahsStationLists(
   signal: AbortSignal
-): Promise<readonly CocorahsStationMetadata[]> {
+): Promise<StationList<CocorahsStationMetadata>> {
   // The IEM mirror has no combined-region endpoint, so fetch each state and
   // merge; a per-state failure is contained the same way the AWDB per-network
   // fan-out is (partial results survive, a total failure throws).
@@ -1778,17 +1857,14 @@ async function fetchCocorahsStationLists(
       failures.push(result.reason);
     }
   }
-  const abortFailure = failures.find(isAbortError);
-  if (abortFailure || signal.aborted) {
-    throw abortFailure ?? new DOMException('Aborted', 'AbortError');
-  }
+  if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
   if (failures.length === COCORAHS_DISCOVERY_STATES.length) {
     throw new Error('CoCoRaHS station discovery failed for all requested states');
   }
   if (failures.length > 0) {
     console.warn('[telemetry] partial CoCoRaHS station discovery failed.', failures);
   }
-  return stations;
+  return { stations, complete: failures.length === 0 };
 }
 
 async function fetchCocorahsStationsForState(
@@ -1951,10 +2027,6 @@ function normalizeLongitude(value: number): number {
     return ((((value + 180) % 360) + 360) % 360) - 180;
   }
   return value;
-}
-
-function isAbortError(err: unknown): boolean {
-  return err instanceof DOMException && err.name === 'AbortError';
 }
 
 function clamp(value: number, min: number, max: number): number {

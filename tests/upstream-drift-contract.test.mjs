@@ -370,6 +370,7 @@ const OUT_FIELDS_SENDERS = [
   'src/layers/nws-alerts.ts',
   'src/layers/power-3d.ts',
   'src/layers/spc-fire-weather.ts',
+  'src/layers/tropical-read.ts',
   'src/layers/usdm.ts',
   'src/map/satellite.ts',
   'src/state/display-snapshot.ts',

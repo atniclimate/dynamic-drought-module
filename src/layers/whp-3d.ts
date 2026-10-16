@@ -155,6 +155,8 @@ export async function activateWhpDrape(
     return false;
   }
   if (signal.aborted) return false;
+  // The flat layer can finish activating during the probe, before the watcher below exists.
+  if (flatWhpLayerIsOn()) return false;
   // Before the source exists, so its first tiles are already cut and
   // entering the scene reloads nothing.
   syncPerimeters(map);

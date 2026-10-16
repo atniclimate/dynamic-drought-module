@@ -42,6 +42,7 @@ export const ACKNOWLEDGEMENT_IDS = [
   'noaa-cpc',
   'noaa-wpc',
   'noaa-spc',
+  'noaa-nhc',
   'noaa-nwrfc',
   'noaa-ncep',
   'noaa-ospo',
@@ -192,6 +193,12 @@ export const ACKNOWLEDGEMENTS: Readonly<Record<AcknowledgementId, Acknowledgemen
   'noaa-cpc': { ...nameOnly('noaa-cpc', 'NOAA Climate Prediction Center'), credits: [NWS_FAMILY_LINE] },
   'noaa-wpc': { ...nameOnly('noaa-wpc', 'NOAA Weather Prediction Center'), credits: [NWS_FAMILY_LINE] },
   'noaa-spc': { ...nameOnly('noaa-spc', 'NOAA Storm Prediction Center'), credits: [NWS_FAMILY_LINE] },
+  // The tropical cyclones layer (ENSO B3): NHC and CPHC are NWS centres under
+  // the same weather.gov disclaimer the shared line cites.
+  'noaa-nhc': {
+    ...nameOnly('noaa-nhc', 'NOAA National Hurricane Center and Central Pacific Hurricane Center'),
+    credits: [NWS_FAMILY_LINE]
+  },
   'noaa-nwrfc': {
     // vocab-allow: the issuing office's own name (NOAA NWS Northwest River Forecast Center), an upstream name
     ...nameOnly('noaa-nwrfc', 'NOAA NWS Northwest River Forecast Center'),
@@ -405,6 +412,7 @@ export const PRODUCT_CREDITS: Readonly<Record<ProductKey, CreditRows>> = {
   'spc-fire-weather': ['noaa-spc'],
   'usfs-whp': ['usfs'],
   'sst-anomaly': ['nasa'],
+  'tropical-cyclones': ['noaa-nhc'],
   telemetry: ['usgs', 'usda-nrcs', 'usbr', 'usace', 'nifc', 'noaa-coops', 'cocorahs-iem', 'noaa-nwrfc'],
   dsci: ['usdm-partners'],
   nwsForecast: ['noaa-nws'],
@@ -427,8 +435,10 @@ export const PROVIDERS: Readonly<
   // The OSM raster ground, drawn by default and under satellite.
   'basemap-ground': ['osm'],
   'satellite-geocolor': ['noaa-nesdis'],
-  // The ENSO flow overlay keeps its interim credits in its own key (DR-161,
-  // src/layers/enso-flow.ts); DR-115 allows no Open-Meteo or Copernicus row.
+  // The ENSO flow overlay (src/layers/enso-flow.ts): NOAA GFS and GFS-Wave
+  // read at runtime, and the committed NOAA RTOFS surface-current frame, all
+  // NCEP products (admission rtofs-currents-producer line 11). The overlay
+  // declares no map attribution: its credit is text in its own panel and key.
   'enso-flow': ['noaa-ncep'],
   structures: ['overture'],
   'terrain-archive': ['usgs'],

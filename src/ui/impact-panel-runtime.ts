@@ -74,10 +74,12 @@ import {
   closeImpactPanelShell,
   ensureImpactPanelShell,
   isImpactPanelShellOpen,
+  NO_PLACE_HEADS,
   openImpactPanelShell,
   refreshBriefingActions,
   setMailActionEnabled
 } from './impact-panel';
+import type { NoPlaceSection } from './impact-panel';
 
 // ---------------------------------------------------------------------------
 // Module state
@@ -1202,8 +1204,14 @@ export function closeImpactPanel(): void {
  * a modal over the Help button; on the phone Help is hidden at the half
  * detent), and that briefing's own Acknowledgements section, at the end of
  * its body, opens from its summary.
+ *
+ * The same no-place presentation opens at Technical information (the
+ * owner's call 1) from the door of a popup with nothing to brief and from
+ * the map key's link: the notes alone, expanded, with focus on their
+ * summary. The key link is reachable with a briefing open on the phone
+ * sheet; the notes then replace that briefing, as above.
  */
-export function openAcknowledgementsPanel(opener: HTMLElement | null): void {
+export function openNoPlacePanel(section: NoPlaceSection, opener: HTMLElement | null): void {
   // Supersede whatever this runtime showed before, the same way a new
   // place open does, then render the list alone.
   if (activeController) {
@@ -1220,12 +1228,13 @@ export function openAcknowledgementsPanel(opener: HTMLElement | null): void {
   panelSelection = null;
   setSheetBriefing(null);
   ensurePanel();
-  if (titleEl) titleEl.textContent = 'Acknowledgements';
-  // DRAFT wording (DR-177): source-directory description pending owner read.
-  if (kindEl) kindEl.textContent = 'Every data source this map can show';
-  if (bodyEl) bodyEl.innerHTML = renderAcknowledgements({ open: true });
+  if (titleEl) titleEl.textContent = NO_PLACE_HEADS[section].title;
+  if (kindEl) kindEl.textContent = NO_PLACE_HEADS[section].kind;
+  if (bodyEl) bodyEl.innerHTML = section === 'technical' ? renderMapTechnicalInformation(true) : renderAcknowledgements({ open: true });
   setMailActionEnabled(false);
   openImpactPanelShell(closeImpactPanel, opener);
+  // The shell focused its close button; the expanded notes' summary takes that focus (never grabbed when the shell did not).
+  if (section === 'technical' && panelEl?.contains(document.activeElement)) bodyEl?.querySelector<HTMLElement>('.impact-technical-information > summary')?.focus();
 }
 
 /** Register the eager facade's close hook before the first panel opens. */

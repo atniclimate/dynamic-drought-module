@@ -27,6 +27,7 @@ import type { OceanKey } from '../config/oceans';
 import { REGIONS, regionToMapLibreBounds } from '../config/regions';
 import type { Region, RegionKey } from '../config/regions';
 import { getOceanFraming } from '../state/cluster-store';
+import { floorCentreOrNull } from './enso-camera';
 import { getFraming } from '../state/framing-store';
 import { getCurrentRegion } from '../state/region-store';
 import { prefersReducedMotion } from '../util/motion';
@@ -38,6 +39,8 @@ export const CAMERA_FIT_PADDING_PX = 20;
 export interface CameraTarget {
   readonly bounds: [[number, number], [number, number]];
   readonly padding: number;
+  /** Centre used instead of the bounds' centre when the fit needs a zoom below the map's floor. */
+  readonly floorCentre?: readonly [number, number];
 }
 
 /** A camera is flat when its pitch and bearing are both below this, in degrees. */
@@ -66,7 +69,23 @@ export function allTarget(): CameraTarget {
 
 /** An ocean camera (src/config/oceans.ts). */
 export function oceanTarget(key: OceanKey): CameraTarget {
-  return { bounds: framingFitBounds(OCEANS[key]), padding: CAMERA_FIT_PADDING_PX };
+  const { floorCentre } = OCEANS[key];
+  return {
+    bounds: framingFitBounds(OCEANS[key]),
+    padding: CAMERA_FIT_PADDING_PX,
+    ...(floorCentre ? { floorCentre } : {})
+  };
+}
+
+/**
+ * The centre a fit lands on when the target's zoom would fall below the map's
+ * floor and the target names a floor centre; null when the plain fit applies
+ * (every large map, every target without a floor centre).
+ */
+export function floorCentreFor(map: maplibregl.Map, target: CameraTarget): [number, number] | null {
+  if (!target.floorCentre) return null;
+  const zoom = map.cameraForBounds(target.bounds, { padding: target.padding })?.zoom;
+  return floorCentreOrNull(zoom, map.getMinZoom(), target.floorCentre);
 }
 
 /**
@@ -109,6 +128,15 @@ export function fitCameraTarget(
   target: CameraTarget,
   animate: boolean
 ): void {
+  const centre = floorCentreFor(map, target);
+  if (centre) {
+    // The fit is below the zoom floor: keep the floor, centre on the target's own focus.
+    // bearing 0: fitBounds always turned the map north-up, and this path must too.
+    const view = { center: centre, zoom: map.getMinZoom(), bearing: 0 };
+    if (animate) map.easeTo(view);
+    else map.jumpTo(view);
+    return;
+  }
   map.fitBounds(target.bounds, { padding: target.padding, animate });
 }
 
@@ -157,7 +185,8 @@ export function cameraMatchesTarget(map: maplibregl.Map, target: CameraTarget): 
   if (!camera || camera.center === undefined || camera.zoom === undefined) return false;
   const zoom = Math.min(map.getMaxZoom(), Math.max(map.getMinZoom(), camera.zoom));
   if (Math.abs(zoom - map.getZoom()) > ZOOM_TOLERANCE) return false;
-  const targetPoint = map.project(LngLat.convert(camera.center).wrap());
+  const centre = floorCentreFor(map, target) ?? camera.center;
+  const targetPoint = map.project(LngLat.convert(centre).wrap());
   const livePoint = map.project(map.getCenter().wrap());
   return (
     Math.hypot(targetPoint.x - livePoint.x, targetPoint.y - livePoint.y) <=
@@ -181,6 +210,17 @@ export function readCameraState(map: maplibregl.Map): CameraState {
     pitch: map.getPitch(),
     bearing: map.getBearing()
   };
+}
+
+/** Put a captured camera back; `animate` false jumps (the reduced-motion house rule). */
+export function restoreCameraState(
+  map: maplibregl.Map,
+  state: CameraState,
+  animate: boolean = !prefersReducedMotion()
+): void {
+  const { center, zoom, pitch, bearing } = state;
+  if (animate) map.easeTo({ center, zoom, pitch, bearing });
+  else map.jumpTo({ center, zoom, pitch, bearing });
 }
 
 /**

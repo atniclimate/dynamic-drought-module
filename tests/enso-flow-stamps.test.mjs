@@ -54,6 +54,12 @@ test('the moving GPU form remains drawn with zero native GeoJSON features', () =
   assert.deepEqual(node.dataset, { flowForm: 'moving', flowMotion: 'moving', flowFeatures: '0', flowDrawn: 'wind' });
 });
 
+test('a still shade is drawn with no features and no motion', () => {
+  const node = { dataset: {} };
+  testStampForm({ form: 'shade', features: 0, motion: 'none' }, 'pwat', node);
+  assert.deepEqual(node.dataset, { flowForm: 'shade', flowMotion: 'none', flowFeatures: '0', flowDrawn: 'pwat' });
+});
+
 test('clearing a prior drawn form removes both diagnostic claims', () => {
   const node = { dataset: {} };
   testStampForm({ form: 'arrows', features: 3, motion: 'none' }, 'waves', node);

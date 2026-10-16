@@ -796,6 +796,24 @@ export function setMailActionEnabled(enabled: boolean): void {
  * takes focus back on close.
  */
 export function openAcknowledgements(opener: HTMLElement | null): void {
+  openNoPlace('acknowledgements', opener);
+}
+
+/** The door of a popup with nothing to brief, and the map key's link (the owner's call 1). */
+export function openTechnicalInformation(opener: HTMLElement | null): void {
+  openNoPlace('technical', opener);
+}
+
+/** The heads of the two presentations that open with no place. */
+export const NO_PLACE_HEADS = {
+  // DRAFT wording (DR-177): source-directory description pending owner read.
+  acknowledgements: { title: 'Acknowledgements', kind: 'Every data source this map can show' },
+  // DRAFT wording (DR-177): the owner's call 1, the notes with no place selected.
+  technical: { title: 'Technical information', kind: 'Notes on the layers this map can show' }
+} as const;
+export type NoPlaceSection = keyof typeof NO_PLACE_HEADS;
+
+function openNoPlace(section: NoPlaceSection, opener: HTMLElement | null): void {
   if (unavailableOpen) {
     clearUnavailableState();
     closeImpactPanelShell(false);
@@ -805,14 +823,13 @@ export function openAcknowledgements(opener: HTMLElement | null): void {
   void loadRuntime().then(
     (loaded) => {
       if (intent !== briefingIntentSeq) return;
-      loaded.openAcknowledgementsPanel(opener);
+      loaded.openNoPlacePanel(section, opener);
     },
     () => {
       if (intent !== briefingIntentSeq) return;
       const current = ensureImpactPanelShell();
-      current.title.textContent = 'Acknowledgements';
-      // DRAFT wording (DR-177): source-directory description pending owner read.
-      current.kind.textContent = 'Every data source this map can show';
+      current.title.textContent = NO_PLACE_HEADS[section].title;
+      current.kind.textContent = NO_PLACE_HEADS[section].kind;
       current.body.innerHTML = `<p class="impact-horizon-note">${UNAVAILABLE_NOTE}</p>`;
       setMailActionEnabled(false);
       unavailableOpen = true;

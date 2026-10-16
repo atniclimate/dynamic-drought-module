@@ -124,14 +124,6 @@ const STATES_FETCH_TIMEOUT_MS = 10_000;
 const STATES_LOCAL_URL =
   `${import.meta.env?.BASE_URL ?? '/dynamic-drought-module/'}data/us-states.geojson`;
 
-/**
- * Session cache for the bundled state boundaries used by the point-in-polygon
- * fallback. Resolved once, reused for every later click; a failed fetch caches
- * null so the fallback degrades to "state unresolved" without re-hitting a
- * missing file each click.
- */
-let statesCachePromise: Promise<FeatureCollection | null> | null = null;
-
 /** First non-empty string among `keys` in a feature's properties, else null. */
 function firstString(props: GeoJsonProperties, keys: readonly string[]): string | null {
   if (!props) return null;
@@ -176,37 +168,28 @@ function stateFromProps(props: GeoJsonProperties): StateIdentity | null {
   return { code: code.toUpperCase(), name: name ?? code.toUpperCase() };
 }
 
-/** Load and cache the bundled state boundaries; null on any failure. */
-function loadBundledStates(signal: AbortSignal): Promise<FeatureCollection | null> {
-  if (statesCachePromise) return statesCachePromise;
-  statesCachePromise = (async () => {
-    try {
-      // Shared, page-lifetime transport (DDM-P14-T06): this module's own
-      // `statesCachePromise` still caches a session-lasting null after a real
-      // failure (unchanged below), but the successful path now reuses
-      // whatever fetch the states layer, the deep link, or the Place studio
-      // already made, rather than issuing its own. The collection is only
-      // ever read here (`for...of` plus point-in-polygon and property reads),
-      // never mutated, so sharing the reference is safe.
-      return (await fetchSharedJsonWithBudget(
-        US_STATES_SHARED_KEY,
-        STATES_LOCAL_URL,
-        null,
-        signal,
-        STATES_FETCH_TIMEOUT_MS
-      )) as FeatureCollection;
-    } catch (err) {
-      // An aborted fetch is a superseded click, not a real failure: do not
-      // poison the cache, so a later click can try again.
-      if (signal.aborted) {
-        statesCachePromise = null;
-        return null;
-      }
+/** Load the bundled state boundaries; null on any failure. */
+async function loadBundledStates(signal: AbortSignal): Promise<FeatureCollection | null> {
+  try {
+    // Shared, page-lifetime transport (DDM-P14-T06) is the session cache: a
+    // success is kept and reused by every reader (states layer, deep link,
+    // Place studio), each caller waits with its own signal so a superseded
+    // click cannot cancel a live one, and a failure is evicted so the next
+    // click retries. The collection is only ever read here, never mutated.
+    return (await fetchSharedJsonWithBudget(
+      US_STATES_SHARED_KEY,
+      STATES_LOCAL_URL,
+      null,
+      signal,
+      STATES_FETCH_TIMEOUT_MS
+    )) as FeatureCollection;
+  } catch (err) {
+    // An aborted wait is a superseded click, not a real failure.
+    if (!signal.aborted) {
       console.warn('[location-identity] bundled state boundaries fetch failed.', err);
-      return null;
     }
-  })();
-  return statesCachePromise;
+    return null;
+  }
 }
 
 /**

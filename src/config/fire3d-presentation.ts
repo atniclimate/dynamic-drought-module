@@ -1,5 +1,5 @@
 import type * as maplibregl from 'maplibre-gl';
-import { FIRE3D_TERRAIN_COVERAGE, type TerrainCoverage } from './terrain-coverage';
+import { FIRE3D_TERRAIN_COVERAGE, terrainCoverageSentence, type TerrainCoverage } from './terrain-coverage';
 
 import { HILLSHADE_SHADOW, MAP_GROUND_COLOR } from './interface-tokens';
 import {
@@ -104,8 +104,8 @@ export { FIRE3D_TERRAIN_COVERAGE } from './terrain-coverage';
  * FIRE3D_TERRAIN_COVERAGE.maxZoom plays no part here: this answers ONLY the
  * geographic question (is there any baked elevation here at all), never the
  * separate and non-boundary question of how deep the bake goes once inside
- * the box (see FIRE3D_TERRAIN_COVERAGE_SENTENCE's own comment on why the two
- * must stay apart).
+ * the box (see terrainCoverageSentence's own comment on why the two must
+ * stay apart).
  */
 export function isWithinTerrainCoverage(
   lng: number, lat: number, coverage: TerrainCoverage = FIRE3D_TERRAIN_COVERAGE
@@ -177,62 +177,62 @@ export function classifyTerrainCoverage(
   return contained ? 'full' : 'partial';
 }
 
-/**
- * Exported (not just an internal helper) so the header-vs-sentence test in
- * tests/fire3d-mode.spec.ts asserts against the exact same formatting the
- * sentence uses, rather than a second hand-written copy that could drift
- * from it silently.
- */
-export function formatLatitudeDeg(value: number): string {
-  return `${Math.abs(value)}°${value >= 0 ? 'N' : 'S'}`;
-}
-
-/** See formatLatitudeDeg. */
-export function formatLongitudeDeg(value: number): string {
-  return `${Math.abs(value)}°${value >= 0 ? 'E' : 'W'}`;
-}
+export { formatLatitudeDeg, formatLongitudeDeg } from './terrain-coverage';
 
 /**
- * The terrain-only clause: the geographic extent is the coverage claim
- * (outside the box there is no archive at all, so the ground renders
- * flat); the zoom figure is stated separately as a DETAIL, never folded
- * into the same clause as "outside it...flat", because it is not a
- * coverage boundary. Above zoom 8 MapLibre overzooms the archive's
- * deepest level rather than going flat (src/layers/hillshade.ts:7-11),
- * and the 3D scene builds its own raster-dem from this same archive
- * (src/map/fire3d.ts), so relief persists, softened, at every zoom; a
- * sentence that read "through zoom 8; outside it...flat" would have let
- * "outside" be misread as "past zoom 8", which is false.
- *
- * Exported so src/ui/map-key.ts's flat-hillshade coverage entry can mirror
- * it verbatim (that module is in the eager graph and must not import this
- * chunk); tests/fire3d-mode.spec.ts pins the two against drift.
+ * The 3D scene's terrain clause (src/config/terrain-coverage.ts holds the
+ * shared formatter and the flat Terrain Shading's own form). Formatted from
+ * the archive that actually resolved (DR-083): the bundled zoom 8 depth
+ * before activation, the deep archive's own header depth once it answers. A
+ * bare number keeps the bundled box at that depth.
  */
 export function fire3dTerrainCoverageSentence(terrain: number | TerrainCoverage): string {
   const coverage = typeof terrain === 'number'
     ? { ...FIRE3D_TERRAIN_COVERAGE, maxZoom: terrain } : terrain;
-  return (
-    `Terrain relief uses the ${coverage.issuer}'s elevation data for ` +
-    `${formatLongitudeDeg(coverage.west)} to ${formatLongitudeDeg(coverage.east)}, ` +
-    `${formatLatitudeDeg(coverage.south)} to ${formatLatitudeDeg(coverage.north)}; ` +
-    'outside that box the ground renders flat. ' +
-    `The archive's detail ends at zoom ${coverage.maxZoom}; closer views stretch its deepest tiles.`
-  );
+  return terrainCoverageSentence('3D relief', coverage);
 }
 
 /**
- * The sentence for the BUNDLED archive, the one every deployer ships. Since
- * DR-083 (2026-09-10) this is the sentence's constant form only: the 3D
- * scene may resolve the deep archive instead (src/config/urls.ts,
- * `terrainPmtilesDeep`, zoom 10), and its own note is then formatted from
- * the depth the resolved archive's header declares, through
- * `fire3dCoverageNote`. This constant describes the bundled archive and the
- * flat hillshade, which reads only that one, and tests/fire3d-mode.spec.ts
- * pins it to the committed header.
+ * The 3D scene's edge fade. Outside the archive box MapLibre has no
+ * elevation, so relief and its shading stop on a straight line. MapLibre has
+ * no spatially varying terrain exaggeration, hillshade or DEM alpha, so the
+ * cheapest soft transition is a draped veil: one line of the scene's own fog
+ * colour on the box edge, blurred by half its width so its alpha falls
+ * linearly from the seam to nothing at both sides (a true gradient, no
+ * bands). The seam it hides is the box itself: the bake zero-fills each
+ * edge tile beyond the box, so the ground drops from about 1,500 m to sea
+ * level there and the drape stretches up that face. Further out, where the
+ * edge tiles end (40.98N at zooms 4 to 9), both sides are sea level and
+ * Terrain Shading draws nothing on flat ground, so no terrain seam remains
+ * there. Its width is half a degree of ground from zoom 3 to 9 (a soft edge,
+ * not a hairline, while the whole region is in view), held in screen pixels
+ * past zoom 9 so the half width stays inside the source tile buffer. It
+ * hides the seam, not the geometric step; nothing about the elevation changes.
  */
-export const FIRE3D_TERRAIN_COVERAGE_SENTENCE = fire3dTerrainCoverageSentence(
-  FIRE3D_TERRAIN_COVERAGE.maxZoom
-);
+const TERRAIN_EDGE_DEG = 0.5;
+const edgePx = (zoom: number): number => (TERRAIN_EDGE_DEG * 512 * 2 ** zoom) / 360;
+const edgeWidth = (scale: number): maplibregl.ExpressionSpecification =>
+  ['interpolate', ['exponential', 2], ['zoom'], 3, edgePx(3) * scale, 9, edgePx(9) * scale];
+
+/** GeoJSON tile buffer (512 is a whole tile): above the 182 px half width at zoom 9, so no tile edge cuts the fade. */
+export const TERRAIN_EDGE_BUFFER = 256;
+
+export const TERRAIN_EDGE_PAINT: NonNullable<maplibregl.LineLayerSpecification['paint']> = {
+  'line-color': MAP_GROUND_COLOR,
+  'line-width': edgeWidth(1),
+  'line-blur': edgeWidth(0.5),
+  'line-opacity': ['interpolate', ['linear'], ['zoom'], 6, 0, 8, 0.9]
+};
+
+/** The archive box's edge as one closed line. */
+export function terrainEdgeLine(box: TerrainCoverage): GeoJSON.Feature<GeoJSON.LineString> {
+  const { west: w, south: s, east: e, north: n } = box;
+  return {
+    type: 'Feature',
+    properties: {},
+    geometry: { type: 'LineString', coordinates: [[w, s], [e, s], [e, n], [w, n], [w, s]] }
+  };
+}
 
 /**
  * Honest coverage statement rendered beside the toggle whenever the control

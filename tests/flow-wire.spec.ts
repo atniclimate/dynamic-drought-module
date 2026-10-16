@@ -6,14 +6,18 @@ import { expect, test, type Locator, type Page, type Route } from './offline-tes
 import * as ensoFlowData from '../src/layers/enso-flow-data';
 import { locateMessage } from '../src/layers/flow/nodd';
 import { FLOW_SOURCES, frameGrid } from '../src/layers/flow/source';
+import type { EnsoFlowKind } from '../src/state/enso-flow';
 import { gotoApp, layerCheckbox, noddStubLog } from './helpers';
 
 /*
  * ENSO-FLOW-PLAN block E2, unit E2-1 (FLOW-WIRE): in ENSO mode, Wind and
  * Waves draw NOAA GFS 10 m wind and GFS-Wave peak direction as flowing paths
- * (or their still form), read from NOAA's public NODD bucket, in place of
- * the static Open-Meteo arrows. Ocean currents keep the interim arrows and
- * their DR-161 credits.
+ * (or their still form), read from NOAA's public NODD bucket. Ocean currents
+ * draw the same paths from the committed NOAA RTOFS frame, a file of the
+ * app's own origin (public/data/rtofs-surface-currents*; admission
+ * rtofs-currents-producer), served by the preview like any other asset: its
+ * cases read the frame's run and valid instant from the committed header
+ * and never pin a date of their own, since a landing replaces the frame.
  *
  * Every NODD read is answered by tests/helpers.ts `installDefaultNoddStub`
  * from the 2026-10-05 06Z f006 fixtures (or by a route of the case's own),
@@ -31,8 +35,17 @@ import { gotoApp, layerCheckbox, noddStubLog } from './helpers';
  */
 
 const PIXEL = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
-const OPEN_METEO = /^https:\/\/(?:marine-api|api)\.open-meteo\.com\//;
-const NODD = /^https:\/\/noaa-gfs-bdp-pds\.s3\.amazonaws\.com\//;
+/** The committed currents frame: its header, and the header with its grid files. */
+const CURRENTS_HEADER = /\/data\/rtofs-surface-currents\.json(?:\?|$)/;
+const CURRENTS_FRAME = /\/data\/rtofs-surface-currents[^/]*$/;
+const FRAME = JSON.parse(readFileSync(new URL('../public/data/rtofs-surface-currents.json', import.meta.url), 'utf8')) as {
+  readonly run: string; readonly valid: string; readonly grids: readonly { readonly file: string }[];
+};
+const FRAME_RUN = Date.parse(FRAME.run);
+const FRAME_VALID = Date.parse(FRAME.valid);
+/** Three and a half days after the frame's valid instant: its line ends "frame 3 days old". */
+const FRAME_CLOCK = FRAME_VALID + 3.5 * 24 * 3_600_000;
+const NODD =/^https:\/\/noaa-gfs-bdp-pds\.s3\.amazonaws\.com\//;
 const FIXTURE_CYCLE = Date.UTC(2026, 9, 5, 6);
 const FIXTURE_VALID = Date.UTC(2026, 9, 5, 12);
 /** Candidate cycle 06Z; wind (3-hourly) and waves (hourly) both at f006. */
@@ -65,21 +78,12 @@ async function stubSst(page: Page): Promise<void> {
     (route) => route.fulfill({ status: 200, contentType: 'image/png', body: PIXEL }));
 }
 
-/** Record every Open-Meteo request; answer currents with a 40-cell live sample at the page clock. */
-async function stubOpenMeteo(page: Page, clock: number): Promise<URL[]> {
+/** Record every read of the committed currents frame: only the currents kind reads it. */
+function recordCurrentsFrame(page: Page): URL[] {
   const calls: URL[] = [];
-  await page.route(OPEN_METEO, async (route) => {
-    const url = new URL(route.request().url());
-    calls.push(url);
-    const latitudes = url.searchParams.get('latitude')!.split(',').map(Number);
-    const longitudes = url.searchParams.get('longitude')!.split(',').map(Number);
-    const time = Math.floor(clock / 900_000) * 900;
-    const body = latitudes.map((latitude, i) => ({
-      latitude, longitude: longitudes[i],
-      current_units: { time: 'unixtime', ocean_current_velocity: 'm/s', ocean_current_direction: '°' },
-      current: { time, interval: 900, ocean_current_velocity: 0.4, ocean_current_direction: 90 }
-    }));
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+  page.on('request', (request) => {
+    const url = new URL(request.url());
+    if (CURRENTS_FRAME.test(url.pathname)) calls.push(url);
   });
   return calls;
 }
@@ -89,12 +93,13 @@ async function stubOpenMeteo(page: Page, clock: number): Promise<URL[]> {
  * adds `flow=off`: every case below starts from off and chooses its kind, as
  * it did before the default. `motion: 'live'` leaves the motion loop to the
  * page (the cases that read the moving form); the rest take `gotoApp`'s hold
- * and read the same paths in their still form.
+ * and read the same paths in their still form. Resolves to the reads of the
+ * currents frame, which wind and waves must never make.
  */
 async function bootEnso(page: Page, query = '', clock = LIVE_CLOCK, motion: 'hold' | 'live' = 'hold'): Promise<URL[]> {
   await page.clock.setFixedTime(clock);
   await stubSst(page);
-  const calls = await stubOpenMeteo(page, clock);
+  const calls = recordCurrentsFrame(page);
   const named = /(?:^|&)flow=/.test(query) ? query : `${query}&flow=off`;
   await gotoApp(page, `?cluster=enso&ocean=pacific${named}`, { flowMotion: motion });
   return calls;
@@ -104,7 +109,7 @@ function panel(page: Page): Locator {
   return page.locator('.enso-flow');
 }
 
-async function choose(page: Page, kind: 'off' | 'currents' | 'wind' | 'waves'): Promise<void> {
+async function choose(page: Page, kind: EnsoFlowKind): Promise<void> {
   await panel(page).locator(`[data-flow-kind="${kind}"]`).click();
 }
 
@@ -211,8 +216,11 @@ test.describe('E2-1 flow words', () => {
       else if (value && typeof value === 'object') for (const v of Object.values(value)) walk(v);
     };
     walk(FLOW_WORDS);
-    out.push(flowLiveLine('live', FIXTURE_CYCLE, FIXTURE_VALID), flowLiveLine('live (partial)', FIXTURE_CYCLE, FIXTURE_VALID));
-    out.push(flowStaleLine('wind', FIXTURE_CYCLE), flowStaleLine('waves', FIXTURE_CYCLE));
+    for (const kind of Object.keys(FLOW_SOURCES) as (keyof typeof FLOW_SOURCES)[]) out.push(flowLiveLine('live', kind, FIXTURE_CYCLE, FIXTURE_VALID), flowLiveLine('live (partial)', kind, FIXTURE_CYCLE, FIXTURE_VALID));
+    for (const kind of Object.keys(FLOW_SOURCES) as (keyof typeof FLOW_SOURCES)[]) out.push(flowStaleLine(kind, FIXTURE_CYCLE));
+    // The currents frame's own lines: its dated line with its age, and the box of the grid under the view.
+    out.push(flowLiveLine('live', 'currents', FRAME_RUN, FRAME_VALID, FRAME_CLOCK), flowLiveLine('live (partial)', 'currents', FRAME_RUN, FRAME_VALID, FRAME_VALID));
+    out.push(ensoFlowData.currentsBoxNote({ lon0: 130, lat0: 39, dlon: 1, dlat: 1, nx: 120, ny: 80 }));
     return out;
   }
 
@@ -225,15 +233,15 @@ test.describe('E2-1 flow words', () => {
     }
   });
 
-  test("no flow string contains trajectory, carries, drift, where the wind goes or travels to, and 'path of' appears only inside the one DRAFT negation 'not the path of anything carried by it'", () => {
+  test("no flow string contains trajectory, carries, drift, where the wind goes, travels to or path of", () => {
     const strings = flowStrings();
     for (const s of strings) {
       expect(s, s).not.toMatch(/\btrajector(?:y|ies)\b|\bcarries\b|\bdrift|where the wind goes|\btravels to\b/i);
     }
     const pathOf = strings.filter((s) => /\bpath of\b/i.test(s));
-    expect(pathOf).toEqual([FLOW_WORDS.instant]);
-    expect(FLOW_WORDS.instant).toContain('not the path of anything carried by it');
-    expect(FLOW_WORDS.instant.match(/\bpath of\b/gi)).toHaveLength(1);
+    // The one negation that holds "path of" left the key for the Impact Briefing, where
+    // tests/terrain-coverage.test.mjs holds it to this rule; no panel or key string has the words.
+    expect(pathOf).toEqual([]);
   });
 });
 
@@ -296,13 +304,16 @@ test.describe('E2-1 flowing paths in ENSO mode', () => {
     await expect(panel(page)).toHaveAttribute('data-flow-drawn', 'wind');
   });
 
-  test('ENSO wind reads only the NODD .idx and two ranges, and no Open-Meteo host', async ({ page }) => {
+  for (const [kind, label] of [['wind', 'Atmospheric currents'], ['jet', 'Jet-level wind']] as const) test(`ENSO ${kind} reads only the NODD .idx and two ranges, and no currents frame`, async ({ page }) => {
     const calls = await bootEnso(page);
-    const requested: string[] = [];
-    page.on('request', (request) => { if (OPEN_METEO.test(request.url())) requested.push(request.url()); });
-    await choose(page, 'wind');
+    await choose(page, kind);
     await expect(panel(page)).toHaveAttribute('data-status', 'live');
-    await expect(panel(page)).toHaveAttribute('data-flow-drawn', 'wind');
+    await expect(panel(page)).toHaveAttribute('data-flow-drawn', kind);
+    await expect(panel(page).locator(`[data-flow-kind="${kind}"]`)).toHaveText(label);
+    await expect(flowStatus(page)).toContainText(`${label} · live · ${FLOW_WORDS.source[kind]} · Model run `);
+    await expect(flowProvenance(page)).toHaveText(FLOW_WORDS.provenance[kind]);
+    await expect(flowNotes(page)).toContainText(FLOW_WORDS.bins[kind]);
+    const [ugrd, vgrd] = FLOW_SOURCES[kind].messages.map((m) => spanRange('gfs.t06z.pgrb2.1p00.f006.idx', m.variable, m.level)) as [string, string];
     const log = noddStubLog(page).map(({ method, url, range, answer }) => ({ method, url, range, answer }));
     const key = `https://noaa-gfs-bdp-pds.s3.amazonaws.com/${WIND_IDX.replace(/\.idx$/, '')}`;
     expect(log).toHaveLength(3);
@@ -310,11 +321,37 @@ test.describe('E2-1 flowing paths in ENSO mode', () => {
     // The two message reads run together, so their order is not fixed.
     const messages = log.slice(1).sort((a, b) => (a.range ?? '').localeCompare(b.range ?? ''));
     expect(messages).toEqual([
-      { method: 'GET', url: key, range: spanRange('gfs.t06z.pgrb2.1p00.f006.idx', 'UGRD', '10 m above ground'), answer: 'fixture' },
-      { method: 'GET', url: key, range: spanRange('gfs.t06z.pgrb2.1p00.f006.idx', 'VGRD', '10 m above ground'), answer: 'fixture' }
+      { method: 'GET', url: key, range: ugrd, answer: 'fixture' },
+      { method: 'GET', url: key, range: vgrd, answer: 'fixture' }
     ].sort((a, b) => a.range.localeCompare(b.range)));
-    expect(calls, 'no Open-Meteo read for wind').toHaveLength(0);
-    expect(requested).toEqual([]);
+    expect(calls, `no currents frame read for ${kind}`).toHaveLength(0);
+  });
+
+  test('ENSO precipitable water reads only the NODD .idx and one range, and draws a still shade with nothing to pause', async ({ page }) => {
+    const calls = await bootEnso(page);
+    await choose(page, 'pwat');
+    await expect(panel(page)).toHaveAttribute('data-status', 'live');
+    await expect(panel(page)).toHaveAttribute('data-flow-drawn', 'pwat');
+    await expect(panel(page)).toHaveAttribute('data-flow-form', 'shade');
+    await expect(panel(page)).toHaveAttribute('data-flow-motion', 'none');
+    await expect(panel(page).locator('[data-flow-kind="pwat"]')).toHaveText('Precipitable water');
+    // A shade has no arrows to colour and nothing that moves.
+    await expect(panel(page).locator('.enso-flow-toolbar')).toBeHidden();
+    await expect(page.locator('#map-key-flow-pause')).toBeHidden();
+    await expect(flowStatus(page)).toContainText(`Precipitable water · live · ${FLOW_WORDS.source.pwat} · Model run `);
+    await expect(flowNotes(page)).toHaveText(FLOW_WORDS.bins.pwat);
+    await expect(flowProvenance(page)).toHaveText(FLOW_WORDS.provenance.pwat);
+    const [pwat] = FLOW_SOURCES.pwat.messages.map((m) => spanRange('gfs.t06z.pgrb2.1p00.f006.idx', m.variable, m.level)) as [string];
+    const key = `https://noaa-gfs-bdp-pds.s3.amazonaws.com/${WIND_IDX.replace(/\.idx$/, '')}`;
+    expect(noddStubLog(page).map(({ method, url, range, answer }) => ({ method, url, range, answer }))).toEqual([
+      { method: 'GET', url: `${key}.idx`, range: 'bytes=0-65535', answer: 'fixture' },
+      { method: 'GET', url: key, range: pwat, answer: 'fixture' }
+    ]);
+    expect(calls, 'no currents frame read for precipitable water').toHaveLength(0);
+    // A line kind brings the arrow colour back.
+    await choose(page, 'wind');
+    await expect(panel(page)).toHaveAttribute('data-flow-drawn', 'wind');
+    await expect(panel(page).locator('.enso-flow-toolbar')).toBeVisible();
   });
 
   test('waves read the .idx, DIRPW and HTSGW, and never PERPW', async ({ page }) => {
@@ -333,52 +370,54 @@ test.describe('E2-1 flowing paths in ENSO mode', () => {
     expect(calls).toHaveLength(0);
   });
 
-  test('the drawer line reads live · Model run <date> · Model valid <date>, with no now and no forecast', async ({ page }) => {
+  test('the drawer line reads live · <source> · Model run <date> · Model valid <date>, with no now and no forecast', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await bootEnso(page, '&embed=true&flow=wind');
     await expect(panel(page)).toHaveAttribute('data-status', 'live');
     await openKeyDrawer(page);
     const run = await pageDate(page, FIXTURE_CYCLE);
     const valid = await pageDate(page, FIXTURE_VALID);
-    await expect(flowStatus(page)).toHaveText(`Atmospheric currents · live · Model run ${run} · Model valid ${valid}`);
+    await expect(flowStatus(page)).toHaveText(`Atmospheric currents · live · ${FLOW_WORDS.source.wind} · Model run ${run} · Model valid ${valid}`);
     const text = `${await flowStatus(page).textContent()} ${await flowNotes(page).textContent()}`;
     expect(text).not.toMatch(/\bnow\b|\bforecast/i);
-    await expect(flowNotes(page)).toContainText(FLOW_WORDS.instant);
-    await expect(flowNotes(page)).toContainText('This is model context, independently timed from the observed SST map.');
+    // The key keeps what decodes the lines; the explanations read in the Impact Briefing.
+    await expect(flowNotes(page)).toContainText(FLOW_WORDS.bins.wind);
+    await expect(flowNotes(page)).not.toContainText('independently timed');
+    await expect(flowNotes(page)).not.toContainText('Display bins');
     // Two products, two clocks: the SST date keeps its own node.
     await expect(page.locator('#map-key [data-sst-observed]')).not.toContainText('Model');
     await expect(flowStatus(page)).not.toContainText('Observed');
   });
 
-  test('derived from NOAA GFS shows as text in the drawer and the panel; there is no attribution line', async ({ page }) => {
+  test('the credit (derived from NOAA GFS, then the 10 m wind) shows as text in the drawer and the panel; there is no attribution line', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await bootEnso(page);
     await choose(page, 'wind');
     await expect(panel(page)).toHaveAttribute('data-status', 'live');
     await openKeyDrawer(page);
-    await expect(flowProvenance(page)).toHaveText('derived from NOAA GFS');
+    expect(FLOW_WORDS.provenance.wind).toBe('derived from NOAA GFS 10 m wind');
+    await expect(flowProvenance(page)).toHaveText(FLOW_WORDS.provenance.wind);
     await expect(flowProvenance(page).locator('img, svg, a')).toHaveCount(0);
     const credit = panel(page).locator('[data-enso-flow-provenance]');
-    await expect(credit).toHaveText('derived from NOAA GFS');
+    await expect(credit).toHaveText(FLOW_WORDS.provenance.wind);
     await expect(credit.locator('img, svg, a')).toHaveCount(0);
-    const panelText = (await panel(page).textContent())!;
-    expect(panelText).not.toContain('Open-Meteo');
-    expect(panelText).not.toContain('Copernicus');
+    // The credit is text and only text: the panel links nowhere, and the map's attribution line names no model.
+    await expect(panel(page).locator('a[href]')).toHaveCount(0);
     const attribution = page.locator('.maplibregl-ctrl-attrib');
     for (const text of await attribution.allTextContents()) {
-      expect(text).not.toMatch(/Open-Meteo|GFS/);
+      expect(text).not.toMatch(/GFS|RTOFS/);
     }
   });
 
-  test('the provenance item reads derived from NOAA GFS for waves too, marked for read-back', async ({ page }) => {
+  test('the provenance item reads derived from NOAA GFS-Wave for waves, marked for read-back', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await bootEnso(page);
     await choose(page, 'waves');
     await expect(panel(page)).toHaveAttribute('data-status', /^live/);
     await openKeyDrawer(page);
     await expect(flowStatus(page)).toContainText('Ocean waves · live');
-    await expect(flowProvenance(page)).toHaveText('derived from NOAA GFS');
-    await expect(panel(page).locator('[data-enso-flow-provenance]')).toHaveText('derived from NOAA GFS');
+    await expect(flowProvenance(page)).toHaveText('derived from NOAA GFS-Wave');
+    await expect(panel(page).locator('[data-enso-flow-provenance]')).toHaveText('derived from NOAA GFS-Wave');
   });
 
   test('a 404 thrice reads unavailable plus the FAILED_NOTE, and nothing draws', async ({ page }) => {
@@ -391,7 +430,7 @@ test.describe('E2-1 flowing paths in ENSO mode', () => {
     await bootEnso(page);
     await choose(page, 'wind');
     await expect(panel(page)).toHaveAttribute('data-status', 'unavailable');
-    await expect(panel(page).locator('.enso-flow-status')).toHaveText('unavailable · NOAA GFS wind did not load');
+    await expect(panel(page).locator('.enso-flow-status')).toHaveText('unavailable · NOAA GFS 10 m wind did not load');
     expect(asked.map((a) => a.url.replace('https://noaa-gfs-bdp-pds.s3.amazonaws.com/', ''))).toEqual([
       'gfs.20261005/06/atmos/gfs.t06z.pgrb2.1p00.f006.idx',
       'gfs.20261005/00/atmos/gfs.t00z.pgrb2.1p00.f012.idx',
@@ -400,7 +439,7 @@ test.describe('E2-1 flowing paths in ENSO mode', () => {
     await expect(panel(page)).toHaveAttribute('data-flow-drawn', '');
     await expect(panel(page)).toHaveAttribute('data-flow-form', 'none');
     await openKeyDrawer(page);
-    await expect(flowStatus(page)).toHaveText('Atmospheric currents · unavailable · NOAA GFS wind did not load');
+    await expect(flowStatus(page)).toHaveText('Atmospheric currents · unavailable · NOAA GFS 10 m wind did not load');
     await expect(flowNotes(page)).toHaveText(FAILED_NOTE);
     await expect(flowProvenance(page)).toHaveCount(0);
     await expect(page.locator('#map-key-flow-pause')).toBeHidden();
@@ -514,20 +553,88 @@ test.describe('E2-1 flowing paths in ENSO mode', () => {
     expect(seen.every((s) => !s.startsWith('wind|'))).toBe(true);
   });
 
-  test('currents still draw the interim arrows with the DR-161 credits', async ({ page }) => {
-    const calls = await bootEnso(page);
+  test('currents draw the committed NOAA RTOFS frame as paths: three same-origin reads, a dated line and its credit as text', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    const calls = await bootEnso(page, '', FRAME_CLOCK);
     await choose(page, 'currents');
-    await expect(panel(page)).toHaveAttribute('data-status', 'live');
-    await expect(panel(page).locator('.enso-flow-status')).toContainText('Model valid');
-    expect(calls).toHaveLength(1);
-    expect(calls[0]!.searchParams.get('models')).toBe('meteofrance_currents');
-    expect(calls[0]!.searchParams.get('latitude')!.split(',').length).toBeLessThanOrEqual(40);
-    await expect(panel(page).getByRole('link', { name: 'Weather data by Open-Meteo.com' })).toBeVisible();
-    await expect(panel(page)).toContainText('Generated using E.U. Copernicus Marine Service Information');
-    await expect(panel(page).getByRole('button', { name: 'Update area' })).toBeVisible();
-    await expect(panel(page)).toHaveAttribute('data-flow-drawn', '');
-    await expect(panel(page).locator('[data-enso-flow-provenance]')).toHaveCount(0);
+    // The Pacific view runs past the grid under its centre, so the state may be live (partial).
+    await expect(panel(page)).toHaveAttribute('data-status', /^live/);
+    await expect(panel(page)).toHaveAttribute('data-flow-drawn', 'currents');
+    expect(Number(await panel(page).getAttribute('data-flow-features'))).toBeGreaterThan(0);
+    // The header and its grid files, each once, all from the app's own origin; nothing from NODD.
+    const origin = new URL(page.url()).origin;
+    expect(calls.map((url) => url.origin)).toEqual([origin, origin, origin]);
+    expect(calls.map((url) => url.pathname.split('/').pop()).sort())
+      .toEqual(['rtofs-surface-currents.json', ...FRAME.grids.map((grid) => grid.file)].sort());
     expect(noddStubLog(page)).toHaveLength(0);
+    // A dated frame: its run, its valid instant and its age, never a limit and never "now".
+    const state = (await panel(page).getAttribute('data-status'))!;
+    const line = `${state} · ${FLOW_WORDS.source.currents} · Model run ${await pageDate(page, FRAME_RUN)} · Model valid ${await pageDate(page, FRAME_VALID)} · frame 3 days old`;
+    await expect(panel(page).locator('.enso-flow-status')).toHaveText(line);
+    await openKeyDrawer(page);
+    await expect(flowStatus(page)).toHaveText(`Ocean currents · ${line}`);
+    await expect(flowNotes(page)).toContainText(FLOW_WORDS.bins.currents);
+    // The key keeps the bins and the state; the credit's long form, the coverage and the disclaimer read in the Impact Briefing.
+    await expect(flowNotes(page)).not.toContainText('Not for navigation');
+    await expect(flowProvenance(page)).toHaveText(FLOW_WORDS.provenance.currents);
+    await expect(flowProvenance(page).locator('img, svg, a')).toHaveCount(0);
+    const credit = panel(page).locator('[data-enso-flow-provenance]');
+    await expect(credit).toHaveText(FLOW_WORDS.provenance.currents);
+    await expect(panel(page).locator('a[href]')).toHaveCount(0);
+    // A pan reads nothing again.
+    await dragMap(page, -60, -20);
+    await expect(panel(page)).toHaveAttribute('data-status', /^live/);
+    expect(calls).toHaveLength(3);
+  });
+
+  for (const fault of ['a missing header', 'a grid file that is not a frame'] as const) {
+    test(`currents with ${fault} read unavailable, and nothing draws`, async ({ page }) => {
+      await page.setViewportSize({ width: 1280, height: 800 });
+      await bootEnso(page, '', FRAME_CLOCK);
+      if (fault === 'a missing header') await page.route(CURRENTS_HEADER, (route) => route.fulfill({ status: 404, contentType: 'text/plain', body: 'Not Found' }));
+      else await page.route((url) => url.pathname.endsWith(`/data/${FRAME.grids[0]!.file}`), (route) => route.fulfill({ status: 200, contentType: 'application/octet-stream', body: 'not a frame' }));
+      await choose(page, 'currents');
+      await expect(panel(page)).toHaveAttribute('data-status', 'unavailable');
+      await expect(panel(page).locator('.enso-flow-status')).toHaveText(`unavailable · ${FLOW_WORDS.unavailable.currents}`);
+      await expect(panel(page)).toHaveAttribute('data-flow-drawn', '');
+      await expect(panel(page)).toHaveAttribute('data-flow-form', 'none');
+      await openKeyDrawer(page);
+      await expect(flowStatus(page)).toHaveText(`Ocean currents · unavailable · ${FLOW_WORDS.unavailable.currents}`);
+      await expect(flowNotes(page)).toHaveText(FAILED_NOTE);
+      await expect(flowProvenance(page)).toHaveCount(0);
+      await expect(page.locator('#map-key-flow-pause')).toBeHidden();
+    });
+  }
+
+  test('a currents view off the grid under it reads no data, never calm', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.clock.setFixedTime(FRAME_CLOCK);
+    await stubSst(page);
+    // Utah, framed by the state deep link: inland, east of both grids' sea nodes, so no node in view holds a value.
+    await gotoApp(page, '?cluster=enso&select=state:UT&flow=currents');
+    await expect(panel(page)).toHaveAttribute('data-status', 'no data');
+    await expect(panel(page)).toHaveAttribute('data-flow-form', 'none');
+    await expect(panel(page)).toHaveAttribute('data-flow-features', '0');
+    await expect(panel(page).locator('.enso-flow-status')).toHaveText(/^no data · (?:No ocean values in this view|This view is outside the area this ocean current grid covers)$/);
+    await openKeyDrawer(page);
+    await expect(flowStatus(page)).toContainText('Ocean currents · no data · ');
+    await expect(flowStatus(page)).not.toContainText(/calm/i);
+    await expect(page.locator('#map-key-flow-pause')).toBeHidden();
+  });
+
+  test('under reduced motion, currents show the still paths and 0 repaints in 2 s', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await bootEnso(page, '', FRAME_CLOCK);
+    await choose(page, 'currents');
+    await expect(panel(page)).toHaveAttribute('data-flow-form', 'still');
+    await expect(panel(page)).toHaveAttribute('data-flow-motion', 'reduced');
+    await expect(panel(page)).toHaveAttribute('data-flow-drawn', 'currents');
+    expect(Number(await panel(page).getAttribute('data-flow-features'))).toBeGreaterThan(0);
+    await openKeyDrawer(page);
+    await expect(flowNotes(page)).toContainText(FLOW_WORDS.reduced);
+    await expect.poll(() => rendersOver(page, 500), { timeout: 15_000 }).toBe(0);
+    expect(await rendersOver(page, 2000), 'MapLibre renders in 2 s under reduced motion').toBe(0);
   });
 
   test('under reduced motion, wind shows the still streaks and 0 repaints in 2 s', async ({ page }) => {
@@ -540,27 +647,28 @@ test.describe('E2-1 flowing paths in ENSO mode', () => {
     expect(Number(await panel(page).getAttribute('data-flow-features'))).toBeGreaterThan(20);
     const pause = page.locator('#map-key-flow-pause');
     await expect(pause).toBeVisible();
-    await expect(pause).toHaveAttribute('aria-pressed', 'true');
+    await expect(pause).toHaveAttribute('data-paused', 'true');
+    await expect(pause).toHaveAccessibleName('Play motion');
     await openKeyDrawer(page);
     await expect(flowNotes(page)).toContainText(FLOW_WORDS.reduced);
     await expect.poll(() => rendersOver(page, 500), { timeout: 15_000 }).toBe(0);
     expect(await rendersOver(page, 2000), 'MapLibre renders in 2 s under reduced motion').toBe(0);
   });
 
-  test('Update area is hidden for wind and waves', async ({ page }) => {
-    await bootEnso(page);
-    const update = panel(page).getByRole('button', { name: 'Update area', includeHidden: true });
-    await choose(page, 'wind');
-    await expect(update).toBeHidden();
-    await expect(panel(page)).toHaveAttribute('data-status', 'live');
-    await expect(panel(page).locator('.enso-flow-status')).not.toContainText('Update area');
-    await choose(page, 'waves');
-    await expect(update).toBeHidden();
-    await expect(panel(page)).toHaveAttribute('data-status', /^live/);
+  test('no kind is sampled by hand: the panel offers its kinds and its ink, and a pan reads nothing', async ({ page }) => {
+    const calls = await bootEnso(page);
+    for (const kind of ['wind', 'waves', 'currents'] as const) {
+      await choose(page, kind);
+      await expect(panel(page)).toHaveAttribute('data-status', /^live/);
+      // Every button of the panel is a kind: nothing asks for a resample.
+      await expect(panel(page).locator('button:not([data-flow-kind])')).toHaveCount(0);
+    }
+    const frameReads = calls.length;
+    const noddReads = noddStubLog(page).length;
     await dragMap(page, -60, -20);
-    await expect(panel(page).locator('.enso-flow-status')).not.toContainText('Update area');
-    await choose(page, 'currents');
-    await expect(update).toBeVisible();
+    await expect(panel(page)).toHaveAttribute('data-status', /^live/);
+    expect(calls).toHaveLength(frameReads);
+    expect(noddStubLog(page)).toHaveLength(noddReads);
   });
 
   test('after webglcontextlost the status stays, the still form draws, the detail says so, and restore rebuilds from CPU state with no refetch', async ({ page }) => {
@@ -580,7 +688,7 @@ test.describe('E2-1 flowing paths in ENSO mode', () => {
     await expect(panel(page)).toHaveAttribute('data-status', 'live');
     expect(Number(await panel(page).getAttribute('data-flow-features'))).toBeGreaterThan(20);
     await openKeyDrawer(page);
-    await expect(flowStatus(page)).toContainText('Atmospheric currents · live · Model run ');
+    await expect(flowStatus(page)).toContainText(`Atmospheric currents · live · ${FLOW_WORDS.source.wind} · Model run `);
     await expect(flowNotes(page)).toContainText(FLOW_WORDS.context);
     await page.evaluate(() => (window as unknown as { __lose: WEBGL_lose_context }).__lose.restoreContext());
     await expect(panel(page)).toHaveAttribute('data-flow-form', 'moving');
@@ -632,11 +740,14 @@ test.describe('E2-1 flowing paths in ENSO mode', () => {
         const state = window as FlowRestoreWindow;
         const map = state.__flowRestoreMaps!.find((candidate) => candidate.getContainer().id === 'map')!;
         state.__flowRestoreComplete = false;
-        map.once('style.load', () => { state.__flowRestoreComplete = true; });
+        // A mode's adapter can load an empty stand-in style while graphics are lost; count only the style that restoration loads.
+        // Complete at the map's next idle after that style.load, so a flow layer re-added a tick later is caught by the one absence check below.
+        map.once('webglcontextrestored', () => { map.once('style.load', () => { map.once('idle', () => { state.__flowRestoreComplete = true; }); }); });
         state.__flowRestoreExtension!.restoreContext();
       });
       await expect.poll(() => page.evaluate(() => (window as FlowRestoreWindow).__flowRestoreComplete)).toBe(true);
-      await expect.poll(() => page.evaluate(() => {
+      // Asserted once: the idle above is the settle point, so an absence that holds here is not a first-sample pass.
+      expect(await page.evaluate(() => {
         const map = (window as FlowRestoreWindow).__flowRestoreMaps!.find((candidate) => candidate.getContainer().id === 'map')!;
         return {
           source: Boolean(map.getSource('flow-still')),
@@ -680,10 +791,10 @@ test.describe('E2-1 flowing paths in ENSO mode', () => {
     const features = Number(featureStamp);
     expect(Number.isInteger(features) && features >= 0).toBe(true);
     const status = panel(page).locator('.enso-flow-status');
-    await expect(status).toContainText('live · Model run ');
+    await expect(status).toContainText(`live · ${FLOW_WORDS.source.wind} · Model run `);
     await expect(status).not.toContainText('wave marks');
     await openKeyDrawer(page);
-    await expect(flowStatus(page)).toContainText('Atmospheric currents · live · Model run ');
+    await expect(flowStatus(page)).toContainText(`Atmospheric currents · live · ${FLOW_WORDS.source.wind} · Model run `);
     if (features > 0) {
       expect(nodes).toBeGreaterThan(0);
       await expect(panel(page)).toHaveAttribute('data-flow-form', 'arrows');
@@ -719,9 +830,9 @@ test.describe('E2-1 flowing paths in ENSO mode', () => {
     await expect(panel(page)).toHaveAttribute('data-status', 'live');
     const status = panel(page).locator('.enso-flow-status');
     await expect(status).not.toContainText(FLOW_WORDS.outside);
-    await expect(status).toContainText('live · Model run ');
+    await expect(status).toContainText(`live · ${FLOW_WORDS.source.waves} · Model run `);
     await openKeyDrawer(page);
-    await expect(flowStatus(page)).toContainText('Ocean waves · live · Model run ');
+    await expect(flowStatus(page)).toContainText(`Ocean waves · live · ${FLOW_WORDS.source.waves} · Model run `);
     if (features > 0) {
       expect(nodes).toBeGreaterThan(0);
       await expect(flowNotes(page)).toContainText(FLOW_WORDS.pastGrid);

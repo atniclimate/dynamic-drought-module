@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
 import { expect, test } from './offline-test';
 import type { Feature, FeatureCollection, Geometry, MultiPolygon, Polygon } from 'geojson';
 
@@ -35,18 +38,6 @@ const invalidPolygonComponents: ReadonlyArray<{
   readonly name: string;
   readonly coordinates: Polygon['coordinates'];
 }> = [
-  {
-    name: 'a self-touching spike',
-    coordinates: [[
-      [10, 0],
-      [14, 0],
-      [14, 4],
-      [12, 2],
-      [10, 4],
-      [12, 2],
-      [10, 0]
-    ]]
-  },
   {
     name: 'a collinear ring',
     coordinates: [[[10, 0], [12, 2], [14, 4], [10, 0]]]
@@ -153,7 +144,7 @@ test.describe('computeOverlapRows', () => {
     expect(result.hasSuppressedSlivers).toBe(true);
   });
 
-  test('rejects malformed candidates and omits null and non-areal ones', () => {
+  test('rejects malformed candidates, omits null and non-areal ones, and clips a self-touching ring', () => {
     const selected = rectangle(0, 0, 10, 10);
     const empty: Polygon = { type: 'Polygon', coordinates: [] };
     const zeroArea: Polygon = {
@@ -176,7 +167,8 @@ test.describe('computeOverlapRows', () => {
     // IB-10: a malformed candidate is NAMED as unusable, while a null or
     // non-areal candidate stays silently omitted. Before this fix both
     // collapsed into the same silent omission, so a broken geometry looked
-    // exactly like a point.
+    // exactly like a point. A self-touching ring has real area, and the
+    // sweep-line clipper resolves it, so it is classified, not rejected.
     const emptyCandidate = feature('empty', empty);
     const zeroCandidate = feature('zero', zeroArea);
     const selfTouchingCandidate = feature('self-touching', selfTouching);
@@ -188,8 +180,10 @@ test.describe('computeOverlapRows', () => {
       feature('point', { type: 'Point', coordinates: [2, 2] })
     ));
 
-    expect(result).toEqual({
-      rows: [],
+    expect(result.rows.map((row) => [row.candidate.id, row.relationship])).toEqual([
+      ['self-touching', 'contains']
+    ]);
+    expect(result).toMatchObject({
       hasSuppressedSlivers: false,
       rejections: [
         {
@@ -201,17 +195,13 @@ test.describe('computeOverlapRows', () => {
           source: 'candidate',
           reason: 'invalid-polygon-component',
           candidate: zeroCandidate
-        },
-        {
-          source: 'candidate',
-          reason: 'invalid-polygon-component',
-          candidate: selfTouchingCandidate
         }
       ]
     });
+    expect(result.rejections).toHaveLength(2);
   });
 
-  test('returns no rows for empty, zero-area, or self-touching selections', () => {
+  test('returns no rows for empty or zero-area selections; classifies a self-touching one', () => {
     const candidate = feature('valid', rectangle(0, 0, 10, 10));
     const empty: Polygon = { type: 'Polygon', coordinates: [] };
     const zeroArea: Polygon = {
@@ -245,7 +235,8 @@ test.describe('computeOverlapRows', () => {
     };
     expect(computeOverlapRows(empty, collection(candidate))).toEqual(selectionRejected);
     expect(computeOverlapRows(zeroArea, collection(candidate))).toEqual(selectionRejected);
-    expect(computeOverlapRows(selfTouching, collection(candidate))).toEqual(selectionRejected);
+    expect(computeOverlapRows(selfTouching, collection(candidate)).rows.map((row) => row.relationship))
+      .toEqual(['within']);
   });
 
   test('reports a rejection for wholly degenerate MultiPolygons', () => {
@@ -307,63 +298,89 @@ test.describe('computeOverlapRows', () => {
     expect(result.rejections).toBeUndefined();
   });
 
-  for (const invalidComponent of invalidPolygonComponents) {
-    test(`rejects a mixed-validity selection containing ${invalidComponent.name}`, () => {
+  // Audit 5 finding 3: real agency shapes carry zero-area pieces (Lummi's
+  // 5-point outer ring, Navajo's two empty holes). Such a piece is skipped and
+  // the real remainder is classified; only bad coordinates reject.
+  for (const zeroAreaComponent of invalidPolygonComponents) {
+    test(`skips ${zeroAreaComponent.name} in a selection and classifies the remainder`, () => {
       const selected: MultiPolygon = {
         type: 'MultiPolygon',
         coordinates: [
           rectangle(0, 0, 4, 4).coordinates,
-          invalidComponent.coordinates
+          zeroAreaComponent.coordinates
         ]
       };
       const candidate = feature('inside-valid-remainder', rectangle(1, 1, 3, 3));
 
       const result = computeOverlapRows(selected, collection(candidate));
 
-      expect(result).toEqual({
-        rows: [],
-        hasSuppressedSlivers: false,
-        rejections: [{
-          source: 'selection',
-          reason: 'invalid-polygon-component'
-        }]
-      });
+      expect(result.rows.map((row) => row.relationship)).toEqual(['contains']);
+      expect(result.rejections).toBeUndefined();
     });
 
-    test(`rejects a mixed-validity candidate containing ${invalidComponent.name}`, () => {
+    test(`skips ${zeroAreaComponent.name} in a candidate and classifies the remainder`, () => {
       const selected = rectangle(-1, -1, 5, 5);
       const candidateGeometry: MultiPolygon = {
         type: 'MultiPolygon',
         coordinates: [
           rectangle(0, 0, 4, 4).coordinates,
-          invalidComponent.coordinates
+          zeroAreaComponent.coordinates
         ]
       };
       const candidate = feature('mixed-validity', candidateGeometry);
 
       const result = computeOverlapRows(selected, collection(candidate));
 
-      expect(result).toEqual({
-        rows: [],
-        hasSuppressedSlivers: false,
-        rejections: [{
-          source: 'candidate',
-          reason: 'invalid-polygon-component',
-          candidate
-        }]
-      });
+      expect(result.rows.map((row) => [row.candidate.id, row.relationship])).toEqual([
+        ['mixed-validity', 'contains']
+      ]);
+      expect(result.rows[0]?.evidence.shareOfCandidateArea).toBeCloseTo(1, 12);
+      expect(result.rejections).toBeUndefined();
     });
   }
 
+  test('rejects a mixed-validity selection or candidate with a non-finite coordinate', () => {
+    const badComponent: Polygon['coordinates'] = [[[10, 0], [12, Number.NaN], [14, 0], [10, 0]]];
+    const mixed: MultiPolygon = {
+      type: 'MultiPolygon',
+      coordinates: [rectangle(0, 0, 4, 4).coordinates, badComponent]
+    };
+    const candidate = feature('mixed-validity', mixed);
+
+    expect(computeOverlapRows(mixed, collection(feature('inside', rectangle(1, 1, 3, 3))))).toEqual({
+      rows: [],
+      hasSuppressedSlivers: false,
+      rejections: [{ source: 'selection', reason: 'invalid-polygon-component' }]
+    });
+    expect(computeOverlapRows(rectangle(-1, -1, 5, 5), collection(candidate))).toEqual({
+      rows: [],
+      hasSuppressedSlivers: false,
+      rejections: [{ source: 'candidate', reason: 'invalid-polygon-component', candidate }]
+    });
+  });
+
+  test('skips a 4-point zero-area hole without changing the area', () => {
+    const withHole: Polygon = {
+      type: 'Polygon',
+      coordinates: [...rectangle(0, 0, 10, 10).coordinates, [[2, 2], [3, 3], [4, 4], [2, 2]]]
+    };
+    const candidate = feature('holed', withHole);
+
+    const result = computeOverlapRows(rectangle(0, 0, 20, 10), collection(candidate));
+
+    expect(result.rows.map((row) => row.relationship)).toEqual(['contains']);
+    expect(result.rows[0]?.evidence.shareOfCandidateArea).toBeCloseTo(1, 12);
+    expect(result.rows[0]?.evidence.shareOfSelectedArea).toBeCloseTo(0.5, 3);
+    expect(result.rejections).toBeUndefined();
+  });
+
   test('rejects mixed-validity component pairs spanning the antimeridian on both sides', () => {
     const validComponent = rectangle(170, 50, -175, 60).coordinates;
+    // A non-finite coordinate: a zero-area piece would now be skipped instead.
     const invalidComponent: Polygon['coordinates'] = [[
       [-174, 51],
-      [-168, 51],
+      [-171, Number.NaN],
       [-168, 59],
-      [-171, 55],
-      [-174, 59],
-      [-171, 55],
       [-174, 51]
     ]];
     const mixedGeometry: MultiPolygon = {
@@ -440,6 +457,21 @@ test.describe('computeOverlapRows', () => {
     expect(result.rows[0]?.evidence.shareOfSelectedArea).toBeCloseTo(0.25, 12);
   });
 
+  test('skips a candidate whose bounding box misses the selection before preparing it', () => {
+    // A malformed candidate would be rejected if prepared; far away, it is
+    // never prepared, so it leaves no rejection row.
+    const farMalformed = feature('far', {
+      type: 'Polygon',
+      coordinates: [[[60, 50], [62, 52], [64, 54], [60, 50]]]
+    });
+    const near = feature('near', rectangle(1, 1, 3, 3));
+
+    const result = computeOverlapRows(rectangle(0, 0, 10, 10), collection(farMalformed, near));
+
+    expect(result.rows.map((row) => row.candidate.id)).toEqual(['near']);
+    expect(result.rejections).toBeUndefined();
+  });
+
   test('does not treat edge or point contact as overlap or as a suppressed sliver', () => {
     const selected = rectangle(0, 0, 10, 10);
     const edge = feature('edge', rectangle(10, 0, 20, 10));
@@ -448,5 +480,33 @@ test.describe('computeOverlapRows', () => {
     const result = computeOverlapRows(selected, collection(edge, point));
 
     expect(result).toEqual({ rows: [], hasSuppressedSlivers: false });
+  });
+
+  test('classifies a real 2,758-vertex shoreline within a second', () => {
+    // One full-resolution part of the EPA Level III Puget Lowland (Whidbey
+    // Island), saved from the agency's service.
+    const shoreline = JSON.parse(readFileSync(
+      resolve(process.cwd(), 'tests/fixtures/puget-lowland-shoreline.json'),
+      'utf8'
+    )) as Polygon;
+    const startedAt = performance.now();
+    const result = computeOverlapRows(shoreline, collection(
+      feature('self', shoreline),
+      feature('around', rectangle(-122.8, 47.9, -122.3, 48.42)),
+      feature('west', rectangle(-122.8, 47.9, -122.56, 48.42)),
+      feature('far', rectangle(-120, 47.9, -119, 48.42))
+    ));
+
+    // About 0.1 s here; the triangle engine took 1.2 s on the same call.
+    expect(performance.now() - startedAt).toBeLessThan(1000);
+    expect(result.rejections).toBeUndefined();
+    expect(result.rows.map((row) => [row.candidate.id, row.relationship])).toEqual([
+      ['self', 'within'],
+      ['around', 'within'],
+      ['west', 'overlaps']
+    ]);
+    const west = result.rows[2]?.evidence.shareOfSelectedArea ?? 0;
+    expect(west).toBeGreaterThan(0.02);
+    expect(west).toBeLessThan(1);
   });
 });

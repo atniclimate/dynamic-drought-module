@@ -291,6 +291,15 @@ test('the briefing door keeps one label whatever its warning, and pulses only wi
   assert.equal(doorOf(injected).className, 'popup-impact-btn popup-impact-btn--pulse');
 });
 
+test('the door with nothing to brief opens Technical information: one label, no place, never a pulse', () => {
+  assert.ok(
+    serializePopupFrame(surface({ actions: [{ kind: 'technical' }] })).includes(
+      '<div data-popup-slot="actions"><button type="button" class="popup-impact-btn" data-ddm-impact-trigger data-ddm-technical-door>Open Technical information</button></div>'
+    )
+  );
+  assert.throws(() => serializePopupFrame(surface({ actions: [{ kind: 'other' }] })), PopupFrameError);
+});
+
 /**
  * found-106 (REGISTER.yaml:3427): "requiredLink builds its rejection message
  * from the value it validated." Red on a94eee5: the message re-reads the

@@ -49,6 +49,30 @@ const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
 const DIRECTIONS = new Set(['strengthening', 'weakening', 'steady']);
 const THRESHOLD_SIDES = new Set(['above', 'below', 'within']);
 
+/** CPC's historical episode rule: five consecutive overlapping seasons. */
+export const RUN_LENGTH = 5;
+// The trailing-three-season change that counts as a trajectory rather than
+// noise. Not a CPC number: it is this application's own band, chosen so a
+// season-over-season wobble inside the preliminary revision window does not
+// flip the word. Stated here so it is auditable, and never presented to a
+// reader as an issuer rule. The builder and this contract share it.
+export const DIRECTION_BAND = 0.2;
+export const DIRECTION_SPAN = 3;
+export const SEASON_NAMES = Object.freeze([
+  'DJF',
+  'JFM',
+  'FMA',
+  'MAM',
+  'AMJ',
+  'MJJ',
+  'JJA',
+  'JAS',
+  'ASO',
+  'SON',
+  'OND',
+  'NDJ'
+]);
+
 function isObject(value) {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -76,7 +100,7 @@ function isPhase(value) {
 function isSeasonalIndexPoint(value) {
   return (
     isObject(value) &&
-    typeof value.seas === 'string' &&
+    SEASON_NAMES.includes(value.seas) &&
     Number.isInteger(value.year) &&
     typeof value.anom === 'number' &&
     Number.isFinite(value.anom) &&
@@ -213,6 +237,61 @@ function stateProblems(series, label) {
     if (series.latest.exceedsThreshold !== (expectedSide !== 'within')) {
       problems.push(`${label}.latest.exceedsThreshold does not follow from the newest season`);
     }
+  }
+  // isIndexSeries guarantees at least RUN_LENGTH (> DIRECTION_SPAN) values.
+  const values = series.values;
+  const tail = values.slice(-RUN_LENGTH);
+  const episode = tail.every((point) => point.anom >= state.threshold)
+    ? 'el-nino'
+    : tail.every((point) => point.anom <= -state.threshold)
+      ? 'la-nina'
+      : 'neutral';
+  if (state.episode !== episode) {
+    problems.push(`${label}.state.episode (${state.episode}) does not follow from the last ${RUN_LENGTH} seasons`);
+  }
+  const change = values[values.length - 1].anom - values[values.length - DIRECTION_SPAN].anom;
+  const direction =
+    change >= DIRECTION_BAND ? 'strengthening' : change <= -DIRECTION_BAND ? 'weakening' : 'steady';
+  if (state.direction !== direction) {
+    problems.push(`${label}.state.direction (${state.direction}) does not follow from the last ${DIRECTION_SPAN} seasons`);
+  }
+  return problems;
+}
+
+const SEASONAL_KEYS = ['seas', 'year', 'anom', 'preliminary'];
+/** Per series: the point fields `latest` must repeat, and the step between ordinals. */
+const SERIES_ORDER = {
+  oni: { keys: SEASONAL_KEYS, ordinal: (p) => p.year * 12 + SEASON_NAMES.indexOf(p.seas), step: 1 },
+  roni: { keys: SEASONAL_KEYS, ordinal: (p) => p.year * 12 + SEASON_NAMES.indexOf(p.seas), step: 1 },
+  nino34: { keys: ['year', 'month', 'total', 'climAdjust', 'anom'], ordinal: (p) => p.year * 12 + p.month - 1, step: 1 },
+  nino34Weekly: {
+    keys: ['year', 'month', 'day', 'total', 'anom'],
+    ordinal: (p) => Date.UTC(p.year, p.month - 1, p.day) / 86_400_000,
+    step: 7
+  },
+  // SOI carries the rest of the latest year as null months, so `latest` is
+  // the last populated month, not the last value.
+  soi: { keys: ['year', 'month', 'value'], ordinal: (p) => p.year * 12 + p.month - 1, step: 1 }
+};
+
+/**
+ * The builder parses each series in consecutive order and takes `latest`
+ * from the end of it; a hand edit or a drifted builder must not ship a
+ * headline from a point the series does not end on. Shape-checked series only.
+ */
+function orderProblems(series, label) {
+  const { keys, ordinal, step } = SERIES_ORDER[label];
+  const problems = [];
+  const values = series.values;
+  for (let index = 1; index < values.length; index += 1) {
+    if (ordinal(values[index]) - ordinal(values[index - 1]) !== step) {
+      problems.push(`${label}.values are not consecutive at index ${index}`);
+      break;
+    }
+  }
+  const last = label === 'soi' ? values.findLast((point) => point.value !== null) : values.at(-1);
+  if (!last || keys.some((key) => series.latest[key] !== last[key])) {
+    problems.push(`${label}.latest is not the ${label === 'soi' ? 'last populated' : 'last'} value`);
   }
   return problems;
 }
@@ -548,6 +627,16 @@ export function validateEnsoSnapshot(parsed) {
       continue;
     }
     warnings.push(...stateProblems(series, label));
+  }
+  const shapeOk = { oni: isIndexSeries, roni: isIndexSeries, nino34: isNino34Series, nino34Weekly: isNino34WeeklySeries, soi: isSoiSeries };
+  for (const [label, isShaped] of Object.entries(shapeOk)) {
+    const series = parsed[label];
+    if (series === undefined || !isShaped(series)) continue;
+    warnings.push(...orderProblems(series, label));
+    // ISO days compare as strings; a source cannot be published after it was read.
+    if (isIsoDay(parsed.retrieved) && series.published !== undefined && series.published > parsed.retrieved) {
+      warnings.push(`${label}.published (${series.published}) is after retrieved (${parsed.retrieved})`);
+    }
   }
   return { errors, warnings };
 }

@@ -120,6 +120,9 @@ const WAVE_HTSGW = fixture('global0p25-HTSGW-f006.grib2');
 const WAVE_DIRPW = withParameterNumber(WAVE_HTSGW, 10);
 const UGRD = fixture('gfs1p00-UGRD-10m-f006.grib2');
 const VGRD = fixture('gfs1p00-VGRD-10m-f006.grib2');
+const JET_UGRD = fixture('gfs1p00-UGRD-250mb-f006.grib2');
+const JET_VGRD = fixture('gfs1p00-VGRD-250mb-f006.grib2');
+const PWAT = fixture('gfs1p00-PWAT-atmos-f006.grib2');
 
 const refusedByBound = (variable) => (e) =>
   e instanceof RangeError && new RegExp(`^${variable} `).test(e.message) && /outside the plausible range/.test(e.message);
@@ -292,6 +295,89 @@ test('a wind frame with |u| over the bound is refused, not drawn', async () => {
   assert.deepEqual(PLAUSIBLE_RANGE.VGRD, [-100, 100]);
 });
 
+test('jet-level wind has its own bound, 150 m/s at 250 mb, and the 10 m bound stays 100', () => {
+  const calm = () => new Float32Array(WIND_POINTS).fill(5);
+  const edge = calm();
+  edge[123] = 150;
+  edge[124] = -150;
+  assert.doesNotThrow(() => buildPacket('jet', [edge, calm()], CYCLE, 6), 'at the bound is accepted');
+  // The same values are no 10 m field.
+  assert.throws(() => buildPacket('wind', [edge, calm()], CYCLE, 6), refusedByBound('UGRD'));
+  for (const [k, x] of [
+    [0, 150.01],
+    [1, -150.01],
+    [0, NaN],
+    [1, Number.POSITIVE_INFINITY]
+  ]) {
+    const bad = calm();
+    bad[40_000] = x;
+    const values = k === 0 ? [bad, calm()] : [calm(), bad];
+    assert.throws(() => buildPacket('jet', values, CYCLE, 6), refusedByBound(k === 0 ? 'UGRD' : 'VGRD'), `${k === 0 ? 'u' : 'v'} = ${x}`);
+  }
+  // The real pair passes whole through the Worker core: u and v only, no separate magnitude.
+  const frame = (kind, u, v) => decodeFrame({ kind, cycle: CYCLE, forecastHour: 6, messages: [buffer(u), buffer(v)] });
+  const packet = frame('jet', JET_UGRD, JET_VGRD);
+  assert.equal(packet.kind, 'jet');
+  assert.equal(packet.u.length, WIND_POINTS);
+  assert.equal(packet.m, null);
+  assert.ok(packet.mask.every((value) => value === 1), 'no jet-level node is masked');
+  // A real 250 hPa UGRD message whose values all moved up 80 m/s (to about 160) still parses, and the Worker refuses it.
+  const shifted = shiftedReference(JET_UGRD, 800); // D = 1: R is in tenths of m/s
+  const decoded = decodeGrib2(shifted, { grid: GLOBAL_1P00 }).values;
+  assert.ok(decoded.some((x) => x > 150), 'the shifted message decodes to values above 150 m/s');
+  assert.throws(() => frame('jet', shifted, JET_VGRD), refusedByBound('UGRD'));
+  // A message of the other level is refused by its surface before any value is read.
+  const wrongLevel = (e) => e.name === 'GribError' && e.code === 'expectation';
+  assert.throws(() => frame('jet', UGRD, VGRD), wrongLevel, 'the 10 m pair is not a jet-level frame');
+  assert.throws(() => frame('wind', JET_UGRD, JET_VGRD), wrongLevel, 'the 250 hPa pair is not a 10 m frame');
+  assert.deepEqual(PLAUSIBLE_RANGE['UGRD:250 mb'], [-150, 150]);
+  assert.deepEqual(PLAUSIBLE_RANGE['VGRD:250 mb'], [-150, 150]);
+  assert.deepEqual(PLAUSIBLE_RANGE.UGRD, [-100, 100]);
+});
+
+test('precipitable water is refused outside 0 to 120 kg m-2, with a missing value, or as one value everywhere', () => {
+  const field = () => Float32Array.from({ length: WIND_POINTS }, (_, i) => 10 + (i % 50));
+  const edge = field();
+  edge[123] = 120;
+  edge[124] = 0;
+  const packet = buildPacket('pwat', [edge], CYCLE, 6);
+  // A scalar packet: the values as `m`, no direction, every node valid.
+  assert.deepEqual([packet.kind, packet.u, packet.v], ['pwat', null, null]);
+  assert.equal(packet.m.length, WIND_POINTS);
+  assert.deepEqual([packet.m[123], packet.m[124], packet.m[0]], [12_000, 0, 1_000], 'steps of 0.01 kg m-2');
+  assert.ok(packet.mask.every((value) => value === 1));
+  for (const x of [120.01, 150, -0.01, -5, NaN, Number.POSITIVE_INFINITY]) {
+    const bad = field();
+    bad[40_000] = x;
+    assert.throws(() => buildPacket('pwat', [bad], CYCLE, 6), refusedByBound('PWAT'), `PWAT ${x}`);
+  }
+  // A field that decodes to one value at every point claims nothing about the air: refused, never shaded.
+  for (const x of [0, 20, 60]) {
+    assert.throws(
+      () => buildPacket('pwat', [new Float32Array(WIND_POINTS).fill(x)], CYCLE, 6),
+      (e) => e instanceof RangeError && /^PWAT holds one value at every point/.test(e.message),
+      `constant ${x}`
+    );
+  }
+  // One message, never two.
+  assert.throws(() => buildPacket('pwat', [field(), field()], CYCLE, 6), /expected 1 fields/);
+  // The real message passes whole through the Worker core.
+  const frame = (kind, ...messages) => decodeFrame({ kind, cycle: CYCLE, forecastHour: 6, messages: messages.map(buffer) });
+  const real = frame('pwat', PWAT);
+  assert.equal(real.m.length, WIND_POINTS);
+  assert.ok(real.m.every((q) => q >= 0 && q <= 12_000));
+  // The same message with every value moved up 40 kg m-2 (to about 124) still parses, and the Worker refuses it.
+  const shifted = shiftedReference(PWAT, 400_000); // D = 4: R is in ten-thousandths of kg m-2
+  const decoded = decodeGrib2(shifted, { grid: GLOBAL_1P00 }).values;
+  assert.ok(decoded.some((x) => x > 120), 'the shifted message decodes to values above 120 kg m-2');
+  assert.throws(() => frame('pwat', shifted), refusedByBound('PWAT'));
+  // A wind message is refused as precipitable water by its field and surface, before any value is read, and the reverse.
+  const wrongField = (e) => e.name === 'GribError' && e.code === 'expectation';
+  assert.throws(() => frame('pwat', UGRD), wrongField, 'UGRD is not precipitable water');
+  assert.throws(() => frame('wind', PWAT, VGRD), wrongField, 'precipitable water is not a wind component');
+  assert.deepEqual(PLAUSIBLE_RANGE.PWAT, [0, 120]);
+});
+
 test('an HTSGW value over 30 m is refused', () => {
   const dir = () => new Float32Array(WAVE_POINTS).fill(270);
   const hs = () => new Float32Array(WAVE_POINTS).fill(1.5);
@@ -343,6 +429,9 @@ test('the committed fixtures pass the plausibility bounds', (t) => {
   const cases = [
     ['gfs1p00-UGRD-10m-f006.grib2', 'UGRD', GLOBAL_1P00],
     ['gfs1p00-VGRD-10m-f006.grib2', 'VGRD', GLOBAL_1P00],
+    ['gfs1p00-UGRD-250mb-f006.grib2', 'UGRD', GLOBAL_1P00, '250 mb'],
+    ['gfs1p00-VGRD-250mb-f006.grib2', 'VGRD', GLOBAL_1P00, '250 mb'],
+    ['gfs1p00-PWAT-atmos-f006.grib2', 'PWAT', GLOBAL_1P00, 'entire atmosphere (considered as a single layer)'],
     ['wcoast0p16-HTSGW-f006.grib2', 'HTSGW', WCOAST_0P16],
     ['wcoast0p16-DIRPW-f006.grib2', 'DIRPW', WCOAST_0P16],
     ['global0p25-HTSGW-f006.grib2', 'HTSGW', GLOBAL_0P25],
@@ -352,7 +441,7 @@ test('the committed fixtures pass the plausibility bounds', (t) => {
   // upper bound is exercised by an issuer value, not only by a synthetic one.
   const globalDirpw = decodeGrib2(fixture('global0p25-DIRPW-f006.grib2'), { grid: GLOBAL_0P25 }).values;
   assert.ok(globalDirpw.some((x) => x === 360), 'the global DIRPW fixture holds a value of exactly 360');
-  for (const [name, variable, grid] of cases) {
+  for (const [name, variable, grid, level] of cases) {
     const { values } = decodeGrib2(fixture(name), { grid });
     let lo = Infinity;
     let hi = -Infinity;
@@ -361,8 +450,9 @@ test('the committed fixtures pass the plausibility bounds', (t) => {
       lo = Math.min(lo, x);
       hi = Math.max(hi, x);
     }
-    t.diagnostic(`${name}: ${variable} ${lo} to ${hi}, bound ${PLAUSIBLE_RANGE[variable].join(' to ')}`);
-    assert.doesNotThrow(() => checkPlausible(variable, values), name);
+    const bound = PLAUSIBLE_RANGE[`${variable}:${level}`] ?? PLAUSIBLE_RANGE[variable];
+    t.diagnostic(`${name}: ${variable} ${lo} to ${hi}, bound ${bound.join(' to ')}`);
+    assert.doesNotThrow(() => checkPlausible(variable, values, level), name);
   }
   // The whole wind frame through the Worker core.
   const packet = decodeFrame({ kind: 'wind', cycle: CYCLE, forecastHour: 6, messages: [buffer(UGRD), buffer(VGRD)] });

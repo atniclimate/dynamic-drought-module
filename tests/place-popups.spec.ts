@@ -149,10 +149,16 @@ test.describe('place popups: the briefing door', () => {
     for (const mode of modes) {
       await test.step(`${mode} mode`, async () => {
         expect(Object.prototype.hasOwnProperty.call(HAZARD_CLUSTERS, mode), `${mode} is a cluster`).toBe(true);
-        const recipe = HAZARD_CLUSTERS[mode as HazardClusterKey].recipes.current;
-        await gotoApp(page, '?region=washington_state&view=console');
+        const { recipes, urlToken } = HAZARD_CLUSTERS[mode as HazardClusterKey];
+        const recipe = recipes.current;
+        // Boot into the mode by URL: a press of the ENSO button fits the Pacific
+        // and leaves the reservation, while a deep link naming a region keeps its
+        // camera (ensoBootFitsPacific). The default mode carries no token.
+        await gotoApp(
+          page,
+          `?region=washington_state&view=console${urlToken === null ? '' : `&cluster=${urlToken}`}`
+        );
         const button = page.locator(`.shell-cluster-btn[data-cluster="${mode}"]`);
-        await button.click();
         await expect(button).toHaveAttribute('aria-pressed', 'true');
         for (const key of [...recipe, 'bia-reservations']) await waitForLayerSettled(page, key);
         const firesOn = recipe.includes('nifc-fires');

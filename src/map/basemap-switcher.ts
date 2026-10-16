@@ -1,6 +1,7 @@
 import type * as maplibregl from 'maplibre-gl';
 import {
   getBasemapMode,
+  revertBasemapForFailure,
   setBasemapMode,
   onBasemapChange
 } from '../state/basemap-store';
@@ -49,16 +50,17 @@ export function holdSatellite(map: maplibregl.Map, held: boolean): void {
  */
 export async function applyBasemapMode(
   map: maplibregl.Map,
-  mode: BasemapMode
+  mode: BasemapMode,
+  announce = false
 ): Promise<void> {
   try {
     const { setSatelliteActive } = await import('./satellite');
-    await setSatelliteActive(map, mode === 'satellite' && !satelliteHeld);
+    await setSatelliteActive(map, mode === 'satellite' && !satelliteHeld, announce);
   } catch (err) {
     console.error('[basemap] satellite module failed to load:', err);
     if (mode === 'satellite') {
-      setBasemapMode('default');
-      showToast('Recent satellite imagery is unavailable. Default map restored.');
+      revertBasemapForFailure();
+      if (announce) showToast('Recent satellite imagery is unavailable. Default map restored.');
     }
   }
 }
@@ -73,7 +75,7 @@ export function requestBasemapMode(
   mode: BasemapMode
 ): void {
   setBasemapMode(mode);
-  void applyBasemapMode(map, mode);
+  void applyBasemapMode(map, mode, true);
 }
 
 /** The one-button basemap switcher control. */

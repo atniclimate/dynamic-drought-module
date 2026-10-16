@@ -58,7 +58,17 @@ const STUBS = {
     '  getElement() { return null; }',
     '}'
   ].join('\n'),
-  impactPanel: 'export function openImpactPanel(context) { globalThis.__ddmPanelOpens.push(context); }',
+  impactPanel: [
+    'export function openImpactPanel(context) { globalThis.__ddmPanelOpens.push(context); }',
+    'export function nextBriefingIntent() { return 1; }',
+    'export function isCurrentBriefingIntent(intent) { return intent === 1; }',
+    'export function openTechnicalInformation(opener) { globalThis.__ddmTechnicalOpens.push(opener); }'
+  ].join('\n'),
+  // The region briefing's opener (the door on a popup that is not about a place): recorded, never fetched.
+  deepLink: 'export function openStateBriefing(_map, state, opts) { globalThis.__ddmStateBriefings.push({ state, fit: opts.fit, current: opts.guard() }); }',
+  // The tap's place (the late door's subject): a case names it; otherwise it throws, as the real resolver does on this fake map (no `project`).
+  locationIdentity:
+    'export async function resolveLocationIdentity() { if (!globalThis.__ddmIdentity) throw new Error("no identity"); return globalThis.__ddmIdentity; }',
   mobileSheet: 'export function isSheetActive() { return globalThis.__ddmSheetActive === true; }',
   studioRoute:
     'export function studioOwnsScreen() { return false; } export function onStudioRouteChange(fn) { globalThis.__ddmStudioListeners.push(fn); return () => {}; }'
@@ -71,6 +81,8 @@ registerHooks({
     const fromTs = typeof context.parentURL === 'string' && context.parentURL.endsWith('.ts');
     if (specifier === 'maplibre-gl' && fromTs) return { url: stubUrl(STUBS['maplibre-gl']), shortCircuit: true };
     if (fromTs && /\/ui\/impact-panel$/.test(specifier)) return { url: stubUrl(STUBS.impactPanel), shortCircuit: true };
+    if (fromTs && /\/state\/deep-link$/.test(specifier)) return { url: stubUrl(STUBS.deepLink), shortCircuit: true };
+    if (fromTs && /\/state\/location-identity$/.test(specifier)) return { url: stubUrl(STUBS.locationIdentity), shortCircuit: true };
     if (fromTs && /\/ui\/mobile-sheet$/.test(specifier)) return { url: stubUrl(STUBS.mobileSheet), shortCircuit: true };
     if (fromTs && /\/state\/studio-route$/.test(specifier)) return { url: stubUrl(STUBS.studioRoute), shortCircuit: true };
     if (specifier.startsWith('.') && !/\.[a-z]+$/i.test(specifier) && fromTs) {
@@ -84,6 +96,8 @@ registerHooks({
 globalThis.window = { matchMedia: () => ({ matches: false }) };
 globalThis.__ddmPopups = [];
 globalThis.__ddmPanelOpens = [];
+globalThis.__ddmStateBriefings = [];
+globalThis.__ddmTechnicalOpens = [];
 globalThis.__ddmStudioListeners = [];
 globalThis.__ddmSheetActive = false;
 /** Every string the coordinator set as `innerHTML`, in order: what it rendered. */
@@ -227,6 +241,7 @@ const coordinator = await import('../src/map/interaction-coordinator.ts');
 const FRAME_URL = new URL('../src/ui/popup-frame.ts', import.meta.url).href;
 const { serializePopupFrame } = await import(FRAME_URL);
 const { getPlaceSelection, setPlaceSelection } = await import('../src/state/place-selection.ts');
+const { setCurrentRegion } = await import('../src/state/region-store.ts');
 const { clearEmphasis, getEmphasisTargets } = await import('../src/state/place-emphasis.ts');
 const { setViewMode } = await import('../src/state/view-mode.ts');
 
@@ -603,6 +618,133 @@ test('a response with both content and model, or with neither, is declined and t
     assert.deepEqual(calls, ['first', 'next'], `${name}: the invalid answer fell through to the next hit`);
     assert.deepEqual(rendered, ['fixture next'], `${name}: only the next hit rendered`);
     assert.equal(thrown, null, `${name}: the click threw nothing`);
+  }
+});
+
+test('a door on a popup that is not about a place opens the selected place, else the region briefing, and leaves the selection alone', async () => {
+  const model = { ...MODEL, kind: 'event', actions: [{ kind: 'briefing', place: 'Fixture Place' }] };
+  // The fake DOM parses no markup: the door is found when the rendered string carries it, and its click handler is kept.
+  const querySelector = FakeElement.prototype.querySelector;
+  const doors = [];
+  FakeElement.prototype.querySelector = function (selector) {
+    if (selector !== '[data-ddm-impact-trigger]' || !rendered.at(-1)?.includes('data-ddm-impact-trigger')) return null;
+    const door = new FakeElement();
+    door.addEventListener = (type, fn) => {
+      if (type === 'click') doors.push(fn);
+    };
+    return door;
+  };
+  globalThis.__ddmStateBriefings.length = 0;
+  try {
+    const { click, ready } = harness({ storm: [{ model }] }, { warm: true });
+    await ready;
+
+    const selected = { label: 'Fixture Place', context: context('Fixture Place') };
+    setPlaceSelection(selected);
+    click();
+    assert.equal(doors.length, 1, 'the frame door was wired');
+    doors[0]();
+    assert.deepEqual(globalThis.__ddmPanelOpens, [selected.context], 'the door opened the selected place');
+    assert.equal(globalThis.__ddmPopups.at(-1).removed, true, 'the door dismissed its popup');
+    assert.equal(getPlaceSelection(), selected, 'the popup closing left the selection alone');
+
+    setPlaceSelection(null);
+    setCurrentRegion('washington_state');
+    click();
+    assert.equal(doors.length, 2, 'the frame door was wired again');
+    doors[1]();
+    assert.deepEqual(globalThis.__ddmStateBriefings, [{ state: 'WA', fit: false, current: true }], 'the door opened the region briefing, camera untouched');
+    assert.equal(globalThis.__ddmPanelOpens.length, 1, 'no second place briefing');
+    assert.equal(globalThis.__ddmPopups.at(-1).removed, true, 'the door dismissed its popup');
+  } finally {
+    FakeElement.prototype.querySelector = querySelector;
+    setPlaceSelection(null);
+    setCurrentRegion('national');
+  }
+});
+
+test('the door of a popup with nothing to brief opens the panel at Technical information and hands focus back to the map', async () => {
+  const model = { ...MODEL, kind: 'event', actions: [{ kind: 'technical' }] };
+  // As above: the door is found when the rendered string carries the technical door, and its click handler is kept.
+  const querySelector = FakeElement.prototype.querySelector;
+  const doors = [];
+  FakeElement.prototype.querySelector = function (selector) {
+    if (selector !== '[data-ddm-impact-trigger]' || !rendered.at(-1)?.includes('data-ddm-technical-door')) return null;
+    const door = new FakeElement();
+    door.matches = (s) => s === '[data-ddm-technical-door]';
+    door.addEventListener = (type, fn) => {
+      if (type === 'click') doors.push(fn);
+    };
+    return door;
+  };
+  globalThis.__ddmTechnicalOpens.length = 0;
+  globalThis.__ddmStateBriefings.length = 0;
+  try {
+    const { click, ready, canvas } = harness({ storm: [{ model }] }, { warm: true });
+    await ready;
+    setCurrentRegion('national');
+    click();
+    assert.equal(doors.length, 1, 'the frame door was wired');
+    doors[0]();
+    assert.deepEqual(globalThis.__ddmTechnicalOpens, [canvas], 'the door opened Technical information, focus returning to the map');
+    assert.equal(globalThis.__ddmPanelOpens.length, 0, 'no place briefing');
+    assert.deepEqual(globalThis.__ddmStateBriefings, [], 'no region briefing');
+    assert.equal(globalThis.__ddmPopups.at(-1).removed, true, 'the door dismissed its popup');
+  } finally {
+    FakeElement.prototype.querySelector = querySelector;
+    setCurrentRegion('national');
+  }
+});
+
+test('a technical door gives way to the place door when the tap resolves a state', async () => {
+  const model = { ...MODEL, kind: 'event', actions: [{ kind: 'technical' }] };
+  // The frame's technical door sits in the head; the late door's markup becomes one button the fake can hold.
+  const querySelector = FakeElement.prototype.querySelector;
+  const createElement = document.createElement;
+  class FakeButton extends FakeElement {}
+  globalThis.HTMLButtonElement = FakeButton;
+  const technical = new FakeElement();
+  technical.matches = (s) => s === '[data-ddm-technical-door]';
+  FakeElement.prototype.querySelector = function (selector) {
+    if (!rendered.some((html) => html.includes('data-ddm-technical-door'))) return null;
+    if (selector === '[data-ddm-impact-trigger]' && !technical.parentNode) this.children[0]?.appendChild(technical);
+    if (selector === '[data-ddm-impact-trigger]') return technical;
+    if (selector === '[data-ddm-technical-door]') return technical.parentNode === this ? technical : null;
+    return null;
+  };
+  document.createElement = () => {
+    const element = new FakeElement();
+    Object.defineProperty(element, 'innerHTML', {
+      set(html) {
+        rendered.push(html);
+        if (!html.startsWith('<button')) return;
+        const button = new FakeButton();
+        button.html = html;
+        element.appendChild(button);
+      }
+    });
+    return element;
+  };
+  globalThis.__ddmIdentity = { state: { code: 'FL', name: 'Florida' }, containingTribal: null };
+  try {
+    const { click, ready } = harness({ storm: [{ model }] }, { warm: true });
+    await ready;
+    setCurrentRegion('national');
+    click();
+    // MapLibre puts the popup in the page; this stub does not.
+    document.body.appendChild(globalThis.__ddmPopups.at(-1).content);
+    const head = technical.parentNode;
+    assert.ok(head, 'the frame painted its technical door');
+    for (let i = 0; i < 20 && head.children.includes(technical); i += 1) await new Promise((resolve) => setImmediate(resolve));
+    const doors = head.children.filter((child) => child === technical || child instanceof FakeButton);
+    assert.equal(doors.length, 1, 'the popup carries one door');
+    assert.match(doors[0].html ?? '', /Open the Impact Briefing for Florida/, 'the door names the state the tap resolved');
+  } finally {
+    FakeElement.prototype.querySelector = querySelector;
+    document.createElement = createElement;
+    delete globalThis.HTMLButtonElement;
+    delete globalThis.__ddmIdentity;
+    setCurrentRegion('national');
   }
 });
 

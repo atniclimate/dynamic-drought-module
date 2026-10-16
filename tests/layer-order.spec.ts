@@ -138,6 +138,9 @@ test.describe('layer-order: thematic reassert (E1 deliverable 2)', () => {
       ...EVENT_OVERLAY_IDS,
       ...REFERENCE_BOUNDARY_IDS
     ]);
+    // The 3D edge fade veils the seam above every drape, below the context overlays.
+    expect(CONDITION_SURFACE_IDS.at(-1)).toBe('fire3d-terrain-edge');
+    expect(BOTTOM_STACK_IDS).not.toContain('fire3d-terrain-edge');
     expect(CONDITION_SURFACE_IDS).toEqual(
       expect.arrayContaining([
         'gridded-index-raster',
@@ -243,15 +246,32 @@ test.describe('layer-order: thematic reassert (E1 deliverable 2)', () => {
       expect(idx(id), `${id} sits above the SST and the Nino box`).toBeGreaterThan(idx('nino34-box-label'));
       expect(idx(id), `${id} sits below heatrisk, as the old arrows did`).toBeLessThan(idx('heatrisk'));
     }
-    // The still layers paint casing first, and the interim current arrows keep their seat.
+    // The still layers paint casing first. The sampled current arrows are gone: currents draw through these ids too.
     expect(flowIds.map(idx)).toEqual([...flowIds.map(idx)].sort((a, b) => a - b));
-    expect(idx('enso-flow-arrows')).toBeGreaterThan(idx('nino34-box-label'));
-    expect(idx('enso-flow-arrows')).toBeLessThan(idx('heatrisk'));
+    expect(CONDITION_SURFACE_IDS.filter((id) => id.startsWith('enso-flow'))).toEqual([]);
     // A late custom layer is re-seated under the Tribal outlines and the labels.
     const map = fakeMap(['background', 'basemap', 'sst-anomaly', 'tribal-lands-outline', 'us-places-labels', 'flow-paths', 'flow-still']);
     reassertThematicOrder(map as never);
     reassertLabelOrder(map as never);
     expect(map.order()).toEqual(['background', 'basemap', 'sst-anomaly', 'flow-still', 'flow-paths', 'tribal-lands-outline', 'us-places-labels']);
+  });
+
+  test('the precipitable water shade seats above the SST and the Nino box, under the paths, the storms, every outline and the labels', () => {
+    const idx = (id: string): number => CONDITION_SURFACE_IDS.indexOf(id);
+    // A dated SST frame inserts directly under the Nino box's line, so the shade must sit above the box to stay above it.
+    expect(idx('flow-shade')).toBe(idx('nino34-box-label') + 1);
+    expect(idx('flow-shade')).toBe(idx('flow-still-casing') - 1);
+    expect(idx('flow-shade')).toBeGreaterThan(idx('sst-anomaly'));
+    const map = fakeMap(['background', 'basemap', 'sst-anomaly', 'nino34-box-line', 'tropical-cyclones-points', 'us-states-outline', 'us-places-labels', 'flow-shade']);
+    reassertThematicOrder(map as never);
+    reassertLabelOrder(map as never);
+    expect(map.order()).toEqual(['background', 'basemap', 'sst-anomaly', 'nino34-box-line', 'flow-shade', 'tropical-cyclones-points', 'us-states-outline', 'us-places-labels']);
+    // A dated SST frame (inserted under the Nino box's line by its own module) is never the anchor: it stays put
+    // and the chain, outlines included, re-seats above it.
+    const dated = fakeMap(['background', 'basemap', 'sst-anomaly', 'nino34-box-fill', 'sst-frame-2026-09-06', 'nino34-box-line', 'us-states-outline', 'us-places-labels', 'flow-shade']);
+    reassertThematicOrder(dated as never);
+    reassertLabelOrder(dated as never);
+    expect(dated.order()).toEqual(['background', 'basemap', 'sst-frame-2026-09-06', 'sst-anomaly', 'nino34-box-fill', 'nino34-box-line', 'flow-shade', 'us-states-outline', 'us-places-labels']);
   });
 
   test('idempotent: a second pass changes nothing', () => {

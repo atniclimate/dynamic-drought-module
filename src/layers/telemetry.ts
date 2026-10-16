@@ -47,6 +47,7 @@ import {
 } from '../config/station-registry';
 import type {
   PrimaryParameterCategory,
+  StationDiscoveryRecord,
   StationRegistryEntry,
   ViewportBounds
 } from '../types/station-network';
@@ -107,6 +108,8 @@ interface TelemetryMarkerView {
 let currentDiscoveryController: AbortController | null = null;
 let moveendDebounce: ReturnType<typeof setTimeout> | null = null;
 let moveendHandler: (() => void) | null = null;
+// The last final discovery answer: a progress paint merges it in, so only a final answer removes markers.
+let lastFinalRecords: readonly StationDiscoveryRecord[] = [];
 
 function reportStatus(state: TelemetryStatus): void {
   registry.setStatus(LAYER_KEY, state);
@@ -194,7 +197,8 @@ function renderStations(map: maplibregl.Map, views: readonly TelemetryMarkerView
     const marker = activeMarkers[index]!;
     const previous = markerViews.get(marker)!;
     const next = nextViews.get(previous.station.id);
-    if (next && next.station === previous.station &&
+    // By content: each refresh rebuilds every discovered station as a new object.
+    if (next && JSON.stringify(next.station) === JSON.stringify(previous.station) &&
         next.freshness === previous.freshness &&
         next.primaryParameterCategory === previous.primaryParameterCategory &&
         next.networkLabel === previous.networkLabel) continue;
@@ -279,7 +283,7 @@ function renderStations(map: maplibregl.Map, views: readonly TelemetryMarkerView
       closeOnClick: true
     });
 
-    const marker = new maplibregl.Marker({ element: el })
+    const marker = new maplibregl.Marker(telemetryMarkerOptions(el, glyphWind))
       .setLngLat([lng, lat])
       // addTo removes an earlier keypress listener in MapLibre; bind
       // the popup afterward so its native Enter/Space handler remains.
@@ -444,6 +448,17 @@ function windGlyphShaftLengthPx(speedMph: number): number {
 }
 
 /**
+ * A wind marker turns with the map (MapLibre applies `rotation - bearing`)
+ * but stays facing the viewer: `pitchAlignment` would otherwise follow
+ * `rotationAlignment` and lay the arrow flat in Fire 3D.
+ */
+function telemetryMarkerOptions(element: HTMLElement, wind: RawsWindGlyphFields | null): maplibregl.MarkerOptions {
+  return wind
+    ? { element, rotationAlignment: 'map', pitchAlignment: 'viewport', rotation: wind.windDirectionDeg }
+    : { element };
+}
+
+/**
  * The sustained-wind symbol: an inline-styled SVG child of the marker
  * element (no CSS class whose appearance depends on src/styles/app.css;
  * that grant does not exist for this task). The caller (`renderStations`,
@@ -455,10 +470,10 @@ function windGlyphShaftLengthPx(speedMph: number): number {
  * `WindDirDegrees` is the direction the wind is blowing FROM, in degrees
  * clockwise from true north (NWCG PMS 426-3, verified against the NIFC
  * PublicView_RAWS FeatureServer's own field description). The glyph is a
- * wind-vane arrowhead that points INTO the wind, so rotating an
- * upward-pointing (north-pointing) shaft clockwise by exactly the served
- * number of degrees draws it correctly with no sign inversion and no
- * re-derivation of the served value.
+ * wind-vane arrowhead that points INTO the wind. The SVG draws it pointing
+ * up (north) and never rotates it; the marker's `rotation` carries it,
+ * clockwise by exactly the served number of degrees, with no sign inversion
+ * and no re-derivation of the served value.
  *
  * `color` is `station.color`, the SAME network color the unified legend
  * already keys on (fix F10: the glyph no longer carries its own hardcoded
@@ -502,7 +517,9 @@ function buildRawsWindGlyph(wind: RawsWindGlyphFields, color: string): SVGSVGEle
   svg.style.left = '50%';
   svg.style.top = '50%';
   svg.style.pointerEvents = 'none';
-  svg.style.transform = `translate(-50%, -50%) rotate(${wind.windDirectionDeg}deg)`;
+  // The direction is the marker's own `rotation` (telemetryMarkerOptions),
+  // so MapLibre subtracts the map bearing on every turn.
+  svg.style.transform = 'translate(-50%, -50%)';
 
   // An SVG `<title>` is the element's native tooltip-on-hover text, but
   // `pointer-events: none` above means this element is never itself the
@@ -557,6 +574,24 @@ function buildRawsWindGlyph(wind: RawsWindGlyphFields, color: string): SVGSVGEle
  * via `Marker.remove()` so we do not need it today.
  */
 export function deactivate(map: maplibregl.Map): void {
+  cancelActivation();
+  if (moveendHandler) {
+    map.off('moveend', moveendHandler);
+    moveendHandler = null;
+  }
+  hideCapNote();
+  hideLegend(LAYER_KEY);
+  clearMarkers();
+}
+
+/**
+ * Synchronous cancellation seam (the optional LayerModule hook): the layer
+ * controller calls it the moment off intent is recorded, before the queued
+ * teardown, so an in-flight viewport discovery aborts at once instead of
+ * running out its provider budget (DDM-P1-T02). The aborted discovery returns
+ * quietly; `deactivate` still owns marker and handler removal.
+ */
+export function cancelActivation(): void {
   if (moveendDebounce) {
     clearTimeout(moveendDebounce);
     moveendDebounce = null;
@@ -565,13 +600,7 @@ export function deactivate(map: maplibregl.Map): void {
     currentDiscoveryController.abort();
     currentDiscoveryController = null;
   }
-  if (moveendHandler) {
-    map.off('moveend', moveendHandler);
-    moveendHandler = null;
-  }
-  hideCapNote();
-  hideLegend(LAYER_KEY);
-  clearMarkers();
+  lastFinalRecords = [];
 }
 
 function removeMarker(marker: maplibregl.Marker): void {
@@ -686,37 +715,43 @@ async function runDiscoveryForCurrentViewport(map: maplibregl.Map): Promise<void
   reportStatus('loading');
 
   const curatedEntries = curatedTelemetryEntries();
+  const isCurrent = (): boolean =>
+    !controller.signal.aborted && controller === currentDiscoveryController;
+  const renderMerged = (records: readonly StationDiscoveryRecord[]) => {
+    const merged = mergeTelemetryStations(
+      curatedEntries.map((entry) => entry.station),
+      records
+    );
+    const capped = capDiscoveredStations(merged, viewportCenter(map));
+    renderStations(map, capped.entries.map(markerViewForEntry));
+    updateCapNote(map, capped.totalDiscovered);
+    return capped;
+  };
   try {
     const result = await discoverStationsForViewport({
       bounds: viewportBounds(map),
       center: viewportCenter(map),
-      signal: controller.signal
+      signal: controller.signal,
+      // Paint each source as it settles; the status waits for the final answer.
+      onProgress: (records) => {
+        if (isCurrent()) renderMerged([...records, ...lastFinalRecords]);
+      }
     });
-    if (controller.signal.aborted || controller !== currentDiscoveryController) return;
+    if (!isCurrent()) return;
 
     if (result.status === 'zoom-in') {
       // The viewport is wider than the discovery area cap (D-0.7.0-007):
       // no discovery ran. The curated seeds still render so the layer is
       // not empty, and the pill reads "zoom in to load" honestly. No cap
       // note at region zoom, per the ruling.
-      const merged = mergeTelemetryStations(
-        curatedEntries.map((entry) => entry.station),
-        result.records
-      );
-      const capped = capDiscoveredStations(merged, viewportCenter(map));
-      renderStations(map, capped.entries.map(markerViewForEntry));
-      updateCapNote(map, capped.totalDiscovered);
+      renderMerged(result.records);
+      lastFinalRecords = result.records;
       reportStatus('zoom-in');
       return;
     }
 
-    const merged = mergeTelemetryStations(
-      curatedEntries.map((entry) => entry.station),
-      result.records
-    );
-    const capped = capDiscoveredStations(merged, viewportCenter(map));
-    renderStations(map, capped.entries.map(markerViewForEntry));
-    updateCapNote(map, capped.totalDiscovered);
+    const capped = renderMerged(result.records);
+    lastFinalRecords = result.records;
     // Honest aggregate status (0.7.0 H4): any source failure reads
     // "live (partial)" instead of an unqualified "live". This includes the
     // every-source-failed case, because the curated seed markers are
@@ -733,9 +768,10 @@ async function runDiscoveryForCurrentViewport(map: maplibregl.Map): Promise<void
       reportStatus(capped.entries.length > 0 ? 'ready' : 'no-data');
     }
   } catch (err) {
-    if (controller.signal.aborted || controller !== currentDiscoveryController) return;
+    if (!isCurrent()) return;
     console.warn('[telemetry] station discovery failed.', err);
     renderStations(map, curatedEntries.map(markerViewForEntry));
+    lastFinalRecords = [];
     hideCapNote();
     reportStatus('error');
   }

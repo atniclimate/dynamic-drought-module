@@ -5,6 +5,15 @@
  * - Wind: NOAA GFS `pgrb2.1p00`, UGRD and VGRD at `10 m above ground`; grid
  *   3.0, 360 x 181, 1.0 degree, DRT 5.3, no bitmap. Not cropped: the global
  *   grid covers the whole United States (DR-116 coverage).
+ * - Jet-level wind: the same file and `.idx`, UGRD and VGRD at `250 mb`
+ *   (fixed surface 100, 25,000 Pa), same grid and packing; 53 to 57 kB per
+ *   message (admission gfs-runtime-nodd, 2026-10-13). Another level of the
+ *   file is one more `gfs1p00` row.
+ * - Precipitable water: the same file and `.idx`, the one message PWAT at
+ *   `entire atmosphere (considered as a single layer)` (fixed surface 200),
+ *   same grid and packing, kg m-2; about 97 kB (the same admission, product
+ *   (b)). A scalar: it has no direction and is drawn as a shade (./shade),
+ *   never as paths.
  * - Waves: NOAA GFS-Wave `global.0p25`, DIRPW and HTSGW at `surface`; grid
  *   3.0, 1440 x 721, 0.25 degree, DRT 5.40 with a bitmap. Cropped to 10 S to
  *   62 N and 165 E to 100 W, across the antimeridian (0.25 degree columns 660
@@ -13,9 +22,10 @@
  *   PERPW, the 0p50 wind and the regional wave grids are not read (owner
  *   question 9, Q15): adding one later is a row here.
  *
- * Direction (A-direction.md, CONFIRMED-FROM; admission line 15). GFS 10 m
- * UGRD/VGRD are earth-relative and point the way the air moves (TO); they
- * pass through unchanged. GFS-Wave DIRPW is in degrees true, clockwise from
+ * Direction (A-direction.md, CONFIRMED-FROM; admission line 15). GFS
+ * UGRD/VGRD, at 10 m and at 250 hPa, are earth-relative and point the way
+ * the air moves (TO); they pass through unchanged. GFS-Wave DIRPW is in
+ * degrees true, clockwise from
  * north, and gives the direction the waves come FROM, so they travel toward
  * (DIRPW + 180) mod 360. THIS MODULE IS THE ONE PLACE THAT ROTATES
  * (`waveToVector`, called by the decode Worker); `field.ts` never does. The
@@ -29,8 +39,14 @@
 
 import type { GribParameter } from './grib2';
 import { createFlowField, type FlowField, type FlowGrid, type FlowKind, type FlowMeta } from './field';
+import { isScalarKind, type ScalarField, type ScalarKind } from './shade';
 
 const HOUR = 3_600_000;
+
+/** The kinds read from NODD at runtime as paths: every FlowField kind but the committed currents frame (./currents). */
+export type VectorNoddKind = Exclude<FlowKind, 'currents'>;
+/** Every kind read from NODD at runtime: the path kinds and the scalar kinds drawn as a shade (./shade). */
+export type NoddKind = VectorNoddKind | ScalarKind;
 
 /** The NODD bucket, virtual-hosted: the only form the reader requests. */
 export const NODD_ORIGIN = 'https://noaa-gfs-bdp-pds.s3.amazonaws.com';
@@ -54,12 +70,12 @@ export interface FlowCrop {
 }
 
 export interface FlowSource {
-  readonly kind: FlowKind;
+  readonly kind: NoddKind;
   /** Issuer and model words, verbatim. */
   readonly issuer: string;
   readonly model: string;
   readonly level: string;
-  /** Units of the FlowField magnitude. */
+  /** Units of the FlowField magnitude, or of a scalar kind's values. */
   readonly units: string;
   /** Hours between published forecast hours. */
   readonly cadenceHours: number;
@@ -87,30 +103,46 @@ function stamp(cycle: number): { day: string; hh: string } {
 
 const fff = (fh: number): string => String(fh).padStart(3, '0');
 
-export const FLOW_SOURCES: Readonly<Record<FlowKind, FlowSource>> = {
-  wind: {
-    kind: 'wind',
+/** A GFS meteorological field: its `.idx` VAR word and its GRIB2 category and number in discipline 0. */
+type GfsField = readonly [variable: string, category: number, number: number];
+const WIND: readonly GfsField[] = [['UGRD', 2, 2], ['VGRD', 2, 3]];
+
+/**
+ * Fields of GFS `pgrb2.1p00` at one level: each of `fields` at the `.idx`
+ * LEVEL words `level`, whose GRIB fixed surface is `surface`. Global,
+ * uncropped.
+ */
+function gfs1p00(kind: NoddKind, level: string, surface: FlowSource['surface'], units: string, fields: readonly GfsField[]): FlowSource {
+  return {
+    kind,
     issuer: 'NOAA',
     model: 'GFS',
-    level: '10 m above ground',
-    units: 'm s-1',
+    level,
+    units,
     cadenceHours: 3,
     idxMaxBytes: 65_536,
     grid: { ni: 360, nj: 181, la1: 90, lo1: 0, la2: -90, lo2: 359, di: 1, dj: 1 },
-    surface: { type: 103, value: 10 },
+    surface,
     packing: 3,
     bitmap: false,
-    messages: [
-      { variable: 'UGRD', level: '10 m above ground', parameter: { discipline: 0, category: 2, number: 2 } },
-      { variable: 'VGRD', level: '10 m above ground', parameter: { discipline: 0, category: 2, number: 3 } }
-    ],
+    messages: fields.map(([variable, category, number]) => ({ variable, level, parameter: { discipline: 0, category, number } })),
     crop: null,
     step: { uv: 0.01, m: 0.01 },
     key(cycle, fh) {
       const { day, hh } = stamp(cycle);
       return `gfs.${day}/${hh}/atmos/gfs.t${hh}z.pgrb2.1p00.f${fff(fh)}`;
     }
-  },
+  };
+}
+
+export const FLOW_SOURCES: Readonly<Record<NoddKind, FlowSource>> = {
+  // Fixed surface 103: a height above ground, in metres.
+  wind: gfs1p00('wind', '10 m above ground', { type: 103, value: 10 }, 'm s-1', WIND),
+  // Fixed surface 100: an isobaric surface, in pascals (250 hPa).
+  jet: gfs1p00('jet', '250 mb', { type: 100, value: 25_000 }, 'm s-1', WIND),
+  // Fixed surface 200: the entire atmosphere as a single layer. PWAT is parameter 0.1.3, kg m-2
+  // (NCEP GRIB2 table 4.2-0-1), carried to four decimals; the 0.01 step is the transfer's.
+  pwat: gfs1p00('pwat', 'entire atmosphere (considered as a single layer)', { type: 200, value: 0 }, 'kg m-2', [['PWAT', 1, 3]]),
   waves: {
     kind: 'waves',
     issuer: 'NOAA',
@@ -149,7 +181,7 @@ export function waveToVector(dirFromDegrees: number): [number, number] {
 }
 
 /** The FlowField grid of a kind after its crop. */
-export function frameGrid(kind: FlowKind): FlowGrid {
+export function frameGrid(kind: NoddKind): FlowGrid {
   const s = FLOW_SOURCES[kind];
   const c = s.crop ?? { column0: 0, row0: 0, nx: s.grid.ni, ny: s.grid.nj };
   return {
@@ -164,7 +196,7 @@ export function frameGrid(kind: FlowKind): FlowGrid {
 }
 
 /** The frame's clocks and issuer words: run, valid time and staleAfter. */
-export function frameMeta(kind: FlowKind, cycle: number, forecastHour: number): FlowMeta {
+export function frameMeta(kind: NoddKind, cycle: number, forecastHour: number): FlowMeta {
   const s = FLOW_SOURCES[kind];
   const key = s.key(cycle, forecastHour);
   return {
@@ -188,21 +220,22 @@ export const PACKET_NO_VALUE = -32768;
 /**
  * What the decode Worker transfers back: the cropped grid as Int16 steps
  * (`step` from the source row), with a byte mask. Waves carry the TO unit
- * vector and the significant height; wind carries u and v only.
+ * vector and the significant height; wind at either level carries u and v
+ * only; a scalar kind has no direction and carries its values as `m` alone.
  */
 export interface FlowPacket {
-  readonly kind: FlowKind;
+  readonly kind: NoddKind;
   readonly cycle: number;
   readonly forecastHour: number;
-  readonly u: Int16Array;
-  readonly v: Int16Array;
+  readonly u: Int16Array | null;
+  readonly v: Int16Array | null;
   readonly m: Int16Array | null;
   readonly mask: Uint8Array;
 }
 
 /** The request posted to the decode Worker: one buffer per source message, in order. */
 export interface DecodeRequest {
-  readonly kind: FlowKind;
+  readonly kind: NoddKind;
   readonly cycle: number;
   readonly forecastHour: number;
   readonly messages: readonly ArrayBuffer[];
@@ -219,19 +252,22 @@ function unpack(q: Int16Array, step: number): Float32Array {
   return out;
 }
 
-/** Build the FlowField from a Worker packet, on the main thread. */
-export function fieldFromPacket(packet: FlowPacket, meta: FlowMeta): FlowField {
-  const s = FLOW_SOURCES[packet.kind];
+/** Build the FlowField, or a scalar kind's ScalarField, from a Worker packet, on the main thread. */
+export function fieldFromPacket(packet: FlowPacket, meta: FlowMeta): FlowField | ScalarField {
+  const { kind, u, v, m } = packet;
+  const s = FLOW_SOURCES[kind];
   if (packet.cycle !== meta.cycle || packet.forecastHour !== meta.forecastHour) {
     throw new Error('flow packet clocks differ from the frame requested');
   }
-  const input = {
-    kind: packet.kind,
-    grid: frameGrid(packet.kind),
-    u: unpack(packet.u, s.step.uv),
-    v: unpack(packet.v, s.step.uv),
-    mask: packet.mask,
-    meta
-  };
-  return createFlowField(packet.m ? { ...input, magnitude: unpack(packet.m, s.step.m) } : input);
+  const grid = frameGrid(kind);
+  if (isScalarKind(kind)) {
+    if (!m || u || v || m.length !== grid.nx * grid.ny) throw new Error('flow packet is not the scalar field requested');
+    const values = unpack(m, s.step.m);
+    // Never drawn from a hole: the Worker refuses a scalar message with any missing value.
+    if (values.some(Number.isNaN)) throw new Error('flow packet holds a scalar node with no value');
+    return { kind, grid, values, meta };
+  }
+  if (!u || !v) throw new Error('flow packet carries no direction');
+  const input = { kind, grid, u: unpack(u, s.step.uv), v: unpack(v, s.step.uv), mask: packet.mask, meta };
+  return createFlowField(m ? { ...input, magnitude: unpack(m, s.step.m) } : input);
 }

@@ -194,6 +194,10 @@ test.describe('impact panel accessibility', () => {
     // (design record acknowledgements-table.md section 1.3), so the wrap
     // to Mail comes one Tab later and Shift+Tab returns through it.
     const acknowledgements = panel.locator('.impact-acknowledgements > summary');
+    // Technical information holds source links (map-technical-information.ts), so
+    // the stop before Acknowledgements is its last link, not its summary.
+    const lastTechnicalLink = technical.locator('a[href]').last();
+    await lastTechnicalLink.focus();
     await page.keyboard.press('Tab');
     await expect(acknowledgements).toBeFocused();
     await page.keyboard.press('Tab');
@@ -201,7 +205,7 @@ test.describe('impact panel accessibility', () => {
     await page.keyboard.press('Shift+Tab');
     await expect(acknowledgements).toBeFocused();
     await page.keyboard.press('Shift+Tab');
-    await expect(summary).toBeFocused();
+    await expect(lastTechnicalLink).toBeFocused();
   });
 
   test('the Email control is a mailto whose subject is the briefing title and whose body carries the share link, with select=state:XX only for a state place', async ({

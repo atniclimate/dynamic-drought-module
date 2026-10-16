@@ -160,14 +160,19 @@ function resolveBeforeId(map: maplibregl.Map): string | undefined {
  * Build the GeoJSON query URL. The `where` clause restricts to the heat and
  * fire-weather products; `outFields` is limited to what the popup reads.
  */
-function buildQueryUrl(): string {
+export function buildQueryUrl(): string {
   const quoted = ALERT_EVENTS.map((e) => `'${e}'`).join(',');
   const params = new URLSearchParams({
     where: `prod_type IN (${quoted})`,
     outFields: 'prod_type,onset,ends,expiration,wfo',
     outSR: '4326',
     returnGeometry: 'true',
-    f: 'geojson'
+    f: 'geojson',
+    // Load-bearing on the 5-minute refresh: 310 alerts were 1.88 MB gzipped
+    // (6.2 MB decoded) at full detail and 224 KB with these two (measured
+    // 2026-10-15); zone edges move at most about 200 m.
+    maxAllowableOffset: '0.002',
+    geometryPrecision: '5'
   });
   return `${URLS.nwsWwaMapServer}/query?${params.toString()}`;
 }
@@ -508,7 +513,8 @@ async function refreshSnapshot(
       null,
       signal,
       FETCH_TIMEOUT_MS,
-      // shortcut: whole-country zone polygons at full detail, size never measured on a heavy day; set from a measurement, or simplify at the service.
+      // Simplified at the service (buildQueryUrl): 310 alerts were 224 KB gzipped
+      // (measured 2026-10-15), 6.2 MB decoded unsimplified; this cap is headroom.
       64 * 1024 * 1024
     );
     if (signal.aborted) return;

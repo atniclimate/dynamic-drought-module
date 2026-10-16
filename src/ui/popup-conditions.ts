@@ -83,7 +83,7 @@ import type { GeoJsonProperties, Geometry } from 'geojson';
 import { registry } from '../state/registry';
 import { timeline } from '../state/timeline';
 import { getHazardCluster } from '../state/cluster-store';
-import { USDM_CATEGORIES, NADM_CATEGORIES } from '../config/palette';
+import { USDM_CATEGORIES, NADM_CATEGORIES, readUsdmDm } from '../config/palette';
 import { HAZARD_CLUSTERS, HAZARD_CLUSTER_KEYS } from '../config/clusters';
 import { getLayerDef } from '../config/layers';
 import { PLACE_CONDITION_ROW_DEFERRED, PLACE_CONDITION_ROWS, placeConditionRowKeys } from '../config/place-condition-rows';
@@ -186,7 +186,8 @@ const STATE_WORD: Readonly<Record<LayerStatus, SixStateWord>> = {
  * complete and found nothing present: the layer's own name as the sidebar
  * shows it (src/config/layers.ts) and its six-state word, never an absence
  * sentence (no such layer has a sentence of its own for this state; the NWS
- * row keeps its three). A status not yet written reads 'loading', as the
+ * row keeps its three, and uses this row only for a complete read of a place
+ * partly off screen). A status not yet written reads 'loading', as the
  * map key's chip reads it (src/config/chip-state.ts).
  */
 function unreadRow(label: string, key: string): MarkedRow {
@@ -212,6 +213,28 @@ function flattenLngLat(geometry: Geometry | null | undefined): Array<[number, nu
   return [];
 }
 
+/** The clicked place as a caller holds it: its whole geometry, or the rendered feature that was clicked. */
+type PlaceInput = Geometry | { readonly type: 'Feature'; readonly id?: string | number | undefined; readonly layer: { readonly id: string }; readonly geometry: Geometry };
+
+/**
+ * The clicked place's geometry over every piece the map has drawn of it. A
+ * rendered feature's geometry is only the piece inside one tile, so every
+ * rendered feature of the same layer and id is joined into one MultiPolygon;
+ * a feature with no id cannot be joined, so its one piece is kept and marked
+ * `partial` (no absence is claimed for it). A bare geometry is taken as the
+ * caller's whole place.
+ */
+function placeGeometry(map: maplibregl.Map, input: PlaceInput | null): { geometry: Geometry | null; partial: boolean } {
+  if (input === null) return { geometry: null, partial: false };
+  if (input.type !== 'Feature') return { geometry: input, partial: false };
+  if (input.id === undefined || input.id === null) return { geometry: input.geometry, partial: true };
+  const pieces = map.queryRenderedFeatures({ layers: [input.layer.id] }).filter((f) => f.id === input.id);
+  const polygons = [input.geometry, ...pieces.map((f) => f.geometry)].flatMap((g) =>
+    g.type === 'Polygon' ? [g.coordinates] : g.type === 'MultiPolygon' ? g.coordinates : []
+  );
+  return { geometry: { type: 'MultiPolygon', coordinates: polygons }, partial: false };
+}
+
 /**
  * The clicked boundary feature's OWN screen-space bounding box, clamped to
  * the map container -- the reachability fix in the module doc above. Every
@@ -226,7 +249,7 @@ function flattenLngLat(geometry: Geometry | null | undefined): Array<[number, nu
 function screenBoxForGeometry(
   map: maplibregl.Map,
   geometry: Geometry | null | undefined
-): [maplibregl.PointLike, maplibregl.PointLike] | null {
+): { box: [maplibregl.PointLike, maplibregl.PointLike]; clipped: boolean } | null {
   const vertices = flattenLngLat(geometry);
   if (vertices.length === 0) return null;
 
@@ -263,10 +286,14 @@ function screenBoxForGeometry(
   const clampedMaxY = Math.max(0, Math.min(maxY, container.clientHeight));
   if (clampedMaxX <= clampedMinX || clampedMaxY <= clampedMinY) return null;
 
-  return [
-    [clampedMinX, clampedMinY],
-    [clampedMaxX, clampedMaxY]
-  ];
+  return {
+    box: [
+      [clampedMinX, clampedMinY],
+      [clampedMaxX, clampedMaxY]
+    ],
+    // Part of the place lies off screen (or reaches its edge), where nothing is rendered to query.
+    clipped: minX <= 0 || minY <= 0 || maxX >= container.clientWidth || maxY >= container.clientHeight
+  };
 }
 
 export interface PlaceConditions {
@@ -385,13 +412,6 @@ function usdmMapDateClock(raw: unknown): PopupClock | undefined {
   };
 }
 
-function readDm(props: GeoJsonProperties): number | null {
-  if (!props) return null;
-  const raw = props['DM'] ?? props['dm'];
-  const n = typeof raw === 'number' ? raw : typeof raw === 'string' ? Number(raw) : NaN;
-  return Number.isInteger(n) ? n : null;
-}
-
 /** A row with its clock only when there is one (exact optional properties). */
 function withClock(row: ValueRow, clock: PopupClock | undefined): ValueRow {
   return clock === undefined ? row : { ...row, clock };
@@ -466,10 +486,10 @@ function droughtRow(map: maplibregl.Map, point: maplibregl.PointLike): MarkedRow
     let maxDm = -1;
     let maxProps: GeoJsonProperties = null;
     for (const f of feats) {
-      const dm = readDm(f.properties);
+      const dm = readUsdmDm(f.properties);
       // Only a D0-D4 index is a category; any other DM is not one, so a
       // switched-on layer always answers a row (never the nothing-on line).
-      if (dm !== null && dm < USDM_CATEGORIES.length && dm > maxDm) {
+      if (dm !== null && dm > maxDm) {
         maxDm = dm;
         maxProps = f.properties ?? null;
       }
@@ -566,7 +586,8 @@ function alertRows(
   map: maplibregl.Map,
   region: QueryRegion,
   place: Geometry | null,
-  scope: ClaimScope
+  scope: ClaimScope,
+  whole: boolean
 ): RowResult {
   if (!isLayerOn(ALERTS_KEY)) {
     return NO_ROWS;
@@ -575,7 +596,8 @@ function alertRows(
   // arrived): nothing was read here, so the state sentence below answers,
   // never the nothing-on line (the Codex review of round 1, B2).
   const hasFill = Boolean(map.getLayer(ALERTS_FILL));
-  const complete = hasFill && isReadComplete(ALERTS_KEY);
+  const readComplete = hasFill && isReadComplete(ALERTS_KEY);
+  const complete = readComplete && whole;
 
   // Retrieved by the place's box, kept only where the alert actually touches
   // the place: see the ATTRIBUTION FIX in this module's header.
@@ -605,6 +627,9 @@ function alertRows(
     // the states that mean "not read" (loading, live partial, unavailable)
     // withhold the claim, and so does a layer with no fill yet.
     if (!complete) {
+      // A complete read, but only part of the place was on screen: its state word answers, not a failure sentence.
+      // vocab-allow: names the NWS alert product category (src/layers/nws-alerts.ts), the alert rows' own label
+      if (readComplete) return { rows: [unreadRow('NWS alert', ALERTS_KEY)], hasWarning: false, warningLabel: null };
       const where = scopePhrase(scope);
       const value =
         status === 'loading'
@@ -696,11 +721,12 @@ function fireRow(
   map: maplibregl.Map,
   region: QueryRegion,
   place: Geometry | null,
-  scope: ClaimScope
+  scope: ClaimScope,
+  whole: boolean
 ): RowResult {
   if (!isLayerOn(FIRES_KEY)) return NO_ROWS;
   if (!map.getLayer(FIRES_FILL)) return { rows: [unreadRow('Wildfire', FIRES_KEY)], hasWarning: false, warningLabel: null };
-  const complete = isReadComplete(FIRES_KEY);
+  const complete = whole && isReadComplete(FIRES_KEY);
 
   // Retrieved by the place's box, kept only where the perimeter actually
   // touches the place: see the ATTRIBUTION FIX in this module's header.
@@ -811,6 +837,8 @@ interface RowContext {
   readonly region: QueryRegion;
   readonly place: Geometry | null;
   readonly scope: ClaimScope;
+  /** Whether `region` covers the whole place (false when its box was cut to the screen). */
+  readonly whole: boolean;
 }
 
 /** Each declared row's label, as its builder writes it (a row key with no label fails tsc). */
@@ -827,8 +855,8 @@ const ROW_BUILDERS: Readonly<Record<PlaceConditionRowKey, (context: RowContext) 
     const row = droughtRow(map, point);
     return row === null ? NO_ROWS : { rows: [row], hasWarning: false, warningLabel: null };
   },
-  'nws-alerts': ({ map, region, place, scope }) => alertRows(map, region, place, scope),
-  'wildfire-perimeter': ({ map, region, place, scope }) => fireRow(map, region, place, scope)
+  'nws-alerts': ({ map, region, place, scope, whole }) => alertRows(map, region, place, scope, whole),
+  'wildfire-perimeter': ({ map, region, place, scope, whole }) => fireRow(map, region, place, scope, whole)
 };
 
 /**
@@ -836,8 +864,9 @@ const ROW_BUILDERS: Readonly<Record<PlaceConditionRowKey, (context: RowContext) 
  * point. `point` is the click's screen-pixel position, used point-exact
  * for drought (matching `fire-context.ts`'s convention: a boundary always
  * outranks the lowest-ranked `condition-surface` kind, so the exact pixel
- * is always reachable there). `geometry` is the CLICKED FEATURE's own
- * GeoJSON geometry, when the caller has it; alerts and fires are read
+ * is always reachable there). `clicked` is the CLICKED rendered feature
+ * (its pieces in every tile are joined, `placeGeometry`) or a whole place
+ * geometry, when the caller has one; alerts and fires are read
  * against ITS screen-space bounding box instead of the bare point (see the
  * REACHABILITY FINDING in this module's header) so that a real warning
  * covering the place, not only the exact pixel, is not missed, and are
@@ -851,7 +880,7 @@ const ROW_BUILDERS: Readonly<Record<PlaceConditionRowKey, (context: RowContext) 
 export function buildPlaceConditionsHtml(
   map: maplibregl.Map,
   point: maplibregl.PointLike,
-  geometry?: Geometry | null
+  clicked?: PlaceInput | null
 ): PlaceConditions {
   const rowsByKey: (readonly MarkedRow[])[] = [];
   let hasWarning = false;
@@ -860,16 +889,19 @@ export function buildPlaceConditionsHtml(
   // retrieves, the polygon attributes. When there is no box there is no
   // polygon to attribute against either, and the bare-point read is already
   // exact, so `place` is null and the scope is the pixel.
-  const box = screenBoxForGeometry(map, geometry ?? null);
-  const region: QueryRegion = box ?? point;
-  const place: Geometry | null = box === null ? null : (geometry ?? null);
+  const { geometry, partial } = placeGeometry(map, clicked ?? null);
+  const fit = screenBoxForGeometry(map, geometry);
+  const region: QueryRegion = fit?.box ?? point;
+  const place: Geometry | null = fit === null ? null : geometry;
   const scope: ClaimScope = place === null ? 'point' : 'area';
+  // A box cut to the screen edges, or one piece of a place that could not be joined, read only part of the place, so no box read answers for its absence.
+  const whole = fit === null || (!fit.clipped && !partial);
 
   // Every cluster's declared row, in table order (DR-113): the block is
   // mode-agnostic, so a row is listed whenever its layer is on.
   const rowKeys = placeConditionRowKeys(HAZARD_CLUSTERS, HAZARD_CLUSTER_KEYS);
   for (const key of rowKeys) {
-    const result = ROW_BUILDERS[key]({ map, point, region, place, scope });
+    const result = ROW_BUILDERS[key]({ map, point, region, place, scope, whole });
     rowsByKey.push(result.rows);
     if (result.hasWarning) {
       hasWarning = true;

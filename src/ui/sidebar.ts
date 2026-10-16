@@ -98,9 +98,10 @@ import { bindStudioEscape, trapStudioTabFocus } from './island/studio-inert';
 // user reveals the telemetry list, and each station uses exactly one of the
 // four, so a boot now pays for none of them.
 import type { StationValue, TelemetryStation } from '../types/station';
+import { formatStationNumber } from '../util/station-format';
 import { setCurrentRegion } from '../state/region-store';
 import type { LayerStatus } from '../types/layer';
-import { SIDEBAR_DESKTOP_QUERY, parseUrlParams, syncUrl } from '../state/url';
+import { SIDEBAR_DESKTOP_QUERY, parseSelectParam, parseUrlParams, syncUrl } from '../state/url';
 import type { ParsedUrlParams } from '../state/url';
 import {
   backToMap,
@@ -119,7 +120,7 @@ import {
   setViewMode
 } from '../state/view-mode';
 import { installPopupViewportContainment } from './popup-viewport';
-import { getBasemapMode, onBasemapChange, setBasemapMode } from '../state/basemap-store';
+import { defaultBasemapFor, getBasemapMode, onBasemapChange, setBasemapMode } from '../state/basemap-store';
 import { FIRE3D_CHUNK_WIDTH_QUERY, seedFire3DPreference } from '../state/fire3d-store';
 import { getFraming, onFramingChange, setFraming } from '../state/framing-store';
 import {
@@ -131,9 +132,11 @@ import {
 } from '../state/cluster-store';
 import {
   getCommittedSnapshot,
+  isCustomComposition,
   onCommittedSnapshotChange,
   reconcileClusterWithLayerIntent,
-  requestHorizon
+  requestHorizon,
+  requestOcean
 } from '../state/cluster-service';
 import {
   ALL_FRAMING_BOUNDS,
@@ -142,16 +145,21 @@ import {
   framingFitBounds
 } from '../config/framings';
 import type { FramingKey } from '../config/framings';
-import { OCEANS } from '../config/oceans';
+import { OCEAN_KEYS, OCEANS } from '../config/oceans';
+import type { OceanKey } from '../config/oceans';
 import { applyBasemapMode, holdSatellite, requestBasemapMode } from '../map/basemap-switcher';
 import {
   cameraMatchesTarget,
   cameraStateUnchanged,
   committedCameraTarget,
   fitCameraTarget,
+  fitOcean,
   fitRegion,
-  readCameraState
+  oceanTarget,
+  readCameraState,
+  restoreCameraState
 } from '../map/camera-fit';
+import { ensoBootFitsPacific, ensoCameraAction, hasHeldEnsoCamera, holdEnsoCamera, takeEnsoCamera } from '../map/enso-camera';
 import type { CameraState, CameraTarget } from '../map/camera-fit';
 import { timeline } from '../state/timeline';
 import { resolveStatusPillText } from './island/pill-text';
@@ -729,10 +737,14 @@ function pushUrl(): void {
 function syncRegionSelect(): void {
   const select = document.getElementById('region-select');
   if (!(select instanceof HTMLSelectElement)) return;
+  const ocean = getOceanFraming();
   const framing = getFraming();
-  select.value = framing !== null
-    ? `framing:${framing}`
-    : `region:${STATE.currentRegion ?? DEFAULT_REGION}`;
+  // An ocean camera has precedence over the framing it leaves in the store.
+  select.value = ocean !== null
+    ? `ocean:${ocean}`
+    : framing !== null
+      ? `framing:${framing}`
+      : `region:${STATE.currentRegion ?? DEFAULT_REGION}`;
 }
 
 /** Build one dropdown that follows minimap choices while preserving every
@@ -778,7 +790,16 @@ function buildRegionSelect(): void {
     option.title = region.description;
     detailGroup.appendChild(option);
   }
-  select.append(overviewGroup, detailGroup);
+
+  const oceanGroup = document.createElement('optgroup');
+  oceanGroup.label = 'Ocean views';
+  for (const key of OCEAN_KEYS) {
+    const option = document.createElement('option');
+    option.value = `ocean:${key}`;
+    option.textContent = OCEANS[key].label;
+    oceanGroup.appendChild(option);
+  }
+  select.append(overviewGroup, oceanGroup, detailGroup);
 
   select.addEventListener('change', () => {
     const map = mapRef;
@@ -786,6 +807,15 @@ function buildRegionSelect(): void {
     const [kind, rawKey] = select.value.split(':', 2);
     if (kind === 'region' && rawKey && rawKey in REGIONS) {
       handleRegionChoice(rawKey as RegionKey);
+      return;
+    }
+    if (kind === 'ocean' && rawKey && rawKey in OCEANS) {
+      // One gesture enters ENSO and fits the ocean camera (D-0.7.0-053); the
+      // framing store is untouched so the prior land framing survives a clear.
+      const key = rawKey as OceanKey;
+      requestOcean(key);
+      requestBasemapMode(map, defaultBasemapFor('enso'));
+      fitOcean(map, key);
       return;
     }
     if (kind !== 'framing') return;
@@ -885,7 +915,8 @@ function updateRegionBriefingTrigger(regionKey: RegionKey | null | undefined): v
   if (place) {
     btn.hidden = false;
     btn.textContent = 'See what this means';
-    btn.setAttribute('aria-label', `See what the drought means for ${place.label}`);
+    // Mode-neutral on purpose: the door opens the same briefing in every mode.
+    btn.setAttribute('aria-label', `See what this means for ${place.label}`);
     if (note) note.hidden = true;
     return;
   }
@@ -1172,9 +1203,8 @@ function wireTelemetryReveal(map: maplibregl.Map): void {
 // ---------------------------------------------------------------------------
 
 /**
- * One-shot-per-session guard for the station-value hydration. The skill
- * vocabulary's `unknown` state is "not yet fetched in this session"; the
- * first telemetry-layer activation triggers the fetch round trip.
+ * Guard against a second hydration while telemetry stays on. Every
+ * telemetry layer-off clears it, so each activation fetches again.
  */
 let stationValuesHydrated = false;
 
@@ -1235,18 +1265,13 @@ async function fetchPrimaryStationValue(
 
 /**
  * Compact display label for a station's primary value. Snow Water
- * Equivalent keeps its conventional SWE shorthand; storage readings get a
- * thousands separator; everything else renders label, value, and unit as
+ * Equivalent keeps its conventional SWE shorthand; storage and discharge
+ * readings get a thousands separator; everything else renders label, value, and unit as
  * the source reported them.
  */
 function formatStationValue(value: StationValue): string {
   const label = value.parameter === 'snow_water_equivalent_in' ? 'SWE' : value.label;
-  const wantsThousands =
-    value.parameter === 'reservoir_storage_acft' || value.parameter === 'discharge_cfs';
-  const num =
-    wantsThousands && value.value !== null
-      ? value.value.toLocaleString('en-US', { maximumFractionDigits: 0 })
-      : String(value.value);
+  const num = formatStationNumber(value.value, value.parameter);
   const day = value.timestamp ? ` · ${shortReadingDate(value.timestamp)}` : '';
   const staleNote = value.freshness === 'stale' ? ' (stale)' : '';
   return `${label} ${num} ${value.unit}${day}${staleNote}`;
@@ -1309,11 +1334,11 @@ function hydrateStationValues(map: maplibregl.Map): void {
 }
 
 /**
- * Registry hook for the value lifecycle: first telemetry activation
- * hydrates once per session; a telemetry layer-off aborts anything still
- * in flight (the cancellation invariant). Values already rendered
- * stay rendered; the list is catalog metadata plus last-known readings,
- * not something to blank on toggle.
+ * Registry hook for the value lifecycle: each telemetry activation
+ * hydrates; a telemetry layer-off aborts anything still in flight (the
+ * cancellation invariant) and re-arms the next activation. Values already
+ * rendered stay rendered; the list is catalog metadata plus last-known
+ * readings, not something to blank on toggle.
  */
 function onActiveChangeForStationValues(
   map: maplibregl.Map,
@@ -1358,9 +1383,19 @@ function wireTopLevelEvents(map: maplibregl.Map): void {
   const resetBtn = document.getElementById('reset-btn');
   if (resetBtn) {
     resetBtn.addEventListener('click', () => {
-      if (STATE.currentRegion) {
-        selectRegion(map, STATE.currentRegion);
+      // Reset returns the basemap to the current mode's default.
+      requestBasemapMode(map, defaultBasemapFor(getHazardCluster()));
+      if (!STATE.currentRegion) return;
+      // Reset in ENSO is the boot with no camera in the URL (F9): it drops the
+      // ocean and framing cameras, as the region choice below does, and fits
+      // the Pacific instead of the region under it. Reset never fits a place.
+      if (ensoBootFitsPacific(getHazardCluster(), false, false, STATE.currentRegion === DEFAULT_REGION, false)) {
+        setFraming(null);
+        clearOceanFraming();
+        fitOcean(map, 'pacific');
+        return;
       }
+      selectRegion(map, STATE.currentRegion);
     });
   }
 
@@ -1511,6 +1546,8 @@ function wireTopLevelEvents(map: maplibregl.Map): void {
  */
 function applyUrlStateSync(map: maplibregl.Map): ParsedUrlParams {
   const params = parseUrlParams();
+  // Read now: the first canonical write below drops the one-shot `select=`.
+  const placeSelected = parseSelectParam() !== null;
   STATE.embed = params.embed;
   // Seed the desktop sidebar preference FIRST (D1 M7, S2): the store seeds
   // below can each fire a canonical write through listeners registered
@@ -1591,18 +1628,33 @@ function applyUrlStateSync(map: maplibregl.Map): ParsedUrlParams {
   // winning camera ever paints.
   selectRegion(map, params.region, true);
 
+  // A boot into ENSO whose URL names no camera of its own enters the way the
+  // mode button does (F9): hold the region view just fitted, so leaving ENSO
+  // returns to it, then fit the Pacific. The hold replaces the one the cluster
+  // subscriber took at the seed above, before the region fit.
+  const ensoBoot = ensoBootFitsPacific(
+    params.cluster,
+    params.ocean !== null,
+    params.framing !== null,
+    params.region === DEFAULT_REGION,
+    placeSelected
+  );
+  if (ensoBoot) holdEnsoCamera(readCameraState(map));
+
   // The boot camera precedence (S2): `ocean=` (the most specific gesture,
   // pairing display with camera, D-0.7.0-053) wins over `framing=`
   // (D-0.7.0-039/041), which wins over the legacy `region=` fit above.
   // Both are camera-only: they select nothing and brief nothing.
-  const cameraDef = params.ocean
-    ? OCEANS[params.ocean]
-    : params.framing === 'all'
-      ? { bounds: ALL_FRAMING_BOUNDS, padding: 0 }
-      : params.framing
-        ? FRAMINGS[params.framing]
-        : null;
-  if (cameraDef) {
+  const oceanBoot = params.ocean ?? (ensoBoot ? 'pacific' : null);
+  const cameraDef = params.framing === 'all'
+    ? { bounds: ALL_FRAMING_BOUNDS, padding: 0 }
+    : params.framing
+      ? FRAMINGS[params.framing]
+      : null;
+  if (oceanBoot) {
+    // The shared ocean fit, so a small map keeps the zoom floor on the Nino 3.4 box.
+    fitCameraTarget(map, oceanTarget(oceanBoot), false);
+  } else if (cameraDef) {
     map.fitBounds(
       framingFitBounds(cameraDef),
       { padding: 20, animate: false }
@@ -1956,7 +2008,33 @@ function wireSidebar(map: maplibregl.Map, onRegionSelect: (key: RegionKey) => vo
     updateRegionBriefingTrigger(STATE.currentRegion);
     pushUrl();
   });
-  onHazardClusterChange(pushUrl);
+  // ENSO camera (F9): entering fits the Pacific, leaving restores the view from
+  // before entering. The boot seed fires this too, but the boot's own fits
+  // follow it in the same task, so applyUrlStateSync owns the boot camera.
+  let previousCluster = getHazardCluster();
+  onHazardClusterChange(() => {
+    const next = getHazardCluster();
+    const map = mapRef;
+    if (map) {
+      const action = ensoCameraAction(
+        previousCluster,
+        next,
+        hasHeldEnsoCamera(),
+        getOceanFraming() !== null,
+        isCustomComposition()
+      );
+      if (action.capture) holdEnsoCamera(readCameraState(map));
+      if (action.fitPacific) fitOcean(map, 'pacific');
+      if (action.restore) {
+        const heldCamera = takeEnsoCamera();
+        if (heldCamera) restoreCameraState(map, heldCamera);
+      }
+    }
+    previousCluster = next;
+    // The ocean framing rides the cluster store; keep the dropdown on it.
+    syncRegionSelect();
+    pushUrl();
+  });
 
   // The front-door trigger (F3): when a map place is selected or cleared, the
   // region-briefing button relabels to "See what this means" for that place, or

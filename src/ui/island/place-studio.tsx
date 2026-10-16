@@ -26,14 +26,17 @@ import { createBriefingSkeleton } from '../../impact/briefing';
 import { selectBriefNarrativeLine } from '../../impact/brief-narrative-selector';
 import { buildBoundaryContext, caveatFor } from '../../impact/context';
 import {
-  bboxCenter,
   bboxIntersection,
   bboxIntersects,
   loadServiceEnvelopePieces,
   mergeByStableIdentifier
 } from '../../util/bbox';
 import { geometryBboxAcrossAntimeridian } from '../../util/antimeridian';
-import { hydrateBriefing } from '../../impact/hydrate';
+import { representativePoint } from '../../util/point-in-polygon';
+import { applyMatrix } from '../../impact/matrix';
+import { createNwsRequestSession } from '../../impact/nws-point';
+import { sourceMayRun } from '../../impact/source-policy';
+import { fetchUsdmClaims } from '../../impact/sources';
 import { computeOverlapRows } from './overlap-engine';
 import type { OverlapRelationship } from './overlap-engine';
 import type { BoundaryKind, BoundarySelectionContext } from '../../impact/types';
@@ -51,7 +54,6 @@ import {
   setPlaceStudioDisplayKind,
   setStudioWatershedBoundary
 } from '../../state/display-snapshot';
-import { getMap } from '../../state/map-store';
 import {
   backToMap,
   setPlaceStudioReturnAction,
@@ -194,13 +196,16 @@ function abortIfNeeded(signal: AbortSignal): void {
 async function fetchJson(
   url: string,
   signal: AbortSignal,
-  init: RequestInit | null = null
+  init: RequestInit | null = null,
+  maxDecodedBytes?: number,
+  timeoutMs = PLACE_DATA_TIMEOUT_MS
 ): Promise<unknown> {
   return fetchJsonWithBudget(
     url,
     init,
     signal,
-    PLACE_DATA_TIMEOUT_MS
+    timeoutMs,
+    maxDecodedBytes
   );
 }
 
@@ -275,7 +280,7 @@ function escapeSql(value: string): string {
   return value.replace(/'/g, "''");
 }
 
-// bboxCenter/bboxIntersects/bboxIntersection share the N2-A circular
+// bboxIntersects/bboxIntersection share the N2-A circular
 // longitude contract with deep links and search.
 
 function featureIntersectsBbox(
@@ -305,6 +310,25 @@ function arcGisEnvelopeParams(
   });
 }
 
+// About 55 m, far below what the 2 percent sliver rule can show; keeps a
+// state's or Tribe's ecoregion candidates under the 8 MiB body cap (Idaho is
+// 12.7 MB at full resolution). An ecoregion selection stays full resolution:
+// simplifying both levels separately flips `contains` rows to `overlaps`.
+function ecoregionCandidateParams(
+  envelope: string,
+  outFields: string,
+  selectionKind: TypedPlaceKind
+): URLSearchParams {
+  const params = arcGisEnvelopeParams(envelope, outFields);
+  if (selectionKind !== 'ecoregion') params.set('maxAllowableOffset', '0.0005');
+  return params;
+}
+
+// Full-resolution Middle Rockies candidates are 11.4 MB, over the 8 MiB default.
+const ECOREGION_CANDIDATE_MAX_BYTES = 24 * 1024 * 1024;
+// EPA streams that answer in 4 to 6 s on a good day; 8 s is too thin for headers plus body.
+const ECOREGION_CANDIDATE_TIMEOUT_MS = 20_000;
+
 function resolvedSelection(
   kind: BoundaryKind,
   title: string,
@@ -317,11 +341,11 @@ function resolvedSelection(
     kind,
     properties,
     geometry,
-    bboxCenter(bbox),
+    representativePoint(geometry, bbox),
     title
   );
   return {
-    context: { ...rawContext, bbox },
+    context: { ...rawContext, bbox, pointInsidePlace: true },
     geometry,
     bbox
   };
@@ -371,6 +395,8 @@ async function resolveTribeSelection(
     outFields: 'LARID,LARNAME,CLASSIFICATION,GISACRES,REGION',
     returnGeometry: 'true',
     outSR: '4326',
+    // Full resolution: this response also seeds the emphasis cache that draws
+    // the Tribal boundary on the map, so it is never generalized.
     geometryPrecision: '5',
     f: 'geojson'
   });
@@ -420,7 +446,8 @@ async function resolveEcoregionSelection(
     await fetchJson(
       `${URLS.epaEcoregionsMapServer}/${layer}/query?${params.toString()}`,
       signal,
-      { cache: 'no-store' }
+      // EPA sends an ETag; revalidating spares a repeat 3 to 13 MB read.
+      { cache: 'no-cache' }
     )
   );
   abortIfNeeded(signal);
@@ -438,11 +465,7 @@ async function resolveWatershedSelection(
   entry: PlaceCatalogEntry,
   signal: AbortSignal
 ): Promise<ResolvedPlaceSelection | null> {
-  const feature = await loadWatershedSelectionGeometry(
-    entry,
-    getMap()?.getZoom() ?? 0,
-    signal
-  );
+  const feature = await loadWatershedSelectionGeometry(entry, signal);
   if (!feature) return null;
   return resolvedSelection(
     'watershed',
@@ -510,7 +533,8 @@ async function loadStateCandidates(
 
 async function loadEcoregionCandidates(
   bbox: readonly [number, number, number, number],
-  signal: AbortSignal
+  signal: AbortSignal,
+  selectionKind: TypedPlaceKind
 ): Promise<FeatureCollection<ArealGeometry, PlaceOverlapProperties>> {
   const query = async (
     layer: 7 | 11,
@@ -521,12 +545,14 @@ async function loadEcoregionCandidates(
       layer === 7
         ? 'US_L4CODE,US_L4NAME,US_L3CODE,US_L3NAME'
         : 'US_L3CODE,US_L3NAME';
-    const params = arcGisEnvelopeParams(envelope, outFields);
+    const params = ecoregionCandidateParams(envelope, outFields, selectionKind);
     return assertFeatureCollection(
       await fetchJson(
         `${URLS.epaEcoregionsMapServer}/${layer}/query?${params.toString()}`,
         siblingSignal,
-        { cache: 'no-store' }
+        { cache: 'no-cache' },
+        ECOREGION_CANDIDATE_MAX_BYTES,
+        ECOREGION_CANDIDATE_TIMEOUT_MS
       )
     ).features;
   };
@@ -651,12 +677,7 @@ async function loadWatershedOverlapCandidates(
   const collections = await loadServiceEnvelopePieces(
     bbox,
     signal,
-    (piece, siblingSignal) =>
-      loadWatershedCandidates(
-        piece,
-        getMap()?.getZoom() ?? 0,
-        siblingSignal
-      )
+    (piece, siblingSignal) => loadWatershedCandidates(piece, siblingSignal)
   );
   const candidates = mergeByStableIdentifier(
     collections.map((collection) => collection.features),
@@ -703,7 +724,8 @@ function overlapPairAvailable(
 async function loadCandidateKind(
   kind: TypedPlaceKind,
   bbox: readonly [number, number, number, number],
-  signal: AbortSignal
+  signal: AbortSignal,
+  selectionKind: TypedPlaceKind
 ): Promise<FeatureCollection<ArealGeometry, PlaceOverlapProperties>> {
   switch (kind) {
     case 'tribe':
@@ -713,7 +735,7 @@ async function loadCandidateKind(
     case 'ecoregion': {
       const scopedBbox = bboxIntersection(bbox, PNW_BOUNDS);
       return scopedBbox
-        ? loadEcoregionCandidates(scopedBbox, signal)
+        ? loadEcoregionCandidates(scopedBbox, signal, selectionKind)
         : { type: 'FeatureCollection', features: [] };
     }
     case 'watershed':
@@ -741,7 +763,7 @@ async function loadOverlapView(
       try {
         return {
           kind,
-          candidates: await loadCandidateKind(kind, requestBbox, signal)
+          candidates: await loadCandidateKind(kind, requestBbox, signal, entry.kind)
         } as const;
       } catch (err) {
         if (signal.aborted) throw err;
@@ -1106,30 +1128,49 @@ function PlaceStudio() {
         }
 
         if (coverage.briefable.state === 'available') {
+          // The line reads only point heat and the USDM claim, so fetch those
+          // two under the briefing's own source policy, not the whole briefing.
           const briefing = createBriefingSkeleton(resolved.context);
+          const { context } = resolved;
+          const { signal } = masterAbort;
           setNarrativeKindLabel(briefing.landKind);
-          void hydrateBriefing(briefing, masterAbort.signal, () => {
-            if (masterAbort.signal.aborted) return;
+          const publish = (): void => {
+            if (signal.aborted) return;
             const line = selectBriefNarrativeLine(briefing);
             if (line) {
               setNarrativeLine(line);
               setNarrativeStatus('ready');
             }
-          })
-            .then(() => {
-              if (
-                !masterAbort.signal.aborted &&
-                !selectBriefNarrativeLine(briefing)
-              ) {
-                setNarrativeStatus('unavailable');
-              }
-            })
-            .catch((err: unknown) => {
-              if (!masterAbort.signal.aborted) {
-                console.warn('[place-studio] brief narrative failed.', err);
-                setNarrativeStatus('unavailable');
-              }
-            });
+          };
+          const warn = (err: unknown): void => {
+            if (!signal.aborted) console.warn('[place-studio] brief narrative failed.', err);
+          };
+          const heat = sourceMayRun(briefing.sourcePolicy, 'pointHeat')
+            ? import('../../impact/point-heat')
+                .then(({ fetchPointHeat }) =>
+                  fetchPointHeat(context, createNwsRequestSession(signal))
+                )
+                .then((result) => {
+                  briefing.pointHeat = result;
+                  publish();
+                })
+                .catch(warn)
+            : Promise.resolve();
+          const drought =
+            briefing.sourcePolicy.droughtImpact.enabled &&
+            sourceMayRun(briefing.sourcePolicy, 'usdm')
+              ? fetchUsdmClaims(context, signal)
+                  .then((result) => {
+                    applyMatrix(briefing.horizons, new Map([['usdm', result]]));
+                    publish();
+                  })
+                  .catch(warn)
+              : Promise.resolve();
+          void Promise.all([heat, drought]).then(() => {
+            if (!signal.aborted && !selectBriefNarrativeLine(briefing)) {
+              setNarrativeStatus('unavailable');
+            }
+          });
         } else {
           setNarrativeStatus('unavailable');
         }

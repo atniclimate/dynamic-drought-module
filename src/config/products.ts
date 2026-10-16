@@ -21,7 +21,7 @@ export type UrlsKey = keyof typeof URLS;
  * inferring one from the other's literal keys.
  *
  * One product per DISTINCT issuer data product (the design ruling this file
- * follows, not a rule invented here). The first 23 keys are the layer-backed
+ * follows, not a rule invented here). The first 24 keys are the layer-backed
  * products, one per `LAYER_DEFS` entry in that array's own order; the
  * remaining keys are briefing-only products no map layer draws. Five layer
  * products also carry a briefing lane, because the same issuer endpoint
@@ -51,6 +51,7 @@ export const PRODUCT_KEYS = Object.freeze([
   'spc-fire-weather',
   'usfs-whp',
   'sst-anomaly',
+  'tropical-cyclones',
   'telemetry',
   // Briefing-only products (no LayerDef reads them): DSCI, the NWS point
   // forecast, the two live CPC outlook reads, the cited CPC seasonal drought
@@ -142,7 +143,8 @@ export const PRODUCTS: Readonly<Record<ProductKey, ProductDef>> = Object.freeze(
   },
   ecoregions: {
     key: 'ecoregions',
-    issuer: 'EPA Omernik · PMTiles',
+    // Matches the layer's source line in layers.ts. DRAFT wording (DR-177).
+    issuer: 'EPA Omernik · PMTiles · Pacific Northwest bundle only',
     endpointKey: 'ecoregionsPmtilesLocal',
     layerKey: 'ecoregions',
     lane: null,
@@ -332,6 +334,17 @@ export const PRODUCTS: Readonly<Record<ProductKey, ProductDef>> = Object.freeze(
     // (URLS.ensoIndicesLocal) never queries GIBS imagery. No shared lane.
     lane: null,
     clock: { register: 'observed', cadence: 'on demand' }
+  },
+  'tropical-cyclones': {
+    key: 'tropical-cyclones',
+    issuer: 'NOAA NHC and CPHC · MapServer',
+    // Licence: public domain (https://www.weather.gov/disclaimer and
+    // https://www.nhc.noaa.gov/disclaimer.shtml); no credit sentence is
+    // required, the acknowledgements row names the issuer (DR-106).
+    endpointKey: 'nhcTropicalMapServer',
+    layerKey: 'tropical-cyclones',
+    lane: null,
+    clock: { register: 'outlook', cadence: 'every 6 hours, every 3 hours near the coast' }
   },
   telemetry: {
     key: 'telemetry',

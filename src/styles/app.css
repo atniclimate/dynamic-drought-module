@@ -72,6 +72,8 @@
   /* D3 M5 additions. Existing D1 tokens below keep their adopted values. */
   --surface-base: #010B13;
   --brand-wordmark-red: #E13D33;
+  /* The fresh-feed dot. 5.7:1 on --surface-base and 3.4:1 on white (a graphic needs 3:1). */
+  --status-fresh: #2E9E5B;
   --surface-band: #171C20;
   --rule: #3B3B3B;
   --rule-control: #8A94A6;
@@ -239,8 +241,7 @@
      z-index in JavaScript, so these are the whole stack.
      Deliberately NOT tokenized, because they are local stacking inside
      one component rather than app-level order: the minimap SVG's 0-3,
-     the sheet search results' 1, .sidebar-key-host's 20, and
-     .fire3d-embed-note's 30. */
+     the sheet search results' 1, and .fire3d-embed-note's 30. */
   --z-map-chrome: 600;    /* +10 bottom dock, +40 the sheet's on-map key */
   --z-map-readout: 900;   /* hover inspector, the sheet's map-info panel */
   --z-map-control: 1000;  /* overlay controls and the loading pulse;
@@ -437,9 +438,6 @@ a:hover {
     --sidebar-w: clamp(300px, calc(30vw + 64px), 340px);
   }
 }
-/* The band's second minimap rule lives beside .shell-minimap-ocean-door
-   itself, further down this file, because it has to follow that rule in
-   source order to win at equal specificity. */
 
 /* embed mode: sidebar is hidden by URL param, but expand button still surfaces */
 .app-shell.embed {
@@ -459,6 +457,13 @@ a:hover {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  /* Clip, not hidden: the sr-only helpers positioned against the sidebar
+     extend its scroll height, and a focus jump scrolled the header away. */
+  overflow: clip;
+  /* A clipped box is not a scroll container, so its grid minimum falls back
+     to its content height; 0 keeps the sidebar window-tall and lets
+     .sidebar-scroll be the one that scrolls. */
+  min-height: 0;
   min-width: 0;
   transition: width 0.2s ease;
 }
@@ -2110,11 +2115,6 @@ button.conditions-metric:hover .conditions-action-hide {
   margin: 0 0 8px;
   text-transform: uppercase;
 }
-.popup-description {
-  font-size: 12px;
-  color: var(--fg-1);
-  margin: 0 0 10px;
-}
 
 /* Fire-in-context block (0.4.0 B1): a composed read appended to a NIFC
    perimeter popup (drought class beneath, nearest stations). Composition only,
@@ -2125,15 +2125,6 @@ button.conditions-metric:hover .conditions-action-hide {
   border-top: 1px solid var(--line);
   font-family: var(--font-body);
   font-size: 11.5px;
-}
-.fire-context-heading {
-  font-family: var(--font-display);
-  font-weight: var(--fw-title);
-  font-size: 11px;
-  letter-spacing: var(--track-caps-sm);
-  text-transform: uppercase;
-  color: var(--fg-2);
-  margin-bottom: 6px;
 }
 .fire-context-block {
   display: flex;
@@ -2163,11 +2154,6 @@ button.conditions-metric:hover .conditions-action-hide {
   gap: 8px;
   color: var(--fg-1);
   padding: 1px 0;
-}
-.fire-context-distance {
-  color: var(--fg-3);
-  font-feature-settings: 'tnum' 1;
-  font-variant-numeric: tabular-nums lining-nums;
 }
 .fire-context-note {
   margin: 6px 0 0;
@@ -2212,77 +2198,6 @@ button.conditions-metric:hover .conditions-action-hide {
   to {
     transform: translateX(100%);
   }
-}
-.popup-links {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px solid var(--line);
-  /* Anchors size to their text (U-UX-FIX-1, DG-080-REVIEW finding 2
-     hardening): a stretched full-width anchor ran under the map's
-     attribution control, so the dead right half of the strip was not
-     hit-testable. That control was removed on 2026-08-31 (PR 54), but
-     the rule stays: other persistent map chrome (the scale bar, the (?)
-     disclosure, the embed linkouts) can still legitimately overlay a
-     card's right edge on a short viewport. The visible link text IS the
-     hit area. */
-  align-items: flex-start;
-}
-.popup-links a {
-  font-size: 11.5px;
-  color: var(--accent);
-  border-bottom: none;
-}
-.popup-links a:hover { color: var(--fg-0); }
-.popup-links a::after {
-  content: ' ↗';
-  font-size: 10px;
-  opacity: 0.7;
-}
-.popup-treaty-meta {
-  font-family: var(--font-body);
-  font-feature-settings: 'tnum' 1;
-  font-size: 11px;
-  font-weight: var(--fw-body);
-  color: var(--fg-2);
-  margin-top: 6px;
-  letter-spacing: 0.01em;
-}
-
-/* The place-popup Conditions block (owner amendment, 2026-09-10;
-   src/ui/popup-conditions.ts). Sits in the frozen head between the "kind
-   of place" agency line and the briefing door, so it reads at a glance
-   with no scrolling. Deliberately plainer than .fire-context (no heading,
-   tighter rule): this card is meant to be very simple. */
-.popup-conditions {
-  margin: 6px 0 8px;
-  padding: 6px 0 2px;
-  border-top: 1px solid var(--line);
-  font-family: var(--font-body);
-  font-size: 11.5px;
-}
-.popup-condition-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 10px;
-  padding: 3px 0;
-}
-.popup-condition-row + .popup-condition-row {
-  border-top: 1px dashed var(--line);
-}
-.popup-condition-label {
-  flex-shrink: 0;
-  color: var(--fg-2);
-  letter-spacing: 0.02em;
-}
-.popup-condition-value {
-  color: var(--fg-0);
-  font-weight: var(--fw-body);
-  text-align: right;
-  line-height: 1.35;
 }
 
 /* The briefing-door pulse (director ruling, 2026-09-10, "Emphasis must be
@@ -4211,9 +4126,6 @@ button.conditions-metric:hover .conditions-action-hide {
        2026-07-10). */
     overflow: visible;
   }
-  /* Grabber drags set an inline --sheet-height per frame; the transition
-     would fight the pointer, so it drops for the duration of the drag. */
-  #app.sheet-dragging .sidebar { transition: none; }
 
   /* Closed: the edgeless map-first state (the mockup's rule 3: with no
      active door, no grabber or sheet edge peeks above the footer). The
@@ -4759,7 +4671,6 @@ button.conditions-metric:hover .conditions-action-hide {
   background: var(--line-strong);
 }
 .sheet-grabber:hover .sheet-grabber-bar { background: var(--fg-3); }
-#app.sheet-dragging .sheet-grabber { cursor: grabbing; }
 
 /* The one-time first-peek hint (product lens): dismissible, floats above
    the sheet's top edge, never repeats once dismissed. Offset high enough
@@ -4781,17 +4692,6 @@ button.conditions-metric:hover .conditions-action-hide {
   color: var(--fg-1);
   white-space: nowrap;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
-}
-.sheet-hint-dismiss {
-  appearance: none;
-  background: transparent;
-  border: none;
-  color: var(--fg-2);
-  font-size: 14px;
-  line-height: 1;
-  min-width: 24px;
-  min-height: 24px;
-  cursor: pointer;
 }
 
 /* The at-hand block (the half detent's Brief content). */
@@ -6084,13 +5984,10 @@ a.impact-resource-link::after {
    embed layouts are unchanged. The briefing mounts on <body>, outside
    #app, so the embed test reads the body's direct child. */
 @media (min-width: 721px) {
-  /* T1 prose: no single-word last line (ATNI README:157). The popup
-     description and a condition row's value are sentences of any length
-     (a value can list every fire name), so they take pretty, which holds
-     at any line count. */
+  /* T1 prose: no single-word last line (ATNI README:157). Sentences of
+     any length take pretty, which holds at any line count. */
   :where(body:not(:has(> .app-shell.embed)))
-    :where(p, li, dd, figcaption, [data-popup-slot='note'], .map-key-qualification, .shell-summary-primary,
-      .popup-description, .popup-condition-value) {
+    :where(p, li, dd, figcaption, [data-popup-slot='note'], .map-key-qualification, .shell-summary-primary) {
     text-wrap: pretty;
   }
   /* T2 headings and short labels that may take two lines (README:157):
@@ -6351,6 +6248,13 @@ a.impact-resource-link::after {
   gap: 4px 6px;
   min-width: 0;
 }
+.map-key-tropical-group {
+  display: flex;
+  flex: 1 1 100%;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+}
 .map-key-scale-label {
   flex: 0 0 auto;
   color: var(--fg-1);
@@ -6367,6 +6271,10 @@ a.impact-resource-link::after {
   .app-shell:not(.embed) .sst-anomaly-orientation > span {
     text-wrap: balance;
   }
+}
+/* The long hurricane centre credit never leaves "Center" alone, at any width or in an embed. */
+.map-key-item[data-tropical-issuer] {
+  text-wrap: balance;
 }
 .map-key-nws-products .map-key-item {
   flex: 1 1 132px;
@@ -7138,6 +7046,8 @@ a.impact-resource-link::after {
   pointer-events: auto;
 }
 .heatrisk-sequence[hidden] { display: none; }
+/* Seated in the key drawer the panel takes the drawer's width, so the seven cells and both text lines fit. */
+.map-key-drawer-section .heatrisk-sequence { width: 100%; }
 .heatrisk-sequence-heading {
   display: flex;
   justify-content: space-between;
@@ -7909,6 +7819,17 @@ a.impact-resource-link::after {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 6px;
+  /* Stays in sight when the sidebar scrolls to reveal the 3D Fire view
+     controls; the padding and matching negative margin cover the scroll
+     box's edge without moving the layout. Above the minimap's own overlays. */
+  position: sticky;
+  /* -4px reaches the scroller's own 4px padding strip; the padding fills the
+     row's 10px gap so scrolled text never shows above or below it. */
+  top: -4px;
+  z-index: 4;
+  padding-block: 8px 10px;
+  margin-block: -8px -10px;
+  background: var(--bg-1);
 }
 
 /* Hazard first, then time: one shared order across all four views. */
@@ -7951,8 +7872,10 @@ a.impact-resource-link::after {
   background: var(--fg-3);
 }
 .feed-freshness-dot { box-sizing: border-box; border: 1px solid currentColor; border-radius: 0; color: var(--ink-soft); background: transparent; }
-.feed-freshness-dot[data-freshness='current'] { color: var(--ink); background: currentColor; }
-.feed-freshness-dot[data-freshness='stale'] { background: linear-gradient(90deg, currentColor 50%, transparent 50%); }
+/* Owner, 2026-09-13 and 2026-10-13: green when fresh, red when stale. The shapes stay
+   (filled, half), so the state never rests on colour alone. */
+.feed-freshness-dot[data-freshness='current'] { color: var(--status-fresh); background: currentColor; }
+.feed-freshness-dot[data-freshness='stale'] { color: var(--brand-wordmark-red); background: linear-gradient(90deg, currentColor 50%, transparent 50%); }
 .feed-freshness-dot[data-freshness='unavailable'] { color: var(--ink-strong); background: linear-gradient(135deg, transparent 40%, currentColor 40% 60%, transparent 60%); }
 .feed-freshness-dot[data-freshness='loading'] { background: transparent; }
 .time-bar-feed-details { padding: 8px 10px; }
@@ -8095,6 +8018,11 @@ a.impact-resource-link::after {
   line-height: 1.35;
 }
 
+/* The 3D information paragraphs each set margin 0; space the run of them. */
+.shell-fire3d-details > p + p {
+  margin-top: 6px;
+}
+
 /* The empty-smoke answer (2026-08-19). Same type as the notes beside it,
    one step brighter, because it reports the state of a live source rather
    than a standing caveat: a person who just turned the volume on and sees
@@ -8179,115 +8107,20 @@ a.impact-resource-link::after {
   filter: drop-shadow(0 0 5px rgba(34, 211, 238, 0.34));
 }
 
-.shell-minimap-ocean-doors {
-  position: absolute;
-  inset: 0;
-  z-index: 3;
-  pointer-events: none;
-}
-
-.shell-minimap-ocean-door {
-  position: absolute;
-  appearance: none;
-  min-width: 64px;
-  min-height: 24px;
-  padding: 3px 4px;
-  background: transparent;
+/* ENSO's scale label names the RONI phase, so this line says why the
+   framings carry no fill (the full wording is in each framing's name). */
+.shell-minimap-unshaded-line {
+  display: block;
+  min-height: 8px;
+  margin: -3px 0 6px;
   color: var(--fg-3);
-  border: 0;
-  border-radius: 0;
   font-family: var(--font-display);
   font-size: 8px;
   font-weight: var(--fw-subtitle);
   letter-spacing: var(--track-caps-sm);
+  line-height: 1;
   text-transform: uppercase;
-  cursor: pointer;
-  pointer-events: auto;
-  transition:
-    background 0.12s ease,
-    border-color 0.12s ease,
-    color 0.12s ease,
-    box-shadow 0.12s ease;
-}
-
-/* EF-5 (11-minimap-and-popups MM-08, planning/qa/feature-errors.yaml
-   FE-19): the painted ocean zone is pointer-events:none, so the whole
-   affordance is this button, and it measured 70x24 -- 24px on the short
-   axis, well under the 44px pointer floor the phone chrome already
-   holds itself to. Growing the button would move the label, so the HIT
-   AREA grows instead: a transparent band that is part of the button's
-   own box, so a press anywhere in it activates the button and not one
-   pixel of the label moves. .shell-minimap-canvas clips overflow, so
-   the band is anchored per door to stay inside the canvas. */
-.shell-minimap-ocean-door::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 50%;
-  height: 44px;
-  transform: translateY(-50%);
-}
-/* The arctic door sits 1.5% from the canvas top, so a band centred on
-   it would lose its upper half to the canvas clip and land back under
-   44px. Anchor this one to the door's top edge and grow downward. */
-.shell-minimap-ocean-door-arctic::before {
-  top: 0;
-  transform: none;
-}
-
-.shell-minimap-ocean-door:hover,
-.shell-minimap-ocean-door:focus-visible,
-.shell-minimap-ocean-door[aria-pressed='true'] {
-  background: transparent;
-  color: var(--fg-0);
-  border-color: transparent;
-  box-shadow: none;
-  outline: 1px dotted var(--accent);
-  outline-offset: 1px;
-  text-shadow: 0 0 7px rgba(34, 211, 238, 0.5);
-}
-
-/* THE TABLET BAND (DDM-P10-T01; see the band block beside .app-shell).
-   With a fluid column the canvas is up to 20% shorter than the 660x348
-   frame these doors were authored against, and the 24px box floor is the
-   only piece of the composition that does not shrink with it: at a 300px
-   column the Pacific box reached into the Hawaii inset and the Atlantic
-   box into ALL. The floor comes off inside the band so the box hugs its
-   own 8px label, which is what EF-5 built the transparent 44px `::before`
-   band for in the first place: the band, not the box, is the target, and
-   it is measured unchanged at 44px. The min-width floor is inert here
-   (the three labels already measure 70.1, 68.6 and 78.2px) and stays.
-
-   Measured after: the box is 14px in the band and the unchanged 24px at
-   1025px and wider, so the Pacific box clears Hawaii by 10.2px and the
-   Atlantic box clears ALL by 5.4px at 721. KNOWN SEAM, for the owner's
-   visual pass: because the box is centred on its label, the label sits
-   about 5px higher at 1024px than at 1025px. Keeping it continuous
-   instead would need either a 315px sidebar floor (which leaves almost no
-   fluid range) or the same 14px box on desktop (an unreviewed change to a
-   surface this task was not asked to move). The band-scoped step keeps
-   desktop byte-identical; say the word and it goes the other way. */
-@media (min-width: 721px) and (max-width: 1024px) {
-  .shell-minimap-ocean-door {
-    min-height: 0;
-  }
-}
-
-.shell-minimap-ocean-door-pacific {
-  left: 1.5%;
-  top: 39%;
-}
-
-.shell-minimap-ocean-door-arctic {
-  left: 50%;
-  top: 1.5%;
-  transform: translateX(-50%);
-}
-
-.shell-minimap-ocean-door-atlantic {
-  right: 1.5%;
-  top: 48%;
+  text-align: right;
 }
 
 .shell-minimap-drawing {
@@ -8506,7 +8339,6 @@ a.impact-resource-link::after {
 @media (prefers-reduced-motion: reduce) {
   .shell-minimap-mainland,
   .shell-minimap-ocean,
-  .shell-minimap-ocean-door,
   .shell-minimap-hawaii,
   .shell-minimap-island,
   .shell-minimap-all,
@@ -8747,23 +8579,6 @@ a.impact-resource-link::after {
    just collapses its margin. */
 .shell-summary-caveat:empty { margin: 0; }
 
-/* Desktop Brief replaces the former long legend footer with one frozen
-   rendered-condition receipt. The same full legend remains reachable through
-   a compact Key disclosure and returns to its ordinary Console/mobile seat. */
-.sidebar-bottom-dock {
-  position: relative;
-  display: flex;
-  align-items: flex-end;
-  gap: 7px;
-  flex-shrink: 0;
-  padding: 8px 10px 10px;
-  background: var(--bg-1);
-  border-top: 1px solid var(--line-strong);
-  box-shadow: 0 -8px 20px rgba(0, 0, 0, 0.18);
-}
-.sidebar-bottom-dock:not(:has(#conditions-strip:not([hidden]), #legend-panel:not([hidden]))) {
-  display: none;
-}
 .conditions-strip-dock {
   flex: 1 1 auto;
   min-width: 0;
@@ -8834,58 +8649,6 @@ a.impact-resource-link::after {
   margin-left: auto;
   padding-left: 4px;
 }
-.sidebar-key-disclosure {
-  position: relative;
-  flex: 0 0 auto;
-}
-.sidebar-key-disclosure:not(:has(#legend-panel:not([hidden]))) {
-  display: none;
-}
-.sidebar-key-disclosure > summary {
-  min-width: 44px;
-  min-height: 38px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  list-style: none;
-  cursor: pointer;
-  background: var(--bg-2);
-  color: var(--fg-1);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-md);
-  font-family: var(--font-display);
-  font-size: 10px;
-  font-weight: var(--fw-subtitle);
-  letter-spacing: var(--track-caps-sm);
-  text-transform: uppercase;
-}
-.sidebar-key-disclosure > summary::-webkit-details-marker { display: none; }
-.sidebar-key-disclosure > summary:hover,
-.sidebar-key-disclosure > summary:focus-visible,
-.sidebar-key-disclosure[open] > summary {
-  color: var(--accent);
-  border-color: var(--accent);
-}
-.sidebar-key-host {
-  position: absolute;
-  right: 0;
-  bottom: calc(100% + 7px);
-  z-index: 20;
-  width: calc(var(--sidebar-w) - 20px);
-  max-width: calc(100vw - 20px);
-  max-height: min(52vh, 480px);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  background: var(--bg-1);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-md);
-  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.55);
-}
-.sidebar-key-host > #legend-panel {
-  padding: 12px;
-  border: 0;
-}
-.sidebar-key-host > #legend-panel > .panel-title { display: none; }
 
 /* ----------------------------------------------------------------------------
    S4c: the panel-foot response. Outside .sidebar-scroll, so the frozen
@@ -9197,8 +8960,7 @@ a.impact-resource-link::after {
   .conditions-metric,
   .brief-full-report-link,
   .layer-umbrella-details-toggle,
-  .layer-toggle,
-  .sidebar-key-disclosure > summary {
+  .layer-toggle {
     min-height: var(--touch-target);
   }
 

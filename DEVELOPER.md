@@ -221,7 +221,7 @@ npm run verify:live -- --expect-sha <sha> --expect-nonce <run id>
 ```
 
 `check:drift` probes every upstream and, for each ArcGIS layer path in
-`ARCGIS_FIELD_PROBES` (nineteen today), fetches the layer schema and fails
+`ARCGIS_FIELD_PROBES`, fetches the layer schema and fails
 on a field missing from the `outFields` list read from the module source;
 lists passed as positional function arguments are not extracted and are
 recorded with their reason in `OUT_FIELDS_SENDERS_COVERED_ELSEWHERE`, which
@@ -333,9 +333,10 @@ refusals keep their Cross-Origin Resource Sharing headers for non-browser
 callers and for debugging, not for page script: a browser whose preflight is
 refused raises a generic network error and never exposes the status or the
 body. `/healthz` answers GET and its own preflight, advertising `GET, OPTIONS`
-on every response including its 405. Revision `2026-08-29-options-policy-v4`
-is the published revision (2026-08-29, Cloudflare version
-`10af1660-5b74-4520-80a1-32c80108fc48`); the daily upstream monitor derives
+on every response including its 405. This guide names no revision, because a
+copied one goes stale at the next publish: the reviewed source revision is
+the `WORKER_REVISION` constant in `workers/proxy/src/index.ts`, and the
+published one is whatever the live `/healthz` answers. The daily upstream monitor derives
 the expected revision from this source file through
 `scripts/lib/worker-revision.mjs`, so a published Worker older than reviewed
 source fails that monitor by design until the deployer runs the two-phase
@@ -351,13 +352,12 @@ flag added 2026-10-09, because Cloudflare requires both to turn Node.js
 compatibility off). The compatibility date `2026-05-09` predates the
 2026-08-04 default, so the flags change nothing today: they guard a future
 date bump, and a dry-run build is byte-identical with or without them. A
-config-only change not yet published. Publishing it needs the owner's say. When it is published, the
-rollback handle is the version live before that publish: today that is
-revision `2026-08-29-options-policy-v4`, Cloudflare version
-`10af1660-5b74-4520-80a1-32c80108fc48` (the two paragraphs above), published
-2026-08-29 23:15 UTC from `f0a9092`. If a later, unrecorded publish happens
-before this flag ships, treat that later version as the rollback handle
-instead and update this paragraph at publish time.
+config-only change: it reaches the edge only through a Worker publish, which
+needs the owner's say. The rollback handle for any publish is the version live just
+before it: read its revision from the live `/healthz` and its Cloudflare
+version id from the dashboard at publish time, and record both in that
+publish's release note, not here. Rolling back to anything older drops the
+hardening every later publish added.
 
 `verify:worker` is the instrument for those edge checks. It is read-only
 against the public Worker and writes a receipt:
@@ -376,7 +376,7 @@ for an allow-listed target; an unknown path, an off-route path of an allowed
 host, a host that was never allow-listed, and a host the reviewed revision
 removed are all refused; a POST is refused by the method gate; the request
 bounds hold; and the relay hands back upstream bytes unchanged on one
-static, cache-busted endpoint.
+static endpoint.
 
 Two design points are load-bearing. Each row asserts the HTTP status AND the
 Worker's own JSON error code, because a 403 that arrives from somewhere
@@ -384,9 +384,10 @@ further along is not the same answer as a 403 the route policy produced, and
 a receipt that read only the status would score that as a pass. And byte
 transparency is proved across the whole table before publishing, on
 synthetic bytes in `tests/worker-proxy-policy.spec.ts`; live it is one
-static endpoint with a fresh cache-busting query on both legs, because a
-direct-versus-relay hash false-fails on a dynamic upstream or on a response
-held in the Worker's 60-second edge cache.
+static endpoint fetched at its bare URL on both legs (the Worker pins that
+route to no query names and refuses a cache-busting nonce), because a
+direct-versus-relay hash false-fails on a dynamic upstream; a response held in
+the Worker's 60-second edge cache is a byte copy, so it is still comparable.
 
 Exit 0 when every row passed, 1 when any failed, 2 on a usage error. The
 receipt holds statuses, header values, byte counts, digests, and
@@ -514,8 +515,8 @@ may one deploy run take" are different questions:
   escalates rather than keeping the compare green forever.
 
 Both are inputs the workflow passes, not constants buried in the library, and
-`verify-live.yml` gives the job 50 minutes so a cache-miss Chromium provision
-(up to 10), the bounded propagation poll (up to 12), the 16 minute verifier,
+`verify-live.yml` gives the job 45 minutes so a cache-miss Chromium provision
+(up to 10), the bounded propagation poll (up to 7), the 16 minute verifier,
 and the issue steps all fit inside it.
 
 Every issue mutation, not only the close, refetches `main` immediately before
@@ -538,7 +539,7 @@ bytes. That is acceptable for a hand check because `source-health` boots the
 application against every catalog source and opens its own issues.
 
 Only the BYTES make a verification red. Before any verdict, the workflow
-polls the live site for the deployed sha for up to 10 minutes, so a slow CDN
+polls the live site for the deployed sha for up to 5 minutes, so a slow CDN
 edge cannot be reported as a divergence. After that, the run fails only for
 a `stamp:`, `propagation:`, or `seat:` finding, or a poll that never saw the
 sha. A product finding (a layer, an embed corner, a page error, a range)

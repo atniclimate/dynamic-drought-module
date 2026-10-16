@@ -1,0 +1,47 @@
+/**
+ * ENSO block B3, the active tropical cyclones layer, in the browser: the
+ * empty-season key wording (the owner's words, enso-mode-expansion.yaml F2)
+ * and one occupied slot drawn with its popup. The NOAA service is answered by
+ * tests/tropical-fixtures.ts through gotoApp's `tropical` arm; no request
+ * reaches NOAA. The six-state matrix, the slot sweep and cancellation are
+ * proved browser-free in tests/tropical-read.test.mjs.
+ */
+import { test, expect } from './offline-test';
+
+import { EP5_LAYERS, tropicalStubLog } from './tropical-fixtures';
+import { bootStorm, clickStorm } from './frame-fixtures-tropical';
+import { gotoApp, waitForLayerSettled } from './helpers';
+
+test('an empty season: the ENSO key reads "No active tropical cyclones" and carries no basins note', async ({ page }) => {
+  await gotoApp(page, '?cluster=enso&view=console');
+  await waitForLayerSettled(page, 'tropical-cyclones');
+  const row = page.locator('#map-key [data-tropical-key]');
+  await expect(row).toHaveAttribute('data-tropical-state', 'no data');
+  await expect(row.locator('[data-tropical-empty]')).toHaveText('No active tropical cyclones');
+  // The basins sentence reads in the Impact Briefing's Technical information (tests/terrain-coverage.test.mjs).
+  await expect(row).not.toContainText('Basins covered');
+  await expect(row.locator('[data-tropical-issuer]')).toHaveText(
+    'NOAA National Hurricane Center and Central Pacific Hurricane Center'
+  );
+  // The presence sweep: one Forecast Points read per slot, and nothing more in an empty season.
+  const log = tropicalStubLog(page);
+  expect(log.map((entry) => entry.layerId)).toEqual(Array.from({ length: 15 }, (_, n) => 4 + 26 * n + 2));
+});
+
+test('one occupied slot draws, its key names the advisory, and its popup opens', async ({ page }) => {
+  await bootStorm(page);
+  const row = page.locator('#map-key [data-tropical-key]');
+  await expect(row).toHaveAttribute('data-tropical-state', 'live');
+  await expect(row.locator('[data-tropical-storm="EP5"]')).toHaveText(
+    'Hurricane Simon, Eastern North Pacific, advisory 24, issued 200 AM MST Tue Oct 13 2026'
+  );
+  expect(tropicalStubLog(page).map((entry) => entry.layerId)).toEqual(
+    expect.arrayContaining([EP5_LAYERS.points, EP5_LAYERS.track, EP5_LAYERS.cone, EP5_LAYERS.ww])
+  );
+  await clickStorm(page);
+  const popup = page.locator('.maplibregl-popup [data-popup-frame]');
+  await expect(popup.locator('[data-popup-slot="title"]')).toHaveText(/Simon/);
+  await expect(popup.locator('[data-popup-slot="issuer"]')).toContainText('NOAA National Hurricane Center');
+  await expect(popup.locator('[data-popup-slot="value"]')).toContainText('24');
+  await expect(popup).toContainText('200 AM MST Tue Oct 13 2026');
+});

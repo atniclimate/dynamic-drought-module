@@ -308,6 +308,24 @@ test('wave height sets the class and mark length, never the rate', () => {
   }
 });
 
+test('jet-level wind draws as 10 m wind does, with bins and pace scaled to its speeds', () => {
+  const { FLOW_BINS } = field;
+  const { paceFor } = advect;
+  assert.deepEqual(FLOW_BINS.jet, [20, 40]);
+  assert.deepEqual([19.9, 20, 39.9, 40, 92].map((speed) => classOf('jet', speed)), [0, 1, 1, 2, 2]);
+  // A wind at the jet-level upper bin crosses the screen as fast as a 10 m wind at its own upper bin.
+  assert.equal(paceFor('jet').uniform, false);
+  assert.equal(paceFor('jet').pxPerSecPerUnit * FLOW_BINS.jet[1], WIND_PACE.pxPerSecPerUnit * FLOW_BINS.wind[1]);
+  assert.equal(paceFor('wind'), WIND_PACE);
+  assert.equal(paceFor('waves'), WAVE_PACE);
+  for (const kind of Object.keys(FLOW_BINS)) assert.ok(paceFor(kind).pxPerSecPerUnit > 0, `${kind} has a pace`);
+  // The moving form is the wind ribbons, never the wave crest marks.
+  const jet = gridField('jet', GLOBAL_1P00, (lon, lat) => [45 * Math.cos((lat * Math.PI) / 90), 5]);
+  const layer = new ribbon.FlowRibbonLayer({ id: 'flow-paths', field: jet, now: () => 0 });
+  assert.ok(layer.particles, 'particles advect the jet-level field');
+  assert.equal(layer.marks, null);
+});
+
 test('every wave mark moves at 24 px/s', () => {
   const vq = view(-150, 30, 4, 1440, 900);
   const f = waveField((lon, lat) => 0.5 + Math.abs(Math.sin(lon / 7 + lat / 3)) * 7); // all three classes

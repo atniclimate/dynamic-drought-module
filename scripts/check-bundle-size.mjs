@@ -8,7 +8,7 @@
  * Until DR-085 amendment_2026_09_12, the first two lines were fixed
  * ceilings (45 kB entry, 100 kB eager app) that no measurement backed.
  * That amendment replaced both with a ratified measurement plus
- * ACTIVATION_HEADROOM (8 percent, rounded to one decimal), the same
+ * ACTIVATION_HEADROOM (50 percent until 0.8.x, rounded to one decimal), the same
  * rule and the same constant name as check-activation-budget.mjs, so
  * the two gates read the same way even though they do not share code:
  *
@@ -70,24 +70,29 @@ const RATIFIED_HTML_GZIP_B = 9000;
 // The one headroom both lines carry above their ratified measurement.
 // Same name and value as check-activation-budget.mjs's constant, by
 // intent (one rule stated twice), not by import: the two scripts do
-// not share code. Eight percent, rounded to one decimal, turns 38.637
-// into 41.7 and 56.619 into 61.1; see budgetForMeasurement() below.
-const ACTIVATION_HEADROOM = 0.08;
+// not share code. Fifty percent by the owner's word of 2026-10-12
+// ("loosen them up so that we can get a fully functioning tool"): 0.8.0
+// is every feature working, and 0.8.x re-measures and tightens this back
+// (it was 0.08). Rounded to one decimal it turns 38.637 into 58.0 and
+// 56.619 into 84.9; see budgetForMeasurement() below.
+const ACTIVATION_HEADROOM = 0.5;
+const HEADROOM_PCT = Math.round(ACTIVATION_HEADROOM * 100);
 
 /** The enforced line for a ratified measurement, in kB to one decimal. */
 function budgetForMeasurement(measuredKb) {
   return Math.round(measuredKb * (1 + ACTIVATION_HEADROOM) * 10) / 10;
 }
 
-// Enforced lines derived from the constants above: 41.7 kB entry, 61.1
+// Enforced lines derived from the constants above: 58.0 kB entry, 84.9
 // kB eager app.
 const ENTRY_LINE_KB = budgetForMeasurement(RATIFIED_ENTRY_KB);
 const APP_LINE_KB = budgetForMeasurement(RATIFIED_EAGER_KB);
 
 // The HTML line, in raw bytes (DR-158): 9,000 B plus 8 percent headroom
 // rounded to the nearest whole byte, which is exactly 9,720 B and never
-// goes through the kB-rounding helper above.
-const HTML_LINE_B = Math.round(RATIFIED_HTML_GZIP_B * (1 + ACTIVATION_HEADROOM));
+// goes through the kB-rounding helper above. It keeps its own 8 percent:
+// feature work does not grow index.html.
+const HTML_LINE_B = Math.round(RATIFIED_HTML_GZIP_B * 1.08);
 
 const VENDOR_EXEMPT = /^(maplibre|pmtiles)-/;
 
@@ -141,7 +146,7 @@ const cssGzip = allCss.reduce((sum, f) => sum + gzipBytes(join(ASSETS, f)), 0);
 // size, in raw bytes, never a kB rounding of it.
 const htmlGzip = gzipBytes(join(DIST, 'index.html'));
 
-console.log(`bundle gate (gzip, kB = 1000 bytes; entry line ${budgetKb} kB (ratified ${RATIFIED_ENTRY_KB.toFixed(1)} kB plus 8% headroom), app line ${APP_LINE_KB} kB (ratified ${RATIFIED_EAGER_KB.toFixed(1)} kB plus 8% headroom) on the eager app total, HTML line ${HTML_LINE_B} B (ratified ${RATIFIED_HTML_GZIP_B} B plus 8% headroom))`);
+console.log(`bundle gate (gzip, kB = 1000 bytes; entry line ${budgetKb} kB (ratified ${RATIFIED_ENTRY_KB.toFixed(1)} kB plus ${HEADROOM_PCT}% headroom), app line ${APP_LINE_KB} kB (ratified ${RATIFIED_EAGER_KB.toFixed(1)} kB plus ${HEADROOM_PCT}% headroom) on the eager app total, HTML line ${HTML_LINE_B} B (ratified ${RATIFIED_HTML_GZIP_B} B plus 8% headroom))`);
 console.log(`  app entry chunk    ${kb(entryGzip).padStart(7)} kB  ${entryName}`);
 console.log('  eager boot payload (entry + modulepreload):');
 for (const row of eagerRows) console.log(row);
@@ -152,11 +157,11 @@ console.log(`  index.html         ${String(htmlGzip).padStart(7)} B   gzip (HTML
 
 let failed = false;
 if (entryGzip / 1000 >= budgetKb) {
-  console.error(`bundle gate: FAIL; app entry chunk ${kb(entryGzip)} kB gzip is at or over the ${budgetKb} kB entry line (ratified ${RATIFIED_ENTRY_KB.toFixed(1)} kB plus 8% headroom; re-ratify with a new measurement and a dated reason if this growth is real)`);
+  console.error(`bundle gate: FAIL; app entry chunk ${kb(entryGzip)} kB gzip is at or over the ${budgetKb} kB entry line (ratified ${RATIFIED_ENTRY_KB.toFixed(1)} kB plus ${HEADROOM_PCT}% headroom; re-ratify with a new measurement and a dated reason if this growth is real)`);
   failed = true;
 }
 if (eagerAppGzip / 1000 >= APP_LINE_KB) {
-  console.error(`bundle gate: FAIL; eager app total ${kb(eagerAppGzip)} kB gzip is at or over the ${APP_LINE_KB} kB app line (ratified ${RATIFIED_EAGER_KB.toFixed(1)} kB plus 8% headroom; re-ratify with a new measurement and a dated reason if this growth is real)`);
+  console.error(`bundle gate: FAIL; eager app total ${kb(eagerAppGzip)} kB gzip is at or over the ${APP_LINE_KB} kB app line (ratified ${RATIFIED_EAGER_KB.toFixed(1)} kB plus ${HEADROOM_PCT}% headroom; re-ratify with a new measurement and a dated reason if this growth is real)`);
   failed = true;
 }
 if (htmlGzip > HTML_LINE_B) {
@@ -164,4 +169,4 @@ if (htmlGzip > HTML_LINE_B) {
   failed = true;
 }
 if (failed) process.exit(1);
-console.log(`bundle gate: clean (entry ${kb(entryGzip)} kB under ${budgetKb} kB, ratified ${RATIFIED_ENTRY_KB.toFixed(1)} kB plus 8% headroom; eager app ${kb(eagerAppGzip)} kB under ${APP_LINE_KB} kB, ratified ${RATIFIED_EAGER_KB.toFixed(1)} kB plus 8% headroom; index.html ${htmlGzip} B under ${HTML_LINE_B} B, ratified ${RATIFIED_HTML_GZIP_B} B plus 8% headroom)`);
+console.log(`bundle gate: clean (entry ${kb(entryGzip)} kB under ${budgetKb} kB, ratified ${RATIFIED_ENTRY_KB.toFixed(1)} kB plus ${HEADROOM_PCT}% headroom; eager app ${kb(eagerAppGzip)} kB under ${APP_LINE_KB} kB, ratified ${RATIFIED_EAGER_KB.toFixed(1)} kB plus ${HEADROOM_PCT}% headroom; index.html ${htmlGzip} B under ${HTML_LINE_B} B, ratified ${RATIFIED_HTML_GZIP_B} B plus 8% headroom)`);

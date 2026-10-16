@@ -68,6 +68,10 @@
   margin-top: 8px;
 }
 
+.enso-flow-toolbar[hidden] {
+  display: none;
+}
+
 .enso-flow-toolbar label {
   display: flex;
   min-width: 0;
@@ -164,11 +168,11 @@
 }
 
 #map-key > .map-key-flow-pause .map-key-flow-pause-play,
-#map-key > .map-key-flow-pause[aria-pressed='true'] .map-key-flow-pause-bars {
+#map-key > .map-key-flow-pause[data-paused='true'] .map-key-flow-pause-bars {
   display: none;
 }
 
-#map-key > .map-key-flow-pause[aria-pressed='true'] .map-key-flow-pause-play {
+#map-key > .map-key-flow-pause[data-paused='true'] .map-key-flow-pause-play {
   display: inline;
 }
 

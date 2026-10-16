@@ -21,7 +21,7 @@
  * Usage: npm run build:states
  */
 
-import { mkdir, writeFile, readFile, stat } from 'node:fs/promises';
+import { mkdir, writeFile, readFile, stat, rename } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -37,6 +37,8 @@ const SOURCE_SHP = 'cb_2023_us_state_20m.shp';
 const FIELDS = 'STATEFP,STUSPS,NAME';
 const SOURCE_VINTAGE = '2023 (Census cartographic boundary, 1:20,000,000)';
 const RETRIEVED = '2026-07-01';
+const EXPECTED_STUSPS =
+  'AK AL AR AZ CA CO CT DC DE FL GA HI IA ID IL IN KS KY LA MA MD ME MI MN MO MS MT NC ND NE NH NJ NM NV NY OH OK OR PA PR RI SC SD TN TX UT VA VT WA WI WV WY';
 
 const OUT_PATH = fileURLToPath(
   new URL('../public/data/us-states.geojson', import.meta.url)
@@ -59,7 +61,9 @@ async function fetchCached(url) {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`download failed: ${url} -> HTTP ${res.status}`);
   const buf = Buffer.from(await res.arrayBuffer());
-  await writeFile(cachePath, buf);
+  // A .part file keeps an interrupted write from passing as a cached zip.
+  await writeFile(`${cachePath}.part`, buf);
+  await rename(`${cachePath}.part`, cachePath);
   console.log(`  saved:      ${basename(url)} (${buf.length.toLocaleString()} bytes)`);
   return buf;
 }
@@ -107,6 +111,20 @@ async function main() {
     .filter(Boolean)
     .sort();
   console.log(`  codes: ${names.join(' ')}`);
+
+  // The fifty states, DC and Puerto Rico, each once, with every coordinate a
+  // finite longitude and a latitude inside the shipped range.
+  const expected = EXPECTED_STUSPS.split(' ').sort();
+  if (fc.features.length !== 52 || names.join(' ') !== expected.join(' ')) {
+    throw new Error(`expected the 52 features ${expected.join(' ')}; got ${fc.features.length}: ${names.join(' ')}`);
+  }
+  const coords = fc.features.flatMap((f) => (f.geometry ? [f.geometry.coordinates].flat(Infinity) : [NaN]));
+  for (let i = 0; i < coords.length; i += 2) {
+    const [lng, lat] = [coords[i], coords[i + 1]];
+    if (!Number.isFinite(lng) || !Number.isFinite(lat) || Math.abs(lng) > 180 || lat < -15 || lat > 72) {
+      throw new Error(`coordinate out of range: ${lng}, ${lat}`);
+    }
+  }
 
   // Foreign member carrying provenance (valid per RFC 7946 section 6.1); the
   // honesty stamp the Phase D guards require for every baked artifact.

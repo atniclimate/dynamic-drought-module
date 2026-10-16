@@ -2,6 +2,7 @@ import { addProtocol, type AddProtocolAction } from 'maplibre-gl';
 import type { Position } from 'geojson';
 import { pmtilesTransport, PMTILES_READ_TIMEOUT_MS } from '../map/tile-protocol';
 import { WHP_3D_SHADE_CATEGORIES, WHP_SHADE_CATEGORIES } from '../config/whp-shade';
+import { FIRE3D_TERRAIN_COVERAGE } from '../config/terrain-coverage';
 import { listeningTimeout } from '../util/listening-timeout';
 import { tilePolygonMask } from '../util/tile-polygon-mask';
 
@@ -40,7 +41,30 @@ export function shadeWhpPixels(pixels: Uint8ClampedArray, shade: ShadeAlphaByRgb
   }
 }
 
-/** `tile` is the drape tile's own z, x, y: only then are the fire perimeters cut out of it. */
+type Bounds = { readonly west: number; readonly south: number; readonly east: number; readonly north: number };
+/** The WHP archive's header box, the terrain's own: the bake exported whole edge tiles, so pixels past it are tile padding, not fuel risk. */
+let bounds: Bounds = FIRE3D_TERRAIN_COVERAGE;
+export function setWhpShadeBounds(box: Bounds): void {
+  bounds = box;
+}
+
+/** Make transparent every pixel whose centre lies outside `box`. Clears only; the colours and classes stay as they were. `tile` is z, x, y; `size` its width in pixels. */
+export function clearWhpOutsideBounds(pixels: Uint8ClampedArray, [z, x, y]: readonly number[], size: number, box: Bounds = bounds): void {
+  const tiles = 2 ** z;
+  const outsideLon = Array.from({ length: size }, (_, px) => {
+    const lon = ((x! + (px + 0.5) / size) / tiles) * 360 - 180;
+    return lon < box.west || lon > box.east;
+  });
+  for (let py = 0; py < size; py += 1) {
+    const lat = (Math.atan(Math.sinh(Math.PI * (1 - (2 * (y! + (py + 0.5) / size)) / tiles))) * 180) / Math.PI;
+    const rowOutside = lat < box.south || lat > box.north;
+    for (let px = 0; px < size; px += 1) {
+      if (rowOutside || outsideLon[px]) pixels[(py * size + px) * 4 + 3] = 0;
+    }
+  }
+}
+
+/** `tile` is the drape tile's own z, x, y: only then are the fire perimeters cut out of it and the pixels beyond the archive's box cleared. */
 export async function shadeImage(blob: Blob, signal: AbortSignal, shade?: ShadeAlphaByRgb, tile?: readonly number[]): Promise<ImageBitmap> {
   const bitmap = await createImageBitmap(blob, {
     colorSpaceConversion: 'none', premultiplyAlpha: 'none'
@@ -56,6 +80,7 @@ export async function shadeImage(blob: Blob, signal: AbortSignal, shade?: ShadeA
     const image = context.getImageData(0, 0, bitmap.width, bitmap.height);
     // Archive tiles are square, so the bitmap's width is the tile's pixel size.
     shadeWhpPixels(image.data, shade, tile && tilePolygonMask(perimeters, tile, bitmap.width));
+    if (tile) clearWhpOutsideBounds(image.data, tile, bitmap.width);
     signal.throwIfAborted();
     return createImageBitmap(image);
   } finally {

@@ -48,7 +48,7 @@
  *   [--out <json>] [--summary <markdown file to append>] [--timeout-ms n]
  * Exit 0 when every check passed, 1 when any failed, 2 on a usage error.
  */
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { appendFile, writeFile } from 'node:fs/promises';
 
 import {
@@ -221,33 +221,24 @@ async function runProbeTable() {
 
 /**
  * Row 12. The direct leg goes FIRST so the relay cannot be what warmed an
- * upstream cache, and both legs carry the same fresh nonce so neither the
- * Worker's 60-second edge cache (keyed on the upstream URL) nor an
- * intermediary can answer from a stored copy. One retry with a new nonce
- * before failing, because a single mismatch on a static file is more likely
- * a mid-flight change than a transparency breach.
+ * upstream cache. Both legs use the bare URL with no cache-busting query,
+ * because the Worker pins this route to no query names and would refuse a
+ * nonce with 403; a 60-second edge copy is a byte copy of the upstream, so
+ * it does not weaken the comparison. There is no retry: without a nonce a
+ * second attempt would read the same 60-second edge copy and change nothing.
  */
 async function runTransparency() {
   const probe = { id: 'body-transparency', row: 12, name: 'body transparency, static endpoint', method: 'GET' };
-  let pair = null;
-  let verdict = null;
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    const nonce = randomUUID();
-    const upstream = `${TRANSPARENCY_UPSTREAM}?ddm_cache_bust=${nonce}`;
-    // The direct leg follows redirects the way a browser would, so an
-    // upstream that moved the file still yields comparable bytes; the
-    // relayed leg does not, because a redirect reaching the client would
-    // itself be a policy anomaly worth seeing.
-    const direct = await probeOnce(upstream, { hash: true, redirect: 'follow' });
-    const proxied = await probeOnce(
-      `${args.base.replace(/\/$/, '')}/proxy?url=${encodeURIComponent(upstream)}`,
-      { hash: true },
-    );
-    pair = { nonce, direct, proxied };
-    verdict = evaluateTransparency(pair);
-    if (verdict.ok) break;
-    if (attempt === 0) console.log('retrying the transparency pair once with a new cache-busting nonce');
-  }
+  // The direct leg follows redirects the way a browser would, so an
+  // upstream that moved the file still yields comparable bytes; the
+  // relayed leg does not, because a redirect reaching the client would
+  // itself be a policy anomaly worth seeing.
+  const direct = await probeOnce(TRANSPARENCY_UPSTREAM, { hash: true, redirect: 'follow' });
+  const proxied = await probeOnce(probeUrl(args.base, { path: '/proxy', upstream: TRANSPARENCY_UPSTREAM }), {
+    hash: true,
+  });
+  const pair = { direct, proxied };
+  const verdict = evaluateTransparency(pair);
   receipt.transparency = pair;
   record(probe, { status: pair.proxied.status, error: pair.proxied.error }, verdict);
 }

@@ -19,6 +19,7 @@ import { registry } from '../state/registry';
 import { escapeHtml } from '../util/escape';
 import { fetchJsonWithBudget } from '../util/fetch';
 import { isObject } from '../util/guards';
+import { heatRiskMoment as formatMoment } from '../util/iso-day';
 import { watchDesktopMapSeat } from './map-control-seat';
 import { DETAIL_SECTIONS } from '../config/detail-sections';
 import { getDetailSectionHost } from './detail-section-hosts';
@@ -188,19 +189,6 @@ function formatDate(validTime: number): string {
     year: 'numeric',
     timeZone: 'UTC'
   }).format(new Date(validTime));
-}
-
-function formatMoment(time: number): string {
-  return new Intl.DateTimeFormat('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-    timeZone: 'UTC',
-    timeZoneName: 'short'
-  }).format(new Date(time));
 }
 
 function readKey(
@@ -532,6 +520,11 @@ function textAlternative(read: SequenceRead): string {
     .join('; ');
 }
 
+/** Every day read and every value 0: a verified absence, not a missing read (null stays unstated). */
+function allZero(values: readonly (HeatRiskValue | null)[]): boolean {
+  return values.length > 0 && values.every((value) => value === 0);
+}
+
 function selectedReadHtml(read: SequenceRead): string {
   const index = read.frames.findIndex((frame) => frame.day === selectedDay);
   const frame = read.frames[index];
@@ -576,6 +569,11 @@ function renderRead(read: SequenceRead): void {
     '<div class="heatrisk-sequence-heading">' +
     `<strong>HeatRisk at the selected point for ${escapeHtml(selection.label)}</strong>` +
     '<span>7 days</span></div>' +
+    // The all-zero statement sits above the cells so it is read before the fold.
+    (allZero(read.values)
+      ? '<p class="heatrisk-sequence-selected" data-heatrisk-no-elevated>' +
+        '<strong>No elevated heat risk</strong> at this point on any of the seven days.</p>'
+      : '') +
     '<div class="heatrisk-sequence-grid" role="list">' +
     read.frames
       .map((frame, index) => sequenceCell(frame, read.values[index] ?? null))
@@ -611,6 +609,20 @@ function renderState(copy: string): void {
 
 function hide(): void {
   if (host) host.hidden = true;
+}
+
+/**
+ * A read that failed because a newer read replaced it (its controller aborted,
+ * or the point, frames or activation moved on) says nothing about the issuer:
+ * the newer read owns the panel, so a stale AbortError never lands on
+ * "unavailable". A current read that fails on its own is a real failure.
+ */
+export function readFailureIsSuperseded(
+  controllerAborted: boolean,
+  readKeyValue: string,
+  currentKey: string | null
+): boolean {
+  return controllerAborted || currentKey !== readKeyValue;
 }
 
 async function refreshRead(): Promise<void> {
@@ -670,7 +682,17 @@ async function refreshRead(): Promise<void> {
     if (pendingRead?.promise === promise) pendingRead = null;
     renderRead(read);
   } catch (err) {
-    if (controller.signal.aborted) return;
+    const currentKey = selection
+      ? readKey(
+          frames,
+          selection.context.lngLat.lng,
+          selection.context.lngLat.lat,
+          activationGeneration
+        )
+      : null;
+    if (readFailureIsSuperseded(controller.signal.aborted, key, currentKey)) {
+      return;
+    }
     console.warn('[heatrisk-sequence] identify failed.', err);
     if (pendingRead?.promise === promise) pendingRead = null;
     renderState('unavailable');

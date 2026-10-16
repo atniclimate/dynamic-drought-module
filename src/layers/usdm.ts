@@ -283,7 +283,19 @@ async function fetchFrame(
   if (!response.ok) {
     throw new Error(`HTTP ${response.status} ${response.statusText}`);
   }
-  return (await response.json()) as GeoJSON.FeatureCollection;
+  return readFeatureCollection(await response.json(), 'USDM');
+}
+
+/** An ArcGIS HTTP 200 error body (or any non-collection) throws, so it is never
+ * drawn or cached as a week; features are kept as served (one odd ring must
+ * not blank the default layer). */
+function readFeatureCollection(json: unknown, label: string): GeoJSON.FeatureCollection {
+  const fc = json as { error?: unknown; type?: unknown; features?: unknown } | null;
+  if (typeof fc !== 'object' || fc === null || 'error' in fc ||
+      fc.type !== 'FeatureCollection' || !Array.isArray(fc.features)) {
+    throw new Error(`${label} response was not a FeatureCollection.`);
+  }
+  return fc as GeoJSON.FeatureCollection;
 }
 
 /** Frame loader for the cache: the newest stop uses the current-week
@@ -677,7 +689,8 @@ async function setMode(map: maplibregl.Map, mode: UsdmViewMode): Promise<void> {
       const response = await fetchBufferedWithBudget(url, null, signal, FETCH_TIMEOUT_MS);
       if (!response.ok) throw new Error(`HTTP ${response.status} ${response.statusText}`);
       fc = stampChangeFeatures(
-        (await response.json()) as GeoJSON.FeatureCollection & { date?: unknown }
+        readFeatureCollection(await response.json(), 'USDM change map') as
+          GeoJSON.FeatureCollection & { date?: unknown }
       );
       changeCache.set(mode, fc, CHANGE_CACHE_TTL_MS);
     } catch (err) {

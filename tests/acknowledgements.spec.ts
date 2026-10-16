@@ -55,8 +55,6 @@ const CITED = new Set<string>([
   'usgs-3dep-landscape-signature',
   'aafc-canadian-drought-monitor',
   'statcan-2021-digital-boundary-files',
-  'open-meteo-licence',
-  'copernicus-marine-smoc',
   'usdm',
   'nadm-ncei',
   'nws-web-disclaimer',
@@ -198,7 +196,6 @@ const ATTRIBUTION_SITES: Readonly<Record<string, ProductKey | ProviderKey>> = {
   'src/layers/bia-reservations.ts': 'bia-reservations',
   'src/layers/cdm-drought.ts': 'cdm-drought',
   'src/layers/drought.ts': 'drought',
-  'src/layers/enso-flow.ts': 'enso-flow',
   'src/layers/gridded-index.ts': 'gridded-index',
   'src/layers/heatrisk.ts': 'heatrisk',
   'src/layers/hms-smoke.ts': 'hms-smoke',
@@ -216,7 +213,9 @@ const ATTRIBUTION_SITES: Readonly<Record<string, ProductKey | ProviderKey>> = {
   'src/map/satellite.ts': 'satellite-geocolor',
   'src/map/style.ts': 'basemap-ground',
   // The station chart's source line, printed by the popup frame.
-  'src/ui/popups.ts': 'telemetry'
+  'src/ui/popups.ts': 'telemetry',
+  // The Nino 3.4 box popup's RONI chart, from the bundled CPC snapshot.
+  'src/ui/enso-box-popup.ts': 'ensoIndex'
 };
 
 async function listSourceFiles(dir: string): Promise<string[]> {

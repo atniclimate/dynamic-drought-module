@@ -65,6 +65,16 @@ export function chipStateForStatus(status: LayerStatus | undefined): ChipState {
   }
 }
 
+/**
+ * Terminal state of a basemap-imagery (satellite) lookup that ended with no
+ * usable frame. The service answering with no recent frame is a verified
+ * absence ('no-data'); a failed fetch, error envelope, timeout or probe is
+ * 'unavailable'. Never 'loading': discovery has finished.
+ */
+export function imageryFailureState(verifiedAbsence: boolean): 'no-data' | 'unavailable' {
+  return verifiedAbsence ? 'no-data' : 'unavailable';
+}
+
 /** A ChipState the glyph paints something for (a filled or half-filled mark). */
 const PAINTED_STATES: ReadonlySet<ChipState> = new Set(['live', 'live-partial']);
 

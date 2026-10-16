@@ -527,6 +527,11 @@ export const ARCGIS_FIELD_PROBES = Object.freeze([
   { key: 'nwsHeatRisk', file: 'src/layers/heatrisk.ts', layer: '' },
   { key: 'noaaHmsSmokeFeatureServer', file: 'src/layers/hms-smoke.ts', layer: '' },
   { key: 'nwsWwaMapServer', file: 'src/layers/nws-alerts.ts', layer: '' },
+  // ENSO B3: the EP5 slot's layers stand for all fifteen slots, which share
+  // the same three field constants (points, track and cone, watch-warning).
+  { key: 'nhcTropicalMapServer', file: 'src/layers/tropical-read.ts', layer: '/240', constName: 'POINT_OUT_FIELDS' },
+  { key: 'nhcTropicalMapServer', file: 'src/layers/tropical-read.ts', layer: '/242', constName: 'LINE_OUT_FIELDS' },
+  { key: 'nhcTropicalMapServer', file: 'src/layers/tropical-read.ts', layer: '/243', constName: 'WW_OUT_FIELDS' },
   { key: 'eiaPowerPlantsFeatureLayer', file: 'src/layers/power-3d.ts', layer: '', constName: 'PLANTS_OUT_FIELDS' },
   // DAY1_LAYER_ID in spc-fire-weather.ts.
   { key: 'spcFireWeatherOutlookMapServer', file: 'src/layers/spc-fire-weather.ts', layer: '/1' },

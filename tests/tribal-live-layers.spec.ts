@@ -1008,8 +1008,9 @@ test.describe('DDM-P9-T06: RAWS wind symbol', () => {
     );
     const expectedAsOf = new Date(RAWS_FIXTURE_OBSERVED_MS).toLocaleString();
     await expect(glyph).toHaveAttribute('aria-label', new RegExp(escapeRegExp(expectedAsOf)));
-    const transform = await glyph.evaluate((el) => (el as SVGElement).style.transform);
-    expect(transform).toContain('rotate(295deg)');
+    // The marker carries the rotation (map-aligned, minus the bearing of 0).
+    const transform = await marker.evaluate((el) => (el as HTMLElement).style.transform);
+    expect(transform).toContain('rotateZ(295deg)');
 
     // DDM-P9-T06 fix F5 (opus-read.md): the served speed ("5 mph", the
     // display mapping's own floor) is now visible in the glyph's drawn size,

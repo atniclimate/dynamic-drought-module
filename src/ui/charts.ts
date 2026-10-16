@@ -49,6 +49,8 @@ export interface SparklineOptions {
   readonly title: string;
   /** Unit label appended to the current-value readout, for example "ft3/s". */
   readonly unit?: string;
+  /** Reference values drawn as thin dashed lines (for example the +/-0.5 ENSO thresholds). */
+  readonly guides?: readonly number[];
 }
 
 /**
@@ -56,6 +58,7 @@ export interface SparklineOptions {
  * current-value dot and min and max labels. Legible at a few hundred pixels
  * wide in a narrow popup; tick labels are dropped before the data is. Returns
  * an empty string for fewer than two points (nothing meaningful to draw).
+ * Guides widen the vertical range so each one stays on the plot.
  */
 export function sparklineSvg(values: readonly number[], opts: SparklineOptions): string {
   const clean = values.filter((v) => Number.isFinite(v));
@@ -66,21 +69,27 @@ export function sparklineSvg(values: readonly number[], opts: SparklineOptions):
   const padX = 6;
   const padTop = 14;
   const padBottom = 16;
+  const guides = (opts.guides ?? []).filter((v) => Number.isFinite(v));
   const min = Math.min(...clean);
   const max = Math.max(...clean);
-  const span = max - min || 1;
+  const lo = Math.min(min, ...guides);
+  const span = Math.max(max, ...guides) - lo || 1;
   const plotW = w - padX * 2;
   const plotH = h - padTop - padBottom;
 
   const x = (i: number): number => padX + (i / (clean.length - 1)) * plotW;
-  const y = (v: number): number => padTop + (1 - (v - min) / span) * plotH;
+  const y = (v: number): number => padTop + (1 - (v - lo) / span) * plotH;
 
+  const guideLines = guides
+    .map((g) => `<line x1="${padX}" y1="${y(g).toFixed(1)}" x2="${w - padX}" y2="${y(g).toFixed(1)}" stroke="var(--line-strong)" stroke-width="0.6" stroke-dasharray="3 3"/>`)
+    .join('');
   const points = clean.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
   const lastIdx = clean.length - 1;
   const lastVal = clean[lastIdx] as number;
   const unit = opts.unit ? ` ${opts.unit}` : '';
 
   const inner =
+    guideLines +
     `<polyline points="${points}" fill="none" stroke="${OBSERVATION_SERIES_COLOR}" stroke-width="1.5" ` +
     `stroke-linejoin="round" stroke-linecap="round"/>` +
     `<circle cx="${x(lastIdx).toFixed(1)}" cy="${y(lastVal).toFixed(1)}" r="2.6" fill="${OBSERVATION_SERIES_COLOR}"/>` +

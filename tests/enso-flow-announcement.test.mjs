@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { registerHooks } from 'node:module';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -12,23 +12,32 @@ registerHooks({
   resolve(specifier, context, nextResolve) {
     const fromTs = context.parentURL?.endsWith('.ts');
     if (fromTs && specifier.endsWith('.css')) return stub('export {};');
-    if (fromTs && specifier === '../map/layer-order') return stub('export function reassertThematicOrder() {}');
     if (fromTs && specifier === '../state/enso-flow') return stub(`
       export function parseEnsoFlowParams(params) { return { kind: params.get('flow') ?? 'off', ink: 'light' }; }
       export function syncEnsoFlowParams() {}
-    `);
-    if (fromTs && specifier === '../util/fetch') return stub(`
-      export function fetchJsonWithBudget(url, options, signal) { return globalThis.__flowRead(url, signal); }
     `);
     if (fromTs && specifier === './flow/index') return stub(`
       export const MAX_CYCLE_TRIES = 1;
       export const candidateCycle = () => globalThis.__field.meta.cycle;
       export const forecastHourFor = () => 6;
       export const isStale = () => false;
-      export const readFlowFrame = async () => globalThis.__field;
+      export const readFlowFrame = async () => {
+        if (globalThis.__readError) throw globalThis.__readError;
+        return globalThis.__field;
+      };
+      // A scalar field mounts as a still shade: no state callback, only the 24-hour limit.
+      export function mountShadeView(map, field, options) {
+        globalThis.__shadeStale = options.onStale;
+        globalThis.__mounts.push(field);
+        return { field, dispose() { globalThis.__shadeDisposed = (globalThis.__shadeDisposed ?? 0) + 1; }, halt() {} };
+      }
+      // The committed currents frame: the read is held open by the test, and the grid is picked by latitude.
+      export const readCurrentsFrame = ({ signal }) => globalThis.__flowRead(signal);
+      export const fieldNearestLatitude = (fields, lat) => fields[lat > 39.5 ? 1 : 0];
       export function mountFlowView(map, field, options) {
         globalThis.__fieldState = options.onState;
-        return { state: globalThis.__state, dispose() {}, halt() {}, setInk() {} };
+        globalThis.__mounts.push(field);
+        return { state: globalThis.__state, field, dispose() {}, halt() {}, setInk() {} };
       }
     `);
     if (fromTs && specifier.startsWith('.') && !/\.[a-z]+$/i.test(specifier) &&
@@ -131,27 +140,28 @@ globalThis.window = {
   dispatchEvent: (event) => events.dispatchEvent(event)
 };
 globalThis.fetch = () => { throw new Error('unexpected network'); };
-const sources = new Map();
-const layers = new Map();
 const mapEvents = new Map();
-let longitude = -150;
+let centreLatitude = 20;
 const map = {
   on: (event, listener) => mapEvents.set(event, listener),
   off: (event, listener) => { if (mapEvents.get(event) === listener) mapEvents.delete(event); },
-  getCanvas: () => ({ clientWidth: 390, clientHeight: 844 }),
-  unproject: ([x, y]) => ({ lng: longitude + x / 1000, lat: 20 + y / 1000 }),
-  project: ([lng, lat]) => ({ x: lng * 100, y: lat * 100 }),
-  getBearing: () => 0,
-  getSource: (id) => sources.get(id),
-  getLayer: (id) => layers.get(id),
-  addSource: (id, source) => sources.set(id, { ...source, setData(data) { this.data = data; } }),
-  addLayer: (layer) => layers.set(layer.id, layer),
-  removeSource: (id) => sources.delete(id),
-  removeLayer: (id) => layers.delete(id),
-  setPaintProperty() {}
+  getCenter: () => ({ lng: -150, lat: centreLatitude })
 };
+// The page clock: 3 days and 11 hours after the currents frame's valid instant. Each boot moves it past the
+// panel's ten-minute hold of a read frame, so every case reads the frame itself.
+const RUN = Date.UTC(2026, 9, 13);
+const VALID = RUN + 3_600_000;
+let clock = Date.UTC(2026, 9, 16, 12);
+Date.now = () => clock;
+/** The frame's two grids as the reader hands them over (src/layers/flow/currents.ts), tropics first. */
+const CURRENTS = [
+  { lon0: 130, lat0: 39, dlon: 1, dlat: 1, nx: 120, ny: 80, wrapsLon: false },
+  { lon0: 140, lat0: 84.7, dlon: 0.3, dlat: 0.3, nx: 350, ny: 150, wrapsLon: false }
+].map((grid) => ({ kind: 'currents', grid, meta: { cycle: RUN, forecastHour: 1, validTime: VALID, staleAfter: null } }));
 let held;
-globalThis.__flowRead = (url, signal) => new Promise((resolve, reject) => { held = { url, signal, resolve, reject }; });
+let reads = 0;
+globalThis.__flowRead = (signal) => new Promise((resolve, reject) => { reads++; held = { signal, resolve, reject }; });
+globalThis.__mounts = [];
 globalThis.__field = { kind: 'wind', meta: { cycle: Date.now(), forecastHour: 6, validTime: Date.now() } };
 globalThis.__state = { form: 'moving', motion: 'moving', coverage: 'covered', features: 3, stale: false };
 const flow = await import('../src/layers/enso-flow.ts');
@@ -171,31 +181,30 @@ function boot(kind = 'currents') {
   live.text = '';
   live.writes = [];
   held = null;
-  longitude += 1; // a distinct source URL keeps each case independent of the real cache
+  clock += 11 * 60 * 1000;
+  centreLatitude = 20;
+  globalThis.__mounts.length = 0;
   window.location.search = `?flow=${kind}`;
   flow.activateEnsoFlow(map);
 }
-function answer() {
-  const url = new URL(held.url);
-  const lat = url.searchParams.get('latitude').split(',').map(Number);
-  const lon = url.searchParams.get('longitude').split(',').map(Number);
-  held.resolve(lat.map((latitude, i) => ({
-    latitude, longitude: lon[i],
-    current_units: { time: 'unixtime', ocean_current_velocity: 'm/s', ocean_current_direction: '°' },
-    current: { time: Math.floor(Date.now() / 900_000) * 900, ocean_current_velocity: 0.4, ocean_current_direction: 90 }
-  })));
+/** Boot on currents and wait for the panel to ask for the committed frame. */
+async function bootCurrents() {
+  boot();
+  await until(() => held !== null);
 }
+const answer = () => held.resolve(CURRENTS);
 
 test.afterEach(() => flow.deactivateEnsoFlow());
 
 test('the body announcer receives the actual loading words exactly once', () => {
   boot();
   assert.equal(panel().dataset.status, 'loading');
+  assert.equal(line().textContent, 'loading · NOAA RTOFS surface currents');
   assert.deepEqual(live.writes, [`Ocean currents · ${line().textContent}`]);
 });
 
 test('loading then live are announced once; Key snapshot replay adds no writes', async () => {
-  boot();
+  await bootCurrents();
   const loading = line().textContent;
   answer();
   await until(() => panel().dataset.status === 'live');
@@ -205,11 +214,12 @@ test('loading then live are announced once; Key snapshot replay adds no writes',
 });
 
 test('a failed read announces unavailable exactly once', async () => {
-  boot();
+  await bootCurrents();
   const loading = line().textContent;
   held.reject(new Error('synthetic offline failure'));
   await until(() => panel().dataset.status === 'unavailable');
   replay();
+  assert.equal(line().textContent, 'unavailable · NOAA RTOFS surface currents did not load');
   assert.deepEqual(live.writes, [`Ocean currents · ${loading}`, `Ocean currents · ${line().textContent}`]);
 });
 
@@ -220,7 +230,7 @@ test('the visible panel is plain text rather than a competing live region', () =
 });
 
 test('a late answer after cancellation does not announce or restore a live panel', async () => {
-  boot();
+  await bootCurrents();
   const before = [...live.writes];
   flow.deactivateEnsoFlow();
   assert.equal(held.signal.aborted, true);
@@ -241,59 +251,232 @@ test('motion-only updates and repeated state callbacks do not repeat the live an
   assert.deepEqual(live.writes, before);
 });
 
-test('a pan preserves the existing resample announcement when its control is shown, once per changed line', async () => {
-  boot();
+/** Boot on currents, answer the read, and collect every snapshot the key would get. */
+async function liveCurrents(snapshots) {
+  const record = (event) => snapshots.push(event.detail);
+  window.addEventListener('ddm:enso-flow-snapshot', record);
+  await bootCurrents();
   answer();
   await until(() => panel().dataset.status === 'live');
-  const before = [...live.writes];
-  mapEvents.get('moveend')();
-  assert.match(line().textContent, /Update area to resample$/);
-  mapEvents.get('moveend')();
-  replay();
-  assert.deepEqual(live.writes, [...before, `Ocean currents · ${line().textContent}`]);
-});
-
-test('a pan does not announce a resample instruction while its control is hidden', async () => {
-  boot();
-  answer();
-  await until(() => panel().dataset.status === 'live');
-  const before = [...live.writes];
-  // This only supplies the existing visibility predicate's result; actual CSS
-  // exposure on the desktop/phone/embed surfaces is checked in the browser.
-  host.querySelectorAll('button').find((button) => button.textContent === 'Update area').rendered = false;
-  mapEvents.get('moveend')();
-  assert.match(line().textContent, /Update area to resample$/);
-  assert.deepEqual(live.writes, before);
-});
-
-for (const visibility of ['hidden', 'collapse']) {
-  test(`a pan does not announce a resample instruction through CSS visibility ${visibility}`, async () => {
-    boot();
-    answer();
-    await until(() => panel().dataset.status === 'live');
-    const before = [...live.writes];
-    // A visibility-hidden control still has layout rectangles. Supply the
-    // computed value here; browser cases cover the actual inherited CSS.
-    host.querySelectorAll('button').find((button) => button.textContent === 'Update area').visibility = visibility;
-    mapEvents.get('moveend')();
-    assert.match(line().textContent, /Update area to resample$/);
-    assert.deepEqual(live.writes, before);
-  });
+  return () => window.removeEventListener('ddm:enso-flow-snapshot', record);
 }
 
-for (const [attribute, value] of [['inert', ''], ['aria-hidden', 'true']]) {
-  test(`a pan does not announce a resample instruction through an ${attribute} ancestor`, async () => {
-    boot();
-    answer();
+test('a live currents frame is dated: run, valid instant and age in the line, bins and the RTOFS credit for the key', async () => {
+  const snapshots = [];
+  const stop = await liveCurrents(snapshots);
+  try {
+    const drawn = snapshots.at(-1);
+    assert.equal(drawn.label, 'Ocean currents');
+    assert.equal(drawn.line, 'live · NOAA RTOFS surface currents · Model run Oct 13, 12:00 AM UTC · Model valid Oct 13, 1:00 AM UTC · frame 3 days old');
+    assert.deepEqual(drawn.notes, ['Line width and brightness: under 0.25, 0.25 to 0.5, 0.5 or more m/s.']);
+    assert.equal(drawn.provenance, 'NOAA Global RTOFS, re-encoded by DDM');
+    assert.equal(drawn.motion, 'moving');
+    assert.ok(host.textContent.includes('NOAA Global RTOFS surface currents; ocean model output, one dated frame.'));
+    assert.doesNotMatch(host.textContent, /navigation|never joined/i, 'the briefing explains and disclaims; the panel does not');
+    // The frame never falls stale (its reader refuses one past 14 days): a state that says stale (a NODD frame's 24 hours) does not take it down.
+    globalThis.__fieldState({ ...globalThis.__state, stale: true });
+    assert.equal(panel().dataset.status, 'live');
+  } finally {
+    stop();
+  }
+});
+
+test('the grid under the view centre draws; a pan across the seam swaps grids without a read', async () => {
+  const stop = await liveCurrents([]);
+  try {
+    assert.deepEqual(globalThis.__mounts, [CURRENTS[0]], 'the tropical grid under a centre at 20 N');
+    const readsBefore = reads;
+    mapEvents.get('moveend')();
+    assert.equal(globalThis.__mounts.length, 1, 'a pan inside the grid mounts nothing');
+    centreLatitude = 50;
+    mapEvents.get('moveend')();
+    assert.deepEqual(globalThis.__mounts, [CURRENTS[0], CURRENTS[1]], 'the northern grid, never both at once');
+    centreLatitude = 10;
+    mapEvents.get('moveend')();
+    assert.equal(globalThis.__mounts.at(-1), CURRENTS[0]);
+    assert.equal(reads, readsBefore, 'panning never fetches');
+    assert.equal(panel().dataset.status, 'live');
+  } finally {
+    stop();
+  }
+});
+
+test('a currents view the grid does not fill says so: partial, all land, and outside the grid', async () => {
+  const snapshots = [];
+  const stop = await liveCurrents(snapshots);
+  const box = 'Ocean current lines in this view cover 40 S to 39 N and 130 E to 111 W only; nothing is drawn outside that area.';
+  const bins = 'Line width and brightness: under 0.25, 0.25 to 0.5, 0.5 or more m/s.';
+  try {
+    globalThis.__fieldState({ ...globalThis.__state, coverage: 'partial' });
+    assert.match(snapshots.at(-1).line, /^live \(partial\) · NOAA RTOFS surface currents · Model run .+ · Model valid .+ · frame 3 days old$/);
+    assert.deepEqual(snapshots.at(-1).notes, [box, bins]);
+    globalThis.__fieldState({ ...globalThis.__state, coverage: 'masked', form: 'none', motion: 'none' });
+    assert.equal(snapshots.at(-1).line, 'no data · No ocean values in this view');
+    assert.deepEqual(snapshots.at(-1).notes, ['No marks within one grid cell of the coast or where the model has no water value; no marks does not mean calm water.']);
+    globalThis.__fieldState({ ...globalThis.__state, coverage: 'outside', form: 'none', motion: 'none' });
+    assert.equal(snapshots.at(-1).line, 'no data · This view is outside the area this ocean current grid covers');
+    assert.deepEqual(snapshots.at(-1).notes, [box]);
+    assert.equal(snapshots.at(-1).provenance, 'NOAA Global RTOFS, re-encoded by DDM');
+    // The northern grid names its own box.
+    centreLatitude = 55;
+    mapEvents.get('moveend')();
+    globalThis.__fieldState({ ...globalThis.__state, coverage: 'partial' });
+    assert.equal(snapshots.at(-1).notes[0], 'Ocean current lines in this view cover 40 N to 84.7 N and 140 E to 115.3 W only; nothing is drawn outside that area.');
+  } finally {
+    stop();
+  }
+});
+
+test('a held currents frame is read once: a second choice inside ten minutes asks for nothing', async () => {
+  const stop = await liveCurrents([]);
+  try {
+    const readsBefore = reads;
+    flow.deactivateEnsoFlow();
+    held = null;
+    window.location.search = '?flow=currents';
+    flow.activateEnsoFlow(map);
     await until(() => panel().dataset.status === 'live');
-    const before = [...live.writes];
-    host.setAttribute(attribute, value);
+    assert.equal(reads, readsBefore);
+    assert.equal(held, null);
+  } finally {
+    stop();
+  }
+});
+
+test('with the overlay off the panel carries no credit and no arrow colour', () => {
+  boot('off');
+  assert.equal(host.querySelector('.enso-flow-credit'), null);
+  assert.equal(host.querySelector('.enso-flow-toolbar').hidden, true, 'nothing is drawn, so there are no arrows to colour');
+  // True of every kind: the shade is no direction overlay.
+  assert.equal(line().textContent, 'Overlay off');
+  assert.deepEqual(live.writes, ['Overlay off']);
+});
+
+test('the control lists every kind by its label, with jet-level wind beside the 10 m wind', () => {
+  boot('off');
+  assert.deepEqual(
+    host.querySelectorAll('[data-flow-kind]').map((button) => [button.dataset.flowKind, button.textContent]),
+    [
+      ['off', 'Off'], ['currents', 'Ocean currents'], ['wind', 'Atmospheric currents'], ['jet', 'Jet-level wind'], ['waves', 'Ocean waves'],
+      ['pwat', 'Precipitable water']
+    ]
+  );
+  assert.equal(panel().getAttribute('aria-label'), 'Ocean and atmosphere overlays');
+});
+
+test('live precipitable water is a still shade: a state line and bins for the key, nothing to pause, no arrow colour', async () => {
+  const snapshots = [];
+  const record = (event) => snapshots.push(event.detail);
+  window.addEventListener('ddm:enso-flow-snapshot', record);
+  const wind = globalThis.__field;
+  // A ScalarField as the reader hands it over (src/layers/flow/shade.ts): values, no direction.
+  const water = { kind: 'pwat', values: new Float32Array(4), meta: wind.meta };
+  globalThis.__field = water;
+  globalThis.__shadeDisposed = 0;
+  try {
+    boot('pwat');
+    assert.deepEqual(live.writes, ['Precipitable water · loading · NOAA GFS precipitable water']);
+    assert.equal(host.querySelector('.enso-flow-toolbar').hidden, true, 'a shade has no arrows to colour');
+    await until(() => panel().dataset.status === 'live');
+    assert.deepEqual(globalThis.__mounts, [water], 'one shade, mounted once');
+    const drawn = snapshots.at(-1);
+    assert.equal(drawn.label, 'Precipitable water');
+    assert.match(drawn.line, /^live · NOAA GFS precipitable water · Model run .+ UTC · Model valid .+ UTC$/);
+    assert.deepEqual(drawn.notes, ['Shade deepens in steps: none under 15, then 15 to 30, 30 to 45, 45 or more kg m-2.']);
+    assert.equal(drawn.provenance, 'derived from NOAA GFS precipitable water');
+    // The key offers Pause only where `motion` says something can move (src/ui/map-key.ts syncFlowPause).
+    assert.equal(drawn.motion, 'none');
+    assert.equal(live.writes.at(-1), `Precipitable water · ${drawn.line}`);
+    assert.deepEqual({ ...panel().dataset }, { status: 'live', flowForm: 'shade', flowMotion: 'none', flowFeatures: '0', flowDrawn: 'pwat' });
+    // The source line names the issuer's field; the sentences about lines, direction and navigation do not apply.
+    assert.ok(host.textContent.includes(
+      'NOAA GFS precipitable water (entire atmosphere); global model output, updated every six hours. This is model context, independently timed from the observed SST map.'
+    ));
+    for (const words of [host.textContent, ...live.writes, ...snapshots.flatMap((s) => [s.label, s.line, ...s.notes])]) {
+      assert.doesNotMatch(words, /navigation|calm|hold still|atmospheric river|forecast|transport|warning|\bmm\b/i, words);
+    }
+    // A pan reads and mounts nothing: the image was made once from the frame.
+    mapEvents.get('moveend')();
+    assert.deepEqual(globalThis.__mounts, [water]);
+    // Past cycle + 24 h while mounted, the shade leaves and the panel says which frame it held.
+    globalThis.__shadeStale();
+    assert.equal(panel().dataset.status, 'unavailable');
+    assert.match(snapshots.at(-1).line, /^unavailable · The held NOAA GFS frame from .+ UTC is past its 24-hour limit$/);
+    assert.deepEqual(snapshots.at(-1).notes, ['No moist or dry condition is inferred from a failed request.']);
+    assert.equal(panel().dataset.flowDrawn, '');
+    assert.ok(globalThis.__shadeDisposed >= 1, 'the shade is taken down');
+  } finally {
+    window.removeEventListener('ddm:enso-flow-snapshot', record);
+    globalThis.__field = wind;
+  }
+});
+
+test('a failed precipitable water read says so in words fit for a field with no direction', async () => {
+  const snapshots = [];
+  const record = (event) => snapshots.push(event.detail);
+  window.addEventListener('ddm:enso-flow-snapshot', record);
+  globalThis.__readError = new Error('synthetic refusal');
+  try {
+    boot('pwat');
+    await until(() => panel().dataset.status === 'unavailable');
+    assert.equal(line().textContent, 'unavailable · NOAA GFS precipitable water did not load');
+    assert.deepEqual(snapshots.at(-1).notes, ['No moist or dry condition is inferred from a failed request.']);
+    assert.equal(snapshots.at(-1).motion, undefined);
+    assert.deepEqual(globalThis.__mounts, [], 'nothing is drawn from a failed read');
+    // A line kind keeps its own sentence.
+    boot('wind');
+    await until(() => panel().dataset.status === 'unavailable');
+    assert.deepEqual(snapshots.at(-1).notes, ['No direction or calm condition is inferred from a failed request.']);
+  } finally {
+    window.removeEventListener('ddm:enso-flow-snapshot', record);
+    globalThis.__readError = null;
+  }
+});
+
+for (const [kind, label, source, bins] of [
+  ['wind', 'Atmospheric currents', 'NOAA GFS 10 m wind', 'Line width and brightness: under 5, 5 to 10, 10 or more m/s.'],
+  ['jet', 'Jet-level wind', 'NOAA GFS 250 hPa wind', 'Line width and brightness: under 20, 20 to 40, 40 or more m/s.'],
+  ['waves', 'Ocean waves', 'NOAA GFS-Wave', 'Mark length and brightness: under 2, 2 to 4, 4 or more m significant wave height.']
+]) {
+  test(`a live ${kind} frame gives the key its state line and its bins, and no explanation`, async () => {
+    const snapshots = [];
+    const record = (event) => snapshots.push(event.detail);
+    window.addEventListener('ddm:enso-flow-snapshot', record);
+    const field = globalThis.__field;
+    globalThis.__field = { ...field, kind };
     try {
-      mapEvents.get('moveend')();
-      assert.match(line().textContent, /Update area to resample$/);
-      assert.deepEqual(live.writes, before);
+      boot(kind);
+      assert.deepEqual(live.writes, [`${label} · loading · ${source}`]);
+      assert.equal(host.querySelector('.enso-flow-toolbar').hidden, false, 'the arrow colour shows for the line kinds');
+      await until(() => panel().dataset.status === 'live');
+      const drawn = snapshots.at(-1);
+      assert.equal(drawn.label, label);
+      // The live line and the credit name the kind's own source, as the loading line does.
+      assert.ok(drawn.line.startsWith(`live · ${source} · Model run `) && drawn.line.includes(' · Model valid '), drawn.line);
+      assert.deepEqual(drawn.notes, [bins]);
+      assert.equal(drawn.provenance, `derived from ${source}`);
+      assert.equal(host.querySelector('.enso-flow-credit').textContent, drawn.provenance);
+      // The navigation disclaimer reads in the Impact Briefing, for the ocean kinds only (tests/terrain-coverage.test.mjs).
+      assert.doesNotMatch(host.textContent, /navigation/i);
+      // No kind is sampled by hand any more: the panel offers its kinds and nothing else to press.
+      assert.deepEqual(host.querySelectorAll('button').filter((button) => button.dataset.flowKind === undefined), []);
+      if (kind === 'jet') assert.ok(host.textContent.includes('NOAA GFS 250 hPa wind; global model output, updated every six hours.'));
+      // The still form keeps the sentence that says why the lines hold still, ahead of the bins.
+      globalThis.__fieldState({ ...globalThis.__state, form: 'still', motion: 'reduced' });
+      assert.deepEqual(snapshots.at(-1).notes, ['The lines hold still because this device asks for reduced motion.', bins]);
     } finally {
-      host.removeAttribute(attribute);
+      window.removeEventListener('ddm:enso-flow-snapshot', record);
+      globalThis.__field = field;
     }
   });
 }
+
+test('the key motion button is named for what a press does, in both states', () => {
+  const key = readFileSync(new URL('../src/ui/map-key.ts', import.meta.url), 'utf8');
+  const button = key.slice(key.indexOf('function buildFlowPauseButton('), key.indexOf('function formatHeatRiskDate('));
+  // Lines that hold still (a pause, or reduced motion) offer Play; moving or held lines offer Pause.
+  assert.ok(button.includes("const paused = motion === 'paused' || motion === 'reduced';"));
+  assert.ok(button.includes("paused ? 'Play motion' : 'Pause motion'"));
+  // A name that changes with the state carries no aria-pressed beside it (APG button pattern).
+  assert.ok(!button.includes('aria-pressed'));
+});

@@ -220,7 +220,36 @@ test('malformed feature responses are unavailable, while a valid empty collectio
       const valid = Array.isArray(payload?.features);
       assert.equal(result.ok, valid);
       assert.equal(result.claims.length, valid ? 1 : 0);
-      if (valid) assert.match(result.claims[0].text, /No drought category/);
+      if (valid) assert.match(result.claims[0].text, /No D0-D4 category polygon/);
+    });
+  }
+});
+
+test('a USDM point with no polygon says the popup sentence and never rules drought out', async () => {
+  await withFetch(() => jsonResponse(collection([])), async () => {
+    const [claim] = (await sources.fetchUsdmClaims(place(-120, 47), signal())).claims;
+    assert.equal(
+      claim.text,
+      'No D0-D4 category polygon here (U.S. Drought Monitor). This client has no analyzed-area mask, so this does not confirm no drought.'
+    );
+    assert.doesNotMatch(claim.text, /better than D0/);
+    assert.equal(claim.product, 'usdm');
+  });
+});
+
+test('a selected place reads USDM at a point inside it; a click keeps the clicked point', async () => {
+  const inside = { ...place(-120, 47), pointInsidePlace: true };
+  await withFetch(() => jsonResponse(collection([])), async () => {
+    const [claim] = (await sources.fetchUsdmClaims(inside, signal())).claims;
+    assert.equal(claim.text, 'No D0-D4 category polygon at a point inside the selected place (U.S. Drought Monitor). This client has no analyzed-area mask, so this does not confirm no drought.');
+    assert.equal(claim.support.reporting, 'the USDM polygon at a point inside the selected place');
+  });
+  for (const [context, at] of [[inside, 'at a point inside the selected place'], [place(-120, 47), 'at the clicked point']]) {
+    await withFetch(() => jsonResponse(collection([feature({ DM: 2 })])), async () => {
+      const claims = (await sources.fetchUsdmClaims(context, signal())).claims;
+      assert.equal(claims.length, 2);
+      for (const claim of claims) assert.equal(claim.support.reporting, `the USDM polygon ${at}`);
+      assert.equal(claims[1].lineage[0], `USDM category ${at}`);
     });
   }
 });
@@ -244,6 +273,7 @@ test('DSCI missing readings do not invent easing; numeric zero remains valid', a
     containing: { state: { code: 'WA', name: 'Washington', basis: 'feature-property' } }
   };
   for (const dsci of [null, '', '  ', false, true, [], {}, 'invalid', 0, '0', 25]) {
+    sources.clearDsciResponseCache();
     await withFetch(() => jsonResponse([
       { mapDate: '2026-07-14', dsci: 200 },
       { mapDate: '2026-10-06', dsci }
@@ -270,6 +300,29 @@ test('DSCI sends a single-digit state FIPS code zero-padded', async () => {
   }, () => sources.fetchDsciTrendClaims(context, signal()));
   assert.equal(seen.length, 1);
   assert.match(seen[0], /[?&]aoi=02(&|$)/);
+});
+
+test('DSCI reuses a clean series for the next briefing, and never keeps a bad one', async () => {
+  sources.clearDsciResponseCache();
+  const context = {
+    ...place(-120, 47),
+    properties: { STUSPS: 'WA', NAME: 'Washington' },
+    containing: { state: { code: 'WA', name: 'Washington', basis: 'feature-property' } }
+  };
+  let calls = 0;
+  const answer = (rows) => () => {
+    calls += 1;
+    return jsonResponse(rows);
+  };
+  await withFetch(answer([]), () => sources.fetchDsciTrendClaims(context, signal()));
+  const good = [{ mapDate: '2026-07-14', dsci: 200 }, { mapDate: '2026-10-06', dsci: 150 }];
+  const first = await withFetch(answer(good), () => sources.fetchDsciTrendClaims(context, signal()));
+  assert.equal(calls, 2, 'an empty series was not cached');
+  const second = await withFetch(answer(good), () => sources.fetchDsciTrendClaims(context, signal()));
+  assert.equal(calls, 2, 'the clean series was reused');
+  assert.equal(first.ok, true);
+  assert.deepEqual(second.claims, first.claims);
+  sources.clearDsciResponseCache();
 });
 
 /** Yield to the event loop `ticks` times through `setImmediate`, which no

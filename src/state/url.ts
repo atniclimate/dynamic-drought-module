@@ -8,7 +8,7 @@ import type { OceanKey } from '../config/oceans';
 import { deriveViewMode } from './view-mode';
 import { ensoFlowModeDefault, parseEnsoFlowParams, writeEnsoFlowParams } from './enso-flow';
 import type { ViewMode } from './view-mode';
-import { parseBasemapParam } from './basemap-store';
+import { defaultBasemapFor, isImageryUnavailable, parseBasemapParam } from './basemap-store';
 import type { BasemapMode } from './basemap-store';
 import { parseFramingParam } from './framing-store';
 import { parseClusterParam, parseOceanParam } from './cluster-store';
@@ -45,7 +45,8 @@ import type { TemporalHorizonKey } from '../config/clusters';
  *   dmode    'chg1' | 'chg4', the USDM change-map view mode
  *   sst      YYYY-MM-DD selected SST anomaly frame (always paused on load;
  *            playback state is deliberately never serialized)
- *   flow     currents | wind | waves, optional ENSO model direction samples
+ *   flow     currents | wind | jet | waves | pwat, optional ENSO model overlay
+ *            (direction paths, or the precipitable water shade)
  *   flowink  dark, optional high-contrast dark arrows (default light)
  *   heatday  one-based HeatRisk frame position; the layer resolves that
  *            position only against the service's advertised granule list
@@ -118,8 +119,8 @@ export interface ParsedUrlParams {
    * `true` turns it on. Presentation-only: it never changes which layers
    * are displayed or what any surface claims. */
   readonly fire3d: boolean;
-  /** Basemap mode from `basemap=`; `default` turns the default-on satellite
-   * context off, while absence selects satellite. */
+  /** Basemap mode from `basemap=`; absence selects the parsed cluster's
+   * `defaultBasemap`. */
   readonly basemap: BasemapMode;
   /** Minimap camera from `framing=`; null leaves `region=` in control. */
   readonly framing: FramingSelection;
@@ -416,13 +417,13 @@ export function parseUrlParams(): ParsedUrlParams {
     heatRiskDay: parseHeatRiskDayParam(params),
     fire3d: parseFire3dParam(params),
     // A DUPLICATED basemap parameter is malformed input and pins to the
-    // product default in BOTH orders (D-0.7.0-031 edge-case rule; the stage-5
+    // mode's default in BOTH orders (D-0.7.0-031 edge-case rule; the stage-5
     // adversarial major 5 caught a first-wins drift here): ambiguity is
     // rejected, not resolved by position.
-    basemap:
-      params.getAll('basemap').length > 1
-        ? 'satellite'
-        : parseBasemapParam(params.get('basemap')),
+    basemap: parseBasemapParam(
+      params.getAll('basemap').length > 1 ? null : params.get('basemap'),
+      shell.cluster
+    ),
     framing: shell.framing,
     cluster: shell.cluster,
     ocean: shell.ocean,
@@ -456,7 +457,8 @@ export function parseSelectParam(): SelectParam | null {
   if (idx <= 0) return null;
   const kind = raw.slice(0, idx).trim().toLowerCase();
   const id = raw.slice(idx + 1).trim();
-  if (kind !== 'state' || id === '') return null;
+  // A state is a two-letter code; anything else is no select, so a link cannot set toast text.
+  if (kind !== 'state' || !/^[A-Za-z]{2}$/.test(id)) return null;
   return { kind: 'state', id };
 }
 
@@ -488,8 +490,8 @@ export interface UrlSyncState {
   readonly outlookRange?: OutlookRange;
   /** Committed temporal horizon; omitted for the current horizon. */
   readonly horizon?: TemporalHorizonKey;
-  /** Basemap mode; emitted as `basemap=default` only when satellite is off,
-   * so the product-default URL stays clean. */
+  /** Basemap mode; emitted as `basemap=` only when it differs from the
+   * active cluster's default, so a mode's default URL stays clean. */
   readonly basemap?: BasemapMode;
   /** Minimap camera; emitted only when non-null. Callers pass `region: null`
    * while a minimap camera is active so the URL claims one camera. */
@@ -641,7 +643,7 @@ export function syncUrl(state: UrlSyncState): void {
   if (spiWindow !== null) {
     params.set('spi', String(spiWindow));
   }
-  if (state.basemap === 'default') {
+  if (state.basemap !== undefined && state.basemap !== defaultBasemapFor(cluster) && !isImageryUnavailable()) {
     params.set('basemap', state.basemap);
   }
   if (state.studio === 'layers' || state.studio === 'place') {

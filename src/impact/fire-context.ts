@@ -25,7 +25,7 @@
  */
 import type * as maplibregl from 'maplibre-gl';
 import type { GeoJsonProperties } from 'geojson';
-import { USDM_CATEGORIES } from '../config/palette';
+import { USDM_CATEGORIES, readUsdmDm } from '../config/palette';
 import { STATIC_TELEMETRY_STATION_REGISTRY, distanceMeters } from '../config/station-registry';
 import type { ListItem, PopupClock, PopupDetail, ValueRow } from '../ui/popup-frame';
 import { escapeHtml } from '../util/escape';
@@ -137,7 +137,7 @@ function droughtBeneathRow(map: maplibregl.Map, point: maplibregl.PointLike): Va
   let maxDm = -1;
   let maxProps: GeoJsonProperties = null;
   for (const f of feats) {
-    const dm = readDm(f.properties);
+    const dm = readUsdmDm(f.properties);
     if (dm !== null && dm > maxDm) {
       maxDm = dm;
       maxProps = f.properties;
@@ -232,12 +232,4 @@ function nearestStationsDetail(lngLat: maplibregl.LngLat): PopupDetail {
     };
   }
   return { kind: 'list', label, items: [first, ...rest] };
-}
-
-/** USDM drought category index (0 = D0 through 4 = D4) from feature properties. */
-function readDm(props: GeoJsonProperties): number | null {
-  if (!props) return null;
-  const raw = props['DM'] ?? props['dm'];
-  const n = typeof raw === 'number' ? raw : typeof raw === 'string' ? Number(raw) : NaN;
-  return Number.isInteger(n) ? n : null;
 }

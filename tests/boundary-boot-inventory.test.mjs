@@ -121,7 +121,10 @@ const ROUTE_HOMES = [
     home: 'tests/helpers.ts',
     marker: /STAR_VHI_TILE_PATH|USGS_RG_WMS|star\.nesdis\.noaa\.gov|firedanger_rg_conus_week_data/,
     family: 'dryness ground'
-  }
+  },
+  // ENSO block B3: the tropical MapServer's arms (installDefaultTropicalStub);
+  // a spec names an arm through gotoApp's `tropical` option.
+  { home: 'tests/tropical-fixtures.ts', marker: /NHC_tropical_weather|TROPICAL_SERVICE_PATH|isTropicalRequestUrl/, family: 'tropical cyclones' }
 ];
 
 /**
@@ -249,7 +252,7 @@ const SECOND_PAGE_REASONS = {
   },
   'tests/flow-measure.spec.ts': {
     reason:
-      'the ENSO-FLOW-PLAN E2-2 flow measurement (section 4.2): one page per FRESH browser.newContext(), not a popup in an existing context, because every condition is measured three times from a cold page and one condition must not pay for the previous one. Every page boots through gotoApp, so it installs the same satellite, boundary, minimap, NADM, NIFC, NWS and NOAA NODD suite stubs as any boot here; the spec adds its own Open-Meteo, SST and basemap-tile routes and a context backstop that aborts and logs any other host, so no page reaches a live service. The spec runs only in the chromium-measure project, which CI never invokes.'
+      'the ENSO-FLOW-PLAN E2-2 flow measurement (section 4.2): one page per FRESH browser.newContext(), not a popup in an existing context, because every condition is measured three times from a cold page and one condition must not pay for the previous one. Every page boots through gotoApp, so it installs the same satellite, boundary, minimap, NADM, NIFC, NWS and NOAA NODD suite stubs as any boot here; the spec adds its own SST and basemap-tile routes and a context backstop that aborts and logs any other host, so no page reaches a live service. The spec runs only in the chromium-measure project, which CI never invokes.'
   }
 };
 

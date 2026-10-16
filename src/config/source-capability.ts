@@ -46,27 +46,6 @@ export const BRIEFING_SOURCE_KEYS: readonly BriefingSourceKey[] = [
   'spcFireOutlook'
 ];
 
-export const BRIEFING_SOURCE_LABELS: Readonly<
-  Record<BriefingSourceKey, string>
-> = {
-  pointHeat: 'NWS point observation and grid guidance',
-  // vocab-allow: names the upstream NWS point forecast product
-  nwsForecast: 'NWS point forecast',
-  // vocab-allow: names the upstream NWS active alerts product
-  nwsAlerts: 'NWS active alerts',
-  heatRisk: 'NWS HeatRisk',
-  usdm: 'U.S. Drought Monitor point category',
-  dsci: 'U.S. Drought Monitor statewide DSCI',
-  nifc: 'NIFC current mapped fire perimeters',
-  cpcExtended: 'NOAA CPC extended-range outlooks',
-  enso: 'ENSO phase context',
-  waterSupply: 'NWRFC water-supply outlook',
-  cpcSeasonal: 'NOAA CPC seasonal drought outlook',
-  cpcSeasonalTemp: 'NOAA CPC seasonal temperature outlook',
-  // DDM-P7-T03 (DR-022 a): SPC Day 1-8 Fire Weather Outlook, near-term fire.
-  spcFireOutlook: 'NOAA SPC Day 1-8 Fire Weather Outlook'
-};
-
 type NationalHeatSourceKey =
   | 'pointHeat'
   | 'nwsForecast'

@@ -25,7 +25,9 @@
 
 import type { RegionKey } from '../config/regions';
 import { URLS } from '../config/urls';
+import { ExpiringLruCache } from '../util/bounded-cache';
 import { fetchBufferedWithBudget } from '../util/fetch';
+import { isoDayLocal } from '../util/iso-day';
 import { makeClaim, todayIso } from './evidence';
 import { resolveStateCode } from './resources';
 import type { StateCode } from './resources';
@@ -76,11 +78,14 @@ function waterYearOf(d: Date): number {
   return d.getMonth() >= 9 ? d.getFullYear() + 1 : d.getFullYear();
 }
 
-function isoDay(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+// The NWRFC report is daily; repeat briefings reuse the parsed rows instead of
+// downloading the whole file again. Keyed on the final request URL.
+const WS_CACHE_TTL_MS = 30 * 60_000;
+const WS_ROWS_CACHE = new ExpiringLruCache<string, WsRow[]>(4);
+
+/** Test-only hook for deterministic cache assertions (as clearDsciResponseCache). */
+export function clearWaterSupplyRowsCache(): void {
+  WS_ROWS_CACHE.clear();
 }
 
 interface WsRow {
@@ -223,22 +228,25 @@ export async function fetchWaterSupplyClaims(
   const wy = waterYearOf(today);
   const upstream =
     `${URLS.nwrfcWsReportCsv}?Type=ALL&Source=ALL` +
-    `&Wyr=${wy}&WyrDate=${isoDay(today)}&Flavor=ESP10`;
+    `&Wyr=${wy}&WyrDate=${isoDayLocal(today)}&Flavor=ESP10`;
   const proxied = `${URLS.workerProxy}/proxy?url=${encodeURIComponent(upstream)}`;
 
-  let rows: WsRow[];
-  try {
-    const resp = await fetchBufferedWithBudget(proxied, {}, signal, TIMEOUT_MS);
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    rows = parseWsReport(await resp.text());
-  } catch {
-    if (signal.aborted) return { claims: [], ok: false };
-    return {
-      claims: [],
-      ok: false,
-      // vocab-allow: names the NWRFC Water Supply Forecast and its forecast points, upstream product
-      note: 'The NWRFC water-supply forecast source did not respond.'
-    };
+  let rows = WS_ROWS_CACHE.get(proxied);
+  if (!rows) {
+    try {
+      const resp = await fetchBufferedWithBudget(proxied, {}, signal, TIMEOUT_MS);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      rows = parseWsReport(await resp.text());
+      if (rows.length > 0) WS_ROWS_CACHE.set(proxied, rows, WS_CACHE_TTL_MS);
+    } catch {
+      if (signal.aborted) return { claims: [], ok: false };
+      return {
+        claims: [],
+        ok: false,
+        // vocab-allow: names the NWRFC Water Supply Forecast and its forecast points, upstream product
+        note: 'The NWRFC water-supply forecast source did not respond.'
+      };
+    }
   }
 
   const row = rows.find((r) => r.id === point && r.fcstPeriod === FCST_PERIOD);

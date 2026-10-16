@@ -17,6 +17,7 @@ import { installMinimapAnalysisStubs } from './minimap-fixtures';
 import { installBoundaryStubs, type BoundaryStubMode } from './tribal-fixtures';
 import { installDefaultNifcStub, type NifcStubMode } from './wildfire-fixtures';
 import { installDefaultNwsWwaStub, type NwsWwaStubMode } from './nws-wwa-fixtures';
+import { installDefaultTropicalStub, type TropicalStubMode } from './tropical-fixtures';
 import { untilAnswered } from './answered-read';
 
 const TEST_NADM_SNAPSHOT = {
@@ -302,6 +303,16 @@ export interface GotoAppOptions {
    */
   readonly nwsWwa?: NwsWwaStubMode;
   /**
+   * How this boot answers the NOAA NHC and CPHC Tropical Weather MapServer
+   * (ENSO block B3). Defaults to `allEmpty`: a fail-closed CONTEXT route in
+   * `tests/tropical-fixtures.ts` (`installDefaultTropicalStub`) answers every
+   * slot query with a valid empty collection, so an ENSO boot (the layer is in
+   * every ENSO recipe) never reads NOAA. A spec names another fixture arm
+   * (`occupiedOne`, `arcgisError`, ...) here, never its own `page.route` for
+   * the service; `live` passes through.
+   */
+  readonly tropical?: TropicalStubMode;
+  /**
    * Wait for the boot-idle seam (`<html data-ddm-boot="idle">`, DR-052
    * follow-up): the map has loaded, every layer the URL asked for has left
    * `loading`, and no shared transport is in flight. Defaults to true, so
@@ -426,6 +437,9 @@ export async function gotoApp(
   // boot never waits on NOAA's answer. See `installDefaultNwsWwaStub`'s own
   // comment for the opt-out and why a spec's own `page.route` still wins.
   await installDefaultNwsWwaStub(page, options.nwsWwa ?? 'fixture');
+  // ENSO block B3: every routine boot answers the tropical MapServer from
+  // tests/tropical-fixtures.ts (an empty season unless the spec names an arm).
+  await installDefaultTropicalStub(page, options.tropical ?? 'allEmpty');
   // ENSO-FLOW-PLAN E1-5: every routine boot answers the NOAA NODD GFS bucket
   // from tests/fixtures/flow/, and an unstubbed NODD read is answered 404 and
   // fails the spec (`installDefaultNoddStub`'s own comment). The ENSO flowing
@@ -1116,18 +1130,24 @@ interface NoddFixture {
 }
 
 /**
- * Every NODD read with a fixture: the three `.idx` files and the six
- * messages cut on 2026-10-05 (cycle 2026-10-05 06Z, f006; five by E1-1, the
- * global.0p25 DIRPW by E2a for found-146), each with the key and range its
- * tests/fixtures/flow/reference.json `source` records. Both kinds of
- * src/layers/flow/source.ts read here in full: wind (UGRD and VGRD) and
- * waves (DIRPW and HTSGW on global.0p25). A read not listed here is
- * unstubbed (`installDefaultNoddStub`).
+ * Every NODD read with a fixture: the three `.idx` files and the nine
+ * messages of cycle 2026-10-05 06Z, f006 (five cut on 2026-10-05 by E1-1,
+ * the global.0p25 DIRPW by E2a for found-146, the 250 mb UGRD and VGRD on
+ * 2026-10-13 for the jet-level kind, PWAT the same day for precipitable
+ * water), each with the key and range its
+ * tests/fixtures/flow/reference.json `source` records. Every kind of
+ * src/layers/flow/source.ts reads here in full: wind and jet-level wind
+ * (UGRD and VGRD, at 10 m and at 250 mb) and precipitable water (PWAT),
+ * all from the one atmos file, and waves (DIRPW and HTSGW on global.0p25).
+ * A read not listed here is unstubbed (`installDefaultNoddStub`).
  */
 export const NODD_FIXTURES: readonly NoddFixture[] = [
   { key: 'gfs.20261005/06/atmos/gfs.t06z.pgrb2.1p00.f006.idx', range: null, file: 'gfs.t06z.pgrb2.1p00.f006.idx' },
   { key: 'gfs.20261005/06/atmos/gfs.t06z.pgrb2.1p00.f006', range: 'bytes=34998139-35077224', file: 'gfs1p00-UGRD-10m-f006.grib2' },
   { key: 'gfs.20261005/06/atmos/gfs.t06z.pgrb2.1p00.f006', range: 'bytes=35077225-35156831', file: 'gfs1p00-VGRD-10m-f006.grib2' },
+  { key: 'gfs.20261005/06/atmos/gfs.t06z.pgrb2.1p00.f006', range: 'bytes=17851986-17905646', file: 'gfs1p00-UGRD-250mb-f006.grib2' },
+  { key: 'gfs.20261005/06/atmos/gfs.t06z.pgrb2.1p00.f006', range: 'bytes=17905647-17960139', file: 'gfs1p00-VGRD-250mb-f006.grib2' },
+  { key: 'gfs.20261005/06/atmos/gfs.t06z.pgrb2.1p00.f006', range: 'bytes=36424556-36522245', file: 'gfs1p00-PWAT-atmos-f006.grib2' },
   { key: 'gfs.20261005/06/wave/gridded/gfswave.t06z.global.0p25.f006.grib2.idx', range: null, file: 'gfswave.t06z.global.0p25.f006.grib2.idx' },
   { key: 'gfs.20261005/06/wave/gridded/gfswave.t06z.global.0p25.f006.grib2', range: 'bytes=3029161-3457288', file: 'global0p25-HTSGW-f006.grib2' },
   { key: 'gfs.20261005/06/wave/gridded/gfswave.t06z.global.0p25.f006.grib2', range: 'bytes=3968286-4855671', file: 'global0p25-DIRPW-f006.grib2' },
@@ -1147,7 +1167,7 @@ export type NoddStubAnswer = 'fixture' | 'unsatisfiable' | 'absent' | 'unstubbed
 
 /**
  * The `.idx` keys the ENSO reader asks for (src/layers/flow/source.ts): the
- * atmos 1.00 degree index (wind) and the global 0.25 degree wave index, for any
+ * atmos 1.00 degree index (wind at either level) and the global 0.25 degree wave index, for any
  * cycle and forecast hour. A GET for one with no fixture is `absent`.
  */
 const NODD_READER_INDEX_KEYS: readonly RegExp[] = [

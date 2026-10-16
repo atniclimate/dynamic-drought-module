@@ -32,9 +32,11 @@ import {
   BC_DROUGHT_LEVELS,
   BC_DROUGHT_NO_UPDATE,
   CDM_CATEGORIES,
+  GRIDDED_INDEX_RAMP,
   HEATRISK_CATEGORIES,
   NADM_CATEGORIES,
   NWS_ALERT_COLORS,
+  OUTLOOK_LEGEND,
   SST_ANOMALY_LABELS,
   USDM_CATEGORIES,
   USDM_NONE_SWATCH,
@@ -49,7 +51,8 @@ import {
   USFS_WHP_PRESENTATION,
   NIFC_KEY_GENERALIZATION_NOTE
 } from '../config/wildfire-presentation';
-import { FRAMINGS } from '../config/framings';
+import { FRAMINGS, framingMinimapProvenance } from '../config/framings';
+import { HILLSHADE_COVERAGE_SENTENCE } from '../config/terrain-coverage';
 import { getFraming, onFramingChange } from '../state/framing-store';
 import { getHazardCluster, getOceanFraming, onHazardClusterChange } from '../state/cluster-store';
 import { getViewMode, onViewModeChange } from '../state/view-mode';
@@ -61,10 +64,23 @@ import {
   createHeatRiskSequenceLoader,
   type HeatRiskFrameEventDetail
 } from './heatrisk-sequence-loader';
+import { openTechnicalInformation } from './impact-panel';
 import { watchDesktopMapSeat } from './map-control-seat';
 import { getTimeBarSpec, onTimeBarSpecChange } from './time-bar';
 import { MAP_GROUND_COLOR } from '../config/interface-tokens';
 import { WHP_3D_SHADE_CATEGORIES, WHP_3D_SHADE_QUALIFICATION, WHP_SHADE_CATEGORIES, WHP_SHADE_QUALIFICATION, WHP_SURFACE_OPACITY } from '../config/whp-shade';
+import { FUEL_RISK_TITLE, fireKeySections } from './fire3d-fuel-risk';
+import {
+  TROPICAL_CONE,
+  TROPICAL_EMPTY_TEXT,
+  TROPICAL_ISSUERS,
+  TROPICAL_POINT_CLASSES,
+  TROPICAL_POINT_PAPER,
+  TROPICAL_PART_NAMES,
+  TROPICAL_TRACK,
+  TROPICAL_WW_CLASSES,
+  tropicalBasinName
+} from '../config/tropical-presentation';
 
 export interface KeySpec {
   readonly label: string;
@@ -136,6 +152,23 @@ interface EnsoFlowSnapshotEventDetail {
   /** E1-4: the issuer credit, in the publisher's words, shown as its own item. */
   readonly provenance?: string;
 }
+
+/** The tropical cyclones layer's snapshot (src/layers/tropical-cyclones.ts TropicalSnapshot). */
+interface TropicalSnapshotEventDetail {
+  readonly status: 'inactive' | 'loading' | 'live' | 'live (partial)' | 'unavailable' | 'no data';
+  readonly storms: readonly {
+    readonly bin: string;
+    readonly name: string;
+    readonly basin: string;
+    readonly advisory: string;
+    readonly issued: string;
+  }[];
+}
+
+const TROPICAL_KEY = 'tropical-cyclones';
+const TROPICAL_SNAPSHOT_EVENT = 'ddm:tropical-snapshot';
+const TROPICAL_SNAPSHOT_REQUEST_EVENT = 'ddm:tropical-snapshot-request';
+let tropicalSnapshot: TropicalSnapshotEventDetail | null = null;
 
 const HEATRISK_FRAMES_EVENT = 'ddm:heatrisk-frames';
 const HEATRISK_DAY_SELECT_EVENT = 'ddm:heatrisk-day-select';
@@ -351,7 +384,9 @@ export function resolveMapKeyFamily(
   if (
     active.has('usdm') ||
     active.has('nadm-drought') ||
-    active.has('cdm-drought')
+    active.has('cdm-drought') ||
+    active.has('drought') ||
+    active.has('gridded-index')
   ) {
     return 'drought';
   }
@@ -471,7 +506,10 @@ function sstKey(): KeySpec {
  * The direction arrows' own row, after the SST attribution and apart from
  * the SST "Observed" row: two products, two clocks (docs/design/README.md,
  * DDM-UI-007). Every word is the arrows' module's own; this only joins them.
- * No row while the arrows are off or their layer is inactive.
+ * For the NODD kinds the notes are the bins and any live-state sentence; what
+ * the lines and marks mean reads in the Impact Briefing
+ * (src/ui/map-technical-information.ts). No row while the arrows are off or
+ * their layer is inactive.
  */
 function ensoFlowRow(): { readonly html: string; readonly ariaLabel: string } {
   const flow = ensoFlowSnapshot;
@@ -494,10 +532,12 @@ function ensoFlowRow(): { readonly html: string; readonly ariaLabel: string } {
 
 /**
  * The flowing paths' Pause toggle (E1-4). Built once by initMapKey and only
- * shown, hidden and re-pressed here, never re-created. The icon swaps
- * (two bars while the lines move, a play triangle while they hold still);
- * the accessible name stays constant (APG button pattern) and stays apart
- * from the time bar's own "Pause" and "Play" for the SST days.
+ * shown, hidden and renamed here, never re-created. The icon and the
+ * accessible name swap together and say what a press does (two bars and
+ * "Pause motion" while the lines move, a play triangle and "Play motion"
+ * while they hold still), so the button carries no aria-pressed (APG button
+ * pattern: a name that changes, or a pressed state, never both). The names
+ * stay apart from the time bar's own "Pause" and "Play" for the SST days.
  */
 function buildFlowPauseButton(): HTMLButtonElement {
   const button = document.createElement('button');
@@ -508,7 +548,7 @@ function buildFlowPauseButton(): HTMLButtonElement {
   // DRAFT wording (DR-177): "Pause motion", the flowing paths' toggle name,
   // on ENSO-FLOW-PLAN.md question 6's read-back list.
   button.setAttribute('aria-label', 'Pause motion');
-  button.setAttribute('aria-pressed', 'false');
+  button.dataset.paused = 'false';
   button.hidden = true;
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   svg.setAttribute('viewBox', '0 0 16 16');
@@ -528,9 +568,9 @@ function buildFlowPauseButton(): HTMLButtonElement {
 }
 
 /**
- * Show the toggle only while the paths' snapshot reports motion, and press
- * it while they are paused or still under reduced motion. `held` (the SST
- * days playing, a hidden tab) is no one's pause, so it reads unpressed.
+ * Show the toggle only while the paths' snapshot reports motion, and offer
+ * Play while they are paused or still under reduced motion. `held` (the SST
+ * days playing, a hidden tab) is no one's pause, so it still offers Pause.
  */
 function syncFlowPause(
   host: HTMLElement,
@@ -547,7 +587,10 @@ function syncFlowPause(
     return;
   }
   host.dataset.flowMotion = motion;
-  button.setAttribute('aria-pressed', String(motion === 'paused' || motion === 'reduced'));
+  const paused = motion === 'paused' || motion === 'reduced';
+  button.dataset.paused = String(paused);
+  // DRAFT wording (DR-177): "Play motion", the same toggle's name while the lines hold still.
+  button.setAttribute('aria-label', paused ? 'Play motion' : 'Pause motion');
 }
 
 function formatHeatRiskDate(validTime: number): string {
@@ -762,6 +805,24 @@ function nadmKey(): KeySpec {
   };
 }
 
+/** The CPC outlook classes, from the same table the sidebar legend draws. */
+function outlookKey(): KeySpec {
+  return {
+    label: KEY_ELIGIBLE_LABELS['drought']!,
+    ariaLabel: 'NOAA Climate Prediction Center drought outlook key. Hatched fills mark an outlook, not an observed condition.',
+    itemsHtml: OUTLOOK_LEGEND.map((entry) => swatchItem(entry.color, entry.label)).join('')
+  };
+}
+
+/** The gridded index ramp, drier to wetter; the unlabeled white slot is left out. */
+function griddedKey(): KeySpec {
+  return {
+    label: KEY_ELIGIBLE_LABELS['gridded-index']!,
+    ariaLabel: 'Gridded Standardized Precipitation Index key, drier to wetter. NOAA NIDIS.',
+    itemsHtml: GRIDDED_INDEX_RAMP.flatMap((entry) => (entry.code ? [swatchItem(entry.color, entry.code)] : [])).join('')
+  };
+}
+
 /** A placeholder row for a still-loading key section (W2-D6): the section
  * is named rather than omitted, so live activation never silently drops a
  * source from the reference. 'unavailable' keeps its absence semantics. */
@@ -841,7 +902,7 @@ export function buildFireKey(
   };
 }
 
-export function buildWhpKey(): KeySpec {
+export function buildWhpKey(scaleLabel = 'USFS Wildfire Hazard Potential'): KeySpec {
   const categories = flatWhpShadeActive
     ? WHP_SHADE_CATEGORIES.map((category) => ({ ...category, color: `rgba(255,255,255,${category.opacity * WHP_SURFACE_OPACITY})` }))
     : USFS_WHP_PRESENTATION.categories;
@@ -851,7 +912,7 @@ export function buildWhpKey(): KeySpec {
     ariaLabel: qualification,
     itemsHtml:
       '<span class="map-key-scale" data-usfs-whp-key>' +
-      '<strong class="map-key-scale-label">USFS Wildfire Hazard Potential</strong>' +
+      `<strong class="map-key-scale-label">${escapeHtml(scaleLabel)}</strong>` +
       categories
         .map((category) => swatchItem(category.color, category.label))
         .join('') +
@@ -934,21 +995,6 @@ function loadingKeySpec(key: string): KeySpec {
 const HILLSHADE_COVERAGE_LABEL = 'Terrain: Pacific Northwest only';
 
 /**
- * `FIRE3D_TERRAIN_COVERAGE_SENTENCE` (src/config/fire3d-presentation.ts)
- * mirrored here as a LITERAL, not an import: this module sits in the eager
- * graph (loaded at first paint), and that constant's owning file is reached
- * only through the 3D Fire mode's dynamic-import chain, so importing it here
- * would pull that chunk into first paint. The full `FIRE3D_COVERAGE_NOTE` is
- * not mirrored because its trailing sentence describes the 3D view's bundled
- * structure bake (the central Oregon pilot area), which says nothing about
- * the flat hillshade and would broaden the claim made here.
- * tests/fire3d-mode.spec.ts asserts this string equals the source constant,
- * so the two cannot drift silently.
- */
-const HILLSHADE_COVERAGE_NOTE =
-  "Terrain relief uses the USGS 3D Elevation Program's elevation data for 125°W to 110.5°W, 41.5°N to 49.5°N; outside that box the ground renders flat. The archive's detail ends at zoom 8; closer views stretch its deepest tiles.";
-
-/**
  * Append the terrain coverage entry when Terrain Shading is on. It rides an
  * existing key rather than earning one: the hillshade is reference relief,
  * not a condition surface, so it must never materialize a key strip on a map
@@ -962,12 +1008,12 @@ function withTerrainCoverage(
   const clamped = window.matchMedia(MOBILE_MAP_KEY_QUERY).matches;
   return {
     ...spec,
-    ariaLabel: `${spec.ariaLabel} ${HILLSHADE_COVERAGE_NOTE}`,
+    ariaLabel: `${spec.ariaLabel} ${HILLSHADE_COVERAGE_SENTENCE}`,
     itemsHtml: clamped
       ? spec.itemsHtml
       : spec.itemsHtml +
         '<span class="map-key-qualification" data-hillshade-coverage title="' +
-        `${escapeHtml(HILLSHADE_COVERAGE_NOTE)}">` +
+        `${escapeHtml(HILLSHADE_COVERAGE_SENTENCE)}">` +
         `${escapeHtml(HILLSHADE_COVERAGE_LABEL)}</span>`
   };
 }
@@ -1031,8 +1077,15 @@ function frameCoverageNote(): string {
   const framing = selection === null || selection === 'all' ? null : selection;
   const def = framing !== null ? FRAMINGS[framing] : undefined;
   const coverage = def?.coverage;
-  if (coverage === undefined) return '';
   if (!landFramingGovernsCamera()) return '';
+  // Per mode, and before the coverage early return: arid-west and
+  // southeast-gulf have no coverage block but still earn the Wildfire, Heat
+  // and ENSO clauses.
+  // With no framing selected the key stays as quiet as it always was.
+  const minimapProvenance = framing !== null && minimapInScene()
+    ? framingMinimapProvenance(framing, getHazardCluster())
+    : undefined;
+  if (coverage === undefined) return minimapProvenance?.replace(/\.\s*$/, '') ?? '';
 
   const clauses: string[] = [];
 
@@ -1053,9 +1106,7 @@ function frameCoverageNote(): string {
     if (earned) clauses.push(coverage.displayScope);
   }
 
-  if (coverage.minimapProvenance !== undefined && minimapInScene()) {
-    clauses.push(coverage.minimapProvenance);
-  }
+  if (minimapProvenance !== undefined) clauses.push(minimapProvenance);
 
   // Ungated: the place catalog ends where it ends, whatever is displayed.
   if (coverage.briefingScope !== undefined) clauses.push(coverage.briefingScope);
@@ -1123,20 +1174,146 @@ function fireProductKeys(eligible: ReadonlySet<string>): readonly string[] {
   return (['spc-fire-weather', 'nifc-fires'] as const).filter((key) => eligible.has(key));
 }
 
-/** The condition-surface key, before shared reference qualifications. */
+/**
+ * A neutral circle at a renderer class's size (the issuer's points are icons, not colours).
+ * The map draws dark ink over a bright raster; the key panel is dark, so here the circle is
+ * paper alone: a solid paper disc for a filled point, a paper ring with a clear centre for a
+ * hollow one and for the size examples.
+ */
+function tropicalCircle(radius: number, label: string, filled = false): string {
+  const size = Math.round(radius * 2);
+  return (
+    '<span class="map-key-item"><span class="map-key-swatch" style="' +
+    `background:${filled ? TROPICAL_POINT_PAPER : 'transparent'};border:1.5px solid ${TROPICAL_POINT_PAPER};box-shadow:none;border-radius:50%;width:${size}px;height:${size}px` +
+    `"></span>${escapeHtml(label)}</span>`
+  );
+}
+
+/** One stacked key group: a heading on its own line, then one row per line (CSS .map-key-tropical-group). */
+function tropicalGroup(rows: readonly string[], heading?: string): string {
+  const head = heading ? `<strong class="map-key-scale-label" data-tropical-points="${escapeHtml(heading)}">${escapeHtml(heading)}</strong>` : '';
+  return `<span class="map-key-tropical-group">${head}${rows.join('')}</span>`;
+}
+
+/**
+ * The tropical cyclones row (ENSO block B3), an event overlay appended to
+ * whichever key the surface earned, like the NWS products row. Its state is
+ * the registry's (a refresh that fails reads unavailable; an empty season
+ * reads the owner's words, "No active tropical cyclones"); its storms and
+ * classes are the layer snapshot's and the issuer renderer's labels, verbatim.
+ * The basins and circle-sizing notes read in the Impact Briefing
+ * (src/ui/map-technical-information.ts), not here.
+ */
+function tropicalRow(): { readonly html: string; readonly ariaLabel: string } | null {
+  const status = registry.getStatus(TROPICAL_KEY);
+  const on = registry.getActiveKeys().has(TROPICAL_KEY);
+  // A failed first read leaves the key inactive with 'error' kept for the
+  // committed mode's summary; say unavailable only while that mode shows it.
+  const committed = Object.values(HAZARD_CLUSTERS[getHazardCluster()].recipes).some((r) => r.includes(TROPICAL_KEY));
+  if (!on && status !== 'loading' && !(status === 'error' && committed)) return null;
+  const issuer = TROPICAL_ISSUERS.both.name;
+  const parts: string[] = ['<strong class="map-key-scale-label">Tropical cyclones</strong>'];
+  let aria = 'Tropical cyclones:';
+  let state: string;
+  if (status === 'loading' || status === undefined) {
+    state = 'loading';
+    parts.push(`<span class="map-key-qualification map-key-loading" data-key-loading="${TROPICAL_KEY}"><strong>loading</strong></span>`);
+    aria += ' loading.';
+  } else if (status === 'error') {
+    state = 'unavailable';
+    parts.push('<span class="map-key-qualification" data-tropical-status><strong>unavailable</strong> The NHC and CPHC advisories could not be read.</span>');
+    aria += ' unavailable. The NHC and CPHC advisories could not be read.';
+  } else if (status === 'no-data') {
+    state = 'no data';
+    parts.push(`<span class="map-key-item" data-tropical-empty>${escapeHtml(TROPICAL_EMPTY_TEXT)}</span>`);
+    aria += ` ${TROPICAL_EMPTY_TEXT}.`;
+  } else {
+    state = status === 'degraded' ? 'live (partial)' : 'live';
+    for (const storm of tropicalSnapshot?.storms ?? []) {
+      const basin = tropicalBasinName(storm.basin) ?? `basin ${storm.basin || 'not given'} (not recognised)`;
+      const line = `${storm.name}, ${basin}, advisory ${storm.advisory}, issued ${storm.issued}`;
+      parts.push(`<span class="map-key-item" data-tropical-storm="${escapeHtml(storm.bin)}">${escapeHtml(line)}</span>`);
+      aria += ` ${line}.`;
+    }
+    if (status === 'degraded') {
+      parts.push('<span class="map-key-qualification" data-tropical-status><strong>live (partial)</strong> Some storm layers could not be read or name another advisory; those are not drawn.</span>');
+      aria += ' live (partial).';
+    }
+    for (const src of ['Tropical Cyclone', 'Post-Tropical Cyclone'] as const) {
+      parts.push(
+        tropicalGroup(
+          TROPICAL_POINT_CLASSES.filter((c) => c.key.endsWith(`,${src}`)).map((c) => tropicalCircle(c.radius, c.label)),
+          src
+        )
+      );
+    }
+    parts.push(
+      tropicalGroup([
+        tropicalCircle(7.5, 'Advisory position', true),
+        tropicalCircle(7.5, 'Later positions'),
+        // The track is black on the map; a paper ring keeps it visible on the dark panel.
+        swatchItem(TROPICAL_TRACK.color, TROPICAL_PART_NAMES.track).replace('style="', `style="box-shadow:0 0 0 1px ${TROPICAL_POINT_PAPER};`),
+        swatchItem(TROPICAL_CONE.fill, TROPICAL_PART_NAMES.cone),
+        ...TROPICAL_WW_CLASSES.map((c) => swatchItem(c.color, c.label))
+      ])
+    );
+    aria += ` ${TROPICAL_POINT_CLASSES.map((c) => c.label).join(', ')}; ${TROPICAL_WW_CLASSES.map((c) => c.label).join(', ')}.`;
+  }
+  parts.push(`<span class="map-key-item" data-tropical-issuer>${escapeHtml(issuer)}</span>`);
+  return {
+    html: `<span class="map-key-scale" data-tropical-key data-tropical-state="${state}">${parts.join('')}</span>`,
+    ariaLabel: `${aria} ${issuer}.`
+  };
+}
+
+/** The surface key with the tropical cyclones row appended when that layer is on. */
 function hazardKey(): HazardKeyResult | null {
+  const base = surfaceKey();
+  const row = tropicalRow();
+  if (!row) return base;
+  if (base) {
+    return {
+      spec: { ...base.spec, ariaLabel: `${base.spec.ariaLabel} ${row.ariaLabel}`, itemsHtml: base.spec.itemsHtml + row.html },
+      productKeys: base.productKeys
+    };
+  }
+  return { spec: { label: KEY_ELIGIBLE_LABELS[TROPICAL_KEY]!, ariaLabel: row.ariaLabel, itemsHtml: row.html }, productKeys: [] };
+}
+
+/** The condition-surface key, before shared reference qualifications. */
+function surfaceKey(): HazardKeyResult | null {
   const { active, loading, eligible } = keyEligibility();
   let spec: KeySpec | null = null;
   let productKeys: readonly string[] = [];
+  const fireSections = fireKeySections(eligible);
   if (eligible.has('heatrisk')) {
     spec = active.has('heatrisk') ? heatKey() : loadingKeySpec('heatrisk');
     productKeys = ['heatrisk'];
-  } else if (eligible.has('spc-fire-weather')) {
-    spec = buildFireKey(active, loading);
-    productKeys = fireProductKeys(eligible);
-  } else if (eligible.has('usfs-whp')) {
+  } else if (fireSections && !fireSections.fire) {
     spec = active.has('usfs-whp') ? buildWhpKey() : loadingKeySpec('usfs-whp');
     productKeys = ['usfs-whp'];
+  } else if (fireSections) {
+    // Fuel risk over Wildfire: the Fire key keeps every section and gains the potential one.
+    const fire = buildFireKey(active, loading);
+    spec = fire;
+    productKeys = fireProductKeys(eligible);
+    if (fireSections.whp) {
+      const whp = active.has('usfs-whp')
+        ? buildWhpKey(FUEL_RISK_TITLE)
+        : {
+            ariaLabel: 'loading.',
+            itemsHtml:
+              '<span class="map-key-scale" data-usfs-whp-key>' +
+              `<strong class="map-key-scale-label">${escapeHtml(FUEL_RISK_TITLE)}</strong>` +
+              `${loadingSectionRow('usfs-whp')}</span>`
+          };
+      spec = {
+        ...fire,
+        ariaLabel: `${fire.ariaLabel} ${FUEL_RISK_TITLE}, ${whp.ariaLabel}`,
+        itemsHtml: fire.itemsHtml + whp.itemsHtml
+      };
+      productKeys = [...productKeys, 'usfs-whp'];
+    }
   } else if (eligible.has('cdm-drought')) {
     spec = active.has('cdm-drought') ? cdmKey() : loadingKeySpec('cdm-drought');
     productKeys = ['cdm-drought'];
@@ -1146,6 +1323,12 @@ function hazardKey(): HazardKeyResult | null {
   } else if (eligible.has('usdm')) {
     spec = active.has('usdm') ? droughtKey() : loadingKeySpec('usdm');
     productKeys = ['usdm'];
+  } else if (eligible.has('drought')) {
+    spec = active.has('drought') ? outlookKey() : loadingKeySpec('drought');
+    productKeys = ['drought'];
+  } else if (eligible.has('gridded-index')) {
+    spec = active.has('gridded-index') ? griddedKey() : loadingKeySpec('gridded-index');
+    productKeys = ['gridded-index'];
   } else if (eligible.has('sst-anomaly')) {
     spec = active.has('sst-anomaly') ? sstKey() : loadingKeySpec('sst-anomaly');
     productKeys = ['sst-anomaly'];
@@ -1322,6 +1505,16 @@ export function initMapKey(): void {
   drawerSections.hidden = false;
   content.append(drawerSections);
 
+  // The owner's call 1: one quiet link to the briefing's Technical information, built once (outside the rewritten legend) so it keeps focus.
+  const technicalLink = document.createElement('button');
+  technicalLink.type = 'button';
+  technicalLink.className = 'map-info-ack-link';
+  technicalLink.dataset['openTechnicalInformation'] = '';
+  // DRAFT wording (DR-177)
+  technicalLink.textContent = 'Technical information';
+  technicalLink.addEventListener('click', () => openTechnicalInformation(technicalLink));
+  content.append(technicalLink);
+
   const detailsButton = document.createElement('button');
   detailsButton.id = 'map-key-details-toggle';
   detailsButton.className = 'map-key-details-toggle';
@@ -1333,8 +1526,8 @@ export function initMapKey(): void {
   // E1-4 (ENSO-FLOW-PLAN.md; C-fit.md 1.8; WCAG 2.2.2): the flowing paths'
   // Pause, one native toggle in the collapsed header right after the chip,
   // outside #map-key-legend (rewritten on every update) so it is built once
-  // and keeps focus across key updates. Its name never changes; aria-pressed
-  // carries the state, read only from the paths' own snapshot. Hidden until
+  // and keeps focus across key updates. Its name says what a press does,
+  // from the paths' own snapshot and nothing else. Hidden until
   // a snapshot reports motion (nothing does before E2-1 wires the paths).
   const pauseButton = buildFlowPauseButton();
 
@@ -1387,7 +1580,7 @@ export function initMapKey(): void {
   detailsButton.addEventListener('click', toggleDetails);
   pauseButton.addEventListener('click', () => {
     window.dispatchEvent(new CustomEvent(ENSO_FLOW_MOTION_REQUEST_EVENT, {
-      detail: { paused: pauseButton.getAttribute('aria-pressed') !== 'true' }
+      detail: { paused: pauseButton.dataset.paused !== 'true' }
     }));
   });
   window.addEventListener('ddm:toggle-map-key-details', toggleDetails);
@@ -1651,6 +1844,12 @@ export function initMapKey(): void {
     update();
   };
   window.addEventListener(ENSO_FLOW_SNAPSHOT_EVENT, onEnsoFlowSnapshot);
+  window.addEventListener(TROPICAL_SNAPSHOT_EVENT, (event) => {
+    const detail = (event as CustomEvent<TropicalSnapshotEventDetail>).detail;
+    if (!detail) return;
+    tropicalSnapshot = detail;
+    update();
+  });
   disposeMapKeyTimeBarSpec = onTimeBarSpecChange(update);
   // A framing click never fires a registry event (D-0.7.0-039: camera-only,
   // no layer write), so without this the coverage caution above would only
@@ -1680,5 +1879,7 @@ export function initMapKey(): void {
   window.dispatchEvent(new Event(ENSO_FLOW_SNAPSHOT_REQUEST_EVENT));
   drynessGround = null;
   window.dispatchEvent(new Event(DRYNESS_GROUND_REQUEST_EVENT));
+  tropicalSnapshot = null;
+  window.dispatchEvent(new Event(TROPICAL_SNAPSHOT_REQUEST_EVENT));
   update();
 }

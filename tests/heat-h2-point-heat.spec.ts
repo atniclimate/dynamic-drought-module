@@ -616,7 +616,7 @@ test.describe('H2 critical-first surfaces', () => {
     await expect(pill).toHaveCSS('border-top-color', ink);
     await expect(pill).toHaveCSS('font-style', state === 'no-data' ? 'italic' : 'normal');
     if (state === 'unavailable') await expect(pill).toHaveCSS('font-weight', '700');
-    const glyph = await pill.evaluate((node) => {
+    const readGlyph = () => pill.evaluate((node) => {
       const style = getComputedStyle(node, '::before');
       const box = node.getBoundingClientRect();
       const header = node.parentElement!.getBoundingClientRect();
@@ -629,7 +629,10 @@ test.describe('H2 critical-first surfaces', () => {
         overflow: node.scrollWidth - node.clientWidth
       };
     });
-    expect(glyph).toMatchObject({ content: '""', width: '8px', height: '8px', border: '1px', color: ink, animation: 'none' });
+    // A settling hydration lane re-renders the panel body (refreshOpenBriefing), which can
+    // detach the node resolved for this read; a detached node computes every style as "".
+    let glyph = await readGlyph();
+    await expect.poll(async () => (glyph = await readGlyph())).toMatchObject({ content: '""', width: '8px', height: '8px', border: '1px', color: ink, animation: 'none' });
     expect(glyph.left).toBeGreaterThanOrEqual(-1);
     expect(glyph.right).toBeGreaterThanOrEqual(-1);
     expect(glyph.overflow).toBeLessThanOrEqual(1);
@@ -1432,7 +1435,7 @@ test.describe('DDM-P7-T07: the season-ahead heat cell', () => {
     await expect(chip).toHaveAttribute('aria-disabled', 'true');
     await expect(chip).toHaveAttribute(
       'title',
-      'No verified season-ahead Extreme Heat map surface exists yet.'
+      'Long Range is off for Extreme Heat: no verified map source for this time horizon exists yet, so none is shown rather than a guess.'
     );
     await expect(page.locator('#map-key')).not.toContainText(
       'seasonal temperature outlook'

@@ -436,6 +436,54 @@ test.describe('DDM-P1-T02: viewport discovery aborts on supersession', () => {
       await expect(layerCheckbox(page, key)).toBeChecked();
     }
   });
+
+  test('Water and Snow toggled off mid-discovery aborts the held station query, and on again asks anew', async ({
+    page
+  }) => {
+    await stubCommon(page);
+    // USGS viewport discovery (a bBox query) is HELD; the station-value reads
+    // and the other rosters are not what this test observes.
+    const isUsgsDiscovery = (url: string): boolean =>
+      url.includes('waterservices.usgs.gov') && url.includes('bBox');
+    const held = makeHeld();
+    await page.route('**/waterservices.usgs.gov/**', (route) => {
+      if (!isUsgsDiscovery(route.request().url())) {
+        void route.abort('failed');
+        return;
+      }
+      held.releases.push(fulfilLater(route, JSON.stringify({ value: { timeSeries: [] } }), 'application/json'));
+    });
+    const failures = watchFailures(page, isUsgsDiscovery);
+
+    // A viewport inside the 25-square-degree discovery gate, layer off at boot.
+    await gotoApp(page, '?region=south_puget_sound&view=console&layers=states');
+    await layerCheckbox(page, 'telemetry').check();
+    await expect.poll(() => held.releases.length, { timeout: 30_000 }).toBeGreaterThanOrEqual(1);
+    const firstHeld = held.releases.length;
+
+    // Off mid-discovery: the module's cancelActivation seam aborts its own
+    // discovery controller before the queued teardown, so the held query
+    // fails well inside the 15 s provider budget.
+    const offAt = Date.now();
+    await layerCheckbox(page, 'telemetry').uncheck();
+    await expectAbortedWithin(failures, offAt);
+    await expect(layerPill(page, 'telemetry')).toHaveText('', { timeout: 10_000 });
+
+    // On again: the new activation is not queued behind the old discovery,
+    // so it issues its own query promptly.
+    const onAt = Date.now();
+    await layerCheckbox(page, 'telemetry').check();
+    await expect
+      .poll(() => held.releases.length, { timeout: ABORT_BOUND_MS })
+      .toBeGreaterThan(firstHeld);
+    expect(Date.now() - onAt).toBeLessThan(ABORT_BOUND_MS);
+
+    held.releaseAll();
+    await expect.poll(() => pillClasses(page, 'telemetry'), { timeout: 30_000 }).toMatch(
+      /\b(ready|no-data|degraded|error)\b/
+    );
+    await expect(layerCheckbox(page, 'telemetry')).toBeChecked();
+  });
 });
 
 // ---------------------------------------------------------------------------

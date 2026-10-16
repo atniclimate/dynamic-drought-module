@@ -176,6 +176,14 @@ let moveendHandler: (() => void) | null = null;
 let refreshTimer: number | null = null;
 
 /**
+ * The cache key and request token of the network fetch now in flight, or null.
+ * A `moveend` that lands on the same bucketed view while it runs (the boot
+ * camera settling) must not abort and repeat the slow national query; a token
+ * the module has moved past (cancel, teardown) no longer counts.
+ */
+let inFlight: { readonly key: string; readonly token: number } | null = null;
+
+/**
  * The status last reported for actually-rendered data (`ready` or
  * `no-data`), or null when nothing is rendered (never activated, or torn
  * down). Lets `cancelActivation` restore the honest status of what is still
@@ -200,6 +208,7 @@ let appliedData: FeatureCollection | null = null;
 interface CachedResponse {
   readonly envelope: readonly [number, number, number, number];
   readonly geojson: FeatureCollection;
+  readonly zoomBucket: number;
 }
 
 /**
@@ -244,8 +253,8 @@ function resolveZoomBucket(map: maplibregl.Map): number {
  * Bucketed cache key for the current viewport. Includes the zoom bucket
  * because the query's generalization tolerance is zoom-keyed: a response
  * generalized for zoom 4 must not satisfy a zoom 9 view of the same bounds.
- * The key is a fast-path bucket only; a hit must ALSO pass the
- * `envelopeCovers` coverage check before it is served.
+ * It names an entry for storage, eviction and the in-flight check; lookup
+ * is by coverage (`findCoveringResponse`).
  */
 function buildCacheKey(map: maplibregl.Map, zoomBucket: number): string {
   const b = map.getBounds();
@@ -255,17 +264,36 @@ function buildCacheKey(map: maplibregl.Map, zoomBucket: number): string {
   return `z${zoomBucket}:${bounds}`;
 }
 
+/**
+ * The newest cached response of this zoom bucket whose coverage envelope
+ * contains the whole view, or undefined, so a pan inside the 25 percent
+ * overscan is served without a request (audit 10). A hit moves to the
+ * newest slot so the entry being panned inside is the last to be evicted.
+ */
+function findCoveringResponse(map: maplibregl.Map, zoomBucket: number): CachedResponse | undefined {
+  const view = map.getBounds();
+  for (const [key, entry] of [...responseCache].reverse()) {
+    if (entry.zoomBucket === zoomBucket && envelopeCovers(entry.envelope, view)) {
+      responseCache.delete(key);
+      responseCache.set(key, entry);
+      return entry;
+    }
+  }
+  return undefined;
+}
+
 /** Store a response in the cache, evicting the oldest entry if at capacity. */
 function cacheResponse(
   key: string,
   envelope: readonly [number, number, number, number],
-  geojson: FeatureCollection
+  geojson: FeatureCollection,
+  zoomBucket: number
 ): void {
   if (responseCache.size >= CACHE_MAX_ENTRIES && !responseCache.has(key)) {
     const oldestKey = responseCache.keys().next().value;
     if (oldestKey !== undefined) responseCache.delete(oldestKey);
   }
-  responseCache.set(key, { envelope: toCoverageEnvelope(envelope), geojson });
+  responseCache.set(key, { envelope: toCoverageEnvelope(envelope), geojson, zoomBucket });
 }
 
 /**
@@ -377,8 +405,8 @@ async function fetchAndApply(map: maplibregl.Map): Promise<void> {
 
   const zoomBucket = resolveZoomBucket(map);
   const cacheKey = buildCacheKey(map, zoomBucket);
-  const cached = responseCache.get(cacheKey);
-  if (cached && envelopeCovers(cached.envelope, map.getBounds())) {
+  const cached = findCoveringResponse(map, zoomBucket);
+  if (cached) {
     applyFeatureCollection(map, cached.geojson);
     return;
   }
@@ -386,6 +414,7 @@ async function fetchAndApply(map: maplibregl.Map): Promise<void> {
   masterController = new AbortController();
   const signal = masterController.signal;
   const unlink = linkAbort(masterController, activationSignal);
+  inFlight = { key: cacheKey, token };
 
   reportStatus('loading');
 
@@ -411,6 +440,7 @@ async function fetchAndApply(map: maplibregl.Map): Promise<void> {
     truncated = isTruncated(raw);
   } catch (err) {
     unlink();
+    if (inFlight?.token === token) inFlight = null;
     // Aborted or superseded means a newer request owns the view; drop it
     // per invariant 5, saying so once at debug level and nowhere louder.
     if (signal.aborted || token !== requestSeq) {
@@ -424,6 +454,7 @@ async function fetchAndApply(map: maplibregl.Map): Promise<void> {
   }
 
   unlink();
+  if (inFlight?.token === token) inFlight = null;
   // A late response to a superseded or torn-down request must not render.
   if (signal.aborted || token !== requestSeq) {
     console.debug(`[aiannh] request ${token} dropped: a late response after intent changed`);
@@ -437,7 +468,7 @@ async function fetchAndApply(map: maplibregl.Map): Promise<void> {
     applyFeatureCollection(map, geojson, { partial: true });
     return;
   }
-  cacheResponse(cacheKey, envelope, geojson);
+  cacheResponse(cacheKey, envelope, geojson, zoomBucket);
   applyFeatureCollection(map, geojson);
 }
 
@@ -560,6 +591,14 @@ function attachRefresh(map: maplibregl.Map): void {
     if (refreshTimer !== null) window.clearTimeout(refreshTimer);
     refreshTimer = window.setTimeout(() => {
       refreshTimer = null;
+      // Same view as the fetch already running: let it finish, do not abort it.
+      if (
+        inFlight &&
+        inFlight.token === requestSeq &&
+        inFlight.key === buildCacheKey(map, resolveZoomBucket(map))
+      ) {
+        return;
+      }
       void fetchAndApply(map);
     }, REFRESH_DEBOUNCE_MS);
   };
@@ -657,7 +696,7 @@ export function bindPopups(map: maplibregl.Map): void {
     respond: (feature, click, map) => {
       const props: GeoJsonProperties = feature.properties ?? null;
       return {
-        model: buildAiannhPopupModel(props, buildPlaceConditionsHtml(map, click.point, feature.geometry)),
+        model: buildAiannhPopupModel(props, buildPlaceConditionsHtml(map, click.point, feature)),
         selection: buildBoundaryContext('aiannh', props, feature.geometry, click.lngLat),
         // An id-less feature clears any prior emphasis (the old
         // emphasizePlace contract) rather than lighting an unknown one.

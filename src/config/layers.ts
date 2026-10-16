@@ -53,6 +53,7 @@ export const LAYER_KEYS = Object.freeze([
   'spc-fire-weather',
   'usfs-whp',
   'sst-anomaly',
+  'tropical-cyclones',
   'telemetry'
 ] as const);
 
@@ -280,7 +281,11 @@ const DROUGHT_CONDITIONS_DEF: LayerDef = {
 
 export const LAYER_DEFS: readonly LayerDef[] = [
   { key: 'hydrography', product: 'hydrography', name: 'Hydrography', source: 'OpenStreetMap (Overpass)', role: 'reference', defaultOn: false, load: () => import('../layers/hydrography') },
-  { key: 'ecoregions', product: 'ecoregions', name: 'Ecoregions (Level III/IV)', source: 'EPA Omernik · PMTiles', role: 'reference', defaultOn: false, load: () => import('../layers/ecoregions') },
+  // Audit 10: the bundled archive covers only the Pacific Northwest (its
+  // PMTiles header bounds [-125, 41.5, -110.5, 49.5]) and the layer reads
+  // `live` at any viewport, so the coverage tail rides the source line the
+  // way hillshade's does below. DRAFT wording (DR-177).
+  { key: 'ecoregions', product: 'ecoregions', name: 'Ecoregions (Level III/IV)', source: 'EPA Omernik · PMTiles · Pacific Northwest bundle only', role: 'reference', defaultOn: false, load: () => import('../layers/ecoregions') },
   // Default-on since E1 (D-0.7.0-043 part 3): terrain shading joins the
   // calm default composition so the E1 paint tuning accounts for it from
   // the start; it renders inside the bottom stack, below every data layer.
@@ -289,11 +294,9 @@ export const LAYER_DEFS: readonly LayerDef[] = [
   // src/config/urls.ts on the hillshade entry), but the layer is default-on at
   // every viewport, so a user in Alaska, Hawaii, or the Southeast saw a
   // `live` pill over an empty basemap with nothing saying why. The coverage
-  // qualification rides the source line, mirroring the terrain clause of
-  // FIRE3D_COVERAGE_NOTE (src/config/fire3d-presentation.ts, named there
-  // FIRE3D_TERRAIN_COVERAGE_SENTENCE: the USGS 3DEP issuer, the archive's
-  // own bounding box, and its zoom-8 detail limit), which the 3D control
-  // has always shown.
+  // qualification rides the source line, mirroring HILLSHADE_COVERAGE_SENTENCE
+  // (src/config/terrain-coverage.ts: the USGS 3DEP issuer, the archive's
+  // own bounding box, and its zoom-8 detail limit), which the map key shows.
   { key: 'hillshade', product: 'hillshade', name: 'Terrain Shading', source: 'USGS 3DEP · PMTiles · Pacific Northwest bake only', role: 'reference', defaultOn: true, load: () => import('../layers/hillshade') },
   { key: 'drought', product: 'drought', name: 'Drought Outlook (CPC)', source: 'NOAA CPC · Monthly & Seasonal', role: 'surface', defaultOn: false, load: () => import('../layers/drought') },
   // The NIDIS gridded index carries its coverage limit on the source line, the
@@ -343,6 +346,9 @@ export const LAYER_DEFS: readonly LayerDef[] = [
   { key: 'spc-fire-weather', product: 'spc-fire-weather', name: 'Fire Weather Outlook (Day 1)', source: 'NOAA SPC · MapServer', role: 'surface', defaultOn: false, noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/spc-fire-weather') },
   { key: 'usfs-whp', product: 'usfs-whp', name: 'Wildfire Hazard Potential', source: 'USFS · GeoPlatform', role: 'surface', defaultOn: false, load: () => import('../layers/usfs-whp') },
   { key: 'sst-anomaly', product: 'sst-anomaly', name: 'Ocean Temperature Anomaly', source: 'NASA GIBS · GHRSST MUR', role: 'surface', defaultOn: false, load: () => import('../layers/sst-anomaly') },
+  // ENSO block B3: on in the ENSO mode's recipe only. Its coverage is the
+  // issuer's three basins, so its zero state names them, never "this view".
+  { key: 'tropical-cyclones', product: 'tropical-cyclones', name: 'Active Tropical Cyclones', source: 'NOAA NHC and CPHC · MapServer', searchTerms: ['hurricane', 'tropical storm', 'cyclone', 'NHC', 'CPHC'], role: 'event', defaultOn: false, noDataLabel: 'no active tropical cyclones in the Atlantic, Eastern North Pacific or Central North Pacific', load: () => import('../layers/tropical-cyclones') },
   // Monitoring stations left the default-on set 2026-07-09 (D-0.7.0-018
   // item 1, strengthening the D-0.7.0-007 zoom threshold): at region zoom
   // the layer could only say "zoom in to load", so opening with it on

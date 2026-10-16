@@ -2,7 +2,8 @@
  * The desktop 3D Fire view toggle (W3/W4), rendered in the shell island
  * in the view details below the persistent navigation controls.
  *
- * Visibility: only while the committed cluster is 'wildfire' AND the
+ * Visibility: only while the committed cluster is 'wildfire' (or the
+ * custom display its flat Fuel risk switch makes) AND the
  * device can enter the scene at all, which since DR-025a is the same three
  * questions the map-side gate in `src/map/fire3d.ts` asks: the viewport is
  * at least the desktop breakpoint wide, at least `FIRE3D_MIN_HEIGHT_PX`
@@ -50,7 +51,7 @@
  * main.ts uses, and only while the control is actually visible.
  */
 
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 
 import {
   FIRE3D_COVERAGE_NOTE,
@@ -63,12 +64,16 @@ import {
   fire3dControlOffer,
   fire3dCoverageNote
 } from '../../config/fire3d-presentation';
+import type * as maplibregl from 'maplibre-gl';
 import type { HazardClusterKey } from '../../config/clusters';
 import type { Fire3DStatus } from '../../map/fire3d';
+import { requestBasemapMode } from '../../map/basemap-switcher';
+import { defaultBasemapFor } from '../../state/basemap-store';
 import { loadFire3DController } from '../../map/fire3d-chunk';
 // The shared, once-per-page probe result (already in the entry chunk through
 // main.ts, so reading it here adds no eager weight and no second context).
 import { webGl2Capability } from '../../map/gl-capability';
+import { getCommittedSnapshot, requestCluster } from '../../state/cluster-service';
 import {
   getFire3DGroundLayer,
   onFire3DGroundLayerChange,
@@ -81,6 +86,15 @@ import {
   setFire3DPreference
 } from '../../state/fire3d-store';
 import { registry } from '../../state/registry';
+import {
+  FLAT_FUEL_RISK_KEY,
+  FUEL_RISK_TITLE,
+  fuelRiskKeepsConsole,
+  fuelRiskSwitch,
+  revealScroll,
+  shouldRevealScroll
+} from '../fire3d-fuel-risk';
+import { requestLayerOn } from '../layer-toggle-command';
 import { setMapTechnicalNote } from '../map-technical-information';
 
 /** The catalog key whose emptiness the 3D control reports. */
@@ -91,6 +105,8 @@ const HMS_SMOKE_LAYER_KEY = 'hms-smoke';
  * up: each removes or restores its own white layer and nothing else. They
  * mirror session state (src/state/fire3d-ground-layers.ts), on by default,
  * and are buttons of the same family and size as the 3D toggle above them.
+ * Without a mounted drape, "Fuel risk" is the flat issuer-coloured layer
+ * instead (src/ui/fire3d-fuel-risk.ts), so the flat map has it too.
  */
 const GROUND_SWITCHES: readonly (readonly [Fire3DGroundLayer, string])[] = [
   ['plantStress', 'Plant stress'],
@@ -198,9 +214,11 @@ function outOfCoverageLine(status: Fire3DStatus | null): string {
 }
 
 export function Fire3DControl({
-  cluster
+  cluster,
+  map
 }: {
   readonly cluster: HazardClusterKey | 'custom';
+  readonly map: maplibregl.Map;
 }) {
   // The geometry half of the entry gate (DR-025a): wide enough AND tall
   // enough, watched as two media queries so a phone rotating into landscape
@@ -250,8 +268,8 @@ export function Fire3DControl({
   // The ground switches render straight from their store; a change redraws.
   const [, redrawGroundSwitches] = useState(0);
   useEffect(() => onFire3DGroundLayerChange(() => redrawGroundSwitches((n) => n + 1)), []);
-  // Fuel risk is offered only while the 3D drape is mounted (src/layers/whp-3d.ts says so): when the
-  // flat fuel-risk layer covers the ground instead, the switch would act on nothing.
+  // Fuel risk acts on the 3D drape only while it is mounted (src/layers/whp-3d.ts says so); otherwise
+  // on the flat layer, which the drape stands down for.
   const [drapeMounted, setDrapeMounted] = useState(false);
   useEffect(() => {
     const onShade = (event: Event): void => {
@@ -274,17 +292,42 @@ export function Fire3DControl({
     []
   );
 
+  // The shell re-renders this control on every committed snapshot, so a direct read stays current.
+  const snapshot = getCommittedSnapshot();
+  const flatFuelOn = snapshot.intendedKeys.has(FLAT_FUEL_RISK_KEY);
+  const fuelTarget = fuelRiskSwitch({
+    sceneActive: status?.state === 'active',
+    drapeMounted,
+    cluster,
+    flatOn: flatFuelOn
+  });
   const offer = fire3dControlOffer({
     wideEnough,
     tallEnough,
     webgl2: webGl2Capability().webgl2,
-    fireView: cluster === 'wildfire'
+    fireView: fuelRiskKeepsConsole(cluster, snapshot.selectedHazard, flatFuelOn)
   });
   const visible = offer === 'control';
   const [chunkUnavailable, setChunkUnavailable] = useState(false);
   useEffect(() => {
-    setMapTechnicalNote('fire3d', coverageNote(status));
+    setMapTechnicalNote('fire3d', coverageNote(status), status?.state === 'active' && status.terrainMaxZoom !== null);
   }, [status]);
+
+  // The sidebar scrolls; bring the control up when it appears or gains a row
+  // after load, never on the first run (see shouldRevealScroll).
+  const root = useRef<HTMLDivElement>(null);
+  const lastFuelTarget = useRef<typeof fuelTarget | undefined>(undefined);
+  // Set by the button, not read from the URL: a shared 3D link must not scroll at load.
+  const turnedOn3D = useRef(false);
+  useEffect(() => {
+    const firstRun = lastFuelTarget.current === undefined;
+    const fuelRowChanged = !firstRun && lastFuelTarget.current !== fuelTarget;
+    lastFuelTarget.current = fuelTarget;
+    const box = root.current?.closest('.sidebar-scroll');
+    if (!root.current || !box) return;
+    if (!shouldRevealScroll({ firstRun, sceneRequested: turnedOn3D.current && preference, fuelRowChanged })) return;
+    box.scrollTop += revealScroll(root.current.getBoundingClientRect(), box.getBoundingClientRect());
+  }, [visible, status?.state, fuelTarget]);
 
   useEffect(() => {
     if (!visible) return;
@@ -332,18 +375,27 @@ export function Fire3DControl({
   }
 
   return (
-    <div class="shell-fire3d" id="shell-fire3d">
+    <div class="shell-fire3d" id="shell-fire3d" ref={root}>
       <button
         type="button"
         class="shell-fire3d-btn"
         aria-pressed={preference}
         title="Tilt the Fire view over 3D terrain relief with a volumetric smoke read. Presentation only: it changes how the same mapped data is seen, not what any layer claims."
-        onClick={() => setFire3DPreference(!preference)}
+        onClick={() => {
+          // The scene enters only from the Wildfire recipe, and draws its own fuel risk drape.
+          if (!preference && cluster !== 'wildfire') {
+            requestCluster('wildfire');
+            // A mode switch applies the mode's basemap default, like the shell's chooser.
+            requestBasemapMode(map, defaultBasemapFor('wildfire'));
+          }
+          turnedOn3D.current = !preference;
+          setFire3DPreference(!preference);
+        }}
       >
         3D Fire view
       </button>
       {status?.state === 'active'
-        ? GROUND_SWITCHES.filter(([layer]) => layer !== 'fuelRisk' || drapeMounted).map(([layer, label]) => (
+        ? GROUND_SWITCHES.filter(([layer]) => layer !== 'fuelRisk' || fuelTarget === 'drape').map(([layer, label]) => (
             <button
               key={layer}
               type="button"
@@ -355,6 +407,19 @@ export function Fire3DControl({
             </button>
           ))
         : null}
+      {fuelTarget === 'flat' ? (
+        <button
+          type="button"
+          class="shell-fire3d-layer"
+          data-fuel-risk="flat"
+          aria-pressed={flatFuelOn}
+          title={FUEL_RISK_TITLE}
+          // Off is the Wildfire recipe again, so the display reads Wildfire, not a custom set.
+          onClick={() => (flatFuelOn ? requestCluster('wildfire') : requestLayerOn(FLAT_FUEL_RISK_KEY))}
+        >
+          Fuel risk
+        </button>
+      ) : null}
       <details class="shell-fire3d-details">
         <summary>
           3D information

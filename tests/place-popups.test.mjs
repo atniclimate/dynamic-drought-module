@@ -405,13 +405,13 @@ function square(west, south, size = 0.4) {
   };
 }
 
-/** A map double: the named fills answer their features to any query region. */
-function fakeMap(fills) {
+/** A map double: the named fills answer their features to any query region (or to a whole-map query, options only). */
+function fakeMap(fills, container = { clientWidth: 100_000, clientHeight: 100_000 }) {
   return {
     getLayer: (id) => (Object.prototype.hasOwnProperty.call(fills, id) ? { id } : undefined),
-    queryRenderedFeatures: (_region, options) => options.layers.flatMap((id) => fills[id] ?? []),
+    queryRenderedFeatures: (region, options) => (options ?? region).layers.flatMap((id) => fills[id] ?? []),
     project: ([lng, lat]) => ({ x: (lng + 180) * 10, y: (90 - lat) * 10 }),
-    getContainer: () => ({ clientWidth: 100_000, clientHeight: 100_000 })
+    getContainer: () => container
   };
 }
 
@@ -857,6 +857,76 @@ test('a degraded NIFC read with no perimeter here states no absence; a perimeter
   );
   assert.deepEqual(read.head, [{ text: 'Wildfire' }]);
   assert.deepEqual(read.rows, [{ label: 'Wildfire', text: 'Active mapped perimeter in this area (NIFC WFIGS)', items: ['Fixture Creek'] }]);
+});
+
+test('a place partly off screen states no fire or alert absence for the whole place; a perimeter on screen is still named (audit 10)', () => {
+  // PLACE projects to x 565..620; a 590-pixel-wide map shows only its western half.
+  const halfShown = { clientWidth: 590, clientHeight: 100_000 };
+  const entries = [
+    { key: 'nws-alerts', status: 'no-data', on: true },
+    { key: 'nifc-fires', status: 'ready', on: true }
+  ];
+  const unread = withRegistry(entries, () =>
+    buildPlaceConditionsHtml(fakeMap({ 'nws-alerts-fill': [], 'nifc-fires-fill': [] }, halfShown), [0, 0], PLACE)
+  );
+  assert.deepEqual(unread.head, [{ text: NOT_EVERY_READ }]);
+  assert.deepEqual(unread.rows, [
+    { label: 'NWS alert', text: layerName('nws-alerts'), state: 'no data' },
+    { label: 'Wildfire', text: layerName('nifc-fires'), state: 'live' }
+  ]);
+  assert.equal(unread.hasWarning, false);
+  const read = withRegistry(entries, () =>
+    buildPlaceConditionsHtml(
+      fakeMap(
+        {
+          'nws-alerts-fill': [],
+          'nifc-fires-fill': [{ properties: { attr_IncidentTypeCategory: 'WF', poly_IncidentName: 'Visible Creek' }, geometry: square(-123.2, 46.1) }]
+        },
+        halfShown
+      ),
+      [0, 0],
+      PLACE
+    )
+  );
+  assert.deepEqual(read.head, [{ text: 'Wildfire' }]);
+  assert.deepEqual(read.rows[1], { label: 'Wildfire', text: 'Active mapped perimeter in this area (NIFC WFIGS)', items: ['Visible Creek'] });
+  assert.equal(read.hasWarning, true);
+});
+
+test('a place drawn in several tile pieces is read over every piece, and a piece at the screen edge or no id claims no absence', () => {
+  // A rendered feature's geometry is one tile's piece; WEST (x 565..585) is the clicked one, EAST (x 585..605) the same place's other piece.
+  const PLACE_FILL = 'fixture-place-fill';
+  const WEST = square(-123.5, 46.0, 2);
+  const EAST = square(-121.5, 46.0, 2);
+  const piece = (id, geometry) => ({ type: 'Feature', id, layer: { id: PLACE_FILL }, properties: {}, geometry });
+  const fills = {
+    [PLACE_FILL]: [piece(7, WEST), piece(7, EAST), piece(8, square(-110.0, 40.0, 2))],
+    'nws-alerts-fill': [],
+    'nifc-fires-fill': [
+      { properties: { attr_IncidentTypeCategory: 'WF', poly_IncidentName: 'East Creek' }, geometry: square(-120.5, 46.5) },
+      { properties: { attr_IncidentTypeCategory: 'WF', poly_IncidentName: 'Other Place' }, geometry: OUTSIDE }
+    ]
+  };
+  const entries = [
+    { key: 'nws-alerts', status: 'no-data', on: true },
+    { key: 'nifc-fires', status: 'ready', on: true }
+  ];
+  const whole = withRegistry(entries, () => buildPlaceConditionsHtml(fakeMap(fills), [0, 0], piece(7, WEST)));
+  assert.deepEqual(whole.rows, [
+    { label: 'NWS alert', text: 'No active NWS heat or fire weather watch, warning, or advisory in this area. Only those products are requested.' },
+    { label: 'Wildfire', text: 'Active mapped perimeter in this area (NIFC WFIGS)', items: ['East Creek'] }
+  ]);
+  const unread = [
+    { label: 'NWS alert', text: layerName('nws-alerts'), state: 'no data' },
+    { label: 'Wildfire', text: layerName('nifc-fires'), state: 'live' }
+  ];
+  const quiet = { ...fills, 'nifc-fires-fill': [] };
+  const edge = withRegistry(entries, () =>
+    buildPlaceConditionsHtml(fakeMap(quiet, { clientWidth: 600, clientHeight: 100_000 }), [0, 0], piece(7, WEST))
+  );
+  assert.deepEqual(edge.rows, unread, 'a piece cut by the screen edge');
+  const idless = withRegistry(entries, () => buildPlaceConditionsHtml(fakeMap(quiet), [0, 0], piece(undefined, WEST)));
+  assert.deepEqual(idless.rows, unread, 'a piece with no id to join its others by');
 });
 
 test('a condition layer still loading with no fill: not every layer read, never the nothing-on sentence (Codex B2)', () => {

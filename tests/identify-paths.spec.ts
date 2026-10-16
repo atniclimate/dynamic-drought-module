@@ -68,7 +68,6 @@ const ROOT = process.cwd();
 
 /** Declared with no click popup (interface-chrome-popups-text.md 3.5), each with its reason. */
 const NO_POPUP_MODULES: Readonly<Record<string, string>> = {
-  'src/layers/sst-anomaly.ts': 'a no-op bindPopups',
   'src/layers/usfs-whp.ts': 'a no-op bindPopups',
   'src/layers/heatrisk.ts': 'the Key drawer carries it',
   'src/layers/heatrisk-coverage.ts': 'the Key drawer carries it',
@@ -582,7 +581,9 @@ const CENSUS_BOOTS: readonly (readonly string[])[] = [
   ['nadm-drought'],
   ['cdm-drought'],
   ['drought'],
-  ['spc-fire-weather']
+  ['spc-fire-weather'],
+  ['sst-anomaly'],
+  ['tropical-cyclones']
 ];
 
 /** The adopted station popup's displayed frame root. */

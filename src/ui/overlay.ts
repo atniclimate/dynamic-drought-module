@@ -128,12 +128,15 @@ function announceToastStatus(message: string): void {
   });
 }
 
+let toastFadeTimer: number | undefined;
+let toastHideTimer: number | undefined;
+
 /**
- * Show the toast element with `message` for ~1700 ms, then fade out over
- * 250 ms and set `hidden = true`. Forces a reflow before adding the
- * `.visible` class so the CSS transition runs from the hidden state on
- * every call (matches the vanilla v0.1.2 behavior; if the element was
- * already visible, the timer cycle restarts).
+ * Show the toast element with `message` for ~1700 ms (longer for a long
+ * message), then fade out over 250 ms and set `hidden = true`. Forces a
+ * reflow before adding the `.visible` class so the CSS transition runs from
+ * the hidden state on every call (matches the vanilla v0.1.2 behavior; if
+ * the element was already visible, the timer cycle restarts).
  *
  * Silently no-ops when `#copy-toast` is missing from the DOM so the
  * helper can be called unconditionally during boot wiring.
@@ -148,12 +151,16 @@ export function showToast(message: string): void {
   // Force reflow so the class transition runs from the hidden state.
   void el.offsetWidth;
   el.classList.add('visible');
-  window.setTimeout(() => {
+  // A new toast cancels the last one's pending fade and hide, so it keeps
+  // its own full hold; a long message gets about 55 ms a character to read.
+  window.clearTimeout(toastFadeTimer);
+  window.clearTimeout(toastHideTimer);
+  toastFadeTimer = window.setTimeout(() => {
     el.classList.remove('visible');
-    window.setTimeout(() => {
+    toastHideTimer = window.setTimeout(() => {
       el.hidden = true;
     }, 250);
-  }, 1700);
+  }, Math.min(8000, Math.max(1700, 55 * message.length)));
 }
 
 /**

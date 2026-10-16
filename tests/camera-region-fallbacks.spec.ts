@@ -6,7 +6,11 @@ import { coverageFamilyForGeography } from '../src/config/place-coverage';
 import { resolveStateCode } from '../src/impact/resources';
 import { briefingSourcePolicy } from '../src/impact/source-policy';
 import type { BoundarySelectionContext } from '../src/impact/types';
-import { fetchWaterSupplyClaims, resolveWaterSupplyPoint } from '../src/impact/water-supply';
+import {
+  clearWaterSupplyRowsCache,
+  fetchWaterSupplyClaims,
+  resolveWaterSupplyPoint
+} from '../src/impact/water-supply';
 
 /**
  * Every remaining place decision that can still reach the camera region
@@ -29,6 +33,8 @@ test('water-supply blanks and invalid numbers stay missing while reported zero r
       ['', '', 0], ['  ', '  ', 0], ['N/A', 'N/A', 0],
       ['100', '', 1], ['100', '  ', 1], ['100', 'N/A', 1], ['0', '0', 2]
     ] as const) {
+      // The parsed rows are cached 30 min per URL; each row below is a new upstream answer.
+      clearWaterSupplyRowsCache();
       globalThis.fetch = async () => new Response(
         `ID,Location,FcstPeriod,50PerAvg,CurPerAvg,FcstDate\nBONO3,COLUMBIA - BONNEVILLE DAM,APR-SEP,${forecast},${runoff},2026-10-08`
       );

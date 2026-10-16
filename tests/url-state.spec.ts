@@ -540,7 +540,6 @@ import { fullSiteLayersStudioUrl, fullSitePlaceStudioUrl } from '../src/state/st
 import { FRAMINGS } from '../src/config/framings';
 import { installFakeBrowser } from './map-harness';
 import { stubHeatRiskCatalog } from './helpers';
-import type { Route } from './offline-test';
 
 /** Inbound sidebar= forms and whether the one emitted form survives a write. */
 const SIDEBAR_INBOUND: ReadonlyArray<{ readonly query: string; readonly kept: boolean }> = [
@@ -666,9 +665,11 @@ const RELOAD_PIXEL = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
   'base64'
 );
-const RELOAD_FLOW_ROUTE = /^https:\/\/(?:marine-api|api)\.open-meteo\.com\/v1\//;
 
-/** The SST tile service and the ENSO direction overlay (tests/enso-flow.spec.ts's stubs). */
+/**
+ * The SST tile service (tests/enso-flow.spec.ts's stub). The direction overlay
+ * needs none: ocean currents read the app's own committed frame (public/data/).
+ */
 async function stubEnsoForReload(page: Page): Promise<void> {
   await page.route((url) => url.href.includes('DescribeDomains'), (route) =>
     route.fulfill({
@@ -683,27 +684,6 @@ async function stubEnsoForReload(page: Page): Promise<void> {
     (url) => url.href.includes('GHRSST_L4_MUR') && url.pathname.endsWith('.png'),
     (route) => route.fulfill({ status: 200, contentType: 'image/png', body: RELOAD_PIXEL })
   );
-  await page.route(RELOAD_FLOW_ROUTE, (route: Route) => {
-    const url = new URL(route.request().url());
-    const latitudes = (url.searchParams.get('latitude') ?? '').split(',').map(Number);
-    const longitudes = (url.searchParams.get('longitude') ?? '').split(',').map(Number);
-    const [valueKey = 'value', directionKey = 'direction'] = (
-      url.searchParams.get('current') ?? ''
-    ).split(',');
-    const time = Math.floor(Date.now() / 900_000) * 900;
-    return route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify(
-        latitudes.map((latitude, i) => ({
-          latitude,
-          longitude: longitudes[i],
-          current_units: { time: 'unixtime', [valueKey]: 'm/s', [directionKey]: '°' },
-          current: { time, interval: 900, [valueKey]: 2, [directionKey]: 90 }
-        }))
-      )
-    });
-  });
 }
 
 interface ReloadGroup {

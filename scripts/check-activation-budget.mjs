@@ -129,7 +129,10 @@ const PENDING = 'pending-measurement';
 // force a written reason. Not a latency target; no network profile has
 // been stated for this gate, and a ceiling derived from one would be an
 // owner decision recorded here when it exists.
-const ACTIVATION_HEADROOM = 0.08;
+// Fifty percent by the owner's word of 2026-10-12 ("loosen them up so
+// that we can get a fully functioning tool"): 0.8.0 is every feature
+// working, and 0.8.x re-measures and tightens this back (it was 0.08).
+const ACTIVATION_HEADROOM = 0.5;
 
 /** The enforced budget for a ratified measurement, in kB to one decimal. */
 function budgetForMeasurement(measuredKb) {
@@ -477,6 +480,25 @@ const FEATURE_BUDGETS = [
     measuredJsGzipKb: 26.4,
     networkBytes: 1_316_519,
     requestCount: 3,
+    // The committed NOAA RTOFS surface-current frame (admission rtofs-currents-producer line 10), written by
+    // scripts/build-rtofs-currents.mjs and read same-origin by src/layers/flow/currents.ts: ocean currents are three
+    // requests and 74,399 bytes (the header 1,772, the 1.0 degree grid 19,938 and the 0.3 degree grid 52,689 as gzip;
+    // 248,400 bytes of Int16 inflated), measured 2026-10-13 on the 2026-10-13 00Z frame, so under the network columns
+    // above, which stay the larger kind. Each line is that measurement plus ACTIVATION_HEADROOM; a landing replaces the
+    // frame, and one that crosses a line re-records it here.
+    dataAssets: [
+      { path: 'data/rtofs-surface-currents.json', maxBytes: 2_658 },
+      { path: 'data/rtofs-surface-currents-trop-paci.i16.gz', maxBytes: 29_907 },
+      { path: 'data/rtofs-surface-currents-alaska.i16.gz', maxBytes: 79_033 },
+    ],
+  },
+  {
+    key: 'tropical-cyclones',
+    label: 'NEW 2026-10-13 with ENSO block B3, measured at the build of the first commit (7.9 kB gzip, 8.0 kB after the key and popup fixes, across tropical-cyclones, urls, guards, style-expressions and tropical-presentation; the admission noaa-tropical-cyclones.md line 10 estimate was 11 kB): the active tropical cyclones layer (src/layers/tropical-cyclones.ts with its reader, popup builder and presentation tables) as its own first-use cost. Network, from the admission, not yet measured live: the worst case of fifteen occupied slots, 15 presence reads plus 3 per occupied slot = 60 requests and about 261,690 bytes gzip on the wire (one measured slot, Hurricane Simon EP5, 17,446 bytes, times fifteen), rounded to 300,000; a typical day is 18 requests, an empty season 15 requests of 42 bytes each.',
+    rootModules: ['src/layers/tropical-cyclones.ts'],
+    measuredJsGzipKb: 8.0,
+    networkBytes: 300_000,
+    requestCount: 60,
     dataAssets: [],
   },
 ];
@@ -1745,9 +1767,9 @@ function runSelfTest() {
     }
   }
   // Pure-function directions that need no dist tree.
-  // The derived budget: 8% headroom to one decimal, on the two rows that
+  // The derived budget: 50% headroom to one decimal, on the two rows that
   // share the pmtiles-probe chunk, so the rule is proven by its own numbers.
-  if (budgetForMeasurement(19.3) !== 20.8 || budgetForMeasurement(12.1) !== 13.1 || budgetForMeasurement(0) !== 0) {
+  if (budgetForMeasurement(19.3) !== 29 || budgetForMeasurement(12.1) !== 18.2 || budgetForMeasurement(0) !== 0) {
     console.error(`  self-test FAIL: budgetForMeasurement direction broken (19.3 -> ${budgetForMeasurement(19.3)}, 12.1 -> ${budgetForMeasurement(12.1)})`);
     ok = false;
   }

@@ -8,7 +8,7 @@ import test from 'node:test';
 // the real browser cases cover MapLibre's event and camera ordering.
 function functionBody(path, name) {
   const source = readFileSync(new URL(path, import.meta.url), 'utf8');
-  const body = source.match(new RegExp(`^(?:export )?function ${name}\\([\\s\\S]*?^}`, 'm'))?.[0];
+  const body = source.match(new RegExp(`^(?:export )?(?:async )?function ${name}\\([\\s\\S]*?^}`, 'm'))?.[0];
   assert.ok(body, `${name} is still a source function with its own closing line`);
   return stripTypeScriptTypes(body.replace(/^export\s+/, ''));
 }
@@ -134,7 +134,7 @@ function renderSetup() {
   const source = readFileSync(new URL('../src/layers/telemetry.ts', import.meta.url), 'utf8');
   // On the red base removal is inline in clearMarkers; after the repair it is shared.
   const remove = source.includes('function removeMarker(') ? functionBody('../src/layers/telemetry.ts', 'removeMarker') : '';
-  const functions = new Function(...Object.keys(dependencies), `${remove}\n${functionBody('../src/layers/telemetry.ts', 'clearMarkers')}\n${functionBody('../src/layers/telemetry.ts', 'renderStations')}\nreturn { renderStations, clearMarkers };`)(...Object.values(dependencies));
+  const functions = new Function(...Object.keys(dependencies), `${remove}\n${functionBody('../src/layers/telemetry.ts', 'telemetryMarkerOptions')}\n${functionBody('../src/layers/telemetry.ts', 'clearMarkers')}\n${functionBody('../src/layers/telemetry.ts', 'renderStations')}\nreturn { renderStations, clearMarkers };`)(...Object.values(dependencies));
   const station = { id: 'fixture', coords: [47, -120], color: '#000' };
   const view = { station, freshness: 'unknown', primaryParameterCategory: 'water', networkLabel: 'Fixture' };
   const render = (views) => functions.renderStations({}, views);
@@ -148,7 +148,10 @@ function renderSetup() {
 
 test('an unchanged station keeps its open popup, pending read and single binding through refresh', () => {
   const h = renderSetup();
-  h.render([{ ...h.view }]);
+  // Discovery rebuilds every station object per refresh: equal content, new identity.
+  const rebuilt = { ...h.view.station, coords: [...h.view.station.coords] };
+  assert.notEqual(rebuilt, h.view.station);
+  h.render([{ ...h.view, station: rebuilt }]);
   assert.ok(h.markersByStationId.get('fixture') === h.marker);
   assert.equal(h.marker.popup.open, true);
   assert.equal(h.controller.signal.aborted, false);
@@ -182,3 +185,62 @@ for (const change of ['station', 'freshness', 'primaryParameterCategory', 'netwo
     assert.deepEqual(h.bound, [h.marker, replacement]);
   });
 }
+
+test('a wind marker turns with the map: map-aligned, upright, rotated by the served direction', () => {
+  // MapLibre then draws rotateZ(rotation - bearing) on every map turn.
+  const options = new Function(`${functionBody('../src/layers/telemetry.ts', 'telemetryMarkerOptions')}\nreturn telemetryMarkerOptions;`)();
+  const element = { kind: 'marker' };
+  assert.deepEqual(options(element, { windDirectionDeg: 295 }), { element, rotationAlignment: 'map', pitchAlignment: 'viewport', rotation: 295 });
+  assert.deepEqual(options(element, null), { element });
+  const source = readFileSync(new URL('../src/layers/telemetry.ts', import.meta.url), 'utf8');
+  assert.match(source, /new maplibregl\.Marker\(telemetryMarkerOptions\(el, glyphWind\)\)/);
+  assert.ok(!source.includes('rotate(${wind.windDirectionDeg}deg)'), 'the glyph no longer rotates itself');
+});
+
+test('a progress paint never removes a marker: only the final answer does, and teardown forgets it', async () => {
+  const h = renderSetup();
+  const record = (id) => ({ station: { id, coords: [47, -120], color: '#000' } });
+  let discover;
+  const dependencies = {
+    renderStations: h.renderStations, AbortController, console, clearTimeout,
+    reportStatus() {}, curatedTelemetryEntries: () => [], updateCapNote() {}, hideCapNote() {},
+    viewportBounds: () => ({}), viewportCenter: () => [47, -120],
+    mergeTelemetryStations: (_curated, records) => [...new Map(records.map((r) => [r.station.id, r])).values()],
+    capDiscoveredStations: (entries) => ({ entries, totalDiscovered: entries.length }),
+    markerViewForEntry: (entry) => ({ station: entry.station, freshness: 'unknown', primaryParameterCategory: 'water', networkLabel: 'Fixture' }),
+    discoverStationsForViewport: (request) => discover(request)
+  };
+  // One instance: the module variable spans runs, as it does in the browser.
+  const { run, cancelActivation } = new Function(...Object.keys(dependencies), `let currentDiscoveryController = null; let moveendDebounce = null; let lastFinalRecords = [];
+${functionBody('../src/layers/telemetry.ts', 'runDiscoveryForCurrentViewport')}
+${functionBody('../src/layers/telemetry.ts', 'cancelActivation')}
+return { run: runDiscoveryForCurrentViewport, cancelActivation };`)(...Object.values(dependencies));
+  const progressThenFinal = async (progress, final, check) => {
+    let failure = null;
+    discover = async (request) => {
+      request.onProgress(progress);
+      // run() catches a throw from here, so carry the failure out instead.
+      try { check(); } catch (error) { failure = error; }
+      return { status: 'ok', records: final, failedSources: [] };
+    };
+    await run({});
+    if (failure) throw failure;
+  };
+  discover = async () => ({ status: 'ok', records: [record('fixture'), record('other')], failedSources: [] });
+  await run({});
+  assert.equal(h.markersByStationId.size, 2);
+  const other = h.markersByStationId.get('other');
+  await progressThenFinal([record('other')], [record('fixture'), record('other')], () => {
+    assert.ok(h.markersByStationId.get('fixture') === h.marker, 'the source that has not answered keeps its marker');
+    assert.equal(h.marker.popup.open, true);
+    assert.equal(h.controller.signal.aborted, false);
+    assert.deepEqual(h.bound, [h.marker, other], 'and no marker is bound twice');
+  });
+  await progressThenFinal([record('other')], [record('other')], () => {});
+  assert.equal(h.marker.removed, true, 'the final answer removes the marker it no longer holds');
+  assert.equal(h.markersByStationId.has('fixture'), false);
+  cancelActivation();
+  await progressThenFinal([record('third')], [record('third')], () => {
+    assert.equal(h.markersByStationId.has('other'), false, 'after teardown a progress paint does not resurrect the old answer');
+  });
+});

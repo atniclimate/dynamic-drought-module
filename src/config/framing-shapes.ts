@@ -22,9 +22,8 @@
  * equirectangular the ratified spike prototype used.
  *
  * Region fills belong in src/config/palette.ts (DDM-owned palette
- * doctrine), never inline here; lake cutouts render
- * pointer-transparent; Hawaii renders as the ratified enlarged inset
- * whose click fits REGIONS.hawaii, so it has island blobs, not a ring.
+ * doctrine), never inline here; Hawaii renders as the ratified enlarged
+ * inset whose click fits REGIONS.hawaii, so it has island blobs, not a ring.
  */
 
 /** [longitude, latitude] */
@@ -627,80 +626,6 @@ export const FRAMING_ANALYSIS_AREAS: Readonly<
   ],
   mexico: [{ shape: analysisRectangle(-119, 14, -86, 33), countries: ['MX'] }],
 };
-
-/** Schematic lake cutouts (orientation anchors only; pointer-transparent). */
-export const LAKE_SHAPES: readonly (readonly LonLat[])[] = [
-  [
-    [-92.1, 46.75],
-    [-89.6, 48],
-    [-88, 48.7],
-    [-84.8, 47],
-    [-84.4, 46.5],
-    [-87, 46.5],
-    [-87.4, 46.62],
-    [-90.5, 46.6],
-  ],
-  [
-    [-87.3, 41.7],
-    [-87.75, 43],
-    [-87.6, 44.8],
-    [-86.6, 45.9],
-    [-85.8, 45.9],
-    [-86.3, 44.2],
-    [-86.2, 42.5],
-  ],
-  [
-    [-84.6, 46.1],
-    [-82.6, 45.9],
-    [-80.8, 45.7],
-    [-80, 44.8],
-    [-81.7, 44.5],
-    [-82.4, 43],
-    [-83.5, 43.9],
-    [-84.1, 45],
-  ],
-  [
-    [-83.1, 41.9],
-    [-83, 42.3],
-    [-81.5, 42.7],
-    [-79.8, 42.85],
-    [-78.9, 42.85],
-    [-80.1, 42.2],
-    [-81.8, 41.6],
-    [-82.8, 41.6],
-  ],
-  [
-    [-79.7, 43.25],
-    [-79.2, 43.5],
-    [-77.5, 43.9],
-    [-76.3, 44.1],
-    [-76.5, 43.5],
-    [-77.8, 43.35],
-    [-79, 43.25],
-  ],
-  [
-    [-96.7, 50.45],
-    [-98.2, 52],
-    [-98.4, 53.2],
-    [-97.7, 53.8],
-    [-97, 52.5],
-    [-96.4, 50.9],
-  ],
-  [
-    [-117, 61.5],
-    [-113.5, 61.2],
-    [-109.5, 62.9],
-    [-113, 62.5],
-    [-116, 62.3],
-  ],
-  [
-    [-123.5, 65.2],
-    [-119.5, 64.8],
-    [-118, 66.5],
-    [-121.5, 66.9],
-    [-124, 66],
-  ],
-];
 
 /** The Hawaii inset island blobs (true relative position; the dashed
  * inset frame is the hit target and carries the one ratified label). */

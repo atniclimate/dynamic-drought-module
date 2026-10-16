@@ -1,0 +1,6 @@
+entries:
+  - id: first
+    retrieved: 2026-07-01T00:00:00Z
+    url: "https://a.example/one"
+  - id: last
+    url: "https://a.example/moved"

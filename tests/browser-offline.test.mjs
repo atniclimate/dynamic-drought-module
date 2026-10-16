@@ -53,7 +53,7 @@ test('the context fixture installs the external HTTP backstop before use without
     assert.equal(routes.length, 1, 'backstop is ready before test fixtures register');
     // Playwright runs a later context route first; fixtures keep their precedence.
     await actual.route((url) => url.pathname === '/specific', () => {});
-  });
+  }, { project: { name: 'chromium' }, status: 'passed' });
   assert.equal(used, true);
   const [{ matches, handle }] = routes;
   for (const address of [
@@ -72,6 +72,22 @@ test('the context fixture installs the external HTTP backstop before use without
   let response;
   await handle({ fulfill: async (value) => { response = value; } });
   assert.deepEqual(response, { status: 503, contentType: 'text/plain', body: 'Synthetic offline response' });
+});
+
+test('a passing 3D test drains every open page before the built-in context closes', async () => {
+  await sharedFixture();
+  const fixture = globalThis.__offlineFixtures.context;
+  const drained = [];
+  const page = (name) => ({ evaluate: async () => { drained.push(name); if (name === 'crashed') throw new Error('Target crashed'); } });
+  const context = { route: async () => {}, pages: () => [page('crashed'), page('scene')] };
+  await fixture({ context }, async () => {
+    assert.deepEqual(drained, [], 'nothing drains while the test runs');
+  }, { project: { name: 'chromium-3d' }, status: 'passed' });
+  assert.deepEqual(drained, ['crashed', 'scene'], 'each open page drains, and a crashed one does not stop the rest');
+  drained.length = 0;
+  await fixture({ context }, async () => {}, { project: { name: 'chromium-3d' }, status: 'timedOut' });
+  await fixture({ context }, async () => {}, { project: { name: 'chromium' }, status: 'passed' });
+  assert.deepEqual(drained, [], 'a failed 3D test restarts its worker, and the flat projects keep their teardown');
 });
 
 test('local continuation preserves its network path while external lookalike assets fall back', async () => {

@@ -923,9 +923,12 @@ function finiteNumber(value: unknown): number | null {
   return Number.isFinite(num) ? num : null;
 }
 
-/** Whole units, thousands-separated (sub-acre precision exceeds typical perimeter accuracy). */
+/**
+ * Whole units, thousands-separated (sub-acre precision exceeds typical
+ * perimeter accuracy); a positive value below 1 reads "under 1", never "0".
+ */
 function wholeUnits(value: number): string {
-  return value.toLocaleString('en-US', { maximumFractionDigits: 0 });
+  return value > 0 && value < 1 ? 'under 1' : value.toLocaleString('en-US', { maximumFractionDigits: 0 });
 }
 
 /**
@@ -936,7 +939,10 @@ function wholeUnits(value: number): string {
 function sizeRow(label: string, value: unknown): RecordSize | null {
   const acres = finiteNumber(value);
   if (acres === null) return null;
-  return { label, text: `${wholeUnits(acres)} acres (about ${wholeUnits(acres * HECTARES_PER_ACRE)} ha)` };
+  const shown = wholeUnits(acres);
+  const unit = shown === '1' || shown === 'under 1' ? 'acre' : 'acres';
+  const hectares = wholeUnits(acres * HECTARES_PER_ACRE);
+  return { label, text: `${shown} ${unit} (${hectares === 'under 1' ? '' : 'about '}${hectares} ha)` };
 }
 
 /**

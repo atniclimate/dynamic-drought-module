@@ -9,7 +9,7 @@ import type * as maplibregl from 'maplibre-gl';
  *
  *   background -> basemap (OSM fallback)
  *     -> basemap-satellite (recent NOAA) -> wildfire-dryness-ground -> hillshade
- *     -> condition surfaces -> event overlays -> reference boundaries
+ *     -> condition surfaces (the 3D edge fade last) -> event overlays -> reference boundaries
  *     -> reference labels
  *
  * Three mechanisms enforce it:
@@ -44,20 +44,26 @@ const TOP_LABEL_IDS: readonly string[] = ['us-places-labels'];
  * Condition surfaces, bottom to top. Every known surface is named here so
  * one late network response cannot paint over sovereign and reference
  * outlines. Dynamic SST frames insert immediately below the named Nino line
- * in their owning module and therefore inherit the same ruled position.
+ * in their owning module and therefore inherit the same ruled position;
+ * `reassertThematicOrder` leaves them where they are and re-seats the chain
+ * above them.
  */
 export const CONDITION_SURFACE_IDS: readonly string[] = [
   'whp-2023',
   'gridded-index-raster',
   'sst-anomaly',
+  'nino34-box-fill',
   'nino34-box-line',
   'nino34-box-label',
-  // The ENSO direction overlay's seat: the interim ocean-current arrows
-  // (src/layers/enso-flow.ts), then the wind and wave paths' still form and
-  // node arrows and their moving ribbons (src/layers/flow/still.ts and
-  // index.ts; ENSO-FLOW-PLAN E2-1). One kind draws at a time.
-  'enso-flow-casing',
-  'enso-flow-arrows',
+  // The ENSO "Ocean & atmosphere" overlay's seat (src/layers/enso-flow.ts):
+  // the precipitable water shade, then the wind, wave and current paths'
+  // still form and node arrows, then their moving ribbons
+  // (src/layers/flow/still.ts and index.ts; ENSO-FLOW-PLAN E2-1). One kind
+  // draws at a time. The shade sits above the Nino box because a dated SST
+  // frame inserts directly under the box's line: a seat any lower would put
+  // the shade under that frame. It stays under every event overlay (the
+  // tropical cyclones), every outline and the labels.
+  'flow-shade',
   'flow-still-casing',
   'flow-still',
   'flow-still-marks',
@@ -79,7 +85,11 @@ export const CONDITION_SURFACE_IDS: readonly string[] = [
   'usdm-frame-b-fill',
   'usdm-frame-b-outline',
   'usdm-change-fill',
-  'usdm-change-outline'
+  'usdm-change-outline',
+  // The 3D scene's edge fade (src/map/fire3d.ts, mirrored literal): last, so it
+  // veils the seam above the drapes whose stretched texels climb the terrain
+  // box's edge face, still below power lines, fires, boundaries and labels.
+  'fire3d-terrain-edge'
 ];
 
 /**
@@ -124,7 +134,14 @@ export const EVENT_OVERLAY_IDS: readonly string[] = [
   'nifc-prescribed-outline',
   'nifc-other-outline',
   'nws-alerts-fill',
-  'nws-alerts-outline'
+  'nws-alerts-outline',
+  // ENSO block B3, above the SST frames, the Nino 3.4 box and the flow
+  // paths, below every reference boundary (src/layers/tropical-cyclones.ts).
+  'tropical-cyclones-cone-fill',
+  'tropical-cyclones-cone-line',
+  'tropical-cyclones-track',
+  'tropical-cyclones-ww',
+  'tropical-cyclones-points'
 ];
 
 /**
@@ -177,6 +194,9 @@ const BELOW_THEMATIC_IDS: readonly string[] = [
   'ecoregions-l4-outline'
 ];
 
+/** The id prefix of a dated SST frame's layer (src/layers/sst-anomaly.ts `frameSourceId`, mirrored literal). */
+const SST_FRAME_ID_PREFIX = 'sst-frame-';
+
 /**
  * The id of the first style layer whose id is NOT in `skip`, or undefined
  * when every layer is skipped (the new layer then appends at the top,
@@ -212,7 +232,10 @@ export function reassertLabelOrder(map: maplibregl.Map): void {
  * network fetch resolved first.
  */
 export function reassertThematicOrder(map: maplibregl.Map): void {
-  const skip = [...BOTTOM_STACK_IDS, ...BELOW_THEMATIC_IDS, ...THEMATIC_STACK_IDS];
+  // A dated SST frame sits inside the chain without being a member of it. Taken as the anchor it would pull
+  // every member, the outlines included, beneath it; skipped, it stays put and the chain re-seats above it.
+  const frames = (map.getStyle().layers ?? []).map((l) => l.id).filter((id) => id.startsWith(SST_FRAME_ID_PREFIX));
+  const skip = [...BOTTOM_STACK_IDS, ...BELOW_THEMATIC_IDS, ...THEMATIC_STACK_IDS, ...frames];
   const anchor = firstLayerIdAbove(map, skip);
   for (const id of THEMATIC_STACK_IDS) {
     if (!map.getLayer(id)) continue;

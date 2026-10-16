@@ -26,7 +26,6 @@ import type { FeatureCollection, GeoJsonProperties } from 'geojson';
 import { URLS } from '../config/urls';
 import {
   HMS_DENSITY_PRESENTATION,
-  HMS_OVERVIEW_QUALIFICATION,
   buildHmsSmokeFillPaint,
   parseArcGisPolygonFeatureCollection,
   resolveHmsDensityClass,
@@ -288,8 +287,7 @@ async function load(map: maplibregl.Map, initial: boolean): Promise<void> {
             color: HMS_DENSITY_PRESENTATION.Unknown.color,
             label: HMS_DENSITY_PRESENTATION.Unknown.legendLabel
           }
-        ],
-        HMS_OVERVIEW_QUALIFICATION
+        ]
       )
   });
   if (truncated) {

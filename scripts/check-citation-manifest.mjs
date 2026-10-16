@@ -30,7 +30,7 @@ const LEDGER_PATH = join('planning', 'references', 'register.yaml');
 
 /** The `url:` the private ledger records for one `- id:` block, or null. */
 function ledgerUrl(yaml, id) {
-  const block = new RegExp(`^  - id: ${id}\\s*$([\\s\\S]*?)(?=^  - id: |\\Z)`, 'm').exec(yaml);
+  const block = new RegExp(`^  - id: ${id}\\s*$([\\s\\S]*?)(?=^  - id: |(?![\\s\\S]))`, 'm').exec(yaml);
   if (!block) return null;
   const url = /^\s*url:\s*"([^"]+)"\s*$/m.exec(block[1]);
   return url ? url[1] : null;

@@ -19,7 +19,7 @@ import type { GeoJsonProperties } from 'geojson';
 
 import { registry } from '../../state/registry';
 import { timeline } from '../../state/timeline';
-import { NADM_CATEGORIES, USDM_CATEGORIES } from '../../config/palette';
+import { NADM_CATEGORIES, USDM_CATEGORIES, readUsdmDm } from '../../config/palette';
 import { getLayerDef } from '../../config/layers';
 import { classifyNifcIncidentType } from '../../config/wildfire-presentation';
 import { resolveStatusPillText } from './pill-text';
@@ -87,16 +87,6 @@ export interface Metric {
 // Property readers (defensive; the ESRI GeoJSON casing is uppercase canonical
 // with lowercase fallbacks observed in the layer modules)
 // ---------------------------------------------------------------------------
-
-function readInt(raw: unknown): number | null {
-  const n = typeof raw === 'number' ? raw : Number(raw);
-  return Number.isFinite(n) ? Math.trunc(n) : null;
-}
-
-function readDm(props: GeoJsonProperties): number | null {
-  if (!props) return null;
-  return readInt(props['DM'] ?? props['dm']);
-}
 
 function readMapDateMs(props: GeoJsonProperties): number | null {
   if (!props) return null;
@@ -312,7 +302,7 @@ export function droughtMetric(
   let maxDm = -1;
   let dateMs: number | null = null;
   for (const f of feats) {
-    const dm = readDm(f.properties);
+    const dm = readUsdmDm(f.properties);
     if (dm !== null && dm > maxDm) maxDm = dm;
     const d = readMapDateMs(f.properties);
     if (d !== null) dateMs = d; // every feature carries the same weekly MapDate
