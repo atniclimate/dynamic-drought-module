@@ -696,7 +696,7 @@ export function bindPopups(map: maplibregl.Map): void {
     respond: (feature, click, map) => {
       const props: GeoJsonProperties = feature.properties ?? null;
       return {
-        model: buildAiannhPopupModel(props, buildPlaceConditionsHtml(map, click.point, feature.geometry)),
+        model: buildAiannhPopupModel(props, buildPlaceConditionsHtml(map, click.point, feature)),
         selection: buildBoundaryContext('aiannh', props, feature.geometry, click.lngLat),
         // An id-less feature clears any prior emphasis (the old
         // emphasizePlace contract) rather than lighting an unknown one.

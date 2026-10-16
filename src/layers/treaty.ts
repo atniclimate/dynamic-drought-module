@@ -220,7 +220,7 @@ export function bindPopups(map: maplibregl.Map): void {
       const props: GeoJsonProperties = feature.properties ?? {};
       const featureName = pickTreatyName(props) ?? 'Treaty Area';
       return {
-        model: buildTreatyPopupModel(props, featureName, buildPlaceConditionsHtml(map, click.point, feature.geometry)),
+        model: buildTreatyPopupModel(props, featureName, buildPlaceConditionsHtml(map, click.point, feature)),
         selection: buildBoundaryContext('treaty', props, feature.geometry, click.lngLat, featureName),
         // An id-less feature clears any prior emphasis (the old
         // emphasizePlace contract) rather than lighting an unknown one.

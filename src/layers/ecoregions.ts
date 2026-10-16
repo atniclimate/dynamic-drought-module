@@ -161,7 +161,7 @@ export function bindPopups(map: maplibregl.Map): void {
       const level = levelForFill(feature.layer.id);
       const name = pickName(props, level);
       const parentL3 = level === 'IV' ? pickL3Name(props) : null;
-      const conditions = buildPlaceConditionsHtml(respondMap, click.point, feature.geometry);
+      const conditions = buildPlaceConditionsHtml(respondMap, click.point, feature);
       return {
         model: buildEcoregionPopupModel(name, conditions, parentL3 ? { level, parentL3 } : { level }),
         selection: buildBoundaryContext('ecoregion', props, feature.geometry, click.lngLat, name)

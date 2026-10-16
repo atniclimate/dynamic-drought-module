@@ -213,6 +213,28 @@ function flattenLngLat(geometry: Geometry | null | undefined): Array<[number, nu
   return [];
 }
 
+/** The clicked place as a caller holds it: its whole geometry, or the rendered feature that was clicked. */
+type PlaceInput = Geometry | { readonly type: 'Feature'; readonly id?: string | number | undefined; readonly layer: { readonly id: string }; readonly geometry: Geometry };
+
+/**
+ * The clicked place's geometry over every piece the map has drawn of it. A
+ * rendered feature's geometry is only the piece inside one tile, so every
+ * rendered feature of the same layer and id is joined into one MultiPolygon;
+ * a feature with no id cannot be joined, so its one piece is kept and marked
+ * `partial` (no absence is claimed for it). A bare geometry is taken as the
+ * caller's whole place.
+ */
+function placeGeometry(map: maplibregl.Map, input: PlaceInput | null): { geometry: Geometry | null; partial: boolean } {
+  if (input === null) return { geometry: null, partial: false };
+  if (input.type !== 'Feature') return { geometry: input, partial: false };
+  if (input.id === undefined || input.id === null) return { geometry: input.geometry, partial: true };
+  const pieces = map.queryRenderedFeatures({ layers: [input.layer.id] }).filter((f) => f.id === input.id);
+  const polygons = [input.geometry, ...pieces.map((f) => f.geometry)].flatMap((g) =>
+    g.type === 'Polygon' ? [g.coordinates] : g.type === 'MultiPolygon' ? g.coordinates : []
+  );
+  return { geometry: { type: 'MultiPolygon', coordinates: polygons }, partial: false };
+}
+
 /**
  * The clicked boundary feature's OWN screen-space bounding box, clamped to
  * the map container -- the reachability fix in the module doc above. Every
@@ -269,8 +291,8 @@ function screenBoxForGeometry(
       [clampedMinX, clampedMinY],
       [clampedMaxX, clampedMaxY]
     ],
-    // Part of the place lies off screen, where nothing is rendered to query.
-    clipped: clampedMinX !== minX || clampedMaxX !== maxX || clampedMinY !== minY || clampedMaxY !== maxY
+    // Part of the place lies off screen (or reaches its edge), where nothing is rendered to query.
+    clipped: minX <= 0 || minY <= 0 || maxX >= container.clientWidth || maxY >= container.clientHeight
   };
 }
 
@@ -842,8 +864,9 @@ const ROW_BUILDERS: Readonly<Record<PlaceConditionRowKey, (context: RowContext) 
  * point. `point` is the click's screen-pixel position, used point-exact
  * for drought (matching `fire-context.ts`'s convention: a boundary always
  * outranks the lowest-ranked `condition-surface` kind, so the exact pixel
- * is always reachable there). `geometry` is the CLICKED FEATURE's own
- * GeoJSON geometry, when the caller has it; alerts and fires are read
+ * is always reachable there). `clicked` is the CLICKED rendered feature
+ * (its pieces in every tile are joined, `placeGeometry`) or a whole place
+ * geometry, when the caller has one; alerts and fires are read
  * against ITS screen-space bounding box instead of the bare point (see the
  * REACHABILITY FINDING in this module's header) so that a real warning
  * covering the place, not only the exact pixel, is not missed, and are
@@ -857,7 +880,7 @@ const ROW_BUILDERS: Readonly<Record<PlaceConditionRowKey, (context: RowContext) 
 export function buildPlaceConditionsHtml(
   map: maplibregl.Map,
   point: maplibregl.PointLike,
-  geometry?: Geometry | null
+  clicked?: PlaceInput | null
 ): PlaceConditions {
   const rowsByKey: (readonly MarkedRow[])[] = [];
   let hasWarning = false;
@@ -866,12 +889,13 @@ export function buildPlaceConditionsHtml(
   // retrieves, the polygon attributes. When there is no box there is no
   // polygon to attribute against either, and the bare-point read is already
   // exact, so `place` is null and the scope is the pixel.
-  const fit = screenBoxForGeometry(map, geometry ?? null);
+  const { geometry, partial } = placeGeometry(map, clicked ?? null);
+  const fit = screenBoxForGeometry(map, geometry);
   const region: QueryRegion = fit?.box ?? point;
-  const place: Geometry | null = fit === null ? null : (geometry ?? null);
+  const place: Geometry | null = fit === null ? null : geometry;
   const scope: ClaimScope = place === null ? 'point' : 'area';
-  // A box cut to the screen edges read only part of the place, so no box read answers for its absence.
-  const whole = fit === null || !fit.clipped;
+  // A box cut to the screen edges, or one piece of a place that could not be joined, read only part of the place, so no box read answers for its absence.
+  const whole = fit === null || (!fit.clipped && !partial);
 
   // Every cluster's declared row, in table order (DR-113): the block is
   // mode-agnostic, so a row is listed whenever its layer is on.
