@@ -5,9 +5,9 @@
  "product": "surface current, u (east) and v (north)",
  "level": "0 m below sea level",
  "units": "m s-1",
- "run": "2026-10-13T00:00:00.000Z",
+ "run": "2026-10-15T00:00:00.000Z",
  "forecastHour": 1,
- "valid": "2026-10-13T01:00:00.000Z",
+ "valid": "2026-10-15T01:00:00.000Z",
  "encoding": {
   "type": "int16",
   "endian": "little",
@@ -29,11 +29,11 @@
    "ny": 80,
    "maskedNodes": 718,
    "bytes": 38400,
-   "gzipBytes": 19938,
+   "gzipBytes": 20026,
    "source": {
-    "url": "https://nomads.ncep.noaa.gov/pub/data/nccf/com/rtofs/prod/rtofs.20261013/rtofs_glo.t00z.f024_trop_paci_lowres_std.grb2",
-    "bytes": 1869343,
-    "sha256": "4820743678168fa7f69ae5c7716acf976dce6ef4f72a53115afd04ff80e7fa41"
+    "url": "https://nomads.ncep.noaa.gov/pub/data/nccf/com/rtofs/prod/rtofs.20261015/rtofs_glo.t00z.f024_trop_paci_lowres_std.grb2",
+    "bytes": 1824920,
+    "sha256": "a7791e8cd9c6c4a26a1ab6a0bec70526182a84706c9910bbd7599ac73c3dc3c0"
    }
   },
   {
@@ -47,11 +47,11 @@
    "ny": 150,
    "maskedNodes": 15120,
    "bytes": 210000,
-   "gzipBytes": 52689,
+   "gzipBytes": 54945,
    "source": {
-    "url": "https://nomads.ncep.noaa.gov/pub/data/nccf/com/rtofs/prod/rtofs.20261013/rtofs_glo.t00z.f024_alaska_std.grb2",
-    "bytes": 10746982,
-    "sha256": "d85bcf9e06c69a738ad26fd14f69db6c11696b9b3532518a383f485cc23c479c"
+    "url": "https://nomads.ncep.noaa.gov/pub/data/nccf/com/rtofs/prod/rtofs.20261015/rtofs_glo.t00z.f024_alaska_std.grb2",
+    "bytes": 10877798,
+    "sha256": "2f34e21411d66c06579ad3049ea3a95a1264dbed2622593efdfd3696d93951f3"
    }
   }
  ],
