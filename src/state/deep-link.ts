@@ -274,7 +274,7 @@ export async function openStateBriefing(
     feature.geometry,
     lngLat
   );
-  const context = bbox ? { ...rawContext, bbox } : rawContext;
+  const context = bbox ? { ...rawContext, bbox, pointInsidePlace: true } : rawContext;
   if (opts.summaryFirst) {
     setPlaceSelection({ label: context.title, context });
     // The shared decision: on this branch `panelWillOpen` is exactly

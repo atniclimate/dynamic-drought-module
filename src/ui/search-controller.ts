@@ -252,7 +252,7 @@ async function locateTribalLandArea(map: maplibregl.Map, larName: string): Promi
     aggregateGeometry,
     lngLat
   );
-  const context = bbox ? { ...rawContext, bbox } : rawContext;
+  const context = bbox ? { ...rawContext, bbox, pointInsidePlace: true } : rawContext;
   setPlaceSelection({ label: context.title, context });
   if (isSheetActive() && getViewMode() === 'brief') openImpactPanel(context);
   showLocatedBoundary(map, aggregateGeometry);

@@ -453,8 +453,14 @@ export interface BoundarySelectionContext {
   readonly title: string;
   /** The clicked feature's raw GeoJSON properties (may be null). */
   readonly properties: Readonly<Record<string, unknown>> | null;
-  /** Click location in WGS 84. */
+  /** Click location in WGS 84, or a point inside the place when `pointInsidePlace` is set. */
   readonly lngLat: { readonly lng: number; readonly lat: number };
+  /**
+   * True when `lngLat` is a point the app chose inside the selected place
+   * (`representativePoint`: a deep link, a search, a Place Studio selection),
+   * not a click, so point reads must not say "the clicked point". Omitted for a click.
+   */
+  readonly pointInsidePlace?: boolean;
   /**
    * Compatibility feature bounding box `[west, south, east, north]`, when
    * derivable. A crossing geometry retains its naive min/max walk here.

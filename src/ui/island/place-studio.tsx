@@ -345,7 +345,7 @@ function resolvedSelection(
     title
   );
   return {
-    context: { ...rawContext, bbox },
+    context: { ...rawContext, bbox, pointInsidePlace: true },
     geometry,
     bbox
   };

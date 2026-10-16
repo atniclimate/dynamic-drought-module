@@ -237,6 +237,23 @@ test('a USDM point with no polygon says the popup sentence and never rules droug
   });
 });
 
+test('a selected place reads USDM at a point inside it; a click keeps the clicked point', async () => {
+  const inside = { ...place(-120, 47), pointInsidePlace: true };
+  await withFetch(() => jsonResponse(collection([])), async () => {
+    const [claim] = (await sources.fetchUsdmClaims(inside, signal())).claims;
+    assert.equal(claim.text, 'No D0-D4 category polygon at a point inside the selected place (U.S. Drought Monitor). This client has no analyzed-area mask, so this does not confirm no drought.');
+    assert.equal(claim.support.reporting, 'the USDM polygon at a point inside the selected place');
+  });
+  for (const [context, at] of [[inside, 'at a point inside the selected place'], [place(-120, 47), 'at the clicked point']]) {
+    await withFetch(() => jsonResponse(collection([feature({ DM: 2 })])), async () => {
+      const claims = (await sources.fetchUsdmClaims(context, signal())).claims;
+      assert.equal(claims.length, 2);
+      for (const claim of claims) assert.equal(claim.support.reporting, `the USDM polygon ${at}`);
+      assert.equal(claims[1].lineage[0], `USDM category ${at}`);
+    });
+  }
+});
+
 test('USDM missing or invalid categories cannot become D0 or an absence claim', async (t) => {
   t.mock.method(console, 'warn', () => {});
   for (const dm of [null, '', '  ', false, true, [], {}, -1, 5, 1.5, 0, '0', 4]) {

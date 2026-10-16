@@ -400,6 +400,7 @@ test.describe('rendered briefing under the contract', () => {
     // legend section (support.legendKey: 'usdm').
     await expect(usdmClaim.first()).toContainText('Method:');
     await expect(usdmClaim.first()).toContainText('D0 to D4 by percentile');
+    await expect(usdmClaim.first()).toContainText('Support: the USDM polygon at a point inside the selected place');
     const usdmLegendLink = usdmClaim.first().locator('a[data-legend-key="usdm"]');
     await expect(usdmLegendLink).toBeVisible();
     // DDM-P13-T02 F4: `usdm` is role: 'surface' (src/config/layers.ts), so

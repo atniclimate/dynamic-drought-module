@@ -475,6 +475,8 @@ export async function fetchUsdmClaims(
   const url = `${URLS.usdmFeatureServer}/query?${esriPointQuery(lng, lat, USDM_OUT_FIELDS).toString()}`;
   const source = 'U.S. Drought Monitor (NDMC / NOAA / USDA)';
   const sourceUrl = 'https://droughtmonitor.unl.edu/';
+  // Where the read is: the user's click, or a point the app chose inside a selected place.
+  const at = context.pointInsidePlace ? 'at a point inside the selected place' : 'at the clicked point';
 
   try {
     const json: unknown = await fetchJson(url, GEOJSON_ACCEPT, signal);
@@ -505,7 +507,7 @@ export async function fetchUsdmClaims(
         mapDate === null
           ? { retrieved: todayIso() }
           : { valid: isoDayUtc(mapDate), retrieved: todayIso() },
-      support: { reporting: 'the USDM polygon at the clicked point' }
+      support: { reporting: `the USDM polygon ${at}` }
     };
     // "this week's map" is only true until Thursday's release: NDMC publishes
     // on Thursday using data through the previous Tuesday morning, so the map
@@ -520,8 +522,8 @@ export async function fetchUsdmClaims(
         ok: true,
         claims: [
           makeClaim({
-            // The popup's no-polygon sentence (popup-conditions.ts), word for word.
-            text: 'No D0-D4 category polygon here (U.S. Drought Monitor). This client has no analyzed-area mask, so this does not confirm no drought.',
+            // For a click, the popup's no-polygon sentence (popup-conditions.ts), word for word.
+            text: `No D0-D4 category polygon ${context.pointInsidePlace ? at : 'here'} (U.S. Drought Monitor). This client has no analyzed-area mask, so this does not confirm no drought.`,
             ...usdmShared
           })
         ]
@@ -572,7 +574,7 @@ export async function fetchUsdmClaims(
           // attribute (DR-058 a): "ddm-drought-impact-modeling causal-chain
           // reads" was internal vocabulary inside a public claim.
           lineage: [
-            'USDM category at the clicked point',
+            `USDM category ${at}`,
             'the documented USDM impact profile for that category, read through the DDM drought-impact model'
           ],
           lineageRef: 'ddm-drought-impact-modeling',
