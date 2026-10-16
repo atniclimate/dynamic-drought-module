@@ -120,6 +120,9 @@ function coverageCue(source: string): string | null {
   return tail && tail !== source ? tail : null;
 }
 
+/** Rows whose bundled archive is regional while the layer reads `live` everywhere. */
+const COVERAGE_CUE_KEYS: ReadonlySet<string> = new Set(['hillshade', 'ecoregions']);
+
 function LayerRow({
   def,
   controller,
@@ -132,7 +135,7 @@ function LayerRow({
   const id = `${studio ? 'studio-' : ''}layer-toggle-${def.key}`;
   const isOn = checked.value.get(def.key) ?? false;
   const status = statuses.value.get(def.key);
-  const coverage = def.key === 'hillshade' ? coverageCue(def.source) : null;
+  const coverage = COVERAGE_CUE_KEYS.has(def.key) ? coverageCue(def.source) : null;
 
   const onChange = (event: Event): void => {
     const input = event.currentTarget as HTMLInputElement;

@@ -281,7 +281,11 @@ const DROUGHT_CONDITIONS_DEF: LayerDef = {
 
 export const LAYER_DEFS: readonly LayerDef[] = [
   { key: 'hydrography', product: 'hydrography', name: 'Hydrography', source: 'OpenStreetMap (Overpass)', role: 'reference', defaultOn: false, load: () => import('../layers/hydrography') },
-  { key: 'ecoregions', product: 'ecoregions', name: 'Ecoregions (Level III/IV)', source: 'EPA Omernik · PMTiles', role: 'reference', defaultOn: false, load: () => import('../layers/ecoregions') },
+  // Audit 10: the bundled archive covers only the Pacific Northwest (its
+  // PMTiles header bounds [-125, 41.5, -110.5, 49.5]) and the layer reads
+  // `live` at any viewport, so the coverage tail rides the source line the
+  // way hillshade's does below. DRAFT wording (DR-177).
+  { key: 'ecoregions', product: 'ecoregions', name: 'Ecoregions (Level III/IV)', source: 'EPA Omernik · PMTiles · Pacific Northwest bundle only', role: 'reference', defaultOn: false, load: () => import('../layers/ecoregions') },
   // Default-on since E1 (D-0.7.0-043 part 3): terrain shading joins the
   // calm default composition so the E1 paint tuning accounts for it from
   // the start; it renders inside the bottom stack, below every data layer.
