@@ -287,8 +287,11 @@ export function installPopupViewportContainment(): void {
  * container's inline transform on every map move, async hydration (the
  * telemetry data slot) can grow the content after open, and size-only
  * reflow (fonts arriving, an image, a stylesheet change) can change the
- * box with no mutation at all; all three trigger a re-clamp (throttled
- * to one per animation frame).
+ * box with no mutation at all. A mutation (MapLibre's re-anchor on its
+ * own idle and move events, or the hydration repaint) re-clamps at once
+ * in the observer callback, so no frame paints the card unclamped and no
+ * reader sees it; size-only reflow is throttled to one per animation
+ * frame.
  */
 function wirePopup(popup: HTMLElement): void {
   if (wired.has(popup)) return;
@@ -321,16 +324,21 @@ function wirePopup(popup: HTMLElement): void {
       if (popup.isConnected) clampPopupToViewport(popup);
     });
   };
+  const clampNow = (): void => {
+    if (popup.isConnected) clampPopupToViewport(popup);
+  };
 
   // Reposition: attribute-only on the container, so this module's own
   // writes to the content element never feed back into the observer.
-  const repositionObserver = new MutationObserver(schedule);
+  const repositionObserver = new MutationObserver(clampNow);
   repositionObserver.observe(popup, { attributes: true, attributeFilter: ['style', 'class'] });
 
   // Content growth (hydration replacing the skeleton slot).
   const content = popup.querySelector<HTMLElement>('.maplibregl-popup-content');
   if (content) {
-    const growthObserver = new MutationObserver(schedule);
+    // The clamp writes only the content's own style and class, which this
+    // childList/characterData observer does not watch: no feedback loop.
+    const growthObserver = new MutationObserver(clampNow);
     growthObserver.observe(content, { childList: true, subtree: true, characterData: true });
 
     // Size-only reflow (DG-080-REVIEW recommendation 4). No feedback
