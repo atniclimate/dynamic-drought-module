@@ -675,6 +675,16 @@ export async function activate(
 }
 
 /**
+ * Synchronous cancellation seam (the layer controller calls it the moment off intent is recorded).
+ * The teardown waits out the fade; a tile verdict, camera move or day pick inside it must not
+ * re-take the shared time bar, or that teardown's clear would remove the next surface's bar.
+ */
+export function cancelActivation(): void {
+  masterController?.abort();
+  activeMap = null;
+}
+
+/**
  * Abort current work, detach the frame watcher, and remove the active source.
  * Toggling on again re-enumerates the publisher's current granules.
  */

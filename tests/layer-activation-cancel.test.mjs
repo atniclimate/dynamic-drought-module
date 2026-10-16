@@ -57,7 +57,8 @@ const seen = {
   timeBars: [],
   sources: [],
   layers: [],
-  urlWrites: []
+  urlWrites: [],
+  tileReports: []
 };
 globalThis.cancelSeen = seen;
 globalThis.cancelDefs = LAYER_DEFS;
@@ -78,7 +79,7 @@ const stubs = {
   '/state/url': `export function parseHeatRiskDayParam(){return null;}
     export function syncHeatRiskDayParam(day){globalThis.cancelSeen.urlWrites.push(day);}`,
   '/map/layer-order': 'export function reassertLabelOrder(){} export function reassertThematicOrder(){}',
-  '/util/layer-fade': 'export function fadeInLayers(){} export async function fadeOutLayers(){}',
+  '/util/layer-fade': 'export function fadeInLayers(){} export async function fadeOutLayers(){ await globalThis.cancelFadeHold; }',
   '/ui/overlay': `let n=0;
     export function showLoading(text){ globalThis.cancelSeen.loading.push(text); return ++n; }
     export function hideLoading(){}`,
@@ -90,7 +91,7 @@ const stubs = {
     export function clearTimeBar(){}`,
   '/map/interaction-coordinator': 'export function registerClickTarget(){}',
   '/ui/popups': 'export function buildNwsAlertPopupHtml(){ return ""; }',
-  '/util/raster-status': 'export function watchRasterTiles(){ return { detach(){} }; }'
+  '/util/raster-status': 'export function watchRasterTiles(map, id, report){ globalThis.cancelSeen.tileReports.push(report); return { detach(){} }; }'
 };
 registerHooks({
   resolve(specifier, context, nextResolve) {
@@ -370,6 +371,40 @@ test('HeatRisk: a later off, after a settled activation, does not disturb a re-a
   assert.equal(net.calls[before].signal.aborted, false);
   assert.equal(net.calls[before + 1].signal.aborted, false);
   assert.ok(seen.sources.length >= 2, 'the re-activation drew its frame');
+});
+
+test('HeatRisk: a tile verdict while its off fade runs installs no time bar, so the next surface keeps the bar', async (t) => {
+  resetSeen();
+  const net = installFetch(heatBody, { holdIndexes: [] });
+  const map = fakeMap();
+  let releaseFade = () => {};
+  t.after(() => {
+    releaseFade();
+    globalThis.cancelFadeHold = undefined;
+    net.release();
+    heat.deactivate(map);
+  });
+  globalThis.cancelModules.set('heatrisk', heat);
+  const controller = harness(map, ['heatrisk']);
+  await controller.activate('heatrisk');
+  await settle();
+  const report = seen.tileReports.at(-1);
+  assert.equal(typeof report, 'function', 'setup: the frame watcher is attached');
+  report('ready');
+  assert.equal(seen.timeBars.at(-1), 'heatrisk', 'setup: a verdict while on re-installs the bar');
+  const installs = seen.timeBars.length;
+  // Off intent; the serialized teardown waits on the fade, which is held.
+  globalThis.cancelFadeHold = new Promise((resolve) => { releaseFade = resolve; });
+  controller.deactivate('heatrisk');
+  await settle();
+  assert.equal(registry.getActiveKeys().has('heatrisk'), true, 'setup: the teardown is still behind the fade');
+  // A tile cycle finishing inside the fade (the camera leaving for the Pacific).
+  report('ready');
+  report('degraded');
+  assert.equal(seen.timeBars.length, installs, 'no time bar install after off intent');
+  releaseFade();
+  await settle();
+  assert.equal(registry.getActiveKeys().has('heatrisk'), false);
 });
 
 test('NWS alerts: off while the WWA read is held aborts it at once and draws nothing', async (t) => {
