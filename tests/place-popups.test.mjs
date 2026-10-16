@@ -406,12 +406,12 @@ function square(west, south, size = 0.4) {
 }
 
 /** A map double: the named fills answer their features to any query region. */
-function fakeMap(fills) {
+function fakeMap(fills, container = { clientWidth: 100_000, clientHeight: 100_000 }) {
   return {
     getLayer: (id) => (Object.prototype.hasOwnProperty.call(fills, id) ? { id } : undefined),
     queryRenderedFeatures: (_region, options) => options.layers.flatMap((id) => fills[id] ?? []),
     project: ([lng, lat]) => ({ x: (lng + 180) * 10, y: (90 - lat) * 10 }),
-    getContainer: () => ({ clientWidth: 100_000, clientHeight: 100_000 })
+    getContainer: () => container
   };
 }
 
@@ -857,6 +857,40 @@ test('a degraded NIFC read with no perimeter here states no absence; a perimeter
   );
   assert.deepEqual(read.head, [{ text: 'Wildfire' }]);
   assert.deepEqual(read.rows, [{ label: 'Wildfire', text: 'Active mapped perimeter in this area (NIFC WFIGS)', items: ['Fixture Creek'] }]);
+});
+
+test('a place partly off screen states no fire or alert absence for the whole place; a perimeter on screen is still named (audit 10)', () => {
+  // PLACE projects to x 565..620; a 590-pixel-wide map shows only its western half.
+  const halfShown = { clientWidth: 590, clientHeight: 100_000 };
+  const entries = [
+    { key: 'nws-alerts', status: 'no-data', on: true },
+    { key: 'nifc-fires', status: 'ready', on: true }
+  ];
+  const unread = withRegistry(entries, () =>
+    buildPlaceConditionsHtml(fakeMap({ 'nws-alerts-fill': [], 'nifc-fires-fill': [] }, halfShown), [0, 0], PLACE)
+  );
+  assert.deepEqual(unread.head, [{ text: NOT_EVERY_READ }]);
+  assert.deepEqual(unread.rows, [
+    { label: 'NWS alert', text: layerName('nws-alerts'), state: 'no data' },
+    { label: 'Wildfire', text: layerName('nifc-fires'), state: 'live' }
+  ]);
+  assert.equal(unread.hasWarning, false);
+  const read = withRegistry(entries, () =>
+    buildPlaceConditionsHtml(
+      fakeMap(
+        {
+          'nws-alerts-fill': [],
+          'nifc-fires-fill': [{ properties: { attr_IncidentTypeCategory: 'WF', poly_IncidentName: 'Visible Creek' }, geometry: square(-123.2, 46.1) }]
+        },
+        halfShown
+      ),
+      [0, 0],
+      PLACE
+    )
+  );
+  assert.deepEqual(read.head, [{ text: 'Wildfire' }]);
+  assert.deepEqual(read.rows[1], { label: 'Wildfire', text: 'Active mapped perimeter in this area (NIFC WFIGS)', items: ['Visible Creek'] });
+  assert.equal(read.hasWarning, true);
 });
 
 test('a condition layer still loading with no fill: not every layer read, never the nothing-on sentence (Codex B2)', () => {
