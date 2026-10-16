@@ -66,6 +66,9 @@ const STUBS = {
   ].join('\n'),
   // The region briefing's opener (the door on a popup that is not about a place): recorded, never fetched.
   deepLink: 'export function openStateBriefing(_map, state, opts) { globalThis.__ddmStateBriefings.push({ state, fit: opts.fit, current: opts.guard() }); }',
+  // The tap's place (the late door's subject): a case names it; otherwise it throws, as the real resolver does on this fake map (no `project`).
+  locationIdentity:
+    'export async function resolveLocationIdentity() { if (!globalThis.__ddmIdentity) throw new Error("no identity"); return globalThis.__ddmIdentity; }',
   mobileSheet: 'export function isSheetActive() { return globalThis.__ddmSheetActive === true; }',
   studioRoute:
     'export function studioOwnsScreen() { return false; } export function onStudioRouteChange(fn) { globalThis.__ddmStudioListeners.push(fn); return () => {}; }'
@@ -79,6 +82,7 @@ registerHooks({
     if (specifier === 'maplibre-gl' && fromTs) return { url: stubUrl(STUBS['maplibre-gl']), shortCircuit: true };
     if (fromTs && /\/ui\/impact-panel$/.test(specifier)) return { url: stubUrl(STUBS.impactPanel), shortCircuit: true };
     if (fromTs && /\/state\/deep-link$/.test(specifier)) return { url: stubUrl(STUBS.deepLink), shortCircuit: true };
+    if (fromTs && /\/state\/location-identity$/.test(specifier)) return { url: stubUrl(STUBS.locationIdentity), shortCircuit: true };
     if (fromTs && /\/ui\/mobile-sheet$/.test(specifier)) return { url: stubUrl(STUBS.mobileSheet), shortCircuit: true };
     if (fromTs && /\/state\/studio-route$/.test(specifier)) return { url: stubUrl(STUBS.studioRoute), shortCircuit: true };
     if (specifier.startsWith('.') && !/\.[a-z]+$/i.test(specifier) && fromTs) {
@@ -688,6 +692,58 @@ test('the door of a popup with nothing to brief opens the panel at Technical inf
     assert.equal(globalThis.__ddmPopups.at(-1).removed, true, 'the door dismissed its popup');
   } finally {
     FakeElement.prototype.querySelector = querySelector;
+    setCurrentRegion('national');
+  }
+});
+
+test('a technical door gives way to the place door when the tap resolves a state', async () => {
+  const model = { ...MODEL, kind: 'event', actions: [{ kind: 'technical' }] };
+  // The frame's technical door sits in the head; the late door's markup becomes one button the fake can hold.
+  const querySelector = FakeElement.prototype.querySelector;
+  const createElement = document.createElement;
+  class FakeButton extends FakeElement {}
+  globalThis.HTMLButtonElement = FakeButton;
+  const technical = new FakeElement();
+  technical.matches = (s) => s === '[data-ddm-technical-door]';
+  FakeElement.prototype.querySelector = function (selector) {
+    if (!rendered.some((html) => html.includes('data-ddm-technical-door'))) return null;
+    if (selector === '[data-ddm-impact-trigger]' && !technical.parentNode) this.children[0]?.appendChild(technical);
+    if (selector === '[data-ddm-impact-trigger]') return technical;
+    if (selector === '[data-ddm-technical-door]') return technical.parentNode === this ? technical : null;
+    return null;
+  };
+  document.createElement = () => {
+    const element = new FakeElement();
+    Object.defineProperty(element, 'innerHTML', {
+      set(html) {
+        rendered.push(html);
+        if (!html.startsWith('<button')) return;
+        const button = new FakeButton();
+        button.html = html;
+        element.appendChild(button);
+      }
+    });
+    return element;
+  };
+  globalThis.__ddmIdentity = { state: { code: 'FL', name: 'Florida' }, containingTribal: null };
+  try {
+    const { click, ready } = harness({ storm: [{ model }] }, { warm: true });
+    await ready;
+    setCurrentRegion('national');
+    click();
+    // MapLibre puts the popup in the page; this stub does not.
+    document.body.appendChild(globalThis.__ddmPopups.at(-1).content);
+    const head = technical.parentNode;
+    assert.ok(head, 'the frame painted its technical door');
+    for (let i = 0; i < 20 && head.children.includes(technical); i += 1) await new Promise((resolve) => setImmediate(resolve));
+    const doors = head.children.filter((child) => child === technical || child instanceof FakeButton);
+    assert.equal(doors.length, 1, 'the popup carries one door');
+    assert.match(doors[0].html ?? '', /Open the Impact Briefing for Florida/, 'the door names the state the tap resolved');
+  } finally {
+    FakeElement.prototype.querySelector = querySelector;
+    document.createElement = createElement;
+    delete globalThis.HTMLButtonElement;
+    delete globalThis.__ddmIdentity;
     setCurrentRegion('national');
   }
 });

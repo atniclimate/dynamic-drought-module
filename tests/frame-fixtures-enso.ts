@@ -19,8 +19,10 @@
  * response never routes to the panel-foot sink. These boots select no place
  * and keep the national view, which has no briefing of its own, so the
  * popup's own door (the selected place, else the region's briefing, else
- * Technical information) is the Technical information door here, and the
- * coordinator offers no late briefing door because the popup already has one.
+ * Technical information) is the Technical information door here. The
+ * coordinator still tries a late place door, which would replace it if the tap
+ * resolved a state or Tribal land; on the open ocean nothing resolves, so the
+ * Technical information door stays.
  */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';

@@ -966,7 +966,13 @@ function renderPopup(
   // the label does not name ("for Washington" on a Washington town).
   //
   // Never beside a door the frame already carries: a popup has one door.
-  if (!selection && !door && container.getAttribute('data-popup-kind') !== 'label') {
+  // The Technical information door is a placeholder a resolved place
+  // replaces (a storm over land); over open water it stays.
+  if (
+    !selection &&
+    (!door || door.matches('[data-ddm-technical-door]')) &&
+    container.getAttribute('data-popup-kind') !== 'label'
+  ) {
     void attachConditionDoor(map, popup, head, click);
   }
 }
@@ -1082,6 +1088,7 @@ async function attachConditionDoor(
   // features here" disclosure: the frame's actions slot (after the source,
   // PF3).
   const actions = head.querySelector('[data-popup-slot="actions"]');
+  head.querySelector('[data-ddm-technical-door]')?.remove();
   (actions ?? head).appendChild(button);
 }
 
