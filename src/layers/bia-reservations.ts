@@ -32,11 +32,18 @@
  * drives the viewport, so toggling this layer on after selecting a region
  * pulls only that region's boundaries.
  *
+ * Generalization: the query carries a half-pixel `maxAllowableOffset` for
+ * the integer zoom bucket plus `geometryPrecision`, the same pair as
+ * `aiannh.ts`. Full-detail shapes for the national boot view were about
+ * 16 MB of JSON (6 MB on the wire, audit 10); half a pixel is below what
+ * the screen can show.
+ *
  * Caching: successful responses are kept in an in-memory, session-scoped
- * cache (`responseCache`) keyed by a bucketed bounds string coarser than the
- * query envelope (`buildCacheKey`), so a deactivate then re-activate against
- * substantially the same view renders instantly with no network call. A real
- * region change still misses the cache and fetches fresh.
+ * cache (`responseCache`). Any entry of the same zoom bucket whose coverage
+ * envelope contains the view is served (`findCoveringResponse`), so a pan
+ * inside the overscan and a deactivate then re-activate render instantly
+ * with no network call. A real region change still misses the cache and
+ * fetches fresh.
  * The cache is never committed anywhere and adds nothing to the repository;
  * it is a browser-session optimization, not a data-bundling change (the
  * no-redistribution hard rule is unaffected).
@@ -116,6 +123,15 @@ const CACHE_MAX_ENTRIES = 24;
  * pans, programmatic fit chains) collapse into one refetch.
  */
 const REFRESH_DEBOUNCE_MS = 400;
+
+/**
+ * Geometry generalization tolerance in screen pixels, converted to degrees
+ * for `maxAllowableOffset` at the zoom bucket (the `aiannh.ts` value).
+ */
+const OFFSET_PIXEL_TOLERANCE = 0.5;
+
+/** Decimal places requested for coordinates (`geometryPrecision`), about one meter. */
+const GEOMETRY_PRECISION = 5;
 
 /**
  * E1 composition targets (D-0.7.0-041 part 2, review E1.3; D-0.7.0-043
@@ -199,10 +215,12 @@ let appliedData: FeatureCollection | null = null;
 interface CachedResponse {
   readonly envelope: readonly [number, number, number, number];
   readonly geojson: FeatureCollection;
+  readonly zoomBucket: number;
 }
 
 /**
- * Session-scoped response cache, keyed by `buildCacheKey`. Module-level so
+ * Session-scoped response cache, keyed by `buildCacheKey`, in insertion
+ * order (oldest first, the eviction order). Module-level so
  * it outlives individual activate/deactivate cycles; cleared only on page
  * reload. Never written to disk or the repository; see the Caching
  * paragraph in the module docblock above.
@@ -218,38 +236,77 @@ function resolveBeforeId(map: maplibregl.Map): string | undefined {
 }
 
 /**
- * Bucketed cache key for the current viewport (see CACHE_KEY_PRECISION). No
- * zoom component: this query has no zoom-keyed generalization parameter, so
- * one response serves every zoom of the same bounds. The key is a fast-path
- * bucket only; a hit must ALSO pass the `envelopeCovers` coverage check.
+ * Integer zoom bucket used for BOTH the cache key and the generalization
+ * tolerance, so one cache entry never mixes generalization levels.
  */
-function buildCacheKey(map: maplibregl.Map): string {
+function resolveZoomBucket(map: maplibregl.Map): number {
+  return Math.floor(map.getZoom());
+}
+
+/**
+ * Bucketed cache key for the current viewport (see CACHE_KEY_PRECISION),
+ * with the zoom bucket because the generalization tolerance is zoom-keyed.
+ * It names an entry for storage and eviction; lookup is by coverage
+ * (`findCoveringResponse`).
+ */
+function buildCacheKey(map: maplibregl.Map, zoomBucket: number): string {
   const b = map.getBounds();
-  return [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]
+  const bounds = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]
     .map((n) => n.toFixed(CACHE_KEY_PRECISION))
     .join(',');
+  return `z${zoomBucket}:${bounds}`;
+}
+
+/**
+ * The newest cached response of this zoom bucket whose coverage envelope
+ * contains the whole view, or undefined. A hit moves to the newest slot so
+ * the entry being panned inside is the last to be evicted.
+ */
+function findCoveringResponse(map: maplibregl.Map, zoomBucket: number): CachedResponse | undefined {
+  const view = map.getBounds();
+  for (const [key, entry] of [...responseCache].reverse()) {
+    if (entry.zoomBucket === zoomBucket && envelopeCovers(entry.envelope, view)) {
+      responseCache.delete(key);
+      responseCache.set(key, entry);
+      return entry;
+    }
+  }
+  return undefined;
 }
 
 /** Store a response in the cache, evicting the oldest entry if at capacity. */
 function cacheResponse(
   key: string,
   envelope: readonly [number, number, number, number],
-  geojson: FeatureCollection
+  geojson: FeatureCollection,
+  zoomBucket: number
 ): void {
   if (responseCache.size >= CACHE_MAX_ENTRIES && !responseCache.has(key)) {
     const oldestKey = responseCache.keys().next().value;
     if (oldestKey !== undefined) responseCache.delete(oldestKey);
   }
-  responseCache.set(key, { envelope: toCoverageEnvelope(envelope), geojson });
+  responseCache.set(key, { envelope: toCoverageEnvelope(envelope), geojson, zoomBucket });
+}
+
+/**
+ * Degrees of longitude per CSS pixel at the given zoom bucket (512-pixel
+ * world tiles), scaled by OFFSET_PIXEL_TOLERANCE, for `maxAllowableOffset`.
+ */
+function resolveMaxAllowableOffset(zoomBucket: number): number {
+  return (360 / (512 * Math.pow(2, zoomBucket))) * OFFSET_PIXEL_TOLERANCE;
 }
 
 /**
  * Build the GeoJSON query URL, clipped to the given overscanned envelope.
  * The envelope is `xmin,ymin,xmax,ymax` in the `inSR` (WGS 84 longitude /
  * latitude). `outFields` is limited to the five fields the popup and the
- * impact briefing read, to keep the payload small.
+ * impact briefing read, and geometry is generalized server-side to half a
+ * pixel at the zoom bucket, to keep the payload small.
  */
-function buildQueryUrl(envelope: readonly [number, number, number, number]): string {
+function buildQueryUrl(
+  envelope: readonly [number, number, number, number],
+  zoomBucket: number
+): string {
   const params = new URLSearchParams({
     where: '1=1',
     geometry: envelope.map((n) => n.toFixed(5)).join(','),
@@ -259,6 +316,8 @@ function buildQueryUrl(envelope: readonly [number, number, number, number]): str
     spatialRel: 'esriSpatialRelIntersects',
     outFields: 'LARID,LARNAME,CLASSIFICATION,GISACRES,REGION',
     returnGeometry: 'true',
+    geometryPrecision: String(GEOMETRY_PRECISION),
+    maxAllowableOffset: resolveMaxAllowableOffset(zoomBucket).toFixed(6),
     f: 'geojson'
   });
   return `${URLS.biaLarFeatureServer}/query?${params.toString()}`;
@@ -358,9 +417,10 @@ async function fetchAndApply(map: maplibregl.Map): Promise<void> {
   }
   const token = ++requestSeq;
 
-  const cacheKey = buildCacheKey(map);
-  const cached = responseCache.get(cacheKey);
-  if (cached && envelopeCovers(cached.envelope, map.getBounds())) {
+  const zoomBucket = resolveZoomBucket(map);
+  const cacheKey = buildCacheKey(map, zoomBucket);
+  const cached = findCoveringResponse(map, zoomBucket);
+  if (cached) {
     applyFeatureCollection(map, cached.geojson);
     return;
   }
@@ -380,7 +440,7 @@ async function fetchAndApply(map: maplibregl.Map): Promise<void> {
     // (storable, revalidate-on-use), so without this the browser HTTP
     // cache may persist sovereign-boundary responses across page loads.
     const resp = await fetchBufferedWithBudget(
-      buildQueryUrl(envelope),
+      buildQueryUrl(envelope, zoomBucket),
       { cache: 'no-store' },
       signal,
       FETCH_TIMEOUT_MS
@@ -422,7 +482,7 @@ async function fetchAndApply(map: maplibregl.Map): Promise<void> {
     applyFeatureCollection(map, geojson, { partial: true });
     return;
   }
-  cacheResponse(cacheKey, envelope, geojson);
+  cacheResponse(cacheKey, envelope, geojson, zoomBucket);
   applyFeatureCollection(map, geojson);
 }
 
