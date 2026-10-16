@@ -740,7 +740,8 @@ test.describe('E2-1 flowing paths in ENSO mode', () => {
         const state = window as FlowRestoreWindow;
         const map = state.__flowRestoreMaps!.find((candidate) => candidate.getContainer().id === 'map')!;
         state.__flowRestoreComplete = false;
-        map.once('style.load', () => { state.__flowRestoreComplete = true; });
+        // A mode's adapter can load an empty stand-in style while graphics are lost; count only the style that restoration loads.
+        map.once('webglcontextrestored', () => { map.once('style.load', () => { state.__flowRestoreComplete = true; }); });
         state.__flowRestoreExtension!.restoreContext();
       });
       await expect.poll(() => page.evaluate(() => (window as FlowRestoreWindow).__flowRestoreComplete)).toBe(true);
