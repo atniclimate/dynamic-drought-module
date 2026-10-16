@@ -61,7 +61,8 @@ const STUBS = {
   impactPanel: [
     'export function openImpactPanel(context) { globalThis.__ddmPanelOpens.push(context); }',
     'export function nextBriefingIntent() { return 1; }',
-    'export function isCurrentBriefingIntent(intent) { return intent === 1; }'
+    'export function isCurrentBriefingIntent(intent) { return intent === 1; }',
+    'export function openTechnicalInformation(opener) { globalThis.__ddmTechnicalOpens.push(opener); }'
   ].join('\n'),
   // The region briefing's opener (the door on a popup that is not about a place): recorded, never fetched.
   deepLink: 'export function openStateBriefing(_map, state, opts) { globalThis.__ddmStateBriefings.push({ state, fit: opts.fit, current: opts.guard() }); }',
@@ -92,6 +93,7 @@ globalThis.window = { matchMedia: () => ({ matches: false }) };
 globalThis.__ddmPopups = [];
 globalThis.__ddmPanelOpens = [];
 globalThis.__ddmStateBriefings = [];
+globalThis.__ddmTechnicalOpens = [];
 globalThis.__ddmStudioListeners = [];
 globalThis.__ddmSheetActive = false;
 /** Every string the coordinator set as `innerHTML`, in order: what it rendered. */
@@ -653,6 +655,39 @@ test('a door on a popup that is not about a place opens the selected place, else
   } finally {
     FakeElement.prototype.querySelector = querySelector;
     setPlaceSelection(null);
+    setCurrentRegion('national');
+  }
+});
+
+test('the door of a popup with nothing to brief opens the panel at Technical information and hands focus back to the map', async () => {
+  const model = { ...MODEL, kind: 'event', actions: [{ kind: 'technical' }] };
+  // As above: the door is found when the rendered string carries the technical door, and its click handler is kept.
+  const querySelector = FakeElement.prototype.querySelector;
+  const doors = [];
+  FakeElement.prototype.querySelector = function (selector) {
+    if (selector !== '[data-ddm-impact-trigger]' || !rendered.at(-1)?.includes('data-ddm-technical-door')) return null;
+    const door = new FakeElement();
+    door.matches = (s) => s === '[data-ddm-technical-door]';
+    door.addEventListener = (type, fn) => {
+      if (type === 'click') doors.push(fn);
+    };
+    return door;
+  };
+  globalThis.__ddmTechnicalOpens.length = 0;
+  globalThis.__ddmStateBriefings.length = 0;
+  try {
+    const { click, ready, canvas } = harness({ storm: [{ model }] }, { warm: true });
+    await ready;
+    setCurrentRegion('national');
+    click();
+    assert.equal(doors.length, 1, 'the frame door was wired');
+    doors[0]();
+    assert.deepEqual(globalThis.__ddmTechnicalOpens, [canvas], 'the door opened Technical information, focus returning to the map');
+    assert.equal(globalThis.__ddmPanelOpens.length, 0, 'no place briefing');
+    assert.deepEqual(globalThis.__ddmStateBriefings, [], 'no region briefing');
+    assert.equal(globalThis.__ddmPopups.at(-1).removed, true, 'the door dismissed its popup');
+  } finally {
+    FakeElement.prototype.querySelector = querySelector;
     setCurrentRegion('national');
   }
 });

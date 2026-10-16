@@ -202,12 +202,11 @@ export interface ChartDetail {
  * never printed: its words already stand in the value row that earned it
  * (interface-chrome-popups-text.md 3.3, "The door pulse"), so the pulse is
  * decoration and the door never renames itself by mode.
+ * The `technical` door, on a popup with nothing to brief, opens the briefing panel at Technical information.
  */
-export interface DoorSpec {
-  readonly kind: 'briefing';
-  readonly place: string;
-  readonly warningLabel?: string;
-}
+export type DoorSpec =
+  | { readonly kind: 'briefing'; readonly place: string; readonly warningLabel?: string }
+  | { readonly kind: 'technical' };
 
 // ---------------------------------------------------------------------------
 // Records and groups (PF2; grouping-contract.md sections 4 and 12.1)
@@ -630,10 +629,11 @@ function detailHtml(detail: PopupDetail): string {
 }
 
 function doorHtml(door: DoorSpec): string {
-  const kind = door?.kind;
-  const doorPlace = door?.place;
-  const warningLabel = door?.warningLabel;
-  if (kind !== 'briefing') fail('unknown door kind');
+  // DRAFT wording (DR-177): the door with nothing to brief (the owner's call 1).
+  if (door?.kind === 'technical') return '<button type="button" class="popup-impact-btn" data-ddm-impact-trigger data-ddm-technical-door>Open Technical information</button>';
+  if (door?.kind !== 'briefing') fail('unknown door kind');
+  const doorPlace = door.place;
+  const warningLabel = door.warningLabel;
   const place = text(stated(doorPlace, 'a door place'));
   // The pulse only; the warning's words live in its value row (DoorSpec).
   const pulse = warningLabel !== undefined;

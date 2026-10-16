@@ -44,10 +44,17 @@ export function standingBriefing(): PlaceSelection | RegionBriefingAnchor | null
   return (region ? REGIONS[region]?.briefing : undefined) ?? null;
 }
 
-/** That door for a popup model's `actions`: one door, or none when there is nothing to open. */
-export function standingBriefingDoor(): readonly { readonly kind: 'briefing'; readonly place: string }[] {
+/**
+ * That door for a popup model's `actions`: always one. With nothing to brief
+ * (no place selected, no region briefing), the one door opens the briefing
+ * panel at Technical information.
+ */
+export function standingBriefingDoor(): readonly (
+  | { readonly kind: 'briefing'; readonly place: string }
+  | { readonly kind: 'technical' }
+)[] {
   const briefing = standingBriefing();
-  return briefing ? [{ kind: 'briefing', place: briefing.label }] : [];
+  return [briefing ? { kind: 'briefing', place: briefing.label } : { kind: 'technical' }];
 }
 
 /**

@@ -85,8 +85,8 @@ export const FLOW_TECHNICAL_NOTES: readonly string[] = [
   'Ocean currents are model output: surface currents from the NOAA/NCEP Global RTOFS ocean model, re-encoded by DDM. The map holds one dated frame, as old as its last update: the state line gives the model run, the instant the frame is valid at and its age. Two model grids are held, each on its own spacing and never joined: 1.0 degree from 40 S to 39 N and 130 E to 111 W, and 0.3 degree from 40 N to 84.7 N and 140 E to 115.3 W. The grid under the centre of the view is drawn. Nothing is drawn between 39 N and 40 N, east of 111 W south of 40 N (the coasts of mainland Mexico and Central America) or west of 130 E. Not for navigation.'
 ];
 
-export function renderMapTechnicalInformation(): string {
-  return `<details class="impact-technical-information">
+export function renderMapTechnicalInformation(open = false): string {
+  return `<details class="impact-technical-information"${open ? ' open' : ''}>
     <summary>Technical information</summary>
     <h4>Drought navigation overview</h4>
     <p id="impact-technical-drought">${escapeHtml(notes.drought)}</p>

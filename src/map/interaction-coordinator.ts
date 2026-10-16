@@ -42,7 +42,7 @@ import type { PlaceSelection } from '../state/place-selection';
 import { onStudioRouteChange, studioOwnsScreen } from '../state/studio-route';
 import { getViewMode, onViewModeChange } from '../state/view-mode';
 import type { LocationIdentity } from '../state/location-identity';
-import { isCurrentBriefingIntent, nextBriefingIntent, openImpactPanel } from '../ui/impact-panel';
+import { isCurrentBriefingIntent, nextBriefingIntent, openImpactPanel, openTechnicalInformation } from '../ui/impact-panel';
 import { isSheetActive } from '../ui/mobile-sheet';
 // Types only (zero bytes): the frame itself is loaded by the one dynamic
 // import below (S30D P1-FRAME), never statically, since this module sits in
@@ -883,10 +883,17 @@ function renderPopup(
   // The frame's door opens the response's own place. On a popup that is not
   // about a place (the Nino 3.4 box, a tropical storm) it opens what its
   // builder named from the same read (`standingBriefing`): the selected
-  // place, else the region's briefing as the sidebar's trigger opens it.
+  // place, else the region's briefing as the sidebar's trigger opens it,
+  // else, with nothing to brief, the panel at Technical information.
   let door = container.querySelector<HTMLButtonElement>('[data-ddm-impact-trigger]');
   const briefing = selection ?? standingBriefing();
-  if (door && briefing) {
+  if (door?.matches('[data-ddm-technical-door]')) {
+    // Its popup closes with the click, so the panel's close hands focus to the map.
+    door.addEventListener('click', () => {
+      openTechnicalInformation(map.getCanvas());
+      dismissResponse();
+    });
+  } else if (door && briefing) {
     door.addEventListener('click', () => {
       if ('context' in briefing) {
         openImpactPanel(briefing.context);

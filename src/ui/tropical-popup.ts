@@ -104,7 +104,7 @@ export function buildTropicalPointPopupModel(props: GeoJsonProperties): IssuedMo
     clocks,
     source: { link: issuer.link },
     details,
-    // A storm is no place: its door opens the briefing for the selected place, else the region's.
+    // A storm is no place: its door opens the briefing for the selected place, else the region's, else Technical information.
     actions: standingBriefingDoor()
   };
 }

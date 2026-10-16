@@ -125,13 +125,16 @@ test('the frame serializer accepts the ready, loading and unavailable models', (
   }
 });
 
-test('the one door names the selected place, else the place the region briefing describes; with neither there is no door', () => {
+test('the one door names the selected place, else the place the region briefing describes; with neither it opens Technical information', () => {
   const doors = (model) => serializePopupFrame(model).match(/<button[^>]*data-ddm-impact-trigger[^>]*>[^<]*<\/button>/g) ?? [];
   const models = () => [ready(snapshot()), buildEnsoBoxPopupModel({ kind: 'loading' }), buildEnsoBoxPopupModel({ kind: 'unavailable' })];
   try {
-    // The national view has no briefing of its own and no place is selected: nothing to open.
+    // The national view has no briefing of its own and no place is selected: the door opens Technical information.
     setCurrentRegion('national');
-    for (const model of models()) assert.deepEqual(doors(model), []);
+    for (const model of models()) {
+      assert.deepEqual(model.actions, [{ kind: 'technical' }]);
+      assert.deepEqual(doors(model), ['<button type="button" class="popup-impact-btn" data-ddm-impact-trigger data-ddm-technical-door>Open Technical information</button>']);
+    }
 
     // No place selected: the regional briefing, named by the place it describes.
     setCurrentRegion('washington_state');

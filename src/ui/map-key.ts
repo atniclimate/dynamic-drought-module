@@ -64,6 +64,7 @@ import {
   createHeatRiskSequenceLoader,
   type HeatRiskFrameEventDetail
 } from './heatrisk-sequence-loader';
+import { openTechnicalInformation } from './impact-panel';
 import { watchDesktopMapSeat } from './map-control-seat';
 import { getTimeBarSpec, onTimeBarSpecChange } from './time-bar';
 import { MAP_GROUND_COLOR } from '../config/interface-tokens';
@@ -1503,6 +1504,16 @@ export function initMapKey(): void {
   const drawerSections = ensureDetailSectionHosts();
   drawerSections.hidden = false;
   content.append(drawerSections);
+
+  // The owner's call 1: one quiet link to the briefing's Technical information, built once (outside the rewritten legend) so it keeps focus.
+  const technicalLink = document.createElement('button');
+  technicalLink.type = 'button';
+  technicalLink.className = 'map-info-ack-link';
+  technicalLink.dataset['openTechnicalInformation'] = '';
+  // DRAFT wording (DR-177)
+  technicalLink.textContent = 'Technical information';
+  technicalLink.addEventListener('click', () => openTechnicalInformation(technicalLink));
+  content.append(technicalLink);
 
   const detailsButton = document.createElement('button');
   detailsButton.id = 'map-key-details-toggle';

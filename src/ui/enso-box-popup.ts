@@ -173,7 +173,7 @@ function seasonalRow(label: string, index: SeasonalIndex): ValueRow {
 /** The popup's model for the current read (the chart SVG is mounted later by `mountEnsoBoxChart`). */
 export function buildEnsoBoxPopupModel(read: EnsoBoxRead): IssuedModel {
   const issuer = { role: 'issued-by', name: ISSUER, productKey: 'ensoIndex' } as const;
-  // The box is no place: its door opens the briefing for the selected place, else the region's.
+  // The box is no place: its door opens the briefing for the selected place, else the region's, else Technical information.
   const actions = standingBriefingDoor();
   if (read.kind !== 'ready') {
     return {

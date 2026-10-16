@@ -354,7 +354,7 @@ test('key: the filled and hollow swatches carry their own labels, with no senten
   assert.ok(!/Filled: /.test(MAP_KEY_SOURCE));
 });
 
-test('popup: the one door names the selected place, else the place the region briefing describes; with neither there is no door', async () => {
+test('popup: the one door names the selected place, else the place the region briefing describes; with neither it opens Technical information', async () => {
   const { setPlaceSelection } = await import('../src/state/place-selection.ts');
   const { setCurrentRegion } = await import('../src/state/region-store.ts');
   const doors = (model) => serializePopupFrame(model).match(/<button[^>]*data-ddm-impact-trigger[^>]*>[^<]*<\/button>/g) ?? [];
@@ -364,9 +364,12 @@ test('popup: the one door names the selected place, else the place the region br
     popup.buildTropicalAreaPopupModel({ ...fixtures.EP5_WW.features[2].properties, ddmPart: 'ww' })
   ];
   try {
-    // The national view has no briefing of its own and no place is selected: nothing to open.
+    // The national view has no briefing of its own and no place is selected: the door opens Technical information.
     setCurrentRegion('national');
-    for (const model of models()) assert.deepEqual(doors(model), []);
+    for (const model of models()) {
+      assert.deepEqual(model.actions, [{ kind: 'technical' }]);
+      assert.deepEqual(doors(model), ['<button type="button" class="popup-impact-btn" data-ddm-impact-trigger data-ddm-technical-door>Open Technical information</button>']);
+    }
 
     // No place selected: the regional briefing, named by the place it describes.
     setCurrentRegion('washington_state');

@@ -31,7 +31,7 @@ const STUBS = {
   'maplibre-gl':
     'export class Popup { constructor(options) { globalThis.__ddmPopupOptions = options; throw new Error("RENDER_REACHED at Popup"); } }',
   impactPanel:
-    'export function openImpactPanel() { throw new Error("stub openImpactPanel"); } export function nextBriefingIntent() { return 0; } export function isCurrentBriefingIntent() { return false; }',
+    'export function openImpactPanel() { throw new Error("stub openImpactPanel"); } export function nextBriefingIntent() { return 0; } export function isCurrentBriefingIntent() { return false; } export function openTechnicalInformation() { throw new Error("stub openTechnicalInformation"); }',
   deepLink: 'export function openStateBriefing() { throw new Error("stub openStateBriefing"); }',
   mobileSheet: 'export function isSheetActive() { return false; }',
   studioRoute: 'export function studioOwnsScreen() { return false; } export function onStudioRouteChange() { return () => {}; }'

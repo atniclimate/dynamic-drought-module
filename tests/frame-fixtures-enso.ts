@@ -16,10 +16,11 @@
  * comes from the same file, so a snapshot refresh moves both together.
  *
  * The click is on the open ocean, outside every supported place, so the
- * coordinator offers no late briefing door and the response never routes to
- * the panel-foot sink. These boots select no place and keep the national
- * view, which has no briefing of its own, so the popup's own door (the
- * selected place, else the region's briefing) is absent here too.
+ * response never routes to the panel-foot sink. These boots select no place
+ * and keep the national view, which has no briefing of its own, so the
+ * popup's own door (the selected place, else the region's briefing, else
+ * Technical information) is the Technical information door here, and the
+ * coordinator offers no late briefing door because the popup already has one.
  */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
