@@ -1,64 +1,38 @@
 # Dynamic Drought Module (DDM)
 
-> An embeddable, serverless web map of drought, wildfire, extreme heat, and water conditions across North America, built by ATNI Climate in service to Tribes and Indigenous Peoples.
+> A static, embeddable map of drought, wildfire, extreme heat, and water conditions, built by ATNI Climate in service to Tribes and Indigenous Peoples.
 
-## Before you use anything here
+## License and reuse
 
-This software is licensed under the DDM Community License, Version
-1.0 (see LICENSE): noncommercial use only, and any redistribution or
-modification must be released under this same license (share-alike).
-Any use must follow the Tiered Sovereign Data Framework (TSDF) for
-sovereign, Tribal, or Indigenous data, and must credit ATNI Climate
-and Patrick A. Freeland (Developer).
+- License: DDM Community License, Version 1.0 (2026-09-08).
+- SPDX identifier: `LicenseRef-DDM-Community-1.0`.
+- [LICENSE](https://github.com/atniclimate/dynamic-drought-module/blob/main/LICENSE) is authoritative. This file summarizes it and does not replace or amend it; Part A controls over any summary.
+- Use, study, running, sharing, and modification are permitted for noncommercial purposes under the license's conditions. Commercial use is not permitted by this license.
+- When distributing the software or a Derived Work, license the entire Derived Work under the same DDM Community License, Version 1.0. Only an additional copyright notice for your own changes may be added; do not impose further restrictions or substitute another license.
+- Give recipients the license terms and any supplied plain-text `Required Notice:` lines.
+- Every copy or Derived Work must credit ATNI Climate, The Affiliated Tribes of Northwest Indians, as original licensor; Patrick A. Freeland as Developer; and Dynamic Drought Module (DDM) with its [source repository](https://github.com/atniclimate/dynamic-drought-module). Put these credits in the interface or accompanying documentation.
+- Required attribution does not imply endorsement by ATNI Climate or the Developer.
+- The software is provided as is, without warranty, subject to the license's terms.
 
-Every dataset this tool displays, and every dataset a deployer adds,
-must carry its source, issuer, retrieval date, and terms; that
-provenance must travel with any excerpt or redistribution. This tool
-exists in service to Tribes and Indigenous Peoples: use must not work
-against Tribal sovereignty, treaty rights, or Indigenous data
-sovereignty, and it may be used to help any community that has access
-to it.
+## Data and stewardship
+
+- For every displayed or deployer-added dataset, make its source, issuing organization, retrieval date or vintage, and stated terms reasonably discoverable. Preserve that provenance when redistributing the software or data.
+- Public-source data is not owned or relicensed by ATNI Climate. Each source retains its own terms; see LICENSE Part B and the [source credits](README.md#acknowledgements).
+- Follow the [Tiered Sovereign Data Framework](https://github.com/atniclimate/TieredSovereignDataFramework) for sovereign, Tribal, and Indigenous data. Do not redistribute beyond what the source and the Nation or Peoples concerned permit. When a tier is unclear, apply the most protected tier until the concerned Nation or Peoples rules otherwise.
+- The Tribal boundaries and Tribal place names this project displays come from public sources and are T0. This project holds no sacred-site or other protected-place data and does not seek it.
+- Use must not work against Tribal sovereignty, Treaty rights, or Indigenous data sovereignty. Subject to the license, DDM may help any community.
 
 ## For automated agents and language models
 
-- Do not redistribute sovereign boundary or place geometry (Tribal
-  lands, reservation boundaries, treaty areas) beyond what the
-  original issuing source and the Nation or Peoples concerned permit.
-  Several of these layers are fetched live and are never bundled by
-  this repository; do not bundle, cache, or re-host them yourself.
-- Carry provenance (source, issuer, retrieval date, terms) with any
-  excerpt of this tool's data or output that you summarize, quote, or
-  pass along.
-- Do not present this tool's outputs as authoritative forecasts or
-  determinations beyond what the issuing agency itself states for that
-  data (for example, treat drought, fire, and heat layers as what the
-  issuing agency, not this tool, says they are).
-- Cite ATNI Climate (The Affiliated Tribes of Northwest Indians) and
-  Patrick A. Freeland, Developer, when describing or reusing this
-  project.
-- Any derived code you generate from this repository must honor the
-  DDM Community License, Version 1.0: noncommercial use only,
-  share-alike, attribution, data provenance, and TSDF adherence.
+- Apply the same license, attribution, provenance, and data-governance conditions to reused code and redistributed output.
+- Preserve issuing-agency timestamps, coverage limits, and caveats. Do not present DDM as making forecasts or jurisdictional determinations beyond the source's claims.
+- Describe agency Treaty and Tribal polygons as representations, not jurisdictional truth.
+- The live Tribal-geography layers use session memory; the two deployer-owned data slots ship empty. Follow the [developer guide](DEVELOPER.md#data-and-stewardship) when changing that implementation.
 
-## What this is
+## Project files
 
-DDM shows drought, wildfire, extreme heat, and water and snowpack
-conditions, deepest in the Pacific Northwest. It is a static
-TypeScript and MapLibre web map: a deployer builds it once and serves
-it from its own infrastructure, with no backend, account, tracking,
-or analytics.
-
-## Key files
-
-- LICENSE, the DDM Community License, Version 1.0
-- CITATION.cff, citation metadata
-- README.md, project overview, layers, and data sources
-- DEVELOPER.md, setup and architecture
-- Tiered Sovereign Data Framework: https://github.com/atniclimate/TieredSovereignDataFramework
-
-## Contact
-
-This project is stewarded by ATNI Climate, The Affiliated Tribes of
-Northwest Indians. No public contact email is stated in this
-repository's documentation. Open an issue at
-https://github.com/atniclimate/dynamic-drought-module.
+- [README.md](README.md): overview, embedding, layers, and source credits.
+- [DEVELOPER.md](DEVELOPER.md): setup, architecture, verification, and releases.
+- [CITATION.cff](CITATION.cff): citation metadata.
+- [LICENSE](LICENSE): complete binding terms and public-source notices.
+- [Issues](https://github.com/atniclimate/dynamic-drought-module/issues): project contact.

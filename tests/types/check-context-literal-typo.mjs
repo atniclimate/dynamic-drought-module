@@ -28,7 +28,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const FIXTURE = 'tests/types/context-literal-typo.ts';
-const PROJECT = 'tsconfig.context-literal-typo.json';
+const PROJECT = 'tests/types/tsconfig.context-literal-typo.json';
 
 /** The one deliberate omission in the fixture, pinned to its line. */
 const EXPECTED_LINE = 27;
@@ -68,7 +68,7 @@ if (result.error) {
 
 if (result.status === 0) {
   console.error(
-    'check-context-literal-typo: tsc -p tsconfig.context-literal-typo.json SUCCEEDED, and it must not. ' +
+    `check-context-literal-typo: tsc -p ${PROJECT} SUCCEEDED, and it must not. ` +
       `${FIXTURE} exists to fail typechecking; a clean compile means BoundarySelectionContext's ` +
       '`containing` field silently went optional (or the interface lost it), and a hand-built ' +
       'literal missing it would no longer fail type checking.'
@@ -89,7 +89,7 @@ const reportedLines = new Set(
 
 if (!reportedLines.has(EXPECTED_LINE)) {
   console.error(
-    `check-context-literal-typo: tsc -p tsconfig.context-literal-typo.json failed (as expected), but not for the right reason.`
+    `check-context-literal-typo: tsc -p ${PROJECT} failed (as expected), but not for the right reason.`
   );
   console.error(`  NOT CAUGHT: ${EXPECTED_NAME}, expected an error on ${FIXTURE}:${EXPECTED_LINE}`);
   console.error('Full tsc output:');

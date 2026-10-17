@@ -7,7 +7,7 @@
  * not a silent drift. It is excluded from `tsconfig.json`'s `include`
  * (that list names only `src/**` and `vite.config.ts`, never `tests/**`),
  * so `npm run typecheck` never sees it and stays clean. It is checked on
- * its own, under `tsconfig.key-typos.json`, by `npm run check:key-types`
+ * its own, under `tests/types/tsconfig.key-typos.json`, by `npm run check:key-types`
  * (scripts/check-key-types.mjs), which asserts the OPPOSITE of a normal
  * check: it fails if this file compiles cleanly, because that would mean
  * a union widened back to `string` and stopped catching typos.

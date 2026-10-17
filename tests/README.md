@@ -155,7 +155,7 @@ file's own `include` (`src/**` only) is untouched. `npm run typecheck:tests`
 runs it and then proves the negative side of the acceptance sentence:
 `tests/types/context-literal-typo.ts`, a hand-built `BoundarySelectionContext`
 literal missing its required `containing` field, must FAIL to compile under
-its own `tsconfig.context-literal-typo.json`
+its own `tests/types/tsconfig.context-literal-typo.json`
 (`tests/types/check-context-literal-typo.mjs` asserts exactly that, the same
 inverted-pass/fail pattern `scripts/check-key-types.mjs` uses for
 `tests/types/key-typos.ts`). Both fixture files are excluded from

@@ -25,7 +25,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const FIXTURE = 'tests/types/popup-model-invalid.ts';
-const PROJECT = 'tsconfig.popup-model-invalid.json';
+const PROJECT = 'tests/types/tsconfig.popup-model-invalid.json';
 
 /** Each deliberate invalid variant, pinned to its line. */
 const EXPECTED = new Map([

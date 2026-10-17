@@ -1,11 +1,5 @@
 # How DDM Builds and Launches an Interactive Website via GitHub Pages and npm
 
-**Prompt:**
-
-Explain how this repo uses `npm` or other tools to launch an interactive website via GitHub Pages. Likely there is useful information in `DEVELOPER.md`, `.nvmrc` and `.github/`. Include information on what is `npm` and other tools for a developer unfamiliar with this approach. Save in `EXPLAIN_NPM.md` in this directory.
-
-**Model Answer:**
-
 This guide explains how this repository uses **Node.js**, **npm**, **Vite**, and **GitHub Actions** to build, verify, and host an interactive, high-performance web mapping application on **GitHub Pages**. It is written for developers, data scientists, and researchers who may be more familiar with Python, R, or traditional server architectures than the modern JavaScript/TypeScript ecosystem.
 
 ---

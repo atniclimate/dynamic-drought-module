@@ -32,6 +32,10 @@ npm run build
 npm run preview
 ```
 
+For an introduction to npm, Vite, and Pages, read the
+[tooling walkthrough](docs/tooling/EXPLAIN_NPM.md) or its
+[slides](docs/tooling/EXPLAIN_NPM.html) ([Quarto source](docs/tooling/EXPLAIN_NPM.qmd)).
+
 The production build is written to `dist/`. Vite uses relative asset paths so
 the same output works at a domain root, under the historical
 `/dynamic-drought-module/` subpath, and inside an iframe.
@@ -41,6 +45,32 @@ floor; the two are different axes. The renderer version and the browser and
 graphics floor are stated once, in README's "Browser support" section, and
 `npm run check:renderer` proves that the pin, the lockfile, the installed tree,
 and the build target in `vite.config.ts` still agree with it.
+
+### Dependency overrides
+
+`package.json` pins two `overrides` to remove vulnerable dependencies from
+the dev-only `mapshaper` chain. Run `npm audit` for the current status;
+these overrides do not establish that the full dependency tree is clean.
+The chain is used exclusively by four offline maintainer-run
+artifact builders (`scripts/build-states.mjs`,
+`scripts/build-minimap-geometry.mjs`, `scripts/build-cdm-snapshot.mjs`,
+`scripts/build-ecoregion-tiles.mjs`) and never ships in the bundle.
+
+- `adm-zip: ^0.6.0` lifts mapshaper's zip helper past
+  GHSA-xcpc-8h2w-3j85; 0.6.0 keeps the `.zip` read/write export shape.
+  Both directions are exercised by regenerating the committed minimap
+  artifact after any mapshaper upgrade.
+- `@ngageoint/geopackage: npm:noop2@^2.0.0` replaces the GeoPackage
+  subtree with an empty module. That subtree pins `image-size` 0.8.x
+  (GHSA-w3rx-r6r6-pgpr, GHSA-5p2g-fcmc-qvqq, no fixed release exists)
+  and a vulnerable `file-type`, so the only honest fix is removing it.
+  mapshaper requires it lazily for `.gpkg` I/O only (guarded require
+  sites in `mapshaper.js`: `importGeoPackage` and `exportGeoPackage`),
+  and every pipeline here feeds mapshaper GeoJSON buffers or
+  fflate-unzipped shapefile members, never `.gpkg`. A `.gpkg` request
+  now stops with mapshaper's own "GeoPackage library is not loaded"
+  message. Drop this override if a pipeline ever needs GeoPackage I/O
+  and the upstream chain has a patched `image-size`.
 
 ## Product and planning authority
 
@@ -87,6 +117,77 @@ The layer registry is the source of truth for active layers. The URL is a
 public state contract, not an export added after the fact. A change to view,
 layer, region, basemap, selected place, horizon, or Fire 3D behavior must be
 checked against share, reset, reload, browser history, and embed operation.
+
+### Architecture invariants
+
+Architecture encodes values. These seven commitments govern how the code
+behaves, so a person reading the interface can trust what it says and a
+deployer keeps control of the deployment.
+
+- **No backend.** The `dist/` folder is the entire deployment; the optional
+  Worker is a CORS shim, not application logic.
+- **URL-as-state.** Region, active layers, selection, and the embed flag
+  round-trip through the URL.
+- **One surface at a time.** Condition surfaces are mutually exclusive by
+  construction; place, events, and stations stack over the active surface.
+- **Lazy loading with honest status.** Layers load on first toggle-on; a
+  data failure keeps the layer checked with an honest pill (a shared link
+  never silently loses a layer), and a truncated response reads
+  `live (partial)`, never an unqualified `live`.
+- **Cancellable network operations.** Master abort signal plus per-call
+  timeout on every non-trivial fetch; late responses to superseded
+  operations are dropped, not rendered.
+- **Live-fetch stewardship.** Tribal boundaries are public data (T0), read
+  live from their public sources each session; the two operator slots ship
+  empty.
+- **Mobile and accessibility.** Controls retain 44-pixel targets, accessible names,
+  keyboard focus, safe-area seating, reduced-motion behavior, and arrow-key
+  region navigation; status changes announce through a polite live region;
+  embed semantics remain owned by the separate embed shell.
+
+## Customization quick reference
+
+| Want to change... | Edit in |
+| ----------------- | ------- |
+| Region bounds or names | `src/config/regions.ts` (`REGIONS`) |
+| Layer registry and default-on set | `src/config/layers.ts` (`LAYER_DEFS`) |
+| View presets | `src/config/presets.ts` (`VIEW_PRESETS`) |
+| Colors and palettes | `src/config/palette.ts` |
+| Telemetry stations | `src/config/telemetry.ts` |
+| Endpoint URLs and the Worker base | `src/config/urls.ts` |
+| Brand text and styles | `index.html` header, `src/styles/app.css` |
+
+## URL parameters (URL-as-state)
+
+The application reads `window.location.search` on load, both for direct
+visits and for embedded iframes. The **Share view** button copies the
+current URL.
+
+| Param | Values | Default |
+| ----- | ------ | ------- |
+| `region` | `washington_state`, `columbia_snake_basin`, `cascades`, `central_oregon`, `southwest_washington`, `south_puget_sound`, `national`, `alaska`, `hawaii`, `british_columbia` | `national` (add `region=washington_state&view=brief` to keep the prior Washington framing and the Brief door) |
+| `layers` | comma-separated keys from the [layer table](README.md#layers-and-data-sources) | `hillshade,nadm-drought,aiannh,bia-reservations,states` |
+| `framing` | one of the nine ATNI-authored editorial framing keys, or `all` | none; `region` remains in control |
+| `cluster` | `wildfire`, `heat`, or `enso`; an explicit `layers` list outranks it | Drought, encoded by absence |
+| `ocean` | `pacific`, `arctic`, or `atlantic`, only with `cluster=enso` | none |
+| `select` | `state:<postal code>` (for example `state:WA`): opens the map focused on that boundary with its impact briefing open; applied once, then dropped from the URL | none |
+| `embed` | `true` or `1` (hides the sidebar for clean iframe presentation) | `false` |
+| `view` | `brief` or `console` | derived from the rest of the URL; a bare URL opens Brief |
+| `horizon` | `weeks-ahead` or `season-ahead` | current |
+| `basemap` | `default` explicitly turns recent satellite imagery off; the legacy `satellite` token remains valid | recent satellite imagery, encoded by absence |
+| `studio` | `layers` or `place` | none |
+| `fire3d` | exact token `true`; entry requires a desktop viewport and the committed Wildfire cluster, while an active scene may remain through a custom layer stack as long as a Fire event layer remains | `false`, encoded by absence |
+| `spi` | Gridded Drought Index accumulation window in days: `30`, `60`, `180`, or `365`; applies when the `gridded-index` layer is on | `90` day window, encoded by absence |
+
+Temporal display parameters also round-trip (`week` for the USDM archive,
+`dmode`, `sst`, `outlook`, and `heatday`). The authoritative grammar is
+in `src/state/url.ts`, pinned by the URL-state and legacy-link browser
+tests. Old shared links keep working: `tribal` is still a valid key (now
+the deployer-data slot, off by default; naming it in `layers` turns it
+on), and legacy layer lists resolve deterministically.
+
+Because condition surfaces render one at a time, a `layers` list naming
+several surfaces resolves deterministically to the first surface named.
 
 ## Layer contract
 
@@ -187,6 +288,100 @@ Some builders fetch large upstream datasets or require a local Python
 environment. Read the script header, source terms, expected cache paths, and
 hard-fail checks before running one. Never assume a successful download proves
 the artifact's semantics.
+
+### Framing minimap and Nunavut proxy
+
+The framing minimap derives its colors from the current monthly
+[North American Drought Monitor](https://www.drought.gov/data-maps-tools/north-american-drought-monitor-nadm).
+Each authored framing computes an approximate cosine-latitude-weighted
+ordinal mean of assessed land, from white `None` through dark-red `D4`,
+for its fill; a separate outline carries the total D1-D4 share so the
+mean cannot hide material drought extent. NADM does not publish its exact
+analyzed-area mask, so the minimap excludes Nunavut using a Statistics
+Canada 2021 Digital Boundary File as an analysis-mask proxy and reports
+the northern framing as `live (partial)`. The proxy is used only for
+calculation, never rendered as boundary or jurisdictional geometry.
+
+Nunavut proxy source: Government of Canada; Statistics Canada; Statistical
+Geomatics Centre, 2021 Digital Boundary Files, reference date January 1,
+2021. Contains information licensed under the
+[Open Government Licence - Canada](https://open.canada.ca/en/open-government-licence-canada).
+Adapted for DDM; no endorsement is implied.
+
+Every live endpoint in `src/config/urls.ts` carries a verification
+metadata block (HTTP status, content type, CORS posture, response-shape
+caveats, verification date). Read it before touching a fetcher.
+
+### About the basemap and hydrography
+
+The product-default basemap shows recent satellite imagery from
+[NOAA NESDIS merged GOES East and West GeoColor](https://www.nesdis.noaa.gov/imagery/satellite-maps)
+and its rolling 24-hour archive. The lifecycle selects the newest frame
+passing a known-data image probe, pins all tiles to it, displays the exact
+UTC observation range, and checks every 10 minutes. A failed refresh keeps
+the last good frame; if initial activation fails, the URL reverts honestly
+to `default`. The Satellite control turns imagery on and off;
+`basemap=default` records the satellite-off choice, showing subdued
+OpenStreetMap ground. OpenStreetMap also remains underneath because GOES
+coverage ends near 76 degrees north and imagery can contain clouds or
+gaps. GeoColor is context only: daytime areas approximate true color,
+nighttime areas use infrared and static reference lights.
+
+Explicit Fire and Wildfire controls may request recent GeoColor as part of
+their governed scene, but unrelated layer or horizon changes do not
+override a visitor's manual basemap choice. Future satellite-derived
+products belong in separately named layers with their own status,
+timestamp, caveat, and legend; recoloring an existing layer would let a
+display claim what its source does not. Hydrography queries the
+volunteer-run Overpass API (three-mirror failover, viewport-driven, dormant
+below zoom 7); institutional deployments expecting heavy concurrency should
+plan for the planned National Hydrography Dataset PMTiles bundle.
+
+### The desktop 3D Fire view
+
+The Fire view offers a 3D toggle on desktop widths: terrain relief from
+the bundled Pacific Northwest USGS 3DEP archive under a pitched camera,
+NOAA HMS smoke plumes re-presented as a stylized volume (vertical extent
+encodes the issuer's density class, never measured plume height), and
+issuer-published landscape context draped over the relief. When the NIFC
+perimeter layer is live, each wildfire perimeter stands as a low ribbon
+along its edge (constant on-screen height, not flame height or intensity;
+centered on the published edge, neither enlarging nor shrinking the mapped
+perimeter), pulsing in step with the flat outline. The first context layer
+is USFS Wildfire Hazard Potential 2023, baked with the issuer's categorical
+colors and nearest-neighbor sampling so class boundaries never acquire
+invented colors. It is a long-term hazard context, not an incident
+forecast.
+
+Power infrastructure is a separate, default-off catalog layer usable in
+flat or 3D views, not activated automatically by Fire 3D. Its transmission
+lines come from the ARCHIVED federal HIFLD dataset (baked once, last data
+update 2024-09-30, with that currency caveat always in the legend), and
+its live power plants come from the U.S. Energy Information
+Administration, labeled with the issuer's own reporting period. Substations
+and distribution lines are absent: substation locations are withheld by
+publishing agencies for security reasons, and no authoritative public
+national distribution-circuit dataset exists.
+
+Building structures come from the Overture Maps Foundation buildings theme
+(ODbL, https://opendatacommons.org/licenses/odbl/1-0/), extruded over the terrain from zoom 13: footprints with an
+issuer-published height rise to it; the rest draw in a visibly dimmer tone
+at a disclosed placeholder height. The committed bake covers the central
+Oregon region framing only; a full Pacific Northwest bake was projected
+from the measured per-building tile rate at roughly 240 MB for z14-only
+tiles (about 380 MB at the shipped z13-14 scheme, 9.16 million footprints
+either way) and cannot ride the same-origin hosting path, so the extract
+script's `--bbox` parameter is the documented route for a deployer to bake
+their own region (see `public/data/README.md`).
+
+The view is a 3D context view, deliberately not a "digital twin": that
+phrase names systems bundling physics-based fire simulation with rendering,
+and this module runs no simulation. The control carries two always-visible
+notes: the terrain coverage statement, and a non-prediction disclosure
+stating that nothing in the view shows or implies fire spread, ignition,
+or an all-clear. Wildland fire science context for reading terrain is
+published in NWCG's *Introduction to Wildland Fire Behavior* (S-190); the
+module states no such inference about any specific incident.
 
 ## Interface and responsive behavior
 
@@ -318,6 +513,16 @@ rerunning until a flaky result happens to pass. Keep Playwright traces and
 reports for actionable CI failures.
 
 ## Optional Worker
+
+Most sources serve the browser directly. The Worker in `workers/proxy/` is
+a CORS shim with a strict allow-list (the authoritative set is in
+`workers/proxy/src/index.ts`, mirrored in the `wrangler.toml` header): it
+permits only the exact AWDB, AgriMet, Hydromet, NWRFC, USFS Wildfire
+Hazard Potential, US Drought Monitor DSCI, and `api.weather.gov` reads
+used by the application, returning upstream bytes unchanged with
+browser-facing CORS headers. Deploy with `wrangler` and set
+`URLS.workerProxy` to enable those sources; without it, the module still
+runs and reports those values honestly as unavailable.
 
 The Worker source is in `workers/proxy/` and has its own package metadata. It
 may relay only exact reviewed routes over HTTPS, using the configured method,
@@ -748,6 +953,11 @@ git config core.hooksPath .githooks
 ```
 
 Do not bypass it with `--no-verify`.
+
+AI assistants and automation tools are not named as project contributors in
+public credits, commit trailers, or pull-request text. Preserve the license's
+required human and organizational attribution and all data-source credits.
+Do not rewrite existing history or relabel bot commits as human work.
 
 ## Contribution scope
 
