@@ -202,6 +202,8 @@ jobs:
     steps:
       - name: Open, update, or close the browser-suite issue
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          BROWSER_RESULT: ${{ needs.browser.result }}
         with:
           script: |
             const label = 'browser-suite';
@@ -232,10 +234,11 @@ jobs:
             });
             const existing = open.find((issue) => !issue.pull_request && (issue.body ?? '').includes(marker));
             if (failedShards.length === 0) {
-              // A green suite closes the standing issue. `needs.browser`
-              // reports success for an advisory call whatever the shards
-              // did, so the artifacts, not that result, are what say the
-              // suite was green.
+              // A timeout or setup/upload failure can prevent the failure markers from arriving.
+              if (process.env.BROWSER_RESULT !== 'success') {
+                core.warning('The browser suite did not complete successfully and has no failure markers. Leaving the browser-suite issue unchanged.');
+                return;
+              }
               if (!existing) {
                 core.info('The browser suite passed on main and no browser-suite issue is open.');
                 return;

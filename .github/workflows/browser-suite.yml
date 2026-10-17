@@ -143,10 +143,10 @@ jobs:
     name: ${{ matrix.project }} ${{ matrix.shard }}/${{ matrix.total }}
     runs-on: ubuntu-latest
     # The job budget covers a cache-miss browser install (10), the suite
-    # step's retry envelope (26), and the summary and upload steps, so a
+    # step's retry envelope (35), and the summary and upload steps, so a
     # slow red shard still gets its report kept instead of being cancelled
     # without one.
-    timeout-minutes: 40
+    timeout-minutes: 50
     # Build identity (FE-22, 2026-08-28): the app stamps these two values on
     # <html> (vite.config.ts defines) and tests/helpers.ts gotoApp asserts
     # them on every boot it drives when they are set, so a shard proves it
@@ -200,13 +200,12 @@ jobs:
       # One worker per runner (see playwright.config.ts on the software-GL
       # ceiling). Reporters come from the config: a named line per test,
       # GitHub annotations on failure, an HTML report, and a JSON report
-      # for the summary below. The step budget covers the measured shard
-      # (about 11 minutes when set; see the 2026-10-12 re-fit above) plus one CI retry (playwright.config.ts, dropped
-      # from two on 2026-08-29: nothing ever passed on retry 2) of the
-      # slowest 3D tests.
+      # for the summary below. Shard 7/8 passed in 22.4 minutes but exhausted
+      # 26 minutes on another run while tests still passed (2026-10-17).
+      # shortcut: 35 minutes absorbs runner variance; rebalance if it is exhausted again.
       - name: Run the browser shard
         id: suite
-        timeout-minutes: 26
+        timeout-minutes: 35
         # Advisory calls (deploy.yml) keep `outcome` truthful, which is what
         # the report and trace uploads below are gated on, while the step's
         # conclusion, and so the job's, stays success.
