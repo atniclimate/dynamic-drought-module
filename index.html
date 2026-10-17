@@ -9,21 +9,18 @@
   <meta property="og:title" content="(TEST PREVIEW) Dynamic Drought Module | ATNI Climate" />
   <meta property="og:description" content="(TEST PREVIEW) Live Drought, Wildfire, Extreme heat, and El Niño monitoring and impact briefing for Tribes and communities across North America. It features 3D fire modes, atmospheric currents, near-term and long-range projections, hurricane tracking, and NWS warnings, and more, with Place and Layer Studio to fine tune the display. Built by ATNI Climate." />
   <meta property="og:url" content="https://atniclimate.github.io/dynamic-drought-module/" />
-  <meta property="og:image" content="https://atniclimate.github.io/dynamic-drought-module/social/ddm-test-preview.png" />
-  <meta property="og:image:type" content="image/png" />
+  <meta property="og:image" content="https://atniclimate.github.io/dynamic-drought-module/social/ddm-test-preview.jpg" />
+  <meta property="og:image:type" content="image/jpeg" />
   <meta property="og:image:width" content="1919" />
   <meta property="og:image:height" content="1079" />
   <meta property="og:image:alt" content="Test preview of the Dynamic Drought Module showing the 3D Fire view and an impact briefing for Warm Springs Reservation and Off-Reservation Trust Land." />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="(TEST PREVIEW) Dynamic Drought Module | ATNI Climate" />
   <meta name="twitter:description" content="(TEST PREVIEW) Live Drought, Wildfire, Extreme heat, and El Niño monitoring and impact briefing for Tribes and communities across North America." />
-  <meta name="twitter:image" content="https://atniclimate.github.io/dynamic-drought-module/social/ddm-test-preview.png" />
+  <meta name="twitter:image" content="https://atniclimate.github.io/dynamic-drought-module/social/ddm-test-preview.jpg" />
   <meta name="twitter:image:alt" content="Test preview of the Dynamic Drought Module showing the 3D Fire view and an impact briefing for Warm Springs Reservation and Off-Reservation Trust Land." />
   <meta name="color-scheme" content="dark" />
   <title>Dynamic Drought Module · ATNI Climate</title>
-  <!-- The ATNI seal as the tab icon; also silences the browser's default
-       /favicon.ico request, which 404ed on every first load (found by the
-       U4d browser pass 2026-07-14). -->
   <link rel="icon" type="image/png" href="/brand/atni-seal.png" />
 
   <!-- Fonts are self-hosted (public/fonts/, licences alongside); the @font-face
@@ -114,23 +111,14 @@
              Brief mode. Regenerated markup never owns any shell host. -->
         <section class="panel brief-head" id="brief-head" aria-label="Drought briefing" hidden></section>
 
-        <!-- The S4 main-screen shell (the 2026-07-18 design record): the four
-             hazard cluster buttons, honest conditions summary, same-node
-             region controls, continental minimap, compact temporal row,
-             share door, and same-node Brief place search,
-             rendered by the lazy Preact shell island into this static host.
-             Stylesheet-gated: desktop only (below 720px the mobile sheet
-             and hazard rail carry the same decisions), never in embed. -->
+        <!-- Stable host for the lazy Preact shell; CSS limits it to desktop,
+             while the mobile sheet and hazard rail serve smaller screens. -->
         <section class="panel shell-panel" id="shell-panel" aria-label="Hazard view, conditions, region, framing, time, and share">
           <div id="shell-island"></div>
         </section>
 
-        <!-- The contextual time rail (D-0.7.0-067, Option 1): a stable direct
-             child after place and before the generated display description.
-             src/ui/time-bar.ts renders the current temporal owner's one spec
-             here and moves this SAME node into #sheet-time-host for the mobile
-             Brief surface. Embeds suppress the full rail and keep only the
-             mirrored #embed-date-stamp chip on the map. -->
+        <!-- time-bar.ts moves this same node to #sheet-time-host on mobile;
+             embeds show only the mirrored #embed-date-stamp. -->
         <div id="time-bar" class="time-bar" role="group" hidden></div>
 
         <!-- What is shown and how to refine it. Stable hosts let view-shell
@@ -138,10 +126,7 @@
              without ever rebuilding or nesting #time-bar. The ENSO capability
              is demoted into this description with its detail behind disclosure. -->
         <section class="panel brief-display" id="brief-display" aria-label="Refine the view" hidden>
-          <!-- The static "Shown now" heading and summary sentence moved into
-               the shell island (S4): the S3 DisplaySummary renders the live,
-               status-derived truth there, so a hand-authored placeholder
-               sentence here would be a second, staler description. -->
+          <!-- DisplaySummary owns the live summary in the shell; do not duplicate it here. -->
           <div id="layers-studio-entry-host"></div>
           <div id="brief-secondary-actions"></div>
           <div class="brief-selection-summary" id="brief-selection-summary" hidden>
