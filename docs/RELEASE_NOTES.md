@@ -16,6 +16,12 @@
 - 2026-09-28: the fire perimeter and smoke plume checkboxes now each control
   only their own layer (the Wildfire mode still shows both).
 
+## v0.7.6
+
+- 2026-10-17: shared links include a test-preview screenshot and an ATNI Climate
+  description through Open Graph and large-image social card metadata. The preview
+  is shared across map views; opening a link retains its region, mode, and view.
+
 ## v0.7.0
 
 `v0.7.0` is the package version and, since 2026-09-11, the release tag. It
