@@ -31,9 +31,9 @@ mermaid:
 
 ::: {.column width="50%"}
 ### Core Documentation
-- [README.md](README.md): Product scope, hazards, iframe embedding.
-- [DEVELOPER.md](DEVELOPER.md): Layer contracts, data pipelines, test ladders.
-- [ROADMAP.md](ROADMAP.md): Phases, branch posture, decision registers.
+- [README.md](../../README.md): Product scope, hazards, iframe embedding.
+- [DEVELOPER.md](../../DEVELOPER.md): Layer contracts, data pipelines, test ladders.
+- [Release notes](../RELEASE_NOTES.md): Published changes and release evidence.
 - [EXPLAIN_NPM.md](EXPLAIN_NPM.md): Reference guide on npm, Vite, and Pages.
 :::
 :::
@@ -292,9 +292,9 @@ In DDM, **a merged commit is not proof of a successful release**.
 
 ::: {.column width="50%"}
 ### Further Reading
-- [README.md](README.md): Product scope & embed instructions.
-- [DEVELOPER.md](DEVELOPER.md): Comprehensive developer guidelines.
-- [ROADMAP.md](ROADMAP.md): Project roadmap & delivery posture.
+- [README.md](../../README.md): Product scope & embed instructions.
+- [DEVELOPER.md](../../DEVELOPER.md): Comprehensive developer guidelines.
+- [Release notes](../RELEASE_NOTES.md): Published changes and release evidence.
 - [EXPLAIN_NPM.md](EXPLAIN_NPM.md): Full narrative walkthrough of npm & GitHub Pages.
 :::
 :::

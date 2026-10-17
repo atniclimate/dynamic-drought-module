@@ -8,8 +8,8 @@
  * `tests/types/key-typos.ts` is a fixture that DELIBERATELY fails to
  * typecheck: four object literals, each one key typo away from a real
  * entry in LAYER_KEYS, PRESET_KEYS, or a recipe's LayerKey union. This
- * script runs `tsc -p tsconfig.key-typos.json` against that ONE file
- * (tsconfig.key-typos.json extends the project tsconfig so the fixture is
+ * script runs `tsc -p tests/types/tsconfig.key-typos.json` against that ONE file
+ * (tests/types/tsconfig.key-typos.json extends the project tsconfig so the fixture is
  * judged under the same strictness as src/) and inverts the usual
  * pass/fail sense on purpose:
  *
@@ -37,7 +37,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const FIXTURE = 'tests/types/key-typos.ts';
-const PROJECT = 'tsconfig.key-typos.json';
+const PROJECT = 'tests/types/tsconfig.key-typos.json';
 
 /**
  * The four deliberate typos in tests/types/key-typos.ts, by the line each
@@ -92,7 +92,7 @@ if (result.error) {
 
 if (result.status === 0) {
   console.error(
-    'check-key-types: tsc -p tsconfig.key-typos.json SUCCEEDED, and it must not. ' +
+    `check-key-types: tsc -p ${PROJECT} SUCCEEDED, and it must not. ` +
       `${FIXTURE} exists to fail typechecking; a clean compile means one of the ` +
       'four internal key unions (LAYER_KEYS/LayerKey, PRESET_KEYS/PresetKey, or a ' +
       'recipe\'s LayerKey typing) has silently widened back to `string` and a ' +
@@ -123,7 +123,7 @@ const unexpected = [...reportedLines].filter((line) => !expectedLineSet.has(line
 
 if (missing.length > 0 || unexpected.length > 0) {
   console.error(
-    `check-key-types: tsc -p tsconfig.key-typos.json failed (as expected), but not for the right reasons.`
+    `check-key-types: tsc -p ${PROJECT} failed (as expected), but not for the right reasons.`
   );
   for (const typo of missing) {
     console.error(

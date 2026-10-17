@@ -4,7 +4,7 @@
  * pinned line below and nowhere else.
  *
  * It is excluded from `tsconfig.tests.json` and checked on its own, under
- * `tsconfig.popup-model-invalid.json`, by
+ * `tests/types/tsconfig.popup-model-invalid.json`, by
  * `tests/types/check-popup-model-invalid.mjs`, which fails if any pinned line
  * compiles (the popup model silently admitted an invalid variant) or if any
  * OTHER line errors (the valid scaffolding broke, which would make every

@@ -6,7 +6,7 @@
  * compiler error, not a silent gap that `tsconfig.tests.json` fails to catch.
  * It is excluded from that config's own `include` (see `exclude` there),
  * so `npm run typecheck:tests` never sees it directly, and is checked on its
- * own, under `tsconfig.context-literal-typo.json`, by
+ * own, under `tests/types/tsconfig.context-literal-typo.json`, by
  * `tests/types/check-context-literal-typo.mjs`, which asserts the OPPOSITE
  * of a normal check: it fails if this file compiles cleanly, because that
  * would mean `containing` silently became optional (or the interface
