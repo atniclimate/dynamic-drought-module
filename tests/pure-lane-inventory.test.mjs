@@ -54,9 +54,9 @@ export function stripComments(source) {
 }
 
 async function pureSpecsFromConfig() {
-  const config = await readFile(join(ROOT, 'playwright.pure.config.ts'), 'utf8');
+  const config = await readFile(join(ROOT, 'playwright.config.ts'), 'utf8');
   const block = /export const PURE_SPECS = \[([\s\S]*?)\] as const;/.exec(config);
-  assert.ok(block, 'PURE_SPECS is not declared as an `as const` array in playwright.pure.config.ts');
+  assert.ok(block, 'PURE_SPECS is not declared as an `as const` array in playwright.config.ts');
   const files = [...block[1].matchAll(/'([^']+)'/g)].map((m) => m[1]);
   assert.ok(files.length > 0, 'PURE_SPECS is empty');
   return files;
@@ -93,6 +93,8 @@ test('the pure config carries no web server and one project', async () => {
   assert.match(config, /const \{ webServer: _webServer, projects: _projects, \.\.\.inherited \} = base;/);
   assert.doesNotMatch(config, /\bwebServer:\s*\{/);
   assert.match(config, /name: 'pure'/);
+  assert.match(config, /import base, \{ PURE_SPECS \} from '\.\/playwright\.config';/);
+  assert.match(config, /testMatch: PURE_SPECS\.map\(/);
 });
 
 test('the pure lane is wired as verify:pure and the ladder documents it', async () => {

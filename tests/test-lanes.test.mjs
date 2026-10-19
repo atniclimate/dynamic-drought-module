@@ -16,7 +16,7 @@ import { readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
-import config from '../playwright.config.ts';
+import config, { PURE_SPECS } from '../playwright.config.ts';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const THREE_PROJECTS = ['chromium', 'chromium-interaction', 'chromium-3d'];
@@ -25,6 +25,7 @@ const MEASURE_SCRIPTS = [
   ['measure:flow', 'tests/flow-measure.spec.ts']
 ];
 const MEASURE_FILES = MEASURE_SCRIPTS.map(([, spec]) => spec.slice('tests/'.length));
+const PURE_FILES = PURE_SPECS.map((spec) => spec.slice('tests/'.length));
 const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
 
 function scriptArgs(script, label) {
@@ -83,7 +84,7 @@ function proveConfig(candidate) {
     if (project.name === 'chromium') {
       assert.equal(project.testMatch, undefined, 'chromium retains its default .spec.ts match');
       assert.ok(Array.isArray(project.testIgnore), 'chromium uses an explicit ignore list');
-      for (const file of MEASURE_FILES) {
+      for (const file of [...MEASURE_FILES, ...PURE_FILES]) {
         assert.ok(project.testIgnore.includes(`**/${file}`), `chromium explicitly ignores ${file}`);
       }
     } else {
@@ -99,6 +100,7 @@ function proveConfig(candidate) {
         }
       } else {
         assert.ok(files.every((file) => !MEASURE_FILES.includes(file)), `${project.name}: measurement files excluded`);
+        assert.ok(files.every((file) => !PURE_FILES.includes(file)), `${project.name}: pure files stay in the gate`);
       }
     }
   }
@@ -122,7 +124,7 @@ function changedProject(name, change) {
   };
 }
 
-for (const file of MEASURE_FILES) {
+for (const file of [...MEASURE_FILES, PURE_FILES[0]]) {
   test(`mutation control: losing the ordinary ignore for ${file} is rejected`, () => {
     const changed = changedProject('chromium', (project) => ({ testIgnore: project.testIgnore.filter((pattern) => pattern !== `**/${file}`) }));
     assert.throws(() => proveConfig(changed), /chromium explicitly ignores/);
@@ -147,9 +149,9 @@ for (const ignore of ['**/flow-measure.spec.ts', '**/*.spec.ts', /measure/]) {
 }
 
 for (const name of ['chromium-interaction', 'chromium-3d']) {
-  test(`mutation control: ${name} cannot broaden or include a measurement`, () => {
-    for (const testMatch of [['**/*.spec.ts'], ['**/flow-measure.spec.ts']]) {
-      assert.throws(() => proveConfig(changedProject(name, () => ({ testMatch }))), /nonliteral|measurement files excluded/);
+  test(`mutation control: ${name} cannot broaden or include a measurement or pure file`, () => {
+    for (const testMatch of [['**/*.spec.ts'], ['**/flow-measure.spec.ts'], [`**/${PURE_FILES[0]}`]]) {
+      assert.throws(() => proveConfig(changedProject(name, () => ({ testMatch }))), /nonliteral|measurement files excluded|pure files stay in the gate/);
     }
   });
 }

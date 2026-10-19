@@ -8,10 +8,9 @@
  * per-check evaluators the live proof records, and resolveLiveExpectation,
  * which decides what the live site should be serving and whether that can be
  * checked at all. Receipts carry URLs, HTTP status,
- * byte counts, milliseconds, and status words only; never a response body
- * or a screenshot, because an ordinary boot fetches live AIANNH and BIA
- * geometry that the runtime keeps in memory (hard rule 1; see the
- * NON-REDISTRIBUTION GUARD in src/layers/aiannh.ts).
+ * byte counts, milliseconds, and status words only; no response bodies or
+ * screenshots are needed for these verdicts. Public Tribal boundaries and
+ * names are T0 and may appear in other diagnostic artifacts.
  */
 
 /** The registry statuses that end a layer's activation (the catalog pill
@@ -309,6 +308,25 @@ export function receiptOk(receipt) {
   return receipt.checks.length > 0 && receipt.checks.every((c) => c.ok);
 }
 
+/** A crashed verifier must not inherit a light receipt or a successful stamp poll. */
+export function evaluateVerificationReceipt(receipt, expected) {
+  const invalid = { valid: false, verdict: 'fail' };
+  if (!receipt || receipt.mode !== expected.mode || receipt.base !== expected.base
+      || receipt.expectSha !== expected.sha || receipt.expectNonce !== expected.nonce
+      || !Array.isArray(receipt.checks) || receipt.checks.length === 0
+      || !receipt.checks.every((c) => c && typeof c.name === 'string' && typeof c.ok === 'boolean')
+      || !Array.isArray(receipt.failed)) return invalid;
+  const failed = receipt.checks.filter((c) => !c.ok).map((c) => c.name);
+  const diverged = failed.some((name) => /^(stamp|propagation|seat):/.test(name));
+  if (JSON.stringify(failed) !== JSON.stringify(receipt.failed)
+      || receipt.diverged !== diverged
+      || expected.exitCode !== (failed.length ? '1' : '0')) return invalid;
+  return {
+    valid: true,
+    verdict: expected.propagated !== 'true' || diverged ? 'fail' : failed.length ? 'product' : 'pass',
+  };
+}
+
 export function renderSummary(receipt) {
   const lines = [];
   lines.push(`## Live verification: ${receiptOk(receipt) ? 'pass' : 'FAIL'}`);
@@ -350,8 +368,8 @@ export function renderSummary(receipt) {
 /**
  * How long main's head may go without a successful deploy before the
  * difference between main and the live build counts as a divergence
- * rather than a release in progress. A green push to main takes about 15
- * minutes through the gate, the sharded browser suite, and deploy-pages;
+ * rather than a release in progress. Publication runs the artifact gate
+ * and deploy-pages; the candidate browser suite already ran in Validate.
  * 30 minutes leaves room for a slow runner and for Pages propagation
  * without letting a red or cancelled deploy sit unreported for a day.
  */
@@ -364,9 +382,8 @@ export const LIVE_COMPARE_GRACE_MS = 30 * 60 * 1000;
  * A different question from the head grace above, and it was a defect to
  * answer both with 30 minutes. The head grace asks how long a commit may go
  * with no successful deploy; the deploy's OWN envelope is longer than that,
- * because .github/workflows/browser-suite.yml gives each shard 40 minutes
- * and deploy.yml adds a 15 minute gate job before it. A run inside its own
- * documented budget must not be reported as stuck, so this bound is 60
+ * because a queued Pages deployment can outlast the head grace even when
+ * its gate and publication are healthy. Keep a conservative bound of 60
  * minutes from the run's creation: past a deploy that is running late, short
  * of letting a run parked in `queued` or `waiting` keep the compare green
  * for a day.

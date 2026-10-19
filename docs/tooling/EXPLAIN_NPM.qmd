@@ -192,8 +192,8 @@ npm run verify:quick
 # 4. Deterministic quality gate (~40s)
 npm run gate
 
-# 5. Full serial browser test suite
-npm run test:serial
+# Full browser coverage runs in GitHub's Validate workflow.
+# Do not run the full suite locally.
 ```
 :::
 
@@ -205,8 +205,8 @@ npm run test:serial
   - Fast feedback (`verify:quick`), deep gating (`gate`).
 
 ::: {.callout-note}
-### The Gate Rule
-Always run `npm run gate` before pushing. It validates bundle sizes, budgets, and schema contracts.
+### Choose Checks for the Change
+Follow `CLAUDE.md` and `tests/README.md`. The gate validates bundle sizes, budgets, and schema contracts; GitHub owns the full browser suite and its weekly run on main.
 :::
 :::
 :::
@@ -236,13 +236,7 @@ flowchart LR
             HeadCheck --> DeployPages
         end
 
-        subgraph BrowserJob["Job: browser (Advisory)"]
-            direction TB
-            Playwright["Playwright Browser Suite<br/>• 8 parallel shards<br/>• Advisory on main"]
-        end
-
         BuildJob -->|needs: build| DeployJob
-        BuildJob -.->|parallel advisory| BrowserJob
     end
 
     subgraph VerifyWorkflow["verify-live.yml (Post-Deploy Proof)"]

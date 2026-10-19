@@ -1,30 +1,8 @@
-# Build the Dynamic Drought Module (DDM) with Vite and deploy the
-# resulting dist/ folder to GitHub Pages.
-#
-# Repository Settings > Pages must use GitHub Actions as its source. The
-# deploy job waits on the deterministic gate. The full sharded browser
-# suite (browser-suite.yml, the same matrix Validate runs on the pull
-# request) still runs on every push, in parallel, but ADVISORY since
-# 2026-09-01 (owner direction D-2): the merge commit's tree already passed
-# that suite on the pull request and locally before the landing, so a shard
-# flake must not hold a proven build out of Pages. That reverses the
-# 2026-08-28 policy, which was written when landings were frequent and
-# small; it was observed costing a deploy on run 33597030766, where a
-# comment-only change to three YAML files was blocked by one interaction
-# shard. The pull request's Validate remains the binding gate.
-#
-# Advisory is not silent (report 18 section 6, 2026-09-02): the
-# `browser-report` job below turns a red advisory shard into ONE
-# marker-matched issue, closed by the next green suite, so a regression that
-# lands on main cannot go unnoticed until the next landing. browser-suite.yml
-# also runs itself weekly against main for the same reason.
-#
-# The proof of the live build (DDM-P0-T04 and DDM-P0-T08) lives in
-# verify-live.yml: it runs on this workflow's completion, only when the run
-# succeeded, in its own concurrency group, so a newer push here cannot
-# cancel the receipt for the build still live, and on demand. The daily
-# compare, the path that catches a deploy here that failed or was cancelled
-# and therefore raised no completion event, is snoozed through 2026-09-11.
+# Build the checked production artifact and deploy it to GitHub Pages.
+# The exact candidate passes Validate before landing; the full browser suite
+# is not repeated here. verify-live.yml proves the published SHA and nonce
+# when this workflow completes, and browser-suite.yml still runs weekly.
+# Repository Settings > Pages must use GitHub Actions as its source.
 
 name: Build and deploy DDM to GitHub Pages
 
@@ -32,10 +10,8 @@ on:
   push:
     branches: [main]
     # A change that cannot reach dist/ leaves the live build correct, so the
-    # pipeline has nothing to prove and this workflow does not run. Measured
-    # cost avoided per docs push (run 33597030766, a YAML comment change):
-    # the gate plus eight Playwright shards, about 38 job-minutes, plus a
-    # Pages publish and a live proof of bytes that did not change.
+    # pipeline has nothing to prove and this workflow does not run.
+    # This avoids rebuilding, publishing and proving bytes that did not change.
     #
     # NOT '**/*.md': public/data/README.md, public/data/resources/README.md,
     # and public/fonts/README.md are copied into dist/ by Vite, so they are
@@ -75,12 +51,14 @@ permissions:
 # cancelled rather than emailing a failure, which `false` would do for
 # every extra deploy it ran to completion.
 concurrency:
-  group: pages
+  # Non-main dispatches cannot cancel an eligible main publication.
+  group: ${{ github.ref == 'refs/heads/main' && 'pages' || format('pages-ineligible-{0}', github.run_id) }}
   cancel-in-progress: true
 
 jobs:
   build:
     name: Gate and build
+    if: ${{ github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -89,12 +67,9 @@ jobs:
     # Build identity (FE-22, 2026-08-28): the app stamps these two values on
     # <html> (vite.config.ts defines) so a browser run can prove WHICH build
     # it is exercising. The artifact uploaded here is the build the gate
-    # produced; the browser shards rebuild with the same values as inputs
-    # and assert the stamp on every boot (tests/helpers.ts), so every proof
-    # in this run names the same nonce. The nonce is the run id alone: a
-    # "re-run failed jobs" keeps the run id, reruns only the red shards, and
-    # deploys the artifact this job already uploaded, so a run_attempt
-    # suffix would make the shard proof and the deployed stamp diverge.
+    # produced, and verify-live.yml checks its stamp after publication. The
+    # nonce is the run id alone: a "re-run failed jobs" keeps that run id and
+    # deploys the artifact this job already uploaded.
     env:
       DDM_BUILD_SHA: ${{ github.sha }}
       DDM_BUILD_NONCE: ${{ github.run_id }}
@@ -148,157 +123,10 @@ jobs:
         with:
           path: dist
 
-  browser:
-    name: Browser suite (advisory)
-    uses: ./.github/workflows/browser-suite.yml
-    with:
-      build-sha: ${{ github.sha }}
-      build-nonce: ${{ github.run_id }}
-      # Advisory here, binding on the pull request (owner direction D-2,
-      # 2026-09-01). It still runs on every push, still summarizes, still
-      # keeps a red shard's report and traces; it just does not fail the
-      # job, so it can neither block the deploy below nor turn the run's
-      # conclusion into `failure`, which would cost this deploy its
-      # verify-live proof. See browser-suite.yml's `advisory` input.
-      advisory: true
-
-  # The witness the advisory suite was missing (report 18 section 6,
-  # 2026-09-02). "CI is never a blocker" and "CI is never a witness" are
-  # different claims and only the first was asked for: before this job, a
-  # regression the suite catches and verify-live's checks do not could land
-  # on main and produce no issue, no email and no red badge, and sit until
-  # the next landing, which under one landing per window is weeks.
-  #
-  # One issue, found by its marker comment, exactly the mechanism
-  # verify-live.yml uses for the live proof: opened on the first red push,
-  # commented on every later red push, closed by the next green suite. Never
-  # one per shard and never one per run. This job cannot fail the workflow's
-  # deploy: `deploy` does not need it, and nothing here is evidence about
-  # the bytes.
-  #
-  # It lives here rather than in browser-suite.yml because a reusable
-  # workflow's permissions can only be maintained or reduced by its caller,
-  # never elevated: a job requesting `issues: write` inside browser-suite.yml
-  # would make validate.yml's call fail outright, and Validate is the one
-  # binding gate. deploy.yml is a top-level workflow, so this job may hold
-  # more than the workflow-level default, the same way `deploy` below holds
-  # `pages: write`.
-  browser-report:
-    name: Route the browser suite result to one issue
-    needs: [browser]
-    # `!cancelled()`: a run superseded by the `pages` concurrency group must
-    # not touch the issue either way, because it proved nothing. `push`
-    # only: a hand dispatch is somebody watching the run.
-    if: ${{ !cancelled() && github.event_name == 'push' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      contents: read
-      # Listing this run's own artifacts is GET
-      # /repos/{owner}/{repo}/actions/runs/{run_id}/artifacts, which the
-      # fine-grained permission reference lists under Actions at read.
-      actions: read
-      issues: write
-    steps:
-      - name: Open, update, or close the browser-suite issue
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
-        env:
-          BROWSER_RESULT: ${{ needs.browser.result }}
-        with:
-          script: |
-            const label = 'browser-suite';
-            const marker = '<!-- ddm-browser-suite -->';
-            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
-            // Each shard that did not pass uploaded one marker artifact named
-            // browser-suite-failure-<project>-<shard>-of-<total>
-            // (browser-suite.yml). Counting those artifacts is the only
-            // signal that survives BOTH `continue-on-error` (a step under it
-            // reports a success conclusion, so neither the job result nor the
-            // jobs API can tell an advisory failure from a pass) and matrix
-            // output overwriting (a passing leg finishing last would erase a
-            // failing leg's output).
-            const artifacts = await github.paginate(
-              github.rest.actions.listWorkflowRunArtifacts,
-              { owner: context.repo.owner, repo: context.repo.repo, run_id: context.runId, per_page: 100 }
-            );
-            const failedShards = artifacts
-              .filter((a) => a.name.startsWith('browser-suite-failure-'))
-              .map((a) => a.name.slice('browser-suite-failure-'.length))
-              .sort();
-            const open = await github.paginate(github.rest.issues.listForRepo, {
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              state: 'open',
-              labels: label,
-              per_page: 100
-            });
-            const existing = open.find((issue) => !issue.pull_request && (issue.body ?? '').includes(marker));
-            if (failedShards.length === 0) {
-              // A timeout or setup/upload failure can prevent the failure markers from arriving.
-              if (process.env.BROWSER_RESULT !== 'success') {
-                core.warning('The browser suite did not complete successfully and has no failure markers. Leaving the browser-suite issue unchanged.');
-                return;
-              }
-              if (!existing) {
-                core.info('The browser suite passed on main and no browser-suite issue is open.');
-                return;
-              }
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: existing.number,
-                body: `The browser suite passed on main at \`${context.sha}\` ([run ${context.runId}](${runUrl})). Closing.`
-              });
-              await github.rest.issues.update({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: existing.number,
-                state: 'closed'
-              });
-              core.info(`Closed browser-suite issue #${existing.number}.`);
-              return;
-            }
-            const body = [
-              marker,
-              '## The browser suite failed on main',
-              '',
-              `Commit: \`${context.sha}\``,
-              `Failed shards (${failedShards.length}): ${failedShards.map((s) => '`' + s + '`').join(', ')}`,
-              '',
-              'The suite is advisory on a push to main (owner direction D-2), so the deploy was not blocked and this run is green. The failing shard names its tests in its own job summary, and it kept its report and its pixel-free traces for three days.',
-              '',
-              `Run: ${runUrl}`,
-              '',
-              '_This issue closes automatically when a later push to main passes the same suite._'
-            ].join('\n');
-            if (existing) {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: existing.number,
-                body
-              });
-              core.info(`Commented on browser-suite issue #${existing.number}.`);
-              return;
-            }
-            const created = await github.rest.issues.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              title: 'Browser suite failed on main',
-              labels: [label],
-              body
-            });
-            core.info(`Opened browser-suite issue #${created.data.number}.`);
-
   deploy:
     name: Deploy to GitHub Pages
-    # `build` only (owner direction D-2, 2026-09-01). The identical tree
-    # already passed the sharded suite on the pull request and locally
-    # before the landing, and the live proof that follows boots the deployed
-    # build six ways on the real site, which is stronger evidence than a
-    # shard on a runner. The `browser` job above still runs, in parallel
-    # now, and still annotates. What this gives up is the invariant that the
-    # deployed sha itself was exercised by the suite before publishing.
+    if: ${{ github.ref == 'refs/heads/main' }}
+    # Validate already proved the candidate; publish this gate's artifact.
     needs: [build]
     runs-on: ubuntu-latest
     permissions:
@@ -346,14 +174,4 @@ jobs:
         if: steps.deployment.outcome == 'failure'
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
 
-  # The post-deploy proof is verify-live.yml (workflow_run on this
-  # workflow's completion, success only, own concurrency group), so a
-  # newer push to main cannot cancel the receipt for the build still
-  # live. It expects this run's commit and run id in the live stamp.
-  # A run of this workflow that fails or is cancelled raises no such
-  # proof; the scheduled compare in the same workflow is what notices that
-  # main is then ahead of the live build, and it is snoozed through
-  # 2026-09-11. That is the reason the browser suite above is advisory
-  # rather than merely absent from `needs`: a failing job would make this
-  # run's conclusion `failure`, and a deploy that really did publish would
-  # then go unproved.
+  # verify-live.yml proves this run's SHA and nonce after successful completion.
