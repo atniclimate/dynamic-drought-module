@@ -404,6 +404,20 @@ for (const action of ['pause', 'reactivate', 'deactivate']) {
   });
 }
 
+test('the Nino 3.4 label reads from one point at the box centre, so it draws once however the box splits across tiles, and leaves with the layer', async () => {
+  await withSst({ answer: () => domainsOk() }, async ({ map }) => {
+    await mod.activate(map);
+    const label = map.getLayer('nino34-box-label');
+    assert.ok(label, 'the label layer is added');
+    const data = map.getSource(label.source)?.data;
+    assert.equal(data?.geometry?.type, 'Point', 'a polygon source labels each tile piece of the box, twice once zoomed in');
+    assert.deepEqual(data.geometry.coordinates, [-145, 0]);
+    assert.equal(data.properties.label, 'Nino 3.4 (the ENSO index region)');
+    mod.deactivate(map);
+    assert.equal(map.getSource(label.source), undefined, 'the label source is removed with the layer');
+  });
+});
+
 test('pause/resume and manual stepping retire the old playback loop', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   await withSst({ answer: () => domainsOk() }, async ({ map }) => {

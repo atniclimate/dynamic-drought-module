@@ -91,6 +91,7 @@ const NINO_SOURCE_ID = 'nino34-box';
 const NINO_FILL_ID = 'nino34-box-fill';
 const NINO_LINE_ID = 'nino34-box-line';
 const NINO_LABEL_ID = 'nino34-box-label';
+const NINO_LABEL_SOURCE_ID = 'nino34-box-label';
 
 /** Dated frame ids. */
 const frameSourceId = (date: string): string => `sst-frame-${date}`;
@@ -201,6 +202,12 @@ const NINO34_BOX: GeoJSON.Feature = {
 };
 /** The box centre, where the key's Nino 3.4 button identifies it. */
 const NINO34_CENTRE = [-145, 0] as const;
+/** The label's own point: a polygon source labels each tile's piece of the box, twice once zoomed in. */
+const NINO34_LABEL_POINT: GeoJSON.Feature = {
+  type: 'Feature',
+  properties: { label: NINO34_LABEL },
+  geometry: { type: 'Point', coordinates: [...NINO34_CENTRE] }
+};
 
 function viewIncludesNino34(map: maplibregl.Map): boolean {
   const b = map.getBounds();
@@ -721,11 +728,15 @@ export async function activate(map: maplibregl.Map): Promise<void> {
       });
     }
 
+    if (!map.getSource(NINO_LABEL_SOURCE_ID)) {
+      map.addSource(NINO_LABEL_SOURCE_ID, { type: 'geojson', data: NINO34_LABEL_POINT });
+    }
+
     if (!map.getLayer(NINO_LABEL_ID)) {
       map.addLayer({
         id: NINO_LABEL_ID,
         type: 'symbol',
-        source: NINO_SOURCE_ID,
+        source: NINO_LABEL_SOURCE_ID,
         layout: {
           'text-field': ['get', 'label'],
           // Explicitly the self-hosted fontstack (U0a): MapLibre's implicit
@@ -927,7 +938,7 @@ export function deactivate(map: maplibregl.Map): void {
   for (const id of [NINO_LABEL_ID, NINO_LINE_ID, NINO_FILL_ID, LAYER_ID]) {
     if (map.getLayer(id)) map.removeLayer(id);
   }
-  for (const id of [NINO_SOURCE_ID, SOURCE_ID]) {
+  for (const id of [NINO_LABEL_SOURCE_ID, NINO_SOURCE_ID, SOURCE_ID]) {
     if (map.getSource(id)) map.removeSource(id);
   }
   dates = [];
