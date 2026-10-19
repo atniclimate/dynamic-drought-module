@@ -375,6 +375,19 @@ test('the Brief horizon row sticks under the mode row', () => {
   assert.match(shellSrc, /setProperty\('--shell-view-h', `\$\{view\.offsetHeight\}px`\)/);
 });
 
+// A control reached by Tab scrolls only to the scroller's edge; the scroll
+// padding keeps its focus ring clear of the sticky rows and the dock (WCAG 2.4.11).
+test('the Brief column scroll padding clears the sticky rows and the dock', () => {
+  assert.match(
+    code,
+    /#app\.view-brief:not\(\.embed\) \.sidebar-scroll \{\s*scroll-padding-block:\s*calc\(var\(--shell-view-h, 0px\) \+ var\(--shell-when-h, 0px\)\) var\(--dock-h, 0px\);/
+  );
+  assert.match(shellSrc, /setProperty\('--shell-when-h', `\$\{when\.offsetHeight\}px`\)/);
+  assert.match(shellSrc, /setProperty\('--dock-h', `\$\{dock\.offsetHeight\}px`\)/);
+  // Custom properties inherit downward only: the scroller itself must carry them.
+  assert.match(shellSrc, /const scroller = shell\.closest<HTMLElement>\('\.sidebar-scroll'\) \?\? shell;/);
+});
+
 // Owner 2026-10-19: Conditions in view keeps one seat of one height in the
 // Brief dock in every mode and horizon, and is the page's one region of that name.
 test('Conditions in view keeps a stable seat and is one landmark', async () => {

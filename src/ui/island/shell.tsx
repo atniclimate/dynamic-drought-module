@@ -205,8 +205,17 @@ function useDesktopBriefRehost(): void {
     const sidebarScroll = document.querySelector<HTMLElement>('.sidebar-scroll');
     const releaseLegendSeat =
       legendDisclosure && sidebarScroll ? holdSummarySeat(legendDisclosure, sidebarScroll) : null;
+    // Desktop Brief's sticky dock covers the column foot; its height feeds the
+    // column's scroll-padding so keyboard focus never lands under it.
+    const dock = sidebarScroll?.querySelector<HTMLElement>('.sidebar-bottom-dock');
+    const dockObserver =
+      sidebarScroll && dock && typeof ResizeObserver === 'function'
+        ? new ResizeObserver(() => sidebarScroll.style.setProperty('--dock-h', `${dock.offsetHeight}px`))
+        : null;
+    if (dock) dockObserver?.observe(dock);
 
     return () => {
+      dockObserver?.disconnect();
       releaseLegendSeat?.();
       observer.disconnect();
       widthQuery.removeEventListener('change', sync);
@@ -336,14 +345,21 @@ function Shell({ map, snap, framing, specTick, onMinimapNoteChange }: ShellProps
   useDesktopBriefRehost();
 
   // The sticky horizon row sits under the sticky mode row, so it needs that
-  // row's live height (font load, touch floor, text zoom).
+  // row's live height (font load, touch floor, text zoom); the column's
+  // scroll padding needs both, so they sit on the scroller.
   const shellRef = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     const shell = shellRef.current;
     const view = shell?.querySelector<HTMLElement>('.shell-view');
-    if (!shell || !view || typeof ResizeObserver !== 'function') return;
-    const observer = new ResizeObserver(() => shell.style.setProperty('--shell-view-h', `${view.offsetHeight}px`));
+    const when = shell?.querySelector<HTMLElement>('.shell-when');
+    if (!shell || !view || !when || typeof ResizeObserver !== 'function') return;
+    const scroller = shell.closest<HTMLElement>('.sidebar-scroll') ?? shell;
+    const observer = new ResizeObserver(() => {
+      scroller.style.setProperty('--shell-view-h', `${view.offsetHeight}px`);
+      scroller.style.setProperty('--shell-when-h', `${when.offsetHeight}px`);
+    });
     observer.observe(view);
+    observer.observe(when);
     return () => observer.disconnect();
   }, []);
 

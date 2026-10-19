@@ -7744,6 +7744,11 @@ a.impact-resource-link::after {
   /* Brief pins the strip and Layer legends to the column foot when the
      column has free space; margin-top: auto is inert elsewhere. */
   #app.view-brief:not(.embed) .sidebar-scroll { display: flex; flex-direction: column; }
+  /* The shell island measures the sticky mode and horizon rows and the sticky
+     dock below, so a control reached by Tab stops clear of all three. */
+  #app.view-brief:not(.embed) .sidebar-scroll {
+    scroll-padding-block: calc(var(--shell-view-h, 0px) + var(--shell-when-h, 0px)) var(--dock-h, 0px);
+  }
   #app.view-brief:not(.embed) .sidebar-scroll > * { flex-shrink: 0; }
   /* The dock grows upward from the foot, so the open legend renders above its
      summary; holdSummarySeat scrolls back any push past the foot. */

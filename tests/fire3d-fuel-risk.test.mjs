@@ -90,6 +90,18 @@ test('revealing the console scrolls its panel just enough to show the bottom, ne
   assert.equal(revealScroll({ top: 50, bottom: 100 }, box), 0);
 });
 
+test('the reveal stops at the top of the sticky Brief dock, not under it', () => {
+  const box = { top: 125, bottom: 843 };
+  // The dock is stuck at the visible foot (top 700): the control's bottom lands at the dock's top.
+  assert.equal(revealScroll({ top: 812, bottom: 900 }, box, 700), 200);
+  // Still never past the panel's top.
+  assert.equal(revealScroll({ top: 700, bottom: 1700 }, box, 700), 575);
+  // A dock below the fold (in flow) changes nothing.
+  assert.equal(revealScroll({ top: 812, bottom: 900 }, box, 1200), 57);
+  // A dock in flow below a visible control: no scroll.
+  assert.equal(revealScroll({ top: 300, bottom: 400 }, box, 420), 0);
+});
+
 test('the block never reveal-scrolls on its first run, so page load leaves the horizon chips in view', () => {
   const quiet = { firstRun: false, sceneRequested: false, fuelRowChanged: false };
   // Page load, with or without a stored 3D choice or a Fuel risk row.

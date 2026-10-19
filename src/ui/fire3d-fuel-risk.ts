@@ -80,12 +80,15 @@ export function fuelRiskKeepsConsole(
  * (tests/s4-layout-spike.spec.ts), so a control that grows below the fold
  * is brought up; the panel is scrolled directly rather than through
  * scrollIntoView, which would also scroll a page that frames this app.
+ * `footTop` is the top of the Brief dock, which sticks over the panel's foot
+ * when the column overflows; the element's bottom stops above it.
  */
 export function revealScroll(
   el: { readonly top: number; readonly bottom: number },
-  box: { readonly top: number; readonly bottom: number }
+  box: { readonly top: number; readonly bottom: number },
+  footTop: number = box.bottom
 ): number {
-  return Math.max(0, Math.min(el.bottom - box.bottom, el.top - box.top));
+  return Math.max(0, Math.min(el.bottom - Math.min(box.bottom, footTop), el.top - box.top));
 }
 
 /**
