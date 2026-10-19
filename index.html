@@ -314,15 +314,13 @@
         <span class="test-preview-badge">Test preview</span>
         <!-- The desktop column's four fixed slots (S30D D1 M9; rulings R1 a
              and R2 a; the seat table is src/config/map-chrome.ts): 1 Reset,
-             2 SAT, 3 Help with its drawer, 4 the reserved Share slot. On the
+             2 SAT, 3 Help with its drawer, 4 Share. On the
              desktop shell the stylesheet places each by `data-map-slot` in a
              four-row grid, so Share fills slot 4 in Brief and Console alike.
              Share and Reset stay direct children in this
              source order, which the phone rail (its `order` rules) and the
-             embed stack read unchanged. This span is slot 4's box; it
-             renders only on the desktop shell and never takes a pointer. -->
-        <span class="map-spine-reserve" data-map-slot="4" aria-hidden="true"></span>
-        <button id="share-btn" class="overlay-btn map-cell" aria-label="Share view: the link restores region or framing, layers, mode and horizon, not the map position or an open briefing" title="The link restores region or framing, layers, mode and horizon, not the map position or an open briefing">
+             embed stack read unchanged. -->
+        <button id="share-btn" class="overlay-btn map-cell" data-map-slot="4" aria-label="Share view: the link restores region or framing, layers, mode and horizon, not the map position or an open briefing" title="The link restores region or framing, layers, mode and horizon, not the map position or an open briefing">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
           <span class="map-control-label">Share view</span>
         </button>

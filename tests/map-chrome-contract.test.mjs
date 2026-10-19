@@ -121,11 +121,6 @@ test('the chrome tokens in app.css equal MAP_CHROME_SEATS', () => {
     MAP_CHROME_SEATS.map((seat) => seat.key),
     ['reset', 'satellite', 'help', 'share']
   );
-  assert.deepEqual(
-    MAP_CHROME_SEATS.filter((seat) => !seat.alwaysSeated).map((seat) => seat.key),
-    [],
-    'every slot keeps its control in every desktop view (Share in Brief too, owner 2026-10-19)'
-  );
   // The formula at the 1280x720 open-sidebar container (W 940), every
   // number derived from the table: x = W - inset - cell width, y = inset +
   // (slot - 1) * (height + gap).
@@ -264,11 +259,18 @@ test('the column rules read the tokens, and index.html carries every slot', () =
     1: /<button id="reset-btn"[^>]*data-map-slot="1"/,
     2: /<div id="basemap-switcher-overlay-host"[^>]*data-map-slot="2"/,
     3: /<div id="map-info-seat"[^>]*data-map-slot="3"/,
-    4: /<span class="map-spine-reserve" data-map-slot="4"/
+    4: /<button id="share-btn"[^>]*data-map-slot="4"/
   };
   for (const seat of MAP_CHROME_SEATS) {
     assert.match(html, slotMarkup[seat.slot], `index.html lost slot ${seat.slot} (${seat.key})`);
   }
+  // Share is slot 4's own box, as Reset is slot 1's: no empty reserve under it.
+  assert.equal(
+    MAP_CHROME_SEATS.find((seat) => seat.slot === 4)?.slotSelector,
+    '.map-overlay-controls > #share-btn'
+  );
+  assert.doesNotMatch(html, /map-spine-reserve/, 'the retired slot 4 reserve span is gone');
+  assert.doesNotMatch(css, /map-spine-reserve/, 'no stylesheet rule for the retired reserve span');
 
   // Share keeps slot 4 in Brief too (owner 2026-10-19): no sidebar Share seat
   // in the markup and no Share entry in the Brief rehost table.
@@ -306,4 +308,46 @@ test('sidebar seats: no mode-sized block sits above a control', () => {
   assert.ok(!indicator.includes('conditions-strip-dock'), 'the strip no longer seats on the map');
   assert.match(code, /\.sidebar-bottom-dock\s*\{\s*margin-top:\s*auto;/);
   assert.match(code, /#app\.view-brief:not\(\.embed\) \.sidebar-scroll \{ display: flex; flex-direction: column; \}/);
+});
+
+// The Key's door buttons (Nino 3.4, one per storm) inherit 11 px text with no
+// padding; the desktop census measures with the drawer closed, so the floor is
+// held here.
+test('the Key door buttons keep the 24 px pointer floor', () => {
+  assert.match(ruleBody('.map-key-door'), /min-height:\s*var\(--pointer-target\);/);
+});
+
+test('Layer legends opens upward and its summary keeps its seat under the pointer', async () => {
+  // The dock is pinned to the column foot, so content opening below the
+  // summary would lift it; the open legend renders above the summary instead.
+  assert.match(code, /#app\.view-brief:not\(\.embed\) \.sidebar-legend-disclosure\[open\] \{ display: flex; flex-direction: column-reverse; \}/);
+
+  // When the opened legend overflows the column, the summary is pushed down;
+  // the column scrolls by that shift so the summary stays where it was clicked.
+  const { holdSummarySeat } = await import(new URL('src/ui/disclosure-seat.ts', ROOT).href);
+  let frame = null;
+  globalThis.requestAnimationFrame = (fn) => { frame = fn; return 1; };
+  globalThis.cancelAnimationFrame = () => { frame = null; };
+  const listeners = new Map();
+  let top = 500;
+  const summary = {
+    getBoundingClientRect: () => ({ top }),
+    addEventListener: (type, fn) => listeners.set(type, fn),
+    removeEventListener: (type) => listeners.delete(type)
+  };
+  const details = { querySelector: () => summary };
+  const scroller = { scrollTop: 40 };
+  const release = holdSummarySeat(details, scroller);
+
+  listeners.get('click')();
+  top = 620; // the native toggle opens the legend above, pushing the summary 120px down
+  frame();
+  assert.equal(scroller.scrollTop, 160, 'the column scrolls by the summary shift');
+
+  listeners.get('click')();
+  frame(); // free space absorbed the legend: the summary did not move
+  assert.equal(scroller.scrollTop, 160);
+
+  release();
+  assert.equal(listeners.size, 0, 'release removes the listener');
 });

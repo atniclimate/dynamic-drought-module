@@ -106,11 +106,6 @@ const SEAT_QUERIES = MAP_CHROME_SEATS.map((seat) => ({
   controlSelector: seat.controlSelector
 }));
 
-/** Slots whose control must be in the column in every phase (every slot). */
-const ALWAYS_SEATED = new Set<MapChromeSlot>(
-  MAP_CHROME_SEATS.filter((seat) => seat.alwaysSeated).map((seat) => seat.slot)
-);
-
 /** Three consecutive painted frames of every seat, relative to the map. */
 async function sampleSeats(page: Page, phase: string): Promise<Sample[]> {
   const frames = await page.evaluate(async (queries) => {
@@ -230,7 +225,7 @@ function seatProblems(samples: readonly Sample[]): string[] {
         problems.push(
           ...formulaProblems(sample, `slot ${seat.slot} control`, seat.control, expected)
         );
-      } else if (ALWAYS_SEATED.has(seat.slot)) {
+      } else {
         problems.push(
           `${sample.phase} (frame ${sample.frame}): slot ${seat.slot}'s control is not in the column`
         );
@@ -328,7 +323,7 @@ const shareInColumn = (page: Page) => page.locator('.map-overlay-controls > #sha
 
 test.describe('the desktop column holds its four seats (D1 M9)', () => {
   for (const viewport of DESKTOP_VIEWPORTS) {
-    test(`Reset, SAT, Help and the reserved Share slot hold their MAP_CHROME_SEATS rects within 1 px across modes, horizons, loading, selection and the views at ${viewport.width}x${viewport.height}`, async ({
+    test(`Reset, SAT, Help and Share hold their MAP_CHROME_SEATS rects within 1 px across modes, horizons, loading, selection and the views at ${viewport.width}x${viewport.height}`, async ({
       page
     }) => {
       test.setTimeout(240_000);
@@ -538,7 +533,6 @@ test.describe('the desktop column holds its four seats (D1 M9)', () => {
         page.locator('.maplibregl-ctrl-bottom-right .basemap-switcher-control')
       ).toHaveCount(1);
       await expect(page.locator('.map-overlay-controls > #share-btn')).toHaveCount(1);
-      await expect(page.locator('.map-spine-reserve')).toBeHidden();
       await expect(page.locator('#map-info-btn .map-cell-label')).toBeHidden();
       // The word-less home disclosure keeps its name; only the desktop
       // seat, which shows the word Help, leads with it.

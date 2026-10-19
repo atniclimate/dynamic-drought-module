@@ -154,11 +154,6 @@ export interface MapChromeSeat {
   readonly word: string;
   /** The rectangle in `#map-container` px, W and H the container's size. */
   readonly formula: string;
-  /**
-   * Every slot holds its control on the desktop shell; the field stays so
-   * the seat spec can name a future exception.
-   */
-  readonly alwaysSeated: boolean;
 }
 
 const SLOT_FORMULA =
@@ -171,8 +166,7 @@ export const MAP_CHROME_SEATS: readonly MapChromeSeat[] = [
     slotSelector: '.map-overlay-controls > #reset-btn',
     controlSelector: '#reset-btn',
     word: 'Reset',
-    formula: SLOT_FORMULA,
-    alwaysSeated: true
+    formula: SLOT_FORMULA
   },
   {
     slot: 2,
@@ -180,8 +174,7 @@ export const MAP_CHROME_SEATS: readonly MapChromeSeat[] = [
     slotSelector: '.map-overlay-controls > #basemap-switcher-overlay-host',
     controlSelector: '#basemap-switcher-overlay-host .basemap-switcher-btn',
     word: 'SAT',
-    formula: SLOT_FORMULA,
-    alwaysSeated: true
+    formula: SLOT_FORMULA
   },
   {
     slot: 3,
@@ -189,17 +182,15 @@ export const MAP_CHROME_SEATS: readonly MapChromeSeat[] = [
     slotSelector: '.map-overlay-controls > #map-info-seat',
     controlSelector: '#map-info-seat > #map-info-btn',
     word: 'Help',
-    formula: SLOT_FORMULA,
-    alwaysSeated: true
+    formula: SLOT_FORMULA
   },
   {
     slot: 4,
     key: 'share',
-    slotSelector: '.map-overlay-controls > .map-spine-reserve',
+    slotSelector: '.map-overlay-controls > #share-btn',
     controlSelector: '.map-overlay-controls > #share-btn',
     word: 'Share view',
-    formula: SLOT_FORMULA,
-    alwaysSeated: true
+    formula: SLOT_FORMULA
   }
 ];
 
