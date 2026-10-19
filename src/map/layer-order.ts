@@ -54,12 +54,11 @@ export const CONDITION_SURFACE_IDS: readonly string[] = [
   'sst-anomaly',
   'nino34-box-fill',
   'nino34-box-line',
-  'nino34-box-label',
   // The ENSO "Ocean & atmosphere" overlay's seat (src/layers/enso-flow.ts):
   // the precipitable water shade, then the wind, wave and current paths'
   // still form and node arrows, then their moving ribbons
   // (src/layers/flow/still.ts and index.ts; ENSO-FLOW-PLAN E2-1). One kind
-  // draws at a time. The shade sits above the Nino box because a dated SST
+  // draws at a time. The shade sits above the Nino box line because a dated SST
   // frame inserts directly under the box's line: a seat any lower would put
   // the shade under that frame. It stays under every event overlay (the
   // tropical cyclones), every outline and the labels.
@@ -68,6 +67,9 @@ export const CONDITION_SURFACE_IDS: readonly string[] = [
   'flow-still',
   'flow-still-marks',
   'flow-paths',
+  // The Nino 3.4 label reads above the paths, which invert the ground beneath
+  // them (the block's browser look, 2026-10-19).
+  'nino34-box-label',
   'heatrisk',
   'usfs-whp',
   'usfs-whp-classes',

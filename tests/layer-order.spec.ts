@@ -244,7 +244,8 @@ test.describe('layer-order: thematic reassert (E1 deliverable 2)', () => {
     const flowIds = ['flow-still-casing', 'flow-still', 'flow-still-marks', 'flow-paths'];
     for (const id of flowIds) {
       expect(idx(id), `${id} is in the condition band`).toBeGreaterThanOrEqual(0);
-      expect(idx(id), `${id} sits above the SST and the Nino box`).toBeGreaterThan(idx('nino34-box-label'));
+      expect(idx(id), `${id} sits above the SST and the Nino box`).toBeGreaterThan(idx('nino34-box-line'));
+      expect(idx(id), `${id} sits below the Nino 3.4 label, which the paths must not invert`).toBeLessThan(idx('nino34-box-label'));
       expect(idx(id), `${id} sits below heatrisk, as the old arrows did`).toBeLessThan(idx('heatrisk'));
     }
     // The still layers paint casing first. The sampled current arrows are gone: currents draw through these ids too.
@@ -260,7 +261,7 @@ test.describe('layer-order: thematic reassert (E1 deliverable 2)', () => {
   test('the precipitable water shade seats above the SST and the Nino box, under the paths, the storms, every outline and the labels', () => {
     const idx = (id: string): number => CONDITION_SURFACE_IDS.indexOf(id);
     // A dated SST frame inserts directly under the Nino box's line, so the shade must sit above the box to stay above it.
-    expect(idx('flow-shade')).toBe(idx('nino34-box-label') + 1);
+    expect(idx('flow-shade')).toBe(idx('nino34-box-line') + 1);
     expect(idx('flow-shade')).toBe(idx('flow-still-casing') - 1);
     expect(idx('flow-shade')).toBeGreaterThan(idx('sst-anomaly'));
     const map = fakeMap(['background', 'basemap', 'sst-anomaly', 'nino34-box-line', 'tropical-cyclones-points', 'us-states-outline', 'us-places-labels', 'flow-shade']);

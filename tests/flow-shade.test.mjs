@@ -319,14 +319,16 @@ test('the shade sits above the SST and the Nino box, and under the tropical cycl
   const seat = CONDITION_SURFACE_IDS.indexOf(FLOW_SHADE_ID);
   assert.ok(seat > CONDITION_SURFACE_IDS.indexOf('sst-anomaly'));
   // A dated SST frame inserts directly under the Nino box's line, so the shade must seat above the box.
-  assert.equal(seat, CONDITION_SURFACE_IDS.indexOf('nino34-box-label') + 1);
+  assert.equal(seat, CONDITION_SURFACE_IDS.indexOf('nino34-box-line') + 1);
   assert.equal(seat, CONDITION_SURFACE_IDS.indexOf('flow-still-casing') - 1);
+  // The Nino 3.4 label reads above the paths and the shade.
+  assert.ok(CONDITION_SURFACE_IDS.indexOf('nino34-box-label') > CONDITION_SURFACE_IDS.indexOf('flow-paths'));
   assert.ok(!EVENT_OVERLAY_IDS.includes(FLOW_SHADE_ID));
   const map = fakeMap();
   const view = mountShadeView(map, moist(), { onStale: () => undefined });
   assert.deepEqual(map.order(), [
-    'background', 'basemap', 'sst-anomaly', 'nino34-box-fill', 'nino34-box-line', 'nino34-box-label',
-    'flow-shade', 'tropical-cyclones-points', 'us-states-outline', 'us-places-labels'
+    'background', 'basemap', 'sst-anomaly', 'nino34-box-fill', 'nino34-box-line', 'flow-shade',
+    'nino34-box-label', 'tropical-cyclones-points', 'us-states-outline', 'us-places-labels'
   ]);
   view.dispose();
 });
@@ -389,7 +391,7 @@ test('after a restored context the same image is handed over again, with no new 
   map.getSource(FLOW_SHADE_ID).image = null;
   map.fire('style.load');
   assert.equal(map.getSource(FLOW_SHADE_ID).image, first);
-  assert.equal(map.order().indexOf('flow-shade'), map.order().indexOf('nino34-box-label') + 1);
+  assert.equal(map.order().indexOf('flow-shade'), map.order().indexOf('nino34-box-line') + 1);
   view.dispose();
   assert.deepEqual(map.listening(), []);
 });
