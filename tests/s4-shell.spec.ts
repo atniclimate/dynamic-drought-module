@@ -331,7 +331,7 @@ test.describe('S4a desktop shell boot', () => {
     await expect(page.locator('.sidebar-bottom-dock #conditions-strip')).toHaveCount(1);
     await expect(page.locator('#brief-head-lede')).toHaveCount(0);
     await expect(page.locator('#shell-refine-host > #brief-head')).toHaveCount(1);
-    await expect(page.locator('#shell-conditions-heading')).toHaveText('Conditions in view');
+    await expect(page.locator('#shell-conditions-heading')).toHaveText('Display summary');
     await expect(page.locator('#conditions-strip-dock .conditions-title')).toBeVisible();
 
     // Existing behavior rides the moved nodes: region navigation still owns

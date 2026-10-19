@@ -291,6 +291,10 @@ export function ConditionsStrip({ map, tick, checked }: StripProps) {
       {alertsOn ? <MetricTile id="alerts" m={alerts} isOn={alertsOn} tile={TILE_LAYER.alerts!} /> : null}
       {firesOn ? <MetricTile id="fires" m={fires} isOn={firesOn} tile={TILE_LAYER.fires!} /> : null}
       {!droughtOn ? droughtTileNode : null}
+      {/* Last, so the stylesheet shows it only while no tile is shown (an ENSO
+          view; a Brief dock whose only tile is off) and the seat never collapses. */}
+      {/* DRAFT wording (DR-177) */}
+      <p class="conditions-empty">No readings for this view</p>
     </>
   );
 }

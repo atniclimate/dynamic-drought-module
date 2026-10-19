@@ -351,3 +351,28 @@ test('Layer legends opens upward and its summary keeps its seat under the pointe
   release();
   assert.equal(listeners.size, 0, 'release removes the listener');
 });
+
+// Owner 2026-10-19: Conditions in view keeps one seat of one height in the
+// Brief dock in every mode and horizon, and is the page's one region of that name.
+test('Conditions in view keeps a stable seat and is one landmark', async () => {
+  const stripSrc = await readFile(new URL('src/ui/island/conditions-strip.tsx', ROOT), 'utf8');
+  const timeSrc = await readFile(new URL('src/ui/island/time-popover.tsx', ROOT), 'utf8');
+  assert.match(html, /id="conditions-strip" aria-label="Conditions in view"/);
+  assert.doesNotMatch(shellSrc, />Conditions in view</, 'the shell summary is not a second region of the same name');
+  // Every tone (a zero count, an off or loading tile) takes the docked row, not only a data reading.
+  const tile = ruleBody('#conditions-strip-dock .conditions-metric');
+  assert.match(tile, /flex-flow:\s*row nowrap;/);
+  assert.match(tile, /min-height:\s*40px;/);
+  assert.match(ruleBody('#conditions-strip-dock .conditions-metric .conditions-action'), /margin-left:\s*auto;/);
+  // With no tile shown, one short status line holds the same 40 px seat; the
+  // dock no longer hides itself when no reading is live (ENSO, Near Term).
+  const indicators = (await readFile(new URL('src/styles/hazard-indicators.css', ROOT), 'utf8')).replace(/\/\*[\s\S]*?\*\//g, '');
+  assert.match(stripSrc, /<p class="conditions-empty">[^<]+<\/p>\s*<\/>/, 'the status line renders last');
+  assert.match(ruleBody('#conditions-strip-dock .conditions-empty'), /min-height:\s*40px;/);
+  assert.match(code, /\.conditions-metric ~ \.conditions-empty \{ display: none; \}/);
+  assert.doesNotMatch(indicators, /#conditions-strip-dock:not\(/, 'the dock never collapses');
+  assert.match(indicators, /#conditions-strip-dock \.conditions-metric\[data-layer-on='true'\] ~ \.conditions-empty \{\s*display: none;/);
+  // The WHEN line's freshness square keeps a gap from the horizon words.
+  assert.match(timeSrc, /class="shell-time-headline-horizon"[^\n]*\n\s*\{spec\.stamp\.freshness \? \(\s*<span class="feed-current"/);
+  assert.match(ruleBody('.shell-time-headline .feed-current'), /margin-left:\s*\d+px;/);
+});

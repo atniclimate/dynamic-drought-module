@@ -106,7 +106,9 @@ test.describe('UX-3 conditions strip', () => {
     await expect(page.locator('#conditions-strip-dock > #conditions-strip')).toHaveCount(1);
     await expect(page.locator('.sidebar-bottom-dock #conditions-strip')).toHaveCount(1);
     await expect(page.locator('#map-condition-indicator #conditions-strip')).toHaveCount(0);
-    await expect(page.locator('#shell-conditions-heading')).toHaveText('Conditions in view');
+    // One region carries the name: the shell summary names the display instead.
+    await expect(page.locator('#shell-conditions-heading')).toHaveText('Display summary');
+    await expect(page.getByRole('region', { name: 'Conditions in view', exact: true })).toHaveCount(1);
     await expect(strip.locator('.conditions-title')).toBeVisible();
     await expect(strip.locator('#conditions-date')).toBeAttached();
 
@@ -514,6 +516,8 @@ test.describe('found-008: Conditions in view offers only the current mode\'s sur
       // is not this mode's own recipe: no "Layer off. Press to show." drought
       // chip is offered here.
       await expect(page.locator('.conditions-metric[data-metric="drought"]')).toHaveCount(0);
+      // The strip never collapses: a tile or the one status line holds its seat.
+      await expect.poll(() => page.locator('#conditions-metrics > :is(.conditions-metric, .conditions-empty):visible').count()).toBeGreaterThan(0);
     });
   }
 });

@@ -45,7 +45,7 @@ import {
 } from '../../config/clusters';
 import type { HazardClusterKey, TemporalHorizonKey } from '../../config/clusters';
 import { HORIZON_CHROME, SHELL_HORIZON_KEY } from '../../impact/horizon-chrome';
-import { horizonSurfaceSignature } from '../../state/timeline';
+import { clusterHorizonReason } from '../horizon-reason';
 import type { FramingSelection } from '../../config/framings';
 import { getLayerDef } from '../../config/layers';
 import {
@@ -232,24 +232,6 @@ function isPending(snap: CommittedShellSnapshot): boolean {
 }
 
 /**
- * The detail clause of the duplicate-surface reason: one sentence per
- * hazard whose recipe repeats across horizons (DDM-P8-T03, DR-017 a).
- * Named here rather than derived, because only the owning layer's own
- * doctrine explains why its one surface honestly answers every horizon
- * (`src/layers/heatrisk.ts`, `src/layers/sst-anomaly.ts`); drought and
- * wildfire never hit this branch (every one of their three recipes has
- * a distinct signature), so they carry no entry.
- */
-const DUPLICATE_SURFACE_DETAIL: Partial<Record<HazardClusterKey, string>> = {
-  heat:
-    'the National Weather Service HeatRisk sequence publishes seven daily ' +
-    'periods on one surface, and the Valid date control in the key selects the day.',
-  enso:
-    'the sea-surface-temperature anomaly field is one analysed daily ' +
-    'surface at every horizon.'
-};
-
-/**
  * The honest reason a horizon chip is disabled, or null when the chip is
  * honestly applicable (DR-017 a). Two independent cases:
  *
@@ -265,16 +247,10 @@ const DUPLICATE_SURFACE_DETAIL: Partial<Record<HazardClusterKey, string>> = {
  * The committed chip stays enabled (an idempotent no-op press, and the
  * honest pressed state).
  *
- * A COMMITTED cluster (DDM-P8-T03): the recipe's capability signature
- * (`horizonSurfaceSignature`, computed from `HAZARD_CLUSTERS` only, never
- * from a claim: the briefing is consulted nowhere in this function, and
- * no import of `matrix.ts`, `hydrate.ts` or any claim module may appear
- * in this file) decides. An empty recipe disables the chip even when it
- * is the committed horizon (a deep link into an unanswerable horizon is
- * exactly what "cannot answer" means). Otherwise, a signature that
- * repeats an EARLIER key's in `TEMPORAL_HORIZON_KEYS` disables the chip
- * with a reason naming that earlier horizon's title; `current` is first,
- * so this rule can never disable it and it always remains the way back.
+ * A COMMITTED cluster (DDM-P8-T03): `clusterHorizonReason`
+ * (src/ui/horizon-reason.ts), from the recipe's capability signature only;
+ * no import of `matrix.ts`, `hydrate.ts` or any claim module may appear in
+ * this file either.
  */
 function horizonDisabledReason(
   snap: CommittedShellSnapshot,
@@ -290,26 +266,7 @@ function horizonDisabledReason(
       'layers you chose. Pick a hazard view to change the time horizon.'
     );
   }
-
-  const signature = horizonSurfaceSignature(snap.cluster, key);
-  if (signature === null) {
-    return (
-      `${HORIZON_CHROME[SHELL_HORIZON_KEY[key]].title} is off for ` +
-      `${HAZARD_CLUSTERS[snap.cluster].title}: no verified map source for ` +
-      'this time horizon exists yet, so none is shown rather than a guess.'
-    );
-  }
-
-  const idx = TEMPORAL_HORIZON_KEYS.indexOf(key);
-  for (let i = 0; i < idx; i++) {
-    const earlierKey = TEMPORAL_HORIZON_KEYS[i]!;
-    if (horizonSurfaceSignature(snap.cluster, earlierKey) !== signature) continue;
-    const ownTitle = HORIZON_CHROME[SHELL_HORIZON_KEY[key]].title;
-    const earlierTitle = HORIZON_CHROME[SHELL_HORIZON_KEY[earlierKey]].title;
-    const detail = DUPLICATE_SURFACE_DETAIL[snap.cluster] ?? '';
-    return `${ownTitle} shows the same map as ${earlierTitle} here: ${detail}`;
-  }
-  return null;
+  return clusterHorizonReason(snap.cluster, key);
 }
 
 interface ShellProps {
@@ -547,16 +504,12 @@ function ShellDetails({ map, snap, framingNote }: {
   readonly framingNote: ReadonlySignal<string>;
 }) {
   const snapshot = snap.value;
-  const horizonNote = snapshot.cluster === 'custom'
-    ? ''
-    : TEMPORAL_HORIZON_KEYS.map((key) => horizonDisabledReason(snapshot, key))
-        .filter((reason) => reason !== null)
-        .join(' ');
   return (
     <>
       <Fire3DControl cluster={snapshot.cluster} map={map} />
       <section class="shell-summary" id="shell-conditions-summary" aria-labelledby="shell-conditions-heading">
-        <h2 class="panel-title sr-only" id="shell-conditions-heading">Conditions in view</h2>
+        {/* The strip owns the "Conditions in view" region; this one names what is displayed. */}
+        <h2 class="panel-title sr-only" id="shell-conditions-heading">Display summary</h2>
         <p class="shell-summary-primary sr-only" id="shell-summary-primary">{snapshot.summary.primary}</p>
         {/* Keep the live regions mounted as their text changes. */}
         <p class="shell-summary-caveat" id="shell-summary-caveat" aria-live="polite">
@@ -564,8 +517,7 @@ function ShellDetails({ map, snap, framingNote }: {
         </p>
       </section>
       <p class="shell-minimap-note" id="shell-framing-note" aria-live="polite">{framingNote.value}</p>
-      {/* The disabled chips' reasons, visible but outside the time block: its height varies by mode and must not displace the minimap, search and layers. */}
-      {horizonNote !== '' && <p class="shell-minimap-note" id="shell-horizon-note">{horizonNote}</p>}
+      {/* The disabled chips' reasons ride each chip's title; their visible text reads in Technical information. */}
     </>
   );
 }

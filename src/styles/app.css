@@ -8360,6 +8360,8 @@ a.impact-resource-link::after {
   font-variant-numeric: tabular-nums lining-nums;
 }
 .shell-time-headline[data-register='outlook'] { color: var(--ink-soft); }
+/* The freshness square sits apart from the horizon words, as the " · " detail does elsewhere. */
+.shell-time-headline .feed-current { margin-left: 6px; }
 .shell-time-empty {
   font-family: var(--font-body);
   font-size: 10.5px;
@@ -8432,7 +8434,9 @@ a.impact-resource-link::after {
   grid-template-columns: minmax(0, 1fr);
   gap: 5px;
 }
-#conditions-strip-dock .conditions-metric[data-tone='data'] {
+/* Every tone takes the one-line row (owner 2026-10-19: the seat never
+   changes size between modes); a zero count no longer stacks three lines. */
+#conditions-strip-dock .conditions-metric {
   display: flex;
   flex-flow: row nowrap;
   align-items: baseline;
@@ -8446,6 +8450,22 @@ a.impact-resource-link::after {
   box-sizing: border-box;
   min-height: 40px;
 }
+/* No tile shown (an ENSO view): one muted line holds the tile's seat. The
+   Brief dock also hides off tiles, so it decides by live tiles instead
+   (hazard-indicators.css). */
+.conditions-empty {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 11px;
+  color: var(--fg-3);
+}
+.conditions-metric ~ .conditions-empty { display: none; }
+#conditions-strip-dock .conditions-empty {
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  min-height: 40px;
+}
 /* DR-153: the 721 to 1024 px tablet band is touch-first on every pointer
    (RATIFICATION-6 Q2/Q2b), the same rule THE DESKTOP COLUMN's cell size
    and chipSeatRect (src/config/map-chrome.ts) apply; repair round on M10
@@ -8453,11 +8473,12 @@ a.impact-resource-link::after {
    with the briefing open, under the 44px floor). Declared after the base
    rule above so it wins at equal specificity. */
 @media (min-width: 721px) and (max-width: 1024px) {
-  #conditions-strip-dock .conditions-metric[data-tone='data'] {
+  #conditions-strip-dock .conditions-metric,
+  #conditions-strip-dock .conditions-empty {
     min-height: 44px;
   }
 }
-#conditions-strip-dock .conditions-metric[data-tone='data'] .conditions-value {
+#conditions-strip-dock .conditions-metric:is([data-tone='data'], [data-tone='none']) .conditions-value {
   flex: 0 0 auto;
   font-size: 18px;
   text-shadow: 0 0 1px rgba(241, 245, 249, 0.72);
@@ -8478,7 +8499,7 @@ a.impact-resource-link::after {
    trailing, right-pushed hint reads clearly as "there is more to this
    control" without competing with the capitalized category readout for
    the eye's first landing spot. */
-#conditions-strip-dock .conditions-metric[data-tone='data'] .conditions-action-hide {
+#conditions-strip-dock .conditions-metric .conditions-action {
   flex: 0 0 auto;
   margin-left: auto;
   padding-left: 4px;

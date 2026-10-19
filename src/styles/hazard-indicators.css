@@ -76,11 +76,12 @@
   border: 1px solid var(--keyline, #C6CBD4);
   border-radius: 2px;
 }
-/* Brief shows every live reading and hides the strip when none is live. */
+/* Brief shows every live reading; with none live, the strip keeps its seat
+   and its status line (owner 2026-10-19: the seat never comes and goes). */
 #conditions-strip-dock .conditions-metric[data-layer-on='false'] {
   display: none;
 }
-#conditions-strip-dock:not(:has(.conditions-metric[data-layer-on='true'])) {
+#conditions-strip-dock .conditions-metric[data-layer-on='true'] ~ .conditions-empty {
   display: none;
 }
 /* The chip's grammar (S30D D1 M10; interface-chrome-popups-text.md section
