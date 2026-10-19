@@ -2,8 +2,8 @@
  * The desktop 3D Fire view toggle (W3/W4), rendered in the shell island
  * in the view details below the persistent navigation controls.
  *
- * Visibility: only while the committed cluster is 'wildfire' (or the
- * custom display its flat Fuel risk switch makes) AND the
+ * Visibility: only while the committed cluster is 'wildfire' (Fuel risk
+ * included, an optional layer of Wildfire) AND the
  * device can enter the scene at all, which since DR-025a is the same three
  * questions the map-side gate in `src/map/fire3d.ts` asks: the viewport is
  * at least the desktop breakpoint wide, at least `FIRE3D_MIN_HEIGHT_PX`
@@ -74,7 +74,7 @@ import { loadFire3DController } from '../../map/fire3d-chunk';
 // The shared, once-per-page probe result (already in the entry chunk through
 // main.ts, so reading it here adds no eager weight and no second context).
 import { webGl2Capability } from '../../map/gl-capability';
-import { getCommittedSnapshot, requestCluster } from '../../state/cluster-service';
+import { getCommittedSnapshot, onCommittedSnapshotChange, requestCluster } from '../../state/cluster-service';
 import {
   getFire3DGroundLayer,
   onFire3DGroundLayerChange,
@@ -293,8 +293,13 @@ export function Fire3DControl({
     []
   );
 
-  // The shell re-renders this control on every committed snapshot, so a direct read stays current.
-  const snapshot = getCommittedSnapshot();
+  // Subscribed, not read on render: Fuel risk keeps the Wildfire cluster, so the shell's props do not
+  // change and the signals integration skips this control's re-render on that publish.
+  const [snapshot, setSnapshot] = useState(getCommittedSnapshot);
+  useEffect(() => {
+    setSnapshot(getCommittedSnapshot()); // a publish between the first render and this subscription
+    return onCommittedSnapshotChange(() => setSnapshot(getCommittedSnapshot()));
+  }, []);
   const flatFuelOn = snapshot.intendedKeys.has(FLAT_FUEL_RISK_KEY);
   const recipeHasFlat =
     snapshot.cluster !== 'custom' &&

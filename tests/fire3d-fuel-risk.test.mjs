@@ -59,6 +59,16 @@ test('the one Fuel risk switch acts on the 3D drape only while it is mounted, el
   assert.equal(FLAT_FUEL_RISK_KEY, 'usfs-whp');
 });
 
+test('the flat Fuel risk button reads the snapshot it subscribes to, so every press toggles it', async () => {
+  // Fuel risk keeps the Wildfire cluster, so the shell passes the control unchanged props and the
+  // signals integration skips its re-render; a direct read of the snapshot would stay stale.
+  const { readFile } = await import('node:fs/promises');
+  const control = await readFile(new URL('../src/ui/island/fire3d-control.tsx', import.meta.url), 'utf8');
+  assert.match(control, /onCommittedSnapshotChange\(\(\) => setSnapshot\(getCommittedSnapshot\(\)\)\)/);
+  assert.match(control, /useState\(getCommittedSnapshot\)/);
+  assert.doesNotMatch(control, /const snapshot = getCommittedSnapshot\(\)/);
+});
+
 test('the Wildfire console stays offered over Wildfire, and nowhere else', () => {
   assert.equal(fuelRiskKeepsConsole('wildfire', 'wildfire', false), true);
   assert.equal(fuelRiskKeepsConsole('custom', 'wildfire', true), true);
