@@ -519,7 +519,7 @@ function bindKeyboardIdentify(map: maplibregl.Map): void {
  * collapse; neither another target nor another feature opens in its place.
  * Out of view, the camera eases there first (a jump under reduced motion).
  * A miss (tiles still drawing) is looked at again for a bounded time, then
- * dismissed. A newer door, a map click or a dismissal cancels a pending one.
+ * dismissed. A newer door, a map click, a dismissal or Escape cancels a pending one.
  * Map-wide keyboard identify stays behind KEYBOARD_IDENTIFY.
  */
 export function identifyAt(
@@ -543,7 +543,7 @@ export function identifyAt(
     timer = null;
     if (pendingDoor !== cancel) return;
     if (studioOwnsScreen()) {
-      pendingDoor = null;
+      cancelDoor();
       return;
     }
     const point = map.project(at);
@@ -551,22 +551,29 @@ export function identifyAt(
     const primary = hits.find((h) => isTarget(h.feature));
     deadline ??= Date.now() + DOOR_WAIT_MS;
     if (primary) {
-      pendingDoor = null;
+      cancelDoor();
       noteFocusBeforeCommit(opener);
       commit(map, hits, primary, { lngLat: map.unproject(point), point });
     } else if (Date.now() < deadline) {
       // Tiles at a new view can still be drawing: look again shortly.
       timer = setTimeout(run, DOOR_RETRY_MS);
     } else {
-      pendingDoor = null;
+      cancelDoor();
       dismissResponse();
     }
+  };
+  // Escape while the door waits (no popup yet, so no popup Escape handler)
+  // means the person moved on: no popup opens later to take their focus.
+  const onEscape = (e: KeyboardEvent): void => {
+    if (e.key === 'Escape' && pendingDoor === cancel) cancelDoor();
   };
   const cancel = (): void => {
     if (timer !== null) clearTimeout(timer);
     map.off('moveend', run);
+    document.removeEventListener('keydown', onEscape);
   };
   pendingDoor = cancel;
+  document.addEventListener('keydown', onEscape);
   const { x, y } = map.project(at);
   const canvas = map.getCanvas();
   if (x >= 0 && y >= 0 && x <= canvas.clientWidth && y <= canvas.clientHeight) {

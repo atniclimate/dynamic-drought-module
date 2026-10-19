@@ -141,7 +141,12 @@ class FakeElement extends FakeNode {
   }
 }
 const fakeDom = { on: false };
+/** Document keydown listeners, so a case can press a key on the page. */
+const keydownListeners = new Set();
+const pressKey = (key) => [...keydownListeners].forEach((listener) => listener({ key }));
 globalThis.document = {
+  addEventListener: (type, listener) => type === 'keydown' && keydownListeners.add(listener),
+  removeEventListener: (type, listener) => type === 'keydown' && keydownListeners.delete(listener),
   getElementById: (id) => (id === 'map-container' ? mapContainer : null),
   createElement: () => {
     if (fakeDom.on) return new FakeElement();
@@ -448,4 +453,33 @@ test('a newer door, a map click or a dismissal cancels a pending door', (t) => {
   rendered = [];
   onClick({ point: { x: 10, y: 10 }, lngLat: { lng: -120, lat: 47 } });
   assert.equal(h.once.has('moveend'), false, 'a map click cancels the pending door');
+});
+
+test('Escape while a door waits on its move or its retry cancels it, and the door leaves no key listener behind', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+  let rendered = [F('door', 'd1')];
+  const h = doorHarness({ inView: false, rendered: () => rendered });
+  h.map.easeTo = () => {};
+  coordinator.identifyAt(h.map, ['door'], -145, 0);
+  const moveEnd = h.once.get('moveend');
+  pressKey('Tab');
+  assert.equal(h.once.has('moveend'), true, 'another key leaves the door pending');
+  pressKey('Escape');
+  assert.equal(h.once.has('moveend'), false, 'Escape during the move cancels the door');
+  moveEnd();
+  assert.deepEqual(h.calls, [], 'nothing commits after Escape, even if the move ends');
+  assert.equal(keydownListeners.size, 0, 'the cancelled door removed its Escape listener');
+
+  rendered = [];
+  coordinator.identifyAt(h.map, ['door'], -145, 0);
+  h.once.get('moveend')();
+  pressKey('Escape');
+  rendered = [F('door', 'd1')];
+  t.mock.timers.tick(5000);
+  assert.deepEqual(h.calls, [], 'Escape during the retry cancels it');
+
+  coordinator.identifyAt(h.map, ['door'], -145, 0);
+  h.once.get('moveend')();
+  assert.deepEqual(h.calls, ['d1'], 'a door that is not cancelled still opens');
+  assert.equal(keydownListeners.size, 0, 'a door that commits removes its Escape listener');
 });
