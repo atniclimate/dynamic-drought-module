@@ -117,6 +117,19 @@ on:
         required: false
         type: string
         default: ''
+      # Measure C (owner, 2026-10-19): a targeted run, dispatched through
+      # validate.yml's `specs` input. Every shard keeps its slot and runs only
+      # its slice of the named files, so a broad list still fans out; a file
+      # lives in one project, so most shards find none of it and
+      # --pass-with-no-tests keeps them green. Deploy and the schedule never
+      # set it.
+      specs:
+        description: >-
+          Space-separated spec paths to run instead of the whole suite. Empty
+          (the default) runs everything, as before.
+        required: false
+        type: string
+        default: ''
       # CI-02/CI-11 (2026-09-01, owner direction D-2). Advisory means the
       # shards still RUN, still summarize, and still keep their reports and
       # traces, but a red shard does not fail the calling job. deploy.yml
@@ -231,7 +244,16 @@ jobs:
           # leaves this empty and playwright.config.ts's own isCI retries
           # setting governs, unchanged.
           RETRIES_ARG: ${{ inputs.retries != '' && format('--retries={0}', inputs.retries) || '' }}
-        run: npx playwright test --project=${{ matrix.project }} --shard=${{ matrix.shard }}/${{ matrix.total }} --workers=$WORKERS $RETRIES_ARG
+          # Empty unless a targeted run named files (the `specs` input); empty
+          # on the schedule too, so the command below is today's exactly.
+          SPECS: ${{ inputs.specs }}
+        # A misspelt path would match nothing and pass with no tests, so every
+        # named file must exist first.
+        run: |
+          for spec in $SPECS; do
+            test -f "$spec" || { echo "::error::No spec file $spec on this commit."; exit 1; }
+          done
+          npx playwright test --project=${{ matrix.project }} --shard=${{ matrix.shard }}/${{ matrix.total }} --workers=$WORKERS $RETRIES_ARG ${SPECS:+--pass-with-no-tests $SPECS}
 
       # DDM-P0-T06: name what happened. The job summary lists passed, failed,
       # flaky (passed only on retry), and skipped counts and the file:line of

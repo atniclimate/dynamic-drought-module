@@ -722,6 +722,7 @@ test.describe('S4b minimap', () => {
       }
       scratch.remove();
       return points;
+      // spec-impact: intended, the retired Arctic zone's path is sampled to prove it no longer answers.
     }, 'M0,0H660V78C572,66 502,78 430,70C344,61 266,70 194,66C126,62 62,70 0,58Z');
     expect(samples.length, 'no sample fell in the retired Arctic zone').toBeGreaterThan(0);
     expect(samples.filter((point) => point.ocean !== null)).toEqual([]);

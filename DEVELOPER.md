@@ -445,7 +445,14 @@ gate's single fresh build.
 
 The full browser suite runs on GitHub in the `Validate` workflow; start it on a
 branch without an open pull request with `gh workflow run validate.yml --ref
-<branch>`. Reserve a local `npm run test:serial` (more than an hour) for when
+<branch>`. Only that full run decides a landing. Partway through a block, a
+targeted run of the block's own specs (`-f "specs=$(node
+scripts/spec-impact.mjs --list)"`) answers in about five minutes and its run
+name says it is not a landing run. Before the full dispatch, `npm run
+spec:impact` must show no spec still naming text the block removed, and `npm
+run test:touched` runs the touched specs once locally; the testing guide's
+"Iteration and session closeout" has the order. A pull request that changes
+only `workers/proxy/` skips the browser job. Reserve a local `npm run test:serial` (more than an hour) for when
 GitHub is unavailable. Ending a session does not trigger another full suite.
 Documentation-only and verification-tooling checks are scoped in the same
 ladder. Report exactly what ran and what remains unverified.
@@ -667,8 +674,10 @@ runs no CI on push; start it by hand with `gh workflow run validate.yml --ref
 the change. When a piece of work is finished, run the focused tests again and
 the browser-free checks (`npm run verify:quick`; `npm run gate:nobuild` or
 `npm run gate` when the change is cross-cutting), then push the branch. The
-full browser suite runs on GitHub in eight shards, once the release candidate
-is frozen rather than on every push. Before a release, the full suite must be green on GitHub for the
+full browser suite runs on GitHub in fourteen shards, once at the end of each
+block and once for the frozen release candidate, never on every push; a
+targeted run of the block's own specs may come partway through a block, and it
+never counts for a landing. Before a release, the full suite must be green on GitHub for the
 frozen release candidate, and one independent review covers the release's whole
 diff. A local `npm run test:serial` is the fallback when GitHub is unavailable.
 `Validate` is the only check that must be green on the pull request, and

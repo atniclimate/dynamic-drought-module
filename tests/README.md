@@ -34,13 +34,17 @@ Avoid copying spec counts and runtime estimates into several documents.
 | Pure logic | `npm run verify:pure -- tests/layer-order.spec.ts` | Selected source-level cases; omit the selector for the whole pure lane |
 | Source checks without a bundle | `npm run gate:nobuild` | Types and all source checks, including the pure lane |
 | A browser behavior | `npx playwright test --workers=1 tests/boot.spec.ts` | Fresh production build and the selected cases |
+| A finished block's own specs, once before the full dispatch | `npm run test:touched` | The specs `npm run spec:impact` lists as touched; refuses none, more than 12, or a held port 4173 or 4180 |
 | Cross-cutting build/configuration changes | `npm run gate` | Fresh build, artifact budgets and all source checks |
 | Full suite locally, when GitHub is unavailable | `npm run test:serial` | All three assertion projects, one worker; excludes the measurement project |
 
 The full browser suite normally runs on GitHub, in the Validate workflow, which
-slices it into eight shards. On a branch without an open pull request, start it
-with `gh workflow run validate.yml --ref <branch>`. A local `test:serial` takes
-more than an hour and is the fallback, not a routine step.
+slices it into fourteen shards. On a branch without an open pull request, start
+it with `gh workflow run validate.yml --ref <branch>`; only that full run
+decides a landing. A pull request that changes only `workers/proxy/` (the
+weekly Dependabot Worker bumps) skips the browser job and is judged by the gate
+and the Worker checks. A local `test:serial` takes more than an hour and is the
+fallback, not a routine step.
 
 `npm test` runs the same three assertion projects with the configured worker
 count. Keep one browser runner at a time. The pure lane starts no browser or
@@ -72,8 +76,27 @@ configuration, size or pure-logic change never needs one. When one is needed:
 the fewest cases (`-g`), every diagnostic in the first run, at most one
 confirming run when the piece is finished. `verify:smoke`, whole Playwright
 projects, the Fire pair and repeat runs are not local steps: the full suite
-runs on GitHub once, for the frozen release candidate, and the release's whole
-diff gets one independent review.
+runs on GitHub once at the end of each block and once for the frozen release
+candidate, and the release's whole diff gets one independent review.
+
+A block's own specs (owner, 2026-10-19). `npm run spec:impact` reads the
+block's commits (`<base>...HEAD`, the base defaulting to the merge base with
+`origin/main`, `--base <ref>` to choose; it reads commits, so commit first).
+It prints every spec line that still names a string, attribute value, class
+token or visible text the block removed from `src/` or `index.html` and that
+HEAD no longer has (likely absence checks are listed apart and not counted),
+then the touched specs: specs the block changed, specs with such a mention,
+and specs that import a changed `src/` module directly. It exits 1 while a
+counted mention remains; `--list` prints only the touched paths. In order:
+
+1. Partway through a block, a targeted GitHub run of only those specs, about
+   five minutes: `gh workflow run validate.yml --ref <branch> -f
+   "specs=$(node scripts/spec-impact.mjs --list)"`. Every shard runs only its
+   slice of the named files; the run's name says it is not a landing run.
+2. Before the full dispatch: `npm run spec:impact` with no counted mention
+   left, then one local `npm run test:touched`.
+3. The full Validate run, with no `specs`, once. Only that run decides a
+   landing.
 
 A session ending is not a new application verification event. Do not start
 `verify:smoke` or `test:serial` solely because the session is ending, or rerun
@@ -87,8 +110,8 @@ the gate when build orchestration changes, and a focused execution of the change
 browser startup path. A tooling check does not establish application readiness.
 
 After shared navigation, map lifecycle or state changes, run only the affected
-browser cases locally, if any; the full suite on GitHub covers the rest once
-the release candidate is frozen.
+browser cases locally, if any; the full suite on GitHub covers the rest at the
+block's end.
 
 ### 3D diagnosis
 
@@ -351,6 +374,11 @@ exactly the pressure the flakiest specs are sensitive to, so a wall-clock win
 bought with a new flake is a loss. Take at least 5 runs per setting on one
 unchanged SHA before comparing, and adopt a change only when the repeated
 runs show no new flake names and no rise in the existing rate.
+
+A third input, `specs` (2026-10-19), is the targeted run described under
+"Iteration and session closeout": each shard adds `--pass-with-no-tests` and
+the named files, after checking each file exists. Empty, as on every pull
+request, deploy call and the weekly schedule, the command is unchanged.
 
 Every shard writes a job summary (passed, failed, flaky, skipped, and the
 `file:line` of each failed or flaky test) from its JSON report through

@@ -88,6 +88,7 @@ test('the CPC drought outlook fills with solid issuer class colors at the curren
   expect(paint['fill-opacity']).toBe(0.48);
 });
 
+// spec-impact: intended, the hatch is retired and this case guards its absence.
 test('the USDM observed week fills with a solid fill-color, never a hatch fill-pattern', () => {
   const dummyColor = '#123456' as unknown as maplibregl.ExpressionSpecification;
   const paint = buildUsdmFillPaint(dummyColor) as Record<string, unknown>;

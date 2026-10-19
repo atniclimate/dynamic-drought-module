@@ -9,6 +9,13 @@
 
 name: Validate DDM
 
+# A targeted run (the `specs` input below, 2026-10-19) must never be taken for
+# a landing run. Empty or whitespace keeps GitHub's event-specific name (the
+# pull request's title; the workflow name on a plain dispatch): the
+# `run-name` entry of the workflow syntax reference.
+run-name: >-
+  ${{ inputs.specs != '' && format('Targeted browser run on {0}, not a landing run', github.ref_name) || '' }}
+
 on:
   pull_request:
     # A pull request that touches only documentation outside the build has
@@ -48,12 +55,25 @@ on:
         required: false
         type: string
         default: ''
+      # Measure C (owner, 2026-10-19): partway through a block, run only the
+      # block's own specs (`npm run spec:impact -- --list`), about 5 minutes.
+      # Only a run with this empty decides a landing.
+      specs:
+        description: >-
+          Space-separated spec paths (tests/x.spec.ts). Empty (the default)
+          runs the whole suite, the only run that counts for a landing.
+        required: false
+        type: string
+        default: ''
 
 permissions:
   contents: read
 
+# A targeted run has its own group so it can never cancel a full run on the
+# same branch, or be cancelled by one. On pull_request `inputs.specs` is null,
+# so the group name is unchanged.
 concurrency:
-  group: validate-${{ github.ref }}
+  group: validate-${{ github.ref }}${{ inputs.specs != '' && '-targeted' || '' }}
   cancel-in-progress: true
 
 jobs:
@@ -104,8 +124,42 @@ jobs:
       - name: Audit Worker dependencies
         run: npm --prefix workers/proxy audit
 
+  # Owner, 2026-10-19: the weekly Dependabot Worker bumps change only
+  # workers/proxy/, which the gate job's Worker typecheck and audit cover; the
+  # browser suite says nothing about them, yet it turned them red whenever
+  # main's own suite was red. A pull request whose every changed path is
+  # under workers/proxy/ skips the browser job. A dispatch never asks.
+  scope:
+    name: Changed paths
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      worker-only: ${{ steps.paths.outputs.worker-only }}
+    steps:
+      # The pull_request checkout is the test merge commit, whose first
+      # parent is the base: depth 2 holds both sides of the diff.
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
+
+      - name: Decide whether only workers/proxy/ changed
+        id: paths
+        run: |
+          git diff --name-only HEAD^1 HEAD | tee changed.txt
+          if test -s changed.txt && ! grep -qv '^workers/proxy/' changed.txt; then
+            echo "worker-only=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "worker-only=false" >> "$GITHUB_OUTPUT"
+          fi
+
   browser:
     name: Browser suite
+    needs: scope
+    # `!cancelled()` lets the suite run when `scope` is skipped (a dispatch)
+    # or failed (no answer means run it).
+    if: ${{ !cancelled() && needs.scope.outputs.worker-only != 'true' }}
     uses: ./.github/workflows/browser-suite.yml
     with:
       build-sha: ${{ github.sha }}
@@ -115,19 +169,35 @@ jobs:
       # today's behavior; a dispatched run can override either value.
       workers: ${{ inputs.workers || '1' }}
       retries: ${{ inputs.retries || '' }}
+      specs: ${{ inputs.specs || '' }}
 
   # `!cancelled()` rather than `always()`: a run superseded by
   # `cancel-in-progress` must read as cancelled, not as a red Validate.
   validate:
     name: Validate
-    needs: [gate, browser]
+    needs: [gate, scope, browser]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - name: Say that this is a targeted run
+        if: ${{ inputs.specs != '' }}
+        env:
+          SPECS: ${{ inputs.specs }}
+        run: |
+          echo "::notice::Targeted browser run of named specs only. Not a landing run: only a full Validate run (no specs) decides a landing."
+          printf '### Targeted run, not a landing run\n\nOnly these spec files ran: %s\n\nA landing needs a full Validate run, dispatched with no specs.\n' "$SPECS" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Require every job to have passed
         run: |
           echo "gate: ${{ needs.gate.result }}"
+          echo "scope: ${{ needs.scope.result }} (worker-only: ${{ needs.scope.outputs.worker-only }})"
           echo "browser: ${{ needs.browser.result }}"
           test "${{ needs.gate.result }}" = "success"
-          test "${{ needs.browser.result }}" = "success"
+          test "${{ needs.scope.result }}" != "failure"
+          # A skipped suite passes only for a workers/proxy/-only pull request.
+          if test "${{ needs.browser.result }}" = "skipped" && test "${{ needs.scope.outputs.worker-only }}" = "true"; then
+            echo "browser: skipped, every changed path is under workers/proxy/"
+          else
+            test "${{ needs.browser.result }}" = "success"
+          fi
