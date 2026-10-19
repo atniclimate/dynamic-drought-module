@@ -152,6 +152,38 @@ permissions:
   contents: read
 
 jobs:
+  # A targeted run whose named files belong to no matrix project (a file only
+  # the measure project owns, say) would leave every shard green having run
+  # nothing. Listing is cheap: no browser, no build.
+  collect:
+    name: Named specs collect tests
+    if: ${{ inputs.specs != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SPECS: ${{ inputs.specs }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install application dependencies
+        run: npm ci
+
+      # Without --pass-with-no-tests, zero listed tests is a non-zero exit.
+      - name: Fail if the matrix would run zero tests
+        run: |
+          read -r -a files <<< "$SPECS"
+          for spec in "${files[@]}"; do
+            [[ "$spec" =~ ^tests/[A-Za-z0-9._-]+\.spec\.ts$ ]] || { echo "::error::$spec is not a tests/*.spec.ts path."; exit 1; }
+          done
+          npx playwright test --list --project=chromium --project=chromium-interaction --project=chromium-3d "${files[@]}"
+
   shard:
     name: ${{ matrix.project }} ${{ matrix.shard }}/${{ matrix.total }}
     runs-on: ubuntu-latest
@@ -235,29 +267,37 @@ jobs:
           # scheduled run's fallback: an empty WORKERS would make
           # `--workers=` an invalid argument rather than a default.
           WORKERS: ${{ inputs.workers || '1' }}
-          # Empty on the weekly scheduled run too: GitHub casts both null and
-          # the empty string to 0 when the operand types differ, so the
-          # `!= ''` test is false when there is no caller and no input.
-          #
-          # Non-empty only when the `retries` experiment input (above) was
-          # set; a plain call (Validate's pull_request path, or deploy.yml)
-          # leaves this empty and playwright.config.ts's own isCI retries
-          # setting governs, unchanged.
-          RETRIES_ARG: ${{ inputs.retries != '' && format('--retries={0}', inputs.retries) || '' }}
+          # Empty on the weekly scheduled run too, and whenever the `retries`
+          # experiment input (above) was not set: a plain call (Validate's
+          # pull_request path, or deploy.yml) leaves this empty and
+          # playwright.config.ts's own isCI retries setting governs, unchanged.
+          RETRIES: ${{ inputs.retries }}
           # Empty unless a targeted run named files (the `specs` input); empty
           # on the schedule too, so the command below is today's exactly.
           SPECS: ${{ inputs.specs }}
-        # A misspelt path would match nothing and pass with no tests, so every
-        # named file must exist first. A blank list would run the whole suite
-        # under the targeted run's name, so it fails instead.
+        # Each input is checked, then the command is built as an array, so a
+        # stray space cannot add arguments. A blank spec list would run the
+        # whole suite under the targeted run's name, and a path that is not a
+        # spec file (or does not exist) would match nothing, so both fail.
+        # A shard that owns none of the named files stays green here; the
+        # `collect` job fails the run when no shard owns any.
         run: |
-          if test -n "$SPECS" && test -z "${SPECS//[[:space:]]/}"; then
-            echo "::error::The specs input is blank. Dispatch with no specs for the full run."; exit 1
+          [[ "$WORKERS" =~ ^[0-9]{1,2}$ ]] || { echo "::error::workers must be a small whole number."; exit 1; }
+          [[ "$RETRIES" =~ ^[0-9]{0,2}$ ]] || { echo "::error::retries must be empty or a small whole number."; exit 1; }
+          args=(test "--project=${{ matrix.project }}" "--shard=${{ matrix.shard }}/${{ matrix.total }}" "--workers=$WORKERS")
+          if test -n "$RETRIES"; then args+=("--retries=$RETRIES"); fi
+          if test -n "$SPECS"; then
+            read -r -a files <<< "$SPECS"
+            if test "${#files[@]}" -eq 0; then
+              echo "::error::The specs input is blank. Dispatch with no specs for the full run."; exit 1
+            fi
+            for spec in "${files[@]}"; do
+              [[ "$spec" =~ ^tests/[A-Za-z0-9._-]+\.spec\.ts$ ]] || { echo "::error::$spec is not a tests/*.spec.ts path."; exit 1; }
+              test -f "$spec" || { echo "::error::No spec file $spec on this commit."; exit 1; }
+            done
+            args+=(--pass-with-no-tests "${files[@]}")
           fi
-          for spec in $SPECS; do
-            test -f "$spec" || { echo "::error::No spec file $spec on this commit."; exit 1; }
-          done
-          npx playwright test --project=${{ matrix.project }} --shard=${{ matrix.shard }}/${{ matrix.total }} --workers=$WORKERS $RETRIES_ARG ${SPECS:+--pass-with-no-tests $SPECS}
+          npx playwright "${args[@]}"
 
       # DDM-P0-T06: name what happened. The job summary lists passed, failed,
       # flaky (passed only on retry), and skipped counts and the file:line of
