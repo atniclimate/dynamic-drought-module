@@ -45,7 +45,7 @@ const STUBS = {
   './gl-capability':
     'export function watchContextLoss() { return () => {}; } export function webGl2Capability() { return { webgl2: true }; }',
   '/state/cluster-service':
-    'export function getCommittedSnapshot() { return { cluster: globalThis.__ribbonReadEnv.cluster }; } export function onCommittedSnapshotChange() { return () => {}; }',
+    'export function getCommittedSnapshot() { return { cluster: globalThis.__ribbonReadEnv.cluster, horizon: "current", intendedKeys: new Set() }; } export function onCommittedSnapshotChange() { return () => {}; } export function requestCluster() {}',
   '/state/fire3d-store':
     'const env = globalThis.__ribbonReadEnv; export function getFire3DPreference() { return env.preference; } export function onFire3DPreferenceChange(fn) { env.preferenceListeners.push(fn); return () => {}; } export function setFire3DPreference(next) { env.preference = next; }',
   '/ui/overlay': 'export function showToast() {}',

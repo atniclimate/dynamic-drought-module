@@ -49,7 +49,7 @@ export function fuelRiskSwitch(input: {
 }
 
 /**
- * Whether the 3D button re-applies the Wildfire recipe on entry. The scene
+ * Whether scene entry (src/map/fire3d.ts) re-applies the Wildfire recipe. The scene
  * draws its own perimeter-masked fuel risk drape, which the flat layer would
  * block (src/layers/whp-3d.ts), so an optional flat Fuel risk is cleared; at
  * Long Range the recipe itself holds the flat layer and it stays.

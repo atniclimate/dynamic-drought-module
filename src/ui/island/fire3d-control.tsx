@@ -93,7 +93,6 @@ import {
   fuelRiskKeepsConsole,
   fuelRiskSwitch,
   revealScroll,
-  sceneEntryAppliesRecipe,
   shouldRevealScroll
 } from '../fire3d-fuel-risk';
 import { requestLayerOn } from '../layer-toggle-command';
@@ -382,11 +381,11 @@ export function Fire3DControl({
         aria-pressed={preference}
         title="Tilt the Fire view over 3D terrain relief with a volumetric smoke read. Presentation only: it changes how the same mapped data is seen, not what any layer claims."
         onClick={() => {
-          // The scene enters only from the Wildfire recipe, and draws its own fuel risk drape.
-          if (!preference && sceneEntryAppliesRecipe({ cluster, flatOn: flatFuelOn, recipeHasFlat })) {
+          // The scene enters only from Wildfire; its controller clears an optional flat Fuel risk on entry.
+          if (!preference && cluster !== 'wildfire') {
             requestCluster('wildfire');
             // A mode switch applies the mode's basemap default, like the shell's chooser.
-            if (cluster !== 'wildfire') requestBasemapMode(map, defaultBasemapFor('wildfire'));
+            requestBasemapMode(map, defaultBasemapFor('wildfire'));
           }
           turnedOn3D.current = !preference;
           setFire3DPreference(!preference);
