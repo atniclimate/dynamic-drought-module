@@ -172,9 +172,13 @@ test('satellite revert is silent on boot and toasts only for a pressed SAT', asy
   assert.match(sw, /announce = false/);
   assert.match(sw, /void applyBasemapMode\(map, mode, announce\);/);
   assert.match(sw, /requestBasemapMode\(map, next, true\);/);
+  // Any third argument up to the statement's `;`, so a nested second argument cannot hide it.
+  const announces = /requestBasemapMode\([^;]*,[^;]*,[^;]*;/;
+  assert.match('requestBasemapMode(map, defaultBasemapFor(key), true);', announces);
+  assert.doesNotMatch('requestBasemapMode(map, defaultBasemapFor(key));', announces);
   for (const path of ['src/ui/sidebar.ts', 'src/ui/island/shell.tsx', 'src/ui/island/minimap.tsx', 'src/ui/island/fire3d-control.tsx']) {
     const caller = await readFile(new URL(path, ROOT), 'utf8');
-    assert.doesNotMatch(caller, /requestBasemapMode\([^)]*,[^)]*,/, `${path} must not announce`);
+    assert.doesNotMatch(caller, announces, `${path} must not announce`);
   }
   assert.equal((sw.match(/applyBasemapMode\(map, 'satellite'\)/g) ?? []).length, 1);
   assert.match(sw, /if \(announce\) showToast\(/);
