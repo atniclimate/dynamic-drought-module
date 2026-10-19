@@ -84,15 +84,22 @@ block's commits (`<base>...HEAD`, the base defaulting to the merge base with
 `origin/main`, `--base <ref>` to choose; it reads commits, so commit first).
 It prints every spec line that still names a string, attribute value, class
 token or visible text the block removed from `src/` or `index.html` and that
-HEAD no longer has (likely absence checks are listed apart and not counted),
-then the touched specs: specs the block changed, specs with such a mention,
-and specs that import a changed `src/` module directly. It exits 1 while a
-counted mention remains; `--list` prints only the touched paths. In order:
+HEAD's code no longer has anywhere (a mention left in a comment does not
+count; likely absence checks are listed apart and not counted), then the
+touched specs: specs the block changed, specs with such a mention, and specs
+that import a changed `src/` module or test helper directly (the measurement
+specs are left out). It catches text deleted everywhere, not text the block
+moved or reworded: a spec asserting a label that now reads differently still
+needs the targeted run to find it. It exits 1 while a counted mention remains;
+`--list` prints only the touched paths. In order:
 
 1. Partway through a block, a targeted GitHub run of only those specs, about
-   five minutes: `gh workflow run validate.yml --ref <branch> -f
-   "specs=$(node scripts/spec-impact.mjs --list)"`. Every shard runs only its
-   slice of the named files; the run's name says it is not a landing run.
+   five minutes: push, then `npm run spec:impact -- --dispatch` (add
+   `--base <ref>` as above). It dispatches Validate on the checked-out branch
+   with the touched list as `specs`, and refuses an empty list (that would be
+   the full run), a detached HEAD, or a HEAD that is not the pushed tip. Every
+   shard runs only its slice of the named files; the run's name says it is not
+   a landing run.
 2. Before the full dispatch: `npm run spec:impact` with no counted mention
    left, then one local `npm run test:touched`.
 3. The full Validate run, with no `specs`, once. Only that run decides a
@@ -377,7 +384,8 @@ runs show no new flake names and no rise in the existing rate.
 
 A third input, `specs` (2026-10-19), is the targeted run described under
 "Iteration and session closeout": each shard adds `--pass-with-no-tests` and
-the named files, after checking each file exists. Empty, as on every pull
+the named files, after checking each file exists (a blank list fails rather
+than running everything under the targeted name). Empty, as on every pull
 request, deploy call and the weekly schedule, the command is unchanged.
 
 Every shard writes a job summary (passed, failed, flaky, skipped, and the

@@ -446,11 +446,12 @@ gate's single fresh build.
 The full browser suite runs on GitHub in the `Validate` workflow; start it on a
 branch without an open pull request with `gh workflow run validate.yml --ref
 <branch>`. Only that full run decides a landing. Partway through a block, a
-targeted run of the block's own specs (`-f "specs=$(node
-scripts/spec-impact.mjs --list)"`) answers in about five minutes and its run
-name says it is not a landing run. Before the full dispatch, `npm run
-spec:impact` must show no spec still naming text the block removed, and `npm
-run test:touched` runs the touched specs once locally; the testing guide's
+targeted run of the block's own specs (`npm run spec:impact -- --dispatch`
+after a push; it refuses an empty list, which would be the full run) answers
+in about five minutes and its run name says it is not a landing run. Before
+the full dispatch, `npm run spec:impact` must show no spec still naming text
+the block deleted everywhere (it does not catch text moved or reworded), and
+`npm run test:touched` runs the touched specs once locally; the testing guide's
 "Iteration and session closeout" has the order. A pull request that changes
 only `workers/proxy/` skips the browser job. Reserve a local `npm run test:serial` (more than an hour) for when
 GitHub is unavailable. Ending a session does not trigger another full suite.

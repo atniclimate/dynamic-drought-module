@@ -182,8 +182,8 @@ async function captureMaps(page: Page): Promise<void> {
 
 /**
  * Wait until every source on the main map (`#map`) has settled the tiles of
- * the view (MapLibre `loaded()`, read from tile state, so it needs no frame:
- * a tile that errors fires no render and so no idle).
+ * the view (MapLibre `loaded()`: every tile loaded or errored, as of the last
+ * render; polled, because a tile that errors fires no render and so no idle).
  *
  * The SST pill reads live from the latest frame, and src/layers/sst-anomaly.ts
  * mounts the hidden previous-day frame in the same task, so that frame's

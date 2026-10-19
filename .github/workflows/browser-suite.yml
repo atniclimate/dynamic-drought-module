@@ -248,8 +248,12 @@ jobs:
           # on the schedule too, so the command below is today's exactly.
           SPECS: ${{ inputs.specs }}
         # A misspelt path would match nothing and pass with no tests, so every
-        # named file must exist first.
+        # named file must exist first. A blank list would run the whole suite
+        # under the targeted run's name, so it fails instead.
         run: |
+          if test -n "$SPECS" && test -z "${SPECS//[[:space:]]/}"; then
+            echo "::error::The specs input is blank. Dispatch with no specs for the full run."; exit 1
+          fi
           for spec in $SPECS; do
             test -f "$spec" || { echo "::error::No spec file $spec on this commit."; exit 1; }
           done

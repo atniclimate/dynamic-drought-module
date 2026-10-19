@@ -4,11 +4,14 @@
  * fixtures only; no git, no browser.
  */
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import {
   MAX_LOCAL_SPECS,
+  dispatchRefusal,
   findMentions,
   importsChanged,
+  measureSpecs,
   removedLiterals,
   runRefusal,
   staleLiterals,
@@ -65,6 +68,16 @@ test('a literal still present anywhere in HEAD source is not stale', () => {
   assert.deepEqual(stale, ['Quick views', 'is-open']);
 });
 
+test('a literal left only in a HEAD comment is stale; a URL is not a comment', () => {
+  const head = [
+    "// The old 'Quick views' row is retired.",
+    "/* 'Chips row' too */ const url = 'https://example.gov/x'; // 'Pick a view'",
+    '<!-- conditions-dock -->'
+  ].join('\n');
+  const stale = staleLiterals(['Quick views', 'Chips row', 'Pick a view', 'conditions-dock', 'https://example.gov/x'], head);
+  assert.deepEqual(stale, ['Quick views', 'Chips row', 'Pick a view', 'conditions-dock']);
+});
+
 test('mentions name file and line, skip comments and mark absence checks', () => {
   const specs = [
     {
@@ -75,7 +88,10 @@ test('mentions name file and line, skip comments and mark absence checks', () =>
         "await expect(page.locator('.is-open'))",
         '  .toHaveCount(0);',
         '// spec-impact: intended, the retired path is sampled on purpose',
-        "await page.evaluate((d) => d.length, 'M0,0H660');"
+        "await page.evaluate((d) => d.length, 'M0,0H660');",
+        "await expect(page.getByRole('button', { name: 'Quick views' })).not.toBeDisabled();",
+        "await expect(page.locator('.is-open')).toBeHidden();",
+        "await expect(page.locator('#dock')).not.toContainText('Quick views');"
       ].join('\n')
     },
     { path: 'tests/other.spec.ts', text: "expect(1).toBe(1);" }
@@ -83,29 +99,49 @@ test('mentions name file and line, skip comments and mark absence checks', () =>
   assert.deepEqual(findMentions(['Quick views', 'is-open', 'M0,0H660'], specs), [
     { file: 'tests/panel.spec.ts', line: 2, text: 'Quick views', absent: false },
     { file: 'tests/panel.spec.ts', line: 3, text: 'is-open', absent: true },
-    { file: 'tests/panel.spec.ts', line: 6, text: 'M0,0H660', absent: true }
+    { file: 'tests/panel.spec.ts', line: 6, text: 'M0,0H660', absent: true },
+    // `.not.toBeDisabled()` still needs the control to exist: not an absence check.
+    { file: 'tests/panel.spec.ts', line: 7, text: 'Quick views', absent: false },
+    { file: 'tests/panel.spec.ts', line: 8, text: 'is-open', absent: true },
+    { file: 'tests/panel.spec.ts', line: 9, text: 'Quick views', absent: true }
   ]);
 });
 
-test('touched specs: changed, mentioning, or directly importing a changed module', () => {
+test('touched specs: changed, mentioning, or directly importing a changed module or helper', () => {
   const specs = [
     { path: 'tests/a.spec.ts', text: "import { x } from '../src/ui/panel';" },
     { path: 'tests/b.spec.ts', text: "const m = await import('../src/map/index.ts');" },
     { path: 'tests/c.spec.ts', text: "import { y } from '../src/ui/panel-extra';" },
-    { path: 'tests/d.spec.ts', text: '' }
+    { path: 'tests/d.spec.ts', text: '' },
+    { path: 'tests/e.spec.ts', text: "import { stubRecentSatellite } from './satellite-fixture';" },
+    { path: 'tests/flow-measure.spec.ts', text: "import { x } from '../src/ui/panel';" }
   ];
   assert.ok(importsChanged('tests/a.spec.ts', specs[0].text, ['src/ui/panel.ts']));
   assert.ok(importsChanged('tests/b.spec.ts', specs[1].text, ['src/map/index.ts']));
   assert.ok(!importsChanged('tests/c.spec.ts', specs[2].text, ['src/ui/panel.ts']));
+  assert.ok(importsChanged('tests/e.spec.ts', specs[4].text, ['tests/satellite-fixture.ts']));
   assert.deepEqual(
     touchedSpecs({
       changedSpecs: ['tests/d.spec.ts'],
       mentions: [{ file: 'tests/d.spec.ts' }, { file: 'tests/c.spec.ts' }],
       specs,
-      changedSrc: ['src/ui/panel.ts', 'src/map/index.ts']
+      changedModules: ['src/ui/panel.ts', 'src/map/index.ts', 'tests/satellite-fixture.ts'],
+      measureOnly: new Set(['tests/flow-measure.spec.ts'])
     }),
-    ['tests/a.spec.ts', 'tests/b.spec.ts', 'tests/c.spec.ts', 'tests/d.spec.ts']
+    ['tests/a.spec.ts', 'tests/b.spec.ts', 'tests/c.spec.ts', 'tests/d.spec.ts', 'tests/e.spec.ts']
   );
+});
+
+test('the measurement-only specs are read from playwright.config.ts', () => {
+  const config = readFileSync(new URL('../playwright.config.ts', import.meta.url), 'utf8');
+  assert.deepEqual([...measureSpecs(config)].sort(), ['tests/flow-measure.spec.ts', 'tests/mode-switch-cost.spec.ts']);
+});
+
+test('--dispatch refuses an empty list (the full run), a detached HEAD and an unpushed tip', () => {
+  assert.match(dispatchRefusal([], 'work/x', 'a1', 'a1'), /full run/);
+  assert.match(dispatchRefusal(['tests/a.spec.ts'], 'HEAD', 'a1', ''), /detached/);
+  assert.match(dispatchRefusal(['tests/a.spec.ts'], 'work/x', 'a1', 'b2'), /push first/);
+  assert.equal(dispatchRefusal(['tests/a.spec.ts'], 'work/x', 'a1', 'a1'), null);
 });
 
 test('--run refuses an empty list (the whole suite) and a list too broad for one local run', () => {

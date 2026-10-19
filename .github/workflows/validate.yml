@@ -147,7 +147,8 @@ jobs:
       - name: Decide whether only workers/proxy/ changed
         id: paths
         run: |
-          git diff --name-only HEAD^1 HEAD | tee changed.txt
+          # --no-renames: a file moved into workers/proxy/ also lists its old path.
+          git diff --no-renames --name-only HEAD^1 HEAD | tee changed.txt
           if test -s changed.txt && ! grep -qv '^workers/proxy/' changed.txt; then
             echo "worker-only=true" >> "$GITHUB_OUTPUT"
           else
