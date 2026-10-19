@@ -148,6 +148,8 @@ export function watchRasterTiles(
   let requestCycleActive = true;
   let deadlineTimer: ReturnType<typeof setTimeout> | null = null;
   let lastCompletenessOutcome: RasterTileOutcome | null = null;
+  // A verdict has gone to `report` since attach or reset.
+  let reported = false;
 
   const clearDeadline = (): void => {
     if (deadlineTimer !== null) clearTimeout(deadlineTimer);
@@ -228,6 +230,7 @@ export function watchRasterTiles(
         `[${sourceId}] selected-frame tile requests completed with known holes; reporting live (partial).`
       );
     }
+    reported = true;
     report(outcome);
   };
 
@@ -238,9 +241,10 @@ export function watchRasterTiles(
       if (!requestCycleActive) return;
       // A rendered source whose view emptied inside the cycle was hidden (the
       // flat Fuel risk under the 3D drape): it keeps its verdict, as a hidden
-      // source does outside a cycle, and the cycle closes.
+      // source does outside a cycle, and the cycle closes. With no verdict yet
+      // there is nothing to keep, so it reports and the consumer settles it.
       const view = readView();
-      if (rendered && view !== undefined && view[0] === 0) {
+      if (rendered && reported && view !== undefined && view[0] === 0) {
         requestCycleActive = false;
         return;
       }
@@ -384,6 +388,7 @@ export function watchRasterTiles(
     reset(): void {
       clearDeadline();
       rendered = false;
+      reported = false;
       requestedTiles = new Set();
       successfulTiles = new Set();
       lastCompletenessOutcome = null;

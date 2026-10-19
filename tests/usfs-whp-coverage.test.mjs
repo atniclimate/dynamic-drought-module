@@ -160,11 +160,25 @@ test('a layer the 3D drape hides before its first frame is not reported unavaila
     // whp-3d.ts hides the flat layer in the same task it is added; a hidden source requests no tiles.
     map.setLayoutProperty('usfs-whp', 'visibility', 'none');
     t.mock.timers.tick(10_000);
-    assert.notEqual(registry.getStatus('usfs-whp'), 'error');
+    // Terminal, not stuck at 'loading': the drape draws the row, so boot idle and quiescence settle.
+    assert.equal(registry.getStatus('usfs-whp'), 'ready');
     // Given back by the drape, its first tile closes the open cycle as ready.
     map.setLayoutProperty('usfs-whp', 'visibility', 'visible');
     map.loadEmptyTile();
     assert.equal(registry.getStatus('usfs-whp'), 'ready');
+  });
+});
+
+test('a layer given back by the 3D drape whose every tile fails reads unavailable', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  await withMap((map) => {
+    map.setLayoutProperty('usfs-whp', 'visibility', 'none');
+    t.mock.timers.tick(10_000);
+    map.setLayoutProperty('usfs-whp', 'visibility', 'visible');
+    // A failed tile fires no sourcedata; the deadline is its only read.
+    map.emit('sourcedataloading', { sourceId: 'usfs-whp', dataType: 'source', tile: { tileID: { key: 't1' } } });
+    t.mock.timers.tick(10_000);
+    assert.equal(registry.getStatus('usfs-whp'), 'error');
   });
 });
 

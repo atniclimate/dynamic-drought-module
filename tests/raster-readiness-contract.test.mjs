@@ -1440,6 +1440,26 @@ test('current view guard: a rendered source hidden while a cycle is open keeps i
   });
 });
 
+test('current view guard: a source hidden mid-cycle before its first verdict still reports at the deadline, so its row cannot stay loading', async (t) => {
+  // A shared link with fire3d=true: some flat Fuel risk tiles load, then the
+  // drape hides the layer before any idle. With no verdict to keep, the
+  // deadline must still report so the layer's own hidden guard can settle it.
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  await withLayer('gridded-index', GRIDDED, async ({ mod, map }) => {
+    const view = trackView(map, 'gridded-index');
+    await mod.activate(map);
+    view.request('a');
+    view.request('b');
+    view.load('a');
+    assert.equal(registry.getStatus('gridded-index'), 'loading');
+    view.leave('a');
+    view.leave('b');
+    view.frame();
+    t.mock.timers.tick(deadlineMs);
+    assert.notEqual(registry.getStatus('gridded-index'), 'loading');
+  });
+});
+
 test('current view guard: a watch without a deadline (the Fire 3D terrain path) reports nothing from the view, and detaches whole', async () => {
   // The no-deadline watch is raster-error-watch.ts's alone (DR-142).
   const { watchRasterTiles } = await import('../src/util/raster-error-watch.ts');

@@ -188,12 +188,34 @@ export function createWhpLayer(key: 'usfs-whp' | 'usfs-whp-classes', shaded: boo
       const next = pointHasHeatRiskCoverage(lng, lat) ? tile : 'no-data';
       if (registry.getStatus(key) !== next) reportStatus(next);
     };
+    // A dropped 'error' stays in the watcher's memory, so a failed view after
+    // the drape gives the layer back would repeat it unheard: its first tile
+    // request starts a fresh watch with its own deadline.
+    let unheard = false;
+    const givenBack = (e: { sourceId?: string }): void => {
+      if (!unheard || e.sourceId !== SOURCE_ID) return;
+      unheard = false;
+      tileWatch?.reset();
+    };
     map.on('moveend', sync);
-    releaseCoverageWatch = () => map.off('moveend', sync);
+    map.on('sourcedataloading', givenBack);
+    releaseCoverageWatch = () => {
+      map.off('moveend', sync);
+      map.off('sourcedataloading', givenBack);
+    };
     return (state) => {
       // A hidden layer (the Wildfire 3D drape stands in for it) requests no
       // tiles, so a deadline verdict then is no evidence; keep the last one.
-      if (map.getLayoutProperty(LAYER_ID, 'visibility') === 'none') return;
+      // A row hidden before its first verdict is settled ready (off coverage, no data).
+      // shortcut: hidden only under the mounted 3D drape, which draws this edition from the probed archive; the first verdict after the layer is given back replaces it
+      if (map.getLayoutProperty(LAYER_ID, 'visibility') === 'none') {
+        if (state === 'error') unheard = true;
+        if (tile === 'loading') {
+          tile = 'ready';
+          sync();
+        }
+        return;
+      }
       tile = state;
       sync();
     };
