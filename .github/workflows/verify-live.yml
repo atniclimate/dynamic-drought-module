@@ -82,7 +82,7 @@
 # not a finding, and ends green with a summary line instead of accusing a
 # commit the repository has moved past. The receipt carries URLs, status
 # codes, bytes, milliseconds, and status words only, never a body or a
-# screenshot (hard rule 1; src/layers/aiannh.ts).
+# screenshot; those payloads are unnecessary for this receipt.
 #
 # Why a separate workflow (2026-08-28): as a job inside deploy.yml this
 # proof sat in the deploy's `pages` concurrency group, so a newer push
@@ -440,6 +440,17 @@ jobs:
       # github.sha can already be behind the commit the resolver chose.
       # Re-point the working tree at that commit so the PMTiles range
       # checks read the archive list the verified build shipped.
+      # Classification belongs to this workflow, even when it proves an older build.
+      - name: Preserve the workflow's receipt policy
+        id: policy
+        if: ${{ steps.expect.outputs.verdict == 'verify' }}
+        run: |
+          set -euo pipefail
+          if ! git cat-file -e "$GITHUB_WORKFLOW_SHA^{commit}" 2>/dev/null; then
+            git fetch --depth=1 origin "$GITHUB_WORKFLOW_SHA"
+          fi
+          git show "$GITHUB_WORKFLOW_SHA:scripts/lib/live-receipts.mjs" > "$RUNNER_TEMP/ddm-live-receipts.mjs"
+
       - name: Align the checkout with the resolved commit
         id: align
         if: ${{ steps.expect.outputs.verdict == 'verify' }}
@@ -488,6 +499,7 @@ jobs:
               exit 1
               ;;
           esac
+          url="${url%/}/"
           echo "url=$url" >> "$GITHUB_OUTPUT"
           echo "Verifying $DEPLOY_SHA (deploy runs $DEPLOY_RUN_NONCES) at $url"
 
@@ -564,6 +576,7 @@ jobs:
           BASE_URL: ${{ steps.pages.outputs.url }}
         run: |
           set +e
+          rm -f live-receipt.json
           node scripts/verify-live.mjs \
             --light \
             --base "$BASE_URL" \
@@ -643,6 +656,7 @@ jobs:
           PREVIOUS_RECEIPT: ${{ steps.previous.outputs.path }}
         run: |
           set +e
+          rm -f live-receipt.json
           node scripts/verify-live.mjs \
             --base "$BASE_URL" \
             --expect-sha "$DEPLOY_SHA" \
@@ -655,10 +669,8 @@ jobs:
 
       # One verdict for the steps below, whichever half produced it. The
       # deep proof wins when it ran, because it ran either as the only
-      # check or because the light one had already failed. An empty
-      # exit_code (the step was killed by its own timeout before it could
-      # write one) stays empty and reads as a failure downstream, which is
-      # the existing contract: a deployed build never goes unreported.
+      # check or because the light one had already failed. Missing, stale or
+      # inconsistent receipts fail closed, even after a successful stamp poll.
       - name: Name the verification outcome
         id: verify
         if: ${{ !cancelled() && steps.expect.outputs.verdict == 'verify' && (steps.light.outcome != 'skipped' || steps.deep.outcome != 'skipped') }}
@@ -666,38 +678,33 @@ jobs:
           LIGHT_EXIT: ${{ steps.light.outputs.exit_code }}
           DEEP_EXIT: ${{ steps.deep.outputs.exit_code }}
           DEEP_OUTCOME: ${{ steps.deep.outcome }}
+          BASE_URL: ${{ steps.pages.outputs.url }}
+          POLL_PROPAGATED: ${{ steps.poll.outputs.propagated }}
         run: |
-          set -euo pipefail
-          if [ "$DEEP_OUTCOME" != "skipped" ]; then
-            echo "exit_code=$DEEP_EXIT" >> "$GITHUB_OUTPUT"
-            echo "mode=deep" >> "$GITHUB_OUTPUT"
-            echo "Deep proof exit code: ${DEEP_EXIT:-(none, the step did not finish)}"
-          else
-            echo "exit_code=$LIGHT_EXIT" >> "$GITHUB_OUTPUT"
-            echo "mode=light" >> "$GITHUB_OUTPUT"
-            echo "Light check exit code: ${LIGHT_EXIT:-(none, the step did not finish)}"
-          fi
-          # The severity, read straight off the receipt the verifier wrote:
-          # `diverged` is true only when a `stamp:`, `propagation:`, or
-          # `seat:` check failed, which is the live site serving bytes other
-          # than the ones this deploy published, or referencing an asset it
-          # does not serve. Everything else in `failed` is a product
-          # finding. No receipt (the verifier crashed or was killed) leaves
-          # this empty, and the poll step above is then the only evidence
-          # about the bytes, which is exactly how the fail step reads it.
-          diverged=$(jq -r 'if .diverged == true then "true" else "false" end' live-receipt.json 2>/dev/null || true)
-          echo "diverged=${diverged:-}" >> "$GITHUB_OUTPUT"
-          echo "Divergence (stamp or propagation) in the receipt: ${diverged:-(no receipt)}"
-          failed=$(jq -r '(.failed // []) | join(", ")' live-receipt.json 2>/dev/null || true)
-          echo "Failed checks: ${failed:-(no receipt)}"
+          node --input-type=module <<'NODE'
+          import { readFileSync, appendFileSync } from 'node:fs';
+          import { pathToFileURL } from 'node:url';
+          const env = process.env;
+          const { evaluateVerificationReceipt } = await import(pathToFileURL(`${env.RUNNER_TEMP}/ddm-live-receipts.mjs`));
+          const mode = env.DEEP_OUTCOME !== 'skipped' ? 'deep' : 'light';
+          const exitCode = mode === 'deep' ? env.DEEP_EXIT : env.LIGHT_EXIT;
+          let receipt = null;
+          try { receipt = JSON.parse(readFileSync('live-receipt.json', 'utf8')); } catch {}
+          const result = evaluateVerificationReceipt(receipt, {
+            mode, exitCode, base: env.BASE_URL, sha: env.DEPLOY_SHA,
+            nonce: env.DEPLOY_RUN_NONCES, propagated: env.POLL_PROPAGATED,
+          });
+          appendFileSync(env.GITHUB_OUTPUT, `mode=${mode}\nvalid=${result.valid}\nverdict=${result.verdict}\n`);
+          console.log(`${mode} proof: exit ${exitCode || '(missing)'}, valid receipt ${result.valid}, verdict ${result.verdict}`);
+          NODE
 
       # `!cancelled()` replaces the implicit success(), so these steps run
       # even when an earlier one failed. That is deliberate for a verifier
       # that timed out or crashed (outcome `failure`, no receipt): a
       # deployed build must never go without a durable alert. It is WRONG
       # when the verifier never ran at all, because the align step, npm ci,
-      # or the Chromium action failed: `exit_code` is then empty, `!= '0'`
-      # is true, and the run would file a divergence for a live build it
+      # or the Chromium action failed: the verdict is then empty and is not
+      # a pass, and the run would file a divergence for a live build it
       # never looked at. `outcome != 'skipped'` is the difference.
       - name: Keep the receipt
         if: ${{ !cancelled() && steps.expect.outputs.verdict == 'verify' && steps.verify.outcome != 'skipped' }}
@@ -755,14 +762,15 @@ jobs:
 
       # One issue, found by its marker comment across every page of open
       # issues under the label. A verifier that timed out or crashed
-      # (exit_code empty) still files, so a deployed build never goes
+      # (no valid completed receipt) still files, so a deployed build never goes
       # without a durable alert. A failure that is only the propagation
       # poll is worded as inconclusive rather than a proved divergence.
       - name: Open or update the divergence issue
-        if: ${{ !cancelled() && steps.named.outcome == 'success' && steps.expect.outputs.verdict == 'verify' && steps.verify.outcome != 'skipped' && steps.verify.outputs.exit_code != '0' && steps.fresh.outputs.current != 'false' }}
+        if: ${{ !cancelled() && steps.named.outcome == 'success' && steps.expect.outputs.verdict == 'verify' && steps.verify.outcome != 'skipped' && steps.verify.outputs.verdict != 'pass' && steps.fresh.outputs.current != 'false' }}
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
-          POLL_PROPAGATED: ${{ steps.poll.outputs.propagated }}
+          RECEIPT_VALID: ${{ steps.verify.outputs.valid }}
+          VERIFY_VERDICT: ${{ steps.verify.outputs.verdict }}
         with:
           script: |
             const fs = require('fs');
@@ -779,22 +787,20 @@ jobs:
             const deployRunId = process.env.DEPLOY_RUN_ID;
             const deployRunUrl = process.env.DEPLOY_RUN_URL;
             const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
-            const failed = receipt?.failed ?? [];
-            const inconclusive = receipt?.inconclusive === true;
-            // The bytes are proved when the bounded poll saw the deployed sha
-            // live AND no stamp/propagation check failed. That case is a
-            // PRODUCT finding: worth this issue, not worth a red branch, and
-            // the run itself ends green (the severity split in this workflow).
-            const bytesProved = process.env.POLL_PROPAGATED === 'true' && receipt?.diverged !== true;
-            const heading = receipt === null
+            const valid = process.env.RECEIPT_VALID === 'true';
+            const failed = valid ? receipt.failed : [];
+            const inconclusive = valid && receipt.inconclusive === true;
+            // Only a completed proof can classify a finding as product-only.
+            const bytesProved = process.env.VERIFY_VERDICT === 'product';
+            const heading = !valid
               ? 'Live build verification did not complete'
               : inconclusive
                 ? 'Live build verification inconclusive (propagation timeout)'
                 : bytesProved
                   ? 'Live build is the right bytes; a product check failed'
                   : 'Live build verification failed';
-            const explanation = receipt === null
-              ? 'The verifier produced no receipt (it timed out or crashed), so the live build is unproved, not proved wrong.'
+            const explanation = !valid
+              ? 'The verifier did not produce a valid completed receipt for this proof and build (it timed out, crashed, or returned inconsistent evidence), so the live build is unproved.'
               : inconclusive
                 ? 'The referenced scripts did not contain the deployed commit within the grace period. The Pages CDN may still be propagating, or a newer deploy superseded this one; the live build is unproved, not proved wrong.'
                 : bytesProved
@@ -897,7 +903,7 @@ jobs:
             }
 
       - name: Close the divergence issue on a verified build
-        if: ${{ !cancelled() && steps.named.outcome == 'success' && steps.expect.outputs.verdict == 'verify' && steps.verify.outputs.exit_code == '0' && steps.fresh.outputs.current == 'true' }}
+        if: ${{ !cancelled() && steps.named.outcome == 'success' && steps.expect.outputs.verdict == 'verify' && steps.verify.outputs.verdict == 'pass' && steps.fresh.outputs.current == 'true' }}
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
@@ -937,7 +943,7 @@ jobs:
         if: >-
           ${{ !cancelled() && steps.named.outcome == 'success'
               && steps.fresh.outputs.current == 'false'
-              && ((steps.expect.outputs.verdict == 'verify' && steps.verify.outcome != 'skipped' && steps.verify.outputs.exit_code != '0')
+              && ((steps.expect.outputs.verdict == 'verify' && steps.verify.outcome != 'skipped' && steps.verify.outputs.verdict != 'pass')
                   || steps.expect.outputs.verdict == 'undeployed') }}
         env:
           FRESH_HEAD: ${{ steps.fresh.outputs.head }}
@@ -956,21 +962,22 @@ jobs:
 
       # The severity split (CI-01/5a, 2026-09-01). Only the BYTES red this
       # run: a `stamp:`, `propagation:`, or `seat:` finding in the receipt,
-      # or a 5-minute poll that never saw the deployed sha on the site.
+      # or a poll that never saw the deployed sha on the site. An incomplete
+      # or invalid proof also fails; a stamp poll alone cannot excuse a crash.
       # A product finding has already opened or updated the single
       # deploy-divergence issue above; making it red as well turns every
       # product regression, and every assertion in the proof that has
       # drifted from the runtime, into a broken branch. That is exactly
       # what happened to d5aaac1 on 2026-09-01: the live build was correct
       # and main went red on a stale embed-corner assertion.
-      - name: Fail the run only when the live bytes diverge
+      - name: Fail the run when verification is incomplete or the live bytes diverge
         if: >-
           ${{ !cancelled() && steps.named.outcome == 'success'
               && steps.expect.outputs.verdict == 'verify'
               && steps.verify.outcome != 'skipped'
-              && steps.verify.outputs.exit_code != '0'
+              && steps.verify.outputs.verdict != 'pass'
               && steps.fresh.outputs.current != 'false'
-              && (steps.poll.outputs.propagated != 'true' || steps.verify.outputs.diverged == 'true') }}
+              && steps.verify.outputs.verdict != 'product' }}
         run: |
           echo "::error::The live build was not proved to be $DEPLOY_SHA (deploy run $DEPLOY_RUN_ID); see the job summary and the deploy-divergence issue."
           exit 1
@@ -983,10 +990,9 @@ jobs:
           ${{ !cancelled() && steps.named.outcome == 'success'
               && steps.expect.outputs.verdict == 'verify'
               && steps.verify.outcome != 'skipped'
-              && steps.verify.outputs.exit_code != '0'
+              && steps.verify.outputs.verdict != 'pass'
               && steps.fresh.outputs.current != 'false'
-              && steps.poll.outputs.propagated == 'true'
-              && steps.verify.outputs.diverged != 'true' }}
+              && steps.verify.outputs.verdict == 'product' }}
         run: |
           {
             echo "## Live build is the right bytes; a product check failed"

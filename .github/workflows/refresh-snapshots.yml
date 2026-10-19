@@ -34,6 +34,7 @@ jobs:
   refresh:
     name: Rebuild and commit snapshots
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -50,6 +51,7 @@ jobs:
         run: npm ci
 
       - name: Rebuild the ENSO snapshot
+        timeout-minutes: 5
         run: npm run build:enso
 
       # The shared consumer-contract check (2026-07-28 regression guard):

@@ -86,7 +86,7 @@ Located at the root of the repository, this file organizes three crucial things:
    - `npm run build`: Runs TypeScript typechecking (`tsc --noEmit`) and invokes `vite build`.
    - `npm run preview`: Boots a local static HTTP server at `http://localhost:4173` serving the built `dist/` directory for production simulation.
    - `npm run gate`: Deterministic quality gate; builds `dist/`, checks bundle sizes and activation budgets, and runs all unit contracts.
-   - `npm run test:serial`: Runs end-to-end browser tests via Playwright.
+   - `npm run test:serial`: Full Playwright browser suite; GitHub runs it in shards. Do not run the full suite locally.
 
 ### 3. `vite.config.ts`
 
@@ -117,11 +117,6 @@ flowchart TD
             Setup --> Gate --> UploadArtifact
         end
 
-        subgraph BrowserJob["Job: browser (Advisory)"]
-            direction TB
-            Playwright["Playwright Browser Suite<br/>• 8 parallel shards<br/>• Non-blocking (advisory on main)<br/>• Reports failures to GitHub Issue"]
-        end
-
         subgraph DeployJob["Job: deploy (Publish to Pages)"]
             direction TB
             HeadCheck["Confirm commit is still HEAD of main"]
@@ -130,7 +125,6 @@ flowchart TD
         end
 
         BuildJob -->|needs: build| DeployJob
-        BuildJob -.->|parallel advisory| BrowserJob
     end
 
     subgraph VerifyWorkflow["verify-live.yml (Post-Deploy Proof)"]
@@ -214,13 +208,15 @@ Visit `http://localhost:4173`.
 
 ### 5. Run the Deterministic Quality Gate
 
-Before pushing changes to GitHub, run:
+When the change requires the complete deterministic gate, run:
 
 ```bash
 npm run gate
 ```
 
 This executes the exact checks that the GitHub Actions `deploy.yml` workflow will run in the cloud.
+
+Follow `CLAUDE.md` and `tests/README.md` for checks appropriate to the change. Full browser coverage runs in GitHub's Validate workflow, with a weekly run on main.
 
 ---
 

@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import test from 'node:test';
+import { runInNewContext } from 'node:vm';
+import { parse } from 'yaml';
 
 import {
   EXPECTED_BOOT_LAYERS,
@@ -12,6 +17,7 @@ import {
   evaluateLayers,
   evaluateRange,
   evaluateStamp,
+  evaluateVerificationReceipt,
   expectedNonces,
   extractStamp,
   parseArgs,
@@ -19,6 +25,80 @@ import {
   renderSummary,
   resolveLiveExpectation,
 } from '../scripts/lib/live-receipts.mjs';
+
+test('workflow verdict requires a completed receipt from the selected proof and build', () => {
+  const expected = { mode: 'deep', base: 'https://example.com/', sha: 'abc', nonce: '42', exitCode: '1', propagated: 'true' };
+  const receipt = {
+    mode: 'deep', base: expected.base, expectSha: 'abc', expectNonce: '42',
+    checks: [{ name: 'boot:root', ok: false }], failed: ['boot:root'], diverged: false,
+  };
+  assert.deepEqual(evaluateVerificationReceipt(receipt, expected), { valid: true, verdict: 'product' });
+  for (const bad of [null, {}, { ...receipt, mode: 'light' }, { ...receipt, expectSha: 'old' },
+    { ...receipt, expectNonce: '41' }, { ...receipt, base: 'https://other.example/' },
+    { ...receipt, checks: [] }, { ...receipt, checks: [null] }, { ...receipt, failed: [] },
+    { ...receipt, diverged: true }]) {
+    assert.deepEqual(evaluateVerificationReceipt(bad, expected), { valid: false, verdict: 'fail' });
+  }
+  for (const exitCode of ['', '0', '2', '137']) {
+    assert.deepEqual(evaluateVerificationReceipt(receipt, { ...expected, exitCode }), { valid: false, verdict: 'fail' });
+  }
+  const passed = { ...receipt, checks: [{ name: 'boot:root', ok: true }], failed: [] };
+  assert.deepEqual(evaluateVerificationReceipt(passed, { ...expected, exitCode: '0' }), { valid: true, verdict: 'pass' });
+  assert.equal(evaluateVerificationReceipt(passed, { ...expected, exitCode: '0', propagated: 'false' }).verdict, 'fail');
+  const divergent = { ...receipt, checks: [{ name: 'stamp:root', ok: false }], failed: ['stamp:root'], diverged: true };
+  assert.deepEqual(evaluateVerificationReceipt(divergent, expected), { valid: true, verdict: 'fail' });
+});
+
+test('workflow runs its receipt classifier and fails a crash despite a successful stamp poll', () => {
+  const steps = parse(readFileSync(new URL('../.github/workflows/verify-live.yml', import.meta.url), 'utf8')).jobs.verify.steps;
+  const classify = steps.find((step) => step.id === 'verify');
+  const source = classify.run.match(/<<'NODE'\n([\s\S]*?)\nNODE/)[1];
+  const policy = steps.find((step) => step.id === 'policy');
+  assert(steps.indexOf(policy) < steps.findIndex((step) => step.id === 'align'));
+  assert.match(policy.run, /git show "\$GITHUB_WORKFLOW_SHA:scripts\/lib\/live-receipts\.mjs"/);
+  assert.match(steps.find((step) => step.id === 'pages').run, /url="\$\{url%\/\}\/"/);
+  const dir = mkdtempSync(join(tmpdir(), 'ddm-live-verdict-'));
+  const receipt = {
+    mode: 'deep', base: 'https://example.com/', expectSha: 'abc', expectNonce: '42',
+    checks: [{ name: 'boot:root', ok: false }], failed: ['boot:root'], diverged: false,
+  };
+  try {
+    copyFileSync(new URL('../scripts/lib/live-receipts.mjs', import.meta.url), join(dir, 'ddm-live-receipts.mjs'));
+    for (const [body, exitCode, verdict] of [
+      ['not json', '1', 'fail'], [JSON.stringify({ ...receipt, mode: 'light' }), '1', 'fail'],
+      [JSON.stringify(receipt), '1', 'product'],
+      [JSON.stringify({ ...receipt, checks: [{ name: 'boot:root', ok: true }], failed: [] }), '0', 'pass'],
+    ]) {
+      writeFileSync(join(dir, 'live-receipt.json'), body);
+      const output = join(dir, 'output');
+      writeFileSync(output, '');
+      const run = spawnSync(process.execPath, ['--input-type=module', '-e', source], {
+        cwd: dir, encoding: 'utf8', env: { ...process.env, GITHUB_OUTPUT: output, RUNNER_TEMP: dir,
+          DEEP_OUTCOME: 'success', DEEP_EXIT: exitCode, LIGHT_EXIT: '1',
+          BASE_URL: receipt.base, DEPLOY_SHA: 'abc', DEPLOY_RUN_NONCES: '42', POLL_PROPAGATED: 'true' },
+      });
+      assert.ifError(run.error);
+      assert.equal(run.status, 0, run.stderr);
+      const outputs = Object.fromEntries(readFileSync(output, 'utf8').trim().split('\n').map((line) => line.split('=')));
+      assert.equal(outputs.verdict, verdict);
+      const context = { cancelled: () => false, steps: {
+        named: { outcome: 'success' }, expect: { outputs: { verdict: 'verify' } },
+        verify: { outcome: 'success', outputs }, fresh: { outputs: { current: 'true' } },
+        poll: { outputs: { propagated: 'true' } },
+      } };
+      for (const [name, enabled] of [
+        ['Fail the run when verification is incomplete or the live bytes diverge', verdict === 'fail'],
+        ['Record a product finding without failing the run', verdict === 'product'],
+        ['Close the divergence issue on a verified build', verdict === 'pass'],
+      ]) {
+        const condition = steps.find((step) => step.name === name).if.slice(3, -2).trim();
+        assert.equal(runInNewContext(condition, context), enabled, `${name}: ${verdict}`);
+      }
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
 
 test('parseArgs applies the live defaults and reads every flag', () => {
   const d = parseArgs([]);

@@ -424,8 +424,8 @@ a test keeps in step with `src/`. `check:source-health` boots a served
 build (start `npm run preview` first) once as a control and once per
 catalog layer at the default camera and records the requests the runtime
 issues, with basemap tiles stubbed and the ambient boot requests replayed
-from the control capture; the daily `source-health` workflow runs it on
-`main`. `verify:live` is the post-deploy proof the Pages workflow runs; by
+from the control capture; the manual `source-health` workflow runs it on
+`main` (its daily schedule is currently disabled). `verify:live` is the post-deploy proof the Pages workflow runs; by
 hand it needs the expected commit and run id and defaults to the public
 site.
 
@@ -433,20 +433,34 @@ The Worker-health row of `check:drift` now compares the live `/healthz`
 revision to the `WORKER_REVISION` constant read from
 `workers/proxy/src/index.ts`, not a hand-pinned string, so drift is
 source-vs-live rather than live-vs-live. Between a reviewed source revision
-bump and the owner's publish, the daily `upstream-monitor` run opens exactly
+bump and the owner's publish, a manually dispatched `upstream-monitor` run opens exactly
 one `upstream-drift` issue naming the mismatch, which is the design working
 as intended, and it closes automatically on the first run after the publish.
+Its daily schedule is currently disabled.
 
 Choose checks using the [local verification ladder](tests/README.md#the-local-verification-ladder).
-Run focused source or browser tests while editing, `npm run gate` for build and
-cross-cutting configuration changes, and optionally `npm run verify:smoke` when a
-wider local signal is wanted before pushing. Smoke owns its gate and serves that
-gate's single fresh build.
+Run the smallest source or browser checks that cover each coherent change.
+Use `npm run gate` when build or cross-cutting configuration changes need it;
+reuse its CI evidence instead of adding a duplicate local gate.
+`npm run verify:smoke` is GitHub's, not a local step.
 
 The full browser suite runs on GitHub in the `Validate` workflow; start it on a
 branch without an open pull request with `gh workflow run validate.yml --ref
-<branch>`. Reserve a local `npm run test:serial` (more than an hour) for when
-GitHub is unavailable. Ending a session does not trigger another full suite.
+<branch>`. That full run supplies application integration evidence. Partway through a block, a
+targeted run of the block's own specs (`npm run spec:impact -- --dispatch`
+after a push; it refuses an empty list, which would be the full run) answers
+in about five minutes and its run name says it is not a landing run. Before
+the full dispatch, `npm run spec:impact` must show no spec still naming text
+the block deleted everywhere (it does not catch text moved or reworded; its
+fixed cross-cutting specs for shared style, key, dock, minimap and test-seam
+changes are a guess at ownership, not a dependency graph). Choose a focused local
+`npm run test:touched` or targeted GitHub run when needed; reuse passing evidence
+instead of requiring both before integration. The testing guide's "Iteration and
+session closeout" explains the choices. Proxy-only pull requests run the proxy
+typecheck, audit and client-contract/receipt tests; docs outside the artifact
+report Validate without application jobs. Named browser dispatches skip the
+unrelated gate and landscape suite. A local `npm run test:serial` is not a local
+step. Ending a session does not trigger another full suite.
 Documentation-only and verification-tooling checks are scoped in the same
 ladder. Report exactly what ran and what remains unverified.
 
@@ -487,8 +501,9 @@ Stop-Process -Id <pid> -Force
 workflow; run it by hand when documentation links change.
 
 Shared navigation, map lifecycle, state, responsive behavior, and release
-readiness changes require the full suite to be green on GitHub, with the
-affected specs run locally first. A narrow documentation-only change
+readiness changes require full integration on GitHub at the landing boundary.
+Use local or remote focused checks during development; a local browser run is
+not a prerequisite for that integration. A narrow documentation-only change
 normally needs documentation checks, YAML validation when applicable, the
 public-tree gate, and a clean Git diff rather than the full browser suite.
 
@@ -663,17 +678,25 @@ Branch workflow: each release is built on a short-lived branch cut from
 `main`, and `main` changes only when the maintainer lands a release.
 `validate.yml` is `on: pull_request`, so a branch without an open pull request
 runs no CI on push; start it by hand with `gh workflow run validate.yml --ref
-<branch>`. While developing, run `npm run typecheck` and the focused tests for
-the change. When a piece of work is finished, run the focused tests again and
-the browser-free checks (`npm run verify:quick`; `npm run gate:nobuild` or
-`npm run gate` when the change is cross-cutting), then push the branch. The
-full browser suite runs on GitHub in eight shards, once the release candidate
-is frozen rather than on every push. Before a release, the full suite must be green on GitHub for the
-frozen release candidate, and one independent review covers the release's whole
-diff. A local `npm run test:serial` is the fallback when GitHub is unavailable.
-`Validate` is the only check that must be green on the pull request, and
+<branch>` when full integration is needed. While developing, run the focused
+checks for the change. Commit and push pieces without repeating checks that
+already passed. Inspect changed interface modes once per coherent feature;
+GitHub's integration run supplies the gate, without a mandatory local duplicate.
+The full browser suite runs on GitHub in fourteen shards for the frozen block
+candidate. Reuse that full green for the release when its exact SHA and main
+base are unchanged; do not dispatch a duplicate. An open PR, including a draft,
+already triggers validation on pushes, so inspect existing runs first; a
+targeted run of the block's own specs may come partway through a block, and it
+never counts for a landing. Application, shared configuration and unknown changes
+need full integration. Documentation and proxy-only changes need their selected
+scope and final Validate status. For a PR run, confirm its tested merge tree equals
+the candidate tree with the current main base; a green name alone is insufficient.
+One independent review covers the release's whole
+diff. `Validate` is the only check that must be green on the pull request, and
 `deploy` and `verify-live` are consequences of the merge rather than gates on
-it.
+it. Deployment builds and checks the publication artifact, then publishes it without
+repeating the browser suite. The live proof follows immediately after the deploy
+workflow succeeds; the weekly browser suite remains enabled.
 
 `scripts/resolve-live-expectation.mjs`, whose
 judgment is the pure `resolveLiveExpectation` in
@@ -706,17 +729,15 @@ the snapshot has not seen. It returns one of three verdicts:
 Two envelopes, because "how long may a commit go undeployed" and "how long
 may one deploy run take" are different questions:
 
-- head grace, 30 minutes from the commit (`LIVE_COMPARE_GRACE_MS`): a normal
-  green push takes about 15 minutes through the gate, the sharded browser
-  suite, and `deploy-pages`, and this leaves room for a slow runner. The
+- head grace, 30 minutes from the commit (`LIVE_COMPARE_GRACE_MS`): this
+  leaves room for the publication gate, Pages deployment and runner queues. The
   head's age is floored by its OLDEST deploy run's start, so a backdated
   committer date cannot skip the grace and a retry cannot reset a clock the
   head has already spent.
 - in-flight bound, 60 minutes from the deploy run's creation
-  (`LIVE_INFLIGHT_STUCK_MS`): the deploy's own envelope is longer than the
-  head grace, since `browser-suite.yml` budgets 40 minutes per shard and
-  `deploy.yml` adds a 15 minute gate before it. A run 45 minutes in is late,
-  not stuck. Past the bound, a deploy parked in `queued` or `waiting`
+  (`LIVE_INFLIGHT_STUCK_MS`): this conservative allowance includes the
+  publication gate, Pages and runner queues. Past the bound, a deploy parked
+  in `queued` or `waiting`
   escalates rather than keeping the compare green forever.
 
 Both are inputs the workflow passes, not constants buried in the library, and

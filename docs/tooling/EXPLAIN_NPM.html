@@ -3994,8 +3994,8 @@ display:block!important;
 <span id="cb1-10"><a href></a><span class="co"># 4. Deterministic quality gate (~40s)</span></span>
 <span id="cb1-11"><a href></a><span class="ex">npm</span> run gate</span>
 <span id="cb1-12"><a href></a></span>
-<span id="cb1-13"><a href></a><span class="co"># 5. Full serial browser test suite</span></span>
-<span id="cb1-14"><a href></a><span class="ex">npm</span> run test:serial</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb1-13"><a href></a><span class="co"># Full browser coverage runs in GitHub's Validate workflow.</span></span>
+<span id="cb1-14"><a href></a><span class="co"># Do not run the full suite locally.</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div><div class="column" style="width:49%;">
 <h3 id="quality-principles">Quality Principles</h3>
 <ul>
@@ -4014,10 +4014,10 @@ display:block!important;
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
-<p><strong>The Gate Rule</strong></p>
+<p><strong>Choose Checks for the Change</strong></p>
 </div>
 <div class="callout-content">
-<p>Always run <code>npm run gate</code> before pushing. It validates bundle sizes, budgets, and schema contracts.</p>
+<p>Follow <code>CLAUDE.md</code> and <code>tests/README.md</code>. The gate validates bundle sizes, budgets, and schema contracts; GitHub owns the full browser suite and its weekly run on main.</p>
 </div>
 </div>
 </div>
@@ -4051,13 +4051,7 @@ display:block!important;
             HeadCheck --&gt; DeployPages
         end
 
-        subgraph BrowserJob[&quot;Job: browser (Advisory)&quot;]
-            direction TB
-            Playwright[&quot;Playwright Browser Suite&lt;br/&gt;• 8 parallel shards&lt;br/&gt;• Advisory on main&quot;]
-        end
-
         BuildJob --&gt;|needs: build| DeployJob
-        BuildJob -.-&gt;|parallel advisory| BrowserJob
     end
 
     subgraph VerifyWorkflow[&quot;verify-live.yml (Post-Deploy Proof)&quot;]

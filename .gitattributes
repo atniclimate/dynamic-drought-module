@@ -19,3 +19,4 @@ tests/fixtures/flow/reference.json -text
 THIRD-PARTY-NOTICES.md text eol=lf
 public/THIRD-PARTY-NOTICES.md text eol=lf
 .githooks/* text eol=lf
+.github/actions/playwright-chromium/*.sh text eol=lf

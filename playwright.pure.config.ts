@@ -1,23 +1,19 @@
 /**
  * The `verify:pure` fast lane (DR-052 b, ruled 2026-09-02; built 2026-09-03).
  *
- * The browser-free spec files below never request `page`, `browser`,
+ * The shared browser-free spec roster never requests `page`, `browser`,
  * `context` or `request`: they import from `src/` and assert on returned
- * values. Inside the main config they already run at browser-free speed
- * (Playwright creates no browser for a case that asks for no fixture), but
- * they still wait behind the main config's `webServer`, which builds and
- * serves `dist/` before any spec collects. That wait is the whole cost of
- * running them, so this config drops it: same specs, same runner, no
- * build, no preview, no port, answering in seconds.
+ * values. The main config excludes these files from its browser matrix;
+ * this config runs them once through the gate without its `webServer`:
+ * no build, no preview, no port, answering in seconds.
  *
  * What this lane proves: the pure logic under `src/` that these files
  * cover. What it does not prove: anything the built bundle or a browser
- * would show; `verify:quick` stays the typecheck rung and `verify:smoke`
- * the first browser rung (tests/README.md).
+ * would show; the browser checks follow the ladder in tests/README.md.
  *
  * Membership rule, enforced by `tests/pure-lane-inventory.test.mjs` under
- * `check:all`: a file may be listed here only while its body mentions none
- * of the fixture names and none of the boot helpers. A file that grows a
+ * `check:all`: a file may be listed in PURE_SPECS only while its body mentions
+ * none of the fixture names and none of the boot helpers. A file that grows a
  * browser case leaves the list (the main config still runs it), and the
  * inventory test says so before the lane silently starts needing a server
  * it does not have.
@@ -25,45 +21,9 @@
 
 import { defineConfig } from '@playwright/test';
 
-import base from './playwright.config';
+import base, { PURE_SPECS } from './playwright.config';
 
-/** The browser-free spec files, alphabetical. */
-export const PURE_SPECS = [
-  'tests/acknowledgements.spec.ts',
-  'tests/antimeridian.spec.ts',
-  'tests/camera-region-fallbacks.spec.ts',
-  'tests/capability-matrix.spec.ts',
-  'tests/cluster-service.spec.ts',
-  'tests/config-key-authority.spec.ts',
-  'tests/display-summary.spec.ts',
-  'tests/drought-semantics.spec.ts',
-  'tests/enso-flow-data.spec.ts',
-  'tests/fetch.spec.ts',
-  'tests/gl-capability.spec.ts',
-  'tests/heat-h0-cancellation.spec.ts',
-  'tests/heat-h2-cancellation.spec.ts',
-  'tests/landscape-loader.spec.ts',
-  'tests/layer-order.spec.ts',
-  'tests/location-identity.spec.ts',
-  'tests/minimap-drought.spec.ts',
-  'tests/minimap-wildfire.spec.ts',
-  'tests/nadm-shared-payload.spec.ts',
-  'tests/overlap-engine.spec.ts',
-  'tests/place-ref.spec.ts',
-  'tests/pmtiles-probe.spec.ts',
-  'tests/point-in-polygon.spec.ts',
-  'tests/polygon-overlap.spec.ts',
-  'tests/power-layer.spec.ts',
-  'tests/product-catalog.spec.ts',
-  'tests/s1-substrate.spec.ts',
-  'tests/satellite-source.spec.ts',
-  'tests/umbrella-config.spec.ts',
-  'tests/usfs-whp.spec.ts',
-  'tests/verification-config.spec.ts',
-  'tests/wildfire-basemap-policy.spec.ts',
-  'tests/wildfire-source-semantics.spec.ts',
-  'tests/worker-proxy-policy.spec.ts'
-] as const;
+export { PURE_SPECS } from './playwright.config';
 
 const { webServer: _webServer, projects: _projects, ...inherited } = base;
 

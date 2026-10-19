@@ -25,22 +25,29 @@ on port 4173, the suite fails instead of reusing an unattributed build.
 ## The local verification ladder
 
 Choose verification for the changed behavior. The scripts in `package.json`
-are the executable rosters; `playwright.pure.config.ts` owns pure-lane membership.
+are the executable rosters. The exported `PURE_SPECS` roster in `playwright.config.ts`
+supplies pure-lane membership and the browser matrix exclusions.
 Avoid copying spec counts and runtime estimates into several documents.
 
 | Work being checked | Command | Scope |
 | --- | --- | --- |
-| An edit during development | `npm run verify:quick` | Types, vocabulary, coverage and punctuation; no browser or build |
+| A change needing the combined source checks | `npm run verify:quick` | Types, vocabulary, coverage and punctuation; no browser or build |
 | Pure logic | `npm run verify:pure -- tests/layer-order.spec.ts` | Selected source-level cases; omit the selector for the whole pure lane |
 | Source checks without a bundle | `npm run gate:nobuild` | Types and all source checks, including the pure lane |
-| A browser behavior | `npx playwright test --workers=1 tests/boot.spec.ts` | Fresh production build and the selected cases |
+| A red that reading the code cannot explain | `npx playwright test --workers=1 -g "case title"` | Fresh production build and the one case, with every diagnostic in the first run |
+| A needed local check of touched browser behavior | `npm run test:touched` | The specs `npm run spec:impact` lists as touched; refuses none, more than 12, or a held port 4173 or 4180 |
 | Cross-cutting build/configuration changes | `npm run gate` | Fresh build, artifact budgets and all source checks |
-| Full suite locally, when GitHub is unavailable | `npm run test:serial` | All three assertion projects, one worker; excludes the measurement project |
+| The full suite | `gh workflow run validate.yml --ref <branch>` | GitHub's fourteen shards; `npm run test:serial` is not a local step |
 
 The full browser suite normally runs on GitHub, in the Validate workflow, which
-slices it into eight shards. On a branch without an open pull request, start it
-with `gh workflow run validate.yml --ref <branch>`. A local `test:serial` takes
-more than an hour and is the fallback, not a routine step.
+slices it into fourteen shards. On a branch without an open pull request, start
+it with `gh workflow run validate.yml --ref <branch>`; only that full run
+decides an application landing. Proxy-only pull requests run the proxy typecheck,
+audit and client-contract/receipt tests without the application, terrain,
+landscape or browser suites. Docs outside the artifact report Validate without
+application jobs. Named browser dispatches run only those specs. An empty
+dispatch requests full integration. A local `test:serial` takes more than an
+hour and is not a local step: the full suite is GitHub's.
 
 `npm test` runs the same three assertion projects with the configured worker
 count. Keep one browser runner at a time. The pure lane starts no browser or
@@ -61,19 +68,58 @@ each builder keeps its own fresh page and runs each fixture method once. Tests
 that require a live layer or date rail must install positive fixtures explicitly;
 the offline backstop's error response cannot establish those preconditions.
 
-While developing, run `npm run typecheck` and the one browser-free test that
-covers the change. When a piece of work is finished, run ONE of
-`npm run verify:quick`, `npm run gate:nobuild` (a cross-cutting change; it
-already includes everything verify:quick runs, about a minute) or `npm run gate`
-(the build or a size budget changed), then push the branch.
+While developing, choose the smallest named checks that cover the change.
+Use `npm run typecheck` for TypeScript changes and the affected browser-free
+tests for logic. Commit and push pieces without repeating a gate per commit.
+GitHub's integration run includes the gate; do not duplicate it locally unless
+a specific diagnosis needs it. The table offers choices, not a required sequence.
 
 A browser run only when nothing simpler can answer the question. A wording,
 configuration, size or pure-logic change never needs one. When one is needed:
 the fewest cases (`-g`), every diagnostic in the first run, at most one
 confirming run when the piece is finished. `verify:smoke`, whole Playwright
 projects, the Fire pair and repeat runs are not local steps: the full suite
-runs on GitHub once, for the frozen release candidate, and the release's whole
-diff gets one independent review.
+runs on GitHub for the frozen block candidate. The same full green satisfies
+the release when the exact candidate and main base are unchanged; reuse it.
+The release's whole diff gets one independent review. Inspect existing runs
+before dispatching: an open PR already triggers Validate on each push, and its
+synthetic merge commit is different from a manually dispatched branch tip.
+Batch fixes before validating a new candidate. An unchanged infrastructure
+failure needs only the failed jobs retried, subject to the owner's run guard.
+
+A block's own specs (owner, 2026-10-19). `npm run spec:impact` reads the
+block's commits (`<base>...HEAD`, the base defaulting to the merge base with
+`origin/main`, `--base <ref>` to choose; it reads commits, so commit first).
+It prints every spec line that still names a string, attribute value, class
+token or visible text the block removed from `src/` or `index.html` and that
+HEAD's code no longer has anywhere (a mention left in a comment does not
+count; likely absence checks are listed apart and not counted), then the
+touched specs: specs the block changed, specs with such a mention, and specs
+that import a changed `src/` module or test helper directly (the measurement
+specs are left out). It catches text deleted everywhere, not text the block
+moved or reworded: a spec asserting a label that now reads differently still
+needs the targeted run to find it. It also adds a few fixed specs when the
+block touches shared style or markup (`src/styles/`, `index.html`), a map key,
+legend, dock or minimap component, or the test seam (`tests/helpers.ts`,
+`tests/offline-test.ts`, `playwright.config.ts`), and prints which rule added
+each; the sets (`CROSS_CUTTING` in `scripts/spec-impact.mjs`) come from the
+0.7.7 reds, six specs in all, and are a guess at ownership, not a dependency
+graph. It exits 1 while a counted mention remains; `--list` prints only the
+touched paths. Choose the needed evidence:
+
+1. For changed browser behavior, choose a local focused check or a targeted
+   GitHub run: after the authorized push, `npm run spec:impact -- --dispatch` (add
+   `--base <ref>` as above). It dispatches Validate on the checked-out branch
+   with the touched list as `specs`, and refuses an empty list (that would be
+   the full run), a detached HEAD, or a HEAD that is not the pushed tip. Every
+   shard runs only its slice of the named files; the run's name says it is not
+   a landing run.
+2. Before a needed full dispatch, run `npm run spec:impact` with no counted
+   mention left. Reuse passing focused evidence; `npm run test:touched` is an
+   option when a local browser check is needed, not a mandatory extra run.
+3. At an application integration or release boundary, use the full Validate
+   run with no `specs`, once. Reuse a matching full green rather than dispatch
+   a duplicate. A targeted browser pass is not full landing evidence.
 
 A session ending is not a new application verification event. Do not start
 `verify:smoke` or `test:serial` solely because the session is ending, or rerun
@@ -86,9 +132,9 @@ For verification-tooling work, run the relevant lane/configuration tests, types,
 the gate when build orchestration changes, and a focused execution of the changed
 browser startup path. A tooling check does not establish application readiness.
 
-After shared navigation, map lifecycle or state changes, run only the affected
-browser cases locally, if any; the full suite on GitHub covers the rest once
-the release candidate is frozen.
+After shared navigation, map lifecycle or state changes, choose local or remote
+focused browser cases when needed; full integration on GitHub covers the rest
+at the landing boundary.
 
 ### 3D diagnosis
 
@@ -131,11 +177,8 @@ remain between the same groups, and the NIFC model keeps its separate
 `node --test tests/<file>.test.mjs`. A failed group stops the `&&` chain before later
 checks or preview startup.
 
-As the local fallback when GitHub is unavailable, to run the gate and the full
-serial suite together on one build, run
-`npm run test:serial -- --config=playwright.smoke.config.ts`.
-This runs all three assertion projects and serves the gate's checked build.
-A separate preparatory gate is unnecessary for the same candidate.
+The full serial suite runs on GitHub. If GitHub is unavailable, preserve the
+local gate and focused-test results until the full run can complete there.
 
 A build SHA or dirty marker alone does not establish equivalent inputs. For a
 release candidate, record the commit, build SHA and GitHub run id of the run
@@ -273,14 +316,11 @@ judgment call rather than a red CI run. The telemetry spec here asserts only
 the honest-status contract (terminal, not a specific number), which is what a
 regression would actually break.
 
-Pull requests run the deterministic root gate and Worker typecheck (without
-deploying the optional Worker) beside the browser suite; the Pages workflow
-runs the root gate and build beside the same browser suite, and deploys only
-when both have passed. Run focused affected specs during development, and
-when a change affects shared navigation, map lifecycle, or state, run the
-affected specs locally; the full suite on GitHub covers the rest once the
-release candidate is frozen. The verification
-ladder above wraps that advice into scripts.
+Validate runs the deterministic root gate and Worker checks beside the browser
+suite. Pages builds and gates the publication artifact, publishes it, and then
+runs the live proof; it does not repeat the candidate's browser suite. Use the
+focused and bounded touched-spec checks described above while developing.
+The full GitHub suite covers the frozen candidate once.
 
 ## How CI runs the suite
 
@@ -304,11 +344,11 @@ holds `fire3d-mode.spec.ts` and
 smoke volume, and context tiles on the software renderer and carry their own
 120 to 180 second budgets (the Node-level cases in `fire3d-mode` and the
 three non-3D contract rows ride along; the split is by file, and all three
-projects use the same browser settings). Locally, `npm test` and `npm run
-test:serial` run all three projects, so coverage is the same in either seat.
+projects use the same browser settings). `npm test` and `npm run test:serial`
+select all three projects, but the full suite runs only on GitHub.
 
-In CI (`.github/workflows/browser-suite.yml`, called by both Validate and the
-Pages deploy) each project is sliced with `--shard=i/n` onto its own runners,
+In CI (`.github/workflows/browser-suite.yml`, called by Validate and run weekly
+on main) each project is sliced with `--shard=i/n` onto its own runners,
 one worker each: eight shards for `chromium` (four until 2026-10-12), two for `chromium-interaction`,
 four for `chromium-3d` (two until 2026-10-12). Each runner builds and serves its own `dist/`, so no
 shard reads another's state. Each page is its own software-GL MapLibre
@@ -353,6 +393,15 @@ exactly the pressure the flakiest specs are sensitive to, so a wall-clock win
 bought with a new flake is a loss. Take at least 5 runs per setting on one
 unchanged SHA before comparing, and adopt a change only when the repeated
 runs show no new flake names and no rise in the existing rate.
+
+A third input, `specs` (2026-10-19), is the targeted run described under
+"Iteration and session closeout": each shard adds `--pass-with-no-tests` and
+the named files, after checking each is an existing `tests/*.spec.ts` path (a
+blank list fails rather than running everything under the targeted name), and
+a `collect` job lists the named files across the three matrix projects and
+fails the run when that finds no test at all. `workers` and `retries` must be
+small whole numbers (`retries` may be empty). Empty, as on every pull
+request and the weekly schedule, the command is unchanged.
 
 Every shard writes a job summary (passed, failed, flaky, skipped, and the
 `file:line` of each failed or flaky test) from its JSON report through
