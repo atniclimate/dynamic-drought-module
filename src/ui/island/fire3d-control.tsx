@@ -106,8 +106,8 @@ const HMS_SMOKE_LAYER_KEY = 'hms-smoke';
  * up: each removes or restores its own white layer and nothing else. They
  * mirror session state (src/state/fire3d-ground-layers.ts), on by default,
  * and are buttons of the same family and size as the 3D toggle above them.
- * Without a mounted drape, "Fuel risk" is the flat issuer-coloured layer
- * instead (src/ui/fire3d-fuel-risk.ts), so the flat map has it too.
+ * On the flat map "Fuel risk" turns on the flat white layer instead
+ * (src/ui/fire3d-fuel-risk.ts); in the scene it waits for the drape.
  */
 const GROUND_SWITCHES: readonly (readonly [Fire3DGroundLayer, string])[] = [
   ['plantStress', 'Plant stress'],
@@ -269,8 +269,8 @@ export function Fire3DControl({
   // The ground switches render straight from their store; a change redraws.
   const [, redrawGroundSwitches] = useState(0);
   useEffect(() => onFire3DGroundLayerChange(() => redrawGroundSwitches((n) => n + 1)), []);
-  // Fuel risk acts on the 3D drape only while it is mounted (src/layers/whp-3d.ts says so); otherwise
-  // on the flat layer, which the drape stands down for.
+  // In the scene Fuel risk acts on the 3D drape only while it is mounted (src/layers/whp-3d.ts says
+  // so), which hides the flat layer meanwhile; on the flat map it acts on the flat layer.
   const [drapeMounted, setDrapeMounted] = useState(false);
   useEffect(() => {
     const onShade = (event: Event): void => {
@@ -381,7 +381,7 @@ export function Fire3DControl({
         aria-pressed={preference}
         title="Tilt the Fire view over 3D terrain relief with a volumetric smoke read. Presentation only: it changes how the same mapped data is seen, not what any layer claims."
         onClick={() => {
-          // The scene enters only from Wildfire; its controller clears an optional flat Fuel risk on entry.
+          // The scene enters only from Wildfire; a flat Fuel risk stays on and steps aside for the drape.
           if (!preference && cluster !== 'wildfire') {
             requestCluster('wildfire');
             // A mode switch applies the mode's basemap default, like the shell's chooser.

@@ -3,9 +3,9 @@
  *
  * On the flat Wildfire map it turns on the catalog's USFS Wildfire Hazard
  * Potential surface, drawn as white of increasing opacity by class by its own
- * adapter (src/layers/usfs-whp.ts). In the 3D scene, while the scene's white
- * drape is mounted (src/layers/whp-3d.ts), it shows or hides that drape, as
- * it always has. Pure and DOM-free so Node can prove the decisions.
+ * adapter (src/layers/usfs-whp.ts). In the 3D scene it acts only on the
+ * scene's white drape while that is mounted (src/layers/whp-3d.ts), which
+ * hides the flat layer meanwhile. Pure and DOM-free so Node can prove the decisions.
  */
 
 /** The flat USFS Wildfire Hazard Potential surface (src/config/layers.ts). */
@@ -26,9 +26,11 @@ export const FUEL_RISK_TITLE = 'Fuel risk: USFS Wildfire Hazard Potential';
  * key rather than replacing it, since the display is Wildfire plus one layer.
  */
 export function fireKeySections(
-  eligible: ReadonlySet<string>
+  eligible: ReadonlySet<string>,
+  /** The 3D drape is mounted, so the flat Fuel risk layer is hidden (src/layers/whp-3d.ts). */
+  drapeMounted = false
 ): { readonly fire: boolean; readonly whp: boolean } | null {
-  const whp = eligible.has(FLAT_FUEL_RISK_KEY) || eligible.has('usfs-whp-classes');
+  const whp = (eligible.has(FLAT_FUEL_RISK_KEY) && !drapeMounted) || eligible.has('usfs-whp-classes');
   if (!whp && !eligible.has('spc-fire-weather')) return null;
   return { fire: eligible.has('spc-fire-weather') || eligible.has('nifc-fires'), whp };
 }
@@ -42,24 +44,11 @@ export function fuelRiskSwitch(input: {
   /** The committed mode's recipe at its horizon already holds the flat layer (Wildfire Long Range). */
   readonly recipeHasFlat: boolean;
 }): FuelRiskSwitch {
-  if (input.sceneActive && input.drapeMounted) return 'drape';
+  // In the scene the switch acts only on the drape; 3D never changes the layer choices.
+  if (input.sceneActive) return input.drapeMounted ? 'drape' : null;
   // Long Range: the committed Wildfire recipe is the flat layer itself.
   if (input.recipeHasFlat) return null;
   return 'flat';
-}
-
-/**
- * Whether scene entry (src/map/fire3d.ts) re-applies the Wildfire recipe. The scene
- * draws its own perimeter-masked fuel risk drape, which the flat layer would
- * block (src/layers/whp-3d.ts), so an optional flat Fuel risk is cleared; at
- * Long Range the recipe itself holds the flat layer and it stays.
- */
-export function sceneEntryAppliesRecipe(input: {
-  readonly cluster: string;
-  readonly flatOn: boolean;
-  readonly recipeHasFlat: boolean;
-}): boolean {
-  return input.cluster !== 'wildfire' || (input.flatOn && !input.recipeHasFlat);
 }
 
 /**

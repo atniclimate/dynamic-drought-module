@@ -41,7 +41,7 @@
 
 import type * as maplibregl from 'maplibre-gl';
 
-import { HAZARD_CLUSTERS, type HazardClusterKey } from '../config/clusters';
+import type { HazardClusterKey } from '../config/clusters';
 import {
   FIRE3D_CAMERA_TRANSITION_MS,
   FIRE3D_COVERAGE_NOTE,
@@ -73,8 +73,7 @@ import { BOTTOM_STACK_IDS, firstLayerIdAbove, reassertLabelOrder, reassertThemat
 import { watchContextLoss, webGl2Capability } from './gl-capability';
 import {
   getCommittedSnapshot,
-  onCommittedSnapshotChange,
-  requestCluster
+  onCommittedSnapshotChange
 } from '../state/cluster-service';
 import {
   getFire3DPreference,
@@ -82,8 +81,6 @@ import {
   setFire3DPreference
 } from '../state/fire3d-store';
 import { registry } from '../state/registry';
-import { FLAT_FUEL_RISK_KEY, sceneEntryAppliesRecipe } from '../ui/fire3d-fuel-risk';
-import { requestLayerOn } from '../ui/layer-toggle-command';
 import { showToast } from '../ui/overlay';
 import { isObject } from '../util/guards';
 import { prefersReducedMotion } from '../util/motion';
@@ -275,9 +272,6 @@ const statusListeners = new Set<() => void>();
 let controllerWired = false;
 let active = false;
 let activation: AbortController | null = null;
-/** Scene entry cleared an optional flat Fuel risk from Wildfire; the scene's
- * failure or exit owes it back (restoreFlatFuelRisk). */
-let flatFuelStoodDown = false;
 /** Mirrors Fire3DStatus.terrainCoverage; read by publishStatus and by
  * syncEmbedNote, kept current by coverageMoveListener while active. `full`
  * while inactive, so neither coverage sentence renders outside the scene. */
@@ -651,19 +645,6 @@ function failScene(map: maplibregl.Map, reason: string, err?: unknown): void {
   publishStatus('unavailable', reason);
   setFire3DPreference(false);
   showToast('3D Fire view unavailable; the flat map remains accurate.');
-  restoreFlatFuelRisk();
-}
-
-/**
- * Hand back the flat Fuel risk that scene entry cleared, once, if the mode is
- * still Wildfire. Called only after the scene is down and the gate is closed
- * (preference demoted or the gate itself said leave), so the re-evaluation
- * this layer change triggers cannot re-enter and clear it again.
- */
-function restoreFlatFuelRisk(): void {
-  if (!flatFuelStoodDown) return;
-  flatFuelStoodDown = false;
-  if (getCommittedSnapshot().cluster === 'wildfire') requestLayerOn(FLAT_FUEL_RISK_KEY);
 }
 
 /**
@@ -759,7 +740,6 @@ async function activateScene(map: maplibregl.Map): Promise<void> {
     setFire3DPreference(false);
     showToast('3D Fire view unavailable; the flat map remains accurate.');
     console.warn('[fire3d] terrain archive probe failed.', err);
-    restoreFlatFuelRisk();
     return;
   }
   if (activation === myController) activation = null;
@@ -979,7 +959,6 @@ export function setFire3DActive(map: maplibregl.Map, next: boolean): void {
     savedCamera = null;
     publishStatus('inactive', null);
   }
-  restoreFlatFuelRisk();
 }
 
 /**
@@ -1066,22 +1045,6 @@ export function initFire3DController(map: maplibregl.Map): void {
     });
     if (should) {
       if (!active && activation === null) {
-        // Every way in (button, shared link, widened window) enters from the
-        // Wildfire recipe: an optional flat Fuel risk would block the scene's
-        // perimeter-masked drape (src/layers/whp-3d.ts).
-        const snapshot = getCommittedSnapshot();
-        if (
-          sceneEntryAppliesRecipe({
-            cluster: snapshot.cluster,
-            flatOn: snapshot.intendedKeys.has(FLAT_FUEL_RISK_KEY),
-            recipeHasFlat:
-              snapshot.cluster !== 'custom' &&
-              HAZARD_CLUSTERS[snapshot.cluster].recipes[snapshot.horizon].includes(FLAT_FUEL_RISK_KEY)
-          })
-        ) {
-          flatFuelStoodDown = snapshot.cluster === 'wildfire';
-          requestCluster('wildfire');
-        }
         void activateScene(map);
       } else {
         reconcileSmokeVolume(map);

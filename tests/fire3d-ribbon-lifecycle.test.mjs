@@ -273,7 +273,6 @@ async function reset() {
   if (registry.getActiveKeys().has(PERIMETER_KEY)) perimetersOff();
   setPerimeterSnapshot(null);
   await settle();
-  // After the exit: an exit may hand a cleared Fuel risk back.
   env.intended = new Set();
   env.requested = [];
   env.layersOn = [];
@@ -386,31 +385,11 @@ test('a terrain archive failure with no tile rolls the scene back, and a tile er
 });
 
 // ---------------------------------------------------------------------------
-// Entry from the Wildfire recipe (a shared link or a widened window, not
-// only the 3D button)
+// 3D never changes the layer choices (a shared link, a widened window or the
+// 3D button)
 // ---------------------------------------------------------------------------
 
-test('a scene opened with optional flat Fuel risk on re-applies the Wildfire recipe before it opens', async () => {
-  // A fire3d=true link with layers=<recipe>,usfs-whp boots Wildfire with the flat layer on.
-  env.intended = new Set(['nifc-fires', 'hms-smoke', 'usfs-whp']);
-  const openingAtRequest = [];
-  env.onRequest = () => openingAtRequest.push(['checking', 'active'].includes(getFire3DStatus().state));
-  await enterScene();
-  assert.deepEqual(env.requested, ['wildfire']);
-  assert.deepEqual(openingAtRequest, [false], 'the recipe landed before the scene began opening');
-  assert.equal(env.intended.has('usfs-whp'), false);
-
-  // At Long Range the recipe itself holds the flat layer: nothing is re-applied.
-  setPreference(false);
-  await settle();
-  env.requested = [];
-  env.horizon = 'season-ahead';
-  env.intended = new Set(['usfs-whp']);
-  await enterScene();
-  assert.deepEqual(env.requested, []);
-});
-
-test('a scene that cleared flat Fuel risk hands it back when it fails or exits, while the mode is still Wildfire', async () => {
+test('entering, failing or leaving the scene with flat Fuel risk on never changes the mode or the layers', async () => {
   const WITH_FUEL = ['nifc-fires', 'hms-smoke', 'usfs-whp'];
 
   // The terrain archive is unreachable: the scene never opens.
@@ -418,45 +397,24 @@ test('a scene that cleared flat Fuel risk hands it back when it fails or exits, 
   env.intended = new Set(WITH_FUEL);
   setPreference(true);
   await until(() => getFire3DStatus().state === 'unavailable', 'the probe failed');
-  assert.deepEqual(env.requested, ['wildfire']);
-  assert.deepEqual(env.layersOn, ['usfs-whp'], 'the failed entry handed Fuel risk back');
   env.probeFails = false;
 
   // The terrain source fails after the scene opened.
-  env.layersOn = [];
-  env.intended = new Set(WITH_FUEL);
   await enterScene();
   for (const fn of [...(mapListeners.error ?? [])]) {
     fn({ sourceId: 'fire3d-terrain-dem', error: new Error('PMTiles read timed out') });
   }
   assert.equal(getFire3DStatus().state, 'unavailable');
-  assert.deepEqual(env.layersOn, ['usfs-whp'], 'the rolled-back scene handed Fuel risk back');
 
-  // The scene leaves (a shrunk window or 3D turned off).
-  env.layersOn = [];
-  env.intended = new Set(WITH_FUEL);
+  // The scene opens and the person turns 3D off.
   await enterScene();
   setPreference(false);
   await settle();
   assert.equal(getFire3DStatus().state, 'inactive');
-  assert.deepEqual(env.layersOn, ['usfs-whp'], 'the exit handed Fuel risk back');
 
-  // The person left Wildfire while in the scene: nothing is handed back.
-  env.layersOn = [];
-  env.intended = new Set(WITH_FUEL);
-  await enterScene();
-  env.cluster = 'drought';
-  setPreference(false);
-  await settle();
-  assert.deepEqual(env.layersOn, []);
-
-  // A later exit owes nothing: the debt was settled once.
-  env.cluster = 'wildfire';
-  env.intended = new Set(['nifc-fires']);
-  await enterScene();
-  setPreference(false);
-  await settle();
-  assert.deepEqual(env.layersOn, []);
+  assert.deepEqual(env.requested, [], 'no mode was requested');
+  assert.deepEqual(env.layersOn, [], 'no layer was turned on');
+  assert.deepEqual([...env.intended], WITH_FUEL, 'the layer choices stand');
 });
 
 // ---------------------------------------------------------------------------

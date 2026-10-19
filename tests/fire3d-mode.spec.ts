@@ -1292,17 +1292,15 @@ test('a corrupt archive fails the probe before any map mutation and drops fire3d
   }
 });
 
-// Both flat rows (the horizon's 'usfs-whp' and the Layer studio's USFS-colours
-// 'usfs-whp-classes') draw the same issuer product, so each stands the drape down.
-for (const flatKey of ['usfs-whp', 'usfs-whp-classes'] as const) {
+// The Layer studio's issuer-coloured row ('usfs-whp-classes') is a deliberate
+// choice of the issuer's colours, so the drape stands down for it.
+for (const flatKey of ['usfs-whp-classes'] as const) {
   test(`the hazard drape stands down while the flat WHP surface (${flatKey}) is on, and leaves when it arrives`, async () => {
     const browser = installFakeBrowser({ desktop: true, reducedMotion: false });
     const restoreFetch = stubPmtilesFetch();
     const harness = fakeMapHarness({ pitch: 0, bearing: 0 });
 
     try {
-      // The wildfire cluster's season-ahead horizon activates the 'usfs-whp'
-      // flat layer (src/config/clusters.ts:119), so the pairing is real.
       // Both draw the SAME USFS product from the same service: stacked they
       // would double one classification's translucency, print two legends
       // for one issuer, and show the Pacific Northwest bake box as a hard
@@ -1342,6 +1340,52 @@ for (const flatKey of ['usfs-whp', 'usfs-whp-classes'] as const) {
     }
   });
 }
+
+test('flat Fuel risk steps aside for the drape and draws again when the drape leaves, still on throughout', async () => {
+  const browser = installFakeBrowser({ desktop: true, reducedMotion: false });
+  const restoreFetch = stubPmtilesFetch();
+  const harness = fakeMapHarness({ pitch: 0, bearing: 0 });
+  const { map } = harness;
+  // A fresh spec each time, as the flat adapter adds it (src/layers/usfs-whp.ts).
+  const addFlat = (): void => {
+    map.addLayer({ id: 'usfs-whp', type: 'raster', source: 'usfs-whp' } as never);
+  };
+  const flatVisibility = (): unknown => harness.layerSpecs.get('usfs-whp')?.layout?.['visibility'];
+
+  try {
+    // Fuel risk is on (Wildfire's optional layer, or the Long Range recipe) when the scene opens.
+    addFlat();
+    registry.activate('usfs-whp');
+    const controller = new AbortController();
+    const activation = await activateContextLayers(map, controller.signal);
+
+    // The perimeter-masked drape mounts and the flat layer is hidden, not turned off.
+    expect(activation.keys).toContain('whp');
+    expect(harness.layerSpecs.has('whp-2023')).toBe(true);
+    expect(harness.layoutChanges).toContainEqual({ layerId: 'usfs-whp', name: 'visibility', value: 'none' });
+    expect(registry.getActiveKeys().has('usfs-whp')).toBe(true);
+
+    // Turned off and on again while the scene is up (a horizon change): re-added visible, hidden again.
+    map.removeLayer('usfs-whp');
+    registry.deactivate('usfs-whp');
+    addFlat();
+    expect(flatVisibility()).toBeUndefined();
+    registry.activate('usfs-whp');
+    expect(flatVisibility()).toBe('none');
+    expect(harness.layerSpecs.has('whp-2023')).toBe(true);
+
+    // The scene leaves: the drape goes and the flat layer draws again.
+    deactivateContextLayers(map);
+    expect(harness.layerSpecs.has('whp-2023')).toBe(false);
+    expect(flatVisibility()).toBe('visible');
+    expect(registry.getActiveKeys().has('usfs-whp')).toBe(true);
+  } finally {
+    registry.deactivate('usfs-whp');
+    deactivateContextLayers(map);
+    restoreFetch();
+    browser.restore();
+  }
+});
 
 test('a corrupt hazard archive degrades only the drape; the scene stays active', async () => {
   const browser = installFakeBrowser({ desktop: true, reducedMotion: false });

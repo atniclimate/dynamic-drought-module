@@ -206,6 +206,8 @@ let disposeMapKeyFraming: (() => void) | null = null;
 let disposeMapKeyViewMode: (() => void) | null = null;
 let disposeMapKeyHazardCluster: (() => void) | null = null;
 let whpShadeActive = false;
+/** The Wildfire 3D drape is mounted, so the flat Fuel risk layer is hidden (src/layers/whp-3d.ts). */
+let whpDrapeMounted = false;
 /** The Wildfire 3D dryness ground (DDM-P9-T13); mirrored literals of src/layers/wildfire-dryness.ts. */
 const DRYNESS_GROUND_EVENT = 'ddm:dryness-ground';
 const DRYNESS_GROUND_REQUEST_EVENT = 'ddm:dryness-ground-request';
@@ -1215,7 +1217,7 @@ function surfaceKey(): HazardKeyResult | null {
   const { active, loading, eligible } = keyEligibility();
   let spec: KeySpec | null = null;
   let productKeys: readonly string[] = [];
-  const fireSections = fireKeySections(eligible);
+  const fireSections = fireKeySections(eligible, whpDrapeMounted);
   // Fuel risk ('usfs-whp') is white-shaded; the Layer studio's classes row keeps issuer colours.
   const whpKey = eligible.has('usfs-whp-classes') ? 'usfs-whp-classes' : 'usfs-whp';
   const whpShaded = whpKey === 'usfs-whp';
@@ -1720,7 +1722,9 @@ export function initMapKey(): void {
   });
 
   const onWhpShade = (event: Event): void => {
-    whpShadeActive = Boolean((event as CustomEvent<{ active: boolean }>).detail?.active);
+    const detail = (event as CustomEvent<{ active: boolean; mounted?: boolean }>).detail;
+    whpShadeActive = Boolean(detail?.active);
+    whpDrapeMounted = Boolean(detail?.mounted);
     update();
   };
   window.addEventListener('ddm:whp-shade', onWhpShade);

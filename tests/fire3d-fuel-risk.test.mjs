@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-const { FLAT_FUEL_RISK_KEY, FUEL_RISK_TITLE, fireKeySections, fuelRiskKeepsConsole, fuelRiskSwitch, revealScroll, sceneEntryAppliesRecipe, shouldRevealScroll } =
+const { FLAT_FUEL_RISK_KEY, FUEL_RISK_TITLE, fireKeySections, fuelRiskKeepsConsole, fuelRiskSwitch, revealScroll, shouldRevealScroll } =
   await import('../src/ui/fire3d-fuel-risk.ts');
 
 test('Fuel risk on adds its section to the Wildfire key instead of replacing it', () => {
@@ -18,6 +18,13 @@ test('Fuel risk on adds its section to the Wildfire key instead of replacing it'
   // Neither the outlook nor the potential layer: the later surfaces keep their precedence.
   assert.equal(fireKeySections(keys('nifc-fires', 'hms-smoke')), null);
   assert.equal(fireKeySections(keys('usdm', 'nifc-fires')), null);
+  // In 3D the mounted drape hides the flat Fuel risk layer and carries its own legend: the key names only what is drawn.
+  // Wildfire with Fuel risk then keys exactly like Wildfire alone (null: the Fire key's own precedence).
+  assert.equal(fireKeySections(keys('nifc-fires', 'hms-smoke', 'usfs-whp'), true), null);
+  assert.deepEqual(fireKeySections(keys('spc-fire-weather', 'nifc-fires', 'usfs-whp'), true), { fire: true, whp: false });
+  assert.equal(fireKeySections(keys('usfs-whp'), true), null);
+  // The drape stands down for the issuer colours, so they keep their section.
+  assert.deepEqual(fireKeySections(keys('usfs-whp-classes'), true), { fire: false, whp: true });
   // One feature, one name a person can follow from the button to the key and the layer list.
   assert.match(FUEL_RISK_TITLE, /^Fuel risk: .*Wildfire Hazard Potential$/);
 });
@@ -30,26 +37,14 @@ test('the one Fuel risk switch acts on the 3D drape only while it is mounted, el
   assert.equal(fuelRiskSwitch({ ...base, sceneActive: true, drapeMounted: true }), 'drape');
   // A drape event outlives the scene for a moment; the scene decides.
   assert.equal(fuelRiskSwitch({ ...base, drapeMounted: true }), 'flat');
-  // The 3D scene without a drape (archive unavailable, or the flat layer already on): the flat layer.
-  assert.equal(fuelRiskSwitch({ ...base, sceneActive: true }), 'flat');
+  // The 3D scene without a drape (still mounting, archive unavailable, or issuer colours on):
+  // nothing to switch, since 3D never changes the layer choices.
+  assert.equal(fuelRiskSwitch({ ...base, sceneActive: true }), null);
   // Long Range: the committed recipe IS the flat layer, so there is nothing to switch.
   assert.equal(fuelRiskSwitch({ ...base, recipeHasFlat: true }), null);
   // The 3D drape still answers to the switch at Long Range.
   assert.equal(fuelRiskSwitch({ ...base, sceneActive: true, drapeMounted: true, recipeHasFlat: true }), 'drape');
   assert.equal(FLAT_FUEL_RISK_KEY, 'usfs-whp');
-});
-
-test('entering 3D re-applies the Wildfire recipe unless the display already is that recipe', () => {
-  const base = { cluster: 'wildfire', flatOn: false, recipeHasFlat: false };
-  // Wildfire as recipe: nothing to reset.
-  assert.equal(sceneEntryAppliesRecipe(base), false);
-  // Wildfire plus the optional flat Fuel risk at Current: reset, so the masked 3D drape mounts.
-  assert.equal(sceneEntryAppliesRecipe({ ...base, flatOn: true }), true);
-  // Long Range: the recipe itself holds the flat layer, so it stays.
-  assert.equal(sceneEntryAppliesRecipe({ ...base, flatOn: true, recipeHasFlat: true }), false);
-  // A custom display always goes back to the recipe.
-  assert.equal(sceneEntryAppliesRecipe({ ...base, cluster: 'custom' }), true);
-  assert.equal(sceneEntryAppliesRecipe({ ...base, cluster: 'custom', flatOn: true }), true);
 });
 
 test('the Wildfire console stays offered over Wildfire, and nowhere else', () => {

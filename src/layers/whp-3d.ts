@@ -7,9 +7,15 @@
  * The companion legend carries the matching opacity scale and source limits.
  *
  * This presentation companion is owned by the lazy fire3d context module,
- * not the layer catalog. It stands down whenever the flat WHP surface is
- * active, so one product never draws twice. An unavailable archive leaves
- * terrain and smoke available as a partial scene.
+ * not the layer catalog. While it is mounted the flat Fuel risk layer
+ * (`usfs-whp`) steps aside (layout visibility none) and comes back when the
+ * drape is torn down, as hms-smoke-volume.ts does with the flat smoke veil;
+ * the person's layer choices never change. Between the scene going active
+ * and the drape mounting the flat layer still draws, like the smoke veil and
+ * the perimeter ribbon. The drape stands down for the issuer-coloured row
+ * (`usfs-whp-classes`), a deliberate Layer studio choice. An unavailable
+ * archive leaves terrain and smoke as a partial scene, with the flat Fuel
+ * risk layer, if on, as the degrade.
  */
 
 import type * as maplibregl from 'maplibre-gl';
@@ -22,6 +28,7 @@ import { reassertLabelOrder, reassertThematicOrder } from '../map/layer-order';
 import { getPerimeterSnapshot, onPerimeterSnapshotChange } from '../state/fire-perimeter-snapshot';
 import { getFire3DGroundLayer, onFire3DGroundLayerChange } from '../state/fire3d-ground-layers';
 import { registry } from '../state/registry';
+import { FLAT_FUEL_RISK_KEY } from '../ui/fire3d-fuel-risk';
 import {
   LEGEND_ORDER,
   hideLegend,
@@ -34,10 +41,7 @@ const SOURCE_ID = 'whp-2023';
 const LAYER_ID = 'whp-2023';
 const LEGEND_KEY = 'whp-2023';
 
-/** The flat catalog layers that draw the SAME issuer product, live. */
-const FLAT_WHP_LAYER_KEYS = ['usfs-whp', 'usfs-whp-classes'] as const;
-
-/** Released when the drape is torn down; watches for the flat layer. */
+/** Released when the drape is torn down; watches the flat WHP layers. */
 let releaseFlatLayerWatch: (() => void) | null = null;
 /** Released when the drape is torn down; follows the console's "Fuel risk" switch. */
 let releaseSwitchWatch: (() => void) | null = null;
@@ -114,38 +118,32 @@ function announceFuelRisk(): void {
 }
 
 /**
- * One issuer, one legend, per layer: never draw this drape while either flat
- * WHP catalog surface (`usfs-whp`, `usfs-whp-classes`) is on.
- *
- * The two render the same USFS product from the same service. Stacked,
- * they would double the translucency of one classification, print two
- * legends for one issuer, and show the PNW bake box as a hard rectangular
- * seam over the live CONUS layer. The wildfire cluster's season-ahead
- * horizon activates exactly that flat layer
- * (src/config/clusters.ts:119), so this is a real pairing, not a
- * hypothetical one.
- *
- * The flat layer wins when both are eligible: it is live rather than a
- * snapshot, and it covers the conterminous United States rather than the
- * Pacific Northwest box. It also drapes over terrain on its own, so the
- * 3D scene still shows hazard relief; it simply shows the better copy.
+ * One issuer, one drawn copy. The issuer-coloured row (`usfs-whp-classes`)
+ * is a deliberate Layer studio choice of the issuer's colours, so the drape
+ * stands down for it. Fuel risk (`usfs-whp`, white, also the Long Range
+ * recipe) is the drape's own presentation, so it steps aside for the
+ * perimeter-masked drape instead (`showFlatFuelRisk`).
  */
-function flatWhpLayerIsOn(): boolean {
-  const active = registry.getActiveKeys();
-  return FLAT_WHP_LAYER_KEYS.some((key) => active.has(key));
+function issuerColoursOn(): boolean {
+  return registry.getActiveKeys().has('usfs-whp-classes');
+}
+
+/** Hide or restore the flat Fuel risk layer; its registry state is untouched. */
+function showFlatFuelRisk(map: maplibregl.Map, visible: boolean): void {
+  if (map.getLayer(FLAT_FUEL_RISK_KEY)) map.setLayoutProperty(FLAT_FUEL_RISK_KEY, 'visibility', visible ? 'visible' : 'none');
 }
 
 /**
  * Probe the bundled archive, then add the raster source and drape layer
  * and register the legend. Idempotent. Returns false (nothing added) when
- * the flat WHP surface already covers this ground, or when the archive is
- * unreachable or invalid; the caller degrades partially either way.
+ * the issuer-coloured row is on, or when the archive is unreachable or
+ * invalid; the caller degrades partially either way.
  */
 export async function activateWhpDrape(
   map: maplibregl.Map,
   signal: AbortSignal
 ): Promise<boolean> {
-  if (flatWhpLayerIsOn()) return false;
+  if (issuerColoursOn()) return false;
 
   try {
     await probeArchiveHeader(URLS.whp2023PmtilesLocal, signal);
@@ -156,8 +154,8 @@ export async function activateWhpDrape(
     return false;
   }
   if (signal.aborted) return false;
-  // The flat layer can finish activating during the probe, before the watcher below exists.
-  if (flatWhpLayerIsOn()) return false;
+  // The issuer colours can finish activating during the probe, before the watcher below exists.
+  if (issuerColoursOn()) return false;
   // Before the source exists, so its first tiles are already cut and
   // entering the scene reloads nothing.
   syncPerimeters(map);
@@ -222,6 +220,7 @@ export async function activateWhpDrape(
     return false;
   }
 
+  showFlatFuelRisk(map, false);
   announceFuelRisk();
   releaseSwitchWatch?.();
   releaseSwitchWatch = onFire3DGroundLayerChange((layer) => {
@@ -230,15 +229,15 @@ export async function activateWhpDrape(
     announceFuelRisk();
   });
 
-  // The flat layer can be switched on AFTER the scene is up (the
-  // season-ahead horizon does exactly that). Watch for it and stand down
-  // rather than stacking two copies of one issuer. The reverse is not
-  // symmetric on purpose: switching the flat layer back off does not
-  // resurrect the drape until the scene is re-entered, which
-  // under-claims rather than over-claims and needs no disclosure.
+  // Either flat layer can be switched on AFTER the scene is up (the Long
+  // Range horizon adds Fuel risk). Fuel risk is hidden again each time it
+  // is re-added; the issuer colours make the drape stand down, and turning
+  // them back off does not resurrect it until the scene is re-entered,
+  // which under-claims rather than over-claims.
   releaseFlatLayerWatch?.();
   releaseFlatLayerWatch = registry.on('change', () => {
-    if (flatWhpLayerIsOn()) deactivateWhpDrape(map);
+    if (issuerColoursOn()) deactivateWhpDrape(map);
+    else showFlatFuelRisk(map, false);
   });
   // The perimeter layer publishes each different collection it puts on the
   // map (its first, and after a pan or zoom), and null once it is off; the
@@ -252,8 +251,8 @@ export async function activateWhpDrape(
 }
 
 /**
- * Remove the drape layer, source, and legend. Defensive guards throughout;
- * symmetric with activate.
+ * Remove the drape layer, source, and legend, and give the flat Fuel risk
+ * layer back its visibility. Defensive guards throughout; symmetric with activate.
  */
 export function deactivateWhpDrape(map: maplibregl.Map): void {
   releaseFlatLayerWatch?.();
@@ -264,6 +263,7 @@ export function deactivateWhpDrape(map: maplibregl.Map): void {
   releasePerimeterWatch = null;
   if (map.getLayer(LAYER_ID)) map.removeLayer(LAYER_ID);
   if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);
+  showFlatFuelRisk(map, true);
   hideLegend(LEGEND_KEY);
   window.dispatchEvent(new CustomEvent('ddm:whp-shade', { detail: { layer: LAYER_ID, active: false, mounted: false } }));
 }

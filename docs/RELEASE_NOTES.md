@@ -38,8 +38,10 @@ every mode, plus the fixes the review's checks found.
   nearer the mainland, and makes the Pacific and Atlantic clickable (each opens ENSO on that
   ocean). The Arctic stays in the framing list.
 - 2026-10-19: Wildfire's Fuel risk is white shading of increasing opacity on every map, and
-  Wildfire stays the mode with Fuel risk on, at every horizon and in a shared link; entering 3D
-  swaps it for the masked 3D drape and hands it back on leaving. The USFS colours are a Layer
+  Wildfire stays the mode with Fuel risk on, at every horizon and in a shared link. In 3D the
+  white shading steps aside for the 3D fuel risk drape, which is never drawn inside current fire
+  perimeters, at every horizon (Long Range in 3D now shows the Pacific Northwest drape); entering
+  or leaving 3D changes no layer choice and no link. The USFS colours are a Layer
   Studio row, "Wildfire Hazard Potential (USFS colors)". The USFS service now paints its no-data
   areas black; both rows clear them, so no tile goes missing and no dark wash covers the ocean
   or Canada.
