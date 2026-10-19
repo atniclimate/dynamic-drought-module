@@ -90,6 +90,7 @@ import type * as maplibregl from 'maplibre-gl';
 import { URLS } from '../config/urls';
 import { WHP_SURFACE_OPACITY } from '../config/whp-shade';
 import { registry } from '../state/registry';
+import type { LayerStatus } from '../types/layer';
 import { clearTimeBar, setTimeBar } from '../ui/time-bar';
 import { watchRasterTiles, type RasterTileOutcome, type RasterTileWatch } from '../util/raster-status';
 import { pointHasHeatRiskCoverage } from './heatrisk-coverage';
@@ -98,6 +99,18 @@ import { registerWhpImageShadeProtocol } from './whp-image-shade-protocol';
 const TILE_SUCCESS_DEADLINE_MS = 10_000;
 
 type WhpStatus = 'loading' | 'ready' | 'degraded' | 'error' | 'no-data';
+
+/** The issuer-coloured row: the same service, and the one drawn copy while it stands the 3D drape down. */
+const COLOURS_KEY = 'usfs-whp-classes';
+
+/**
+ * Whether the Wildfire 3D drape draws this edition: mounted (src/layers/whp-3d.ts,
+ * its layer id mirrored, as src/map/fire3d.ts does, so this chunk stays free of
+ * the scene) and not stood down, which it is exactly while the colours row is on.
+ */
+function drapeDrawn(map: maplibregl.Map): boolean {
+  return Boolean(map.getLayer('whp-2023')) && !registry.getActiveKeys().has(COLOURS_KEY);
+}
 
 /**
  * The time statement (DDM-P8-T02 clause 4), the Wildfire screen's stamp at
@@ -171,7 +184,7 @@ export function createWhpLayer(key: 'usfs-whp' | 'usfs-whp-classes', shaded: boo
   let tileWatch: RasterTileWatch | null = null;
   let releaseCoverageWatch: (() => void) | null = null;
 
-  function reportStatus(state: WhpStatus): void {
+  function reportStatus(state: LayerStatus): void {
     registry.setStatus(key, state);
   }
 
@@ -183,11 +196,24 @@ export function createWhpLayer(key: 'usfs-whp' | 'usfs-whp-classes', shaded: boo
   function watchCoverage(map: maplibregl.Map): (tile: RasterTileOutcome) => void {
     releaseCoverageWatch?.();
     let tile: WhpStatus = 'loading';
+    // Hidden before a verdict under a stood-down drape, nothing draws this
+    // row: it reads the colours row until the drape stands up and draws it.
+    let borrowing = false;
     const sync = (): void => {
+      if (borrowing && drapeDrawn(map)) {
+        borrowing = false;
+        tile = 'ready';
+      }
+      const own = borrowing ? (registry.getStatus(COLOURS_KEY) ?? 'loading') : tile;
       const { lng, lat } = map.getCenter();
-      const next = pointHasHeatRiskCoverage(lng, lat) ? tile : 'no-data';
+      const next = pointHasHeatRiskCoverage(lng, lat) ? own : 'no-data';
       if (registry.getStatus(key) !== next) reportStatus(next);
     };
+    // A hidden source's closed cycle reports nothing more, so the registry drives the borrowed read.
+    const follow = (): void => {
+      if (borrowing) sync();
+    };
+    const releaseFollow = [registry.on('change', follow), registry.on('status-change', follow)];
     // A dropped 'error' stays in the watcher's memory, so a failed view after
     // the drape gives the layer back would repeat it unheard: its first tile
     // request starts a fresh watch with its own deadline.
@@ -202,20 +228,24 @@ export function createWhpLayer(key: 'usfs-whp' | 'usfs-whp-classes', shaded: boo
     releaseCoverageWatch = () => {
       map.off('moveend', sync);
       map.off('sourcedataloading', givenBack);
+      for (const release of releaseFollow) release();
     };
     return (state) => {
       // A hidden layer (the Wildfire 3D drape stands in for it) requests no
       // tiles, so a deadline verdict then is no evidence; keep the last one.
-      // A row hidden before its first verdict is settled ready (off coverage, no data).
-      // shortcut: hidden only under the mounted 3D drape, which draws this edition from the probed archive; the first verdict after the layer is given back replaces it
+      // A row hidden before its first verdict is settled ready (off coverage,
+      // no data) while the drape draws it, and borrows the colours row's verdict while it is stood down.
+      // shortcut: hidden only under the mounted 3D drape, which draws this edition from the probed archive unless stood down; the first verdict after the layer is given back replaces it
       if (map.getLayoutProperty(LAYER_ID, 'visibility') === 'none') {
         if (state === 'error') unheard = true;
         if (tile === 'loading') {
-          tile = 'ready';
+          borrowing = !drapeDrawn(map);
+          if (!borrowing) tile = 'ready';
           sync();
         }
         return;
       }
+      borrowing = false;
       tile = state;
       sync();
     };

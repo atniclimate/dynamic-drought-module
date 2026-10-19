@@ -157,7 +157,8 @@ test('Fuel risk is white-shaded on a flat map; the classes row keeps issuer colo
 test('a layer the 3D drape hides before its first frame is not reported unavailable at the deadline', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   await withMap((map) => {
-    // whp-3d.ts hides the flat layer in the same task it is added; a hidden source requests no tiles.
+    // whp-3d.ts mounts its drape, then hides the flat layer in the same task; a hidden source requests no tiles.
+    map.addLayer({ id: 'whp-2023' });
     map.setLayoutProperty('usfs-whp', 'visibility', 'none');
     t.mock.timers.tick(10_000);
     // Terminal, not stuck at 'loading': the drape draws the row, so boot idle and quiescence settle.
@@ -167,6 +168,31 @@ test('a layer the 3D drape hides before its first frame is not reported unavaila
     map.loadEmptyTile();
     assert.equal(registry.getStatus('usfs-whp'), 'ready');
   });
+});
+
+test('hidden under a drape stood down for the USFS colours row, Fuel risk takes that row\'s verdict, never ready', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  registry.activate('usfs-whp-classes');
+  registry.setStatus('usfs-whp-classes', 'loading');
+  try {
+    await withMap((map) => {
+      // Mounted but stood down: whp-3d.ts hides both the drape and the flat layer, so nothing draws Fuel risk.
+      map.addLayer({ id: 'whp-2023', layout: { visibility: 'none' } });
+      map.setLayoutProperty('usfs-whp', 'visibility', 'none');
+      t.mock.timers.tick(10_000);
+      assert.equal(registry.getStatus('usfs-whp'), 'loading');
+      // The same service, the one drawn copy, reaches its deadline unavailable.
+      registry.setStatus('usfs-whp-classes', 'error');
+      assert.equal(registry.getStatus('usfs-whp'), 'error');
+      // The colours row goes off, the drape stands up and draws this edition: the next settle reads ready.
+      registry.deactivate('usfs-whp-classes');
+      map.setLayoutProperty('whp-2023', 'visibility', 'visible');
+      map.emit('idle');
+      assert.equal(registry.getStatus('usfs-whp'), 'ready');
+    });
+  } finally {
+    registry.deactivate('usfs-whp-classes');
+  }
 });
 
 test('a layer given back by the 3D drape whose every tile fails reads unavailable', async (t) => {
