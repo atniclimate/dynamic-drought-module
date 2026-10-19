@@ -702,7 +702,7 @@ test('selected-area NIFC copy names the bounding box, keeps categories distinct,
   expect(buildNifcAreaPerimeterClaim(['WF'], { truncated: false })).not.toContain('lower bound');
 });
 
-test('HMS uses one cool veil and an explicit unclassified fallback', () => {
+test('HMS uses a warm taupe ramp darker with density and an explicit unclassified fallback', () => {
   const light = resolveHmsDensityPresentation('Light');
   const medium = resolveHmsDensityPresentation('medium');
   const heavy = resolveHmsDensityPresentation('HEAVY');
@@ -715,9 +715,8 @@ test('HMS uses one cool veil and an explicit unclassified fallback', () => {
   expect(unknown).toBe(HMS_DENSITY_PRESENTATION.Unknown);
   expect(missing).toBe(HMS_DENSITY_PRESENTATION.Unknown);
 
-  expect(light.color).toBe('#93a8c4');
-  expect(medium.color).toBe('#93a8c4');
-  expect(heavy.color).toBe('#93a8c4');
+  expect([light.color, medium.color, heavy.color]).toEqual(['#aa9c8d', '#908477', '#766d62']);
+  expect(new Set([light.color, medium.color, heavy.color, unknown.color]).size).toBe(4);
   expect([light.opacity, medium.opacity, heavy.opacity]).toEqual([
     0.08,
     0.17,

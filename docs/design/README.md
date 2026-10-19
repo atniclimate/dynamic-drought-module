@@ -113,8 +113,11 @@ named path was confirmed to exist on 2026-09-01.
   (`src/state/minimap-drought.ts`, `src/state/minimap-wildfire.ts`).
 - **DDM-UI-006.** Prescribed fire is split from wildfire within the existing
   WFIGS perimeter source (`src/layers/nifc-fires.ts`).
-- **DDM-UI-007.** HMS smoke density renders through one cool hue and opacity;
-  unknown remains explicitly unclassified (`src/layers/hms-smoke.ts`).
+- **DDM-UI-007.** HMS smoke density renders through the owner's warm taupe ramp
+  and opacity; unknown remains explicitly unclassified (`src/layers/hms-smoke.ts`).
+  - Amended 2026-10-19 (owner walk): density renders through the owner's warm
+    taupe ramp (Light #aa9c8d, Medium #908477, Heavy #766d62) with the same
+    opacities; unknown stays neutral slate and unclassified.
   - Amended 2026-09-26 (DR-128): the HMS presentation is draped and feathered
     from the issuer's three classes and never draws or states a height
     (DDM-P5-T08). A separate NOAA HRRR-Smoke model volume may draw smoke at the

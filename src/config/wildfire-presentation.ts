@@ -440,22 +440,22 @@ export function buildNifcLinePaint(
 
 export type HmsDensityClass = 'Light' | 'Medium' | 'Heavy' | 'Unknown';
 
-/** One cool hue, with density carried by opacity and an explicit neutral fallback. */
+/** A warm taupe ramp (owner palette, 2026-10-19), darker with density and carried with opacity, and an explicit neutral fallback. */
 export const HMS_DENSITY_PRESENTATION = {
   Light: {
-    color: '#93a8c4',
+    color: '#aa9c8d',
     opacity: 0.08,
     legendLabel: 'Light smoke (8% veil)',
     popupLabel: 'Light smoke'
   },
   Medium: {
-    color: '#93a8c4',
+    color: '#908477',
     opacity: 0.17,
     legendLabel: 'Medium smoke (17% veil)',
     popupLabel: 'Medium smoke'
   },
   Heavy: {
-    color: '#93a8c4',
+    color: '#766d62',
     opacity: 0.33,
     legendLabel: 'Heavy smoke (33% veil)',
     popupLabel: 'Heavy smoke'
