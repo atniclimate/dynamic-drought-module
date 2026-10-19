@@ -798,14 +798,22 @@ test.describe('desktop Brief region band', () => {
     // shows the door, moves every fixed-position control below it,
     // including #brief-search, which the 2026-09-13 stable-position rule
     // pins in place across selection changes.
+    // Measured in the sidebar column's content coordinates: the States row
+    // now follows the Tribal group, and clicking it may scroll the column
+    // to clear the sticky Brief dock. That scroll is not a layout move.
+    const searchContentTop = (): Promise<number> =>
+      page.locator('#brief-search').evaluate((element) => {
+        const scroller = element.closest('.sidebar-scroll');
+        return element.getBoundingClientRect().top + (scroller?.scrollTop ?? 0);
+      });
     await gotoApp(page);
-    const searchBoxBefore = await rect(page.locator('#brief-search'));
+    const searchTopBefore = await searchContentTop();
     await page.locator('#brief-search [data-ddm-search]').fill('oregon');
     await page.locator('#brief-search [data-search-kind="place"][data-search-id="OR"]').click();
     await expect(page.locator('#region-briefing-btn')).toBeVisible();
-    const searchBoxAfter = await rect(page.locator('#brief-search'));
+    const searchTopAfter = await searchContentTop();
     expect(
-      Math.abs(searchBoxAfter.top - searchBoxBefore.top),
+      Math.abs(searchTopAfter - searchTopBefore),
       '#brief-search moved when the region row gained the visible door'
     ).toBeLessThanOrEqual(1);
   });

@@ -1,24 +1,21 @@
 import { test, expect } from './offline-test';
-import { gotoApp, waitForLayerSettled, urlLayers } from './helpers';
-import { stubCpcDroughtOutlook } from './cpc-outlook-fixtures';
+import { gotoApp, waitForLayerSettled } from './helpers';
 
 for (const width of [1440, 820]) {
   test('D3 opaque sidebar selection and briefing focus use adopted neutral tokens at ' + width, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
     await page.emulateMedia({ reducedMotion: 'reduce' });
-    // Season ahead activates the actual CPC drought outlook, not the
-    // seasonal temperature product already stubbed by gotoApp.
-    await stubCpcDroughtOutlook(page);
     await gotoApp(page, '?region=washington_state&view=console&layers=none&flow=off');
     const sidebar = page.locator('#sidebar');
-    const chip = sidebar.getByRole('button', { name: 'Season ahead', exact: true });
+    // The Quick views chips are retired (v0.7.7); the Drought mode button is
+    // the sidebar's pressed selection control that shares their tokens. With
+    // no layers on, no mode is pressed; Space commits Drought at Current.
+    const chip = sidebar.locator('.shell-cluster-btn[data-cluster="drought"]');
     await expect(chip).toHaveAttribute('aria-pressed', 'false');
     await chip.focus();
     await page.keyboard.press('Space');
-    await waitForLayerSettled(page, 'drought');
-    await waitForLayerSettled(page, 'aiannh');
-    await expect(sidebar.locator('[data-layer-status="drought"]')).toHaveClass(/\bready\b/);
-    await expect.poll(async () => [...await urlLayers(page)].sort()).toEqual(['aiannh', 'drought']);
+    await waitForLayerSettled(page, 'nadm-drought');
+    await expect(sidebar.locator('[data-layer-status="nadm-drought"]')).toHaveClass(/\bready\b/);
     await expect(chip).toHaveAttribute('aria-pressed', 'true');
     await expect(chip).toBeFocused();
     await expect(chip).toHaveCSS('background-color', 'rgb(42, 49, 56)');
@@ -30,7 +27,7 @@ for (const width of [1440, 820]) {
     const shadow = await chip.evaluate(node => getComputedStyle(node).boxShadow);
     expect(shadow).toContain('rgb(255, 255, 255) 2px 0px 0px 0px inset');
     expect(shadow).toContain('rgb(1, 11, 19) 0px 0px 0px 4px');
-    await expect(sidebar.locator('input[type="checkbox"][data-layer-key="drought"]')).toBeChecked();
+    await expect(sidebar.locator('input[type="checkbox"][data-layer-key="nadm-drought"]')).toBeChecked();
     await chip.hover();
     await expect(chip).toHaveCSS('background-color', 'rgb(42, 49, 56)');
     await expect(chip).toHaveCSS('color', 'rgb(255, 255, 255)');
