@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 import { isExternalHttp } from './offline-test';
 import { continueLocalRoute } from './offline-test';
 import { test, expect, type Page } from './offline-test';
@@ -155,13 +157,17 @@ async function bootModelTarget(page: Page, query: string, answers: readonly Answ
   await page.route(
     (url) => BIA_CHUNK.test(url.pathname),
     async (route) => {
-      if (isExternalHttp(new URL(route.request().url()))) return route.fallback();
-      const response = await route.fetch();
-      const body = await response.text();
+      const url = new URL(route.request().url());
+      if (isExternalHttp(url)) return route.fallback();
+      // The built file the preview serves (it serves dist/ at the root), read
+      // from disk: re-fetching it through Playwright's own HTTP client added a
+      // second connection to the preview that once dropped mid-boot
+      // (`route.fetch: socket hang up`, Validate run 38853281382).
+      const body = readFileSync(new URL(`../dist${url.pathname}`, import.meta.url), 'utf8');
       const sites = body.match(BIA_REGISTRATION)?.length ?? 0;
       rewrites.push(sites);
       await route.fulfill({
-        response,
+        contentType: 'text/javascript',
         body: sites === 1 ? body.replace(BIA_REGISTRATION, '(window.__ddmModelWrap||(f=>f))($1)({kind:') : body
       });
     }

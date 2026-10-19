@@ -181,6 +181,32 @@ async function captureMaps(page: Page): Promise<void> {
 }
 
 /**
+ * Wait until every source on the main map (`#map`) has settled the tiles of
+ * the view (MapLibre `loaded()`, read from tile state, so it needs no frame:
+ * a tile that errors fires no render and so no idle).
+ *
+ * The SST pill reads live from the latest frame, and src/layers/sst-anomaly.ts
+ * mounts the hidden previous-day frame in the same task, so that frame's
+ * tiles can still be queued (MapLibre's parallel image limit) when the pill
+ * reads live. A tile still unanswered when the case leaves the boot view is
+ * held and dropped, so the return requests it again (Validate run
+ * 39064203091: the last three of its twelve).
+ */
+async function bootViewLoaded(page: Page): Promise<void> {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() => {
+          type LoadedMap = { getContainer(): HTMLElement; loaded(): boolean };
+          const maps = (window as unknown as { __flowPlumbMaps?: LoadedMap[] }).__flowPlumbMaps ?? [];
+          return maps.find((candidate) => candidate.getContainer().id === 'map')?.loaded() ?? false;
+        }),
+      { message: 'every tile the boot view requested has settled' }
+    )
+    .toBe(true);
+}
+
+/**
  * Turn on MapLibre's own continuous repaint on the main map (`#map`), the
  * repaint loop a moving layer runs, and count every `'idle'` after it.
  */
@@ -338,6 +364,9 @@ test.describe('E1-5 flow plumbing (ENSO-FLOW-PLAN block E1)', () => {
       await gotoApp(page, '?view=console&layers=sst-anomaly&region=national');
       await expect(pill).toHaveText(PILL.live);
 
+      // The whole boot view, the hidden previous-day frame included, is in
+      // MapLibre's cache before the case leaves it.
+      await bootViewLoaded(page);
       // The loop: from here MapLibre never fires 'idle'.
       await startRepaintLoop(page);
 
