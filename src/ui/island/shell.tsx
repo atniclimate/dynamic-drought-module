@@ -71,6 +71,7 @@ import { Fire3DControl } from './fire3d-control';
 import { Minimap } from './minimap';
 import { TimeCompact } from './time-popover';
 import { wireShellPopover } from './popover-discipline';
+import { holdSummarySeat } from '../disclosure-seat';
 
 const DESKTOP_SHELL_QUERY = '(min-width: 721px)';
 
@@ -200,7 +201,13 @@ function useDesktopBriefRehost(): void {
     widthQuery.addEventListener('change', sync);
     sync();
 
+    const legendDisclosure = document.querySelector<HTMLDetailsElement>('.sidebar-legend-disclosure');
+    const sidebarScroll = document.querySelector<HTMLElement>('.sidebar-scroll');
+    const releaseLegendSeat =
+      legendDisclosure && sidebarScroll ? holdSummarySeat(legendDisclosure, sidebarScroll) : null;
+
     return () => {
+      releaseLegendSeat?.();
       observer.disconnect();
       widthQuery.removeEventListener('change', sync);
       document.removeEventListener('focusin', rememberRehostFocus);
