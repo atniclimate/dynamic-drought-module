@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-const { FLAT_FUEL_RISK_KEY, FUEL_RISK_TITLE, fireKeySections, fuelRiskKeepsConsole, fuelRiskSwitch, revealScroll, shouldRevealScroll } =
+const { FLAT_FUEL_RISK_KEY, FUEL_RISK_TITLE, fireKeySections, fuelRiskKeepsConsole, fuelRiskSwitch, revealScroll, sceneEntryAppliesRecipe, shouldRevealScroll } =
   await import('../src/ui/fire3d-fuel-risk.ts');
 
 test('Fuel risk on adds its section to the Wildfire key instead of replacing it', () => {
@@ -37,6 +37,19 @@ test('the one Fuel risk switch acts on the 3D drape only while it is mounted, el
   // The 3D drape still answers to the switch at Long Range.
   assert.equal(fuelRiskSwitch({ ...base, sceneActive: true, drapeMounted: true, recipeHasFlat: true }), 'drape');
   assert.equal(FLAT_FUEL_RISK_KEY, 'usfs-whp');
+});
+
+test('entering 3D re-applies the Wildfire recipe unless the display already is that recipe', () => {
+  const base = { cluster: 'wildfire', flatOn: false, recipeHasFlat: false };
+  // Wildfire as recipe: nothing to reset.
+  assert.equal(sceneEntryAppliesRecipe(base), false);
+  // Wildfire plus the optional flat Fuel risk at Current: reset, so the masked 3D drape mounts.
+  assert.equal(sceneEntryAppliesRecipe({ ...base, flatOn: true }), true);
+  // Long Range: the recipe itself holds the flat layer, so it stays.
+  assert.equal(sceneEntryAppliesRecipe({ ...base, flatOn: true, recipeHasFlat: true }), false);
+  // A custom display always goes back to the recipe.
+  assert.equal(sceneEntryAppliesRecipe({ ...base, cluster: 'custom' }), true);
+  assert.equal(sceneEntryAppliesRecipe({ ...base, cluster: 'custom', flatOn: true }), true);
 });
 
 test('the Wildfire console stays offered over Wildfire, and nowhere else', () => {

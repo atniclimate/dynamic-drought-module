@@ -49,6 +49,20 @@ export function fuelRiskSwitch(input: {
 }
 
 /**
+ * Whether the 3D button re-applies the Wildfire recipe on entry. The scene
+ * draws its own perimeter-masked fuel risk drape, which the flat layer would
+ * block (src/layers/whp-3d.ts), so an optional flat Fuel risk is cleared; at
+ * Long Range the recipe itself holds the flat layer and it stays.
+ */
+export function sceneEntryAppliesRecipe(input: {
+  readonly cluster: string;
+  readonly flatOn: boolean;
+  readonly recipeHasFlat: boolean;
+}): boolean {
+  return input.cluster !== 'wildfire' || (input.flatOn && !input.recipeHasFlat);
+}
+
+/**
  * Whether the console is offered. Fuel risk is an optional layer of Wildfire
  * (src/config/clusters.ts `optionalLayers`), so turning it on keeps the mode;
  * the custom clause keeps the console when a person has also changed another

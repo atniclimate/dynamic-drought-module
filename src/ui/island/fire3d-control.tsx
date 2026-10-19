@@ -93,6 +93,7 @@ import {
   fuelRiskKeepsConsole,
   fuelRiskSwitch,
   revealScroll,
+  sceneEntryAppliesRecipe,
   shouldRevealScroll
 } from '../fire3d-fuel-risk';
 import { requestLayerOn } from '../layer-toggle-command';
@@ -296,13 +297,10 @@ export function Fire3DControl({
   // The shell re-renders this control on every committed snapshot, so a direct read stays current.
   const snapshot = getCommittedSnapshot();
   const flatFuelOn = snapshot.intendedKeys.has(FLAT_FUEL_RISK_KEY);
-  const fuelTarget = fuelRiskSwitch({
-    sceneActive: status?.state === 'active',
-    drapeMounted,
-    recipeHasFlat:
-      snapshot.cluster !== 'custom' &&
-      HAZARD_CLUSTERS[snapshot.cluster].recipes[snapshot.horizon].includes(FLAT_FUEL_RISK_KEY)
-  });
+  const recipeHasFlat =
+    snapshot.cluster !== 'custom' &&
+    HAZARD_CLUSTERS[snapshot.cluster].recipes[snapshot.horizon].includes(FLAT_FUEL_RISK_KEY);
+  const fuelTarget = fuelRiskSwitch({ sceneActive: status?.state === 'active', drapeMounted, recipeHasFlat });
   const offer = fire3dControlOffer({
     wideEnough,
     tallEnough,
@@ -385,10 +383,10 @@ export function Fire3DControl({
         title="Tilt the Fire view over 3D terrain relief with a volumetric smoke read. Presentation only: it changes how the same mapped data is seen, not what any layer claims."
         onClick={() => {
           // The scene enters only from the Wildfire recipe, and draws its own fuel risk drape.
-          if (!preference && cluster !== 'wildfire') {
+          if (!preference && sceneEntryAppliesRecipe({ cluster, flatOn: flatFuelOn, recipeHasFlat })) {
             requestCluster('wildfire');
             // A mode switch applies the mode's basemap default, like the shell's chooser.
-            requestBasemapMode(map, defaultBasemapFor('wildfire'));
+            if (cluster !== 'wildfire') requestBasemapMode(map, defaultBasemapFor('wildfire'));
           }
           turnedOn3D.current = !preference;
           setFire3DPreference(!preference);
