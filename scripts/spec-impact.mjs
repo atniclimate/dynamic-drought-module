@@ -22,7 +22,9 @@
  *
  * Touched specs: spec files changed in the range, spec files with a stale
  * mention, and spec files that import a changed src/ module or test helper
- * directly. The measurement-only specs (playwright.config.ts MEASURE_SPECS),
+ * directly, plus a few fixed specs when the range touches shared style or
+ * markup, a map-key, legend, dock or minimap component, or the test seam
+ * (CROSS_CUTTING; each is printed with the rule that added it). The measurement-only specs (playwright.config.ts MEASURE_SPECS),
  * which no CI shard and no --run project collects, are left out.
  */
 
@@ -135,9 +137,47 @@ export function importsChanged(specPath, specSource, changedModules) {
   return false;
 }
 
+// Browser specs enter through the built app, so shared CSS, markup and key or
+// dock components reach their specs through no import. Chosen from the 0.7.7
+// Validate run's reds (shell, dock, map key, minimap, responsive, tokens); not
+// a dependency graph. Keep the union small: it joins the twelve-file local cap.
+const SHELL_SPECS = ['tests/interface-responsive.spec.ts', 'tests/s4-shell.spec.ts'];
+export const CROSS_CUTTING = [
+  {
+    rule: 'shared style or markup',
+    match: (path) => path.startsWith('src/styles/') || path === 'index.html',
+    specs: [...SHELL_SPECS, 'tests/telemetry-hover-tokens.spec.ts', 'tests/horizon-chips.spec.ts']
+  },
+  {
+    rule: 'map key, legend or dock component',
+    match: (path) => path.startsWith('src/') && (/map-key|legend|dock/i.test(path) || path === 'src/ui/island/shell.tsx'),
+    specs: [...SHELL_SPECS, 'tests/flow-wire.spec.ts']
+  },
+  {
+    rule: 'minimap component',
+    match: (path) => path.startsWith('src/') && /minimap/i.test(path),
+    specs: ['tests/s4-minimap.spec.ts']
+  },
+  {
+    rule: 'shared test seam',
+    match: (path) => ['tests/helpers.ts', 'tests/offline-test.ts', 'playwright.config.ts'].includes(path),
+    specs: [...SHELL_SPECS, 'tests/flow-wire.spec.ts', 'tests/s4-minimap.spec.ts']
+  }
+];
+
+/** `Map<spec path, rule names>` the changed paths fire, limited to specs that exist. */
+export function crossCuttingSpecs(changedPaths, specPaths, rules = CROSS_CUTTING) {
+  const picked = new Map();
+  for (const { rule, match, specs } of rules) {
+    if (!changedPaths.some(match)) continue;
+    for (const spec of specs) if (specPaths.has(spec)) picked.set(spec, [...(picked.get(spec) ?? []), rule]);
+  }
+  return picked;
+}
+
 /** Sorted, unique spec paths a block touches, measurement-only specs left out. */
-export function touchedSpecs({ changedSpecs, mentions, specs, changedModules, measureOnly = new Set() }) {
-  const out = new Set(changedSpecs);
+export function touchedSpecs({ changedSpecs, mentions, specs, changedModules, measureOnly = new Set(), crossCutting = new Map() }) {
+  const out = new Set([...changedSpecs, ...crossCutting.keys()]);
   for (const { file } of mentions) out.add(file);
   for (const { path, text } of specs) if (importsChanged(path, text, changedModules)) out.add(path);
   return [...out].filter((path) => !measureOnly.has(path)).sort();
@@ -223,11 +263,16 @@ async function main(argv) {
 
   const diff = git(['diff', '-U0', '--no-color', '--no-ext-diff', range, '--', 'src', 'index.html']);
   const mentions = findMentions(staleLiterals(removedLiterals(diff), headSource), specs);
-  const changed = git(['diff', '--name-only', range, '--', 'src', 'tests']).split('\n').filter(Boolean);
+  const changed = git(['diff', '--name-only', range, '--', 'src', 'tests', 'index.html', 'playwright.config.ts']).split('\n').filter(Boolean);
   const changedSpecs = changed.filter((path) => specPaths.has(path));
   const changedModules = changed.filter((path) => !specPaths.has(path));
   const measureOnly = measureSpecs(git(['show', 'HEAD:playwright.config.ts']));
-  const touched = touchedSpecs({ changedSpecs, mentions, specs, changedModules, measureOnly });
+  const crossCutting = crossCuttingSpecs(changed, specPaths);
+  const touched = touchedSpecs({ changedSpecs, mentions, specs, changedModules, measureOnly, crossCutting });
+  const reasons = [...crossCutting].filter(([path]) => touched.includes(path)).map(([path, rules]) => `${path}  (${rules.join('; ')})`);
+  // Stderr in the scripted modes, so --list stays one line.
+  const say = argv.some((arg) => ['--list', '--dispatch', '--run'].includes(arg)) ? console.error : console.log;
+  if (reasons.length > 0) say(`Added by cross-cutting rules (not a dependency graph):\n  ${reasons.join('\n  ')}`);
 
   if (argv.includes('--list')) {
     console.log(touched.join(' '));

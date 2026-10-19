@@ -33,18 +33,18 @@ Avoid copying spec counts and runtime estimates into several documents.
 | An edit during development | `npm run verify:quick` | Types, vocabulary, coverage and punctuation; no browser or build |
 | Pure logic | `npm run verify:pure -- tests/layer-order.spec.ts` | Selected source-level cases; omit the selector for the whole pure lane |
 | Source checks without a bundle | `npm run gate:nobuild` | Types and all source checks, including the pure lane |
-| A browser behavior | `npx playwright test --workers=1 tests/boot.spec.ts` | Fresh production build and the selected cases |
+| A red that reading the code cannot explain | `npx playwright test --workers=1 -g "case title"` | Fresh production build and the one case, with every diagnostic in the first run |
 | A finished block's own specs, once before the full dispatch | `npm run test:touched` | The specs `npm run spec:impact` lists as touched; refuses none, more than 12, or a held port 4173 or 4180 |
 | Cross-cutting build/configuration changes | `npm run gate` | Fresh build, artifact budgets and all source checks |
-| Full suite locally, when GitHub is unavailable | `npm run test:serial` | All three assertion projects, one worker; excludes the measurement project |
+| The full suite | `gh workflow run validate.yml --ref <branch>` | GitHub's fourteen shards; `npm run test:serial` is not a local step |
 
 The full browser suite normally runs on GitHub, in the Validate workflow, which
 slices it into fourteen shards. On a branch without an open pull request, start
 it with `gh workflow run validate.yml --ref <branch>`; only that full run
 decides a landing. A pull request that changes only `workers/proxy/` (the
 weekly Dependabot Worker bumps) skips the browser job and is judged by the gate
-and the Worker checks. A local `test:serial` takes more than an hour and is the
-fallback, not a routine step.
+and the Worker checks. A local `test:serial` takes more than an hour and is not
+a local step: the full suite is GitHub's.
 
 `npm test` runs the same three assertion projects with the configured worker
 count. Keep one browser runner at a time. The pure lane starts no browser or
@@ -90,8 +90,14 @@ touched specs: specs the block changed, specs with such a mention, and specs
 that import a changed `src/` module or test helper directly (the measurement
 specs are left out). It catches text deleted everywhere, not text the block
 moved or reworded: a spec asserting a label that now reads differently still
-needs the targeted run to find it. It exits 1 while a counted mention remains;
-`--list` prints only the touched paths. In order:
+needs the targeted run to find it. It also adds a few fixed specs when the
+block touches shared style or markup (`src/styles/`, `index.html`), a map key,
+legend, dock or minimap component, or the test seam (`tests/helpers.ts`,
+`tests/offline-test.ts`, `playwright.config.ts`), and prints which rule added
+each; the sets (`CROSS_CUTTING` in `scripts/spec-impact.mjs`) come from the
+0.7.7 reds, six specs in all, and are a guess at ownership, not a dependency
+graph. It exits 1 while a counted mention remains; `--list` prints only the
+touched paths. In order:
 
 1. Partway through a block, a targeted GitHub run of only those specs, about
    five minutes: push, then `npm run spec:impact -- --dispatch` (add
@@ -384,8 +390,11 @@ runs show no new flake names and no rise in the existing rate.
 
 A third input, `specs` (2026-10-19), is the targeted run described under
 "Iteration and session closeout": each shard adds `--pass-with-no-tests` and
-the named files, after checking each file exists (a blank list fails rather
-than running everything under the targeted name). Empty, as on every pull
+the named files, after checking each is an existing `tests/*.spec.ts` path (a
+blank list fails rather than running everything under the targeted name), and
+a `collect` job lists the named files across the three matrix projects and
+fails the run when that finds no test at all. `workers` and `retries` must be
+small whole numbers (`retries` may be empty). Empty, as on every pull
 request, deploy call and the weekly schedule, the command is unchanged.
 
 Every shard writes a job summary (passed, failed, flaky, skipped, and the

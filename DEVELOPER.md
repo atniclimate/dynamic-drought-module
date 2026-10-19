@@ -439,9 +439,8 @@ as intended, and it closes automatically on the first run after the publish.
 
 Choose checks using the [local verification ladder](tests/README.md#the-local-verification-ladder).
 Run focused source or browser tests while editing, `npm run gate` for build and
-cross-cutting configuration changes, and optionally `npm run verify:smoke` when a
-wider local signal is wanted before pushing. Smoke owns its gate and serves that
-gate's single fresh build.
+cross-cutting configuration changes. `npm run verify:smoke` is GitHub's, not a
+local step.
 
 The full browser suite runs on GitHub in the `Validate` workflow; start it on a
 branch without an open pull request with `gh workflow run validate.yml --ref
@@ -450,11 +449,13 @@ targeted run of the block's own specs (`npm run spec:impact -- --dispatch`
 after a push; it refuses an empty list, which would be the full run) answers
 in about five minutes and its run name says it is not a landing run. Before
 the full dispatch, `npm run spec:impact` must show no spec still naming text
-the block deleted everywhere (it does not catch text moved or reworded), and
+the block deleted everywhere (it does not catch text moved or reworded; its
+fixed cross-cutting specs for shared style, key, dock, minimap and test-seam
+changes are a guess at ownership, not a dependency graph), and
 `npm run test:touched` runs the touched specs once locally; the testing guide's
 "Iteration and session closeout" has the order. A pull request that changes
-only `workers/proxy/` skips the browser job. Reserve a local `npm run test:serial` (more than an hour) for when
-GitHub is unavailable. Ending a session does not trigger another full suite.
+only `workers/proxy/` skips the browser job. A local `npm run test:serial` is
+not a local step. Ending a session does not trigger another full suite.
 Documentation-only and verification-tooling checks are scoped in the same
 ladder. Report exactly what ran and what remains unverified.
 
@@ -680,8 +681,7 @@ block and once for the frozen release candidate, never on every push; a
 targeted run of the block's own specs may come partway through a block, and it
 never counts for a landing. Before a release, the full suite must be green on GitHub for the
 frozen release candidate, and one independent review covers the release's whole
-diff. A local `npm run test:serial` is the fallback when GitHub is unavailable.
-`Validate` is the only check that must be green on the pull request, and
+diff. `Validate` is the only check that must be green on the pull request, and
 `deploy` and `verify-live` are consequences of the merge rather than gates on
 it.
 

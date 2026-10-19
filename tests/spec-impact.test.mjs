@@ -7,7 +7,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import {
+  CROSS_CUTTING,
   MAX_LOCAL_SPECS,
+  crossCuttingSpecs,
   dispatchRefusal,
   findMentions,
   importsChanged,
@@ -129,6 +131,44 @@ test('touched specs: changed, mentioning, or directly importing a changed module
       measureOnly: new Set(['tests/flow-measure.spec.ts'])
     }),
     ['tests/a.spec.ts', 'tests/b.spec.ts', 'tests/c.spec.ts', 'tests/d.spec.ts', 'tests/e.spec.ts']
+  );
+});
+
+test('cross-cutting rules: shared style, key and dock components, minimap and the test seam add fixed specs', () => {
+  const all = new Set(CROSS_CUTTING.flatMap(({ specs }) => specs));
+  const names = (changed) => Object.fromEntries(crossCuttingSpecs(changed, all));
+  assert.deepEqual(crossCuttingSpecs(['src/ui/panel.ts', 'tests/a.spec.ts'], all).size, 0);
+  assert.deepEqual(names(['src/styles/app.css']), {
+    'tests/horizon-chips.spec.ts': ['shared style or markup'],
+    'tests/interface-responsive.spec.ts': ['shared style or markup'],
+    'tests/s4-shell.spec.ts': ['shared style or markup'],
+    'tests/telemetry-hover-tokens.spec.ts': ['shared style or markup']
+  });
+  assert.deepEqual(Object.keys(names(['index.html'])).sort(), Object.keys(names(['src/styles/app.css'])).sort());
+  for (const path of ['src/ui/map-key.ts', 'src/ui/legend-registry.ts', 'src/ui/island/shell.tsx']) {
+    assert.deepEqual(Object.keys(names([path])).sort(), ['tests/flow-wire.spec.ts', 'tests/interface-responsive.spec.ts', 'tests/s4-shell.spec.ts'], path);
+  }
+  assert.deepEqual(Object.keys(names(['src/ui/island/minimap.tsx'])), ['tests/s4-minimap.spec.ts']);
+  assert.deepEqual(Object.keys(names(['src/state/minimap-wildfire.ts'])), ['tests/s4-minimap.spec.ts']);
+  // The seam rule adds its set; a spec two rules pick names both.
+  assert.deepEqual(names(['playwright.config.ts', 'src/ui/island/minimap.tsx'])['tests/s4-minimap.spec.ts'], ['minimap component', 'shared test seam']);
+  for (const path of ['tests/helpers.ts', 'tests/offline-test.ts']) assert.ok(crossCuttingSpecs([path], all).size > 0, path);
+  // A rule's spec that does not exist at HEAD is dropped, not dispatched.
+  assert.equal(crossCuttingSpecs(['index.html'], new Set(['tests/s4-shell.spec.ts'])).size, 1);
+});
+
+test('cross-cutting rules stay small, name real non-measurement specs, and join touchedSpecs', () => {
+  const union = new Set(CROSS_CUTTING.flatMap(({ specs }) => specs));
+  assert.ok(union.size <= MAX_LOCAL_SPECS / 2, `${union.size} fixed specs`);
+  for (const { specs } of CROSS_CUTTING) assert.ok(specs.length <= 5);
+  const config = readFileSync(new URL('../playwright.config.ts', import.meta.url), 'utf8');
+  for (const path of union) {
+    assert.ok(path.endsWith('.spec.ts') && !measureSpecs(config).has(path), path);
+    readFileSync(new URL(`../${path}`, import.meta.url));
+  }
+  assert.deepEqual(
+    touchedSpecs({ changedSpecs: ['tests/z.spec.ts'], mentions: [], specs: [], changedModules: [], crossCutting: crossCuttingSpecs(['src/ui/island/minimap.tsx'], union) }),
+    ['tests/s4-minimap.spec.ts', 'tests/z.spec.ts']
   );
 });
 
