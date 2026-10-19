@@ -191,6 +191,9 @@ export function createWhpLayer(key: 'usfs-whp' | 'usfs-whp-classes', shaded: boo
     map.on('moveend', sync);
     releaseCoverageWatch = () => map.off('moveend', sync);
     return (state) => {
+      // A hidden layer (the Wildfire 3D drape stands in for it) requests no
+      // tiles, so a deadline verdict then is no evidence; keep the last one.
+      if (map.getLayoutProperty(LAYER_ID, 'visibility') === 'none') return;
       tile = state;
       sync();
     };

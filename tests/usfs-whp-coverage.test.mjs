@@ -70,6 +70,13 @@ class FakeMap {
   removeLayer(id) {
     this.layers.delete(id);
   }
+  getLayoutProperty(id, name) {
+    return this.layers.get(id)?.layout?.[name];
+  }
+  setLayoutProperty(id, name, value) {
+    const layer = this.layers.get(id);
+    layer.layout = { ...layer.layout, [name]: value };
+  }
   on(event, handler) {
     const set = this.listeners.get(event) ?? new Set();
     set.add(handler);
@@ -145,6 +152,28 @@ test('Fuel risk is white-shaded on a flat map; the classes row keeps issuer colo
     registry.deactivate('usfs-whp');
     registry.deactivate('usfs-whp-classes');
   }
+});
+
+test('a layer the 3D drape hides before its first frame is not reported unavailable at the deadline', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  await withMap((map) => {
+    // whp-3d.ts hides the flat layer in the same task it is added; a hidden source requests no tiles.
+    map.setLayoutProperty('usfs-whp', 'visibility', 'none');
+    t.mock.timers.tick(10_000);
+    assert.notEqual(registry.getStatus('usfs-whp'), 'error');
+    // Given back by the drape, its first tile closes the open cycle as ready.
+    map.setLayoutProperty('usfs-whp', 'visibility', 'visible');
+    map.loadEmptyTile();
+    assert.equal(registry.getStatus('usfs-whp'), 'ready');
+  });
+});
+
+test('a visible layer with no tile at the deadline still reads unavailable', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  await withMap(() => {
+    t.mock.timers.tick(10_000);
+    assert.equal(registry.getStatus('usfs-whp'), 'error');
+  });
 });
 
 test('deactivate drops the move listener', async () => {
