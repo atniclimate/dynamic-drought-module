@@ -459,9 +459,17 @@ test('HMS smoke classes pin the owner taupe ramp, distinct swatches, darker and 
   assert.ok(lum('#aa9c8d') > lum('#908477') && lum('#908477') > lum('#766d62'), 'swatches darken with density');
 });
 test('the smoke legend draws each class as the map does: its colour at its fill opacity over the map ground', () => {
+  // Independently preblended sRGB channels, rounded to ordinary 8-bit hex so
+  // inline backgrounds also work before browser support for color-mix().
+  const expectedSwatches = {
+    Light: '#0f171d',
+    Medium: '#192024',
+    Heavy: '#282b2d',
+    Unknown: '#0d1821'
+  };
   for (const k of ['Light', 'Medium', 'Heavy', 'Unknown']) {
-    const { color, opacity, legendLabel } = wildfire.HMS_DENSITY_PRESENTATION[k];
-    assert.equal(wildfire.hmsLegendSwatch(k), `color-mix(in srgb, ${color} ${Math.round(opacity * 100)}%, #010B13)`);
+    const { legendLabel } = wildfire.HMS_DENSITY_PRESENTATION[k];
+    assert.equal(wildfire.hmsLegendSwatch(k), expectedSwatches[k]);
     assert.doesNotMatch(legendLabel, /veil|%/);
   }
   assert.deepEqual(['Light', 'Medium', 'Heavy'].map(k => wildfire.HMS_DENSITY_PRESENTATION[k].legendLabel), ['Light smoke', 'Medium smoke', 'Heavy smoke']);

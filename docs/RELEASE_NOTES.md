@@ -25,6 +25,7 @@ Startup and delivery reliability.
   the published site's origin when checking Worker access. The CI-input tests also run on
   native Windows with Git Bash. Build dependencies receive compatible security updates.
 - 2026-10-19: the terrain Worker advertises its supported methods when refusing a request.
+- 2026-10-19: smoke legend colors also render in the oldest supported browsers.
 
 - 2026-10-19: three browser tests that passed only on a second try now hold on the first: the
   map-chunk failure case reads the built file from disk instead of fetching it a second time,

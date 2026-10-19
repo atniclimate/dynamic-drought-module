@@ -472,7 +472,8 @@ export const HMS_DENSITY_PRESENTATION = {
 /** A smoke legend swatch as the map draws the class: its colour at its fill opacity over the map's dark ground. */
 export function hmsLegendSwatch(densityClass: HmsDensityClass): string {
   const { color, opacity } = HMS_DENSITY_PRESENTATION[densityClass];
-  return `color-mix(in srgb, ${color} ${Math.round(opacity * 100)}%, ${MAP_GROUND_COLOR})`;
+  // Inline legend styles bypass CSS lowering for our supported older browsers.
+  return interpolateHexColor(MAP_GROUND_COLOR, color, opacity);
 }
 
 /** The smoke plumes' note; reads in the Impact Briefing (src/ui/map-technical-information.ts), not in the legend. */

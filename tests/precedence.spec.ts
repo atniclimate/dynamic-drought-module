@@ -8,6 +8,18 @@ import {
   waitForLayerSettled
 } from './helpers';
 
+// Real persisted-restore proof needs full Chromium's headless mode and an enabled cache.
+test.use({
+  channel: 'chromium',
+  launchOptions: {
+    ignoreDefaultArgs: ['--disable-back-forward-cache'],
+    args: [
+      '--use-gl=angle', '--use-angle=swiftshader',
+      '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'
+    ]
+  }
+});
+
 /**
  * S30D D1's precedence spec (DDM-P10-T13, DR-109; the "precedence spec" named
  * in the checkpoint's own gate). Pins the URL, Reset and embed precedence
@@ -866,16 +878,17 @@ test.describe('D1 M7: the sidebar= key (DDM-P10-T07, DR-139)', () => {
     // The Codex M7 review, F2 (review:96, adopted at disposition:84): a REAL
     // persisted restore, observed through a trusted pageshow that an init
     // script records, with the document's identity retained across the away
-    // navigation. Playwright launches Chromium with
-    // --disable-back-forward-cache (playwright-core's default switches), so
-    // a runner that reloads the document on Back instead is DETECTED here and
-    // the case is skipped with that reason: an unsupported result, never a
-    // pass on a synthetic event.
+    // navigation. This file filters Playwright's default cache-disabling
+    // switch; a reload fails the identity assertion instead of skipping proof.
     interface DocumentRead {
       readonly id: string | null;
       readonly path: string;
       readonly restores: number;
     }
+    const cacheMisses: unknown[] = [];
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Page.enable');
+    cdp.on('Page.backForwardCacheNotUsed', (event) => cacheMisses.push(event));
     await page.addInitScript(() => {
       const w = window as unknown as {
         __ddmDocId: string;
@@ -920,7 +933,7 @@ test.describe('D1 M7: the sidebar= key (DDM-P10-T07, DR-139)', () => {
     const booted = await readDocument();
     expect(booted?.id, 'the init script stamped the app document').toBeTruthy();
 
-    /** Away, the caller's viewport change, then Back; skip if not restored. */
+    /** Away, the caller's viewport change, then prove the original document returned. */
     const awayAndBack = async (
       whileAway: () => Promise<void>,
       restoresExpected: number,
@@ -937,13 +950,16 @@ test.describe('D1 M7: the sidebar= key (DDM-P10-T07, DR-139)', () => {
         .toBe(appPath);
       const back = await readDocument();
       const restored = back !== null && back.id === booted?.id;
-      test.skip(
-        !restored,
-        'UNSUPPORTED: this runner reloaded the document on Back instead of restoring it from ' +
-          'the back-forward cache (Playwright launches Chromium with --disable-back-forward-cache). ' +
-          'Real persisted-restore verification remains outstanding; the synthetic ' +
-          'persisted-pageshow reconciliation test covers only the handler.'
-      );
+      const notRestoredReasons = restored ? null : await page.evaluate(() => {
+        const navigation = performance.getEntriesByType('navigation')[0] as
+          | (PerformanceNavigationTiming & { notRestoredReasons?: unknown })
+          | undefined;
+        return navigation?.notRestoredReasons ?? null;
+      });
+      expect(
+        restored,
+        `${moment}: the original document must restore; reasons=${JSON.stringify(notRestoredReasons)}; native=${JSON.stringify(cacheMisses)}`
+      ).toBe(true);
       await expect
         .poll(async () => (await readDocument())?.restores ?? -1, {
           message: `${moment}: a trusted persisted pageshow`

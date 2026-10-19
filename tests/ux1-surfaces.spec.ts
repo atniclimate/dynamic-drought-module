@@ -104,15 +104,10 @@ test.describe('UX-1 role groups and exclusive surfaces', () => {
     await expect(layerCheckbox(page, 'telemetry')).toBeChecked();
   });
 
-  // Quarantined: depends on a live HeatRisk fetch (contract at
-  // tests/url-state.spec.ts:137) that fails silently and nondeterministically,
-  // so this assertion flakes independent of any change under test. Matches the
-  // decision register's known_pre_existing_red
-  // (planning/decisions/2026-09-02-decision-register.yaml:186-195). Pending a
-  // network-expecting lane; see SESSION_ROSTER.yaml owner_calls for the T1 to
-  // move it there.
-  test.skip('an old multi-surface link keeps the first surface named (heatrisk before usdm)', async ({ page }) => {
+  test('an old multi-surface link keeps the first surface named (heatrisk before usdm)', async ({ page }) => {
+    await stubHeatRiskCatalog(page);
     await gotoApp(page, '?layers=heatrisk,usdm,tribal');
+    await expect(layerPill(page, 'heatrisk')).toHaveText(PILL.live);
 
     await expect(layerCheckbox(page, 'heatrisk')).toBeChecked();
     await expect(layerCheckbox(page, 'usdm')).not.toBeChecked();
