@@ -5,10 +5,8 @@
  *
  * THE RULE. On the desktop shell (721 px and wider, outside an embed) the
  * top-right column is a grid of four fixed slots that never move: Reset,
- * SAT, Help (with the Map information drawer it opens), then a reserved
- * Share slot that Share fills whenever the Brief shell has not rehosted it
- * into the sidebar foot. A rehost empties slot 4's box; nothing else moves
- * (the 2026-09-13 stable-position rule). Above 1024 px each slot is a
+ * SAT, Help (with the Map information drawer it opens), then Share, which
+ * fills slot 4 in every view (the 2026-09-13 stable-position rule). Above 1024 px each slot is a
  * square-edged, labelled cell (R1 a): a fixed 20 px icon column, then the
  * word. Across the 721 to 1024 px tablet band it is a 44 px icon square
  * with the word visually hidden (owner ruling DR-153; MAP_CHROME_TABLET_BAND).
@@ -157,8 +155,8 @@ export interface MapChromeSeat {
   /** The rectangle in `#map-container` px, W and H the container's size. */
   readonly formula: string;
   /**
-   * False only for Share: the desktop Brief shell rehosts it into the
-   * sidebar foot, which leaves slot 4's box empty and moves nothing.
+   * Every slot holds its control on the desktop shell; the field stays so
+   * the seat spec can name a future exception.
    */
   readonly alwaysSeated: boolean;
 }
@@ -201,7 +199,7 @@ export const MAP_CHROME_SEATS: readonly MapChromeSeat[] = [
     controlSelector: '.map-overlay-controls > #share-btn',
     word: 'Share view',
     formula: SLOT_FORMULA,
-    alwaysSeated: false
+    alwaysSeated: true
   }
 ];
 
