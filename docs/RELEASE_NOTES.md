@@ -16,6 +16,57 @@
 - 2026-09-28: the fire perimeter and smoke plume checkboxes now each control
   only their own layer (the Wildfire mode still shows both).
 
+## v0.7.7
+
+The owner's live review of 2026-10-19, start and getting around, with presentation notes on
+every mode, plus the fixes the review's checks found.
+
+- 2026-10-19: a full-site link opens Brief unless it says `view=console`. An embed that names
+  layers, a region, a mode, an ocean or a framing still opens the map view it did before.
+- 2026-10-19: Reset returns to the default view: the national framing (the Pacific in ENSO; an
+  embed's own region), the mode's base map, and the sidebar open on desktop. Mode, horizon and
+  layers stay. This replaces the 2026-09-27 behaviour noted under v0.8.0, where Reset returned
+  to whatever region was selected.
+- 2026-10-19: the Quick views chip row is removed; each mode opens with its own layers. The
+  phone hazard rail is unchanged.
+- 2026-10-19: the More time button is removed. Console keeps the full time rail; a link that
+  carries a past week or day still restores it. Entering Brief pauses ocean temperature playback.
+- 2026-10-19: Share view sits at the top right of the map in Brief, as in Console.
+- 2026-10-19: sidebar controls hold still between modes. In Brief, Conditions in view sits at
+  the bottom beside Layer legends in every mode; in Console it sits below the mode panel.
+- 2026-10-19: the minimap fills its card, has no viewport rectangle, places the Hawaii inset
+  nearer the mainland, and makes the Pacific and Atlantic clickable (each opens ENSO on that
+  ocean). The Arctic stays in the framing list.
+- 2026-10-19: Wildfire's Fuel risk is white shading of increasing opacity on every map, and
+  Wildfire stays the mode with Fuel risk on, at every horizon and in a shared link; entering 3D
+  swaps it for the masked 3D drape and hands it back on leaving. The USFS colours are a Layer
+  Studio row, "Wildfire Hazard Potential (USFS colors)". The USFS service now paints its no-data
+  areas black; both rows clear them, so no tile goes missing and no dark wash covers the ocean
+  or Canada.
+- 2026-10-19: smoke plumes draw in a warm taupe ramp, darker with density, and the legend draws
+  each class as the map does.
+- 2026-10-19: Extreme Heat no longer draws HeatRisk's "Little to None" class, so the heat
+  classes stand out; their edges are slightly softened.
+- 2026-10-19: the Drought outlook (Near Term and Long Range) is a solid colour fill in the
+  issuer's categories.
+- 2026-10-19: the map key names each National Weather Service heat product once (Extreme Heat
+  Warning, Extreme Heat Watch), shows the read time as "As of 1:14 AM, Oct 19", and moves its
+  coverage and timing notes to Technical information, with the fire-perimeter and currents notes
+  and the reasons a time horizon is unavailable.
+- 2026-10-19: in ENSO, the light moving paths take the inverse colour of the map beneath them
+  with a dark edge, and the Nino 3.4 label stays above them. The ENSO key has buttons that open
+  the Nino 3.4 box and each active storm from the keyboard.
+- 2026-10-19: search lists Tribal land areas first, then States, Cities and Layers. It finds
+  Tribes the BIA land-area service does not cover, from the Census Bureau's Tribal areas, such
+  as The Muscogee (Creek) Nation, and shows the Nation's formal name when picked. Major cities
+  come from the place names the map already ships. Enter opens a row only when the typed name
+  matches it unambiguously.
+- 2026-10-19: NOAA's satellite map server stopped updating on 2026-10-08. The SAT button says
+  so when pressed; a mode that opens on satellite falls back to the default map quietly, and the
+  app does not look again for ten minutes.
+- 2026-10-19: the ocean currents frame is rebuilt from the 2026-10-19 00Z NOAA RTOFS run; it
+  reads as current until 2026-11-02 01:00 UTC.
+
 ## v0.7.6
 
 - 2026-10-17: shared links include a test-preview screenshot and an ATNI Climate
