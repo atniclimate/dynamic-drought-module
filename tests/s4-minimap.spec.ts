@@ -925,6 +925,10 @@ test.describe('S4b minimap: compact height band geometry gating (DDM-P11-T01 cla
     await door.scrollIntoViewIfNeeded();
     await door.click();
     await expect(popover).toBeVisible();
+    // Focus lands on the current framing, never on an ocean zone (Enter there switches to ENSO).
+    await expect(
+      popover.locator('[role="radiogroup"] [role="radio"][tabindex="0"]'),
+    ).toBeFocused();
     await expect(popover.locator('svg.shell-minimap-drawing')).toHaveCount(1);
     await expect(
       popover.locator('svg.shell-minimap-drawing path.shell-minimap-mainland'),

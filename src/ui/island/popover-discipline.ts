@@ -2,8 +2,8 @@
  * Shared discipline for the shell's compact "Map areas" minimap popover
  * (the S4c focus-restoration contract):
  *
- *   - FOCUS: opening moves focus to the first operable control inside
- *     the card; closing restores focus to the door that opened it, or to
+ *   - FOCUS: opening moves focus to the framing radiogroup's current stop
+ *     (else the first operable control inside the card); closing restores focus to the door that opened it, or to
  *     the given fallback when the door has unmounted (a spec teardown
  *     can re-render the compact row without its button; focus must never
  *     silently drop to the document body).
@@ -37,9 +37,12 @@ export function wireShellPopover(
     // (W2-D9) so it matches the app's other aria-expanded disclosures.
     getDoor()?.setAttribute('aria-expanded', String(state === 'open'));
     if (state === 'open') {
-      pop
-        .querySelector<HTMLElement>('button:not([disabled]), input, [tabindex="0"]')
-        ?.focus();
+      // The framing radiogroup's roving stop first: the ocean zones precede
+      // it in the DOM and Enter on one switches the display to ENSO.
+      (
+        pop.querySelector<HTMLElement>('[role="radiogroup"] [tabindex="0"]') ??
+        pop.querySelector<HTMLElement>('button:not([disabled]), input, [tabindex="0"]')
+      )?.focus();
     } else {
       const door = getDoor();
       if (door && door.isConnected) {

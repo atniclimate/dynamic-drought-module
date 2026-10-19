@@ -77,6 +77,23 @@ test('the flag expires after 400 ms with no click', (t) => {
   assert.equal(fire('click').prevented, false);
 });
 
+test('opening focuses the framing radiogroup stop, not an earlier ocean zone', () => {
+  globalThis.document = { addEventListener() {}, removeEventListener() {} };
+  let focused = null;
+  const el = (name) => ({ focus: () => (focused = name) });
+  // Document order: the ocean paths (tabindex 0) precede the radiogroup.
+  const ocean = el('ocean'), radio = el('radio');
+  let onToggle;
+  const pop = {
+    addEventListener: (type, fn) => type === 'toggle' && (onToggle = fn),
+    removeEventListener() {},
+    querySelector: (sel) => (sel.startsWith('[role="radiogroup"]') ? radio : ocean)
+  };
+  wireShellPopover(pop, () => null);
+  onToggle({ newState: 'open' });
+  assert.equal(focused, 'radio');
+});
+
 test('the disposer removes every listener', () => {
   const { dispose, listeners } = setup();
   dispose();
