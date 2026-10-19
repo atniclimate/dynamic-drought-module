@@ -11,9 +11,9 @@
  * ENSO later restores the temporal register; leaving ENSO restores the
  * camera from before entering (F9, src/map/enso-camera.ts).
  *
- * Since 2026-10-13 the ocean views are chosen from the 'Ocean views' group
- * of the framing dropdown under the minimap (src/ui/sidebar.ts); the
- * minimap only highlights the active ocean shape.
+ * The Pacific and Atlantic zones on the minimap are clickable; all three
+ * views stay in the framing dropdown's 'Ocean views' group
+ * (src/ui/sidebar.ts).
  *
  * PROVENANCE (D-0.7.0-051): these zones are SCHEMATIC UI AFFORDANCES.
  * They claim nothing about real ocean boundaries; they exist so a
@@ -85,3 +85,9 @@ export const OCEANS: Record<OceanKey, OceanDef> = {
 };
 
 export const OCEAN_KEYS: readonly OceanKey[] = ['pacific', 'arctic', 'atlantic'];
+
+/** Ocean zones the minimap draws and makes clickable. The Arctic stays a
+ * dropdown and deep-link view only: the minimap is for the Pacific and
+ * Atlantic (owner, 2026-10-19). */
+export const MINIMAP_OCEAN_KEYS = ['pacific', 'atlantic'] as const satisfies readonly OceanKey[];
+export type MinimapOceanKey = (typeof MINIMAP_OCEAN_KEYS)[number];

@@ -122,10 +122,14 @@ test.describe('S4b minimap', () => {
     );
     await expect(
       page.locator('.shell-minimap-map .shell-minimap-drawing'),
-    ).toHaveAttribute('viewBox', '0 0 660 348');
+    ).toHaveAttribute('viewBox', '0 49 660 299');
     await expect(
       page.locator('.shell-minimap-map .shell-minimap-drawing'),
-    ).toHaveAttribute('data-geographic-extent', '-188,14,-52,84');
+    ).toHaveAttribute('data-geographic-extent', '-188,14,-52,74');
+    // No viewport rectangle (owner, 2026-10-19).
+    await expect(
+      page.locator('.shell-minimap-map .shell-minimap-viewport'),
+    ).toHaveCount(0);
     await expect(
       page.locator('.shell-minimap-map .shell-minimap-hawaii-label'),
     ).toHaveText('Hawaii (enlarged)');
@@ -384,8 +388,8 @@ test.describe('S4b minimap', () => {
         };
       });
 
-    expect(proportions.left).toBeCloseTo(0.027, 2);
-    expect(proportions.top).toBeCloseTo(0.567, 2);
+    expect(proportions.left).toBeCloseTo(0.16, 2);
+    expect(proportions.top).toBeCloseTo(0.38, 2);
     expect(proportions.width).toBeCloseTo(0.257, 2);
     expect(proportions.height).toBeCloseTo(0.39, 2);
     await expect(
@@ -530,11 +534,12 @@ test.describe('S4b minimap', () => {
     await gotoApp(page, '?view=brief&framing=pacific-coast');
     const minimap = page.locator('.shell-minimap-map');
     const select = page.locator('#region-select');
-    // The card no longer carries ocean buttons (2026-10-13); it only
-    // highlights the active ocean shape, in OCEAN_KEYS order.
-    await expect(minimap.locator('button[data-ocean]')).toHaveCount(0);
+    // The card draws clickable Pacific and Atlantic zones (owner,
+    // 2026-10-19); the Arctic is a dropdown and deep-link view only.
     const oceanShape = (key: string) =>
-      minimap.locator('.shell-minimap-ocean').nth(['pacific', 'arctic', 'atlantic'].indexOf(key));
+      minimap.locator(`[data-ocean="${key}"]`);
+    await expect(minimap.locator('[data-ocean]')).toHaveCount(2);
+    await expect(oceanShape('arctic')).toHaveCount(0);
     await expect(
       select.locator('optgroup[label="Ocean views"] option'),
     ).toHaveText(['Pacific Ocean', 'Arctic Ocean', 'Atlantic Ocean']);
@@ -581,15 +586,52 @@ test.describe('S4b minimap', () => {
       .poll(async () => new URLSearchParams(await search(page)).get('ocean'))
       .toBe('arctic');
     await expect(select).toHaveValue('ocean:arctic');
-    await expect(oceanShape('arctic')).toHaveClass(/\bactive\b/);
+    await expect(minimap.locator('.shell-minimap-ocean.active')).toHaveCount(0);
 
     await page.reload({ waitUntil: 'domcontentloaded' });
     await expect(select).toHaveValue('ocean:arctic');
-    await expect(oceanShape('arctic')).toHaveClass(/\bactive\b/);
+    await expect(minimap.locator('.shell-minimap-ocean.active')).toHaveCount(0);
     const restored = new URLSearchParams(await search(page));
     expect(restored.get('cluster')).toBe('enso');
     expect(restored.get('ocean')).toBe('arctic');
     expect(restored.get('framing')).toBe('pacific-coast');
+  });
+
+  test('the minimap Pacific and Atlantic zones enter ENSO and fit their ocean by keyboard and pointer', async ({
+    page,
+  }) => {
+    await gotoApp(page, '?view=brief&framing=pacific-coast');
+    const pacific = page.locator('#shell-minimap-ocean-pacific');
+    const atlantic = page.locator('#shell-minimap-ocean-atlantic');
+    await expect(pacific).toHaveAttribute('role', 'button');
+    await expect(pacific).toHaveAttribute('aria-pressed', 'false');
+
+    await pacific.focus();
+    await page.keyboard.press('Enter');
+    await expect
+      .poll(async () => {
+        const params = new URLSearchParams(await search(page));
+        return {
+          cluster: params.get('cluster'),
+          ocean: params.get('ocean'),
+          framing: params.get('framing'),
+        };
+      })
+      .toEqual({
+        cluster: 'enso',
+        ocean: 'pacific',
+        framing: 'pacific-coast',
+      });
+    await expect(pacific).toHaveAttribute('aria-pressed', 'true');
+
+    // The zone's bbox centre falls on land or the Hawaii box, so a plain
+    // click() would fail Playwright's hit check; dispatch on the path.
+    await atlantic.dispatchEvent('click');
+    await expect
+      .poll(async () => new URLSearchParams(await search(page)).get('ocean'))
+      .toBe('atlantic');
+    await expect(atlantic).toHaveAttribute('aria-pressed', 'true');
+    await expect(pacific).toHaveAttribute('aria-pressed', 'false');
   });
 
   test('ALL writes a restorable North America camera and survives reload', async ({
@@ -635,48 +677,37 @@ test.describe('S4b minimap', () => {
     expect(new URLSearchParams(await search(page)).get('region')).toBeNull();
   });
 
-  test('the viewport footprint tracks the main map camera and stays inside the card (DDM-P11-T01 clause 2)', async ({
+  test('no viewport rectangle is drawn; the canvas still carries the main map camera bounds', async ({
     page,
   }) => {
-    // Reduced motion: the footprint jumps to the new bounds with fitBounds's
+    // Reduced motion: the camera jumps to the new bounds with fitBounds's
     // own animation skipped, rather than this test racing an easing curve.
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await gotoApp(page);
     const minimap = page.locator('.shell-minimap-map');
-    const footprint = minimap.locator('#shell-minimap-viewport');
-    await expect(footprint).toHaveCount(1);
-    await expect(footprint).toHaveAttribute('data-viewport', 'true');
+    // The owner removed the rectangle (2026-10-19); the bounds stay as a
+    // camera seam on the canvas.
+    await expect(minimap.locator('.shell-minimap-viewport')).toHaveCount(0);
+    const canvas = minimap.locator('.shell-minimap-canvas');
+    await expect(canvas).toHaveAttribute('data-bounds', /^-?\d/);
 
-    const readBox = () =>
-      footprint.evaluate((el) => ({
-        x: Number(el.getAttribute('x')),
-        y: Number(el.getAttribute('y')),
-        width: Number(el.getAttribute('width')),
-        height: Number(el.getAttribute('height')),
-      }));
-    const before = await readBox();
+    const readBounds = () => canvas.getAttribute('data-bounds');
+    const before = await readBounds();
 
     // The SAME `map` instance the minimap's own fit* helpers fly: clicking
     // a framing region is the established way this suite already moves the
     // main map's real camera (see the pointer-selection test above), so it
-    // doubles as this clause's camera-mover with no second map handle
+    // doubles as this test's camera-mover with no second map handle
     // needed.
     await minimap.locator('[data-framing="arid-west"]').click();
     await page.waitForFunction(() =>
       window.location.search.includes('framing=arid-west'),
     );
 
-    await expect.poll(readBox).not.toEqual(before);
-    const after = await readBox();
-    // Stays inside the card: the drawing plane's own viewBox (the boot
-    // test above pins it to "0 0 660 348").
-    expect(after.x).toBeGreaterThanOrEqual(0);
-    expect(after.y).toBeGreaterThanOrEqual(0);
-    expect(after.x + after.width).toBeLessThanOrEqual(660);
-    expect(after.y + after.height).toBeLessThanOrEqual(348);
-    // Feedback only: the click already committed framing=arid-west above;
-    // the footprint reflecting the SAME camera does not itself write a
-    // second, competing claim.
+    await expect.poll(readBounds).not.toEqual(before);
+    await expect(minimap.locator('.shell-minimap-viewport')).toHaveCount(0);
+    // Read only: the click already committed framing=arid-west above;
+    // the bounds reflecting the SAME camera do not write a second claim.
     expect(new URLSearchParams(await search(page)).get('framing')).toBe(
       'arid-west',
     );

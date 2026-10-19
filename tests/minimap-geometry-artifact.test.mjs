@@ -2,6 +2,13 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
+import {
+  FRAMING_SHAPES,
+  FRAMING_SUPPLEMENTAL_SHAPES,
+  MINIMAP_VIEW_NORTH,
+} from '../src/config/framing-shapes.ts';
+import { MINIMAP_OCEAN_KEYS, OCEAN_KEYS, OCEANS } from '../src/config/oceans.ts';
+
 const artifactUrl = new URL('../src/config/minimap-geometry.ts', import.meta.url);
 const artifactSource = await readFile(artifactUrl, 'utf8');
 const executableArtifact = artifactSource
@@ -156,4 +163,20 @@ test('contains exactly the eight selected physical lake anchors', () => {
     assert.match(path, /Z$/);
     assert.doesNotMatch(path, /NaN|Infinity/);
   }
+});
+
+test('the minimap view crops the unframed Arctic band but keeps every framing', () => {
+  const latitudes = [
+    ...Object.values(FRAMING_SHAPES),
+    ...Object.values(FRAMING_SUPPLEMENTAL_SHAPES).flat(),
+  ].flatMap((shape) => shape.map((point) => point[1]));
+  const north = Math.max(...latitudes);
+  assert.ok(north < MINIMAP_VIEW_NORTH, `framing vertex at ${north}N is cropped`);
+  assert.ok(MINIMAP_VIEW_NORTH - north <= 4, 'the card is filled to the northernmost framing');
+});
+
+test('the minimap offers the Pacific and Atlantic; the Arctic stays a dropdown and link view', () => {
+  assert.deepEqual([...MINIMAP_OCEAN_KEYS], ['pacific', 'atlantic']);
+  assert.ok(OCEAN_KEYS.includes('arctic'));
+  assert.ok('arctic' in OCEANS);
 });

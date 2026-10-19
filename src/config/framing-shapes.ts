@@ -627,6 +627,11 @@ export const FRAMING_ANALYSIS_AREAS: Readonly<
   mexico: [{ shape: analysisRectangle(-119, 14, -86, 33), countries: ['MX'] }],
 };
 
+/** The minimap's visible north edge: 2.5 degrees above the northernmost
+ * framing (71.5N) so the card spends no band on unframed Arctic (owner,
+ * 2026-10-19). */
+export const MINIMAP_VIEW_NORTH = 74;
+
 /** The Hawaii inset island blobs (true relative position; the dashed
  * inset frame is the hit target and carries the one ratified label). */
 export const HAWAII_ISLAND_SHAPES: readonly (readonly LonLat[])[] = [

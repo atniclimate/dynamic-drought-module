@@ -25,9 +25,11 @@
  * that describe THIS control: that is inherent control labeling read before
  * a commit, not a rendered popup, so it was left in place.
  *
- * The three ocean zones are schematic shapes, not geographic boundaries.
- * Since 2026-10-13 an ocean view is chosen from the framing dropdown under
- * the minimap (src/ui/sidebar.ts); this card only highlights the active one.
+ * The ocean zones are schematic shapes, not geographic boundaries. The
+ * Pacific and Atlantic are clickable here: each enters ENSO and fits its
+ * ocean camera, with its own Tab stop outside the framing radiogroup
+ * because it changes display and camera. The Arctic is reached from the
+ * framing dropdown (src/ui/sidebar.ts).
  *
  * Keyboard model: one radiogroup (ALL plus the nine framings) with the
  * repository's roving-tabindex idiom (the region radiogroup pattern),
@@ -53,12 +55,13 @@ import {
 } from '../../config/framings';
 import type { FramingKey, FramingSelection } from '../../config/framings';
 import type { HazardClusterKey } from '../../config/clusters';
-import { OCEANS, OCEAN_KEYS } from '../../config/oceans';
-import type { OceanKey } from '../../config/oceans';
+import { OCEANS, MINIMAP_OCEAN_KEYS } from '../../config/oceans';
+import type { MinimapOceanKey, OceanKey } from '../../config/oceans';
 import {
   FRAMING_SHAPES,
   FRAMING_SUPPLEMENTAL_SHAPES,
   HAWAII_ISLAND_SHAPES,
+  MINIMAP_VIEW_NORTH,
 } from '../../config/framing-shapes';
 import type { LonLat, MainlandFramingKey } from '../../config/framing-shapes';
 import {
@@ -97,11 +100,16 @@ import type {
   MinimapWildfireSummary,
 } from '../../state/minimap-wildfire';
 import type { EnsoPhaseLabel } from '../../impact/enso';
-import { fitAll, fitFraming } from '../../map/camera-fit';
+import { fitAll, fitFraming, fitOcean } from '../../map/camera-fit';
+import { requestBasemapMode } from '../../map/basemap-switcher';
+import { defaultBasemapFor } from '../../state/basemap-store';
+import { requestOcean } from '../../state/cluster-service';
 import { setMapTechnicalNote } from '../map-technical-information';
 
 /** The kit's ratified equirectangular drawing plane. The final 8 units
- * leave the small lower gutter carried by the production-candidate SVG. */
+ * leave the small lower gutter carried by the production-candidate SVG.
+ * The card shows it cropped at MINIMAP_VIEW_NORTH and stretched to fit
+ * (VIEW_BOX below). */
 const LON_MIN = -188;
 const LON_MAX = -52;
 const LAT_MIN = 14;
@@ -110,15 +118,17 @@ const DRAWING_WIDTH = 660;
 const DRAWING_SCALE = DRAWING_WIDTH / (LON_MAX - LON_MIN);
 const DRAWING_MAP_HEIGHT = Math.round((LAT_MAX - LAT_MIN) * DRAWING_SCALE);
 const DRAWING_HEIGHT = DRAWING_MAP_HEIGHT + 8;
+/** Crop the unframed Arctic band and stretch the rest to the card: the SVGs
+ * use preserveAspectRatio="none", and every stroke is non-scaling. */
+const VIEW_TOP = Math.round((LAT_MAX - MINIMAP_VIEW_NORTH) * DRAWING_SCALE);
+const VIEW_BOX = `0 ${VIEW_TOP} ${DRAWING_WIDTH} ${DRAWING_HEIGHT - VIEW_TOP}`;
 
 /** Schematic water affordances. Land controls render above these paths, so
  * the zones own only visible water. They are navigation hit areas, never
  * ocean-boundary geometry. */
-const OCEAN_ZONE_PATHS: Readonly<Record<OceanKey, string>> = {
+const OCEAN_ZONE_PATHS: Readonly<Record<MinimapOceanKey, string>> = {
   pacific:
     'M0,54C92,62 174,88 244,128C282,181 316,262 350,348H0Z',
-  arctic:
-    'M0,0H660V78C572,66 502,78 430,70C344,61 266,70 194,66C126,62 62,70 0,58Z',
   atlantic:
     'M660,54C573,63 511,91 462,136C424,190 389,271 350,348H660Z',
 };
@@ -154,40 +164,6 @@ function shapesPath(
   projector: Projector = project,
 ): string {
   return shapes.map((shape) => shapePath(shape, projector)).join('');
-}
-
-interface ViewportFootprintRect {
-  readonly x: number;
-  readonly y: number;
-  readonly width: number;
-  readonly height: number;
-}
-
-const VIEWPORT_FOOTPRINT_MIN_SIZE = 2;
-
-/**
- * Project the main map's current bounds into the drawing plane, clamped to
- * the authored equirectangular window (LON_MIN/MAX, LAT_MIN/MAX) so a
- * camera panned or zoomed past this schematic's coverage still "stays
- * inside the card" (clause 2) instead of drawing off it. This is feedback
- * only: nothing here writes to the framing store or the URL.
- */
-function viewportFootprintRect(
-  bounds: maplibregl.LngLatBounds | null,
-): ViewportFootprintRect | null {
-  if (!bounds) return null;
-  const clampLon = (lon: number): number =>
-    Math.min(LON_MAX, Math.max(LON_MIN, lon));
-  const clampLat = (lat: number): number =>
-    Math.min(LAT_MAX, Math.max(LAT_MIN, lat));
-  const [x1, y1] = project([clampLon(bounds.getWest()), clampLat(bounds.getNorth())]);
-  const [x2, y2] = project([clampLon(bounds.getEast()), clampLat(bounds.getSouth())]);
-  return {
-    x: Math.min(x1, x2),
-    y: Math.min(y1, y2),
-    width: Math.max(VIEWPORT_FOOTPRINT_MIN_SIZE, Math.abs(x2 - x1)),
-    height: Math.max(VIEWPORT_FOOTPRINT_MIN_SIZE, Math.abs(y2 - y1)),
-  };
 }
 
 const HAWAII_INSET_SCALE = 2.6;
@@ -634,6 +610,19 @@ function choose(map: maplibregl.Map, key: FramingKey | null): void {
   else fitFraming(map, key);
 }
 
+/** One ocean gesture enters ENSO and fits that ocean, the same three calls
+ * as the framing dropdown's ocean group (src/ui/sidebar.ts). */
+function chooseOcean(map: maplibregl.Map, key: OceanKey): void {
+  requestOcean(key);
+  requestBasemapMode(map, defaultBasemapFor('enso'));
+  fitOcean(map, key);
+}
+
+function oceanAccessibleName(key: OceanKey): string {
+  const ocean = OCEANS[key];
+  return `${ocean.label}. Switch to the El Nino / Southern Oscillation sea-surface-temperature anomaly display and fit this ocean camera. ${ocean.provenance}`;
+}
+
 function accessibleName(
   key: FramingKey,
   drought: MinimapDroughtSnapshot,
@@ -768,11 +757,8 @@ export function Minimap({
     ? compactHeightBand && popoverOpen
     : desktopMinimap && !compactHeightBand;
 
-  // Clause 2: a live footprint of the main map's own camera, independent
-  // of the committed framing selection. `map` is the SAME instance the
-  // fit* helpers already fly (choose above); this is the only
-  // place anything in this module listens to it move, so there is no
-  // second map-listener store to invent.
+  // Camera seam only: the main map's bounds as data-bounds on the canvas
+  // (the s4-shell refit cases read it); nothing is drawn (owner, 2026-10-19).
   const [viewportBounds, setViewportBounds] = useState<maplibregl.LngLatBounds | null>(
     () => map.getBounds(),
   );
@@ -962,9 +948,6 @@ export function Minimap({
   useEffect(() => {
     onNoteChange?.(framingNote);
   }, [framingNote, onNoteChange]);
-  const viewportRect = geometryVisible
-    ? viewportFootprintRect(viewportBounds)
-    : null;
 
   return (
     <div class="shell-minimap" ref={rootRef}>
@@ -1021,25 +1004,46 @@ export function Minimap({
             ? (drought.month ?? undefined)
             : undefined
         }
+        data-bounds={viewportBounds
+          ? [
+              viewportBounds.getWest(),
+              viewportBounds.getSouth(),
+              viewportBounds.getEast(),
+              viewportBounds.getNorth(),
+            ]
+              .map((value) => value.toFixed(4))
+              .join(',')
+          : undefined}
       >
         {geometryVisible && (
           <svg
             class="shell-minimap-oceans"
-            viewBox={`0 0 ${DRAWING_WIDTH} ${DRAWING_HEIGHT}`}
-            preserveAspectRatio="xMidYMid meet"
-            aria-hidden="true"
+            viewBox={VIEW_BOX}
+            preserveAspectRatio="none"
+            role="group"
+            aria-label="Ocean views"
             focusable="false"
           >
-            {OCEAN_KEYS.map((key) => {
-              return (
-                <path
-                  key={key}
-                  class={`shell-minimap-ocean${activeOcean === key ? ' active' : ''}`}
-                  d={OCEAN_ZONE_PATHS[key]}
-                  vectorEffect="non-scaling-stroke"
-                />
-              );
-            })}
+            {MINIMAP_OCEAN_KEYS.map((key) => (
+              <path
+                key={key}
+                id={`${idPrefix}-ocean-${key}`}
+                class={`shell-minimap-ocean${activeOcean === key ? ' active' : ''}`}
+                d={OCEAN_ZONE_PATHS[key]}
+                vectorEffect="non-scaling-stroke"
+                data-ocean={key}
+                role="button"
+                tabIndex={0}
+                aria-pressed={activeOcean === key}
+                aria-label={oceanAccessibleName(key)}
+                onClick={() => chooseOcean(map, key)}
+                onKeyDown={(event) => {
+                  if (event.key !== 'Enter' && event.key !== ' ') return;
+                  event.preventDefault();
+                  chooseOcean(map, key);
+                }}
+              />
+            ))}
           </svg>
         )}
 
@@ -1053,9 +1057,9 @@ export function Minimap({
           {geometryVisible && (
           <svg
             class="shell-minimap-drawing"
-            viewBox={`0 0 ${DRAWING_WIDTH} ${DRAWING_HEIGHT}`}
-            preserveAspectRatio="xMidYMid meet"
-          data-geographic-extent={`${LON_MIN},${LAT_MIN},${LON_MAX},${LAT_MAX}`}
+            viewBox={VIEW_BOX}
+            preserveAspectRatio="none"
+          data-geographic-extent={`${LON_MIN},${LAT_MIN},${LON_MAX},${MINIMAP_VIEW_NORTH}`}
           >
           <defs>
             <clipPath
@@ -1236,61 +1240,6 @@ export function Minimap({
               vectorEffect="non-scaling-stroke"
             />
           ))}
-          {viewportRect && (
-            <>
-              {/* Clause 2: feedback only (no onClick/onKeyDown, no store
-                  write) mirroring the main map's own getBounds()/moveend,
-                  never the committed framing. A white-on-navy halo keeps
-                  at least one ring at ~15:1 contrast against every fill
-                  in the drought and wildfire palettes (report has the
-                  computed ratios); reduced motion needs no handling here
-                  because neither rect carries a transition. */}
-              <rect
-                id={`${idPrefix}-viewport`}
-                class="shell-minimap-viewport"
-                data-viewport="true"
-                data-bounds={viewportBounds
-                  ? [
-                      viewportBounds.getWest(),
-                      viewportBounds.getSouth(),
-                      viewportBounds.getEast(),
-                      viewportBounds.getNorth(),
-                    ]
-                      .map((value) => value.toFixed(4))
-                      .join(',')
-                  : undefined}
-                x={viewportRect.x}
-                y={viewportRect.y}
-                width={viewportRect.width}
-                height={viewportRect.height}
-                aria-hidden="true"
-                focusable="false"
-                style={{
-                  fill: 'none',
-                  stroke: '#0F172A',
-                  strokeWidth: 3,
-                  vectorEffect: 'non-scaling-stroke',
-                  pointerEvents: 'none',
-                }}
-              />
-              <rect
-                class="shell-minimap-viewport shell-minimap-viewport-inner"
-                x={viewportRect.x}
-                y={viewportRect.y}
-                width={viewportRect.width}
-                height={viewportRect.height}
-                aria-hidden="true"
-                focusable="false"
-                style={{
-                  fill: 'none',
-                  stroke: '#FFFFFF',
-                  strokeWidth: 1.5,
-                  vectorEffect: 'non-scaling-stroke',
-                  pointerEvents: 'none',
-                }}
-              />
-            </>
-          )}
           </svg>
           )}
 
