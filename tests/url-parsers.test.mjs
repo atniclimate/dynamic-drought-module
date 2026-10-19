@@ -19,6 +19,7 @@ registerHooks({
 globalThis.fetch = () => { throw new Error('unexpected network in URL unit test'); };
 const url = await import('../src/state/url.ts');
 const { installFakeBrowser } = await import('./map-harness.ts');
+const { deriveViewMode } = await import('../src/state/view-mode.ts');
 
 /** Audit 4 item 9: each URL parser's accepted and rejected values, as a table. */
 const P = (search) => new URLSearchParams(search);
@@ -52,6 +53,16 @@ const TABLE = [
     ['?select=state:WA', { kind: 'state', id: 'WA' }], ['?select=STATE: or ', { kind: 'state', id: 'or' }],
     ['', null], ['?select=state:', null], ['?select=state:WAS', null], ['?select=state:W1', null],
     ['?select=:WA', null], ['?select=county:WA', null], ['?select=WA', null], ['?select=state:<b>hi</b>', null]
+  ]],
+  // Brief unless view=console; only an embed keeps the display-link rule (owner, 2026-10-19).
+  ['deriveViewMode', (s) => deriveViewMode(P(s)), [
+    ['', 'brief'], ['?cluster=wildfire', 'brief'], ['?cluster=enso&ocean=pacific', 'brief'],
+    ['?framing=arid-west', 'brief'], ['?region=washington_state&layers=states', 'brief'],
+    ['?select=state:WA&cluster=wildfire', 'brief'], ['?view=console&cluster=heat', 'console'],
+    ['?view=brief&cluster=heat', 'brief'], ['?view=bogus&layers=usdm', 'brief'],
+    ['?embed=true&layers=usdm', 'console'], ['?embed=1&cluster=wildfire', 'console'],
+    ['?embed=true&select=state:WA&layers=states', 'brief'], ['?embed=true', 'brief'],
+    ['?embed=yes&layers=usdm', 'brief']
   ]]
 ];
 

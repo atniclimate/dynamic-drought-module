@@ -17,9 +17,10 @@ import {
  * stand: BRIEF leads with the briefing search and keeps the catalog as
  * the drill-down; CONSOLE is the full map-and-layers instrument. The
  * mode round-trips through `view=` (URL as state), and URLs without it
- * follow the legacy-URL rule (D-0.7.0-017): layers= or region (without
- * select=) means the sharer meant the map (console); bare URLs and
- * select= deep links open Brief; embeds default to Brief.
+ * open Brief on the full site (owner, 2026-10-19): only view=console
+ * opens the console. An embed naming layers= or region (without
+ * select=) keeps the older display-link rule and opens the console;
+ * other embeds default to Brief.
  */
 test.describe('U1 the two doors (view mode)', () => {
   test('a bare URL opens Brief with NO unsolicited briefing (D-0.7.0-041)', async ({ page }) => {
@@ -45,23 +46,28 @@ test.describe('U1 the two doors (view mode)', () => {
     await expect(page.locator('#layer-toggles .layer-group')).toHaveCount(4);
   });
 
-  test('a URL naming layers= opens the console (the sharer meant the map)', async ({
+  test('a full-site link naming region= and layers= opens Brief (owner, 2026-10-19)', async ({
     page
   }) => {
-    await gotoApp(page, '?region=washington_state&layers=usdm');
+    await gotoApp(page, '?region=washington_state&layers=usdm', { derivedView: true });
 
-    await expect(page.locator('#app')).toHaveClass(/\bview-console\b/);
-    await expect(page.locator('#brief-head')).toBeHidden();
+    await expect(page.locator('#app')).toHaveClass(/\bview-brief\b/);
+    await expect(page.locator('#brief-head')).toBeVisible();
     // No briefing panel was auto-opened (it is created lazily on first open).
     await expect(page.locator('#impact-panel')).toHaveCount(0);
     await expect
       .poll(async () => new URLSearchParams(await search(page)).get('view'))
-      .toBe('console');
+      .toBe('brief');
   });
 
-  test('an explicit view= wins over the legacy rule', async ({ page }) => {
+  test('an explicit view= wins over the derived door', async ({ page }) => {
     await gotoApp(page, '?layers=usdm&view=brief');
     await expect(page.locator('#app')).toHaveClass(/\bview-brief\b/);
+
+    await gotoApp(page, '?region=washington_state&layers=usdm&view=console', {
+      derivedView: true
+    });
+    await expect(page.locator('#app')).toHaveClass(/\bview-console\b/);
 
     await gotoApp(page, '?view=console');
     await expect(page.locator('#app')).toHaveClass(/\bview-console\b/);

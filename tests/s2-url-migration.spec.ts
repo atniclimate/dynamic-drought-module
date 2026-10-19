@@ -140,22 +140,28 @@ test.describe('S2 precedence table (Node)', () => {
     expect(parseFramingParam('national')).toBeNull();
   });
 
-  test('view derivation: display links open the console; select= still outranks (D-0.7.0-017/041/044)', () => {
-    // The new display parameters mean "the sharer meant the map",
-    // exactly like layers= and region=.
-    expect(deriveViewMode(new URLSearchParams('?cluster=wildfire'))).toBe('console');
-    expect(deriveViewMode(new URLSearchParams('?cluster=enso&ocean=pacific'))).toBe('console');
-    expect(deriveViewMode(new URLSearchParams('?framing=arid-west'))).toBe('console');
-    // select= keeps outranking every display clause for view derivation.
+  test('view derivation: only view=console opens the full-site console; embeds keep the display-link rule', () => {
+    // A full-site display link opens Brief (owner, 2026-10-19).
+    expect(deriveViewMode(new URLSearchParams('?cluster=wildfire'))).toBe('brief');
+    expect(deriveViewMode(new URLSearchParams('?cluster=enso&ocean=pacific'))).toBe('brief');
+    expect(deriveViewMode(new URLSearchParams('?framing=arid-west'))).toBe('brief');
+    expect(deriveViewMode(new URLSearchParams('?region=washington_state&layers=states'))).toBe(
+      'brief'
+    );
     expect(deriveViewMode(new URLSearchParams('?select=state:WA&cluster=wildfire'))).toBe(
       'brief'
     );
-    expect(deriveViewMode(new URLSearchParams('?select=state:WA&layers=states'))).toBe('brief');
-    // An explicit view= still wins over everything.
+    // An explicit view= wins over everything.
+    expect(deriveViewMode(new URLSearchParams('?view=console&cluster=heat'))).toBe('console');
     expect(deriveViewMode(new URLSearchParams('?view=brief&cluster=heat'))).toBe('brief');
-    // A bare URL still opens Brief (with no unsolicited briefing behind
-    // it since D-0.7.0-041; pinned in view-mode.spec.ts).
     expect(deriveViewMode(new URLSearchParams(''))).toBe('brief');
+    // An embed naming a display parameter without select= keeps the console.
+    expect(deriveViewMode(new URLSearchParams('?embed=true&layers=usdm'))).toBe('console');
+    expect(deriveViewMode(new URLSearchParams('?embed=1&cluster=wildfire'))).toBe('console');
+    expect(deriveViewMode(new URLSearchParams('?embed=true&select=state:WA&layers=states'))).toBe(
+      'brief'
+    );
+    expect(deriveViewMode(new URLSearchParams('?embed=true'))).toBe('brief');
   });
 });
 
@@ -224,7 +230,7 @@ test.describe('S2 cluster= in the browser', () => {
     await stubWildfireRecipe(page);
     await gotoApp(page, '?cluster=wildfire');
 
-    // A display link opens the console (the sharer meant the map).
+    // gotoApp pins a display boot to the console (tests/helpers.ts).
     await expect(page.locator('#app')).toHaveClass(/\bview-console\b/);
 
     // The current-horizon recipe: perimeters plus smoke ONLY

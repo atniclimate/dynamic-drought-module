@@ -91,8 +91,8 @@ export interface ParsedUrlParams {
    * the key (precedence 2.2). Whether it applies also depends on the
    * viewport, which is the runtime's call, not the parser's. */
   readonly sidebarClosed: boolean;
-  /** Brief/console mode from `view=`, or derived by the legacy-URL rule
-   * (D-0.7.0-017; see `deriveViewMode` in `./view-mode`). */
+  /** Brief/console mode from `view=`, or derived: Brief unless `view=console`
+   * (embeds keep the display-link rule; see `deriveViewMode` in `./view-mode`). */
   readonly view: ViewMode;
   /** Whether the INBOUND URL carried an explicit, valid `view=` token
    * (U-UX-FIX-1 DEF-2). This is raw parse-time truth, captured BEFORE the
@@ -477,8 +477,8 @@ export interface UrlSyncState {
    * threaded here. */
   readonly sidebarClosed?: boolean;
   /** Brief/console mode; always emitted so a shared URL restores the
-   * exact door the sharer was looking through (the legacy-URL rule
-   * derives a mode only for URLs authored before `view=` existed). */
+   * exact door the sharer was looking through (Brief unless view=console;
+   * embeds keep the display-link rule, for URLs written without `view=`). */
   readonly view: ViewMode;
   /** Selected USDM week; emitted as `week=` only when non-null. */
   readonly usdmWeek?: string | null;
