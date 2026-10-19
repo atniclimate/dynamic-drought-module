@@ -12,8 +12,9 @@
  * drape is torn down, as hms-smoke-volume.ts does with the flat smoke veil;
  * the person's layer choices never change. Between the scene going active
  * and the drape mounting the flat layer still draws, like the smoke veil and
- * the perimeter ribbon. The drape stands down for the issuer-coloured row
- * (`usfs-whp-classes`), a deliberate Layer studio choice. An unavailable
+ * the perimeter ribbon. The drape stands down (hidden, still mounted) while
+ * the issuer-coloured row (`usfs-whp-classes`), a deliberate Layer studio
+ * choice, is on, and stands back up when it goes off. An unavailable
  * archive leaves terrain and smoke as a partial scene, with the flat Fuel
  * risk layer, if on, as the degrade.
  */
@@ -52,6 +53,8 @@ let releasePerimeterWatch: (() => void) | null = null;
 let shadedRevision = 0;
 /** The polygons of that revision, in an order-free form, which the mounted tiles were shaded with. */
 let shadedPolygons = '';
+/** The drape is mounted but stood down (hidden) for the issuer-coloured row. */
+let stoodDown = false;
 
 /**
  * Fuel risk is fully transparent inside a fire perimeter (owner, 2026-10-11).
@@ -224,20 +227,30 @@ export async function activateWhpDrape(
   announceFuelRisk();
   releaseSwitchWatch?.();
   releaseSwitchWatch = onFire3DGroundLayerChange((layer) => {
-    if (layer !== 'fuelRisk') return;
+    if (layer !== 'fuelRisk' || stoodDown) return;
     if (map.getLayer(LAYER_ID)) map.setLayoutProperty(LAYER_ID, 'visibility', fuelRiskVisibility());
     announceFuelRisk();
   });
 
   // Either flat layer can be switched on AFTER the scene is up (the Long
   // Range horizon adds Fuel risk). Fuel risk is hidden again each time it
-  // is re-added; the issuer colours make the drape stand down, and turning
-  // them back off does not resurrect it until the scene is re-entered,
-  // which under-claims rather than over-claims.
+  // is re-added, so the white copy never draws in the scene. The issuer
+  // colours stand the drape down (hidden, still mounted and still following
+  // the perimeters), and turning them off stands it back up; only the scene
+  // teardown removes it and gives the flat layer back.
+  stoodDown = false;
   releaseFlatLayerWatch?.();
   releaseFlatLayerWatch = registry.on('change', () => {
-    if (issuerColoursOn()) deactivateWhpDrape(map);
-    else showFlatFuelRisk(map, false);
+    showFlatFuelRisk(map, false);
+    if (issuerColoursOn() === stoodDown) return;
+    stoodDown = !stoodDown;
+    if (map.getLayer(LAYER_ID)) map.setLayoutProperty(LAYER_ID, 'visibility', stoodDown ? 'none' : fuelRiskVisibility());
+    if (!stoodDown) {
+      announceFuelRisk();
+      return;
+    }
+    hideLegend(LEGEND_KEY);
+    window.dispatchEvent(new CustomEvent('ddm:whp-shade', { detail: { layer: LAYER_ID, active: false, mounted: false } }));
   });
   // The perimeter layer publishes each different collection it puts on the
   // map (its first, and after a pan or zoom), and null once it is off; the
@@ -261,6 +274,7 @@ export function deactivateWhpDrape(map: maplibregl.Map): void {
   releaseSwitchWatch = null;
   releasePerimeterWatch?.();
   releasePerimeterWatch = null;
+  stoodDown = false;
   if (map.getLayer(LAYER_ID)) map.removeLayer(LAYER_ID);
   if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);
   showFlatFuelRisk(map, true);

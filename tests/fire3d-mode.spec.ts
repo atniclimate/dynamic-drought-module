@@ -1295,7 +1295,7 @@ test('a corrupt archive fails the probe before any map mutation and drops fire3d
 // The Layer studio's issuer-coloured row ('usfs-whp-classes') is a deliberate
 // choice of the issuer's colours, so the drape stands down for it.
 for (const flatKey of ['usfs-whp-classes'] as const) {
-  test(`the hazard drape stands down while the flat WHP surface (${flatKey}) is on, and leaves when it arrives`, async () => {
+  test(`the hazard drape stands down while the flat WHP surface (${flatKey}) is on, and stands back up when it goes off`, async () => {
     const browser = installFakeBrowser({ desktop: true, reducedMotion: false });
     const restoreFetch = stubPmtilesFetch();
     const harness = fakeMapHarness({ pitch: 0, bearing: 0 });
@@ -1327,11 +1327,13 @@ for (const flatKey of ['usfs-whp-classes'] as const) {
       expect(second.keys).toContain('whp');
       expect(harness.layerSpecs.has('whp-2023')).toBe(true);
 
-      // ...and it leaves the moment the flat layer is switched on, because a
-      // horizon change (or the Layer studio) can do that while the scene is up.
+      // ...and it stands down (hidden, still mounted) the moment the flat layer
+      // is switched on, because the Layer studio can do that while the scene
+      // is up, and stands back up when it goes off again.
       registry.activate(flatKey);
-      expect(harness.layerSpecs.has('whp-2023')).toBe(false);
-      expect(harness.sources.has('whp-2023')).toBe(false);
+      expect(harness.layerSpecs.get('whp-2023')?.layout?.['visibility']).toBe('none');
+      registry.deactivate(flatKey);
+      expect(harness.layerSpecs.get('whp-2023')?.layout?.['visibility']).toBe('visible');
     } finally {
       registry.deactivate(flatKey);
       deactivateContextLayers(harness.map);
