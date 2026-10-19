@@ -42,13 +42,16 @@ test('with no rendered tile after it, the previous rendered tile takes focus', (
   assert.equal(stripFocusAfterHide(fires)?.name, alerts.name);
 });
 
-test('the last live reading in the Brief dock hands focus to Layer legends', () => {
+// Not the Layer legends summary: hiding the last legend-bearing layer hides
+// the whole disclosure, which would drop focus to the page body.
+test('the last live reading in the Brief dock hands focus to the strip, not Layer legends', () => {
   const summary = el('legends-summary');
   const dock = el('dock', { query: { '.sidebar-legend-disclosure > summary': summary } });
   const strip = el('strip');
   const fires = el('fires', { closest: { '.sidebar-bottom-dock': dock, '#conditions-strip': strip } });
   row([fires, el('drought', { rendered: false })]);
-  assert.equal(stripFocusAfterHide(fires)?.name, 'legends-summary');
+  assert.equal(stripFocusAfterHide(fires)?.name, 'strip');
+  assert.equal(strip.tabIndex, -1);
 });
 
 test('outside the dock, a lone tile hands focus to the strip, made focusable', () => {
