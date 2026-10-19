@@ -50,7 +50,6 @@
   }
 }
 #map-condition-indicator > * { pointer-events: auto; }
-#map-condition-indicator .conditions-metric,
 #map-condition-indicator .map-key {
   background: var(--indicator-glass);
   border: 1px solid var(--indicator-border);
@@ -59,18 +58,17 @@
   -webkit-backdrop-filter: blur(var(--rich-black-blur, 15px));
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.16);
 }
-/* The docked drought tile's own single-reading swatch (palette-tokens.md,
-   "Swatches and value text"): the class colour leaves the text (it used to
-   be conditions-strip.tsx's inline `color:${m.color}`, D1.md M10 Notes)
-   and becomes a 10px keylined square beside the value instead. Scoped to
-   this indicator only: the same tile also renders in the Console sidebar
-   through src/ui/island/shell.tsx's rehost, and that copy is D3's file. */
-#map-condition-indicator .conditions-value {
+/* The docked strip's single-reading swatch (palette-tokens.md, "Swatches
+   and value text"): the class colour leaves the text (it used to be
+   conditions-strip.tsx's inline `color:${m.color}`, D1.md M10 Notes) and
+   becomes a 10px keylined square beside the value instead. Scoped to the
+   Brief sidebar's bottom dock; the Console copy keeps its home styling. */
+#conditions-strip-dock .conditions-value {
   display: inline-flex;
   align-items: center;
   gap: 6px;
 }
-#map-condition-indicator .conditions-swatch {
+#conditions-strip-dock .conditions-swatch {
   display: inline-block;
   width: 10px;
   height: 10px;
@@ -78,21 +76,11 @@
   border: 1px solid var(--keyline, #C6CBD4);
   border-radius: 2px;
 }
-#map-condition-indicator #conditions-strip {
-  background: transparent;
-}
-#map-condition-indicator .conditions-head {
+/* Brief shows every live reading and hides the strip when none is live. */
+#conditions-strip-dock .conditions-metric[data-layer-on='false'] {
   display: none;
 }
-#map-condition-indicator #conditions-strip-dock {
-  width: var(--indicator-width);
-  max-width: 100%;
-}
-#map-condition-indicator .conditions-metric:not([data-metric='drought']),
-#map-condition-indicator .conditions-metric[data-layer-on='false'] {
-  display: none;
-}
-#map-condition-indicator #conditions-strip-dock:not(:has(.conditions-metric[data-metric='drought'][data-layer-on='true'])) {
+#conditions-strip-dock:not(:has(.conditions-metric[data-layer-on='true'])) {
   display: none;
 }
 /* The chip's grammar (S30D D1 M10; interface-chrome-popups-text.md section
@@ -293,15 +281,6 @@
     width: 100%;
     max-width: 100%;
   }
-}
-#app #map-key[data-key-metric-trigger='true'][data-key-details-open='false'] {
-  display: none !important;
-}
-#app #map-key[data-key-family='drought'][data-key-details-open='true'] {
-  display: block !important;
-}
-#app #map-key[data-key-family='drought'][data-key-metric-trigger='false'] {
-  display: block !important;
 }
 #map-key[data-key-details-open='true'] .map-key-details-toggle {
   border-bottom: 1px solid var(--line);

@@ -5,7 +5,8 @@
  * unexpected layer-off control. Off drought and event tiles in Console
  * retain their explicit layer actions through the shared toggle command.
  *
- * The same strip node seats on the Brief map and in the Console sidebar.
+ * The same strip node seats in the Brief sidebar's bottom dock and in the
+ * Console sidebar below the hazard buttons.
  * Source status, historical-week dates, and stale flags stay authoritative.
  */
 

@@ -65,26 +65,18 @@ test.describe('UX-3 conditions strip', () => {
       await gotoApp(page, '?view=brief&layers=nadm-drought&basemap=satellite', { bootIdle: false });
       await expect.poll(() => droughtRequested).toBe(true);
       await expect.poll(() => heldSatelliteTiles).toBeGreaterThan(0);
-      const drought = page.locator('#map-condition-indicator .conditions-metric[data-metric="drought"]');
+      // Desktop Brief seats the strip in the sidebar's bottom dock, off the
+      // map, so the map's read-glass backing and inks no longer apply to it.
+      const drought = page.locator('#conditions-strip-dock .conditions-metric[data-metric="drought"]');
+      // The real held source, not a manufactured status class.
       await expect(drought).toHaveAttribute('data-tone', 'loading');
-      // The real held source, not a manufactured status class. Loading must
-      // retain the full read-glass backing and an allowed secondary ink.
-      await expect(drought).toHaveCSS('background-color', 'rgba(1, 11, 19, 0.72)');
-      await expect(drought).toHaveCSS('opacity', '1');
-      await expect(drought).toHaveCSS('border-top-color', 'rgb(198, 203, 212)');
-      await expect(drought.locator('.conditions-value')).toHaveCSS('color', 'rgb(198, 203, 212)');
       releaseDrought();
       await expect(drought).toHaveAttribute('data-tone', 'data');
       await expect(drought.locator('.conditions-value')).toHaveText('D3');
       await expect(drought.locator('.conditions-value')).toHaveCSS('font-family', /^"?DDM Heros"?,/);
       await expect(drought.locator('.conditions-value')).toHaveCSS('font-variant-numeric', /^(?:lining-nums tabular-nums|tabular-nums lining-nums)$/);
       await expect(drought.locator('.conditions-sublabel')).toContainText('Extreme drought');
-      await expect(drought.locator('.conditions-sublabel')).toHaveCSS('color', 'rgb(198, 203, 212)');
       await expect(drought).toHaveCSS('opacity', '1');
-      await drought.focus();
-      await expect(drought).toHaveCSS('outline-color', 'rgb(255, 255, 255)');
-      await expect(drought).toHaveCSS('outline-offset', '0px');
-      await expect(drought).toHaveCSS('box-shadow', 'rgb(1, 11, 19) 0px 0px 0px 4px');
       // No satellite response has been released: this read must follow the
       // drought source's render, rather than depend on whole-map idle.
       await expect(drought).not.toContainText('No polygon');
@@ -108,13 +100,14 @@ test.describe('UX-3 conditions strip', () => {
     await expect(tiles).toHaveCount(1);
     await expect(tiles.nth(0)).toHaveAttribute('data-metric', 'drought');
 
-    // Desktop Brief moves the original strip to the top-left map indicator.
-    // Its old visual title stands down, while the valid-date slot and the one
-    // metric root stay on the same node.
+    // Desktop Brief moves the original strip to the sidebar's bottom dock,
+    // above Layer legends. Its title shows there, while the valid-date slot
+    // and the one metric root stay on the same node.
     await expect(page.locator('#conditions-strip-dock > #conditions-strip')).toHaveCount(1);
-    await expect(page.locator('#map-condition-indicator #conditions-strip')).toHaveCount(1);
+    await expect(page.locator('.sidebar-bottom-dock #conditions-strip')).toHaveCount(1);
+    await expect(page.locator('#map-condition-indicator #conditions-strip')).toHaveCount(0);
     await expect(page.locator('#shell-conditions-heading')).toHaveText('Conditions in view');
-    await expect(strip.locator('.conditions-title')).toBeHidden();
+    await expect(strip.locator('.conditions-title')).toBeVisible();
     await expect(strip.locator('#conditions-date')).toBeAttached();
 
     await waitForLayerSettled(page, 'nadm-drought');
@@ -463,11 +456,11 @@ test.describe('the drought tile swatch (D1 M10)', () => {
   }) => {
     // `region=` and `layers=` alone derive CONSOLE (src/state/view-mode.ts,
     // the legacy-URL rule): the swatch this test checks is scoped to the
-    // desktop Brief rehost (`#map-condition-indicator`, hazard-indicators.css
-    // ":62-67"), which never applies in Console. `view=brief` is explicit so
-    // the docked tile, not the sidebar's own copy, is what gets measured
-    // (repair round on M10; predicted red without it: "element(s) not
-    // found", since the node never moves into `#map-condition-indicator`).
+    // desktop Brief rehost (`#conditions-strip-dock`, the sidebar's bottom
+    // dock, hazard-indicators.css), which never applies in Console.
+    // `view=brief` is explicit so the docked tile, not the Console home copy,
+    // is what gets measured (repair round on M10; predicted red without it:
+    // "element(s) not found", since the node never moves into the dock).
     await page.route('**/USDM_current/**', (route) =>
       route.fulfill({
         status: 200,
@@ -489,7 +482,7 @@ test.describe('the drought tile swatch (D1 M10)', () => {
     await expect(layerPill(page, 'usdm')).toHaveText(PILL.live);
     await expect(layerCheckbox(page, 'usdm')).toBeChecked();
     await expect.poll(async () => (await urlLayers(page)).has('usdm')).toBe(true);
-    const drought = page.locator('#map-condition-indicator .conditions-metric[data-metric="drought"]');
+    const drought = page.locator('#conditions-strip-dock .conditions-metric[data-metric="drought"]');
     await expect(drought.locator('.conditions-value')).toHaveText('D3');
     const swatch = drought.locator('.conditions-swatch');
     await expect(swatch).toBeVisible();

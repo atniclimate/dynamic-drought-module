@@ -42,7 +42,7 @@ async function readStop(page: Page): Promise<Stop> {
     if (!el || el === document.body) name = 'body';
     else if (el.id === 'sidebar-expand') name = 'expand';
     else if (el.matches('.maplibregl-canvas')) name = 'canvas';
-    else if (el.id === 'map-key-details-toggle' || el.matches('#conditions-strip-dock .conditions-metric')) name = 'chip';
+    else if (el.id === 'map-key-details-toggle') name = 'chip';
     else if (inside('#map-key-content')) name = 'key drawer';
     else if (el.id === 'share-btn') name = 'share';
     else if (el.id === 'reset-btn') name = 'reset';
@@ -195,60 +195,6 @@ test.describe('map chrome focus (S30D D1 M28)', () => {
     const heading = page.locator('#map-key-legend .map-key-label');
     await expect(heading).toBeFocused();
     await expect(heading).toHaveAttribute('tabindex', '-1');
-  });
-
-  test('the drought tile and the key toggle hand focus to the shown node when they swap under keyboard focus, both directions (found-088)', async ({
-    page
-  }) => {
-    await page.setViewportSize(DESKTOP_VIEWPORT);
-    await stubHeatRiskCatalog(page);
-    await gotoApp(page, '?view=brief');
-    const tile = page.locator('#conditions-strip-dock .conditions-metric[data-metric="drought"]');
-    const toggle = page.locator('#map-key-details-toggle');
-    await expect(page.locator('#map-key')).toHaveAttribute('data-key-metric-trigger', 'true');
-    await expect(tile).toBeVisible();
-
-    // Tile to toggle: a mode change from elsewhere (a programmatic click
-    // moves no focus) while the tile holds focus.
-    await tile.focus();
-    await page.evaluate(() => {
-      document.querySelector<HTMLButtonElement>('.shell-cluster-btn[data-cluster="heat"]')?.click();
-    });
-    await expect(page.locator('#map-key')).toHaveAttribute('data-key-metric-trigger', 'false');
-    await expect(toggle).toBeVisible();
-    await expect(toggle).toBeFocused();
-
-    // Toggle to tile.
-    await page.evaluate(() => {
-      document.querySelector<HTMLButtonElement>('.shell-cluster-btn[data-cluster="drought"]')?.click();
-    });
-    await expect(page.locator('#map-key')).toHaveAttribute('data-key-metric-trigger', 'true');
-    await expect(tile).toBeVisible();
-    await expect(tile).toBeFocused();
-  });
-
-  test('a pointer click that switches mode keeps focus on the clicked button while the tile and the key toggle swap (found-088)', async ({
-    page
-  }) => {
-    await page.setViewportSize(DESKTOP_VIEWPORT);
-    await stubHeatRiskCatalog(page);
-    await gotoApp(page, '?view=brief');
-    const tile = page.locator('#conditions-strip-dock .conditions-metric[data-metric="drought"]');
-    const toggle = page.locator('#map-key-details-toggle');
-
-    await tile.focus();
-    const heat = page.locator('.shell-cluster-btn[data-cluster="heat"]');
-    await heat.click();
-    await expect(page.locator('#map-key')).toHaveAttribute('data-key-metric-trigger', 'false');
-    await expect(toggle).toBeVisible();
-    await expect(heat).toBeFocused();
-
-    await toggle.focus();
-    const drought = page.locator('.shell-cluster-btn[data-cluster="drought"]');
-    await drought.click();
-    await expect(page.locator('#map-key')).toHaveAttribute('data-key-metric-trigger', 'true');
-    await expect(tile).toBeVisible();
-    await expect(drought).toBeFocused();
   });
 
   test('a popup closing returns focus to the element focused before the commit', async ({ page }) => {

@@ -219,13 +219,10 @@ async function chooseMode(page: Page, mode: string): Promise<void> {
 }
 
 /**
- * The two Key drawer triggers. On the desktop shell in Brief with the
- * drought family, src/ui/map-key.ts sets `data-key-metric-trigger="true"`
- * on `#map-key`, hazard-indicators.css then hides the host (and its toggle)
- * until the drawer is open, and the docked drought metric opens it
- * (conditions-strip.tsx dispatches `ddm:toggle-map-key-details`). Everywhere
- * else the Key toggle does. interface-responsive.spec.ts's `openMapKey`
- * handles the same two seats.
+ * The Key drawer trigger. Since the Brief strip moved to the sidebar's
+ * bottom dock, src/ui/map-key.ts no longer sets `data-key-metric-trigger`,
+ * so the Key toggle is the trigger in every view; the metric branch below
+ * stays inert unless the attribute returns.
  */
 const DROUGHT_METRIC = '#conditions-strip-dock .conditions-metric[data-metric="drought"][data-layer-on="true"]';
 const KEY_TOGGLE = '#map-key .map-key-details-toggle';
