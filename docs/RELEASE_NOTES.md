@@ -16,6 +16,25 @@
 - 2026-09-28: the fire perimeter and smoke plume checkboxes now each control
   only their own layer (the Wildfire mode still shows both).
 
+## v0.7.8
+
+Testing reliability. Nothing a visitor sees changes.
+
+- 2026-10-19: three browser tests that passed only on a second try now hold on the first: the
+  map-chunk failure case reads the built file from disk instead of fetching it a second time,
+  the ocean temperature repaint case waits until the map has finished loading before it starts,
+  and the satellite refresh case holds the new picture's tiles unanswered so its own time limit
+  is the only thing that decides the outcome.
+- 2026-10-19: partway through a block, a targeted run on GitHub tests only the block's own
+  browser specs, in about five minutes. Its name says it is not a landing run; only a full run
+  decides a landing.
+- 2026-10-19: `npm run spec:impact` lists any test that still names on-screen text, an id or a
+  class the block deleted, and the tests the block touched; `npm run test:touched` runs those
+  tests once on the developer's machine, and `npm run spec:impact -- --dispatch` starts the
+  targeted GitHub run of them.
+- 2026-10-19: a pull request that changes only the Worker (the weekly dependency updates) runs
+  the build checks and the Worker checks and skips the browser suite.
+
 ## v0.7.7
 
 The owner's live review of 2026-10-19, start and getting around, with presentation notes on

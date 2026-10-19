@@ -2,7 +2,7 @@ cff-version: 1.2.0
 message: "If you use this software, please cite it using the metadata below."
 title: "Dynamic Drought Module (DDM)"
 type: software
-version: "0.7.7"
+version: "0.7.8"
 date-released: "2026-10-19"
 repository-code: "https://github.com/atniclimate/dynamic-drought-module"
 url: "https://atniclimate.github.io/dynamic-drought-module/"
