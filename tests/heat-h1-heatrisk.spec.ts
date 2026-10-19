@@ -2,7 +2,7 @@ import { expect, test, type Page } from './offline-test';
 
 import {
   HEATRISK_CATEGORIES,
-  NWS_ALERT_COLORS
+  NWS_ALERT_LEGEND
 } from '../src/config/palette';
 import { makeClaim } from '../src/impact/evidence';
 import { HORIZON_CHROME } from '../src/impact/horizon-chrome';
@@ -381,7 +381,10 @@ test.describe('selected-place HeatRisk sequence and briefing', () => {
       const row = rows.nth(index);
       await expect(row).toHaveCSS('color', 'rgb(198, 203, 212)');
       await expect(row).toContainText(String(category.value));
-      await expect(row.locator('.map-key-swatch')).toHaveAttribute('style', `background:${category.color}`);
+      await expect(row.locator('.map-key-swatch')).toHaveAttribute(
+        'style',
+        category.value === 0 ? 'background:transparent' : `background:${category.color}`
+      );
     }
   });
   test.use({ viewport: { width: 400, height: 600 } });
@@ -411,7 +414,7 @@ test.describe('selected-place HeatRisk sequence and briefing', () => {
         }
       });
     });
-    const expectClassSampling = async (): Promise<void> => {
+    const expectDisplaySampling = async (): Promise<void> => {
       expect(await page.evaluate(() => {
         const map = (window as unknown as ClassWindow).__classMaps.find(
           (candidate) => candidate.getContainer().id === 'map'
@@ -421,7 +424,7 @@ test.describe('selected-place HeatRisk sequence and briefing', () => {
           sampling: map?.getPaintProperty('heatrisk', 'raster-resampling'),
           roundZoom: layer ? map?.getSource(layer.source)?.roundZoom : undefined
         };
-      })).toEqual({ sampling: 'nearest', roundZoom: false });
+      })).toEqual({ sampling: 'linear', roundZoom: false });
     };
     await page.emulateMedia({ reducedMotion: 'reduce' });
     const receipt = await stubHeatH1(page);
@@ -431,7 +434,7 @@ test.describe('selected-place HeatRisk sequence and briefing', () => {
     );
 
     await expect(layerPill(page, 'heatrisk')).toHaveText('live');
-    await expectClassSampling();
+    await expectDisplaySampling();
     const sequence = page.locator('#heatrisk-sequence');
     await expect(sequence).toBeVisible();
     const cells = sequence.locator('[data-heatrisk-sequence-day]');
@@ -496,14 +499,15 @@ test.describe('selected-place HeatRisk sequence and briefing', () => {
       );
       await expect(row.locator('.map-key-swatch')).toHaveAttribute(
         'style',
-        `background:${category.color}`
+        category.value === 0 ? 'background:transparent' : `background:${category.color}`
       );
     }
 
     const productKey = page.locator('#map-key [data-nws-products-key]');
-    for (const product of Object.keys(NWS_ALERT_COLORS)) {
-      await expect(productKey).toContainText(product);
+    for (const { label } of NWS_ALERT_LEGEND) {
+      await expect(productKey).toContainText(label);
     }
+    await expect(productKey).not.toContainText('Excessive');
 
     const selectedCell = cells.nth(2);
     await selectedCell.focus();
@@ -553,7 +557,7 @@ test.describe('selected-place HeatRisk sequence and briefing', () => {
     await page.keyboard.press('ArrowLeft');
     await expect(selector).toHaveValue('6');
     await expect(layerPill(page, 'heatrisk')).toHaveText('live');
-    await expectClassSampling();
+    await expectDisplaySampling();
     await expect(selectedRead).toContainText('no data');
     await expect(selectedRead).toContainText(
       'The National Weather Service returned no HeatRisk value'

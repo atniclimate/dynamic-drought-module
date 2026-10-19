@@ -61,7 +61,7 @@ import {
   resetDroughtSurfacePresentation,
   setDroughtSurfacePresentation
 } from '../config/layers';
-import { MOBILE_HAZARD_PRESETS, VIEW_PRESETS, isPresetShowing } from '../config/presets';
+import { MOBILE_HAZARD_PRESETS } from '../config/presets';
 import type { ViewPreset } from '../config/presets';
 import { REGIONS, DEFAULT_REGION } from '../config/regions';
 import type { RegionKey, Region } from '../config/regions';
@@ -131,11 +131,8 @@ import {
   setHazardCluster
 } from '../state/cluster-store';
 import {
-  getCommittedSnapshot,
   isCustomComposition,
-  onCommittedSnapshotChange,
   reconcileClusterWithLayerIntent,
-  requestHorizon,
   requestOcean
 } from '../state/cluster-service';
 import {
@@ -157,6 +154,7 @@ import {
   fitRegion,
   oceanTarget,
   readCameraState,
+  regionTarget,
   restoreCameraState
 } from '../map/camera-fit';
 import { ensoBootFitsPacific, ensoCameraAction, hasHeldEnsoCamera, holdEnsoCamera, takeEnsoCamera } from '../map/enso-camera';
@@ -190,8 +188,9 @@ import { loadSearchController } from './search-chunk';
  *
  * Reset and URL sync read this object. `currentRegion` changes only in
  * `selectRegion`; `embed` only at the boot seed and in the expand-button
- * handler; `desktopSidebarClosed` only at the boot seed and in the collapse
- * and expand handlers (the two explicit controls).
+ * handler; `desktopSidebarClosed` only at the boot seed, in the collapse
+ * and expand handlers (the two explicit controls), and in Reset, which
+ * reopens it.
  */
 interface SidebarState {
   currentRegion: RegionKey | null;
@@ -213,6 +212,9 @@ const STATE: SidebarState = {
   embed: false,
   desktopSidebarClosed: false
 };
+
+/** The region an embed's own link names; Reset returns an embed there (its frame is the embedder's choice). */
+let embedHomeRegion: RegionKey = DEFAULT_REGION;
 
 /**
  * Apply the live desktop preference to the column, and nothing else: no URL
@@ -239,7 +241,7 @@ let mapRef: maplibregl.Map | null = null;
 /**
  * The layer-activation controller (the extracted spine, D-ARCH-004). Created
  * once in `buildSidebar` with the map plus the DOM view adapter below; the
- * toggle rows, preset chips, and the URL-boot path drive layer state through
+ * toggle rows, hazard rail, and the URL-boot path drive layer state through
  * it. Held module-level, mirroring `mapRef`, so the DOM builders can reach it
  * without threading it through every signature.
  */
@@ -327,7 +329,7 @@ const CONTROL_NOTE_ID = 'sidebar-control-note';
 
 /**
  * Every generated control the map has to be alive for. Read fresh on each
- * call: the chips and the dropdown are rebuilt by the shell builders, and
+ * call: the dropdown is rebuilt by the shell builders, and
  * the hazard rail's markup is static in `index.html`.
  *
  * Deliberately NOT included: the share button (wired by `wireTopLevelEvents`
@@ -343,9 +345,6 @@ function mapDependentControls(): HTMLElement[] {
   };
   push(document.getElementById('region-select'));
   push(document.getElementById('region-briefing-btn'));
-  for (const chip of document.querySelectorAll('#preset-chips .preset-chip')) {
-    push(chip);
-  }
   for (const btn of document.querySelectorAll('#hazard-rail button[data-preset]')) {
     push(btn);
   }
@@ -434,7 +433,7 @@ function enableMapDependentControls(): void {
  * no-WebGL-2 shell gap, and the DDM-P14 boot watchdog).
  *
  * Called from the first lines of `boot()`, before the WebGL 2 probe, so the
- * dropdown and the chips exist on EVERY boot path, including the two that
+ * dropdown and the hazard rail exist on EVERY boot path, including the two that
  * never get a map. Until the map is ready they are visibly and audibly
  * disabled with a reason a non-specialist reads; `buildSidebar` enables
  * them when the map-dependent wiring is live.
@@ -481,14 +480,9 @@ export function buildSidebarShell(): void {
   const app = document.getElementById('app');
   if (app && boot) {
     app.classList.toggle('embed', boot.embed);
-    // Presentation only (ruling A2; S14, 2026-09-08): the stylesheet reads
-    // this URL-derived mode to hide the Quick views panel through the boot
-    // window the way `view-brief` hides it after. `initViewShell` owns the mode.
-    app.dataset['ddmBootView'] = boot.view;
   }
 
   buildRegionSelect();
-  buildPresetChips();
   wireHazardRail();
 
   if (boot) {
@@ -617,7 +611,8 @@ function selectRegion(
   //
   // DR-109 precedence D2 / Q6: this must fire only on an EXPLICIT change
   // into a none-synthesis region, never on the silent boot fit (`silent`)
-  // or a same-region Reset (`key === priorRegion`). Without both guards,
+  // or a same-region Reset (`key === priorRegion`; Reset targets the default
+  // region, so this is a Reset from national). Without both guards,
   // Reset under the national default (impactSynthesis 'none',
   // src/config/capability-matrix.ts:124-127) would close a briefing it just
   // opened, because the check used to fire on every selectRegion call for
@@ -951,104 +946,27 @@ function updateRegionBriefingTrigger(regionKey: RegionKey | null | undefined): v
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
-// View preset chips (UX-2)
+// Hazard presets (phone rail)
 // ---------------------------------------------------------------------------
 
 /**
- * Apply one preset (a quick-view chip or a hazard-rail button), in a fixed
- * order (D1 M6, 2026-09-27; found-005):
+ * Apply one hazard-rail preset, in a fixed order (D1 M6, 2026-09-27;
+ * found-005):
  *
  *   1. The layer set, through the controller (`applyPreset`). Every
  *      checkbox flip it makes reconciles the cluster claim synchronously
  *      (the checked-change subscription in `wireSidebar`; the bridge
  *      notifies in the same turn), and no preset set equals a hazard's
  *      clean composition, so the display is a custom set when this returns.
- *   2. The preset's declared `horizon`, if any, through the cluster
- *      service's `requestHorizon`. On a custom set that write only
- *      republishes the set at the new horizon. The reverse order would
- *      re-run a committed hazard's own recipe at the new horizon (the
- *      service's timeline subscription) and fetch layers step 1 then
- *      removes.
- *   3. The explicit preferred basemap, if any.
+ *   2. The explicit preferred basemap, if any.
  */
 function applyViewPreset(preset: ViewPreset): void {
   const map = mapRef;
   if (!map || !controllerRef) return;
   controllerRef.applyPreset(preset);
-  if (preset.horizon !== undefined) {
-    requestHorizon(preset.horizon);
-  }
   if (preset.preferredBasemap) {
     requestBasemapMode(map, preset.preferredBasemap);
   }
-}
-
-/** The one pressed-state subscription the chip row holds (a rebuild
- * replaces it rather than stacking a second). */
-let presetChipsPressedUnsubscribe: (() => void) | null = null;
-
-/**
- * Build the question-first preset chip row from `VIEW_PRESETS`. Each chip
- * is a toggle-button in its markup (`aria-pressed`) but never a lock: its
- * click applies the preset's layer set, its declared horizon, and any
- * explicit preferred basemap (`applyViewPreset`), and the visitor stays
- * free to adjust afterward. The tooltip carries the question the preset
- * answers.
- *
- * Pressed state (D1 M6, 2026-09-27; found-005): every chip always carries
- * `aria-pressed`, "true" exactly while `isPresetShowing` holds for the
- * committed shell snapshot (its intended keys equal the preset's layers as
- * a set, and its horizon equals the preset's declared horizon when it
- * declares one), "false" otherwise, refreshed on every snapshot publish.
- * The chips are built at DOM ready, before the URL state is applied and
- * before the lazy island initializes the cluster service, so they start at
- * "false" and reflect from the service's first publish: reading the
- * snapshot here would capture and cache a pre-boot derivation. A publish
- * sets the snapshot before it notifies, so the read inside the listener
- * derives nothing extra.
- *
- * Map-free (2026-09-03 launch ruling section 4): the chips are generated
- * from the static `VIEW_PRESETS` table at DOM ready and stay disabled with
- * a stated reason until the map is wired.
- */
-function buildPresetChips(): void {
-  const container = document.getElementById('preset-chips');
-  if (!container) return;
-  container.innerHTML = '';
-
-  const chips: Array<{ btn: HTMLButtonElement; preset: ViewPreset }> = [];
-  for (const preset of VIEW_PRESETS) {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'preset-chip';
-    btn.textContent = preset.label;
-    btn.title = preset.description;
-    btn.setAttribute('aria-pressed', 'false');
-    chips.push({ btn, preset });
-    // Preset application (deactivate the non-wanted, activate the wanted,
-    // preserving the at-most-one-surface invariant) now lives in the
-    // controller; the chip is a thin trigger.
-    btn.addEventListener('click', () => {
-      if (!mapDependentControlsEnabled) return;
-      applyViewPreset(preset);
-      // Mobile shell (the mockup's rule 5): a quick view applies its
-      // preset and closes the sheet so the map answers. Desktop is
-      // untouched (the sheet is never active there).
-      if (isSheetActive()) {
-        const d = getSheetDetent();
-        if (d === 'half' || d === 'full') setSheetDetent('closed');
-      }
-    });
-    container.appendChild(btn);
-  }
-
-  presetChipsPressedUnsubscribe?.();
-  presetChipsPressedUnsubscribe = onCommittedSnapshotChange(() => {
-    const snapshot = getCommittedSnapshot();
-    for (const { btn, preset } of chips) {
-      btn.setAttribute('aria-pressed', String(isPresetShowing(preset, snapshot)));
-    }
-  });
 }
 
 /**
@@ -1380,25 +1298,6 @@ function ensureTelemetryActive(_map: maplibregl.Map): void {
 function wireTopLevelEvents(map: maplibregl.Map): void {
   wireShareButton('share-btn');
 
-  const resetBtn = document.getElementById('reset-btn');
-  if (resetBtn) {
-    resetBtn.addEventListener('click', () => {
-      // Reset returns the basemap to the current mode's default.
-      requestBasemapMode(map, defaultBasemapFor(getHazardCluster()));
-      if (!STATE.currentRegion) return;
-      // Reset in ENSO is the boot with no camera in the URL (F9): it drops the
-      // ocean and framing cameras, as the region choice below does, and fits
-      // the Pacific instead of the region under it. Reset never fits a place.
-      if (ensoBootFitsPacific(getHazardCluster(), false, false, STATE.currentRegion === DEFAULT_REGION, false)) {
-        setFraming(null);
-        clearOceanFraming();
-        fitOcean(map, 'pacific');
-        return;
-      }
-      selectRegion(map, STATE.currentRegion);
-    });
-  }
-
   // The refit on a sidebar toggle (D1 M8, found-029, DDM-P10-T07). Opening or
   // closing the desktop column changes the map's width; when the camera still
   // shows the committed target (the ocean, framing or region last committed),
@@ -1427,7 +1326,7 @@ function wireTopLevelEvents(map: maplibregl.Map): void {
   // ONE pending timer for both controls: a re-toggle inside the delay clears
   // it, and its own snapshot decides (the resizeTimer pattern below).
   let sidebarRefitTimer: number | null = null;
-  const resizeAfterSidebarToggle = (snapshot: SidebarCameraSnapshot): void => {
+  const resizeAfterSidebarToggle = (snapshot: SidebarCameraSnapshot, refitAlways = false): void => {
     if (sidebarRefitTimer !== null) window.clearTimeout(sidebarRefitTimer);
     // Allow the CSS grid transition to settle before resizing the map. The
     // 220 ms delay matches the vanilla baseline; it is kept under reduced
@@ -1437,8 +1336,9 @@ function wireTopLevelEvents(map: maplibregl.Map): void {
       sidebarRefitTimer = null;
       map.resize();
       const { target, camera } = snapshot;
-      // A pan, zoom or pitch during the transition cancels the refit.
-      if (target !== null && cameraStateUnchanged(map, camera)) {
+      // A pan, zoom or pitch during the transition cancels the refit, except
+      // after Reset, whose own fit is still animating at this mark.
+      if (target !== null && (refitAlways || cameraStateUnchanged(map, camera))) {
         fitCameraTarget(map, target, !prefersReducedMotion());
       }
     }, 220);
@@ -1492,6 +1392,34 @@ function wireTopLevelEvents(map: maplibregl.Map): void {
       // expand is a no-op inside the helper.
       revealSheetAtPeek();
       resizeAfterSidebarToggle(snapshot);
+    });
+  }
+
+  // Reset is the mode's bare link (owner, 2026-10-19): the default region (an
+  // embed's own link region), the Pacific in ENSO, the mode's base map, and the
+  // desktop column reopened. Mode, horizon, layers and view stay.
+  const resetBtn = document.getElementById('reset-btn');
+  if (resetBtn) {
+    resetBtn.addEventListener('click', () => {
+      const cluster = getHazardCluster();
+      const reopen = !STATE.embed && STATE.desktopSidebarClosed
+        && window.matchMedia(SIDEBAR_DESKTOP_QUERY).matches;
+      if (reopen) {
+        // Before selectRegion, so its URL write already drops sidebar=closed.
+        STATE.desktopSidebarClosed = false;
+        applyDesktopSidebarPreference();
+      }
+      requestBasemapMode(map, defaultBasemapFor(cluster));
+      const home = STATE.embed ? embedHomeRegion : DEFAULT_REGION;
+      // An explicit choice: clears framing= and ocean=, fits, writes the URL.
+      selectRegion(map, home);
+      const pacific = ensoBootFitsPacific(cluster, false, false, home === DEFAULT_REGION, false);
+      if (pacific) fitOcean(map, 'pacific');
+      // The reopened column narrows the canvas under the fit: refit once it settles.
+      if (reopen) {
+        const target = pacific ? oceanTarget('pacific') : regionTarget(home);
+        resizeAfterSidebarToggle({ target, camera: readCameraState(map) }, true);
+      }
     });
   }
 
@@ -1626,6 +1554,7 @@ function applyUrlStateSync(map: maplibregl.Map): ParsedUrlParams {
   // bookkeeping (STATE.currentRegion, the radio marks, the store
   // mirror), and both fits are instant in the same task, so only the
   // winning camera ever paints.
+  if (params.embed) embedHomeRegion = params.region;
   selectRegion(map, params.region, true);
 
   // A boot into ENSO whose URL names no camera of its own enters the way the
@@ -1694,7 +1623,7 @@ export function buildSidebar(
 function wireSidebar(map: maplibregl.Map, onRegionSelect: (key: RegionKey) => void): void {
   mapRef = map;
   onRegionSelectRef = onRegionSelect;
-  // The shell (the dropdown, the chips, the hazard rail, the live region)
+  // The shell (the dropdown, the hazard rail, the live region)
   // normally built at DOM ready from `boot()`. Idempotent, and called here
   // too so a host that reaches `buildSidebar` by another route still gets
   // one complete sidebar rather than half of one.
@@ -1743,7 +1672,7 @@ function wireSidebar(map: maplibregl.Map, onRegionSelect: (key: RegionKey) => vo
   // invoke it.
   bindLayerToggleController(controllerRef);
 
-  // The dropdown, the chips and the hazard rail are already built (the
+  // The dropdown and the hazard rail are already built (the
   // shell above); what follows is the half that needs a live map.
   // The Water & Snow list is not built here (DR-008a): the reveal and the
   // first telemetry activation each build it on demand.
@@ -2138,8 +2067,8 @@ function wireSidebar(map: maplibregl.Map, onRegionSelect: (key: RegionKey) => vo
   // controls now do what their names say (2026-09-03 launch ruling section
   // 4). The enable itself runs in `buildSidebar`'s finally, synchronously
   // after this returns or throws: `<html data-ddm-controls="ready">` is the
-  // signal a verification suite waits on in place of the preset chips,
-  // which no longer prove a finished boot because they exist before one.
+  // signal a verification suite waits on in place of the generated
+  // controls, which do not prove a finished boot because they exist before one.
 }
 
 // ---------------------------------------------------------------------------

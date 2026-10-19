@@ -115,6 +115,32 @@ test.describe('precedence: boot, Reset and embed defaults (DR-109)', () => {
     }
   });
 
+  test('Reset leaves a chosen region and a minimap framing for the default view and reopens the sidebar', async ({
+    page
+  }) => {
+    // The owner's report (2026-10-19): British Columbia, then Alaska, then
+    // Reset went back to British Columbia. Reset is the bare link's view.
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await gotoApp(page, '?region=british_columbia&view=console');
+    await regionSelect(page).selectOption('framing:alaska-northwest');
+    await expect
+      .poll(async () => new URLSearchParams(await search(page)).get('framing'))
+      .toBe('alaska-northwest');
+    await page.locator('#sidebar-collapse').click();
+    await expect(page.locator('#app')).toHaveClass(/\bsidebar-collapsed\b/);
+
+    await page.locator('#reset-btn').click();
+
+    await expect(page.locator('#app')).not.toHaveClass(/\bsidebar-collapsed\b/);
+    await expect(regionSelect(page)).toHaveValue('region:national');
+    const params = new URLSearchParams(await search(page));
+    expect(params.get('region')).toBe('national');
+    expect(params.get('framing')).toBeNull();
+    expect(params.has('sidebar')).toBe(false);
+    expect(params.has('basemap')).toBe(false);
+    expect(params.get('view')).toBe('console');
+  });
+
   test('an embed pinned to region=washington_state&view=brief keeps the Washington framing and the Brief door', async ({
     page
   }) => {
@@ -233,7 +259,6 @@ import { installDefaultNifcStub } from './wildfire-fixtures';
 import { stubCpcSeasonalTempOutlook, stubSpcFireOutlook } from './helpers';
 import { stubCpcDroughtOutlook } from './cpc-outlook-fixtures';
 import { DEFAULT_REGION, REGIONS } from '../src/config/regions';
-import { VIEW_PRESETS, type ViewPreset } from '../src/config/presets';
 
 const M7_DESKTOP = { width: 1280, height: 720 } as const;
 const M7_PHONE = { width: 390, height: 844 } as const;
@@ -1215,93 +1240,6 @@ test.describe('D1 M7: the sidebar= key (DDM-P10-T07, DR-139)', () => {
     }
   });
 
-  test('Season ahead then Right now while the sidebar is closed keeps it closed through a reload', async ({
-    page
-  }) => {
-    test.setTimeout(120_000);
-    // The quick views are the two VIEW_PRESETS entries that declare these
-    // horizons (enumerated from src/config/presets.ts, not named here).
-    const presetFor = (horizon: string): ViewPreset => {
-      const found = VIEW_PRESETS.find((preset) => preset.horizon === horizon);
-      if (!found) throw new Error(`no VIEW_PRESETS entry declares horizon ${horizon}`);
-      return found;
-    };
-    const seasonAhead = presetFor('season-ahead');
-    const rightNow = presetFor('current');
-    // The CPC Drought Outlook the season-ahead quick view shows (the shared
-    // M6 stub), and the live station-value sources the current quick view's
-    // telemetry reaches, answered with a local failure as M6's
-    // tests/preset-toggle-cycles.spec.ts stubStationValueSources does.
-    // Registered before gotoApp, so every stub gotoApp installs still wins.
-    await stubCpcDroughtOutlook(page);
-    for (const pattern of [
-      '**/waterservices.usgs.gov/**',
-      '**/wcc.sc.egov.usda.gov/**',
-      '**/cwms-data.usace.army.mil/**',
-      '**/www.usbr.gov/**',
-      '**/www.nwrfc.noaa.gov/**',
-      '**/api.tidesandcurrents.noaa.gov/**',
-      '**/mesonet.agron.iastate.edu/**',
-      '**/ddm-proxy.atniclimate.workers.dev/**'
-    ]) {
-      await page.route(pattern, (route) => route.abort('failed'));
-    }
-    await page.setViewportSize(M7_DESKTOP);
-    const app = page.locator('#app');
-    await gotoApp(page, '?view=console&sidebar=closed');
-    await waitForLayerSettled(page, 'nadm-drought');
-    await expect(app).toHaveClass(/\bsidebar-collapsed\b/);
-
-    // The chip row lives in the collapsed column. Opening it through the
-    // expand control is itself the explicit open choice that drops the key,
-    // so the chips are pressed through their own click handlers in the page
-    // (the same handler a tap reaches) while the column stays closed.
-    const pressQuickView = async (preset: ViewPreset): Promise<void> => {
-      await page.evaluate((label: string) => {
-        const chip = Array.from(document.querySelectorAll('#preset-chips .preset-chip')).find(
-          (element) => element.textContent === label
-        );
-        if (!(chip instanceof HTMLElement)) throw new Error(`no quick-view chip "${label}"`);
-        chip.click();
-      }, preset.label);
-    };
-
-    await pressQuickView(seasonAhead);
-    await expect(horizonChip(page, 'season-ahead')).toHaveAttribute('aria-pressed', 'true', {
-      timeout: 25_000
-    });
-    await expect
-      .poll(async () => new URLSearchParams(await search(page)).get('horizon'))
-      .toBe('season-ahead');
-    expect(await sidebarTokens(page), 'after Season ahead').toEqual(['closed']);
-    await expect(app, 'after Season ahead').toHaveClass(/\bsidebar-collapsed\b/);
-
-    await pressQuickView(rightNow);
-    await expect
-      .poll(async () => new URLSearchParams(await search(page)).get('horizon'))
-      .toBeNull();
-    await expect(horizonChip(page, 'current')).toHaveAttribute('aria-pressed', 'true');
-    expect(await sidebarTokens(page), 'after Right now').toEqual(['closed']);
-    await expect(app, 'after Right now').toHaveClass(/\bsidebar-collapsed\b/);
-
-    await page.reload({ waitUntil: 'domcontentloaded' });
-    await expect(page.locator('html')).toHaveAttribute('data-ddm-controls', 'ready');
-    await expect(app, 'reload').toHaveClass(/\bsidebar-collapsed\b/);
-    await expect(horizonChip(page, 'current'), 'reload').toHaveAttribute('aria-pressed', 'true');
-    expect(new URLSearchParams(await search(page)).get('horizon'), 'reload').toBeNull();
-    await expect.poll(() => sidebarTokens(page), { message: 'reload: sidebar=' }).toEqual([
-      'closed'
-    ]);
-    expect((await sidebarChrome(page)).exposed, 'reload: painted').toBe(false);
-
-    // Closed until the explicit expand, which drops the key and keeps the
-    // normalized horizon.
-    await page.locator('#sidebar-expand').click();
-    await expect(app).not.toHaveClass(/\bsidebar-collapsed\b/);
-    await expect.poll(() => sidebarTokens(page)).toEqual([]);
-    expect(new URLSearchParams(await search(page)).get('horizon')).toBeNull();
-  });
-
   test('the first URL mutation normalizes sidebar', async ({ page }) => {
     // S3 (the literal next-write rule, decision 1): every replaceState and
     // pushState from navigation start is recorded. A direct studio boot's
@@ -1632,7 +1570,7 @@ test.describe('D1 M7: the sidebar= key (DDM-P10-T07, DR-139)', () => {
               .toBe(true);
             // No application module has run.
             expect(await page.locator('html').getAttribute('data-ddm-controls'), label).toBeNull();
-            await expect(page.locator('#preset-chips .preset-chip'), label).toHaveCount(0);
+            await expect(page.locator('#region-select option'), label).toHaveCount(0);
 
             const chrome = await sidebarChrome(page);
             expect(chrome.collapsed, `${label}: collapsed`).toBe(scenario.collapsed);

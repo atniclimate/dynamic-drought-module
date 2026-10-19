@@ -34,6 +34,7 @@ const {
 
 const css = await readFile(new URL('src/styles/app.css', ROOT), 'utf8');
 const html = await readFile(new URL('index.html', ROOT), 'utf8');
+const shellSrc = await readFile(new URL('src/ui/island/shell.tsx', ROOT), 'utf8');
 
 /** Comments out, so a token named in prose never counts as a declaration. */
 const code = css.replace(/\/\*[\s\S]*?\*\//g, '');
@@ -122,8 +123,8 @@ test('the chrome tokens in app.css equal MAP_CHROME_SEATS', () => {
   );
   assert.deepEqual(
     MAP_CHROME_SEATS.filter((seat) => !seat.alwaysSeated).map((seat) => seat.key),
-    ['share'],
-    'only Share leaves its slot (the Brief rehost, R2 a)'
+    [],
+    'every slot keeps its control in every desktop view (Share in Brief too, owner 2026-10-19)'
   );
   // The formula at the 1280x720 open-sidebar container (W 940), every
   // number derived from the table: x = W - inset - cell width, y = inset +
@@ -268,4 +269,34 @@ test('the column rules read the tokens, and index.html carries every slot', () =
   for (const seat of MAP_CHROME_SEATS) {
     assert.match(html, slotMarkup[seat.slot], `index.html lost slot ${seat.slot} (${seat.key})`);
   }
+
+  // Share keeps slot 4 in Brief too (owner 2026-10-19): no sidebar Share seat
+  // in the markup and no Share entry in the Brief rehost table.
+  assert.doesNotMatch(html, /id="shell-share-host"/, 'the sidebar Share seat is gone');
+  assert.doesNotMatch(shellSrc, /nodeId:\s*'share-btn'/, 'Share is not rehosted');
+});
+
+// Owner 2026-10-19: controls stay put across modes. The Console strip sits
+// below the hazard buttons, the ENSO buttons above the mode-sized view
+// details, and desktop Brief docks the strip above Layer legends at the
+// sidebar's foot, off the map.
+test('sidebar seats: no mode-sized block sits above a control', () => {
+  const at = (s) => {
+    const i = html.indexOf(s);
+    assert.ok(i >= 0, `index.html lost ${s}`);
+    return i;
+  };
+  assert.ok(at('id="shell-panel"') < at('id="conditions-strip-home"'), 'the Console strip home sits below the hazard buttons');
+  assert.match(html, /<span id="conditions-strip-home" hidden><\/span>\s*<section[^>]*id="conditions-strip"/);
+  assert.ok(
+    at('id="brief-display"') < at('id="enso-flow-controls"') && at('id="enso-flow-controls"') < at('id="shell-details-panel"'),
+    'the ENSO buttons sit above the variable view details'
+  );
+  const dock = html.slice(at('class="sidebar-bottom-dock"'));
+  const strip = dock.indexOf('id="conditions-strip-dock"');
+  assert.ok(strip >= 0 && strip < dock.indexOf('sidebar-legend-disclosure'), 'the strip dock sits in the bottom dock above Layer legends');
+  const indicator = html.slice(at('id="map-condition-indicator"'), at('id="hover-inspector"'));
+  assert.ok(!indicator.includes('conditions-strip-dock'), 'the strip no longer seats on the map');
+  assert.match(code, /\.sidebar-bottom-dock\s*\{\s*margin-top:\s*auto;/);
+  assert.match(code, /#app\.view-brief:not\(\.embed\) \.sidebar-scroll \{ display: flex; flex-direction: column; \}/);
 });

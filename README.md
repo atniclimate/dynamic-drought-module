@@ -69,8 +69,8 @@ See the [release notes](docs/RELEASE_NOTES.md) for release history and verificat
 
 ## What the module shows
 
-The module shows five kinds of information, plus the presets that arrange
-them. Each kind answers a different question about conditions and place.
+The module shows five kinds of information, and each mode opens with the
+layers that answer it. Each kind answers a different question about conditions and place.
 
 - **Condition surfaces** answer the severity question for the visible
   area, shown one at a time so they never fight visually: the US Drought
@@ -106,10 +106,6 @@ them. Each kind answers a different question about conditions and place.
   seasonal water-supply outlook, the El Nino / Southern Oscillation
   (ENSO) tilt, and public resources routed in stewardship order (Tribe
   first, then federal, then state).
-- **View presets** organize the layer stack around a question instead of
-  asking you to build one: five question-first chips ("Right now", "This
-  week", "Season ahead", "Fire risk", "Whose land") set the stack for
-  the question being asked, without locking it.
 
 Every layer reports an honest status (`loading`, `live`,
 `live (partial)`, `unavailable`, `no data`, `zoom in to load`); a failure
@@ -186,6 +182,7 @@ for layer lists, views, time controls, defaults, and legacy links.
 | `heatrisk` | HeatRisk (seven published days) | surface | NOAA NWS/WPC ImageServer (live) |
 | `spc-fire-weather` | Fire Weather Outlook (Day 1) | surface | NOAA SPC MapServer (live) |
 | `usfs-whp` | Wildfire Hazard Potential | surface | USFS GeoPlatform ImageServer (live) |
+| `usfs-whp-classes` | Wildfire Hazard Potential (USFS colors) | surface | USFS GeoPlatform ImageServer (live) |
 | `cdm-drought` | Canadian Drought Monitor (snapshot) | surface | Agriculture and Agri-Food Canada, bundled monthly snapshot |
 | `nadm-drought` | North American Drought Monitor | surface | NOAA NCEI GeoJSON (live) |
 | `sst-anomaly` | Ocean Temperature Anomaly | surface | NASA GIBS WMTS (live) |

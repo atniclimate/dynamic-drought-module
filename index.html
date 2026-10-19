@@ -90,18 +90,6 @@
 
       <div class="sidebar-scroll">
 
-        <!-- Stable fallback seat for the one conditions strip. Desktop Brief
-             moves the SAME section into the top-left map indicator; every
-             other surface and the island pre-mount fallback retain this seat. -->
-        <span id="conditions-strip-home" hidden></span>
-        <section class="panel conditions-strip" id="conditions-strip" aria-label="Conditions in view" hidden>
-          <div class="conditions-head">
-            <span class="conditions-title">Conditions in view</span>
-            <span class="conditions-date" id="conditions-date"></span>
-          </div>
-          <div class="conditions-metrics" id="conditions-metrics" aria-live="polite" aria-atomic="true"></div>
-        </section>
-
         <!-- Stable fallback seat for the generated Brief head. The eligible
              desktop Brief shell moves the SAME section below its minimap;
              console, mobile, embed, collapse, and pre-mount retain this seat. -->
@@ -115,6 +103,19 @@
              while the mobile sheet and hazard rail serve smaller screens. -->
         <section class="panel shell-panel" id="shell-panel" aria-label="Hazard view, conditions, region, framing, time, and share">
           <div id="shell-island"></div>
+        </section>
+
+        <!-- Stable fallback seat for the one conditions strip, below the hazard
+             buttons so its changing height never moves them. Desktop Brief
+             moves the SAME section into the sidebar's bottom dock; every other
+             surface and the island pre-mount fallback retain this seat. -->
+        <span id="conditions-strip-home" hidden></span>
+        <section class="panel conditions-strip" id="conditions-strip" aria-label="Conditions in view" hidden>
+          <div class="conditions-head">
+            <span class="conditions-title">Conditions in view</span>
+            <span class="conditions-date" id="conditions-date"></span>
+          </div>
+          <div class="conditions-metrics" id="conditions-metrics" aria-live="polite" aria-atomic="true"></div>
         </section>
 
         <!-- time-bar.ts moves this same node to #sheet-time-host on mobile;
@@ -138,11 +139,12 @@
             <button type="button" class="brief-full-report-link" id="brief-full-report-link">Open the full briefing</button>
           </div>
         </section>
-        <!-- Variable view details follow the persistent navigation controls. -->
+        <div id="enso-flow-controls"></div>
+        <!-- Variable view details follow the persistent navigation controls
+             and the ENSO buttons, so their mode-sized height moves neither. -->
         <section id="shell-details-panel" class="shell-details-panel" aria-label="View details">
           <div id="shell-details-island"></div>
         </section>
-        <div id="enso-flow-controls"></div>
 
         <!-- The sheet's at-hand block (U2/U3): the half detent's Brief content
              (place title, the current-horizon read, the ONE search, the one
@@ -180,17 +182,6 @@
         <section class="panel" id="panel-region">
           <label class="panel-title sr-only" for="region-select">Jump to region</label>
           <select id="region-select" class="region-select" aria-label="Jump to region"></select>
-        </section>
-
-        <!-- The Quick views preset panel (UX-2). On the desktop BRIEF
-             launch pad the shell panel's four cluster buttons carry the
-             view question (S4; the 2026-07-18 design record) and this
-             panel stays hidden as it has since E1; it remains the shipped
-             surface of desktop console and the mobile sheet's half and
-             console detents (mobile surfaces defer to S6). -->
-        <section class="panel" id="panel-quick-views">
-          <h2 class="panel-title">Quick views</h2>
-          <div id="preset-chips" class="preset-chips" role="group" aria-label="Quick view presets"></div>
         </section>
 
         <!-- Mobile seat for the same ENSO flow controls used by the desktop
@@ -254,10 +245,15 @@
              overlay. Display is stylesheet-gated. -->
         <div class="sheet-report" id="sheet-report"></div>
 
-        <details class="sidebar-legend-disclosure">
-          <summary>Layer legends</summary>
-          <div id="sidebar-key-host"></div>
-        </details>
+        <!-- Desktop Brief pins this group to the column foot: the conditions
+             strip, then Layer legends last so its summary keeps one seat. -->
+        <div class="sidebar-bottom-dock">
+          <div id="conditions-strip-dock" class="conditions-strip-dock"></div>
+          <details class="sidebar-legend-disclosure">
+            <summary>Layer legends</summary>
+            <div id="sidebar-key-host"></div>
+          </details>
+        </div>
 
       </div>
 
@@ -269,8 +265,6 @@
            OUTSIDE .sidebar-scroll so the no-scroll contract and the foot's
            own scroll region cannot fight. -->
       <div id="panel-response" class="panel-response"></div>
-
-      <div class="shell-rehost shell-share-host sidebar-share-host" id="shell-share-host"></div>
 
       <footer class="sidebar-footer">
         <p>A project of ATNI Climate (Affiliated Tribes of Northwest Indians)</p>
@@ -290,7 +284,6 @@
       <div id="map" role="application" aria-label="Interactive regional map"></div>
 
       <div id="map-condition-indicator" class="map-condition-indicator">
-        <div id="conditions-strip-dock" class="conditions-strip-dock"></div>
         <div id="map-key-overlay-host" class="map-overlay-seat"></div>
       </div>
 
@@ -323,16 +316,12 @@
              and R2 a; the seat table is src/config/map-chrome.ts): 1 Reset,
              2 SAT, 3 Help with its drawer, 4 the reserved Share slot. On the
              desktop shell the stylesheet places each by `data-map-slot` in a
-             four-row grid, so the Brief shell's Share rehost empties slot 4
-             and moves nothing. Share and Reset stay direct children in this
+             four-row grid, so Share fills slot 4 in Brief and Console alike.
+             Share and Reset stay direct children in this
              source order, which the phone rail (its `order` rules) and the
              embed stack read unchanged. This span is slot 4's box; it
              renders only on the desktop shell and never takes a pointer. -->
         <span class="map-spine-reserve" data-map-slot="4" aria-hidden="true"></span>
-        <!-- Stable fallback seat for the one wired Share view button. The
-             desktop Brief shell rehosts this exact node; every other surface
-             returns it here, into slot 4. -->
-        <span id="share-btn-home" hidden></span>
         <button id="share-btn" class="overlay-btn map-cell" aria-label="Share view: the link restores region or framing, layers, mode and horizon, not the map position or an open briefing" title="The link restores region or framing, layers, mode and horizon, not the map position or an open briefing">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
           <span class="map-control-label">Share view</span>
@@ -340,7 +329,7 @@
         <!-- The Reset glyph is Feather rotate-ccw, whose ink spans x 1 to 21
              of its 24 box. The viewBox starts at x -1 so the ink box is
              centred on the icon column (it sat 0.83 px left at 20 px). -->
-        <button id="reset-btn" class="overlay-btn map-cell" data-map-slot="1" aria-label="Reset map view" title="Reset to selected region bounds">
+        <button id="reset-btn" class="overlay-btn map-cell" data-map-slot="1" aria-label="Reset map view" title="Return to the default view">
           <svg viewBox="-1 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
           <span class="map-control-label">Reset</span>
         </button>

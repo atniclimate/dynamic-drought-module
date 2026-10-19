@@ -96,7 +96,7 @@
      1.4.3 floor for normal text at every size this app uses it at.
      Those earlier surface ratios predate the D3 opaque alias migration.
      The retained #7d8ba1 clears 4.5 on adopted S0-S2; --bg-3 is a hover background
-     (.preset-chip, .telemetry-item, .hazard-rail-btn, #share-btn) and
+     (.telemetry-item, .hazard-rail-btn, #share-btn) and
      still misses AA at 4.21 -- see the report note on #8592a6 (4.62). */
   /* D3 T4: use only on S0-S2; S3 descendants step up to ink-muted. */
   --fg-3: var(--ink-faint);
@@ -1174,7 +1174,7 @@ button.conditions-metric:hover .conditions-action-hide {
 
 /* E1 deliverable 1, interim progressive disclosure (D-0.7.0-041 part 2; the
    2026-07-16 design review E1.2): in Brief mode the console instrumentation
-   (Quick views, the Layers catalog, Water & Snow, and the persistent footer)
+   (the Layers catalog, Water & Snow, and the persistent footer)
    steps behind the existing, honestly named "Open the map & layers console"
    door; the Brief page is the answer, the one search, and the one door.
    CSS-first: the DOM stays mounted (the island pre-mount boot signal and the
@@ -1182,79 +1182,18 @@ button.conditions-metric:hover .conditions-action-hide {
    untouched byte for byte (:not(.embed)): the embed surface keeps its
    shipped chrome (hard rule 8). On mobile the sheet detent matrix already
    gates these sections; these rules only quiet the desktop Brief column. */
-#app.view-brief:not(.embed) #panel-quick-views,
 #app.view-brief:not(.embed) #panel-layers,
 #app.view-brief:not(.embed) #panel-telemetry,
 #app.view-brief:not(.embed) .sidebar-footer {
   display: none;
 }
 
-/* The same door during the boot window (foundations plan v2 ruling A2; S14,
-   2026-09-08): `view-brief` arrives with the map but the shell builds at DOM
-   ready (DR-065), so a bare URL flashed five dimmed chips. The shell stamps
-   the URL-derived mode on `data-ddm-boot-view`; desktop shell only, the
-   phone sheet's detents own the panel below 721px. */
-@media (min-width: 721px) {
-  html:not([data-ddm-controls='ready']) #app[data-ddm-boot-view='brief']:not(.embed) #panel-quick-views {
-    display: none;
-  }
-}
-
-/* ----------------------------------------------------------------------------
-   View preset chips (UX-2)
-   ---------------------------------------------------------------------------- */
-
-.preset-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-/* Item 9, 2026-09-10: a CONTROL takes the design system's radius; the pill
-   shape is reserved for status BADGES, where the fully rounded end is what
-   distinguishes a readout from something you can press (.status-pill,
-   .point-heat-pill, .impact-horizon-pill, .impact-hazard-pill keep theirs
-   for exactly that reason). Three selectors moved: this one,
+/* Control radius (Item 9, 2026-09-10): a CONTROL takes the design system's
+   radius; the pill shape is reserved for status BADGES, where the fully
+   rounded end is what distinguishes a readout from something you can press
+   (.status-pill, .point-heat-pill, .impact-horizon-pill, .impact-hazard-pill
+   keep theirs for exactly that reason). Two selectors carry it:
    .time-bar-mode and .shell-horizon-btn. */
-.preset-chip {
-  appearance: none;
-  background: var(--bg-2);
-  color: var(--fg-1);
-  border: 1px solid var(--rule-control);
-  border-radius: var(--radius-md);
-  padding: 6px 12px;
-  font-family: var(--font-display);
-  font-size: 11px;
-  font-weight: var(--fw-subtitle);
-  letter-spacing: 0.02em;
-  cursor: pointer;
-  transition: all 0.12s ease;
-  line-height: 1.2;
-  /* DDM-P17-T07 (found-020): a quick-view chip measured 21px tall at
-     1440x900 with a mouse. The mobile sheet's own 44px rule
-     (#app[data-sheet-detent] .preset-chip) already outranks this on
-     specificity, so it is untouched. */
-  min-height: var(--pointer-target);
-}
-.preset-chip:hover {
-  background: var(--bg-3);
-  border-color: var(--rule-control);
-  color: var(--fg-0);
-}
-.preset-chip:active {
-  background: var(--accent-soft);
-  border-color: var(--accent-strong);
-  color: var(--fg-0);
-}
-/* D1 M6 (2026-09-27; found-005): the quick view whose view is showing
-   reads pressed with the accent the pressed hazard and horizon buttons use
-   (.shell-cluster-btn, .shell-horizon-btn). It follows :hover and :active
-   so a hovered pressed chip still reads pressed. */
-.preset-chip[aria-pressed='true'] {
-  background: var(--accent-soft);
-  border-color: var(--accent);
-  color: var(--accent);
-}
 
 /* ----------------------------------------------------------------------------
    Layer toggles
@@ -1843,27 +1782,10 @@ button.conditions-metric:hover .conditions-action-hide {
     color: var(--ink);
     border-color: var(--rule-control);
   }
-  .app-shell:not(.embed) #sidebar .preset-chip:not([aria-disabled='true']):active {
-    background: var(--surface-hover);
-    border-color: var(--rule-control);
-    color: var(--ink);
-  }
-  .app-shell:not(.embed) #sidebar .preset-chip[aria-pressed='true'] {
-    background: var(--surface-hover);
-    color: var(--ink-strong);
-    /* The same edge as the shared pressed treatment (horizon chips, mode
-       buttons), so a pressed quick view reads as one with its horizon. */
-    border-color: var(--rule-control);
-    font-weight: 700;
-    box-shadow: inset 2px 0 0 var(--ink-strong);
-  }
-  .app-shell:not(.embed) #sidebar :is(.region-briefing-btn, .preset-chip):focus-visible {
+  .app-shell:not(.embed) #sidebar .region-briefing-btn:focus-visible {
     outline: 2px solid var(--focus-inner);
     outline-offset: 0;
     box-shadow: 0 0 0 4px var(--focus-outer);
-  }
-  .app-shell:not(.embed) #sidebar .preset-chip[aria-pressed='true']:focus-visible {
-    box-shadow: inset 2px 0 0 var(--ink-strong), 0 0 0 4px var(--focus-outer);
   }
 }
 
@@ -1949,18 +1871,6 @@ button.conditions-metric:hover .conditions-action-hide {
 }
 .maplibregl-ctrl-bottom-left > .maplibregl-ctrl-scale + .maplibregl-ctrl-scale {
   border-radius: 0 0 var(--radius-sm) var(--radius-sm);
-}
-
-/* The desktop app already carries drought categories in the sidebar. Other
-   on-map keys keep their controls and qualifications, while the compact
-   embed retains its drought key because it has no sidebar. Scoped to the
-   desktop shell only (W2-D2): below 721px the sidebar legend is off screen
-   behind the sheet, so the phone shell keeps its drought key exactly like
-   Fire and Heat. */
-@media (min-width: 721px) {
-  #app:not(.embed) #map-key[data-key-family='drought'] {
-    display: none !important;
-  }
 }
 
 /* The basemap switcher button (U4d): the DESIGN MODEL of the map control
@@ -2886,8 +2796,8 @@ button.conditions-metric:hover .conditions-action-hide {
    moved in by src/map/init.ts), 3 Help with its Map information drawer
    (moved in by src/ui/map-information.ts), 4 Share view, reserved. The
    grid rows are explicit, so a slot's box exists whether or not its
-   control is there: the Brief shell's Share rehost empties slot 4 and
-   nothing else moves (the 2026-09-13 stable-position rule, measured to
+   control is there: Share fills slot 4 in every view and nothing moves
+   (the 2026-09-13 stable-position rule, measured to
    1px by tests/map-chrome-seats.spec.ts). The seat table lives in
    src/config/map-chrome.ts and tests/map-chrome-contract.test.mjs keeps
    these tokens equal to it.
@@ -2957,8 +2867,7 @@ button.conditions-metric:hover .conditions-action-hide {
   .app-shell:not(.embed) .map-overlay-controls > #share-btn { grid-area: 4 / 1; }
   /* Slots 2 and 3 stop being `display: contents` and become their own
      boxes: the moved control fills its slot, and slot 3 anchors the
-     drawer. Slot 4's box is the reserve span, under Share when Share is
-     home. */
+     drawer. Slot 4's box is the reserve span, under Share. */
   .app-shell:not(.embed) .map-overlay-controls > .map-spine-slot {
     display: block;
     position: relative;
@@ -4194,7 +4103,6 @@ button.conditions-metric:hover .conditions-action-hide {
 
   /* Half, console: the compact controls and the one door to the catalog. */
   #app[data-sheet-detent='half'].view-console #panel-region,
-  #app[data-sheet-detent='half'].view-console #panel-quick-views,
   #app[data-sheet-detent='half'].view-console #sheet-all-layers { display: block; }
 
 
@@ -4480,11 +4388,6 @@ button.conditions-metric:hover .conditions-action-hide {
     border: 0;
   }
   #app[data-sheet-detent] .basemap-switcher-icon { display: block; }
-  #app[data-sheet-detent] .preset-chip {
-    min-height: 44px;
-    padding: 10px 14px;
-    font-size: 12px;
-  }
   #app[data-sheet-detent] .region-select { min-height: 44px; }
   #app[data-sheet-detent] .sheet-report-door { min-height: 44px; }
   #app[data-sheet-detent] .time-bar-step,
@@ -5941,7 +5844,6 @@ a.impact-resource-link::after {
 @supports (text-box: trim-both cap alphabetic) {
   .status-pill,
   .layer-toggle-status,
-  .preset-chip,
   .region-select,
   .conditions-value {
     text-box: trim-both cap alphabetic;
@@ -6006,7 +5908,7 @@ a.impact-resource-link::after {
      one line and its button keeps its own sub line. */
   :where(body:not(:has(> .app-shell.embed)))
     :where(.map-cell, .map-key-chip-label, .shell-cluster-btn, .shell-horizon-btn-title, .status-pill,
-      .layer-toggle-status, .preset-chip) {
+      .layer-toggle-status) {
     white-space: nowrap;
   }
   /* T4 measure: 50 to 75 characters, 66 ideal (README:153). */
@@ -6171,6 +6073,19 @@ a.impact-resource-link::after {
   align-items: center;
   gap: 4px;
 }
+/* A key line that opens its map feature's popup: reads as the line it was, focus ring from the global rule. */
+.map-key-door {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: start;
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
 .map-key-qualification {
   flex: 1 1 100%;
   min-width: 0;
@@ -6281,6 +6196,18 @@ a.impact-resource-link::after {
   min-width: 0;
   line-height: 1.2;
   white-space: normal;
+}
+/* Owner review 2026-10-19: larger key text, each section heading on its own
+   line, and the HeatRisk and NWS rows on one shared two-column edge. */
+@media (min-width: 721px) {
+  #map-key .map-key-content { font-size: 11px; }
+  #map-key .map-key-scale { width: 100%; }
+  #map-key .map-key-scale-label { width: 100%; font-size: 10px; }
+  #map-key .map-key-scale[data-heatrisk-scale] .map-key-item,
+  #map-key .map-key-nws-products .map-key-item {
+    flex: 0 0 calc(50% - 3px);
+    min-width: 0;
+  }
 }
 .app-shell.embed .map-key {
   max-width: min(560px, calc(100% - 112px));
@@ -7216,8 +7143,7 @@ a.impact-resource-link::after {
      rather than degrading. `.time-bar-rail`'s flex-basis of 0 means it
      never itself forces a wrap; wrapping is driven by the step/jump/play
      items' own content sizes, so at a narrow width they wrap to a second
-     line and the rail keeps the whole first line to grow into (mirrors
-     the already-wrapped `.shell-time-detail-modes` / `-jumps` below). */
+     line and the rail keeps the whole first line to grow into. */
   flex-wrap: wrap;
 }
 
@@ -7348,8 +7274,7 @@ a.impact-resource-link::after {
      card's margins and padding are subtracted, and with no wrap the
      overflow is clipped by the sidebar's own overflow:hidden ancestors
      rather than the chip degrading, making the last chip look "dead" at a
-     real width even though its click handler is fine. Mirrors the
-     popover's already-wrapped .shell-time-detail-modes. */
+     real width even though its click handler is fine. */
   flex-wrap: wrap;
 }
 .time-bar-mode {
@@ -7359,7 +7284,7 @@ a.impact-resource-link::after {
   padding: 2px 9px;
   background: transparent;
   border: 1px solid var(--line);
-  /* Item 9: a control, not a badge. See the note above .preset-chip. */
+  /* Item 9: a control, not a badge. See the Item 9 control-radius note. */
   border-radius: var(--radius-sm);
   font-family: var(--font-body);
   font-weight: var(--fw-body);
@@ -7802,17 +7727,6 @@ a.impact-resource-link::after {
 #shell-framing-note:empty { margin: 0; }
 #shell-details-island > .shell-fire3d { margin-block: 10px; }
 #shell-details-island > .shell-summary { margin-block: 6px; }
-#shell-share-host > #share-btn {
-  width: 100%;
-  min-height: 36px;
-  background: var(--bg-2);
-  border: 1px solid var(--rule-control);
-  border-radius: var(--radius-md);
-}
-#shell-share-host > #share-btn:hover {
-  background: var(--bg-3);
-  border-color: var(--rule-control);
-}
 
 /* VIEW: the four hazard cluster buttons. */
 .shell-view {
@@ -7838,12 +7752,6 @@ a.impact-resource-link::after {
   border-top: 1px solid var(--line-strong);
 }
 
-.sidebar-share-host {
-  flex: 0 0 auto;
-  padding: 10px 18px;
-  border-top: 1px solid var(--line);
-}
-.sidebar-share-host:empty { display: none; }
 .sidebar-legend-disclosure { margin: 0 18px 12px; }
 .sidebar-legend-disclosure:not(:has(#legend-panel:not([hidden]))) { display: none; }
 .sidebar-legend-disclosure > summary {
@@ -7853,6 +7761,14 @@ a.impact-resource-link::after {
   padding-block: 8px;
 }
 .sidebar-legend-disclosure #legend-panel { padding: 10px 0; border: 0; }
+.sidebar-bottom-dock { margin-top: auto; }
+.sidebar-bottom-dock > .conditions-strip-dock { margin: 0 18px 12px; }
+@media (min-width: 721px) {
+  /* Brief pins the strip and Layer legends to the column foot so a mode's
+     variable details never move them; margin-top: auto is inert elsewhere. */
+  #app.view-brief:not(.embed) .sidebar-scroll { display: flex; flex-direction: column; }
+  #app.view-brief:not(.embed) .sidebar-scroll > * { flex-shrink: 0; }
+}
 
 .feed-current {
   display: inline-flex;
@@ -8092,6 +8008,8 @@ a.impact-resource-link::after {
 }
 
 .shell-minimap-ocean {
+  cursor: pointer;
+  pointer-events: auto;
   fill: rgba(34, 211, 238, 0.04);
   stroke: transparent;
   stroke-width: 1.2px;
@@ -8099,6 +8017,13 @@ a.impact-resource-link::after {
     fill 0.12s ease,
     stroke 0.12s ease,
     filter 0.12s ease;
+}
+
+.shell-minimap-ocean:hover,
+.shell-minimap-ocean:focus-visible {
+  fill: rgba(34, 211, 238, 0.09);
+  stroke: rgba(34, 211, 238, 0.72);
+  outline: none;
 }
 
 .shell-minimap-ocean.active {
@@ -8202,11 +8127,14 @@ a.impact-resource-link::after {
 
 /* Hawaii is intentionally enlarged and detached from the mainland
    projection. The dashed frame, not an individual island, is the one
-   complete hit target and fits the real island-chain bounds. */
+   complete hit target and fits the real island-chain bounds. It sits
+   under the Alaska and Northwest framing, beside the Pacific coast, and
+   leaves Pacific water on its left and below for the ocean target
+   (owner, 2026-10-19). */
 .shell-minimap-hawaii {
   position: absolute;
-  left: 2.7%;
-  top: 56.7%;
+  left: 16%;
+  top: 38%;
   z-index: 2;
   appearance: none;
   width: 25.7%;
@@ -8342,8 +8270,7 @@ a.impact-resource-link::after {
   .shell-minimap-hawaii,
   .shell-minimap-island,
   .shell-minimap-all,
-  .shell-cluster-btn,
-  #shell-share-host > #share-btn {
+  .shell-cluster-btn {
     transition: none;
   }
   .shell-minimap-canvas[data-minimap-status="loading"] .shell-minimap-mainland,
@@ -8371,7 +8298,7 @@ a.impact-resource-link::after {
   /* Item 9: these are the Current Conditions / Near Term / Long Range
      controls the owner named. A segmented row of pills reads as three
      separate badges; the design system radius reads as one control set.
-     See the note above .preset-chip. */
+     See the Item 9 control-radius note. */
   border-radius: var(--radius-md);
   padding: 4px 6px;
   font-family: var(--font-display);
@@ -8451,25 +8378,6 @@ a.impact-resource-link::after {
   font-size: 10.5px;
   color: var(--fg-3);
 }
-.shell-time > .shell-popover-door {
-  /* 72px and one line: with the self-hosted Spartan MB (2026-10-07) "More
-     time" no longer fit 64px and wrapped, so the row grew in Drought and
-     shrank under "Details", moving every control below it (s4-shell). */
-  flex: 0 0 72px;
-  width: 72px;
-  white-space: nowrap;
-  /* DDM-P17-T07 (found-020): the More time / Details door measured 64x17
-     at 1440x900 with a mouse. Its width already clears the floor; only
-     the height needs raising. */
-  min-height: var(--pointer-target);
-}
-.shell-time > .shell-popover-door:disabled { opacity: 0.45; cursor: default; }
-/* found-015 (M12 repair): a single-period spec's door keeps its 64px seat
-   (the row's box never moves) but is hidden as well as disabled, never
-   just dimmed like the no-spec-at-all state above; visibility (not
-   display) so the flex layout is untouched. */
-.shell-time > .shell-popover-door[data-controls='none'] { visibility: hidden; }
-
 .shell-popover-door {
   appearance: none;
   background: transparent;
@@ -8484,7 +8392,7 @@ a.impact-resource-link::after {
 }
 .shell-popover-door:hover { color: var(--fg-0); border-color: var(--line-strong); }
 
-/* The shared popover card (the compact minimap and the More time detail). */
+/* The shared popover card (the compact minimap). */
 .shell-popover {
   background: var(--bg-1);
   color: var(--fg-1);
@@ -8495,65 +8403,6 @@ a.impact-resource-link::after {
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
 }
 .shell-popover::backdrop { background: rgba(0, 0, 0, 0.35); }
-
-/* The time door anchors to its trigger (found-015): a native [popover]'s
-   UA default (inset: 0; margin: auto) centres it in the viewport, which is
-   the "about 300 px from its 64x17 button" defect. CSS anchor positioning
-   overrides that default for THIS popover only (id selectors; the shared
-   .shell-popover class, including the minimap's card, is untouched).
-   Unsupported browsers keep today's centred UA default, never a blank or
-   off-screen card. */
-#shell-time-more { anchor-name: --shell-time-door; }
-@supports (anchor-name: --shell-time-door) {
-  #shell-time-popover:popover-open {
-    position: fixed;
-    position-anchor: --shell-time-door;
-    inset: auto;
-    position-area: bottom span-left;
-    margin: 8px 0 0;
-  }
-}
-
-.shell-time-detail { display: grid; gap: 10px; }
-.shell-time-detail-stamp { display: grid; gap: 2px; }
-.shell-time-detail-headline {
-  font-family: var(--font-body);
-  font-size: 11px;
-  font-weight: var(--fw-subtitle);
-  letter-spacing: 0.04em;
-  color: var(--accent);
-  font-feature-settings: 'tnum' 1;
-  font-variant-numeric: tabular-nums lining-nums;
-}
-.shell-time-detail-stamp[data-register='outlook'] .shell-time-detail-headline {
-  color: var(--ink-soft);
-}
-.shell-time-detail-line {
-  font-family: var(--font-body);
-  font-size: 10.5px;
-  color: var(--fg-2);
-}
-/* The detail card's horizon line mirrors .time-bar-stamp-horizon (S13). */
-.shell-time-detail-horizon {
-  font-family: var(--font-display);
-  font-weight: var(--fw-subtitle);
-  font-size: 9.5px;
-  letter-spacing: var(--track-caps-sm);
-  text-transform: uppercase;
-  color: var(--fg-2);
-}
-.shell-time-detail-rail {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.shell-time-detail-rail .time-bar-rail { flex: 1; }
-.shell-time-detail-modes,
-.shell-time-detail-jumps {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
 
 /* CONDITIONS IN VIEW: the honest display summary. */
 .shell-summary-primary {
@@ -8588,9 +8437,7 @@ a.impact-resource-link::after {
   padding: 0;
   border: 0;
 }
-#conditions-strip-dock .conditions-title { display: none; }
 #conditions-strip-dock .conditions-head {
-  justify-content: flex-end;
   margin-bottom: 5px;
 }
 #conditions-strip-dock .conditions-metrics {
@@ -8891,7 +8738,6 @@ a.impact-resource-link::after {
   .shell-cluster-btn,
   .shell-horizon-btn,
   .shell-popover-door,
-  #shell-share-host > #share-btn,
   .panel-response-close.icon-btn {
     min-height: var(--touch-target);
   }
@@ -8946,11 +8792,10 @@ a.impact-resource-link::after {
     padding-inline: 12px;
   }
 
-  /* Sidebar body: the preset chips (21px), the place search (31px), the
+  /* Sidebar body: the place search (31px), the
      region select and its briefing trigger (38px), the Tribal Nations
      action (32px), the two studio doors (28px), the conditions metrics
      (37px), the full-report link (17px), and the key disclosure (38px). */
-  .preset-chip,
   .ddm-search-input,
   .region-select,
   .region-briefing-btn,
@@ -9134,7 +8979,6 @@ a.impact-resource-link::after {
 /* stop it changing a value nothing would honor. The whole treatment is  */
 /* removed, not rewritten, once the map is ready.                        */
 /* --------------------------------------------------------------------- */
-.preset-chip[aria-disabled='true'],
 .hazard-rail-btn[aria-disabled='true'],
 .region-briefing-btn[aria-disabled='true'],
 .region-select:disabled {
@@ -9142,11 +8986,6 @@ a.impact-resource-link::after {
   cursor: var(--ctl-pending-cursor);
 }
 /* A disabled control must not answer a hover as though it would act. */
-.preset-chip[aria-disabled='true']:hover {
-  background: var(--bg-2);
-  border-color: var(--line);
-  color: var(--fg-1);
-}
 .region-select:disabled:hover {
   background: var(--bg-2);
   border-color: var(--line);

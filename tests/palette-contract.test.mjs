@@ -70,7 +70,7 @@ const DISPLAY_TRANSFORMS = [
     'fill-opacity': [0.3], 'line-opacity': [0.9]
   } },
   { id: 'HeatRisk', source: 'S5', file: 'layers/heatrisk.ts', paint: {
-    'raster-opacity': [0.55], 'raster-resampling': ['nearest']
+    'raster-opacity': [0.55], 'raster-resampling': ['linear']
   } },
   { id: 'WHP 2D', source: 'S9', file: 'layers/usfs-whp.ts', paint: {
     'raster-opacity': [0.55], 'raster-resampling': ['nearest']
@@ -81,8 +81,8 @@ const DISPLAY_TRANSFORMS = [
   { id: 'SPI', source: 'S12', file: 'layers/gridded-index.ts', paint: {
     'raster-opacity': [0.72]
   } },
-  { id: 'CPC hatch', source: 'S8', file: 'layers/drought.ts', paint: {
-    'fill-opacity': [1], 'line-opacity': [0.9]
+  { id: 'CPC outlook', source: 'S8', file: 'layers/drought.ts', paint: {
+    'fill-opacity': [0.48], 'line-opacity': [0.9]
   } },
   { id: 'NIFC pulse', source: 'DDM mapped-perimeter class', file: 'config/wildfire-presentation.ts', paint: {} }
 ];
@@ -116,12 +116,11 @@ function assertTransform(row, text) {
 
 test('named display transforms pin the actual current adapter paint independently of source colors', () => {
   assert.deepEqual(DISPLAY_TRANSFORMS.map(row => row.id), [
-    'USDM', 'CDM', 'NADM', 'BC', 'NWS', 'SPC', 'HeatRisk', 'WHP 2D', 'SST', 'SPI', 'CPC hatch', 'NIFC pulse'
+    'USDM', 'CDM', 'NADM', 'BC', 'NWS', 'SPC', 'HeatRisk', 'WHP 2D', 'SST', 'SPI', 'CPC outlook', 'NIFC pulse'
   ]);
   for (const row of DISPLAY_TRANSFORMS) assertTransform(row, sourceText(row.file));
-  const hatch = withoutBlockComments(sourceText('util/hatch.ts'));
-  assert.match(hatch, /^const STROKE_ALPHA = 0\.6;/m);
-  assert.match(hatch, /ctx\.strokeStyle\s*=\s*withAlpha\(color,\s*STROKE_ALPHA\)/);
+  // The outlook is a solid fill (owner, 2026-10-19), never the retired hatch pattern.
+  assert.doesNotMatch(withoutBlockComments(sourceText('layers/drought.ts')), /fill-pattern|util\/hatch/);
   assert.deepEqual(wildfire.WILDFIRE_PULSE_COLORS, ['#ff3300', '#ff4c00', '#ff6600']);
   assert.equal(wildfire.WILDFIRE_PULSE_DURATION_MS, 1800);
   assert.equal(wildfire.WILDFIRE_STATIC_COLOR, '#ff4c00');
@@ -137,9 +136,9 @@ test('transform pins reject source-opacity, resampling and extra-declaration dri
   assert.throws(() => assertTransform(cdm, changed), /CDM \(S3\) fill-opacity/);
   const heat = DISPLAY_TRANSFORMS.find(row => row.id === 'HeatRisk');
   const heatSource = sourceText(heat.file);
-  const linear = heatSource.replace("'raster-resampling': 'nearest'", "'raster-resampling': 'linear'");
-  assert.notEqual(linear, heatSource);
-  assert.throws(() => assertTransform(heat, linear), /HeatRisk \(S5\) raster-resampling/);
+  const nearest = heatSource.replace("'raster-resampling': 'linear'", "'raster-resampling': 'nearest'");
+  assert.notEqual(nearest, heatSource);
+  assert.throws(() => assertTransform(heat, nearest), /HeatRisk \(S5\) raster-resampling/);
   assert.throws(() => assertTransform(heat, heatSource + "\nconst drift = { 'raster-opacity': 0.99 };"), /HeatRisk \(S5\) raster-opacity/);
 });
 
@@ -302,6 +301,11 @@ test('S5 HeatRisk retains issuer class identity and colors', () => {
     [2, 'Moderate', '#F69632'], [3, 'Major', '#E22F33'], [4, 'Extreme', '#7A0E7F']
   ]);
 });
+test('S5 HeatRisk tile request leaves class 0 undrawn', () => {
+  const heatTile = sourceText('layers/heatrisk.ts');
+  assert.match(heatTile, /'noData=0'/);
+  assert.match(heatTile, /'interpolation=RSP_NearestNeighbor'/);
+});
 test('S6-S8 current source tables are pinned without upgrading pending provenance', () => {
   assert.deepEqual(palette.NWS_ALERT_COLORS, {
     'Extreme Heat Warning': '#c71585', 'Excessive Heat Warning': '#c71585',
@@ -315,6 +319,15 @@ test('S6-S8 current source tables are pinned without upgrading pending provenanc
   ]);
   assert.deepEqual(palette.DROUGHT_COLORS,
     { PERSISTS: '#9B634A', DEVELOPS: '#FFDE63', IMPROVES: '#DED4BC', REMOVAL: '#B2AD69' });
+});
+test('S6 NWS key lists one current name per drawn colour, no Excessive alias', () => {
+  const labels = palette.NWS_ALERT_LEGEND.map(({ label }) => label);
+  assert.deepEqual(labels,
+    ['Extreme Heat Warning', 'Extreme Heat Watch', 'Heat Advisory', 'Red Flag Warning', 'Fire Weather Watch']);
+  for (const { color, label } of palette.NWS_ALERT_LEGEND) assert.equal(color, palette.NWS_ALERT_COLORS[label]);
+  assert.deepEqual(new Set(palette.NWS_ALERT_LEGEND.map(({ color }) => color)),
+    new Set(Object.values(palette.NWS_ALERT_COLORS)));
+  assert.ok(labels.every((label) => !/Excessive/.test(label)));
 });
 const SST_SOURCE_EXPECTED = [
   [0, null, '#000000', true],
@@ -433,6 +446,12 @@ test('S10 LANDFIRE class-code/color pairs stay pinned while this source remains'
     ['TL5','#bee8ff'],['TL6','#00c5ff'],['TL7','#0084a8'],['TL8','#005ce6'],['TL9','#4d6e91'],
     ['SB1','#e8beff'],['SB2','#c500ff'],['SB3','#ffbee8'],['SB4','#ff7f7f']
   ]);
+});
+test('HMS smoke classes pin the owner taupe ramp, distinct swatches, darker and denser with class', () => {
+  const rows = ['Light', 'Medium', 'Heavy', 'Unknown'].map(k => [k, wildfire.HMS_DENSITY_PRESENTATION[k].color, wildfire.HMS_DENSITY_PRESENTATION[k].opacity]);
+  assert.deepEqual(rows, [['Light', '#aa9c8d', 0.08], ['Medium', '#908477', 0.17], ['Heavy', '#766d62', 0.33], ['Unknown', '#64748b', 0.12]]);
+  const lum = h => [1, 3, 5].reduce((s, i, n) => s + [0.2126, 0.7152, 0.0722][n] * parseInt(h.slice(i, i + 2), 16), 0);
+  assert.ok(lum('#aa9c8d') > lum('#908477') && lum('#908477') > lum('#766d62'), 'swatches darken with density');
 });
 function assertE1(rows) {
   assert.deepEqual(rows.map(row => row.opacity), [0, 0.15, 0.38, 0.68, 1, 0, 0]);

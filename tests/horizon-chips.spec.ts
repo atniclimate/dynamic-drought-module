@@ -142,16 +142,10 @@ test.describe('DDM-P8-T03: the shell horizon chips read HORIZON_CHROME', () => {
       expect(subtitle, `${key} chip subtitle`).toBe(chrome.subtitle);
     }
 
-    // The retired chip wording must not survive anywhere in the DOM. Scoped
-    // to exclude .preset-chip: VIEW_PRESETS' unrelated "Season ahead" scene
-    // chip (src/config/presets.ts) coincidentally shares the words but is a
-    // different feature, not a temporal horizon, and out of this task's
-    // scope.
-    const stray = await page.evaluate(() => {
-      const clone = document.body.cloneNode(true) as HTMLElement;
-      clone.querySelectorAll('.preset-chip').forEach((el) => el.remove());
-      return /\bWeeks ahead\b|\bSeason ahead\b/.test(clone.textContent ?? '');
-    });
+    // The retired chip wording must not survive anywhere in the DOM.
+    const stray = await page.evaluate(() =>
+      /\bWeeks ahead\b|\bSeason ahead\b/.test(document.body.textContent ?? '')
+    );
     expect(stray, 'the retired chip wording still appears somewhere in the DOM').toBe(false);
   });
 });
@@ -344,6 +338,11 @@ const PNG_1PX = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
   'base64'
 );
+/** One opaque #ed1e00 (Very High) pixel: Fuel risk shades only issuer class colours. */
+const WHP_PNG_1PX = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGN4K8fwHwAFEgILjNz/OgAAAABJRU5ErkJggg==',
+  'base64'
+);
 
 /** Empty, deterministic wildfire product fixtures so a wildfire cluster
  * commit in this file depends on no live agency (the same pattern already
@@ -365,7 +364,7 @@ async function stubWildfireProducts(page: Page): Promise<void> {
   await page.route('https://ddm-proxy.atniclimate.workers.dev/**', async (route) => {
     const target = new URL(route.request().url()).searchParams.get('url') ?? '';
     if (target.includes('/exportImage')) {
-      await route.fulfill({ status: 200, contentType: 'image/png', body: PNG_1PX });
+      await route.fulfill({ status: 200, contentType: 'image/png', body: WHP_PNG_1PX });
       return;
     }
     await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });

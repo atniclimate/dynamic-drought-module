@@ -177,7 +177,7 @@ test.describe('the mobile hazard rail (390x844)', () => {
     );
     await expect(page.locator('#reset-btn')).toHaveAttribute(
       'title',
-      'Reset to selected region bounds'
+      'Return to the default view'
     );
   });
 
@@ -234,7 +234,7 @@ test.describe('the mobile hazard rail (390x844)', () => {
     ).toHaveAttribute('aria-pressed', 'false');
   });
 
-  test('the rail stays reachable beside open panels; a quick-view chip closes the panel', async ({
+  test('the rail stays reachable beside open panels; a rail button closes the panel', async ({
     page
   }) => {
     await gotoApp(page);
@@ -258,9 +258,9 @@ test.describe('the mobile hazard rail (390x844)', () => {
     await satellite.evaluate((button) => (button as HTMLButtonElement).focus());
     await expect(satellite).toBeFocused();
 
-    // A quick-view chip applies its preset AND closes the sheet (the
+    // A rail button applies its preset AND closes the sheet (the
     // mockup's rule 5: the map answers).
-    await page.locator('#preset-chips .preset-chip', { hasText: 'Fire risk' }).click();
+    await page.locator('#hazard-rail button[data-preset="hazard-fire"]').click();
     await expect(app).toHaveAttribute('data-sheet-detent', 'closed');
     await expect(rail).toBeVisible();
     await expect(satellite).toBeVisible();

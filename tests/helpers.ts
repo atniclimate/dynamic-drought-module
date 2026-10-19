@@ -141,15 +141,6 @@ export const ROLE_GROUPS: ReadonlyArray<{ title: string; hint: string | null }> 
   { title: 'Stations', hint: null }
 ];
 
-/** Preset chip labels in order, mirroring `VIEW_PRESETS` in `src/config/presets.ts`. */
-export const PRESET_LABELS: readonly string[] = [
-  'Right now',
-  'This week',
-  'Season ahead',
-  'Fire risk',
-  'Whose land'
-];
-
 /** Default-on layer keys, mirroring `defaultOn: true` rows in `LAYER_DEFS`.
  * Telemetry left this set 2026-07-09 (0.7.0 H4, D-0.7.0-018 item 1);
  * states joined 2026-07-12 (U4c, boundaries as chrome). The Tribal Nations
@@ -173,6 +164,7 @@ export const SURFACE_KEYS = [
   'heatrisk',
   'spc-fire-weather',
   'usfs-whp',
+  'usfs-whp-classes',
   'sst-anomaly'
 ] as const;
 
@@ -219,7 +211,7 @@ export function stationValues(page: Page, id: string): Locator {
  * `?region=washington_state&layers=usdm,tribal`) and wait for boot to finish.
  *
  * Boot completes only after the map fires `load`, at which point `buildSidebar`
- * synchronously renders the preset chips and the region radios. Waiting on
+ * synchronously renders the region options. Waiting on
  * those two DOM facts is a network-independent boot signal: it does not depend
  * on any live agency layer succeeding, only on the map's WebGL context coming
  * up and the sidebar building. `domcontentloaded` (not `load`) avoids blocking
@@ -230,10 +222,16 @@ export function stationValues(page: Page, id: string): Locator {
  * (headroom C1), so waiting on it would hang exactly the boots the embed
  * specs exercise. Every other boot mounts the island, so the strong
  * catalog-present contract is kept for the specs that drive its rows.
- * The brief-embed detection mirrors `deriveViewMode` (src/state/
+ * The brief-embed detection mirrors `deriveViewMode`'s embed clause (src/state/
  * view-mode.ts): embed plus nothing that routes to the console.
  */
 export interface GotoAppOptions {
+  /**
+   * True navigates the query exactly as written, so the app's own view
+   * derivation picks the door. Default false pins a full-site display boot
+   * to `view=console` (see the shortcut in `gotoApp`).
+   */
+  readonly derivedView?: boolean;
   /**
    * How this boot answers the Census AIANNH and BIA AIAN-LAR queries.
    * Defaults to `fixture`, the synthetic bodies in `tests/tribal-fixtures.ts`.
@@ -327,7 +325,7 @@ export interface GotoAppOptions {
    * synchronous URL state. It does not get a SETTLED page: layers may still
    * be loading and shared transport may still be in flight, which is the
    * point of opting out. Before this change the same two guarantees were
-   * carried by one signal, the preset chips, which now appear at DOM ready
+   * carried by one signal, the generated controls, which now appear at DOM ready
    * and prove neither.
    */
   readonly bootIdle?: boolean;
@@ -455,21 +453,22 @@ export async function gotoApp(
   // fixtures (`installDefaultDrynessStub`), so no spec reaches either agency.
   await installDefaultDrynessStub(page);
   coverFuturePages(page);
+  // shortcut: a full-site display boot written before 0.7.7 derived the console; pin it so those specs keep their door; drop once specs name view=console themselves.
+  if (!options.derivedView && !/[?&]embed=(true|1)\b/.test(query) && !/[?&](view|select)=/.test(query) && /[?&](layers=|region=|cluster=|ocean=|framing=)/.test(query)) query += '&view=console';
   await page.goto(query, { waitUntil: 'domcontentloaded' });
   // DOM READY, and no longer a proxy for a finished boot. The generated
   // sidebar controls are built from the static registry tables before the
   // renderer is probed (the 2026-09-03 launch ruling section 4), so the
-  // chips and the region options now appear on every boot path, including
-  // one that never gets a map. These two assertions still earn their place
-  // (a boot that never runs its entry chunk fails them), but the wait that
-  // used to mean "the map loaded and the sidebar built" is the
-  // `data-ddm-controls` assertion below.
-  await expect(page.locator('#preset-chips .preset-chip')).toHaveCount(PRESET_LABELS.length);
-  await assertBuildIdentity(page);
+  // region options now appear on every boot path, including one that never
+  // gets a map. These two assertions still earn their place (a boot that
+  // never runs its entry chunk fails them), but the wait that used to mean
+  // "the map loaded and the sidebar built" is the `data-ddm-controls`
+  // assertion below.
   await expect(page.locator('#region-select option')).not.toHaveCount(0);
+  await assertBuildIdentity(page);
   // MAP READY: `buildSidebar` has created the layer controller, applied the
   // synchronous URL state, and enabled the map-dependent controls, which is
-  // exactly what the preset-chip count used to prove. Asserted for every
+  // exactly what the generated-control count used to prove. Asserted for every
   // caller, `bootIdle: false` included, so a spec that deliberately holds a
   // boot open still starts from a wired interface rather than a shell.
   await expect(page.locator('html')).toHaveAttribute('data-ddm-controls', 'ready');
@@ -587,7 +586,7 @@ function localBuildSha(): string | undefined {
  * must carry the same values, or the shard proved the wrong build (a stale
  * dist, another lane's preview, a rebuild without the variables under a
  * running preview: the 2026-08-28 qualification run caught exactly that,
- * `<sha>-dirty` against `<sha>`). It runs after the preset chips are
+ * `<sha>-dirty` against `<sha>`). It runs after the region options are
  * present, so a boot that never ran reads as a boot failure, not as a
  * wrong build; a missing stamp after a successful boot is named as such.
  *

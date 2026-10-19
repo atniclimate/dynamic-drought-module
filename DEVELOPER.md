@@ -151,7 +151,7 @@ deployer keeps control of the deployment.
 | ----------------- | ------- |
 | Region bounds or names | `src/config/regions.ts` (`REGIONS`) |
 | Layer registry and default-on set | `src/config/layers.ts` (`LAYER_DEFS`) |
-| View presets | `src/config/presets.ts` (`VIEW_PRESETS`) |
+| Phone hazard rail | `src/config/presets.ts` (`MOBILE_HAZARD_PRESETS`) |
 | Colors and palettes | `src/config/palette.ts` |
 | Telemetry stations | `src/config/telemetry.ts` |
 | Endpoint URLs and the Worker base | `src/config/urls.ts` |
@@ -165,14 +165,14 @@ current URL.
 
 | Param | Values | Default |
 | ----- | ------ | ------- |
-| `region` | `washington_state`, `columbia_snake_basin`, `cascades`, `central_oregon`, `southwest_washington`, `south_puget_sound`, `national`, `alaska`, `hawaii`, `british_columbia` | `national` (add `region=washington_state&view=brief` to keep the prior Washington framing and the Brief door) |
+| `region` | `washington_state`, `columbia_snake_basin`, `cascades`, `central_oregon`, `southwest_washington`, `south_puget_sound`, `national`, `alaska`, `hawaii`, `british_columbia` | `national` (add `region=washington_state&view=brief` to keep the prior Washington framing) |
 | `layers` | comma-separated keys from the [layer table](README.md#layers-and-data-sources) | `hillshade,nadm-drought,aiannh,bia-reservations,states` |
 | `framing` | one of the nine ATNI-authored editorial framing keys, or `all` | none; `region` remains in control |
 | `cluster` | `wildfire`, `heat`, or `enso`; an explicit `layers` list outranks it | Drought, encoded by absence |
 | `ocean` | `pacific`, `arctic`, or `atlantic`, only with `cluster=enso` | none |
 | `select` | `state:<postal code>` (for example `state:WA`): opens the map focused on that boundary with its impact briefing open; applied once, then dropped from the URL | none |
 | `embed` | `true` or `1` (hides the sidebar for clean iframe presentation) | `false` |
-| `view` | `brief` or `console` | derived from the rest of the URL; a bare URL opens Brief |
+| `view` | `brief` or `console` | `brief`; only `view=console` opens Console (an embed naming `layers`, `region`, `cluster`, `ocean` or `framing` without `select` still opens Console) |
 | `horizon` | `weeks-ahead` or `season-ahead` | current |
 | `basemap` | `default` explicitly turns recent satellite imagery off; the legacy `satellite` token remains valid | recent satellite imagery, encoded by absence |
 | `studio` | `layers` or `place` | none |

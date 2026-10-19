@@ -4,9 +4,10 @@
  *
  * Shared desktop order: hazard, time horizon, regional navigation, and place
  * search. Variable view details follow Place, Layers, and Tribal Nations.
- * Share is the final sidebar control. The
- * active condition readout lives in the map's top-left glass indicator;
- * source details stay available through its key and the Impact Briefing.
+ * Share stays in the map column's slot 4 in every view. The
+ * active condition readout lives in the sidebar's bottom dock in Brief and
+ * below the hazard buttons in Console; source details stay available
+ * through the map key and the Impact Briefing.
  * Place and Layers studios keep their existing route and restoration logic.
  *
  * The four cluster buttons render COMMITTED truth, never optimistic
@@ -90,11 +91,6 @@ const SHELL_REHOST_SEATS = [
     hostId: 'shell-region-host'
   },
   {
-    nodeId: 'share-btn',
-    homeId: 'share-btn-home',
-    hostId: 'shell-share-host'
-  },
-  {
     nodeId: 'brief-head',
     homeId: 'brief-head-home',
     hostId: 'shell-refine-host'
@@ -120,11 +116,11 @@ function shellRehostSeats(): readonly ShellRehostSeat[] | null {
 }
 
 /**
- * Seat the existing region, share, and Brief-head nodes inside the ordered
- * desktop Brief shell, its condition readout on the map, and its legend in
- * the sidebar's collapsed legend disclosure. No surface is cloned or rewired: moving each node preserves
+ * Seat the existing region and Brief-head nodes inside the ordered
+ * desktop Brief shell, and its condition readout and legend in the
+ * sidebar's bottom dock (the legend inside its collapsed disclosure). No surface is cloned or rewired: moving each node preserves
  * its island root, controls, listeners, and live state. Every ineligible
- * presentation returns all five nodes to static HTML homes.
+ * presentation returns all four nodes to static HTML homes.
  */
 function useDesktopBriefRehost(): void {
   useLayoutEffect(() => {
@@ -319,10 +315,10 @@ interface ShellProps {
 
 /**
  * The compact-band framing door and its popover (the 600-699px height
- * band's only "where" control). Carries the same popover discipline as
- * the More time detail: focus moves in on open, restores to the door on
- * close, and the light-dismissing pointer gesture is consumed rather
- * than clicking through to the map.
+ * band's only "where" control). Carries the shared popover discipline:
+ * focus moves in on open, restores to the door on close, and the
+ * light-dismissing pointer gesture is consumed rather than clicking
+ * through to the map.
  */
 function MinimapPopover({
   map,

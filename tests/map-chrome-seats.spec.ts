@@ -36,19 +36,16 @@ import { gotoApp, layerCheckbox, waitForLayerSettled } from './helpers';
  * Any |d| over 1 px fails. The four slots must also be pairwise disjoint by
  * at least 4 px and lie inside the container.
  *
- * Slot 4 is the reserved Share slot (ruling R2 a). Its box is always
- * measured; the Share button is measured too whenever it is home in the
- * column (Console, or the sidebar collapsed), and must fill exactly that
- * box. In Brief with the sidebar open the shell rehosts Share into the
- * sidebar foot, which must empty slot 4 and move nothing.
+ * Slot 4 is the Share slot (ruling R2 a). Its box and the Share button
+ * are measured in every view, Brief and Console alike (owner 2026-10-19),
+ * and the button must fill exactly that box.
  *
  * WHAT IS SAMPLED, AND WHY NOT THE FULL CROSS PRODUCT. At each of the four
  * desktop viewports: the settled boot; EVERY mode read from the rendered
  * `.shell-cluster-btn[data-cluster]` (DR-113: never a literal list), each
  * held in loading by a request gate and then settled; EVERY horizon read
  * from `.shell-horizon-btn`; help's drawer open and closed; Brief and
- * Console, each with the sidebar open and collapsed (the Share rehost and
- * its return); and a second boot with a `select=` selection. Modes and
+ * Console, each with the sidebar open and collapsed; and a second boot with a `select=` selection. Modes and
  * horizons are crossed with Brief and the open sidebar only, because the
  * sidebar and view states are sampled on their own at every viewport and
  * none of the three inputs reaches the column's geometry; the full product
@@ -109,7 +106,7 @@ const SEAT_QUERIES = MAP_CHROME_SEATS.map((seat) => ({
   controlSelector: seat.controlSelector
 }));
 
-/** Slots whose control must be in the column in every phase (all but Share). */
+/** Slots whose control must be in the column in every phase (every slot). */
 const ALWAYS_SEATED = new Set<MapChromeSlot>(
   MAP_CHROME_SEATS.filter((seat) => seat.alwaysSeated).map((seat) => seat.slot)
 );
@@ -328,11 +325,10 @@ async function setView(page: Page, view: 'brief' | 'console'): Promise<void> {
 }
 
 const shareInColumn = (page: Page) => page.locator('.map-overlay-controls > #share-btn');
-const shareInSidebar = (page: Page) => page.locator('#shell-share-host > #share-btn');
 
 test.describe('the desktop column holds its four seats (D1 M9)', () => {
   for (const viewport of DESKTOP_VIEWPORTS) {
-    test(`Reset, SAT, Help and the reserved Share slot hold their MAP_CHROME_SEATS rects within 1 px across modes, horizons, loading, selection and the Share rehost at ${viewport.width}x${viewport.height}`, async ({
+    test(`Reset, SAT, Help and the reserved Share slot hold their MAP_CHROME_SEATS rects within 1 px across modes, horizons, loading, selection and the views at ${viewport.width}x${viewport.height}`, async ({
       page
     }) => {
       test.setTimeout(240_000);
@@ -346,9 +342,9 @@ test.describe('the desktop column holds its four seats (D1 M9)', () => {
       try {
         await gotoApp(page);
         await settleLayout(page);
-        // The default desktop boot: Brief, sidebar open, Share rehosted.
-        await expect(shareInSidebar(page)).toHaveCount(1);
-        await sample('Brief, sidebar open, settled (Share rehosted)');
+        // The default desktop boot: Brief, sidebar open, Share in slot 4.
+        await expect(shareInColumn(page)).toHaveCount(1);
+        await sample('Brief, sidebar open, settled');
 
         // Every mode, from the rendered switcher, held in loading and then
         // settled. The committed mode is visited last so each switch is a
@@ -413,7 +409,7 @@ test.describe('the desktop column holds its four seats (D1 M9)', () => {
         await sample('Help drawer closed');
 
         // Brief and Console, each with the sidebar open and collapsed: the
-        // Share rehost and its return, and the column's right anchoring.
+        // Share staying in slot 4, and the column's right anchoring.
         await setView(page, 'console');
         await expect(shareInColumn(page)).toHaveCount(1);
         await sample('Console, sidebar open (Share in slot 4)');
@@ -422,13 +418,13 @@ test.describe('the desktop column holds its four seats (D1 M9)', () => {
         await sample('Console, sidebar collapsed');
         await setSidebar(page, 'open');
         await setView(page, 'brief');
-        await expect(shareInSidebar(page)).toHaveCount(1);
-        await sample('Brief, sidebar open again (Share rehosted)');
+        await expect(shareInColumn(page)).toHaveCount(1);
+        await sample('Brief, sidebar open again');
         await setSidebar(page, 'collapsed');
         await expect(shareInColumn(page)).toHaveCount(1);
-        await sample('Brief, sidebar collapsed (Share returned)');
+        await sample('Brief, sidebar collapsed');
         await setSidebar(page, 'open');
-        await expect(shareInSidebar(page)).toHaveCount(1);
+        await expect(shareInColumn(page)).toHaveCount(1);
         await sample('Brief, sidebar open after the round trip');
 
         // A selection, from the URL, on a fresh boot of the same viewport.
@@ -520,7 +516,7 @@ test.describe('the desktop column holds its four seats (D1 M9)', () => {
           }
         }
         // The hover title stays (no hover tag replaces it).
-        await expect(page.locator('#reset-btn')).toHaveAttribute('title', 'Reset to selected region bounds');
+        await expect(page.locator('#reset-btn')).toHaveAttribute('title', 'Return to the default view');
       }
     });
   });
@@ -640,12 +636,9 @@ test.describe('the chip, TL-0, the pill and the dock hold their D1 M10 seats', (
   const MODE_VIEWPORT = { width: 1440, height: 900 } as const;
 
   /** The chip's box relative to #map-container, or null if it has no
-   * rendered box (the pre-M10 hidden state). The TL-1 seat is shared by
-   * two nodes with exactly one visible (interface-chrome-popups-text.md
-   * section 2.4): `#map-key` (the toggle, closed) in every mode but
-   * desktop Brief-with-the-sidebar-open Drought, and the docked drought
-   * tile there. Repair round on M10: measure whichever one is actually
-   * rendering, not `#map-key` unconditionally. */
+   * rendered box (the pre-M10 hidden state). The TL-1 seat holds
+   * `#map-key` (the toggle, closed) in every mode; the docked drought tile
+   * now sits in the sidebar's bottom dock, never in this seat. */
   async function chipBox(page: Page): Promise<{ x: number; y: number; width: number; height: number } | null> {
     return page.evaluate(() => {
       const container = document.getElementById('map-container');
@@ -659,9 +652,7 @@ test.describe('the chip, TL-0, the pill and the dock hold their D1 M10 seats', (
         if (r.width === 0 && r.height === 0) return null;
         return r;
       };
-      const r =
-        visibleBox(document.getElementById('map-key')) ??
-        visibleBox(document.querySelector('.conditions-metric[data-metric="drought"]'));
+      const r = visibleBox(document.getElementById('map-key'));
       if (!r) return null;
       return { x: r.left - c.left, y: r.top - c.top, width: r.width, height: r.height };
     });

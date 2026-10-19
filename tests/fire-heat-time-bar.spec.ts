@@ -53,6 +53,11 @@ const ONE_PIXEL_PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
   'base64'
 );
+/** One opaque #ed1e00 (Very High) pixel: Fuel risk shades only issuer class colours. */
+const WHP_PNG_1PX = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGN4K8fwHwAFEgILjNz/OgAAAABJRU5ErkJggg==',
+  'base64'
+);
 
 const HEATRISK_PATH = '/experimental/rest/services/NWS_HeatRisk/ImageServer';
 const WWA_PATH = '/eventdriven/rest/services/WWA/watch_warn_adv/MapServer/1/query';
@@ -174,7 +179,7 @@ async function stubFire(page: Page, options: FireStubOptions): Promise<void> {
   await page.route('https://ddm-proxy.atniclimate.workers.dev/**', async (route) => {
     const target = new URL(route.request().url()).searchParams.get('url') ?? '';
     if (target.includes('/exportImage')) {
-      await route.fulfill({ status: 200, contentType: 'image/png', body: ONE_PIXEL_PNG });
+      await route.fulfill({ status: 200, contentType: 'image/png', body: WHP_PNG_1PX });
       return;
     }
     await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
@@ -372,11 +377,9 @@ async function expectChipsStillHonest(page: Page): Promise<void> {
     expect((await btn.locator('.shell-horizon-btn-title').innerText()).trim()).toBe(chrome.title);
     expect((await btn.locator('.shell-horizon-btn-sub').innerText()).replace(/\u00a0/g, ' ').trim()).toBe(chrome.subtitle);
   }
-  const stray = await page.evaluate(() => {
-    const clone = document.body.cloneNode(true) as HTMLElement;
-    clone.querySelectorAll('.preset-chip').forEach((el) => el.remove());
-    return /\bWeeks ahead\b|\bSeason ahead\b/.test(clone.textContent ?? '');
-  });
+  const stray = await page.evaluate(() =>
+    /\bWeeks ahead\b|\bSeason ahead\b/.test(document.body.textContent ?? '')
+  );
   expect(stray, 'the retired chip wording reappeared with the time bar rendered').toBe(false);
 }
 
@@ -808,28 +811,6 @@ test.describe('DDM-P8-T02: the Extreme Heat screen has a seven-day time control'
     // The surface's own outlook day still states itself, right beside it,
     // so nothing honest is lost (the OUTCOME's second clause).
     await expect(page.locator('.shell-time-headline-detail')).toContainText('Outlook valid');
-    await expect(page.locator('#shell-time-more')).toHaveText('More time');
-
-    // The door agrees with the pressed chip too, in the SAME pressed
-    // horizon's HORIZON_CHROME words ('Current Conditions · now'), never
-    // HeatRisk's own declared stamp.horizon ('nearTerm', which would read
-    // 'Near Term · days to weeks' here): the one place Drought's own
-    // per-horizon case (tests/s4-shell.spec.ts) cannot tell apart, because
-    // every Drought surface's stamp.horizon already equals whichever chip
-    // is pressed. This is the case that reds the break
-    // `stampHorizonText(horizonKey)` -> `stampHorizonText(spec.stamp.horizon)`
-    // in DetailControls (src/ui/island/time-popover.tsx), because HeatRisk's
-    // stamp.horizon and the pressed chip genuinely disagree here (M12
-    // repair, director gate CMD10/CMD12). HeatRisk's own headline and
-    // 'Day 3 of 7' detail keep stating the day inside it.
-    await page.locator('#shell-time-more').click();
-    const popover = page.locator('#shell-time-popover');
-    await expect(popover).toBeVisible();
-    await expect(popover.locator('.shell-time-detail-horizon')).toHaveText(
-      `${HORIZON_CHROME.current.title} · ${HORIZON_CHROME.current.subtitle}`
-    );
-    await expect(popover.locator('.shell-time-detail-headline')).toContainText('Outlook valid');
-    await expect(popover.locator('.shell-time-detail-line')).toContainText('Day 3 of 7');
   });
 
   test('an unavailable day: the stamp keeps the issuer and the period and says no tile loaded', async ({
@@ -933,69 +914,10 @@ test.describe('DDM-P8-T02: the Extreme Heat screen has a seven-day time control'
     await expect(page.locator('#shell-time .shell-time-empty')).toHaveCount(0);
     await expect(page.locator('#time-bar .time-bar-stamp-detail')).toContainText('NWS HeatRisk');
     await expect(page.locator('#time-bar .time-bar-stamp-headline')).toContainText('2026');
-    const detailsDoor = page.locator('#shell-time-more');
-    await expect(detailsDoor).toBeVisible();
-    await expect(detailsDoor).toBeEnabled();
-    await expect(detailsDoor).toHaveAttribute('aria-expanded', 'false');
-    await expect(page.locator('#shell-time-popover')).toBeHidden();
     // Console keeps the full rail; only Brief substitutes the compact row.
     await expect(page.locator('#time-bar')).toBeVisible();
   });
 
-  test('a closed focused time door hands focus to its stable row when the owning surface stands down', async ({
-    page
-  }) => {
-    // DR-190 makes a switch to Heat date-bearing, so it can no longer
-    // stand down this door. Turn off the CPC layer directly instead; all
-    // focus-return and stable-row geometry assertions remain the same.
-    await stubCommon(page);
-    await stubCpcDroughtOutlook(page);
-    await gotoApp(page, '?view=brief');
-    await page.locator('.shell-horizon-btn[data-horizon="season-ahead"]').click();
-    await expect(
-      page.locator('.shell-horizon-btn[data-horizon="season-ahead"]')
-    ).toHaveAttribute('aria-pressed', 'true', { timeout: 25_000 });
-
-    const row = page.locator('#shell-time');
-    const door = page.locator('#shell-time-more');
-    await expect(row).toBeVisible({ timeout: 25_000 });
-    await expect(row).toHaveAttribute('data-has-spec', 'true', { timeout: 25_000 });
-    await expect(door).toBeEnabled();
-    await expect(door).toHaveAttribute('aria-expanded', 'false');
-    await door.focus();
-    await expect(door).toBeFocused();
-    const before = await row.boundingBox();
-    expect(before).not.toBeNull();
-
-    // Turn off the real layer without a pointer gesture, so focus stays
-    // on More time while the layer controller's queued fade and teardown
-    // clear the CPC outlook's TimeBarSpec asynchronously. This isolates the
-    // component contract: no intervening control receives focus before the
-    // owner stands down.
-    await layerCheckbox(page, 'drought')
-      .evaluate((checkbox) => (checkbox as HTMLInputElement).click());
-
-    await expect(row).toHaveAttribute('data-has-spec', 'false');
-    await expect(door).toBeDisabled();
-    await expect(door).toHaveAttribute('aria-expanded', 'false');
-    await expect(row).toBeFocused();
-    await expect
-      .poll(() => new URL(page.url()).searchParams.get('cluster'))
-      .toBeNull();
-    await expect
-      .poll(() => new URL(page.url()).searchParams.get('layers')?.split(',').includes('drought'))
-      .toBe(false);
-    await expect
-      .poll(() => new URL(page.url()).searchParams.get('horizon'))
-      .toBe('season-ahead');
-
-    const after = await row.boundingBox();
-    expect(after).not.toBeNull();
-    expect(after?.x).toBeCloseTo(before?.x ?? 0, 0);
-    expect(after?.y).toBeCloseTo(before?.y ?? 0, 0);
-    expect(after?.width).toBeCloseTo(before?.width ?? 0, 0);
-    expect(after?.height).toBeCloseTo(before?.height ?? 0, 0);
-  });
 });
 
 // ---------------------------------------------------------------------------
@@ -1081,18 +1003,16 @@ test.describe('DDM-P8-T02: the Drought and ENSO screens state their horizon in t
 // ---------------------------------------------------------------------------
 // M12 repair: a test per mode (the director's rule 2, DR-113). Every
 // HAZARD_CLUSTER_KEYS mode at every enabled horizon: the heading names the
-// pressed chip in HORIZON_CHROME's own words, and the time door is either
-// absent/hidden (found-015: a single-period spec) or opens with more than
-// zero real controls (buttons, inputs or selects), never a door that opens
-// on nothing. Never a literal cluster/horizon list (DR-113): both keys come
+// pressed chip in HORIZON_CHROME's own words. Never a literal
+// cluster/horizon list (DR-113): both keys come
 // from src/config/clusters.ts, and a horizon's own aria-disabled state
 // (read live, the way the rendered chip declares it) decides whether this
 // case visits it, exactly like the existing per-Drought-horizon case in
 // tests/s4-shell.spec.ts.
 // ---------------------------------------------------------------------------
 
-test.describe('DDM-P10-T11: every mode names its pressed horizon, and the door matches its periods (found-014, found-015, DR-113)', () => {
-  test('the time card heading equals HORIZON_CHROME at every enabled cluster x horizon, and the door is absent/hidden or opens with real controls', async ({
+test.describe('DDM-P10-T11: every mode names its pressed horizon (found-014, DR-113)', () => {
+  test('the time card heading equals HORIZON_CHROME at every enabled cluster x horizon', async ({
     page
   }) => {
     test.setTimeout(150_000);
@@ -1128,27 +1048,11 @@ test.describe('DDM-P10-T11: every mode names its pressed horizon, and the door m
         ).toHaveText(chrome.title, { timeout: 45_000 });
         // The heading names the pressed chip even before the surface's own
         // spec installs (found-014 reads `pressedHorizon`, not the spec), so
-        // wait for the row's own truth (`data-has-spec`) before reading the
-        // door: an enabled, non-empty recipe always settles to `true`.
+        // wait for the row's own truth (`data-has-spec`): an enabled,
+        // non-empty recipe always settles to `true`.
         await expect(page.locator('#shell-time')).toHaveAttribute('data-has-spec', 'true', {
           timeout: 45_000
         });
-
-        const door = page.locator('#shell-time-more');
-        if (await door.isVisible()) {
-          await door.click();
-          const popover = page.locator('#shell-time-popover');
-          await expect(popover, `${clusterKey} at ${horizonKey}: door opened`).toBeVisible();
-          await expect(
-            popover.locator('button, input, select'),
-            `${clusterKey} at ${horizonKey}: a visible door must open on real controls`
-          ).not.toHaveCount(0);
-          await page.keyboard.press('Escape');
-          await expect(popover).toBeHidden();
-        }
-        // A hidden door needs no further proof here: found-015's rule is
-        // that a single-period spec's door is absent/hidden, which
-        // `door.isVisible()` above already read straight off the DOM.
       }
     }
   });

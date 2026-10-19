@@ -4,7 +4,7 @@ import { gotoApp, search } from './helpers';
 import { stubUsdmWeeks, USDM_FIXTURE_PRIOR_WEEK } from './usdm-fixtures';
 
 test.describe('D-0.7.0-067 contextual time rail', () => {
-  test('desktop reads hazard, time, place, then selection response with Share last', async ({ page }) => {
+  test('desktop reads hazard, time, place, then selection response with Share on the map', async ({ page }) => {
     await gotoApp(page, '?view=brief&layers=usdm');
 
     const shellOrder = await page.locator('#shell-panel .shell').evaluate((shell) => {
@@ -20,14 +20,14 @@ test.describe('D-0.7.0-067 contextual time rail', () => {
     });
     expect(shellOrder.every((index) => index >= 0)).toBe(true);
     expect(shellOrder).toEqual([...shellOrder].sort((a, b) => a - b));
-    await expect(page.locator('#sidebar > #shell-share-host > #share-btn')).toHaveCount(1);
+    await expect(page.locator('.map-overlay-controls > #share-btn')).toHaveCount(1);
     await expect(page.locator('#shell-panel + #time-bar + #brief-display')).toHaveCount(1);
     await expect(page.locator('#brief-display + #shell-details-panel')).toHaveCount(1);
     await expect(page.locator('#shell-details-island > #shell-conditions-summary')).toHaveCount(1);
 
     // S4 supersession (the 2026-07-18 design record, S4c): on the
-    // desktop Brief shell the compact WHEN row plus the "More time"
-    // popover carry the temporal surface, and the full #time-bar stands
+    // desktop Brief shell the compact WHEN row carries the date statement,
+    // and the full #time-bar stands
     // down (attached for console/mobile, display gone here). The
     // D-0.7.0-067 stable-node contract above still holds on the DOM.
     await expect(page.locator('#time-bar')).toBeHidden();

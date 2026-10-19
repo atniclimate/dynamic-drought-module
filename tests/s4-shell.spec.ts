@@ -284,7 +284,7 @@ test.describe('S4a desktop shell boot', () => {
     ).toHaveAttribute('aria-pressed', 'true');
   });
 
-  test('the pre-S4 surfaces stay staged: the console door lives, Quick views stays hidden in Brief', async ({
+  test('the pre-S4 surfaces stay staged: the console door lives', async ({
     page
   }) => {
     await gotoApp(page);
@@ -294,11 +294,6 @@ test.describe('S4a desktop shell boot', () => {
     // successor; the design record's "mode-switch cleanup" does not
     // sanction retiring desktop console itself.
     await expect(page.locator('.view-switch [data-view="console"]')).toBeVisible();
-    // Quick views is hidden on the desktop Brief launch pad (as since
-    // E1; the shell's cluster buttons carry the view question there)
-    // but remains the shipped surface of console and the mobile sheet.
-    await expect(page.locator('#panel-quick-views')).toBeHidden();
-    await expect(page.locator('#panel-quick-views')).toBeAttached();
   });
 
   test('desktop Brief seats the same controls in the ruled shell order and restores them for console and collapse', async ({
@@ -321,7 +316,8 @@ test.describe('S4a desktop shell boot', () => {
     });
     expect(shellOrder).toEqual([...shellOrder].sort((a, b) => a - b));
     expect(shellOrder.every((index) => index >= 0)).toBe(true);
-    await expect(page.locator('#brief-display + #shell-details-panel')).toHaveCount(1);
+    // The ENSO buttons sit above the mode-sized details so those never move them.
+    await expect(page.locator('#brief-display + #enso-flow-controls + #shell-details-panel')).toHaveCount(1);
     await expect(page.locator('#shell-details-island > #shell-conditions-summary')).toHaveCount(1);
     await expect(page.locator('#shell-panel #shell-conditions-summary')).toHaveCount(0);
 
@@ -331,12 +327,12 @@ test.describe('S4a desktop shell boot', () => {
     await expect(page.locator('#conditions-strip-dock > #conditions-strip')).toHaveCount(1);
     await expect(page.locator('#sidebar-key-host > #legend-panel')).toHaveCount(1);
     await expect(page.locator('#shell-region-host > #panel-region')).toHaveCount(1);
-    await expect(page.locator('#sidebar > #shell-share-host > #share-btn')).toHaveCount(1);
-    await expect(page.locator('#map-condition-indicator #conditions-strip')).toHaveCount(1);
+    await expect(page.locator('.map-overlay-controls > #share-btn')).toHaveCount(1);
+    await expect(page.locator('.sidebar-bottom-dock #conditions-strip')).toHaveCount(1);
     await expect(page.locator('#brief-head-lede')).toHaveCount(0);
     await expect(page.locator('#shell-refine-host > #brief-head')).toHaveCount(1);
     await expect(page.locator('#shell-conditions-heading')).toHaveText('Conditions in view');
-    await expect(page.locator('#conditions-strip-dock .conditions-title')).toBeHidden();
+    await expect(page.locator('#conditions-strip-dock .conditions-title')).toBeVisible();
 
     // Existing behavior rides the moved nodes: region navigation still owns
     // URL state, and the one share listener still produces its toast.
@@ -350,7 +346,6 @@ test.describe('S4a desktop shell boot', () => {
     await expect(page.locator('#conditions-strip-home + #conditions-strip')).toHaveCount(1);
     await expect(page.locator('#legend-panel-home + #legend-panel')).toHaveCount(1);
     await expect(page.locator('#panel-region-home + #panel-region')).toHaveCount(1);
-    await expect(page.locator('#share-btn-home + #share-btn')).toHaveCount(1);
     await expect(page.locator('#brief-head-home + #brief-head')).toHaveCount(1);
     await expect(page.locator('.map-overlay-controls > #share-btn')).toHaveCount(1);
 
@@ -459,10 +454,9 @@ test.describe('S4 temporal register coherence (DG-080 review blocker 1)', () => 
       page.locator('.shell-cluster-btn[data-cluster="drought"]')
     ).toHaveAttribute('aria-pressed', 'true');
     await page.locator('.shell-horizon-btn[data-horizon="weeks-ahead"]').click();
-    // The monthly register renders (the More time door's description
-    // names the product register the surface installed).
-    await expect(page.locator('#shell-time-more')).toHaveAttribute(
-      'title',
+    // The monthly register renders (the stamp detail names the product
+    // register the surface installed).
+    await expect(page.locator('#time-bar .time-bar-stamp-detail')).toContainText(
       /Monthly Drought Outlook/,
       { timeout: 45_000 }
     );
@@ -474,8 +468,7 @@ test.describe('S4 temporal register coherence (DG-080 review blocker 1)', () => 
     await expect(
       page.locator('.shell-horizon-btn[data-horizon="season-ahead"]')
     ).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.locator('#shell-time-more')).toHaveAttribute(
-      'title',
+    await expect(page.locator('#time-bar .time-bar-stamp-detail')).toContainText(
       /Seasonal Drought Outlook/,
       { timeout: 45_000 }
     );
@@ -518,8 +511,8 @@ test.describe('S4 temporal register coherence (DG-080 review blocker 1)', () => 
   // S30D D1 M13 (found-010, found-017; DDM-P8-T07): a STRENGTHENED
   // assertion over the case above, not an edit to make a test pass. The
   // case above reads only #shell-minimap-heading at the suite's default
-  // viewport; this extension adds #shell-share-host (the Share control's
-  // sidebar seat, S4's rehosted `#share-btn`) at the four desktop widths
+  // viewport; this extension adds Share in the map column's slot 4 (it
+  // stays there in Brief, owner 2026-10-19) at the four desktop widths
   // the design record's acceptance names, where --sidebar-w is the
   // unclamped 340px constant (app.css:394-398's tablet clamp band ends at
   // 1024px, below every width here). Red only if either element moves;
@@ -531,7 +524,7 @@ test.describe('S4 temporal register coherence (DG-080 review blocker 1)', () => 
     { width: 1920, height: 1080 },
     { width: 2560, height: 1440 }
   ]) {
-    test(`a horizon switch to a longer outlook headline moves neither #shell-minimap-heading nor #shell-share-host by more than 1 px at ${viewport.width}x${viewport.height} (found-010, found-017)`, async ({
+    test(`a horizon switch to a longer outlook headline moves neither #shell-minimap-heading nor Share in the map column by more than 1 px at ${viewport.width}x${viewport.height} (found-010, found-017)`, async ({
       page
     }) => {
       await page.setViewportSize(viewport);
@@ -543,7 +536,7 @@ test.describe('S4 temporal register coherence (DG-080 review blocker 1)', () => 
       await expect(headline).toContainText('Consensus month');
 
       const navigation = page.locator('#shell-minimap-heading');
-      const shareHost = page.locator('#shell-share-host');
+      const shareHost = page.locator('.map-overlay-controls > #share-btn');
       const navBefore = await navigation.boundingBox();
       const shareBefore = await shareHost.boundingBox();
       expect(navBefore).not.toBeNull();
@@ -563,7 +556,7 @@ test.describe('S4 temporal register coherence (DG-080 review blocker 1)', () => 
     });
   }
 
-  test('the time card heading names the pressed horizon chip in HORIZON_CHROME\'s own words at every Drought horizon, and the door opens anchored to its trigger (found-014, found-015)', async ({
+  test('the time card heading names the pressed horizon chip in HORIZON_CHROME\'s own words at every Drought horizon (found-014)', async ({
     page
   }) => {
     await routeCpcOutlook(page);
@@ -573,15 +566,6 @@ test.describe('S4 temporal register coherence (DG-080 review blocker 1)', () => 
     // read straight from HORIZON_CHROME for whichever chip is pressed, at
     // every enabled horizon this cluster offers (TEMPORAL_HORIZON_KEYS,
     // never a hard-coded list, DR-113).
-    //
-    // found-015 (M12 repair, the director's door rule): NADM (Drought,
-    // Current) is one period (`periodCount`, time-popover.tsx: no rail,
-    // no modes), so its door keeps its 64px seat but goes disabled AND
-    // hidden rather than opening on nothing; the CPC outlook at Weeks
-    // ahead and Season ahead has `modes` (Monthly / Seasonal,
-    // `periodCount` = 2), so those two stay enabled and openable. Read
-    // the door's own visibility live rather than assuming which horizon
-    // is which, so a future recipe change cannot go stale here.
     for (const key of TEMPORAL_HORIZON_KEYS) {
       const chip = page.locator(`.shell-horizon-btn[data-horizon="${key}"]`);
       if ((await chip.getAttribute('aria-disabled')) === 'true') continue;
@@ -594,42 +578,7 @@ test.describe('S4 temporal register coherence (DG-080 review blocker 1)', () => 
       await expect(page.locator('#shell-time')).toHaveAttribute('data-has-spec', 'true', {
         timeout: 45_000
       });
-
-      const door = page.locator('#shell-time-more');
-      if (await door.isVisible()) {
-        // The popover's own heading agrees (DetailControls reads the same
-        // pressed horizon, not the surface's own declared stamp.horizon).
-        await door.click();
-        await expect(page.locator('.shell-time-detail-horizon')).toHaveText(
-          `${chrome.title} · ${chrome.subtitle}`
-        );
-        await door.click();
-        await expect(page.locator('#shell-time-popover')).toBeHidden();
-      } else {
-        await expect(door, `${key}: a one-period door stays disabled, not just hidden`).toBeDisabled();
-      }
     }
-
-    // found-015: the door opens anchored to its trigger (a measured
-    // rectangle), not centred in the viewport, about 300 px away (the
-    // native [popover] UA default of inset: 0; margin: auto). Season
-    // ahead (the CPC Seasonal Drought Outlook, `periodCount` = 2 via its
-    // two modes) is the loop's last horizon and is still pressed here, so
-    // its door is the enabled, multi-period one this check needs.
-    const seasonChip = page.locator('.shell-horizon-btn[data-horizon="season-ahead"]');
-    await expect(seasonChip).toHaveAttribute('aria-pressed', 'true');
-    const door = page.locator('#shell-time-more');
-    await expect(door).toBeEnabled();
-    const doorBox = await door.boundingBox();
-    expect(doorBox).not.toBeNull();
-    await door.click();
-    const popover = page.locator('#shell-time-popover');
-    await expect(popover).toBeVisible();
-    const popoverBox = await popover.boundingBox();
-    expect(popoverBox).not.toBeNull();
-    expect(
-      Math.abs(popoverBox!.y - (doorBox!.y + doorBox!.height))
-    ).toBeLessThan(60);
   });
 });
 
@@ -769,8 +718,7 @@ test.describe('S4 r2: custom-composition horizon honesty and the failed range sw
     expect(await season.getAttribute('aria-disabled')).toBeNull();
     await season.click();
     await expect(season).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.locator('#shell-time-more')).toHaveAttribute(
-      'title',
+    await expect(page.locator('#time-bar .time-bar-stamp-detail')).toContainText(
       /Seasonal Drought Outlook/,
       { timeout: 45_000 }
     );
@@ -822,8 +770,7 @@ test.describe('S4 r2: custom-composition horizon honesty and the failed range sw
     // truth: these dates come from the rendered features)...
     await expect(page.locator('.shell-time-headline')).toContainText(MONTHLY_TARGET);
     await expect(page.locator('.shell-time-headline')).not.toContainText(SEASONAL_TARGET);
-    await expect(page.locator('#shell-time-more')).toHaveAttribute(
-      'title',
+    await expect(page.locator('#time-bar .time-bar-stamp-detail')).toContainText(
       /Monthly Drought Outlook/
     );
     // ...the status is the displayed range's honest 'live', not a
@@ -1107,10 +1054,10 @@ test.describe('M8: the refit on a sidebar toggle (found-029, DDM-P10-T07)', () =
   }
 
   // The production build has no map handle: the camera is read from the
-  // minimap's live viewport footprint, `data-bounds` = west,south,east,north
-  // rounded to 4 decimals (src/ui/island/minimap.tsx). It keeps updating on
-  // the map's moveend while the collapsed sidebar hides it.
-  const FOOTPRINT = '#shell-minimap-viewport';
+  // inline minimap canvas's `data-bounds` = west,south,east,north rounded to
+  // 4 decimals (src/ui/island/minimap.tsx; no rectangle is drawn). It keeps
+  // updating on the map's moveend while the collapsed sidebar hides it.
+  const FOOTPRINT = '.shell-minimap-map .shell-minimap-canvas';
   // Equality with the fresh-boot oracle, per edge, in degrees: about 0.1 CSS
   // px at the Washington State fit, far under the roughly 0.2 degree the
   // Washington refit moves each latitude edge.

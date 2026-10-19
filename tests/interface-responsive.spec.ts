@@ -162,7 +162,7 @@ test.describe('the exact desktop and mobile boundary', () => {
     const shareHandle = await share.elementHandle();
     expect(shareHandle).not.toBeNull();
     await expect(page.locator('#shell-panel')).toBeVisible();
-    await expect(page.locator('#shell-share-host > #share-btn')).toHaveCount(1);
+    await expect(page.locator('.map-overlay-controls > #share-btn')).toHaveCount(1);
     await expect(app).not.toHaveAttribute('data-sheet-detent', /.+/);
     await expect
       .poll(() =>
@@ -197,7 +197,7 @@ test.describe('the exact desktop and mobile boundary', () => {
 
     await page.setViewportSize({ width: 721, height: 844 });
     await expect(app).not.toHaveAttribute('data-sheet-detent', /.+/);
-    await expect(page.locator('#shell-share-host > #share-btn')).toHaveCount(1);
+    await expect(page.locator('.map-overlay-controls > #share-btn')).toHaveCount(1);
     await expect(share).toBeFocused();
     expect(
       await shareHandle!.evaluate(
@@ -253,7 +253,7 @@ test.describe('mobile key growth at 390x844', () => {
     await expectMobileKeyClearance(page, '.map-key-item');
 
     // An explicitly opened key remains open when the viewport grows.
-    // The desktop drought metric becomes its trigger in the same map seat.
+    // The desktop drought metric in the sidebar's bottom dock tracks it too.
     await page.setViewportSize({ width: 1280, height: 800 });
     await expect(key).toBeVisible();
     await expect(page.locator('#conditions-strip-dock .conditions-metric[data-metric="drought"]')).toHaveAttribute('aria-expanded', 'true');
@@ -719,7 +719,7 @@ test.describe('short landscape coarse-pointer shell', () => {
       '.shell-cluster-btn',
       '.shell-horizon-btn',
       '#shell-minimap-door',
-      '#shell-share-host > #share-btn'
+      '.map-overlay-controls > #share-btn'
     ]) {
       const target = page.locator(selector).first();
       const targetBox = await rect(target);
@@ -737,7 +737,7 @@ test.describe('short landscape coarse-pointer shell', () => {
 
     for (const selector of [
       '.shell-cluster-btn',
-      '#shell-share-host > #share-btn',
+      '.map-overlay-controls > #share-btn',
       '#shell-minimap-popover .shell-minimap-mainland'
     ]) {
       const duration = await page
@@ -1004,9 +1004,9 @@ async function reachableTargets(page: Page): Promise<Target[]> {
         typeof element.className === 'string' && element.className.trim()
           ? `.${element.className.trim().split(/\s+/).slice(0, 2).join('.')}`
           : '';
-      // The hit area is the box: the minimap ocean doors, whose 44px
-      // `::before` band was the one exception, moved to the framing
-      // dropdown on 2026-10-13.
+      // The hit area is the box. The minimap Pacific and Atlantic zones
+      // (2026-10-19) are reachable again, but their box centres fall on the
+      // Hawaii inset or on land, so the centre check above skips them.
       const hitWidth = box.width;
       const hitHeight = box.height;
       const eff = effectiveRect(element, box);
