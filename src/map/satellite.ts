@@ -35,6 +35,7 @@ const TILE_COMPLETENESS_DEADLINE_MS = 30_000;
 const CANDIDATE_PROBE_TIMEOUT_MS = 35_000;
 const FRAME_SELECTION_TIMEOUT_MS = 55_000;
 const REFRESH_INTERVAL_MS = 10 * 60_000;
+const FAILED_LOOKUP_RETRY_MS = 10 * 60_000;
 const RECENT_FRAME_MS = 45 * 60_000;
 const MAX_FRAME_AGE_MS = 26 * 60 * 60_000;
 const MAX_FUTURE_SKEW_MS = 15 * 60_000;
@@ -65,9 +66,12 @@ let metadataController: AbortController | null = null;
 let tileWatch: RasterTileWatch | null = null;
 let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 let activationEpoch = 0;
-// A revert toasts only when a person asked for imagery (SAT or a mode's
-// preferred basemap); the boot and URL restore path stays silent.
+// A revert toasts only for a SAT press; a mode's default, the boot and URL
+// restore path stay silent.
 let announceRevert = false;
+// When imagery last failed: automatic requests do not look again for
+// FAILED_LOOKUP_RETRY_MS.
+let lastFailureAt = Number.NEGATIVE_INFINITY;
 let currentFrame: SatelliteFrame | null = null;
 type FrameStatus = 'live' | 'live-partial';
 let frameStatus: FrameStatus | null = null;
@@ -458,6 +462,7 @@ function revertToDefault(
   state: 'no-data' | 'unavailable' = 'unavailable'
 ): void {
   if (activeMap !== map) return;
+  lastFailureAt = Date.now();
   console.warn(`[basemap] recent satellite imagery reverted: ${reason}`);
   // Write the terminal state first: the hidden chip is the SAT button's
   // accessible description and must not keep reading "loading".
@@ -725,6 +730,8 @@ async function refreshFrame(
     }
 
     replaceFrame(map, selection.frame, epoch);
+    // A success clears the hold, so a working feed is never skipped.
+    lastFailureAt = Number.NEGATIVE_INFINITY;
   } catch (error) {
     if (
       (controller.signal.aborted && !selectionTimedOut) ||
@@ -793,6 +800,12 @@ export async function setSatelliteActive(
   }
 
   if (activeMap === map) return;
+  // A failed lookup is not repeated automatically for ten minutes; a SAT
+  // press looks again.
+  if (!announce && Date.now() - lastFailureAt < FAILED_LOOKUP_RETRY_MS) {
+    revertBasemapForFailure();
+    return;
+  }
   if (activeMap && activeMap !== map) deactivate(activeMap);
 
   activationEpoch++;

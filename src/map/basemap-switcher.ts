@@ -68,14 +68,16 @@ export async function applyBasemapMode(
 /**
  * Record and apply one explicit basemap request. Callers use this only for a
  * visitor action, never while restoring or reconciling hazard state, so a
- * later manual choice remains authoritative.
+ * later manual choice remains authoritative. Only a SAT press announces: a
+ * mode's default that finds no imagery falls back quietly.
  */
 export function requestBasemapMode(
   map: maplibregl.Map,
-  mode: BasemapMode
+  mode: BasemapMode,
+  announce = false
 ): void {
   setBasemapMode(mode);
-  void applyBasemapMode(map, mode, true);
+  void applyBasemapMode(map, mode, announce);
 }
 
 /** The one-button basemap switcher control. */
@@ -124,7 +126,7 @@ export class BasemapSwitcherControl implements maplibregl.IControl {
       // Store first (URL and button state update immediately), then the
       // map-side application; a failed chunk reverts the store inside
       // applyBasemapMode.
-      requestBasemapMode(map, next);
+      requestBasemapMode(map, next, true);
     });
 
     container.appendChild(btn);

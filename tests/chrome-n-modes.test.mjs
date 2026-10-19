@@ -168,9 +168,14 @@ test('satellite revert is silent on boot and toasts only for a pressed SAT', asy
   // The chip and store still land on the terminal state; only the toast is gated.
   assert.match(sat, /revertBasemapForFailure\(\);\s+if \(!announceRevert\) return;\s+showToast\(/);
   assert.match(sat, /announceRevert = announce;/);
-  // A visitor request announces; the default (boot, URL restore, 3D release) does not.
+  // Only the SAT button announces; a mode default, boot, URL restore and 3D release do not.
   assert.match(sw, /announce = false/);
-  assert.match(sw, /void applyBasemapMode\(map, mode, true\);/);
+  assert.match(sw, /void applyBasemapMode\(map, mode, announce\);/);
+  assert.match(sw, /requestBasemapMode\(map, next, true\);/);
+  for (const path of ['src/ui/sidebar.ts', 'src/ui/island/shell.tsx', 'src/ui/island/minimap.tsx', 'src/ui/island/fire3d-control.tsx']) {
+    const caller = await readFile(new URL(path, ROOT), 'utf8');
+    assert.doesNotMatch(caller, /requestBasemapMode\([^)]*,[^)]*,/, `${path} must not announce`);
+  }
   assert.equal((sw.match(/applyBasemapMode\(map, 'satellite'\)/g) ?? []).length, 1);
   assert.match(sw, /if \(announce\) showToast\(/);
   const sidebar = await readFile(new URL('src/ui/sidebar.ts', ROOT), 'utf8');
@@ -411,5 +416,44 @@ test('every surface-role layer in a cluster recipe has a key label and branch', 
   for (const key of drawn) {
     assert.ok(KEY_ELIGIBLE_LABELS[key], `${key} is a recipe surface with no KEY_ELIGIBLE_LABELS entry`);
     assert.ok(mapKey.includes(`'${key}'`), `${key} is a recipe surface with no branch in map-key.ts`);
+  }
+});
+
+// The owner's live review: NOAA's frozen satellite catalog drew a metadata
+// lookup on every Reset and mode switch. A failed lookup now holds automatic
+// requests off for ten minutes; a SAT press always looks again.
+test('a failed satellite lookup is not repeated automatically for ten minutes; a SAT press looks again', async () => {
+  const { setSatelliteActive } = await import(new URL('src/map/satellite.ts', ROOT).href);
+  const store = await import(new URL('src/state/basemap-store.ts', ROOT).href);
+  const savedFetch = globalThis.fetch;
+  const savedDocument = globalThis.document;
+  let lookups = 0;
+  const stale = Date.now() - 48 * 3600e3;
+  globalThis.document = { getElementById: () => null };
+  globalThis.fetch = async () => {
+    lookups++;
+    return new Response(JSON.stringify({ features: [{ attributes: {
+      objectid: 1, name: 'MERGEDGC.10-minute.stale.color', start_time: stale - 540e3, end_time: stale
+    } }] }), { status: 200, headers: { 'content-type': 'application/json' } });
+  };
+  const map = { getLayer: () => undefined, getSource: () => undefined, removeLayer() {}, removeSource() {} };
+  try {
+    store.setBasemapMode('satellite');
+    await setSatelliteActive(map, true, false);
+    assert.equal(lookups, 1);
+    assert.equal(store.getBasemapMode(), 'default');
+    assert.equal(store.isImageryUnavailable(), true);
+
+    store.setBasemapMode('satellite');
+    await setSatelliteActive(map, true, false);
+    assert.equal(lookups, 1, 'an automatic request inside the hold made a lookup');
+    assert.equal(store.getBasemapMode(), 'default');
+
+    await setSatelliteActive(map, true, true);
+    assert.equal(lookups, 2, 'a SAT press did not look again');
+  } finally {
+    globalThis.fetch = savedFetch;
+    if (savedDocument === undefined) delete globalThis.document;
+    else globalThis.document = savedDocument;
   }
 });
