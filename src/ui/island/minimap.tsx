@@ -1033,7 +1033,9 @@ export function Minimap({
                 vectorEffect="non-scaling-stroke"
                 data-ocean={key}
                 role="button"
-                tabIndex={0}
+                // Lowercase on purpose: Preact writes SVG props as attributes
+                // verbatim, and only `tabindex` makes a listener-free path focusable.
+                tabindex={0}
                 aria-pressed={activeOcean === key}
                 aria-label={oceanAccessibleName(key)}
                 onClick={() => chooseOcean(map, key)}

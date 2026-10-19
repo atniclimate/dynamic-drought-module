@@ -694,7 +694,15 @@ test.describe('S4b minimap', () => {
       const ctm = oceans?.getScreenCTM();
       if (!oceans || !ctm) return [];
       const view = oceans.viewBox.baseVal;
+      const toLocal = ctm.inverse();
       const live = [...oceans.querySelectorAll<SVGPathElement>('[data-ocean]')];
+      // A live zone's own edge (its painted stroke, rounding under the
+      // stretched viewBox) answers its own clicks, so keep 3px clear of it.
+      const nearLive = (screen: DOMPoint): boolean =>
+        [[0, 0], [3, 0], [-3, 0], [0, 3], [0, -3]].some(([dx, dy]) => {
+          const point = new DOMPoint(screen.x + dx!, screen.y + dy!).matrixTransform(toLocal);
+          return live.some((zone) => zone.isPointInFill(point));
+        });
       const scratch = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
       scratch.setAttribute('style', 'position:absolute;left:0;top:0;width:1px;height:1px;visibility:hidden;pointer-events:none');
       const arctic = document.createElementNS('http://www.w3.org/2000/svg', 'path');
@@ -705,8 +713,9 @@ test.describe('S4b minimap', () => {
       for (let y = view.y + 2; y <= 78; y += 4) {
         for (let x = 10; x <= 650; x += 20) {
           const local = new DOMPoint(x, y);
-          if (!arctic.isPointInFill(local) || live.some((zone) => zone.isPointInFill(local))) continue;
+          if (!arctic.isPointInFill(local)) continue;
           const screen = local.matrixTransform(ctm);
+          if (nearLive(screen)) continue;
           const hit = document.elementFromPoint(screen.x, screen.y);
           points.push({ x: screen.x, y: screen.y, ocean: hit?.closest('[data-ocean]')?.getAttribute('data-ocean') ?? null });
         }
