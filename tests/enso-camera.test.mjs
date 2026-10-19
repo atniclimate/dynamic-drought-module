@@ -69,10 +69,16 @@ test('a boot into ENSO fits the Pacific only when the URL names no camera of its
   }
 });
 
-test('Reset in ENSO asks the boot rule and fits the Pacific; the other modes keep the region fit', () => {
+test('Reset is the bare link: default region, the Pacific in ENSO, base map, desktop sidebar reopened', () => {
   const sidebar = readFileSync(new URL('../src/ui/sidebar.ts', import.meta.url), 'utf8');
-  const reset = sidebar.slice(sidebar.indexOf("getElementById('reset-btn')"), sidebar.indexOf('// The refit on a sidebar toggle'));
-  assert.ok(reset.includes('ensoBootFitsPacific(getHazardCluster(), false, false, STATE.currentRegion === DEFAULT_REGION, false)'));
+  const start = sidebar.indexOf("getElementById('reset-btn')");
+  const reset = sidebar.slice(start, sidebar.indexOf('// Debounced resize handler', start));
+  assert.ok(start > 0 && reset.length > 0);
+  assert.ok(!reset.includes('STATE.currentRegion'), 'Reset never returns to the last chosen region');
+  assert.ok(reset.includes('STATE.embed ? embedHomeRegion : DEFAULT_REGION'));
+  assert.ok(reset.includes('selectRegion(map, home)'));
+  assert.ok(reset.includes('ensoBootFitsPacific(cluster, false, false, home === DEFAULT_REGION, false)'));
   assert.ok(reset.includes("fitOcean(map, 'pacific')"));
-  assert.ok(reset.includes('selectRegion(map, STATE.currentRegion)'));
+  assert.ok(reset.includes('requestBasemapMode(map, defaultBasemapFor(cluster))'));
+  assert.ok(reset.includes('STATE.desktopSidebarClosed = false'));
 });

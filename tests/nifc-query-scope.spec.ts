@@ -10,7 +10,7 @@ import {
 } from '../src/config/wildfire-presentation';
 import { buildMinimapWildfireQueryBody } from '../src/state/minimap-wildfire';
 import { leafletBoundsToMapLibre } from '../src/util/bbox';
-import { gotoApp, layerPill, waitForLayerSettled } from './helpers';
+import { gotoApp, layerPill, regionSelect, waitForLayerSettled } from './helpers';
 import { NIFC_STUB, PNW_POLYGON, stubWildfireFeeds } from './wildfire-fixtures';
 
 /**
@@ -310,9 +310,8 @@ test.describe('NIFC WFIGS query scope', () => {
     // The 'washington_state' region's declared bounds (src/config/regions.ts:58:
     // `[[45.5435, -124.7630], [49.0024, -116.9159]]`, the SAME box the
     // brief's scout used); its geographic center is where `map.fitBounds`
-    // centers the camera on both the initial boot (STATE.currentRegion
-    // defaults to it) and a later `#reset-btn` click (which re-applies it),
-    // regardless of viewport size or padding. A fixture centered exactly
+    // centers the camera on both the initial boot (`region=washington_state`)
+    // and a later re-choice of it in the region dropdown, regardless of viewport size or padding. A fixture centered exactly
     // there sits under the map's center pixel after either fit, so a click
     // at that pixel identifies WHICH collection is currently on the map
     // without needing the map container's exact rendered size.
@@ -420,15 +419,15 @@ test.describe('NIFC WFIGS query scope', () => {
         .poll(() => queries.length, { message: 'the far jump never issued its request' })
         .toBe(2);
 
-      // Pan back inside A's envelope BEFORE B resolves: the real "Reset to
-      // selected region bounds" control (#reset-btn, index.html), which
-      // re-fits the camera to the still-selected Washington region
-      // (STATE.currentRegion never changed; the region dropdown stayed on
-      // "Washington State" through the search selection above) -- inside
-      // A's cached envelope, not a test-only camera hook.
-      await page.locator('#reset-btn').click();
+      // Pan back inside A's envelope BEFORE B resolves: the real region
+      // dropdown, re-choosing Washington State (it stayed on Washington
+      // State through the search selection above), which re-fits the camera
+      // to the Washington region -- inside A's cached envelope, not a
+      // test-only camera hook. Reset no longer serves: it goes to the
+      // default view, outside A's envelope.
+      await regionSelect(page).selectOption('region:washington_state');
 
-      // The reset's re-query must resolve from A's cache with no third
+      // The re-choice's re-query must resolve from A's cache with no third
       // request: give its fitBounds settle and the 400 ms debounce room,
       // then check before touching B at all.
       await page.waitForTimeout(1_500);
