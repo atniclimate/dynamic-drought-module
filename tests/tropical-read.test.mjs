@@ -458,7 +458,15 @@ test('layer: the key storm button identifies its storm at the advisory (tau 0) p
   door('storm:EP5');
   door('storm:AL1');
   door('nino34');
-  assert.deepEqual(globalThis.doorCalls, [[['tropical-cyclones-points'], -107.2, 20.6]], 'only the drawn storm answers, at tau 0');
+  assert.deepEqual(globalThis.doorCalls.map((c) => c.slice(0, 3)), [[['tropical-cyclones-points'], -107.2, 20.6]], 'only the drawn storm answers, at tau 0');
+  // The door names its feature: that storm's advisory point, never a forecast point or another storm's.
+  const named = globalThis.doorCalls[0][3];
+  assert.equal(typeof named, 'function', 'the door carries an identity predicate');
+  const points = map.getSource('tropical-cyclones').data.features.filter((f) => f.properties.ddmPart === 'points');
+  const advisory = points.find((f) => Number(f.properties.tau) === 0);
+  assert.ok(advisory && points.length > 1, 'the fixture draws the advisory and forecast points');
+  assert.deepEqual(points.filter((f) => named(f)), [advisory], 'only the advisory point is the named feature');
+  assert.equal(named({ properties: { ...advisory.properties, ddmBin: 'AL1' } }), false, "another storm's advisory point is not");
   layer.deactivate(map);
   door('storm:EP5');
   assert.equal(globalThis.doorCalls.length, 1, 'nothing drawn: the button opens nothing');

@@ -228,9 +228,15 @@ export function bindPopups(map: maplibregl.Map): void {
   window.addEventListener(FEATURE_DOOR_EVENT, (event) => {
     const door = (event as CustomEvent<unknown>).detail;
     if (typeof door !== 'string' || !door.startsWith('storm:')) return;
-    const points = drawn.filter((f) => f.properties?.['ddmPart'] === 'points' && f.properties?.['ddmBin'] === door.slice(6));
-    const at = (points.find((f) => Number(f.properties?.['tau']) === 0) ?? points[0])?.geometry;
-    if (at?.type === 'Point') identifyAt(map, [POINTS_ID], at.coordinates[0]!, at.coordinates[1]!);
+    const bin = door.slice(6);
+    const points = drawn.filter((f) => f.properties?.['ddmPart'] === 'points' && f.properties?.['ddmBin'] === bin);
+    const target = points.find((f) => Number(f.properties?.['tau']) === 0) ?? points[0];
+    const at = target?.geometry;
+    // That storm's own point at that tau, never a nearby forecast point or another storm's.
+    const tau = target?.properties?.['tau'];
+    const named = (f: { properties?: Record<string, unknown> | null }): boolean =>
+      f.properties?.['ddmBin'] === bin && f.properties?.['tau'] === tau;
+    if (at?.type === 'Point') identifyAt(map, [POINTS_ID], at.coordinates[0]!, at.coordinates[1]!, named);
   });
   for (const id of [POINTS_ID, WW_ID, CONE_FILL_ID]) {
     map.on('mouseenter', id, () => {

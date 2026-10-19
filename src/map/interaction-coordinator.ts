@@ -341,6 +341,7 @@ export function initInteractionCoordinator(map: maplibregl.Map): void {
   // has no popup yet.
   map.on('remove', () => {
     pendingCommit = null;
+    cancelDoor();
   });
 }
 
@@ -470,6 +471,7 @@ export function resetInteractionCoordinatorForTest(): void {
   // A waiting commit never outlives a reset, and the frame is forgotten so
   // the next registration warms it again (a test can then commit cold).
   pendingCommit = null;
+  cancelDoor();
   serializeFrame = null;
   paintAdoptedFrame = null;
   focusBeforeCommit = null;
@@ -498,6 +500,7 @@ function bindKeyboardIdentify(map: maplibregl.Map): void {
       return;
     }
     e.preventDefault();
+    cancelDoor();
     if (studioOwnsScreen()) return;
     noteFocusBeforeCommit();
     const point = new maplibregl.Point(canvas.clientWidth / 2, canvas.clientHeight / 2);
@@ -511,37 +514,85 @@ function bindKeyboardIdentify(map: maplibregl.Map): void {
  * A named door (I16): a map key button identifies one registered target at a
  * known position through the click's own collection and commit, so the
  * popup, its "Other map features here" list and Escape's focus return to the
- * door are a click's. The door's target leads, and no other target opens in
- * its place. Out of view, the camera eases there first (a jump under reduced
- * motion). Map-wide keyboard identify stays behind KEYBOARD_IDENTIFY.
+ * door are a click's. `named`, when given, picks the one feature the door
+ * names (a storm's advisory point) before the registration's first-feature
+ * collapse; neither another target nor another feature opens in its place.
+ * Out of view, the camera eases there first (a jump under reduced motion).
+ * A miss (tiles still drawing) is looked at again for a bounded time, then
+ * dismissed. A newer door, a map click or a dismissal cancels a pending one.
+ * Map-wide keyboard identify stays behind KEYBOARD_IDENTIFY.
  */
-export function identifyAt(map: maplibregl.Map, layerIds: readonly string[], lng: number, lat: number): void {
+export function identifyAt(
+  map: maplibregl.Map,
+  layerIds: readonly string[],
+  lng: number,
+  lat: number,
+  named?: (feature: maplibregl.MapGeoJSONFeature) => boolean
+): void {
+  cancelDoor();
   if (studioOwnsScreen()) return;
+  // The opener as the door is pressed, before any camera move or retry.
+  const opener = document.activeElement;
+  const isTarget = (f: maplibregl.MapGeoJSONFeature): boolean =>
+    layerIds.includes(f.layer.id) && (named?.(f) ?? true);
   // The world copy nearest the view (ENSO frames the Pacific across the antimeridian).
   const at = { lng: lng + 360 * Math.round((map.getCenter().lng - lng) / 360), lat };
-  const run = (afterMove: boolean): void => {
-    if (studioOwnsScreen()) return;
-    noteFocusBeforeCommit();
+  let deadline: number | null = null;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const run = (): void => {
+    timer = null;
+    if (pendingDoor !== cancel) return;
+    if (studioOwnsScreen()) {
+      pendingDoor = null;
+      return;
+    }
     const point = map.project(at);
-    const hits = collectHits(map, point);
-    const primary = hits.find((h) => layerIds.includes(h.feature.layer.id));
-    if (primary) commit(map, hits, primary, { lngLat: map.unproject(point), point });
-    // Tiles at a new view can still be loading as the move ends: one more look once they settle.
-    else if (afterMove) map.once('idle', () => run(false));
-    else dismissResponse();
+    const hits = collectHits(map, point, isTarget);
+    const primary = hits.find((h) => isTarget(h.feature));
+    deadline ??= Date.now() + DOOR_WAIT_MS;
+    if (primary) {
+      pendingDoor = null;
+      noteFocusBeforeCommit(opener);
+      commit(map, hits, primary, { lngLat: map.unproject(point), point });
+    } else if (Date.now() < deadline) {
+      // Tiles at a new view can still be drawing: look again shortly.
+      timer = setTimeout(run, DOOR_RETRY_MS);
+    } else {
+      pendingDoor = null;
+      dismissResponse();
+    }
   };
+  const cancel = (): void => {
+    if (timer !== null) clearTimeout(timer);
+    map.off('moveend', run);
+  };
+  pendingDoor = cancel;
   const { x, y } = map.project(at);
   const canvas = map.getCanvas();
   if (x >= 0 && y >= 0 && x <= canvas.clientWidth && y <= canvas.clientHeight) {
-    run(false);
+    run();
     return;
   }
   // Bound before the ease: a reduced-motion jump ends its move inside easeTo.
-  map.once('moveend', () => run(true));
+  map.once('moveend', run);
   map.easeTo({ center: [at.lng, at.lat], ...(prefersReducedMotion() ? { animate: false } : {}) });
 }
 
+/** How long a named door looks again for its feature after a miss, and how often. */
+const DOOR_WAIT_MS = 2000;
+const DOOR_RETRY_MS = 100;
+
+/** The pending named door's cancel; null when none is pending. */
+let pendingDoor: (() => void) | null = null;
+
+function cancelDoor(): void {
+  const cancel = pendingDoor;
+  pendingDoor = null;
+  cancel?.();
+}
+
 function handleClick(map: maplibregl.Map, e: maplibregl.MapMouseEvent): void {
+  cancelDoor();
   if (studioOwnsScreen()) return;
   noteFocusBeforeCommit();
   const hits = collectHits(map, e.point);
@@ -568,16 +619,18 @@ let focusBeforeCommit: Element | null = null;
 let replacingPopup = false;
 
 /** Remember what had focus as a commit starts, unless it is inside the response it replaces. */
-function noteFocusBeforeCommit(): void {
-  const active = document.activeElement;
+function noteFocusBeforeCommit(active: Element | null = document.activeElement): void {
   if (!currentPopup?.getElement()?.contains(active)) focusBeforeCommit = active;
 }
 
 function returnFocus(map: maplibregl.Map): void {
   const active = document.activeElement;
   if (active && active !== document.body) return;
-  const before = focusBeforeCommit;
+  let before = focusBeforeCommit;
   focusBeforeCommit = null;
+  // A key re-render replaces a named door's button (src/ui/map-key.ts): find its replacement by name.
+  const door = before instanceof HTMLElement && !before.isConnected ? before.getAttribute('data-feature-door') : null;
+  if (door !== null) before = document.querySelector(`[data-feature-door="${CSS.escape(door)}"]`);
   const target =
     before instanceof HTMLElement && before.isConnected && before.getClientRects().length > 0
       ? before
@@ -640,9 +693,15 @@ function clickBoxRadius(): number {
  * promotion (a hit that IS the currently emphasized place outranks its
  * own class; re-clicking inside a selected boundary re-affirms it
  * rather than switching subjects). Same-rank ties break by rendered
- * order, which is deterministic under the E1 z-order.
+ * order, which is deterministic under the E1 z-order. A named door's
+ * `named` features are taken first, so its registration's hit is the named
+ * feature (each keeps its rendered order for the tiebreak).
  */
-function collectHits(map: maplibregl.Map, point: maplibregl.Point): Hit[] {
+function collectHits(
+  map: maplibregl.Map,
+  point: maplibregl.Point,
+  named?: (feature: maplibregl.MapGeoJSONFeature) => boolean
+): Hit[] {
   const present = [...specByLayerId.keys()].filter((id) => map.getLayer(id));
   if (present.length === 0) return [];
 
@@ -651,14 +710,15 @@ function collectHits(map: maplibregl.Map, point: maplibregl.Point): Hit[] {
     [point.x - radius, point.y - radius],
     [point.x + radius, point.y + radius]
   ];
-  const features = map.queryRenderedFeatures(box, { layers: present });
+  const features = [...map.queryRenderedFeatures(box, { layers: present }).entries()];
+  if (named) features.sort((a, b) => Number(named(b[1])) - Number(named(a[1])));
   const hits: Hit[] = [];
   const taken = new Map<ClickTargetSpec, Hit>();
 
   // The first-feature collapse per registration. The collection seam sits
   // before it (tests/interaction-coordinator-collect.test.mjs): a
   // group-capable target's hit keeps every later labelled feature too.
-  for (const [order, feature] of features.entries()) {
+  for (const [order, feature] of features) {
     const spec = specByLayerId.get(feature.layer.id);
     if (!spec) continue;
     const prior = taken.get(spec);
@@ -1203,6 +1263,7 @@ function buildDisclosure(
  * retired too: a dismissal wins over it.
  */
 export function dismissResponse(): void {
+  cancelDoor();
   pendingCommit = null;
   const popup = currentPopup;
   currentPopup = null;

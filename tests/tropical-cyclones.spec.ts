@@ -57,6 +57,11 @@ test("a storm's key line is a button: Enter opens that storm's popup and Escape 
   await page.keyboard.press('Enter');
   const popup = page.locator('.maplibregl-popup [data-popup-frame]');
   await expect(popup.locator('[data-popup-slot="title"]')).toHaveText(/Simon/);
+  // A key re-render (a storm refresh, an SST or flow snapshot) replaces the button while the popup holds focus.
+  await page.evaluate(() => {
+    const old = document.querySelector('#map-key [data-feature-door="storm:EP5"]')!;
+    old.replaceWith(old.cloneNode(true));
+  });
   await page.keyboard.press('Escape');
   await expect(page.locator('.maplibregl-popup')).toHaveCount(0);
   await expect(door).toBeFocused();

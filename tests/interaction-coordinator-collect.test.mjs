@@ -314,11 +314,15 @@ test('takeFrame accepts a frame root holding only its two regions, and refuses r
 function doorHarness({ center = -150, inView = true, rendered }) {
   coordinator.resetInteractionCoordinatorForTest();
   const calls = [];
+  // The pending one-time listeners by type; `off` removes one as MapLibre's does.
   const once = new Map();
   const eased = [];
   const projected = [];
   const map = {
     once: (type, handler) => once.set(type, handler),
+    off: (type, handler) => {
+      if (once.get(type) === handler) once.delete(type);
+    },
     getLayer: (id) => (['door', 'event'].includes(id) ? { id } : undefined),
     queryRenderedFeatures: () => rendered(),
     getCenter: () => ({ lng: center, lat: 0 }),
@@ -370,18 +374,78 @@ test('a named door wraps to the world copy nearest the view (the Pacific across 
   assert.deepEqual(h.projected[0], { lng: 215, lat: 0 });
 });
 
-test('a named door never opens another target in its place, and waits for one idle only after a move', () => {
+test('a named door never opens another target in its place, and retries a miss for a bounded time only', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
   let rendered = [F('event', 'e1')];
   const still = doorHarness({ rendered: () => rendered });
   coordinator.identifyAt(still.map, ['door'], -145, 0);
   assert.deepEqual(still.calls, [], 'no door target under the point: nothing else is opened');
-  assert.equal(still.once.has('idle'), false, 'in view: no lingering wait to fire on some later idle');
+  assert.equal(still.once.has('idle'), false, 'no wait on a global idle a moving flow can withhold');
+  t.mock.timers.tick(5000);
+  const looks = still.projected.length;
+  t.mock.timers.tick(5000);
+  assert.equal(still.projected.length, looks, 'the retry ends (in a dismissal) once its bound passes');
+  assert.deepEqual(still.calls, [], 'and nothing else was opened meanwhile');
 
   const moved = doorHarness({ inView: false, rendered: () => rendered });
   coordinator.identifyAt(moved.map, ['door'], -145, 0);
   moved.once.get('moveend')();
   assert.deepEqual(moved.calls, [], 'the tiles there are not drawn yet');
   rendered = [F('door', 'd1')];
-  moved.once.get('idle')();
-  assert.deepEqual(moved.calls, ['d1'], 'the tiles settle: the door target answers');
+  t.mock.timers.tick(500);
+  assert.deepEqual(moved.calls, ['d1'], 'the tiles settle within the bound: the door target answers');
+});
+
+test('a named door opens exactly the feature it names among overlapping hits of its own target', () => {
+  const later = F('door', 'later');
+  const named = F('door', 'named');
+  const h = doorHarness({ rendered: () => [later, named, F('event', 'e1')] });
+  coordinator.identifyAt(h.map, ['door'], -145, 0, (f) => f === named);
+  assert.deepEqual(h.calls, ['named', 'e1'], 'the named feature leads, never the first rendered feature of its target');
+});
+
+test('a named door whose named feature is absent opens nothing, even with its target under the point', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+  const h = doorHarness({ rendered: () => [F('door', 'other storm'), F('event', 'e1')] });
+  coordinator.identifyAt(h.map, ['door'], -145, 0, (f) => name(f) === 'named');
+  t.mock.timers.tick(10000);
+  assert.deepEqual(h.calls, [], 'another feature of the same target is never opened in its place');
+});
+
+test('a newer door, a map click or a dismissal cancels a pending door', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+  let rendered = [];
+  const h = doorHarness({ inView: false, rendered: () => rendered });
+  h.map.easeTo = () => {}; // every door stays pending on its move
+  const pending = (door) => {
+    coordinator.identifyAt(h.map, ['door'], -145, 0, (f) => name(f) === door);
+    return h.once.get('moveend');
+  };
+
+  const first = pending('a');
+  const second = pending('b');
+  assert.notEqual(first, second);
+  rendered = [F('door', 'a'), F('door', 'b')];
+  first();
+  assert.deepEqual(h.calls, [], 'the superseded door does nothing, even if its move ends');
+  second();
+  assert.deepEqual(h.calls, ['b'], 'the newer door opens its own feature');
+
+  h.calls.length = 0;
+  rendered = [];
+  pending('a')();
+  coordinator.dismissResponse();
+  rendered = [F('door', 'a')];
+  t.mock.timers.tick(5000);
+  assert.deepEqual(h.calls, [], 'a dismissal during the retry cancels it');
+  pending('a');
+  coordinator.dismissResponse();
+  assert.equal(h.once.has('moveend'), false, 'a dismissal during the move leaves no listener behind');
+
+  let onClick = null;
+  coordinator.initInteractionCoordinator({ ...h.map, on: (type, handler) => type === 'click' && (onClick = handler) });
+  pending('a');
+  rendered = [];
+  onClick({ point: { x: 10, y: 10 }, lngLat: { lng: -120, lat: 47 } });
+  assert.equal(h.once.has('moveend'), false, 'a map click cancels the pending door');
 });
