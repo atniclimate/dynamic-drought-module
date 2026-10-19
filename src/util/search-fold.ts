@@ -52,22 +52,33 @@ export function matchesTokens(haystack: string, tokens: readonly string[], triba
 
 /**
  * What Enter picks with no highlighted row, across the search's groups: a
- * label equal to the query, else the first label that starts with it, else
- * nothing. A typed-out "Colorado" opens the state, not an earlier Tribal row
- * whose name begins with "Colorado". An id equal to the query counts as
- * exact, so a state code such as "CA" opens California. No first-row
+ * label equal to the query, else the one label that starts with it when it is
+ * the only listed row of its kind, else nothing: several listed labels that
+ * start with or contain it ("Kickapoo", "Potawatomi") may be several Nations,
+ * so Enter opens none of them. A typed-out "Colorado" opens the state, not an earlier Tribal row
+ * whose name begins with "Colorado". A state row's id equal to the query
+ * counts as exact, so a state code such as "CA" opens California; a Tribal
+ * row's id is its LARNAME ("Omaha"), so it never does. An exact tie goes to
+ * the state, then the city, ahead of the Tribal and layer rows: "Iowa" opens
+ * the State of Iowa, "Tampa" the city. No first-row
  * fallback: a row that only contains the words may be another Nation's area
  * ("Seneca Nation" finds only "Seneca-Cayuga Nation"), so the caller
  * highlights it and a second Enter opens what the person can see.
  */
-export function enterChoice<T extends { label: string; id?: string }>(
+export function enterChoice<T extends { label: string; id?: string; kind?: string }>(
   items: readonly T[],
   foldedQuery: string
 ): T | undefined {
   const folded = items.map((i) => foldSearchText(i.label));
   const at = (pick: (f: string, i: number) => boolean): T | undefined => items[folded.findIndex(pick)];
-  return (
-    at((f, i) => f === foldedQuery || foldSearchText(items[i].id ?? '') === foldedQuery) ??
-    at((f) => f.startsWith(foldedQuery))
-  );
+  const exact = (kind: string): T | undefined =>
+    at(
+      (f, i) =>
+        items[i].kind === kind &&
+        (f === foldedQuery || (kind === 'place' && foldSearchText(items[i].id ?? '') === foldedQuery))
+    );
+  const prefixed = items.filter((_, i) => folded[i].startsWith(foldedQuery));
+  // The lone prefix row opens only as the lone listed row of its kind: "Potawatomi" lists six Nations.
+  const lone = prefixed.length === 1 && items.filter((i) => i.kind === prefixed[0].kind).length === 1;
+  return exact('place') ?? exact('city') ?? at((f) => f === foldedQuery) ?? (lone ? prefixed[0] : undefined);
 }

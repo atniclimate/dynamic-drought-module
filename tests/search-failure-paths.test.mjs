@@ -284,3 +284,85 @@ test('a formal Oklahoma Nation name lists its Census area first, never a land ar
   assert.equal(sent[0].split('?')[0], CENSUS_URL);
   assert.equal(new URL(sent[0]).searchParams.get('where'), `AIANNH='${code('Kickapoo OTSA')}'`);
 });
+
+// The REAL src/ui/island/search.tsx, transpiled by the installed rolldown (oxc) and
+// rendered as a plain function: preact/hooks and the JSX runtime are in-memory
+// stand-ins (state lives in globalThis.__sh; a "render" is one call of Search).
+const H = (globalThis.__sh = { slots: [], i: 0 });
+const SEARCH_STUBS = {
+  'preact/hooks':
+    'const H = globalThis.__sh;' +
+    ' export function useState(init) { const i = H.i++; if (!(i in H.slots)) H.slots[i] = init;' +
+    ' return [H.slots[i], (v) => { H.slots[i] = typeof v === "function" ? v(H.slots[i]) : v; }]; }' +
+    ' export function useRef(init) { const i = H.i++; if (!(i in H.slots)) H.slots[i] = { current: init }; return H.slots[i]; }' +
+    ' export const useId = () => "s";',
+  'preact/jsx-runtime':
+    'export const jsx = (type, props) => ({ type, props }); export const jsxs = jsx; export const Fragment = "f";'
+};
+const { transformSync } = await import('rolldown/utils');
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    const parent = typeof context.parentURL === 'string' ? context.parentURL : '';
+    if (!parent.endsWith('/src/ui/island/search.tsx')) return nextResolve(specifier, context);
+    if (specifier in SEARCH_STUBS) return { url: dataUrl(SEARCH_STUBS[specifier]), shortCircuit: true };
+    return nextResolve(specifier.startsWith('.') ? `${specifier}.ts` : specifier, context);
+  },
+  load(url, context, nextLoad) {
+    if (!url.endsWith('/src/ui/island/search.tsx')) return nextLoad(url, context);
+    const { code } = transformSync(url, readFileSync(fileURLToPath(url), 'utf8'), {
+      jsx: { runtime: 'automatic', importSource: 'preact' }
+    });
+    return { format: 'module', source: code, shortCircuit: true };
+  }
+});
+const { Search } = await import('../src/ui/island/search.tsx');
+
+function walk(node, visit) {
+  if (Array.isArray(node)) node.forEach((n) => walk(n, visit));
+  else if (node && typeof node === 'object' && node.props) {
+    visit(node);
+    walk(node.props.children, visit);
+  }
+}
+
+test('a retried Tribal list that lands under a still pointer waits for the next keystroke', async () => {
+  H.slots = [];
+  let release;
+  let calls = 0;
+  const props = {
+    items: [{ kind: 'place', id: 'WA', label: 'Washington', haystack: 'washington' }],
+    loadTribal: () =>
+      ++calls === 1
+        ? Promise.reject(new Error('timed out'))
+        : new Promise((resolve) => {
+            release = resolve;
+          }),
+    onSelect: () => {},
+    placeholder: 'Search'
+  };
+  const render = () => {
+    H.i = 0;
+    let input;
+    const rows = [];
+    walk(Search(props), (n) => {
+      if (n.type === 'input') input = n.props;
+      if (n.props['data-search-kind']) rows.push(`${n.props['data-search-kind']}:${n.props['data-search-id']}`);
+    });
+    return { input, rows };
+  };
+  const type = (value) => render().input.onInput({ currentTarget: { value } });
+
+  type('wash'); // the first load fails
+  await flush();
+  assert.deepEqual(render().rows, ['place:WA'], 'States stay under the failure line');
+
+  type('wash'); // a keystroke starts the retry; the groups stay on screen
+  assert.equal(calls, 2);
+  assert.deepEqual(render().rows, ['place:WA']);
+  release([{ kind: 'tribal', id: 'Washoe', label: 'Washoe', haystack: 'washoe' }]);
+  await flush();
+  assert.deepEqual(render().rows, ['place:WA'], 'the landed retry does not slide Washington under the pointer');
+
+  type('wash'); // the next keystroke shows it
+  assert.deepEqual(render().rows, ['tribal:Washoe', 'place:WA']);
+});

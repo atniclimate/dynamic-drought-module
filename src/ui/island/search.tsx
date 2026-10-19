@@ -141,17 +141,34 @@ function useLazyItems(load: (() => Promise<SearchItem[]>) | undefined): LazyItem
   const [pending, setPending] = useState(false);
   const [failed, setFailed] = useState(false);
   const started = useRef(false);
+  const settled = useRef(false);
+  const parked = useRef<SearchItem[] | null>(null);
   const start = (): void => {
+    if (parked.current) {
+      setItems(parked.current);
+      setFailed(false);
+      parked.current = null;
+    }
     if (!load || started.current) return;
     started.current = true;
-    setPending(true);
-    setFailed(false);
+    // Only the first load is pending: a retry keeps the failure line and the
+    // groups below it on screen until it lands.
+    if (!settled.current) setPending(true);
     load()
       .then((loaded) => {
+        // A landed retry waits for the next keystroke or focus: inserted now,
+        // its rows would push the groups below out from under a still pointer.
+        if (settled.current) {
+          parked.current = loaded;
+          return;
+        }
+        settled.current = true;
         setItems(loaded);
         setPending(false);
+        setFailed(false);
       })
       .catch(() => {
+        settled.current = true;
         setItems([]);
         setPending(false);
         setFailed(true);
@@ -219,12 +236,19 @@ export function Search(props: SearchProps): preact.JSX.Element {
     (tribalPending || tribalFailed || tribalGroup.visible.length > 0);
   // The city group also shows its own unavailable line after a failed load.
   const showCityGroup = !isEmptyQuery && (cities.failed || groups.city.visible.length > 0);
+  // Groups below a still-loading one wait for it (pending is the first load
+  // only): rows shown under it would slide out from under a pointer when it
+  // lands, and a click would open the row that slid in.
+  const pendingAt = GROUP_ORDER.findIndex(
+    (k) => (k === 'tribal' ? tribalPending : k === 'city' && cities.pending)
+  );
   const showGroup = (kind: SearchItem['kind']): boolean =>
-    kind === 'tribal'
+    (pendingAt < 0 || GROUP_ORDER.indexOf(kind) <= pendingAt) &&
+    (kind === 'tribal'
       ? showTribalGroup
       : kind === 'city'
         ? showCityGroup
-        : groups[kind].visible.length > 0;
+        : groups[kind].visible.length > 0);
   const groupsForRender = GROUP_ORDER.map((kind) => groups[kind]).filter((g) => showGroup(g.kind));
 
   // Flat, ordered, ID-stamped list for keyboard nav and aria-activedescendant.
@@ -251,8 +275,8 @@ export function Search(props: SearchProps): preact.JSX.Element {
     highlightedKey === null ? -1 : flatRows.findIndex((r) => rowKey(r) === highlightedKey);
   const activeRow = activeIndex >= 0 ? flatRows[activeIndex] : undefined;
 
-  const totalMatches =
-    placeMatches.length + tribalMatches.length + cityMatches.length + layerMatches.length;
+  // Counts only shown groups, so held-back rows are not announced.
+  const totalMatches = groupsForRender.reduce((n, g) => n + g.visible.length + g.overflow, 0);
   const noGroupsShown = groupsForRender.length === 0;
   // The zero-match line only appears once the Tribal load has settled
   // (design-lens: written before ship, plain-language, never blaming the

@@ -165,6 +165,49 @@ test('Enter on a partly typed state skips an earlier Tribe whose name only conta
   assert.equal(enterChoice(rows, 'oreg')?.kind, 'place');
 });
 
+test('Enter does not guess between several Nations whose names start with the query', () => {
+  // Real roster labels: three Nations share the "Kickapoo" prefix.
+  const rows = [
+    { kind: 'tribal', label: 'Kickapoo Traditional Tribe of Texas' },
+    { kind: 'tribal', label: 'Kickapoo Tribe of Indians of the Kickapoo Reservation in Kansas' },
+    { kind: 'tribal', label: 'Kickapoo OTSA' }
+  ];
+  // The rows the search lists for a query: every token matches, prefix rows first.
+  const listed = (q) =>
+    prefixFirst(rows.filter((r) => matchesTokens(foldSearchText(r.label), q.split(' '), true)), q);
+  // No exact row and more than one prefix row: nothing opens; the caller highlights the first row.
+  assert.equal(enterChoice(listed('kickapoo'), 'kickapoo'), undefined);
+  assert.equal(enterChoice(listed('kickapoo t'), 'kickapoo t'), undefined);
+  // One prefix row, but all three Nations still listed ("o" is in every label): nothing opens.
+  assert.equal(listed('kickapoo o').length, 3);
+  assert.equal(enterChoice(listed('kickapoo o'), 'kickapoo o'), undefined);
+  // Typed far enough that only one Nation is listed, Enter opens it.
+  assert.equal(
+    enterChoice(listed('kickapoo traditional'), 'kickapoo traditional')?.label,
+    'Kickapoo Traditional Tribe of Texas'
+  );
+});
+
+test('Enter does not open the one Nation whose name starts with the query while other Nations are listed', () => {
+  // Real roster labels: only "Potawatomi (Kansas)" starts with "potawatomi"; the rest contain it.
+  const rows = [
+    { kind: 'tribal', label: 'Potawatomi (Kansas)' },
+    { kind: 'tribal', label: 'Forest County Potawatomi Community, Wisconsin' },
+    { kind: 'tribal', label: 'Huron Potawatomi' },
+    { kind: 'tribal', label: 'Pokagon of Potawatomi' },
+    { kind: 'tribal', label: 'Citizen Potawatomi Nation-Absentee Shawnee OTSA' },
+    { kind: 'tribal', label: 'Pokagon Band of Potawatomi Indians, Michigan and Indiana' }
+  ];
+  assert.equal(enterChoice(rows, 'potawatomi'), undefined);
+  const maricopa = [
+    { kind: 'tribal', label: 'Maricopa (Ak-Chin)' },
+    { kind: 'tribal', label: 'Salt River Pima-Maricopa Indian Community of the Salt River Reservation, Arizona' }
+  ];
+  assert.equal(enterChoice(maricopa, 'maricopa'), undefined);
+  // A lone prefix row of its kind still opens beside rows of another kind.
+  assert.equal(enterChoice([...maricopa.slice(1), { kind: 'city', label: 'Maricopa' }], 'marico')?.kind, 'city');
+});
+
 test('Enter on a two-letter state code opens the state, not a Tribe whose name starts with it', () => {
   // A state row's id is its code; its haystack carries the code on purpose.
   const rows = [
@@ -173,6 +216,25 @@ test('Enter on a two-letter state code opens the state, not a Tribe whose name s
   ];
   assert.equal(enterChoice(rows, 'ca')?.kind, 'place');
   assert.equal(enterChoice(rows, 'cah')?.kind, 'tribal');
+});
+
+test('Enter on a city or state name opens it, not a Tribal row whose LARNAME id or label ties', () => {
+  // Real roster rows: a land-area row's id is its LARNAME, its label the formal name (or the bare LARNAME).
+  const rows = [
+    { kind: 'tribal', id: 'Omaha', label: 'Omaha Tribe of Nebraska' },
+    { kind: 'tribal', id: 'Iowa', label: 'Iowa' },
+    { kind: 'tribal', id: 'Tampa', label: 'Tampa' },
+    { kind: 'place', id: 'IA', label: 'Iowa' },
+    { kind: 'city', id: 'Omaha', label: 'Omaha' },
+    { kind: 'city', id: 'Tampa', label: 'Tampa' }
+  ];
+  assert.deepEqual(enterChoice(rows, 'omaha'), rows[4]);
+  assert.deepEqual(enterChoice(rows, 'iowa'), rows[3]);
+  assert.deepEqual(enterChoice(rows, 'tampa'), rows[5]);
+  assert.deepEqual(enterChoice(rows, 'ia'), rows[3]);
+  // With no city or state of that name, a Tribal LARNAME id alone is not exact; its own label still is.
+  assert.equal(enterChoice(rows.slice(0, 1), 'omaha')?.label, 'Omaha Tribe of Nebraska', 'prefix tier');
+  assert.equal(enterChoice([rows[1]], 'iowa')?.label, 'Iowa');
 });
 
 test('a formal Nation name finds its Census area, whose label keeps the Census name', () => {
@@ -203,4 +265,19 @@ test('the search view relaxes only Census rows and Enter goes through enterChoic
   assert.match(searchSrc, /matchesTokens\(item\.haystack, tokens, item\.kind === 'tribal' && item\.id\.startsWith\('census:'\)\)/);
   // Not `activeRow ?? flatRows[0]`: that opened the Colorado River Indian Tribes on "Colorado".
   assert.match(searchSrc, /activeRow\?\.item \?\?\s*enterChoice\(/);
+});
+
+test('the search view holds back rows below a still-loading group', () => {
+  // The Tribal group sits first and lands late: States rows shown under its
+  // loading line would slide out from under a pointer when the roster arrives.
+  const searchSrc = readFileSync(new URL('../src/ui/island/search.tsx', import.meta.url), 'utf8');
+  assert.match(
+    searchSrc,
+    /const pendingAt = GROUP_ORDER\.findIndex\(\s*\(k\) => \(k === 'tribal' \? tribalPending : k === 'city' && cities\.pending\)\s*\);/
+  );
+  assert.match(searchSrc, /\(pendingAt < 0 \|\| GROUP_ORDER\.indexOf\(kind\) <= pendingAt\) &&/);
+  // A retry after a failure keeps States and Layers on screen: the browser case
+  // in tests/u3-stage5-fixes.spec.ts ("a retry after a failed roster load").
+  // The live count names only the rows a person can see.
+  assert.match(searchSrc, /const totalMatches = groupsForRender\.reduce\(/);
 });
