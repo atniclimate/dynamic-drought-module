@@ -61,8 +61,6 @@ export interface TimeBarJump {
   readonly key: string;
   readonly label: string;
   readonly title: string;
-  /** Hatched styling marks a jump INTO the outlook register. */
-  readonly hatched: boolean;
 }
 
 /** The two typographic registers the stamp can render in. */
@@ -396,7 +394,7 @@ function render(preserveFeedDisclosure = false): void {
   if (spec.jumps) {
     for (const j of spec.jumps.options) {
       parts.push(
-        `<button type="button" class="time-bar-jump${j.hatched ? ' hatched' : ''}" ` +
+        `<button type="button" class="time-bar-jump" ` +
           `data-jump="${escapeHtml(j.key)}" title="${escapeHtml(j.title)}">${escapeHtml(j.label)}</button>`
       );
     }

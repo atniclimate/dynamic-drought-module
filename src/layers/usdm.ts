@@ -327,11 +327,10 @@ const dmColorExpression: maplibregl.ExpressionSpecification = [
 const changeColorExpression = buildUsdmChangeColorExpression();
 
 /**
- * The observed register's fill paint: a solid `fill-color`, never a hatch
- * `fill-pattern` (that distinction IS the observed-vs-outlook grammar,
- * DR-070). Exported as a pure seam so a future edit cannot silently flatten
- * the register without a
- * test noticing (tests/drought-semantics.spec.ts).
+ * The observed register's fill paint: a solid `fill-color`. The outlook is
+ * solid too (owner, 2026-10-19); the observed/outlook split is carried by the
+ * time stamp and the key title. Exported as a pure seam so a test pins it
+ * (tests/drought-semantics.spec.ts).
  */
 export function buildUsdmFillPaint(
   color: maplibregl.ExpressionSpecification
@@ -484,7 +483,7 @@ function installTimeBar(map: maplibregl.Map): void {
         ? {
             horizon: 'current',
             headline: `Valid ${weekLabel(currentKey)}`,
-            detail: 'US Drought Monitor week · solid fills are observed conditions',
+            detail: 'US Drought Monitor week',
             register: 'observed'
           }
         : {
@@ -529,15 +528,13 @@ function installTimeBar(map: maplibregl.Map): void {
           key: 'monthly',
           label: 'Monthly outlook',
           title: // vocab-allow: names the CPC outlook (an upstream forecast product) and disclaims outcomes
-            'Switch to the CPC Monthly Drought Outlook: a forecast register (a shift in odds, not a forecast of outcomes)',
-          hatched: true
+            'Switch to the CPC Monthly Drought Outlook: a forecast register (a shift in odds, not a forecast of outcomes)'
         },
         {
           key: 'seasonal',
           label: 'Seasonal outlook',
           title: // vocab-allow: names the CPC outlook (an upstream forecast product) and disclaims outcomes
-            'Switch to the CPC Seasonal Drought Outlook: a forecast register (a shift in odds, not a forecast of outcomes)',
-          hatched: true
+            'Switch to the CPC Seasonal Drought Outlook: a forecast register (a shift in odds, not a forecast of outcomes)'
         }
       ],
       onJump: (key) => switchToOutlook(key)

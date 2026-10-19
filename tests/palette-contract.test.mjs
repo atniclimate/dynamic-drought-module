@@ -121,6 +121,11 @@ test('named display transforms pin the actual current adapter paint independentl
   for (const row of DISPLAY_TRANSFORMS) assertTransform(row, sourceText(row.file));
   // The outlook is a solid fill (owner, 2026-10-19), never the retired hatch pattern.
   assert.doesNotMatch(withoutBlockComments(sourceText('layers/drought.ts')), /fill-pattern|util\/hatch/);
+  // No outlook-jump chip or caption may still promise a hatch the outlook no longer has.
+  assert.doesNotMatch(sourceText('ui/time-bar.ts'), /hatched/);
+  assert.doesNotMatch(sourceText('styles/app.css'), /\.time-bar-jump\.hatched/);
+  assert.doesNotMatch(sourceText('layers/drought.ts'), /hatched: |solid fills/);
+  assert.doesNotMatch(sourceText('layers/usdm.ts'), /hatched: /);
   assert.deepEqual(wildfire.WILDFIRE_PULSE_COLORS, ['#ff3300', '#ff4c00', '#ff6600']);
   assert.equal(wildfire.WILDFIRE_PULSE_DURATION_MS, 1800);
   assert.equal(wildfire.WILDFIRE_STATIC_COLOR, '#ff4c00');

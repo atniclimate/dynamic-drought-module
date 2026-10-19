@@ -204,8 +204,7 @@ function installTimeBar(map: maplibregl.Map, fc: GeoJSON.FeatureCollection): voi
         {
           key: 'observed',
           label: 'Observed weeks',
-          title: 'Back to the US Drought Monitor: observed conditions, solid fills',
-          hatched: false
+          title: 'Back to the US Drought Monitor: observed conditions'
         }
       ],
       onJump: () => switchToObserved()

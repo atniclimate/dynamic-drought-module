@@ -79,7 +79,7 @@ export const ECOREGION_DEFAULT_COLOR = '#5a6b7d';
  * NOAA CPC Seasonal Drought Outlook category palette
  *
  * NOAA cpc_drought_outlk MapServer layers 1 and 4 publish these class colors.
- * The vector adapter keys the outlook attribute; this table drives hatch ink,
+ * The vector adapter keys the outlook attribute; this table drives fill color,
  * outlines and swatches. DDM display opacity is a separate transform.
  * D3 M0 receipt: cpc-seasonal-drought-outlook, clause_verdicts_2026_10_07.
  * ------------------------------------------------------------------------- */

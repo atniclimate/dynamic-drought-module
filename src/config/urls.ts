@@ -606,7 +606,7 @@ export const URLS = Object.freeze({
   // ---------- CPC drought outlook, vector form (0.5.0b outlook register) ----------
   // The same cpc_drought_outlk service the raster `cpcDroughtWMS` above
   // renders, but the ArcGIS REST vector layers, so the outlook register can
-  // draw hatched fills client-side with the issued date and valid-through
+  // draw class fills client-side with the issued date and valid-through
   // target read from attributes. Layer 1 = Monthly Drought Outlook (US +
   // Puerto Rico), layer 4 = Seasonal Drought Outlook (US + Puerto Rico);
   // island-territory layers are siblings. Consumer appends
