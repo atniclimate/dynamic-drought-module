@@ -1326,14 +1326,42 @@ function wireTopLevelEvents(map: maplibregl.Map): void {
   // ONE pending timer for both controls: a re-toggle inside the delay clears
   // it, and its own snapshot decides (the resizeTimer pattern below).
   let sidebarRefitTimer: number | null = null;
-  const resizeAfterSidebarToggle = (snapshot: SidebarCameraSnapshot, refitAlways = false): void => {
+  let stopWatchingCamera: (() => void) | null = null;
+  const clearSidebarRefit = (): void => {
     if (sidebarRefitTimer !== null) window.clearTimeout(sidebarRefitTimer);
+    sidebarRefitTimer = null;
+    stopWatchingCamera?.();
+    stopWatchingCamera = null;
+  };
+  // A forced (Reset) refit is only for as long as Reset is the latest camera
+  // intent: any later move that is not a resize (a gesture, a region, framing,
+  // ocean or search fit) cancels it. A resize starts its own movestart only
+  // when idle, and fires `resize` in the same call, so the microtask skips it.
+  const cancelRefitOnNewerCamera = (): void => {
+    let resized = false;
+    const onResize = (): void => { resized = true; };
+    const onMoveStart = (): void => {
+      resized = false;
+      queueMicrotask(() => { if (!resized) clearSidebarRefit(); });
+    };
+    map.on('resize', onResize);
+    map.on('movestart', onMoveStart);
+    stopWatchingCamera = () => {
+      map.off('resize', onResize);
+      map.off('movestart', onMoveStart);
+    };
+  };
+  const resizeAfterSidebarToggle = (snapshot: SidebarCameraSnapshot, refitAlways = false): void => {
+    clearSidebarRefit();
+    if (refitAlways) cancelRefitOnNewerCamera();
     // Allow the CSS grid transition to settle before resizing the map. The
     // 220 ms delay matches the vanilla baseline; it is kept under reduced
     // motion too, where the transition itself is instant (a known mismatch,
     // left as it is by M8).
     sidebarRefitTimer = window.setTimeout(() => {
       sidebarRefitTimer = null;
+      stopWatchingCamera?.();
+      stopWatchingCamera = null;
       map.resize();
       const { target, camera } = snapshot;
       // A pan, zoom or pitch during the transition cancels the refit, except
