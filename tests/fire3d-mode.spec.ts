@@ -1292,52 +1292,56 @@ test('a corrupt archive fails the probe before any map mutation and drops fire3d
   }
 });
 
-test('the hazard drape stands down while the flat WHP surface is on, and leaves when it arrives', async () => {
-  const browser = installFakeBrowser({ desktop: true, reducedMotion: false });
-  const restoreFetch = stubPmtilesFetch();
-  const harness = fakeMapHarness({ pitch: 0, bearing: 0 });
+// Both flat rows (the horizon's 'usfs-whp' and the Layer studio's USFS-colours
+// 'usfs-whp-classes') draw the same issuer product, so each stands the drape down.
+for (const flatKey of ['usfs-whp', 'usfs-whp-classes'] as const) {
+  test(`the hazard drape stands down while the flat WHP surface (${flatKey}) is on, and leaves when it arrives`, async () => {
+    const browser = installFakeBrowser({ desktop: true, reducedMotion: false });
+    const restoreFetch = stubPmtilesFetch();
+    const harness = fakeMapHarness({ pitch: 0, bearing: 0 });
 
-  try {
-    // The wildfire cluster's season-ahead horizon activates exactly this
-    // flat layer (src/config/clusters.ts:119), so the pairing is real.
-    // Both draw the SAME USFS product from the same service: stacked they
-    // would double one classification's translucency, print two legends
-    // for one issuer, and show the Pacific Northwest bake box as a hard
-    // rectangular seam over the live conterminous-US layer.
-    registry.activate('usfs-whp');
-    const controller = new AbortController();
-    const activation = await activateContextLayers(
-      harness.map,
-      controller.signal
-    );
+    try {
+      // The wildfire cluster's season-ahead horizon activates the 'usfs-whp'
+      // flat layer (src/config/clusters.ts:119), so the pairing is real.
+      // Both draw the SAME USFS product from the same service: stacked they
+      // would double one classification's translucency, print two legends
+      // for one issuer, and show the Pacific Northwest bake box as a hard
+      // rectangular seam over the live conterminous-US layer.
+      registry.activate(flatKey);
+      const controller = new AbortController();
+      const activation = await activateContextLayers(
+        harness.map,
+        controller.signal
+      );
 
-    expect(activation.keys).not.toContain('whp');
-    expect(harness.sources.has('whp-2023')).toBe(false);
-    expect(harness.layerSpecs.has('whp-2023')).toBe(false);
-    // No embed line either: a disclosure may only describe what rendered.
-    expect(activation.embedLines.join(' ')).not.toContain(
-      'Wildfire Hazard Potential'
-    );
+      expect(activation.keys).not.toContain('whp');
+      expect(harness.sources.has('whp-2023')).toBe(false);
+      expect(harness.layerSpecs.has('whp-2023')).toBe(false);
+      // No embed line either: a disclosure may only describe what rendered.
+      expect(activation.embedLines.join(' ')).not.toContain(
+        'Wildfire Hazard Potential'
+      );
 
-    // With the flat layer off, the drape activates as usual...
-    registry.deactivate('usfs-whp');
-    deactivateContextLayers(harness.map);
-    const second = await activateContextLayers(harness.map, controller.signal);
-    expect(second.keys).toContain('whp');
-    expect(harness.layerSpecs.has('whp-2023')).toBe(true);
+      // With the flat layer off, the drape activates as usual...
+      registry.deactivate(flatKey);
+      deactivateContextLayers(harness.map);
+      const second = await activateContextLayers(harness.map, controller.signal);
+      expect(second.keys).toContain('whp');
+      expect(harness.layerSpecs.has('whp-2023')).toBe(true);
 
-    // ...and it leaves the moment the flat layer is switched on, because a
-    // horizon change can do that while the scene is already up.
-    registry.activate('usfs-whp');
-    expect(harness.layerSpecs.has('whp-2023')).toBe(false);
-    expect(harness.sources.has('whp-2023')).toBe(false);
-  } finally {
-    registry.deactivate('usfs-whp');
-    deactivateContextLayers(harness.map);
-    restoreFetch();
-    browser.restore();
-  }
-});
+      // ...and it leaves the moment the flat layer is switched on, because a
+      // horizon change (or the Layer studio) can do that while the scene is up.
+      registry.activate(flatKey);
+      expect(harness.layerSpecs.has('whp-2023')).toBe(false);
+      expect(harness.sources.has('whp-2023')).toBe(false);
+    } finally {
+      registry.deactivate(flatKey);
+      deactivateContextLayers(harness.map);
+      restoreFetch();
+      browser.restore();
+    }
+  });
+}
 
 test('a corrupt hazard archive degrades only the drape; the scene stays active', async () => {
   const browser = installFakeBrowser({ desktop: true, reducedMotion: false });

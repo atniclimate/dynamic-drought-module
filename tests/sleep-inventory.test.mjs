@@ -96,6 +96,16 @@ const REASON_CLASSES = Object.freeze([
 /** @type {ReadonlyArray<{file: string, line: number, test: string, text: string, occurrence: number, class: ReasonClass, reason: string}>} */
 const SITES = [
   {
+    file: 's4-minimap.spec.ts',
+    line: 722,
+    test: 'the former Arctic zone is no longer a pointer target (owner, 2026-10-19)',
+    text: 'await page.waitForTimeout(500);',
+    occurrence: 1,
+    class: 'absence-window',
+    reason:
+      'proves a click on the retired Arctic area starts no ocean framing: a short window for an ENSO switch that must not happen, then the URL and the active zone are read; not a readiness wait.'
+  },
+  {
     file: 'fire3d-mode.spec.ts',
     line: 2850,
     test: '${protocol}: removing the owner cancels a native body and suppresses late data',

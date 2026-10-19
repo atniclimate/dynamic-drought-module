@@ -66,3 +66,28 @@ test("a storm's key line is a button: Enter opens that storm's popup and Escape 
   await expect(page.locator('.maplibregl-popup')).toHaveCount(0);
   await expect(door).toBeFocused();
 });
+
+test("a storm refresh re-renders the key and the focused storm button keeps focus", async ({ page }) => {
+  await bootStorm(page);
+  const toggle = page.locator('#map-key-details-toggle');
+  await expect(toggle).toBeVisible();
+  if ((await toggle.getAttribute('aria-expanded')) === 'false') await toggle.click();
+  const door = page.locator('#map-key [data-feature-door="storm:EP5"]');
+  await expect(door).toBeVisible();
+  await door.focus();
+  // The 30-minute refresh brings the next advisory: replay the layer's snapshot with advisory 25.
+  await page.evaluate(() => {
+    type Snapshot = { status: string; storms: { advisory: string }[] };
+    let current: Snapshot | null = null;
+    window.addEventListener('ddm:tropical-snapshot', (event) => {
+      current = (event as CustomEvent<Snapshot>).detail;
+    }, { once: true });
+    window.dispatchEvent(new Event('ddm:tropical-snapshot-request'));
+    const replayed = current as Snapshot | null;
+    if (!replayed || replayed.storms.length === 0) throw new Error('the layer replayed no storm snapshot');
+    const storms = replayed.storms.map((storm) => ({ ...storm, advisory: '25' }));
+    window.dispatchEvent(new CustomEvent('ddm:tropical-snapshot', { detail: { ...replayed, storms } }));
+  });
+  await expect(door).toContainText('advisory 25');
+  await expect(door).toBeFocused();
+});

@@ -141,6 +141,35 @@ test.describe('precedence: boot, Reset and embed defaults (DR-109)', () => {
     expect(params.get('view')).toBe('console');
   });
 
+  test('Reset in ENSO drops ocean= for the national region and fits the Pacific', async ({ page }) => {
+    await captureMainMap(page);
+    await gotoApp(page, '?cluster=enso&ocean=atlantic&view=console');
+    const centerLng = (): Promise<number> =>
+      page.evaluate(() => (window as MainMapWindow).__precedenceMaps!
+        .find((map) => map.getContainer().id === 'map')!.getCenter().lng);
+    await expect.poll(centerLng, { message: 'the boot fits the Atlantic' }).toBeGreaterThan(-90);
+
+    await page.locator('#reset-btn').click();
+
+    const params = new URLSearchParams(await search(page));
+    expect(params.get('ocean')).toBeNull();
+    expect(params.get('region')).toBe('national');
+    expect(params.get('cluster')).toBe('enso');
+    // The Pacific fit (src/config/oceans.ts, -179.9 to -110) centres near -145;
+    // the national fit it must override centres east of -125.
+    await expect.poll(centerLng, { message: 'Reset ends on the Pacific' }).toBeLessThan(-125);
+  });
+
+  test('Reset in an embed returns to the embed link region, not the national default', async ({ page }) => {
+    await gotoApp(page, '?embed=true&region=washington_state');
+    await chooseRegionIn(page, 'central_oregon');
+
+    await page.locator('#reset-btn').click();
+
+    await expect(regionSelect(page)).toHaveValue('region:washington_state');
+    expect(new URLSearchParams(await search(page)).get('region')).toBe('washington_state');
+  });
+
   test('an embed pinned to region=washington_state&view=brief keeps the Washington framing and the Brief door', async ({
     page
   }) => {
@@ -259,6 +288,26 @@ import { installDefaultNifcStub } from './wildfire-fixtures';
 import { stubCpcSeasonalTempOutlook, stubSpcFireOutlook } from './helpers';
 import { stubCpcDroughtOutlook } from './cpc-outlook-fixtures';
 import { DEFAULT_REGION, REGIONS } from '../src/config/regions';
+import type { Map as MlMap } from 'maplibre-gl';
+
+interface MainMapWindow extends Window {
+  __precedenceMaps?: MlMap[];
+}
+
+/** Observe the real map constructor, as in flow-wire's capture; replace no method. */
+async function captureMainMap(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const maps: MlMap[] = [];
+    (window as MainMapWindow).__precedenceMaps = maps;
+    Object.defineProperty(Object.prototype, '_onWindowOnline', {
+      configurable: true,
+      set(this: MlMap, value: unknown) {
+        Object.defineProperty(this, '_onWindowOnline', { configurable: true, enumerable: true, writable: true, value });
+        maps.push(this);
+      }
+    });
+  });
+}
 
 const M7_DESKTOP = { width: 1280, height: 720 } as const;
 const M7_PHONE = { width: 390, height: 844 } as const;

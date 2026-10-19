@@ -79,6 +79,11 @@ test('Reset is the bare link: default region, the Pacific in ENSO, base map, des
   assert.ok(reset.includes('selectRegion(map, home)'));
   assert.ok(reset.includes('ensoBootFitsPacific(cluster, false, false, home === DEFAULT_REGION, false)'));
   assert.ok(reset.includes("fitOcean(map, 'pacific')"));
+  assert.ok(
+    reset.indexOf('selectRegion(map, home)') < reset.indexOf("fitOcean(map, 'pacific')"),
+    'the Pacific fit follows the region fit, or the national fit wins'
+  );
+  assert.ok(sidebar.includes('if (params.embed) embedHomeRegion = params.region;'), 'an embed remembers its link region');
   assert.ok(reset.includes('requestBasemapMode(map, defaultBasemapFor(cluster))'));
   assert.ok(reset.includes('STATE.desktopSidebarClosed = false'));
 });
