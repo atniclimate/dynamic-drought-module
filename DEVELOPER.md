@@ -168,7 +168,7 @@ current URL.
 | `region` | `washington_state`, `columbia_snake_basin`, `cascades`, `central_oregon`, `southwest_washington`, `south_puget_sound`, `national`, `alaska`, `hawaii`, `british_columbia` | `national` (add `region=washington_state&view=brief` to keep the prior Washington framing) |
 | `layers` | comma-separated keys from the [layer table](README.md#layers-and-data-sources) | `hillshade,nadm-drought,aiannh,bia-reservations,states` |
 | `framing` | one of the nine ATNI-authored editorial framing keys, or `all` | none; `region` remains in control |
-| `cluster` | `wildfire`, `heat`, or `enso`; an explicit `layers` list outranks it | Drought, encoded by absence |
+| `cluster` | `wildfire`, `heat`, or `enso`; an explicit `layers` list outranks it unless the list matches that mode's recipe at the selected horizon, including any enabled optional layers (such as Wildfire with Fuel risk) | Drought, encoded by absence |
 | `ocean` | `pacific`, `arctic`, or `atlantic`, only with `cluster=enso` | none |
 | `select` | `state:<postal code>` (for example `state:WA`): opens the map focused on that boundary with its impact briefing open; applied once, then dropped from the URL | none |
 | `embed` | `true` or `1` (hides the sidebar for clean iframe presentation) | `false` |
