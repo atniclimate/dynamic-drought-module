@@ -71,19 +71,21 @@ test('USDM fade targets contain the actual fill and outline layers only', () => 
 });
 
 // ---------------------------------------------------------------------------
-// The observed-vs-outlook register split (DR-070): the CPC outlook is
-// hatched (`fill-pattern`), the USDM observed week is solid (`fill-color`).
-// Both modules build their fill paint through a pure, exported seam
-// (buildOutlookFillPaint / buildUsdmFillPaint) precisely so this split can be
-// pinned here without a network-backed activation; a future edit that
-// flattens either surface onto the other's paint property fails this test.
+// The CPC outlook is a solid issuer-color fill at the current-conditions
+// opacity (owner, 2026-10-19; it was hatched under DR-070). The observed/
+// outlook split is carried by the time stamp and the key title. Both modules
+// build their fill paint through a pure, exported seam
+// (buildOutlookFillPaint / buildUsdmFillPaint) so it can be pinned here
+// without a network-backed activation.
 // ---------------------------------------------------------------------------
 
-test('the CPC drought outlook fills with a hatch fill-pattern, never a solid fill-color', () => {
+test('the CPC drought outlook fills with solid issuer class colors at the current-conditions opacity, never a pattern', () => {
   const paint = buildOutlookFillPaint() as Record<string, unknown>;
-  expect(Object.keys(paint).sort()).toEqual(['fill-opacity', 'fill-pattern']);
-  expect(paint['fill-pattern']).toBeTruthy();
-  expect(paint['fill-opacity']).toBe(1);
+  expect(Object.keys(paint).sort()).toEqual(['fill-color', 'fill-opacity']);
+  expect(paint['fill-color']).toEqual(['match', ['get', 'outlook'],
+    'Persistence', '#9B634A', 'Development', '#FFDE63',
+    'Improvement', '#DED4BC', 'Removal', '#B2AD69', 'rgba(0,0,0,0)']);
+  expect(paint['fill-opacity']).toBe(0.48);
 });
 
 test('the USDM observed week fills with a solid fill-color, never a hatch fill-pattern', () => {

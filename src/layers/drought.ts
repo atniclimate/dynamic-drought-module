@@ -12,7 +12,7 @@
  * remains in urls.ts as the documented fallback) so the forecast register
  * can visibly CHANGE INSTRUMENT:
  *
- *   - hatched, see-through class fills (src/util/hatch.ts), never solid;
+ *   - solid class fills at the current-conditions opacity (owner 2026-10-19; formerly hatched);
  *   - an ISSUED date plus valid-through range in the time bar's outlook
  *     typography (warn amber, body face), never a hard VALID stamp;
  *   - the ENSO doctrine's framing in every copy surface: a shift in odds,
@@ -45,7 +45,6 @@ import { requestHorizon } from '../state/cluster-service';
 import { fetchJsonWithBudget } from '../util/fetch';
 import { ExpiringLruCache } from '../util/bounded-cache';
 import type { ClockValue, IssuedModel, PopupClock } from '../ui/popup-frame';
-import { ensureHatchImages, hatchImageId } from '../util/hatch';
 import { hideLoading, showLoading } from '../ui/overlay';
 import { DROUGHT_COLORS, OUTLOOK_LEGEND } from '../config/palette';
 import { setTimeBar, clearTimeBar } from '../ui/time-bar';
@@ -56,6 +55,8 @@ const LAYER_KEY = 'drought';
 const SOURCE_ID = 'drought-outlook';
 const FILL_LAYER_ID = 'drought-outlook-fill';
 const OUTLINE_LAYER_ID = 'drought-outlook-outline';
+// Same display transform as the current-conditions NADM fill (nadm-drought.ts).
+const FILL_OPACITY = 0.48;
 
 /** Fade targets for the sidebar's toggle transitions (LayerModule contract). */
 export const fadeLayerIds = [FILL_LAYER_ID, OUTLINE_LAYER_ID] as const;
@@ -236,34 +237,8 @@ function switchToObserved(): void {
 // Rendering
 // ---------------------------------------------------------------------------
 
-/** Hatch pattern per class; No_Drought matches nothing and renders blank. */
-const patternExpression: maplibregl.ExpressionSpecification = [
-  'match',
-  ['get', 'outlook'],
-  'Persistence', hatchImageId('PERSISTS'),
-  'Development', hatchImageId('DEVELOPS'),
-  'Improvement', hatchImageId('IMPROVES'),
-  'Removal', hatchImageId('REMOVAL'),
-  ''
-];
-
-/**
- * The outlook register's fill paint: a hatch `fill-pattern`, never a solid
- * `fill-color` (that distinction IS the observed-vs-outlook grammar, DR-070).
- * Exported as a pure seam, mirroring `buildUsdmFillPaint` in
- * usdm.ts, so a future edit cannot silently flatten the register without a
- * test noticing (tests/drought-semantics.spec.ts).
- */
-export function buildOutlookFillPaint(): NonNullable<maplibregl.FillLayerSpecification['paint']> {
-  return {
-    'fill-pattern': patternExpression,
-    // The hatch tiles carry their own transparency; full layer opacity
-    // keeps the strokes crisp over the basemap.
-    'fill-opacity': 1
-  };
-}
-
-const outlineColorExpression: maplibregl.ExpressionSpecification = [
+/** Issuer class colors for the fill and the outline; No_Drought matches nothing and renders blank. */
+const classColorExpression: maplibregl.ExpressionSpecification = [
   'match',
   ['get', 'outlook'],
   'Persistence', DROUGHT_COLORS['PERSISTS']!,
@@ -272,6 +247,18 @@ const outlineColorExpression: maplibregl.ExpressionSpecification = [
   'Removal', DROUGHT_COLORS['REMOVAL']!,
   'rgba(0,0,0,0)'
 ];
+
+/**
+ * The outlook register's fill paint: a solid issuer-class `fill-color` at the
+ * current-conditions opacity. The owner's words (2026-10-19) supersede the
+ * earlier hatch grammar (DR-070): the observed/outlook split is carried by
+ * the time stamp and the key title, not the fill texture. Exported as a pure
+ * seam, mirroring `buildUsdmFillPaint` in usdm.ts, so a test pins it
+ * (tests/drought-semantics.spec.ts).
+ */
+export function buildOutlookFillPaint(): NonNullable<maplibregl.FillLayerSpecification['paint']> {
+  return { 'fill-color': classColorExpression, 'fill-opacity': FILL_OPACITY };
+}
 
 /** Forecast classes only; No_Drought stays blank like CPC's own map. */
 function outlookOnly(fc: GeoJSON.FeatureCollection): GeoJSON.FeatureCollection {
@@ -451,7 +438,7 @@ async function runShowRange(map: maplibregl.Map, range: OutlookRange): Promise<v
 }
 
 /**
- * Add the outlook source, the hatched fill, the class outline, the legend,
+ * Add the outlook source, the class fill, the class outline, the legend,
  * and the time bar, then load the range the timeline selects. Idempotent:
  * a re-activation with the source present re-renders the selected range
  * only if it changed.
@@ -487,8 +474,6 @@ export async function activate(map: maplibregl.Map): Promise<void> {
   reportStatus('loading');
 
   try {
-    ensureHatchImages(map);
-
     map.addSource(SOURCE_ID, {
       type: 'geojson',
       data: { type: 'FeatureCollection', features: [] },
@@ -513,7 +498,7 @@ export async function activate(map: maplibregl.Map): Promise<void> {
         type: 'line',
         source: SOURCE_ID,
         paint: {
-          'line-color': outlineColorExpression,
+          'line-color': classColorExpression,
           'line-width': 1.1,
           'line-opacity': 0.9
         }
@@ -529,7 +514,7 @@ export async function activate(map: maplibregl.Map): Promise<void> {
           'Drought outlook key',
           OUTLOOK_LEGEND,
           // vocab-allow: names the CPC outlook (an upstream forecast product) and disclaims outcomes
-          'NOAA CPC Drought Outlook · hatched fills mark a FORECAST register; a shift in odds, not a forecast of outcomes'
+          'NOAA CPC Drought Outlook · a shift in odds, not a forecast of outcomes'
         )
     });
   } catch (err) {
@@ -589,7 +574,7 @@ export function cancelActivation(): void {
 
 /**
  * Abort in-flight work and remove the outlook layers, source, legend, and
- * time bar. The hatch images stay registered on the map (tiny, reusable).
+ * time bar.
  * Symmetric with `activate`; safe to call when never activated.
  */
 export function deactivate(map: maplibregl.Map): void {
@@ -717,7 +702,7 @@ export function buildOutlookPopupModel(props: GeoJsonProperties, range: OutlookR
 }
 
 /**
- * Register the hatched fill's click target with the
+ * Register the outlook fill's click target with the
  * InteractionCoordinator (one response per click; D-0.7.0-058 ruling 5;
  * condition surfaces rank last so they never blanket a boundary).
  */

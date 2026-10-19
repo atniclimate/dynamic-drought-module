@@ -199,7 +199,7 @@ test('D3 S7 SPC three rendered classes retain exact issuer map and key colors', 
 });
 
 for (const range of ['monthly', 'seasonal'] as const) {
-  test('D3 S8 CPC ' + range + ' four rendered classes retain issuer hatch and legend colors', async ({ page }) => {
+  test('D3 S8 CPC ' + range + ' four rendered classes retain issuer fill and legend colors', async ({ page }) => {
     const classes = ['Persistence', 'Development', 'Improvement', 'Removal', 'No_Drought'];
     const requestedLayers: string[] = [];
     await page.route('**/cpc_drought_outlk/MapServer/*/query?*', route => {
@@ -219,66 +219,19 @@ for (const range of ['monthly', 'seasonal'] as const) {
         .map(f => f.properties.outlook) ?? [])].sort();
     })).toEqual(['Development', 'Improvement', 'Persistence', 'Removal']);
     expect(requestedLayers).toContain(range === 'monthly' ? '1' : '4');
-    // Read the images registered by the real adapter, not reconstructed fixture tiles.
-    const hatchImages = await page.evaluate(() => {
-      const map = (window as unknown as OutlookWindow).__issuerOutlookMaps.find(m => m.getContainer().id === 'map')!;
-      return ['persists', 'develops', 'improves', 'removal'].map(cls => {
-        const image = map.getImage('outlook-hatch-' + cls);
-        if (!image) return null;
-        const { width, height, data } = image.data;
-        const coreColors: number[][] = [];
-        let gaps = 0;
-        let singleStrokePixels = 0;
-        let maximumAlpha = 0;
-        for (let i = 0; i < data.length; i += 4) {
-          const alpha = data[i + 3]!;
-          if (alpha === 0) gaps++;
-          if (Math.abs(alpha - 153) <= 1) singleStrokePixels++;
-          maximumAlpha = Math.max(maximumAlpha, alpha);
-          // Ignore faint antialiased edges where unpremultiplication amplifies rounding.
-          if (alpha >= 128) coreColors.push([data[i]!, data[i + 1]!, data[i + 2]!]);
-        }
-        return { cls, width, height, pixelRatio: image.pixelRatio, gaps,
-          singleStrokePixels, maximumAlpha, coreColors };
-      });
-    });
-    const issuerInk = [[155, 99, 74], [255, 222, 99], [222, 212, 188], [178, 173, 105]];
-    hatchImages.forEach((image, index) => {
-      expect(image, 'registered class image').not.toBeNull();
-      if (!image) throw new Error('Missing registered CPC hatch');
-      expect([image.width, image.height, image.pixelRatio]).toEqual([36, 36, 2]);
-      expect(image.gaps, image.cls + ' transparent ground').toBeGreaterThan(0);
-      expect(image.singleStrokePixels, image.cls + ' 0.6-alpha ink').toBeGreaterThan(0);
-      expect(image.coreColors.length, image.cls + ' positive ink').toBeGreaterThan(0);
-      // Two fully covered strokes would reach 0.84. Antialiased intersections
-      // can cover only part of a pixel, so this is a ceiling, not an exact value.
-      if (image.cls === 'develops') {
-        expect(image.maximumAlpha, 'overlapping crosshatch ink').toBeGreaterThan(154);
-        expect(image.maximumAlpha, 'two-stroke alpha ceiling').toBeLessThanOrEqual(215);
-      } else {
-        expect(Math.abs(image.maximumAlpha - 153), image.cls + ' single stroke').toBeLessThanOrEqual(1);
-      }
-      for (const rgb of image.coreColors) {
-        rgb.forEach((channel, component) => {
-          expect(Math.abs(channel - issuerInk[index]![component]!)).toBeLessThanOrEqual(2);
-        });
-      }
-    });
     const paints = await page.evaluate(() => {
       const map = (window as unknown as OutlookWindow).__issuerOutlookMaps.find(m => m.getContainer().id === 'map')!;
       return {
         outline: map.getPaintProperty('drought-outlook-outline', 'line-color'),
-        pattern: map.getPaintProperty('drought-outlook-fill', 'fill-pattern'),
+        fill: map.getPaintProperty('drought-outlook-fill', 'fill-color'),
         opacity: map.getPaintProperty('drought-outlook-fill', 'fill-opacity')
       };
     });
     expect(paints.outline).toEqual(['match', ['get', 'outlook'],
       'Persistence', '#9B634A', 'Development', '#FFDE63',
       'Improvement', '#DED4BC', 'Removal', '#B2AD69', 'rgba(0,0,0,0)']);
-    expect(paints.pattern).toEqual(['match', ['get', 'outlook'],
-      'Persistence', 'outlook-hatch-persists', 'Development', 'outlook-hatch-develops',
-      'Improvement', 'outlook-hatch-improves', 'Removal', 'outlook-hatch-removal', '']);
-    expect(paints.opacity).toBe(1);
+    expect(paints.fill).toEqual(paints.outline);
+    expect(paints.opacity).toBe(0.48);
     expect(await page.locator('[data-legend="drought"] .swatch').evaluateAll(nodes =>
       nodes.map(n => getComputedStyle(n).backgroundColor))).toEqual([
       'rgb(155, 99, 74)', 'rgb(255, 222, 99)', 'rgb(222, 212, 188)', 'rgb(178, 173, 105)'

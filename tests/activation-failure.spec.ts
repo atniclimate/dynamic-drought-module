@@ -236,8 +236,8 @@ test.describe('DDM-P1-T03: activation failure, thrown and non-thrown, self-corre
 
   // A third shape -- a module that self-reports 'error' and THEN throws
   // (drought.ts:527-529, `reportStatus('error'); throw err;`) -- is not
-  // added here: reaching that catch block requires ensureHatchImages,
-  // map.addSource, or map.addLayer (drought.ts:477-514) to throw, and none
+  // added here: reaching that catch block requires
+  // map.addSource or map.addLayer (drought.ts:477-514) to throw, and none
   // of those depend on a network request a Playwright `page.route` abort
   // can reach; forcing one deterministically would need patching MapLibre
   // internals from the test, which this brief's owned files do not cover.
