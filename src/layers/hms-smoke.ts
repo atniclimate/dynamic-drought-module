@@ -27,6 +27,7 @@ import { URLS } from '../config/urls';
 import {
   HMS_DENSITY_PRESENTATION,
   buildHmsSmokeFillPaint,
+  hmsLegendSwatch,
   parseArcGisPolygonFeatureCollection,
   resolveHmsDensityClass,
   resolveHmsDensityPresentation
@@ -272,19 +273,19 @@ async function load(map: maplibregl.Map, initial: boolean): Promise<void> {
         'Satellite smoke plumes',
         [
           {
-            color: HMS_DENSITY_PRESENTATION.Light.color,
+            color: hmsLegendSwatch('Light'),
             label: HMS_DENSITY_PRESENTATION.Light.legendLabel
           },
           {
-            color: HMS_DENSITY_PRESENTATION.Medium.color,
+            color: hmsLegendSwatch('Medium'),
             label: HMS_DENSITY_PRESENTATION.Medium.legendLabel
           },
           {
-            color: HMS_DENSITY_PRESENTATION.Heavy.color,
+            color: hmsLegendSwatch('Heavy'),
             label: HMS_DENSITY_PRESENTATION.Heavy.legendLabel
           },
           {
-            color: HMS_DENSITY_PRESENTATION.Unknown.color,
+            color: hmsLegendSwatch('Unknown'),
             label: HMS_DENSITY_PRESENTATION.Unknown.legendLabel
           }
         ]

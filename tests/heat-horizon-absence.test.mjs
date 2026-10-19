@@ -8,8 +8,8 @@ import { fileURLToPath } from 'node:url';
  * Extreme Heat's Near Term and Long Range chips are off by design, not by a
  * bug: Near Term repeats Current's one HeatRisk surface and Long Range has
  * no verified source. This pins both facts (so a later source admission
- * flips the test, not the copy by accident) and the shell's visible caption
- * and the all-zero statement that carry the reason in plain words.
+ * flips the test, not the copy by accident) and the chip's reason and the
+ * all-zero statement that carry the reason in plain words.
  */
 
 registerHooks({
@@ -52,9 +52,10 @@ test('heat: the first horizon has a surface, the other two are off for stated re
   assert.deepEqual(outcomes.sort(), ['no-source', 'same-surface']);
 });
 
-test('the shell shows the disabled-chip reasons as visible text, not only a title', () => {
-  assert.match(shellSource, /id="shell-horizon-note"/);
+test('the shell carries the disabled-chip reasons on the chip; the visible text reads in Technical information', () => {
+  assert.doesNotMatch(shellSource, /id="shell-horizon-note"/);
   assert.match(shellSource, /horizonDisabledReason\(snapshot, key\)/);
+  assert.match(shellSource, /title=\{disabledReason \?\? undefined\}/);
 });
 
 test('the sequence states an all-zero week only when every day was read as 0', () => {
@@ -71,16 +72,6 @@ test('the all-zero line is read before the day cells, under the heading', () => 
   const line = sequenceSource.indexOf('data-heatrisk-no-elevated');
   const grid = sequenceSource.indexOf('class="heatrisk-sequence-grid"');
   assert.ok(heading < line && line < grid);
-});
-
-test('the horizon note sits in the details host after the framing note, not in the time block', () => {
-  const whenBlock = shellSource.slice(
-    shellSource.indexOf('class="shell-when"'),
-    shellSource.indexOf('class="shell-minimap-map"')
-  );
-  assert.doesNotMatch(whenBlock, /id="shell-horizon-note"/);
-  const framing = shellSource.indexOf('id="shell-framing-note"');
-  assert.ok(framing > 0 && shellSource.indexOf('id="shell-horizon-note"') > framing);
 });
 
 test('a superseded read never lands on unavailable; a current failed read still does', async () => {

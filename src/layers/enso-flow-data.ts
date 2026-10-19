@@ -151,7 +151,10 @@ export function flowLiveLine(
   return ageAt === undefined ? line : `${line} · ${flowAgeWords(validTime, ageAt)}`;
 }
 
-/** A regional grid's node box in words ("40 S to 39 N and 130 E to 111 W"), from the grid itself. */
+/**
+ * A regional grid's node box in words ("40 S to 39 N and 130 E to 111 W"), from the grid itself;
+ * tests/terrain-coverage.test.mjs holds Technical information's currents boxes to it.
+ */
 export function gridBoxWords(grid: {
   readonly lon0: number; readonly lat0: number; readonly dlon: number; readonly dlat: number; readonly nx: number; readonly ny: number;
 }): string {
@@ -159,11 +162,6 @@ export function gridBoxWords(grid: {
   const lon = (x: number): string => degrees(((x + 180) % 360 + 360) % 360 - 180, 'E', 'W');
   const south = grid.lat0 - (grid.ny - 1) * grid.dlat;
   return `${degrees(south, 'N', 'S')} to ${degrees(grid.lat0, 'N', 'S')} and ${lon(grid.lon0)} to ${lon(grid.lon0 + (grid.nx - 1) * grid.dlon)}`;
-}
-
-// DRAFT wording (DR-177): the wave box sentence, for the currents grid under the view.
-export function currentsBoxNote(grid: Parameters<typeof gridBoxWords>[0]): string {
-  return `Ocean current lines in this view cover ${gridBoxWords(grid)} only; nothing is drawn outside that area.`;
 }
 
 /** The stale line: the held frame's run and its 24-hour limit. */

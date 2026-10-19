@@ -458,6 +458,16 @@ test('HMS smoke classes pin the owner taupe ramp, distinct swatches, darker and 
   const lum = h => [1, 3, 5].reduce((s, i, n) => s + [0.2126, 0.7152, 0.0722][n] * parseInt(h.slice(i, i + 2), 16), 0);
   assert.ok(lum('#aa9c8d') > lum('#908477') && lum('#908477') > lum('#766d62'), 'swatches darken with density');
 });
+test('the smoke legend draws each class as the map does: its colour at its fill opacity over the map ground', () => {
+  for (const k of ['Light', 'Medium', 'Heavy', 'Unknown']) {
+    const { color, opacity, legendLabel } = wildfire.HMS_DENSITY_PRESENTATION[k];
+    assert.equal(wildfire.hmsLegendSwatch(k), `color-mix(in srgb, ${color} ${Math.round(opacity * 100)}%, #010B13)`);
+    assert.doesNotMatch(legendLabel, /veil|%/);
+  }
+  assert.deepEqual(['Light', 'Medium', 'Heavy'].map(k => wildfire.HMS_DENSITY_PRESENTATION[k].legendLabel), ['Light smoke', 'Medium smoke', 'Heavy smoke']);
+  const legend = readFileSync(new URL('../src/layers/hms-smoke.ts', import.meta.url), 'utf8');
+  assert.doesNotMatch(legend, /color: HMS_DENSITY_PRESENTATION\.\w+\.color/, 'no solid class colour in the legend');
+});
 function assertE1(rows) {
   assert.deepEqual(rows.map(row => row.opacity), [0, 0.15, 0.38, 0.68, 1, 0, 0]);
   assert.deepEqual(rows.map(({ label, color }) => ({ label, color })), wildfire.USFS_WHP_PRESENTATION.categories);

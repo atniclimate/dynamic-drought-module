@@ -47,7 +47,7 @@ const {
 } = await import('../src/layers/flow/currents.ts');
 const { FLOW_BINS, classOf, newSample, sampleField } = await import('../src/layers/flow/field.ts');
 const { WIND_PACE, paceFor } = await import('../src/layers/flow/advect.ts');
-const { FLOW_WORDS, currentsBoxNote, flowAgeWords, flowLiveLine, gridBoxWords } = await import('../src/layers/enso-flow-data.ts');
+const { FLOW_WORDS, flowAgeWords, flowLiveLine, gridBoxWords } = await import('../src/layers/enso-flow-data.ts');
 const { encodeGrid } = await import('../scripts/build-rtofs-currents.mjs');
 
 const HOUR = 3_600_000;
@@ -270,10 +270,9 @@ test('the state line dates the frame and states its age, and never calls it now'
   const north = { lon0: 140, lat0: 84.7, dlon: 0.3, dlat: 0.3, nx: 350, ny: 150 };
   assert.equal(gridBoxWords(tropics), '40 S to 39 N and 130 E to 111 W');
   assert.equal(gridBoxWords(north), '40 N to 84.7 N and 140 E to 115.3 W');
-  assert.equal(currentsBoxNote(tropics), 'Ocean current lines in this view cover 40 S to 39 N and 130 E to 111 W only; nothing is drawn outside that area.');
   const words = [
     FLOW_WORDS.source.currents, FLOW_WORDS.unavailable.currents, FLOW_WORDS.bins.currents, FLOW_WORDS.provenance.currents,
-    FLOW_WORDS.currentsOutside, currentsBoxNote(north), flowLiveLine('live', 'currents', run, valid, valid + DAY)
+    FLOW_WORDS.currentsOutside, flowLiveLine('live', 'currents', run, valid, valid + DAY)
   ];
   for (const text of words) assert.doesNotMatch(text, /\b(?:now|currently|current conditions|real-time|latest|today)\b/i, text);
   assert.equal(FLOW_WORDS.staleModel.currents, undefined, 'the dated frame has no 24-hour limit to name');

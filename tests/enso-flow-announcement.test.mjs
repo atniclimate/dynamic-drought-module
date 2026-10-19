@@ -304,24 +304,24 @@ test('the grid under the view centre draws; a pan across the seam swaps grids wi
 test('a currents view the grid does not fill says so: partial, all land, and outside the grid', async () => {
   const snapshots = [];
   const stop = await liveCurrents(snapshots);
-  const box = 'Ocean current lines in this view cover 40 S to 39 N and 130 E to 111 W only; nothing is drawn outside that area.';
+  // The grid boxes read in Technical information (tests/terrain-coverage.test.mjs), never in the key.
   const bins = 'Line width and brightness: under 0.25, 0.25 to 0.5, 0.5 or more m/s.';
   try {
     globalThis.__fieldState({ ...globalThis.__state, coverage: 'partial' });
     assert.match(snapshots.at(-1).line, /^live \(partial\) · NOAA RTOFS surface currents · Model run .+ · Model valid .+ · frame 3 days old$/);
-    assert.deepEqual(snapshots.at(-1).notes, [box, bins]);
+    assert.deepEqual(snapshots.at(-1).notes, [bins]);
     globalThis.__fieldState({ ...globalThis.__state, coverage: 'masked', form: 'none', motion: 'none' });
     assert.equal(snapshots.at(-1).line, 'no data · No ocean values in this view');
     assert.deepEqual(snapshots.at(-1).notes, ['No marks within one grid cell of the coast or where the model has no water value; no marks does not mean calm water.']);
     globalThis.__fieldState({ ...globalThis.__state, coverage: 'outside', form: 'none', motion: 'none' });
     assert.equal(snapshots.at(-1).line, 'no data · This view is outside the area this ocean current grid covers');
-    assert.deepEqual(snapshots.at(-1).notes, [box]);
+    assert.deepEqual(snapshots.at(-1).notes, []);
     assert.equal(snapshots.at(-1).provenance, 'NOAA Global RTOFS, re-encoded by DDM');
-    // The northern grid names its own box.
+    // The northern grid is partial in the same words.
     centreLatitude = 55;
     mapEvents.get('moveend')();
     globalThis.__fieldState({ ...globalThis.__state, coverage: 'partial' });
-    assert.equal(snapshots.at(-1).notes[0], 'Ocean current lines in this view cover 40 N to 84.7 N and 140 E to 115.3 W only; nothing is drawn outside that area.');
+    assert.deepEqual(snapshots.at(-1).notes, [bins]);
   } finally {
     stop();
   }

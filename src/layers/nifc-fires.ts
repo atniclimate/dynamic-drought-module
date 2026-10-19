@@ -39,7 +39,7 @@
  * display generalization (`maxAllowableOffset` 0.0005 degree,
  * `geometryPrecision` 5): 1.83 MB in 4.5 s on the same day. The
  * generalization changes the drawn edge, so NIFC_GENERALIZATION_NOTE is
- * carried by the legend, the popup, and the map key.
+ * carried by Technical information, the popup, and the map key.
  *
  * Viewport scope (DDM-P1-T06, 2026-09-12). The query is now ALSO clipped to
  * an overscanned envelope of the current view, copying aiannh.ts's pattern:
@@ -694,8 +694,7 @@ function applyFeatureCollection(
               color: NIFC_INCIDENT_PRESENTATION.other.lineColor,
               label: NIFC_INCIDENT_PRESENTATION.other.legendLabel
             }
-          ],
-          `NIFC WFIGS current interagency mapped perimeters. ${NIFC_GENERALIZATION_NOTE} Service cadence does not establish individual perimeter age. Not for evacuation, parcel, or tactical decisions; open NIFC for the source record.`
+          ]
         )
     });
   }

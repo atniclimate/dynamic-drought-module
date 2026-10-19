@@ -27,7 +27,7 @@ import {
   type EnsoFlowKind, type EnsoFlowPreference
 } from '../state/enso-flow';
 import {
-  FLOW_WORDS, currentsBoxNote, flowFormNote, flowLiveLine, flowStaleLine, isShadeKind,
+  FLOW_WORDS, flowFormNote, flowLiveLine, flowStaleLine, isShadeKind,
   type ActiveFlowKind, type FlowFieldKind
 } from './enso-flow-data';
 import type { FlowField, FlowView, FlowViewState, ScalarField, ShadeView } from './flow/index';
@@ -267,17 +267,18 @@ function presentFieldState(kind: ActiveFlowKind, field: FlowField, state: FlowVi
   // Only a regional grid has an outside (the wave crop, each currents grid);
   // src/layers/flow/index.ts never reports one for a global grid.
   const regional = kind === 'waves' || kind === 'currents';
-  const box = (): string => (kind === 'currents' ? currentsBoxNote(field.grid) : FLOW_WORDS.waveBox);
+  // The currents grids' boxes read in Technical information; the key keeps only the wave crop's.
+  const box = kind === 'currents' ? null : FLOW_WORDS.waveBox;
   if (state.coverage === 'masked' || state.coverage === 'outside') {
     const masked = state.coverage === 'masked' || !regional;
-    const notes = [masked ? FLOW_WORDS.mask : box()];
+    const notes = masked ? [FLOW_WORDS.mask] : box ? [box] : [];
     const reason = masked ? FLOW_WORDS.noOcean : kind === 'currents' ? FLOW_WORDS.currentsOutside : FLOW_WORDS.outside;
     setStatus('no data', `no data · ${reason}`, kind, notes, { motion: 'none', provenance });
     if (detailNode) detailNode.textContent = notes.join(' ');
     return;
   }
   const status = regional && state.coverage === 'partial' ? 'live (partial)' : 'live';
-  const notes = fieldNotes(kind, state, status === 'live (partial)' ? box() : null);
+  const notes = fieldNotes(kind, state, status === 'live (partial)' ? box : null);
   const { cycle, validTime } = field.meta;
   // The currents frame is dated, never "now": its line ends with its age.
   const line = flowLiveLine(status, kind, cycle ?? validTime, validTime, kind === 'currents' ? Date.now() : undefined);

@@ -184,6 +184,24 @@ test('the notes taken off the key, the storm popup and the smoke legend read in 
   assert.doesNotMatch(source('layers', 'hms-smoke.ts'), /HMS_OVERVIEW_QUALIFICATION/);
 });
 
+test('the perimeter note, the currents box and the time horizon reasons read in Technical information, not the legend, key or sidebar', async () => {
+  const { renderMapTechnicalInformation } = await import('../src/ui/map-technical-information.ts');
+  const { NIFC_GENERALIZATION_NOTE } = await import('../src/config/wildfire-presentation.ts');
+  const { clusterHorizonReason } = await import('../src/ui/horizon-reason.ts');
+  const { HAZARD_CLUSTER_KEYS, TEMPORAL_HORIZON_KEYS } = await import('../src/config/clusters.ts');
+  const html = renderMapTechnicalInformation().replace(/&#039;/g, "'");
+  assert.ok(html.includes(`<p>NIFC WFIGS current interagency mapped perimeters. ${NIFC_GENERALIZATION_NOTE} Service cadence does not establish individual perimeter age. Not for evacuation, parcel, or tactical decisions; open NIFC for the source record.</p>`));
+  // Every mode's disabled-chip reasons, enumerated from the cluster table.
+  const reasons = HAZARD_CLUSTER_KEYS.flatMap((cluster) => TEMPORAL_HORIZON_KEYS.map((key) => clusterHorizonReason(cluster, key))).filter((r) => r !== null);
+  assert.ok(reasons.length > 0);
+  for (const reason of reasons) assert.ok(html.includes(reason), reason);
+  const source = (...path) => readFileSync(join(ROOT, 'src', ...path), 'utf8');
+  assert.doesNotMatch(source('layers', 'nifc-fires.ts'), /Service cadence does not establish/);
+  assert.doesNotMatch(source('ui', 'island', 'shell.tsx'), /id="shell-horizon-note"/);
+  assert.doesNotMatch(source('layers', 'enso-flow.ts'), /currentsBoxNote/);
+  assert.doesNotMatch(source('layers', 'enso-flow-data.ts'), /Ocean current lines in this view/);
+});
+
 test('the flow explanations taken off the ENSO key read in the Impact Briefing under the name of their control', async () => {
   const { renderMapTechnicalInformation, FLOW_TECHNICAL_NOTES } = await import('../src/ui/map-technical-information.ts');
   const { FLOW_WORDS } = await import('../src/layers/enso-flow-data.ts');

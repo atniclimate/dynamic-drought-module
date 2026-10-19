@@ -218,9 +218,8 @@ test.describe('E2-1 flow words', () => {
     walk(FLOW_WORDS);
     for (const kind of Object.keys(FLOW_SOURCES) as (keyof typeof FLOW_SOURCES)[]) out.push(flowLiveLine('live', kind, FIXTURE_CYCLE, FIXTURE_VALID), flowLiveLine('live (partial)', kind, FIXTURE_CYCLE, FIXTURE_VALID));
     for (const kind of Object.keys(FLOW_SOURCES) as (keyof typeof FLOW_SOURCES)[]) out.push(flowStaleLine(kind, FIXTURE_CYCLE));
-    // The currents frame's own lines: its dated line with its age, and the box of the grid under the view.
+    // The currents frame's own lines: its dated line with its age (the grid boxes read in Technical information).
     out.push(flowLiveLine('live', 'currents', FRAME_RUN, FRAME_VALID, FRAME_CLOCK), flowLiveLine('live (partial)', 'currents', FRAME_RUN, FRAME_VALID, FRAME_VALID));
-    out.push(ensoFlowData.currentsBoxNote({ lon0: 130, lat0: 39, dlon: 1, dlat: 1, nx: 120, ny: 80 }));
     return out;
   }
 

@@ -1,6 +1,8 @@
+import { HAZARD_CLUSTER_KEYS, TEMPORAL_HORIZON_KEYS } from '../config/clusters';
 import { HILLSHADE_COVERAGE_SENTENCE } from '../config/terrain-coverage';
-import { HMS_OVERVIEW_QUALIFICATION } from '../config/wildfire-presentation';
+import { HMS_OVERVIEW_QUALIFICATION, NIFC_PERIMETER_TECHNICAL_NOTE } from '../config/wildfire-presentation';
 import { escapeHtml } from '../util/escape';
+import { clusterHorizonReason } from './horizon-reason';
 
 type Overview = 'drought' | 'wildfire' | 'fire3d';
 type PlantStress = import('../layers/wildfire-dryness').DrynessBriefing | null;
@@ -98,6 +100,8 @@ export function renderMapTechnicalInformation(open = false): string {
     <p id="impact-technical-drought">${escapeHtml(notes.drought)}</p>
     <h4>Wildfire navigation overview</h4>
     <p id="impact-technical-wildfire">${escapeHtml(notes.wildfire)}</p>
+    <h4>Mapped fire perimeters</h4>
+    <p>${escapeHtml(NIFC_PERIMETER_TECHNICAL_NOTE)}</p>
     <h4>Smoke Plumes (HMS)</h4>
     <p>${escapeHtml(HMS_OVERVIEW_QUALIFICATION)}</p>
     <h4>3D Fire context</h4>
@@ -124,5 +128,16 @@ export function renderMapTechnicalInformation(open = false): string {
     <p>Basins covered: Atlantic, Eastern North Pacific, Central North Pacific.</p>
     <p>${escapeHtml("Circles are sized by the issuer's wind classes; the issuer's icons are not reproduced.")}</p>
     <p>Times are as the issuer states them; DDM does not read them as full dates.</p>
+    <h4>Time horizon</h4>
+    ${horizonReasonsHtml()}
   </details>`;
+}
+
+/** Each mode's disabled-chip reasons, which left the sidebar for here (the chips keep them as their titles). */
+function horizonReasonsHtml(): string {
+  return HAZARD_CLUSTER_KEYS.map((cluster) => TEMPORAL_HORIZON_KEYS.map((key) => clusterHorizonReason(cluster, key))
+    .filter((reason) => reason !== null).join(' '))
+    .filter((text) => text !== '')
+    .map((text) => `<p>${escapeHtml(text)}</p>`)
+    .join('');
 }

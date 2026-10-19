@@ -1,6 +1,7 @@
 import type * as maplibregl from 'maplibre-gl';
 import type { FeatureCollection } from 'geojson';
 
+import { MAP_GROUND_COLOR } from './interface-tokens';
 import { matchExpression } from './style-expressions';
 
 export interface ArcGisPolygonFeatureCollection {
@@ -445,19 +446,19 @@ export const HMS_DENSITY_PRESENTATION = {
   Light: {
     color: '#aa9c8d',
     opacity: 0.08,
-    legendLabel: 'Light smoke (8% veil)',
+    legendLabel: 'Light smoke',
     popupLabel: 'Light smoke'
   },
   Medium: {
     color: '#908477',
     opacity: 0.17,
-    legendLabel: 'Medium smoke (17% veil)',
+    legendLabel: 'Medium smoke',
     popupLabel: 'Medium smoke'
   },
   Heavy: {
     color: '#766d62',
     opacity: 0.33,
-    legendLabel: 'Heavy smoke (33% veil)',
+    legendLabel: 'Heavy smoke',
     popupLabel: 'Heavy smoke'
   },
   Unknown: {
@@ -467,6 +468,12 @@ export const HMS_DENSITY_PRESENTATION = {
     popupLabel: 'Unclassified smoke density'
   }
 } as const;
+
+/** A smoke legend swatch as the map draws the class: its colour at its fill opacity over the map's dark ground. */
+export function hmsLegendSwatch(densityClass: HmsDensityClass): string {
+  const { color, opacity } = HMS_DENSITY_PRESENTATION[densityClass];
+  return `color-mix(in srgb, ${color} ${Math.round(opacity * 100)}%, ${MAP_GROUND_COLOR})`;
+}
 
 /** The smoke plumes' note; reads in the Impact Briefing (src/ui/map-technical-information.ts), not in the legend. */
 export const HMS_OVERVIEW_QUALIFICATION =
@@ -973,9 +980,13 @@ export const NIFC_MAX_ALLOWABLE_OFFSET_DEG = 0.0005;
 /** Coordinate decimal places requested from the service (about one meter). */
 export const NIFC_GEOMETRY_PRECISION = 5;
 
-/** The full statement, for the sidebar legend and the perimeter popup. */
+/** The full statement, for Technical information and the perimeter popup. */
 export const NIFC_GENERALIZATION_NOTE =
   'Outlines are generalized by the NIFC service for display at a 0.0005 degree tolerance (roughly 37 to 56 m across mapped United States latitudes); the displayed edge is not the full-resolution source geometry.';
+
+/** The perimeters' note; reads in the Impact Briefing (src/ui/map-technical-information.ts), not in the legend. */
+export const NIFC_PERIMETER_TECHNICAL_NOTE =
+  `NIFC WFIGS current interagency mapped perimeters. ${NIFC_GENERALIZATION_NOTE} Service cadence does not establish individual perimeter age. Not for evacuation, parcel, or tactical decisions; open NIFC for the source record.`;
 
 /** The compact statement for the on-map key. */
 export const NIFC_KEY_GENERALIZATION_NOTE =
