@@ -66,6 +66,54 @@ const TABLE = [
   ]]
 ];
 
+// A mode's optional layer beyond its recipe (Fuel risk over Wildfire) is not
+// the mode's link: the link writes `layers=` beside the mode token, so a share
+// or reload keeps the layer, the mode and the mode's base map.
+test('a mode plus an optional layer beyond its recipe round-trips the mode, the layers and the base map', async () => {
+  const { HAZARD_CLUSTERS } = await import('../src/config/clusters.ts');
+  const { getLayerDef } = await import('../src/config/layers.ts');
+  const { composeClusterIntent } = await import('../src/state/cluster-service.ts');
+  const { defaultBasemapFor } = await import('../src/state/basemap-store.ts');
+  const sync = (cluster, horizon, layers) => {
+    const browser = installFakeBrowser({ search: '' });
+    try {
+      url.syncUrl({ region: null, layers, embed: false, view: 'console', cluster, horizon, basemap: defaultBasemapFor(cluster) });
+      return new URLSearchParams(browser.search());
+    } finally { browser.restore(); }
+  };
+  const reload = (params) => {
+    const browser = installFakeBrowser({ search: `?${params}` });
+    try { return url.parseUrlParams(); } finally { browser.restore(); }
+  };
+  let checked = 0;
+  for (const [cluster, def] of Object.entries(HAZARD_CLUSTERS)) {
+    if (def.urlToken === null) continue;
+    for (const [horizon, recipe] of Object.entries(def.recipes)) {
+      const base = composeClusterIntent(cluster, horizon);
+      assert.equal(sync(cluster, horizon, new Set(base)).get('cluster'), def.urlToken, `${cluster} ${horizon} clean`);
+      for (const extra of def.optionalLayers ?? []) {
+        if (recipe.includes(extra)) continue;
+        // The optional surface stands in for the recipe's surface (one-surface rule).
+        const shown = new Set([
+          ...base.filter((key) => getLayerDef(extra)?.role !== 'surface' || getLayerDef(key)?.role !== 'surface'),
+          extra
+        ]);
+        const params = sync(cluster, horizon, shown);
+        const label = `${cluster} ${horizon} + ${extra}`;
+        assert.equal(params.get('cluster'), def.urlToken, label);
+        assert.deepEqual(new Set(params.get('layers')?.split(',')), shown, label);
+        const back = reload(params);
+        assert.equal(back.cluster, cluster, `${label} reload`);
+        assert.equal(back.horizon, horizon, `${label} reload`);
+        assert.deepEqual(back.layers, shown, `${label} reload`);
+        assert.equal(back.basemap, defaultBasemapFor(cluster), `${label} reload`);
+        checked += 1;
+      }
+    }
+  }
+  assert.ok(checked > 0, 'some mode has an optional layer outside a recipe');
+});
+
 for (const [name, parse, rows] of TABLE) {
   test(`${name} accepts and rejects its table`, () => {
     for (const [input, expected] of rows) {

@@ -99,8 +99,8 @@ export interface HazardClusterDef {
   readonly recipes: Readonly<Record<TemporalHorizonKey, readonly LayerKey[]>>;
   /**
    * Layers a person may add on top of this mode without leaving it: the mode
-   * stays pressed, every horizon stays usable and the link stays the mode's
-   * link (it does not carry them). A surface here stands in for the recipe's
+   * stays pressed and every horizon stays usable; while one is on beyond the
+   * recipe the link writes `layers=` so it carries it. A surface here stands in for the recipe's
    * surface, which the one-surface rule turns off when it comes on. A horizon
    * change re-applies the recipe, so a layer here follows it.
    */

@@ -169,7 +169,7 @@ export function composeClusterIntent(
  * mode's optional layers (HazardClusterDef.optionalLayers); an optional surface
  * stands in for the recipe's surface. With no optional layers this is set
  * equality. */
-function isModeDisplay(
+export function isModeDisplay(
   cluster: HazardClusterKey,
   horizon: TemporalHorizonKey,
   keys: ReadonlySet<string>

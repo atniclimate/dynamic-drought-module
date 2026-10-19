@@ -12,7 +12,7 @@ import { defaultBasemapFor, isImageryUnavailable, parseBasemapParam } from './ba
 import type { BasemapMode } from './basemap-store';
 import { parseFramingParam } from './framing-store';
 import { parseClusterParam, parseOceanParam } from './cluster-store';
-import { composeClusterIntent, resolveHorizonForCluster } from './cluster-service';
+import { composeClusterIntent, isModeDisplay, resolveHorizonForCluster } from './cluster-service';
 import {
   parseUsdmMode,
   parseUsdmWeek,
@@ -305,7 +305,9 @@ export function syncFire3dParam(enabled: boolean): void {
  *   - `layers=` OUTRANKS `cluster=` (D-0.7.0-044: the granular list is
  *     the more specific intent); when both appear, the cluster parses
  *     to 'drought' (absence) and is therefore dropped by the next
- *     canonical write.
+ *     canonical write, unless the list is that cluster's display at the
+ *     link's horizon (its recipe plus its optional layers, the form
+ *     syncUrl writes for a mode with an optional layer on).
  *   - `ocean=` is valid ONLY beside a surviving `cluster=enso`
  *     (D-0.7.0-042/053); otherwise it parses to null and is dropped on
  *     the next sync.
@@ -318,9 +320,17 @@ export function parseShellParams(params: URLSearchParams): {
   ocean: OceanKey | null;
 } {
   const framing = parseFramingParam(params.get('framing'));
-  const cluster = params.has('layers')
-    ? 'drought'
-    : parseClusterParam(params.get('cluster'));
+  const named = parseClusterParam(params.get('cluster'));
+  const listed = params.get('layers');
+  const cluster =
+    listed === null ||
+    isModeDisplay(
+      named,
+      parseHorizonParam(params.get('horizon')),
+      new Set(resolveExclusiveSurface(listed.split(',').map((s) => s.trim()).filter((s) => s.length > 0)))
+    )
+      ? named
+      : 'drought';
   const ocean = cluster === 'enso' ? parseOceanParam(params.get('ocean')) : null;
   return { framing, cluster, ocean };
 }
@@ -593,18 +603,25 @@ export function syncUrl(state: UrlSyncState): void {
   // explicit-empty all-off form). The caller (the sidebar's pushUrl)
   // clears the cluster the moment the layer intent diverges from the
   // cluster's composition, so the two branches can never both be true
-  // of the display.
+  // of the display. A mode's optional layer beyond its recipe keeps the
+  // mode pressed but is not the mode's link, so it writes `layers=` beside
+  // the token (parseShellParams keeps the token for that mode's display).
   const cluster = state.cluster ?? 'drought';
-  const clusterToken = HAZARD_CLUSTERS[cluster].urlToken;
+  const def = HAZARD_CLUSTERS[cluster];
+  const recipe: readonly string[] = def.recipes[state.horizon ?? 'current'];
+  const optionalOn = (def.optionalLayers ?? []).some(
+    (key) => state.layers.has(key) && !recipe.includes(key)
+  );
+  const clusterToken = def.urlToken;
   if (clusterToken !== null) {
     params.set('cluster', clusterToken);
     if (cluster === 'enso' && state.ocean) {
       params.set('ocean', state.ocean);
     }
-  } else if (state.layers.size > 0) {
+  }
+  if (clusterToken === null || optionalOn) {
+    // An empty set writes the explicit all-off `layers=`.
     params.set('layers', Array.from(state.layers).join(','));
-  } else {
-    params.set('layers', '');
   }
 
   if (state.embed) {
