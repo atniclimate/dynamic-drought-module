@@ -152,13 +152,14 @@ test('Fuel risk WHP is white-shaded with or without terrain; the classes layer k
     expect(fakeMap.getSource()!.tiles).toEqual(shadedTiles);
 
     await classes.activate(classesTarget);
-    expect(classesMap.getSource()!.tiles).toEqual(shadedTiles.map((tile) => tile.replace('whp-image-shade://', '')));
+    // The classes row decodes only to clear the issuer's opaque-black NoData; its colours stay the issuer's.
+    expect(classesMap.getSource()!.tiles).toEqual(shadedTiles.map((tile) => tile.replace('whp-image-shade://', 'whp-image-classes://')));
     // DR-138 / D3 R7 preserves class sampling on the issuer-coloured row too.
     expect(classesMap.paint.get('raster-resampling')).toBe('nearest');
     expect(classesMap.getSource()!.roundZoom).toBe(false);
     classesMap.terrain = true;
     classesMap.emit('terrain');
-    expect(classesMap.getSource()!.tiles[0]).not.toContain('whp-image-shade');
+    expect(classesMap.getSource()!.tiles[0]).toContain('whp-image-classes://');
   } finally {
     deactivate(map);
     classes.deactivate(classesTarget);

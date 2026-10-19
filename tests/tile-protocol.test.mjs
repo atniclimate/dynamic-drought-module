@@ -1215,6 +1215,22 @@ test('the Wildfire 3D drape protocol clears fuel risk by the share of each pixel
   assert.deepEqual([...pixels], [255, 255, 255, 0, 255, 255, 255, 204, 255, 255, 255, 153, 0, 0, 0, 0]);
   assert.throws(() => whpShade.shadeWhpPixels(new Uint8ClampedArray([255, 0, 0, 255]), whpShade.WHP_3D_SHADE_ALPHA_BY_RGB, Uint8ClampedArray.of(255)),
     /Unrecognized WHP class/);
+  // Live tile z6/10/21 (2026-10-19): the issuer's NoData is opaque black, not its tRNS colour; it clears, the classes beside it shade, and a near-black still fails.
+  const edge = new Uint8ClampedArray([0, 0, 0, 255, 237, 30, 0, 255, 0, 112, 225, 255]);
+  whpShade.shadeWhpPixels(edge);
+  assert.deepEqual([...edge], [0, 0, 0, 0, 255, 255, 255, 255, 255, 255, 255, 0]);
+  assert.throws(() => whpShade.shadeWhpPixels(new Uint8ClampedArray([1, 0, 0, 255])), /Unrecognized WHP class/);
+});
+
+test('the issuer-colours row clears only the issuer\'s opaque-black NoData and keeps every other colour as drawn', async () => {
+  const pixels = new Uint8ClampedArray([0, 0, 0, 255, 237, 30, 0, 255, 1, 0, 0, 255, 0, 112, 225, 255]);
+  whpShade.clearWhpNoData(pixels);
+  assert.deepEqual([...pixels], [0, 0, 0, 0, 237, 30, 0, 255, 1, 0, 0, 255, 0, 112, 225, 255]);
+  // Through the image path: a pixel function in place of a shade table leaves the issuer's Very High as it came.
+  await withWhpBrowser(async () => {
+    const image = await whpShade.shadeImage(new Blob([]), new AbortController().signal, whpShade.clearWhpNoData);
+    assert.deepEqual([...image.data].slice(0, 4), [237, 30, 0, 255]);
+  });
 });
 
 test('the Wildfire 3D drape clears the pixels outside the archive box: an edge tile at z8 keeps its north of 41.5 N, an interior tile is unchanged', () => {

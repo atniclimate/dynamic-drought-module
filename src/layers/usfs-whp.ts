@@ -223,11 +223,12 @@ export function createWhpLayer(key: 'usfs-whp' | 'usfs-whp-classes', shaded: boo
     }
 
     try {
-      if (shaded) registerWhpImageShadeProtocol();
+      registerWhpImageShadeProtocol();
       if (!map.getSource(SOURCE_ID)) {
         map.addSource(SOURCE_ID, {
           type: 'raster',
-          tiles: [`${shaded ? 'whp-image-shade://' : ''}${buildImageTileTemplate()}`],
+          // The classes row decodes too: the issuer paints its NoData opaque black (whp-image-shade-protocol.ts).
+          tiles: [`${shaded ? 'whp-image-shade://' : 'whp-image-classes://'}${buildImageTileTemplate()}`],
           tileSize: 256,
           attribution: 'USDA Forest Service - Wildfire Hazard Potential'
         });

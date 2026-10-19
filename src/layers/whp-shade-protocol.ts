@@ -27,17 +27,30 @@ const SHADE_ALPHA_BY_RGB = alphaByRgb(WHP_SHADE_CATEGORIES);
 /** The Wildfire 3D archive drape's own shading (src/layers/whp-3d.ts). */
 export const WHP_3D_SHADE_ALPHA_BY_RGB = alphaByRgb(WHP_3D_SHADE_CATEGORIES);
 
-/** Recolor only known issuer classes. Keep missing pixels transparent, and clear each pixel by the share of it `mask` gives (one byte each, 255 for all of it). */
+/** The live ImageServer paints its NoData (value 255: ocean, Canada, Mexico, interior gaps) opaque black although its PNG tRNS names (253,253,253); black is no issuer class (probed 2026-10-19), so it is missing coverage. */
+const ISSUER_NO_DATA_RGB = 0x000000;
+const rgbAt = (pixels: Uint8ClampedArray, offset: number): number =>
+  (pixels[offset]! << 16) | (pixels[offset + 1]! << 8) | pixels[offset + 2]!;
+
+/** Recolor only known issuer classes. Keep missing pixels (transparent, or the issuer's opaque-black NoData) transparent, and clear each pixel by the share of it `mask` gives (one byte each, 255 for all of it). */
 export function shadeWhpPixels(pixels: Uint8ClampedArray, shade: ShadeAlphaByRgb = SHADE_ALPHA_BY_RGB, mask?: Uint8ClampedArray | null): void {
   for (let offset = 0; offset < pixels.length; offset += 4) {
     if (pixels[offset + 3] === 0) continue;
-    const rgb = (pixels[offset]! << 16) | (pixels[offset + 1]! << 8) | pixels[offset + 2]!;
+    const rgb = rgbAt(pixels, offset);
+    if (rgb === ISSUER_NO_DATA_RGB) { pixels[offset + 3] = 0; continue; }
     const opacity = shade.get(rgb);
     if (opacity === undefined) throw new Error('Unrecognized WHP class');
     pixels[offset] = 255;
     pixels[offset + 1] = 255;
     pixels[offset + 2] = 255;
     pixels[offset + 3] = Math.round(pixels[offset + 3]! * opacity * (1 - (mask?.[offset >> 2] ?? 0) / 255));
+  }
+}
+
+/** The issuer-colours row: keep every colour as the issuer drew it and clear only its opaque-black NoData. */
+export function clearWhpNoData(pixels: Uint8ClampedArray): void {
+  for (let offset = 0; offset < pixels.length; offset += 4) {
+    if (rgbAt(pixels, offset) === ISSUER_NO_DATA_RGB) pixels[offset + 3] = 0;
   }
 }
 
@@ -64,8 +77,8 @@ export function clearWhpOutsideBounds(pixels: Uint8ClampedArray, [z, x, y]: read
   }
 }
 
-/** `tile` is the drape tile's own z, x, y: only then are the fire perimeters cut out of it and the pixels beyond the archive's box cleared. */
-export async function shadeImage(blob: Blob, signal: AbortSignal, shade?: ShadeAlphaByRgb, tile?: readonly number[]): Promise<ImageBitmap> {
+/** `tile` is the drape tile's own z, x, y: only then are the fire perimeters cut out of it and the pixels beyond the archive's box cleared. `shade` is a class table, or a pixel function that replaces the shading (the issuer-colours row's `clearWhpNoData`). */
+export async function shadeImage(blob: Blob, signal: AbortSignal, shade?: ShadeAlphaByRgb | ((pixels: Uint8ClampedArray) => void), tile?: readonly number[]): Promise<ImageBitmap> {
   const bitmap = await createImageBitmap(blob, {
     colorSpaceConversion: 'none', premultiplyAlpha: 'none'
   });
@@ -79,7 +92,8 @@ export async function shadeImage(blob: Blob, signal: AbortSignal, shade?: ShadeA
     context.drawImage(bitmap, 0, 0);
     const image = context.getImageData(0, 0, bitmap.width, bitmap.height);
     // Archive tiles are square, so the bitmap's width is the tile's pixel size.
-    shadeWhpPixels(image.data, shade, tile && tilePolygonMask(perimeters, tile, bitmap.width));
+    if (typeof shade === 'function') shade(image.data);
+    else shadeWhpPixels(image.data, shade, tile && tilePolygonMask(perimeters, tile, bitmap.width));
     if (tile) clearWhpOutsideBounds(image.data, tile, bitmap.width);
     signal.throwIfAborted();
     return createImageBitmap(image);
