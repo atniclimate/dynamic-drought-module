@@ -86,6 +86,9 @@ class FakeWhpMap {
 
   setPaintProperty(_id: string, key: string, value: unknown): void { this.paint.set(key, value); }
 
+  // The layer is never hidden here; usfs-whp reads visibility before taking a tile verdict.
+  getLayoutProperty(): unknown { return undefined; }
+
   removeLayer(): void {
     this.layer = undefined;
   }
