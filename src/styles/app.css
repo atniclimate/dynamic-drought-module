@@ -7741,13 +7741,33 @@ a.impact-resource-link::after {
 .sidebar-bottom-dock { margin-top: auto; }
 .sidebar-bottom-dock > .conditions-strip-dock { margin: 0 18px 12px; }
 @media (min-width: 721px) {
-  /* Brief pins the strip and Layer legends to the column foot so a mode's
-     variable details never move them; margin-top: auto is inert elsewhere. */
+  /* Brief pins the strip and Layer legends to the column foot when the
+     column has free space; margin-top: auto is inert elsewhere. */
   #app.view-brief:not(.embed) .sidebar-scroll { display: flex; flex-direction: column; }
   #app.view-brief:not(.embed) .sidebar-scroll > * { flex-shrink: 0; }
   /* The dock grows upward from the foot, so the open legend renders above its
      summary; holdSummarySeat scrolls back any push past the foot. */
   #app.view-brief:not(.embed) .sidebar-legend-disclosure[open] { display: flex; flex-direction: column-reverse; }
+  /* Where a mode's controls outrun the column, the dock sticks to the visible
+     foot (-4px reaches the scroller's padding strip) and content scrolls
+     beneath it; the open legend scrolls inside it. */
+  #app.view-brief:not(.embed) .sidebar-bottom-dock {
+    position: sticky;
+    bottom: -4px;
+    z-index: 4;
+    padding-top: 8px;
+    border-top: 1px solid var(--line);
+    background: var(--bg-1);
+  }
+  #app.view-brief:not(.embed) #sidebar-key-host { max-height: 30vh; overflow-y: auto; }
+  /* The 3D reveal scrolls the column: the horizon row sticks under the mode
+     row, whose height the shell island measures, instead of sliding beneath. */
+  #app.view-brief:not(.embed) .shell-when {
+    position: sticky;
+    top: calc(var(--shell-view-h) - 4px);
+    z-index: 4;
+    background: var(--bg-1);
+  }
 }
 
 .feed-current {

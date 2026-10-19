@@ -335,6 +335,18 @@ function MinimapPopover({
 function Shell({ map, snap, framing, specTick, onMinimapNoteChange }: ShellProps) {
   useDesktopBriefRehost();
 
+  // The sticky horizon row sits under the sticky mode row, so it needs that
+  // row's live height (font load, touch floor, text zoom).
+  const shellRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const shell = shellRef.current;
+    const view = shell?.querySelector<HTMLElement>('.shell-view');
+    if (!shell || !view || typeof ResizeObserver !== 'function') return;
+    const observer = new ResizeObserver(() => shell.style.setProperty('--shell-view-h', `${view.offsetHeight}px`));
+    observer.observe(view);
+    return () => observer.disconnect();
+  }, []);
+
   const snapshot = snap.value;
   const pending = isPending(snapshot);
 
@@ -406,7 +418,7 @@ function Shell({ map, snap, framing, specTick, onMinimapNoteChange }: ShellProps
   };
 
   return (
-    <div class="shell">
+    <div class="shell" ref={shellRef}>
       <div class="shell-view" role="group" aria-label="Hazard view">
         {HAZARD_CLUSTER_KEYS.map((key) => {
           const def = HAZARD_CLUSTERS[key];

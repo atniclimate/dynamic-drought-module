@@ -352,6 +352,29 @@ test('Layer legends opens upward and its summary keeps its seat under the pointe
   assert.equal(listeners.size, 0, 'release removes the listener');
 });
 
+// Owner 2026-10-19: in Brief, Conditions in view sits where Layer legends is,
+// at the foot of the sidebar's visible area in every mode, however tall the
+// mode's own controls run; content scrolls beneath it.
+test('the Brief bottom dock sticks to the visible foot and its open legend scrolls inside it', () => {
+  const dock = ruleBody('#app.view-brief:not(.embed) .sidebar-bottom-dock');
+  assert.match(dock, /position:\s*sticky;/);
+  assert.match(dock, /bottom:\s*-4px;/, 'reaches the scroller padding strip, as the mode row does at the top');
+  assert.match(dock, /background:\s*var\(--bg-1\);/, 'the sidebar background, so content scrolls beneath it');
+  assert.match(ruleBody('#app.view-brief:not(.embed) #sidebar-key-host'), /max-height:\s*\d+vh;\s*overflow-y:\s*auto;/);
+  const desktop = code.slice(code.indexOf('#app.view-brief:not(.embed) .sidebar-scroll { display: flex;'));
+  assert.ok(desktop.indexOf('.sidebar-bottom-dock {') < desktop.search(/\n\}/), 'desktop only: inside the 721 px block');
+});
+
+// The 3D reveal scrolls the sidebar; the horizon row sticks under the sticky
+// mode row instead of sliding beneath it. The mode row's height is measured.
+test('the Brief horizon row sticks under the mode row', () => {
+  const when = ruleBody('#app.view-brief:not(.embed) .shell-when');
+  assert.match(when, /position:\s*sticky;/);
+  assert.match(when, /top:\s*calc\(var\(--shell-view-h\) - 4px\);/);
+  assert.match(when, /background:\s*var\(--bg-1\);/);
+  assert.match(shellSrc, /setProperty\('--shell-view-h', `\$\{view\.offsetHeight\}px`\)/);
+});
+
 // Owner 2026-10-19: Conditions in view keeps one seat of one height in the
 // Brief dock in every mode and horizon, and is the page's one region of that name.
 test('Conditions in view keeps a stable seat and is one landmark', async () => {
