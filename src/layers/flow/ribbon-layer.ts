@@ -5,8 +5,14 @@
  * for waves with one fragment shader. Particle state lives on the CPU
  * (`advect.ts`); each fixed step uploads one ring slot.
  *
- * - Colours are premultiplied: MapLibre draws custom layers with
- *   blendFunc(ONE, ONE_MINUS_SRC_ALPHA).
+ * - Colours are premultiplied. The trails draw with MapLibre's
+ *   blendFunc(ONE, ONE_MINUS_SRC_ALPHA) into the layer's own RGBA8 target,
+ *   then one full-screen pass lays the target over the map. Light ink lays it
+ *   as the inverse of the ground beneath: blendFuncSeparate(ONE_MINUS_DST_COLOR,
+ *   ONE_MINUS_SRC_ALPHA, ONE, ONE_MINUS_SRC_ALPHA). Joints and crossings
+ *   settle in the target first, so no pixel inverts twice; the near-black
+ *   casing still darkens mid-grey ground, which inverts to itself. MapLibre
+ *   re-applies its own state after each custom render (context.setDirty).
  * - The layer binds its own vertex array and unbinds it before returning,
  *   so MapLibre's own VAO state is never disturbed.
  * - Positions are uploaded relative to an origin near the view, and the
@@ -126,7 +132,21 @@ void main() {
 }
 `;
 
-export const RIBBON_SHADERS = { VERT_RING, VERT_MARKS, FRAG } as const;
+// One triangle covering the viewport: ids 0, 1, 2 -> (-1,-1), (3,-1), (-1,3).
+const VERT_COMPOSITE = `#version 300 es
+void main() {
+  gl_Position = vec4(float((gl_VertexID & 1) << 2) - 1.0, float((gl_VertexID & 2) << 1) - 1.0, 0.0, 1.0);
+}
+`;
+
+const FRAG_COMPOSITE = `#version 300 es
+precision highp float;
+uniform highp sampler2D u_trails;
+out vec4 fragColor;
+void main() { fragColor = texelFetch(u_trails, ivec2(gl_FragCoord.xy), 0); }
+`;
+
+export const RIBBON_SHADERS = { VERT_RING, VERT_MARKS, FRAG, VERT_COMPOSITE, FRAG_COMPOSITE } as const;
 
 function compile(gl: WebGL2RenderingContext, vs: string, fs: string): WebGLProgram {
   const program = gl.createProgram();
@@ -191,8 +211,9 @@ export interface RibbonLayerOptions {
   readonly now?: () => number;
   /**
    * Called once if rebuilding the programs after a context restore throws
-   * (moving-paths section 14): the layer stops for good and draws nothing,
-   * so the caller shows the still form and says why.
+   * (moving-paths section 14), or the trails target cannot be made: the
+   * layer stops for good and draws nothing, so the caller shows the still
+   * form and says why.
    */
   readonly onRebuildFailed?: (error: unknown) => void;
 }
@@ -208,11 +229,15 @@ interface GpuState {
   readonly gl: WebGL2RenderingContext;
   readonly ringProgram: WebGLProgram;
   readonly markProgram: WebGLProgram;
+  readonly compositeProgram: WebGLProgram;
+  /** Has no attributes; the composite triangle draws with it too. */
   readonly ringVao: WebGLVertexArrayObject;
   readonly markVao: WebGLVertexArrayObject;
   readonly markBuffer: WebGLBuffer;
   ringTexture: WebGLTexture | null;
   ringCapacity: number;
+  /** The trails target at the drawing buffer's size; made on the first draw. */
+  target: { fbo: WebGLFramebuffer; texture: WebGLTexture; w: number; h: number } | null;
   readonly uniforms: Map<string, WebGLUniformLocation | null>;
 }
 
@@ -337,10 +362,12 @@ export class FlowRibbonLayer implements CustomLayerInterface {
       const g = this.gpu;
       gl.deleteProgram(g.ringProgram);
       gl.deleteProgram(g.markProgram);
+      gl.deleteProgram(g.compositeProgram);
       gl.deleteVertexArray(g.ringVao);
       gl.deleteVertexArray(g.markVao);
       gl.deleteBuffer(g.markBuffer);
       if (g.ringTexture) gl.deleteTexture(g.ringTexture);
+      this.releaseTarget(gl);
     }
     this.gpu = null;
     this.map = null;
@@ -350,12 +377,14 @@ export class FlowRibbonLayer implements CustomLayerInterface {
   private build(gl: WebGL2RenderingContext): void {
     let ringProgram: WebGLProgram | null = null;
     let markProgram: WebGLProgram | null = null;
+    let compositeProgram: WebGLProgram | null = null;
     let ringVao: WebGLVertexArrayObject | null = null;
     let markVao: WebGLVertexArrayObject | null = null;
     let markBuffer: WebGLBuffer | null = null;
     try {
       ringProgram = compile(gl, VERT_RING, FRAG);
       markProgram = compile(gl, VERT_MARKS, FRAG);
+      compositeProgram = compile(gl, VERT_COMPOSITE, FRAG_COMPOSITE);
       ringVao = gl.createVertexArray();
       markVao = gl.createVertexArray();
       markBuffer = gl.createBuffer();
@@ -372,8 +401,8 @@ export class FlowRibbonLayer implements CustomLayerInterface {
       gl.vertexAttribPointer(aMeta, 2, gl.FLOAT, false, 24, 16);
       gl.vertexAttribDivisor(aMeta, 1);
       this.gpu = {
-        gl, ringProgram, markProgram, ringVao, markVao, markBuffer,
-        ringTexture: null, ringCapacity: 0, uniforms: new Map()
+        gl, ringProgram, markProgram, compositeProgram, ringVao, markVao, markBuffer,
+        ringTexture: null, ringCapacity: 0, target: null, uniforms: new Map()
       };
       // A rebuilt context starts with an empty texture: send the whole CPU ring.
       if (this.particles) this.particles.ringDirty = true;
@@ -385,6 +414,7 @@ export class FlowRibbonLayer implements CustomLayerInterface {
       if (!gl.isContextLost()) {
         if (ringProgram) gl.deleteProgram(ringProgram);
         if (markProgram) gl.deleteProgram(markProgram);
+        if (compositeProgram) gl.deleteProgram(compositeProgram);
         if (ringVao) gl.deleteVertexArray(ringVao);
         if (markVao) gl.deleteVertexArray(markVao);
         if (markBuffer) gl.deleteBuffer(markBuffer);
@@ -441,6 +471,42 @@ export class FlowRibbonLayer implements CustomLayerInterface {
     gl.bindBuffer(gl.ARRAY_BUFFER, g.markBuffer);
     gl.bufferSubData(gl.ARRAY_BUFFER, 0, this.marks.segs, 0, this.marks.segCount * 6);
     gl.bindBuffer(gl.ARRAY_BUFFER, null);
+  }
+
+  /** The trails target at the drawing buffer's size, made again on a resize. Leaves its framebuffer bound. */
+  private ensureTarget(gl: WebGL2RenderingContext): NonNullable<GpuState['target']> {
+    const g = this.gpu as GpuState;
+    const w = gl.drawingBufferWidth;
+    const h = gl.drawingBufferHeight;
+    if (g.target && g.target.w === w && g.target.h === h) {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, g.target.fbo);
+      return g.target;
+    }
+    this.releaseTarget(gl);
+    const texture = gl.createTexture();
+    const fbo = gl.createFramebuffer();
+    if (!texture || !fbo) {
+      if (texture) gl.deleteTexture(texture);
+      if (fbo) gl.deleteFramebuffer(fbo);
+      throw new Error('flow ribbon: trails target allocation failed');
+    }
+    g.target = { fbo, texture, w, h };
+    // texStorage2D: the ring's texImage2D stays the layer's only full upload.
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA8, w, h);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+    if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) throw new Error('flow ribbon: trails target incomplete');
+    return g.target;
+  }
+
+  private releaseTarget(gl: WebGL2RenderingContext): void {
+    const g = this.gpu;
+    if (!g?.target) return;
+    gl.deleteFramebuffer(g.target.fbo);
+    gl.deleteTexture(g.target.texture);
+    g.target = null;
   }
 
   private resetState(map: MlMap): void {
@@ -503,6 +569,21 @@ export class FlowRibbonLayer implements CustomLayerInterface {
     }
     const g = this.gpu as GpuState;
     if (!this.advance(gl, map)) return;
+    const mapFbo = gl.getParameter(gl.FRAMEBUFFER_BINDING) as WebGLFramebuffer | null;
+    let target: NonNullable<GpuState['target']>;
+    try {
+      target = this.ensureTarget(gl);
+    } catch (error) {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, mapFbo);
+      this.failed = true;
+      this.running = false;
+      this.onRebuildFailed?.(error);
+      return;
+    }
+    // The target matches the drawing buffer, as MapLibre's viewport does, so one viewport serves both passes.
+    gl.viewport(0, 0, target.w, target.h);
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
     const ringMode = this.particles !== null;
     const program = ringMode ? g.ringProgram : g.markProgram;
     const [ox, oy] = this.particles
@@ -536,6 +617,17 @@ export class FlowRibbonLayer implements CustomLayerInterface {
       gl.bindVertexArray(g.markVao);
       gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, this.marks.segCount);
     }
+    // Composite: u_trails samples unit 0, its default.
+    gl.bindFramebuffer(gl.FRAMEBUFFER, mapFbo);
+    gl.useProgram(g.compositeProgram);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, target.texture);
+    gl.disable(gl.DEPTH_TEST);
+    // Light ink: each line is the inverse of the ground beneath, at its alpha; alpha itself stays plain over.
+    if (this.ink === 'light') gl.blendFuncSeparate(gl.ONE_MINUS_DST_COLOR, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    gl.bindVertexArray(g.ringVao);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
     gl.bindVertexArray(null);
+    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
   }
 }

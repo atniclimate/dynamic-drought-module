@@ -599,7 +599,7 @@ test('a successful ribbon retains its programs until removal and deletes each ha
   const map = fakeMap(-145, 26, 3, { gl });
   const flow = mount(map, uniform('wind', GLOBAL_1P00));
   assert.equal(flow.state.form, 'moving');
-  assert.equal(gl.created.filter((handle) => handle.kind === 'Program').length, 2);
+  assert.equal(gl.created.filter((handle) => handle.kind === 'Program').length, 3, 'ring, marks and composite');
   assert.equal(gl.deleted.filter((handle) => handle.kind !== 'Shader').length, 0);
   flow.dispose();
   flow.dispose();

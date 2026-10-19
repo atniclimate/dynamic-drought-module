@@ -4,6 +4,9 @@
  * with luminance because adjacent classes differ only weakly in luminance.
  * A cased mark clears 3:1 over any ground: the worst ground makes core and
  * casing equally contrasting, which is sqrt(core-to-casing contrast).
+ * In motion the light core lays over the map as the inverse of the ground
+ * (ribbon-layer.ts), so there it carries the ground's complementary hue; the
+ * still form draws these tokens as they are.
  */
 export type FlowInkName = 'light' | 'dark';
 

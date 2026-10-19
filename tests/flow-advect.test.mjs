@@ -402,7 +402,7 @@ test('resuming resets ages, so no burst', () => {
 // The ribbon layer against a recording fake WebGL2 context and a fake map
 // ---------------------------------------------------------------------------
 
-function fakeGl() {
+function fakeGl({ fbStatus = 'FRAMEBUFFER_COMPLETE' } = {}) {
   const calls = [];
   let lost = false;
   let id = 0;
@@ -420,6 +420,8 @@ function fakeGl() {
         if (prop === 'getShaderParameter' || prop === 'getProgramParameter') return true;
         if (prop === 'getAttribLocation') return 0;
         if (prop === 'getUniformLocation') return { uniform: args[1] };
+        if (prop === 'getParameter') return null; // FRAMEBUFFER_BINDING: MapLibre draws to the canvas
+        if (prop === 'checkFramebufferStatus') return fbStatus;
         return undefined;
       };
     }
@@ -470,7 +472,22 @@ test('the ribbon layer binds its own vertex array, leaves none bound, and output
   assert.ok(lastBindBeforeDraw[1] && lastBindBeforeDraw[1].kind === 'VertexArray', 'its own VAO is bound for the draw');
   assert.equal(gl.calls[draw][4], layer.particles.count * 17, 'one instance per trail segment');
   assert.match(ribbon.RIBBON_SHADERS.FRAG, /fragColor = vec4\(mix\(u_casing, ink, core\) \* a, a\)/, 'colour is multiplied by alpha');
-  assert.ok(!gl.calls.some((c) => c[0] === 'blendFunc'), 'the layer leaves MapLibre blend state alone');
+  // The trails settle in the layer's own target, then one full-screen pass lays
+  // light ink over the map as the inverse of the ground beneath.
+  const toTarget = gl.calls.slice(0, draw).findLastIndex((c) => c[0] === 'bindFramebuffer');
+  assert.equal(gl.calls[toTarget][2].kind, 'Framebuffer', 'the trails draw into the layer target');
+  assert.ok(gl.calls.slice(toTarget, draw).some((c) => c[0] === 'clear'), 'the target is cleared before the trails');
+  assert.equal(gl.calls.filter((c) => c[0] === 'createFramebuffer').length, 1, 'one target, reused each frame');
+  const back = gl.calls.findIndex((c, i) => i > draw && c[0] === 'bindFramebuffer');
+  assert.equal(gl.calls[back][2], null, 'then the map framebuffer again');
+  const invert = gl.calls.findIndex((c, i) => i > back && c[0] === 'blendFuncSeparate');
+  assert.deepEqual(gl.calls[invert].slice(1), ['ONE_MINUS_DST_COLOR', 'ONE_MINUS_SRC_ALPHA', 'ONE', 'ONE_MINUS_SRC_ALPHA'],
+    'colour inverts the ground at the line alpha; alpha stays plain over');
+  const composite = gl.calls.findIndex((c, i) => i > invert && c[0] === 'drawArrays');
+  assert.deepEqual(gl.calls[composite].slice(1), ['TRIANGLES', 0, 3], 'one full-screen triangle');
+  assert.deepEqual(gl.calls.findLast((c) => c[0].startsWith('blendFunc')).slice(1), ['ONE', 'ONE_MINUS_SRC_ALPHA'],
+    'MapLibre custom-layer blend is restored');
+  assert.match(ribbon.RIBBON_SHADERS.FRAG_COMPOSITE, /texelFetch\(u_trails, ivec2\(gl_FragCoord\.xy\), 0\)/);
   // The per-frame origin: the matrix is translated to the origin in double precision.
   const m = ribbon.originMatrix(RENDER_INPUT.defaultProjectionData.mainMatrix, 0.25, 0.5);
   assert.deepEqual(Array.from(m.slice(12)), [0.25, 0.5, 0, 1]);
@@ -508,9 +525,66 @@ test('after a context loss the ribbon layer rebuilds from CPU state with the sam
   assert.ok(restored.calls.some((c) => c[0] === 'createProgram'), 'programs rebuilt on the restored context');
   const upload = restored.calls.find((c) => c[0] === 'texImage2D');
   assert.ok(upload && upload[9] === layer.particles.ring, 'the whole CPU ring is re-uploaded');
+  assert.ok(restored.calls.some((c) => c[0] === 'createFramebuffer'), 'the trails target is rebuilt on the restored context');
   assert.equal(layer.particles.count, count, 'the same particle count');
   assert.equal(layer.field, f, 'the same field: no refetch');
   assert.ok(restored.calls.some((c) => c[0] === 'drawArraysInstanced'));
+});
+
+test('dark ink composites with plain over; the trails target follows the drawing buffer and is released', () => {
+  let t = 0;
+  const layer = new ribbon.FlowRibbonLayer({ id: 'flow-paths', field: windField(), now: () => t, ink: 'dark' });
+  const map = fakeMap(-145, 26, 3);
+  const gl = fakeGl();
+  const frame = () => {
+    t += STEP_S;
+    layer.render(gl, RENDER_INPUT);
+  };
+  layer.onAdd(map, gl);
+  layer.setRunning(true);
+  frame();
+  assert.ok(gl.calls.some((c) => c[0] === 'drawArrays' && c[1] === 'TRIANGLES' && c[3] === 3), 'dark ink composites too');
+  assert.ok(!gl.calls.some((c) => c[0] === 'blendFuncSeparate'), 'dark ink is never inverted');
+  layer.setInk('light');
+  frame();
+  assert.ok(gl.calls.some((c) => c[0] === 'blendFuncSeparate'), 'the ink select switches the inversion live');
+  const targets = () => [...new Set(gl.calls.filter((c) => c[0] === 'bindFramebuffer' && c[2]).map((c) => c[2]))];
+  gl.drawingBufferWidth = 1200;
+  frame();
+  assert.equal(targets().length, 2, 'a resized drawing buffer gets a new target');
+  assert.ok(gl.calls.some((c) => c[0] === 'deleteFramebuffer' && c[1] === targets()[0]), 'the old target is released');
+  assert.deepEqual(gl.calls.findLast((c) => c[0] === 'texStorage2D').slice(1), ['TEXTURE_2D', 1, 'RGBA8', 1200, 900]);
+  const composite = gl.calls.findLast((c) => c[0] === 'useProgram')[1];
+  layer.onRemove(map, gl);
+  assert.ok(gl.calls.some((c) => c[0] === 'deleteFramebuffer' && c[1] === targets()[1]), 'removal releases the target');
+  assert.ok(gl.calls.some((c) => c[0] === 'deleteProgram' && c[1] === composite), 'and the composite program');
+});
+
+test('a trails target that cannot complete stops the moving form once and rebinds the map framebuffer', () => {
+  let t = 0;
+  let failures = 0;
+  const layer = new ribbon.FlowRibbonLayer({
+    id: 'flow-paths', field: windField(), now: () => t, onRebuildFailed: () => failures++
+  });
+  const map = fakeMap(-145, 26, 3);
+  const gl = fakeGl({ fbStatus: 'FRAMEBUFFER_UNSUPPORTED' });
+  layer.onAdd(map, gl);
+  layer.setRunning(true);
+  for (let i = 0; i < 3; i++) {
+    t += STEP_S;
+    layer.render(gl, RENDER_INPUT);
+  }
+  assert.equal(failures, 1);
+  assert.equal(layer.rebuildFailed, true);
+  assert.equal(layer.isRunning, false);
+  assert.equal(gl.calls.findLast((c) => c[0] === 'bindFramebuffer')[2], null, 'the map framebuffer is bound again');
+  assert.ok(!gl.calls.some((c) => c[0] === 'drawArraysInstanced' || c[0] === 'drawArrays'), 'nothing draws');
+  const fbo = gl.calls.find((c) => c[0] === 'bindFramebuffer' && c[2])[2];
+  const storage = gl.calls.findIndex((c) => c[0] === 'texStorage2D');
+  const texture = gl.calls.slice(0, storage).findLast((c) => c[0] === 'bindTexture')[2];
+  layer.onRemove(map, gl);
+  assert.ok(gl.calls.some((c) => c[0] === 'deleteFramebuffer' && c[1] === fbo), 'the incomplete target is released');
+  assert.ok(gl.calls.some((c) => c[0] === 'deleteTexture' && c[1] === texture), 'with its texture');
 });
 
 test('after the centre wraps across the date line the particles sit in the view the map reports', () => {
