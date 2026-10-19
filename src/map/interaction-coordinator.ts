@@ -519,7 +519,7 @@ function bindKeyboardIdentify(map: maplibregl.Map): void {
  * collapse; neither another target nor another feature opens in its place.
  * Out of view, the camera eases there first (a jump under reduced motion).
  * A miss (tiles still drawing) is looked at again for a bounded time, then
- * dismissed. A newer door, a map click, a dismissal or Escape cancels a pending one.
+ * dismissed. A newer door, a map click, a dismissal, Escape or Tab cancels a pending one.
  * Map-wide keyboard identify stays behind KEYBOARD_IDENTIFY.
  */
 export function identifyAt(
@@ -562,10 +562,12 @@ export function identifyAt(
       dismissResponse();
     }
   };
-  // Escape while the door waits (no popup yet, so no popup Escape handler)
-  // means the person moved on: no popup opens later to take their focus.
+  // Escape or Tab while the door waits (no popup yet, so no popup Escape
+  // handler) means the person moved on: no popup opens later to take their focus.
+  // shortcut: a pointer move to another control does not cancel, only a map click
+  // does; add a focusin cancel (guarding the opener) if that jump is reported.
   const onEscape = (e: KeyboardEvent): void => {
-    if (e.key === 'Escape' && pendingDoor === cancel) cancelDoor();
+    if ((e.key === 'Escape' || e.key === 'Tab') && pendingDoor === cancel) cancelDoor();
   };
   const cancel = (): void => {
     if (timer !== null) clearTimeout(timer);
