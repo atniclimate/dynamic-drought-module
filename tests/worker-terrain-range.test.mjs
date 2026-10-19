@@ -56,6 +56,18 @@ function fakeBucket() {
 
 const ARCHIVE = 'https://terrain.test/pnw-z10-2026-09-10.pmtiles';
 
+test('unsupported methods name the methods accepted without reading storage', async () => {
+  const { default: worker } = await import('../workers/terrain/src/index.ts');
+  const bucket = fakeBucket();
+  for (const method of ['POST', 'PUT', 'PATCH', 'DELETE']) {
+    const response = await worker.fetch(new Request(ARCHIVE, { method }), bucket.env);
+    assert.equal(response.status, 405);
+    assert.equal(response.headers.get('Allow'), 'GET, HEAD, OPTIONS');
+    assert.equal(response.headers.get('access-control-allow-origin'), '*');
+  }
+  assert.deepEqual(bucket.calls, { head: 0, get: 0 });
+});
+
 test("the reader's exact range costs one storage read", async () => {
   const { default: worker } = await import('../workers/terrain/src/index.ts');
   const bucket = fakeBucket();

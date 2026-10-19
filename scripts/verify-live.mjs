@@ -174,13 +174,8 @@ async function loadPreviousStatuses() {
 }
 
 async function get(url, init = {}) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-  try {
-    return await fetch(url, { cache: 'no-store', redirect: 'follow', signal: controller.signal, ...init });
-  } finally {
-    clearTimeout(timer);
-  }
+  // Keep the deadline active while callers consume the response body.
+  return fetch(url, { cache: 'no-store', redirect: 'follow', ...init, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
 }
 
 function cacheHeaders(res) {

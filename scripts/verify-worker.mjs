@@ -146,7 +146,7 @@ async function probeOnce(url, { method = 'GET', hash = false, wantRevision = fal
       cache: 'no-store',
       redirect,
       signal: controller.signal,
-      headers: { 'Cache-Control': 'no-cache', ...headers },
+      headers: { Origin: 'https://atniclimate.github.io', 'Cache-Control': 'no-cache', ...headers },
       ...(method === 'POST' ? { body: '' } : {}),
     });
     row.status = response.status;

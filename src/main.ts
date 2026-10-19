@@ -69,7 +69,7 @@ import { initLocatedBoundary } from './state/located-boundary';
 function prepareStudioAwareDeepLink(
   map: maplibregl.Map,
   initialSelect: SelectParam
-): () => void {
+): () => Promise<void> {
   interface InFlightCommand {
     readonly select: SelectParam;
     readonly routeGeneration: number;
@@ -140,13 +140,12 @@ function prepareStudioAwareDeepLink(
     cleanup();
   });
 
-  return () => {
+  return async () => {
     if (started) return;
     started = true;
     if (!studioOwnsScreen()) {
       cleanup();
-      void applyDeepLink(map, initialSelect);
-      return;
+      return applyDeepLink(map, initialSelect);
     }
     runHeld();
   };
@@ -499,7 +498,7 @@ function wireMapDependentChrome(map: maplibregl.Map): void {
   // return to the map; that is a later, user-driven activation, not part of
   // the boot, so the seam treats the held link as settled.
   let deepLink: Promise<void> = Promise.resolve();
-  if (startStudioAwareDeepLink) startStudioAwareDeepLink();
+  if (startStudioAwareDeepLink) deepLink = startStudioAwareDeepLink();
   else deepLink = applyDeepLink(map, select);
   armBootIdle(deepLink);
 }

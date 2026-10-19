@@ -18,7 +18,13 @@
 
 ## v0.7.8
 
-Testing reliability. Nothing a visitor sees changes.
+Startup and delivery reliability.
+
+- 2026-10-19: a place deep link is marked ready only after its place briefing opens.
+- 2026-10-19: deployment checks keep a deadline through downloaded response bodies and send
+  the published site's origin when checking Worker access. The CI-input tests also run on
+  native Windows with Git Bash. Build dependencies receive compatible security updates.
+- 2026-10-19: the terrain Worker advertises its supported methods when refusing a request.
 
 - 2026-10-19: three browser tests that passed only on a second try now hold on the first: the
   map-chunk failure case reads the built file from disk instead of fetching it a second time,

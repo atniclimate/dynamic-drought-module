@@ -110,7 +110,9 @@ export default {
       return new Response(null, { status: 204, headers: CORS_HEADERS });
     }
     if (request.method !== 'GET' && request.method !== 'HEAD') {
-      return corsResponse(405, 'Method not allowed.\n');
+      const response = corsResponse(405, 'Method not allowed.\n');
+      response.headers.set('Allow', CORS_HEADERS['access-control-allow-methods']);
+      return response;
     }
 
     const url = new URL(request.url);

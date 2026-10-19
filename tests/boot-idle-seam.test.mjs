@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
-import { existsSync } from 'node:fs';
-import { registerHooks } from 'node:module';
+import { existsSync, readFileSync } from 'node:fs';
+import { registerHooks, stripTypeScriptTypes } from 'node:module';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
@@ -915,4 +915,45 @@ test('whenQuiescent rejects a budget that is not a positive finite number', asyn
   const seam = globalThis.window.__ddm;
   await assert.rejects(seam.whenQuiescent(0), RangeError);
   await assert.rejects(seam.whenQuiescent(Number.NaN), RangeError);
+});
+
+test('a normal select boot stays booting until its deep link finishes after the shared fetch', async () => {
+  const main = readFileSync(new URL('../src/main.ts', import.meta.url), 'utf8');
+  const prepare = main.match(/function prepareStudioAwareDeepLink\([\s\S]*?\n\}/)?.[0];
+  const arm = main.match(/  let deepLink: Promise<void>[\s\S]*?  armBootIdle\(deepLink\);/)?.[0];
+  assert.ok(prepare && arm, 'run the actual boot helper and its arming call');
+  let finishDeepLink;
+  const held = new Promise((resolve) => { finishDeepLink = resolve; });
+  let briefingOpened = false;
+  const bindings = {
+    applyDeepLink: async () => { await held; briefingOpened = true; },
+    studioOwnsScreen: () => false,
+    onStudioRouteChange: () => () => {},
+    onTypedPlaceChange: () => () => {},
+    getStudioRoute: () => null,
+    parseSelectParam: () => null,
+    armBootIdle: bootIdle.armBootIdle,
+    map: {},
+    select: { kind: 'state', id: 'WA' }
+  };
+  const run = Function(...Object.keys(bindings), stripTypeScriptTypes(
+    `${prepare}\nconst startStudioAwareDeepLink = prepareStudioAwareDeepLink(map, select);\n${arm}`
+  ));
+  run(...Object.values(bindings));
+  try {
+    // The boundary transport has completed; only the deep link's lazy work is held.
+    assert.equal(fetchUtil.pendingSharedTransportCount(), 0);
+    const outcome = await Promise.race([
+      window.__ddm.ready.then(() => 'idle'),
+      new Promise((resolve) => setTimeout(() => resolve('still-booting'), 25))
+    ]);
+    assert.equal(outcome, 'still-booting');
+    assert.equal(briefingOpened, false);
+    assert.equal(document.documentElement.dataset.ddmBoot, 'booting');
+  } finally {
+    finishDeepLink();
+  }
+  await window.__ddm.ready;
+  assert.equal(briefingOpened, true);
+  assert.equal(document.documentElement.dataset.ddmBoot, 'idle');
 });

@@ -5,9 +5,8 @@
  * runs for real under bash with a stand-in `npx` that prints its arguments.
  */
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
-import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -21,16 +20,18 @@ const shardScript = workflow.jobs.shard.steps
   .replace('${{ matrix.shard }}', '3')
   .replace('${{ matrix.total }}', '8');
 
-const bin = mkdtempSync(join(tmpdir(), 'ddm-npx-'));
-writeFileSync(join(bin, 'npx'), '#!/bin/sh\nfor a in "$@"; do echo "ARG:$a"; done\n');
-chmodSync(join(bin, 'npx'), 0o755);
+// Windows' PATH can resolve bash to the WSL launcher instead of Git Bash.
+const bash = process.platform === 'win32'
+  ? join(execFileSync('git', ['--exec-path'], { encoding: 'utf8' }).trim(), '../../../bin/bash.exe')
+  : 'bash';
 
 function shard({ workers = '1', retries = '', specs = '' }) {
-  const run = spawnSync('bash', ['-c', shardScript], {
+  const run = spawnSync(bash, ['-c', 'npx() { printf \'ARG:%s\\n\' "$@"; }\n' + shardScript], {
     cwd: root,
     encoding: 'utf8',
-    env: { ...process.env, WORKERS: workers, RETRIES: retries, SPECS: specs, PATH: `${bin}${process.platform === 'win32' ? ';' : ':'}${process.env.PATH}` }
+    env: { ...process.env, WORKERS: workers, RETRIES: retries, SPECS: specs }
   });
+  assert.ifError(run.error);
   const args = run.stdout.split('\n').filter((line) => line.startsWith('ARG:')).map((line) => line.slice(4));
   return { status: run.status, args, out: run.stdout + run.stderr };
 }

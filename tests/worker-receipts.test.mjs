@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 
 import {
@@ -19,6 +20,18 @@ import {
 
 const LIVE_REVISION = '2026-07-29-nws-point-heat-v2';
 const CANDIDATE_REVISION = '2026-08-29-options-policy-v4';
+
+test('the live receipt driver sends the deployed page Origin', () => {
+  const driver = new URL('../scripts/verify-worker.mjs', import.meta.url).href;
+  const result = spawnSync(process.execPath, ['--input-type=module', '-e', `
+    globalThis.fetch = async (_url, init) => {
+      process.exit(init.headers.Origin === 'https://atniclimate.github.io' ? 0 : 2);
+    };
+    process.argv = ['node', 'verify-worker.mjs', '--expect-revision', 'test'];
+    await import(${JSON.stringify(driver)});
+  `], { encoding: 'utf8', timeout: 10_000 });
+  assert.equal(result.status, 0, result.stderr || String(result.error ?? ''));
+});
 
 /**
  * The CORS advertisement the live 2026-07-29 Worker injects, and the one the

@@ -167,11 +167,8 @@ remain between the same groups, and the NIFC model keeps its separate
 `node --test tests/<file>.test.mjs`. A failed group stops the `&&` chain before later
 checks or preview startup.
 
-As the local fallback when GitHub is unavailable, to run the gate and the full
-serial suite together on one build, run
-`npm run test:serial -- --config=playwright.smoke.config.ts`.
-This runs all three assertion projects and serves the gate's checked build.
-A separate preparatory gate is unnecessary for the same candidate.
+The full serial suite runs on GitHub. If GitHub is unavailable, preserve the
+local gate and focused-test results until the full run can complete there.
 
 A build SHA or dirty marker alone does not establish equivalent inputs. For a
 release candidate, record the commit, build SHA and GitHub run id of the run
