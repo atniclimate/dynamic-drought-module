@@ -28,6 +28,7 @@ import {
   formatMapDate
 } from './strip-metrics';
 import type { Metric } from './strip-metrics';
+import { stripFocusAfterHide } from './strip-focus';
 
 /**
  * The tile-to-layer mapping. `disclose` marks the drought tile's
@@ -114,10 +115,13 @@ function MetricTile({
     return () => window.removeEventListener('ddm:map-key-details-change', update);
   }, []);
 
-  const onClick = (): void => {
+  const onClick = (event: MouseEvent): void => {
     if (showsDetails) {
       window.dispatchEvent(new Event('ddm:toggle-map-key-details'));
     } else if (isOn && !isFailedCheckedLayer(tile.key)) {
+      // Hide unmounts this tile; hand on focus a person left here first.
+      const btn = event.currentTarget as HTMLElement;
+      if (document.activeElement === btn) stripFocusAfterHide(btn)?.focus({ preventScroll: true });
       requestLayerOff(tile.key);
     } else {
       requestLayerOn(tile.key);
