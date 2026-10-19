@@ -73,7 +73,7 @@ test.describe('NIFC WFIGS query scope', () => {
     expect(params.get('outFields')).not.toContain('attr_DailyAcres');
   });
 
-  test('the legend and the map key state the generalization', async ({ page }) => {
+  test('the legend states the generalization; the map key leaves it to Technical information', async ({ page }) => {
     await stubWildfireFeeds(page);
     await gotoApp(page, '?cluster=wildfire&view=console');
     await waitForLayerSettled(page, 'nifc-fires');
@@ -85,8 +85,11 @@ test.describe('NIFC WFIGS query scope', () => {
     await page.locator('#map-key-details-toggle').click();
     const key = page.locator('#map-key [data-nifc-perimeter-key]');
     await expect(key).toBeVisible();
-    await expect(key.locator('[data-nifc-generalization]')).toContainText('0.0005 degree');
     await expect(key.locator('.map-key-item')).toHaveCount(3);
+    // Small print goes in Technical information, never the key
+    // (tests/terrain-coverage.test.mjs holds the Technical information paragraph).
+    await expect(key.locator('[data-nifc-generalization]')).toHaveCount(0);
+    await expect(key).not.toContainText('0.0005 degree');
   });
 
   // ---------------------------------------------------------------------

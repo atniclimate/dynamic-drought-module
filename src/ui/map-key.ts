@@ -46,11 +46,7 @@ import { LAYER_DEFS, getDroughtSurfacePresentation } from '../config/layers';
 import { HAZARD_CLUSTERS } from '../config/clusters';
 import { DETAIL_SECTIONS } from '../config/detail-sections';
 import { ensureDetailSectionHosts } from './detail-section-hosts';
-import {
-  NIFC_INCIDENT_PRESENTATION,
-  USFS_WHP_PRESENTATION,
-  NIFC_KEY_GENERALIZATION_NOTE
-} from '../config/wildfire-presentation';
+import { NIFC_INCIDENT_PRESENTATION, USFS_WHP_PRESENTATION } from '../config/wildfire-presentation';
 import { FRAMINGS, framingMinimapProvenance } from '../config/framings';
 import { getFraming, onFramingChange } from '../state/framing-store';
 import { getHazardCluster, getOceanFraming, onHazardClusterChange } from '../state/cluster-store';
@@ -515,16 +511,19 @@ function sstKey(): KeySpec {
  * (src/ui/map-technical-information.ts). No row while the arrows are off or
  * their layer is inactive.
  */
-function ensoFlowRow(): { readonly html: string; readonly ariaLabel: string } {
-  const flow = ensoFlowSnapshot;
+export function ensoFlowRow(
+  flow: EnsoFlowSnapshotEventDetail | null = ensoFlowSnapshot
+): { readonly html: string; readonly ariaLabel: string } {
   if (!flow || flow.status === 'inactive' || flow.status === 'off') return { html: '', ariaLabel: '' };
   // DRAFT wording (DR-177): pending owner read (DRAFT-W1, the
   // composition "<label> · <status line>" then the qualification sentences).
   const status = `${flow.label} · ${flow.line}`;
   const notes = flow.notes.join(' ');
   // E1-4: the credit is its own text item, as data-sst-attribution is for
-  // the SST; the words are the publisher's, never typed here.
-  const provenance = flow.provenance ?? '';
+  // the SST; the words are the publisher's, never typed here. A "derived from
+  // <product>" credit is dropped when the state line already names that product.
+  const credit = flow.provenance ?? '';
+  const provenance = status.includes(credit.replace(/^derived from /, '')) ? '' : credit;
   return {
     html:
       `<span class="map-key-item" data-enso-flow="status">${escapeHtml(status)}</span>` +
@@ -863,10 +862,7 @@ export function buildFireKey(
             swatchItem(
               NIFC_INCIDENT_PRESENTATION.other.lineColor,
               NIFC_INCIDENT_PRESENTATION.other.legendLabel
-            ) +
-            '<span class="map-key-qualification" data-nifc-generalization>' +
-            escapeHtml(NIFC_KEY_GENERALIZATION_NOTE) +
-            '</span>') +
+            )) +
         '</span>'
       : '';
   const ariaParts: string[] = [];

@@ -202,6 +202,32 @@ test('the perimeter note, the currents box and the time horizon reasons read in 
   assert.doesNotMatch(source('layers', 'enso-flow-data.ts'), /Ocean current lines in this view/);
 });
 
+test('the Fire key carries no perimeter generalization note; Technical information holds it', async () => {
+  const { buildFireKey } = await import('../src/ui/map-key.ts');
+  const { NIFC_GENERALIZATION_NOTE } = await import('../src/config/wildfire-presentation.ts');
+  const { renderMapTechnicalInformation } = await import('../src/ui/map-technical-information.ts');
+  const key = buildFireKey(new Set(['nifc-fires', 'spc-fire-weather']));
+  assert.doesNotMatch(key.itemsHtml, /0\.0005 degree|data-nifc-generalization|tactical/);
+  assert.ok(renderMapTechnicalInformation().replace(/&#039;/g, "'").includes(NIFC_GENERALIZATION_NOTE));
+});
+
+test('the ENSO key drops a derived-from credit that only repeats the product its state line names', async () => {
+  const { ensoFlowRow } = await import('../src/ui/map-key.ts');
+  const { FLOW_WORDS, flowLiveLine } = await import('../src/layers/enso-flow-data.ts');
+  const row = (kind, line) => ensoFlowRow({ status: 'live', label: kind, line, notes: [], provenance: FLOW_WORDS.provenance[kind] });
+  const at = Date.UTC(2026, 9, 5, 6);
+  for (const kind of Object.keys(FLOW_WORDS.provenance)) {
+    const live = row(kind, flowLiveLine('live', kind, at, at));
+    const repeats = FLOW_WORDS.provenance[kind] === `derived from ${FLOW_WORDS.source[kind]}`;
+    assert.equal(live.html.includes('data-enso-flow="provenance"'), !repeats, kind);
+    assert.equal(live.ariaLabel.includes(FLOW_WORDS.provenance[kind]), !repeats, kind);
+    // A line that does not name the product keeps the credit.
+    assert.ok(row(kind, `no data · ${FLOW_WORDS.noOcean}`).html.includes('data-enso-flow="provenance"'), kind);
+  }
+  // The currents credit names a different product (the re-encoding), so it stays.
+  assert.ok(row('currents', flowLiveLine('live', 'currents', at, at)).html.includes(FLOW_WORDS.provenance.currents));
+});
+
 test('the flow explanations taken off the ENSO key read in the Impact Briefing under the name of their control', async () => {
   const { renderMapTechnicalInformation, FLOW_TECHNICAL_NOTES } = await import('../src/ui/map-technical-information.ts');
   const { FLOW_WORDS } = await import('../src/layers/enso-flow-data.ts');
