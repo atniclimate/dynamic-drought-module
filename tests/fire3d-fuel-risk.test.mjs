@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-const { FLAT_FUEL_RISK_KEY, FUEL_RISK_TITLE, fireKeySections, fuelRiskKeepsConsole, fuelRiskSwitch, revealScroll, shouldRevealScroll } =
+const { FLAT_FUEL_RISK_KEY, FUEL_RISK_TITLE, fireKeySections, fuelRiskKeepsConsole, noSurfaceKeyAria, fuelRiskSwitch, revealScroll, shouldRevealScroll } =
   await import('../src/ui/fire3d-fuel-risk.ts');
 
 test('Fuel risk on adds its section to the Wildfire key instead of replacing it', () => {
@@ -27,6 +27,18 @@ test('Fuel risk on adds its section to the Wildfire key instead of replacing it'
   assert.deepEqual(fireKeySections(keys('usfs-whp-classes'), true), { fire: false, whp: true });
   // One feature, one name a person can follow from the button to the key and the layer list.
   assert.match(FUEL_RISK_TITLE, /^Fuel risk: .*Wildfire Hazard Potential$/);
+});
+
+test('Wildfire 3D at season-ahead: a shown drape with no keyed surface is still drawn, so the key names it and stays up', async () => {
+  // The season-ahead recipe is the flat layer alone, which the mounted drape hides: no surface section remains.
+  assert.equal(fireKeySections(new Set(['usfs-whp']), true), null);
+  assert.equal(noSurfaceKeyAria('Wildfire', true), 'Wildfire. 3D wildfire potential.');
+  assert.equal(noSurfaceKeyAria('Wildfire', false), 'Wildfire. No classed layer is drawn.');
+  const { readFile } = await import('node:fs/promises');
+  const mapKey = await readFile(new URL('../src/ui/map-key.ts', import.meta.url), 'utf8');
+  // Phones and embeds hide the key only when nothing is drawn, the shown drape included.
+  assert.match(mapKey, /if \(!active && !isDesktopChip && !whpShadeActive\)/);
+  assert.match(mapKey, /noSurfaceKeyAria\(chipFallbackLabel\(getHazardCluster\(\)\), whpShadeActive\)/);
 });
 
 test('the one Fuel risk switch acts on the 3D drape only while it is mounted, else on the flat fuel-risk layer', () => {

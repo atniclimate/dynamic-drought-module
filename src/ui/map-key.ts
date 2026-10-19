@@ -68,7 +68,7 @@ import { watchDesktopMapSeat } from './map-control-seat';
 import { getTimeBarSpec, onTimeBarSpecChange } from './time-bar';
 import { MAP_GROUND_COLOR } from '../config/interface-tokens';
 import { WHP_3D_SHADE_CATEGORIES, WHP_3D_SHADE_QUALIFICATION, WHP_SHADE_CATEGORIES, WHP_SHADE_QUALIFICATION, WHP_SURFACE_OPACITY } from '../config/whp-shade';
-import { FUEL_RISK_TITLE, fireKeySections } from './fire3d-fuel-risk';
+import { FUEL_RISK_TITLE, fireKeySections, noSurfaceKeyAria } from './fire3d-fuel-risk';
 import {
   TROPICAL_CONE,
   TROPICAL_EMPTY_TEXT,
@@ -1586,7 +1586,8 @@ export function initMapKey(): void {
     // (D1.md M10 scope), which includes hiding when nothing is eligible;
     // only there does the pre-M10 `host.hidden = true` path survive.
     const isDesktopChip = !widthQuery.matches && !app?.classList.contains('embed');
-    if (!active && !isDesktopChip) {
+    // A shown 3D drape is drawn even when no surface is keyed (Wildfire 3D at season-ahead).
+    if (!active && !isDesktopChip && !whpShadeActive) {
       host.hidden = true;
       setDetailsOpen(false);
       delete host.dataset.keyFamily;
@@ -1597,7 +1598,7 @@ export function initMapKey(): void {
     }
     const spec: KeySpec = active?.spec ?? {
       label: chipFallbackLabel(getHazardCluster()),
-      ariaLabel: `${chipFallbackLabel(getHazardCluster())}. No classed layer is drawn.`,
+      ariaLabel: noSurfaceKeyAria(chipFallbackLabel(getHazardCluster()), whpShadeActive),
       itemsHtml: ''
     };
     // The committed mode's no-key fallback above names no product (its

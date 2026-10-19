@@ -35,6 +35,15 @@ export function fireKeySections(
   return { fire: eligible.has('spc-fire-weather') || eligible.has('nifc-fires'), whp };
 }
 
+/**
+ * The key's accessible name when no classed surface is keyed. A shown 3D drape
+ * is still drawn (Wildfire 3D at season-ahead, where the drape hides the only
+ * recipe layer), so the key names it rather than claiming nothing is drawn.
+ */
+export function noSurfaceKeyAria(label: string, shadeOn: boolean): string {
+  return `${label}. ${shadeOn ? '3D wildfire potential.' : 'No classed layer is drawn.'}`;
+}
+
 /** What the switch acts on, or null when there is nothing to switch. */
 export type FuelRiskSwitch = 'drape' | 'flat' | null;
 
