@@ -39,10 +39,12 @@ async function captureWaProperties(
 /**
  * U3c/U3d: the one search experience.
  *
- * One input in the console catalog searches across Places, Tribal land areas,
- * and Layers, grouped. These assertions cover the network-independent paths:
- * the grouping, a layer result turning its layer on, and the Tribal group
- * loading from the bundled NAMES-ONLY roster (public/data/tribal-roster.json).
+ * One input in the console catalog searches across Tribal land areas, States,
+ * Cities, and Layers, grouped in that order. These assertions cover the
+ * network-independent paths: the grouping, a layer result turning its layer
+ * on, the Tribal group loading from the bundled NAMES-ONLY roster
+ * (public/data/tribal-roster.json, including its Census areas), and the
+ * Cities group from the bundled us-places.json.
  * The live LARNAME locate (an external AIAN-LAR query) and the place briefing
  * open are exercised by the Codex browser pass, not here.
  */
@@ -92,6 +94,26 @@ test.describe('U3 the one search', () => {
     const tribalGroup = page.locator('[data-search-group="tribal"]');
     await expect(tribalGroup).toBeVisible();
     await expect(tribalGroup).toContainText('Yakama Nation');
+  });
+
+  test('a Tribe with no BIA land area is found through its Census area', async ({ page }) => {
+    await gotoApp(page, '?view=console');
+    await page.locator(searchInput).fill('muscogee');
+
+    const row = page.locator(
+      '#catalog-search [data-search-group="tribal"] [data-search-kind="tribal"][data-search-id="census:5620"]'
+    );
+    await expect(row).toBeVisible();
+    await expect(row).toContainText('The Muscogee (Creek) Nation');
+  });
+
+  test('a major city appears in the Cities group', async ({ page }) => {
+    await gotoApp(page, '?view=console');
+    await page.locator(searchInput).fill('tulsa');
+
+    await expect(
+      page.locator('#catalog-search [data-search-group="city"] [data-search-kind="city"][data-search-id="Tulsa"]')
+    ).toBeVisible();
   });
 
   test('a place result carries its kind and state code', async ({ page }) => {

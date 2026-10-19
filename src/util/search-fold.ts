@@ -20,3 +20,16 @@ export function foldSearchText(raw: string): string {
     .replace(/\s+/g, ' ')
     .trim();
 }
+
+/**
+ * The one rank the search applies (no confidence score): a stable partition
+ * that puts items whose folded label starts with the folded query first, so
+ * "oregon" lists the state ahead of a Tribe whose name ends in "Oregon".
+ */
+export function prefixFirst<T extends { label: string }>(
+  items: readonly T[],
+  foldedQuery: string
+): T[] {
+  const starts = (i: T): boolean => foldSearchText(i.label).startsWith(foldedQuery);
+  return [...items.filter(starts), ...items.filter((i) => !starts(i))];
+}

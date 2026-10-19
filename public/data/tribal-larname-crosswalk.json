@@ -1,14 +1,17 @@
 {
-  "_comment": "Crosswalk audit for maintainer review (U3b; safe matcher per D-0.7.0-026). matched: land area LARNAME to the formal Federal Register Tribe name, with the safety rule that matched it; rows carrying a confirmed field were explicitly maintainer-confirmed against a flagged historical-renaming collision on the parallel-LAR premise (D-0.7.0-026b; parallelLar names the LAR row held by the other claimant Nation). larLabel: land areas that keep the BIA land-area label (no unambiguous match; NOT mapped to a guessed Tribe name, per hard rules 5 and 6 and D-0.7.0-026); this is the maintainer residue list. ambiguous: the subset of larLabel rows where several roster names contained the LARNAME phrase OR the maintainer curated the row as known-ambiguous (D-0.7.0-026a; curated rows carry a rule field naming that ruling; the candidates are listed; automation refuses to pick). rosterNoLar: federally recognized Tribes with no matched land area in AIAN-LAR (landless Tribes, Alaska Native villages, or differently-named areas).",
+  "_comment": "Crosswalk audit for maintainer review (U3b; safe matcher per D-0.7.0-026). matched: land area LARNAME to the formal Federal Register Tribe name, with the safety rule that matched it; rows carrying a confirmed field were explicitly maintainer-confirmed against a flagged historical-renaming collision on the parallel-LAR premise (D-0.7.0-026b; parallelLar names the LAR row held by the other claimant Nation). larLabel: land areas that keep the BIA land-area label (no unambiguous match; NOT mapped to a guessed Tribe name, per hard rules 5 and 6 and D-0.7.0-026); this is the maintainer residue list. ambiguous: the subset of larLabel rows where several roster names contained the LARNAME phrase OR the maintainer curated the row as known-ambiguous (D-0.7.0-026a; curated rows carry a rule field naming that ruling; the candidates are listed; automation refuses to pick). rosterNoLar: federally recognized Tribes with no matched land area in AIAN-LAR (landless Tribes, Alaska Native villages, or differently-named areas). censusMatched: Census AIANNH areas matched to a roster name under rule 7 of the build script, with the rule that matched. censusLabel: Census areas that keep the Census name (no unique match).",
   "meta": {
     "rosterSource": "Federal Register 2026-01899 (2026-01-30)",
     "landAreaSource": "BIA AIAN-LAR FeatureServer (distinct LARNAME)",
     "matcher": "safe-match v2 (D-0.7.0-026): unique whole-phrase containment, state-constrained, distinctive-token guard; plus the maintainer-curated known-ambiguous gate (D-0.7.0-026a)",
-    "generated": "2026-07-12",
+    "generated": "2026-10-19",
     "rosterCount": 573,
     "landAreaCount": 335,
     "safeMatchCount": 258,
-    "larLabelCount": 77
+    "larLabelCount": 77,
+    "censusSource": "US Census Bureau TIGERweb AIANNH layer 47 (names only)",
+    "censusAreaCount": 272,
+    "censusSafeMatchCount": 234
   },
   "matched": [
     {
@@ -1853,5 +1856,1451 @@
     "Wrangell Cooperative Association",
     "Yakutat Tlingit Tribe",
     "Yupiit of Andreafski"
+  ],
+  "censusMatched": [
+    {
+      "aiannh": "2320",
+      "name": "Mohegan Reservation",
+      "tribe": "Mohegan Tribe of Indians of Connecticut",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "3075",
+      "name": "Rappahannock Trust Land",
+      "tribe": "Rappahannock Tribe, Inc.",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "3860",
+      "name": "Snoqualmie Reservation and Off-Reservation Trust Land",
+      "tribe": "Snoqualmie Indian Tribe",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "2890",
+      "name": "Pokagon Reservation and Off-Reservation Trust Land",
+      "tribe": "Pokagon Band of Potawatomi Indians, Michigan and Indiana",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "2595",
+      "name": "Osage Reservation",
+      "tribe": "The Osage Nation",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "2555",
+      "name": "Oneida Indian Nation Reservation",
+      "tribe": "Oneida Indian Nation",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "3885",
+      "name": "Sokaogon Chippewa Community and Off-Reservation Trust Land",
+      "tribe": "Sokaogon Chippewa Community, Wisconsin",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "0770",
+      "name": "Coos, Lower Umpqua, and Siuslaw Reservation and Off-Reservation Trust Land",
+      "tribe": "Confederated Tribes of the Coos, Lower Umpqua and Siuslaw Indians",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "1690",
+      "name": "Jena Band of Choctaw Reservation",
+      "tribe": "Jena Band of Choctaw Indians",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "1860",
+      "name": "Lake Traverse Reservation and Off-Reservation Trust Land",
+      "tribe": "Sisseton-Wahpeton Oyate of the Lake Traverse Reservation, South Dakota",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "3935",
+      "name": "Spirit Lake Reservation",
+      "tribe": "Spirit Lake Tribe, North Dakota",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "0780",
+      "name": "Cortina Indian Rancheria",
+      "tribe": "Kletsel Dehe Wintun Nation of the Cortina Rancheria (previously listed as Kletsel Dehe Band of Wintun Indians)",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "2145",
+      "name": "Mashantucket Pequot Reservation and Off-Reservation Trust Land",
+      "tribe": "Mashantucket Pequot Indian Tribe",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "4710",
+      "name": "Yavapai-Prescott Reservation",
+      "tribe": "Yavapai-Prescott Indian Tribe",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "1280",
+      "name": "Fort Yuma Indian Reservation",
+      "tribe": "Quechan Tribe of the Fort Yuma Indian Reservation, California & Arizona",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "2510",
+      "name": "Ohkay Owingeh",
+      "tribe": "Ohkay Owingeh, New Mexico",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "0050",
+      "name": "Alabama-Coushatta Reservation and Off-Reservation Trust Land",
+      "tribe": "Alabama-Coushatta Tribe of Texas",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "3205",
+      "name": "Rocky Boy's Reservation and Off-Reservation Trust Land",
+      "tribe": "Chippewa Cree Indians of the Rocky Boy's Reservation, Montana",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "1065",
+      "name": "Ewiiaapaayp Reservation",
+      "tribe": "Ewiiaapaayp Band of Kumeyaay Indians (previously listed as Ewiiaapaayp Band of Kumeyaay Indians, California)",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "0775",
+      "name": "Coquille Reservation and Off-Reservation Trust Land",
+      "tribe": "Coquille Indian Tribe",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7230",
+      "name": "Pilot Station ANVSA",
+      "tribe": "Pilot Station Traditional Village",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6315",
+      "name": "Chilkoot ANVSA",
+      "tribe": "Chilkoot Indian Association (Haines)",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7475",
+      "name": "Sitka ANVSA",
+      "tribe": "Sitka Tribe of Alaska",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7555",
+      "name": "Tatitlek ANVSA",
+      "tribe": "Native Village of Tatitlek",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6550",
+      "name": "Grayling ANVSA",
+      "tribe": "Organized Village of Grayling (aka Holikachuk)",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6585",
+      "name": "Holy Cross ANVSA",
+      "tribe": "Holy Cross Tribe",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7580",
+      "name": "Tetlin ANVSA",
+      "tribe": "Native Village of Tetlin",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7100",
+      "name": "Nondalton ANVSA",
+      "tribe": "Nondalton Tribe (previously listed as Nondalton Village)",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7205",
+      "name": "Pedro Bay ANVSA",
+      "tribe": "Pedro Bay Village",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7215",
+      "name": "Perryville ANVSA",
+      "tribe": "Native Village of Perryville",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7225",
+      "name": "Pilot Point ANVSA",
+      "tribe": "Native Village of Pilot Point",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7270",
+      "name": "Port Heiden ANVSA",
+      "tribe": "Native Village of Port Heiden",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7665",
+      "name": "Ugashik ANVSA",
+      "tribe": "Ugashik Village",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7640",
+      "name": "Tuntutuliak ANVSA",
+      "tribe": "Native Village of Tuntutuliak",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7645",
+      "name": "Tununak ANVSA",
+      "tribe": "Native Village of Tununak",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6025",
+      "name": "Akiak ANVSA",
+      "tribe": "Akiak Native Community",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7505",
+      "name": "South Naknek ANVSA",
+      "tribe": "Native Village of South Naknek (previously listed as South Naknek Village)",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6420",
+      "name": "Douglas ANVSA",
+      "tribe": "Douglas Indian Association",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6030",
+      "name": "Akutan ANVSA",
+      "tribe": "Native Village of Akutan",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6400",
+      "name": "Deering ANVSA",
+      "tribe": "Native Village of Deering",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6730",
+      "name": "Kiana ANVSA",
+      "tribe": "Native Village of Kiana",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6755",
+      "name": "Kivalina ANVSA",
+      "tribe": "Native Village of Kivalina",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6910",
+      "name": "Marshall ANVSA",
+      "tribe": "Native Village of Marshall (aka Fortuna Ledge)",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6470",
+      "name": "Elim ANVSA",
+      "tribe": "Native Village of Elim",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6100",
+      "name": "Angoon ANVSA",
+      "tribe": "Angoon Community Association",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7630",
+      "name": "Tuluksak ANVSA",
+      "tribe": "Tuluksak Native Community",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6080",
+      "name": "Anaktuvuk Pass ANVSA",
+      "tribe": "Village of Anaktuvuk Pass",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6830",
+      "name": "Koyukuk ANVSA",
+      "tribe": "Koyukuk Native Village",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6335",
+      "name": "Chuathbaluk ANVSA",
+      "tribe": "Native Village of Chuathbaluk (Russian Mission, Kuskokwim)",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7130",
+      "name": "Nulato ANVSA",
+      "tribe": "Nulato Village",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7300",
+      "name": "Rampart ANVSA",
+      "tribe": "Rampart Village",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7310",
+      "name": "Ruby ANVSA",
+      "tribe": "Native Village of Ruby",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7440",
+      "name": "Shageluk ANVSA",
+      "tribe": "Shageluk Native Village",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6895",
+      "name": "McGrath ANVSA",
+      "tribe": "McGrath Native Village",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6900",
+      "name": "Manley Hot Springs ANVSA",
+      "tribe": "Manley Hot Springs Village",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6020",
+      "name": "Akiachak ANVSA",
+      "tribe": "Akiachak Native Community",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6290",
+      "name": "Chickaloon ANVSA",
+      "tribe": "Chickaloon Native Village",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6785",
+      "name": "Knik ANVSA",
+      "tribe": "Knik Tribe",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7133",
+      "name": "Nunam Iqua ANVSA",
+      "tribe": "Native Village of Nunam Iqua",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7145",
+      "name": "Ohogamiut ANVSA",
+      "tribe": "Village of Ohogamiut",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7185",
+      "name": "Paimiut ANVSA",
+      "tribe": "Native Village of Paimiut",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6630",
+      "name": "Inalik ANVSA",
+      "tribe": "Native Village of Diomede (aka Inalik)",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6035",
+      "name": "Alakanuk ANVSA",
+      "tribe": "Village of Alakanuk",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6065",
+      "name": "Algaaciq ANVSA",
+      "tribe": "Algaaciq Native Village (St. Mary's)",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6225",
+      "name": "Bill Moore's ANVSA",
+      "tribe": "Village of Bill Moore's Slough",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6330",
+      "name": "Chitina ANVSA",
+      "tribe": "Native Village of Chitina",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6365",
+      "name": "Copper Center ANVSA",
+      "tribe": "Native Village of Kluti Kaah (aka Copper Center)",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7765",
+      "name": "Yakutat ANVSA",
+      "tribe": "Yakutat Tlingit Tribe",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7695",
+      "name": "Unalaska ANVSA",
+      "tribe": "Qawalangin Tribe of Unalaska",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6545",
+      "name": "Goodnews Bay ANVSA",
+      "tribe": "Native Village of Goodnews Bay",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7150",
+      "name": "Old Harbor ANVSA",
+      "tribe": "Alutiiq Tribe of Old Harbor",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7180",
+      "name": "Ouzinkie ANVSA",
+      "tribe": "Native Village of Ouzinkie",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7275",
+      "name": "Port Lions ANVSA",
+      "tribe": "Native Village of Port Lions",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6835",
+      "name": "Kwethluk ANVSA",
+      "tribe": "Organized Village of Kwethluk",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6840",
+      "name": "Kwigillingok ANVSA",
+      "tribe": "Native Village of Kwigillingok",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6845",
+      "name": "Kwinhagak ANVSA",
+      "tribe": "Native Village of Kwinhagak (aka Quinhagak)",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6875",
+      "name": "Lime Village ANVSA",
+      "tribe": "Lime Village",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6890",
+      "name": "Lower Kalskag ANVSA",
+      "tribe": "Village of Lower Kalskag",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6935",
+      "name": "Mekoryuk ANVSA",
+      "tribe": "Native Village of Mekoryuk",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7005",
+      "name": "Napaimute ANVSA",
+      "tribe": "Native Village of Napaimute",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6310",
+      "name": "Chilkat ANVSA",
+      "tribe": "Chilkat Indian Village (Klukwan)",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6175",
+      "name": "Barrow ANVSA",
+      "tribe": "Native Village of Barrow Inupiat Traditional Government",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6680",
+      "name": "Kaktovik ANVSA",
+      "tribe": "Kaktovik Village (aka Barter Island)",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7125",
+      "name": "Nuiqsut ANVSA",
+      "tribe": "Native Village of Nuiqsut (aka Nooiksut)",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7250",
+      "name": "Point Hope ANVSA",
+      "tribe": "Native Village of Point Hope",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7255",
+      "name": "Point Lay ANVSA",
+      "tribe": "Native Village of Point Lay",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6285",
+      "name": "Chevak ANVSA",
+      "tribe": "Chevak Native Village",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6445",
+      "name": "Egegik ANVSA",
+      "tribe": "Egegik Village",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6620",
+      "name": "Igiugig ANVSA",
+      "tribe": "Igiugig Village",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6625",
+      "name": "Iliamna ANVSA",
+      "tribe": "Village of Iliamna",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6650",
+      "name": "Ivanof Bay ANVSA",
+      "tribe": "Ivanof Bay Tribe",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6800",
+      "name": "Kokhanok ANVSA",
+      "tribe": "Kokhanok Village",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6865",
+      "name": "Levelock ANVSA",
+      "tribe": "Levelock Village",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7035",
+      "name": "Newhalen ANVSA",
+      "tribe": "Newhalen Village",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7065",
+      "name": "Nightmute ANVSA",
+      "tribe": "Native Village of Nightmute",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7135",
+      "name": "Nunapitchuk ANVSA",
+      "tribe": "Native Village of Nunapitchuk",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6280",
+      "name": "Chenega ANVSA",
+      "tribe": "Native Village of Chenega",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7080",
+      "name": "Ninilchik ANVSA",
+      "tribe": "Ninilchik Village",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7265",
+      "name": "Port Graham ANVSA",
+      "tribe": "Native Village of Port Graham",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7400",
+      "name": "Salamatof ANVSA",
+      "tribe": "Salamatof Tribe",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7435",
+      "name": "Seldovia ANVSA",
+      "tribe": "Seldovia Village Tribe",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7655",
+      "name": "Tyonek ANVSA",
+      "tribe": "Native Village of Tyonek",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6150",
+      "name": "Atka ANVSA",
+      "tribe": "Native Village of Atka",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7075",
+      "name": "Nikolski ANVSA",
+      "tribe": "Native Village of Nikolski",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7340",
+      "name": "St. George ANVSA",
+      "tribe": "Pribilof Islands Aleut Communities of St. Paul & St. George Islands (St. George Island and Saint Paul Island)",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7560",
+      "name": "Tazlina ANVSA",
+      "tribe": "Native Village of Tazlina",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6240",
+      "name": "Brevig Mission ANVSA",
+      "tribe": "Native Village of Brevig Mission",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6530",
+      "name": "Gambell ANVSA",
+      "tribe": "Native Village of Gambell",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7740",
+      "name": "Wales ANVSA",
+      "tribe": "Native Village of Wales",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6300",
+      "name": "Chignik Lagoon ANVSA",
+      "tribe": "Native Village of Chignik Lagoon",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7055",
+      "name": "Newtok ANVSA",
+      "tribe": "Newtok Village",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6690",
+      "name": "Kaltag ANVSA",
+      "tribe": "Village of Kaltag",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7485",
+      "name": "Skagway ANVSA",
+      "tribe": "Skagway Village",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6725",
+      "name": "Ketchikan ANVSA",
+      "tribe": "Ketchikan Indian Community",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6540",
+      "name": "Golovin ANVSA",
+      "tribe": "Chinik Eskimo Community (Golovin)",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6590",
+      "name": "Hoonah ANVSA",
+      "tribe": "Hoonah Indian Association",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6610",
+      "name": "Huslia ANVSA",
+      "tribe": "Huslia Village",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6015",
+      "name": "Akhiok ANVSA",
+      "tribe": "Native Village of Akhiok",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6700",
+      "name": "Karluk ANVSA",
+      "tribe": "Native Village of Karluk",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6855",
+      "name": "Larsen Bay ANVSA",
+      "tribe": "Native Village of Larsen Bay",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6710",
+      "name": "Kasigluk ANVSA",
+      "tribe": "Kasigluk Traditional Elders Council",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6750",
+      "name": "Kipnuk ANVSA",
+      "tribe": "Native Village of Kipnuk",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6810",
+      "name": "Kongiganak ANVSA",
+      "tribe": "Native Village of Kongiganak",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7095",
+      "name": "Nome ANVSA",
+      "tribe": "Nome Eskimo Community",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6720",
+      "name": "Kenaitze ANVSA",
+      "tribe": "Kenaitze Indian Tribe",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6995",
+      "name": "Nanwalek ANVSA",
+      "tribe": "Native Village of Nanwalek (aka English Bay)",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6305",
+      "name": "Chignik Lake ANVSA",
+      "tribe": "Chignik Lake Village",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6740",
+      "name": "King Salmon ANVSA",
+      "tribe": "King Salmon Tribe",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6255",
+      "name": "Cantwell ANVSA",
+      "tribe": "Native Village of Cantwell",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6040",
+      "name": "Alatna ANVSA",
+      "tribe": "Alatna Village",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6615",
+      "name": "Hydaburg ANVSA",
+      "tribe": "Hydaburg Cooperative Association",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6705",
+      "name": "Kasaan ANVSA",
+      "tribe": "Organized Village of Kasaan",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6490",
+      "name": "Evansville ANVSA",
+      "tribe": "Evansville Village (aka Bettles Field)",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6515",
+      "name": "Fort Yukon ANVSA",
+      "tribe": "Native Village of Fort Yukon",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6795",
+      "name": "Kodiak ANVSA",
+      "tribe": "Sun'aq Tribe of Kodiak",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7085",
+      "name": "Noatak ANVSA",
+      "tribe": "Native Village of Noatak",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7110",
+      "name": "Noorvik ANVSA",
+      "tribe": "Noorvik Native Community",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7430",
+      "name": "Selawik ANVSA",
+      "tribe": "Native Village of Selawik",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6125",
+      "name": "Anvik ANVSA",
+      "tribe": "Anvik Village",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6190",
+      "name": "Beaver ANVSA",
+      "tribe": "Beaver Village",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6235",
+      "name": "Birch Creek ANVSA",
+      "tribe": "Birch Creek Tribe",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6385",
+      "name": "Craig ANVSA",
+      "tribe": "Craig Tribal Association",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7725",
+      "name": "Venetie ANVSA",
+      "tribe": "Native Village of Venetie Tribal Government (Arctic Village and Village of Venetie)",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6340",
+      "name": "Chuloonawick ANVSA",
+      "tribe": "Chuloonawick Native Village",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6480",
+      "name": "Emmonak ANVSA",
+      "tribe": "Emmonak Village",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6570",
+      "name": "Hamilton ANVSA",
+      "tribe": "Native Village of Hamilton",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6765",
+      "name": "Klawock ANVSA",
+      "tribe": "Klawock Cooperative Association",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6965",
+      "name": "Minto ANVSA",
+      "tribe": "Native Village of Minto",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7030",
+      "name": "Nenana ANVSA",
+      "tribe": "Nenana Native Association",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7070",
+      "name": "Nikolai ANVSA",
+      "tribe": "Nikolai Village",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6605",
+      "name": "Hughes ANVSA",
+      "tribe": "Hughes Village",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6825",
+      "name": "Koyuk ANVSA",
+      "tribe": "Native Village of Koyuk",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6070",
+      "name": "Allakaket ANVSA",
+      "tribe": "Allakaket Village",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6165",
+      "name": "Atqasuk ANVSA",
+      "tribe": "Native Village of Atqasuk",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6265",
+      "name": "Chalkyitsik ANVSA",
+      "tribe": "Chalkyitsik Village",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6350",
+      "name": "Circle ANVSA",
+      "tribe": "Circle Native Community",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7410",
+      "name": "Sand Point ANVSA",
+      "tribe": "Qagan Tayagungin Tribe of Sand Point",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6455",
+      "name": "Ekuk ANVSA",
+      "tribe": "Native Village of Ekuk",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7530",
+      "name": "Takotna ANVSA",
+      "tribe": "Takotna Village",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6790",
+      "name": "Kobuk ANVSA",
+      "tribe": "Native Village of Kobuk",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6820",
+      "name": "Kotzebue ANVSA",
+      "tribe": "Native Village of Kotzebue",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6105",
+      "name": "Aniak ANVSA",
+      "tribe": "Village of Aniak",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6160",
+      "name": "Atmautluak ANVSA",
+      "tribe": "Village of Atmautluak",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7175",
+      "name": "Oscarville ANVSA",
+      "tribe": "Oscarville Traditional Village",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7245",
+      "name": "Platinum ANVSA",
+      "tribe": "Platinum Traditional Village",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7305",
+      "name": "Red Devil ANVSA",
+      "tribe": "Village of Red Devil",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7495",
+      "name": "Sleetmute ANVSA",
+      "tribe": "Village of Sleetmute",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7525",
+      "name": "Stony River ANVSA",
+      "tribe": "Village of Stony River",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6595",
+      "name": "Hooper Bay ANVSA",
+      "tribe": "Native Village of Hooper Bay",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6815",
+      "name": "Kotlik ANVSA",
+      "tribe": "Village of Kotlik",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7220",
+      "name": "Petersburg ANVSA",
+      "tribe": "Petersburg Indian Association",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7735",
+      "name": "Wainwright ANVSA",
+      "tribe": "Village of Wainwright",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6915",
+      "name": "Mary's Igloo ANVSA",
+      "tribe": "Native Village of Mary's Igloo",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7415",
+      "name": "Savoonga ANVSA",
+      "tribe": "Native Village of Savoonga",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6195",
+      "name": "Belkofski ANVSA",
+      "tribe": "Native Village of Belkofski",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6500",
+      "name": "False Pass ANVSA",
+      "tribe": "Native Village of False Pass",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6735",
+      "name": "King Cove ANVSA",
+      "tribe": "Agdaagux Tribe of King Cove",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7025",
+      "name": "Nelson Lagoon ANVSA",
+      "tribe": "Native Village of Nelson Lagoon",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6560",
+      "name": "Gulkana ANVSA",
+      "tribe": "Gulkana Village Council",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6670",
+      "name": "Kake ANVSA",
+      "tribe": "Organized Village of Kake",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6460",
+      "name": "Ekwok ANVSA",
+      "tribe": "Native Village of Ekwok",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6905",
+      "name": "Manokotak ANVSA",
+      "tribe": "Manokotak Village",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7040",
+      "name": "New Koliganek ANVSA",
+      "tribe": "New Koliganek Village Council",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7050",
+      "name": "New Stuyahok ANVSA",
+      "tribe": "New Stuyahok Village",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7260",
+      "name": "Portage Creek ANVSA",
+      "tribe": "Portage Creek Village (aka Ohgsenakale)",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7605",
+      "name": "Togiak ANVSA",
+      "tribe": "Traditional Village of Togiak",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7650",
+      "name": "Twin Hills ANVSA",
+      "tribe": "Twin Hills Village",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7425",
+      "name": "Scammon Bay ANVSA",
+      "tribe": "Native Village of Scammon Bay",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6075",
+      "name": "Ambler ANVSA",
+      "tribe": "Native Village of Ambler",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6250",
+      "name": "Buckland ANVSA",
+      "tribe": "Native Village of Buckland",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7470",
+      "name": "Shungnak ANVSA",
+      "tribe": "Native Village of Shungnak",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7010",
+      "name": "Napakiak ANVSA",
+      "tribe": "Native Village of Napakiak",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7020",
+      "name": "Napaskiak ANVSA",
+      "tribe": "Native Village of Napaskiak",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7755",
+      "name": "Wrangell ANVSA",
+      "tribe": "Wrangell Cooperative Association",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "5580",
+      "name": "Chickasaw OTSA",
+      "tribe": "The Chickasaw Nation",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "5835",
+      "name": "Seneca-Cayuga OTSA",
+      "tribe": "Seneca-Cayuga Nation",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "5740",
+      "name": "Modoc OTSA",
+      "tribe": "Modoc Nation",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "5795",
+      "name": "Peoria OTSA",
+      "tribe": "Peoria Tribe of Indians of Oklahoma",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "5810",
+      "name": "Quapaw OTSA",
+      "tribe": "Quapaw Nation",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "5890",
+      "name": "Wyandotte OTSA",
+      "tribe": "Wyandotte Nation",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "5620",
+      "name": "Creek OTSA",
+      "tribe": "The Muscogee (Creek) Nation",
+      "rule": "unique-parenthetical-alias"
+    },
+    {
+      "aiannh": "5560",
+      "name": "Cheyenne and Arapaho OTSA",
+      "tribe": "Cheyenne and Arapaho Tribes, Oklahoma",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "5690",
+      "name": "Kaw OTSA",
+      "tribe": "Kaw Nation, Oklahoma",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "5860",
+      "name": "Tonkawa OTSA",
+      "tribe": "Tonkawa Tribe of Indians of Oklahoma",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "5640",
+      "name": "Eastern Shawnee OTSA",
+      "tribe": "Eastern Shawnee Tribe of Oklahoma",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "5730",
+      "name": "Miami OTSA",
+      "tribe": "Miami Tribe of Oklahoma",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "5760",
+      "name": "Otoe-Missouria OTSA",
+      "tribe": "Otoe-Missouria Tribe of Indians, Oklahoma",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "5780",
+      "name": "Pawnee OTSA",
+      "tribe": "Pawnee Nation of Oklahoma",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6450",
+      "name": "Eklutna ANVSA",
+      "tribe": "Eklutna Native Village",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6415",
+      "name": "Dot Lake ANVSA",
+      "tribe": "Village of Dot Lake",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6430",
+      "name": "Eagle ANVSA",
+      "tribe": "Native Village of Eagle",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6575",
+      "name": "Healy Lake ANVSA",
+      "tribe": "Healy Lake Village",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7115",
+      "name": "Northway ANVSA",
+      "tribe": "Northway Village",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7535",
+      "name": "Tanacross ANVSA",
+      "tribe": "Native Village of Tanacross",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "8750",
+      "name": "Samish TDSA",
+      "tribe": "Samish Indian Nation",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "8300",
+      "name": "Ione Band of Miwok TDSA",
+      "tribe": "Ione Band of Miwok Indians of California",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "8450",
+      "name": "Mechoopda TDSA",
+      "tribe": "Mechoopda Indian Tribe of Chico Rancheria, California",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7450",
+      "name": "Shaktoolik ANVSA",
+      "tribe": "Native Village of Shaktoolik",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7420",
+      "name": "Saxman ANVSA",
+      "tribe": "Organized Village of Saxman",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6275",
+      "name": "Chefornak ANVSA",
+      "tribe": "Village of Chefornak",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6045",
+      "name": "Aleknagik ANVSA",
+      "tribe": "Native Village of Aleknagik",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6360",
+      "name": "Clarks Point ANVSA",
+      "tribe": "Village of Clarks Point",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7540",
+      "name": "Tanana ANVSA",
+      "tribe": "Native Village of Tanana",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7565",
+      "name": "Telida ANVSA",
+      "tribe": "Telida Village",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7465",
+      "name": "Shishmaref ANVSA",
+      "tribe": "Native Village of Shishmaref",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7500",
+      "name": "Solomon ANVSA",
+      "tribe": "Village of Solomon",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7510",
+      "name": "Stebbins ANVSA",
+      "tribe": "Stebbins Community Association",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7570",
+      "name": "Teller ANVSA",
+      "tribe": "Native Village of Teller",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "7690",
+      "name": "Unalakleet ANVSA",
+      "tribe": "Native Village of Unalakleet",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6390",
+      "name": "Crooked Creek ANVSA",
+      "tribe": "Village of Crooked Creek",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6440",
+      "name": "Eek ANVSA",
+      "tribe": "Native Village of Eek",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6535",
+      "name": "Georgetown ANVSA",
+      "tribe": "Native Village of Georgetown",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6495",
+      "name": "Eyak ANVSA",
+      "tribe": "Native Village of Eyak (Cordova)",
+      "rule": "unique-containment"
+    },
+    {
+      "aiannh": "6520",
+      "name": "Gakona ANVSA",
+      "tribe": "Native Village of Gakona",
+      "rule": "unique-containment"
+    }
+  ],
+  "censusLabel": [
+    "Pitkas Point ANVSA",
+    "Naknek ANVSA",
+    "Mountain Village ANVSA",
+    "Andreafsky ANVSA",
+    "Chistochina ANVSA",
+    "St. Paul ANVSA",
+    "Kalskag ANVSA",
+    "Port Alsworth ANVSA",
+    "Council ANVSA",
+    "Chignik ANVSA",
+    "Lake Minchumina ANVSA",
+    "Lesnoi ANVSA",
+    "Galena ANVSA",
+    "Arctic Village ANVSA",
+    "Canyon Village ANVSA",
+    "Stevens Village ANVSA",
+    "Bethel ANVSA",
+    "Toksook Bay ANVSA",
+    "St. Michael ANVSA",
+    "Mentasta Lake ANVSA",
+    "Russian Mission ANVSA",
+    "Seminole OTSA",
+    "Kiowa-Comanche-Apache-Fort Sill Apache OTSA",
+    "Citizen Potawatomi Nation-Absentee Shawnee OTSA",
+    "Sac and Fox OTSA",
+    "Ottawa OTSA",
+    "Iowa OTSA",
+    "Cherokee OTSA",
+    "Caddo-Wichita-Delaware OTSA",
+    "Kickapoo OTSA",
+    "Ponca OTSA",
+    "Choctaw OTSA",
+    "Chickahominy TDSA",
+    "Cayuga Nation TDSA",
+    "Eastern Chickahominy TDSA",
+    "Uyak ANVSA",
+    "Dillingham ANVSA",
+    "White Mountain ANVSA"
   ]
 }

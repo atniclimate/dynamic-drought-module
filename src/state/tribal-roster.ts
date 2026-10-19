@@ -48,28 +48,55 @@ export function gatedDisplayName(area: TribalRosterArea): string {
   return TRUSTED_PROVENANCE.has(area.provenance ?? '') ? area.displayName : area.larName;
 }
 
+/**
+ * One Census AIANNH area row (`censusAreas`): a Census area for a Tribe the
+ * AIAN-LAR set cannot locate, keyed by its four-digit AIANNH code. Names only.
+ */
+export interface TribalCensusArea {
+  readonly aiannh: string;
+  readonly name: string;
+  readonly displayName: string;
+  readonly provenance?: string;
+}
+
+/** The same gate for a Census row: untrusted rows keep the Census name. */
+export function gatedCensusName(area: TribalCensusArea): string {
+  return TRUSTED_PROVENANCE.has(area.provenance ?? '') ? area.displayName : area.name;
+}
+
 // Guarded so a pure Node test can import this module without a Vite-served
 // page (the same idiom as src/config/urls-boot.ts:29, DDM-P2-T12).
 const ROSTER_URL = (import.meta.env?.BASE_URL ?? '/dynamic-drought-module/') + 'data/tribal-roster.json';
 
 /**
  * Deadline for the roster load, milliseconds. The artifact is same-origin and
- * about 52 kB, so ten seconds is generous even on a rural connection, while
+ * about 95 kB, so ten seconds is generous even on a rural connection, while
  * still honoring invariant 7 (non-trivial network work must be cancellable and
  * time-bounded). Previously this was a bare `fetch` with no signal and no
  * timeout (ARCH-05).
  */
 const ROSTER_TIMEOUT_MS = 10_000;
 
-let rosterCache: readonly TribalRosterArea[] | null = null;
-let rosterInFlight: Promise<readonly TribalRosterArea[]> | null = null;
+interface RosterFile {
+  readonly areas: readonly TribalRosterArea[];
+  readonly censusAreas: readonly TribalCensusArea[];
+}
 
-/**
- * Lazy-load the roster's area rows (once, cached). REJECTS on failure
- * (invariant 6: a failed load must surface honestly, never masquerade as an
- * empty roster); a later attempt can retry.
- */
-export function loadTribalRoster(): Promise<readonly TribalRosterArea[]> {
+let rosterCache: RosterFile | null = null;
+let rosterInFlight: Promise<RosterFile> | null = null;
+
+function isCensusArea(row: unknown): row is TribalCensusArea {
+  return (
+    isObject(row) &&
+    typeof row['aiannh'] === 'string' &&
+    /^\d{4}$/.test(row['aiannh']) &&
+    typeof row['name'] === 'string' &&
+    typeof row['displayName'] === 'string'
+  );
+}
+
+/** The one fetch both loaders share. */
+function loadRosterFile(): Promise<RosterFile> {
   if (rosterCache) return Promise.resolve(rosterCache);
   if (rosterInFlight) return rosterInFlight;
   rosterInFlight = (async () => {
@@ -81,7 +108,12 @@ export function loadTribalRoster(): Promise<readonly TribalRosterArea[]> {
         ROSTER_TIMEOUT_MS
       );
       const areas = isObject(json) ? json['areas'] : undefined;
-      rosterCache = Array.isArray(areas) ? (areas as readonly TribalRosterArea[]) : [];
+      // An older roster (and every test fixture) has no censusAreas: none.
+      const census = isObject(json) ? json['censusAreas'] : undefined;
+      rosterCache = {
+        areas: Array.isArray(areas) ? (areas as readonly TribalRosterArea[]) : [],
+        censusAreas: Array.isArray(census) ? census.filter(isCensusArea) : []
+      };
       return rosterCache;
     } catch (err) {
       console.warn('[tribal-roster] roster load failed.', err);
@@ -91,4 +123,18 @@ export function loadTribalRoster(): Promise<readonly TribalRosterArea[]> {
     }
   })();
   return rosterInFlight;
+}
+
+/**
+ * Lazy-load the roster's area rows (once, cached). REJECTS on failure
+ * (invariant 6: a failed load must surface honestly, never masquerade as an
+ * empty roster); a later attempt can retry.
+ */
+export function loadTribalRoster(): Promise<readonly TribalRosterArea[]> {
+  return loadRosterFile().then((f) => f.areas);
+}
+
+/** The Census area rows from the same cached load; rejects like loadTribalRoster. */
+export function loadTribalCensusAreas(): Promise<readonly TribalCensusArea[]> {
+  return loadRosterFile().then((f) => f.censusAreas);
 }

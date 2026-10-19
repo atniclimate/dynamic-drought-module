@@ -566,7 +566,8 @@ export const OUT_FIELDS_SENDERS_COVERED_ELSEWHERE = Object.freeze({
   'src/util/bcws-perimeter-read.ts':
     'dormant: reached only from src/layers/bcws-fires.ts, which no shipped module imports, so no build carries it and nothing contacts the Province (checked 2026-10-08 for release 0.7.1); BC read limits are undecided, add its probe row only with that ruling',
   'src/state/display-snapshot.ts': 'extracted list (BIA LARID) is a subset of the biaLarFeatureServer row today; not probed on its own',
-  'src/ui/search-controller.ts': 'extracted list is the same five BIA fields as the biaLarFeatureServer row today; not probed on its own',
+  'src/ui/search-controller.ts':
+    'the BIA fields are the same five as the biaLarFeatureServer row, and the Census AIANNH layer 47 fields are byte-identical to the censusAiannhMapServer row (src/layers/aiannh.ts); not probed on its own',
   'src/state/watershed-geometry.ts':
     'NOT extracted (the template is a positional argument to geometryParams); byte-identical to the place-catalog template today',
   'src/impact/sources.ts':

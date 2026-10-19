@@ -8,19 +8,22 @@
  * search (the console catalog, the Brief head, the mobile sheet), so all three
  * share ONE component and ONE routing brain.
  *
- * Three result kinds:
+ * Four result kinds:
+ *   - tribal a Tribal land area (LARNAME) or a Census AIANNH area
+ *            (census:<code>) for a Tribe LAR cannot locate; locates it live,
+ *            frames it, lights it, and opens its briefing (locateBoundary).
  *   - place  a state; opens its drought briefing (openStateBriefing).
+ *   - city   a major city from the shipped Natural Earth points; moves the
+ *            camera and turns on City & Town Labels (no briefing).
  *   - layer  a catalog layer; turns it on through the shared toggle command
  *            (which syncs the checkbox and respects surface exclusivity,
  *            exactly like a catalog toggle; no layer co-activates a partner
  *            since DR-168).
- *   - tribal a Tribal land area (LARNAME); locates it live, frames it, lights
- *            it, and opens its briefing (locateTribalLandArea).
  *
  * Stewardship: the roster it searches is NAMES ONLY (public/data/tribal-roster
- * .json). Locations come from a LIVE AIAN-LAR query at selection time, never a
- * bundled polygon (hard rule 1). The briefing carries the representation caveat
- * through buildBoundaryContext, as a map click would.
+ * .json). Locations come from a LIVE AIAN-LAR or Census AIANNH query at
+ * selection time, never a bundled polygon (hard rule 1). The briefing carries
+ * the representation caveat through buildBoundaryContext, as a map click would.
  */
 
 import { h, render } from 'preact';
@@ -38,8 +41,14 @@ import { openStateBriefing } from '../state/deep-link';
 import { showLocatedBoundary } from '../state/located-boundary';
 import { getViewMode } from '../state/view-mode';
 import { onPlaceSelectionChange, setPlaceSelection } from '../state/place-selection';
-import { loadTribalRoster, gatedDisplayName } from '../state/tribal-roster';
-import { fetchBufferedWithBudget } from '../util/fetch';
+import {
+  loadTribalRoster,
+  loadTribalCensusAreas,
+  gatedDisplayName,
+  gatedCensusName
+} from '../state/tribal-roster';
+import { fetchBufferedWithBudget, fetchJsonWithBudget } from '../util/fetch';
+import { isObject } from '../util/guards';
 import { isSheetActive } from './mobile-sheet';
 import { requestLayerOn } from './layer-toggle-command';
 import { isCurrentBriefingIntent, nextBriefingIntent, openImpactPanel } from './impact-panel';
@@ -88,20 +97,63 @@ function buildSyncItems(
 let tribalCache: SearchItem[] | null = null;
 let tribalInFlight: Promise<SearchItem[]> | null = null;
 
+// shortcut: rank <= 4 keeps names unique (111 cities); a deeper cut needs a state field in us-places.json
+const MAJOR_CITY_MAX_RANK = 4;
+/** Coordinates of the major-city items, keyed by item id (the city name). */
+const cityCoords = new Map<string, [number, number]>();
+
+/** Major cities from the shipped Natural Earth points (us-places.json). */
+async function loadCityItems(): Promise<SearchItem[]> {
+  const json = await fetchJsonWithBudget(URLS.usPlacesLocal, null, null, LOCATE_TIMEOUT_MS);
+  const places = isObject(json) && Array.isArray(json['places']) ? json['places'] : [];
+  const items: SearchItem[] = [];
+  const seen = new Set<string>();
+  for (const p of places) {
+    if (!isObject(p)) continue;
+    const { name, lon, lat, rank } = p;
+    if (typeof name !== 'string' || typeof lon !== 'number' || typeof lat !== 'number') continue;
+    if (!Number.isFinite(lon) || !Number.isFinite(lat) || typeof rank !== 'number') continue;
+    if (rank > MAJOR_CITY_MAX_RANK || seen.has(name)) continue;
+    seen.add(name);
+    cityCoords.set(name, [lon, lat]);
+    items.push({ kind: 'city', id: name, label: name, haystack: norm(name) });
+  }
+  return items;
+}
+
 /**
  * Lazy-load the NAMES-ONLY Tribal land-area index (once, cached) from the
  * shared roster module (src/state/tribal-roster.ts, which owns the
- * D-0.7.0-026 structural provenance gate). REJECTS on failure (invariant 6:
- * a failed load must surface as "unavailable", never masquerade as an empty
- * result); the component renders the honest unavailable line and a later
- * attempt can retry.
+ * D-0.7.0-026 structural provenance gate): the AIAN-LAR land areas, then the
+ * Census areas for Tribes LAR cannot locate, then the major cities. REJECTS
+ * on a roster failure (invariant 6: a failed load must surface as
+ * "unavailable", never masquerade as an empty result); the component renders
+ * the honest unavailable line and a later attempt can retry. A city failure
+ * only drops the cities.
  */
 function loadTribal(): Promise<SearchItem[]> {
   if (tribalCache) return Promise.resolve(tribalCache);
   if (tribalInFlight) return tribalInFlight;
   tribalInFlight = (async () => {
     try {
-      const areas = await loadTribalRoster();
+      const [areas, census, cities] = await Promise.all([
+        loadTribalRoster(),
+        loadTribalCensusAreas(),
+        loadCityItems().catch((err: unknown) => {
+          console.warn('[search] City list load failed.', err);
+          return [] as SearchItem[];
+        })
+      ]);
+      const censusItems: SearchItem[] = census.map((a) => {
+        const label = gatedCensusName(a);
+        return {
+          kind: 'tribal' as const,
+          id: `census:${a.aiannh}`,
+          label,
+          sublabel: `Census area: ${a.name}`,
+          haystack: norm(`${a.name} ${label}`)
+        };
+      });
       const items: SearchItem[] = areas.map((a) => {
         // DDM-P2-T10 / DR-094: the shared gate helper (src/state/tribal-roster.ts),
         // not an open-coded check, so this list and the place catalog's
@@ -116,8 +168,8 @@ function loadTribal(): Promise<SearchItem[]> {
           ...(label !== a.larName ? { sublabel: `Land area: ${a.larName}` } : {})
         };
       });
-      tribalCache = items;
-      return items;
+      tribalCache = [...items, ...censusItems, ...cities];
+      return tribalCache;
     } catch (err) {
       console.warn('[search] Tribal roster load failed.', err);
       throw err instanceof Error ? err : new Error(String(err));
@@ -158,43 +210,46 @@ onPlaceSelectionChange(() => {
   locateAbort = null;
 });
 
+/** One live boundary service a search selection can locate against. */
+interface LocateSpec {
+  readonly url: string;
+  readonly kind: 'bia-reservation' | 'aiannh';
+  readonly layerKey: 'bia-reservations' | 'aiannh';
+  readonly failToast: string;
+  readonly emptyToast: string;
+}
+
 /**
- * Locate a Tribal land area by LARNAME: one live AIAN-LAR query (SQL-escaped),
- * frame the merged extent, light the located geometry, turn on the BIA layer for
- * surrounding context, and open the briefing. Carries the standard briefing
- * intent guard so a newer user action wins any race, plus a master abort so a
- * superseded request is actively cancelled. Failures surface honestly as a
- * toast (invariant 6), never as a silent no-op.
+ * Locate a Tribal land area: one live boundary query (AIAN-LAR by LARNAME, or
+ * Census AIANNH by code), frame the merged extent, light the located geometry,
+ * turn on that service's layer for surrounding context, and open the briefing.
+ * Carries the standard briefing intent guard so a newer user action wins any
+ * race, plus a master abort so a superseded request is actively cancelled.
+ * Failures surface honestly as a toast (invariant 6), never as a silent no-op.
  */
-async function locateTribalLandArea(map: maplibregl.Map, larName: string): Promise<void> {
+async function locateBoundary(map: maplibregl.Map, spec: LocateSpec): Promise<void> {
   const intent = nextBriefingIntent();
   locateAbort?.abort();
   const abort = new AbortController();
   locateAbort = abort;
-  const escaped = larName.replace(/'/g, "''");
-  const params = new URLSearchParams({
-    where: `LARNAME='${escaped}'`,
-    outFields: 'LARID,LARNAME,CLASSIFICATION,GISACRES,REGION',
-    returnGeometry: 'true',
-    outSR: '4326',
-    f: 'geojson'
-  });
-  const url = `${URLS.biaLarFeatureServer}/query?${params.toString()}`;
 
   let fc: FeatureCollection;
   try {
     // cache: 'no-store': this response carries sovereign-boundary geometry,
     // so it must never persist in the browser HTTP cache (hard rule 1;
     // the same transport guard as the three live Tribal-geography layers).
-    const res = await fetchBufferedWithBudget(url, { cache: 'no-store' }, abort.signal, LOCATE_TIMEOUT_MS);
+    const res = await fetchBufferedWithBudget(spec.url, { cache: 'no-store' }, abort.signal, LOCATE_TIMEOUT_MS);
     if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
-    fc = (await res.json()) as FeatureCollection;
+    const json: unknown = await res.json();
+    // An ArcGIS host can answer HTTP 200 with an error envelope: unavailable, not empty.
+    if (isObject(json) && 'error' in json) throw new Error('ArcGIS error envelope');
+    fc = json as FeatureCollection;
   } catch (err) {
-    console.warn('[search] LARNAME locate failed.', err);
+    console.warn('[search] Tribal land area locate failed.', err);
     // A deliberate supersede is not an error to report; anything else is
-    // surfaced honestly (the BIA service failed, no result will appear).
+    // surfaced honestly (the service failed, no result will appear).
     if (!abort.signal.aborted && isCurrentBriefingIntent(intent)) {
-      showToast('Could not reach the BIA land area service. Try again in a moment.');
+      showToast(spec.failToast);
     }
     return;
   }
@@ -202,7 +257,7 @@ async function locateTribalLandArea(map: maplibregl.Map, larName: string): Promi
   const features = fc.features ?? [];
   if (features.length === 0) {
     if (isCurrentBriefingIntent(intent)) {
-      showToast('The BIA land area service returned no boundary for this land area.');
+      showToast(spec.emptyToast);
     }
     return;
   }
@@ -225,9 +280,9 @@ async function locateTribalLandArea(map: maplibregl.Map, larName: string): Promi
     );
   }
 
-  // Surrounding reservations for context; the located highlight guarantees THIS
-  // land area reads regardless of the BIA layer's clipped viewport.
-  requestLayerOn('bia-reservations');
+  // Surrounding areas for context; the located highlight guarantees THIS
+  // land area reads regardless of the layer's clipped viewport.
+  requestLayerOn(spec.layerKey);
 
   const primary = features[0]!;
   // Dynamic import: point-in-polygon is briefing-cluster code the activation
@@ -247,7 +302,7 @@ async function locateTribalLandArea(map: maplibregl.Map, larName: string): Promi
   // left panel's one link; on the active mobile Brief sheet it still opens
   // directly (map-click parity, the at-hand half detent IS the summary).
   const rawContext = buildBoundaryContext(
-    'bia-reservation',
+    spec.kind,
     primary.properties ?? null,
     aggregateGeometry,
     lngLat
@@ -256,6 +311,45 @@ async function locateTribalLandArea(map: maplibregl.Map, larName: string): Promi
   setPlaceSelection({ label: context.title, context });
   if (isSheetActive() && getViewMode() === 'brief') openImpactPanel(context);
   showLocatedBoundary(map, aggregateGeometry);
+}
+
+/** Locate an AIAN-LAR land area by LARNAME (SQL-escaped). */
+function locateTribalLandArea(map: maplibregl.Map, larName: string): Promise<void> {
+  const params = new URLSearchParams({
+    where: `LARNAME='${larName.replace(/'/g, "''")}'`,
+    outFields: 'LARID,LARNAME,CLASSIFICATION,GISACRES,REGION',
+    returnGeometry: 'true',
+    outSR: '4326',
+    f: 'geojson'
+  });
+  return locateBoundary(map, {
+    url: `${URLS.biaLarFeatureServer}/query?${params.toString()}`,
+    kind: 'bia-reservation',
+    layerKey: 'bia-reservations',
+    failToast: 'Could not reach the BIA land area service. Try again in a moment.',
+    emptyToast: 'The BIA land area service returned no boundary for this land area.'
+  });
+}
+
+/** Locate a Census AIANNH area by its four-digit code (layer 47, the live aiannh layer's). */
+function locateCensusArea(map: maplibregl.Map, code: string): Promise<void> {
+  if (!/^\d{4}$/.test(code)) return Promise.resolve();
+  const params = new URLSearchParams({
+    where: `AIANNH='${code}'`,
+    outFields: 'NAME,AIANNHCC,MTFCC,BASENAME,AIANNHNS,AREALAND,AREAWATER',
+    returnGeometry: 'true',
+    outSR: '4326',
+    geometryPrecision: '5',
+    maxAllowableOffset: '0.002',
+    f: 'geojson'
+  });
+  return locateBoundary(map, {
+    url: `${URLS.censusAiannhMapServer}/47/query?${params.toString()}`,
+    kind: 'aiannh',
+    layerKey: 'aiannh',
+    failToast: 'Could not reach the Census Tribal area service. Try again in a moment.',
+    emptyToast: 'The Census service returned no boundary for this area.'
+  });
 }
 
 /** Route a chosen search result to its action. */
@@ -278,6 +372,20 @@ function selectResult(map: maplibregl.Map, item: SearchItem): void {
       guard: () => isCurrentBriefingIntent(intent),
       summaryFirst: true
     });
+    return;
+  }
+  if (item.kind === 'city') {
+    // A city only moves the camera and shows the city labels; no briefing.
+    nextBriefingIntent();
+    locateAbort?.abort();
+    locateAbort = null;
+    const center = cityCoords.get(item.id);
+    if (center) map.easeTo({ center, zoom: Math.max(map.getZoom(), 8) });
+    requestLayerOn('places');
+    return;
+  }
+  if (item.id.startsWith('census:')) {
+    void locateCensusArea(map, item.id.slice('census:'.length));
     return;
   }
   void locateTribalLandArea(map, item.id);
@@ -309,7 +417,7 @@ export function buildSearchWiring(
     onSelect: (item) => {
       if (!permittedKinds || permittedKinds.has(item.kind)) selectResult(map, item);
     },
-    placeholder: options?.placeholder ?? 'Search places, Tribal land areas, and layers'
+    placeholder: options?.placeholder ?? 'Search Tribes, states, cities, and layers'
   };
 }
 

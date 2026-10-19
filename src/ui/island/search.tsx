@@ -1,6 +1,7 @@
 /**
  * The one search (U3c, 0.7.0): a single input that searches across
- * Places, Tribal land areas, and Layers, rendering grouped results.
+ * Tribal land areas, States, Cities, and Layers, rendering grouped results
+ * in that order (Tribes first, the owner's 0.7.7 review).
  * Ports the ratified U3 note verbatim (the 2026-07-10 design-lens
  * ruling): "one search box and one set of grouped
  * results," reachable identically from wherever a caller mounts it, with
@@ -10,8 +11,8 @@
  * PURE VIEW. This file imports only from 'preact', '@preact/signals'
  * (types only), 'preact/hooks', and the pure dependency-free text fold
  * in src/util/search-fold.ts (shared so query and haystack can never
- * diverge; wave A finding 1). All data (the synchronous Places and
- * Layers items, the lazy Tribal loader) and all behavior (onSelect)
+ * diverge; wave A finding 1). All data (the synchronous States and
+ * Layers items, the lazy Tribal and city loader) and all behavior (onSelect)
  * arrive as props; this component has no knowledge of the map, the URL,
  * the layer registry, or any config table. The caller owns wiring
  * `SearchItem[]` from `LAYER_DEFS`, the region table, and the BIA Tribal
@@ -20,13 +21,15 @@
  * Matching: every whitespace-separated token of the normalized query
  * must appear in an item's `haystack` (AND, substring, case-insensitive,
  * diacritic-insensitive on the query side; the caller is trusted to have
- * normalized `haystack` the same way). No ranking, no visible confidence
+ * normalized `haystack` the same way). The one rank: within a group,
+ * labels that start with the query come first (prefixFirst), and Enter
+ * with no highlight picks the first such row; no visible confidence
  * score. The main-shell instances keep the complete grouped vocabulary;
  * a specialized host may supply only the result kinds it can act on.
  *
  * Stewardship: this component holds no Tribal, Treaty, or
  * sovereign-jurisdiction data itself. `SearchItem` for `kind: 'tribal'`
- * carries only a LARNAME-keyed label and id that the caller supplies
+ * carries only a LARNAME- or Census-code-keyed label and id that the caller supplies
  * (see the BIA Land Area Representation source, ddm-tribal-boundary-
  * mapping); this file performs plain substring matching over whatever
  * text arrives and never fetches or redistributes boundary data.
@@ -42,11 +45,11 @@
 import type * as preact from 'preact';
 import { useId, useRef, useState } from 'preact/hooks';
 
-import { foldSearchText } from '../../util/search-fold';
+import { foldSearchText, prefixFirst } from '../../util/search-fold';
 
 export interface SearchItem {
-  kind: 'place' | 'tribal' | 'layer';
-  id: string; // state code | LARNAME | layer key
+  kind: 'place' | 'tribal' | 'city' | 'layer';
+  id: string; // state code | LARNAME or census:<AIANNH code> | city name | layer key
   label: string; // primary display text
   sublabel?: string; // secondary line (layer source, or a land-area label)
   haystack: string; // pre-normalized lowercase search string (already includes label+sublabel tokens)
@@ -55,11 +58,11 @@ export interface SearchItem {
 export interface SearchProps {
   /** Items available synchronously (Places + Layers). */
   items: SearchItem[];
-  /** Optional lazy loader for Tribal land areas, called once on first focus or first keystroke. */
+  /** Optional lazy loader for Tribal land areas and cities, called once on first focus or first keystroke. */
   loadTribal?: () => Promise<SearchItem[]>;
   /** Called when the user chooses a result (click or Enter). */
   onSelect: (item: SearchItem) => void;
-  /** Input placeholder + accessible label, e.g. "Search places, Tribal land areas, and layers". */
+  /** Input placeholder + accessible label, e.g. "Search Tribes, states, cities, and layers". */
   placeholder: string;
 }
 
@@ -68,11 +71,12 @@ const GROUP_CAP = 8;
 
 /** Fixed group order and headings (never reordered, never per-surface). */
 const GROUP_TITLES: Record<SearchItem['kind'], string> = {
-  place: 'Places',
   tribal: 'Tribal land areas',
+  place: 'States',
+  city: 'Cities',
   layer: 'Layers'
 };
-const GROUP_ORDER: readonly SearchItem['kind'][] = ['place', 'tribal', 'layer'];
+const GROUP_ORDER: readonly SearchItem['kind'][] = ['tribal', 'place', 'city', 'layer'];
 
 /**
  * The ONE search folding, shared with every other surface (wave A finding
@@ -159,19 +163,27 @@ export function Search(props: SearchProps): preact.JSX.Element {
   const tokens = tokenize(normalizeQuery(query));
   const isEmptyQuery = rawTrimmed.length === 0 || tokens.length === 0;
 
-  const placeMatches = isEmptyQuery
-    ? []
-    : props.items.filter((i) => i.kind === 'place' && matchesAllTokens(i, tokens));
-  const layerMatches = isEmptyQuery
-    ? []
-    : props.items.filter((i) => i.kind === 'layer' && matchesAllTokens(i, tokens));
-  const tribalMatches = isEmptyQuery
-    ? []
-    : tribalItems.filter((i) => matchesAllTokens(i, tokens));
+  const foldedQuery = tokens.join(' ');
+  // Matches of one kind, labels that start with the query first.
+  const matchesOf = (kind: SearchItem['kind'], from: SearchItem[]): SearchItem[] =>
+    isEmptyQuery
+      ? []
+      : prefixFirst(
+          from.filter((i) => i.kind === kind && matchesAllTokens(i, tokens)),
+          foldedQuery
+        );
+  const placeMatches = matchesOf('place', props.items);
+  const layerMatches = matchesOf('layer', props.items);
+  const tribalMatches = matchesOf('tribal', tribalItems);
+  const cityMatches = matchesOf('city', tribalItems);
 
-  const placeGroup = buildGroup('place', placeMatches);
-  const tribalGroup = buildGroup('tribal', tribalMatches);
-  const layerGroup = buildGroup('layer', layerMatches);
+  const groups: Record<SearchItem['kind'], GroupResult> = {
+    tribal: buildGroup('tribal', tribalMatches),
+    place: buildGroup('place', placeMatches),
+    city: buildGroup('city', cityMatches),
+    layer: buildGroup('layer', layerMatches)
+  };
+  const tribalGroup = groups.tribal;
 
   // The Tribal group appears while its load is pending (showing only the
   // loading line) even before any items resolve; once settled, it only
@@ -182,11 +194,9 @@ export function Search(props: SearchProps): preact.JSX.Element {
     tribalEnabled &&
     !isEmptyQuery &&
     (tribalPending || tribalFailed || tribalGroup.visible.length > 0);
-  const groupsForRender = GROUP_ORDER.map((kind) => {
-    if (kind === 'place') return placeGroup;
-    if (kind === 'layer') return layerGroup;
-    return tribalGroup;
-  }).filter((g) => (g.kind === 'tribal' ? showTribalGroup : g.visible.length > 0));
+  const groupsForRender = GROUP_ORDER.map((kind) => groups[kind]).filter((g) =>
+    g.kind === 'tribal' ? showTribalGroup : g.visible.length > 0
+  );
 
   // Flat, ordered, ID-stamped list for keyboard nav and aria-activedescendant.
   // The DOM ids are position-based within a render (they only name the
@@ -196,9 +206,8 @@ export function Search(props: SearchProps): preact.JSX.Element {
   let flatIdx = 0;
   const flatRows: FlatRow[] = [];
   for (const kind of GROUP_ORDER) {
-    const group = kind === 'place' ? placeGroup : kind === 'layer' ? layerGroup : tribalGroup;
     if (kind === 'tribal' && !showTribalGroup) continue;
-    for (const item of group.visible) {
+    for (const item of groups[kind].visible) {
       flatRows.push({ item, id: `${uid}-opt-${flatIdx}`, kind });
       flatIdx += 1;
     }
@@ -213,7 +222,8 @@ export function Search(props: SearchProps): preact.JSX.Element {
     highlightedKey === null ? -1 : flatRows.findIndex((r) => rowKey(r) === highlightedKey);
   const activeRow = activeIndex >= 0 ? flatRows[activeIndex] : undefined;
 
-  const totalMatches = placeMatches.length + tribalMatches.length + layerMatches.length;
+  const totalMatches =
+    placeMatches.length + tribalMatches.length + cityMatches.length + layerMatches.length;
   const noGroupsShown = groupsForRender.length === 0;
   // The zero-match line only appears once the Tribal load has settled
   // (design-lens: written before ship, plain-language, never blaming the
@@ -273,7 +283,12 @@ export function Search(props: SearchProps): preact.JSX.Element {
     } else if (event.key === 'Enter') {
       if (flatRows.length === 0) return;
       event.preventDefault();
-      const chosen = activeRow ?? flatRows[0];
+      // With the Tribal group first, a typed state or city name still wins
+      // Enter over a Tribe whose name merely contains it.
+      const chosen =
+        activeRow ??
+        flatRows.find((r) => foldSearchText(r.item.label).startsWith(foldedQuery)) ??
+        flatRows[0];
       if (chosen) selectItem(chosen.item);
     } else if (event.key === 'Escape' && query) {
       // An empty box leaves Escape unhandled so the sheet and studio close on it.
@@ -295,7 +310,7 @@ export function Search(props: SearchProps): preact.JSX.Element {
         ) : null}
         {group.kind === 'tribal' && tribalFailed && !tribalPending ? (
           <p class="ddm-search-unavailable">
-            Tribal land area search is unavailable right now. Places and layers still work.
+            Tribal land area search is unavailable right now. States and layers still work.
           </p>
         ) : null}
         {rows.map((row) => {
