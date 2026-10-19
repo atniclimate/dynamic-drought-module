@@ -19,6 +19,7 @@ const { HAZARD_CLUSTERS, HAZARD_CLUSTER_KEYS, TEMPORAL_HORIZON_KEYS } =
 const palette = await import('../src/config/palette.ts');
 const wildfire = await import('../src/config/wildfire-presentation.ts');
 const tropical = await import('../src/config/tropical-presentation.ts');
+const shade = await import('../src/config/whp-shade.ts');
 
 // D3 palette-tokens section 9 T1 F/G vocabulary. "issuer" identifies a
 // source-table role, not a scientific receipt or verification of its colors.
@@ -31,6 +32,8 @@ const ENTRIES = {
   HMS_DENSITY_PRESENTATION: { module: wildfire, classification: 'transform' },
   SPC_FIREWX_CATEGORIES: { module: palette, classification: 'issuer' },
   USFS_WHP_PRESENTATION: { module: wildfire, classification: 'issuer' },
+  // Fuel risk: the issuer's classes drawn as white of increasing opacity (src/config/whp-shade.ts).
+  WHP_SHADE_CATEGORIES: { module: shade, classification: 'transform' },
   HEATRISK_CATEGORIES: { module: palette, classification: 'issuer' },
   NWS_ALERT_COLORS: { module: palette, classification: 'issuer' },
   SST_ANOMALY_SCALE: { module: palette, classification: 'issuer' },
@@ -44,7 +47,7 @@ const MEMBERS = {
   'nifc-fires': { entry: 'NIFC_INCIDENT_PRESENTATION', classification: 'derived-mark' },
   'hms-smoke': { entry: 'HMS_DENSITY_PRESENTATION', classification: 'transform' },
   'spc-fire-weather': { entry: 'SPC_FIREWX_CATEGORIES', classification: 'issuer' },
-  'usfs-whp': { entry: 'USFS_WHP_PRESENTATION', classification: 'issuer' },
+  'usfs-whp': { entry: 'WHP_SHADE_CATEGORIES', classification: 'transform' },
   heatrisk: { entry: 'HEATRISK_CATEGORIES', classification: 'issuer' },
   'nws-alerts': { entry: 'NWS_ALERT_COLORS', classification: 'issuer' },
   'sst-anomaly': { entry: 'SST_ANOMALY_SCALE', classification: 'issuer' },

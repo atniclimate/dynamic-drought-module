@@ -52,6 +52,7 @@ export const LAYER_KEYS = Object.freeze([
   'heatrisk',
   'spc-fire-weather',
   'usfs-whp',
+  'usfs-whp-classes',
   'sst-anomaly',
   'tropical-cyclones',
   'telemetry'
@@ -345,6 +346,7 @@ export const LAYER_DEFS: readonly LayerDef[] = [
   { key: 'heatrisk', product: 'heatrisk', name: 'HeatRisk (Experimental)', source: 'NOAA NWS/WPC · ImageServer', role: 'surface', defaultOn: false, load: () => import('../layers/heatrisk') },
   { key: 'spc-fire-weather', product: 'spc-fire-weather', name: 'Fire Weather Outlook (Day 1)', source: 'NOAA SPC · MapServer', role: 'surface', defaultOn: false, noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/spc-fire-weather') },
   { key: 'usfs-whp', product: 'usfs-whp', name: 'Wildfire Hazard Potential', source: 'USFS · GeoPlatform', role: 'surface', defaultOn: false, load: () => import('../layers/usfs-whp') },
+  { key: 'usfs-whp-classes', product: 'usfs-whp', name: 'Wildfire Hazard Potential (USFS colors)', source: 'USFS · GeoPlatform', role: 'surface', defaultOn: false, load: () => import('../layers/usfs-whp-classes') },
   { key: 'sst-anomaly', product: 'sst-anomaly', name: 'Ocean Temperature Anomaly', source: 'NASA GIBS · GHRSST MUR', role: 'surface', defaultOn: false, load: () => import('../layers/sst-anomaly') },
   // ENSO block B3: on in the ENSO mode's recipe only. Its coverage is the
   // issuer's three basins, so its zero state names them, never "this view".

@@ -70,6 +70,7 @@ export const CONDITION_SURFACE_IDS: readonly string[] = [
   'flow-paths',
   'heatrisk',
   'usfs-whp',
+  'usfs-whp-classes',
   'drought-outlook-fill',
   'drought-outlook-outline',
   'spc-fire-weather-fill',

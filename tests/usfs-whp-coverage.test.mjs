@@ -39,6 +39,7 @@ registerHooks({
 
 const { registry } = await import('../src/state/registry.ts');
 const whp = await import('../src/layers/usfs-whp.ts');
+const classes = await import('../src/layers/usfs-whp-classes.ts');
 
 class FakeMap {
   center = { lng: -120.5, lat: 44 };
@@ -125,6 +126,25 @@ test('a view centred on Alaska reads no-data over its empty tiles, and ready aga
     map.moveTo(-157.8, 21.3);
     assert.equal(registry.getStatus('usfs-whp'), 'no-data');
   });
+});
+
+test('Fuel risk is white-shaded on a flat map; the classes row keeps issuer colours', async () => {
+  const map = new FakeMap();
+  try {
+    await whp.activate(map);
+    await classes.activate(map);
+    assert.ok(map.sources.get('usfs-whp').tiles[0].startsWith('whp-image-shade://'));
+    assert.ok(!map.sources.get('usfs-whp-classes').tiles[0].includes('whp-image-shade'));
+    assert.ok(map.layers.has('usfs-whp-classes'));
+    classes.deactivate(map);
+    assert.ok(!map.sources.has('usfs-whp-classes'));
+    assert.ok(map.sources.has('usfs-whp'));
+  } finally {
+    whp.deactivate(map);
+    classes.deactivate(map);
+    registry.deactivate('usfs-whp');
+    registry.deactivate('usfs-whp-classes');
+  }
 });
 
 test('deactivate drops the move listener', async () => {

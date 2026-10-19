@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 
 import { activate, deactivate } from '../src/layers/usfs-whp';
+import * as classes from '../src/layers/usfs-whp-classes';
 import { registry } from '../src/state/registry';
 import { loadWhpShade, shadeWhpPixels } from '../src/layers/whp-shade-protocol';
 import { URLS } from '../src/config/urls';
@@ -132,36 +133,36 @@ test('WHP stays loading until proxied raster tiles actually succeed', async () =
   }
 });
 
-test('Long Range WHP uses white shading on terrain and restores issuer colors on exit', async () => {
+test('Fuel risk WHP is white-shaded with or without terrain; the classes layer keeps issuer colors', async () => {
   const fakeMap = new FakeWhpMap();
   const map = fakeMap as unknown as Parameters<typeof activate>[0];
+  const classesMap = new FakeWhpMap();
+  const classesTarget = classesMap as unknown as Parameters<typeof classes.activate>[0];
   try {
     await activate(map);
     expect(fakeMap.paint.get('raster-resampling')).toBe('nearest');
     expect(fakeMap.getSource()!.roundZoom).toBe(false);
-    const issuerTiles = [...fakeMap.getSource()!.tiles];
-    expect(issuerTiles[0]).not.toContain('whp-image-shade://');
+    const shadedTiles = [...fakeMap.getSource()!.tiles];
+    expect(shadedTiles[0]).toContain('whp-image-shade://');
     fakeMap.terrain = true;
     fakeMap.emit('terrain');
-    expect(fakeMap.getSource()!.tiles).toEqual(issuerTiles.map((tile) => `whp-image-shade://${tile}`));
-    expect(fakeMap.paint.get('raster-resampling')).toBe('nearest');
-    expect(fakeMap.getSource()!.roundZoom).toBe(false);
+    expect(fakeMap.getSource()!.tiles).toEqual(shadedTiles);
     fakeMap.terrain = false;
     fakeMap.emit('terrain');
-    expect(fakeMap.getSource()!.tiles).toEqual(issuerTiles);
-    // DR-138 / D3 R7 preserves class sampling after leaving shaded terrain.
-    expect(fakeMap.paint.get('raster-resampling')).toBe('nearest');
-    expect(fakeMap.getSource()!.roundZoom).toBe(false);
-    deactivate(map);
-    fakeMap.terrain = true;
-    fakeMap.emit('terrain');
-    expect(fakeMap.getSource()).toBeUndefined();
-    await activate(map);
-    expect(fakeMap.getSource()!.tiles[0]).toContain('whp-image-shade://');
-    expect(fakeMap.paint.get('raster-resampling')).toBe('nearest');
-    expect(fakeMap.getSource()!.roundZoom).toBe(false);
+    expect(fakeMap.getSource()!.tiles).toEqual(shadedTiles);
+
+    await classes.activate(classesTarget);
+    expect(classesMap.getSource()!.tiles).toEqual(shadedTiles.map((tile) => tile.replace('whp-image-shade://', '')));
+    // DR-138 / D3 R7 preserves class sampling on the issuer-coloured row too.
+    expect(classesMap.paint.get('raster-resampling')).toBe('nearest');
+    expect(classesMap.getSource()!.roundZoom).toBe(false);
+    classesMap.terrain = true;
+    classesMap.emit('terrain');
+    expect(classesMap.getSource()!.tiles[0]).not.toContain('whp-image-shade');
   } finally {
     deactivate(map);
+    classes.deactivate(classesTarget);
     registry.deactivate('usfs-whp');
+    registry.deactivate('usfs-whp-classes');
   }
 });

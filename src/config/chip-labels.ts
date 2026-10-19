@@ -28,6 +28,7 @@ export const KEY_ELIGIBLE_LABELS: Readonly<Record<string, string>> = {
   heatrisk: 'HeatRisk',
   'spc-fire-weather': 'Fire',
   'usfs-whp': 'Wildfire potential',
+  'usfs-whp-classes': 'Wildfire potential',
   'cdm-drought': 'Canada drought',
   'nadm-drought': 'North America drought',
   usdm: 'Drought',

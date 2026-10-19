@@ -36,8 +36,8 @@ import { formatDistanceKm } from './point-heat-format';
  * query, so the read is always the week actually on screen. */
 const USDM_FILLS = ['usdm-frame-a-fill', 'usdm-frame-b-fill'] as const;
 
-/** The USFS Wildfire Hazard Potential raster layer id (src/layers/usfs-whp.ts). */
-const WHP_LAYER = 'usfs-whp';
+/** The USFS Wildfire Hazard Potential raster layer ids (src/layers/usfs-whp.ts). */
+const WHP_LAYERS = ['usfs-whp', 'usfs-whp-classes'] as const;
 
 /** How many nearest stations to name. */
 const NEAREST_STATION_COUNT = 3;
@@ -188,7 +188,7 @@ function fuelsRow(map: maplibregl.Map): PopupDetail {
   return {
     kind: 'row',
     label: 'Fuels and hazard',
-    text: map.getLayer(WHP_LAYER)
+    text: WHP_LAYERS.some((id) => map.getLayer(id))
       ? 'Wildfire Hazard Potential is on; read the class from the shaded surface beneath this perimeter.'
       : 'Turn on Wildfire Hazard Potential to see the fuels hazard here.'
   };

@@ -2,7 +2,7 @@
  * The Wildfire console's one "Fuel risk" switch (src/ui/island/fire3d-control.tsx).
  *
  * On the flat Wildfire map it turns on the catalog's USFS Wildfire Hazard
- * Potential surface, drawn in the issuer's own class colours by its own
+ * Potential surface, drawn as white of increasing opacity by class by its own
  * adapter (src/layers/usfs-whp.ts). In the 3D scene, while the scene's white
  * drape is mounted (src/layers/whp-3d.ts), it shows or hides that drape, as
  * it always has. Pure and DOM-free so Node can prove the decisions.
@@ -28,7 +28,7 @@ export const FUEL_RISK_TITLE = 'Fuel risk: USFS Wildfire Hazard Potential';
 export function fireKeySections(
   eligible: ReadonlySet<string>
 ): { readonly fire: boolean; readonly whp: boolean } | null {
-  const whp = eligible.has(FLAT_FUEL_RISK_KEY);
+  const whp = eligible.has(FLAT_FUEL_RISK_KEY) || eligible.has('usfs-whp-classes');
   if (!whp && !eligible.has('spc-fire-weather')) return null;
   return { fire: eligible.has('spc-fire-weather') || eligible.has('nifc-fires'), whp };
 }

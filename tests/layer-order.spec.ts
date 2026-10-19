@@ -147,6 +147,7 @@ test.describe('layer-order: thematic reassert (E1 deliverable 2)', () => {
         'sst-anomaly',
         'heatrisk',
         'usfs-whp',
+        'usfs-whp-classes',
         'nadm-drought-fill',
         'cdm-drought-fill',
         'bc-drought-fill'

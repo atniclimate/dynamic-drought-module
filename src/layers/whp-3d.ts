@@ -34,8 +34,8 @@ const SOURCE_ID = 'whp-2023';
 const LAYER_ID = 'whp-2023';
 const LEGEND_KEY = 'whp-2023';
 
-/** The flat catalog layer that draws the SAME issuer product, live. */
-const FLAT_WHP_LAYER_KEY = 'usfs-whp';
+/** The flat catalog layers that draw the SAME issuer product, live. */
+const FLAT_WHP_LAYER_KEYS = ['usfs-whp', 'usfs-whp-classes'] as const;
 
 /** Released when the drape is torn down; watches for the flat layer. */
 let releaseFlatLayerWatch: (() => void) | null = null;
@@ -114,8 +114,8 @@ function announceFuelRisk(): void {
 }
 
 /**
- * One issuer, one legend, per layer: never draw this drape while the flat
- * `usfs-whp` catalog surface is on.
+ * One issuer, one legend, per layer: never draw this drape while either flat
+ * WHP catalog surface (`usfs-whp`, `usfs-whp-classes`) is on.
  *
  * The two render the same USFS product from the same service. Stacked,
  * they would double the translucency of one classification, print two
@@ -131,7 +131,8 @@ function announceFuelRisk(): void {
  * 3D scene still shows hazard relief; it simply shows the better copy.
  */
 function flatWhpLayerIsOn(): boolean {
-  return registry.getActiveKeys().has(FLAT_WHP_LAYER_KEY);
+  const active = registry.getActiveKeys();
+  return FLAT_WHP_LAYER_KEYS.some((key) => active.has(key));
 }
 
 /**

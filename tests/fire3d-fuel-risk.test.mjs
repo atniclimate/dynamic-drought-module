@@ -12,6 +12,9 @@ test('Fuel risk on adds its section to the Wildfire key instead of replacing it'
   // Long Range: the potential layer alone keeps its own key.
   assert.deepEqual(fireKeySections(keys('usfs-whp')), { fire: false, whp: true });
   assert.deepEqual(fireKeySections(keys('spc-fire-weather')), { fire: true, whp: false });
+  // The Layer studio's issuer-coloured row keeps the same section, alone or over Wildfire.
+  assert.deepEqual(fireKeySections(keys('usfs-whp-classes')), { fire: false, whp: true });
+  assert.deepEqual(fireKeySections(keys('nifc-fires', 'usfs-whp-classes')), { fire: true, whp: true });
   // Neither the outlook nor the potential layer: the later surfaces keep their precedence.
   assert.equal(fireKeySections(keys('nifc-fires', 'hms-smoke')), null);
   assert.equal(fireKeySections(keys('usdm', 'nifc-fires')), null);
@@ -19,9 +22,9 @@ test('Fuel risk on adds its section to the Wildfire key instead of replacing it'
   assert.match(FUEL_RISK_TITLE, /^Fuel risk: .*Wildfire Hazard Potential$/);
 });
 
-test('the one Fuel risk switch acts on the 3D drape only while it is mounted, else on the flat issuer layer', () => {
+test('the one Fuel risk switch acts on the 3D drape only while it is mounted, else on the flat fuel-risk layer', () => {
   const base = { sceneActive: false, drapeMounted: false, cluster: 'wildfire', flatOn: false };
-  // The flat Wildfire map: the switch turns the issuer-coloured layer on.
+  // The flat Wildfire map: the switch turns the white fuel-risk layer on.
   assert.equal(fuelRiskSwitch(base), 'flat');
   // Wildfire 3D with its white drape mounted: the switch shows or hides that drape.
   assert.equal(fuelRiskSwitch({ ...base, sceneActive: true, drapeMounted: true }), 'drape');

@@ -24,6 +24,11 @@ const ONE_PIXEL_PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
   'base64'
 );
+/** One opaque #ed1e00 (Very High) pixel: Fuel risk shades only issuer class colours. */
+const WHP_PNG_1PX = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGN4K8fwHwAFEgILjNz/OgAAAABJRU5ErkJggg==',
+  'base64'
+);
 
 const EMPTY_FC = { type: 'FeatureCollection', features: [] } as const;
 
@@ -117,7 +122,7 @@ async function stubEveryStudioLayer(page: Page): Promise<void> {
     (url) =>
       url.href.includes('ddm-proxy.atniclimate.workers.dev') &&
       url.href.includes('WildfireHazardPotentialClassified'),
-    (route) => route.fulfill({ status: 200, contentType: 'image/png', body: ONE_PIXEL_PNG })
+    (route) => route.fulfill({ status: 200, contentType: 'image/png', body: WHP_PNG_1PX })
   );
 
   // nws-alerts: the NOAA NWS watch/warning/advisory MapServer.
