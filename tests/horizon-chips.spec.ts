@@ -755,9 +755,13 @@ test.describe('DDM-P8-T03 clauses 2 and 3: one grammar, product-specific registe
       await expect(bar).toHaveAttribute('data-register', 'observed');
       await expect(key).toHaveAttribute('data-register', 'observed');
       // The key's own accessible name carries the static-edition honesty
-      // disclaimer (src/config/wildfire-presentation.ts qualification);
-      // the visible label stays 'Wildfire potential', never a dated claim.
-      await expect(key).toHaveAttribute('aria-label', /static 2023 edition/);
+      // disclaimer; since v0.7.7 Fuel risk is the white shade on every map,
+      // so it is the shade's qualification (src/config/whp-shade.ts
+      // WHP_SHADE_QUALIFICATION): the 2023 edition, static context, not
+      // current conditions or a forecast. The visible label stays
+      // 'Wildfire potential', never a dated claim.
+      await expect(key).toHaveAttribute('aria-label', /Wildfire Hazard Potential 2023/);
+      await expect(key).toHaveAttribute('aria-label', /Static context, not current conditions or a forecast\./);
     });
   });
 
