@@ -198,14 +198,18 @@ test.describe('U3 stage-5: honest search failure states (major 5)', () => {
     );
   });
 
-  test('a retry after a failed roster load keeps States rows and the failure line on screen', async ({
+  test('after a failed roster load a keystroke does not retry; a new search does', async ({
     page
   }) => {
     // Every roster request fails until `hold` is set; after that the retry is
     // held on a gate so its in-flight state can be inspected. Typed holders,
     // as in the minor-8 case below, because the closures assign them.
-    const roster: { hold: boolean; release: (() => void) | null; requested: (() => void) | null } =
-      { hold: false, release: null, requested: null };
+    const roster: {
+      hold: boolean;
+      requests: number;
+      release: (() => void) | null;
+      requested: (() => void) | null;
+    } = { hold: false, requests: 0, release: null, requested: null };
     const gate = new Promise<void>((resolve) => {
       roster.release = resolve;
     });
@@ -213,6 +217,7 @@ test.describe('U3 stage-5: honest search failure states (major 5)', () => {
       roster.requested = resolve;
     });
     await page.route('**/data/tribal-roster.json', async (route) => {
+      roster.requests += 1;
       if (!roster.hold) {
         await route.fulfill({ status: 500, contentType: 'text/plain', body: 'boom' });
         return;
@@ -230,23 +235,36 @@ test.describe('U3 stage-5: honest search failure states (major 5)', () => {
     await input.fill('washingto');
 
     const unavailable = page.locator('#catalog-search .ddm-search-unavailable');
+    const loading = page.locator('#catalog-search .ddm-search-loading');
     const washington = page.locator(
       '#catalog-search [data-search-kind="place"][data-search-id="WA"]'
     );
     await expect(unavailable).toContainText('Tribal land area search is unavailable');
     await expect(washington).toBeVisible();
+    const failedRequests = roster.requests;
 
-    // The next keystroke retries the roster. Only the first load reads as
-    // loading: a retry that did would hide States and Layers behind the
-    // loading line and leave Enter with nothing to open.
+    // The next keystroke lands in a list already on screen: no retry, so no
+    // late roster can push Washington out from under a pointer.
     roster.hold = true;
     await input.press('n');
-    await retryRequested;
-    await expect(page.locator('#catalog-search .ddm-search-loading')).toHaveCount(0);
+    await expect(input).toHaveValue('washington');
+    await expect(loading).toHaveCount(0);
     await expect(unavailable).toBeVisible();
     await expect(washington).toBeVisible();
+    expect(roster.requests).toBe(failedRequests);
+
+    // Clearing the box and typing again begins a new search, which retries.
+    await input.fill('');
+    await input.fill('washingto');
+    await retryRequested;
+    expect(roster.requests).toBe(failedRequests + 1);
+    await expect(loading).toBeVisible();
+    await expect(washington).toHaveCount(0);
 
     roster.release?.();
+    await expect(washington).toBeVisible();
+    await expect(unavailable).toHaveCount(0);
+    await expect(loading).toHaveCount(0);
   });
 
   test('a failed live BIA locate surfaces a toast, never a silent no-op', async ({ page }) => {

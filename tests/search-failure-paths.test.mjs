@@ -325,106 +325,130 @@ function walk(node, visit) {
   }
 }
 
-/** A Search whose first Tribal load fails and whose retry waits for `release`. */
-async function failedThenRetrying() {
-  H.slots = [];
-  const harness = { calls: 0, release: undefined, selected: [] };
-  const props = {
-    items: [{ kind: 'place', id: 'WA', label: 'Washington', haystack: 'washington' }],
-    loadTribal: () =>
-      ++harness.calls === 1
-        ? Promise.reject(new Error('timed out'))
-        : new Promise((resolve) => {
-            harness.release = resolve;
-          }),
-    onSelect: (item) => harness.selected.push(item),
-    placeholder: 'Search'
-  };
-  harness.render = () => {
-    H.i = 0;
-    let input;
-    let listbox;
-    let unavailable = false;
-    const rows = [];
-    const optionIds = {};
-    walk(Search(props), (n) => {
-      if (n.type === 'input') input = n.props;
-      if (n.props.role === 'listbox') listbox = n.props;
-      if (n.props.class === 'ddm-search-unavailable') unavailable = true;
-      if (n.props['data-search-kind']) {
-        const key = `${n.props['data-search-kind']}:${n.props['data-search-id']}`;
-        rows.push(key);
-        optionIds[key] = n.props.id;
-      }
-    });
-    return { input, listbox, rows, optionIds, unavailable };
-  };
-  harness.type = (value) => harness.render().input.onInput({ currentTarget: { value } });
 
-  harness.type('wash'); // the first load fails
-  await flush();
-  assert.deepEqual(harness.render().rows, ['place:WA'], 'States stay under the failure line');
-  assert.ok(harness.render().unavailable);
-
-  harness.type('wash'); // a keystroke starts the retry; the groups stay on screen
-  assert.equal(harness.calls, 2);
-  assert.deepEqual(harness.render().rows, ['place:WA']);
-  return harness;
-}
+const WA = { kind: 'place', id: 'WA', label: 'Washington', haystack: 'washington' };
 const WASHOE = [{ kind: 'tribal', id: 'Washoe', label: 'Washoe', haystack: 'washoe' }];
 
-test('a retried Tribal list that lands with no pointer over the results shows at once', async () => {
-  const h = await failedThenRetrying();
-  h.release(WASHOE);
+/** A loader whose every call waits until the test settles it. */
+function heldLoader() {
+  const l = { calls: 0, pending: [] };
+  l.load = () => {
+    l.calls += 1;
+    return new Promise((resolve, reject) => l.pending.push({ resolve, reject }));
+  };
+  return l;
+}
+
+/** A mounted Search over the State "Washington" and the given lazy loaders. */
+function mountSearch(loaders) {
+  H.slots = [];
+  const h = { selected: [] };
+  const props = {
+    items: [WA],
+    ...loaders,
+    onSelect: (item) => h.selected.push(item),
+    placeholder: 'Search'
+  };
+  h.render = () => {
+    H.i = 0;
+    const out = { input: undefined, rows: [], loading: 0, unavailable: false, live: '' };
+    walk(Search(props), (n) => {
+      if (n.type === 'input') out.input = n.props;
+      if (n.props.class === 'ddm-search-loading') out.loading += 1;
+      if (n.props.class === 'ddm-search-unavailable') out.unavailable = true;
+      if (n.props.class === 'ddm-search-live') out.live = n.props.children;
+      if (n.props['data-search-kind']) out.rows.push(`${n.props['data-search-kind']}:${n.props['data-search-id']}`);
+    });
+    return out;
+  };
+  h.type = (value) => h.render().input.onInput({ currentTarget: { value } });
+  h.focus = () => h.render().input.onFocus();
+  h.key = (key) => h.render().input.onKeyDown({ key, preventDefault() {} });
+  return h;
+}
+
+test('while either list loads, the results show one loading line and no rows', async () => {
+  const tribal = heldLoader();
+  const cities = heldLoader();
+  const h = mountSearch({ loadTribal: tribal.load, loadCities: cities.load });
+  h.type('wash');
+  let shown = h.render();
+  assert.equal(shown.loading, 1, 'one loading line');
+  assert.deepEqual(shown.rows, [], 'no row is on screen to move');
+  assert.equal(shown.live, 'Loading search results.');
+  h.key('Enter');
+  assert.deepEqual(h.selected, [], 'Enter opens nothing while the lists load');
+
+  tribal.pending[0].resolve(WASHOE);
   await flush();
-  const after = h.render();
-  assert.deepEqual(after.rows, ['tribal:Washoe', 'place:WA'], 'no keystroke needed');
-  assert.equal(after.unavailable, false, 'the failure line goes once the list loads');
+  shown = h.render();
+  assert.deepEqual(shown.rows, [], 'one list landed, the other still loads: still no rows');
+  assert.equal(shown.loading, 1);
+
+  cities.pending[0].resolve([]);
+  await flush();
+  shown = h.render();
+  assert.deepEqual(shown.rows, ['tribal:Washoe', 'place:WA'], 'both groups show at once');
+  assert.equal(shown.loading, 0);
+  assert.equal(shown.live, '2 results.');
 });
 
-test('a retried Tribal list that lands under a still pointer waits for the pointer to leave', async () => {
-  const h = await failedThenRetrying();
-  h.render().listbox.ref.current = { matches: (sel) => sel === ':hover' };
-  h.release(WASHOE);
+test('after a failed Tribal load, further keystrokes do not retry and the shown rows stay', async () => {
+  const tribal = heldLoader();
+  const h = mountSearch({ loadTribal: tribal.load });
+  h.type('wash');
+  tribal.pending[0].reject(new Error('timed out'));
   await flush();
-  assert.deepEqual(h.render().rows, ['place:WA'], 'the landed retry does not slide Washington under the pointer');
+  let shown = h.render();
+  assert.deepEqual(shown.rows, ['place:WA'], 'States show under the failure line');
+  assert.ok(shown.unavailable, 'the unavailable line, never "No matches"');
 
-  h.render().listbox.ref.current = null;
-  h.render().listbox.onPointerLeave();
-  const after = h.render();
-  assert.deepEqual(after.rows, ['tribal:Washoe', 'place:WA'], 'leaving the results shows it');
-  assert.equal(after.unavailable, false);
+  h.type('washi');
+  h.type('washin');
+  assert.equal(tribal.calls, 1, 'a keystroke into a list on screen does not retry');
+  shown = h.render();
+  assert.deepEqual(shown.rows, ['place:WA']);
+  assert.ok(shown.unavailable);
+  assert.equal(shown.loading, 0);
 });
 
-test('a retried Tribal list parked under a still pointer shows on an arrow key', async () => {
-  const h = await failedThenRetrying();
-  h.render().listbox.ref.current = { matches: (sel) => sel === ':hover' };
-  h.release(WASHOE);
+test('clearing the box and typing again retries, shows loading, then the rows with no failure line', async () => {
+  const tribal = heldLoader();
+  const h = mountSearch({ loadTribal: tribal.load });
+  h.type('wash');
+  tribal.pending[0].reject(new Error('timed out'));
   await flush();
+  assert.ok(h.render().unavailable);
+
+  h.type('');
+  assert.equal(tribal.calls, 1, 'clearing alone does not retry');
+  h.type('w');
+  assert.equal(tribal.calls, 2, 'the new search retries');
+  let shown = h.render();
+  assert.equal(shown.loading, 1);
+  assert.deepEqual(shown.rows, []);
+  assert.equal(shown.unavailable, false);
+
+  tribal.pending[1].resolve(WASHOE);
+  await flush();
+  shown = h.render();
+  assert.deepEqual(shown.rows, ['tribal:Washoe', 'place:WA'], 'no other action needed');
+  assert.equal(shown.unavailable, false);
+  assert.equal(shown.loading, 0);
+});
+
+test('focus with a query in the box does not retry; focus on an empty box does', async () => {
+  const tribal = heldLoader();
+  const h = mountSearch({ loadTribal: tribal.load });
+  h.type('wash');
+  tribal.pending[0].reject(new Error('timed out'));
+  await flush();
+
+  h.focus();
+  assert.equal(tribal.calls, 1, 'focus on a list on screen does not retry');
   assert.deepEqual(h.render().rows, ['place:WA']);
 
-  h.render().input.onKeyDown({ key: 'ArrowDown', preventDefault: () => {} });
-  const after = h.render();
-  assert.deepEqual(after.rows, ['tribal:Washoe', 'place:WA'], 'a key press is not a pointer choosing a row');
-  assert.equal(after.unavailable, false);
-});
-
-test('a keyboard highlight stays on its row when a retried Tribal list lands above it', async () => {
-  const h = await failedThenRetrying();
-  const key = { preventDefault() {} };
-  h.render().input.onKeyDown({ ...key, key: 'ArrowDown' });
-  assert.equal(h.render().input['aria-activedescendant'], h.render().optionIds['place:WA']);
-
-  h.release(WASHOE); // no pointer over the results, so Washoe lands above Washington
-  await flush();
-  const after = h.render();
-  assert.deepEqual(after.rows, ['tribal:Washoe', 'place:WA']);
-  assert.equal(after.input['aria-activedescendant'], after.optionIds['place:WA'], 'the highlight follows Washington');
-
-  after.input.onKeyDown({ ...key, key: 'Enter' });
-  assert.deepEqual(
-    h.selected.map((item) => `${item.kind}:${item.id}`),
-    ['place:WA'],
-    'Enter opens the highlighted State, not the Tribal area that slid into its place'
-  );
+  h.type('');
+  h.focus();
+  assert.equal(tribal.calls, 2, 'focus on an empty box begins a search');
 });

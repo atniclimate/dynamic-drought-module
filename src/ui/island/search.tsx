@@ -24,10 +24,18 @@
  * normalized `haystack` the same way; a Census area row may skip a generic word
  * such as "Nation", see matchesTokens). The one rank: within a group,
  * labels that start with the query come first (prefixFirst), and Enter
- * with no highlight opens an exact or else the first such row, or only
- * highlights the first row when none matches that way; no visible confidence
- * score. The main-shell instances keep the complete grouped vocabulary;
- * a specialized host may supply only the result kinds it can act on.
+ * with no highlight opens only an unambiguous shown match (enterChoice: an
+ * exact state or city, a unique exact label, or the only prefix row of its
+ * kind), or else highlights the first row; no visible confidence score. The
+ * main-shell instances keep the complete grouped vocabulary; a specialized
+ * host may supply only the result kinds it can act on.
+ *
+ * Loading: the Tribal and city lists load when a search begins (focus on an
+ * empty box, or the first keystroke into one), and a failed list reloads
+ * only then. While either list loads, the results show one loading line and
+ * no rows, so while the query is unchanged no late list ever lands in rows
+ * already on screen and Enter or a click opens only a row the person sees.
+ * The group order (Tribal, States, Cities, Layers) is presentation only.
  *
  * Stewardship: this component holds no Tribal, Treaty, or
  * sovereign-jurisdiction data itself. `SearchItem` for `kind: 'tribal'`
@@ -60,7 +68,7 @@ export interface SearchItem {
 export interface SearchProps {
   /** Items available synchronously (Places + Layers). */
   items: SearchItem[];
-  /** Optional lazy loader for Tribal land areas, called once on first focus or first keystroke. */
+  /** Optional lazy loader for Tribal land areas, called when a search begins; after a failure, again when the next one begins. */
   loadTribal?: () => Promise<SearchItem[]>;
   /** Optional lazy loader for cities, loaded and failing independently of the Tribal list. */
   loadCities?: () => Promise<SearchItem[]>;
@@ -127,90 +135,61 @@ interface LazyItems {
   pending: boolean;
   failed: boolean;
   start: () => void;
-  applyParked: () => void;
 }
 
 /**
- * One lazy item source. Started on first focus OR first keystroke, whichever
- * comes first (the ref guard makes the second caller a no-op). The loader
- * REJECTS on failure (invariant 6): the failure renders as an honest
- * "unavailable" line, never as a fake empty result, and the guard resets so a
- * later focus or keystroke retries.
+ * One lazy item source, started when a search begins (the ref guard makes a
+ * second start a no-op). The loader REJECTS on failure (invariant 6): the
+ * failure renders as an honest "unavailable" line, never as a fake empty
+ * result, and the guard resets so the next search retries.
  */
-function useLazyItems(
-  load: (() => Promise<SearchItem[]>) | undefined,
-  pointerOver: () => boolean
-): LazyItems {
+function useLazyItems(load: (() => Promise<SearchItem[]>) | undefined): LazyItems {
   const [items, setItems] = useState<SearchItem[]>([]);
   const [pending, setPending] = useState(false);
   const [failed, setFailed] = useState(false);
   const started = useRef(false);
-  const settled = useRef(false);
-  const parked = useRef<SearchItem[] | null>(null);
-  const applyParked = (): void => {
-    if (!parked.current) return;
-    setItems(parked.current);
-    setFailed(false);
-    parked.current = null;
-  };
   const start = (): void => {
-    applyParked();
     if (!load || started.current) return;
     started.current = true;
-    // Only the first load is pending: a retry keeps the failure line and the
-    // groups below it on screen until it lands.
-    if (!settled.current) setPending(true);
+    setPending(true);
     load()
       .then((loaded) => {
-        // A retry landing under a pointer waits for it to leave the results or
-        // the next keystroke: inserted now, its rows would push the groups below
-        // out from under it. With no pointer there, the failure line goes at once.
-        if (settled.current && pointerOver()) {
-          parked.current = loaded;
-          return;
-        }
-        settled.current = true;
         setItems(loaded);
-        setPending(false);
         setFailed(false);
       })
       .catch(() => {
-        settled.current = true;
-        setItems([]);
-        setPending(false);
         setFailed(true);
         started.current = false;
-      });
+      })
+      .finally(() => setPending(false));
   };
-  return { items, pending, failed, start, applyParked };
+  return { items, pending, failed, start };
 }
 
 export function Search(props: SearchProps): preact.JSX.Element {
   const [query, setQuery] = useState('');
   // The keyboard highlight is keyed by the ITEM (kind + id), never by list
-  // position: the Tribal group resolves asynchronously and inserts ABOVE the
-  // Layers group, so a position-keyed highlight would silently slide onto an
-  // unrelated row when the roster lands (the U3 stage-5 minor 8 fix). If the
-  // highlighted item leaves the list, the highlight collapses to none.
+  // position, so a changed row order never moves it onto an unrelated row (the
+  // U3 stage-5 minor 8 fix). If the highlighted item leaves the list, the
+  // highlight collapses to none.
   const [highlightedKey, setHighlightedKey] = useState<string | null>(null);
-  const listbox = useRef<HTMLDivElement>(null);
-  const pointerOver = (): boolean => listbox.current?.matches(':hover') ?? false;
-  const tribal = useLazyItems(props.loadTribal, pointerOver);
-  const cities = useLazyItems(props.loadCities, pointerOver);
-  const { items: tribalItems, pending: tribalPending, failed: tribalFailed } = tribal;
+  const tribal = useLazyItems(props.loadTribal);
+  const cities = useLazyItems(props.loadCities);
   // A per-instance id prefix so multiple mounts (the console catalog, the Brief
   // head, the mobile sheet) never collide on element ids (invalid HTML that
   // would break the aria-controls / aria-activedescendant references).
   const uid = useId();
-  const tribalEnabled = props.loadTribal !== undefined;
-  const startLazyLoads = (): void => {
-    tribal.start();
-    cities.start();
-  };
 
   const rawTrimmed = query.trim();
   const tokens = tokenize(normalizeQuery(query));
   const isEmptyQuery = rawTrimmed.length === 0 || tokens.length === 0;
+  // A search begins from an empty box; only then do lists (re)load, so no load lands in a list on screen.
+  const startSearch = (): void => {
+    if (isEmptyQuery) {
+      tribal.start();
+      cities.start();
+    }
+  };
 
   const foldedQuery = tokens.join(' ');
   // Matches of one kind, labels that start with the query first.
@@ -223,7 +202,7 @@ export function Search(props: SearchProps): preact.JSX.Element {
         );
   const placeMatches = matchesOf('place', props.items);
   const layerMatches = matchesOf('layer', props.items);
-  const tribalMatches = matchesOf('tribal', tribalItems);
+  const tribalMatches = matchesOf('tribal', tribal.items);
   const cityMatches = matchesOf('city', cities.items);
 
   const groups: Record<SearchItem['kind'], GroupResult> = {
@@ -232,43 +211,27 @@ export function Search(props: SearchProps): preact.JSX.Element {
     city: buildGroup('city', cityMatches),
     layer: buildGroup('layer', layerMatches)
   };
-  const tribalGroup = groups.tribal;
 
-  // The Tribal group appears while its load is pending (showing only the
-  // loading line) even before any items resolve; once settled, it only
-  // appears if it actually has matches (an empty resolve never shows a
-  // heading with nothing under it) OR if the load FAILED (the honest
-  // unavailable line; a service failure is never dressed up as no results).
-  const showTribalGroup =
-    tribalEnabled &&
-    !isEmptyQuery &&
-    (tribalPending || tribalFailed || tribalGroup.visible.length > 0);
-  // The city group also shows its own unavailable line after a failed load.
-  const showCityGroup = !isEmptyQuery && (cities.failed || groups.city.visible.length > 0);
-  // Groups below a still-loading one wait for it (pending is the first load
-  // only): rows shown under it would slide out from under a pointer when it
-  // lands, and a click would open the row that slid in.
-  const pendingAt = GROUP_ORDER.findIndex(
-    (k) => (k === 'tribal' ? tribalPending : k === 'city' && cities.pending)
-  );
+  // The one gate: while either lazy list loads, no group shows, so no row is on
+  // screen for a late list to push aside. A group shows when it has matches (an
+  // empty resolve never shows a heading with nothing under it) or, for a lazy
+  // list, when its load FAILED (the honest unavailable line; a service failure
+  // is never dressed up as no results).
+  const loading = tribal.pending || cities.pending;
   const showGroup = (kind: SearchItem['kind']): boolean =>
-    (pendingAt < 0 || GROUP_ORDER.indexOf(kind) <= pendingAt) &&
-    (kind === 'tribal'
-      ? showTribalGroup
-      : kind === 'city'
-        ? showCityGroup
-        : groups[kind].visible.length > 0);
-  const groupsForRender = GROUP_ORDER.map((kind) => groups[kind]).filter((g) => showGroup(g.kind));
+    groups[kind].visible.length > 0 ||
+    (kind === 'tribal' && tribal.failed) ||
+    (kind === 'city' && cities.failed);
+  const shownKinds = isEmptyQuery || loading ? [] : GROUP_ORDER.filter(showGroup);
+  const groupsForRender = shownKinds.map((kind) => groups[kind]);
 
   // Flat, ordered, ID-stamped list for keyboard nav and aria-activedescendant.
   // The DOM ids are position-based within a render (they only name the
   // currently highlighted DOM option for aria-activedescendant); the
-  // HIGHLIGHT itself is keyed by the stable item key so async list changes
-  // never move it to an unrelated row.
+  // HIGHLIGHT itself is keyed by the stable item key.
   let flatIdx = 0;
   const flatRows: FlatRow[] = [];
-  for (const kind of GROUP_ORDER) {
-    if (!showGroup(kind)) continue;
+  for (const kind of shownKinds) {
     for (const item of groups[kind].visible) {
       flatRows.push({ item, id: `${uid}-opt-${flatIdx}`, kind });
       flatIdx += 1;
@@ -284,27 +247,24 @@ export function Search(props: SearchProps): preact.JSX.Element {
     highlightedKey === null ? -1 : flatRows.findIndex((r) => rowKey(r) === highlightedKey);
   const activeRow = activeIndex >= 0 ? flatRows[activeIndex] : undefined;
 
-  // Counts only shown groups, so held-back rows are not announced.
+  // Counts only shown groups.
   const totalMatches = groupsForRender.reduce((n, g) => n + g.visible.length + g.overflow, 0);
-  const noGroupsShown = groupsForRender.length === 0;
-  // The zero-match line only appears once the Tribal load has settled
+  // The zero-match line only appears once the lists have loaded
   // (design-lens: written before ship, plain-language, never blaming the
   // user, since Tribal Nation names often will not match agency spellings).
-  const showZeroMatch = !isEmptyQuery && noGroupsShown && !tribalPending && !cities.pending;
+  const showZeroMatch = !isEmptyQuery && !loading && shownKinds.length === 0;
 
   const liveText = isEmptyQuery
     ? ''
-    : tribalPending && totalMatches === 0
-      ? 'Loading Tribal land areas.'
-      : tribalFailed && totalMatches === 0
+    : loading
+      ? 'Loading search results.'
+      : tribal.failed && totalMatches === 0
         ? 'Tribal land area search is unavailable right now.'
-        : cities.pending && totalMatches === 0
-          ? 'Loading cities.'
-          : cities.failed && totalMatches === 0
-            ? 'City search is unavailable right now.'
-            : totalMatches === 0
-              ? `No matches for "${rawTrimmed}".`
-              : `${totalMatches} result${totalMatches === 1 ? '' : 's'}.`;
+        : cities.failed && totalMatches === 0
+          ? 'City search is unavailable right now.'
+          : totalMatches === 0
+            ? `No matches for "${rawTrimmed}".`
+            : `${totalMatches} result${totalMatches === 1 ? '' : 's'}.`;
 
   const selectItem = (item: SearchItem): void => {
     props.onSelect(item);
@@ -319,11 +279,11 @@ export function Search(props: SearchProps): preact.JSX.Element {
     const value = (event.currentTarget as HTMLInputElement).value;
     setQuery(value);
     setHighlightedKey(null);
-    startLazyLoads();
+    startSearch(); // isEmptyQuery is still the box before this input
   };
 
   const onFocus = (): void => {
-    startLazyLoads();
+    startSearch();
   };
 
   // Arrow keys clamp at the list boundaries; they do not wrap. From "no
@@ -340,11 +300,6 @@ export function Search(props: SearchProps): preact.JSX.Element {
   };
 
   const onKeyDown = (event: KeyboardEvent): void => {
-    // A key press is not a pointer choosing a row, so a parked retry can land.
-    if (event.key === 'ArrowDown' || event.key === 'ArrowUp' || event.key === 'Enter') {
-      tribal.applyParked();
-      cities.applyParked();
-    }
     if (event.key === 'ArrowDown') {
       event.preventDefault();
       moveHighlight(1);
@@ -381,10 +336,7 @@ export function Search(props: SearchProps): preact.JSX.Element {
         <div class="ddm-search-group-title" id={headingId}>
           {group.title}
         </div>
-        {group.kind === 'tribal' && tribalPending ? (
-          <p class="ddm-search-loading">Loading Tribal land areas...</p>
-        ) : null}
-        {group.kind === 'tribal' && tribalFailed && !tribalPending ? (
+        {group.kind === 'tribal' && tribal.failed ? (
           <p class="ddm-search-unavailable">
             Tribal land area search is unavailable right now. States and layers still work.
           </p>
@@ -452,15 +404,9 @@ export function Search(props: SearchProps): preact.JSX.Element {
         class="ddm-search-results"
         role="listbox"
         id={`${uid}-listbox`}
-        ref={listbox}
-        onPointerLeave={() => {
-          tribal.applyParked();
-          cities.applyParked();
-        }}
       >
-        {!isEmptyQuery
-          ? groupsForRender.map((group) => renderGroup(group, rowsByKind(group.kind)))
-          : null}
+        {!isEmptyQuery && loading ? <p class="ddm-search-loading">Loading search results...</p> : null}
+        {groupsForRender.map((group) => renderGroup(group, rowsByKind(group.kind)))}
         {showZeroMatch ? (
           <p class="ddm-search-empty">No matches for "{rawTrimmed}".</p>
         ) : null}

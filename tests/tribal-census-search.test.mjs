@@ -237,6 +237,18 @@ test('Enter on a city or state name opens it, not a Tribal row whose LARNAME id 
   assert.equal(enterChoice([rows[1]], 'iowa')?.label, 'Iowa');
 });
 
+test('Enter on a formal name shared by several land areas opens none of them', () => {
+  // Real roster rows: one Federal Register name labels five Washoe land areas.
+  const formal =
+    'Washoe Tribe of Nevada & California (Carson Colony, Dresslerville Colony, Woodfords Community, Stewart Community, & Washoe Ranches)';
+  const rows = [
+    { kind: 'tribal', id: 'Carson', label: formal },
+    { kind: 'tribal', id: 'Dresslerville', label: formal }
+  ];
+  assert.equal(enterChoice(rows, foldSearchText(formal)), undefined, 'no guessed area');
+  assert.equal(enterChoice(rows.slice(0, 1), foldSearchText(formal))?.id, 'Carson', 'a unique exact label opens');
+});
+
 test('a formal Nation name finds its Census area, whose label keeps the Census name', () => {
   // The haystack search-controller builds for a census-label row: name plus the gated label.
   const row = census.find((a) => a.name === 'Cherokee OTSA');
@@ -265,19 +277,4 @@ test('the search view relaxes only Census rows and Enter goes through enterChoic
   assert.match(searchSrc, /matchesTokens\(item\.haystack, tokens, item\.kind === 'tribal' && item\.id\.startsWith\('census:'\)\)/);
   // Not `activeRow ?? flatRows[0]`: that opened the Colorado River Indian Tribes on "Colorado".
   assert.match(searchSrc, /activeRow\?\.item \?\?\s*enterChoice\(/);
-});
-
-test('the search view holds back rows below a still-loading group', () => {
-  // The Tribal group sits first and lands late: States rows shown under its
-  // loading line would slide out from under a pointer when the roster arrives.
-  const searchSrc = readFileSync(new URL('../src/ui/island/search.tsx', import.meta.url), 'utf8');
-  assert.match(
-    searchSrc,
-    /const pendingAt = GROUP_ORDER\.findIndex\(\s*\(k\) => \(k === 'tribal' \? tribalPending : k === 'city' && cities\.pending\)\s*\);/
-  );
-  assert.match(searchSrc, /\(pendingAt < 0 \|\| GROUP_ORDER\.indexOf\(kind\) <= pendingAt\) &&/);
-  // A retry after a failure keeps States and Layers on screen: the browser case
-  // in tests/u3-stage5-fixes.spec.ts ("a retry after a failed roster load").
-  // The live count names only the rows a person can see.
-  assert.match(searchSrc, /const totalMatches = groupsForRender\.reduce\(/);
 });

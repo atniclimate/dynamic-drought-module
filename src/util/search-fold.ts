@@ -51,8 +51,10 @@ export function matchesTokens(haystack: string, tokens: readonly string[], triba
 }
 
 /**
- * What Enter picks with no highlighted row, across the search's groups: a
- * label equal to the query, else the one label that starts with it when it is
+ * What Enter picks with no highlighted row, across the search's groups: the
+ * one label equal to the query (one Federal Register name can label several
+ * land areas, such as the Washoe colonies, so a shared label opens none of
+ * them), else the one label that starts with it when it is
  * the only listed row of its kind, else nothing: several listed labels that
  * start with or contain it ("Kickapoo", "Potawatomi") may be several Nations,
  * so Enter opens none of them. A typed-out "Colorado" opens the state, not an earlier Tribal row
@@ -80,5 +82,6 @@ export function enterChoice<T extends { label: string; id?: string; kind?: strin
   const prefixed = items.filter((_, i) => folded[i].startsWith(foldedQuery));
   // The lone prefix row opens only as the lone listed row of its kind: "Potawatomi" lists six Nations.
   const lone = prefixed.length === 1 && items.filter((i) => i.kind === prefixed[0].kind).length === 1;
-  return exact('place') ?? exact('city') ?? at((f) => f === foldedQuery) ?? (lone ? prefixed[0] : undefined);
+  const exactRows = items.filter((_, i) => folded[i] === foldedQuery);
+  return exact('place') ?? exact('city') ?? (exactRows.length === 1 ? exactRows[0] : undefined) ?? (lone ? prefixed[0] : undefined);
 }
