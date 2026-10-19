@@ -288,6 +288,13 @@ test('sidebar seats: no mode-sized block sits above a control', () => {
   };
   assert.ok(at('id="shell-panel"') < at('id="conditions-strip-home"'), 'the Console strip home sits below the hazard buttons');
   assert.match(html, /<span id="conditions-strip-home" hidden><\/span>\s*<section[^>]*id="conditions-strip"/);
+  // syncTimeBarHost reseats the bar right after the shell panel at runtime, so
+  // the static band order is shell, bar, then Brief display; the strip home
+  // marker is not adjacent to either and no spec may assume it is.
+  assert.ok(
+    at('id="shell-panel"') < at('id="time-bar"') && at('id="time-bar"') < at('id="brief-display"'),
+    'the time bar sits between the shell panel and Brief display'
+  );
   assert.ok(
     at('id="brief-display"') < at('id="enso-flow-controls"') && at('id="enso-flow-controls"') < at('id="shell-details-panel"'),
     'the ENSO buttons sit above the variable view details'

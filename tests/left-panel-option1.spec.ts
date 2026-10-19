@@ -21,8 +21,18 @@ test.describe('D-0.7.0-067 contextual time rail', () => {
     expect(shellOrder.every((index) => index >= 0)).toBe(true);
     expect(shellOrder).toEqual([...shellOrder].sort((a, b) => a - b));
     await expect(page.locator('.map-overlay-controls > #share-btn')).toHaveCount(1);
-    await expect(page.locator('#shell-panel + #time-bar + #brief-display')).toHaveCount(1);
-    await expect(page.locator('#brief-display + #shell-details-panel')).toHaveCount(1);
+    // Settled runtime order: syncTimeBarHost seats the bar right after the
+    // shell panel, but the hidden conditions-strip home marker (and the
+    // strip itself when not docked) still sits between the bar and Brief
+    // display, so only the document order is asserted for that pair. The
+    // ENSO buttons sit between Brief display and the view details.
+    const settledOrder = await page.evaluate(() => {
+      const ids = ['shell-panel', 'time-bar', 'brief-display', 'enso-flow-controls', 'shell-details-panel'];
+      const nodes = ids.map((id) => document.getElementById(id));
+      return nodes.every((node, i) => node && (i === 0 || nodes[i - 1]!.compareDocumentPosition(node) & Node.DOCUMENT_POSITION_FOLLOWING));
+    });
+    expect(settledOrder).toBe(true);
+    await expect(page.locator('#brief-display + #enso-flow-controls + #shell-details-panel')).toHaveCount(1);
     await expect(page.locator('#shell-details-island > #shell-conditions-summary')).toHaveCount(1);
 
     // S4 supersession (the 2026-07-18 design record, S4c): on the
