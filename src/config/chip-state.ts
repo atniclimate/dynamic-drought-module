@@ -5,9 +5,9 @@
  * The chip's six-state glyph used to be read back from a KeySpec's OWN
  * rendered text (`chipStateFromSpec` in src/ui/map-key.ts, a substring
  * match on `ariaLabel` and `itemsHtml`). That text is not a status
- * channel: the hillshade coverage qualification writes the words "no
- * data" into a live key's items (map-key.ts, `withTerrainCoverage`'s
- * HILLSHADE_COVERAGE_NOTE), and a multi-layer key such as the fire key
+ * channel: a coverage qualification could write the words "no data" into
+ * a live key's items (the hillshade note, since removed from the key),
+ * and a multi-layer key such as the fire key
  * (`buildFireKey`) can carry a loading row for one product while another
  * is live, so the glyph could read "no data" or "loading" for a key that
  * is painted and live. Six honest layer states are a product invariant

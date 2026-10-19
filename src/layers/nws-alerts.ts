@@ -41,7 +41,8 @@ import type { LayerActivation } from '../config/layers';
 import { URLS } from '../config/urls';
 import {
   NWS_ALERT_COLORS,
-  NWS_ALERT_DEFAULT_COLOR
+  NWS_ALERT_DEFAULT_COLOR,
+  NWS_ALERT_LEGEND
 } from '../config/palette';
 import { matchExpression } from '../config/style-expressions';
 import { registerClickTarget } from '../map/interaction-coordinator';
@@ -84,21 +85,6 @@ const ALERT_EVENTS: readonly string[] = [ // vocab-allow: verbatim NWS product n
   'Heat Advisory',
   'Red Flag Warning', // vocab-allow: verbatim NWS product names, quoted source data
   'Fire Weather Watch'
-];
-
-/**
- * Legend rows for the alert layer: the distinct hazards it requests, collapsing
- * the Extreme/Excessive heat pairs (which share a color) into one row each.
- * Colors come from the official NWS display palette in NWS_ALERT_COLORS.
- */
-const ALERT_LEGEND: ReadonlyArray<{ color: string; label: string }> = [
-  // vocab-allow: verbatim NWS product names, quoted source data
-  { color: NWS_ALERT_COLORS['Extreme Heat Warning'], label: 'Extreme Heat Warning' },
-  { color: NWS_ALERT_COLORS['Extreme Heat Watch'], label: 'Extreme Heat Watch' },
-  { color: NWS_ALERT_COLORS['Heat Advisory'], label: 'Heat Advisory' },
-  // vocab-allow: verbatim NWS product names, quoted source data
-  { color: NWS_ALERT_COLORS['Red Flag Warning'], label: 'Red Flag Warning' },
-  { color: NWS_ALERT_COLORS['Fire Weather Watch'], label: 'Fire Weather Watch' }
 ];
 
 type Status = 'loading' | 'ready' | 'degraded' | 'error' | 'no-data';
@@ -397,7 +383,7 @@ function showSnapshotLegend(featureCount: number): void {
         body,
         // vocab-allow: names the NWS alert products layer, upstream data
         'Heat & fire weather alerts',
-        ALERT_LEGEND,
+        NWS_ALERT_LEGEND,
         note
       )
   });
@@ -422,7 +408,7 @@ function showUnavailableLegend(): void {
         body,
         // vocab-allow: names the NWS alert products layer, upstream data
         'Heat & fire weather alerts',
-        ALERT_LEGEND,
+        NWS_ALERT_LEGEND,
         'The National Weather Service product snapshot is unavailable.'
       )
   });

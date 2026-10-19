@@ -957,9 +957,9 @@ test('the terrain coverage constant matches the committed archive header, so a r
   expect(FIRE3D_COVERAGE_NOTE).not.toContain('terrarium');
 });
 
-// The map key's flat Terrain Shading sentence is no longer a hand-typed
-// mirror: it imports HILLSHADE_COVERAGE_SENTENCE from the eager-safe
-// src/config/terrain-coverage.ts, pinned by tests/terrain-coverage.test.mjs.
+// The flat Terrain Shading sentence (HILLSHADE_COVERAGE_SENTENCE) reads in
+// Technical information, not the map key; pinned by
+// tests/terrain-coverage.test.mjs.
 
 test('the perimeter layer sits above the hazard drape in the style order while the scene is active (clause 2, read-only proof)', async () => {
   const browser = installFakeBrowser({ desktop: true, reducedMotion: false });

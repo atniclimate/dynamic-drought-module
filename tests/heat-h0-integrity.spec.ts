@@ -267,9 +267,8 @@ for (const embedViewport of [
         '#map-key [data-heatrisk-coverage]'
       );
       await expect(qualification).toContainText('no data');
-      await expect(qualification).toContainText(
-        'National Weather Service HeatRisk covers the contiguous United States only.'
-      );
+      // The coverage sentence reads in Technical information, not the key.
+      await expect(qualification).not.toContainText('contiguous United States');
       await expectCompactEmbedKey(page);
     });
 
@@ -284,7 +283,7 @@ for (const embedViewport of [
 
       await expect(
         page.locator('#map-key [data-nws-snapshot]')
-      ).toContainText('National Weather Service snapshot as of');
+      ).toHaveText(/^As of \d{1,2}:\d{2}\s?[AP]M, [A-Z][a-z]{2} \d{1,2}$/);
       await expectCompactEmbedKey(page);
     });
 

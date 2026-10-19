@@ -68,9 +68,10 @@ test('the flat shading and the 3D scene name different layers, so their zooms ca
   }
 });
 
-test('the map key derives its terrain sentence instead of typing a zoom by hand', () => {
+test('the map key carries no terrain coverage note; Technical information holds it', () => {
   const source = readFileSync(join(ROOT, 'src', 'ui', 'map-key.ts'), 'utf8');
-  assert.ok(source.includes('HILLSHADE_COVERAGE_SENTENCE'), 'map-key.ts imports HILLSHADE_COVERAGE_SENTENCE');
+  assert.ok(!source.includes('HILLSHADE_COVERAGE_SENTENCE'), 'map-key.ts no longer reads the terrain sentence');
+  assert.ok(!source.includes('Pacific Northwest only'), 'map-key.ts prints no terrain label');
   assert.ok(!/detail ends at zoom \d/.test(source), 'map-key.ts types no zoom figure by hand');
 });
 
@@ -162,7 +163,10 @@ test('the notes taken off the key, the storm popup and the smoke legend read in 
     'Surface temperature anomalies are shown for large lakes and inland seas as well as the ocean.',
     'Basins covered: Atlantic, Eastern North Pacific, Central North Pacific.',
     "Circles are sized by the issuer's wind classes; the issuer's icons are not reproduced.",
-    'Times are as the issuer states them; DDM does not read them as full dates.'
+    'Times are as the issuer states them; DDM does not read them as full dates.',
+    'National Weather Service HeatRisk covers the contiguous United States only.',
+    'Products issued under the former names Excessive Heat Warning and Excessive Heat Watch are drawn in the colours of Extreme Heat Warning and Extreme Heat Watch and share their rows in the key; a product\'s popup gives the name it was issued under.',
+    'National Weather Service products are read about every five minutes; the time beside them in the key is when DDM last read them, not when a product was issued or when it is in effect.'
   ]) {
     assert.ok(html.includes(`<p>${note}</p>`), note);
   }
@@ -176,6 +180,7 @@ test('the notes taken off the key, the storm popup and the smoke legend read in 
   }
   const source = (...path) => readFileSync(join(ROOT, 'src', ...path), 'utf8');
   assert.doesNotMatch(source('ui', 'map-key.ts'), /Basins covered|Circles are sized/);
+  assert.doesNotMatch(source('ui', 'map-key.ts'), /covers the contiguous United States|snapshot as of|join\(' \/ '\)/);
   assert.doesNotMatch(source('layers', 'hms-smoke.ts'), /HMS_OVERVIEW_QUALIFICATION/);
 });
 

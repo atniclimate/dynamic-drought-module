@@ -507,6 +507,21 @@ export const NWS_ALERT_COLORS: Readonly<Record<string, string>> = {
   'Fire Weather Watch': '#ffdead'
 };
 
+/**
+ * One key row per NWS product under its current name (the 2025 Hazard
+ * Simplification names); the Excessive Heat aliases share their row's colour
+ * and still match in the data.
+ */
+export const NWS_ALERT_LEGEND: ReadonlyArray<{ color: string; label: string }> = [
+  // vocab-allow: verbatim NWS product names, quoted source data
+  { color: NWS_ALERT_COLORS['Extreme Heat Warning'], label: 'Extreme Heat Warning' },
+  { color: NWS_ALERT_COLORS['Extreme Heat Watch'], label: 'Extreme Heat Watch' },
+  { color: NWS_ALERT_COLORS['Heat Advisory'], label: 'Heat Advisory' },
+  // vocab-allow: verbatim NWS product names, quoted source data
+  { color: NWS_ALERT_COLORS['Red Flag Warning'], label: 'Red Flag Warning' },
+  { color: NWS_ALERT_COLORS['Fire Weather Watch'], label: 'Fire Weather Watch' }
+];
+
 export const NWS_ALERT_DEFAULT_COLOR = '#9ca3af';
 
 /* ---------------------------------------------------------------------------

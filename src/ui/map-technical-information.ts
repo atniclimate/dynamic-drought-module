@@ -85,6 +85,12 @@ export const FLOW_TECHNICAL_NOTES: readonly string[] = [
   'Ocean currents are model output: surface currents from the NOAA/NCEP Global RTOFS ocean model, re-encoded by DDM. The map holds one dated frame, as old as its last update: the state line gives the model run, the instant the frame is valid at and its age. Two model grids are held, each on its own spacing and never joined: 1.0 degree from 40 S to 39 N and 130 E to 111 W, and 0.3 degree from 40 N to 84.7 N and 140 E to 115.3 W. The grid under the centre of the view is drawn. Nothing is drawn between 39 N and 40 N, east of 111 W south of 40 N (the coasts of mainland Mexico and Central America) or west of 130 E. Not for navigation.'
 ];
 
+// DRAFT wording (DR-177): the HeatRisk coverage sentence and the NWS products stamp left the map key for here.
+const HEATRISK_COVERAGE_NOTE = 'National Weather Service HeatRisk covers the contiguous United States only.';
+// vocab-allow: verbatim NWS product names, quoted source data
+const NWS_HEAT_NAME_NOTE = 'Products issued under the former names Excessive Heat Warning and Excessive Heat Watch are drawn in the colours of Extreme Heat Warning and Extreme Heat Watch and share their rows in the key; a product\'s popup gives the name it was issued under.';
+const NWS_SNAPSHOT_NOTE = 'National Weather Service products are read about every five minutes; the time beside them in the key is when DDM last read them, not when a product was issued or when it is in effect.';
+
 export function renderMapTechnicalInformation(open = false): string {
   return `<details class="impact-technical-information"${open ? ' open' : ''}>
     <summary>Technical information</summary>
@@ -100,6 +106,11 @@ export function renderMapTechnicalInformation(open = false): string {
     <p>Wildfire Hazard Potential 2023 reflects landscape conditions as of the end of 2020 (USFS), so areas burned since then still show their earlier class.</p>
     <p>In Wildfire 3D, fuel risk is not drawn inside current fire perimeters (NIFC).</p>
     <div id="impact-technical-plant-stress">${plantStressHtml()}</div>
+    <h4>Extreme Heat</h4>
+    <p>${escapeHtml(HEATRISK_COVERAGE_NOTE)}</p>
+    <h4>National Weather Service products</h4>
+    <p>${escapeHtml(NWS_HEAT_NAME_NOTE)}</p>
+    <p>${escapeHtml(NWS_SNAPSHOT_NOTE)}</p>
     <h4>ENSO</h4>
     <p>The map shows current conditions.</p>
     <p>"It is inaccurate to label individual storms or events as a La Niña or El Niño event. Rather, these climate extremes affect the position and intensity of the jet streams, and the normal regions of high and low pressure, which in turn affect the average intensity and track of storms." <a href="https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/ensostuff/ensofaq.shtml" target="_blank" rel="noopener">NOAA Climate Prediction Center, ENSO FAQ</a></p>
