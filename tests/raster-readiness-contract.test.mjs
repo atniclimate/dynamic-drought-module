@@ -1404,6 +1404,42 @@ test('current view guard: a settled source whose view empties (its layer hidden)
   }
 });
 
+test('current view guard: a rendered source hidden while a cycle is open keeps its verdict at the deadline, never unavailable', async (t) => {
+  // The flat Fuel risk under the Wildfire 3D drape: the pitch ease opens a
+  // cycle, the drape hides the layer, MapLibre drops every tile of the unused
+  // source (the in-flight one aborts), and the 3D scene never idles.
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  await withLayer('gridded-index', GRIDDED, async ({ mod, map, status }) => {
+    const view = trackView(map, 'gridded-index');
+    await mod.activate(map);
+    view.request('a');
+    view.load('a', true);
+    assert.equal(registry.getStatus('gridded-index'), 'ready');
+    const mark = status.seen.length;
+    const warnings = [];
+    const warn = console.warn;
+    console.warn = (...args) => warnings.push(args);
+    try {
+      view.move();
+      view.request('b');
+      view.leave('a');
+      view.leave('b');
+      view.frame();
+      t.mock.timers.tick(deadlineMs);
+      assert.equal(registry.getStatus('gridded-index'), 'ready');
+      assert.equal(status.seen.length, mark, `a hidden view reported ${status.seen.slice(mark).join(', ')}`);
+      assert.equal(warnings.length, 0, `warned ${warnings.length} time(s)`);
+      // Shown again: the cached tile returns and the next frame reads it.
+      view.restore('a');
+      view.move();
+      view.frame();
+      assert.equal(registry.getStatus('gridded-index'), 'ready');
+    } finally {
+      console.warn = warn;
+    }
+  });
+});
+
 test('current view guard: a watch without a deadline (the Fire 3D terrain path) reports nothing from the view, and detaches whole', async () => {
   // The no-deadline watch is raster-error-watch.ts's alone (DR-142).
   const { watchRasterTiles } = await import('../src/util/raster-error-watch.ts');

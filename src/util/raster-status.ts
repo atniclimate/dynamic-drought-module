@@ -236,6 +236,14 @@ export function watchRasterTiles(
     deadlineTimer = setTimeout(() => {
       deadlineTimer = null;
       if (!requestCycleActive) return;
+      // A rendered source whose view emptied inside the cycle was hidden (the
+      // flat Fuel risk under the 3D drape): it keeps its verdict, as a hidden
+      // source does outside a cycle, and the cycle closes.
+      const view = readView();
+      if (rendered && view !== undefined && view[0] === 0) {
+        requestCycleActive = false;
+        return;
+      }
       // An open cycle at its deadline: an empty view reads `error`, never the
       // idle outcome, and the found-042 floor holds after a rendered frame.
       reportCompleteness('error', rendered);

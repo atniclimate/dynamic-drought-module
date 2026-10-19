@@ -1321,3 +1321,47 @@ test('the Wildfire 3D drape takes the published perimeters before its source exi
     }
   });
 });
+
+test('in Wildfire 3D the issuer colours on and then off stand the drape down and back up; the flat white Fuel risk never draws in the scene', async () => {
+  const { activateWhpDrape, deactivateWhpDrape } = await import('../src/layers/whp-3d.ts');
+  const { registry } = await import('../src/state/registry.ts');
+  const { setFire3DGroundLayer } = await import('../src/state/fire3d-ground-layers.ts');
+  const visibility = new Map(), mounted = [], sources = new Map();
+  const layers = new Map([['usfs-whp', { id: 'usfs-whp' }]]);
+  const map = {
+    getSource: id => sources.get(id), removeSource: id => sources.delete(id), addSource: (id, spec) => sources.set(id, spec),
+    getLayer: id => layers.get(id), removeLayer: id => layers.delete(id),
+    addLayer(layer) { layers.set(layer.id, layer); visibility.set(layer.id, layer.layout.visibility); },
+    moveLayer() {}, setLayoutProperty: (id, name, value) => visibility.set(id, value),
+    getStyle: () => ({ layers: [...layers.keys()].map(id => ({ id })) }), refreshTiles() {}
+  };
+  await withWhpBrowser(async () => {
+    const scene = new AbortController();
+    try {
+      window.dispatchEvent = event => { if (event.type === 'ddm:whp-shade') mounted.push(event.detail.mounted); };
+      assert.equal(await activateWhpDrape(map, scene.signal), true);
+      assert.deepEqual([visibility.get('usfs-whp'), visibility.get('whp-2023')], ['none', 'visible']);
+
+      // The issuer colours come on: the drape stands down without being torn down; the white copy stays hidden.
+      registry.activate('usfs-whp-classes');
+      assert.deepEqual([visibility.get('usfs-whp'), visibility.get('whp-2023')], ['none', 'none']);
+      assert.equal(mounted.at(-1), false);
+      // The console's switch has nothing to act on meanwhile, so a switch change shows nothing.
+      setFire3DGroundLayer('fuelRisk', false); setFire3DGroundLayer('fuelRisk', true);
+      assert.equal(visibility.get('whp-2023'), 'none');
+
+      // Off again: the drape is back, still perimeter-masked, and the flat white layer never returns in the scene.
+      registry.deactivate('usfs-whp-classes');
+      assert.equal(sources.has('whp-2023'), true);
+      assert.deepEqual([visibility.get('usfs-whp'), visibility.get('whp-2023')], ['none', 'visible']);
+      assert.equal(mounted.at(-1), true);
+
+      // Only the scene teardown gives the flat layer back.
+      deactivateWhpDrape(map);
+      assert.equal(visibility.get('usfs-whp'), 'visible');
+      assert.equal(mounted.at(-1), false);
+    } finally {
+      scene.abort(); registry.deactivate('usfs-whp-classes'); deactivateWhpDrape(map); setFire3DGroundLayer('fuelRisk', true);
+    }
+  });
+});
