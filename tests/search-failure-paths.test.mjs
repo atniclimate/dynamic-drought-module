@@ -180,8 +180,20 @@ test('a city chosen during the lazy import wins: the earlier locate commits noth
   wiring.onSelect({ kind: 'city', id: 'Seattle', label: 'Seattle', haystack: 'seattle' });
   S.held.at(-1)();
   for (let i = 0; i < 20; i += 1) await flush();
-  assert.equal(S.selections.length, 0, 'no stale selection');
+  assert.deepEqual(S.selections, [null], 'the city clears the selection and nothing stale follows');
   assert.equal(S.highlights.length, 0, 'no stale highlight');
+});
+
+test('a city pick clears an earlier place selection and sets none of its own', async () => {
+  answers.set(LAR_URL, () => json(fc));
+  S.selections.length = 0;
+  const heldBefore = S.held.length;
+  wiring.onSelect(tribalItem);
+  await waitFor(() => S.held.length > heldBefore);
+  S.held.at(-1)();
+  await waitFor(() => S.selections.length === 1);
+  wiring.onSelect({ kind: 'city', id: 'Seattle', label: 'Seattle', haystack: 'seattle' });
+  assert.deepEqual(S.selections.slice(1), [null], 'the old place no longer reads as current');
 });
 
 test('a census: result locates against the Census service; an HTTP 200 error envelope is unavailable', async () => {

@@ -687,7 +687,6 @@ function renderPointHeat(
         <span class="point-heat-pill point-heat-pill-${pointHeat.status}">${escapeHtml(SOURCE_PILL_TEXT[pointHeat.status])}</span>
       </div>
       <p class="point-heat-scope">Values describe this coordinate and nearby station, not the complete selected boundary or jurisdiction.</p>
-      ${pointHeat.note ? `<p class="impact-horizon-note">${escapeHtml(pointHeat.note)}</p>` : ''}
       <div class="point-heat-grid">
         <section class="point-heat-card" aria-label="Observed nearby">
           <h5>Observed nearby</h5>

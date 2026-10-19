@@ -14,7 +14,7 @@
  *            frames it, lights it, and opens its briefing (locateBoundary).
  *   - place  a state; opens its drought briefing (openStateBriefing).
  *   - city   a major city from the shipped Natural Earth points; moves the
- *            camera (no briefing, no layer change).
+ *            camera and clears the selected place (no briefing, no layer change).
  *   - layer  a catalog layer; turns it on through the shared toggle command
  *            (which syncs the checkbox and respects surface exclusivity,
  *            exactly like a catalog toggle; no layer co-activates a partner
@@ -411,6 +411,8 @@ function selectResult(map: maplibregl.Map, item: SearchItem): void {
     nextBriefingIntent();
     locateAbort?.abort();
     locateAbort = null;
+    // The earlier place no longer describes the view; a city is not a place, so none is set.
+    setPlaceSelection(null);
     const center = cityCoords.get(item.id);
     if (center) map.easeTo({ center, zoom: Math.max(map.getZoom(), 8) });
     return;
