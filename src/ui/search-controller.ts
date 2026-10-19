@@ -102,10 +102,14 @@ const MAJOR_CITY_MAX_RANK = 4;
 /** Coordinates of the major-city items, keyed by item id (the city name). */
 const cityCoords = new Map<string, [number, number]>();
 
+let cityCache: SearchItem[] | null = null;
+let cityInFlight: Promise<SearchItem[]> | null = null;
+
 /** Major cities from the shipped Natural Earth points (us-places.json). */
 async function loadCityItems(): Promise<SearchItem[]> {
   const json = await fetchJsonWithBudget(URLS.usPlacesLocal, null, null, LOCATE_TIMEOUT_MS);
-  const places = isObject(json) && Array.isArray(json['places']) ? json['places'] : [];
+  const places = isObject(json) ? json['places'] : undefined;
+  if (!Array.isArray(places)) throw new Error('City index payload has no places list');
   const items: SearchItem[] = [];
   const seen = new Set<string>();
   for (const p of places) {
@@ -122,28 +126,41 @@ async function loadCityItems(): Promise<SearchItem[]> {
 }
 
 /**
+ * Lazy-load the major cities (once, cached on success). REJECTS on a failed
+ * or malformed index so the component shows the city group as unavailable and
+ * a later search retries; a failure is never cached as an empty result.
+ */
+function loadCities(): Promise<SearchItem[]> {
+  if (cityCache) return Promise.resolve(cityCache);
+  if (cityInFlight) return cityInFlight;
+  cityInFlight = loadCityItems()
+    .then((items) => (cityCache = items))
+    .catch((err: unknown) => {
+      console.warn('[search] City list load failed.', err);
+      throw err instanceof Error ? err : new Error(String(err));
+    })
+    .finally(() => {
+      cityInFlight = null;
+    });
+  return cityInFlight;
+}
+
+/**
  * Lazy-load the NAMES-ONLY Tribal land-area index (once, cached) from the
  * shared roster module (src/state/tribal-roster.ts, which owns the
  * D-0.7.0-026 structural provenance gate): the AIAN-LAR land areas, then the
- * Census areas for Tribes LAR cannot locate, then the major cities. REJECTS
- * on a roster failure (invariant 6: a failed load must surface as
- * "unavailable", never masquerade as an empty result); the component renders
- * the honest unavailable line and a later attempt can retry. A city failure
- * only drops the cities.
+ * Census areas for Tribes LAR cannot locate. REJECTS on a roster failure
+ * (invariant 6: a failed load must surface as "unavailable", never masquerade
+ * as an empty result); the component renders the honest unavailable line and
+ * a later attempt can retry. Cities load separately (loadCities), so a slow or
+ * failed city index never delays or drops the Tribal results.
  */
 function loadTribal(): Promise<SearchItem[]> {
   if (tribalCache) return Promise.resolve(tribalCache);
   if (tribalInFlight) return tribalInFlight;
   tribalInFlight = (async () => {
     try {
-      const [areas, census, cities] = await Promise.all([
-        loadTribalRoster(),
-        loadTribalCensusAreas(),
-        loadCityItems().catch((err: unknown) => {
-          console.warn('[search] City list load failed.', err);
-          return [] as SearchItem[];
-        })
-      ]);
+      const [areas, census] = await Promise.all([loadTribalRoster(), loadTribalCensusAreas()]);
       const censusItems: SearchItem[] = census.map((a) => {
         const label = gatedCensusName(a);
         return {
@@ -168,7 +185,7 @@ function loadTribal(): Promise<SearchItem[]> {
           ...(label !== a.larName ? { sublabel: `Land area: ${a.larName}` } : {})
         };
       });
-      tribalCache = [...items, ...censusItems, ...cities];
+      tribalCache = [...items, ...censusItems];
       return tribalCache;
     } catch (err) {
       console.warn('[search] Tribal roster load failed.', err);
@@ -294,6 +311,8 @@ async function locateBoundary(map: maplibregl.Map, spec: LocateSpec): Promise<vo
         () => bboxCenter(bbox)
       )
     : { lng: 0, lat: 0 };
+  // A newer selection during the lazy import wins: commit nothing stale.
+  if (abort.signal.aborted || !isCurrentBriefingIntent(intent)) return;
   // ORDER MATTERS: the located-boundary module clears its highlight on
   // EVERY selection change (the stage-5 major 4 fix), so the selection is
   // set first and the highlight for THIS subject renders after; any prior
@@ -395,6 +414,7 @@ function selectResult(map: maplibregl.Map, item: SearchItem): void {
 export interface SearchWiring {
   items: SearchItem[];
   loadTribal?: () => Promise<SearchItem[]>;
+  loadCities?: () => Promise<SearchItem[]>;
   onSelect: (item: SearchItem) => void;
   placeholder: string;
 }
@@ -411,9 +431,11 @@ export function buildSearchWiring(
 ): SearchWiring {
   const permittedKinds = options ? new Set(options.permittedKinds) : null;
   const permitsTribal = permittedKinds?.has('tribal') ?? true;
+  const permitsCity = permittedKinds?.has('city') ?? true;
   return {
     items: buildSyncItems(permittedKinds),
     ...(permitsTribal ? { loadTribal } : {}),
+    ...(permitsCity ? { loadCities } : {}),
     onSelect: (item) => {
       if (!permittedKinds || permittedKinds.has(item.kind)) selectResult(map, item);
     },

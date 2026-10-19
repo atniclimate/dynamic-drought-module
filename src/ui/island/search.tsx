@@ -58,8 +58,10 @@ export interface SearchItem {
 export interface SearchProps {
   /** Items available synchronously (Places + Layers). */
   items: SearchItem[];
-  /** Optional lazy loader for Tribal land areas and cities, called once on first focus or first keystroke. */
+  /** Optional lazy loader for Tribal land areas, called once on first focus or first keystroke. */
   loadTribal?: () => Promise<SearchItem[]>;
+  /** Optional lazy loader for cities, loaded and failing independently of the Tribal list. */
+  loadCities?: () => Promise<SearchItem[]>;
   /** Called when the user chooses a result (click or Enter). */
   onSelect: (item: SearchItem) => void;
   /** Input placeholder + accessible label, e.g. "Search Tribes, states, cities, and layers". */
@@ -117,6 +119,45 @@ interface FlatRow {
   kind: SearchItem['kind'];
 }
 
+interface LazyItems {
+  items: SearchItem[];
+  pending: boolean;
+  failed: boolean;
+  start: () => void;
+}
+
+/**
+ * One lazy item source. Started on first focus OR first keystroke, whichever
+ * comes first (the ref guard makes the second caller a no-op). The loader
+ * REJECTS on failure (invariant 6): the failure renders as an honest
+ * "unavailable" line, never as a fake empty result, and the guard resets so a
+ * later focus or keystroke retries.
+ */
+function useLazyItems(load: (() => Promise<SearchItem[]>) | undefined): LazyItems {
+  const [items, setItems] = useState<SearchItem[]>([]);
+  const [pending, setPending] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const started = useRef(false);
+  const start = (): void => {
+    if (!load || started.current) return;
+    started.current = true;
+    setPending(true);
+    setFailed(false);
+    load()
+      .then((loaded) => {
+        setItems(loaded);
+        setPending(false);
+      })
+      .catch(() => {
+        setItems([]);
+        setPending(false);
+        setFailed(true);
+        started.current = false;
+      });
+  };
+  return { items, pending, failed, start };
+}
+
 export function Search(props: SearchProps): preact.JSX.Element {
   const [query, setQuery] = useState('');
   // The keyboard highlight is keyed by the ITEM (kind + id), never by list
@@ -125,38 +166,17 @@ export function Search(props: SearchProps): preact.JSX.Element {
   // unrelated row when the roster lands (the U3 stage-5 minor 8 fix). If the
   // highlighted item leaves the list, the highlight collapses to none.
   const [highlightedKey, setHighlightedKey] = useState<string | null>(null);
-  const [tribalItems, setTribalItems] = useState<SearchItem[]>([]);
-  const [tribalPending, setTribalPending] = useState(false);
-  const [tribalFailed, setTribalFailed] = useState(false);
-  const tribalStarted = useRef(false);
+  const tribal = useLazyItems(props.loadTribal);
+  const cities = useLazyItems(props.loadCities);
+  const { items: tribalItems, pending: tribalPending, failed: tribalFailed } = tribal;
   // A per-instance id prefix so multiple mounts (the console catalog, the Brief
   // head, the mobile sheet) never collide on element ids (invalid HTML that
   // would break the aria-controls / aria-activedescendant references).
   const uid = useId();
   const tribalEnabled = props.loadTribal !== undefined;
-
-  // Called once on first focus OR first keystroke, whichever comes first
-  // (the ref guard makes the second caller a no-op). loadTribal REJECTS on
-  // failure (invariant 6): the failure renders as an honest "unavailable"
-  // line, never as a fake empty result, and the guard resets so a later
-  // keystroke retries.
-  const startTribalLoad = (): void => {
-    const loadTribal = props.loadTribal;
-    if (!loadTribal || tribalStarted.current) return;
-    tribalStarted.current = true;
-    setTribalPending(true);
-    setTribalFailed(false);
-    loadTribal()
-      .then((loaded) => {
-        setTribalItems(loaded);
-        setTribalPending(false);
-      })
-      .catch(() => {
-        setTribalItems([]);
-        setTribalPending(false);
-        setTribalFailed(true);
-        tribalStarted.current = false;
-      });
+  const startLazyLoads = (): void => {
+    tribal.start();
+    cities.start();
   };
 
   const rawTrimmed = query.trim();
@@ -175,7 +195,7 @@ export function Search(props: SearchProps): preact.JSX.Element {
   const placeMatches = matchesOf('place', props.items);
   const layerMatches = matchesOf('layer', props.items);
   const tribalMatches = matchesOf('tribal', tribalItems);
-  const cityMatches = matchesOf('city', tribalItems);
+  const cityMatches = matchesOf('city', cities.items);
 
   const groups: Record<SearchItem['kind'], GroupResult> = {
     tribal: buildGroup('tribal', tribalMatches),
@@ -194,9 +214,15 @@ export function Search(props: SearchProps): preact.JSX.Element {
     tribalEnabled &&
     !isEmptyQuery &&
     (tribalPending || tribalFailed || tribalGroup.visible.length > 0);
-  const groupsForRender = GROUP_ORDER.map((kind) => groups[kind]).filter((g) =>
-    g.kind === 'tribal' ? showTribalGroup : g.visible.length > 0
-  );
+  // The city group also shows its own unavailable line after a failed load.
+  const showCityGroup = !isEmptyQuery && (cities.failed || groups.city.visible.length > 0);
+  const showGroup = (kind: SearchItem['kind']): boolean =>
+    kind === 'tribal'
+      ? showTribalGroup
+      : kind === 'city'
+        ? showCityGroup
+        : groups[kind].visible.length > 0;
+  const groupsForRender = GROUP_ORDER.map((kind) => groups[kind]).filter((g) => showGroup(g.kind));
 
   // Flat, ordered, ID-stamped list for keyboard nav and aria-activedescendant.
   // The DOM ids are position-based within a render (they only name the
@@ -206,7 +232,7 @@ export function Search(props: SearchProps): preact.JSX.Element {
   let flatIdx = 0;
   const flatRows: FlatRow[] = [];
   for (const kind of GROUP_ORDER) {
-    if (kind === 'tribal' && !showTribalGroup) continue;
+    if (!showGroup(kind)) continue;
     for (const item of groups[kind].visible) {
       flatRows.push({ item, id: `${uid}-opt-${flatIdx}`, kind });
       flatIdx += 1;
@@ -228,7 +254,7 @@ export function Search(props: SearchProps): preact.JSX.Element {
   // The zero-match line only appears once the Tribal load has settled
   // (design-lens: written before ship, plain-language, never blaming the
   // user, since Tribal Nation names often will not match agency spellings).
-  const showZeroMatch = !isEmptyQuery && noGroupsShown && !tribalPending;
+  const showZeroMatch = !isEmptyQuery && noGroupsShown && !tribalPending && !cities.pending;
 
   const liveText = isEmptyQuery
     ? ''
@@ -236,9 +262,13 @@ export function Search(props: SearchProps): preact.JSX.Element {
       ? 'Loading Tribal land areas.'
       : tribalFailed && totalMatches === 0
         ? 'Tribal land area search is unavailable right now.'
-        : totalMatches === 0
-          ? `No matches for "${rawTrimmed}".`
-          : `${totalMatches} result${totalMatches === 1 ? '' : 's'}.`;
+        : cities.pending && totalMatches === 0
+          ? 'Loading cities.'
+          : cities.failed && totalMatches === 0
+            ? 'City search is unavailable right now.'
+            : totalMatches === 0
+              ? `No matches for "${rawTrimmed}".`
+              : `${totalMatches} result${totalMatches === 1 ? '' : 's'}.`;
 
   const selectItem = (item: SearchItem): void => {
     props.onSelect(item);
@@ -253,11 +283,11 @@ export function Search(props: SearchProps): preact.JSX.Element {
     const value = (event.currentTarget as HTMLInputElement).value;
     setQuery(value);
     setHighlightedKey(null);
-    startTribalLoad();
+    startLazyLoads();
   };
 
   const onFocus = (): void => {
-    startTribalLoad();
+    startLazyLoads();
   };
 
   // Arrow keys clamp at the list boundaries; they do not wrap. From "no
@@ -312,6 +342,9 @@ export function Search(props: SearchProps): preact.JSX.Element {
           <p class="ddm-search-unavailable">
             Tribal land area search is unavailable right now. States and layers still work.
           </p>
+        ) : null}
+        {group.kind === 'city' && cities.failed ? (
+          <p class="ddm-search-unavailable">City search is unavailable right now.</p>
         ) : null}
         {rows.map((row) => {
           const isActive = activeRow?.id === row.id;
