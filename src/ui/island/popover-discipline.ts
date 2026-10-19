@@ -1,7 +1,6 @@
 /**
- * Shared discipline for the shell's S4 popovers (the "More time" detail
- * and the compact "Map areas" minimap; the S4c focus-restoration
- * contract, applied uniformly so the two popovers cannot disagree):
+ * Shared discipline for the shell's compact "Map areas" minimap popover
+ * (the S4c focus-restoration contract):
  *
  *   - FOCUS: opening moves focus to the first operable control inside
  *     the card; closing restores focus to the door that opened it, or to

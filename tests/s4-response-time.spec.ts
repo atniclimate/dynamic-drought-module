@@ -3,8 +3,7 @@ import { gotoApp, waitForLayerSettled } from './helpers';
 
 /**
  * S4c: the panel-foot response (the coordinator's swappable sink) and
- * the compact/detail temporal adapters (the TimeBarSpec facade + the
- * "More time" popover), including the focus-restoration contract.
+ * the compact temporal adapter (the TimeBarSpec facade).
  *
  * The response cases drive the two live Tribal-geography layers against
  * the synthetic route fixtures, exactly as the coordinator suite does:
@@ -102,7 +101,7 @@ test.describe('S4c time-bar desktop seat (DG-080 review finding 4)', () => {
 });
 
 test.describe('S4c compact/detail temporal adapters', () => {
-  test('the compact WHEN row mirrors the installed spec; More time opens the detail; Escape restores focus', async ({
+  test('the compact WHEN row mirrors the installed spec and carries no time door', async ({
     page
   }) => {
     await stubUsdmTimeSurface(page);
@@ -119,27 +118,8 @@ test.describe('S4c compact/detail temporal adapters', () => {
     // owns the WHEN band); the embed date chip contract is untouched.
     await expect(page.locator('#time-bar')).toBeHidden();
 
-    const more = page.locator('#shell-time-more');
-    // W2-D9: the More time door is a disclosure and reports its state.
-    await expect(more).toHaveAttribute('aria-expanded', 'false');
-    await more.click();
-    const popover = page.locator('#shell-time-popover');
-    await expect(popover).toBeVisible();
-    await expect(more).toHaveAttribute('aria-expanded', 'true');
-    // The detail renders from the same spec: the USDM stepped rail (an
-    // authored product: a discrete rail, never a Play control).
-    await expect(popover.locator('.shell-time-detail')).toBeVisible();
-    await expect(popover.locator('.shell-time-detail-headline')).toBeVisible();
-    await expect(popover.locator('.shell-time-detail-headline')).toHaveCSS('font-family', /^"?DDM Heros"?,/);
-    await expect(popover.locator('.shell-time-detail-headline')).toHaveCSS('font-variant-numeric', /^(?:lining-nums tabular-nums|tabular-nums lining-nums)$/);
-    await expect(popover.locator('.time-bar-rail')).toHaveCount(1);
-    await expect(popover.locator('.time-bar-play')).toHaveCount(0);
-
-    // Focus restoration: Escape closes the popover and returns focus to
-    // the door that opened it.
-    await page.keyboard.press('Escape');
-    await expect(popover).toBeHidden();
-    await expect(more).toBeFocused();
-    await expect(more).toHaveAttribute('aria-expanded', 'false');
+    // The WHEN row is a read-only date statement: no time door, no popover.
+    await expect(page.locator('#shell-time-more')).toHaveCount(0);
+    await expect(page.locator('#shell-time-popover')).toHaveCount(0);
   });
 });

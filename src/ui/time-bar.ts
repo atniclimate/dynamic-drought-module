@@ -154,9 +154,9 @@ let currentSpec: TimeBarSpec | null = null;
 
 /**
  * The compact/detail spec facade (S4c; the S4 design record section 3).
- * The shell's compact WHEN row and the "More time" popover render FROM
- * the same spec the owning surface installed, so the two surfaces can
- * never disagree about the product date or its capabilities. Listeners
+ * The shell's compact WHEN row renders FROM the same spec the owning
+ * surface installed, so it and the bar can never disagree about the
+ * product date or its capabilities. Listeners
  * fire after every install or clear (owners re-install on each temporal
  * change, so a subscriber sees every date step). Read-only: consumers
  * drive changes only through the spec's own callbacks.
