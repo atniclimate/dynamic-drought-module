@@ -49,6 +49,7 @@ import { URLS } from '../config/urls';
 import { renderSstAnomalyLegend } from '../ui/sst-anomaly-legend';
 import { registry } from '../state/registry';
 import { timeline } from '../state/timeline';
+import { onViewModeChange } from '../state/view-mode';
 import { fetchBufferedWithBudget, sleepUnlessAborted } from '../util/fetch';
 import { prefersReducedMotion } from '../util/motion';
 import { prefetchAllowed, crossfadeFrames, FRAME_FADE_MS } from '../util/frame-stepper';
@@ -158,6 +159,8 @@ const frameWatches = new Map<string, RasterTileWatch>();
 const frameVerdicts = new Map<string, RasterTileOutcome>();
 let playing = false;
 let playEpoch = 0;
+/** Unsubscribes the active surface's view-mode listener (the Brief pause). */
+let viewModeOff: (() => void) | null = null;
 let buffering = false;
 /** Supersede counter (invariant 5). */
 let stepEpoch = 0;
@@ -643,6 +646,11 @@ export async function activate(map: maplibregl.Map): Promise<void> {
 
   playing = false;
   playEpoch++;
+  // Desktop Brief hides the time bar and its Pause, so entering Brief pauses the loop (WCAG 2.2.2).
+  viewModeOff?.();
+  viewModeOff = onViewModeChange((mode) => {
+    if (mode === 'brief' && playing) togglePlay(map);
+  });
   if (masterController) masterController.abort();
   masterController = new AbortController();
   const signal = masterController.signal;
@@ -896,6 +904,8 @@ export function cancelActivation(): void {
  */
 export function deactivate(map: maplibregl.Map): void {
   deactivateEnsoFlow();
+  viewModeOff?.();
+  viewModeOff = null;
   playing = false;
   playEpoch++;
   buffering = false;

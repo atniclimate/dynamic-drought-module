@@ -438,6 +438,32 @@ test('pause/resume and manual stepping retire the old playback loop', async (t) 
   });
 });
 
+test('switching to Brief stops playback, since desktop Brief hides the time bar and its Pause', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const { setViewMode } = await import('../src/state/view-mode.ts');
+  setViewMode('console');
+  try {
+    await withSst({ answer: () => domainsOk() }, async ({ map }) => {
+      map.isSourceLoaded = () => true;
+      await mod.activate(map);
+      proveLatestFrame(map);
+      timeBars.get(KEY).play.onToggle();
+      await settle();
+      assert.equal(timeBars.get(KEY).play.playing, true);
+      setViewMode('brief');
+      assert.equal(timeBars.get(KEY).play.playing, false, 'the bar reads paused after the switch');
+      const index = timeBars.get(KEY).rail.index;
+      t.mock.timers.tick(900);
+      await settle();
+      t.mock.timers.tick(900);
+      await settle();
+      assert.equal(timeBars.get(KEY).rail.index, index, 'the loop no longer advances');
+    });
+  } finally {
+    setViewMode('brief');
+  }
+});
+
 test('a plain boot stays loading while DescribeDomains is held, even with the latest frame proven, and reads live once the axis answers (M1: the frame proof precedes ready)', async () => {
   const domains = gate();
   await withSst({ answer: async () => (await domains.held, domainsOk()) }, async ({ map, log }) => {
