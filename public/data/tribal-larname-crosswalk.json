@@ -12,7 +12,7 @@
     "larLabelCount": 77,
     "censusSource": "US Census Bureau TIGERweb AIANNH layer 47 (names only)",
     "censusAreaCount": 272,
-    "censusSafeMatchCount": 234
+    "censusSafeMatchCount": 232
   },
   "matched": [
     {
@@ -2484,12 +2484,6 @@
       "rule": "unique-containment"
     },
     {
-      "aiannh": "7340",
-      "name": "St. George ANVSA",
-      "tribe": "Pribilof Islands Aleut Communities of St. Paul & St. George Islands (St. George Island and Saint Paul Island)",
-      "rule": "unique-containment"
-    },
-    {
       "aiannh": "7560",
       "name": "Tazlina ANVSA",
       "tribe": "Native Village of Tazlina",
@@ -2709,12 +2703,6 @@
       "aiannh": "6385",
       "name": "Craig ANVSA",
       "tribe": "Craig Tribal Association",
-      "rule": "unique-containment"
-    },
-    {
-      "aiannh": "7725",
-      "name": "Venetie ANVSA",
-      "tribe": "Native Village of Venetie Tribal Government (Arctic Village and Village of Venetie)",
       "rule": "unique-containment"
     },
     {
@@ -3302,7 +3290,9 @@
     "Eastern Chickahominy TDSA",
     "Uyak ANVSA",
     "Dillingham ANVSA",
-    "White Mountain ANVSA"
+    "White Mountain ANVSA",
+    "St. George ANVSA",
+    "Venetie ANVSA"
   ],
   "censusAmbiguous": [
     {
@@ -3439,6 +3429,22 @@
         "White Mountain Apache Tribe of the Fort Apache Reservation, Arizona",
         "Native Village of White Mountain"
       ]
+    },
+    {
+      "aiannh": "7340",
+      "name": "St. George ANVSA",
+      "candidates": [
+        "Pribilof Islands Aleut Communities of St. Paul & St. George Islands (St. George Island and Saint Paul Island)"
+      ],
+      "rule": "known-ambiguous (maintainer-curated, D-0.7.0-026a)"
+    },
+    {
+      "aiannh": "7725",
+      "name": "Venetie ANVSA",
+      "candidates": [
+        "Native Village of Venetie Tribal Government (Arctic Village and Village of Venetie)"
+      ],
+      "rule": "known-ambiguous (maintainer-curated, D-0.7.0-026a)"
     }
   ]
 }

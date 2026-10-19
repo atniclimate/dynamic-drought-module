@@ -12,7 +12,7 @@
     "larLabelCount": 77,
     "censusSource": "US Census Bureau TIGERweb AIANNH layer 47 (names only)",
     "censusAreaCount": 272,
-    "censusSafeMatchCount": 234
+    "censusSafeMatchCount": 232
   },
   "areas": [
     {
@@ -2743,12 +2743,6 @@
       "provenance": "safe-match"
     },
     {
-      "aiannh": "7725",
-      "name": "Venetie ANVSA",
-      "displayName": "Native Village of Venetie Tribal Government (Arctic Village and Village of Venetie)",
-      "provenance": "safe-match"
-    },
-    {
       "aiannh": "7740",
       "name": "Wales ANVSA",
       "displayName": "Native Village of Wales",
@@ -2953,12 +2947,6 @@
       "provenance": "safe-match"
     },
     {
-      "aiannh": "7340",
-      "name": "St. George ANVSA",
-      "displayName": "Pribilof Islands Aleut Communities of St. Paul & St. George Islands (St. George Island and Saint Paul Island)",
-      "provenance": "safe-match"
-    },
-    {
       "aiannh": "7410",
       "name": "Sand Point ANVSA",
       "displayName": "Qagan Tayagungin Tribe of Sand Point",
@@ -3079,6 +3067,12 @@
       "provenance": "safe-match"
     },
     {
+      "aiannh": "7340",
+      "name": "St. George ANVSA",
+      "displayName": "St. George ANVSA",
+      "provenance": "census-label"
+    },
+    {
       "aiannh": "7375",
       "name": "St. Michael ANVSA",
       "displayName": "St. Michael ANVSA",
@@ -3178,6 +3172,12 @@
       "aiannh": "7705",
       "name": "Uyak ANVSA",
       "displayName": "Uyak ANVSA",
+      "provenance": "census-label"
+    },
+    {
+      "aiannh": "7725",
+      "name": "Venetie ANVSA",
+      "displayName": "Venetie ANVSA",
       "provenance": "census-label"
     },
     {

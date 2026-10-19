@@ -1,14 +1,17 @@
 import assert from 'node:assert/strict';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { registerHooks } from 'node:module';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
+import { foldSearchText, matchesTokens, prefixFirst } from '../src/util/search-fold.ts';
+
 /**
  * The search controller's failure paths (the 2026-10-19 live-review block,
  * findings 6 and 8), run against the REAL src/ui/search-controller.ts and the
- * REAL body-bounded fetch helper, with only `fetch` and the controller's
- * map, panel and roster neighbours replaced by in-memory stand-ins.
+ * REAL body-bounded fetch helper and the REAL roster module reading the
+ * bundled public/data/tribal-roster.json, with only `fetch` and the
+ * controller's map and panel neighbours replaced by in-memory stand-ins.
  *
  *   6. A failed or malformed city index is a failure, never a cached empty
  *      success: the city loader rejects, a later call retries, and the Tribal
@@ -22,6 +25,7 @@ const S = (globalThis.__sfp = {
   selections: [],
   highlights: [],
   held: [],
+  toasts: [],
   lazyLoads: 0
 });
 
@@ -42,16 +46,12 @@ const STUBS = {
   '../state/place-selection':
     'export const onPlaceSelectionChange = () => () => {};' +
     ' export const setPlaceSelection = (s) => globalThis.__sfp.selections.push(s);',
-  '../state/tribal-roster':
-    'export const loadTribalRoster = async () => [{ larName: "Alpha Land Area" }];' +
-    ' export const loadTribalCensusAreas = async () => [];' +
-    ' export const gatedDisplayName = (a) => a.larName; export const gatedCensusName = (a) => a.name;',
   './mobile-sheet': 'export const isSheetActive = () => false;',
   './layer-toggle-command': 'export const requestLayerOn = () => {};',
   './impact-panel':
     'let n = 0; export const nextBriefingIntent = () => ++n;' +
     ' export const isCurrentBriefingIntent = (i) => i === n; export const openImpactPanel = () => {};',
-  './overlay': 'export const showToast = () => {};',
+  './overlay': 'export const showToast = (t) => globalThis.__sfp.toasts.push(t);',
   './island/search': 'export const Search = () => null;'
 };
 const HELD_PIP =
@@ -80,9 +80,11 @@ registerHooks({
 /** Per-URL answers: a function returning a Response (or a never-settling promise). */
 const answers = new Map();
 const fetchCalls = [];
+const fetchUrls = [];
 globalThis.fetch = async (url, init) => {
   const key = String(url).split('?')[0];
   fetchCalls.push(key);
+  fetchUrls.push(String(url));
   const answer = answers.get(key);
   if (!answer) throw new TypeError(`no stub for ${key}`);
   return answer(init);
@@ -91,11 +93,16 @@ const json = (body, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 const CITY_URL = 'https://stub.test/us-places.json';
 const LAR_URL = 'https://stub.test/lar/query';
+const CENSUS_URL = 'https://stub.test/census/47/query';
 const flush = () => new Promise((r) => setTimeout(r, 0));
 async function waitFor(predicate) {
   for (let i = 0; i < 200 && !predicate(); i += 1) await flush();
   assert.ok(predicate(), 'condition reached');
 }
+
+// The roster module's same-origin URL outside Vite (src/state/tribal-roster.ts ROSTER_URL).
+const ROSTER = readFileSync(new URL('../public/data/tribal-roster.json', import.meta.url));
+answers.set('/dynamic-drought-module/data/tribal-roster.json', () => new Response(ROSTER, { status: 200 }));
 
 const map = { fitBounds() {}, easeTo() {}, getZoom: () => 3 };
 const { buildSearchWiring } = await import('../src/ui/search-controller.ts');
@@ -174,4 +181,75 @@ test('a city chosen during the lazy import wins: the earlier locate commits noth
   for (let i = 0; i < 20; i += 1) await flush();
   assert.equal(S.selections.length, 0, 'no stale selection');
   assert.equal(S.highlights.length, 0, 'no stale highlight');
+});
+
+test('a census: result locates against the Census service; an HTTP 200 error envelope is unavailable', async () => {
+  const censusItem = {
+    kind: 'tribal',
+    id: 'census:5620',
+    label: 'The Muscogee (Creek) Nation',
+    haystack: 'muscogee'
+  };
+  answers.set(CENSUS_URL, () => json(fc));
+  S.selections.length = 0;
+  S.highlights.length = 0;
+  const callsBefore = fetchCalls.length;
+  const heldBefore = S.held.length;
+  wiring.onSelect(censusItem);
+  await waitFor(() => S.held.length > heldBefore);
+  S.held.at(-1)();
+  await waitFor(() => S.highlights.length === 1);
+  const sent = fetchUrls.slice(callsBefore);
+  assert.equal(sent.length, 1, 'one boundary query');
+  assert.equal(sent[0].split('?')[0], CENSUS_URL, 'routed to the Census service');
+  assert.equal(new URL(sent[0]).searchParams.get('where'), "AIANNH='5620'");
+  assert.ok(!fetchCalls.slice(callsBefore).includes(LAR_URL), 'the BIA LAR service is never asked');
+  assert.equal(S.selections.length, 1);
+
+  answers.set(CENSUS_URL, () => json({ error: { code: 400, message: 'Invalid query' } }));
+  S.selections.length = 0;
+  S.highlights.length = 0;
+  S.toasts.length = 0;
+  wiring.onSelect(censusItem);
+  await waitFor(() => S.toasts.length === 1);
+  assert.match(S.toasts[0], /^Could not reach/, 'an error envelope reads as unavailable, not as no boundary');
+  assert.equal(S.selections.length, 0, 'no selection from an error envelope');
+  assert.equal(S.highlights.length, 0);
+});
+
+test('a formal Oklahoma Nation name lists its Census area first, never a land area in another state', async () => {
+  // The real loadTribal items (haystacks included), filtered and ranked as search.tsx
+  // does (tribal-census-search.test.mjs pins the filter line there).
+  const items = (await wiring.loadTribal()).filter((i) => i.kind === 'tribal');
+  const hits = (q) => {
+    const folded = foldSearchText(q);
+    const tokens = folded.split(' ');
+    return prefixFirst(
+      items.filter((i) => matchesTokens(i.haystack, tokens, i.id.startsWith('census:'))),
+      folded
+    );
+  };
+  const census = JSON.parse(String(ROSTER)).censusAreas;
+  const code = (name) => census.find((a) => a.name === name).aiannh;
+  const kickapoo = hits('Kickapoo Tribe of Oklahoma');
+  assert.equal(kickapoo[0]?.id, `census:${code('Kickapoo OTSA')}`);
+  assert.ok(!kickapoo.some((i) => i.label.startsWith('Kickapoo Traditional')), 'the Texas Tribe is not listed');
+  const choctaw = hits('Choctaw Nation of Oklahoma');
+  assert.equal(choctaw[0]?.id, `census:${code('Choctaw OTSA')}`);
+  assert.ok(!choctaw.some((i) => i.label.includes('Jena Band')), 'the Louisiana Band is not listed');
+  assert.equal(hits('Sac and Fox Nation')[0]?.id, `census:${code('Sac and Fox OTSA')}`);
+  assert.equal(hits('Iowa Tribe of Oklahoma')[0]?.id, `census:${code('Iowa OTSA')}`);
+  assert.equal(hits('Cherokee Nation')[0]?.id, `census:${code('Cherokee OTSA')}`);
+
+  // Opening that row asks the Census service for the Kickapoo OTSA's AIANNH code.
+  answers.set(CENSUS_URL, () => json(fc));
+  const callsBefore = fetchUrls.length;
+  const heldBefore = S.held.length;
+  wiring.onSelect(kickapoo[0]);
+  await waitFor(() => S.held.length > heldBefore);
+  S.held.at(-1)();
+  await waitFor(() => fetchUrls.length > callsBefore);
+  const sent = fetchUrls.slice(callsBefore);
+  assert.equal(sent[0].split('?')[0], CENSUS_URL);
+  assert.equal(new URL(sent[0]).searchParams.get('where'), `AIANNH='${code('Kickapoo OTSA')}'`);
 });

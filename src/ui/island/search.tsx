@@ -21,9 +21,11 @@
  * Matching: every whitespace-separated token of the normalized query
  * must appear in an item's `haystack` (AND, substring, case-insensitive,
  * diacritic-insensitive on the query side; the caller is trusted to have
- * normalized `haystack` the same way). The one rank: within a group,
+ * normalized `haystack` the same way; a Census area row may skip a generic word
+ * such as "Nation", see matchesTokens). The one rank: within a group,
  * labels that start with the query come first (prefixFirst), and Enter
- * with no highlight picks the first such row; no visible confidence
+ * with no highlight opens an exact or else the first such row, or only
+ * highlights the first row when none matches that way; no visible confidence
  * score. The main-shell instances keep the complete grouped vocabulary;
  * a specialized host may supply only the result kinds it can act on.
  *
@@ -45,7 +47,7 @@
 import type * as preact from 'preact';
 import { useId, useRef, useState } from 'preact/hooks';
 
-import { foldSearchText, prefixFirst } from '../../util/search-fold';
+import { enterChoice, foldSearchText, matchesTokens, prefixFirst } from '../../util/search-fold';
 
 export interface SearchItem {
   kind: 'place' | 'tribal' | 'city' | 'layer';
@@ -94,7 +96,8 @@ function tokenize(normalized: string): string[] {
 }
 
 function matchesAllTokens(item: SearchItem, tokens: string[]): boolean {
-  return tokens.every((t) => item.haystack.includes(t));
+  // Only Census rows relax: a land-area row skipping "Oklahoma" would match another state's Nation.
+  return matchesTokens(item.haystack, tokens, item.kind === 'tribal' && item.id.startsWith('census:'));
 }
 
 interface GroupResult {
@@ -314,12 +317,17 @@ export function Search(props: SearchProps): preact.JSX.Element {
       if (flatRows.length === 0) return;
       event.preventDefault();
       // With the Tribal group first, a typed state or city name still wins
-      // Enter over a Tribe whose name merely contains it.
+      // Enter over a Tribe whose name merely starts with it. With no exact or
+      // prefix row, Enter highlights the first row instead of opening it: it
+      // may be another Nation's area, and a second Enter opens what is seen.
       const chosen =
-        activeRow ??
-        flatRows.find((r) => foldSearchText(r.item.label).startsWith(foldedQuery)) ??
-        flatRows[0];
-      if (chosen) selectItem(chosen.item);
+        activeRow?.item ??
+        enterChoice(
+          flatRows.map((r) => r.item),
+          foldedQuery
+        );
+      if (chosen) selectItem(chosen);
+      else setHighlightedKey(rowKey(flatRows[0]));
     } else if (event.key === 'Escape' && query) {
       // An empty box leaves Escape unhandled so the sheet and studio close on it.
       event.preventDefault();

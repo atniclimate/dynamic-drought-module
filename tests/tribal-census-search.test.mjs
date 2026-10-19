@@ -15,7 +15,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-import { prefixFirst } from '../src/util/search-fold.ts';
+import { enterChoice, foldSearchText, matchesTokens, prefixFirst } from '../src/util/search-fold.ts';
 
 const roster = JSON.parse(
   readFileSync(new URL('../public/data/tribal-roster.json', import.meta.url), 'utf8')
@@ -138,4 +138,69 @@ test('prefixFirst puts labels that start with the query first, stably', () => {
     ['Oregon', 'Oregon City', 'Confederated Tribes of Oregon', 'Burns Paiute Tribe, Oregon']
   );
   assert.deepEqual(prefixFirst(items, 'zzz').map((i) => i.label), items.map((i) => i.label));
+});
+
+test('Enter picks an exact label over an earlier Tribal row that only starts with it', () => {
+  // Rows in the search's group order: the Tribal group comes first.
+  const rows = [
+    { kind: 'tribal', label: 'Colorado River Indian Tribes of the Colorado River Indian Reservation, Arizona and California' },
+    { kind: 'place', label: 'Colorado' },
+    { kind: 'city', label: 'Colorado Springs' }
+  ];
+  assert.equal(enterChoice(rows, 'colorado')?.kind, 'place');
+  assert.equal(enterChoice(rows, 'colorado r')?.kind, 'tribal');
+  // No exact or prefix match: Enter opens nothing; the caller highlights the first row.
+  assert.equal(enterChoice(rows, 'springs'), undefined);
+  assert.equal(enterChoice([], 'colorado'), undefined);
+});
+
+test('Enter on a partly typed state skips an earlier Tribe whose name only contains it', () => {
+  // The Tribal group renders first and roster names end in "of Oregon".
+  const rows = [
+    { kind: 'tribal', label: 'Confederated Tribes of Siletz Indians of Oregon' },
+    { kind: 'tribal', label: 'Coquille Indian Tribe' },
+    { kind: 'place', label: 'Oregon' }
+  ];
+  assert.equal(enterChoice(rows, 'oregon')?.kind, 'place');
+  assert.equal(enterChoice(rows, 'oreg')?.kind, 'place');
+});
+
+test('Enter on a two-letter state code opens the state, not a Tribe whose name starts with it', () => {
+  // A state row's id is its code; its haystack carries the code on purpose.
+  const rows = [
+    { kind: 'tribal', id: 'Cahto Tribe', label: 'Cahto Tribe' },
+    { kind: 'place', id: 'CA', label: 'California' }
+  ];
+  assert.equal(enterChoice(rows, 'ca')?.kind, 'place');
+  assert.equal(enterChoice(rows, 'cah')?.kind, 'tribal');
+});
+
+test('a formal Nation name finds its Census area, whose label keeps the Census name', () => {
+  // The haystack search-controller builds for a census-label row: name plus the gated label.
+  const row = census.find((a) => a.name === 'Cherokee OTSA');
+  assert.equal(row.provenance, 'census-label');
+  const haystack = foldSearchText(`${row.name} ${row.displayName}`);
+  const tokens = (q) => foldSearchText(q).split(' ');
+  assert.ok(matchesTokens(haystack, tokens('Cherokee Nation'), true));
+  assert.ok(matchesTokens(haystack, tokens('Cherokee Nat'), true), 'no dead end while typing');
+  assert.ok(!matchesTokens(haystack, tokens('Cherokee Nation'), false), 'only Tribal rows relax');
+  assert.ok(!matchesTokens(haystack, tokens('Nation'), true), 'a generic word alone finds nothing new');
+  assert.ok(!matchesTokens(haystack, tokens('Cherokee Creek'), true));
+  // An OTSA's haystack carries "oklahoma" (search-controller loadTribal); "oklahoma" is never skipped.
+  const seminole = census.find((a) => a.name === 'Seminole OTSA');
+  assert.ok(matchesTokens(foldSearchText(`${seminole.name} oklahoma`), tokens('The Seminole Nation of Oklahoma'), true));
+  assert.ok(!matchesTokens(foldSearchText(seminole.name), tokens('Seminole Oklahoma'), true));
+  assert.ok(
+    !matchesTokens(foldSearchText('Kickapoo Traditional (Texas) Kickapoo Traditional Tribe of Texas'), tokens('Kickapoo Tribe of Oklahoma'), true),
+    'a same-named Nation in another state does not match'
+  );
+});
+
+test('the search view relaxes only Census rows and Enter goes through enterChoice', () => {
+  // The Oklahoma Nation cases run against the real loadTribal items in
+  // search-failure-paths.test.mjs; this pins the two search.tsx lines that case mirrors.
+  const searchSrc = readFileSync(new URL('../src/ui/island/search.tsx', import.meta.url), 'utf8');
+  assert.match(searchSrc, /matchesTokens\(item\.haystack, tokens, item\.kind === 'tribal' && item\.id\.startsWith\('census:'\)\)/);
+  // Not `activeRow ?? flatRows[0]`: that opened the Colorado River Indian Tribes on "Colorado".
+  assert.match(searchSrc, /activeRow\?\.item \?\?\s*enterChoice\(/);
 });

@@ -168,7 +168,8 @@ function loadTribal(): Promise<SearchItem[]> {
           id: `census:${a.aiannh}`,
           label,
           sublabel: `Census area: ${a.name}`,
-          haystack: norm(`${a.name} ${label}`)
+          // An OTSA is an Oklahoma Tribal Statistical Area: "of Oklahoma" finds it, never a same-named area elsewhere.
+          haystack: norm(`${a.name} ${label}${a.name.endsWith(' OTSA') ? ' oklahoma' : ''}`)
         };
       });
       const items: SearchItem[] = areas.map((a) => {

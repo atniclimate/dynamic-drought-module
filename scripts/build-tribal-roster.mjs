@@ -244,6 +244,26 @@ const KNOWN_AMBIGUOUS = new Map([
         'Ohkay Owingeh, New Mexico (previously listed as Pueblo of San Juan)'
       ]
     }
+  ],
+  // Census BASENAMEs (rule 7). Premise: the one Nation that names this
+  // community also names another with its own ANVSA (St. Paul; Arctic
+  // Village), so its formal name on this area alone would claim the whole
+  // Nation for one community. shortcut: listed by hand; a general rule (a
+  // roster name naming two or more places never takes one place's BASENAME)
+  // replaces these entries when a third case appears.
+  [
+    'st george',
+    {
+      candidates: [
+        'Pribilof Islands Aleut Communities of St. Paul & St. George Islands (St. George Island and Saint Paul Island)'
+      ]
+    }
+  ],
+  [
+    'venetie',
+    {
+      candidates: ['Native Village of Venetie Tribal Government (Arctic Village and Village of Venetie)']
+    }
   ]
 ]);
 
