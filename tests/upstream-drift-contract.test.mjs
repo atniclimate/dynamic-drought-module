@@ -13,6 +13,7 @@ import {
   EXPECTED_WORKER_REVISION,
   OUT_FIELDS_SENDERS_COVERED_ELSEWHERE,
   buildFieldProbeEntries,
+  check,
   checkFieldSchema,
   classifyDriftResults,
   extractOutFields,
@@ -295,6 +296,26 @@ test('checkFieldSchema turns a pjson body into a tripwire miss or a present note
   assert.match(checkFieldSchema(['DM'], '{"error":{"code":400,"message":"Invalid URL"}}').miss, /ArcGIS error 400/);
   assert.match(checkFieldSchema(['DM'], '<html>').miss, /not JSON/);
   assert.match(checkFieldSchema(['DM'], '{"name":"x"}').miss, /no fields array/);
+});
+
+test('the bounded NLCD coverage probe rejects HTTP 200 OGC exceptions and requires TIFF bytes', async () => {
+  const originalFetch = globalThis.fetch;
+  try {
+    for (const [body, type, expected] of [
+      ['<ows:ExceptionReport><ows:ExceptionText>Could not understand version:1.0.0</ows:ExceptionText></ows:ExceptionReport>', 'application/xml', false],
+      ['<ows:ExceptionReport/>', 'image/tiff', false],
+      ['II*\0fixture', 'image/tiff; application=geotiff', true],
+      ['MM\0+fixture', 'application/octet-stream', true],
+    ]) {
+      globalThis.fetch = async () => new Response(body, { status: 200, headers: { 'content-type': type } });
+      const result = await check({ key: 'landscapeNlcdPinnedTime', url: 'https://coverage.example.test/wcs' });
+      assert.equal(result.ok, expected, type);
+      assert.equal(result.tier, DRIFT_TIERS.BUILD);
+      if (!expected) assert.match(result.detail, /TRIPWIRE:.*did not return TIFF bytes/);
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test('every ArcGIS field probe names a runtime URLS key, an existing module, and resolves its field list', async () => {

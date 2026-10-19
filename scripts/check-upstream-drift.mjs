@@ -441,6 +441,18 @@ const CONTENT_TRIPWIRES = new Map([
     }
   ],
   [
+    'landscapeNlcdPinnedTime',
+    (body, response) => {
+      const type = response.headers.get('content-type') ?? '';
+      const rasterType = /^(?:image\/(?:tiff|geotiff)|application\/(?:octet-stream|geotiff))(?:;|$)/i.test(type);
+      const tiffHeader = ['II*\0', 'MM\0*', 'II+\0', 'MM\0+'].some((header) => body.startsWith(header));
+      if (!rasterType || !tiffHeader) {
+        return 'pinned Annual NLCD TIME=2024-01-01 did not return TIFF bytes (an HTTP 200 OGC exception is not coverage)';
+      }
+      return null;
+    }
+  ],
+  [
     'landscapeNlcdCollection',
     (body) => {
       const coverage =
@@ -733,7 +745,7 @@ function probeUrl(entry) {
   return url;
 }
 
-async function check(entry) {
+export async function check(entry) {
   const url = probeUrl(entry);
   const tier = entry.tier ?? sourceTierForKey(entry.key);
   const controller = new AbortController();
