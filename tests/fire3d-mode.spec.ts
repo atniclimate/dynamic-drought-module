@@ -51,7 +51,8 @@ import {
 } from '../src/state/fire3d-store';
 import {
   activateContextLayers,
-  deactivateContextLayers
+  deactivateContextLayers,
+  WHP_EMBED_LINE
 } from '../src/map/fire3d-context';
 import { URLS } from '../src/config/urls';
 import { registry } from '../src/state/registry';
@@ -1313,13 +1314,13 @@ for (const flatKey of ['usfs-whp-classes'] as const) {
       );
 
       // Mounted stood down (hidden), so turning the flat layer off stands it up.
-      expect(activation.keys).not.toContain('whp');
+      // Reported as mounted, so the scene's load watch already holds its source
+      // when it stands up; the orchestrator prints the embed line only while
+      // the ddm:whp-shade event says the drape is mounted.
+      expect(activation.keys).toContain('whp');
+      expect(activation.embedLines).toContain(WHP_EMBED_LINE);
       expect(harness.sources.has('whp-2023')).toBe(true);
       expect(harness.layerSpecs.get('whp-2023')?.layout?.['visibility']).toBe('none');
-      // No embed line either: a disclosure may only describe what rendered.
-      expect(activation.embedLines.join(' ')).not.toContain(
-        'Wildfire Hazard Potential'
-      );
       registry.deactivate(flatKey);
       expect(harness.layerSpecs.get('whp-2023')?.layout?.['visibility']).toBe('visible');
 

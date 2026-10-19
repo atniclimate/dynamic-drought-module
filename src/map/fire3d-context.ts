@@ -46,7 +46,9 @@ export interface Fire3DContextActivation {
   readonly embedLines: readonly string[];
 }
 
-const WHP_EMBED_LINE =
+/** The drape can be mounted stood down, so the orchestrator prints this line
+ * only while the last `ddm:whp-shade` event says the drape is mounted. */
+export const WHP_EMBED_LINE =
   `${WHP_SHADE_QUALIFICATION} Pacific Northwest; reduced resolution.`;
 
 /** Exported for the disclosure cross-gate test beside the archive. */

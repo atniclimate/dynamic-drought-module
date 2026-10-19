@@ -304,6 +304,10 @@ let transportIdleListener: (() => void) | null = null;
 /** Truthful per-layer embed disclosure lines, composed at activation from
  * what actually rendered (never static claims). */
 let contextEmbedLines: readonly string[] = [];
+/** The last `ddm:whp-shade` event's `mounted`: the drape mounts stood down
+ * for the USFS colours row and can stand up later, so its embed line
+ * follows this, not the activation. */
+let whpDrapeMounted = false;
 let contextAbort: AbortController | null = null;
 /** DDM-P9-T13: the dryness ground's lazy chunk and the one activation it serves. */
 let drynessModule: typeof import('../layers/wildfire-dryness') | null = null;
@@ -368,7 +372,9 @@ function syncEmbedNote(active: boolean): void {
       ? FIRE3D_COVERAGE_NOTE
       : fire3dCoverageNote(resolvedTerrainExtent ?? resolvedTerrainMaxZoom),
     ...terrainCoverageLines(terrainCoverage),
-    ...contextEmbedLines
+    ...contextEmbedLines.filter(
+      (line) => whpDrapeMounted || line !== contextModule?.WHP_EMBED_LINE
+    )
   ].filter((line) => line.length > 0);
   const note = existing ?? document.createElement('p');
   note.id = EMBED_NOTE_ID;
@@ -1085,6 +1091,14 @@ export function initFire3DController(map: maplibregl.Map): void {
     window
       .matchMedia(FIRE3D_MIN_HEIGHT_QUERY)
       .addEventListener('change', evaluate);
+  }
+  if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+    window.addEventListener('ddm:whp-shade', (event) => {
+      const mounted = (event as CustomEvent<{ mounted?: boolean }>).detail?.mounted;
+      if (mounted === undefined || mounted === whpDrapeMounted) return;
+      whpDrapeMounted = mounted;
+      syncEmbedNote(status.state === 'active');
+    });
   }
   // DR-105: no satellite imagery while the scene is opening or open. Synced
   // once after the first evaluation too, which releases a boot hold

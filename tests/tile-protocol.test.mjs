@@ -1383,8 +1383,9 @@ test('entering Wildfire 3D with the issuer colours already on mounts the drape s
     try {
       window.dispatchEvent = event => { if (event.type === 'ddm:whp-shade') mounted.push(event.detail.mounted); };
       registry.activate('usfs-whp-classes');
-      // Not drawn, so not reported as rendered; but mounted hidden, and the white copy steps aside.
-      assert.equal(await activateWhpDrape(map, scene.signal), false);
+      // Mounted hidden, and the white copy steps aside. Reported as mounted, so the scene's
+      // context keys and load watch already hold the drape when the colours go off.
+      assert.equal(await activateWhpDrape(map, scene.signal), true);
       assert.equal(sources.has('whp-2023'), true);
       assert.deepEqual([visibility.get('usfs-whp'), visibility.get('whp-2023')], ['none', 'none']);
       assert.deepEqual(mounted, [false]);

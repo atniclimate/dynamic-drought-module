@@ -144,10 +144,11 @@ function showFlatFuelRisk(map: maplibregl.Map, visible: boolean): void {
 
 /**
  * Probe the bundled archive, then add the raster source and drape layer
- * and register the legend. Idempotent. Returns false when the archive is
- * unreachable or invalid (nothing added), or when the issuer-coloured row
- * is on (mounted stood down, so nothing drawn yet); the caller degrades
- * partially either way.
+ * and register the legend. Idempotent. Returns true once mounted, stood
+ * down or not: a stood-down drape can stand up while the scene is up, and
+ * the `ddm:whp-shade` event's `mounted` says whether it draws. Returns
+ * false when the archive is unreachable or invalid (nothing added); the
+ * caller degrades partially.
  */
 export async function activateWhpDrape(
   map: maplibregl.Map,
@@ -262,8 +263,7 @@ export async function activateWhpDrape(
     syncPerimeters(map);
   });
 
-  // Stood down, nothing is drawn yet: no rendered claim for the scene's disclosure or load wait.
-  return !stoodDown;
+  return true;
 }
 
 /**
