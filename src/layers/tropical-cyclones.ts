@@ -37,7 +37,7 @@ import {
   TROPICAL_WW_UNKNOWN
 } from '../config/tropical-presentation';
 import { matchExpression } from '../config/style-expressions';
-import { registerClickTarget } from '../map/interaction-coordinator';
+import { identifyAt, registerClickTarget } from '../map/interaction-coordinator';
 import { reassertLabelOrder, reassertThematicOrder } from '../map/layer-order';
 import { registry } from '../state/registry';
 import type { LayerStatus } from '../types/layer';
@@ -53,6 +53,7 @@ const TRACK_ID = 'tropical-cyclones-track';
 const WW_ID = 'tropical-cyclones-ww';
 const POINTS_ID = 'tropical-cyclones-points';
 const SNAPSHOT_EVENT = 'ddm:tropical-snapshot';
+const FEATURE_DOOR_EVENT = 'ddm:feature-door';
 const SNAPSHOT_REQUEST_EVENT = 'ddm:tropical-snapshot-request';
 const REFRESH_MS = 30 * 60 * 1000;
 const SWEEP_REUSE_MS = 5 * 60 * 1000;
@@ -79,6 +80,8 @@ let generation = 0;
 let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 let snapshot: TropicalSnapshot = { status: 'inactive', storms: [] };
 let lastSweep: { readonly at: number; readonly result: TropicalSweep } | null = null;
+/** What is drawn now, for the key's storm buttons. */
+let drawn: TropicalSweep['features'] = [];
 
 function emit(next: TropicalSnapshot): void {
   snapshot = next;
@@ -163,6 +166,7 @@ async function sweep(map: maplibregl.Map, signal: AbortSignal, first: boolean): 
   if (result.problems.length > 0) console.warn('[tropical-cyclones] read problems:', result.problems);
   if (result.features.length > 0) ensureLayers(map, { type: 'FeatureCollection', features: [...result.features] });
   else clearDrawn(map);
+  drawn = result.features;
   // The key reads the storms from the snapshot and the state from the registry: snapshot first.
   emit({ status: result.state, storms: result.storms });
   registry.setStatus(LAYER_KEY, REGISTRY_STATUS[result.state]);
@@ -200,6 +204,7 @@ export function deactivate(map: maplibregl.Map): void {
   if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);
   window.removeEventListener(SNAPSHOT_REQUEST_EVENT, replaySnapshot);
   activeMap = null;
+  drawn = [];
   emit({ status: 'inactive', storms: [] });
 }
 
@@ -218,6 +223,14 @@ export function bindPopups(map: maplibregl.Map): void {
           ? buildTropicalPointPopupModel(feature.properties ?? null)
           : buildTropicalAreaPopupModel(feature.properties ?? null)
     })
+  });
+  // The key's storm button (src/ui/map-key.ts) opens that storm's popup at its advisory (tau 0) position.
+  window.addEventListener(FEATURE_DOOR_EVENT, (event) => {
+    const door = (event as CustomEvent<unknown>).detail;
+    if (typeof door !== 'string' || !door.startsWith('storm:')) return;
+    const points = drawn.filter((f) => f.properties?.['ddmPart'] === 'points' && f.properties?.['ddmBin'] === door.slice(6));
+    const at = (points.find((f) => Number(f.properties?.['tau']) === 0) ?? points[0])?.geometry;
+    if (at?.type === 'Point') identifyAt(map, [POINTS_ID], at.coordinates[0]!, at.coordinates[1]!);
   });
   for (const id of [POINTS_ID, WW_ID, CONE_FILL_ID]) {
     map.on('mouseenter', id, () => {

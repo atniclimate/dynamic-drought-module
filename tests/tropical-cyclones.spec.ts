@@ -45,3 +45,19 @@ test('one occupied slot draws, its key names the advisory, and its popup opens',
   await expect(popup.locator('[data-popup-slot="value"]')).toContainText('24');
   await expect(popup).toContainText('200 AM MST Tue Oct 13 2026');
 });
+
+test("a storm's key line is a button: Enter opens that storm's popup and Escape returns focus to it", async ({ page }) => {
+  await bootStorm(page);
+  const toggle = page.locator('#map-key-details-toggle');
+  await expect(toggle).toBeVisible();
+  if ((await toggle.getAttribute('aria-expanded')) === 'false') await toggle.click();
+  const door = page.locator('#map-key [data-feature-door="storm:EP5"]');
+  await expect(door).toBeVisible();
+  await door.focus();
+  await page.keyboard.press('Enter');
+  const popup = page.locator('.maplibregl-popup [data-popup-frame]');
+  await expect(popup.locator('[data-popup-slot="title"]')).toHaveText(/Simon/);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.maplibregl-popup')).toHaveCount(0);
+  await expect(door).toBeFocused();
+});

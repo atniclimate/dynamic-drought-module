@@ -63,7 +63,7 @@ import { setTimeBar, clearTimeBar } from '../ui/time-bar';
 import { showLegend, hideLegend, LEGEND_ORDER } from '../ui/legend-registry';
 import { showToast } from '../ui/overlay';
 import { activateEnsoFlow, cancelEnsoFlowLoad, deactivateEnsoFlow } from './enso-flow';
-import { registerClickTarget } from '../map/interaction-coordinator';
+import { identifyAt, registerClickTarget } from '../map/interaction-coordinator';
 import {
   buildEnsoBoxPopupModel,
   cancelEnsoBoxRead,
@@ -82,6 +82,7 @@ const LAYER_KEY = 'sst-anomaly';
  * is enumerated, and as inactive on deactivate.
  */
 const SST_SNAPSHOT_EVENT = 'ddm:sst-snapshot';
+const FEATURE_DOOR_EVENT = 'ddm:feature-door';
 const SOURCE_ID = 'sst-anomaly';
 const LAYER_ID = 'sst-anomaly';
 const NINO_SOURCE_ID = 'nino34-box';
@@ -195,6 +196,8 @@ const NINO34_BOX: GeoJSON.Feature = {
     ]
   }
 };
+/** The box centre, where the key's Nino 3.4 button identifies it. */
+const NINO34_CENTRE = [-145, 0] as const;
 
 function viewIncludesNino34(map: maplibregl.Map): boolean {
   const b = map.getBounds();
@@ -945,6 +948,12 @@ export function bindPopups(map: maplibregl.Map): void {
       requestAnimationFrame(() => void mountEnsoBoxChart(m.getContainer(), model).catch(() => undefined));
       return { model };
     }
+  });
+  // The ENSO key's Nino 3.4 button (src/ui/map-key.ts) opens this popup at the box centre.
+  window.addEventListener(FEATURE_DOOR_EVENT, (event) => {
+    if ((event as CustomEvent<unknown>).detail !== 'nino34' || !map.getLayer(NINO_FILL_ID)) return;
+    startEnsoBoxRead();
+    identifyAt(map, [NINO_FILL_ID, NINO_LINE_ID], NINO34_CENTRE[0], NINO34_CENTRE[1]);
   });
   map.on('mouseenter', NINO_FILL_ID, () => {
     // A deactivate cancels the read; restart it on hover so a mouse click after re-entry is not "loading".

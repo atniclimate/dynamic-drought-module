@@ -46,7 +46,7 @@ const stubs = {
   '/map/layer-order': 'export function reassertLabelOrder(){} export function reassertThematicOrder(){}',
   '/util/layer-fade': 'export function fadeInLayers(){} export async function fadeOutLayers(){}',
   '/ui/overlay': 'export function showLoading(){ return 1; } export function hideLoading(){}',
-  '/map/interaction-coordinator': 'export function registerClickTarget(){}'
+  '/map/interaction-coordinator': 'export function registerClickTarget(){} export function identifyAt(){}'
 };
 registerHooks({
   resolve(specifier, context, nextResolve) {

@@ -465,3 +465,20 @@ test("found-115 the arrows' Key drawer row follows the open panel: none while of
   await layerCheckbox(page, 'sst-anomaly').uncheck();
   await expect(page.locator(FLOW_ROW)).toHaveCount(0);
 });
+
+test('the Key drawer names the Nino 3.4 box as a button: Enter opens the box popup and Escape returns focus to it', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.clock.setFixedTime(LIVE_CLOCK);
+  await stubSst(page);
+  await gotoApp(page, '?cluster=enso&ocean=pacific&view=console&basemap=default&flow=off');
+  await openKeyDrawer(page);
+  const door = page.locator('#map-key [data-feature-door="nino34"]');
+  await expect(door).toHaveText('Nino 3.4 (the ENSO index region)');
+  await door.focus();
+  await page.keyboard.press('Enter');
+  const popup = page.locator('.maplibregl-popup [data-popup-frame]');
+  await expect(popup.locator('[data-popup-slot="title"]')).toHaveText(/Nino 3\.4/);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.maplibregl-popup')).toHaveCount(0);
+  await expect(door).toBeFocused();
+});

@@ -305,3 +305,83 @@ test('takeFrame accepts a frame root holding only its two regions, and refuses r
     'visible text under the frame root, outside both regions, is not accepted as a frame'
   );
 });
+
+/**
+ * I16 named doors: `identifyAt` takes the click path at a known position for
+ * one target (a map key button), so the popup it opens is that target's own
+ * even where a click there would rank another hit first.
+ */
+function doorHarness({ center = -150, inView = true, rendered }) {
+  coordinator.resetInteractionCoordinatorForTest();
+  const calls = [];
+  const once = new Map();
+  const eased = [];
+  const projected = [];
+  const map = {
+    once: (type, handler) => once.set(type, handler),
+    getLayer: (id) => (['door', 'event'].includes(id) ? { id } : undefined),
+    queryRenderedFeatures: () => rendered(),
+    getCenter: () => ({ lng: center, lat: 0 }),
+    getCanvas: () => ({ clientWidth: 100, clientHeight: 100 }),
+    project: (ll) => {
+      projected.push(ll);
+      return inView ? { x: 50, y: 50 } : { x: -10, y: 50 };
+    },
+    unproject: () => ({ lng: 0, lat: 0 }),
+    easeTo: (options) => {
+      eased.push(options);
+      inView = true;
+    }
+  };
+  for (const [kind, id] of [['condition-surface', 'door'], ['point-event', 'event']]) {
+    coordinator.registerClickTarget({
+      kind,
+      layerIds: [id],
+      label: name,
+      respond(feature) {
+        calls.push(name(feature));
+        return null;
+      }
+    });
+  }
+  return { map, calls, once, eased, projected };
+}
+
+test('a named door asks its own target first, even when a click there would rank another hit first', () => {
+  const h = doorHarness({ rendered: () => [F('event', 'e1'), F('door', 'd1')] });
+  coordinator.identifyAt(h.map, ['door'], -145, 0);
+  assert.deepEqual(h.calls, ['d1', 'e1'], 'the door target leads; the other hit stays next in line');
+  assert.deepEqual(h.eased, [], 'a target already in view moves no camera');
+});
+
+test('a named door out of view eases there first and identifies only once the move ends', () => {
+  const h = doorHarness({ inView: false, rendered: () => [F('door', 'd1')] });
+  coordinator.identifyAt(h.map, ['door'], -145, 0);
+  assert.deepEqual(h.calls, [], 'nothing is identified mid-move');
+  assert.equal(h.eased.length, 1);
+  assert.deepEqual(h.eased[0].center, [-145, 0]);
+  h.once.get('moveend')();
+  assert.deepEqual(h.calls, ['d1']);
+});
+
+test('a named door wraps to the world copy nearest the view (the Pacific across the antimeridian)', () => {
+  const h = doorHarness({ center: 170, rendered: () => [F('door', 'd1')] });
+  coordinator.identifyAt(h.map, ['door'], -145, 0);
+  assert.deepEqual(h.projected[0], { lng: 215, lat: 0 });
+});
+
+test('a named door never opens another target in its place, and waits for one idle only after a move', () => {
+  let rendered = [F('event', 'e1')];
+  const still = doorHarness({ rendered: () => rendered });
+  coordinator.identifyAt(still.map, ['door'], -145, 0);
+  assert.deepEqual(still.calls, [], 'no door target under the point: nothing else is opened');
+  assert.equal(still.once.has('idle'), false, 'in view: no lingering wait to fire on some later idle');
+
+  const moved = doorHarness({ inView: false, rendered: () => rendered });
+  coordinator.identifyAt(moved.map, ['door'], -145, 0);
+  moved.once.get('moveend')();
+  assert.deepEqual(moved.calls, [], 'the tiles there are not drawn yet');
+  rendered = [F('door', 'd1')];
+  moved.once.get('idle')();
+  assert.deepEqual(moved.calls, ['d1'], 'the tiles settle: the door target answers');
+});

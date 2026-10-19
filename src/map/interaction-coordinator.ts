@@ -49,6 +49,7 @@ import { isSheetActive } from '../ui/mobile-sheet';
 // the entry graph.
 import type { PopupModel, serializePopupFrame, paintAdoptedPopupFrame } from '../ui/popup-frame';
 import { createChunkLoader } from '../util/chunk-retry';
+import { prefersReducedMotion } from '../util/motion';
 
 /** The click location a response builder receives. */
 export interface CoordinatorClick {
@@ -504,6 +505,40 @@ function bindKeyboardIdentify(map: maplibregl.Map): void {
     if (hits.length === 0) dismissResponse();
     else commit(map, hits, hits[0]!, { lngLat: map.unproject(point), point });
   });
+}
+
+/**
+ * A named door (I16): a map key button identifies one registered target at a
+ * known position through the click's own collection and commit, so the
+ * popup, its "Other map features here" list and Escape's focus return to the
+ * door are a click's. The door's target leads, and no other target opens in
+ * its place. Out of view, the camera eases there first (a jump under reduced
+ * motion). Map-wide keyboard identify stays behind KEYBOARD_IDENTIFY.
+ */
+export function identifyAt(map: maplibregl.Map, layerIds: readonly string[], lng: number, lat: number): void {
+  if (studioOwnsScreen()) return;
+  // The world copy nearest the view (ENSO frames the Pacific across the antimeridian).
+  const at = { lng: lng + 360 * Math.round((map.getCenter().lng - lng) / 360), lat };
+  const run = (afterMove: boolean): void => {
+    if (studioOwnsScreen()) return;
+    noteFocusBeforeCommit();
+    const point = map.project(at);
+    const hits = collectHits(map, point);
+    const primary = hits.find((h) => layerIds.includes(h.feature.layer.id));
+    if (primary) commit(map, hits, primary, { lngLat: map.unproject(point), point });
+    // Tiles at a new view can still be loading as the move ends: one more look once they settle.
+    else if (afterMove) map.once('idle', () => run(false));
+    else dismissResponse();
+  };
+  const { x, y } = map.project(at);
+  const canvas = map.getCanvas();
+  if (x >= 0 && y >= 0 && x <= canvas.clientWidth && y <= canvas.clientHeight) {
+    run(false);
+    return;
+  }
+  // Bound before the ease: a reduced-motion jump ends its move inside easeTo.
+  map.once('moveend', () => run(true));
+  map.easeTo({ center: [at.lng, at.lat], ...(prefersReducedMotion() ? { animate: false } : {}) });
 }
 
 function handleClick(map: maplibregl.Map, e: maplibregl.MapMouseEvent): void {

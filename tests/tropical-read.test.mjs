@@ -36,7 +36,7 @@ const BASE = 'https://mapservices.weather.noaa.gov/tropical/rest/services/tropic
 globalThis.tropicalTestBase = BASE;
 const stubs = {
   'maplibre-gl': 'export const stub = true;',
-  '/map/interaction-coordinator': 'export function registerClickTarget(){}',
+  '/map/interaction-coordinator': 'export function registerClickTarget(){} export function identifyAt(...a){ globalThis.doorCalls?.push(a.slice(1)); }',
   '/config/urls': 'export const URLS = { nhcTropicalMapServer: globalThis.tropicalTestBase };'
 };
 registerHooks({
@@ -153,6 +153,7 @@ test('one occupied slot reads live: its points, track, cone and watch-warning li
   assert.deepEqual(sweep.storms, [
     { bin: 'EP5', name: 'Hurricane Simon', basin: 'EP', advisory: '24', issued: '200 AM MST Tue Oct 13 2026' }
   ]);
+  assert.ok(sweep.features.every((f) => f.properties.ddmBin === 'EP5'), 'every part carries its storm key bin (the key button finds its position by it)');
 });
 
 test('a 503 on one sublayer reads live (partial); the other sublayers still draw', async () => {
@@ -439,6 +440,28 @@ test('layer: one occupied slot draws the source and five layers, reports ready a
   assert.equal(map.getSource('tropical-cyclones').data.features.length, 14);
   assert.equal(registry.getStatus('tropical-cyclones'), 'ready');
   assert.deepEqual(snapshots(), ['loading', 'live']);
+});
+
+test('layer: the key storm button identifies its storm at the advisory (tau 0) position, and nothing once the layer is off', async (t) => {
+  installFetch('occupiedOne');
+  const map = fakeMap();
+  const listeners = new Map();
+  globalThis.addEventListener = (type, fn) => listeners.set(type, fn);
+  globalThis.doorCalls = [];
+  t.after(() => {
+    globalThis.addEventListener = () => {};
+    globalThis.doorCalls = undefined;
+  });
+  layer.bindPopups(map);
+  await layer.activate(map);
+  const door = (detail) => listeners.get('ddm:feature-door')({ detail });
+  door('storm:EP5');
+  door('storm:AL1');
+  door('nino34');
+  assert.deepEqual(globalThis.doorCalls, [[['tropical-cyclones-points'], -107.2, 20.6]], 'only the drawn storm answers, at tau 0');
+  layer.deactivate(map);
+  door('storm:EP5');
+  assert.equal(globalThis.doorCalls.length, 1, 'nothing drawn: the button opens nothing');
 });
 
 test('layer: a sweep under five minutes old is drawn again on re-entry without a read; an older one is read again', async (t) => {

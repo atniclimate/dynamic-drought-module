@@ -222,6 +222,8 @@ export async function readTropicalSweep(
       // The points layer names the storm with its classification ("Hurricane Simon"); the
       // track, cone and watch-warning layers carry the bare name, so every part takes the points title.
       const ddmTitle = text(points.features[0]?.properties?.['stormname']);
+      // The storm's key identity on every part, so the key's storm button finds its advisory position.
+      const ddmBin = text(points.features[0]?.properties?.['binnumber']) || slot.bin;
       const reads: [TropicalPart, Outcome][] = [
         ['points', { ok: true, read: points }],
         ...(['track', 'cone', 'ww'] as const).map((part, j): [TropicalPart, Outcome] => [part, rest[i]![j]!])
@@ -243,12 +245,12 @@ export async function readTropicalSweep(
           partial = true;
           problems.push(`${slot.bin} ${part}: advisory number differs from the points advisory ${advisory}`);
         }
-        features.push(...same.map((f) => ({ ...f, properties: { ...f.properties, ddmTitle } })));
+        features.push(...same.map((f) => ({ ...f, properties: { ...f.properties, ddmTitle, ddmBin } })));
       }
       const first = points.features[0]?.properties;
       if (first) {
         storms.push({
-          bin: text(first['binnumber']) || slot.bin,
+          bin: ddmBin,
           name: text(first['stormname']),
           basin: text(first['basin']),
           advisory,
