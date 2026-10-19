@@ -412,6 +412,9 @@ function buildImageTileTemplate(timeMs: number): string {
     'size=256,256',
     'format=png32',
     'transparent=true',
+    // Class 0 (Little to None) is not drawn: noData=0 makes it transparent so
+    // classes 1-4 stand out; values and identify are unchanged.
+    'noData=0',
     'interpolation=RSP_NearestNeighbor',
     `time=${timeMs}`,
     'f=image'
@@ -471,15 +474,14 @@ function renderFrame(map: maplibregl.Map, day: number): void {
     tiles: [buildImageTileTemplate(frame.validTime)],
     tileSize: 256,
     // The NWS service advertises 2,539.703 m Web Mercator cells (verified
-    // 2026-09-13). z6 serves 2,445.98 m pixels. Requesting ever-finer
-    // exports only enlarges those class cells into hard square blocks.
-    // Preserve issuer class colors when overscaling (DR-138, D3 R7).
-    // Point-identify reads retain their separate category values.
+    // 2026-09-13). z6 serves 2,445.98 m pixels, so finer exports add
+    // nothing. Linear display resampling softens the cell edges (owner
+    // request, 2026-10-19); point-identify reads keep the issuer's classes.
     maxzoom: 6,
     attribution: 'NOAA NWS HeatRisk (experimental)'
   });
-  // Floor flat-view coverage zoom so categorical tiles are magnified rather
-  // than rounded up into linear minification. Pitch needs separate coverage.
+  // Floor flat-view coverage zoom so the z6 tiles are magnified, not
+  // re-requested at finer zooms.
   map.getSource<maplibregl.RasterTileSource>(sourceId)!.roundZoom = false;
   map.addLayer({
     id: LAYER_ID,
@@ -487,7 +489,7 @@ function renderFrame(map: maplibregl.Map, day: number): void {
     source: sourceId,
     paint: {
       'raster-opacity': 0.55,
-      'raster-resampling': 'nearest'
+      'raster-resampling': 'linear'
     }
   });
 
