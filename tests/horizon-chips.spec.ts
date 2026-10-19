@@ -144,7 +144,7 @@ test.describe('DDM-P8-T03: the shell horizon chips read HORIZON_CHROME', () => {
 
     // The retired chip wording must not survive anywhere in the DOM.
     const stray = await page.evaluate(() =>
-      /\bWeeks ahead\b|\bSeason ahead\b/.test(document.body.textContent ?? '')
+      /\bWeeks ahead\b|\bSeason ahead\b/.test(document.body.textContent ?? '') // spec-impact: intended, asserts retired wording is absent
     );
     expect(stray, 'the retired chip wording still appears somewhere in the DOM').toBe(false);
   });

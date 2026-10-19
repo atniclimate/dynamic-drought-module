@@ -378,7 +378,7 @@ async function expectChipsStillHonest(page: Page): Promise<void> {
     expect((await btn.locator('.shell-horizon-btn-sub').innerText()).replace(/\u00a0/g, ' ').trim()).toBe(chrome.subtitle);
   }
   const stray = await page.evaluate(() =>
-    /\bWeeks ahead\b|\bSeason ahead\b/.test(document.body.textContent ?? '')
+    /\bWeeks ahead\b|\bSeason ahead\b/.test(document.body.textContent ?? '') // spec-impact: intended, asserts retired wording is absent
   );
   expect(stray, 'the retired chip wording reappeared with the time bar rendered').toBe(false);
 }
