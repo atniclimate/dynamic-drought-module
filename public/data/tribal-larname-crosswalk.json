@@ -1,9 +1,10 @@
 {
-  "_comment": "Crosswalk audit for maintainer review (U3b; safe matcher per D-0.7.0-026). matched: land area LARNAME to the formal Federal Register Tribe name, with the safety rule that matched it; rows carrying a confirmed field were explicitly maintainer-confirmed against a flagged historical-renaming collision on the parallel-LAR premise (D-0.7.0-026b; parallelLar names the LAR row held by the other claimant Nation). larLabel: land areas that keep the BIA land-area label (no unambiguous match; NOT mapped to a guessed Tribe name, per hard rules 5 and 6 and D-0.7.0-026); this is the maintainer residue list. ambiguous: the subset of larLabel rows where several roster names contained the LARNAME phrase OR the maintainer curated the row as known-ambiguous (D-0.7.0-026a; curated rows carry a rule field naming that ruling; the candidates are listed; automation refuses to pick). rosterNoLar: federally recognized Tribes with no matched land area in AIAN-LAR (landless Tribes, Alaska Native villages, or differently-named areas). censusMatched: Census AIANNH areas matched to a roster name under rule 7 of the build script, with the rule that matched. censusLabel: Census areas that keep the Census name (no unique match).",
+  "_comment": "Crosswalk audit for maintainer review (U3b; safe matcher per D-0.7.0-026). matched: land area LARNAME to the formal Federal Register Tribe name, with the safety rule that matched it; rows carrying a confirmed field were explicitly maintainer-confirmed against a flagged historical-renaming collision on the parallel-LAR premise (D-0.7.0-026b; parallelLar names the LAR row held by the other claimant Nation). larLabel: land areas that keep the BIA land-area label (no unambiguous match; NOT mapped to a guessed Tribe name, per hard rules 5 and 6 and D-0.7.0-026); this is the maintainer residue list. ambiguous: the subset of larLabel rows where several roster names contained the LARNAME phrase OR the maintainer curated the row as known-ambiguous (D-0.7.0-026a; curated rows carry a rule field naming that ruling; the candidates are listed; automation refuses to pick). rosterNoLar: federally recognized Tribes with no matched land area in AIAN-LAR (landless Tribes, Alaska Native villages, or differently-named areas). censusMatched: Census AIANNH areas matched to a roster name under rule 7 of the build script, with the rule that matched. censusLabel: Census areas that keep the Census name (no unique match). censusAmbiguous: the subset of censusLabel with several candidates or a maintainer-curated known-ambiguous BASENAME (rule field), candidates listed.",
   "meta": {
     "rosterSource": "Federal Register 2026-01899 (2026-01-30)",
     "landAreaSource": "BIA AIAN-LAR FeatureServer (distinct LARNAME)",
-    "matcher": "safe-match v2 (D-0.7.0-026): unique whole-phrase containment, state-constrained, distinctive-token guard; plus the maintainer-curated known-ambiguous gate (D-0.7.0-026a)",
+    "matcher": "LAR areas, safe-match v2 (D-0.7.0-026): unique whole-phrase containment, state-constrained, distinctive-token guard; plus the maintainer-curated known-ambiguous gate (D-0.7.0-026a)",
+    "censusMatcher": "Census areas (rule 7): maintainer-curated known-ambiguous gate (D-0.7.0-026a) first; then unique whole-phrase containment of BASENAME outside the roster name parentheses, or equality with a parenthetical, distinctive-token guard; several candidates resolve only when exactly one carries BASENAME as its parenthetical; no state constraint",
     "generated": "2026-10-19",
     "rosterCount": 573,
     "landAreaCount": 335,
@@ -3302,5 +3303,142 @@
     "Uyak ANVSA",
     "Dillingham ANVSA",
     "White Mountain ANVSA"
+  ],
+  "censusAmbiguous": [
+    {
+      "aiannh": "6990",
+      "name": "Naknek ANVSA",
+      "candidates": [
+        "Naknek Native Village",
+        "Native Village of South Naknek (previously listed as South Naknek Village)"
+      ]
+    },
+    {
+      "aiannh": "7390",
+      "name": "St. Paul ANVSA",
+      "candidates": [
+        "Aleut Community of St. Paul Island (See Pribilof Islands Aleut Communities of St. Paul & St. George Islands) (previously listed as Saint Paul Island ( See Pribilof Islands Aleut Communities of St. Paul & St. George Islands))",
+        "Pribilof Islands Aleut Communities of St. Paul & St. George Islands (St. George Island and Saint Paul Island)"
+      ]
+    },
+    {
+      "aiannh": "6685",
+      "name": "Kalskag ANVSA",
+      "candidates": [
+        "Village of Kalskag",
+        "Village of Lower Kalskag"
+      ]
+    },
+    {
+      "aiannh": "6380",
+      "name": "Council ANVSA",
+      "candidates": [
+        "Central Council of the Tlingit & Haida Indian Tribes",
+        "Chignik Bay Tribal Council",
+        "Curyung Tribal Council",
+        "Gulkana Village Council",
+        "Iqugmiut Traditional Council",
+        "Kasigluk Traditional Elders Council",
+        "Mentasta Traditional Council",
+        "Native Village of Council",
+        "New Koliganek Village Council",
+        "Orutsararmiut Traditional Native Council",
+        "Pitka's Point Traditional Council"
+      ]
+    },
+    {
+      "aiannh": "6295",
+      "name": "Chignik ANVSA",
+      "candidates": [
+        "Chignik Bay Tribal Council",
+        "Chignik Lake Village",
+        "Native Village of Chignik Lagoon"
+      ]
+    },
+    {
+      "aiannh": "5830",
+      "name": "Seminole OTSA",
+      "candidates": [
+        "Seminole Tribe of Florida",
+        "The Seminole Nation of Oklahoma"
+      ]
+    },
+    {
+      "aiannh": "5770",
+      "name": "Ottawa OTSA",
+      "candidates": [
+        "Grand Traverse Band of Ottawa and Chippewa Indians, Michigan",
+        "Little River Band of Ottawa Indians, Michigan",
+        "Ottawa Tribe of Oklahoma"
+      ]
+    },
+    {
+      "aiannh": "5670",
+      "name": "Iowa OTSA",
+      "candidates": [
+        "Iowa Tribe of Kansas and Nebraska",
+        "Iowa Tribe of Oklahoma",
+        "Sac & Fox Tribe of the Mississippi in Iowa"
+      ]
+    },
+    {
+      "aiannh": "5550",
+      "name": "Cherokee OTSA",
+      "candidates": [
+        "Cherokee Nation",
+        "Eastern Band of Cherokee Indians",
+        "United Keetoowah Band of Cherokee Indians in Oklahoma"
+      ]
+    },
+    {
+      "aiannh": "5700",
+      "name": "Kickapoo OTSA",
+      "candidates": [
+        "Kickapoo Traditional Tribe of Texas",
+        "Kickapoo Tribe of Indians of the Kickapoo Reservation in Kansas",
+        "Kickapoo Tribe of Oklahoma"
+      ]
+    },
+    {
+      "aiannh": "5800",
+      "name": "Ponca OTSA",
+      "candidates": [
+        "Ponca Tribe of Indians of Oklahoma",
+        "Ponca Tribe of Nebraska"
+      ]
+    },
+    {
+      "aiannh": "5590",
+      "name": "Choctaw OTSA",
+      "candidates": [
+        "Jena Band of Choctaw Indians",
+        "Mississippi Band of Choctaw Indians",
+        "The Choctaw Nation of Oklahoma"
+      ]
+    },
+    {
+      "aiannh": "8150",
+      "name": "Chickahominy TDSA",
+      "candidates": [
+        "Chickahominy Indian Tribe",
+        "Chickahominy Indian Tribe-Eastern Division"
+      ]
+    },
+    {
+      "aiannh": "8100",
+      "name": "Cayuga Nation TDSA",
+      "candidates": [
+        "Cayuga Nation",
+        "Seneca-Cayuga Nation"
+      ]
+    },
+    {
+      "aiannh": "7745",
+      "name": "White Mountain ANVSA",
+      "candidates": [
+        "White Mountain Apache Tribe of the Fort Apache Reservation, Arizona",
+        "Native Village of White Mountain"
+      ]
+    }
   ]
 }

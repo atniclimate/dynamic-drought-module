@@ -70,6 +70,8 @@
  *        47 names (no geometry) add `censusAreas` for Tribes the LAR set
  *        cannot locate (no Oklahoma LAR features; most Alaska villages).
  *        Only federal classes are read (CENSUS_FED_LEGAL, CENSUS_FED_STAT).
+ *        The KNOWN_AMBIGUOUS gate (rule 5) runs first on the BASENAME: a
+ *        listed name keeps the Census NAME. No state constraint applies.
  *        The Census BASENAME must appear verbatim in a roster name OUTSIDE
  *        its parentheses, or equal one of its parentheticals ("aka" and
  *        "previously listed as" stripped); text inside parentheses never
@@ -79,7 +81,8 @@
  *        its parenthetical ("Creek" to "The Muscogee (Creek) Nation"); that
  *        alias rule applies to Census names only. Anything else keeps the
  *        Census NAME (provenance "census-label"). OTSA, TDSA and ANVSA rows
- *        always ship; a reservation or trust land row ships only when it
+ *        always ship, so a Nation can appear both as a LAR area and as a
+ *        statistical area; a reservation or trust land row ships only when it
  *        safe-matches a Tribe with no LAR land area, so it never duplicates
  *        a LAR row.
  *   Every emitted area row carries a `provenance` field ("safe-match" or
@@ -311,6 +314,77 @@ function parseLarName(larName) {
   return { base: larName, state: null };
 }
 
+/**
+ * The Census pass (rule 7 in the header): Census AIANNH features (names only)
+ * against the roster. noLarSet holds the roster names LAR did not locate.
+ * Exported for the builder-level test.
+ */
+export function censusPass(features, roster, noLarSet) {
+  // Roster names split into the text outside parentheses (one level of
+  // nesting) and each parenthetical with "aka" / "previously listed as" off.
+  const rosterParts = roster.map((name) => ({
+    name,
+    outside: norm(name.replace(/\([^()]*(\([^()]*\))?[^()]*\)/g, ' ')),
+    parens: [...name.matchAll(/\(([^()]*)\)/g)].map((m) =>
+      norm(m[1]).replace(/^(aka|previously listed as) /, '')
+    )
+  }));
+  const censusAreas = [];
+  const censusMatched = [];
+  const censusLabel = [];
+  const censusAmbiguous = [];
+  for (const f of features) {
+    const { NAME, BASENAME, AIANNH, AIANNHCC } = f.attributes ?? {};
+    if (typeof NAME !== 'string' || typeof BASENAME !== 'string' || !/^\d{4}$/.test(AIANNH ?? '')) {
+      continue;
+    }
+    const legal = CENSUS_FED_LEGAL.has(AIANNHCC);
+    if (!legal && !CENSUS_FED_STAT.has(AIANNHCC)) continue;
+    const name = noEmDash(NAME.trim());
+    const base = norm(BASENAME);
+    // The maintainer-curated known-ambiguous gate (D-0.7.0-026a) runs first
+    // here too: a listed BASENAME never reaches the matcher or the alias tie-break.
+    const curated = KNOWN_AMBIGUOUS.get(base);
+    let candidates = [];
+    let rule = 'unique-containment';
+    if (!curated && base.split(' ').some((t) => t.length > 2 && !GENERIC.has(t))) {
+      candidates = rosterParts.filter((r) => phraseIn(r.outside, base) || r.parens.includes(base));
+      if (candidates.length > 1) {
+        const alias = candidates.filter((r) => r.parens.includes(base));
+        if (alias.length === 1) {
+          candidates = alias;
+          rule = 'unique-parenthetical-alias';
+        }
+      }
+    }
+    const tribe = candidates.length === 1 ? candidates[0].name : null;
+    // A reservation row for a Tribe LAR already locates would be a duplicate.
+    if (legal && !(tribe && noLarSet.has(tribe))) continue;
+    if (tribe) censusMatched.push({ aiannh: AIANNH, name, tribe, rule });
+    else {
+      censusLabel.push(name);
+      if (curated) {
+        censusAmbiguous.push({
+          aiannh: AIANNH,
+          name,
+          candidates: curated.candidates,
+          rule: 'known-ambiguous (maintainer-curated, D-0.7.0-026a)'
+        });
+      } else if (candidates.length > 1) {
+        censusAmbiguous.push({ aiannh: AIANNH, name, candidates: candidates.map((c) => c.name) });
+      }
+    }
+    censusAreas.push({
+      aiannh: AIANNH,
+      name,
+      displayName: tribe ?? name,
+      provenance: tribe ? 'safe-match' : 'census-label'
+    });
+  }
+  censusAreas.sort((a, b) => a.displayName.localeCompare(b.displayName));
+  return { censusAreas, censusMatched, censusLabel, censusAmbiguous };
+}
+
 async function main() {
   console.log('[tribal-roster] discovering the current Federal Register notice...');
   const search = await getJson(FR_SEARCH);
@@ -445,53 +519,11 @@ async function main() {
         ')'
     );
   }
-  const noLarSet = new Set(rosterNoLar);
-  // Roster names split into the text outside parentheses (one level of
-  // nesting) and each parenthetical with "aka" / "previously listed as" off.
-  const rosterParts = roster.map((name) => ({
-    name,
-    outside: norm(name.replace(/\([^()]*(\([^()]*\))?[^()]*\)/g, ' ')),
-    parens: [...name.matchAll(/\(([^()]*)\)/g)].map((m) =>
-      norm(m[1]).replace(/^(aka|previously listed as) /, '')
-    )
-  }));
-  const censusAreas = [];
-  const censusMatched = [];
-  const censusLabel = [];
-  for (const f of censusJson.features) {
-    const { NAME, BASENAME, AIANNH, AIANNHCC } = f.attributes ?? {};
-    if (typeof NAME !== 'string' || typeof BASENAME !== 'string' || !/^\d{4}$/.test(AIANNH ?? '')) {
-      continue;
-    }
-    const legal = CENSUS_FED_LEGAL.has(AIANNHCC);
-    if (!legal && !CENSUS_FED_STAT.has(AIANNHCC)) continue;
-    const base = norm(BASENAME);
-    const distinctive = base.split(' ').some((t) => t.length > 2 && !GENERIC.has(t));
-    let candidates = distinctive
-      ? rosterParts.filter((r) => phraseIn(r.outside, base) || r.parens.includes(base))
-      : [];
-    let rule = 'unique-containment';
-    if (candidates.length > 1) {
-      const alias = candidates.filter((r) => r.parens.includes(base));
-      if (alias.length === 1) {
-        candidates = alias;
-        rule = 'unique-parenthetical-alias';
-      }
-    }
-    const tribe = candidates.length === 1 ? candidates[0].name : null;
-    // A reservation row for a Tribe LAR already locates would be a duplicate.
-    if (legal && !(tribe && noLarSet.has(tribe))) continue;
-    const name = noEmDash(NAME.trim());
-    if (tribe) censusMatched.push({ aiannh: AIANNH, name, tribe, rule });
-    else censusLabel.push(name);
-    censusAreas.push({
-      aiannh: AIANNH,
-      name,
-      displayName: tribe ?? name,
-      provenance: tribe ? 'safe-match' : 'census-label'
-    });
-  }
-  censusAreas.sort((a, b) => a.displayName.localeCompare(b.displayName));
+  const { censusAreas, censusMatched, censusLabel, censusAmbiguous } = censusPass(
+    censusJson.features,
+    roster,
+    new Set(rosterNoLar)
+  );
   console.log(
     `[tribal-roster] Census areas: ${censusAreas.length} (${censusMatched.length} safe-matched)`
   );
@@ -510,15 +542,22 @@ async function main() {
       'safe-match: displayName is the formal Federal Register Tribe name, matched under ' +
       'the safety rules in scripts/build-tribal-roster.mjs. provenance lar-label: ' +
       'displayName is the BIA land-area label verbatim (no Tribe mapping is guessed). ' +
-      'censusAreas: Census AIANNH areas absent from AIAN-LAR (names only; a search ' +
-      'selection queries the live Census service); provenance census-label keeps the ' +
-      'Census name verbatim. Regenerate with `npm run build:tribal-roster`.',
+      'censusAreas: Census AIANNH federal areas (names only; a search selection queries ' +
+      'the live Census service): every OTSA, TDSA and ANVSA, plus reservation and trust ' +
+      'land areas only for Tribes AIAN-LAR does not locate, so a Nation can appear both ' +
+      'as a LAR land area and as a Census statistical area. provenance census-label keeps ' +
+      'the Census name verbatim. Regenerate with `npm run build:tribal-roster`.',
     meta: {
       rosterSource: `Federal Register ${doc.document_number} (${doc.publication_date})`,
       landAreaSource: 'BIA AIAN-LAR FeatureServer (distinct LARNAME)',
       matcher:
-        'safe-match v2 (D-0.7.0-026): unique whole-phrase containment, state-constrained, ' +
+        'LAR areas, safe-match v2 (D-0.7.0-026): unique whole-phrase containment, state-constrained, ' +
         'distinctive-token guard; plus the maintainer-curated known-ambiguous gate (D-0.7.0-026a)',
+      censusMatcher:
+        'Census areas (rule 7): maintainer-curated known-ambiguous gate (D-0.7.0-026a) first; ' +
+        'then unique whole-phrase containment of BASENAME outside the roster name parentheses, ' +
+        'or equality with a parenthetical, distinctive-token guard; several candidates resolve ' +
+        'only when exactly one carries BASENAME as its parenthetical; no state constraint',
       generated,
       rosterCount: roster.length,
       landAreaCount: larNames.length,
@@ -549,14 +588,17 @@ async function main() {
       'recognized Tribes with no matched land area in AIAN-LAR (landless Tribes, Alaska ' +
       'Native villages, or differently-named areas). censusMatched: Census AIANNH ' +
       'areas matched to a roster name under rule 7 of the build script, with the rule ' +
-      'that matched. censusLabel: Census areas that keep the Census name (no unique match).',
+      'that matched. censusLabel: Census areas that keep the Census name (no unique match). ' +
+      'censusAmbiguous: the subset of censusLabel with several candidates or a ' +
+      'maintainer-curated known-ambiguous BASENAME (rule field), candidates listed.',
     meta: rosterOut.meta,
     matched: matchedPairs,
     larLabel: larLabelFallback,
     ambiguous,
     rosterNoLar,
     censusMatched,
-    censusLabel
+    censusLabel,
+    censusAmbiguous
   };
 
   // The runtime index ships in public/data (fetched lazily on first search).
@@ -606,12 +648,17 @@ async function main() {
   for (const c of censusMatched) console.log(`  ${c.name} => ${c.tribe} [${c.rule}]`);
   console.log(`\nCensus areas keeping the Census name: ${censusLabel.length}`);
   console.log('  ' + censusLabel.join('\n  '));
+  console.log(`\nCensus areas with several or curated candidates: ${censusAmbiguous.length}`);
+  for (const a of censusAmbiguous) console.log(`  ${a.name}: ${a.candidates.join(' | ')}`);
   console.log(
     '\nWrote public/data/tribal-roster.json and public/data/tribal-larname-crosswalk.json'
   );
 }
 
-main().catch((err) => {
-  console.error('[tribal-roster] FAILED:', err.message);
-  process.exit(1);
-});
+// Run only as a script; the test imports censusPass without fetching.
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch((err) => {
+    console.error('[tribal-roster] FAILED:', err.message);
+    process.exit(1);
+  });
+}
