@@ -497,8 +497,9 @@ async function checkBoots() {
   try {
     await boot(browser, 'root', desktop, '');
     await boot(browser, 'wildfire', desktop, '?cluster=wildfire&view=console');
-    await boot(browser, 'heat', desktop, '?cluster=heat');
-    await boot(browser, 'enso', desktop, '?cluster=enso');
+    // view=console keeps these two receipts measuring the Console they always have; full-site links now open Brief.
+    await boot(browser, 'heat', desktop, '?cluster=heat&view=console');
+    await boot(browser, 'enso', desktop, '?cluster=enso&view=console');
     await boot(browser, 'embed-1280', { viewport: { width: 1280, height: 800 } }, '?embed=true&cluster=wildfire', { corner: true });
     await boot(browser, 'embed-390', phone, '?embed=true&cluster=wildfire', { corner: true });
   } finally {
