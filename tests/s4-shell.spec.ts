@@ -132,6 +132,20 @@ for (const viewport of [{ width: 1440, height: 1000 }, { width: 958, height: 935
       await page.locator('#brief-search [data-ddm-search]').fill('oregon');
       await page.locator('#brief-search [data-search-kind="place"][data-search-id="OR"]').click();
       await expect(page.locator('#brief-place-name')).toHaveText('Oregon');
+      // In a short window the pointer pick scrolls the honest-scroll Brief
+      // column to reach a result row beneath the sticky dock: the user's
+      // scroll, not a layout shift. While scrolled, every hazard button must
+      // stay on top (the sticky horizon row never covers the mode row).
+      const coveredHazards = await page.evaluate(() =>
+        [...document.querySelectorAll<HTMLElement>('.shell-cluster-btn')].flatMap((button) => {
+          const { x, y, width, height } = button.getBoundingClientRect();
+          const hit = document.elementFromPoint(x + width / 2, y + height / 2);
+          return hit && button.contains(hit) ? [] : [button.dataset.cluster ?? '?'];
+        }));
+      expect(coveredHazards, 'A scrolled Brief column must leave every hazard button on top').toEqual([]);
+      // Back at the column's top, the selected-place context must not have
+      // moved any upper control.
+      await page.evaluate(() => { document.querySelector('.sidebar-scroll')!.scrollTop = 0; });
       await sample('Drought with Oregon selected');
     } finally {
       for (const gate of gates.values()) gate.release();

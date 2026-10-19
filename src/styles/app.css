@@ -7773,6 +7773,9 @@ a.impact-resource-link::after {
     z-index: 4;
     background: var(--bg-1);
   }
+  /* Near the column's end the shell's own foot drags the sticky horizon row
+     up; the mode row paints above it, so no hazard button is ever covered. */
+  #app.view-brief:not(.embed) .shell-view { z-index: 5; }
 }
 
 .feed-current {
@@ -8746,6 +8749,10 @@ a.impact-resource-link::after {
   .shell-minimap-map { display: none; }
   .shell-minimap-popover-wrap { display: block; }
   .panel-response-card { max-height: 30vh; }
+  /* A short column has no room for a sticky foot: the Brief dock flows after the
+     content again, so it never covers the compact Map areas door. */
+  #app.view-brief:not(.embed) .sidebar-bottom-dock { position: static; }
+  #app.view-brief:not(.embed) .sidebar-scroll { scroll-padding-bottom: 0; }
 }
 
 @media (max-width: 720px) {
