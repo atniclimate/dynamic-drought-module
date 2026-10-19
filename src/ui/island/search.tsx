@@ -127,6 +127,7 @@ interface LazyItems {
   pending: boolean;
   failed: boolean;
   start: () => void;
+  applyParked: () => void;
 }
 
 /**
@@ -136,19 +137,24 @@ interface LazyItems {
  * "unavailable" line, never as a fake empty result, and the guard resets so a
  * later focus or keystroke retries.
  */
-function useLazyItems(load: (() => Promise<SearchItem[]>) | undefined): LazyItems {
+function useLazyItems(
+  load: (() => Promise<SearchItem[]>) | undefined,
+  pointerOver: () => boolean
+): LazyItems {
   const [items, setItems] = useState<SearchItem[]>([]);
   const [pending, setPending] = useState(false);
   const [failed, setFailed] = useState(false);
   const started = useRef(false);
   const settled = useRef(false);
   const parked = useRef<SearchItem[] | null>(null);
+  const applyParked = (): void => {
+    if (!parked.current) return;
+    setItems(parked.current);
+    setFailed(false);
+    parked.current = null;
+  };
   const start = (): void => {
-    if (parked.current) {
-      setItems(parked.current);
-      setFailed(false);
-      parked.current = null;
-    }
+    applyParked();
     if (!load || started.current) return;
     started.current = true;
     // Only the first load is pending: a retry keeps the failure line and the
@@ -156,9 +162,10 @@ function useLazyItems(load: (() => Promise<SearchItem[]>) | undefined): LazyItem
     if (!settled.current) setPending(true);
     load()
       .then((loaded) => {
-        // A landed retry waits for the next keystroke or focus: inserted now,
-        // its rows would push the groups below out from under a still pointer.
-        if (settled.current) {
+        // A retry landing under a pointer waits for it to leave the results or
+        // the next keystroke: inserted now, its rows would push the groups below
+        // out from under it. With no pointer there, the failure line goes at once.
+        if (settled.current && pointerOver()) {
           parked.current = loaded;
           return;
         }
@@ -175,7 +182,7 @@ function useLazyItems(load: (() => Promise<SearchItem[]>) | undefined): LazyItem
         started.current = false;
       });
   };
-  return { items, pending, failed, start };
+  return { items, pending, failed, start, applyParked };
 }
 
 export function Search(props: SearchProps): preact.JSX.Element {
@@ -186,8 +193,10 @@ export function Search(props: SearchProps): preact.JSX.Element {
   // unrelated row when the roster lands (the U3 stage-5 minor 8 fix). If the
   // highlighted item leaves the list, the highlight collapses to none.
   const [highlightedKey, setHighlightedKey] = useState<string | null>(null);
-  const tribal = useLazyItems(props.loadTribal);
-  const cities = useLazyItems(props.loadCities);
+  const listbox = useRef<HTMLDivElement>(null);
+  const pointerOver = (): boolean => listbox.current?.matches(':hover') ?? false;
+  const tribal = useLazyItems(props.loadTribal, pointerOver);
+  const cities = useLazyItems(props.loadCities, pointerOver);
   const { items: tribalItems, pending: tribalPending, failed: tribalFailed } = tribal;
   // A per-instance id prefix so multiple mounts (the console catalog, the Brief
   // head, the mobile sheet) never collide on element ids (invalid HTML that
@@ -331,6 +340,11 @@ export function Search(props: SearchProps): preact.JSX.Element {
   };
 
   const onKeyDown = (event: KeyboardEvent): void => {
+    // A key press is not a pointer choosing a row, so a parked retry can land.
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp' || event.key === 'Enter') {
+      tribal.applyParked();
+      cities.applyParked();
+    }
     if (event.key === 'ArrowDown') {
       event.preventDefault();
       moveHighlight(1);
@@ -434,7 +448,16 @@ export function Search(props: SearchProps): preact.JSX.Element {
           the input; the input already carries the same words as both its
           placeholder and its aria-label, so assistive tech loses nothing.
           The honest zero-match line below (inside the results) stays. */}
-      <div class="ddm-search-results" role="listbox" id={`${uid}-listbox`}>
+      <div
+        class="ddm-search-results"
+        role="listbox"
+        id={`${uid}-listbox`}
+        ref={listbox}
+        onPointerLeave={() => {
+          tribal.applyParked();
+          cities.applyParked();
+        }}
+      >
         {!isEmptyQuery
           ? groupsForRender.map((group) => renderGroup(group, rowsByKind(group.kind)))
           : null}
