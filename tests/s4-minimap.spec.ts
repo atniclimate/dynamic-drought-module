@@ -40,6 +40,44 @@ const NADM_FIXTURE = {
 };
 
 /**
+ * A screen point inside an ocean zone where the zone itself is topmost
+ * (elementFromPoint, with a 3px margin each way) and that lies off the
+ * physical land path: exposed water a person can click. Nearest the zone's
+ * box centre among the candidates.
+ */
+async function exposedWaterPoint(
+  page: Page,
+  key: string,
+): Promise<{ x: number; y: number }> {
+  const zone = page.locator(`#shell-minimap-ocean-${key}`);
+  await zone.scrollIntoViewIfNeeded();
+  const point = await zone.evaluate((path) => {
+    const land = document.querySelector<SVGPathElement>(
+      `#${path.id.replace(/-ocean-[a-z]+$/, '')}-physical-land path`,
+    );
+    const toLand = land?.ownerSVGElement?.getScreenCTM()?.inverse();
+    if (!land || !toLand) return null;
+    const box = path.getBoundingClientRect();
+    const cx = box.left + box.width / 2;
+    const cy = box.top + box.height / 2;
+    let best: { x: number; y: number; d: number } | null = null;
+    for (let y = Math.ceil(box.top) + 3; y <= box.bottom - 3; y += 3) {
+      for (let x = Math.ceil(box.left) + 3; x <= box.right - 3; x += 3) {
+        const topmost = [[0, 0], [3, 0], [-3, 0], [0, 3], [0, -3]].every(
+          ([dx, dy]) => document.elementFromPoint(x + dx!, y + dy!) === path,
+        );
+        if (!topmost || land.isPointInFill(new DOMPoint(x, y).matrixTransform(toLand))) continue;
+        const d = (x - cx) ** 2 + (y - cy) ** 2;
+        if (best === null || d < best.d) best = { x, y, d };
+      }
+    }
+    return best && { x: best.x, y: best.y };
+  });
+  expect(point, `no exposed water point in the ${key} zone`).not.toBeNull();
+  return point!;
+}
+
+/**
  * S4b: the framing minimap, pointer and keyboard (the S4 design record
  * section 3; D-0.7.0-039/041/054). Passing this file is the ruled
  * precondition for the staged desktop retirement of #panel-region (the
@@ -624,14 +662,68 @@ test.describe('S4b minimap', () => {
       });
     await expect(pacific).toHaveAttribute('aria-pressed', 'true');
 
-    // The zone's bbox centre falls on land or the Hawaii box, so a plain
-    // click() would fail Playwright's hit check; dispatch on the path.
-    await atlantic.dispatchEvent('click');
+    // A real pointer click at exposed water: the zone's bbox centre falls on
+    // land or the Hawaii box, so the point is found by hit-testing instead.
+    const atlanticWater = await exposedWaterPoint(page, 'atlantic');
+    await page.mouse.click(atlanticWater.x, atlanticWater.y);
     await expect
       .poll(async () => new URLSearchParams(await search(page)).get('ocean'))
       .toBe('atlantic');
     await expect(atlantic).toHaveAttribute('aria-pressed', 'true');
     await expect(pacific).toHaveAttribute('aria-pressed', 'false');
+
+    const pacificWater = await exposedWaterPoint(page, 'pacific');
+    await page.mouse.click(pacificWater.x, pacificWater.y);
+    await expect
+      .poll(async () => new URLSearchParams(await search(page)).get('ocean'))
+      .toBe('pacific');
+    await expect(pacific).toHaveAttribute('aria-pressed', 'true');
+    await expect(atlantic).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  test('the former Arctic zone is no longer a pointer target (owner, 2026-10-19)', async ({
+    page,
+  }) => {
+    await gotoApp(page, '?view=brief&framing=pacific-coast');
+    const pacific = page.locator('#shell-minimap-ocean-pacific');
+    await pacific.scrollIntoViewIfNeeded();
+    // Sample the retired Arctic zone (its path as shipped before 2026-10-19)
+    // where it does not overlap the surviving zones, inside the cropped view.
+    const samples = await pacific.evaluate((path, arcticPath) => {
+      const oceans = (path as SVGPathElement).ownerSVGElement;
+      const ctm = oceans?.getScreenCTM();
+      if (!oceans || !ctm) return [];
+      const view = oceans.viewBox.baseVal;
+      const live = [...oceans.querySelectorAll<SVGPathElement>('[data-ocean]')];
+      const scratch = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      scratch.setAttribute('style', 'position:absolute;left:0;top:0;width:1px;height:1px;visibility:hidden;pointer-events:none');
+      const arctic = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      arctic.setAttribute('d', arcticPath);
+      scratch.appendChild(arctic);
+      document.body.appendChild(scratch);
+      const points: { x: number; y: number; ocean: string | null }[] = [];
+      for (let y = view.y + 2; y <= 78; y += 4) {
+        for (let x = 10; x <= 650; x += 20) {
+          const local = new DOMPoint(x, y);
+          if (!arctic.isPointInFill(local) || live.some((zone) => zone.isPointInFill(local))) continue;
+          const screen = local.matrixTransform(ctm);
+          const hit = document.elementFromPoint(screen.x, screen.y);
+          points.push({ x: screen.x, y: screen.y, ocean: hit?.closest('[data-ocean]')?.getAttribute('data-ocean') ?? null });
+        }
+      }
+      scratch.remove();
+      return points;
+    }, 'M0,0H660V78C572,66 502,78 430,70C344,61 266,70 194,66C126,62 62,70 0,58Z');
+    expect(samples.length, 'no sample fell in the retired Arctic zone').toBeGreaterThan(0);
+    expect(samples.filter((point) => point.ocean !== null)).toEqual([]);
+
+    const middle = samples[Math.floor(samples.length / 2)]!;
+    await page.mouse.click(middle.x, middle.y);
+    await page.waitForTimeout(500);
+    const params = new URLSearchParams(await search(page));
+    expect(params.get('ocean')).toBeNull();
+    expect(params.get('cluster')).not.toBe('enso');
+    await expect(page.locator('.shell-minimap-map .shell-minimap-ocean.active')).toHaveCount(0);
   });
 
   test('ALL writes a restorable North America camera and survives reload', async ({

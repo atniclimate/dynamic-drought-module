@@ -60,6 +60,44 @@ test.describe('U1 the two doors (view mode)', () => {
       .toBe('brief');
   });
 
+  // The unmodified display links (no view=, no compatibility pin): every
+  // full-site family opens Brief and keeps its own state in the canonical URL.
+  for (const [query, kept] of [
+    ['?cluster=wildfire', { cluster: 'wildfire' }],
+    ['?cluster=enso&ocean=atlantic', { cluster: 'enso', ocean: 'atlantic' }],
+    ['?framing=pacific-coast', { framing: 'pacific-coast' }],
+    ['?select=state:WA', {}]
+  ] as const) {
+    test(`a full-site ${query} link opens Brief and survives a reload (owner, 2026-10-19)`, async ({
+      page
+    }) => {
+      await gotoApp(page, query, { derivedView: true });
+      for (const pass of ['boot', 'reload']) {
+        await expect(page.locator('#app'), pass).toHaveClass(/\bview-brief\b/);
+        await expect
+          .poll(async () => {
+            const params = new URLSearchParams(await search(page));
+            return Object.fromEntries(
+              ['view', ...Object.keys(kept)].map((key) => [key, params.get(key)])
+            );
+          }, { message: pass })
+          .toEqual({ view: 'brief', ...kept });
+        // The reload reads the synced (shared) URL, not the original link.
+        if (pass === 'boot') await page.reload({ waitUntil: 'domcontentloaded' });
+      }
+    });
+  }
+
+  test('an embed display link keeps the console unless it names select= (embed rule)', async ({
+    page
+  }) => {
+    await gotoApp(page, '?embed=true&cluster=wildfire', { derivedView: true });
+    await expect(page.locator('#app')).toHaveClass(/\bview-console\b/);
+
+    await gotoApp(page, '?embed=true&cluster=wildfire&select=state:WA', { derivedView: true });
+    await expect(page.locator('#app')).toHaveClass(/\bview-brief\b/);
+  });
+
   test('an explicit view= wins over the derived door', async ({ page }) => {
     await gotoApp(page, '?layers=usdm&view=brief');
     await expect(page.locator('#app')).toHaveClass(/\bview-brief\b/);
