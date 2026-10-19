@@ -129,18 +129,4 @@ test.describe('explicit Wildfire and Fire recent scenes', () => {
     await expect(layerCheckbox(page, 'nifc-fires')).toBeChecked();
     await expect(layerCheckbox(page, 'hms-smoke')).toBeChecked();
   });
-
-  test('Fire risk quick view explicitly selects the same recent scene', async ({
-    page
-  }) => {
-    await gotoApp(page, '?view=console');
-    await page
-      .locator('#preset-chips .preset-chip', { hasText: 'Fire risk' })
-      .click();
-
-    await expect(page.locator(SWITCHER)).toHaveAttribute('aria-pressed', 'true');
-    await expect.poll(async () => search(page)).not.toContain('basemap=');
-    await expect(layerCheckbox(page, 'nifc-fires')).toBeChecked();
-    await expect(layerCheckbox(page, 'hms-smoke')).toBeChecked();
-  });
 });

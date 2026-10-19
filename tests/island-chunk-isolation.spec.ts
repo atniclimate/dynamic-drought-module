@@ -10,7 +10,6 @@ import {
   stubSpcFireOutlook,
   coverFuturePages,
   assertBuildIdentity,
-  PRESET_LABELS,
   ROLE_GROUPS
 } from './helpers';
 import { stubRecentSatellite } from './satellite-fixture';
@@ -65,9 +64,8 @@ async function bootBriefWithoutCatalog(page: Page, query: string): Promise<void>
   await stubSpcFireOutlook(page);
   coverFuturePages(page);
   await page.goto(query, { waitUntil: 'domcontentloaded' });
-  await expect(page.locator('#preset-chips .preset-chip')).toHaveCount(PRESET_LABELS.length);
-  await assertBuildIdentity(page);
   await expect(page.locator('#region-select option')).not.toHaveCount(0);
+  await assertBuildIdentity(page);
   await expect(page.locator('html')).toHaveAttribute('data-ddm-controls', 'ready');
   await expect.poll(() => page.locator('html').getAttribute('data-ddm-boot')).toBe('idle');
 }

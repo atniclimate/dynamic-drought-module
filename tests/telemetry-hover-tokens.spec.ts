@@ -55,18 +55,10 @@ for (const width of [1440, 820]) {
   });
 }
 
-test('D3 opaque quick-view and checkbox controls keep neutral accessible edges', async ({ page }) => {
+test('D3 opaque checkbox controls keep neutral accessible edges', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await gotoApp(page, '?region=central_oregon&view=console&layers=none&flow=off');
-  const chip = page.locator('.preset-chip[aria-pressed="false"]').first();
-  await expect(chip).toBeVisible();
-  await expect(chip).toHaveCSS('background-color', 'rgb(30, 36, 44)');
-  await expect(chip).toHaveCSS('border-top-color', 'rgb(138, 148, 166)');
-  await chip.hover();
-  await expect(chip).toHaveCSS('background-color', 'rgb(42, 49, 56)');
-  await expect(chip).toHaveCSS('color', 'rgb(232, 236, 240)');
-  await expect(chip).toHaveCSS('border-top-color', 'rgb(138, 148, 166)');
   const checkbox = page.locator('.layer-toggle:visible input[type="checkbox"]:not(:checked)').first();
   await expect(checkbox).toHaveCSS('border-top-color', 'rgb(138, 148, 166)');
   await expect(checkbox).toHaveCSS('background-color', 'rgb(1, 11, 19)');

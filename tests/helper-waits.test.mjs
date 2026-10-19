@@ -37,7 +37,7 @@ function harness({ read, timing = clock(), seam = null, seamError } = {}) {
       return untilAnswered(readValue, accept, budget, what, timing);
     },
     layerPill: (page, key) => page.locator(`[data-layer-status="${key}"]`),
-    PRESET_LABELS: [], ROLE_GROUPS: []
+    ROLE_GROUPS: []
   };
   for (const name of [...body('gotoApp').matchAll(/(?:await )?((?:stub|install|cover|assertBuild)[A-Za-z]+)\(/g)].map((m) => m[1])) {
     bindings[name] = async () => {};

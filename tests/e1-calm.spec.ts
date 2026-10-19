@@ -23,10 +23,9 @@ test.describe('E1 deliverable 1: Brief-mode progressive disclosure', () => {
 
     await expect(page.locator('#app')).toHaveClass(/\bview-brief\b/);
 
-    // Hidden in Brief: Quick views, the Layers catalog, Water & Snow, and
+    // Hidden in Brief: the Layers catalog, Water & Snow, and
     // the persistent footer (review E1.2). CSS-first: the DOM stays
     // mounted, so counts still resolve while nothing displays.
-    await expect(page.locator('#panel-quick-views')).toBeHidden();
     await expect(page.locator('#panel-layers')).toBeHidden();
     await expect(page.locator('#panel-telemetry')).toBeHidden();
     await expect(page.locator('.sidebar-footer')).toBeHidden();
@@ -42,7 +41,6 @@ test.describe('E1 deliverable 1: Brief-mode progressive disclosure', () => {
     await page.locator('.view-switch [data-view="console"]').click();
 
     await expect(page.locator('#app')).toHaveClass(/\bview-console\b/);
-    await expect(page.locator('#panel-quick-views')).toBeVisible();
     await expect(page.locator('#panel-layers')).toBeVisible();
     await expect(page.locator('#panel-telemetry')).toBeVisible();
     await expect(page.locator('.sidebar-footer')).toBeVisible();
@@ -56,7 +54,6 @@ test.describe('E1 deliverable 1: Brief-mode progressive disclosure', () => {
     await expect(page.locator('#brief-search [data-ddm-search]')).toBeVisible();
 
     await gotoApp(page, '?view=console');
-    await expect(page.locator('#panel-quick-views')).toBeVisible();
     await expect(page.locator('#panel-layers')).toBeVisible();
     await expect(page.locator('.sidebar-footer')).toBeVisible();
   });

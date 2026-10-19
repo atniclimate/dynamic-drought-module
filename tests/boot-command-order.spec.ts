@@ -10,7 +10,7 @@ import {
 } from './helpers';
 import { stubCpcDroughtOutlook } from './cpc-outlook-fixtures';
 import { emptyCollectionBody, routeGeojson } from './tribal-fixtures';
-import { MOBILE_HAZARD_PRESETS, VIEW_PRESETS, type ViewPreset } from '../src/config/presets';
+import { MOBILE_HAZARD_PRESETS, type ViewPreset } from '../src/config/presets';
 
 const ONE_PIXEL_PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
@@ -26,7 +26,7 @@ const ONE_PIXEL_PNG = Buffer.from(
  * (`src/ui/sidebar.ts`, `enableMapDependentControls` in its finally), but
  * the URL or default layer set is activated only once the lazy island chunk
  * settles (`islandReady.then(... applyLayerSet(bootParams.layers))`). On a
- * slow link a hazard-rail tap or a preset chip click lands in that window,
+ * slow link a hazard-rail tap or a Layers studio checkbox lands in that window,
  * and before this unit the boot then re-checked and re-activated every key it
  * had captured, with no exclusivity pass: the drought surface and the chosen
  * surface drew together, and the share URL carried both.
@@ -49,8 +49,7 @@ const ONE_PIXEL_PNG = Buffer.from(
  * checked, in the URL, and never drawn.
  *
  * Modes are never a literal list: the rail case taps every RENDERED rail
- * button in order (several quick mode changes), and the chip cases pick a
- * RENDERED chip by what its preset declares, each resolved to its preset
+ * button in order (several quick mode changes), each resolved to its preset
  * through `src/config/presets.ts`.
  *
  * The cluster (mode) buttons and the horizon chips are rendered by the
@@ -229,29 +228,6 @@ async function expectDisplayIs(
     .toEqual({ undrawn: [], otherSurfaces: [] });
 }
 
-/** The first rendered preset chip whose preset satisfies `accept`. */
-async function firstRenderedChip(
-  page: Page,
-  accept: (preset: ViewPreset) => boolean,
-  what: string
-): Promise<{ label: string; preset: ViewPreset }> {
-  const labels = await page.locator('#preset-chips .preset-chip').allTextContents();
-  for (const label of labels) {
-    const preset = VIEW_PRESETS.find((candidate) => candidate.label === label.trim());
-    if (preset && accept(preset)) return { label: label.trim(), preset };
-  }
-  throw new Error(`no rendered preset chip ${what}`);
-}
-
-/** A preset that names a surface, none of them in `bootLayers`. */
-function namesAnotherSurface(bootLayers: readonly string[]): (preset: ViewPreset) => boolean {
-  const bootSurfaces = new Set(surfacesOf(bootLayers));
-  return (preset) => {
-    const surfaces = surfacesOf(preset.layers);
-    return surfaces.length > 0 && surfaces.every((key) => !bootSurfaces.has(key));
-  };
-}
-
 test.beforeEach(async ({ page }) => {
   await stubModeSources(page);
 });
@@ -284,60 +260,6 @@ test.describe('a command during the deferred boot (phone, 390x844)', () => {
 
 test.describe('a command during the deferred boot (desktop, 1280x800)', () => {
   test.use({ viewport: { width: 1280, height: 800 } });
-
-  test('a preset chip click while the island chunk is held wins over the deferred boot set', async ({
-    page
-  }) => {
-    let chosen: ViewPreset | null = null;
-    await bootWithHeldIsland(page, '?view=console', async () => {
-      const { label, preset } = await firstRenderedChip(
-        page,
-        namesAnotherSurface(DEFAULT_ON),
-        'names a surface the boot did not'
-      );
-      await page.locator('#preset-chips .preset-chip', { hasText: label }).click();
-      chosen = preset;
-    });
-    expect(chosen).not.toBeNull();
-    await expectDisplayIs(page, (chosen as ViewPreset | null)?.layers ?? []);
-  });
-
-  test('a preset chip declaring a later horizon, pressed while the island chunk is held, wins over the deferred boot set', async ({
-    page
-  }) => {
-    let chosen: ViewPreset | null = null;
-    await bootWithHeldIsland(page, '?view=console', async () => {
-      // The chip runs requestHorizon inside the window as well as its layers.
-      const { label, preset } = await firstRenderedChip(
-        page,
-        (candidate) => candidate.horizon !== undefined && candidate.horizon !== 'current',
-        'declares a horizon later than current'
-      );
-      await page.locator('#preset-chips .preset-chip', { hasText: label }).click();
-      chosen = preset;
-    });
-    expect(chosen).not.toBeNull();
-    const preset = chosen as ViewPreset | null;
-    await expectDisplayIs(page, preset?.layers ?? [], preset?.horizon);
-  });
-
-  test('a preset chip click held behind an explicit layers= deep link wins over the deferred boot set', async ({
-    page
-  }) => {
-    const deepLink = ['nadm-drought', 'states'];
-    let chosen: ViewPreset | null = null;
-    await bootWithHeldIsland(page, `?view=console&layers=${deepLink.join(',')}`, async () => {
-      const { label, preset } = await firstRenderedChip(
-        page,
-        namesAnotherSurface(deepLink),
-        'names a surface the deep link did not'
-      );
-      await page.locator('#preset-chips .preset-chip', { hasText: label }).click();
-      chosen = preset;
-    });
-    expect(chosen).not.toBeNull();
-    await expectDisplayIs(page, (chosen as ViewPreset | null)?.layers ?? []);
-  });
 
   test('a Layers studio checkbox while the island chunk is held wins over the deferred boot set', async ({
     page

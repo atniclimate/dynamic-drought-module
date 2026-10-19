@@ -443,7 +443,7 @@ test.describe('U3i one search across hosts (U3b/c/d)', () => {
 
 /**
  * At a short-phone 390x844 in console mode, the sheet's HALF detent must fit
- * the whole console-half stack (the region jump-to list, the quick views, and
+ * the whole console-half stack (the region jump-to list and
  * the door to the full catalog) without the retired U2 compaction. Because
  * `.sidebar-scroll` is `overflow: hidden` at half, anything pushed below the
  * fold is clipped and unreachable; the load-bearing assertion is that the
@@ -464,7 +464,6 @@ test.describe('U3i half-detent fit at 390x844 (MINOR 6)', () => {
 
     // The whole half-console stack is present.
     await expect(page.locator('#panel-region')).toBeVisible();
-    await expect(page.locator('#panel-quick-views')).toBeVisible();
     const door = page.locator('#sheet-all-layers-btn');
     await expect(door).toBeVisible();
 

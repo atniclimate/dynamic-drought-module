@@ -46,7 +46,7 @@ test.describe('DEF-2 explicit view=brief on a mobile cold load (390x844)', () =>
     await page.locator('#mobile-footer-nav button[data-tab="place"]').click();
     await expect(page.locator('#app')).toHaveAttribute('data-sheet-detent', 'half');
     await page.reload({ waitUntil: 'domcontentloaded' });
-    await expect(page.locator('#preset-chips .preset-chip')).not.toHaveCount(0);
+    await expect(page.locator('#region-select option')).not.toHaveCount(0);
     await expect(page.locator('#app')).toHaveAttribute('data-sheet-detent', 'closed');
   });
 

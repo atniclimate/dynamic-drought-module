@@ -77,9 +77,9 @@ test('without WebGL 2 the chrome still boots and says so', async ({ page }) => {
   const regionSelect = page.locator('#region-select');
   await expect(regionSelect).toBeDisabled();
   await expect(regionSelect).toHaveAttribute('aria-disabled', 'true');
-  await expect(page.locator('#preset-chips .preset-chip')).not.toHaveCount(0);
+  await expect(page.locator('#hazard-rail button[data-preset]')).not.toHaveCount(0);
   await expect(
-    page.locator('#preset-chips .preset-chip:not([aria-disabled="true"])')
+    page.locator('#hazard-rail button[data-preset]:not([aria-disabled="true"])')
   ).toHaveCount(0);
   await expect(page.locator('#sidebar-control-note')).toHaveText(
     'This browser cannot show the map, so these controls have nothing to change.'

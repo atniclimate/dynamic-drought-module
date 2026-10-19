@@ -1,10 +1,7 @@
 import { expect, test } from './offline-test';
 
 import { HAZARD_CLUSTERS } from '../src/config/clusters';
-import {
-  MOBILE_HAZARD_PRESETS,
-  VIEW_PRESETS
-} from '../src/config/presets';
+import { MOBILE_HAZARD_PRESETS } from '../src/config/presets';
 import { HMS_OVERVIEW_QUALIFICATION } from '../src/config/wildfire-presentation';
 
 test.describe('Wildfire recent-scene configuration', () => {
@@ -20,14 +17,6 @@ test.describe('Wildfire recent-scene configuration', () => {
     expect(mobilePreferences.get('hazard-fire')).toBe('satellite');
     expect(mobilePreferences.get('hazard-drought')).toBeUndefined();
     expect(mobilePreferences.get('hazard-heat')).toBeUndefined();
-
-    const quickPreferences = new Map(
-      VIEW_PRESETS.map((preset) => [preset.key, preset.preferredBasemap])
-    );
-    expect(quickPreferences.get('fire-risk')).toBe('satellite');
-    for (const key of ['right-now', 'this-week', 'season-ahead', 'whose-land'] as const) {
-      expect(quickPreferences.get(key)).toBeUndefined();
-    }
   });
 
   test('copy keeps GeoColor context separate from the HMS observation clock', () => {

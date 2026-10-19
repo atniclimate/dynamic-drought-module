@@ -59,7 +59,8 @@ test.describe('boot', () => {
 
     // UX-3 framing pass: the sidebar carries domain vocabulary, not GIS jargon.
     const titles = page.locator('.sidebar-scroll .panel-title');
-    await expect(titles.filter({ hasText: 'Quick views' })).toHaveCount(1);
+    // The Quick views chip row is retired (owner review, 2026-10-19).
+    await expect(titles.filter({ hasText: 'Quick views' })).toHaveCount(0);
     await expect(titles.filter({ hasText: 'Water & Snow' })).toHaveCount(1);
     await expect(
       page.locator('label.layer-toggle:has(input[data-layer-key="telemetry"]) .layer-toggle-name')

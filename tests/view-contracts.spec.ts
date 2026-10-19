@@ -333,7 +333,6 @@ async function runStep(
     await page.reload({ waitUntil: 'domcontentloaded' });
     // Boot is finished when the sidebar has rebuilt, the same
     // network-independent signal `gotoApp` waits on.
-    await expect(page.locator('#preset-chips .preset-chip')).not.toHaveCount(0);
     await expect(page.locator('#region-select option')).not.toHaveCount(0);
     return;
   }

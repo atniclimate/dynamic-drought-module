@@ -246,8 +246,6 @@ Two doctrines shape the coverage.
    - `ux1-surfaces.spec.ts` - the four role groups render in order; condition
      surfaces are mutually exclusive; an old multi-surface link resolves to
      the first surface named; a deactivated surface clears its pill.
-   - `ux2-presets.spec.ts` - the five preset chips render in order; a preset
-     replaces the active layer set and holds the one-surface-at-a-time rule.
    - `url-state.spec.ts` - region and layers restore from a deep link; a
      toggle round-trips through the URL and a second toggle-on reuses the
      cached lazy-loaded module; embed mode survives a re-sync; expanding the
@@ -603,8 +601,8 @@ the sidebar never builds.
 
 ## When you change a config table
 
-The canonical strings the specs assert against (preset labels, role-group
+The canonical strings the specs assert against (role-group
 headings, the pill vocabulary, default-on keys) are mirrored in
-`tests/helpers.ts`. If you rename a preset or relabel a role group, update the
+`tests/helpers.ts`. If you relabel a role group, update the
 mirror there; the mismatch will otherwise surface as a failing spec, which is
 the point.

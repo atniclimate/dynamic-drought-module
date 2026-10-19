@@ -1,7 +1,7 @@
 import { test, expect } from './offline-test';
 
 import { LAYER_KEYS, LAYER_DEFS, getLayerDef, resolveExclusiveSurface } from '../src/config/layers';
-import { PRESET_KEYS, MOBILE_HAZARD_PRESETS, VIEW_PRESETS } from '../src/config/presets';
+import { PRESET_KEYS, MOBILE_HAZARD_PRESETS } from '../src/config/presets';
 import { HAZARD_CLUSTERS } from '../src/config/clusters';
 import { parseUrlParams } from '../src/state/url';
 
@@ -76,9 +76,9 @@ test('every coActivateWith entry names a key that exists in LAYER_KEYS', () => {
   }
 });
 
-test('every preset layer key (MOBILE_HAZARD_PRESETS and VIEW_PRESETS) exists in LAYER_KEYS', () => {
+test('every preset layer key (MOBILE_HAZARD_PRESETS) exists in LAYER_KEYS', () => {
   const authoritySet = new Set<string>(LAYER_KEYS);
-  const allPresets = [...MOBILE_HAZARD_PRESETS, ...VIEW_PRESETS];
+  const allPresets = MOBILE_HAZARD_PRESETS;
   for (const preset of allPresets) {
     for (const layerKey of preset.layers) {
       expect(
@@ -107,25 +107,25 @@ test('every cluster recipe layer key (HAZARD_CLUSTERS) exists in LAYER_KEYS', ()
   }
 });
 
-test('PRESET_KEYS has the same length as MOBILE_HAZARD_PRESETS plus VIEW_PRESETS', () => {
-  const allPresets = [...MOBILE_HAZARD_PRESETS, ...VIEW_PRESETS];
+test('PRESET_KEYS has the same length as MOBILE_HAZARD_PRESETS', () => {
+  const allPresets = MOBILE_HAZARD_PRESETS;
   expect(
     PRESET_KEYS.length,
     `PRESET_KEYS has ${PRESET_KEYS.length} entries but MOBILE_HAZARD_PRESETS ` +
-      `plus VIEW_PRESETS has ${allPresets.length}; add or remove an entry in ` +
+      `has ${allPresets.length}; add or remove an entry in ` +
       'PRESET_KEYS (src/config/presets.ts) so the two lists have the same ' +
       'length before checking their contents'
   ).toBe(allPresets.length);
 });
 
 test('PRESET_KEYS has no stale key (every PRESET_KEYS entry names a real preset)', () => {
-  const allPresets = [...MOBILE_HAZARD_PRESETS, ...VIEW_PRESETS];
+  const allPresets = MOBILE_HAZARD_PRESETS;
   const presetKeySet = new Set(allPresets.map((preset) => preset.key));
   for (const key of PRESET_KEYS) {
     expect(
       presetKeySet.has(key),
-      `PRESET_KEYS entry "${key}" names no preset in MOBILE_HAZARD_PRESETS or ` +
-        'VIEW_PRESETS; remove the stale entry from PRESET_KEYS in ' +
+      `PRESET_KEYS entry "${key}" names no preset in MOBILE_HAZARD_PRESETS; ` +
+        'remove the stale entry from PRESET_KEYS in ' +
         'src/config/presets.ts'
     ).toBe(true);
   }
@@ -133,11 +133,11 @@ test('PRESET_KEYS has no stale key (every PRESET_KEYS entry names a real preset)
 
 test('PRESET_KEYS has no missing key (every preset key is named in PRESET_KEYS)', () => {
   const authoritySet = new Set<string>(PRESET_KEYS);
-  const allPresets = [...MOBILE_HAZARD_PRESETS, ...VIEW_PRESETS];
+  const allPresets = MOBILE_HAZARD_PRESETS;
   for (const preset of allPresets) {
     expect(
       authoritySet.has(preset.key),
-      `preset key "${preset.key}" (from MOBILE_HAZARD_PRESETS or VIEW_PRESETS) ` +
+      `preset key "${preset.key}" (from MOBILE_HAZARD_PRESETS) ` +
         'is missing from PRESET_KEYS; add it to PRESET_KEYS in ' +
         'src/config/presets.ts'
     ).toBe(true);
@@ -218,8 +218,8 @@ test('resolveExclusiveSurface enforces one-surface-at-a-time among real keys whi
   expect(result).toEqual(['nadm-drought', 'aiannh', 'not-a-real-layer-key']);
 });
 
-test('no preset key appears twice across MOBILE_HAZARD_PRESETS and VIEW_PRESETS combined', () => {
-  const allPresets = [...MOBILE_HAZARD_PRESETS, ...VIEW_PRESETS];
+test('no preset key appears twice in MOBILE_HAZARD_PRESETS', () => {
+  const allPresets = MOBILE_HAZARD_PRESETS;
   const seen = new Map<string, number>();
   for (const preset of allPresets) {
     const count = (seen.get(preset.key) ?? 0) + 1;
@@ -228,8 +228,8 @@ test('no preset key appears twice across MOBILE_HAZARD_PRESETS and VIEW_PRESETS 
   for (const [key, count] of seen) {
     expect(
       count,
-      `preset key "${key}" appears ${count} times across MOBILE_HAZARD_PRESETS ` +
-        'and VIEW_PRESETS combined (expected exactly 1); either rename one of ' +
+      `preset key "${key}" appears ${count} times in MOBILE_HAZARD_PRESETS ` +
+        '(expected exactly 1); either rename one of ' +
         'the presets or, if the duplication is deliberate, this assertion ' +
         'needs revisiting'
     ).toBe(1);

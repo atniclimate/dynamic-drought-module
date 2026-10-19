@@ -133,7 +133,6 @@ test.describe('mobile side rail and glass panels', () => {
     await layers.click();
     await expect(app).toHaveAttribute('data-sheet-detent', 'half');
     await expect(page.locator('#panel-region')).toBeVisible();
-    await expect(page.locator('#panel-quick-views')).toBeVisible();
     await expect(page.locator('#sheet-enso-flow-host')).toBeVisible();
     await expect(page.locator('#sheet-enso-flow-host #enso-flow-controls')).toBeVisible();
     await expect(page.locator('#sheet-all-layers-btn')).toBeVisible();

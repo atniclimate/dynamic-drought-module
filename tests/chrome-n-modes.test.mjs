@@ -6,7 +6,7 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 // src/config/chip-labels.ts imports `./clusters` extensionless; the same
-// resolve hook tests/preset-pressed.test.mjs installs for presets.ts's
+// resolve hook tests/quick-views-retired.test.mjs installs for presets.ts's
 // `./clusters` import, so a plain `node --test` still needs no DOM stub.
 registerHooks({
   resolve(specifier, context, nextResolve) {
@@ -39,7 +39,7 @@ registerHooks({
  * (src/config/clusters.ts, itself import-free: its sole import is
  * `import type`, erased by Node 24's type stripping), so this file loads
  * both with no resolve hook, the same pattern
- * tests/map-chrome-contract.test.mjs and tests/preset-pressed.test.mjs
+ * tests/map-chrome-contract.test.mjs and tests/quick-views-retired.test.mjs
  * establish (checked below by import, not by re-deriving the mechanism).
  *
  * Predicted red on the pre-M10 tree: the module import of
