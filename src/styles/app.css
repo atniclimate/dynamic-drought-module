@@ -2710,13 +2710,6 @@ button.conditions-metric:hover .conditions-action-hide {
   display: contents;
 }
 
-/* Slot 4's reserved box (S30D D1 M9) exists on the desktop shell only. An
-   empty flex item would still take a gap in the phone and embed stacks,
-   so everywhere else it generates no box at all. */
-.map-spine-reserve {
-  display: none;
-}
-
 /* The key in the control column is bounded by the column, not by the
    bottom dock's width, and stays non-interactive chrome. */
 @media (min-width: 721px) {
@@ -2857,25 +2850,21 @@ button.conditions-metric:hover .conditions-action-hide {
     align-items: stretch;
     justify-items: stretch;
     width: var(--map-cell-w);
-    /* The empty reserved slot and the gaps never swallow a map click. */
+    /* The gaps never swallow a map click. */
     pointer-events: none;
   }
   .app-shell:not(.embed) .map-overlay-controls > [data-map-slot='1'] { grid-area: 1 / 1; }
   .app-shell:not(.embed) .map-overlay-controls > [data-map-slot='2'] { grid-area: 2 / 1; }
   .app-shell:not(.embed) .map-overlay-controls > [data-map-slot='3'] { grid-area: 3 / 1; }
-  .app-shell:not(.embed) .map-overlay-controls > [data-map-slot='4'],
-  .app-shell:not(.embed) .map-overlay-controls > #share-btn { grid-area: 4 / 1; }
+  .app-shell:not(.embed) .map-overlay-controls > [data-map-slot='4'] { grid-area: 4 / 1; }
   /* Slots 2 and 3 stop being `display: contents` and become their own
      boxes: the moved control fills its slot, and slot 3 anchors the
-     drawer. Slot 4's box is the reserve span, under Share. */
+     drawer. */
   .app-shell:not(.embed) .map-overlay-controls > .map-spine-slot {
     display: block;
     position: relative;
     min-width: 0;
     min-height: 0;
-  }
-  .app-shell:not(.embed) .map-overlay-controls > .map-spine-reserve {
-    display: block;
   }
   /* A physically framed page that is not an embed still gets the full-site
      link-outs (src/ui/view-shell.ts); they follow the grid, never take a
@@ -6075,6 +6064,7 @@ a.impact-resource-link::after {
 }
 /* A key line that opens its map feature's popup: reads as the line it was, focus ring from the global rule. */
 .map-key-door {
+  min-height: var(--pointer-target);
   margin: 0;
   padding: 0;
   border: 0;
@@ -7205,19 +7195,6 @@ a.impact-resource-link::after {
   white-space: nowrap;
 }
 .time-bar-jump:hover { color: var(--fg-0); border-color: var(--line-strong); }
-/* A hatched jump chip previews the outlook instrument it switches to. */
-.time-bar-jump.hatched {
-  color: var(--ink-soft);
-  border-color: var(--rule-control);
-  background:
-    repeating-linear-gradient(
-      45deg,
-      transparent 0 3px,
-      color-mix(in srgb, var(--ink-soft) 16%, transparent) 3px 5px
-    ),
-    var(--bg-2);
-}
-.time-bar-jump.hatched:hover { color: var(--fg-0); }
 
 .time-bar-stamp {
   display: flex;
@@ -7768,6 +7745,9 @@ a.impact-resource-link::after {
      variable details never move them; margin-top: auto is inert elsewhere. */
   #app.view-brief:not(.embed) .sidebar-scroll { display: flex; flex-direction: column; }
   #app.view-brief:not(.embed) .sidebar-scroll > * { flex-shrink: 0; }
+  /* The dock grows upward from the foot, so the open legend renders above its
+     summary; holdSummarySeat scrolls back any push past the foot. */
+  #app.view-brief:not(.embed) .sidebar-legend-disclosure[open] { display: flex; flex-direction: column-reverse; }
 }
 
 .feed-current {
@@ -8019,17 +7999,24 @@ a.impact-resource-link::after {
     filter 0.12s ease;
 }
 
-.shell-minimap-ocean:hover,
-.shell-minimap-ocean:focus-visible {
+.shell-minimap-ocean:hover {
   fill: rgba(34, 211, 238, 0.09);
   stroke: rgba(34, 211, 238, 0.72);
-  outline: none;
 }
 
 .shell-minimap-ocean.active {
   fill: rgba(34, 211, 238, 0.09);
   stroke: rgba(34, 211, 238, 0.72);
   filter: drop-shadow(0 0 5px rgba(34, 211, 238, 0.34));
+}
+
+/* After .active, and unlike it, so focus also shows on the pressed zone
+   (the mainland region's pattern). */
+.shell-minimap-ocean:focus-visible {
+  outline: none;
+  fill: rgba(34, 211, 238, 0.09);
+  stroke: var(--accent);
+  stroke-width: 2px;
 }
 
 /* ENSO's scale label names the RONI phase, so this line says why the
