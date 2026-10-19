@@ -1365,3 +1365,40 @@ test('in Wildfire 3D the issuer colours on and then off stand the drape down and
     }
   });
 });
+
+test('entering Wildfire 3D with the issuer colours already on mounts the drape stood down; the flat white Fuel risk is hidden and the drape stands up when the colours go off', async () => {
+  const { activateWhpDrape, deactivateWhpDrape } = await import('../src/layers/whp-3d.ts');
+  const { registry } = await import('../src/state/registry.ts');
+  const visibility = new Map(), mounted = [], sources = new Map();
+  const layers = new Map([['usfs-whp', { id: 'usfs-whp' }]]);
+  const map = {
+    getSource: id => sources.get(id), removeSource: id => sources.delete(id), addSource: (id, spec) => sources.set(id, spec),
+    getLayer: id => layers.get(id), removeLayer: id => layers.delete(id),
+    addLayer(layer) { layers.set(layer.id, layer); visibility.set(layer.id, layer.layout.visibility); },
+    moveLayer() {}, setLayoutProperty: (id, name, value) => visibility.set(id, value),
+    getStyle: () => ({ layers: [...layers.keys()].map(id => ({ id })) }), refreshTiles() {}
+  };
+  await withWhpBrowser(async () => {
+    const scene = new AbortController();
+    try {
+      window.dispatchEvent = event => { if (event.type === 'ddm:whp-shade') mounted.push(event.detail.mounted); };
+      registry.activate('usfs-whp-classes');
+      // Not drawn, so not reported as rendered; but mounted hidden, and the white copy steps aside.
+      assert.equal(await activateWhpDrape(map, scene.signal), false);
+      assert.equal(sources.has('whp-2023'), true);
+      assert.deepEqual([visibility.get('usfs-whp'), visibility.get('whp-2023')], ['none', 'none']);
+      assert.deepEqual(mounted, [false]);
+
+      // The colours go off: the perimeter-masked drape stands up; the flat white layer stays hidden.
+      registry.deactivate('usfs-whp-classes');
+      assert.deepEqual([visibility.get('usfs-whp'), visibility.get('whp-2023')], ['none', 'visible']);
+      assert.equal(mounted.at(-1), true);
+
+      deactivateWhpDrape(map);
+      assert.equal(visibility.get('usfs-whp'), 'visible');
+      assert.equal(sources.has('whp-2023'), false);
+    } finally {
+      scene.abort(); registry.deactivate('usfs-whp-classes'); deactivateWhpDrape(map);
+    }
+  });
+});

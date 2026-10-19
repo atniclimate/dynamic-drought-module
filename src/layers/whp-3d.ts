@@ -120,6 +120,12 @@ function announceFuelRisk(): void {
   window.dispatchEvent(new CustomEvent('ddm:whp-shade', { detail: { layer: LAYER_ID, active: on, mounted: true } }));
 }
 
+/** No drape drawn (stood down or torn down): no legend, and the console's switch has nothing to act on. */
+function announceNoDrape(): void {
+  hideLegend(LEGEND_KEY);
+  window.dispatchEvent(new CustomEvent('ddm:whp-shade', { detail: { layer: LAYER_ID, active: false, mounted: false } }));
+}
+
 /**
  * One issuer, one drawn copy. The issuer-coloured row (`usfs-whp-classes`)
  * is a deliberate Layer studio choice of the issuer's colours, so the drape
@@ -138,16 +144,15 @@ function showFlatFuelRisk(map: maplibregl.Map, visible: boolean): void {
 
 /**
  * Probe the bundled archive, then add the raster source and drape layer
- * and register the legend. Idempotent. Returns false (nothing added) when
- * the issuer-coloured row is on, or when the archive is unreachable or
- * invalid; the caller degrades partially either way.
+ * and register the legend. Idempotent. Returns false when the archive is
+ * unreachable or invalid (nothing added), or when the issuer-coloured row
+ * is on (mounted stood down, so nothing drawn yet); the caller degrades
+ * partially either way.
  */
 export async function activateWhpDrape(
   map: maplibregl.Map,
   signal: AbortSignal
 ): Promise<boolean> {
-  if (issuerColoursOn()) return false;
-
   try {
     await probeArchiveHeader(URLS.whp2023PmtilesLocal, signal);
   } catch (err) {
@@ -157,8 +162,9 @@ export async function activateWhpDrape(
     return false;
   }
   if (signal.aborted) return false;
-  // The issuer colours can finish activating during the probe, before the watcher below exists.
-  if (issuerColoursOn()) return false;
+  // Read after the probe and in the same task as the watcher below, so the
+  // issuer colours on at entry mount the drape stood down and their going off stands it up.
+  stoodDown = issuerColoursOn();
   // Before the source exists, so its first tiles are already cut and
   // entering the scene reloads nothing.
   syncPerimeters(map);
@@ -178,7 +184,7 @@ export async function activateWhpDrape(
         id: LAYER_ID,
         type: 'raster',
         source: SOURCE_ID,
-        layout: { visibility: fuelRiskVisibility() },
+        layout: { visibility: stoodDown ? 'none' : fuelRiskVisibility() },
         paint: {
           // The shading table carries each class's effective white opacity
           // (WHP_3D_SHADE_CATEGORIES), so the layer itself adds none.
@@ -224,7 +230,8 @@ export async function activateWhpDrape(
   }
 
   showFlatFuelRisk(map, false);
-  announceFuelRisk();
+  if (stoodDown) announceNoDrape();
+  else announceFuelRisk();
   releaseSwitchWatch?.();
   releaseSwitchWatch = onFire3DGroundLayerChange((layer) => {
     if (layer !== 'fuelRisk' || stoodDown) return;
@@ -238,19 +245,14 @@ export async function activateWhpDrape(
   // colours stand the drape down (hidden, still mounted and still following
   // the perimeters), and turning them off stands it back up; only the scene
   // teardown removes it and gives the flat layer back.
-  stoodDown = false;
   releaseFlatLayerWatch?.();
   releaseFlatLayerWatch = registry.on('change', () => {
     showFlatFuelRisk(map, false);
     if (issuerColoursOn() === stoodDown) return;
     stoodDown = !stoodDown;
     if (map.getLayer(LAYER_ID)) map.setLayoutProperty(LAYER_ID, 'visibility', stoodDown ? 'none' : fuelRiskVisibility());
-    if (!stoodDown) {
-      announceFuelRisk();
-      return;
-    }
-    hideLegend(LEGEND_KEY);
-    window.dispatchEvent(new CustomEvent('ddm:whp-shade', { detail: { layer: LAYER_ID, active: false, mounted: false } }));
+    if (stoodDown) announceNoDrape();
+    else announceFuelRisk();
   });
   // The perimeter layer publishes each different collection it puts on the
   // map (its first, and after a pan or zoom), and null once it is off; the
@@ -260,7 +262,8 @@ export async function activateWhpDrape(
     syncPerimeters(map);
   });
 
-  return true;
+  // Stood down, nothing is drawn yet: no rendered claim for the scene's disclosure or load wait.
+  return !stoodDown;
 }
 
 /**
@@ -278,6 +281,5 @@ export function deactivateWhpDrape(map: maplibregl.Map): void {
   if (map.getLayer(LAYER_ID)) map.removeLayer(LAYER_ID);
   if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);
   showFlatFuelRisk(map, true);
-  hideLegend(LEGEND_KEY);
-  window.dispatchEvent(new CustomEvent('ddm:whp-shade', { detail: { layer: LAYER_ID, active: false, mounted: false } }));
+  announceNoDrape();
 }

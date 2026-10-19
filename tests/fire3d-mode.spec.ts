@@ -1312,16 +1312,18 @@ for (const flatKey of ['usfs-whp-classes'] as const) {
         controller.signal
       );
 
+      // Mounted stood down (hidden), so turning the flat layer off stands it up.
       expect(activation.keys).not.toContain('whp');
-      expect(harness.sources.has('whp-2023')).toBe(false);
-      expect(harness.layerSpecs.has('whp-2023')).toBe(false);
+      expect(harness.sources.has('whp-2023')).toBe(true);
+      expect(harness.layerSpecs.get('whp-2023')?.layout?.['visibility']).toBe('none');
       // No embed line either: a disclosure may only describe what rendered.
       expect(activation.embedLines.join(' ')).not.toContain(
         'Wildfire Hazard Potential'
       );
+      registry.deactivate(flatKey);
+      expect(harness.layerSpecs.get('whp-2023')?.layout?.['visibility']).toBe('visible');
 
       // With the flat layer off, the drape activates as usual...
-      registry.deactivate(flatKey);
       deactivateContextLayers(harness.map);
       const second = await activateContextLayers(harness.map, controller.signal);
       expect(second.keys).toContain('whp');
