@@ -25,7 +25,8 @@ on port 4173, the suite fails instead of reusing an unattributed build.
 ## The local verification ladder
 
 Choose verification for the changed behavior. The scripts in `package.json`
-are the executable rosters; `playwright.pure.config.ts` owns pure-lane membership.
+are the executable rosters. The exported `PURE_SPECS` roster in `playwright.config.ts`
+supplies pure-lane membership and the browser matrix exclusions.
 Avoid copying spec counts and runtime estimates into several documents.
 
 | Work being checked | Command | Scope |
@@ -66,18 +67,23 @@ that require a live layer or date rail must install positive fixtures explicitly
 the offline backstop's error response cannot establish those preconditions.
 
 While developing, run `npm run typecheck` and the one browser-free test that
-covers the change. When a piece of work is finished, run ONE of
-`npm run verify:quick`, `npm run gate:nobuild` (a cross-cutting change; it
-already includes everything verify:quick runs, about a minute) or `npm run gate`
-(the build or a size budget changed), then push the branch.
+covers the change. Commit and push pieces without repeating a gate per commit. At the end of a
+functional block, run `npm run gate` once; it includes the lighter checks.
+For a scoped non-functional change, choose the smallest relevant check from
+the table, rather than running every command in it.
 
 A browser run only when nothing simpler can answer the question. A wording,
 configuration, size or pure-logic change never needs one. When one is needed:
 the fewest cases (`-g`), every diagnostic in the first run, at most one
 confirming run when the piece is finished. `verify:smoke`, whole Playwright
 projects, the Fire pair and repeat runs are not local steps: the full suite
-runs on GitHub once at the end of each block and once for the frozen release
-candidate, and the release's whole diff gets one independent review.
+runs on GitHub for the frozen block candidate. The same full green satisfies
+the release when the exact candidate and main base are unchanged; reuse it.
+The release's whole diff gets one independent review. Inspect existing runs
+before dispatching: an open PR already triggers Validate on each push, and its
+synthetic merge commit is different from a manually dispatched branch tip.
+Batch fixes before validating a new candidate. An unchanged infrastructure
+failure needs only the failed jobs retried, subject to the owner's run guard.
 
 A block's own specs (owner, 2026-10-19). `npm run spec:impact` reads the
 block's commits (`<base>...HEAD`, the base defaulting to the merge base with
@@ -304,14 +310,11 @@ judgment call rather than a red CI run. The telemetry spec here asserts only
 the honest-status contract (terminal, not a specific number), which is what a
 regression would actually break.
 
-Pull requests run the deterministic root gate and Worker typecheck (without
-deploying the optional Worker) beside the browser suite; the Pages workflow
-runs the root gate and build beside the same browser suite, and deploys only
-when both have passed. Run focused affected specs during development, and
-when a change affects shared navigation, map lifecycle, or state, run the
-affected specs locally; the full suite on GitHub covers the rest once the
-release candidate is frozen. The verification
-ladder above wraps that advice into scripts.
+Validate runs the deterministic root gate and Worker checks beside the browser
+suite. Pages builds and gates the publication artifact, publishes it, and then
+runs the live proof; it does not repeat the candidate's browser suite. Use the
+focused and bounded touched-spec checks described above while developing.
+The full GitHub suite covers the frozen candidate once.
 
 ## How CI runs the suite
 
@@ -335,11 +338,11 @@ holds `fire3d-mode.spec.ts` and
 smoke volume, and context tiles on the software renderer and carry their own
 120 to 180 second budgets (the Node-level cases in `fire3d-mode` and the
 three non-3D contract rows ride along; the split is by file, and all three
-projects use the same browser settings). Locally, `npm test` and `npm run
-test:serial` run all three projects, so coverage is the same in either seat.
+projects use the same browser settings). `npm test` and `npm run test:serial`
+select all three projects, but the full suite runs only on GitHub.
 
-In CI (`.github/workflows/browser-suite.yml`, called by both Validate and the
-Pages deploy) each project is sliced with `--shard=i/n` onto its own runners,
+In CI (`.github/workflows/browser-suite.yml`, called by Validate and run weekly
+on main) each project is sliced with `--shard=i/n` onto its own runners,
 one worker each: eight shards for `chromium` (four until 2026-10-12), two for `chromium-interaction`,
 four for `chromium-3d` (two until 2026-10-12). Each runner builds and serves its own `dist/`, so no
 shard reads another's state. Each page is its own software-GL MapLibre
@@ -392,7 +395,7 @@ blank list fails rather than running everything under the targeted name), and
 a `collect` job lists the named files across the three matrix projects and
 fails the run when that finds no test at all. `workers` and `retries` must be
 small whole numbers (`retries` may be empty). Empty, as on every pull
-request, deploy call and the weekly schedule, the command is unchanged.
+request and the weekly schedule, the command is unchanged.
 
 Every shard writes a job summary (passed, failed, flaky, skipped, and the
 `file:line` of each failed or flaky test) from its JSON report through

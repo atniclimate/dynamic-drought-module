@@ -41,7 +41,7 @@ test('Overpass 200 with a remark or no elements array is a mirror failure and is
     ]) {
       calls = 0;
       await hydrography.activate(map);
-      assert.equal(calls, 3, 'every mirror was tried');
+      assert.equal(calls, 2, 'both public mirrors were tried');
       assert.equal(registry.getStatus('hydrography'), 'error');
       hydrography.deactivate(map);
     }

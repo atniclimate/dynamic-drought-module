@@ -25,7 +25,8 @@
  * directly, plus a few fixed specs when the range touches shared style or
  * markup, a map-key, legend, dock or minimap component, or the test seam
  * (CROSS_CUTTING; each is printed with the rule that added it). The measurement-only specs (playwright.config.ts MEASURE_SPECS),
- * which no CI shard and no --run project collects, are left out.
+ * and browser-free PURE_SPECS are left out of browser execution selection.
+ * Stale-text inspection still covers every spec.
  */
 
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -175,18 +176,25 @@ export function crossCuttingSpecs(changedPaths, specPaths, rules = CROSS_CUTTING
   return picked;
 }
 
-/** Sorted, unique spec paths a block touches, measurement-only specs left out. */
-export function touchedSpecs({ changedSpecs, mentions, specs, changedModules, measureOnly = new Set(), crossCutting = new Map() }) {
+/** Sorted, unique browser spec paths; pure and measurement-only files stay out. */
+export function touchedSpecs({ changedSpecs, mentions, specs, changedModules, measureOnly = new Set(), pureOnly = new Set(), crossCutting = new Map() }) {
   const out = new Set([...changedSpecs, ...crossCutting.keys()]);
   for (const { file } of mentions) out.add(file);
   for (const { path, text } of specs) if (importsChanged(path, text, changedModules)) out.add(path);
-  return [...out].filter((path) => !measureOnly.has(path)).sort();
+  return [...out].filter((path) => !measureOnly.has(path) && !pureOnly.has(path)).sort();
 }
 
 /** The spec paths playwright.config.ts's MEASURE_SPECS names (`'**\/name.spec.ts'`). */
 export function measureSpecs(configText) {
   const list = configText.match(/const MEASURE_SPECS = \[([^\]]*)\]/)?.[1] ?? '';
   return new Set([...list.matchAll(/\*\*\/([\w.-]+\.spec\.ts)/g)].map(([, name]) => `tests/${name}`));
+}
+
+/** The browser-free roster lives alongside the browser project's exclusions. */
+export function pureSpecs(configText) {
+  const list = configText.match(/const PURE_SPECS = \[([^\]]*)\]/)?.[1];
+  if (!list) throw new Error('Cannot read PURE_SPECS from playwright.config.ts');
+  return new Set([...list.matchAll(/['"](tests\/[\w.-]+\.spec\.ts)['"]/g)].map(([, path]) => path));
 }
 
 /** Why `--run` must not start, or null. */
@@ -266,12 +274,17 @@ async function main(argv) {
   const changed = git(['diff', '--name-only', range, '--', 'src', 'tests', 'index.html', 'playwright.config.ts']).split('\n').filter(Boolean);
   const changedSpecs = changed.filter((path) => specPaths.has(path));
   const changedModules = changed.filter((path) => !specPaths.has(path));
-  const measureOnly = measureSpecs(git(['show', 'HEAD:playwright.config.ts']));
+  const config = git(['show', 'HEAD:playwright.config.ts']);
+  const measureOnly = measureSpecs(config);
+  const pureOnly = pureSpecs(config);
   const crossCutting = crossCuttingSpecs(changed, specPaths);
-  const touched = touchedSpecs({ changedSpecs, mentions, specs, changedModules, measureOnly, crossCutting });
+  const selected = { changedSpecs, mentions, specs, changedModules, measureOnly, crossCutting };
+  const touched = touchedSpecs({ ...selected, pureOnly });
+  const pureTouched = touchedSpecs(selected).filter((path) => pureOnly.has(path));
   const reasons = [...crossCutting].filter(([path]) => touched.includes(path)).map(([path, rules]) => `${path}  (${rules.join('; ')})`);
   // Stderr in the scripted modes, so --list stays one line.
   const say = argv.some((arg) => ['--list', '--dispatch', '--run'].includes(arg)) ? console.error : console.log;
+  if (pureTouched.length > 0) say(`Browser-free specs stay in the pure lane: npm run verify:pure -- ${pureTouched.join(' ')}`);
   if (reasons.length > 0) say(`Added by cross-cutting rules (not a dependency graph):\n  ${reasons.join('\n  ')}`);
 
   if (argv.includes('--list')) {
@@ -280,6 +293,10 @@ async function main(argv) {
   }
 
   if (argv.includes('--dispatch')) {
+    if (touched.length === 0) {
+      console.error(dispatchRefusal(touched));
+      return 2;
+    }
     const branch = git(['rev-parse', '--abbrev-ref', 'HEAD']).trim();
     const pushed = branch === 'HEAD' ? '' : git(['ls-remote', 'origin', `refs/heads/${branch}`]).split('\t')[0];
     const refusal = dispatchRefusal(touched, branch, git(['rev-parse', 'HEAD']).trim(), pushed);

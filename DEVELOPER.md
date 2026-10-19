@@ -333,7 +333,7 @@ override a visitor's manual basemap choice. Future satellite-derived
 products belong in separately named layers with their own status,
 timestamp, caveat, and legend; recoloring an existing layer would let a
 display claim what its source does not. Hydrography queries the
-volunteer-run Overpass API (three-mirror failover, viewport-driven, dormant
+volunteer-run Overpass API (two-mirror failover, viewport-driven, dormant
 below zoom 7); institutional deployments expecting heavy concurrency should
 plan for the planned National Hydrography Dataset PMTiles bundle.
 
@@ -424,8 +424,8 @@ a test keeps in step with `src/`. `check:source-health` boots a served
 build (start `npm run preview` first) once as a control and once per
 catalog layer at the default camera and records the requests the runtime
 issues, with basemap tiles stubbed and the ambient boot requests replayed
-from the control capture; the daily `source-health` workflow runs it on
-`main`. `verify:live` is the post-deploy proof the Pages workflow runs; by
+from the control capture; the manual `source-health` workflow runs it on
+`main` (its daily schedule is currently disabled). `verify:live` is the post-deploy proof the Pages workflow runs; by
 hand it needs the expected commit and run id and defaults to the public
 site.
 
@@ -433,9 +433,10 @@ The Worker-health row of `check:drift` now compares the live `/healthz`
 revision to the `WORKER_REVISION` constant read from
 `workers/proxy/src/index.ts`, not a hand-pinned string, so drift is
 source-vs-live rather than live-vs-live. Between a reviewed source revision
-bump and the owner's publish, the daily `upstream-monitor` run opens exactly
+bump and the owner's publish, a manually dispatched `upstream-monitor` run opens exactly
 one `upstream-drift` issue naming the mismatch, which is the design working
 as intended, and it closes automatically on the first run after the publish.
+Its daily schedule is currently disabled.
 
 Choose checks using the [local verification ladder](tests/README.md#the-local-verification-ladder).
 Run focused source or browser tests while editing, `npm run gate` for build and
@@ -673,17 +674,20 @@ Branch workflow: each release is built on a short-lived branch cut from
 `validate.yml` is `on: pull_request`, so a branch without an open pull request
 runs no CI on push; start it by hand with `gh workflow run validate.yml --ref
 <branch>`. While developing, run `npm run typecheck` and the focused tests for
-the change. When a piece of work is finished, run the focused tests again and
-the browser-free checks (`npm run verify:quick`; `npm run gate:nobuild` or
-`npm run gate` when the change is cross-cutting), then push the branch. The
-full browser suite runs on GitHub in fourteen shards, once at the end of each
-block and once for the frozen release candidate, never on every push; a
+the change. Commit and push pieces without repeating checks that already passed. At the
+end of a functional block, run `npm run gate` once and inspect the touched modes.
+The full browser suite runs on GitHub in fourteen shards for the frozen block
+candidate. Reuse that full green for the release when its exact SHA and main
+base are unchanged; do not dispatch a duplicate. An open PR, including a draft,
+already triggers validation on pushes, so inspect existing runs first; a
 targeted run of the block's own specs may come partway through a block, and it
 never counts for a landing. Before a release, the full suite must be green on GitHub for the
 frozen release candidate, and one independent review covers the release's whole
 diff. `Validate` is the only check that must be green on the pull request, and
 `deploy` and `verify-live` are consequences of the merge rather than gates on
-it.
+it. Deployment builds and checks the publication artifact, then publishes it without
+repeating the browser suite. The live proof follows immediately after the deploy
+workflow succeeds; the weekly browser suite remains enabled.
 
 `scripts/resolve-live-expectation.mjs`, whose
 judgment is the pure `resolveLiveExpectation` in
@@ -716,17 +720,15 @@ the snapshot has not seen. It returns one of three verdicts:
 Two envelopes, because "how long may a commit go undeployed" and "how long
 may one deploy run take" are different questions:
 
-- head grace, 30 minutes from the commit (`LIVE_COMPARE_GRACE_MS`): a normal
-  green push takes about 15 minutes through the gate, the sharded browser
-  suite, and `deploy-pages`, and this leaves room for a slow runner. The
+- head grace, 30 minutes from the commit (`LIVE_COMPARE_GRACE_MS`): this
+  leaves room for the publication gate, Pages deployment and runner queues. The
   head's age is floored by its OLDEST deploy run's start, so a backdated
   committer date cannot skip the grace and a retry cannot reset a clock the
   head has already spent.
 - in-flight bound, 60 minutes from the deploy run's creation
-  (`LIVE_INFLIGHT_STUCK_MS`): the deploy's own envelope is longer than the
-  head grace, since `browser-suite.yml` budgets 40 minutes per shard and
-  `deploy.yml` adds a 15 minute gate before it. A run 45 minutes in is late,
-  not stuck. Past the bound, a deploy parked in `queued` or `waiting`
+  (`LIVE_INFLIGHT_STUCK_MS`): this conservative allowance includes the
+  publication gate, Pages and runner queues. Past the bound, a deploy parked
+  in `queued` or `waiting`
   escalates rather than keeping the compare green forever.
 
 Both are inputs the workflow passes, not constants buried in the library, and

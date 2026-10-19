@@ -4051,13 +4051,7 @@ display:block!important;
             HeadCheck --&gt; DeployPages
         end
 
-        subgraph BrowserJob[&quot;Job: browser (Advisory)&quot;]
-            direction TB
-            Playwright[&quot;Playwright Browser Suite&lt;br/&gt;• 8 parallel shards&lt;br/&gt;• Advisory on main&quot;]
-        end
-
         BuildJob --&gt;|needs: build| DeployJob
-        BuildJob -.-&gt;|parallel advisory| BrowserJob
     end
 
     subgraph VerifyWorkflow[&quot;verify-live.yml (Post-Deploy Proof)&quot;]

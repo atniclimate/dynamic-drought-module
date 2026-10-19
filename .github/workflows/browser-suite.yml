@@ -1,5 +1,4 @@
-# The sharded browser suite, shared by Validate (pull requests) and the Pages
-# deploy (push to main) so the two can never prove different things.
+# The sharded browser suite for candidate validation and the weekly main check.
 #
 # Shape (DDM-P0-T02, 2026-08-28; reshaped 2026-08-29 for the measured flake
 # cluster, see below). Public-repo standard runners are 4 vCPU / 16 GB (the
@@ -41,30 +40,8 @@
 # main two days earlier. It now runs over 4 shards; 14 shard jobs in all,
 # still inside the 20-job cap.
 
-# The CI gap this file closes (report 18 section 6, 2026-09-02). With the
-# suite ADVISORY on a push to main (deploy.yml) and every daily cron snoozed
-# through 2026-09-11, a regression that verify-live.yml's checks do not cover
-# could land on main and produce no durable notification at all: no issue, no
-# email, no red badge. It would sit until the next landing pull request, which
-# under one landing per window is weeks, not a day. Two answers, both here:
-#
-#   1. A shard that fails writes a small marker artifact (see "Record the
-#      failed shard" below). The CALLER aggregates those markers into ONE
-#      marker-matched issue, closed by the next green run, exactly the
-#      mechanism verify-live.yml already uses for the live proof. The routing
-#      job lives in deploy.yml rather than here because a reusable workflow's
-#      permissions "can only be maintained or reduced, not elevated" by the
-#      caller: declaring a job that requests `issues: write` in THIS file
-#      would make validate.yml's call fail outright ("Error calling workflow
-#      ... the nested job is requesting 'issues: write', but is only allowed
-#      'issues: none'"), and Validate is the one binding gate.
-#   2. A weekly scheduled run of this workflow against main (below), so a
-#      regression cannot outlive a window even when nothing lands.
-#
-# No concurrency group is introduced here. The callers hold their own
-# (deploy.yml's `pages`, validate.yml's `validate-<ref>`); a group at this
-# workflow would apply to those calls too and could cancel a required
-# Validate run, which is the opposite of the intent.
+# Validate owns the required candidate proof. The weekly run catches regressions
+# between landings. Keep concurrency in Validate so a schedule cannot cancel it.
 
 name: Browser suite
 
@@ -78,10 +55,8 @@ on:
   # Monday 15:13 UTC. A scheduled run has no caller, so `inputs` is empty and
   # every use of it below falls back: the checkout takes the default branch
   # (main), the build stamp comes from github.sha and github.run_id, workers
-  # stays 1, retries stays the config's, and `advisory` is false, so a red
-  # shard reds this run. A failed scheduled run on the default branch emails
-  # the owner and shows on the Actions page, which is the durable
-  # notification the advisory push path gets from its issue instead.
+  # stays 1 and retries stays the config's. A failed scheduled run fails here
+  # and remains visible on the Actions page.
   schedule:
     - cron: '13 15 * * 1'
   workflow_call:
@@ -97,8 +72,7 @@ on:
       # Experiment inputs (R3, 2026-08-29). No new workflow: a workers=2 trial
       # or a retries=0 sample runs by dispatching Validate on a branch
       # (validate.yml plumbs matching workflow_dispatch inputs through to
-      # this call), never through deploy.yml. Both default to production
-      # behavior, so an ordinary Validate or deploy call is unaffected.
+      # this call). Both default to ordinary Validate behavior.
       workers:
         description: >-
           Playwright --workers value for every shard's runner. The
@@ -120,9 +94,8 @@ on:
       # Measure C (owner, 2026-10-19): a targeted run, dispatched through
       # validate.yml's `specs` input. Every shard keeps its slot and runs only
       # its slice of the named files, so a broad list still fans out; a file
-      # lives in one project, so most shards find none of it and
-      # --pass-with-no-tests keeps them green. Deploy and the schedule never
-      # set it.
+      # lives in one project, so empty shards skip provisioning and execution.
+      # The schedule never sets it.
       specs:
         description: >-
           Space-separated spec paths to run instead of the whole suite. Empty
@@ -130,23 +103,6 @@ on:
         required: false
         type: string
         default: ''
-      # CI-02/CI-11 (2026-09-01, owner direction D-2). Advisory means the
-      # shards still RUN, still summarize, and still keep their reports and
-      # traces, but a red shard does not fail the calling job. deploy.yml
-      # passes true: the merge commit's tree already passed this same
-      # sharded suite on the pull request and locally before the landing, so
-      # a shard flake on the merge must not hold a proven build out of
-      # Pages. It must also not fail the deploy RUN, because verify-live.yml
-      # only proves a deploy whose run concluded success, and losing the
-      # live proof to a flake is the opposite of the intent. Validate does
-      # NOT pass it: on the pull request this suite is the required gate.
-      advisory:
-        description: >-
-          When true, a failing shard annotates and uploads its report but
-          does not fail the job. Default false: the shard result is binding.
-        required: false
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -235,11 +191,49 @@ jobs:
       - name: Install application dependencies
         run: npm ci
 
+      # Targeted runs keep the matrix, but empty shards need no browser or build.
+      # Collection errors fail this step; only a successful nonempty list runs.
+      - name: Collect this shard's selected tests
+        id: selection
+        if: ${{ inputs.specs != '' }}
+        env:
+          WORKERS: ${{ inputs.workers || '1' }}
+          RETRIES: ${{ inputs.retries }}
+          SPECS: ${{ inputs.specs }}
+        run: |
+          [[ "$WORKERS" =~ ^[0-9]{1,2}$ ]] || { echo "::error::workers must be a small whole number."; exit 1; }
+          [[ "$RETRIES" =~ ^[0-9]{0,2}$ ]] || { echo "::error::retries must be empty or a small whole number."; exit 1; }
+          args=(test "--project=${{ matrix.project }}" "--shard=${{ matrix.shard }}/${{ matrix.total }}" "--workers=$WORKERS")
+          if test -n "$RETRIES"; then args+=("--retries=$RETRIES"); fi
+          if test -n "$SPECS"; then
+            read -r -a files <<< "$SPECS"
+            if test "${#files[@]}" -eq 0; then
+              echo "::error::The specs input is blank. Dispatch with no specs for the full run."; exit 1
+            fi
+            for spec in "${files[@]}"; do
+              [[ "$spec" =~ ^tests/[A-Za-z0-9._-]+\.spec\.ts$ ]] || { echo "::error::$spec is not a tests/*.spec.ts path."; exit 1; }
+              test -f "$spec" || { echo "::error::No spec file $spec on this commit."; exit 1; }
+            done
+            args+=(--pass-with-no-tests "${files[@]}")
+          fi
+          npx playwright "${args[@]}" --list --reporter=json > "$RUNNER_TEMP/selected-tests.json" || exit $?
+          node --input-type=module - "$RUNNER_TEMP/selected-tests.json" >> "$GITHUB_OUTPUT" <<'NODE'
+          import { readFileSync } from 'node:fs';
+          const report = JSON.parse(readFileSync(process.argv[2], 'utf8'));
+          if (!Array.isArray(report.suites) || report.errors?.length) {
+            throw new Error('Selected tests did not collect successfully.');
+          }
+          const hasTests = suites => suites.some(suite =>
+            (suite.specs ?? []).some(spec => spec.tests.length > 0) || hasTests(suite.suites ?? []));
+          console.log(`has-tests=${hasTests(report.suites)}`);
+          NODE
+
       # DDM-P0-T01: browser provisioning is deterministic and cached. The
       # composite action documents the cache key and the miss and hit paths;
       # the deploy's live verification and the source-health probe use the
       # same action so every browser job provisions one way.
       - name: Provision Chromium
+        if: ${{ inputs.specs == '' || steps.selection.outputs.has-tests == 'true' }}
         uses: ./.github/actions/playwright-chromium
 
       # One worker per runner (see playwright.config.ts on the software-GL
@@ -250,16 +244,8 @@ jobs:
       # shortcut: 35 minutes absorbs runner variance; rebalance if it is exhausted again.
       - name: Run the browser shard
         id: suite
+        if: ${{ inputs.specs == '' || steps.selection.outputs.has-tests == 'true' }}
         timeout-minutes: 35
-        # Advisory calls (deploy.yml) keep `outcome` truthful, which is what
-        # the report and trace uploads below are gated on, while the step's
-        # conclusion, and so the job's, stays success.
-        #
-        # `== true` rather than the bare input: on the weekly scheduled run
-        # there is no caller, so `inputs.advisory` is null and a bare
-        # interpolation would hand this key an empty string. The comparison
-        # always yields a boolean, and it is identical for both callers.
-        continue-on-error: ${{ inputs.advisory == true }}
         env:
           # Routed through env, like RETRIES_ARG below, rather than
           # interpolated directly into `run:`, so neither input's value is
@@ -268,8 +254,8 @@ jobs:
           # `--workers=` an invalid argument rather than a default.
           WORKERS: ${{ inputs.workers || '1' }}
           # Empty on the weekly scheduled run too, and whenever the `retries`
-          # experiment input (above) was not set: a plain call (Validate's
-          # pull_request path, or deploy.yml) leaves this empty and
+          # experiment input (above) was not set: a plain Validate call leaves
+          # this empty and
           # playwright.config.ts's own isCI retries setting governs, unchanged.
           RETRIES: ${{ inputs.retries }}
           # Empty unless a targeted run named files (the `specs` input); empty
@@ -279,8 +265,8 @@ jobs:
         # stray space cannot add arguments. A blank spec list would run the
         # whole suite under the targeted run's name, and a path that is not a
         # spec file (or does not exist) would match nothing, so both fail.
-        # A shard that owns none of the named files stays green here; the
-        # `collect` job fails the run when no shard owns any.
+        # The selection step skips shards that own none of the named tests;
+        # the `collect` job fails the run when no shard owns any.
         run: |
           [[ "$WORKERS" =~ ^[0-9]{1,2}$ ]] || { echo "::error::workers must be a small whole number."; exit 1; }
           [[ "$RETRIES" =~ ^[0-9]{0,2}$ ]] || { echo "::error::retries must be empty or a small whole number."; exit 1; }
@@ -306,67 +292,10 @@ jobs:
       # gates the upload below.
       - name: Summarize the shard
         id: summary
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && (inputs.specs == '' || steps.selection.outputs.has-tests == 'true') }}
         env:
           PLAYWRIGHT_PROJECT: ${{ matrix.project }} ${{ matrix.shard }}/${{ matrix.total }}
         run: node scripts/summarize-playwright-shard.mjs test-results/report.json >> "$GITHUB_STEP_SUMMARY"
-
-      # An advisory shard that failed is still worth saying out loud: the
-      # summary above names the tests, and this puts one line on the run so
-      # a reader does not have to open a green job to learn a shard was red.
-      - name: Say that an advisory shard failed
-        if: ${{ !cancelled() && inputs.advisory && steps.suite.outcome != 'success' }}
-        run: |
-          echo "::warning::Advisory shard ${{ matrix.project }} ${{ matrix.shard }}/${{ matrix.total }} failed. The run is not red: this tree passed the same suite on its pull request. See the job summary and the kept report."
-
-      # The durable half of the answer to report 18 section 6. A failed shard
-      # writes one small text marker; the caller's routing job (deploy.yml,
-      # "Route the browser suite result to one issue") counts the markers in
-      # this run and opens, updates, or closes ONE marker-matched issue.
-      #
-      # On the weekly scheduled run there is no caller, so nothing reads the
-      # marker yet: that run's notification is its own red conclusion. The
-      # marker is still written there so the routing becomes one job the day
-      # validate.yml's `browser` job grants `issues: write` and the routing
-      # can move into this file and serve both paths.
-      #
-      # Why an artifact and not a job output: this job is a matrix, and
-      # outputs from matrix legs overwrite each other, so a passing leg that
-      # finishes last would erase a failing leg's signal. Why not the jobs
-      # API: a step under `continue-on-error` reports a success conclusion,
-      # so the API cannot distinguish an advisory failure from a pass.
-      #
-      # Only on a push to main and on the weekly schedule. A pull request's
-      # red shard already fails Validate and needs no repository issue, and a
-      # hand dispatch of deploy.yml is somebody watching the run.
-      #
-      # The marker carries the project, the shard, the run and the commit.
-      # No test names, no page text, no geometry: the shard's own report
-      # artifacts above are where diagnosis lives, under their own retention
-      # and their own sovereignty guarantee.
-      - name: Record the failed shard for the run's issue routing
-        if: >-
-          ${{ !cancelled() && steps.suite.outcome != 'success'
-          && (github.event_name == 'schedule'
-          || (github.event_name == 'push' && github.ref == 'refs/heads/main')) }}
-        env:
-          SHARD_LABEL: ${{ matrix.project }} ${{ matrix.shard }}/${{ matrix.total }}
-        run: |
-          set -euo pipefail
-          mkdir -p shard-failure
-          printf '%s\n' "$SHARD_LABEL" > shard-failure/shard.txt
-
-      - name: Keep the failed-shard marker
-        if: >-
-          ${{ !cancelled() && steps.suite.outcome != 'success'
-          && (github.event_name == 'schedule'
-          || (github.event_name == 'push' && github.ref == 'refs/heads/main')) }}
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: browser-suite-failure-${{ matrix.project }}-${{ matrix.shard }}-of-${{ matrix.total }}
-          path: shard-failure/shard.txt
-          retention-days: 1
-          if-no-files-found: ignore
 
       # Measurement channel (R1/R3, 2026-08-29): upload the raw JSON report
       # unconditionally, every shard, not only on failure or flake, so a real
@@ -384,7 +313,7 @@ jobs:
       # geometry ever reaches a test's stdout or the report JSON. Short
       # retention: this is a measurement artifact, not a diagnostic one.
       - name: Keep the JSON report for measurement
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && (inputs.specs == '' || steps.selection.outputs.has-tests == 'true') }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: playwright-json-${{ matrix.project }}-${{ matrix.shard }}-of-${{ matrix.total }}
@@ -413,7 +342,7 @@ jobs:
       # drops from seven days to three: same-day diagnosis, not a record.
       # Retention shortens exposure; it is not what makes the content safe.
       - name: Keep the failure or flaky report
-        if: ${{ !cancelled() && (steps.suite.outcome != 'success' || steps.summary.outputs.flaky != '0') }}
+        if: ${{ !cancelled() && (inputs.specs == '' || steps.selection.outputs.has-tests == 'true') && (steps.suite.outcome != 'success' || steps.summary.outputs.flaky != '0') }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: playwright-report-${{ matrix.project }}-${{ matrix.shard }}-of-${{ matrix.total }}
@@ -431,7 +360,7 @@ jobs:
       # acceptance check reads a retained trace. Same three-day retention and
       # the same guarantee as the report, for the same reason.
       - name: Keep the failure or flaky traces
-        if: ${{ !cancelled() && (steps.suite.outcome != 'success' || steps.summary.outputs.flaky != '0') }}
+        if: ${{ !cancelled() && (inputs.specs == '' || steps.selection.outputs.has-tests == 'true') && (steps.suite.outcome != 'success' || steps.summary.outputs.flaky != '0') }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: playwright-traces-${{ matrix.project }}-${{ matrix.shard }}-of-${{ matrix.total }}

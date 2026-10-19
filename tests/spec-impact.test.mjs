@@ -14,6 +14,7 @@ import {
   findMentions,
   importsChanged,
   measureSpecs,
+  pureSpecs,
   removedLiterals,
   runRefusal,
   staleLiterals,
@@ -175,6 +176,25 @@ test('cross-cutting rules stay small, name real non-measurement specs, and join 
 test('the measurement-only specs are read from playwright.config.ts', () => {
   const config = readFileSync(new URL('../playwright.config.ts', import.meta.url), 'utf8');
   assert.deepEqual([...measureSpecs(config)].sort(), ['tests/flow-measure.spec.ts', 'tests/mode-switch-cost.spec.ts']);
+});
+
+test('pure-only changes never become browser runs, while mixed changes retain browser coverage', () => {
+  const config = readFileSync(new URL('../playwright.config.ts', import.meta.url), 'utf8');
+  const pureOnly = pureSpecs(config);
+  assert.equal(pureOnly.size, 34);
+  assert(pureOnly.has('tests/antimeridian.spec.ts'));
+  assert.throws(() => pureSpecs(''), /Cannot read PURE_SPECS/);
+  const selection = {
+    changedSpecs: ['tests/antimeridian.spec.ts'],
+    mentions: [{ file: 'tests/antimeridian.spec.ts' }],
+    specs: [{ path: 'tests/point-in-polygon.spec.ts', text: "import { x } from '../src/util/point-in-polygon';" }],
+    changedModules: ['src/util/point-in-polygon.ts'], pureOnly,
+  };
+  assert.deepEqual(touchedSpecs(selection), []);
+  assert.deepEqual(touchedSpecs({ ...selection, changedSpecs: [...selection.changedSpecs, 'tests/studio-options.spec.ts'] }), ['tests/studio-options.spec.ts']);
+  assert.match(runRefusal(touchedSpecs(selection)), /empty list/i);
+  assert.match(dispatchRefusal(touchedSpecs(selection)), /empty list/i);
+  assert.equal(findMentions(['retired control'], [{ path: 'tests/antimeridian.spec.ts', text: "expect('retired control').toBe('retired control');" }]).length, 1);
 });
 
 test('--dispatch refuses an empty list (the full run), a detached HEAD and an unpushed tip', () => {

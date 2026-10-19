@@ -70,10 +70,11 @@ export const URLS = Object.freeze({
   // backoff between failures. All must respond with `Access-Control-
   // Allow-Origin: *`. Verified during the v0.1.1 polish pass; sizes
   // and freshness can drift, so retest before reordering.
+  // The OSM France host is excluded: it now requires allowlisted usage
+  // (HTTP 403 verified 2026-10-19), so it cannot serve this public browser app.
   overpassMirrors: [
     'https://overpass-api.de/api/interpreter',          // canonical, freshest
-    'https://overpass.kumi.systems/api/interpreter',    // independent operator
-    'https://overpass.openstreetmap.fr/api/interpreter' // replaces private.coffee
+    'https://overpass.kumi.systems/api/interpreter'     // independent operator
   ],
 
   // ---------- Drought outlook (NOAA CPC, OGC WMS) ----------

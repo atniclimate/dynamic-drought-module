@@ -40,6 +40,45 @@ const BASE_URL = `${PREVIEW_ORIGIN}${BASE_PATH}`;
 
 const isCI = !!process.env['CI'];
 
+/** Browser-free spec files run once by the gate's pure project, alphabetical. */
+export const PURE_SPECS = [
+  'tests/acknowledgements.spec.ts',
+  'tests/antimeridian.spec.ts',
+  'tests/camera-region-fallbacks.spec.ts',
+  'tests/capability-matrix.spec.ts',
+  'tests/cluster-service.spec.ts',
+  'tests/config-key-authority.spec.ts',
+  'tests/display-summary.spec.ts',
+  'tests/drought-semantics.spec.ts',
+  'tests/enso-flow-data.spec.ts',
+  'tests/fetch.spec.ts',
+  'tests/gl-capability.spec.ts',
+  'tests/heat-h0-cancellation.spec.ts',
+  'tests/heat-h2-cancellation.spec.ts',
+  'tests/landscape-loader.spec.ts',
+  'tests/layer-order.spec.ts',
+  'tests/location-identity.spec.ts',
+  'tests/minimap-drought.spec.ts',
+  'tests/minimap-wildfire.spec.ts',
+  'tests/nadm-shared-payload.spec.ts',
+  'tests/overlap-engine.spec.ts',
+  'tests/place-ref.spec.ts',
+  'tests/pmtiles-probe.spec.ts',
+  'tests/point-in-polygon.spec.ts',
+  'tests/polygon-overlap.spec.ts',
+  'tests/power-layer.spec.ts',
+  'tests/product-catalog.spec.ts',
+  'tests/s1-substrate.spec.ts',
+  'tests/satellite-source.spec.ts',
+  'tests/umbrella-config.spec.ts',
+  'tests/usfs-whp.spec.ts',
+  'tests/verification-config.spec.ts',
+  'tests/wildfire-basemap-policy.spec.ts',
+  'tests/wildfire-source-semantics.spec.ts',
+  'tests/worker-proxy-policy.spec.ts'
+] as const;
+const PURE_SPEC_PATTERNS = PURE_SPECS.map((file) => `**/${file.replace(/^tests\//, '')}`);
+
 // The 3D Fire specs build terrain, a sky, a smoke volume, and context tiles
 // on the software renderer, and carry their own 120 to 180 second budgets
 // (`test.setTimeout` in fire3d-mode.spec.ts, `timeout_ms` rows in
@@ -245,7 +284,7 @@ export default defineConfig({
 
   projects: [
     {
-      // Everything except the 3D Fire specs and the interaction cluster. CI
+      // Browser specs except the 3D Fire specs and the interaction cluster. CI
       // shards this project across a runner matrix with `--shard=i/n`
       // (contiguous equal-count slices of the file-ordered test list), one
       // worker per runner.
@@ -255,7 +294,14 @@ export default defineConfig({
       // collection and every worker, where they register zero Playwright
       // tests but do execute, so a module-scope throw in one would red a
       // shard as a collection error rather than fail its own runner.
-      testIgnore: [...FIRE3D_SPECS, ...INTERACTION_SPECS, ...MEASURE_SPECS, '**/*.test.mjs'],
+      // Pure files already run in the gate; keep the browser matrix disjoint.
+      testIgnore: [
+        ...FIRE3D_SPECS,
+        ...INTERACTION_SPECS,
+        ...MEASURE_SPECS,
+        ...PURE_SPEC_PATTERNS,
+        '**/*.test.mjs'
+      ],
       use: CHROMIUM_USE
     },
     {

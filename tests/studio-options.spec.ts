@@ -134,13 +134,12 @@ async function stubEveryStudioLayer(page: Page): Promise<void> {
     })
   );
 
-  // hydrography: the live Overpass API, all three mirrored hosts
+  // hydrography: the live Overpass API, both public mirrored hosts
   // (src/config/urls.ts overpassMirrors).
   await page.route(
     (url) =>
       url.href.includes('overpass-api.de') ||
-      url.href.includes('overpass.kumi.systems') ||
-      url.href.includes('overpass.openstreetmap.fr'),
+      url.href.includes('overpass.kumi.systems'),
     (route) =>
       route.fulfill({
         status: 200,

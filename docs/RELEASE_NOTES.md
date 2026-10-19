@@ -26,6 +26,12 @@ Startup and delivery reliability.
   native Windows with Git Bash. Build dependencies receive compatible security updates.
 - 2026-10-19: the terrain Worker advertises its supported methods when refusing a request.
 - 2026-10-19: smoke legend colors also render in the oldest supported browsers.
+- 2026-10-19: publication no longer repeats the candidate's full browser suite. The gate
+  and browser matrix also stop repeating pure tests, and targeted empty shards skip
+  browser setup. Checks on the published build and live site remain.
+- 2026-10-19: live verification fails when its proof crashes or returns an invalid receipt,
+  even if the earlier version check succeeded.
+- 2026-10-19: hydrography no longer tries an Overpass mirror that now requires whitelisting.
 
 - 2026-10-19: three browser tests that passed only on a second try now hold on the first: the
   map-chunk failure case reads the built file from disk instead of fetching it a second time,
