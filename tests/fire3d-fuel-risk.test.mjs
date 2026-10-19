@@ -23,7 +23,7 @@ test('Fuel risk on adds its section to the Wildfire key instead of replacing it'
 });
 
 test('the one Fuel risk switch acts on the 3D drape only while it is mounted, else on the flat fuel-risk layer', () => {
-  const base = { sceneActive: false, drapeMounted: false, cluster: 'wildfire', flatOn: false };
+  const base = { sceneActive: false, drapeMounted: false, recipeHasFlat: false };
   // The flat Wildfire map: the switch turns the white fuel-risk layer on.
   assert.equal(fuelRiskSwitch(base), 'flat');
   // Wildfire 3D with its white drape mounted: the switch shows or hides that drape.
@@ -32,14 +32,14 @@ test('the one Fuel risk switch acts on the 3D drape only while it is mounted, el
   assert.equal(fuelRiskSwitch({ ...base, drapeMounted: true }), 'flat');
   // The 3D scene without a drape (archive unavailable, or the flat layer already on): the flat layer.
   assert.equal(fuelRiskSwitch({ ...base, sceneActive: true }), 'flat');
-  // The flat switch turned on: the display is custom and the switch reads pressed from the same layer.
-  assert.equal(fuelRiskSwitch({ ...base, cluster: 'custom', flatOn: true }), 'flat');
   // Long Range: the committed recipe IS the flat layer, so there is nothing to switch.
-  assert.equal(fuelRiskSwitch({ ...base, flatOn: true }), null);
+  assert.equal(fuelRiskSwitch({ ...base, recipeHasFlat: true }), null);
+  // The 3D drape still answers to the switch at Long Range.
+  assert.equal(fuelRiskSwitch({ ...base, sceneActive: true, drapeMounted: true, recipeHasFlat: true }), 'drape');
   assert.equal(FLAT_FUEL_RISK_KEY, 'usfs-whp');
 });
 
-test('the Wildfire console stays offered on the custom display the flat fuel risk switch makes, and nowhere else', () => {
+test('the Wildfire console stays offered over Wildfire, and nowhere else', () => {
   assert.equal(fuelRiskKeepsConsole('wildfire', 'wildfire', false), true);
   assert.equal(fuelRiskKeepsConsole('custom', 'wildfire', true), true);
   // Any other customization of Wildfire, or fuel risk reached from another mode, keeps today's answer.

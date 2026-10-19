@@ -510,6 +510,51 @@ test.describe('S3 snapshot revisions and honesty under later changes', () => {
     }
   });
 
+  test('an optional layer keeps the mode: Wildfire plus Fuel risk stays Wildfire at every horizon', () => {
+    resetWorld();
+    const dispose = initClusterService();
+    try {
+      requestCluster('wildfire');
+      requestLayerOn('usfs-whp');
+      expect(getHazardCluster()).toBe('wildfire');
+      expect(getCommittedSnapshot().cluster).toBe('wildfire');
+      expect(getCommittedSnapshot().intendedKeys.has('usfs-whp')).toBe(true);
+
+      // Off again from the catalog: back to the composition, still Wildfire.
+      requestLayerOff('usfs-whp');
+      expect(getCommittedSnapshot().cluster).toBe('wildfire');
+      expect([...getCommittedSnapshot().intendedKeys].sort()).toEqual(
+        [...composeClusterIntent('wildfire', 'current')].sort()
+      );
+
+      // A horizon change re-applies the recipe, so the optional layer follows it.
+      requestLayerOn('usfs-whp');
+      timeline.setHorizon('weeks-ahead');
+      let snapshot = getCommittedSnapshot();
+      expect(snapshot.cluster).toBe('wildfire');
+      expect(snapshot.horizon).toBe('weeks-ahead');
+      expect(checkedKeys().has('usfs-whp')).toBe(false);
+      expect(checkedKeys().has('spc-fire-weather')).toBe(true);
+
+      // Near Term: the optional surface stands in for the recipe's surface (the
+      // harness controller has no one-surface rule, so the case does its swap).
+      requestLayerOn('usfs-whp');
+      requestLayerOff('spc-fire-weather');
+      snapshot = getCommittedSnapshot();
+      expect(getHazardCluster()).toBe('wildfire');
+      expect(snapshot.cluster).toBe('wildfire');
+      expect(snapshot.horizon).toBe('weeks-ahead');
+
+      // The switch's off press re-applies the recipe: the outlook returns.
+      requestCluster('wildfire');
+      expect(checkedKeys().has('spc-fire-weather')).toBe(true);
+      expect(checkedKeys().has('usfs-whp')).toBe(false);
+      expect(getCommittedSnapshot().cluster).toBe('wildfire');
+    } finally {
+      dispose();
+    }
+  });
+
   test('deferred activations: the service stays coherent under a controller that drops stale settles, A -> B -> A (DG-080 finding 5; the real controller drop is proved in tests/stale-generation.test.mjs)', () => {
     // WHAT THIS PROVES: the cluster SERVICE (intent, claim, snapshot
     // revisions) stays coherent when the controller below it settles

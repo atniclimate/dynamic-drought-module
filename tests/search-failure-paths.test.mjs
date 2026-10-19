@@ -35,7 +35,8 @@ const STUBS = {
     'export const URLS = { usPlacesLocal: "https://stub.test/us-places.json",' +
     ' biaLarFeatureServer: "https://stub.test/lar", censusAiannhMapServer: "https://stub.test/census" };',
   '../impact/resources': 'export const STATE_LABEL = {};',
-  '../impact/context': 'export const buildBoundaryContext = () => ({ title: "Located area" });',
+  '../impact/context':
+    'export const buildBoundaryContext = (_k, _p, _g, _l, t) => ({ title: t || "Located area" });',
   '../util/bbox':
     'export const bboxCenter = () => ({ lng: 0, lat: 0 }); export const bboxToContinuousBounds = (b) => b;',
   '../util/antimeridian': 'export const geometryBboxAcrossAntimeridian = () => [0, 0, 1, 1];',
@@ -215,6 +216,36 @@ test('a census: result locates against the Census service; an HTTP 200 error env
   assert.match(S.toasts[0], /^Could not reach/, 'an error envelope reads as unavailable, not as no boundary');
   assert.equal(S.selections.length, 0, 'no selection from an error envelope');
   assert.equal(S.highlights.length, 0);
+});
+
+test('a search pick titles its selection with the row label and keeps the area name as its source label', async () => {
+  answers.set(CENSUS_URL, () => json(fc));
+  S.selections.length = 0;
+  S.highlights.length = 0;
+  let heldBefore = S.held.length;
+  wiring.onSelect({
+    kind: 'tribal',
+    id: 'census:5620',
+    label: 'The Muscogee (Creek) Nation',
+    sublabel: 'Census area: Creek OTSA',
+    haystack: 'muscogee'
+  });
+  await waitFor(() => S.held.length > heldBefore);
+  S.held.at(-1)();
+  await waitFor(() => S.selections.length === 1);
+  assert.equal(S.selections[0].label, 'The Muscogee (Creek) Nation', 'the formal name, never the Census short name');
+  assert.equal(S.selections[0].context.areaLabel, 'Census area: Creek OTSA');
+
+  // A row whose label is the land area's own name carries no separate source label.
+  answers.set(LAR_URL, () => json(fc));
+  S.selections.length = 0;
+  heldBefore = S.held.length;
+  wiring.onSelect(tribalItem);
+  await waitFor(() => S.held.length > heldBefore);
+  S.held.at(-1)();
+  await waitFor(() => S.selections.length === 1);
+  assert.equal(S.selections[0].label, 'Alpha Land Area');
+  assert.equal(S.selections[0].context.areaLabel, undefined);
 });
 
 test('a formal Oklahoma Nation name lists its Census area first, never a land area in another state', async () => {

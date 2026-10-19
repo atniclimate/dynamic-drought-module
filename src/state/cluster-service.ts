@@ -165,6 +165,25 @@ export function composeClusterIntent(
   return out;
 }
 
+/** Whether `keys` shows `cluster` at `horizon`: its composition plus only the
+ * mode's optional layers (HazardClusterDef.optionalLayers); an optional surface
+ * stands in for the recipe's surface. With no optional layers this is set
+ * equality. */
+function isModeDisplay(
+  cluster: HazardClusterKey,
+  horizon: TemporalHorizonKey,
+  keys: ReadonlySet<string>
+): boolean {
+  const base = composeClusterIntent(cluster, horizon);
+  const optional: readonly string[] = HAZARD_CLUSTERS[cluster].optionalLayers ?? [];
+  const isSurface = (key: string): boolean => getLayerDef(key)?.role === 'surface';
+  const optionalSurfaceOn = optional.some((key) => keys.has(key) && isSurface(key));
+  return (
+    base.every((key) => keys.has(key) || (optionalSurfaceOn && isSurface(key))) &&
+    [...keys].every((key) => base.includes(key) || optional.includes(key))
+  );
+}
+
 /** The committed cluster, horizon, and intent, deriving from the store
  * when no explicit commitment has been made yet (the pre-S4 boot path).
  * The horizon returned is ALWAYS the one the intent was resolved at:
@@ -201,10 +220,12 @@ function resolveCommitted(): {
   // composed claim.
   if (checkedSnapshot().size > 0) {
     const on = onKeys();
-    const agrees =
-      on.size === composed.size && [...composed].every((key) => on.has(key));
-    if (!agrees) {
+    if (!isModeDisplay(cluster, horizon, on)) {
       return { cluster: 'custom', horizon, intent: on };
+    }
+    // Agreement can include the mode's optional layers, which the intent must name.
+    if (on.size !== composed.size || [...composed].some((key) => !on.has(key))) {
+      return { cluster, horizon, intent: on };
     }
   }
   return { cluster, horizon, intent: composed };
@@ -552,7 +573,8 @@ export function requestHorizon(next: TemporalHorizonKey): void {
  * names it because it stays in the committed intendedKeys. A failure the
  * controller does uncheck (any layer of a custom set) still lands here,
  * and so does a user's own uncheck of a composition member: that display
- * is no longer the cluster.
+ * is no longer the cluster. A mode's optional layers
+ * (HazardClusterDef.optionalLayers) on top of its composition do not demote it.
  * Stands down while the service itself is applying a cluster, so the
  * transaction's own intermediate flips can never demote the cluster it
  * is committing (the S2-mechanics defect this service retires).
@@ -572,6 +594,19 @@ export function reconcileClusterWithLayerIntent(checked: ReadonlySet<string>): v
   const matches =
     checked.size === intent.size && [...intent].every((key) => checked.has(key));
   if (matches) return;
+  // A mode plus only its optional layers stays that mode (Fuel risk over Wildfire).
+  const mode = committedCluster ?? getHazardCluster();
+  if (mode !== 'custom') {
+    const horizon = committedHorizon ?? timeline.horizon;
+    if (isModeDisplay(mode, horizon, checked)) {
+      committedCluster = mode;
+      committedIntent = new Set(checked);
+      committedHorizon = horizon;
+      if (disposer !== null) publish();
+      else current = null;
+      return;
+    }
+  }
   committedCluster = 'custom';
   committedIntent = new Set(checked);
   committedHorizon = null;

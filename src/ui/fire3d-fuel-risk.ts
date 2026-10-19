@@ -39,19 +39,20 @@ export type FuelRiskSwitch = 'drape' | 'flat' | null;
 export function fuelRiskSwitch(input: {
   readonly sceneActive: boolean;
   readonly drapeMounted: boolean;
-  readonly cluster: string;
-  readonly flatOn: boolean;
+  /** The committed mode's recipe at its horizon already holds the flat layer (Wildfire Long Range). */
+  readonly recipeHasFlat: boolean;
 }): FuelRiskSwitch {
   if (input.sceneActive && input.drapeMounted) return 'drape';
   // Long Range: the committed Wildfire recipe is the flat layer itself.
-  if (input.cluster === 'wildfire' && input.flatOn) return null;
+  if (input.recipeHasFlat) return null;
   return 'flat';
 }
 
 /**
- * Whether the console is offered. Turning the flat layer on adds a layer to
- * the Wildfire recipe, so the display honestly reads custom (the URL carries
- * `layers=`); the console stays so the same switch can turn it off.
+ * Whether the console is offered. Fuel risk is an optional layer of Wildfire
+ * (src/config/clusters.ts `optionalLayers`), so turning it on keeps the mode;
+ * the custom clause keeps the console when a person has also changed another
+ * layer.
  */
 export function fuelRiskKeepsConsole(
   cluster: string,

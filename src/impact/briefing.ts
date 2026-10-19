@@ -62,7 +62,7 @@ export function createBriefingSkeleton(
     context,
     sourcePolicy,
     landTitle: context.title,
-    landKind: kindLabel(context.kind),
+    landKind: context.areaLabel ? `${kindLabel(context.kind)} · ${context.areaLabel}` : kindLabel(context.kind),
     landCaveat: caveatFor(context.kind),
     landscape: {
       status: 'loading',

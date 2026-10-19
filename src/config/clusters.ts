@@ -98,6 +98,14 @@ export interface HazardClusterDef {
    */
   readonly recipes: Readonly<Record<TemporalHorizonKey, readonly LayerKey[]>>;
   /**
+   * Layers a person may add on top of this mode without leaving it: the mode
+   * stays pressed, every horizon stays usable and the link stays the mode's
+   * link (it does not carry them). A surface here stands in for the recipe's
+   * surface, which the one-surface rule turns off when it comes on. A horizon
+   * change re-applies the recipe, so a layer here follows it.
+   */
+  readonly optionalLayers?: readonly LayerKey[];
+  /**
    * The Key drawer's sections for this cluster, in order (S30D D1 M11;
    * DR-113; src/config/detail-sections.ts). Omitted or empty means the
    * drawer holds only the legend, qualifications and the map-information
@@ -164,6 +172,8 @@ export const HAZARD_CLUSTERS: Record<HazardClusterKey, HazardClusterDef> = {
       // Long horizon: the static potential read becomes eligible.
       'season-ahead': ['usfs-whp']
     },
+    // The console's Fuel risk switch (src/ui/fire3d-fuel-risk.ts).
+    optionalLayers: ['usfs-whp'],
     placeConditionRow: 'wildfire-perimeter'
   },
   heat: {

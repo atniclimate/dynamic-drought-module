@@ -65,6 +65,7 @@ import {
   fire3dCoverageNote
 } from '../../config/fire3d-presentation';
 import type * as maplibregl from 'maplibre-gl';
+import { HAZARD_CLUSTERS } from '../../config/clusters';
 import type { HazardClusterKey } from '../../config/clusters';
 import type { Fire3DStatus } from '../../map/fire3d';
 import { requestBasemapMode } from '../../map/basemap-switcher';
@@ -298,8 +299,9 @@ export function Fire3DControl({
   const fuelTarget = fuelRiskSwitch({
     sceneActive: status?.state === 'active',
     drapeMounted,
-    cluster,
-    flatOn: flatFuelOn
+    recipeHasFlat:
+      snapshot.cluster !== 'custom' &&
+      HAZARD_CLUSTERS[snapshot.cluster].recipes[snapshot.horizon].includes(FLAT_FUEL_RISK_KEY)
   });
   const offer = fire3dControlOffer({
     wideEnough,

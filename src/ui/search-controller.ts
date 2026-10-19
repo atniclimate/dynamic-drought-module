@@ -14,7 +14,7 @@
  *            frames it, lights it, and opens its briefing (locateBoundary).
  *   - place  a state; opens its drought briefing (openStateBriefing).
  *   - city   a major city from the shipped Natural Earth points; moves the
- *            camera and turns on City & Town Labels (no briefing).
+ *            camera (no briefing, no layer change).
  *   - layer  a catalog layer; turns it on through the shared toggle command
  *            (which syncs the checkbox and respects surface exclusivity,
  *            exactly like a catalog toggle; no layer co-activates a partner
@@ -22,7 +22,8 @@
  *
  * Stewardship: the roster it searches is NAMES ONLY (public/data/tribal-roster
  * .json). Locations come from a LIVE AIAN-LAR or Census AIANNH query at
- * selection time, never a bundled polygon (hard rule 1). The briefing carries
+ * selection time, never a bundled polygon (hard rule 1). The selection is
+ * titled with the row's gated formal name, not the service's area name. The briefing carries
  * the representation caveat through buildBoundaryContext, as a map click would.
  */
 
@@ -167,7 +168,7 @@ function loadTribal(): Promise<SearchItem[]> {
           kind: 'tribal' as const,
           id: `census:${a.aiannh}`,
           label,
-          sublabel: `Census area: ${a.name}`,
+          ...(label !== a.name ? { sublabel: `Census area: ${a.name}` } : {}),
           // An OTSA is an Oklahoma Tribal Statistical Area: "of Oklahoma" finds it, never a same-named area elsewhere.
           haystack: norm(`${a.name} ${label}${a.name.endsWith(' OTSA') ? ' oklahoma' : ''}`)
         };
@@ -235,7 +236,12 @@ interface LocateSpec {
   readonly layerKey: 'bia-reservations' | 'aiannh';
   readonly failToast: string;
   readonly emptyToast: string;
+  /** The row's gated label: a trusted formal Nation name is never abbreviated to the service's area name. */
+  readonly title: string;
+  /** The row's sublabel, the service's own area name, set only when the title differs from it. */
+  readonly areaLabel?: string;
 }
+type LocateLabels = Pick<LocateSpec, 'title' | 'areaLabel'>;
 
 /**
  * Locate a Tribal land area: one live boundary query (AIAN-LAR by LARNAME, or
@@ -325,16 +331,20 @@ async function locateBoundary(map: maplibregl.Map, spec: LocateSpec): Promise<vo
     spec.kind,
     primary.properties ?? null,
     aggregateGeometry,
-    lngLat
+    lngLat,
+    spec.title
   );
-  const context = bbox ? { ...rawContext, bbox, pointInsidePlace: true } : rawContext;
+  const context = {
+    ...(bbox ? { ...rawContext, bbox, pointInsidePlace: true } : rawContext),
+    ...(spec.areaLabel ? { areaLabel: spec.areaLabel } : {})
+  };
   setPlaceSelection({ label: context.title, context });
   if (isSheetActive() && getViewMode() === 'brief') openImpactPanel(context);
   showLocatedBoundary(map, aggregateGeometry);
 }
 
 /** Locate an AIAN-LAR land area by LARNAME (SQL-escaped). */
-function locateTribalLandArea(map: maplibregl.Map, larName: string): Promise<void> {
+function locateTribalLandArea(map: maplibregl.Map, larName: string, labels: LocateLabels): Promise<void> {
   const params = new URLSearchParams({
     where: `LARNAME='${larName.replace(/'/g, "''")}'`,
     outFields: 'LARID,LARNAME,CLASSIFICATION,GISACRES,REGION',
@@ -347,12 +357,13 @@ function locateTribalLandArea(map: maplibregl.Map, larName: string): Promise<voi
     kind: 'bia-reservation',
     layerKey: 'bia-reservations',
     failToast: 'Could not reach the BIA land area service. Try again in a moment.',
-    emptyToast: 'The BIA land area service returned no boundary for this land area.'
+    emptyToast: 'The BIA land area service returned no boundary for this land area.',
+    ...labels
   });
 }
 
 /** Locate a Census AIANNH area by its four-digit code (layer 47, the live aiannh layer's). */
-function locateCensusArea(map: maplibregl.Map, code: string): Promise<void> {
+function locateCensusArea(map: maplibregl.Map, code: string, labels: LocateLabels): Promise<void> {
   if (!/^\d{4}$/.test(code)) return Promise.resolve();
   const params = new URLSearchParams({
     where: `AIANNH='${code}'`,
@@ -368,7 +379,8 @@ function locateCensusArea(map: maplibregl.Map, code: string): Promise<void> {
     kind: 'aiannh',
     layerKey: 'aiannh',
     failToast: 'Could not reach the Census Tribal area service. Try again in a moment.',
-    emptyToast: 'The Census service returned no boundary for this area.'
+    emptyToast: 'The Census service returned no boundary for this area.',
+    ...labels
   });
 }
 
@@ -395,20 +407,21 @@ function selectResult(map: maplibregl.Map, item: SearchItem): void {
     return;
   }
   if (item.kind === 'city') {
-    // A city only moves the camera and shows the city labels; no briefing.
+    // A city only moves the camera; no briefing and no layer change, so the mode stays as it is.
     nextBriefingIntent();
     locateAbort?.abort();
     locateAbort = null;
     const center = cityCoords.get(item.id);
     if (center) map.easeTo({ center, zoom: Math.max(map.getZoom(), 8) });
-    requestLayerOn('places');
     return;
   }
+  // The row's gated label titles the selection (a formal Nation name is never abbreviated).
+  const labels = { title: item.label, ...(item.sublabel ? { areaLabel: item.sublabel } : {}) };
   if (item.id.startsWith('census:')) {
-    void locateCensusArea(map, item.id.slice('census:'.length));
+    void locateCensusArea(map, item.id.slice('census:'.length), labels);
     return;
   }
-  void locateTribalLandArea(map, item.id);
+  void locateTribalLandArea(map, item.id, labels);
 }
 
 /** The props the search component needs, assembled and routed for a map. */

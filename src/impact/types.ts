@@ -462,6 +462,12 @@ export interface BoundarySelectionContext {
    */
   readonly pointInsidePlace?: boolean;
   /**
+   * The service's own area name ('Census area: Creek OTSA'), set only when a
+   * search titles the selection with a trusted formal Nation name. Shown beside
+   * the kind in the briefing subtitle.
+   */
+  readonly areaLabel?: string;
+  /**
    * Compatibility feature bounding box `[west, south, east, north]`, when
    * derivable. A crossing geometry retains its naive min/max walk here.
    */
