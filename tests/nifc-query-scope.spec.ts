@@ -73,14 +73,15 @@ test.describe('NIFC WFIGS query scope', () => {
     expect(params.get('outFields')).not.toContain('attr_DailyAcres');
   });
 
-  test('the legend states the generalization; the map key leaves it to Technical information', async ({ page }) => {
+  test('the legend and the map key leave the generalization to Technical information', async ({ page }) => {
     await stubWildfireFeeds(page);
     await gotoApp(page, '?cluster=wildfire&view=console');
     await waitForLayerSettled(page, 'nifc-fires');
 
-    const legend = page.locator('#legend, .legend, [data-legend]').first();
-    await expect(legend).toContainText('0.0005 degree');
-    await expect(legend).toContainText('not the full-resolution source geometry');
+    const legend = page.locator('.legend-section[data-legend="nifc-fires"]');
+    // The title proves the section rendered, so the absence check below is not vacuous.
+    await expect(legend).toContainText('Mapped fire perimeters');
+    await expect(legend).not.toContainText('0.0005 degree');
 
     await page.locator('#map-key-details-toggle').click();
     const key = page.locator('#map-key [data-nifc-perimeter-key]');

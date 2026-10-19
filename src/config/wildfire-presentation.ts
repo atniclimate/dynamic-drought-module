@@ -987,7 +987,3 @@ export const NIFC_GENERALIZATION_NOTE =
 /** The perimeters' note; reads in the Impact Briefing (src/ui/map-technical-information.ts), not in the legend. */
 export const NIFC_PERIMETER_TECHNICAL_NOTE =
   `NIFC WFIGS current interagency mapped perimeters. ${NIFC_GENERALIZATION_NOTE} Service cadence does not establish individual perimeter age. Not for evacuation, parcel, or tactical decisions; open NIFC for the source record.`;
-
-/** The compact statement for the on-map key. */
-export const NIFC_KEY_GENERALIZATION_NOTE =
-  'Outlines generalized by the service at 0.0005 degree (up to about 56 m); not for tactical or evacuation decisions.';
