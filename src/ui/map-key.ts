@@ -520,10 +520,9 @@ export function ensoFlowRow(
   const status = `${flow.label} · ${flow.line}`;
   const notes = flow.notes.join(' ');
   // E1-4: the credit is its own text item, as data-sst-attribution is for
-  // the SST; the words are the publisher's, never typed here. A "derived from
-  // <product>" credit is dropped when the state line already names that product.
-  const credit = flow.provenance ?? '';
-  const provenance = status.includes(credit.replace(/^derived from /, '')) ? '' : credit;
+  // the SST; the words are the publisher's, never typed here. It stays when the
+  // state line names the product: only the credit says DDM re-encodes it.
+  const provenance = flow.provenance ?? '';
   return {
     html:
       `<span class="map-key-item" data-enso-flow="status">${escapeHtml(status)}</span>` +

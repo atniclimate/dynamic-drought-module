@@ -211,21 +211,19 @@ test('the Fire key carries no perimeter generalization note; Technical informati
   assert.ok(renderMapTechnicalInformation().replace(/&#039;/g, "'").includes(NIFC_GENERALIZATION_NOTE));
 });
 
-test('the ENSO key drops a derived-from credit that only repeats the product its state line names', async () => {
+test('the ENSO key keeps every kind\'s credit as its own text item, even when the state line names the product', async () => {
   const { ensoFlowRow } = await import('../src/ui/map-key.ts');
   const { FLOW_WORDS, flowLiveLine } = await import('../src/layers/enso-flow-data.ts');
   const row = (kind, line) => ensoFlowRow({ status: 'live', label: kind, line, notes: [], provenance: FLOW_WORDS.provenance[kind] });
   const at = Date.UTC(2026, 9, 5, 6);
+  // The "derived from" credit says DDM re-encodes the product; the state line naming the product does not say that.
   for (const kind of Object.keys(FLOW_WORDS.provenance)) {
-    const live = row(kind, flowLiveLine('live', kind, at, at));
-    const repeats = FLOW_WORDS.provenance[kind] === `derived from ${FLOW_WORDS.source[kind]}`;
-    assert.equal(live.html.includes('data-enso-flow="provenance"'), !repeats, kind);
-    assert.equal(live.ariaLabel.includes(FLOW_WORDS.provenance[kind]), !repeats, kind);
-    // A line that does not name the product keeps the credit.
-    assert.ok(row(kind, `no data · ${FLOW_WORDS.noOcean}`).html.includes('data-enso-flow="provenance"'), kind);
+    for (const line of [flowLiveLine('live', kind, at, at), `no data · ${FLOW_WORDS.noOcean}`]) {
+      const { html, ariaLabel } = row(kind, line);
+      assert.ok(html.includes(`<span class="map-key-item" data-enso-flow="provenance">${FLOW_WORDS.provenance[kind]}</span>`), kind);
+      assert.ok(ariaLabel.endsWith(` ${FLOW_WORDS.provenance[kind]}.`), kind);
+    }
   }
-  // The currents credit names a different product (the re-encoding), so it stays.
-  assert.ok(row('currents', flowLiveLine('live', 'currents', at, at)).html.includes(FLOW_WORDS.provenance.currents));
 });
 
 test('the flow explanations taken off the ENSO key read in the Impact Briefing under the name of their control', async () => {
