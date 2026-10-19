@@ -102,6 +102,7 @@ jobs:
           cache-dependency-path: |
             package-lock.json
             workers/proxy/package-lock.json
+            workers/terrain/package-lock.json
 
       - name: Install application dependencies
         run: npm ci
@@ -123,6 +124,36 @@ jobs:
       # as a plain `npm audit`; fails the gate on a reachable advisory.
       - name: Audit Worker dependencies
         run: npm --prefix workers/proxy audit
+
+      - name: Install terrain Worker dependencies
+        run: npm --prefix workers/terrain ci
+
+      - name: Typecheck terrain Worker without deploying
+        run: npm --prefix workers/terrain run typecheck
+
+      - name: Audit terrain Worker dependencies
+        run: npm --prefix workers/terrain audit
+
+  landscape:
+    name: Landscape fixture suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: scripts/requirements-landscape.txt
+
+      - name: Install pinned landscape environment
+        run: python -m pip install --disable-pip-version-check -r scripts/requirements-landscape.txt
+
+      - name: Run landscape fixture tests
+        run: python -m unittest discover -s scripts/landscape/tests -v
 
   # Owner, 2026-10-19: the weekly Dependabot Worker bumps change only
   # workers/proxy/, which the gate job's Worker typecheck and audit cover; the
@@ -176,7 +207,7 @@ jobs:
   # `cancel-in-progress` must read as cancelled, not as a red Validate.
   validate:
     name: Validate
-    needs: [gate, scope, browser]
+    needs: [gate, landscape, scope, browser]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -192,9 +223,11 @@ jobs:
       - name: Require every job to have passed
         run: |
           echo "gate: ${{ needs.gate.result }}"
+          echo "landscape: ${{ needs.landscape.result }}"
           echo "scope: ${{ needs.scope.result }} (worker-only: ${{ needs.scope.outputs.worker-only }})"
           echo "browser: ${{ needs.browser.result }}"
           test "${{ needs.gate.result }}" = "success"
+          test "${{ needs.landscape.result }}" = "success"
           test "${{ needs.scope.result }}" != "failure"
           # A skipped suite passes only for a workers/proxy/-only pull request.
           if test "${{ needs.browser.result }}" = "skipped" && test "${{ needs.scope.outputs.worker-only }}" = "true"; then

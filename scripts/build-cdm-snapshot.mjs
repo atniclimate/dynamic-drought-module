@@ -20,6 +20,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { basename, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { fetchBufferedWithBudget } from '../src/util/fetch.ts';
 
 import { unzipSync } from 'fflate';
 import mapshaper from 'mapshaper';
@@ -34,6 +35,8 @@ const LICENSE_URL =
 const DATASET_URL =
   'https://open.canada.ca/data/en/dataset/292646cd-619f-4200-afb1-8b2c52f984a2';
 const MAX_ARCHIVE_BYTES = 10_000_000;
+// Match the Tribal roster producer's whole-response budget.
+const FETCH_TIMEOUT_MS = 30_000;
 const MAX_EXPANDED_BYTES = 100_000_000;
 const MAX_ARTIFACT_BYTES = 5_000_000;
 const SIMPLIFY = '15%';
@@ -88,7 +91,9 @@ function isZip(bytes) {
 }
 
 async function downloadArchive(url) {
-  const response = await fetch(url, { cache: 'no-store' });
+  const response = await fetchBufferedWithBudget(
+    url, { cache: 'no-store' }, null, FETCH_TIMEOUT_MS, MAX_ARCHIVE_BYTES
+  );
   if (!response.ok) {
     throw new Error(
       `month not published or fetch failed: HTTP ${response.status} for ${url}`

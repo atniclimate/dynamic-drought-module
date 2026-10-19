@@ -257,6 +257,38 @@ test('src/util/fetch.ts exports no Range-read bound', () => {
 const here = dirname(fileURLToPath(import.meta.url));
 const srcRoot = join(here, '..', 'src');
 
+test('snapshot producers bound a stalled response body and cancel its stream', async (t) => {
+  for (const [script, name] of [
+    ['build-enso-snapshot.mjs', 'fetchText'],
+    ['build-cdm-snapshot.mjs', 'downloadArchive']
+  ]) {
+    await t.test(script, async () => {
+      const source = readFileSync(join(here, '..', 'scripts', script), 'utf8');
+      const wrapper = source.match(new RegExp(`async function ${name}\\(url\\) \\{[\\s\\S]*?\\n\\}`))?.[0];
+      assert.ok(wrapper, 'exercise the producer wrapper, without running its artifact writer');
+      const read = new Function('fetchBufferedWithBudget', 'FETCH_TIMEOUT_MS', 'MAX_ARCHIVE_BYTES',
+        `${wrapper}; return ${name};`)(fetchBufferedWithBudget, 40, 16);
+      const stub = stubFetch({ chunks: ['partial body'], close: false });
+      await withFetch(stub, async () => {
+        await assert.rejects(raced(read('/stalled-source'), 2000, script), { name: 'AbortError' });
+        await raced(stub.cancelled, 2000, 'producer stream cancel');
+      });
+      await withFetch(stubFetch({ status: 503 }), async () => {
+        await assert.rejects(read('/failed-source'), {
+          message: `${name === 'downloadArchive' ? 'month not published or ' : ''}fetch failed: HTTP 503 for /failed-source`
+        });
+      });
+      if (name === 'downloadArchive') {
+        const oversized = stubFetch({ chunks: ['x'.repeat(17)], close: false });
+        await withFetch(oversized, async () => {
+          await assert.rejects(raced(read('/oversized-source'), 2000, script), { name: 'RangeError' });
+          await raced(oversized.cancelled, 2000, 'oversized archive cancel');
+        });
+      }
+    });
+  }
+});
+
 function walk(dir, out = []) {
   for (const name of readdirSync(dir)) {
     const path = join(dir, name);

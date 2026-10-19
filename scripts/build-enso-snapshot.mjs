@@ -55,6 +55,7 @@
 import { writeFile, mkdir } from 'node:fs/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
+import { fetchBufferedWithBudget } from '../src/util/fetch.ts';
 import {
   rejectEnsoSnapshot,
   CPC_RULE_URLS,
@@ -102,6 +103,8 @@ const THRESHOLD = 0.5;
 // CPC number), DIRECTION_SPAN and SEASON_NAMES live in the contract, which
 // recomputes the state block from them.
 const SOI_MISSING = -999.9;
+// Match the Tribal roster producer's whole-response budget.
+const FETCH_TIMEOUT_MS = 30_000;
 const SEASONS = new Set(SEASON_NAMES);
 const MONTH_NAMES = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
 const SOI_HEADER = `YEAR ${MONTH_NAMES.join(' ')}`;
@@ -125,7 +128,7 @@ function publishedDay(resp, url) {
 }
 
 async function fetchText(url) {
-  const resp = await fetch(url);
+  const resp = await fetchBufferedWithBudget(url, null, null, FETCH_TIMEOUT_MS);
   if (!resp.ok) throw new Error(`fetch failed: HTTP ${resp.status} for ${url}`);
   return {
     text: await resp.text(),
@@ -619,7 +622,7 @@ const ONI_METHOD = {
 };
 
 async function main() {
-  // Sequential fetches keep the four-request refresh bounded and polite.
+  // Sequential fetches keep the five-request refresh bounded and polite.
   const roni = await fetchSeasonIndex(RONI_URL, 'SEAS YR ANOM', 'RONI');
   const oni = await fetchSeasonIndex(ONI_URL, 'SEAS YR TOTAL ANOM', 'ONI');
   const nino34 = await fetchNino34();
