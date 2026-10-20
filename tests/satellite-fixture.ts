@@ -69,7 +69,7 @@ export function satelliteObservationRangeText(frame: SatelliteFrame): string {
 export interface SatelliteStubOptions {
   readonly frames?: readonly SatelliteFrame[];
   readonly failedProbeFrameIds?: readonly number[];
-  readonly stalledRenderedFrameIds?: readonly number[];
+  readonly failedRenderedFrameIds?: readonly number[];
 }
 
 export interface SatelliteStubController {
@@ -77,12 +77,7 @@ export interface SatelliteStubController {
   readonly renderedFrameIds: readonly number[];
   setFrames(frames: readonly SatelliteFrame[]): void;
   failProbeFrame(objectId: number): void;
-  /**
-   * The frame's rendered tiles never answer while the page lives, so nothing
-   * settles its view and its completeness deadline is its only verdict: a
-   * case that fast-forwards the clock past that deadline decides the outcome.
-   */
-  stallRenderedFrame(objectId: number): void;
+  failRenderedFrame(objectId: number): void;
 }
 
 const stubbedPages = new WeakMap<Page, SatelliteStubController>();
@@ -95,10 +90,9 @@ export async function stubRecentSatellite(
   if (existing) return existing;
   let frames = [...(options.frames ?? [SATELLITE_FRAME])];
   const failedProbeFrameIds = new Set(options.failedProbeFrameIds ?? []);
-  const stalledRenderedFrameIds = new Set(options.stalledRenderedFrameIds ?? []);
+  const failedRenderedFrameIds = new Set(options.failedRenderedFrameIds ?? []);
   const probeFrameIds: number[] = [];
   const renderedFrameIds: number[] = [];
-  let pageClosed: Promise<void> | null = null;
 
   await page.route('**/MERGEDGC_Last_24hr/ImageServer/query?**', (route) =>
     route.fulfill({
@@ -118,7 +112,7 @@ export async function stubRecentSatellite(
   );
   await page.route(
     '**/MERGEDGC_Last_24hr/ImageServer/exportImage?**',
-    async (route) => {
+    (route) => {
       const url = new URL(route.request().url());
       const objectId = frameObjectId(url.href);
       const isProbe = url.searchParams.get('bbox') === SATELLITE_PROBE_BBOX;
@@ -135,13 +129,9 @@ export async function stubRecentSatellite(
       if (
         objectId !== null &&
         !isProbe &&
-        stalledRenderedFrameIds.has(objectId)
+        failedRenderedFrameIds.has(objectId)
       ) {
-        // One shared listener however many tiles stall; MapLibre may cancel
-        // the request first, so the late abort can find it gone.
-        pageClosed ??= new Promise((resolve) => page.once('close', () => resolve()));
-        await pageClosed;
-        return route.abort().catch(() => undefined);
+        return route.abort();
       }
       return route.fulfill({
         status: 200,
@@ -160,8 +150,8 @@ export async function stubRecentSatellite(
     failProbeFrame(objectId): void {
       failedProbeFrameIds.add(objectId);
     },
-    stallRenderedFrame(objectId): void {
-      stalledRenderedFrameIds.add(objectId);
+    failRenderedFrame(objectId): void {
+      failedRenderedFrameIds.add(objectId);
     }
   };
   stubbedPages.set(page, controller);

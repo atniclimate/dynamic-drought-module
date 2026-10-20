@@ -439,24 +439,28 @@ as intended, and it closes automatically on the first run after the publish.
 Its daily schedule is currently disabled.
 
 Choose checks using the [local verification ladder](tests/README.md#the-local-verification-ladder).
-Run focused source or browser tests while editing, `npm run gate` for build and
-cross-cutting configuration changes. `npm run verify:smoke` is GitHub's, not a
-local step.
+Run the smallest source or browser checks that cover each coherent change.
+Use `npm run gate` when build or cross-cutting configuration changes need it;
+reuse its CI evidence instead of adding a duplicate local gate.
+`npm run verify:smoke` is GitHub's, not a local step.
 
 The full browser suite runs on GitHub in the `Validate` workflow; start it on a
 branch without an open pull request with `gh workflow run validate.yml --ref
-<branch>`. Only that full run decides a landing. Partway through a block, a
+<branch>`. That full run supplies application integration evidence. Partway through a block, a
 targeted run of the block's own specs (`npm run spec:impact -- --dispatch`
 after a push; it refuses an empty list, which would be the full run) answers
 in about five minutes and its run name says it is not a landing run. Before
 the full dispatch, `npm run spec:impact` must show no spec still naming text
 the block deleted everywhere (it does not catch text moved or reworded; its
 fixed cross-cutting specs for shared style, key, dock, minimap and test-seam
-changes are a guess at ownership, not a dependency graph), and
-`npm run test:touched` runs the touched specs once locally; the testing guide's
-"Iteration and session closeout" has the order. A pull request that changes
-only `workers/proxy/` skips the browser job. A local `npm run test:serial` is
-not a local step. Ending a session does not trigger another full suite.
+changes are a guess at ownership, not a dependency graph). Choose a focused local
+`npm run test:touched` or targeted GitHub run when needed; reuse passing evidence
+instead of requiring both before integration. The testing guide's "Iteration and
+session closeout" explains the choices. Proxy-only pull requests run the proxy
+typecheck, audit and client-contract/receipt tests; docs outside the artifact
+report Validate without application jobs. Named browser dispatches skip the
+unrelated gate and landscape suite. A local `npm run test:serial` is not a local
+step. Ending a session does not trigger another full suite.
 Documentation-only and verification-tooling checks are scoped in the same
 ladder. Report exactly what ran and what remains unverified.
 
@@ -497,8 +501,9 @@ Stop-Process -Id <pid> -Force
 workflow; run it by hand when documentation links change.
 
 Shared navigation, map lifecycle, state, responsive behavior, and release
-readiness changes require the full suite to be green on GitHub, with the
-affected specs run locally first. A narrow documentation-only change
+readiness changes require full integration on GitHub at the landing boundary.
+Use local or remote focused checks during development; a local browser run is
+not a prerequisite for that integration. A narrow documentation-only change
 normally needs documentation checks, YAML validation when applicable, the
 public-tree gate, and a clean Git diff rather than the full browser suite.
 
@@ -673,16 +678,20 @@ Branch workflow: each release is built on a short-lived branch cut from
 `main`, and `main` changes only when the maintainer lands a release.
 `validate.yml` is `on: pull_request`, so a branch without an open pull request
 runs no CI on push; start it by hand with `gh workflow run validate.yml --ref
-<branch>`. While developing, run `npm run typecheck` and the focused tests for
-the change. Commit and push pieces without repeating checks that already passed. At the
-end of a functional block, run `npm run gate` once and inspect the touched modes.
+<branch>` when full integration is needed. While developing, run the focused
+checks for the change. Commit and push pieces without repeating checks that
+already passed. Inspect changed interface modes once per coherent feature;
+GitHub's integration run supplies the gate, without a mandatory local duplicate.
 The full browser suite runs on GitHub in fourteen shards for the frozen block
 candidate. Reuse that full green for the release when its exact SHA and main
 base are unchanged; do not dispatch a duplicate. An open PR, including a draft,
 already triggers validation on pushes, so inspect existing runs first; a
 targeted run of the block's own specs may come partway through a block, and it
-never counts for a landing. Before a release, the full suite must be green on GitHub for the
-frozen release candidate, and one independent review covers the release's whole
+never counts for a landing. Application, shared configuration and unknown changes
+need full integration. Documentation and proxy-only changes need their selected
+scope and final Validate status. For a PR run, confirm its tested merge tree equals
+the candidate tree with the current main base; a green name alone is insufficient.
+One independent review covers the release's whole
 diff. `Validate` is the only check that must be green on the pull request, and
 `deploy` and `verify-live` are consequences of the merge rather than gates on
 it. Deployment builds and checks the publication artifact, then publishes it without

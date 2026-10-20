@@ -31,21 +31,23 @@ Avoid copying spec counts and runtime estimates into several documents.
 
 | Work being checked | Command | Scope |
 | --- | --- | --- |
-| An edit during development | `npm run verify:quick` | Types, vocabulary, coverage and punctuation; no browser or build |
+| A change needing the combined source checks | `npm run verify:quick` | Types, vocabulary, coverage and punctuation; no browser or build |
 | Pure logic | `npm run verify:pure -- tests/layer-order.spec.ts` | Selected source-level cases; omit the selector for the whole pure lane |
 | Source checks without a bundle | `npm run gate:nobuild` | Types and all source checks, including the pure lane |
 | A red that reading the code cannot explain | `npx playwright test --workers=1 -g "case title"` | Fresh production build and the one case, with every diagnostic in the first run |
-| A finished block's own specs, once before the full dispatch | `npm run test:touched` | The specs `npm run spec:impact` lists as touched; refuses none, more than 12, or a held port 4173 or 4180 |
+| A needed local check of touched browser behavior | `npm run test:touched` | The specs `npm run spec:impact` lists as touched; refuses none, more than 12, or a held port 4173 or 4180 |
 | Cross-cutting build/configuration changes | `npm run gate` | Fresh build, artifact budgets and all source checks |
 | The full suite | `gh workflow run validate.yml --ref <branch>` | GitHub's fourteen shards; `npm run test:serial` is not a local step |
 
 The full browser suite normally runs on GitHub, in the Validate workflow, which
 slices it into fourteen shards. On a branch without an open pull request, start
 it with `gh workflow run validate.yml --ref <branch>`; only that full run
-decides a landing. A pull request that changes only `workers/proxy/` (the
-weekly Dependabot Worker bumps) skips the browser job and is judged by the gate
-and the Worker checks. A local `test:serial` takes more than an hour and is not
-a local step: the full suite is GitHub's.
+decides an application landing. Proxy-only pull requests run the proxy typecheck,
+audit and client-contract/receipt tests without the application, terrain,
+landscape or browser suites. Docs outside the artifact report Validate without
+application jobs. Named browser dispatches run only those specs. An empty
+dispatch requests full integration. A local `test:serial` takes more than an
+hour and is not a local step: the full suite is GitHub's.
 
 `npm test` runs the same three assertion projects with the configured worker
 count. Keep one browser runner at a time. The pure lane starts no browser or
@@ -66,11 +68,11 @@ each builder keeps its own fresh page and runs each fixture method once. Tests
 that require a live layer or date rail must install positive fixtures explicitly;
 the offline backstop's error response cannot establish those preconditions.
 
-While developing, run `npm run typecheck` and the one browser-free test that
-covers the change. Commit and push pieces without repeating a gate per commit. At the end of a
-functional block, run `npm run gate` once; it includes the lighter checks.
-For a scoped non-functional change, choose the smallest relevant check from
-the table, rather than running every command in it.
+While developing, choose the smallest named checks that cover the change.
+Use `npm run typecheck` for TypeScript changes and the affected browser-free
+tests for logic. Commit and push pieces without repeating a gate per commit.
+GitHub's integration run includes the gate; do not duplicate it locally unless
+a specific diagnosis needs it. The table offers choices, not a required sequence.
 
 A browser run only when nothing simpler can answer the question. A wording,
 configuration, size or pure-logic change never needs one. When one is needed:
@@ -103,19 +105,21 @@ legend, dock or minimap component, or the test seam (`tests/helpers.ts`,
 each; the sets (`CROSS_CUTTING` in `scripts/spec-impact.mjs`) come from the
 0.7.7 reds, six specs in all, and are a guess at ownership, not a dependency
 graph. It exits 1 while a counted mention remains; `--list` prints only the
-touched paths. In order:
+touched paths. Choose the needed evidence:
 
-1. Partway through a block, a targeted GitHub run of only those specs, about
-   five minutes: push, then `npm run spec:impact -- --dispatch` (add
+1. For changed browser behavior, choose a local focused check or a targeted
+   GitHub run: after the authorized push, `npm run spec:impact -- --dispatch` (add
    `--base <ref>` as above). It dispatches Validate on the checked-out branch
    with the touched list as `specs`, and refuses an empty list (that would be
    the full run), a detached HEAD, or a HEAD that is not the pushed tip. Every
    shard runs only its slice of the named files; the run's name says it is not
    a landing run.
-2. Before the full dispatch: `npm run spec:impact` with no counted mention
-   left, then one local `npm run test:touched`.
-3. The full Validate run, with no `specs`, once. Only that run decides a
-   landing.
+2. Before a needed full dispatch, run `npm run spec:impact` with no counted
+   mention left. Reuse passing focused evidence; `npm run test:touched` is an
+   option when a local browser check is needed, not a mandatory extra run.
+3. At an application integration or release boundary, use the full Validate
+   run with no `specs`, once. Reuse a matching full green rather than dispatch
+   a duplicate. A targeted browser pass is not full landing evidence.
 
 A session ending is not a new application verification event. Do not start
 `verify:smoke` or `test:serial` solely because the session is ending, or rerun
@@ -128,9 +132,9 @@ For verification-tooling work, run the relevant lane/configuration tests, types,
 the gate when build orchestration changes, and a focused execution of the changed
 browser startup path. A tooling check does not establish application readiness.
 
-After shared navigation, map lifecycle or state changes, run only the affected
-browser cases locally, if any; the full suite on GitHub covers the rest at the
-block's end.
+After shared navigation, map lifecycle or state changes, choose local or remote
+focused browser cases when needed; full integration on GitHub covers the rest
+at the landing boundary.
 
 ### 3D diagnosis
 

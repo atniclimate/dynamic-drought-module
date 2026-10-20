@@ -6,14 +6,13 @@
 # exact @playwright/test version (which fixes the Chromium revision), so a
 # Playwright bump misses once and rebuilds; every other run restores in
 # seconds instead of downloading Chromium (about 21 s on a good day, and the
-# step where the 2026-08-19 deploy stalled for its whole budget). OS
-# libraries are outside the cache: a miss installs them with the browser; a
-# hit runs `playwright install chromium`, which is a no-op when the restored
-# executable is present and a bounded re-download when the entry is
-# partial, then reinstalls only the libraries. Composite steps cannot carry
-# `timeout-minutes`, so each path is bounded as a whole with coreutils
-# `timeout` (600 s, the same ten-minute envelope the inline steps had) and
-# fails fast with its own log.
+# step where the 2026-08-19 deploy stalled for its whole budget). The shared
+# provisioning step installs Chromium, then OS libraries; Chromium install is
+# a no-op on a complete cache hit and repairs a partial entry or downloads on
+# a miss. OS dependency provisioning retries up to three times. Composite
+# steps cannot carry `timeout-minutes`, so provisioning stays bounded as a
+# whole by coreutils `timeout` (600 s, the same ten-minute envelope the inline
+# steps had).
 #
 # Restore and save are separate steps, and only a run ON main saves. A cache
 # entry is scoped to the ref that wrote it: an entry written from a pull
@@ -57,11 +56,9 @@ runs:
       with:
         path: ~/.cache/ms-playwright
         key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}
-
-    - name: Install Chromium for browser verification (cache miss)
-      if: steps.playwright-cache.outputs.cache-hit != 'true'
+    - name: Install Chromium and its OS dependencies
       shell: bash
-      run: timeout 600 npx playwright install --with-deps chromium
+      run: timeout 600 bash ./.github/actions/playwright-chromium/install-deps.sh
 
     # Only main writes an entry every other ref can read: see the header note.
     - name: Save the Playwright browser directory (miss, on main)
@@ -70,8 +67,3 @@ runs:
       with:
         path: ~/.cache/ms-playwright
         key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}
-
-    - name: Verify Chromium and install its OS dependencies (cache hit)
-      if: steps.playwright-cache.outputs.cache-hit == 'true'
-      shell: bash
-      run: timeout 600 bash -c 'npx playwright install chromium && npx playwright install-deps chromium'

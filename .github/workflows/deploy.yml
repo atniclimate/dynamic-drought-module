@@ -51,12 +51,14 @@ permissions:
 # cancelled rather than emailing a failure, which `false` would do for
 # every extra deploy it ran to completion.
 concurrency:
-  group: pages
+  # Non-main dispatches cannot cancel an eligible main publication.
+  group: ${{ github.ref == 'refs/heads/main' && 'pages' || format('pages-ineligible-{0}', github.run_id) }}
   cancel-in-progress: true
 
 jobs:
   build:
     name: Gate and build
+    if: ${{ github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -123,6 +125,7 @@ jobs:
 
   deploy:
     name: Deploy to GitHub Pages
+    if: ${{ github.ref == 'refs/heads/main' }}
     # Validate already proved the candidate; publish this gate's artifact.
     needs: [build]
     runs-on: ubuntu-latest

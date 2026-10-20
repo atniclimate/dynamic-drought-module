@@ -163,25 +163,18 @@ test.describe('U4d: the switcher control and assistive observation status', () =
     await expect(chip).toContainText(satelliteObservationRangeText(SATELLITE_FRAME));
 
     satelliteStub.setFrames([SATELLITE_NEW_FRAME, SATELLITE_FRAME]);
-    // Stalled, never failed: a failed tile can settle the new frame's view
-    // (an error verdict on idle) before the jump below, and the jump then
-    // expires the RESTORED frame's fresh deadline while its tiles are still
-    // in flight, which reads unavailable (Validate 39276455292, Deploy
-    // 39074727335). Stalled tiles leave the new frame's deadline its only
-    // verdict, so the rollback runs inside the jump and the restored frame's
-    // deadline lands 30 s after it.
-    satelliteStub.stallRenderedFrame(SATELLITE_NEW_FRAME.objectId);
+    satelliteStub.failRenderedFrame(SATELLITE_NEW_FRAME.objectId);
     await page.clock.fastForward(10 * 60_000);
 
     await expect.poll(() =>
       satelliteStub.renderedFrameIds.includes(SATELLITE_NEW_FRAME.objectId)
     ).toBe(true);
-    // The selected-frame completeness deadline is clock-driven. Once the
-    // failed refresh has actually requested a rendered tile, advance the
-    // installed test clock so the bounded rollback can resolve deterministically.
-    await page.clock.fastForward(31_000);
+    // Stop advancing at rollback so the restored frame can load before its own deadline.
+    await expect.poll(async () => {
+      await page.clock.fastForward(1_000);
+      return chip.textContent();
+    }, { intervals: [100] }).toContain('refresh delayed');
     await expect(chip).toContainText(satelliteObservationRangeText(SATELLITE_FRAME));
-    await expect(chip).toContainText('refresh delayed');
     await expect(page.locator(SWITCHER)).toHaveAttribute('aria-pressed', 'true');
     expect(await search(page)).not.toContain('basemap=');
   });

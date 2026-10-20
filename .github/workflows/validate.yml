@@ -4,13 +4,13 @@
 #
 # Shape (DDM-P0-T02, 2026-08-28): the deterministic gate and the browser
 # suite are separate jobs so the suite can fan out across the shared runner
-# matrix in browser-suite.yml (the same matrix the Pages deploy runs).
+# matrix in browser-suite.yml. Pages does not repeat that suite.
 # `validate` is the single required status: it fails if any job fails.
 
 name: Validate DDM
 
 # A targeted run (the `specs` input below, 2026-10-19) must never be taken for
-# a landing run. Empty or whitespace keeps GitHub's event-specific name (the
+# a landing run. Empty keeps GitHub's event-specific name (the
 # pull request's title; the workflow name on a plain dispatch): the
 # `run-name` entry of the workflow syntax reference.
 run-name: >-
@@ -18,22 +18,7 @@ run-name: >-
 
 on:
   pull_request:
-    # A pull request that touches only documentation outside the build has
-    # nothing for the gate or the eight-shard suite to check, so it runs
-    # neither. Same list, and the same reasoning, as deploy.yml: NOT
-    # '**/*.md', because the three README files under public/ are copied
-    # into dist/ by Vite and so are part of the shipped tree.
-    #
-    # Caveat for D-5 (branch protection): `main` has no ruleset today. If
-    # `Validate` is ever made a REQUIRED status check, a pull request
-    # skipped by this filter reports no status at all, and a required check
-    # that never reports blocks the merge. Pair any such ruleset with a
-    # skip-shaped stand-in, or drop this filter, before turning it on.
-    paths-ignore:
-      - '*.md'
-      - 'docs/**'
-      - 'planning/**'
-      - '.github/ISSUE_TEMPLATE/**'
+    # Classify paths inside the workflow so even docs-only PRs report Validate.
   workflow_dispatch:
     inputs:
       # Mirrors browser-suite.yml's workflow_call experiment inputs, defaults
@@ -79,6 +64,8 @@ concurrency:
 jobs:
   gate:
     name: Gate and Worker typecheck
+    needs: scope
+    if: ${{ needs.scope.outputs.mode == 'full' || needs.scope.outputs.mode == 'proxy' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     # Build identity (FE-22, 2026-08-28): the app stamps these two values on
@@ -105,13 +92,20 @@ jobs:
             workers/terrain/package-lock.json
 
       - name: Install application dependencies
+        if: ${{ needs.scope.outputs.mode == 'full' }}
         run: npm ci
 
       - name: Verify TypeScript compiler
+        if: ${{ needs.scope.outputs.mode == 'full' }}
         run: npm exec tsc -- --version
 
       - name: Run deterministic release gate
+        if: ${{ needs.scope.outputs.mode == 'full' }}
         run: npm run gate
+
+      - name: Check proxy client contract and receipts
+        if: ${{ needs.scope.outputs.mode == 'proxy' }}
+        run: node --test tests/worker-client-contract.test.mjs tests/worker-receipts.test.mjs
 
       - name: Install Worker dependencies
         run: npm --prefix workers/proxy ci
@@ -126,16 +120,21 @@ jobs:
         run: npm --prefix workers/proxy audit
 
       - name: Install terrain Worker dependencies
+        if: ${{ needs.scope.outputs.mode == 'full' }}
         run: npm --prefix workers/terrain ci
 
       - name: Typecheck terrain Worker without deploying
+        if: ${{ needs.scope.outputs.mode == 'full' }}
         run: npm --prefix workers/terrain run typecheck
 
       - name: Audit terrain Worker dependencies
+        if: ${{ needs.scope.outputs.mode == 'full' }}
         run: npm --prefix workers/terrain audit
 
   landscape:
     name: Landscape fixture suite
+    needs: scope
+    if: ${{ needs.scope.outputs.mode == 'full' }}
     runs-on: windows-latest
     timeout-minutes: 15
     steps:
@@ -155,18 +154,13 @@ jobs:
       - name: Run landscape fixture tests
         run: python -m unittest discover -s scripts/landscape/tests -v
 
-  # Owner, 2026-10-19: the weekly Dependabot Worker bumps change only
-  # workers/proxy/, which the gate job's Worker typecheck and audit cover; the
-  # browser suite says nothing about them, yet it turned them red whenever
-  # main's own suite was red. A pull request whose every changed path is
-  # under workers/proxy/ skips the browser job. A dispatch never asks.
+  # Unknown paths use full coverage. Failed classification cannot pass Validate.
   scope:
     name: Changed paths
-    if: ${{ github.event_name == 'pull_request' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
-      worker-only: ${{ steps.paths.outputs.worker-only }}
+      mode: ${{ steps.paths.outputs.mode }}
     steps:
       # The pull_request checkout is the test merge commit, whose first
       # parent is the base: depth 2 holds both sides of the diff.
@@ -175,23 +169,22 @@ jobs:
         with:
           fetch-depth: 2
 
-      - name: Decide whether only workers/proxy/ changed
+      - name: Select affected validation
         id: paths
-        run: |
-          # --no-renames: a file moved into workers/proxy/ also lists its old path.
-          git diff --no-renames --name-only HEAD^1 HEAD | tee changed.txt
-          if test -s changed.txt && ! grep -qv '^workers/proxy/' changed.txt; then
-            echo "worker-only=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "worker-only=false" >> "$GITHUB_OUTPUT"
-          fi
+        env:
+          SPECS: ${{ inputs.specs || '' }}
+        run: node .github/scripts/validation-scope.mjs
+
+      - name: Check validation routing
+        run: node --test .github/scripts/validation-scope.test.mjs
+
+      - name: Keep private process files out of the public tree
+        run: node scripts/check-public-tree.mjs
 
   browser:
     name: Browser suite
     needs: scope
-    # `!cancelled()` lets the suite run when `scope` is skipped (a dispatch)
-    # or failed (no answer means run it).
-    if: ${{ !cancelled() && needs.scope.outputs.worker-only != 'true' }}
+    if: ${{ needs.scope.outputs.mode == 'full' || needs.scope.outputs.mode == 'targeted' }}
     uses: ./.github/workflows/browser-suite.yml
     with:
       build-sha: ${{ github.sha }}
@@ -212,6 +205,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - name: Checkout validation policy
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
       - name: Say that this is a targeted run
         if: ${{ inputs.specs != '' }}
         env:
@@ -220,18 +216,7 @@ jobs:
           echo "::notice::Targeted browser run of named specs only. Not a landing run: only a full Validate run (no specs) decides a landing."
           printf '### Targeted run, not a landing run\n\nOnly these spec files ran: %s\n\nA landing needs a full Validate run, dispatched with no specs.\n' "$SPECS" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Require every job to have passed
-        run: |
-          echo "gate: ${{ needs.gate.result }}"
-          echo "landscape: ${{ needs.landscape.result }}"
-          echo "scope: ${{ needs.scope.result }} (worker-only: ${{ needs.scope.outputs.worker-only }})"
-          echo "browser: ${{ needs.browser.result }}"
-          test "${{ needs.gate.result }}" = "success"
-          test "${{ needs.landscape.result }}" = "success"
-          test "${{ needs.scope.result }}" != "failure"
-          # A skipped suite passes only for a workers/proxy/-only pull request.
-          if test "${{ needs.browser.result }}" = "skipped" && test "${{ needs.scope.outputs.worker-only }}" = "true"; then
-            echo "browser: skipped, every changed path is under workers/proxy/"
-          else
-            test "${{ needs.browser.result }}" = "success"
-          fi
+      - name: Require every selected job to have passed
+        env:
+          JOB_RESULTS: ${{ toJSON(needs) }}
+        run: node .github/scripts/validation-scope.mjs --verify
