@@ -705,8 +705,8 @@ the candidate tree with the current main base; a green name alone is insufficien
 Reuse independent review coverage and review material uncovered changes once.
 A maintainer may explicitly authorize focused local checks and a direct main push
 for a specific candidate, subject to repository protection. Record that narrower
-coverage and remaining risk; focused checks are not full integration. A direct push
-to main starts publication, not Validate. `Validate` is the intended required PR
+coverage and remaining risk; focused checks are not full integration. A publication-eligible
+direct push to main starts publication, not Validate. `Validate` is the intended required PR
 status; inspect actual protection settings rather than assuming it is enforced, and
 `deploy` and `verify-live` are consequences of the merge rather than gates on
 it. Deployment builds and checks the publication artifact, then publishes it without

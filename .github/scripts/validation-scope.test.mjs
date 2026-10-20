@@ -9,6 +9,7 @@ import { validationScope, requiredValidationJobs, verifyValidationResults } from
 
 test('docs outside the artifact report success without application jobs', () => {
   assert.equal(validationScope('pull_request', '', ['README.md', 'docs/guide.md', '.github/ISSUE_TEMPLATE/bug.yml']), 'docs');
+  assert.equal(validationScope('pull_request', '', ['DEVELOPER.md', 'tests/README.md']), 'docs');
   assert.deepEqual(requiredValidationJobs('docs'), []);
 });
 
@@ -25,6 +26,7 @@ test('artifact docs, shared config, unknown paths, mixed changes and empty diffs
     ['.github/workflows/validate.yml'], ['workers/terrain/src/index.ts'],
     ['workers/proxy/src/index.ts', 'src/old-worker.ts'], // both sides of a move
     ['README.md', 'workers/proxy/package.json'], ['unknown'],
+    ['tests/README.md', 'tests/boot.spec.ts'], ['tests/fixtures/README.md'],
   ]) assert.equal(validationScope('pull_request', '', paths), 'full', JSON.stringify(paths));
 });
 

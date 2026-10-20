@@ -26,6 +26,7 @@ on:
     # it proves the sha its own deploy published.
     paths-ignore:
       - '*.md'
+      - 'tests/README.md'
       - 'docs/**'
       - 'planning/**'
       - '.github/ISSUE_TEMPLATE/**'
