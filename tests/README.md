@@ -40,9 +40,10 @@ Avoid copying spec counts and runtime estimates into several documents.
 | The full suite | `gh workflow run validate.yml --ref <branch>` | GitHub's fourteen shards; `npm run test:serial` is not a local step |
 
 The full browser suite normally runs on GitHub, in the Validate workflow, which
-slices it into fourteen shards. On a branch without an open pull request, start
-it with `gh workflow run validate.yml --ref <branch>`; only that full run
-decides an application landing. Proxy-only pull requests run the proxy typecheck,
+slices it into fourteen shards. When full integration is needed and no matching run
+exists, use an existing PR's run or, without a PR, dispatch
+`gh workflow run validate.yml --ref <branch>`. The normal application landing route
+requires that integration evidence. Proxy-only pull requests run the proxy typecheck,
 audit and client-contract/receipt tests without the application, terrain,
 landscape or browser suites. Docs outside the artifact report Validate without
 application jobs. Named browser dispatches run only those specs. An empty
@@ -79,13 +80,19 @@ configuration, size or pure-logic change never needs one. When one is needed:
 the fewest cases (`-g`), every diagnostic in the first run, at most one
 confirming run when the piece is finished. `verify:smoke`, whole Playwright
 projects, the Fire pair and repeat runs are not local steps: the full suite
-runs on GitHub for the frozen block candidate. The same full green satisfies
-the release when the exact candidate and main base are unchanged; reuse it.
-The release's whole diff gets one independent review. Inspect existing runs
+runs on GitHub at a real integration/release boundary or for a specific broad
+regression risk. A block, commit, push or new session is not an automatic suite trigger.
+Explain the scope first. Reuse complete passing evidence when source, dependencies,
+configuration, relevant inputs and main base match. Reuse independent review coverage;
+review material uncovered changes once. Inspect existing runs
 before dispatching: an open PR already triggers Validate on each push, and its
 synthetic merge commit is different from a manually dispatched branch tip.
 Batch fixes before validating a new candidate. An unchanged infrastructure
-failure needs only the failed jobs retried, subject to the owner's run guard.
+failure needs only justified failed jobs retried, subject to the owner's run guard.
+After a code fix, run its focused regression before any necessary new integration.
+An explicitly authorized direct delivery may use a stated narrower check scope,
+subject to repository protection; report its limits without claiming full integration.
+Never call skipped checks passed.
 
 A block's own specs (owner, 2026-10-19). `npm run spec:impact` reads the
 block's commits (`<base>...HEAD`, the base defaulting to the merge base with

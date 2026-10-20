@@ -6,6 +6,7 @@ export function validationScope(event, specs, paths) {
   if (event !== 'pull_request') return specs ? 'targeted' : 'full';
   if (!paths.length) return 'full';
   const docs = (path) => /^[^/]+\.md$/.test(path)
+    || path === 'tests/README.md'
     || /^(?:docs\/|planning\/|\.github\/ISSUE_TEMPLATE\/)/.test(path);
   if (paths.every(docs)) return 'docs';
   if (paths.every((path) => path.startsWith('workers/proxy/'))) return 'proxy';

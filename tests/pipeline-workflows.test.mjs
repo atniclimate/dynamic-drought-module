@@ -48,6 +48,9 @@ test('proxy-only validation has no application, terrain, landscape or browser wo
 test('Pages has one main-only publisher, isolated concurrency, freshness and minimal permissions', () => {
   const deploy = workflow('deploy');
   assert.deepEqual(deploy.on.push.branches, ['main']);
+  assert.deepEqual(deploy.on.push['paths-ignore'], [
+    '*.md', 'tests/README.md', 'docs/**', 'planning/**', '.github/ISSUE_TEMPLATE/**',
+  ]);
   assert.deepEqual(deploy.permissions, { contents: 'read' });
   assert.equal(deploy.concurrency.group, "${{ github.ref == 'refs/heads/main' && 'pages' || format('pages-ineligible-{0}', github.run_id) }}");
   assert.deepEqual(Object.keys(deploy.jobs), ['build', 'deploy']);
