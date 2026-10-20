@@ -444,9 +444,10 @@ Use `npm run gate` when build or cross-cutting configuration changes need it;
 reuse its CI evidence instead of adding a duplicate local gate.
 `npm run verify:smoke` is GitHub's, not a local step.
 
-The full browser suite runs on GitHub in the `Validate` workflow; start it on a
-branch without an open pull request with `gh workflow run validate.yml --ref
-<branch>`. That full run supplies application integration evidence. Partway through a block, a
+The full browser suite runs on GitHub in the `Validate` workflow. When integration
+is needed and no matching run exists, start it on a branch without an open pull
+request with `gh workflow run validate.yml --ref <branch>`. That full run supplies
+application integration evidence. Partway through a block, a
 targeted run of the block's own specs (`npm run spec:impact -- --dispatch`
 after a push; it refuses an empty list, which would be the full run) answers
 in about five minutes and its run name says it is not a landing run. Before
@@ -674,29 +675,47 @@ weekly `refresh-snapshots` cron was never snoozed. Until the restore, a
 deploy that fails or is cancelled goes unnoticed by CI; GitHub still emails
 the owner about the red run.
 
-Branch workflow: each release is built on a short-lived branch cut from
-`main`, and `main` changes only when the maintainer lands a release.
+Branch workflow: continue the designated product branch and checkout across sessions
+with one writer. Inspect current main, ancestry, the actual diff and dirty work before
+creating isolation. Temporary worktrees need a purpose and a return target; a new
+session does not require one. Preserve implemented features when reconciling maintenance.
+Main changes through an authorized landing. Compare pending changes with current main,
+not an older remote tracking branch's ahead count. An already integrated, revision-verified
+candidate needs no new release.
 `validate.yml` is `on: pull_request`, so a branch without an open pull request
 runs no CI on push; start it by hand with `gh workflow run validate.yml --ref
 <branch>` when full integration is needed. While developing, run the focused
 checks for the change. Commit and push pieces without repeating checks that
 already passed. Inspect changed interface modes once per coherent feature;
 GitHub's integration run supplies the gate, without a mandatory local duplicate.
-The full browser suite runs on GitHub in fourteen shards for the frozen block
-candidate. Reuse that full green for the release when its exact SHA and main
-base are unchanged; do not dispatch a duplicate. An open PR, including a draft,
+A finished feature block needs a clear delivery state; it does not automatically
+require a full suite, fresh review, version bump, data rebuild or publication.
+Carry out an already-authorized landing or record the candidate as ready with its
+next action before stacking unrelated work. Full integration belongs at a real
+integration/release boundary or a specific broad regression risk. Explain its scope
+first. The full browser suite runs on GitHub in fourteen shards for that candidate.
+Reuse passing evidence when source, dependencies, configuration, relevant inputs and
+main base match; do not dispatch a duplicate. An open PR, including a draft,
 already triggers validation on pushes, so inspect existing runs first; a
 targeted run of the block's own specs may come partway through a block, and it
 never counts for a landing. Application, shared configuration and unknown changes
 need full integration. Documentation and proxy-only changes need their selected
 scope and final Validate status. For a PR run, confirm its tested merge tree equals
 the candidate tree with the current main base; a green name alone is insufficient.
-One independent review covers the release's whole
-diff. `Validate` is the only check that must be green on the pull request, and
+Reuse independent review coverage and review material uncovered changes once.
+A maintainer may explicitly authorize focused local checks and a direct main push
+for a specific candidate, subject to repository protection. Record that narrower
+coverage and remaining risk; focused checks are not full integration. A direct push
+to main starts publication, not Validate. `Validate` is the intended required PR
+status; inspect actual protection settings rather than assuming it is enforced, and
 `deploy` and `verify-live` are consequences of the merge rather than gates on
 it. Deployment builds and checks the publication artifact, then publishes it without
 repeating the browser suite. The live proof follows immediately after the deploy
-workflow succeeds; the weekly browser suite remains enabled.
+workflow succeeds; the weekly browser suite remains enabled. Read its receipt to
+confirm the expected source SHA, deploy nonce, completeness and asset/boot results.
+Report upstream source health separately from delivery: a green workflow conclusion
+alone does not establish that every source probe passed. A source outage alone does
+not justify another publication or full browser run.
 
 `scripts/resolve-live-expectation.mjs`, whose
 judgment is the pure `resolveLiveExpectation` in
