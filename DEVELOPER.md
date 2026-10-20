@@ -675,13 +675,17 @@ weekly `refresh-snapshots` cron was never snoozed. Until the restore, a
 deploy that fails or is cancelled goes unnoticed by CI; GitHub still emails
 the owner about the red run.
 
-Branch workflow: continue the designated product branch and checkout across sessions
-with one writer. Inspect current main, ancestry, the actual diff and dirty work before
-creating isolation. Temporary worktrees need a purpose and a return target; a new
-session does not require one. Preserve implemented features when reconciling maintenance.
-Main changes through an authorized landing. Compare pending changes with current main,
-not an older remote tracking branch's ahead count. An already integrated, revision-verified
-candidate needs no new release.
+Branch workflow: use the repository's primary checkout on local `main` for everyday
+edits and iteration commits, with one writer. Keep that checkout across sessions;
+do not create or switch branches/worktrees merely because a session starts. Inspect
+dirty work, ancestry and remote movement before writing. Exceptional isolation needs
+a purpose and a return target of the primary checkout on main. Preserve implemented
+features and automated data when reconciling changes.
+Local commits are not yet delivered: compare pending work with freshly fetched
+`origin/main`, not local main itself or an older feature tracking branch's ahead count.
+Updating remote main requires an authorized push or merge; the live receipt identifies
+what was actually published. A review branch, when needed, does not replace the daily
+checkout. An already integrated, revision-verified candidate needs no new release.
 `validate.yml` is `on: pull_request`, so a branch without an open pull request
 runs no CI on push; start it by hand with `gh workflow run validate.yml --ref
 <branch>` when full integration is needed. While developing, run the focused
