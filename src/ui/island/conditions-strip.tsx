@@ -254,7 +254,7 @@ export function ConditionsStrip({ map, tick, checked }: StripProps) {
       dateEl.textContent = `viewing week of ${formatMapDate(drought.dateMs)}`;
       delete dateEl.dataset['stale'];
     } else {
-      dateEl.textContent = `as of ${formatMapDate(drought.dateMs)}`;
+      dateEl.textContent = `as of ${drought.dateLabel ?? formatMapDate(drought.dateMs)}`;
       delete dateEl.dataset['stale'];
     }
   });

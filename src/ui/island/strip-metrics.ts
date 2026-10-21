@@ -20,6 +20,7 @@ import type { GeoJsonProperties } from 'geojson';
 import { registry } from '../../state/registry';
 import { timeline } from '../../state/timeline';
 import { NADM_CATEGORIES, USDM_CATEGORIES, readUsdmDm } from '../../config/palette';
+import { normalizeNadmYearMonth } from '../../util/nadm-collection';
 import { getLayerDef } from '../../config/layers';
 import { classifyNifcIncidentType } from '../../config/wildfire-presentation';
 import { resolveStatusPillText } from './pill-text';
@@ -195,7 +196,7 @@ function isLayerOn(key: string): boolean {
 export function droughtMetric(
   map: maplibregl.Map,
   preferredKey: typeof USDM_KEY | typeof NADM_KEY = NADM_KEY
-): { metric: Metric; dateMs: number | null } {
+): { metric: Metric; dateMs: number | null; dateLabel?: string } {
   if (isLayerOn(NADM_KEY)) {
     if (!map.getLayer(NADM_FILL)) {
       return { metric: pendingMetric(NADM_KEY), dateMs: null };
@@ -226,6 +227,24 @@ export function droughtMetric(
       if (index > maxIndex) maxIndex = index;
     }
     const category = maxIndex >= 0 ? NADM_CATEGORIES[maxIndex] : undefined;
+    // Read the NADM consensus month from the rendered features so the
+    // conditions strip can display it (the NADM surface carries YEAR_MONTH
+    // at month precision, not the day-precision MapDate that USDM uses).
+    let nadmDateMs: number | null = null;
+    let nadmDateLabel: string | undefined;
+    for (const f of features) {
+      const ym = normalizeNadmYearMonth(f.properties?.['YEAR_MONTH']);
+      if (ym !== null) {
+        const [y, m] = ym.split('-').map(Number);
+        nadmDateMs = Date.UTC(y!, m! - 1, 1);
+        nadmDateLabel = new Intl.DateTimeFormat('en-US', {
+          month: 'long',
+          year: 'numeric',
+          timeZone: 'UTC'
+        }).format(new Date(nadmDateMs));
+        break;
+      }
+    }
     return category
       ? {
           metric: {
@@ -234,7 +253,8 @@ export function droughtMetric(
             tone: 'data',
             color: category.color
           },
-          dateMs: null
+          dateMs: nadmDateMs,
+          ...(nadmDateLabel != null ? { dateLabel: nadmDateLabel } : {})
         }
       : {
           metric: {
