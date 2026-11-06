@@ -126,11 +126,11 @@ rows:
         fire3d: null
         cluster: wildfire
 
-  - id: 3d-exits-with-the-cluster-and-re-applies-on-return
+  - id: 3d-exits-with-the-cluster-and-returns-flat
     description: >
-      Leaving the Fire view exits the scene and hides the control, but the
-      preference survives in the URL and re-applies on return. This is the
-      contract documented at src/state/fire3d-store.ts:8-13.
+      Leaving the Fire view exits the scene and drops fire3d= (DR-122: the
+      parameter is Wildfire-scoped), so a return to Wildfire opens flat until
+      terrain3d=, which would re-emit it, is built.
     url: '?region=washington_state&cluster=wildfire&fire3d=true'
     stub_wildfire: true
     timeout_ms: 180000
@@ -139,13 +139,13 @@ rows:
       - click_cluster: drought
       - wait_fire3d: inactive
       - click_cluster: wildfire
-      - wait_fire3d: active
     expect:
       cluster_pressed: wildfire
-      fire3d_stamp: active
-      fire3d_toggle: pressed
+      fire3d_stamp: inactive
+      fire3d_toggle: unpressed
       url_params:
-        fire3d: 'true'
+        fire3d: null
+        cluster: wildfire
 
   - id: a-region-jump-preserves-the-3d-preference
     description: >

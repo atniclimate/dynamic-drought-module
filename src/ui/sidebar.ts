@@ -103,7 +103,7 @@ import type { StationValue, TelemetryStation } from '../types/station';
 import { formatStationNumber } from '../util/station-format';
 import { setCurrentRegion } from '../state/region-store';
 import type { LayerStatus } from '../types/layer';
-import { SIDEBAR_DESKTOP_QUERY, parseSelectParam, parseUrlParams, syncUrl } from '../state/url';
+import { SIDEBAR_DESKTOP_QUERY, parseSelectParam, parseUrlParams, syncFire3dParam, syncUrl } from '../state/url';
 import type { ParsedUrlParams } from '../state/url';
 import {
   backToMap,
@@ -123,7 +123,7 @@ import {
 } from '../state/view-mode';
 import { installPopupViewportContainment } from './popup-viewport';
 import { defaultBasemapFor, getBasemapMode, onBasemapChange, setBasemapMode } from '../state/basemap-store';
-import { FIRE3D_CHUNK_WIDTH_QUERY, seedFire3DPreference } from '../state/fire3d-store';
+import { FIRE3D_CHUNK_WIDTH_QUERY, seedFire3DPreference, setFire3DPreference } from '../state/fire3d-store';
 import { getFraming, onFramingChange, setFraming } from '../state/framing-store';
 import {
   clearOceanFraming,
@@ -133,7 +133,9 @@ import {
   setHazardCluster
 } from '../state/cluster-store';
 import {
+  getCommittedSnapshot,
   isCustomComposition,
+  onCommittedSnapshotChange,
   reconcileClusterWithLayerIntent,
   requestOcean,
   requestPresetHorizon
@@ -752,18 +754,29 @@ function dropPlaceView(): void {
 
 /** Once the camera settles, record it if it left the committed view. */
 function noteViewLeftRegion(map: maplibregl.Map): void {
+  // The new choice replaces the earlier place view now. Left standing, this
+  // flight's own moveend dropped it and stood the settle below down, so every
+  // second search fell back to the region (Colorado, then Alaska).
+  dropPlaceView();
   const gen = placeViewGen;
   const settle = (): void => {
     // A later choice interrupts the flight and fires moveend; its camera is mid-flight, not the place.
     if (gen !== placeViewGen) return;
     const target = committedCameraTarget();
-    if (!target || cameraMatchesTarget(map, target)) return;
-    placeView = readCameraState(map);
+    placeView = target && !cameraMatchesTarget(map, target) ? readCameraState(map) : null;
     syncRegionSelect();
   };
   // The fit is usually under way when the choice lands; wait for it to end.
   if (map.isMoving()) map.once('moveend', settle);
   else settle();
+}
+
+/** Every moveend: once the camera leaves the chosen place the neutral entry no longer applies; fall back to the committed region. */
+function dropMovedPlaceView(map: maplibregl.Map): void {
+  if (placeView && !cameraStateUnchanged(map, placeView)) {
+    dropPlaceView();
+    syncRegionSelect();
+  }
 }
 
 /** A search or deep-link place choice. */
@@ -1617,10 +1630,14 @@ function applyUrlStateSync(map: maplibregl.Map): ParsedUrlParams {
   // visual switch is kicked off here and settles asynchronously (the
   // desaturated default paints first; the U1 boot-split precedent).
   setBasemapMode(params.basemap);
+  // DR-122: fire3d= is Wildfire-scoped, so an old link outside Wildfire
+  // boots flat and drops the token (before the hold below is ever taken).
+  const fire3d = params.fire3d && params.cluster === 'wildfire';
+  if (params.fire3d && !fire3d) syncFire3dParam(false);
   // DR-105: a `fire3d=true` boot at the 3D chunk's width (main.ts) holds the
   // imagery until the scene's controller decides; it releases the hold when
   // the scene does not open.
-  if (params.fire3d && window.matchMedia(FIRE3D_CHUNK_WIDTH_QUERY).matches) {
+  if (fire3d && window.matchMedia(FIRE3D_CHUNK_WIDTH_QUERY).matches) {
     holdSatellite(map, true);
   }
   if (params.basemap === 'satellite') {
@@ -1632,7 +1649,7 @@ function applyUrlStateSync(map: maplibregl.Map): ParsedUrlParams {
   // write (syncUrl re-reads the parameter fresh). The seed never writes the
   // URL; the orchestrator (src/map/fire3d.ts, a desktop-only lazy chunk
   // loaded from main.ts) observes the store and applies the map side.
-  seedFire3DPreference(params.fire3d);
+  seedFire3DPreference(fire3d);
 
   // The studio composes with all map state. Seed it only after every
   // underlying store above is ready, and before selectRegion performs the
@@ -2039,6 +2056,12 @@ function wireSidebar(map: maplibregl.Map, onRegionSelect: (key: RegionKey) => vo
     updateRegionBriefingTrigger(STATE.currentRegion);
     pushUrl();
   });
+  // DR-122: fire3d= is dropped when the selected hazard leaves Wildfire. A
+  // custom set inside Wildfire keeps it; terrain3d=, which would re-emit it on
+  // return, is not built, so a return to Wildfire opens flat.
+  onCommittedSnapshotChange(() => {
+    if (getCommittedSnapshot().selectedHazard !== 'wildfire') setFire3DPreference(false);
+  });
   // ENSO camera (F9): entering fits the Pacific, leaving restores the view from
   // before entering. The boot seed fires this too, but the boot's own fits
   // follow it in the same task, so applyUrlStateSync owns the boot camera.
@@ -2075,15 +2098,7 @@ function wireSidebar(map: maplibregl.Map, onRegionSelect: (key: RegionKey) => vo
     updateRegionBriefingTrigger(STATE.currentRegion);
     if (place) notePlaceView(map, place);
   });
-  // Once the camera leaves the chosen place the neutral entry no longer applies;
-  // fall back to the committed region. Registered before any settle's own
-  // moveend, so a new choice's flight ends here first and is recorded after.
-  map.on('moveend', () => {
-    if (placeView && !cameraStateUnchanged(map, placeView)) {
-      dropPlaceView();
-      syncRegionSelect();
-    }
-  });
+  map.on('moveend', () => dropMovedPlaceView(map));
 
   // Apply the URL state, split per the ADR 0002 U1 integration note. The
   // synchronous half (embed class, timeline seed, region fit) applies NOW,

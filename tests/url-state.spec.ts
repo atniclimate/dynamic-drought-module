@@ -21,6 +21,7 @@ import {
 } from './tribal-fixtures';
 import { HAZARD_CLUSTER_KEYS, HAZARD_CLUSTERS } from '../src/config/clusters';
 import { stubCpcDroughtOutlook } from './cpc-outlook-fixtures';
+import type { Map as MlMap } from 'maplibre-gl';
 
 /**
  * DDM-P2-T09: the recognized URL parameter vocabulary, read from its own
@@ -502,12 +503,41 @@ test.describe('DDM-P2-T09: one canonical place reference, no new URL parameter',
   });
 });
 
+interface RegionMenuWindow extends Window {
+  __regionMenuMaps?: MlMap[];
+}
+
 test.describe('the region menu follows a place chosen from search', () => {
   const searchInput = '#catalog-search [data-ddm-search]';
 
   test('a state or city leaves the menu naming no other region, and Reset restores the default', async ({
     page
   }) => {
+    // Observe the real map constructor, as precedence.spec.ts does; replace no method.
+    await page.addInitScript(() => {
+      const maps: MlMap[] = [];
+      (window as RegionMenuWindow).__regionMenuMaps = maps;
+      Object.defineProperty(Object.prototype, '_onWindowOnline', {
+        configurable: true,
+        set(this: MlMap, value: unknown) {
+          Object.defineProperty(this, '_onWindowOnline', { configurable: true, enumerable: true, writable: true, value });
+          maps.push(this);
+        }
+      });
+    });
+    const cameraSettles = (): Promise<void> =>
+      expect
+        .poll(
+          () =>
+            page.evaluate(() => {
+              const map = (window as RegionMenuWindow).__regionMenuMaps?.find(
+                (candidate) => candidate.getContainer().id === 'map'
+              );
+              return map !== undefined && !map.isMoving();
+            }),
+          { timeout: 30_000 }
+        )
+        .toBe(true);
     await gotoApp(page, '?view=console');
     const menu = regionSelect(page);
     await expect(menu).toHaveValue('region:national');
@@ -520,6 +550,8 @@ test.describe('the region menu follows a place chosen from search', () => {
     // Alaska has a region option too, but the menu stays neutral so choosing it from the menu still fires.
     await page.locator(searchInput).fill('alaska');
     await page.locator('[data-search-kind="place"][data-search-id="AK"]').click();
+    // Read after the flight lands: the second search used to fall back to the region on landing.
+    await cameraSettles();
     await expect(menu).toHaveValue('view:place');
     await menu.selectOption('region:alaska');
     await expect(menu).toHaveValue('region:alaska');
@@ -795,11 +827,12 @@ const RELOAD_GROUPS: readonly ReloadGroup[] = [
     // The Fire 3D chunk is desktop-only and can honestly demote the mode on a
     // renderer that cannot hold it, so the flag's URL restoration is proven
     // at phone width, where nothing but the store reads it. The desktop scene
-    // restore is tests/view-contracts.yaml:261-279.
+    // restore is a-reloaded-3d-share-boots-back-into-the-same-view in
+    // tests/view-contracts.yaml. fire3d= is Wildfire-scoped (DR-122).
     name: 'Fire 3D preference',
-    query: '?layers=places&fire3d=true',
+    query: '?cluster=wildfire&fire3d=true',
     viewport: RELOAD_PHONE,
-    expected: { fire3d: 'true' }
+    expected: { cluster: 'wildfire', fire3d: 'true' }
   }
 ];
 
