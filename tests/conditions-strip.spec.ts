@@ -11,6 +11,7 @@ import { stubRecentSatellite } from './satellite-fixture';
 import { isNifcRequestUrl } from './wildfire-fixtures';
 import { SATELLITE_PROBE_BBOX } from '../src/map/satellite';
 import { HAZARD_CLUSTERS, HAZARD_CLUSTER_KEYS } from '../src/config/clusters';
+import { composeClusterIntent } from '../src/state/cluster-service';
 
 /**
  * UX-3 conditions strip: a dated at-a-glance summary of the rendered map.
@@ -541,6 +542,18 @@ test.describe('found-008: Conditions in view offers only the current mode\'s sur
       await expect(page.locator('.conditions-metric[data-metric="drought"]')).toHaveCount(0);
       // The strip never collapses: a tile or the one status line holds its seat.
       await expect.poll(() => page.locator('#conditions-metrics > :is(.conditions-metric, .conditions-empty):visible').count()).toBeGreaterThan(0);
+    });
+
+    // Audit round 3: a custom set reads the person's hazard, never the store's Drought.
+    test(`a custom set made in ${key} keeps its hazard in the link and offers no drought chip`, async ({ page }) => {
+      // The mode's own layers plus a reference layer: a custom set, whose store claim reads Drought.
+      const layers = [...composeClusterIntent(key, 'current'), 'places'].join(',');
+      await gotoApp(page, `?layers=${layers}&hazard=${token}&view=console`);
+      await expect.poll(() => new URL(page.url()).searchParams.get('hazard')).toBe(token);
+      expect(new URL(page.url()).searchParams.get('cluster')).toBeNull();
+      // The strip has rendered, so the count below tests something.
+      await expect.poll(() => page.locator('#conditions-metrics > :is(.conditions-metric, .conditions-empty):visible').count()).toBeGreaterThan(0);
+      await expect(page.locator('.conditions-metric[data-metric="drought"]')).toHaveCount(0);
     });
   }
 });

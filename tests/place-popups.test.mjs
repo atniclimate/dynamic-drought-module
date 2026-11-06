@@ -1115,6 +1115,8 @@ test('in a mode with no place row the nothing-on head reads the interim line; th
   const before = getHazardCluster();
   const deferred = HAZARD_CLUSTER_KEYS.filter((mode) => HAZARD_CLUSTERS[mode].placeConditionRow === null);
   assert.ok(deferred.length > 0, 'no mode defers its place row, so the interim line is unexercised');
+  // The head follows the person's hazard, which a store write reaches through the running service.
+  const stopService = service.initClusterService();
   try {
     for (const mode of HAZARD_CLUSTER_KEYS) {
       setHazardCluster(mode);
@@ -1136,8 +1138,13 @@ test('in a mode with no place row the nothing-on head reads the interim line; th
     setHazardCluster(deferred[0]);
     const html = buildStatePopupHtml({ NAME: 'Fixture State' }, buildPlaceConditionsHtml(fakeMap({}), [0, 0], PLACE));
     assert.equal(textOf(slot(html, 'value')), `Conditions ${NO_ROW_FOR_MODE}`);
+    // A custom set made from that mode (a reference layer on top; its store claim reads Drought) keeps the line.
+    service.reconcileClusterWithLayerIntent(new Set([...service.composeClusterIntent(deferred[0]), 'hydrography']));
+    assert.equal(getHazardCluster(), 'drought', 'setup: a custom set\'s store claim');
+    assert.deepEqual(buildPlaceConditionsHtml(fakeMap({}), [0, 0], PLACE).head, [{ label: 'Conditions', text: NO_ROW_FOR_MODE }]);
   } finally {
-    setHazardCluster(before);
+    service.restoreCommittedCluster(before, null);
+    stopService();
   }
 });
 

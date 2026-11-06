@@ -994,7 +994,7 @@ function frameCoverageNote(): string {
   // block but still earn the Wildfire, Heat and ENSO clauses.
   // With no framing selected the key stays as quiet as it always was.
   const minimapProvenance = framing !== null && minimapInScene()
-    ? minimapProvenanceAt(framing, getHazardCluster(), timeline.horizon)
+    ? minimapProvenanceAt(framing, getSelectedHazard(), timeline.horizon)
     : undefined;
   if (coverage === undefined) return minimapProvenance?.replace(/\.\s*$/, '') ?? '';
 
@@ -1555,8 +1555,8 @@ export function initMapKey(): void {
       return;
     }
     const spec: KeySpec = active?.spec ?? {
-      label: chipFallbackLabel(getHazardCluster()),
-      ariaLabel: noSurfaceKeyAria(chipFallbackLabel(getHazardCluster()), whpShadeActive),
+      label: chipFallbackLabel(getSelectedHazard()),
+      ariaLabel: noSurfaceKeyAria(chipFallbackLabel(getSelectedHazard()), whpShadeActive),
       itemsHtml: ''
     };
     // The committed mode's no-key fallback above names no product (its

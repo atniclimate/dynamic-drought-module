@@ -1,5 +1,5 @@
 import { HAZARD_CLUSTERS, type HazardClusterDef } from '../config/clusters';
-import { normalizeSidebarParam } from './url';
+import { replaceQuery } from './url';
 
 /**
  * Every flow kind, each its own `flow=` token: `jet` is GFS wind at 250 hPa,
@@ -70,13 +70,8 @@ export function writeEnsoFlowParams(
 }
 
 export function syncEnsoFlowParams(preference: EnsoFlowPreference): void {
-  const params = new URLSearchParams(window.location.search);
-  writeEnsoFlowParams(params, preference);
-  // This writer clones the current query, so it runs the shared sidebar=
-  // normalizer like every other cloning writer (D1 M7, S3). url.ts imports
-  // this module too; the cycle is call-time only (neither module reads the
-  // other while it evaluates).
-  normalizeSidebarParam(params);
-  const query = params.toString();
-  window.history.replaceState(window.history.state, '', window.location.pathname + (query ? `?${query}` : ''));
+  // The shared cloning writer runs the sidebar= normalizer (D1 M7, S3). url.ts
+  // imports this module too; the cycle is call-time only (neither module reads
+  // the other while it evaluates).
+  replaceQuery((params) => writeEnsoFlowParams(params, preference));
 }

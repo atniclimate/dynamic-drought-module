@@ -62,7 +62,6 @@ import {
   outlookFramingWords,
   outlookScaleText,
 } from '../../config/minimap-readings';
-import type { MinimapReading } from '../../config/minimap-readings';
 import { OCEANS, MINIMAP_OCEAN_KEYS } from '../../config/oceans';
 import type { MinimapOceanKey, OceanKey } from '../../config/oceans';
 import {
@@ -219,36 +218,19 @@ const ROVING_ORDER: ReadonlyArray<FramingKey | null> = [...FRAMING_KEYS, null];
 
 const CAMERA_ONLY_NOTE = 'Click fits the camera. Camera-only; selects nothing.';
 
-export type MinimapMetricContext = HazardClusterKey | 'custom';
-
 /**
  * DR-040 c: a mode and horizon with no reading in the table
- * (src/config/minimap-readings.ts), and a custom display, shade no framing
- * (DDM-UI-004); the minimap never invents a product for them. These say what
- * the minimap shows; the clause true at that horizon (`minimapProvenanceAt`)
- * says why, or nothing when no clause is true there.
+ * (src/config/minimap-readings.ts) shade no framing (DDM-UI-004); the minimap
+ * never invents a product for them. A custom set reads the person's hazard
+ * (the shell passes `selectedHazard`). These say what the minimap shows; the
+ * clause true at that horizon (`minimapProvenanceAt`) says why, or nothing
+ * when no clause is true there.
  */
 const UNSHADED_NOTE = 'Framings are unshaded in this display.';
 const UNSHADED_SCALE_TEXT = 'Unshaded · see main map';
 
-/** The reading this minimap takes, from the one table (never a mode literal). */
-function readingFor(
-  metricContext: MinimapMetricContext,
-  horizon: TemporalHorizonKey,
-): MinimapReading | null {
-  return metricContext === 'custom' ? null : minimapReading(metricContext, horizon);
-}
-
-function provenanceFor(
-  key: FramingKey | null,
-  metricContext: MinimapMetricContext,
-  horizon: TemporalHorizonKey,
-): string | undefined {
-  return metricContext === 'custom' ? undefined : minimapProvenanceAt(key, metricContext, horizon);
-}
-
-function unshadedNote(metricContext: MinimapMetricContext, horizon: TemporalHorizonKey): string {
-  const why = provenanceFor(null, metricContext, horizon);
+function unshadedNote(metricContext: HazardClusterKey, horizon: TemporalHorizonKey): string {
+  const why = minimapProvenanceAt(null, metricContext, horizon);
   return why === undefined ? UNSHADED_NOTE : `${UNSHADED_NOTE} ${why}`;
 }
 
@@ -678,11 +660,11 @@ function accessibleName(
   drought: MinimapDroughtSnapshot,
   wildfire: MinimapWildfireSnapshot,
   outlook: MinimapOutlookSnapshot,
-  metricContext: MinimapMetricContext,
+  metricContext: HazardClusterKey,
   horizon: TemporalHorizonKey,
 ): string {
   const def = FRAMINGS[key];
-  const reading = readingFor(metricContext, horizon);
+  const reading = minimapReading(metricContext, horizon);
   // The accessible name of a MINIMAP control, so it carries the clauses that
   // describe this widget and the ground it draws: what the display reaches
   // and what informs this minimap at the current mode and horizon, never
@@ -696,7 +678,7 @@ function accessibleName(
   // not published as a live claim about the current display, and a name that
   // changed its words as layers toggled would be worse for a screen-reader
   // user than one that is stable and slightly broader.
-  const minimapClause = provenanceFor(key, metricContext, horizon);
+  const minimapClause = minimapProvenanceAt(key, metricContext, horizon);
   const clauses = [def.coverage?.displayScope, minimapClause]
     .filter((clause): clause is string => clause !== undefined && clause.length > 0)
     .join(' ');
@@ -740,7 +722,7 @@ export interface MinimapProps {
    * stay unique when both are mounted. */
   readonly idPrefix: string;
   /** The mode whose reading the table names (src/config/minimap-readings.ts). */
-  readonly metricContext: MinimapMetricContext;
+  readonly metricContext: HazardClusterKey;
   /** The committed horizon: with the mode, it picks the table's cell. */
   readonly horizon: TemporalHorizonKey;
   /** Receives the inline instance's framing or ocean note when another
@@ -762,12 +744,11 @@ export function Minimap({
   const landSelectionIsCurrent = activeOcean === null;
   // What this minimap reads comes from the one table, at this mode AND
   // horizon: a horizon reads only a product it loads.
-  const reading = readingFor(metricContext, horizon);
+  const reading = minimapReading(metricContext, horizon);
   const showDroughtMetric = reading?.rule === 'nadm-framing-summary';
   const showWildfireMetric = reading?.rule === 'nifc-perimeter-count';
   const outlookReading = reading?.rule === 'classes-drawn' ? reading : null;
-  const showIndexLabel =
-    metricContext !== 'custom' && minimapIndexLabel(metricContext, horizon) === 'roni';
+  const showIndexLabel = minimapIndexLabel(metricContext, horizon) === 'roni';
   // The roving-focus position, independent of the committed selection
   // (deferred commit; see the header note). `undefined` means "no
   // browsing in progress": the tab stop sits on the committed option.
@@ -1067,7 +1048,7 @@ export function Minimap({
         data-wildfire-status={showWildfireMetric ? wildfire.status : 'neutral'}
         data-minimap-status={
           // Six-state vocabulary only (src/ui/island/pill-text.ts:18-25):
-          // Heat/ENSO/custom carry no status word at all rather than the
+          // Heat/ENSO carry no status word at all rather than the
           // former novel 'neutral' sentinel.
           showDroughtMetric
             ? drought.status
