@@ -37,6 +37,7 @@ import { isStateCode } from '../config/state-codes';
 import { getEmphasisTargets, emphasizePlaces } from '../state/place-emphasis';
 import type { EmphasisTarget } from '../state/place-emphasis';
 import { openStateBriefing } from '../state/deep-link';
+import { getCommittedSnapshot, onCommittedSnapshotChange } from '../state/cluster-service';
 import { getPlaceSelection, setPlaceSelection, standingBriefing } from '../state/place-selection';
 import type { PlaceSelection } from '../state/place-selection';
 import { onStudioRouteChange, studioOwnsScreen } from '../state/studio-route';
@@ -183,9 +184,9 @@ let initialized = false;
 // does nothing unless it is STILL that record. Every route that supersedes
 // it clears or replaces the record: a later commit (cleared on entry to
 // `commit`, before its builder runs), a dismissal (`dismissResponse`: an
-// empty click, Escape on an open response, a studio route, entering Brief
-// with the mobile sheet active, a station popup adopting the slot, the
-// briefing door), Escape during the wait itself (a handler that lives as long
+// empty click, Escape on an open response, a studio route, a mode or horizon
+// switch, entering Brief with the mobile sheet active, a station popup
+// adopting the slot, the briefing door), Escape during the wait itself (a handler that lives as long
 // as the wait), the current response closed by its close button (`closed`,
 // the adopted station popup's included), the map's removal, the test reset,
 // and the mobile Brief sheet ACTIVATING with no view-mode change (a resize
@@ -365,6 +366,21 @@ export function initInteractionCoordinator(map: maplibregl.Map): void {
   // console mode would be a second response beside it.
   onViewModeChange((mode) => {
     if (mode === 'brief' && isSheetActive()) dismissResponse();
+  });
+  // A mode or horizon switch replaces the drawn surfaces, so an open response
+  // (popup or panel foot) would describe what is no longer on the map. A
+  // republish in the same mode and horizon (a layer toggle, a status) keeps
+  // it; a briefing opened from it holds its own selection, so it stays.
+  const shownView = (): string => {
+    const { selectedHazard, horizon } = getCommittedSnapshot();
+    return `${selectedHazard}|${horizon}`;
+  };
+  let view = shownView();
+  onCommittedSnapshotChange(() => {
+    const next = shownView();
+    if (next === view) return;
+    view = next;
+    dismissResponse();
   });
   // The mobile Brief sheet activating with no view-mode change (a resize, an
   // embed transition, revealSheetAtPeek) settles synchronously, and its
