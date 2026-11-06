@@ -119,6 +119,7 @@ import { requestBasemapMode } from '../../map/basemap-switcher';
 import { defaultBasemapFor } from '../../state/basemap-store';
 import { requestOcean } from '../../state/cluster-service';
 import { setMapTechnicalNote } from '../map-technical-information';
+import { dateTok } from '../../util/text-tokens';
 
 /** The kit's ratified equirectangular drawing plane. The final 8 units
  * leave the small lower gutter carried by the production-candidate SVG.
@@ -360,13 +361,8 @@ function droughtDescription(
 
 function checkedTimeLabel(checkedAtUtc: string | null): string {
   if (checkedAtUtc === null) return 'at an unavailable check time';
-  return new Intl.DateTimeFormat('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    timeZoneName: 'short',
-  }).format(new Date(checkedAtUtc));
+  // The house date token, as the Wildfire time statement writes the same browser check.
+  return dateTok(checkedAtUtc);
 }
 
 function whpScope(summary: MinimapWildfireSummary): string {

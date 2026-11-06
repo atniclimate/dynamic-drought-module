@@ -864,7 +864,7 @@ const STATION_MODEL: IssuedModel = {
   title: 'Fixture Station',
   issuer: { role: 'issued-by', name: 'Fixture agency', productKey: 'telemetry' },
   value: [{ text: 'Fixture live data', state: 'loading' }],
-  clocks: [{ kind: 'not-stated', label: 'As of', reason: 'loading' }],
+  clocks: [{ kind: 'not-stated', label: 'Observed', reason: 'loading' }],
   source: { link: { label: 'Fixture station page', href: 'https://waterdata.usgs.gov/' } }
 };
 
@@ -872,7 +872,7 @@ const STATION_MODEL: IssuedModel = {
 const HYDRATED_STATION_MODEL: IssuedModel = {
   ...STATION_MODEL,
   value: [{ label: 'Fixture gauge', text: '0 ft', issuer: 'Fixture service' }],
-  clocks: [{ kind: 'point', meaning: 'observed', label: 'As of', at: { precision: 'instant', at: Date.UTC(2026, 9, 4, 17, 0), zone: 'UTC' } }]
+  clocks: [{ kind: 'point', meaning: 'observed', label: 'Observed', at: { precision: 'instant', at: Date.UTC(2026, 9, 4, 17, 0), zone: 'UTC' } }]
 };
 
 test.describe('identify paths: inert payloads and the shared validator', () => {
@@ -1392,7 +1392,7 @@ test.describe('identify paths: the telemetry station popup joins the frame (D1 M
       }).toPass({ timeout: 20_000 });
       // The frame paints at once, its head stating the read is loading.
       await expect(headValue.locator('[data-state]')).toHaveText('loading');
-      await expect(head.locator(':scope > [data-popup-slot="clock"]')).toContainText('As of loading');
+      await expect(head.locator(':scope > [data-popup-slot="clock"]')).toContainText('Observed loading');
       await expect.poll(() => held.length, { message: 'each open asks for its own live read' }).toBe(reads);
     };
 

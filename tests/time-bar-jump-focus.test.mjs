@@ -77,7 +77,15 @@ globalThis.document = {
   getElementById: (id) => (id === 'time-bar' ? bar : null)
 };
 
-const { clearTimeBar, setTimeBar } = await import('../src/ui/time-bar.ts');
+const { clearTimeBar, freshnessDate, freshnessLabel, setTimeBar } = await import('../src/ui/time-bar.ts');
+
+// Round 4 audit, R4-19: the stale dot names the check as the NIFC detail beneath
+// it and the NIFC popup's clock do. Red on 22268b3: "Last successful feed check".
+test('a stale feed dot names the last successful browser check', () => {
+  const stamp = { freshness: { state: 'stale', checkedAt: '2026-11-06T21:14:00Z' } };
+  assert.equal(freshnessLabel(stamp), `Last successful browser check ${freshnessDate(stamp)}`);
+  assert.notEqual(freshnessDate(stamp), '');
+});
 
 function spec(...keys) {
   return {

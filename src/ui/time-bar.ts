@@ -113,7 +113,8 @@ export function freshnessLabel(stamp: TimeBarStamp): string {
   if (freshness.state === 'current') return 'Current feed check';
   if (freshness.state === 'loading') return 'Checking current conditions';
   const date = freshnessDate(stamp);
-  return date ? `Last successful feed check ${date}` : 'Current feed check unavailable';
+  // DRAFT wording: "browser check", the words of the detail beneath it and of the NIFC popup's clock.
+  return date ? `Last successful browser check ${date}` : 'Current feed check unavailable';
 }
 
 export interface TimeBarSpec {
