@@ -556,9 +556,11 @@ test.describe('selected-place HeatRisk sequence and briefing', () => {
     await cells.nth(3).focus();
     await page.keyboard.press('End');
     await expect(selector).toHaveValue('7');
-    await cells.nth(6).focus();
+    // No refocus: the redraw for the chosen day hands focus back to its cell.
+    await expect(cells.nth(6)).toBeFocused();
     await page.keyboard.press('ArrowLeft');
     await expect(selector).toHaveValue('6');
+    await expect(cells.nth(5)).toBeFocused();
     await expect(layerPill(page, 'heatrisk')).toHaveText('live');
     await expectDisplaySampling();
     await expect(selectedRead).toContainText('no data');

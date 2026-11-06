@@ -248,11 +248,13 @@ function syncPlaceStudioRoute(
 ): void {
   if (route === 'place' && source === 'push') {
     const active = document.activeElement;
-    placeStudioOpener =
+    // Keep the click-set opener when the click left focus elsewhere (Safari does not focus buttons).
+    if (
       active instanceof HTMLElement &&
       (active.id === PLACE_STUDIO_ENTRY_ID || active.id === 'sheet-place-studio-entry')
-        ? active
-        : null;
+    ) {
+      placeStudioOpener = active;
+    }
   }
 
   const isEmbed = document.getElementById('app')?.classList.contains('embed') ?? false;
