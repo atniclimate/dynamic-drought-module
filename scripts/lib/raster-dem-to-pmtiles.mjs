@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { PNG } from 'pngjs';
 import { fromFile } from 'geotiff';
 import { zxyToTileId } from './pmtiles-writer.mjs';
@@ -124,7 +125,7 @@ function intersects(a, b) {
   return a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1];
 }
 
-function terrariumPng(elevations, width, height) {
+export function terrariumPng(elevations, width, height) {
   const png = new PNG({ width, height });
   for (let i = 0; i < elevations.length; i++) {
     const value = Number.isFinite(elevations[i]) ? Math.round(elevations[i]) : 0;
@@ -135,23 +136,23 @@ function terrariumPng(elevations, width, height) {
     png.data[o + 2] = encoded & 255;
     png.data[o + 3] = 255;
   }
-  const candidates = [-1, 2, 4];
-  let best = null;
-  let bestFilterType = null;
-  for (const filterType of candidates) {
-    const data = PNG.sync.write(png, {
-      colorType: 6,
-      inputColorType: 6,
-      deflateLevel: 9,
-      deflateStrategy: 3,
-      filterType
-    });
-    if (!best || data.length < best.length) {
-      best = data;
-      bestFilterType = filterType;
+  // One encode: strategy 0 with the Up filter measured 23 to 39 percent smaller than strategy 3 (dossier 4.5).
+  return { data: PNG.sync.write(png, { colorType: 6, inputColorType: 6, deflateLevel: 9, deflateStrategy: 0, filterType: 2 }) };
+}
+
+/** Parent elevations as 2x2 means of four 512 px children, sources in NW, NE, SW, SE order. */
+async function overviewElevations(sources) {
+  const out = new Float32Array(512 * 512);
+  for (let q = 0; q < 4; q++) {
+    const child = decodeTerrariumTile(await readFile(sources[q].path));
+    if (child.png.width !== 512 || child.png.height !== 512) throw Error('Overview child must be a 512 px tile');
+    const ox = (q & 1) * 256, oy = (q >> 1) * 256, at = child.elevationAtIndex;
+    for (let y = 0; y < 256; y++) for (let x = 0; x < 256; x++) {
+      const i = 2 * y * 512 + 2 * x;
+      out[(oy + y) * 512 + ox + x] = normalizeElevation((at(i) + at(i + 1) + at(i + 512) + at(i + 513)) / 4);
     }
   }
-  return { data: best, filterType: bestFilterType };
+  return out;
 }
 
 function decodeTerrariumPixel(png, pixelIndex) {
@@ -162,6 +163,38 @@ function decodeTerrariumPixel(png, pixelIndex) {
 function normalizeElevation(v) {
   if (!Number.isFinite(v) || v <= DEM_NODATA_FLOOR) return 0;
   return clamp(v, -32768, 32767);
+}
+
+/**
+ * Centre-aligned Web Mercator resample: every tile pixel samples the source
+ * bilinearly at its own centre, source pixel centres sitting at i + 0.5. The
+ * degree-window read above is top-left aligned and linear in latitude, which
+ * read Mount Jefferson 21 m low at z10 in the 2026-11-06 pilot. No-data reads
+ * 0 m before blending, as there.
+ */
+async function readDemAtPixelCentres(image, nodata, { z, tileSize, tileOriginX, tileOriginY, colStart, colEnd, rowStart, rowEnd }) {
+  const [ox, oy] = image.getOrigin(), [rx, ry] = image.getResolution(), w = image.getWidth(), h = image.getHeight();
+  if (image.getFileDirectory?.().getValue('ModelTransformation') || ![ox, oy, rx, ry].every(Number.isFinite) || rx <= 0 || ry >= 0) {
+    throw Error('DEM must use north-up pixel-scale georeferencing');
+  }
+  const sx = [], sy = [];
+  for (let c = colStart; c < colEnd; c++) sx.push((globalPixelToLon(tileOriginX + c + 0.5, z, tileSize) - ox) / rx - 0.5);
+  for (let r = rowStart; r < rowEnd; r++) sy.push((globalPixelToLat(tileOriginY + r + 0.5, z, tileSize) - oy) / ry - 0.5);
+  const x0 = clamp(Math.floor(sx[0]), 0, w - 1), x1 = clamp(Math.floor(sx.at(-1)) + 1, 0, w - 1);
+  const y0 = clamp(Math.floor(sy[0]), 0, h - 1), y1 = clamp(Math.floor(sy.at(-1)) + 1, 0, h - 1);
+  const raw = await image.readRasters({ window: [x0, y0, x1 + 1, y1 + 1], samples: [0] });
+  const src = raw[0], rw = raw.width, rh = raw.height;
+  for (let i = 0; i < src.length; i++) if (src[i] === nodata) src[i] = 0;
+  const out = new Float32Array(sx.length * sy.length);
+  for (let j = 0; j < sy.length; j++) {
+    const fy = clamp(sy[j] - y0, 0, rh - 1), yl = Math.floor(fy), yh = Math.min(yl + 1, rh - 1), ty = fy - yl;
+    for (let i = 0; i < sx.length; i++) {
+      const fx = clamp(sx[i] - x0, 0, rw - 1), xl = Math.floor(fx), xh = Math.min(xl + 1, rw - 1), tx = fx - xl;
+      const top = src[yl * rw + xl] * (1 - tx) + src[yl * rw + xh] * tx, bottom = src[yh * rw + xl] * (1 - tx) + src[yh * rw + xh] * tx;
+      out[j * sx.length + i] = top * (1 - ty) + bottom * ty;
+    }
+  }
+  return out;
 }
 
 async function fillFromSourceTile(out, { z, x, y, tileSize, bounds }, source) {
@@ -182,19 +215,8 @@ async function fillFromSourceTile(out, { z, x, y, tileSize, bounds }, source) {
   const height = rowEnd - rowStart;
   if (width <= 0 || height <= 0) return false;
 
-  const readWest = Math.max(globalPixelToLon(tileOriginX + colStart, z, tileSize), source.bounds[0]);
-  const readEast = Math.min(globalPixelToLon(tileOriginX + colEnd, z, tileSize), source.bounds[2]);
-  const readNorth = Math.min(globalPixelToLat(tileOriginY + rowStart, z, tileSize), source.bounds[3]);
-  const readSouth = Math.max(globalPixelToLat(tileOriginY + rowEnd, z, tileSize), source.bounds[1]);
-  if (readWest >= readEast || readSouth >= readNorth) return false;
-
-  const rasters = await readDemWindow(source.image, {
-    bbox: [readWest, readSouth, readEast, readNorth],
-    width,
-    height,
-    nodata: source.nodata
-  });
-  const band = rasters[0];
+  const band = await readDemAtPixelCentres(source.image, source.nodata,
+    { z, tileSize, tileOriginX, tileOriginY, colStart, colEnd, rowStart, rowEnd });
   for (let row = 0; row < height; row++) {
     const outOffset = (rowStart + row) * tileSize + colStart;
     const inOffset = row * width;
@@ -206,14 +228,15 @@ async function fillFromSourceTile(out, { z, x, y, tileSize, bounds }, source) {
 }
 
 /** Local-only national bake seam. Pool supplies an explicit ordered source plan.
- * Degree-window floor/ceil and bilinear resampling are the existing approximate
- * sampling method, not exact reprojection or a datum conversion.
+ * Land pixels are bilinear samples at Web Mercator pixel centres (no datum
+ * conversion); overview pixels are 2x2 means of four child tiles.
  */
 export async function renderLocalDemTile(job, {maxSourcePixels,maxTileBytes}) {
   const tileSize=512,bounds=tileBounds(job.z,job.x,job.y);
-  const elevations=new Float32Array(tileSize*tileSize);
+  // Overview before the land loop: its sources are child PNGs, not GeoTIFFs.
+  const elevations=job.kind==='overview'?await overviewElevations(job.sources):new Float32Array(tileSize*tileSize);
   let filledSources=0;
-  if(job.kind!=='ocean'){
+  if(job.kind==='land'){
     for(const receipt of job.sources){
       const source=await openLocalDem(receipt.path);
       let failed=false;

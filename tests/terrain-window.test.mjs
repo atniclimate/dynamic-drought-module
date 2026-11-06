@@ -4,7 +4,48 @@ import {mkdtemp,writeFile,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {writeArrayBuffer} from 'geotiff';
-import {openLocalDem,readDemWindow} from '../scripts/lib/raster-dem-to-pmtiles.mjs';
+import {PNG} from 'pngjs';
+import {openLocalDem,readDemWindow,terrariumPng,decodeTerrariumTile,renderLocalDemTile} from '../scripts/lib/raster-dem-to-pmtiles.mjs';
+
+test('frozen Terrarium encoder: one deflate strategy 0 Up-filter encode, lossless to whole metres',()=>{
+  const size=16,values=new Float32Array(size*size);
+  const fixed=[-85,0,6147,NaN,Infinity,-Infinity,-84.6,6146.5,183.2,-0.4,4387.1];
+  for(let i=0;i<values.length;i++)values[i]=i<fixed.length?fixed[i]:((i*37)%3000)-80;
+  const {data}=terrariumPng(values,size,size);
+  const decoded=decodeTerrariumTile(data);
+  for(let i=0;i<values.length;i++){
+    const want=Number.isFinite(values[i])?Math.round(values[i]):0;
+    assert.equal(decoded.elevationAtIndex(i),want===0?0:want,'pixel '+i);
+  }
+  // The recipe is the exact byte stream of this single encode (receipt key freeze).
+  const png=new PNG({width:size,height:size});png.data.set(decoded.png.data);
+  const frozen=PNG.sync.write(png,{colorType:6,inputColorType:6,deflateLevel:9,deflateStrategy:0,filterType:2});
+  assert.deepEqual(Buffer.from(data),frozen);
+});
+
+test('land tiles sample the source bilinearly at each Web Mercator pixel centre',async()=>{
+  // A field linear in lon and lat is reproduced exactly by bilinear sampling at the right place, so any
+  // half-pixel or linear-latitude misplacement shows as metres (the pilot's Mount Jefferson regression).
+  const directory=await mkdtemp(join(tmpdir(),'ddm-terrain-mercator-'));
+  try{
+    const n=360,values=new Float32Array(n*n),field=(lon,lat)=>-10000+20000*(lon+122)+30000*(45-lat);
+    for(let j=0;j<n;j++)for(let i=0;i<n;i++)values[j*n+i]=field(-122+(i+0.5)/n,45-(j+0.5)/n);
+    const path=join(directory,'linear.tif');
+    await writeFile(path,Buffer.from(writeArrayBuffer(values,{width:n,height:n,BitsPerSample:[32],SampleFormat:[3],
+      ModelPixelScale:[1/n,1/n,0],ModelTiepoint:[0,0,0,-122,45,0],GTModelTypeGeoKey:2,GeographicTypeGeoKey:4269})));
+    const z=10,x=Math.floor((-121.5+180)/360*1024),y=Math.floor((1-Math.asinh(Math.tan(44.5*Math.PI/180))/Math.PI)/2*1024);
+    const {data}=await renderLocalDemTile({z,x,y,kind:'land',sources:[{path}]},{maxSourcePixels:n*n,maxTileBytes:2e6});
+    const tile=decodeTerrariumTile(data),world=1024*512;
+    let checked=0,worst=0;
+    for(let r=0;r<512;r+=7)for(let c=0;c<512;c+=7){
+      const lon=(x*512+c+0.5)/world*360-180,lat=180/Math.PI*Math.atan(Math.sinh(Math.PI-2*Math.PI*(y*512+r+0.5)/world));
+      if(lon<-122+1/n||lon>-121-1/n||lat<44+1/n||lat>45-1/n)continue;
+      worst=Math.max(worst,Math.abs(tile.elevationAtIndex(r*512+c)-field(lon,lat)));checked++;
+    }
+    assert.ok(checked>1000,'checked '+checked);
+    assert.ok(worst<=0.6,'worst pixel off by '+worst+' m');
+  }finally{await rm(directory,{recursive:true,force:true});}
+});
 
 test('two geographic windows of one local GeoTIFF read distinct source elevations',async()=>{
   const directory=await mkdtemp(join(tmpdir(),'ddm-terrain-window-'));
@@ -43,6 +84,25 @@ test('source no-data cells read as 0 m and are not blended into valid neighbours
     assert.equal(out[0][3],0);
     assert.ok(Math.min(...out[0])>=0,'no pixel below the 0 m no-data value');
   }finally{await source?.close();await rm(directory,{recursive:true,force:true});}
+});
+
+test('the pixel-centre sampler reads source no-data as 0 m before blending, so no tile pixel goes below 0',async()=>{
+  // Blending -9999 into 1000 m neighbours would give negative pixels well above the -100000 floor.
+  const directory=await mkdtemp(join(tmpdir(),'ddm-terrain-centre-nodata-'));
+  try{
+    const n=60,values=new Float32Array(n*n).fill(1000);
+    for(let j=27;j<33;j++)for(let i=27;i<36;i++)values[j*n+i]=-9999;
+    const path=join(directory,'nodata.tif');
+    await writeFile(path,Buffer.from(writeArrayBuffer(values,{width:n,height:n,BitsPerSample:[32],SampleFormat:[3],GDAL_NODATA:'-9999',
+      ModelPixelScale:[1/n,1/n,0],ModelTiepoint:[0,0,0,-122,45,0],GTModelTypeGeoKey:2,GeographicTypeGeoKey:4269})));
+    const z=10,x=Math.floor((-121.5+180)/360*1024),y=Math.floor((1-Math.asinh(Math.tan(44.5*Math.PI/180))/Math.PI)/2*1024);
+    const {data}=await renderLocalDemTile({z,x,y,kind:'land',sources:[{path}]},{maxSourcePixels:n*n,maxTileBytes:2e6});
+    const tile=decodeTerrariumTile(data);
+    let min=Infinity,zeros=0,full=0;
+    for(let i=0;i<512*512;i++){const v=tile.elevationAtIndex(i);min=Math.min(min,v);if(v===0)zeros++;if(v===1000)full++;}
+    assert.ok(min>=0,'lowest pixel '+min+' m');
+    assert.ok(zeros>100&&full>100,'the no-data block reads 0 m inside 1000 m ground: '+zeros+' zero, '+full+' full');
+  }finally{await rm(directory,{recursive:true,force:true});}
 });
 
 test('window conversion rejects rotated or reversed axes instead of inventing geography',async()=>{

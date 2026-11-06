@@ -63,7 +63,7 @@ import {
   terrainEdgeLine
 } from '../config/fire3d-presentation';
 import type { TerrainCoverageReading } from '../config/fire3d-presentation';
-import { terrainCoverageFromHeader, FIRE3D_TERRAIN_COVERAGE,
+import { terrainCoverageFor, terrainCoverageFromHeader, FIRE3D_TERRAIN_COVERAGE,
   type TerrainCoverage } from '../config/terrain-coverage';
 import { URLS } from '../config/urls';
 import { resolveHillshadeArchive } from '../layers/hillshade';
@@ -679,13 +679,16 @@ interface ResolvedTerrainArchive {
   readonly coverage: TerrainCoverage;
 }
 
+/** The archive's object key, the last path segment of its URL. */
+const archiveKey = (url: string): string => url.split(/[?#]/)[0].split('/').pop() ?? '';
+
 async function resolveFire3DTerrainUrl(
   signal: AbortSignal
 ): Promise<ResolvedTerrainArchive> {
   try {
     const header = await probeArchiveHeader(URLS.terrainPmtilesDeep, signal);
     return { url: URLS.terrainPmtilesDeep, maxZoom: header.maxZoom,
-      coverage: terrainCoverageFromHeader(header) };
+      coverage: terrainCoverageFor(archiveKey(URLS.terrainPmtilesDeep), header) };
   } catch (err) {
     // An aborted probe is a withdrawn activation, not a missing archive: let
     // the caller's own abort handling see it rather than spending a second

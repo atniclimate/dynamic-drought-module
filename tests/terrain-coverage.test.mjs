@@ -126,6 +126,75 @@ test('the edge fade is one blurred line on the archive box: a true gradient, no 
   assert.ok(TERRAIN_EDGE_BUFFER <= 512, 'the style spec caps the buffer at 512');
 });
 
+test('national boxes attach only to a national key with the committed union header, and drive the dormant multi-box reads', async () => {
+  const { NATIONAL_TERRAIN_BOXES, terrainCoverageFor } = await import('../src/config/terrain-coverage.ts');
+  const { classifyTerrainCoverage, isWithinTerrainCoverage } = await import('../src/config/fire3d-presentation.ts');
+  const header = (west, south, east, north, maxZoom = 10) =>
+    ({ tileDataOffset: 1, tileDataLength: 1, minZoom: 0, maxZoom, west, south, east, north });
+  const union = header(-179.3, -14.7, -64.4, 71.5);
+  const national = terrainCoverageFor('us-z10-2026-11-06.pmtiles', union);
+  assert.deepEqual(national.boxes, NATIONAL_TERRAIN_BOXES);
+  assert.equal(terrainCoverageFor('us-z11-2026-11-06.pmtiles', { ...union, maxZoom: 11 }).boxes, NATIONAL_TERRAIN_BOXES);
+  // Fallbacks: the live PNW key, a wrong union, or a stray key keep the header's single box.
+  for (const [key, h] of [
+    ['pnw-z10-2026-09-10.pmtiles', union],
+    ['us-z10-2026-11-06.pmtiles', header(-125, 24, -66.9, 50)],
+    ['us-z10-2026-11-06.pmtiles', header(-125, 41.5, -110.5, 49.5)],
+    ['us-z10-latest.pmtiles', union]
+  ]) {
+    const c = terrainCoverageFor(key, h);
+    assert.equal(c.boxes, undefined, key);
+    assert.deepEqual([c.west, c.south, c.east, c.north], [h.west, h.south, h.east, h.north]);
+  }
+  // Inside one box is full; across a box edge is partial; between Hawaii and CONUS is none.
+  assert.equal(classifyTerrainCoverage({ west: -100, south: 37, east: -96, north: 40 }, national), 'full');
+  assert.equal(classifyTerrainCoverage({ west: -123, south: 49, east: -121, north: 50 }, national), 'partial');
+  assert.equal(classifyTerrainCoverage({ west: -140, south: 25, east: -135, north: 30 }, national), 'none');
+  assert.equal(classifyTerrainCoverage({ west: -156, south: 19, east: -155, north: 20 }, national), 'full');
+  // The same view against the union rectangle alone would claim it full.
+  assert.equal(classifyTerrainCoverage({ west: -140, south: 25, east: -135, north: 30 }, { ...national, boxes: undefined }), 'full');
+  assert.equal(isWithinTerrainCoverage(-140, 25, national), false, 'mid-Pacific inside the union carries no elevation');
+  assert.equal(isWithinTerrainCoverage(-155.47, 19.82, national), true);
+  assert.equal(isWithinTerrainCoverage(-170.7, -14.3, national), true);
+});
+
+test('the edge fade draws every box ring when the archive has boxes, the single box otherwise', async () => {
+  const { NATIONAL_TERRAIN_BOXES } = await import('../src/config/terrain-coverage.ts');
+  const national = { ...FIRE3D_TERRAIN_COVERAGE, west: -179.3, south: -14.7, east: -64.4, north: 71.5, boxes: NATIONAL_TERRAIN_BOXES };
+  const line = terrainEdgeLine(national);
+  assert.equal(line.geometry.type, 'MultiLineString');
+  assert.equal(line.geometry.coordinates.length, 5);
+  const [w, s, e, n] = [-125.0, 24.4, -66.9, 49.5];
+  assert.deepEqual(line.geometry.coordinates[0], [[w, s], [e, s], [e, n], [w, n], [w, s]]);
+  assert.equal(terrainEdgeLine(FIRE3D_TERRAIN_COVERAGE).geometry.type, 'LineString');
+});
+
+test('the perimeter ribbon holds 16 px at the latitude it is drawn, not only at 45 N', async () => {
+  const { perimeterRibbonHeightMeters, buildPerimeterRibbonSlabPaint, PERIMETER_RIBBON_SCREEN_HEIGHT_PX,
+    PERIMETER_RIBBON_SLAB_COUNT } = await import('../src/config/fire3d-presentation.ts');
+  const metersPerPixel = (zoom, lat) => (78271.5169640205 * Math.cos((lat * Math.PI) / 180)) / 2 ** zoom;
+  for (const lat of [25, 45, 64]) {
+    for (const zoom of [5, 9.5, 15]) {
+      const px = perimeterRibbonHeightMeters(zoom, lat) / metersPerPixel(zoom, lat);
+      assert.ok(Math.abs(px - PERIMETER_RIBBON_SCREEN_HEIGHT_PX) < 1e-9, `${lat} N zoom ${zoom}: ${px} px`);
+    }
+  }
+  // The default stays the 45 N tuning, so a caller that passes no latitude draws exactly as before.
+  assert.equal(perimeterRibbonHeightMeters(9), perimeterRibbonHeightMeters(9, 45));
+  assert.deepEqual(buildPerimeterRibbonSlabPaint(2), buildPerimeterRibbonSlabPaint(2, 45));
+  const top = buildPerimeterRibbonSlabPaint(PERIMETER_RIBBON_SLAB_COUNT - 1, 64)['fill-extrusion-height'];
+  assert.ok(Math.abs(top[4] - perimeterRibbonHeightMeters(5, 64)) < 1e-9);
+  // At 64 N the fixed 45 N height drew about 1.6 times too tall.
+  assert.ok(Math.abs(perimeterRibbonHeightMeters(9) / perimeterRibbonHeightMeters(9, 64) - 1.613) < 0.001);
+});
+
+test('the deep archive branch resolves its coverage by key and header; the bundled fallback stays header-only', () => {
+  const source = readFileSync(join(ROOT, 'src', 'map', 'fire3d.ts'), 'utf8');
+  const fn = source.slice(source.indexOf('async function resolveFire3DTerrainUrl'), source.indexOf('function warnComponent'));
+  assert.match(fn, /coverage: terrainCoverageFor\(archiveKey\(URLS\.terrainPmtilesDeep\), header\)/);
+  assert.match(fn, /coverage: terrainCoverageFromHeader\(bundled\.header\)/);
+});
+
 test('the scene adds the veil with that buffer and re-seats the ruled chain after it', () => {
   const source = readFileSync(join(ROOT, 'src', 'map', 'fire3d.ts'), 'utf8');
   const block = source.slice(source.indexOf('terrainEdgeLine(resolved.coverage)'));
