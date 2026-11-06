@@ -1354,9 +1354,11 @@ def download_whp_zip(
     mode = "ab" if resume_at else "wb"
     with open(part, mode) as fh:
         for chunk in resp.iter_content(chunk_size=1 << 20):
-            fh.write(chunk)
+            # Checked before the write, so a finished stream never leaves a
+            # complete .part whose resume Range would only get HTTP 416.
             if time.monotonic() - started > time_budget_s:
                 resp.close()
+                fh.flush()
                 raise WhpDownloadIncomplete(
                     f"WHP zip download hit the per-invocation time budget "
                     f"({time_budget_s:.0f}s) at {part.stat().st_size} of "
@@ -1364,6 +1366,7 @@ def download_whp_zip(
                     f"re-invoke the capture to resume (the resume spends "
                     f"rds-whp-zip again)"
                 )
+            fh.write(chunk)
     if total is not None and part.stat().st_size != total:
         raise RuntimeError(
             f"WHP zip download ended short: {part.stat().st_size} of "

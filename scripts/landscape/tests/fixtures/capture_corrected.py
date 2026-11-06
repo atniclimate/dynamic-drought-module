@@ -84,13 +84,14 @@ def main() -> int:
         with mock.patch.object(core, "load_ecoregions", lambda level: gdf), \
              mock.patch.object(terrain, "DEM_VRT", str(SYNTH / "dem.tif")), \
              mock.patch.object(core, "CACHE_DIR", Path(tmp)), \
-             mock.patch.object(core, "OUT_PATH", out_path), \
+             mock.patch.object(core, "OUT_PATH", Path(tmp) / "public.json"), \
              mock.patch.object(core, "_acquisition_stamp",
                                lambda: FIXED_DATE), \
              mock.patch.object(core, "materialized_sha256",
                                lambda path: SENTINEL_SHA256):
             rc = landscape_main(["--only", "terrain", "--level", "3",
-                                 "--retrieved", FIXED_DATE])
+                                 "--retrieved", FIXED_DATE,
+                                 "--output", str(out_path)])
         if rc != 0:
             print(f"landscape main() exited {rc}", file=sys.stderr)
             return rc

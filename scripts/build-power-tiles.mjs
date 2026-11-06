@@ -158,6 +158,21 @@ async function readCachedPull() {
   }
 }
 
+/**
+ * A cache pulled for another box or field list would bake stale data under
+ * the new request. Refuse rather than refetch (the upstream is archived); a
+ * legacy cache that predates the record only warns.
+ */
+function assertCacheMatchesRequest(cached) {
+  if (cached.bbox === undefined && cached.fields === undefined) {
+    console.warn('  WARNING: cached pull predates its bbox/fields record; delete it after changing either');
+    return;
+  }
+  if (JSON.stringify(cached.bbox) !== JSON.stringify(PNW_BBOX) || JSON.stringify(cached.fields) !== JSON.stringify(FIELDS)) {
+    throw new Error(`cached pull was made with a different bbox or field list; delete ${CACHE_PATH} to refetch`);
+  }
+}
+
 export async function main() {
   console.log('power transmission-line bake (archived HIFLD copy, PNW box)');
   console.log(`  service: ${SERVICE}`);
@@ -167,6 +182,7 @@ export async function main() {
   let features = cached?.features;
   let retrieved = typeof cached?.retrieved === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(cached.retrieved)
     ? cached.retrieved : 'unknown';
+  if (cached !== null) assertCacheMatchesRequest(cached);
   if (cached === null) {
     features = [];
     let exhausted = false;
@@ -193,7 +209,7 @@ export async function main() {
     await mkdir(dirname(CACHE_PATH), { recursive: true });
     await writeFile(
       CACHE_PATH,
-      JSON.stringify({ type: 'FeatureCollection', features, retrieved })
+      JSON.stringify({ type: 'FeatureCollection', features, retrieved, bbox: PNW_BBOX, fields: FIELDS })
     );
     console.log(`  cached the raw pull at ${CACHE_PATH}`);
   }

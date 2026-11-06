@@ -40,7 +40,7 @@ const DOC_PATH = fileURLToPath(
 const [nodeMajor, nodeMinor] = process.versions.node.split('.').map(Number);
 if (nodeMajor < 22 || (nodeMajor === 22 && nodeMinor < 18)) {
   console.error(
-    `coverage-matrix: this script imports TypeScript via Node's native type stripping and needs Node >= 22.18; found ${process.versions.node}. Upgrade Node (the repo develops on 24; CI runs 22.x); do not duplicate the table into JavaScript.`
+    `coverage-matrix: this script imports TypeScript via Node's native type stripping and needs Node >= 22.18; found ${process.versions.node}. Upgrade Node (the repo pins 24 in .nvmrc); do not duplicate the table into JavaScript.`
   );
   process.exit(1);
 }
