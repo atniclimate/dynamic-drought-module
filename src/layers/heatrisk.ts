@@ -111,6 +111,8 @@ let coverageMoveMap: maplibregl.Map | null = null;
 /** The on-map loading-indicator token held across a frame render, or null
  * when no frame is in flight (DDM-P8-T05). */
 let frameLoadToken: number | null = null;
+/** Re-installs the stamp when the selected frame's period begins or ends. */
+let phaseTimer: ReturnType<typeof setTimeout> | undefined;
 
 function reportStatus(state: Status): void {
   registry.setStatus(LAYER_KEY, state);
@@ -220,8 +222,9 @@ function surfaceNote(status: Status): string {
  * start field and no end field) grounded in the issuer's own words "over a
  * 24-hour period" and the catalog's 24-hour spacing; the two moments are
  * always the issuer's start and that start plus one day. The phase is read
- * on every install (a day change, a status change), not on a timer; a
- * page left open across a boundary re-reads it at the next change.
+ * on every install (a day change, a status change) and again at the
+ * selected frame's next boundary (`phaseTimer`), so a page left open never
+ * keeps presenting an ended period as an outlook in force.
  */
 type FramePhase = 'not-begun' | 'in-progress' | 'ended';
 
@@ -270,8 +273,14 @@ function frameStamp(frame: HeatRiskFrame, status: Status): TimeBarStamp {
  * note above tracks the raster; the bar memoizes identical markup.
  */
 function installTimeBar(status: Status): void {
+  clearTimeout(phaseTimer);
   const frame = selectedDay === null ? undefined : frames[selectedDay - 1];
   if (!activeMap || !frame) return;
+  const now = Date.now();
+  const boundary = [frame.validTime, frame.validTime + DAILY_FRAME_MS].find((t) => t > now);
+  if (boundary !== undefined) {
+    phaseTimer = setTimeout(() => installTimeBar(status), boundary - now);
+  }
   setTimeBar(LAYER_KEY, {
     ariaLabel: 'NWS HeatRisk day',
     stamp: frameStamp(frame, status),
@@ -620,12 +629,20 @@ export async function activate(
   emitFrames('loading');
 
   try {
-    const metadataJson = await fetchJsonWithBudget(
-      `${URLS.nwsHeatRisk}?f=json`,
-      null,
-      signal,
-      FETCH_TIMEOUT_MS
-    );
+    const metadataUrl = `${URLS.nwsHeatRisk}?f=json`;
+    let metadataJson: unknown;
+    try {
+      metadataJson = await fetchJsonWithBudget(metadataUrl, null, signal, FETCH_TIMEOUT_MS);
+    } catch (err) {
+      // One retry for a read the network lost (a fetch TypeError, or an
+      // abort nobody here asked for: the budget or the browser). A caller's
+      // cancellation and any answer the service gave are final.
+      const transient =
+        err instanceof TypeError || (err instanceof DOMException && err.name === 'AbortError');
+      if (signal.aborted || !transient) throw err;
+      console.warn('[heatrisk] service metadata read failed; retrying once.', err);
+      metadataJson = await fetchJsonWithBudget(metadataUrl, null, signal, FETCH_TIMEOUT_MS);
+    }
     if (signal.aborted) return;
     const extent = extractTimeExtent(metadataJson);
     if (extent === null) {
@@ -694,6 +711,7 @@ export function deactivate(map: maplibregl.Map): void {
   masterController?.abort();
   masterController = null;
   endFrameLoad();
+  clearTimeout(phaseTimer);
   removeActiveRaster(map);
   stopListeningForDaySelection();
   stopListeningForCoverageMoves();
