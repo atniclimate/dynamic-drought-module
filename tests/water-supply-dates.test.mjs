@@ -26,7 +26,47 @@ registerHooks({
   }
 });
 
-const { fetchWaterSupplyClaims } = await import('../src/impact/water-supply.ts');
+const { fetchWaterSupplyClaims, clearWaterSupplyRowsCache } = await import('../src/impact/water-supply.ts');
+
+const WA_SELECTION = {
+  kind: 'ecoregion',
+  title: 'Test selection',
+  properties: null,
+  lngLat: { lng: -120.5, lat: 47.2 },
+  place: null,
+  containing: { state: 'WA', basis: 'point-in-polygon' },
+  regionKey: 'washington_state'
+};
+
+async function twoBriefings(body) {
+  clearWaterSupplyRowsCache();
+  const originalFetch = globalThis.fetch;
+  let requests = 0;
+  globalThis.fetch = async () => {
+    requests += 1;
+    return new Response(body);
+  };
+  try {
+    await fetchWaterSupplyClaims(WA_SELECTION, new AbortController().signal);
+    const second = await fetchWaterSupplyClaims(WA_SELECTION, new AbortController().signal);
+    return { requests, second };
+  } finally {
+    globalThis.fetch = originalFetch;
+    clearWaterSupplyRowsCache();
+  }
+}
+
+test('a header-only NWRFC report (no forecast yet this water year) is cached: the next briefing asks again for nothing', async () => {
+  const { requests, second } = await twoBriefings('ID,Location,FcstPeriod,50PerAvg,CurPerAvg,FcstDate\n');
+  assert.equal(requests, 1);
+  assert.match(second.note, /carried no APR-SEP forecast/);
+});
+
+test('a 200 answer with no report header is a failed read, never cached', async () => {
+  const { requests, second } = await twoBriefings('<html><body>Service unavailable</body></html>');
+  assert.equal(requests, 2);
+  assert.match(second.note, /did not respond/);
+});
 
 test('water-supply claims never present the echoed FcstDate as an issue date', async () => {
   const originalFetch = globalThis.fetch;

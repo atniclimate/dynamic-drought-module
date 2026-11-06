@@ -697,7 +697,7 @@ test('selected-area NIFC copy names the bounding box, keeps categories distinct,
   // A page returned at the record cap is a lower bound, and says so.
   const floor = buildNifcAreaPerimeterClaim(Array(50).fill('WF'), { truncated: true });
   expect(floor).toBe(
-    '50 current mapped NIFC wildfire perimeters intersect the bounding box around this selection. The service returned its 50-record maximum, so this count is a lower bound.'
+    '50 current mapped NIFC wildfire perimeters intersect the bounding box around this selection. The service returned the 50 records this briefing asks for, so this count is a lower bound.'
   );
   expect(buildNifcAreaPerimeterClaim(['WF'], { truncated: false })).not.toContain('lower bound');
 });

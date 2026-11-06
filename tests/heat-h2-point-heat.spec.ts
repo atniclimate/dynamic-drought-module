@@ -838,6 +838,8 @@ test.describe('H2 critical-first surfaces', () => {
   test('a place change aborts the old point read and keeps the newer briefing current', async ({
     page
   }) => {
+    // The observation fixtures are 2026-07-29 12:05 UTC; a later clock reads them as a station that stopped reporting.
+    await page.clock.setFixedTime('2026-07-29T12:30:00+00:00');
     let pointsRequestCount = 0;
     // A typed holder, not a bare `let`: the assignment happens inside the
     // Promise executor closure below, which TypeScript cannot see from the
@@ -957,6 +959,7 @@ test.describe('H2 critical-first surfaces', () => {
         requestCount += 1;
       }
     });
+    await page.clock.setFixedTime('2026-07-29T12:30:00+00:00'); // the observation fixture's own hour
     await stubBrowserNwsHeat(page);
     await gotoApp(page, '?region=washington_state&view=console');
 

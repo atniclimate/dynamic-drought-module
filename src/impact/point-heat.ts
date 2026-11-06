@@ -5,6 +5,7 @@ import {
   type NwsPointMetadata,
   type NwsRequestSession
 } from './nws-point';
+import { formatPointHeatTimestamp } from './point-heat-format';
 import type {
   BoundarySelectionContext,
   PointHeatBriefing,
@@ -38,6 +39,7 @@ const OBSERVATION_METRICS: ReadonlyArray<{
 ];
 
 const MAX_SERIES_VALUES = 24;
+const OBSERVATION_FRESH_MS = 6 * 60 * 60 * 1000;
 
 function numeric(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
@@ -268,7 +270,8 @@ function observationMetric(
 
 function parseObservation(
   payload: unknown,
-  station: StationCandidate
+  station: StationCandidate,
+  now: number
 ): PointHeatObservation {
   if (!isObject(payload) || !isObject(payload.properties)) {
     throw new Error('invalid NWS observation payload');
@@ -278,7 +281,7 @@ function parseObservation(
     typeof properties.timestamp === 'string'
       ? properties.timestamp
       : null;
-  if (!timestamp) {
+  if (!timestamp || !Number.isFinite(Date.parse(timestamp))) {
     return {
       status: 'no-data',
       note: 'The nearest NWS station returned no timestamped observation.',
@@ -286,6 +289,22 @@ function parseObservation(
       stationName: station.name,
       stationUrl: station.url,
       distanceKm: station.distanceKm,
+      metrics: []
+    };
+  }
+  // A station that stopped reporting is not current heat: past the house
+  // window for an hourly reading (`hourlyFreshness`, src/util/cwms.ts), the
+  // grid guidance or the drought claim leads instead.
+  if (now - Date.parse(timestamp) > OBSERVATION_FRESH_MS) {
+    return {
+      status: 'no-data',
+      // DRAFT wording
+      note: `The nearest NWS station has not reported since ${formatPointHeatTimestamp(timestamp)}.`,
+      stationId: station.id,
+      stationName: station.name,
+      stationUrl: station.url,
+      distanceKm: station.distanceKm,
+      timestamp,
       metrics: []
     };
   }
@@ -348,7 +367,8 @@ async function fetchGrid(
 async function fetchObservation(
   metadata: NwsPointMetadata,
   point: { readonly lng: number; readonly lat: number },
-  session: NwsRequestSession
+  session: NwsRequestSession,
+  now: number
 ): Promise<PointHeatObservation> {
   if (!metadata.observationStationsUrl) {
     return {
@@ -375,7 +395,7 @@ async function fetchObservation(
       latestUrl,
       NWS_CACHE_TTL.observation
     );
-    return parseObservation(latest, nearest);
+    return parseObservation(latest, nearest, now);
   } catch (err) {
     if (session.signal.aborted) throw err;
     console.warn('[point-heat] NWS nearby observation failed.', err);
@@ -425,7 +445,7 @@ export async function fetchPointHeat(
       throw new DOMException('Aborted', 'AbortError');
     }
     const [observation, grid] = await Promise.all([
-      fetchObservation(metadata, point, session),
+      fetchObservation(metadata, point, session, now),
       fetchGrid(metadata, session, now)
     ]);
     const note = overallNote(observation, grid);

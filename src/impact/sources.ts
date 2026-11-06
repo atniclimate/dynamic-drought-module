@@ -247,14 +247,14 @@ export function isoDayUtc(time: number): string {
 }
 
 /**
- * An upstream ISO 8601 timestamp field, read as its UTC calendar day for a
- * claim's `dates`, or `undefined` when the field is missing or unparseable
+ * The calendar day an upstream ISO 8601 timestamp names in its own offset
+ * ("2026-11-06T18:00:00-08:00" is 2026-11-06, never the UTC 2026-11-07), for
+ * a claim's `dates`, or `undefined` when the field is missing or unparseable
  * (never invented; the caller keeps `retrieved` as the honest fallback).
  */
-function isoDayFromUpstream(value: unknown): string | undefined {
-  if (typeof value !== 'string') return undefined;
-  const t = Date.parse(value);
-  return Number.isFinite(t) ? isoDayUtc(t) : undefined;
+function issuerCalendarDay(value: unknown): string | undefined {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T/.test(value)) return undefined;
+  return Number.isFinite(Date.parse(value)) ? value.slice(0, 10) : undefined;
 }
 
 /**
@@ -654,7 +654,7 @@ function calendarToIso(c: CalendarDay): string {
 
 /**
  * Fetch the Drought Severity and Coverage Index (DSCI, 0 to 500) weekly series
- * for the region's primary state over roughly the past 14 months from the USDM
+ * for the region's primary state over the past year (the chart's own title) from the USDM
  * Data Services API and render it as an observed trend line. DSCI is a
  * statewide measure (not point-specific), so the claim is framed as statewide
  * context. The chart is solid throughout (all observation) with the current
@@ -684,7 +684,7 @@ export async function fetchDsciTrendClaims(
   }
   const end = new Date();
   const start = new Date(end);
-  start.setMonth(start.getMonth() - 14);
+  start.setMonth(start.getMonth() - 12);
   const params = new URLSearchParams({
     aoi: String(fips).padStart(2, '0'),
     startdate: fmtUsdmDate(start),
@@ -1149,10 +1149,17 @@ export async function fetchNwsAlertClaims(
     const alertShared = { source, sourceUrl, product: 'nws-alerts', evidence: 'observed', dates: { retrieved: todayIso() } } as const;
     const claims: SourcedClaim[] = [];
     if (fire.length > 0) {
+      // Only a Red Flag Warning is "imminent"; a Fire Weather Watch is NWS's
+      // "critical fire weather conditions are possible but not imminent or
+      // occurring" (https://www.weather.gov/safety/wildfire-ww).
+      const fireMeaning = fire.includes('Red Flag Warning') // vocab-allow: verbatim NWS product name
+        ? 'This signals imminent fire-weather conditions (low humidity, wind, dry fuels).'
+        // DRAFT wording: NWS's own Fire Weather Watch definition, owner to confirm.
+        : 'This means critical fire weather conditions are possible but not imminent or occurring (low humidity, wind, dry fuels).';
       claims.push(
         makeClaim({
           // vocab-allow: reports the NWS alert products in effect, upstream data
-          text: `A fire-weather alert is in effect here: ${fire.join(', ')}. This signals imminent fire-weather conditions (low humidity, wind, dry fuels).`,
+          text: `A fire-weather alert is in effect here: ${fire.join(', ')}. ${fireMeaning}`,
           ...alertShared,
           // One query answers for two hazard rows, so each statement names
           // the row it speaks for and neither row carries the other's.
@@ -1175,8 +1182,12 @@ export async function fetchNwsAlertClaims(
           // (DWH-07); do not reintroduce a DDM-inferred drought-to-heat link.
           text:
             heat.length > 0
+              // DRAFT wording: "NWS heat alert", since NWS keeps a Heat Advisory
+              // below its Extreme Heat criteria ("dangerous heat conditions that
+              // are not expected to reach warning criteria",
+              // https://www.weather.gov/safety/heat-ww); the product names stay verbatim.
               // vocab-allow: reports the NWS alert products in effect, upstream data
-              ? `An extreme-heat alert is in effect here: ${heat.join(', ')}. Heat raises drinking-water demand and human-health stress.`
+              ? `An NWS heat alert is in effect here: ${heat.join(', ')}. Heat raises drinking-water demand and human-health stress.`
               : heatText,
           ...alertShared,
           hazards: ['heat']
@@ -1807,8 +1818,13 @@ export async function fetchNwsForecastClaims(
     // NWS issued this forecast) as `issued`, each read straight off the
     // upstream response and never invented when absent (Rule: never broaden
     // certainty). `retrieved` still records the fetch day regardless.
-    const validDay = isoDayFromUpstream(first.startTime);
-    const issuedDay = isoDayFromUpstream(properties?.updateTime);
+    // `startTime` carries the point's own offset, so its written day is the
+    // period's day; `updateTime` is a UTC instant, read as the viewer's local
+    // day as `todayIso` is.
+    const validDay = issuerCalendarDay(first.startTime);
+    const updateMs =
+      typeof properties?.updateTime === 'string' ? Date.parse(properties.updateTime) : NaN;
+    const issuedDay = Number.isFinite(updateMs) ? isoDayLocal(new Date(updateMs)) : undefined;
 
     return {
       ok: true,

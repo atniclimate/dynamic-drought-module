@@ -300,6 +300,14 @@ test('DSCI sends a single-digit state FIPS code zero-padded', async () => {
   }, () => sources.fetchDsciTrendClaims(context, signal()));
   assert.equal(seen.length, 1);
   assert.match(seen[0], /[?&]aoi=02(&|$)/);
+  // The chart is titled "over the past year", so the request asks for one year.
+  const q = new URL(seen[0].slice(seen[0].indexOf('https://usdm'))).searchParams;
+  const utcDay = (mdy) => {
+    const [m, d, y] = mdy.split('/').map(Number);
+    return Date.UTC(y, m - 1, d) / 86_400_000;
+  };
+  const days = utcDay(q.get('enddate')) - utcDay(q.get('startdate'));
+  assert.ok(days >= 365 && days <= 366, `${q.get('startdate')} to ${q.get('enddate')}: ${days} days`);
 });
 
 test('DSCI reuses a clean series for the next briefing, and never keeps a bad one', async () => {
@@ -1200,7 +1208,7 @@ test('a heat-only NWS answer leaves the Fire row exactly as at base: no alerts c
     result.claims.map((claim) => [claim.text, claim.hazards]),
     [
       [
-        'An extreme-heat alert is in effect here: Heat Advisory. Heat raises drinking-water demand and human-health stress.',
+        'An NWS heat alert is in effect here: Heat Advisory. Heat raises drinking-water demand and human-health stress.',
         ['heat']
       ]
     ]
@@ -1210,6 +1218,26 @@ test('a heat-only NWS answer leaves the Fire row exactly as at base: no alerts c
   assert.equal(fire.status, 'loading', 'the Fire row still waits on NIFC, as at base');
   const heat = settledCell('current', 'heat', [['nwsAlerts', result]]);
   assert.equal(heat.status, 'ready');
+});
+
+test('only a Red Flag Warning reads imminent; a Fire Weather Watch reads possible, in NWS words', async () => {
+  for (const [events, meaning] of [
+    [['Fire Weather Watch'], 'This means critical fire weather conditions are possible but not imminent or occurring'],
+    [['Red Flag Warning', 'Fire Weather Watch'], 'This signals imminent fire-weather conditions']
+  ]) {
+    clearNwsResponseCache();
+    const result = await withFetch(nwsAlertsAnswer(events), () =>
+      sources.fetchNwsAlertClaims(place(-120.44, 47.44), signal())
+    );
+    const fireClaim = result.claims.find((claim) => claim.hazards?.includes('fire'));
+    assert.ok(fireClaim?.text.includes(meaning), `${events.join(', ')}: ${fireClaim?.text}`);
+  }
+});
+
+test('a NIFC page at the record cap names the cap as the briefing request, not the service maximum', () => {
+  const floor = buildNifcAreaPerimeterClaim(Array(50).fill('WF'), { truncated: true });
+  assert.match(floor, /The service returned the 50 records this briefing asks for, so this count is a lower bound\.$/);
+  assert.doesNotMatch(floor, /maximum/);
 });
 
 test('an NWS answer with neither alert keeps the one shared all-clear in both rows', async () => {
