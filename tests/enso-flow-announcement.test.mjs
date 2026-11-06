@@ -20,9 +20,10 @@ registerHooks({
       export const MAX_CYCLE_TRIES = 1;
       export const candidateCycle = () => globalThis.__field.meta.cycle;
       export const forecastHourFor = () => 6;
-      export const isStale = () => false;
+      export const isStale = (field) => globalThis.__staleFields?.has(field) ?? false;
       export const readFlowFrame = async () => {
         if (globalThis.__readError) throw globalThis.__readError;
+        globalThis.__frameReads = (globalThis.__frameReads ?? 0) + 1;
         return globalThis.__field;
       };
       // A scalar field mounts as a still shade: no state callback, only the 24-hour limit.
@@ -418,16 +419,56 @@ test('live precipitable water is a still shade: a state line and bins for the ke
     // A pan reads and mounts nothing: the image was made once from the frame.
     mapEvents.get('moveend')();
     assert.deepEqual(globalThis.__mounts, [water]);
-    // Past cycle + 24 h while mounted, the shade leaves and the panel says which frame it held.
+    // Past cycle + 24 h while mounted, the panel reads once for a newer cycle and draws it.
+    const reads = globalThis.__frameReads ?? 0;
+    const newer = { ...water, meta: { ...wind.meta, cycle: wind.meta.cycle + 6 * 3_600_000 } };
+    globalThis.__staleFields = new Set([water]);
+    globalThis.__field = newer;
     globalThis.__shadeStale();
-    assert.equal(panel().dataset.status, 'unavailable');
+    await until(() => globalThis.__mounts.at(-1) === newer && panel().dataset.status === 'live');
+    assert.equal(globalThis.__frameReads, reads + 1, 'one read per stale frame');
+    assert.ok(globalThis.__shadeDisposed >= 1, 'the old shade is taken down');
+    // When NODD has nothing newer, the shade leaves and the panel says which frame it held; nothing failed.
+    globalThis.__staleFields.add(newer);
+    globalThis.__shadeStale();
+    await until(() => panel().dataset.status === 'unavailable');
+    assert.equal(globalThis.__frameReads, reads + 2);
     assert.match(snapshots.at(-1).line, /^unavailable · The held NOAA GFS frame from .+ UTC is past its 24-hour limit$/);
-    assert.deepEqual(snapshots.at(-1).notes, ['No moist or dry condition is inferred from a failed request.']);
+    assert.deepEqual(snapshots.at(-1).notes, ['No moist or dry condition is inferred from an old frame.']);
     assert.equal(panel().dataset.flowDrawn, '');
-    assert.ok(globalThis.__shadeDisposed >= 1, 'the shade is taken down');
   } finally {
     window.removeEventListener('ddm:enso-flow-snapshot', record);
     globalThis.__field = wind;
+    globalThis.__staleFields = null;
+  }
+});
+
+test('a drawn wind frame past its 24-hour limit reads once for a newer cycle, and says it held an old frame when there is none', async () => {
+  const snapshots = [];
+  const record = (event) => snapshots.push(event.detail);
+  window.addEventListener('ddm:enso-flow-snapshot', record);
+  const wind = globalThis.__field;
+  try {
+    boot('wind');
+    await until(() => panel().dataset.status === 'live');
+    const reads = globalThis.__frameReads;
+    const newer = { ...wind, meta: { ...wind.meta, cycle: wind.meta.cycle + 6 * 3_600_000 } };
+    globalThis.__staleFields = new Set([wind]);
+    globalThis.__field = newer;
+    globalThis.__fieldState({ ...globalThis.__state, stale: true });
+    await until(() => globalThis.__mounts.at(-1) === newer && panel().dataset.status === 'live');
+    assert.equal(globalThis.__frameReads, reads + 1, 'one read per stale frame');
+    globalThis.__staleFields.add(newer);
+    globalThis.__fieldState({ ...globalThis.__state, stale: true });
+    await until(() => panel().dataset.status === 'unavailable');
+    assert.equal(globalThis.__frameReads, reads + 2);
+    assert.match(snapshots.at(-1).line, /^unavailable · The held NOAA GFS frame from .+ UTC is past its 24-hour limit$/);
+    assert.deepEqual(snapshots.at(-1).notes, ['No direction or calm condition is inferred from an old frame.']);
+    assert.equal(panel().dataset.flowDrawn, '');
+  } finally {
+    window.removeEventListener('ddm:enso-flow-snapshot', record);
+    globalThis.__field = wind;
+    globalThis.__staleFields = null;
   }
 });
 

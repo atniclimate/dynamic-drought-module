@@ -601,6 +601,10 @@ class FakeMap {
     // A Pacific view that includes the Nino 3.4 box, so no toast is raised.
     return { getWest: () => -200, getEast: () => -80, getSouth: () => -30, getNorth: () => 50 };
   }
+  /** A settled camera: the zoom-out toast is judged at once (src/layers/sst-anomaly.ts). */
+  isMoving() {
+    return false;
+  }
   isSourceLoaded(id) {
     return this.loadedSources.has(id);
   }

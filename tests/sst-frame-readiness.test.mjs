@@ -215,6 +215,17 @@ class FakeMap {
     // A Pacific view that includes the Nino 3.4 box, so no toast is raised.
     return { getWest: () => -200, getEast: () => -80, getSouth: () => -30, getNorth: () => 50 };
   }
+  /** A camera move in flight; the zoom-out toast case sets `moving`. */
+  isMoving() {
+    return this.moving === true;
+  }
+  once(event, handler) {
+    const wrapped = (payload) => {
+      this.off(event, wrapped);
+      handler(payload);
+    };
+    return this.on(event, wrapped);
+  }
   isSourceLoaded(id) {
     return this.loadedSources.has(id);
   }
@@ -1033,4 +1044,46 @@ test('a late DescribeDomains answer after a re-activation superseded it changes 
       assert.equal(registry.getStatus(KEY), 'ready');
     }
   );
+});
+
+// Audit round 5 (R5-33): an ENSO press flies the camera to the Pacific, and the
+// once-per-session toast read the land view it was leaving. Last in this file:
+// the toast's latch is per module, and only this case raises it.
+test('the zoom-out toast is judged where the camera settles, never during the flight to the Pacific', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const shown = [];
+  const toast = { hidden: true, offsetWidth: 0, classList: { add() {}, remove() {} }, set textContent(text) { shown.push(text); } };
+  const getElementById = document.getElementById;
+  document.getElementById = (id) => (id === 'copy-toast' ? toast : null);
+  const land = { getWest: () => -125, getEast: () => -100, getSouth: () => 30, getNorth: () => 50 };
+  try {
+    await withSst({ answer: () => domainsOk() }, async ({ map }) => {
+      const pacific = map.getBounds();
+      const flyFromLand = async () => {
+        map.getBounds = () => land;
+        map.moving = true;
+        await mod.activate(map);
+        map.moving = false;
+      };
+      await flyFromLand();
+      assert.deepEqual(shown, [], 'no toast while the camera is still over land in flight');
+      map.getBounds = () => pacific;
+      map.emit('moveend');
+      assert.deepEqual(shown, [], 'the flight ended over the Pacific');
+      // Turned off before the move ends: nothing is said for a layer that has left.
+      await flyFromLand();
+      mod.deactivate(map);
+      map.emit('moveend');
+      assert.deepEqual(shown, []);
+      // A move that ends off the Pacific says it once, and only once a session.
+      await flyFromLand();
+      map.emit('moveend');
+      assert.equal(shown.length, 1);
+      assert.match(shown[0], /zoom out toward the equatorial Pacific/);
+      await mod.activate(map);
+      assert.equal(shown.length, 1);
+    });
+  } finally {
+    document.getElementById = getElementById;
+  }
 });

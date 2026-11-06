@@ -32,6 +32,8 @@ import {
   BC_DROUGHT_LEVELS,
   BC_DROUGHT_NO_UPDATE,
   CDM_CATEGORIES,
+  CPC_EXTENDED_COLORS,
+  CPC_SEASONAL_COLORS,
   GRIDDED_INDEX_RAMP,
   HEATRISK_CATEGORIES,
   NADM_CATEGORIES,
@@ -462,13 +464,15 @@ function sstKey(): KeySpec {
   const first = SST_ANOMALY_LABELS[0];
   const last = SST_ANOMALY_LABELS[2];
   const flow = ensoFlowRow();
+  const outlooks = cpcOutlookRows();
   return {
     label: 'Ocean temperature',
     ariaLabel:
       `Ocean temperature anomaly key, ${first.toLowerCase()} through ${last.toLowerCase()}, a qualitative scale.` +
       observed +
       ' NASA GIBS GHRSST MUR SST anomaly.' +
-      flow.ariaLabel,
+      flow.ariaLabel +
+      outlooks.ariaLabel,
     itemsHtml:
       (sstObservedDate
         ? `<span class="map-key-item" data-sst-observed>Observed ${escapeHtml(
@@ -481,8 +485,46 @@ function sstKey(): KeySpec {
       '<span class="map-key-item" data-sst-attribution>NASA GIBS GHRSST MUR</span>' +
       // A keyboard door to the box's popup (the box's own title; src/layers/sst-anomaly.ts answers it).
       '<button type="button" class="map-key-item map-key-door" data-feature-door="nino34">Nino 3.4 (the ENSO index region)</button>' +
-      flow.html
+      flow.html +
+      outlooks.html
   };
+}
+
+type CpcClass = { readonly label: string; readonly color: readonly number[] };
+/** The CPC outlooks ENSO draws over the SST, in their legend order (src/layers/cpc-seasonal-outlook.ts KEY_ORDER). */
+const CPC_OUTLOOK_CLASSES: readonly (readonly [string, readonly CpcClass[]])[] = [
+  ['cpc-seasonal-precip', CPC_SEASONAL_COLORS.precipitation],
+  ['cpc-seasonal-temp', CPC_SEASONAL_COLORS.temperature],
+  ['cpc-610-precip', CPC_EXTENDED_COLORS.precipitation],
+  ['cpc-610-temp', CPC_EXTENDED_COLORS.temperature],
+  ['cpc-814-precip', CPC_EXTENDED_COLORS.precipitation],
+  ['cpc-814-temp', CPC_EXTENDED_COLORS.temperature]
+];
+
+/**
+ * One row per CPC outlook on the map, as outlookKey keys the drought outlook:
+ * the layer's catalog name, then its renderer's classes and labels. Equal
+ * Chances is drawn clear, so it has no swatch. The valid season and issue
+ * date stay in the layer's legend and popup.
+ */
+export function cpcOutlookRows(
+  drawn: (key: string) => boolean = (key) =>
+    registry.getActiveKeys().has(key) && ['ready', 'degraded'].includes(registry.getStatus(key) ?? '')
+): { readonly html: string; readonly ariaLabel: string } {
+  let html = '';
+  let ariaLabel = '';
+  for (const [key, rows] of CPC_OUTLOOK_CLASSES) {
+    if (!drawn(key)) continue;
+    const name = LAYER_DEFS.find((def) => def.key === key)?.name ?? key;
+    const classes = rows.filter((row) => (row.color[3] ?? 255) > 0);
+    // DRAFT wording (DR-177): the catalog name, the renderer's labels, the popup's issuer and outlookKey's odds sentence.
+    html +=
+      `<span class="map-key-scale" data-cpc-key="${escapeHtml(key)}"><strong class="map-key-scale-label">${escapeHtml(name)}</strong>` +
+      classes.map(({ label, color: [r, g, b] }) => swatchItem(`rgb(${r},${g},${b})`, label)).join('') +
+      '<span class="map-key-item">NOAA Climate Prediction Center</span></span>';
+    ariaLabel += ` NOAA Climate Prediction Center ${name} key, ${classes.map((row) => row.label).join(', ')}. An outlook is a shift in odds, not an observed condition.`;
+  }
+  return { html, ariaLabel };
 }
 
 /**

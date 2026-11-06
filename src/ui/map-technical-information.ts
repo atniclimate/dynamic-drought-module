@@ -95,6 +95,11 @@ const HEATRISK_COVERAGE_NOTE = 'National Weather Service HeatRisk covers the con
 // vocab-allow: verbatim NWS product names, quoted source data
 const NWS_HEAT_NAME_NOTE = 'Products issued under the former names Excessive Heat Warning and Excessive Heat Watch are drawn in the colours of Extreme Heat Warning and Extreme Heat Watch and share their rows in the key; a product\'s popup gives the name it was issued under.';
 const NWS_SNAPSHOT_NOTE = 'National Weather Service products are read about every five minutes; the time beside them in the key is when DDM last read them, not when a product was issued or when it is in effect.';
+// DRAFT wording (DR-019): the current-conditions sentence scoped to the horizon it is true at, and the binding's own
+// words ("CPC seasonal outlooks that ENSO informs, not an ENSO forecast", decided 2026-09-02) for the Season ahead outlooks, the issuer named in full.
+const ENSO_CURRENT_NOTE = 'At Current the map shows current conditions.';
+// vocab-allow: honesty disclaimer denying that the CPC seasonal outlooks drawn are an ENSO forecast (DR-019)
+const ENSO_SEASON_AHEAD_NOTE = 'At Season ahead the outlooks drawn are NOAA Climate Prediction Center seasonal outlooks that ENSO informs, not an ENSO forecast.';
 
 export function renderMapTechnicalInformation(open = false): string {
   return `<details class="impact-technical-information"${open ? ' open' : ''}>
@@ -119,7 +124,8 @@ export function renderMapTechnicalInformation(open = false): string {
     <p>${escapeHtml(NWS_HEAT_NAME_NOTE)}</p>
     <p>${escapeHtml(NWS_SNAPSHOT_NOTE)}</p>
     <h4>ENSO</h4>
-    <p>The map shows current conditions.</p>
+    <p>${escapeHtml(ENSO_CURRENT_NOTE)}</p>
+    <p>${escapeHtml(ENSO_SEASON_AHEAD_NOTE)}</p>
     <p>"It is inaccurate to label individual storms or events as a La Niña or El Niño event. Rather, these climate extremes affect the position and intensity of the jet streams, and the normal regions of high and low pressure, which in turn affect the average intensity and track of storms." <a href="https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/ensostuff/ensofaq.shtml" target="_blank" rel="noopener">NOAA Climate Prediction Center, ENSO FAQ</a></p>
     <h4>Ocean Temperature Anomaly</h4>
     <p>Surface temperature anomalies are shown for large lakes and inland seas as well as the ocean.</p>
