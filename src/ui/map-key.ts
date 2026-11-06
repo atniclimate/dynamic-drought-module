@@ -47,7 +47,8 @@ import { HAZARD_CLUSTERS } from '../config/clusters';
 import { DETAIL_SECTIONS } from '../config/detail-sections';
 import { ensureDetailSectionHosts } from './detail-section-hosts';
 import { NIFC_INCIDENT_PRESENTATION, USFS_WHP_PRESENTATION } from '../config/wildfire-presentation';
-import { FRAMINGS, framingMinimapProvenance } from '../config/framings';
+import { FRAMINGS } from '../config/framings';
+import { minimapProvenanceAt } from '../config/minimap-readings';
 import { getFraming, onFramingChange } from '../state/framing-store';
 import { getHazardCluster, getOceanFraming, onHazardClusterChange } from '../state/cluster-store';
 import { getViewMode, onViewModeChange } from '../state/view-mode';
@@ -1011,12 +1012,12 @@ function frameCoverageNote(): string {
   const def = framing !== null ? FRAMINGS[framing] : undefined;
   const coverage = def?.coverage;
   if (!landFramingGovernsCamera()) return '';
-  // Per mode, and before the coverage early return: arid-west and
-  // southeast-gulf have no coverage block but still earn the Wildfire, Heat
-  // and ENSO clauses.
+  // Per mode and horizon (the minimap's own reading table), and before the
+  // coverage early return: arid-west and southeast-gulf have no coverage
+  // block but still earn the Wildfire, Heat and ENSO clauses.
   // With no framing selected the key stays as quiet as it always was.
   const minimapProvenance = framing !== null && minimapInScene()
-    ? framingMinimapProvenance(framing, getHazardCluster())
+    ? minimapProvenanceAt(framing, getHazardCluster(), timeline.horizon)
     : undefined;
   if (coverage === undefined) return minimapProvenance?.replace(/\.\s*$/, '') ?? '';
 
