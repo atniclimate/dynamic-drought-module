@@ -1105,7 +1105,7 @@ function nwsActiveProductFeatures(json: unknown): unknown[] | null {
 
 /**
  * Query the National Weather Service active alerts at the clicked point and
- * surface any fire-weather or extreme-heat alerts as observations. When none
+ * surface any fire-weather or heat alerts as observations. When none
  * are active, that is reported plainly (a meaningful all-clear for the
  * foregrounded hazards).
  */
@@ -1142,8 +1142,10 @@ export async function fetchNwsAlertClaims(
       heat.length > 0
         // vocab-allow: reports upstream NWS alert products in effect
         ? `NWS active alerts at the selected point: ${heat.join(', ')}.`
+        // DRAFT wording: "heat alert", as in the presence sentence below; HEAT_EVENTS
+        // includes a Heat Advisory, so "extreme-heat" understated the absence.
         // vocab-allow: reports the absence of upstream NWS alert products
-        : 'NWS reports no active extreme-heat alert at the selected point.';
+        : 'NWS reports no active heat alert at the selected point.';
     // Whether an NWS alert is in effect at the point is a directly observed
     // fact (the alert names quoted are verbatim upstream product names).
     const alertShared = { source, sourceUrl, product: 'nws-alerts', evidence: 'observed', dates: { retrieved: todayIso() } } as const;
@@ -1199,8 +1201,9 @@ export async function fetchNwsAlertClaims(
         makeClaim({
           // This one sentence reports both hazards, so it keeps the lane's own
           // pair and stands in the Fire row and the Heat row alike.
+          // DRAFT wording: "heat alerts", the same HEAT_EVENTS set as `heatText`.
           // vocab-allow: reports the absence of NWS alert products, upstream data
-          text: 'No active red-flag fire-weather or extreme-heat alerts at this location right now (NWS).',
+          text: 'No active red-flag fire-weather or heat alerts at this location right now (NWS).',
           ...alertShared
         })
       );

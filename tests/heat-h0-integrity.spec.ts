@@ -584,6 +584,6 @@ test('an invalid NWS active-products body is unavailable, never an all-clear', a
     current.locator('.impact-hazard[data-hazard="drought"]')
   ).not.toContainText('The NWS alerts service did not respond.');
   await expect(current).not.toContainText(
-    'No active red-flag fire-weather or extreme-heat alerts'
+    'No active red-flag fire-weather or heat alerts'
   );
 });

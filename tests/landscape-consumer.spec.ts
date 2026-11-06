@@ -297,5 +297,7 @@ test('the full briefing renders dated ecoregion context and source vintages', as
   );
   await expect(landscape).toContainText('Artifact dated 2026-07-24');
   await expect(landscape).toContainText('Vintage: FY2025');
-  await expect(landscape.locator('.impact-landscape-source a')).toHaveCount(6);
+  // Terrain, FBFM40 and the WHP DOI; the machine endpoints show as labels
+  // (tests/landscape-source-links.test.mjs).
+  await expect(landscape.locator('.impact-landscape-source a')).toHaveCount(3);
 });
