@@ -145,16 +145,18 @@ const isAbort = (failure) => /ERR_ABORTED|aborted/i.test(failure ?? '');
 /**
  * Row shape: { key, status, settleMs, responses: [{url, status, bytes, ms,
  * count, cache?}], failed?: [{url, failure}], requests?: number,
- * shared?: number, finalStatus?: string }. `status` is the pill at the end
+ * shared?: number, reasons?: string[] }. `status` is the pill at the end
  * of the stability window (the verdict); `settleMs` is when it first went
- * terminal; `finalStatus` is set by the driver only when the pill changed
- * during the window.
+ * terminal; `reasons` holds errors the driver caught, and any one of them
+ * makes the row a breach whatever the pill last read. The returned reasons
+ * are the evaluator's own, for the driver to append.
  */
 export function evaluateLayerHealth(row, opts) {
   const expectsRecords = opts.expectsRecords.has(row.key);
   const failed = row.failed ?? [];
   const requests = row.requests ?? row.responses.length + failed.length;
-  if (row.status === 'zoom-in') {
+  const caught = (row.reasons?.length ?? 0) > 0;
+  if (row.status === 'zoom-in' && !caught) {
     return { verdict: 'skipped', reasons: ['zoom in to load at the default camera; no source query issued'] };
   }
   const reasons = [];
@@ -176,7 +178,7 @@ export function evaluateLayerHealth(row, opts) {
   if (row.status === 'ready' && requests > 0 && row.responses.length === 0 && failed.length === 0) {
     reasons.push(`${requests} request(s) issued but no response observed inside the window`);
   }
-  if (reasons.length) return { verdict: 'breach', reasons };
+  if (reasons.length || caught) return { verdict: 'breach', reasons };
   if (row.responses.length === 0 && failed.length === 0 && requests === 0 && row.status === 'ready') {
     return {
       verdict: 'skipped',
@@ -188,9 +190,6 @@ export function evaluateLayerHealth(row, opts) {
     };
   }
   if (row.status === 'degraded') reasons.push('live (partial): the runtime reported a partial answer (for example the ArcGIS transfer limit)');
-  if (row.finalStatus && row.finalStatus !== row.status) {
-    reasons.push(`pill moved from ${row.status} to ${row.finalStatus} during the stability window`);
-  }
   for (const r of row.responses) {
     if (r.ms > opts.warnSeconds * 1000) {
       reasons.push(`${seconds(r.ms)} for ${r.bytes.toLocaleString('en-US')} bytes, over the ${opts.warnSeconds} s warning line: ${r.url}`);

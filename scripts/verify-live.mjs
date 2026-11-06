@@ -210,7 +210,7 @@ function assetUrls(html, base) {
  */
 async function pagesSnapshot() {
   const rows = [];
-  let found = !args.expectSha;
+  let found = false;
   const stamp = { sha: null, nonce: null };
   const res = await get(args.base);
   const html = await res.text();
@@ -220,7 +220,7 @@ async function pagesSnapshot() {
       const r = await get(url);
       const body = await r.text();
       rows.push({ url, status: r.status, bytes: Buffer.byteLength(body, 'utf8') });
-      if (args.expectSha && body.includes(args.expectSha)) found = true;
+      if (body.includes(args.expectSha)) found = true;
       // The same two literals the boots read from <html>, taken straight
       // from the shipped script so the light check can name the live nonce
       // without a browser.

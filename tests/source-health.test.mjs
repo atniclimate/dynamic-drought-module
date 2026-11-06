@@ -73,8 +73,17 @@ test('evaluateLayerHealth: ok, slow, large, and aborted answers', () => {
   const aborted = { ...good, failed: [{ url: 'https://x/tile', failure: 'net::ERR_ABORTED' }], requests: 2 };
   assert.equal(evaluateLayerHealth(aborted, opts).verdict, 'warn');
   assert.match(evaluateLayerHealth(aborted, opts).reasons[0], /aborted by the runtime/);
-  const moved = { ...good, finalStatus: 'ready', status: 'ready' };
-  assert.equal(evaluateLayerHealth(moved, opts).verdict, 'ok');
+});
+
+test('evaluateLayerHealth: an error the driver caught after the pill went terminal is a breach', () => {
+  // The pill read `ready` (or `zoom-in`), then a later page.evaluate threw;
+  // the driver keeps that message in row.reasons and the verdict must not be ok.
+  const thrown = ['Execution context was destroyed'];
+  assert.deepEqual(evaluateLayerHealth({ ...good, reasons: thrown }, opts), { verdict: 'breach', reasons: [] });
+  const zoom = { key: 'hydrography', status: 'zoom-in', settleMs: 200, responses: [], failed: [], requests: 0, reasons: thrown };
+  assert.equal(evaluateLayerHealth(zoom, opts).verdict, 'breach');
+  const slow = { ...good, responses: [{ ...goodResponse, ms: 12_000 }], reasons: [] };
+  assert.equal(evaluateLayerHealth(slow, opts).verdict, 'warn', 'an empty driver list changes nothing');
 });
 
 test('evaluateLayerHealth: breaches from the terminal state', () => {

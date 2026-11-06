@@ -21,8 +21,8 @@
  *   6. an off-route path of an allowed host, a host that was never
  *      allow-listed, and a host the reviewed revision removed are all
  *      refused (rows 8, 9, 10);
- *   7. the relay hands back upstream bytes unchanged, on one static,
- *      cache-busted endpoint (row 12);
+ *   7. the relay hands back upstream bytes unchanged, on one static
+ *      bare-URL endpoint that may be the 60-second edge copy (row 12);
  *   8. the request bounds hold: an oversized url, an http target,
  *      credentials, a port, a duplicated and a missing url parameter
  *      (row 13);
