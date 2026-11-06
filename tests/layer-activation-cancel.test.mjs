@@ -149,6 +149,9 @@ const heat = await import('../src/layers/heatrisk.ts');
 const alerts = await import('../src/layers/nws-alerts.ts');
 const { HAZARD_CLUSTERS, HEAT_FIRE_ALERTS } = await import('../src/config/clusters.ts');
 const { getHazardCluster, setHazardCluster } = await import('../src/state/cluster-store.ts');
+const service = await import('../src/state/cluster-service.ts');
+// The alerts follow the person's hazard (cluster-service getSelectedHazard), which a store write reaches through the running service.
+service.initClusterService();
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const FIRST_TIME = 1_785_153_600_000;
@@ -582,12 +585,37 @@ test('NWS alerts: a mode change while on reads the new mode\'s products at once,
   setHazardCluster('heat');
   await settle();
   assert.deepEqual(askedFor(net.calls[2]), [...HEAT_FIRE_ALERTS.events]);
-  // A custom layer set commits Drought, which names the same heat and fire weather products.
+  // Drought names the same heat and fire weather products.
   setHazardCluster('drought');
   await settle();
   assert.equal(net.calls.length, 3, 'the same products are not read again');
   assert.equal(registry.getStatus('nws-alerts'), 'no-data');
   assert.equal(longTimers.size, 1, 'one five-minute refresh, not one per read');
+});
+
+test('NWS alerts: a custom set made from ENSO keeps the ENSO products, though its store claim reads Drought', async (t) => {
+  resetSeen();
+  inMode(t, 'enso');
+  const net = installFetch(wwaBody, { holdIndexes: [] });
+  const map = fakeMap();
+  t.after(() => {
+    net.release();
+    alerts.deactivate(map);
+    // The demotion left the store on Drought; put the service back on it too.
+    service.restoreCommittedCluster('drought', null);
+  });
+  globalThis.cancelModules.set('nws-alerts', alerts);
+  await harness(map, ['nws-alerts']).activate('nws-alerts');
+  await settle();
+  assert.deepEqual(askedFor(net.calls[0]), [...HAZARD_CLUSTERS.enso.alerts.events]);
+  // Hydrography on top: outside ENSO's composition, so the set demotes to custom and the store reads Drought.
+  service.reconcileClusterWithLayerIntent(new Set([...service.composeClusterIntent('enso'), 'nws-alerts', 'hydrography']));
+  await settle();
+  assert.equal(service.getCommittedSnapshot().cluster, 'custom', 'setup: a custom set');
+  assert.equal(getHazardCluster(), 'drought', 'setup: its store claim');
+  assert.equal(service.getSelectedHazard(), 'enso');
+  assert.equal(net.calls.length, 1, 'no heat and fire weather read replaces the ENSO products');
+  assert.equal(registry.getStatus('nws-alerts'), 'no-data');
 });
 
 /** One WWA feature in force for the next six hours, as the service answers it. */

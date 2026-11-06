@@ -1,12 +1,13 @@
 /**
  * National Weather Service (NWS) watch, warning and advisory polygons (E2).
  *
- * Renders the active NWS products the committed mode names
+ * Renders the active NWS products the person's mode names
  * (`HazardClusterDef.alerts`, src/config/clusters.ts): the heat and fire
- * weather products in Drought (every custom layer set), Wildfire and
- * Extreme Heat, the flood, storm, wind and coastal Warnings and Watches in
- * ENSO. A mode that names none gets no read, and a mode change while the
- * layer is on reads the new mode's products at once.
+ * weather products in Drought, Wildfire and Extreme Heat, the flood, storm,
+ * wind and coastal Warnings and Watches in ENSO. A custom layer set keeps the
+ * products of the mode it was made from (`getSelectedHazard`). A mode that
+ * names none gets no read, and a mode change while the layer is on reads the
+ * new mode's products at once.
  *
  * The read. Each WWA feature becomes one `NormalizedAlert` (event, onset,
  * ends, geometry, issuer); the map, the key, the popups, the place row, the
@@ -48,7 +49,7 @@ import type {
 import { HAZARD_CLUSTERS, HEAT_FIRE_ALERTS, type AlertSet } from '../config/clusters';
 import type { LayerActivation } from '../config/layers';
 import { URLS } from '../config/urls';
-import { getHazardCluster, onHazardClusterChange } from '../state/cluster-store';
+import { getSelectedHazard, onCommittedSnapshotChange } from '../state/cluster-service';
 import {
   NWS_ALERT_COLORS,
   NWS_ALERT_DEFAULT_COLOR,
@@ -138,9 +139,19 @@ let snapshotTruncated = false;
 let snapshotSet: AlertSet | null = null;
 let stopModeWatch: (() => void) | null = null;
 
-/** The products the committed mode names, or null: it names none. */
+/** The products the person's mode names, or null: it names none. A custom set keeps its mode's. */
 function modeAlertSet(): AlertSet | null {
-  return HAZARD_CLUSTERS[getHazardCluster()].alerts ?? null;
+  return HAZARD_CLUSTERS[getSelectedHazard()].alerts ?? null;
+}
+
+/** Follow the person's hazard: a publish that keeps it (a status, a custom set) is no mode change. */
+function watchMode(): () => void {
+  let followed = getSelectedHazard();
+  return onCommittedSnapshotChange(() => {
+    if (getSelectedHazard() === followed) return;
+    followed = getSelectedHazard();
+    onModeChange();
+  });
 }
 
 function reportStatus(state: Status): void {
@@ -591,7 +602,7 @@ export async function activate(
   document.removeEventListener('visibilitychange', onVisibilityChange);
   document.addEventListener('visibilitychange', onVisibilityChange);
   stopModeWatch?.();
-  stopModeWatch = onHazardClusterChange(onModeChange);
+  stopModeWatch = watchMode();
   emitSnapshot('loading');
   try {
     await refreshSnapshot(map, signal, true);

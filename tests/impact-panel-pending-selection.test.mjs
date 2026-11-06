@@ -63,8 +63,8 @@ globalThis.document = {
   getElementById: () => null
 };
 
-const { openImpactPanel, closeImpactPanel } = await import('../src/ui/impact-panel.ts');
-const { getPlaceSelection, setPlaceSelection } = await import('../src/state/place-selection.ts');
+const { openImpactPanel, closeImpactPanel, nextBriefingIntent } = await import('../src/ui/impact-panel.ts');
+const { getPlaceSelection, onPlaceSelectionChange, setPlaceSelection } = await import('../src/state/place-selection.ts');
 const { emphasizePlaces, initPlaceEmphasis } = await import('../src/state/place-emphasis.ts');
 
 const settle = () => new Promise((resolve) => setImmediate(resolve));
@@ -108,4 +108,32 @@ test('a door that opens a briefing while it loads keeps the place selected and l
   await settle();
   await settle();
   assert.deepEqual(globalThis.__runtimeOpens, [context], 'the runtime opened the place');
+});
+
+test('a newer briefing intent gives the held selection back at once, so the waiting open landing later cancels nothing of the newer one', async () => {
+  const context = {
+    kind: 'bia-reservation',
+    title: 'Fixture Nation',
+    properties: null,
+    lngLat: { lng: -120, lat: 46 },
+    regionKey: 'washington_state',
+    containing: { state: null, basis: 'none' }
+  };
+  // The runtime is warm from the case above; the open still waits on its containing state.
+  openImpactPanel(context);
+  assert.equal(getPlaceSelection()?.context, context, 'setup: the waiting open holds the place');
+  // A Tribal land area search (search-controller.ts locateBoundary): the intent first, then its in-flight query,
+  // which every selection change aborts.
+  nextBriefingIntent();
+  assert.equal(getPlaceSelection(), null, 'the superseded open gives its selection back at the declaration');
+  const locate = new AbortController();
+  const stop = onPlaceSelectionChange(() => locate.abort());
+  try {
+    await settle();
+    await settle();
+    assert.equal(locate.signal.aborted, false, 'the superseded open landing does not cancel the newer query');
+    assert.equal(globalThis.__runtimeOpens.length, 1, 'and never paints');
+  } finally {
+    stop();
+  }
 });

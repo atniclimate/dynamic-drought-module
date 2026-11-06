@@ -18,7 +18,7 @@ const { NWS_ALERT_COLORS, NWS_ALERT_LEGEND } = await import('../src/config/palet
 const { getHazardCluster, setHazardCluster } = await import('../src/state/cluster-store.ts');
 
 // The heat and fire weather query exactly as the layer sent it before modes named their own products
-// (recorded from 10c9690, 2026-11-05): heat, wildfire and every custom layer set must keep sending it.
+// (recorded from 10c9690, 2026-11-05): heat, wildfire, drought and a custom set made from one of them must keep sending it.
 const HEAT_FIRE_QUERY =
   'https://mapservices.weather.noaa.gov/eventdriven/rest/services/WWA/watch_warn_adv/MapServer/1/query?where=prod_type+IN+%28%27Extreme+Heat+Warning%27%2C%27Excessive+Heat+Warning%27%2C%27Extreme+Heat+Watch%27%2C%27Excessive+Heat+Watch%27%2C%27Heat+Advisory%27%2C%27Red+Flag+Warning%27%2C%27Fire+Weather+Watch%27%29&outFields=prod_type%2Conset%2Cends%2Cexpiration%2Cwfo&outSR=4326&returnGeometry=true&f=geojson&maxAllowableOffset=0.002&geometryPrecision=5';
 
@@ -41,7 +41,7 @@ function askedFor(url) {
   return listed[1].split(',').map((quoted) => quoted.replace(/^'|'$/g, ''));
 }
 
-test('heat, wildfire and every custom layer set (Drought) send the heat and fire weather query byte for byte', () => {
+test('heat, wildfire and drought (and a custom set made from one of them) send the heat and fire weather query byte for byte', () => {
   for (const mode of ['heat', 'wildfire', 'drought']) {
     assert.equal(HAZARD_CLUSTERS[mode].alerts, HEAT_FIRE_ALERTS, mode);
     assert.equal(buildQueryUrl(HAZARD_CLUSTERS[mode].alerts.events), HEAT_FIRE_QUERY, mode);
