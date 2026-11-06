@@ -480,18 +480,18 @@ test('NWS alerts: a normal activation is unchanged (one read, then the source, l
   assert.equal(longTimers.size, 1, 'the five-minute refresh is scheduled as before');
 });
 
-for (const variable of ['precipitation', 'temperature']) {
+for (const key of ['cpc-seasonal-precip', 'cpc-seasonal-temp', 'cpc-610-precip', 'cpc-610-temp', 'cpc-814-precip', 'cpc-814-temp']) {
   for (const held of [false, true]) {
-    test(`CPC ${variable}: real controller Off ${held ? 'aborts held headers and suppresses late drawing' : 'cleans its completed source and registry'}`, async (t) => {
-      const { cpcSeasonalBody } = await import('./cpc-seasonal-polygon-fixtures.mjs');
-      const key = variable === 'precipitation' ? 'cpc-seasonal-precip' : 'cpc-seasonal-temp';
+    test(`CPC ${key}: real controller Off ${held ? 'aborts held headers and suppresses late drawing' : 'cleans its completed source and registry'}`, async (t) => {
+      const { cpcExtendedPolygons, cpcSeasonalBody } = await import('./cpc-seasonal-polygon-fixtures.mjs');
       // The registered LayerDef and the shipped module with its admitted limits.
       assert.ok(LAYER_DEFS.some(row => row.key === key));
       const module = await import(`../src/layers/${key}.ts`);
       globalThis.cancelModules.set(key, module);
       resetSeen();
       const originalFetch = globalThis.fetch;
-      const net = installFetch(() => JSON.stringify(cpcSeasonalBody('polygons')),
+      const body = key.startsWith('cpc-seasonal-') ? cpcSeasonalBody('polygons') : cpcExtendedPolygons();
+      const net = installFetch(() => JSON.stringify(body),
         { holdIndexes: held ? [0] : [], ignoreAbort: held });
       const map = fakeMap();
       t.after(() => {

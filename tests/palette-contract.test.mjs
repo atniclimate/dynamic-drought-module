@@ -159,6 +159,7 @@ const CLASSIFICATION = {
     ENSO_INDEX_GUIDE_COLORS: 'S13 product-specific CPC ONI HTML and RONI CSS, verified 2026-10-07',
     CPC_OUTLOOK_TERCILE_COLORS: 'S14 CPC exact cat/prob renderer rows, verified 2026-10-07',
     CPC_SEASONAL_COLORS: 'D6 CPC seasonal Lead 1 exact cat/prob renderer RGBA and labels, verified 2026-10-07',
+    CPC_EXTENDED_COLORS: 'CPC 6-10 and 8-14 day exact cat/prob renderer RGBA, labels and outline widths, verified 2026-11-06',
     INDEX_SERIES_COLORS: 'DDM measured-index display transform',
     ECOREGION_COLORS: 'DDM geographic context',
     DROUGHT_COLORS: 'S8 CPC drought outlook, source receipt 2026-10-07',

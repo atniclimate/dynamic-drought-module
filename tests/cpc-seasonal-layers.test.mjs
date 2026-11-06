@@ -3,21 +3,21 @@ import { existsSync } from 'node:fs';
 import { registerHooks } from 'node:module';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { cpcSeasonalPolygons } from './cpc-seasonal-polygon-fixtures.mjs';
+import { CPC_EXTENDED_CLASSES, CPC_EXTENDED_RENDERER, cpcExtendedPolygons, cpcSeasonalPolygons } from './cpc-seasonal-polygon-fixtures.mjs';
 
 /**
- * The CPC seasonal outlook maps in ENSO mode, against their acceptance
- * sentence (2026-09-25, amended 2026-09-26): the two shipped layers resolve
- * with an issuer and a clock, a failed read is unavailable, the two outlooks
- * on together keep two legends and no combined class, and an in-session
- * entry into ENSO opens on Season ahead while a link without `horizon=`
- * stays Current. The DDM-P16-T09 composite the sentence also names is not
- * built, so its clause is proven between the two outlooks instead.
+ * The CPC outlook maps in ENSO mode. The seasonal pair answers its acceptance
+ * sentence (2026-09-25, amended 2026-09-26); the 6-10 and 8-14 day four are
+ * built to the same terms (no sentence of their own was ratified): each
+ * shipped layer resolves with an issuer and a clock, a failed read is
+ * unavailable, any of them on together keep their own legends and no combined
+ * class, and an in-session entry into ENSO opens on Season ahead while a link
+ * keeps its own horizon. The DDM-P16-T09 composite the seasonal sentence also
+ * names is not built, so its clause is proven between the outlooks instead.
  *
- * The REAL shipped modules (src/layers/cpc-seasonal-precip.ts and
- * -temp.ts), the real legend registry over a small fake legend panel, and
- * the real cluster service with the sidebar's reconcile wiring. `fetch` is
- * stubbed: no live host decides a result.
+ * The REAL shipped modules (src/layers/cpc-*.ts), the real legend registry
+ * over a small fake legend panel, and the real cluster service with the
+ * sidebar's reconcile wiring. `fetch` is stubbed: no live host decides a result.
  */
 
 registerHooks({
@@ -55,19 +55,32 @@ globalThis.document = {
 const { LAYER_DEFS, getLayerDef } = await import('../src/config/layers.ts');
 const { PRODUCTS } = await import('../src/config/products.ts');
 const { URLS } = await import('../src/config/urls.ts');
-const { HAZARD_CLUSTERS, HAZARD_CLUSTER_KEYS } = await import('../src/config/clusters.ts');
+const { HAZARD_CLUSTERS, HAZARD_CLUSTER_KEYS, TEMPORAL_HORIZON_KEYS } = await import('../src/config/clusters.ts');
 const { MOBILE_HAZARD_PRESETS } = await import('../src/config/presets.ts');
-const { CPC_SEASONAL_COLORS } = await import('../src/config/palette.ts');
+const { CPC_EXTENDED_COLORS, CPC_SEASONAL_COLORS } = await import('../src/config/palette.ts');
 const { registry } = await import('../src/state/registry.ts');
 const { resolveStatusPillText } = await import('../src/ui/island/pill-text.ts');
+const { clusterHorizonReason } = await import('../src/ui/horizon-reason.ts');
 const { CPC_SEASONAL_PRODUCTION } = await import('../src/layers/cpc-seasonal-outlook.ts');
-const precip = await import('../src/layers/cpc-seasonal-precip.ts');
-const temp = await import('../src/layers/cpc-seasonal-temp.ts');
 
+const SEASONAL_FIELDS = 'cat,prob,valid_seas,fcst_date';
+const EXTENDED_FIELDS = 'cat,prob,fcst_date,start_date,end_date';
 const LAYERS = [
-  { key: 'cpc-seasonal-precip', variable: 'precipitation', module: precip, service: 'cpc_sea_precip_outlk', product: 'cpc-seasonal-precip', name: 'Seasonal Precipitation Outlook' },
-  { key: 'cpc-seasonal-temp', variable: 'temperature', module: temp, service: 'cpc_sea_temp_outlk', product: 'cpcSeasonalTemp', name: 'Seasonal Temperature Outlook' }
+  { key: 'cpc-seasonal-precip', variable: 'precipitation', seasonal: true, service: 'cpc_sea_precip_outlk', layer: 0, product: 'cpc-seasonal-precip', lane: null, name: 'Seasonal Precipitation Outlook' },
+  { key: 'cpc-seasonal-temp', variable: 'temperature', seasonal: true, service: 'cpc_sea_temp_outlk', layer: 0, product: 'cpcSeasonalTemp', lane: 'cpcSeasonalTemp', name: 'Seasonal Temperature Outlook' },
+  { key: 'cpc-610-precip', variable: 'precipitation', seasonal: false, service: 'cpc_6_10_day_outlk', layer: 1, product: 'cpc-610-precip', lane: 'cpcExtended', name: '6-10 Day Precipitation Outlook' },
+  { key: 'cpc-610-temp', variable: 'temperature', seasonal: false, service: 'cpc_6_10_day_outlk', layer: 0, product: 'cpc-610-temp', lane: 'cpcExtended', name: '6-10 Day Temperature Outlook' },
+  { key: 'cpc-814-precip', variable: 'precipitation', seasonal: false, service: 'cpc_8_14_day_outlk', layer: 1, product: 'cpc-814-precip', lane: 'cpcExtended', name: '8-14 Day Precipitation Outlook' },
+  { key: 'cpc-814-temp', variable: 'temperature', seasonal: false, service: 'cpc_8_14_day_outlk', layer: 0, product: 'cpc-814-temp', lane: 'cpcExtended', name: '8-14 Day Temperature Outlook' }
 ];
+for (const layer of LAYERS) {
+  layer.module = await import(`../src/layers/${layer.key}.ts`);
+  layer.path = `/vector/rest/services/outlooks/${layer.service}/MapServer/${layer.layer}/query`;
+  layer.issuer = (layer.seasonal ? CPC_SEASONAL_COLORS : CPC_EXTENDED_COLORS)[layer.variable];
+}
+const byKey = (key) => LAYERS.find((layer) => layer.key === key);
+const layerFor = (url) => LAYERS.find((layer) => new URL(url).pathname === layer.path);
+const day = (time) => new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }).format(time);
 
 function fakeMap() {
   const sources = new Map(), layers = new Map();
@@ -80,9 +93,9 @@ function fakeMap() {
   };
 }
 
-/** One body per service; `clock` restamps every feature's issuer clock. */
-function bodyFor(clock) {
-  const body = cpcSeasonalPolygons();
+/** One body per layer: its own renderer's classes; `clock` restamps every feature's issuer clock. */
+function bodyFor(layer, clock) {
+  const body = layer.seasonal ? cpcSeasonalPolygons() : cpcExtendedPolygons();
   if (clock) for (const feature of body.features) Object.assign(feature.properties, clock);
   return body;
 }
@@ -105,58 +118,74 @@ function legendRows(html) {
 const clockText = (html) => [...html.matchAll(/<p class="legend-note" data-cpc-clock>([^<]*)<\/p>/g)].map((m) => m[1]);
 const section = (key) => sections.find((entry) => entry.dataset.legend === key);
 
-test('both outlooks are registered layers, each a products.ts entry with an issuer and a clock', () => {
+test('every outlook is a registered layer, each a products.ts entry with an issuer, a clock and its lane', () => {
   for (const layer of LAYERS) {
     const def = getLayerDef(layer.key);
     assert.ok(def, `${layer.key} is registered`);
     assert.equal(def.name, layer.name);
     assert.equal(def.source, 'NOAA CPC · MapServer');
-    // An overlay: the SST surface stays on beside it, and the two stack.
+    // An overlay: the SST surface stays on beside it, and any two stack.
     assert.equal(def.role, 'event');
     assert.equal(def.defaultOn, false);
     assert.equal(def.product, layer.product);
     const product = PRODUCTS[layer.product];
     assert.equal(product.layerKey, layer.key);
+    assert.equal(product.lane, layer.lane);
     assert.match(product.issuer, /\S/);
     assert.equal(product.clock.register, 'outlook');
-    assert.match(product.clock.cadence, /\S/);
+    assert.equal(product.clock.cadence, layer.seasonal ? 'monthly' : 'daily');
     assert.ok(URLS[product.endpointKey].endsWith(`/outlooks/${layer.service}/MapServer`), product.endpointKey);
     // The shipped module is the LayerModule namespace the chunk loader returns.
     for (const name of ['activate', 'deactivate', 'cancelActivation']) assert.equal(typeof layer.module[name], 'function', name);
     assert.deepEqual([...layer.module.fadeLayerIds], [`${layer.key}-fill`, `${layer.key}-line`]);
   }
+  // The briefing lane's own product still names the two day-range services.
+  assert.equal(PRODUCTS.cpcExtended.lane, 'cpcExtended');
   assert.deepEqual(CPC_SEASONAL_PRODUCTION, {
     limits: { timeoutMs: 10_000, maxDecodedBytes: 1_000_000, maxFeatures: 200, maxAllowableOffset: 0.05 },
     fillOpacity: 0.48
   });
 });
 
-test('the national request is the measured generalized Lead 1 query, one per outlook', async () => {
-  await withFetch(() => new Response(JSON.stringify(bodyFor())), async (urls) => {
+test('the day-range palette is the two services\' renderers verbatim, outline widths included', () => {
+  for (const [variable, fixture] of [['precipitation', 'precip'], ['temperature', 'temp']]) {
+    const rows = CPC_EXTENDED_COLORS[variable];
+    assert.deepEqual(rows.map(({ cat, prob, label }) => ({ cat, prob, label })), CPC_EXTENDED_CLASSES);
+    assert.deepEqual(rows.map((row) => [...row.color]), CPC_EXTENDED_RENDERER[fixture].colors);
+    assert.deepEqual(rows.map((row) => row.outline), CPC_EXTENDED_RENDERER[fixture].widths);
+    assert.ok(!rows.some((row) => row.cat === 'EC'), 'the day-range renderers draw no Equal Chances class');
+  }
+});
+
+test('each national request is the measured generalized query of its own REST layer', async () => {
+  await withFetch((url) => new Response(JSON.stringify(bodyFor(layerFor(url)))), async (urls) => {
     for (const layer of LAYERS) {
       const map = fakeMap();
       await layer.module.activate(map);
+      assert.equal(registry.getStatus(layer.key), 'ready', layer.key);
       layer.module.deactivate(map);
     }
-    assert.deepEqual(urls.map((u) => u.pathname), LAYERS.map((l) => `/vector/rest/services/outlooks/${l.service}/MapServer/0/query`));
-    for (const url of urls) {
+    assert.deepEqual(urls.map((u) => u.pathname), LAYERS.map((l) => l.path));
+    for (const [i, url] of urls.entries()) {
       assert.equal(url.searchParams.get('where'), '1=1');
       assert.equal(url.searchParams.get('returnGeometry'), 'true');
       assert.equal(url.searchParams.get('maxAllowableOffset'), '0.05');
-      assert.equal(url.searchParams.get('outFields'), 'cat,prob,valid_seas,fcst_date');
+      assert.equal(url.searchParams.get('outFields'), LAYERS[i].seasonal ? SEASONAL_FIELDS : EXTENDED_FIELDS);
       assert.equal(url.searchParams.has('geometry'), false, 'national, not a point read');
     }
   });
 });
 
 test('a failed read is unavailable with nothing drawn and no key, never an empty outlook', async () => {
-  const oversize = bodyFor();
-  oversize.features[0].properties.padding = 'x'.repeat(CPC_SEASONAL_PRODUCTION.limits.maxDecodedBytes);
   const failures = {
     'HTTP 500': () => new Response('upstream failure', { status: 500 }),
     'ArcGIS error envelope': () => new Response(JSON.stringify({ error: { code: 500, message: 'Fixture failure' } })),
     'network rejection': () => { throw new TypeError('Failed to fetch'); },
-    'body over the decoded cap': () => new Response(JSON.stringify(oversize))
+    'body over the decoded cap': (url) => {
+      const oversize = bodyFor(layerFor(url));
+      oversize.features[0].properties.padding = 'x'.repeat(CPC_SEASONAL_PRODUCTION.limits.maxDecodedBytes);
+      return new Response(JSON.stringify(oversize));
+    }
   };
   for (const [name, answer] of Object.entries(failures)) {
     for (const layer of LAYERS) {
@@ -172,88 +201,108 @@ test('a failed read is unavailable with nothing drawn and no key, never an empty
     }
   }
   // The issuer answering with no polygons is a different state, never a failure.
-  await withFetch(() => new Response(JSON.stringify({ type: 'FeatureCollection', features: [] })), async () => {
-    const map = fakeMap();
-    await precip.activate(map);
-    assert.equal(registry.getStatus('cpc-seasonal-precip'), 'no-data');
-    assert.equal(section('cpc-seasonal-precip'), undefined);
-    precip.deactivate(map);
-  });
+  for (const key of ['cpc-seasonal-precip', 'cpc-814-precip']) {
+    await withFetch(() => new Response(JSON.stringify({ type: 'FeatureCollection', features: [] })), async () => {
+      const map = fakeMap();
+      await byKey(key).module.activate(map);
+      assert.equal(registry.getStatus(key), 'no-data');
+      assert.equal(section(key), undefined);
+      byKey(key).module.deactivate(map);
+    });
+  }
 });
 
-test('both outlooks on together keep two legends, each its own 17 issuer classes and clock, and no combined class', async () => {
+test('all six outlooks on together keep six legends, each its own issuer classes and clock, and no combined class', async () => {
   const clocks = {
     cpc_sea_precip_outlk: { valid_seas: 'NDJ 2026-2027', fcst_date: Date.UTC(2026, 9, 15) },
-    cpc_sea_temp_outlk: { valid_seas: 'DJF 2026-2027', fcst_date: Date.UTC(2026, 10, 19) }
+    cpc_sea_temp_outlk: { valid_seas: 'DJF 2026-2027', fcst_date: Date.UTC(2026, 10, 19) },
+    cpc_6_10_day_outlk: { fcst_date: Date.UTC(2026, 10, 5), start_date: Date.UTC(2026, 10, 11), end_date: Date.UTC(2026, 10, 15) },
+    cpc_8_14_day_outlk: { fcst_date: Date.UTC(2026, 10, 6), start_date: Date.UTC(2026, 10, 14), end_date: Date.UTC(2026, 10, 20) }
   };
-  await withFetch((url) => new Response(JSON.stringify(bodyFor(url.includes('precip') ? clocks.cpc_sea_precip_outlk : clocks.cpc_sea_temp_outlk))), async () => {
+  const clockLine = (layer) => {
+    const own = clocks[layer.service];
+    return layer.seasonal
+      ? `Valid Season ${own.valid_seas} · Forecast Date ${day(own.fcst_date)}`
+      : `Start Date ${day(own.start_date)} · End Date ${day(own.end_date)} · Forecast Date ${day(own.fcst_date)}`;
+  };
+  await withFetch((url) => new Response(JSON.stringify(bodyFor(layerFor(url), clocks[layerFor(url).service]))), async () => {
     const map = fakeMap();
-    await precip.activate(map);
-    await temp.activate(map);
-    assert.equal(registry.getStatus('cpc-seasonal-precip'), 'ready');
-    assert.equal(registry.getStatus('cpc-seasonal-temp'), 'ready');
+    for (const layer of LAYERS) await layer.module.activate(map);
+    for (const layer of LAYERS) assert.equal(registry.getStatus(layer.key), 'ready', layer.key);
     assert.equal(panel.hidden, false);
-    assert.deepEqual(sections.map((entry) => entry.dataset.legend), ['cpc-seasonal-precip', 'cpc-seasonal-temp']);
+    assert.deepEqual(sections.map((entry) => entry.dataset.legend), LAYERS.map((layer) => layer.key));
     for (const layer of LAYERS) {
       const html = section(layer.key).innerHTML;
       assert.match(html, new RegExp(`<h3 class="legend-section-title">${layer.name}</h3>`));
       const rows = legendRows(html);
-      const issuer = CPC_SEASONAL_COLORS[layer.variable];
-      // The renderer's 17 classes, in its order, labels verbatim, nothing else.
-      assert.equal(rows.length, 17);
-      assert.equal((html.match(/<li/g) ?? []).length, 17);
-      assert.deepEqual(rows.map((row) => row.label), issuer.map((row) => row.label));
-      assert.deepEqual(rows.map((row) => row.pair), issuer.map((row) => `${row.cat},${row.prob}`));
+      // The renderer's classes, in its order, labels verbatim, nothing else.
+      assert.equal(rows.length, layer.seasonal ? 17 : 15);
+      assert.equal((html.match(/<li/g) ?? []).length, rows.length);
+      assert.deepEqual(rows.map((row) => row.label), layer.issuer.map((row) => row.label));
+      assert.deepEqual(rows.map((row) => row.pair), layer.issuer.map((row) => `${row.cat},${row.prob}`));
       // Each swatch is its own issuer colour at the map's fill alpha, inside the issuer outline.
-      assert.deepEqual(rows.map((row) => row.fill), issuer.map(({ color: [r, g, b, a] }) => `rgba(${r},${g},${b},${(a / 255) * 0.48})`));
+      assert.deepEqual(rows.map((row) => row.fill), layer.issuer.map(({ color: [r, g, b, a] }) => `rgba(${r},${g},${b},${(a / 255) * 0.48})`));
       assert.ok(rows.every((row) => row.outline === 'rgb(110,110,110)'));
-      // Equal Chances: the issuer's transparent fill inside that outline.
-      const ec = rows.find((row) => row.label === 'Equal Chances');
-      assert.match(ec.fill, /,0\)$/);
-      // Keyed by this outlook's own valid season and product date, never the other's.
-      const own = clocks[layer.service];
-      assert.deepEqual(clockText(html), [`Valid Season ${own.valid_seas} · Forecast Date ${new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }).format(own.fcst_date)}`]);
-      // The fill reads only this outlook's source and matches only its own 17 pairs.
+      if (layer.seasonal) assert.match(rows.find((row) => row.label === 'Equal Chances').fill, /,0\)$/);
+      // Keyed by this outlook's own issuer clock fields, never another's.
+      assert.deepEqual(clockText(html), [clockLine(layer)]);
+      for (const other of LAYERS) {
+        if (other.service !== layer.service) assert.ok(!clockText(html).includes(clockLine(other)), `${layer.key} names ${other.key}'s clock`);
+      }
+      // The fill reads only this outlook's source and matches only its own pairs.
       const fill = map.layers.get(`${layer.key}-fill`);
       assert.equal(fill.source, layer.key);
       assert.equal(fill.paint['fill-opacity'], 0.48);
-      const match = fill.paint['fill-color'];
-      const pairs = match.slice(2, -1).filter((_, i) => i % 2 === 0);
-      assert.deepEqual(pairs, issuer.map((row) => `${row.cat},${row.prob}`));
-      assert.deepEqual(map.layers.get(`${layer.key}-line`).paint, { 'line-color': 'rgb(110,110,110)', 'line-width': 1 });
+      const pairs = fill.paint['fill-color'].slice(2, -1).filter((_, i) => i % 2 === 0);
+      assert.deepEqual(pairs, layer.issuer.map((row) => `${row.cat},${row.prob}`));
+      // The outline is the renderer's colour at its own width per class.
+      const line = map.layers.get(`${layer.key}-line`);
+      assert.equal(line.source, layer.key);
+      assert.equal(line.paint['line-color'], 'rgb(110,110,110)');
+      const width = line.paint['line-width'];
+      if (layer.seasonal) assert.equal(width, 1);
+      else assert.deepEqual(width.slice(2), [...layer.issuer.flatMap((row) => [`${row.cat},${row.prob}`, row.outline]), 1]);
     }
-    // Two products, two clocks: the colours differ where the issuer's do, and no
-    // section names the other's season.
-    assert.doesNotMatch(section('cpc-seasonal-precip').innerHTML, /DJF 2026-2027/);
-    assert.doesNotMatch(section('cpc-seasonal-temp').innerHTML, /NDJ 2026-2027/);
     // Off again: each takes only its own key away.
-    temp.deactivate(map);
-    assert.deepEqual(sections.map((entry) => entry.dataset.legend), ['cpc-seasonal-precip']);
-    precip.deactivate(map);
+    byKey('cpc-610-temp').module.deactivate(map);
+    assert.deepEqual(sections.map((entry) => entry.dataset.legend), LAYERS.map((layer) => layer.key).filter((key) => key !== 'cpc-610-temp'));
+    for (const layer of LAYERS) layer.module.deactivate(map);
     assert.equal(sections.length, 0);
     assert.equal(panel.hidden, true);
   });
 });
 
 test('polygons stamped with two issuer clocks list both, never one joined issuance', async () => {
-  const body = bodyFor({ valid_seas: 'NDJ 2026-2027', fcst_date: Date.UTC(2026, 9, 15) });
+  const body = bodyFor(byKey('cpc-seasonal-precip'), { valid_seas: 'NDJ 2026-2027', fcst_date: Date.UTC(2026, 9, 15) });
   Object.assign(body.features[0].properties, { valid_seas: 'DJF 2026-2027', fcst_date: null });
-  await withFetch(() => new Response(JSON.stringify(body)), async () => {
+  const days = bodyFor(byKey('cpc-814-precip'));
+  Object.assign(days.features[0].properties, { start_date: Date.UTC(2026, 10, 13), end_date: Date.UTC(2026, 10, 19) });
+  await withFetch((url) => new Response(JSON.stringify(layerFor(url).seasonal ? body : days)), async () => {
     const map = fakeMap();
-    await precip.activate(map);
+    await byKey('cpc-seasonal-precip').module.activate(map);
+    await byKey('cpc-814-precip').module.activate(map);
     assert.deepEqual(clockText(section('cpc-seasonal-precip').innerHTML), ['Valid Season DJF 2026-2027', 'Valid Season NDJ 2026-2027 · Forecast Date Oct 15, 2026']);
-    precip.deactivate(map);
+    assert.deepEqual(clockText(section('cpc-814-precip').innerHTML), [
+      'Start Date Nov 13, 2026 · End Date Nov 19, 2026 · Forecast Date Nov 5, 2026',
+      'Start Date Nov 11, 2026 · End Date Nov 15, 2026 · Forecast Date Nov 5, 2026'
+    ]);
+    for (const layer of LAYERS) layer.module.deactivate(map);
   });
 });
 
-test('ENSO Season ahead turns the precipitation outlook on over the SST and storms; temperature is the mode\'s, off until chosen', () => {
+test('ENSO draws the 8-14 day precipitation outlook at Weeks ahead and the seasonal one at Season ahead; the other four are the mode\'s, off until chosen', () => {
   const enso = HAZARD_CLUSTERS.enso;
+  assert.deepEqual(enso.recipes.current, ['sst-anomaly', 'tropical-cyclones']);
+  assert.deepEqual(enso.recipes['weeks-ahead'], ['sst-anomaly', 'cpc-814-precip', 'tropical-cyclones']);
   assert.deepEqual(enso.recipes['season-ahead'], ['sst-anomaly', 'cpc-seasonal-precip', 'tropical-cyclones']);
-  for (const horizon of ['current', 'weeks-ahead']) assert.ok(!enso.recipes[horizon].includes('cpc-seasonal-precip'));
-  assert.deepEqual(enso.optionalLayers, ['cpc-seasonal-temp']);
+  assert.deepEqual(enso.optionalLayers, ['cpc-seasonal-temp', 'cpc-610-precip', 'cpc-610-temp', 'cpc-814-temp']);
   for (const key of HAZARD_CLUSTER_KEYS) {
-    for (const recipe of Object.values(HAZARD_CLUSTERS[key].recipes)) assert.ok(!recipe.includes('cpc-seasonal-temp'));
+    for (const recipe of Object.values(HAZARD_CLUSTERS[key].recipes)) {
+      for (const optional of enso.optionalLayers) assert.ok(!recipe.includes(optional), `${key} recipe holds ${optional}`);
+    }
   }
+  // Every ENSO horizon is now its own map, so no chip of it is a duplicate.
+  for (const horizon of TEMPORAL_HORIZON_KEYS) assert.equal(clusterHorizonReason('enso', horizon), null, horizon);
   // Every mode-level read is N-mode: only ENSO declares an entry horizon today.
   assert.deepEqual(HAZARD_CLUSTER_KEYS.filter((key) => HAZARD_CLUSTERS[key].entryHorizon), ['enso']);
   assert.equal(enso.entryHorizon, 'season-ahead');
@@ -261,7 +310,7 @@ test('ENSO Season ahead turns the precipitation outlook on over the SST and stor
   const rail = MOBILE_HAZARD_PRESETS.find((preset) => preset.mode === 'enso');
   assert.deepEqual(rail.layers, ['sst-anomaly', 'cpc-seasonal-precip', 'aiannh']);
   assert.deepEqual(MOBILE_HAZARD_PRESETS.map((preset) => preset.mode).sort(), [...HAZARD_CLUSTER_KEYS].sort());
-  assert.ok(LAYER_DEFS.filter((def) => def.key.startsWith('cpc-seasonal')).every((def) => def.role !== 'surface'));
+  assert.ok(LAYER_DEFS.filter((def) => def.key.startsWith('cpc-')).every((def) => def.role !== 'surface'));
 });
 
 test('an in-session entry into ENSO commits Season ahead; a re-press, an ocean change and a horizon change keep the person\'s horizon; a link keeps its own', async () => {
@@ -303,18 +352,29 @@ test('an in-session entry into ENSO commits Season ahead; a re-press, an ocean c
     assert.equal(snap.horizon, 'season-ahead');
     assert.equal(timeline.horizon, 'season-ahead');
     assert.ok(snap.intendedKeys.has('cpc-seasonal-precip') && snap.intendedKeys.has('sst-anomaly'));
-    assert.ok(!snap.intendedKeys.has('cpc-seasonal-temp'));
+    assert.ok(!snap.intendedKeys.has('cpc-seasonal-temp') && !snap.intendedKeys.has('cpc-814-precip'));
     assert.ok(registry.getActiveKeys().has('cpc-seasonal-precip'));
+    // Weeks ahead: the 8-14 day precipitation outlook replaces the seasonal one.
+    service.requestHorizon('weeks-ahead');
+    snap = service.getCommittedSnapshot();
+    assert.equal(snap.horizon, 'weeks-ahead');
+    assert.ok(snap.intendedKeys.has('cpc-814-precip') && !snap.intendedKeys.has('cpc-seasonal-precip'));
+    assert.ok(registry.getActiveKeys().has('cpc-814-precip') && !registry.getActiveKeys().has('cpc-seasonal-precip'));
+    // Another day-range outlook on top keeps the mode pressed.
+    requestLayerOn('cpc-610-temp');
+    snap = service.getCommittedSnapshot();
+    assert.equal(snap.cluster, 'enso');
+    assert.ok(snap.intendedKeys.has('cpc-610-temp') && snap.intendedKeys.has('cpc-814-precip'));
     // The person's own horizon inside ENSO holds through a re-press and an ocean change.
     service.requestHorizon('current');
     assert.equal(service.getCommittedSnapshot().horizon, 'current');
-    assert.ok(!registry.getActiveKeys().has('cpc-seasonal-precip'));
+    assert.ok(!registry.getActiveKeys().has('cpc-814-precip') && !registry.getActiveKeys().has('cpc-610-temp'));
     service.requestCluster('enso');
     service.requestOcean('pacific');
     snap = service.getCommittedSnapshot();
     assert.equal(snap.horizon, 'current');
-    assert.ok(!snap.intendedKeys.has('cpc-seasonal-precip'));
-    // The temperature outlook on top keeps the mode pressed.
+    assert.ok(!snap.intendedKeys.has('cpc-seasonal-precip') && !snap.intendedKeys.has('cpc-814-precip'));
+    // The seasonal temperature outlook on top keeps the mode pressed.
     service.requestHorizon('season-ahead');
     requestLayerOn('cpc-seasonal-temp');
     snap = service.getCommittedSnapshot();
@@ -340,8 +400,11 @@ test('an in-session entry into ENSO commits Season ahead; a re-press, an ocean c
   const old = boot('?cluster=enso');
   assert.equal(old.horizon, 'current');
   assert.ok(old.layers.has('sst-anomaly'));
-  assert.ok(!old.layers.has('cpc-seasonal-precip'));
+  assert.ok(!old.layers.has('cpc-seasonal-precip') && !old.layers.has('cpc-814-precip'));
   const shared = boot('?cluster=enso&horizon=season-ahead');
   assert.equal(shared.horizon, 'season-ahead');
   assert.ok(shared.layers.has('cpc-seasonal-precip'));
+  const weeks = boot('?cluster=enso&horizon=weeks-ahead');
+  assert.equal(weeks.horizon, 'weeks-ahead');
+  assert.ok(weeks.layers.has('cpc-814-precip') && !weeks.layers.has('cpc-seasonal-precip'));
 });

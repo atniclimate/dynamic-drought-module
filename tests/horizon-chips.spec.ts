@@ -371,15 +371,14 @@ async function stubWildfireProducts(page: Page): Promise<void> {
   });
 }
 
-/** The three chips DR-017 a disables: heat season-ahead has an empty
- * recipe, and the other two repeat an earlier horizon's signature
- * (fact 1 of the step plan's ground-truth read: heat current === weeks-
- * ahead; enso weeks-ahead === current). ENSO's season-ahead adds the CPC
- * seasonal precipitation outlook (2026-11-05), a map of its own. */
+/** The two chips DR-017 a disables: heat season-ahead has an empty recipe,
+ * and heat weeks-ahead repeats current's signature (fact 1 of the step
+ * plan's ground-truth read). ENSO's weeks-ahead adds the CPC 8-14 day
+ * precipitation outlook (2026-11-06) and its season-ahead the CPC seasonal
+ * one (2026-11-05), each a map of its own. */
 const DISABLED_CHIPS: ReadonlySet<string> = new Set([
   'heat:weeks-ahead',
-  'heat:season-ahead',
-  'enso:weeks-ahead'
+  'heat:season-ahead'
 ]);
 const CLUSTER_KEYS = ['drought', 'wildfire', 'heat', 'enso'] as const;
 

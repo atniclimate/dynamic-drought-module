@@ -223,14 +223,15 @@ export const HAZARD_CLUSTERS: Record<HazardClusterKey, HazardClusterDef> = {
       // line is a UI surface, not a map layer. The active tropical cyclones
       // (ENSO block B3, an event overlay) ride every horizon: the issuer
       // serves only the current advisories, which run five days ahead.
-      // Season ahead adds the CPC seasonal precipitation outlook over the
-      // SST surface, its own layer and key, never merged with another.
+      // Weeks ahead adds the CPC 8-14 day precipitation outlook and Season
+      // ahead the CPC seasonal precipitation outlook over the SST surface,
+      // each its own layer and key, never merged with another.
       current: ['sst-anomaly', 'tropical-cyclones'],
-      'weeks-ahead': ['sst-anomaly', 'tropical-cyclones'],
+      'weeks-ahead': ['sst-anomaly', 'cpc-814-precip', 'tropical-cyclones'],
       'season-ahead': ['sst-anomaly', 'cpc-seasonal-precip', 'tropical-cyclones']
     },
-    // The CPC seasonal temperature outlook is the mode's, off until chosen.
-    optionalLayers: ['cpc-seasonal-temp'],
+    // The other CPC outlooks are the mode's, each off until chosen.
+    optionalLayers: ['cpc-seasonal-temp', 'cpc-610-precip', 'cpc-610-temp', 'cpc-814-temp'],
     // ENSO opens on the outlook until the DDM-P16-T09 composite is promoted
     // (its acceptance sentence, amended 2026-09-26).
     entryHorizon: 'season-ahead',

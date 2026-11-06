@@ -57,6 +57,10 @@ export const LAYER_KEYS = Object.freeze([
   'tropical-cyclones',
   'cpc-seasonal-precip',
   'cpc-seasonal-temp',
+  'cpc-610-precip',
+  'cpc-610-temp',
+  'cpc-814-precip',
+  'cpc-814-temp',
   'telemetry'
 ] as const);
 
@@ -359,6 +363,12 @@ export const LAYER_DEFS: readonly LayerDef[] = [
   // together, each with its own key and none merged.
   { key: 'cpc-seasonal-precip', product: 'cpc-seasonal-precip', name: 'Seasonal Precipitation Outlook', source: 'NOAA CPC · MapServer', role: 'event', defaultOn: false, noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/cpc-seasonal-precip') },
   { key: 'cpc-seasonal-temp', product: 'cpcSeasonalTemp', name: 'Seasonal Temperature Outlook', source: 'NOAA CPC · MapServer', role: 'event', defaultOn: false, noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/cpc-seasonal-temp') },
+  // The CPC 6-10 and 8-14 day outlooks, the same kind of overlay: ENSO's
+  // Weeks ahead draws the 8-14 day precipitation outlook, the others on request.
+  { key: 'cpc-610-precip', product: 'cpc-610-precip', name: '6-10 Day Precipitation Outlook', source: 'NOAA CPC · MapServer', role: 'event', defaultOn: false, noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/cpc-610-precip') },
+  { key: 'cpc-610-temp', product: 'cpc-610-temp', name: '6-10 Day Temperature Outlook', source: 'NOAA CPC · MapServer', role: 'event', defaultOn: false, noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/cpc-610-temp') },
+  { key: 'cpc-814-precip', product: 'cpc-814-precip', name: '8-14 Day Precipitation Outlook', source: 'NOAA CPC · MapServer', role: 'event', defaultOn: false, noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/cpc-814-precip') },
+  { key: 'cpc-814-temp', product: 'cpc-814-temp', name: '8-14 Day Temperature Outlook', source: 'NOAA CPC · MapServer', role: 'event', defaultOn: false, noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/cpc-814-temp') },
   // Monitoring stations left the default-on set 2026-07-09 (D-0.7.0-018
   // item 1, strengthening the D-0.7.0-007 zoom threshold): at region zoom
   // the layer could only say "zoom in to load", so opening with it on

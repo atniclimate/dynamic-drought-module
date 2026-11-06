@@ -23,6 +23,30 @@ export function cpcSeasonalPolygons() {
       geometry:index%2 ? {type:'MultiPolygon',coordinates:[[ring]]} : {type:'Polygon',coordinates:[ring]}};
   })};
 }
+// The 6-10 and 8-14 day renderers, read 2026-11-06 from cpc_6_10_day_outlk and
+// cpc_8_14_day_outlk MapServer/0 (temperature) and /1 (precipitation): the
+// same 15 rows in both services, no Equal Chances class, outline rgb(110,110,110)
+// at width 1 or 0.4 (points) per class.
+export const CPC_EXTENDED_CLASSES = [
+  ...[90,80,70,60,50,40,33].map(prob=>({cat:'Above',prob,label:`Above, ${prob}%`})),
+  {cat:'Normal',prob:36,label:'Near Normal'},
+  ...[33,40,50,60,70,80,90].map(prob=>({cat:'Below',prob,label:`Below, ${prob}%`}))
+];
+export const CPC_EXTENDED_RENDERER = {
+  precip:{colors:[[40,83,0,255],[40,96,10,255],[0,120,20,255],[0,150,32,255],[72,180,48,255],[149,206,127,255],[179,217,171,255],[160,160,160,255],[240,212,147,255],[216,167,79,255],[187,109,51,255],[155,80,49,255],[147,70,57,255],[128,64,0,255],[79,47,47,255]],
+    widths:[1,1,1,1,1,1,1,0.4,1,1,1,1,1,1,1]},
+  temp:{colors:[[112,33,0,255],[145,38,0,255],[179,46,5,255],[201,59,26,255],[218,87,49,255],[227,139,75,255],[231,177,104,255],[160,160,160,255],[191,203,228,255],[160,192,223,255],[119,181,226,255],[56,159,220,255],[0,93,161,255],[46,33,111,255],[34,24,82,255]],
+    widths:[1,1,1,0.4,0.4,1,0.4,0.4,1,1,1,1,1,1,1]}
+};
+/** One square per day-range class; the clock is the 6-10 day issuance of 2026-11-05. */
+export function cpcExtendedPolygons(clock={fcst_date:Date.UTC(2026,10,5),start_date:Date.UTC(2026,10,11),end_date:Date.UTC(2026,10,15)}) {
+  return {type:'FeatureCollection',features:CPC_EXTENDED_CLASSES.map((entry,index)=>{
+    const x=-125+index;
+    const ring=[[x,42],[x+0.5,42],[x+0.5,42.5],[x,42.5],[x,42]];
+    return {type:'Feature',properties:{cat:entry.cat,prob:entry.prob,...clock},
+      geometry:index%2 ? {type:'MultiPolygon',coordinates:[[ring]]} : {type:'Polygon',coordinates:[ring]}};
+  })};
+}
 export function cpcSeasonalBody(arm) {
   if(arm==='polygons') return cpcSeasonalPolygons();
   if(arm==='emptyCollection') return {type:'FeatureCollection',features:[]};
