@@ -166,6 +166,13 @@ function reportStatus(state: UsdmStatus): void {
   registry.setStatus(LAYER_KEY, state);
 }
 
+/** A failed step leaves the shown week drawn: report its status, not 'error',
+ * which the layer controller reads as a failed activation and tears down. */
+function reportShownStatus(): void {
+  const shown = frameCache.peek(weeks[weekIndex]!);
+  reportStatus(shown && shown.features.length === 0 ? 'no-data' : 'ready');
+}
+
 function resolveBeforeId(map: maplibregl.Map): string | undefined {
   return map.getLayer(BEFORE_ID) ? BEFORE_ID : undefined;
 }
@@ -600,7 +607,9 @@ async function showWeek(map: maplibregl.Map, index: number): Promise<void> {
   } catch (err) {
     if (signal.aborted || myEpoch !== stepEpoch) return;
     console.warn(`[usdm] week ${key} fetch failed.`, err);
-    reportStatus('error');
+    reportShownStatus();
+    // A shared week that never loaded must not stay in the timeline (strip, URL, briefing).
+    timeline.setUsdmWeek(weekIndex === weeks.length - 1 ? null : weeks[weekIndex]!);
     // The rail thumb already moved (the user's drag or arrow key), but
     // `weekIndex` and the stamp still describe the week ON THE MAP. Re-install
     // the unchanged spec so the bar snaps the thumb back to the rendered stop
@@ -693,7 +702,7 @@ async function setMode(map: maplibregl.Map, mode: UsdmViewMode): Promise<void> {
     } catch (err) {
       if (signal.aborted || myEpoch !== stepEpoch) return;
       console.warn(`[usdm] change map (${mode}) fetch failed.`, err);
-      reportStatus('error');
+      reportShownStatus();
       return;
     }
   }

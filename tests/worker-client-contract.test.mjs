@@ -56,6 +56,43 @@ const builders = {
   'nws alerts': () => fetchNwsAlertClaims(selection, signal())
 };
 
+/** Runs one NWS session read with the proxied URL failing; returns every URL fetched. */
+async function nwsReadWithFailedWorker(upstream, onProxied) {
+  const originalFetch = globalThis.fetch;
+  const fetched = [];
+  const controller = new AbortController();
+  globalThis.fetch = async (input) => {
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+    fetched.push(url);
+    if (url.startsWith(`${URLS.workerProxy}/proxy`)) return onProxied(controller);
+    return new Response('{"ok":1}', { status: 200, headers: { 'content-type': 'application/json' } });
+  };
+  try {
+    const result = await createNwsRequestSession(controller.signal).fetchJson(upstream, 1000).catch((e) => e);
+    return { fetched, result };
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+}
+
+test('a failed Worker NWS read is retried direct once', async () => {
+  assert.equal(URLS.nwsApiUseWorker, true, 'this case needs the proxied transport');
+  const upstream = `${URLS.nwsApi}/points/45.52,-122.68`;
+  const { fetched, result } = await nwsReadWithFailedWorker(upstream, () => new Response('', { status: 429 }));
+  assert.deepEqual(fetched, [`${URLS.workerProxy}/proxy?url=${encodeURIComponent(upstream)}`, upstream]);
+  assert.deepEqual(result, { ok: 1 });
+});
+
+test('an abandoned NWS read is not retried direct', async () => {
+  const upstream = `${URLS.nwsApi}/points/45.53,-122.68`;
+  const { fetched, result } = await nwsReadWithFailedWorker(upstream, (controller) => {
+    controller.abort();
+    throw new DOMException('Aborted', 'AbortError');
+  });
+  assert.equal(fetched.length, 1);
+  assert.equal(result?.name, 'AbortError');
+});
+
 for (const [label, build] of Object.entries(builders)) {
   test(`the Worker accepts every proxied URL the ${label} client builds`, async () => {
     const originalFetch = globalThis.fetch;

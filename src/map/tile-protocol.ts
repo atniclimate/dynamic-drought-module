@@ -103,13 +103,9 @@ class ArchiveCache implements Cache {
     return waitFor(held.promise, caller.signal).finally(() => {
       held.users -= 1;
       if (held.users === 0) {
-        if (this.pending.get(fullKey) === held) {
-          this.pending.delete(fullKey);
-          // An abandoned parse/decompression may finish later. Its cache must
-          // not become the next generation's successful header/directory.
-          this.resolved = new ResolvedValueCache();
-          this.generation += 1;
-        }
+        // Only this read is dropped: the resolved cache holds only successful
+        // reads, and a changed archive is caught by invalidate() on its ETag.
+        if (this.pending.get(fullKey) === held) this.pending.delete(fullKey);
         held.controller.abort();
       }
     });
