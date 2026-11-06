@@ -307,16 +307,17 @@ export function deactivate(map: maplibregl.Map): void {
  * error, advances to the next mirror; if the
  * abort signal fires at any point, returns an empty collection.
  *
- * Returns an empty FeatureCollection rather than throwing on abort or
- * full mirror failure so the caller does not need a try/catch around
- * each invocation. Status is the caller's responsibility; this function
- * only fetches and parses.
+ * Returns an empty FeatureCollection on abort and `null` when every mirror
+ * failed, rather than throwing, so the caller does not need a try/catch
+ * around each invocation and never has to guess a failure from an empty
+ * answer. Status is the caller's responsibility; this function only fetches
+ * and parses.
  */
 export async function fetchOSMWaterways(
   _map: maplibregl.Map,
   bounds: maplibregl.LngLatBounds,
   signal: AbortSignal
-): Promise<FeatureCollection<LineString>> {
+): Promise<FeatureCollection<LineString> | null> {
   // Bbox stays in Leaflet `[s, w, n, e]` order to match the cache
   // layout from v0.1.x; `quantizeBbox` operates on the same order.
   const bbox = quantizeBbox(
@@ -396,7 +397,7 @@ export async function fetchOSMWaterways(
 
   if (!payload) {
     console.warn('All Overpass mirrors failed.', lastErr);
-    return emptyFeatureCollection();
+    return null;
   }
 
   const features: Feature<LineString>[] = [];
@@ -444,7 +445,7 @@ async function runFetchForCurrentViewport(map: maplibregl.Map): Promise<void> {
 
   setStatus('loading');
 
-  let collection: FeatureCollection<LineString>;
+  let collection: FeatureCollection<LineString> | null;
   try {
     collection = await fetchOSMWaterways(map, map.getBounds(), controller.signal);
   } catch (err) {
@@ -472,35 +473,16 @@ async function runFetchForCurrentViewport(map: maplibregl.Map): Promise<void> {
     return;
   }
 
-  // A truly empty collection from a non-cancelled run means every mirror
-  // failed; surface as the canonical 'error' state ("unavailable" in the
-  // sidebar). Conversely a cache hit may legitimately return zero
-  // features for an empty patch of the world; we cannot distinguish here
-  // without more state, so empty maps to 'ready'. The mirror-failure
-  // path above logged a warning; this branch handles only the
-  // cache-hit-with-zero-features case.
-  if (
-    collection.features.length === 0 &&
-    HYDRO_CACHE.get(cacheKeyForBounds(map.getBounds())) === undefined
-  ) {
+  // Every mirror failed: the canonical 'error' state ("unavailable" in the
+  // sidebar), and the rivers already drawn stay. An empty answer is a real
+  // empty patch of the world and reads 'ready'.
+  if (!collection) {
     setStatus('error');
     return;
   }
 
   setSourceData(map, collection);
   setStatus('ready');
-}
-
-/**
- * Build the cache key string for a given bounds object. Used by the
- * post-fetch error-vs-empty disambiguation in `runFetchForCurrentViewport`.
- */
-function cacheKeyForBounds(bounds: maplibregl.LngLatBounds): string {
-  const bbox = quantizeBbox(
-    [bounds.getSouth(), bounds.getWest(), bounds.getNorth(), bounds.getEast()],
-    HYDRO_BBOX_QUANT
-  );
-  return bbox.join(',');
 }
 
 /**

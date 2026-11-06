@@ -715,8 +715,9 @@ export function bindPopups(map: maplibregl.Map): void {
         ? `Drought outlook: ${cls}`
         : 'Drought outlook';
     },
+    // The range drawn, not the one still loading: the clicked polygon is the drawn range's.
     respond: (feature) => ({
-      model: buildOutlookPopupModel(feature.properties ?? {}, timeline.outlookRange)
+      model: buildOutlookPopupModel(feature.properties ?? {}, renderedRange ?? timeline.outlookRange)
     })
   });
   map.on('mouseenter', FILL_LAYER_ID, () => {
