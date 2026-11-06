@@ -7,7 +7,7 @@ import type { Polygon } from 'geojson';
 import { placeRefFromBoundary } from '../src/config/entities';
 import { postalCodeFromProperties } from '../src/config/geography';
 import { resolveLandscapeContext } from '../src/impact/landscape-consumer';
-import { loadLandscapeSignature } from '../src/impact/landscape';
+import { loadLandscapeSignatureAtUrl } from '../src/impact/landscape';
 import {
   resolveLandscapeSelection,
   selectedLandscapeEcoregion,
@@ -62,11 +62,10 @@ function context(
 }
 
 function loadFixture(
-  opts?: Parameters<typeof loadLandscapeSignature>[0]
+  opts?: Parameters<typeof loadLandscapeSignatureAtUrl>[1]
 ) {
-  return loadLandscapeSignature({
+  return loadLandscapeSignatureAtUrl('https://example.invalid/landscape.json', {
     ...opts,
-    url: 'https://example.invalid/landscape.json',
     fetchJsonImpl: async () => ARTIFACT
   });
 }

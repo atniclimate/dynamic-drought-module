@@ -760,6 +760,59 @@ test.describe('H2 critical-first surfaces', () => {
     await expect(identity).not.toHaveText(/^[A-Z]+ \/ [A-Z]+$/);
   });
 
+  test('a station URL carrying userinfo names the station and the heat read as text, never as a link', async ({
+    page
+  }) => {
+    // R1-22: the station URL is agency text; one link rule (src/util/escape.ts
+    // checkPopupHref) refuses userinfo where a bare https prefix passed it.
+    const userinfoStation = 'https://user:pw@api.weather.gov/stations/KNEAR';
+    await page.clock.setFixedTime('2026-07-29T12:30:00+00:00');
+    await stubBrowserNwsHeat(page);
+    await page.route(NWS_PROXY_ROUTE, (route) => {
+      if (new URL(nwsUpstreamUrl(route.request().url())).pathname !== '/gridpoints/TOP/31,80/stations') {
+        return route.fallback();
+      }
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/geo+json',
+        body: JSON.stringify({
+          type: 'FeatureCollection',
+          features: [
+            {
+              type: 'Feature',
+              geometry: { type: 'Point', coordinates: [-120.5, 47.5] },
+              properties: { stationIdentifier: 'KNEAR', name: 'Near Station', '@id': userinfoStation }
+            }
+          ]
+        })
+      });
+    });
+    // The latest observation is read from the station URL itself, which the
+    // shared NWS route pattern (an api.weather.gov prefix) does not match.
+    await page.route(
+      (url) => url.searchParams.get('url') === `${userinfoStation}/observations/latest`,
+      (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: 'application/geo+json',
+          body: JSON.stringify(OBSERVATION_PAYLOAD)
+        })
+    );
+    await gotoApp(page, '?select=state:WA');
+
+    const pointHeat = page.locator(
+      '#impact-panel .point-heat[aria-label="Heat at selected point"]'
+    );
+    await expect(pointHeat.locator('.point-heat-station')).toHaveText('Near Station');
+    await expect(
+      pointHeat.locator('.point-heat-synthesis li strong', {
+        hasText: 'NWS point observation and grid guidance'
+      })
+    ).toHaveCount(1);
+    await expect(pointHeat.locator('.point-heat-station a')).toHaveCount(0);
+    await expect(page.locator('#impact-panel a[href*="user:pw"]')).toHaveCount(0);
+  });
+
   test('embed report exposes the same point heat model without adding URL state', async ({
     page
   }) => {

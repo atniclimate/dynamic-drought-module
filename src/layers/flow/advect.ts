@@ -58,8 +58,12 @@ export const MARK_CRESTS = 3;
 export const MARK_ARC = (40 * Math.PI) / 180;
 /** Gap between crest midpoints along the travel, as a fraction of the front length: a drawing convention, not a wavelength. */
 export const MARK_GAP_RATIO = 0.25;
-/** Crest lengths back to front as fractions of the front: with that gap, all three arcs share one centre. */
-export const MARK_CREST_RATIO: readonly [number, number, number] = [1 - MARK_ARC / 2, 1 - MARK_ARC / 4, 1];
+/** Crest lengths back to front as fractions of the front, derived from that gap so all three arcs share one centre. */
+export const MARK_CREST_RATIO: readonly [number, number, number] = [
+  1 - 2 * MARK_GAP_RATIO * MARK_ARC,
+  1 - MARK_GAP_RATIO * MARK_ARC,
+  1
+];
 /** Width and alpha factor of each crest, back to front: the wind ribbons' tail-to-head taper. */
 export const MARK_CREST_WEIGHT: readonly [number, number, number] = [0.5, 0.75, 1];
 /** Width and alpha at a crest's ends, as a fraction of its centre. */
@@ -284,16 +288,12 @@ const posB = { x: 0, y: 0 };
 const MAX_CHORD_CELLS = 8;
 
 /**
- * True when every cell the straight chord (x0, y0) to (x1, y1) can touch has
- * four valid corners. Longitude depends on Mercator x alone and latitude on y
- * alone, so the chord lies within the column and row ranges of its ends.
+ * True when every cell the straight chord between two ends (longitude and
+ * latitude) can touch has four valid corners. Longitude depends on Mercator x
+ * alone and latitude on y alone, so the chord lies within the column and row
+ * ranges of its ends.
  */
-export function chordClear(field: FlowField, x0: number, y0: number, x1: number, y1: number): boolean {
-  return chordClearLonLat(field, lonOf(x0), latOf(y0), lonOf(x1), latOf(y1));
-}
-
-/** chordClear with the ends already converted to longitude and latitude. */
-function chordClearLonLat(field: FlowField, lon0: number, lat0: number, lon1: number, lat1: number): boolean {
+function chordClear(field: FlowField, lon0: number, lat0: number, lon1: number, lat1: number): boolean {
   const a = gridPosition(field, lon0, lat0, posA);
   const b = gridPosition(field, lon1, lat1, posB);
   if (!a || !b) return false;
@@ -368,7 +368,7 @@ export function advance(
   const end = sampleField(field, lonEnd, latEnd, tmpSample);
   if (!end) return null;
   // The chord check uses its own scratch records, so `end` is intact.
-  if (!chordClearLonLat(field, lonStart, latStart, lonEnd, latEnd)) return null;
+  if (!chordClear(field, lonStart, latStart, lonEnd, latEnd)) return null;
   out[0] = px;
   out[1] = py;
   if (out.length >= 4) {

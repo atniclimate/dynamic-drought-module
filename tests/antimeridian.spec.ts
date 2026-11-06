@@ -14,13 +14,11 @@ import {
   type LngLatBbox
 } from '../src/util/antimeridian';
 import {
-  arcGisEnvelopeValues,
   bboxCenter,
   bboxIntersection,
   bboxIntersects,
   bboxToContinuousBounds,
   mergeByStableIdentifier,
-  selectionEnvelopes,
   unionBboxes
 } from '../src/util/bbox';
 import {
@@ -312,7 +310,7 @@ test.describe('consumer behavior on a crossing selection (N2-A)', () => {
     expect(naiveBboxSuggestsAntimeridianCrossing(naiveWalk)).toBe(true);
   });
 
-  test('NIFC envelope: a production context becomes exactly two non-crossing requests', () => {
+  test('NIFC envelope: a production context carries the compact service bbox', () => {
     const context = buildBoundaryContext(
       'state',
       { NAME: 'Alaska' },
@@ -320,14 +318,6 @@ test.describe('consumer behavior on a crossing selection (N2-A)', () => {
       { lng: -175, lat: 52 }
     );
     expect(context.serviceBbox).toEqual([178, 51, -170, 53]);
-    expect(selectionEnvelopes(context.serviceBbox, context.lngLat)).toEqual([
-      '178,51,180,53',
-      '-180,51,-170,53'
-    ]);
-    expect(selectionEnvelopes(compactWalk, { lng: -175, lat: 52 })).toEqual([
-      '178,51,180,53',
-      '-180,51,-170,53'
-    ]);
   });
 
   test('NIFC production fetch pins both complete service envelopes by value', async () => {
@@ -379,19 +369,6 @@ test.describe('consumer behavior on a crossing selection (N2-A)', () => {
         globalThis.fetch = originalFetch;
       }
     });
-  });
-
-  test('NIFC envelope: the no-bbox click halo is unchanged', () => {
-    expect(selectionEnvelopes(undefined, { lng: -175, lat: 52 })).toEqual([
-      '-175.5,51.5,-174.5,52.5'
-    ]);
-  });
-
-  test('ArcGIS envelope values use the same two-piece service contract', () => {
-    expect(arcGisEnvelopeValues(compactWalk)).toEqual([
-      '178,51,180,53',
-      '-180,51,-170,53'
-    ]);
   });
 
   test('camera midpoint stays near the selected Aleutian geometry', () => {

@@ -40,6 +40,7 @@ registerHooks({
 
 const frame = await import('../src/ui/popup-frame.ts');
 const { serializePopupFrame, PopupFrameError } = frame;
+const { checkPopupHref } = await import('../src/util/escape.ts');
 
 const NBSP = ' ';
 const PAYLOAD = '"><img src=x onerror="globalThis.__pwned=1">';
@@ -669,9 +670,9 @@ test('every link position validates HTTPS and the BC record host', () => {
   ];
   const body = bodyOf(serializePopupFrame({ kind: 'group', group: groupInput({ records }) }));
   assert.deepEqual(hrefsIn(body), ['https://data-nifc.opendata.arcgis.com/ok']);
-  // The same validator, directly: exact host where mandated.
-  assert.equal(frame.checkPopupHref('https://wildfiresituation.nrs.gov.bc.ca/map', 'wildfiresituation.nrs.gov.bc.ca'), 'https://wildfiresituation.nrs.gov.bc.ca/map');
-  for (const href of bcHost) assert.equal(frame.checkPopupHref(href, 'wildfiresituation.nrs.gov.bc.ca'), null, href);
+  // The same validator, directly (src/util/escape.ts): exact host where mandated.
+  assert.equal(checkPopupHref('https://wildfiresituation.nrs.gov.bc.ca/map', 'wildfiresituation.nrs.gov.bc.ca'), 'https://wildfiresituation.nrs.gov.bc.ca/map');
+  for (const href of bcHost) assert.equal(checkPopupHref(href, 'wildfiresituation.nrs.gov.bc.ca'), null, href);
 });
 
 test('a collection renders its group sections inside one frame root, ordered by group key', () => {

@@ -35,6 +35,7 @@ import type {
 } from './types';
 import type { LandscapeEcoregionKey } from './landscape-resolution';
 import { LANDSCAPE_SIGNATURE_LOCAL_URL } from '../config/landscape-url';
+import { checkPopupHref } from '../util/escape';
 
 type LandscapeLoader = (
   opts?: Parameters<typeof loadLandscapeSignatureAtUrl>[1]
@@ -210,7 +211,7 @@ function sourceContext(
   return {
     key,
     label: source.source,
-    ...(source.sourceUrl.startsWith('https://')
+    ...(checkPopupHref(source.sourceUrl) !== null
       ? { url: source.sourceUrl }
       : {}),
     vintage: source.vintage,

@@ -300,36 +300,8 @@ export function bboxIntersection(
 }
 
 /**
- * Selection envelopes for NIFC and similar services. The selection bbox is
- * used when present; otherwise a click halo is constructed. Crossings always
- * return exactly two non-crossing strings.
- */
-export function selectionEnvelopes(
-  bbox: LngLatBbox | undefined,
-  lngLat: { readonly lng: number; readonly lat: number },
-  haloDegrees = 0.5
-): readonly string[] {
-  const box =
-    bbox ??
-    ([
-      lngLat.lng - haloDegrees,
-      lngLat.lat - haloDegrees,
-      lngLat.lng + haloDegrees,
-      lngLat.lat + haloDegrees
-    ] as const);
-  return serviceBboxPieces(box).map((piece) =>
-    piece.map((n) => Math.round(n * 10000) / 10000).join(',')
-  );
-}
-
-/** ArcGIS `geometry` parameter values under the shared split contract. */
-export function arcGisEnvelopeValues(bbox: LngLatBbox): readonly string[] {
-  return serviceBboxPieces(bbox).map((piece) => piece.join(','));
-}
-
-/**
  * Legacy singular ArcGIS value for callers whose product behavior belongs to
- * a later slice. N2-A consumers use `arcGisEnvelopeValues`.
+ * a later slice. N2-A consumers split through `serviceBboxPieces`.
  */
 export function arcGisEnvelopeValue(bbox: LngLatBbox): string {
   return bbox.join(',');

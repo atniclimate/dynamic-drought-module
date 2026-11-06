@@ -41,7 +41,7 @@
 import type { Popup } from 'maplibre-gl';
 import type { ProductKey } from '../config/products';
 import type { SparklineOptions } from './charts';
-import { escapeHtml } from '../util/escape';
+import { checkPopupHref, escapeHtml } from '../util/escape';
 import { briefingDoorColor } from './briefing-door-color';
 import { dateTok } from '../util/text-tokens';
 
@@ -373,25 +373,6 @@ function text(value: string): string {
 function stated(value: string | undefined, what: string): string {
   if (typeof value !== 'string' || value.trim() === '') fail(`${what} must be a non-empty string`);
   return value;
-}
-
-/**
- * The one runtime URL check (PF4): a parsed absolute URL, https only, no
- * userinfo, and the exact hostname when one is mandated (the BC record host,
- * grouping-contract.md:127). Returns the normalized href, or null.
- */
-export function checkPopupHref(href: unknown, host?: string): string | null {
-  if (typeof href !== 'string') return null;
-  let url: URL;
-  try {
-    url = new URL(href);
-  } catch {
-    return null;
-  }
-  if (url.protocol !== 'https:') return null;
-  if (url.username !== '' || url.password !== '') return null;
-  if (host !== undefined && url.hostname !== host) return null;
-  return url.href;
 }
 
 function anchor(label: string, href: string): string {

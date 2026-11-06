@@ -6,22 +6,19 @@ import { test, expect } from './offline-test';
 
 import {
   isLandscapeBundle,
+  isLandscapeSource,
   isTerrainSignature,
-  isTerrainSource,
   isUnavailableSignature,
-  loadLandscapeSignature,
+  loadLandscapeSignatureAtUrl,
   type LandscapeSignatureResult
 } from '../src/impact/landscape';
 import type { fetchJsonWithBudget } from '../src/util/fetch';
 
 /**
  * T-M0-3 (L1c): the landscape-signature loader stub. Pure Node in the
- * s1-substrate pattern (no browser): every case injects `url` plus a stub
- * `fetchJsonImpl`, so the lazy default Uniform Resource Locator (URL)
- * branch (a dynamic import of
- * config/urls, which only evaluates under the Vite bundle) is never taken
- * here. T3-2 exercises that default URL branch through the rendered
- * ecoregion-briefing verification in landscape-consumer.spec.ts.
+ * s1-substrate pattern (no browser): every case passes a URL and a stub
+ * `fetchJsonImpl`. The production URL is the consumer's
+ * (LANDSCAPE_SIGNATURE_LOCAL_URL, landscape-consumer.spec.ts).
  *
  * The failure contract under test is the MACHINE-READABLE reason code,
  * not prose: absence/timeout -> 'unavailable', cancel -> 'aborted',
@@ -102,10 +99,9 @@ function expectFailure(
   }
 }
 
-test.describe('loadLandscapeSignature', () => {
+test.describe('loadLandscapeSignatureAtUrl', () => {
   test('returns the snapshot for a valid artifact', async () => {
-    const result = await loadLandscapeSignature({
-      url: URL_UNDER_TEST,
+    const result = await loadLandscapeSignatureAtUrl(URL_UNDER_TEST, {
       fetchJsonImpl: stubResolving(validArtifact())
     });
     expect(result.ok).toBe(true);
@@ -119,8 +115,7 @@ test.describe('loadLandscapeSignature', () => {
   test('minor-tolerant inside the reviewed line only: 1.3.9 passes', async () => {
     const artifact = validArtifact();
     artifact.schemaVersion = '1.3.9';
-    const result = await loadLandscapeSignature({
-      url: URL_UNDER_TEST,
+    const result = await loadLandscapeSignatureAtUrl(URL_UNDER_TEST, {
       fetchJsonImpl: stubResolving(artifact)
     });
     expect(result.ok).toBe(true);
@@ -135,8 +130,7 @@ test.describe('loadLandscapeSignature', () => {
     test(`schemaVersion ${version} is unsupported (known-minor policy)`, async () => {
       const artifact = validArtifact();
       artifact.schemaVersion = version;
-      const result = await loadLandscapeSignature({
-        url: URL_UNDER_TEST,
+      const result = await loadLandscapeSignatureAtUrl(URL_UNDER_TEST, {
         fetchJsonImpl: stubResolving(artifact)
       });
       expectFailure(result, 'unsupported-version');
@@ -145,16 +139,14 @@ test.describe('loadLandscapeSignature', () => {
   }
 
   test('an HTTP error is honest absence, not a throw', async () => {
-    const result = await loadLandscapeSignature({
-      url: URL_UNDER_TEST,
+    const result = await loadLandscapeSignatureAtUrl(URL_UNDER_TEST, {
       fetchJsonImpl: stubThrowing(new Error('HTTP 404 Not Found'))
     });
     expectFailure(result, 'unavailable');
   });
 
   test('a network failure is honest absence', async () => {
-    const result = await loadLandscapeSignature({
-      url: URL_UNDER_TEST,
+    const result = await loadLandscapeSignatureAtUrl(URL_UNDER_TEST, {
       fetchJsonImpl: stubThrowing(new TypeError('fetch failed'))
     });
     expectFailure(result, 'unavailable');
@@ -164,8 +156,7 @@ test.describe('loadLandscapeSignature', () => {
     // fetchJsonWithBudget throws AbortError for both the per-call timeout
     // and a master cancel; the loader distinguishes them by whether the
     // caller's signal is aborted. No signal aborted here = timeout.
-    const result = await loadLandscapeSignature({
-      url: URL_UNDER_TEST,
+    const result = await loadLandscapeSignatureAtUrl(URL_UNDER_TEST, {
       fetchJsonImpl: stubThrowing(abortError())
     });
     expectFailure(result, 'unavailable');
@@ -173,8 +164,7 @@ test.describe('loadLandscapeSignature', () => {
 
   test('a master-signal cancel maps to aborted', async () => {
     const controller = new AbortController();
-    const result = await loadLandscapeSignature({
-      url: URL_UNDER_TEST,
+    const result = await loadLandscapeSignatureAtUrl(URL_UNDER_TEST, {
       signal: controller.signal,
       fetchJsonImpl: async () => {
         controller.abort();
@@ -193,8 +183,7 @@ test.describe('loadLandscapeSignature', () => {
       // reported 'aborted', never reclassified as a parse or
       // availability statement.
       const controller = new AbortController();
-      const result = await loadLandscapeSignature({
-        url: URL_UNDER_TEST,
+      const result = await loadLandscapeSignatureAtUrl(URL_UNDER_TEST, {
         signal: controller.signal,
         fetchJsonImpl: async () => {
           controller.abort();
@@ -211,8 +200,7 @@ test.describe('loadLandscapeSignature', () => {
     // report 'aborted' rather than handing a superseded snapshot to the
     // caller (the cancellation invariant).
     const controller = new AbortController();
-    const result = await loadLandscapeSignature({
-      url: URL_UNDER_TEST,
+    const result = await loadLandscapeSignatureAtUrl(URL_UNDER_TEST, {
       signal: controller.signal,
       fetchJsonImpl: async () => {
         controller.abort();
@@ -223,8 +211,7 @@ test.describe('loadLandscapeSignature', () => {
   });
 
   test('unparseable JSON maps to malformed-json', async () => {
-    const result = await loadLandscapeSignature({
-      url: URL_UNDER_TEST,
+    const result = await loadLandscapeSignatureAtUrl(URL_UNDER_TEST, {
       fetchJsonImpl: stubThrowing(
         new SyntaxError('Unexpected token < in JSON')
       )
@@ -269,8 +256,7 @@ test.describe('loadLandscapeSignature', () => {
     ]
   ] as const) {
     test(`${label} maps to invalid-shape`, async () => {
-      const result = await loadLandscapeSignature({
-        url: URL_UNDER_TEST,
+      const result = await loadLandscapeSignatureAtUrl(URL_UNDER_TEST, {
         fetchJsonImpl: stubResolving(mutate())
       });
       expectFailure(result, 'invalid-shape');
@@ -307,21 +293,21 @@ test.describe('landscape type guards', () => {
     expect(isUnavailableSignature({ unavailable: true })).toBe(false);
   });
 
-  test('isTerrainSource checks the 1.3.0 provenance fields', () => {
+  test('isLandscapeSource checks the 1.3.0 provenance fields', () => {
     const artifact = validArtifact();
     const sources = artifact.sources as Record<string, unknown>;
-    expect(isTerrainSource(sources.terrain)).toBe(true);
+    expect(isLandscapeSource(sources.terrain)).toBe(true);
     const nullProvenance = {
       ...(sources.terrain as Record<string, unknown>),
       acquired: null,
       materializedRasterSha256: null
     };
-    expect(isTerrainSource(nullProvenance)).toBe(true);
+    expect(isLandscapeSource(nullProvenance)).toBe(true);
     const missingMethodVersion = {
       ...(sources.terrain as Record<string, unknown>)
     };
     delete missingMethodVersion.methodVersion;
-    expect(isTerrainSource(missingMethodVersion)).toBe(false);
+    expect(isLandscapeSource(missingMethodVersion)).toBe(false);
   });
 
   test('isLandscapeBundle narrows both terrain variants', () => {
