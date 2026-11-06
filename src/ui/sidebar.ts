@@ -122,7 +122,7 @@ import {
 } from '../state/view-mode';
 import { installPopupViewportContainment } from './popup-viewport';
 import { defaultBasemapFor, getBasemapMode, onBasemapChange, setBasemapMode } from '../state/basemap-store';
-import { FIRE3D_CHUNK_WIDTH_QUERY, seedFire3DPreference, setFire3DPreference } from '../state/fire3d-store';
+import { FIRE3D_CHUNK_WIDTH_QUERY, getFire3DPreference, seedFire3DPreference, setFire3DPreference } from '../state/fire3d-store';
 import { getFraming, onFramingChange, setFraming } from '../state/framing-store';
 import {
   clearOceanFraming,
@@ -2077,7 +2077,15 @@ function wireSidebar(map: maplibregl.Map, onRegionSelect: (key: RegionKey) => vo
         getOceanFraming() !== null,
         isCustomComposition()
       );
-      if (action.capture) holdEnsoCamera(readCameraState(map));
+      // Entering ENSO ends the 3D Fire view now (DR-122), so its ease back
+      // starts before the ocean fit and cannot cancel it; the view held for
+      // leaving ENSO is flat and north-up, as the scene's own exit leaves it.
+      const scene = (action.capture || action.fitPacific) && getFire3DPreference();
+      if (scene) setFire3DPreference(false);
+      if (action.capture) {
+        const camera = readCameraState(map);
+        holdEnsoCamera(scene ? { ...camera, pitch: 0, bearing: 0 } : camera);
+      }
       if (action.fitPacific) fitOcean(map, 'pacific');
       if (action.restore) {
         const heldCamera = takeEnsoCamera();

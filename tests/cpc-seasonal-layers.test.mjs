@@ -499,11 +499,16 @@ test('an in-session entry into ENSO commits Season ahead and leaving undoes it; 
       tapPreset(mode);
       assert.equal(timeline.horizon, 'current', mode);
       assert.equal(service.getCommittedSnapshot().cluster, 'custom');
+      // R6-9: the rail sets the person's hazard; the set stays custom (DR-156).
+      assert.equal(service.getSelectedHazard(), mode);
+      assert.equal(service.getCommittedSnapshot().selectedHazard, mode);
     }
-    // Otherwise a preset leaves the horizon where it is.
+    // Otherwise a preset leaves the horizon where it is, and still publishes the hazard.
     service.requestHorizon('weeks-ahead');
     tapPreset('heat');
     assert.equal(timeline.horizon, 'weeks-ahead');
+    assert.equal(service.getCommittedSnapshot().selectedHazard, 'heat');
+    assert.equal(service.getCommittedSnapshot().cluster, 'custom');
   } finally {
     unsubscribe();
     dispose();

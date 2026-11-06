@@ -196,6 +196,67 @@ test('Back to map unlights the studio place unless a briefing follows, and a Nat
   assert.deepEqual(log.splice(0), ['unlight'], 'a briefing voided before the exit does not hold the light');
 });
 
+/**
+ * Audit round 6, R6-4, on the shipped chase body: Back to map before the
+ * studio resolved its choice chases the briefing; a chase that fails or finds
+ * nothing unlights the place it lit, unless a newer place now owns the light.
+ * Red on f27a23c: a failed chase left the place lit with nothing open.
+ */
+test('a Back to map chase that ends without a briefing unlights the studio place, but not a newer one', async () => {
+  const log = [];
+  let typed = { kind: 'tribe', id: 'a' };
+  let resolveResult = () => Promise.reject(new Error('offline'));
+  let lit = [];
+  const chase = new Function(
+    'getTypedPlace',
+    'resolvePlaceSelection',
+    'openReturnBriefing',
+    'clearStudioEmphasis',
+    'getEmphasisTargets',
+    `${body('placeStillCurrent')}\n${body('chaseBriefingOnReturn')}\nreturn chaseBriefingOnReturn;`
+  )(
+    () => typed,
+    () => resolveResult(),
+    (entry) => log.push(`open ${entry.id}`),
+    () => log.push('unlight'),
+    () => lit
+  );
+  const entry = { kind: 'tribe', id: 'a' };
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  chase(entry, null)();
+  await settle();
+  assert.deepEqual(log.splice(0), ['unlight'], 'a failed resolve unlights');
+
+  chase(entry, Promise.reject(new Error('aborted')))();
+  await settle();
+  assert.deepEqual(log.splice(0), ['unlight'], 'an aborted chase whose own resolve fails unlights');
+
+  resolveResult = () => Promise.resolve(null);
+  chase(entry, null)();
+  await settle();
+  assert.deepEqual(log.splice(0), ['unlight'], 'nothing resolved unlights');
+
+  resolveResult = () => Promise.resolve({ context: {}, geometry: {} });
+  chase(entry, null)();
+  await settle();
+  assert.deepEqual(log.splice(0), ['open a'], 'a resolved chase opens the briefing and keeps the light');
+
+  typed = { kind: 'tribe', id: 'b' };
+  resolveResult = () => Promise.reject(new Error('offline'));
+  chase(entry, null)();
+  await settle();
+  assert.deepEqual(log.splice(0), [], 'a newer place keeps its own light');
+
+  // Review finding 2: a map click on a reservation or Tribal land area during
+  // the chase lights it without changing the typed place; its light stays.
+  typed = { kind: 'tribe', id: 'a' };
+  chase(entry, null)();
+  lit = [{ source: 'bia', id: 7 }];
+  await settle();
+  assert.deepEqual(log.splice(0), [], 'a newer map emphasis keeps its light');
+});
+
 test('Tribe candidates and the shared envelope builder stay at full resolution', () => {
   const shared = new Function(`${body('arcGisEnvelopeParams')}\nreturn arcGisEnvelopeParams;`)();
   assert.equal(shared('-117,42,-111,49', 'x').has('maxAllowableOffset'), false);
