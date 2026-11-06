@@ -142,6 +142,7 @@ const { createLayerController } = await import('../src/state/layer-controller.ts
 const heat = await import('../src/layers/heatrisk.ts');
 const alerts = await import('../src/layers/nws-alerts.ts');
 const bcws = await import('../src/layers/bcws-fires.ts');
+const { forgetBcwsStampRead } = await import('../src/util/bcws-perimeter-read.ts');
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const FIRST_TIME = 1_785_153_600_000;
@@ -184,6 +185,8 @@ function fakeMap() {
 function resetSeen() {
   for (const list of Object.values(seen)) list.length = 0;
   for (const key of registry.getActiveKeys()) registry.deactivate(key);
+  // Each case is a fresh fixture service: no BC stamp read carries over.
+  forgetBcwsStampRead();
 }
 
 function harness(map, initial) {
@@ -625,7 +628,7 @@ test('BC perimeters: a normal activation reads stamps, perimeters, stamps, then 
   // The DDM-P1-T06 envelope: the view overscanned by a quarter each side, cut to British Columbia's box.
   assert.equal(new URL(net.calls[1].url).searchParams.get('geometry'), '-124,48,-118,51');
   assert.deepEqual(seen.sources, ['bcws-fires']);
-  assert.deepEqual(seen.layers, ['bcws-fires-fill', 'bcws-fires-line']);
+  assert.deepEqual(seen.layers, ['bcws-fires-fill', 'bcws-fires-casing', 'bcws-fires-line']);
   assert.ok(seen.legends.includes('bcws-fires'));
   assert.equal(registry.getStatus('bcws-fires'), 'ready');
   assert.equal(registry.getActiveKeys().has('bcws-fires'), true);

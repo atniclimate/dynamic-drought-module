@@ -139,6 +139,7 @@ export const EVENT_OVERLAY_IDS: readonly string[] = [
   // The BC Wildfire Service perimeters beside NIFC's, then the fire areas
   // where the two overlap, drawn once over both (src/layers/bcws-fires.ts).
   'bcws-fires-fill',
+  'bcws-fires-casing',
   'bcws-fires-line',
   'fire-footprints-fill',
   'fire-footprints-line',

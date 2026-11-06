@@ -1249,6 +1249,7 @@ test('an NWS answer with neither alert keeps the one shared all-clear in both ro
 // ---------------------------------------------------------------------------
 
 const { buildBcwsAreaPerimeterClaim, buildFireAreaClaim, OVERLAP_COUNT_LABEL } = await import('../src/config/wildfire-presentation.ts');
+const { forgetBcwsStampRead } = await import('../src/util/bcws-perimeter-read.ts');
 
 /** A box at the Border 2 fire, both sides of the 49th parallel. */
 const BORDER_BOX = [-121.2, 48.9, -120.9, 49.2];
@@ -1259,6 +1260,8 @@ const STEADY_STAMPS = { schemaLastEditDate: 1793940086179, dataLastEditDate: 179
 const NEXT_STAMPS = { schemaLastEditDate: 1793940989464, dataLastEditDate: 1793940995977 };
 /** The BC service: the layer's edit stamps (a reload that finished and held still unless `stamps` says otherwise) and its perimeters. */
 function bcService({ features = [], stamps = [STEADY_STAMPS, STEADY_STAMPS], status = 200 } = {}) {
+  // A fresh fixture service: no BC stamp read carries over from the case before.
+  forgetBcwsStampRead();
   const urls = [];
   let checks = 0;
   const answer = (url) => {

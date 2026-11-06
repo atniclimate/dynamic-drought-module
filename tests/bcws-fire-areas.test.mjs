@@ -136,14 +136,21 @@ test('a failed BC read leaves the strip\'s NIFC count standing and says so; BC h
     // A BC outage with no earlier answer: the layer stays checked, with no fill.
     setChecked('bcws-fires', true);
     registry.setStatus('bcws-fires', 'error');
+    // The tile's name says it counts both agencies (its accessible name and title read it).
+    const name = 'Current Mapped Fire Perimeters (NIFC and BC Wildfire Service)';
     assert.deepEqual(strip.firesMetric(map), {
-      value: '2', sublabel: 'mapped wildfire perimeters in view; BC Wildfire Service perimeters unavailable', tone: 'data'
+      value: '2', sublabel: 'mapped wildfire perimeters in view; BC Wildfire Service perimeters unavailable', tone: 'data', name
     });
     registry.setStatus('bcws-fires', 'loading');
     assert.equal(strip.firesMetric(map).value, '-', 'while BC loads, its tile waits');
     registry.activate('bcws-fires');
     registry.setStatus('bcws-fires', 'no-data');
-    assert.deepEqual(strip.firesMetric(map), { value: '2', sublabel: 'mapped wildfire perimeters in view', tone: 'data' });
+    assert.deepEqual(strip.firesMetric(map), { value: '2', sublabel: 'mapped wildfire perimeters in view', tone: 'data', name });
+    setChecked('bcws-fires', false);
+    registry.deactivate('bcws-fires');
+    assert.equal('name' in strip.firesMetric(map), false, 'NIFC alone keeps its own layer name');
+    setChecked('bcws-fires', true);
+    registry.activate('bcws-fires');
     // With NIFC off, a failed BC read is never a zero.
     registry.deactivate('nifc-fires');
     registry.setStatus('bcws-fires', 'error');
@@ -222,6 +229,57 @@ test('the map draws by the same whitelist: the paint matches the derived stage c
   assert.equal(presentation.BCWS_STATUS_PRESENTATION.active.legendLabel, 'Out of Control, Being Held or Under Control');
   assert.equal(presentation.BCWS_STATUS_PRESENTATION.inactive.legendLabel, 'Out');
   assert.equal(presentation.BCWS_STATUS_PRESENTATION.inactive.fillOpacity, 0, 'an Out fire is an outline, never a burning fill');
+});
+
+/** `hex` at `alpha` over an [r, g, b] ground, as the map composites it. */
+const over = (hex, alpha, ground) => '#' + ground.map((g, i) =>
+  Math.round(alpha * parseInt(hex.slice(1 + 2 * i, 3 + 2 * i), 16) + (1 - alpha) * g).toString(16).padStart(2, '0')).join('');
+const hexOf = (rgb) => over('#000000', 0, rgb);
+
+test('Out and an unstated stage hold 3:1 over both basemaps: the line over the default dark base, its casing over the satellite cloud', async () => {
+  const { contrast } = await import('./road-color-math.mjs');
+  // Grounds read off the 2026-11-06 captures: the default base (typical, brightest) and the satellite cloud (grey, white).
+  const grounds = [[59, 62, 64], [77, 80, 82], [158, 155, 163], [232, 232, 234]];
+  const casing = presentation.buildBcwsCasingPaint();
+  for (const cls of ['inactive', 'unknown']) {
+    const row = presentation.BCWS_STATUS_PRESENTATION[cls];
+    for (const ground of grounds) {
+      const edge = Math.max(contrast(over(row.lineColor, row.lineOpacity, ground), hexOf(ground)),
+        contrast(over(row.casingColor, row.lineOpacity, ground), hexOf(ground)));
+      assert.ok(edge >= 3, `${cls} over ${ground}: ${edge.toFixed(2)}:1`);
+    }
+  }
+  // The casing paint draws for the outline-only stages and stays clear under the active ones, one pixel wider each side.
+  const opacity = casing['line-opacity'];
+  assert.deepEqual(opacity.slice(0, 2), ['match', ['get', presentation.BCWS_STAGE_CLASS_PROPERTY]]);
+  assert.equal(opacity[3], 0, 'no casing under an active stage');
+  assert.deepEqual(casing['line-width'].slice(2), ['active', 5, 'inactive', 4.4, 4.4]);
+});
+
+test('the unstated stage is drawn apart from Out and from NIFC "Other or unclassified"; the key gives each stage its own line, as the map draws it', async () => {
+  const { BCWS_STATUS_PRESENTATION: bc, NIFC_INCIDENT_PRESENTATION: nifc } = presentation;
+  const mark = (row) => `${row.lineColor} ${row.lineDasharray.join(',')}`;
+  assert.equal(new Set([mark(bc.unknown), mark(bc.inactive), mark(nifc.other)]).size, 3, 'colour and dash together differ');
+  assert.notDeepEqual([...bc.unknown.lineDasharray], [...nifc.other.lineDasharray], 'not the NIFC dash in the NIFC colour');
+  assert.notDeepEqual([...bc.unknown.lineDasharray], [...bc.inactive.lineDasharray], 'not the Out line');
+  const dash = presentation.buildBcwsLinePaint()['line-dasharray'];
+  assert.deepEqual(dash.slice(2), ['active', ['literal', [1, 0]], 'inactive', ['literal', [1, 0]], ['literal', [0.5, 2]]]);
+  const { buildFireKey } = await import('../src/ui/map-key.ts');
+  const html = buildFireKey(new Set(['nifc-fires', 'bcws-fires'])).itemsHtml;
+  const item = (cls) => html.match(new RegExp(`<span class="map-key-item" style="([^"]*)" data-bcws-stage="${cls}"><span class="map-key-swatch" style="([^"]*)">`));
+  for (const cls of ['active', 'inactive', 'unknown']) assert.equal(item(cls)?.[1], 'flex-basis:100%', `${cls} on its own line`);
+  assert.equal(item('active')[2], `background:${bc.active.lineColor}`, 'the active stages are a filled mark, as drawn');
+  assert.equal(item('inactive')[2], 'background:transparent;border:2px solid #a8a29e;box-shadow:none', 'Out is an outline alone');
+  assert.equal(item('unknown')[2], 'background:transparent;border:2px dotted #94a3b8;box-shadow:none', 'an unstated stage is a dotted outline');
+});
+
+test('the minimap credits both agencies it checks: no label or Technical information note names NIFC alone', () => {
+  const source = readFileSync(new URL('../src/ui/island/minimap.tsx', import.meta.url), 'utf8');
+  for (const nifcAlone of ["'NIFC / WHP 2023'", 'Checking current mapped NIFC wildfire perimeters', 'Current mapped NIFC wildfire perimeter summary unavailable',
+    'Current mapped NIFC wildfire perimeter check unavailable', '`NIFC browser check:', 'Current mapped NIFC wildfire perimeters with static']) {
+    assert.equal(source.includes(nifcAlone), false, nifcAlone);
+  }
+  assert.ok(source.includes("'NIFC, BCWS / WHP 2023'"));
 });
 
 test('hectares in the issuer\'s unit as served, with the acre conversion beside it', () => {

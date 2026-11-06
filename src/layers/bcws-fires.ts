@@ -27,7 +27,7 @@
  */
 
 import type * as maplibregl from 'maplibre-gl';
-import type { Feature, FeatureCollection, MultiPolygon, Polygon } from 'geojson';
+import type { Feature, FeatureCollection, MultiPolygon, Polygon, Position } from 'geojson';
 
 import type { LayerStatus } from '../types/layer';
 import { URLS } from '../config/urls';
@@ -36,6 +36,7 @@ import {
   BCWS_STATUS_PRESENTATION,
   FIRE_FOOTPRINT_PRESENTATION,
   bcwsStatusClass,
+  buildBcwsCasingPaint,
   buildBcwsFillPaint,
   buildBcwsLinePaint
 } from '../config/wildfire-presentation';
@@ -67,6 +68,8 @@ export interface BcwsCallerOptions {
   readonly coverage: Envelope;
   readonly fillPaint: NonNullable<maplibregl.FillLayerSpecification['paint']>;
   readonly linePaint: NonNullable<maplibregl.LineLayerSpecification['paint']>;
+  /** The dark casing drawn under the line (between the fill and the line). */
+  readonly casingPaint: NonNullable<maplibregl.LineLayerSpecification['paint']>;
   readonly beforeId?: string;
   /** Debounce for the while-active viewport refresh (nifc-fires.ts REFRESH_DEBOUNCE_MS). */
   readonly refreshDebounceMs?: number;
@@ -88,6 +91,7 @@ export interface BcwsSourceSnapshot {
 }
 const KEY = 'bcws-fires';
 const FILL = 'bcws-fires-fill';
+const CASING = 'bcws-fires-casing';
 const LINE = 'bcws-fires-line';
 
 /**
@@ -128,14 +132,40 @@ function queryEnvelope(map: maplibregl.Map, coverage: Envelope): { query: Envelo
   return { query: null, coverage: covered };
 }
 
-/** The map source's copy: each feature carries its stage class beside the raw record. */
+/** A ring's planar area in square degrees: enough to order perimeters by size. */
+function ringArea(ring: readonly Position[]): number {
+  let twice = 0;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    twice += ring[j]![0]! * ring[i]![1]! - ring[i]![0]! * ring[j]![1]!;
+  }
+  return Math.abs(twice) / 2;
+}
+
+function perimeterArea(geometry: Polygon | MultiPolygon | null): number {
+  if (!geometry) return 0;
+  const polygons = geometry.type === 'Polygon' ? [geometry.coordinates] : geometry.coordinates;
+  let area = 0;
+  for (const [outer, ...holes] of polygons) {
+    area += (outer ? ringArea(outer) : 0) - holes.reduce((sum, hole) => sum + ringArea(hole), 0);
+  }
+  return area;
+}
+
+/**
+ * The map source's copy: each feature carries its stage class beside the raw
+ * record, largest first, so a smaller perimeter inside a larger one draws
+ * over it and answers the click (an Out fill is clear but still answers).
+ */
 function withStageClass(collection: FeatureCollection<Polygon | MultiPolygon>): FeatureCollection<Polygon | MultiPolygon> {
   return {
     type: 'FeatureCollection',
-    features: collection.features.map((feature) => ({
-      ...feature,
-      properties: { ...feature.properties, [BCWS_STAGE_CLASS_PROPERTY]: bcwsStatusClass(feature.properties?.['FIRE_STATUS']) }
-    }))
+    features: collection.features
+      .map((feature) => ({ feature, area: perimeterArea(feature.geometry) }))
+      .sort((a, b) => b.area - a.area)
+      .map(({ feature }) => ({
+        ...feature,
+        properties: { ...feature.properties, [BCWS_STAGE_CLASS_PROPERTY]: bcwsStatusClass(feature.properties?.['FIRE_STATUS']) }
+      }))
   };
 }
 
@@ -167,6 +197,7 @@ export function createBcwsCaller(options: BcwsCallerOptions): {
   const empty = (): FeatureCollection<Polygon | MultiPolygon> => ({ type: 'FeatureCollection', features: [] });
   function clearMap(map: maplibregl.Map): void {
     if (map.getLayer(LINE)) map.removeLayer(LINE);
+    if (map.getLayer(CASING)) map.removeLayer(CASING);
     if (map.getLayer(FILL)) map.removeLayer(FILL);
     if (map.getSource(KEY)) map.removeSource(KEY);
   }
@@ -197,6 +228,8 @@ export function createBcwsCaller(options: BcwsCallerOptions): {
       else map.addSource(KEY, { type: 'geojson', data, attribution: 'BC Wildfire Service' });
       const before = options.beforeId && map.getLayer(options.beforeId) ? options.beforeId : undefined;
       if (!map.getLayer(FILL)) map.addLayer({ id: FILL, type: 'fill', source: KEY, paint: options.fillPaint }, before);
+      // The casing goes under the line, whether or not the line is already there.
+      if (!map.getLayer(CASING)) map.addLayer({ id: CASING, type: 'line', source: KEY, paint: options.casingPaint }, map.getLayer(LINE) ? LINE : before);
       if (!map.getLayer(LINE)) map.addLayer({ id: LINE, type: 'line', source: KEY, paint: options.linePaint }, before);
     }
     snapshot = value;
@@ -209,7 +242,7 @@ export function createBcwsCaller(options: BcwsCallerOptions): {
       snapshot !== null && snapshot.complete && snapshot.coverage !== null &&
       envelopeCovers(snapshot.coverage, map.getBounds()) &&
       (snapshot.retrievedAt === null || Date.now() - snapshot.retrievedAt < reuseMs) &&
-      (snapshot.collection.features.length === 0 || Boolean(map.getSource(KEY) && map.getLayer(FILL) && map.getLayer(LINE)))
+      (snapshot.collection.features.length === 0 || Boolean(map.getSource(KEY) && map.getLayer(FILL) && map.getLayer(CASING) && map.getLayer(LINE)))
     );
   }
   async function read(map: maplibregl.Map, request: number, owner: AbortController): Promise<void> {
@@ -292,7 +325,7 @@ const FOOTPRINT_FILL = 'fire-footprints-fill';
 const FOOTPRINT_LINE = 'fire-footprints-line';
 
 /** Fade targets for the sidebar's toggle transitions (LayerModule contract). */
-export const fadeLayerIds = [FILL, LINE] as const;
+export const fadeLayerIds = [FILL, CASING, LINE] as const;
 
 let areas: FireAreaState = NO_FIRE_AREAS;
 let groupingController: AbortController | null = null;
@@ -305,6 +338,7 @@ const caller = createBcwsCaller({
   coverage: BCWS_COVERAGE,
   fillPaint: buildBcwsFillPaint(),
   linePaint: buildBcwsLinePaint(),
+  casingPaint: buildBcwsCasingPaint(),
   beforeId: 'first-symbol',
   onPublish(map, snapshot) {
     if (snapshot.collection.features.length > 0) {

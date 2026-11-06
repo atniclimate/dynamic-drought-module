@@ -814,6 +814,22 @@ function griddedKey(): KeySpec {
   };
 }
 
+/**
+ * One BC stage on a line of its own, its swatch drawn as the map draws the
+ * stage: a filled mark for the active stages, an outline alone (dotted where
+ * the map dots it) for Out and an unstated stage.
+ */
+function bcwsStageItem(cls: 'active' | 'inactive' | 'unknown'): string {
+  const row = BCWS_STATUS_PRESENTATION[cls];
+  const swatch = row.fillOpacity > 0
+    ? `background:${row.lineColor}`
+    : `background:transparent;border:2px ${row.lineDasharray[1] === 0 ? 'solid' : 'dotted'} ${row.lineColor};box-shadow:none`;
+  return (
+    `<span class="map-key-item" style="flex-basis:100%" data-bcws-stage="${cls}">` +
+    `<span class="map-key-swatch" style="${escapeHtml(swatch)}"></span>${escapeHtml(row.legendLabel)}</span>`
+  );
+}
+
 /** A placeholder row for a still-loading key section (W2-D6): the section
  * is named rather than omitted, so live activation never silently drops a
  * source from the reference. 'unavailable' keeps its absence semantics. */
@@ -844,9 +860,7 @@ export function buildFireKey(
         '<strong class="map-key-scale-label">BC Wildfire Service current perimeters</strong>' +
         (bcwsLoading
           ? loadingSectionRow('bcws-fires')
-          : (['active', 'inactive', 'unknown'] as const)
-              .map((cls) => swatchItem(BCWS_STATUS_PRESENTATION[cls].lineColor, BCWS_STATUS_PRESENTATION[cls].legendLabel))
-              .join('')) +
+          : (['active', 'inactive', 'unknown'] as const).map(bcwsStageItem).join('')) +
         '</span>'
       : '';
   const outlook =

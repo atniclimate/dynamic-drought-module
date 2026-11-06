@@ -77,6 +77,14 @@ export const BCWS_RELOAD_SETTLE_MS = 30_000;
  */
 export const BCWS_RELOAD_FINISHED_GAP_MS = 3_000;
 
+/**
+ * How long one stamp read can stand as a later read's first check, so the
+ * layer and the minimap entering Wildfire together share it. An earlier first
+ * check only lengthens the span the stamps must hold still over, so the
+ * reload rule is unchanged: a reload inside that span reads incomplete.
+ */
+export const BCWS_STAMP_SHARE_MS = 5_000;
+
 /** The layer's own edit stamps (ArcGIS `editingInfo`, epoch ms). */
 interface EditStamps {
   readonly schema: number;
@@ -91,13 +99,13 @@ let stampRequests = 0;
  * cache hits); a value no earlier request used makes it ask the service
  * (`X-Cache: TCP_MISS`, 07:42:54 UTC), and no-store keeps the browser out.
  */
-async function editStamps(layerUrl: string, options: BcwsReadOptions): Promise<EditStamps | null> {
+async function editStamps(layerUrl: string, timeoutMs: number, signal: AbortSignal): Promise<EditStamps | null> {
   const url = new URL(layerUrl);
   url.searchParams.set('f', 'json');
   url.searchParams.set('_', `${Date.now()}-${++stampRequests}`);
   try {
     // The layer description is about 11 kB; a larger answer is not the one measured.
-    const value = await fetchJsonWithBudget(url.toString(), { cache: 'no-store' }, options.signal, options.pageTimeoutMs, 64 * 1024);
+    const value = await fetchJsonWithBudget(url.toString(), { cache: 'no-store' }, signal, timeoutMs, 64 * 1024);
     const info = (value as { editingInfo?: { schemaLastEditDate?: unknown; dataLastEditDate?: unknown } } | null)?.editingInfo;
     const schema = info?.schemaLastEditDate;
     const data = info?.dataLastEditDate;
@@ -105,8 +113,59 @@ async function editStamps(layerUrl: string, options: BcwsReadOptions): Promise<E
       ? { schema, data }
       : null;
   } catch (error) {
-    if (options.signal.aborted) throw error;
+    if (signal.aborted) throw error;
     return null;
+  }
+}
+
+/** One stamp request and the readers waiting on it. */
+interface StampRound {
+  readonly layerUrl: string;
+  /** `performance.now()` when the request began. */
+  readonly startedAt: number;
+  readonly controller: AbortController;
+  readonly promise: Promise<EditStamps | null>;
+  readers: number;
+  settled: boolean;
+}
+let latestRound: StampRound | null = null;
+
+/** Test seam: a fresh fixture service starts with no stamp read to share. */
+export function forgetBcwsStampRead(): void {
+  latestRound = null;
+}
+
+/**
+ * The layer's edit stamps from a request begun strictly after `after` (a
+ * `performance.now()` reading; strictly, so a coarse clock never lets a
+ * request begun before that moment pass): the newest one when it qualifies
+ * (in flight or answered), else a new one. The request stops only when every
+ * reader waiting on it has left; a failed answer is never shared onward.
+ */
+async function sharedEditStamps(layerUrl: string, options: BcwsReadOptions, after: number): Promise<EditStamps | null> {
+  if (options.signal.aborted) throw new DOMException('Aborted', 'AbortError');
+  let round = latestRound;
+  if (round === null || round.layerUrl !== layerUrl || round.startedAt <= after || round.controller.signal.aborted) {
+    const controller = new AbortController();
+    const fresh: StampRound = {
+      layerUrl, startedAt: performance.now(), controller, readers: 0, settled: false,
+      promise: editStamps(layerUrl, options.pageTimeoutMs, controller.signal)
+    };
+    const forget = (): void => { fresh.settled = true; if (latestRound === fresh) latestRound = null; };
+    void fresh.promise.then((stamps) => (stamps === null ? forget() : void (fresh.settled = true)), forget);
+    latestRound = round = fresh;
+  }
+  const joined = round;
+  joined.readers++;
+  const signal = options.signal;
+  try {
+    return await new Promise<EditStamps | null>((resolve, reject) => {
+      const onAbort = (): void => reject(new DOMException('Aborted', 'AbortError'));
+      signal.addEventListener('abort', onAbort, { once: true });
+      void joined.promise.then(resolve, reject).finally(() => signal.removeEventListener('abort', onAbort));
+    });
+  } finally {
+    if (--joined.readers === 0 && !joined.settled) joined.controller.abort();
   }
 }
 
@@ -130,7 +189,9 @@ async function editStamps(layerUrl: string, options: BcwsReadOptions): Promise<E
  * layer that holds still that long is one whose last reload wrote no data
  * (an emptied table after the April 1 rollover reads as zero). Anything else
  * is `changed-record`, never complete. Current-product membership is never
- * filtered by year.
+ * filtered by year. Readers running together (the layer and the minimap on
+ * entering Wildfire) share a first check begun within `BCWS_STAMP_SHARE_MS`;
+ * each second check is begun after its own page.
  */
 export async function readBcwsPerimeters(options: BcwsReadOptions): Promise<PolygonPagesResult> {
   if (options.bounds && (!options.bounds.every(Number.isFinite) ||
@@ -138,7 +199,8 @@ export async function readBcwsPerimeters(options: BcwsReadOptions): Promise<Poly
     throw new RangeError('Invalid BCWS query bounds.');
   }
   const layerUrl = options.endpoint.replace(/\/query$/, '');
-  const before = await editStamps(layerUrl, options);
+  // The first check may be another reader's, begun a little earlier; the second is always begun after this page.
+  const before = await sharedEditStamps(layerUrl, options, performance.now() - BCWS_STAMP_SHARE_MS);
   const started = performance.now();
   const result = await readPolygonPages({
     ...options,
@@ -167,7 +229,7 @@ export async function readBcwsPerimeters(options: BcwsReadOptions): Promise<Poly
   if (before !== null && !finished) {
     await sleepUnlessAborted((options.reloadSettleMs ?? BCWS_RELOAD_SETTLE_MS) - (performance.now() - started), options.signal);
   }
-  const after = await editStamps(layerUrl, options);
+  const after = await sharedEditStamps(layerUrl, options, performance.now());
   const held = before !== null && after !== null && after.schema === before.schema && after.data === before.data;
   return held ? result : { ...result, complete: false, reason: 'changed-record' };
 }

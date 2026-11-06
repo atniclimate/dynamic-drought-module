@@ -478,7 +478,8 @@ function installPerimeterTimeBar(): void {
   const owner = timeBarOwner();
   if (owner !== null && owner !== LAYER_KEY) return;
   setTimeBar(LAYER_KEY, {
-    ariaLabel: 'NIFC mapped fire perimeters time statement',
+    // DRAFT wording: the group no longer credits NIFC alone; the detail still names the issuer
+    ariaLabel: 'Mapped fire perimeters time statement',
     stamp: {
       horizon: 'current',
       headline: 'Current perimeters · no single valid time',

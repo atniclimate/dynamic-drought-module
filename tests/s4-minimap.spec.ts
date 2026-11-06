@@ -251,7 +251,7 @@ test.describe('S4b minimap', () => {
     await gotoApp(page, '?view=brief&cluster=wildfire');
     const minimap = page.locator('.shell-minimap-map');
     await expect(minimap.locator('.shell-minimap-scale')).toHaveText(
-      'NIFC / WHP 2023',
+      'NIFC, BCWS / WHP 2023',
     );
     await expect(minimap.locator('.shell-minimap-metric-note')).toHaveCount(0);
     await expect(minimap.locator('.shell-minimap-canvas')).toHaveAttribute(

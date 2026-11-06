@@ -90,6 +90,8 @@ export interface Metric {
    * (critical-review #6). Currently only the weekly USDM surface sets this.
    */
   readonly stale?: boolean;
+  /** The tile's name where it reads more than its own layer; absent, the view names the tile's layer. */
+  readonly name?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -368,7 +370,15 @@ export function alertsMetric(map: maplibregl.Map): Metric {
   };
 }
 
+/** The fires tile's name while both agencies' perimeters are on (DRAFT wording, DR-177): it counts both. */
+export const FIRES_BOTH_AGENCIES_NAME = 'Current Mapped Fire Perimeters (NIFC and BC Wildfire Service)';
+
 export function firesMetric(map: maplibregl.Map): Metric {
+  const metric = firesReading(map);
+  return isLayerOn(FIRES_KEY) && isLayerOn(BCWS_KEY) ? { ...metric, name: FIRES_BOTH_AGENCIES_NAME } : metric;
+}
+
+function firesReading(map: maplibregl.Map): Metric {
   const nifcOn = isLayerOn(FIRES_KEY);
   const bcOn = isLayerOn(BCWS_KEY);
   if (!nifcOn && !bcOn) return offMetric('wildfires');

@@ -20,6 +20,8 @@ registerHooks({ resolve(specifier, context, nextResolve) {
   return nextResolve(specifier, context);
 } });
 const { registry } = await import('../src/state/registry.ts');
+// Each case is a fresh fixture service: no stamp read carries over from the case before.
+const { forgetBcwsStampRead } = await import('../src/util/bcws-perimeter-read.ts');
 const moduleUnderTest = () => import('../src/layers/bcws-fires.ts');
 const key = 'bcws-fires';
 const feature = (id, status = 'Being Held') => ({ type: 'Feature', properties: {
@@ -66,12 +68,13 @@ const configuration = overrides => ({
     maxPageBytes: 2000000, maxTotalBytes: 4000000, maxVertices: 50000 },
   fillPaint: { 'fill-color':'#ff0000', 'fill-opacity':0.1 },
   linePaint: { 'line-color':'#000000', 'line-width':1 },
+  casingPaint: { 'line-color':'#111111', 'line-width':3 },
   refreshDebounceMs: 5,
   ...overrides
 });
 async function setup(fetcher, body, overrides) {
   const { createBcwsCaller } = await moduleUnderTest();
-  const previous = globalThis.fetch; globalThis.fetch = fetcher;
+  const previous = globalThis.fetch; globalThis.fetch = fetcher; forgetBcwsStampRead();
   const caller = createBcwsCaller(configuration(overrides)); const map = fakeMap();
   registry.activate(key);
   try { await body(caller, map); }
@@ -85,7 +88,7 @@ test('actual source/layers and registry publish only after complete valid respon
   const states = []; const unbind = registry.on('status-change', (layer, status) => { if (layer === key) states.push(status); });
   try { await setup(serve(async () => response(value)), async (caller,map) => {
     const start = Date.now(); await caller.activate(map);
-    assert.deepEqual(states, ['loading','ready']); assert.equal(map.layers.size, 2);
+    assert.deepEqual(states, ['loading','ready']); assert.deepEqual([...map.layers.keys()], ['bcws-fires-fill', 'bcws-fires-casing', 'bcws-fires-line']);
     assert.deepEqual(withoutStageClass(map.getSource(key).data), valueWithoutCollectionProperties(value));
     // The map source alone carries the stage class the paint reads; the snapshot keeps the raw record.
     assert.deepEqual(map.getSource(key).data.features.map(f => f.properties.ddm_stage_class), ['active', 'unknown']);
@@ -100,6 +103,16 @@ test('actual source/layers and registry publish only after complete valid respon
   }); } finally { unbind(); }
 });
 function valueWithoutCollectionProperties(value) { return { type:'FeatureCollection', features:value.features }; }
+test('a smaller perimeter inside a larger one comes later in the map source, so it draws over it and answers the click (C22352 inside the Out K70748)', async () => {
+  const square = (west, south, side) => ({ type: 'Polygon', coordinates: [[[west, south], [west + side, south], [west + side, south + side], [west, south + side], [west, south]]] });
+  const small = { ...feature(1, null), properties: { ...feature(1, null).properties, FIRE_NUMBER: 'C22352' }, geometry: square(-120.5, 49.5, 0.1) };
+  const large = { ...feature(2, 'Out'), properties: { ...feature(2, 'Out').properties, FIRE_NUMBER: 'K70748' }, geometry: square(-121, 49, 1) };
+  await setup(serve(async () => response({ type: 'FeatureCollection', features: [small, large] })), async (caller, map) => {
+    await caller.activate(map);
+    assert.deepEqual(map.getSource(key).data.features.map((f) => f.properties.FIRE_NUMBER), ['K70748', 'C22352']);
+    assert.deepEqual(caller.getSnapshot().collection.features.map((f) => f.properties.FIRE_NUMBER), ['C22352', 'K70748'], 'the snapshot keeps the answer as served');
+  });
+});
 test('full real paging through caller commits 1000+237 records once settled', async () => {
   let page = 0;
   await setup(serve(async () => response(page++ ? collection(Array.from({length:237},(_,i)=>1001+i)) :
@@ -306,7 +319,7 @@ test('reactivation retries failed reads and restores removed style resources thr
     await caller.activate(map); assert.equal(registry.getStatus(key),'error');
     await caller.activate(map); assert.equal(calls,2); assert.equal(registry.getStatus(key),'ready');
     map.layers.clear(); map.sources.clear();
-    await caller.activate(map); assert.equal(calls,3); assert.equal(map.layers.size,2); assert.equal(map.sources.size,1);
+    await caller.activate(map); assert.equal(calls,3); assert.equal(map.layers.size,3); assert.equal(map.sources.size,1);
   });
 });
 test('byte and vertex rejection are error, never clean no-data or partial publication', async () => {
@@ -325,6 +338,7 @@ test('the fire-area popup gives the NIFC record the same retrieval clock the NIF
   const nifcFetchedAt = Date.UTC(2026, 10, 6, 6, 30);
   const map = fakeMap();
   const previous = globalThis.fetch;
+  forgetBcwsStampRead();
   globalThis.fetch = serve(async () => response({ type: 'FeatureCollection', features: [fixture.bcws] }));
   globalThis.__bcwsClickTargets = [];
   setPerimeterSnapshot({ type: 'FeatureCollection', features: [fixture.nifc] }, nifcFetchedAt);
@@ -351,11 +365,73 @@ test('the production read sends the drift-checked field list, the stage whitelis
   const { BCWS_OUT_FIELDS, BCWS_ACTIVE_STAGES, BCWS_ACTIVE_WHERE, bcwsStatusClass, readBcwsPerimeters } = await import('../src/util/bcws-perimeter-read.ts');
   for (const stage of BCWS_ACTIVE_STAGES) assert.equal(bcwsStatusClass(stage), 'active');
   assert.equal(BCWS_ACTIVE_WHERE, "FIRE_STATUS IN ('Out of Control','Being Held','Under Control')");
-  const urls = []; const previous = globalThis.fetch;
+  const urls = []; const previous = globalThis.fetch; forgetBcwsStampRead();
   globalThis.fetch = serve(async url => { urls.push(new URL(url)); return response(collection([1])); });
   try {
     await readBcwsPerimeters({ ...configuration().limits, endpoint: 'https://fixture.invalid/query', signal: new AbortController().signal, where: BCWS_ACTIVE_WHERE });
   } finally { globalThis.fetch = previous; }
   assert.equal(urls[0].searchParams.get('outFields'), BCWS_OUT_FIELDS.join(','));
   assert.equal(urls[0].searchParams.get('where'), BCWS_ACTIVE_WHERE);
+});
+test('the layer and the minimap reading together share their first stamp check (three stamp requests, not four); a reload across them still reads incomplete', async () => {
+  const { BCWS_ACTIVE_WHERE, BCWS_STAMP_SHARE_MS, readBcwsPerimeters } = await import('../src/util/bcws-perimeter-read.ts');
+  const read = (where) => readBcwsPerimeters({ ...configuration().limits, endpoint: 'https://fixture.invalid/query',
+    signal: new AbortController().signal, ...(where ? { where } : {}) });
+  const previous = globalThis.fetch;
+  try {
+    for (const [stampAt, complete] of [[() => STEADY, true], [(n) => (n ? NEXT : STEADY), false]]) {
+      forgetBcwsStampRead();
+      let stamps = 0;
+      globalThis.fetch = async (url) => isStamps(url) ? response({ editingInfo: stampAt(stamps++) }) : response(collection([1]));
+      const results = await Promise.all([read(), read(BCWS_ACTIVE_WHERE)]);
+      assert.equal(stamps, 3, 'one shared first check, then a second check begun after each read\'s own page');
+      assert.deepEqual(results.map((result) => result.complete), [complete, complete]);
+    }
+    // The first check is shared only while it is recent: a read begun past the window takes its own.
+    forgetBcwsStampRead();
+    let stamps = 0;
+    globalThis.fetch = async (url) => isStamps(url) ? (stamps++, response({ editingInfo: STEADY })) : response(collection([1]));
+    await read();
+    assert.equal(stamps, 2);
+    await read();
+    assert.equal(stamps, 3, 'a read straight after shares the last check as its first');
+    const realNow = performance.now;
+    const later = realNow.call(performance) + BCWS_STAMP_SHARE_MS + 1;
+    performance.now = () => later;
+    try { await read(); } finally { performance.now = realNow; }
+    assert.equal(stamps, 5, 'past the window both checks are its own');
+  } finally { globalThis.fetch = previous; }
+});
+test('a reader that leaves does not stop the stamp check another reader is waiting on', async () => {
+  const { readBcwsPerimeters } = await import('../src/util/bcws-perimeter-read.ts');
+  const previous = globalThis.fetch;
+  forgetBcwsStampRead();
+  const held = deferred(); let stampSignal;
+  globalThis.fetch = async (url, init) => {
+    if (!isStamps(url)) return response(collection([1]));
+    if (!stampSignal) {
+      stampSignal = init.signal;
+      // As a real fetch does, the held answer rejects when its own signal aborts.
+      return new Promise((resolve, reject) => {
+        void held.promise.then(resolve);
+        init.signal.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true });
+      });
+    }
+    return response({ editingInfo: STEADY });
+  };
+  try {
+    const leaving = new AbortController();
+    const options = (signal) => ({ ...configuration().limits, endpoint: 'https://fixture.invalid/query', signal });
+    const first = readBcwsPerimeters(options(leaving.signal));
+    const second = readBcwsPerimeters(options(new AbortController().signal));
+    leaving.abort();
+    await assert.rejects(first, { name: 'AbortError' });
+    assert.equal(stampSignal.aborted, false, 'the shared check keeps running for the reader still waiting');
+    held.resolve(response({ editingInfo: STEADY }));
+    assert.equal((await second).complete, true);
+  } finally {
+    // A failed assertion above never leaves the held answer pending.
+    held.resolve(response({ editingInfo: STEADY }));
+    globalThis.fetch = previous;
+  }
 });

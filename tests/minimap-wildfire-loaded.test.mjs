@@ -73,6 +73,7 @@ registerHooks({
 const minimap = await import('../src/state/minimap-wildfire.ts');
 const { registry } = await import('../src/state/registry.ts');
 const { FRAMING_KEYS } = await import('../src/config/framings.ts');
+const { forgetBcwsStampRead } = await import('../src/util/bcws-perimeter-read.ts');
 
 const COVERED = 'pacific-coast';
 const COUNT_ANSWER = 3;
@@ -133,6 +134,8 @@ async function runFeed({ status, snapshot, bc = BC_QUIET, nifcCount = COUNT_ANSW
   const original = globalThis.fetch;
   const posts = [];
   const bcUrls = [];
+  // Each run is a fresh fixture service: no BC stamp read carries over.
+  forgetBcwsStampRead();
   globalThis.fetch = async (input, init) => {
     const url = String(input);
     if (url.includes('BCWS_FirePerimeters_PublicView')) {

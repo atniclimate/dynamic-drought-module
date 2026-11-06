@@ -445,6 +445,13 @@ export function buildNifcLinePaint(
  * ruling of 2026-09-26). Every BC perimeter is a wildfire perimeter. The
  * active stages wear the wildfire mark; Out and an unstated stage are drawn
  * as an outline only, so a season's extinguished fires never read as burning.
+ * An outline-only stage is opaque on a dark casing: the line holds at least
+ * 3:1 over the default dark base (ground 59,62,64 to 77,80,82 in the
+ * 2026-11-06 capture) and the casing over the satellite basemap's cloud
+ * (158,155,163 to 232,232,234, where the bare Out line read 2.08:1).
+ * The unstated stage is dotted: Out is solid and NIFC's "Other or
+ * unclassified" (the same slate) is dashed. A solid line is the dash
+ * pattern [1, 0], since the pattern is chosen per feature.
  */
 export const BCWS_STATUS_PRESENTATION = {
   active: {
@@ -453,26 +460,44 @@ export const BCWS_STATUS_PRESENTATION = {
     lineColor: WILDFIRE_STATIC_COLOR,
     lineOpacity: 0.82,
     lineWidth: 3,
+    lineDasharray: [1, 0],
+    casingColor: null,
     // DRAFT wording (DR-177): the issuer's three active stage names, verbatim.
     legendLabel: 'Out of Control, Being Held or Under Control'
   },
-  inactive: { fillColor: '#a8a29e', fillOpacity: 0, lineColor: '#a8a29e', lineOpacity: 0.82, lineWidth: 2.4, legendLabel: 'Out' },
+  inactive: {
+    fillColor: '#a8a29e',
+    fillOpacity: 0,
+    lineColor: '#a8a29e',
+    lineOpacity: 1,
+    lineWidth: 2.4,
+    lineDasharray: [1, 0],
+    casingColor: '#1c1917',
+    legendLabel: 'Out'
+  },
   unknown: {
     fillColor: '#94a3b8',
     fillOpacity: 0,
     lineColor: '#94a3b8',
-    lineOpacity: 0.78,
+    lineOpacity: 1,
     lineWidth: 2.4,
+    lineDasharray: [0.5, 2],
+    casingColor: '#1c1917',
     // DRAFT wording (DR-177)
     legendLabel: 'Stage of control not stated'
   }
 } as const;
 
+/** The casing's width beyond the line it carries: one pixel each side. */
+const BCWS_CASING_EXTRA_WIDTH = 2;
+
 /** The stage class the BC map source carries beside the raw record (src/layers/bcws-fires.ts). */
 export const BCWS_STAGE_CLASS_PROPERTY = 'ddm_stage_class';
 
+type BcwsStageRow = (typeof BCWS_STATUS_PRESENTATION)['active' | 'inactive' | 'unknown'];
+
 function bcwsStageMatch(
-  pick: (row: (typeof BCWS_STATUS_PRESENTATION)['active' | 'inactive' | 'unknown']) => string | number
+  pick: (row: BcwsStageRow) => string | number | maplibregl.ExpressionSpecification
 ): maplibregl.ExpressionSpecification {
   const p = BCWS_STATUS_PRESENTATION;
   return ['match', ['get', BCWS_STAGE_CLASS_PROPERTY], 'active', pick(p.active), 'inactive', pick(p.inactive), pick(p.unknown)];
@@ -486,7 +511,17 @@ export function buildBcwsLinePaint(): NonNullable<maplibregl.LineLayerSpecificat
   return {
     'line-color': bcwsStageMatch((row) => row.lineColor),
     'line-opacity': bcwsStageMatch((row) => row.lineOpacity),
-    'line-width': bcwsStageMatch((row) => row.lineWidth)
+    'line-width': bcwsStageMatch((row) => row.lineWidth),
+    'line-dasharray': bcwsStageMatch((row) => ['literal', [...row.lineDasharray]])
+  };
+}
+
+/** The dark casing under the outline-only stages (none under the active stages, which carry their own fill). */
+export function buildBcwsCasingPaint(): NonNullable<maplibregl.LineLayerSpecification['paint']> {
+  return {
+    'line-color': bcwsStageMatch((row) => row.casingColor ?? row.lineColor),
+    'line-opacity': bcwsStageMatch((row) => (row.casingColor === null ? 0 : row.lineOpacity)),
+    'line-width': bcwsStageMatch((row) => row.lineWidth + BCWS_CASING_EXTRA_WIDTH)
   };
 }
 
