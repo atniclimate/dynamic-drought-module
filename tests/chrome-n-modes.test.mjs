@@ -402,7 +402,11 @@ test('every HAZARD_CLUSTER_KEYS entry resolves a placeConditionRow (DR-113)', as
   // The NIFC incident-type class 'wildfire' (src/config/wildfire-presentation.ts
   // classifyNifcIncidentType) shares a spelling with a cluster key and is not
   // one; its one comparison is set aside before the cluster-literal scan.
-  const clusterScan = code.replace(/classifyNifcIncidentType\([^)]*\)\s*===\s*'wildfire'/g, '');
+  // The CPC Drought Outlook's layer key 'drought' (src/config/layers.ts) is
+  // likewise a layer, not a mode; its one restatement is set aside too.
+  const clusterScan = code
+    .replace(/classifyNifcIncidentType\([^)]*\)\s*===\s*'wildfire'/g, '')
+    .replace(/const OUTLOOK_KEY = 'drought';/, '');
   for (const mode of HAZARD_CLUSTER_KEYS) {
     assert.doesNotMatch(
       clusterScan,

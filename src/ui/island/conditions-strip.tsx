@@ -19,7 +19,7 @@ import { timeline } from '../../state/timeline';
 import { isFailedCheckedLayer, requestLayerOff, requestLayerOn } from '../layer-toggle-command';
 import { HAZARD_CLUSTERS } from '../../config/clusters';
 import type { HazardClusterKey } from '../../config/clusters';
-import { getSelectedHazard, onCommittedSnapshotChange } from '../../state/cluster-service';
+import { getSelectedHazard, onCommittedSnapshotChange, requestHorizon } from '../../state/cluster-service';
 import {
   droughtMetric,
   alertsMetric,
@@ -126,6 +126,9 @@ function MetricTile({
       if (document.activeElement === btn) stripFocusAfterHide(btn)?.focus({ preventScroll: true });
       requestLayerOff(tile.key);
     } else {
+      // The observed drought surface commits the Current horizon first, as
+      // drought.ts switchToObserved does, so no outlook chip stays pressed over it.
+      if (id === 'drought') requestHorizon('current');
       requestLayerOn(tile.key);
     }
   };

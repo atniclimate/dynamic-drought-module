@@ -1111,6 +1111,22 @@ test('a ready USDM change register does not assert nothing is mapped (Codex P2 1
   }
 });
 
+test('the CPC Drought Outlook alone is a register row, never "no condition layer" (audit round 5, R5-4)', () => {
+  // Drought mode at Near Term or Long Range draws only the outlook.
+  const result = withRegistry([{ key: 'drought', status: 'ready', on: true }], () =>
+    buildPlaceConditionsHtml(fakeMap({ 'drought-fill': [{ properties: { category: 'Persists' } }] }), [0, 0], PLACE)
+  );
+  assert.equal(result.rows.length, 1, JSON.stringify(result));
+  assert.equal(result.rows[0].label, 'Drought');
+  assert.match(result.rows[0].text, /CPC Drought Outlook.*no current category/);
+  assert.deepEqual(result.head, [{ text: NOT_EVERY_READ }]);
+  // An outlook asked for that failed to activate joins the unread check.
+  const failed = withRegistry([{ key: 'drought', status: 'error', on: false }], () =>
+    buildPlaceConditionsHtml(fakeMap({}), [0, 0], PLACE)
+  );
+  assert.deepEqual(failed.head, [{ label: 'Conditions', text: COULD_NOT_READ }]);
+});
+
 test('in a mode with no place row the nothing-on head reads the interim line; the other sentences keep their cases (draft DR-180)', () => {
   const before = getHazardCluster();
   const deferred = HAZARD_CLUSTER_KEYS.filter((mode) => HAZARD_CLUSTERS[mode].placeConditionRow === null);
