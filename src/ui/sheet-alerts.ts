@@ -150,6 +150,13 @@ function render(): void {
       '<p class="sheet-alerts-note">The National Weather Service alert feed is not reachable right now. Current alerts are always available at <a href="https://www.weather.gov/alerts" target="_blank" rel="noopener">weather.gov/alerts</a>.</p>';
     return;
   }
+  // A cut-off answer may have dropped the alerts of this view: no claim of none.
+  if (status === 'degraded') {
+    // DRAFT wording (pending the owner's read-back): the place popup's own "the response was incomplete".
+    body.innerHTML = // vocab-allow: describes the NWS alert feed, upstream data
+      '<p class="sheet-alerts-note">The National Weather Service response was incomplete, so this view cannot rule an alert out.</p>';
+    return;
+  }
   body.innerHTML = heatFire
     // vocab-allow: describes the NWS alert products and feed, upstream data
     ? '<p class="sheet-alerts-note">No active heat or fire-weather alerts in the current map view.</p>'
