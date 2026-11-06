@@ -358,7 +358,9 @@ export function buildBiaReservationPopupModel(
  * the caveat wording; an unknown code falls back to the neutral, non-committal
  * "Census AIANNH area", never to a jurisdiction claim.
  */
-function resolveAiannhSubtype(code: string): { label: string; isLegal: boolean } {
+function resolveAiannhSubtype(code: string, isTdsa: boolean): { label: string; isLegal: boolean } {
+  // DRAFT wording: the Census Bureau's own term for MTFCC G2160, which shares class D6 with the OTSAs.
+  if (isTdsa) return { label: 'Tribal Designated Statistical Area (statistical)', isLegal: false };
   switch (code.toUpperCase()) {
     case 'D1':
     case 'D2':
@@ -406,7 +408,10 @@ export function buildAiannhPopupModel(
   // The name the search and the briefing give this Census area; the Census name stays a detail row.
   const name = censusNames?.get(censusArea) ?? censusArea;
   const code = firstText([p.AIANNHCC, p.aiannhcc]);
-  const subtype = resolveAiannhSubtype(code);
+  // Census class D6 holds both Oklahoma Tribal Statistical Areas (MTFCC G2140)
+  // and Tribal Designated Statistical Areas elsewhere (G2160, Samish among them).
+  const isTdsa = code.toUpperCase() === 'D6' && firstText([p.MTFCC, p.mtfcc]) === 'G2160';
+  const subtype = resolveAiannhSubtype(code, isTdsa);
   // The user-visible provenance sentence (umbrella build Unit D): publisher,
   // fetched-live-not-bundled, vintage, and the jurisdiction caveat, on the
   // one surface that survives desktop, mobile, and embed.
@@ -420,7 +425,7 @@ export function buildAiannhPopupModel(
   // UNDERSTATING affirmed reservations (McGirt v. Oklahoma, 2020), so
   // D6 carries its own wording, and every branch ends with the
   // absence-is-not-absence line.
-  const isOtsa = code.toUpperCase() === 'D6';
+  const isOtsa = code.toUpperCase() === 'D6' && !isTdsa;
   const caveat = isOtsa
     ? "This boundary is the US Census Bureau's statistical delineation (vintage January 1, 2025) of a reservation as it existed before Oklahoma statehood (1907), requested live from the Census TIGERweb service when the layer needs it, held only in this browser session's memory, and not bundled by this module. 'Statistical area' describes the Census dataset, not the land's status: in McGirt v. Oklahoma (2020) and later rulings, courts affirmed that several of these reservations were never disestablished and remain Indian country. Boundaries and legal status are matters of each Nation's sovereign authority; consult the Nation for any authoritative statement. No federal dataset maps every Tribal Nation; absence from this layer is not absence of a Nation or of its rights."
     : subtype.isLegal

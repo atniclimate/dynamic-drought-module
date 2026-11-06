@@ -89,14 +89,22 @@ let nationNamesLoad: Promise<ReadonlyMap<string, string>> | null = null;
  * Load, once, the BIA land-area to Nation name map through the roster's
  * provenance gate (gatedDisplayName, DR-094), the source the BIA popup, the
  * search and the place catalog title a Nation from. Rejects like the roster;
- * until it resolves, or after a failure, a BIA land area titles itself.
+ * until it resolves (a failure is retried on the next call), a BIA land area titles itself.
  */
 export function loadBiaNationNames(): Promise<ReadonlyMap<string, string>> {
   nationNamesLoad ??= loadTribalRoster().then((areas) => {
     nationNames = new Map(areas.map((area) => [area.larName, gatedDisplayName(area)]));
     return nationNames;
+  }, (err: unknown) => {
+    nationNamesLoad = null;
+    throw err;
   });
   return nationNamesLoad;
+}
+
+/** The loaded LARNAME to Nation name map, or undefined before it loads. */
+export function biaNationNames(): ReadonlyMap<string, string> | undefined {
+  return nationNames ?? undefined;
 }
 
 /** The BIA land area a feature names, before any Nation name. */
@@ -112,14 +120,22 @@ let censusNamesLoad: Promise<ReadonlyMap<string, string>> | null = null;
  * Load, once, the Census area to name map through the same gate
  * (gatedCensusName): the search's Census rows (DR-239), keyed by the Census
  * NAME the layer's features carry. Rejects like the roster; until it
- * resolves, or after a failure, a Census area titles itself.
+ * resolves (a failure is retried on the next call), a Census area titles itself.
  */
 export function loadCensusNationNames(): Promise<ReadonlyMap<string, string>> {
   censusNamesLoad ??= loadTribalCensusAreas().then((areas) => {
     censusNames = new Map(areas.map((area) => [area.name, gatedCensusName(area)]));
     return censusNames;
+  }, (err: unknown) => {
+    censusNamesLoad = null;
+    throw err;
   });
   return censusNamesLoad;
+}
+
+/** The loaded Census NAME to gated name map, or undefined before it loads. */
+export function censusNationNames(): ReadonlyMap<string, string> | undefined {
+  return censusNames ?? undefined;
 }
 
 /** The Census AIANNH area a feature names (NAME; BASENAME the descriptor-stripped form). */

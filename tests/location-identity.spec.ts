@@ -51,7 +51,7 @@ function identityMap(layerFeatures: SyntheticLayerFeatures): maplibregl.Map {
 
 async function containingTribal(
   layerFeatures: SyntheticLayerFeatures
-): Promise<{ name: string; source: string } | null> {
+): Promise<{ name: string; source: string; biaLandArea?: string } | null> {
   const identity = await resolveLocationIdentity(
     identityMap(layerFeatures),
     { lng: -120.5, lat: 47.2 },
@@ -75,7 +75,7 @@ test('the subtype-aware identity matrix covers legal AIANNH, statistical AIANNH,
   const cases: ReadonlyArray<{
     readonly label: string;
     readonly layers: SyntheticLayerFeatures;
-    readonly expected: { readonly name: string; readonly source: string } | null;
+    readonly expected: { readonly name: string; readonly source: string; readonly biaLandArea?: string } | null;
   }> = [
     {
       label: 'legal AIANNH only',
@@ -98,7 +98,8 @@ test('the subtype-aware identity matrix covers legal AIANNH, statistical AIANNH,
         [BIA_FILL]: bia,
         [AIANNH_FILL]: [statisticalAiannh, legalAiannh]
       },
-      expected: { name: 'Synthetic Census Legal Area', source: 'aiannh' }
+      // R5-37: the BIA land area rides along so the door can name the Nation.
+      expected: { name: 'Synthetic Census Legal Area', source: 'aiannh', biaLandArea: 'Synthetic BIA LAR Area' }
     },
     {
       label: 'BIA outranks a statistical AIANNH area',

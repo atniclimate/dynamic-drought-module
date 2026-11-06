@@ -892,7 +892,7 @@
     },
     {
       "larName": "Resighini",
-      "tribe": "PuliklaTribe of Yurok People (previously listed as Resighini Rancheria, California)",
+      "tribe": "Pulikla Tribe of Yurok People (previously listed as Resighini Rancheria, California)",
       "rule": "unique-containment"
     },
     {
@@ -1516,7 +1516,7 @@
     {
       "larName": "Yurok",
       "candidates": [
-        "PuliklaTribe of Yurok People (previously listed as Resighini Rancheria, California)",
+        "Pulikla Tribe of Yurok People (previously listed as Resighini Rancheria, California)",
         "Yurok Tribe of the Yurok Reservation, California"
       ]
     }

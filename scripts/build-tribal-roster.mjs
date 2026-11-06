@@ -182,9 +182,13 @@ function noEmDash(s) {
 export function parseRoster(xml) {
   const names = [];
   for (const m of xml.matchAll(/<FP SOURCE="FP-1"[^>]*>([\s\S]*?)<\/FP>/g)) {
+    // Source typo, the one correction to a Nation's name: Federal Register
+    // 2026-01899 (2026-01-30) prints "PuliklaTribe of Yurok People"; its prior
+    // edition, 2024-29005 (2024-12-11), prints "Pulikla Tribe". Only the space
+    // is restored. shortcut: one named entry, remove when a notice prints the space.
     const name = noEmDash(
       decodeEntities(m[1].replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim()
-    );
+    ).replace(/^PuliklaTribe /, 'Pulikla Tribe ');
     if (name) names.push(name);
   }
   // An entry with a "(See X)" whose X begins another roster entry is a
