@@ -59,6 +59,7 @@ import { registerClickTarget } from '../map/interaction-coordinator';
 import type { IssuedModel, PopupClock } from '../ui/popup-frame';
 import { fetchJsonWithBudget, linkAbort } from '../util/fetch';
 import { isObject } from '../util/guards';
+import { formatSnapshotTime } from '../util/snapshot-time';
 import { registry } from '../state/registry';
 import { showLegend, hideLegend, LEGEND_ORDER, renderSwatchLegend } from '../ui/legend-registry';
 
@@ -386,23 +387,12 @@ function ensureMapLayers(
   }
 }
 
-function formatSnapshotTime(time: number): string {
-  return new Date(time).toLocaleString(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    timeZoneName: 'short'
-  });
-}
-
 function showSnapshotLegend(active: readonly HeldAlert[]): void {
   const featureCount = active.length;
   const asOf =
     snapshotAsOf === null
       ? ''
-      : ` Snapshot as of ${formatSnapshotTime(snapshotAsOf)}.`;
+      : ` As of ${formatSnapshotTime(snapshotAsOf)}.`;
   const note = snapshotTruncated
     ? `Results may be incomplete because the National Weather Service response reached its transfer limit.${asOf}`
     : featureCount === 0

@@ -356,7 +356,7 @@ test('HeatRisk: a normal activation is unchanged (metadata, then catalog, then o
   assert.deepEqual(seen.sources, ['heatrisk-frame-1']);
   assert.deepEqual(seen.layers, ['heatrisk']);
   assert.ok(seen.loading.includes('Loading HeatRisk...'), 'the frame indicator opens');
-  assert.ok(seen.legends.includes('heatrisk'));
+  assert.ok(!seen.legends.includes('heatrisk'), 'the coverage sentence lives in Technical information, not a legend');
 });
 
 test('HeatRisk: a later off, after a settled activation, does not disturb a re-activation', async (t) => {

@@ -43,7 +43,7 @@ import {
   parseHeatRiskDayParam,
   syncHeatRiskDayParam
 } from '../state/url';
-import { hideLegend, LEGEND_ORDER, showLegend } from '../ui/legend-registry';
+import { hideLegend } from '../ui/legend-registry';
 import { hideLoading, showLoading } from '../ui/overlay';
 import { clearTimeBar, setTimeBar, type TimeBarStamp } from '../ui/time-bar';
 import { fetchJsonWithBudget, linkAbort } from '../util/fetch';
@@ -308,23 +308,6 @@ function mapCenterHasCoverage(map: maplibregl.Map): boolean {
   return pointHasHeatRiskCoverage(center.lng, center.lat);
 }
 
-function showCoverageNote(hasCoverage: boolean): void {
-  showLegend(LAYER_KEY, {
-    order: LEGEND_ORDER.surface,
-    render: (body) => {
-      const title = document.createElement('h3');
-      title.className = 'legend-section-title';
-      title.textContent = 'HeatRisk coverage';
-      const note = document.createElement('p');
-      note.className = 'legend-note';
-      note.textContent = hasCoverage
-        ? 'National Weather Service HeatRisk covers the contiguous United States only.'
-        : 'No HeatRisk data at the map center. National Weather Service HeatRisk covers the contiguous United States only.';
-      body.append(title, note);
-    }
-  });
-}
-
 /** Read the complete advertised time range from the service metadata. */
 function extractTimeExtent(json: unknown): readonly [number, number] | null {
   if (!isObject(json) || !isObject(json.timeInfo)) return null;
@@ -464,7 +447,6 @@ function renderFrame(map: maplibregl.Map, day: number): void {
 
   const hasCoverage = mapCenterHasCoverage(map);
   currentHasCoverage = hasCoverage;
-  showCoverageNote(hasCoverage);
   if (!hasCoverage) {
     // A verified absence, not a pending fetch: withdraw the loading
     // statement in the same turn so the two never both stand.
@@ -540,7 +522,6 @@ function onCoverageMoveEnd(): void {
   if (!activeMap || selectedDay === null || frames.length === 0) return;
   const hasCoverage = mapCenterHasCoverage(activeMap);
   currentHasCoverage = hasCoverage;
-  showCoverageNote(hasCoverage);
   if (!hasCoverage) {
     masterController?.abort();
     masterController = null;

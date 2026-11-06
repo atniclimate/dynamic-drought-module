@@ -185,11 +185,10 @@ test('HeatRisk is live only at a contiguous United States map center', async ({
   );
 
   await expect(layerPill(page, 'heatrisk')).toHaveText('live');
+  // The coverage sentence lives in Technical information, not a floating legend.
   await expect(
     page.locator('.legend-section[data-legend="heatrisk"]')
-  ).toContainText(
-    'National Weather Service HeatRisk covers the contiguous United States only.'
-  );
+  ).toHaveCount(0);
 
   for (const region of ['alaska', 'hawaii'] as const) {
     await selectRegion(page, region);
@@ -198,7 +197,7 @@ test('HeatRisk is live only at a contiguous United States map center', async ({
     );
     await expect(
       page.locator('.legend-section[data-legend="heatrisk"]')
-    ).toContainText('No HeatRisk data at the map center.');
+    ).toHaveCount(0);
   }
 
   await selectRegion(page, 'washington_state');
@@ -337,7 +336,7 @@ test('the National Weather Service snapshot prunes expired products and exposes 
   await expect(note).toContainText(
     'response reached its transfer limit'
   );
-  await expect(note).toContainText('Snapshot as of');
+  await expect(note).toContainText(/As of \d{1,2}:\d{2}\s?[AP]M, [A-Z][a-z]{2} \d{1,2}\./);
   await expect(note).toHaveAttribute('data-snapshot-as-of', /T/);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.locator('#mobile-footer-nav button[data-tab="alerts"]').click();

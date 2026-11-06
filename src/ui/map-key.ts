@@ -53,6 +53,7 @@ import { getHazardCluster, getOceanFraming, onHazardClusterChange } from '../sta
 import { getViewMode, onViewModeChange } from '../state/view-mode';
 import { isUsScopeCautionLayer } from '../state/display-summary';
 import { escapeHtml } from '../util/escape';
+import { formatSnapshotTime } from '../util/snapshot-time';
 import { KEY_ELIGIBLE_LABELS, chipFallbackLabel } from '../config/chip-labels';
 import { CHIP_STATE_WORDS, chipStateFromStatuses, type ChipState } from '../config/chip-state';
 import {
@@ -714,14 +715,6 @@ function nwsProductKey(): {
     ariaLabel:
       rows.length === 0 ? '' : `National Weather Service event products: ${rows.map(({ label }) => label).join(', ')}.`
   };
-}
-
-/** "1:14 AM, Oct 19" on the viewer's clock: when DDM last read the products. */
-function formatSnapshotTime(time: number): string {
-  const date = new Date(time);
-  const clock = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' });
-  const day = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' });
-  return `${clock.format(date)}, ${day.format(date)}`;
 }
 
 function nwsSnapshotQualification(): {
