@@ -250,7 +250,7 @@ test('ENSO Season ahead turns the precipitation outlook on over the SST and stor
   const enso = HAZARD_CLUSTERS.enso;
   assert.deepEqual(enso.recipes['season-ahead'], ['sst-anomaly', 'cpc-seasonal-precip', 'tropical-cyclones']);
   for (const horizon of ['current', 'weeks-ahead']) assert.ok(!enso.recipes[horizon].includes('cpc-seasonal-precip'));
-  assert.deepEqual(enso.optionalLayers, ['cpc-seasonal-temp']);
+  assert.deepEqual(enso.optionalLayers, ['cpc-seasonal-temp', 'nws-alerts']);
   for (const key of HAZARD_CLUSTER_KEYS) {
     for (const recipe of Object.values(HAZARD_CLUSTERS[key].recipes)) assert.ok(!recipe.includes('cpc-seasonal-temp'));
   }

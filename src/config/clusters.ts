@@ -270,8 +270,9 @@ export const HAZARD_CLUSTERS: Record<HazardClusterKey, HazardClusterDef> = {
       'weeks-ahead': ['sst-anomaly', 'tropical-cyclones'],
       'season-ahead': ['sst-anomaly', 'cpc-seasonal-precip', 'tropical-cyclones']
     },
-    // The CPC seasonal temperature outlook is the mode's, off until chosen.
-    optionalLayers: ['cpc-seasonal-temp'],
+    // The CPC seasonal temperature outlook and the alert layer are the mode's,
+    // each off until a person turns it on, at any horizon.
+    optionalLayers: ['cpc-seasonal-temp', 'nws-alerts'],
     // ENSO opens on the outlook until the DDM-P16-T09 composite is promoted
     // (its acceptance sentence, amended 2026-09-26).
     entryHorizon: 'season-ahead',
@@ -282,8 +283,6 @@ export const HAZARD_CLUSTERS: Record<HazardClusterKey, HazardClusterDef> = {
     // ENSO opens with the NOAA GFS wind paths on (DR-111 Q-WIND-MODES;
     // precedence.md 2.4); `flow=off` keeps it off (ENSO-FLOW-PLAN E2-4).
     flowDefault: 'wind',
-    // The alert layer is off until a person turns it on, at any horizon.
-    optionalLayers: ['nws-alerts'],
     alerts: {
       // DRAFT wording (pending the owner's read-back): the alert layer's name in ENSO.
       // vocab-allow: names the NWS alert products layer, upstream data
