@@ -1,6 +1,7 @@
 import type { ImpactBriefing } from './types';
 
 import {
+  formatDistanceKm,
   formatPointHeatInterval,
   formatPointHeatTimestamp,
   formatPointHeatValue
@@ -35,7 +36,12 @@ export function selectBriefNarrativeLine(
         observation.stationName ??
         observation.stationId ??
         'the nearest NWS station';
-      return `Heat at the selected point: ${station} reports ${values.join(', ')}${observation.timestamp ? ` at ${formatPointHeatTimestamp(observation.timestamp)}` : ''}.`;
+      // DRAFT wording (pending the owner's read-back): the distance clause, in heat-synthesis.ts's own words.
+      const distance =
+        observation.distanceKm === undefined
+          ? ''
+          : `, ${formatDistanceKm(observation.distanceKm)} from the selected point,`;
+      return `Heat at the selected point: ${station}${distance} reports ${values.join(', ')}${observation.timestamp ? ` at ${formatPointHeatTimestamp(observation.timestamp)}` : ''}.`;
     }
   }
 

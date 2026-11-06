@@ -112,6 +112,21 @@ test('a forecast period written in the point offset keeps its own calendar day, 
   assert.equal(result.claims[0].dates.valid, '2026-11-06');
 });
 
+// Audit round 5 (R5-24), DR-047 option a: the DDM-authored heat-to-dryness
+// sentence is not part of the NWS outlook; it is its own derived claim with a lineage.
+test('the NWS outlook claim carries only the forecast, and the heat-to-dryness sentence is derived', async () => {
+  const result = await withFetch(nwsAnswer('2026-11-06T18:00:00-08:00'), () =>
+    fetchNwsForecastClaims(SEATTLE, new AbortController().signal)
+  );
+  const [outlook, derived] = result.claims;
+  assert.equal(outlook.evidence, 'outlook');
+  assert.equal(outlook.text, 'Tonight: Rain, near 41 degrees F.');
+  assert.equal(derived.evidence, 'derived');
+  assert.equal(derived.product, 'nwsForecast');
+  assert.equal(derived.text, 'Watch this against the heat outlook; hot, dry spells deepen near-term dryness and fire danger.');
+  assert.ok(derived.lineage.length > 0, 'a derived claim names what it stands on');
+});
+
 const NOW = Date.parse('2026-11-06T22:30:00+00:00');
 
 async function observationAt(timestamp) {

@@ -86,6 +86,16 @@ test('a frozen companion file is withheld on its own age and does not date the R
   assert.equal(claims.some((c) => c.product === 'ensoNino34Weekly'), true);
 });
 
+// Audit round 5 (R5-32): the monthly file posts about every 30 days, so at 70
+// days it has missed an issue and is no longer "the most recent analyzed month".
+test('a monthly file frozen past 60 days is withheld while its headline is fresh', async () => {
+  const claims = await claimsAtAge(30, (snap) => {
+    snap.nino34.published = dayOffset(70);
+  });
+  assert.equal(claims.some((c) => c.product === 'ensoNino34Monthly'), false);
+  assert.equal(claims.some((c) => c.product === 'ensoNino34Weekly'), true);
+});
+
 test('a weekly file frozen past 45 days is withheld while its headline is fresh', async () => {
   const claims = await claimsAtAge(30, (snap) => {
     snap.nino34Weekly.published = dayOffset(60);

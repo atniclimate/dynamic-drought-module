@@ -708,8 +708,9 @@ test.describe('H2 critical-first surfaces', () => {
     await stubBrowserNwsHeat(page);
     await gotoApp(page, '?select=state:WA');
 
+    // R5-27: the station's distance from the selected point sits between its name and its reading.
     await expect(page.locator('.sheet-at-hand-headline')).toContainText(
-      'Heat at the selected point: Near Station reports temperature 90 °F (32 °C), heat index 95 °F (35 °C)'
+      /Heat at the selected point: Near Station, [\d.]+ mi \([\d.]+ km\) from the selected point, reports temperature 90 °F \(32 °C\), heat index 95 °F \(35 °C\)/
     );
     await page.locator('#sheet-report-door').click();
     const pointHeat = page.locator(

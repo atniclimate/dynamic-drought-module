@@ -1112,7 +1112,8 @@ export async function fetchEnsoClaims(
           })
         ];
 
-    const observedCompanionClaims = snap.nino34 && !stale && companionFresh(snap.nino34.published)
+    // The monthly file posts about every 30 days, so 60 days means CPC skipped an issue and it is no longer the most recent month.
+    const observedCompanionClaims = snap.nino34 && !stale && companionFresh(snap.nino34.published, 60)
       ? [
           makeClaim({
             text: nino34Text(snap.nino34, snap.retrieved),

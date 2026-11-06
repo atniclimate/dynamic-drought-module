@@ -38,6 +38,9 @@ const USDM_FILLS = ['usdm-frame-a-fill', 'usdm-frame-b-fill'] as const;
 /** The USFS Wildfire Hazard Potential raster layer ids (src/layers/usfs-whp.ts). */
 const WHP_LAYERS = ['usfs-whp', 'usfs-whp-classes'] as const;
 
+/** The Wildfire 3D perimeter-masked fuel risk drape (src/layers/whp-3d.ts). */
+const WHP_3D_DRAPE = 'whp-2023';
+
 /** How many nearest stations to name. */
 const NEAREST_STATION_COUNT = 3;
 
@@ -159,9 +162,14 @@ function fuelsRow(map: maplibregl.Map): PopupDetail {
   return {
     kind: 'row',
     label: 'Fuels and hazard',
-    text: WHP_LAYERS.some((id) => map.getLayer(id))
-      ? 'Wildfire Hazard Potential is on; read the class from the shaded surface beneath this perimeter.'
-      : 'Turn on Wildfire Hazard Potential to see the fuels hazard here.'
+    // The Wildfire 3D drape draws nothing inside a perimeter (src/layers/whp-3d.ts),
+    // unless the issuer colours row stood it down and draws unmasked itself.
+    text:
+      map.getLayer(WHP_3D_DRAPE) && !map.getLayer('usfs-whp-classes')
+        ? 'In Wildfire 3D, fuel risk is not drawn inside current fire perimeters (NIFC).'
+        : WHP_LAYERS.some((id) => map.getLayer(id))
+          ? 'Wildfire Hazard Potential is on; read the class from the shaded surface beneath this perimeter.'
+          : 'Turn on Wildfire Hazard Potential to see the fuels hazard here.'
   };
 }
 

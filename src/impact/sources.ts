@@ -516,6 +516,12 @@ export async function fetchUsdmClaims(
       mapDate === null
         ? "this week's U.S. Drought Monitor"
         : `the U.S. Drought Monitor map dated ${humanDayUtc(mapDate)}`;
+    // While the NADM surface is on, the map and place card read it, not USDM
+    // (popup-conditions.ts droughtRow), so the two categories are named apart.
+    const mapProduct = registry.getActiveKeys().has('nadm-drought')
+      ? // DRAFT wording (pending the owner's read-back); the NADM description is the layer's own (nadm-drought.ts).
+        ' The map shows the North American Drought Monitor, a tri-national monthly consensus published 2 to 3 weeks after month-end, so its category here can differ from this weekly U.S. Drought Monitor read.'
+      : '';
 
     if (worst < 0) {
       return {
@@ -523,7 +529,7 @@ export async function fetchUsdmClaims(
         claims: [
           makeClaim({
             // For a click, the popup's no-polygon sentence (popup-conditions.ts), word for word.
-            text: `No D0-D4 category polygon ${context.pointInsidePlace ? at : 'here'} (U.S. Drought Monitor). This client has no analyzed-area mask, so this does not confirm no drought.`,
+            text: `No D0-D4 category polygon ${context.pointInsidePlace ? at : 'here'} (U.S. Drought Monitor). This client has no analyzed-area mask, so this does not confirm no drought.${mapProduct}`,
             ...usdmShared
           })
         ]
@@ -536,7 +542,7 @@ export async function fetchUsdmClaims(
         ok: true,
         claims: [
           makeClaim({
-            text: `This location is in a mapped drought category (DM ${worst}) in ${asOfMap}.`,
+            text: `This location is in a mapped drought category (DM ${worst}) in ${asOfMap}.${mapProduct}`,
             ...usdmShared,
             support: { ...usdmShared.support, legendKey: 'usdm' },
             method: { basis: USDM_PERCENTILE_BASIS }
@@ -549,7 +555,7 @@ export async function fetchUsdmClaims(
       ok: true,
       claims: [
         makeClaim({
-          text: `This location is in ${impact.code} ${impact.label} as of ${asOfMap}. ${impact.summary}`,
+          text: `This location is in ${impact.code} ${impact.label} as of ${asOfMap}. ${impact.summary}${mapProduct}`,
           ...usdmShared,
           support: { ...usdmShared.support, legendKey: 'usdm' },
           method: { basis: USDM_PERCENTILE_BASIS }
@@ -1814,7 +1820,7 @@ export async function fetchNwsForecastClaims(
     const short = typeof first.shortForecast === 'string' ? first.shortForecast : '';
     const tempStr = temp !== null ? `${temp} degrees ${unit}` : 'an unspecified temperature';
     // vocab-allow: renders the upstream NWS point forecast product
-    const text = `${name}: ${short || 'forecast available'}, near ${tempStr}. Watch this against the heat outlook; hot, dry spells deepen near-term dryness and fire danger.`;
+    const text = `${name}: ${short || 'forecast available'}, near ${tempStr}.`;
 
     // The forecast product's own date: the period's own start (the day the
     // read period covers) as `valid`, and the product's own `updateTime` (when
@@ -1828,6 +1834,11 @@ export async function fetchNwsForecastClaims(
     const updateMs =
       typeof properties?.updateTime === 'string' ? Date.parse(properties.updateTime) : NaN;
     const issuedDay = Number.isFinite(updateMs) ? isoDayLocal(new Date(updateMs)) : undefined;
+    const dates = {
+      ...(validDay ? { valid: validDay } : {}),
+      ...(issuedDay ? { issued: issuedDay } : {}),
+      retrieved: todayIso()
+    };
 
     return {
       ok: true,
@@ -1839,21 +1850,33 @@ export async function fetchNwsForecastClaims(
           sourceUrl,
           product: 'nwsForecast',
           evidence: 'outlook',
-          dates: {
-            ...(validDay ? { valid: validDay } : {}),
-            ...(issuedDay ? { issued: issuedDay } : {}),
-            retrieved: todayIso()
-          },
+          dates,
           // vocab-allow: names the NWS point forecast, upstream product
           uncertainty: { kind: 'not-quantified', text: 'a point weather forecast stated as a tendency; the NWS product publishes no uncertainty band here' }
+        }),
+        // DR-047 a: the DDM-authored heat-to-dryness sentence (item 7 of the
+        // briefing's causal list) is relabeled derived with a lineage, pending
+        // citation, as the USDM wildfire sentence above is; its words are unchanged.
+        makeClaim({
+          text: 'Watch this against the heat outlook; hot, dry spells deepen near-term dryness and fire danger.',
+          source,
+          sourceUrl,
+          product: 'nwsForecast',
+          evidence: 'derived',
+          dates,
+          // DRAFT wording (pending the owner's read-back): the lineage and uncertainty lines.
+          // vocab-allow: names the NWS point forecast, upstream product
+          lineage: ['the NWS point forecast for the coming period', 'a DDM-authored heat and dryness read, pending citation'],
+          lineageRef: 'ddm-drought-impact-modeling',
+          // vocab-allow: honesty disclaimer, denies being a forecast
+          uncertainty: { kind: 'typical', text: 'a general tendency, not a forecast for this place' }
         })
       ],
       heatRead: {
         key: 'nwsForecast',
         // vocab-allow: names the upstream NWS point forecast product
         label: 'NWS point forecast',
-        // vocab-allow: renders the upstream NWS point forecast product
-        text: `${name}: ${short || 'forecast available'}, near ${tempStr}.`,
+        text,
         sourceUrl
       }
     };

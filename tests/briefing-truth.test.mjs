@@ -254,6 +254,28 @@ test('a selected place reads USDM at a point inside it; a click keeps the clicke
   }
 });
 
+// Audit round 5 (R5-10): with the North American Drought Monitor drawn (Drought
+// mode's own surface, which the place card reads), the weekly USDM category
+// claim says the map shows a different product, so two categories never disagree silently.
+test('with NADM drawn, the USDM category claim names the map product; without it, nothing is added', async () => {
+  const note = /North American Drought Monitor, a tri-national monthly consensus/;
+  for (const features of [[feature({ DM: 2 })], []]) {
+    await withFetch(() => jsonResponse(collection(features)), async () => {
+      const off = (await sources.fetchUsdmClaims(place(-120, 47), signal())).claims;
+      assert.doesNotMatch(off[0].text, note);
+      registry.activate('nadm-drought');
+      try {
+        const on = (await sources.fetchUsdmClaims(place(-120, 47), signal())).claims;
+        assert.equal(on.length, off.length);
+        assert.match(on[0].text, note);
+        assert.ok(on[0].text.startsWith(off[0].text));
+      } finally {
+        registry.deactivate('nadm-drought');
+      }
+    });
+  }
+});
+
 test('USDM missing or invalid categories cannot become D0 or an absence claim', async (t) => {
   t.mock.method(console, 'warn', () => {});
   for (const dm of [null, '', '  ', false, true, [], {}, -1, 5, 1.5, 0, '0', 4]) {
