@@ -3,7 +3,7 @@
  * batch that leaves LEGACY_ALLOWANCE (tests/identify-paths-manifest.ts) adds
  * its fixtures to its own module, so parallel batches never edit one hunk:
  * the places (M24), the surfaces (M25), the events and stations (M26), the
- * telemetry station popup's tier fixture (M26c). The
+ * telemetry station popup's tier fixture (M26c), the six CPC outlooks. The
  * census in tests/identify-paths.spec.ts and the PF3 tier rows in
  * tests/popup-viewport.spec.ts dispatch through these two records, keyed by
  * the manifest's builder id.
@@ -16,6 +16,7 @@ import { EVENT_STATION_CENSUS_FIXTURES, EVENT_STATION_TIER_FIXTURES } from './fr
 import { TELEMETRY_TIER_FIXTURES } from './frame-fixtures-telemetry';
 import { ENSO_CENSUS_FIXTURES, ENSO_TIER_FIXTURES } from './frame-fixtures-enso';
 import { TROPICAL_CENSUS_FIXTURES, TROPICAL_TIER_FIXTURES } from './frame-fixtures-tropical';
+import { CPC_OUTLOOK_CENSUS_FIXTURES, CPC_OUTLOOK_TIER_FIXTURES } from './frame-fixtures-cpc-outlooks';
 
 /**
  * The census spec's own helpers, handed to each fixture (a spec file exports
@@ -51,7 +52,8 @@ export const CENSUS_FIXTURES: Readonly<Record<string, CensusFixture>> = {
   ...FIRE_LABEL_CENSUS_FIXTURES,
   ...EVENT_STATION_CENSUS_FIXTURES,
   ...ENSO_CENSUS_FIXTURES,
-  ...TROPICAL_CENSUS_FIXTURES
+  ...TROPICAL_CENSUS_FIXTURES,
+  ...CPC_OUTLOOK_CENSUS_FIXTURES
 };
 
 export const TIER_FIXTURES: Readonly<Record<string, TierFixture>> = {
@@ -61,6 +63,7 @@ export const TIER_FIXTURES: Readonly<Record<string, TierFixture>> = {
   ...EVENT_STATION_TIER_FIXTURES,
   ...ENSO_TIER_FIXTURES,
   ...TROPICAL_TIER_FIXTURES,
+  ...CPC_OUTLOOK_TIER_FIXTURES,
   // The station popup (M26c): an adopted external popup with no click
   // target, so it has a tier fixture here and its census fixture beside the
   // census (tests/identify-paths.spec.ts EXTERNAL_CENSUS_FIXTURES).

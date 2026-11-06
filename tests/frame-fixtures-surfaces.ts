@@ -289,7 +289,7 @@ export async function bootSurface(
  * polygon covers the whole fitted map, so any canvas point hits it. Throws
  * naming the element over the centre when no canvas point exists.
  */
-async function mapClickPoint(page: Page): Promise<{ x: number; y: number }> {
+export async function mapClickPoint(page: Page): Promise<{ x: number; y: number }> {
   const found = await page.evaluate(() => {
     const map = document.getElementById('map');
     const canvas = map?.querySelector('canvas.maplibregl-canvas') ?? null;

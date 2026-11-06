@@ -583,7 +583,9 @@ const CENSUS_BOOTS: readonly (readonly string[])[] = [
   ['drought'],
   ['spc-fire-weather'],
   ['sst-anomaly'],
-  ['tropical-cyclones']
+  ['tropical-cyclones'],
+  // The CPC outlooks are event-role overlays, not exclusive surfaces: one boot holds all six.
+  ['cpc-seasonal-precip', 'cpc-seasonal-temp', 'cpc-610-precip', 'cpc-610-temp', 'cpc-814-precip', 'cpc-814-temp']
 ];
 
 /** The adopted station popup's displayed frame root. */
