@@ -135,10 +135,9 @@ import {
 import {
   isCustomComposition,
   reconcileClusterWithLayerIntent,
-  requestHorizon,
-  requestOcean
+  requestOcean,
+  requestPresetHorizon
 } from '../state/cluster-service';
-import { HAZARD_CLUSTERS } from '../config/clusters';
 import {
   ALL_FRAMING_BOUNDS,
   FRAMING_KEYS,
@@ -1027,17 +1026,17 @@ function updateRegionBriefingTrigger(regionKey: RegionKey | null | undefined): v
  *      (the checked-change subscription in `wireSidebar`; the bridge
  *      notifies in the same turn), and no preset set equals a hazard's
  *      clean composition, so the display is a custom set when this returns.
- *   2. The preset's mode's entry horizon, if it declares one, on the
+ *   2. The horizon an entry into the preset's mode lands on, on the
  *      register only (a custom set keeps its layers; ENSO's rail entry
- *      commits Season ahead, which its layers already show).
+ *      commits Season ahead, which its layers already show, and a later
+ *      preset of another mode undoes it, `requestPresetHorizon`).
  *   3. The explicit preferred basemap, if any.
  */
 function applyViewPreset(preset: ViewPreset): void {
   const map = mapRef;
   if (!map || !controllerRef) return;
   controllerRef.applyPreset(preset);
-  const entry = HAZARD_CLUSTERS[preset.mode].entryHorizon;
-  if (entry) requestHorizon(entry);
+  requestPresetHorizon(preset.mode);
   if (preset.preferredBasemap) {
     requestBasemapMode(map, preset.preferredBasemap);
   }

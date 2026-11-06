@@ -124,6 +124,9 @@ let committedIntent: ReadonlySet<string> | null = null;
 let committedHorizon: TemporalHorizonKey | null = null;
 /** User-facing hazard intent, separate from exact-set cluster honesty. */
 let selectedHazard: HazardClusterKey = getHazardCluster();
+/** The horizon held before a mode's entry horizon replaced it, kept while
+ * that imposed horizon stands and the person has not picked another. */
+let entryUndo: { held: TemporalHorizonKey; imposed: TemporalHorizonKey } | null = null;
 let current: CommittedShellSnapshot | null = null;
 /** True while requestCluster (or a service-internal store write) is
  * mid-transaction; subscriptions stand down so no intermediate state is
@@ -355,11 +358,35 @@ export function resolveHorizonForCluster(
 }
 
 /**
+ * The horizon a move into `mode` lands on: `entry` (its entry horizon, passed
+ * only when the move commits the mode's own layers), else the held horizon.
+ * A horizon an earlier entry imposed is undone first while it still stands, so
+ * leaving that mode returns the person to the horizon they held before it.
+ * The mode switcher, the ocean door and the phone rail all enter through here.
+ */
+function enterHorizon(mode: HazardClusterKey, entry: TemporalHorizonKey | undefined): TemporalHorizonKey {
+  const held = entryUndo !== null && timeline.horizon === entryUndo.imposed ? entryUndo.held : timeline.horizon;
+  const next = entry === undefined ? held : resolveHorizonForCluster(mode, entry);
+  entryUndo = next === held ? null : { held, imposed: next };
+  return next;
+}
+
+/** An on key a cluster switch never deactivates: a reference layer, or a key
+ * with no definition (a stale deep link's user-visible intent). */
+function survivesSwitch(key: string): boolean {
+  const def = getLayerDef(key);
+  return def === null || def.role === 'reference';
+}
+
+/**
  * Resolve, apply, and commit a hazard cluster (the S3 transaction):
  *
- *   1. Resolve the timeline's horizon for the destination cluster, or its
- *      `entryHorizon` when the press enters it from another hazard. Retain
- *      a supported horizon; otherwise commit Current (DR-190).
+ *   1. Resolve the timeline's horizon for the destination cluster. A press
+ *      entering it from another hazard goes through `enterHorizon`: the
+ *      mode's `entryHorizon` when the entry commits its own composition (no
+ *      reference extra would demote it), with any horizon the mode being
+ *      left imposed undone. Retain a supported horizon; otherwise commit
+ *      Current (DR-190).
  *   2. Resolve the intent: the persistent reference set union the
  *      resolved horizon recipe (pairs expanded).
  *   3. Deactivate the old display's exclusive non-reference members
@@ -395,9 +422,16 @@ function applyCluster(
   key: HazardClusterKey,
   requestedOcean: OceanKey | null,
 ): void {
-  // An entry from another hazard takes the mode's entry horizon; a re-press,
-  // an ocean change inside the mode and a horizon re-resolve keep the held one.
-  const held = selectedHazard === key ? timeline.horizon : (HAZARD_CLUSTERS[key].entryHorizon ?? timeline.horizon);
+  // A re-press, an ocean change inside the mode and a horizon re-resolve keep
+  // the held horizon; an entry from another hazard goes through enterHorizon.
+  let entry = selectedHazard === key ? undefined : HAZARD_CLUSTERS[key].entryHorizon;
+  if (entry !== undefined) {
+    // An extra that will demote the commit to a custom set keeps the held horizon,
+    // whose chips stay usable; the entry horizon belongs to the mode's own set.
+    const composed = composeClusterIntent(key, resolveHorizonForCluster(key, entry));
+    if ([...onKeys()].some((onKey) => !composed.includes(onKey) && survivesSwitch(onKey))) entry = undefined;
+  }
+  const held = selectedHazard === key ? timeline.horizon : enterHorizon(key, entry);
   selectedHazard = key;
   const horizon = resolveHorizonForCluster(key, held);
   const intent = composeClusterIntent(key, horizon);
@@ -412,8 +446,7 @@ function applyCluster(
     const extras: string[] = [];
     for (const onKey of onKeys()) {
       if (intentSet.has(onKey)) continue;
-      const def = getLayerDef(onKey);
-      if (def === null || def.role === 'reference') {
+      if (survivesSwitch(onKey)) {
         extras.push(onKey);
         continue;
       }
@@ -539,6 +572,23 @@ export function requestOcean(key: OceanKey): void {
  */
 export function requestHorizon(next: TemporalHorizonKey): void {
   if (timeline.horizon === next) return;
+  // A horizon the person picks is theirs: leaving the mode carries it.
+  entryUndo = null;
+  commitHorizon(next);
+}
+
+/**
+ * The phone rail's horizon after a preset for `mode` has replaced the layer
+ * set: the entry into that mode through `enterHorizon`, so an ENSO preset
+ * commits Season ahead and a later preset of a mode with no entry horizon
+ * returns to the horizon held before it; otherwise the horizon stays.
+ */
+export function requestPresetHorizon(mode: HazardClusterKey): void {
+  const next = enterHorizon(mode, HAZARD_CLUSTERS[mode].entryHorizon);
+  if (timeline.horizon !== next) commitHorizon(next);
+}
+
+function commitHorizon(next: TemporalHorizonKey): void {
   if (committedCluster === null) {
     // Derived: when the boot honesty guard already reads the display as
     // 'custom' (a layers= deep link), the granular set keeps itself; the
@@ -642,6 +692,7 @@ export function initClusterService(): () => void {
   // hazard from the parsed store here so a direct cluster= deep link does not
   // inherit the module's earlier Drought default.
   selectedHazard = getHazardCluster();
+  entryUndo = null;
   current = null;
   const unsubscribers = [
     registry.on('change', () => {
