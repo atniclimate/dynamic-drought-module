@@ -2,6 +2,7 @@ import { test, expect, type Page } from './offline-test';
 import { gotoApp, waitForLayerSettled } from './helpers';
 import { caveatFor } from '../src/impact/context';
 import { buildTribeCatalogEntries } from '../src/config/place-catalog';
+import { isoDayLocal } from '../src/util/iso-day';
 
 /**
  * Unit D acceptance (the umbrella build; design finding 5): the provenance
@@ -47,7 +48,7 @@ const BIA_POPUP_CLAUSES = [
   'Bureau of Indian Affairs',
   'feature definitions were last published in 2019',
   'continuing spatial-accuracy and attribute updates',
-  `Retrieved on ${new Date().toISOString().slice(0, 10)}`,
+  `Retrieved on ${isoDayLocal(new Date())}`,
   'BIA-authoritative for BIA mission use only',
   'not legal, survey, or jurisdictional truth',
   'requested live from the BIA service',

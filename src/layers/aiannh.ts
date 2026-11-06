@@ -69,6 +69,7 @@ import { registerClickTarget } from '../map/interaction-coordinator';
 import type { LayerActivation } from '../config/layers';
 import { fetchBufferedWithBudget, linkAbort } from '../util/fetch';
 import { buildQueryEnvelope, envelopeCovers, toCoverageEnvelope } from '../util/bbox';
+import { assertFeatureCollection, isTruncated } from '../util/geojson-checks';
 import { registry } from '../state/registry';
 
 const LAYER_KEY = 'aiannh';
@@ -334,46 +335,6 @@ function buildQueryUrl(
 }
 
 /**
- * Validate that a parsed response is a genuine GeoJSON FeatureCollection and
- * not an ArcGIS error body or other malformed shape. Throws on failure so the
- * caller's catch block reports `'error'`. A response the service flags as
- * truncated (`exceededTransferLimit`) is logged, not silently complete.
- */
-function assertFeatureCollection(raw: unknown): FeatureCollection {
-  if (raw && typeof raw === 'object' && 'error' in raw) {
-    const err = (raw as { error?: { code?: number; message?: string } }).error;
-    throw new Error(
-      `ArcGIS error ${err?.code ?? '(unknown code)'}: ${err?.message ?? 'unknown error'}`
-    );
-  }
-  if (
-    !raw ||
-    typeof raw !== 'object' ||
-    (raw as { type?: string }).type !== 'FeatureCollection' ||
-    !Array.isArray((raw as { features?: unknown }).features)
-  ) {
-    throw new Error('AIANNH response was not a GeoJSON FeatureCollection.');
-  }
-  return raw as FeatureCollection;
-}
-
-/**
- * Whether the service flagged this response as truncated
- * (`exceededTransferLimit`). A truncated body renders (partial data beats
- * none) but reports `degraded` ("live (partial)") and is NEVER admitted to
- * the coverage-envelope cache: a cached envelope asserts "the service
- * answered this whole envelope", which a truncated response cannot claim
- * (R2-trio, the 2026-07-15 planning true-up, D-0.7.0-037).
- */
-function isTruncated(raw: unknown): boolean {
-  return Boolean(
-    raw &&
-      typeof raw === 'object' &&
-      (raw as { exceededTransferLimit?: boolean }).exceededTransferLimit
-  );
-}
-
-/**
  * Remove any rendered features from a prior viewport. D-0.8.0-052 authorizes
  * no post-failure fallback, so an active refresh failure must clear first and
  * then report unavailable.
@@ -436,7 +397,7 @@ async function fetchAndApply(map: maplibregl.Map): Promise<void> {
       throw new Error(`HTTP ${resp.status} ${resp.statusText}`);
     }
     const raw: unknown = await resp.json();
-    geojson = assertFeatureCollection(raw);
+    geojson = assertFeatureCollection(raw, 'AIANNH');
     truncated = isTruncated(raw);
   } catch (err) {
     unlink();
