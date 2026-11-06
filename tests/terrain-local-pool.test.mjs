@@ -7,7 +7,7 @@ import {join} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {createHash} from 'node:crypto';
 import {writeArrayBuffer} from 'geotiff';
-import {buildRasterDemTileStore,decodeTerrariumTile} from '../scripts/lib/raster-dem-to-pmtiles.mjs';
+import {buildRasterDemTileStore,decodeTerrariumTile,terrariumPng} from '../scripts/lib/raster-dem-to-pmtiles.mjs';
 const sha=bytes=>createHash('sha256').update(bytes).digest('hex');
 const limits={workers:2,jobTimeoutMs:10000,maxJobs:10,maxSourcesPerTile:1,maxSourceBytes:1048576,
   sourceReadBufferBytes:16384,maxSourcePixels:100,maxTileBytes:65536,maxReceiptBytes:4096};
@@ -89,6 +89,46 @@ test('native busy worker deadline and owner abort terminate started work before 
   try{await assert.rejects(buildRasterDemTileStore({...common,signal:owner.signal}),error=>error===reason);}
   finally{clearInterval(watch);}
   assert.deepEqual(await readdir(options.storePath),[]);
+});
+async function overviewSetup(t){
+  const dir=await mkdtemp(join(tmpdir(),'ddm-overview-'));
+  t.after(()=>rm(dir,{recursive:true,force:true}));
+  const fills=[i=>((i*7)%11)*3-5,()=>0,i=>(i*13)%1000,i=>6000+(i%3)];
+  const children=[];
+  for(const [q,fill]of fills.entries()){
+    const values=new Float32Array(512*512);for(let i=0;i<values.length;i++)values[i]=fill(i);
+    const bytes=terrariumPng(values,512,512).data,path=join(dir,'child-'+q+'.png');
+    await writeFile(path,bytes);children.push({path,sha256:sha(bytes),bytes});
+  }
+  const job={z:3,x:2,y:5,kind:'overview',sources:children.map(({path,sha256})=>({path,sha256}))};
+  return {dir,children,options:{storePath:join(dir,'store'),jobs:[job],recipe:'synthetic overview v1',
+    limits:{...limits,maxSourcesPerTile:4,maxTileBytes:600000}}};
+}
+test('overview parent is the whole-metre 2x2 mean of its four children in NW NE SW SE order',async t=>{
+  const {children,options}=await overviewSetup(t);
+  const first=await buildRasterDemTileStore(options);
+  assert.equal(first.rendered,1);
+  const parent=decodeTerrariumTile(await readFile(first.records[0].path));
+  const kids=children.map(c=>decodeTerrariumTile(c.bytes));
+  for(let row=0;row<512;row++)for(let col=0;col<512;col++){
+    const kid=kids[(row>=256?2:0)+(col>=256?1:0)],i=2*(row%256)*512+2*(col%256);
+    const mean=(kid.elevationAtIndex(i)+kid.elevationAtIndex(i+1)+kid.elevationAtIndex(i+512)+kid.elevationAtIndex(i+513))/4;
+    const want=Math.round(mean);
+    assert.equal(parent.elevationAtIndex(row*512+col),want===0?0:want,'pixel '+row+','+col);
+  }
+  const again=await buildRasterDemTileStore(options);
+  assert.equal(again.rendered,0);assert.equal(again.reused,1);assert.deepEqual(again.records,first.records);
+});
+test('overview needs exactly four sources, and a changed child refuses the stored parent',async t=>{
+  const {children,options}=await overviewSetup(t),[job]=options.jobs;
+  await assert.rejects(buildRasterDemTileStore({...options,jobs:[{...job,sources:job.sources.slice(0,3)}]}),/source plan/);
+  await assert.rejects(buildRasterDemTileStore({...options,jobs:[{...job,sources:[...job.sources,job.sources[0]]}],
+    limits:{...options.limits,maxSourcesPerTile:5}}),/source plan/);
+  await buildRasterDemTileStore(options);
+  const changed=Buffer.from(children[2].bytes);changed[changed.length-20]^=1;await writeFile(children[2].path,changed);
+  await assert.rejects(buildRasterDemTileStore(options),/source receipt mismatch/);
+  const sources=job.sources.map((s,i)=>i===2?{...s,sha256:sha(changed)}:s);
+  await assert.rejects(buildRasterDemTileStore({...options,jobs:[{...job,sources}]}),/recipe mismatch/);
 });
 test('explicit limits/plan and exclusive store ownership reject before work',async t=>{
   const {options}=await setup(t);
