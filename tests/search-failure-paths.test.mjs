@@ -24,6 +24,7 @@ import { foldSearchText, matchesTokens, prefixFirst } from '../src/util/search-f
 const S = (globalThis.__sfp = {
   selections: [],
   highlights: [],
+  emphasis: [],
   held: [],
   toasts: [],
   lazyLoads: 0
@@ -43,6 +44,8 @@ const STUBS = {
   '../state/deep-link': 'export const openStateBriefing = async () => {};',
   '../state/located-boundary':
     'export const showLocatedBoundary = (_m, g) => globalThis.__sfp.highlights.push(g);',
+  '../state/place-emphasis':
+    'export const clearEmphasis = () => globalThis.__sfp.emphasis.push(globalThis.__sfp.highlights.length);',
   '../state/view-mode': 'export const getViewMode = () => "brief";',
   '../state/place-selection':
     'export const onPlaceSelectionChange = () => () => {};' +
@@ -165,12 +168,16 @@ test('a locate still current after the lazy import commits its selection and hig
   answers.set(LAR_URL, () => json(fc));
   S.selections.length = 0;
   S.highlights.length = 0;
+  S.emphasis.length = 0;
   const heldBefore = S.held.length;
   wiring.onSelect(tribalItem);
   await waitFor(() => S.held.length > heldBefore);
   S.held.at(-1)();
   await waitFor(() => S.highlights.length === 1);
   assert.equal(S.selections.length, 1);
+  // Audit round 5, R5-36: a reservation lit by an earlier click is unlit
+  // before the located overlay draws the searched area. Red on 0ffe87a.
+  assert.deepEqual(S.emphasis, [0], 'the prior lit place is cleared before the highlight');
 });
 
 test('a city chosen during the lazy import wins: the earlier locate commits nothing', async () => {

@@ -41,11 +41,13 @@ import {
 import type { TypedPlaceKind, TypedPlaceRef } from '../../state/typed-place';
 import {
   beginPlaceStudioDisplay,
+  clearStudioEmphasis,
   emphasizeTypedPlace,
   restoreDisplaySnapshot,
   seedTribeEmphasisTargets,
   setPlaceStudioDisplayKind,
-  setStudioWatershedBoundary
+  setStudioWatershedBoundary,
+  showStudioReturnBoundary
 } from '../../state/display-snapshot';
 import { setPlaceReturnBriefing, takePlaceReturn } from '../../state/place-return';
 import { backToMap, getStudioRoute } from '../../state/studio-route';
@@ -828,11 +830,35 @@ function chaseBriefingOnReturn(
     void (pending ? pending.catch(resolveIndependently) : resolveIndependently())
       .then((resolved) => {
         if (resolved && placeStillCurrent(entry)) {
-          openImpactPanel(resolved.context);
+          openReturnBriefing(entry, resolved);
         }
       })
       .catch(() => undefined);
   };
+}
+
+/** Set while the exit hand-off runs a briefing, so the exit unlights its place only when none follows. */
+let briefingHandedBack = false;
+
+/** Run the exit hand-off; with no briefing on it, nothing would ever unlight the place the studio lit. */
+function runReturnHandoff(): void {
+  briefingHandedBack = false;
+  takePlaceReturn()?.();
+  if (!briefingHandedBack) clearStudioEmphasis();
+}
+
+/** Queue the exit briefing (newest wins, as setPlaceReturnBriefing). */
+function queueReturnBriefing(action: () => void): void {
+  setPlaceReturnBriefing(() => {
+    briefingHandedBack = true;
+    action();
+  });
+}
+
+/** The exit briefing; a Nation's boundary is drawn after the open, so the overlay records the Nation's selection. */
+function openReturnBriefing(entry: PlaceCatalogEntry, resolved: ResolvedPlaceSelection): void {
+  openImpactPanel(resolved.context);
+  if (entry.kind === 'tribe') showStudioReturnBoundary(resolved.geometry);
 }
 
 function PlaceStudio() {
@@ -880,7 +906,7 @@ function PlaceStudio() {
       // hand-off runs only here, AFTER restoreDisplaySnapshot(), so it can
       // neither open before the restore nor be cancelled by the restore's
       // intent supersede (the former popstate microtask raced both ways).
-      takePlaceReturn()?.();
+      runReturnHandoff();
     };
   }, []);
 
@@ -1031,7 +1057,7 @@ function PlaceStudio() {
       explicitSelectionKeyRef.current === selectionKey &&
       coverage.briefable.state === 'available'
     ) {
-      setPlaceReturnBriefing(chaseBriefingOnReturn(selectionEntry, promise));
+      queueReturnBriefing(chaseBriefingOnReturn(selectionEntry, promise));
     }
 
     void promise
@@ -1078,7 +1104,7 @@ function PlaceStudio() {
           explicitSelectionKeyRef.current === selectionKey &&
           coverage.briefable.state === 'available'
         ) {
-          setPlaceReturnBriefing(() => openImpactPanel(resolved.context));
+          queueReturnBriefing(() => openReturnBriefing(selectionEntry, resolved));
         }
 
         if (coverage.briefable.state === 'available') {
@@ -1362,11 +1388,11 @@ function PlaceStudio() {
                             // the briefing was lost. The effect replaces
                             // this action with its own once it runs.
                             if (resolved?.key === selectionKey) {
-                              setPlaceReturnBriefing(() =>
-                                openImpactPanel(resolved.value.context)
+                              queueReturnBriefing(() =>
+                                openReturnBriefing(entry, resolved.value)
                               );
                             } else {
-                              setPlaceReturnBriefing(chaseBriefingOnReturn(entry, null));
+                              queueReturnBriefing(chaseBriefingOnReturn(entry, null));
                             }
                           }
                           setSelectionEntry(entry);
