@@ -694,8 +694,10 @@ async function setMode(map: maplibregl.Map, mode: UsdmViewMode): Promise<void> {
     installTimeBar(map);
     showAbsoluteLegend();
     await crossfadeFrames(map, pairFadeTargets(CHANGE_SOURCE), pairFadeTargets(slotSource));
-    if (signal.aborted || myEpoch !== stepEpoch) return;
-    setPairVisibility(map, CHANGE_SOURCE, false);
+    if (signal.aborted) return;
+    // Hidden even when a rail step began meanwhile: a faded-out pair left
+    // visible stays queryable. A newer change mode drew it again.
+    if (timeline.usdmMode === 'absolute') setPairVisibility(map, CHANGE_SOURCE, false);
     return;
   }
 
@@ -736,8 +738,9 @@ async function setMode(map: maplibregl.Map, mode: UsdmViewMode): Promise<void> {
 
   const slotSource = SLOT_SOURCES[activeSlot];
   await crossfadeFrames(map, pairFadeTargets(slotSource), pairFadeTargets(CHANGE_SOURCE));
-  if (signal.aborted || myEpoch !== stepEpoch) return;
-  setPairVisibility(map, slotSource, false);
+  if (signal.aborted) return;
+  // Same rule; back in the absolute register, the rail step owns the slots.
+  if (timeline.usdmMode !== 'absolute') setPairVisibility(map, slotSource, false);
 }
 
 // ---------------------------------------------------------------------------

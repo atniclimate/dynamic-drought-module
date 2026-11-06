@@ -24,7 +24,7 @@ import {
   droughtMetric,
   alertsMetric,
   firesMetric,
-  isUsdmStale,
+  isDroughtStale,
   formatMapDate
 } from './strip-metrics';
 import type { Metric } from './strip-metrics';
@@ -234,14 +234,13 @@ export function ConditionsStrip({ map, tick, checked }: StripProps) {
   // its own honest "viewing week of" date register instead.
   const viewingHistory = timeline.usdmWeek !== null;
 
-  // Degrade a frozen or drifted USDM surface to an explicit stale read
+  // Degrade a frozen or drifted USDM or NADM surface to an explicit stale read
   // (critical-review #6): the category still shows, but the tile and the date
-  // line both say so, rather than presenting an old week as current.
+  // line both say so, rather than presenting an old week or month as current.
   const droughtStale =
-    droughtLayer.key === 'usdm' &&
     !viewingHistory &&
     drought.metric.tone === 'data' &&
-    isUsdmStale(drought.dateMs);
+    isDroughtStale(droughtLayer.key, drought.dateMs);
   const droughtTile: Metric = droughtStale ? { ...drought.metric, stale: true } : drought.metric;
 
   useEffect(() => {
@@ -254,7 +253,7 @@ export function ConditionsStrip({ map, tick, checked }: StripProps) {
       dateEl.textContent = '';
       delete dateEl.dataset['stale'];
     } else if (droughtStale) {
-      dateEl.textContent = `stale, data as of ${formatMapDate(drought.dateMs)}`;
+      dateEl.textContent = `stale, data as of ${drought.dateLabel ?? formatMapDate(drought.dateMs)}`;
       dateEl.dataset['stale'] = 'true';
     } else if (viewingHistory) {
       dateEl.textContent = `viewing week of ${formatMapDate(drought.dateMs)}`;

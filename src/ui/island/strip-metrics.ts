@@ -416,11 +416,19 @@ export function firesMetric(map: maplibregl.Map): Metric {
 // older than two full cycles means at least one release was missed: the upstream
 // has frozen or drifted and the map is showing an old week. That is the
 // "confident-looking stale map" harm from critical-review #6, so we flag it.
-const USDM_STALE_AFTER_MS = 14 * 24 * 60 * 60 * 1000;
+// The NADM consensus month (dated its first day) is published 2 to 3 weeks after
+// month-end, so the newest month is at most about 80 days old; past 92 days at
+// least one monthly release was missed.
+const DAY_MS = 24 * 60 * 60 * 1000;
+const STALE_AFTER_MS = { usdm: 14 * DAY_MS, 'nadm-drought': 92 * DAY_MS };
 
-/** True when a USDM MapDate is old enough that the feed has plainly stopped updating. */
-export function isUsdmStale(dateMs: number | null, nowMs = Date.now()): boolean {
-  return dateMs !== null && nowMs - dateMs > USDM_STALE_AFTER_MS;
+/** True when a drought surface's date is old enough that its feed has plainly stopped updating. */
+export function isDroughtStale(
+  key: keyof typeof STALE_AFTER_MS,
+  dateMs: number | null,
+  nowMs = Date.now()
+): boolean {
+  return dateMs !== null && nowMs - dateMs > STALE_AFTER_MS[key];
 }
 
 /** Compact "Mon D, YYYY" from a millisecond epoch, in UTC to match the USDM release date. */

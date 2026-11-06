@@ -49,6 +49,11 @@ class FakeMap {
   getCenter() {
     return this.center;
   }
+  /** A regional view four degrees wide and three high around the centre. */
+  getBounds() {
+    const { lng, lat } = this.center;
+    return { getWest: () => lng - 2, getEast: () => lng + 2, getSouth: () => lat - 1.5, getNorth: () => lat + 1.5 };
+  }
   getTerrain() {
     return null;
   }
@@ -136,6 +141,15 @@ test('a view centred on Alaska reads no-data over its empty tiles, and ready aga
     assert.equal(registry.getStatus('usfs-whp'), 'ready');
     map.moveTo(-157.8, 21.3);
     assert.equal(registry.getStatus('usfs-whp'), 'no-data');
+  });
+});
+
+test('a coast view centred offshore with United States land in view reads ready (R6-14)', async () => {
+  await withMap((map) => {
+    // The Olympic coast, centred just off the hull; the eastern quarters are Washington land.
+    map.moveTo(-124.95, 47.6);
+    map.loadEmptyTile();
+    assert.equal(registry.getStatus('usfs-whp'), 'ready');
   });
 });
 

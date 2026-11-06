@@ -31,7 +31,7 @@ registerHooks({
 });
 
 const { registry } = await import('../src/state/registry.ts');
-const { alertsMetric, firesMetric } = await import('../src/ui/island/strip-metrics.ts');
+const { alertsMetric, firesMetric, isDroughtStale } = await import('../src/ui/island/strip-metrics.ts');
 
 // Both fills exist; nothing is drawn in this view.
 const map = {
@@ -64,4 +64,15 @@ test('the Alerts tile reads partial, not 0, when the read was cut off', () => {
   const tile = alertsMetric(map);
   assert.equal(tile.value, '-');
   assert.equal(tile.sublabel, 'live (partial)');
+});
+
+test('a frozen NADM month reads stale, like a frozen USDM week (R6-13)', () => {
+  const now = Date.UTC(2026, 10, 6);
+  // NADM dates are the consensus month's first day; the newest month is up to about 80 days old.
+  assert.equal(isDroughtStale('nadm-drought', Date.UTC(2026, 8, 1), now), false, 'September is current on Nov 6');
+  assert.equal(isDroughtStale('nadm-drought', Date.UTC(2026, 6, 1), now), true, 'July has stopped updating');
+  assert.equal(isDroughtStale('nadm-drought', null, now), false);
+  // The USDM rule is unchanged: two weekly cycles.
+  assert.equal(isDroughtStale('usdm', now - 13 * 86400000, now), false);
+  assert.equal(isDroughtStale('usdm', now - 15 * 86400000, now), true);
 });

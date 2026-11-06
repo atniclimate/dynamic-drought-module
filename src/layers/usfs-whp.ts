@@ -98,6 +98,27 @@ import { registerWhpImageShadeProtocol } from './whp-image-shade-protocol';
 
 const TILE_SUCCESS_DEADLINE_MS = 10_000;
 
+/**
+ * The view has coverage when its center or the middle of any of its four
+ * quarters is inside the hull, so a coast view centered offshore still
+ * draws while a Canadian or Alaskan view with a border sliver in one corner
+ * does not. shortcut: five sample points, not a bounds-hull intersection;
+ * a covered strip that misses all five reads no data until the next pan.
+ * shortcut: a copy of heatrisk.ts viewHasCoverage, until both import one from heatrisk-coverage.ts.
+ */
+function viewHasCoverage(map: maplibregl.Map): boolean {
+  const center = map.getCenter();
+  if (pointHasHeatRiskCoverage(center.lng, center.lat)) return true;
+  const bounds = map.getBounds();
+  const west = bounds.getWest();
+  const south = bounds.getSouth();
+  const width = bounds.getEast() - west;
+  const height = bounds.getNorth() - south;
+  return [0.25, 0.75].some((x) =>
+    [0.25, 0.75].some((y) => pointHasHeatRiskCoverage(west + width * x, south + height * y))
+  );
+}
+
 type WhpStatus = 'loading' | 'ready' | 'degraded' | 'error' | 'no-data';
 
 /** The issuer-coloured row: the same service, and the one drawn copy while it stands the 3D drape down. */
@@ -190,8 +211,8 @@ export function createWhpLayer(key: 'usfs-whp' | 'usfs-whp-classes', shaded: boo
 
   /**
    * Outside the conterminous United States the service answers 200 with
-   * transparent tiles, which the watcher reads as ready, so the map centre
-   * decides (the coverage ring HeatRisk uses). Returns the watcher's reporter.
+   * transparent tiles, which the watcher reads as ready, so the view's five
+   * sample points decide (the coverage ring HeatRisk uses). Returns the watcher's reporter.
    */
   function watchCoverage(map: maplibregl.Map): (tile: RasterTileOutcome) => void {
     releaseCoverageWatch?.();
@@ -205,8 +226,7 @@ export function createWhpLayer(key: 'usfs-whp' | 'usfs-whp-classes', shaded: boo
         tile = 'ready';
       }
       const own = borrowing ? (registry.getStatus(COLOURS_KEY) ?? 'loading') : tile;
-      const { lng, lat } = map.getCenter();
-      const next = pointHasHeatRiskCoverage(lng, lat) ? own : 'no-data';
+      const next = viewHasCoverage(map) ? own : 'no-data';
       if (registry.getStatus(key) !== next) reportStatus(next);
     };
     // A hidden source's closed cycle reports nothing more, so the registry drives the borrowed read.
