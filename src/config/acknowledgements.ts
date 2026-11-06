@@ -286,7 +286,25 @@ export const ACKNOWLEDGEMENTS: Readonly<Record<AcknowledgementId, Acknowledgemen
       }
     ]
   },
-  bia: nameOnly('bia', 'Bureau of Indian Affairs'),
+  bia: {
+    ...nameOnly('bia', 'Bureau of Indian Affairs'),
+    credits: [
+      // DRAFT wording for the owner's citation check: ledger bia-aian-lar's own optional Acknowledgements line,
+      // verbatim; null citeId never renders (DR-147) until ddm-cite records it.
+      {
+        text:
+          'Bureau of Indian Affairs, Office of Trust Services, Division of Land Titles and Records, Branch of Geospatial Support: American Indian and Alaska Native Land Area Representation (AIAN-LAR).',
+        citeId: null
+      },
+      // DRAFT wording for the owner's citation check: the notice's own title, number and date
+      // (https://www.federalregister.gov/d/2026-01899), the source of every Tribal Nation name; no ledger row yet.
+      {
+        text:
+          'Tribal Nation names: Bureau of Indian Affairs, Indian Entities Recognized by and Eligible To Receive Services From the United States Bureau of Indian Affairs, Federal Register document 2026-01899, January 30, 2026.',
+        citeId: null
+      }
+    ]
+  },
   hifld: {
     ...nameOnly('hifld', 'HIFLD (U.S. Government)'),
     credits: [

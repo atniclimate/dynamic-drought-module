@@ -278,11 +278,14 @@ test('every AIANNH branch carries its own approved caveat variant verbatim', () 
   const cases = [
     { code: 'D1', type: 'Federal reservation', variant: 'aiannh:legal', text: AIANNH_LEGAL },
     { code: 'D6', type: 'Oklahoma Tribal Statistical Area (statistical)', variant: 'aiannh:otsa', text: AIANNH_OTSA },
+    { code: 'D6', mtfcc: 'G2140', type: 'Oklahoma Tribal Statistical Area (statistical)', variant: 'aiannh:otsa', text: AIANNH_OTSA },
+    // R5-35: a Tribal Designated Statistical Area (Samish, Washington) shares D6 but is not in Oklahoma.
+    { code: 'D6', mtfcc: 'G2160', type: 'Tribal Designated Statistical Area (statistical)', variant: 'aiannh:statistical', text: AIANNH_STATISTICAL },
     { code: 'E1', type: 'Alaska Native Village Statistical Area (statistical)', variant: 'aiannh:statistical', text: AIANNH_STATISTICAL },
     { code: 'Z9', type: 'Census AIANNH area', variant: 'aiannh:statistical', text: AIANNH_STATISTICAL }
   ];
   for (const c of cases) {
-    const html = buildAiannhPopupHtml({ NAME: `Fixture ${c.code} Area`, AIANNHCC: c.code }, QUIET);
+    const html = buildAiannhPopupHtml({ NAME: `Fixture ${c.code} Area`, AIANNHCC: c.code, ...(c.mtfcc ? { MTFCC: c.mtfcc } : {}) }, QUIET);
     assert.equal(textOf(slot(html, 'issuer')), 'Boundary from: U.S. Census Bureau (AIANNH)', c.code);
     assert.equal(textOf(slot(html, 'clock')), `Vintage Jan${NBSP}1,${NBSP}2025`, c.code);
     assert.deepEqual(detailsOf(html), { Type: c.type }, c.code);

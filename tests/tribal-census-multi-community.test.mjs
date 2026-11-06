@@ -61,6 +61,19 @@ test('the roster drops cross-references and keeps a Nation whose See note names 
   assert.deepEqual(parseRoster(xml), ['Lumbee Tribe of North Carolina', VENETIE, PRIBILOF]);
 });
 
+// R5-41: Federal Register 2026-01899 drops one space that its prior edition
+// (2024-29005, 2024-12-11) prints; the roster restores it and nothing else.
+test('the roster restores the space the 2026 notice drops from the Pulikla Tribe of Yurok People', () => {
+  const PULIKLA = 'Pulikla Tribe of Yurok People (previously listed as Resighini Rancheria, California)';
+  const xml = `<FP SOURCE="FP-1">${PULIKLA.replace('Pulikla Tribe', 'PuliklaTribe')}</FP>\n<FP SOURCE="FP-1">${PULIKLA}</FP>`;
+  assert.deepEqual(parseRoster(xml), [PULIKLA, PULIKLA]);
+  const committed = ['tribal-roster.json', 'tribal-larname-crosswalk.json']
+    .map((file) => readFileSync(new URL(`../public/data/${file}`, import.meta.url), 'utf8'))
+    .join('\n');
+  assert.equal(committed.includes('PuliklaTribe'), false, 'the committed roster and crosswalk carry the space');
+  assert.ok(committed.includes(PULIKLA));
+});
+
 test('the committed roster keeps the Census names for St. George, St. Paul and Venetie', () => {
   const roster = JSON.parse(readFileSync(new URL('../public/data/tribal-roster.json', import.meta.url), 'utf8'));
   for (const code of ['7340', '7390', '7725']) {

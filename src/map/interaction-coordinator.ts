@@ -1207,11 +1207,15 @@ async function attachConditionDoor(
     subject.title = resolveBoundaryTitle('bia-reservation', { LARNAME: landArea });
     if (subject.title !== landArea) areaLabel = `Land area: ${landArea}`;
   } else if (subject.kind === 'aiannh') {
-    const { loadCensusNationNames, resolveBoundaryTitle } = await import('../impact/context');
-    await loadCensusNationNames().catch(() => {});
+    const { loadBiaNationNames, loadCensusNationNames, resolveBoundaryTitle } = await import('../impact/context');
+    const landArea = identity.containingTribal?.biaLandArea;
+    await Promise.all([loadCensusNationNames().catch(() => {}), landArea && loadBiaNationNames().catch(() => {})]);
     if (currentPopup !== popup || !head.isConnected) return;
     const censusArea = subject.title;
-    subject.title = resolveBoundaryTitle('aiannh', { NAME: censusArea });
+    // A legal Census area over a BIA land area takes the Nation name a click on
+    // the land area gives, only when the roster's gate names one (never a bare LARNAME).
+    const nation = landArea && resolveBoundaryTitle('bia-reservation', { LARNAME: landArea });
+    subject.title = nation && nation !== landArea ? nation : resolveBoundaryTitle('aiannh', { NAME: censusArea });
     // DRAFT wording: "Census area", the search's own sublabel word (as buildBoundaryContext).
     if (subject.title !== censusArea) areaLabel = `Census area: ${censusArea}`;
   }
