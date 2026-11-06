@@ -106,6 +106,14 @@ export interface HazardClusterDef {
    */
   readonly optionalLayers?: readonly LayerKey[];
   /**
+   * The horizon an in-session entry into this mode commits (the mode
+   * switcher, the minimap ocean door, the phone rail), read only through the
+   * cluster service and the rail, never as a mode literal (DR-113). Unset
+   * keeps the held horizon where the mode can show it (DR-190). A shared link
+   * keeps its own `horizon=`, and an absent one means Current.
+   */
+  readonly entryHorizon?: TemporalHorizonKey;
+  /**
    * The Key drawer's sections for this cluster, in order (S30D D1 M11;
    * DR-113; src/config/detail-sections.ts). Omitted or empty means the
    * drawer holds only the legend, qualifications and the map-information
@@ -129,7 +137,42 @@ export interface HazardClusterDef {
    * to 'wind' (ENSO-FLOW-PLAN block E2, unit E2-4); no other mode sets it.
    */
   readonly flowDefault?: Exclude<import('../state/enso-flow').EnsoFlowKind, 'off'>;
+  /**
+   * The National Weather Service products the alert layer (`nws-alerts`,
+   * src/layers/nws-alerts.ts) reads in this mode, and its name here. Read
+   * through the person's hazard (`getSelectedHazard`, src/state/cluster-service.ts),
+   * so a custom layer set keeps its mode's. Unset: the layer reads nothing in this mode.
+   */
+  readonly alerts?: AlertSet;
 }
+
+/**
+ * One mode's alert products. Each event is a `prod_type` value of the NWS
+ * Watch/Warning/Advisory MapServer verbatim (the service's renderer lists
+ * them); the reader asks for these and no others, and the key lists them in
+ * NWS_ALERT_LEGEND order (src/config/palette.ts).
+ */
+export interface AlertSet {
+  readonly name: string;
+  readonly events: readonly string[];
+}
+
+/** The heat and fire weather products: the alert layer's one list before modes named their own. */
+export const HEAT_FIRE_ALERTS: AlertSet = {
+  // vocab-allow: names the NWS alert products layer, upstream data
+  name: 'Heat & Fire Weather Alerts',
+  // The pre-2025 "Excessive Heat" and the Hazard Simplification "Extreme
+  // Heat" names both, so transitional products never drop out silently.
+  events: [ // vocab-allow: verbatim NWS product names, quoted source data
+    'Extreme Heat Warning', // vocab-allow: verbatim NWS product names, quoted source data
+    'Excessive Heat Warning',
+    'Extreme Heat Watch',
+    'Excessive Heat Watch',
+    'Heat Advisory',
+    'Red Flag Warning', // vocab-allow: verbatim NWS product names, quoted source data
+    'Fire Weather Watch'
+  ]
+};
 
 export const HAZARD_CLUSTERS: Record<HazardClusterKey, HazardClusterDef> = {
   drought: {
@@ -150,7 +193,11 @@ export const HAZARD_CLUSTERS: Record<HazardClusterKey, HazardClusterDef> = {
       'weeks-ahead': ['drought'],
       'season-ahead': ['drought']
     },
-    placeConditionRow: 'drought'
+    placeConditionRow: 'drought',
+    // Drought is also the committed mode of every custom layer set (a
+    // `layers=` link, the phone hazard rail, a studio choice), which read
+    // these products before modes named their own.
+    alerts: HEAT_FIRE_ALERTS
   },
   wildfire: {
     title: 'Wildfire',
@@ -169,12 +216,16 @@ export const HAZARD_CLUSTERS: Record<HazardClusterKey, HazardClusterDef> = {
       current: ['nifc-fires', 'hms-smoke'],
       // Near-term: the SPC fire-weather outlook over the live events.
       'weeks-ahead': ['spc-fire-weather', 'nifc-fires', 'hms-smoke'],
-      // Long horizon: the static potential read becomes eligible.
-      'season-ahead': ['usfs-whp']
+      // Long horizon: the static potential read becomes eligible beside the
+      // live perimeters, which DR-022 keeps in every horizon. Retiring WHP
+      // for the NIFC Months 1 to 4 outlook is the rest of DDM-P7-T03.
+      // WHP first: the activation-failure spec fails recipe[0], so this keeps a WHP failure tested.
+      'season-ahead': ['usfs-whp', 'nifc-fires']
     },
     // The console's Fuel risk switch (src/ui/fire3d-fuel-risk.ts).
     optionalLayers: ['usfs-whp'],
-    placeConditionRow: 'wildfire-perimeter'
+    placeConditionRow: 'wildfire-perimeter',
+    alerts: HEAT_FIRE_ALERTS
   },
   heat: {
     title: 'Extreme Heat',
@@ -200,7 +251,8 @@ export const HAZARD_CLUSTERS: Record<HazardClusterKey, HazardClusterDef> = {
     detailSections: ['heatrisk-sequence'],
     // HeatRisk has no verified per-point read (src/ui/popup-conditions.ts),
     // so Heat's place row is the active NWS heat and fire weather products.
-    placeConditionRow: 'nws-alerts'
+    placeConditionRow: 'nws-alerts',
+    alerts: HEAT_FIRE_ALERTS
   },
   enso: {
     title: 'ENSO',
@@ -215,27 +267,51 @@ export const HAZARD_CLUSTERS: Record<HazardClusterKey, HazardClusterDef> = {
       // line is a UI surface, not a map layer. The active tropical cyclones
       // (ENSO block B3, an event overlay) ride every horizon: the issuer
       // serves only the current advisories, which run five days ahead.
+      // Weeks ahead adds the CPC 8-14 day precipitation outlook and Season
+      // ahead the CPC seasonal precipitation outlook over the SST surface,
+      // each its own layer and key, never merged with another.
       current: ['sst-anomaly', 'tropical-cyclones'],
-      'weeks-ahead': ['sst-anomaly', 'tropical-cyclones'],
-      'season-ahead': ['sst-anomaly', 'tropical-cyclones']
+      'weeks-ahead': ['sst-anomaly', 'cpc-814-precip', 'tropical-cyclones'],
+      'season-ahead': ['sst-anomaly', 'cpc-seasonal-precip', 'tropical-cyclones']
     },
+    // The other CPC outlooks and the alert layer are the mode's, each off
+    // until a person turns it on, at any horizon.
+    optionalLayers: ['cpc-seasonal-temp', 'cpc-610-precip', 'cpc-610-temp', 'cpc-814-temp', 'nws-alerts'],
+    // ENSO opens on the outlook until the DDM-P16-T09 composite is promoted
+    // (its acceptance sentence, amended 2026-09-26).
+    entryHorizon: 'season-ahead',
     // Deferred, not absent: ENSO's place row (the sea surface temperature
     // anomaly) moves to the ocean sprint the owner asked for on 2026-10-01
     // (PLACE_CONDITION_ROW_DEFERRED in src/config/place-condition-rows.ts).
     placeConditionRow: null,
     // ENSO opens with the NOAA GFS wind paths on (DR-111 Q-WIND-MODES;
     // precedence.md 2.4); `flow=off` keeps it off (ENSO-FLOW-PLAN E2-4).
-    flowDefault: 'wind'
+    flowDefault: 'wind',
+    alerts: {
+      // DRAFT wording (pending the owner's read-back): the alert layer's name in ENSO.
+      // vocab-allow: names the NWS alert products layer, upstream data
+      name: 'Flood, Storm, Wind & Coastal Alerts',
+      // The service's Warnings and Watches for flood, storm, wind and the
+      // coast, in that group order, each group in the NWS priority order
+      // (https://www.weather.gov/help-map); no advisory or statement. The
+      // Hurricane and Tropical Storm Watches and Warnings are the storm
+      // layer's (tropical-cyclones, in its issuer's colours); the Typhoon
+      // products stay, since that layer's three basins exclude the western Pacific.
+      events: [
+        'Flash Flood Warning', 'Flood Warning', 'Flash Flood Watch', 'Flood Watch', // vocab-allow: verbatim NWS product names, quoted source data
+        'Typhoon Warning', 'Blizzard Warning', 'Ice Storm Warning', 'Winter Storm Warning', // vocab-allow: verbatim NWS product names, quoted source data
+        'Typhoon Watch', 'Winter Storm Watch',
+        'Extreme Wind Warning', 'High Wind Warning', 'High Wind Watch', // vocab-allow: verbatim NWS product names, quoted source data
+        'Storm Surge Warning', 'Coastal Flood Warning', 'Lakeshore Flood Warning', 'High Surf Warning', // vocab-allow: verbatim NWS product names, quoted source data
+        'Storm Surge Watch', 'Coastal Flood Watch', 'Lakeshore Flood Watch'
+      ]
+    }
   }
 };
 
-/** The cluster keys in button presentation order (D-0.7.0-042). */
-export const HAZARD_CLUSTER_KEYS: readonly HazardClusterKey[] = [
-  'drought',
-  'wildfire',
-  'heat',
-  'enso'
-];
+/** The cluster keys in button presentation order (D-0.7.0-042): the
+ * HAZARD_CLUSTERS table's own order, so a new mode cannot miss the list. */
+export const HAZARD_CLUSTER_KEYS = Object.keys(HAZARD_CLUSTERS) as readonly HazardClusterKey[];
 
 /** Display-name table for the honest prose display summary
  * (D-0.7.0-041 part 2; src/types/display-summary.ts). */

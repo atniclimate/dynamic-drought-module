@@ -23,7 +23,7 @@ import {
   type AcknowledgementRow,
   type CreditSentence
 } from '../config/acknowledgements';
-import { escapeHtml } from '../util/escape';
+import { checkPopupHref, escapeHtml } from '../util/escape';
 
 export interface AcknowledgementsOptions {
   /**
@@ -73,9 +73,10 @@ function renderRow(row: AcknowledgementRow, options: AcknowledgementsOptions): s
         `<p class="ack-notice"><span class="ack-notice-label">${escapeHtml(DDM_NOTICE_LABEL)}:</span> ${escapeHtml(notice.text)}</p>`
     )
     .join('');
+  const licenceHref = checkPopupHref(row.licence?.url);
   const licence =
-    row.licence && row.licence.url.startsWith('https://')
-      ? `<p class="ack-licence"><a href="${escapeHtml(row.licence.url)}" target="_blank" rel="noopener">${escapeHtml(row.licence.name)}</a></p>`
+    row.licence && licenceHref !== null
+      ? `<p class="ack-licence"><a href="${escapeHtml(licenceHref)}" target="_blank" rel="noopener">${escapeHtml(row.licence.name)}</a></p>`
       : '';
   return (
     `<li class="ack-row" data-ack-id="${escapeHtml(row.id)}">` +

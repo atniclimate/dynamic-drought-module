@@ -371,15 +371,14 @@ async function stubWildfireProducts(page: Page): Promise<void> {
   });
 }
 
-/** The four chips DR-017 a disables: heat season-ahead has an empty
- * recipe, and the other three repeat an earlier horizon's signature
- * (fact 1 of the step plan's ground-truth read: heat current === weeks-
- * ahead; enso is one surface at every horizon). */
+/** The two chips DR-017 a disables: heat season-ahead has an empty recipe,
+ * and heat weeks-ahead repeats current's signature (fact 1 of the step
+ * plan's ground-truth read). ENSO's weeks-ahead adds the CPC 8-14 day
+ * precipitation outlook (2026-11-06) and its season-ahead the CPC seasonal
+ * one (2026-11-05), each a map of its own. */
 const DISABLED_CHIPS: ReadonlySet<string> = new Set([
   'heat:weeks-ahead',
-  'heat:season-ahead',
-  'enso:weeks-ahead',
-  'enso:season-ahead'
+  'heat:season-ahead'
 ]);
 const CLUSTER_KEYS = ['drought', 'wildfire', 'heat', 'enso'] as const;
 
@@ -442,10 +441,8 @@ test.describe('DDM-P8-T03 clause 1: every horizon chip either changes the map or
         const btn = page.locator(`.shell-horizon-btn[data-horizon="${key}"]`);
         const expectDisabled = DISABLED_CHIPS.has(`${cluster}:${key}`);
         if (!expectDisabled) {
-          expect(
-            await btn.getAttribute('aria-disabled'),
-            `${cluster}:${key} should be enabled`
-          ).toBeNull();
+          // Polled: the previous mode can leave this chip disabled for a frame after the click.
+          await expect(btn, `${cluster}:${key} should be enabled`).not.toHaveAttribute('aria-disabled');
           continue;
         }
         await expect(btn, `${cluster}:${key} should be disabled`).toHaveAttribute(
@@ -498,6 +495,9 @@ test.describe('DDM-P8-T03 clause 1: every horizon chip either changes the map or
     await page.locator('.shell-cluster-btn[data-cluster="enso"]').click();
     const weeks = page.locator('.shell-horizon-btn[data-horizon="weeks-ahead"]');
     await expect(weeks).toHaveAttribute('aria-disabled', 'true');
+    // Places demotes the ENSO press to a custom set, which keeps the held horizon
+    // (Current) instead of the entry horizon; the refused keys must not move it.
+    expect(await search(page)).not.toContain('horizon=');
     await weeks.focus();
     await expect(weeks).toBeFocused();
     const pressedBefore = await weeks.getAttribute('aria-pressed');
@@ -769,16 +769,13 @@ test.describe('DDM-P8-T03 clauses 2 and 3: one grammar, product-specific registe
     page
   }) => {
     await stubSstFixture(page);
-    // FLIPPED 2026-09-27 (D1 M6, found-009): this deep link names a horizon
-    // ENSO cannot distinctly show (its season-ahead signature repeats
-    // current's, horizonSurfaceSignature in src/state/timeline.ts), so the
-    // URL parser now boots it on Current Conditions
-    // (src/state/url.ts's resolveHorizonForCluster) instead of committing
-    // Long Range pressed AND disabled at once (the pair this file's "no
-    // horizon chip is ever both aria-pressed and aria-disabled" case pins
-    // for every mode). The one-grammar intent is unchanged: the chip's
-    // static title, the stamp and the briefing heading still read the same
-    // HORIZON_CHROME table whether or not the chip is the pressed one.
+    // FLIPPED BACK 2026-11-05: ENSO's Season ahead now shows the CPC
+    // seasonal precipitation outlook beside the SST, a map its Current does
+    // not show, so this deep link keeps its own horizon (an inbound link
+    // keeps its URL's horizon) and Long Range is pressed and enabled. The
+    // one-grammar intent is unchanged: the chip's static title, the stamp
+    // and the briefing heading read the same HORIZON_CHROME table, and the
+    // stamp still says what the SST surface is.
     await gotoApp(
       page,
       '?view=console&cluster=enso&horizon=season-ahead&sst=2026-07-03'
@@ -798,15 +795,13 @@ test.describe('DDM-P8-T03 clauses 2 and 3: one grammar, product-specific registe
     const expectedStampHorizon = `${HORIZON_CHROME.current.title} · ${HORIZON_CHROME.current.subtitle}`;
     await expect(stampHorizonEl).toHaveText(expectedStampHorizon, { timeout: 25_000 });
     expect(expectedStampHorizon).not.toBe(chipTitle);
-    // The redirect lands on an enabled horizon: Current Conditions is
-    // pressed, and the Long Range chip stays unpressed and disabled (ENSO
-    // shows one surface at every horizon).
+    // The link's horizon holds: Long Range pressed and enabled, Current not.
     await expect(
       page.locator('.shell-horizon-btn[data-horizon="current"]')
-    ).toHaveAttribute('aria-pressed', 'true');
+    ).toHaveAttribute('aria-pressed', 'false');
     const seasonChip = page.locator('.shell-horizon-btn[data-horizon="season-ahead"]');
-    expect(await seasonChip.getAttribute('aria-pressed')).toBe('false');
-    expect(await seasonChip.getAttribute('aria-disabled')).toBe('true');
-    expect(await search(page)).not.toContain('horizon=');
+    await expect(seasonChip).toHaveAttribute('aria-pressed', 'true');
+    expect(await seasonChip.getAttribute('aria-disabled')).toBeNull();
+    expect(new URLSearchParams(await search(page)).get('horizon')).toBe('season-ahead');
   });
 });

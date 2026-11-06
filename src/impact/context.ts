@@ -21,6 +21,7 @@ import { postalCodeFromProperties } from '../config/geography';
 import { placeRefFromBoundary } from '../config/entities';
 import { isStateCode } from './resources';
 import { getCurrentRegion } from '../state/region-store';
+import { gatedCensusName, gatedDisplayName, loadTribalCensusAreas, loadTribalRoster } from '../state/tribal-roster';
 import {
   geometryBboxAcrossAntimeridian,
   geometryLikelyCrossesAntimeridian
@@ -80,6 +81,68 @@ function containingFromProperties(properties: GeoJsonProperties): ContainingPlac
     : { state: null, basis: 'none' };
 }
 
+/** LARNAME to the gated Nation name (the BIA popup's roster source), once loaded. */
+let nationNames: ReadonlyMap<string, string> | null = null;
+let nationNamesLoad: Promise<ReadonlyMap<string, string>> | null = null;
+
+/**
+ * Load, once, the BIA land-area to Nation name map through the roster's
+ * provenance gate (gatedDisplayName, DR-094), the source the BIA popup, the
+ * search and the place catalog title a Nation from. Rejects like the roster;
+ * until it resolves (a failure is retried on the next call), a BIA land area titles itself.
+ */
+export function loadBiaNationNames(): Promise<ReadonlyMap<string, string>> {
+  nationNamesLoad ??= loadTribalRoster().then((areas) => {
+    nationNames = new Map(areas.map((area) => [area.larName, gatedDisplayName(area)]));
+    return nationNames;
+  }, (err: unknown) => {
+    nationNamesLoad = null;
+    throw err;
+  });
+  return nationNamesLoad;
+}
+
+/** The loaded LARNAME to Nation name map, or undefined before it loads. */
+export function biaNationNames(): ReadonlyMap<string, string> | undefined {
+  return nationNames ?? undefined;
+}
+
+/** The BIA land area a feature names, before any Nation name. */
+function biaLandArea(props: GeoJsonProperties): string {
+  return firstString(props, ['LARNAME', 'LARName', 'NAME', 'name']) ?? 'Reservation land area';
+}
+
+/** Census AIANNH NAME to the gated name the search titles a Census-only area with, once loaded. */
+let censusNames: ReadonlyMap<string, string> | null = null;
+let censusNamesLoad: Promise<ReadonlyMap<string, string>> | null = null;
+
+/**
+ * Load, once, the Census area to name map through the same gate
+ * (gatedCensusName): the search's Census rows (DR-239), keyed by the Census
+ * NAME the layer's features carry. Rejects like the roster; until it
+ * resolves (a failure is retried on the next call), a Census area titles itself.
+ */
+export function loadCensusNationNames(): Promise<ReadonlyMap<string, string>> {
+  censusNamesLoad ??= loadTribalCensusAreas().then((areas) => {
+    censusNames = new Map(areas.map((area) => [area.name, gatedCensusName(area)]));
+    return censusNames;
+  }, (err: unknown) => {
+    censusNamesLoad = null;
+    throw err;
+  });
+  return censusNamesLoad;
+}
+
+/** The loaded Census NAME to gated name map, or undefined before it loads. */
+export function censusNationNames(): ReadonlyMap<string, string> | undefined {
+  return censusNames ?? undefined;
+}
+
+/** The Census AIANNH area a feature names (NAME; BASENAME the descriptor-stripped form). */
+function censusArea(props: GeoJsonProperties): string {
+  return firstString(props, ['NAME', 'BASENAME', 'name']) ?? 'Tribal land area';
+}
+
 /** Resolve the display title for a selection by boundary kind. */
 function resolveTitle(kind: BoundaryKind, props: GeoJsonProperties): string {
   switch (kind) {
@@ -90,17 +153,25 @@ function resolveTitle(kind: BoundaryKind, props: GeoJsonProperties): string {
         firstString(props, ['LARName', 'LARNAME', 'NAME', 'name', 'TRIBE', 'RESERV_NAM']) ??
         'Tribal land area'
       );
-    case 'aiannh':
-      // US Census AIANNH: NAME carries the area name (BASENAME the descriptor-
-      // stripped form). Never presented as the Tribe's own name for itself.
-      return firstString(props, ['NAME', 'BASENAME', 'name']) ?? 'Tribal land area';
+    case 'aiannh': {
+      // A Census-only area takes the name the search gives it: the roster's
+      // gated Nation name, never one written here; otherwise the Census name.
+      if (!censusNamesLoad) loadCensusNationNames().catch(() => {});
+      const area = censusArea(props);
+      return censusNames?.get(area) ?? area;
+    }
     case 'treaty':
       return (
         firstString(props, ['name', 'TREATY_NAM', 'TREATY_NAME', 'TreatyName', 'NAME', 'Treaty']) ??
         'Treaty area'
       );
-    case 'bia-reservation':
-      return firstString(props, ['LARNAME', 'LARName', 'NAME', 'name']) ?? 'Reservation land area';
+    case 'bia-reservation': {
+      // A Nation's formal name is never abbreviated: the briefing, the selected-place
+      // label and the disclosure all take the popup's gated name, from one map.
+      if (!nationNamesLoad) loadBiaNationNames().catch(() => {});
+      const landArea = biaLandArea(props);
+      return nationNames?.get(landArea) ?? landArea;
+    }
     case 'state':
       return firstString(props, ['NAME', 'name', 'STUSPS']) ?? 'State';
     case 'watershed':
@@ -175,6 +246,9 @@ export function buildBoundaryContext(
   titleOverride?: string
 ): BoundarySelectionContext {
   const title = titleOverride && titleOverride.trim() !== '' ? titleOverride : resolveTitle(kind, properties);
+  // A Nation-titled BIA or Census area keeps its own area name beside the source, as the search words it.
+  const landArea =
+    titleOverride ? title : kind === 'bia-reservation' ? biaLandArea(properties) : kind === 'aiannh' ? censusArea(properties) : title;
   const bbox = geometryBbox(geometry);
   const crossesAntimeridian = bbox ? geometryLikelyCrossesAntimeridian(geometry) : false;
   // N2-A consumes the T-M0-4 crossing evidence. The compatibility bbox stays
@@ -188,6 +262,8 @@ export function buildBoundaryContext(
     title,
     properties: (properties as Readonly<Record<string, unknown>> | null) ?? null,
     lngLat: { lng: lngLat.lng, lat: lngLat.lat },
+    // DRAFT wording: "Census area", the search's own sublabel word for a Census row.
+    ...(landArea !== title ? { areaLabel: `${kind === 'aiannh' ? 'Census area' : 'Land area'}: ${landArea}` } : {}),
     ...(bbox ? { bbox } : {}),
     ...(serviceBbox ? { serviceBbox } : {}),
     ...(crossesAntimeridian ? { bboxCrossesAntimeridian: true } : {}),

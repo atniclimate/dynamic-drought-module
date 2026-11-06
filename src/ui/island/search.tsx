@@ -90,14 +90,8 @@ const GROUP_TITLES: Record<SearchItem['kind'], string> = {
 };
 const GROUP_ORDER: readonly SearchItem['kind'][] = ['tribal', 'place', 'city', 'layer'];
 
-/**
- * The ONE search folding, shared with every other surface (wave A finding
- * 1): query and haystack normalize identically or punctuation and
- * diacritics silently break matching. See src/util/search-fold.ts.
- */
-function normalizeQuery(raw: string): string {
-  return foldSearchText(raw);
-}
+/** Whether the row press under way is touch or pen (set on pointerdown, read on its mousedown). */
+let touchPress = false;
 
 function tokenize(normalized: string): string[] {
   return normalized.length === 0 ? [] : normalized.split(' ').filter((t) => t.length > 0);
@@ -181,7 +175,10 @@ export function Search(props: SearchProps): preact.JSX.Element {
   const uid = useId();
 
   const rawTrimmed = query.trim();
-  const tokens = tokenize(normalizeQuery(query));
+  // The ONE search folding, shared with every other surface (wave A finding
+  // 1): query and haystack normalize identically or punctuation and
+  // diacritics silently break matching. See src/util/search-fold.ts.
+  const tokens = tokenize(foldSearchText(query));
   const isEmptyQuery = rawTrimmed.length === 0 || tokens.length === 0;
   // A search begins from an empty box; only then do lists (re)load, so no load lands in a list on screen.
   const startSearch = (): void => {
@@ -270,7 +267,8 @@ export function Search(props: SearchProps): preact.JSX.Element {
     props.onSelect(item);
     // Clearing the query is what closes the results (an empty query
     // renders the guidance line, not a list); the caller navigates away,
-    // so the input keeps focus rather than being blurred.
+    // so the input keeps focus rather than being blurred (a mouse row
+    // press holds it, below).
     setQuery('');
     setHighlightedKey(null);
   };
@@ -355,6 +353,14 @@ export function Search(props: SearchProps): preact.JSX.Element {
               class={isActive ? 'ddm-search-result is-active' : 'ddm-search-result'}
               data-search-kind={row.kind}
               data-search-id={row.item.id}
+              // A mouse press would blur the box to the page body; a touch
+              // press may, so the phone keyboard closes after a pick.
+              onPointerDown={(event) => {
+                touchPress = event.pointerType !== 'mouse';
+              }}
+              onMouseDown={(event) => {
+                if (!touchPress) event.preventDefault();
+              }}
               onClick={() => selectItem(row.item)}
             >
               <span class="ddm-search-result-label">{row.item.label}</span>

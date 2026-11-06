@@ -72,12 +72,16 @@ export function createNwsRequestSession(
       const existing = inFlight.get(url);
       if (existing) return existing;
 
-      const request = fetchJsonWithBudget(
-        nwsRequestUrl(url),
-        { headers: NWS_ACCEPT },
-        signal,
-        NWS_TIMEOUT_MS
-      )
+      const requestUrl = nwsRequestUrl(url);
+      const read = (target: string): Promise<unknown> =>
+        fetchJsonWithBudget(target, { headers: NWS_ACCEPT }, signal, NWS_TIMEOUT_MS);
+      const request = read(requestUrl)
+        // api.weather.gov allows CORS: a failed Worker read (limit, outage)
+        // is retried direct once, unless the briefing itself was abandoned.
+        .catch((err: unknown) => {
+          if (signal.aborted || requestUrl === url) throw err;
+          return read(url);
+        })
         .then((payload) => {
           if (signal.aborted) {
             throw new DOMException('Aborted', 'AbortError');

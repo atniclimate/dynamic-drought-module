@@ -29,6 +29,7 @@ import {
   rawsStrongWindBody,
   rawsUnparseableDirectionBody
 } from './fixtures/raws-fixtures';
+import { dateTok } from '../src/util/text-tokens';
 
 /**
  * Unit G: the deterministic backbone for the live Tribal-geography layers
@@ -1006,7 +1007,7 @@ test.describe('DDM-P9-T06: RAWS wind symbol', () => {
       'aria-label',
       /^Wind 5 mph from 295 degrees \(NIFC RAWS\), observed .+$/
     );
-    const expectedAsOf = new Date(RAWS_FIXTURE_OBSERVED_MS).toLocaleString();
+    const expectedAsOf = dateTok(RAWS_FIXTURE_OBSERVED_MS);
     await expect(glyph).toHaveAttribute('aria-label', new RegExp(escapeRegExp(expectedAsOf)));
     // The marker carries the rotation (map-aligned, minus the bearing of 0).
     const transform = await marker.evaluate((el) => (el as HTMLElement).style.transform);

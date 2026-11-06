@@ -13,6 +13,7 @@ import type {
   StationViewportDiscoveryRequest,
   ViewportBounds
 } from '../types/station-network';
+import { escapeSql } from '../util/arcgis-features';
 import { fetchBufferedWithBudget } from '../util/fetch';
 import {
   bboxCoveredByEnvelope,
@@ -22,12 +23,11 @@ import {
   type ViewEnvelope
 } from '../util/bbox';
 import { isObject } from '../util/guards';
-import { readLatestUsgsReading, readUnitCode, readVariableCode } from '../util/usgs';
+import { IV_FRESH_WINDOW_MS, readLatestUsgsReading, readUnitCode, readVariableCode } from '../util/usgs';
 import { ExpiringLruCache } from '../util/bounded-cache';
 
 const MINUTE_MS = 60 * 1000;
 const HOUR_MS = 60 * MINUTE_MS;
-const DAY_MS = 24 * HOUR_MS;
 const PROXIMITY_MERGE_METERS = 100;
 // Spatial-hash cell size for the proximity-merge fallback (#1). Chosen so one
 // cell is at least PROXIMITY_MERGE_METERS (100 m) wide in BOTH latitude and
@@ -186,63 +186,54 @@ export const STATION_NETWORKS = [
   {
     key: 'usgs-iv',
     label: 'USGS Instantaneous Values',
-    refreshWindowMs: 6 * HOUR_MS,
     cadence: 'about every 15 to 60 minutes',
     adapter: DISCOVERY_NOT_WIRED_ADAPTER
   },
   {
     key: 'nrcs-awdb',
     label: 'NRCS AWDB SNOTEL and SCAN',
-    refreshWindowMs: 2 * DAY_MS,
     cadence: 'about daily',
     adapter: DISCOVERY_NOT_WIRED_ADAPTER
   },
   {
     key: 'usace-cwms',
     label: 'USACE Corps Water Management System',
-    refreshWindowMs: 6 * HOUR_MS,
     cadence: 'about hourly',
     adapter: DISCOVERY_NOT_WIRED_ADAPTER
   },
   {
     key: 'usbr-hydromet',
     label: 'USBR Hydromet',
-    refreshWindowMs: 2 * DAY_MS,
     cadence: 'about daily',
     adapter: DISCOVERY_NOT_WIRED_ADAPTER
   },
   {
     key: 'raws',
     label: 'NIFC Remote Automated Weather Stations',
-    refreshWindowMs: 3 * HOUR_MS,
     cadence: 'about hourly',
     adapter: RAWS_STATION_ADAPTER
   },
   {
     key: 'noaa-coops',
     label: 'NOAA Tides and Currents',
-    refreshWindowMs: 6 * HOUR_MS,
     cadence: 'about every 6 minutes',
     adapter: COOPS_STATION_ADAPTER
   },
   {
     key: 'usbr-agrimet',
     label: 'USBR AgriMet',
-    refreshWindowMs: 2 * DAY_MS,
     cadence: 'about daily',
     adapter: AGRIMET_STATION_ADAPTER
   },
   {
     key: 'cocorahs',
     label: 'CoCoRaHS (via Iowa Environmental Mesonet)',
-    refreshWindowMs: 2 * DAY_MS,
     cadence: 'daily (volunteer reports)',
     adapter: COCORAHS_STATION_ADAPTER
   },
   {
     key: 'nwrfc',
     label: 'Northwest River Forecast Center', // vocab-allow: verbatim agency name
-    refreshWindowMs: DAY_MS,
     cadence: 'seasonal updates',
     adapter: DISCOVERY_NOT_WIRED_ADAPTER
   }
@@ -334,16 +325,18 @@ export function mergeTelemetryStations(
   return entries;
 }
 
+/** Staleness windows for the timestamped networks read here; daily-duration
+ * readings (AWDB, Hydromet, AgriMet) use dailyFreshness in util/awdb.ts. */
+const FRESH_WINDOW_MS = { 'usgs-iv': IV_FRESH_WINDOW_MS, raws: 3 * HOUR_MS } as const;
+
 export function freshnessForNetwork(
-  network: StationNetworkKey,
+  network: keyof typeof FRESH_WINDOW_MS,
   timestampIso: string,
   nowMs = Date.now()
 ): TelemetryFreshness {
   const timestampMs = Date.parse(timestampIso);
   if (Number.isNaN(timestampMs)) return 'stale';
-  return nowMs - timestampMs <= stationNetworkByKey(network).refreshWindowMs
-    ? 'fresh'
-    : 'stale';
+  return nowMs - timestampMs <= FRESH_WINDOW_MS[network] ? 'fresh' : 'stale';
 }
 
 // Session caches keyed by quantized viewport (#3); see DISCOVERY_BBOX_QUANT.
@@ -1038,7 +1031,7 @@ function readUsgsStationValue(
   const value = Number(latest.value);
 
   const timestamp = latest.dateTime ?? '';
-  const freshness = usgsDiscoveryFreshness(timestamp);
+  const freshness = freshnessForNetwork('usgs-iv', timestamp);
   return {
     stationId: `usgs-${siteCode}`,
     parameter: code === '00065' ? 'gage_height_ft' : 'discharge_cfs',
@@ -1058,13 +1051,6 @@ function preferredUsgsValue(values: readonly StationValue[]): StationValue | nul
     values[0] ??
     null
   );
-}
-
-function usgsDiscoveryFreshness(timestampIso: string): TelemetryFreshness {
-  const timestampMs = Date.parse(timestampIso);
-  if (Number.isNaN(timestampMs)) return 'stale';
-  if (Date.now() - timestampMs > DAY_MS) return 'stale';
-  return freshnessForNetwork('usgs-iv', timestampIso);
 }
 
 function formatBboxNumber(value: number): string {
@@ -1561,7 +1547,7 @@ export async function fetchRawsStationConditions(
   signal: AbortSignal | null
 ): Promise<RawsStationConditions | null> {
   const params = new URLSearchParams({
-    where: `StationID='${stationId.replace(/'/g, "''")}'`,
+    where: `StationID='${escapeSql(stationId)}'`,
     outFields: RAWS_OUT_FIELDS,
     resultRecordCount: '1',
     f: 'geojson'
@@ -2004,7 +1990,7 @@ function readFiniteNumber(value: unknown): number | null {
  * itself as the unit of record and use this only where a genuine number is
  * required (the marker's headline `StationValue.value`).
  */
-function parseLeadingNumber(raw: string): number | null {
+export function parseLeadingNumber(raw: string): number | null {
   const match = /-?\d+(?:\.\d+)?/.exec(raw);
   return match ? Number(match[0]) : null;
 }

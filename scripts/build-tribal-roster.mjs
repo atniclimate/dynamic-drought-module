@@ -179,19 +179,27 @@ function noEmDash(s) {
 }
 
 /** Parse the roster (formal Tribe names) from the Federal Register full-text XML. */
-function parseRoster(xml) {
+export function parseRoster(xml) {
   const names = [];
   for (const m of xml.matchAll(/<FP SOURCE="FP-1"[^>]*>([\s\S]*?)<\/FP>/g)) {
+    // Source typo, the one correction to a Nation's name: Federal Register
+    // 2026-01899 (2026-01-30) prints "PuliklaTribe of Yurok People"; its prior
+    // edition, 2024-29005 (2024-12-11), prints "Pulikla Tribe". Only the space
+    // is restored. shortcut: one named entry, remove when a notice prints the space.
     const name = noEmDash(
       decodeEntities(m[1].replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim()
-    );
-    if (!name) continue;
-    // "See ..." entries are cross-references to another listing, not a distinct
-    // Tribe; skip them so they do not double-count or mislabel.
-    if (/^.*\(See /i.test(name) && /\(See [^)]+\)\s*$/i.test(name)) continue;
-    names.push(name);
+    ).replace(/^PuliklaTribe /, 'Pulikla Tribe ');
+    if (name) names.push(name);
   }
-  return names;
+  // An entry with a "(See X)" whose X begins another roster entry is a
+  // cross-reference ("Arctic Village (See Native Village of Venetie ...)"), not
+  // a distinct Tribe: skip it. Any other "(See ...)" is an editorial note, not
+  // part of the Nation's name (Lumbee's "(See Supplementary Information supra,
+  // ...)"): drop the note and keep the Nation.
+  const see = /\s*\(\s*See ([^()]+)\)/gi;
+  const crossRef = (n) =>
+    [...n.matchAll(see)].some(([, t]) => names.some((o) => o !== n && o.startsWith(t.trim())));
+  return names.filter((n) => !crossRef(n)).map((n) => n.replace(see, '').trim());
 }
 
 // The 50 US state names, normalized. Used ONLY to recognize a parenthetical
@@ -253,6 +261,18 @@ const KNOWN_AMBIGUOUS = new Map([
   // replaces these entries when a third case appears.
   [
     'st george',
+    {
+      candidates: [
+        'Pribilof Islands Aleut Communities of St. Paul & St. George Islands (St. George Island and Saint Paul Island)'
+      ]
+    }
+  ],
+  // Same premise as St. George, the other Pribilof community (St. George has
+  // its own ANVSA). Before the roster parse dropped the "Aleut Community of St.
+  // Paul Island (See ...)" cross-reference, that line was a second candidate
+  // and kept this area on its Census name by accident (audit round 3).
+  [
+    'st paul',
     {
       candidates: [
         'Pribilof Islands Aleut Communities of St. Paul & St. George Islands (St. George Island and Saint Paul Island)'

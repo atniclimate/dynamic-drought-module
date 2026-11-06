@@ -26,7 +26,69 @@ registerHooks({
   }
 });
 
-const { fetchWaterSupplyClaims } = await import('../src/impact/water-supply.ts');
+const { fetchWaterSupplyClaims, clearWaterSupplyRowsCache } = await import('../src/impact/water-supply.ts');
+
+const WA_SELECTION = {
+  kind: 'ecoregion',
+  title: 'Test selection',
+  properties: null,
+  lngLat: { lng: -120.5, lat: 47.2 },
+  place: null,
+  containing: { state: 'WA', basis: 'point-in-polygon' },
+  regionKey: 'washington_state'
+};
+
+async function twoBriefings(body) {
+  clearWaterSupplyRowsCache();
+  const originalFetch = globalThis.fetch;
+  let requests = 0;
+  globalThis.fetch = async () => {
+    requests += 1;
+    return new Response(body);
+  };
+  try {
+    await fetchWaterSupplyClaims(WA_SELECTION, new AbortController().signal);
+    const second = await fetchWaterSupplyClaims(WA_SELECTION, new AbortController().signal);
+    return { requests, second };
+  } finally {
+    globalThis.fetch = originalFetch;
+    clearWaterSupplyRowsCache();
+  }
+}
+
+test('a header-only NWRFC report (no forecast yet this water year) is cached: the next briefing asks again for nothing', async () => {
+  const { requests, second } = await twoBriefings('ID,Location,FcstPeriod,50PerAvg,CurPerAvg,FcstDate\n');
+  assert.equal(requests, 1);
+  assert.match(second.note, /carried no APR-SEP forecast/);
+});
+
+test('a 200 answer with no report header is a failed read, never cached', async () => {
+  const { requests, second } = await twoBriefings('<html><body>Service unavailable</body></html>');
+  assert.equal(requests, 2);
+  assert.match(second.note, /did not respond/);
+});
+
+test('the forecast claim states the number and its 50 percent exceedance only: no DDM band sentence (DR-046 a)', async () => {
+  const originalFetch = globalThis.fetch;
+  try {
+    for (const pct of [20, 74, 88, 100, 130]) {
+      clearWaterSupplyRowsCache();
+      globalThis.fetch = async () =>
+        new Response(
+          'ID,Location,FcstPeriod,50PerAvg,CurPerAvg,FcstDate\n' +
+            `BONO3,COLUMBIA - BONNEVILLE DAM,APR-SEP,${pct},95,2026-10-08`
+        );
+      const result = await fetchWaterSupplyClaims(WA_SELECTION, new AbortController().signal);
+      const forecast = result.claims.at(-1);
+      assert.match(forecast.text, new RegExp(`is ${pct} percent of the 1991-2020 normal \\(50 percent exceedance\\)\\.`));
+      assert.ok(forecast.text.endsWith('not a site-specific value.'), `${pct} percent: ${forecast.text}`);
+      assert.match(forecast.uncertainty.text, /50 percent exceedance/);
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+    clearWaterSupplyRowsCache();
+  }
+});
 
 test('water-supply claims never present the echoed FcstDate as an issue date', async () => {
   const originalFetch = globalThis.fetch;

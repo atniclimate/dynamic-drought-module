@@ -111,8 +111,7 @@ state-curated set).
   A one-time extract of the ARCHIVED federal HIFLD dataset via the public
   Esri Federal User Community copy (accessInformation "U.S. Government";
   Extract capability enabled; the item states it is archived with last
-  data update 2024-09-30; some geometries carry OpenStreetMap provenance,
-  credited in the attribution). 6,941 features, zooms 0-11, 3,816 tiles,
+  data update 2024-09-30). 6,941 features, zooms 0-11, 3,816 tiles,
   3,827,596 bytes, retrieved 2026-08-19 UTC. Issuer sentinel attributes are
   preserved verbatim (VOLTAGE -999999, VOLT_CLASS 'NOT AVAILABLE'). The in-app qualification
   carries the mandatory caveat: not comprehensive or current, never for
@@ -159,7 +158,7 @@ state-curated set).
 
   Loaded only while the 3D Fire view is active.
 - `us-places.json`: municipal label points (Natural Earth, built by
-  `npm run build:states` tooling; see scripts/).
+  `npm run build:places`; see scripts/).
 - `tribal-roster.json` + `tribal-larname-crosswalk.json`: the
   names-only roster of federally recognized Tribes from the BIA annual
   Federal Register notice, with the reviewed LARNAME crosswalk and a
@@ -180,7 +179,7 @@ shipped artifact or an active Fire 3D input.
 
 ## `enso-indices.json` (committed snapshot, not a placeholder)
 
-A committed snapshot of four National Oceanic and Atmospheric
+A committed snapshot of five National Oceanic and Atmospheric
 Administration (NOAA) Climate Prediction Center (CPC) El Nino / Southern
 Oscillation (ENSO) index series:
 
@@ -192,18 +191,18 @@ Oscillation (ENSO) index series:
   the Nino 3.4 sea surface temperature anomaly, kept as the historical
   continuity comparison;
 - the analyzed monthly Nino 3.4 anomaly, a fast-moving companion that
-  never declares a phase on its own; and
+  never declares a phase on its own;
+- the weekly Nino 3.4 sea surface temperature anomaly (`nino34Weekly`); and
 - the standardized Southern Oscillation Index (SOI), a supporting
   ocean-atmosphere agreement flag only.
 
 Seasonal points carry a `preliminary` flag (recent seasons may still be
 revised). They drive the drought-impact briefing's long-range ENSO tilt
-and its index chart. The publish script refuses to copy back any
-externally refreshed snapshot that lacks this shape or drops a series
-(see `scripts/publish-public.mjs`), so a stale builder can never regress
-the live read again.
+and its index chart. `npm run check:enso` (`scripts/validate-enso-snapshot.mjs`,
+part of `check:all`) refuses a snapshot that lacks this shape or drops a
+required series, so a stale builder can never regress the live read again.
 
-Both CPC sources are served without Cross-Origin Resource Sharing (CORS)
+The CPC sources are served without Cross-Origin Resource Sharing (CORS)
 headers, so a browser cannot fetch them directly. Per the
 climate-data-sources doctrine, a slow monthly index is snapshotted at
 build or commit time rather than proxied at runtime. Refresh the snapshot
@@ -213,7 +212,7 @@ build or commit time rather than proxied at runtime. Refresh the snapshot
 npm run build:enso
 ```
 
-That runs `scripts/build-enso-snapshot.mjs`, which fetches all four
+That runs `scripts/build-enso-snapshot.mjs`, which fetches all five
 index products, parses each table, determines each ENSO phase, and rewrites
 `enso-indices.json` with its retrieval date. Commit the regenerated file.
 There is no deployer authorization concern here; this is public federal
@@ -254,24 +253,17 @@ public federal model output (https://www.weather.gov/disclaimer).
 
 ---
 
-## British Columbia basin drought levels (live, not bundled)
+## British Columbia basin drought levels (held)
 
-The British Columbia drought framing fetches basin geometry directly from
-the Province of British Columbia ArcGIS FeatureServer at activation time.
-No British Columbia basin geometry is copied into this repository or stored
-under `public/data/`.
-
-The source attribution is `Province of British Columbia`. Its ArcGIS item
-terms were reconfirmed on 2026-07-27 and remain `Access Only`, `Copyright
-(c), Province of British Columbia. All rights reserved.` The maintainer's
-2026-07-08 display-and-attribution sign-off therefore remains applicable.
-The layer asks only for the basin identifier, basin name, drought level, and
-source date needed by the display.
-
-The provincial 0 through 5 scale is not converted to United States Drought
-Monitor categories. Source value 99 renders as `No update`, meaning the basin
-is not measured outside the core drought season; it is never put on the
-severity ramp.
+The Province of British Columbia basin drought-level edition is held by
+DR-160 (2026-09-28) until the Province's written permission or the owner's
+re-ruling: its ArcGIS item terms say "you may not reproduce or distribute
+them without the prior written permission of the Province". While the hold
+stands (`BC_BASIN_EDITION_HELD` in `src/config/layers.ts`), no code path
+selects, presents or fetches that edition, and no British Columbia basin
+geometry is stored under `public/data/`. British Columbia keeps the drought
+monitors (the Canadian Drought Monitor and the North American Drought
+Monitor).
 
 ---
 
@@ -283,7 +275,7 @@ Open Government Licence - Canada. The dataset licence was reconfirmed through
 the open.canada.ca record
 `292646cd-619f-4200-afb1-8b2c52f984a2` on 2026-07-27.
 
-The committed artifact is for June 2026. It records its month, source URL,
+The committed artifact records its own month (see its `month` field), source URL,
 retrieval date, source archive byte count, present and absent classes,
 reprojection, simplification, and stewardship result. The source archive
 contained D0, D1, D2, and D3 files. D4 was absent, which means no area was in
@@ -301,7 +293,7 @@ The builder downloads one archive, expands it only in Node with the dev-only
 First Nations, Metis, Métis, Inuit, reserve, and Treaty terms, and fails
 before write on any match. It also rejects unexpected GeoJSON or properties,
 reprojects EPSG:3857 to WGS 84, and enforces a 5,000,000-byte build ceiling.
-For the June 2026 snapshot the mandatory result was:
+For the committed snapshot the mandatory result was:
 
 `PASS: no First Nations, Metis, Métis, Inuit, reserve, or Treaty terms found in 4 archive member names or decoded contents.`
 
@@ -318,7 +310,7 @@ After populating a deployer slot, test locally from the repo root:
 
 ```bash
 npm run dev
-# open http://localhost:5173/dynamic-drought-module/?layers=tribal
+# open http://localhost:5173/?layers=tribal
 ```
 
 If the layer toggle reports `no data (see data/README.md)`, the file is

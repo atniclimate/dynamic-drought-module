@@ -5,7 +5,7 @@
     "landAreaSource": "BIA AIAN-LAR FeatureServer (distinct LARNAME)",
     "matcher": "LAR areas, safe-match v2 (D-0.7.0-026): unique whole-phrase containment, state-constrained, distinctive-token guard; plus the maintainer-curated known-ambiguous gate (D-0.7.0-026a)",
     "censusMatcher": "Census areas (rule 7): maintainer-curated known-ambiguous gate (D-0.7.0-026a) first; then unique whole-phrase containment of BASENAME outside the roster name parentheses, or equality with a parenthetical, distinctive-token guard; several candidates resolve only when exactly one carries BASENAME as its parenthetical; no state constraint",
-    "generated": "2026-10-19",
+    "generated": "2026-11-06",
     "rosterCount": 573,
     "landAreaCount": 335,
     "safeMatchCount": 258,
@@ -892,7 +892,7 @@
     },
     {
       "larName": "Resighini",
-      "tribe": "PuliklaTribe of Yurok People (previously listed as Resighini Rancheria, California)",
+      "tribe": "Pulikla Tribe of Yurok People (previously listed as Resighini Rancheria, California)",
       "rule": "unique-containment"
     },
     {
@@ -1516,7 +1516,7 @@
     {
       "larName": "Yurok",
       "candidates": [
-        "PuliklaTribe of Yurok People (previously listed as Resighini Rancheria, California)",
+        "Pulikla Tribe of Yurok People (previously listed as Resighini Rancheria, California)",
         "Yurok Tribe of the Yurok Reservation, California"
       ]
     }
@@ -1566,6 +1566,7 @@
     "Kootenai Tribe of Idaho",
     "Little River Band of Ottawa Indians, Michigan",
     "Little Shell Tribe of Chippewa Indians of Montana",
+    "Lumbee Tribe of North Carolina",
     "Manchester Band of Pomo Indians of the Manchester Rancheria, California",
     "Mashantucket Pequot Indian Tribe",
     "Miami Tribe of Oklahoma",
@@ -1638,7 +1639,6 @@
     "Alatna Village",
     "Algaaciq Native Village (St. Mary's)",
     "Allakaket Village",
-    "Aleut Community of St. Paul Island (See Pribilof Islands Aleut Communities of St. Paul & St. George Islands) (previously listed as Saint Paul Island ( See Pribilof Islands Aleut Communities of St. Paul & St. George Islands))",
     "Alutiiq Tribe of Old Harbor",
     "Angoon Community Association",
     "Anvik Village",
@@ -3261,6 +3261,7 @@
     "St. Paul ANVSA",
     "Kalskag ANVSA",
     "Port Alsworth ANVSA",
+    "St. George ANVSA",
     "Council ANVSA",
     "Chignik ANVSA",
     "Lake Minchumina ANVSA",
@@ -3268,6 +3269,7 @@
     "Galena ANVSA",
     "Arctic Village ANVSA",
     "Canyon Village ANVSA",
+    "Venetie ANVSA",
     "Stevens Village ANVSA",
     "Bethel ANVSA",
     "Toksook Bay ANVSA",
@@ -3290,9 +3292,7 @@
     "Eastern Chickahominy TDSA",
     "Uyak ANVSA",
     "Dillingham ANVSA",
-    "White Mountain ANVSA",
-    "St. George ANVSA",
-    "Venetie ANVSA"
+    "White Mountain ANVSA"
   ],
   "censusAmbiguous": [
     {
@@ -3307,9 +3307,9 @@
       "aiannh": "7390",
       "name": "St. Paul ANVSA",
       "candidates": [
-        "Aleut Community of St. Paul Island (See Pribilof Islands Aleut Communities of St. Paul & St. George Islands) (previously listed as Saint Paul Island ( See Pribilof Islands Aleut Communities of St. Paul & St. George Islands))",
         "Pribilof Islands Aleut Communities of St. Paul & St. George Islands (St. George Island and Saint Paul Island)"
-      ]
+      ],
+      "rule": "known-ambiguous (maintainer-curated, D-0.7.0-026a)"
     },
     {
       "aiannh": "6685",
@@ -3318,6 +3318,14 @@
         "Village of Kalskag",
         "Village of Lower Kalskag"
       ]
+    },
+    {
+      "aiannh": "7340",
+      "name": "St. George ANVSA",
+      "candidates": [
+        "Pribilof Islands Aleut Communities of St. Paul & St. George Islands (St. George Island and Saint Paul Island)"
+      ],
+      "rule": "known-ambiguous (maintainer-curated, D-0.7.0-026a)"
     },
     {
       "aiannh": "6380",
@@ -3344,6 +3352,14 @@
         "Chignik Lake Village",
         "Native Village of Chignik Lagoon"
       ]
+    },
+    {
+      "aiannh": "7725",
+      "name": "Venetie ANVSA",
+      "candidates": [
+        "Native Village of Venetie Tribal Government (Arctic Village and Village of Venetie)"
+      ],
+      "rule": "known-ambiguous (maintainer-curated, D-0.7.0-026a)"
     },
     {
       "aiannh": "5830",
@@ -3429,22 +3445,6 @@
         "White Mountain Apache Tribe of the Fort Apache Reservation, Arizona",
         "Native Village of White Mountain"
       ]
-    },
-    {
-      "aiannh": "7340",
-      "name": "St. George ANVSA",
-      "candidates": [
-        "Pribilof Islands Aleut Communities of St. Paul & St. George Islands (St. George Island and Saint Paul Island)"
-      ],
-      "rule": "known-ambiguous (maintainer-curated, D-0.7.0-026a)"
-    },
-    {
-      "aiannh": "7725",
-      "name": "Venetie ANVSA",
-      "candidates": [
-        "Native Village of Venetie Tribal Government (Arctic Village and Village of Venetie)"
-      ],
-      "rule": "known-ambiguous (maintainer-curated, D-0.7.0-026a)"
     }
   ]
 }

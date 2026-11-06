@@ -2,7 +2,7 @@ import { expect, test } from './offline-test';
 import type * as maplibregl from 'maplibre-gl';
 
 import { USDM_NONE_SWATCH } from '../src/config/palette';
-import { buildFireContextHtml } from '../src/impact/fire-context';
+import { readFireContext } from '../src/impact/fire-context';
 import {
   buildUsdmFillPaint,
   fadeLayerIds
@@ -24,7 +24,8 @@ test('zero rendered USDM polygons stays an explicit unmasked absence', () => {
   const map = {
     getLayer: (id: string) =>
       id === 'usdm-frame-a-fill' || id === 'usdm-frame-b-fill' ? { id } : undefined,
-    queryRenderedFeatures: () => []
+    queryRenderedFeatures: () => [],
+    isSourceLoaded: () => true
   } as unknown as maplibregl.Map;
 
   const { metric, dateMs } = droughtMetric(map);
@@ -33,6 +34,25 @@ test('zero rendered USDM polygons stays an explicit unmasked absence', () => {
     sublabel: 'no D0-D4 polygon rendered; no area mask to confirm no drought',
     tone: 'none'
   });
+  expect(dateMs).toBeNull();
+});
+
+// Audit round 2 (R2-8): an unfinished source cannot establish absence, as the
+// NADM branch already holds; a new week read 'No polygon' before it tiled.
+test('zero rendered USDM polygons while a slot source still loads reads loading, not an absence', () => {
+  registry.activate('usdm');
+  registry.setStatus('usdm', 'ready');
+
+  const map = {
+    getLayer: (id: string) =>
+      id === 'usdm-frame-a-fill' || id === 'usdm-frame-b-fill' ? { id } : undefined,
+    queryRenderedFeatures: () => [],
+    isSourceLoaded: (id: string) => id !== 'usdm-frame-b'
+  } as unknown as maplibregl.Map;
+
+  const { metric, dateMs } = droughtMetric(map);
+  expect(metric.tone).toBe('loading');
+  expect(metric.value).toBe('-');
   expect(dateMs).toBeNull();
 });
 
@@ -45,6 +65,8 @@ test('the no-polygon swatch does not claim a no-drought class', () => {
 });
 
 test('fire context does not infer no drought without an analyzed-area mask', () => {
+  registry.activate('usdm');
+  registry.setStatus('usdm', 'ready');
   const map = {
     getLayer: (id: string) =>
       id === 'usdm-frame-a-fill' || id === 'usdm-frame-b-fill' ? { id } : undefined,
@@ -55,10 +77,44 @@ test('fire context does not infer no drought without an analyzed-area mask', () 
   // A tuple, not a bare `{x,y}` object: maplibre-gl's `PointLike` is
   // `Point | [number, number]`, and a plain literal lacks the `Point`
   // class's own methods (`clone`, `add`, ...).
-  const html = buildFireContextHtml(map, [10, 10], lngLat);
-  expect(html).toContain('No D0-D4 polygon rendered here.');
-  expect(html).toContain('no analyzed-area mask here');
-  expect(html).toContain('does not confirm no drought');
+  const { drought } = readFireContext(map, [10, 10], lngLat);
+  expect(drought.label).toBe('Drought beneath');
+  expect(drought.text).toContain('No D0-D4 category polygon here');
+  expect(drought.text).toContain('no analyzed-area mask');
+  expect(drought.text).toContain('does not confirm no drought');
+});
+
+// Audit round 5 (R5-9, R5-18): the perimeter popup reads drought as the place
+// card does, so the change register is named, not read as an absence, and the
+// NADM surface Drought mode draws is read rather than "turn on the USDM".
+test('fire context names the USDM change register instead of an absence', () => {
+  registry.activate('usdm');
+  registry.setStatus('usdm', 'ready');
+  timeline.setUsdmMode('chg1');
+  const map = {
+    getLayer: (id: string) => ({ id }),
+    queryRenderedFeatures: () => []
+  } as unknown as maplibregl.Map;
+  const { drought } = readFireContext(map, [10, 10], { lng: -120, lat: 46 } as maplibregl.LngLat);
+  expect(drought.text).toContain('change register');
+  expect(drought.text).not.toContain('No D0-D4');
+});
+
+test('fire context reads the NADM category when NADM is the drawn drought surface', () => {
+  registry.activate('nadm-drought');
+  registry.setStatus('nadm-drought', 'ready');
+  try {
+    const map = {
+      getLayer: (id: string) => (id === 'nadm-drought-fill' ? { id } : undefined),
+      queryRenderedFeatures: () => [{ properties: { DROUGHTCAT: 'D2', YEAR_MONTH: '202609' } }]
+    } as unknown as maplibregl.Map;
+    const { drought } = readFireContext(map, [10, 10], { lng: -120, lat: 46 } as maplibregl.LngLat);
+    expect(drought.label).toBe('Drought beneath');
+    expect(drought.text).toContain('(North American Drought Monitor)');
+    expect(drought.text).not.toContain('Turn on');
+  } finally {
+    registry.deactivate('nadm-drought');
+  }
 });
 
 test('USDM fade targets contain the actual fill and outline layers only', () => {

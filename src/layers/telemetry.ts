@@ -41,7 +41,9 @@ import {
   STATIC_TELEMETRY_STATION_REGISTRY,
   STATION_MARKER_LEGEND,
   discoverStationsForViewport,
+  distanceMeters,
   mergeTelemetryStations,
+  parseLeadingNumber,
   stationNetworkByKey,
   type RawsWindStationFields
 } from '../config/station-registry';
@@ -60,6 +62,7 @@ import {
   showLegend
 } from '../ui/legend-registry';
 import { prefersReducedMotion } from '../util/motion';
+import { dateTok } from '../util/text-tokens';
 
 // ---------------------------------------------------------------------------
 // Module-level state
@@ -89,7 +92,6 @@ const popupOrigins = new WeakMap<maplibregl.Marker, HTMLElement>();
 const LAYER_KEY = 'telemetry';
 const MOVEEND_DEBOUNCE_MS = 350;
 const DISCOVERED_STATION_RENDER_CAP = 50;
-const EARTH_RADIUS_METERS = 6_371_000;
 const CAP_NOTE_ID = 'telemetry-discovery-note';
 // H2 (0.6.2, D-0.7.0-004): a compact count chip in the shared bottom dock;
 // the full explanation lives in the sidebar Water & Snow panel. The old
@@ -266,7 +268,7 @@ function renderStations(map: maplibregl.Map, views: readonly TelemetryMarkerView
       // otherwise), so an absolutely-positioned child sized past the
       // marker's own 16px box still renders in full; no src/styles/app.css
       // edit needed (that grant does not exist for this task).
-      el.appendChild(buildRawsWindGlyph(glyphWind, station.color));
+      el.appendChild(buildRawsWindGlyph(glyphWind, station.color, view.freshness === 'fresh'));
     }
 
     // TelemetryStation.coords is [lat, lng]; MapLibre wants [lng, lat].
@@ -370,15 +372,14 @@ function glyphEligibleWind(wind: RawsWindStationFields | null): RawsWindGlyphFie
 }
 
 /**
- * The observation time in the same "As of" style the RAWS popup already
- * uses (src/ui/popups.ts `renderRawsRows`), so the two never disagree about
- * how a timestamp reads. `null` reads "an unknown time" rather than
+ * The observation time as the house `dateTok` token, zone named, the way the
+ * popup frame prints instants. `null` reads "an unknown time" rather than
  * omitting the clause the acceptance requires.
  */
 function formatRawsObservedTime(observedAtIso: string | null): string {
   if (!observedAtIso) return 'an unknown time';
   const observed = new Date(observedAtIso);
-  return Number.isNaN(observed.getTime()) ? observedAtIso : observed.toLocaleString();
+  return Number.isNaN(observed.getTime()) ? observedAtIso : dateTok(observed);
 }
 
 /**
@@ -421,20 +422,6 @@ const WIND_GLYPH_STROKE_WIDTH_PX = 1.5;
 // Padding so the arrowhead's white contrast stroke never clips against the
 // SVG's own edge.
 const WIND_GLYPH_PAD_PX = 2;
-
-/**
- * The served speed's leading numeric token, for example 5 out of "5 mph".
- * Mirrors `parseLeadingNumber` in src/config/station-registry.ts (a private,
- * unexported helper; that file's non-doc-comment lines are not owned by this
- * round), duplicated rather than imported for that reason. Never invents a
- * value: a string with no numeric token (the issuer's own "calm" or similar)
- * returns `null`, and the caller draws no directional shape for it, the same
- * way it already does for a parsed speed of exactly 0.
- */
-function parseServedWindSpeedMph(served: string): number | null {
-  const match = /-?\d+(?:\.\d+)?/.exec(served);
-  return match ? Number(match[0]) : null;
-}
 
 function clampWindSpeedForShaft(speedMph: number): number {
   return Math.min(Math.max(speedMph, WIND_GLYPH_SHAFT_MIN_MPH), WIND_GLYPH_SHAFT_MAX_MPH);
@@ -484,10 +471,14 @@ function telemetryMarkerOptions(element: HTMLElement, wind: RawsWindGlyphFields 
  * stroke; a live satellite or terrain basemap varies pixel to pixel, so this
  * is a representative check against the lightest plausible background, not
  * an exhaustive one.
+ *
+ * `fresh` is the marker's own freshness verdict (freshnessForNetwork): a
+ * reading past its window draws the way its dot does in app.css, at 0.7
+ * opacity with a dashed line, so an old arrow never reads as a current one.
  */
-function buildRawsWindGlyph(wind: RawsWindGlyphFields, color: string): SVGSVGElement {
+function buildRawsWindGlyph(wind: RawsWindGlyphFields, color: string, fresh: boolean): SVGSVGElement {
   const accessibleName = buildRawsWindAccessibleName(wind);
-  const parsedSpeedMph = parseServedWindSpeedMph(wind.windSpeedServed);
+  const parsedSpeedMph = parseLeadingNumber(wind.windSpeedServed);
   // Fix F5 (opus-read.md, including its "0 mph with a direction" caveat): a
   // parsed speed of 0, or a speed string with no numeric token at all, draws
   // no directional shape. A calm or unparseable reading has nothing honest
@@ -520,6 +511,7 @@ function buildRawsWindGlyph(wind: RawsWindGlyphFields, color: string): SVGSVGEle
   // The direction is the marker's own `rotation` (telemetryMarkerOptions),
   // so MapLibre subtracts the map bearing on every turn.
   svg.style.transform = 'translate(-50%, -50%)';
+  if (!fresh) svg.style.opacity = '0.7';
 
   // An SVG `<title>` is the element's native tooltip-on-hover text, but
   // `pointer-events: none` above means this element is never itself the
@@ -548,6 +540,7 @@ function buildRawsWindGlyph(wind: RawsWindGlyphFields, color: string): SVGSVGEle
     shaft.setAttribute('stroke', color);
     shaft.setAttribute('stroke-width', String(WIND_GLYPH_STROKE_WIDTH_PX));
     shaft.setAttribute('stroke-linecap', 'round');
+    if (!fresh) shaft.setAttribute('stroke-dasharray', '3 3');
     svg.appendChild(shaft);
 
     const arrow = document.createElementNS(SVG_NS, 'path');
@@ -761,11 +754,14 @@ async function runDiscoveryForCurrentViewport(map: maplibregl.Map): Promise<void
     // scrub the layer, unchecking it and clearing the seeds it just
     // rendered (layer-controller.ts, the critical-review #2 guard;
     // adversarial-review finding, 2026-07-10). 'error' remains the catch
-    // branch below, where discovery itself threw.
+    // branch below, where discovery itself threw. The curated seeds render
+    // wherever the map looks, so 'no-data' means no station inside the view.
     if (result.failedSources.length > 0) {
       reportStatus('degraded');
     } else {
-      reportStatus(capped.entries.length > 0 ? 'ready' : 'no-data');
+      const view = map.getBounds();
+      const inView = capped.entries.some((e) => view.contains([e.station.coords[1], e.station.coords[0]]));
+      reportStatus(inView ? 'ready' : 'no-data');
     }
   } catch (err) {
     if (!isCurrent()) return;
@@ -887,26 +883,6 @@ function freshnessLabel(freshness: TelemetryFreshness): string {
 
 function categoryLabel(category: PrimaryParameterCategory): string {
   return category.replace(/-/g, ' ');
-}
-
-function distanceMeters(
-  a: readonly [number, number],
-  b: readonly [number, number]
-): number {
-  const [lat1, lon1] = a;
-  const [lat2, lon2] = b;
-  const dLat = radians(lat2 - lat1);
-  const dLon = radians(lon2 - lon1);
-  const rLat1 = radians(lat1);
-  const rLat2 = radians(lat2);
-  const h =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(rLat1) * Math.cos(rLat2) * Math.sin(dLon / 2) ** 2;
-  return 2 * EARTH_RADIUS_METERS * Math.asin(Math.min(1, Math.sqrt(h)));
-}
-
-function radians(degrees: number): number {
-  return (degrees * Math.PI) / 180;
 }
 
 // ---------------------------------------------------------------------------

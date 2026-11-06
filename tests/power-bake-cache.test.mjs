@@ -56,6 +56,17 @@ test('power bakes preserve cache retrieval dates and never invent dates for lega
   } finally { globalThis.fetch = originalFetch; }
 });
 
+test('a cached pull made for a different box or field list refuses the bake instead of baking stale data', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => { throw new Error('a mismatched cache must not refetch an archived upstream'); };
+  try {
+    for (const stale of [{ fields: ['ID'] }, { bbox: [-125, 41.5, -110.5, 50] }]) {
+      state.cached = { type: 'FeatureCollection', features, retrieved: '2026-08-19', ...stale };
+      await assert.rejects(main(), /delete .*power-lines-pnw-raw\.geojson/);
+    }
+  } finally { globalThis.fetch = originalFetch; }
+});
+
 test('a fresh pull records its retrieval date in both the cache and archive attribution', async () => {
   const originalFetch = globalThis.fetch;
   state.cached = null;
@@ -68,5 +79,7 @@ test('a fresh pull records its retrieval date in both the cache and archive attr
     assert.ok([before, new Date().toISOString().slice(0, 10)].includes(cached.retrieved));
     assert.ok(state.attribution.includes(`retrieved ${cached.retrieved};`));
     assert.equal(cached.features.length, 5000);
+    assert.deepEqual(cached.bbox, [-125, 41.5, -110.5, 49.5]);
+    assert.ok(cached.fields.includes('VOLT_CLASS'));
   } finally { globalThis.fetch = originalFetch; }
 });

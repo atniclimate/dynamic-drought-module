@@ -13,6 +13,7 @@ import type { ChartDetail, IssuedModel, PopupClock, ValueRow } from './popup-fra
 import { URLS } from '../config/urls';
 import { standingBriefingDoor } from '../state/place-selection';
 import { ENSO_INDICES_SHARED_KEY, fetchSharedJsonWithBudget } from '../util/fetch';
+import { checkPopupHref } from '../util/escape';
 
 const TITLE = 'Nino 3.4 (the ENSO index region)';
 const ISSUER = 'NOAA Climate Prediction Center';
@@ -92,7 +93,7 @@ function isSeasonal(v: unknown): v is SeasonalIndex {
 export function readEnsoBoxSnapshot(json: unknown): EnsoBoxSnapshot | null {
   if (!isObj(json) || !isDay(json.retrieved) || !isSeasonal(json.roni) || !isSeasonal(json.oni)) return null;
   // The source link is the frame's one required href, and the frame refuses a non-https one.
-  if (!json.roni.sourceUrl.startsWith('https://')) return null;
+  if (checkPopupHref(json.roni.sourceUrl) === null) return null;
   const w = isObj(json.nino34Weekly) ? json.nino34Weekly : null;
   const wl = w && isObj(w.latest) ? w.latest : null;
   const weeklyOk = wl !== null && isNum(wl.year) && isMonth(wl.month) && isNum(wl.day) && isNum(wl.total) && isNum(wl.anom);

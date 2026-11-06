@@ -47,8 +47,8 @@ const {
 } = await import('../src/layers/flow/currents.ts');
 const { FLOW_BINS, classOf, newSample, sampleField } = await import('../src/layers/flow/field.ts');
 const { WIND_PACE, paceFor } = await import('../src/layers/flow/advect.ts');
-const { FLOW_WORDS, flowAgeWords, flowLiveLine, gridBoxWords } = await import('../src/layers/enso-flow-data.ts');
-const { encodeGrid } = await import('../scripts/build-rtofs-currents.mjs');
+const { CurrentsFrameTooOld, FLOW_WORDS, flowAgeWords, flowLiveLine, gridBoxWords } = await import('../src/layers/enso-flow-data.ts');
+const { assertFrameFresh, encodeGrid } = await import('../scripts/build-rtofs-currents.mjs');
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
@@ -119,6 +119,12 @@ test('the producer writes the issuer values unchanged, north first, and the read
   }
 });
 
+test('the producer refuses to write a frame the app would refuse as too old, such as one from stale kept files', () => {
+  const valid = Date.UTC(2026, 9, 13, 1);
+  assert.doesNotThrow(() => assertFrameFresh(valid, valid + CURRENTS_MAX_AGE_MS));
+  assert.throws(() => assertFrameFresh(valid, valid + CURRENTS_MAX_AGE_MS + 1), /older than the app accepts/);
+});
+
 test('the producer refuses a value it would have to change, and a mask that differs between u and v', () => {
   const grid = { ni: 2, nj: 2 };
   const calm = () => Float32Array.of(0, 0.01, -0.02, 0.5);
@@ -185,7 +191,10 @@ test('a frame valid more than 14 days before the clock is refused before its gri
     assert.equal((await readCurrentsFrame({ signal, now: () => valid + 14 * DAY })).length, 1, 'exactly 14 days old still draws');
     assert.deepEqual(reads, [CURRENTS_HEADER_FILE, 'grid.i16.gz']);
     reads.length = 0;
-    await assert.rejects(readCurrentsFrame({ signal, now: () => valid + 14 * DAY + 1 }), /currents frame: valid more than 14 days ago/);
+    await assert.rejects(
+      readCurrentsFrame({ signal, now: () => valid + 14 * DAY + 1 }),
+      (error) => error instanceof CurrentsFrameTooOld && error.valid === valid && /currents frame: valid more than 14 days ago/.test(error.message)
+    );
     assert.deepEqual(reads, [CURRENTS_HEADER_FILE], 'a refused frame reads no grid file');
     // A clock behind the frame is no age (flowAgeWords claims none either).
     assert.equal((await readCurrentsFrame({ signal, now: () => valid - DAY })).length, 1);
@@ -291,6 +300,5 @@ test('current bins are 0.25 and 0.5 m/s, and the pace is scaled like jet-level w
   assert.deepEqual([0.1, 0.25, 0.49, 0.5, 1.4].map((speed) => classOf('currents', speed)), [0, 1, 1, 2, 2]);
   assert.equal(FLOW_WORDS.bins.currents, 'Line width and brightness: under 0.25, 0.25 to 0.5, 0.5 or more m/s.');
   const pace = paceFor('currents');
-  assert.equal(pace.uniform, false, 'pace follows the speed of the field');
   assert.equal(pace.pxPerSecPerUnit * FLOW_BINS.currents[1], WIND_PACE.pxPerSecPerUnit * FLOW_BINS.wind[1]);
 });

@@ -31,8 +31,8 @@ export interface PlaceConditionRowDef {
   /** Stable key; matches a HazardClusterDef.placeConditionRow value. */
   readonly key: PlaceConditionRowKey;
   /**
-   * The layers this row reads, in the block's own precedence (NADM before
-   * USDM for drought). A row is listed while any of them is on; one that
+   * The layers this row reads, in the block's own precedence (NADM, then
+   * USDM, then the CPC outlook for drought). A row is listed while any of them is on; one that
    * was asked for and could not be read joins the block's "switched on but
    * could not be read" check.
    */
@@ -41,7 +41,7 @@ export interface PlaceConditionRowDef {
 
 /** The rows, in the block's presentation order. */
 export const PLACE_CONDITION_ROWS: Readonly<Record<PlaceConditionRowKey, PlaceConditionRowDef>> = {
-  drought: { key: 'drought', layerKeys: ['nadm-drought', 'usdm'] },
+  drought: { key: 'drought', layerKeys: ['nadm-drought', 'usdm', 'drought'] },
   'nws-alerts': { key: 'nws-alerts', layerKeys: ['nws-alerts'] },
   'wildfire-perimeter': { key: 'wildfire-perimeter', layerKeys: ['nifc-fires'] }
 };

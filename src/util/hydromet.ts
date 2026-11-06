@@ -13,6 +13,8 @@
  *   - Fields are comma-delimited but space-padded; trim every field.
  *   - The most recent day commonly reads the literal `NO RECORD` (not yet
  *     posted, about one calendar day of lag); skipped, not an error.
+ *   - 998877 is USBR's documented null value (usbr.gov/pn/hydromet/
+ *     using_dfcgi.html); skipped like NO RECORD, never a reading.
  */
 
 import { URLS } from '../config/urls';
@@ -24,6 +26,7 @@ const FETCH_TIMEOUT_MS = 15_000;
 // A daily arc for a few parameters is a few KB; a larger body (an error page)
 // is refused instead of being read until the timer fires.
 const MAX_BODY_BYTES = 2 * 1024 * 1024;
+const HYDROMET_NULL = 998877;
 
 /** One Hydromet parameter series ("WIC AF"), readings in date order. */
 export interface HydrometSeries {
@@ -116,7 +119,7 @@ function parseHydrometCsv(text: string): HydrometSeries[] {
       const raw = fields[i + 1];
       if (raw === undefined || raw === '' || raw.toUpperCase().includes('NO RECORD')) continue;
       const n = Number(raw);
-      if (!Number.isFinite(n)) continue;
+      if (!Number.isFinite(n) || n === HYDROMET_NULL) continue;
       series[i]?.readings.push({ date: iso, value: n });
     }
   }

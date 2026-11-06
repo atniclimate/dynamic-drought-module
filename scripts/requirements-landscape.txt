@@ -1,5 +1,5 @@
 # Build-time-only Python toolchain for the landscape signature
-# (scripts/landscape package; historical entry scripts/build_landscape_signature.py).
+# (scripts/landscape package; run with python -m scripts.landscape).
 #
 # This stack runs ONLY at build time, is kept out of the shipped bundle, and
 # never reaches the browser; the client consumes only

@@ -64,11 +64,12 @@ import { URLS } from '../config/urls';
 import { AIANNH_FILL_COLOR, AIANNH_OUTLINE_COLOR } from '../config/palette';
 import { buildAiannhPopupModel } from '../ui/popups';
 import { buildPlaceConditionsHtml } from '../ui/popup-conditions';
-import { buildBoundaryContext, resolveBoundaryTitle } from '../impact/context';
+import { buildBoundaryContext, censusNationNames, loadCensusNationNames, resolveBoundaryTitle } from '../impact/context';
 import { registerClickTarget } from '../map/interaction-coordinator';
 import type { LayerActivation } from '../config/layers';
 import { fetchBufferedWithBudget, linkAbort } from '../util/fetch';
 import { buildQueryEnvelope, envelopeCovers, toCoverageEnvelope } from '../util/bbox';
+import { assertFeatureCollection, isTruncated } from '../util/geojson-checks';
 import { registry } from '../state/registry';
 
 const LAYER_KEY = 'aiannh';
@@ -334,46 +335,6 @@ function buildQueryUrl(
 }
 
 /**
- * Validate that a parsed response is a genuine GeoJSON FeatureCollection and
- * not an ArcGIS error body or other malformed shape. Throws on failure so the
- * caller's catch block reports `'error'`. A response the service flags as
- * truncated (`exceededTransferLimit`) is logged, not silently complete.
- */
-function assertFeatureCollection(raw: unknown): FeatureCollection {
-  if (raw && typeof raw === 'object' && 'error' in raw) {
-    const err = (raw as { error?: { code?: number; message?: string } }).error;
-    throw new Error(
-      `ArcGIS error ${err?.code ?? '(unknown code)'}: ${err?.message ?? 'unknown error'}`
-    );
-  }
-  if (
-    !raw ||
-    typeof raw !== 'object' ||
-    (raw as { type?: string }).type !== 'FeatureCollection' ||
-    !Array.isArray((raw as { features?: unknown }).features)
-  ) {
-    throw new Error('AIANNH response was not a GeoJSON FeatureCollection.');
-  }
-  return raw as FeatureCollection;
-}
-
-/**
- * Whether the service flagged this response as truncated
- * (`exceededTransferLimit`). A truncated body renders (partial data beats
- * none) but reports `degraded` ("live (partial)") and is NEVER admitted to
- * the coverage-envelope cache: a cached envelope asserts "the service
- * answered this whole envelope", which a truncated response cannot claim
- * (R2-trio, the 2026-07-15 planning true-up, D-0.7.0-037).
- */
-function isTruncated(raw: unknown): boolean {
-  return Boolean(
-    raw &&
-      typeof raw === 'object' &&
-      (raw as { exceededTransferLimit?: boolean }).exceededTransferLimit
-  );
-}
-
-/**
  * Remove any rendered features from a prior viewport. D-0.8.0-052 authorizes
  * no post-failure fallback, so an active refresh failure must clear first and
  * then report unavailable.
@@ -436,7 +397,7 @@ async function fetchAndApply(map: maplibregl.Map): Promise<void> {
       throw new Error(`HTTP ${resp.status} ${resp.statusText}`);
     }
     const raw: unknown = await resp.json();
-    geojson = assertFeatureCollection(raw);
+    geojson = assertFeatureCollection(raw, 'AIANNH');
     truncated = isTruncated(raw);
   } catch (err) {
     unlink();
@@ -689,6 +650,11 @@ export function deactivate(map: maplibregl.Map): void {
  * cursor affordance. Bound once on first activation.
  */
 export function bindPopups(map: maplibregl.Map): void {
+  // The search's name for each Census area, from the one map the briefing title
+  // shares (impact/context loadCensusNationNames, the roster's provenance gate).
+  // Until it loads, a popup titles the Census area as before; a failed read is
+  // retried by the next click's label, so the map is read at click time.
+  loadCensusNationNames().catch(() => {});
   registerClickTarget({
     kind: 'tribal-lands',
     layerIds: [FILL_LAYER_ID],
@@ -696,7 +662,7 @@ export function bindPopups(map: maplibregl.Map): void {
     respond: (feature, click, map) => {
       const props: GeoJsonProperties = feature.properties ?? null;
       return {
-        model: buildAiannhPopupModel(props, buildPlaceConditionsHtml(map, click.point, feature)),
+        model: buildAiannhPopupModel(props, buildPlaceConditionsHtml(map, click.point, feature), censusNationNames()),
         selection: buildBoundaryContext('aiannh', props, feature.geometry, click.lngLat),
         // An id-less feature clears any prior emphasis (the old
         // emphasizePlace contract) rather than lighting an unknown one.

@@ -37,6 +37,7 @@ import { isStateCode } from '../config/state-codes';
 import { getEmphasisTargets, emphasizePlaces } from '../state/place-emphasis';
 import type { EmphasisTarget } from '../state/place-emphasis';
 import { openStateBriefing } from '../state/deep-link';
+import { getCommittedSnapshot, onCommittedSnapshotChange } from '../state/cluster-service';
 import { getPlaceSelection, setPlaceSelection, standingBriefing } from '../state/place-selection';
 import type { PlaceSelection } from '../state/place-selection';
 import { onStudioRouteChange, studioOwnsScreen } from '../state/studio-route';
@@ -183,9 +184,9 @@ let initialized = false;
 // does nothing unless it is STILL that record. Every route that supersedes
 // it clears or replaces the record: a later commit (cleared on entry to
 // `commit`, before its builder runs), a dismissal (`dismissResponse`: an
-// empty click, Escape on an open response, a studio route, entering Brief
-// with the mobile sheet active, a station popup adopting the slot, the
-// briefing door), Escape during the wait itself (a handler that lives as long
+// empty click, Escape on an open response, a studio route, a mode or horizon
+// switch, entering Brief with the mobile sheet active, a station popup
+// adopting the slot, the briefing door), Escape during the wait itself (a handler that lives as long
 // as the wait), the current response closed by its close button (`closed`,
 // the adopted station popup's included), the map's removal, the test reset,
 // and the mobile Brief sheet ACTIVATING with no view-mode change (a resize
@@ -253,6 +254,31 @@ let sinkPresented = false;
 let sinkSelection: PlaceSelection | null = null;
 
 /**
+ * Whether an Escape belongs to another control, so it never also dismisses
+ * the response: one that control already used (the search box clearing its
+ * query, the map-information panel closing), or one aimed inside a nested
+ * surface, which owns its first Escape as in mobile-sheet.ts (some never
+ * preventDefault). Every response Escape handler (sink, popup, the wait) asks.
+ */
+function escapeOwnedElsewhere(event: KeyboardEvent): boolean {
+  const target = event.target;
+  return (
+    event.defaultPrevented ||
+    (target instanceof HTMLElement &&
+      target.closest('#impact-panel, #map-key, #map-info-panel, #place-studio-root, #layers-studio-root') !== null)
+  );
+}
+
+/**
+ * Escape dismisses a sink-presented response as it does a popup (the popup's
+ * own handler is bindPopupKeyboard). Bound only while the sink holds one.
+ */
+function onSinkEscape(event: KeyboardEvent): void {
+  if (event.key !== 'Escape' || !sinkPresented || escapeOwnedElsewhere(event)) return;
+  dismissResponse();
+}
+
+/**
  * Install (or, with null, remove) the one alternate response sink. Only
  * PLACE-BEARING responses route to the sink, mirroring the shipped
  * mobile-sheet precedent: the map is the instrument for fire, smoke,
@@ -312,6 +338,21 @@ export function initInteractionCoordinator(map: maplibregl.Map): void {
   map.on('click', (e) => {
     handleClick(map, e);
   });
+  // The pointer shows exactly where a click would answer (same box, same
+  // label filter). Set once per frame, after every layer's own hover pair in
+  // the same dispatch, so a mouseleave over a still-clickable layer (the
+  // state fill under everything) cannot leave the arrow showing.
+  let cursorPoint: maplibregl.Point | null = null;
+  map.on('mousemove', (e) => {
+    if (cursorPoint === null) {
+      requestAnimationFrame(() => {
+        if (cursorPoint === null) return;
+        map.getCanvas().style.cursor = collectHits(map, cursorPoint).length > 0 ? 'pointer' : '';
+        cursorPoint = null;
+      });
+    }
+    cursorPoint = e.point;
+  });
   if (keyboardIdentifyEnabled()) bindKeyboardIdentify(map);
   // A studio owns the screen: entering one dismisses any open response
   // (the PLACE studio is a left-side route on desktop, so a lingering
@@ -325,6 +366,21 @@ export function initInteractionCoordinator(map: maplibregl.Map): void {
   // console mode would be a second response beside it.
   onViewModeChange((mode) => {
     if (mode === 'brief' && isSheetActive()) dismissResponse();
+  });
+  // A mode or horizon switch replaces the drawn surfaces, so an open response
+  // (popup or panel foot) would describe what is no longer on the map. A
+  // republish in the same mode and horizon (a layer toggle, a status) keeps
+  // it; a briefing opened from it holds its own selection, so it stays.
+  const shownView = (): string => {
+    const { selectedHazard, horizon } = getCommittedSnapshot();
+    return `${selectedHazard}|${horizon}`;
+  };
+  let view = shownView();
+  onCommittedSnapshotChange(() => {
+    const next = shownView();
+    if (next === view) return;
+    view = next;
+    dismissResponse();
   });
   // The mobile Brief sheet activating with no view-mode change (a resize, an
   // embed transition, revealSheetAtPeek) settles synchronously, and its
@@ -468,6 +524,7 @@ export function resetInteractionCoordinatorForTest(): void {
   sink = null;
   sinkPresented = false;
   sinkSelection = null;
+  document.removeEventListener('keydown', onSinkEscape);
   // A waiting commit never outlives a reset, and the frame is forgotten so
   // the next registration warms it again (a test can then commit cold).
   pendingCommit = null;
@@ -653,7 +710,7 @@ function bindPopupKeyboard(popup: maplibregl.Popup, map: maplibregl.Map): () => 
     target instanceof Node && (popup.getElement()?.contains(target) ?? false);
   let focusInside = contains(document.activeElement);
   const onEscape = (event: KeyboardEvent): void => {
-    if (event.key === 'Escape' && currentPopup === popup) dismissResponse();
+    if (event.key === 'Escape' && currentPopup === popup && !escapeOwnedElsewhere(event)) dismissResponse();
   };
   // An adopted popup can open before its lazy frame creates any DOM. Listen
   // on the document so the first paint and later hydration keep the same
@@ -876,7 +933,7 @@ function commit(
   // the wait, however it ends, acts only while this commit is still the
   // waiting one, and swallows nothing.
   const onEscape = (e: KeyboardEvent): void => {
-    if (e.key === 'Escape' && pendingCommit === record) dismissResponse();
+    if (e.key === 'Escape' && pendingCommit === record && !escapeOwnedElsewhere(e)) dismissResponse();
   };
   document.addEventListener('keydown', onEscape);
   loadFrame().finally(() => document.removeEventListener('keydown', onEscape)).then(
@@ -1027,6 +1084,7 @@ function renderPopup(
     if (presented) {
       sinkPresented = true;
       sinkSelection = selection;
+      document.addEventListener('keydown', onSinkEscape);
       return;
     }
   }
@@ -1154,6 +1212,29 @@ async function attachConditionDoor(
     import('../state/region-store'),
     import('../ui/popups')
   ]);
+  // A BIA land area or a Census area takes the title a click on the area itself
+  // gives: the roster's gated name, its own area name beside the source.
+  let areaLabel: string | undefined;
+  if (subject.kind === 'bia-reservation') {
+    const { loadBiaNationNames, resolveBoundaryTitle } = await import('../impact/context');
+    await loadBiaNationNames().catch(() => {});
+    if (currentPopup !== popup || !head.isConnected) return;
+    const landArea = subject.title;
+    subject.title = resolveBoundaryTitle('bia-reservation', { LARNAME: landArea });
+    if (subject.title !== landArea) areaLabel = `Land area: ${landArea}`;
+  } else if (subject.kind === 'aiannh') {
+    const { loadBiaNationNames, loadCensusNationNames, resolveBoundaryTitle } = await import('../impact/context');
+    const landArea = identity.containingTribal?.biaLandArea;
+    await Promise.all([loadCensusNationNames().catch(() => {}), landArea && loadBiaNationNames().catch(() => {})]);
+    if (currentPopup !== popup || !head.isConnected) return;
+    const censusArea = subject.title;
+    // A legal Census area over a BIA land area takes the Nation name a click on
+    // the land area gives, only when the roster's gate names one (never a bare LARNAME).
+    const nation = landArea && resolveBoundaryTitle('bia-reservation', { LARNAME: landArea });
+    subject.title = nation && nation !== landArea ? nation : resolveBoundaryTitle('aiannh', { NAME: censusArea });
+    // DRAFT wording: "Census area", the search's own sublabel word (as buildBoundaryContext).
+    if (subject.title !== censusArea) areaLabel = `Census area: ${censusArea}`;
+  }
 
   // `identity.state` came from `resolveState` (src/state/location-identity.ts
   // :201-222), which never reads a postal code off the thing this click
@@ -1175,6 +1256,7 @@ async function attachConditionDoor(
     title: subject.title,
     properties: null,
     lngLat: { lng: click.lngLat.lng, lat: click.lngLat.lat },
+    ...(areaLabel ? { areaLabel } : {}),
     regionKey: getCurrentRegion(),
     containing
   };
@@ -1279,6 +1361,7 @@ export function dismissResponse(): void {
   popup?.remove();
   if (sinkPresented) {
     sinkPresented = false;
+    document.removeEventListener('keydown', onSinkEscape);
     const sel = sinkSelection;
     sinkSelection = null;
     sink?.dismiss();

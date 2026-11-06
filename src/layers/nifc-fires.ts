@@ -697,6 +697,9 @@ function applyFeatureCollection(
           ]
         )
     });
+  } else {
+    // The key follows the batch drawn, like the pulse above.
+    hideLegend(LAYER_KEY);
   }
 
   if (opts.truncated) {

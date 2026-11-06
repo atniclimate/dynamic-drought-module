@@ -281,6 +281,23 @@ function heldBody(offsetToHold) {
   return { entered, reads, release: () => release(), aborted: () => bodyAborted, restore: () => { globalThis.fetch = previous; } };
 }
 
+test('an abandoned leaf read keeps the cached header: the retry reads only the leaf and the tile', async () => {
+  let stall = true;
+  const f = fixture(offset => stall && offset === 16384 ? 'stall' : archive());
+  try {
+    const p = createPmtilesTransport();
+    await p.tilev4(json, new AbortController());
+    const a = new AbortController();
+    const first = p.tilev4(tile, a);
+    while (f.active() === 0) await new Promise(setImmediate);
+    a.abort();
+    await assert.rejects(first, { name: 'AbortError' });
+    stall = false;
+    assert.deepEqual([...(await p.tilev4(tile, new AbortController())).data], [10, 20, 30, 40]);
+    assert.deepEqual(f.reads.map(r => r.offset), [0, 16384, 16384, 16389], 'no second header read');
+  } finally { f.restore(); }
+});
+
 test('one leaf waiter cancels independently and a survivor retains the shared read', async () => {
   const f = heldBody(16384);
   try {

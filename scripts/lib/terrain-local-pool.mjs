@@ -85,8 +85,9 @@ export async function buildLocalTerrainStore({storePath,jobs,recipe,limits,signa
   if(!isAbsolute(storePath))throw Error('Tile store must be an explicit absolute path');
   const normalized=jobs.map(job=>{
     if(![job.z,job.x,job.y].every(n=>Number.isSafeInteger(n)&&n>=0)||job.z>26||job.x>=2**job.z||job.y>=2**job.z)throw Error('Invalid tile coordinates');
-    if(!['land','ocean'].includes(job.kind)||!Array.isArray(job.sources)||job.sources.length>limits.maxSourcesPerTile||
-      (job.kind==='ocean'?job.sources.length!==0:job.sources.length===0))throw Error('Explicit land/ocean source plan required');
+    // An overview always names its four children in quadrant order; a missing child is the shared zero tile.
+    if(!['land','ocean','overview'].includes(job.kind)||!Array.isArray(job.sources)||job.sources.length>limits.maxSourcesPerTile||
+      (job.kind==='ocean'?job.sources.length!==0:job.kind==='overview'?job.sources.length!==4:job.sources.length===0))throw Error('Explicit land/ocean/overview source plan required');
     const sources=job.sources.map(source=>{
       if(!isAbsolute(source.path)||!(/^[a-f0-9]{64}$/).test(source.sha256))throw Error('Local source receipt required');
       return {path:resolve(source.path),sha256:source.sha256};

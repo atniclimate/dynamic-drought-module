@@ -1,9 +1,12 @@
 import { expect, test, type Page } from './offline-test';
 
+import { HAZARD_CLUSTERS } from '../src/config/clusters';
+import { NWS_ALERT_LEGEND } from '../src/config/palette';
 import {
   gotoApp,
   layerCheckbox,
   layerPill,
+  search,
   selectRegion
 } from './helpers';
 
@@ -53,14 +56,16 @@ function rectangleFeature(
       expiration,
       wfo: 'SEW'
     },
+    // The lower 48, so a product stays in a phone view after a desktop boot:
+    // the phone Alerts pane lists only what is drawn in the current view.
     geometry: {
       type: 'Polygon',
       coordinates: [[
-        [-125, 45],
-        [-116, 45],
-        [-116, 50],
+        [-125, 25],
+        [-67, 25],
+        [-67, 50],
         [-125, 50],
-        [-125, 45]
+        [-125, 25]
       ]]
     }
   };
@@ -182,11 +187,10 @@ test('HeatRisk is live only at a contiguous United States map center', async ({
   );
 
   await expect(layerPill(page, 'heatrisk')).toHaveText('live');
+  // The coverage sentence lives in Technical information, not a floating legend.
   await expect(
     page.locator('.legend-section[data-legend="heatrisk"]')
-  ).toContainText(
-    'National Weather Service HeatRisk covers the contiguous United States only.'
-  );
+  ).toHaveCount(0);
 
   for (const region of ['alaska', 'hawaii'] as const) {
     await selectRegion(page, region);
@@ -195,7 +199,7 @@ test('HeatRisk is live only at a contiguous United States map center', async ({
     );
     await expect(
       page.locator('.legend-section[data-legend="heatrisk"]')
-    ).toContainText('No HeatRisk data at the map center.');
+    ).toHaveCount(0);
   }
 
   await selectRegion(page, 'washington_state');
@@ -334,7 +338,7 @@ test('the National Weather Service snapshot prunes expired products and exposes 
   await expect(note).toContainText(
     'response reached its transfer limit'
   );
-  await expect(note).toContainText('Snapshot as of');
+  await expect(note).toContainText(/As of \d{1,2}:\d{2}\s?[AP]M, [A-Z][a-z]{2} \d{1,2}\./);
   await expect(note).toHaveAttribute('data-snapshot-as-of', /T/);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.locator('#mobile-footer-nav button[data-tab="alerts"]').click();
@@ -480,6 +484,52 @@ test('an invalid NWS MapServer body stays unavailable through activation cleanup
   await expect(layerCheckbox(page, 'nws-alerts')).not.toBeChecked();
 });
 
+test('ENSO offers its flood, storm, wind and coastal products off by default; on, ENSO stays the mode and its key lists the ones in force', async ({
+  page
+}) => {
+  await stubBasemap(page);
+  const asked: string[] = [];
+  // Two of ENSO's products, answered out of the set's order; nothing else is in force.
+  await page.route(
+    (url) => url.pathname.endsWith(WWA_PATH),
+    (route) => {
+      asked.push(new URL(route.request().url()).searchParams.get('where') ?? '');
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/geo+json',
+        body: collection([
+          rectangleFeature('Flood Watch', Date.now() + 3_600_000),
+          rectangleFeature('Flash Flood Warning', Date.now() + 3_600_000)
+        ])
+      });
+    }
+  );
+  const events = HAZARD_CLUSTERS.enso.alerts!.events;
+
+  await gotoApp(page, '?cluster=enso&view=console');
+  // Off by default: unchecked, named for the mode, and never read.
+  await expect(layerCheckbox(page, 'nws-alerts')).not.toBeChecked();
+  await expect(page.locator('label[for="layer-toggle-nws-alerts"] .layer-toggle-name')).toHaveText(
+    HAZARD_CLUSTERS.enso.alerts!.name
+  );
+  expect(asked).toEqual([]);
+
+  await layerCheckbox(page, 'nws-alerts').check();
+  await expect(layerPill(page, 'nws-alerts')).toHaveText('live');
+  expect(asked).toEqual([`prod_type IN (${events.map((event) => `'${event}'`).join(',')})`]);
+  // An optional layer: the mode stays ENSO and the link carries the layer beside it.
+  await expect.poll(async () => new URLSearchParams(await search(page)).get('layers')?.split(',') ?? []).toContain('nws-alerts');
+  expect(new URLSearchParams(await search(page)).get('cluster')).toBe('enso');
+
+  // The key lists only the products in force, verbatim, in the set's order (NWS_ALERT_LEGEND), and no other mode's.
+  const inForce = NWS_ALERT_LEGEND.filter((row) => ['Flood Watch', 'Flash Flood Warning'].includes(row.label)).map((row) => row.label);
+  expect(inForce).toEqual(['Flash Flood Warning', 'Flood Watch']);
+  const productKey = page.locator('#map-key [data-nws-products-key]');
+  await expect(productKey.locator('.map-key-item')).toHaveText(inForce);
+  await expect(productKey).not.toContainText('Red Flag Warning');
+  await expect(page.locator('.legend-section[data-legend="nws-alerts"] .legend li')).toHaveText(inForce);
+});
+
 test('an invalid NWS active-products body is unavailable, never an all-clear', async ({
   page
 }) => {
@@ -536,6 +586,6 @@ test('an invalid NWS active-products body is unavailable, never an all-clear', a
     current.locator('.impact-hazard[data-hazard="drought"]')
   ).not.toContainText('The NWS alerts service did not respond.');
   await expect(current).not.toContainText(
-    'No active red-flag fire-weather or extreme-heat alerts'
+    'No active red-flag fire-weather or heat alerts'
   );
 });

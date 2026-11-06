@@ -65,7 +65,7 @@ export const NWS_FIXTURE_WFO = 'KSEW';
 function nwsProperties(variant: EventStationVariant): Record<string, unknown> {
   const hour = Math.floor(Date.now() / HOUR_MS) * HOUR_MS;
   return {
-    // The longest product name the layer requests (src/layers/nws-alerts.ts ALERT_EVENTS).
+    // The longest heat and fire weather product name (HEAT_FIRE_ALERTS in src/config/clusters.ts).
     prod_type: variant === 'long' ? 'Excessive Heat Warning' : 'Red Flag Warning',
     onset: new Date(hour - 2 * HOUR_MS).toISOString(),
     ends: new Date(hour + 22 * HOUR_MS).toISOString(),
@@ -236,7 +236,8 @@ export const EVENT_STATION_CASES: Readonly<Record<EventStationId, EventStationCa
     region: 'washington_state',
     layerIds: ['nws-alerts-fill'],
     source: { label: 'NWS Active Alerts', href: 'https://alerts.weather.gov/' },
-    moreLinks: [{ label: 'NWS Heat Safety', href: 'https://www.weather.gov/safety/heat' }]
+    // The tier case's alert is a Red Flag Warning: the heat-safety page rides the heat products only (P3-30).
+    moreLinks: []
   },
   spc: {
     id: 'spc',

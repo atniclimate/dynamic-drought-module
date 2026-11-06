@@ -254,6 +254,28 @@ test('a selected place reads USDM at a point inside it; a click keeps the clicke
   }
 });
 
+// Audit round 5 (R5-10): with the North American Drought Monitor drawn (Drought
+// mode's own surface, which the place card reads), the weekly USDM category
+// claim says the map shows a different product, so two categories never disagree silently.
+test('with NADM drawn, the USDM category claim names the map product; without it, nothing is added', async () => {
+  const note = /North American Drought Monitor, a tri-national monthly consensus/;
+  for (const features of [[feature({ DM: 2 })], []]) {
+    await withFetch(() => jsonResponse(collection(features)), async () => {
+      const off = (await sources.fetchUsdmClaims(place(-120, 47), signal())).claims;
+      assert.doesNotMatch(off[0].text, note);
+      registry.activate('nadm-drought');
+      try {
+        const on = (await sources.fetchUsdmClaims(place(-120, 47), signal())).claims;
+        assert.equal(on.length, off.length);
+        assert.match(on[0].text, note);
+        assert.ok(on[0].text.startsWith(off[0].text));
+      } finally {
+        registry.deactivate('nadm-drought');
+      }
+    });
+  }
+});
+
 test('USDM missing or invalid categories cannot become D0 or an absence claim', async (t) => {
   t.mock.method(console, 'warn', () => {});
   for (const dm of [null, '', '  ', false, true, [], {}, -1, 5, 1.5, 0, '0', 4]) {
@@ -300,6 +322,14 @@ test('DSCI sends a single-digit state FIPS code zero-padded', async () => {
   }, () => sources.fetchDsciTrendClaims(context, signal()));
   assert.equal(seen.length, 1);
   assert.match(seen[0], /[?&]aoi=02(&|$)/);
+  // The chart is titled "over the past year", so the request asks for one year.
+  const q = new URL(seen[0].slice(seen[0].indexOf('https://usdm'))).searchParams;
+  const utcDay = (mdy) => {
+    const [m, d, y] = mdy.split('/').map(Number);
+    return Date.UTC(y, m - 1, d) / 86_400_000;
+  };
+  const days = utcDay(q.get('enddate')) - utcDay(q.get('startdate'));
+  assert.ok(days >= 365 && days <= 366, `${q.get('startdate')} to ${q.get('enddate')}: ${days} days`);
 });
 
 test('DSCI reuses a clean series for the next briefing, and never keeps a bad one', async () => {
@@ -743,7 +773,7 @@ function spcAnswer(layers) {
 test('an SPC read whose Day 3 query failed is live (partial): every day that answered keeps its claim and Day 3 is never folded into "no area"', async () => {
   const result = await withFetch(
     spcAnswer({
-      1: { dn: 8, valid: '202609091700', expire: '202609101200' },
+      1: { dn: 8, valid: '202609091700', expire: '209909101200' },
       8: 503
     }),
     () => sources.fetchSpcFireOutlookClaims(place(-120.5, 47.5), signal())
@@ -772,7 +802,7 @@ test('an SPC read whose Day 3 query failed is live (partial): every day that ans
 
 test('an SPC read whose Day 1 answered with an unrecognized dn is live (partial): the day is dropped, never invented, never folded into "no area"', async () => {
   const result = await withFetch(
-    spcAnswer({ 1: { dn: 0, valid: '202609091700', expire: '202609101200' } }),
+    spcAnswer({ 1: { dn: 0, valid: '202609091700', expire: '209909101200' } }),
     () => sources.fetchSpcFireOutlookClaims(place(-120.55, 47.5), signal())
   );
   assert.equal(result.ok, true);
@@ -785,7 +815,7 @@ test('an SPC read whose Day 1 answered with an unrecognized dn is live (partial)
 
 test('an SPC read whose Day 4 answered with an unrecognized label is live (partial)', async () => {
   const result = await withFetch(
-    spcAnswer({ 11: { dn: 5, label: '0.05', valid: '202609111200', expire: '202609121200', issue: '202609082156' } }),
+    spcAnswer({ 11: { dn: 5, label: '0.05', valid: '202609111200', expire: '209909121200', issue: '202609082156' } }),
     () => sources.fetchSpcFireOutlookClaims(place(-120.56, 47.5), signal())
   );
   const texts = result.claims.map((claim) => claim.text);
@@ -797,9 +827,29 @@ test('an SPC read whose Day 4 answered with an unrecognized label is live (parti
   assert.equal(cell.status, 'partial', 'the read did not establish Day 4');
 });
 
+test('an SPC issuance past its own expire time states no category: the day is dropped and the read is live (partial)', async () => {
+  // Audit round 6 (R6-11): the service still serving an old Day 1 and Day 3.
+  const result = await withFetch(
+    spcAnswer({
+      1: { dn: 8, valid: '202609091700', expire: '202609101200' },
+      8: { dn: 40, label: '0.40', valid: '202609101200', expire: '202609111200', issue: '202609082156' }
+    }),
+    () => sources.fetchSpcFireOutlookClaims(place(-120.62, 47.5), signal())
+  );
+  assert.equal(result.ok, true);
+  const texts = result.claims.map((claim) => claim.text);
+  assert.ok(texts.every((text) => !text.startsWith('SPC Day 1 ') && !text.startsWith('SPC Day 3 ')), texts.join(' | '));
+  assert.ok(
+    texts.includes('SPC Day 3-8 Fire Weather Outlook: no area is drawn over this point for Days 4, 5, 6, 7, and 8.'),
+    'an expired day is never folded into "no area"'
+  );
+  const cell = settledCell('nearTerm', 'fire', [['spcFireOutlook', result]]);
+  assert.equal(cell.status, 'partial');
+});
+
 test('an SPC read with every day answering stays live', async () => {
   const result = await withFetch(
-    spcAnswer({ 1: { dn: 8, valid: '202609091700', expire: '202609101200' } }),
+    spcAnswer({ 1: { dn: 8, valid: '202609091700', expire: '209909101200' } }),
     () => sources.fetchSpcFireOutlookClaims(place(-120.6, 47.5), signal())
   );
   const cell = settledCell('nearTerm', 'fire', [['spcFireOutlook', result]]);
@@ -845,7 +895,7 @@ async function nifcFromLoaded(features, bbox) {
   globalThis.__p3truthLoadedNifc = {
     collection: collection(features),
     envelope: null,
-    fetchedAt: Date.UTC(2026, 9, 4, 12)
+    fetchedAt: Date.now()
   };
   const requests = [];
   try {
@@ -917,7 +967,7 @@ test('a polygon-overlap chunk that fails to load never leaves the NIFC read unse
   globalThis.__p3truthLoadedNifc = {
     collection: collection([wildfire('HOLE-1', DONUT)]),
     envelope: null,
-    fetchedAt: Date.UTC(2026, 9, 4, 12)
+    fetchedAt: Date.now()
   };
   globalThis.__p3truthFailOverlap = true;
   const requests = [];
@@ -954,7 +1004,7 @@ function loadPerimeters(features, status = 'ready') {
   globalThis.__p3truthLoadedNifc = {
     collection: collection(features),
     envelope: null,
-    fetchedAt: Date.UTC(2026, 9, 4, 12),
+    fetchedAt: Date.now(),
     truncated: status === 'degraded'
   };
 }
@@ -992,6 +1042,28 @@ test('a DEGRADED (transfer-limited) loaded collection is never reused for a coun
     );
     assert.ok(requests.some(isWfigs), 'a truncated collection declines; the service is asked');
     assert.equal(result.claims[0].text, ONE_WILDFIRE, 'never "No current mapped NIFC fire perimeters intersect ..."');
+  } finally {
+    clearPerimeters();
+  }
+});
+
+test('a loaded collection past the layer\'s 5-minute check window is never read as current: the network read answers', async () => {
+  // Audit round 6 (R6-10): a refresh that fails over covered ground puts the
+  // layer back to `ready` with its old set; the briefing must not state it.
+  loadPerimeters([wildfire('HOLE-1', DONUT)], 'ready');
+  globalThis.__p3truthLoadedNifc = { ...globalThis.__p3truthLoadedNifc, fetchedAt: Date.now() - 10 * 60_000 };
+  const requests = [];
+  try {
+    const result = await withFetch(
+      (url) => {
+        requests.push(url);
+        return jsonResponse({ message: 'stubbed outage' }, 503);
+      },
+      () => sources.fetchNifcClaims(place(-121.6, 46.4, [-121.8, 46.2, -121.4, 46.6]), signal())
+    );
+    assert.ok(requests.some(isWfigs), 'an old collection declines; the service is asked');
+    assert.equal(result.ok, false, 'the outage reads unavailable, never the old count');
+    assert.deepEqual(result.claims, []);
   } finally {
     clearPerimeters();
   }
@@ -1162,7 +1234,8 @@ function nwsAlertsAnswer(events) {
   };
 }
 
-const HEAT_ABSENCE = 'NWS reports no active extreme-heat alert at the selected point.';
+// Any NWS heat product (a Heat Advisory too) counts, so the absence says "heat alert".
+const HEAT_ABSENCE = 'NWS reports no active heat alert at the selected point.';
 
 test('a fire-only NWS answer gives the Heat cell its absence claim, never unavailable', async () => {
   clearNwsResponseCache();
@@ -1200,7 +1273,7 @@ test('a heat-only NWS answer leaves the Fire row exactly as at base: no alerts c
     result.claims.map((claim) => [claim.text, claim.hazards]),
     [
       [
-        'An extreme-heat alert is in effect here: Heat Advisory. Heat raises drinking-water demand and human-health stress.',
+        'An NWS heat alert is in effect here: Heat Advisory. Heat raises drinking-water demand and human-health stress.',
         ['heat']
       ]
     ]
@@ -1212,12 +1285,32 @@ test('a heat-only NWS answer leaves the Fire row exactly as at base: no alerts c
   assert.equal(heat.status, 'ready');
 });
 
+test('only a Red Flag Warning reads imminent; a Fire Weather Watch reads possible, in NWS words', async () => {
+  for (const [events, meaning] of [
+    [['Fire Weather Watch'], 'This means critical fire weather conditions are possible but not imminent or occurring'],
+    [['Red Flag Warning', 'Fire Weather Watch'], 'This signals imminent fire-weather conditions']
+  ]) {
+    clearNwsResponseCache();
+    const result = await withFetch(nwsAlertsAnswer(events), () =>
+      sources.fetchNwsAlertClaims(place(-120.44, 47.44), signal())
+    );
+    const fireClaim = result.claims.find((claim) => claim.hazards?.includes('fire'));
+    assert.ok(fireClaim?.text.includes(meaning), `${events.join(', ')}: ${fireClaim?.text}`);
+  }
+});
+
+test('a NIFC page at the record cap names the cap as the briefing request, not the service maximum', () => {
+  const floor = buildNifcAreaPerimeterClaim(Array(50).fill('WF'), { truncated: true });
+  assert.match(floor, /The service returned the 50 records this briefing asks for, so this count is a lower bound\.$/);
+  assert.doesNotMatch(floor, /maximum/);
+});
+
 test('an NWS answer with neither alert keeps the one shared all-clear in both rows', async () => {
   clearNwsResponseCache();
   const result = await withFetch(nwsAlertsAnswer([]), () =>
     sources.fetchNwsAlertClaims(place(-120.42, 47.42), signal())
   );
-  const shared = 'No active red-flag fire-weather or extreme-heat alerts at this location right now (NWS).';
+  const shared = 'No active red-flag fire-weather or heat alerts at this location right now (NWS).';
   for (const hazard of ['fire', 'heat']) {
     const cell = settledCell('current', hazard, [['nwsAlerts', result]]);
     assert.deepEqual(

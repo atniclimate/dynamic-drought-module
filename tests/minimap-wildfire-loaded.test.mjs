@@ -102,8 +102,8 @@ function bboxOf(key) {
 
 /** What the layer's `loadedNifcCollection` answers. `envelope` null is the
  * layer's unscoped national fallback and covers every framing. */
-function loaded(collection, { truncated, envelope = null }) {
-  return { collection, envelope, fetchedAt: Date.now(), truncated };
+function loaded(collection, { truncated, envelope = null, fetchedAt = Date.now() }) {
+  return { collection, envelope, fetchedAt, truncated };
 }
 
 // ---------------------------------------------------------------------------
@@ -241,6 +241,16 @@ test('a framing the loaded collection does not cover still takes its count-only 
   for (const key of uncovered) assert.equal(postedFor(posts, key), true, `${key} was posted`);
   assert.equal(snapshot.summaries[COVERED].condition, 'mapped-wildfire');
   assert.notEqual(snapshot.summaries[COVERED].mappedWildfirePerimeterCount, COUNT_ANSWER);
+});
+
+test('a complete loaded collection older than the refresh interval is declined: every framing posts, so the check time is true', async () => {
+  // A still map never refetches its perimeters; a count from them is not a check made now.
+  const { posts, snapshot } = await runFeed({
+    status: 'ready',
+    snapshot: loaded(WITH_PERIMETER, { truncated: false, fetchedAt: Date.now() - 6 * 60_000 })
+  });
+  assert.equal(posts.length, FRAMING_KEYS.length, 'one count-only POST per framing');
+  assert.equal(snapshot.summaries[COVERED].mappedWildfirePerimeterCount, COUNT_ANSWER, 'counted by the service');
 });
 
 test('no loaded snapshot at all (the layer says ready but nothing is loaded) takes the count-only POST for every framing', async () => {

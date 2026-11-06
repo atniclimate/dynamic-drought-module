@@ -47,6 +47,7 @@ import { renderAcknowledgements } from './acknowledgements';
 import { getLegendSection } from './legend-registry';
 import { requestLayerOn } from './layer-toggle-command';
 import { loadFederalResources, resourcesForIdentity } from '../impact/resource-catalog';
+import { HAZARD_CLUSTERS } from '../config/clusters';
 import {
   getCommittedSnapshot,
   onCommittedSnapshotChange
@@ -69,7 +70,7 @@ import type {
   ResourceTier
 } from '../impact/types';
 import type { LayerStatus } from '../types/layer';
-import { escapeHtml } from '../util/escape';
+import { checkPopupHref, escapeHtml } from '../util/escape';
 import {
   closeImpactPanelShell,
   ensureImpactPanelShell,
@@ -312,6 +313,13 @@ function ensurePanel(): HTMLElement {
  */
 function applyActiveHazardEmphasis(): void {
   if (!bodyEl) return;
+  // D4: the unavailable block follows a mode change while the panel is open.
+  const unavailable = unavailableTitle();
+  bodyEl.querySelectorAll<HTMLElement>('.impact-capability-unavailable').forEach((section) => {
+    section.setAttribute('aria-label', unavailable);
+    const heading = section.querySelector('h3');
+    if (heading) heading.textContent = unavailable;
+  });
   const activeHazard = SHELL_HAZARD_KEY[getCommittedSnapshot().selectedHazard];
   bodyEl.querySelectorAll<HTMLElement>('.impact-hazard').forEach((row) => {
     const isActive = row.dataset['hazard'] === activeHazard;
@@ -547,9 +555,10 @@ function renderObservation(pointHeat: PointHeatBriefing): string {
   }
   const stationName =
     observation.stationName ?? observation.stationId ?? 'Nearest NWS station';
+  const stationHref = checkPopupHref(observation.stationUrl);
   const station =
-    observation.stationUrl?.startsWith('https://')
-      ? `<a href="${escapeHtml(observation.stationUrl)}" target="_blank" rel="noopener">${escapeHtml(stationName)}</a>`
+    stationHref !== null
+      ? `<a href="${escapeHtml(stationHref)}" target="_blank" rel="noopener">${escapeHtml(stationName)}</a>`
       : escapeHtml(stationName);
   const distance =
     observation.distanceKm === undefined
@@ -647,10 +656,10 @@ function renderHeatSynthesis(synthesis: HeatSynthesis): string {
     synthesis.reads.length > 0
       ? `<ul>${synthesis.reads
           .map((read) => {
+            const href = checkPopupHref(read.sourceUrl);
             const label =
-              typeof read.sourceUrl === 'string' &&
-              read.sourceUrl.startsWith('https://')
-                ? `<a href="${escapeHtml(read.sourceUrl)}" target="_blank" rel="noopener">${escapeHtml(read.label)}</a>`
+              href !== null
+                ? `<a href="${escapeHtml(href)}" target="_blank" rel="noopener">${escapeHtml(read.label)}</a>`
                 : escapeHtml(read.label);
             return `<li><strong>${label}</strong><p>${escapeHtml(read.text)}</p></li>`;
           })
@@ -704,7 +713,8 @@ function renderPointHeat(
 
 /** Render one resource link, or the empty-by-default Tribe's-own affordance. */
 function renderResource(resource: ResourceLink): string {
-  const hasLink = typeof resource.url === 'string' && resource.url.startsWith('https://');
+  const href = checkPopupHref(resource.url);
+  const hasLink = href !== null;
   const desc = resource.description
     ? `<p class="impact-resource-desc">${escapeHtml(resource.description)}</p>`
     : '';
@@ -719,7 +729,7 @@ function renderResource(resource: ResourceLink): string {
     `;
   }
   const labelHtml = hasLink
-    ? `<a class="impact-resource-label impact-resource-link" href="${escapeHtml(resource.url as string)}" target="_blank" rel="noopener">${escapeHtml(resource.label)}</a>`
+    ? `<a class="impact-resource-label impact-resource-link" href="${escapeHtml(href)}" target="_blank" rel="noopener">${escapeHtml(resource.label)}</a>`
     : `<p class="impact-resource-label">${escapeHtml(resource.label)}</p>`;
   return `
     <div class="impact-resource">
@@ -730,8 +740,24 @@ function renderResource(resource: ResourceLink): string {
   `;
 }
 
-/** Render the resources, grouped by tier in stewardship order. */
+/**
+ * The title of the block that stands in for the horizon matrix when impact
+ * synthesis is unavailable: the active mode's own name (D4, 2026-11-05: a
+ * Wildfire or ENSO briefing was titled "Drought"). The Drought mode keeps
+ * the shipped "Drought impact unavailable".
+ */
+function unavailableTitle(): string {
+  // DRAFT wording: "<mode title> impact unavailable" for the non-Drought modes.
+  return `${HAZARD_CLUSTERS[getCommittedSnapshot().selectedHazard].title} impact unavailable`;
+}
+
+/**
+ * Render the resources, grouped by tier in stewardship order; nothing at all
+ * when there are none (D4: no empty heading over zero links where routing is
+ * off).
+ */
 function renderResources(resources: readonly ResourceLink[]): string {
+  if (resources.length === 0) return '';
   const groups = TIER_ORDER.map((tier) => {
     const items = resources.filter((r) => r.tier === tier);
     if (items.length === 0) return '';
@@ -783,8 +809,8 @@ function renderBriefingSections(
       // covered; see the completion report.
       `
       ${pointHeatSection}
-      <section class="impact-capability-unavailable" aria-label="Drought impact unavailable">
-        <h3 class="impact-section-title">Drought impact unavailable</h3>
+      <section class="impact-capability-unavailable" aria-label="${escapeHtml(unavailableTitle())}">
+        <h3 class="impact-section-title">${escapeHtml(unavailableTitle())}</h3>
         <p class="impact-horizon-note">${escapeHtml(impactUnavailableNote)}</p>
       </section>
     `

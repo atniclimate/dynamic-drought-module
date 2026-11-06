@@ -149,6 +149,8 @@ const frameCache = new FrameCache<GeoJSON.FeatureCollection>(12);
  * one refetches behind the view already on the map. */
 const CHANGE_CACHE_TTL_MS = 60 * 60 * 1000;
 const changeCache = new ExpiringLruCache<UsdmViewMode, GeoJSON.FeatureCollection>(2);
+/** The shown change file's own `date` (YYYYMMDD), which can be newer than the rail's newest week. */
+let changeKey: string | null = null;
 
 const USDM_COLORS: ReadonlyArray<string> = USDM_CATEGORIES.map((c) => c.color);
 
@@ -164,6 +166,13 @@ type UsdmStatus = 'loading' | 'ready' | 'error' | 'no-data';
 
 function reportStatus(state: UsdmStatus): void {
   registry.setStatus(LAYER_KEY, state);
+}
+
+/** A failed step leaves the shown week drawn: report its status, not 'error',
+ * which the layer controller reads as a failed activation and tears down. */
+function reportShownStatus(): void {
+  const shown = frameCache.peek(weeks[weekIndex]!);
+  reportStatus(shown && shown.features.length === 0 ? 'no-data' : 'ready');
 }
 
 function resolveBeforeId(map: maplibregl.Map): string | undefined {
@@ -488,7 +497,7 @@ function installTimeBar(map: maplibregl.Map): void {
           }
         : {
             horizon: 'current',
-            headline: `Change through ${weekLabel(currentKey)}`,
+            headline: `Change through ${weekLabel(changeKey ?? currentKey)}`,
             // vocab-allow: honesty disclaimer, denies being a forecast
             detail: `USDM ${mode === 'chg4' ? '4-week' : '1-week'} change · observed, not forecast`,
             register: 'observed'
@@ -582,13 +591,12 @@ async function showWeek(map: maplibregl.Map, index: number): Promise<void> {
   const myEpoch = ++stepEpoch;
   const key = weeks[clamped]!;
 
-  // Leaving the newest stop while in a change mode falls back to the
-  // absolute register (change maps exist for the current week only).
-  if (timeline.usdmMode !== 'absolute' && clamped !== weeks.length - 1) {
-    setPairVisibility(map, CHANGE_SOURCE, false);
-    setPairVisibility(map, SLOT_SOURCES[activeSlot], true);
-    timeline.setUsdmMode('absolute');
-    showAbsoluteLegend();
+  // In a change mode the newest stop is what is drawn: the epoch bump drops
+  // a pending older step, and the bar snaps its thumb back.
+  if (timeline.usdmMode !== 'absolute' && clamped === weeks.length - 1) {
+    reportShownStatus();
+    installTimeBar(map);
+    return;
   }
 
   const cached = frameCache.peek(key) !== undefined;
@@ -600,7 +608,9 @@ async function showWeek(map: maplibregl.Map, index: number): Promise<void> {
   } catch (err) {
     if (signal.aborted || myEpoch !== stepEpoch) return;
     console.warn(`[usdm] week ${key} fetch failed.`, err);
-    reportStatus('error');
+    reportShownStatus();
+    // A shared week that never loaded must not stay in the timeline (strip, URL, briefing).
+    timeline.setUsdmWeek(weekIndex === weeks.length - 1 ? null : weeks[weekIndex]!);
     // The rail thumb already moved (the user's drag or arrow key), but
     // `weekIndex` and the stamp still describe the week ON THE MAP. Re-install
     // the unchanged spec so the bar snaps the thumb back to the rendered stop
@@ -610,6 +620,16 @@ async function showWeek(map: maplibregl.Map, index: number): Promise<void> {
     return;
   }
   if (signal.aborted || myEpoch !== stepEpoch) return;
+
+  // Leaving the newest stop while in a change mode falls back to the
+  // absolute register (change maps exist for the current week only). Only
+  // once the week has loaded: until then, and after a failed load, the change
+  // map stays drawn and the mode chip still describes it.
+  if (timeline.usdmMode !== 'absolute' && clamped !== weeks.length - 1) {
+    setPairVisibility(map, CHANGE_SOURCE, false);
+    timeline.setUsdmMode('absolute');
+    showAbsoluteLegend();
+  }
 
   const outSource = SLOT_SOURCES[activeSlot];
   const inSlot: Slot = activeSlot === 0 ? 1 : 0;
@@ -626,8 +646,12 @@ async function showWeek(map: maplibregl.Map, index: number): Promise<void> {
   reportStatus((frame?.features ?? []).length === 0 ? 'no-data' : 'ready');
 
   await crossfadeFrames(map, pairFadeTargets(outSource), pairFadeTargets(inSource));
-  if (signal.aborted || myEpoch !== stepEpoch) return;
-  setPairVisibility(map, outSource, false);
+  if (signal.aborted) return;
+  // Hidden even when a newer step began: a faded-out slot left visible stays
+  // queryable, so the strip and the place card would read a week not drawn.
+  // A newer cached step that reused this slot made it the active one again.
+  if (outSource !== SLOT_SOURCES[activeSlot]) setPairVisibility(map, outSource, false);
+  if (myEpoch !== stepEpoch) return;
 
   // Warm the neighbors so the next step is instant (polite: the cache
   // skips prefetch entirely on constrained connections).
@@ -670,8 +694,10 @@ async function setMode(map: maplibregl.Map, mode: UsdmViewMode): Promise<void> {
     installTimeBar(map);
     showAbsoluteLegend();
     await crossfadeFrames(map, pairFadeTargets(CHANGE_SOURCE), pairFadeTargets(slotSource));
-    if (signal.aborted || myEpoch !== stepEpoch) return;
-    setPairVisibility(map, CHANGE_SOURCE, false);
+    if (signal.aborted) return;
+    // Hidden even when a rail step began meanwhile: a faded-out pair left
+    // visible stays queryable. A newer change mode drew it again.
+    if (timeline.usdmMode === 'absolute') setPairVisibility(map, CHANGE_SOURCE, false);
     return;
   }
 
@@ -693,12 +719,15 @@ async function setMode(map: maplibregl.Map, mode: UsdmViewMode): Promise<void> {
     } catch (err) {
       if (signal.aborted || myEpoch !== stepEpoch) return;
       console.warn(`[usdm] change map (${mode}) fetch failed.`, err);
-      reportStatus('error');
+      reportShownStatus();
       return;
     }
   }
   if (signal.aborted || myEpoch !== stepEpoch) return;
 
+  // A cached file keeps its `date` too, so both paths stamp the file shown.
+  const changeDate = String((fc as { date?: unknown }).date ?? '');
+  changeKey = /^\d{8}$/.test(changeDate) ? changeDate : null;
   setPairData(map, CHANGE_SOURCE, fc);
   primeForFadeIn(map, pairFadeTargets(CHANGE_SOURCE));
   setPairVisibility(map, CHANGE_SOURCE, true);
@@ -709,8 +738,9 @@ async function setMode(map: maplibregl.Map, mode: UsdmViewMode): Promise<void> {
 
   const slotSource = SLOT_SOURCES[activeSlot];
   await crossfadeFrames(map, pairFadeTargets(slotSource), pairFadeTargets(CHANGE_SOURCE));
-  if (signal.aborted || myEpoch !== stepEpoch) return;
-  setPairVisibility(map, slotSource, false);
+  if (signal.aborted) return;
+  // Same rule; back in the absolute register, the rail step owns the slots.
+  if (timeline.usdmMode !== 'absolute') setPairVisibility(map, slotSource, false);
 }
 
 // ---------------------------------------------------------------------------

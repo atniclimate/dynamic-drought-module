@@ -35,6 +35,7 @@ import type {
 } from './types';
 import type { LandscapeEcoregionKey } from './landscape-resolution';
 import { LANDSCAPE_SIGNATURE_LOCAL_URL } from '../config/landscape-url';
+import { checkPopupHref } from '../util/escape';
 
 type LandscapeLoader = (
   opts?: Parameters<typeof loadLandscapeSignatureAtUrl>[1]
@@ -201,18 +202,31 @@ function fuelsFact(bundle: Record<string, unknown>): LandscapeContextFact | null
       };
 }
 
+/**
+ * Sources whose artifact `sourceUrl` is the builder's download address, not a
+ * page for people (WHP's is a 368 MB data zip; SoilWeb, SDA and the MRLC WCS
+ * are bare service endpoints). These show as labels, linked only through a
+ * DOI their own vintage carries.
+ */
+const MACHINE_ENDPOINT_SOURCES = new Set(['soilMukey', 'soilSda', 'landcoverNlcd', 'hazardWhp']);
+
+function sourceHref(key: string, source: LandscapeSource): string | null {
+  if (!MACHINE_ENDPOINT_SOURCES.has(key)) return checkPopupHref(source.sourceUrl);
+  const doi = /\bDOI (10\.\d{4,}\/\S+)$/.exec(source.vintage)?.[1];
+  return doi === undefined ? null : checkPopupHref(`https://doi.org/${doi}`);
+}
+
 function sourceContext(
   key: string,
   value: unknown
 ): LandscapeContextSource | null {
   if (!isLandscapeSource(value)) return null;
   const source = value as LandscapeSource;
+  const url = sourceHref(key, source);
   return {
     key,
     label: source.source,
-    ...(source.sourceUrl.startsWith('https://')
-      ? { url: source.sourceUrl }
-      : {}),
+    ...(url !== null ? { url } : {}),
     vintage: source.vintage,
     ...(source.acquired ? { acquired: source.acquired } : {}),
     methodVersion: source.methodVersion

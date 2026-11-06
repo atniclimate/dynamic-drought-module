@@ -83,6 +83,7 @@ import {
   closeImpactPanel
 } from './impact-panel';
 import { getPlaceSelection, onPlaceSelectionChange } from '../state/place-selection';
+import type { PlaceSelection } from '../state/place-selection';
 import {
   ensureBriefHeadSearch,
   ensureBriefHeadTribalAction,
@@ -101,7 +102,7 @@ import type { StationValue, TelemetryStation } from '../types/station';
 import { formatStationNumber } from '../util/station-format';
 import { setCurrentRegion } from '../state/region-store';
 import type { LayerStatus } from '../types/layer';
-import { SIDEBAR_DESKTOP_QUERY, parseSelectParam, parseUrlParams, syncUrl } from '../state/url';
+import { SIDEBAR_DESKTOP_QUERY, parseSelectParam, parseUrlParams, syncFire3dParam, syncUrl } from '../state/url';
 import type { ParsedUrlParams } from '../state/url';
 import {
   backToMap,
@@ -121,7 +122,7 @@ import {
 } from '../state/view-mode';
 import { installPopupViewportContainment } from './popup-viewport';
 import { defaultBasemapFor, getBasemapMode, onBasemapChange, setBasemapMode } from '../state/basemap-store';
-import { FIRE3D_CHUNK_WIDTH_QUERY, seedFire3DPreference } from '../state/fire3d-store';
+import { FIRE3D_CHUNK_WIDTH_QUERY, getFire3DPreference, seedFire3DPreference, setFire3DPreference } from '../state/fire3d-store';
 import { getFraming, onFramingChange, setFraming } from '../state/framing-store';
 import {
   clearOceanFraming,
@@ -131,9 +132,14 @@ import {
   setHazardCluster
 } from '../state/cluster-store';
 import {
+  getCommittedSnapshot,
+  getSelectedHazard,
+  initClusterService,
   isCustomComposition,
+  onCommittedSnapshotChange,
   reconcileClusterWithLayerIntent,
-  requestOcean
+  requestOcean,
+  requestPresetHorizon
 } from '../state/cluster-service';
 import {
   ALL_FRAMING_BOUNDS,
@@ -619,6 +625,7 @@ function selectRegion(
   // such a region regardless of whether the region actually changed or the
   // call was the boot's own silent fit.
   const priorRegion = STATE.currentRegion;
+  dropPlaceView();
   if (
     !silent &&
     key !== priorRegion &&
@@ -721,6 +728,7 @@ function pushUrl(): void {
     framing,
     cluster: getHazardCluster(),
     ocean: getOceanFraming(),
+    hazard: getSelectedHazard(),
     studio: getStudioRoute()
   });
 }
@@ -729,17 +737,70 @@ function pushUrl(): void {
 // Region and minimap-framing selector
 // ---------------------------------------------------------------------------
 
+/**
+ * A place chosen by search or deep link moves the camera without touching the
+ * region, framing or ocean stores, so the menu kept naming the region it left
+ * (Colorado chosen, "United States" shown). This holds the camera the place
+ * ended on, and the menu then shows the neutral entry (never a region option,
+ * so picking any region from the menu always fires a change). Any region,
+ * framing or ocean choice drops it, and so does a camera that has moved off it.
+ */
+let placeView: CameraState | null = null;
+/** Bumped by every drop, so a settle that was waiting when the view was dropped stands down. */
+let placeViewGen = 0;
+
+function dropPlaceView(): void {
+  placeView = null;
+  placeViewGen += 1;
+}
+
+/** Once the camera settles, record it if it left the committed view. */
+function noteViewLeftRegion(map: maplibregl.Map): void {
+  // The new choice replaces the earlier place view now. Left standing, this
+  // flight's own moveend dropped it and stood the settle below down, so every
+  // second search fell back to the region (Colorado, then Alaska).
+  dropPlaceView();
+  const gen = placeViewGen;
+  const settle = (): void => {
+    // A later choice interrupts the flight and fires moveend; its camera is mid-flight, not the place.
+    if (gen !== placeViewGen) return;
+    const target = committedCameraTarget();
+    placeView = target && !cameraMatchesTarget(map, target) ? readCameraState(map) : null;
+    syncRegionSelect();
+  };
+  // The fit is usually under way when the choice lands; wait for it to end.
+  if (map.isMoving()) map.once('moveend', settle);
+  else settle();
+}
+
+/** Every moveend: once the camera leaves the chosen place the neutral entry no longer applies; fall back to the committed region. */
+function dropMovedPlaceView(map: maplibregl.Map): void {
+  if (placeView && !cameraStateUnchanged(map, placeView)) {
+    dropPlaceView();
+    syncRegionSelect();
+  }
+}
+
+/** A search or deep-link place choice. */
+function notePlaceView(map: maplibregl.Map, place: PlaceSelection): void {
+  // A map click carries no pointInsidePlace and does not move the camera.
+  if (place.context.pointInsidePlace) noteViewLeftRegion(map);
+}
+
 function syncRegionSelect(): void {
   const select = document.getElementById('region-select');
   if (!(select instanceof HTMLSelectElement)) return;
   const ocean = getOceanFraming();
   const framing = getFraming();
-  // An ocean camera has precedence over the framing it leaves in the store.
-  select.value = ocean !== null
-    ? `ocean:${ocean}`
-    : framing !== null
-      ? `framing:${framing}`
-      : `region:${STATE.currentRegion ?? DEFAULT_REGION}`;
+  // A place view wins over the stores it did not change; an ocean camera
+  // has precedence over the framing it leaves in the store.
+  select.value = placeView && mapRef && cameraStateUnchanged(mapRef, placeView)
+    ? 'view:place'
+    : ocean !== null
+      ? `ocean:${ocean}`
+      : framing !== null
+        ? `framing:${framing}`
+        : `region:${STATE.currentRegion ?? DEFAULT_REGION}`;
 }
 
 /** Build one dropdown that follows minimap choices while preserving every
@@ -794,11 +855,18 @@ function buildRegionSelect(): void {
     option.textContent = OCEANS[key].label;
     oceanGroup.appendChild(option);
   }
-  select.append(overviewGroup, oceanGroup, detailGroup);
+  // Shown only after a place choice moved the camera off every region; it names none.
+  const placeOption = document.createElement('option');
+  placeOption.value = 'view:place';
+  placeOption.textContent = 'Selected place';
+  placeOption.hidden = true;
+  placeOption.disabled = true;
+  select.append(placeOption, overviewGroup, oceanGroup, detailGroup);
 
   select.addEventListener('change', () => {
     const map = mapRef;
     if (!map || !mapDependentControlsEnabled) return;
+    dropPlaceView();
     const [kind, rawKey] = select.value.split(':', 2);
     if (kind === 'region' && rawKey && rawKey in REGIONS) {
       handleRegionChoice(rawKey as RegionKey);
@@ -958,12 +1026,17 @@ function updateRegionBriefingTrigger(regionKey: RegionKey | null | undefined): v
  *      (the checked-change subscription in `wireSidebar`; the bridge
  *      notifies in the same turn), and no preset set equals a hazard's
  *      clean composition, so the display is a custom set when this returns.
- *   2. The explicit preferred basemap, if any.
+ *   2. The horizon an entry into the preset's mode lands on, on the
+ *      register only (a custom set keeps its layers; ENSO's rail entry
+ *      commits Season ahead, which its layers already show, and a later
+ *      preset of another mode undoes it, `requestPresetHorizon`).
+ *   3. The explicit preferred basemap, if any.
  */
 function applyViewPreset(preset: ViewPreset): void {
   const map = mapRef;
   if (!map || !controllerRef) return;
   controllerRef.applyPreset(preset);
+  requestPresetHorizon(preset.mode);
   if (preset.preferredBasemap) {
     requestBasemapMode(map, preset.preferredBasemap);
   }
@@ -1203,9 +1276,9 @@ function formatStationValue(value: StationValue): string {
  *
  * Each station renders its primary parameter compactly (the 400 pixel
  * embed is first-class), with the reading date, "(stale)" appended when
- * the reading is older than its freshness window, or "values
- * unavailable" on fetch failure. A zero reading renders as 0; summer
- * snowpack is legitimately zero.
+ * the reading is older than its freshness window, "no data" when the read
+ * answered with no recent value, or "values unavailable" on fetch failure.
+ * A zero reading renders as 0; summer snowpack is legitimately zero.
  */
 function hydrateStationValues(map: maplibregl.Map): void {
   const controller = new AbortController();
@@ -1221,7 +1294,7 @@ function hydrateStationValues(map: maplibregl.Map): void {
       if (!station.awdbStation && !station.hydrometParams && !station.cwms && !station.usgsSite)
         continue;
       const slot = document.querySelector<HTMLElement>(
-        `[data-station-values="${cssAttrEscape(station.id)}"]`
+        `[data-station-values="${CSS.escape(station.id)}"]`
       );
       if (!slot) continue;
 
@@ -1235,7 +1308,8 @@ function hydrateStationValues(map: maplibregl.Map): void {
         .then((value) => {
           if (signal.aborted || !slot.isConnected) return;
           if (!value || value.value === null) {
-            slot.textContent = 'values unavailable';
+            // The read answered with no recent value: the station popup's state word.
+            slot.textContent = 'no data';
             slot.className = 'telemetry-values unavailable';
             return;
           }
@@ -1268,7 +1342,12 @@ function onActiveChangeForStationValues(
   } else if (!active.has('telemetry') && stationValuesController) {
     stationValuesController.abort();
     stationValuesController = null;
-    // Aborted rows are left at "loading..."; the next activation must refetch.
+    // Rows still loading are emptied (the :empty rule hides them); resolved
+    // rows keep their last-known values. The next activation refetches.
+    for (const slot of document.querySelectorAll<HTMLElement>('.telemetry-values.loading')) {
+      slot.textContent = '';
+      slot.className = 'telemetry-values';
+    }
     stationValuesHydrated = false;
   }
 }
@@ -1429,7 +1508,8 @@ function wireTopLevelEvents(map: maplibregl.Map): void {
   const resetBtn = document.getElementById('reset-btn');
   if (resetBtn) {
     resetBtn.addEventListener('click', () => {
-      const cluster = getHazardCluster();
+      // The person's hazard: a custom set made in ENSO still resets to the Pacific.
+      const cluster = getSelectedHazard();
       const reopen = !STATE.embed && STATE.desktopSidebarClosed
         && window.matchMedia(SIDEBAR_DESKTOP_QUERY).matches;
       if (reopen) {
@@ -1525,6 +1605,10 @@ function applyUrlStateSync(map: maplibregl.Map): ParsedUrlParams {
   // so the seeds are the committed truth.
   setFraming(params.framing);
   setHazardCluster(params.cluster, params.ocean);
+  // The person's hazard from the link, before the first write carries it. A
+  // brief embed never mounts the shell, so this is its only initialization;
+  // mountShell's later call is a no-op.
+  initClusterService(params.hazard);
 
   // Seed the temporal store BEFORE any layer activates, so a layer module
   // that reads the timeline during activate() (USDM restoring a scrubbed
@@ -1544,10 +1628,16 @@ function applyUrlStateSync(map: maplibregl.Map): ParsedUrlParams {
   // visual switch is kicked off here and settles asynchronously (the
   // desaturated default paints first; the U1 boot-split precedent).
   setBasemapMode(params.basemap);
+  // DR-122: fire3d= is Wildfire-scoped, so an old link outside Wildfire
+  // boots flat and drops the token (before the hold below is ever taken).
+  // shortcut: a custom set made in Wildfire also boots flat and drops it, since
+  // the Fire3D gate admits no custom boot; read the hazard here only once the gate does.
+  const fire3d = params.fire3d && params.cluster === 'wildfire';
+  if (params.fire3d && !fire3d) syncFire3dParam(false);
   // DR-105: a `fire3d=true` boot at the 3D chunk's width (main.ts) holds the
   // imagery until the scene's controller decides; it releases the hold when
   // the scene does not open.
-  if (params.fire3d && window.matchMedia(FIRE3D_CHUNK_WIDTH_QUERY).matches) {
+  if (fire3d && window.matchMedia(FIRE3D_CHUNK_WIDTH_QUERY).matches) {
     holdSatellite(map, true);
   }
   if (params.basemap === 'satellite') {
@@ -1559,7 +1649,7 @@ function applyUrlStateSync(map: maplibregl.Map): ParsedUrlParams {
   // write (syncUrl re-reads the parameter fresh). The seed never writes the
   // URL; the orchestrator (src/map/fire3d.ts, a desktop-only lazy chunk
   // loaded from main.ts) observes the store and applies the map side.
-  seedFire3DPreference(params.fire3d);
+  seedFire3DPreference(fire3d);
 
   // The studio composes with all map state. Seed it only after every
   // underlying store above is ready, and before selectRegion performs the
@@ -1590,7 +1680,7 @@ function applyUrlStateSync(map: maplibregl.Map): ParsedUrlParams {
   // returns to it, then fit the Pacific. The hold replaces the one the cluster
   // subscriber took at the seed above, before the region fit.
   const ensoBoot = ensoBootFitsPacific(
-    params.cluster,
+    params.hazard,
     params.ocean !== null,
     params.framing !== null,
     params.region === DEFAULT_REGION,
@@ -1959,11 +2049,18 @@ function wireSidebar(map: maplibregl.Map, onRegionSelect: (key: RegionKey) => vo
   // swaps between the one-word `cluster=` claim and the granular
   // `layers=` list (D-0.7.0-044).
   onFramingChange(() => {
+    dropPlaceView();
     syncRegionSelect();
     // The door follows the camera (D1 M4, found-025): hide it the instant a
     // framing takes over, and let a later region choice bring it back.
     updateRegionBriefingTrigger(STATE.currentRegion);
     pushUrl();
+  });
+  // DR-122: fire3d= is dropped when the selected hazard leaves Wildfire. A
+  // custom set inside Wildfire keeps it; terrain3d=, which would re-emit it on
+  // return, is not built, so a return to Wildfire opens flat.
+  onCommittedSnapshotChange(() => {
+    if (getCommittedSnapshot().selectedHazard !== 'wildfire') setFire3DPreference(false);
   });
   // ENSO camera (F9): entering fits the Pacific, leaving restores the view from
   // before entering. The boot seed fires this too, but the boot's own fits
@@ -1980,7 +2077,15 @@ function wireSidebar(map: maplibregl.Map, onRegionSelect: (key: RegionKey) => vo
         getOceanFraming() !== null,
         isCustomComposition()
       );
-      if (action.capture) holdEnsoCamera(readCameraState(map));
+      // Entering ENSO ends the 3D Fire view now (DR-122), so its ease back
+      // starts before the ocean fit and cannot cancel it; the view held for
+      // leaving ENSO is flat and north-up, as the scene's own exit leaves it.
+      const scene = (action.capture || action.fitPacific) && getFire3DPreference();
+      if (scene) setFire3DPreference(false);
+      if (action.capture) {
+        const camera = readCameraState(map);
+        holdEnsoCamera(scene ? { ...camera, pitch: 0, bearing: 0 } : camera);
+      }
       if (action.fitPacific) fitOcean(map, 'pacific');
       if (action.restore) {
         const heldCamera = takeEnsoCamera();
@@ -1989,6 +2094,7 @@ function wireSidebar(map: maplibregl.Map, onRegionSelect: (key: RegionKey) => vo
     }
     previousCluster = next;
     // The ocean framing rides the cluster store; keep the dropdown on it.
+    dropPlaceView();
     syncRegionSelect();
     pushUrl();
   });
@@ -1996,7 +2102,13 @@ function wireSidebar(map: maplibregl.Map, onRegionSelect: (key: RegionKey) => vo
   // The front-door trigger (F3): when a map place is selected or cleared, the
   // region-briefing button relabels to "See what this means" for that place, or
   // reverts to the region anchor.
-  onPlaceSelectionChange(() => updateRegionBriefingTrigger(STATE.currentRegion));
+  onPlaceSelectionChange((place) => {
+    updateRegionBriefingTrigger(STATE.currentRegion);
+    if (place) notePlaceView(map, place);
+  });
+  // A city sets no place, so its search (in any host) announces the view instead.
+  window.addEventListener('ddm:city-view', () => noteViewLeftRegion(map));
+  map.on('moveend', () => dropMovedPlaceView(map));
 
   // Apply the URL state, split per the ADR 0002 U1 integration note. The
   // synchronous half (embed class, timeline seed, region fit) applies NOW,
@@ -2036,6 +2148,7 @@ function wireSidebar(map: maplibregl.Map, onRegionSelect: (key: RegionKey) => vo
     // Defensive fallback: at least fit the default region so the user
     // sees the map.
     selectRegion(map, DEFAULT_REGION, true);
+    initClusterService();
   }
 
   // Every checkbox-intent flip serializes the URL the moment it happens
@@ -2102,17 +2215,6 @@ function wireSidebar(map: maplibregl.Map, onRegionSelect: (key: RegionKey) => vo
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
-
-/**
- * Escape a value for safe use inside a CSS attribute selector. The
- * layer keys and region keys we accept are restricted (kebab-case
- * identifiers) so this is defensive rather than load-bearing, but it
- * keeps the behavior correct if a future config table introduces a
- * key with a quote or backslash.
- */
-function cssAttrEscape(value: string): string {
-  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-}
 
 /**
  * Re-export internal handles for test harnesses and the toast helper.

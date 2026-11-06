@@ -3,7 +3,8 @@
  * in the view details below the persistent navigation controls.
  *
  * Visibility: only while the committed cluster is 'wildfire' (Fuel risk
- * included, an optional layer of Wildfire) AND the
+ * included, an optional layer of Wildfire) or the scene is still up after a
+ * custom demotion (the button is the way out) AND the
  * device can enter the scene at all, which since DR-025a is the same three
  * questions the map-side gate in `src/map/fire3d.ts` asks: the viewport is
  * at least the desktop breakpoint wide, at least `FIRE3D_MIN_HEIGHT_PX`
@@ -133,14 +134,16 @@ const GROUND_SWITCHES: readonly (readonly [Fire3DGroundLayer, string])[] = [
  * strings move. `inactive` renders no line at all: the scene is off and
  * claims nothing.
  */
-function statusLine(status: Fire3DStatus | null): string {
+function statusLine(status: Fire3DStatus | null, smokeStatus: string | undefined): string {
   if (status === null) return '';
   switch (status.state) {
     case 'checking':
       return 'Loading terrain availability...';
     case 'active':
-      return status.smokeVolume
-        ? 'Live: terrain relief with the smoke volume.'
+      if (status.smokeVolume) return 'Live: terrain relief with the smoke volume.';
+      // A failed smoke read empties the flat veil too, so there is no veil to point at.
+      return smokeStatus === 'error'
+        ? 'Live (partial): terrain relief; smoke is unavailable.' // DRAFT wording
         : 'Live (partial): terrain relief; smoke stays in the flat veil.';
     case 'unavailable':
       return `Unavailable. ${status.reason ?? ''}`.trim();
@@ -309,7 +312,11 @@ export function Fire3DControl({
     wideEnough,
     tallEnough,
     webgl2: webGl2Capability().webgl2,
-    fireView: fuelRiskKeepsConsole(cluster, snapshot.selectedHazard, flatFuelOn)
+    // A scene kept up after a custom demotion keeps its button: it is the one direct way out.
+    fireView:
+      fuelRiskKeepsConsole(cluster, snapshot.selectedHazard, flatFuelOn) ||
+      status?.state === 'active' ||
+      status?.state === 'checking'
   });
   const visible = offer === 'control';
   const [chunkUnavailable, setChunkUnavailable] = useState(false);
@@ -321,15 +328,19 @@ export function Fire3DControl({
   // after load, never on the first run (see shouldRevealScroll).
   const root = useRef<HTMLDivElement>(null);
   const lastFuelTarget = useRef<typeof fuelTarget | undefined>(undefined);
+  const lastRecipeHasFlat = useRef(recipeHasFlat);
   // Set by the button, not read from the URL: a shared 3D link must not scroll at load.
   const turnedOn3D = useRef(false);
   useEffect(() => {
     const firstRun = lastFuelTarget.current === undefined;
     const fuelRowChanged = !firstRun && lastFuelTarget.current !== fuelTarget;
     lastFuelTarget.current = fuelTarget;
+    // shortcut: recipeHasFlat is not an effect dependency (adding it would scroll a 3D user on every horizon press), so this ref can lag a horizon change made while the scene is active; upgrade if a 3D horizon press is seen to scroll.
+    const recipeChanged = lastRecipeHasFlat.current !== recipeHasFlat;
+    lastRecipeHasFlat.current = recipeHasFlat;
     const box = root.current?.closest('.sidebar-scroll');
     if (!root.current || !box) return;
-    if (!shouldRevealScroll({ firstRun, sceneRequested: turnedOn3D.current && preference, fuelRowChanged })) return;
+    if (!shouldRevealScroll({ firstRun, sceneRequested: turnedOn3D.current && preference, fuelRowChanged, recipeChanged })) return;
     // A hidden dock (the phone sheet) has no box and would read top 0.
     const dock = box.querySelector('.sidebar-bottom-dock');
     const dockTop = dock?.getClientRects().length ? dock.getBoundingClientRect().top : undefined;
@@ -337,7 +348,11 @@ export function Fire3DControl({
   }, [visible, status?.state, fuelTarget]);
 
   useEffect(() => {
-    if (!visible) return;
+    // Hidden, the status stops refreshing; a kept 'active' would hold fireView up in another mode.
+    if (!visible) {
+      setStatus(null);
+      return;
+    }
     let disposed = false;
     let unsubscribe: (() => void) | null = null;
     void loadFire3DController().then((mod) => {
@@ -442,7 +457,7 @@ export function Fire3DControl({
         data-fire3d-transport={status?.transport ?? undefined}
         aria-live="polite"
       >
-        {chunkUnavailable ? 'Unavailable.' : statusLine(status)}
+        {chunkUnavailable ? 'Unavailable.' : statusLine(status, smokeStatus)}
       </p>
       {emptySmokeLine(status, smokeStatus) ? (
         <p class="shell-fire3d-empty" data-fire3d-empty-smoke>

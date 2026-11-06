@@ -341,6 +341,28 @@ export function openImpactPanelShell(
   return current;
 }
 
+/**
+ * Return focus to the control that opened the briefing, never the page body.
+ * Hard close retires the panel-owned selection, which hides the doors that
+ * name it (the sidebar's "See what this means", the Brief report link), and a
+ * popup's door left with its popup on the click. A door the close hid hands
+ * focus to the place-search entry beside it, shown only in Brief mode, and
+ * otherwise to the map; a map popup's door hands it to the map, as the
+ * Technical door does.
+ */
+function returnBriefingFocus(opener: HTMLElement): void {
+  opener.focus();
+  if (document.activeElement === opener) return;
+  const fallbacks = opener.closest('.maplibregl-popup')
+    ? ['.maplibregl-canvas']
+    : ['#brief-search [data-ddm-search]', '.maplibregl-canvas'];
+  for (const selector of fallbacks) {
+    const target = document.querySelector<HTMLElement>(selector);
+    target?.focus();
+    if (target && document.activeElement === target) return;
+  }
+}
+
 /** Close the shared shell and restore its detent and opener. */
 export function closeImpactPanelShell(restoreFocus = true): void {
   if (!shell) return;
@@ -358,15 +380,7 @@ export function closeImpactPanelShell(restoreFocus = true): void {
 
   const opener = shellOpener;
   shellOpener = null;
-  if (restoreFocus && opener && document.contains(opener)) {
-    opener.focus();
-    // Hard close retires the panel-owned selection, hiding the Brief report
-    // door. Return to its visible place-search entry rather than losing
-    // keyboard focus when that now-hidden opener cannot receive it.
-    if (document.activeElement !== opener && opener.id === 'brief-full-report-link') {
-      document.querySelector<HTMLInputElement>('#brief-search [data-ddm-search]')?.focus();
-    }
-  }
+  if (restoreFocus && opener) returnBriefingFocus(opener);
   window.setTimeout(() => {
     if (shell && !shell.panel.classList.contains('open')) {
       shell.panel.hidden = true;
@@ -408,11 +422,24 @@ function beginPendingOpen(
   pendingOpen = pending;
 }
 
+/**
+ * The selection a waiting open holds, so the response it replaces (a popup, the
+ * panel-foot card) sees a newer subject on its close and the place stays lit.
+ * The runtime's or the unavailable render's own selection replaces it.
+ */
+let pendingSelection: PlaceSelection | null = null;
+
+function releasePendingSelection(): void {
+  if (pendingSelection !== null && getPlaceSelection() === pendingSelection) setPlaceSelection(null);
+  pendingSelection = null;
+}
+
 function invalidatePendingIntent(): void {
   briefingIntentSeq++;
   openToken++;
   currentRuntimeToken = null;
   finishPendingOpen();
+  releasePendingSelection();
 }
 
 function loadRuntime(): Promise<ImpactPanelRuntime> {
@@ -727,15 +754,24 @@ export function openImpactPanel(context: BoundarySelectionContext): number {
     contextReady = Promise.resolve(context);
   }
 
+  const held: PlaceSelection = { label: context.title, context };
+  pendingSelection = held;
+  setPlaceSelection(held);
+  const stale = (): boolean => {
+    if (intent === briefingIntentSeq && token === openToken) return false;
+    if (pendingSelection === held) releasePendingSelection();
+    return true;
+  };
+
   void Promise.all([loadRuntime(), contextReady]).then(
     ([loaded, resolvedContext]) => {
       finishPendingOpen(token);
-      if (intent !== briefingIntentSeq || token !== openToken) return;
+      if (stale()) return;
       currentRuntimeToken = loaded.openImpactPanel(resolvedContext, active);
     },
     () => {
       finishPendingOpen(token);
-      if (intent !== briefingIntentSeq || token !== openToken) return;
+      if (stale()) return;
       currentRuntimeToken = null;
       renderUnavailable(context, active);
     }
@@ -856,6 +892,8 @@ export function isCurrentBriefing(token: number): boolean {
  */
 export function nextBriefingIntent(): number {
   finishPendingOpen();
+  // Given back now, not when the superseded open lands: that late null write would abort the newer opener's own fetch.
+  releasePendingSelection();
   return ++briefingIntentSeq;
 }
 

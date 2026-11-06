@@ -11,6 +11,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import geopandas as gpd
@@ -986,6 +987,57 @@ class TwoStepTransportRetryTests(unittest.TestCase):
         self.assertEqual(path, tif_marker)
         self.assertFalse(service_returned)
         extract.assert_called_once_with(zip_marker)
+
+
+class WhpZipResumeTests(unittest.TestCase):
+    def test_budget_expiry_on_the_last_chunk_leaves_a_resumable_part(self) -> None:
+        """A budget that runs out as the final chunk arrives must not leave
+        a complete .part behind: its resume would ask for bytes past the end
+        and get 416 on every rerun."""
+        chunks = [b"a" * 4, b"b" * 4, b"c" * 4]
+        payload = b"".join(chunks)
+        requested: list = []
+
+        class FakeResponse:
+            def __init__(self, body: list, status: int):
+                self.body, self.status_code = body, status
+                self.headers = {"Content-Length": str(sum(map(len, body)))}
+
+            def raise_for_status(self):
+                if self.status_code >= 400:
+                    raise lf.requests.HTTPError(str(self.status_code))
+
+            def iter_content(self, chunk_size):
+                return iter(self.body)
+
+            def close(self):
+                pass
+
+        def fake_get(url, headers, stream, timeout):
+            requested.append(headers.get("Range"))
+            start = int(headers["Range"][6:-1]) if "Range" in headers else 0
+            if start >= len(payload):
+                return FakeResponse([], 416)
+            if start == 0:
+                return FakeResponse(chunks, 200)
+            return FakeResponse([payload[start:]], 206)
+
+        url = "https://example.invalid/whp.zip"
+        budget = lf.RequestBudget({"rds-whp-zip": 2})
+        # started, then one reading per chunk: the third crosses the budget.
+        clock = iter([0.0, 1.0, 2.0, 999.0])
+        with _cache_tempdir() as tmp_name, patch.object(
+                lf, "DOWNLOAD_CACHE", Path(tmp_name)), patch.object(
+                lf.requests, "get", side_effect=fake_get):
+            with patch.object(lf, "time", SimpleNamespace(
+                    monotonic=lambda: next(clock))):
+                with self.assertRaises(lf.WhpDownloadIncomplete):
+                    lf.download_whp_zip(budget, time_budget_s=10.0, url=url)
+            part = next(Path(tmp_name).glob("*.part"))
+            self.assertLess(part.stat().st_size, len(payload))
+            dest = lf.download_whp_zip(budget, time_budget_s=10.0, url=url)
+            self.assertEqual(dest.read_bytes(), payload)
+        self.assertEqual(requested, [None, "bytes=8-"])
 
 
 if __name__ == "__main__":

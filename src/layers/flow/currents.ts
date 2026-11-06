@@ -2,7 +2,7 @@
  * The committed NOAA RTOFS surface-current frame (admission
  * rtofs-currents-producer; DR-116), read same-origin and never from NOMADS.
  *
- * scripts/build-rtofs-currents.mjs writes it at a landing: one JSON header
+ * scripts/build-rtofs-currents.mjs writes it when run by hand: one JSON header
  * (run, valid instant, grids, scale) and, per grid, one gzip file of Int16
  * little-endian values, all u (east) then all v (north), rows north to
  * south, in steps of `scale` m/s, -32768 where the issuer's bitmap masks the
@@ -12,7 +12,7 @@
  *
  * It is a dated model frame: the header's run and valid instant go to the
  * state line with the frame's age, and `staleAfter` is null (no 24-hour
- * limit), because the frame is as old as the last landing (CONTRADICTIONS-4
+ * limit), because the frame is as old as the last hand rebuild (CONTRADICTIONS-4
  * Q3 a). A missing, truncated or unparseable frame, one valid more than 14
  * days ago, or one holding a speed no ocean has, throws, and the panel reads
  * unavailable.
@@ -20,6 +20,7 @@
 import { BASE_URL } from '../../config/urls-boot';
 import { fetchBufferedWithBudget, fetchJsonWithBudget } from '../../util/fetch';
 import { isObject } from '../../util/guards';
+import { CurrentsFrameTooOld } from '../enso-flow-data';
 import { createFlowField, type FlowField, type FlowGrid } from './field';
 
 const DATA_URL = `${BASE_URL}data/`;
@@ -36,7 +37,7 @@ export const CURRENTS_NO_DATA = -32768;
 export const CURRENT_COMPONENT_MAX_MS = 5;
 const READ_BUDGET_MS = 12_000;
 const HOUR = 3_600_000;
-/** A frame valid more than 14 days before the clock is refused; each ENSO landing rebuilds it well inside that. */
+/** A frame valid more than 14 days before the clock is refused. Nothing rebuilds it automatically: scripts/build-rtofs-currents.mjs is run by hand (public/data/README.md), so the layer reads unavailable until someone does. */
 export const CURRENTS_MAX_AGE_MS = 14 * 24 * HOUR;
 
 export interface CurrentsGrid extends FlowGrid {
@@ -130,7 +131,7 @@ export async function decodeCurrentsFrame(
       meta: {
         issuer: 'NOAA', model: 'Global RTOFS', transport: 'same-origin-frame',
         cycle: header.run, forecastHour: header.forecastHour, validTime: header.valid,
-        // A dated frame, as old as the last landing: its age is stated; readCurrentsFrame refuses one past 14 days.
+        // A dated frame, as old as the last hand rebuild: its age is stated; readCurrentsFrame refuses one past 14 days.
         staleAfter: null,
         level: header.level, units: 'm s-1', sourceUrl, productKey: id
       }
@@ -144,7 +145,7 @@ export async function readCurrentsFrame(
 ): Promise<FlowField[]> {
   const url = DATA_URL + CURRENTS_HEADER_FILE;
   const header = parseCurrentsHeader(await fetchJsonWithBudget(url, null, options.signal, READ_BUDGET_MS, 16_384));
-  if ((options.now ?? Date.now)() - header.valid > CURRENTS_MAX_AGE_MS) refuse('valid more than 14 days ago');
+  if ((options.now ?? Date.now)() - header.valid > CURRENTS_MAX_AGE_MS) throw new CurrentsFrameTooOld(header.valid);
   const bodies = await Promise.all(header.grids.map(async (grid) => {
     // A gzip file is never longer than its Int16 bytes plus a small wrapper.
     const cap = grid.nx * grid.ny * 4 + 1_024;

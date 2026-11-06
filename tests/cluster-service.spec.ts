@@ -141,7 +141,8 @@ test.describe('S3 composeClusterIntent (the composition the URL boot shares)', (
     expect(composeClusterIntent('wildfire')).toContain('nifc-fires');
     timeline.setHorizon('season-ahead');
     expect(composeClusterIntent('wildfire')).toContain('usfs-whp');
-    expect(composeClusterIntent('wildfire')).not.toContain('nifc-fires');
+    // DR-022: the live perimeters stay in every horizon.
+    expect(composeClusterIntent('wildfire')).toContain('nifc-fires');
     timeline.reset();
   });
 });
@@ -202,7 +203,8 @@ test.describe('S3 requestCluster (the transaction)', () => {
       requestCluster('wildfire');
       expect(getCommittedSnapshot().horizon).toBe('season-ahead');
       expect(getCommittedSnapshot().intendedKeys.has('usfs-whp')).toBe(true);
-      expect(getCommittedSnapshot().intendedKeys.has('nifc-fires')).toBe(false);
+      // DR-022: live perimeters in every horizon, Long Range included.
+      expect(getCommittedSnapshot().intendedKeys.has('nifc-fires')).toBe(true);
 
       // Flip clusters: the register persists; the flip re-resolves at
       // the same horizon.
@@ -325,9 +327,14 @@ test.describe('S3 requestCluster (the transaction)', () => {
           // Set the held horizon before subscribing: this case isolates the
           // destination transaction from the preceding mode's capability.
           timeline.setHorizon(horizon);
+          // A press of another mode than the reset one is an entry: its entry
+          // horizon replaces the held one (ENSO opens on Season ahead), and
+          // the link that press writes says so.
+          const entered =
+            cluster === getHazardCluster() ? horizon : (HAZARD_CLUSTERS[cluster].entryHorizon ?? horizon);
           Object.defineProperty(globalThis, 'window', {
             configurable: true,
-            value: { location: { search: `?cluster=${cluster}&horizon=${horizon}` } }
+            value: { location: { search: `?cluster=${cluster}&horizon=${entered}` } }
           });
           const boot = parseUrlParams();
           const dispose = initClusterService();
@@ -426,7 +433,7 @@ test.describe('S3 requestCluster (the transaction)', () => {
       expect(observed.length).toBeGreaterThanOrEqual(1);
       for (const rev of observed) {
         if (rev.horizon === 'season-ahead') {
-          expect(rev.hasNifc).toBe(false);
+          expect(rev.hasNifc).toBe(true);
           expect(rev.hasWhp).toBe(true);
         } else {
           expect(rev.hasWhp).toBe(false);
@@ -439,10 +446,10 @@ test.describe('S3 requestCluster (the transaction)', () => {
       expect(snapshot.cluster).toBe('wildfire');
       expect(snapshot.horizon).toBe('season-ahead');
       expect(snapshot.intendedKeys.has('usfs-whp')).toBe(true);
-      expect(snapshot.intendedKeys.has('nifc-fires')).toBe(false);
+      expect(snapshot.intendedKeys.has('nifc-fires')).toBe(true);
       expect(getHazardCluster()).toBe('wildfire');
       expect(registry.getActiveKeys().has('usfs-whp')).toBe(true);
-      expect(registry.getActiveKeys().has('nifc-fires')).toBe(false);
+      expect(registry.getActiveKeys().has('nifc-fires')).toBe(true);
     } finally {
       dispose();
       timeline.reset();
@@ -462,7 +469,7 @@ test.describe('S3 snapshot revisions and honesty under later changes', () => {
       const after = getCommittedSnapshot();
       expect(after.revision).toBeGreaterThan(before.revision);
       expect(after.summary.caveat).toContain(
-        'Current Mapped Fire Perimeters (National Interagency Fire Center, NIFC) is live with partial coverage'
+        'Current Mapped Fire Perimeters (National Interagency Fire Center, NIFC) are live with partial coverage'
       );
     } finally {
       dispose();

@@ -437,14 +437,12 @@ async function showFrame(map: maplibregl.Map, index: number): Promise<void> {
   const incoming = [
     { layerId: frameSourceId(date), prop: 'raster-opacity', target: RASTER_OPACITY }
   ];
-  const outgoing = [];
-  if (previous && previous !== date) {
-    outgoing.push({
-      layerId: frameSourceId(previous),
-      prop: 'raster-opacity',
-      target: RASTER_OPACITY
-    });
-  }
+  // Every other mounted frame, not only `previous`: a step superseded during
+  // its tile wait leaves `previous` naming a frame never shown, while the day
+  // on screen is another one. A lookahead already at 0 stays at 0.
+  const outgoing = mountedFrames
+    .filter((other) => other !== date)
+    .map((other) => ({ layerId: frameSourceId(other), prop: 'raster-opacity', target: RASTER_OPACITY }));
   if (map.getLayer(LAYER_ID)) {
     // First dated step: fade the boot-time `default` layer out for good.
     outgoing.push({ layerId: LAYER_ID, prop: 'raster-opacity', target: RASTER_OPACITY });
@@ -784,10 +782,14 @@ export async function activate(map: maplibregl.Map): Promise<void> {
       render: renderSstAnomalyLegend
     });
 
-    if (!pacificHintShown && !viewIncludesNino34(map)) {
+    // Judged where the camera settles: an ENSO entry flies to the Pacific, so the view at activation is the land it is leaving.
+    const pacificHint = (): void => {
+      if (signal.aborted || pacificHintShown || viewIncludesNino34(map)) return;
       pacificHintShown = true;
       showToast('Ocean temperature anomaly is global; zoom out toward the equatorial Pacific to see the ENSO signal.');
-    }
+    };
+    if (map.isMoving()) map.once('moveend', pacificHint);
+    else pacificHint();
 
     // No `ready` here (DDM-P14-T04, found-001): the status stays `loading`
     // until a watcher proves the view's tiles. A re-activation over a dated
@@ -950,6 +952,35 @@ export function deactivate(map: maplibregl.Map): void {
 }
 
 /**
+ * Mount the RONI chart once the coordinator paints this response: right after
+ * `respond` with the popup frame loaded, after the frame chunk's wait without
+ * it. A failed chunk or a superseded commit paints no figure, so the next map
+ * click ends the watch.
+ */
+let stopChartWatch: (() => void) | undefined;
+
+function mountChartOnPaint(map: maplibregl.Map, model: ReturnType<typeof buildEnsoBoxPopupModel>): void {
+  // One watch at a time: a popup opened or closed from the keyboard has no map click to end the last one.
+  stopChartWatch?.();
+  const chart = model.details?.find((d) => d.kind === 'chart');
+  if (chart?.kind !== 'chart') return;
+  const root = map.getContainer();
+  const stop = (): void => {
+    observer.disconnect();
+    map.off('click', stop);
+  };
+  stopChartWatch = stop;
+  const observer = new MutationObserver(() => {
+    const figure = root.querySelector(`[data-popup-chart="${chart.chartKey}"]`);
+    if (!figure || figure.querySelector('svg')) return;
+    stop();
+    void mountEnsoBoxChart(root, model).catch(() => undefined);
+  });
+  observer.observe(root, { childList: true, subtree: true });
+  map.on('click', stop);
+}
+
+/**
  * The Nino 3.4 box is the one click target: the anomaly raster has no
  * per-pixel attributes on the client. The coordinator's respond is
  * synchronous, so the bundled ENSO snapshot is read from registration (the
@@ -965,8 +996,7 @@ export function bindPopups(map: maplibregl.Map): void {
     respond: (_feature, _click, m) => {
       const model = buildEnsoBoxPopupModel(currentEnsoBoxRead());
       startEnsoBoxRead();
-      // shortcut: a click before the frame chunk resolves paints the chart's text alternative only; fine while the frame is warmed at registration.
-      requestAnimationFrame(() => void mountEnsoBoxChart(m.getContainer(), model).catch(() => undefined));
+      mountChartOnPaint(m, model);
       return { model };
     }
   });

@@ -333,8 +333,8 @@ export const BC_DROUGHT_NO_UPDATE: BcDroughtLevel = {
  * The `match` field is a substring tested against the GeoJSON feature name
  * by `pickTreatyEntry` / `pickTreatyColor`. The `tribe` field carries the
  * full formal Tribe name where the Treaty key uniquely names a Tribe
- * (Yakama, Nez Perce, Quinault). For Treaty-location keys (Medicine Creek,
- * Point Elliott, Point No Point, Walla Walla) the Treaty was signed by
+ * (Yakama, Nez Perce). For the other keys (Medicine Creek, Point Elliott,
+ * Point No Point, Quinault, Walla Walla) the Treaty was signed by
  * multiple Tribes, so `tribe` is null and the popup falls back to whatever
  * value the source GeoJSON carries on the feature.
  *
@@ -359,7 +359,7 @@ export const TREATY_COLORS: ReadonlyArray<TreatyEntry> = [
   { match: 'Nez Perce',      tribe: 'Nez Perce Tribe',                                     color: '#9333ea' },
   { match: 'Point Elliott',  tribe: null,                                                  color: '#d946ef' },
   { match: 'Point No Point', tribe: null,                                                  color: '#a855f7' },
-  { match: 'Quinault',       tribe: 'Quinault Indian Nation',                              color: '#8b5cf6' },
+  { match: 'Quinault',       tribe: null,                                                  color: '#8b5cf6' },
   { match: 'Walla Walla',    tribe: null,                                                  color: '#7c3aed' }
 ];
 
@@ -487,14 +487,17 @@ export { HILLSHADE_SHADOW, HILLSHADE_HIGHLIGHT } from './interface-tokens';
 export const HILLSHADE_EXAGGERATION = 0.22;
 
 /* ---------------------------------------------------------------------------
- * NWS heat and fire-weather alert polygons
+ * NWS watch, warning and advisory polygons (each mode's alert products,
+ * HazardClusterDef.alerts in src/config/clusters.ts)
  *
  * Colors follow the National Weather Service watch/warning/advisory display
  * standard (the weather.gov map colors users already know), so the module
- * never invents its own severity language. The NWS Hazard Simplification
- * project renamed Excessive Heat Warning to Extreme Heat Warning in 2025;
- * both names are carried so archived or transitional products still color
- * correctly.
+ * never invents its own severity language. The flood, storm, wind and
+ * coastal rows are the Hex Code column of the NWS hazards map table,
+ * https://www.weather.gov/help-map (read 2026-11-06; the WWA MapServer's
+ * renderer draws the same RGB). The NWS Hazard Simplification project
+ * renamed Excessive Heat Warning to Extreme Heat Warning in 2025; both names
+ * are carried so archived or transitional products still color correctly.
  * ------------------------------------------------------------------------- */
 
 export const NWS_ALERT_COLORS: Readonly<Record<string, string>> = {
@@ -504,13 +507,27 @@ export const NWS_ALERT_COLORS: Readonly<Record<string, string>> = {
   'Excessive Heat Watch': '#800000',
   'Heat Advisory': '#ff7f50',
   'Red Flag Warning': '#ff1493', // vocab-allow: verbatim NWS product names, quoted source data
-  'Fire Weather Watch': '#ffdead'
+  'Fire Weather Watch': '#ffdead',
+  'Flash Flood Warning': '#8b0000', 'Flood Warning': '#00ff00', // vocab-allow: verbatim NWS product names, quoted source data
+  'Flash Flood Watch': '#2e8b57', 'Flood Watch': '#2e8b57',
+  'Typhoon Warning': '#dc143c', 'Blizzard Warning': '#ff4500', // vocab-allow: verbatim NWS product names, quoted source data
+  'Ice Storm Warning': '#8b008b', 'Winter Storm Warning': '#ff69b4', // vocab-allow: verbatim NWS product names, quoted source data
+  'Typhoon Watch': '#ff00ff', 'Winter Storm Watch': '#4682b4',
+  'Extreme Wind Warning': '#ff8c00', 'High Wind Warning': '#daa520', // vocab-allow: verbatim NWS product names, quoted source data
+  'High Wind Watch': '#b8860b',
+  'Storm Surge Warning': '#b524f7', 'Coastal Flood Warning': '#228b22', // vocab-allow: verbatim NWS product names, quoted source data
+  'Lakeshore Flood Warning': '#228b22', 'High Surf Warning': '#228b22', // vocab-allow: verbatim NWS product names, quoted source data
+  'Storm Surge Watch': '#db7ff7', 'Coastal Flood Watch': '#66cdaa',
+  'Lakeshore Flood Watch': '#66cdaa'
 };
 
 /**
- * One key row per NWS product under its current name (the 2025 Hazard
- * Simplification names); the Excessive Heat aliases share their row's colour
- * and still match in the data.
+ * Every key row in key order: one row per NWS product under its current name
+ * (the 2025 Hazard Simplification names; the Excessive Heat aliases share
+ * their row's colour and still match in the data), the heat and fire weather
+ * rows first, then the ENSO rows in their mode's event order. A mode's key
+ * takes its rows in this order: every row its set asks for (heat and fire
+ * weather), or only those in the layer's current read (any other set).
  */
 export const NWS_ALERT_LEGEND: ReadonlyArray<{ color: string; label: string }> = [
   // vocab-allow: verbatim NWS product names, quoted source data
@@ -519,7 +536,15 @@ export const NWS_ALERT_LEGEND: ReadonlyArray<{ color: string; label: string }> =
   { color: NWS_ALERT_COLORS['Heat Advisory'], label: 'Heat Advisory' },
   // vocab-allow: verbatim NWS product names, quoted source data
   { color: NWS_ALERT_COLORS['Red Flag Warning'], label: 'Red Flag Warning' },
-  { color: NWS_ALERT_COLORS['Fire Weather Watch'], label: 'Fire Weather Watch' }
+  { color: NWS_ALERT_COLORS['Fire Weather Watch'], label: 'Fire Weather Watch' },
+  ...[
+    'Flash Flood Warning', 'Flood Warning', 'Flash Flood Watch', 'Flood Watch', // vocab-allow: verbatim NWS product names, quoted source data
+    'Typhoon Warning', 'Blizzard Warning', 'Ice Storm Warning', 'Winter Storm Warning', // vocab-allow: verbatim NWS product names, quoted source data
+    'Typhoon Watch', 'Winter Storm Watch',
+    'Extreme Wind Warning', 'High Wind Warning', 'High Wind Watch', // vocab-allow: verbatim NWS product names, quoted source data
+    'Storm Surge Warning', 'Coastal Flood Warning', 'Lakeshore Flood Warning', 'High Surf Warning', // vocab-allow: verbatim NWS product names, quoted source data
+    'Storm Surge Watch', 'Coastal Flood Watch', 'Lakeshore Flood Watch'
+  ].map((label) => ({ color: NWS_ALERT_COLORS[label]!, label }))
 ];
 
 export const NWS_ALERT_DEFAULT_COLOR = '#9ca3af';
@@ -804,4 +829,47 @@ export const CPC_SEASONAL_COLORS = {
     { cat: 'Below', prob: 90, label: 'Below, 90%', color: [34, 24, 82, 255] },
     { cat: 'EC', prob: 33, label: 'Equal Chances', color: [255, 255, 255, 0] }
   ],
+} as const;
+
+/** CPC 6-10 and 8-14 day outlook uniqueValue renderers, cat+prob, read
+ * 2026-11-06 from cpc_6_10_day_outlk and cpc_8_14_day_outlk MapServer layers
+ * 0 (temperature) and 1 (precipitation): both services carry the same 15
+ * rows per variable. Source RGBA and outline width (points) per class, all
+ * outlines rgb(110,110,110); no Equal Chances class and no default symbol.
+ */
+export const CPC_EXTENDED_COLORS = {
+  precipitation: [
+    { cat: 'Above', prob: 90, label: 'Above, 90%', color: [40, 83, 0, 255], outline: 1 },
+    { cat: 'Above', prob: 80, label: 'Above, 80%', color: [40, 96, 10, 255], outline: 1 },
+    { cat: 'Above', prob: 70, label: 'Above, 70%', color: [0, 120, 20, 255], outline: 1 },
+    { cat: 'Above', prob: 60, label: 'Above, 60%', color: [0, 150, 32, 255], outline: 1 },
+    { cat: 'Above', prob: 50, label: 'Above, 50%', color: [72, 180, 48, 255], outline: 1 },
+    { cat: 'Above', prob: 40, label: 'Above, 40%', color: [149, 206, 127, 255], outline: 1 },
+    { cat: 'Above', prob: 33, label: 'Above, 33%', color: [179, 217, 171, 255], outline: 1 },
+    { cat: 'Normal', prob: 36, label: 'Near Normal', color: [160, 160, 160, 255], outline: 0.4 },
+    { cat: 'Below', prob: 33, label: 'Below, 33%', color: [240, 212, 147, 255], outline: 1 },
+    { cat: 'Below', prob: 40, label: 'Below, 40%', color: [216, 167, 79, 255], outline: 1 },
+    { cat: 'Below', prob: 50, label: 'Below, 50%', color: [187, 109, 51, 255], outline: 1 },
+    { cat: 'Below', prob: 60, label: 'Below, 60%', color: [155, 80, 49, 255], outline: 1 },
+    { cat: 'Below', prob: 70, label: 'Below, 70%', color: [147, 70, 57, 255], outline: 1 },
+    { cat: 'Below', prob: 80, label: 'Below, 80%', color: [128, 64, 0, 255], outline: 1 },
+    { cat: 'Below', prob: 90, label: 'Below, 90%', color: [79, 47, 47, 255], outline: 1 }
+  ],
+  temperature: [
+    { cat: 'Above', prob: 90, label: 'Above, 90%', color: [112, 33, 0, 255], outline: 1 },
+    { cat: 'Above', prob: 80, label: 'Above, 80%', color: [145, 38, 0, 255], outline: 1 },
+    { cat: 'Above', prob: 70, label: 'Above, 70%', color: [179, 46, 5, 255], outline: 1 },
+    { cat: 'Above', prob: 60, label: 'Above, 60%', color: [201, 59, 26, 255], outline: 0.4 },
+    { cat: 'Above', prob: 50, label: 'Above, 50%', color: [218, 87, 49, 255], outline: 0.4 },
+    { cat: 'Above', prob: 40, label: 'Above, 40%', color: [227, 139, 75, 255], outline: 1 },
+    { cat: 'Above', prob: 33, label: 'Above, 33%', color: [231, 177, 104, 255], outline: 0.4 },
+    { cat: 'Normal', prob: 36, label: 'Near Normal', color: [160, 160, 160, 255], outline: 0.4 },
+    { cat: 'Below', prob: 33, label: 'Below, 33%', color: [191, 203, 228, 255], outline: 1 },
+    { cat: 'Below', prob: 40, label: 'Below, 40%', color: [160, 192, 223, 255], outline: 1 },
+    { cat: 'Below', prob: 50, label: 'Below, 50%', color: [119, 181, 226, 255], outline: 1 },
+    { cat: 'Below', prob: 60, label: 'Below, 60%', color: [56, 159, 220, 255], outline: 1 },
+    { cat: 'Below', prob: 70, label: 'Below, 70%', color: [0, 93, 161, 255], outline: 1 },
+    { cat: 'Below', prob: 80, label: 'Below, 80%', color: [46, 33, 111, 255], outline: 1 },
+    { cat: 'Below', prob: 90, label: 'Below, 90%', color: [34, 24, 82, 255], outline: 1 }
+  ]
 } as const;

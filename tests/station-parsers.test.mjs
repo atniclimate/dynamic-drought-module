@@ -410,6 +410,8 @@ test('a Hydromet NO RECORD on the newest day is skipped for the last posted day'
     '06/28/2026 ,   1200.00,      0.20',
     '06/29/2026 ,   1234.00,      0.25',
     '06/30/2026 , NO RECORD, NO RECORD',
+    // USBR's documented null value is not a reading either.
+    '07/01/2026 , 998877.00, 998877.00',
     'END DATA',
     '</PRE></BODY></HTML>'
   ].join('\n');

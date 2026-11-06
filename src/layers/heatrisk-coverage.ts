@@ -1,3 +1,5 @@
+import type * as maplibregl from 'maplibre-gl';
+
 /**
  * Map-center coverage ring derived offline from all 11,009 vertices of the
  * bundled 2023 United States Census Bureau 1:20,000,000 geometry for the 48
@@ -39,4 +41,25 @@ export function pointHasHeatRiskCoverage(
     }
   }
   return inside;
+}
+
+/**
+ * The view has coverage when its center or the middle of any of its four
+ * quarters is inside the hull, so a coast view centered offshore still
+ * draws while a Canadian or Alaskan view with a border sliver in one corner
+ * does not. HeatRisk and Fuel risk share it so their pills agree.
+ * shortcut: five sample points, not a bounds-hull intersection;
+ * a covered strip that misses all five reads no data until the next pan.
+ */
+export function viewHasHeatRiskCoverage(map: maplibregl.Map): boolean {
+  const center = map.getCenter();
+  if (pointHasHeatRiskCoverage(center.lng, center.lat)) return true;
+  const bounds = map.getBounds();
+  const west = bounds.getWest();
+  const south = bounds.getSouth();
+  const width = bounds.getEast() - west;
+  const height = bounds.getNorth() - south;
+  return [0.25, 0.75].some((x) =>
+    [0.25, 0.75].some((y) => pointHasHeatRiskCoverage(west + width * x, south + height * y))
+  );
 }

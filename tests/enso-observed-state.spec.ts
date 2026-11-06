@@ -1,4 +1,4 @@
-import { test, expect } from './offline-test';
+import { test, expect, type Page } from './offline-test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { gotoApp } from './helpers';
@@ -78,6 +78,19 @@ function snapshotInState(
       }
     }
   };
+}
+
+/**
+ * Serve the bundled snapshot with its monthly Nino 3.4 file published today,
+ * so a case about how the monthly claim renders does not depend on CPC having
+ * issued it within the 60-day cadence gate (audit round 5, R5-32).
+ */
+async function routeFreshMonthlySnapshot(page: Page): Promise<void> {
+  const base = readSnapshot();
+  const snapshot = { ...base, nino34: { ...base.nino34, published: new Date().toISOString().slice(0, 10) } };
+  await page.route('**/data/enso-indices.json', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(snapshot) })
+  );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -160,6 +173,7 @@ test.describe('ENSO observed-state repair', () => {
     expect(snapshot.roni.latest.preliminary).toBe(true);
     expect(snapshot.oni.latest.preliminary).toBe(true);
 
+    await routeFreshMonthlySnapshot(page);
     await gotoApp(page, '?select=state:WA');
 
     await expect(page.locator('#enso-driver')).toHaveCount(0);
@@ -224,6 +238,7 @@ test.describe('ENSO observed-state repair', () => {
   test('briefing labels Nino 3.4 analyzed, keeps SOI supporting, and renders no plume', async ({
     page
   }) => {
+    await routeFreshMonthlySnapshot(page);
     await gotoApp(page, '?select=state:WA');
 
     const panel = page.locator('#impact-panel');
@@ -352,7 +367,8 @@ test.describe('ENSO observed-state repair', () => {
       route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(snapshotInState('la-nina', 'la-nina', 'weakening', -1.1))
+        // The stored direction is the raw sign: a rise toward zero, which is a weakening La Nina.
+        body: JSON.stringify(snapshotInState('la-nina', 'la-nina', 'strengthening', -1.1))
       })
     );
 

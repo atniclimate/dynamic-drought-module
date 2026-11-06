@@ -247,14 +247,14 @@ export function isoDayUtc(time: number): string {
 }
 
 /**
- * An upstream ISO 8601 timestamp field, read as its UTC calendar day for a
- * claim's `dates`, or `undefined` when the field is missing or unparseable
+ * The calendar day an upstream ISO 8601 timestamp names in its own offset
+ * ("2026-11-06T18:00:00-08:00" is 2026-11-06, never the UTC 2026-11-07), for
+ * a claim's `dates`, or `undefined` when the field is missing or unparseable
  * (never invented; the caller keeps `retrieved` as the honest fallback).
  */
-function isoDayFromUpstream(value: unknown): string | undefined {
-  if (typeof value !== 'string') return undefined;
-  const t = Date.parse(value);
-  return Number.isFinite(t) ? isoDayUtc(t) : undefined;
+function issuerCalendarDay(value: unknown): string | undefined {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T/.test(value)) return undefined;
+  return Number.isFinite(Date.parse(value)) ? value.slice(0, 10) : undefined;
 }
 
 /**
@@ -516,6 +516,12 @@ export async function fetchUsdmClaims(
       mapDate === null
         ? "this week's U.S. Drought Monitor"
         : `the U.S. Drought Monitor map dated ${humanDayUtc(mapDate)}`;
+    // While the NADM surface is on, the map and place card read it, not USDM
+    // (popup-conditions.ts droughtRow), so the two categories are named apart.
+    const mapProduct = registry.getActiveKeys().has('nadm-drought')
+      ? // DRAFT wording (pending the owner's read-back); the NADM description is the layer's own (nadm-drought.ts).
+        ' The map shows the North American Drought Monitor, a tri-national monthly consensus published 2 to 3 weeks after month-end, so its category here can differ from this weekly U.S. Drought Monitor read.'
+      : '';
 
     if (worst < 0) {
       return {
@@ -523,7 +529,7 @@ export async function fetchUsdmClaims(
         claims: [
           makeClaim({
             // For a click, the popup's no-polygon sentence (popup-conditions.ts), word for word.
-            text: `No D0-D4 category polygon ${context.pointInsidePlace ? at : 'here'} (U.S. Drought Monitor). This client has no analyzed-area mask, so this does not confirm no drought.`,
+            text: `No D0-D4 category polygon ${context.pointInsidePlace ? at : 'here'} (U.S. Drought Monitor). This client has no analyzed-area mask, so this does not confirm no drought.${mapProduct}`,
             ...usdmShared
           })
         ]
@@ -536,7 +542,7 @@ export async function fetchUsdmClaims(
         ok: true,
         claims: [
           makeClaim({
-            text: `This location is in a mapped drought category (DM ${worst}) in ${asOfMap}.`,
+            text: `This location is in a mapped drought category (DM ${worst}) in ${asOfMap}.${mapProduct}`,
             ...usdmShared,
             support: { ...usdmShared.support, legendKey: 'usdm' },
             method: { basis: USDM_PERCENTILE_BASIS }
@@ -549,7 +555,7 @@ export async function fetchUsdmClaims(
       ok: true,
       claims: [
         makeClaim({
-          text: `This location is in ${impact.code} ${impact.label} as of ${asOfMap}. ${impact.summary}`,
+          text: `This location is in ${impact.code} ${impact.label} as of ${asOfMap}. ${impact.summary}${mapProduct}`,
           ...usdmShared,
           support: { ...usdmShared.support, legendKey: 'usdm' },
           method: { basis: USDM_PERCENTILE_BASIS }
@@ -654,7 +660,7 @@ function calendarToIso(c: CalendarDay): string {
 
 /**
  * Fetch the Drought Severity and Coverage Index (DSCI, 0 to 500) weekly series
- * for the region's primary state over roughly the past 14 months from the USDM
+ * for the region's primary state over the past year (the chart's own title) from the USDM
  * Data Services API and render it as an observed trend line. DSCI is a
  * statewide measure (not point-specific), so the claim is framed as statewide
  * context. The chart is solid throughout (all observation) with the current
@@ -684,7 +690,7 @@ export async function fetchDsciTrendClaims(
   }
   const end = new Date();
   const start = new Date(end);
-  start.setMonth(start.getMonth() - 14);
+  start.setMonth(start.getMonth() - 12);
   const params = new URLSearchParams({
     aoi: String(fips).padStart(2, '0'),
     startdate: fmtUsdmDate(start),
@@ -883,6 +889,10 @@ async function nifcClaimFromLoadedCollection(
   // publish a truncated collection in between, so completeness is read from
   // this snapshot itself (Codex block 1 review, P1).
   if (loaded === null || loaded.truncated) return null;
+  // The layer refetches only on a pan and keeps `ready` after a failed refresh, so a set past
+  // its own 5-minute check window (CURRENT_CHECK_WINDOW_MS, src/layers/nifc-fires.ts) is not
+  // current: the network read answers (the minimap's reader does the same).
+  if (Date.now() - loaded.fetchedAt >= 5 * 60_000) return null;
   if (!bboxCoveredByEnvelope(loaded.envelope, [west, south, east, north])) return null;
 
   // S30D P3-TRUTH: a perimeter counts when its GEOMETRY meets the place's
@@ -1105,7 +1115,7 @@ function nwsActiveProductFeatures(json: unknown): unknown[] | null {
 
 /**
  * Query the National Weather Service active alerts at the clicked point and
- * surface any fire-weather or extreme-heat alerts as observations. When none
+ * surface any fire-weather or heat alerts as observations. When none
  * are active, that is reported plainly (a meaningful all-clear for the
  * foregrounded hazards).
  */
@@ -1142,17 +1152,26 @@ export async function fetchNwsAlertClaims(
       heat.length > 0
         // vocab-allow: reports upstream NWS alert products in effect
         ? `NWS active alerts at the selected point: ${heat.join(', ')}.`
+        // DRAFT wording: "heat alert", as in the presence sentence below; HEAT_EVENTS
+        // includes a Heat Advisory, so "extreme-heat" understated the absence.
         // vocab-allow: reports the absence of upstream NWS alert products
-        : 'NWS reports no active extreme-heat alert at the selected point.';
+        : 'NWS reports no active heat alert at the selected point.';
     // Whether an NWS alert is in effect at the point is a directly observed
     // fact (the alert names quoted are verbatim upstream product names).
     const alertShared = { source, sourceUrl, product: 'nws-alerts', evidence: 'observed', dates: { retrieved: todayIso() } } as const;
     const claims: SourcedClaim[] = [];
     if (fire.length > 0) {
+      // Only a Red Flag Warning is "imminent"; a Fire Weather Watch is NWS's
+      // "critical fire weather conditions are possible but not imminent or
+      // occurring" (https://www.weather.gov/safety/wildfire-ww).
+      const fireMeaning = fire.includes('Red Flag Warning') // vocab-allow: verbatim NWS product name
+        ? 'This signals imminent fire-weather conditions (low humidity, wind, dry fuels).'
+        // DRAFT wording: NWS's own Fire Weather Watch definition, owner to confirm.
+        : 'This means critical fire weather conditions are possible but not imminent or occurring (low humidity, wind, dry fuels).';
       claims.push(
         makeClaim({
           // vocab-allow: reports the NWS alert products in effect, upstream data
-          text: `A fire-weather alert is in effect here: ${fire.join(', ')}. This signals imminent fire-weather conditions (low humidity, wind, dry fuels).`,
+          text: `A fire-weather alert is in effect here: ${fire.join(', ')}. ${fireMeaning}`,
           ...alertShared,
           // One query answers for two hazard rows, so each statement names
           // the row it speaks for and neither row carries the other's.
@@ -1175,8 +1194,12 @@ export async function fetchNwsAlertClaims(
           // (DWH-07); do not reintroduce a DDM-inferred drought-to-heat link.
           text:
             heat.length > 0
+              // DRAFT wording: "NWS heat alert", since NWS keeps a Heat Advisory
+              // below its Extreme Heat criteria ("dangerous heat conditions that
+              // are not expected to reach warning criteria",
+              // https://www.weather.gov/safety/heat-ww); the product names stay verbatim.
               // vocab-allow: reports the NWS alert products in effect, upstream data
-              ? `An extreme-heat alert is in effect here: ${heat.join(', ')}. Heat raises drinking-water demand and human-health stress.`
+              ? `An NWS heat alert is in effect here: ${heat.join(', ')}. Heat raises drinking-water demand and human-health stress.`
               : heatText,
           ...alertShared,
           hazards: ['heat']
@@ -1188,8 +1211,9 @@ export async function fetchNwsAlertClaims(
         makeClaim({
           // This one sentence reports both hazards, so it keeps the lane's own
           // pair and stands in the Fire row and the Heat row alike.
+          // DRAFT wording: "heat alerts", the same HEAT_EVENTS set as `heatText`.
           // vocab-allow: reports the absence of NWS alert products, upstream data
-          text: 'No active red-flag fire-weather or extreme-heat alerts at this location right now (NWS).',
+          text: 'No active red-flag fire-weather or heat alerts at this location right now (NWS).',
           ...alertShared
         })
       );
@@ -1563,6 +1587,10 @@ function spcCategoricalClaim(
       dates: { retrieved: todayIso() }
     });
   }
+  // An issuance past its own expire time is not the near-term outlook: no claim, and the
+  // caller reads the day as unreadable (partial), as the map withholds it.
+  const expireMs = parseSpcMoment(props.expire);
+  if (expireMs !== null && expireMs <= Date.now()) return null;
   const dn = typeof props.dn === 'number' ? props.dn : Number(props.dn);
   const categoryWord = Number.isFinite(dn) ? spcCategoryWord(dn) : null;
   if (categoryWord === null) {
@@ -1573,7 +1601,6 @@ function spcCategoricalClaim(
     return null;
   }
   const validMs = parseSpcMoment(props.valid);
-  const expireMs = parseSpcMoment(props.expire);
   return makeClaim({
     text: `${product}: ${categoryWord} risk from wind and relative humidity at this point${spcValidityClause(validMs, expireMs)}`,
     source,
@@ -1666,6 +1693,12 @@ export async function fetchSpcFireOutlookClaims(
       noFeatureDays.push(day);
       continue;
     }
+    // An issuance past its own expire time states nothing; the read is incomplete.
+    const expireMs = parseSpcMoment(props.expire);
+    if (expireMs !== null && expireMs <= Date.now()) {
+      unreadable = true;
+      continue;
+    }
     const product = `SPC Day ${day} Fire Weather Outlook`;
     const label = typeof props.label === 'string' ? props.label.trim() : '';
     const issuedMs = parseSpcMoment(props.issue);
@@ -1676,7 +1709,6 @@ export async function fetchSpcFireOutlookClaims(
     if (label === '0.40' || label === '0.70') {
       const pct = label === '0.40' ? 40 : 70;
       const validMs = parseSpcMoment(props.valid);
-      const expireMs = parseSpcMoment(props.expire);
       claims.push(
         makeClaim({
           text: `${product}: ${pct}% probability of critical fire weather and/or lightning-based ignition within 12 miles of this point${spcValidityClause(validMs, expireMs)}`,
@@ -1768,7 +1800,8 @@ export async function fetchSpcFireOutlookClaims(
 export async function fetchNwsForecastClaims(
   context: BoundarySelectionContext,
   signal: AbortSignal,
-  session: NwsRequestSession = createNwsRequestSession(signal)
+  session: NwsRequestSession = createNwsRequestSession(signal),
+  now: number = Date.now()
 ): Promise<SourceResult> {
   const source = 'NWS forecast'; // vocab-allow: names the NWS point forecast, upstream product
   const sourceUrl = 'https://www.weather.gov/';
@@ -1791,7 +1824,11 @@ export async function fetchNwsForecastClaims(
 
     const properties = isObject(fJson) && isObject(fJson.properties) ? fJson.properties : null;
     const periods = properties && Array.isArray(properties.periods) ? properties.periods : [];
-    const first = periods.find(isObject);
+    // A period whose own endTime has passed is not the coming period (point-heat.ts
+    // `currentOrFuture` drops ended grid intervals the same way); no endTime stays eligible.
+    const first = periods
+      .filter(isObject)
+      .find((p) => !(typeof p.endTime === 'string' && Date.parse(p.endTime) <= now));
     if (!first) throw new Error('no forecast periods');
 
     const name = typeof first.name === 'string' ? first.name : 'The coming period';
@@ -1800,15 +1837,25 @@ export async function fetchNwsForecastClaims(
     const short = typeof first.shortForecast === 'string' ? first.shortForecast : '';
     const tempStr = temp !== null ? `${temp} degrees ${unit}` : 'an unspecified temperature';
     // vocab-allow: renders the upstream NWS point forecast product
-    const text = `${name}: ${short || 'forecast available'}, near ${tempStr}. Watch this against the heat outlook; hot, dry spells deepen near-term dryness and fire danger.`;
+    const text = `${name}: ${short || 'forecast available'}, near ${tempStr}.`;
 
     // The forecast product's own date: the period's own start (the day the
     // read period covers) as `valid`, and the product's own `updateTime` (when
     // NWS issued this forecast) as `issued`, each read straight off the
     // upstream response and never invented when absent (Rule: never broaden
     // certainty). `retrieved` still records the fetch day regardless.
-    const validDay = isoDayFromUpstream(first.startTime);
-    const issuedDay = isoDayFromUpstream(properties?.updateTime);
+    // `startTime` carries the point's own offset, so its written day is the
+    // period's day; `updateTime` is a UTC instant, read as the viewer's local
+    // day as `todayIso` is.
+    const validDay = issuerCalendarDay(first.startTime);
+    const updateMs =
+      typeof properties?.updateTime === 'string' ? Date.parse(properties.updateTime) : NaN;
+    const issuedDay = Number.isFinite(updateMs) ? isoDayLocal(new Date(updateMs)) : undefined;
+    const dates = {
+      ...(validDay ? { valid: validDay } : {}),
+      ...(issuedDay ? { issued: issuedDay } : {}),
+      retrieved: todayIso()
+    };
 
     return {
       ok: true,
@@ -1820,21 +1867,33 @@ export async function fetchNwsForecastClaims(
           sourceUrl,
           product: 'nwsForecast',
           evidence: 'outlook',
-          dates: {
-            ...(validDay ? { valid: validDay } : {}),
-            ...(issuedDay ? { issued: issuedDay } : {}),
-            retrieved: todayIso()
-          },
+          dates,
           // vocab-allow: names the NWS point forecast, upstream product
           uncertainty: { kind: 'not-quantified', text: 'a point weather forecast stated as a tendency; the NWS product publishes no uncertainty band here' }
+        }),
+        // DR-047 a: the DDM-authored heat-to-dryness sentence (item 7 of the
+        // briefing's causal list) is relabeled derived with a lineage, pending
+        // citation, as the USDM wildfire sentence above is; its words are unchanged.
+        makeClaim({
+          text: 'Watch this against the heat outlook; hot, dry spells deepen near-term dryness and fire danger.',
+          source,
+          sourceUrl,
+          product: 'nwsForecast',
+          evidence: 'derived',
+          dates,
+          // DRAFT wording (pending the owner's read-back): the lineage and uncertainty lines.
+          // vocab-allow: names the NWS point forecast, upstream product
+          lineage: ['the NWS point forecast for the coming period', 'a DDM-authored heat and dryness read, pending citation'],
+          lineageRef: 'ddm-drought-impact-modeling',
+          // vocab-allow: honesty disclaimer, denies being a forecast
+          uncertainty: { kind: 'typical', text: 'a general tendency, not a forecast for this place' }
         })
       ],
       heatRead: {
         key: 'nwsForecast',
         // vocab-allow: names the upstream NWS point forecast product
         label: 'NWS point forecast',
-        // vocab-allow: renders the upstream NWS point forecast product
-        text: `${name}: ${short || 'forecast available'}, near ${tempStr}.`,
+        text,
         sourceUrl
       }
     };

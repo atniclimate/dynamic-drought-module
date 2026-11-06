@@ -87,6 +87,11 @@ export interface ContainingTribalIdentity {
    * result as a source representation, never jurisdictional truth.
    */
   readonly source: 'tribal' | 'bia-reservation' | 'aiannh';
+  /**
+   * The BIA LARNAME under the same point when a legal Census area wins, so a
+   * consumer can title the place by the Nation name a click on the BIA area gives.
+   */
+  readonly biaLandArea?: string;
 }
 
 /** The composed identity for a point. Every field degrades honestly to null. */
@@ -272,13 +277,10 @@ function resolveContainingTribal(
 
   const aiannhFeatures = queryFeatures(map, point, [AIANNH_FILL]);
   const legalAiannh = aiannhIdentity(aiannhFeatures, true);
-  if (legalAiannh) return legalAiannh;
-
   const bia = queryFirstFeature(map, point, [BIA_FILL]);
-  if (bia) {
-    const name = firstString(bia.properties, ['LARNAME', 'LARName', 'NAME', 'name']);
-    if (name) return { name, source: 'bia-reservation' };
-  }
+  const biaName = bia ? firstString(bia.properties, ['LARNAME', 'LARName', 'NAME', 'name']) : null;
+  if (legalAiannh) return biaName ? { ...legalAiannh, biaLandArea: biaName } : legalAiannh;
+  if (biaName) return { name: biaName, source: 'bia-reservation' };
 
   return aiannhIdentity(aiannhFeatures, false);
 }

@@ -11,7 +11,9 @@ import {
   requestLayerOnExact
 } from '../ui/layer-toggle-command';
 import { getHazardCluster, getOceanFraming } from './cluster-store';
-import { restoreCommittedCluster } from './cluster-service';
+import { getSelectedHazard, restoreCommittedCluster } from './cluster-service';
+import type { Geometry } from 'geojson';
+import { showLocatedBoundary } from './located-boundary';
 import { getMap } from './map-store';
 import {
   clearEmphasis,
@@ -24,6 +26,7 @@ import {
   showStudioBoundary,
   type StudioBoundaryGeometry
 } from './studio-boundary';
+import { escapeSql } from '../util/arcgis-features';
 import { registry } from './registry';
 import { holdStudioReturnDisplay } from './url';
 import type { TypedPlaceKind, TypedPlaceRef } from './typed-place';
@@ -38,6 +41,8 @@ export interface DisplaySnapshot {
   readonly statuses: ReadonlyMap<string, LayerStatus>;
   readonly cluster: HazardClusterKey;
   readonly ocean: OceanKey | null;
+  /** The person's hazard; for a custom set `cluster` reads Drought. */
+  readonly selectedHazard: HazardClusterKey;
 }
 
 const SET_ASIDE_ROLES = new Set(['surface', 'event']);
@@ -93,7 +98,8 @@ function captureDisplaySnapshot(): DisplaySnapshot {
     intentKeys,
     statuses,
     cluster: getHazardCluster(),
-    ocean: getOceanFraming()
+    ocean: getOceanFraming(),
+    selectedHazard: getSelectedHazard()
   };
 }
 
@@ -242,6 +248,21 @@ export function seedTribeEmphasisTargets(
   featureIdCache.set(cacheKey, targets);
 }
 
+/** The studio exit with no briefing handed back: nothing else would ever unlight the place the studio lit. */
+export function clearStudioEmphasis(): void {
+  const map = getMap();
+  if (map) clearEmphasis(map);
+}
+
+/**
+ * Draw a Nation's boundary under its exit briefing as the located overlay:
+ * the restore turns the Tribal layers that lit it off again when the person had them off.
+ */
+export function showStudioReturnBoundary(geometry: Geometry): void {
+  const map = getMap();
+  if (map) showLocatedBoundary(map, geometry);
+}
+
 /**
  * Restore the exact captured intent. Status values are deliberately not
  * replayed: deactivated layers activate again through the controller and
@@ -287,7 +308,7 @@ export function restoreDisplaySnapshot(): DisplaySnapshot | null {
   // service door forces the re-derivation a real store change would have
   // triggered either way, so the hazard re-presses on every restore, not
   // only when the captured cluster differs from whatever it degraded to.
-  restoreCommittedCluster(snapshot.cluster, snapshot.ocean);
+  restoreCommittedCluster(snapshot.cluster, snapshot.ocean, snapshot.selectedHazard);
   return snapshot;
 }
 
@@ -403,7 +424,7 @@ async function resolveEmphasisTargets(
     const larNames = entry.representationIds.filter((name) => name !== '');
     if (larNames.length === 0) return [];
     const quoted = larNames
-      .map((name) => `'${name.replace(/'/g, "''")}'`)
+      .map((name) => `'${escapeSql(name)}'`)
       .join(',');
     const params = new URLSearchParams({
       where: `LARNAME IN (${quoted})`,

@@ -67,7 +67,7 @@ const STUBS = {
   '/util/raster-error-watch':
     'export function watchRasterTiles() { return { detach() {} }; }',
   '/layers/hms-smoke-volume':
-    'export function activateSmokeVolume() { globalThis.__ribbonLifecycleEnv.onSmoke?.(); return false; } export function deactivateSmokeVolume() {} export function cleanupOrphanedSmokeSource() {}',
+    'export function activateSmokeVolume() { globalThis.__ribbonLifecycleEnv.onSmoke?.(); return globalThis.__ribbonLifecycleEnv.smokeSource === true; } export function deactivateSmokeVolume() {} export function cleanupOrphanedSmokeSource() {}',
   '/layers/wildfire-dryness':
     'export async function activateWildfireDryness() {} export function getDrynessSourceId() { return null; }',
   './fire3d-context':
@@ -264,6 +264,7 @@ async function enterScene() {
  * no published collection, and nothing on the map. */
 async function reset() {
   env.onSmoke = null;
+  env.smokeSource = false;
   env.onRequest = null;
   env.horizon = 'current';
   env.probeFails = false;
@@ -357,6 +358,29 @@ test('smoke whose source lands after the layer registered gets its volume on the
   // The fetch lands, the source is added, then the layer reports.
   registry.setStatus('hms-smoke', 'ready');
   assert.ok(attempts > early, 'the status report retried the volume');
+});
+
+test('a failed smoke read takes the volume down while the layer stays on, and a good read brings it back', async () => {
+  // The smoke source stands (a failed refresh empties it, it does not remove it).
+  env.smokeSource = true;
+  await enterScene();
+  registry.activate('hms-smoke');
+  registry.setStatus('hms-smoke', 'ready');
+  assert.equal(getFire3DStatus().smokeVolume, true);
+
+  registry.setStatus('hms-smoke', 'error');
+  assert.equal(getFire3DStatus().smokeVolume, false, 'no volume claimed over a failed read');
+
+  registry.setStatus('hms-smoke', 'ready');
+  assert.equal(getFire3DStatus().smokeVolume, true, 'the next good read brings the volume back');
+});
+
+test('a scene entered after the smoke read failed claims no volume', async () => {
+  env.smokeSource = true;
+  registry.activate('hms-smoke');
+  registry.setStatus('hms-smoke', 'error');
+  await enterScene();
+  assert.equal(getFire3DStatus().smokeVolume, false);
 });
 
 // ---------------------------------------------------------------------------

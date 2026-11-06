@@ -19,12 +19,12 @@ import { timeline } from '../../state/timeline';
 import { isFailedCheckedLayer, requestLayerOff, requestLayerOn } from '../layer-toggle-command';
 import { HAZARD_CLUSTERS } from '../../config/clusters';
 import type { HazardClusterKey } from '../../config/clusters';
-import { getHazardCluster, onHazardClusterChange } from '../../state/cluster-store';
+import { getSelectedHazard, onCommittedSnapshotChange, requestHorizon } from '../../state/cluster-service';
 import {
   droughtMetric,
   alertsMetric,
   firesMetric,
-  isUsdmStale,
+  isDroughtStale,
   formatMapDate
 } from './strip-metrics';
 import type { Metric } from './strip-metrics';
@@ -67,7 +67,9 @@ function clusterOffersDroughtFamily(clusterKey: HazardClusterKey): boolean {
  */
 function tileAriaLabel(name: string, m: Metric, isOn: boolean, disclose: boolean, retries: boolean): string {
   let status: string;
-  if (m.tone === 'data') {
+  // A count reads as one phrase ("0 mapped wildfire perimeters in view"); only
+  // a word value ("No polygon, no NADM category polygon...") takes the comma.
+  if (m.tone === 'data' || /^\d+$/.test(m.value)) {
     status = `${m.value} ${m.sublabel}.`;
   } else if (m.tone === 'none') {
     status = `${m.value}, ${m.sublabel}.`;
@@ -124,6 +126,9 @@ function MetricTile({
       if (document.activeElement === btn) stripFocusAfterHide(btn)?.focus({ preventScroll: true });
       requestLayerOff(tile.key);
     } else {
+      // The observed drought surface commits the Current horizon first, as
+      // drought.ts switchToObserved does, so no outlook chip stays pressed over it.
+      if (id === 'drought') requestHorizon('current');
       requestLayerOn(tile.key);
     }
   };
@@ -197,8 +202,9 @@ export function ConditionsStrip({ map, tick, checked }: StripProps) {
   // the checked set unchanged (rare, but possible via a reference-role
   // extra surviving the switch) still re-evaluates which surfaces this
   // mode actually offers.
-  const [cluster, setCluster] = useState<HazardClusterKey>(() => getHazardCluster());
-  useEffect(() => onHazardClusterChange(() => setCluster(getHazardCluster())), []);
+  // The person's hazard, not the store, which reads Drought for every custom set.
+  const [cluster, setCluster] = useState<HazardClusterKey>(getSelectedHazard);
+  useEffect(() => onCommittedSnapshotChange(() => setCluster(getSelectedHazard())), []);
 
   const lastDroughtLayer = useRef<'usdm' | 'nadm-drought'>('nadm-drought');
   if (checked.value.get('usdm')) lastDroughtLayer.current = 'usdm';
@@ -228,14 +234,13 @@ export function ConditionsStrip({ map, tick, checked }: StripProps) {
   // its own honest "viewing week of" date register instead.
   const viewingHistory = timeline.usdmWeek !== null;
 
-  // Degrade a frozen or drifted USDM surface to an explicit stale read
+  // Degrade a frozen or drifted USDM or NADM surface to an explicit stale read
   // (critical-review #6): the category still shows, but the tile and the date
-  // line both say so, rather than presenting an old week as current.
+  // line both say so, rather than presenting an old week or month as current.
   const droughtStale =
-    droughtLayer.key === 'usdm' &&
     !viewingHistory &&
     drought.metric.tone === 'data' &&
-    isUsdmStale(drought.dateMs);
+    isDroughtStale(droughtLayer.key, drought.dateMs);
   const droughtTile: Metric = droughtStale ? { ...drought.metric, stale: true } : drought.metric;
 
   useEffect(() => {
@@ -248,7 +253,7 @@ export function ConditionsStrip({ map, tick, checked }: StripProps) {
       dateEl.textContent = '';
       delete dateEl.dataset['stale'];
     } else if (droughtStale) {
-      dateEl.textContent = `stale, data as of ${formatMapDate(drought.dateMs)}`;
+      dateEl.textContent = `stale, data as of ${drought.dateLabel ?? formatMapDate(drought.dateMs)}`;
       dateEl.dataset['stale'] = 'true';
     } else if (viewingHistory) {
       dateEl.textContent = `viewing week of ${formatMapDate(drought.dateMs)}`;

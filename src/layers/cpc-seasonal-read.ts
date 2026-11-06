@@ -1,8 +1,11 @@
 import type { FeatureCollection } from 'geojson';
+import { URLS } from '../config/urls';
 import { parseArcGisPolygonFeatureCollection } from '../config/wildfire-presentation';
 import { fetchBufferedWithBudget } from '../util/fetch';
 
 export type CpcSeasonalVariable = 'precipitation' | 'temperature';
+/** The CPC outlook product: the seasonal Lead 1, or the 6-10 or 8-14 day outlook. */
+export type CpcOutlookWindow = 'seasonal' | '6-10' | '8-14';
 export interface CpcSeasonalReadLimits {
   readonly timeoutMs: number;
   readonly maxDecodedBytes: number;
@@ -15,9 +18,15 @@ export interface CpcSeasonalReadState {
   readonly collection: FeatureCollection;
 }
 const ENDPOINTS: Record<CpcSeasonalVariable, string> = {
-  precipitation: 'https://mapservices.weather.noaa.gov/vector/rest/services/outlooks/cpc_sea_precip_outlk/MapServer',
-  temperature: 'https://mapservices.weather.noaa.gov/vector/rest/services/outlooks/cpc_sea_temp_outlk/MapServer'
+  precipitation: URLS.cpcSeasonalPrecipOutlookMapServer,
+  temperature: URLS.cpcSeasonalTempOutlookMapServer
 };
+/** REST layer 0 is the seasonal Lead 1; each 6-10 and 8-14 day service draws
+ * temperature in layer 0 and precipitation in layer 1 (its own layer names). */
+function layerUrl(variable: CpcSeasonalVariable, outlook: CpcOutlookWindow): string {
+  if (outlook === 'seasonal') return `${ENDPOINTS[variable]}/0`;
+  return `${outlook === '6-10' ? URLS.cpc610OutlookMapServer : URLS.cpc814OutlookMapServer}/${variable === 'temperature' ? 0 : 1}`;
+}
 const empty = (): FeatureCollection => ({ type: 'FeatureCollection', features: [] });
 
 function validateLimits(limits: CpcSeasonalReadLimits): void {
@@ -32,7 +41,8 @@ function validateLimits(limits: CpcSeasonalReadLimits): void {
 
 /** A required-limit runtime seam; no provider activation or budget defaults.
  * Limits describe decoded bytes, not gzip transfer size. All geometry and
- * raw issuer cat/prob/valid_seas/fcst_date fields survive the shared parser.
+ * raw issuer cat/prob and clock fields (valid_seas and fcst_date; for the
+ * 6-10 and 8-14 day outlooks fcst_date, start_date and end_date) survive the shared parser.
  * The map consumer owns clock/legend rendering and must not treat an unknown
  * category as Equal Chances or join two source clocks into one issuance.
  */
@@ -44,7 +54,8 @@ export function createCpcSeasonalReader(publish: (state: CpcSeasonalReadState) =
     current?.abort();
     current = null;
   }
-  async function read(variable: CpcSeasonalVariable, limits: CpcSeasonalReadLimits): Promise<void> {
+  async function read(variable: CpcSeasonalVariable, limits: CpcSeasonalReadLimits,
+    outlook: CpcOutlookWindow = 'seasonal'): Promise<void> {
     validateLimits(limits);
     cancel();
     const owner = new AbortController();
@@ -52,16 +63,17 @@ export function createCpcSeasonalReader(publish: (state: CpcSeasonalReadState) =
     current = owner;
     const owns = (): boolean => current === owner && generation === mine && !owner.signal.aborted;
     publish({ variable, status: 'loading', collection: empty() });
+    const seasonal = outlook === 'seasonal';
     const params = new URLSearchParams({
-      where: '1=1', outFields: 'cat,prob,valid_seas,fcst_date',
+      where: '1=1', outFields: seasonal ? 'cat,prob,valid_seas,fcst_date' : 'cat,prob,fcst_date,start_date,end_date',
       returnGeometry: 'true', outSR: '4326', f: 'geojson',
       maxAllowableOffset: String(limits.maxAllowableOffset),
       resultRecordCount: String(limits.maxFeatures)
     });
     let state: CpcSeasonalReadState;
     try {
-      // REST layer 0 is Lead 1 for each variable; do not use WMS order.
-      const response = await fetchBufferedWithBudget(`${ENDPOINTS[variable]}/0/query?${params}`, null, owner.signal, limits.timeoutMs, limits.maxDecodedBytes);
+      // REST layer indexes, never WMS order (layerUrl above).
+      const response = await fetchBufferedWithBudget(`${layerUrl(variable, outlook)}/query?${params}`, null, owner.signal, limits.timeoutMs, limits.maxDecodedBytes);
       if (!owns()) return;
       if (!response.ok) throw new Error(`CPC HTTP ${response.status}`);
       const parsed = parseArcGisPolygonFeatureCollection(await response.json(), 'CPC seasonal outlook');

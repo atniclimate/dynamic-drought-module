@@ -333,7 +333,7 @@ test.describe('InteractionCoordinator: one click, one response', () => {
             {
               type: 'Feature',
               id: 1,
-              properties: { dn: 2, valid: '202607171200', expire: '209912312359' },
+              properties: { dn: 5, valid: '202607171200', expire: '209912312359' },
               geometry: {
                 type: 'Polygon',
                 coordinates: [
@@ -567,8 +567,8 @@ test.describe('the Conditions block never claims an absence it did not read', ()
   test('a successful empty read scopes its absence to the products actually requested', async ({
     page
   }) => {
-    // The layer asks for seven heat and fire weather products only
-    // (ALERT_EVENTS in src/layers/nws-alerts.ts). An absence sentence that
+    // The layer asks for seven heat and fire weather products only here
+    // (HEAT_FIRE_ALERTS in src/config/clusters.ts). An absence sentence that
     // said "no NWS watch, warning, or advisory" spoke past that query and
     // would have denied an active Flash Flood Warning.
     await bootWithAlerts(page, (route) =>
@@ -728,7 +728,7 @@ test.describe('the Conditions block attributes an alert only where it touches th
 
     // Amendment A2 gates the briefing door's emphasis on real issuer evidence
     // AT the clicked place. Somewhere else's warning must not pulse it
-    // (`popup-impact-btn--pulse`, src/ui/popups.ts buildImpactTriggerButtonHtml).
+    // (`popup-impact-btn--pulse`, src/ui/popup-frame.ts doorHtml).
     const door = page.locator('.maplibregl-popup-content [data-ddm-impact-trigger]');
     await expect(door).toHaveCount(1);
     await expect(door).not.toHaveClass(/popup-impact-btn--pulse/);

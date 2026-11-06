@@ -32,6 +32,8 @@ import {
   BC_DROUGHT_LEVELS,
   BC_DROUGHT_NO_UPDATE,
   CDM_CATEGORIES,
+  CPC_EXTENDED_COLORS,
+  CPC_SEASONAL_COLORS,
   GRIDDED_INDEX_RAMP,
   HEATRISK_CATEGORIES,
   NADM_CATEGORIES,
@@ -43,16 +45,19 @@ import {
   SPC_FIREWX_CATEGORIES
 } from '../config/palette';
 import { LAYER_DEFS, getDroughtSurfacePresentation } from '../config/layers';
-import { HAZARD_CLUSTERS } from '../config/clusters';
+import { HAZARD_CLUSTERS, HEAT_FIRE_ALERTS } from '../config/clusters';
 import { DETAIL_SECTIONS } from '../config/detail-sections';
 import { ensureDetailSectionHosts } from './detail-section-hosts';
 import { NIFC_INCIDENT_PRESENTATION, USFS_WHP_PRESENTATION } from '../config/wildfire-presentation';
-import { FRAMINGS, framingMinimapProvenance } from '../config/framings';
+import { FRAMINGS } from '../config/framings';
+import { minimapProvenanceAt } from '../config/minimap-readings';
 import { getFraming, onFramingChange } from '../state/framing-store';
 import { getHazardCluster, getOceanFraming, onHazardClusterChange } from '../state/cluster-store';
+import { getCommittedSnapshot, getSelectedHazard, onCommittedSnapshotChange } from '../state/cluster-service';
 import { getViewMode, onViewModeChange } from '../state/view-mode';
 import { isUsScopeCautionLayer } from '../state/display-summary';
 import { escapeHtml } from '../util/escape';
+import { formatSnapshotTime } from '../util/snapshot-time';
 import { KEY_ELIGIBLE_LABELS, chipFallbackLabel } from '../config/chip-labels';
 import { CHIP_STATE_WORDS, chipStateFromStatuses, type ChipState } from '../config/chip-state';
 import {
@@ -101,6 +106,8 @@ interface NwsSnapshotEventDetail {
     | 'inactive';
   readonly asOf: number | null;
   readonly truncated: boolean;
+  /** The products the layer's current read holds, in its set's order (src/layers/nws-alerts.ts keyEvents). */
+  readonly events?: readonly string[];
 }
 
 interface CdmSnapshotEventDetail {
@@ -194,13 +201,9 @@ let heatRiskHasCoverage: boolean | null = null;
 let nwsSnapshotStatus: NwsSnapshotEventDetail['status'] = 'inactive';
 let nwsSnapshotAsOf: number | null = null;
 let nwsSnapshotTruncated = false;
-let disposeMapKeyLayout: (() => void) | null = null;
-let disposeMapKeyOverflow: (() => void) | null = null;
-let disposeMapKeySeat: (() => void) | null = null;
-let disposeMapKeyTimeBarSpec: (() => void) | null = null;
-let disposeMapKeyFraming: (() => void) | null = null;
-let disposeMapKeyViewMode: (() => void) | null = null;
-let disposeMapKeyHazardCluster: (() => void) | null = null;
+let nwsSnapshotEvents: readonly string[] = [];
+/** initMapKey has run: the degraded boot calls it twice (src/main.ts), and the first run's DOM and listeners stand. */
+let mapKeyBooted = false;
 let whpShadeActive = false;
 /** The Wildfire 3D drape is mounted, so the flat Fuel risk layer is hidden (src/layers/whp-3d.ts). */
 let whpDrapeMounted = false;
@@ -227,12 +230,12 @@ function drynessKeyHtml(): string {
  * alone in the bottom-left corner). Phones and embeds keep the dock seat
  * their layouts were designed around; see src/ui/map-control-seat.ts.
  */
-function watchMapKeySeat(node: HTMLElement): () => void {
+function watchMapKeySeat(node: HTMLElement): void {
   const marker = document.getElementById('map-key-home');
   const overlayHost = document.getElementById('map-key-overlay-host');
   const dock = marker?.parentElement ?? null;
-  if (!marker || !overlayHost || !dock) return () => {};
-  return watchDesktopMapSeat({
+  if (!marker || !overlayHost || !dock) return;
+  watchDesktopMapSeat({
     node,
     host: overlayHost,
     home: dock,
@@ -249,7 +252,6 @@ function watchMapKeySeat(node: HTMLElement): () => void {
 
 interface MapKeyLayoutWatch {
   readonly schedule: () => void;
-  readonly dispose: () => void;
 }
 
 /**
@@ -262,7 +264,7 @@ interface MapKeyLayoutWatch {
 function watchMapKeyLayout(host: HTMLElement): MapKeyLayoutWatch {
   const app = document.getElementById('app');
   if (!app) {
-    return { schedule: () => {}, dispose: () => {} };
+    return { schedule: () => {} };
   }
 
   const widthQuery = window.matchMedia(MOBILE_MAP_KEY_QUERY);
@@ -271,11 +273,9 @@ function watchMapKeyLayout(host: HTMLElement): MapKeyLayoutWatch {
   const controls = document.querySelector<HTMLElement>('.map-overlay-controls');
   const bottomDock = document.getElementById('map-bottom-dock');
   let frame: number | null = null;
-  let disposed = false;
 
   const measure = (): void => {
     frame = null;
-    if (disposed) return;
     const content = host.querySelector<HTMLElement>('#map-key-content');
     const mapBox = document.getElementById('map-container')?.getBoundingClientRect();
     if (content && !content.hidden && mapBox) {
@@ -335,7 +335,7 @@ function watchMapKeyLayout(host: HTMLElement): MapKeyLayoutWatch {
   };
 
   const schedule = (): void => {
-    if (disposed || frame !== null) return;
+    if (frame !== null) return;
     frame = window.requestAnimationFrame(measure);
   };
 
@@ -353,22 +353,7 @@ function watchMapKeyLayout(host: HTMLElement): MapKeyLayoutWatch {
   void document.fonts?.ready.then(schedule);
   schedule();
 
-  return {
-    schedule,
-    dispose() {
-      if (disposed) return;
-      disposed = true;
-      observer?.disconnect();
-      loadingVisibility.disconnect();
-      widthQuery.removeEventListener('change', schedule);
-      window.removeEventListener('resize', schedule);
-      if (frame !== null) window.cancelAnimationFrame(frame);
-      frame = null;
-      app.style.removeProperty(MOBILE_MAP_KEY_HEIGHT_PROPERTY);
-      app.style.removeProperty(DESKTOP_LOADING_TOP_PROPERTY);
-      host.style.removeProperty('--map-key-available-height');
-    }
-  };
+  return { schedule };
 }
 
 /** Presentation-only family for semantic CSS hooks and disclosure behavior. */
@@ -479,13 +464,15 @@ function sstKey(): KeySpec {
   const first = SST_ANOMALY_LABELS[0];
   const last = SST_ANOMALY_LABELS[2];
   const flow = ensoFlowRow();
+  const outlooks = cpcOutlookRows();
   return {
     label: 'Ocean temperature',
     ariaLabel:
       `Ocean temperature anomaly key, ${first.toLowerCase()} through ${last.toLowerCase()}, a qualitative scale.` +
       observed +
       ' NASA GIBS GHRSST MUR SST anomaly.' +
-      flow.ariaLabel,
+      flow.ariaLabel +
+      outlooks.ariaLabel,
     itemsHtml:
       (sstObservedDate
         ? `<span class="map-key-item" data-sst-observed>Observed ${escapeHtml(
@@ -498,8 +485,46 @@ function sstKey(): KeySpec {
       '<span class="map-key-item" data-sst-attribution>NASA GIBS GHRSST MUR</span>' +
       // A keyboard door to the box's popup (the box's own title; src/layers/sst-anomaly.ts answers it).
       '<button type="button" class="map-key-item map-key-door" data-feature-door="nino34">Nino 3.4 (the ENSO index region)</button>' +
-      flow.html
+      flow.html +
+      outlooks.html
   };
+}
+
+type CpcClass = { readonly label: string; readonly color: readonly number[] };
+/** The CPC outlooks ENSO draws over the SST, in their legend order (src/layers/cpc-seasonal-outlook.ts KEY_ORDER). */
+const CPC_OUTLOOK_CLASSES: readonly (readonly [string, readonly CpcClass[]])[] = [
+  ['cpc-seasonal-precip', CPC_SEASONAL_COLORS.precipitation],
+  ['cpc-seasonal-temp', CPC_SEASONAL_COLORS.temperature],
+  ['cpc-610-precip', CPC_EXTENDED_COLORS.precipitation],
+  ['cpc-610-temp', CPC_EXTENDED_COLORS.temperature],
+  ['cpc-814-precip', CPC_EXTENDED_COLORS.precipitation],
+  ['cpc-814-temp', CPC_EXTENDED_COLORS.temperature]
+];
+
+/**
+ * One row per CPC outlook on the map, as outlookKey keys the drought outlook:
+ * the layer's catalog name, then its renderer's classes and labels. Equal
+ * Chances is drawn clear, so it has no swatch. The valid season and issue
+ * date stay in the layer's legend and popup.
+ */
+export function cpcOutlookRows(
+  drawn: (key: string) => boolean = (key) =>
+    registry.getActiveKeys().has(key) && ['ready', 'degraded'].includes(registry.getStatus(key) ?? '')
+): { readonly html: string; readonly ariaLabel: string } {
+  let html = '';
+  let ariaLabel = '';
+  for (const [key, rows] of CPC_OUTLOOK_CLASSES) {
+    if (!drawn(key)) continue;
+    const name = LAYER_DEFS.find((def) => def.key === key)?.name ?? key;
+    const classes = rows.filter((row) => (row.color[3] ?? 255) > 0);
+    // DRAFT wording (DR-177): the catalog name, the renderer's labels, the popup's issuer and outlookKey's odds sentence.
+    html +=
+      `<span class="map-key-scale" data-cpc-key="${escapeHtml(key)}"><strong class="map-key-scale-label">${escapeHtml(name)}</strong>` +
+      classes.map(({ label, color: [r, g, b] }) => swatchItem(`rgb(${r},${g},${b})`, label)).join('') +
+      '<span class="map-key-item">NOAA Climate Prediction Center</span></span>';
+    ariaLabel += ` NOAA Climate Prediction Center ${name} key, ${classes.map((row) => row.label).join(', ')}. An outlook is a shift in odds, not an observed condition.`;
+  }
+  return { html, ariaLabel };
 }
 
 /**
@@ -696,23 +721,21 @@ function nwsProductKey(): {
   readonly html: string;
   readonly ariaLabel: string;
 } {
+  // Key order (NWS_ALERT_LEGEND): every heat and fire weather product the mode
+  // asks for (HazardClusterDef.alerts), or, for any other set, those the
+  // layer's current read holds, carried by its snapshot event.
+  const set = HAZARD_CLUSTERS[getSelectedHazard()].alerts;
+  const events = set === HEAT_FIRE_ALERTS ? set.events : nwsSnapshotEvents;
+  const rows = NWS_ALERT_LEGEND.filter(({ label }) => events.includes(label));
   return {
     html:
       '<span class="map-key-scale map-key-nws-products" data-nws-products-key>' +
       '<strong class="map-key-scale-label">NWS products</strong>' +
-      NWS_ALERT_LEGEND.map(({ color, label }) => swatchItem(color, label)).join('') +
+      rows.map(({ color, label }) => swatchItem(color, label)).join('') +
       '</span>',
     ariaLabel:
-      `National Weather Service event products: ${NWS_ALERT_LEGEND.map(({ label }) => label).join(', ')}.`
+      rows.length === 0 ? '' : `National Weather Service event products: ${rows.map(({ label }) => label).join(', ')}.`
   };
-}
-
-/** "1:14 AM, Oct 19" on the viewer's clock: when DDM last read the products. */
-function formatSnapshotTime(time: number): string {
-  const date = new Date(time);
-  const clock = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' });
-  const day = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' });
-  return `${clock.format(date)}, ${day.format(date)}`;
 }
 
 function nwsSnapshotQualification(): {
@@ -1008,12 +1031,12 @@ function frameCoverageNote(): string {
   const def = framing !== null ? FRAMINGS[framing] : undefined;
   const coverage = def?.coverage;
   if (!landFramingGovernsCamera()) return '';
-  // Per mode, and before the coverage early return: arid-west and
-  // southeast-gulf have no coverage block but still earn the Wildfire, Heat
-  // and ENSO clauses.
+  // Per mode and horizon (the minimap's own reading table), and before the
+  // coverage early return: arid-west and southeast-gulf have no coverage
+  // block but still earn the Wildfire, Heat and ENSO clauses.
   // With no framing selected the key stays as quiet as it always was.
   const minimapProvenance = framing !== null && minimapInScene()
-    ? framingMinimapProvenance(framing, getHazardCluster())
+    ? minimapProvenanceAt(framing, getSelectedHazard(), timeline.horizon)
     : undefined;
   if (coverage === undefined) return minimapProvenance?.replace(/\.\s*$/, '') ?? '';
 
@@ -1307,8 +1330,8 @@ function surfaceKey(): HazardKeyResult | null {
     return {
       spec: {
         ...spec,
-        ariaLabel:
-          `${spec.ariaLabel} ${products.ariaLabel} ${snapshot.ariaLabel}`,
+        // A read that lists no product leaves its sentence out.
+        ariaLabel: [spec.ariaLabel, products.ariaLabel, snapshot.ariaLabel].filter(Boolean).join(' '),
         itemsHtml: spec.itemsHtml + products.html + snapshot.html
       },
       productKeys
@@ -1317,7 +1340,7 @@ function surfaceKey(): HazardKeyResult | null {
   return {
     spec: {
       label: KEY_ELIGIBLE_LABELS['nws-alerts']!,
-      ariaLabel: `${products.ariaLabel} ${snapshot.ariaLabel}`,
+      ariaLabel: [products.ariaLabel, snapshot.ariaLabel].filter(Boolean).join(' '),
       itemsHtml: products.html + snapshot.html
     },
     productKeys: []
@@ -1389,18 +1412,12 @@ function buildChipGrammar(button: HTMLButtonElement): {
 
 /** Build the swatch strip once and keep it synced to the registry. */
 export function initMapKey(): void {
+  if (mapKeyBooted) return;
+  mapKeyBooted = true;
   const host = document.getElementById('map-key');
   if (!host) return;
-  disposeMapKeyLayout?.();
-  disposeMapKeyOverflow?.();
-  disposeMapKeySeat?.();
-  disposeMapKeyTimeBarSpec?.();
-  disposeMapKeyFraming?.();
-  disposeMapKeyViewMode?.();
-  disposeMapKeyHazardCluster?.();
   const layout = watchMapKeyLayout(host);
-  disposeMapKeyLayout = layout.dispose;
-  disposeMapKeySeat = watchMapKeySeat(host);
+  watchMapKeySeat(host);
   const heatRiskSequenceLoader = createHeatRiskSequenceLoader(
     () => import('./heatrisk-sequence'),
     (err) => {
@@ -1561,18 +1578,6 @@ export function initMapKey(): void {
   document.addEventListener('focusin', onFocusIn);
   document.addEventListener('focusout', onFocusOut);
 
-  disposeMapKeyOverflow = () => {
-    appPresentationObserver.disconnect();
-    widthQuery.removeEventListener('change', onWidthChange);
-    window.removeEventListener('ddm:toggle-map-key-details', toggleDetails);
-    window.removeEventListener('ddm:whp-shade', onWhpShade);
-    window.removeEventListener(DRYNESS_GROUND_EVENT, onDrynessGround);
-    host.removeEventListener('keydown', closeDetailsOnEscape);
-    document.removeEventListener('focusin', onFocusIn);
-    document.removeEventListener('focusout', onFocusOut);
-    window.removeEventListener(ENSO_FLOW_SNAPSHOT_EVENT, onEnsoFlowSnapshot);
-  };
-
   const update = (): void => {
     const active = activeKey();
     // THE CHIP NEVER HIDES, but only where it IS the chip: the desktop
@@ -1592,8 +1597,8 @@ export function initMapKey(): void {
       return;
     }
     const spec: KeySpec = active?.spec ?? {
-      label: chipFallbackLabel(getHazardCluster()),
-      ariaLabel: noSurfaceKeyAria(chipFallbackLabel(getHazardCluster()), whpShadeActive),
+      label: chipFallbackLabel(getSelectedHazard()),
+      ariaLabel: noSurfaceKeyAria(chipFallbackLabel(getSelectedHazard()), whpShadeActive),
       itemsHtml: ''
     };
     // The committed mode's no-key fallback above names no product (its
@@ -1651,11 +1656,13 @@ export function initMapKey(): void {
     family = nextFamily;
     host.dataset.keyFamily = family;
     // The drawer's per-cluster sections (DR-113; src/config/detail-
-    // sections.ts): the COMMITTED cluster decides which static section
+    // sections.ts): the SELECTED hazard decides which static section
     // host is revealed, never the momentarily-eligible family, so a
     // section never flashes for a layer that is merely loading under a
-    // different mode.
-    const activeCluster = getHazardCluster();
+    // different mode. Not the store's cluster: a reference layer added to
+    // a mode demotes the set to custom and the store to 'drought', while
+    // the shell keeps its hazard (view-shell.ts selectedHazardTitle).
+    const activeCluster = getCommittedSnapshot().selectedHazard;
     const activeSections = HAZARD_CLUSTERS[activeCluster].detailSections ?? [];
     for (const def of Object.values(DETAIL_SECTIONS)) {
       const sectionEl = document.getElementById(def.homeId);
@@ -1747,6 +1754,7 @@ export function initMapKey(): void {
     nwsSnapshotStatus = detail.status;
     nwsSnapshotAsOf = detail.asOf;
     nwsSnapshotTruncated = detail.truncated;
+    nwsSnapshotEvents = detail.events ?? [];
     update();
   });
   window.addEventListener(CDM_SNAPSHOT_EVENT, (event) => {
@@ -1782,20 +1790,23 @@ export function initMapKey(): void {
     tropicalSnapshot = detail;
     update();
   });
-  disposeMapKeyTimeBarSpec = onTimeBarSpecChange(update);
+  onTimeBarSpecChange(update);
   // A framing click never fires a registry event (D-0.7.0-039: camera-only,
   // no layer write), so without this the coverage caution above would only
   // refresh on the NEXT unrelated key change.
-  disposeMapKeyFraming = onFramingChange(update);
+  onFramingChange(update);
   // Nor does a Brief/Console flip, and it decides whether the minimap
   // provenance clause has a referent at all (finding 5). Without this the
   // sentence would linger into Console until some unrelated key change.
-  disposeMapKeyViewMode = onViewModeChange(update);
+  onViewModeChange(update);
   // The chip never hides (section 2.4): with no key eligible it falls back
   // to the committed mode's own word, so a mode switch with no layer
   // change (an empty season-ahead recipe, D-0.7.0-043) still has to
   // re-render the fallback label.
-  disposeMapKeyHazardCluster = onHazardClusterChange(update);
+  onHazardClusterChange(update);
+  // The drawer sections follow the selected hazard, which a requestCluster
+  // publishes only after its store write (cluster-service.ts publish).
+  onCommittedSnapshotChange(update);
 
   registry.on('change', update);
   // Every status transition can change the strip now that a loading key

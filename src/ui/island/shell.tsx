@@ -63,9 +63,9 @@ import { restoreCameraState } from '../../map/camera-fit';
 import {
   backToMap,
   getStudioRoute,
-  setPlaceStudioReturnDisplayCommand,
   studioOwnsScreen
 } from '../../state/studio-route';
+import { setPlaceReturnDisplayCommand } from '../../state/place-return';
 import { onTimeBarSpecChange } from '../time-bar';
 import { Fire3DControl } from './fire3d-control';
 import { Minimap } from './minimap';
@@ -296,11 +296,13 @@ interface ShellProps {
 function MinimapPopover({
   map,
   framing,
-  metricContext
+  metricContext,
+  horizon
 }: {
   readonly map: maplibregl.Map;
   readonly framing: ReadonlySignal<FramingSelection>;
-  readonly metricContext: CommittedShellSnapshot['cluster'];
+  readonly metricContext: HazardClusterKey;
+  readonly horizon: CommittedShellSnapshot['horizon'];
 }) {
   const doorRef = useRef<HTMLButtonElement>(null);
   const popRef = useRef<HTMLDivElement>(null);
@@ -335,6 +337,7 @@ function MinimapPopover({
           framing={framing}
           idPrefix="shell-minimap-pop"
           metricContext={metricContext}
+          horizon={horizon}
         />
       </div>
     </div>
@@ -392,9 +395,9 @@ function Shell({ map, snap, framing, specTick, onMinimapNoteChange }: ShellProps
    * and the new display is applied after that restore rather than in a race
    * with it.
    *
-   * The command has its OWN hand-off slot (`setPlaceStudioReturnDisplayCommand`,
+   * The command has its OWN hand-off slot (`setPlaceReturnDisplayCommand`,
    * src/state/place-return.ts), not the briefing's. The first cut wrote it
-   * through `setPlaceStudioReturnAction`, the single slot the studio uses for
+   * through `setPlaceReturnBriefing`, the single slot the studio uses for
    * the briefing of its selected place, so a hazard click after a selection
    * silently dropped the promised briefing (/code-review, 2026-09-10). Both
    * now survive: the exit runs the display command, then opens the briefing.
@@ -404,7 +407,7 @@ function Shell({ map, snap, framing, specTick, onMinimapNoteChange }: ShellProps
    */
   const runDisplayCommand = (apply: () => void): void => {
     if (studioOwnsScreen() && getStudioRoute() === 'place') {
-      setPlaceStudioReturnDisplayCommand(apply);
+      setPlaceReturnDisplayCommand(apply);
       backToMap();
       return;
     }
@@ -511,6 +514,7 @@ function Shell({ map, snap, framing, specTick, onMinimapNoteChange }: ShellProps
           framing={framing}
           idPrefix="shell-minimap"
           metricContext={snapshot.selectedHazard}
+          horizon={snapshot.horizon}
           onNoteChange={onMinimapNoteChange}
         />
       </div>
@@ -518,6 +522,7 @@ function Shell({ map, snap, framing, specTick, onMinimapNoteChange }: ShellProps
         map={map}
         framing={framing}
         metricContext={snapshot.selectedHazard}
+        horizon={snapshot.horizon}
       />
       <div class="shell-rehost" id="shell-region-host" />
       <div class="shell-rehost shell-search-host" id="shell-refine-host" />

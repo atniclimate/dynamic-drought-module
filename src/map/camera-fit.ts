@@ -122,22 +122,27 @@ export function committedCameraTarget(): CameraTarget | null {
   return region === null ? null : regionTarget(region);
 }
 
-/** Fit the camera to a target; `animate` false jumps (the reduced-motion house rule). */
+/**
+ * Fit the camera to a target; `animate` false jumps (the reduced-motion house
+ * rule); `flat` also levels the pitch, which a fit otherwise keeps.
+ */
 export function fitCameraTarget(
   map: maplibregl.Map,
   target: CameraTarget,
-  animate: boolean
+  animate: boolean,
+  flat = false
 ): void {
+  const level = flat ? { pitch: 0 } : {};
   const centre = floorCentreFor(map, target);
   if (centre) {
     // The fit is below the zoom floor: keep the floor, centre on the target's own focus.
     // bearing 0: fitBounds always turned the map north-up, and this path must too.
-    const view = { center: centre, zoom: map.getMinZoom(), bearing: 0 };
+    const view = { center: centre, zoom: map.getMinZoom(), bearing: 0, ...level };
     if (animate) map.easeTo(view);
     else map.jumpTo(view);
     return;
   }
-  map.fitBounds(target.bounds, { padding: target.padding, animate });
+  map.fitBounds(target.bounds, { padding: target.padding, animate, ...level });
 }
 
 /** Fit the camera to a framing, mirroring the boot path's fit. */
@@ -152,7 +157,8 @@ export function fitAll(map: maplibregl.Map): void {
 
 /** Fit an ocean camera. */
 export function fitOcean(map: maplibregl.Map, key: OceanKey): void {
-  fitCameraTarget(map, oceanTarget(key), !prefersReducedMotion());
+  // Flat: an ocean fit taken over a 3D Fire view's ease back must not keep its tilt.
+  fitCameraTarget(map, oceanTarget(key), !prefersReducedMotion(), true);
 }
 
 /** Fit a legacy region, the math of `selectRegion` in src/ui/sidebar.ts. */

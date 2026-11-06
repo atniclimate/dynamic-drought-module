@@ -85,7 +85,7 @@ export interface LandscapeSignatureSnapshot {
   readonly analysisCrs: string;
   readonly gridResolutionMeters: number;
   readonly aggregationUnit: string;
-  /** Per-family source blocks; narrow with isTerrainSource. */
+  /** Per-family source blocks; narrow with isLandscapeSource. */
   readonly sources: Readonly<Record<string, unknown>>;
   /** Per-ecoregion-code bundles; narrow with isLandscapeBundle. */
   readonly bundles: Readonly<Record<string, unknown>>;
@@ -109,11 +109,6 @@ export interface LandscapeSource {
   readonly methodVersion: number;
   readonly acquired: string | null;
   readonly materializedRasterSha256: string | null;
-}
-
-/** The terrain source always has a numeric native resolution. */
-export interface TerrainSource extends LandscapeSource {
-  readonly resolutionMeters: number;
 }
 
 /** The per-ecoregion stats variant (aspect pair null together; slope may
@@ -221,10 +216,6 @@ export interface Level4Bundle {
 export type LandscapeBundle = Level3Bundle | Level4Bundle;
 
 export interface LandscapeLoadOptions {
-  /** Override the artifact Uniform Resource Locator (URL); tests use
-   * this. Defaults to URLS.landscapeSignatureLocal via a lazy import,
-   * see the loader body. */
-  readonly url?: string;
   /** Injectable transport with the fetchJsonWithBudget signature. */
   readonly fetchJsonImpl?: typeof fetchJsonWithBudget;
   /** The owning operation's abort signal. */
@@ -255,13 +246,6 @@ export function isTerrainSignature(value: unknown): value is TerrainSignature {
     (v.aspectCardinal === null || typeof v.aspectCardinal === 'string') &&
     (v.aspectMeanDeg === null) === (v.aspectCardinal === null) &&
     typeof v.coveragePct === 'number'
-  );
-}
-
-export function isTerrainSource(value: unknown): value is TerrainSource {
-  return (
-    isLandscapeSource(value) &&
-    typeof value.resolutionMeters === 'number'
   );
 }
 
@@ -415,34 +399,17 @@ export function isLandscapeBundle(value: unknown): value is LandscapeBundle {
 }
 
 /**
- * Load the landscape-signature artifact. Never throws for absence, shape,
- * or version problems: every failure is `{ ok: false, reason, note }`.
- * A response that completes after the master signal aborted is reported
- * as 'aborted', never returned as success (the cancellation invariant:
- * late responses to superseded operations are dropped).
- */
-export async function loadLandscapeSignature(
-  opts?: LandscapeLoadOptions
-): Promise<LandscapeSignatureResult> {
-  let url = opts?.url;
-  if (url === undefined) {
-    // Lazy so this module stays importable in pure-Node specs: config/urls
-    // evaluates import.meta.env at module scope, which only exists under
-    // the Vite bundle. Production callers take this branch; tests inject
-    // `url`.
-    const { URLS } = await import('../config/urls');
-    url = URLS.landscapeSignatureLocal;
-  }
-  return loadLandscapeSignatureAtUrl(url, opts);
-}
-
-/**
- * Load from an already-resolved URL. T3-2 uses this entry so the consumer
- * activation chunk has no nested configuration import.
+ * Load the landscape-signature artifact from an already-resolved URL (T3-2:
+ * the caller passes it, so the consumer activation chunk has no nested
+ * configuration import). Never throws for absence, shape, or version
+ * problems: every failure is `{ ok: false, reason, note }`. A response that
+ * completes after the master signal aborted is reported as 'aborted', never
+ * returned as success (the cancellation invariant: late responses to
+ * superseded operations are dropped).
  */
 export async function loadLandscapeSignatureAtUrl(
   url: string,
-  opts?: Omit<LandscapeLoadOptions, 'url'>
+  opts?: LandscapeLoadOptions
 ): Promise<LandscapeSignatureResult> {
   const signal = opts?.signal ?? null;
   const fetchJson = opts?.fetchJsonImpl ?? fetchJsonWithBudget;

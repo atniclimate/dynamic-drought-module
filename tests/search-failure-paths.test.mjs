@@ -24,6 +24,7 @@ import { foldSearchText, matchesTokens, prefixFirst } from '../src/util/search-f
 const S = (globalThis.__sfp = {
   selections: [],
   highlights: [],
+  emphasis: [],
   held: [],
   toasts: [],
   lazyLoads: 0
@@ -43,6 +44,8 @@ const STUBS = {
   '../state/deep-link': 'export const openStateBriefing = async () => {};',
   '../state/located-boundary':
     'export const showLocatedBoundary = (_m, g) => globalThis.__sfp.highlights.push(g);',
+  '../state/place-emphasis':
+    'export const clearEmphasis = () => globalThis.__sfp.emphasis.push(globalThis.__sfp.highlights.length);',
   '../state/view-mode': 'export const getViewMode = () => "brief";',
   '../state/place-selection':
     'export const onPlaceSelectionChange = () => () => {};' +
@@ -106,6 +109,9 @@ const ROSTER = readFileSync(new URL('../public/data/tribal-roster.json', import.
 answers.set('/dynamic-drought-module/data/tribal-roster.json', () => new Response(ROSTER, { status: 200 }));
 
 const map = { fitBounds() {}, easeTo() {}, getZoom: () => 3 };
+// A city pick announces its view to the region menu (src/ui/sidebar.ts listens).
+const windowEvents = [];
+globalThis.window = { dispatchEvent: (event) => windowEvents.push(event.type) };
 const { buildSearchWiring } = await import('../src/ui/search-controller.ts');
 const wiring = buildSearchWiring(map);
 
@@ -162,12 +168,16 @@ test('a locate still current after the lazy import commits its selection and hig
   answers.set(LAR_URL, () => json(fc));
   S.selections.length = 0;
   S.highlights.length = 0;
+  S.emphasis.length = 0;
   const heldBefore = S.held.length;
   wiring.onSelect(tribalItem);
   await waitFor(() => S.held.length > heldBefore);
   S.held.at(-1)();
   await waitFor(() => S.highlights.length === 1);
   assert.equal(S.selections.length, 1);
+  // Audit round 5, R5-36: a reservation lit by an earlier click is unlit
+  // before the located overlay draws the searched area. Red on 0ffe87a.
+  assert.deepEqual(S.emphasis, [0], 'the prior lit place is cleared before the highlight');
 });
 
 test('a city chosen during the lazy import wins: the earlier locate commits nothing', async () => {
@@ -192,8 +202,10 @@ test('a city pick clears an earlier place selection and sets none of its own', a
   await waitFor(() => S.held.length > heldBefore);
   S.held.at(-1)();
   await waitFor(() => S.selections.length === 1);
+  windowEvents.length = 0;
   wiring.onSelect({ kind: 'city', id: 'Seattle', label: 'Seattle', haystack: 'seattle' });
   assert.deepEqual(S.selections.slice(1), [null], 'the old place no longer reads as current');
+  assert.deepEqual(windowEvents, ['ddm:city-view'], 'the region menu hears of the city view');
 });
 
 test('a census: result locates against the Census service; an HTTP 200 error envelope is unavailable', async () => {

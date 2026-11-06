@@ -34,7 +34,7 @@ supported; the note says why).
 - **Selectable place** (partial): AIANNH/BIA and state selection exist nationally, but the behavior is unproven outside the PNW.
 - **Drought state** (partial): USDM polygons and the NIDIS SPI raster display cover CONUS; no gridded index feeds analysis or the briefing.
 - **Landscape signature** (none): No signature inputs are baked outside the planned PNW pipeline.
-- **Impact synthesis** (none): The briefing synthesis and resource routing are not validated outside the PNW.
+- **Impact synthesis** (none): The briefing synthesis and resource routing are not validated outside the Pacific Northwest.
 
 ### Alaska and Hawaii
 

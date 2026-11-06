@@ -4,9 +4,10 @@
  * Renders the SPC's categorical fire-weather threat forecast for today:
  * areas where pre-existing fuel dryness combines with forecast wind,
  * relative humidity, and dry lightning to favor fire spread. Categories are
- * Elevated, Critical, and Extreme, carried by the MapServer's integer `dn`
- * field (5, 8, 10) with no string sibling; the palette owns the value-to-
- * label mapping (`SPC_FIREWX_CATEGORIES`).
+ * Elevated, Critical, and Extremely Critical, carried by the MapServer's
+ * integer `dn` field (5, 8, 10) with no string sibling; the palette owns the
+ * value-to-label mapping (`SPC_FIREWX_CATEGORIES`). An area with any other
+ * `dn` is not drawn, the briefing's rule (`spcCategoryWord`, sources.ts).
  *
  * Honest framing (verified source doctrine): this is fire-WEATHER threat,
  * not the National Fire Danger Rating System (NFDRS) fuel-dryness fire
@@ -79,22 +80,26 @@ function resolveBeforeId(map: maplibregl.Map): string | undefined {
   return map.getLayer(BEFORE_ID) ? BEFORE_ID : undefined;
 }
 
-/**
- * The category's swatch, as the map draws it (SPC_FIREWX_CATEGORIES), or
- * null for a `dn` outside the outlook's categories (its label says so).
- */
-function categorySwatch(dn: unknown): IssuerSwatch | null {
+/** The outlook category a `dn` names, or undefined for a value SPC_FIREWX_CATEGORIES does not carry. */
+function category(dn: unknown): (typeof SPC_FIREWX_CATEGORIES)[number] | undefined {
   const n = typeof dn === 'number' ? dn : Number(dn);
-  const entry = SPC_FIREWX_CATEGORIES.find((c) => c.dn === n);
+  return SPC_FIREWX_CATEGORIES.find((c) => c.dn === n);
+}
+
+/** The category's swatch, as the map draws it (SPC_FIREWX_CATEGORIES). */
+function categorySwatch(dn: unknown): IssuerSwatch | null {
+  const entry = category(dn);
   return entry ? { table: 'SPC_FIREWX_CATEGORIES', classKey: String(entry.dn), color: entry.color } : null;
 }
 
-/** Resolve the display label for a `dn` category value. */
+/**
+ * The issuer's category word. `load` draws only known categories, so the
+ * fallback is defensive: it states the raw service value, never a category
+ * SPC does not publish.
+ */
 function categoryLabel(dn: unknown): string {
-  const n = typeof dn === 'number' ? dn : Number(dn);
-  const entry = SPC_FIREWX_CATEGORIES.find((c) => c.dn === n);
-  // Surface an unknown value honestly rather than guessing a severity.
-  return entry ? entry.label : `Category ${String(dn)}`;
+  // DRAFT wording
+  return category(dn)?.label ?? `unrecognized outlook value (dn ${String(dn)})`;
 }
 
 function buildQueryUrl(): string {
@@ -312,7 +317,15 @@ async function load(map: maplibregl.Map, initial: boolean): Promise<void> {
   // drawn and the status is the no-data one; the stamp still states its period.
   const expireMs = spcMs(features[0]?.properties?.['expire']);
   const expired = expireMs !== null && expireMs <= Date.now();
-  const drawn = expired ? EMPTY : geojson;
+  // An area whose `dn` is none of the outlook's categories is dropped, never
+  // drawn under an invented one; the issuance's own times still stand above.
+  const known = features.filter((f) => category(f.properties?.['dn']) !== undefined);
+  const dropped = known.length < features.length;
+  if (dropped && !expired) {
+    console.warn('[spc-fire-weather] outlook returned an unrecognized dn; those areas are not drawn.');
+  }
+  const drawn = expired ? EMPTY : dropped ? { ...geojson, features: known } : geojson;
+  const partial = truncated || dropped;
 
   const source = map.getSource(SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
   if (source) {
@@ -331,7 +344,7 @@ async function load(map: maplibregl.Map, initial: boolean): Promise<void> {
   installTimeBar(features, noArea);
 
   if (drawn.features.length === 0) {
-    reportStatus(truncated && !expired ? 'degraded' : 'no-data');
+    reportStatus(partial && !expired ? 'degraded' : 'no-data');
     return;
   }
 
@@ -384,7 +397,7 @@ async function load(map: maplibregl.Map, initial: boolean): Promise<void> {
       '[spc-fire-weather] outlook response reached the ArcGIS transfer limit; rendering available categories as live (partial).'
     );
   }
-  reportStatus(truncated ? 'degraded' : 'ready');
+  reportStatus(partial ? 'degraded' : 'ready');
 }
 
 /**

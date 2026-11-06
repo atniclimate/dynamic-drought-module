@@ -71,7 +71,10 @@ const STUBS = {
     'export async function resolveLocationIdentity() { if (!globalThis.__ddmIdentity) throw new Error("no identity"); return globalThis.__ddmIdentity; }',
   mobileSheet: 'export function isSheetActive() { return globalThis.__ddmSheetActive === true; }',
   studioRoute:
-    'export function studioOwnsScreen() { return false; } export function onStudioRouteChange(fn) { globalThis.__ddmStudioListeners.push(fn); return () => {}; }'
+    'export function studioOwnsScreen() { return false; } export function onStudioRouteChange(fn) { globalThis.__ddmStudioListeners.push(fn); return () => {}; }',
+  // The committed mode and horizon: a case publishes a new snapshot through `publishSnapshot`.
+  clusterService:
+    'export function getCommittedSnapshot() { return globalThis.__ddmSnapshot; } export function onCommittedSnapshotChange(fn) { globalThis.__ddmSnapshotListeners.push(fn); return () => {}; }'
 };
 
 const stubUrl = (source) => `data:text/javascript,${encodeURIComponent(source)}`;
@@ -85,6 +88,7 @@ registerHooks({
     if (fromTs && /\/state\/location-identity$/.test(specifier)) return { url: stubUrl(STUBS.locationIdentity), shortCircuit: true };
     if (fromTs && /\/ui\/mobile-sheet$/.test(specifier)) return { url: stubUrl(STUBS.mobileSheet), shortCircuit: true };
     if (fromTs && /\/state\/studio-route$/.test(specifier)) return { url: stubUrl(STUBS.studioRoute), shortCircuit: true };
+    if (fromTs && /\/state\/cluster-service$/.test(specifier)) return { url: stubUrl(STUBS.clusterService), shortCircuit: true };
     if (specifier.startsWith('.') && !/\.[a-z]+$/i.test(specifier) && fromTs) {
       const candidate = new URL(`${specifier}.ts`, context.parentURL);
       if (existsSync(fileURLToPath(candidate))) return nextResolve(`${specifier}.ts`, context);
@@ -100,6 +104,13 @@ globalThis.__ddmStateBriefings = [];
 globalThis.__ddmTechnicalOpens = [];
 globalThis.__ddmStudioListeners = [];
 globalThis.__ddmSheetActive = false;
+globalThis.__ddmSnapshot = { selectedHazard: 'drought', cluster: 'drought', horizon: 'current' };
+globalThis.__ddmSnapshotListeners = [];
+/** Publish a committed snapshot as the cluster service does: every listener, in the same turn. */
+function publishSnapshot(snapshot) {
+  globalThis.__ddmSnapshot = snapshot;
+  for (const fn of globalThis.__ddmSnapshotListeners) fn();
+}
 /** Every string the coordinator set as `innerHTML`, in order: what it rendered. */
 const rendered = [];
 
@@ -286,6 +297,8 @@ function harness(layers, { warm = false } = {}) {
   globalThis.__ddmPopups.length = 0;
   globalThis.__ddmPanelOpens.length = 0;
   globalThis.__ddmStudioListeners.length = 0;
+  globalThis.__ddmSnapshotListeners.length = 0;
+  globalThis.__ddmSnapshot = { selectedHazard: 'drought', cluster: 'drought', horizon: 'current' };
   globalThis.__ddmSheetActive = false;
   rendered.length = 0;
   // A popup an earlier case left open keeps its own Escape handler; a fresh
@@ -748,6 +761,140 @@ test('a technical door gives way to the place door when the tap resolves a state
   }
 });
 
+// The look at 4237781, R1-3: the late door over a BIA reservation named the
+// land area (LARNAME) where a click on the reservation names the Nation.
+test('the late door over a BIA reservation names the Nation as a click on the reservation does, the land area beside it', async () => {
+  const model = { ...MODEL, kind: 'surface' };
+  const createElement = document.createElement;
+  const fetch = globalThis.fetch;
+  class FakeButton extends FakeElement {
+    addEventListener(type, fn) {
+      if (type === 'click') this.onclick = fn;
+    }
+  }
+  globalThis.HTMLButtonElement = FakeButton;
+  const buttons = [];
+  document.createElement = () => {
+    const element = new FakeElement();
+    Object.defineProperty(element, 'innerHTML', {
+      set(html) {
+        rendered.push(html);
+        if (!html.startsWith('<button')) return;
+        const button = new FakeButton();
+        button.html = html;
+        buttons.push(button);
+        element.appendChild(button);
+      }
+    });
+    return element;
+  };
+  globalThis.fetch = async () =>
+    new Response(JSON.stringify({ areas: [{ larName: 'Fixture Trusted Area', displayName: 'Fixture Trusted Nation', provenance: 'safe-match' }] }), {
+      headers: { 'content-type': 'application/json' }
+    });
+  globalThis.__ddmIdentity = { state: null, containingTribal: { source: 'bia-reservation', name: 'Fixture Trusted Area' } };
+  try {
+    const { click, ready } = harness({ drought: [{ model }] }, { warm: true });
+    await ready;
+    click();
+    // MapLibre puts the popup in the page; this stub does not.
+    document.body.appendChild(globalThis.__ddmPopups.at(-1).content);
+    for (let i = 0; i < 50 && buttons.length === 0; i += 1) await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(buttons.length, 1, 'the late door was added');
+    assert.match(buttons[0].html, /Fixture Trusted Nation/, 'the door names the Nation');
+    buttons[0].onclick();
+    const opened = globalThis.__ddmPanelOpens.at(-1);
+    assert.equal(opened.title, 'Fixture Trusted Nation', 'the briefing is titled by the Nation');
+    assert.equal(opened.areaLabel, 'Land area: Fixture Trusted Area', 'the land area beside the source');
+    assert.equal(opened.kind, 'bia-reservation');
+  } finally {
+    document.createElement = createElement;
+    globalThis.fetch = fetch;
+    delete globalThis.HTMLButtonElement;
+    delete globalThis.__ddmIdentity;
+  }
+});
+
+// Round 5, R5-37: with both Tribal layers on, the late door over a legal Census
+// area named it by its Census name where a click on the BIA land area under it
+// names the Nation. The legal Census area keeps its rank (D-0.8.0-052); the door
+// takes the gated Nation name, the Census area beside the source.
+test('the late door over a legal Census area with a BIA land area under it names the Nation, the Census area beside it', async () => {
+  const model = { ...MODEL, kind: 'surface' };
+  const createElement = document.createElement;
+  const fetch = globalThis.fetch;
+  class FakeButton extends FakeElement {
+    addEventListener(type, fn) {
+      if (type === 'click') this.onclick = fn;
+    }
+  }
+  globalThis.HTMLButtonElement = FakeButton;
+  const buttons = [];
+  document.createElement = () => {
+    const element = new FakeElement();
+    Object.defineProperty(element, 'innerHTML', {
+      set(html) {
+        rendered.push(html);
+        if (!html.startsWith('<button')) return;
+        const button = new FakeButton();
+        button.html = html;
+        buttons.push(button);
+        element.appendChild(button);
+      }
+    });
+    return element;
+  };
+  globalThis.fetch = async () =>
+    new Response(JSON.stringify({ areas: [{ larName: 'Fixture Trusted Area', displayName: 'Fixture Trusted Nation', provenance: 'safe-match' }], censusAreas: [] }), {
+      headers: { 'content-type': 'application/json' }
+    });
+  globalThis.__ddmIdentity = {
+    state: null,
+    containingTribal: { source: 'aiannh', name: 'Fixture Census Reservation', biaLandArea: 'Fixture Trusted Area' }
+  };
+  try {
+    const { click, ready } = harness({ drought: [{ model }] }, { warm: true });
+    await ready;
+    click();
+    // MapLibre puts the popup in the page; this stub does not.
+    document.body.appendChild(globalThis.__ddmPopups.at(-1).content);
+    for (let i = 0; i < 50 && buttons.length === 0; i += 1) await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(buttons.length, 1, 'the late door was added');
+    assert.match(buttons[0].html, /Fixture Trusted Nation/, 'the door names the Nation');
+    buttons[0].onclick();
+    const opened = globalThis.__ddmPanelOpens.at(-1);
+    assert.equal(opened.title, 'Fixture Trusted Nation', 'the briefing is titled by the Nation');
+    assert.equal(opened.areaLabel, 'Census area: Fixture Census Reservation', 'the Census area beside the source');
+    assert.equal(opened.kind, 'aiannh', 'the legal Census area keeps its kind');
+  } finally {
+    document.createElement = createElement;
+    globalThis.fetch = fetch;
+    delete globalThis.HTMLButtonElement;
+    delete globalThis.__ddmIdentity;
+  }
+});
+
+// The look at 4237781, R1-4: one Escape aimed at another control also closed the map popup.
+test('Escape another control used, or one inside a nested surface, leaves the map popup open', async () => {
+  const { click, ready } = harness({ surface: [{ model: MODEL }] }, { warm: true });
+  await ready;
+  click();
+  const popup = globalThis.__ddmPopups.at(-1);
+  const escape = (event) => {
+    for (const fn of [...(documentListeners.get('keydown') ?? [])]) fn({ key: 'Escape', ...event });
+  };
+  escape({ defaultPrevented: true });
+  assert.equal(popup.removed, false, 'the search box clearing its query is not a dismissal');
+  const inside = new FakeElement();
+  inside.closest = (selectors) => (selectors.split(', ').includes('#map-info-panel') ? inside : null);
+  escape({ defaultPrevented: false, target: inside });
+  assert.equal(popup.removed, false, 'Escape inside the map-information panel is that panel\'s');
+  const outside = new FakeElement();
+  outside.closest = () => null;
+  escape({ defaultPrevented: false, target: outside });
+  assert.equal(popup.removed, true, 'Escape elsewhere still closes the popup');
+});
+
 test('a model the frame refuses throws its PopupFrameError before any selection or emphasis is written', async () => {
   const { click, ready } = harness(
     { refused: [{ model: REFUSED_MODEL, selection: context('Refused'), emphasis: [{ source: 'refused', id: 1 }] }] },
@@ -1032,4 +1179,84 @@ test('after the wait, the refusal catch covers serialization only: a sink callba
     process.off('unhandledRejection', onUnhandled);
     for (const handler of runnerHandlers) process.on('unhandledRejection', handler);
   }
+});
+
+// The look at 6748f25, D3: Escape closed a station popup but not the
+// selection response at the foot of the side panel (the installed sink).
+test('Escape dismisses a response the panel-foot sink presents, unless another control used it, and its handler goes with the response', async () => {
+  const selection = context('Sink Place');
+  const { click, ready } = harness({ place: [{ model: MODEL, selection, emphasis: [] }] }, { warm: true });
+  await ready;
+  let dismissed = 0;
+  coordinator.setResponseSink({ present: () => true, dismiss: () => { dismissed += 1; } });
+  click();
+  assert.equal(globalThis.__ddmPopups.length, 0, 'the sink took the response, no popup');
+  assert.equal(getPlaceSelection()?.context, selection);
+  assert.equal(keydownListeners(), 1, 'the presented response listens for Escape');
+  // An Escape another control already used (the search box clearing its query) is not a dismissal.
+  for (const fn of [...(documentListeners.get('keydown') ?? [])]) fn({ key: 'Escape', defaultPrevented: true });
+  assert.equal(dismissed, 0);
+  press('Enter');
+  assert.equal(dismissed, 0, 'another key is not a dismissal');
+  assert.deepEqual(press('Escape'), [], 'Escape is not swallowed');
+  assert.equal(dismissed, 1, 'Escape dismissed the sink response');
+  assert.equal(getPlaceSelection(), null, 'its place selection cleared with it');
+  assert.equal(keydownListeners(), 0, 'no Escape handler outlives the response');
+  press('Escape');
+  assert.equal(dismissed, 1, 'a second Escape does nothing');
+});
+
+// Review F1: the panel-foot listener is added before a studio's own, so a nested
+// surface's first Escape (a studio, the briefing, the key) reached it too.
+test('Escape inside a studio, the briefing or the key leaves the panel-foot response and its selection', async () => {
+  const selection = context('Sink Place');
+  const { click, ready } = harness({ place: [{ model: MODEL, selection, emphasis: [] }] }, { warm: true });
+  await ready;
+  let dismissed = 0;
+  coordinator.setResponseSink({ present: () => true, dismiss: () => { dismissed += 1; } });
+  click();
+  assert.equal(keydownListeners(), 1);
+  for (const root of ['#impact-panel', '#map-key', '#map-info-panel', '#place-studio-root', '#layers-studio-root']) {
+    const target = new FakeElement();
+    target.closest = (selectors) => (selectors.split(', ').includes(root) ? target : null);
+    for (const fn of [...(documentListeners.get('keydown') ?? [])]) fn({ key: 'Escape', defaultPrevented: false, target });
+    assert.equal(dismissed, 0, `Escape inside ${root} is that surface's`);
+  }
+  assert.equal(getPlaceSelection()?.context, selection, 'the place selection stays');
+  const outside = new FakeElement();
+  outside.closest = () => null;
+  for (const fn of [...(documentListeners.get('keydown') ?? [])]) fn({ key: 'Escape', defaultPrevented: false, target: outside });
+  assert.equal(dismissed, 1, 'Escape elsewhere still dismisses');
+  assert.equal(getPlaceSelection(), null);
+});
+
+// Audit round 6, R6-7: a response read in Drought Current stayed open after a
+// press of Wildfire or Near Term, still describing a surface no longer drawn.
+test('a mode or horizon change closes the open response, popup or panel foot, and leaves a briefing-owned selection', async () => {
+  const selection = context('Mode Place');
+  const { click, ready } = harness({ place: [{ model: MODEL, selection, emphasis: [] }] }, { warm: true });
+  await ready;
+  click();
+  const popup = globalThis.__ddmPopups.at(-1);
+  publishSnapshot({ selectedHazard: 'drought', cluster: 'custom', horizon: 'current' });
+  assert.equal(popup.removed, false, 'a republish in the same mode and horizon (a layer toggle) keeps the response');
+  publishSnapshot({ selectedHazard: 'wildfire', cluster: 'wildfire', horizon: 'current' });
+  assert.equal(popup.removed, true, 'a mode switch closes the popup');
+  assert.equal(getPlaceSelection(), null, 'the response took its own selection with it');
+
+  click();
+  publishSnapshot({ selectedHazard: 'wildfire', cluster: 'wildfire', horizon: 'weeks-ahead' });
+  assert.equal(globalThis.__ddmPopups.at(-1).removed, true, 'a horizon switch closes the popup');
+
+  let dismissed = 0;
+  coordinator.setResponseSink({ present: () => true, dismiss: () => { dismissed += 1; } });
+  click();
+  assert.equal(getPlaceSelection()?.context, selection, 'the panel foot holds the response');
+  // The briefing door's open replaces the response's selection with the briefing's own.
+  const briefing = { label: 'Mode Place', context: selection };
+  setPlaceSelection(briefing);
+  publishSnapshot({ selectedHazard: 'drought', cluster: 'drought', horizon: 'weeks-ahead' });
+  assert.equal(dismissed, 1, 'a mode switch dismisses the panel-foot response');
+  assert.equal(getPlaceSelection(), briefing, 'the briefing keeps its place');
+  assert.equal(keydownListeners(), 0, 'no Escape handler outlives the response');
 });

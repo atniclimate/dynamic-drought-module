@@ -145,7 +145,7 @@ test.describe('S3 display summary: the six ruled statuses', () => {
     const summary = deriveDisplaySummary(
       input(keys, { ...allReady(DROUGHT_KEYS), telemetry: 'zoom-in' })
     );
-    expect(summary.caveat).toContain('Monitoring stations appears after you zoom in');
+    expect(summary.caveat).toContain('Monitoring stations appear after you zoom in');
   });
 
   test('several problems still make ONE caveat string, never a dashboard', () => {

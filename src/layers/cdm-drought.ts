@@ -271,7 +271,11 @@ function showCdmTimeBar(artifact: CdmArtifact): void {
     ariaLabel: 'Canadian Drought Monitor snapshot month',
     stamp: {
       horizon: 'current',
-      headline: `Month ${monthLabel(artifact.month)}`,
+      // The month is a file committed with the site (npm run build:cdm), never
+      // refreshed at runtime, so the statement says so in the layer source
+      // line's own words (the WHP edition stamp's pattern).
+      // DRAFT wording (pending the owner's read-back)
+      headline: `Month ${monthLabel(artifact.month)} · committed monthly snapshot`,
       detail:
         'Canadian Drought Monitor · Agriculture and Agri-Food Canada · monthly classification',
       register: 'observed'

@@ -128,18 +128,6 @@ export default defineConfig({
     // Local dev port. Vite picks the next available port if 5173 is
     // taken, so this mostly matters for documentation.
     port: 5173,
-
-    // Uncomment to proxy Cloudflare Worker requests during local dev,
-    // assuming `wrangler dev` is running on localhost:8787. This lets
-    // the same /proxy URLs work in both dev and production without a
-    // build-time conditional.
-    //
-    // proxy: {
-    //   '/proxy': {
-    //     target: 'http://localhost:8787',
-    //     changeOrigin: true,
-    //   },
-    // },
   },
 
   preview: {
@@ -150,19 +138,4 @@ export default defineConfig({
     port: 4173,
     strictPort: true,
   },
-
-  // Path aliases are commented out. To enable, uncomment below AND add
-  // a matching "paths" entry under "compilerOptions" in tsconfig.json:
-  //
-  //   "baseUrl": ".",
-  //   "paths": { "@/*": ["src/*"] }
-  //
-  // Without both sides matching, TypeScript will complain about imports
-  // that Vite happily resolves at build time.
-  //
-  // resolve: {
-  //   alias: {
-  //     '@': '/src',
-  //   },
-  // },
 });

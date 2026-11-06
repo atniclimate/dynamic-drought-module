@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { registerHooks } from 'node:module';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -67,7 +67,7 @@ const STAND_INS = new Map([
     '/src/util/frame-stepper.ts',
     'export const FRAME_FADE_MS = 0;\n' +
       'export function prefetchAllowed() { return globalThis.__rasterReadinessTest.prefetch === true; }\n' +
-      'export async function crossfadeFrames() { const g = globalThis.__rasterReadinessTest.crossfadeGate; if (g) await g; }\n'
+      'export async function crossfadeFrames(map, outgoing, incoming) { globalThis.__rasterReadinessTest.fades?.push({ outgoing, incoming }); const g = globalThis.__rasterReadinessTest.crossfadeGate; if (g) await g; }\n'
   ],
   [
     '/src/layers/enso-flow.ts',
@@ -79,6 +79,12 @@ const STAND_INS = new Map([
     '/src/ui/time-bar.ts',
     'export function setTimeBar(key, config) { globalThis.__rasterReadinessTest.timeBars.set(key, config); }\n' +
       'export function clearTimeBar(key) { globalThis.__rasterReadinessTest.timeBars.delete(key); }\n'
+  ],
+  // The Nino 3.4 case calls the layer's own `respond` (tests/place-label-nifc-model.test.mjs, the same seam).
+  [
+    '/src/map/interaction-coordinator.ts',
+    'export function registerClickTarget(t) { (globalThis.__rasterReadinessTest.targets ??= []).push(t); }\n' +
+      'export function identifyAt() {}\n'
   ]
 ]);
 
@@ -208,6 +214,17 @@ class FakeMap {
   getBounds() {
     // A Pacific view that includes the Nino 3.4 box, so no toast is raised.
     return { getWest: () => -200, getEast: () => -80, getSouth: () => -30, getNorth: () => 50 };
+  }
+  /** A camera move in flight; the zoom-out toast case sets `moving`. */
+  isMoving() {
+    return this.moving === true;
+  }
+  once(event, handler) {
+    const wrapped = (payload) => {
+      this.off(event, wrapped);
+      handler(payload);
+    };
+    return this.on(event, wrapped);
   }
   isSourceLoaded(id) {
     return this.loadedSources.has(id);
@@ -919,6 +936,95 @@ test('an abort during the DescribeDomains body read cancels the stream, writes n
   });
 });
 
+test('a Nino 3.4 click before the popup frame chunk has painted draws the RONI chart once the frame paints, and a later click ends the wait', async (t) => {
+  const snapshot = readFileSync(fileURLToPath(new URL('../public/data/enso-indices.json', import.meta.url)));
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input) => {
+    if (!String(input).endsWith('data/enso-indices.json')) throw new Error(`unexpected egress from a node test: ${input}`);
+    return new Response(snapshot, { status: 200, headers: { 'Content-Type': 'application/json' } });
+  };
+  const observers = [];
+  globalThis.MutationObserver = class {
+    constructor(callback) {
+      this.callback = callback;
+      this.watching = false;
+      observers.push(this);
+    }
+    observe() {
+      this.watching = true;
+    }
+    disconnect() {
+      this.watching = false;
+    }
+  };
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+    delete globalThis.MutationObserver;
+  });
+  // The popup's chart mount, absent until the coordinator paints the frame after the chunk's wait.
+  let figure = null;
+  const container = { querySelector: (selector) => (selector === '[data-popup-chart="enso-box-roni"]' ? figure : null) };
+  const paint = () => {
+    figure = { html: '', querySelector: () => null, insertAdjacentHTML(_where, html) { this.html += html; } };
+    for (const o of observers.filter((o) => o.watching)) o.callback([]);
+  };
+  const map = new FakeMap();
+  map.getContainer = () => container;
+  mod.bindPopups(map);
+  await settle();
+  const target = globalThis.__rasterReadinessTest.targets.find((x) => x.layerIds.includes('nino34-box-fill'));
+
+  const { model } = target.respond(null, { point: { x: 0, y: 0 }, lngLat: { lng: -145, lat: 0 } }, map);
+  assert.ok(model.details.some((d) => d.chartKey === 'enso-box-roni'), 'the snapshot was read: the model carries the RONI chart');
+  // A frame later (the old one-shot mount) the popup is still waiting for its chunk: nothing to draw into yet.
+  await settle();
+  assert.equal(figure, null);
+  paint();
+  await settle();
+  assert.match(figure.html, /<svg class="ddm-chart"/, 'the chart is drawn into the painted figure');
+  assert.equal(observers[0].watching, false, 'the watch ends at the paint');
+  assert.equal(map.listeners.get('click')?.size ?? 0, 0, 'and leaves no click listener');
+
+  // A commit superseded before it paints (the next click): the watch ends and draws nothing later.
+  figure = null;
+  target.respond(null, { point: { x: 0, y: 0 }, lngLat: { lng: -145, lat: 0 } }, map);
+  map.emit('click');
+  assert.equal(observers[1].watching, false, 'a later click ends the watch');
+  assert.equal(map.listeners.get('click')?.size ?? 0, 0);
+});
+
+// Audit round 2 (R2-25): a second step during the first one's tile wait read
+// `previous` as the first target (still at opacity 0), so the day actually on
+// screen was never faded out and showed through the new one.
+test('a quick second step fades out the day still on screen, not only the step it superseded', async () => {
+  await withSst({ answer: () => domainsOk() }, async ({ map }) => {
+    const fades = [];
+    globalThis.__rasterReadinessTest.fades = fades;
+    try {
+      await mod.activate(map);
+      proveLatestFrame(map);
+      const step = async (index, prove) => {
+        timeBars.get(KEY).rail.onStep(index);
+        if (prove) {
+          map.requestTile(frameSource(WINDOW[index]), `${WINDOW[index]}-1`);
+          map.loadTile(frameSource(WINDOW[index]), `${WINDOW[index]}-1`, true);
+        }
+        await settle();
+      };
+      await step(2, true); // 2026-09-22 on screen
+      await step(1, false); // 2026-09-21: its tiles never arrive
+      await step(3, true); // 2026-09-23 supersedes it
+      const last = fades.at(-1);
+      assert.deepEqual(last.incoming.map((f) => f.layerId), [frameSource('2026-09-23')]);
+      const out = last.outgoing.map((f) => f.layerId);
+      assert.ok(out.includes(frameSource('2026-09-22')), `the day on screen was not faded out: ${out.join(', ')}`);
+      assert.ok(!out.includes(frameSource('2026-09-23')), 'the incoming day was faded out');
+    } finally {
+      delete globalThis.__rasterReadinessTest.fades;
+    }
+  });
+});
+
 test('a late DescribeDomains answer after a re-activation superseded it changes nothing', async () => {
   const first = gate();
   const lateXml = DOMAINS_XML.replace('2026-09-20/2026-09-24', '2026-08-01/2026-08-05');
@@ -938,4 +1044,46 @@ test('a late DescribeDomains answer after a re-activation superseded it changes 
       assert.equal(registry.getStatus(KEY), 'ready');
     }
   );
+});
+
+// Audit round 5 (R5-33): an ENSO press flies the camera to the Pacific, and the
+// once-per-session toast read the land view it was leaving. Last in this file:
+// the toast's latch is per module, and only this case raises it.
+test('the zoom-out toast is judged where the camera settles, never during the flight to the Pacific', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const shown = [];
+  const toast = { hidden: true, offsetWidth: 0, classList: { add() {}, remove() {} }, set textContent(text) { shown.push(text); } };
+  const getElementById = document.getElementById;
+  document.getElementById = (id) => (id === 'copy-toast' ? toast : null);
+  const land = { getWest: () => -125, getEast: () => -100, getSouth: () => 30, getNorth: () => 50 };
+  try {
+    await withSst({ answer: () => domainsOk() }, async ({ map }) => {
+      const pacific = map.getBounds();
+      const flyFromLand = async () => {
+        map.getBounds = () => land;
+        map.moving = true;
+        await mod.activate(map);
+        map.moving = false;
+      };
+      await flyFromLand();
+      assert.deepEqual(shown, [], 'no toast while the camera is still over land in flight');
+      map.getBounds = () => pacific;
+      map.emit('moveend');
+      assert.deepEqual(shown, [], 'the flight ended over the Pacific');
+      // Turned off before the move ends: nothing is said for a layer that has left.
+      await flyFromLand();
+      mod.deactivate(map);
+      map.emit('moveend');
+      assert.deepEqual(shown, []);
+      // A move that ends off the Pacific says it once, and only once a session.
+      await flyFromLand();
+      map.emit('moveend');
+      assert.equal(shown.length, 1);
+      assert.match(shown[0], /zoom out toward the equatorial Pacific/);
+      await mod.activate(map);
+      assert.equal(shown.length, 1);
+    });
+  } finally {
+    document.getElementById = getElementById;
+  }
 });

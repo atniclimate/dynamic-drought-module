@@ -80,6 +80,8 @@ test.describe('U3 the one search', () => {
     // The catalog checkbox reflects the search selection (and the query clears).
     await expect(layerCheckbox(page, 'nifc-fires')).toBeChecked();
     await expect(page.locator(searchInput)).toHaveValue('');
+    // A mouse pick keeps keyboard focus in the box (audit round 4), not on the page body.
+    await expect(page.locator(searchInput)).toBeFocused();
   });
 
   test('the Tribal land areas group loads from the bundled roster and matches a formal name', async ({

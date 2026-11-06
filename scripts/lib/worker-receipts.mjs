@@ -42,15 +42,19 @@ export const EXPECTED_PREFLIGHT_MAX_AGE = '86400';
  */
 export const DEFAULT_HEALTHZ_ALLOW_METHODS = 'GET, OPTIONS';
 
-/** The Worker's own upstream-failure codes. A probe marked
- * `upstreamTolerant` records these as warnings: an agency outage is not a
- * policy failure, and the receipt must not cry wolf about one. */
+/** Upstream-failure statuses and the Worker's upstream-failure codes. A
+ * probe marked `upstreamTolerant` records these as warnings: an agency
+ * outage is not a policy failure, and the receipt must not cry wolf about
+ * one. The Worker's own limiter also answers 429, with `rate_limited`; that
+ * is the relay refusing the caller, so it never counts as an outage. */
 export const UPSTREAM_STATUSES = new Set([429, 502, 503, 504]);
 export const UPSTREAM_CODES = new Set([
   'upstream_timeout',
   'upstream_unreachable',
   'too_many_redirects',
 ]);
+const upstreamFailure = (status, error) =>
+  error !== 'rate_limited' && (UPSTREAM_STATUSES.has(status) || UPSTREAM_CODES.has(error));
 
 /** The Worker's upstream deadline (index.ts UPSTREAM_TIMEOUT_MS). A relay
  * measured slower than this from the caller's side is recorded as a warning:
@@ -579,9 +583,7 @@ export function evaluateProbe(row, expectation) {
   }
   const reasons = [];
   const observedError = row?.error ?? null;
-  const tolerated =
-    expectation?.upstreamTolerant === true &&
-    (UPSTREAM_STATUSES.has(row?.status) || UPSTREAM_CODES.has(observedError));
+  const tolerated = expectation?.upstreamTolerant === true && upstreamFailure(row?.status, observedError);
 
   const outcome = [];
   if (expectation?.status !== undefined && !statusMatches(expectation.status, row?.status)) {
@@ -652,7 +654,7 @@ export function evaluateTransparency({ direct, proxied } = {}) {
   }
   if (proxied?.networkError) {
     warnings.push(`relayed leg failed (${proxied.networkError}); inconclusive`);
-  } else if (UPSTREAM_STATUSES.has(proxied?.status) || UPSTREAM_CODES.has(proxied?.error ?? null)) {
+  } else if (upstreamFailure(proxied?.status, proxied?.error ?? null)) {
     warnings.push(`relayed leg answered ${proxied.status}${proxied.error ? ` ${proxied.error}` : ''}; inconclusive`);
   } else if (proxied?.status !== 200) {
     // A refusal on an allow-listed route is a policy answer, not weather.
@@ -705,7 +707,7 @@ export function renderSummary(receipt) {
     lines.push(
       `Body transparency (row 12): upstream ${t.direct?.bytes ?? '?'} bytes sha256 \`${t.direct?.sha256 ?? '?'}\`; ` +
         `relayed ${t.proxied?.bytes ?? '?'} bytes sha256 \`${t.proxied?.sha256 ?? '?'}\`. ` +
-        'One static, cache-busted endpoint; the rest of the table proves transparency on synthetic bytes before a publish.',
+        'One static bare-URL endpoint (the relayed leg may be the 60-second edge copy); the rest of the table proves transparency on synthetic bytes before a publish.',
     );
   }
   if (receipt.timing) {

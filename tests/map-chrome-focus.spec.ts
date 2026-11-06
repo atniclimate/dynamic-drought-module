@@ -197,6 +197,31 @@ test.describe('map chrome focus (S30D D1 M28)', () => {
     await expect(heading).toHaveAttribute('tabindex', '-1');
   });
 
+  // Round 4 audit, R4-6: the Help drawer closed on every Escape on the page,
+  // so the catalog search's own Escape (clearing its text) also closed the drawer
+  // and moved focus to Help. Red on 22268b3: the drawer hides and Help takes focus.
+  test('Escape that the catalog search uses leaves the Help drawer open and focus in the search', async ({ page }) => {
+    await page.setViewportSize(DESKTOP_VIEWPORT);
+    await gotoApp(page, '?view=console');
+    await page.locator('#map-info-btn').click();
+    const drawer = page.locator('#map-info-panel');
+    await expect(drawer).toBeVisible();
+
+    const search = page.locator('#catalog-search [data-ddm-search]');
+    await search.click();
+    await search.fill('ore');
+    await page.keyboard.press('Escape');
+    await expect(search).toHaveValue('');
+    await expect(search).toBeFocused();
+    await expect(drawer).toBeVisible();
+
+    // Escape aimed at the drawer itself still closes it and returns focus to Help.
+    await drawer.focus();
+    await page.keyboard.press('Escape');
+    await expect(drawer).toBeHidden();
+    await expect(page.locator('#map-info-btn')).toBeFocused();
+  });
+
   test('a popup closing returns focus to the element focused before the commit', async ({ page }) => {
     await bootCollision(page);
 

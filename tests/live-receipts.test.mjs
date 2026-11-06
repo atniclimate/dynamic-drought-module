@@ -101,7 +101,8 @@ test('workflow runs its receipt classifier and fails a crash despite a successfu
 });
 
 test('parseArgs applies the live defaults and reads every flag', () => {
-  const d = parseArgs([]);
+  assert.throws(() => parseArgs([]), /--expect-sha/, 'a receipt with no expected commit would pass any build Pages serves');
+  const d = parseArgs(['--expect-sha', 'abc']);
   assert.equal(d.base, 'https://atniclimate.github.io/dynamic-drought-module/');
   assert.equal(d.settleMs, 300_000);
   assert.equal(d.ceilingMs, 45_000);
@@ -115,7 +116,7 @@ test('parseArgs applies the live defaults and reads every flag', () => {
   assert.equal(a.expectSha, 'abc');
   assert.equal(a.expectNonce, '42');
   assert.deepEqual(a.expectNonces, ['42']);
-  assert.deepEqual(parseArgs(['--expect-nonce', '42,43']).expectNonces, ['42', '43']);
+  assert.deepEqual(parseArgs(['--expect-sha', 'abc', '--expect-nonce', '42,43']).expectNonces, ['42', '43']);
   assert.equal(a.summary, 's.md');
   assert.equal(a.settleMs, 1000);
   assert.equal(a.ceilingMs, 2000);
@@ -126,7 +127,7 @@ test('parseArgs applies the live defaults and reads every flag', () => {
   assert.equal(light.expectSha, 'abc');
   assert.throws(() => parseArgs(['--base', 'ftp://x']), /http/);
   assert.throws(() => parseArgs(['--bogus']), /unknown/i);
-  assert.throws(() => parseArgs(['--settle-ms', 'soon']), /integer/);
+  assert.throws(() => parseArgs(['--expect-sha', 'abc', '--settle-ms', 'soon']), /integer/);
 });
 
 test('evaluateStamp requires the expected SHA, a non-dev nonce, and the expected nonce when given', () => {

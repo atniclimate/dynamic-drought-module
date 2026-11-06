@@ -1,5 +1,7 @@
 import type * as maplibregl from 'maplibre-gl';
-import { FIRE3D_TERRAIN_COVERAGE, terrainCoverageSentence, type TerrainCoverage } from './terrain-coverage';
+import {
+  FIRE3D_TERRAIN_COVERAGE, terrainCoverageSentence, type TerrainBox, type TerrainCoverage
+} from './terrain-coverage';
 
 import { HILLSHADE_SHADOW, MAP_GROUND_COLOR } from './interface-tokens';
 import {
@@ -110,11 +112,12 @@ export { FIRE3D_TERRAIN_COVERAGE } from './terrain-coverage';
 export function isWithinTerrainCoverage(
   lng: number, lat: number, coverage: TerrainCoverage = FIRE3D_TERRAIN_COVERAGE
 ): boolean {
-  return (
-    lng >= coverage.west &&
-    lng <= coverage.east &&
-    lat >= coverage.south &&
-    lat <= coverage.north
+  // A multi-box archive carries elevation only inside its boxes, not across its whole header rectangle.
+  return (coverage.boxes ?? [coverage]).some((box) =>
+    lng >= box.west &&
+    lng <= box.east &&
+    lat >= box.south &&
+    lat <= box.north
   );
 }
 
@@ -159,21 +162,26 @@ export type TerrainCoverageReading = 'full' | 'partial' | 'none';
  * own inclusive bounding box: a view touching an edge without crossing it is
  * still fully covered. Antimeridian-naive, like every other box in this
  * codebase.
+ *
+ * A multi-box archive is `full` only inside one box, `none` when the view
+ * meets no box, else `partial`: a view spanning two touching boxes reads
+ * `partial`, which is cautious and allowed.
  */
 export function classifyTerrainCoverage(
-  view: ViewBox, box: TerrainCoverage = FIRE3D_TERRAIN_COVERAGE
+  view: ViewBox, coverage: TerrainCoverage = FIRE3D_TERRAIN_COVERAGE
 ): TerrainCoverageReading {
-  const disjoint =
+  const boxes = coverage.boxes ?? [coverage];
+  const disjoint = (box: TerrainBox): boolean =>
     view.west > box.east ||
     view.east < box.west ||
     view.south > box.north ||
     view.north < box.south;
-  if (disjoint) return 'none';
-  const contained =
+  if (boxes.every(disjoint)) return 'none';
+  const contained = boxes.some((box) =>
     view.west >= box.west &&
     view.east <= box.east &&
     view.south >= box.south &&
-    view.north <= box.north;
+    view.north <= box.north);
   return contained ? 'full' : 'partial';
 }
 
@@ -224,13 +232,18 @@ export const TERRAIN_EDGE_PAINT: NonNullable<maplibregl.LineLayerSpecification['
   'line-opacity': ['interpolate', ['linear'], ['zoom'], 6, 0, 8, 0.9]
 };
 
-/** The archive box's edge as one closed line. */
-export function terrainEdgeLine(box: TerrainCoverage): GeoJSON.Feature<GeoJSON.LineString> {
-  const { west: w, south: s, east: e, north: n } = box;
+/** The archive box's edge as one closed line; a multi-box archive gets every box ring. */
+export function terrainEdgeLine(
+  coverage: TerrainCoverage
+): GeoJSON.Feature<GeoJSON.LineString | GeoJSON.MultiLineString> {
+  const ring = ({ west: w, south: s, east: e, north: n }: TerrainBox): GeoJSON.Position[] =>
+    [[w, s], [e, s], [e, n], [w, n], [w, s]];
   return {
     type: 'Feature',
     properties: {},
-    geometry: { type: 'LineString', coordinates: [[w, s], [e, s], [e, n], [w, n], [w, s]] }
+    geometry: coverage.boxes
+      ? { type: 'MultiLineString', coordinates: coverage.boxes.map(ring) }
+      : { type: 'LineString', coordinates: ring(coverage) }
   };
 }
 
@@ -514,11 +527,16 @@ export const PERIMETER_RIBBON_SCREEN_HEIGHT_PX = 16;
  */
 export const PERIMETER_RIBBON_ZOOM_STOPS = [5, 15] as const;
 
-/** The ribbon's full height in meters at `zoom`, at the reference latitude. */
-export function perimeterRibbonHeightMeters(zoom: number): number {
+/**
+ * The ribbon's full height in meters at `zoom`, at `latitudeDeg` (the map
+ * centre where it is drawn; the reference latitude by default). Once terrain
+ * is national a fixed 45 N would draw the ribbon about 1.6 times tall at 64 N.
+ */
+export function perimeterRibbonHeightMeters(
+  zoom: number, latitudeDeg: number = PERIMETER_RIBBON_REFERENCE_LATITUDE_DEG
+): number {
   const groundResolution =
-    (MERCATOR_METERS_PER_PIXEL_AT_ZOOM_0 *
-      Math.cos((PERIMETER_RIBBON_REFERENCE_LATITUDE_DEG * Math.PI) / 180)) /
+    (MERCATOR_METERS_PER_PIXEL_AT_ZOOM_0 * Math.cos((latitudeDeg * Math.PI) / 180)) /
     2 ** zoom;
   return PERIMETER_RIBBON_SCREEN_HEIGHT_PX * groundResolution;
 }
@@ -576,7 +594,7 @@ export function perimeterRibbonSlabOpacity(index: number): number {
  * its pixel height.
  */
 function perimeterRibbonHeightCurve(
-  fraction: number
+  fraction: number, latitudeDeg: number
 ): maplibregl.ExpressionSpecification {
   const [low, high] = PERIMETER_RIBBON_ZOOM_STOPS;
   return [
@@ -584,9 +602,9 @@ function perimeterRibbonHeightCurve(
     ['exponential', 0.5],
     ['zoom'],
     low,
-    fraction * perimeterRibbonHeightMeters(low),
+    fraction * perimeterRibbonHeightMeters(low, latitudeDeg),
     high,
-    fraction * perimeterRibbonHeightMeters(high)
+    fraction * perimeterRibbonHeightMeters(high, latitudeDeg)
   ];
 }
 
@@ -600,16 +618,16 @@ function perimeterRibbonHeightCurve(
  * outline (WILDFIRE_PULSE_PAINT_TARGETS in src/layers/nifc-fires.ts).
  */
 export function buildPerimeterRibbonSlabPaint(
-  index: number
+  index: number, latitudeDeg: number = PERIMETER_RIBBON_REFERENCE_LATITUDE_DEG
 ): NonNullable<maplibregl.FillExtrusionLayerSpecification['paint']> {
   return {
     'fill-extrusion-color': WILDFIRE_STATIC_COLOR,
     'fill-extrusion-base':
       index === 0
         ? 0
-        : perimeterRibbonHeightCurve(index / PERIMETER_RIBBON_SLAB_COUNT),
+        : perimeterRibbonHeightCurve(index / PERIMETER_RIBBON_SLAB_COUNT, latitudeDeg),
     'fill-extrusion-height': perimeterRibbonHeightCurve(
-      (index + 1) / PERIMETER_RIBBON_SLAB_COUNT
+      (index + 1) / PERIMETER_RIBBON_SLAB_COUNT, latitudeDeg
     ),
     'fill-extrusion-opacity': perimeterRibbonSlabOpacity(index),
     // MapLibre's own vertical gradient shades the FOOT of an extrusion

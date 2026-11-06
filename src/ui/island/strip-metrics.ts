@@ -17,8 +17,10 @@
 import type * as maplibregl from 'maplibre-gl';
 import type { GeoJsonProperties } from 'geojson';
 
+import { getSelectedHazard } from '../../state/cluster-service';
 import { registry } from '../../state/registry';
 import { timeline } from '../../state/timeline';
+import { HAZARD_CLUSTERS, HEAT_FIRE_ALERTS } from '../../config/clusters';
 import { NADM_CATEGORIES, USDM_CATEGORIES, readUsdmDm } from '../../config/palette';
 import { normalizeNadmYearMonth } from '../../util/nadm-collection';
 import { getLayerDef } from '../../config/layers';
@@ -193,6 +195,11 @@ function isLayerOn(key: string): boolean {
   );
 }
 
+/** A drawn layer whose source has not finished tiling: loading, never an absence. */
+function sourceLoadingMetric(): { metric: Metric; dateMs: null } {
+  return { metric: { value: '-', sublabel: resolveStatusPillText('loading'), tone: 'loading' }, dateMs: null };
+}
+
 export function droughtMetric(
   map: maplibregl.Map,
   preferredKey: typeof USDM_KEY | typeof NADM_KEY = NADM_KEY
@@ -205,12 +212,7 @@ export function droughtMetric(
     if (features.length === 0) {
       // Registry ready means the source was installed, not that its worker
       // tiles have rendered. An unfinished source cannot establish absence.
-      if (!map.isSourceLoaded(NADM_SOURCE)) {
-        return {
-          metric: { value: '-', sublabel: resolveStatusPillText('loading'), tone: 'loading' },
-          dateMs: null
-        };
-      }
+      if (!map.isSourceLoaded(NADM_SOURCE)) return sourceLoadingMetric();
       return {
         metric: {
           value: 'No polygon',
@@ -306,6 +308,8 @@ export function droughtMetric(
 
   const feats = map.queryRenderedFeatures({ layers: [...presentFills] });
   if (feats.length === 0) {
+    // As NADM above: an unfinished slot source cannot establish absence.
+    if (presentFills.some((id) => !map.isSourceLoaded(id.replace(/-fill$/, '')))) return sourceLoadingMetric();
     // The USDM surface supplies D0 through D4 polygons, but this client has
     // no analyzed-area mask. A zero rendered-feature query proves only that
     // no category polygon is drawn here, not that the view is drought-free.
@@ -350,12 +354,19 @@ export function alertsMetric(map: maplibregl.Map): Metric {
   if (!map.getLayer(ALERTS_FILL)) return pendingMetric(ALERTS_KEY);
   const feats = map.queryRenderedFeatures({ layers: [ALERTS_FILL] });
   const n = countDistinct(feats, (p) =>
-    [p?.['prod_type'], p?.['onset'], p?.['ends'], p?.['wfo']].join('|')
+    [p?.['event'], p?.['onset'], p?.['ends'], p?.['issuer']].join('|')
   );
+  // A pending, failed or cut-off read cannot establish absence: never a zero (a nonzero count is kept).
+  const status = registry.getStatus(ALERTS_KEY);
+  if (n === 0 && (status === 'loading' || status === 'error' || status === 'degraded')) {
+    return pendingMetric(ALERTS_KEY);
+  }
+  const heatFire = HAZARD_CLUSTERS[getSelectedHazard()].alerts === HEAT_FIRE_ALERTS;
   return {
     value: String(n),
-    // vocab-allow: counts the NWS heat/fire alert products, upstream data
-    sublabel: n === 1 ? 'heat/fire alert' : 'heat/fire alerts',
+    // DRAFT wording (pending the owner's read-back) for any other set: the chip's and the place row's own words.
+    // vocab-allow: counts the NWS alert products the mode asks for, upstream data
+    sublabel: heatFire ? (n === 1 ? 'heat/fire alert' : 'heat/fire alerts') : n === 1 ? 'NWS alert' : 'NWS alerts',
     tone: n > 0 ? 'data' : 'none'
   };
 }
@@ -382,6 +393,10 @@ export function firesMetric(map: maplibregl.Map): Metric {
       p?.['IncidentName']
     )
   );
+  // Never a zero while the request is in flight or after it failed (the source
+  // still holds the previous view's perimeters); a nonzero count is kept.
+  const status = registry.getStatus(FIRES_KEY);
+  if (n === 0 && (status === 'loading' || status === 'error')) return pendingMetric(FIRES_KEY);
   return {
     value: String(n),
     sublabel:
@@ -401,11 +416,19 @@ export function firesMetric(map: maplibregl.Map): Metric {
 // older than two full cycles means at least one release was missed: the upstream
 // has frozen or drifted and the map is showing an old week. That is the
 // "confident-looking stale map" harm from critical-review #6, so we flag it.
-const USDM_STALE_AFTER_MS = 14 * 24 * 60 * 60 * 1000;
+// The NADM consensus month (dated its first day) is published 2 to 3 weeks after
+// month-end, so the newest month is at most about 80 days old; past 92 days at
+// least one monthly release was missed.
+const DAY_MS = 24 * 60 * 60 * 1000;
+const STALE_AFTER_MS = { usdm: 14 * DAY_MS, 'nadm-drought': 92 * DAY_MS };
 
-/** True when a USDM MapDate is old enough that the feed has plainly stopped updating. */
-export function isUsdmStale(dateMs: number | null, nowMs = Date.now()): boolean {
-  return dateMs !== null && nowMs - dateMs > USDM_STALE_AFTER_MS;
+/** True when a drought surface's date is old enough that its feed has plainly stopped updating. */
+export function isDroughtStale(
+  key: keyof typeof STALE_AFTER_MS,
+  dateMs: number | null,
+  nowMs = Date.now()
+): boolean {
+  return dateMs !== null && nowMs - dateMs > STALE_AFTER_MS[key];
 }
 
 /** Compact "Mon D, YYYY" from a millisecond epoch, in UTC to match the USDM release date. */

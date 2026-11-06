@@ -1,5 +1,6 @@
 import { expect, test, type Page } from './offline-test';
 
+import { HEAT_FIRE_ALERTS } from '../src/config/clusters';
 import {
   HEATRISK_CATEGORIES,
   NWS_ALERT_LEGEND
@@ -504,10 +505,12 @@ test.describe('selected-place HeatRisk sequence and briefing', () => {
     }
 
     const productKey = page.locator('#map-key [data-nws-products-key]');
-    for (const { label } of NWS_ALERT_LEGEND) {
+    // The key rows of the products this view asks for (HazardClusterDef.alerts), never another mode's.
+    for (const { label } of NWS_ALERT_LEGEND.filter((row) => HEAT_FIRE_ALERTS.events.includes(row.label))) {
       await expect(productKey).toContainText(label);
     }
     await expect(productKey).not.toContainText('Excessive');
+    await expect(productKey).not.toContainText('Flood Warning');
 
     const selectedCell = cells.nth(2);
     await selectedCell.focus();
@@ -553,9 +556,11 @@ test.describe('selected-place HeatRisk sequence and briefing', () => {
     await cells.nth(3).focus();
     await page.keyboard.press('End');
     await expect(selector).toHaveValue('7');
-    await cells.nth(6).focus();
+    // No refocus: the redraw for the chosen day hands focus back to its cell.
+    await expect(cells.nth(6)).toBeFocused();
     await page.keyboard.press('ArrowLeft');
     await expect(selector).toHaveValue('6');
+    await expect(cells.nth(5)).toBeFocused();
     await expect(layerPill(page, 'heatrisk')).toHaveText('live');
     await expectDisplaySampling();
     await expect(selectedRead).toContainText('no data');

@@ -272,6 +272,8 @@ async function countFromLoadedNifcCollection(
   // perimeters: neither its zero nor its count is exact, so the framing
   // takes its count-only POST.
   if (loaded === null || loaded.truncated) return null;
+  // The layer refetches only on a pan; an old collection would be stamped as checked now.
+  if (Date.now() - loaded.fetchedAt >= REFRESH_INTERVAL_MS) return null;
   if (!bboxCoveredByEnvelope(loaded.envelope, bbox)) return null;
 
   const frame = framingGeometry(key);

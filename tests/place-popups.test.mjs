@@ -37,26 +37,13 @@ registerHooks({
 
 const popups = await import('../src/ui/popups.ts');
 
-test('legacy briefing door preserves warning opt-in and escaped words while borrowing issuer color', () => {
-  for (const [warningLabel, color] of [
-    ['Red Flag Warning', '#ff1493'],
-    ['Mapped wildfire perimeter', '#ff4c00'],
-    ['Unknown Warning', 'var(--ink-strong)'],
-    ['constructor', 'var(--ink-strong)']
-  ]) {
-    const html = popups.buildImpactTriggerButtonHtml('A & B', { pulse: true, warningLabel });
-    assert.ok(html.includes(`style="--door-issuer-color: ${color}"`));
-    assert.ok(html.endsWith(`>${warningLabel} - Open the Impact Briefing for A &amp; B</button>`));
-  }
-  for (const opts of [undefined, { pulse: false, warningLabel: 'Red Flag Warning' }, { pulse: true, warningLabel: null }]) {
-    const html = popups.buildImpactTriggerButtonHtml('A & B', opts);
-    assert.equal(html.includes('--door-issuer-color'), false);
-    assert.equal(html.includes('popup-impact-btn--pulse'), false);
-    assert.ok(html.endsWith('>Open the Impact Briefing for A &amp; B</button>'));
-  }
-  const injected = popups.buildImpactTriggerButtonHtml('Fixture Place', { pulse: true, warningLabel: '\"><img src=x>' });
-  assert.ok(injected.includes('style="--door-issuer-color: var(--ink-strong)"'));
-  assert.equal(injected.includes('<img'), false);
+// The coordinator's door: one label, the place escaped. The pulse and its
+// issuer colour live only in the frame's door (tests/popup-frame.test.mjs).
+// Audit round 2 (R2-9): the retired "<warning> - Open ..." label is gone.
+test('the coordinator briefing door names only the place, escaped, and never a warning', () => {
+  const door = '<button type="button" class="popup-impact-btn" data-ddm-impact-trigger>Open the Impact Briefing for A &amp; B</button>';
+  assert.equal(popups.buildImpactTriggerButtonHtml('A & B'), door);
+  assert.equal(popups.buildImpactTriggerButtonHtml('A & B', { pulse: true, warningLabel: 'Red Flag Warning' }), door);
 });
 const { buildPlaceConditionsHtml } = await import('../src/ui/popup-conditions.ts');
 const { registry } = await import('../src/state/registry.ts');
@@ -66,6 +53,7 @@ const { serializePopupFrame } = await import('../src/ui/popup-frame.ts');
 const { getLayerDef } = await import('../src/config/layers.ts');
 const { HAZARD_CLUSTERS, HAZARD_CLUSTER_KEYS } = await import('../src/config/clusters.ts');
 const { getHazardCluster, setHazardCluster } = await import('../src/state/cluster-store.ts');
+const service = await import('../src/state/cluster-service.ts');
 const { timeline } = await import('../src/state/timeline.ts');
 
 /**
@@ -290,11 +278,14 @@ test('every AIANNH branch carries its own approved caveat variant verbatim', () 
   const cases = [
     { code: 'D1', type: 'Federal reservation', variant: 'aiannh:legal', text: AIANNH_LEGAL },
     { code: 'D6', type: 'Oklahoma Tribal Statistical Area (statistical)', variant: 'aiannh:otsa', text: AIANNH_OTSA },
+    { code: 'D6', mtfcc: 'G2140', type: 'Oklahoma Tribal Statistical Area (statistical)', variant: 'aiannh:otsa', text: AIANNH_OTSA },
+    // R5-35: a Tribal Designated Statistical Area (Samish, Washington) shares D6 but is not in Oklahoma.
+    { code: 'D6', mtfcc: 'G2160', type: 'Tribal Designated Statistical Area (statistical)', variant: 'aiannh:statistical', text: AIANNH_STATISTICAL },
     { code: 'E1', type: 'Alaska Native Village Statistical Area (statistical)', variant: 'aiannh:statistical', text: AIANNH_STATISTICAL },
     { code: 'Z9', type: 'Census AIANNH area', variant: 'aiannh:statistical', text: AIANNH_STATISTICAL }
   ];
   for (const c of cases) {
-    const html = buildAiannhPopupHtml({ NAME: `Fixture ${c.code} Area`, AIANNHCC: c.code }, QUIET);
+    const html = buildAiannhPopupHtml({ NAME: `Fixture ${c.code} Area`, AIANNHCC: c.code, ...(c.mtfcc ? { MTFCC: c.mtfcc } : {}) }, QUIET);
     assert.equal(textOf(slot(html, 'issuer')), 'Boundary from: U.S. Census Bureau (AIANNH)', c.code);
     assert.equal(textOf(slot(html, 'clock')), `Vintage Jan${NBSP}1,${NBSP}2025`, c.code);
     assert.deepEqual(detailsOf(html), { Type: c.type }, c.code);
@@ -362,6 +353,15 @@ test('a blank title falls to the fallback and the popup still opens', () => {
     buildTreatyPopupHtml(null, 'Fixture Treaty Area', QUIET)
   ]) {
     assert.ok(html.startsWith('<article data-popup-frame'));
+  }
+});
+
+test('a Treaty signed by several Nations shows the deployer\'s own Tribe value, not one table name', () => {
+  // The Quinault Treaty had more than one signatory, so its TREATY_COLORS
+  // entry is tribe: null like Medicine Creek and Point Elliott.
+  const tribe = 'Fixture Signatory One, Fixture Signatory Two';
+  for (const name of ['Quinault Treaty', 'Treaty of Medicine Creek']) {
+    assert.equal(detailsOf(buildTreatyPopupHtml({ tribe }, name, QUIET)).Tribe, tribe, name);
   }
 });
 
@@ -492,7 +492,7 @@ test('an alert window end is an instant only with its zone; anything else is sho
   const alert = (ends) =>
     withLayers(['nws-alerts'], () =>
       buildPlaceConditionsHtml(
-        fakeMap({ 'nws-alerts-fill': [{ properties: { prod_type: 'Red Flag Warning', ends }, geometry: square(-122, 47) }] }),
+        fakeMap({ 'nws-alerts-fill': [{ properties: { event: 'Red Flag Warning', ends }, geometry: square(-122, 47) }] }),
         [0, 0],
         PLACE
       )
@@ -514,15 +514,16 @@ test('an alert window end is an instant only with its zone; anything else is sho
       at: { precision: 'supplied', text: raw, explanation: 'As the issuer states it; DDM does not read it as a full date.' }
     }, raw);
   }
-  assert.equal(alert(null).rows[0].text, 'Red Flag Warning in this area (NOAA NWS)');
+  // An alert in force that states no end says so (never another time in its place).
+  assert.equal(alert(null).rows[0].text, 'Red Flag Warning in this area, end not stated (NOAA NWS)');
   assert.equal(alert(null).rows[0].clock, undefined);
   // Two alerts of one product with different ends share a row that states neither end.
   const twin = withLayers(['nws-alerts'], () =>
     buildPlaceConditionsHtml(
       fakeMap({
         'nws-alerts-fill': [
-          { properties: { prod_type: 'Red Flag Warning', ends: '2026-09-30T18:00:00-07:00' }, geometry: square(-122, 47) },
-          { properties: { prod_type: 'Red Flag Warning', ends: '2026-10-01T18:00:00-07:00' }, geometry: square(-122, 47) }
+          { properties: { event: 'Red Flag Warning', ends: '2026-09-30T18:00:00-07:00' }, geometry: square(-122, 47) },
+          { properties: { event: 'Red Flag Warning', ends: '2026-10-01T18:00:00-07:00' }, geometry: square(-122, 47) }
         ]
       }),
       [0, 0],
@@ -540,7 +541,7 @@ const SUPPLIED = 'As the issuer states it; DDM does not read it as a full date.'
 function alertRowFor(ends) {
   return withLayers(['nws-alerts'], () =>
     buildPlaceConditionsHtml(
-      fakeMap({ 'nws-alerts-fill': [{ properties: { prod_type: 'Red Flag Warning', ends }, geometry: square(-122, 47) }] }),
+      fakeMap({ 'nws-alerts-fill': [{ properties: { event: 'Red Flag Warning', ends }, geometry: square(-122, 47) }] }),
       [0, 0],
       PLACE
     )
@@ -604,7 +605,7 @@ test('a feature value that is not text is absent, never String()-ed into a throw
     buildPlaceConditionsHtml(
       fakeMap({
         'nadm-drought-fill': [{ properties: { DROUGHTCAT: broken }, geometry: PLACE }],
-        'nws-alerts-fill': [{ properties: { prod_type: broken }, geometry: square(-122, 47) }],
+        'nws-alerts-fill': [{ properties: { event: broken }, geometry: square(-122, 47) }],
         'nifc-fires-fill': [{ properties: { attr_IncidentTypeCategory: 'WF', poly_IncidentName: broken }, geometry: square(-122, 47) }]
       }),
       [0, 0],
@@ -709,8 +710,8 @@ test('the head names only the conditions present at the place; an absence row is
     buildPlaceConditionsHtml(
       fakeMap({
         'nws-alerts-fill': [
-          { properties: { prod_type: 'Heat Advisory' }, geometry: square(-122, 47) },
-          { properties: { prod_type: 'Red Flag Warning' }, geometry: square(-121, 47) }
+          { properties: { event: 'Heat Advisory' }, geometry: square(-122, 47) },
+          { properties: { event: 'Red Flag Warning' }, geometry: square(-121, 47) }
         ]
       }),
       [0, 0],
@@ -814,6 +815,51 @@ test('a confirmed empty read on every active layer still says "Nothing mapped he
   );
   const html = buildStatePopupHtml({ NAME: 'Fixture State' }, result);
   assert.equal(textOf(slot(html, 'value')), NOTHING_MAPPED);
+});
+
+test('in ENSO the alert row speaks for the products ENSO asks for: a present one by name, none in the layer\'s own no-result words', () => {
+  const before = getHazardCluster();
+  // The row follows the person's hazard (getSelectedHazard), which a store write reaches through the running service.
+  const stopService = service.initClusterService();
+  setHazardCluster('enso');
+  try {
+    const none = withRegistry([{ key: 'nws-alerts', status: 'no-data', on: true }], () =>
+      buildPlaceConditionsHtml(fakeMap({ 'nws-alerts-fill': [] }), [0, 0], PLACE)
+    );
+    assert.deepEqual(none.rows, [{ label: 'NWS alert', text: 'No active requested National Weather Service products in this area.' }]);
+    assert.equal(JSON.stringify(none).includes('heat or fire'), false);
+    // An alert in force that states no end says so; two of one product with different ends state none.
+    const flood = withRegistry([{ key: 'nws-alerts', status: 'ready', on: true }], () =>
+      buildPlaceConditionsHtml(
+        fakeMap({
+          'nws-alerts-fill': [
+            { properties: { event: 'Flood Warning' }, geometry: square(-122, 47) },
+            { properties: { event: 'Flood Warning' }, geometry: square(-121.8, 47) },
+            { properties: { event: 'High Wind Watch', ends: '2026-11-07T12:00:00Z' }, geometry: square(-122, 47) },
+            { properties: { event: 'High Wind Watch' }, geometry: square(-121.8, 47) }
+          ]
+        }),
+        [0, 0],
+        PLACE
+      )
+    );
+    assert.deepEqual(flood.rows, [
+      { label: 'NWS alert', text: 'Flood Warning in this area, end not stated (NOAA NWS)' },
+      { label: 'NWS alert', text: 'High Wind Watch in this area (NOAA NWS)' }
+    ]);
+    assert.equal(flood.warningLabel, 'Flood Warning');
+    // A custom set made from ENSO (Hydrography on top; its store claim reads Drought) keeps ENSO's words.
+    service.reconcileClusterWithLayerIntent(new Set([...service.composeClusterIntent('enso'), 'nws-alerts', 'hydrography']));
+    assert.equal(getHazardCluster(), 'drought', 'setup: a custom set\'s store claim');
+    const custom = withRegistry([{ key: 'nws-alerts', status: 'no-data', on: true }], () =>
+      buildPlaceConditionsHtml(fakeMap({ 'nws-alerts-fill': [] }), [0, 0], PLACE)
+    );
+    assert.deepEqual(custom.rows, none.rows);
+  } finally {
+    // Forces the re-derivation even when the store already reads `before` (the demotion wrote Drought).
+    service.restoreCommittedCluster(before, null);
+    stopService();
+  }
 });
 
 test('a refresh failure that keeps the fill: the head says not every layer has been read (head branch c)', () => {
@@ -1068,10 +1114,28 @@ test('a ready USDM change register does not assert nothing is mapped (Codex P2 1
   }
 });
 
+test('the CPC Drought Outlook alone is a register row, never "no condition layer" (audit round 5, R5-4)', () => {
+  // Drought mode at Near Term or Long Range draws only the outlook.
+  const result = withRegistry([{ key: 'drought', status: 'ready', on: true }], () =>
+    buildPlaceConditionsHtml(fakeMap({ 'drought-fill': [{ properties: { category: 'Persists' } }] }), [0, 0], PLACE)
+  );
+  assert.equal(result.rows.length, 1, JSON.stringify(result));
+  assert.equal(result.rows[0].label, 'Drought');
+  assert.match(result.rows[0].text, /CPC Drought Outlook.*no current category/);
+  assert.deepEqual(result.head, [{ text: NOT_EVERY_READ }]);
+  // An outlook asked for that failed to activate joins the unread check.
+  const failed = withRegistry([{ key: 'drought', status: 'error', on: false }], () =>
+    buildPlaceConditionsHtml(fakeMap({}), [0, 0], PLACE)
+  );
+  assert.deepEqual(failed.head, [{ label: 'Conditions', text: COULD_NOT_READ }]);
+});
+
 test('in a mode with no place row the nothing-on head reads the interim line; the other sentences keep their cases (draft DR-180)', () => {
   const before = getHazardCluster();
   const deferred = HAZARD_CLUSTER_KEYS.filter((mode) => HAZARD_CLUSTERS[mode].placeConditionRow === null);
   assert.ok(deferred.length > 0, 'no mode defers its place row, so the interim line is unexercised');
+  // The head follows the person's hazard, which a store write reaches through the running service.
+  const stopService = service.initClusterService();
   try {
     for (const mode of HAZARD_CLUSTER_KEYS) {
       setHazardCluster(mode);
@@ -1093,8 +1157,13 @@ test('in a mode with no place row the nothing-on head reads the interim line; th
     setHazardCluster(deferred[0]);
     const html = buildStatePopupHtml({ NAME: 'Fixture State' }, buildPlaceConditionsHtml(fakeMap({}), [0, 0], PLACE));
     assert.equal(textOf(slot(html, 'value')), `Conditions ${NO_ROW_FOR_MODE}`);
+    // A custom set made from that mode (a reference layer on top; its store claim reads Drought) keeps the line.
+    service.reconcileClusterWithLayerIntent(new Set([...service.composeClusterIntent(deferred[0]), 'hydrography']));
+    assert.equal(getHazardCluster(), 'drought', 'setup: a custom set\'s store claim');
+    assert.deepEqual(buildPlaceConditionsHtml(fakeMap({}), [0, 0], PLACE).head, [{ label: 'Conditions', text: NO_ROW_FOR_MODE }]);
   } finally {
-    setHazardCluster(before);
+    service.restoreCommittedCluster(before, null);
+    stopService();
   }
 });
 
@@ -1105,4 +1174,48 @@ test('a RAWS reading past its network window is stale; a fresh or timeless one i
   assert.deepEqual(stale('2026-10-04T17:00:00Z'), [true, true, true]);
   assert.deepEqual(stale('2026-10-05T15:00:00Z'), [false, false, false]);
   assert.deepEqual(stale(null), [false, false, false]);
+});
+
+// The look at 6748f25, P3-14: a BIA popup titled the land area ("Yakama")
+// where the search and the Place studio name the Nation.
+test('a BIA popup titles the Nation\'s gated name when the roster names one, and keeps the land area as a detail row', () => {
+  const names = new Map([['Yakama', 'Confederated Tribes and Bands of the Yakama Nation']]);
+  const html = buildBiaReservationPopupHtml({ LARNAME: 'Yakama', CLASSIFICATION: 'Reservation' }, QUIET, names);
+  assert.equal(textOf(slot(html, 'title')), 'Confederated Tribes and Bands of the Yakama Nation');
+  assert.equal(detailsOf(html)['Land area'], 'Yakama');
+  assert.equal(doorOf(html).label, 'Open the Impact Briefing for Confederated Tribes and Bands of the Yakama Nation');
+  assert.ok(textOf(headOf(html)).includes('Boundary from: BIA (AIAN Land Area Representation)'), 'the source stays named');
+  // No roster yet, or a land area the roster does not name: the land area, and no repeated row.
+  for (const map of [undefined, new Map()]) {
+    const plain = buildBiaReservationPopupHtml({ LARNAME: 'Yakama' }, QUIET, map);
+    assert.equal(textOf(slot(plain, 'title')), 'Yakama');
+    assert.equal(detailsOf(plain)['Land area'], undefined);
+  }
+});
+
+// The look at 6748f25, P3-07: "As of no data", and "no data" twice. Round 4
+// audit, R4-21: the station's own time is "Observed" ("As of" is DDM's read,
+// src/util/snapshot-time.ts). Red on 22268b3: the clocks say "As of".
+test('a station popup never repeats its state word in the clock, nor says "Observed no data"', async () => {
+  const { stationCustody } = await import('../src/config/station-registry.ts');
+  const base = {
+    id: 'fixture-psp', name: 'Fixture Vital Signs', coords: [47, -122], region: 'puget', type: 'psp', agency: 'PSP',
+    color: '#06b6d4', description: 'Fixture description.', links: [{ label: 'Fixture portal', url: 'https://example.org/' }]
+  };
+  assert.equal(stationCustody(base), null, 'the fixture is a station with no custody network');
+  const clockText = (read, station = base) => textOf(slot(serializePopupFrame(popups.buildTelemetryPopupModel(station, read)), 'clock'));
+  assert.equal(clockText(undefined), 'Observed not stated');
+  const live = { ...base, id: 'fixture-snotel', awdbStation: '999:WA:SNTL' };
+  for (const read of [{ kind: 'no data', text: 'No recent NRCS values for this station.' }, { kind: 'unavailable' }]) {
+    const markup = serializePopupFrame(popups.buildTelemetryPopupModel(live, read));
+    assert.equal(markup.split(`<span data-state>${read.kind}</span>`).length - 1, 1, `the "${read.kind}" state word once`);
+    assert.equal(clockText(read, live), 'Observed not stated', `${read.kind}: the clock does not repeat it`);
+  }
+  // The in-flight state keeps its clock word (the station census pins "Observed loading").
+  assert.equal(clockText(undefined, live), 'Observed loading');
+  // A landed read: the station's time is "Observed", DDM's read "Retrieved on".
+  const reading = { label: 'Fixture depth', text: '1 in', issuer: 'Fixture service', observed: { precision: 'date', date: '2026-11-06' } };
+  const landed = serializePopupFrame(popups.buildTelemetryPopupModel(live, { kind: 'live', readings: [reading], retrievedAt: Date.UTC(2026, 10, 6, 21, 14) }));
+  assert.match(textOf(slot(landed, 'clock')), /^Observed /);
+  assert.doesNotMatch(landed, /As of/);
 });

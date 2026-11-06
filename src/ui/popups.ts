@@ -15,7 +15,6 @@ import { fetchHydrometDaily, hydrometStationValue } from '../util/hydromet';
 import type { HydrometSeries } from '../util/hydromet';
 import { escapeHtml } from '../util/escape';
 import { formatStationNumber } from '../util/station-format';
-import { briefingDoorColor } from './briefing-door-color';
 import type { PlaceConditions } from './popup-conditions';
 import type {
   ChartDetail,
@@ -74,41 +73,12 @@ import { sparklineSvg } from './charts';
  * for rather than repeating the same bare noun on every boundary popup.
  * `placeTitle` runs through `escapeHtml`: never inline it unescaped.
  *
- * `opts.pulse` plus `opts.warningLabel` (director ruling, 2026-09-10,
- * "Emphasis must be ethical"): set ONLY when `src/ui/popup-conditions.ts`
- * found a REAL issuer-published warning-class condition at this place (an
- * NWS product ending "Warning", or a currently mapped NIFC WFIGS wildfire
- * perimeter) -- never for a DDM-computed judgement, a raster
- * hazard-potential surface, or an outlook. `warningLabel` is that
- * condition's own verbatim product name (or, for a fire perimeter, the
- * plain "Mapped wildfire perimeter" legend phrase): the surface-vocabulary
- * doctrine (scripts/check-surface-vocabulary.mjs) holds that DDM never
- * calls its own read "a warning" in its own voice, only the issuer's own
- * product name earns that word, so the button names the actual product
- * rather than a generic badge. That text is part of the SAME string as the
- * place name (still no separate `aria-label`), so colour is never the only
- * carrier of the warning (accessibility clause d). `pulse` only takes
- * effect when a `warningLabel` is also given (a pulse with nothing to name
- * would be colour alone); the motion itself is added by CSS
- * (`.popup-impact-btn--pulse`) and is fully retired under
- * `prefers-reduced-motion: reduce`, where the class still renders its
- * static issuer-color edge treatment (clause b).
+ * The warning pulse (director ruling, 2026-09-10, "Emphasis must be
+ * ethical") is the popup frame's door alone (src/ui/popup-frame.ts
+ * `DoorSpec.warningLabel`), and it never renames the door (S30D D1 M24).
  */
-export function buildImpactTriggerButtonHtml(
-  placeTitle: string,
-  opts?: { pulse?: boolean; warningLabel?: string | null }
-): string {
-  const warningLabel = opts?.warningLabel ?? null;
-  const pulse = opts?.pulse === true && warningLabel !== null;
-  const cls = pulse ? 'popup-impact-btn popup-impact-btn--pulse' : 'popup-impact-btn';
-  const label =
-    pulse && warningLabel !== null
-      ? `${escapeHtml(warningLabel)} - Open the Impact Briefing for ${escapeHtml(placeTitle)}`
-      : `Open the Impact Briefing for ${escapeHtml(placeTitle)}`;
-  const style = pulse && warningLabel !== null
-    ? ` style="--door-issuer-color: ${briefingDoorColor(warningLabel)}"`
-    : '';
-  return `<button type="button" class="${cls}" data-ddm-impact-trigger${style}>${label}</button>`;
+export function buildImpactTriggerButtonHtml(placeTitle: string): string {
+  return `<button type="button" class="popup-impact-btn" data-ddm-impact-trigger>Open the Impact Briefing for ${escapeHtml(placeTitle)}</button>`;
 }
 
 
@@ -317,14 +287,21 @@ export function buildTribalPopupModel(props: GeoJsonProperties, conditions: Plac
  * legal, survey, or jurisdictional truth. Tribal sovereignty and a Tribe's
  * own understanding of its territory are matters of sovereign authority.
  */
-export function buildBiaReservationPopupModel(props: GeoJsonProperties, conditions: PlaceConditions): PopupModel {
+export function buildBiaReservationPopupModel(
+  props: GeoJsonProperties,
+  conditions: PlaceConditions,
+  /** LARNAME to the Nation's name through the roster's provenance gate (gatedDisplayName, DR-094); absent until the roster loads. */
+  nationNames?: ReadonlyMap<string, string>
+): PopupModel {
   const p = props ?? {};
-  const name = placeTitle([p.LARNAME, p.LARName, p.NAME, p.name], 'Reservation land area');
+  const landArea = placeTitle([p.LARNAME, p.LARName, p.NAME, p.name], 'Reservation land area');
+  // The formal name the search and the Place studio show (the look at 6748f25, P3-14); the land area stays a detail row.
+  const name = nationNames?.get(landArea) ?? landArea;
   const classification = firstText([p.CLASSIFICATION, p.Classification]);
   const region = firstText([p.REGION, p.Region]);
   const acresStr = formatAcres(p.GISACRES ?? p.GISAcres ?? p.ACRES ?? '');
   // The layer's own browser retrieval stamp (src/layers/bia-reservations.ts,
-  // a UTC YYYY-MM-DD); missing, blank or not text reads 'not recorded', as before.
+  // a local-day YYYY-MM-DD); missing, blank or not text reads 'not recorded', as before.
   const retrievedRaw: unknown = p.__DDM_RETRIEVED_ON;
   const retrievedText = retrievedRaw ? featureText(retrievedRaw) : undefined;
   const retrievedOn = retrievedText === undefined || retrievedText.trim() === '' ? 'not recorded' : retrievedText;
@@ -355,6 +332,8 @@ export function buildBiaReservationPopupModel(props: GeoJsonProperties, conditio
     source: { link: { label: 'BIA GeoPlatform', href: 'https://biamaps.geoplatform.gov/' } },
     moreLinks: [{ label: 'BIA OneMap', href: 'https://onemap-bia-geospatial.hub.arcgis.com/' }],
     details: [
+      // DRAFT wording: "Land area", the search's own sublabel word for the same LARNAME.
+      ...(name === landArea ? [] : detailRow('Land area', landArea)),
       ...detailRow('Classification', classification),
       ...detailRow('BIA region', region),
       ...detailRow('Acres', acresStr)
@@ -379,7 +358,9 @@ export function buildBiaReservationPopupModel(props: GeoJsonProperties, conditio
  * the caveat wording; an unknown code falls back to the neutral, non-committal
  * "Census AIANNH area", never to a jurisdiction claim.
  */
-function resolveAiannhSubtype(code: string): { label: string; isLegal: boolean } {
+function resolveAiannhSubtype(code: string, isTdsa: boolean): { label: string; isLegal: boolean } {
+  // DRAFT wording: the Census Bureau's own term for MTFCC G2160, which shares class D6 with the OTSAs.
+  if (isTdsa) return { label: 'Tribal Designated Statistical Area (statistical)', isLegal: false };
   switch (code.toUpperCase()) {
     case 'D1':
     case 'D2':
@@ -416,11 +397,21 @@ function resolveAiannhSubtype(code: string): { label: string; isLegal: boolean }
  * distinct, separately labeled representation and is never blended with the
  * BIA AIAN-LAR layer (the architectural-review HIGH constraint).
  */
-export function buildAiannhPopupModel(props: GeoJsonProperties, conditions: PlaceConditions): PopupModel {
+export function buildAiannhPopupModel(
+  props: GeoJsonProperties,
+  conditions: PlaceConditions,
+  /** Census NAME to the search's name through the roster's provenance gate (gatedCensusName); absent until the roster loads. */
+  censusNames?: ReadonlyMap<string, string>
+): PopupModel {
   const p = props ?? {};
-  const name = placeTitle([p.NAME, p.BASENAME, p.name], 'Tribal land area');
+  const censusArea = placeTitle([p.NAME, p.BASENAME, p.name], 'Tribal land area');
+  // The name the search and the briefing give this Census area; the Census name stays a detail row.
+  const name = censusNames?.get(censusArea) ?? censusArea;
   const code = firstText([p.AIANNHCC, p.aiannhcc]);
-  const subtype = resolveAiannhSubtype(code);
+  // Census class D6 holds both Oklahoma Tribal Statistical Areas (MTFCC G2140)
+  // and Tribal Designated Statistical Areas elsewhere (G2160, Samish among them).
+  const isTdsa = code.toUpperCase() === 'D6' && firstText([p.MTFCC, p.mtfcc]) === 'G2160';
+  const subtype = resolveAiannhSubtype(code, isTdsa);
   // The user-visible provenance sentence (umbrella build Unit D): publisher,
   // fetched-live-not-bundled, vintage, and the jurisdiction caveat, on the
   // one surface that survives desktop, mobile, and embed.
@@ -434,7 +425,7 @@ export function buildAiannhPopupModel(props: GeoJsonProperties, conditions: Plac
   // UNDERSTATING affirmed reservations (McGirt v. Oklahoma, 2020), so
   // D6 carries its own wording, and every branch ends with the
   // absence-is-not-absence line.
-  const isOtsa = code.toUpperCase() === 'D6';
+  const isOtsa = code.toUpperCase() === 'D6' && !isTdsa;
   const caveat = isOtsa
     ? "This boundary is the US Census Bureau's statistical delineation (vintage January 1, 2025) of a reservation as it existed before Oklahoma statehood (1907), requested live from the Census TIGERweb service when the layer needs it, held only in this browser session's memory, and not bundled by this module. 'Statistical area' describes the Census dataset, not the land's status: in McGirt v. Oklahoma (2020) and later rulings, courts affirmed that several of these reservations were never disestablished and remain Indian country. Boundaries and legal status are matters of each Nation's sovereign authority; consult the Nation for any authoritative statement. No federal dataset maps every Tribal Nation; absence from this layer is not absence of a Nation or of its rights."
     : subtype.isLegal
@@ -450,7 +441,11 @@ export function buildAiannhPopupModel(props: GeoJsonProperties, conditions: Plac
     // The vintage every caveat branch states.
     clocks: [{ kind: 'point', meaning: 'edition', label: 'Vintage', at: { precision: 'date', date: '2025-01-01' } }],
     source: { link: { label: 'US Census geography', href: 'https://www.census.gov/programs-surveys/geography.html' } },
-    details: detailRow('Type', subtype.label),
+    details: [
+      // DRAFT wording: "Census area", the search's own sublabel word for the same Census NAME.
+      ...(name === censusArea ? [] : detailRow('Census area', censusArea)),
+      ...detailRow('Type', subtype.label)
+    ],
     // The branch's own approved variant, verbatim (PF4: AIANNH's distinct branches).
     representation: { product: 'aiannh', variant: isOtsa ? 'otsa' : subtype.isLegal ? 'legal' : 'statistical', text: caveat },
     actions: placeDoor(name, conditions)
@@ -670,6 +665,11 @@ const SOURCE_LINK_NOTE = 'Live readings open at the source link below.';
 const LOADING_TEXT = 'Live data';
 // DRAFT wording (DR-177): a station that lists no https page.
 const NO_STATION_PAGE = 'This station lists no public page.';
+// DRAFT wording: "not stated", as the alert popup words a time its issuer leaves open;
+// a station with no reading time, never "Observed no data" beside a "no data" state (the look at 6748f25, P3-07).
+// DRAFT wording: "Observed", the station's own time (as the HMS smoke clock words it); "As of" is DDM's read.
+const STATION_OBSERVED = 'Observed';
+const STATION_TIME_NOT_STATED: PopupClock = { kind: 'not-stated', label: STATION_OBSERVED, reason: 'not stated' };
 
 /** Whether the station carries one of the five wired in-browser reads (DDM-P9-T05 added RAWS). */
 function stationHydrates(station: TelemetryStation): boolean {
@@ -718,8 +718,8 @@ function observedAt(text: string | null | undefined): ClockValue | null {
 
 function observedClock(reading: StationReading): PopupClock {
   return reading.observed === null
-    ? { kind: 'not-stated', label: 'As of', reason: 'not recorded' }
-    : { kind: 'point', meaning: 'observed', label: 'As of', at: reading.observed };
+    ? { kind: 'not-stated', label: STATION_OBSERVED, reason: 'not recorded' }
+    : { kind: 'point', meaning: 'observed', label: STATION_OBSERVED, at: reading.observed };
 }
 
 /** The served text, with the shared " (stale)" note past the network's window (0.4.0 A4). */
@@ -764,7 +764,7 @@ export function buildTelemetryPopupModel(station: TelemetryStation, read?: Stati
     value = { text: first === undefined ? NO_STATION_PAGE : SOURCE_LINK_NOTE };
     clocks = [
       custody === null
-        ? { kind: 'not-stated', label: 'As of', reason: 'no data' }
+        ? STATION_TIME_NOT_STATED
         : { kind: 'not-stated', label: 'Updates', reason: custody.cadence }
     ];
   } else if (state.kind === 'live') {
@@ -790,7 +790,8 @@ export function buildTelemetryPopupModel(station: TelemetryStation, read?: Stati
             : state.text,
       state: state.kind
     };
-    clocks = [{ kind: 'not-stated', label: 'As of', reason: state.kind }];
+    // The value row already carries the state word; the clock repeats only the in-flight one (pinned by the station census).
+    clocks = [state.kind === 'loading' ? { kind: 'not-stated', label: STATION_OBSERVED, reason: 'loading' } : STATION_TIME_NOT_STATED];
   }
   return {
     kind: 'station',

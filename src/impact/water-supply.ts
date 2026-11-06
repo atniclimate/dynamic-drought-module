@@ -100,17 +100,18 @@ interface WsRow {
 /**
  * Parse the HTML-wrapped CSV: drop markup and blank lines, read the header
  * to find column indices by name (defensive against column drift), and
- * return the data rows.
+ * return the data rows: possibly none (a header-only report is an answer),
+ * or null when the header or a column is missing (not a report at all).
  */
-function parseWsReport(text: string): WsRow[] {
+function parseWsReport(text: string): WsRow[] | null {
   const lines = text
     .split(/\r?\n/)
     .map((l) => l.trim())
     .filter((l) => l.length > 0 && !l.startsWith('<'));
   const headerIdx = lines.findIndex((l) => l.startsWith('ID,'));
-  if (headerIdx < 0) return [];
+  if (headerIdx < 0) return null;
   const header = lines[headerIdx];
-  if (!header) return [];
+  if (!header) return null;
   const cols = header.split(',');
   const iId = cols.indexOf('ID');
   const iLoc = cols.indexOf('Location');
@@ -118,7 +119,7 @@ function parseWsReport(text: string): WsRow[] {
   const iPct = cols.indexOf('50PerAvg');
   const iCur = cols.indexOf('CurPerAvg');
   const iDate = cols.indexOf('FcstDate');
-  if ([iId, iLoc, iPeriod, iPct, iCur, iDate].some((i) => i < 0)) return [];
+  if ([iId, iLoc, iPeriod, iPct, iCur, iDate].some((i) => i < 0)) return null;
 
   const rows: WsRow[] = [];
   for (const line of lines.slice(headerIdx + 1)) {
@@ -147,20 +148,6 @@ function titleCase(s: string): string {
   return s
     .toLowerCase()
     .replace(/\b[a-z]/g, (c) => c.toUpperCase());
-}
-
-/** The honest supply-tilt sentence for a percent-of-normal forecast. */
-function supplyTilt(pct: number): string {
-  if (pct < 75) {
-    return 'A well-below-normal supply outlook tightens late-season streamflow, irrigation deliveries, and fisheries flows, and extends the season when drought impacts compound.';
-  }
-  if (pct < 90) {
-    return 'A below-normal supply outlook leans toward tighter late-season streamflow and earlier drawdown of stored water.';
-  }
-  if (pct <= 110) {
-    return 'A near-normal supply outlook suggests typical late-season streamflow, with local basins still varying.';
-  }
-  return 'An above-normal supply outlook eases late-season streamflow pressure, though timing of the melt still shapes local conditions.';
 }
 
 /**
@@ -236,8 +223,12 @@ export async function fetchWaterSupplyClaims(
     try {
       const resp = await fetchBufferedWithBudget(proxied, {}, signal, TIMEOUT_MS);
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      rows = parseWsReport(await resp.text());
-      if (rows.length > 0) WS_ROWS_CACHE.set(proxied, rows, WS_CACHE_TTL_MS);
+      const parsed = parseWsReport(await resp.text());
+      if (parsed === null) throw new Error('no NWRFC report header');
+      rows = parsed;
+      // A header with no rows is the report's answer (October until the
+      // first new-year forecast), so it is cached like any other.
+      WS_ROWS_CACHE.set(proxied, rows, WS_CACHE_TTL_MS);
     } catch {
       if (signal.aborted) return { claims: [], ok: false };
       return {
@@ -285,12 +276,13 @@ export async function fetchWaterSupplyClaims(
     );
   }
 
+  // DR-046 a: the number and its uncertainty stand alone; NWRFC publishes no
+  // percent-of-normal bands, so no DDM band sentence follows.
   claims.push(
     makeClaim({
       text: // vocab-allow: names the NWRFC Water Supply Forecast and its forecast points, upstream product
         `The NWRFC April-September ${wy} water-supply forecast at ${location} is ${row.pctOfNormal} percent of the 1991-2020 normal ` + // vocab-allow: names the NWRFC Water Supply Forecast and its forecast points, upstream product
-        `(50 percent exceedance). This is a basin-scale read at a named forecast point, not a site-specific value. ` +
-        supplyTilt(row.pctOfNormal),
+        `(50 percent exceedance). This is a basin-scale read at a named forecast point, not a site-specific value.`,
       ...wsShared,
       evidence: 'outlook',
       // vocab-allow: names the NWRFC Water Supply Forecast and its forecast points, upstream product

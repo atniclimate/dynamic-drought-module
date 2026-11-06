@@ -29,17 +29,19 @@
 
 import { h, render } from 'preact';
 import type * as maplibregl from 'maplibre-gl';
-import type { Feature, FeatureCollection, Geometry } from 'geojson';
+import type { FeatureCollection } from 'geojson';
 
 import { LAYER_DEFS } from '../config/layers';
 import { URLS } from '../config/urls';
 import { STATE_LABEL } from '../impact/resources';
 import type { StateCode } from '../impact/resources';
 import { buildBoundaryContext } from '../impact/context';
+import { escapeSql, mergeArealGeometry } from '../util/arcgis-features';
 import { bboxCenter, bboxToContinuousBounds } from '../util/bbox';
 import { geometryBboxAcrossAntimeridian } from '../util/antimeridian';
 import { openStateBriefing } from '../state/deep-link';
 import { showLocatedBoundary } from '../state/located-boundary';
+import { clearEmphasis } from '../state/place-emphasis';
 import { getViewMode } from '../state/view-mode';
 import { onPlaceSelectionChange, setPlaceSelection } from '../state/place-selection';
 import {
@@ -56,14 +58,10 @@ import { isCurrentBriefingIntent, nextBriefingIntent, openImpactPanel } from './
 import { showToast } from './overlay';
 import { Search } from './island/search';
 import type { SearchItem } from './island/search';
+// The same normalization the roster build and the search component use.
 import { foldSearchText } from '../util/search-fold';
 
 const LOCATE_TIMEOUT_MS = 12_000;
-
-/** The same normalization the roster build and the search component use. */
-function norm(s: string): string {
-  return foldSearchText(s);
-}
 
 /** Places (states) and layers are available synchronously from the config tables. */
 function buildSyncItems(
@@ -72,7 +70,7 @@ function buildSyncItems(
   const items: SearchItem[] = [];
   if (!permittedKinds || permittedKinds.has('place')) {
     for (const [code, name] of Object.entries(STATE_LABEL) as Array<[StateCode, string]>) {
-      items.push({ kind: 'place', id: code, label: name, haystack: norm(`${name} ${code}`) });
+      items.push({ kind: 'place', id: code, label: name, haystack: foldSearchText(`${name} ${code}`) });
     }
   }
   if (!permittedKinds || permittedKinds.has('layer')) {
@@ -86,7 +84,7 @@ function buildSyncItems(
         id: def.key,
         label: def.name,
         sublabel: def.source,
-        haystack: norm(
+        haystack: foldSearchText(
           `${def.name} ${def.source} ${(def.searchTerms ?? []).join(' ')}`
         )
       });
@@ -121,7 +119,7 @@ async function loadCityItems(): Promise<SearchItem[]> {
     if (rank > MAJOR_CITY_MAX_RANK || seen.has(name)) continue;
     seen.add(name);
     cityCoords.set(name, [lon, lat]);
-    items.push({ kind: 'city', id: name, label: name, haystack: norm(name) });
+    items.push({ kind: 'city', id: name, label: name, haystack: foldSearchText(name) });
   }
   return items;
 }
@@ -170,7 +168,7 @@ function loadTribal(): Promise<SearchItem[]> {
           label,
           ...(label !== a.name ? { sublabel: `Census area: ${a.name}` } : {}),
           // An OTSA is an Oklahoma Tribal Statistical Area: "of Oklahoma" finds it, never a same-named area elsewhere.
-          haystack: norm(`${a.name} ${label}${a.name.endsWith(' OTSA') ? ' oklahoma' : ''}`)
+          haystack: foldSearchText(`${a.name} ${label}${a.name.endsWith(' OTSA') ? ' oklahoma' : ''}`)
         };
       });
       const items: SearchItem[] = areas.map((a) => {
@@ -182,7 +180,7 @@ function loadTribal(): Promise<SearchItem[]> {
           kind: 'tribal' as const,
           id: a.larName,
           label,
-          haystack: norm(`${a.larName} ${label}`),
+          haystack: foldSearchText(`${a.larName} ${label}`),
           // exactOptionalPropertyTypes: omit sublabel rather than set undefined.
           ...(label !== a.larName ? { sublabel: `Land area: ${a.larName}` } : {})
         };
@@ -197,19 +195,6 @@ function loadTribal(): Promise<SearchItem[]> {
     }
   })();
   return tribalInFlight;
-}
-
-/** Merge many features' Polygon / MultiPolygon rings into one MultiPolygon. */
-function combineGeometry(features: readonly Feature[]): Geometry | null {
-  const polys: number[][][][] = [];
-  for (const f of features) {
-    const g = f.geometry;
-    if (!g) continue;
-    if (g.type === 'Polygon') polys.push(g.coordinates as number[][][]);
-    else if (g.type === 'MultiPolygon') polys.push(...(g.coordinates as number[][][][]));
-  }
-  if (polys.length === 0) return null;
-  return { type: 'MultiPolygon', coordinates: polys };
 }
 
 /**
@@ -291,7 +276,7 @@ async function locateBoundary(map: maplibregl.Map, spec: LocateSpec): Promise<vo
   // retains a compact Aleutian extent and lets the context's crossing evidence
   // describe the same subject the camera frames.
   const aggregateGeometry =
-    combineGeometry(features) ?? features[0]?.geometry ?? null;
+    mergeArealGeometry(features) ?? features[0]?.geometry ?? null;
   const bbox = geometryBboxAcrossAntimeridian(aggregateGeometry);
   if (bbox) {
     const continuous = bboxToContinuousBounds(bbox);
@@ -320,10 +305,10 @@ async function locateBoundary(map: maplibregl.Map, spec: LocateSpec): Promise<vo
     : { lng: 0, lat: 0 };
   // A newer selection during the lazy import wins: commit nothing stale.
   if (abort.signal.aborted || !isCurrentBriefingIntent(intent)) return;
-  // ORDER MATTERS: the located-boundary module clears its highlight on
-  // EVERY selection change (the stage-5 major 4 fix), so the selection is
-  // set first and the highlight for THIS subject renders after; any prior
-  // subject's highlight is gone. Summary-first (D-0.7.0-070): the search
+  // ORDER MATTERS: the located-boundary highlight records the selection
+  // current when it is shown and clears on a close or a different subject
+  // (the stage-5 major 4 fix), so the selection is set first and the
+  // highlight for THIS subject renders after; any prior subject's is gone. Summary-first (D-0.7.0-070): the search
   // selection behaves like a map click, so the briefing opens through the
   // left panel's one link; on the active mobile Brief sheet it still opens
   // directly (map-click parity, the at-hand half detent IS the summary).
@@ -340,13 +325,15 @@ async function locateBoundary(map: maplibregl.Map, spec: LocateSpec): Promise<vo
   };
   setPlaceSelection({ label: context.title, context });
   if (isSheetActive() && getViewMode() === 'brief') openImpactPanel(context);
+  // The located overlay marks this subject; a place an earlier click lit is unlit.
+  clearEmphasis(map);
   showLocatedBoundary(map, aggregateGeometry);
 }
 
 /** Locate an AIAN-LAR land area by LARNAME (SQL-escaped). */
 function locateTribalLandArea(map: maplibregl.Map, larName: string, labels: LocateLabels): Promise<void> {
   const params = new URLSearchParams({
-    where: `LARNAME='${larName.replace(/'/g, "''")}'`,
+    where: `LARNAME='${escapeSql(larName)}'`,
     outFields: 'LARID,LARNAME,CLASSIFICATION,GISACRES,REGION',
     returnGeometry: 'true',
     outSR: '4326',
@@ -414,7 +401,11 @@ function selectResult(map: maplibregl.Map, item: SearchItem): void {
     // The earlier place no longer describes the view; a city is not a place, so none is set.
     setPlaceSelection(null);
     const center = cityCoords.get(item.id);
-    if (center) map.easeTo({ center, zoom: Math.max(map.getZoom(), 8) });
+    if (center) {
+      map.easeTo({ center, zoom: Math.max(map.getZoom(), 8) });
+      // Every search host passes here; the sidebar's region menu listens (it is not imported into this chunk).
+      window.dispatchEvent(new Event('ddm:city-view'));
+    }
     return;
   }
   // The row's gated label titles the selection (a formal Nation name is never abbreviated).

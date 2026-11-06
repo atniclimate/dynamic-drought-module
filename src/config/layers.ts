@@ -1,6 +1,8 @@
 import type * as maplibregl from 'maplibre-gl';
 
+import { HAZARD_CLUSTERS, HEAT_FIRE_ALERTS } from './clusters';
 import type { ProductKey } from './products';
+import { getSelectedHazard } from '../state/cluster-service';
 import type { LayerRole } from '../types/layer';
 import { createChunkLoader } from '../util/chunk-retry';
 
@@ -55,6 +57,12 @@ export const LAYER_KEYS = Object.freeze([
   'usfs-whp-classes',
   'sst-anomaly',
   'tropical-cyclones',
+  'cpc-seasonal-precip',
+  'cpc-seasonal-temp',
+  'cpc-610-precip',
+  'cpc-610-temp',
+  'cpc-814-precip',
+  'cpc-814-temp',
   'telemetry'
 ] as const);
 
@@ -299,7 +307,7 @@ export const LAYER_DEFS: readonly LayerDef[] = [
   // (src/config/terrain-coverage.ts: the USGS 3DEP issuer, the archive's
   // own bounding box, and its zoom-8 detail limit), which the map key shows.
   { key: 'hillshade', product: 'hillshade', name: 'Terrain Shading', source: 'USGS 3DEP · PMTiles · Pacific Northwest bake only', role: 'reference', defaultOn: true, load: () => import('../layers/hillshade') },
-  { key: 'drought', product: 'drought', name: 'Drought Outlook (CPC)', source: 'NOAA CPC · Monthly & Seasonal', role: 'surface', defaultOn: false, load: () => import('../layers/drought') },
+  { key: 'drought', product: 'drought', name: 'Drought Outlook (CPC)', source: 'NOAA CPC · Monthly & Seasonal', role: 'surface', defaultOn: false, noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/drought') },
   // The NIDIS gridded index carries its coverage limit on the source line, the
   // same way `hillshade` above does: drought.gov gives the ACIS "Grid 1"
   // dataset's Data Coverage as "Contiguous U.S.", and every wired SPI window
@@ -340,22 +348,35 @@ export const LAYER_DEFS: readonly LayerDef[] = [
   // failure modes, and either can be live without the other.
   { key: 'power-infrastructure', product: 'power-infrastructure', name: 'Power Lines & Plants', source: 'HIFLD archive (2024-09-30) · EIA (live)', searchTerms: ['transmission', 'electric', 'grid', 'power plant', 'utility'], role: 'reference', defaultOn: false, load: () => import('../layers/power-3d') },
   { key: 'nifc-fires', product: 'nifc-fires', name: 'Current Mapped Fire Perimeters (NIFC)', source: 'NIFC WFIGS · FeatureServer', searchTerms: ['wildfire', 'Prescribed fire', 'fire perimeter'], role: 'event', defaultOn: false, noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/nifc-fires') },
-  // vocab-allow: names the NWS alert products layer, upstream data
-  { key: 'nws-alerts', product: 'nws-alerts', name: 'Heat & Fire Weather Alerts', source: 'NOAA NWS · MapServer', role: 'event', defaultOn: false, noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/nws-alerts') },
+  // Named by the committed mode, beside the products it reads (HazardClusterDef.alerts).
+  { key: 'nws-alerts', product: 'nws-alerts', get name() { return (HAZARD_CLUSTERS[getSelectedHazard()].alerts ?? HEAT_FIRE_ALERTS).name; }, source: 'NOAA NWS · MapServer', role: 'event', defaultOn: false, noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/nws-alerts') },
   { key: 'hms-smoke', product: 'hms-smoke', name: 'Smoke Plumes (HMS)', source: 'NOAA OSPO · FeatureServer', role: 'event', defaultOn: false, noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/hms-smoke') },
-  { key: 'heatrisk', product: 'heatrisk', name: 'HeatRisk (Experimental)', source: 'NOAA NWS/WPC · ImageServer', role: 'surface', defaultOn: false, load: () => import('../layers/heatrisk') },
+  // HeatRisk reaches no-data only from its coverage check (src/layers/heatrisk.ts), never an empty answer.
+  { key: 'heatrisk', product: 'heatrisk', name: 'HeatRisk (Experimental)', source: 'NOAA NWS/WPC · ImageServer', role: 'surface', defaultOn: false, noDataLabel: 'no data for this view', load: () => import('../layers/heatrisk') },
   { key: 'spc-fire-weather', product: 'spc-fire-weather', name: 'Fire Weather Outlook (Day 1)', source: 'NOAA SPC · MapServer', role: 'surface', defaultOn: false, noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/spc-fire-weather') },
-  { key: 'usfs-whp', product: 'usfs-whp', name: 'Wildfire Hazard Potential', source: 'USFS · GeoPlatform', role: 'surface', defaultOn: false, load: () => import('../layers/usfs-whp') },
-  { key: 'usfs-whp-classes', product: 'usfs-whp', name: 'Wildfire Hazard Potential (USFS colors)', source: 'USFS · GeoPlatform', role: 'surface', defaultOn: false, load: () => import('../layers/usfs-whp-classes') },
+  { key: 'usfs-whp', product: 'usfs-whp', name: 'Wildfire Hazard Potential', source: 'USFS · GeoPlatform', role: 'surface', defaultOn: false, noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/usfs-whp') },
+  { key: 'usfs-whp-classes', product: 'usfs-whp', name: 'Wildfire Hazard Potential (USFS colors)', source: 'USFS · GeoPlatform', role: 'surface', defaultOn: false, noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/usfs-whp-classes') },
   { key: 'sst-anomaly', product: 'sst-anomaly', name: 'Ocean Temperature Anomaly', source: 'NASA GIBS · GHRSST MUR', role: 'surface', defaultOn: false, load: () => import('../layers/sst-anomaly') },
   // ENSO block B3: on in the ENSO mode's recipe only. Its coverage is the
   // issuer's three basins, so its zero state names them, never "this view".
   { key: 'tropical-cyclones', product: 'tropical-cyclones', name: 'Active Tropical Cyclones', source: 'NOAA NHC and CPHC · MapServer', searchTerms: ['hurricane', 'tropical storm', 'cyclone', 'NHC', 'CPHC'], role: 'event', defaultOn: false, noDataLabel: 'no active tropical cyclones in the Atlantic, Eastern North Pacific or Central North Pacific', load: () => import('../layers/tropical-cyclones') },
+  // The CPC seasonal outlooks (Lead 1), named as the issuer's services name
+  // them. Overlays, not surfaces: ENSO's Season ahead draws precipitation
+  // over the sea-surface-temperature surface, and the two outlooks may be on
+  // together, each with its own key and none merged.
+  { key: 'cpc-seasonal-precip', product: 'cpc-seasonal-precip', name: 'Seasonal Precipitation Outlook', source: 'NOAA CPC · MapServer', role: 'event', defaultOn: false, noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/cpc-seasonal-precip') },
+  { key: 'cpc-seasonal-temp', product: 'cpcSeasonalTemp', name: 'Seasonal Temperature Outlook', source: 'NOAA CPC · MapServer', role: 'event', defaultOn: false, noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/cpc-seasonal-temp') },
+  // The CPC 6-10 and 8-14 day outlooks, the same kind of overlay: ENSO's
+  // Weeks ahead draws the 8-14 day precipitation outlook, the others on request.
+  { key: 'cpc-610-precip', product: 'cpc-610-precip', name: '6-10 Day Precipitation Outlook', source: 'NOAA CPC · MapServer', role: 'event', defaultOn: false, noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/cpc-610-precip') },
+  { key: 'cpc-610-temp', product: 'cpc-610-temp', name: '6-10 Day Temperature Outlook', source: 'NOAA CPC · MapServer', role: 'event', defaultOn: false, noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/cpc-610-temp') },
+  { key: 'cpc-814-precip', product: 'cpc-814-precip', name: '8-14 Day Precipitation Outlook', source: 'NOAA CPC · MapServer', role: 'event', defaultOn: false, noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/cpc-814-precip') },
+  { key: 'cpc-814-temp', product: 'cpc-814-temp', name: '8-14 Day Temperature Outlook', source: 'NOAA CPC · MapServer', role: 'event', defaultOn: false, noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/cpc-814-temp') },
   // Monitoring stations left the default-on set 2026-07-09 (D-0.7.0-018
   // item 1, strengthening the D-0.7.0-007 zoom threshold): at region zoom
   // the layer could only say "zoom in to load", so opening with it on
   // bought noise, not signal.
-  { key: 'telemetry', product: 'telemetry', name: 'Monitoring stations', source: 'USGS · USBR · NRCS · USACE', role: 'stations', defaultOn: false, load: () => import('../layers/telemetry') }
+  { key: 'telemetry', product: 'telemetry', name: 'Monitoring stations', source: 'USGS · USBR · NRCS · USACE', role: 'stations', defaultOn: false, noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/telemetry') }
 ];
 
 /**

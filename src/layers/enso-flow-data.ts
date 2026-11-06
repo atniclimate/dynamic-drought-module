@@ -87,7 +87,8 @@ export const FLOW_WORDS = {
   bins: {
     wind: 'Line width and brightness: under 5, 5 to 10, 10 or more m/s.',
     jet: 'Line width and brightness: under 20, 20 to 40, 40 or more m/s.',
-    waves: 'Mark length and brightness: under 2, 2 to 4, 4 or more m significant wave height.',
+    // DRAFT wording (DR-177): the crest sets' direction cue and size (src/layers/flow/advect.ts CrestMarks; waves-dynamics design section 5), 2026-11-06.
+    waves: 'Curved lines lie across the way the waves travel, the longest in front. Size and brightness: under 2, 2 to 4, 4 or more m significant wave height.',
     currents: 'Line width and brightness: under 0.25, 0.25 to 0.5, 0.5 or more m/s.',
     // DRAFT wording (DR-177): the shade's steps in the issuer's unit (src/layers/flow/shade.ts SHADE_BINS; tests/flow-shade.test.mjs).
     pwat: 'Shade deepens in steps: none under 15, then 15 to 30, 30 to 45, 45 or more kg m-2.'
@@ -162,6 +163,20 @@ export function gridBoxWords(grid: {
   const lon = (x: number): string => degrees(((x + 180) % 360 + 360) % 360 - 180, 'E', 'W');
   const south = grid.lat0 - (grid.ny - 1) * grid.dlat;
   return `${degrees(south, 'N', 'S')} to ${degrees(grid.lat0, 'N', 'S')} and ${lon(grid.lon0)} to ${lon(grid.lon0 + (grid.nx - 1) * grid.dlon)}`;
+}
+
+/** The reader's refusal of a currents frame past its age limit: the frame loaded, so the panel says so rather than "did not load". */
+export class CurrentsFrameTooOld extends Error {
+  readonly valid: number;
+  constructor(valid: number) {
+    super('currents frame: valid more than 14 days ago');
+    this.valid = valid;
+  }
+}
+
+/** The line for a currents frame refused for its age, in the stale line's words around its valid date. */
+export function currentsTooOldLine(valid: number): string {
+  return `unavailable · The ${FLOW_WORDS.source.currents} ${FLOW_WORDS.stale.from} ${dateLabel(valid)} is past its 14-day limit`;
 }
 
 /** The stale line: the held frame's run and its 24-hour limit. */

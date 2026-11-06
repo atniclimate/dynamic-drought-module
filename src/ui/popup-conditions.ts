@@ -82,9 +82,9 @@ import type { GeoJsonProperties, Geometry } from 'geojson';
 
 import { registry } from '../state/registry';
 import { timeline } from '../state/timeline';
-import { getHazardCluster } from '../state/cluster-store';
+import { getSelectedHazard } from '../state/cluster-service';
 import { USDM_CATEGORIES, NADM_CATEGORIES, readUsdmDm } from '../config/palette';
-import { HAZARD_CLUSTERS, HAZARD_CLUSTER_KEYS } from '../config/clusters';
+import { HAZARD_CLUSTERS, HAZARD_CLUSTER_KEYS, HEAT_FIRE_ALERTS } from '../config/clusters';
 import { getLayerDef } from '../config/layers';
 import { PLACE_CONDITION_ROW_DEFERRED, PLACE_CONDITION_ROWS, placeConditionRowKeys } from '../config/place-condition-rows';
 import type { PlaceConditionRowKey } from '../config/place-condition-rows';
@@ -142,6 +142,8 @@ const USDM_KEY = 'usdm';
 const USDM_FILLS = ['usdm-frame-a-fill', 'usdm-frame-b-fill'] as const;
 const NADM_KEY = 'nadm-drought';
 const NADM_FILL = 'nadm-drought-fill';
+/** The CPC Drought Outlook's layer key (src/config/layers.ts), a layer and not a mode. */
+const OUTLOOK_KEY = 'drought';
 
 const ALERTS_KEY = 'nws-alerts';
 const ALERTS_FILL = 'nws-alerts-fill';
@@ -419,11 +421,12 @@ function withClock(row: ValueRow, clock: PopupClock | undefined): ValueRow {
 
 /** The drought category beneath the clicked point, NADM preferred when its
  * layer is active (matches the conditions-strip's own precedence in
- * `src/ui/island/strip-metrics.ts` `droughtMetric`), else USDM. Omitted
- * entirely (returns null) when neither drought layer is on. A layer that is
+ * `src/ui/island/strip-metrics.ts` `droughtMetric`), else USDM, else the
+ * CPC outlook's register note. Omitted entirely (returns null) when no
+ * drought layer is on. A layer that is
  * on but has no fill yet, or whose read is not complete and found no
  * category here, gives its state row, never an absence (draft DR-179). */
-function droughtRow(map: maplibregl.Map, point: maplibregl.PointLike): MarkedRow | null {
+export function droughtRow(map: maplibregl.Map, point: maplibregl.PointLike): MarkedRow | null {
   if (isLayerOn(NADM_KEY)) {
     if (!map.getLayer(NADM_FILL)) return unreadRow('Drought', NADM_KEY);
     const complete = isReadComplete(NADM_KEY);
@@ -515,28 +518,48 @@ function droughtRow(map: maplibregl.Map, point: maplibregl.PointLike): MarkedRow
     );
   }
 
+  // The outlook alone (Drought mode's Near Term and Long Range) is a forecast
+  // register: named as one, like the change register above, never read as a
+  // current category and never the nothing-on line.
+  if (isLayerOn(OUTLOOK_KEY)) {
+    return unreported(
+      {
+        label: 'Drought',
+        // DRAFT wording (pending the owner's read-back): the change-register sentence above, with the outlook's "forecast register" (src/layers/drought.ts).
+        // vocab-allow: names the CPC outlook (an upstream forecast product) and says no current category is read from it
+        text: 'The map is showing the CPC Drought Outlook, a forecast register, so no current category is displayed at this point.'
+      },
+      false
+    );
+  }
+
   return null;
 }
 
 /**
  * The confirmed-zero sentence, scoped to what was actually asked for. The
- * layer requests seven products only (`ALERT_EVENTS` in
- * `src/layers/nws-alerts.ts`: the Extreme and Excessive Heat Warnings and
- * Watches, the Heat Advisory, the Red Flag Warning and the Fire Weather
- * Watch), so the older sentence, "No active NWS watch, warning, or advisory
- * here", spoke past its own evidence: a place under an active Flash Flood
- * Warning was told there was nothing. This says what was checked, in the
- * same limited sense the layer's own legend already uses ("No active
- * requested National Weather Service products", `nws-alerts.ts`).
+ * layer requests only the committed mode's products (`HazardClusterDef.alerts`
+ * in src/config/clusters.ts; the heat and fire weather set is the Extreme and
+ * Excessive Heat Warnings and Watches, the Heat Advisory, the Red Flag
+ * Warning and the Fire Weather Watch), so the older sentence, "No active NWS
+ * watch, warning, or advisory here", spoke past its own evidence: a place
+ * under an active Flash Flood Warning was told there was nothing. This says
+ * what was checked, in the same limited sense the layer's own legend already
+ * uses ("No active requested National Weather Service products",
+ * `nws-alerts.ts`), which is this sentence for any other set.
  */
 function noRequestedAlert(scope: ClaimScope): string {
+  if (HAZARD_CLUSTERS[getSelectedHazard()].alerts !== HEAT_FIRE_ALERTS) {
+    // DRAFT wording (pending the owner's read-back): the layer's own no-result note, scoped to the place.
+    return `No active requested National Weather Service products ${scopePhrase(scope)}.`;
+  }
   // vocab-allow: names the NWS watch/warning/advisory product category (src/layers/nws-alerts.ts), scoped to the products this layer requests
   return `No active NWS heat or fire weather watch, warning, or advisory ${scopePhrase(scope)}. Only those products are requested.`;
 }
 
-/** The NWS product name this app already requests (see
- * `src/layers/nws-alerts.ts` `ALERT_EVENTS`): true only for the
- * "Warning"-tier products, never a Watch or an Advisory. */
+/** The NWS product name this app already requests (the mode's
+ * `HazardClusterDef.alerts`): true only for the "Warning"-tier products,
+ * never a Watch or an Advisory. */
 function isNwsWarningTier(prodType: string): boolean {
   return /warning$/i.test(prodType.trim());
 }
@@ -577,11 +600,11 @@ interface RowResult {
 const NO_ROWS: RowResult = { rows: [], hasWarning: false, warningLabel: null };
 
 /** Every distinct active NWS alert polygon covering the clicked point
- * (fire-weather and heat share one layer, distinguished by `prod_type`),
- * each its own row so a Heat Advisory and a Red Flag Warning covering the
- * same point are never collapsed into one line. Omitted entirely when the
- * alerts layer is off; a confirmed zero (layer on, nothing here) renders
- * one honest "none" row. */
+ * (the mode's products share one layer, distinguished by the alert's
+ * `event`, src/layers/nws-alerts.ts NormalizedAlert), each its own row so
+ * a Heat Advisory and a Red Flag Warning covering the same point are never
+ * collapsed into one line. Omitted entirely when the alerts layer is off; a
+ * confirmed zero (layer on, nothing here) renders one honest "none" row. */
 function alertRows(
   map: maplibregl.Map,
   region: QueryRegion,
@@ -602,14 +625,16 @@ function alertRows(
   // Retrieved by the place's box, kept only where the alert actually touches
   // the place: see the ATTRIBUTION FIX in this module's header.
   const feats = hasFill ? touchingPlace(map.queryRenderedFeatures(region, { layers: [ALERTS_FILL] }), place) : [];
-  const seen = new Map<string, { prodType: string; ends: unknown }>();
+  const seen = new Map<string, { prodType: string; ends: unknown; mixed: boolean }>();
   for (const f of feats) {
-    const prodType = propText(f.properties?.['prod_type']).trim();
+    const prodType = propText(f.properties?.['event']).trim();
     if (prodType === '') continue;
-    const endsRaw: unknown = f.properties?.['ends'] ?? f.properties?.['expiration'] ?? null;
+    // An end the alert does not state is unknown (null), never another time.
+    const endsRaw: unknown = f.properties?.['ends'] ?? null;
     // Two alerts of one product share a row; with different ends no one end is true, so none is stated.
     const prior = seen.get(prodType);
-    seen.set(prodType, { prodType, ends: prior !== undefined && prior.ends !== endsRaw ? null : endsRaw });
+    const mixed = prior !== undefined && (prior.mixed || prior.ends !== endsRaw);
+    seen.set(prodType, { prodType, ends: mixed ? null : endsRaw, mixed });
   }
 
   if (seen.size === 0) {
@@ -642,14 +667,12 @@ function alertRows(
     }
     return {
       // The absence must not reach further than the query did. This layer
-      // asks for seven products only (ALERT_EVENTS in src/layers/nws-alerts.ts:
-      // the Extreme and Excessive Heat Warnings and Watches, Heat Advisory,
-      // Red Flag Warning and Fire Weather Watch), so a place under an active
-      // Flash Flood Warning would have been told, wrongly, that no NWS watch,
-      // warning or advisory was in force. The sentence now says what was
-      // actually checked, in the same limited sense the layer's own legend
-      // already uses ("No active requested National Weather Service
-      // products", nws-alerts.ts).
+      // asks for the committed mode's products only (HazardClusterDef.alerts
+      // in src/config/clusters.ts), so a place under an active Flash Flood
+      // Warning would have been told, wrongly, that no NWS watch, warning or
+      // advisory was in force. The sentence says what was actually checked,
+      // in the same limited sense the layer's own legend already uses ("No
+      // active requested National Weather Service products", nws-alerts.ts).
       // vocab-allow: names the NWS watch/warning/advisory product category (src/layers/nws-alerts.ts), matching that module's own description, and scopes the absence to the products actually requested
       rows: [unreported({ label: 'NWS alert', text: noRequestedAlert(scope) }, true)],
       hasWarning: false,
@@ -659,7 +682,7 @@ function alertRows(
 
   let hasWarning = false;
   let warningLabel: string | null = null;
-  const rows = [...seen.values()].map(({ prodType, ends }): MarkedRow => {
+  const rows = [...seen.values()].map(({ prodType, ends, mixed }): MarkedRow => {
     if (isNwsWarningTier(prodType)) {
       hasWarning = true;
       warningLabel ??= prodType;
@@ -668,7 +691,13 @@ function alertRows(
     // The scope rides on the product name, so a reader is never left to assume
     // a place-wide read was taken at the pixel they clicked.
     const named = `${prodType} ${scopePhrase(scope)}`;
-    const value = until.kind === 'instant' ? `${named}, until ${until.text} (NOAA NWS)` : `${named} (NOAA NWS)`;
+    const value =
+      until.kind === 'instant'
+        ? `${named}, until ${until.text} (NOAA NWS)`
+        : until.kind === 'none' && !mixed
+          ? // DRAFT wording (pending the owner's read-back): the alert popup's "End not stated".
+            `${named}, end not stated (NOAA NWS)`
+          : `${named} (NOAA NWS)`;
     // vocab-allow: names the NWS alert product category (src/layers/nws-alerts.ts); the value is the issuer's own verbatim product name
     const row: ValueRow = { label: 'NWS alert', text: value };
     // A window end the issuer supplied in a form DDM does not read as a full
@@ -801,12 +830,11 @@ function zonedIsoInstant(value: string): number | null {
 }
 
 /**
- * An alert `ends`/`expiration` value as the card shows it. An ISO 8601
- * timestamp with its zone or offset, or the epoch milliseconds the layer
- * itself accepts as an issuer time (src/layers/nws-alerts.ts
- * `issuerTimeMs`), is an instant, written through `dateTok` with its zone
- * named; any other present value is kept as supplied (the card says so),
- * and an absent one is no window at all.
+ * An alert's `ends` value as the card shows it. An ISO 8601 timestamp with
+ * its zone or offset (the layer hands on ISO text, src/layers/nws-alerts.ts
+ * `issuerTime`), or epoch milliseconds, is an instant, written through
+ * `dateTok` with its zone named; any other present value is kept as supplied
+ * (the card says so), and an absent one is no window at all.
  */
 function formatWhen(
   value: unknown
@@ -959,7 +987,7 @@ export function buildPlaceConditionsHtml(
   // cluster table through the committed mode, never a mode name).
   // The interim line is for a DEFERRED row (draft DR-180): the committed
   // mode declares none and its deferral is recorded with its reason.
-  const mode = getHazardCluster();
+  const mode = getSelectedHazard();
   const modeHasNoRow = HAZARD_CLUSTERS[mode].placeConditionRow === null && Object.hasOwn(PLACE_CONDITION_ROW_DEFERRED, mode);
   const head: readonly [ValueRow] =
     presentLabels.length > 0

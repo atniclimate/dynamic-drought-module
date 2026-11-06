@@ -444,7 +444,7 @@ test.describe('E2-1 flowing paths in ENSO mode', () => {
     await expect(page.locator('#map-key-flow-pause')).toBeHidden();
   });
 
-  test('a frame past cycle + 24 h is never drawn', async ({ page }) => {
+  test('a frame past cycle + 24 h is never drawn, and reads once for a newer cycle', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await bootEnso(page);
@@ -457,13 +457,16 @@ test.describe('E2-1 flowing paths in ENSO mode', () => {
     await expect(panel(page)).toHaveAttribute('data-status', 'unavailable');
     await expect(panel(page)).toHaveAttribute('data-flow-drawn', '');
     await expect(panel(page)).toHaveAttribute('data-flow-form', 'none');
-    const run = await pageDate(page, FIXTURE_CYCLE);
-    await expect(panel(page).locator('.enso-flow-status')).toHaveText(`unavailable · The held NOAA GFS frame from ${run} is past its 24-hour limit`);
+    // The held frame leaves and the panel reads the three newer cycles once; no fixture publishes them.
+    await expect(panel(page).locator('.enso-flow-status')).toHaveText('unavailable · NOAA GFS 10 m wind did not load');
     await openKeyDrawer(page);
-    await expect(flowStatus(page)).toContainText('past its 24-hour limit');
+    await expect(flowNotes(page)).toHaveText(FAILED_NOTE);
     await expect(flowProvenance(page)).toHaveCount(0);
-    // Nothing is read again for the held frame.
-    expect(noddStubLog(page)).toHaveLength(reads);
+    expect(noddStubLog(page).slice(reads).map((e) => [e.url.replace('https://noaa-gfs-bdp-pds.s3.amazonaws.com/', ''), e.answer])).toEqual([
+      ['gfs.20261006/00/atmos/gfs.t00z.pgrb2.1p00.f006.idx', 'absent'],
+      ['gfs.20261005/18/atmos/gfs.t18z.pgrb2.1p00.f012.idx', 'absent'],
+      ['gfs.20261005/12/atmos/gfs.t12z.pgrb2.1p00.f018.idx', 'absent']
+    ]);
   });
 
   test('an all-land wave view reads no data, never calm', async ({ page }) => {

@@ -4,11 +4,12 @@
  * fixtures only; no git, no browser.
  */
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import test from 'node:test';
 import {
   CROSS_CUTTING,
   MAX_LOCAL_SPECS,
+  MODULE_SPECS,
   crossCuttingSpecs,
   dispatchRefusal,
   findMentions,
@@ -171,6 +172,36 @@ test('cross-cutting rules stay small, name real non-measurement specs, and join 
     touchedSpecs({ changedSpecs: ['tests/z.spec.ts'], mentions: [], specs: [], changedModules: [], crossCutting: crossCuttingSpecs(['src/ui/island/minimap.tsx'], union) }),
     ['tests/s4-minimap.spec.ts', 'tests/z.spec.ts']
   );
+});
+
+test('modules the browser specs reach only through the app pick their own specs', () => {
+  // The nine changed in the week of 2026-11-02 that picked no spec at all.
+  assert.deepEqual(Object.keys(MODULE_SPECS), [
+    'src/main.ts',
+    'src/map/interaction-coordinator.ts',
+    'src/layers/telemetry.ts',
+    'src/ui/island/place-studio.tsx',
+    'src/ui/sidebar.ts',
+    'src/ui/time-bar.ts',
+    'src/ui/heatrisk-sequence.ts',
+    'src/ui/sheet-alerts.ts',
+    'src/ui/popup-conditions.ts'
+  ]);
+  const config = readFileSync(new URL('../playwright.config.ts', import.meta.url), 'utf8');
+  const specPaths = new Set(readdirSync(new URL('./', import.meta.url)).filter((name) => name.endsWith('.spec.ts')).map((name) => `tests/${name}`));
+  const browserOnly = { measureOnly: measureSpecs(config), pureOnly: pureSpecs(config) };
+  for (const [module, specs] of Object.entries(MODULE_SPECS)) {
+    readFileSync(new URL(`../${module}`, import.meta.url));
+    for (const spec of specs) assert.ok(specPaths.has(spec), `${module}: ${spec} is not a spec file`);
+    const crossCutting = crossCuttingSpecs([module], specPaths);
+    const picked = touchedSpecs({ changedSpecs: [], mentions: [], specs: [], changedModules: [module], crossCutting, ...browserOnly });
+    assert.ok(picked.length > 0 && picked.length <= 5, `${module}: ${picked.length} specs`);
+    assert.equal(picked.length, crossCutting.size, `${module}: a mapped spec is missing, pure or measurement-only`);
+    assert.equal(runRefusal(picked), null, module);
+  }
+  // A module named only by the coordinator's spec, through the popup's Conditions slot.
+  assert.deepEqual(Object.keys(Object.fromEntries(crossCuttingSpecs(['src/ui/popup-conditions.ts'], specPaths))).sort(), ['tests/interaction-coordinator.spec.ts', 'tests/place-popups.spec.ts']);
+  assert.equal(crossCuttingSpecs(['src/ui/panel.ts'], specPaths).size, 0);
 });
 
 test('the measurement-only specs are read from playwright.config.ts', () => {

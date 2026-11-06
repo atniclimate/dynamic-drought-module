@@ -407,14 +407,14 @@ const FEATURE_BUDGETS = [
   },
   {
     key: 'canadian-drought-monitor-snapshot',
-    label: 'rebalanced 2026-09-03 with the URL-catalog split: DR-008 a moved the two boot values into src/config/urls-boot.ts and the seventy-entry catalog out of the entry chunk (entry 33.6 to 29.7 kB gzip, eager app 49.9 to 45.8), so the 2.7 kB urls chunk now lands in this first-activation closure instead of first paint; the default-on layers fetch it in parallel with their own chunks at boot, so total boot transfer is unchanged and the critical path is shorter; the budget is the new measurement plus the same headroom as before; measured 8.3 kB; Canadian Drought Monitor monthly committed snapshot (June 2026 artifact measured 960,818 bytes on 2026-07-28; S4 shared time-bar closure measured 5,591 gzip bytes on 2026-07-29)',
+    label: 'rebalanced 2026-09-03 with the URL-catalog split: DR-008 a moved the two boot values into src/config/urls-boot.ts and the seventy-entry catalog out of the entry chunk (entry 33.6 to 29.7 kB gzip, eager app 49.9 to 45.8), so the 2.7 kB urls chunk now lands in this first-activation closure instead of first paint; the default-on layers fetch it in parallel with their own chunks at boot, so total boot transfer is unchanged and the critical path is shorter; the budget is the new measurement plus the same headroom as before; measured 8.3 kB; Canadian Drought Monitor monthly committed snapshot (June 2026 artifact measured 960,818 bytes on 2026-07-28; S4 shared time-bar closure measured 5,591 gzip bytes on 2026-07-29); re-recorded 2026-11-06: the September 2026 artifact (the latest published month; October was not yet published) measured 1,633,864 bytes on disk and 493,276 bytes gzip, so the data line is that measurement plus ACTIVATION_HEADROOM (named at the landing stop for the owner\'s word)',
     rootModules: ['src/layers/cdm-drought.ts'],
     measuredJsGzipKb: 8.4,
-    networkBytes: 1_000_000,
+    networkBytes: 2_450_000,
     requestCount: 1,
     dataAssets: [{
       path: 'data/cdm-drought-areas.json',
-      maxBytes: 1_000_000,
+      maxBytes: 2_450_000,
     }],
   },
   {

@@ -81,11 +81,13 @@ import {
 } from '../config/palette';
 import { buildBiaReservationPopupModel } from '../ui/popups';
 import { buildPlaceConditionsHtml } from '../ui/popup-conditions';
-import { buildBoundaryContext, resolveBoundaryTitle } from '../impact/context';
+import { biaNationNames, buildBoundaryContext, loadBiaNationNames, resolveBoundaryTitle } from '../impact/context';
 import { registerClickTarget } from '../map/interaction-coordinator';
 import type { LayerActivation } from '../config/layers';
 import { fetchBufferedWithBudget, linkAbort } from '../util/fetch';
 import { buildQueryEnvelope, envelopeCovers, toCoverageEnvelope } from '../util/bbox';
+import { assertFeatureCollection, isTruncated } from '../util/geojson-checks';
+import { isoDayLocal } from '../util/iso-day';
 import { registry } from '../state/registry';
 
 const LAYER_KEY = 'bia-reservations';
@@ -324,48 +326,6 @@ function buildQueryUrl(
 }
 
 /**
- * Validate that a parsed response is a genuine GeoJSON FeatureCollection and
- * not an ArcGIS error body or other malformed shape. Throws on failure so the
- * caller's existing catch block reports `'error'`, matching every other
- * failure path in this module. A response the service flags as truncated
- * (`exceededTransferLimit`) is logged, not silently treated as complete;
- * full pagination is a larger change than this validation pass covers.
- */
-function assertFeatureCollection(raw: unknown): FeatureCollection {
-  if (raw && typeof raw === 'object' && 'error' in raw) {
-    const err = (raw as { error?: { code?: number; message?: string } }).error;
-    throw new Error(
-      `ArcGIS error ${err?.code ?? '(unknown code)'}: ${err?.message ?? 'unknown error'}`
-    );
-  }
-  if (
-    !raw ||
-    typeof raw !== 'object' ||
-    (raw as { type?: string }).type !== 'FeatureCollection' ||
-    !Array.isArray((raw as { features?: unknown }).features)
-  ) {
-    throw new Error('AIAN-LAR response was not a GeoJSON FeatureCollection.');
-  }
-  return raw as FeatureCollection;
-}
-
-/**
- * Whether the service flagged this response as truncated
- * (`exceededTransferLimit`). A truncated body renders (partial data beats
- * none) but reports `degraded` ("live (partial)") and is NEVER admitted to
- * the coverage-envelope cache: a cached envelope asserts "the service
- * answered this whole envelope", which a truncated response cannot claim
- * (R2-trio, the 2026-07-15 planning true-up, D-0.7.0-037).
- */
-function isTruncated(raw: unknown): boolean {
-  return Boolean(
-    raw &&
-      typeof raw === 'object' &&
-      (raw as { exceededTransferLimit?: boolean }).exceededTransferLimit
-  );
-}
-
-/**
  * Stamp each fetched feature with the browser retrieval date shown in the
  * popup. A session-cache hit retains the original date instead of presenting
  * the later display time as a new retrieval.
@@ -450,8 +410,8 @@ async function fetchAndApply(map: maplibregl.Map): Promise<void> {
     }
     const raw: unknown = await resp.json();
     geojson = stampRetrievalDate(
-      assertFeatureCollection(raw),
-      new Date().toISOString().slice(0, 10)
+      assertFeatureCollection(raw, 'AIAN-LAR'),
+      isoDayLocal(new Date())
     );
     truncated = isTruncated(raw);
   } catch (err) {
@@ -696,6 +656,11 @@ export function deactivate(map: maplibregl.Map): void {
  * not-yet-existing layer id.
  */
 export function bindPopups(map: maplibregl.Map): void {
+  // The Nation's name for each LARNAME, from the one map the briefing title
+  // shares (impact/context loadBiaNationNames, the roster's provenance gate).
+  // Until it loads, a popup titles the land area as before; a failed read is
+  // retried by the next click's label, so the map is read at click time.
+  loadBiaNationNames().catch(() => {});
   registerClickTarget({
     kind: 'reservation-boundary',
     layerIds: [FILL_LAYER_ID],
@@ -703,7 +668,7 @@ export function bindPopups(map: maplibregl.Map): void {
     respond: (feature, click, map) => {
       const props: GeoJsonProperties = feature.properties ?? null;
       return {
-        model: buildBiaReservationPopupModel(props, buildPlaceConditionsHtml(map, click.point, feature)),
+        model: buildBiaReservationPopupModel(props, buildPlaceConditionsHtml(map, click.point, feature), biaNationNames()),
         selection: buildBoundaryContext('bia-reservation', props, feature.geometry, click.lngLat),
         // An id-less feature clears any prior emphasis (the old
         // emphasizePlace contract) rather than lighting an unknown one.

@@ -20,6 +20,7 @@ import { escapeHtml } from '../util/escape';
 import { fetchJsonWithBudget } from '../util/fetch';
 import { isObject } from '../util/guards';
 import { heatRiskMoment as formatMoment } from '../util/iso-day';
+import { dateTok } from '../util/text-tokens';
 import { watchDesktopMapSeat } from './map-control-seat';
 import { DETAIL_SECTIONS } from '../config/detail-sections';
 import { getDetailSectionHost } from './detail-section-hosts';
@@ -99,8 +100,8 @@ let deactivatedAt: number | null = null;
  * per catalog extent (the correction to the RACE finding: the layer-off
  * fallback used to fire a brand-new catalog read plus an /identify on every
  * call). Invalidated on a new advertised extent (the key includes it) and on
- * a place-selection change (cleared where `cachedRead` is, in
- * `mountHeatRiskSequence`'s `onPlaceSelectionChange` handler). NOT
+ * a place-selection change (in `mountHeatRiskSequence`'s
+ * `onPlaceSelectionChange` handler, beside the `cachedRead` check). NOT
  * invalidated by activation or deactivation: memoizing across a toggle is
  * the whole point.
  *
@@ -565,6 +566,12 @@ function renderRead(read: SequenceRead): void {
     return;
   }
   const alternative = textAlternative(read);
+  // The rewrite below destroys the focused day cell; note it to hand focus back.
+  const active = document.activeElement;
+  const focusedDay =
+    active instanceof HTMLElement && host.contains(active)
+      ? active.dataset['heatriskSequenceDay']
+      : undefined;
   host.innerHTML =
     '<div class="heatrisk-sequence-heading">' +
     `<strong>HeatRisk at the selected point for ${escapeHtml(selection.label)}</strong>` +
@@ -583,13 +590,19 @@ function renderRead(read: SequenceRead): void {
     `<p id="heatrisk-sequence-alt" class="sr-only">Seven-day HeatRisk text alternative. ${escapeHtml(alternative)}.</p>` +
     '<p class="heatrisk-sequence-source">' +
     `<a href="${escapeHtml(URLS.nwsHeatRisk)}/info/iteminfo" target="_blank" rel="noopener">National Weather Service HeatRisk</a> · ` +
-    `Retrieved ${escapeHtml(formatMoment(read.retrievedAt))}. Selected valid period shown above.</p>`;
+    // DDM's read in the viewer's zone, as every other "Retrieved" stamp; the valid period above keeps NWS's UTC.
+    `Retrieved ${escapeHtml(dateTok(read.retrievedAt))}. Selected valid period shown above.</p>`;
   host.setAttribute(
     'aria-label',
     `National Weather Service HeatRisk seven-day sequence at the selected point for ${selection.label}`
   );
   host.setAttribute('aria-describedby', 'heatrisk-sequence-alt');
   host.hidden = false;
+  if (focusedDay) {
+    host
+      .querySelector<HTMLElement>(`[data-heatrisk-sequence-day="${focusedDay}"]`)
+      ?.focus({ preventScroll: true });
+  }
 }
 
 function renderState(copy: string): void {
@@ -827,7 +840,14 @@ export function mountHeatRiskSequence(initial: HeatRiskFrameDetail): void {
     selection = getPlaceSelection();
     onPlaceSelectionChange((next) => {
       selection = next;
-      cachedRead = null;
+      // A new object for the SAME point (popup, then its briefing) keeps the finished read.
+      if (
+        !next ||
+        next.context.lngLat.lng !== cachedRead?.lng ||
+        next.context.lngLat.lat !== cachedRead?.lat
+      ) {
+        cachedRead = null;
+      }
       fallbackCache = null;
       void refreshRead();
     });

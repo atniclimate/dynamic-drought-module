@@ -10,6 +10,7 @@ import {
   stubWildfireMinimap,
   stubWildfireMinimapUnavailable,
 } from './minimap-fixtures';
+import { stubCpcDroughtOutlook } from './cpc-outlook-fixtures';
 
 test('the Alaska framing camera includes the wrapped western Aleutians', () => {
   const [[west], [east]] = framingFitBounds(FRAMINGS['alaska-northwest']);
@@ -267,6 +268,15 @@ test.describe('S4b minimap', () => {
     await expect(
       minimap.locator('[data-framing="alaska-northwest"]'),
     ).toHaveCSS('fill', 'rgb(255, 76, 0)');
+    // Round 4 audit, R4-19: the browser check reads in the house date token
+    // (dateTok), as the Wildfire time statement writes the same check.
+    // Red on 22268b3: the year-less 12-hour form ("browser checked Nov 6, 1:14 PM PST").
+    await expect(
+      minimap.locator('[data-framing="alaska-northwest"]'),
+    ).toHaveAttribute(
+      'aria-label',
+      /browser checked [A-Z][a-z]{2} \d{1,2}, \d{4}, \d{2}:\d{2} \S+\./,
+    );
     // A live mapped-fire framing has no discrete date to claim.
     expect(
       await minimap
@@ -361,6 +371,53 @@ test.describe('S4b minimap', () => {
     expect(
       await minimap.locator('.shell-minimap-canvas').getAttribute('data-minimap-status'),
     ).toBeNull();
+  });
+
+  test('an outlook horizon reads only a product it loads, and is otherwise navigation-only and names no product it does not show', async ({
+    page,
+  }) => {
+    await stubCpcDroughtOutlook(page);
+    await stubWildfireMinimap(page, { 'alaska-northwest': 1 });
+    await gotoApp(page, '?view=brief&horizon=weeks-ahead');
+    const minimap = page.locator('.shell-minimap-map');
+    const scale = minimap.locator('.shell-minimap-scale');
+    const canvas = minimap.locator('.shell-minimap-canvas');
+    const pacific = minimap.locator('[data-framing="pacific-coast"]');
+    // Drought at Weeks ahead draws the CPC Drought Outlook, whose minimap row
+    // is the owner's to turn on (src/config/minimap-readings.ts). Until then
+    // no framing is shaded and no product is named, least of all the
+    // Drought Monitor the main map is not showing.
+    await expect(canvas).toHaveAttribute('data-metric-context', 'drought');
+    await expect(scale).toHaveText('Unshaded · see main map');
+    await expect(pacific).toHaveAttribute('data-drought-class', 'neutral');
+    await expect(pacific).toHaveAttribute('aria-label', /Framings are unshaded in this display\./);
+    await expect(pacific).not.toHaveAttribute('aria-label', /Drought Monitor|Drought Outlook|informs/);
+    expect(await canvas.getAttribute('data-minimap-status')).toBeNull();
+    await pacific.click();
+    await expect(page.locator('#map-key')).not.toContainText(/informs (this|the) minimap/);
+    // Wildfire keeps Weeks ahead, which draws the perimeters too, so the
+    // shipped perimeter count reads there as at Current.
+    await page.locator('.shell-cluster-btn[data-cluster="wildfire"]').click();
+    await expect(canvas).toHaveAttribute('data-metric-context', 'wildfire');
+    await expect(
+      page.locator('.shell-horizon-btn[data-horizon="weeks-ahead"]'),
+    ).toHaveAttribute('aria-pressed', 'true');
+    await expect(scale).toHaveText('NIFC / WHP 2023');
+    await expect(
+      minimap.locator('[data-framing="alaska-northwest"]'),
+    ).toHaveAttribute('data-wildfire-condition', 'mapped-wildfire');
+    // Season ahead draws the perimeters beside the WHP raster (DR-022), but its minimap
+    // row reads nothing yet (src/config/minimap-readings.ts): no count and no WHP fallback named.
+    await page.locator('.shell-horizon-btn[data-horizon="season-ahead"]').click();
+    await expect(scale).toHaveText('Unshaded · see main map');
+    await expect(pacific).toHaveAttribute('data-wildfire-condition', 'neutral');
+    await expect(pacific).not.toHaveAttribute('aria-label', /NIFC|Wildfire Hazard Potential/);
+    // Back at Current, the shipped reading returns as it was.
+    await page.locator('.shell-horizon-btn[data-horizon="current"]').click();
+    await expect(scale).toHaveText('NIFC / WHP 2023');
+    await expect(
+      minimap.locator('[data-framing="alaska-northwest"]'),
+    ).toHaveAttribute('data-wildfire-condition', 'mapped-wildfire');
   });
 
   test('the annotated granular drought URL keeps the selected drought metric and regional fills', async ({

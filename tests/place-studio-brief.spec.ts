@@ -342,7 +342,17 @@ test.describe('PS-BRIEF PLACE studio rendering', () => {
     const tribalRow = overlapColumn.locator('[data-overlap-kind="tribe"]');
     await expect(tribalRow).toHaveCount(1);
     await expect(tribalRow).toContainText(FIXTURE_NATION_NAME);
-    await expect(tribalRow.locator('.place-overlap-tribal-caveat')).toHaveText(
+    // D13 (the look of 2026-11-05): the rows' public sources are named and
+    // the representation note stands once for the group, never per row.
+    await expect(tribalRow.locator('.place-overlap-tribal-caveat')).toHaveCount(0);
+    await expect(columns.locator('.place-overlap-tribal-caveat')).toHaveCount(2);
+    // Public naming, not the catalog's internal sourceLabels.
+    await expect(columns.locator('#place-overlap-tribal-source')).toHaveText(
+      'Tribal Nations: names from the Bureau of Indian Affairs Federal Register list of federally recognized Tribes (2026-01-30); boundaries from the Bureau of Indian Affairs American Indian and Alaska Native Land Area Representation (AIAN-LAR).'
+    );
+    await expect(columns.locator('#place-overlap-tribal-source')).not.toContainText('FeatureServer');
+    await expect(columns.locator('#place-overlap-tribal-source')).not.toContainText('LARNAME');
+    await expect(columns.locator('#place-overlap-tribal-representation')).toHaveText(
       caveatFor('bia-reservation')
     );
 
@@ -368,6 +378,8 @@ test.describe('PS-BRIEF PLACE studio rendering', () => {
     await expect(columns.locator('#place-overlap-empty')).toHaveText(
       'No overlapping places listed.'
     );
+    // No Tribal row, no Tribal source or representation note.
+    await expect(columns.locator('#place-overlap-tribal-note')).toHaveCount(0);
   });
 
   test('keeps declared watershed capabilities available when a geometry request fails', async ({
@@ -558,12 +570,73 @@ test.describe('PS-BRIEF return hand-off', () => {
     await expect(page.locator(PLACE_ROOT)).toHaveCount(0);
     await expect(page.locator('#impact-panel')).toHaveCount(0);
   });
+
+  test('browser Back while Back to map waits steps history back once', async ({ page }) => {
+    let releaseGeometry = (): void => {};
+    const geometryHeld = new Promise<void>((resolve) => {
+      releaseGeometry = resolve;
+    });
+    await page.route('**/wbd/MapServer/*/query?*', async (route) => {
+      const url = new URL(route.request().url());
+      if (url.searchParams.get('resultRecordCount') === '1') {
+        // Hold the selected watershed's boundary so Back to map waits on it.
+        await geometryHeld;
+        await route
+          .fulfill({ status: 200, contentType: 'application/geo+json', body: EMPTY_COLLECTION })
+          .catch(() => {});
+        return;
+      }
+      const layer = url.pathname.split('/').at(-2);
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          features: [
+            {
+              attributes:
+                layer === '1'
+                  ? { huc2: '17', name: 'Pacific Northwest' }
+                  : { huc4: '1703', name: 'Yakima' }
+            }
+          ]
+        })
+      });
+    });
+    await gotoApp(page, '?view=brief&layers=places');
+    // A same-document entry under the studio's, so a second step is counted instead of leaving the page.
+    await page.evaluate(() => {
+      const counted = window as unknown as { __ddmPops: number };
+      history.pushState(null, '', location.href);
+      counted.__ddmPops = 0;
+      window.addEventListener('popstate', () => {
+        counted.__ddmPops += 1;
+      });
+    });
+    await page.locator('#studio-entry-pair #place-studio-entry').click();
+    await page.locator('#place-type-watershed').click();
+    await page.locator('#place-studio-search').fill('Yakima');
+    await page.locator('#place-list-panel .place-studio-option').click();
+
+    const back = page.locator('#place-studio-back');
+    await back.click();
+    await expect(back).toBeDisabled();
+    await page.goBack();
+    await expect(page.locator(PLACE_ROOT)).toHaveCount(0);
+    releaseGeometry();
+    // The studio's cleanup aborted the wait; two frames is past its settling.
+    await page.evaluate(
+      () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+    );
+    expect(
+      await page.evaluate(() => (window as unknown as { __ddmPops: number }).__ddmPops)
+    ).toBe(1);
+  });
 });
 
 /**
  * Before DR-169, a sidebar hazard click reached the studio's deferred
  * hand-off (src/ui/island/shell.tsx runDisplayCommand,
- * setPlaceStudioReturnDisplayCommand) while the Place studio stayed open,
+ * setPlaceReturnDisplayCommand) while the Place studio stayed open,
  * and this describe pinned that the display command composed with the
  * return hand-off's briefing rather than replacing it (/code-review,
  * 2026-09-10: the exposed-sidebar fix, Codex finding 6,

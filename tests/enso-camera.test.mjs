@@ -69,6 +69,24 @@ test('a boot into ENSO fits the Pacific only when the URL names no camera of its
   }
 });
 
+/**
+ * Audit round 6, R6-8: entering ENSO from Wildfire 3D. The 3D scene's own ease
+ * back to its pre-3D camera ran after the Pacific fit and cancelled it, and the
+ * camera held for leaving ENSO kept the 3D tilt. Pinned from source (the map
+ * wiring needs maplibre-gl). Red on f27a23c: the entry never ends the scene first.
+ */
+test('entering ENSO ends the 3D Fire view before the Pacific fit, and holds a flat camera for the way back', () => {
+  const sidebar = readFileSync(new URL('../src/ui/sidebar.ts', import.meta.url), 'utf8');
+  const start = sidebar.indexOf('onHazardClusterChange(() => {');
+  const block = sidebar.slice(start, sidebar.indexOf('previousCluster = next;', start));
+  assert.ok(start > 0 && block.length > 0);
+  const drop = block.indexOf('setFire3DPreference(false)');
+  assert.ok(drop > 0, 'the entry ends the 3D scene');
+  assert.ok(drop < block.indexOf('holdEnsoCamera('), 'before the camera is held');
+  assert.ok(drop < block.indexOf("fitOcean(map, 'pacific')"), 'before the Pacific fit');
+  assert.ok(block.includes('{ ...camera, pitch: 0, bearing: 0 }'), 'the held camera is flat and north-up');
+});
+
 test('Reset is the bare link: default region, the Pacific in ENSO, base map, desktop sidebar reopened', () => {
   const sidebar = readFileSync(new URL('../src/ui/sidebar.ts', import.meta.url), 'utf8');
   const start = sidebar.indexOf("getElementById('reset-btn')");
@@ -78,6 +96,8 @@ test('Reset is the bare link: default region, the Pacific in ENSO, base map, des
   assert.ok(reset.includes('STATE.embed ? embedHomeRegion : DEFAULT_REGION'));
   assert.ok(reset.includes('selectRegion(map, home)'));
   assert.ok(reset.includes('ensoBootFitsPacific(cluster, false, false, home === DEFAULT_REGION, false)'));
+  // The person's hazard: the store reads Drought for a custom set made in ENSO or Wildfire.
+  assert.ok(reset.includes('const cluster = getSelectedHazard();') && !reset.includes('getHazardCluster()'));
   assert.ok(reset.includes("fitOcean(map, 'pacific')"));
   assert.ok(
     reset.indexOf('selectRegion(map, home)') < reset.indexOf("fitOcean(map, 'pacific')"),

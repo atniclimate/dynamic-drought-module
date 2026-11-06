@@ -547,6 +547,15 @@ export const ARCGIS_FIELD_PROBES = Object.freeze([
   { key: 'eiaPowerPlantsFeatureLayer', file: 'src/layers/power-3d.ts', layer: '', constName: 'PLANTS_OUT_FIELDS' },
   // DAY1_LAYER_ID in spc-fire-weather.ts.
   { key: 'spcFireWeatherOutlookMapServer', file: 'src/layers/spc-fire-weather.ts', layer: '/1' },
+  // The ENSO outlook map layers. The reader sends one list per family (a
+  // ternary): the seasonal Lead 1 (REST layer 0 of each service) and the 6-10
+  // and 8-14 day layers (each service: 0 temperature, 1 precipitation).
+  { key: 'cpcSeasonalPrecipOutlookMapServer', file: 'src/layers/cpc-seasonal-read.ts', layer: '/0', pick: (fields) => fields.includes('valid_seas') },
+  { key: 'cpcSeasonalTempOutlookMapServer', file: 'src/layers/cpc-seasonal-read.ts', layer: '/0', pick: (fields) => fields.includes('valid_seas') },
+  { key: 'cpc610OutlookMapServer', file: 'src/layers/cpc-seasonal-read.ts', layer: '/0', pick: (fields) => fields.includes('start_date') },
+  { key: 'cpc610OutlookMapServer', file: 'src/layers/cpc-seasonal-read.ts', layer: '/1', pick: (fields) => fields.includes('start_date') },
+  { key: 'cpc814OutlookMapServer', file: 'src/layers/cpc-seasonal-read.ts', layer: '/0', pick: (fields) => fields.includes('start_date') },
+  { key: 'cpc814OutlookMapServer', file: 'src/layers/cpc-seasonal-read.ts', layer: '/1', pick: (fields) => fields.includes('start_date') },
   // F6 (S20 fix round, DDM-P7-T03): the Days 3-8 probabilistic field set
   // (SPC_PROBABILISTIC_OUT_FIELDS in src/impact/sources.ts), one row for
   // layer 8 (Day 3) standing for all six probabilistic layers, which share
@@ -573,8 +582,6 @@ export const ARCGIS_FIELD_PROBES = Object.freeze([
  */
 export const OUT_FIELDS_SENDERS_COVERED_ELSEWHERE = Object.freeze({
   'src/config/urls.ts': 'documentation comments only; no query is built here',
-  'src/layers/cpc-seasonal-read.ts':
-    'dormant: reached only from src/layers/cpc-seasonal-outlook.ts, which no shipped module imports, so no build carries it (checked 2026-10-08 for release 0.7.1); add its probe row when the adapter is admitted',
   'src/util/bcws-perimeter-read.ts':
     'dormant: reached only from src/layers/bcws-fires.ts, which no shipped module imports, so no build carries it and nothing contacts the Province (checked 2026-10-08 for release 0.7.1); BC read limits are undecided, add its probe row only with that ruling',
   'src/state/display-snapshot.ts': 'extracted list (BIA LARID) is a subset of the biaLarFeatureServer row today; not probed on its own',
@@ -676,6 +683,42 @@ export function checkFieldSchema(expected, bodyText) {
     return { miss: `missing fields: ${missing.join(', ')}${near}`, note: '' };
   }
   return { miss: null, note: `${expected.length}/${expected.length} requested fields present` };
+}
+
+/** Judge a WWA layer `?f=json` body against the product names the alert reader asks for:
+ * each must be a value of the service renderer's own list, or a rename drops it silently. */
+export function checkProductNames(expected, bodyText) {
+  let json;
+  try {
+    json = JSON.parse(bodyText);
+  } catch {
+    return { miss: 'layer body is not JSON', note: '' };
+  }
+  if (json && json.error) {
+    return { miss: `ArcGIS error ${json.error.code ?? '?'} ${json.error.message ?? ''}`.trim(), note: '' };
+  }
+  const values = json?.drawingInfo?.renderer?.uniqueValueInfos;
+  if (!Array.isArray(values)) return { miss: 'layer body has no renderer value list', note: '' };
+  const served = new Set(values.map((info) => info?.value));
+  const missing = expected.filter((name) => !served.has(name));
+  if (missing.length > 0) return { miss: `products not in the renderer: ${missing.join(', ')}`, note: '' };
+  return { miss: null, note: `${expected.length}/${expected.length} requested products in the renderer` };
+}
+
+/** The pre-2025 names the heat set still asks for on purpose (Hazard Simplification renamed
+ * Excessive Heat to Extreme Heat; src/config/palette.ts): the renderer no longer lists them. */
+export const RETIRED_ALERT_PRODUCTS = Object.freeze(['Excessive Heat Warning', 'Excessive Heat Watch']);
+
+/** One probe of every product name any mode's alert set asks for (HazardClusterDef.alerts),
+ * read from the mode table itself; a missing WWA key is a disarmed probe and throws. */
+export async function buildProductProbeEntry(urlEntries) {
+  const base = urlEntries.find((e) => e.key === 'nwsWwaMapServer');
+  if (!base) throw new Error('product probe: nwsWwaMapServer is not an extracted urls.ts entry; the probe is disarmed');
+  const { HAZARD_CLUSTERS } = await import('../src/config/clusters.ts');
+  const productsExpected = [...new Set(Object.values(HAZARD_CLUSTERS).flatMap((def) => def.alerts?.events ?? []))]
+    .filter((name) => !RETIRED_ALERT_PRODUCTS.includes(name));
+  if (productsExpected.length === 0) throw new Error('product probe: no mode names alert products; the probe is disarmed');
+  return { key: 'products:nwsWwaMapServer', url: `${base.url}?f=json`, tier: DRIFT_TIERS.RUNTIME, productsExpected };
 }
 
 async function fieldListsForProbe(probe, root) {
@@ -783,6 +826,10 @@ export async function check(entry) {
       if (fieldNote && entry.fieldsDynamic?.length) {
         fieldNote += `; template token${entry.fieldsDynamic.length === 1 ? '' : 's'} ${entry.fieldsDynamic.map((t) => '${' + t + '}').join(', ')} not checked`;
       }
+    } else if (entry.productsExpected && resp.status < 400) {
+      const result = checkProductNames(entry.productsExpected, await resp.text());
+      tripwireMiss = result.miss;
+      fieldNote = result.note;
     }
     const ok = resp.status < 400 && !corsInvalid && tripwireMiss === null;
     const detail =
@@ -1019,6 +1066,8 @@ async function main() {
     // Field-schema rows for every ArcGIS outFields list the runtime sends;
     // an unresolvable row throws (a disarmed probe must fail loudly).
     entries.push(...(await buildFieldProbeEntries(entries)));
+    // The alert products every mode asks for, against the WWA renderer's own names.
+    entries.push(await buildProductProbeEntry(entries));
   }
   entries.push(...LANDSCAPE_PROBES);
 

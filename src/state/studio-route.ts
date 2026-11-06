@@ -1,9 +1,4 @@
-import {
-  clearPlaceReturn,
-  setPlaceReturnBriefing,
-  setPlaceReturnDisplayCommand,
-  takePlaceReturn
-} from './place-return';
+import { clearPlaceReturn } from './place-return';
 import { normalizeSidebarParam, parseStudioParam } from './url';
 
 /** The bounded query-state route vocabulary for the two studios. */
@@ -191,35 +186,6 @@ export function enterPlaceStudio(): void {
 /** Browser Back and the studio control share this exact one-step action. */
 export function backToMap(): void {
   window.history.back();
-}
-
-/**
- * Queue the selected-exit BRIEFING to run after popstate has unmounted the
- * studio. The studio owns this slot: newest selection wins, null clears it.
- */
-export function setPlaceStudioReturnAction(action: (() => void) | null): void {
-  setPlaceReturnBriefing(action);
-}
-
-/**
- * Queue a sidebar DISPLAY COMMAND (cluster, horizon) behind the studio's
- * exit. Its own slot, so it neither overwrites nor is overwritten by the
- * briefing above (src/state/place-return.ts). Newest command wins.
- */
-export function setPlaceStudioReturnDisplayCommand(
-  action: (() => void) | null
-): void {
-  setPlaceReturnDisplayCommand(action);
-}
-
-/**
- * Take (and clear) the pending PLACE return hand-off, the display command
- * composed before the briefing. Called by the PLACE studio island's unmount
- * cleanup AFTER restoreDisplaySnapshot(), which is the only ordering that
- * honors restore-then-act deterministically.
- */
-export function takePlaceStudioReturnAction(): (() => void) | null {
-  return takePlaceReturn();
 }
 
 /** Build an embed link-out from the latest current URL state. */

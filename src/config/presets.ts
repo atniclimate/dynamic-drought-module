@@ -1,4 +1,4 @@
-import { HAZARD_CLUSTERS } from './clusters';
+import { HAZARD_CLUSTERS, type HazardClusterKey } from './clusters';
 import type { LayerKey } from './layers';
 
 /**
@@ -11,7 +11,8 @@ import type { LayerKey } from './layers';
  * URL sync, and status pills stay honest) and then leaves the user free to
  * adjust: presets set state without locking it. There is no preset
  * parameter, only the granular `layers` and the optional `basemap` state the
- * preset produces. A preset leaves the committed horizon where it is.
+ * preset produces. A preset leaves the committed horizon where it is unless
+ * its mode declares an entry horizon (`mode` below).
  *
  * Constraint: a preset names at most ONE surface-role layer (the
  * one-surface-at-a-time invariant, UX-1). `resolveExclusiveSurface`
@@ -54,6 +55,11 @@ export interface ViewPreset {
   readonly description: string;
   /** Basemap requested only by an explicit click on this preset. */
   readonly preferredBasemap?: 'satellite';
+  /** The mode this preset is the phone face of; a press commits that mode's
+   * `entryHorizon` when it declares one (an entry into ENSO opens on its
+   * Season ahead outlook), undoes a horizon an earlier preset's entry imposed
+   * when it declares none, and otherwise leaves the horizon where it is. */
+  readonly mode: HazardClusterKey;
   /** Layer keys to activate, in activation order. At most one surface. */
   readonly layers: readonly LayerKey[];
 }
@@ -65,7 +71,8 @@ export interface ViewPreset {
  * question-named: on a phone the visitor reaches for ENSO, fire, drought, or
  * heat, not a temporal frame. REPLACE the active set through the controller;
  * at most one surface; never locked. A rail press leaves the committed
- * horizon where it is (the phone shell shows no horizon row), and the
+ * horizon where it is (the phone shell shows no horizon row) unless its
+ * mode declares an entry horizon, and the
  * rail's pressed state is the registry-driven surface read in
  * src/ui/sidebar.ts's `wireHazardRail`. Deliberately slim layer sets: the
  * rail's job is the fastest honest read of one hazard, not a composed
@@ -78,23 +85,29 @@ export const MOBILE_HAZARD_PRESETS: readonly ViewPreset[] = [
     key: 'hazard-enso',
     label: 'ENSO',
     description: HAZARD_CLUSTERS.enso.description,
-    layers: ['sst-anomaly', 'aiannh']
+    mode: 'enso',
+    // The SST surface first (the rail's pressed state reads layers[0]), then
+    // the Season ahead outlook the ENSO entry opens on.
+    layers: ['sst-anomaly', 'cpc-seasonal-precip', 'aiannh']
   },
   {
     key: 'hazard-drought',
     label: 'Drought',
     description: 'Current drought conditions: the tri-national North American Drought Monitor',
+    mode: 'drought',
     layers: ['nadm-drought', 'aiannh']
   },
   {
     key: 'hazard-heat',
     label: 'Heat',
     description: 'Extreme heat: published National Weather Service HeatRisk heat-impact levels for the selected date, with active heat notices',
+    mode: 'heat',
     layers: ['heatrisk', 'nws-alerts', 'aiannh']
   },
   {
     key: 'hazard-fire',
     label: 'Fire',
+    mode: 'wildfire',
     description: 'Wildfire: recent NOAA GOES GeoColor context; the SPC fire-weather outlook with current mapped fire perimeters, including Wildfire and Prescribed fire, plus independently timed NOAA Hazard Mapping System (HMS) smoke plumes',
     preferredBasemap: 'satellite',
     // hms-smoke is named explicitly (maintainer ruling 2026-07-15): a fire

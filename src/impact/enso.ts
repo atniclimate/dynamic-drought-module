@@ -258,6 +258,16 @@ const DIRECTION_SPAN = 3;
  * claim text so a reader is never shown it as an issuer threshold.
  */
 const WEEKLY_DIRECTION_SPAN = 4;
+
+/**
+ * The contract's `directionOf`: the change is rounded to the data's
+ * two-decimal precision first, so a printed +0.20 is never judged inside the
+ * band (3.4 - 3.2 is 0.19999999999999973).
+ */
+function directionOf(change: number): EnsoDirection {
+  const rounded = Math.round(change * 100) / 100;
+  return rounded >= DIRECTION_BAND ? 'strengthening' : rounded <= -DIRECTION_BAND ? 'weakening' : 'steady';
+}
 const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
 const MONTH_NAMES = [
   'January',
@@ -292,9 +302,11 @@ function snapshotAgeDays(retrieved: string): number | null {
  * How old this read really is (ENSO-05). `retrieved` is rewritten on every
  * scheduled build whether or not CPC published anything, so retrieval age
  * alone can never notice a frozen upstream. The hedges therefore key on the
- * LARGER of the retrieval age and the age of the oldest captured CPC
+ * LARGER of the retrieval age and the age of the older headline (RONI or ONI)
  * publication date, and `basis` records which one is speaking so the prose
- * never attributes a publication age to the snapshot file.
+ * never attributes a publication age to the snapshot file. A companion file
+ * (monthly and weekly Nino 3.4, SOI) is withheld on its own age instead
+ * (`companionFresh`), so one frozen companion cannot date the headline.
  */
 interface SnapshotAge {
   readonly days: number;
@@ -304,13 +316,7 @@ interface SnapshotAge {
 function snapshotAge(snap: EnsoSnapshot): SnapshotAge | null {
   const retrievedAge = snapshotAgeDays(snap.retrieved);
   if (retrievedAge === null) return null;
-  const publishedAges = [
-    snap.roni.published,
-    snap.oni.published,
-    snap.nino34?.published,
-    snap.nino34Weekly?.published,
-    snap.soi?.published
-  ]
+  const publishedAges = [snap.roni.published, snap.oni.published]
     .map((day) => (day === undefined ? null : snapshotAgeDays(day)))
     .filter((age): age is number => age !== null);
   const oldestPublishedAge =
@@ -319,6 +325,12 @@ function snapshotAge(snap: EnsoSnapshot): SnapshotAge | null {
     return { days: oldestPublishedAge, basis: 'publication' };
   }
   return { days: retrievedAge, basis: 'retrieval' };
+}
+
+/** A companion file is shown only while its own CPC publication date is inside `limit` days. */
+function companionFresh(published: string | undefined, limit = HARD_STALE_DAYS): boolean {
+  const age = published === undefined ? null : snapshotAgeDays(published);
+  return age === null || age <= limit;
 }
 
 /**
@@ -364,7 +376,8 @@ function snapshotProvenance(snap: EnsoSnapshot): string {
   if (age.days > 45) {
     const weeks = Math.round(age.days / 7);
     return age.basis === 'publication'
-      ? ` This ENSO read is from the CPC index snapshot retrieved ${snap.retrieved}, but its oldest captured CPC publication date is now about ${weeks} weeks old, so the indices themselves are possibly out of date; check CPC for a newer issue.${publishedText}`
+      ? // DRAFT wording: "oldest captured CPC publication date" narrowed to the RONI and ONI dates this age is measured from (audit round 2).
+        ` This ENSO read is from the CPC index snapshot retrieved ${snap.retrieved}, but its older RONI or ONI publication date is now about ${weeks} weeks old, so the indices themselves are possibly out of date; check CPC for a newer issue.${publishedText}`
       : ` This ENSO read is from the CPC index snapshot retrieved ${snap.retrieved}, now about ${weeks} weeks old and possibly out of date; refresh the snapshot for the current state.${publishedText}`;
   }
   return ` This ENSO read is from the CPC index snapshot retrieved ${snap.retrieved}.${publishedText}`;
@@ -405,17 +418,10 @@ function readState(series: IndexSeries): IndexState {
         ? 'la-nina'
         : 'neutral';
   const previous = values[values.length - DIRECTION_SPAN];
-  const change = previous === undefined ? 0 : anom - previous.anom;
-  const direction: EnsoDirection =
-    change >= DIRECTION_BAND
-      ? 'strengthening'
-      : change <= -DIRECTION_BAND
-        ? 'weakening'
-        : 'steady';
   return {
     conditions,
     episode,
-    direction,
+    direction: directionOf(previous === undefined ? 0 : anom - previous.anom),
     emerging: conditions !== 'neutral' && episode === 'neutral',
     threshold: THRESHOLD,
     conditionsRule: RONI_PRODUCT_URL,
@@ -454,7 +460,15 @@ function conditionsSentence(state: IndexState, latest: SeasonalIndexPoint): stri
   }
   const side = state.conditions === 'el-nino' ? 'above' : 'below';
   const sign = state.conditions === 'el-nino' ? 'plus' : 'minus';
-  return `${PHASE_NAME[state.conditions]} conditions are present${EVENT_TREND[state.direction]}: the newest operational RONI season is ${roni}, ${side} the CPC onset threshold of ${sign} ${threshold} degrees Celsius for a single three-month season.`;
+  // `direction` is the raw sign of the change. In CPC's usage a La Nina
+  // strengthens as the anomaly grows more negative and weakens as it rises
+  // toward zero, so the event word flips for La Nina.
+  // DRAFT wording: the La Nina trend word now follows CPC's sense (audit round 2).
+  const trend =
+    state.conditions === 'la-nina'
+      ? ({ strengthening: 'weakening', weakening: 'strengthening', steady: 'steady' } as const)[state.direction]
+      : state.direction;
+  return `${PHASE_NAME[state.conditions]} conditions are present${EVENT_TREND[trend]}: the newest operational RONI season is ${roni}, ${side} the CPC onset threshold of ${sign} ${threshold} degrees Celsius for a single three-month season.`;
 }
 
 /**
@@ -491,7 +505,8 @@ function observedStateText(
     // age is never reported as the age of the snapshot file (ENSO-05).
     const ageClause =
       age.basis === 'publication'
-        ? `its oldest captured CPC publication date is about ${weeks} weeks old, so a new RONI season has likely posted and the state may have changed`
+        ? // DRAFT wording: narrowed from "oldest captured CPC publication date" (audit round 2).
+          `its older RONI or ONI publication date is about ${weeks} weeks old, so a new RONI season has likely posted and the state may have changed`
         : `about ${weeks} weeks old, so a new RONI season has likely posted and the state may have changed`;
     const wasConditions =
       state.conditions === 'neutral'
@@ -709,12 +724,7 @@ function nino34WeeklyText(series: Nino34WeeklySeries): string {
   const span = Math.min(WEEKLY_DIRECTION_SPAN, series.values.length);
   const earlier = series.values[series.values.length - span]!;
   const change = latest.anom - earlier.anom;
-  const direction: EnsoDirection =
-    change >= DIRECTION_BAND
-      ? 'strengthening'
-      : change <= -DIRECTION_BAND
-        ? 'weakening'
-        : 'steady';
+  const direction = directionOf(change);
   return (
     `Across the last ${span} weekly observations the Nino 3.4 sea surface temperature anomaly went from ${signed(earlier.anom, 1)} to ${signed(latest.anom, 1)} degrees Celsius, a change of ${signed(change, 2)} degrees Celsius measured against this application's own ${DIRECTION_BAND.toFixed(1)} degree band for calling a trajectory rather than noise, so across those weeks it is ${WEEKLY_TREND[direction]} (week centred ${weeklyDayText(latest)}, the newest week CPC has posted; this file dates each week at its centre). ` +
     // vocab-allow: honesty disclaimer, denies being a forecast
@@ -1031,7 +1041,9 @@ export async function fetchEnsoClaims(
     const text =
       observedStateText(state, snap.roni.latest, snap.retrieved, age) +
       (stale ? '' : ` ${oniContinuity(snap.roni, snap.oni)}`) +
-      (snap.soi && !stale ? ` ${soiAgreementText(snap.roni, snap.soi)}` : '') +
+      (snap.soi && !stale && companionFresh(snap.soi.published)
+        ? ` ${soiAgreementText(snap.roni, snap.soi)}`
+        : '') +
       snapshotProvenance(snap);
 
     const chartSvg = oniLineSvg(snap.roni.values, {
@@ -1100,7 +1112,8 @@ export async function fetchEnsoClaims(
           })
         ];
 
-    const observedCompanionClaims = snap.nino34 && !stale
+    // The monthly file posts about every 30 days, so 60 days means CPC skipped an issue and it is no longer the most recent month.
+    const observedCompanionClaims = snap.nino34 && !stale && companionFresh(snap.nino34.published, 60)
       ? [
           makeClaim({
             text: nino34Text(snap.nino34, snap.retrieved),
@@ -1125,7 +1138,8 @@ export async function fetchEnsoClaims(
     // trajectory read on weeks that may long since have been superseded is
     // worse than the named absence the cell falls back to.
     const weeklyObservationClaims =
-      snap.nino34Weekly && !stale
+      // The weekly file posts weekly, so 45 days (the soft hedge) means CPC froze it (wksst8110 once sat frozen at HTTP 200).
+      snap.nino34Weekly && !stale && companionFresh(snap.nino34Weekly.published, 45)
         ? [
             makeClaim({
               text: nino34WeeklyText(snap.nino34Weekly),

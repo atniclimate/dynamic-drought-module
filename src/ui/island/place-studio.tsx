@@ -1,13 +1,6 @@
 import { render } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import type {
-  Feature,
-  FeatureCollection,
-  GeoJsonProperties,
-  Geometry,
-  MultiPolygon,
-  Polygon
-} from 'geojson';
+import type { Feature, FeatureCollection, GeoJsonProperties } from 'geojson';
 
 import {
   PLACE_CATALOG,
@@ -48,21 +41,28 @@ import {
 import type { TypedPlaceKind, TypedPlaceRef } from '../../state/typed-place';
 import {
   beginPlaceStudioDisplay,
+  clearStudioEmphasis,
   emphasizeTypedPlace,
   restoreDisplaySnapshot,
   seedTribeEmphasisTargets,
   setPlaceStudioDisplayKind,
-  setStudioWatershedBoundary
+  setStudioWatershedBoundary,
+  showStudioReturnBoundary
 } from '../../state/display-snapshot';
-import {
-  backToMap,
-  setPlaceStudioReturnAction,
-  takePlaceStudioReturnAction
-} from '../../state/studio-route';
+import { getEmphasisTargets } from '../../state/place-emphasis';
+import { setPlaceReturnBriefing, takePlaceReturn } from '../../state/place-return';
+import { backToMap, getStudioRoute } from '../../state/studio-route';
 import {
   loadWatershedCandidates,
   loadWatershedSelectionGeometry
 } from '../../state/watershed-geometry';
+import {
+  assertCompleteFeatureCollection,
+  escapeSql,
+  isArealGeometry,
+  mergeArealGeometry
+} from '../../util/arcgis-features';
+import type { ArealGeometry } from '../../util/arcgis-features';
 import { fetchJsonWithBudget, fetchSharedJsonWithBudget, US_STATES_SHARED_KEY } from '../../util/fetch';
 import { foldSearchText } from '../../util/search-fold';
 import { openImpactPanel } from '../impact-panel';
@@ -94,10 +94,13 @@ const EMPTY_OVERLAP_RESULT = 'No overlapping places listed.';
 const UNAVAILABLE_OVERLAP_PAIR =
   'Overlap listing is not available for this pair yet.';
 const TRIBAL_OVERLAP_CAVEAT = caveatFor('bia-reservation');
+// DRAFT wording: the public naming of the Tribal Nations rows' sources (D13),
+// after README.md; PLACE_CATALOG.tribe.sourceLabels stay internal.
+const TRIBAL_OVERLAP_SOURCE =
+  'Tribal Nations: names from the Bureau of Indian Affairs Federal Register list of federally recognized Tribes (2026-01-30); boundaries from the Bureau of Indian Affairs American Indian and Alaska Native Land Area Representation (AIAN-LAR).';
 const PLACE_DATA_TIMEOUT_MS = 8_000;
 const PNW_BOUNDS = [-125, 41.5, -110.5, 49.5] as const;
 
-type ArealGeometry = Polygon | MultiPolygon;
 type NarrativeStatus = 'loading' | 'ready' | 'unavailable';
 type OverlapStatus = 'loading' | 'ready';
 
@@ -118,7 +121,6 @@ interface PlaceOverlapRow {
   readonly kind: TypedPlaceKind;
   readonly id: string;
   readonly label: string;
-  readonly caveat: string | null;
 }
 
 interface UnavailableOverlapCandidate {
@@ -228,44 +230,6 @@ async function fetchSharedUsStates(signal: AbortSignal): Promise<unknown> {
   );
 }
 
-function assertFeatureCollection(raw: unknown): FeatureCollection {
-  if (raw && typeof raw === 'object' && 'error' in raw) {
-    throw new Error('ArcGIS returned an error response.');
-  }
-  if (
-    !raw ||
-    typeof raw !== 'object' ||
-    (raw as { type?: unknown }).type !== 'FeatureCollection' ||
-    !Array.isArray((raw as { features?: unknown }).features)
-  ) {
-    throw new Error('Expected a GeoJSON FeatureCollection.');
-  }
-  if ((raw as { exceededTransferLimit?: unknown }).exceededTransferLimit === true) {
-    throw new Error('ArcGIS returned a partial FeatureCollection.');
-  }
-  return raw as FeatureCollection;
-}
-
-function isArealGeometry(
-  geometry: Geometry | null | undefined
-): geometry is ArealGeometry {
-  return geometry?.type === 'Polygon' || geometry?.type === 'MultiPolygon';
-}
-
-function mergeArealGeometry(features: readonly Feature[]): ArealGeometry | null {
-  const polygons: MultiPolygon['coordinates'] = [];
-  for (const feature of features) {
-    const geometry = feature.geometry;
-    if (geometry?.type === 'Polygon') polygons.push(geometry.coordinates);
-    if (geometry?.type === 'MultiPolygon') polygons.push(...geometry.coordinates);
-  }
-  if (polygons.length === 0) return null;
-  if (polygons.length === 1) {
-    return { type: 'Polygon', coordinates: polygons[0] ?? [] };
-  }
-  return { type: 'MultiPolygon', coordinates: polygons };
-}
-
 function textProperty(
   properties: GeoJsonProperties,
   key: string
@@ -274,10 +238,6 @@ function textProperty(
   if (typeof value === 'string' && value.trim() !== '') return value.trim();
   if (typeof value === 'number' && Number.isFinite(value)) return String(value);
   return null;
-}
-
-function escapeSql(value: string): string {
-  return value.replace(/'/g, "''");
 }
 
 // bboxIntersects/bboxIntersection share the N2-A circular
@@ -355,7 +315,7 @@ async function resolveStateSelection(
   entry: PlaceCatalogEntry,
   signal: AbortSignal
 ): Promise<ResolvedPlaceSelection | null> {
-  const collection = assertFeatureCollection(
+  const collection = assertCompleteFeatureCollection(
     await fetchSharedUsStates(signal)
   );
   abortIfNeeded(signal);
@@ -400,7 +360,7 @@ async function resolveTribeSelection(
     geometryPrecision: '5',
     f: 'geojson'
   });
-  const collection = assertFeatureCollection(
+  const collection = assertCompleteFeatureCollection(
     await fetchJson(
       `${URLS.biaLarFeatureServer}/query?${params.toString()}`,
       signal,
@@ -442,7 +402,7 @@ async function resolveEcoregionSelection(
     geometryPrecision: '5',
     f: 'geojson'
   });
-  const collection = assertFeatureCollection(
+  const collection = assertCompleteFeatureCollection(
     await fetchJson(
       `${URLS.epaEcoregionsMapServer}/${layer}/query?${params.toString()}`,
       signal,
@@ -515,7 +475,7 @@ async function loadStateCandidates(
   bbox: readonly [number, number, number, number],
   signal: AbortSignal
 ): Promise<FeatureCollection<ArealGeometry, PlaceOverlapProperties>> {
-  const collection = assertFeatureCollection(
+  const collection = assertCompleteFeatureCollection(
     await fetchSharedUsStates(signal)
   );
   abortIfNeeded(signal);
@@ -546,7 +506,7 @@ async function loadEcoregionCandidates(
         ? 'US_L4CODE,US_L4NAME,US_L3CODE,US_L3NAME'
         : 'US_L3CODE,US_L3NAME';
     const params = ecoregionCandidateParams(envelope, outFields, selectionKind);
-    return assertFeatureCollection(
+    return assertCompleteFeatureCollection(
       await fetchJson(
         `${URLS.epaEcoregionsMapServer}/${layer}/query?${params.toString()}`,
         siblingSignal,
@@ -609,7 +569,7 @@ async function loadTribeCandidates(
         envelope,
         'LARID,LARNAME,CLASSIFICATION,GISACRES,REGION'
       );
-      return assertFeatureCollection(
+      return assertCompleteFeatureCollection(
         await fetchJson(
           `${URLS.biaLarFeatureServer}/query?${params.toString()}`,
           siblingSignal,
@@ -748,10 +708,6 @@ async function loadOverlapView(
   selected: ResolvedPlaceSelection,
   signal: AbortSignal
 ): Promise<OverlapViewState> {
-  const requestBbox =
-    entry.kind === 'ecoregion'
-      ? bboxIntersection(selected.bbox, PNW_BOUNDS) ?? selected.bbox
-      : selected.bbox;
   const availableKinds = PLACE_TYPE_ORDER.filter((kind) =>
     overlapPairAvailable(entry, kind, selected.bbox)
   );
@@ -763,7 +719,10 @@ async function loadOverlapView(
       try {
         return {
           kind,
-          candidates: await loadCandidateKind(kind, requestBbox, signal, entry.kind)
+          // The whole extent for every kind: an ecoregion reaches past the PNW
+          // strip (Central Basin and Range runs to 36.4 N); loadCandidateKind
+          // scopes only the ecoregion catalog.
+          candidates: await loadCandidateKind(kind, selected.bbox, signal, entry.kind)
         } as const;
       } catch (err) {
         if (signal.aborted) throw err;
@@ -828,9 +787,7 @@ async function loadOverlapView(
         relationship: row.relationship,
         kind: properties.placeKind,
         id: properties.placeId,
-        label: properties.placeLabel,
-        caveat:
-          properties.placeKind === 'tribe' ? TRIBAL_OVERLAP_CAVEAT : null
+        label: properties.placeLabel
       });
     }
   }
@@ -862,23 +819,53 @@ function placeStillCurrent(entry: PlaceCatalogEntry): boolean {
  * own resolution, when there is one; if that was aborted by the unmount
  * cleanup, or there is none yet, it resolves INDEPENDENTLY (bounded by the
  * fetch budget). It opens only while the durable typed place still names the
- * entry (newest intent wins).
+ * entry (newest intent wins); a chase that ends with no briefing unlights the
+ * place, since the exit's own unlight stood down for it, unless a newer
+ * emphasis took over.
  */
 function chaseBriefingOnReturn(
   entry: PlaceCatalogEntry,
   pending: Promise<ResolvedPlaceSelection | null> | null
 ): () => void {
   return () => {
+    const lit = getEmphasisTargets();
     const resolveIndependently = (): Promise<ResolvedPlaceSelection | null> =>
       resolvePlaceSelection(entry, new AbortController().signal);
     void (pending ? pending.catch(resolveIndependently) : resolveIndependently())
+      .catch(() => null)
       .then((resolved) => {
-        if (resolved && placeStillCurrent(entry)) {
-          openImpactPanel(resolved.context);
-        }
+        // A newer typed place owns the light now.
+        if (!placeStillCurrent(entry)) return;
+        if (resolved) openReturnBriefing(entry, resolved);
+        // A map click on a land area relights without changing the typed place.
+        else if (getEmphasisTargets() === lit) clearStudioEmphasis();
       })
       .catch(() => undefined);
   };
+}
+
+/** Set while the exit hand-off runs a briefing, so the exit unlights its place only when none follows. */
+let briefingHandedBack = false;
+
+/** Run the exit hand-off; with no briefing on it, nothing would ever unlight the place the studio lit. */
+function runReturnHandoff(): void {
+  briefingHandedBack = false;
+  takePlaceReturn()?.();
+  if (!briefingHandedBack) clearStudioEmphasis();
+}
+
+/** Queue the exit briefing (newest wins, as setPlaceReturnBriefing). */
+function queueReturnBriefing(action: () => void): void {
+  setPlaceReturnBriefing(() => {
+    briefingHandedBack = true;
+    action();
+  });
+}
+
+/** The exit briefing; a Nation's boundary is drawn after the open, so the overlay records the Nation's selection. */
+function openReturnBriefing(entry: PlaceCatalogEntry, resolved: ResolvedPlaceSelection): void {
+  openImpactPanel(resolved.context);
+  if (entry.kind === 'tribe') showStudioReturnBoundary(resolved.geometry);
 }
 
 function PlaceStudio() {
@@ -926,7 +913,7 @@ function PlaceStudio() {
       // hand-off runs only here, AFTER restoreDisplaySnapshot(), so it can
       // neither open before the restore nor be cancelled by the restore's
       // intent supersede (the former popstate microtask raced both ways).
-      takePlaceStudioReturnAction()?.();
+      runReturnHandoff();
     };
   }, []);
 
@@ -1002,7 +989,7 @@ function PlaceStudio() {
   }, [entries, kind, selection]);
 
   useEffect(() => {
-    setPlaceStudioReturnAction(null);
+    setPlaceReturnBriefing(null);
     setStudioWatershedBoundary(null);
     resolvedSelectionRef.current = null;
     selectionPromiseRef.current = null;
@@ -1077,7 +1064,7 @@ function PlaceStudio() {
       explicitSelectionKeyRef.current === selectionKey &&
       coverage.briefable.state === 'available'
     ) {
-      setPlaceStudioReturnAction(chaseBriefingOnReturn(selectionEntry, promise));
+      queueReturnBriefing(chaseBriefingOnReturn(selectionEntry, promise));
     }
 
     void promise
@@ -1124,7 +1111,7 @@ function PlaceStudio() {
           explicitSelectionKeyRef.current === selectionKey &&
           coverage.briefable.state === 'available'
         ) {
-          setPlaceStudioReturnAction(() => openImpactPanel(resolved.context));
+          queueReturnBriefing(() => openReturnBriefing(selectionEntry, resolved));
         }
 
         if (coverage.briefable.state === 'available') {
@@ -1210,7 +1197,7 @@ function PlaceStudio() {
           // DDM-P2-T10: the deferred tribe emphasis falls back to
           // display-snapshot's own (unseeded) resolution here, honestly
           // attempting the live query rather than leaving a stale highlight.
-          if (selectionEntry.kind === 'tribe') {
+          if (selectionEntry.kind === 'tribe' && selectionStillCurrent()) {
             emphasizeTypedPlace(selection, selectionEntry);
           }
           setNarrativeStatus('unavailable');
@@ -1248,6 +1235,8 @@ function PlaceStudio() {
       } catch {
         // The selected capability remains unavailable when its fetch failed.
       }
+      // Browser Back during the wait already left the studio; a second back would leave the site.
+      if (getStudioRoute() !== 'place') return;
     }
     backToMap();
   };
@@ -1395,7 +1384,7 @@ function PlaceStudio() {
                         onClick={() => {
                           const selectionKey = `${entry.kind}:${entry.id}`;
                           explicitSelectionKeyRef.current = selectionKey;
-                          setPlaceStudioReturnAction(null);
+                          setPlaceReturnBriefing(null);
                           const resolved = resolvedSelectionRef.current;
                           if (coverageForEntry(entry).briefable.state === 'available') {
                             // FE-23: register the hand-off in the click's
@@ -1406,11 +1395,11 @@ function PlaceStudio() {
                             // the briefing was lost. The effect replaces
                             // this action with its own once it runs.
                             if (resolved?.key === selectionKey) {
-                              setPlaceStudioReturnAction(() =>
-                                openImpactPanel(resolved.value.context)
+                              queueReturnBriefing(() =>
+                                openReturnBriefing(entry, resolved.value)
                               );
                             } else {
-                              setPlaceStudioReturnAction(chaseBriefingOnReturn(entry, null));
+                              queueReturnBriefing(chaseBriefingOnReturn(entry, null));
                             }
                           }
                           setSelectionEntry(entry);
@@ -1495,11 +1484,6 @@ function PlaceStudio() {
                                   >
                                     <span>{row.label}</span>
                                     <small>{PLACE_CATALOG[row.kind].label}</small>
-                                    {row.caveat ? (
-                                      <p class="place-overlap-tribal-caveat">
-                                        {row.caveat}
-                                      </p>
-                                    ) : null}
                                   </li>
                                 ))}
                               </ul>
@@ -1507,6 +1491,19 @@ function PlaceStudio() {
                           );
                         })}
                       </div>
+                      {/* D13: the Tribal Nations rows' public sources and the
+                          representation note, once for the group, not per row. */}
+                      {overlapView.rows.some((row) => row.kind === 'tribe') ? (
+                        <div id="place-overlap-tribal-note">
+                          {/* One class for both: the stylesheet's existing small-print rule. */}
+                          <p id="place-overlap-tribal-source" class="place-overlap-tribal-caveat">
+                            {TRIBAL_OVERLAP_SOURCE}
+                          </p>
+                          <p id="place-overlap-tribal-representation" class="place-overlap-tribal-caveat">
+                            {TRIBAL_OVERLAP_CAVEAT}
+                          </p>
+                        </div>
+                      ) : null}
                       {overlapView.rows.length === 0 &&
                       overlapView.unavailableKinds.length < PLACE_TYPE_ORDER.length ? (
                         <p id="place-overlap-empty">{EMPTY_OVERLAP_RESULT}</p>

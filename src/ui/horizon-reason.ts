@@ -8,17 +8,14 @@ import { horizonSurfaceSignature } from '../state/timeline';
  * hazard whose recipe repeats across horizons (DDM-P8-T03, DR-017 a).
  * Named here rather than derived, because only the owning layer's own
  * doctrine explains why its one surface honestly answers every horizon
- * (`src/layers/heatrisk.ts`, `src/layers/sst-anomaly.ts`); drought and
- * wildfire never hit this branch (every one of their three recipes has
- * a distinct signature), so they carry no entry.
+ * (`src/layers/heatrisk.ts`); drought, wildfire and ENSO never hit this
+ * branch (every one of their three recipes has a distinct signature; ENSO's
+ * since its CPC outlook layers, 2026-11-06), so they carry no entry.
  */
 const DUPLICATE_SURFACE_DETAIL: Partial<Record<HazardClusterKey, string>> = {
   heat:
     'the National Weather Service HeatRisk sequence publishes seven daily ' +
-    'periods on one surface, and the Valid date control in the key selects the day.',
-  enso:
-    'the sea-surface-temperature anomaly field is one analysed daily ' +
-    'surface at every horizon.'
+    'periods on one surface, and the Valid date control in the key selects the day.'
 };
 
 /**

@@ -7,8 +7,9 @@
  * DURABLE APPLICATION STATE: it survives panel close, screen changes,
  * and studio round trips, unlike the existing popup-scoped
  * `PlaceSelection` (src/state/place-selection.ts), which clears when
- * its popup closes. The two stores coexist until a later unit
- * reconciles the boundary-click path onto this one.
+ * its popup closes. A state or ecoregion selection writes this store
+ * (place-selection.ts, DR-099); BIA and AIANNH selections do not yet,
+ * so the two stores still coexist for Tribal areas.
  *
  * NEVER URL STATE: there is no typed-place URL parameter and no
  * coordinate parameter in any form (D-0.7.0-035 ruling 2, D-0.7.0-046;

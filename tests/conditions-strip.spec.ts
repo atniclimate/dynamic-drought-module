@@ -8,8 +8,10 @@ import {
   PILL
 } from './helpers';
 import { stubRecentSatellite } from './satellite-fixture';
+import { isNifcRequestUrl } from './wildfire-fixtures';
 import { SATELLITE_PROBE_BBOX } from '../src/map/satellite';
 import { HAZARD_CLUSTERS, HAZARD_CLUSTER_KEYS } from '../src/config/clusters';
+import { composeClusterIntent } from '../src/state/cluster-service';
 
 /**
  * UX-3 conditions strip: a dated at-a-glance summary of the rendered map.
@@ -180,16 +182,12 @@ test.describe('UX-3 conditions strip', () => {
     // E1 deliverable 6: no off-state card before the layer goes on.
     await expect(fires).toHaveCount(0);
 
-    // Turn the NIFC perimeter layer on and let its activation settle. The
-    // reflect-the-map contract is asserted only when the layer actually
-    // renders; on an upstream outage the honest outcome is an "unavailable"
-    // pill with the checkbox self-corrected off and the tile still absent,
-    // which is correct behavior, not a regression, so the spec skips rather
-    // than fails (the deterministic backbone never reds on a blipping agency).
+    // Turn the NIFC perimeter layer on and let its activation settle. gotoApp
+    // answers NIFC from the fixture (installDefaultNifcStub), so no agency
+    // outage reaches this case: a pill short of live is a bug, and it fails.
     await layerCheckbox(page, 'nifc-fires').check();
     await waitForLayerSettled(page, 'nifc-fires');
-    const pill = (await layerPill(page, 'nifc-fires').textContent())?.trim();
-    test.skip(pill !== PILL.live, 'NIFC upstream unavailable; nothing rendered to reflect');
+    await expect(layerPill(page, 'nifc-fires')).toHaveText(PILL.live);
 
     // The layer is live: the tile appears and reflects the count (a real
     // zero keeps full contrast; it is an answer, not an absence).
@@ -197,6 +195,28 @@ test.describe('UX-3 conditions strip', () => {
     await expect
       .poll(async () => fires.locator('.conditions-sublabel').textContent())
       .not.toBe('wildfires');
+  });
+
+  test('a zero perimeter count reads as one phrase, with no stray comma (P3-24)', async ({ page }) => {
+    // The look of 2026-11-05: "0, mapped wildfire perimeters in view."
+    await page.route(
+      (url) => isNifcRequestUrl(url.href),
+      (route) =>
+        route.request().method() === 'GET'
+          ? route.fulfill({
+              status: 200,
+              contentType: 'application/geo+json',
+              body: JSON.stringify({ type: 'FeatureCollection', features: [] })
+            })
+          : route.fallback()
+    );
+    await gotoApp(page, '?cluster=wildfire&view=console');
+    const fires = page.locator('.conditions-metric[data-metric="fires"]');
+    await expect(fires).toHaveAttribute('data-tone', 'none');
+    await expect(fires).toHaveAttribute(
+      'aria-label',
+      /^0 mapped wildfire perimeters in view\. Current Mapped Fire Perimeters/
+    );
   });
 
   test('a frozen USDM feed degrades to an explicit stale read, not a confident current one', async ({
@@ -497,6 +517,25 @@ test.describe('the drought tile swatch (D1 M10)', () => {
   });
 });
 
+// Audit round 5 (R5-5): the off drought tile is an observed surface, so
+// pressing it at Near Term commits Current rather than leaving that chip
+// pressed (and every other chip disabled) over the NADM month.
+test('pressing the off drought tile at Near Term commits the Current horizon', async ({ page }) => {
+  await gotoApp(page, '?view=console');
+  const weeksAhead = page.locator('.shell-horizon-btn[data-horizon="weeks-ahead"]');
+  await weeksAhead.click();
+  await expect(weeksAhead).toHaveAttribute('aria-pressed', 'true');
+  await waitForLayerSettled(page, 'drought');
+  const tile = page.locator('.conditions-metric[data-metric="drought"][data-layer-on="false"]');
+  await tile.click();
+  const current = page.locator('.shell-horizon-btn[data-horizon="current"]');
+  await expect(current).toHaveAttribute('aria-pressed', 'true');
+  expect(await current.getAttribute('aria-disabled')).toBeNull();
+  await expect(weeksAhead).toHaveAttribute('aria-pressed', 'false');
+  await expect.poll(() => new URL(page.url()).searchParams.get('horizon')).toBeNull();
+  await expect(page.locator('.conditions-metric[data-metric="drought"]')).toHaveAttribute('data-layer-on', 'true');
+});
+
 /**
  * found-008 (D1 M14): "Conditions in view" offers only the current mode's
  * surfaces, enumerated from HAZARD_CLUSTER_KEYS (DR-113) rather than a
@@ -518,6 +557,18 @@ test.describe('found-008: Conditions in view offers only the current mode\'s sur
       await expect(page.locator('.conditions-metric[data-metric="drought"]')).toHaveCount(0);
       // The strip never collapses: a tile or the one status line holds its seat.
       await expect.poll(() => page.locator('#conditions-metrics > :is(.conditions-metric, .conditions-empty):visible').count()).toBeGreaterThan(0);
+    });
+
+    // Audit round 3: a custom set reads the person's hazard, never the store's Drought.
+    test(`a custom set made in ${key} keeps its hazard in the link and offers no drought chip`, async ({ page }) => {
+      // The mode's own layers plus a reference layer: a custom set, whose store claim reads Drought.
+      const layers = [...composeClusterIntent(key, 'current'), 'places'].join(',');
+      await gotoApp(page, `?layers=${layers}&hazard=${token}&view=console`);
+      await expect.poll(() => new URL(page.url()).searchParams.get('hazard')).toBe(token);
+      expect(new URL(page.url()).searchParams.get('cluster')).toBeNull();
+      // The strip has rendered, so the count below tests something.
+      await expect.poll(() => page.locator('#conditions-metrics > :is(.conditions-metric, .conditions-empty):visible').count()).toBeGreaterThan(0);
+      await expect(page.locator('.conditions-metric[data-metric="drought"]')).toHaveCount(0);
     });
   }
 });

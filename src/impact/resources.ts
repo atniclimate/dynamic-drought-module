@@ -197,8 +197,9 @@ function tribeOwnSlot(): ResourceLink {
     label: "Your Nation's drought, water, and emergency resources",
     agency: 'Deployer-populated',
     tier: 'tribe-own',
+    // P3-26 (2026-11-05): no repository path in public copy; data/README.md stays the deployer's guide.
     description:
-      "Primary: your Nation's own emergency management, water and drinking-water authority, and adaptation or hazard-mitigation plan. Populate this slot for your deployment (see data/README.md)."
+      "Primary: your Nation's own emergency management, water and drinking-water authority, and adaptation or hazard-mitigation plan. Populate this slot for your deployment."
   };
 }
 

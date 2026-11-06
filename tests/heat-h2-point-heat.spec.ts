@@ -338,7 +338,12 @@ test('point heat and point forecast share discovery and stay within the six-requ
         session,
         Date.parse('2026-07-29T12:30:00+00:00')
       ),
-      fetchNwsForecastClaims(context('KS'), master.signal, session)
+      fetchNwsForecastClaims(
+        context('KS'),
+        master.signal,
+        session,
+        Date.parse('2026-07-29T12:30:00+00:00')
+      )
     ]);
     expect(heat.status).toBe('ready');
     expect(forecast.ok).toBe(true);
@@ -523,7 +528,7 @@ test('cross-source synthesis compares issuer reads without creating a DDM heat c
         heatRead: {
           key: 'nwsAlerts',
           label: 'NWS active heat alerts',
-          text: 'NWS reports no active extreme-heat alert at the selected point.'
+          text: 'NWS reports no active heat alert at the selected point.'
         }
       }
     ],
@@ -708,8 +713,9 @@ test.describe('H2 critical-first surfaces', () => {
     await stubBrowserNwsHeat(page);
     await gotoApp(page, '?select=state:WA');
 
+    // R5-27: the station's distance from the selected point sits between its name and its reading.
     await expect(page.locator('.sheet-at-hand-headline')).toContainText(
-      'Heat at the selected point: Near Station reports temperature 90 °F (32 °C), heat index 95 °F (35 °C)'
+      /Heat at the selected point: Near Station, [\d.]+ mi \([\d.]+ km\) from the selected point, reports temperature 90 °F \(32 °C\), heat index 95 °F \(35 °C\)/
     );
     await page.locator('#sheet-report-door').click();
     const pointHeat = page.locator(
@@ -760,6 +766,59 @@ test.describe('H2 critical-first surfaces', () => {
     await expect(identity).not.toHaveText(/^[A-Z]+ \/ [A-Z]+$/);
   });
 
+  test('a station URL carrying userinfo names the station and the heat read as text, never as a link', async ({
+    page
+  }) => {
+    // R1-22: the station URL is agency text; one link rule (src/util/escape.ts
+    // checkPopupHref) refuses userinfo where a bare https prefix passed it.
+    const userinfoStation = 'https://user:pw@api.weather.gov/stations/KNEAR';
+    await page.clock.setFixedTime('2026-07-29T12:30:00+00:00');
+    await stubBrowserNwsHeat(page);
+    await page.route(NWS_PROXY_ROUTE, (route) => {
+      if (new URL(nwsUpstreamUrl(route.request().url())).pathname !== '/gridpoints/TOP/31,80/stations') {
+        return route.fallback();
+      }
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/geo+json',
+        body: JSON.stringify({
+          type: 'FeatureCollection',
+          features: [
+            {
+              type: 'Feature',
+              geometry: { type: 'Point', coordinates: [-120.5, 47.5] },
+              properties: { stationIdentifier: 'KNEAR', name: 'Near Station', '@id': userinfoStation }
+            }
+          ]
+        })
+      });
+    });
+    // The latest observation is read from the station URL itself, which the
+    // shared NWS route pattern (an api.weather.gov prefix) does not match.
+    await page.route(
+      (url) => url.searchParams.get('url') === `${userinfoStation}/observations/latest`,
+      (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: 'application/geo+json',
+          body: JSON.stringify(OBSERVATION_PAYLOAD)
+        })
+    );
+    await gotoApp(page, '?select=state:WA');
+
+    const pointHeat = page.locator(
+      '#impact-panel .point-heat[aria-label="Heat at selected point"]'
+    );
+    await expect(pointHeat.locator('.point-heat-station')).toHaveText('Near Station');
+    await expect(
+      pointHeat.locator('.point-heat-synthesis li strong', {
+        hasText: 'NWS point observation and grid guidance'
+      })
+    ).toHaveCount(1);
+    await expect(pointHeat.locator('.point-heat-station a')).toHaveCount(0);
+    await expect(page.locator('#impact-panel a[href*="user:pw"]')).toHaveCount(0);
+  });
+
   test('embed report exposes the same point heat model without adding URL state', async ({
     page
   }) => {
@@ -785,6 +844,8 @@ test.describe('H2 critical-first surfaces', () => {
   test('a place change aborts the old point read and keeps the newer briefing current', async ({
     page
   }) => {
+    // The observation fixtures are 2026-07-29 12:05 UTC; a later clock reads them as a station that stopped reporting.
+    await page.clock.setFixedTime('2026-07-29T12:30:00+00:00');
     let pointsRequestCount = 0;
     // A typed holder, not a bare `let`: the assignment happens inside the
     // Promise executor closure below, which TypeScript cannot see from the
@@ -904,6 +965,7 @@ test.describe('H2 critical-first surfaces', () => {
         requestCount += 1;
       }
     });
+    await page.clock.setFixedTime('2026-07-29T12:30:00+00:00'); // the observation fixture's own hour
     await stubBrowserNwsHeat(page);
     await gotoApp(page, '?region=washington_state&view=console');
 
@@ -1474,7 +1536,7 @@ test.describe('DDM-P7-T07: the season-ahead heat cell', () => {
     const unavailable = panel.locator('.impact-capability-unavailable');
     await expect(unavailable).toBeVisible();
     await expect(unavailable.locator('.impact-horizon-note')).toHaveText(
-      'The briefing synthesis and resource routing are not validated outside the PNW.'
+      'The briefing synthesis and resource routing are not validated outside the Pacific Northwest.'
     );
     await expect(panel.locator('.impact-hazard')).toHaveCount(0);
     await expect(page.locator(CELL)).toHaveCount(0);

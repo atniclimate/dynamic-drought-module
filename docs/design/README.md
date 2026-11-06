@@ -109,7 +109,8 @@ named path was confirmed to exist on 2026-09-01.
 - **DDM-UI-004.** Drought receives a backed NADM mean-severity and
   outline-share summary. Wildfire receives a strict current-WFIGS-first
   summary, with static WHP thresholds used only after a successful zero count.
-  Heat, ENSO land framings, and custom views stay explicitly neutral
+  Heat and ENSO land framings stay explicitly neutral; a custom view reads
+  the hazard it was made from
   (`src/state/minimap-drought.ts`, `src/state/minimap-wildfire.ts`).
 - **DDM-UI-006.** Prescribed fire is split from wildfire within the existing
   WFIGS perimeter source (`src/layers/nifc-fires.ts`).

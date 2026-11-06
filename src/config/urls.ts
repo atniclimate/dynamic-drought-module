@@ -97,6 +97,12 @@ export const URLS = Object.freeze({
   // Content-Type application/json, one feature returned for a PNW point, and a
   // browser fetch from the app origin succeeds (Access-Control-Allow-Origin: *
   // confirmed by live in-page fetch, not just by header inspection).
+  // Re-verified 2026-11-06 for the ENSO Weeks ahead map layers
+  // (src/layers/cpc-seasonal-read.ts): each layer's national `where=1=1`
+  // GeoJSON query with `maxAllowableOffset=0.05` echoed
+  // `Access-Control-Allow-Origin: https://atniclimate.github.io` and measured
+  // 96,432 (6-10 temperature), 97,911 (6-10 precipitation), 95,887 (8-14
+  // temperature) and 96,228 (8-14 precipitation) bytes gzip.
   cpc610OutlookMapServer:
     'https://mapservices.weather.noaa.gov/vector/rest/services/outlooks/cpc_6_10_day_outlk/MapServer',
   cpc814OutlookMapServer:
@@ -125,6 +131,20 @@ export const URLS = Object.freeze({
   // Northwest point.
   cpcSeasonalTempOutlookMapServer:
     'https://mapservices.weather.noaa.gov/vector/rest/services/outlooks/cpc_sea_temp_outlk/MapServer',
+
+  // ---------- CPC seasonal precipitation outlook (NOAA, ArcGIS MapServer) ----------
+  // The temperature service's sibling ("Seasonal Precipitation Outlooks"), the
+  // same 13 lead layers and field set; layer 0 is "Lead 1". Both draw as the
+  // ENSO Season ahead outlook layers (src/layers/cpc-seasonal-read.ts reads
+  // each service's layer 0 nationally). Verified 2026-11-05: `/0?f=json` names
+  // the fields objectid, fcst_date (alias "Forecast Date"), valid_seas (alias
+  // "Valid Season"), prob, cat, idp_source, idp_filedate, idp_ingestdate,
+  // maxRecordCount 2000, and a cat,prob uniqueValue renderer of 17 classes; a
+  // national `where=1=1` GeoJSON query with `maxAllowableOffset=0.05` echoed
+  // `Access-Control-Allow-Origin: https://atniclimate.github.io` and measured
+  // 96,953 bytes gzip (precipitation) and 95,212 (temperature), 18 features each.
+  cpcSeasonalPrecipOutlookMapServer:
+    'https://mapservices.weather.noaa.gov/vector/rest/services/outlooks/cpc_sea_precip_outlk/MapServer',
 
   // ---------- USGS Water Services Instantaneous Values (open data, CORS-OK) ----------
   // United States Geological Survey (USGS) Water Services, Instantaneous
@@ -978,20 +998,6 @@ export const URLS = Object.freeze({
   // landscape, it flattens it, and the mountain is what it removes.
   terrainPmtilesDeep:
     'https://ddm-terrain.atniclimate.workers.dev/pnw-z10-2026-09-10.pmtiles',
-  // The PNW LANDFIRE fuel-model drape for the desktop 3D Fire mode: LF2024
-  // Scott and Burgan 40 Fire Behavior Fuel Models (FBFM40), CONUS, rendered
-  // server-side by the LANDFIRE ImageServer's own class colors and baked to
-  // PNG PMTiles by scripts/build-fuels-tiles.mjs (`npm run build:fuels-tiles`;
-  // U.S. Public Domain, USGS-produced; vintage, retrieval date, and the
-  // reduced-resolution disclosure are recorded in the archive attribution).
-  // Loaded only while the 3D Fire mode is active, via the pmtiles protocol's
-  // ranged reads, exactly like the hillshade archive above.
-  // RETIRED FROM THE SCENE 2026-08-19 (owner direction): the fuel-model
-  // drape was replaced by the hazard drape below, and the 25.7 MB archive
-  // was removed from the working tree so it stops riding every deploy.
-  // The builder and this path stay so the layer can be restored as an
-  // opt-in without re-deriving anything; git history holds the archive.
-  fuelsFbfm40PmtilesLocal: BASE_URL + 'data/fuels-fbfm40-pnw.pmtiles',
   // The PNW Wildfire Hazard Potential drape for the desktop 3D Fire mode:
   // the USDA Forest Service Rocky Mountain Research Station's 2023 WHP
   // classification, rendered server-side in the issuer's own class colors

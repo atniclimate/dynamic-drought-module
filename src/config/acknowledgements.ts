@@ -52,6 +52,8 @@ export const ACKNOWLEDGEMENT_IDS = [
   'usfs',
   'usda-nrcs',
   'usda-nw-climate-hub',
+  'landfire',
+  'mrlc',
   'usbr',
   'usace',
   'nifc',
@@ -242,6 +244,31 @@ export const ACKNOWLEDGEMENTS: Readonly<Record<AcknowledgementId, Acknowledgemen
   usfs: nameOnly('usfs', 'USDA Forest Service'),
   'usda-nrcs': nameOnly('usda-nrcs', 'USDA Natural Resources Conservation Service'),
   'usda-nw-climate-hub': nameOnly('usda-nw-climate-hub', 'USDA Northwest Climate Hub'),
+  landfire: {
+    ...nameOnly('landfire', 'LANDFIRE'),
+    credits: [
+      // DRAFT wording for the owner's citation check: ledger landfire-lf2023 new_text, LANDFIRE's own
+      // template from https://landfire.gov/data/citation; null citeId never renders (DR-147) until ddm-cite records it.
+      {
+        text:
+          'Fuel-model shares computed by DDM from LANDFIRE, 2024, LANDFIRE 2023 Scott and Burgan 40 Fire Behavior Fuel Models (FBFM40), CONUS, LF 2023 (release 240), U.S. Department of the Interior, Geological Survey, and U.S. Department of Agriculture. Accessed 25 July 2026 at https://doi.org/10.5066/P9BJP7OV.',
+        citeId: null
+      }
+    ]
+  },
+  mrlc: {
+    ...nameOnly('mrlc', 'Multi-Resolution Land Characteristics (MRLC) Consortium', 'partnerships-and-other'),
+    credits: [
+      // DRAFT wording for the owner's citation check: ledger usgs-annual-nlcd-collection-1 new_text, USGS's own
+      // citation from https://www.usgs.gov/centers/eros/how-do-i-cite-annual-nlcd-data (read 2026-11-06, which now
+      // names "ver. 1.2, June 2026"; the artifact records Collection 1.1); null citeId never renders (DR-147).
+      {
+        text:
+          "Forest, cropland, wetland and open-water shares computed by DDM from U.S. Geological Survey (USGS), 2024, Annual NLCD Collection 1 Science Products: U.S. Geological Survey data release, https://doi.org/10.5066/P94UXNTS, distributed via the Multi-Resolution Land Characteristics (MRLC) Consortium's geospatial services (land cover for 2024, accessed 25 July 2026).",
+        citeId: null
+      }
+    ]
+  },
   usbr: nameOnly('usbr', 'Bureau of Reclamation'),
   usace: nameOnly('usace', 'U.S. Army Corps of Engineers'),
   nifc: {
@@ -259,7 +286,25 @@ export const ACKNOWLEDGEMENTS: Readonly<Record<AcknowledgementId, Acknowledgemen
       }
     ]
   },
-  bia: nameOnly('bia', 'Bureau of Indian Affairs'),
+  bia: {
+    ...nameOnly('bia', 'Bureau of Indian Affairs'),
+    credits: [
+      // DRAFT wording for the owner's citation check: ledger bia-aian-lar's own optional Acknowledgements line,
+      // verbatim; null citeId never renders (DR-147) until ddm-cite records it.
+      {
+        text:
+          'Bureau of Indian Affairs, Office of Trust Services, Division of Land Titles and Records, Branch of Geospatial Support: American Indian and Alaska Native Land Area Representation (AIAN-LAR).',
+        citeId: null
+      },
+      // DRAFT wording for the owner's citation check: the notice's own title, number and date
+      // (https://www.federalregister.gov/d/2026-01899), the source of every Tribal Nation name; no ledger row yet.
+      {
+        text:
+          'Tribal Nation names: Bureau of Indian Affairs, Indian Entities Recognized by and Eligible To Receive Services From the United States Bureau of Indian Affairs, Federal Register document 2026-01899, January 30, 2026.',
+        citeId: null
+      }
+    ]
+  },
   hifld: {
     ...nameOnly('hifld', 'HIFLD (U.S. Government)'),
     credits: [
@@ -413,6 +458,11 @@ export const PRODUCT_CREDITS: Readonly<Record<ProductKey, CreditRows>> = {
   'usfs-whp': ['usfs'],
   'sst-anomaly': ['nasa'],
   'tropical-cyclones': ['noaa-nhc'],
+  'cpc-seasonal-precip': ['noaa-cpc'],
+  'cpc-610-precip': ['noaa-cpc'],
+  'cpc-610-temp': ['noaa-cpc'],
+  'cpc-814-precip': ['noaa-cpc'],
+  'cpc-814-temp': ['noaa-cpc'],
   telemetry: ['usgs', 'usda-nrcs', 'usbr', 'usace', 'nifc', 'noaa-coops', 'cocorahs-iem', 'noaa-nwrfc'],
   dsci: ['usdm-partners'],
   nwsForecast: ['noaa-nws'],
@@ -445,8 +495,8 @@ export const PROVIDERS: Readonly<
   'whp-3d': ['usfs'],
   // The Wildfire 3D plant-stress ground: STAR's index, USGS Relative Greenness as the fallback.
   'dryness-ground': ['noaa-star', 'usgs'],
-  // public/data/landscape-signature-pnw.json, the briefing's terrain facts.
-  'landscape-signature': ['usgs'],
+  // public/data/landscape-signature-pnw.json, the briefing's terrain, soil, land cover and fuels facts.
+  'landscape-signature': ['usgs', 'usda-nrcs', 'usfs', 'landfire', 'mrlc'],
   // The minimap drought metric: CDM input and the Nunavut exclusion mask.
   'minimap-drought-metric': ['aafc', 'statcan']
 };

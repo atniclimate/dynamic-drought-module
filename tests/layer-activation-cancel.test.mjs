@@ -58,7 +58,10 @@ const seen = {
   sources: [],
   layers: [],
   urlWrites: [],
-  tileReports: []
+  tileReports: [],
+  // The alerts' own key: the rows each legend render lists, and every snapshot event's detail.
+  alertKeys: [],
+  snapshots: []
 };
 globalThis.cancelSeen = seen;
 globalThis.cancelDefs = LAYER_DEFS;
@@ -84,9 +87,9 @@ const stubs = {
     export function showLoading(text){ globalThis.cancelSeen.loading.push(text); return ++n; }
     export function hideLoading(){}`,
   '/ui/legend-registry': `export const LEGEND_ORDER={surface:1,event:2};
-    export function showLegend(key){ globalThis.cancelSeen.legends.push(key); return null; }
+    export function showLegend(key, spec){ globalThis.cancelSeen.legends.push(key); if (key === 'nws-alerts') spec.render(null); return null; }
     export function hideLegend(){}
-    export function renderSwatchLegend(){}`,
+    export function renderSwatchLegend(body, title, entries){ globalThis.cancelSeen.alertKeys.push(entries.map((entry) => entry.label)); }`,
   '/ui/time-bar': `export function setTimeBar(key){ globalThis.cancelSeen.timeBars.push(key); }
     export function clearTimeBar(){}`,
   '/map/interaction-coordinator': 'export function registerClickTarget(){}',
@@ -129,7 +132,10 @@ globalThis.clearTimeout = (handle) => {
   longTimers.delete(handle);
   realClearTimeout(handle);
 };
-globalThis.dispatchEvent = () => true;
+globalThis.dispatchEvent = (event) => {
+  if (event?.type === 'ddm:nws-products-snapshot') seen.snapshots.push(event.detail);
+  return true;
+};
 globalThis.addEventListener = () => {};
 globalThis.removeEventListener = () => {};
 globalThis.document = {
@@ -141,6 +147,11 @@ globalThis.document = {
 const { createLayerController } = await import('../src/state/layer-controller.ts');
 const heat = await import('../src/layers/heatrisk.ts');
 const alerts = await import('../src/layers/nws-alerts.ts');
+const { HAZARD_CLUSTERS, HEAT_FIRE_ALERTS } = await import('../src/config/clusters.ts');
+const { getHazardCluster, setHazardCluster } = await import('../src/state/cluster-store.ts');
+const service = await import('../src/state/cluster-service.ts');
+// The alerts follow the person's hazard (cluster-service getSelectedHazard), which a store write reaches through the running service.
+service.initClusterService();
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const FIRST_TIME = 1_785_153_600_000;
@@ -348,7 +359,7 @@ test('HeatRisk: a normal activation is unchanged (metadata, then catalog, then o
   assert.deepEqual(seen.sources, ['heatrisk-frame-1']);
   assert.deepEqual(seen.layers, ['heatrisk']);
   assert.ok(seen.loading.includes('Loading HeatRisk...'), 'the frame indicator opens');
-  assert.ok(seen.legends.includes('heatrisk'));
+  assert.ok(!seen.legends.includes('heatrisk'), 'the coverage sentence lives in Technical information, not a legend');
 });
 
 test('HeatRisk: a later off, after a settled activation, does not disturb a re-activation', async (t) => {
@@ -480,22 +491,271 @@ test('NWS alerts: a normal activation is unchanged (one read, then the source, l
   assert.equal(longTimers.size, 1, 'the five-minute refresh is scheduled as before');
 });
 
-for (const variable of ['precipitation', 'temperature']) {
+/** The product names one WWA request asked for. */
+const askedFor = (call) =>
+  (new URL(call.url).searchParams.get('where') ?? '').replace(/^prod_type IN \(|\)$/g, '').split(',').map((name) => name.replace(/^'|'$/g, ''));
+
+/** Commit `mode` for one case and restore the store after it. */
+function inMode(t, mode) {
+  const before = getHazardCluster();
+  setHazardCluster(mode);
+  t.after(() => setHazardCluster(before));
+}
+
+test('NWS alerts: in ENSO the one read asks for exactly the ENSO products and an empty answer is no data', async (t) => {
+  resetSeen();
+  inMode(t, 'enso');
+  const net = installFetch(wwaBody, { holdIndexes: [] });
+  const map = fakeMap();
+  t.after(() => {
+    net.release();
+    alerts.deactivate(map);
+  });
+  globalThis.cancelModules.set('nws-alerts', alerts);
+  const controller = harness(map, ['nws-alerts']);
+  await controller.activate('nws-alerts');
+  await settle();
+  assert.equal(net.calls.length, 1);
+  assert.deepEqual(askedFor(net.calls[0]), [...HAZARD_CLUSTERS.enso.alerts.events]);
+  assert.equal(registry.getStatus('nws-alerts'), 'no-data');
+  assert.equal(longTimers.size, 1, 'the five-minute refresh is scheduled');
+});
+
+test('NWS alerts: a mode that names no products gets no read and reads unavailable, never none', async (t) => {
+  resetSeen();
+  const named = HAZARD_CLUSTERS.drought.alerts;
+  delete HAZARD_CLUSTERS.drought.alerts;
+  t.after(() => {
+    HAZARD_CLUSTERS.drought.alerts = named;
+  });
+  inMode(t, 'drought');
+  const net = installFetch(wwaBody, { holdIndexes: [] });
+  const map = fakeMap();
+  t.after(() => {
+    net.release();
+    alerts.deactivate(map);
+  });
+  globalThis.cancelModules.set('nws-alerts', alerts);
+  const controller = harness(map, ['nws-alerts']);
+  await controller.activate('nws-alerts');
+  await settle();
+  assert.equal(net.calls.length, 0, 'no request at all');
+  assert.equal(registry.getStatus('nws-alerts'), 'error');
+  assert.deepEqual(seen.sources, []);
+  assert.equal(registry.getActiveKeys().has('nws-alerts'), false);
+});
+
+test('NWS alerts: a failed read is unavailable, never zero alerts', async (t) => {
+  resetSeen();
+  const calls = [];
+  globalThis.fetch = (url) => {
+    calls.push(String(url));
+    return Promise.resolve(new Response('busy', { status: 503 }));
+  };
+  const map = fakeMap();
+  t.after(() => alerts.deactivate(map));
+  globalThis.cancelModules.set('nws-alerts', alerts);
+  const controller = harness(map, ['nws-alerts']);
+  await controller.activate('nws-alerts');
+  await settle();
+  assert.equal(calls.length, 1);
+  assert.equal(registry.getStatus('nws-alerts'), 'error');
+  assert.deepEqual(seen.sources, [], 'nothing drawn, no empty layer standing for none');
+  assert.equal(registry.getActiveKeys().has('nws-alerts'), false);
+});
+
+test('NWS alerts: a mode change while on reads the new mode\'s products at once, and a change that keeps them reads nothing', async (t) => {
+  resetSeen();
+  inMode(t, 'heat');
+  const net = installFetch(wwaBody, { holdIndexes: [] });
+  const map = fakeMap();
+  t.after(() => {
+    net.release();
+    alerts.deactivate(map);
+  });
+  globalThis.cancelModules.set('nws-alerts', alerts);
+  const controller = harness(map, ['nws-alerts']);
+  await controller.activate('nws-alerts');
+  await settle();
+  assert.deepEqual(askedFor(net.calls[0]), [...HEAT_FIRE_ALERTS.events]);
+  setHazardCluster('enso');
+  await settle();
+  assert.equal(net.calls.length, 2, 'the ENSO products are read at once');
+  assert.deepEqual(askedFor(net.calls[1]), [...HAZARD_CLUSTERS.enso.alerts.events]);
+  setHazardCluster('heat');
+  await settle();
+  assert.deepEqual(askedFor(net.calls[2]), [...HEAT_FIRE_ALERTS.events]);
+  // Drought names the same heat and fire weather products.
+  setHazardCluster('drought');
+  await settle();
+  assert.equal(net.calls.length, 3, 'the same products are not read again');
+  assert.equal(registry.getStatus('nws-alerts'), 'no-data');
+  assert.equal(longTimers.size, 1, 'one five-minute refresh, not one per read');
+});
+
+test('NWS alerts: a custom set made from ENSO keeps the ENSO products, though its store claim reads Drought', async (t) => {
+  resetSeen();
+  inMode(t, 'enso');
+  const net = installFetch(wwaBody, { holdIndexes: [] });
+  const map = fakeMap();
+  t.after(() => {
+    net.release();
+    alerts.deactivate(map);
+    // The demotion left the store on Drought; put the service back on it too.
+    service.restoreCommittedCluster('drought', null);
+  });
+  globalThis.cancelModules.set('nws-alerts', alerts);
+  await harness(map, ['nws-alerts']).activate('nws-alerts');
+  await settle();
+  assert.deepEqual(askedFor(net.calls[0]), [...HAZARD_CLUSTERS.enso.alerts.events]);
+  // Hydrography on top: outside ENSO's composition, so the set demotes to custom and the store reads Drought.
+  service.reconcileClusterWithLayerIntent(new Set([...service.composeClusterIntent('enso'), 'nws-alerts', 'hydrography']));
+  await settle();
+  assert.equal(service.getCommittedSnapshot().cluster, 'custom', 'setup: a custom set');
+  assert.equal(getHazardCluster(), 'drought', 'setup: its store claim');
+  assert.equal(service.getSelectedHazard(), 'enso');
+  assert.equal(net.calls.length, 1, 'no heat and fire weather read replaces the ENSO products');
+  assert.equal(registry.getStatus('nws-alerts'), 'no-data');
+});
+
+/** One WWA feature in force for the next six hours, as the service answers it. */
+const wwaFeature = (prodType) => ({
+  type: 'Feature',
+  properties: { prod_type: prodType, onset: null, ends: new Date(Date.now() + 6 * 3_600_000).toISOString(), expiration: null, wfo: 'KSEW' },
+  geometry: { type: 'Polygon', coordinates: [[[-123, 46], [-122, 46], [-122, 47], [-123, 47], [-123, 46]]] }
+});
+const wwaAnswer = (...products) => JSON.stringify({ type: 'FeatureCollection', features: products.map(wwaFeature) });
+const HEAT_FIRE_ROWS = ['Extreme Heat Warning', 'Extreme Heat Watch', 'Heat Advisory', 'Red Flag Warning', 'Fire Weather Watch'];
+
+/** Activate the alerts under `mode` against `answer` (a response maker), and settle. */
+async function alertsIn(t, mode, answer) {
+  resetSeen();
+  inMode(t, mode);
+  const calls = [];
+  globalThis.fetch = (url) => {
+    calls.push(String(url));
+    return Promise.resolve(answer(String(url)));
+  };
+  const map = fakeMap();
+  t.after(() => alerts.deactivate(map));
+  globalThis.cancelModules.set('nws-alerts', alerts);
+  await harness(map, ['nws-alerts']).activate('nws-alerts');
+  await settle();
+  return calls;
+}
+
+test('NWS alerts: the key lists every heat and fire weather product, and only the ENSO products the read holds, in set order', async (t) => {
+  await alertsIn(t, 'enso', () => new Response(wwaAnswer('Flood Watch', 'Flash Flood Warning', 'Flood Watch'), { status: 200 }));
+  assert.deepEqual(seen.alertKeys.at(-1), ['Flash Flood Warning', 'Flood Watch'], 'the sidebar legend');
+  assert.deepEqual(seen.snapshots.at(-1), { status: 'ready', asOf: seen.snapshots.at(-1).asOf, truncated: false, events: ['Flash Flood Warning', 'Flood Watch'] });
+});
+
+test('NWS alerts: an empty or failed ENSO read lists no product; heat and fire weather keeps its full rows either way', async (t) => {
+  await alertsIn(t, 'enso', () => new Response(wwaAnswer(), { status: 200 }));
+  assert.deepEqual(seen.alertKeys.at(-1), []);
+  assert.deepEqual(seen.snapshots.at(-1).events, []);
+  // A failed first read: the unavailable key, then the controller's cleanup ('inactive').
+  const failed = () => seen.snapshots.find((snapshot) => snapshot.status === 'error');
+  await alertsIn(t, 'enso', () => new Response('busy', { status: 503 }));
+  assert.deepEqual(seen.alertKeys.at(-1), []);
+  assert.deepEqual(failed().events, []);
+  await alertsIn(t, 'heat', () => new Response(wwaAnswer(), { status: 200 }));
+  assert.deepEqual(seen.alertKeys.at(-1), HEAT_FIRE_ROWS);
+  await alertsIn(t, 'heat', () => new Response('busy', { status: 503 }));
+  assert.deepEqual(seen.alertKeys.at(-1), HEAT_FIRE_ROWS);
+  assert.deepEqual(failed().events, [...HEAT_FIRE_ALERTS.events]);
+});
+
+test('NWS alerts: off intent stops following the mode, so a mode change during the off fade neither empties the polygons nor starts a read', async (t) => {
+  resetSeen();
+  inMode(t, 'heat');
+  const net = installFetch(() => wwaAnswer('Red Flag Warning'), { holdIndexes: [] });
+  const map = fakeMap();
+  let releaseFade = () => {};
+  t.after(() => {
+    releaseFade();
+    globalThis.cancelFadeHold = undefined;
+    net.release();
+    alerts.deactivate(map);
+  });
+  globalThis.cancelModules.set('nws-alerts', alerts);
+  const controller = harness(map, ['nws-alerts']);
+  await controller.activate('nws-alerts');
+  await settle();
+  let emptied = 0;
+  map.getSource('nws-alerts').setData = (data) => {
+    if (data.features.length === 0) emptied += 1;
+  };
+  // Leaving heat for ENSO: off intent first (the teardown waits on the fade), then the store change.
+  globalThis.cancelFadeHold = new Promise((resolve) => { releaseFade = resolve; });
+  controller.deactivate('nws-alerts');
+  setHazardCluster('enso');
+  await settle();
+  assert.equal(registry.getActiveKeys().has('nws-alerts'), true, 'setup: the teardown is still behind the fade');
+  assert.equal(net.calls.length, 1, 'no read for the mode the layer is leaving with');
+  assert.equal(emptied, 0, 'the polygons fade out as drawn');
+  releaseFade();
+  await settle();
+  assert.equal(registry.getActiveKeys().has('nws-alerts'), false);
+  assert.equal(net.calls.length, 1);
+});
+
+for (const late of ['an answer', 'a failure']) {
+  test(`NWS alerts: ${late} for the mode left behind is dropped, nothing is drawn from it, and the new mode's read goes out`, async (t) => {
+    resetSeen();
+    inMode(t, 'heat');
+    const calls = [];
+    let releaseFirst = () => {};
+    globalThis.fetch = (url) => {
+      calls.push(String(url));
+      if (calls.length > 1) return Promise.resolve(new Response(wwaAnswer('Flood Warning'), { status: 200 }));
+      const first = late === 'an answer' ? new Response(wwaAnswer('Red Flag Warning'), { status: 200 }) : new Response('busy', { status: 503 });
+      return new Promise((resolve) => { releaseFirst = () => resolve(first); });
+    };
+    const map = fakeMap();
+    const drawn = [];
+    const addSource = map.addSource;
+    map.addSource = (id, spec) => {
+      addSource(id, spec);
+      drawn.push(...spec.data.features.map((feature) => feature.properties.event));
+      map.getSource(id).setData = (data) => drawn.push(...data.features.map((feature) => feature.properties.event));
+    };
+    t.after(() => {
+      releaseFirst();
+      alerts.deactivate(map);
+    });
+    globalThis.cancelModules.set('nws-alerts', alerts);
+    const controller = harness(map, ['nws-alerts']);
+    const activation = controller.activate('nws-alerts');
+    await settle();
+    assert.equal(calls.length, 1, 'setup: the heat read is held');
+    setHazardCluster('enso');
+    await settle();
+    assert.equal(calls.length, 1, 'one read at a time');
+    releaseFirst();
+    await activation;
+    await settle();
+    assert.equal(calls.length, 2, 'the ENSO read goes out once the held one is dropped');
+    assert.deepEqual(askedFor({ url: calls[1] }), [...HAZARD_CLUSTERS.enso.alerts.events]);
+    assert.deepEqual(drawn, ['Flood Warning'], 'nothing drawn from the read for the mode left behind');
+    assert.equal(registry.getStatus('nws-alerts'), 'ready');
+    assert.equal(registry.getActiveKeys().has('nws-alerts'), true, 'the activation stands');
+    assert.equal(seen.snapshots.some((snapshot) => snapshot.status === 'error'), false, 'no unavailable state from the old read');
+  });
+}
+
+for (const key of ['cpc-seasonal-precip', 'cpc-seasonal-temp', 'cpc-610-precip', 'cpc-610-temp', 'cpc-814-precip', 'cpc-814-temp']) {
   for (const held of [false, true]) {
-    test(`CPC ${variable}: real controller Off ${held ? 'aborts held headers and suppresses late drawing' : 'cleans its completed source and registry'}`, async (t) => {
-      const { createCpcSeasonalAdapter } = await import('../src/layers/cpc-seasonal-outlook.ts');
-      const { cpcSeasonalBody } = await import('./cpc-seasonal-polygon-fixtures.mjs');
-      const key = variable === 'precipitation' ? 'cpc-seasonal-precip' : 'cpc-seasonal-temp';
-      // Test-only catalogue registration: no public entry or admitted allowance.
-      const module = createCpcSeasonalAdapter({ variable, fillOpacity: 0.75,
-        limits: { timeoutMs: 1_000, maxDecodedBytes: 100_000, maxFeatures: 20, maxAllowableOffset: 0.01 } });
-      const definition = { ...LAYER_DEFS.find(row => row.key === 'heatrisk'), key,
-        defaultOn: false, load: async () => module };
-      LAYER_DEFS.push(definition);
+    test(`CPC ${key}: real controller Off ${held ? 'aborts held headers and suppresses late drawing' : 'cleans its completed source and registry'}`, async (t) => {
+      const { cpcExtendedPolygons, cpcSeasonalBody } = await import('./cpc-seasonal-polygon-fixtures.mjs');
+      // The registered LayerDef and the shipped module with its admitted limits.
+      assert.ok(LAYER_DEFS.some(row => row.key === key));
+      const module = await import(`../src/layers/${key}.ts`);
       globalThis.cancelModules.set(key, module);
       resetSeen();
       const originalFetch = globalThis.fetch;
-      const net = installFetch(() => JSON.stringify(cpcSeasonalBody('polygons')),
+      const body = key.startsWith('cpc-seasonal-') ? cpcSeasonalBody('polygons') : cpcExtendedPolygons();
+      const net = installFetch(() => JSON.stringify(body),
         { holdIndexes: held ? [0] : [], ignoreAbort: held });
       const map = fakeMap();
       t.after(() => {
@@ -503,7 +763,6 @@ for (const variable of ['precipitation', 'temperature']) {
         module.deactivate(map);
         registry.deactivate(key);
         globalThis.cancelModules.delete(key);
-        LAYER_DEFS.splice(LAYER_DEFS.indexOf(definition), 1);
         globalThis.fetch = originalFetch;
       });
       const controller = harness(map, [key]);
@@ -515,6 +774,7 @@ for (const variable of ['precipitation', 'temperature']) {
       if (!held) {
         assert.ok(map.getSource(key));
         assert.equal(registry.getActiveKeys().has(key), true);
+        assert.ok(seen.legends.includes(key), 'a drawn outlook shows its own key');
       }
       controller.deactivate(key);
       // Completed transport listeners are detached; a held transport must abort now.
@@ -532,6 +792,7 @@ for (const variable of ['precipitation', 'temperature']) {
       if (held) {
         assert.deepEqual(seen.sources, []);
         assert.deepEqual(seen.layers, []);
+        assert.deepEqual(seen.legends, []);
       }
     });
   }

@@ -20,9 +20,10 @@ registerHooks({
       export const MAX_CYCLE_TRIES = 1;
       export const candidateCycle = () => globalThis.__field.meta.cycle;
       export const forecastHourFor = () => 6;
-      export const isStale = () => false;
+      export const isStale = (field) => globalThis.__staleFields?.has(field) ?? false;
       export const readFlowFrame = async () => {
         if (globalThis.__readError) throw globalThis.__readError;
+        globalThis.__frameReads = (globalThis.__frameReads ?? 0) + 1;
         return globalThis.__field;
       };
       // A scalar field mounts as a still shade: no state callback, only the 24-hour limit.
@@ -223,6 +224,26 @@ test('a failed read announces unavailable exactly once', async () => {
   assert.deepEqual(live.writes, [`Ocean currents · ${loading}`, `Ocean currents · ${line().textContent}`]);
 });
 
+test('a frame refused for its age says so in the line, the note and the announcement; another refusal keeps the failed wording', async () => {
+  const { CurrentsFrameTooOld } = await import('../src/layers/enso-flow-data.ts');
+  await bootCurrents();
+  const loading = line().textContent;
+  held.reject(new CurrentsFrameTooOld(VALID));
+  await until(() => panel().dataset.status === 'unavailable');
+  const old = 'unavailable · The NOAA RTOFS surface currents frame from Oct 13, 1:00 AM UTC is past its 14-day limit';
+  assert.equal(line().textContent, old);
+  assert.deepEqual(live.writes, [`Ocean currents · ${loading}`, `Ocean currents · ${old}`]);
+  assert.ok(host.textContent.includes('No direction or calm condition is inferred from an old frame.'));
+  assert.ok(!host.textContent.includes('did not load') && !host.textContent.includes('failed request'));
+  // Any other refusal of the same read keeps today's words.
+  await bootCurrents();
+  held.reject(new Error('currents frame: a grid file is missing'));
+  await until(() => panel().dataset.status === 'unavailable');
+  assert.equal(line().textContent, 'unavailable · NOAA RTOFS surface currents did not load');
+  assert.ok(host.textContent.includes('No direction or calm condition is inferred from a failed request.'));
+  assert.ok(!host.textContent.includes('old frame'));
+});
+
 test('the visible panel is plain text rather than a competing live region', () => {
   boot();
   assert.equal(line().getAttribute('role'), null);
@@ -398,16 +419,56 @@ test('live precipitable water is a still shade: a state line and bins for the ke
     // A pan reads and mounts nothing: the image was made once from the frame.
     mapEvents.get('moveend')();
     assert.deepEqual(globalThis.__mounts, [water]);
-    // Past cycle + 24 h while mounted, the shade leaves and the panel says which frame it held.
+    // Past cycle + 24 h while mounted, the panel reads once for a newer cycle and draws it.
+    const reads = globalThis.__frameReads ?? 0;
+    const newer = { ...water, meta: { ...wind.meta, cycle: wind.meta.cycle + 6 * 3_600_000 } };
+    globalThis.__staleFields = new Set([water]);
+    globalThis.__field = newer;
     globalThis.__shadeStale();
-    assert.equal(panel().dataset.status, 'unavailable');
+    await until(() => globalThis.__mounts.at(-1) === newer && panel().dataset.status === 'live');
+    assert.equal(globalThis.__frameReads, reads + 1, 'one read per stale frame');
+    assert.ok(globalThis.__shadeDisposed >= 1, 'the old shade is taken down');
+    // When NODD has nothing newer, the shade leaves and the panel says which frame it held; nothing failed.
+    globalThis.__staleFields.add(newer);
+    globalThis.__shadeStale();
+    await until(() => panel().dataset.status === 'unavailable');
+    assert.equal(globalThis.__frameReads, reads + 2);
     assert.match(snapshots.at(-1).line, /^unavailable · The held NOAA GFS frame from .+ UTC is past its 24-hour limit$/);
-    assert.deepEqual(snapshots.at(-1).notes, ['No moist or dry condition is inferred from a failed request.']);
+    assert.deepEqual(snapshots.at(-1).notes, ['No moist or dry condition is inferred from an old frame.']);
     assert.equal(panel().dataset.flowDrawn, '');
-    assert.ok(globalThis.__shadeDisposed >= 1, 'the shade is taken down');
   } finally {
     window.removeEventListener('ddm:enso-flow-snapshot', record);
     globalThis.__field = wind;
+    globalThis.__staleFields = null;
+  }
+});
+
+test('a drawn wind frame past its 24-hour limit reads once for a newer cycle, and says it held an old frame when there is none', async () => {
+  const snapshots = [];
+  const record = (event) => snapshots.push(event.detail);
+  window.addEventListener('ddm:enso-flow-snapshot', record);
+  const wind = globalThis.__field;
+  try {
+    boot('wind');
+    await until(() => panel().dataset.status === 'live');
+    const reads = globalThis.__frameReads;
+    const newer = { ...wind, meta: { ...wind.meta, cycle: wind.meta.cycle + 6 * 3_600_000 } };
+    globalThis.__staleFields = new Set([wind]);
+    globalThis.__field = newer;
+    globalThis.__fieldState({ ...globalThis.__state, stale: true });
+    await until(() => globalThis.__mounts.at(-1) === newer && panel().dataset.status === 'live');
+    assert.equal(globalThis.__frameReads, reads + 1, 'one read per stale frame');
+    globalThis.__staleFields.add(newer);
+    globalThis.__fieldState({ ...globalThis.__state, stale: true });
+    await until(() => panel().dataset.status === 'unavailable');
+    assert.equal(globalThis.__frameReads, reads + 2);
+    assert.match(snapshots.at(-1).line, /^unavailable · The held NOAA GFS frame from .+ UTC is past its 24-hour limit$/);
+    assert.deepEqual(snapshots.at(-1).notes, ['No direction or calm condition is inferred from an old frame.']);
+    assert.equal(panel().dataset.flowDrawn, '');
+  } finally {
+    window.removeEventListener('ddm:enso-flow-snapshot', record);
+    globalThis.__field = wind;
+    globalThis.__staleFields = null;
   }
 });
 
@@ -436,7 +497,7 @@ test('a failed precipitable water read says so in words fit for a field with no 
 for (const [kind, label, source, bins] of [
   ['wind', 'Atmospheric currents', 'NOAA GFS 10 m wind', 'Line width and brightness: under 5, 5 to 10, 10 or more m/s.'],
   ['jet', 'Jet-level wind', 'NOAA GFS 250 hPa wind', 'Line width and brightness: under 20, 20 to 40, 40 or more m/s.'],
-  ['waves', 'Ocean waves', 'NOAA GFS-Wave', 'Mark length and brightness: under 2, 2 to 4, 4 or more m significant wave height.']
+  ['waves', 'Ocean waves', 'NOAA GFS-Wave', 'Curved lines lie across the way the waves travel, the longest in front. Size and brightness: under 2, 2 to 4, 4 or more m significant wave height.']
 ]) {
   test(`a live ${kind} frame gives the key its state line and its bins, and no explanation`, async () => {
     const snapshots = [];

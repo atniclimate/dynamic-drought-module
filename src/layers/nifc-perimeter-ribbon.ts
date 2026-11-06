@@ -291,7 +291,7 @@ export function activatePerimeterRibbon(map: maplibregl.Map): boolean {
       id,
       type: 'fill-extrusion',
       source: RIBBON_SOURCE_ID,
-      paint: buildPerimeterRibbonSlabPaint(index)
+      paint: buildPerimeterRibbonSlabPaint(index, map.getCenter().lat)
     });
   });
   // Seat the slabs at their ruled position (EVENT_OVERLAY_IDS, directly

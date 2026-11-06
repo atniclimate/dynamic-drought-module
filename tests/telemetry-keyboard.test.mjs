@@ -215,6 +215,7 @@ test('a progress paint never removes a marker: only the final answer does, and t
 ${functionBody('../src/layers/telemetry.ts', 'runDiscoveryForCurrentViewport')}
 ${functionBody('../src/layers/telemetry.ts', 'cancelActivation')}
 return { run: runDiscoveryForCurrentViewport, cancelActivation };`)(...Object.values(dependencies));
+  const map = { getBounds: () => ({ contains: () => true }) };
   const progressThenFinal = async (progress, final, check) => {
     let failure = null;
     discover = async (request) => {
@@ -223,11 +224,11 @@ return { run: runDiscoveryForCurrentViewport, cancelActivation };`)(...Object.va
       try { check(); } catch (error) { failure = error; }
       return { status: 'ok', records: final, failedSources: [] };
     };
-    await run({});
+    await run(map);
     if (failure) throw failure;
   };
   discover = async () => ({ status: 'ok', records: [record('fixture'), record('other')], failedSources: [] });
-  await run({});
+  await run(map);
   assert.equal(h.markersByStationId.size, 2);
   const other = h.markersByStationId.get('other');
   await progressThenFinal([record('other')], [record('fixture'), record('other')], () => {
@@ -243,4 +244,66 @@ return { run: runDiscoveryForCurrentViewport, cancelActivation };`)(...Object.va
   await progressThenFinal([record('third')], [record('third')], () => {
     assert.equal(h.markersByStationId.has('other'), false, 'after teardown a progress paint does not resurrect the old answer');
   });
+});
+
+test('a view with no station in it reads no data, though the featured seeds still render elsewhere', async () => {
+  const statuses = [];
+  const seed = { station: { id: 'seed', coords: [47, -120] }, isCuratedSeed: true };
+  const dependencies = {
+    renderStations() {}, AbortController, console,
+    reportStatus: (state) => statuses.push(state), curatedTelemetryEntries: () => [seed],
+    updateCapNote() {}, hideCapNote() {}, viewportBounds: () => ({}), viewportCenter: () => [0, 0],
+    mergeTelemetryStations: (curated, records) => [...curated.map((station) => ({ station })), ...records],
+    capDiscoveredStations: (entries) => ({ entries, totalDiscovered: 0 }), markerViewForEntry: (entry) => entry,
+    discoverStationsForViewport: async () => ({ status: 'ok', records: [], failedSources: [] })
+  };
+  const run = new Function(...Object.keys(dependencies), `let currentDiscoveryController = null; let lastFinalRecords = [];
+${functionBody('../src/layers/telemetry.ts', 'runDiscoveryForCurrentViewport')}
+return runDiscoveryForCurrentViewport;`)(...Object.values(dependencies));
+  // contains takes [lng, lat], as MapLibre's LngLatBounds does.
+  const view = (west, east, south, north) => ({
+    getBounds: () => ({ contains: ([lng, lat]) => lng >= west && lng <= east && lat >= south && lat <= north })
+  });
+  await run(view(-117, -116, 39, 40)); // open Nevada: no station here
+  await run(view(-121, -119, 46, 48)); // the seed's own view
+  assert.deepEqual(statuses, ['loading', 'no-data', 'loading', 'ready']);
+});
+
+function windGlyphBuilder() {
+  const created = [];
+  const node = (tag) => {
+    const el = { tag, attributes: {}, style: {}, children: [],
+      setAttribute(name, value) { this.attributes[name] = value; }, appendChild(child) { this.children.push(child); } };
+    created.push(el);
+    return el;
+  };
+  const source = readFileSync(new URL('../src/layers/telemetry.ts', import.meta.url), 'utf8');
+  const constants = source.match(/^const (?:SVG_NS|WIND_GLYPH_\w+) = .*;$/gm).join('\n');
+  const dependencies = { document: { createElementNS: (_ns, tag) => node(tag) }, parseLeadingNumber: Number.parseFloat, dateTok: (d) => `tok:${d.toISOString()}` };
+  const names = ['buildRawsWindGlyph', 'buildRawsWindAccessibleName', 'formatRawsObservedTime', 'windGlyphShaftLengthPx', 'clampWindSpeedForShaft'];
+  const build = new Function(...Object.keys(dependencies),
+    `${constants}\n${names.map((name) => functionBody('../src/layers/telemetry.ts', name)).join('\n')}\nreturn buildRawsWindGlyph;`)(...Object.values(dependencies));
+  return { build, created };
+}
+
+test('a stale RAWS wind arrow draws the way its stale dot does: dimmed, with a dashed shaft', () => {
+  const wind = { windSpeedServed: '25 mph', windDirectionServed: '315 degrees', windDirectionDeg: 315, windObservedAtIso: '2026-11-02T15:00:00.000Z' };
+  const { build } = windGlyphBuilder();
+  const fresh = build(wind, '#ef4444', true);
+  assert.equal(fresh.style.opacity, undefined);
+  assert.equal(fresh.children.find((c) => c.tag === 'line').attributes['stroke-dasharray'], undefined);
+  const stale = build(wind, '#ef4444', false);
+  assert.equal(stale.style.opacity, '0.7', 'the stale dot\'s own opacity (app.css data-telemetry-freshness="stale")');
+  assert.ok(stale.children.find((c) => c.tag === 'line').attributes['stroke-dasharray'], 'the stale dot\'s border is dashed');
+  const source = readFileSync(new URL('../src/layers/telemetry.ts', import.meta.url), 'utf8');
+  assert.match(source, /buildRawsWindGlyph\(glyphWind, station\.color, view\.freshness === 'fresh'\)/, 'the marker passes its own freshness');
+});
+
+test('the RAWS marker title names the observation time with the house date token, zone named', async () => {
+  const { dateTok } = await import('../src/util/text-tokens.ts');
+  const format = new Function('dateTok', `${functionBody('../src/layers/telemetry.ts', 'formatRawsObservedTime')}\nreturn formatRawsObservedTime;`)(dateTok);
+  const iso = '2026-11-06T22:00:00.000Z';
+  assert.equal(format(iso), dateTok(new Date(iso)));
+  assert.equal(format(null), 'an unknown time');
+  assert.equal(format('not a time'), 'not a time');
 });

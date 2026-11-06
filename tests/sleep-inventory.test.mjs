@@ -542,16 +542,6 @@ const SITES = [
       'post-click settle proving no stale boundary popup remains clickable; the shared helper runs after many different layer-toggle scenarios, not one guaranteed transport.'
   },
   {
-    file: 'umbrella.spec.ts',
-    line: 185,
-    test: 'an all-on click is a clean no-op and the button stays enabled and reusable',
-    text: 'await page.waitForTimeout(750);',
-    occurrence: 1,
-    class: 'absence-window',
-    reason:
-      "settle window after the CTA click, proving a would-be regression's extra live request never fires."
-  },
-  {
     file: 'url-state.spec.ts',
     line: 140,
     test: 'a bare boot never publishes an empty or partial layers value while the live defaults load (boot layer intent)',

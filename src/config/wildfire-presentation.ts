@@ -347,8 +347,10 @@ export function buildNifcAreaPerimeterClaim(
     return `No current mapped NIFC fire perimeters intersect ${NIFC_AREA_QUERY_EXTENT}.`;
   }
 
+  // The cap is this briefing's own resultRecordCount, not the service's limit.
   const floor = options.truncated
-    ? ` The service returned its ${NIFC_AREA_QUERY_RECORD_CAP}-record maximum, so this count is a lower bound.`
+    // DRAFT wording
+    ? ` The service returned the ${NIFC_AREA_QUERY_RECORD_CAP} records this briefing asks for, so this count is a lower bound.`
     : '';
   const verb = total === 1 ? 'perimeter intersects' : 'perimeters intersect';
 
