@@ -20,6 +20,7 @@ import { escapeHtml } from '../util/escape';
 import { fetchJsonWithBudget } from '../util/fetch';
 import { isObject } from '../util/guards';
 import { heatRiskMoment as formatMoment } from '../util/iso-day';
+import { dateTok } from '../util/text-tokens';
 import { watchDesktopMapSeat } from './map-control-seat';
 import { DETAIL_SECTIONS } from '../config/detail-sections';
 import { getDetailSectionHost } from './detail-section-hosts';
@@ -589,7 +590,8 @@ function renderRead(read: SequenceRead): void {
     `<p id="heatrisk-sequence-alt" class="sr-only">Seven-day HeatRisk text alternative. ${escapeHtml(alternative)}.</p>` +
     '<p class="heatrisk-sequence-source">' +
     `<a href="${escapeHtml(URLS.nwsHeatRisk)}/info/iteminfo" target="_blank" rel="noopener">National Weather Service HeatRisk</a> · ` +
-    `Retrieved ${escapeHtml(formatMoment(read.retrievedAt))}. Selected valid period shown above.</p>`;
+    // DDM's read in the viewer's zone, as every other "Retrieved" stamp; the valid period above keeps NWS's UTC.
+    `Retrieved ${escapeHtml(dateTok(read.retrievedAt))}. Selected valid period shown above.</p>`;
   host.setAttribute(
     'aria-label',
     `National Weather Service HeatRisk seven-day sequence at the selected point for ${selection.label}`

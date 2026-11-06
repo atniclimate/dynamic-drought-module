@@ -21,7 +21,7 @@ import { postalCodeFromProperties } from '../config/geography';
 import { placeRefFromBoundary } from '../config/entities';
 import { isStateCode } from './resources';
 import { getCurrentRegion } from '../state/region-store';
-import { gatedDisplayName, loadTribalRoster } from '../state/tribal-roster';
+import { gatedCensusName, gatedDisplayName, loadTribalCensusAreas, loadTribalRoster } from '../state/tribal-roster';
 import {
   geometryBboxAcrossAntimeridian,
   geometryLikelyCrossesAntimeridian
@@ -104,6 +104,29 @@ function biaLandArea(props: GeoJsonProperties): string {
   return firstString(props, ['LARNAME', 'LARName', 'NAME', 'name']) ?? 'Reservation land area';
 }
 
+/** Census AIANNH NAME to the gated name the search titles a Census-only area with, once loaded. */
+let censusNames: ReadonlyMap<string, string> | null = null;
+let censusNamesLoad: Promise<ReadonlyMap<string, string>> | null = null;
+
+/**
+ * Load, once, the Census area to name map through the same gate
+ * (gatedCensusName): the search's Census rows (DR-239), keyed by the Census
+ * NAME the layer's features carry. Rejects like the roster; until it
+ * resolves, or after a failure, a Census area titles itself.
+ */
+export function loadCensusNationNames(): Promise<ReadonlyMap<string, string>> {
+  censusNamesLoad ??= loadTribalCensusAreas().then((areas) => {
+    censusNames = new Map(areas.map((area) => [area.name, gatedCensusName(area)]));
+    return censusNames;
+  });
+  return censusNamesLoad;
+}
+
+/** The Census AIANNH area a feature names (NAME; BASENAME the descriptor-stripped form). */
+function censusArea(props: GeoJsonProperties): string {
+  return firstString(props, ['NAME', 'BASENAME', 'name']) ?? 'Tribal land area';
+}
+
 /** Resolve the display title for a selection by boundary kind. */
 function resolveTitle(kind: BoundaryKind, props: GeoJsonProperties): string {
   switch (kind) {
@@ -114,10 +137,13 @@ function resolveTitle(kind: BoundaryKind, props: GeoJsonProperties): string {
         firstString(props, ['LARName', 'LARNAME', 'NAME', 'name', 'TRIBE', 'RESERV_NAM']) ??
         'Tribal land area'
       );
-    case 'aiannh':
-      // US Census AIANNH: NAME carries the area name (BASENAME the descriptor-
-      // stripped form). Never presented as the Tribe's own name for itself.
-      return firstString(props, ['NAME', 'BASENAME', 'name']) ?? 'Tribal land area';
+    case 'aiannh': {
+      // A Census-only area takes the name the search gives it: the roster's
+      // gated Nation name, never one written here; otherwise the Census name.
+      if (!censusNamesLoad) loadCensusNationNames().catch(() => {});
+      const area = censusArea(props);
+      return censusNames?.get(area) ?? area;
+    }
     case 'treaty':
       return (
         firstString(props, ['name', 'TREATY_NAM', 'TREATY_NAME', 'TreatyName', 'NAME', 'Treaty']) ??
@@ -204,8 +230,9 @@ export function buildBoundaryContext(
   titleOverride?: string
 ): BoundarySelectionContext {
   const title = titleOverride && titleOverride.trim() !== '' ? titleOverride : resolveTitle(kind, properties);
-  // A Nation-titled BIA area keeps its land area beside the source, as the search words it.
-  const landArea = kind === 'bia-reservation' && !titleOverride ? biaLandArea(properties) : title;
+  // A Nation-titled BIA or Census area keeps its own area name beside the source, as the search words it.
+  const landArea =
+    titleOverride ? title : kind === 'bia-reservation' ? biaLandArea(properties) : kind === 'aiannh' ? censusArea(properties) : title;
   const bbox = geometryBbox(geometry);
   const crossesAntimeridian = bbox ? geometryLikelyCrossesAntimeridian(geometry) : false;
   // N2-A consumes the T-M0-4 crossing evidence. The compatibility bbox stays
@@ -219,7 +246,8 @@ export function buildBoundaryContext(
     title,
     properties: (properties as Readonly<Record<string, unknown>> | null) ?? null,
     lngLat: { lng: lngLat.lng, lat: lngLat.lat },
-    ...(landArea !== title ? { areaLabel: `Land area: ${landArea}` } : {}),
+    // DRAFT wording: "Census area", the search's own sublabel word for a Census row.
+    ...(landArea !== title ? { areaLabel: `${kind === 'aiannh' ? 'Census area' : 'Land area'}: ${landArea}` } : {}),
     ...(bbox ? { bbox } : {}),
     ...(serviceBbox ? { serviceBbox } : {}),
     ...(crossesAntimeridian ? { bboxCrossesAntimeridian: true } : {}),

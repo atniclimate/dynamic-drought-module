@@ -331,7 +331,8 @@ export function initMapInformation(): void {
 
   const onButtonClick = (): void => setOpen(!open);
   const onKeyDown = (event: KeyboardEvent): void => {
-    if (!open || event.key !== 'Escape') return;
+    // Only an Escape aimed at this disclosure and not already used (the search clearing its text, the briefing closing).
+    if (!open || event.key !== 'Escape' || event.defaultPrevented || !(panel.contains(event.target as Node) || event.target === button)) return;
     event.preventDefault();
     setOpen(false);
   };

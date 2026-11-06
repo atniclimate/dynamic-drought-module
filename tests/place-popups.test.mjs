@@ -1174,8 +1174,10 @@ test('a BIA popup titles the Nation\'s gated name when the roster names one, and
   }
 });
 
-// The look at 6748f25, P3-07: "As of no data", and "no data" twice.
-test('a station popup never repeats its state word in the clock, nor says "As of no data"', async () => {
+// The look at 6748f25, P3-07: "As of no data", and "no data" twice. Round 4
+// audit, R4-21: the station's own time is "Observed" ("As of" is DDM's read,
+// src/util/snapshot-time.ts). Red on 22268b3: the clocks say "As of".
+test('a station popup never repeats its state word in the clock, nor says "Observed no data"', async () => {
   const { stationCustody } = await import('../src/config/station-registry.ts');
   const base = {
     id: 'fixture-psp', name: 'Fixture Vital Signs', coords: [47, -122], region: 'puget', type: 'psp', agency: 'PSP',
@@ -1183,13 +1185,18 @@ test('a station popup never repeats its state word in the clock, nor says "As of
   };
   assert.equal(stationCustody(base), null, 'the fixture is a station with no custody network');
   const clockText = (read, station = base) => textOf(slot(serializePopupFrame(popups.buildTelemetryPopupModel(station, read)), 'clock'));
-  assert.equal(clockText(undefined), 'As of not stated');
+  assert.equal(clockText(undefined), 'Observed not stated');
   const live = { ...base, id: 'fixture-snotel', awdbStation: '999:WA:SNTL' };
   for (const read of [{ kind: 'no data', text: 'No recent NRCS values for this station.' }, { kind: 'unavailable' }]) {
     const markup = serializePopupFrame(popups.buildTelemetryPopupModel(live, read));
     assert.equal(markup.split(`<span data-state>${read.kind}</span>`).length - 1, 1, `the "${read.kind}" state word once`);
-    assert.equal(clockText(read, live), 'As of not stated', `${read.kind}: the clock does not repeat it`);
+    assert.equal(clockText(read, live), 'Observed not stated', `${read.kind}: the clock does not repeat it`);
   }
-  // The in-flight state keeps its clock word (the station census pins "As of loading").
-  assert.equal(clockText(undefined, live), 'As of loading');
+  // The in-flight state keeps its clock word (the station census pins "Observed loading").
+  assert.equal(clockText(undefined, live), 'Observed loading');
+  // A landed read: the station's time is "Observed", DDM's read "Retrieved on".
+  const reading = { label: 'Fixture depth', text: '1 in', issuer: 'Fixture service', observed: { precision: 'date', date: '2026-11-06' } };
+  const landed = serializePopupFrame(popups.buildTelemetryPopupModel(live, { kind: 'live', readings: [reading], retrievedAt: Date.UTC(2026, 10, 6, 21, 14) }));
+  assert.match(textOf(slot(landed, 'clock')), /^Observed /);
+  assert.doesNotMatch(landed, /As of/);
 });

@@ -18,6 +18,9 @@ import { registerHooks } from 'node:module';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
+// A viewer outside UTC, so DDM's read time shows in the viewer's zone (R4-20).
+process.env.TZ = 'America/Los_Angeles';
+
 const seen = { identifies: 0, selectionListener: null, current: null };
 globalThis.hrSeen = seen;
 
@@ -77,6 +80,7 @@ class FakeHost extends FakeElement {
     return this.cells.includes(node);
   }
   set innerHTML(html) {
+    this.html = html;
     const lost = this.cells.includes(globalThis.document.activeElement);
     this.cells = [...html.matchAll(/data-heatrisk-sequence-day="(\d+)"/g)].map(
       ([, day]) => new FakeButton({ heatriskSequenceDay: day })
@@ -156,4 +160,19 @@ test('a new selection object for the same point reuses the finished read', async
   seen.selectionListener(point(-121, 47.3));
   await settle();
   assert.equal(seen.identifies, before + 14);
+});
+
+// Round 4 audit, R4-20: "Retrieved" is DDM's read, shown in the viewer's zone
+// like every other retrieved stamp (dateTok); the issuer's valid period stays UTC.
+// Red on 22268b3: the read time reads in UTC.
+test('the retrieved stamp is the read time in the viewer zone, the valid period in UTC', async () => {
+  const { dateTok } = await import('../src/util/text-tokens.ts');
+  const from = Date.now();
+  seen.selectionListener(point(-122, 47.3));
+  await settle();
+  const to = Date.now();
+  const retrieved = /Retrieved ([^.<]+)\./.exec(host.html)?.[1];
+  assert.ok([dateTok(from), dateTok(to)].includes(retrieved), `read stamp: ${retrieved}`);
+  assert.match(retrieved, /P[SD]T$/);
+  assert.match(host.html, /UTC to /, 'the valid period keeps the issuer clock');
 });

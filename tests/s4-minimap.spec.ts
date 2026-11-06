@@ -268,6 +268,15 @@ test.describe('S4b minimap', () => {
     await expect(
       minimap.locator('[data-framing="alaska-northwest"]'),
     ).toHaveCSS('fill', 'rgb(255, 76, 0)');
+    // Round 4 audit, R4-19: the browser check reads in the house date token
+    // (dateTok), as the Wildfire time statement writes the same check.
+    // Red on 22268b3: the year-less 12-hour form ("browser checked Nov 6, 1:14 PM PST").
+    await expect(
+      minimap.locator('[data-framing="alaska-northwest"]'),
+    ).toHaveAttribute(
+      'aria-label',
+      /browser checked [A-Z][a-z]{2} \d{1,2}, \d{4}, \d{2}:\d{2} \S+\./,
+    );
     // A live mapped-fire framing has no discrete date to claim.
     expect(
       await minimap

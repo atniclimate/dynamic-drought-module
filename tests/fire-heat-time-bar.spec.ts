@@ -453,7 +453,8 @@ test.describe('DDM-P8-T02: the Wildfire screen has a time control at every horiz
     await expect(dot).toHaveCSS('color', 'rgb(225, 61, 51)');
     await expect(dot).toHaveCSS('background-image', /linear-gradient\(90deg,.*50%/);
     await expect(dot).toHaveCSS('animation-name', 'none');
-    await expect(dot).toHaveAttribute('aria-label', `Last successful feed check ${checkedDate}`);
+    // Round 4 audit, R4-19: the dot names the check as the detail beneath it does.
+    await expect(dot).toHaveAttribute('aria-label', `Last successful browser check ${checkedDate}`);
     await expect(summary).toHaveText(`Current Conditions${checkedDate}`);
     // Expiry updates the visible source state without closing details or
     // dropping a keyboard reader's focus as the stamp markup is refreshed.

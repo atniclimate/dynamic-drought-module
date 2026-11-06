@@ -395,9 +395,16 @@ function resolveAiannhSubtype(code: string): { label: string; isLegal: boolean }
  * distinct, separately labeled representation and is never blended with the
  * BIA AIAN-LAR layer (the architectural-review HIGH constraint).
  */
-export function buildAiannhPopupModel(props: GeoJsonProperties, conditions: PlaceConditions): PopupModel {
+export function buildAiannhPopupModel(
+  props: GeoJsonProperties,
+  conditions: PlaceConditions,
+  /** Census NAME to the search's name through the roster's provenance gate (gatedCensusName); absent until the roster loads. */
+  censusNames?: ReadonlyMap<string, string>
+): PopupModel {
   const p = props ?? {};
-  const name = placeTitle([p.NAME, p.BASENAME, p.name], 'Tribal land area');
+  const censusArea = placeTitle([p.NAME, p.BASENAME, p.name], 'Tribal land area');
+  // The name the search and the briefing give this Census area; the Census name stays a detail row.
+  const name = censusNames?.get(censusArea) ?? censusArea;
   const code = firstText([p.AIANNHCC, p.aiannhcc]);
   const subtype = resolveAiannhSubtype(code);
   // The user-visible provenance sentence (umbrella build Unit D): publisher,
@@ -429,7 +436,11 @@ export function buildAiannhPopupModel(props: GeoJsonProperties, conditions: Plac
     // The vintage every caveat branch states.
     clocks: [{ kind: 'point', meaning: 'edition', label: 'Vintage', at: { precision: 'date', date: '2025-01-01' } }],
     source: { link: { label: 'US Census geography', href: 'https://www.census.gov/programs-surveys/geography.html' } },
-    details: detailRow('Type', subtype.label),
+    details: [
+      // DRAFT wording: "Census area", the search's own sublabel word for the same Census NAME.
+      ...(name === censusArea ? [] : detailRow('Census area', censusArea)),
+      ...detailRow('Type', subtype.label)
+    ],
     // The branch's own approved variant, verbatim (PF4: AIANNH's distinct branches).
     representation: { product: 'aiannh', variant: isOtsa ? 'otsa' : subtype.isLegal ? 'legal' : 'statistical', text: caveat },
     actions: placeDoor(name, conditions)
@@ -650,8 +661,10 @@ const LOADING_TEXT = 'Live data';
 // DRAFT wording (DR-177): a station that lists no https page.
 const NO_STATION_PAGE = 'This station lists no public page.';
 // DRAFT wording: "not stated", as the alert popup words a time its issuer leaves open;
-// a station with no reading time, never "As of no data" beside a "no data" state (the look at 6748f25, P3-07).
-const STATION_TIME_NOT_STATED: PopupClock = { kind: 'not-stated', label: 'As of', reason: 'not stated' };
+// a station with no reading time, never "Observed no data" beside a "no data" state (the look at 6748f25, P3-07).
+// DRAFT wording: "Observed", the station's own time (as the HMS smoke clock words it); "As of" is DDM's read.
+const STATION_OBSERVED = 'Observed';
+const STATION_TIME_NOT_STATED: PopupClock = { kind: 'not-stated', label: STATION_OBSERVED, reason: 'not stated' };
 
 /** Whether the station carries one of the five wired in-browser reads (DDM-P9-T05 added RAWS). */
 function stationHydrates(station: TelemetryStation): boolean {
@@ -700,8 +713,8 @@ function observedAt(text: string | null | undefined): ClockValue | null {
 
 function observedClock(reading: StationReading): PopupClock {
   return reading.observed === null
-    ? { kind: 'not-stated', label: 'As of', reason: 'not recorded' }
-    : { kind: 'point', meaning: 'observed', label: 'As of', at: reading.observed };
+    ? { kind: 'not-stated', label: STATION_OBSERVED, reason: 'not recorded' }
+    : { kind: 'point', meaning: 'observed', label: STATION_OBSERVED, at: reading.observed };
 }
 
 /** The served text, with the shared " (stale)" note past the network's window (0.4.0 A4). */
@@ -773,7 +786,7 @@ export function buildTelemetryPopupModel(station: TelemetryStation, read?: Stati
       state: state.kind
     };
     // The value row already carries the state word; the clock repeats only the in-flight one (pinned by the station census).
-    clocks = [state.kind === 'loading' ? { kind: 'not-stated', label: 'As of', reason: 'loading' } : STATION_TIME_NOT_STATED];
+    clocks = [state.kind === 'loading' ? { kind: 'not-stated', label: STATION_OBSERVED, reason: 'loading' } : STATION_TIME_NOT_STATED];
   }
   return {
     kind: 'station',
