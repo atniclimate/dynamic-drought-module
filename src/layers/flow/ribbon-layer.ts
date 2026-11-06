@@ -1,7 +1,7 @@
 /**
  * The moving form (design/moving-paths.md sections 3, 4 and 14; DR-116;
  * block E1 unit E1-3): one WebGL2 MapLibre custom layer, `renderingMode
- * '2d'`, drawing instanced, tapered, cased ribbons for wind and crest marks
+ * '2d'`, drawing instanced, tapered, cased ribbons for wind and crest sets
  * for waves with one fragment shader. Particle state lives on the CPU
  * (`advect.ts`); each fixed step uploads one ring slot.
  *
@@ -29,7 +29,8 @@
 import type { CustomLayerInterface, CustomRenderMethodInput, Map as MlMap } from 'maplibre-gl';
 import type { FlowField } from './field';
 import {
-  type ViewQuad, CrestMarks, FlowClock, MAX_MARKS, PAST_GRID_CELL_PX, Particles, SLOTS, cellPx, markCount,
+  type ViewQuad, CrestMarks, FlowClock, MARK_SEG_FLOATS, MARK_SEGS_PER_SET, MAX_MARKS, PAST_GRID_CELL_PX,
+  Particles, SLOTS, cellPx, markCount,
   paceFor, particleCount, viewCenter, viewQuadFromCorners
 } from './advect';
 import { FLOW_CASING_ALPHA, FLOW_CASING_WIDTH_PX, FLOW_CORE_WIDTH_PX, FLOW_HEAD_ALPHA, FLOW_INK, type FlowInkName, inkRgb } from './ink';
@@ -102,11 +103,13 @@ void main() {
 }
 `;
 
+// Instance = one crest segment, inner (a_seg.xy) to outer (a_seg.zw); a_meta: class, alpha, and the
+// width factor at each end, which scales width and alpha as the ribbon taper does.
 const VERT_MARKS = `${VERT_COMMON}
 uniform float u_head_alpha;
 in vec4 a_seg;
-in vec2 a_meta;
-void main() { emit(a_seg.xy, a_seg.zw, int(a_meta.x), 1.0, 1.0, u_head_alpha * a_meta.y); }
+in vec4 a_meta;
+void main() { emit(a_seg.xy, a_seg.zw, int(a_meta.x), a_meta.z, a_meta.w, u_head_alpha * a_meta.y); }
 `;
 
 const FRAG = `#version 300 es
@@ -293,7 +296,7 @@ export class FlowRibbonLayer implements CustomLayerInterface {
       this.gpu = null;
       this.gpuEpoch++;
     };
-    // Waves draw crest marks; every wind kind draws ribbons at its own pace.
+    // Waves draw crest sets; every wind kind draws ribbons at its own pace.
     const waves = this.field.kind === 'waves';
     this.particles = waves ? null : new Particles(this.field, paceFor(this.field.kind));
     this.marks = waves ? new CrestMarks(this.field) : null;
@@ -391,14 +394,15 @@ export class FlowRibbonLayer implements CustomLayerInterface {
       if (!ringVao || !markVao || !markBuffer) throw new Error('flow ribbon: GL allocation failed');
       gl.bindVertexArray(markVao);
       gl.bindBuffer(gl.ARRAY_BUFFER, markBuffer);
-      gl.bufferData(gl.ARRAY_BUFFER, MAX_MARKS * 2 * 6 * 4, gl.DYNAMIC_DRAW);
+      const stride = MARK_SEG_FLOATS * 4;
+      gl.bufferData(gl.ARRAY_BUFFER, MAX_MARKS * MARK_SEGS_PER_SET * stride, gl.DYNAMIC_DRAW);
       const aSeg = gl.getAttribLocation(markProgram, 'a_seg');
       const aMeta = gl.getAttribLocation(markProgram, 'a_meta');
       gl.enableVertexAttribArray(aSeg);
-      gl.vertexAttribPointer(aSeg, 4, gl.FLOAT, false, 24, 0);
+      gl.vertexAttribPointer(aSeg, 4, gl.FLOAT, false, stride, 0);
       gl.vertexAttribDivisor(aSeg, 1);
       gl.enableVertexAttribArray(aMeta);
-      gl.vertexAttribPointer(aMeta, 2, gl.FLOAT, false, 24, 16);
+      gl.vertexAttribPointer(aMeta, 4, gl.FLOAT, false, stride, 16);
       gl.vertexAttribDivisor(aMeta, 1);
       this.gpu = {
         gl, ringProgram, markProgram, compositeProgram, ringVao, markVao, markBuffer,
@@ -469,7 +473,7 @@ export class FlowRibbonLayer implements CustomLayerInterface {
     const g = this.gpu;
     if (!g || !this.marks) return;
     gl.bindBuffer(gl.ARRAY_BUFFER, g.markBuffer);
-    gl.bufferSubData(gl.ARRAY_BUFFER, 0, this.marks.segs, 0, this.marks.segCount * 6);
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, this.marks.segs, 0, this.marks.segCount * MARK_SEG_FLOATS);
     gl.bindBuffer(gl.ARRAY_BUFFER, null);
   }
 

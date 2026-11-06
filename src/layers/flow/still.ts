@@ -2,7 +2,7 @@
  * The still form and the past-grid arrows (design/moving-paths.md sections 3
  * and 4; block E1 unit E1-3), as GeoJSON for three native MapLibre line
  * layers on one source: `flow-still-casing` (every feature), `flow-still`
- * (paths) and `flow-still-marks` (crest marks and node arrows). Native lines
+ * (paths) and `flow-still-marks` (crest sets and node arrows). Native lines
  * drape under terrain 3D, print, and need no WebGL2 of their own.
  *
  * - Seeds come from a jittered grid at the moving form's density, drawn from
@@ -12,14 +12,18 @@
  *   form's own `advance()` (same pace, same mask, same kill before commit),
  *   then cut into 3 pieces of stepped width, tail to head, with a 6 px
  *   chevron head. Same ink, classes and widths as the moving form.
- * - Waves draw as static crest marks, the same marks the moving form draws.
+ * - Waves draw as static crest sets, the sets the moving form would start
+ *   from the same rules (direction and class read once, the agreement gate,
+ *   the path check): three concentric arcs across the travel, the front one
+ *   longest and boldest.
  * - Past 384 CSS px per model cell, one 18 px arrow (6 px head) per valid
  *   grid node in view replaces the paths: nothing is interpolated there.
  */
 import type { ExpressionSpecification, LayerSpecification } from 'maplibre-gl';
 import { type FlowClass, type FlowField, type FlowSample, classOf, latOf, lonOf, mercX, mercY, newSample, nodeLonLat, sampleField } from './field';
 import {
-  type FlowForm, type ViewQuad, CrestMarks, STEP_S, advance, insideView, mulberry32, paceFor, viewPoint, CSS_PX2_PER_PARTICLE
+  type FlowForm, type ViewQuad, CrestMarks, MARK_CRESTS, MARK_SEG_FLOATS, MARK_SEGS_PER_SET, STEP_S, advance, insideView,
+  mulberry32, paceFor, viewPoint, CSS_PX2_PER_PARTICLE
 } from './advect';
 import { FLOW_CASING_ALPHA, FLOW_CASING_WIDTH_PX, FLOW_CORE_WIDTH_PX, FLOW_INK, type FlowInkName } from './ink';
 
@@ -45,7 +49,7 @@ export type StillRole = 'path' | 'mark';
 export interface StillProperties {
   readonly role: StillRole;
   readonly cls: FlowClass;
-  /** 0..2 the three path pieces tail to head, 3 the chevron; marks are 2. */
+  /** 0..2 the three path pieces tail to head, 3 the chevron; crests 0..2 back to front; arrows 2, heads 3. */
   readonly piece: number;
   /** Core width, CSS px. */
   readonly w: number;
@@ -144,7 +148,12 @@ function stillPaths(field: FlowField, view: ViewQuad, seed: number, densityFacto
   return out;
 }
 
-/** Wave still: the moving form's crest marks, placed by the seeded PRNG and not moved. */
+/**
+ * Wave still: the moving form's crest sets, placed by the seeded PRNG and not
+ * moved. One line per crest, pieces 0 to 2 back to front, each at its crest
+ * weight of the class core width (the front crest at full width). A native
+ * line holds one width, so a still crest does not thin to its ends.
+ */
 function stillMarks(field: FlowField, view: ViewQuad, seed: number, densityFactor: number): StillFeature[] {
   const marks = new CrestMarks(field, mulberry32(seed));
   marks.setCount(view, densityFactor);
@@ -152,13 +161,19 @@ function stillMarks(field: FlowField, view: ViewQuad, seed: number, densityFacto
   marks.step(view, 0);
   const out: StillFeature[] = [];
   const s = marks.segs;
-  for (let i = 0; i < marks.segCount; i++) {
-    const o = i * 6;
-    const cls = s[o + 4] as FlowClass;
-    out.push(feature([
-      [lonOf((s[o] as number) + marks.originX), latOf((s[o + 1] as number) + marks.originY)],
-      [lonOf((s[o + 2] as number) + marks.originX), latOf((s[o + 3] as number) + marks.originY)]
-    ], { role: 'mark', cls, piece: 2, w: FLOW_CORE_WIDTH_PX[cls] }));
+  const at = (o: number): number[] => [lonOf((s[o] as number) + marks.originX), latOf((s[o + 1] as number) + marks.originY)];
+  const per = MARK_SEGS_PER_SET / MARK_CRESTS;
+  // A crest is drawn from its centre out, side by side: one line end to end, through the centre.
+  for (let k = 0; k < marks.segCount / per; k++) {
+    const seg = (j: number): number => (k * per + j) * MARK_SEG_FLOATS;
+    const coords: number[][] = [];
+    for (let j = per / 2 - 1; j >= 0; j--) coords.push(at(seg(j) + 2));
+    coords.push(at(seg(0)));
+    for (let j = per / 2; j < per; j++) coords.push(at(seg(j) + 2));
+    const cls = s[seg(0) + 4] as FlowClass;
+    out.push(feature(coords, {
+      role: 'mark', cls, piece: k % MARK_CRESTS, w: FLOW_CORE_WIDTH_PX[cls] * (s[seg(0) + 6] as number)
+    }));
   }
   return out;
 }
@@ -253,7 +268,7 @@ export interface StillOptions {
 
 /**
  * The GeoJSON for the still layers in one form: still paths (wind), static
- * crest marks (waves), or node arrows past the grid. The moving form draws
+ * crest sets (waves), or node arrows past the grid. The moving form draws
  * nothing here.
  */
 export function buildStillForm(field: FlowField, view: ViewQuad, form: FlowForm, options: StillOptions = {}): StillCollection {

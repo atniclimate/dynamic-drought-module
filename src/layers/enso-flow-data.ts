@@ -87,7 +87,8 @@ export const FLOW_WORDS = {
   bins: {
     wind: 'Line width and brightness: under 5, 5 to 10, 10 or more m/s.',
     jet: 'Line width and brightness: under 20, 20 to 40, 40 or more m/s.',
-    waves: 'Mark length and brightness: under 2, 2 to 4, 4 or more m significant wave height.',
+    // DRAFT wording (DR-177): the crest sets' direction cue and size (src/layers/flow/advect.ts CrestMarks; waves-dynamics design section 5), 2026-11-06.
+    waves: 'Curved lines lie across the way the waves travel, the longest in front. Size and brightness: under 2, 2 to 4, 4 or more m significant wave height.',
     currents: 'Line width and brightness: under 0.25, 0.25 to 0.5, 0.5 or more m/s.',
     // DRAFT wording (DR-177): the shade's steps in the issuer's unit (src/layers/flow/shade.ts SHADE_BINS; tests/flow-shade.test.mjs).
     pwat: 'Shade deepens in steps: none under 15, then 15 to 30, 30 to 45, 45 or more kg m-2.'
