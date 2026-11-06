@@ -441,17 +441,17 @@ test.describe('DDM-P1-T02: viewport discovery aborts on supersession', () => {
     page
   }) => {
     await stubCommon(page);
-    // USGS viewport discovery (a bBox query) is HELD; the station-value reads
-    // and the other rosters are not what this test observes.
+    // USGS viewport discovery (a bbox query) is HELD; the station-value and
+    // name reads and the other rosters are not what this test observes.
     const isUsgsDiscovery = (url: string): boolean =>
-      url.includes('waterservices.usgs.gov') && url.includes('bBox');
+      url.includes('api.waterdata.usgs.gov') && url.includes('bbox=');
     const held = makeHeld();
-    await page.route('**/waterservices.usgs.gov/**', (route) => {
+    await page.route('**/api.waterdata.usgs.gov/**', (route) => {
       if (!isUsgsDiscovery(route.request().url())) {
         void route.abort('failed');
         return;
       }
-      held.releases.push(fulfilLater(route, JSON.stringify({ value: { timeSeries: [] } }), 'application/json'));
+      held.releases.push(fulfilLater(route, JSON.stringify({ type: 'FeatureCollection', features: [] }), 'application/json'));
     });
     const failures = watchFailures(page, isUsgsDiscovery);
 

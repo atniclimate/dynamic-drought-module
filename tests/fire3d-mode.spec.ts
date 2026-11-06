@@ -2030,7 +2030,7 @@ test.describe('W3/W4 browser truth', () => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await stubWildfireFeeds(page);
     await stubDeepTerrainArchive(page);
-    await page.route('**/waterservices.usgs.gov/**', (route) => route.abort('failed'));
+    await page.route('**/api.waterdata.usgs.gov/**', (route) => route.abort('failed'));
     await page.route('**/wcc.sc.egov.usda.gov/**', (route) => route.abort('failed'));
     await page.route('**/api.tidesandcurrents.noaa.gov/**', (route) => route.abort('failed'));
     await page.route('**/mesonet.agron.iastate.edu/**', (route) => route.abort('failed'));

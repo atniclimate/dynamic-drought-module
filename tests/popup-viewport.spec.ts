@@ -941,7 +941,7 @@ test.describe('DEF-4 finding 1: viewport resize while telemetry hydration is in 
       await route.abort('failed');
     };
     await page.route('**/ddm-proxy.atniclimate.workers.dev/**', delayedAbort);
-    await page.route('**/waterservices.usgs.gov/**', delayedAbort);
+    await page.route('**/api.waterdata.usgs.gov/**', delayedAbort);
     // The 'ihr' station hydrates through the direct USACE CWMS Data API
     // (wildcard CORS), not the proxy; without this route the popup would
     // hydrate LIVE and the honest fallback would never render.
@@ -1084,7 +1084,7 @@ test.describe('DEF-4: the telemetry popup fits a 390px viewport (390x844)', () =
     // Deterministic backbone: abort the live telemetry data routes so the
     // popup settles on its honest fallback instead of racing an upstream.
     await page.route('**/ddm-proxy.atniclimate.workers.dev/**', (route) => route.abort('failed'));
-    await page.route('**/waterservices.usgs.gov/**', (route) => route.abort('failed'));
+    await page.route('**/api.waterdata.usgs.gov/**', (route) => route.abort('failed'));
     // The 'ihr' station hydrates through the direct USACE CWMS Data API
     // (wildcard CORS), not the proxy; without this route the popup would
     // hydrate LIVE and the honest fallback would never render.

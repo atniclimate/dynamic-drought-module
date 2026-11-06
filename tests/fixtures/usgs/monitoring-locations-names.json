@@ -1,0 +1,48 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "monitoring_location_name": "ROSS RESERVOIR NEAR NEWHALEM, WA"
+      },
+      "id": "USGS-12175000",
+      "geometry": null
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "monitoring_location_name": "SKAGIT RIVER ABOVE ALMA CREEK NEAR MARBLEMOUNT, WA"
+      },
+      "id": "USGS-12179000",
+      "geometry": null
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "monitoring_location_name": "JOHN DAY RIVER AT SERVICE CREEK, OR"
+      },
+      "id": "USGS-14046500",
+      "geometry": null
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "monitoring_location_name": "DESCHUTES RIVER AT MOODY, NEAR BIGGS, OR"
+      },
+      "id": "USGS-14103000",
+      "geometry": null
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "monitoring_location_name": "SKAGIT RIVER NEAR CONCRETE, WA"
+      },
+      "id": "USGS-12194000",
+      "geometry": null
+    }
+  ],
+  "numberReturned": 5,
+  "links": [],
+  "timeStamp": "2026-11-06T05:39:26.457875Z"
+}

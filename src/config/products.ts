@@ -350,7 +350,7 @@ export const PRODUCTS: Readonly<Record<ProductKey, ProductDef>> = Object.freeze(
     key: 'telemetry',
     issuer: 'USGS · USBR · NRCS · USACE',
     // Four agencies behind src/config/station-registry.ts, each its own URLS
-    // key (usgsIV, nrcsAwdbStations, nifcRawsFeatureServer, noaaCoopsStations,
+    // key (usgsWaterData, nrcsAwdbStations, nifcRawsFeatureServer, noaaCoopsStations,
     // usbrAgrimetSitesJs, iemCocorahsNetwork and more); no single key names
     // this layer honestly. See the microtask 1 report.
     endpointKey: null,

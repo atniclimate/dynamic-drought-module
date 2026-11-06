@@ -153,7 +153,7 @@ async function stubEveryStudioLayer(page: Page): Promise<void> {
   // own registry status; abort each wired agency deterministically (the
   // honest "values unavailable" fallback) instead of reaching it live.
   for (const pattern of [
-    '**/waterservices.usgs.gov/**',
+    '**/api.waterdata.usgs.gov/**',
     '**/wcc.sc.egov.usda.gov/**',
     '**/usbr.gov/**',
     '**/cwms-data.usace.army.mil/**'

@@ -1,0 +1,223 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "time_series_id": "4f98b2dac6e4437c903fe838cd7d03dd",
+        "parameter_code": "00065",
+        "time": "2026-11-06T03:00:00+00:00",
+        "value": "2.88",
+        "unit_of_measure": "ft",
+        "qualifier": null
+      },
+      "id": "cd4a44a7-259f-4be9-a90c-4fba0ad0cc3c",
+      "geometry": null
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "time_series_id": "4f98b2dac6e4437c903fe838cd7d03dd",
+        "parameter_code": "00065",
+        "time": "2026-11-06T03:15:00+00:00",
+        "value": "2.88",
+        "unit_of_measure": "ft",
+        "qualifier": null
+      },
+      "id": "9414ce25-7fa4-4c94-8ce8-650790496c78",
+      "geometry": null
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "time_series_id": "4f98b2dac6e4437c903fe838cd7d03dd",
+        "parameter_code": "00065",
+        "time": "2026-11-06T03:30:00+00:00",
+        "value": "2.88",
+        "unit_of_measure": "ft",
+        "qualifier": null
+      },
+      "id": "67044464-91a9-4b03-b632-1d3a8c3a7787",
+      "geometry": null
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "time_series_id": "4f98b2dac6e4437c903fe838cd7d03dd",
+        "parameter_code": "00065",
+        "time": "2026-11-06T03:45:00+00:00",
+        "value": "2.88",
+        "unit_of_measure": "ft",
+        "qualifier": null
+      },
+      "id": "17140766-3fa1-4699-ac52-1d69d84ec997",
+      "geometry": null
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "time_series_id": "4f98b2dac6e4437c903fe838cd7d03dd",
+        "parameter_code": "00065",
+        "time": "2026-11-06T04:00:00+00:00",
+        "value": "2.87",
+        "unit_of_measure": "ft",
+        "qualifier": null
+      },
+      "id": "de29c256-6867-40c3-8b73-b8510bef5ef2",
+      "geometry": null
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "time_series_id": "4f98b2dac6e4437c903fe838cd7d03dd",
+        "parameter_code": "00065",
+        "time": "2026-11-06T04:15:00+00:00",
+        "value": "2.87",
+        "unit_of_measure": "ft",
+        "qualifier": null
+      },
+      "id": "35b1d19f-b37d-4ebf-8a98-f3239f89585e",
+      "geometry": null
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "time_series_id": "4f98b2dac6e4437c903fe838cd7d03dd",
+        "parameter_code": "00065",
+        "time": "2026-11-06T04:30:00+00:00",
+        "value": "2.87",
+        "unit_of_measure": "ft",
+        "qualifier": null
+      },
+      "id": "7a258884-02da-4011-bde4-81d56fe8f70e",
+      "geometry": null
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "time_series_id": "4f98b2dac6e4437c903fe838cd7d03dd",
+        "parameter_code": "00065",
+        "time": "2026-11-06T04:45:00+00:00",
+        "value": "2.87",
+        "unit_of_measure": "ft",
+        "qualifier": null
+      },
+      "id": "01a3adaa-5fca-44f9-923f-30f6229bfb45",
+      "geometry": null
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "time_series_id": "5e1925ea44c94eb199158a23fc17febe",
+        "parameter_code": "00060",
+        "time": "2026-11-06T03:00:00+00:00",
+        "value": "4380",
+        "unit_of_measure": "ft^3/s",
+        "qualifier": null
+      },
+      "id": "eb980d3d-7643-48ab-95e1-16fbd923b293",
+      "geometry": null
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "time_series_id": "5e1925ea44c94eb199158a23fc17febe",
+        "parameter_code": "00060",
+        "time": "2026-11-06T03:15:00+00:00",
+        "value": "4380",
+        "unit_of_measure": "ft^3/s",
+        "qualifier": null
+      },
+      "id": "f0b851b5-ce26-4ead-9ec8-122205af959e",
+      "geometry": null
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "time_series_id": "5e1925ea44c94eb199158a23fc17febe",
+        "parameter_code": "00060",
+        "time": "2026-11-06T03:30:00+00:00",
+        "value": "4380",
+        "unit_of_measure": "ft^3/s",
+        "qualifier": null
+      },
+      "id": "3641da6e-3cc2-4c2e-a35e-cb236ac56059",
+      "geometry": null
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "time_series_id": "5e1925ea44c94eb199158a23fc17febe",
+        "parameter_code": "00060",
+        "time": "2026-11-06T03:45:00+00:00",
+        "value": "4380",
+        "unit_of_measure": "ft^3/s",
+        "qualifier": null
+      },
+      "id": "a6ae8e8f-6bd1-49ce-aaec-3ae069aa7daa",
+      "geometry": null
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "time_series_id": "5e1925ea44c94eb199158a23fc17febe",
+        "parameter_code": "00060",
+        "time": "2026-11-06T04:00:00+00:00",
+        "value": "4350",
+        "unit_of_measure": "ft^3/s",
+        "qualifier": null
+      },
+      "id": "8224c388-f29e-438a-b5bf-7776c4cdb366",
+      "geometry": null
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "time_series_id": "5e1925ea44c94eb199158a23fc17febe",
+        "parameter_code": "00060",
+        "time": "2026-11-06T04:15:00+00:00",
+        "value": "4350",
+        "unit_of_measure": "ft^3/s",
+        "qualifier": null
+      },
+      "id": "c54b26f1-6928-474f-ac0c-733050b06889",
+      "geometry": null
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "time_series_id": "5e1925ea44c94eb199158a23fc17febe",
+        "parameter_code": "00060",
+        "time": "2026-11-06T04:30:00+00:00",
+        "value": "4350",
+        "unit_of_measure": "ft^3/s",
+        "qualifier": null
+      },
+      "id": "42079715-cbeb-4fec-b398-11f92d5dfea1",
+      "geometry": null
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "time_series_id": "5e1925ea44c94eb199158a23fc17febe",
+        "parameter_code": "00060",
+        "time": "2026-11-06T04:45:00+00:00",
+        "value": "4350",
+        "unit_of_measure": "ft^3/s",
+        "qualifier": null
+      },
+      "id": "954d25cf-f6f4-4612-971c-21b61d8fb762",
+      "geometry": null
+    }
+  ],
+  "numberReturned": 16,
+  "links": [
+    {
+      "type": "application/geo+json",
+      "rel": "self",
+      "title": "This document as GeoJSON",
+      "href": "https://api.waterdata.usgs.gov/ogcapi/v1/collections/continuous/items?f=json&monitoring_location_id=USGS-14103000&parameter_code=00060,00065&time=P7D&limit=5000&skipGeometry=true&properties=time_series_id,parameter_code,time,value,unit_of_measure,qualifier"
+    }
+  ],
+  "timeStamp": "2026-11-06T05:39:25.999320Z"
+}

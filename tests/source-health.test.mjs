@@ -48,10 +48,9 @@ test('every stubbed host and tile glob names a host the runtime registry actuall
   }
 });
 
-test('countRecords reads GeoJSON, ArcGIS JSON, WaterML, and arrays, and returns null otherwise', () => {
+test('countRecords reads GeoJSON, ArcGIS JSON, and arrays, and returns null otherwise', () => {
   assert.equal(countRecords('application/geo+json', JSON.stringify({ type: 'FeatureCollection', features: [{}, {}] })), 2);
   assert.equal(countRecords('application/json; charset=utf-8', JSON.stringify({ features: [{}] })), 1);
-  assert.equal(countRecords('application/json', JSON.stringify({ value: { timeSeries: [{}, {}, {}] } })), 3);
   assert.equal(countRecords('application/json', JSON.stringify([1, 2])), 2);
   assert.equal(countRecords('image/png', 'not json'), null);
   assert.equal(countRecords('application/json', '{"error":{"code":400}}'), null);
