@@ -621,7 +621,7 @@ function selectRegion(
   // such a region regardless of whether the region actually changed or the
   // call was the boot's own silent fit.
   const priorRegion = STATE.currentRegion;
-  placeView = null;
+  dropPlaceView();
   if (
     !silent &&
     key !== priorRegion &&
@@ -736,27 +736,28 @@ function pushUrl(): void {
  * A place chosen by search or deep link moves the camera without touching the
  * region, framing or ocean stores, so the menu kept naming the region it left
  * (Colorado chosen, "United States" shown). This holds the camera the place
- * ended on and what the menu may name for it: the state's own region option,
- * else the neutral entry. Any region, framing or ocean choice drops it, and a
- * camera that has since moved off it no longer counts.
+ * ended on, and the menu then shows the neutral entry (never a region option,
+ * so picking any region from the menu always fires a change). Any region,
+ * framing or ocean choice drops it, and so does a camera that has moved off it.
  */
-let placeView: { camera: CameraState; regionKey: RegionKey | null } | null = null;
+let placeView: CameraState | null = null;
+/** Bumped by every drop, so a settle that was waiting when the view was dropped stands down. */
+let placeViewGen = 0;
 
-/** The region option that is exactly the chosen state (Alaska, Hawaii, Washington State), if any. */
-function regionForState(stusps: unknown): RegionKey | null {
-  if (typeof stusps !== 'string') return null;
-  const match = (Object.entries(REGIONS) as Array<[RegionKey, Region]>).find(
-    ([, region]) => region.briefing?.id === stusps && region.label.startsWith(region.briefing.label)
-  );
-  return match ? match[0] : null;
+function dropPlaceView(): void {
+  placeView = null;
+  placeViewGen += 1;
 }
 
-/** Once the camera settles, record it if it left the committed view; `regionKey` is the option that fits it, if any. */
-function noteViewLeftRegion(map: maplibregl.Map, regionKey: RegionKey | null): void {
+/** Once the camera settles, record it if it left the committed view. */
+function noteViewLeftRegion(map: maplibregl.Map): void {
+  const gen = placeViewGen;
   const settle = (): void => {
+    // A later choice interrupts the flight and fires moveend; its camera is mid-flight, not the place.
+    if (gen !== placeViewGen) return;
     const target = committedCameraTarget();
     if (!target || cameraMatchesTarget(map, target)) return;
-    placeView = { camera: readCameraState(map), regionKey };
+    placeView = readCameraState(map);
     syncRegionSelect();
   };
   // The fit is usually under way when the choice lands; wait for it to end.
@@ -767,22 +768,20 @@ function noteViewLeftRegion(map: maplibregl.Map, regionKey: RegionKey | null): v
 /** A search or deep-link place choice. */
 function notePlaceView(map: maplibregl.Map, place: PlaceSelection): void {
   // A map click carries no pointInsidePlace and does not move the camera.
-  if (!place.context.pointInsidePlace) return;
-  const state = place.context.kind === 'state' ? place.context.properties?.STUSPS : null;
-  noteViewLeftRegion(map, regionForState(state));
+  if (place.context.pointInsidePlace) noteViewLeftRegion(map);
 }
 
 /**
  * A city choice only eases the camera and sets no place, so it never reaches the
  * place listener. Wrapped here, not in search-controller, so that lazy chunk
- * need not import this module; a city is never a region option.
+ * need not import this module.
  */
 function withCityView(map: maplibregl.Map, wiring: SearchWiring): SearchWiring {
   return {
     ...wiring,
     onSelect: (item) => {
       wiring.onSelect(item);
-      if (item.kind === 'city') noteViewLeftRegion(map, null);
+      if (item.kind === 'city') noteViewLeftRegion(map);
     }
   };
 }
@@ -792,11 +791,10 @@ function syncRegionSelect(): void {
   if (!(select instanceof HTMLSelectElement)) return;
   const ocean = getOceanFraming();
   const framing = getFraming();
-  const place = placeView && mapRef && cameraStateUnchanged(mapRef, placeView.camera) ? placeView : null;
   // A place view wins over the stores it did not change; an ocean camera
   // has precedence over the framing it leaves in the store.
-  select.value = place
-    ? place.regionKey !== null ? `region:${place.regionKey}` : 'view:place'
+  select.value = placeView && mapRef && cameraStateUnchanged(mapRef, placeView)
+    ? 'view:place'
     : ocean !== null
       ? `ocean:${ocean}`
       : framing !== null
@@ -867,7 +865,7 @@ function buildRegionSelect(): void {
   select.addEventListener('change', () => {
     const map = mapRef;
     if (!map || !mapDependentControlsEnabled) return;
-    placeView = null;
+    dropPlaceView();
     const [kind, rawKey] = select.value.split(':', 2);
     if (kind === 'region' && rawKey && rawKey in REGIONS) {
       handleRegionChoice(rawKey as RegionKey);
@@ -2028,7 +2026,7 @@ function wireSidebar(map: maplibregl.Map, onRegionSelect: (key: RegionKey) => vo
   // swaps between the one-word `cluster=` claim and the granular
   // `layers=` list (D-0.7.0-044).
   onFramingChange(() => {
-    placeView = null;
+    dropPlaceView();
     syncRegionSelect();
     // The door follows the camera (D1 M4, found-025): hide it the instant a
     // framing takes over, and let a later region choice bring it back.
@@ -2059,7 +2057,7 @@ function wireSidebar(map: maplibregl.Map, onRegionSelect: (key: RegionKey) => vo
     }
     previousCluster = next;
     // The ocean framing rides the cluster store; keep the dropdown on it.
-    placeView = null;
+    dropPlaceView();
     syncRegionSelect();
     pushUrl();
   });
@@ -2070,6 +2068,15 @@ function wireSidebar(map: maplibregl.Map, onRegionSelect: (key: RegionKey) => vo
   onPlaceSelectionChange((place) => {
     updateRegionBriefingTrigger(STATE.currentRegion);
     if (place) notePlaceView(map, place);
+  });
+  // Once the camera leaves the chosen place the neutral entry no longer applies;
+  // fall back to the committed region. Registered before any settle's own
+  // moveend, so a new choice's flight ends here first and is recorded after.
+  map.on('moveend', () => {
+    if (placeView && !cameraStateUnchanged(map, placeView)) {
+      dropPlaceView();
+      syncRegionSelect();
+    }
   });
 
   // Apply the URL state, split per the ADR 0002 U1 integration note. The

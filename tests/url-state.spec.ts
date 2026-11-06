@@ -512,15 +512,18 @@ test.describe('the region menu follows a place chosen from search', () => {
     const menu = regionSelect(page);
     await expect(menu).toHaveValue('region:national');
 
-    // Colorado is not a region option: the camera left the national view, so the neutral entry shows.
+    // The camera left the national view, so the neutral entry shows.
     await page.locator(searchInput).fill('colorado');
     await page.locator('[data-search-kind="place"][data-search-id="CO"]').click();
     await expect(menu).toHaveValue('view:place');
 
-    // Alaska is a region option: the menu shows it.
+    // Alaska has a region option too, but the menu stays neutral so choosing it from the menu still fires.
     await page.locator(searchInput).fill('alaska');
     await page.locator('[data-search-kind="place"][data-search-id="AK"]').click();
+    await expect(menu).toHaveValue('view:place');
+    await menu.selectOption('region:alaska');
     await expect(menu).toHaveValue('region:alaska');
+    await expect.poll(async () => new URLSearchParams(await search(page)).get('region')).toBe('alaska');
 
     // A city is never a region option.
     await page.locator(searchInput).fill('tulsa');
