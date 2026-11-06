@@ -37,7 +37,7 @@ import type { Map as MlMap } from 'maplibre-gl';
  */
 const RECOGNIZED_URL_KEYS: ReadonlySet<string> = new Set([
   'region', 'layers', 'embed', 'view', 'week', 'dmode', 'sst', 'outlook',
-  'horizon', 'basemap', 'framing', 'cluster', 'ocean', 'studio', 'heatday',
+  'horizon', 'basemap', 'framing', 'cluster', 'hazard', 'ocean', 'studio', 'heatday',
   'spi', 'fire3d', 'flow', 'flowink', 'sidebar', 'select'
 ]);
 
@@ -833,6 +833,12 @@ const RELOAD_GROUPS: readonly ReloadGroup[] = [
     query: '?cluster=wildfire&fire3d=true',
     viewport: RELOAD_PHONE,
     expected: { cluster: 'wildfire', fire3d: 'true' }
+  },
+  {
+    // A custom set made in Wildfire: layers= is no mode's display, so the hazard survives (parseShellParams).
+    name: 'custom set hazard',
+    query: '?layers=places&hazard=wildfire&view=console',
+    expected: { layers: 'places', hazard: 'wildfire', view: 'console' }
   }
 ];
 

@@ -1,18 +1,11 @@
-import type {
-  Feature,
-  FeatureCollection,
-  GeoJsonProperties,
-  Geometry,
-  MultiPolygon,
-  Polygon
-} from 'geojson';
+import type { Feature, FeatureCollection, GeoJsonProperties } from 'geojson';
 
 import type { PlaceCatalogEntry } from '../config/place-catalog';
 import { URLS } from '../config/urls';
+import { assertCompleteFeatureCollection, isArealGeometry } from '../util/arcgis-features';
+import type { ArealGeometry } from '../util/arcgis-features';
 import { arcGisEnvelopeValue } from '../util/bbox';
 import { fetchJsonWithBudget } from '../util/fetch';
-
-export type WatershedGeometry = Polygon | MultiPolygon;
 
 export interface WatershedCandidateProperties extends Record<string, unknown> {
   readonly watershedLevel: 2 | 4;
@@ -37,30 +30,6 @@ const WATERSHED_LAYERS: readonly WatershedLayer[] = [
 
 function abortIfNeeded(signal: AbortSignal): void {
   if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
-}
-
-function isArealGeometry(
-  geometry: Geometry | null | undefined
-): geometry is WatershedGeometry {
-  return geometry?.type === 'Polygon' || geometry?.type === 'MultiPolygon';
-}
-
-function assertFeatureCollection(raw: unknown): FeatureCollection {
-  if (raw && typeof raw === 'object' && 'error' in raw) {
-    throw new Error('ArcGIS returned an error response.');
-  }
-  if (
-    !raw ||
-    typeof raw !== 'object' ||
-    (raw as { type?: unknown }).type !== 'FeatureCollection' ||
-    !Array.isArray((raw as { features?: unknown }).features)
-  ) {
-    throw new Error('Expected a GeoJSON FeatureCollection.');
-  }
-  if ((raw as { exceededTransferLimit?: unknown }).exceededTransferLimit === true) {
-    throw new Error('ArcGIS returned a partial FeatureCollection.');
-  }
-  return raw as FeatureCollection;
 }
 
 function propertyText(
@@ -117,14 +86,14 @@ async function queryLayer(
     WATERSHED_TIMEOUT_MS
   );
   abortIfNeeded(signal);
-  return assertFeatureCollection(raw);
+  return assertCompleteFeatureCollection(raw);
 }
 
 /** Fetch one selected HUC2 or HUC4 boundary by its catalog code. */
 export async function loadWatershedSelectionGeometry(
   entry: PlaceCatalogEntry,
   signal: AbortSignal
-): Promise<Feature<WatershedGeometry, GeoJsonProperties> | null> {
+): Promise<Feature<ArealGeometry, GeoJsonProperties> | null> {
   const layer = layerForEntry(entry);
   const params = geometryParams(`${layer.codeField},name,areasqkm,states`);
   params.set('where', `${layer.codeField}='${entry.id}'`);
@@ -151,7 +120,7 @@ export async function loadWatershedCandidates(
   bbox: readonly [number, number, number, number],
   signal: AbortSignal
 ): Promise<
-  FeatureCollection<WatershedGeometry, WatershedCandidateProperties>
+  FeatureCollection<ArealGeometry, WatershedCandidateProperties>
 > {
   const collections = await Promise.all(
     WATERSHED_LAYERS.map(async (layer) => {
@@ -169,7 +138,7 @@ export async function loadWatershedCandidates(
   abortIfNeeded(signal);
 
   const features: Array<
-    Feature<WatershedGeometry, WatershedCandidateProperties>
+    Feature<ArealGeometry, WatershedCandidateProperties>
   > = [];
   for (const { layer, collection } of collections) {
     for (const feature of collection.features) {

@@ -1,13 +1,6 @@
 import { render } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import type {
-  Feature,
-  FeatureCollection,
-  GeoJsonProperties,
-  Geometry,
-  MultiPolygon,
-  Polygon
-} from 'geojson';
+import type { Feature, FeatureCollection, GeoJsonProperties } from 'geojson';
 
 import {
   PLACE_CATALOG,
@@ -60,6 +53,13 @@ import {
   loadWatershedCandidates,
   loadWatershedSelectionGeometry
 } from '../../state/watershed-geometry';
+import {
+  assertCompleteFeatureCollection,
+  escapeSql,
+  isArealGeometry,
+  mergeArealGeometry
+} from '../../util/arcgis-features';
+import type { ArealGeometry } from '../../util/arcgis-features';
 import { fetchJsonWithBudget, fetchSharedJsonWithBudget, US_STATES_SHARED_KEY } from '../../util/fetch';
 import { foldSearchText } from '../../util/search-fold';
 import { openImpactPanel } from '../impact-panel';
@@ -98,7 +98,6 @@ const TRIBAL_OVERLAP_SOURCE =
 const PLACE_DATA_TIMEOUT_MS = 8_000;
 const PNW_BOUNDS = [-125, 41.5, -110.5, 49.5] as const;
 
-type ArealGeometry = Polygon | MultiPolygon;
 type NarrativeStatus = 'loading' | 'ready' | 'unavailable';
 type OverlapStatus = 'loading' | 'ready';
 
@@ -228,44 +227,6 @@ async function fetchSharedUsStates(signal: AbortSignal): Promise<unknown> {
   );
 }
 
-function assertFeatureCollection(raw: unknown): FeatureCollection {
-  if (raw && typeof raw === 'object' && 'error' in raw) {
-    throw new Error('ArcGIS returned an error response.');
-  }
-  if (
-    !raw ||
-    typeof raw !== 'object' ||
-    (raw as { type?: unknown }).type !== 'FeatureCollection' ||
-    !Array.isArray((raw as { features?: unknown }).features)
-  ) {
-    throw new Error('Expected a GeoJSON FeatureCollection.');
-  }
-  if ((raw as { exceededTransferLimit?: unknown }).exceededTransferLimit === true) {
-    throw new Error('ArcGIS returned a partial FeatureCollection.');
-  }
-  return raw as FeatureCollection;
-}
-
-function isArealGeometry(
-  geometry: Geometry | null | undefined
-): geometry is ArealGeometry {
-  return geometry?.type === 'Polygon' || geometry?.type === 'MultiPolygon';
-}
-
-function mergeArealGeometry(features: readonly Feature[]): ArealGeometry | null {
-  const polygons: MultiPolygon['coordinates'] = [];
-  for (const feature of features) {
-    const geometry = feature.geometry;
-    if (geometry?.type === 'Polygon') polygons.push(geometry.coordinates);
-    if (geometry?.type === 'MultiPolygon') polygons.push(...geometry.coordinates);
-  }
-  if (polygons.length === 0) return null;
-  if (polygons.length === 1) {
-    return { type: 'Polygon', coordinates: polygons[0] ?? [] };
-  }
-  return { type: 'MultiPolygon', coordinates: polygons };
-}
-
 function textProperty(
   properties: GeoJsonProperties,
   key: string
@@ -274,10 +235,6 @@ function textProperty(
   if (typeof value === 'string' && value.trim() !== '') return value.trim();
   if (typeof value === 'number' && Number.isFinite(value)) return String(value);
   return null;
-}
-
-function escapeSql(value: string): string {
-  return value.replace(/'/g, "''");
 }
 
 // bboxIntersects/bboxIntersection share the N2-A circular
@@ -355,7 +312,7 @@ async function resolveStateSelection(
   entry: PlaceCatalogEntry,
   signal: AbortSignal
 ): Promise<ResolvedPlaceSelection | null> {
-  const collection = assertFeatureCollection(
+  const collection = assertCompleteFeatureCollection(
     await fetchSharedUsStates(signal)
   );
   abortIfNeeded(signal);
@@ -400,7 +357,7 @@ async function resolveTribeSelection(
     geometryPrecision: '5',
     f: 'geojson'
   });
-  const collection = assertFeatureCollection(
+  const collection = assertCompleteFeatureCollection(
     await fetchJson(
       `${URLS.biaLarFeatureServer}/query?${params.toString()}`,
       signal,
@@ -442,7 +399,7 @@ async function resolveEcoregionSelection(
     geometryPrecision: '5',
     f: 'geojson'
   });
-  const collection = assertFeatureCollection(
+  const collection = assertCompleteFeatureCollection(
     await fetchJson(
       `${URLS.epaEcoregionsMapServer}/${layer}/query?${params.toString()}`,
       signal,
@@ -515,7 +472,7 @@ async function loadStateCandidates(
   bbox: readonly [number, number, number, number],
   signal: AbortSignal
 ): Promise<FeatureCollection<ArealGeometry, PlaceOverlapProperties>> {
-  const collection = assertFeatureCollection(
+  const collection = assertCompleteFeatureCollection(
     await fetchSharedUsStates(signal)
   );
   abortIfNeeded(signal);
@@ -546,7 +503,7 @@ async function loadEcoregionCandidates(
         ? 'US_L4CODE,US_L4NAME,US_L3CODE,US_L3NAME'
         : 'US_L3CODE,US_L3NAME';
     const params = ecoregionCandidateParams(envelope, outFields, selectionKind);
-    return assertFeatureCollection(
+    return assertCompleteFeatureCollection(
       await fetchJson(
         `${URLS.epaEcoregionsMapServer}/${layer}/query?${params.toString()}`,
         siblingSignal,
@@ -609,7 +566,7 @@ async function loadTribeCandidates(
         envelope,
         'LARID,LARNAME,CLASSIFICATION,GISACRES,REGION'
       );
-      return assertFeatureCollection(
+      return assertCompleteFeatureCollection(
         await fetchJson(
           `${URLS.biaLarFeatureServer}/query?${params.toString()}`,
           siblingSignal,
@@ -748,10 +705,6 @@ async function loadOverlapView(
   selected: ResolvedPlaceSelection,
   signal: AbortSignal
 ): Promise<OverlapViewState> {
-  const requestBbox =
-    entry.kind === 'ecoregion'
-      ? bboxIntersection(selected.bbox, PNW_BOUNDS) ?? selected.bbox
-      : selected.bbox;
   const availableKinds = PLACE_TYPE_ORDER.filter((kind) =>
     overlapPairAvailable(entry, kind, selected.bbox)
   );
@@ -763,7 +716,10 @@ async function loadOverlapView(
       try {
         return {
           kind,
-          candidates: await loadCandidateKind(kind, requestBbox, signal, entry.kind)
+          // The whole extent for every kind: an ecoregion reaches past the PNW
+          // strip (Central Basin and Range runs to 36.4 N); loadCandidateKind
+          // scopes only the ecoregion catalog.
+          candidates: await loadCandidateKind(kind, selected.bbox, signal, entry.kind)
         } as const;
       } catch (err) {
         if (signal.aborted) throw err;

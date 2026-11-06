@@ -106,6 +106,9 @@ const ROSTER = readFileSync(new URL('../public/data/tribal-roster.json', import.
 answers.set('/dynamic-drought-module/data/tribal-roster.json', () => new Response(ROSTER, { status: 200 }));
 
 const map = { fitBounds() {}, easeTo() {}, getZoom: () => 3 };
+// A city pick announces its view to the region menu (src/ui/sidebar.ts listens).
+const windowEvents = [];
+globalThis.window = { dispatchEvent: (event) => windowEvents.push(event.type) };
 const { buildSearchWiring } = await import('../src/ui/search-controller.ts');
 const wiring = buildSearchWiring(map);
 
@@ -192,8 +195,10 @@ test('a city pick clears an earlier place selection and sets none of its own', a
   await waitFor(() => S.held.length > heldBefore);
   S.held.at(-1)();
   await waitFor(() => S.selections.length === 1);
+  windowEvents.length = 0;
   wiring.onSelect({ kind: 'city', id: 'Seattle', label: 'Seattle', haystack: 'seattle' });
   assert.deepEqual(S.selections.slice(1), [null], 'the old place no longer reads as current');
+  assert.deepEqual(windowEvents, ['ddm:city-view'], 'the region menu hears of the city view');
 });
 
 test('a census: result locates against the Census service; an HTTP 200 error envelope is unavailable', async () => {
