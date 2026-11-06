@@ -15,6 +15,7 @@ import { NADM_CATEGORIES } from '../config/palette';
 import { URLS } from '../config/urls';
 import { registerClickTarget } from '../map/interaction-coordinator';
 import { registry } from '../state/registry';
+import { timeline } from '../state/timeline';
 import {
   hideLegend,
   LEGEND_ORDER,
@@ -164,6 +165,8 @@ function installMapState(
 }
 
 export async function activate(map: maplibregl.Map): Promise<void> {
+  // NADM is an observed register: commit Current so no outlook chip stays pressed over it (usdm.ts activateUsdm).
+  timeline.setHorizon('current');
   if (activeSnapshot !== null) {
     registry.setStatus(LAYER_KEY, 'ready');
     return;

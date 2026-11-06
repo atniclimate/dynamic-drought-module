@@ -426,7 +426,7 @@ function withClock(row: ValueRow, clock: PopupClock | undefined): ValueRow {
  * drought layer is on. A layer that is
  * on but has no fill yet, or whose read is not complete and found no
  * category here, gives its state row, never an absence (draft DR-179). */
-function droughtRow(map: maplibregl.Map, point: maplibregl.PointLike): MarkedRow | null {
+export function droughtRow(map: maplibregl.Map, point: maplibregl.PointLike): MarkedRow | null {
   if (isLayerOn(NADM_KEY)) {
     if (!map.getLayer(NADM_FILL)) return unreadRow('Drought', NADM_KEY);
     const complete = isReadComplete(NADM_KEY);
