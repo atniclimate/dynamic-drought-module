@@ -9,6 +9,9 @@ Thumbs.db
 .env
 .env.*
 !.env.example
+.dev.vars
+/secrets/
+/private/
 
 # Build output / dependencies
 node_modules/
@@ -36,8 +39,8 @@ test-results/
 playwright-report/
 blob-report/
 
-# wrangler dev local state (workers/proxy)
-workers/proxy/.wrangler/
+# wrangler dev local state (every Worker)
+workers/*/.wrangler/
 
 # Local agent, session, planning, and research material. These files may stay
 # in a working copy, but they are not part of the public application source.

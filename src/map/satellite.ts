@@ -157,14 +157,6 @@ export function parseSatelliteFrames(
   return frames;
 }
 
-/** Retained as the small single-frame parser contract used by older tests. */
-export function parseLatestSatelliteFrame(
-  value: unknown,
-  now = Date.now()
-): SatelliteFrame {
-  return parseSatelliteFrames(value, now)[0];
-}
-
 function latestFrameQueryUrl(): string {
   const params = new URLSearchParams({
     where: '1=1',

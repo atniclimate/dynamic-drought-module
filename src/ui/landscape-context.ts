@@ -9,12 +9,13 @@ import type {
   LandscapeContext,
   LandscapeContextSource
 } from '../impact/types';
-import { escapeHtml } from '../util/escape';
+import { checkPopupHref, escapeHtml } from '../util/escape';
 
 function renderSource(source: LandscapeContextSource): string {
+  const href = checkPopupHref(source.url);
   const label =
-    source.url?.startsWith('https://') === true
-      ? `<a href="${escapeHtml(source.url)}" target="_blank" rel="noopener">${escapeHtml(source.label)}</a>`
+    href !== null
+      ? `<a href="${escapeHtml(href)}" target="_blank" rel="noopener">${escapeHtml(source.label)}</a>`
       : escapeHtml(source.label);
   const acquired = source.acquired
     ? `; acquired ${escapeHtml(source.acquired)}`

@@ -47,9 +47,8 @@ import type {
 
 /**
  * One row: a US postal code this table gives an EXPLICIT family membership
- * that differs from the CONUS default. `PostalCodeOverrideKey` is derived
- * from this list (the LAYER_KEYS pattern, `src/config/layers.ts`), so this
- * table is the one authority for the postal-code-to-family hop.
+ * that differs from the CONUS default. This table is the one authority for
+ * the postal-code-to-family hop.
  */
 export const PLACE_COVERAGE_OVERRIDES = Object.freeze([
   { postalCode: 'WA', family: 'pnw' },
@@ -58,10 +57,6 @@ export const PLACE_COVERAGE_OVERRIDES = Object.freeze([
   { postalCode: 'AK', family: 'ak-hi' },
   { postalCode: 'HI', family: 'ak-hi' }
 ] as const);
-
-/** The union of postal codes `PLACE_COVERAGE_OVERRIDES` names, derived. */
-export type PostalCodeOverrideKey =
-  (typeof PLACE_COVERAGE_OVERRIDES)[number]['postalCode'];
 
 const FAMILY_BY_OVERRIDDEN_POSTAL_CODE: ReadonlyMap<string, CoverageFamilyKey> =
   new Map(PLACE_COVERAGE_OVERRIDES.map((row) => [row.postalCode, row.family]));

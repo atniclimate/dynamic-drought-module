@@ -43,28 +43,6 @@ export interface PlaceRef {
   readonly code: string;
 }
 
-function isPlaceScheme(value: string): value is PlaceScheme {
-  return (PLACE_SCHEMES as readonly string[]).includes(value);
-}
-
-/** Render a `PlaceRef` as `scheme:code`. Round-trips with `parsePlaceRef`. */
-export function formatPlaceRef(ref: PlaceRef): string {
-  return `${ref.scheme}:${ref.code}`;
-}
-
-/**
- * Parse a `scheme:code` string back into a `PlaceRef`. Null for an unknown
- * scheme, a missing colon, or an empty code; never throws.
- */
-export function parsePlaceRef(text: string): PlaceRef | null {
-  const separatorIndex = text.indexOf(':');
-  if (separatorIndex <= 0) return null;
-  const scheme = text.slice(0, separatorIndex);
-  const code = text.slice(separatorIndex + 1);
-  if (!isPlaceScheme(scheme) || code === '') return null;
-  return { scheme, code };
-}
-
 /** A string property, or a finite number rendered as its decimal string. Trims; empty is null. */
 function readCode(properties: GeoJsonProperties, key: string): string | null {
   if (!properties) return null;

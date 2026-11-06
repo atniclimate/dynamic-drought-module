@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 
 import { parseRange } from '../workers/terrain/src/index.ts';
@@ -75,6 +76,22 @@ test("the reader's exact range costs one storage read", async () => {
   assert.equal(response.status, 206);
   assert.equal(response.headers.get('content-range'), `bytes 0-99/${SIZE}`);
   assert.deepEqual(bucket.calls, { head: 0, get: 1 });
+});
+
+test("the app's deep terrain archive is a key the Worker serves; an unlisted key is 404 without a storage read", async () => {
+  const { default: worker } = await import('../workers/terrain/src/index.ts');
+  const urls = readFileSync(new URL('../src/config/urls.ts', import.meta.url), 'utf8');
+  const key = urls.match(/terrainPmtilesDeep:\s*'https:\/\/ddm-terrain\.atniclimate\.workers\.dev\/([^']+)'/)?.[1];
+  assert.ok(key, 'src/config/urls.ts names terrainPmtilesDeep on the ddm-terrain Worker');
+  const listed = fakeBucket();
+  const head = await worker.fetch(new Request(`https://terrain.test/${key}`, { method: 'HEAD' }), listed.env);
+  assert.equal(head.status, 200, `the Worker's ALLOWED_KEYS must hold ${key}`);
+  const unlisted = fakeBucket();
+  for (const path of ['other.pmtiles', `nested/${key}`]) {
+    const response = await worker.fetch(new Request(`https://terrain.test/${path}`), unlisted.env);
+    assert.equal(response.status, 404, path);
+  }
+  assert.deepEqual(unlisted.calls, { head: 0, get: 0 });
 });
 
 test('a range past the end still answers 416 with the size', async () => {

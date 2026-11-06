@@ -166,6 +166,7 @@ test('a blank or corrupt snapshot reads as unreadable, never as data', () => {
   assert.equal(readEnsoBoxSnapshot({}), null);
   assert.equal(readEnsoBoxSnapshot(snapshot({ roni: { latest: {} } })), null);
   assert.equal(readEnsoBoxSnapshot(snapshot({ roni: { ...snapshot().roni, sourceUrl: 'http://x.test/' } })), null);
+  assert.equal(readEnsoBoxSnapshot(snapshot({ roni: { ...snapshot().roni, sourceUrl: 'https://user:pw@x.test/' } })), null);
 });
 
 test('the loader reads through the shared transport and honours an aborted signal', async () => {

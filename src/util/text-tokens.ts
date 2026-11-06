@@ -5,10 +5,9 @@
  * here, never reworded; a token formats a date, a quantity, a class or an
  * identifier THIS app already renders, not a copy of an issuer's sentence.
  *
- * M12 adds `dateTok` only (the time door's dates, R5 a: month-name form,
- * `interface-chrome-popups-text.md` section 10). `qtyTok`, `classTok` and
- * `idTok` are M23 to M27's (D1.md section 3: "M23 to M26 consume it, M27
- * extends it").
+ * `dateTok` is the one token with a caller (M12, the time door's dates, R5 a:
+ * month-name form, `interface-chrome-popups-text.md` section 10); a quantity,
+ * class or identifier token is added with its first caller.
  *
  * Kept import-free and small: every consumer, eager or lazy, can afford
  * this module without pulling anything else in behind it.
@@ -17,40 +16,6 @@
 /** One part of a formatted date, read off `Intl.DateTimeFormat`. */
 function part(parts: readonly Intl.DateTimeFormatPart[], type: Intl.DateTimeFormatPartTypes): string {
   return parts.find((p) => p.type === type)?.value ?? '';
-}
-
-/** U+00A0, written as an escape so the tie is visible in review. */
-const TIE = ' ';
-
-/**
- * "9,108 acres": a quantity and its unit as one token (M27; section 4.2).
- * A number is grouped the en-US way; a string amount is kept exactly as
- * given (already formatted by its issuer or its caller). The unit is never
- * reworded; only its spaces, and the one between amount and unit, are tied.
- */
-export function qtyTok(value: number | string, unit: string): string {
-  const amount = typeof value === 'number' ? new Intl.NumberFormat('en-US').format(value) : value;
-  return `${amount} ${unit}`.replace(/ /g, TIE);
-}
-
-/**
- * "D1 Moderate": a class label tied into one token when it fits its slot
- * (section 4.2, "tied when it fits its slot"). `slotChars` is the slot's
- * width in characters; a label longer than that is returned exactly as
- * given, so it may still wrap at its own spaces rather than overflow. With
- * no slot named the label is always tied.
- */
-export function classTok(label: string, slotChars?: number): string {
-  if (slotChars !== undefined && label.length > slotChars) return label;
-  return label.replace(/ /g, TIE);
-}
-
-/**
- * An identifier ("HUC 17110005", an incident or station id) as one token:
- * its spaces tied, every other character kept exactly as given.
- */
-export function idTok(id: string): string {
-  return id.replace(/ /g, TIE);
 }
 
 /**

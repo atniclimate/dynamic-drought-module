@@ -1,13 +1,6 @@
 import { expect, test } from './offline-test';
 
-import {
-  formatPlaceRef,
-  parsePlaceRef,
-  PLACE_SCHEMES,
-  placeRefFromBoundary,
-  placeRefFromTypedPlace,
-  type PlaceRef
-} from '../src/config/entities';
+import { placeRefFromBoundary, placeRefFromTypedPlace } from '../src/config/entities';
 import { buildBoundaryContext } from '../src/impact/context';
 import type { TypedPlaceRef } from '../src/state/typed-place';
 
@@ -18,27 +11,6 @@ import type { TypedPlaceRef } from '../src/state/typed-place';
  */
 
 const LNG_LAT = { lng: -120.5, lat: 47.5 };
-
-test.describe('formatPlaceRef / parsePlaceRef: round trip', () => {
-  for (const scheme of PLACE_SCHEMES) {
-    test(`${scheme}:CODE round-trips`, () => {
-      const ref: PlaceRef = { scheme, code: 'CODE' };
-      expect(parsePlaceRef(formatPlaceRef(ref))).toEqual(ref);
-    });
-  }
-
-  test('an unknown scheme parses to null', () => {
-    expect(parsePlaceRef('county:WA-053')).toBeNull();
-  });
-
-  test('an empty code parses to null', () => {
-    expect(parsePlaceRef('state:')).toBeNull();
-  });
-
-  test('text with no colon parses to null', () => {
-    expect(parsePlaceRef('WA')).toBeNull();
-  });
-});
 
 test.describe('placeRefFromBoundary: one property read per kind', () => {
   test('state reads STUSPS', () => {

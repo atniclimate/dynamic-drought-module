@@ -14,9 +14,12 @@
  */
 
 import assert from 'node:assert/strict';
+import { existsSync } from 'node:fs';
+import { registerHooks } from 'node:module';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 
-import { escapeHtml } from '../src/util/escape.ts';
+import { checkPopupHref, escapeHtml } from '../src/util/escape.ts';
 
 test('null and undefined become the empty string', () => {
   assert.equal(escapeHtml(null), '');
@@ -110,4 +113,67 @@ test('escaping is length-preserving for safe input and only grows for unsafe inp
   assert.equal(escapeHtml(safe).length, safe.length);
   const unsafe = '<&>';
   assert.ok(escapeHtml(unsafe).length > unsafe.length);
+});
+
+// `checkPopupHref`, the one link rule (audit R1-22): the popup frame's check
+// (parsed, https, no userinfo) also guards the briefing's claim and landscape
+// links, where a bare startsWith('https://') let `https://user:pw@host/` through.
+
+// Extensionless relative specifiers between .ts modules (tests/popup-frame.test.mjs, the same hook).
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    if (
+      specifier.startsWith('.') &&
+      !/\.[a-z]+$/i.test(specifier) &&
+      typeof context.parentURL === 'string' &&
+      context.parentURL.endsWith('.ts')
+    ) {
+      const candidate = new URL(`${specifier}.ts`, context.parentURL);
+      if (existsSync(fileURLToPath(candidate))) return nextResolve(`${specifier}.ts`, context);
+    }
+    return nextResolve(specifier, context);
+  }
+});
+
+const { renderLandscapeContext } = await import('../src/ui/landscape-context.ts');
+const { renderClaim } = await import('../src/ui/claim-render.ts');
+const { makeClaim } = await import('../src/impact/evidence.ts');
+
+const USERINFO = 'https://user:pw@example.org/';
+const GOOD = 'https://www.usgs.gov/3d-elevation-program';
+
+test('checkPopupHref refuses userinfo, non-https and non-strings, and returns the normalized href', () => {
+  for (const href of [USERINFO, 'https://user@example.org/', 'http://example.org/', 'javascript:alert(1)', 'not a url', 42, undefined]) {
+    assert.equal(checkPopupHref(href), null, String(href));
+  }
+  assert.equal(checkPopupHref(GOOD), GOOD);
+  assert.equal(checkPopupHref('https://example.org'), 'https://example.org/');
+});
+
+test('a landscape source with a userinfo URL renders its label as text', () => {
+  const html = (url) =>
+    renderLandscapeContext({
+      status: 'ready',
+      facts: [],
+      sources: [{ key: 'terrain', label: 'USGS 3DEP', url, vintage: '2024', methodVersion: 1 }]
+    });
+  assert.ok(html(GOOD).includes(`<a href="${GOOD}"`));
+  assert.equal(html(USERINFO).includes('<a '), false);
+  assert.equal(html(USERINFO).includes('user:pw'), false);
+});
+
+test('a claim with a userinfo source URL renders its source as text', () => {
+  const claim = (sourceUrl) =>
+    renderClaim(
+      makeClaim({
+        text: 'Synthetic claim.',
+        source: 'Offline fixture',
+        sourceUrl,
+        product: 'usdm',
+        evidence: 'observed',
+        dates: { valid: '2026-10-01' }
+      })
+    );
+  assert.ok(claim(GOOD).includes(`<a href="${GOOD}"`));
+  assert.equal(claim(USERINFO).includes('user:pw'), false);
 });

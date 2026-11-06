@@ -37,6 +37,7 @@
 
 import { URLS } from '../config/urls';
 import { fetchBufferedWithBudget } from '../util/fetch';
+import { checkPopupHref } from '../util/escape';
 import type { ResourceLink } from './types';
 import type { LocationIdentity } from '../state/location-identity';
 
@@ -83,7 +84,7 @@ function normalizeRow(raw: unknown, expectedTier: CatalogTier): ResourceLink | n
   if (!isNonEmptyString(row['agency'])) return null;
   if (row['tier'] !== expectedTier) return null;
   const url = row['url'];
-  if (typeof url !== 'string' || !url.startsWith('https://')) return null;
+  if (typeof url !== 'string' || checkPopupHref(url) === null) return null;
   const description = row['description'];
   return {
     label: row['label'] as string,

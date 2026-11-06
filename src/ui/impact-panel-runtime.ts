@@ -70,7 +70,7 @@ import type {
   ResourceTier
 } from '../impact/types';
 import type { LayerStatus } from '../types/layer';
-import { escapeHtml } from '../util/escape';
+import { checkPopupHref, escapeHtml } from '../util/escape';
 import {
   closeImpactPanelShell,
   ensureImpactPanelShell,
@@ -555,9 +555,10 @@ function renderObservation(pointHeat: PointHeatBriefing): string {
   }
   const stationName =
     observation.stationName ?? observation.stationId ?? 'Nearest NWS station';
+  const stationHref = checkPopupHref(observation.stationUrl);
   const station =
-    observation.stationUrl?.startsWith('https://')
-      ? `<a href="${escapeHtml(observation.stationUrl)}" target="_blank" rel="noopener">${escapeHtml(stationName)}</a>`
+    stationHref !== null
+      ? `<a href="${escapeHtml(stationHref)}" target="_blank" rel="noopener">${escapeHtml(stationName)}</a>`
       : escapeHtml(stationName);
   const distance =
     observation.distanceKm === undefined
@@ -655,10 +656,10 @@ function renderHeatSynthesis(synthesis: HeatSynthesis): string {
     synthesis.reads.length > 0
       ? `<ul>${synthesis.reads
           .map((read) => {
+            const href = checkPopupHref(read.sourceUrl);
             const label =
-              typeof read.sourceUrl === 'string' &&
-              read.sourceUrl.startsWith('https://')
-                ? `<a href="${escapeHtml(read.sourceUrl)}" target="_blank" rel="noopener">${escapeHtml(read.label)}</a>`
+              href !== null
+                ? `<a href="${escapeHtml(href)}" target="_blank" rel="noopener">${escapeHtml(read.label)}</a>`
                 : escapeHtml(read.label);
             return `<li><strong>${label}</strong><p>${escapeHtml(read.text)}</p></li>`;
           })
@@ -712,7 +713,8 @@ function renderPointHeat(
 
 /** Render one resource link, or the empty-by-default Tribe's-own affordance. */
 function renderResource(resource: ResourceLink): string {
-  const hasLink = typeof resource.url === 'string' && resource.url.startsWith('https://');
+  const href = checkPopupHref(resource.url);
+  const hasLink = href !== null;
   const desc = resource.description
     ? `<p class="impact-resource-desc">${escapeHtml(resource.description)}</p>`
     : '';
@@ -727,7 +729,7 @@ function renderResource(resource: ResourceLink): string {
     `;
   }
   const labelHtml = hasLink
-    ? `<a class="impact-resource-label impact-resource-link" href="${escapeHtml(resource.url as string)}" target="_blank" rel="noopener">${escapeHtml(resource.label)}</a>`
+    ? `<a class="impact-resource-label impact-resource-link" href="${escapeHtml(href)}" target="_blank" rel="noopener">${escapeHtml(resource.label)}</a>`
     : `<p class="impact-resource-label">${escapeHtml(resource.label)}</p>`;
   return `
     <div class="impact-resource">

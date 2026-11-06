@@ -2,7 +2,6 @@ import { expect, test } from './offline-test';
 
 import {
   isSatelliteFrameRecent,
-  parseLatestSatelliteFrame,
   parseSatelliteFrames,
   SATELLITE_PROBE_BBOX,
   satelliteProbeUrl,
@@ -13,7 +12,7 @@ const NOW = Date.UTC(2026, 7, 5, 18, 10);
 
 test.describe('recent NOAA satellite source', () => {
   test('validates the newest catalog frame and pins the tile template', () => {
-    const frame = parseLatestSatelliteFrame({
+    const frame = parseSatelliteFrames({
       features: [
         {
           attributes: {
@@ -24,7 +23,7 @@ test.describe('recent NOAA satellite source', () => {
           }
         }
       ]
-    }, NOW);
+    }, NOW)[0];
 
     expect(frame.objectId).toBe(9026);
     expect(frame.endTime - frame.startTime).toBe(9 * 60_000);
@@ -39,11 +38,11 @@ test.describe('recent NOAA satellite source', () => {
   });
 
   test('rejects missing, malformed, and implausibly long frames', () => {
-    expect(() => parseLatestSatelliteFrame({ features: [] })).toThrow(
+    expect(() => parseSatelliteFrames({ features: [] })).toThrow(
       /no recent frame/
     );
     expect(() =>
-      parseLatestSatelliteFrame({
+      parseSatelliteFrames({
         features: [
           {
             attributes: {

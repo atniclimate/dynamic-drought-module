@@ -11,7 +11,7 @@
 
 import { claimDateLine, claimRegisterTag, EVIDENCE_PRESENTATION } from '../impact/evidence';
 import type { SourcedClaim } from '../impact/types';
-import { escapeHtml } from '../util/escape';
+import { checkPopupHref, escapeHtml } from '../util/escape';
 
 /**
  * A claim's `method` fields, joined into one compact phrase, or null when the
@@ -56,9 +56,10 @@ function supportPhrase(support: SourcedClaim['support']): string | null {
 export function renderClaim(claim: SourcedClaim): string {
   const pres = EVIDENCE_PRESENTATION[claim.evidence];
   const dateLine = claimDateLine(claim);
+  const sourceHref = checkPopupHref(claim.sourceUrl);
   const sourceHtml =
-    typeof claim.sourceUrl === 'string' && claim.sourceUrl.startsWith('https://')
-      ? `<a href="${escapeHtml(claim.sourceUrl)}" target="_blank" rel="noopener">${escapeHtml(claim.source)}</a>`
+    sourceHref !== null
+      ? `<a href="${escapeHtml(sourceHref)}" target="_blank" rel="noopener">${escapeHtml(claim.source)}</a>`
       : escapeHtml(claim.source);
   // chartSvg is trusted, self-generated markup from src/ui/charts.ts (never
   // user-supplied), so it is injected as-is beneath the claim text.
