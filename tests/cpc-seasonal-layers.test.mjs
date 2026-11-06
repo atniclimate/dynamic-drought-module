@@ -421,8 +421,13 @@ test('an in-session entry into ENSO commits Season ahead and leaving undoes it; 
     reset();
     service.requestCluster('enso');
     service.requestHorizon('weeks-ahead');
-    // ENSO's Weeks ahead is its Current display (DR-190), and that pick carries.
-    assert.equal(timeline.horizon, 'current');
+    assert.equal(timeline.horizon, 'weeks-ahead');
+    service.requestCluster('drought');
+    assert.equal(service.getCommittedSnapshot().horizon, 'weeks-ahead');
+    // A pick back to the entry horizon is still the person's.
+    reset();
+    service.requestCluster('enso');
+    service.requestHorizon('weeks-ahead');
     service.requestHorizon('season-ahead');
     service.requestCluster('wildfire');
     assert.equal(service.getCommittedSnapshot().horizon, 'season-ahead');
