@@ -278,7 +278,8 @@ function installTimeBar(status: Status): void {
   if (!activeMap || !frame) return;
   const now = Date.now();
   const boundary = [frame.validTime, frame.validTime + DAILY_FRAME_MS].find((t) => t > now);
-  if (boundary !== undefined) {
+  // Past 2^31-1 ms setTimeout fires at once and this would re-arm in a loop; no advertised frame is that far ahead.
+  if (boundary !== undefined && boundary - now <= 0x7fffffff) {
     phaseTimer = setTimeout(() => installTimeBar(status), boundary - now);
   }
   setTimeBar(LAYER_KEY, {

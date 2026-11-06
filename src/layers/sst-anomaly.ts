@@ -955,7 +955,11 @@ export function deactivate(map: maplibregl.Map): void {
  * it. A failed chunk or a superseded commit paints no figure, so the next map
  * click ends the watch.
  */
+let stopChartWatch: (() => void) | undefined;
+
 function mountChartOnPaint(map: maplibregl.Map, model: ReturnType<typeof buildEnsoBoxPopupModel>): void {
+  // One watch at a time: a popup opened or closed from the keyboard has no map click to end the last one.
+  stopChartWatch?.();
   const chart = model.details?.find((d) => d.kind === 'chart');
   if (chart?.kind !== 'chart') return;
   const root = map.getContainer();
@@ -963,6 +967,7 @@ function mountChartOnPaint(map: maplibregl.Map, model: ReturnType<typeof buildEn
     observer.disconnect();
     map.off('click', stop);
   };
+  stopChartWatch = stop;
   const observer = new MutationObserver(() => {
     const figure = root.querySelector(`[data-popup-chart="${chart.chartKey}"]`);
     if (!figure || figure.querySelector('svg')) return;

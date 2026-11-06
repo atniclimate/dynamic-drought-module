@@ -5,8 +5,9 @@
  * diacritics silently break matching: a formal Tribal Nation name such as
  * "Absentee-Shawnee Tribe of Indians of Oklahoma" or a pasted layer label
  * such as "City & Town Labels" must match its punctuation-free typing and
- * its exact spelling alike (wave A finding 1, 2026-07-17; the roster build
- * script applies the same folding).
+ * its exact spelling alike (wave A finding 1, 2026-07-17). The roster build
+ * script pairs names at build time with its own fold, which keeps
+ * apostrophes and periods as spaces; nothing at runtime reads it.
  *
  * Folding: lowercase, decompose and strip combining marks (diacritics),
  * delete apostrophes (straight and typographic) and periods outright so
