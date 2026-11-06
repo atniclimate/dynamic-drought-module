@@ -9,7 +9,9 @@ test('Fuel risk on adds its section to the Wildfire key instead of replacing it'
   // Wildfire plus Fuel risk: the perimeters stay in the key beside the fuel risk section.
   assert.deepEqual(fireKeySections(keys('nifc-fires', 'hms-smoke', 'usfs-whp')), { fire: true, whp: true });
   assert.deepEqual(fireKeySections(keys('spc-fire-weather', 'nifc-fires', 'usfs-whp')), { fire: true, whp: true });
-  // Long Range: the potential layer alone keeps its own key.
+  // Long Range: the live perimeters stay beside the potential layer (DR-022), and both keep their sections.
+  assert.deepEqual(fireKeySections(keys('nifc-fires', 'usfs-whp')), { fire: true, whp: true });
+  // The potential layer alone (a custom set) keeps its own key.
   assert.deepEqual(fireKeySections(keys('usfs-whp')), { fire: false, whp: true });
   assert.deepEqual(fireKeySections(keys('spc-fire-weather')), { fire: true, whp: false });
   // The Layer studio's issuer-coloured row keeps the same section, alone or over Wildfire.
@@ -30,7 +32,11 @@ test('Fuel risk on adds its section to the Wildfire key instead of replacing it'
 });
 
 test('Wildfire 3D at season-ahead: a shown drape with no keyed surface is still drawn, so the key names it and stays up', async () => {
-  // The season-ahead recipe is the flat layer alone, which the mounted drape hides: no surface section remains.
+  // The season-ahead recipe's only surface is the flat layer, which the mounted drape hides: no surface section remains.
+  const { HAZARD_CLUSTERS } = await import('../src/config/clusters.ts');
+  const seasonAhead = HAZARD_CLUSTERS.wildfire.recipes['season-ahead'];
+  assert.deepEqual([...seasonAhead].sort(), ['nifc-fires', 'usfs-whp'], 'DR-022: the live perimeters stay at Long Range');
+  assert.equal(fireKeySections(new Set(seasonAhead), true), null);
   assert.equal(fireKeySections(new Set(['usfs-whp']), true), null);
   assert.equal(noSurfaceKeyAria('Wildfire', true), 'Wildfire. 3D wildfire potential.');
   assert.equal(noSurfaceKeyAria('Wildfire', false), 'Wildfire. No classed layer is drawn.');
@@ -53,7 +59,7 @@ test('the one Fuel risk switch acts on the 3D drape only while it is mounted, el
   // The 3D scene without a drape (still mounting, archive unavailable, or issuer colours on):
   // nothing to switch, since 3D never changes the layer choices.
   assert.equal(fuelRiskSwitch({ ...base, sceneActive: true }), null);
-  // Long Range: the committed recipe IS the flat layer, so there is nothing to switch.
+  // Long Range: the committed recipe holds the flat layer, so there is nothing to switch.
   assert.equal(fuelRiskSwitch({ ...base, recipeHasFlat: true }), null);
   // The 3D drape still answers to the switch at Long Range.
   assert.equal(fuelRiskSwitch({ ...base, sceneActive: true, drapeMounted: true, recipeHasFlat: true }), 'drape');

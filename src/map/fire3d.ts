@@ -884,7 +884,8 @@ async function activateScene(map: maplibregl.Map): Promise<void> {
   if (myGeneration !== generation || !active) return;
   if (smokeModule) {
     try {
-      smokeVolumeOn = smokeModule.activateSmokeVolume(map);
+      // A source left empty by a failed read is no volume (reconcileSmokeVolume says the same).
+      smokeVolumeOn = registry.getStatus('hms-smoke') !== 'error' && smokeModule.activateSmokeVolume(map);
     } catch (err) {
       smokeVolumeOn = false;
       warnComponent('smoke activation', err);
@@ -979,7 +980,8 @@ export function setFire3DActive(map: maplibregl.Map, next: boolean): void {
  */
 function reconcileSmokeVolume(map: maplibregl.Map): void {
   if (!active || !smokeModule) return;
-  const smokeLayerOn = registry.getActiveKeys().has('hms-smoke');
+  // A failed read empties the source but keeps the key active: the volume and its key go with the data.
+  const smokeLayerOn = registry.getActiveKeys().has('hms-smoke') && registry.getStatus('hms-smoke') !== 'error';
   if (smokeVolumeOn === smokeLayerOn) return;
   if (smokeVolumeOn) {
     smokeModule.deactivateSmokeVolume(map);

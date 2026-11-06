@@ -141,7 +141,8 @@ test.describe('S3 composeClusterIntent (the composition the URL boot shares)', (
     expect(composeClusterIntent('wildfire')).toContain('nifc-fires');
     timeline.setHorizon('season-ahead');
     expect(composeClusterIntent('wildfire')).toContain('usfs-whp');
-    expect(composeClusterIntent('wildfire')).not.toContain('nifc-fires');
+    // DR-022: the live perimeters stay in every horizon.
+    expect(composeClusterIntent('wildfire')).toContain('nifc-fires');
     timeline.reset();
   });
 });
@@ -431,7 +432,7 @@ test.describe('S3 requestCluster (the transaction)', () => {
       expect(observed.length).toBeGreaterThanOrEqual(1);
       for (const rev of observed) {
         if (rev.horizon === 'season-ahead') {
-          expect(rev.hasNifc).toBe(false);
+          expect(rev.hasNifc).toBe(true);
           expect(rev.hasWhp).toBe(true);
         } else {
           expect(rev.hasWhp).toBe(false);
@@ -444,10 +445,10 @@ test.describe('S3 requestCluster (the transaction)', () => {
       expect(snapshot.cluster).toBe('wildfire');
       expect(snapshot.horizon).toBe('season-ahead');
       expect(snapshot.intendedKeys.has('usfs-whp')).toBe(true);
-      expect(snapshot.intendedKeys.has('nifc-fires')).toBe(false);
+      expect(snapshot.intendedKeys.has('nifc-fires')).toBe(true);
       expect(getHazardCluster()).toBe('wildfire');
       expect(registry.getActiveKeys().has('usfs-whp')).toBe(true);
-      expect(registry.getActiveKeys().has('nifc-fires')).toBe(false);
+      expect(registry.getActiveKeys().has('nifc-fires')).toBe(true);
     } finally {
       dispose();
       timeline.reset();

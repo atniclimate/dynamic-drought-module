@@ -3,7 +3,8 @@
  * in the view details below the persistent navigation controls.
  *
  * Visibility: only while the committed cluster is 'wildfire' (Fuel risk
- * included, an optional layer of Wildfire) AND the
+ * included, an optional layer of Wildfire) or the scene is still up after a
+ * custom demotion (the button is the way out) AND the
  * device can enter the scene at all, which since DR-025a is the same three
  * questions the map-side gate in `src/map/fire3d.ts` asks: the viewport is
  * at least the desktop breakpoint wide, at least `FIRE3D_MIN_HEIGHT_PX`
@@ -133,14 +134,16 @@ const GROUND_SWITCHES: readonly (readonly [Fire3DGroundLayer, string])[] = [
  * strings move. `inactive` renders no line at all: the scene is off and
  * claims nothing.
  */
-function statusLine(status: Fire3DStatus | null): string {
+function statusLine(status: Fire3DStatus | null, smokeStatus: string | undefined): string {
   if (status === null) return '';
   switch (status.state) {
     case 'checking':
       return 'Loading terrain availability...';
     case 'active':
-      return status.smokeVolume
-        ? 'Live: terrain relief with the smoke volume.'
+      if (status.smokeVolume) return 'Live: terrain relief with the smoke volume.';
+      // A failed smoke read empties the flat veil too, so there is no veil to point at.
+      return smokeStatus === 'error'
+        ? 'Live (partial): terrain relief; smoke is unavailable.' // DRAFT wording
         : 'Live (partial): terrain relief; smoke stays in the flat veil.';
     case 'unavailable':
       return `Unavailable. ${status.reason ?? ''}`.trim();
@@ -309,7 +312,11 @@ export function Fire3DControl({
     wideEnough,
     tallEnough,
     webgl2: webGl2Capability().webgl2,
-    fireView: fuelRiskKeepsConsole(cluster, snapshot.selectedHazard, flatFuelOn)
+    // A scene kept up after a custom demotion keeps its button: it is the one direct way out.
+    fireView:
+      fuelRiskKeepsConsole(cluster, snapshot.selectedHazard, flatFuelOn) ||
+      status?.state === 'active' ||
+      status?.state === 'checking'
   });
   const visible = offer === 'control';
   const [chunkUnavailable, setChunkUnavailable] = useState(false);
@@ -341,7 +348,11 @@ export function Fire3DControl({
   }, [visible, status?.state, fuelTarget]);
 
   useEffect(() => {
-    if (!visible) return;
+    // Hidden, the status stops refreshing; a kept 'active' would hold fireView up in another mode.
+    if (!visible) {
+      setStatus(null);
+      return;
+    }
     let disposed = false;
     let unsubscribe: (() => void) | null = null;
     void loadFire3DController().then((mod) => {
@@ -446,7 +457,7 @@ export function Fire3DControl({
         data-fire3d-transport={status?.transport ?? undefined}
         aria-live="polite"
       >
-        {chunkUnavailable ? 'Unavailable.' : statusLine(status)}
+        {chunkUnavailable ? 'Unavailable.' : statusLine(status, smokeStatus)}
       </p>
       {emptySmokeLine(status, smokeStatus) ? (
         <p class="shell-fire3d-empty" data-fire3d-empty-smoke>

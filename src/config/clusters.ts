@@ -216,8 +216,11 @@ export const HAZARD_CLUSTERS: Record<HazardClusterKey, HazardClusterDef> = {
       current: ['nifc-fires', 'hms-smoke'],
       // Near-term: the SPC fire-weather outlook over the live events.
       'weeks-ahead': ['spc-fire-weather', 'nifc-fires', 'hms-smoke'],
-      // Long horizon: the static potential read becomes eligible.
-      'season-ahead': ['usfs-whp']
+      // Long horizon: the static potential read becomes eligible beside the
+      // live perimeters, which DR-022 keeps in every horizon. Retiring WHP
+      // for the NIFC Months 1 to 4 outlook is the rest of DDM-P7-T03.
+      // WHP first: the activation-failure spec fails recipe[0], so this keeps a WHP failure tested.
+      'season-ahead': ['usfs-whp', 'nifc-fires']
     },
     // The console's Fuel risk switch (src/ui/fire3d-fuel-risk.ts).
     optionalLayers: ['usfs-whp'],
