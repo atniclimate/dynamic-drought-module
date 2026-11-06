@@ -43,7 +43,7 @@ import {
   SPC_FIREWX_CATEGORIES
 } from '../config/palette';
 import { LAYER_DEFS, getDroughtSurfacePresentation } from '../config/layers';
-import { HAZARD_CLUSTERS } from '../config/clusters';
+import { HAZARD_CLUSTERS, HEAT_FIRE_ALERTS } from '../config/clusters';
 import { DETAIL_SECTIONS } from '../config/detail-sections';
 import { ensureDetailSectionHosts } from './detail-section-hosts';
 import { NIFC_INCIDENT_PRESENTATION, USFS_WHP_PRESENTATION } from '../config/wildfire-presentation';
@@ -101,6 +101,8 @@ interface NwsSnapshotEventDetail {
     | 'inactive';
   readonly asOf: number | null;
   readonly truncated: boolean;
+  /** The products the layer's current read holds, in its set's order (src/layers/nws-alerts.ts keyEvents). */
+  readonly events?: readonly string[];
 }
 
 interface CdmSnapshotEventDetail {
@@ -194,6 +196,7 @@ let heatRiskHasCoverage: boolean | null = null;
 let nwsSnapshotStatus: NwsSnapshotEventDetail['status'] = 'inactive';
 let nwsSnapshotAsOf: number | null = null;
 let nwsSnapshotTruncated = false;
+let nwsSnapshotEvents: readonly string[] = [];
 let disposeMapKeyLayout: (() => void) | null = null;
 let disposeMapKeyOverflow: (() => void) | null = null;
 let disposeMapKeySeat: (() => void) | null = null;
@@ -696,8 +699,11 @@ function nwsProductKey(): {
   readonly html: string;
   readonly ariaLabel: string;
 } {
-  // The rows of the products the committed mode asks for (HazardClusterDef.alerts), in key order.
-  const events = HAZARD_CLUSTERS[getHazardCluster()].alerts?.events ?? [];
+  // Key order (NWS_ALERT_LEGEND): every heat and fire weather product the mode
+  // asks for (HazardClusterDef.alerts), or, for any other set, those the
+  // layer's current read holds, carried by its snapshot event.
+  const set = HAZARD_CLUSTERS[getHazardCluster()].alerts;
+  const events = set === HEAT_FIRE_ALERTS ? set.events : nwsSnapshotEvents;
   const rows = NWS_ALERT_LEGEND.filter(({ label }) => events.includes(label));
   return {
     html:
@@ -706,7 +712,7 @@ function nwsProductKey(): {
       rows.map(({ color, label }) => swatchItem(color, label)).join('') +
       '</span>',
     ariaLabel:
-      `National Weather Service event products: ${rows.map(({ label }) => label).join(', ')}.`
+      rows.length === 0 ? '' : `National Weather Service event products: ${rows.map(({ label }) => label).join(', ')}.`
   };
 }
 
@@ -1310,8 +1316,8 @@ function surfaceKey(): HazardKeyResult | null {
     return {
       spec: {
         ...spec,
-        ariaLabel:
-          `${spec.ariaLabel} ${products.ariaLabel} ${snapshot.ariaLabel}`,
+        // A read that lists no product leaves its sentence out.
+        ariaLabel: [spec.ariaLabel, products.ariaLabel, snapshot.ariaLabel].filter(Boolean).join(' '),
         itemsHtml: spec.itemsHtml + products.html + snapshot.html
       },
       productKeys
@@ -1320,7 +1326,7 @@ function surfaceKey(): HazardKeyResult | null {
   return {
     spec: {
       label: KEY_ELIGIBLE_LABELS['nws-alerts']!,
-      ariaLabel: `${products.ariaLabel} ${snapshot.ariaLabel}`,
+      ariaLabel: [products.ariaLabel, snapshot.ariaLabel].filter(Boolean).join(' '),
       itemsHtml: products.html + snapshot.html
     },
     productKeys: []
@@ -1750,6 +1756,7 @@ export function initMapKey(): void {
     nwsSnapshotStatus = detail.status;
     nwsSnapshotAsOf = detail.asOf;
     nwsSnapshotTruncated = detail.truncated;
+    nwsSnapshotEvents = detail.events ?? [];
     update();
   });
   window.addEventListener(CDM_SNAPSHOT_EVENT, (event) => {

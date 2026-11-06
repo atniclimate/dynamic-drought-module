@@ -510,11 +510,9 @@ export const NWS_ALERT_COLORS: Readonly<Record<string, string>> = {
   'Fire Weather Watch': '#ffdead',
   'Flash Flood Warning': '#8b0000', 'Flood Warning': '#00ff00', // vocab-allow: verbatim NWS product names, quoted source data
   'Flash Flood Watch': '#2e8b57', 'Flood Watch': '#2e8b57',
-  'Hurricane Warning': '#dc143c', 'Typhoon Warning': '#dc143c', // vocab-allow: verbatim NWS product names, quoted source data
-  'Blizzard Warning': '#ff4500', 'Ice Storm Warning': '#8b008b', // vocab-allow: verbatim NWS product names, quoted source data
-  'Winter Storm Warning': '#ff69b4', 'Tropical Storm Warning': '#b22222', // vocab-allow: verbatim NWS product names, quoted source data
-  'Hurricane Watch': '#ff00ff', 'Typhoon Watch': '#ff00ff',
-  'Tropical Storm Watch': '#f08080', 'Winter Storm Watch': '#4682b4',
+  'Typhoon Warning': '#dc143c', 'Blizzard Warning': '#ff4500', // vocab-allow: verbatim NWS product names, quoted source data
+  'Ice Storm Warning': '#8b008b', 'Winter Storm Warning': '#ff69b4', // vocab-allow: verbatim NWS product names, quoted source data
+  'Typhoon Watch': '#ff00ff', 'Winter Storm Watch': '#4682b4',
   'Extreme Wind Warning': '#ff8c00', 'High Wind Warning': '#daa520', // vocab-allow: verbatim NWS product names, quoted source data
   'High Wind Watch': '#b8860b',
   'Storm Surge Warning': '#b524f7', 'Coastal Flood Warning': '#228b22', // vocab-allow: verbatim NWS product names, quoted source data
@@ -527,8 +525,9 @@ export const NWS_ALERT_COLORS: Readonly<Record<string, string>> = {
  * Every key row in key order: one row per NWS product under its current name
  * (the 2025 Hazard Simplification names; the Excessive Heat aliases share
  * their row's colour and still match in the data), the heat and fire weather
- * rows first, then the ENSO rows in their mode's event order. A mode's key is
- * the rows its alert set asks for, in this order.
+ * rows first, then the ENSO rows in their mode's event order. A mode's key
+ * takes its rows in this order: every row its set asks for (heat and fire
+ * weather), or only those in the layer's current read (any other set).
  */
 export const NWS_ALERT_LEGEND: ReadonlyArray<{ color: string; label: string }> = [
   // vocab-allow: verbatim NWS product names, quoted source data
@@ -540,9 +539,8 @@ export const NWS_ALERT_LEGEND: ReadonlyArray<{ color: string; label: string }> =
   { color: NWS_ALERT_COLORS['Fire Weather Watch'], label: 'Fire Weather Watch' },
   ...[
     'Flash Flood Warning', 'Flood Warning', 'Flash Flood Watch', 'Flood Watch', // vocab-allow: verbatim NWS product names, quoted source data
-    'Hurricane Warning', 'Typhoon Warning', 'Blizzard Warning', 'Ice Storm Warning', // vocab-allow: verbatim NWS product names, quoted source data
-    'Winter Storm Warning', 'Tropical Storm Warning', 'Hurricane Watch', 'Typhoon Watch', // vocab-allow: verbatim NWS product names, quoted source data
-    'Tropical Storm Watch', 'Winter Storm Watch',
+    'Typhoon Warning', 'Blizzard Warning', 'Ice Storm Warning', 'Winter Storm Warning', // vocab-allow: verbatim NWS product names, quoted source data
+    'Typhoon Watch', 'Winter Storm Watch',
     'Extreme Wind Warning', 'High Wind Warning', 'High Wind Watch', // vocab-allow: verbatim NWS product names, quoted source data
     'Storm Surge Warning', 'Coastal Flood Warning', 'Lakeshore Flood Warning', 'High Surf Warning', // vocab-allow: verbatim NWS product names, quoted source data
     'Storm Surge Watch', 'Coastal Flood Watch', 'Lakeshore Flood Watch'

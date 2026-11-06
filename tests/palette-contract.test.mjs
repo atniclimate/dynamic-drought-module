@@ -170,7 +170,7 @@ const CLASSIFICATION = {
     CDM_CATEGORIES: 'S3 AAFC CDM service legend, verified 2026-10-07',
     BC_DROUGHT_LEVELS: 'S4 BC portal renderer verified 2026-10-07; DR-160 held',
     TREATY_COLORS: 'representation styling, not hazard',
-    NWS_ALERT_COLORS: 'S6 five current NWS event colors verified 2026-10-07; 24 ENSO products from weather.gov/help-map read 2026-11-06; legacy heat aliases retained compatibility; gray fallback DDM',
+    NWS_ALERT_COLORS: 'S6 five current NWS event colors verified 2026-10-07; 20 ENSO products from weather.gov/help-map read 2026-11-06; legacy heat aliases retained compatibility; gray fallback DDM',
     SPC_FIREWX_CATEGORIES: 'S7 SPC fire weather, source receipt 2026-10-07',
     SST_ANOMALY_SCALE: 'S11 exact GIBS v1.3 intervals/colors verified 2026-10-07; qualitative labels remain separately unverified',
     GRIDDED_INDEX_RAMP: 'S12 ACIS five-window issuer legend pixels, verified 2026-10-07; bins unknown'
@@ -319,9 +319,8 @@ test('S6-S8 current source tables are pinned without upgrading pending provenanc
     'Heat Advisory': '#ff7f50', 'Red Flag Warning': '#ff1493', 'Fire Weather Watch': '#ffdead',
     // ENSO: the Hex Code column of https://www.weather.gov/help-map, read 2026-11-06.
     'Flash Flood Warning': '#8b0000', 'Flood Warning': '#00ff00', 'Flash Flood Watch': '#2e8b57', 'Flood Watch': '#2e8b57',
-    'Hurricane Warning': '#dc143c', 'Typhoon Warning': '#dc143c', 'Blizzard Warning': '#ff4500',
-    'Ice Storm Warning': '#8b008b', 'Winter Storm Warning': '#ff69b4', 'Tropical Storm Warning': '#b22222',
-    'Hurricane Watch': '#ff00ff', 'Typhoon Watch': '#ff00ff', 'Tropical Storm Watch': '#f08080',
+    'Typhoon Warning': '#dc143c', 'Blizzard Warning': '#ff4500', 'Ice Storm Warning': '#8b008b',
+    'Winter Storm Warning': '#ff69b4', 'Typhoon Watch': '#ff00ff',
     'Winter Storm Watch': '#4682b4', 'Extreme Wind Warning': '#ff8c00', 'High Wind Warning': '#daa520',
     'High Wind Watch': '#b8860b', 'Storm Surge Warning': '#b524f7', 'Coastal Flood Warning': '#228b22',
     'Lakeshore Flood Warning': '#228b22', 'High Surf Warning': '#228b22', 'Storm Surge Watch': '#db7ff7',
@@ -340,8 +339,7 @@ test('S6 NWS key lists one current name per drawn colour, no Excessive alias', (
   assert.deepEqual(labels, [
     'Extreme Heat Warning', 'Extreme Heat Watch', 'Heat Advisory', 'Red Flag Warning', 'Fire Weather Watch',
     'Flash Flood Warning', 'Flood Warning', 'Flash Flood Watch', 'Flood Watch',
-    'Hurricane Warning', 'Typhoon Warning', 'Blizzard Warning', 'Ice Storm Warning', 'Winter Storm Warning',
-    'Tropical Storm Warning', 'Hurricane Watch', 'Typhoon Watch', 'Tropical Storm Watch', 'Winter Storm Watch',
+    'Typhoon Warning', 'Blizzard Warning', 'Ice Storm Warning', 'Winter Storm Warning', 'Typhoon Watch', 'Winter Storm Watch',
     'Extreme Wind Warning', 'High Wind Warning', 'High Wind Watch',
     'Storm Surge Warning', 'Coastal Flood Warning', 'Lakeshore Flood Warning', 'High Surf Warning',
     'Storm Surge Watch', 'Coastal Flood Watch', 'Lakeshore Flood Watch'

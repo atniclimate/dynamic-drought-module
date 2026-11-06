@@ -1251,13 +1251,14 @@ test.describe('identify paths: the NWS, SPC and power models print the issuer wo
     expect(odd).not.toContain('office');
     expect(odd).toContain('Until Tonight As the issuer states it; DDM does not read it as a full date.');
 
-    // An ENSO product: its own swatch, an open end not stated, and no heat or fire weather words or link.
+    // An ENSO product: its own swatch, an end it does not state said so, and no description or link of its own.
     const floodMarkup = serializePopupFrame(buildNwsAlertPopupModel({ event: 'Flood Warning', onset, ends: null, issuer: 'KDVN' }));
     const flood = frameText(floodMarkup);
     expect(flood).toContain('Issued by: NOAA NWS, office DVN');
-    expect(flood).toContain('Until unavailable');
+    expect(flood).toContain('End not stated');
+    expect(flood).not.toContain('unavailable');
     expect(floodMarkup).toContain('data-swatch-class="Flood Warning" style="--popup-swatch: #00ff00"');
-    expect(flood).toContain('Polygons are NWS forecast-zone shapes, updated about every five minutes.');
+    expect(flood).not.toContain('forecast-zone shapes');
     expect(flood).not.toContain('extreme heat or fire weather');
     expect(floodMarkup).not.toContain('https://www.weather.gov/safety/heat');
     expect(floodMarkup).toContain('href="https://alerts.weather.gov/"');
