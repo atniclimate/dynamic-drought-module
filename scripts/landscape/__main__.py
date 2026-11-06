@@ -5,8 +5,9 @@ Usage (from the repository root, through the pinned project environment):
       Run the North Cascades terrain smoke path.
   .venv/Scripts/python.exe -m scripts.landscape
       Build all accepted families for Level III and Level IV ecoregions.
-  .venv/Scripts/python.exe -m scripts.landscape --only terrain --level 3
-      Restrict a build for a focused receipt or fixture capture.
+  .venv/Scripts/python.exe -m scripts.landscape --only terrain --level 3 --output <path>
+      Restrict a build for a focused receipt or fixture capture. A partial
+      build is refused on the public artifact path, so --output is required.
 
 The default full build uses Contract B acquisition for terrain and
 land-cover/fuels, consumes soil only from the digest-bound FY2025
@@ -654,9 +655,19 @@ def main(argv: list[str] | None = None, prog: str | None = None) -> int:
     if not families:
         ap.error("--only must select at least one family")
     output = args.output or core.OUT_PATH
+    levels = _levels(args.level)
+    # Refused before any fetch: the schema check passes a subset snapshot, so
+    # nothing downstream would catch the lost families or levels.
+    if output.resolve() == core.OUT_PATH.resolve() and (
+        families != list(FAMILY_ORDER) or levels != [3, 4]
+    ):
+        ap.error(
+            "a partial build (--only or --level) never replaces the public "
+            "artifact; pass --output"
+        )
     return _full_build(
         families,
-        _levels(args.level),
+        levels,
         output,
         args.retrieved,
         args.receipt,
