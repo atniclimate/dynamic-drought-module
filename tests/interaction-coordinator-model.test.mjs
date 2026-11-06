@@ -71,7 +71,10 @@ const STUBS = {
     'export async function resolveLocationIdentity() { if (!globalThis.__ddmIdentity) throw new Error("no identity"); return globalThis.__ddmIdentity; }',
   mobileSheet: 'export function isSheetActive() { return globalThis.__ddmSheetActive === true; }',
   studioRoute:
-    'export function studioOwnsScreen() { return false; } export function onStudioRouteChange(fn) { globalThis.__ddmStudioListeners.push(fn); return () => {}; }'
+    'export function studioOwnsScreen() { return false; } export function onStudioRouteChange(fn) { globalThis.__ddmStudioListeners.push(fn); return () => {}; }',
+  // The committed mode and horizon: a case publishes a new snapshot through `publishSnapshot`.
+  clusterService:
+    'export function getCommittedSnapshot() { return globalThis.__ddmSnapshot; } export function onCommittedSnapshotChange(fn) { globalThis.__ddmSnapshotListeners.push(fn); return () => {}; }'
 };
 
 const stubUrl = (source) => `data:text/javascript,${encodeURIComponent(source)}`;
@@ -85,6 +88,7 @@ registerHooks({
     if (fromTs && /\/state\/location-identity$/.test(specifier)) return { url: stubUrl(STUBS.locationIdentity), shortCircuit: true };
     if (fromTs && /\/ui\/mobile-sheet$/.test(specifier)) return { url: stubUrl(STUBS.mobileSheet), shortCircuit: true };
     if (fromTs && /\/state\/studio-route$/.test(specifier)) return { url: stubUrl(STUBS.studioRoute), shortCircuit: true };
+    if (fromTs && /\/state\/cluster-service$/.test(specifier)) return { url: stubUrl(STUBS.clusterService), shortCircuit: true };
     if (specifier.startsWith('.') && !/\.[a-z]+$/i.test(specifier) && fromTs) {
       const candidate = new URL(`${specifier}.ts`, context.parentURL);
       if (existsSync(fileURLToPath(candidate))) return nextResolve(`${specifier}.ts`, context);
@@ -100,6 +104,13 @@ globalThis.__ddmStateBriefings = [];
 globalThis.__ddmTechnicalOpens = [];
 globalThis.__ddmStudioListeners = [];
 globalThis.__ddmSheetActive = false;
+globalThis.__ddmSnapshot = { selectedHazard: 'drought', cluster: 'drought', horizon: 'current' };
+globalThis.__ddmSnapshotListeners = [];
+/** Publish a committed snapshot as the cluster service does: every listener, in the same turn. */
+function publishSnapshot(snapshot) {
+  globalThis.__ddmSnapshot = snapshot;
+  for (const fn of globalThis.__ddmSnapshotListeners) fn();
+}
 /** Every string the coordinator set as `innerHTML`, in order: what it rendered. */
 const rendered = [];
 
@@ -286,6 +297,8 @@ function harness(layers, { warm = false } = {}) {
   globalThis.__ddmPopups.length = 0;
   globalThis.__ddmPanelOpens.length = 0;
   globalThis.__ddmStudioListeners.length = 0;
+  globalThis.__ddmSnapshotListeners.length = 0;
+  globalThis.__ddmSnapshot = { selectedHazard: 'drought', cluster: 'drought', horizon: 'current' };
   globalThis.__ddmSheetActive = false;
   rendered.length = 0;
   // A popup an earlier case left open keeps its own Escape handler; a fresh
@@ -1215,4 +1228,35 @@ test('Escape inside a studio, the briefing or the key leaves the panel-foot resp
   for (const fn of [...(documentListeners.get('keydown') ?? [])]) fn({ key: 'Escape', defaultPrevented: false, target: outside });
   assert.equal(dismissed, 1, 'Escape elsewhere still dismisses');
   assert.equal(getPlaceSelection(), null);
+});
+
+// Audit round 6, R6-7: a response read in Drought Current stayed open after a
+// press of Wildfire or Near Term, still describing a surface no longer drawn.
+test('a mode or horizon change closes the open response, popup or panel foot, and leaves a briefing-owned selection', async () => {
+  const selection = context('Mode Place');
+  const { click, ready } = harness({ place: [{ model: MODEL, selection, emphasis: [] }] }, { warm: true });
+  await ready;
+  click();
+  const popup = globalThis.__ddmPopups.at(-1);
+  publishSnapshot({ selectedHazard: 'drought', cluster: 'custom', horizon: 'current' });
+  assert.equal(popup.removed, false, 'a republish in the same mode and horizon (a layer toggle) keeps the response');
+  publishSnapshot({ selectedHazard: 'wildfire', cluster: 'wildfire', horizon: 'current' });
+  assert.equal(popup.removed, true, 'a mode switch closes the popup');
+  assert.equal(getPlaceSelection(), null, 'the response took its own selection with it');
+
+  click();
+  publishSnapshot({ selectedHazard: 'wildfire', cluster: 'wildfire', horizon: 'weeks-ahead' });
+  assert.equal(globalThis.__ddmPopups.at(-1).removed, true, 'a horizon switch closes the popup');
+
+  let dismissed = 0;
+  coordinator.setResponseSink({ present: () => true, dismiss: () => { dismissed += 1; } });
+  click();
+  assert.equal(getPlaceSelection()?.context, selection, 'the panel foot holds the response');
+  // The briefing door's open replaces the response's selection with the briefing's own.
+  const briefing = { label: 'Mode Place', context: selection };
+  setPlaceSelection(briefing);
+  publishSnapshot({ selectedHazard: 'drought', cluster: 'drought', horizon: 'weeks-ahead' });
+  assert.equal(dismissed, 1, 'a mode switch dismisses the panel-foot response');
+  assert.equal(getPlaceSelection(), briefing, 'the briefing keeps its place');
+  assert.equal(keydownListeners(), 0, 'no Escape handler outlives the response');
 });
