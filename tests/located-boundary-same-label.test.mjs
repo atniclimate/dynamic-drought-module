@@ -64,3 +64,57 @@ test('the briefing taking over the searched place keeps its highlight; a new sub
     setPlaceSelection(null);
   }
 });
+
+/**
+ * Audit round 5, R5-38: one Nation title can cover several land areas (the
+ * gated roster names five areas "Minnesota Chippewa Tribe"), so the overlay is
+ * matched by the place's own code, not its title. Red on 0ffe87a: a click on a
+ * second area under the same title kept the first area's highlight.
+ */
+test('a different land area under the same Nation title clears the highlight; the same area keeps it', () => {
+  const { map, layers } = fakeMap();
+  const dispose = initLocatedBoundary(map);
+  const area = (code) => ({
+    label: 'Fixture Nation',
+    context: { title: 'Fixture Nation', place: { scheme: 'bia', code } }
+  });
+  try {
+    setPlaceSelection(area('1001'));
+    showLocatedBoundary(map, GEOM);
+    setPlaceSelection(area('1001'));
+    assert.equal(layers.size, 2, 'the same area written again keeps the highlight');
+
+    setPlaceSelection(area('1002'));
+    assert.equal(layers.size, 0, 'another area under the same title clears it');
+  } finally {
+    dispose();
+    setPlaceSelection(null);
+  }
+});
+
+/**
+ * Audit round 5 review: the condition door's briefing carries no place code,
+ * only the title and area label search uses, so a code-only key cleared the
+ * searched place's highlight. Red before the fix: the uncoded write cleared it.
+ */
+test('an uncoded briefing on the searched place keeps the highlight; another area name clears it', () => {
+  const { map, layers } = fakeMap();
+  const dispose = initLocatedBoundary(map);
+  const coded = {
+    label: 'Fixture Nation',
+    context: { title: 'Fixture Nation', areaLabel: 'Land area: Fixture Land Area', place: { scheme: 'bia', code: '1001' } }
+  };
+  const uncoded = (areaLabel) => ({ label: 'Fixture Nation', context: { title: 'Fixture Nation', areaLabel } });
+  try {
+    setPlaceSelection(coded);
+    showLocatedBoundary(map, GEOM);
+    setPlaceSelection(uncoded('Land area: Fixture Land Area'));
+    assert.equal(layers.size, 2, 'the condition door on the same land area keeps the highlight');
+
+    setPlaceSelection(uncoded('Land area: Another Land Area'));
+    assert.equal(layers.size, 0, 'the same title on another land area clears it');
+  } finally {
+    dispose();
+    setPlaceSelection(null);
+  }
+});

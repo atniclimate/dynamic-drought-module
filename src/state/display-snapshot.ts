@@ -12,6 +12,8 @@ import {
 } from '../ui/layer-toggle-command';
 import { getHazardCluster, getOceanFraming } from './cluster-store';
 import { getSelectedHazard, restoreCommittedCluster } from './cluster-service';
+import type { Geometry } from 'geojson';
+import { showLocatedBoundary } from './located-boundary';
 import { getMap } from './map-store';
 import {
   clearEmphasis,
@@ -244,6 +246,21 @@ export function seedTribeEmphasisTargets(
     targets.push({ source: 'bia-reservations', id });
   }
   featureIdCache.set(cacheKey, targets);
+}
+
+/** The studio exit with no briefing handed back: nothing else would ever unlight the place the studio lit. */
+export function clearStudioEmphasis(): void {
+  const map = getMap();
+  if (map) clearEmphasis(map);
+}
+
+/**
+ * Draw a Nation's boundary under its exit briefing as the located overlay:
+ * the restore turns the Tribal layers that lit it off again when the person had them off.
+ */
+export function showStudioReturnBoundary(geometry: Geometry): void {
+  const map = getMap();
+  if (map) showLocatedBoundary(map, geometry);
 }
 
 /**

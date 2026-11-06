@@ -24,13 +24,29 @@ import type { Geometry } from 'geojson';
 
 import { RESERVATION_FILL_COLOR, RESERVATION_OUTLINE_COLOR } from '../config/palette';
 import { getPlaceSelection, onPlaceSelectionChange } from './place-selection';
+import type { PlaceSelection } from './place-selection';
 
 const SOURCE_ID = 'ddm-located-boundary';
 const FILL_LAYER_ID = 'ddm-located-boundary-fill';
 const LINE_LAYER_ID = 'ddm-located-boundary-line';
 
-/** The selection label the shown highlight depicts (null when none is shown). */
-let shownLabel: string | null = null;
+/** The place the shown highlight depicts (null when none is shown). */
+let shown: { code: string | null; name: string } | null = null;
+
+function placeKeys(selection: PlaceSelection): { code: string | null; name: string } {
+  const place = selection.context.place;
+  return {
+    code: place ? `${place.scheme}:${place.code}` : null,
+    name: `${selection.label}|${selection.context.areaLabel ?? ''}`
+  };
+}
+
+// One Nation title can cover several land areas, so two codes decide; a writer without one (the condition door) matches by title and area.
+function samePlace(selection: PlaceSelection): boolean {
+  if (!shown) return false;
+  const next = placeKeys(selection);
+  return shown.code && next.code ? shown.code === next.code : shown.name === next.name;
+}
 
 /** Render (or replace) the located-boundary highlight for one geometry. */
 export function showLocatedBoundary(map: maplibregl.Map, geometry: Geometry | null | undefined): void {
@@ -38,7 +54,8 @@ export function showLocatedBoundary(map: maplibregl.Map, geometry: Geometry | nu
     clearLocatedBoundary(map);
     return;
   }
-  shownLabel = getPlaceSelection()?.label ?? null;
+  const selection = getPlaceSelection();
+  shown = selection ? placeKeys(selection) : null;
   const data = {
     type: 'Feature' as const,
     properties: {},
@@ -76,7 +93,7 @@ export function showLocatedBoundary(map: maplibregl.Map, geometry: Geometry | nu
 
 /** Remove the located-boundary highlight. Safe to call when nothing is shown. */
 export function clearLocatedBoundary(map: maplibregl.Map): void {
-  shownLabel = null;
+  shown = null;
   if (map.getLayer(FILL_LAYER_ID)) map.removeLayer(FILL_LAYER_ID);
   if (map.getLayer(LINE_LAYER_ID)) map.removeLayer(LINE_LAYER_ID);
   if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);
@@ -86,18 +103,17 @@ export function clearLocatedBoundary(map: maplibregl.Map): void {
  * Wire the clear seam: the highlight is dropped on a close (null) AND on a
  * subject change (a new briefing, a new popup; the U3 stage-5 major 4 fix),
  * because it depicts the selection that created it. A later write for the
- * SAME label (the briefing taking ownership of the searched place) keeps it.
+ * SAME place (the briefing taking ownership of the searched place) keeps it.
  * The search-locate path sets the selection first and shows its highlight
- * after, so the label it records is its own. Called once at boot.
- * shortcut: two different subjects sharing one title keep the highlight; key
- * on a boundary id if that ever happens.
- * The show side is the search-locate path (search-controller.ts).
+ * after, so the place it records is its own. Called once at boot.
+ * The show side is the search-locate path (search-controller.ts) and the
+ * Place studio's exit briefing for a Nation (place-studio.tsx).
  *
  * Returns the store unsubscribe so a bounded-lifetime caller (a test) can
  * drop the subscription; the boot caller ignores it.
  */
 export function initLocatedBoundary(map: maplibregl.Map): () => void {
   return onPlaceSelectionChange((selection) => {
-    if (!selection || selection.label !== shownLabel) clearLocatedBoundary(map);
+    if (!selection || !samePlace(selection)) clearLocatedBoundary(map);
   });
 }

@@ -145,6 +145,57 @@ test('an ecoregion selection reads Tribes, states and watersheds over its whole 
   );
 });
 
+/**
+ * Audit round 5, R5-39 and R5-40, on the shipped exit hand-off bodies with the
+ * real place-return slots. Back to map with no briefing handed back unlights
+ * the studio's place (nothing else would); a Nation's briefing draws its
+ * boundary as the located overlay after the open, since the restore may turn
+ * the Tribal layers that lit it off again. Red on 0ffe87a: none of these exist.
+ */
+test('Back to map unlights the studio place unless a briefing follows, and a Nation briefing draws its boundary', async () => {
+  const { clearPlaceReturn, setPlaceReturnBriefing, setPlaceReturnDisplayCommand, takePlaceReturn } =
+    await import('../src/state/place-return.ts');
+  const log = [];
+  const exit = new Function(
+    'setPlaceReturnBriefing',
+    'takePlaceReturn',
+    'clearStudioEmphasis',
+    'openImpactPanel',
+    'showStudioReturnBoundary',
+    `${source.match(/^let briefingHandedBack = false;$/m)?.[0]}\n` +
+      `${body('runReturnHandoff')}\n${body('queueReturnBriefing')}\n${body('openReturnBriefing')}\n` +
+      'return { runReturnHandoff, queueReturnBriefing, openReturnBriefing };'
+  )(
+    setPlaceReturnBriefing,
+    takePlaceReturn,
+    () => log.push('unlight'),
+    (context) => log.push(`open ${context.title}`),
+    (geometry) => log.push(`draw ${geometry.type}`)
+  );
+  const resolved = { context: { title: 'Fixture Nation' }, geometry: { type: 'Polygon' } };
+
+  clearPlaceReturn();
+  exit.runReturnHandoff();
+  assert.deepEqual(log.splice(0), ['unlight'], 'no briefing: the lit place is cleared');
+
+  setPlaceReturnDisplayCommand(() => log.push('cluster'));
+  exit.runReturnHandoff();
+  assert.deepEqual(log.splice(0), ['cluster', 'unlight'], 'a display command alone is not a briefing');
+
+  exit.queueReturnBriefing(() => exit.openReturnBriefing({ kind: 'tribe' }, resolved));
+  exit.runReturnHandoff();
+  assert.deepEqual(log.splice(0), ['open Fixture Nation', 'draw Polygon'], 'a Nation briefing keeps it lit and draws its boundary after the open');
+
+  exit.queueReturnBriefing(() => exit.openReturnBriefing({ kind: 'state' }, resolved));
+  exit.runReturnHandoff();
+  assert.deepEqual(log.splice(0), ['open Fixture Nation'], 'only a Nation draws the located overlay');
+
+  exit.queueReturnBriefing(() => exit.openReturnBriefing({ kind: 'tribe' }, resolved));
+  clearPlaceReturn();
+  exit.runReturnHandoff();
+  assert.deepEqual(log.splice(0), ['unlight'], 'a briefing voided before the exit does not hold the light');
+});
+
 test('Tribe candidates and the shared envelope builder stay at full resolution', () => {
   const shared = new Function(`${body('arcGisEnvelopeParams')}\nreturn arcGisEnvelopeParams;`)();
   assert.equal(shared('-117,42,-111,49', 'x').has('maxAllowableOffset'), false);

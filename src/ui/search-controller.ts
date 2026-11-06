@@ -41,6 +41,7 @@ import { bboxCenter, bboxToContinuousBounds } from '../util/bbox';
 import { geometryBboxAcrossAntimeridian } from '../util/antimeridian';
 import { openStateBriefing } from '../state/deep-link';
 import { showLocatedBoundary } from '../state/located-boundary';
+import { clearEmphasis } from '../state/place-emphasis';
 import { getViewMode } from '../state/view-mode';
 import { onPlaceSelectionChange, setPlaceSelection } from '../state/place-selection';
 import {
@@ -324,6 +325,8 @@ async function locateBoundary(map: maplibregl.Map, spec: LocateSpec): Promise<vo
   };
   setPlaceSelection({ label: context.title, context });
   if (isSheetActive() && getViewMode() === 'brief') openImpactPanel(context);
+  // The located overlay marks this subject; a place an earlier click lit is unlit.
+  clearEmphasis(map);
   showLocatedBoundary(map, aggregateGeometry);
 }
 
