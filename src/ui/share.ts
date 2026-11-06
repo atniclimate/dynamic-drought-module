@@ -1,6 +1,7 @@
 import { copyToClipboard } from '../util/clipboard';
 import { showToast } from './overlay';
 import type { SelectParam } from '../state/url';
+import { isPhysicallyFramed } from '../state/studio-route';
 
 /**
  * Build the shareable link for the current view: `window.location.href`,
@@ -52,7 +53,10 @@ export function wireShareButton(buttonId: string): void {
     showToast(
       ok
         ? 'Link copied. It restores region or framing, layers, mode and horizon, not the map position or an open briefing.'
-        : 'Copy blocked. Use the address bar to copy this view.'
+        : isPhysicallyFramed()
+          // In a frame the address bar belongs to the host page and carries none of this view's state.
+          ? 'Copy blocked here. Open this map in its own browser tab to copy this view.'
+          : 'Copy blocked. Use the address bar to copy this view.'
     );
   });
 }
