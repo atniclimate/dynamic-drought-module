@@ -449,7 +449,7 @@ test('SPC Day 1 categorical: a stubbed dn 8 feature renders the VERIFIED word, p
 }) => {
   await stubBaselineBriefingHosts(page);
   await stubSpcFireOutlook(page, {
-    1: [spcFeature({ dn: 8, valid: '202609091700', expire: '202609101200' })]
+    1: [spcFeature({ dn: 8, valid: '202609091700', expire: '209909101200' })]
   });
   await gotoApp(page, '?view=brief&layers=places&select=state:WA');
 
@@ -466,7 +466,7 @@ test('SPC Day 1 categorical: a stubbed dn 8 feature renders the VERIFIED word, p
     'Critical risk from wind and relative humidity'
   );
   await expect(day1Claim).toContainText(
-    'valid Sep 9, 2026, 17:00 UTC to Sep 10, 2026, 12:00 UTC'
+    'valid Sep 9, 2026, 17:00 UTC to Sep 10, 2099, 12:00 UTC'
   );
   await expect(day1Claim.locator('.impact-claim-source')).toContainText(
     'Storm Prediction Center'
@@ -479,7 +479,7 @@ test('SPC Day 2 categorical: a stubbed dn 10 feature renders the issuer\'s own "
 }) => {
   await stubBaselineBriefingHosts(page);
   await stubSpcFireOutlook(page, {
-    4: [spcFeature({ dn: 10, valid: '202609091700', expire: '202609101200' })]
+    4: [spcFeature({ dn: 10, valid: '202609091700', expire: '209909101200' })]
   });
   await gotoApp(page, '?view=brief&layers=places&select=state:WA');
 
@@ -497,7 +497,7 @@ test('SPC Day 1 with a malformed dn: the point-heat-briefing convention drops th
 }) => {
   await stubBaselineBriefingHosts(page);
   await stubSpcFireOutlook(page, {
-    1: [spcFeature({ dn: 0, valid: '202609091700', expire: '202609101200' })]
+    1: [spcFeature({ dn: 0, valid: '202609091700', expire: '209909101200' })]
   });
   await gotoApp(page, '?view=brief&layers=places&select=state:WA');
 
@@ -567,7 +567,7 @@ test('the Days 3-8 probabilistic reads: 0.40, 0.70 and the live "Probability Too
         label: '0.40',
         label2: '40% Wind/RH Risk',
         valid: '202609101200',
-        expire: '202609111200',
+        expire: '209909111200',
         issue: '202609082156'
       })
     ],
@@ -577,7 +577,7 @@ test('the Days 3-8 probabilistic reads: 0.40, 0.70 and the live "Probability Too
         label: '0.70',
         label2: '70% Wind/RH Risk',
         valid: '202609111200',
-        expire: '202609121200',
+        expire: '209909121200',
         issue: '202609082156'
       })
     ],
@@ -587,7 +587,7 @@ test('the Days 3-8 probabilistic reads: 0.40, 0.70 and the live "Probability Too
         label: 'Probability Too Low',
         label2: ' ',
         valid: '202609151200',
-        expire: '202609161200',
+        expire: '209909161200',
         issue: '202609082156'
       })
     ]
@@ -631,7 +631,7 @@ test('P3-TRUTH: an SPC read with one failed day renders live (partial), keeping 
 }) => {
   await stubBaselineBriefingHosts(page);
   await stubSpcFireOutlook(page, {
-    1: [spcFeature({ dn: 8, valid: '202609091700', expire: '202609101200' })]
+    1: [spcFeature({ dn: 8, valid: '202609091700', expire: '209909101200' })]
   });
   // Day 3 (layer 8) fails. A page route outranks the context route
   // `stubSpcFireOutlook` installs.

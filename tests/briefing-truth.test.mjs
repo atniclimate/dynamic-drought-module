@@ -773,7 +773,7 @@ function spcAnswer(layers) {
 test('an SPC read whose Day 3 query failed is live (partial): every day that answered keeps its claim and Day 3 is never folded into "no area"', async () => {
   const result = await withFetch(
     spcAnswer({
-      1: { dn: 8, valid: '202609091700', expire: '202609101200' },
+      1: { dn: 8, valid: '202609091700', expire: '209909101200' },
       8: 503
     }),
     () => sources.fetchSpcFireOutlookClaims(place(-120.5, 47.5), signal())
@@ -802,7 +802,7 @@ test('an SPC read whose Day 3 query failed is live (partial): every day that ans
 
 test('an SPC read whose Day 1 answered with an unrecognized dn is live (partial): the day is dropped, never invented, never folded into "no area"', async () => {
   const result = await withFetch(
-    spcAnswer({ 1: { dn: 0, valid: '202609091700', expire: '202609101200' } }),
+    spcAnswer({ 1: { dn: 0, valid: '202609091700', expire: '209909101200' } }),
     () => sources.fetchSpcFireOutlookClaims(place(-120.55, 47.5), signal())
   );
   assert.equal(result.ok, true);
@@ -815,7 +815,7 @@ test('an SPC read whose Day 1 answered with an unrecognized dn is live (partial)
 
 test('an SPC read whose Day 4 answered with an unrecognized label is live (partial)', async () => {
   const result = await withFetch(
-    spcAnswer({ 11: { dn: 5, label: '0.05', valid: '202609111200', expire: '202609121200', issue: '202609082156' } }),
+    spcAnswer({ 11: { dn: 5, label: '0.05', valid: '202609111200', expire: '209909121200', issue: '202609082156' } }),
     () => sources.fetchSpcFireOutlookClaims(place(-120.56, 47.5), signal())
   );
   const texts = result.claims.map((claim) => claim.text);
@@ -827,9 +827,29 @@ test('an SPC read whose Day 4 answered with an unrecognized label is live (parti
   assert.equal(cell.status, 'partial', 'the read did not establish Day 4');
 });
 
+test('an SPC issuance past its own expire time states no category: the day is dropped and the read is live (partial)', async () => {
+  // Audit round 6 (R6-11): the service still serving an old Day 1 and Day 3.
+  const result = await withFetch(
+    spcAnswer({
+      1: { dn: 8, valid: '202609091700', expire: '202609101200' },
+      8: { dn: 40, label: '0.40', valid: '202609101200', expire: '202609111200', issue: '202609082156' }
+    }),
+    () => sources.fetchSpcFireOutlookClaims(place(-120.62, 47.5), signal())
+  );
+  assert.equal(result.ok, true);
+  const texts = result.claims.map((claim) => claim.text);
+  assert.ok(texts.every((text) => !text.startsWith('SPC Day 1 ') && !text.startsWith('SPC Day 3 ')), texts.join(' | '));
+  assert.ok(
+    texts.includes('SPC Day 3-8 Fire Weather Outlook: no area is drawn over this point for Days 4, 5, 6, 7, and 8.'),
+    'an expired day is never folded into "no area"'
+  );
+  const cell = settledCell('nearTerm', 'fire', [['spcFireOutlook', result]]);
+  assert.equal(cell.status, 'partial');
+});
+
 test('an SPC read with every day answering stays live', async () => {
   const result = await withFetch(
-    spcAnswer({ 1: { dn: 8, valid: '202609091700', expire: '202609101200' } }),
+    spcAnswer({ 1: { dn: 8, valid: '202609091700', expire: '209909101200' } }),
     () => sources.fetchSpcFireOutlookClaims(place(-120.6, 47.5), signal())
   );
   const cell = settledCell('nearTerm', 'fire', [['spcFireOutlook', result]]);
@@ -875,7 +895,7 @@ async function nifcFromLoaded(features, bbox) {
   globalThis.__p3truthLoadedNifc = {
     collection: collection(features),
     envelope: null,
-    fetchedAt: Date.UTC(2026, 9, 4, 12)
+    fetchedAt: Date.now()
   };
   const requests = [];
   try {
@@ -947,7 +967,7 @@ test('a polygon-overlap chunk that fails to load never leaves the NIFC read unse
   globalThis.__p3truthLoadedNifc = {
     collection: collection([wildfire('HOLE-1', DONUT)]),
     envelope: null,
-    fetchedAt: Date.UTC(2026, 9, 4, 12)
+    fetchedAt: Date.now()
   };
   globalThis.__p3truthFailOverlap = true;
   const requests = [];
@@ -984,7 +1004,7 @@ function loadPerimeters(features, status = 'ready') {
   globalThis.__p3truthLoadedNifc = {
     collection: collection(features),
     envelope: null,
-    fetchedAt: Date.UTC(2026, 9, 4, 12),
+    fetchedAt: Date.now(),
     truncated: status === 'degraded'
   };
 }
@@ -1022,6 +1042,28 @@ test('a DEGRADED (transfer-limited) loaded collection is never reused for a coun
     );
     assert.ok(requests.some(isWfigs), 'a truncated collection declines; the service is asked');
     assert.equal(result.claims[0].text, ONE_WILDFIRE, 'never "No current mapped NIFC fire perimeters intersect ..."');
+  } finally {
+    clearPerimeters();
+  }
+});
+
+test('a loaded collection past the layer\'s 5-minute check window is never read as current: the network read answers', async () => {
+  // Audit round 6 (R6-10): a refresh that fails over covered ground puts the
+  // layer back to `ready` with its old set; the briefing must not state it.
+  loadPerimeters([wildfire('HOLE-1', DONUT)], 'ready');
+  globalThis.__p3truthLoadedNifc = { ...globalThis.__p3truthLoadedNifc, fetchedAt: Date.now() - 10 * 60_000 };
+  const requests = [];
+  try {
+    const result = await withFetch(
+      (url) => {
+        requests.push(url);
+        return jsonResponse({ message: 'stubbed outage' }, 503);
+      },
+      () => sources.fetchNifcClaims(place(-121.6, 46.4, [-121.8, 46.2, -121.4, 46.6]), signal())
+    );
+    assert.ok(requests.some(isWfigs), 'an old collection declines; the service is asked');
+    assert.equal(result.ok, false, 'the outage reads unavailable, never the old count');
+    assert.deepEqual(result.claims, []);
   } finally {
     clearPerimeters();
   }

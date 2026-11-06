@@ -338,7 +338,12 @@ test('point heat and point forecast share discovery and stay within the six-requ
         session,
         Date.parse('2026-07-29T12:30:00+00:00')
       ),
-      fetchNwsForecastClaims(context('KS'), master.signal, session)
+      fetchNwsForecastClaims(
+        context('KS'),
+        master.signal,
+        session,
+        Date.parse('2026-07-29T12:30:00+00:00')
+      )
     ]);
     expect(heat.status).toBe('ready');
     expect(forecast.ok).toBe(true);

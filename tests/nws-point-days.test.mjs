@@ -127,6 +127,51 @@ test('the NWS outlook claim carries only the forecast, and the heat-to-dryness s
   assert.ok(derived.lineage.length > 0, 'a derived claim names what it stands on');
 });
 
+/** A forecast answer carrying exactly `periods` (every other path as above). */
+function forecastWith(periods) {
+  const base = nwsAnswer('2026-11-06T18:00:00-08:00');
+  return async (input) =>
+    decodeURIComponent(String(input)).endsWith('/forecast')
+      ? Response.json({ properties: { updateTime: '2026-11-04T01:30:00+00:00', periods } })
+      : base(input);
+}
+
+// Audit round 6 (R6-12): an old forecast whose first periods have ended.
+const TUESDAY = {
+  name: 'Tuesday',
+  startTime: '2026-11-03T06:00:00-08:00',
+  endTime: '2026-11-03T18:00:00-08:00',
+  temperature: 95,
+  temperatureUnit: 'F',
+  shortForecast: 'Sunny'
+};
+const THURSDAY = {
+  name: 'Thursday',
+  startTime: '2026-11-05T06:00:00-08:00',
+  endTime: '2026-11-05T18:00:00-08:00',
+  temperature: 52,
+  temperatureUnit: 'F',
+  shortForecast: 'Cloudy'
+};
+const ON_THURSDAY = Date.parse('2026-11-05T12:00:00-08:00');
+
+test('a forecast period that has ended is never stated: the claim reads the first period still running', async () => {
+  const result = await withFetch(forecastWith([TUESDAY, THURSDAY]), () =>
+    fetchNwsForecastClaims(SEATTLE, new AbortController().signal, undefined, ON_THURSDAY)
+  );
+  assert.equal(result.ok, true);
+  assert.equal(result.claims[0].text, 'Thursday: Cloudy, near 52 degrees F.');
+  assert.equal(result.claims[0].dates.valid, '2026-11-05');
+});
+
+test('a forecast whose every period has ended reads unavailable, never an ended period', async () => {
+  const result = await withFetch(forecastWith([TUESDAY]), () =>
+    fetchNwsForecastClaims(SEATTLE, new AbortController().signal, undefined, ON_THURSDAY)
+  );
+  assert.equal(result.ok, false);
+  assert.deepEqual(result.claims, []);
+});
+
 const NOW = Date.parse('2026-11-06T22:30:00+00:00');
 
 async function observationAt(timestamp) {
