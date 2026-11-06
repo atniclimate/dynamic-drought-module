@@ -483,11 +483,12 @@ test('an invalid NWS MapServer body stays unavailable through activation cleanup
   await expect(layerCheckbox(page, 'nws-alerts')).not.toBeChecked();
 });
 
-test('ENSO offers its flood, storm, wind and coastal products off by default; on, ENSO stays the mode and its key lists them', async ({
+test('ENSO offers its flood, storm, wind and coastal products off by default; on, ENSO stays the mode and its key lists the ones in force', async ({
   page
 }) => {
   await stubBasemap(page);
   const asked: string[] = [];
+  // Two of ENSO's products, answered out of the set's order; nothing else is in force.
   await page.route(
     (url) => url.pathname.endsWith(WWA_PATH),
     (route) => {
@@ -495,7 +496,10 @@ test('ENSO offers its flood, storm, wind and coastal products off by default; on
       return route.fulfill({
         status: 200,
         contentType: 'application/geo+json',
-        body: collection([rectangleFeature('Flood Warning', Date.now() + 3_600_000)])
+        body: collection([
+          rectangleFeature('Flood Watch', Date.now() + 3_600_000),
+          rectangleFeature('Flash Flood Warning', Date.now() + 3_600_000)
+        ])
       });
     }
   );
@@ -516,12 +520,13 @@ test('ENSO offers its flood, storm, wind and coastal products off by default; on
   await expect.poll(async () => new URLSearchParams(await search(page)).get('layers')?.split(',') ?? []).toContain('nws-alerts');
   expect(new URLSearchParams(await search(page)).get('cluster')).toBe('enso');
 
-  // The key: ENSO's own rows, verbatim and in their stated order, and no other mode's.
+  // The key lists only the products in force, verbatim, in the set's order (NWS_ALERT_LEGEND), and no other mode's.
+  const inForce = NWS_ALERT_LEGEND.filter((row) => ['Flood Watch', 'Flash Flood Warning'].includes(row.label)).map((row) => row.label);
+  expect(inForce).toEqual(['Flash Flood Warning', 'Flood Watch']);
   const productKey = page.locator('#map-key [data-nws-products-key]');
-  await expect(productKey.locator('.map-key-item')).toHaveText(
-    NWS_ALERT_LEGEND.filter((row) => events.includes(row.label)).map((row) => row.label)
-  );
+  await expect(productKey.locator('.map-key-item')).toHaveText(inForce);
   await expect(productKey).not.toContainText('Red Flag Warning');
+  await expect(page.locator('.legend-section[data-legend="nws-alerts"] .legend li')).toHaveText(inForce);
 });
 
 test('an invalid NWS active-products body is unavailable, never an all-clear', async ({

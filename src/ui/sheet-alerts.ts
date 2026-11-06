@@ -74,7 +74,8 @@ function collectAlerts(map: maplibregl.Map): AlertRow[] {
     rows.push({
       type,
       office,
-      ends: formatEnds(props['ends']),
+      // DRAFT wording (pending the owner's read-back): the alert popup's "End not stated".
+      ends: props['ends'] == null ? 'end not stated' : formatEnds(props['ends']),
       color: NWS_ALERT_COLORS[type] ?? NWS_ALERT_DEFAULT_COLOR
     });
   }

@@ -10,8 +10,9 @@ registerHooks({ resolve(specifier, context, nextResolve) {
   return nextResolve(specifier, context);
 } });
 
-const { buildQueryUrl, parseMapPayload } = await import('../src/layers/nws-alerts.ts');
+const { buildNwsAlertPopupModel, buildQueryUrl, parseMapPayload } = await import('../src/layers/nws-alerts.ts');
 const { HAZARD_CLUSTERS, HAZARD_CLUSTER_KEYS, HEAT_FIRE_ALERTS, TEMPORAL_HORIZON_KEYS } = await import('../src/config/clusters.ts');
+const { TROPICAL_WW_CLASSES } = await import('../src/config/tropical-presentation.ts');
 const { getLayerDef } = await import('../src/config/layers.ts');
 const { NWS_ALERT_COLORS, NWS_ALERT_LEGEND } = await import('../src/config/palette.ts');
 const { getHazardCluster, setHazardCluster } = await import('../src/state/cluster-store.ts');
@@ -25,8 +26,7 @@ const HEAT_FIRE_QUERY =
 // (MapServer/1?f=json, read 2026-11-06), in group order and the NWS priority order within a group.
 const ENSO_PRODUCTS = [
   'Flash Flood Warning', 'Flood Warning', 'Flash Flood Watch', 'Flood Watch',
-  'Hurricane Warning', 'Typhoon Warning', 'Blizzard Warning', 'Ice Storm Warning', 'Winter Storm Warning',
-  'Tropical Storm Warning', 'Hurricane Watch', 'Typhoon Watch', 'Tropical Storm Watch', 'Winter Storm Watch',
+  'Typhoon Warning', 'Blizzard Warning', 'Ice Storm Warning', 'Winter Storm Warning', 'Typhoon Watch', 'Winter Storm Watch',
   'Extreme Wind Warning', 'High Wind Warning', 'High Wind Watch',
   'Storm Surge Warning', 'Coastal Flood Warning', 'Lakeshore Flood Warning', 'High Surf Warning',
   'Storm Surge Watch', 'Coastal Flood Watch', 'Lakeshore Flood Watch'
@@ -58,6 +58,21 @@ test('the ENSO query asks for exactly its flood, storm, wind and coastal Warning
   for (const key of ['outFields', 'outSR', 'returnGeometry', 'f', 'maxAllowableOffset', 'geometryPrecision']) {
     assert.equal(enso.searchParams.get(key), heat.searchParams.get(key), key);
   }
+  // ENSO's storm layer already keys the hurricane center's own watches and warnings; the alert set never repeats a name.
+  for (const { label } of TROPICAL_WW_CLASSES) assert.equal(ENSO.includes(label), false, label);
+});
+
+test('the alert popup describes only the heat and fire weather products; an end the alert leaves open reads not stated', () => {
+  const red = buildNwsAlertPopupModel({ event: 'Red Flag Warning', onset: '2026-08-11T08:00:00-07:00', ends: '2026-08-12T20:00:00-07:00' });
+  assert.equal(red.qualifications.length, 1);
+  assert.match(red.qualifications[0], /for extreme heat or fire weather\. Polygons are NWS forecast-zone shapes/);
+  assert.deepEqual(red.moreLinks, [{ label: 'NWS Heat Safety', href: 'https://www.weather.gov/safety/heat' }]);
+  assert.deepEqual(red.clocks.map((clock) => clock.label), ['From', 'Until']);
+  const flood = buildNwsAlertPopupModel({ event: 'Flash Flood Warning', onset: '2026-11-05T20:09:00-06:00', ends: null, issuer: 'KDVN' });
+  assert.deepEqual(flood.qualifications, []);
+  assert.deepEqual(flood.moreLinks, []);
+  assert.deepEqual(flood.clocks.at(-1), { kind: 'not-stated', label: 'End', reason: 'not stated' });
+  assert.deepEqual(buildNwsAlertPopupModel({ event: 'Red Flag Warning' }).clocks, [{ kind: 'not-stated', label: 'End', reason: 'not stated' }]);
 });
 
 test('the WWA alerts query asks the service for simplified, rounded shapes', () => {

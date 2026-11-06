@@ -145,16 +145,29 @@ function reportStatus(state: Status): void {
   registry.setStatus(LAYER_KEY, state);
 }
 
-function emitSnapshot(status: SnapshotEventStatus): void {
+/** `events`: the product names the key lists for this snapshot (`keyEvents`). */
+function emitSnapshot(status: SnapshotEventStatus, events: readonly string[] = []): void {
   window.dispatchEvent(
     new CustomEvent(SNAPSHOT_EVENT, {
       detail: {
         status,
         asOf: snapshotAsOf,
-        truncated: snapshotTruncated
+        truncated: snapshotTruncated,
+        events
       }
     })
   );
+}
+
+/**
+ * The products the key lists: every heat and fire weather product, as it
+ * always has; for any other set only those in the current read, in the set's
+ * order, so none for an empty or failed read.
+ */
+function keyEvents(set: AlertSet | null, drawn: readonly HeldAlert[]): readonly string[] {
+  if (set === HEAT_FIRE_ALERTS) return set.events;
+  const present = new Set(drawn.map(({ alert }) => alert.event));
+  return set?.events.filter((event) => present.has(event)) ?? [];
 }
 
 function resolveBeforeId(map: maplibregl.Map): string | undefined {
@@ -384,7 +397,8 @@ function formatSnapshotTime(time: number): string {
   });
 }
 
-function showSnapshotLegend(featureCount: number): void {
+function showSnapshotLegend(active: readonly HeldAlert[]): void {
+  const featureCount = active.length;
   const asOf =
     snapshotAsOf === null
       ? ''
@@ -395,9 +409,10 @@ function showSnapshotLegend(featureCount: number): void {
       ? `No active requested National Weather Service products.${asOf}`
       : `Active National Weather Service products.${asOf}`;
   const set = snapshotSet;
+  const events = keyEvents(set, active);
   const section = showLegend(LAYER_KEY, {
     order: LEGEND_ORDER.event,
-    render: (body) => renderSetLegend(body, set, note)
+    render: (body) => renderSetLegend(body, set, events, note)
   });
   const noteElement = section?.querySelector<HTMLElement>('.legend-note');
   if (noteElement && snapshotAsOf !== null) {
@@ -408,25 +423,27 @@ function showSnapshotLegend(featureCount: number): void {
       ? 'degraded'
       : featureCount > 0
         ? 'ready'
-        : 'no-data'
+        : 'no-data',
+    events
   );
 }
 
 function showUnavailableLegend(set: AlertSet | null): void {
+  const events = keyEvents(set, []);
   showLegend(LAYER_KEY, {
     order: LEGEND_ORDER.event,
-    render: (body) => renderSetLegend(body, set, 'The National Weather Service product snapshot is unavailable.')
+    render: (body) => renderSetLegend(body, set, events, 'The National Weather Service product snapshot is unavailable.')
   });
-  emitSnapshot('error');
+  emitSnapshot('error', events);
 }
 
-/** The set's own key rows, under the heat and fire weather set's long-standing title or the set's name. */
-function renderSetLegend(body: HTMLElement, set: AlertSet | null, note: string): void {
+/** The key rows `events` names, under the heat and fire weather set's long-standing title or the set's name. */
+function renderSetLegend(body: HTMLElement, set: AlertSet | null, events: readonly string[], note: string): void {
   renderSwatchLegend(
     body,
     // vocab-allow: names the NWS alert products layer, upstream data
     set === HEAT_FIRE_ALERTS ? 'Heat & fire weather alerts' : (set ?? HEAT_FIRE_ALERTS).name,
-    NWS_ALERT_LEGEND.filter(({ label }) => set?.events.includes(label) ?? false),
+    NWS_ALERT_LEGEND.filter(({ label }) => events.includes(label)),
     note
   );
 }
@@ -464,7 +481,7 @@ function applyCurrentSnapshot(
 ): void {
   const active = activeAlertsAt(Date.now());
   ensureMapLayers(map, featureCollection(active));
-  showSnapshotLegend(active.length);
+  showSnapshotLegend(active);
   reportStatus(
     snapshotTruncated
       ? 'degraded'
@@ -629,6 +646,17 @@ export async function activate(
 }
 
 /**
+ * Off intent (the controller calls this synchronously, ahead of the teardown
+ * it queues behind the fade): stop following the mode, so a mode change
+ * during the fade neither empties the polygons nor starts a read the
+ * teardown would abort. Any later activation follows the mode again.
+ */
+export function cancelActivation(): void {
+  stopModeWatch?.();
+  stopModeWatch = null;
+}
+
+/**
  * Abort any in-flight fetch and remove the fill, outline, and source. All
  * guards are defensive so callers can invoke `deactivate` without first
  * verifying activation state.
@@ -690,12 +718,13 @@ function alertClock(label: 'From' | 'Until', value: unknown): PopupClock | null 
  * line, DR-179's note for M26's builders; the frame moves Until to the
  * body's clock slot directly under the head); NWS Active Alerts. The body:
  * the layer's own description, then NWS Heat Safety, for the heat and fire
- * weather products; any other product keeps only the zone sentence. The
- * valid window is shown where the alert states it (an alert without its
- * window would read as a permanent condition; an unknown end reads not
- * stated), and the link routes to the NWS active-alerts page rather than the
- * raw Common Alerting Protocol JSON the WWA `url` attribute carries. Reads
- * the map feature's properties: the NormalizedAlert fields.
+ * weather products only; any other product has no qualification sentence
+ * (the zone sentence is not true of storm-based polygons). The valid window
+ * is shown where the alert states it (an alert without its window would read
+ * as a permanent condition; an end the alert does not state reads "End not
+ * stated"), and the link routes to the NWS active-alerts page rather than
+ * the raw Common Alerting Protocol JSON the WWA `url` attribute carries.
+ * Reads the map feature's properties: the NormalizedAlert fields.
  */
 export function buildNwsAlertPopupModel(props: GeoJsonProperties): IssuedModel {
   const p = props ?? {};
@@ -708,8 +737,9 @@ export function buildNwsAlertPopupModel(props: GeoJsonProperties): IssuedModel {
     ? { table: 'NWS_ALERT_COLORS', classKey: event, color: NWS_ALERT_COLORS[event]! }
     : { table: 'NWS_ALERT_COLORS', classKey: 'default', color: NWS_ALERT_DEFAULT_COLOR };
   const from = alertClock('From', p['onset']);
-  // An end the issuer leaves open is said to be so, never filled from another time.
-  const until: PopupClock = alertClock('Until', p['ends']) ?? { kind: 'not-stated', label: 'Until', reason: 'unavailable' };
+  // An end the alert does not state is said to be so, never filled from another time.
+  // DRAFT wording (pending the owner's read-back): "End not stated"; the place row and phone pane say "end not stated".
+  const until: PopupClock = alertClock('Until', p['ends']) ?? { kind: 'not-stated', label: 'End', reason: 'not stated' };
   const heatFire = HEAT_FIRE_ALERTS.events.includes(event);
   return {
     kind: 'event',
@@ -721,13 +751,12 @@ export function buildNwsAlertPopupModel(props: GeoJsonProperties): IssuedModel {
     // vocab-allow: names the NWS active-alerts page, upstream product name
     source: { link: { label: 'NWS Active Alerts', href: 'https://alerts.weather.gov/' } },
     moreLinks: heatFire ? [{ label: 'NWS Heat Safety', href: 'https://www.weather.gov/safety/heat' }] : [],
-    qualifications: [
-      heatFire
-        // vocab-allow: describes the NWS alert products verbatim, upstream data
-        ? 'Active National Weather Service watch, warning, or advisory for extreme heat or fire weather. Polygons are NWS forecast-zone shapes, updated about every five minutes.'
-        // vocab-allow: names the NWS forecast zones, upstream term; the sentence above, its second half verbatim
-        : 'Polygons are NWS forecast-zone shapes, updated about every five minutes.'
-    ]
+    qualifications: heatFire
+      ? [
+          // vocab-allow: describes the NWS alert products verbatim, upstream data
+          'Active National Weather Service watch, warning, or advisory for extreme heat or fire weather. Polygons are NWS forecast-zone shapes, updated about every five minutes.'
+        ]
+      : []
   };
 }
 

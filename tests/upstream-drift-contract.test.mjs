@@ -12,9 +12,12 @@ import {
   DRIFT_TIERS,
   EXPECTED_WORKER_REVISION,
   OUT_FIELDS_SENDERS_COVERED_ELSEWHERE,
+  RETIRED_ALERT_PRODUCTS,
   buildFieldProbeEntries,
+  buildProductProbeEntry,
   check,
   checkFieldSchema,
+  checkProductNames,
   classifyDriftResults,
   extractOutFields,
   extractUrls,
@@ -296,6 +299,34 @@ test('checkFieldSchema turns a pjson body into a tripwire miss or a present note
   assert.match(checkFieldSchema(['DM'], '{"error":{"code":400,"message":"Invalid URL"}}').miss, /ArcGIS error 400/);
   assert.match(checkFieldSchema(['DM'], '<html>').miss, /not JSON/);
   assert.match(checkFieldSchema(['DM'], '{"name":"x"}').miss, /no fields array/);
+});
+
+test('the WWA product probe checks every product a mode names against the renderer, and a renamed one fails the run', async () => {
+  const urls = await readFile(new URL('../src/config/urls.ts', import.meta.url), 'utf8');
+  const entry = await buildProductProbeEntry(extractUrls(urls));
+  assert.equal(entry.key, 'products:nwsWwaMapServer');
+  assert.match(entry.url, /\/WWA\/watch_warn_adv\/MapServer\/1\?f=json$/);
+  assert.equal(entry.tier, DRIFT_TIERS.RUNTIME);
+  const { HAZARD_CLUSTERS } = await import('../src/config/clusters.ts');
+  const named = new Set(Object.values(HAZARD_CLUSTERS).flatMap((def) => def.alerts?.events ?? []));
+  assert.deepEqual(new Set([...entry.productsExpected, ...RETIRED_ALERT_PRODUCTS]), named);
+  const renderer = (names) => JSON.stringify({ drawingInfo: { renderer: { uniqueValueInfos: names.map((value) => ({ value, label: value })) } } });
+  const all = entry.productsExpected.length;
+  assert.deepEqual(checkProductNames(entry.productsExpected, renderer(entry.productsExpected)), { miss: null, note: `${all}/${all} requested products in the renderer` });
+  assert.match(checkProductNames(['Flood Warning', 'High Wind Watch'], renderer(['Flood Warning'])).miss, /products not in the renderer: High Wind Watch$/);
+  assert.match(checkProductNames(['Flood Warning'], '{"error":{"code":400,"message":"Invalid URL"}}').miss, /ArcGIS error 400/);
+  assert.match(checkProductNames(['Flood Warning'], '<html>').miss, /not JSON/);
+  assert.match(checkProductNames(['Flood Warning'], '{"fields":[]}').miss, /no renderer value list/);
+  await assert.rejects(buildProductProbeEntry([]), /disarmed/);
+  const originalFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = async () => new Response(renderer(entry.productsExpected.slice(1)), { status: 200, headers: { 'content-type': 'application/json' } });
+    const result = await check(entry);
+    assert.equal(result.ok, false);
+    assert.match(result.detail, new RegExp(`TRIPWIRE: products not in the renderer: ${entry.productsExpected[0]}`));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test('the bounded NLCD coverage probe rejects HTTP 200 OGC exceptions and requires TIFF bytes', async () => {

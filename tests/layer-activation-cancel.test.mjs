@@ -58,7 +58,10 @@ const seen = {
   sources: [],
   layers: [],
   urlWrites: [],
-  tileReports: []
+  tileReports: [],
+  // The alerts' own key: the rows each legend render lists, and every snapshot event's detail.
+  alertKeys: [],
+  snapshots: []
 };
 globalThis.cancelSeen = seen;
 globalThis.cancelDefs = LAYER_DEFS;
@@ -84,9 +87,9 @@ const stubs = {
     export function showLoading(text){ globalThis.cancelSeen.loading.push(text); return ++n; }
     export function hideLoading(){}`,
   '/ui/legend-registry': `export const LEGEND_ORDER={surface:1,event:2};
-    export function showLegend(key){ globalThis.cancelSeen.legends.push(key); return null; }
+    export function showLegend(key, spec){ globalThis.cancelSeen.legends.push(key); if (key === 'nws-alerts') spec.render(null); return null; }
     export function hideLegend(){}
-    export function renderSwatchLegend(){}`,
+    export function renderSwatchLegend(body, title, entries){ globalThis.cancelSeen.alertKeys.push(entries.map((entry) => entry.label)); }`,
   '/ui/time-bar': `export function setTimeBar(key){ globalThis.cancelSeen.timeBars.push(key); }
     export function clearTimeBar(){}`,
   '/map/interaction-coordinator': 'export function registerClickTarget(){}',
@@ -129,7 +132,10 @@ globalThis.clearTimeout = (handle) => {
   longTimers.delete(handle);
   realClearTimeout(handle);
 };
-globalThis.dispatchEvent = () => true;
+globalThis.dispatchEvent = (event) => {
+  if (event?.type === 'ddm:nws-products-snapshot') seen.snapshots.push(event.detail);
+  return true;
+};
 globalThis.addEventListener = () => {};
 globalThis.removeEventListener = () => {};
 globalThis.document = {
@@ -583,6 +589,132 @@ test('NWS alerts: a mode change while on reads the new mode\'s products at once,
   assert.equal(registry.getStatus('nws-alerts'), 'no-data');
   assert.equal(longTimers.size, 1, 'one five-minute refresh, not one per read');
 });
+
+/** One WWA feature in force for the next six hours, as the service answers it. */
+const wwaFeature = (prodType) => ({
+  type: 'Feature',
+  properties: { prod_type: prodType, onset: null, ends: new Date(Date.now() + 6 * 3_600_000).toISOString(), expiration: null, wfo: 'KSEW' },
+  geometry: { type: 'Polygon', coordinates: [[[-123, 46], [-122, 46], [-122, 47], [-123, 47], [-123, 46]]] }
+});
+const wwaAnswer = (...products) => JSON.stringify({ type: 'FeatureCollection', features: products.map(wwaFeature) });
+const HEAT_FIRE_ROWS = ['Extreme Heat Warning', 'Extreme Heat Watch', 'Heat Advisory', 'Red Flag Warning', 'Fire Weather Watch'];
+
+/** Activate the alerts under `mode` against `answer` (a response maker), and settle. */
+async function alertsIn(t, mode, answer) {
+  resetSeen();
+  inMode(t, mode);
+  const calls = [];
+  globalThis.fetch = (url) => {
+    calls.push(String(url));
+    return Promise.resolve(answer(String(url)));
+  };
+  const map = fakeMap();
+  t.after(() => alerts.deactivate(map));
+  globalThis.cancelModules.set('nws-alerts', alerts);
+  await harness(map, ['nws-alerts']).activate('nws-alerts');
+  await settle();
+  return calls;
+}
+
+test('NWS alerts: the key lists every heat and fire weather product, and only the ENSO products the read holds, in set order', async (t) => {
+  await alertsIn(t, 'enso', () => new Response(wwaAnswer('Flood Watch', 'Flash Flood Warning', 'Flood Watch'), { status: 200 }));
+  assert.deepEqual(seen.alertKeys.at(-1), ['Flash Flood Warning', 'Flood Watch'], 'the sidebar legend');
+  assert.deepEqual(seen.snapshots.at(-1), { status: 'ready', asOf: seen.snapshots.at(-1).asOf, truncated: false, events: ['Flash Flood Warning', 'Flood Watch'] });
+});
+
+test('NWS alerts: an empty or failed ENSO read lists no product; heat and fire weather keeps its full rows either way', async (t) => {
+  await alertsIn(t, 'enso', () => new Response(wwaAnswer(), { status: 200 }));
+  assert.deepEqual(seen.alertKeys.at(-1), []);
+  assert.deepEqual(seen.snapshots.at(-1).events, []);
+  // A failed first read: the unavailable key, then the controller's cleanup ('inactive').
+  const failed = () => seen.snapshots.find((snapshot) => snapshot.status === 'error');
+  await alertsIn(t, 'enso', () => new Response('busy', { status: 503 }));
+  assert.deepEqual(seen.alertKeys.at(-1), []);
+  assert.deepEqual(failed().events, []);
+  await alertsIn(t, 'heat', () => new Response(wwaAnswer(), { status: 200 }));
+  assert.deepEqual(seen.alertKeys.at(-1), HEAT_FIRE_ROWS);
+  await alertsIn(t, 'heat', () => new Response('busy', { status: 503 }));
+  assert.deepEqual(seen.alertKeys.at(-1), HEAT_FIRE_ROWS);
+  assert.deepEqual(failed().events, [...HEAT_FIRE_ALERTS.events]);
+});
+
+test('NWS alerts: off intent stops following the mode, so a mode change during the off fade neither empties the polygons nor starts a read', async (t) => {
+  resetSeen();
+  inMode(t, 'heat');
+  const net = installFetch(() => wwaAnswer('Red Flag Warning'), { holdIndexes: [] });
+  const map = fakeMap();
+  let releaseFade = () => {};
+  t.after(() => {
+    releaseFade();
+    globalThis.cancelFadeHold = undefined;
+    net.release();
+    alerts.deactivate(map);
+  });
+  globalThis.cancelModules.set('nws-alerts', alerts);
+  const controller = harness(map, ['nws-alerts']);
+  await controller.activate('nws-alerts');
+  await settle();
+  let emptied = 0;
+  map.getSource('nws-alerts').setData = (data) => {
+    if (data.features.length === 0) emptied += 1;
+  };
+  // Leaving heat for ENSO: off intent first (the teardown waits on the fade), then the store change.
+  globalThis.cancelFadeHold = new Promise((resolve) => { releaseFade = resolve; });
+  controller.deactivate('nws-alerts');
+  setHazardCluster('enso');
+  await settle();
+  assert.equal(registry.getActiveKeys().has('nws-alerts'), true, 'setup: the teardown is still behind the fade');
+  assert.equal(net.calls.length, 1, 'no read for the mode the layer is leaving with');
+  assert.equal(emptied, 0, 'the polygons fade out as drawn');
+  releaseFade();
+  await settle();
+  assert.equal(registry.getActiveKeys().has('nws-alerts'), false);
+  assert.equal(net.calls.length, 1);
+});
+
+for (const late of ['an answer', 'a failure']) {
+  test(`NWS alerts: ${late} for the mode left behind is dropped, nothing is drawn from it, and the new mode's read goes out`, async (t) => {
+    resetSeen();
+    inMode(t, 'heat');
+    const calls = [];
+    let releaseFirst = () => {};
+    globalThis.fetch = (url) => {
+      calls.push(String(url));
+      if (calls.length > 1) return Promise.resolve(new Response(wwaAnswer('Flood Warning'), { status: 200 }));
+      const first = late === 'an answer' ? new Response(wwaAnswer('Red Flag Warning'), { status: 200 }) : new Response('busy', { status: 503 });
+      return new Promise((resolve) => { releaseFirst = () => resolve(first); });
+    };
+    const map = fakeMap();
+    const drawn = [];
+    const addSource = map.addSource;
+    map.addSource = (id, spec) => {
+      addSource(id, spec);
+      drawn.push(...spec.data.features.map((feature) => feature.properties.event));
+      map.getSource(id).setData = (data) => drawn.push(...data.features.map((feature) => feature.properties.event));
+    };
+    t.after(() => {
+      releaseFirst();
+      alerts.deactivate(map);
+    });
+    globalThis.cancelModules.set('nws-alerts', alerts);
+    const controller = harness(map, ['nws-alerts']);
+    const activation = controller.activate('nws-alerts');
+    await settle();
+    assert.equal(calls.length, 1, 'setup: the heat read is held');
+    setHazardCluster('enso');
+    await settle();
+    assert.equal(calls.length, 1, 'one read at a time');
+    releaseFirst();
+    await activation;
+    await settle();
+    assert.equal(calls.length, 2, 'the ENSO read goes out once the held one is dropped');
+    assert.deepEqual(askedFor({ url: calls[1] }), [...HAZARD_CLUSTERS.enso.alerts.events]);
+    assert.deepEqual(drawn, ['Flood Warning'], 'nothing drawn from the read for the mode left behind');
+    assert.equal(registry.getStatus('nws-alerts'), 'ready');
+    assert.equal(registry.getActiveKeys().has('nws-alerts'), true, 'the activation stands');
+    assert.equal(seen.snapshots.some((snapshot) => snapshot.status === 'error'), false, 'no unavailable state from the old read');
+  });
+}
 
 for (const variable of ['precipitation', 'temperature']) {
   for (const held of [false, true]) {

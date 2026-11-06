@@ -289,12 +289,14 @@ export const HAZARD_CLUSTERS: Record<HazardClusterKey, HazardClusterDef> = {
       name: 'Flood, Storm, Wind & Coastal Alerts',
       // The service's Warnings and Watches for flood, storm, wind and the
       // coast, in that group order, each group in the NWS priority order
-      // (https://www.weather.gov/help-map); no advisory or statement.
+      // (https://www.weather.gov/help-map); no advisory or statement. The
+      // Hurricane and Tropical Storm Watches and Warnings are the storm
+      // layer's (tropical-cyclones, in its issuer's colours); the Typhoon
+      // products stay, since that layer's three basins exclude the western Pacific.
       events: [
         'Flash Flood Warning', 'Flood Warning', 'Flash Flood Watch', 'Flood Watch', // vocab-allow: verbatim NWS product names, quoted source data
-        'Hurricane Warning', 'Typhoon Warning', 'Blizzard Warning', 'Ice Storm Warning', // vocab-allow: verbatim NWS product names, quoted source data
-        'Winter Storm Warning', 'Tropical Storm Warning', 'Hurricane Watch', 'Typhoon Watch', // vocab-allow: verbatim NWS product names, quoted source data
-        'Tropical Storm Watch', 'Winter Storm Watch',
+        'Typhoon Warning', 'Blizzard Warning', 'Ice Storm Warning', 'Winter Storm Warning', // vocab-allow: verbatim NWS product names, quoted source data
+        'Typhoon Watch', 'Winter Storm Watch',
         'Extreme Wind Warning', 'High Wind Warning', 'High Wind Watch', // vocab-allow: verbatim NWS product names, quoted source data
         'Storm Surge Warning', 'Coastal Flood Warning', 'Lakeshore Flood Warning', 'High Surf Warning', // vocab-allow: verbatim NWS product names, quoted source data
         'Storm Surge Watch', 'Coastal Flood Watch', 'Lakeshore Flood Watch'

@@ -514,7 +514,8 @@ test('an alert window end is an instant only with its zone; anything else is sho
       at: { precision: 'supplied', text: raw, explanation: 'As the issuer states it; DDM does not read it as a full date.' }
     }, raw);
   }
-  assert.equal(alert(null).rows[0].text, 'Red Flag Warning in this area (NOAA NWS)');
+  // An alert in force that states no end says so (never another time in its place).
+  assert.equal(alert(null).rows[0].text, 'Red Flag Warning in this area, end not stated (NOAA NWS)');
   assert.equal(alert(null).rows[0].clock, undefined);
   // Two alerts of one product with different ends share a row that states neither end.
   const twin = withLayers(['nws-alerts'], () =>
@@ -825,14 +826,25 @@ test('in ENSO the alert row speaks for the products ENSO asks for: a present one
     );
     assert.deepEqual(none.rows, [{ label: 'NWS alert', text: 'No active requested National Weather Service products in this area.' }]);
     assert.equal(JSON.stringify(none).includes('heat or fire'), false);
+    // An alert in force that states no end says so; two of one product with different ends state none.
     const flood = withRegistry([{ key: 'nws-alerts', status: 'ready', on: true }], () =>
       buildPlaceConditionsHtml(
-        fakeMap({ 'nws-alerts-fill': [{ properties: { event: 'Flood Warning' }, geometry: square(-122, 47) }] }),
+        fakeMap({
+          'nws-alerts-fill': [
+            { properties: { event: 'Flood Warning' }, geometry: square(-122, 47) },
+            { properties: { event: 'Flood Warning' }, geometry: square(-121.8, 47) },
+            { properties: { event: 'High Wind Watch', ends: '2026-11-07T12:00:00Z' }, geometry: square(-122, 47) },
+            { properties: { event: 'High Wind Watch' }, geometry: square(-121.8, 47) }
+          ]
+        }),
         [0, 0],
         PLACE
       )
     );
-    assert.deepEqual(flood.rows, [{ label: 'NWS alert', text: 'Flood Warning in this area (NOAA NWS)' }]);
+    assert.deepEqual(flood.rows, [
+      { label: 'NWS alert', text: 'Flood Warning in this area, end not stated (NOAA NWS)' },
+      { label: 'NWS alert', text: 'High Wind Watch in this area (NOAA NWS)' }
+    ]);
     assert.equal(flood.warningLabel, 'Flood Warning');
   } finally {
     setHazardCluster(before);

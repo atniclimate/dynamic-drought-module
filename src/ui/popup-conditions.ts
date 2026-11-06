@@ -607,15 +607,16 @@ function alertRows(
   // Retrieved by the place's box, kept only where the alert actually touches
   // the place: see the ATTRIBUTION FIX in this module's header.
   const feats = hasFill ? touchingPlace(map.queryRenderedFeatures(region, { layers: [ALERTS_FILL] }), place) : [];
-  const seen = new Map<string, { prodType: string; ends: unknown }>();
+  const seen = new Map<string, { prodType: string; ends: unknown; mixed: boolean }>();
   for (const f of feats) {
     const prodType = propText(f.properties?.['event']).trim();
     if (prodType === '') continue;
-    // An end the issuer left open is unknown, so the row states no end.
+    // An end the alert does not state is unknown (null), never another time.
     const endsRaw: unknown = f.properties?.['ends'] ?? null;
     // Two alerts of one product share a row; with different ends no one end is true, so none is stated.
     const prior = seen.get(prodType);
-    seen.set(prodType, { prodType, ends: prior !== undefined && prior.ends !== endsRaw ? null : endsRaw });
+    const mixed = prior !== undefined && (prior.mixed || prior.ends !== endsRaw);
+    seen.set(prodType, { prodType, ends: mixed ? null : endsRaw, mixed });
   }
 
   if (seen.size === 0) {
@@ -663,7 +664,7 @@ function alertRows(
 
   let hasWarning = false;
   let warningLabel: string | null = null;
-  const rows = [...seen.values()].map(({ prodType, ends }): MarkedRow => {
+  const rows = [...seen.values()].map(({ prodType, ends, mixed }): MarkedRow => {
     if (isNwsWarningTier(prodType)) {
       hasWarning = true;
       warningLabel ??= prodType;
@@ -672,7 +673,13 @@ function alertRows(
     // The scope rides on the product name, so a reader is never left to assume
     // a place-wide read was taken at the pixel they clicked.
     const named = `${prodType} ${scopePhrase(scope)}`;
-    const value = until.kind === 'instant' ? `${named}, until ${until.text} (NOAA NWS)` : `${named} (NOAA NWS)`;
+    const value =
+      until.kind === 'instant'
+        ? `${named}, until ${until.text} (NOAA NWS)`
+        : until.kind === 'none' && !mixed
+          ? // DRAFT wording (pending the owner's read-back): the alert popup's "End not stated".
+            `${named}, end not stated (NOAA NWS)`
+          : `${named} (NOAA NWS)`;
     // vocab-allow: names the NWS alert product category (src/layers/nws-alerts.ts); the value is the issuer's own verbatim product name
     const row: ValueRow = { label: 'NWS alert', text: value };
     // A window end the issuer supplied in a form DDM does not read as a full
