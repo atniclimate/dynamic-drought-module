@@ -9,13 +9,17 @@
  * script applies the same folding).
  *
  * Folding: lowercase, decompose and strip combining marks (diacritics),
- * replace every non-alphanumeric with a space, collapse whitespace, trim.
+ * delete apostrophes (straight and typographic) and periods outright so
+ * "Rocky Boy's" is "rocky boys" and "D.C." is "dc", replace every other
+ * non-alphanumeric (the comma in "Washington, D.C." included) with a space,
+ * collapse whitespace, trim.
  */
 export function foldSearchText(raw: string): string {
   return raw
     .toLowerCase()
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')
+    .replace(/['‘’ʼ.]/g, '')
     .replace(/[^a-z0-9 ]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();

@@ -278,3 +278,29 @@ test('the search view relaxes only Census rows and Enter goes through enterChoic
   // Not `activeRow ?? flatRows[0]`: that opened the Colorado River Indian Tribes on "Colorado".
   assert.match(searchSrc, /activeRow\?\.item \?\?\s*enterChoice\(/);
 });
+
+test('apostrophes, periods and the comma in initials do not decide a match, and nothing else changed', () => {
+  const tokens = (q) => foldSearchText(q).split(' ');
+  // Real Census area: the catalog spells it with an apostrophe; it displays exactly as given.
+  const rocky = census.find((a) => a.aiannh === '3205');
+  assert.equal(rocky.name, "Rocky Boy's Reservation and Off-Reservation Trust Land");
+  const haystack = foldSearchText(`${rocky.name} ${rocky.displayName}`);
+  for (const q of ['Rocky Boys', "Rocky Boy's", 'Rocky Boy’s', 'rocky boys reservation']) {
+    assert.ok(matchesTokens(haystack, tokens(q), true), `${q} finds the Rocky Boy's area`);
+  }
+  assert.equal(foldSearchText("Rocky Boy's"), foldSearchText('Rocky Boy’s'));
+  assert.equal(foldSearchText("Rocky Boy's"), foldSearchText('Rocky Boys'));
+  // The us-places catalog holds "Washington,  D.C." (two spaces) and "St. Louis" as the source gives them.
+  const names = readFileSync(new URL('../public/data/us-places.json', import.meta.url), 'utf8');
+  assert.ok(names.includes('"Washington,  D.C."') && names.includes('"St. Louis"'));
+  const dc = foldSearchText('Washington,  D.C.');
+  for (const q of ['Washington DC', 'Washington D.C.', 'Washington, D.C.']) {
+    assert.equal(foldSearchText(q), dc, `${q} folds like the catalog name`);
+  }
+  assert.equal(foldSearchText('St. Louis'), foldSearchText('St Louis'));
+  assert.ok(matchesTokens(foldSearchText('St. Louis'), tokens('St Louis'), false));
+  // Unchanged: hyphens, ampersands and diacritics fold as before.
+  assert.equal(foldSearchText('Absentee-Shawnee Tribe'), 'absentee shawnee tribe');
+  assert.equal(foldSearchText('City & Town Labels'), 'city town labels');
+  assert.equal(foldSearchText('Cañon City'), 'canon city');
+});
