@@ -81,9 +81,8 @@ import {
 } from '../config/palette';
 import { buildBiaReservationPopupModel } from '../ui/popups';
 import { buildPlaceConditionsHtml } from '../ui/popup-conditions';
-import { buildBoundaryContext, resolveBoundaryTitle } from '../impact/context';
+import { buildBoundaryContext, loadBiaNationNames, resolveBoundaryTitle } from '../impact/context';
 import { registerClickTarget } from '../map/interaction-coordinator';
-import { gatedDisplayName, loadTribalRoster } from '../state/tribal-roster';
 import type { LayerActivation } from '../config/layers';
 import { fetchBufferedWithBudget, linkAbort } from '../util/fetch';
 import { buildQueryEnvelope, envelopeCovers, toCoverageEnvelope } from '../util/bbox';
@@ -700,15 +699,10 @@ let nationNames: ReadonlyMap<string, string> | null = null;
  * not-yet-existing layer id.
  */
 export function bindPopups(map: maplibregl.Map): void {
-  // The Nation's name for each LARNAME, through the roster's provenance gate
-  // (the cached roster search and the place catalog share). Until it loads, or
-  // if it fails, a popup titles the land area as before.
-  loadTribalRoster().then(
-    (areas) => {
-      nationNames = new Map(areas.map((area) => [area.larName, gatedDisplayName(area)]));
-    },
-    () => {}
-  );
+  // The Nation's name for each LARNAME, from the one map the briefing title
+  // shares (impact/context loadBiaNationNames, the roster's provenance gate).
+  // Until it loads, or if it fails, a popup titles the land area as before.
+  loadBiaNationNames().then((names) => { nationNames = names; }, () => {});
   registerClickTarget({
     kind: 'reservation-boundary',
     layerIds: [FILL_LAYER_ID],
