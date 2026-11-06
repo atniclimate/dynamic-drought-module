@@ -21,6 +21,7 @@ import { postalCodeFromProperties } from '../config/geography';
 import { placeRefFromBoundary } from '../config/entities';
 import { isStateCode } from './resources';
 import { getCurrentRegion } from '../state/region-store';
+import { gatedDisplayName, loadTribalRoster } from '../state/tribal-roster';
 import {
   geometryBboxAcrossAntimeridian,
   geometryLikelyCrossesAntimeridian
@@ -80,6 +81,29 @@ function containingFromProperties(properties: GeoJsonProperties): ContainingPlac
     : { state: null, basis: 'none' };
 }
 
+/** LARNAME to the gated Nation name (the BIA popup's roster source), once loaded. */
+let nationNames: ReadonlyMap<string, string> | null = null;
+let nationNamesLoad: Promise<ReadonlyMap<string, string>> | null = null;
+
+/**
+ * Load, once, the BIA land-area to Nation name map through the roster's
+ * provenance gate (gatedDisplayName, DR-094), the source the BIA popup, the
+ * search and the place catalog title a Nation from. Rejects like the roster;
+ * until it resolves, or after a failure, a BIA land area titles itself.
+ */
+export function loadBiaNationNames(): Promise<ReadonlyMap<string, string>> {
+  nationNamesLoad ??= loadTribalRoster().then((areas) => {
+    nationNames = new Map(areas.map((area) => [area.larName, gatedDisplayName(area)]));
+    return nationNames;
+  });
+  return nationNamesLoad;
+}
+
+/** The BIA land area a feature names, before any Nation name. */
+function biaLandArea(props: GeoJsonProperties): string {
+  return firstString(props, ['LARNAME', 'LARName', 'NAME', 'name']) ?? 'Reservation land area';
+}
+
 /** Resolve the display title for a selection by boundary kind. */
 function resolveTitle(kind: BoundaryKind, props: GeoJsonProperties): string {
   switch (kind) {
@@ -99,8 +123,13 @@ function resolveTitle(kind: BoundaryKind, props: GeoJsonProperties): string {
         firstString(props, ['name', 'TREATY_NAM', 'TREATY_NAME', 'TreatyName', 'NAME', 'Treaty']) ??
         'Treaty area'
       );
-    case 'bia-reservation':
-      return firstString(props, ['LARNAME', 'LARName', 'NAME', 'name']) ?? 'Reservation land area';
+    case 'bia-reservation': {
+      // A Nation's formal name is never abbreviated: the briefing, the selected-place
+      // label and the disclosure all take the popup's gated name, from one map.
+      if (!nationNamesLoad) loadBiaNationNames().catch(() => {});
+      const landArea = biaLandArea(props);
+      return nationNames?.get(landArea) ?? landArea;
+    }
     case 'state':
       return firstString(props, ['NAME', 'name', 'STUSPS']) ?? 'State';
     case 'watershed':
@@ -175,6 +204,8 @@ export function buildBoundaryContext(
   titleOverride?: string
 ): BoundarySelectionContext {
   const title = titleOverride && titleOverride.trim() !== '' ? titleOverride : resolveTitle(kind, properties);
+  // A Nation-titled BIA area keeps its land area beside the source, as the search words it.
+  const landArea = kind === 'bia-reservation' && !titleOverride ? biaLandArea(properties) : title;
   const bbox = geometryBbox(geometry);
   const crossesAntimeridian = bbox ? geometryLikelyCrossesAntimeridian(geometry) : false;
   // N2-A consumes the T-M0-4 crossing evidence. The compatibility bbox stays
@@ -188,6 +219,7 @@ export function buildBoundaryContext(
     title,
     properties: (properties as Readonly<Record<string, unknown>> | null) ?? null,
     lngLat: { lng: lngLat.lng, lat: lngLat.lat },
+    ...(landArea !== title ? { areaLabel: `Land area: ${landArea}` } : {}),
     ...(bbox ? { bbox } : {}),
     ...(serviceBbox ? { serviceBbox } : {}),
     ...(crossesAntimeridian ? { bboxCrossesAntimeridian: true } : {}),
