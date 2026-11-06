@@ -182,16 +182,12 @@ test.describe('UX-3 conditions strip', () => {
     // E1 deliverable 6: no off-state card before the layer goes on.
     await expect(fires).toHaveCount(0);
 
-    // Turn the NIFC perimeter layer on and let its activation settle. The
-    // reflect-the-map contract is asserted only when the layer actually
-    // renders; on an upstream outage the honest outcome is an "unavailable"
-    // pill with the checkbox self-corrected off and the tile still absent,
-    // which is correct behavior, not a regression, so the spec skips rather
-    // than fails (the deterministic backbone never reds on a blipping agency).
+    // Turn the NIFC perimeter layer on and let its activation settle. gotoApp
+    // answers NIFC from the fixture (installDefaultNifcStub), so no agency
+    // outage reaches this case: a pill short of live is a bug, and it fails.
     await layerCheckbox(page, 'nifc-fires').check();
     await waitForLayerSettled(page, 'nifc-fires');
-    const pill = (await layerPill(page, 'nifc-fires').textContent())?.trim();
-    test.skip(pill !== PILL.live, 'NIFC upstream unavailable; nothing rendered to reflect');
+    await expect(layerPill(page, 'nifc-fires')).toHaveText(PILL.live);
 
     // The layer is live: the tile appears and reflects the count (a real
     // zero keeps full contrast; it is an answer, not an absence).
