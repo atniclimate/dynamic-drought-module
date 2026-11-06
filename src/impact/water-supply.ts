@@ -150,20 +150,6 @@ function titleCase(s: string): string {
     .replace(/\b[a-z]/g, (c) => c.toUpperCase());
 }
 
-/** The honest supply-tilt sentence for a percent-of-normal forecast. */
-function supplyTilt(pct: number): string {
-  if (pct < 75) {
-    return 'A well-below-normal supply outlook tightens late-season streamflow, irrigation deliveries, and fisheries flows, and extends the season when drought impacts compound.';
-  }
-  if (pct < 90) {
-    return 'A below-normal supply outlook leans toward tighter late-season streamflow and earlier drawdown of stored water.';
-  }
-  if (pct <= 110) {
-    return 'A near-normal supply outlook suggests typical late-season streamflow, with local basins still varying.';
-  }
-  return 'An above-normal supply outlook eases late-season streamflow pressure, though timing of the melt still shapes local conditions.';
-}
-
 /**
  * The place's own state wins whenever it is known: `context.containing.basis`
  * is 'none' only when the place's own state could not be resolved from the
@@ -290,12 +276,13 @@ export async function fetchWaterSupplyClaims(
     );
   }
 
+  // DR-046 a: the number and its uncertainty stand alone; NWRFC publishes no
+  // percent-of-normal bands, so no DDM band sentence follows.
   claims.push(
     makeClaim({
       text: // vocab-allow: names the NWRFC Water Supply Forecast and its forecast points, upstream product
         `The NWRFC April-September ${wy} water-supply forecast at ${location} is ${row.pctOfNormal} percent of the 1991-2020 normal ` + // vocab-allow: names the NWRFC Water Supply Forecast and its forecast points, upstream product
-        `(50 percent exceedance). This is a basin-scale read at a named forecast point, not a site-specific value. ` +
-        supplyTilt(row.pctOfNormal),
+        `(50 percent exceedance). This is a basin-scale read at a named forecast point, not a site-specific value.`,
       ...wsShared,
       evidence: 'outlook',
       // vocab-allow: names the NWRFC Water Supply Forecast and its forecast points, upstream product

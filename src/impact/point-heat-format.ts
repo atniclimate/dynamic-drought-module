@@ -21,6 +21,8 @@ interface TimeFormatOptions {
    * browser at runtime). Tests pass an explicit zone for determinism.
    */
   readonly timeZone?: string;
+  /** Add the year ("Nov 10, 2025, 3:00 PM PST"), for a reading that may be months old. */
+  readonly year?: boolean;
 }
 
 /** "90 °F (32 °C)" for temperatures; "48%" for percents; rounded otherwise. */
@@ -57,10 +59,11 @@ function plainSpaces(text: string): string {
   return text.replace(/[\u202f\u2009]/g, ' ');
 }
 
-function dateFormatter(timeZone?: string): Intl.DateTimeFormat {
+function dateFormatter(timeZone?: string, year = false): Intl.DateTimeFormat {
   return new Intl.DateTimeFormat('en-US', {
     month: 'short',
     day: 'numeric',
+    ...(year ? { year: 'numeric' } : {}),
     ...(timeZone ? { timeZone } : {})
   });
 }
@@ -85,7 +88,7 @@ export function formatPointHeatTimestamp(
   const parsed = Date.parse(iso);
   if (!Number.isFinite(parsed)) return iso;
   const date = new Date(parsed);
-  const day = dateFormatter(options.timeZone).format(date);
+  const day = dateFormatter(options.timeZone, options.year).format(date);
   const time = timeFormatter(options.timeZone, true).format(date);
   return plainSpaces(`${day}, ${time}`);
 }

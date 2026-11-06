@@ -252,7 +252,7 @@ test('one query answering two hazards files each statement in its own row', () =
   });
   const both = makeClaim({
     // vocab-allow: reports the absence of upstream NWS alert products
-    text: 'No active red-flag fire-weather or extreme-heat alerts here.',
+    text: 'No active red-flag fire-weather or heat alerts here.',
     source: 'nwsAlerts',
     product: 'nws-alerts',
     evidence: 'observed',
@@ -803,7 +803,7 @@ test('P3-TRUTH: a fire-only NWS alerts answer renders the Heat cell live with it
   const heat = cellAt(page, 'current', 'heat');
   await expect(heat.locator('.impact-hazard-pill')).toHaveText('live');
   await expect(heat).toContainText(
-    'NWS reports no active extreme-heat alert at the selected point.'
+    'NWS reports no active heat alert at the selected point.'
   );
   await expect(heat).not.toContainText('No NWS active alerts read is available');
   await expect(cellAt(page, 'current', 'fire')).toContainText(

@@ -1170,7 +1170,8 @@ function nwsAlertsAnswer(events) {
   };
 }
 
-const HEAT_ABSENCE = 'NWS reports no active extreme-heat alert at the selected point.';
+// Any NWS heat product (a Heat Advisory too) counts, so the absence says "heat alert".
+const HEAT_ABSENCE = 'NWS reports no active heat alert at the selected point.';
 
 test('a fire-only NWS answer gives the Heat cell its absence claim, never unavailable', async () => {
   clearNwsResponseCache();
@@ -1245,7 +1246,7 @@ test('an NWS answer with neither alert keeps the one shared all-clear in both ro
   const result = await withFetch(nwsAlertsAnswer([]), () =>
     sources.fetchNwsAlertClaims(place(-120.42, 47.42), signal())
   );
-  const shared = 'No active red-flag fire-weather or extreme-heat alerts at this location right now (NWS).';
+  const shared = 'No active red-flag fire-weather or heat alerts at this location right now (NWS).';
   for (const hazard of ['fire', 'heat']) {
     const cell = settledCell('current', hazard, [['nwsAlerts', result]]);
     assert.deepEqual(

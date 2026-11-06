@@ -133,3 +133,9 @@ test('a station that last reported days ago is not current heat: no metrics, and
   assert.equal(heat.observation.timestamp, '2026-10-30T21:00:00+00:00');
   assert.match(heat.note, /The nearest NWS station has not reported since Oct 30, /);
 });
+
+test('a station silent since an earlier year is dated with that year, not read as a coming day', async () => {
+  const heat = await observationAt('2025-11-10T23:00:00+00:00');
+  assert.equal(heat.observation.status, 'no-data');
+  assert.match(heat.note, /has not reported since Nov 10, 2025, /);
+});

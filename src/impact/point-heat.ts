@@ -298,8 +298,9 @@ function parseObservation(
   if (now - Date.parse(timestamp) > OBSERVATION_FRESH_MS) {
     return {
       status: 'no-data',
-      // DRAFT wording
-      note: `The nearest NWS station has not reported since ${formatPointHeatTimestamp(timestamp)}.`,
+      // DRAFT wording. The year is stated: a silent station's last reading can
+      // be months old, and "Nov 10" alone reads as a coming day.
+      note: `The nearest NWS station has not reported since ${formatPointHeatTimestamp(timestamp, { year: true })}.`,
       stationId: station.id,
       stationName: station.name,
       stationUrl: station.url,

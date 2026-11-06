@@ -523,7 +523,7 @@ test('cross-source synthesis compares issuer reads without creating a DDM heat c
         heatRead: {
           key: 'nwsAlerts',
           label: 'NWS active heat alerts',
-          text: 'NWS reports no active extreme-heat alert at the selected point.'
+          text: 'NWS reports no active heat alert at the selected point.'
         }
       }
     ],
