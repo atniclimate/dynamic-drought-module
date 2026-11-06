@@ -71,7 +71,8 @@ const VALID_POLYGON_COLLECTION = {
   features: [
     {
       type: 'Feature',
-      properties: {},
+      // dn 5 is a real SPC category (Elevated), so the SPC layer draws it; NIFC and HMS ignore it.
+      properties: { dn: 5 },
       geometry: {
         type: 'Polygon',
         coordinates: [
