@@ -11,7 +11,7 @@ import { tileIdToZxy } from 'pmtiles';
 import {
   NATIONAL_TERRAIN_BOXES, S3_PREFIX, parseListing, selectCells, cellBounds, cellName, cellsForTile, rectangleIds,
   assemblyIds, planJobs, overviewJobs, modificationsSentence, pointInTile, readPoint, parseArgs, runCommand, unionOf, transport,
-  tileSeamShare, cellSeamRatios, receiptPicks
+  tileSeamShare, cellSeamRatios, receiptPicks, summitFailures
 } from '../scripts/build-terrain-archive.mjs';
 import { Readable } from 'node:stream';
 import { tileRangeForBounds, tileBounds, terrariumPng, decodeTerrariumTile } from '../scripts/lib/raster-dem-to-pmtiles.mjs';
@@ -176,7 +176,28 @@ test('paths must be absolute and outside the checkout', () => {
   const opts = parseArgs(['render', '--root', join(tmpdir(), 'bake'), '--zooms', '10', '--cells', 'n45w122,n47w122'], ROOT);
   assert.deepEqual([opts.zooms, opts.cells, opts.run], [[10], ['n45w122', 'n47w122'], opts.root]);
   assert.equal(opts.decode, true, 'decoded checks are on by default');
-  assert.equal(parseArgs(['verify-local', '--root', join(tmpdir(), 'bake'), '--decode', 'false'], ROOT).decode, false);
+  assert.equal(parseArgs(['verify-local', '--root', join(tmpdir(), 'bake'), '--date', '2026-11-06', '--decode', 'false'], ROOT).decode, false);
+});
+
+test('the archive phases need --date or --key: a clock default renames the archive across midnight UTC', () => {
+  const root = join(tmpdir(), 'bake');
+  for (const command of ['assemble', 'receipt', 'verify-local']) {
+    assert.throws(() => parseArgs([command, '--root', root], ROOT), /--date or --key is required/);
+    assert.equal(parseArgs([command, '--root', root, '--key', 'k.pmtiles'], ROOT).key, 'k.pmtiles');
+  }
+  assert.equal(parseArgs(['render', '--root', root], ROOT).date, undefined, 'phases that never name the archive need no date');
+});
+
+test('summit check: a summit in a box with no deepest-zoom row fails, a far-off read fails, pilot cells scope it', () => {
+  const denali = { west: -152, south: 62.5, east: -150, north: 63.5 };
+  assert.deepEqual(summitFailures([], [denali], 11), ['summit Denali AK has no row at z11']);
+  const row = (bilinear, max3) => ({ name: 'Denali AK', z: 11, ref: 6147, bilinear, max3, bilinearDelta: Math.round((bilinear - 6147) * 10) / 10 });
+  assert.deepEqual(summitFailures([row(6144.6, 6160)], [denali], 11), [], 'the pilot v2 z11 read passes');
+  assert.deepEqual(summitFailures([row(6000, 6160)], [denali], 11), [], 'a reference coordinate off the peak: max3 still within 100 m');
+  assert.match(summitFailures([row(5216, 5230)], [denali], 11)[0], /summit Denali AK reads 5216 m at z11, reference 6147 m/);
+  assert.deepEqual(summitFailures([{ ...row(6144.6, 6160), z: 10 }], [denali], 11), ['summit Denali AK has no row at z11'], 'a shallower row does not count');
+  assert.deepEqual(summitFailures([], [denali], 11, ['n45w122']), [], 'a --cells pilot only answers for its own cells');
+  assert.deepEqual(summitFailures([], [denali], 11, ['n64w152']), ['summit Denali AK has no row at z11']);
 });
 
 test('the driver boxes are the client boxes', async () => {
@@ -254,11 +275,17 @@ test('verify-local fails below -100 m and on skipped decoded checks; assemble re
   await writeFile(join(root, 'out', 'low-z10.pmtiles'), 'partial');
   await assert.rejects(runCommand({ ...base, command: 'assemble' }), /Partial archive present/);
   await rm(join(root, 'out', 'low-z10.pmtiles'));
+  // A kill during the tile copy leaves only the scratch file: name it, not a bare EEXIST.
+  await writeFile(join(root, 'out', 'low-z10.pmtiles.tile-data.tmp'), 'partial');
+  await assert.rejects(runCommand({ ...base, command: 'assemble' }), /Partial scratch present .*low-z10\.pmtiles\.tile-data\.tmp/);
+  await rm(join(root, 'out', 'low-z10.pmtiles.tile-data.tmp'));
   for (const command of ['assemble', 'receipt', 'verify-local']) await runCommand({ ...base, command });
   const reportPath = join(root, 'logs', 'verify-low-z10.json');
   let report = JSON.parse(await readFile(reportPath, 'utf8'));
   assert.equal(report.readBack.missing + report.readBack.mismatched, 0);
   assert.ok(report.failures.some(f => /below -100 m: .*z10 \d+/.test(f)), JSON.stringify(report.failures));
+  // Mount Jefferson sits in this box, and the synthetic ground reads about 3,000 m under its reference.
+  assert.ok(report.failures.some(f => /^summit Mount Jefferson OR reads -?\d/.test(f)), JSON.stringify(report.failures));
   assert.equal(process.exitCode, 1);
   process.exitCode = exitCode;
   await runCommand({ ...base, command: 'verify-local', decode: false });

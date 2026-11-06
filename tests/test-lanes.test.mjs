@@ -12,7 +12,7 @@
  * Actual test registration and execution remain the browser lanes' job.
  */
 import assert from 'node:assert/strict';
-import { readFileSync, statSync } from 'node:fs';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
@@ -108,6 +108,12 @@ function proveConfig(candidate) {
 
 test('ordinary and measurement scripts retain exact projects and file selections', () => {
   proveScripts(pkg.scripts);
+});
+
+// A browser-free test missing from check:all never runs in the gate.
+test('every tests/*.test.mjs is wired into check:all', () => {
+  const unwired = readdirSync(join(ROOT, 'tests')).filter((name) => name.endsWith('.test.mjs') && !pkg.scripts['check:all'].includes(`tests/${name}`));
+  assert.deepEqual(unwired, [], 'append these to the check:all script in package.json');
 });
 
 test('actual config isolates both measurement files from all ordinary projects', () => {

@@ -31,7 +31,7 @@
 
 import { execFileSync, spawnSync } from 'node:child_process';
 import { connect } from 'node:net';
-import { posix } from 'node:path';
+import { posix, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const MIN_LENGTH = 4;
@@ -339,6 +339,7 @@ async function main(argv) {
   return stale.length > 0 ? 1 : 0;
 }
 
-if (import.meta.main) {
+// Not import.meta.main: it is undefined before Node 24.2, and engines admits 24.0.
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   process.exitCode = await main(process.argv.slice(2));
 }
