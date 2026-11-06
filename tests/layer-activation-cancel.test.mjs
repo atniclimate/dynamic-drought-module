@@ -141,6 +141,8 @@ globalThis.document = {
 const { createLayerController } = await import('../src/state/layer-controller.ts');
 const heat = await import('../src/layers/heatrisk.ts');
 const alerts = await import('../src/layers/nws-alerts.ts');
+const { HAZARD_CLUSTERS, HEAT_FIRE_ALERTS } = await import('../src/config/clusters.ts');
+const { getHazardCluster, setHazardCluster } = await import('../src/state/cluster-store.ts');
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const FIRST_TIME = 1_785_153_600_000;
@@ -478,6 +480,108 @@ test('NWS alerts: a normal activation is unchanged (one read, then the source, l
   assert.deepEqual(seen.layers, ['nws-alerts-fill', 'nws-alerts-outline']);
   assert.ok(seen.legends.includes('nws-alerts'));
   assert.equal(longTimers.size, 1, 'the five-minute refresh is scheduled as before');
+});
+
+/** The product names one WWA request asked for. */
+const askedFor = (call) =>
+  (new URL(call.url).searchParams.get('where') ?? '').replace(/^prod_type IN \(|\)$/g, '').split(',').map((name) => name.replace(/^'|'$/g, ''));
+
+/** Commit `mode` for one case and restore the store after it. */
+function inMode(t, mode) {
+  const before = getHazardCluster();
+  setHazardCluster(mode);
+  t.after(() => setHazardCluster(before));
+}
+
+test('NWS alerts: in ENSO the one read asks for exactly the ENSO products and an empty answer is no data', async (t) => {
+  resetSeen();
+  inMode(t, 'enso');
+  const net = installFetch(wwaBody, { holdIndexes: [] });
+  const map = fakeMap();
+  t.after(() => {
+    net.release();
+    alerts.deactivate(map);
+  });
+  globalThis.cancelModules.set('nws-alerts', alerts);
+  const controller = harness(map, ['nws-alerts']);
+  await controller.activate('nws-alerts');
+  await settle();
+  assert.equal(net.calls.length, 1);
+  assert.deepEqual(askedFor(net.calls[0]), [...HAZARD_CLUSTERS.enso.alerts.events]);
+  assert.equal(registry.getStatus('nws-alerts'), 'no-data');
+  assert.equal(longTimers.size, 1, 'the five-minute refresh is scheduled');
+});
+
+test('NWS alerts: a mode that names no products gets no read and reads unavailable, never none', async (t) => {
+  resetSeen();
+  const named = HAZARD_CLUSTERS.drought.alerts;
+  delete HAZARD_CLUSTERS.drought.alerts;
+  t.after(() => {
+    HAZARD_CLUSTERS.drought.alerts = named;
+  });
+  inMode(t, 'drought');
+  const net = installFetch(wwaBody, { holdIndexes: [] });
+  const map = fakeMap();
+  t.after(() => {
+    net.release();
+    alerts.deactivate(map);
+  });
+  globalThis.cancelModules.set('nws-alerts', alerts);
+  const controller = harness(map, ['nws-alerts']);
+  await controller.activate('nws-alerts');
+  await settle();
+  assert.equal(net.calls.length, 0, 'no request at all');
+  assert.equal(registry.getStatus('nws-alerts'), 'error');
+  assert.deepEqual(seen.sources, []);
+  assert.equal(registry.getActiveKeys().has('nws-alerts'), false);
+});
+
+test('NWS alerts: a failed read is unavailable, never zero alerts', async (t) => {
+  resetSeen();
+  const calls = [];
+  globalThis.fetch = (url) => {
+    calls.push(String(url));
+    return Promise.resolve(new Response('busy', { status: 503 }));
+  };
+  const map = fakeMap();
+  t.after(() => alerts.deactivate(map));
+  globalThis.cancelModules.set('nws-alerts', alerts);
+  const controller = harness(map, ['nws-alerts']);
+  await controller.activate('nws-alerts');
+  await settle();
+  assert.equal(calls.length, 1);
+  assert.equal(registry.getStatus('nws-alerts'), 'error');
+  assert.deepEqual(seen.sources, [], 'nothing drawn, no empty layer standing for none');
+  assert.equal(registry.getActiveKeys().has('nws-alerts'), false);
+});
+
+test('NWS alerts: a mode change while on reads the new mode\'s products at once, and a change that keeps them reads nothing', async (t) => {
+  resetSeen();
+  inMode(t, 'heat');
+  const net = installFetch(wwaBody, { holdIndexes: [] });
+  const map = fakeMap();
+  t.after(() => {
+    net.release();
+    alerts.deactivate(map);
+  });
+  globalThis.cancelModules.set('nws-alerts', alerts);
+  const controller = harness(map, ['nws-alerts']);
+  await controller.activate('nws-alerts');
+  await settle();
+  assert.deepEqual(askedFor(net.calls[0]), [...HEAT_FIRE_ALERTS.events]);
+  setHazardCluster('enso');
+  await settle();
+  assert.equal(net.calls.length, 2, 'the ENSO products are read at once');
+  assert.deepEqual(askedFor(net.calls[1]), [...HAZARD_CLUSTERS.enso.alerts.events]);
+  setHazardCluster('heat');
+  await settle();
+  assert.deepEqual(askedFor(net.calls[2]), [...HEAT_FIRE_ALERTS.events]);
+  // A custom layer set commits Drought, which names the same heat and fire weather products.
+  setHazardCluster('drought');
+  await settle();
+  assert.equal(net.calls.length, 3, 'the same products are not read again');
+  assert.equal(registry.getStatus('nws-alerts'), 'no-data');
+  assert.equal(longTimers.size, 1, 'one five-minute refresh, not one per read');
 });
 
 for (const variable of ['precipitation', 'temperature']) {

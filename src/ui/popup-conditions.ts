@@ -84,7 +84,7 @@ import { registry } from '../state/registry';
 import { timeline } from '../state/timeline';
 import { getHazardCluster } from '../state/cluster-store';
 import { USDM_CATEGORIES, NADM_CATEGORIES, readUsdmDm } from '../config/palette';
-import { HAZARD_CLUSTERS, HAZARD_CLUSTER_KEYS } from '../config/clusters';
+import { HAZARD_CLUSTERS, HAZARD_CLUSTER_KEYS, HEAT_FIRE_ALERTS } from '../config/clusters';
 import { getLayerDef } from '../config/layers';
 import { PLACE_CONDITION_ROW_DEFERRED, PLACE_CONDITION_ROWS, placeConditionRowKeys } from '../config/place-condition-rows';
 import type { PlaceConditionRowKey } from '../config/place-condition-rows';
@@ -520,23 +520,28 @@ function droughtRow(map: maplibregl.Map, point: maplibregl.PointLike): MarkedRow
 
 /**
  * The confirmed-zero sentence, scoped to what was actually asked for. The
- * layer requests seven products only (`ALERT_EVENTS` in
- * `src/layers/nws-alerts.ts`: the Extreme and Excessive Heat Warnings and
- * Watches, the Heat Advisory, the Red Flag Warning and the Fire Weather
- * Watch), so the older sentence, "No active NWS watch, warning, or advisory
- * here", spoke past its own evidence: a place under an active Flash Flood
- * Warning was told there was nothing. This says what was checked, in the
- * same limited sense the layer's own legend already uses ("No active
- * requested National Weather Service products", `nws-alerts.ts`).
+ * layer requests only the committed mode's products (`HazardClusterDef.alerts`
+ * in src/config/clusters.ts; the heat and fire weather set is the Extreme and
+ * Excessive Heat Warnings and Watches, the Heat Advisory, the Red Flag
+ * Warning and the Fire Weather Watch), so the older sentence, "No active NWS
+ * watch, warning, or advisory here", spoke past its own evidence: a place
+ * under an active Flash Flood Warning was told there was nothing. This says
+ * what was checked, in the same limited sense the layer's own legend already
+ * uses ("No active requested National Weather Service products",
+ * `nws-alerts.ts`), which is this sentence for any other set.
  */
 function noRequestedAlert(scope: ClaimScope): string {
+  if (HAZARD_CLUSTERS[getHazardCluster()].alerts !== HEAT_FIRE_ALERTS) {
+    // DRAFT wording (pending the owner's read-back): the layer's own no-result note, scoped to the place.
+    return `No active requested National Weather Service products ${scopePhrase(scope)}.`;
+  }
   // vocab-allow: names the NWS watch/warning/advisory product category (src/layers/nws-alerts.ts), scoped to the products this layer requests
   return `No active NWS heat or fire weather watch, warning, or advisory ${scopePhrase(scope)}. Only those products are requested.`;
 }
 
-/** The NWS product name this app already requests (see
- * `src/layers/nws-alerts.ts` `ALERT_EVENTS`): true only for the
- * "Warning"-tier products, never a Watch or an Advisory. */
+/** The NWS product name this app already requests (the mode's
+ * `HazardClusterDef.alerts`): true only for the "Warning"-tier products,
+ * never a Watch or an Advisory. */
 function isNwsWarningTier(prodType: string): boolean {
   return /warning$/i.test(prodType.trim());
 }
@@ -577,11 +582,11 @@ interface RowResult {
 const NO_ROWS: RowResult = { rows: [], hasWarning: false, warningLabel: null };
 
 /** Every distinct active NWS alert polygon covering the clicked point
- * (fire-weather and heat share one layer, distinguished by `prod_type`),
- * each its own row so a Heat Advisory and a Red Flag Warning covering the
- * same point are never collapsed into one line. Omitted entirely when the
- * alerts layer is off; a confirmed zero (layer on, nothing here) renders
- * one honest "none" row. */
+ * (the mode's products share one layer, distinguished by the alert's
+ * `event`, src/layers/nws-alerts.ts NormalizedAlert), each its own row so
+ * a Heat Advisory and a Red Flag Warning covering the same point are never
+ * collapsed into one line. Omitted entirely when the alerts layer is off; a
+ * confirmed zero (layer on, nothing here) renders one honest "none" row. */
 function alertRows(
   map: maplibregl.Map,
   region: QueryRegion,
@@ -604,9 +609,10 @@ function alertRows(
   const feats = hasFill ? touchingPlace(map.queryRenderedFeatures(region, { layers: [ALERTS_FILL] }), place) : [];
   const seen = new Map<string, { prodType: string; ends: unknown }>();
   for (const f of feats) {
-    const prodType = propText(f.properties?.['prod_type']).trim();
+    const prodType = propText(f.properties?.['event']).trim();
     if (prodType === '') continue;
-    const endsRaw: unknown = f.properties?.['ends'] ?? f.properties?.['expiration'] ?? null;
+    // An end the issuer left open is unknown, so the row states no end.
+    const endsRaw: unknown = f.properties?.['ends'] ?? null;
     // Two alerts of one product share a row; with different ends no one end is true, so none is stated.
     const prior = seen.get(prodType);
     seen.set(prodType, { prodType, ends: prior !== undefined && prior.ends !== endsRaw ? null : endsRaw });
@@ -642,14 +648,12 @@ function alertRows(
     }
     return {
       // The absence must not reach further than the query did. This layer
-      // asks for seven products only (ALERT_EVENTS in src/layers/nws-alerts.ts:
-      // the Extreme and Excessive Heat Warnings and Watches, Heat Advisory,
-      // Red Flag Warning and Fire Weather Watch), so a place under an active
-      // Flash Flood Warning would have been told, wrongly, that no NWS watch,
-      // warning or advisory was in force. The sentence now says what was
-      // actually checked, in the same limited sense the layer's own legend
-      // already uses ("No active requested National Weather Service
-      // products", nws-alerts.ts).
+      // asks for the committed mode's products only (HazardClusterDef.alerts
+      // in src/config/clusters.ts), so a place under an active Flash Flood
+      // Warning would have been told, wrongly, that no NWS watch, warning or
+      // advisory was in force. The sentence says what was actually checked,
+      // in the same limited sense the layer's own legend already uses ("No
+      // active requested National Weather Service products", nws-alerts.ts).
       // vocab-allow: names the NWS watch/warning/advisory product category (src/layers/nws-alerts.ts), matching that module's own description, and scopes the absence to the products actually requested
       rows: [unreported({ label: 'NWS alert', text: noRequestedAlert(scope) }, true)],
       hasWarning: false,
@@ -801,12 +805,11 @@ function zonedIsoInstant(value: string): number | null {
 }
 
 /**
- * An alert `ends`/`expiration` value as the card shows it. An ISO 8601
- * timestamp with its zone or offset, or the epoch milliseconds the layer
- * itself accepts as an issuer time (src/layers/nws-alerts.ts
- * `issuerTimeMs`), is an instant, written through `dateTok` with its zone
- * named; any other present value is kept as supplied (the card says so),
- * and an absent one is no window at all.
+ * An alert's `ends` value as the card shows it. An ISO 8601 timestamp with
+ * its zone or offset (the layer hands on ISO text, src/layers/nws-alerts.ts
+ * `issuerTime`), or epoch milliseconds, is an instant, written through
+ * `dateTok` with its zone named; any other present value is kept as supplied
+ * (the card says so), and an absent one is no window at all.
  */
 function formatWhen(
   value: unknown

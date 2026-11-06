@@ -1227,8 +1227,9 @@ test.describe('identify paths: the NWS, SPC and power models print the issuer wo
   test('an NWS alert model prints the product name verbatim with its swatch, the office, and From and Until with their zone', async () => {
     const { buildNwsAlertPopupModel } = await import('../src/layers/nws-alerts');
     const onset = Date.UTC(2026, 7, 11, 15, 0);
+    // The map feature's properties are the reader's NormalizedAlert fields (src/layers/nws-alerts.ts).
     const markup = serializePopupFrame(
-      buildNwsAlertPopupModel({ prod_type: 'Red Flag Warning', onset, ends: '2026-08-12T20:00:00-07:00', wfo: 'KSEW' })
+      buildNwsAlertPopupModel({ event: 'Red Flag Warning', onset, ends: '2026-08-12T20:00:00-07:00', issuer: 'KSEW' })
     );
     const text = frameText(markup);
     expect(markup).toContain('data-popup-kind="event"');
@@ -1245,10 +1246,21 @@ test.describe('identify paths: the NWS, SPC and power models print the issuer wo
     expect(markup).toContain('href="https://www.weather.gov/safety/heat"');
 
     // Issuer time text DDM does not read is shown as supplied; no office, no office line.
-    const odd = frameText(serializePopupFrame(buildNwsAlertPopupModel({ prod_type: 'Heat Advisory', ends: 'Tonight' })));
+    const odd = frameText(serializePopupFrame(buildNwsAlertPopupModel({ event: 'Heat Advisory', ends: 'Tonight' })));
     expect(odd).toContain('Issued by: NOAA NWS ');
     expect(odd).not.toContain('office');
     expect(odd).toContain('Until Tonight As the issuer states it; DDM does not read it as a full date.');
+
+    // An ENSO product: its own swatch, an open end not stated, and no heat or fire weather words or link.
+    const floodMarkup = serializePopupFrame(buildNwsAlertPopupModel({ event: 'Flood Warning', onset, ends: null, issuer: 'KDVN' }));
+    const flood = frameText(floodMarkup);
+    expect(flood).toContain('Issued by: NOAA NWS, office DVN');
+    expect(flood).toContain('Until unavailable');
+    expect(floodMarkup).toContain('data-swatch-class="Flood Warning" style="--popup-swatch: #00ff00"');
+    expect(flood).toContain('Polygons are NWS forecast-zone shapes, updated about every five minutes.');
+    expect(flood).not.toContain('extreme heat or fire weather');
+    expect(floodMarkup).not.toContain('https://www.weather.gov/safety/heat');
+    expect(floodMarkup).toContain('href="https://alerts.weather.gov/"');
   });
 
   test('an SPC outlook model prints the category word verbatim with its swatch and the valid period in UTC', async () => {

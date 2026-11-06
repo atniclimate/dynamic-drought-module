@@ -487,14 +487,17 @@ export { HILLSHADE_SHADOW, HILLSHADE_HIGHLIGHT } from './interface-tokens';
 export const HILLSHADE_EXAGGERATION = 0.22;
 
 /* ---------------------------------------------------------------------------
- * NWS heat and fire-weather alert polygons
+ * NWS watch, warning and advisory polygons (each mode's alert products,
+ * HazardClusterDef.alerts in src/config/clusters.ts)
  *
  * Colors follow the National Weather Service watch/warning/advisory display
  * standard (the weather.gov map colors users already know), so the module
- * never invents its own severity language. The NWS Hazard Simplification
- * project renamed Excessive Heat Warning to Extreme Heat Warning in 2025;
- * both names are carried so archived or transitional products still color
- * correctly.
+ * never invents its own severity language. The flood, storm, wind and
+ * coastal rows are the Hex Code column of the NWS hazards map table,
+ * https://www.weather.gov/help-map (read 2026-11-06; the WWA MapServer's
+ * renderer draws the same RGB). The NWS Hazard Simplification project
+ * renamed Excessive Heat Warning to Extreme Heat Warning in 2025; both names
+ * are carried so archived or transitional products still color correctly.
  * ------------------------------------------------------------------------- */
 
 export const NWS_ALERT_COLORS: Readonly<Record<string, string>> = {
@@ -504,13 +507,28 @@ export const NWS_ALERT_COLORS: Readonly<Record<string, string>> = {
   'Excessive Heat Watch': '#800000',
   'Heat Advisory': '#ff7f50',
   'Red Flag Warning': '#ff1493', // vocab-allow: verbatim NWS product names, quoted source data
-  'Fire Weather Watch': '#ffdead'
+  'Fire Weather Watch': '#ffdead',
+  'Flash Flood Warning': '#8b0000', 'Flood Warning': '#00ff00', // vocab-allow: verbatim NWS product names, quoted source data
+  'Flash Flood Watch': '#2e8b57', 'Flood Watch': '#2e8b57',
+  'Hurricane Warning': '#dc143c', 'Typhoon Warning': '#dc143c', // vocab-allow: verbatim NWS product names, quoted source data
+  'Blizzard Warning': '#ff4500', 'Ice Storm Warning': '#8b008b', // vocab-allow: verbatim NWS product names, quoted source data
+  'Winter Storm Warning': '#ff69b4', 'Tropical Storm Warning': '#b22222', // vocab-allow: verbatim NWS product names, quoted source data
+  'Hurricane Watch': '#ff00ff', 'Typhoon Watch': '#ff00ff',
+  'Tropical Storm Watch': '#f08080', 'Winter Storm Watch': '#4682b4',
+  'Extreme Wind Warning': '#ff8c00', 'High Wind Warning': '#daa520', // vocab-allow: verbatim NWS product names, quoted source data
+  'High Wind Watch': '#b8860b',
+  'Storm Surge Warning': '#b524f7', 'Coastal Flood Warning': '#228b22', // vocab-allow: verbatim NWS product names, quoted source data
+  'Lakeshore Flood Warning': '#228b22', 'High Surf Warning': '#228b22', // vocab-allow: verbatim NWS product names, quoted source data
+  'Storm Surge Watch': '#db7ff7', 'Coastal Flood Watch': '#66cdaa',
+  'Lakeshore Flood Watch': '#66cdaa'
 };
 
 /**
- * One key row per NWS product under its current name (the 2025 Hazard
- * Simplification names); the Excessive Heat aliases share their row's colour
- * and still match in the data.
+ * Every key row in key order: one row per NWS product under its current name
+ * (the 2025 Hazard Simplification names; the Excessive Heat aliases share
+ * their row's colour and still match in the data), the heat and fire weather
+ * rows first, then the ENSO rows in their mode's event order. A mode's key is
+ * the rows its alert set asks for, in this order.
  */
 export const NWS_ALERT_LEGEND: ReadonlyArray<{ color: string; label: string }> = [
   // vocab-allow: verbatim NWS product names, quoted source data
@@ -519,7 +537,16 @@ export const NWS_ALERT_LEGEND: ReadonlyArray<{ color: string; label: string }> =
   { color: NWS_ALERT_COLORS['Heat Advisory'], label: 'Heat Advisory' },
   // vocab-allow: verbatim NWS product names, quoted source data
   { color: NWS_ALERT_COLORS['Red Flag Warning'], label: 'Red Flag Warning' },
-  { color: NWS_ALERT_COLORS['Fire Weather Watch'], label: 'Fire Weather Watch' }
+  { color: NWS_ALERT_COLORS['Fire Weather Watch'], label: 'Fire Weather Watch' },
+  ...[
+    'Flash Flood Warning', 'Flood Warning', 'Flash Flood Watch', 'Flood Watch', // vocab-allow: verbatim NWS product names, quoted source data
+    'Hurricane Warning', 'Typhoon Warning', 'Blizzard Warning', 'Ice Storm Warning', // vocab-allow: verbatim NWS product names, quoted source data
+    'Winter Storm Warning', 'Tropical Storm Warning', 'Hurricane Watch', 'Typhoon Watch', // vocab-allow: verbatim NWS product names, quoted source data
+    'Tropical Storm Watch', 'Winter Storm Watch',
+    'Extreme Wind Warning', 'High Wind Warning', 'High Wind Watch', // vocab-allow: verbatim NWS product names, quoted source data
+    'Storm Surge Warning', 'Coastal Flood Warning', 'Lakeshore Flood Warning', 'High Surf Warning', // vocab-allow: verbatim NWS product names, quoted source data
+    'Storm Surge Watch', 'Coastal Flood Watch', 'Lakeshore Flood Watch'
+  ].map((label) => ({ color: NWS_ALERT_COLORS[label]!, label }))
 ];
 
 export const NWS_ALERT_DEFAULT_COLOR = '#9ca3af';

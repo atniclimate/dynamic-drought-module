@@ -696,14 +696,17 @@ function nwsProductKey(): {
   readonly html: string;
   readonly ariaLabel: string;
 } {
+  // The rows of the products the committed mode asks for (HazardClusterDef.alerts), in key order.
+  const events = HAZARD_CLUSTERS[getHazardCluster()].alerts?.events ?? [];
+  const rows = NWS_ALERT_LEGEND.filter(({ label }) => events.includes(label));
   return {
     html:
       '<span class="map-key-scale map-key-nws-products" data-nws-products-key>' +
       '<strong class="map-key-scale-label">NWS products</strong>' +
-      NWS_ALERT_LEGEND.map(({ color, label }) => swatchItem(color, label)).join('') +
+      rows.map(({ color, label }) => swatchItem(color, label)).join('') +
       '</span>',
     ariaLabel:
-      `National Weather Service event products: ${NWS_ALERT_LEGEND.map(({ label }) => label).join(', ')}.`
+      `National Weather Service event products: ${rows.map(({ label }) => label).join(', ')}.`
   };
 }
 

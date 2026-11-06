@@ -567,8 +567,8 @@ test.describe('the Conditions block never claims an absence it did not read', ()
   test('a successful empty read scopes its absence to the products actually requested', async ({
     page
   }) => {
-    // The layer asks for seven heat and fire weather products only
-    // (ALERT_EVENTS in src/layers/nws-alerts.ts). An absence sentence that
+    // The layer asks for seven heat and fire weather products only here
+    // (HEAT_FIRE_ALERTS in src/config/clusters.ts). An absence sentence that
     // said "no NWS watch, warning, or advisory" spoke past that query and
     // would have denied an active Flash Flood Warning.
     await bootWithAlerts(page, (route) =>

@@ -492,7 +492,7 @@ test('an alert window end is an instant only with its zone; anything else is sho
   const alert = (ends) =>
     withLayers(['nws-alerts'], () =>
       buildPlaceConditionsHtml(
-        fakeMap({ 'nws-alerts-fill': [{ properties: { prod_type: 'Red Flag Warning', ends }, geometry: square(-122, 47) }] }),
+        fakeMap({ 'nws-alerts-fill': [{ properties: { event: 'Red Flag Warning', ends }, geometry: square(-122, 47) }] }),
         [0, 0],
         PLACE
       )
@@ -521,8 +521,8 @@ test('an alert window end is an instant only with its zone; anything else is sho
     buildPlaceConditionsHtml(
       fakeMap({
         'nws-alerts-fill': [
-          { properties: { prod_type: 'Red Flag Warning', ends: '2026-09-30T18:00:00-07:00' }, geometry: square(-122, 47) },
-          { properties: { prod_type: 'Red Flag Warning', ends: '2026-10-01T18:00:00-07:00' }, geometry: square(-122, 47) }
+          { properties: { event: 'Red Flag Warning', ends: '2026-09-30T18:00:00-07:00' }, geometry: square(-122, 47) },
+          { properties: { event: 'Red Flag Warning', ends: '2026-10-01T18:00:00-07:00' }, geometry: square(-122, 47) }
         ]
       }),
       [0, 0],
@@ -540,7 +540,7 @@ const SUPPLIED = 'As the issuer states it; DDM does not read it as a full date.'
 function alertRowFor(ends) {
   return withLayers(['nws-alerts'], () =>
     buildPlaceConditionsHtml(
-      fakeMap({ 'nws-alerts-fill': [{ properties: { prod_type: 'Red Flag Warning', ends }, geometry: square(-122, 47) }] }),
+      fakeMap({ 'nws-alerts-fill': [{ properties: { event: 'Red Flag Warning', ends }, geometry: square(-122, 47) }] }),
       [0, 0],
       PLACE
     )
@@ -604,7 +604,7 @@ test('a feature value that is not text is absent, never String()-ed into a throw
     buildPlaceConditionsHtml(
       fakeMap({
         'nadm-drought-fill': [{ properties: { DROUGHTCAT: broken }, geometry: PLACE }],
-        'nws-alerts-fill': [{ properties: { prod_type: broken }, geometry: square(-122, 47) }],
+        'nws-alerts-fill': [{ properties: { event: broken }, geometry: square(-122, 47) }],
         'nifc-fires-fill': [{ properties: { attr_IncidentTypeCategory: 'WF', poly_IncidentName: broken }, geometry: square(-122, 47) }]
       }),
       [0, 0],
@@ -709,8 +709,8 @@ test('the head names only the conditions present at the place; an absence row is
     buildPlaceConditionsHtml(
       fakeMap({
         'nws-alerts-fill': [
-          { properties: { prod_type: 'Heat Advisory' }, geometry: square(-122, 47) },
-          { properties: { prod_type: 'Red Flag Warning' }, geometry: square(-121, 47) }
+          { properties: { event: 'Heat Advisory' }, geometry: square(-122, 47) },
+          { properties: { event: 'Red Flag Warning' }, geometry: square(-121, 47) }
         ]
       }),
       [0, 0],
@@ -814,6 +814,29 @@ test('a confirmed empty read on every active layer still says "Nothing mapped he
   );
   const html = buildStatePopupHtml({ NAME: 'Fixture State' }, result);
   assert.equal(textOf(slot(html, 'value')), NOTHING_MAPPED);
+});
+
+test('in ENSO the alert row speaks for the products ENSO asks for: a present one by name, none in the layer\'s own no-result words', () => {
+  const before = getHazardCluster();
+  setHazardCluster('enso');
+  try {
+    const none = withRegistry([{ key: 'nws-alerts', status: 'no-data', on: true }], () =>
+      buildPlaceConditionsHtml(fakeMap({ 'nws-alerts-fill': [] }), [0, 0], PLACE)
+    );
+    assert.deepEqual(none.rows, [{ label: 'NWS alert', text: 'No active requested National Weather Service products in this area.' }]);
+    assert.equal(JSON.stringify(none).includes('heat or fire'), false);
+    const flood = withRegistry([{ key: 'nws-alerts', status: 'ready', on: true }], () =>
+      buildPlaceConditionsHtml(
+        fakeMap({ 'nws-alerts-fill': [{ properties: { event: 'Flood Warning' }, geometry: square(-122, 47) }] }),
+        [0, 0],
+        PLACE
+      )
+    );
+    assert.deepEqual(flood.rows, [{ label: 'NWS alert', text: 'Flood Warning in this area (NOAA NWS)' }]);
+    assert.equal(flood.warningLabel, 'Flood Warning');
+  } finally {
+    setHazardCluster(before);
+  }
 });
 
 test('a refresh failure that keeps the fill: the head says not every layer has been read (head branch c)', () => {
