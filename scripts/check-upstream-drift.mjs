@@ -547,9 +547,15 @@ export const ARCGIS_FIELD_PROBES = Object.freeze([
   { key: 'eiaPowerPlantsFeatureLayer', file: 'src/layers/power-3d.ts', layer: '', constName: 'PLANTS_OUT_FIELDS' },
   // DAY1_LAYER_ID in spc-fire-weather.ts.
   { key: 'spcFireWeatherOutlookMapServer', file: 'src/layers/spc-fire-weather.ts', layer: '/1' },
-  // The ENSO Season ahead outlooks: REST layer 0 (Lead 1) of each service.
-  { key: 'cpcSeasonalPrecipOutlookMapServer', file: 'src/layers/cpc-seasonal-read.ts', layer: '/0' },
-  { key: 'cpcSeasonalTempOutlookMapServer', file: 'src/layers/cpc-seasonal-read.ts', layer: '/0' },
+  // The ENSO outlook map layers. The reader sends one list per family (a
+  // ternary): the seasonal Lead 1 (REST layer 0 of each service) and the 6-10
+  // and 8-14 day layers (each service: 0 temperature, 1 precipitation).
+  { key: 'cpcSeasonalPrecipOutlookMapServer', file: 'src/layers/cpc-seasonal-read.ts', layer: '/0', pick: (fields) => fields.includes('valid_seas') },
+  { key: 'cpcSeasonalTempOutlookMapServer', file: 'src/layers/cpc-seasonal-read.ts', layer: '/0', pick: (fields) => fields.includes('valid_seas') },
+  { key: 'cpc610OutlookMapServer', file: 'src/layers/cpc-seasonal-read.ts', layer: '/0', pick: (fields) => fields.includes('start_date') },
+  { key: 'cpc610OutlookMapServer', file: 'src/layers/cpc-seasonal-read.ts', layer: '/1', pick: (fields) => fields.includes('start_date') },
+  { key: 'cpc814OutlookMapServer', file: 'src/layers/cpc-seasonal-read.ts', layer: '/0', pick: (fields) => fields.includes('start_date') },
+  { key: 'cpc814OutlookMapServer', file: 'src/layers/cpc-seasonal-read.ts', layer: '/1', pick: (fields) => fields.includes('start_date') },
   // F6 (S20 fix round, DDM-P7-T03): the Days 3-8 probabilistic field set
   // (SPC_PROBABILISTIC_OUT_FIELDS in src/impact/sources.ts), one row for
   // layer 8 (Day 3) standing for all six probabilistic layers, which share
