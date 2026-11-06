@@ -551,6 +551,7 @@ export function buildBcwsAreaPerimeterClaim(
   statuses: readonly unknown[],
   options: { readonly truncated?: boolean } = {}
 ): string {
+  // DRAFT wording (DR-177): this sentence and the counted one at the end of this function.
   if (statuses.length === 0) return `No current BC Wildfire Service perimeters intersect ${NIFC_AREA_QUERY_EXTENT}.`;
   const counts = new Map<string, number>();
   for (const status of statuses) {
@@ -564,12 +565,18 @@ export function buildBcwsAreaPerimeterClaim(
   const verb = statuses.length === 1 ? 'perimeter intersects' : 'perimeters intersect';
   // DRAFT wording (DR-177): the record-cap sentence for the BC read.
   const floor = options.truncated ? ' The read reached its record limit, so this count is a lower bound.' : '';
+  // DRAFT wording (DR-177): the counted BC sentence.
   return `${statuses.length} current BC Wildfire Service ${verb} ${NIFC_AREA_QUERY_EXTENT}: ${list}.${floor}`;
 }
 
 /** The place count across both agencies, each fire area once (DRAFT wording, DR-177; the ratified label). */
 export function buildFireAreaClaim(count: number): string {
   return `${count} fire ${count === 1 ? 'area' : 'areas'} in ${NIFC_AREA_QUERY_EXTENT} from NIFC WFIGS and BC Wildfire Service perimeters; ${OVERLAP_COUNT_LABEL}.`;
+}
+
+/** A minimap framing where no overlap between the agencies can be established: each count apart, none combined (DRAFT wording, DR-177). */
+export function buildAgencyCountsApart(nifc: number, bcws: number): string {
+  return `${nifc} current mapped NIFC wildfire ${nifc === 1 ? 'perimeter' : 'perimeters'} and ${bcws} current mapped BC Wildfire Service wildfire ${bcws === 1 ? 'perimeter' : 'perimeters'} intersect this authored framing; each agency is counted on its own because overlaps between them are not checked here`;
 }
 
 export type HmsDensityClass = 'Light' | 'Medium' | 'Heavy' | 'Unknown';

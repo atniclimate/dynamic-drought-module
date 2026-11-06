@@ -659,7 +659,7 @@ function applyFeatureCollection(
     // statement stands for both (an empty current set is still the product).
     armTimeBar();
   }
-  setPerimeterSnapshot(geojson);
+  setPerimeterSnapshot(geojson, lastLoaded?.fetchedAt ?? null);
 
   ensureLayersAdded(map);
 

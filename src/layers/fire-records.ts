@@ -239,6 +239,7 @@ export function bcwsRecordBlock(props: GeoJsonProperties, retrievedAt: number | 
     key: bcwsRecordKey(p, featureId),
     issuer: 'bcws',
     // The issuer's field names (Fire Number, Fire Year), verbatim; FIRE_YEAR is the April-March fiscal year.
+    // DRAFT wording (DR-177): "Fire Number not stated" when the record has none.
     identifier: `Fire Number ${number ?? 'not stated'}${year === null ? '' : `, Fire Year ${year}`}`,
     sizes: size === null ? [] : [{ label: 'Reported size', text: size }],
     status: bcwsStatus(p.FIRE_STATUS),
@@ -265,11 +266,13 @@ export function buildBcwsPopupModel(
   const record = bcwsRecordBlock(p, retrievedAt, featureId);
   return {
     kind: 'event',
+    // DRAFT wording (DR-177): "Fire Number not stated" when the record has none.
     title: `Fire Number ${textField(p.FIRE_NUMBER) ?? 'not stated'}`,
     issuer: { role: 'issued-by', name: BCWS_ISSUER_NAME, productKey: 'bcws-fires' },
     value: [{ text: record.status!.text, swatch: bcwsSwatch(p.FIRE_STATUS) }],
     clocks: [record.clocks[0]],
     records: [record],
+    // DRAFT wording (DR-177): the source link label.
     source: { link: { label: 'BC Data Catalogue', href: BCWS_CATALOGUE_URL } },
     ...(notices.length > 0 ? { notices } : {})
   };

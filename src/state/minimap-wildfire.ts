@@ -38,7 +38,7 @@ import type { MinimapWhpFramingSummary } from '../config/minimap-whp';
 import { MINIMAP_ACTIVE_WILDFIRE_FILTER, bcwsStatusClass } from '../config/wildfire-presentation';
 import { URLS } from '../config/urls';
 import { countFireAreas, fireRecordKey, type CountedPerimeter } from '../layers/fire-areas';
-import { bboxCoveredByEnvelope } from '../util/bbox';
+import { bboxCoveredByEnvelope, type ViewEnvelope } from '../util/bbox';
 import { BCWS_ACTIVE_WHERE, BCWS_COVERAGE, BCWS_READ_LIMITS, readBcwsPerimeters } from '../util/bcws-perimeter-read';
 import { fetchJsonWithBudget } from '../util/fetch';
 import { geometriesOverlap } from '../util/polygon-overlap';
@@ -78,7 +78,9 @@ export interface MinimapWildfireSummary {
   /**
    * Current mapped wildfire perimeters, or null when that query failed: NIFC
    * alone, or, for a framing that reaches British Columbia, NIFC and BC
-   * Wildfire Service together with each known fire area counted once.
+   * Wildfire Service together with each known fire area counted once. Where
+   * no overlap between the two can be established it is the larger agency
+   * count, a lower bound on distinct fire areas (`nifcPerimeterCount` is set).
    */
   readonly mappedWildfirePerimeterCount: number | null;
   readonly highOrVeryHighPercent: number | null;
@@ -88,6 +90,8 @@ export interface MinimapWildfireSummary {
   readonly bcwsPerimeterCount?: number | null;
   /** Fire areas that joined a BC and a NIFC perimeter into one count; above zero, the count carries the ratified label. */
   readonly fireAreasMerged?: number;
+  /** NIFC's own count, present only when its overlap with BC could not be established; each agency's count is then stated apart. */
+  readonly nifcPerimeterCount?: number;
 }
 
 export type MinimapWildfireStatus =
@@ -342,13 +346,28 @@ async function readBcwsActive(signal: AbortSignal): Promise<readonly { readonly 
   }
 }
 
-/** The BC layer's fire areas when it is on, so a known overlapping pair counts once; else none. */
-async function knownFireAreas(): Promise<(recordKey: string) => string | null> {
+/**
+ * The BC layer's fire areas when its complete answer has been grouped, so a
+ * known overlapping pair counts once, with the view that answer covers; null
+ * when no grouping can say (the layer off, failed or partial, or its
+ * grouping pending or failed).
+ */
+async function knownFireAreas(): Promise<{ readonly areaOf: (recordKey: string) => string | null; readonly coverage: ViewEnvelope } | null> {
   const status = registry.getStatus('bcws-fires');
-  if (status !== 'ready' && status !== 'degraded' && status !== 'no-data') return () => null;
-  const { fireAreas } = await import('../layers/bcws-fires');
+  if (status !== 'ready' && status !== 'no-data') return null;
+  const { fireAreas, loadedBcwsCollection } = await import('../layers/bcws-fires');
   const areas = fireAreas();
-  return (recordKey) => areas.areaOf.get(recordKey) ?? null;
+  const coverage = loadedBcwsCollection()?.coverage ?? null;
+  if (coverage === null || (areas.status !== 'complete' && areas.status !== 'none')) return null;
+  return { areaOf: (recordKey) => areas.areaOf.get(recordKey) ?? null, coverage };
+}
+
+/** Whether the BC layer's grouped view reaches over all of a framing's British Columbia part (pairs outside it were never grouped). */
+function groupedViewCovers(coverage: ViewEnvelope, key: FramingKey): boolean {
+  const bbox = framingBbox(key);
+  if (bbox === null) return false;
+  const [west, south, east, north] = BCWS_COVERAGE;
+  return bboxCoveredByEnvelope(coverage, [Math.max(bbox[0], west), Math.max(bbox[1], south), Math.min(bbox[2], east), Math.min(bbox[3], north)]);
 }
 
 /**
@@ -357,14 +376,16 @@ async function knownFireAreas(): Promise<(recordKey: string) => string | null> {
  * perimeter is unavailable (never a zero for the Province, never a WHP
  * fallback); NIFC perimeters with BC unknown are still mapped-wildfire, BC
  * marked unavailable. Fire areas merge only when both agencies' records are
- * in hand (NIFC from the layer's loaded answer); a count-only NIFC answer adds
- * the two agencies' perimeters as they are.
+ * in hand (NIFC from the layer's loaded answer) and the BC layer has grouped
+ * them over the whole framing. Otherwise no overlap can be established, so
+ * the two counts are never added: the framing takes the larger, a lower bound
+ * on distinct fire areas, and states each agency's own.
  */
 function combineWithBc(
   outcome: FramingCountOutcome,
   bc: readonly { readonly properties: Record<string, unknown> | null; readonly geometry: Geometry | null }[] | null,
-  areaOf: (recordKey: string) => string | null,
-): { readonly result: MinimapWildfireCountResult; readonly bcwsPerimeterCount?: number | null; readonly fireAreasMerged?: number } {
+  known: { readonly areaOf: (recordKey: string) => string | null; readonly coverage: ViewEnvelope } | null,
+): { readonly result: MinimapWildfireCountResult; readonly bcwsPerimeterCount?: number | null; readonly fireAreasMerged?: number; readonly nifcPerimeterCount?: number } {
   if (!framingReachesBc(outcome.key) || outcome.result.status === 'unavailable') return { result: outcome.result };
   if (bc === null) {
     return outcome.result.count > 0
@@ -378,10 +399,14 @@ function combineWithBc(
       const recordKey = fireRecordKey('bcws', feature.properties);
       return { identity: recordKey ?? `bcws-row:${i}`, recordKey };
     });
-  if (outcome.rows === undefined) {
-    return { result: { status: 'live', count: outcome.result.count + bcRows.length }, bcwsPerimeterCount: bcRows.length, fireAreasMerged: 0 };
+  if (outcome.rows === undefined || known === null || !groupedViewCovers(known.coverage, outcome.key)) {
+    const both = outcome.result.count > 0 && bcRows.length > 0;
+    return {
+      result: { status: 'live', count: Math.max(outcome.result.count, bcRows.length) },
+      bcwsPerimeterCount: bcRows.length, fireAreasMerged: 0, ...(both ? { nifcPerimeterCount: outcome.result.count } : {})
+    };
   }
-  const { count, merged } = countFireAreas([...outcome.rows, ...bcRows], areaOf);
+  const { count, merged } = countFireAreas([...outcome.rows, ...bcRows], known.areaOf);
   return { result: { status: 'live', count }, bcwsPerimeterCount: bcRows.length, fireAreasMerged: merged };
 }
 
@@ -584,9 +609,9 @@ async function loadSummaries(
       FRAMING_KEYS.map((key) => queryFramingCount(key, signal)),
     );
     const bcActive = readBcwsActive(signal);
-    const [counted, bc, areaOf] = await Promise.all([nifcOutcomes, bcActive, knownFireAreas()]);
+    const [counted, bc, known] = await Promise.all([nifcOutcomes, bcActive, knownFireAreas()]);
     if (signal.aborted || epoch !== loadEpoch || retainCount === 0) return;
-    const combined = counted.map((outcome) => ({ outcome, ...combineWithBc(outcome, bc, areaOf) }));
+    const combined = counted.map((outcome) => ({ outcome, ...combineWithBc(outcome, bc, known) }));
     const outcomes = combined.map(({ outcome, result }) => ({ ...outcome, result }));
 
     const failed = outcomes.filter((outcome) => outcome.error !== undefined);
@@ -600,11 +625,12 @@ async function loadSummaries(
     }
 
     const summaries = Object.fromEntries(
-      combined.map(({ outcome, result, bcwsPerimeterCount, fireAreasMerged }) => [
+      combined.map(({ outcome, result, bcwsPerimeterCount, fireAreasMerged, nifcPerimeterCount }) => [
         outcome.key,
         {
           ...deriveMinimapWildfireSummary(result, MINIMAP_WHP.framings[outcome.key]),
           ...(bcwsPerimeterCount === undefined ? {} : { bcwsPerimeterCount, fireAreasMerged: fireAreasMerged ?? 0 }),
+          ...(nifcPerimeterCount === undefined ? {} : { nifcPerimeterCount }),
         },
       ]),
     ) as Record<FramingKey, MinimapWildfireSummary>;

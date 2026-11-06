@@ -100,7 +100,7 @@ import type {
   MinimapWildfireSummary,
 } from '../../state/minimap-wildfire';
 import type { EnsoPhaseLabel } from '../../impact/enso';
-import { OVERLAP_COUNT_LABEL } from '../../config/wildfire-presentation';
+import { OVERLAP_COUNT_LABEL, buildAgencyCountsApart } from '../../config/wildfire-presentation';
 import { fitAll, fitFraming, fitOcean } from '../../map/camera-fit';
 import { requestBasemapMode } from '../../map/basemap-switcher';
 import { defaultBasemapFor } from '../../state/basemap-store';
@@ -390,8 +390,12 @@ function wildfireDescription(
   if (summary.condition === 'mapped-wildfire') {
     const merged = (summary.fireAreasMerged ?? 0) > 0 ? `; ${OVERLAP_COUNT_LABEL}` : '';
     const bcMissing = summary.bcwsPerimeterCount === null ? '; BC Wildfire Service perimeters were unavailable' : '';
+    // Where no overlap could be established, each agency's count stands apart and none is combined.
+    const counted = summary.nifcPerimeterCount !== undefined && typeof summary.bcwsPerimeterCount === 'number'
+      ? buildAgencyCountsApart(summary.nifcPerimeterCount, summary.bcwsPerimeterCount)
+      : `${perimeterCount} current mapped ${agencies} wildfire ${perimeterCount === 1 ? 'perimeter intersects' : 'perimeters intersect'} this authored framing${merged}${bcMissing}`;
     return (
-      `${perimeterCount} current mapped ${agencies} wildfire ${perimeterCount === 1 ? 'perimeter intersects' : 'perimeters intersect'} this authored framing${merged}${bcMissing}; prescribed fire is excluded; browser checked ${check}. ` +
+      `${counted}; prescribed fire is excluded; browser checked ${check}. ` +
       'This is mapped-perimeter evidence, not a count of every active wildfire.'
     );
   }

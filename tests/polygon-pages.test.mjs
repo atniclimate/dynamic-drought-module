@@ -166,9 +166,9 @@ test('DR-134 status whitelist stays exact, including unseen and future values', 
 test('BCWS query uses adopted geometry/paging contract and preserves earlier-year current records', async () => {
   const { readBcwsPerimeters } = await import('../src/util/bcws-perimeter-read.ts');
   let requested;
-  // The read is bracketed by two whole-table counts (the service empties and refills the layer at each reload).
+  // The read is bracketed by the layer's edit stamps (the service empties and refills the layer at each reload).
   await stub(async url => {
-    if (new URL(url).searchParams.get('returnCountOnly') === 'true') return new Response(encode({ count: 319 }));
+    if (!new URL(url).pathname.endsWith('/query')) return new Response(encode({ editingInfo: { schemaLastEditDate: 1793940086179, dataLastEditDate: 1793940092833 } }));
     requested = new URL(url); return new Response(encode(collection([1])));
   }, async () => {
     const result = await readBcwsPerimeters({ ...options(), endpoint: 'https://fixture.invalid/query', bounds: [-125,46,-116,50] });

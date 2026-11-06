@@ -542,9 +542,9 @@ for (const variable of ['precipitation', 'temperature']) {
 
 // ---------------------------------------------------------------------------
 // BC Wildfire Service perimeters (DDM-P1-T06's cancellation pattern): the real
-// controller drives the real src/layers/bcws-fires.ts. Its read is a
-// whole-table count, the perimeters, then a second count (src/util/
-// bcws-perimeter-read.ts); request 1 is the perimeters read.
+// controller drives the real src/layers/bcws-fires.ts. Its read checks the
+// layer's edit stamps, reads the perimeters, then checks the stamps again
+// (src/util/bcws-perimeter-read.ts); request 1 is the perimeters read.
 // ---------------------------------------------------------------------------
 
 const BC_BODY = JSON.stringify({
@@ -555,7 +555,8 @@ const BC_BODY = JSON.stringify({
     geometry: { type: 'Polygon', coordinates: [[[-121.1, 49.0], [-121.0, 49.0], [-121.0, 49.1], [-121.1, 49.1], [-121.1, 49.0]]] }
   }]
 });
-const bcBody = (url) => (url.includes('returnCountOnly=true') ? JSON.stringify({ count: 319 }) : BC_BODY);
+const isBcStamps = (url) => !new URL(url).pathname.endsWith('/query');
+const bcBody = (url) => (isBcStamps(url) ? JSON.stringify({ editingInfo: { schemaLastEditDate: 1793940086179, dataLastEditDate: 1793940092833 } }) : BC_BODY);
 
 test('BC perimeters: off while the perimeters read is held aborts it at once and draws nothing', async (t) => {
   resetSeen();
@@ -569,7 +570,7 @@ test('BC perimeters: off while the perimeters read is held aborts it at once and
   const controller = harness(map, ['bcws-fires']);
   const activation = controller.activate('bcws-fires');
   await settle();
-  assert.equal(net.calls.length, 2, 'the first count answered, the perimeters read is held');
+  assert.equal(net.calls.length, 2, 'the first stamp check answered, the perimeters read is held');
   assert.equal(net.calls[1].signal.aborted, false);
 
   controller.deactivate('bcws-fires');
@@ -578,7 +579,7 @@ test('BC perimeters: off while the perimeters read is held aborts it at once and
   net.release();
   await activation;
   await settle();
-  assert.equal(net.calls.length, 2, 'no second count and no refresh follows');
+  assert.equal(net.calls.length, 2, 'no second stamp check and no refresh follows');
   assert.deepEqual(seen.sources, []);
   assert.deepEqual(seen.layers, []);
   assert.deepEqual(seen.legends, []);
@@ -608,7 +609,7 @@ test('BC perimeters: an answer that lands after the abort is dropped and draws n
   assert.deepEqual(seen.legends, []);
 });
 
-test('BC perimeters: a normal activation reads count, perimeters, count, then draws its source, layers and legend', async (t) => {
+test('BC perimeters: a normal activation reads stamps, perimeters, stamps, then draws its source, layers and legend', async (t) => {
   resetSeen();
   const net = installFetch(bcBody, { holdIndexes: [] });
   const map = fakeMap();
@@ -620,7 +621,7 @@ test('BC perimeters: a normal activation reads count, perimeters, count, then dr
   const controller = harness(map, ['bcws-fires']);
   await controller.activate('bcws-fires');
   await settle();
-  assert.deepEqual(net.calls.map((call) => (call.url.includes('returnCountOnly=true') ? 'count' : 'perimeters')), ['count', 'perimeters', 'count']);
+  assert.deepEqual(net.calls.map((call) => (isBcStamps(call.url) ? 'stamps' : 'perimeters')), ['stamps', 'perimeters', 'stamps']);
   // The DDM-P1-T06 envelope: the view overscanned by a quarter each side, cut to British Columbia's box.
   assert.equal(new URL(net.calls[1].url).searchParams.get('geometry'), '-124,48,-118,51');
   assert.deepEqual(seen.sources, ['bcws-fires']);

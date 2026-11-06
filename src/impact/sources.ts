@@ -1082,8 +1082,9 @@ export async function fetchNifcClaims(
 // place's fire areas counted once where they overlap NIFC's
 // ---------------------------------------------------------------------------
 
+// DRAFT wording (DR-177): the BC claim's source line.
 const BCWS_AREA_CLAIM_SOURCE = 'BC Wildfire Service current fire perimeters';
-/** The frame's own group issuer line (src/ui/popup-frame.ts), for the cross-agency count. */
+/** The frame's own group issuer line (src/ui/popup-frame.ts), for the cross-agency count. DRAFT wording (DR-177). */
 const FIRE_AREA_CLAIM_SOURCE = 'Computed by DDM from NIFC WFIGS and BC Wildfire Service perimeters';
 
 /** The one `makeClaim` site for both BC claims (the product-catalog spec pins the site count). */

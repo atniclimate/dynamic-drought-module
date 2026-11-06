@@ -117,22 +117,22 @@ export const BCWS_QUIET = { type: 'FeatureCollection', features: [] } as const;
 
 /**
  * Answer one BC request as the app issues them (src/util/bcws-perimeter-read.ts):
- * a GET whole-table count (`returnCountOnly=true`, answered with a steady
- * count so the reload bracket agrees) or a GET `f=geojson` read, answered with
- * `collection`. Anything else is a 400 ArcGIS-style envelope, never live.
+ * a GET of the layer description (`.../FeatureServer/0?f=json`, answered with
+ * the edit stamps of a finished reload that holds still, so the reload bracket
+ * agrees) or a GET `f=geojson` read, answered with `collection`. Anything else
+ * is a 400 ArcGIS-style envelope, never live.
  */
 export async function fulfillBcws(route: Route, collection: unknown = BCWS_QUIET): Promise<void> {
   const request = route.request();
   const url = new URL(request.url());
   const json = (status: number, body: unknown): Promise<void> =>
     route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
-  if (request.method() !== 'GET' || !url.pathname.endsWith('/query')) {
-    await json(400, { error: { code: 400, message: 'Unknown test BCWS request' } });
-    return;
-  }
-  if (url.searchParams.get('returnCountOnly') === 'true') await json(200, { count: 319 });
-  else if (url.searchParams.get('f') === 'geojson') await json(200, collection);
-  else await json(400, { error: { code: 400, message: 'Unknown test BCWS request' } });
+  const unknown = (): Promise<void> => json(400, { error: { code: 400, message: 'Unknown test BCWS request' } });
+  if (request.method() !== 'GET') await unknown();
+  else if (url.pathname.endsWith('/FeatureServer/0') && url.searchParams.get('f') === 'json') {
+    await json(200, { editingInfo: { schemaLastEditDate: 1793940086179, dataLastEditDate: 1793940092833 } });
+  } else if (url.pathname.endsWith('/query') && url.searchParams.get('f') === 'geojson') await json(200, collection);
+  else await unknown();
 }
 
 /** How a `gotoApp` boot answers the BC Wildfire Service. */

@@ -1,13 +1,16 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { registerHooks } from 'node:module';
 // The layer module's peripheral imports (the click coordinator and the legend
-// panel need a DOM); the caller under test touches neither.
+// panel need a DOM; the grouping Worker needs a browser): the click targets
+// are kept for the popup case, and the grouping job runs in this process.
 const stubs = {
-  '/map/interaction-coordinator': 'export function registerClickTarget(){}',
-  '/ui/legend-registry': 'export const LEGEND_ORDER={surface:1,event:2}; export function showLegend(){} export function hideLegend(){} export function renderSwatchLegend(){}'
+  '/map/interaction-coordinator': 'export function registerClickTarget(target){ (globalThis.__bcwsClickTargets ??= []).push(target); }',
+  '/ui/legend-registry': 'export const LEGEND_ORDER={surface:1,event:2}; export function showLegend(){} export function hideLegend(){} export function renderSwatchLegend(){}',
+  '/util/perimeter-job-client': `import { runPerimeterJob } from ${JSON.stringify(new URL('../src/util/perimeter-job.ts', import.meta.url).href)};
+    export async function groupPerimetersInWorker(sourceJson, options) { return runPerimeterJob(sourceJson, options.limits); }`
 };
 registerHooks({ resolve(specifier, context, nextResolve) {
   const stub = Object.entries(stubs).find(([suffix]) => specifier.endsWith(suffix));
@@ -27,8 +30,17 @@ const collection = (ids, incomplete = false) => ({ type: 'FeatureCollection', pr
 const response = value => new Response(JSON.stringify(value));
 const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; };
 const isCount = url => new URL(String(url)).searchParams.get('returnCountOnly') === 'true';
-/** Answer the read's two whole-table counts (a steady table), and hand every other request to `reads`. */
-const serve = (reads, count = 319) => async (url, init) => isCount(url) ? response({ count }) : reads(url, init);
+/** The layer description (`.../FeatureServer/0?f=json`), whose `editingInfo` brackets the read. */
+const isStamps = url => { const u = new URL(String(url)); return u.searchParams.get('f') === 'json' && !u.pathname.endsWith('/query'); };
+// The live layer's stamps (2026-11-06 UTC): the 04:41 reload finished; the 04:56 reload begun (schema step only); then finished.
+const STEADY = { schemaLastEditDate: 1793940086179, dataLastEditDate: 1793940092833, lastEditDate: 1793940092833 };
+const MID = { schemaLastEditDate: 1793940989464, dataLastEditDate: 1793940092833, lastEditDate: 1793940989464 };
+const NEXT = { schemaLastEditDate: 1793940989464, dataLastEditDate: 1793940995977, lastEditDate: 1793940995977 };
+// The 04:56 reload begun, had its emptying step also moved the data stamp (not caught live), and a refill quicker than 3 s.
+const EMPTIED = { schemaLastEditDate: 1793940989464, dataLastEditDate: 1793940989964, lastEditDate: 1793940989964 };
+const QUICK = { schemaLastEditDate: 1793940989464, dataLastEditDate: 1793940990964, lastEditDate: 1793940990964 };
+/** Answer the read's two edit-stamp checks (a layer that held still), and hand every other request to `reads`. */
+const serve = (reads) => async (url, init) => isStamps(url) ? response({ editingInfo: STEADY }) : reads(url, init);
 function fakeMap(initial = [-125,48,-116,50]) {
   let view = initial; const sources = new Map(); const layers = new Map(); const events = new Map();
   const map = {
@@ -113,18 +125,62 @@ test('complete empty clears old rendering and is no-data with an answered retrie
     assert.equal(caller.getSnapshot().reason,'answered'); assert.equal(typeof caller.getSnapshot().retrievedAt,'number');
   });
 });
-test('a reload during the read (the two whole-table counts disagree) is never complete, so an emptied layer is unavailable, not no-data', async () => {
+// The settle wait for an unfinished-looking layer, shortened for these cases.
+const settling = () => ({ limits: { ...configuration().limits, reloadSettleMs: 20 } });
+test('a read that falls wholly inside a reload (the table at 0 records for both checks) is never complete: an emptied layer is unavailable, not no-data', async () => {
+  for (const begun of [MID, EMPTIED]) {
+    // The data step lands 10 ms after the first check, so a read that did not wait would see `begun` twice.
+    let landsAt = null;
+    // Both whole-table counts the old bracket asked for would have read 0 here, and agreed.
+    await setup(async url => {
+      if (isCount(url)) return response({ count: 0 });
+      if (!isStamps(url)) return response(collection([]));
+      landsAt ??= Date.now() + 10;
+      return response({ editingInfo: Date.now() < landsAt ? begun : NEXT });
+    }, async (caller,map) => {
+      await caller.activate(map);
+      assert.equal(caller.getSnapshot().complete,false); assert.equal(registry.getStatus(key),'error');
+    }, settling());
+  }
+});
+test('a reload between the two checks (319, empty, 319) is never complete; nor is a failed stamp read', async () => {
   for (const ids of [[], [1]]) {
-    let counts = 0;
-    await setup(async url => isCount(url) ? response({ count: counts++ ? 319 : 0 }) : response(collection(ids)), async (caller,map) => {
+    let stampCalls = 0;
+    await setup(async url => isCount(url) ? response({ count: 319 }) : isStamps(url) ? response({ editingInfo: stampCalls++ ? NEXT : STEADY }) : response(collection(ids)), async (caller,map) => {
       await caller.activate(map);
       assert.equal(caller.getSnapshot().complete,false); assert.equal(caller.getSnapshot().reason,'incomplete');
       assert.equal(registry.getStatus(key), ids.length ? 'degraded' : 'error');
     });
   }
-  // A count that fails or does not parse is the same: no proof, no completeness.
-  await setup(async url => isCount(url) ? new Response('',{status:503}) : response(collection([1])), async (caller,map) => {
+  await setup(async url => isStamps(url) ? new Response('',{status:503}) : response(collection([1])), async (caller,map) => {
     await caller.activate(map); assert.equal(caller.getSnapshot().complete,false);
+  });
+});
+test('a layer whose last reload wrote no data, held still past the settle time, is an answered zero (an emptied table after the April 1 rollover)', async () => {
+  // So is a refill quicker than the finished gap: it waits, then counts.
+  for (const held of [MID, QUICK]) {
+    const stamps = [];
+    await setup(async url => isStamps(url) ? (stamps.push(Date.now()), response({ editingInfo: held })) : response(collection([])), async (caller,map) => {
+      await caller.activate(map);
+      assert.equal(caller.getSnapshot().complete,true); assert.equal(registry.getStatus(key),'no-data');
+      assert.ok(stamps[1] - stamps[0] >= 15, 'the second check waited for the settle time');
+    }, settling());
+  }
+  // A finished reload over an empty table is a zero at once.
+  await setup(serve(async () => response(collection([]))), async (caller,map) => {
+    await caller.activate(map); assert.equal(registry.getStatus(key),'no-data');
+  });
+});
+test('the stamps and the perimeters are read past the caches: the browser\'s, and for the stamps the CDN\'s (served public for 300 s)', async () => {
+  const seen = [];
+  await setup(async (url, init) => {
+    seen.push({ what: isStamps(url) ? 'stamps' : 'perimeters', cache: init?.cache, bust: new URL(String(url)).searchParams.get('_') });
+    return isStamps(url) ? response({ editingInfo: STEADY }) : response(collection([1]));
+  }, async (caller,map) => {
+    await caller.activate(map);
+    assert.deepEqual(seen.map((s) => [s.what, s.cache]), [['stamps','no-store'], ['perimeters','no-store'], ['stamps','no-store']]);
+    const busts = seen.filter((s) => s.what === 'stamps').map((s) => s.bust);
+    assert.ok(busts.every(Boolean), 'each stamp request carries a value no earlier request used'); assert.notEqual(busts[0], busts[1]);
   });
 });
 test('off static coverage makes zero requests and records coverage reason, not a fabricated retrieval', async () => {
@@ -260,6 +316,35 @@ test('byte and vertex rejection are error, never clean no-data or partial public
       await caller.activate(map);assert.equal(registry.getStatus(key),'error');
       assert.equal(caller.getSnapshot().complete,false);assert.equal(map.sources.size,0);assert.equal(caller.getSnapshot().retrievedAt,null);
     },config);
+  }
+});
+test('the fire-area popup gives the NIFC record the same retrieval clock the NIFC popup shows', async () => {
+  const layer = await moduleUnderTest();
+  const { setPerimeterSnapshot } = await import('../src/state/fire-perimeter-snapshot.ts');
+  const fixture = JSON.parse(readFileSync(new URL('./fixtures/bcws-border2.json', import.meta.url), 'utf8'));
+  const nifcFetchedAt = Date.UTC(2026, 10, 6, 6, 30);
+  const map = fakeMap();
+  const previous = globalThis.fetch;
+  globalThis.fetch = serve(async () => response({ type: 'FeatureCollection', features: [fixture.bcws] }));
+  globalThis.__bcwsClickTargets = [];
+  setPerimeterSnapshot({ type: 'FeatureCollection', features: [fixture.nifc] }, nifcFetchedAt);
+  try {
+    layer.bindPopups(map);
+    await layer.activate(map);
+    for (let i = 0; i < 400 && layer.fireAreas().status !== 'complete'; i++) await new Promise((resolve) => setTimeout(resolve, 5));
+    const [area] = layer.fireAreas().areas;
+    assert.ok(area, 'the Border 2 pair is one fire area');
+    const footprint = globalThis.__bcwsClickTargets.find((target) => target.layerIds.includes('fire-footprints-fill'));
+    const { model } = footprint.respond({ properties: { footprint: area.key } });
+    const retrieved = (issuer) => model.group.records.find((record) => record.issuer === issuer).clocks.find((clock) => clock.meaning === 'retrieved');
+    assert.equal(retrieved('nifc')?.at.at, nifcFetchedAt, 'the NIFC record carries its own last browser check');
+    assert.equal(retrieved('nifc').label, 'Last successful browser check');
+    assert.equal(typeof retrieved('bcws')?.at.at, 'number');
+  } finally {
+    layer.deactivate(map);
+    setPerimeterSnapshot(null);
+    globalThis.fetch = previous;
+    registry.deactivate(key);
   }
 });
 test('the production read sends the drift-checked field list, the stage whitelist where clause stays the three active stages', async () => {

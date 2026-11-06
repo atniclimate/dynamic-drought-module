@@ -474,7 +474,7 @@ function areaInput(key: string): GroupInput | null {
   const area = areas.areas.find((candidate) => candidate.key === key);
   if (!area || areas.computedAt === null) return null;
   return buildFireAreaGroupInput(key, area.members, areas.computedAt, Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC', {
-    nifc: null,
+    nifc: getPerimeterSnapshot().fetchedAt,
     bcws: caller.getSnapshot()?.retrievedAt ?? null
   });
 }

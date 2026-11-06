@@ -58,17 +58,16 @@ function signedArea(ring: readonly (readonly number[])[]): number {
 
 /**
  * The BC Wildfire Service read beside the nine NIFC POSTs
- * (src/state/minimap-wildfire.ts `readBcwsActive`): a steady table with no
- * active perimeter, so each framing's answer is its NIFC answer. Null for
- * every other request.
+ * (src/state/minimap-wildfire.ts `readBcwsActive`): the edit stamps of a
+ * finished reload that holds still and no active perimeter, so each framing's
+ * answer is its NIFC answer. Null for every other request.
  */
 function bcwsAnswer(input: RequestInfo | URL): Response | null {
   const url = String(input);
   if (!url.includes('BCWS_FirePerimeters_PublicView')) return null;
-  const body =
-    new URL(url).searchParams.get('returnCountOnly') === 'true'
-      ? { count: 319 }
-      : { type: 'FeatureCollection', features: [] };
+  const body = !new URL(url).pathname.endsWith('/query')
+    ? { editingInfo: { schemaLastEditDate: 1793940086179, dataLastEditDate: 1793940092833 } }
+    : { type: 'FeatureCollection', features: [] };
   return new Response(JSON.stringify(body), {
     status: 200,
     headers: { 'Content-Type': 'application/json' },

@@ -374,8 +374,11 @@ export function firesMetric(map: maplibregl.Map): Metric {
   if (!nifcOn && !bcOn) return offMetric('wildfires');
   if (nifcOn && !map.getLayer(FIRES_FILL)) return pendingMetric(FIRES_KEY);
   // The BC layer removes its fill for a verified empty answer ('no-data');
-  // any other state with no fill is not a zero for British Columbia.
-  if (bcOn && !map.getLayer(BCWS_FILL) && registry.getStatus(BCWS_KEY) !== 'no-data') return pendingMetric(BCWS_KEY);
+  // any other state with no fill is not a zero for British Columbia. BC holds
+  // the tile only while it loads; a failed BC read leaves NIFC's count standing.
+  const bcStatus = registry.getStatus(BCWS_KEY);
+  const bcMissing = bcOn && !map.getLayer(BCWS_FILL) && bcStatus !== 'no-data';
+  if (bcMissing && (bcStatus === 'loading' || !nifcOn)) return pendingMetric(BCWS_KEY);
   // The owning layer already filters this fill to WF and CX. Retain the
   // property check defensively so Prescribed fire can never enter this count.
   const feats = nifcOn
@@ -415,9 +418,11 @@ export function firesMetric(map: maplibregl.Map): Metric {
   ].map((row, i) => (row.identity.trim() === '' ? { ...row, identity: `__anon_${i}` } : row));
   const { count: n, merged } = countFireAreas(rows, (key) => areaOf.get(key) ?? null);
   const sublabel = n === 1 ? 'mapped wildfire perimeter in view' : 'mapped wildfire perimeters in view';
+  // DRAFT wording (DR-177): the note when the BC read failed and the count is NIFC's alone.
+  const notes = [...(merged > 0 ? [OVERLAP_COUNT_LABEL] : []), ...(bcMissing ? ['BC Wildfire Service perimeters unavailable'] : [])];
   return {
     value: String(n),
-    sublabel: merged > 0 ? `${sublabel}; ${OVERLAP_COUNT_LABEL}` : sublabel,
+    sublabel: [sublabel, ...notes].join('; '),
     tone: n > 0 ? 'data' : 'none'
   };
 }

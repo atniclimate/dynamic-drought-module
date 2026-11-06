@@ -55,12 +55,15 @@ registerHooks({
           'export function loadedNifcCollection() { return globalThis.__minimapLoaded ?? null; }'
       };
     }
-    // The BC layer's fire areas, as its module answers them (src/layers/bcws-fires.ts `fireAreas`).
+    // The BC layer's fire areas and the view its grouped answer covers, as its
+    // module answers them (src/layers/bcws-fires.ts `fireAreas`, `loadedBcwsCollection`).
     if (url.endsWith(BCWS_LAYER_MODULE)) {
       return {
         format: 'module',
         shortCircuit: true,
-        source: 'export function fireAreas() { return globalThis.__minimapAreas ?? { areaOf: new Map() }; }'
+        source:
+          'export function fireAreas() { return globalThis.__minimapAreas ?? { areaOf: new Map() }; }' +
+          ' export function loadedBcwsCollection() { const coverage = globalThis.__minimapAreas?.coverage; return coverage === undefined ? null : { coverage }; }'
       };
     }
     return nextLoad(url, context);
@@ -121,8 +124,10 @@ function loaded(collection, { truncated, envelope = null }) {
 
 /** Run the retained feed once under a layer status and a loaded snapshot and
  * return the recorded count-only POST bodies plus the published summaries. */
-/** The BC read's answers: its two whole-table counts and its active perimeters (no live host). */
-const BC_QUIET = { count: 319, features: [] };
+/** The BC read's answers: the layer's edit stamps (a finished reload unless `stamps` says otherwise) and its active perimeters (no live host). */
+const BC_QUIET = { features: [] };
+const STEADY_STAMPS = { schemaLastEditDate: 1793940086179, dataLastEditDate: 1793940092833 };
+const NEXT_STAMPS = { schemaLastEditDate: 1793940989464, dataLastEditDate: 1793940995977 };
 
 async function runFeed({ status, snapshot, bc = BC_QUIET, nifcCount = COUNT_ANSWER, bcStatus, areas }) {
   const original = globalThis.fetch;
@@ -133,8 +138,8 @@ async function runFeed({ status, snapshot, bc = BC_QUIET, nifcCount = COUNT_ANSW
     if (url.includes('BCWS_FirePerimeters_PublicView')) {
       bcUrls.push(url);
       if (bc === 'fail') return new Response('', { status: 503 });
-      const body = new URL(url).searchParams.get('returnCountOnly') === 'true'
-        ? { count: bc.count }
+      const body = !new URL(url).pathname.endsWith('/query')
+        ? { editingInfo: bc.stamps?.() ?? STEADY_STAMPS }
         : { type: 'FeatureCollection', features: bc.features };
       return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }
@@ -339,7 +344,7 @@ test('setup: the Border square lies in Pacific Coast, and Mexico and Hawaii do n
 });
 
 test('a framing that reaches British Columbia adds the active BC perimeters to its count; one outside it carries no BC field', async () => {
-  const { bcUrls, snapshot } = await runFeed({ status: undefined, nifcCount: 0, bc: { count: 319, features: [BC_ACTIVE] } });
+  const { bcUrls, snapshot } = await runFeed({ status: undefined, nifcCount: 0, bc: { features: [BC_ACTIVE] } });
   const covered = snapshot.summaries[COVERED];
   assert.equal(covered.mappedWildfirePerimeterCount, 1);
   assert.equal(covered.condition, 'mapped-wildfire');
@@ -349,7 +354,7 @@ test('a framing that reaches British Columbia adds the active BC perimeters to i
     assert.equal('bcwsPerimeterCount' in snapshot.summaries[key], false, `${key} is outside British Columbia`);
     assert.equal(snapshot.summaries[key].mappedWildfirePerimeterCount, 0);
   }
-  // One province read of the active stages, bracketed by two whole-table counts.
+  // One province read of the active stages, bracketed by the layer's edit stamps.
   assert.equal(bcUrls.length, 3);
   const read = new URL(bcUrls.find((url) => url.includes('f=geojson')));
   assert.equal(read.searchParams.get('where'), "FIRE_STATUS IN ('Out of Control','Being Held','Under Control')");
@@ -368,36 +373,59 @@ test('a failed BC read is never a zero for British Columbia: with no NIFC perime
   assert.equal(some.snapshot.summaries[COVERED].bcwsPerimeterCount, null);
 });
 
-test('a BC answer taken while the service reloads (its two whole-table counts disagree) is unavailable, never a zero', async () => {
-  let counts = 0;
-  const original = globalThis.Response;
+test('a BC answer taken across a service reload (its edit stamps moved during the read) is unavailable, never a zero', async () => {
+  let checks = 0;
   const { snapshot } = await runFeed({
     status: undefined,
     nifcCount: 0,
-    bc: {
-      get count() { counts += 1; return counts === 1 ? 0 : 319; },
-      features: []
-    }
+    bc: { stamps: () => (checks++ ? NEXT_STAMPS : STEADY_STAMPS), features: [] }
   });
-  assert.equal(globalThis.Response, original);
   assert.equal(snapshot.summaries[COVERED].condition, 'unavailable', 'an emptied layer mid-reload is not "no BC fires"');
 });
 
-test('a known fire area counts once and carries the ratified label; unknown, the two agencies count apart', async () => {
+/** A BC layer view over the whole of British Columbia's box, so its grouping reaches every framing's BC part. */
+const BC_WIDE_VIEW = [-140, 40, -110, 61];
+
+test('a known fire area counts once and carries the ratified label; grouped and apart, the two agencies add', async () => {
   const nifc = loaded({ type: 'FeatureCollection', features: [NIFC_BORDER] }, { truncated: false });
   const areaOf = new Map([['nifc:2026-WANCP-000266', 'fa:x'], ['bcws:2026-V10885', 'fa:x']]);
-  const once = await runFeed({ status: 'ready', snapshot: nifc, bc: { count: 319, features: [BC_ACTIVE] }, bcStatus: 'ready', areas: { areaOf } });
+  const once = await runFeed({ status: 'ready', snapshot: nifc, bc: { features: [BC_ACTIVE] }, bcStatus: 'ready', areas: { status: 'complete', areaOf, coverage: BC_WIDE_VIEW } });
   assert.equal(once.snapshot.summaries[COVERED].mappedWildfirePerimeterCount, 1);
   assert.equal(once.snapshot.summaries[COVERED].fireAreasMerged, 1);
-  const apart = await runFeed({ status: 'ready', snapshot: nifc, bc: { count: 319, features: [BC_ACTIVE] } });
+  // The BC layer grouped this view and found no overlap: two fire areas.
+  const apart = await runFeed({ status: 'ready', snapshot: nifc, bc: { features: [BC_ACTIVE] }, bcStatus: 'ready', areas: { status: 'complete', areaOf: new Map(), coverage: BC_WIDE_VIEW } });
   assert.equal(apart.snapshot.summaries[COVERED].mappedWildfirePerimeterCount, 2);
   assert.equal(apart.snapshot.summaries[COVERED].fireAreasMerged, 0);
+  assert.equal('nifcPerimeterCount' in apart.snapshot.summaries[COVERED], false);
+});
+
+test('where no overlap can be established the two agencies are never added: the larger count shades and each is stated apart', async () => {
+  // NIFC's count from the network (a count-only answer) beside the Border 2 BC record.
+  const counted = await runFeed({ status: undefined, nifcCount: 1, bc: { features: [BC_ACTIVE] } });
+  // NIFC's loaded record with no BC grouping to say (the BC layer off, failed, or its grouping pending).
+  const nifc = loaded({ type: 'FeatureCollection', features: [NIFC_BORDER] }, { truncated: false });
+  const ungrouped = await runFeed({ status: 'ready', snapshot: nifc, bc: { features: [BC_ACTIVE] } });
+  // A grouping that found no overlap, over a BC view smaller than the framing: pairs outside it were never grouped.
+  const narrow = await runFeed({ status: 'ready', snapshot: nifc, bc: { features: [BC_ACTIVE] }, bcStatus: 'ready', areas: { status: 'complete', areaOf: new Map(), coverage: [-122, 48.5, -120, 49.5] } });
+  for (const { snapshot } of [counted, ungrouped, narrow]) {
+    const summary = snapshot.summaries[COVERED];
+    assert.equal(summary.mappedWildfirePerimeterCount, 1, 'the larger agency count, never 1 + 1');
+    assert.equal(summary.condition, 'mapped-wildfire');
+    assert.equal(summary.nifcPerimeterCount, 1);
+    assert.equal(summary.bcwsPerimeterCount, 1);
+    assert.equal(summary.fireAreasMerged, 0);
+  }
+  const { buildAgencyCountsApart } = await import('../src/config/wildfire-presentation.ts');
+  assert.equal(
+    buildAgencyCountsApart(1, 2),
+    '1 current mapped NIFC wildfire perimeter and 2 current mapped BC Wildfire Service wildfire perimeters intersect this authored framing; each agency is counted on its own because overlaps between them are not checked here'
+  );
 });
 
 test('the BC stage whitelist decides what the minimap counts: Out and an unstated stage are not active', async () => {
   const out = { ...BC_ACTIVE, properties: { ...BC_ACTIVE.properties, FIRE_STATUS: 'Out' } };
   const unstated = { ...BC_ACTIVE, properties: { ...BC_ACTIVE.properties, OBJECTID: 1, FIRE_NUMBER: 'C22352', FIRE_STATUS: null } };
-  const { snapshot } = await runFeed({ status: undefined, nifcCount: 0, bc: { count: 319, features: [out, unstated] } });
+  const { snapshot } = await runFeed({ status: undefined, nifcCount: 0, bc: { features: [out, unstated] } });
   assert.equal(snapshot.summaries[COVERED].bcwsPerimeterCount, 0);
   assert.notEqual(snapshot.summaries[COVERED].condition, 'mapped-wildfire');
 });

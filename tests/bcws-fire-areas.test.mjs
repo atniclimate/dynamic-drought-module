@@ -121,6 +121,40 @@ test('a fire area counts once and carries the ratified label', async () => {
   assert.ok(presentation.buildFireAreaClaim(2).endsWith('; overlapping agency perimeters counted as one fire area.'));
 });
 
+test('a failed BC read leaves the strip\'s NIFC count standing and says so; BC holds the tile only while it loads', async () => {
+  const strip = await import('../src/ui/island/strip-metrics.ts');
+  const { registry } = await import('../src/state/registry.ts');
+  const { setChecked } = await import('../src/ui/island/bridge.ts');
+  const nifc = ['2026-WANCP-000266', '2026-IDBOF-000001'].map((id) => ({ properties: { attr_IncidentTypeCategory: 'WF', attr_UniqueFireIdentifier: id } }));
+  const map = {
+    getLayer: (id) => (id === 'nifc-fires-fill' ? { id } : undefined),
+    queryRenderedFeatures: ({ layers }) => (layers.includes('nifc-fires-fill') ? nifc : [])
+  };
+  try {
+    registry.activate('nifc-fires');
+    registry.setStatus('nifc-fires', 'ready');
+    // A BC outage with no earlier answer: the layer stays checked, with no fill.
+    setChecked('bcws-fires', true);
+    registry.setStatus('bcws-fires', 'error');
+    assert.deepEqual(strip.firesMetric(map), {
+      value: '2', sublabel: 'mapped wildfire perimeters in view; BC Wildfire Service perimeters unavailable', tone: 'data'
+    });
+    registry.setStatus('bcws-fires', 'loading');
+    assert.equal(strip.firesMetric(map).value, '-', 'while BC loads, its tile waits');
+    registry.activate('bcws-fires');
+    registry.setStatus('bcws-fires', 'no-data');
+    assert.deepEqual(strip.firesMetric(map), { value: '2', sublabel: 'mapped wildfire perimeters in view', tone: 'data' });
+    // With NIFC off, a failed BC read is never a zero.
+    registry.deactivate('nifc-fires');
+    registry.setStatus('bcws-fires', 'error');
+    assert.equal(strip.firesMetric(map).value, '-');
+  } finally {
+    registry.deactivate('nifc-fires');
+    registry.deactivate('bcws-fires');
+    setChecked('bcws-fires', false);
+  }
+});
+
 test('a reload that renumbers OBJECTID and GlobalID keeps each record\'s key, its fire area and a single count', async () => {
   const reloaded = { ...fixture.bcws, id: 999, properties: { ...fixture.bcws.properties, OBJECTID: 999, GlobalID: '00000000-0000-0000-0000-000000000000' } };
   assert.equal(areas.fireRecordKey('bcws', reloaded.properties), areas.fireRecordKey('bcws', fixture.bcws.properties));

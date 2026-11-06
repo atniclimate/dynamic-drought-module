@@ -1255,14 +1255,16 @@ const BORDER_BOX = [-121.2, 48.9, -120.9, 49.2];
 const BORDER_SQUARE = { type: 'Polygon', coordinates: [[[-121.1, 49.0], [-121.0, 49.0], [-121.0, 49.1], [-121.1, 49.1], [-121.1, 49.0]]] };
 const bcRecord = (number, status, objectId = 1) =>
   feature({ OBJECTID: objectId, FIRE_NUMBER: number, FIRE_YEAR: 2026, FIRE_STATUS: status, FIRE_SIZE_HECTARES: 10 }, BORDER_SQUARE);
-/** The BC service: its two whole-table counts (a steady table unless `counts` says otherwise) and its perimeters. */
-function bcService({ features = [], counts = [319, 319], status = 200 } = {}) {
+const STEADY_STAMPS = { schemaLastEditDate: 1793940086179, dataLastEditDate: 1793940092833 };
+const NEXT_STAMPS = { schemaLastEditDate: 1793940989464, dataLastEditDate: 1793940995977 };
+/** The BC service: the layer's edit stamps (a reload that finished and held still unless `stamps` says otherwise) and its perimeters. */
+function bcService({ features = [], stamps = [STEADY_STAMPS, STEADY_STAMPS], status = 200 } = {}) {
   const urls = [];
-  let count = 0;
+  let checks = 0;
   const answer = (url) => {
     urls.push(url);
     if (status !== 200) return jsonResponse({}, status);
-    if (new URL(url).searchParams.get('returnCountOnly') === 'true') return jsonResponse({ count: counts[Math.min(count++, counts.length - 1)] });
+    if (!new URL(url).pathname.endsWith('/query')) return jsonResponse({ editingInfo: stamps[Math.min(checks++, stamps.length - 1)] });
     return jsonResponse(collection(features));
   };
   return { urls, answer };
@@ -1286,11 +1288,11 @@ test('the BC read sets out the issuer\'s own stage names over the selection box,
   const read = new URL(service.urls.find((url) => url.includes('f=geojson')));
   // The box is cut to British Columbia's: the service is never asked south of 48 N.
   assert.equal(read.searchParams.get('geometry'), '-121.2,48.9,-120.9,49.2');
-  assert.equal(service.urls.length, 3, 'one read between two whole-table counts');
+  assert.equal(service.urls.length, 3, 'one read between two checks of the layer\'s edit stamps');
 });
 
 test('a failed or reload-straddling BC read is a note, never a zero for British Columbia', async () => {
-  for (const service of [bcService({ status: 503 }), bcService({ counts: [0, 319] })]) {
+  for (const service of [bcService({ status: 503 }), bcService({ stamps: [STEADY_STAMPS, NEXT_STAMPS] })]) {
     const result = await withFetch(service.answer, () => sources.fetchBcwsClaims(place(-121.05, 49.05, BORDER_BOX), signal()));
     assert.equal(result.ok, false);
     assert.deepEqual(result.claims, [], 'no "No current BC Wildfire Service perimeters" claim');

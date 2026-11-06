@@ -13,6 +13,8 @@ export interface PolygonPageOptions {
   readonly maxPageBytes: number;
   readonly maxTotalBytes: number;
   readonly maxVertices: number;
+  /** Passed to each page's fetch, for a caller that must read past the browser cache. */
+  readonly requestInit?: RequestInit;
 }
 type PolygonFeature = Feature<Polygon | MultiPolygon>;
 export interface PolygonPagesResult {
@@ -78,7 +80,7 @@ export async function readPolygonPages(options: PolygonPageOptions): Promise<Pol
       try {
         pages++;
         const response = await fetchBufferedWithBudget(
-          options.urlForPage(page * options.pageSize, options.pageSize), null,
+          options.urlForPage(page * options.pageSize, options.pageSize), options.requestInit ?? null,
           controller.signal, options.pageTimeoutMs,
           Math.min(options.maxPageBytes, remainingBytes)
         );

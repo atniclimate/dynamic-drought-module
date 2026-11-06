@@ -103,6 +103,7 @@ const NWS_HEAT_NAME_NOTE = 'Products issued under the former names Excessive Hea
 const NWS_SNAPSHOT_NOTE = 'National Weather Service products are read about every five minutes; the time beside them in the key is when DDM last read them, not when a product was issued or when it is in effect.';
 
 export function renderMapTechnicalInformation(open = false): string {
+  // DRAFT wording (DR-177): the two BC link texts below, "BC Wildfire Service, BC Data Catalogue" and "BC Wildfire Service, stages of control".
   return `<details class="impact-technical-information"${open ? ' open' : ''}>
     <summary>Technical information</summary>
     <h4>Drought navigation overview</h4>
