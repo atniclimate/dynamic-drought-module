@@ -351,7 +351,8 @@ export const LAYER_DEFS: readonly LayerDef[] = [
   // Named by the committed mode, beside the products it reads (HazardClusterDef.alerts).
   { key: 'nws-alerts', product: 'nws-alerts', get name() { return (HAZARD_CLUSTERS[getSelectedHazard()].alerts ?? HEAT_FIRE_ALERTS).name; }, source: 'NOAA NWS · MapServer', role: 'event', defaultOn: false, noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/nws-alerts') },
   { key: 'hms-smoke', product: 'hms-smoke', name: 'Smoke Plumes (HMS)', source: 'NOAA OSPO · FeatureServer', role: 'event', defaultOn: false, noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/hms-smoke') },
-  { key: 'heatrisk', product: 'heatrisk', name: 'HeatRisk (Experimental)', source: 'NOAA NWS/WPC · ImageServer', role: 'surface', defaultOn: false, noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/heatrisk') },
+  // HeatRisk reaches no-data only from its coverage check (src/layers/heatrisk.ts), never an empty answer.
+  { key: 'heatrisk', product: 'heatrisk', name: 'HeatRisk (Experimental)', source: 'NOAA NWS/WPC · ImageServer', role: 'surface', defaultOn: false, noDataLabel: 'no data for this view', load: () => import('../layers/heatrisk') },
   { key: 'spc-fire-weather', product: 'spc-fire-weather', name: 'Fire Weather Outlook (Day 1)', source: 'NOAA SPC · MapServer', role: 'surface', defaultOn: false, noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/spc-fire-weather') },
   { key: 'usfs-whp', product: 'usfs-whp', name: 'Wildfire Hazard Potential', source: 'USFS · GeoPlatform', role: 'surface', defaultOn: false, noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/usfs-whp') },
   { key: 'usfs-whp-classes', product: 'usfs-whp', name: 'Wildfire Hazard Potential (USFS colors)', source: 'USFS · GeoPlatform', role: 'surface', defaultOn: false, noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/usfs-whp-classes') },

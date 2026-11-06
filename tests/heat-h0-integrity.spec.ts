@@ -56,14 +56,16 @@ function rectangleFeature(
       expiration,
       wfo: 'SEW'
     },
+    // The lower 48, so a product stays in a phone view after a desktop boot:
+    // the phone Alerts pane lists only what is drawn in the current view.
     geometry: {
       type: 'Polygon',
       coordinates: [[
-        [-125, 45],
-        [-116, 45],
-        [-116, 50],
+        [-125, 25],
+        [-67, 25],
+        [-67, 50],
         [-125, 50],
-        [-125, 45]
+        [-125, 25]
       ]]
     }
   };
