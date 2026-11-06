@@ -97,6 +97,10 @@ class FakeMap {
     this.emit('sourcedata', { sourceId: 'usfs-whp', dataType: 'source', tile });
     this.emit('idle');
   }
+  /** MapLibre's frame after the layer is shown again: the source is used again (Style.update). */
+  giveBack() {
+    this.emit('sourcedata', { sourceId: 'usfs-whp', dataType: 'source', sourceDataType: 'visibility' });
+  }
   moveTo(lng, lat) {
     this.center = { lng, lat };
     this.emit('moveend');
@@ -201,11 +205,38 @@ test('a layer given back by the 3D drape whose every tile fails reads unavailabl
     map.setLayoutProperty('usfs-whp', 'visibility', 'none');
     t.mock.timers.tick(10_000);
     map.setLayoutProperty('usfs-whp', 'visibility', 'visible');
+    map.giveBack();
     // A failed tile fires no sourcedata; the deadline is its only read.
     map.emit('sourcedataloading', { sourceId: 'usfs-whp', dataType: 'source', tile: { tileID: { key: 't1' } } });
     t.mock.timers.tick(10_000);
     assert.equal(registry.getStatus('usfs-whp'), 'error');
   });
+});
+
+test('a layer given back by the 3D drape over tiles it already holds reads its own verdict again, with no new tile read', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  registry.activate('usfs-whp-classes');
+  registry.setStatus('usfs-whp-classes', 'error');
+  try {
+    await withMap((map) => {
+      // A tile loads, then the stood-down drape hides the layer before its verdict, which then lands hidden.
+      const tile = { tileID: { key: 't1' } };
+      map.emit('sourcedataloading', { sourceId: 'usfs-whp', dataType: 'source', tile });
+      map.emit('sourcedata', { sourceId: 'usfs-whp', dataType: 'source', tile });
+      map.addLayer({ id: 'whp-2023', layout: { visibility: 'none' } });
+      map.setLayoutProperty('usfs-whp', 'visibility', 'none');
+      map.emit('idle');
+      assert.equal(registry.getStatus('usfs-whp'), 'error', 'hidden, it borrows the colours row');
+      // The scene exits with the colours row still on: whp-3d.ts removes the drape and shows the layer.
+      map.removeLayer('whp-2023');
+      map.setLayoutProperty('usfs-whp', 'visibility', 'visible');
+      map.giveBack();
+      map.emit('idle');
+      assert.equal(registry.getStatus('usfs-whp'), 'ready', 'its own held tile is the verdict, not the borrowed one');
+    });
+  } finally {
+    registry.deactivate('usfs-whp-classes');
+  }
 });
 
 test('a visible layer with no tile at the deadline still reads unavailable', async (t) => {

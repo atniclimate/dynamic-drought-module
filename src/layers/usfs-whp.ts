@@ -214,20 +214,30 @@ export function createWhpLayer(key: 'usfs-whp' | 'usfs-whp-classes', shaded: boo
       if (borrowing) sync();
     };
     const releaseFollow = [registry.on('change', follow), registry.on('status-change', follow)];
-    // A dropped 'error' stays in the watcher's memory, so a failed view after
-    // the drape gives the layer back would repeat it unheard: its first tile
-    // request starts a fresh watch with its own deadline.
-    let unheard = false;
-    const givenBack = (e: { sourceId?: string }): void => {
-      if (!unheard || e.sourceId !== SOURCE_ID) return;
-      unheard = false;
-      tileWatch?.reset();
+    // The watcher's last verdict while the drape hid this layer; null once given back.
+    let held: RasterTileOutcome | null = null;
+    // Given back (MapLibre marks the source used again, before any tile request):
+    // the watcher's own last verdict replaces the drape's, so held tiles need no
+    // new read. A hidden 'error' is no evidence and stays in the watcher's
+    // memory, so the view is read afresh under a new deadline.
+    const givenBack = (e: { sourceId?: string; sourceDataType?: string }): void => {
+      if (held === null || e.sourceId !== SOURCE_ID || e.sourceDataType !== 'visibility') return;
+      if (map.getLayoutProperty(LAYER_ID, 'visibility') === 'none') return;
+      borrowing = false;
+      if (held === 'error') {
+        tile = 'loading';
+        tileWatch?.reset();
+      } else {
+        tile = held;
+      }
+      held = null;
+      sync();
     };
     map.on('moveend', sync);
-    map.on('sourcedataloading', givenBack);
+    map.on('sourcedata', givenBack);
     releaseCoverageWatch = () => {
       map.off('moveend', sync);
-      map.off('sourcedataloading', givenBack);
+      map.off('sourcedata', givenBack);
       for (const release of releaseFollow) release();
     };
     return (state) => {
@@ -235,9 +245,9 @@ export function createWhpLayer(key: 'usfs-whp' | 'usfs-whp-classes', shaded: boo
       // tiles, so a deadline verdict then is no evidence; keep the last one.
       // A row hidden before its first verdict is settled ready (off coverage,
       // no data) while the drape draws it, and borrows the colours row's verdict while it is stood down.
-      // shortcut: hidden only under the mounted 3D drape, which draws this edition from the probed archive unless stood down; the first verdict after the layer is given back replaces it
+      // Hidden only under the mounted 3D drape, which draws this edition from the probed archive unless stood down.
       if (map.getLayoutProperty(LAYER_ID, 'visibility') === 'none') {
-        if (state === 'error') unheard = true;
+        held = state;
         if (tile === 'loading') {
           borrowing = !drapeDrawn(map);
           if (!borrowing) tile = 'ready';
@@ -245,6 +255,7 @@ export function createWhpLayer(key: 'usfs-whp' | 'usfs-whp-classes', shaded: boo
         }
         return;
       }
+      held = null;
       borrowing = false;
       tile = state;
       sync();

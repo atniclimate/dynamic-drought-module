@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { registerHooks } from 'node:module';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -79,6 +79,12 @@ const STAND_INS = new Map([
     '/src/ui/time-bar.ts',
     'export function setTimeBar(key, config) { globalThis.__rasterReadinessTest.timeBars.set(key, config); }\n' +
       'export function clearTimeBar(key) { globalThis.__rasterReadinessTest.timeBars.delete(key); }\n'
+  ],
+  // The Nino 3.4 case calls the layer's own `respond` (tests/place-label-nifc-model.test.mjs, the same seam).
+  [
+    '/src/map/interaction-coordinator.ts',
+    'export function registerClickTarget(t) { (globalThis.__rasterReadinessTest.targets ??= []).push(t); }\n' +
+      'export function identifyAt() {}\n'
   ]
 ]);
 
@@ -917,6 +923,63 @@ test('an abort during the DescribeDomains body read cancels the stream, writes n
     assert.equal(map.listenerCount(), 0, 'a map listener outlived deactivate');
     assert.deepEqual(warn.messages, [], 'a cancel is silent');
   });
+});
+
+test('a Nino 3.4 click before the popup frame chunk has painted draws the RONI chart once the frame paints, and a later click ends the wait', async (t) => {
+  const snapshot = readFileSync(fileURLToPath(new URL('../public/data/enso-indices.json', import.meta.url)));
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input) => {
+    if (!String(input).endsWith('data/enso-indices.json')) throw new Error(`unexpected egress from a node test: ${input}`);
+    return new Response(snapshot, { status: 200, headers: { 'Content-Type': 'application/json' } });
+  };
+  const observers = [];
+  globalThis.MutationObserver = class {
+    constructor(callback) {
+      this.callback = callback;
+      this.watching = false;
+      observers.push(this);
+    }
+    observe() {
+      this.watching = true;
+    }
+    disconnect() {
+      this.watching = false;
+    }
+  };
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+    delete globalThis.MutationObserver;
+  });
+  // The popup's chart mount, absent until the coordinator paints the frame after the chunk's wait.
+  let figure = null;
+  const container = { querySelector: (selector) => (selector === '[data-popup-chart="enso-box-roni"]' ? figure : null) };
+  const paint = () => {
+    figure = { html: '', querySelector: () => null, insertAdjacentHTML(_where, html) { this.html += html; } };
+    for (const o of observers.filter((o) => o.watching)) o.callback([]);
+  };
+  const map = new FakeMap();
+  map.getContainer = () => container;
+  mod.bindPopups(map);
+  await settle();
+  const target = globalThis.__rasterReadinessTest.targets.find((x) => x.layerIds.includes('nino34-box-fill'));
+
+  const { model } = target.respond(null, { point: { x: 0, y: 0 }, lngLat: { lng: -145, lat: 0 } }, map);
+  assert.ok(model.details.some((d) => d.chartKey === 'enso-box-roni'), 'the snapshot was read: the model carries the RONI chart');
+  // A frame later (the old one-shot mount) the popup is still waiting for its chunk: nothing to draw into yet.
+  await settle();
+  assert.equal(figure, null);
+  paint();
+  await settle();
+  assert.match(figure.html, /<svg class="ddm-chart"/, 'the chart is drawn into the painted figure');
+  assert.equal(observers[0].watching, false, 'the watch ends at the paint');
+  assert.equal(map.listeners.get('click')?.size ?? 0, 0, 'and leaves no click listener');
+
+  // A commit superseded before it paints (the next click): the watch ends and draws nothing later.
+  figure = null;
+  target.respond(null, { point: { x: 0, y: 0 }, lngLat: { lng: -145, lat: 0 } }, map);
+  map.emit('click');
+  assert.equal(observers[1].watching, false, 'a later click ends the watch');
+  assert.equal(map.listeners.get('click')?.size ?? 0, 0);
 });
 
 test('a late DescribeDomains answer after a re-activation superseded it changes nothing', async () => {

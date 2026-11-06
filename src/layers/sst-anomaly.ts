@@ -950,6 +950,30 @@ export function deactivate(map: maplibregl.Map): void {
 }
 
 /**
+ * Mount the RONI chart once the coordinator paints this response: right after
+ * `respond` with the popup frame loaded, after the frame chunk's wait without
+ * it. A failed chunk or a superseded commit paints no figure, so the next map
+ * click ends the watch.
+ */
+function mountChartOnPaint(map: maplibregl.Map, model: ReturnType<typeof buildEnsoBoxPopupModel>): void {
+  const chart = model.details?.find((d) => d.kind === 'chart');
+  if (chart?.kind !== 'chart') return;
+  const root = map.getContainer();
+  const stop = (): void => {
+    observer.disconnect();
+    map.off('click', stop);
+  };
+  const observer = new MutationObserver(() => {
+    const figure = root.querySelector(`[data-popup-chart="${chart.chartKey}"]`);
+    if (!figure || figure.querySelector('svg')) return;
+    stop();
+    void mountEnsoBoxChart(root, model).catch(() => undefined);
+  });
+  observer.observe(root, { childList: true, subtree: true });
+  map.on('click', stop);
+}
+
+/**
  * The Nino 3.4 box is the one click target: the anomaly raster has no
  * per-pixel attributes on the client. The coordinator's respond is
  * synchronous, so the bundled ENSO snapshot is read from registration (the
@@ -965,8 +989,7 @@ export function bindPopups(map: maplibregl.Map): void {
     respond: (_feature, _click, m) => {
       const model = buildEnsoBoxPopupModel(currentEnsoBoxRead());
       startEnsoBoxRead();
-      // shortcut: a click before the frame chunk resolves paints the chart's text alternative only; fine while the frame is warmed at registration.
-      requestAnimationFrame(() => void mountEnsoBoxChart(m.getContainer(), model).catch(() => undefined));
+      mountChartOnPaint(m, model);
       return { model };
     }
   });
