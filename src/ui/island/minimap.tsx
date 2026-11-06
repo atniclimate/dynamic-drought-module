@@ -51,10 +51,18 @@ import {
   FRAMINGS,
   FRAMING_KEYS,
   framingMayContainNunavut,
-  framingMinimapProvenance,
 } from '../../config/framings';
 import type { FramingKey, FramingSelection } from '../../config/framings';
-import type { HazardClusterKey } from '../../config/clusters';
+import type { HazardClusterKey, TemporalHorizonKey } from '../../config/clusters';
+import {
+  minimapIndexLabel,
+  minimapProductName,
+  minimapProvenanceAt,
+  minimapReading,
+  outlookFramingWords,
+  outlookScaleText,
+} from '../../config/minimap-readings';
+import type { MinimapReading } from '../../config/minimap-readings';
 import { OCEANS, MINIMAP_OCEAN_KEYS } from '../../config/oceans';
 import type { MinimapOceanKey, OceanKey } from '../../config/oceans';
 import {
@@ -99,6 +107,13 @@ import type {
   MinimapWildfireSnapshot,
   MinimapWildfireSummary,
 } from '../../state/minimap-wildfire';
+import {
+  IDLE_OUTLOOK,
+  outlookColors,
+  outlookLabels,
+  watchMinimapOutlook,
+} from '../../state/minimap-outlook';
+import type { MinimapOutlookSnapshot } from '../../state/minimap-outlook';
 import type { EnsoPhaseLabel } from '../../impact/enso';
 import { fitAll, fitFraming, fitOcean } from '../../map/camera-fit';
 import { requestBasemapMode } from '../../map/basemap-switcher';
@@ -207,18 +222,33 @@ const CAMERA_ONLY_NOTE = 'Click fits the camera. Camera-only; selects nothing.';
 export type MinimapMetricContext = HazardClusterKey | 'custom';
 
 /**
- * DR-040 c: Heat, ENSO and a custom display shade no framing (DDM-UI-004);
- * the minimap never invents a product for them. These say what the minimap
- * shows; the mode's own clause (`framingMinimapProvenance`) says why.
+ * DR-040 c: a mode and horizon with no reading in the table
+ * (src/config/minimap-readings.ts), and a custom display, shade no framing
+ * (DDM-UI-004); the minimap never invents a product for them. These say what
+ * the minimap shows; the clause true at that horizon (`minimapProvenanceAt`)
+ * says why, or nothing when no clause is true there.
  */
 const UNSHADED_NOTE = 'Framings are unshaded in this display.';
 const UNSHADED_SCALE_TEXT = 'Unshaded · see main map';
 
-function unshadedNote(metricContext: MinimapMetricContext): string {
-  const why =
-    metricContext === 'custom'
-      ? undefined
-      : framingMinimapProvenance(null, metricContext);
+/** The reading this minimap takes, from the one table (never a mode literal). */
+function readingFor(
+  metricContext: MinimapMetricContext,
+  horizon: TemporalHorizonKey,
+): MinimapReading | null {
+  return metricContext === 'custom' ? null : minimapReading(metricContext, horizon);
+}
+
+function provenanceFor(
+  key: FramingKey | null,
+  metricContext: MinimapMetricContext,
+  horizon: TemporalHorizonKey,
+): string | undefined {
+  return metricContext === 'custom' ? undefined : minimapProvenanceAt(key, metricContext, horizon);
+}
+
+function unshadedNote(metricContext: MinimapMetricContext, horizon: TemporalHorizonKey): string {
+  const why = provenanceFor(null, metricContext, horizon);
   return why === undefined ? UNSHADED_NOTE : `${UNSHADED_NOTE} ${why}`;
 }
 
@@ -507,6 +537,7 @@ function droughtMetricNote(snapshot: MinimapDroughtSnapshot): string {
 function metricFill(
   droughtSummary: FramingDroughtSummary | undefined,
   wildfireSummary: MinimapWildfireSummary | undefined,
+  outlookFill?: readonly string[],
 ): string | undefined {
   if (droughtSummary) {
     return MINIMAP_DROUGHT_COLORS[droughtSummary.averageClass];
@@ -514,7 +545,22 @@ function metricFill(
   if (wildfireSummary) {
     return MINIMAP_WILDFIRE_COLORS[wildfireSummary.condition];
   }
-  return undefined;
+  return outlookFill?.[0];
+}
+
+/**
+ * DRAFT (classes-drawn rows): several drawn classes as equal stripes of their
+ * issuer colours in legend order, so no class is ranked, merged or blended.
+ */
+function ClassStripes({ id, colors }: { readonly id: string; readonly colors: readonly string[] }) {
+  const size = 4 * colors.length;
+  return (
+    <pattern id={id} width={size} height={size} patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      {colors.map((color, index) => (
+        <rect key={index} x={4 * index} width="4" height={size} fill={color} />
+      ))}
+    </pattern>
+  );
 }
 
 function metricIsPartial(
@@ -578,9 +624,13 @@ function fillTreatment(
   key: string,
   droughtSummary: FramingDroughtSummary | undefined,
   wildfireSummary: MinimapWildfireSummary | undefined,
+  outlookFill?: readonly string[],
 ): MinimapFillTreatment | undefined {
-  const fill = metricFill(droughtSummary, wildfireSummary);
+  const fill = metricFill(droughtSummary, wildfireSummary, outlookFill);
   if (fill === undefined) return undefined;
+  if (outlookFill !== undefined && outlookFill.length > 1) {
+    return { kind: 'pattern', patternId: `${idPrefix}-classes-${key}` };
+  }
   if (isWildfireWhpFallback(wildfireSummary)) {
     return { kind: 'pattern', patternId: `${idPrefix}-whp-${key}` };
   }
@@ -627,13 +677,16 @@ function accessibleName(
   key: FramingKey,
   drought: MinimapDroughtSnapshot,
   wildfire: MinimapWildfireSnapshot,
+  outlook: MinimapOutlookSnapshot,
   metricContext: MinimapMetricContext,
+  horizon: TemporalHorizonKey,
 ): string {
   const def = FRAMINGS[key];
+  const reading = readingFor(metricContext, horizon);
   // The accessible name of a MINIMAP control, so it carries the clauses that
   // describe this widget and the ground it draws: what the display reaches
-  // and what informs this minimap in the current mode, never another mode's
-  // source (`framingMinimapProvenance`). The briefing-scope
+  // and what informs this minimap at the current mode and horizon, never
+  // another mode's or horizon's source (`minimapProvenanceAt`). The briefing-scope
   // clause is deliberately not here; it describes place selection, which this
   // control does not perform, and the on-map key already carries it
   // (src/config/framings.ts FramingCoverage; Codex review finding 5).
@@ -643,10 +696,7 @@ function accessibleName(
   // not published as a live claim about the current display, and a name that
   // changed its words as layers toggled would be worse for a screen-reader
   // user than one that is stable and slightly broader.
-  const minimapClause =
-    metricContext === 'custom'
-      ? undefined
-      : framingMinimapProvenance(key, metricContext);
+  const minimapClause = provenanceFor(key, metricContext, horizon);
   const clauses = [def.coverage?.displayScope, minimapClause]
     .filter((clause): clause is string => clause !== undefined && clause.length > 0)
     .join(' ');
@@ -658,7 +708,7 @@ function accessibleName(
   // sovereignty-adjacent honesty requirement, not decoration. Coverage
   // copy does not substitute for geometry provenance.
   const metric =
-    metricContext === 'drought'
+    reading?.rule === 'nadm-framing-summary'
       ? droughtDescription(
           drought.status,
           drought.summaries[key],
@@ -666,13 +716,19 @@ function accessibleName(
           key,
           drought.analysisMaskMissing,
         )
-      : metricContext === 'wildfire'
+      : reading?.rule === 'nifc-perimeter-count'
         ? wildfireDescription(
             wildfire.status,
             wildfire.summaries[key],
             wildfire.checkedAtUtc,
           )
-        : UNSHADED_NOTE;
+        : reading?.rule === 'classes-drawn'
+          ? outlookFramingWords(
+              minimapProductName(reading.product),
+              outlook.status,
+              outlookLabels(reading.outlook, outlook, key),
+            )
+          : UNSHADED_NOTE;
   return `${base} ${metric} ${CAMERA_ONLY_NOTE} ${def.provenance}`;
 }
 
@@ -683,8 +739,10 @@ export interface MinimapProps {
   /** Distinguishes the inline instance from the popover instance so ids
    * stay unique when both are mounted. */
   readonly idPrefix: string;
-  /** Drought and Wildfire have source-qualified framing metrics. */
+  /** The mode whose reading the table names (src/config/minimap-readings.ts). */
   readonly metricContext: MinimapMetricContext;
+  /** The committed horizon: with the mode, it picks the table's cell. */
+  readonly horizon: TemporalHorizonKey;
   /** Receives the inline instance's framing or ocean note when another
    * shell surface owns its presentation. */
   readonly onNoteChange?: (note: string) => void;
@@ -695,14 +753,21 @@ export function Minimap({
   framing,
   idPrefix,
   metricContext,
+  horizon,
   onNoteChange
 }: MinimapProps) {
   const active = framing.value === 'all' ? null : framing.value;
   const [oceanFraming, setOceanFramingState] = useState(getOceanFraming);
   const activeOcean = metricContext === 'enso' ? oceanFraming : null;
   const landSelectionIsCurrent = activeOcean === null;
-  const showDroughtMetric = metricContext === 'drought';
-  const showWildfireMetric = metricContext === 'wildfire';
+  // What this minimap reads comes from the one table, at this mode AND
+  // horizon: an outlook horizon never shows the current-conditions reading.
+  const reading = readingFor(metricContext, horizon);
+  const showDroughtMetric = reading?.rule === 'nadm-framing-summary';
+  const showWildfireMetric = reading?.rule === 'nifc-perimeter-count';
+  const outlookReading = reading?.rule === 'classes-drawn' ? reading : null;
+  const showIndexLabel =
+    metricContext !== 'custom' && minimapIndexLabel(metricContext, horizon) === 'roni';
   // The roving-focus position, independent of the committed selection
   // (deferred commit; see the header note). `undefined` means "no
   // browsing in progress": the tab stop sits on the committed option.
@@ -715,6 +780,7 @@ export function Minimap({
   const [wildfire, setWildfire] = useState<MinimapWildfireSnapshot>(
     getMinimapWildfireSnapshot,
   );
+  const [outlook, setOutlook] = useState<MinimapOutlookSnapshot>(IDLE_OUTLOOK);
   const [ensoPhase, setEnsoPhase] = useState<EnsoPhaseLabel | null>(null);
   const desktopMinimap = useDesktopMinimap();
   const compactHeightBand = useCompactHeightBand();
@@ -781,14 +847,25 @@ export function Minimap({
     return retainMinimapWildfire(setWildfire);
   }, [showWildfireMetric, desktopMinimap, viewMode]);
 
+  // A classes-drawn row reads what its layer drew; stopping it forgets the
+  // last reading, so the next row never shows another product's classes.
   useEffect(() => {
-    if (metricContext === 'drought' && drought.status !== 'idle') {
+    if (outlookReading === null || !desktopMinimap || viewMode === 'console') return;
+    const stop = watchMinimapOutlook(map, outlookReading.product, outlookReading.outlook, setOutlook);
+    return () => {
+      stop();
+      setOutlook(IDLE_OUTLOOK);
+    };
+  }, [map, outlookReading, desktopMinimap, viewMode]);
+
+  useEffect(() => {
+    if (showDroughtMetric && drought.status !== 'idle') {
       setMapTechnicalNote('drought', droughtMetricNote(drought));
     }
-    if (metricContext === 'wildfire' && wildfire.status !== 'idle') {
+    if (showWildfireMetric && wildfire.status !== 'idle') {
       setMapTechnicalNote('wildfire', wildfireMetricNote(wildfire));
     }
-  }, [metricContext, drought, wildfire]);
+  }, [showDroughtMetric, showWildfireMetric, drought, wildfire]);
 
   // EF-6: name the current ENSO phase in the scale slot instead of the bare
   // unshaded label. Label only, from the SAME bundled snapshot and the
@@ -798,7 +875,7 @@ export function Minimap({
   // accessible name still says so. An unavailable read leaves the existing
   // label untouched rather than asserting a phase.
   useEffect(() => {
-    if (metricContext !== 'enso' || !desktopMinimap || viewMode === 'console') return;
+    if (!showIndexLabel || !desktopMinimap || viewMode === 'console') return;
     const controller = new AbortController();
     let live = true;
     void (async () => {
@@ -814,7 +891,7 @@ export function Minimap({
       live = false;
       controller.abort();
     };
-  }, [metricContext, desktopMinimap, viewMode]);
+  }, [showIndexLabel, desktopMinimap, viewMode]);
 
   useEffect(
     () =>
@@ -890,13 +967,13 @@ export function Minimap({
   // stale phrase and drops the present-tense "emerging" tendency.
   const ensoStaleAsOf = ensoPhase?.staleAsOf ?? null;
   const ensoScaleText =
-    metricContext === 'enso' && ensoPhase !== null
+    showIndexLabel && ensoPhase !== null
       ? ensoStaleAsOf !== null
         ? `As of the CPC snapshot dated ${ensoStaleAsOf}: RONI ${ensoPhase.conditionsName} · ${ensoPhase.season} ${ensoPhase.year}`
         : `RONI ${ensoPhase.conditionsName}${ensoPhase.emerging ? ' emerging' : ''} · ${ensoPhase.season} ${ensoPhase.year}`
       : null;
   const ensoScaleAccessibleText =
-    metricContext === 'enso' && ensoPhase !== null
+    showIndexLabel && ensoPhase !== null
       ? `${UNSHADED_NOTE} ${ensoStaleAsOf !== null ? `As of the CPC snapshot dated ${ensoStaleAsOf}, the` : 'The'} operational Relative Oceanic Nino Index ${ensoStaleAsOf !== null ? 'read' : 'reads'} ${ensoPhase.conditionsName} conditions for the ${ensoPhase.season} ${ensoPhase.year} season` +
         (ensoPhase.emerging && ensoStaleAsOf === null
           ? `, with the historical five-season episode classification still reading ${ensoPhase.phaseName}`
@@ -915,7 +992,9 @@ export function Minimap({
         : wildfire.status === 'unavailable'
           ? 'Wildfire unavailable'
           : 'NIFC / WHP 2023'
-      : ensoScaleText ?? UNSHADED_SCALE_TEXT;
+      : outlookReading !== null
+        ? outlookScaleText(minimapProductName(outlookReading.product), outlook.status)
+        : ensoScaleText ?? UNSHADED_SCALE_TEXT;
   const scaleAccessibleText = showDroughtMetric
     ? drought.status === 'live' && drought.month !== null
       ? `North American Drought Monitor monthly consensus, ${monthLabel(drought.month)}. Fill is an approximate area-weighted mean category index; outline width is the D1 through D4 share.`
@@ -926,7 +1005,9 @@ export function Minimap({
         : wildfire.status === 'unavailable'
           ? 'Current mapped NIFC wildfire perimeter summary unavailable. Static WHP is not substituted.'
           : 'Current mapped NIFC wildfire perimeters with static United States Forest Service Wildfire Hazard Potential 2023 fallback.'
-      : ensoScaleAccessibleText ?? unshadedNote(metricContext);
+      : outlookReading !== null
+        ? scaleText
+        : ensoScaleAccessibleText ?? unshadedNote(metricContext, horizon);
   const activePartialNote =
     activeDrought?.coverage === 'live-partial'
       ? ` ${droughtMaskSentence(activeDrought.notAnalyzedPercent, drought.analysisMaskMissing, active!)}`.trimEnd()
@@ -992,7 +1073,9 @@ export function Minimap({
             ? drought.status
             : showWildfireMetric
               ? wildfire.status
-              : undefined
+              : outlookReading !== null
+                ? outlook.status
+                : undefined
         }
         data-metric-context={metricContext}
         // The source's valid month, never a retrieval timestamp; wildfire
@@ -1085,13 +1168,20 @@ export function Minimap({
               const wildfireSummary = showWildfireMetric
                 ? wildfire.summaries[key]
                 : undefined;
+              const outlookFill = outlookReading
+                ? outlookColors(outlookReading.outlook, outlook, key)
+                : undefined;
               const treatment = fillTreatment(
                 idPrefix,
                 key,
                 droughtSummary,
                 wildfireSummary,
+                outlookFill,
               );
               if (!treatment || treatment.kind !== 'pattern') return null;
+              if (outlookFill !== undefined) {
+                return <ClassStripes key={key} id={treatment.patternId} colors={outlookFill} />;
+              }
               const fill = metricFill(droughtSummary, wildfireSummary);
               if (fill === undefined) return null;
               // DR-138 R5: the WHP fallback pattern is issuer color plus
@@ -1151,6 +1241,7 @@ export function Minimap({
               key,
               droughtSummary,
               wildfireSummary,
+              outlookReading ? outlookColors(outlookReading.outlook, outlook, key) : undefined,
             );
             const whpFallback = isWildfireWhpFallback(wildfireSummary);
             return (
@@ -1161,7 +1252,7 @@ export function Minimap({
                 d={MAINLAND_PATHS[key]}
                 role="radio"
                 aria-checked={isActive}
-                aria-label={accessibleName(key, drought, wildfire, metricContext)}
+                aria-label={accessibleName(key, drought, wildfire, outlook, metricContext, horizon)}
                 tabIndex={roving === key ? 0 : -1}
                 focusable="true"
                 vectorEffect="non-scaling-stroke"
@@ -1251,7 +1342,7 @@ export function Minimap({
           class={`shell-minimap-region shell-minimap-hawaii${landSelectionIsCurrent && active === 'hawaii' ? ' active' : ''}`}
           role="radio"
           aria-checked={landSelectionIsCurrent && active === 'hawaii'}
-          aria-label={accessibleName('hawaii', drought, wildfire, metricContext)}
+          aria-label={accessibleName('hawaii', drought, wildfire, outlook, metricContext, horizon)}
           tabIndex={roving === 'hawaii' ? 0 : -1}
           data-framing="hawaii"
           data-drought-class={
@@ -1314,11 +1405,15 @@ export function Minimap({
             const hawaiiWildfire = showWildfireMetric
               ? wildfire.summaries.hawaii
               : undefined;
+            const hawaiiOutlook = outlookReading
+              ? outlookColors(outlookReading.outlook, outlook, 'hawaii')
+              : undefined;
             const hawaiiTreatment = fillTreatment(
               idPrefix,
               'hawaii',
               hawaiiDrought,
               hawaiiWildfire,
+              hawaiiOutlook,
             );
             const hawaiiWhpFallback = isWildfireWhpFallback(hawaiiWildfire);
             const hawaiiFill = metricFill(hawaiiDrought, hawaiiWildfire);
@@ -1331,6 +1426,9 @@ export function Minimap({
               >
                 {hawaiiTreatment && hawaiiTreatment.kind === 'pattern' ? (
                   <defs>
+                    {hawaiiOutlook !== undefined ? (
+                      <ClassStripes id={hawaiiTreatment.patternId} colors={hawaiiOutlook} />
+                    ) : (
                     <pattern
                       id={hawaiiTreatment.patternId}
                       width="8"
@@ -1350,6 +1448,7 @@ export function Minimap({
                         <path d="M-2,2L2,-2M0,8L8,0M6,10L10,6" />
                       )}
                     </pattern>
+                    )}
                   </defs>
                 ) : null}
                 {HAWAII_PATHS.map((path, index) => (

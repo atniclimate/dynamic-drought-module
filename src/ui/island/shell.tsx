@@ -296,11 +296,13 @@ interface ShellProps {
 function MinimapPopover({
   map,
   framing,
-  metricContext
+  metricContext,
+  horizon
 }: {
   readonly map: maplibregl.Map;
   readonly framing: ReadonlySignal<FramingSelection>;
   readonly metricContext: CommittedShellSnapshot['cluster'];
+  readonly horizon: CommittedShellSnapshot['horizon'];
 }) {
   const doorRef = useRef<HTMLButtonElement>(null);
   const popRef = useRef<HTMLDivElement>(null);
@@ -335,6 +337,7 @@ function MinimapPopover({
           framing={framing}
           idPrefix="shell-minimap-pop"
           metricContext={metricContext}
+          horizon={horizon}
         />
       </div>
     </div>
@@ -511,6 +514,7 @@ function Shell({ map, snap, framing, specTick, onMinimapNoteChange }: ShellProps
           framing={framing}
           idPrefix="shell-minimap"
           metricContext={snapshot.selectedHazard}
+          horizon={snapshot.horizon}
           onNoteChange={onMinimapNoteChange}
         />
       </div>
@@ -518,6 +522,7 @@ function Shell({ map, snap, framing, specTick, onMinimapNoteChange }: ShellProps
         map={map}
         framing={framing}
         metricContext={snapshot.selectedHazard}
+        horizon={snapshot.horizon}
       />
       <div class="shell-rehost" id="shell-region-host" />
       <div class="shell-rehost shell-search-host" id="shell-refine-host" />

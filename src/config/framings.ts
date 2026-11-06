@@ -124,7 +124,9 @@ export interface FramingCoverage {
   /**
    * Where the minimap's own monthly drought read comes from: the Drought
    * mode's clause only. Every mode's clause is read through
-   * `framingMinimapProvenance`. Rendered only in a scene that HAS a
+   * `framingMinimapProvenance`, and shown only at a horizon where the
+   * minimap's reading table makes it true (`minimapProvenanceAt`,
+   * src/config/minimap-readings.ts). Rendered only in a scene that HAS a
    * minimap: Console hides it and stops its fetches, so the sentence has no
    * referent there.
    */
@@ -326,6 +328,8 @@ export const FRAMINGS: Record<FramingKey, FramingDef> = {
  * read in every mode). A new mode in `HAZARD_CLUSTERS` must add its entry.
  * Heat and ENSO shade no framing, so their clause says why. A null key asks
  * for the mode-wide clause, which Drought, read per framing, does not have.
+ * Which horizons a clause is true at is the reading table's call
+ * (`minimapProvenanceAt`, src/config/minimap-readings.ts); read it there.
  */
 const MINIMAP_PROVENANCE: Readonly<
   Record<HazardClusterKey, (key: FramingKey | null) => string | undefined>
