@@ -51,7 +51,7 @@ import { FRAMINGS } from '../config/framings';
 import { minimapProvenanceAt } from '../config/minimap-readings';
 import { getFraming, onFramingChange } from '../state/framing-store';
 import { getHazardCluster, getOceanFraming, onHazardClusterChange } from '../state/cluster-store';
-import { getCommittedSnapshot, onCommittedSnapshotChange } from '../state/cluster-service';
+import { getCommittedSnapshot, getSelectedHazard, onCommittedSnapshotChange } from '../state/cluster-service';
 import { getViewMode, onViewModeChange } from '../state/view-mode';
 import { isUsScopeCautionLayer } from '../state/display-summary';
 import { escapeHtml } from '../util/escape';
@@ -682,7 +682,7 @@ function nwsProductKey(): {
   // Key order (NWS_ALERT_LEGEND): every heat and fire weather product the mode
   // asks for (HazardClusterDef.alerts), or, for any other set, those the
   // layer's current read holds, carried by its snapshot event.
-  const set = HAZARD_CLUSTERS[getHazardCluster()].alerts;
+  const set = HAZARD_CLUSTERS[getSelectedHazard()].alerts;
   const events = set === HEAT_FIRE_ALERTS ? set.events : nwsSnapshotEvents;
   const rows = NWS_ALERT_LEGEND.filter(({ label }) => events.includes(label));
   return {

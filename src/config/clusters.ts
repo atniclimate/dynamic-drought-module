@@ -140,8 +140,8 @@ export interface HazardClusterDef {
   /**
    * The National Weather Service products the alert layer (`nws-alerts`,
    * src/layers/nws-alerts.ts) reads in this mode, and its name here. Read
-   * through the committed mode (src/state/cluster-store.ts), which is Drought
-   * for every custom layer set. Unset: the layer reads nothing in this mode.
+   * through the person's hazard (`getSelectedHazard`, src/state/cluster-service.ts),
+   * so a custom layer set keeps its mode's. Unset: the layer reads nothing in this mode.
    */
   readonly alerts?: AlertSet;
 }

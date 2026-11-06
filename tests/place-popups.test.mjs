@@ -53,6 +53,7 @@ const { serializePopupFrame } = await import('../src/ui/popup-frame.ts');
 const { getLayerDef } = await import('../src/config/layers.ts');
 const { HAZARD_CLUSTERS, HAZARD_CLUSTER_KEYS } = await import('../src/config/clusters.ts');
 const { getHazardCluster, setHazardCluster } = await import('../src/state/cluster-store.ts');
+const service = await import('../src/state/cluster-service.ts');
 const { timeline } = await import('../src/state/timeline.ts');
 
 /**
@@ -815,6 +816,8 @@ test('a confirmed empty read on every active layer still says "Nothing mapped he
 
 test('in ENSO the alert row speaks for the products ENSO asks for: a present one by name, none in the layer\'s own no-result words', () => {
   const before = getHazardCluster();
+  // The row follows the person's hazard (getSelectedHazard), which a store write reaches through the running service.
+  const stopService = service.initClusterService();
   setHazardCluster('enso');
   try {
     const none = withRegistry([{ key: 'nws-alerts', status: 'no-data', on: true }], () =>
@@ -842,8 +845,17 @@ test('in ENSO the alert row speaks for the products ENSO asks for: a present one
       { label: 'NWS alert', text: 'High Wind Watch in this area (NOAA NWS)' }
     ]);
     assert.equal(flood.warningLabel, 'Flood Warning');
+    // A custom set made from ENSO (Hydrography on top; its store claim reads Drought) keeps ENSO's words.
+    service.reconcileClusterWithLayerIntent(new Set([...service.composeClusterIntent('enso'), 'nws-alerts', 'hydrography']));
+    assert.equal(getHazardCluster(), 'drought', 'setup: a custom set\'s store claim');
+    const custom = withRegistry([{ key: 'nws-alerts', status: 'no-data', on: true }], () =>
+      buildPlaceConditionsHtml(fakeMap({ 'nws-alerts-fill': [] }), [0, 0], PLACE)
+    );
+    assert.deepEqual(custom.rows, none.rows);
   } finally {
-    setHazardCluster(before);
+    // Forces the re-derivation even when the store already reads `before` (the demotion wrote Drought).
+    service.restoreCommittedCluster(before, null);
+    stopService();
   }
 });
 

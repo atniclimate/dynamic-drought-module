@@ -83,6 +83,7 @@ import type { GeoJsonProperties, Geometry } from 'geojson';
 import { registry } from '../state/registry';
 import { timeline } from '../state/timeline';
 import { getHazardCluster } from '../state/cluster-store';
+import { getSelectedHazard } from '../state/cluster-service';
 import { USDM_CATEGORIES, NADM_CATEGORIES, readUsdmDm } from '../config/palette';
 import { HAZARD_CLUSTERS, HAZARD_CLUSTER_KEYS, HEAT_FIRE_ALERTS } from '../config/clusters';
 import { getLayerDef } from '../config/layers';
@@ -531,7 +532,7 @@ function droughtRow(map: maplibregl.Map, point: maplibregl.PointLike): MarkedRow
  * `nws-alerts.ts`), which is this sentence for any other set.
  */
 function noRequestedAlert(scope: ClaimScope): string {
-  if (HAZARD_CLUSTERS[getHazardCluster()].alerts !== HEAT_FIRE_ALERTS) {
+  if (HAZARD_CLUSTERS[getSelectedHazard()].alerts !== HEAT_FIRE_ALERTS) {
     // DRAFT wording (pending the owner's read-back): the layer's own no-result note, scoped to the place.
     return `No active requested National Weather Service products ${scopePhrase(scope)}.`;
   }

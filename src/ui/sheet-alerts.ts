@@ -24,7 +24,7 @@ import type * as maplibregl from 'maplibre-gl';
 
 import { HAZARD_CLUSTERS, HEAT_FIRE_ALERTS } from '../config/clusters';
 import { NWS_ALERT_COLORS, NWS_ALERT_DEFAULT_COLOR } from '../config/palette';
-import { getHazardCluster } from '../state/cluster-store';
+import { getSelectedHazard } from '../state/cluster-service';
 import { registry } from '../state/registry';
 import { isChecked } from './island/bridge';
 import { requestLayerOn } from './layer-toggle-command';
@@ -108,7 +108,7 @@ function render(): void {
   const active = registry.getActiveKeys().has(LAYER_KEY);
   const rows = active ? collectAlerts(mapRef) : [];
   // The heat and fire weather set keeps its own words; any other set the layer's own no-result note.
-  const heatFire = HAZARD_CLUSTERS[getHazardCluster()].alerts === HEAT_FIRE_ALERTS;
+  const heatFire = HAZARD_CLUSTERS[getSelectedHazard()].alerts === HEAT_FIRE_ALERTS;
 
   if (rows.length > 0) {
     body.innerHTML =

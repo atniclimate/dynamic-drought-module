@@ -16,6 +16,7 @@ const { TROPICAL_WW_CLASSES } = await import('../src/config/tropical-presentatio
 const { getLayerDef } = await import('../src/config/layers.ts');
 const { NWS_ALERT_COLORS, NWS_ALERT_LEGEND } = await import('../src/config/palette.ts');
 const { getHazardCluster, setHazardCluster } = await import('../src/state/cluster-store.ts');
+const service = await import('../src/state/cluster-service.ts');
 
 // The heat and fire weather query exactly as the layer sent it before modes named their own products
 // (recorded from 10c9690, 2026-11-05): heat, wildfire, drought and a custom set made from one of them must keep sending it.
@@ -113,8 +114,10 @@ test('ENSO offers the alert layer off by default at every horizon: in no recipe,
   assert.equal(getLayerDef('nws-alerts').defaultOn, false);
 });
 
-test('the layer carries the committed mode\'s name', () => {
+test('the layer carries the person\'s mode\'s name, and a custom set made from ENSO keeps ENSO\'s', () => {
   const before = getHazardCluster();
+  // The name follows the person's hazard (getSelectedHazard), which a store write reaches through the running service.
+  const stopService = service.initClusterService();
   try {
     for (const mode of HAZARD_CLUSTER_KEYS) {
       setHazardCluster(mode);
@@ -124,8 +127,15 @@ test('the layer carries the committed mode\'s name', () => {
     assert.equal(getLayerDef('nws-alerts').name, 'Heat & Fire Weather Alerts');
     setHazardCluster('enso');
     assert.equal(getLayerDef('nws-alerts').name, 'Flood, Storm, Wind & Coastal Alerts');
+    // Hydrography on top of ENSO demotes the set to custom, whose store claim reads Drought.
+    service.reconcileClusterWithLayerIntent(new Set([...service.composeClusterIntent('enso'), 'nws-alerts', 'hydrography']));
+    assert.equal(service.getCommittedSnapshot().cluster, 'custom', 'setup: a custom set');
+    assert.equal(getHazardCluster(), 'drought', 'setup: its store claim');
+    assert.equal(getLayerDef('nws-alerts').name, 'Flood, Storm, Wind & Coastal Alerts');
   } finally {
-    setHazardCluster(before);
+    // Forces the re-derivation even when the store already reads `before` (the demotion wrote Drought).
+    service.restoreCommittedCluster(before, null);
+    stopService();
   }
 });
 
