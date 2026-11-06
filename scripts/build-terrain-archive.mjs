@@ -180,6 +180,26 @@ export function readPoint(decoded, col, row) {
   return { nearest: at(c, r), bilinear: Math.round((top * (1 - ty) + bottom * ty) * 10) / 10, max3 };
 }
 
+/**
+ * Summit failures at the deepest zoom: a summit inside a box (and, for a --cells pilot, inside a baked
+ * cell) with no row, or a row where both the bilinear read and the highest nearby pixel miss the
+ * reference by over 100 m. The tolerance is an engineering call: the pilot v2 worst was 34 m (Whitney
+ * z10); the defect it guards was 931 m (Jefferson).
+ */
+export function summitFailures(summits, boxes, maxZoom, cells) {
+  const out = [];
+  for (const [name, lon, lat] of SUMMITS) {
+    if (!boxes.some(box => meets([lon, lat, lon, lat], box))) continue;
+    if (cells && !cells.includes(cellName(Math.floor(lon), Math.floor(lat) + 1))) continue;
+    const row = summits.find(s => s.name === name && s.z === maxZoom);
+    if (!row) out.push(`summit ${name} has no row at z${maxZoom}`);
+    else if (Math.abs(row.bilinearDelta) > 100 && Math.abs(row.max3 - row.ref) > 100) {
+      out.push(`summit ${name} reads ${row.bilinear} m at z${maxZoom}, reference ${row.ref} m`);
+    }
+  }
+  return out;
+}
+
 // ---- I/O phases -------------------------------------------------------------------------------
 
 const readJson = async path => JSON.parse(await readFile(path, 'utf8'));
@@ -338,8 +358,10 @@ async function assemble(opts) {
   const exists = async path => { try { await stat(path); return true; } catch (error) { if (error.code === 'ENOENT') return false; throw error; } };
   // The summary is written (atomically) only after the archive is complete.
   if (await exists(outputPath + '.assemble.json')) { log('assemble', key, 'complete, skipped'); return; }
-  // A hard kill leaves a partial archive at the final path; removing it is the operator's call, not the driver's.
+  // A hard kill leaves a partial archive at the final path, or (during the tile copy) only the writer's
+  // scratch file; removing either is the operator's call, not the driver's.
   if (await exists(outputPath)) throw Error('Partial archive present (no .assemble.json): ' + outputPath);
+  if (await exists(outputPath + '.tile-data.tmp')) throw Error('Partial scratch present (safe to delete after a kill): ' + outputPath + '.tile-data.tmp');
   const store = join(run, 'store'), zero = await readJson(join(run, 'zero.json')), present = await storeIds(store);
   const doc = await readJson(join(root, 'manifest.json')), planned = assemblyIds(boxes, 0, maxZoom);
   const union = unionOf(boxes), retrieved = doc.retrieved.slice(0, 10), started = Date.now();
@@ -573,6 +595,7 @@ async function verifyLocal(opts) {
     }
   } finally { await close2(); }
   report.summits = summits;
+  for (const message of summitFailures(summits, opts.boxes, header.maxZoom, opts.cells)) fail(message);
   await mkdir(join(opts.run, 'logs'), { recursive: true });
   await writeJson(join(opts.run, 'logs', `verify-${key.replace(/\.pmtiles$/, '')}.json`), report);
   log('verify-local', JSON.stringify({ key, failures: report.failures, readBack: report.readBack, leafCount: report.leafCount }));
@@ -601,7 +624,8 @@ export function parseArgs(argv, checkout) {
   opts.workers = Number(opts.workers ?? 12);
   opts.streams = Number(opts.streams ?? 4);
   opts.maxZoom = Number(opts.maxZoom ?? 10);
-  opts.date ??= new Date().toISOString().slice(0, 10);
+  // No clock default: a resume after 00:00 UTC would name a new archive and start a second assemble.
+  if (['assemble', 'receipt', 'verify-local'].includes(command) && !opts.date && !opts.key) throw Error('--date or --key is required');
   opts.decode = opts.decode !== 'false'; // decoded checks on unless explicitly refused
   return opts;
 }

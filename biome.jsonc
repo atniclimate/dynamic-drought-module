@@ -15,6 +15,8 @@
   //
   // Measured 2026-09-03 at 5be15f5, `biome lint --reporter=summary`:
   // 463 diagnostics over 178 files, 8 errors, 202 warnings, 253 infos.
+  // Widened to src/**/*.tsx 2026-11-06 at 4237781: 17 more errors, all in the
+  // a11y group below; every other rule already holds at zero on the .tsx.
   "$schema": "https://biomejs.dev/schemas/2.5.12/schema.json",
 
   // The repository's own Git state is not the file selector; `files.includes`
@@ -31,7 +33,7 @@
     // Claude Code places under .claude/worktrees/: each is a full checkout
     // with its own copy of this file, and Biome 2 refuses a nested root
     // configuration it finds while walking (observed 2026-09-11, S28).
-    "includes": ["src/**/*.ts", "src/styles/app.css", "!.claude"]
+    "includes": ["src/**/*.{ts,tsx}", "src/styles/app.css", "!.claude"]
   },
 
   // Formatting is not linting. A formatter run would reflow a large share of
@@ -45,6 +47,27 @@
     "enabled": true,
     "rules": {
       "preset": "recommended",
+
+      "a11y": {
+        // The Preact island (src/ui/island/*.tsx), measured when the glob
+        // first reached .tsx. Accessibility signals, so burn-down first in
+        // DDM-P15-T05.
+        // 9: role="group"/"button"/"radio" on a div where fieldset, button or
+        // input type="radio" exists (catalog, minimap, shell).
+        "useSemanticElements": "off",
+        // 3: aria-label on an element whose implicit role does not take it
+        // (minimap 1039, shell 328, time-popover 87).
+        "useAriaPropsSupportedByRole": "off",
+        // 2: aria-hidden on decorative minimap paths that carry
+        // focusable="false" (1218, 1319); the rule misreads the attribute,
+        // so these are not keyboard bugs.
+        "noAriaHiddenOnFocusable": "off",
+        // 1 each: the first two on the search result option (search 350),
+        // the third on one minimap svg (1143).
+        "useFocusableInteractive": "off",
+        "useKeyWithClickEvents": "off",
+        "noSvgWithoutTitle": "off"
+      },
 
       "suspicious": {
         // 6, all in app.css, and every one is the deliberate `100vh` line
