@@ -8,6 +8,7 @@ import {
   PILL
 } from './helpers';
 import { stubRecentSatellite } from './satellite-fixture';
+import { isNifcRequestUrl } from './wildfire-fixtures';
 import { SATELLITE_PROBE_BBOX } from '../src/map/satellite';
 import { HAZARD_CLUSTERS, HAZARD_CLUSTER_KEYS } from '../src/config/clusters';
 
@@ -197,6 +198,28 @@ test.describe('UX-3 conditions strip', () => {
     await expect
       .poll(async () => fires.locator('.conditions-sublabel').textContent())
       .not.toBe('wildfires');
+  });
+
+  test('a zero perimeter count reads as one phrase, with no stray comma (P3-24)', async ({ page }) => {
+    // The look of 2026-11-05: "0, mapped wildfire perimeters in view."
+    await page.route(
+      (url) => isNifcRequestUrl(url.href),
+      (route) =>
+        route.request().method() === 'GET'
+          ? route.fulfill({
+              status: 200,
+              contentType: 'application/geo+json',
+              body: JSON.stringify({ type: 'FeatureCollection', features: [] })
+            })
+          : route.fallback()
+    );
+    await gotoApp(page, '?cluster=wildfire&view=console');
+    const fires = page.locator('.conditions-metric[data-metric="fires"]');
+    await expect(fires).toHaveAttribute('data-tone', 'none');
+    await expect(fires).toHaveAttribute(
+      'aria-label',
+      /^0 mapped wildfire perimeters in view\. Current Mapped Fire Perimeters/
+    );
   });
 
   test('a frozen USDM feed degrades to an explicit stale read, not a confident current one', async ({

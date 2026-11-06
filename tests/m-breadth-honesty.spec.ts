@@ -239,8 +239,14 @@ test('impactSynthesis none keeps unrelated sources off while independent point h
   const panel = page.locator('#impact-panel');
   await expect(panel).toBeVisible();
   await expect(panel.locator('.impact-capability-unavailable')).toContainText(
-    'The briefing synthesis and resource routing are not validated outside the PNW.'
+    'The briefing synthesis and resource routing are not validated outside the Pacific Northwest.'
   );
+  // D4 (the look of 2026-11-05): the Drought mode names its own block, and no
+  // empty Resources heading stands over zero links.
+  await expect(panel.locator('.impact-capability-unavailable > h3')).toHaveText(
+    'Drought impact unavailable'
+  );
+  await expect(panel.locator('.impact-resources')).toHaveCount(0);
   await expect(
     panel.locator('.point-heat > .impact-horizon-head .point-heat-pill-ready')
   ).toHaveText('live');

@@ -342,7 +342,17 @@ test.describe('PS-BRIEF PLACE studio rendering', () => {
     const tribalRow = overlapColumn.locator('[data-overlap-kind="tribe"]');
     await expect(tribalRow).toHaveCount(1);
     await expect(tribalRow).toContainText(FIXTURE_NATION_NAME);
-    await expect(tribalRow.locator('.place-overlap-tribal-caveat')).toHaveText(
+    // D13 (the look of 2026-11-05): the rows' public sources are named and
+    // the representation note stands once for the group, never per row.
+    await expect(tribalRow.locator('.place-overlap-tribal-caveat')).toHaveCount(0);
+    await expect(columns.locator('.place-overlap-tribal-caveat')).toHaveCount(2);
+    // Public naming, not the catalog's internal sourceLabels.
+    await expect(columns.locator('#place-overlap-tribal-source')).toHaveText(
+      'Tribal Nations: names from the Bureau of Indian Affairs Federal Register list of federally recognized Tribes (2026-01-30); boundaries from the Bureau of Indian Affairs American Indian and Alaska Native Land Area Representation (AIAN-LAR).'
+    );
+    await expect(columns.locator('#place-overlap-tribal-source')).not.toContainText('FeatureServer');
+    await expect(columns.locator('#place-overlap-tribal-source')).not.toContainText('LARNAME');
+    await expect(columns.locator('#place-overlap-tribal-representation')).toHaveText(
       caveatFor('bia-reservation')
     );
 
@@ -368,6 +378,8 @@ test.describe('PS-BRIEF PLACE studio rendering', () => {
     await expect(columns.locator('#place-overlap-empty')).toHaveText(
       'No overlapping places listed.'
     );
+    // No Tribal row, no Tribal source or representation note.
+    await expect(columns.locator('#place-overlap-tribal-note')).toHaveCount(0);
   });
 
   test('keeps declared watershed capabilities available when a geometry request fails', async ({

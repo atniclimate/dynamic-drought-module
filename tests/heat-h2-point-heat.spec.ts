@@ -1474,7 +1474,7 @@ test.describe('DDM-P7-T07: the season-ahead heat cell', () => {
     const unavailable = panel.locator('.impact-capability-unavailable');
     await expect(unavailable).toBeVisible();
     await expect(unavailable.locator('.impact-horizon-note')).toHaveText(
-      'The briefing synthesis and resource routing are not validated outside the PNW.'
+      'The briefing synthesis and resource routing are not validated outside the Pacific Northwest.'
     );
     await expect(panel.locator('.impact-hazard')).toHaveCount(0);
     await expect(page.locator(CELL)).toHaveCount(0);

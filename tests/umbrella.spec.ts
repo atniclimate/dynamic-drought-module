@@ -17,6 +17,7 @@ import {
 } from './tribal-fixtures';
 import { installMinimapAnalysisStubs } from './minimap-fixtures';
 import { installDefaultNifcStub, nifcStubLog } from './wildfire-fixtures';
+import { TRIBAL_NATIONS_GROUP } from '../src/config/layer-groups';
 
 /**
  * The Tribal Nations umbrella UI (Unit F, D-0.7.0-033): the featured group
@@ -75,8 +76,8 @@ for (const width of [1440, 820]) {
       return BUTTON_SET.every(key => layers.has(key));
     }).toBe(true);
     await expect(page.locator(COUNT)).toHaveText('2 of 2 selected');
-    // The command remains a command, not a new pressed-state toggle.
-    expect(await command.getAttribute('aria-pressed')).toBeNull();
+    // A toggle like the Brief-door control (P3-03, 2026-11-05): pressed now.
+    await expect(command).toHaveAttribute('aria-pressed', 'true');
   });
 }
 
@@ -95,13 +96,15 @@ test.describe('the Tribal Nations umbrella (console catalog)', () => {
     await expect(umbrella).toHaveAttribute('role', 'group');
     expect(await umbrella.getAttribute('data-layer-key')).toBeNull();
 
-    // The command button: accessible name, effect description, no
-    // disclosure semantics (it is a command, not a toggle).
+    // The toggle button (found-006; P3-03 of the 2026-11-05 look): its name,
+    // pressed state and description follow the pair, which a default boot
+    // has on; no disclosure semantics.
     const cta = page.locator(CTA);
     await expect(cta).toBeVisible();
-    await expect(cta).toHaveAccessibleName('Show Tribal Nations layers');
+    await expect(cta).toHaveAccessibleName('Hide Tribal Nations layers');
+    await expect(cta).toHaveAttribute('aria-pressed', 'true');
+    await expect(cta).toHaveAccessibleDescription(TRIBAL_NATIONS_GROUP.actionOffDescription);
     expect(await cta.getAttribute('aria-expanded')).toBeNull();
-    expect(await cta.getAttribute('aria-pressed')).toBeNull();
 
     // Members are permanently mounted (hidden, not unmounted): read-only
     // locators resolve the live pair with their exact contract attributes.
@@ -182,62 +185,47 @@ test.describe('the Tribal Nations umbrella (console catalog)', () => {
     await expect(page.locator(COUNT)).toHaveText('2 of 2 selected');
   });
 
-  test('an all-on click is a clean no-op and the button stays enabled and reusable', async ({
+  test('an all-on press hides the pair and the name and pressed state follow the layers (P3-03)', async ({
     page
   }) => {
-    // Count the live requests so the no-op is proven at the network layer,
-    // not only in the URL.
-    let liveRequests = 0;
-    const counted = async (pattern: string, body: unknown): Promise<void> => {
-      await routeBoundary(page, pattern, (route) => {
-        liveRequests += 1;
-        void route.fulfill({
-          contentType: 'application/geo+json',
-          body: JSON.stringify(body)
-        });
-      });
-    };
-    await counted(AIANNH_ROUTE, syntheticAiannhBody());
-    await counted(BIA_ROUTE, syntheticBiaBody());
+    // P3-03 (the look of 2026-11-05): with both layers on, the button used to
+    // say "Show ... / Turns on" and a press did nothing. It is now the same
+    // toggle as the Brief-door control (found-006).
+    await routeBoundary(page, AIANNH_ROUTE, (route) =>
+      route.fulfill({ contentType: 'application/geo+json', body: JSON.stringify(syntheticAiannhBody()) })
+    );
+    await routeBoundary(page, BIA_ROUTE, (route) =>
+      route.fulfill({ contentType: 'application/geo+json', body: JSON.stringify(syntheticBiaBody()) })
+    );
 
     await gotoApp(page, '?view=console&layers=aiannh,bia-reservations');
-    await expect(page.locator(COUNT)).toHaveText('2 of 2 selected');
-    const before = await urlLayers(page);
-
-    // Wait for the live-request stream to go QUIET before snapshotting: the
-    // boot region fit's debounced viewport refresh can legitimately land
-    // after the pills settle, and it must not be mistaken for CTA work.
-    let lastSeen = -1;
-    await expect
-      .poll(
-        () => {
-          const stable = liveRequests === lastSeen;
-          lastSeen = liveRequests;
-          return stable;
-        },
-        { intervals: [700], timeout: 20_000 }
-      )
-      .toBe(true);
-    const requestsBefore = liveRequests;
-
     const cta = page.locator(CTA);
-    await expect(cta).toBeEnabled();
-    await cta.click();
-    // Give a would-be regression time to fire, then prove nothing moved.
-    await page.waitForTimeout(750);
-    expect(liveRequests).toBe(requestsBefore);
-    expect([...(await urlLayers(page))].sort()).toEqual([...before].sort());
     await expect(page.locator(COUNT)).toHaveText('2 of 2 selected');
-    await expect(cta).toBeEnabled();
+    await expect(cta).toHaveAttribute('aria-pressed', 'true');
+    await expect(cta).toHaveAccessibleName('Hide Tribal Nations layers');
+    await expect(cta).toHaveAccessibleDescription(TRIBAL_NATIONS_GROUP.actionOffDescription);
 
-    // Reusability (never a once-only handler): turn ONE member off, click
-    // again, and only the missing member returns.
-    await openTribalNationsDetails(page);
-    await layerCheckbox(page, 'aiannh').uncheck();
-    await expect(page.locator(COUNT)).toHaveText('1 of 2 selected');
     await cta.click();
-    await expect(layerCheckbox(page, 'aiannh')).toBeChecked();
+    for (const key of BUTTON_SET) {
+      await expect(layerCheckbox(page, key)).not.toBeChecked();
+    }
+    await expect(page.locator(COUNT)).toHaveText('0 of 2 selected');
+    await expect(cta).toHaveAttribute('aria-pressed', 'false');
+    await expect(cta).toHaveAccessibleName('Show Tribal Nations layers');
+    await expect(cta).toHaveAccessibleDescription(TRIBAL_NATIONS_GROUP.actionDescription);
+
+    // A partial set reads unpressed and its press completes the pair.
+    await openTribalNationsDetails(page);
+    await layerCheckbox(page, 'aiannh').check();
+    await expect(page.locator(COUNT)).toHaveText('1 of 2 selected');
+    await expect(cta).toHaveAttribute('aria-pressed', 'false');
+    await cta.click();
+    for (const key of BUTTON_SET) {
+      await expect(layerCheckbox(page, key)).toBeChecked();
+    }
     await expect(page.locator(COUNT)).toHaveText('2 of 2 selected');
+    await expect(cta).toHaveAttribute('aria-pressed', 'true');
+    await expect(cta).toBeEnabled();
   });
 
   test('keyboard: the CTA and disclosure are native tab stops; collapsed children are skipped', async ({
