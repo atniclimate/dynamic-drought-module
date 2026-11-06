@@ -13,6 +13,7 @@ import type {
   StationViewportDiscoveryRequest,
   ViewportBounds
 } from '../types/station-network';
+import { escapeSql } from '../util/arcgis-features';
 import { fetchBufferedWithBudget } from '../util/fetch';
 import {
   bboxCoveredByEnvelope,
@@ -1546,7 +1547,7 @@ export async function fetchRawsStationConditions(
   signal: AbortSignal | null
 ): Promise<RawsStationConditions | null> {
   const params = new URLSearchParams({
-    where: `StationID='${stationId.replace(/'/g, "''")}'`,
+    where: `StationID='${escapeSql(stationId)}'`,
     outFields: RAWS_OUT_FIELDS,
     resultRecordCount: '1',
     f: 'geojson'

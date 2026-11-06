@@ -24,6 +24,7 @@ import {
   showStudioBoundary,
   type StudioBoundaryGeometry
 } from './studio-boundary';
+import { escapeSql } from '../util/arcgis-features';
 import { registry } from './registry';
 import { holdStudioReturnDisplay } from './url';
 import type { TypedPlaceKind, TypedPlaceRef } from './typed-place';
@@ -406,7 +407,7 @@ async function resolveEmphasisTargets(
     const larNames = entry.representationIds.filter((name) => name !== '');
     if (larNames.length === 0) return [];
     const quoted = larNames
-      .map((name) => `'${name.replace(/'/g, "''")}'`)
+      .map((name) => `'${escapeSql(name)}'`)
       .join(',');
     const params = new URLSearchParams({
       where: `LARNAME IN (${quoted})`,

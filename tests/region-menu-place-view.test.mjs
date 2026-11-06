@@ -26,7 +26,9 @@ function setup() {
     camera: 'region:national',
     moving: false,
     isMoving() { return this.moving; },
-    once(type, fn) { assert.equal(type, 'moveend'); later.push(fn); }
+    once(type, fn) { assert.equal(type, 'moveend'); later.push(fn); },
+    getZoom() { return 5; },
+    easeTo() { this.moving = true; }
   };
   const dependencies = {
     mapRef: map,
@@ -52,6 +54,12 @@ function setup() {
   };
   return {
     select,
+    map,
+    noteViewLeftRegion: () => fns.noteViewLeftRegion(map),
+    land(camera) {
+      map.camera = camera;
+      moveend();
+    },
     // A search result: the fit starts, then the place is set, then the flight lands.
     search(camera) {
       map.moving = true;
@@ -84,4 +92,30 @@ test('a hand pan off the place, or a search that lands on the committed view, na
   assert.equal(h.select.value, 'view:place');
   h.search('region:national');
   assert.equal(h.select.value, 'region:national');
+});
+
+// Audit round 4: a city sets no place, so only the console catalog's own
+// wrapper told the menu; the Brief head and the phone sheet left it on the old
+// region. selectResult, which every host shares, now announces the city view.
+test('a city chosen from any search host leaves the menu on Selected place', () => {
+  const h = setup();
+  const sidebar = readFileSync(SIDEBAR, 'utf8');
+  assert.ok(
+    sidebar.includes("window.addEventListener('ddm:city-view', () => noteViewLeftRegion(map));"),
+    'the sidebar answers the city view'
+  );
+  const controller = readFileSync(new URL('../src/ui/search-controller.ts', import.meta.url), 'utf8');
+  const deps = {
+    window: { dispatchEvent: (event) => { if (event.type === 'ddm:city-view') h.noteViewLeftRegion(); } },
+    nextBriefingIntent: () => 0,
+    setPlaceSelection: () => {},
+    cityCoords: new Map([['seattle', [-122.33, 47.61]]])
+  };
+  const selectResult = new Function(
+    ...Object.keys(deps),
+    `let locateAbort = null;\n${functionBody(controller, 'selectResult')}\nreturn selectResult;`
+  )(...Object.values(deps));
+  selectResult(h.map, { kind: 'city', id: 'seattle', label: 'Seattle' });
+  h.land('city:seattle');
+  assert.equal(h.select.value, 'view:place');
 });

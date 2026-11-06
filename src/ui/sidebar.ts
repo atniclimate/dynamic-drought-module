@@ -84,7 +84,6 @@ import {
 } from './impact-panel';
 import { getPlaceSelection, onPlaceSelectionChange } from '../state/place-selection';
 import type { PlaceSelection } from '../state/place-selection';
-import type { SearchWiring } from './search-controller';
 import {
   ensureBriefHeadSearch,
   ensureBriefHeadTribalAction,
@@ -786,21 +785,6 @@ function dropMovedPlaceView(map: maplibregl.Map): void {
 function notePlaceView(map: maplibregl.Map, place: PlaceSelection): void {
   // A map click carries no pointInsidePlace and does not move the camera.
   if (place.context.pointInsidePlace) noteViewLeftRegion(map);
-}
-
-/**
- * A city choice only eases the camera and sets no place, so it never reaches the
- * place listener. Wrapped here, not in search-controller, so that lazy chunk
- * need not import this module.
- */
-function withCityView(map: maplibregl.Map, wiring: SearchWiring): SearchWiring {
-  return {
-    ...wiring,
-    onSelect: (item) => {
-      wiring.onSelect(item);
-      if (item.kind === 'city') noteViewLeftRegion(map);
-    }
-  };
 }
 
 function syncRegionSelect(): void {
@@ -1860,7 +1844,7 @@ function wireSidebar(map: maplibregl.Map, onRegionSelect: (key: RegionKey) => vo
         ({ mountSidebarIsland }) =>
           searchLoad
             .then((searchModule) => {
-              const searchProps = searchModule ? withCityView(map, searchModule.buildSearchWiring(map)) : undefined;
+              const searchProps = searchModule?.buildSearchWiring(map);
               mountSidebarIsland(map, controllerForIsland, searchProps);
             })
             .catch((err: unknown) => {
@@ -2114,6 +2098,8 @@ function wireSidebar(map: maplibregl.Map, onRegionSelect: (key: RegionKey) => vo
     updateRegionBriefingTrigger(STATE.currentRegion);
     if (place) notePlaceView(map, place);
   });
+  // A city sets no place, so its search (in any host) announces the view instead.
+  window.addEventListener('ddm:city-view', () => noteViewLeftRegion(map));
   map.on('moveend', () => dropMovedPlaceView(map));
 
   // Apply the URL state, split per the ADR 0002 U1 integration note. The

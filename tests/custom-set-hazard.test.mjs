@@ -142,10 +142,26 @@ test('Back from a studio keeps the additive keys the live map holds', () => {
     const back = new URLSearchParams(browser.search());
     assert.equal(back.get('heatday'), '4');
     assert.equal(back.get('fire3d'), null);
-    // That write was on the map entry, so the next write reads the location again.
-    window.location.search = '?layers=heatrisk&view=console&heatday=2';
+    // A later map write is the live map's truth for the next write.
+    url.syncHeatRiskDayParam(2);
     url.syncUrl({ region: null, layers: new Set(['heatrisk']), embed: false, view: 'console' });
     assert.equal(new URLSearchParams(browser.search()).get('heatday'), '2');
+  } finally { browser.restore(); }
+});
+
+test('Forward into a studio keeps the additive keys the live map holds', () => {
+  const browser = installFakeBrowser({ search: '?layers=heatrisk&view=console' });
+  try {
+    // After Back, the person picks day 6 on the map entry.
+    window.history.state = null;
+    url.syncHeatRiskDayParam(6);
+    // Forward: the browser shows the older studio entry (heatday=3) when the map's state is written onto it.
+    window.history.state = { ddmStudioEntry: true };
+    window.location.search = '?layers=heatrisk&view=console&heatday=3&studio=layers';
+    url.syncUrl({ region: null, layers: new Set(['heatrisk']), embed: false, view: 'console', studio: 'layers' });
+    const forward = new URLSearchParams(browser.search());
+    assert.equal(forward.get('heatday'), '6', 'the map draws day 6, so the link names day 6');
+    assert.equal(forward.get('studio'), 'layers');
   } finally { browser.restore(); }
 });
 

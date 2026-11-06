@@ -198,18 +198,19 @@ export function normalizeSidebarParam(params: URLSearchParams): void {
 }
 
 /**
- * The query last written on a studio entry (src/state/studio-route.ts marks
- * those with `ddmStudioEntry`), else null. Back from a studio lands on the
- * older map entry before the map's state is written back, so syncUrl reads
- * the additive keys (heatday, fire3d, spi, flow) the live map holds from here.
+ * The query this module last wrote (null before the first write). Back or
+ * Forward between the map and a studio lands on an older entry before the
+ * map's state is written back, so syncUrl reads the additive keys (heatday,
+ * fire3d, spi, flow) the live map holds from here, not from that entry. The
+ * studio route's pushes clone the query, so the last write stays the truth.
+ * Held per history, so a fresh window (a node test's fake browser) starts clean.
  */
-let studioQuery: string | null = null;
+let lastWrite: { readonly history: History; readonly query: string } | null = null;
 
 /** Every URL write here goes through this, keeping history.state (the studio marker). */
 function replaceUrl(url: string): void {
   window.history.replaceState(window.history.state, '', url);
-  const state = window.history.state as { readonly ddmStudioEntry?: boolean } | null;
-  studioQuery = state?.ddmStudioEntry === true ? window.location.search : null;
+  lastWrite = { history: window.history, query: window.location.search };
 }
 
 /**
@@ -599,8 +600,10 @@ export function syncUrl(state: UrlSyncState): void {
   // module's own async activate/deactivate settles. HeatRisk's own
   // `activate()` re-applies its remembered day (src/layers/heatrisk.ts) and
   // re-emits `heatday=` through this same function on the next activation.
-  // The live query: the last studio write while Back is rewriting the map entry.
-  const live = new URLSearchParams(studioQuery ?? window.location.search);
+  // The live query: the last write, even when Back or Forward shows an older entry.
+  const live = new URLSearchParams(
+    lastWrite?.history === window.history ? lastWrite.query : window.location.search
+  );
   const heatRiskDay = state.layers.has('heatrisk') ? parseHeatRiskDayParam(live) : null;
   // The 3D Fire mode likewise owns its additive flag (its store writes it
   // through syncFire3dParam); read it fresh here so ordinary state writes

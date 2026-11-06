@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { stripTypeScriptTypes } from 'node:module';
+import { registerHooks, stripTypeScriptTypes } from 'node:module';
 import test from 'node:test';
 
 /**
@@ -50,7 +50,7 @@ test('an ecoregion selection reads its candidates under the 24 MiB cap', async (
     'fetchJson',
     `${body('arcGisEnvelopeParams')}\n${body('ecoregionCandidateParams')}\n` +
       `${constant('ECOREGION_CANDIDATE_MAX_BYTES')}\n${constant('ECOREGION_CANDIDATE_TIMEOUT_MS')}\n` +
-      'const assertFeatureCollection = (raw) => raw;\n' +
+      'const assertCompleteFeatureCollection = (raw) => raw;\n' +
       'const loadServiceEnvelopePieces = async (bbox, signal, run) => [await run(bbox, signal)];\n' +
       'const mergeByStableIdentifier = (groups) => groups.flat();\n' +
       'const textProperty = () => null;\n' +
@@ -95,6 +95,54 @@ test('Studio watershed reads take no zoom and never read the map', async () => {
   await fns.resolveWatershedSelection({ id: '1709' }, signal);
   await fns.loadWatershedOverlapCandidates([-124, 42, -116, 46], signal);
   assert.deepEqual(seen, [signal, signal]);
+});
+
+// Audit round 4: an ecoregion's overlap list read only the PNW strip for every
+// kind, so Tribes and watersheds inside Central Basin and Range below 41.5 N
+// (EPA extent 36.4 to 42.4 N) were never fetched and silently missing.
+test('an ecoregion selection reads Tribes, states and watersheds over its whole extent', async () => {
+  registerHooks({
+    resolve(specifier, context, nextResolve) {
+      if (specifier.startsWith('.') && !/\.[a-z]+$/i.test(specifier) && context.parentURL?.endsWith('.ts')) {
+        return nextResolve(`${specifier}.ts`, context);
+      }
+      return nextResolve(specifier, context);
+    }
+  });
+  const { bboxIntersection } = await import('../src/util/bbox.ts');
+  const seen = {};
+  const record = (kind) => async (bbox) => {
+    seen[kind] = [...bbox];
+    return { type: 'FeatureCollection', features: [] };
+  };
+  const loadOverlapView = new Function(
+    'bboxIntersection',
+    'loadTribeCandidates',
+    'loadStateCandidates',
+    'loadEcoregionCandidates',
+    'loadWatershedOverlapCandidates',
+    `${stripTypeScriptTypes(constant('PNW_BOUNDS'))}\n` +
+      "const PLACE_TYPE_ORDER = ['tribe', 'state', 'ecoregion', 'watershed'];\n" +
+      'const overlapPairAvailable = () => true;\n' +
+      'const abortIfNeeded = () => {};\n' +
+      'const computeOverlapRows = () => ({ rows: [], hasSuppressedSlivers: false });\n' +
+      `${asyncBody('loadCandidateKind')}\n${asyncBody('loadOverlapView')}\nreturn loadOverlapView;`
+  )(bboxIntersection, record('tribe'), record('state'), record('ecoregion'), record('watershed'));
+  const centralBasinAndRange = [-120.3, 36.44, -111.4, 42.36];
+  const view = await loadOverlapView(
+    { kind: 'ecoregion', id: '13' },
+    { bbox: centralBasinAndRange, geometry: null },
+    new AbortController().signal
+  );
+  assert.equal(view.status, 'ready');
+  assert.deepEqual(seen.tribe, centralBasinAndRange);
+  assert.deepEqual(seen.state, centralBasinAndRange);
+  assert.deepEqual(seen.watershed, centralBasinAndRange);
+  assert.deepEqual(
+    seen.ecoregion.map((value) => Math.round(value * 100) / 100),
+    [-120.3, 41.5, -111.4, 42.36],
+    'the ecoregion catalog alone stays PNW-scoped'
+  );
 });
 
 test('Tribe candidates and the shared envelope builder stay at full resolution', () => {
