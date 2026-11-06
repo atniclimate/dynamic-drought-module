@@ -2665,7 +2665,7 @@ test('an embed without the flag never activates and never gains it', async ({
     expect(await search(page)).toContain('fire3d=true');
   });
 
-  test('switching clusters exits the scene and hides the control without dropping the preference', async ({
+  test('switching clusters exits the scene, hides the control and drops the preference (DR-122)', async ({
     page
   }) => {
     // Unlike its siblings above (120_000-180_000), this test declared no
@@ -2687,13 +2687,27 @@ test('an embed without the flag never activates and never gains it', async ({
     await page.locator('.shell-cluster-btn[data-cluster="drought"]').click();
     await expect.poll(() => fire3dStamp(page)).toBe('inactive');
     await expect(page.locator(TOGGLE)).toHaveCount(0);
-    // The durable preference stays; re-entering the Fire view restores 3D.
-    expect(await search(page)).toContain('fire3d=true');
+    // fire3d= is Wildfire-scoped; terrain3d=, which would re-emit it on return, is not built.
+    await expect.poll(() => search(page)).not.toContain('fire3d');
 
     await page.locator('.shell-cluster-btn[data-cluster="wildfire"]').click();
-    await expect
-      .poll(() => fire3dStamp(page), { timeout: 30_000 })
-      .toBe('active');
+    await expect(page.locator(TOGGLE)).toHaveAttribute('aria-pressed', 'false');
+    expect(await fire3dStamp(page)).toBe('inactive');
+    expect(await search(page)).not.toContain('fire3d');
+  });
+
+  test('an old fire3d=true link outside Wildfire boots flat and drops the token (DR-122)', async ({
+    page
+  }) => {
+    await stubWildfireFeeds(page);
+    await gotoApp(page, '?region=washington_state&cluster=drought&fire3d=true');
+    await expect.poll(() => search(page)).not.toContain('fire3d');
+    await expect(page.locator(TOGGLE)).toHaveCount(0);
+
+    // The dropped token does not come back as a preference in Wildfire.
+    await page.locator('.shell-cluster-btn[data-cluster="wildfire"]').click();
+    await expect(page.locator(TOGGLE)).toHaveAttribute('aria-pressed', 'false');
+    expect(await search(page)).not.toContain('fire3d');
   });
 });
 

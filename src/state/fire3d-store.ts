@@ -9,8 +9,10 @@ import { syncFire3dParam } from './url';
  * orchestrator (src/map/fire3d.ts) gates activation on this preference AND
  * the desktop width query AND the terrain capability AND the committed
  * cluster condition, so the preference can honestly outlive a temporary
- * gate failure (a cluster switch, a narrow resize) and re-apply when the
- * gate reopens. The store deliberately knows nothing about MapLibre.
+ * gate failure (a narrow resize, a custom set inside Wildfire) and re-apply
+ * when the gate reopens. Leaving Wildfire is not temporary: DR-122 drops the
+ * preference and its parameter then (src/ui/sidebar.ts). The store
+ * deliberately knows nothing about MapLibre.
  *
  * URL discipline: `setFire3DPreference` (a user choice or a forced honest
  * demotion after a terrain failure) writes the parameter through
