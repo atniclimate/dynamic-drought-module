@@ -1904,12 +1904,17 @@ button.conditions-metric:hover .conditions-action-hide {
   color: var(--fg-0) !important;
 }
 /* The family's sharp-rectangle model: MapLibre's control group would
-   otherwise round and clip the switcher's corners. */
+   otherwise round and clip the switcher's corners, and its white card
+   showed through the translucent faces (SAT on read white on white in the
+   LAYERS studio header, the embed and the phone seat). */
 .maplibregl-ctrl-group:has(.basemap-switcher-btn) {
   border-radius: 0;
+  background: none;
 }
+/* The accent tint over the resting slate, so the pressed face never
+   depends on what lies beneath it (tests/chrome-css-faces.test.mjs). */
 .basemap-switcher-btn.active {
-  background: var(--accent-soft) !important;
+  background: linear-gradient(var(--accent-soft), var(--accent-soft)), rgba(15, 23, 42, 0.85) !important;
   color: var(--accent) !important;
   box-shadow: inset 0 0 0 1px var(--accent-strong);
 }
@@ -5849,9 +5854,10 @@ a.impact-resource-link::after {
      shrink below its one-line label, the overflow the fit test forbids.
      The horizon title is the title span, so "Current Conditions" reads on
      one line and its button keeps its own sub line. */
+  /* A layer row's status line is a sentence, not a label: it wraps
+     (tests/chrome-css-faces.test.mjs). */
   :where(body:not(:has(> .app-shell.embed)))
-    :where(.map-cell, .map-key-chip-label, .shell-cluster-btn, .shell-horizon-btn-title, .status-pill,
-      .layer-toggle-status) {
+    :where(.map-cell, .map-key-chip-label, .shell-cluster-btn, .shell-horizon-btn-title, .status-pill) {
     white-space: nowrap;
   }
   /* T4 measure: 50 to 75 characters, 66 ideal (README:153). */

@@ -4,7 +4,7 @@
  *
  * Reflect-the-map, like the conditions strip and the hover inspector: the
  * pane renders ONLY what the `nws-alerts` layer already fetched (the NOAA
- * Watch/Warning/Advisory features in the loaded map view). Opening the
+ * Watch/Warning/Advisory features drawn in the current view). Opening the
  * pane requests the layer on through the one toggle command, so the
  * registry, the URL, and the catalog checkbox stay honest; nothing is
  * fetched here directly. Severity colors come from the same
@@ -32,6 +32,8 @@ import { escapeHtml } from '../util/escape';
 
 const LAYER_KEY = 'nws-alerts';
 const SOURCE_ID = 'nws-alerts';
+// The alerts fill (src/layers/nws-alerts.ts), restated as strip-metrics.ts does.
+const FILL_ID = 'nws-alerts-fill';
 
 let armed = false;
 let mapRef: maplibregl.Map | null = null;
@@ -57,10 +59,15 @@ function formatEnds(value: unknown): string {
   return `${day} ${time}`;
 }
 
-/** The deduplicated alert rows currently present in the loaded source tiles. */
+/**
+ * The deduplicated alert rows drawn in the current view. Rendered features,
+ * as the desktop strip counts them (src/ui/island/strip-metrics.ts): the
+ * source's loaded tiles reach past the view, and the pane says "in the
+ * current map view".
+ */
 function collectAlerts(map: maplibregl.Map): AlertRow[] {
-  if (!map.getSource(SOURCE_ID)) return [];
-  const features = map.querySourceFeatures(SOURCE_ID);
+  if (!map.getLayer(FILL_ID)) return [];
+  const features = map.queryRenderedFeatures({ layers: [FILL_ID] });
   const seen = new Set<string>();
   const rows: AlertRow[] = [];
   for (const f of features) {
@@ -166,8 +173,17 @@ export function openSheetAlerts(map: maplibregl.Map): void {
   registry.on('status-change', (key) => {
     if (key === LAYER_KEY) render();
   });
+  // Rendered features exist only after the frame draws: arriving alert data
+  // is read on the next render, as the strip does (src/ui/island/index.tsx),
+  // never on global idle, which an animated layer can hold off.
+  let sourceDirty = false;
   map.on('sourcedata', (e) => {
-    if (e.sourceId === SOURCE_ID) render();
+    if (e.sourceId === SOURCE_ID) sourceDirty = true;
+  });
+  map.on('render', () => {
+    if (!sourceDirty) return;
+    sourceDirty = false;
+    render();
   });
   map.on('moveend', render);
 }
