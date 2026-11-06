@@ -99,8 +99,8 @@ let deactivatedAt: number | null = null;
  * per catalog extent (the correction to the RACE finding: the layer-off
  * fallback used to fire a brand-new catalog read plus an /identify on every
  * call). Invalidated on a new advertised extent (the key includes it) and on
- * a place-selection change (cleared where `cachedRead` is, in
- * `mountHeatRiskSequence`'s `onPlaceSelectionChange` handler). NOT
+ * a place-selection change (in `mountHeatRiskSequence`'s
+ * `onPlaceSelectionChange` handler, beside the `cachedRead` check). NOT
  * invalidated by activation or deactivation: memoizing across a toggle is
  * the whole point.
  *
@@ -565,6 +565,12 @@ function renderRead(read: SequenceRead): void {
     return;
   }
   const alternative = textAlternative(read);
+  // The rewrite below destroys the focused day cell; note it to hand focus back.
+  const active = document.activeElement;
+  const focusedDay =
+    active instanceof HTMLElement && host.contains(active)
+      ? active.dataset['heatriskSequenceDay']
+      : undefined;
   host.innerHTML =
     '<div class="heatrisk-sequence-heading">' +
     `<strong>HeatRisk at the selected point for ${escapeHtml(selection.label)}</strong>` +
@@ -590,6 +596,11 @@ function renderRead(read: SequenceRead): void {
   );
   host.setAttribute('aria-describedby', 'heatrisk-sequence-alt');
   host.hidden = false;
+  if (focusedDay) {
+    host
+      .querySelector<HTMLElement>(`[data-heatrisk-sequence-day="${focusedDay}"]`)
+      ?.focus({ preventScroll: true });
+  }
 }
 
 function renderState(copy: string): void {
@@ -827,7 +838,14 @@ export function mountHeatRiskSequence(initial: HeatRiskFrameDetail): void {
     selection = getPlaceSelection();
     onPlaceSelectionChange((next) => {
       selection = next;
-      cachedRead = null;
+      // A new object for the SAME point (popup, then its briefing) keeps the finished read.
+      if (
+        !next ||
+        next.context.lngLat.lng !== cachedRead?.lng ||
+        next.context.lngLat.lat !== cachedRead?.lat
+      ) {
+        cachedRead = null;
+      }
       fallbackCache = null;
       void refreshRead();
     });

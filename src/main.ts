@@ -346,7 +346,9 @@ async function boot(): Promise<void> {
     hideRendererNotice();
   });
 
-  if (map.isStyleLoaded() === true) {
+  // A GPU failure leaves the style loading with no painter: wiring now would
+  // hide the 'no-webgl2' notice and enable controls over a map that never paints.
+  if (map.isStyleLoaded() === true && !gpuInitializationFailed) {
     // The style is in hand and only the painting is stalled (a hidden or
     // occluded window throttles requestAnimationFrame to nothing, so `load`
     // never fires even though everything loaded). Sources and layers can be

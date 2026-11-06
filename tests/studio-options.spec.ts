@@ -314,7 +314,7 @@ test.describe('PLACE studio: every rail kind exercised (owner-1c)', () => {
 
     // States: select, return to the map, and prove the FRAME -- the
     // briefing opens named for the selected place (place-studio.tsx's
-    // setPlaceStudioReturnAction wiring; the same mechanism
+    // setPlaceReturnBriefing wiring; the same mechanism
     // place-studio-brief.spec.ts's own "PS-BRIEF return hand-off" describe
     // block proves for this exact fixture shape).
     await page.route('**/data/us-states.geojson', (route) =>

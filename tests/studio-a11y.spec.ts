@@ -38,6 +38,22 @@ test.describe('studio focus and geometry', () => {
     await expect(layersOpener).toBeFocused();
   });
 
+  test('PLACE regains focus when its click did not focus it (Safari)', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await gotoApp(page, '?view=brief&layers=places');
+    const placeOpener = page.locator('#brief-display #place-studio-entry');
+    await expect(placeOpener).toBeVisible();
+    // Safari does not focus a button on click: dispatch the click with focus left on the body.
+    await page.evaluate(() => {
+      (document.activeElement as HTMLElement | null)?.blur();
+      document.getElementById('place-studio-entry')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await expect(page.locator(PLACE_ROOT)).toBeVisible();
+    await page.locator(`${PLACE_ROOT} #place-studio-back`).click();
+    await expect(page.locator(PLACE_ROOT)).toHaveCount(0);
+    await expect(placeOpener).toBeFocused();
+  });
+
   for (const studio of ['place', 'layers'] as const) {
     test(`direct-boot ${studio} exit focuses the map container`, async ({ page }) => {
       await gotoApp(page, `?view=brief&layers=places&studio=${studio}`);

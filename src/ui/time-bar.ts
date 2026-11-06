@@ -197,6 +197,8 @@ function notifySpecChange(): void {
  * time, so a skipped swap never pins stale callbacks.
  */
 let lastRenderedHtml: string | null = null;
+/** Focus was in the bar when an owner cleared it (see render). */
+let refocusBar = false;
 
 const mobileSheetMedia: MediaQueryList | null =
   typeof window !== 'undefined' ? window.matchMedia('(max-width: 720px)') : null;
@@ -351,6 +353,8 @@ function render(preserveFeedDisclosure = false): void {
   syncEmbedStamp(currentSpec);
 
   if (!currentSpec) {
+    // A jump chip clears the bar it sits in; the next owner's bar takes focus back.
+    refocusBar = el.contains(document.activeElement);
     el.hidden = true;
     el.innerHTML = '';
     lastRenderedHtml = null;
@@ -358,6 +362,8 @@ function render(preserveFeedDisclosure = false): void {
   }
 
   const restoreFocus = focusMarker(el);
+  const reseatFocus = refocusBar || restoreFocus !== null;
+  refocusBar = false;
   const feedOpen = preserveFeedDisclosure &&
     el.querySelector<HTMLDetailsElement>('.time-bar-feed-details')?.open;
 
@@ -556,5 +562,10 @@ function render(preserveFeedDisclosure = false): void {
     // and drops focus to the body; the rail stays focusable.
     const seat = target?.matches(':disabled') ? el.querySelector<HTMLElement>('.time-bar-rail') : target;
     seat?.focus({ preventScroll: true });
+  }
+  // The used control is gone (a jump installs a bar without its chip): the
+  // nearest shown control takes focus, unless the person has moved on.
+  if (reseatFocus && (!document.activeElement || document.activeElement === document.body)) {
+    el.querySelector<HTMLElement>('.time-bar-jump, .time-bar-rail')?.focus({ preventScroll: true });
   }
 }

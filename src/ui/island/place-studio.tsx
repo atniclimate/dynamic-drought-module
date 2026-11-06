@@ -54,11 +54,8 @@ import {
   setPlaceStudioDisplayKind,
   setStudioWatershedBoundary
 } from '../../state/display-snapshot';
-import {
-  backToMap,
-  setPlaceStudioReturnAction,
-  takePlaceStudioReturnAction
-} from '../../state/studio-route';
+import { setPlaceReturnBriefing, takePlaceReturn } from '../../state/place-return';
+import { backToMap, getStudioRoute } from '../../state/studio-route';
 import {
   loadWatershedCandidates,
   loadWatershedSelectionGeometry
@@ -927,7 +924,7 @@ function PlaceStudio() {
       // hand-off runs only here, AFTER restoreDisplaySnapshot(), so it can
       // neither open before the restore nor be cancelled by the restore's
       // intent supersede (the former popstate microtask raced both ways).
-      takePlaceStudioReturnAction()?.();
+      takePlaceReturn()?.();
     };
   }, []);
 
@@ -1003,7 +1000,7 @@ function PlaceStudio() {
   }, [entries, kind, selection]);
 
   useEffect(() => {
-    setPlaceStudioReturnAction(null);
+    setPlaceReturnBriefing(null);
     setStudioWatershedBoundary(null);
     resolvedSelectionRef.current = null;
     selectionPromiseRef.current = null;
@@ -1078,7 +1075,7 @@ function PlaceStudio() {
       explicitSelectionKeyRef.current === selectionKey &&
       coverage.briefable.state === 'available'
     ) {
-      setPlaceStudioReturnAction(chaseBriefingOnReturn(selectionEntry, promise));
+      setPlaceReturnBriefing(chaseBriefingOnReturn(selectionEntry, promise));
     }
 
     void promise
@@ -1125,7 +1122,7 @@ function PlaceStudio() {
           explicitSelectionKeyRef.current === selectionKey &&
           coverage.briefable.state === 'available'
         ) {
-          setPlaceStudioReturnAction(() => openImpactPanel(resolved.context));
+          setPlaceReturnBriefing(() => openImpactPanel(resolved.context));
         }
 
         if (coverage.briefable.state === 'available') {
@@ -1211,7 +1208,7 @@ function PlaceStudio() {
           // DDM-P2-T10: the deferred tribe emphasis falls back to
           // display-snapshot's own (unseeded) resolution here, honestly
           // attempting the live query rather than leaving a stale highlight.
-          if (selectionEntry.kind === 'tribe') {
+          if (selectionEntry.kind === 'tribe' && selectionStillCurrent()) {
             emphasizeTypedPlace(selection, selectionEntry);
           }
           setNarrativeStatus('unavailable');
@@ -1249,6 +1246,8 @@ function PlaceStudio() {
       } catch {
         // The selected capability remains unavailable when its fetch failed.
       }
+      // Browser Back during the wait already left the studio; a second back would leave the site.
+      if (getStudioRoute() !== 'place') return;
     }
     backToMap();
   };
@@ -1396,7 +1395,7 @@ function PlaceStudio() {
                         onClick={() => {
                           const selectionKey = `${entry.kind}:${entry.id}`;
                           explicitSelectionKeyRef.current = selectionKey;
-                          setPlaceStudioReturnAction(null);
+                          setPlaceReturnBriefing(null);
                           const resolved = resolvedSelectionRef.current;
                           if (coverageForEntry(entry).briefable.state === 'available') {
                             // FE-23: register the hand-off in the click's
@@ -1407,11 +1406,11 @@ function PlaceStudio() {
                             // the briefing was lost. The effect replaces
                             // this action with its own once it runs.
                             if (resolved?.key === selectionKey) {
-                              setPlaceStudioReturnAction(() =>
+                              setPlaceReturnBriefing(() =>
                                 openImpactPanel(resolved.value.context)
                               );
                             } else {
-                              setPlaceStudioReturnAction(chaseBriefingOnReturn(entry, null));
+                              setPlaceReturnBriefing(chaseBriefingOnReturn(entry, null));
                             }
                           }
                           setSelectionEntry(entry);
