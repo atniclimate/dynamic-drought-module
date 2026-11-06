@@ -496,6 +496,11 @@ function applyCluster(
   publish();
 }
 
+/** The hazard the person chose. Read this, not the store: the store reads Drought for every custom set. */
+export function getSelectedHazard(): HazardClusterKey {
+  return selectedHazard;
+}
+
 /** True while the committed composition is a person's custom layer set rather than a mode. */
 export function isCustomComposition(): boolean {
   return committedCluster === 'custom';
@@ -508,9 +513,9 @@ export function requestCluster(key: HazardClusterKey): void {
 /** Discard any explicit commitment and re-derive from the store (the
  * `onHazardClusterChange` listener's body, shared with
  * `restoreCommittedCluster` below so a same-value store write can still
- * force the exact same re-derivation). */
-function resyncFromStore(): void {
-  selectedHazard = getHazardCluster();
+ * force the exact same re-derivation). `hazard` is set before the publish. */
+function resyncFromStore(hazard: HazardClusterKey = getHazardCluster()): void {
+  selectedHazard = hazard;
   committedCluster = null;
   committedIntent = null;
   committedHorizon = null;
@@ -532,11 +537,13 @@ function resyncFromStore(): void {
  * re-presses the hazard it captured even when the store value never
  * moved. Suppresses the store's own notification while writing it (the
  * `applying` guard already used by `requestHorizon`) so the resync below
- * is the only one that runs, never a redundant second.
+ * is the only one that runs, never a redundant second. `hazard` is the
+ * person's captured hazard: a custom set's store claim reads Drought.
  */
 export function restoreCommittedCluster(
   cluster: HazardClusterKey,
-  ocean: OceanKey | null
+  ocean: OceanKey | null,
+  hazard: HazardClusterKey = cluster
 ): void {
   applying = true;
   try {
@@ -544,7 +551,7 @@ export function restoreCommittedCluster(
   } finally {
     applying = false;
   }
-  resyncFromStore();
+  resyncFromStore(hazard);
 }
 
 /**

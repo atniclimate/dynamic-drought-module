@@ -11,7 +11,7 @@ import {
   requestLayerOnExact
 } from '../ui/layer-toggle-command';
 import { getHazardCluster, getOceanFraming } from './cluster-store';
-import { restoreCommittedCluster } from './cluster-service';
+import { getSelectedHazard, restoreCommittedCluster } from './cluster-service';
 import { getMap } from './map-store';
 import {
   clearEmphasis,
@@ -38,6 +38,8 @@ export interface DisplaySnapshot {
   readonly statuses: ReadonlyMap<string, LayerStatus>;
   readonly cluster: HazardClusterKey;
   readonly ocean: OceanKey | null;
+  /** The person's hazard; for a custom set `cluster` reads Drought. */
+  readonly selectedHazard: HazardClusterKey;
 }
 
 const SET_ASIDE_ROLES = new Set(['surface', 'event']);
@@ -93,7 +95,8 @@ function captureDisplaySnapshot(): DisplaySnapshot {
     intentKeys,
     statuses,
     cluster: getHazardCluster(),
-    ocean: getOceanFraming()
+    ocean: getOceanFraming(),
+    selectedHazard: getSelectedHazard()
   };
 }
 
@@ -287,7 +290,7 @@ export function restoreDisplaySnapshot(): DisplaySnapshot | null {
   // service door forces the re-derivation a real store change would have
   // triggered either way, so the hazard re-presses on every restore, not
   // only when the captured cluster differs from whatever it degraded to.
-  restoreCommittedCluster(snapshot.cluster, snapshot.ocean);
+  restoreCommittedCluster(snapshot.cluster, snapshot.ocean, snapshot.selectedHazard);
   return snapshot;
 }
 

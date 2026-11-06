@@ -892,6 +892,8 @@ export function isCurrentBriefing(token: number): boolean {
  */
 export function nextBriefingIntent(): number {
   finishPendingOpen();
+  // Given back now, not when the superseded open lands: that late null write would abort the newer opener's own fetch.
+  releasePendingSelection();
   return ++briefingIntentSeq;
 }
 
