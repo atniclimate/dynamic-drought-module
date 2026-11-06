@@ -47,7 +47,7 @@ const {
 } = await import('../src/layers/flow/currents.ts');
 const { FLOW_BINS, classOf, newSample, sampleField } = await import('../src/layers/flow/field.ts');
 const { WIND_PACE, paceFor } = await import('../src/layers/flow/advect.ts');
-const { FLOW_WORDS, flowAgeWords, flowLiveLine, gridBoxWords } = await import('../src/layers/enso-flow-data.ts');
+const { CurrentsFrameTooOld, FLOW_WORDS, flowAgeWords, flowLiveLine, gridBoxWords } = await import('../src/layers/enso-flow-data.ts');
 const { encodeGrid } = await import('../scripts/build-rtofs-currents.mjs');
 
 const HOUR = 3_600_000;
@@ -185,7 +185,10 @@ test('a frame valid more than 14 days before the clock is refused before its gri
     assert.equal((await readCurrentsFrame({ signal, now: () => valid + 14 * DAY })).length, 1, 'exactly 14 days old still draws');
     assert.deepEqual(reads, [CURRENTS_HEADER_FILE, 'grid.i16.gz']);
     reads.length = 0;
-    await assert.rejects(readCurrentsFrame({ signal, now: () => valid + 14 * DAY + 1 }), /currents frame: valid more than 14 days ago/);
+    await assert.rejects(
+      readCurrentsFrame({ signal, now: () => valid + 14 * DAY + 1 }),
+      (error) => error instanceof CurrentsFrameTooOld && error.valid === valid && /currents frame: valid more than 14 days ago/.test(error.message)
+    );
     assert.deepEqual(reads, [CURRENTS_HEADER_FILE], 'a refused frame reads no grid file');
     // A clock behind the frame is no age (flowAgeWords claims none either).
     assert.equal((await readCurrentsFrame({ signal, now: () => valid - DAY })).length, 1);

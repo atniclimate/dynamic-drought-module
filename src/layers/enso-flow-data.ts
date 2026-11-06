@@ -164,6 +164,20 @@ export function gridBoxWords(grid: {
   return `${degrees(south, 'N', 'S')} to ${degrees(grid.lat0, 'N', 'S')} and ${lon(grid.lon0)} to ${lon(grid.lon0 + (grid.nx - 1) * grid.dlon)}`;
 }
 
+/** The reader's refusal of a currents frame past its age limit: the frame loaded, so the panel says so rather than "did not load". */
+export class CurrentsFrameTooOld extends Error {
+  readonly valid: number;
+  constructor(valid: number) {
+    super('currents frame: valid more than 14 days ago');
+    this.valid = valid;
+  }
+}
+
+/** The line for a currents frame refused for its age, in the stale line's words around its valid date. */
+export function currentsTooOldLine(valid: number): string {
+  return `unavailable · The ${FLOW_WORDS.source.currents} ${FLOW_WORDS.stale.from} ${dateLabel(valid)} is past its 14-day limit`;
+}
+
 /** The stale line: the held frame's run and its 24-hour limit. */
 export function flowStaleLine(kind: FlowFieldKind, cycle: number): string {
   const { lead, from, tail } = FLOW_WORDS.stale;

@@ -27,7 +27,7 @@ import {
   type EnsoFlowKind, type EnsoFlowPreference
 } from '../state/enso-flow';
 import {
-  FLOW_WORDS, flowFormNote, flowLiveLine, flowStaleLine, isShadeKind,
+  CurrentsFrameTooOld, FLOW_WORDS, currentsTooOldLine, flowFormNote, flowLiveLine, flowStaleLine, isShadeKind,
   type ActiveFlowKind, type FlowFieldKind
 } from './enso-flow-data';
 import type { FlowField, FlowView, FlowViewState, ScalarField, ShadeView } from './flow/index';
@@ -56,6 +56,7 @@ const SOURCES: Record<ActiveFlowKind, string> = {
 const TIMING_NOTE = 'This is model context, independently timed from the observed SST map.';
 const FAILED_NOTE = 'No direction or calm condition is inferred from a failed request.';
 // DRAFT wording (DR-177): the same sentence for a kind with no direction.
+const TOO_OLD_NOTE = 'No direction or calm condition is inferred from an old frame.';
 const SHADE_FAILED_NOTE = 'No moist or dry condition is inferred from a failed request.';
 const failedNote = (kind: ActiveFlowKind): string => (isShadeKind(kind) ? SHADE_FAILED_NOTE : FAILED_NOTE);
 type FlowStatus = 'off' | 'loading' | 'live' | 'live (partial)' | 'no data' | 'unavailable';
@@ -238,8 +239,12 @@ function presentStale(kind: FlowFieldKind, field: Pick<FlowField, 'meta'>): void
 function presentFailure(kind: ActiveFlowKind, error: unknown): void {
   console.warn('[enso-flow]', error);
   disposeFlowView();
-  setStatus('unavailable', `unavailable · ${FLOW_WORDS.unavailable[kind]}`, kind, [failedNote(kind)]);
-  if (detailNode) detailNode.textContent = failedNote(kind);
+  // A frame that loaded and is refused for its age is not a failed request.
+  const tooOld = error instanceof CurrentsFrameTooOld;
+  const line = tooOld ? currentsTooOldLine(error.valid) : `unavailable · ${FLOW_WORDS.unavailable[kind]}`;
+  const note = tooOld ? TOO_OLD_NOTE : failedNote(kind);
+  setStatus('unavailable', line, kind, [note]);
+  if (detailNode) detailNode.textContent = note;
 }
 
 /**

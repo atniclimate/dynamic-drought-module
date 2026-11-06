@@ -20,6 +20,7 @@
 import { BASE_URL } from '../../config/urls-boot';
 import { fetchBufferedWithBudget, fetchJsonWithBudget } from '../../util/fetch';
 import { isObject } from '../../util/guards';
+import { CurrentsFrameTooOld } from '../enso-flow-data';
 import { createFlowField, type FlowField, type FlowGrid } from './field';
 
 const DATA_URL = `${BASE_URL}data/`;
@@ -144,7 +145,7 @@ export async function readCurrentsFrame(
 ): Promise<FlowField[]> {
   const url = DATA_URL + CURRENTS_HEADER_FILE;
   const header = parseCurrentsHeader(await fetchJsonWithBudget(url, null, options.signal, READ_BUDGET_MS, 16_384));
-  if ((options.now ?? Date.now)() - header.valid > CURRENTS_MAX_AGE_MS) refuse('valid more than 14 days ago');
+  if ((options.now ?? Date.now)() - header.valid > CURRENTS_MAX_AGE_MS) throw new CurrentsFrameTooOld(header.valid);
   const bodies = await Promise.all(header.grids.map(async (grid) => {
     // A gzip file is never longer than its Int16 bytes plus a small wrapper.
     const cap = grid.nx * grid.ny * 4 + 1_024;

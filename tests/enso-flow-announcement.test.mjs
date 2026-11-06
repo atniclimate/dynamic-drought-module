@@ -223,6 +223,26 @@ test('a failed read announces unavailable exactly once', async () => {
   assert.deepEqual(live.writes, [`Ocean currents · ${loading}`, `Ocean currents · ${line().textContent}`]);
 });
 
+test('a frame refused for its age says so in the line, the note and the announcement; another refusal keeps the failed wording', async () => {
+  const { CurrentsFrameTooOld } = await import('../src/layers/enso-flow-data.ts');
+  await bootCurrents();
+  const loading = line().textContent;
+  held.reject(new CurrentsFrameTooOld(VALID));
+  await until(() => panel().dataset.status === 'unavailable');
+  const old = 'unavailable · The NOAA RTOFS surface currents frame from Oct 13, 1:00 AM UTC is past its 14-day limit';
+  assert.equal(line().textContent, old);
+  assert.deepEqual(live.writes, [`Ocean currents · ${loading}`, `Ocean currents · ${old}`]);
+  assert.ok(host.textContent.includes('No direction or calm condition is inferred from an old frame.'));
+  assert.ok(!host.textContent.includes('did not load') && !host.textContent.includes('failed request'));
+  // Any other refusal of the same read keeps today's words.
+  await bootCurrents();
+  held.reject(new Error('currents frame: a grid file is missing'));
+  await until(() => panel().dataset.status === 'unavailable');
+  assert.equal(line().textContent, 'unavailable · NOAA RTOFS surface currents did not load');
+  assert.ok(host.textContent.includes('No direction or calm condition is inferred from a failed request.'));
+  assert.ok(!host.textContent.includes('old frame'));
+});
+
 test('the visible panel is plain text rather than a competing live region', () => {
   boot();
   assert.equal(line().getAttribute('role'), null);
