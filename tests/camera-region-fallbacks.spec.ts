@@ -288,7 +288,7 @@ test.describe('briefingSourcePolicy: impact synthesis gated by the place, with o
     expect(policy.geography.basis).toBe('region-framing');
     expect(policy.droughtImpact.enabled).toBe(false);
     expect(policy.droughtImpact.note).toBe(
-      'The briefing synthesis and resource routing are not validated outside the PNW.'
+      'The briefing synthesis and resource routing are not validated outside the Pacific Northwest.'
     );
   });
 
@@ -333,7 +333,7 @@ test.describe('briefingSourcePolicy: impact synthesis gated by the place, with o
     expect(policy.geography.postalCode).toBe('TX');
     expect(policy.droughtImpact.enabled).toBe(false);
     expect(policy.droughtImpact.note).toBe(
-      'The briefing synthesis and resource routing are not validated outside the PNW.'
+      'The briefing synthesis and resource routing are not validated outside the Pacific Northwest.'
     );
     // DR-075 a's gate is a separate branch of the same policy (the national
     // heat capability by geography key) and DR-090 does not reach it. That

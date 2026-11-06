@@ -67,7 +67,9 @@ function clusterOffersDroughtFamily(clusterKey: HazardClusterKey): boolean {
  */
 function tileAriaLabel(name: string, m: Metric, isOn: boolean, disclose: boolean, retries: boolean): string {
   let status: string;
-  if (m.tone === 'data') {
+  // A count reads as one phrase ("0 mapped wildfire perimeters in view"); only
+  // a word value ("No polygon, no NADM category polygon...") takes the comma.
+  if (m.tone === 'data' || /^\d+$/.test(m.value)) {
     status = `${m.value} ${m.sublabel}.`;
   } else if (m.tone === 'none') {
     status = `${m.value}, ${m.sublabel}.`;

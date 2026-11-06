@@ -94,6 +94,10 @@ const EMPTY_OVERLAP_RESULT = 'No overlapping places listed.';
 const UNAVAILABLE_OVERLAP_PAIR =
   'Overlap listing is not available for this pair yet.';
 const TRIBAL_OVERLAP_CAVEAT = caveatFor('bia-reservation');
+// DRAFT wording: the public naming of the Tribal Nations rows' sources (D13),
+// after README.md; PLACE_CATALOG.tribe.sourceLabels stay internal.
+const TRIBAL_OVERLAP_SOURCE =
+  'Tribal Nations: names from the Bureau of Indian Affairs Federal Register list of federally recognized Tribes (2026-01-30); boundaries from the Bureau of Indian Affairs American Indian and Alaska Native Land Area Representation (AIAN-LAR).';
 const PLACE_DATA_TIMEOUT_MS = 8_000;
 const PNW_BOUNDS = [-125, 41.5, -110.5, 49.5] as const;
 
@@ -118,7 +122,6 @@ interface PlaceOverlapRow {
   readonly kind: TypedPlaceKind;
   readonly id: string;
   readonly label: string;
-  readonly caveat: string | null;
 }
 
 interface UnavailableOverlapCandidate {
@@ -828,9 +831,7 @@ async function loadOverlapView(
         relationship: row.relationship,
         kind: properties.placeKind,
         id: properties.placeId,
-        label: properties.placeLabel,
-        caveat:
-          properties.placeKind === 'tribe' ? TRIBAL_OVERLAP_CAVEAT : null
+        label: properties.placeLabel
       });
     }
   }
@@ -1495,11 +1496,6 @@ function PlaceStudio() {
                                   >
                                     <span>{row.label}</span>
                                     <small>{PLACE_CATALOG[row.kind].label}</small>
-                                    {row.caveat ? (
-                                      <p class="place-overlap-tribal-caveat">
-                                        {row.caveat}
-                                      </p>
-                                    ) : null}
                                   </li>
                                 ))}
                               </ul>
@@ -1507,6 +1503,19 @@ function PlaceStudio() {
                           );
                         })}
                       </div>
+                      {/* D13: the Tribal Nations rows' public sources and the
+                          representation note, once for the group, not per row. */}
+                      {overlapView.rows.some((row) => row.kind === 'tribe') ? (
+                        <div id="place-overlap-tribal-note">
+                          {/* One class for both: the stylesheet's existing small-print rule. */}
+                          <p id="place-overlap-tribal-source" class="place-overlap-tribal-caveat">
+                            {TRIBAL_OVERLAP_SOURCE}
+                          </p>
+                          <p id="place-overlap-tribal-representation" class="place-overlap-tribal-caveat">
+                            {TRIBAL_OVERLAP_CAVEAT}
+                          </p>
+                        </div>
+                      ) : null}
                       {overlapView.rows.length === 0 &&
                       overlapView.unavailableKinds.length < PLACE_TYPE_ORDER.length ? (
                         <p id="place-overlap-empty">{EMPTY_OVERLAP_RESULT}</p>

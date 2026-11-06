@@ -123,7 +123,8 @@ export const CAPABILITY_MATRIX: CapabilityMatrix = {
     },
     impactSynthesis: {
       level: 'none',
-      note: 'The briefing synthesis and resource routing are not validated outside the PNW.'
+      // DRAFT wording: "PNW" written out (D4, 2026-11-05); this note is the briefing's public coverage line.
+      note: 'The briefing synthesis and resource routing are not validated outside the Pacific Northwest.'
     }
   },
   'ak-hi': {

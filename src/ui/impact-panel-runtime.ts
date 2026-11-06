@@ -47,6 +47,7 @@ import { renderAcknowledgements } from './acknowledgements';
 import { getLegendSection } from './legend-registry';
 import { requestLayerOn } from './layer-toggle-command';
 import { loadFederalResources, resourcesForIdentity } from '../impact/resource-catalog';
+import { HAZARD_CLUSTERS } from '../config/clusters';
 import {
   getCommittedSnapshot,
   onCommittedSnapshotChange
@@ -312,6 +313,13 @@ function ensurePanel(): HTMLElement {
  */
 function applyActiveHazardEmphasis(): void {
   if (!bodyEl) return;
+  // D4: the unavailable block follows a mode change while the panel is open.
+  const unavailable = unavailableTitle();
+  bodyEl.querySelectorAll<HTMLElement>('.impact-capability-unavailable').forEach((section) => {
+    section.setAttribute('aria-label', unavailable);
+    const heading = section.querySelector('h3');
+    if (heading) heading.textContent = unavailable;
+  });
   const activeHazard = SHELL_HAZARD_KEY[getCommittedSnapshot().selectedHazard];
   bodyEl.querySelectorAll<HTMLElement>('.impact-hazard').forEach((row) => {
     const isActive = row.dataset['hazard'] === activeHazard;
@@ -730,8 +738,24 @@ function renderResource(resource: ResourceLink): string {
   `;
 }
 
-/** Render the resources, grouped by tier in stewardship order. */
+/**
+ * The title of the block that stands in for the horizon matrix when impact
+ * synthesis is unavailable: the active mode's own name (D4, 2026-11-05: a
+ * Wildfire or ENSO briefing was titled "Drought"). The Drought mode keeps
+ * the shipped "Drought impact unavailable".
+ */
+function unavailableTitle(): string {
+  // DRAFT wording: "<mode title> impact unavailable" for the non-Drought modes.
+  return `${HAZARD_CLUSTERS[getCommittedSnapshot().selectedHazard].title} impact unavailable`;
+}
+
+/**
+ * Render the resources, grouped by tier in stewardship order; nothing at all
+ * when there are none (D4: no empty heading over zero links where routing is
+ * off).
+ */
 function renderResources(resources: readonly ResourceLink[]): string {
+  if (resources.length === 0) return '';
   const groups = TIER_ORDER.map((tier) => {
     const items = resources.filter((r) => r.tier === tier);
     if (items.length === 0) return '';
@@ -783,8 +807,8 @@ function renderBriefingSections(
       // covered; see the completion report.
       `
       ${pointHeatSection}
-      <section class="impact-capability-unavailable" aria-label="Drought impact unavailable">
-        <h3 class="impact-section-title">Drought impact unavailable</h3>
+      <section class="impact-capability-unavailable" aria-label="${escapeHtml(unavailableTitle())}">
+        <h3 class="impact-section-title">${escapeHtml(unavailableTitle())}</h3>
         <p class="impact-horizon-note">${escapeHtml(impactUnavailableNote)}</p>
       </section>
     `

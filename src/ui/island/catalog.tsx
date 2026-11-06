@@ -43,7 +43,7 @@ import { LAYER_DEFS, LAYER_ROLE_ORDER, getLayerDef } from '../../config/layers';
 import type { LayerDef } from '../../config/layers';
 import { TRIBAL_NATIONS_PROVENANCE_NOTE } from '../../config/provenance';
 import { TRIBAL_NATIONS_GROUP } from '../../config/layer-groups';
-import { activateTribalNationsGroup, formatGroupHealth } from '../tribal-nations-action';
+import { formatGroupHealth, toggleTribalNationsGroup } from '../tribal-nations-action';
 import type { LayerRole, LayerStatus } from '../../types/layer';
 import type { LayerController } from '../../state/layer-controller';
 import { resolveStatusPillText } from './pill-text';
@@ -194,9 +194,11 @@ interface UmbrellaProps extends CatalogProps {
  * The Tribal Nations umbrella (D-0.7.0-033; Unit F): the featured group
  * card inside the reference role group, per the 2026-07-15 Codex front-end
  * consultation.
- * Two SEPARATE controls: the prominent activation button is a command (it
- * requests the configured live member set on through the bridge-safe
- * shared door; no aria-expanded, no aria-pressed, never disabled), and the
+ * Two SEPARATE controls: the prominent button is a toggle like the
+ * Brief-door control (found-006; P3-03 of the 2026-11-05 look): pressed
+ * while every member is on, its press then turns the set off, otherwise it
+ * requests the configured set on through the bridge-safe shared door; no
+ * aria-expanded, never disabled), and the
  * quieter "Layer details" disclosure reveals the granular member rows.
  * Member rows stay PERMANENTLY MOUNTED inside a natively `hidden` region:
  * checkboxes leave the tab order and the accessibility tree while
@@ -217,6 +219,10 @@ function LayerUmbrella({ sourcesOpen, ...props }: UmbrellaProps) {
   const selectedCount = group.buttonActivates.filter(
     (key) => checked.value.get(key) ?? false
   ).length;
+  // found-006 / P3-03: the same toggle as the Brief-door control; pressed
+  // only while every member is on (`isTribalNationsGroupOn`'s rule, read
+  // from this catalog's own checked signal).
+  const pressed = selectedCount === group.buttonActivates.length;
   // Outcome beside intent (the final-pass finding 2): a terminally failed
   // agency shows here too, in the same shared format the Brief hosts use.
   const unavailableCount = group.buttonActivates.filter(
@@ -236,14 +242,15 @@ function LayerUmbrella({ sourcesOpen, ...props }: UmbrellaProps) {
       <button
         type="button"
         class="layer-umbrella-cta"
-        aria-label={`Show ${group.label} layers`}
+        aria-pressed={pressed}
+        aria-label={`${pressed ? 'Hide' : 'Show'} ${group.label} layers`}
         aria-describedby={descId}
-        onClick={() => activateTribalNationsGroup()}
+        onClick={() => toggleTribalNationsGroup()}
       >
         {group.label}
       </button>
       <p id={descId} class="sr-only">
-        {group.actionDescription}
+        {pressed ? group.actionOffDescription : group.actionDescription}
       </p>
       {/* "selected", never "live": activation may still be loading or may
           fail; the pills carry the honest per-layer status, and a terminal
