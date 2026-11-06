@@ -58,6 +58,8 @@ const FAILED_NOTE = 'No direction or calm condition is inferred from a failed re
 // DRAFT wording (DR-177): the same sentence for a kind with no direction.
 const TOO_OLD_NOTE = 'No direction or calm condition is inferred from an old frame.';
 const SHADE_FAILED_NOTE = 'No moist or dry condition is inferred from a failed request.';
+// DRAFT wording (DR-177): the shade's sentence for a frame past its limit, as TOO_OLD_NOTE words it for the lines.
+const SHADE_TOO_OLD_NOTE = 'No moist or dry condition is inferred from an old frame.';
 const failedNote = (kind: ActiveFlowKind): string => (isShadeKind(kind) ? SHADE_FAILED_NOTE : FAILED_NOTE);
 type FlowStatus = 'off' | 'loading' | 'live' | 'live (partial)' | 'no data' | 'unavailable';
 type FlowModule = typeof import('./flow/index');
@@ -228,12 +230,14 @@ function fieldNotes(kind: ActiveFlowKind, state: FlowViewState, box: string | nu
   return notes;
 }
 
+/** A frame past its limit at read time: NODD had nothing newer, so the panel says which frame it held. */
 function presentStale(kind: FlowFieldKind, field: Pick<FlowField, 'meta'>): void {
   disposeFlowView();
   const { cycle, forecastHour } = field.meta;
   if (cycle !== null && forecastHour !== null) fieldCache.delete(fieldKey(kind, cycle, forecastHour));
-  setStatus('unavailable', flowStaleLine(kind, field.meta.cycle ?? field.meta.validTime), kind, [failedNote(kind)]);
-  if (detailNode) detailNode.textContent = failedNote(kind);
+  const note = isShadeKind(kind) ? SHADE_TOO_OLD_NOTE : TOO_OLD_NOTE;
+  setStatus('unavailable', flowStaleLine(kind, field.meta.cycle ?? field.meta.validTime), kind, [note]);
+  if (detailNode) detailNode.textContent = note;
 }
 
 function presentFailure(kind: ActiveFlowKind, error: unknown): void {
@@ -264,8 +268,9 @@ function presentShade(kind: ActiveFlowKind, field: ScalarField): void {
 function presentFieldState(kind: ActiveFlowKind, field: FlowField, state: FlowViewState): void {
   stampForm(state, kind);
   // The currents frame never falls stale (its reader refuses one past 14 days), so only a NODD frame does.
+  // A drawn frame past its limit reads once for a newer cycle; the read's own stale check ends there.
   if (state.stale && kind !== 'currents') {
-    presentStale(kind, field);
+    void loadArea();
     return;
   }
   const provenance = FLOW_WORDS.provenance[kind];
@@ -326,7 +331,7 @@ async function loadField(activeMap: maplibregl.Map, kind: ActiveFlowKind, genera
         const shade = field;
         if (controller === owned) controller = null;
         flowView = flow.mountShadeView(activeMap, shade, {
-          onStale: () => { if (generation === epoch) presentStale(kind, shade); }
+          onStale: () => { if (generation === epoch) void loadArea(); }
         });
         presentShade(kind, shade);
         return;

@@ -782,10 +782,14 @@ export async function activate(map: maplibregl.Map): Promise<void> {
       render: renderSstAnomalyLegend
     });
 
-    if (!pacificHintShown && !viewIncludesNino34(map)) {
+    // Judged where the camera settles: an ENSO entry flies to the Pacific, so the view at activation is the land it is leaving.
+    const pacificHint = (): void => {
+      if (signal.aborted || pacificHintShown || viewIncludesNino34(map)) return;
       pacificHintShown = true;
       showToast('Ocean temperature anomaly is global; zoom out toward the equatorial Pacific to see the ENSO signal.');
-    }
+    };
+    if (map.isMoving()) map.once('moveend', pacificHint);
+    else pacificHint();
 
     // No `ready` here (DDM-P14-T04, found-001): the status stays `loading`
     // until a watcher proves the view's tiles. A re-activation over a dated
