@@ -320,10 +320,10 @@ async function locateBoundary(map: maplibregl.Map, spec: LocateSpec): Promise<vo
     : { lng: 0, lat: 0 };
   // A newer selection during the lazy import wins: commit nothing stale.
   if (abort.signal.aborted || !isCurrentBriefingIntent(intent)) return;
-  // ORDER MATTERS: the located-boundary module clears its highlight on
-  // EVERY selection change (the stage-5 major 4 fix), so the selection is
-  // set first and the highlight for THIS subject renders after; any prior
-  // subject's highlight is gone. Summary-first (D-0.7.0-070): the search
+  // ORDER MATTERS: the located-boundary highlight records the selection
+  // current when it is shown and clears on a close or a different subject
+  // (the stage-5 major 4 fix), so the selection is set first and the
+  // highlight for THIS subject renders after; any prior subject's is gone. Summary-first (D-0.7.0-070): the search
   // selection behaves like a map click, so the briefing opens through the
   // left panel's one link; on the active mobile Brief sheet it still opens
   // directly (map-click parity, the at-hand half detent IS the summary).
