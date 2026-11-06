@@ -49,6 +49,7 @@ import {
   setStudioWatershedBoundary,
   showStudioReturnBoundary
 } from '../../state/display-snapshot';
+import { getEmphasisTargets } from '../../state/place-emphasis';
 import { setPlaceReturnBriefing, takePlaceReturn } from '../../state/place-return';
 import { backToMap, getStudioRoute } from '../../state/studio-route';
 import {
@@ -818,20 +819,26 @@ function placeStillCurrent(entry: PlaceCatalogEntry): boolean {
  * own resolution, when there is one; if that was aborted by the unmount
  * cleanup, or there is none yet, it resolves INDEPENDENTLY (bounded by the
  * fetch budget). It opens only while the durable typed place still names the
- * entry (newest intent wins).
+ * entry (newest intent wins); a chase that ends with no briefing unlights the
+ * place, since the exit's own unlight stood down for it, unless a newer
+ * emphasis took over.
  */
 function chaseBriefingOnReturn(
   entry: PlaceCatalogEntry,
   pending: Promise<ResolvedPlaceSelection | null> | null
 ): () => void {
   return () => {
+    const lit = getEmphasisTargets();
     const resolveIndependently = (): Promise<ResolvedPlaceSelection | null> =>
       resolvePlaceSelection(entry, new AbortController().signal);
     void (pending ? pending.catch(resolveIndependently) : resolveIndependently())
+      .catch(() => null)
       .then((resolved) => {
-        if (resolved && placeStillCurrent(entry)) {
-          openReturnBriefing(entry, resolved);
-        }
+        // A newer typed place owns the light now.
+        if (!placeStillCurrent(entry)) return;
+        if (resolved) openReturnBriefing(entry, resolved);
+        // A map click on a land area relights without changing the typed place.
+        else if (getEmphasisTargets() === lit) clearStudioEmphasis();
       })
       .catch(() => undefined);
   };

@@ -588,11 +588,14 @@ export function requestHorizon(next: TemporalHorizonKey): void {
  * The phone rail's horizon after a preset for `mode` has replaced the layer
  * set: the entry into that mode through `enterHorizon`, so an ENSO preset
  * commits Season ahead and a later preset of a mode with no entry horizon
- * returns to the horizon held before it; otherwise the horizon stays.
+ * returns to the horizon held before it; otherwise the horizon stays. The
+ * preset's mode becomes the person's hazard; its layer set stays custom (DR-156).
  */
 export function requestPresetHorizon(mode: HazardClusterKey): void {
+  selectedHazard = mode;
   const next = enterHorizon(mode, HAZARD_CLUSTERS[mode].entryHorizon);
   if (timeline.horizon !== next) commitHorizon(next);
+  else publish();
 }
 
 function commitHorizon(next: TemporalHorizonKey): void {
@@ -655,18 +658,31 @@ export function reconcileClusterWithLayerIntent(checked: ReadonlySet<string>): v
   const matches =
     checked.size === intent.size && [...intent].every((key) => checked.has(key));
   if (matches) return;
-  // A mode plus only its optional layers stays that mode (Fuel risk over Wildfire).
-  const mode = committedCluster ?? getHazardCluster();
-  if (mode !== 'custom') {
-    const horizon = committedHorizon ?? timeline.horizon;
-    if (isModeDisplay(mode, horizon, checked)) {
-      committedCluster = mode;
-      committedIntent = new Set(checked);
-      committedHorizon = horizon;
-      if (disposer !== null) publish();
-      else current = null;
-      return;
+  // A mode plus only its optional layers stays that mode (Fuel risk over Wildfire),
+  // and a custom set (committed, or derived from a link or a studio restore) that
+  // is the person's mode again at a horizon the mode shows returns to it.
+  const committed = committedCluster;
+  const custom = committed === 'custom' || (committed === null && selectedHazard !== getHazardCluster());
+  const mode = custom ? selectedHazard : (committed ?? getHazardCluster());
+  const horizon = committedHorizon ?? timeline.horizon;
+  // shortcut: ENSO stays custom, since its store write would refit the Pacific and
+  // drop the ocean; upgrade when the camera can tell that write from a press.
+  const canReturn = !custom || (mode !== 'enso' && resolveHorizonForCluster(mode, horizon) === horizon);
+  if (canReturn && isModeDisplay(mode, horizon, checked)) {
+    committedCluster = mode;
+    committedIntent = new Set(checked);
+    committedHorizon = horizon;
+    if (getHazardCluster() !== mode) {
+      applying = true;
+      try {
+        setHazardCluster(mode, null);
+      } finally {
+        applying = false;
+      }
     }
+    if (disposer !== null) publish();
+    else current = null;
+    return;
   }
   committedCluster = 'custom';
   committedIntent = new Set(checked);
