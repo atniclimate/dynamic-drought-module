@@ -36,3 +36,19 @@ test('every Pacific fit goes through the shared target fit', () => {
   const fit = readFileSync(new URL('../src/map/camera-fit.ts', import.meta.url), 'utf8');
   assert.ok(fit.includes('floorCentreFor(map, target)'));
 });
+
+/**
+ * Audit round 6, R6-8: entering ENSO from Wildfire 3D, the Pacific fit's
+ * flyTo cancels the scene's ease back and keeps the live pitch, so only the
+ * ocean fit is flat; region and framing fits keep the person's tilt. Pinned
+ * from source (camera-fit.ts needs maplibre-gl). Red on f27a23c.
+ */
+test('the ocean fit lands flat on both fit paths, and only the ocean fit', () => {
+  const fit = readFileSync(new URL('../src/map/camera-fit.ts', import.meta.url), 'utf8');
+  assert.ok(fit.includes('fitCameraTarget(map, oceanTarget(key), !prefersReducedMotion(), true)'), 'the ocean fit asks for flat');
+  assert.ok(fit.includes('bearing: 0, ...level }'), 'the floor view levels the pitch');
+  assert.ok(fit.includes('animate, ...level }'), 'the bounds fit levels the pitch');
+  assert.equal((fit.match(/, true\)/g) ?? []).length, 1, 'no other fit is flat');
+  const sidebar = readFileSync(new URL('../src/ui/sidebar.ts', import.meta.url), 'utf8');
+  assert.ok(sidebar.includes('fitCameraTarget(map, target, !prefersReducedMotion());'), 'the region and framing fits keep the tilt');
+});

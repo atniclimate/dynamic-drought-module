@@ -35,7 +35,7 @@
 
 import type * as maplibregl from 'maplibre-gl';
 
-import { pointHasHeatRiskCoverage } from './heatrisk-coverage';
+import { viewHasHeatRiskCoverage } from './heatrisk-coverage';
 import type { LayerActivation } from '../config/layers';
 import { URLS } from '../config/urls';
 import { registry } from '../state/registry';
@@ -303,26 +303,6 @@ function installTimeBar(status: Status): void {
   });
 }
 
-/**
- * The view has coverage when its center or the middle of any of its four
- * quarters is inside the hull, so a coast view centered offshore still
- * draws while a Canadian or Alaskan view with a border sliver in one corner
- * does not. shortcut: five sample points, not a bounds-hull intersection;
- * a covered strip that misses all five reads no data until the next pan.
- */
-function viewHasCoverage(map: maplibregl.Map): boolean {
-  const center = map.getCenter();
-  if (pointHasHeatRiskCoverage(center.lng, center.lat)) return true;
-  const bounds = map.getBounds();
-  const west = bounds.getWest();
-  const south = bounds.getSouth();
-  const width = bounds.getEast() - west;
-  const height = bounds.getNorth() - south;
-  return [0.25, 0.75].some((x) =>
-    [0.25, 0.75].some((y) => pointHasHeatRiskCoverage(west + width * x, south + height * y))
-  );
-}
-
 /** Read the complete advertised time range from the service metadata. */
 function extractTimeExtent(json: unknown): readonly [number, number] | null {
   if (!isObject(json) || !isObject(json.timeInfo)) return null;
@@ -460,7 +440,7 @@ function renderFrame(map: maplibregl.Map, day: number): void {
   rememberedDay = day;
   syncHeatRiskDayParam(day);
 
-  const hasCoverage = viewHasCoverage(map);
+  const hasCoverage = viewHasHeatRiskCoverage(map);
   currentHasCoverage = hasCoverage;
   if (!hasCoverage) {
     // A verified absence, not a pending fetch: withdraw the loading
@@ -507,7 +487,7 @@ function renderFrame(map: maplibregl.Map, day: number): void {
       // Every path through the watcher is a terminal verdict on this
       // frame, so every path also ends the loading statement.
       endFrameLoad();
-      if (!viewHasCoverage(map)) {
+      if (!viewHasHeatRiskCoverage(map)) {
         currentHasCoverage = false;
         reportStatus('no-data');
         emitFrames('no-data');
@@ -535,7 +515,7 @@ function renderFrame(map: maplibregl.Map, day: number): void {
 
 function onCoverageMoveEnd(): void {
   if (!activeMap || selectedDay === null || frames.length === 0) return;
-  const hasCoverage = viewHasCoverage(activeMap);
+  const hasCoverage = viewHasHeatRiskCoverage(activeMap);
   // A tile verdict that landed while the view was uncovered left 'no-data' over a source that still stands.
   const hadCoverage = currentHasCoverage;
   currentHasCoverage = hasCoverage;

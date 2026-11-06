@@ -93,31 +93,10 @@ import { registry } from '../state/registry';
 import type { LayerStatus } from '../types/layer';
 import { clearTimeBar, setTimeBar } from '../ui/time-bar';
 import { watchRasterTiles, type RasterTileOutcome, type RasterTileWatch } from '../util/raster-status';
-import { pointHasHeatRiskCoverage } from './heatrisk-coverage';
+import { viewHasHeatRiskCoverage } from './heatrisk-coverage';
 import { registerWhpImageShadeProtocol } from './whp-image-shade-protocol';
 
 const TILE_SUCCESS_DEADLINE_MS = 10_000;
-
-/**
- * The view has coverage when its center or the middle of any of its four
- * quarters is inside the hull, so a coast view centered offshore still
- * draws while a Canadian or Alaskan view with a border sliver in one corner
- * does not. shortcut: five sample points, not a bounds-hull intersection;
- * a covered strip that misses all five reads no data until the next pan.
- * shortcut: a copy of heatrisk.ts viewHasCoverage, until both import one from heatrisk-coverage.ts.
- */
-function viewHasCoverage(map: maplibregl.Map): boolean {
-  const center = map.getCenter();
-  if (pointHasHeatRiskCoverage(center.lng, center.lat)) return true;
-  const bounds = map.getBounds();
-  const west = bounds.getWest();
-  const south = bounds.getSouth();
-  const width = bounds.getEast() - west;
-  const height = bounds.getNorth() - south;
-  return [0.25, 0.75].some((x) =>
-    [0.25, 0.75].some((y) => pointHasHeatRiskCoverage(west + width * x, south + height * y))
-  );
-}
 
 type WhpStatus = 'loading' | 'ready' | 'degraded' | 'error' | 'no-data';
 
@@ -226,7 +205,7 @@ export function createWhpLayer(key: 'usfs-whp' | 'usfs-whp-classes', shaded: boo
         tile = 'ready';
       }
       const own = borrowing ? (registry.getStatus(COLOURS_KEY) ?? 'loading') : tile;
-      const next = viewHasCoverage(map) ? own : 'no-data';
+      const next = viewHasHeatRiskCoverage(map) ? own : 'no-data';
       if (registry.getStatus(key) !== next) reportStatus(next);
     };
     // A hidden source's closed cycle reports nothing more, so the registry drives the borrowed read.
