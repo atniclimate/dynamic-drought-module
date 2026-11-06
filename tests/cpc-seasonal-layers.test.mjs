@@ -212,6 +212,34 @@ test('a failed read is unavailable with nothing drawn and no key, never an empty
   }
 });
 
+test('a day-range class outside the issuer\'s renderer is not drawn and reads partial; an answer with nothing inside it is unavailable', async () => {
+  // The day-range renderers carry no Equal Chances row and one Near Normal pair (Normal,36).
+  for (const key of ['cpc-610-temp', 'cpc-814-precip']) {
+    const layer = byKey(key);
+    for (const outside of [{ cat: 'EC', prob: 33 }, { cat: 'Normal', prob: 40 }]) {
+      const mixed = bodyFor(layer);
+      const total = mixed.features.length;
+      Object.assign(mixed.features[0].properties, outside);
+      await withFetch(() => new Response(JSON.stringify(mixed)), async () => {
+        const map = fakeMap();
+        await layer.module.activate(map);
+        assert.equal(registry.getStatus(key), 'degraded', `${key}: ${outside.cat},${outside.prob}`);
+        assert.equal(map.sources.get(key).data.features.length, total - 1, 'the pair outside the renderer is not drawn');
+        layer.module.deactivate(map);
+      });
+      const alone = bodyFor(layer);
+      alone.features = [{ ...alone.features[0], properties: { ...alone.features[0].properties, ...outside } }];
+      await withFetch(() => new Response(JSON.stringify(alone)), async () => {
+        const map = fakeMap();
+        await layer.module.activate(map);
+        assert.equal(registry.getStatus(key), 'error', `${key}: only ${outside.cat},${outside.prob}`);
+        assert.equal(map.sources.size, 0);
+        layer.module.deactivate(map);
+      });
+    }
+  }
+});
+
 test('all six outlooks on together keep six legends, each its own issuer classes and clock, and no combined class', async () => {
   const clocks = {
     cpc_sea_precip_outlk: { valid_seas: 'NDJ 2026-2027', fcst_date: Date.UTC(2026, 9, 15) },

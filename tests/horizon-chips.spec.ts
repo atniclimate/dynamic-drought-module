@@ -441,10 +441,8 @@ test.describe('DDM-P8-T03 clause 1: every horizon chip either changes the map or
         const btn = page.locator(`.shell-horizon-btn[data-horizon="${key}"]`);
         const expectDisabled = DISABLED_CHIPS.has(`${cluster}:${key}`);
         if (!expectDisabled) {
-          expect(
-            await btn.getAttribute('aria-disabled'),
-            `${cluster}:${key} should be enabled`
-          ).toBeNull();
+          // Polled: the previous mode can leave this chip disabled for a frame after the click.
+          await expect(btn, `${cluster}:${key} should be enabled`).not.toHaveAttribute('aria-disabled');
           continue;
         }
         await expect(btn, `${cluster}:${key} should be disabled`).toHaveAttribute(
