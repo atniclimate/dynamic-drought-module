@@ -60,9 +60,9 @@ import {
   rejectEnsoSnapshot,
   CPC_RULE_URLS,
   RUN_LENGTH,
-  DIRECTION_BAND,
   DIRECTION_SPAN,
-  SEASON_NAMES
+  SEASON_NAMES,
+  directionOf
 } from './lib/enso-snapshot-contract.mjs';
 
 const ONI_URL = 'https://www.cpc.ncep.noaa.gov/data/indices/oni.ascii.txt';
@@ -246,11 +246,7 @@ function thresholdSide(latest) {
  */
 function seasonDirection(values) {
   if (values.length < DIRECTION_SPAN) return 'steady';
-  const change =
-    values[values.length - 1].anom - values[values.length - DIRECTION_SPAN].anom;
-  if (change >= DIRECTION_BAND) return 'strengthening';
-  if (change <= -DIRECTION_BAND) return 'weakening';
-  return 'steady';
+  return directionOf(values[values.length - 1].anom - values[values.length - DIRECTION_SPAN].anom);
 }
 
 /**
@@ -539,6 +535,31 @@ async function fetchSoi() {
   };
 }
 
+/**
+ * Without a Last-Modified date the app ages a series from `retrieved`, which
+ * every run resets, so a frozen upstream would keep a present-tense read
+ * forever. Only then must the newest data itself be recent: the newest RONI
+ * season ended at most four months ago (RONI posts monthly), and the newest
+ * weekly Nino 3.4 week is at most 21 days old (it posts weekly).
+ */
+export function assertRecentWhenUndated(roni, nino34Weekly, now = new Date()) {
+  if (!roni.published) {
+    // A season label carries its centre month's year, so DJF 2026 ends in February 2026.
+    const endMonth = roni.latest.year * 12 + SEASON_NAMES.indexOf(roni.latest.seas) + 1;
+    const behind = now.getUTCFullYear() * 12 + now.getUTCMonth() - endMonth;
+    if (behind > 4) {
+      throw new Error(`RONI has no Last-Modified date and its newest season (${roni.latest.seas} ${roni.latest.year}) ended ${behind} months ago`);
+    }
+  }
+  if (!nino34Weekly.published) {
+    const { year, month, day } = nino34Weekly.latest;
+    const days = (now.getTime() - Date.UTC(year, month - 1, day)) / 86_400_000;
+    if (days > 21) {
+      throw new Error(`weekly Nino 3.4 has no Last-Modified date and its newest week (${year}-${month}-${day}) is ${Math.floor(days)} days old`);
+    }
+  }
+}
+
 function withPublished(published) {
   return published ? { published } : {};
 }
@@ -628,6 +649,7 @@ async function main() {
   const nino34 = await fetchNino34();
   const nino34Weekly = await fetchNino34Weekly();
   const soi = await fetchSoi();
+  assertRecentWhenUndated(roni, nino34Weekly);
 
   const snapshot = {
     retrieved: new Date().toISOString().slice(0, 10),
