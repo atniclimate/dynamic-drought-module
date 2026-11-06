@@ -6,19 +6,21 @@
  * filter.
  *
  * A cell names the loaded product the minimap reads and the rule that takes
- * a regional reading from it. A cell with no reading, or with a reading that
- * is off, leaves the minimap navigation-only: it shades no framing, says so
- * in the unshaded words, and names nothing it does not show. The Record types
- * require a cell for every mode and horizon of `HAZARD_CLUSTERS`, and
- * tests/minimap-readings.test.mjs holds every reading's product to that
- * horizon's recipe, so no cell can read a product its horizon does not load.
+ * a regional reading from it. A cell with no reading on leaves the minimap
+ * navigation-only: it shades no framing, says so in the unshaded words, and
+ * names nothing it does not show. The Record types require a cell for every
+ * mode and horizon of `HAZARD_CLUSTERS`, and tests/minimap-readings.test.mjs
+ * holds every reading's product, draft or shipped, to that horizon's recipe,
+ * so no cell can read a product its horizon does not load.
  *
  * DRAFT rows: a regional reading of an outlook is a derived presentation of
  * an agency's product, so its rule and its words are the owner's decision.
- * Each ships off (`on: false`), which keeps its horizon navigation-only, until
- * the owner turns it on. Their one rule, `classes-drawn`, names the issuer
- * classes the loaded outlook draws over a framing in the issuer's own words
- * (src/state/minimap-outlook.ts); it computes no area, share, rank or band.
+ * Each sits in its cell's `draft` slot and ships off (`on: false`), which
+ * leaves the cell as shipped (its `reading`, or navigation-only), until the
+ * owner turns it on; then it takes the cell's place. Their one rule,
+ * `classes-drawn`, names the issuer classes the loaded outlook draws over a
+ * framing in the issuer's own words (src/state/minimap-outlook.ts); it
+ * computes no area, share, rank or band.
  */
 
 import type { HazardClusterKey, TemporalHorizonKey } from './clusters';
@@ -63,7 +65,10 @@ export type MinimapReading =
     };
 
 export interface MinimapCell {
+  /** The shipped reading of a product this horizon loads. */
   readonly reading?: MinimapReading;
+  /** The owner's DRAFT row: read instead of `reading` only once switched on. */
+  readonly draft?: MinimapReading;
   /** Navigation-only, the mode's own clause saying why no framing is shaded is true here. */
   readonly unshadedWhy?: true;
   /** Navigation-only, the scale slot names the basin-wide index (EF-6). */
@@ -113,18 +118,20 @@ export const MINIMAP_READINGS: Readonly<
     current: { reading: { rule: 'nadm-framing-summary', product: 'nadm-drought', on: true } },
     // DRAFT row (owner's decision): the CPC Monthly Drought Outlook classes drawn in each framing.
     'weeks-ahead': {
-      reading: { rule: 'classes-drawn', product: 'drought', on: false, outlook: DROUGHT_OUTLOOK },
+      draft: { rule: 'classes-drawn', product: 'drought', on: false, outlook: DROUGHT_OUTLOOK },
     },
     // DRAFT row (owner's decision): the CPC Seasonal Drought Outlook classes drawn in each framing.
     'season-ahead': {
-      reading: { rule: 'classes-drawn', product: 'drought', on: false, outlook: DROUGHT_OUTLOOK },
+      draft: { rule: 'classes-drawn', product: 'drought', on: false, outlook: DROUGHT_OUTLOOK },
     },
   },
   wildfire: {
     current: { reading: { rule: 'nifc-perimeter-count', product: 'nifc-fires', on: true } },
+    // Weeks ahead draws the perimeters too, so the shipped count reads here as at Current.
     // DRAFT row (owner's decision): the SPC Day 1 fire weather categories drawn in each framing.
     'weeks-ahead': {
-      reading: { rule: 'classes-drawn', product: 'spc-fire-weather', on: false, outlook: SPC_FIRE_WEATHER },
+      reading: { rule: 'nifc-perimeter-count', product: 'nifc-fires', on: true },
+      draft: { rule: 'classes-drawn', product: 'spc-fire-weather', on: false, outlook: SPC_FIRE_WEATHER },
     },
     // The WHP raster on the map gives no issuer-class reading per framing, and
     // the bundled WHP overview holds only merged classes over DDM thresholds.
@@ -140,7 +147,7 @@ export const MINIMAP_READINGS: Readonly<
     current: { unshadedWhy: true, index: 'roni' },
     // DRAFT row (owner's decision): the CPC 8-14 day precipitation outlook classes drawn in each framing.
     'weeks-ahead': {
-      reading: {
+      draft: {
         rule: 'classes-drawn',
         product: 'cpc-814-precip',
         on: false,
@@ -151,7 +158,7 @@ export const MINIMAP_READINGS: Readonly<
     },
     // DRAFT row (owner's decision): the CPC seasonal precipitation outlook classes drawn in each framing.
     'season-ahead': {
-      reading: {
+      draft: {
         rule: 'classes-drawn',
         product: 'cpc-seasonal-precip',
         on: false,
@@ -168,8 +175,8 @@ export function minimapReading(
   mode: HazardClusterKey,
   horizon: TemporalHorizonKey,
 ): MinimapReading | null {
-  const reading = MINIMAP_READINGS[mode][horizon].reading;
-  return reading?.on ? reading : null;
+  const { reading, draft } = MINIMAP_READINGS[mode][horizon];
+  return draft?.on ? draft : reading?.on ? reading : null;
 }
 
 /** The scale slot's basin-wide index here, when the minimap is navigation-only. */
@@ -214,6 +221,7 @@ export function outlookFramingWords(
   status: MinimapOutlookStatus,
   labels: readonly string[],
 ): string {
+  // shortcut: idle (the layer turned off) is worded "loading" here and in the scale and never resolves, give idle its own words in the commit that turns a row on.
   const body =
     status === 'live'
       ? labels.join('; ') || 'no area drawn'

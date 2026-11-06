@@ -12,10 +12,12 @@ import { fileURLToPath } from 'node:url';
  *  1. Every mode and horizon, enumerated from the mode table, resolves to a
  *     reading or to navigation-only, and no row names a product its horizon
  *     does not load.
- *  2. The shipped readings (Drought and Wildfire at Current) are unchanged,
- *     and every Current clause is the mode's own words.
- *  3. Every new row is DRAFT and off: off, its horizon is navigation-only and
- *     names nothing it does not show; on, it reads its product and names it.
+ *  2. The shipped readings (Drought and Wildfire at Current, and Wildfire at
+ *     Weeks ahead, which draws the perimeters too) are unchanged, and every
+ *     Current clause is the mode's own words.
+ *  3. Every new row is DRAFT and off: off, its cell keeps its shipped reading
+ *     or is navigation-only and names nothing it does not show; on, it reads
+ *     its product and names it.
  *  4. The classes-drawn rule on fixtures, and its words.
  *  5. The stub swap: the stubbed upstream swapped between two fixtures moves
  *     the reading, for the shipped Wildfire reading (on its own refresh) and
@@ -167,19 +169,19 @@ async function until(predicate, label) {
   assert.fail(`never settled: ${label}`);
 }
 
-/** The table's new rows: every classes-drawn reading, wherever it sits. */
+/** The table's new rows: every cell's DRAFT slot. */
 function draftRows() {
   return HAZARD_CLUSTER_KEYS.flatMap((mode) =>
     TEMPORAL_HORIZON_KEYS.flatMap((horizon) => {
-      const reading = MINIMAP_READINGS[mode][horizon].reading;
-      return reading?.rule === 'classes-drawn' ? [{ mode, horizon, reading }] : [];
+      const reading = MINIMAP_READINGS[mode][horizon].draft;
+      return reading ? [{ mode, horizon, reading }] : [];
     })
   );
 }
 
 /** Switch one row's flag on for a case (the owner's switch), and off again after. */
 async function withRowOn(mode, horizon, run) {
-  const row = MINIMAP_READINGS[mode][horizon].reading;
+  const row = MINIMAP_READINGS[mode][horizon].draft;
   row.on = true;
   try {
     const reading = minimapReading(mode, horizon);
@@ -202,10 +204,14 @@ test('every mode and horizon of the mode table resolves to a reading or to navig
   for (const mode of HAZARD_CLUSTER_KEYS) {
     assert.deepEqual(Object.keys(MINIMAP_READINGS[mode]).sort(), [...TEMPORAL_HORIZON_KEYS].sort(), mode);
     for (const horizon of TEMPORAL_HORIZON_KEYS) {
-      const row = MINIMAP_READINGS[mode][horizon].reading;
+      const { reading, draft } = MINIMAP_READINGS[mode][horizon];
       const resolved = minimapReading(mode, horizon);
-      assert.ok(resolved === null || resolved === row, `${mode} ${horizon} resolves to its own row or to navigation-only`);
-      if (row !== undefined) {
+      assert.ok(
+        resolved === null || resolved === reading || resolved === draft,
+        `${mode} ${horizon} resolves to its own row or to navigation-only`
+      );
+      for (const row of [reading, draft]) {
+        if (row === undefined) continue;
         assert.ok(
           HAZARD_CLUSTERS[mode].recipes[horizon].includes(row.product),
           `${mode} ${horizon} reads ${row.product}, which that horizon's recipe loads`
@@ -246,21 +252,31 @@ test('a navigation-only clause names only what its horizon loads: no Drought Mon
       }
     }
   }
-  // The cases the defect was about, said outright.
+  // The cases the defect was about, said outright: Drought's outlook horizons and
+  // Wildfire Season ahead draw nothing the minimap reads, while Wildfire Weeks
+  // ahead draws the perimeters, so the shipped count and its clause stay there.
   for (const horizon of ['weeks-ahead', 'season-ahead']) {
     assert.equal(minimapReading('drought', horizon), null);
-    assert.equal(minimapReading('wildfire', horizon), null);
     for (const key of FRAMING_KEYS) {
       assert.equal(minimapProvenanceAt(key, 'drought', horizon), undefined, `drought ${horizon} ${key}`);
-      assert.equal(minimapProvenanceAt(key, 'wildfire', horizon), undefined, `wildfire ${horizon} ${key}`);
     }
+  }
+  assert.equal(minimapReading('wildfire', 'season-ahead'), null);
+  assert.deepEqual(minimapReading('wildfire', 'weeks-ahead'), minimapReading('wildfire', 'current'));
+  for (const key of FRAMING_KEYS) {
+    assert.equal(minimapProvenanceAt(key, 'wildfire', 'season-ahead'), undefined, `wildfire season-ahead ${key}`);
+    assert.equal(
+      minimapProvenanceAt(key, 'wildfire', 'weeks-ahead'),
+      framingMinimapProvenance(key, 'wildfire'),
+      `wildfire weeks-ahead ${key}`
+    );
   }
   // Extreme Heat at Season ahead draws nothing, so even its HeatRisk clause is gone.
   assert.equal(minimapProvenanceAt('arid-west', 'heat', 'season-ahead'), undefined);
   assert.match(minimapProvenanceAt('arid-west', 'heat', 'weeks-ahead'), /HeatRisk/);
 });
 
-test('every new row is DRAFT and off, so its horizon ships navigation-only and names nothing it does not show', () => {
+test('every new row is DRAFT and off, so its cell keeps its shipped reading or is navigation-only, and names nothing it does not show', () => {
   const drafts = draftRows();
   assert.deepEqual(
     drafts.map(({ mode, horizon, reading }) => `${mode} ${horizon} ${reading.product}`),
@@ -274,7 +290,11 @@ test('every new row is DRAFT and off, so its horizon ships navigation-only and n
   );
   for (const { mode, horizon, reading } of drafts) {
     assert.equal(reading.on, false, `${mode} ${horizon} ships off until the owner turns it on`);
-    assert.equal(minimapReading(mode, horizon), null, `${mode} ${horizon} is navigation-only`);
+    assert.equal(
+      minimapReading(mode, horizon),
+      MINIMAP_READINGS[mode][horizon].reading ?? null,
+      `${mode} ${horizon} keeps its shipped reading, or is navigation-only`
+    );
     const name = minimapProductName(reading.product);
     for (const key of [null, ...FRAMING_KEYS]) {
       const clause = minimapProvenanceAt(key, mode, horizon) ?? '';
@@ -288,7 +308,7 @@ test('every new row is DRAFT and off, so its horizon ships navigation-only and n
   }
 });
 
-test('a row switched on reads its product and names it; switched off again it is navigation-only', async () => {
+test('a row switched on reads its product and names it; switched off again its cell reads as shipped', async () => {
   for (const { mode, horizon, reading } of draftRows()) {
     await withRowOn(mode, horizon, async () => {
       const clause = `The ${minimapProductName(reading.product)} informs this minimap.`;
@@ -296,7 +316,7 @@ test('a row switched on reads its product and names it; switched off again it is
       assert.equal(minimapProvenanceAt(null, mode, horizon), clause);
       assert.equal(minimapIndexLabel(mode, horizon), undefined, `${mode} ${horizon}: the reading takes the scale slot`);
     });
-    assert.equal(minimapReading(mode, horizon), null);
+    assert.equal(minimapReading(mode, horizon), MINIMAP_READINGS[mode][horizon].reading ?? null);
   }
 });
 
@@ -487,8 +507,8 @@ test('Wildfire Weeks ahead, flag on: the SPC Day 1 upstream swapped between fixt
 test('Drought Weeks ahead and Season ahead, flag on: the CPC Drought Outlook upstream swapped between fixtures moves the reading, by data and by horizon', async () => {
   const layer = await import('../src/layers/drought.ts');
   const { timeline } = await import('../src/state/timeline.ts');
-  const weeksRow = MINIMAP_READINGS.drought['weeks-ahead'].reading;
-  const seasonRow = MINIMAP_READINGS.drought['season-ahead'].reading;
+  const weeksRow = MINIMAP_READINGS.drought['weeks-ahead'].draft;
+  const seasonRow = MINIMAP_READINGS.drought['season-ahead'].draft;
   seasonRow.on = true;
   await withRowOn('drought', 'weeks-ahead', async (weeks) => {
     let monthly = new Response('upstream failure', { status: 500 });

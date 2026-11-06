@@ -761,7 +761,7 @@ export function Minimap({
   const activeOcean = metricContext === 'enso' ? oceanFraming : null;
   const landSelectionIsCurrent = activeOcean === null;
   // What this minimap reads comes from the one table, at this mode AND
-  // horizon: an outlook horizon never shows the current-conditions reading.
+  // horizon: a horizon reads only a product it loads.
   const reading = readingFor(metricContext, horizon);
   const showDroughtMetric = reading?.rule === 'nadm-framing-summary';
   const showWildfireMetric = reading?.rule === 'nifc-perimeter-count';

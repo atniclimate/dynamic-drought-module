@@ -133,6 +133,7 @@ export function watchMinimapOutlook(
     active = !active;
     read();
   });
+  // shortcut: Drought Weeks to Season ahead share one source, so this read can show the old outlook until the layer's next status, also re-read on the horizon when a row turns on.
   read();
   return () => {
     generation++;

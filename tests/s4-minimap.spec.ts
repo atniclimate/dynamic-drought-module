@@ -364,7 +364,7 @@ test.describe('S4b minimap', () => {
     ).toBeNull();
   });
 
-  test('an outlook horizon with no reading turned on is navigation-only and names no product it does not show', async ({
+  test('an outlook horizon reads only a product it loads, and is otherwise navigation-only and names no product it does not show', async ({
     page,
   }) => {
     await stubCpcDroughtOutlook(page);
@@ -386,12 +386,19 @@ test.describe('S4b minimap', () => {
     expect(await canvas.getAttribute('data-minimap-status')).toBeNull();
     await pacific.click();
     await expect(page.locator('#map-key')).not.toContainText(/informs (this|the) minimap/);
-    // Wildfire keeps Weeks ahead: no perimeter count and no WHP fallback named.
+    // Wildfire keeps Weeks ahead, which draws the perimeters too, so the
+    // shipped perimeter count reads there as at Current.
     await page.locator('.shell-cluster-btn[data-cluster="wildfire"]').click();
     await expect(canvas).toHaveAttribute('data-metric-context', 'wildfire');
     await expect(
       page.locator('.shell-horizon-btn[data-horizon="weeks-ahead"]'),
     ).toHaveAttribute('aria-pressed', 'true');
+    await expect(scale).toHaveText('NIFC / WHP 2023');
+    await expect(
+      minimap.locator('[data-framing="alaska-northwest"]'),
+    ).toHaveAttribute('data-wildfire-condition', 'mapped-wildfire');
+    // Season ahead draws only the WHP raster: no perimeter count and no WHP fallback named.
+    await page.locator('.shell-horizon-btn[data-horizon="season-ahead"]').click();
     await expect(scale).toHaveText('Unshaded · see main map');
     await expect(pacific).toHaveAttribute('data-wildfire-condition', 'neutral');
     await expect(pacific).not.toHaveAttribute('aria-label', /NIFC|Wildfire Hazard Potential/);
