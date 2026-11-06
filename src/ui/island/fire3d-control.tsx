@@ -321,15 +321,19 @@ export function Fire3DControl({
   // after load, never on the first run (see shouldRevealScroll).
   const root = useRef<HTMLDivElement>(null);
   const lastFuelTarget = useRef<typeof fuelTarget | undefined>(undefined);
+  const lastRecipeHasFlat = useRef(recipeHasFlat);
   // Set by the button, not read from the URL: a shared 3D link must not scroll at load.
   const turnedOn3D = useRef(false);
   useEffect(() => {
     const firstRun = lastFuelTarget.current === undefined;
     const fuelRowChanged = !firstRun && lastFuelTarget.current !== fuelTarget;
     lastFuelTarget.current = fuelTarget;
+    // shortcut: recipeHasFlat is not an effect dependency (adding it would scroll a 3D user on every horizon press), so this ref can lag a horizon change made while the scene is active; upgrade if a 3D horizon press is seen to scroll.
+    const recipeChanged = lastRecipeHasFlat.current !== recipeHasFlat;
+    lastRecipeHasFlat.current = recipeHasFlat;
     const box = root.current?.closest('.sidebar-scroll');
     if (!root.current || !box) return;
-    if (!shouldRevealScroll({ firstRun, sceneRequested: turnedOn3D.current && preference, fuelRowChanged })) return;
+    if (!shouldRevealScroll({ firstRun, sceneRequested: turnedOn3D.current && preference, fuelRowChanged, recipeChanged })) return;
     // A hidden dock (the phone sheet) has no box and would read top 0.
     const dock = box.querySelector('.sidebar-bottom-dock');
     const dockTop = dock?.getClientRects().length ? dock.getBoundingClientRect().top : undefined;

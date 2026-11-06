@@ -120,6 +120,16 @@ function listNames(defs: readonly LayerDef[]): string {
   return `${names.slice(0, -1).join(', ')}, and ${names[names.length - 1]}`;
 }
 
+/**
+ * Whether the listed names take a plural verb: more than one layer, or one
+ * layer whose name is itself plural ("Monitoring stations", "Current Mapped
+ * Fire Perimeters (...)"). Every layer name whose head, before any
+ * parenthesis, ends in "s" is plural; no singular layer name ends in "s".
+ */
+function pluralNames(defs: readonly LayerDef[]): boolean {
+  return defs.length > 1 || (defs.length === 1 && /s$/.test(proseName(defs[0] as LayerDef).replace(/\s*\(.*$/, '')));
+}
+
 /** The Showing sentence body: "A", "A with B", "A with B, C, and D". */
 function showingNames(defs: readonly LayerDef[]): string {
   const names = defs.map(proseName);
@@ -200,7 +210,7 @@ export const deriveDisplaySummary: DeriveDisplaySummary = (input) => {
   const degraded = withStatus('degraded');
   if (degraded.length > 0) {
     clauses.push(
-      `${listNames(degraded)} ${degraded.length > 1 ? 'are' : 'is'} live with partial coverage`
+      `${listNames(degraded)} ${pluralNames(degraded) ? 'are' : 'is'} live with partial coverage`
     );
   }
 
@@ -212,7 +222,7 @@ export const deriveDisplaySummary: DeriveDisplaySummary = (input) => {
   const unavailable = withStatus('error');
   if (unavailable.length > 0) {
     clauses.push(
-      `${listNames(unavailable)} ${unavailable.length > 1 ? 'are' : 'is'} unavailable`
+      `${listNames(unavailable)} ${pluralNames(unavailable) ? 'are' : 'is'} unavailable`
     );
   }
 
@@ -228,7 +238,7 @@ export const deriveDisplaySummary: DeriveDisplaySummary = (input) => {
   const zoomGated = withStatus('zoom-in');
   if (zoomGated.length > 0) {
     clauses.push(
-      `${listNames(zoomGated)} ${zoomGated.length > 1 ? 'appear' : 'appears'} after you zoom in`
+      `${listNames(zoomGated)} ${pluralNames(zoomGated) ? 'appear' : 'appears'} after you zoom in`
     );
   }
 

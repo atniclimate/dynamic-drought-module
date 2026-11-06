@@ -467,7 +467,7 @@ test.describe('S3 snapshot revisions and honesty under later changes', () => {
       const after = getCommittedSnapshot();
       expect(after.revision).toBeGreaterThan(before.revision);
       expect(after.summary.caveat).toContain(
-        'Current Mapped Fire Perimeters (National Interagency Fire Center, NIFC) is live with partial coverage'
+        'Current Mapped Fire Perimeters (National Interagency Fire Center, NIFC) are live with partial coverage'
       );
     } finally {
       dispose();

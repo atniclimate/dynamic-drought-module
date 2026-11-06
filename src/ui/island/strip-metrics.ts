@@ -386,6 +386,8 @@ export function firesMetric(map: maplibregl.Map): Metric {
       p?.['IncidentName']
     )
   );
+  // Never a zero while the request is in flight; a nonzero count is kept.
+  if (n === 0 && registry.getStatus(FIRES_KEY) === 'loading') return pendingMetric(FIRES_KEY);
   return {
     value: String(n),
     sublabel:

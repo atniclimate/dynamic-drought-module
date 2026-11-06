@@ -120,8 +120,8 @@ function coverageCue(source: string): string | null {
   return tail && tail !== source ? tail : null;
 }
 
-/** Rows whose bundled archive is regional while the layer reads `live` everywhere. */
-const COVERAGE_CUE_KEYS: ReadonlySet<string> = new Set(['hillshade', 'ecoregions']);
+/** Rows whose bundled archive is regional, or a dated snapshot, while the layer reads `live`. */
+const COVERAGE_CUE_KEYS: ReadonlySet<string> = new Set(['hillshade', 'ecoregions', 'cdm-drought']);
 
 function LayerRow({
   def,

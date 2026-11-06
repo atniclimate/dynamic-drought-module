@@ -103,7 +103,7 @@ test('the reveal stops at the top of the sticky Brief dock, not under it', () =>
 });
 
 test('the block never reveal-scrolls on its first run, so page load leaves the horizon chips in view', () => {
-  const quiet = { firstRun: false, sceneRequested: false, fuelRowChanged: false };
+  const quiet = { firstRun: false, sceneRequested: false, fuelRowChanged: false, recipeChanged: false };
   // Page load, with or without a stored 3D choice or a Fuel risk row.
   for (const sceneRequested of [false, true]) {
     for (const fuelRowChanged of [false, true]) {
@@ -115,4 +115,6 @@ test('the block never reveal-scrolls on its first run, so page load leaves the h
   assert.equal(shouldRevealScroll({ ...quiet, fuelRowChanged: true }), true);
   // Without 3D, a block that merely appears or changes status stays where it is.
   assert.equal(shouldRevealScroll(quiet), false);
+  // A horizon press that moves the flat layer into or out of the recipe (Wildfire Long Range) is not a Fuel risk change.
+  assert.equal(shouldRevealScroll({ ...quiet, fuelRowChanged: true, recipeChanged: true }), false);
 });

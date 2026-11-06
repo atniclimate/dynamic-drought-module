@@ -95,12 +95,14 @@ export function revealScroll(
  * Whether the control block may scroll the sidebar to reveal itself. Never on
  * its first run (page load: the scroll carried the horizon chips under the
  * sticky mode row). Later, a person who turned 3D on gets the reveal; without
- * 3D only a changed Fuel risk row does.
+ * 3D only a changed Fuel risk row does, and not when the row moved because a
+ * horizon press took the flat layer into or out of the recipe.
  */
 export function shouldRevealScroll(input: {
   readonly firstRun: boolean;
   readonly sceneRequested: boolean;
   readonly fuelRowChanged: boolean;
+  readonly recipeChanged: boolean;
 }): boolean {
-  return !input.firstRun && (input.sceneRequested || input.fuelRowChanged);
+  return !input.firstRun && (input.sceneRequested || (input.fuelRowChanged && !input.recipeChanged));
 }

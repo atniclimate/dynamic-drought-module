@@ -62,5 +62,7 @@ test('the catalog shows the coverage cue on the ecoregions row', () => {
   const keys = [...match[1].matchAll(/'([^']+)'/g)].map((m) => m[1]);
   assert.ok(keys.includes('ecoregions'), `keys ${keys.join(', ')}`);
   assert.ok(keys.includes('hillshade'), `keys ${keys.join(', ')}`);
+  // The Canadian Drought Monitor is a committed monthly snapshot that reads `live`: its row says so.
+  assert.ok(keys.includes('cdm-drought'), `keys ${keys.join(', ')}`);
   assert.match(text, /COVERAGE_CUE_KEYS\.has\(def\.key\)\s*\?\s*coverageCue\(def\.source\)/);
 });
