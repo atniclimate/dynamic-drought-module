@@ -2214,9 +2214,8 @@ test.describe('W3/W4 browser truth', () => {
 
     // Turning the perimeter layer off takes the ribbon with it while the
     // scene stays up: the ribbon is a re-presentation of that layer and has
-    // no life of its own. (The layer change demotes the committed cluster to
-    // custom, which hides the 3D control while a fire event layer keeps the
-    // scene alive, so this is the last gesture of the case.)
+    // no life of its own. The layer change demotes the committed cluster to
+    // custom while a fire event layer keeps the scene alive.
     await layerCheckbox(page, 'nifc-fires').uncheck();
     await stampReaches(
       page,
@@ -2227,6 +2226,12 @@ test.describe('W3/W4 browser truth', () => {
     );
     await expect(ribbonLegend).toHaveCount(0);
     expect(await fire3dStamp(page)).toBe('active');
+
+    // The 3D button stays while that scene is up: it is the direct way out.
+    await expect(page.locator(TOGGLE)).toHaveAttribute('aria-pressed', 'true');
+    await page.locator(TOGGLE).click();
+    await stampReaches(page, fire3dStamp, 'inactive', 10_000, 'the 3D button did not end the custom scene');
+    await expect(page.locator(TOGGLE)).toHaveCount(0);
   });
 
   test('unchecking perimeters removes a ribbon whose pulse is advancing', async ({ page }) => {
@@ -2430,6 +2435,29 @@ test.describe('W3/W4 browser truth', () => {
   await expect(page.locator('.shell-fire3d-note')).toHaveCount(2);
 });
 
+test('a failed smoke read says smoke is unavailable in the 3D control, not that it stays in a flat veil', async ({
+  page
+}) => {
+  test.setTimeout(150_000);
+  await stubWildfireFeeds(page);
+  await stubDeepTerrainArchive(page);
+  // Registered AFTER the shared stub, so it wins: the HMS service fails, so
+  // there is no volume and no flat veil either.
+  await page.route(
+    (url) => url.href.includes('NOAA_Satellite_Smoke_Detection'),
+    (route) => route.fulfill({ status: 503, body: 'unavailable' })
+  );
+  await gotoApp(page, '?region=washington_state&cluster=wildfire&fire3d=true');
+
+  await expect
+    .poll(() => fire3dStamp(page), { timeout: 60_000 })
+    .toBe('active');
+  await page.locator('.shell-fire3d-details > summary').click();
+  const line = page.locator('.shell-fire3d-status');
+  await expect(line).toHaveText('Live (partial): terrain relief; smoke is unavailable.', { timeout: 30_000 });
+  await expect(page.locator('.legend-section[data-legend="hms-smoke-volume"]')).toHaveCount(0);
+});
+
 test('an embed without the flag never activates and never gains it', async ({
     page
   }) => {
@@ -2509,6 +2537,26 @@ test('an embed without the flag never activates and never gains it', async ({
     await page.setViewportSize({ width: 1024, height: 768 });
     await expect(page.locator('#shell-fire3d')).toHaveCount(1);
     await expect(refusal).toHaveCount(0);
+  });
+
+  test('a scene ended by a short window leaves no 3D refusal behind in Drought', async ({ page }) => {
+    test.setTimeout(150_000);
+    await stubWildfireFeeds(page);
+    await stubDeepTerrainArchive(page);
+    await page.setViewportSize({ width: 1024, height: 768 });
+    await gotoApp(page, '?region=washington_state&cluster=wildfire&fire3d=true');
+    await expect.poll(() => fire3dStamp(page), { timeout: 60_000 }).toBe('active');
+
+    // Too short: the control hides and the map gate ends the scene. The
+    // control must not keep the last 'active' it heard while hidden, or that
+    // stale status would keep 3D wording in a mode that has no 3D.
+    await page.setViewportSize({ width: 844, height: 390 });
+    await expect(page.locator('#shell-fire3d-refused')).toHaveAttribute('data-fire3d-refused', 'short-window');
+    await stampReaches(page, fire3dStamp, 'inactive', 10_000, 'the short window did not end the scene');
+
+    await page.locator('.shell-cluster-btn[data-cluster="drought"]').click();
+    await expect(page.locator('#shell-fire3d-refused')).toHaveCount(0);
+    await expect(page.locator('#shell-fire3d')).toHaveCount(0);
   });
 
   test.describe('landscape touch screens', () => {

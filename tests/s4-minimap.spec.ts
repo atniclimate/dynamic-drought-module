@@ -406,7 +406,8 @@ test.describe('S4b minimap', () => {
     await expect(
       minimap.locator('[data-framing="alaska-northwest"]'),
     ).toHaveAttribute('data-wildfire-condition', 'mapped-wildfire');
-    // Season ahead draws only the WHP raster: no perimeter count and no WHP fallback named.
+    // Season ahead draws the perimeters beside the WHP raster (DR-022), but its minimap
+    // row reads nothing yet (src/config/minimap-readings.ts): no count and no WHP fallback named.
     await page.locator('.shell-horizon-btn[data-horizon="season-ahead"]').click();
     await expect(scale).toHaveText('Unshaded · see main map');
     await expect(pacific).toHaveAttribute('data-wildfire-condition', 'neutral');
