@@ -123,9 +123,13 @@ test.describe('S1 hazard clusters (D-0.7.0-042/043/044)', () => {
     expect(current).not.toContain('usfs-whp');
   });
 
-  test('ENSO is the shipped SST anomaly surface plus the active tropical cyclones at every horizon (D-0.7.0-042; ENSO B3)', () => {
+  test('ENSO is the shipped SST anomaly surface plus the active tropical cyclones at every horizon (D-0.7.0-042; ENSO B3), with the CPC seasonal precipitation outlook at Season ahead', () => {
     for (const horizon of TEMPORAL_HORIZON_KEYS) {
-      expect(HAZARD_CLUSTERS.enso.recipes[horizon]).toEqual(['sst-anomaly', 'tropical-cyclones']);
+      expect(HAZARD_CLUSTERS.enso.recipes[horizon]).toEqual(
+        horizon === 'season-ahead'
+          ? ['sst-anomaly', 'cpc-seasonal-precip', 'tropical-cyclones']
+          : ['sst-anomaly', 'tropical-cyclones']
+      );
     }
   });
 });

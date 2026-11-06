@@ -126,6 +126,20 @@ export const URLS = Object.freeze({
   cpcSeasonalTempOutlookMapServer:
     'https://mapservices.weather.noaa.gov/vector/rest/services/outlooks/cpc_sea_temp_outlk/MapServer',
 
+  // ---------- CPC seasonal precipitation outlook (NOAA, ArcGIS MapServer) ----------
+  // The temperature service's sibling ("Seasonal Precipitation Outlooks"), the
+  // same 13 lead layers and field set; layer 0 is "Lead 1". Both draw as the
+  // ENSO Season ahead outlook layers (src/layers/cpc-seasonal-read.ts reads
+  // each service's layer 0 nationally). Verified 2026-11-05: `/0?f=json` names
+  // the fields objectid, fcst_date (alias "Forecast Date"), valid_seas (alias
+  // "Valid Season"), prob, cat, idp_source, idp_filedate, idp_ingestdate,
+  // maxRecordCount 2000, and a cat,prob uniqueValue renderer of 17 classes; a
+  // national `where=1=1` GeoJSON query with `maxAllowableOffset=0.05` echoed
+  // `Access-Control-Allow-Origin: https://atniclimate.github.io` and measured
+  // 96,953 bytes gzip (precipitation) and 95,212 (temperature), 18 features each.
+  cpcSeasonalPrecipOutlookMapServer:
+    'https://mapservices.weather.noaa.gov/vector/rest/services/outlooks/cpc_sea_precip_outlk/MapServer',
+
   // ---------- USGS Water Services Instantaneous Values (open data, CORS-OK) ----------
   // United States Geological Survey (USGS) Water Services, Instantaneous
   // Values (IV). Two query shapes share this base URL:

@@ -1,4 +1,5 @@
 import type { FeatureCollection } from 'geojson';
+import { URLS } from '../config/urls';
 import { parseArcGisPolygonFeatureCollection } from '../config/wildfire-presentation';
 import { fetchBufferedWithBudget } from '../util/fetch';
 
@@ -15,8 +16,8 @@ export interface CpcSeasonalReadState {
   readonly collection: FeatureCollection;
 }
 const ENDPOINTS: Record<CpcSeasonalVariable, string> = {
-  precipitation: 'https://mapservices.weather.noaa.gov/vector/rest/services/outlooks/cpc_sea_precip_outlk/MapServer',
-  temperature: 'https://mapservices.weather.noaa.gov/vector/rest/services/outlooks/cpc_sea_temp_outlk/MapServer'
+  precipitation: URLS.cpcSeasonalPrecipOutlookMapServer,
+  temperature: URLS.cpcSeasonalTempOutlookMapServer
 };
 const empty = (): FeatureCollection => ({ type: 'FeatureCollection', features: [] });
 

@@ -1,5 +1,5 @@
 import { test, expect, type Page } from './offline-test';
-import { gotoApp, urlLayers, waitForLayerSettled } from './helpers';
+import { gotoApp, search, urlLayers, waitForLayerSettled } from './helpers';
 import {
   AIANNH_ROUTE,
   BIA_ROUTE,
@@ -190,10 +190,13 @@ test.describe('the mobile hazard rail (390x844)', () => {
     const ensoBtn = page.locator('#hazard-rail button[data-preset="hazard-enso"]');
     await ensoBtn.click();
 
+    // An entry into ENSO opens on its Season ahead outlook beside the SST.
     await expect
       .poll(async () => [...(await urlLayers(page))].sort())
-      .toEqual(['aiannh', 'sst-anomaly']);
+      .toEqual(['aiannh', 'cpc-seasonal-precip', 'sst-anomaly']);
+    await expect.poll(async () => new URLSearchParams(await search(page)).get('horizon')).toBe('season-ahead');
     await waitForLayerSettled(page, 'sst-anomaly');
+    await waitForLayerSettled(page, 'cpc-seasonal-precip');
     await expect(ensoBtn).toHaveAttribute('aria-pressed', 'true');
     await expect(
       page.locator('#hazard-rail button[data-preset="hazard-drought"]')

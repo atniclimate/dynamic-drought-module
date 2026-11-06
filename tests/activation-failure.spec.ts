@@ -202,7 +202,8 @@ test.describe('DDM-P1-T03: activation failure, thrown and non-thrown, self-corre
         await gotoApp(page, '?view=console');
         const clusterButton = page.locator(`.shell-cluster-btn[data-cluster="${cluster}"]`);
         await clusterButton.click();
-        if (horizon !== 'current') {
+        // A press from the Current boot lands on the mode's entry horizon (ENSO: Season ahead).
+        if (horizon !== (HAZARD_CLUSTERS[cluster].entryHorizon ?? 'current')) {
           await page.locator(`.shell-horizon-btn[data-horizon="${horizon}"]`).click();
         }
         await waitForLayerSettled(page, failing);

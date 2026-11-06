@@ -1,6 +1,18 @@
 import { test, expect } from './offline-test';
-import { gotoApp, layerCheckbox, layerPill, PILL, waitForLayerSettled } from './helpers';
+import { gotoApp, layerCheckbox, layerPill, PILL, search, waitForLayerSettled } from './helpers';
 import { stubCpcDroughtOutlook } from './cpc-outlook-fixtures';
+
+/**
+ * The CPC seasonal outlooks' renderer labels, verbatim from both services'
+ * Lead 1 uniqueValue renderer (cpc_sea_precip_outlk and cpc_sea_temp_outlk,
+ * MapServer/0?f=json, read 2026-11-05), in the renderer's order.
+ */
+const CPC_SEASONAL_LABELS = [
+  'Above, 90%', 'Above, 80%', 'Above, 70%', 'Above, 60%', 'Above, 50%', 'Above, 40%', 'Above, 33%',
+  'Near Normal, 33%', 'Near Normal, 40%',
+  'Below, 33%', 'Below, 40%', 'Below, 50%', 'Below, 60%', 'Below, 70%', 'Below, 80%', 'Below, 90%',
+  'Equal Chances'
+];
 
 /**
  * UX-3 unified legend registry: one panel whose sections are contributed by
@@ -179,5 +191,64 @@ test.describe('UX-3 unified legend registry', () => {
     await layerCheckbox(page, 'drought').uncheck();
     await expect(page.locator('#legend-panel')).toBeHidden();
     await expect(page.locator('#legend-sections .legend-section')).toHaveCount(0);
+  });
+
+  /**
+   * The CPC seasonal outlook maps (their acceptance sentence, amended
+   * 2026-09-26): an in-session entry into ENSO commits Season ahead, whose
+   * outlook carries its own key, the renderer's 17 labels alone with Equal
+   * Chances as a transparent fill inside the issuer's rgb(110,110,110)
+   * outline; the temperature outlook is the mode's too, and on together
+   * each keeps its own key. Both outlooks answer from `gotoApp`'s fixture.
+   */
+  test('entering ENSO opens on the Season ahead outlook with its own issuer key; the temperature outlook adds a second', async ({
+    page
+  }) => {
+    await gotoApp(page, '?view=console');
+    await waitForLayerSettled(page, 'nadm-drought');
+    const enso = page.locator('.shell-cluster-btn[data-cluster="enso"]');
+    await enso.click();
+    await expect(enso).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('.shell-horizon-btn[data-horizon="season-ahead"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect.poll(async () => new URLSearchParams(await search(page)).get('horizon')).toBe('season-ahead');
+    await expect(layerPill(page, 'cpc-seasonal-precip')).toHaveText(PILL.live);
+    await expect(layerCheckbox(page, 'cpc-seasonal-temp')).not.toBeChecked();
+
+    const cpcKeys = async (): Promise<(string | null)[]> =>
+      (await sectionKeys(page)).filter((key) => key?.startsWith('cpc-seasonal-'));
+    const precip = page.locator('.legend-section[data-legend="cpc-seasonal-precip"]');
+    await expect(precip.locator('.legend-section-title')).toHaveText('Seasonal Precipitation Outlook');
+    await expect(precip.locator('[data-cpc-clock]')).toHaveText(['Valid Season SON 2026 · Forecast Date Sep 1, 2026']);
+    await expect(precip.locator('.legend li')).toHaveText(CPC_SEASONAL_LABELS);
+    const precipEc = precip.locator('.legend li[data-cpc-class="EC,33"] .swatch');
+    await expect(precipEc).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+    await expect(precipEc).toHaveCSS('border-top-color', 'rgb(110, 110, 110)');
+
+    await layerCheckbox(page, 'cpc-seasonal-temp').check();
+    await expect(layerPill(page, 'cpc-seasonal-temp')).toHaveText(PILL.live);
+    // The mode's own optional layer: ENSO stays pressed and the link carries it.
+    await expect(enso).toHaveAttribute('aria-pressed', 'true');
+    await expect.poll(async () => new URLSearchParams(await search(page)).get('layers') ?? '').toContain('cpc-seasonal-temp');
+    // Two keys, never one merged: each lists its own 17 classes.
+    await expect.poll(cpcKeys).toEqual(['cpc-seasonal-precip', 'cpc-seasonal-temp']);
+    const temp = page.locator('.legend-section[data-legend="cpc-seasonal-temp"]');
+    await expect(temp.locator('.legend-section-title')).toHaveText('Seasonal Temperature Outlook');
+    await expect(temp.locator('.legend li')).toHaveText(CPC_SEASONAL_LABELS);
+    await expect(temp.locator('.legend li[data-cpc-class="EC,33"] .swatch')).toHaveCSS('background-color', 'rgba(255, 255, 255, 0)');
+    await expect(page.locator('.legend-section[data-legend^="cpc-seasonal-"] .legend li')).toHaveCount(34);
+
+    await layerCheckbox(page, 'cpc-seasonal-temp').uncheck();
+    await expect.poll(cpcKeys).toEqual(['cpc-seasonal-precip']);
+  });
+
+  test('an ENSO link without horizon= still opens on Current, the sea-surface-temperature anomaly, with no outlook', async ({
+    page
+  }) => {
+    await gotoApp(page, '?view=console&cluster=enso');
+    await expect(page.locator('.shell-horizon-btn[data-horizon="current"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(layerCheckbox(page, 'sst-anomaly')).toBeChecked();
+    await expect(layerCheckbox(page, 'cpc-seasonal-precip')).not.toBeChecked();
+    await expect(page.locator('.legend-section[data-legend^="cpc-seasonal-"]')).toHaveCount(0);
+    expect(new URLSearchParams(await search(page)).get('horizon')).toBeNull();
   });
 });

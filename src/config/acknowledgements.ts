@@ -413,6 +413,7 @@ export const PRODUCT_CREDITS: Readonly<Record<ProductKey, CreditRows>> = {
   'usfs-whp': ['usfs'],
   'sst-anomaly': ['nasa'],
   'tropical-cyclones': ['noaa-nhc'],
+  'cpc-seasonal-precip': ['noaa-cpc'],
   telemetry: ['usgs', 'usda-nrcs', 'usbr', 'usace', 'nifc', 'noaa-coops', 'cocorahs-iem', 'noaa-nwrfc'],
   dsci: ['usdm-partners'],
   nwsForecast: ['noaa-nws'],

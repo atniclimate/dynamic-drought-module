@@ -357,7 +357,8 @@ export function resolveHorizonForCluster(
 /**
  * Resolve, apply, and commit a hazard cluster (the S3 transaction):
  *
- *   1. Resolve the timeline's horizon for the destination cluster. Retain
+ *   1. Resolve the timeline's horizon for the destination cluster, or its
+ *      `entryHorizon` when the press enters it from another hazard. Retain
  *      a supported horizon; otherwise commit Current (DR-190).
  *   2. Resolve the intent: the persistent reference set union the
  *      resolved horizon recipe (pairs expanded).
@@ -394,8 +395,11 @@ function applyCluster(
   key: HazardClusterKey,
   requestedOcean: OceanKey | null,
 ): void {
+  // An entry from another hazard takes the mode's entry horizon; a re-press,
+  // an ocean change inside the mode and a horizon re-resolve keep the held one.
+  const held = selectedHazard === key ? timeline.horizon : (HAZARD_CLUSTERS[key].entryHorizon ?? timeline.horizon);
   selectedHazard = key;
-  const horizon = resolveHorizonForCluster(key, timeline.horizon);
+  const horizon = resolveHorizonForCluster(key, held);
   const intent = composeClusterIntent(key, horizon);
   const intentSet: ReadonlySet<string> = new Set(intent);
   applying = true;

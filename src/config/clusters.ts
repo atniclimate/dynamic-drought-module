@@ -106,6 +106,14 @@ export interface HazardClusterDef {
    */
   readonly optionalLayers?: readonly LayerKey[];
   /**
+   * The horizon an in-session entry into this mode commits (the mode
+   * switcher, the minimap ocean door, the phone rail), read only through the
+   * cluster service and the rail, never as a mode literal (DR-113). Unset
+   * keeps the held horizon where the mode can show it (DR-190). A shared link
+   * keeps its own `horizon=`, and an absent one means Current.
+   */
+  readonly entryHorizon?: TemporalHorizonKey;
+  /**
    * The Key drawer's sections for this cluster, in order (S30D D1 M11;
    * DR-113; src/config/detail-sections.ts). Omitted or empty means the
    * drawer holds only the legend, qualifications and the map-information
@@ -215,10 +223,17 @@ export const HAZARD_CLUSTERS: Record<HazardClusterKey, HazardClusterDef> = {
       // line is a UI surface, not a map layer. The active tropical cyclones
       // (ENSO block B3, an event overlay) ride every horizon: the issuer
       // serves only the current advisories, which run five days ahead.
+      // Season ahead adds the CPC seasonal precipitation outlook over the
+      // SST surface, its own layer and key, never merged with another.
       current: ['sst-anomaly', 'tropical-cyclones'],
       'weeks-ahead': ['sst-anomaly', 'tropical-cyclones'],
-      'season-ahead': ['sst-anomaly', 'tropical-cyclones']
+      'season-ahead': ['sst-anomaly', 'cpc-seasonal-precip', 'tropical-cyclones']
     },
+    // The CPC seasonal temperature outlook is the mode's, off until chosen.
+    optionalLayers: ['cpc-seasonal-temp'],
+    // ENSO opens on the outlook until the DDM-P16-T09 composite is promoted
+    // (its acceptance sentence, amended 2026-09-26).
+    entryHorizon: 'season-ahead',
     // Deferred, not absent: ENSO's place row (the sea surface temperature
     // anomaly) moves to the ocean sprint the owner asked for on 2026-10-01
     // (PLACE_CONDITION_ROW_DEFERRED in src/config/place-condition-rows.ts).

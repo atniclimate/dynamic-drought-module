@@ -51,6 +51,13 @@ const TOP_LABEL_IDS: readonly string[] = ['us-places-labels'];
 export const CONDITION_SURFACE_IDS: readonly string[] = [
   'whp-2023',
   'gridded-index-raster',
+  // The CPC seasonal outlooks (src/layers/cpc-seasonal-outlook.ts): land
+  // fields beside the ocean SST, under the ENSO flow paths, every event,
+  // boundary and label. Both on: temperature paints over precipitation.
+  'cpc-seasonal-precip-fill',
+  'cpc-seasonal-precip-line',
+  'cpc-seasonal-temp-fill',
+  'cpc-seasonal-temp-line',
   'sst-anomaly',
   'nino34-box-fill',
   'nino34-box-line',

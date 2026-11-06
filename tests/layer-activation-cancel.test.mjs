@@ -483,15 +483,11 @@ test('NWS alerts: a normal activation is unchanged (one read, then the source, l
 for (const variable of ['precipitation', 'temperature']) {
   for (const held of [false, true]) {
     test(`CPC ${variable}: real controller Off ${held ? 'aborts held headers and suppresses late drawing' : 'cleans its completed source and registry'}`, async (t) => {
-      const { createCpcSeasonalAdapter } = await import('../src/layers/cpc-seasonal-outlook.ts');
       const { cpcSeasonalBody } = await import('./cpc-seasonal-polygon-fixtures.mjs');
       const key = variable === 'precipitation' ? 'cpc-seasonal-precip' : 'cpc-seasonal-temp';
-      // Test-only catalogue registration: no public entry or admitted allowance.
-      const module = createCpcSeasonalAdapter({ variable, fillOpacity: 0.75,
-        limits: { timeoutMs: 1_000, maxDecodedBytes: 100_000, maxFeatures: 20, maxAllowableOffset: 0.01 } });
-      const definition = { ...LAYER_DEFS.find(row => row.key === 'heatrisk'), key,
-        defaultOn: false, load: async () => module };
-      LAYER_DEFS.push(definition);
+      // The registered LayerDef and the shipped module with its admitted limits.
+      assert.ok(LAYER_DEFS.some(row => row.key === key));
+      const module = await import(`../src/layers/${key}.ts`);
       globalThis.cancelModules.set(key, module);
       resetSeen();
       const originalFetch = globalThis.fetch;
@@ -503,7 +499,6 @@ for (const variable of ['precipitation', 'temperature']) {
         module.deactivate(map);
         registry.deactivate(key);
         globalThis.cancelModules.delete(key);
-        LAYER_DEFS.splice(LAYER_DEFS.indexOf(definition), 1);
         globalThis.fetch = originalFetch;
       });
       const controller = harness(map, [key]);
@@ -515,6 +510,7 @@ for (const variable of ['precipitation', 'temperature']) {
       if (!held) {
         assert.ok(map.getSource(key));
         assert.equal(registry.getActiveKeys().has(key), true);
+        assert.ok(seen.legends.includes(key), 'a drawn outlook shows its own key');
       }
       controller.deactivate(key);
       // Completed transport listeners are detached; a held transport must abort now.
@@ -532,6 +528,7 @@ for (const variable of ['precipitation', 'temperature']) {
       if (held) {
         assert.deepEqual(seen.sources, []);
         assert.deepEqual(seen.layers, []);
+        assert.deepEqual(seen.legends, []);
       }
     });
   }

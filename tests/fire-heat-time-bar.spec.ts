@@ -981,21 +981,17 @@ test.describe('DDM-P8-T02: the Drought and ENSO screens state their horizon in t
       issuer: 'GHRSST MUR'
     });
     expect(stamp.headline).toBe('Observed Jul 3, 2026');
-    // FLIPPED 2026-09-27 (D1 M6, found-009): this case used to end on the
-    // Long Range chip pressed over the Current Conditions stamp. ENSO's
-    // season-ahead recipe repeats its current one (horizonSurfaceSignature,
-    // src/state/timeline.ts), so the Long Range chip is disabled, and a
-    // deep link naming it now boots on Current Conditions
-    // (src/state/url.ts's resolveHorizonForCluster) instead of pressing a
-    // disabled chip. The stamp assertions above are unchanged: the stamp
-    // still says Current Conditions.
+    // FLIPPED BACK 2026-11-05: ENSO's Season ahead now adds the CPC seasonal
+    // precipitation outlook, a map its Current does not show, so the link
+    // keeps its own horizon and Long Range is pressed again over the
+    // Current Conditions stamp, which still says what the SST surface is.
     await expect(page.locator('.shell-horizon-btn[data-horizon="current"]')).toHaveAttribute(
       'aria-pressed',
-      'true'
+      'false'
     );
     await expect(page.locator('.shell-horizon-btn[data-horizon="season-ahead"]')).toHaveAttribute(
       'aria-pressed',
-      'false'
+      'true'
     );
   });
 });

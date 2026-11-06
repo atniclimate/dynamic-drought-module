@@ -9,6 +9,8 @@ registerHooks({ resolve(specifier, context, nextResolve) {
       existsSync(fileURLToPath(new URL(specifier + '.ts', context.parentURL)))) return nextResolve(specifier + '.ts', context);
   return nextResolve(specifier, context);
 } });
+// The legend registry finds no legend panel here, so each key it is asked to show is a no-op.
+globalThis.document = { getElementById: () => null };
 const { createCpcSeasonalAdapter } = await import('../src/layers/cpc-seasonal-outlook.ts');
 const { CPC_SEASONAL_COLORS } = await import('../src/config/palette.ts');
 const { registry } = await import('../src/state/registry.ts');

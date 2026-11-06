@@ -118,11 +118,11 @@ for (const viewport of [{ width: 1440, height: 1000 }, { width: 958, height: 935
         await expect(layerPill(page, source)).toHaveText(/^live(?: \(partial\))?$/);
         if (key === 'enso') {
           // Value-only migration (found-014): the heading now leads with the
-          // pressed horizon chip's own HORIZON_CHROME title ('Current
-          // Conditions', the boot default here), so the stamp's own words
-          // follow it rather than standing alone.
+          // pressed horizon chip's own HORIZON_CHROME title, so the stamp's
+          // own words follow it rather than standing alone. Entering ENSO
+          // commits its Season ahead (Long Range); the stamp is still the SST's.
           await expect(page.locator('.shell-time-headline')).toHaveText(
-            'Current Conditions · Observed Jul 7, 2026'
+            'Long Range · Observed Jul 7, 2026'
           );
         }
         await sample(`${key} settled`);

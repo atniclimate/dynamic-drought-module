@@ -325,9 +325,14 @@ test.describe('S3 requestCluster (the transaction)', () => {
           // Set the held horizon before subscribing: this case isolates the
           // destination transaction from the preceding mode's capability.
           timeline.setHorizon(horizon);
+          // A press of another mode than the reset one is an entry: its entry
+          // horizon replaces the held one (ENSO opens on Season ahead), and
+          // the link that press writes says so.
+          const entered =
+            cluster === getHazardCluster() ? horizon : (HAZARD_CLUSTERS[cluster].entryHorizon ?? horizon);
           Object.defineProperty(globalThis, 'window', {
             configurable: true,
-            value: { location: { search: `?cluster=${cluster}&horizon=${horizon}` } }
+            value: { location: { search: `?cluster=${cluster}&horizon=${entered}` } }
           });
           const boot = parseUrlParams();
           const dispose = initClusterService();
