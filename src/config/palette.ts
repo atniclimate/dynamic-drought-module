@@ -333,8 +333,8 @@ export const BC_DROUGHT_NO_UPDATE: BcDroughtLevel = {
  * The `match` field is a substring tested against the GeoJSON feature name
  * by `pickTreatyEntry` / `pickTreatyColor`. The `tribe` field carries the
  * full formal Tribe name where the Treaty key uniquely names a Tribe
- * (Yakama, Nez Perce, Quinault). For Treaty-location keys (Medicine Creek,
- * Point Elliott, Point No Point, Walla Walla) the Treaty was signed by
+ * (Yakama, Nez Perce). For the other keys (Medicine Creek, Point Elliott,
+ * Point No Point, Quinault, Walla Walla) the Treaty was signed by
  * multiple Tribes, so `tribe` is null and the popup falls back to whatever
  * value the source GeoJSON carries on the feature.
  *
@@ -359,7 +359,7 @@ export const TREATY_COLORS: ReadonlyArray<TreatyEntry> = [
   { match: 'Nez Perce',      tribe: 'Nez Perce Tribe',                                     color: '#9333ea' },
   { match: 'Point Elliott',  tribe: null,                                                  color: '#d946ef' },
   { match: 'Point No Point', tribe: null,                                                  color: '#a855f7' },
-  { match: 'Quinault',       tribe: 'Quinault Indian Nation',                              color: '#8b5cf6' },
+  { match: 'Quinault',       tribe: null,                                                  color: '#8b5cf6' },
   { match: 'Walla Walla',    tribe: null,                                                  color: '#7c3aed' }
 ];
 

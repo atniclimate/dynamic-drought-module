@@ -337,6 +337,21 @@ export function initInteractionCoordinator(map: maplibregl.Map): void {
   map.on('click', (e) => {
     handleClick(map, e);
   });
+  // The pointer shows exactly where a click would answer (same box, same
+  // label filter). Set once per frame, after every layer's own hover pair in
+  // the same dispatch, so a mouseleave over a still-clickable layer (the
+  // state fill under everything) cannot leave the arrow showing.
+  let cursorPoint: maplibregl.Point | null = null;
+  map.on('mousemove', (e) => {
+    if (cursorPoint === null) {
+      requestAnimationFrame(() => {
+        if (cursorPoint === null) return;
+        map.getCanvas().style.cursor = collectHits(map, cursorPoint).length > 0 ? 'pointer' : '';
+        cursorPoint = null;
+      });
+    }
+    cursorPoint = e.point;
+  });
   if (keyboardIdentifyEnabled()) bindKeyboardIdentify(map);
   // A studio owns the screen: entering one dismisses any open response
   // (the PLACE studio is a left-side route on desktop, so a lingering

@@ -352,6 +352,15 @@ test('a blank title falls to the fallback and the popup still opens', () => {
   }
 });
 
+test('a Treaty signed by several Nations shows the deployer\'s own Tribe value, not one table name', () => {
+  // The Quinault Treaty had more than one signatory, so its TREATY_COLORS
+  // entry is tribe: null like Medicine Creek and Point Elliott.
+  const tribe = 'Fixture Signatory One, Fixture Signatory Two';
+  for (const name of ['Quinault Treaty', 'Treaty of Medicine Creek']) {
+    assert.equal(detailsOf(buildTreatyPopupHtml({ tribe }, name, QUIET)).Tribe, tribe, name);
+  }
+});
+
 test('the BIA retrieval stamp: a date, a malformed value shown as supplied, an absence not stated', () => {
   // The head keeps the first clock and the body's more-clocks slot the
   // retrieval stamp (S30D block 3, the head fits): read in that order.
