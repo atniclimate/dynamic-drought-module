@@ -53,6 +53,13 @@ export const BUILDERS: readonly BuilderEntry[] = [
   { id: 'places', layerKey: 'places', path: 'coordinated', targets: ['point-event:us-places-labels'] },
   { id: 'enso-box', layerKey: 'sst-anomaly', path: 'coordinated', targets: ['point-event:nino34-box-fill,nino34-box-line'] },
   { id: 'tropical', layerKey: 'tropical-cyclones', path: 'coordinated', targets: ['point-event:tropical-cyclones-points,tropical-cyclones-ww,tropical-cyclones-cone-fill'] },
+  // The six CPC outlooks (4a25794): one condition-surface target per fill (src/layers/cpc-seasonal-outlook.ts).
+  { id: 'cpc-seasonal-precip', layerKey: 'cpc-seasonal-precip', path: 'coordinated', targets: ['condition-surface:cpc-seasonal-precip-fill'] },
+  { id: 'cpc-seasonal-temp', layerKey: 'cpc-seasonal-temp', path: 'coordinated', targets: ['condition-surface:cpc-seasonal-temp-fill'] },
+  { id: 'cpc-610-precip', layerKey: 'cpc-610-precip', path: 'coordinated', targets: ['condition-surface:cpc-610-precip-fill'] },
+  { id: 'cpc-610-temp', layerKey: 'cpc-610-temp', path: 'coordinated', targets: ['condition-surface:cpc-610-temp-fill'] },
+  { id: 'cpc-814-precip', layerKey: 'cpc-814-precip', path: 'coordinated', targets: ['condition-surface:cpc-814-precip-fill'] },
+  { id: 'cpc-814-temp', layerKey: 'cpc-814-temp', path: 'coordinated', targets: ['condition-surface:cpc-814-temp-fill'] },
   { id: 'telemetry', layerKey: 'telemetry', path: 'external', targets: [] }
 ];
 
