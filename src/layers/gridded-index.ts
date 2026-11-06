@@ -70,6 +70,7 @@ import type * as maplibregl from 'maplibre-gl';
 import { URLS } from '../config/urls';
 import { registry } from '../state/registry';
 import { GRIDDED_INDEX_RAMP } from '../config/palette';
+import { ExpiringLruCache } from '../util/bounded-cache';
 import { escapeHtml } from '../util/escape';
 import { fetchJsonWithBudget } from '../util/fetch';
 import { isObject } from '../util/guards';
@@ -229,8 +230,15 @@ type InfoState =
   | { readonly kind: 'ready'; readonly info: ProductInfo }
   | { readonly kind: 'unavailable' };
 
-/** Parsed `info.json` per slug, for the session (a re-select re-uses it). */
-const infoBySlug = new Map<string, ProductInfo>();
+/**
+ * Parsed `info.json` per slug for one hour, the issuer's own `max-age=3600`:
+ * a re-select or re-toggle within the hour re-uses it, a later one re-reads
+ * the daily product's date. shortcut: a layer left on without a toggle or
+ * window change keeps its stamp past the hour; re-read on tile reload if
+ * that is ever reported.
+ */
+const infoBySlug = new ExpiringLruCache<string, ProductInfo>(PRODUCTS.length);
+const INFO_TTL_MS = 60 * 60 * 1000;
 
 /** The current read, and the slug it describes (never shown for another). */
 let infoState: InfoState = { kind: 'loading' };
@@ -427,7 +435,7 @@ async function loadProductInfo(map: maplibregl.Map): Promise<void> {
     );
     if (controller.signal.aborted || currentSlug !== slug) return;
     const info = parseProductInfo(json);
-    infoBySlug.set(slug, info);
+    infoBySlug.set(slug, info, INFO_TTL_MS);
     infoStateSlug = slug;
     infoState = { kind: 'ready', info };
     applyProductInfo(map, slug);

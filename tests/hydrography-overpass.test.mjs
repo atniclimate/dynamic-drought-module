@@ -52,3 +52,20 @@ test('Overpass 200 with a remark or no elements array is a mirror failure and is
     assert.equal(map.getSource('hydrography').data.features.length, 1);
   } finally { hydrography.deactivate(map); globalThis.fetch = previous; }
 });
+
+test('every mirror failing reads error even when the view has drifted onto a cached cell', async () => {
+  const previous = globalThis.fetch;
+  globalThis.fetch = async () => new Response('', { status: 502 });
+  const map = fakeMap();
+  // The fetch reads an uncached cell; a pan still running then settles the
+  // view back on the cell the case above cached.
+  const cached = map.getBounds();
+  let reads = 0;
+  map.getBounds = () => (reads++ === 0
+    ? { getSouth: () => 40.1, getWest: () => -110.9, getNorth: () => 41.4, getEast: () => -109.6 }
+    : cached);
+  try {
+    await hydrography.activate(map);
+    assert.equal(registry.getStatus('hydrography'), 'error');
+  } finally { hydrography.deactivate(map); globalThis.fetch = previous; }
+});

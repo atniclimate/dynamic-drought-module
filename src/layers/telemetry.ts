@@ -62,6 +62,7 @@ import {
   showLegend
 } from '../ui/legend-registry';
 import { prefersReducedMotion } from '../util/motion';
+import { dateTok } from '../util/text-tokens';
 
 // ---------------------------------------------------------------------------
 // Module-level state
@@ -267,7 +268,7 @@ function renderStations(map: maplibregl.Map, views: readonly TelemetryMarkerView
       // otherwise), so an absolutely-positioned child sized past the
       // marker's own 16px box still renders in full; no src/styles/app.css
       // edit needed (that grant does not exist for this task).
-      el.appendChild(buildRawsWindGlyph(glyphWind, station.color));
+      el.appendChild(buildRawsWindGlyph(glyphWind, station.color, view.freshness === 'fresh'));
     }
 
     // TelemetryStation.coords is [lat, lng]; MapLibre wants [lng, lat].
@@ -371,15 +372,14 @@ function glyphEligibleWind(wind: RawsWindStationFields | null): RawsWindGlyphFie
 }
 
 /**
- * The observation time in the same "As of" style the RAWS popup already
- * uses (src/ui/popups.ts `renderRawsRows`), so the two never disagree about
- * how a timestamp reads. `null` reads "an unknown time" rather than
+ * The observation time as the house `dateTok` token, zone named, the way the
+ * popup frame prints instants. `null` reads "an unknown time" rather than
  * omitting the clause the acceptance requires.
  */
 function formatRawsObservedTime(observedAtIso: string | null): string {
   if (!observedAtIso) return 'an unknown time';
   const observed = new Date(observedAtIso);
-  return Number.isNaN(observed.getTime()) ? observedAtIso : observed.toLocaleString();
+  return Number.isNaN(observed.getTime()) ? observedAtIso : dateTok(observed);
 }
 
 /**
@@ -471,8 +471,12 @@ function telemetryMarkerOptions(element: HTMLElement, wind: RawsWindGlyphFields 
  * stroke; a live satellite or terrain basemap varies pixel to pixel, so this
  * is a representative check against the lightest plausible background, not
  * an exhaustive one.
+ *
+ * `fresh` is the marker's own freshness verdict (freshnessForNetwork): a
+ * reading past its window draws the way its dot does in app.css, at 0.7
+ * opacity with a dashed line, so an old arrow never reads as a current one.
  */
-function buildRawsWindGlyph(wind: RawsWindGlyphFields, color: string): SVGSVGElement {
+function buildRawsWindGlyph(wind: RawsWindGlyphFields, color: string, fresh: boolean): SVGSVGElement {
   const accessibleName = buildRawsWindAccessibleName(wind);
   const parsedSpeedMph = parseLeadingNumber(wind.windSpeedServed);
   // Fix F5 (opus-read.md, including its "0 mph with a direction" caveat): a
@@ -507,6 +511,7 @@ function buildRawsWindGlyph(wind: RawsWindGlyphFields, color: string): SVGSVGEle
   // The direction is the marker's own `rotation` (telemetryMarkerOptions),
   // so MapLibre subtracts the map bearing on every turn.
   svg.style.transform = 'translate(-50%, -50%)';
+  if (!fresh) svg.style.opacity = '0.7';
 
   // An SVG `<title>` is the element's native tooltip-on-hover text, but
   // `pointer-events: none` above means this element is never itself the
@@ -535,6 +540,7 @@ function buildRawsWindGlyph(wind: RawsWindGlyphFields, color: string): SVGSVGEle
     shaft.setAttribute('stroke', color);
     shaft.setAttribute('stroke-width', String(WIND_GLYPH_STROKE_WIDTH_PX));
     shaft.setAttribute('stroke-linecap', 'round');
+    if (!fresh) shaft.setAttribute('stroke-dasharray', '3 3');
     svg.appendChild(shaft);
 
     const arrow = document.createElementNS(SVG_NS, 'path');
@@ -748,11 +754,14 @@ async function runDiscoveryForCurrentViewport(map: maplibregl.Map): Promise<void
     // scrub the layer, unchecking it and clearing the seeds it just
     // rendered (layer-controller.ts, the critical-review #2 guard;
     // adversarial-review finding, 2026-07-10). 'error' remains the catch
-    // branch below, where discovery itself threw.
+    // branch below, where discovery itself threw. The curated seeds render
+    // wherever the map looks, so 'no-data' means no station inside the view.
     if (result.failedSources.length > 0) {
       reportStatus('degraded');
     } else {
-      reportStatus(capped.entries.length > 0 ? 'ready' : 'no-data');
+      const view = map.getBounds();
+      const inView = capped.entries.some((e) => view.contains([e.station.coords[1], e.station.coords[0]]));
+      reportStatus(inView ? 'ready' : 'no-data');
     }
   } catch (err) {
     if (!isCurrent()) return;
