@@ -63,9 +63,9 @@ import { restoreCameraState } from '../../map/camera-fit';
 import {
   backToMap,
   getStudioRoute,
-  setPlaceStudioReturnDisplayCommand,
   studioOwnsScreen
 } from '../../state/studio-route';
+import { setPlaceReturnDisplayCommand } from '../../state/place-return';
 import { onTimeBarSpecChange } from '../time-bar';
 import { Fire3DControl } from './fire3d-control';
 import { Minimap } from './minimap';
@@ -395,9 +395,9 @@ function Shell({ map, snap, framing, specTick, onMinimapNoteChange }: ShellProps
    * and the new display is applied after that restore rather than in a race
    * with it.
    *
-   * The command has its OWN hand-off slot (`setPlaceStudioReturnDisplayCommand`,
+   * The command has its OWN hand-off slot (`setPlaceReturnDisplayCommand`,
    * src/state/place-return.ts), not the briefing's. The first cut wrote it
-   * through `setPlaceStudioReturnAction`, the single slot the studio uses for
+   * through `setPlaceReturnBriefing`, the single slot the studio uses for
    * the briefing of its selected place, so a hazard click after a selection
    * silently dropped the promised briefing (/code-review, 2026-09-10). Both
    * now survive: the exit runs the display command, then opens the briefing.
@@ -407,7 +407,7 @@ function Shell({ map, snap, framing, specTick, onMinimapNoteChange }: ShellProps
    */
   const runDisplayCommand = (apply: () => void): void => {
     if (studioOwnsScreen() && getStudioRoute() === 'place') {
-      setPlaceStudioReturnDisplayCommand(apply);
+      setPlaceReturnDisplayCommand(apply);
       backToMap();
       return;
     }

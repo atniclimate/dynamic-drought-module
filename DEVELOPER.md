@@ -176,6 +176,7 @@ current URL.
 | `horizon` | `weeks-ahead` or `season-ahead` | current |
 | `basemap` | `default` explicitly turns recent satellite imagery off; the legacy `satellite` token remains valid | recent satellite imagery, encoded by absence |
 | `studio` | `layers` or `place` | none |
+| `hazard` | a mode token (`wildfire`, `heat`, `enso`), written only beside `layers` with no `cluster`: the hazard a custom layer set was made from (its alert products, key and strip); it never changes the display | the cluster, encoded by absence |
 | `fire3d` | exact token `true`; entry requires a desktop viewport and the committed Wildfire cluster, while an active scene may remain through a custom layer stack as long as a Fire event layer remains | `false`, encoded by absence |
 | `spi` | Gridded Drought Index accumulation window in days: `30`, `60`, `180`, or `365`; applies when the `gridded-index` layer is on | `90` day window, encoded by absence |
 
