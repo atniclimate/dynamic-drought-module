@@ -19,6 +19,7 @@ import { installDefaultNifcStub, type NifcStubMode } from './wildfire-fixtures';
 import { installDefaultNwsWwaStub, type NwsWwaStubMode } from './nws-wwa-fixtures';
 import { installDefaultTropicalStub, type TropicalStubMode } from './tropical-fixtures';
 import { untilAnswered } from './answered-read';
+import { cpcSeasonalPolygons } from './cpc-seasonal-polygon-fixtures.mjs';
 
 const TEST_NADM_SNAPSHOT = {
   type: 'FeatureCollection',
@@ -408,6 +409,9 @@ export async function gotoApp(
   // spec that opens the briefing sends this new query to the live agency
   // (see `stubCpcSeasonalTempOutlook`'s own comment).
   await stubCpcSeasonalTempOutlook(page);
+  // ENSO's Season ahead draws the CPC seasonal precipitation outlook (and the
+  // temperature outlook on request): both national map reads are answered.
+  await stubCpcSeasonalOutlookMaps(page);
   // DDM-P7-T03: the near-term fire cell reads the SPC Day 1-8 Fire Weather
   // Outlook live, independent of any map layer, on every briefing. Stubbed
   // unconditionally, like the calls above, so no spec that opens the
@@ -936,6 +940,41 @@ export async function stubCpcSeasonalTempOutlook(
 }
 
 const cpcSeasonalTempOutlookStubbedPages = new WeakSet<Page>();
+
+// ---------------------------------------------------------------------------
+// CPC seasonal outlook maps (the ENSO Season ahead layers)
+// ---------------------------------------------------------------------------
+
+/** The national Lead 1 query paths `src/layers/cpc-seasonal-read.ts` reads. */
+const CPC_SEASONAL_OUTLOOK_MAP_PATHS: readonly string[] = [
+  '/vector/rest/services/outlooks/cpc_sea_precip_outlk/MapServer/0/query',
+  `${CPC_SEASONAL_TEMP_OUTLOOK_PATH}/0/query`
+];
+
+/**
+ * Answer the two outlook layers' national queries (`cpc-seasonal-precip`,
+ * `cpc-seasonal-temp`) with one square per issuer class
+ * (`tests/cpc-seasonal-polygon-fixtures.mjs`, clock SON 2026 issued
+ * 2026-09-01), so a legend reads every class. Every in-session entry into
+ * ENSO draws the precipitation outlook, so `gotoApp` calls this on every
+ * boot. A point read (a `geometry=` parameter: the briefing's temperature
+ * cell) is left to `stubCpcSeasonalTempOutlook` above. De-duplicated per page.
+ */
+export async function stubCpcSeasonalOutlookMaps(page: Page): Promise<void> {
+  if (cpcSeasonalOutlookMapPages.has(page)) return;
+  cpcSeasonalOutlookMapPages.add(page);
+  await page.route(
+    (url) => CPC_SEASONAL_OUTLOOK_MAP_PATHS.includes(url.pathname) && !url.searchParams.has('geometry'),
+    (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/geo+json',
+        body: JSON.stringify(cpcSeasonalPolygons())
+      })
+  );
+}
+
+const cpcSeasonalOutlookMapPages = new WeakSet<Page>();
 
 // ---------------------------------------------------------------------------
 // SPC Day 1-8 Fire Weather Outlook network stub (DDM-P7-T03)

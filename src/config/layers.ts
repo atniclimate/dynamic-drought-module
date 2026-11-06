@@ -55,6 +55,8 @@ export const LAYER_KEYS = Object.freeze([
   'usfs-whp-classes',
   'sst-anomaly',
   'tropical-cyclones',
+  'cpc-seasonal-precip',
+  'cpc-seasonal-temp',
   'telemetry'
 ] as const);
 
@@ -351,6 +353,12 @@ export const LAYER_DEFS: readonly LayerDef[] = [
   // ENSO block B3: on in the ENSO mode's recipe only. Its coverage is the
   // issuer's three basins, so its zero state names them, never "this view".
   { key: 'tropical-cyclones', product: 'tropical-cyclones', name: 'Active Tropical Cyclones', source: 'NOAA NHC and CPHC · MapServer', searchTerms: ['hurricane', 'tropical storm', 'cyclone', 'NHC', 'CPHC'], role: 'event', defaultOn: false, noDataLabel: 'no active tropical cyclones in the Atlantic, Eastern North Pacific or Central North Pacific', load: () => import('../layers/tropical-cyclones') },
+  // The CPC seasonal outlooks (Lead 1), named as the issuer's services name
+  // them. Overlays, not surfaces: ENSO's Season ahead draws precipitation
+  // over the sea-surface-temperature surface, and the two outlooks may be on
+  // together, each with its own key and none merged.
+  { key: 'cpc-seasonal-precip', product: 'cpc-seasonal-precip', name: 'Seasonal Precipitation Outlook', source: 'NOAA CPC · MapServer', role: 'event', defaultOn: false, noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/cpc-seasonal-precip') },
+  { key: 'cpc-seasonal-temp', product: 'cpcSeasonalTemp', name: 'Seasonal Temperature Outlook', source: 'NOAA CPC · MapServer', role: 'event', defaultOn: false, noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/cpc-seasonal-temp') },
   // Monitoring stations left the default-on set 2026-07-09 (D-0.7.0-018
   // item 1, strengthening the D-0.7.0-007 zoom threshold): at region zoom
   // the layer could only say "zoom in to load", so opening with it on

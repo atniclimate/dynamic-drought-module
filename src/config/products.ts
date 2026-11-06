@@ -21,9 +21,11 @@ export type UrlsKey = keyof typeof URLS;
  * inferring one from the other's literal keys.
  *
  * One product per DISTINCT issuer data product (the design ruling this file
- * follows, not a rule invented here). The first 24 keys are the layer-backed
+ * follows, not a rule invented here). The first 25 keys are the layer-backed
  * products, one per `LAYER_DEFS` entry in that array's own order; the
- * remaining keys are briefing-only products no map layer draws. Five layer
+ * remaining keys are briefing products, which no map layer draws except
+ * `cpcSeasonalTemp`: its own `cpc-seasonal-temp` layer reads the same Lead 1
+ * service its lane reads, so the one product backs both. Five more layer
  * products also carry a briefing lane, because the same issuer endpoint
  * feeds both the map and a matrix cell: `usdm`, `heatrisk`, `nifc-fires`,
  * `nws-alerts`, `spc-fire-weather`.
@@ -52,8 +54,10 @@ export const PRODUCT_KEYS = Object.freeze([
   'usfs-whp',
   'sst-anomaly',
   'tropical-cyclones',
+  'cpc-seasonal-precip',
   'telemetry',
-  // Briefing-only products (no LayerDef reads them): DSCI, the NWS point
+  // Briefing products (no LayerDef reads them, but for cpcSeasonalTemp, see
+  // above): DSCI, the NWS point
   // forecast, the two live CPC outlook reads, the cited CPC seasonal drought
   // prose, the NWRFC water-supply read, and the six distinct issuer products
   // the ENSO snapshot lane cites (one snapshot fetch, six named products,
@@ -346,6 +350,15 @@ export const PRODUCTS: Readonly<Record<ProductKey, ProductDef>> = Object.freeze(
     lane: null,
     clock: { register: 'outlook', cadence: 'every 6 hours, every 3 hours near the coast' }
   },
+  'cpc-seasonal-precip': {
+    key: 'cpc-seasonal-precip',
+    issuer: 'NOAA CPC · MapServer',
+    endpointKey: 'cpcSeasonalPrecipOutlookMapServer',
+    layerKey: 'cpc-seasonal-precip',
+    lane: null,
+    // The service description's "Monthly" update, as cpcSeasonalTemp records it.
+    clock: { register: 'outlook', cadence: 'monthly' }
+  },
   telemetry: {
     key: 'telemetry',
     issuer: 'USGS · USBR · NRCS · USACE',
@@ -359,7 +372,7 @@ export const PRODUCTS: Readonly<Record<ProductKey, ProductDef>> = Object.freeze(
     clock: { register: 'observed', cadence: 'on demand' }
   },
 
-  // -- Briefing-only products: no LayerDef draws these. --------------------
+  // -- Briefing products: no LayerDef draws these but cpcSeasonalTemp. -----
 
   dsci: {
     key: 'dsci',
@@ -403,7 +416,7 @@ export const PRODUCTS: Readonly<Record<ProductKey, ProductDef>> = Object.freeze(
     key: 'cpcSeasonalTemp',
     issuer: 'NOAA Climate Prediction Center seasonal temperature outlook',
     endpointKey: 'cpcSeasonalTempOutlookMapServer',
-    layerKey: null,
+    layerKey: 'cpc-seasonal-temp',
     lane: 'cpcSeasonalTemp',
     clock: { register: 'outlook', cadence: 'monthly' }
   },

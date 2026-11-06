@@ -277,7 +277,7 @@ test.describe('mobile map-information disclosure (390x844)', () => {
     await ensoButton.click();
     await expect
       .poll(async () => [...(await urlLayers(page))].sort())
-      .toEqual(['aiannh', 'sst-anomaly']);
+      .toEqual(['aiannh', 'cpc-seasonal-precip', 'sst-anomaly']);
     await waitForLayerSettled(page, 'sst-anomaly');
     await expect(ensoButton).toHaveAttribute('aria-pressed', 'true');
     await expect(panel).toBeVisible();
