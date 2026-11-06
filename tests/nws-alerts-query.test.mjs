@@ -66,7 +66,7 @@ test('the ENSO query asks for exactly its flood, storm, wind and coastal Warning
 test('the alert popup describes only the heat and fire weather products; an end the alert leaves open reads not stated', () => {
   const red = buildNwsAlertPopupModel({ event: 'Red Flag Warning', onset: '2026-08-11T08:00:00-07:00', ends: '2026-08-12T20:00:00-07:00' });
   assert.equal(red.qualifications.length, 1);
-  assert.match(red.qualifications[0], /for extreme heat or fire weather\. Polygons are NWS forecast-zone shapes/);
+  assert.match(red.qualifications[0], /for heat or fire weather\. Polygons are NWS forecast-zone shapes/);
   // The heat-safety page rides the heat products only, never a fire weather one (the look at 6748f25, P3-30).
   assert.deepEqual(red.moreLinks, []);
   assert.deepEqual(buildNwsAlertPopupModel({ event: 'Fire Weather Watch' }).moreLinks, []);

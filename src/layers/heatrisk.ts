@@ -303,9 +303,24 @@ function installTimeBar(status: Status): void {
   });
 }
 
-function mapCenterHasCoverage(map: maplibregl.Map): boolean {
+/**
+ * The view has coverage when its center or the middle of any of its four
+ * quarters is inside the hull, so a coast view centered offshore still
+ * draws while a Canadian or Alaskan view with a border sliver in one corner
+ * does not. shortcut: five sample points, not a bounds-hull intersection;
+ * a covered strip that misses all five reads no data until the next pan.
+ */
+function viewHasCoverage(map: maplibregl.Map): boolean {
   const center = map.getCenter();
-  return pointHasHeatRiskCoverage(center.lng, center.lat);
+  if (pointHasHeatRiskCoverage(center.lng, center.lat)) return true;
+  const bounds = map.getBounds();
+  const west = bounds.getWest();
+  const south = bounds.getSouth();
+  const width = bounds.getEast() - west;
+  const height = bounds.getNorth() - south;
+  return [0.25, 0.75].some((x) =>
+    [0.25, 0.75].some((y) => pointHasHeatRiskCoverage(west + width * x, south + height * y))
+  );
 }
 
 /** Read the complete advertised time range from the service metadata. */
@@ -445,7 +460,7 @@ function renderFrame(map: maplibregl.Map, day: number): void {
   rememberedDay = day;
   syncHeatRiskDayParam(day);
 
-  const hasCoverage = mapCenterHasCoverage(map);
+  const hasCoverage = viewHasCoverage(map);
   currentHasCoverage = hasCoverage;
   if (!hasCoverage) {
     // A verified absence, not a pending fetch: withdraw the loading
@@ -492,7 +507,7 @@ function renderFrame(map: maplibregl.Map, day: number): void {
       // Every path through the watcher is a terminal verdict on this
       // frame, so every path also ends the loading statement.
       endFrameLoad();
-      if (!mapCenterHasCoverage(map)) {
+      if (!viewHasCoverage(map)) {
         currentHasCoverage = false;
         reportStatus('no-data');
         emitFrames('no-data');
@@ -520,7 +535,9 @@ function renderFrame(map: maplibregl.Map, day: number): void {
 
 function onCoverageMoveEnd(): void {
   if (!activeMap || selectedDay === null || frames.length === 0) return;
-  const hasCoverage = mapCenterHasCoverage(activeMap);
+  const hasCoverage = viewHasCoverage(activeMap);
+  // A tile verdict that landed while the view was uncovered left 'no-data' over a source that still stands.
+  const hadCoverage = currentHasCoverage;
   currentHasCoverage = hasCoverage;
   if (!hasCoverage) {
     masterController?.abort();
@@ -532,7 +549,7 @@ function onCoverageMoveEnd(): void {
     installTimeBar('no-data');
     return;
   }
-  if (!activeSourceId || !activeMap.getSource(activeSourceId)) {
+  if (hadCoverage === false || !activeSourceId || !activeMap.getSource(activeSourceId)) {
     renderFrame(activeMap, selectedDay);
   }
 }
@@ -578,6 +595,103 @@ function stopListeningForDaySelection(): void {
 }
 
 /**
+ * Read the service metadata and the catalog and return the seven advertised
+ * frames, or null when either answer is unusable (or the read was aborted).
+ * A network failure the retry does not absorb is thrown.
+ */
+async function readAdvertisedFrames(
+  signal: AbortSignal
+): Promise<readonly HeatRiskFrame[] | null> {
+  const metadataUrl = `${URLS.nwsHeatRisk}?f=json`;
+  let metadataJson: unknown;
+  try {
+    metadataJson = await fetchJsonWithBudget(metadataUrl, null, signal, FETCH_TIMEOUT_MS);
+  } catch (err) {
+    // One retry for a read the network lost (a fetch TypeError, or an
+    // abort nobody here asked for: the budget or the browser). A caller's
+    // cancellation and any answer the service gave are final.
+    const transient =
+      err instanceof TypeError || (err instanceof DOMException && err.name === 'AbortError');
+    if (signal.aborted || !transient) throw err;
+    console.warn('[heatrisk] service metadata read failed; retrying once.', err);
+    metadataJson = await fetchJsonWithBudget(metadataUrl, null, signal, FETCH_TIMEOUT_MS);
+  }
+  if (signal.aborted) return null;
+  const extent = extractTimeExtent(metadataJson);
+  if (extent === null) {
+    console.warn('[heatrisk] service metadata carried no usable time extent.');
+    return null;
+  }
+
+  const catalogJson = await fetchJsonWithBudget(
+    buildCatalogUrl(),
+    null,
+    signal,
+    FETCH_TIMEOUT_MS
+  );
+  if (signal.aborted) return null;
+  const advertised = extractFrames(catalogJson, extent);
+  if (advertised === null) {
+    console.warn('[heatrisk] catalog carried no consistent granule times.');
+  }
+  return advertised;
+}
+
+/** How often the catalog is re-read while its Day 1 period has ended and the service still offers it. */
+const CATALOG_RECHECK_MS = 60 * 60 * 1000;
+let catalogTimer: ReturnType<typeof setTimeout> | undefined;
+let catalogRefresh: AbortController | null = null;
+
+function stopCatalogRefresh(): void {
+  clearTimeout(catalogTimer);
+  catalogRefresh?.abort();
+  catalogRefresh = null;
+}
+
+/**
+ * The catalog rolls forward once a day: a page left open must not keep an
+ * ended Day 1 and miss the new seventh day. Re-read it when Day 1's period
+ * ends, then hourly while the advertised Day 1 stays ended.
+ */
+function armCatalogRefresh(): void {
+  clearTimeout(catalogTimer);
+  const first = frames[0];
+  if (!first) return;
+  const untilEnd = first.validTime + DAILY_FRAME_MS - Date.now();
+  const wait = untilEnd > 0 ? untilEnd : CATALOG_RECHECK_MS;
+  // Past 2^31-1 ms setTimeout fires at once; no advertised Day 1 ends that far ahead.
+  if (wait <= 0x7fffffff) catalogTimer = setTimeout(() => void refreshCatalog(), wait);
+}
+
+/**
+ * Re-enumerate on the same map. A failed or unchanged read keeps the
+ * advertised days and tries again later; a rolled catalog keeps the
+ * displayed period when it is still offered, else shows Day 1.
+ */
+async function refreshCatalog(): Promise<void> {
+  const map = activeMap;
+  if (!map || frames.length === 0) return;
+  const controller = new AbortController();
+  catalogRefresh = controller;
+  let advertised: readonly HeatRiskFrame[] | null = null;
+  try {
+    advertised = await readAdvertisedFrames(controller.signal);
+  } catch (err) {
+    if (!controller.signal.aborted) {
+      console.warn('[heatrisk] catalog re-read failed; keeping the advertised days.', err);
+    }
+  }
+  if (controller.signal.aborted || activeMap !== map || frames.length === 0) return;
+  catalogRefresh = null;
+  if (advertised !== null && advertised[0]!.validTime !== frames[0]!.validTime) {
+    const shownTime = selectedDay === null ? undefined : frames[selectedDay - 1]?.validTime;
+    frames = advertised;
+    renderFrame(map, advertised.find((frame) => frame.validTime === shownTime)?.day ?? 1);
+  }
+  armCatalogRefresh();
+}
+
+/**
  * Enumerate exact granule times, then add the first or URL-selected raster
  * frame. Missing or inconsistent metadata reports `error`; there is no
  * fallback that guesses a date.
@@ -605,51 +719,23 @@ export async function activate(
   frames = [];
   selectedDay = null;
   currentHasCoverage = null;
+  stopCatalogRefresh();
   listenForDaySelection();
   listenForCoverageMoves(map);
   reportStatus('loading');
   emitFrames('loading');
 
   try {
-    const metadataUrl = `${URLS.nwsHeatRisk}?f=json`;
-    let metadataJson: unknown;
-    try {
-      metadataJson = await fetchJsonWithBudget(metadataUrl, null, signal, FETCH_TIMEOUT_MS);
-    } catch (err) {
-      // One retry for a read the network lost (a fetch TypeError, or an
-      // abort nobody here asked for: the budget or the browser). A caller's
-      // cancellation and any answer the service gave are final.
-      const transient =
-        err instanceof TypeError || (err instanceof DOMException && err.name === 'AbortError');
-      if (signal.aborted || !transient) throw err;
-      console.warn('[heatrisk] service metadata read failed; retrying once.', err);
-      metadataJson = await fetchJsonWithBudget(metadataUrl, null, signal, FETCH_TIMEOUT_MS);
-    }
+    const advertised = await readAdvertisedFrames(signal);
     if (signal.aborted) return;
-    const extent = extractTimeExtent(metadataJson);
-    if (extent === null) {
-      console.warn('[heatrisk] service metadata carried no usable time extent.');
-      reportStatus('error');
-      emitFrames('error');
-      return;
-    }
-
-    const catalogJson = await fetchJsonWithBudget(
-      buildCatalogUrl(),
-      null,
-      signal,
-      FETCH_TIMEOUT_MS
-    );
-    if (signal.aborted) return;
-    const advertised = extractFrames(catalogJson, extent);
     if (advertised === null) {
-      console.warn('[heatrisk] catalog carried no consistent granule times.');
       reportStatus('error');
       emitFrames('error');
       return;
     }
 
     frames = advertised;
+    armCatalogRefresh();
     // The heatday rule: an explicit, valid `heatday=` on the URL always
     // wins (a shared link is honored exactly); absent that, the day
     // remembered from this session's last selection is re-applied (the
@@ -682,6 +768,7 @@ export async function activate(
  */
 export function cancelActivation(): void {
   masterController?.abort();
+  stopCatalogRefresh();
   activeMap = null;
 }
 
@@ -694,6 +781,7 @@ export function deactivate(map: maplibregl.Map): void {
   masterController = null;
   endFrameLoad();
   clearTimeout(phaseTimer);
+  stopCatalogRefresh();
   removeActiveRaster(map);
   stopListeningForDaySelection();
   stopListeningForCoverageMoves();

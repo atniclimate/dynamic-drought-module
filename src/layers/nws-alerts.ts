@@ -720,8 +720,10 @@ export function buildNwsAlertPopupModel(props: GeoJsonProperties): IssuedModel {
     moreLinks: heatFire && event.includes('Heat') ? [{ label: 'NWS Heat Safety', href: 'https://www.weather.gov/safety/heat' }] : [],
     qualifications: heatFire
       ? [
+          // DRAFT wording (pending the owner's read-back): "heat", not "extreme heat", since NWS defines a Heat
+          // Advisory as dangerous heat not expected to reach warning criteria (weather.gov/safety/heat-ww).
           // vocab-allow: describes the NWS alert products verbatim, upstream data
-          'Active National Weather Service watch, warning, or advisory for extreme heat or fire weather. Polygons are NWS forecast-zone shapes, updated about every five minutes.'
+          'Active National Weather Service watch, warning, or advisory for heat or fire weather. Polygons are NWS forecast-zone shapes, updated about every five minutes.'
         ]
       : []
   };

@@ -356,6 +356,11 @@ export function alertsMetric(map: maplibregl.Map): Metric {
   const n = countDistinct(feats, (p) =>
     [p?.['event'], p?.['onset'], p?.['ends'], p?.['issuer']].join('|')
   );
+  // A pending, failed or cut-off read cannot establish absence: never a zero (a nonzero count is kept).
+  const status = registry.getStatus(ALERTS_KEY);
+  if (n === 0 && (status === 'loading' || status === 'error' || status === 'degraded')) {
+    return pendingMetric(ALERTS_KEY);
+  }
   const heatFire = HAZARD_CLUSTERS[getSelectedHazard()].alerts === HEAT_FIRE_ALERTS;
   return {
     value: String(n),
@@ -388,8 +393,10 @@ export function firesMetric(map: maplibregl.Map): Metric {
       p?.['IncidentName']
     )
   );
-  // Never a zero while the request is in flight; a nonzero count is kept.
-  if (n === 0 && registry.getStatus(FIRES_KEY) === 'loading') return pendingMetric(FIRES_KEY);
+  // Never a zero while the request is in flight or after it failed (the source
+  // still holds the previous view's perimeters); a nonzero count is kept.
+  const status = registry.getStatus(FIRES_KEY);
+  if (n === 0 && (status === 'loading' || status === 'error')) return pendingMetric(FIRES_KEY);
   return {
     value: String(n),
     sublabel:

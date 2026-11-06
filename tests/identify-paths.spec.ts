@@ -1263,7 +1263,7 @@ test.describe('identify paths: the NWS, SPC and power models print the issuer wo
     expect(flood).not.toContain('unavailable');
     expect(floodMarkup).toContain('data-swatch-class="Flood Warning" style="--popup-swatch: #00ff00"');
     expect(flood).not.toContain('forecast-zone shapes');
-    expect(flood).not.toContain('extreme heat or fire weather');
+    expect(flood).not.toContain('heat or fire weather');
     expect(floodMarkup).not.toContain('https://www.weather.gov/safety/heat');
     expect(floodMarkup).toContain('href="https://alerts.weather.gov/"');
   });

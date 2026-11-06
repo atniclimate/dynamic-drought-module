@@ -74,3 +74,13 @@ test('arriving alert data is read on the frame that draws it', () => {
   assert.match(body.innerHTML, /Rip Current Statement/);
   assert.doesNotMatch(body.innerHTML, /Winter Storm Warning/);
 });
+
+test('a cut-off answer with nothing drawn in view never says there are no alerts', () => {
+  drawn = [];
+  registry.setStatus('nws-alerts', 'degraded');
+  assert.match(body.innerHTML, /response was incomplete/);
+  assert.doesNotMatch(body.innerHTML, /No active/);
+  // A clean empty answer still says none.
+  registry.setStatus('nws-alerts', 'no-data');
+  assert.match(body.innerHTML, /No active/);
+});
