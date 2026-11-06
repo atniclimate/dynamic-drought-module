@@ -502,6 +502,36 @@ test.describe('DDM-P2-T09: one canonical place reference, no new URL parameter',
   });
 });
 
+test.describe('the region menu follows a place chosen from search', () => {
+  const searchInput = '#catalog-search [data-ddm-search]';
+
+  test('a state or city leaves the menu naming no other region, and Reset restores the default', async ({
+    page
+  }) => {
+    await gotoApp(page, '?view=console');
+    const menu = regionSelect(page);
+    await expect(menu).toHaveValue('region:national');
+
+    // Colorado is not a region option: the camera left the national view, so the neutral entry shows.
+    await page.locator(searchInput).fill('colorado');
+    await page.locator('[data-search-kind="place"][data-search-id="CO"]').click();
+    await expect(menu).toHaveValue('view:place');
+
+    // Alaska is a region option: the menu shows it.
+    await page.locator(searchInput).fill('alaska');
+    await page.locator('[data-search-kind="place"][data-search-id="AK"]').click();
+    await expect(menu).toHaveValue('region:alaska');
+
+    // A city is never a region option.
+    await page.locator(searchInput).fill('tulsa');
+    await page.locator('[data-search-kind="city"][data-search-id="Tulsa"]').click();
+    await expect(menu).toHaveValue('view:place');
+
+    await page.locator('#reset-btn').click();
+    await expect(menu).toHaveValue('region:national');
+  });
+});
+
 test.describe('D1 M4, found-026: unique Jump to region labels', () => {
   test('every Jump to region option label is unique', async ({ page }) => {
     await gotoApp(page);
