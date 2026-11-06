@@ -24,7 +24,8 @@
  * mention, and spec files that import a changed src/ module or test helper
  * directly, plus a few fixed specs when the range touches shared style or
  * markup, a map-key, legend, dock or minimap component, or the test seam
- * (CROSS_CUTTING; each is printed with the rule that added it). The measurement-only specs (playwright.config.ts MEASURE_SPECS),
+ * (CROSS_CUTTING), or one of the modules MODULE_SPECS maps by hand; each is
+ * printed with the rule that added it. The measurement-only specs (playwright.config.ts MEASURE_SPECS),
  * and browser-free PURE_SPECS are left out of browser execution selection.
  * Stale-text inspection still covers every spec.
  */
@@ -166,8 +167,25 @@ export const CROSS_CUTTING = [
   }
 ];
 
+// Modules whose specs reach them only through the built app, mapped by hand
+// from those specs' selectors, chunk routes and source reads (2026-11-06:
+// each picked no spec). Also not a dependency graph: a new spec for one of
+// these modules is added here by hand. At most five per module.
+export const MODULE_SPECS = {
+  'src/main.ts': ['tests/boot.spec.ts', 'tests/boot-without-map.spec.ts', 'tests/boot-command-order.spec.ts', 'tests/identify-paths.spec.ts'],
+  'src/map/interaction-coordinator.ts': ['tests/interaction-coordinator.spec.ts', 'tests/identify-paths.spec.ts', 'tests/popup-viewport.spec.ts', 'tests/surface-popups.spec.ts'],
+  'src/layers/telemetry.ts': ['tests/telemetry.spec.ts', 'tests/telemetry-discovery.spec.ts', 'tests/telemetry-raws-gate.spec.ts', 'tests/identify-paths.spec.ts'],
+  'src/ui/island/place-studio.tsx': ['tests/place-studio.spec.ts', 'tests/place-studio-brief.spec.ts', 'tests/place-studio-map.spec.ts', 'tests/place-studio-watersheds.spec.ts', 'tests/island-chunk-isolation.spec.ts'],
+  'src/ui/sidebar.ts': ['tests/precedence.spec.ts', 'tests/u3i.spec.ts', 'tests/s4-shell.spec.ts', 'tests/activation-failure.spec.ts'],
+  'src/ui/time-bar.ts': ['tests/temporal-axis.spec.ts', 'tests/fire-heat-time-bar.spec.ts', 'tests/raster-status.spec.ts', 'tests/usdm-time.spec.ts'],
+  'src/ui/heatrisk-sequence.ts': ['tests/heat-h1-heatrisk.spec.ts', 'tests/map-drawers.spec.ts', 'tests/heat-h2-point-heat.spec.ts', 'tests/map-chrome-focus.spec.ts'],
+  'src/ui/sheet-alerts.ts': ['tests/mobile-sheet.spec.ts', 'tests/heat-h0-integrity.spec.ts', 'tests/hazard-rail.spec.ts', 'tests/retry-doors.spec.ts'],
+  'src/ui/popup-conditions.ts': ['tests/interaction-coordinator.spec.ts', 'tests/place-popups.spec.ts']
+};
+const MODULE_RULES = Object.entries(MODULE_SPECS).map(([module, specs]) => ({ rule: `specs of ${module}`, match: (path) => path === module, specs }));
+
 /** `Map<spec path, rule names>` the changed paths fire, limited to specs that exist. */
-export function crossCuttingSpecs(changedPaths, specPaths, rules = CROSS_CUTTING) {
+export function crossCuttingSpecs(changedPaths, specPaths, rules = [...CROSS_CUTTING, ...MODULE_RULES]) {
   const picked = new Map();
   for (const { rule, match, specs } of rules) {
     if (!changedPaths.some(match)) continue;
