@@ -3911,10 +3911,9 @@ button.conditions-metric:hover .conditions-action-hide {
 
    The attribute never appears in embed (`?embed=true` keeps today's
    hidden-chrome semantics byte for byte) and never on desktop; without
-   it, the stacked-rows block above is the no-JavaScript fallback. The
-   `--sheet-peek` and `--sheet-half` values are written by the module
-   from its SHEET_DETENT_SIZE table (the one shared lookup); the literals
-   here are parse-time fallbacks only.
+   it, the stacked-rows block above is the no-JavaScript fallback.
+   `--sheet-peek` and `--sheet-half` are optional overrides that no
+   script sets; the literals in the rules below are the sheet's values.
    ---------------------------------------------------------------------------- */
 
 /* Sheet-only furniture never renders outside the active sheet. */

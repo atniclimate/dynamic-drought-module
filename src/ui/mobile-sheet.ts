@@ -45,14 +45,6 @@ export type SheetDetent = 'closed' | 'peek' | 'half' | 'full';
 /** The side rail's four doors. Ephemeral like the detent; never in the URL. */
 export type SheetTab = 'brief' | 'place' | 'layers' | 'alerts';
 
-/** Legacy values retained for consumers that import the old sheet contract. */
-export const SHEET_DETENT_SIZE = {
-  peekPx: 132,
-  halfFraction: 0.46,
-  footerPx: 56,
-  fullTopGapPx: 72
-} as const;
-
 /** Transform and opacity transition settle fallback. */
 const SETTLE_FALLBACK_MS = 220;
 const PLACE_STUDIO_OPENER_EVENT = 'ddm:place-studio-opener';

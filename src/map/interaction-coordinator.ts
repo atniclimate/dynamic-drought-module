@@ -253,16 +253,27 @@ let sinkPresented = false;
 let sinkSelection: PlaceSelection | null = null;
 
 /**
+ * Whether an Escape belongs to another control, so it never also dismisses
+ * the response: one that control already used (the search box clearing its
+ * query, the map-information panel closing), or one aimed inside a nested
+ * surface, which owns its first Escape as in mobile-sheet.ts (some never
+ * preventDefault). Every response Escape handler (sink, popup, the wait) asks.
+ */
+function escapeOwnedElsewhere(event: KeyboardEvent): boolean {
+  const target = event.target;
+  return (
+    event.defaultPrevented ||
+    (target instanceof HTMLElement &&
+      target.closest('#impact-panel, #map-key, #map-info-panel, #place-studio-root, #layers-studio-root') !== null)
+  );
+}
+
+/**
  * Escape dismisses a sink-presented response as it does a popup (the popup's
- * own handler is bindPopupKeyboard). Bound only while the sink holds one; an
- * Escape another control already used (the search box clearing its query, the
- * map-information panel closing) is not also a dismissal. Nested surfaces own
- * their first Escape, as in mobile-sheet.ts: some never preventDefault.
+ * own handler is bindPopupKeyboard). Bound only while the sink holds one.
  */
 function onSinkEscape(event: KeyboardEvent): void {
-  if (event.key !== 'Escape' || event.defaultPrevented || !sinkPresented) return;
-  const target = event.target;
-  if (target instanceof HTMLElement && target.closest('#impact-panel, #map-key, #map-info-panel, #place-studio-root, #layers-studio-root')) return;
+  if (event.key !== 'Escape' || !sinkPresented || escapeOwnedElsewhere(event)) return;
   dismissResponse();
 }
 
@@ -668,7 +679,7 @@ function bindPopupKeyboard(popup: maplibregl.Popup, map: maplibregl.Map): () => 
     target instanceof Node && (popup.getElement()?.contains(target) ?? false);
   let focusInside = contains(document.activeElement);
   const onEscape = (event: KeyboardEvent): void => {
-    if (event.key === 'Escape' && currentPopup === popup) dismissResponse();
+    if (event.key === 'Escape' && currentPopup === popup && !escapeOwnedElsewhere(event)) dismissResponse();
   };
   // An adopted popup can open before its lazy frame creates any DOM. Listen
   // on the document so the first paint and later hydration keep the same
@@ -891,7 +902,7 @@ function commit(
   // the wait, however it ends, acts only while this commit is still the
   // waiting one, and swallows nothing.
   const onEscape = (e: KeyboardEvent): void => {
-    if (e.key === 'Escape' && pendingCommit === record) dismissResponse();
+    if (e.key === 'Escape' && pendingCommit === record && !escapeOwnedElsewhere(e)) dismissResponse();
   };
   document.addEventListener('keydown', onEscape);
   loadFrame().finally(() => document.removeEventListener('keydown', onEscape)).then(
@@ -1170,6 +1181,17 @@ async function attachConditionDoor(
     import('../state/region-store'),
     import('../ui/popups')
   ]);
+  // A BIA land area takes the title a click on the reservation itself gives:
+  // the roster's gated Nation name, its land area beside the source.
+  let areaLabel: string | undefined;
+  if (subject.kind === 'bia-reservation') {
+    const { loadBiaNationNames, resolveBoundaryTitle } = await import('../impact/context');
+    await loadBiaNationNames().catch(() => {});
+    if (currentPopup !== popup || !head.isConnected) return;
+    const landArea = subject.title;
+    subject.title = resolveBoundaryTitle('bia-reservation', { LARNAME: landArea });
+    if (subject.title !== landArea) areaLabel = `Land area: ${landArea}`;
+  }
 
   // `identity.state` came from `resolveState` (src/state/location-identity.ts
   // :201-222), which never reads a postal code off the thing this click
@@ -1191,6 +1213,7 @@ async function attachConditionDoor(
     title: subject.title,
     properties: null,
     lngLat: { lng: click.lngLat.lng, lat: click.lngLat.lat },
+    ...(areaLabel ? { areaLabel } : {}),
     regionKey: getCurrentRegion(),
     containing
   };

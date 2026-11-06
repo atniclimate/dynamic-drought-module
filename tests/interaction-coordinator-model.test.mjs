@@ -748,6 +748,81 @@ test('a technical door gives way to the place door when the tap resolves a state
   }
 });
 
+// The look at 4237781, R1-3: the late door over a BIA reservation named the
+// land area (LARNAME) where a click on the reservation names the Nation.
+test('the late door over a BIA reservation names the Nation as a click on the reservation does, the land area beside it', async () => {
+  const model = { ...MODEL, kind: 'surface' };
+  const createElement = document.createElement;
+  const fetch = globalThis.fetch;
+  class FakeButton extends FakeElement {
+    addEventListener(type, fn) {
+      if (type === 'click') this.onclick = fn;
+    }
+  }
+  globalThis.HTMLButtonElement = FakeButton;
+  const buttons = [];
+  document.createElement = () => {
+    const element = new FakeElement();
+    Object.defineProperty(element, 'innerHTML', {
+      set(html) {
+        rendered.push(html);
+        if (!html.startsWith('<button')) return;
+        const button = new FakeButton();
+        button.html = html;
+        buttons.push(button);
+        element.appendChild(button);
+      }
+    });
+    return element;
+  };
+  globalThis.fetch = async () =>
+    new Response(JSON.stringify({ areas: [{ larName: 'Fixture Trusted Area', displayName: 'Fixture Trusted Nation', provenance: 'safe-match' }] }), {
+      headers: { 'content-type': 'application/json' }
+    });
+  globalThis.__ddmIdentity = { state: null, containingTribal: { source: 'bia-reservation', name: 'Fixture Trusted Area' } };
+  try {
+    const { click, ready } = harness({ drought: [{ model }] }, { warm: true });
+    await ready;
+    click();
+    // MapLibre puts the popup in the page; this stub does not.
+    document.body.appendChild(globalThis.__ddmPopups.at(-1).content);
+    for (let i = 0; i < 50 && buttons.length === 0; i += 1) await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(buttons.length, 1, 'the late door was added');
+    assert.match(buttons[0].html, /Fixture Trusted Nation/, 'the door names the Nation');
+    buttons[0].onclick();
+    const opened = globalThis.__ddmPanelOpens.at(-1);
+    assert.equal(opened.title, 'Fixture Trusted Nation', 'the briefing is titled by the Nation');
+    assert.equal(opened.areaLabel, 'Land area: Fixture Trusted Area', 'the land area beside the source');
+    assert.equal(opened.kind, 'bia-reservation');
+  } finally {
+    document.createElement = createElement;
+    globalThis.fetch = fetch;
+    delete globalThis.HTMLButtonElement;
+    delete globalThis.__ddmIdentity;
+  }
+});
+
+// The look at 4237781, R1-4: one Escape aimed at another control also closed the map popup.
+test('Escape another control used, or one inside a nested surface, leaves the map popup open', async () => {
+  const { click, ready } = harness({ surface: [{ model: MODEL }] }, { warm: true });
+  await ready;
+  click();
+  const popup = globalThis.__ddmPopups.at(-1);
+  const escape = (event) => {
+    for (const fn of [...(documentListeners.get('keydown') ?? [])]) fn({ key: 'Escape', ...event });
+  };
+  escape({ defaultPrevented: true });
+  assert.equal(popup.removed, false, 'the search box clearing its query is not a dismissal');
+  const inside = new FakeElement();
+  inside.closest = (selectors) => (selectors.split(', ').includes('#map-info-panel') ? inside : null);
+  escape({ defaultPrevented: false, target: inside });
+  assert.equal(popup.removed, false, 'Escape inside the map-information panel is that panel\'s');
+  const outside = new FakeElement();
+  outside.closest = () => null;
+  escape({ defaultPrevented: false, target: outside });
+  assert.equal(popup.removed, true, 'Escape elsewhere still closes the popup');
+});
+
 test('a model the frame refuses throws its PopupFrameError before any selection or emphasis is written', async () => {
   const { click, ready } = harness(
     { refused: [{ model: REFUSED_MODEL, selection: context('Refused'), emphasis: [{ source: 'refused', id: 1 }] }] },
