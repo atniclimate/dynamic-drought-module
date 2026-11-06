@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 
 const root = new URL('../', import.meta.url);
@@ -35,6 +35,11 @@ test('every declared local font has a hash-bound cmap and adjacent licence recei
     assert.ok(record.codepoints.length > 0, file);
     assert.ok(readFileSync(new URL(`public/fonts/${record.licence}`, root), 'utf8').length > 100, file);
   }
+});
+test('every shipped woff2 in public/fonts is loaded by an @font-face', () => {
+  const loaded = new Set(faces.map(face => face.url?.split('/').at(-1)));
+  const shipped = readdirSync(new URL('public/fonts/', root)).filter(name => name.endsWith('.woff2'));
+  assert.deepEqual(shipped.filter(name => !loaded.has(name)), []);
 });
 test('both adopted stacks cover every public name character and the BC orthography fixture', () => {
   const required = new Set([... '\u0294\u02b7\u1e35\u0313\u0331'].map(char => char.codePointAt(0)));

@@ -10,7 +10,8 @@ no-tracking and self-hosted static architecture.
 
 - `glyphs/Noto Sans Regular/0-255.pbf` and `256-511.pbf`: the Basic Latin
   and Latin Extended ranges of Noto Sans Regular, which cover every map
-  label the module currently renders (the Nino 3.4 region label). New
+  label the module currently renders (place labels, power cluster counts
+  and the Nino 3.4 region label). New
   labels that use other scripts need their ranges added here; a missing
   range fails visibly (the label does not draw), never silently.
 - `glyphs/Noto Sans Regular/512-767.pbf`: the Spacing Modifier Letters
