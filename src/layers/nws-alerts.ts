@@ -740,7 +740,8 @@ export function buildNwsAlertPopupModel(props: GeoJsonProperties): IssuedModel {
     clocks: from === null ? [until] : [from, until],
     // vocab-allow: names the NWS active-alerts page, upstream product name
     source: { link: { label: 'NWS Active Alerts', href: 'https://alerts.weather.gov/' } },
-    moreLinks: heatFire ? [{ label: 'NWS Heat Safety', href: 'https://www.weather.gov/safety/heat' }] : [],
+    // The heat-safety page for the heat products only, never a fire weather one (the look at 6748f25, P3-30).
+    moreLinks: heatFire && event.includes('Heat') ? [{ label: 'NWS Heat Safety', href: 'https://www.weather.gov/safety/heat' }] : [],
     qualifications: heatFire
       ? [
           // vocab-allow: describes the NWS alert products verbatim, upstream data

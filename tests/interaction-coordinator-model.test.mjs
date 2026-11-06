@@ -1033,3 +1033,52 @@ test('after the wait, the refusal catch covers serialization only: a sink callba
     for (const handler of runnerHandlers) process.on('unhandledRejection', handler);
   }
 });
+
+// The look at 6748f25, D3: Escape closed a station popup but not the
+// selection response at the foot of the side panel (the installed sink).
+test('Escape dismisses a response the panel-foot sink presents, unless another control used it, and its handler goes with the response', async () => {
+  const selection = context('Sink Place');
+  const { click, ready } = harness({ place: [{ model: MODEL, selection, emphasis: [] }] }, { warm: true });
+  await ready;
+  let dismissed = 0;
+  coordinator.setResponseSink({ present: () => true, dismiss: () => { dismissed += 1; } });
+  click();
+  assert.equal(globalThis.__ddmPopups.length, 0, 'the sink took the response, no popup');
+  assert.equal(getPlaceSelection()?.context, selection);
+  assert.equal(keydownListeners(), 1, 'the presented response listens for Escape');
+  // An Escape another control already used (the search box clearing its query) is not a dismissal.
+  for (const fn of [...(documentListeners.get('keydown') ?? [])]) fn({ key: 'Escape', defaultPrevented: true });
+  assert.equal(dismissed, 0);
+  press('Enter');
+  assert.equal(dismissed, 0, 'another key is not a dismissal');
+  assert.deepEqual(press('Escape'), [], 'Escape is not swallowed');
+  assert.equal(dismissed, 1, 'Escape dismissed the sink response');
+  assert.equal(getPlaceSelection(), null, 'its place selection cleared with it');
+  assert.equal(keydownListeners(), 0, 'no Escape handler outlives the response');
+  press('Escape');
+  assert.equal(dismissed, 1, 'a second Escape does nothing');
+});
+
+// Review F1: the panel-foot listener is added before a studio's own, so a nested
+// surface's first Escape (a studio, the briefing, the key) reached it too.
+test('Escape inside a studio, the briefing or the key leaves the panel-foot response and its selection', async () => {
+  const selection = context('Sink Place');
+  const { click, ready } = harness({ place: [{ model: MODEL, selection, emphasis: [] }] }, { warm: true });
+  await ready;
+  let dismissed = 0;
+  coordinator.setResponseSink({ present: () => true, dismiss: () => { dismissed += 1; } });
+  click();
+  assert.equal(keydownListeners(), 1);
+  for (const root of ['#impact-panel', '#map-key', '#map-info-panel', '#place-studio-root', '#layers-studio-root']) {
+    const target = new FakeElement();
+    target.closest = (selectors) => (selectors.split(', ').includes(root) ? target : null);
+    for (const fn of [...(documentListeners.get('keydown') ?? [])]) fn({ key: 'Escape', defaultPrevented: false, target });
+    assert.equal(dismissed, 0, `Escape inside ${root} is that surface's`);
+  }
+  assert.equal(getPlaceSelection()?.context, selection, 'the place selection stays');
+  const outside = new FakeElement();
+  outside.closest = () => null;
+  for (const fn of [...(documentListeners.get('keydown') ?? [])]) fn({ key: 'Escape', defaultPrevented: false, target: outside });
+  assert.equal(dismissed, 1, 'Escape elsewhere still dismisses');
+  assert.equal(getPlaceSelection(), null);
+});

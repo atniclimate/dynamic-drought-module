@@ -253,6 +253,20 @@ let sinkPresented = false;
 let sinkSelection: PlaceSelection | null = null;
 
 /**
+ * Escape dismisses a sink-presented response as it does a popup (the popup's
+ * own handler is bindPopupKeyboard). Bound only while the sink holds one; an
+ * Escape another control already used (the search box clearing its query, the
+ * map-information panel closing) is not also a dismissal. Nested surfaces own
+ * their first Escape, as in mobile-sheet.ts: some never preventDefault.
+ */
+function onSinkEscape(event: KeyboardEvent): void {
+  if (event.key !== 'Escape' || event.defaultPrevented || !sinkPresented) return;
+  const target = event.target;
+  if (target instanceof HTMLElement && target.closest('#impact-panel, #map-key, #map-info-panel, #place-studio-root, #layers-studio-root')) return;
+  dismissResponse();
+}
+
+/**
  * Install (or, with null, remove) the one alternate response sink. Only
  * PLACE-BEARING responses route to the sink, mirroring the shipped
  * mobile-sheet precedent: the map is the instrument for fire, smoke,
@@ -468,6 +482,7 @@ export function resetInteractionCoordinatorForTest(): void {
   sink = null;
   sinkPresented = false;
   sinkSelection = null;
+  document.removeEventListener('keydown', onSinkEscape);
   // A waiting commit never outlives a reset, and the frame is forgotten so
   // the next registration warms it again (a test can then commit cold).
   pendingCommit = null;
@@ -1027,6 +1042,7 @@ function renderPopup(
     if (presented) {
       sinkPresented = true;
       sinkSelection = selection;
+      document.addEventListener('keydown', onSinkEscape);
       return;
     }
   }
@@ -1279,6 +1295,7 @@ export function dismissResponse(): void {
   popup?.remove();
   if (sinkPresented) {
     sinkPresented = false;
+    document.removeEventListener('keydown', onSinkEscape);
     const sel = sinkSelection;
     sinkSelection = null;
     sink?.dismiss();

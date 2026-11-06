@@ -66,7 +66,12 @@ test('the alert popup describes only the heat and fire weather products; an end 
   const red = buildNwsAlertPopupModel({ event: 'Red Flag Warning', onset: '2026-08-11T08:00:00-07:00', ends: '2026-08-12T20:00:00-07:00' });
   assert.equal(red.qualifications.length, 1);
   assert.match(red.qualifications[0], /for extreme heat or fire weather\. Polygons are NWS forecast-zone shapes/);
-  assert.deepEqual(red.moreLinks, [{ label: 'NWS Heat Safety', href: 'https://www.weather.gov/safety/heat' }]);
+  // The heat-safety page rides the heat products only, never a fire weather one (the look at 6748f25, P3-30).
+  assert.deepEqual(red.moreLinks, []);
+  assert.deepEqual(buildNwsAlertPopupModel({ event: 'Fire Weather Watch' }).moreLinks, []);
+  for (const event of HEAT_FIRE_ALERTS.events.filter((name) => name.includes('Heat'))) {
+    assert.deepEqual(buildNwsAlertPopupModel({ event }).moreLinks, [{ label: 'NWS Heat Safety', href: 'https://www.weather.gov/safety/heat' }], event);
+  }
   assert.deepEqual(red.clocks.map((clock) => clock.label), ['From', 'Until']);
   const flood = buildNwsAlertPopupModel({ event: 'Flash Flood Warning', onset: '2026-11-05T20:09:00-06:00', ends: null, issuer: 'KDVN' });
   assert.deepEqual(flood.qualifications, []);
