@@ -111,8 +111,11 @@ legend, dock or minimap component, or the test seam (`tests/helpers.ts`,
 `tests/offline-test.ts`, `playwright.config.ts`), and prints which rule added
 each; the sets (`CROSS_CUTTING` in `scripts/spec-impact.mjs`) come from the
 0.7.7 reds, six specs in all, and are a guess at ownership, not a dependency
-graph. It exits 1 while a counted mention remains; `--list` prints only the
-touched paths. Choose the needed evidence:
+graph. `MODULE_SPECS` beside it maps, by hand, modules the specs reach only
+through the built app (`src/main.ts`, the interaction coordinator, the time
+bar and others) to at most five specs each; a new spec for one of them is
+added there by hand. It exits 1 while a counted mention remains; `--list`
+prints only the touched paths. Choose the needed evidence:
 
 1. For changed browser behavior, choose a local focused check or a targeted
    GitHub run: after the authorized push, `npm run spec:impact -- --dispatch` (add

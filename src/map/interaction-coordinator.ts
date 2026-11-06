@@ -1196,8 +1196,8 @@ async function attachConditionDoor(
     import('../state/region-store'),
     import('../ui/popups')
   ]);
-  // A BIA land area takes the title a click on the reservation itself gives:
-  // the roster's gated Nation name, its land area beside the source.
+  // A BIA land area or a Census area takes the title a click on the area itself
+  // gives: the roster's gated name, its own area name beside the source.
   let areaLabel: string | undefined;
   if (subject.kind === 'bia-reservation') {
     const { loadBiaNationNames, resolveBoundaryTitle } = await import('../impact/context');
@@ -1206,6 +1206,14 @@ async function attachConditionDoor(
     const landArea = subject.title;
     subject.title = resolveBoundaryTitle('bia-reservation', { LARNAME: landArea });
     if (subject.title !== landArea) areaLabel = `Land area: ${landArea}`;
+  } else if (subject.kind === 'aiannh') {
+    const { loadCensusNationNames, resolveBoundaryTitle } = await import('../impact/context');
+    await loadCensusNationNames().catch(() => {});
+    if (currentPopup !== popup || !head.isConnected) return;
+    const censusArea = subject.title;
+    subject.title = resolveBoundaryTitle('aiannh', { NAME: censusArea });
+    // DRAFT wording: "Census area", the search's own sublabel word (as buildBoundaryContext).
+    if (subject.title !== censusArea) areaLabel = `Census area: ${censusArea}`;
   }
 
   // `identity.state` came from `resolveState` (src/state/location-identity.ts

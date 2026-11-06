@@ -16,9 +16,7 @@
  * Attribute honesty: issuer sentinel values are preserved verbatim
  * (VOLTAGE -999999 means unknown; OWNER and VOLT_CLASS may be
  * 'NOT AVAILABLE'); the presentation maps them to a disclosed
- * thinnest-width read, never to a fabricated value. Some source
- * geometries carry OpenStreetMap provenance (the SOURCE field), so the
- * attribution names OpenStreetMap contributors.
+ * thinnest-width read, never to a fabricated value.
  *
  * Usage: npm run build:power-tiles
  */
@@ -230,8 +228,7 @@ export async function main() {
 
   const attribution =
     'U.S. Electric Power Transmission Lines (HIFLD, U.S. Government), via the Esri ' +
-    'Federal User Community archive; includes OpenStreetMap-derived geometries ' +
-    '(OpenStreetMap contributors); ARCHIVED source, last data update 2024-09-30, ' +
+    'Federal User Community archive; ARCHIVED source, last data update 2024-09-30, ' +
     `no longer maintained; retrieved ${retrieved}; not comprehensive or current and ` +
     'not for siting or safety-critical decisions.';
 

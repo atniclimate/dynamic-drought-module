@@ -50,7 +50,8 @@ function freshnessText(stamp: TimeBarStamp): string {
   if (freshness.state === 'loading') return 'Checking current conditions';
   const checkedAt = freshness.checkedAt;
   const date = checkedAt && Number.isFinite(Date.parse(checkedAt)) ? dateTok(checkedAt) : null;
-  return date ? `Last successful feed check ${date}` : 'Current feed check unavailable';
+  // DRAFT wording: "browser check", as the time bar's dot and the NIFC popup's clock word it.
+  return date ? `Last successful browser check ${date}` : 'Current feed check unavailable';
 }
 
 export function TimeCompact({ specTick, pressedHorizon }: TimeCompactProps) {

@@ -408,4 +408,4 @@ None.
 
 ## Other bundled assets
 
-The fonts and map glyph files served from `fonts/` carry their own licence texts beside them, as `OFL-*.txt` files.
+The fonts and map glyph files served from `fonts/` carry their own licence texts beside them, as `OFL-*.txt` files, and for the DDM Heros fonts `GUST-FONT-LICENSE.txt` with `LPPL-1.3c.txt`.

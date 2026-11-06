@@ -43,9 +43,6 @@ const BAKE_MAX_ZOOM = 9; // measured; the committed depth is chosen by size belo
 const TILE_SIZE = 512;
 /**
  * Stay in the hillshade archive's proven same-origin hosting envelope.
- * This MUST equal the enforced dataAssets maxBytes for
- * data/fuels-fbfm40-pnw.pmtiles in scripts/check-activation-budget.mjs, or
- * a rebake could pass here and fail the gate (or vice versa).
  */
 const SIZE_BUDGET_BYTES = 30_000_000;
 /** The canary-proven depth; emitting shallower would ship an archive whose

@@ -64,7 +64,7 @@ import { URLS } from '../config/urls';
 import { AIANNH_FILL_COLOR, AIANNH_OUTLINE_COLOR } from '../config/palette';
 import { buildAiannhPopupModel } from '../ui/popups';
 import { buildPlaceConditionsHtml } from '../ui/popup-conditions';
-import { buildBoundaryContext, resolveBoundaryTitle } from '../impact/context';
+import { buildBoundaryContext, loadCensusNationNames, resolveBoundaryTitle } from '../impact/context';
 import { registerClickTarget } from '../map/interaction-coordinator';
 import type { LayerActivation } from '../config/layers';
 import { fetchBufferedWithBudget, linkAbort } from '../util/fetch';
@@ -644,12 +644,19 @@ export function deactivate(map: maplibregl.Map): void {
   if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);
 }
 
+/** Census NAME to the gated name, once the roster has loaded (bindPopups). */
+let censusNames: ReadonlyMap<string, string> | null = null;
+
 /**
  * Register the fill layer's click target with the InteractionCoordinator
  * (one response per click; D-0.7.0-058 ruling 5) and wire the hover
  * cursor affordance. Bound once on first activation.
  */
 export function bindPopups(map: maplibregl.Map): void {
+  // The search's name for each Census area, from the one map the briefing title
+  // shares (impact/context loadCensusNationNames, the roster's provenance gate).
+  // Until it loads, or if it fails, a popup titles the Census area as before.
+  loadCensusNationNames().then((names) => { censusNames = names; }, () => {});
   registerClickTarget({
     kind: 'tribal-lands',
     layerIds: [FILL_LAYER_ID],
@@ -657,7 +664,7 @@ export function bindPopups(map: maplibregl.Map): void {
     respond: (feature, click, map) => {
       const props: GeoJsonProperties = feature.properties ?? null;
       return {
-        model: buildAiannhPopupModel(props, buildPlaceConditionsHtml(map, click.point, feature)),
+        model: buildAiannhPopupModel(props, buildPlaceConditionsHtml(map, click.point, feature), censusNames ?? undefined),
         selection: buildBoundaryContext('aiannh', props, feature.geometry, click.lngLat),
         // An id-less feature clears any prior emphasis (the old
         // emphasizePlace contract) rather than lighting an unknown one.
