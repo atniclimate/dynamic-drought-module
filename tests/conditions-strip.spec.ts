@@ -517,6 +517,25 @@ test.describe('the drought tile swatch (D1 M10)', () => {
   });
 });
 
+// Audit round 5 (R5-5): the off drought tile is an observed surface, so
+// pressing it at Near Term commits Current rather than leaving that chip
+// pressed (and every other chip disabled) over the NADM month.
+test('pressing the off drought tile at Near Term commits the Current horizon', async ({ page }) => {
+  await gotoApp(page, '?view=console');
+  const weeksAhead = page.locator('.shell-horizon-btn[data-horizon="weeks-ahead"]');
+  await weeksAhead.click();
+  await expect(weeksAhead).toHaveAttribute('aria-pressed', 'true');
+  await waitForLayerSettled(page, 'drought');
+  const tile = page.locator('.conditions-metric[data-metric="drought"][data-layer-on="false"]');
+  await tile.click();
+  const current = page.locator('.shell-horizon-btn[data-horizon="current"]');
+  await expect(current).toHaveAttribute('aria-pressed', 'true');
+  expect(await current.getAttribute('aria-disabled')).toBeNull();
+  await expect(weeksAhead).toHaveAttribute('aria-pressed', 'false');
+  await expect.poll(() => new URL(page.url()).searchParams.get('horizon')).toBeNull();
+  await expect(page.locator('.conditions-metric[data-metric="drought"]')).toHaveAttribute('data-layer-on', 'true');
+});
+
 /**
  * found-008 (D1 M14): "Conditions in view" offers only the current mode's
  * surfaces, enumerated from HAZARD_CLUSTER_KEYS (DR-113) rather than a

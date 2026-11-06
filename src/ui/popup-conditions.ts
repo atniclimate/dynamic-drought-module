@@ -142,6 +142,8 @@ const USDM_KEY = 'usdm';
 const USDM_FILLS = ['usdm-frame-a-fill', 'usdm-frame-b-fill'] as const;
 const NADM_KEY = 'nadm-drought';
 const NADM_FILL = 'nadm-drought-fill';
+/** The CPC Drought Outlook's layer key (src/config/layers.ts), a layer and not a mode. */
+const OUTLOOK_KEY = 'drought';
 
 const ALERTS_KEY = 'nws-alerts';
 const ALERTS_FILL = 'nws-alerts-fill';
@@ -419,8 +421,9 @@ function withClock(row: ValueRow, clock: PopupClock | undefined): ValueRow {
 
 /** The drought category beneath the clicked point, NADM preferred when its
  * layer is active (matches the conditions-strip's own precedence in
- * `src/ui/island/strip-metrics.ts` `droughtMetric`), else USDM. Omitted
- * entirely (returns null) when neither drought layer is on. A layer that is
+ * `src/ui/island/strip-metrics.ts` `droughtMetric`), else USDM, else the
+ * CPC outlook's register note. Omitted entirely (returns null) when no
+ * drought layer is on. A layer that is
  * on but has no fill yet, or whose read is not complete and found no
  * category here, gives its state row, never an absence (draft DR-179). */
 function droughtRow(map: maplibregl.Map, point: maplibregl.PointLike): MarkedRow | null {
@@ -512,6 +515,21 @@ function droughtRow(map: maplibregl.Map, point: maplibregl.PointLike): MarkedRow
         usdmMapDateClock(maxProps?.['MapDate'] ?? maxProps?.['mapDate'])
       ),
       complete
+    );
+  }
+
+  // The outlook alone (Drought mode's Near Term and Long Range) is a forecast
+  // register: named as one, like the change register above, never read as a
+  // current category and never the nothing-on line.
+  if (isLayerOn(OUTLOOK_KEY)) {
+    return unreported(
+      {
+        label: 'Drought',
+        // DRAFT wording (pending the owner's read-back): the change-register sentence above, with the outlook's "forecast register" (src/layers/drought.ts).
+        // vocab-allow: names the CPC outlook (an upstream forecast product) and says no current category is read from it
+        text: 'The map is showing the CPC Drought Outlook, a forecast register, so no current category is displayed at this point.'
+      },
+      false
     );
   }
 
