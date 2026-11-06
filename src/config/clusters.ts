@@ -137,7 +137,42 @@ export interface HazardClusterDef {
    * to 'wind' (ENSO-FLOW-PLAN block E2, unit E2-4); no other mode sets it.
    */
   readonly flowDefault?: Exclude<import('../state/enso-flow').EnsoFlowKind, 'off'>;
+  /**
+   * The National Weather Service products the alert layer (`nws-alerts`,
+   * src/layers/nws-alerts.ts) reads in this mode, and its name here. Read
+   * through the committed mode (src/state/cluster-store.ts), which is Drought
+   * for every custom layer set. Unset: the layer reads nothing in this mode.
+   */
+  readonly alerts?: AlertSet;
 }
+
+/**
+ * One mode's alert products. Each event is a `prod_type` value of the NWS
+ * Watch/Warning/Advisory MapServer verbatim (the service's renderer lists
+ * them); the reader asks for these and no others, and the key lists them in
+ * NWS_ALERT_LEGEND order (src/config/palette.ts).
+ */
+export interface AlertSet {
+  readonly name: string;
+  readonly events: readonly string[];
+}
+
+/** The heat and fire weather products: the alert layer's one list before modes named their own. */
+export const HEAT_FIRE_ALERTS: AlertSet = {
+  // vocab-allow: names the NWS alert products layer, upstream data
+  name: 'Heat & Fire Weather Alerts',
+  // The pre-2025 "Excessive Heat" and the Hazard Simplification "Extreme
+  // Heat" names both, so transitional products never drop out silently.
+  events: [ // vocab-allow: verbatim NWS product names, quoted source data
+    'Extreme Heat Warning', // vocab-allow: verbatim NWS product names, quoted source data
+    'Excessive Heat Warning',
+    'Extreme Heat Watch',
+    'Excessive Heat Watch',
+    'Heat Advisory',
+    'Red Flag Warning', // vocab-allow: verbatim NWS product names, quoted source data
+    'Fire Weather Watch'
+  ]
+};
 
 export const HAZARD_CLUSTERS: Record<HazardClusterKey, HazardClusterDef> = {
   drought: {
@@ -158,7 +193,11 @@ export const HAZARD_CLUSTERS: Record<HazardClusterKey, HazardClusterDef> = {
       'weeks-ahead': ['drought'],
       'season-ahead': ['drought']
     },
-    placeConditionRow: 'drought'
+    placeConditionRow: 'drought',
+    // Drought is also the committed mode of every custom layer set (a
+    // `layers=` link, the phone hazard rail, a studio choice), which read
+    // these products before modes named their own.
+    alerts: HEAT_FIRE_ALERTS
   },
   wildfire: {
     title: 'Wildfire',
@@ -182,7 +221,8 @@ export const HAZARD_CLUSTERS: Record<HazardClusterKey, HazardClusterDef> = {
     },
     // The console's Fuel risk switch (src/ui/fire3d-fuel-risk.ts).
     optionalLayers: ['usfs-whp'],
-    placeConditionRow: 'wildfire-perimeter'
+    placeConditionRow: 'wildfire-perimeter',
+    alerts: HEAT_FIRE_ALERTS
   },
   heat: {
     title: 'Extreme Heat',
@@ -208,7 +248,8 @@ export const HAZARD_CLUSTERS: Record<HazardClusterKey, HazardClusterDef> = {
     detailSections: ['heatrisk-sequence'],
     // HeatRisk has no verified per-point read (src/ui/popup-conditions.ts),
     // so Heat's place row is the active NWS heat and fire weather products.
-    placeConditionRow: 'nws-alerts'
+    placeConditionRow: 'nws-alerts',
+    alerts: HEAT_FIRE_ALERTS
   },
   enso: {
     title: 'ENSO',
@@ -240,7 +281,26 @@ export const HAZARD_CLUSTERS: Record<HazardClusterKey, HazardClusterDef> = {
     placeConditionRow: null,
     // ENSO opens with the NOAA GFS wind paths on (DR-111 Q-WIND-MODES;
     // precedence.md 2.4); `flow=off` keeps it off (ENSO-FLOW-PLAN E2-4).
-    flowDefault: 'wind'
+    flowDefault: 'wind',
+    // The alert layer is off until a person turns it on, at any horizon.
+    optionalLayers: ['nws-alerts'],
+    alerts: {
+      // DRAFT wording (pending the owner's read-back): the alert layer's name in ENSO.
+      // vocab-allow: names the NWS alert products layer, upstream data
+      name: 'Flood, Storm, Wind & Coastal Alerts',
+      // The service's Warnings and Watches for flood, storm, wind and the
+      // coast, in that group order, each group in the NWS priority order
+      // (https://www.weather.gov/help-map); no advisory or statement.
+      events: [
+        'Flash Flood Warning', 'Flood Warning', 'Flash Flood Watch', 'Flood Watch', // vocab-allow: verbatim NWS product names, quoted source data
+        'Hurricane Warning', 'Typhoon Warning', 'Blizzard Warning', 'Ice Storm Warning', // vocab-allow: verbatim NWS product names, quoted source data
+        'Winter Storm Warning', 'Tropical Storm Warning', 'Hurricane Watch', 'Typhoon Watch', // vocab-allow: verbatim NWS product names, quoted source data
+        'Tropical Storm Watch', 'Winter Storm Watch',
+        'Extreme Wind Warning', 'High Wind Warning', 'High Wind Watch', // vocab-allow: verbatim NWS product names, quoted source data
+        'Storm Surge Warning', 'Coastal Flood Warning', 'Lakeshore Flood Warning', 'High Surf Warning', // vocab-allow: verbatim NWS product names, quoted source data
+        'Storm Surge Watch', 'Coastal Flood Watch', 'Lakeshore Flood Watch'
+      ]
+    }
   }
 };
 

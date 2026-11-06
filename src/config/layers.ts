@@ -1,6 +1,8 @@
 import type * as maplibregl from 'maplibre-gl';
 
+import { HAZARD_CLUSTERS, HEAT_FIRE_ALERTS } from './clusters';
 import type { ProductKey } from './products';
+import { getHazardCluster } from '../state/cluster-store';
 import type { LayerRole } from '../types/layer';
 import { createChunkLoader } from '../util/chunk-retry';
 
@@ -342,8 +344,8 @@ export const LAYER_DEFS: readonly LayerDef[] = [
   // failure modes, and either can be live without the other.
   { key: 'power-infrastructure', product: 'power-infrastructure', name: 'Power Lines & Plants', source: 'HIFLD archive (2024-09-30) · EIA (live)', searchTerms: ['transmission', 'electric', 'grid', 'power plant', 'utility'], role: 'reference', defaultOn: false, load: () => import('../layers/power-3d') },
   { key: 'nifc-fires', product: 'nifc-fires', name: 'Current Mapped Fire Perimeters (NIFC)', source: 'NIFC WFIGS · FeatureServer', searchTerms: ['wildfire', 'Prescribed fire', 'fire perimeter'], role: 'event', defaultOn: false, noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/nifc-fires') },
-  // vocab-allow: names the NWS alert products layer, upstream data
-  { key: 'nws-alerts', product: 'nws-alerts', name: 'Heat & Fire Weather Alerts', source: 'NOAA NWS · MapServer', role: 'event', defaultOn: false, noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/nws-alerts') },
+  // Named by the committed mode, beside the products it reads (HazardClusterDef.alerts).
+  { key: 'nws-alerts', product: 'nws-alerts', get name() { return (HAZARD_CLUSTERS[getHazardCluster()].alerts ?? HEAT_FIRE_ALERTS).name; }, source: 'NOAA NWS · MapServer', role: 'event', defaultOn: false, noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/nws-alerts') },
   { key: 'hms-smoke', product: 'hms-smoke', name: 'Smoke Plumes (HMS)', source: 'NOAA OSPO · FeatureServer', role: 'event', defaultOn: false, noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/hms-smoke') },
   { key: 'heatrisk', product: 'heatrisk', name: 'HeatRisk (Experimental)', source: 'NOAA NWS/WPC · ImageServer', role: 'surface', defaultOn: false, noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/heatrisk') },
   { key: 'spc-fire-weather', product: 'spc-fire-weather', name: 'Fire Weather Outlook (Day 1)', source: 'NOAA SPC · MapServer', role: 'surface', defaultOn: false, noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/spc-fire-weather') },

@@ -17,8 +17,10 @@
 import type * as maplibregl from 'maplibre-gl';
 import type { GeoJsonProperties } from 'geojson';
 
+import { getHazardCluster } from '../../state/cluster-store';
 import { registry } from '../../state/registry';
 import { timeline } from '../../state/timeline';
+import { HAZARD_CLUSTERS, HEAT_FIRE_ALERTS } from '../../config/clusters';
 import { NADM_CATEGORIES, USDM_CATEGORIES, readUsdmDm } from '../../config/palette';
 import { normalizeNadmYearMonth } from '../../util/nadm-collection';
 import { getLayerDef } from '../../config/layers';
@@ -350,12 +352,14 @@ export function alertsMetric(map: maplibregl.Map): Metric {
   if (!map.getLayer(ALERTS_FILL)) return pendingMetric(ALERTS_KEY);
   const feats = map.queryRenderedFeatures({ layers: [ALERTS_FILL] });
   const n = countDistinct(feats, (p) =>
-    [p?.['prod_type'], p?.['onset'], p?.['ends'], p?.['wfo']].join('|')
+    [p?.['event'], p?.['onset'], p?.['ends'], p?.['issuer']].join('|')
   );
+  const heatFire = HAZARD_CLUSTERS[getHazardCluster()].alerts === HEAT_FIRE_ALERTS;
   return {
     value: String(n),
-    // vocab-allow: counts the NWS heat/fire alert products, upstream data
-    sublabel: n === 1 ? 'heat/fire alert' : 'heat/fire alerts',
+    // DRAFT wording (pending the owner's read-back) for any other set: the chip's and the place row's own words.
+    // vocab-allow: counts the NWS alert products the mode asks for, upstream data
+    sublabel: heatFire ? (n === 1 ? 'heat/fire alert' : 'heat/fire alerts') : n === 1 ? 'NWS alert' : 'NWS alerts',
     tone: n > 0 ? 'data' : 'none'
   };
 }

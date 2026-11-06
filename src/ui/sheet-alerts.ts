@@ -22,7 +22,9 @@
 
 import type * as maplibregl from 'maplibre-gl';
 
+import { HAZARD_CLUSTERS, HEAT_FIRE_ALERTS } from '../config/clusters';
 import { NWS_ALERT_COLORS, NWS_ALERT_DEFAULT_COLOR } from '../config/palette';
+import { getHazardCluster } from '../state/cluster-store';
 import { registry } from '../state/registry';
 import { isChecked } from './island/bridge';
 import { requestLayerOn } from './layer-toggle-command';
@@ -41,10 +43,11 @@ interface AlertRow {
   readonly color: string;
 }
 
-/** Format an epoch-milliseconds end time as a short local readout. */
+/** Format an alert's end (ISO 8601 text, src/layers/nws-alerts.ts NormalizedAlert) as a short local readout. */
 function formatEnds(value: unknown): string {
-  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return '';
-  const d = new Date(value);
+  const ms = typeof value === 'string' ? Date.parse(value) : NaN;
+  if (!Number.isFinite(ms) || ms <= 0) return '';
+  const d = new Date(ms);
   if (Number.isNaN(d.getTime())) return '';
   const now = new Date();
   const sameDay = d.toDateString() === now.toDateString();
@@ -62,16 +65,16 @@ function collectAlerts(map: maplibregl.Map): AlertRow[] {
   const rows: AlertRow[] = [];
   for (const f of features) {
     const props = f.properties ?? {};
-    const type = typeof props['prod_type'] === 'string' ? props['prod_type'] : '';
+    const type = typeof props['event'] === 'string' ? props['event'] : '';
     if (!type) continue;
-    const office = typeof props['wfo'] === 'string' ? props['wfo'] : '';
+    const office = typeof props['issuer'] === 'string' ? props['issuer'] : '';
     const key = `${type}|${office}|${String(props['onset'] ?? '')}|${String(props['ends'] ?? '')}`;
     if (seen.has(key)) continue;
     seen.add(key);
     rows.push({
       type,
       office,
-      ends: formatEnds(props['ends'] ?? props['expiration']),
+      ends: formatEnds(props['ends']),
       color: NWS_ALERT_COLORS[type] ?? NWS_ALERT_DEFAULT_COLOR
     });
   }
@@ -96,10 +99,17 @@ function render(): void {
   const status = registry.getStatus(LAYER_KEY);
   const active = registry.getActiveKeys().has(LAYER_KEY);
   const rows = active ? collectAlerts(mapRef) : [];
+  // The heat and fire weather set keeps its own words; any other set the layer's own no-result note.
+  const heatFire = HAZARD_CLUSTERS[getHazardCluster()].alerts === HEAT_FIRE_ALERTS;
 
   if (rows.length > 0) {
-    body.innerHTML = // vocab-allow: describes the NWS alert products and feed, upstream data
-      '<p class="sheet-alerts-note">Active National Weather Service heat and fire-weather alerts in the current map view. Each alert also shades its area on the map.</p>' +
+    body.innerHTML =
+      (heatFire
+        // vocab-allow: describes the NWS alert products and feed, upstream data
+        ? '<p class="sheet-alerts-note">Active National Weather Service heat and fire-weather alerts in the current map view. Each alert also shades its area on the map.</p>'
+        // DRAFT wording (pending the owner's read-back)
+        // vocab-allow: describes the NWS alert products, upstream data
+        : '<p class="sheet-alerts-note">Active National Weather Service products in the current map view. Each alert also shades its area on the map.</p>') +
       '<div class="sheet-alerts-list">' +
       rows
         .map(
@@ -132,8 +142,11 @@ function render(): void {
       '<p class="sheet-alerts-note">The National Weather Service alert feed is not reachable right now. Current alerts are always available at <a href="https://www.weather.gov/alerts" target="_blank" rel="noopener">weather.gov/alerts</a>.</p>';
     return;
   }
-  // vocab-allow: describes the NWS alert products and feed, upstream data
-  body.innerHTML = '<p class="sheet-alerts-note">No active heat or fire-weather alerts in the current map view.</p>';
+  body.innerHTML = heatFire
+    // vocab-allow: describes the NWS alert products and feed, upstream data
+    ? '<p class="sheet-alerts-note">No active heat or fire-weather alerts in the current map view.</p>'
+    // DRAFT wording (pending the owner's read-back): the layer's own no-result note, scoped to the view.
+    : '<p class="sheet-alerts-note">No active requested National Weather Service products in the current map view.</p>';
 }
 
 /**

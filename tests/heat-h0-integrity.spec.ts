@@ -1,9 +1,12 @@
 import { expect, test, type Page } from './offline-test';
 
+import { HAZARD_CLUSTERS } from '../src/config/clusters';
+import { NWS_ALERT_LEGEND } from '../src/config/palette';
 import {
   gotoApp,
   layerCheckbox,
   layerPill,
+  search,
   selectRegion
 } from './helpers';
 
@@ -478,6 +481,47 @@ test('an invalid NWS MapServer body stays unavailable through activation cleanup
 
   await expect(layerPill(page, 'nws-alerts')).toHaveText('unavailable');
   await expect(layerCheckbox(page, 'nws-alerts')).not.toBeChecked();
+});
+
+test('ENSO offers its flood, storm, wind and coastal products off by default; on, ENSO stays the mode and its key lists them', async ({
+  page
+}) => {
+  await stubBasemap(page);
+  const asked: string[] = [];
+  await page.route(
+    (url) => url.pathname.endsWith(WWA_PATH),
+    (route) => {
+      asked.push(new URL(route.request().url()).searchParams.get('where') ?? '');
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/geo+json',
+        body: collection([rectangleFeature('Flood Warning', Date.now() + 3_600_000)])
+      });
+    }
+  );
+  const events = HAZARD_CLUSTERS.enso.alerts!.events;
+
+  await gotoApp(page, '?cluster=enso&view=console');
+  // Off by default: unchecked, named for the mode, and never read.
+  await expect(layerCheckbox(page, 'nws-alerts')).not.toBeChecked();
+  await expect(page.locator('label[for="layer-toggle-nws-alerts"] .layer-toggle-name')).toHaveText(
+    HAZARD_CLUSTERS.enso.alerts!.name
+  );
+  expect(asked).toEqual([]);
+
+  await layerCheckbox(page, 'nws-alerts').check();
+  await expect(layerPill(page, 'nws-alerts')).toHaveText('live');
+  expect(asked).toEqual([`prod_type IN (${events.map((event) => `'${event}'`).join(',')})`]);
+  // An optional layer: the mode stays ENSO and the link carries the layer beside it.
+  await expect.poll(async () => new URLSearchParams(await search(page)).get('layers')?.split(',') ?? []).toContain('nws-alerts');
+  expect(new URLSearchParams(await search(page)).get('cluster')).toBe('enso');
+
+  // The key: ENSO's own rows, verbatim and in their stated order, and no other mode's.
+  const productKey = page.locator('#map-key [data-nws-products-key]');
+  await expect(productKey.locator('.map-key-item')).toHaveText(
+    NWS_ALERT_LEGEND.filter((row) => events.includes(row.label)).map((row) => row.label)
+  );
+  await expect(productKey).not.toContainText('Red Flag Warning');
 });
 
 test('an invalid NWS active-products body is unavailable, never an all-clear', async ({
