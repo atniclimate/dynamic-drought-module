@@ -148,6 +148,10 @@ export function mountPanelResponse(host: HTMLElement): void {
       return true;
     },
     dismiss() {
+      // Focus in the leaving card goes to the map, as a closing popup's does (the coordinator's returnFocus), never the page.
+      if (host.contains(document.activeElement)) {
+        document.querySelector<HTMLElement>('.maplibregl-canvas')?.focus({ preventScroll: true });
+      }
       current.value = null;
       host.toggleAttribute('data-open', false);
     }

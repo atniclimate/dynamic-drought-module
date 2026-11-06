@@ -422,11 +422,24 @@ function beginPendingOpen(
   pendingOpen = pending;
 }
 
+/**
+ * The selection a waiting open holds, so the response it replaces (a popup, the
+ * panel-foot card) sees a newer subject on its close and the place stays lit.
+ * The runtime's or the unavailable render's own selection replaces it.
+ */
+let pendingSelection: PlaceSelection | null = null;
+
+function releasePendingSelection(): void {
+  if (pendingSelection !== null && getPlaceSelection() === pendingSelection) setPlaceSelection(null);
+  pendingSelection = null;
+}
+
 function invalidatePendingIntent(): void {
   briefingIntentSeq++;
   openToken++;
   currentRuntimeToken = null;
   finishPendingOpen();
+  releasePendingSelection();
 }
 
 function loadRuntime(): Promise<ImpactPanelRuntime> {
@@ -741,15 +754,24 @@ export function openImpactPanel(context: BoundarySelectionContext): number {
     contextReady = Promise.resolve(context);
   }
 
+  const held: PlaceSelection = { label: context.title, context };
+  pendingSelection = held;
+  setPlaceSelection(held);
+  const stale = (): boolean => {
+    if (intent === briefingIntentSeq && token === openToken) return false;
+    if (pendingSelection === held) releasePendingSelection();
+    return true;
+  };
+
   void Promise.all([loadRuntime(), contextReady]).then(
     ([loaded, resolvedContext]) => {
       finishPendingOpen(token);
-      if (intent !== briefingIntentSeq || token !== openToken) return;
+      if (stale()) return;
       currentRuntimeToken = loaded.openImpactPanel(resolvedContext, active);
     },
     () => {
       finishPendingOpen(token);
-      if (intent !== briefingIntentSeq || token !== openToken) return;
+      if (stale()) return;
       currentRuntimeToken = null;
       renderUnavailable(context, active);
     }

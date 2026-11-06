@@ -67,12 +67,15 @@ test.describe('S4c panel-foot response', () => {
     // The scrolling body exists as the one bounded scroll region.
     await expect(card.locator('.coordinated-response-body')).toBeAttached();
 
-    // Closing retires the response and clears the place selection.
-    await card.locator('.panel-response-close').click();
+    // Closing retires the response and clears the place selection; a keyboard
+    // close hands focus to the map, never the page body (the look at 4237781, R1-5).
+    await card.locator('.panel-response-close').focus();
+    await page.keyboard.press('Enter');
     await expect(
       page.locator('#panel-response .coordinated-response')
     ).toHaveCount(0);
     await expect(page.locator('#brief-place-context')).toBeHidden();
+    await expect(page.locator('.maplibregl-canvas')).toBeFocused();
   });
 });
 
