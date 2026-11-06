@@ -10,9 +10,9 @@
  * - A fixed 1/30 s step with at most 2 catch-up steps, so pace never depends
  *   on the display rate.
  * - Pace is linear in the field's own speed for wind (4 CSS px/s per m/s at
- *   10 m, 1 at 250 hPa, `JET_PACE`) and
- *   one uniform display rate for waves (24 CSS px/s; ruling R5 a). Wave
- *   height sets only the class and the mark length, never the rate.
+ *   10 m, 1 at 250 hPa, `JET_PACE`). Waves are not advected here: CrestMarks
+ *   moves every set straight at one display rate (24 CSS px/s; ruling R5 a).
+ *   Wave height sets only the class and the mark length, never the rate.
  * - A step is sub-stepped when it would move more than half a cell. It is
  *   refused, and the particle respawns, when any sub-step or the drawn chord
  *   touches a cell without four valid corners: kill before commit, so no
@@ -85,19 +85,16 @@ export const MARK_SEGS_PER_SET = MARK_CRESTS * CREST_SEGS;
 const CSS_PX2_PER_MARK = 6144;
 
 export interface Pace {
-  /** CSS px/s per field unit (m/s), or the uniform rate when `uniform`. */
+  /** CSS px/s per field unit (m/s). */
   readonly pxPerSecPerUnit: number;
-  /** True: every mark moves at the one rate, whatever the magnitude. */
-  readonly uniform: boolean;
 }
 
-export const WIND_PACE: Pace = { pxPerSecPerUnit: 4, uniform: false };
+export const WIND_PACE: Pace = { pxPerSecPerUnit: 4 };
 /**
  * The one illustrative wave rate (R5 a). A ruling for another rate or for
  * trails is a change to this constant only.
  */
 export const WAVE_RATE_PX_PER_S = 24;
-export const WAVE_PACE: Pace = { pxPerSecPerUnit: WAVE_RATE_PX_PER_S, uniform: true };
 
 /**
  * Jet-level wind is several times faster than 10 m wind, and a surface
@@ -106,17 +103,18 @@ export const WAVE_PACE: Pace = { pxPerSecPerUnit: WAVE_RATE_PX_PER_S, uniform: t
  * wind at its upper bin. The pace stays linear in the speed of the field.
  */
 const scaledPace = (kind: FlowKind): Pace => ({
-  pxPerSecPerUnit: (WIND_PACE.pxPerSecPerUnit * FLOW_BINS.wind[1]) / FLOW_BINS[kind][1],
-  uniform: false
+  pxPerSecPerUnit: (WIND_PACE.pxPerSecPerUnit * FLOW_BINS.wind[1]) / FLOW_BINS[kind][1]
 });
 export const JET_PACE: Pace = scaledPace('jet');
 export const CURRENT_PACE: Pace = scaledPace('currents');
-const PACES: Readonly<Record<FlowKind, Pace>> = {
-  wind: WIND_PACE, jet: JET_PACE, waves: WAVE_PACE, currents: CURRENT_PACE
+const PACES: Readonly<Record<Exclude<FlowKind, 'waves'>, Pace>> = {
+  wind: WIND_PACE, jet: JET_PACE, currents: CURRENT_PACE
 };
 
+/** The pace of a wind kind; waves have none (CrestMarks moves at WAVE_RATE_PX_PER_S). */
 export function paceFor(kind: FlowKind): Pace {
-  return PACES[kind];
+  // shortcut: callers (ribbon-layer, still.ts) reach here only for wind kinds; narrow the parameter if one ever passes waves.
+  return PACES[kind as Exclude<FlowKind, 'waves'>];
 }
 
 /** The view as the Mercator positions of its four screen corners (TL, TR, BR, BL), x unwrapped. */
@@ -327,9 +325,8 @@ function cellsClear(field: FlowField, a: { x: number; y: number }, b: { x: numbe
  * One display step from (x, y) over `dt` seconds, sub-stepped above half a
  * cell. Writes the new position into out[0..1] (and, when `out` has four
  * slots, its longitude and latitude into out[2..3]) and returns the field sample
- * there, or null (kill before commit) when a sub-step leaves the valid field,
- * the chord crosses a cell without four valid corners, or a uniform-rate
- * field has no direction (opposite unit vectors blended to nothing).
+ * there, or null (kill before commit) when a sub-step leaves the valid field
+ * or the chord crosses a cell without four valid corners.
  */
 export function advance(
   field: FlowField, pace: Pace, worldSize: number, x: number, y: number, dt: number, out: Float64Array
@@ -340,9 +337,7 @@ export function advance(
   let s = sampleField(field, lonStart, latStart, tmpSample);
   if (!s) return null;
   const k = pace.pxPerSecPerUnit / worldSize;
-  const speed0 = Math.hypot(s.u, s.v);
-  if (pace.uniform && speed0 < 1e-6) return null;
-  const distance = (pace.uniform ? 1 : speed0) * k * dt;
+  const distance = Math.hypot(s.u, s.v) * k * dt;
   const n = Math.max(1, Math.ceil(distance / (0.5 * cellX)));
   const h = dt / n;
   let px = x;
@@ -352,16 +347,8 @@ export function advance(
       s = sampleField(field, lonOf(px), latOf(py), tmpSample);
       if (!s) return null;
     }
-    let du = s.u;
-    let dv = s.v;
-    if (pace.uniform) {
-      const norm = Math.hypot(du, dv);
-      if (norm < 1e-6) return null;
-      du /= norm;
-      dv /= norm;
-    }
-    px += du * k * h;
-    py -= dv * k * h; // north is -y in Mercator
+    px += s.u * k * h;
+    py -= s.v * k * h; // north is -y in Mercator
   }
   const lonEnd = lonOf(px);
   const latEnd = latOf(py);
@@ -412,6 +399,8 @@ export class Particles {
   /** The Mercator origin the ring positions are relative to. */
   declare originX: number;
   declare originY: number;
+  /** The view centre x at the last step or reset, to see a whole-world wrap. */
+  declare private lastCx: number;
   /** Set when the whole ring must be uploaded (reset, rebase, growth). */
   declare ringDirty: boolean;
   declare private nextGen: number;
@@ -433,18 +422,26 @@ export class Particles {
     this.head = SLOTS - 1;
     this.originX = 0;
     this.originY = 0;
+    this.lastCx = 0;
     this.ringDirty = true;
     this.nextGen = 1;
   }
 
   /** Set the count for the view and density; capacity grows in powers of two up to 4,096. */
   setCount(view: ViewQuad, densityFactor: number): void {
+    const old = this.count;
     this.count = particleCount(view, densityFactor);
     if (this.count > this.capacity) {
       let cap = 256;
       while (cap < this.count) cap *= 2;
       this.grow(Math.min(MAX_PARTICLES, cap));
     }
+    // Regained slots start over with no trail, so a particle hidden by a smaller window never returns mid-life.
+    for (let i = old; i < this.count; i++) {
+      this.alive[i] = 0;
+      for (let s = 0; s < SLOTS; s++) this.ring[(s * this.capacity + i) * 4 + 3] = -1;
+    }
+    if (this.count > old) this.ringDirty = true;
   }
 
   private grow(cap: number): void {
@@ -479,14 +476,26 @@ export class Particles {
     const [cx, cy] = viewCenter(view);
     this.originX = cx;
     this.originY = cy;
+    this.lastCx = cx;
     this.clearRing();
     for (let i = 0; i < this.capacity; i++) this.alive[i] = 0;
     for (let i = 0; i < this.count; i++) this.spawn(i, view);
   }
 
-  /** Move the origin to the view centre when it has drifted far, keeping every stored trail. */
+  /**
+   * Follow a whole-world jump of the view (MapLibre wraps its centre at 180
+   * degrees) by moving every particle and the origin with it, then move the
+   * origin to the view centre when it has drifted far, keeping every stored trail.
+   */
   rebaseIfFar(view: ViewQuad): void {
     const [cx, cy] = viewCenter(view);
+    // Measured step to step: the origin itself may lag the centre by more than half a world.
+    const wrap = Math.round(cx - this.lastCx);
+    this.lastCx = cx;
+    if (wrap !== 0) {
+      for (let i = 0; i < this.capacity; i++) this.x[i] = (this.x[i] as number) + wrap;
+      this.originX += wrap;
+    }
     const span = Math.max(view.cssW, view.cssH) / view.worldSize;
     if (Math.abs(cx - this.originX) < 4 * span && Math.abs(cy - this.originY) < 4 * span) return;
     const dx = this.originX - cx;
@@ -768,7 +777,10 @@ export class CrestMarks {
   }
 
   setCount(view: ViewQuad, densityFactor: number): void {
+    const old = this.count;
     this.count = markCount(view, densityFactor);
+    // Regained slots start over, so a set hidden by a smaller window never returns mid-life.
+    for (let i = old; i < this.count; i++) this.alive[i] = 0;
   }
 
   /**
@@ -848,6 +860,9 @@ export class CrestMarks {
   /** One fixed step; `dt` is STEP_S in the moving form and 0 for the still marks (no motion, every set drawn). */
   step(view: ViewQuad, dt: number = STEP_S): void {
     const [cx, cy] = viewCenter(view);
+    // A whole-world jump of the view (MapLibre wraps its centre at 180 degrees) moves every set with it.
+    const wrap = Math.round(cx - this.originX);
+    if (wrap !== 0) for (let i = 0; i < MAX_MARKS; i++) this.x[i] = (this.x[i] as number) + wrap;
     this.originX = cx;
     this.originY = cy;
     const segs = this.segs;

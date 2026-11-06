@@ -300,6 +300,5 @@ test('current bins are 0.25 and 0.5 m/s, and the pace is scaled like jet-level w
   assert.deepEqual([0.1, 0.25, 0.49, 0.5, 1.4].map((speed) => classOf('currents', speed)), [0, 1, 1, 2, 2]);
   assert.equal(FLOW_WORDS.bins.currents, 'Line width and brightness: under 0.25, 0.25 to 0.5, 0.5 or more m/s.');
   const pace = paceFor('currents');
-  assert.equal(pace.uniform, false, 'pace follows the speed of the field');
   assert.equal(pace.pxPerSecPerUnit * FLOW_BINS.currents[1], WIND_PACE.pxPerSecPerUnit * FLOW_BINS.wind[1]);
 });
