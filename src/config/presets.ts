@@ -57,7 +57,8 @@ export interface ViewPreset {
   readonly preferredBasemap?: 'satellite';
   /** The mode this preset is the phone face of; a press commits that mode's
    * `entryHorizon` when it declares one (an entry into ENSO opens on its
-   * Season ahead outlook) and otherwise leaves the horizon where it is. */
+   * Season ahead outlook), undoes a horizon an earlier preset's entry imposed
+   * when it declares none, and otherwise leaves the horizon where it is. */
   readonly mode: HazardClusterKey;
   /** Layer keys to activate, in activation order. At most one surface. */
   readonly layers: readonly LayerKey[];

@@ -497,8 +497,9 @@ test.describe('DDM-P8-T03 clause 1: every horizon chip either changes the map or
     await page.locator('.shell-cluster-btn[data-cluster="enso"]').click();
     const weeks = page.locator('.shell-horizon-btn[data-horizon="weeks-ahead"]');
     await expect(weeks).toHaveAttribute('aria-disabled', 'true');
-    // The ENSO press committed its entry horizon (Season ahead); the refused keys must not move it.
-    await expect.poll(async () => new URLSearchParams(await search(page)).get('horizon')).toBe('season-ahead');
+    // Places demotes the ENSO press to a custom set, which keeps the held horizon
+    // (Current) instead of the entry horizon; the refused keys must not move it.
+    expect(await search(page)).not.toContain('horizon=');
     await weeks.focus();
     await expect(weeks).toBeFocused();
     const pressedBefore = await weeks.getAttribute('aria-pressed');
@@ -508,7 +509,7 @@ test.describe('DDM-P8-T03 clause 1: every horizon chip either changes the map or
     await page.keyboard.press('Space');
     expect(await weeks.getAttribute('aria-pressed')).toBe(pressedBefore);
     await expect(weeks).toBeFocused();
-    expect(new URLSearchParams(await search(page)).get('horizon')).toBe('season-ahead');
+    expect(await search(page)).not.toContain('horizon=');
   });
 
   test('the briefing does not drive chip state', async ({ page }) => {

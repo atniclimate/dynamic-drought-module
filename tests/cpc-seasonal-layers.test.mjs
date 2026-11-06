@@ -314,14 +314,14 @@ test('ENSO draws the 8-14 day precipitation outlook at Weeks ahead and the seaso
   assert.ok(LAYER_DEFS.filter((def) => def.key.startsWith('cpc-')).every((def) => def.role !== 'surface'));
 });
 
-test('an in-session entry into ENSO commits Season ahead; a re-press, an ocean change and a horizon change keep the person\'s horizon; a link keeps its own', async () => {
+test('an in-session entry into ENSO commits Season ahead and leaving undoes it; a re-press, an ocean change and a horizon change keep the person\'s horizon; a link keeps its own', async () => {
   const { installFakeBrowser } = await import('./map-harness.ts');
   const service = await import('../src/state/cluster-service.ts');
   const { parseUrlParams } = await import('../src/state/url.ts');
   const { timeline } = await import('../src/state/timeline.ts');
   const { setHazardCluster } = await import('../src/state/cluster-store.ts');
   const { checkedSnapshot, onCheckedChange, setChecked } = await import('../src/ui/island/bridge.ts');
-  const { bindLayerToggleController, requestLayerOn } = await import('../src/ui/layer-toggle-command.ts');
+  const { bindLayerToggleController, requestLayerOff, requestLayerOn, requestLayerOnExact } = await import('../src/ui/layer-toggle-command.ts');
   // The tests/cluster-service.spec.ts harness: registry effects only, and the
   // sidebar's reconcile on every checkbox flip.
   bindLayerToggleController({
@@ -392,6 +392,78 @@ test('an in-session entry into ENSO commits Season ahead; a re-press, an ocean c
     // Leaving ENSO keeps the DR-190 rule for the destination.
     service.requestCluster('heat');
     assert.equal(service.getCommittedSnapshot().horizon, 'current');
+
+    // Leaving undoes the horizon the entry imposed, for every mode with no entry horizon of its own.
+    for (const dest of HAZARD_CLUSTER_KEYS.filter((key) => !HAZARD_CLUSTERS[key].entryHorizon)) {
+      reset();
+      service.requestCluster('enso');
+      service.requestCluster('enso');
+      assert.equal(timeline.horizon, 'season-ahead', 'a re-press keeps the horizon');
+      service.requestCluster(dest);
+      assert.equal(timeline.horizon, 'current', dest);
+      assert.equal(service.getCommittedSnapshot().horizon, 'current', dest);
+      assert.deepEqual([...service.getCommittedSnapshot().intendedKeys], service.composeClusterIntent(dest, 'current'), dest);
+    }
+    // The horizon picked before entering comes back.
+    reset();
+    service.requestHorizon('weeks-ahead');
+    service.requestCluster('enso');
+    assert.equal(timeline.horizon, 'season-ahead');
+    service.requestCluster('drought');
+    assert.equal(service.getCommittedSnapshot().horizon, 'weeks-ahead');
+    // A horizon picked inside ENSO carries out of it.
+    reset();
+    service.requestHorizon('weeks-ahead');
+    service.requestCluster('enso');
+    service.requestHorizon('current');
+    service.requestCluster('drought');
+    assert.equal(service.getCommittedSnapshot().horizon, 'current');
+    reset();
+    service.requestCluster('enso');
+    service.requestHorizon('weeks-ahead');
+    // ENSO's Weeks ahead is its Current display (DR-190), and that pick carries.
+    assert.equal(timeline.horizon, 'current');
+    service.requestHorizon('season-ahead');
+    service.requestCluster('wildfire');
+    assert.equal(service.getCommittedSnapshot().horizon, 'season-ahead');
+    // A link's Season ahead was never imposed by an entry, so it carries.
+    reset();
+    timeline.setHorizon('season-ahead');
+    setHazardCluster('enso', null);
+    service.requestCluster('drought');
+    assert.equal(service.getCommittedSnapshot().horizon, 'season-ahead');
+    // A reference layer demotes the entry to a custom set, which keeps the held horizon.
+    reset();
+    requestLayerOn('places');
+    service.requestCluster('enso');
+    snap = service.getCommittedSnapshot();
+    assert.equal(snap.cluster, 'custom');
+    assert.equal(timeline.horizon, 'current', 'no horizon= in the link');
+    assert.ok(snap.intendedKeys.has('sst-anomaly') && snap.intendedKeys.has('places'));
+    assert.ok(!snap.intendedKeys.has('cpc-seasonal-precip'));
+    service.requestCluster('enso');
+    assert.equal(timeline.horizon, 'current');
+    // The phone rail: an ENSO preset commits Season ahead, a later preset of another mode undoes it.
+    const tapPreset = (mode) => {
+      const preset = MOBILE_HAZARD_PRESETS.find((entry) => entry.mode === mode);
+      for (const key of on()) if (!preset.layers.includes(key)) requestLayerOff(key);
+      for (const key of preset.layers) requestLayerOnExact(key);
+      service.requestPresetHorizon(mode);
+    };
+    reset();
+    for (const mode of HAZARD_CLUSTER_KEYS.filter((key) => !HAZARD_CLUSTERS[key].entryHorizon)) {
+      tapPreset('enso');
+      assert.equal(timeline.horizon, 'season-ahead');
+      tapPreset('enso');
+      assert.equal(timeline.horizon, 'season-ahead');
+      tapPreset(mode);
+      assert.equal(timeline.horizon, 'current', mode);
+      assert.equal(service.getCommittedSnapshot().cluster, 'custom');
+    }
+    // Otherwise a preset leaves the horizon where it is.
+    service.requestHorizon('weeks-ahead');
+    tapPreset('heat');
+    assert.equal(timeline.horizon, 'weeks-ahead');
   } finally {
     unsubscribe();
     dispose();
