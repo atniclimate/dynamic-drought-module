@@ -40,7 +40,7 @@ const still = await import('../src/layers/flow/still.ts');
 
 const { createFlowField, sampleField, newSample, mercX, mercY, lonOf, latOf, classOf } = field;
 const {
-  Particles, CrestMarks, FlowClock, WIND_PACE, WAVE_PACE, STEP_S, MAX_PARTICLES, MAX_COVERAGE,
+  Particles, CrestMarks, FlowClock, WIND_PACE, WAVE_RATE_PX_PER_S, STEP_S, MAX_PARTICLES, MAX_COVERAGE,
   MARK_LENGTH_PX, MARK_CRESTS, MARK_CREST_WEIGHT, MARK_END_TAPER, MARK_SEG_FLOATS, MARK_SEGS_PER_SET, MAX_MARKS,
   MARK_ARC, MARK_GAP_RATIO, MARK_CREST_RATIO, MARK_MIN_AGREEMENT, MARK_MAX_TURN_DEG, MARK_LIFE_S, MARK_MIN_LIFE_S,
   MARK_SMOOTH_NODES, waveDirections,
@@ -121,7 +121,7 @@ test('350° and 10° interpolate to about 0, never 180', () => {
   const out = new Float64Array(2);
   const x = mercX(-139.5);
   const y = mercY(39.6);
-  assert.ok(advance(f, WAVE_PACE, 512 * 2 ** 6, x, y, STEP_S, out));
+  assert.ok(advance(f, WIND_PACE, 512 * 2 ** 6, x, y, STEP_S, out));
   assert.ok(out[1] < y, 'travel is north (Mercator y decreases)');
 });
 
@@ -255,7 +255,7 @@ test('the sampler wraps across the antimeridian inside the wave crop', () => {
   const y = mercY(52.9);
   const worldSize = 512 * 2 ** 6;
   for (let i = 0; i < 60; i++) {
-    assert.ok(advance(east, WAVE_PACE, worldSize, x, y, STEP_S, out));
+    assert.ok(advance(east, WIND_PACE, worldSize, x, y, STEP_S, out));
     const stepPx = (out[0] - x) * worldSize;
     assert.ok(stepPx > 0 && stepPx < 1, 'no jump across 180');
     x = out[0];
@@ -699,11 +699,10 @@ test('jet-level wind draws as 10 m wind does, with bins and pace scaled to its s
   assert.deepEqual(FLOW_BINS.jet, [20, 40]);
   assert.deepEqual([19.9, 20, 39.9, 40, 92].map((speed) => classOf('jet', speed)), [0, 1, 1, 2, 2]);
   // A wind at the jet-level upper bin crosses the screen as fast as a 10 m wind at its own upper bin.
-  assert.equal(paceFor('jet').uniform, false);
   assert.equal(paceFor('jet').pxPerSecPerUnit * FLOW_BINS.jet[1], WIND_PACE.pxPerSecPerUnit * FLOW_BINS.wind[1]);
   assert.equal(paceFor('wind'), WIND_PACE);
-  assert.equal(paceFor('waves'), WAVE_PACE);
-  for (const kind of Object.keys(FLOW_BINS)) assert.ok(paceFor(kind).pxPerSecPerUnit > 0, `${kind} has a pace`);
+  // Waves are not paced by the field: CrestMarks moves them at WAVE_RATE_PX_PER_S.
+  for (const kind of Object.keys(FLOW_BINS).filter((k) => k !== 'waves')) assert.ok(paceFor(kind).pxPerSecPerUnit > 0, `${kind} has a pace`);
   // The moving form is the wind ribbons, never the wave crest marks.
   const jet = gridField('jet', GLOBAL_1P00, (lon, lat) => [45 * Math.cos((lat * Math.PI) / 90), 5]);
   const layer = new ribbon.FlowRibbonLayer({ id: 'flow-paths', field: jet, now: () => 0 });
@@ -727,8 +726,7 @@ test('every wave mark moves at 24 px/s', () => {
     }
   }
   assert.ok(measured > 10000, `measured ${measured} mark steps`);
-  assert.equal(WAVE_PACE.pxPerSecPerUnit, 24);
-  assert.equal(WAVE_PACE.uniform, true);
+  assert.equal(WAVE_RATE_PX_PER_S, 24);
 });
 
 test('density is capped at 4,096 and coverage at 8 percent', () => {
@@ -781,6 +779,97 @@ test('resuming resets ages, so no burst', () => {
   clock.resume();
   assert.equal(clock.due(20), 1, 'the first tick after resume is one step');
   assert.equal(clock.due(20 + STEP_S * 0.5), 0);
+});
+
+/** The view as the app builds it (viewQuadOf): corners unwrapped near the map's own wrapped centre. */
+function appView(lon, lat, zoom, w = 1440, h = 900) {
+  const ws = 512 * 2 ** zoom;
+  const hx = (w / 2 / ws) * 360;
+  const wrapped = ((((lon + 180) % 360) + 360) % 360) - 180;
+  const yC = mercY(lat);
+  const hy = h / 2 / ws;
+  const n = latOf(yC - hy);
+  const s = latOf(yC + hy);
+  return advect.viewQuadFromCorners([[wrapped - hx, n], [wrapped + hx, n], [wrapped + hx, s], [wrapped - hx, s]], zoom, w, h, mercX(wrapped));
+}
+
+/** Trail segments of `p` that start inside `vq`. */
+function segmentsInView(p, vq) {
+  let k = 0;
+  p.forEachSegment((_p, ax, ay) => {
+    if (advect.insideView(vq, ax, ay)) k++;
+  });
+  return k;
+}
+
+test('a pan across 180 keeps every wave set and wind trail (the wrapped centre jumps a whole world)', () => {
+  // 179.9 E to 180.1 is 0.2 degrees east; MapLibre's centre wraps to 179.9 W.
+  const m = new CrestMarks(gridField('waves', WAVE_CROP, () => [1, 0, 2.5]), mulberry32(7));
+  let vq = appView(179.9, 20, 4);
+  m.setCount(vq, 1);
+  m.reset(vq);
+  for (let i = 0; i < 40; i++) m.step(vq);
+  const sets = m.segCount;
+  vq = appView(180.1, 20, 4);
+  m.step(vq);
+  assert.ok(sets > 1000 && m.segCount >= sets * 0.95, `wave segments ${sets} before the pan, ${m.segCount} after`);
+  const p = new Particles(windField(), WIND_PACE, mulberry32(5));
+  vq = appView(179.9, 20, 4);
+  p.setCount(vq, 1);
+  p.reset(vq);
+  for (let i = 0; i < 30; i++) p.step(vq);
+  const trails = segmentsInView(p, vq);
+  vq = appView(180.1, 20, 4);
+  p.step(vq);
+  const after = segmentsInView(p, vq);
+  assert.ok(trails > 10000 && after >= trails * 0.95, `wind segments ${trails} in view before the pan, ${after} after`);
+});
+
+test('a long pan that crosses no seam keeps the wind trails (the lagging origin is no wrap)', () => {
+  // 0.6 of a world east at zoom 3, about 600 CSS px/s: the ring origin lags more than half a world before it rebases.
+  const p = new Particles(windField(), WIND_PACE, mulberry32(5));
+  let lon = -170;
+  let vq = appView(lon, 20, 3);
+  p.setCount(vq, 1);
+  p.reset(vq);
+  for (let i = 0; i < 30; i++) p.step(vq);
+  const steady = segmentsInView(p, vq);
+  let least = Infinity;
+  for (let i = 0; i < 120; i++) {
+    lon += 1.8;
+    vq = appView(lon, 20, 3);
+    p.step(vq);
+    least = Math.min(least, segmentsInView(p, vq));
+  }
+  assert.ok(lon > 40 && least >= steady * 0.5, `trails ${steady} before the pan, at least ${least} during it`);
+});
+
+test('a window shrunk and regrown brings back no set or trail mid-life: the regained slots start over and fade in', () => {
+  const big = view(-150, 20, 4, 1440, 900);
+  const small = view(-150, 20, 4, 720, 450);
+  const m = new CrestMarks(gridField('waves', WAVE_CROP, () => [1, 0, 2.5]), mulberry32(3));
+  const p = new Particles(windField(), WIND_PACE, mulberry32(3));
+  for (const s of [m, p]) {
+    s.setCount(big, 1);
+    s.reset(big);
+    for (let i = 0; i < 60; i++) s.step(big);
+    s.setCount(small, 1);
+    const kept = s.count;
+    let hidden = 0;
+    for (let i = kept; i < 1266; i++) if (s.alive[i] && s.age[i] > FADE_S) hidden++;
+    for (let i = 0; i < 5; i++) s.step(small);
+    s.setCount(big, 1);
+    s.step(big);
+    assert.ok(hidden > 50, `${hidden} slots were mid-life when the window shrank`);
+    for (let i = kept; i < s.count; i++) {
+      if (s.alive[i]) assert.ok(s.age[i] <= STEP_S + 1e-6, `slot ${i} came back at age ${s.age[i]}`);
+    }
+    if (s === p) {
+      let stale = 0;
+      p.forEachSegment((q) => { if (q >= kept) stale++; });
+      assert.equal(stale, 0, `${stale} old trail segments came back with the regained particles`);
+    }
+  }
 });
 
 // ---------------------------------------------------------------------------
