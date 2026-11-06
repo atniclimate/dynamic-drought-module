@@ -317,9 +317,16 @@ export function buildTribalPopupModel(props: GeoJsonProperties, conditions: Plac
  * legal, survey, or jurisdictional truth. Tribal sovereignty and a Tribe's
  * own understanding of its territory are matters of sovereign authority.
  */
-export function buildBiaReservationPopupModel(props: GeoJsonProperties, conditions: PlaceConditions): PopupModel {
+export function buildBiaReservationPopupModel(
+  props: GeoJsonProperties,
+  conditions: PlaceConditions,
+  /** LARNAME to the Nation's name through the roster's provenance gate (gatedDisplayName, DR-094); absent until the roster loads. */
+  nationNames?: ReadonlyMap<string, string>
+): PopupModel {
   const p = props ?? {};
-  const name = placeTitle([p.LARNAME, p.LARName, p.NAME, p.name], 'Reservation land area');
+  const landArea = placeTitle([p.LARNAME, p.LARName, p.NAME, p.name], 'Reservation land area');
+  // The formal name the search and the Place studio show (the look at 6748f25, P3-14); the land area stays a detail row.
+  const name = nationNames?.get(landArea) ?? landArea;
   const classification = firstText([p.CLASSIFICATION, p.Classification]);
   const region = firstText([p.REGION, p.Region]);
   const acresStr = formatAcres(p.GISACRES ?? p.GISAcres ?? p.ACRES ?? '');
@@ -355,6 +362,8 @@ export function buildBiaReservationPopupModel(props: GeoJsonProperties, conditio
     source: { link: { label: 'BIA GeoPlatform', href: 'https://biamaps.geoplatform.gov/' } },
     moreLinks: [{ label: 'BIA OneMap', href: 'https://onemap-bia-geospatial.hub.arcgis.com/' }],
     details: [
+      // DRAFT wording: "Land area", the search's own sublabel word for the same LARNAME.
+      ...(name === landArea ? [] : detailRow('Land area', landArea)),
       ...detailRow('Classification', classification),
       ...detailRow('BIA region', region),
       ...detailRow('Acres', acresStr)
@@ -670,6 +679,9 @@ const SOURCE_LINK_NOTE = 'Live readings open at the source link below.';
 const LOADING_TEXT = 'Live data';
 // DRAFT wording (DR-177): a station that lists no https page.
 const NO_STATION_PAGE = 'This station lists no public page.';
+// DRAFT wording: "not stated", as the alert popup words a time its issuer leaves open;
+// a station with no reading time, never "As of no data" beside a "no data" state (the look at 6748f25, P3-07).
+const STATION_TIME_NOT_STATED: PopupClock = { kind: 'not-stated', label: 'As of', reason: 'not stated' };
 
 /** Whether the station carries one of the five wired in-browser reads (DDM-P9-T05 added RAWS). */
 function stationHydrates(station: TelemetryStation): boolean {
@@ -764,7 +776,7 @@ export function buildTelemetryPopupModel(station: TelemetryStation, read?: Stati
     value = { text: first === undefined ? NO_STATION_PAGE : SOURCE_LINK_NOTE };
     clocks = [
       custody === null
-        ? { kind: 'not-stated', label: 'As of', reason: 'no data' }
+        ? STATION_TIME_NOT_STATED
         : { kind: 'not-stated', label: 'Updates', reason: custody.cadence }
     ];
   } else if (state.kind === 'live') {
@@ -790,7 +802,8 @@ export function buildTelemetryPopupModel(station: TelemetryStation, read?: Stati
             : state.text,
       state: state.kind
     };
-    clocks = [{ kind: 'not-stated', label: 'As of', reason: state.kind }];
+    // The value row already carries the state word; the clock repeats only the in-flight one (pinned by the station census).
+    clocks = [state.kind === 'loading' ? { kind: 'not-stated', label: 'As of', reason: 'loading' } : STATION_TIME_NOT_STATED];
   }
   return {
     kind: 'station',

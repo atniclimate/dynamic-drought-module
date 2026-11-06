@@ -2,8 +2,10 @@ import type * as maplibregl from 'maplibre-gl';
 import type { Feature, FeatureCollection } from 'geojson';
 import { getLayerDef, type LayerActivation, type LayerModule } from '../config/layers';
 import { CPC_EXTENDED_COLORS, CPC_SEASONAL_COLORS } from '../config/palette';
+import { registerClickTarget } from '../map/interaction-coordinator';
 import { registry } from '../state/registry';
 import { hideLegend, LEGEND_ORDER, showLegend } from '../ui/legend-registry';
+import type { ClockValue, IssuedModel, PopupClock } from '../ui/popup-frame';
 import { escapeHtml } from '../util/escape';
 import { createCpcSeasonalReader, type CpcOutlookWindow, type CpcSeasonalReadLimits,
   type CpcSeasonalReadState, type CpcSeasonalVariable } from './cpc-seasonal-read';
@@ -64,6 +66,29 @@ function clockLines(features: readonly Feature[], fields: readonly (readonly [st
   return [...lines];
 }
 
+/** The frame's explanation for issuer time text DDM does not parse (as src/layers/drought.ts states it). */
+const SUPPLIED_TIME_EXPLANATION = 'As the issuer states it; DDM does not read it as a full date.';
+/** The UTC midnights the legend reads, as the frame's date (years 0 to 9999 only). */
+const LAST_DATE_MS = Date.UTC(9999, 11, 31);
+
+/** One issuer clock field at its own precision: a UTC-midnight date, other text as supplied, else absent. */
+function clockValue(value: unknown): ClockValue | null {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) && value >= 0 && value <= LAST_DATE_MS
+      ? { precision: 'date', date: new Date(value).toISOString().slice(0, 10) }
+      : null;
+  }
+  return typeof value === 'string' && value.trim()
+    ? { precision: 'supplied', text: value.trim(), explanation: SUPPLIED_TIME_EXPLANATION }
+    : null;
+}
+
+/** The issuer pages these layers already cite (src/impact/sources.ts, src/impact/cpc-extended.ts). */
+const SOURCE_HREF = {
+  seasonal: 'https://www.cpc.ncep.noaa.gov/products/predictions/long_range/',
+  extended: 'https://www.cpc.ncep.noaa.gov/'
+} as const;
+
 /** The key slots after the active surface's, one per outlook layer, so two never tie. */
 const KEY_ORDER = ['cpc-seasonal-precip', 'cpc-seasonal-temp', 'cpc-610-precip', 'cpc-610-temp', 'cpc-814-precip', 'cpc-814-temp'];
 
@@ -82,7 +107,7 @@ export interface CpcSeasonalSnapshot extends CpcSeasonalReadState {
 }
 
 export function createCpcSeasonalAdapter(options: CpcSeasonalAdapterOptions):
-  LayerModule & Required<Pick<LayerModule, 'cancelActivation' | 'fadeLayerIds'>> &
+  LayerModule & Required<Pick<LayerModule, 'cancelActivation' | 'fadeLayerIds' | 'bindPopups'>> &
   { getSnapshot(): CpcSeasonalSnapshot | null } {
   if (!Number.isFinite(options.fillOpacity) || options.fillOpacity < 0 || options.fillOpacity > 1) {
     throw new RangeError('Invalid CPC fill opacity.');
@@ -94,8 +119,60 @@ export function createCpcSeasonalAdapter(options: CpcSeasonalAdapterOptions):
   const lineId = `${key}-line`;
   const rows: readonly OutlookClass[] = (outlook === 'seasonal' ? CPC_SEASONAL_COLORS : CPC_EXTENDED_COLORS)[options.variable];
   const clockFields = CLOCK_FIELDS[outlook === 'seasonal' ? 'seasonal' : 'extended'];
-  const known = (properties: Record<string, unknown> | null): boolean =>
-    rows.some(row => properties?.['cat'] === row.cat && properties['prob'] === row.prob);
+  const rowFor = (properties: Record<string, unknown> | null): OutlookClass | undefined =>
+    rows.find(row => properties?.['cat'] === row.cat && properties['prob'] === row.prob);
+  const known = (properties: Record<string, unknown> | null): boolean => rowFor(properties) !== undefined;
+  const title = getLayerDef(key)?.name ?? key;
+  /**
+   * The drawn polygon's identify popup (the look at 6748f25, D6): its class as
+   * the key words it, then each issuer clock field under the key's own alias.
+   * Null for a class outside the renderer (never drawn, so never clicked).
+   */
+  function popupModel(properties: Record<string, unknown> | null): IssuedModel | null {
+    const row = rowFor(properties);
+    if (!row) return null;
+    const [r, g, b, a] = row.color;
+    const hex = `#${[r, g, b].map(c => c.toString(16).padStart(2, '0')).join('')}`;
+    const clocks = clockFields.flatMap(([field, alias]): PopupClock[] => {
+      const at = clockValue(properties?.[field]);
+      return at ? [{ kind: 'point', meaning: field === 'fcst_date' ? 'issued' : 'valid', label: alias, at }] : [];
+    });
+    const [first, ...later] = clocks;
+    return {
+      kind: 'surface',
+      title,
+      // The CPC products are not protected geography; the cast narrows LayerDef's ProductKey for the frame.
+      issuer: { role: 'issued-by', name: 'NOAA Climate Prediction Center',
+        productKey: (getLayerDef(key)?.product ?? key) as IssuedModel['issuer']['productKey'] },
+      // Equal Chances is drawn clear, so it carries no swatch.
+      value: [a === 0 ? { text: row.label }
+        : { text: row.label, swatch: { table: outlook === 'seasonal' ? 'CPC_SEASONAL_COLORS' : 'CPC_EXTENDED_COLORS', classKey: `${row.cat},${row.prob}`, color: hex } }],
+      // DRAFT wording: "not stated" as the alert popup words an absent time.
+      clocks: first ? [first, ...later] : [{ kind: 'not-stated', label: FORECAST_DATE, reason: 'not stated' }],
+      source: { link: { label: title, href: SOURCE_HREF[outlook === 'seasonal' ? 'seasonal' : 'extended'] } }
+    };
+  }
+  /** One click target per outlook fill; outlooks rank as condition surfaces, under every boundary. */
+  function bindPopups(target: maplibregl.Map): void {
+    registerClickTarget({
+      kind: 'condition-surface',
+      layerIds: [fillId],
+      label: (feature) => {
+        const row = rowFor(feature.properties);
+        return row ? `${title}: ${row.label}` : null;
+      },
+      respond: (feature) => {
+        const model = popupModel(feature.properties);
+        return model ? { model } : null;
+      }
+    });
+    target.on('mouseenter', fillId, () => {
+      target.getCanvas().style.cursor = 'pointer';
+    });
+    target.on('mouseleave', fillId, () => {
+      target.getCanvas().style.cursor = '';
+    });
+  }
   const pair: maplibregl.ExpressionSpecification = ['concat', ['get', 'cat'], ',', ['to-string', ['get', 'prob']]];
   const [first, ...rest] = rows;
   if (!first) throw new RangeError('A CPC outlook needs its renderer classes.');
@@ -118,7 +195,6 @@ export function createCpcSeasonalAdapter(options: CpcSeasonalAdapterOptions):
   }
   /** This layer's own key: its renderer's classes and labels as drawn, plus the drawn polygons' clock. */
   function showKey(features: readonly Feature[]): void {
-    const title = getLayerDef(key)?.name ?? key;
     const items = rows.map(row => {
       const [r, g, b, a] = row.color;
       return `<li data-cpc-class="${escapeHtml(`${row.cat},${row.prob}`)}"><span class="swatch" style="background:rgba(${r},${g},${b},${(a / 255) * options.fillOpacity});border-color:${OUTLINE}"></span>${escapeHtml(row.label)}</li>`;
@@ -199,6 +275,6 @@ export function createCpcSeasonalAdapter(options: CpcSeasonalAdapterOptions):
     }
     await reader.read(options.variable, options.limits, outlook);
   }
-  return { activate, deactivate, cancelActivation, fadeLayerIds: [fillId, lineId],
+  return { activate, deactivate, cancelActivation, bindPopups, fadeLayerIds: [fillId, lineId],
     getSnapshot: () => snapshot };
 }

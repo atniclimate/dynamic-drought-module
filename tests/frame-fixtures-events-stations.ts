@@ -236,7 +236,8 @@ export const EVENT_STATION_CASES: Readonly<Record<EventStationId, EventStationCa
     region: 'washington_state',
     layerIds: ['nws-alerts-fill'],
     source: { label: 'NWS Active Alerts', href: 'https://alerts.weather.gov/' },
-    moreLinks: [{ label: 'NWS Heat Safety', href: 'https://www.weather.gov/safety/heat' }]
+    // The tier case's alert is a Red Flag Warning: the heat-safety page rides the heat products only (P3-30).
+    moreLinks: []
   },
   spc: {
     id: 'spc',

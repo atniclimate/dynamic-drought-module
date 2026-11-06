@@ -1141,3 +1141,40 @@ test('a RAWS reading past its network window is stale; a fresh or timeless one i
   assert.deepEqual(stale('2026-10-05T15:00:00Z'), [false, false, false]);
   assert.deepEqual(stale(null), [false, false, false]);
 });
+
+// The look at 6748f25, P3-14: a BIA popup titled the land area ("Yakama")
+// where the search and the Place studio name the Nation.
+test('a BIA popup titles the Nation\'s gated name when the roster names one, and keeps the land area as a detail row', () => {
+  const names = new Map([['Yakama', 'Confederated Tribes and Bands of the Yakama Nation']]);
+  const html = buildBiaReservationPopupHtml({ LARNAME: 'Yakama', CLASSIFICATION: 'Reservation' }, QUIET, names);
+  assert.equal(textOf(slot(html, 'title')), 'Confederated Tribes and Bands of the Yakama Nation');
+  assert.equal(detailsOf(html)['Land area'], 'Yakama');
+  assert.equal(doorOf(html).label, 'Open the Impact Briefing for Confederated Tribes and Bands of the Yakama Nation');
+  assert.ok(textOf(headOf(html)).includes('Boundary from: BIA (AIAN Land Area Representation)'), 'the source stays named');
+  // No roster yet, or a land area the roster does not name: the land area, and no repeated row.
+  for (const map of [undefined, new Map()]) {
+    const plain = buildBiaReservationPopupHtml({ LARNAME: 'Yakama' }, QUIET, map);
+    assert.equal(textOf(slot(plain, 'title')), 'Yakama');
+    assert.equal(detailsOf(plain)['Land area'], undefined);
+  }
+});
+
+// The look at 6748f25, P3-07: "As of no data", and "no data" twice.
+test('a station popup never repeats its state word in the clock, nor says "As of no data"', async () => {
+  const { stationCustody } = await import('../src/config/station-registry.ts');
+  const base = {
+    id: 'fixture-psp', name: 'Fixture Vital Signs', coords: [47, -122], region: 'puget', type: 'psp', agency: 'PSP',
+    color: '#06b6d4', description: 'Fixture description.', links: [{ label: 'Fixture portal', url: 'https://example.org/' }]
+  };
+  assert.equal(stationCustody(base), null, 'the fixture is a station with no custody network');
+  const clockText = (read, station = base) => textOf(slot(serializePopupFrame(popups.buildTelemetryPopupModel(station, read)), 'clock'));
+  assert.equal(clockText(undefined), 'As of not stated');
+  const live = { ...base, id: 'fixture-snotel', awdbStation: '999:WA:SNTL' };
+  for (const read of [{ kind: 'no data', text: 'No recent NRCS values for this station.' }, { kind: 'unavailable' }]) {
+    const markup = serializePopupFrame(popups.buildTelemetryPopupModel(live, read));
+    assert.equal(markup.split(`<span data-state>${read.kind}</span>`).length - 1, 1, `the "${read.kind}" state word once`);
+    assert.equal(clockText(read, live), 'As of not stated', `${read.kind}: the clock does not repeat it`);
+  }
+  // The in-flight state keeps its clock word (the station census pins "As of loading").
+  assert.equal(clockText(undefined, live), 'As of loading');
+});

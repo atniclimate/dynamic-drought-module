@@ -83,6 +83,7 @@ import { buildBiaReservationPopupModel } from '../ui/popups';
 import { buildPlaceConditionsHtml } from '../ui/popup-conditions';
 import { buildBoundaryContext, resolveBoundaryTitle } from '../impact/context';
 import { registerClickTarget } from '../map/interaction-coordinator';
+import { gatedDisplayName, loadTribalRoster } from '../state/tribal-roster';
 import type { LayerActivation } from '../config/layers';
 import { fetchBufferedWithBudget, linkAbort } from '../util/fetch';
 import { buildQueryEnvelope, envelopeCovers, toCoverageEnvelope } from '../util/bbox';
@@ -688,6 +689,9 @@ export function deactivate(map: maplibregl.Map): void {
   if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);
 }
 
+/** LARNAME to the gated Nation name, once the roster has loaded (bindPopups). */
+let nationNames: ReadonlyMap<string, string> | null = null;
+
 /**
  * Register the fill layer's click target with the InteractionCoordinator
  * (one response per click; D-0.7.0-058 ruling 5) and wire the hover
@@ -696,6 +700,15 @@ export function deactivate(map: maplibregl.Map): void {
  * not-yet-existing layer id.
  */
 export function bindPopups(map: maplibregl.Map): void {
+  // The Nation's name for each LARNAME, through the roster's provenance gate
+  // (the cached roster search and the place catalog share). Until it loads, or
+  // if it fails, a popup titles the land area as before.
+  loadTribalRoster().then(
+    (areas) => {
+      nationNames = new Map(areas.map((area) => [area.larName, gatedDisplayName(area)]));
+    },
+    () => {}
+  );
   registerClickTarget({
     kind: 'reservation-boundary',
     layerIds: [FILL_LAYER_ID],
@@ -703,7 +716,7 @@ export function bindPopups(map: maplibregl.Map): void {
     respond: (feature, click, map) => {
       const props: GeoJsonProperties = feature.properties ?? null;
       return {
-        model: buildBiaReservationPopupModel(props, buildPlaceConditionsHtml(map, click.point, feature)),
+        model: buildBiaReservationPopupModel(props, buildPlaceConditionsHtml(map, click.point, feature), nationNames ?? undefined),
         selection: buildBoundaryContext('bia-reservation', props, feature.geometry, click.lngLat),
         // An id-less feature clears any prior emphasis (the old
         // emphasizePlace contract) rather than lighting an unknown one.

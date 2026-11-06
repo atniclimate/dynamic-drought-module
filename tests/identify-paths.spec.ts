@@ -1243,10 +1243,12 @@ test.describe('identify paths: the NWS, SPC and power models print the issuer wo
     expect(text).toMatch(/From Aug 1[01], 2026, \d\d:\d\d \S+/);
     expect(text).toMatch(/Until Aug 1[23], 2026, \d\d:\d\d \S+/);
     expect(markup).toContain('href="https://alerts.weather.gov/"');
-    expect(markup).toContain('href="https://www.weather.gov/safety/heat"');
+    // The heat-safety page rides the heat products only, never a fire weather one (the look at 6748f25, P3-30).
+    expect(markup).not.toContain('href="https://www.weather.gov/safety/heat"');
 
     // Issuer time text DDM does not read is shown as supplied; no office, no office line.
     const odd = frameText(serializePopupFrame(buildNwsAlertPopupModel({ event: 'Heat Advisory', ends: 'Tonight' })));
+    expect(serializePopupFrame(buildNwsAlertPopupModel({ event: 'Heat Advisory', ends: 'Tonight' }))).toContain('href="https://www.weather.gov/safety/heat"');
     expect(odd).toContain('Issued by: NOAA NWS ');
     expect(odd).not.toContain('office');
     expect(odd).toContain('Until Tonight As the issuer states it; DDM does not read it as a full date.');
