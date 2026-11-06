@@ -67,7 +67,7 @@ const STAND_INS = new Map([
     '/src/util/frame-stepper.ts',
     'export const FRAME_FADE_MS = 0;\n' +
       'export function prefetchAllowed() { return globalThis.__rasterReadinessTest.prefetch === true; }\n' +
-      'export async function crossfadeFrames() { const g = globalThis.__rasterReadinessTest.crossfadeGate; if (g) await g; }\n'
+      'export async function crossfadeFrames(map, outgoing, incoming) { globalThis.__rasterReadinessTest.fades?.push({ outgoing, incoming }); const g = globalThis.__rasterReadinessTest.crossfadeGate; if (g) await g; }\n'
   ],
   [
     '/src/layers/enso-flow.ts',
@@ -980,6 +980,38 @@ test('a Nino 3.4 click before the popup frame chunk has painted draws the RONI c
   map.emit('click');
   assert.equal(observers[1].watching, false, 'a later click ends the watch');
   assert.equal(map.listeners.get('click')?.size ?? 0, 0);
+});
+
+// Audit round 2 (R2-25): a second step during the first one's tile wait read
+// `previous` as the first target (still at opacity 0), so the day actually on
+// screen was never faded out and showed through the new one.
+test('a quick second step fades out the day still on screen, not only the step it superseded', async () => {
+  await withSst({ answer: () => domainsOk() }, async ({ map }) => {
+    const fades = [];
+    globalThis.__rasterReadinessTest.fades = fades;
+    try {
+      await mod.activate(map);
+      proveLatestFrame(map);
+      const step = async (index, prove) => {
+        timeBars.get(KEY).rail.onStep(index);
+        if (prove) {
+          map.requestTile(frameSource(WINDOW[index]), `${WINDOW[index]}-1`);
+          map.loadTile(frameSource(WINDOW[index]), `${WINDOW[index]}-1`, true);
+        }
+        await settle();
+      };
+      await step(2, true); // 2026-09-22 on screen
+      await step(1, false); // 2026-09-21: its tiles never arrive
+      await step(3, true); // 2026-09-23 supersedes it
+      const last = fades.at(-1);
+      assert.deepEqual(last.incoming.map((f) => f.layerId), [frameSource('2026-09-23')]);
+      const out = last.outgoing.map((f) => f.layerId);
+      assert.ok(out.includes(frameSource('2026-09-22')), `the day on screen was not faded out: ${out.join(', ')}`);
+      assert.ok(!out.includes(frameSource('2026-09-23')), 'the incoming day was faded out');
+    } finally {
+      delete globalThis.__rasterReadinessTest.fades;
+    }
+  });
 });
 
 test('a late DescribeDomains answer after a re-activation superseded it changes nothing', async () => {

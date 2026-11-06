@@ -367,9 +367,13 @@ function openFooterTab(tab: SheetTab): void {
   if (tab === 'alerts') {
     // Lazy: the alerts pane module rides the same activation the layer
     // does; an embed or desktop session never downloads it.
-    void import('./sheet-alerts').then(({ openSheetAlerts }) => {
-      if (mapRef) openSheetAlerts(mapRef);
-    });
+    void import('./sheet-alerts')
+      .then(({ openSheetAlerts }) => {
+        if (mapRef) openSheetAlerts(mapRef);
+      })
+      .catch((err: unknown) => {
+        console.error('[mobile-sheet] alerts pane failed to load:', err);
+      });
   }
   const target: SheetDetent = tab === 'brief' ? 'full' : 'half';
   if (detent === target) {

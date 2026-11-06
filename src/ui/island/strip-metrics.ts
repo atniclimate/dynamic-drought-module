@@ -195,6 +195,11 @@ function isLayerOn(key: string): boolean {
   );
 }
 
+/** A drawn layer whose source has not finished tiling: loading, never an absence. */
+function sourceLoadingMetric(): { metric: Metric; dateMs: null } {
+  return { metric: { value: '-', sublabel: resolveStatusPillText('loading'), tone: 'loading' }, dateMs: null };
+}
+
 export function droughtMetric(
   map: maplibregl.Map,
   preferredKey: typeof USDM_KEY | typeof NADM_KEY = NADM_KEY
@@ -207,12 +212,7 @@ export function droughtMetric(
     if (features.length === 0) {
       // Registry ready means the source was installed, not that its worker
       // tiles have rendered. An unfinished source cannot establish absence.
-      if (!map.isSourceLoaded(NADM_SOURCE)) {
-        return {
-          metric: { value: '-', sublabel: resolveStatusPillText('loading'), tone: 'loading' },
-          dateMs: null
-        };
-      }
+      if (!map.isSourceLoaded(NADM_SOURCE)) return sourceLoadingMetric();
       return {
         metric: {
           value: 'No polygon',
@@ -308,6 +308,8 @@ export function droughtMetric(
 
   const feats = map.queryRenderedFeatures({ layers: [...presentFills] });
   if (feats.length === 0) {
+    // As NADM above: an unfinished slot source cannot establish absence.
+    if (presentFills.some((id) => !map.isSourceLoaded(id.replace(/-fill$/, '')))) return sourceLoadingMetric();
     // The USDM surface supplies D0 through D4 polygons, but this client has
     // no analyzed-area mask. A zero rendered-feature query proves only that
     // no category polygon is drawn here, not that the view is drought-free.

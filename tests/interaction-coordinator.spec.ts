@@ -728,7 +728,7 @@ test.describe('the Conditions block attributes an alert only where it touches th
 
     // Amendment A2 gates the briefing door's emphasis on real issuer evidence
     // AT the clicked place. Somewhere else's warning must not pulse it
-    // (`popup-impact-btn--pulse`, src/ui/popups.ts buildImpactTriggerButtonHtml).
+    // (`popup-impact-btn--pulse`, src/ui/popup-frame.ts doorHtml).
     const door = page.locator('.maplibregl-popup-content [data-ddm-impact-trigger]');
     await expect(door).toHaveCount(1);
     await expect(door).not.toHaveClass(/popup-impact-btn--pulse/);

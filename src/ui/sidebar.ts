@@ -1289,9 +1289,9 @@ function formatStationValue(value: StationValue): string {
  *
  * Each station renders its primary parameter compactly (the 400 pixel
  * embed is first-class), with the reading date, "(stale)" appended when
- * the reading is older than its freshness window, or "values
- * unavailable" on fetch failure. A zero reading renders as 0; summer
- * snowpack is legitimately zero.
+ * the reading is older than its freshness window, "no data" when the read
+ * answered with no recent value, or "values unavailable" on fetch failure.
+ * A zero reading renders as 0; summer snowpack is legitimately zero.
  */
 function hydrateStationValues(map: maplibregl.Map): void {
   const controller = new AbortController();
@@ -1307,7 +1307,7 @@ function hydrateStationValues(map: maplibregl.Map): void {
       if (!station.awdbStation && !station.hydrometParams && !station.cwms && !station.usgsSite)
         continue;
       const slot = document.querySelector<HTMLElement>(
-        `[data-station-values="${cssAttrEscape(station.id)}"]`
+        `[data-station-values="${CSS.escape(station.id)}"]`
       );
       if (!slot) continue;
 
@@ -1321,7 +1321,8 @@ function hydrateStationValues(map: maplibregl.Map): void {
         .then((value) => {
           if (signal.aborted || !slot.isConnected) return;
           if (!value || value.value === null) {
-            slot.textContent = 'values unavailable';
+            // The read answered with no recent value: the station popup's state word.
+            slot.textContent = 'no data';
             slot.className = 'telemetry-values unavailable';
             return;
           }
@@ -1354,7 +1355,12 @@ function onActiveChangeForStationValues(
   } else if (!active.has('telemetry') && stationValuesController) {
     stationValuesController.abort();
     stationValuesController = null;
-    // Aborted rows are left at "loading..."; the next activation must refetch.
+    // Rows still loading are emptied (the :empty rule hides them); resolved
+    // rows keep their last-known values. The next activation refetches.
+    for (const slot of document.querySelectorAll<HTMLElement>('.telemetry-values.loading')) {
+      slot.textContent = '';
+      slot.className = 'telemetry-values';
+    }
     stationValuesHydrated = false;
   }
 }
@@ -2204,17 +2210,6 @@ function wireSidebar(map: maplibregl.Map, onRegionSelect: (key: RegionKey) => vo
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
-
-/**
- * Escape a value for safe use inside a CSS attribute selector. The
- * layer keys and region keys we accept are restricted (kebab-case
- * identifiers) so this is defensive rather than load-bearing, but it
- * keeps the behavior correct if a future config table introduces a
- * key with a quote or backslash.
- */
-function cssAttrEscape(value: string): string {
-  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-}
 
 /**
  * Re-export internal handles for test harnesses and the toast helper.

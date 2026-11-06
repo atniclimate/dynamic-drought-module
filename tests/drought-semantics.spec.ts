@@ -24,7 +24,8 @@ test('zero rendered USDM polygons stays an explicit unmasked absence', () => {
   const map = {
     getLayer: (id: string) =>
       id === 'usdm-frame-a-fill' || id === 'usdm-frame-b-fill' ? { id } : undefined,
-    queryRenderedFeatures: () => []
+    queryRenderedFeatures: () => [],
+    isSourceLoaded: () => true
   } as unknown as maplibregl.Map;
 
   const { metric, dateMs } = droughtMetric(map);
@@ -33,6 +34,25 @@ test('zero rendered USDM polygons stays an explicit unmasked absence', () => {
     sublabel: 'no D0-D4 polygon rendered; no area mask to confirm no drought',
     tone: 'none'
   });
+  expect(dateMs).toBeNull();
+});
+
+// Audit round 2 (R2-8): an unfinished source cannot establish absence, as the
+// NADM branch already holds; a new week read 'No polygon' before it tiled.
+test('zero rendered USDM polygons while a slot source still loads reads loading, not an absence', () => {
+  registry.activate('usdm');
+  registry.setStatus('usdm', 'ready');
+
+  const map = {
+    getLayer: (id: string) =>
+      id === 'usdm-frame-a-fill' || id === 'usdm-frame-b-fill' ? { id } : undefined,
+    queryRenderedFeatures: () => [],
+    isSourceLoaded: (id: string) => id !== 'usdm-frame-b'
+  } as unknown as maplibregl.Map;
+
+  const { metric, dateMs } = droughtMetric(map);
+  expect(metric.tone).toBe('loading');
+  expect(metric.value).toBe('-');
   expect(dateMs).toBeNull();
 });
 

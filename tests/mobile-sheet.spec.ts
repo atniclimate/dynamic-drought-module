@@ -154,6 +154,18 @@ test.describe('mobile side rail and glass panels', () => {
     await expect(layers).toHaveAttribute('aria-expanded', 'false');
   });
 
+  // Audit round 2 (R2-11): the Alerts door's lazy chunk had no catch.
+  test('a failed Alerts pane chunk raises no unhandled rejection', async ({ page }) => {
+    const pageErrors: Error[] = [];
+    page.on('pageerror', (error) => pageErrors.push(error));
+    await page.route(/\/sheet-alerts-[^/?]*\.js(\?|$)/, (route) => route.abort('failed'));
+    await gotoApp(page, '?view=console');
+    const failed = page.waitForEvent('console', (message) => message.text().includes('[mobile-sheet] alerts pane failed to load'));
+    await page.locator('#mobile-footer-nav button[data-tab="alerts"]').click();
+    await failed;
+    expect(pageErrors).toEqual([]);
+  });
+
   test('a selected place keeps the at-hand summary and full report path', async ({ page }) => {
     await gotoApp(page, '?select=state:WA');
     const app = page.locator('#app');
