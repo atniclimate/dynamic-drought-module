@@ -59,6 +59,7 @@ import { registerClickTarget } from '../map/interaction-coordinator';
 import type { IssuedModel, PopupClock } from '../ui/popup-frame';
 import { fetchJsonWithBudget, linkAbort } from '../util/fetch';
 import { isObject } from '../util/guards';
+import { hasPolygonCoordinates } from '../util/geojson-checks';
 import { formatSnapshotTime } from '../util/snapshot-time';
 import { registry } from '../state/registry';
 import { showLegend, hideLegend, LEGEND_ORDER, renderSwatchLegend } from '../ui/legend-registry';
@@ -213,44 +214,8 @@ function issuerTime(value: unknown): string | null | undefined {
   return Number.isFinite(Date.parse(text)) ? text : undefined;
 }
 
-function isPosition(value: unknown): boolean {
-  return (
-    Array.isArray(value) &&
-    value.length >= 2 &&
-    typeof value[0] === 'number' &&
-    Number.isFinite(value[0]) &&
-    typeof value[1] === 'number' &&
-    Number.isFinite(value[1])
-  );
-}
-
-function isRing(value: unknown): boolean {
-  return (
-    Array.isArray(value) &&
-    value.length >= 4 &&
-    value.every(isPosition)
-  );
-}
-
-function isPolygonCoordinates(value: unknown): boolean {
-  return (
-    Array.isArray(value) &&
-    value.length > 0 &&
-    value.every(isRing)
-  );
-}
-
 function isAlertGeometry(value: unknown): boolean {
-  if (!isObject(value)) return false;
-  if (value.type === 'Polygon') {
-    return isPolygonCoordinates(value.coordinates);
-  }
-  return (
-    value.type === 'MultiPolygon' &&
-    Array.isArray(value.coordinates) &&
-    value.coordinates.length > 0 &&
-    value.coordinates.every(isPolygonCoordinates)
-  );
+  return isObject(value) && hasPolygonCoordinates(value);
 }
 
 /**

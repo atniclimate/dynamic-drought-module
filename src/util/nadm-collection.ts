@@ -14,10 +14,13 @@
  * module is that verdict, and the eviction rule on both sides is now "this
  * function threw", nothing else.
  *
- * Deliberately free of geometry helpers: the layer's activation chunk is
- * budgeted (`scripts/check-activation-budget.mjs`), and the minimap's
- * polygon preparation stays in `src/util/nadm.ts`.
+ * The ring checks are the shared `src/util/geojson-checks.ts` (also the NWS
+ * alert reader's); the layer's activation chunk is budgeted
+ * (`scripts/check-activation-budget.mjs`), and the minimap's polygon
+ * preparation stays in `src/util/nadm.ts`.
  */
+
+import { hasPolygonCoordinates } from './geojson-checks';
 
 /** The consensus classes, upper-cased as the issuer publishes them. */
 export const NADM_CLASS_CODES = ['D0', 'D1', 'D2', 'D3', 'D4'] as const;
@@ -72,39 +75,6 @@ export function normalizeNadmClassCode(value: unknown): NadmClassCode | null {
     : null;
 }
 
-function isPosition(value: unknown): boolean {
-  return (
-    Array.isArray(value) &&
-    value.length >= 2 &&
-    typeof value[0] === 'number' &&
-    Number.isFinite(value[0]) &&
-    typeof value[1] === 'number' &&
-    Number.isFinite(value[1])
-  );
-}
-
-function isRing(value: unknown): boolean {
-  return Array.isArray(value) && value.length >= 4 && value.every(isPosition);
-}
-
-function isPolygonCoordinates(value: unknown): boolean {
-  return Array.isArray(value) && value.length > 0 && value.every(isRing);
-}
-
-/** A Polygon or MultiPolygon with closed, finite rings; nothing else. */
-export function hasNadmPolygonCoordinates(
-  geometry: Record<string, unknown>
-): boolean {
-  const coordinates = geometry['coordinates'];
-  if (geometry['type'] === 'Polygon') return isPolygonCoordinates(coordinates);
-  return (
-    geometry['type'] === 'MultiPolygon' &&
-    Array.isArray(coordinates) &&
-    coordinates.length > 0 &&
-    coordinates.every(isPolygonCoordinates)
-  );
-}
-
 /**
  * Read the collection. Throws `NadmCollectionError` on anything that is not
  * a FeatureCollection of well-formed, single-month, classified polygon
@@ -131,7 +101,7 @@ export function validateNadmCollection(value: unknown): NadmCollectionVerdict {
       feature['type'] !== 'Feature' ||
       !isRecord(feature['properties']) ||
       !isRecord(feature['geometry']) ||
-      !hasNadmPolygonCoordinates(feature['geometry'])
+      !hasPolygonCoordinates(feature['geometry'])
     ) {
       throw new NadmCollectionError(
         'NADM response contains a malformed polygon feature.'

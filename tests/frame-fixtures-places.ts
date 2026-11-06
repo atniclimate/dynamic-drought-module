@@ -24,6 +24,7 @@
 import { expect, type Locator, type Page, type Route } from '@playwright/test';
 import { gotoApp, waitForLayerSettled } from './helpers';
 import { AIANNH_ROUTE, BIA_ROUTE, routeGeojson } from './tribal-fixtures';
+import { isoDayLocal } from '../src/util/iso-day';
 import type { CensusFixture, TierFixture } from './frame-fixtures';
 import {
   MIN_COMPACT_BODY_REGION_HEIGHT_PX,
@@ -168,8 +169,8 @@ export interface PlaceFrameFixture {
 }
 
 function today(): string {
-  // The BIA layer stamps the retrieval day in UTC (src/layers/bia-reservations.ts).
-  return new Date().toISOString().slice(0, 10);
+  // The BIA layer stamps the retrieval day as the viewer's local day (src/layers/bia-reservations.ts).
+  return isoDayLocal(new Date());
 }
 
 /** Choose the ecoregion detail level through its own legend control. */

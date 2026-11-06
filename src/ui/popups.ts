@@ -331,7 +331,7 @@ export function buildBiaReservationPopupModel(
   const region = firstText([p.REGION, p.Region]);
   const acresStr = formatAcres(p.GISACRES ?? p.GISAcres ?? p.ACRES ?? '');
   // The layer's own browser retrieval stamp (src/layers/bia-reservations.ts,
-  // a UTC YYYY-MM-DD); missing, blank or not text reads 'not recorded', as before.
+  // a local-day YYYY-MM-DD); missing, blank or not text reads 'not recorded', as before.
   const retrievedRaw: unknown = p.__DDM_RETRIEVED_ON;
   const retrievedText = retrievedRaw ? featureText(retrievedRaw) : undefined;
   const retrievedOn = retrievedText === undefined || retrievedText.trim() === '' ? 'not recorded' : retrievedText;

@@ -47,15 +47,15 @@ import {
   fetchSharedJsonWithBudget,
   invalidateSharedJsonRequest,
 } from '../util/fetch';
-import {
-  nadmPolygonsFromGeometry,
-  NADM_DROUGHT_CODES,
-  type NadmDroughtCode,
-} from '../util/nadm';
+import { nadmPolygonsFromGeometry } from '../util/nadm';
 // The structural verdict shared with the map layer (DR-052 follow-up): the
 // two consumers of the 'nadm-current' transport read the payload through
 // one function, so neither can evict what the other accepted.
-import { validateNadmCollection } from '../util/nadm-collection';
+import {
+  NADM_CLASS_CODES as NADM_DROUGHT_CODES,
+  type NadmClassCode as NadmDroughtCode,
+  validateNadmCollection,
+} from '../util/nadm-collection';
 
 const FETCH_TIMEOUT_MS = 15_000;
 const MAINLAND_SAMPLE_STEP_DEGREES = 0.5;
