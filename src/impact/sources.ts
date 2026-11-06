@@ -889,6 +889,10 @@ async function nifcClaimFromLoadedCollection(
   // publish a truncated collection in between, so completeness is read from
   // this snapshot itself (Codex block 1 review, P1).
   if (loaded === null || loaded.truncated) return null;
+  // The layer refetches only on a pan and keeps `ready` after a failed refresh, so a set past
+  // its own 5-minute check window (CURRENT_CHECK_WINDOW_MS, src/layers/nifc-fires.ts) is not
+  // current: the network read answers (the minimap's reader does the same).
+  if (Date.now() - loaded.fetchedAt >= 5 * 60_000) return null;
   if (!bboxCoveredByEnvelope(loaded.envelope, [west, south, east, north])) return null;
 
   // S30D P3-TRUTH: a perimeter counts when its GEOMETRY meets the place's
@@ -1583,6 +1587,10 @@ function spcCategoricalClaim(
       dates: { retrieved: todayIso() }
     });
   }
+  // An issuance past its own expire time is not the near-term outlook: no claim, and the
+  // caller reads the day as unreadable (partial), as the map withholds it.
+  const expireMs = parseSpcMoment(props.expire);
+  if (expireMs !== null && expireMs <= Date.now()) return null;
   const dn = typeof props.dn === 'number' ? props.dn : Number(props.dn);
   const categoryWord = Number.isFinite(dn) ? spcCategoryWord(dn) : null;
   if (categoryWord === null) {
@@ -1593,7 +1601,6 @@ function spcCategoricalClaim(
     return null;
   }
   const validMs = parseSpcMoment(props.valid);
-  const expireMs = parseSpcMoment(props.expire);
   return makeClaim({
     text: `${product}: ${categoryWord} risk from wind and relative humidity at this point${spcValidityClause(validMs, expireMs)}`,
     source,
@@ -1686,6 +1693,12 @@ export async function fetchSpcFireOutlookClaims(
       noFeatureDays.push(day);
       continue;
     }
+    // An issuance past its own expire time states nothing; the read is incomplete.
+    const expireMs = parseSpcMoment(props.expire);
+    if (expireMs !== null && expireMs <= Date.now()) {
+      unreadable = true;
+      continue;
+    }
     const product = `SPC Day ${day} Fire Weather Outlook`;
     const label = typeof props.label === 'string' ? props.label.trim() : '';
     const issuedMs = parseSpcMoment(props.issue);
@@ -1696,7 +1709,6 @@ export async function fetchSpcFireOutlookClaims(
     if (label === '0.40' || label === '0.70') {
       const pct = label === '0.40' ? 40 : 70;
       const validMs = parseSpcMoment(props.valid);
-      const expireMs = parseSpcMoment(props.expire);
       claims.push(
         makeClaim({
           text: `${product}: ${pct}% probability of critical fire weather and/or lightning-based ignition within 12 miles of this point${spcValidityClause(validMs, expireMs)}`,
@@ -1788,7 +1800,8 @@ export async function fetchSpcFireOutlookClaims(
 export async function fetchNwsForecastClaims(
   context: BoundarySelectionContext,
   signal: AbortSignal,
-  session: NwsRequestSession = createNwsRequestSession(signal)
+  session: NwsRequestSession = createNwsRequestSession(signal),
+  now: number = Date.now()
 ): Promise<SourceResult> {
   const source = 'NWS forecast'; // vocab-allow: names the NWS point forecast, upstream product
   const sourceUrl = 'https://www.weather.gov/';
@@ -1811,7 +1824,11 @@ export async function fetchNwsForecastClaims(
 
     const properties = isObject(fJson) && isObject(fJson.properties) ? fJson.properties : null;
     const periods = properties && Array.isArray(properties.periods) ? properties.periods : [];
-    const first = periods.find(isObject);
+    // A period whose own endTime has passed is not the coming period (point-heat.ts
+    // `currentOrFuture` drops ended grid intervals the same way); no endTime stays eligible.
+    const first = periods
+      .filter(isObject)
+      .find((p) => !(typeof p.endTime === 'string' && Date.parse(p.endTime) <= now));
     if (!first) throw new Error('no forecast periods');
 
     const name = typeof first.name === 'string' ? first.name : 'The coming period';
