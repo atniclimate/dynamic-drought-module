@@ -147,6 +147,13 @@ test('every outlook is a registered layer, each a products.ts entry with an issu
   });
 });
 
+test('a product a layer draws names that layer\'s source line as its issuer (audit R2-32)', () => {
+  // cpcSeasonalTemp is the briefing lane's product and names the agency in full on purpose.
+  const drawn = LAYER_DEFS.filter((def) => PRODUCTS[def.product]?.layerKey === def.key && def.product !== 'cpcSeasonalTemp');
+  assert.ok(drawn.length >= 29, `only ${drawn.length} layer products compared`);
+  for (const def of drawn) assert.equal(PRODUCTS[def.product].issuer, def.source, def.key);
+});
+
 test('the day-range palette is the two services\' renderers verbatim, outline widths included', () => {
   for (const [variable, fixture] of [['precipitation', 'precip'], ['temperature', 'temp']]) {
     const rows = CPC_EXTENDED_COLORS[variable];

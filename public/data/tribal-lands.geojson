@@ -1,6 +1,6 @@
 {
   "type": "FeatureCollection",
   "name": "Tribal Lands (PNW)",
-  "_comment": "Placeholder: replace with authoritative BIA AIAN-LAR GeoJSON, clipped to PNW. See data/README.md for download and conversion steps. Expected per-feature property: LARNAME or name.",
+  "_comment": "Empty deployer slot for this deployment's own Tribal land boundary data. The public federal boundaries already draw live with their sources named (US Census AIANNH and BIA AIAN-LAR), so do not paste them here. A boundary is a representation, not jurisdictional truth. See data/README.md for properties and conversion steps.",
   "features": []
 }

@@ -93,7 +93,8 @@ export const OCEANS: Record<OceanKey, OceanDef> = {
   }
 };
 
-export const OCEAN_KEYS: readonly OceanKey[] = ['pacific', 'arctic', 'atlantic'];
+/** Dropdown order: the OCEANS table's own order. */
+export const OCEAN_KEYS = Object.keys(OCEANS) as readonly OceanKey[];
 
 /** Ocean zones the minimap draws and makes clickable. The Arctic stays a
  * dropdown and deep-link view only: the minimap is for the Pacific and

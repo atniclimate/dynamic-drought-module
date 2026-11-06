@@ -306,13 +306,9 @@ export const HAZARD_CLUSTERS: Record<HazardClusterKey, HazardClusterDef> = {
   }
 };
 
-/** The cluster keys in button presentation order (D-0.7.0-042). */
-export const HAZARD_CLUSTER_KEYS: readonly HazardClusterKey[] = [
-  'drought',
-  'wildfire',
-  'heat',
-  'enso'
-];
+/** The cluster keys in button presentation order (D-0.7.0-042): the
+ * HAZARD_CLUSTERS table's own order, so a new mode cannot miss the list. */
+export const HAZARD_CLUSTER_KEYS = Object.keys(HAZARD_CLUSTERS) as readonly HazardClusterKey[];
 
 /** Display-name table for the honest prose display summary
  * (D-0.7.0-041 part 2; src/types/display-summary.ts). */

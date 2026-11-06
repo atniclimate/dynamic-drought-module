@@ -19,9 +19,10 @@
  * long after the registry wiring landed; corrected 2026-07-28,
  * ground-truth audit.)
  *
- * Source / property reference: Bureau of Indian Affairs (BIA) American
- * Indian / Alaska Native Land Area Representation (AIAN-LAR), clipped to
- * the Pacific Northwest (PNW) by the deployer.
+ * Source: the deployment's own boundary data. The public federal boundaries
+ * (US Census AIANNH, BIA AIAN-LAR) already draw live through `aiannh.ts` and
+ * `bia-reservations.ts` with their sources named; the properties this layer
+ * reads are listed in `data/README.md`.
  */
 
 import type * as maplibregl from 'maplibre-gl';

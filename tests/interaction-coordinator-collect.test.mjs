@@ -272,6 +272,41 @@ test('the census stamp follows the registry through a test reset (never a stale 
   assert.equal(stamp(), 'condition-surface:layer-b', 'a reset leaves no stale token behind');
 });
 
+test('the pointer cursor follows what a click would answer, whatever a layer\'s own mouseleave set (audit R2-30)', () => {
+  coordinator.resetInteractionCoordinatorForTest();
+  const canvas = { style: { cursor: '' } };
+  const moves = [];
+  let rendered = [];
+  const map = {
+    on(type, handler) {
+      if (type === 'mousemove') moves.push(handler);
+    },
+    getCanvas: () => canvas,
+    getLayer: (id) => ({ id }),
+    queryRenderedFeatures: () => rendered
+  };
+  const frames = [];
+  globalThis.requestAnimationFrame = (fn) => frames.push(fn);
+  try {
+    coordinator.registerClickTarget({ kind: 'condition-surface', layerIds: ['state'], label: name, respond: () => null });
+    coordinator.registerClickTarget({ kind: 'reservation-boundary', layerIds: ['aiannh'], label: () => null, respond: () => null });
+    coordinator.initInteractionCoordinator(map);
+    assert.equal(moves.length, 1, 'the coordinator binds one mousemove handler');
+    const move = (features) => {
+      rendered = features;
+      moves[0]({ point: { x: 10, y: 10 } });
+      canvas.style.cursor = ''; // a layer's own later-bound mouseleave runs in the same dispatch
+      while (frames.length) frames.shift()();
+      return canvas.style.cursor;
+    };
+    assert.equal(move([F('state', 'Fixture State')]), 'pointer', 'still over a clickable state after leaving another layer');
+    assert.equal(move([]), '', 'nothing clickable: the default cursor');
+    assert.equal(move([F('aiannh', 'Fixture Area')]), '', 'a hit whose label declines is not clickable');
+  } finally {
+    delete globalThis.requestAnimationFrame;
+  }
+});
+
 test('takeFrame accepts a frame root holding only its two regions, and refuses root text outside them', () => {
   /** A framed element as the frame module emits it, optionally with extra root text. */
   const frame = (extraText) => {
