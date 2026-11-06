@@ -28,7 +28,6 @@ import type { GeoJsonProperties } from 'geojson';
 import { USDM_CATEGORIES, readUsdmDm } from '../config/palette';
 import { STATIC_TELEMETRY_STATION_REGISTRY, distanceMeters } from '../config/station-registry';
 import type { ListItem, PopupClock, PopupDetail, ValueRow } from '../ui/popup-frame';
-import { escapeHtml } from '../util/escape';
 import { formatDistanceKm } from './point-heat-format';
 
 /** The USDM frame-slot fill ids (0.5.0b scrubber; mirrors
@@ -95,34 +94,6 @@ export function readFireContext(
     details: [fuelsRow(map), nearestStationsDetail(lngLat)],
     note: FIRE_CONTEXT_NOTE
   };
-}
-
-/**
- * The same reads as plain markup (the pre-frame "Fire in context" block),
- * kept only for tests/drought-semantics.spec.ts, which pins the drought
- * row's absence wording through it; the popup itself renders
- * `readFireContext` through the frame. No src module imports it.
- */
-export function buildFireContextHtml(
-  map: maplibregl.Map,
-  point: maplibregl.PointLike,
-  lngLat: maplibregl.LngLat
-): string {
-  const read = readFireContext(map, point, lngLat);
-  const row = (label: string, text: string): string =>
-    `<div class="fire-context-block"><span class="fire-context-label">${escapeHtml(label)}</span> <span class="fire-context-value">${escapeHtml(text)}</span></div>`;
-  const details = read.details
-    .map((detail) =>
-      detail.kind === 'row'
-        ? row(detail.label, detail.text)
-        : detail.kind === 'list'
-          ? `<div class="fire-context-block"><div class="fire-context-label">${escapeHtml(detail.label)}</div><ul class="fire-context-stations">${detail.items
-              .map((item) => `<li>${escapeHtml(typeof item === 'string' ? item : `${item.text} ${item.qualifier?.text ?? ''}`.trim())}</li>`)
-              .join('')}</ul></div>`
-          : ''
-    )
-    .join('');
-  return `<div class="fire-context">${row(read.drought.label ?? '', read.drought.text)}${details}<p class="fire-context-note">${escapeHtml(read.note)}</p></div>`;
 }
 
 /** The USDM class beneath the clicked point, or an honest off/none state. */

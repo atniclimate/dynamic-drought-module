@@ -2,7 +2,7 @@ import { expect, test } from './offline-test';
 import type * as maplibregl from 'maplibre-gl';
 
 import { USDM_NONE_SWATCH } from '../src/config/palette';
-import { buildFireContextHtml } from '../src/impact/fire-context';
+import { readFireContext } from '../src/impact/fire-context';
 import {
   buildUsdmFillPaint,
   fadeLayerIds
@@ -55,10 +55,10 @@ test('fire context does not infer no drought without an analyzed-area mask', () 
   // A tuple, not a bare `{x,y}` object: maplibre-gl's `PointLike` is
   // `Point | [number, number]`, and a plain literal lacks the `Point`
   // class's own methods (`clone`, `add`, ...).
-  const html = buildFireContextHtml(map, [10, 10], lngLat);
-  expect(html).toContain('No D0-D4 polygon rendered here.');
-  expect(html).toContain('no analyzed-area mask here');
-  expect(html).toContain('does not confirm no drought');
+  const { drought } = readFireContext(map, [10, 10], lngLat);
+  expect(drought.text).toContain('No D0-D4 polygon rendered here.');
+  expect(drought.text).toContain('no analyzed-area mask here');
+  expect(drought.text).toContain('does not confirm no drought');
 });
 
 test('USDM fade targets contain the actual fill and outline layers only', () => {

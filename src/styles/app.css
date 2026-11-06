@@ -2026,52 +2026,6 @@ button.conditions-metric:hover .conditions-action-hide {
   text-transform: uppercase;
 }
 
-/* Fire-in-context block (0.4.0 B1): a composed read appended to a NIFC
-   perimeter popup (drought class beneath, nearest stations). Composition only,
-   not a fire forecast. */
-.fire-context {
-  margin-top: 10px;
-  padding-top: 8px;
-  border-top: 1px solid var(--line);
-  font-family: var(--font-body);
-  font-size: 11.5px;
-}
-.fire-context-block {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 3px 0;
-}
-.fire-context-block + .fire-context-block {
-  border-top: 1px dashed var(--line);
-}
-.fire-context-label {
-  color: var(--fg-2);
-  letter-spacing: 0.02em;
-}
-.fire-context-value {
-  color: var(--fg-0);
-  font-weight: var(--fw-strong);
-}
-.fire-context-stations {
-  list-style: none;
-  margin: 2px 0 0;
-  padding: 0;
-}
-.fire-context-stations li {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  color: var(--fg-1);
-  padding: 1px 0;
-}
-.fire-context-note {
-  margin: 6px 0 0;
-  font-size: 10.5px;
-  line-height: 1.35;
-  color: var(--fg-3);
-}
-
 /* ----------------------------------------------------------------------------
    Skeleton shimmer (0.4.0 A4): a calm loading affordance for telemetry
    surfaces that wait on a network round trip (the sidebar value slot and the
