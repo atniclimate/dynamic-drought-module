@@ -685,6 +685,42 @@ export function checkFieldSchema(expected, bodyText) {
   return { miss: null, note: `${expected.length}/${expected.length} requested fields present` };
 }
 
+/** Judge a WWA layer `?f=json` body against the product names the alert reader asks for:
+ * each must be a value of the service renderer's own list, or a rename drops it silently. */
+export function checkProductNames(expected, bodyText) {
+  let json;
+  try {
+    json = JSON.parse(bodyText);
+  } catch {
+    return { miss: 'layer body is not JSON', note: '' };
+  }
+  if (json && json.error) {
+    return { miss: `ArcGIS error ${json.error.code ?? '?'} ${json.error.message ?? ''}`.trim(), note: '' };
+  }
+  const values = json?.drawingInfo?.renderer?.uniqueValueInfos;
+  if (!Array.isArray(values)) return { miss: 'layer body has no renderer value list', note: '' };
+  const served = new Set(values.map((info) => info?.value));
+  const missing = expected.filter((name) => !served.has(name));
+  if (missing.length > 0) return { miss: `products not in the renderer: ${missing.join(', ')}`, note: '' };
+  return { miss: null, note: `${expected.length}/${expected.length} requested products in the renderer` };
+}
+
+/** The pre-2025 names the heat set still asks for on purpose (Hazard Simplification renamed
+ * Excessive Heat to Extreme Heat; src/config/palette.ts): the renderer no longer lists them. */
+export const RETIRED_ALERT_PRODUCTS = Object.freeze(['Excessive Heat Warning', 'Excessive Heat Watch']);
+
+/** One probe of every product name any mode's alert set asks for (HazardClusterDef.alerts),
+ * read from the mode table itself; a missing WWA key is a disarmed probe and throws. */
+export async function buildProductProbeEntry(urlEntries) {
+  const base = urlEntries.find((e) => e.key === 'nwsWwaMapServer');
+  if (!base) throw new Error('product probe: nwsWwaMapServer is not an extracted urls.ts entry; the probe is disarmed');
+  const { HAZARD_CLUSTERS } = await import('../src/config/clusters.ts');
+  const productsExpected = [...new Set(Object.values(HAZARD_CLUSTERS).flatMap((def) => def.alerts?.events ?? []))]
+    .filter((name) => !RETIRED_ALERT_PRODUCTS.includes(name));
+  if (productsExpected.length === 0) throw new Error('product probe: no mode names alert products; the probe is disarmed');
+  return { key: 'products:nwsWwaMapServer', url: `${base.url}?f=json`, tier: DRIFT_TIERS.RUNTIME, productsExpected };
+}
+
 async function fieldListsForProbe(probe, root) {
   const file = join(root, probe.file);
   const source = await readFile(file, 'utf8');
@@ -790,6 +826,10 @@ export async function check(entry) {
       if (fieldNote && entry.fieldsDynamic?.length) {
         fieldNote += `; template token${entry.fieldsDynamic.length === 1 ? '' : 's'} ${entry.fieldsDynamic.map((t) => '${' + t + '}').join(', ')} not checked`;
       }
+    } else if (entry.productsExpected && resp.status < 400) {
+      const result = checkProductNames(entry.productsExpected, await resp.text());
+      tripwireMiss = result.miss;
+      fieldNote = result.note;
     }
     const ok = resp.status < 400 && !corsInvalid && tripwireMiss === null;
     const detail =
@@ -1026,6 +1066,8 @@ async function main() {
     // Field-schema rows for every ArcGIS outFields list the runtime sends;
     // an unresolvable row throws (a disarmed probe must fail loudly).
     entries.push(...(await buildFieldProbeEntries(entries)));
+    // The alert products every mode asks for, against the WWA renderer's own names.
+    entries.push(await buildProductProbeEntry(entries));
   }
   entries.push(...LANDSCAPE_PROBES);
 
