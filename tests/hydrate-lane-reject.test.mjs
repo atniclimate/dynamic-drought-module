@@ -72,6 +72,10 @@ test('a lane whose fetch rejects settles as did-not-respond and the hydration fi
     const cell = briefing.horizons.longRange.cells.drought;
     assert.notEqual(cell.status, 'loading');
     assert.match(JSON.stringify(cell), /did not respond/);
+    // The Seasonal Drought Outlook is categorical: its fixed sentence states no odds.
+    const outlook = cell.claims.find((claim) => claim.product === 'cpcSeasonal');
+    assert.ok(outlook, 'the fixed CPC Seasonal Drought Outlook claim stands in the cell');
+    assert.doesNotMatch(outlook.text, /odds|probability/);
   } finally {
     globalThis.fetch = original;
     console.warn = warn;

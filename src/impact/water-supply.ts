@@ -100,17 +100,18 @@ interface WsRow {
 /**
  * Parse the HTML-wrapped CSV: drop markup and blank lines, read the header
  * to find column indices by name (defensive against column drift), and
- * return the data rows.
+ * return the data rows: possibly none (a header-only report is an answer),
+ * or null when the header or a column is missing (not a report at all).
  */
-function parseWsReport(text: string): WsRow[] {
+function parseWsReport(text: string): WsRow[] | null {
   const lines = text
     .split(/\r?\n/)
     .map((l) => l.trim())
     .filter((l) => l.length > 0 && !l.startsWith('<'));
   const headerIdx = lines.findIndex((l) => l.startsWith('ID,'));
-  if (headerIdx < 0) return [];
+  if (headerIdx < 0) return null;
   const header = lines[headerIdx];
-  if (!header) return [];
+  if (!header) return null;
   const cols = header.split(',');
   const iId = cols.indexOf('ID');
   const iLoc = cols.indexOf('Location');
@@ -118,7 +119,7 @@ function parseWsReport(text: string): WsRow[] {
   const iPct = cols.indexOf('50PerAvg');
   const iCur = cols.indexOf('CurPerAvg');
   const iDate = cols.indexOf('FcstDate');
-  if ([iId, iLoc, iPeriod, iPct, iCur, iDate].some((i) => i < 0)) return [];
+  if ([iId, iLoc, iPeriod, iPct, iCur, iDate].some((i) => i < 0)) return null;
 
   const rows: WsRow[] = [];
   for (const line of lines.slice(headerIdx + 1)) {
@@ -236,8 +237,12 @@ export async function fetchWaterSupplyClaims(
     try {
       const resp = await fetchBufferedWithBudget(proxied, {}, signal, TIMEOUT_MS);
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      rows = parseWsReport(await resp.text());
-      if (rows.length > 0) WS_ROWS_CACHE.set(proxied, rows, WS_CACHE_TTL_MS);
+      const parsed = parseWsReport(await resp.text());
+      if (parsed === null) throw new Error('no NWRFC report header');
+      rows = parsed;
+      // A header with no rows is the report's answer (October until the
+      // first new-year forecast), so it is cached like any other.
+      WS_ROWS_CACHE.set(proxied, rows, WS_CACHE_TTL_MS);
     } catch {
       if (signal.aborted) return { claims: [], ok: false };
       return {
