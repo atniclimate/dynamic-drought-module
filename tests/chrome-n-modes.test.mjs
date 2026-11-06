@@ -296,6 +296,21 @@ test('map-key.ts carries no cluster literal in its section-visibility path (DR-1
     /HAZARD_CLUSTERS\[activeCluster\]\.detailSections/,
     'map-key.ts no longer reads detailSections from the active HAZARD_CLUSTERS entry'
   );
+  // Audit round 2 (R2-5): a reference layer demotes the set to custom and the
+  // store to 'drought', so the section follows the shell's selected hazard
+  // (as view-shell.ts does) and re-renders on every snapshot publish.
+  assert.match(text, /const activeCluster = getCommittedSnapshot\(\)\.selectedHazard;/);
+  assert.match(text, /onCommittedSnapshotChange\(update\)/);
+});
+
+// Audit round 2 (R2-10): the degraded boot reaches loadMapKey twice
+// (src/main.ts bootMapFreeChrome, then wireMapDependentChrome), and a second
+// run used to double every window and registry listener it did not dispose.
+test('initMapKey runs once: a second call returns before wiring anything', async () => {
+  const text = await readFile(new URL('src/ui/map-key.ts', ROOT), 'utf8');
+  const body = text.slice(text.indexOf('export function initMapKey(): void {'));
+  assert.match(body, /^export function initMapKey\(\): void \{\s*if \(mapKeyBooted\) return;\s*mapKeyBooted = true;/);
+  assert.doesNotMatch(text, /disposeMapKey/, 'the partial dispose scaffolding is back');
 });
 
 test('map-key.ts derives the chip glyph from registry.getStatus, not from KeySpec text (the retired substring matcher)', async () => {

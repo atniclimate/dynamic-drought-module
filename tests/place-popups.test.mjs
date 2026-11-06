@@ -37,26 +37,13 @@ registerHooks({
 
 const popups = await import('../src/ui/popups.ts');
 
-test('legacy briefing door preserves warning opt-in and escaped words while borrowing issuer color', () => {
-  for (const [warningLabel, color] of [
-    ['Red Flag Warning', '#ff1493'],
-    ['Mapped wildfire perimeter', '#ff4c00'],
-    ['Unknown Warning', 'var(--ink-strong)'],
-    ['constructor', 'var(--ink-strong)']
-  ]) {
-    const html = popups.buildImpactTriggerButtonHtml('A & B', { pulse: true, warningLabel });
-    assert.ok(html.includes(`style="--door-issuer-color: ${color}"`));
-    assert.ok(html.endsWith(`>${warningLabel} - Open the Impact Briefing for A &amp; B</button>`));
-  }
-  for (const opts of [undefined, { pulse: false, warningLabel: 'Red Flag Warning' }, { pulse: true, warningLabel: null }]) {
-    const html = popups.buildImpactTriggerButtonHtml('A & B', opts);
-    assert.equal(html.includes('--door-issuer-color'), false);
-    assert.equal(html.includes('popup-impact-btn--pulse'), false);
-    assert.ok(html.endsWith('>Open the Impact Briefing for A &amp; B</button>'));
-  }
-  const injected = popups.buildImpactTriggerButtonHtml('Fixture Place', { pulse: true, warningLabel: '\"><img src=x>' });
-  assert.ok(injected.includes('style="--door-issuer-color: var(--ink-strong)"'));
-  assert.equal(injected.includes('<img'), false);
+// The coordinator's door: one label, the place escaped. The pulse and its
+// issuer colour live only in the frame's door (tests/popup-frame.test.mjs).
+// Audit round 2 (R2-9): the retired "<warning> - Open ..." label is gone.
+test('the coordinator briefing door names only the place, escaped, and never a warning', () => {
+  const door = '<button type="button" class="popup-impact-btn" data-ddm-impact-trigger>Open the Impact Briefing for A &amp; B</button>';
+  assert.equal(popups.buildImpactTriggerButtonHtml('A & B'), door);
+  assert.equal(popups.buildImpactTriggerButtonHtml('A & B', { pulse: true, warningLabel: 'Red Flag Warning' }), door);
 });
 const { buildPlaceConditionsHtml } = await import('../src/ui/popup-conditions.ts');
 const { registry } = await import('../src/state/registry.ts');

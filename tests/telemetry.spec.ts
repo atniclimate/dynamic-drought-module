@@ -1,5 +1,5 @@
 import { test, expect } from './offline-test';
-import { gotoApp, stationValues, PILL } from './helpers';
+import { gotoApp, layerCheckbox, stationValues, PILL } from './helpers';
 
 /**
  * Telemetry honesty backbone (T1 through T3 and the 0.2.1 Tier A
@@ -76,5 +76,34 @@ test.describe('telemetry status honesty', () => {
     // no slot may still carry the shimmer. This guards the auto-clear contract
     // (a shimmer stuck on a settled row would misread as perpetual loading).
     await expect(page.locator('.telemetry-values.skeleton-shimmer')).toHaveCount(0);
+  });
+
+  // Audit round 2 (R2-6): a layer-off during the value reads aborted them and
+  // left every unresolved row shimmering "loading..." for good.
+  test('turning telemetry off while values load empties the rows still loading', async ({ page }) => {
+    await page.route('**/cwms-data.usace.army.mil/**', () => {}); // held: never answers
+    await gotoApp(page, '?region=washington_state&view=console&layers=telemetry');
+    await expect(stationValues(page, 'ihr')).toHaveText(PILL.loading);
+    await layerCheckbox(page, 'telemetry').uncheck();
+    await expect(page.locator('.telemetry-values.loading')).toHaveCount(0);
+    await expect(page.locator('.telemetry-values.skeleton-shimmer')).toHaveCount(0);
+    await expect(stationValues(page, 'ihr')).toBeEmpty();
+  });
+
+  // Audit round 2 (R2-7): a read that answered with no recent value says the
+  // station popup's state word, not the failed-read "values unavailable".
+  test('a station whose read answers with no recent value reads no data, and a failed read stays values unavailable', async ({ page }) => {
+    // Ice Harbor answers an empty series and an empty catalog (src/util/cwms.ts
+    // returns null); Bonneville's read fails outright.
+    await page.route('**/cwms-data.usace.army.mil/**', (route) => {
+      const url = route.request().url();
+      if (url.includes('BON.')) return route.fulfill({ status: 500, contentType: 'text/plain', body: 'Synthetic outage' });
+      const body = url.includes('/catalog/') ? { entries: [] } : { units: 'ft', values: [] };
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+    });
+    await gotoApp(page, '?region=washington_state&view=console&layers=telemetry');
+    await expect(stationValues(page, 'ihr')).toHaveText('no data');
+    await expect(stationValues(page, 'ihr')).toHaveClass(/\bunavailable\b/);
+    await expect(stationValues(page, 'bono3')).toHaveText('values unavailable');
   });
 });

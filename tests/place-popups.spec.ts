@@ -2,9 +2,20 @@ import { test, expect, type Page, type Route } from './offline-test';
 import { readFileSync } from 'node:fs';
 import { installBoundaryStubs } from './tribal-fixtures';
 import { installMinimapAnalysisStubs } from './minimap-fixtures';
-import { buildImpactTriggerButtonHtml } from '../src/ui/popups';
+import { serializePopupFrame, type PopupModel } from '../src/ui/popup-frame';
 
 const css = readFileSync(new URL('../src/styles/app.css', import.meta.url), 'utf8');
+
+/** A surface frame whose one action is a briefing door earned by `warningLabel`. */
+const warnedFrame = (warningLabel: string): string => serializePopupFrame({
+  kind: 'surface',
+  title: 'Fixture surface',
+  issuer: { role: 'issued-by', name: 'Fixture issuer', productKey: 'usdm' },
+  value: [{ text: 'Fixture value' }],
+  clocks: [{ kind: 'point', meaning: 'map-date', label: 'Fixture map date', at: { precision: 'date', date: '2026-09-29' } }],
+  source: { link: { label: 'Fixture source', href: 'https://droughtmonitor.unl.edu/' } },
+  actions: [{ kind: 'briefing', place: 'Fixture Place', warningLabel }]
+} satisfies PopupModel);
 
 // Render the shipped serializer and full stylesheet in an isolated document.
 // No map, source requests, GPU contention, or clock sleeps are needed.
@@ -14,7 +25,7 @@ test('briefing warning ring changes width only and keeps a 2px reduced-motion ed
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   await page.setContent(`<style>${css}</style><main>${[
     'Red Flag Warning', 'Extreme Heat Warning', 'Mapped wildfire perimeter', 'Unknown Warning'
-  ].map((warningLabel) => buildImpactTriggerButtonHtml('Fixture Place', { pulse: true, warningLabel })).join('')}</main>`);
+  ].map(warnedFrame).join('')}</main>`);
   const doors = page.locator('[data-ddm-impact-trigger]');
   const colors = ['rgb(255, 20, 147)', 'rgb(199, 21, 133)', 'rgb(255, 76, 0)', 'rgb(255, 255, 255)'];
   for (let i = 0; i < colors.length; i += 1) {

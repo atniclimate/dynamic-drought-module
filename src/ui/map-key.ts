@@ -51,6 +51,7 @@ import { FRAMINGS } from '../config/framings';
 import { minimapProvenanceAt } from '../config/minimap-readings';
 import { getFraming, onFramingChange } from '../state/framing-store';
 import { getHazardCluster, getOceanFraming, onHazardClusterChange } from '../state/cluster-store';
+import { getCommittedSnapshot, onCommittedSnapshotChange } from '../state/cluster-service';
 import { getViewMode, onViewModeChange } from '../state/view-mode';
 import { isUsScopeCautionLayer } from '../state/display-summary';
 import { escapeHtml } from '../util/escape';
@@ -199,13 +200,8 @@ let nwsSnapshotStatus: NwsSnapshotEventDetail['status'] = 'inactive';
 let nwsSnapshotAsOf: number | null = null;
 let nwsSnapshotTruncated = false;
 let nwsSnapshotEvents: readonly string[] = [];
-let disposeMapKeyLayout: (() => void) | null = null;
-let disposeMapKeyOverflow: (() => void) | null = null;
-let disposeMapKeySeat: (() => void) | null = null;
-let disposeMapKeyTimeBarSpec: (() => void) | null = null;
-let disposeMapKeyFraming: (() => void) | null = null;
-let disposeMapKeyViewMode: (() => void) | null = null;
-let disposeMapKeyHazardCluster: (() => void) | null = null;
+/** initMapKey has run: the degraded boot calls it twice (src/main.ts), and the first run's DOM and listeners stand. */
+let mapKeyBooted = false;
 let whpShadeActive = false;
 /** The Wildfire 3D drape is mounted, so the flat Fuel risk layer is hidden (src/layers/whp-3d.ts). */
 let whpDrapeMounted = false;
@@ -232,12 +228,12 @@ function drynessKeyHtml(): string {
  * alone in the bottom-left corner). Phones and embeds keep the dock seat
  * their layouts were designed around; see src/ui/map-control-seat.ts.
  */
-function watchMapKeySeat(node: HTMLElement): () => void {
+function watchMapKeySeat(node: HTMLElement): void {
   const marker = document.getElementById('map-key-home');
   const overlayHost = document.getElementById('map-key-overlay-host');
   const dock = marker?.parentElement ?? null;
-  if (!marker || !overlayHost || !dock) return () => {};
-  return watchDesktopMapSeat({
+  if (!marker || !overlayHost || !dock) return;
+  watchDesktopMapSeat({
     node,
     host: overlayHost,
     home: dock,
@@ -254,7 +250,6 @@ function watchMapKeySeat(node: HTMLElement): () => void {
 
 interface MapKeyLayoutWatch {
   readonly schedule: () => void;
-  readonly dispose: () => void;
 }
 
 /**
@@ -267,7 +262,7 @@ interface MapKeyLayoutWatch {
 function watchMapKeyLayout(host: HTMLElement): MapKeyLayoutWatch {
   const app = document.getElementById('app');
   if (!app) {
-    return { schedule: () => {}, dispose: () => {} };
+    return { schedule: () => {} };
   }
 
   const widthQuery = window.matchMedia(MOBILE_MAP_KEY_QUERY);
@@ -276,11 +271,9 @@ function watchMapKeyLayout(host: HTMLElement): MapKeyLayoutWatch {
   const controls = document.querySelector<HTMLElement>('.map-overlay-controls');
   const bottomDock = document.getElementById('map-bottom-dock');
   let frame: number | null = null;
-  let disposed = false;
 
   const measure = (): void => {
     frame = null;
-    if (disposed) return;
     const content = host.querySelector<HTMLElement>('#map-key-content');
     const mapBox = document.getElementById('map-container')?.getBoundingClientRect();
     if (content && !content.hidden && mapBox) {
@@ -340,7 +333,7 @@ function watchMapKeyLayout(host: HTMLElement): MapKeyLayoutWatch {
   };
 
   const schedule = (): void => {
-    if (disposed || frame !== null) return;
+    if (frame !== null) return;
     frame = window.requestAnimationFrame(measure);
   };
 
@@ -358,22 +351,7 @@ function watchMapKeyLayout(host: HTMLElement): MapKeyLayoutWatch {
   void document.fonts?.ready.then(schedule);
   schedule();
 
-  return {
-    schedule,
-    dispose() {
-      if (disposed) return;
-      disposed = true;
-      observer?.disconnect();
-      loadingVisibility.disconnect();
-      widthQuery.removeEventListener('change', schedule);
-      window.removeEventListener('resize', schedule);
-      if (frame !== null) window.cancelAnimationFrame(frame);
-      frame = null;
-      app.style.removeProperty(MOBILE_MAP_KEY_HEIGHT_PROPERTY);
-      app.style.removeProperty(DESKTOP_LOADING_TOP_PROPERTY);
-      host.style.removeProperty('--map-key-available-height');
-    }
-  };
+  return { schedule };
 }
 
 /** Presentation-only family for semantic CSS hooks and disclosure behavior. */
@@ -1392,18 +1370,12 @@ function buildChipGrammar(button: HTMLButtonElement): {
 
 /** Build the swatch strip once and keep it synced to the registry. */
 export function initMapKey(): void {
+  if (mapKeyBooted) return;
+  mapKeyBooted = true;
   const host = document.getElementById('map-key');
   if (!host) return;
-  disposeMapKeyLayout?.();
-  disposeMapKeyOverflow?.();
-  disposeMapKeySeat?.();
-  disposeMapKeyTimeBarSpec?.();
-  disposeMapKeyFraming?.();
-  disposeMapKeyViewMode?.();
-  disposeMapKeyHazardCluster?.();
   const layout = watchMapKeyLayout(host);
-  disposeMapKeyLayout = layout.dispose;
-  disposeMapKeySeat = watchMapKeySeat(host);
+  watchMapKeySeat(host);
   const heatRiskSequenceLoader = createHeatRiskSequenceLoader(
     () => import('./heatrisk-sequence'),
     (err) => {
@@ -1564,18 +1536,6 @@ export function initMapKey(): void {
   document.addEventListener('focusin', onFocusIn);
   document.addEventListener('focusout', onFocusOut);
 
-  disposeMapKeyOverflow = () => {
-    appPresentationObserver.disconnect();
-    widthQuery.removeEventListener('change', onWidthChange);
-    window.removeEventListener('ddm:toggle-map-key-details', toggleDetails);
-    window.removeEventListener('ddm:whp-shade', onWhpShade);
-    window.removeEventListener(DRYNESS_GROUND_EVENT, onDrynessGround);
-    host.removeEventListener('keydown', closeDetailsOnEscape);
-    document.removeEventListener('focusin', onFocusIn);
-    document.removeEventListener('focusout', onFocusOut);
-    window.removeEventListener(ENSO_FLOW_SNAPSHOT_EVENT, onEnsoFlowSnapshot);
-  };
-
   const update = (): void => {
     const active = activeKey();
     // THE CHIP NEVER HIDES, but only where it IS the chip: the desktop
@@ -1654,11 +1614,13 @@ export function initMapKey(): void {
     family = nextFamily;
     host.dataset.keyFamily = family;
     // The drawer's per-cluster sections (DR-113; src/config/detail-
-    // sections.ts): the COMMITTED cluster decides which static section
+    // sections.ts): the SELECTED hazard decides which static section
     // host is revealed, never the momentarily-eligible family, so a
     // section never flashes for a layer that is merely loading under a
-    // different mode.
-    const activeCluster = getHazardCluster();
+    // different mode. Not the store's cluster: a reference layer added to
+    // a mode demotes the set to custom and the store to 'drought', while
+    // the shell keeps its hazard (view-shell.ts selectedHazardTitle).
+    const activeCluster = getCommittedSnapshot().selectedHazard;
     const activeSections = HAZARD_CLUSTERS[activeCluster].detailSections ?? [];
     for (const def of Object.values(DETAIL_SECTIONS)) {
       const sectionEl = document.getElementById(def.homeId);
@@ -1786,20 +1748,23 @@ export function initMapKey(): void {
     tropicalSnapshot = detail;
     update();
   });
-  disposeMapKeyTimeBarSpec = onTimeBarSpecChange(update);
+  onTimeBarSpecChange(update);
   // A framing click never fires a registry event (D-0.7.0-039: camera-only,
   // no layer write), so without this the coverage caution above would only
   // refresh on the NEXT unrelated key change.
-  disposeMapKeyFraming = onFramingChange(update);
+  onFramingChange(update);
   // Nor does a Brief/Console flip, and it decides whether the minimap
   // provenance clause has a referent at all (finding 5). Without this the
   // sentence would linger into Console until some unrelated key change.
-  disposeMapKeyViewMode = onViewModeChange(update);
+  onViewModeChange(update);
   // The chip never hides (section 2.4): with no key eligible it falls back
   // to the committed mode's own word, so a mode switch with no layer
   // change (an empty season-ahead recipe, D-0.7.0-043) still has to
   // re-render the fallback label.
-  disposeMapKeyHazardCluster = onHazardClusterChange(update);
+  onHazardClusterChange(update);
+  // The drawer sections follow the selected hazard, which a requestCluster
+  // publishes only after its store write (cluster-service.ts publish).
+  onCommittedSnapshotChange(update);
 
   registry.on('change', update);
   // Every status transition can change the strip now that a loading key

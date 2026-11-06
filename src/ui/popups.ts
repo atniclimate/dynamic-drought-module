@@ -15,7 +15,6 @@ import { fetchHydrometDaily, hydrometStationValue } from '../util/hydromet';
 import type { HydrometSeries } from '../util/hydromet';
 import { escapeHtml } from '../util/escape';
 import { formatStationNumber } from '../util/station-format';
-import { briefingDoorColor } from './briefing-door-color';
 import type { PlaceConditions } from './popup-conditions';
 import type {
   ChartDetail,
@@ -74,41 +73,12 @@ import { sparklineSvg } from './charts';
  * for rather than repeating the same bare noun on every boundary popup.
  * `placeTitle` runs through `escapeHtml`: never inline it unescaped.
  *
- * `opts.pulse` plus `opts.warningLabel` (director ruling, 2026-09-10,
- * "Emphasis must be ethical"): set ONLY when `src/ui/popup-conditions.ts`
- * found a REAL issuer-published warning-class condition at this place (an
- * NWS product ending "Warning", or a currently mapped NIFC WFIGS wildfire
- * perimeter) -- never for a DDM-computed judgement, a raster
- * hazard-potential surface, or an outlook. `warningLabel` is that
- * condition's own verbatim product name (or, for a fire perimeter, the
- * plain "Mapped wildfire perimeter" legend phrase): the surface-vocabulary
- * doctrine (scripts/check-surface-vocabulary.mjs) holds that DDM never
- * calls its own read "a warning" in its own voice, only the issuer's own
- * product name earns that word, so the button names the actual product
- * rather than a generic badge. That text is part of the SAME string as the
- * place name (still no separate `aria-label`), so colour is never the only
- * carrier of the warning (accessibility clause d). `pulse` only takes
- * effect when a `warningLabel` is also given (a pulse with nothing to name
- * would be colour alone); the motion itself is added by CSS
- * (`.popup-impact-btn--pulse`) and is fully retired under
- * `prefers-reduced-motion: reduce`, where the class still renders its
- * static issuer-color edge treatment (clause b).
+ * The warning pulse (director ruling, 2026-09-10, "Emphasis must be
+ * ethical") is the popup frame's door alone (src/ui/popup-frame.ts
+ * `DoorSpec.warningLabel`), and it never renames the door (S30D D1 M24).
  */
-export function buildImpactTriggerButtonHtml(
-  placeTitle: string,
-  opts?: { pulse?: boolean; warningLabel?: string | null }
-): string {
-  const warningLabel = opts?.warningLabel ?? null;
-  const pulse = opts?.pulse === true && warningLabel !== null;
-  const cls = pulse ? 'popup-impact-btn popup-impact-btn--pulse' : 'popup-impact-btn';
-  const label =
-    pulse && warningLabel !== null
-      ? `${escapeHtml(warningLabel)} - Open the Impact Briefing for ${escapeHtml(placeTitle)}`
-      : `Open the Impact Briefing for ${escapeHtml(placeTitle)}`;
-  const style = pulse && warningLabel !== null
-    ? ` style="--door-issuer-color: ${briefingDoorColor(warningLabel)}"`
-    : '';
-  return `<button type="button" class="${cls}" data-ddm-impact-trigger${style}>${label}</button>`;
+export function buildImpactTriggerButtonHtml(placeTitle: string): string {
+  return `<button type="button" class="popup-impact-btn" data-ddm-impact-trigger>Open the Impact Briefing for ${escapeHtml(placeTitle)}</button>`;
 }
 
 

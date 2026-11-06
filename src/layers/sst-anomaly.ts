@@ -437,14 +437,12 @@ async function showFrame(map: maplibregl.Map, index: number): Promise<void> {
   const incoming = [
     { layerId: frameSourceId(date), prop: 'raster-opacity', target: RASTER_OPACITY }
   ];
-  const outgoing = [];
-  if (previous && previous !== date) {
-    outgoing.push({
-      layerId: frameSourceId(previous),
-      prop: 'raster-opacity',
-      target: RASTER_OPACITY
-    });
-  }
+  // Every other mounted frame, not only `previous`: a step superseded during
+  // its tile wait leaves `previous` naming a frame never shown, while the day
+  // on screen is another one. A lookahead already at 0 stays at 0.
+  const outgoing = mountedFrames
+    .filter((other) => other !== date)
+    .map((other) => ({ layerId: frameSourceId(other), prop: 'raster-opacity', target: RASTER_OPACITY }));
   if (map.getLayer(LAYER_ID)) {
     // First dated step: fade the boot-time `default` layer out for good.
     outgoing.push({ layerId: LAYER_ID, prop: 'raster-opacity', target: RASTER_OPACITY });
