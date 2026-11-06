@@ -203,7 +203,8 @@ test.describe('S3 requestCluster (the transaction)', () => {
       requestCluster('wildfire');
       expect(getCommittedSnapshot().horizon).toBe('season-ahead');
       expect(getCommittedSnapshot().intendedKeys.has('usfs-whp')).toBe(true);
-      expect(getCommittedSnapshot().intendedKeys.has('nifc-fires')).toBe(false);
+      // DR-022: live perimeters in every horizon, Long Range included.
+      expect(getCommittedSnapshot().intendedKeys.has('nifc-fires')).toBe(true);
 
       // Flip clusters: the register persists; the flip re-resolves at
       // the same horizon.

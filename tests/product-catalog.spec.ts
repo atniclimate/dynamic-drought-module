@@ -196,7 +196,8 @@ function locateMakeClaimSites(
 }
 
 /** The count pinned 2026-09-12 (DDM-P14-T05 microtask 3): a genuinely new construction site should move this number, not silence the assertion below it. */
-const EXPECTED_MAKE_CLAIM_SITES = 28;
+// 28 to 29 on 2026-11-06: the derived heat-to-dryness claim split out of the NWS forecast claim (DR-047 a).
+const EXPECTED_MAKE_CLAIM_SITES = 29;
 
 test('every LayerDef in LAYER_DEFS carries a product field naming a PRODUCT_KEYS member', () => {
   const productKeySet = new Set<string>(PRODUCT_KEYS);
