@@ -222,3 +222,44 @@ test('two quick rail steps never leave the older week queryable under the drawn 
     assert.deepEqual(queryable(map), ['usdm-frame-a-fill'], 'and stays queryable after that load fails');
   });
 });
+
+test('a rail step during the Drought level crossfade leaves no change map queryable (R6-3)', async () => {
+  await withRail(Date.UTC(2022, 9, 4), async (map, handlers) => {
+    handlers.change = async () => json({ ...week(0), date: '20221004' });
+    globalThis.__bar.modes.onSelect('chg1');
+    await settle();
+    assert.deepEqual(queryable(map), ['usdm-change-fill']);
+
+    const fade = deferred();
+    globalThis.__fade = () => fade.promise;
+    globalThis.__bar.modes.onSelect('absolute');
+    await settle();
+    const archive = deferred();
+    handlers.archive = () => archive.promise;
+    globalThis.__bar.rail.onStep(globalThis.__bar.rail.index - 1);
+    await settle();
+    fade.resolve();
+    await settle();
+    assert.deepEqual(queryable(map), ['usdm-frame-a-fill'], 'the faded-out change map still answers clicks');
+
+    archive.resolve(busy());
+    await settle();
+    assert.deepEqual(queryable(map), ['usdm-frame-a-fill']);
+  });
+});
+
+test('a rail step during a change-map crossfade leaves no week queryable under it (R6-3)', async () => {
+  await withRail(Date.UTC(2021, 9, 5), async (map, handlers) => {
+    handlers.change = async () => json({ ...week(0), date: '20211005' });
+    const fade = deferred();
+    globalThis.__fade = () => fade.promise;
+    globalThis.__bar.modes.onSelect('chg4');
+    await settle();
+    globalThis.__bar.rail.onStep(globalThis.__bar.rail.index);
+    await settle();
+    fade.resolve();
+    await settle();
+    assert.deepEqual(queryable(map), ['usdm-change-fill'], 'the faded-out week still answers clicks');
+    assert.equal(timeline.usdmMode, 'chg4');
+  });
+});
