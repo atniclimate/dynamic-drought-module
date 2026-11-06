@@ -64,6 +64,9 @@ import type { TemporalHorizonKey } from '../config/clusters';
  *            absence (D-0.7.0-044); `layers=` outranks it on parse
  *   ocean    pacific | arctic | atlantic; valid only beside
  *            cluster=enso (D-0.7.0-042/053), ignored otherwise
+ *   hazard   a mode token, written only beside `layers=` with no
+ *            `cluster=`: the hazard a custom set was made from (its alert
+ *            products, key and strip); it never changes the display
  *   studio   layers or place opens the matching lazy studio over the
  *            mounted map; it composes with every other durable state
  *            parameter
@@ -130,6 +133,8 @@ export interface ParsedUrlParams {
   /** Ocean framing from `ocean=`; non-null only beside cluster=enso
    * (D-0.7.0-042/053). */
   readonly ocean: OceanKey | null;
+  /** The person's hazard: the cluster, or a custom set's `hazard=` (parseShellParams). */
+  readonly hazard: HazardClusterKey;
   /** Lazy full-viewport studio route. Only the exact tokens `layers` and
    * `place` are recognized; absence or any other value leaves the map open. */
   readonly studio: 'layers' | 'place' | null;
@@ -192,6 +197,34 @@ export function normalizeSidebarParam(params: URLSearchParams): void {
   params.delete('sidebar');
 }
 
+/**
+ * The query last written on a studio entry (src/state/studio-route.ts marks
+ * those with `ddmStudioEntry`), else null. Back from a studio lands on the
+ * older map entry before the map's state is written back, so syncUrl reads
+ * the additive keys (heatday, fire3d, spi, flow) the live map holds from here.
+ */
+let studioQuery: string | null = null;
+
+/** Every URL write here goes through this, keeping history.state (the studio marker). */
+function replaceUrl(url: string): void {
+  window.history.replaceState(window.history.state, '', url);
+  const state = window.history.state as { readonly ddmStudioEntry?: boolean } | null;
+  studioQuery = state?.ddmStudioEntry === true ? window.location.search : null;
+}
+
+/**
+ * The one cloning writer: edit a copy of the current query, run the shared
+ * sidebar= normalizer, and replace the entry. Every other field, including
+ * `embed=true`, is preserved.
+ */
+export function replaceQuery(edit: (params: URLSearchParams) => void): void {
+  const params = new URLSearchParams(window.location.search);
+  edit(params);
+  normalizeSidebarParam(params);
+  const query = params.toString();
+  replaceUrl(window.location.pathname + (query === '' ? '' : `?${query}`));
+}
+
 /** Parse the additive HeatRisk day position. Unknown or duplicate input is ignored. */
 export function parseHeatRiskDayParam(params = new URLSearchParams(window.location.search)): number | null {
   const values = params.getAll('heatday');
@@ -205,16 +238,10 @@ export function parseHeatRiskDayParam(params = new URLSearchParams(window.locati
  * current URL field, including `embed=true`.
  */
 export function syncHeatRiskDayParam(day: number | null): void {
-  const params = new URLSearchParams(window.location.search);
-  if (day !== null && Number.isSafeInteger(day) && day > 1) {
-    params.set('heatday', String(day));
-  } else {
-    params.delete('heatday');
-  }
-  normalizeSidebarParam(params);
-  const query = params.toString();
-  const url = window.location.pathname + (query === '' ? '' : `?${query}`);
-  window.history.replaceState(window.history.state, '', url);
+  replaceQuery((params) => {
+    if (day !== null && Number.isSafeInteger(day) && day > 1) params.set('heatday', String(day));
+    else params.delete('heatday');
+  });
 }
 
 /**
@@ -252,20 +279,13 @@ export function parseSpiWindowParam(
  * idiom). The default window is absence.
  */
 export function syncSpiWindowParam(days: number | null): void {
-  const params = new URLSearchParams(window.location.search);
-  if (
-    days !== null &&
-    SPI_WINDOW_DAYS.includes(days) &&
-    days !== DEFAULT_SPI_WINDOW_DAYS
-  ) {
-    params.set('spi', String(days));
-  } else {
-    params.delete('spi');
-  }
-  normalizeSidebarParam(params);
-  const query = params.toString();
-  const url = window.location.pathname + (query === '' ? '' : `?${query}`);
-  window.history.replaceState(window.history.state, '', url);
+  replaceQuery((params) => {
+    if (days !== null && SPI_WINDOW_DAYS.includes(days) && days !== DEFAULT_SPI_WINDOW_DAYS) {
+      params.set('spi', String(days));
+    } else {
+      params.delete('spi');
+    }
+  });
 }
 
 /**
@@ -285,16 +305,10 @@ export function parseFire3dParam(params = new URLSearchParams(window.location.se
  * idiom). Off is absence: the default URL stays clean.
  */
 export function syncFire3dParam(enabled: boolean): void {
-  const params = new URLSearchParams(window.location.search);
-  if (enabled) {
-    params.set('fire3d', 'true');
-  } else {
-    params.delete('fire3d');
-  }
-  normalizeSidebarParam(params);
-  const query = params.toString();
-  const url = window.location.pathname + (query === '' ? '' : `?${query}`);
-  window.history.replaceState(window.history.state, '', url);
+  replaceQuery((params) => {
+    if (enabled) params.set('fire3d', 'true');
+    else params.delete('fire3d');
+  });
 }
 
 /**
@@ -313,26 +327,33 @@ export function syncFire3dParam(enabled: boolean): void {
  *     the next sync.
  *   - `framing=` is independent of both (camera-only context); unknown
  *     tokens read as no explicit minimap camera.
+ *   - `hazard=` names the person's hazard for a custom set, which the display
+ *     claims no mode for: one exact mode token beside a `layers=` list that is
+ *     no surviving cluster's display and not the default display, else the
+ *     hazard is the cluster. It never changes the display (layers= still
+ *     outranks cluster=).
  */
 export function parseShellParams(params: URLSearchParams): {
   framing: FramingSelection;
   cluster: HazardClusterKey;
   ocean: OceanKey | null;
+  hazard: HazardClusterKey;
 } {
   const framing = parseFramingParam(params.get('framing'));
   const named = parseClusterParam(params.get('cluster'));
   const listed = params.get('layers');
-  const cluster =
-    listed === null ||
-    isModeDisplay(
-      named,
-      parseHorizonParam(params.get('horizon')),
-      new Set(resolveExclusiveSurface(listed.split(',').map((s) => s.trim()).filter((s) => s.length > 0)))
-    )
-      ? named
-      : 'drought';
+  const horizon = parseHorizonParam(params.get('horizon'));
+  const shown = listed === null
+    ? null
+    : new Set(resolveExclusiveSurface(listed.split(',').map((s) => s.trim()).filter((s) => s.length > 0)));
+  const cluster = shown === null || isModeDisplay(named, horizon, shown) ? named : 'drought';
   const ocean = cluster === 'enso' ? parseOceanParam(params.get('ocean')) : null;
-  return { framing, cluster, ocean };
+  const hazards = params.getAll('hazard');
+  const hazard =
+    shown !== null && cluster === 'drought' && hazards.length === 1 && !isModeDisplay('drought', horizon, shown)
+      ? parseClusterParam(hazards[0] ?? null)
+      : cluster;
+  return { framing, cluster, ocean, hazard };
 }
 
 /**
@@ -437,6 +458,7 @@ export function parseUrlParams(): ParsedUrlParams {
     framing: shell.framing,
     cluster: shell.cluster,
     ocean: shell.ocean,
+    hazard: shell.hazard,
     studio:
       params.getAll('studio').length === 1
         ? parseStudioParam(params.get('studio'))
@@ -514,6 +536,9 @@ export interface UrlSyncState {
   /** Ocean framing; emitted as `ocean=` only beside cluster=enso
    * (D-0.7.0-042/053). */
   readonly ocean?: OceanKey | null;
+  /** The person's hazard (getSelectedHazard); emitted as `hazard=` only beside
+   * `layers=` with no cluster token, and only for a mode with a token. */
+  readonly hazard?: HazardClusterKey;
   /** Lazy studio route; emitted only while one exclusive studio is open. */
   readonly studio?: 'layers' | 'place' | null;
 }
@@ -574,19 +599,17 @@ export function syncUrl(state: UrlSyncState): void {
   // module's own async activate/deactivate settles. HeatRisk's own
   // `activate()` re-applies its remembered day (src/layers/heatrisk.ts) and
   // re-emits `heatday=` through this same function on the next activation.
-  const heatRiskDay = state.layers.has('heatrisk')
-    ? parseHeatRiskDayParam(new URLSearchParams(window.location.search))
-    : null;
+  // The live query: the last studio write while Back is rewriting the map entry.
+  const live = new URLSearchParams(studioQuery ?? window.location.search);
+  const heatRiskDay = state.layers.has('heatrisk') ? parseHeatRiskDayParam(live) : null;
   // The 3D Fire mode likewise owns its additive flag (its store writes it
   // through syncFire3dParam); read it fresh here so ordinary state writes
   // preserve an active mode instead of erasing it.
-  const fire3d = parseFire3dParam(new URLSearchParams(window.location.search));
+  const fire3d = parseFire3dParam(live);
   // The gridded index owns its additive accumulation window the same way;
   // read it fresh so an ordinary state write cannot silently return a
   // shared link to the default 90-day window.
-  const spiWindow = parseSpiWindowParam(
-    new URLSearchParams(window.location.search)
-  );
+  const spiWindow = parseSpiWindowParam(live);
   const params = new URLSearchParams();
 
   if (state.region) {
@@ -622,6 +645,11 @@ export function syncUrl(state: UrlSyncState): void {
   if (clusterToken === null || optionalOn) {
     // An empty set writes the explicit all-off `layers=`.
     params.set('layers', Array.from(state.layers).join(','));
+  }
+  // A custom set keeps the person's hazard (its alerts, key and strip) across a share or reload.
+  const hazardToken = state.hazard === undefined ? null : HAZARD_CLUSTERS[state.hazard].urlToken;
+  if (clusterToken === null && hazardToken !== null) {
+    params.set('hazard', hazardToken);
   }
 
   if (state.embed) {
@@ -681,18 +709,16 @@ export function syncUrl(state: UrlSyncState): void {
     // panel shows, so the current link's own default applies. The same goes
     // where the new display has no default, so wind survives a move to the
     // granular display. An explicit `flow=` is read as written either way.
-    const current = new URLSearchParams(window.location.search);
     const entered = ensoFlowModeDefault(params);
     writeEnsoFlowParams(
       params,
-      parseEnsoFlowParams(current, entered === 'off' || ensoFlowPanelMounted() ? ensoFlowModeDefault(current) : entered)
+      parseEnsoFlowParams(live, entered === 'off' || ensoFlowPanelMounted() ? ensoFlowModeDefault(live) : entered)
     );
   }
 
-  const url = window.location.pathname + '?' + params.toString();
   // Preserve the existing history.state: the studio route stamps a
   // marker on studio entries (src/state/studio-route.ts), and replacing
   // it with null here would make a reload inside a studio look like a
   // direct boot and re-synthesize history.
-  window.history.replaceState(window.history.state, '', url);
+  replaceUrl(window.location.pathname + '?' + params.toString());
 }

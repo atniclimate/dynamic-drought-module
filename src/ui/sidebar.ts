@@ -134,6 +134,8 @@ import {
 } from '../state/cluster-store';
 import {
   getCommittedSnapshot,
+  getSelectedHazard,
+  initClusterService,
   isCustomComposition,
   onCommittedSnapshotChange,
   reconcileClusterWithLayerIntent,
@@ -727,6 +729,7 @@ function pushUrl(): void {
     framing,
     cluster: getHazardCluster(),
     ocean: getOceanFraming(),
+    hazard: getSelectedHazard(),
     studio: getStudioRoute()
   });
 }
@@ -1521,7 +1524,8 @@ function wireTopLevelEvents(map: maplibregl.Map): void {
   const resetBtn = document.getElementById('reset-btn');
   if (resetBtn) {
     resetBtn.addEventListener('click', () => {
-      const cluster = getHazardCluster();
+      // The person's hazard: a custom set made in ENSO still resets to the Pacific.
+      const cluster = getSelectedHazard();
       const reopen = !STATE.embed && STATE.desktopSidebarClosed
         && window.matchMedia(SIDEBAR_DESKTOP_QUERY).matches;
       if (reopen) {
@@ -1617,6 +1621,10 @@ function applyUrlStateSync(map: maplibregl.Map): ParsedUrlParams {
   // so the seeds are the committed truth.
   setFraming(params.framing);
   setHazardCluster(params.cluster, params.ocean);
+  // The person's hazard from the link, before the first write carries it. A
+  // brief embed never mounts the shell, so this is its only initialization;
+  // mountShell's later call is a no-op.
+  initClusterService(params.hazard);
 
   // Seed the temporal store BEFORE any layer activates, so a layer module
   // that reads the timeline during activate() (USDM restoring a scrubbed
@@ -1638,6 +1646,8 @@ function applyUrlStateSync(map: maplibregl.Map): ParsedUrlParams {
   setBasemapMode(params.basemap);
   // DR-122: fire3d= is Wildfire-scoped, so an old link outside Wildfire
   // boots flat and drops the token (before the hold below is ever taken).
+  // shortcut: a custom set made in Wildfire also boots flat and drops it, since
+  // the Fire3D gate admits no custom boot; read the hazard here only once the gate does.
   const fire3d = params.fire3d && params.cluster === 'wildfire';
   if (params.fire3d && !fire3d) syncFire3dParam(false);
   // DR-105: a `fire3d=true` boot at the 3D chunk's width (main.ts) holds the
@@ -1686,7 +1696,7 @@ function applyUrlStateSync(map: maplibregl.Map): ParsedUrlParams {
   // returns to it, then fit the Pacific. The hold replaces the one the cluster
   // subscriber took at the seed above, before the region fit.
   const ensoBoot = ensoBootFitsPacific(
-    params.cluster,
+    params.hazard,
     params.ocean !== null,
     params.framing !== null,
     params.region === DEFAULT_REGION,
@@ -2144,6 +2154,7 @@ function wireSidebar(map: maplibregl.Map, onRegionSelect: (key: RegionKey) => vo
     // Defensive fallback: at least fit the default region so the user
     // sees the map.
     selectRegion(map, DEFAULT_REGION, true);
+    initClusterService();
   }
 
   // Every checkbox-intent flip serializes the URL the moment it happens

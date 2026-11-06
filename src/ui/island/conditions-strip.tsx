@@ -19,7 +19,7 @@ import { timeline } from '../../state/timeline';
 import { isFailedCheckedLayer, requestLayerOff, requestLayerOn } from '../layer-toggle-command';
 import { HAZARD_CLUSTERS } from '../../config/clusters';
 import type { HazardClusterKey } from '../../config/clusters';
-import { getHazardCluster, onHazardClusterChange } from '../../state/cluster-store';
+import { getSelectedHazard, onCommittedSnapshotChange } from '../../state/cluster-service';
 import {
   droughtMetric,
   alertsMetric,
@@ -199,8 +199,9 @@ export function ConditionsStrip({ map, tick, checked }: StripProps) {
   // the checked set unchanged (rare, but possible via a reference-role
   // extra surviving the switch) still re-evaluates which surfaces this
   // mode actually offers.
-  const [cluster, setCluster] = useState<HazardClusterKey>(() => getHazardCluster());
-  useEffect(() => onHazardClusterChange(() => setCluster(getHazardCluster())), []);
+  // The person's hazard, not the store, which reads Drought for every custom set.
+  const [cluster, setCluster] = useState<HazardClusterKey>(getSelectedHazard);
+  useEffect(() => onCommittedSnapshotChange(() => setCluster(getSelectedHazard())), []);
 
   const lastDroughtLayer = useRef<'usdm' | 'nadm-drought'>('nadm-drought');
   if (checked.value.get('usdm')) lastDroughtLayer.current = 'usdm';

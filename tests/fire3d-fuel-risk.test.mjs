@@ -38,7 +38,8 @@ test('Wildfire 3D at season-ahead: a shown drape with no keyed surface is still 
   const mapKey = await readFile(new URL('../src/ui/map-key.ts', import.meta.url), 'utf8');
   // Phones and embeds hide the key only when nothing is drawn, the shown drape included.
   assert.match(mapKey, /if \(!active && !isDesktopChip && !whpShadeActive\)/);
-  assert.match(mapKey, /noSurfaceKeyAria\(chipFallbackLabel\(getHazardCluster\(\)\), whpShadeActive\)/);
+  // The person's hazard names the chip: a custom set made in Wildfire still reads Wildfire (audit round 3).
+  assert.match(mapKey, /noSurfaceKeyAria\(chipFallbackLabel\(getSelectedHazard\(\)\), whpShadeActive\)/);
 });
 
 test('the one Fuel risk switch acts on the 3D drape only while it is mounted, else on the flat fuel-risk layer', () => {

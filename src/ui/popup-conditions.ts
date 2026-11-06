@@ -82,7 +82,6 @@ import type { GeoJsonProperties, Geometry } from 'geojson';
 
 import { registry } from '../state/registry';
 import { timeline } from '../state/timeline';
-import { getHazardCluster } from '../state/cluster-store';
 import { getSelectedHazard } from '../state/cluster-service';
 import { USDM_CATEGORIES, NADM_CATEGORIES, readUsdmDm } from '../config/palette';
 import { HAZARD_CLUSTERS, HAZARD_CLUSTER_KEYS, HEAT_FIRE_ALERTS } from '../config/clusters';
@@ -970,7 +969,7 @@ export function buildPlaceConditionsHtml(
   // cluster table through the committed mode, never a mode name).
   // The interim line is for a DEFERRED row (draft DR-180): the committed
   // mode declares none and its deferral is recorded with its reason.
-  const mode = getHazardCluster();
+  const mode = getSelectedHazard();
   const modeHasNoRow = HAZARD_CLUSTERS[mode].placeConditionRow === null && Object.hasOwn(PLACE_CONDITION_ROW_DEFERRED, mode);
   const head: readonly [ValueRow] =
     presentLabels.length > 0

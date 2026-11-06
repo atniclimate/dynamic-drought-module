@@ -692,13 +692,15 @@ export function reconcileClusterWithLayerIntent(checked: ReadonlySet<string>): v
  * revision) on registry, timeline, framing, and external cluster-store
  * changes. Idempotent; returns a disposer. Every subscription stands
  * down while a transaction is applying (the final publish covers it).
+ * The boot (sidebar.ts applyUrlStateSync) passes the link's hazard, which a
+ * custom set carries in `hazard=` while the store reads Drought.
  */
-export function initClusterService(): () => void {
+export function initClusterService(hazard: HazardClusterKey = getHazardCluster()): () => void {
   if (disposer !== null) return disposer;
   // URL state is parsed after this module is evaluated. Seed the user-facing
-  // hazard from the parsed store here so a direct cluster= deep link does not
-  // inherit the module's earlier Drought default.
-  selectedHazard = getHazardCluster();
+  // hazard here so a direct deep link does not inherit the module's earlier
+  // Drought default.
+  selectedHazard = hazard;
   entryUndo = null;
   current = null;
   const unsubscribers = [

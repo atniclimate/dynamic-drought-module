@@ -78,6 +78,8 @@ test('Reset is the bare link: default region, the Pacific in ENSO, base map, des
   assert.ok(reset.includes('STATE.embed ? embedHomeRegion : DEFAULT_REGION'));
   assert.ok(reset.includes('selectRegion(map, home)'));
   assert.ok(reset.includes('ensoBootFitsPacific(cluster, false, false, home === DEFAULT_REGION, false)'));
+  // The person's hazard: the store reads Drought for a custom set made in ENSO or Wildfire.
+  assert.ok(reset.includes('const cluster = getSelectedHazard();') && !reset.includes('getHazardCluster()'));
   assert.ok(reset.includes("fitOcean(map, 'pacific')"));
   assert.ok(
     reset.indexOf('selectRegion(map, home)') < reset.indexOf("fitOcean(map, 'pacific')"),

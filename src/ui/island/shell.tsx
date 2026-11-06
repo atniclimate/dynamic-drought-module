@@ -301,7 +301,7 @@ function MinimapPopover({
 }: {
   readonly map: maplibregl.Map;
   readonly framing: ReadonlySignal<FramingSelection>;
-  readonly metricContext: CommittedShellSnapshot['cluster'];
+  readonly metricContext: HazardClusterKey;
   readonly horizon: CommittedShellSnapshot['horizon'];
 }) {
   const doorRef = useRef<HTMLButtonElement>(null);
