@@ -236,7 +236,10 @@ test('the flow explanations taken off the ENSO key read in the Impact Briefing u
   for (const sentence of [
     'Line pace shows relative speed within this field; it is not real time.',
     'Lines show the modeled flow at one instant, not the path of anything carried by it.',
-    'Ocean waves are drawn as marks, from NOAA GFS-Wave. The marks move in the direction the primary waves travel, all at one display speed; wave speed is not shown. The water does not travel with the marks.',
+    'Ocean waves are drawn as sets of three curved lines, from NOAA GFS-Wave.',
+    'All sets move at one display speed; wave speed is not shown, and the water does not travel with the marks.',
+    'The spacing and curve of the lines are a drawing convention, not the wavelength or the shape of real wave fronts.',
+    'no sets are drawn where neighbouring directions disagree.',
     FLOW_WORDS.mask,
     'Model output, not an observation.',
     'display bins, not thresholds.',

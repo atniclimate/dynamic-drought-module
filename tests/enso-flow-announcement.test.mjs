@@ -456,7 +456,7 @@ test('a failed precipitable water read says so in words fit for a field with no 
 for (const [kind, label, source, bins] of [
   ['wind', 'Atmospheric currents', 'NOAA GFS 10 m wind', 'Line width and brightness: under 5, 5 to 10, 10 or more m/s.'],
   ['jet', 'Jet-level wind', 'NOAA GFS 250 hPa wind', 'Line width and brightness: under 20, 20 to 40, 40 or more m/s.'],
-  ['waves', 'Ocean waves', 'NOAA GFS-Wave', 'Mark length and brightness: under 2, 2 to 4, 4 or more m significant wave height.']
+  ['waves', 'Ocean waves', 'NOAA GFS-Wave', 'Curved lines lie across the way the waves travel, the longest in front. Size and brightness: under 2, 2 to 4, 4 or more m significant wave height.']
 ]) {
   test(`a live ${kind} frame gives the key its state line and its bins, and no explanation`, async () => {
     const snapshots = [];

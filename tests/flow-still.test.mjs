@@ -33,7 +33,9 @@ registerHooks({
 });
 
 const { createFlowField, sampleField, newSample, mercX, mercY, lonOf, latOf } = await import('../src/layers/flow/field.ts');
-const { planForm, particleCount, PHONE_DENSITY_FACTOR } = await import('../src/layers/flow/advect.ts');
+const {
+  planForm, particleCount, PHONE_DENSITY_FACTOR, MARK_CRESTS, MARK_SEGS_PER_SET, MARK_SEG_FLOATS, CrestMarks, mulberry32
+} = await import('../src/layers/flow/advect.ts');
 const still = await import('../src/layers/flow/still.ts');
 const ink = await import('../src/layers/flow/ink.ts');
 
@@ -171,15 +173,63 @@ test('the still form is deterministic for one seed and view', () => {
   }
 });
 
-test('the still form for waves is static crest marks on the marks layer', () => {
+test('the still form for waves is static crest sets on the marks layer, the boldest crest in front', () => {
+  const f = gridField('waves', WAVE_CROP, (lon, lat) => {
+    const to = ((lon * 3 + lat * 5) % 360) * (Math.PI / 180);
+    // A land block (about the North American west coast) so the mask is exercised.
+    const land = lon > 235 && lon < 250 && lat > 30 && lat < 60;
+    return [Math.sin(to), Math.cos(to), 1 + (lat % 5), !land];
+  });
+  const fc = still.buildStillForm(f, PACIFIC, 'still');
+  assert.ok(fc.features.length > 200);
+  assert.deepEqual(fc, still.buildStillForm(f, PACIFIC, 'still'));
+  // Whole sets of MARK_CRESTS crests, back to front, each crest one traced line.
+  const points = MARK_SEGS_PER_SET / MARK_CRESTS + 1;
+  assert.equal(fc.features.length % MARK_CRESTS, 0);
+  for (let i = 0; i < fc.features.length; i += MARK_CRESTS) {
+    const set = fc.features.slice(i, i + MARK_CRESTS).map((x) => x.properties);
+    for (const p of set) assert.equal(p.role, 'mark');
+    assert.deepEqual(set.map((p) => p.piece), [0, 1, 2]);
+    assert.ok(set[0].w < set[1].w && set[1].w < set[2].w, 'the crests thicken toward the front');
+    assert.equal(set[2].w, ink.FLOW_CORE_WIDTH_PX[set[2].cls]);
+    for (const feat of fc.features.slice(i, i + MARK_CRESTS)) assert.equal(feat.geometry.coordinates.length, points);
+  }
+  // No still crest crosses a masked cell.
+  const s = newSample();
+  for (const feat of fc.features) {
+    const cs = feat.geometry.coordinates;
+    for (let k = 1; k < cs.length; k++) {
+      for (let j = 0; j <= 8; j++) {
+        const t = j / 8;
+        const x = mercX(cs[k - 1][0]) + (mercX(cs[k][0]) - mercX(cs[k - 1][0])) * t;
+        const y = mercY(cs[k - 1][1]) + (mercY(cs[k][1]) - mercY(cs[k - 1][1])) * t;
+        assert.ok(sampleField(f, lonOf(x), latOf(y), s), 'a still crest touches a masked cell');
+      }
+    }
+  }
+});
+
+test('the wave still form is exactly the sets the moving form would start, from the same rules', () => {
   const f = gridField('waves', WAVE_CROP, (lon, lat) => {
     const to = ((lon * 3 + lat * 5) % 360) * (Math.PI / 180);
     return [Math.sin(to), Math.cos(to), 1 + (lat % 5)];
   });
-  const fc = still.buildStillForm(f, PACIFIC, 'still');
-  assert.ok(fc.features.length > 200);
-  for (const feat of fc.features) assert.equal(feat.properties.role, 'mark');
-  assert.deepEqual(fc, still.buildStillForm(f, PACIFIC, 'still'));
+  const seed = 17;
+  const fc = still.buildStillForm(f, PACIFIC, 'still', { seed });
+  const m = new CrestMarks(f, mulberry32(seed));
+  m.setCount(PACIFIC, 1);
+  m.reset(PACIFIC);
+  m.step(PACIFIC, 0);
+  const per = MARK_SEGS_PER_SET / MARK_CRESTS;
+  assert.equal(fc.features.length, m.segCount / per, 'one line per crest');
+  assert.ok(fc.features.length > 100);
+  const at = (o) => [lonOf(m.segs[o] + m.originX), latOf(m.segs[o + 1] + m.originY)];
+  fc.features.forEach((feat, k) => {
+    const seg = (j) => (k * per + j) * MARK_SEG_FLOATS;
+    // End, quarter, centre, quarter, end: the moving form's crest, drawn from its centre out.
+    assert.deepEqual(feat.geometry.coordinates, [at(seg(1) + 2), at(seg(0) + 2), at(seg(0)), at(seg(2) + 2), at(seg(3) + 2)]);
+    assert.equal(feat.properties.cls, m.segs[seg(0) + 4]);
+  });
 });
 
 test('the still-form build of a 1440x900 Pacific view is under 50 ms (Node median)', (t) => {
