@@ -525,6 +525,20 @@ function inspectWgsCoordinates(value, bounds) {
   for (const child of value) inspectWgsCoordinates(child, bounds);
 }
 
+// Classes nest: D0 contains every other class and each class contains the
+// ones above it. An archive without D0 is empty or truncated, and a class
+// present above a missing one is a dropped member, never an absence of drought.
+function assertClassesNest(present) {
+  if (!present.has('D0')) {
+    throw new Error('archive has no D0 drought class file; refusing to publish an empty month');
+  }
+  for (let k = 1; k < 5; k += 1) {
+    if (present.has(`D${k}`) && !present.has(`D${k - 1}`)) {
+      throw new Error(`archive has D${k} without D${k - 1}; refusing a partial upload`);
+    }
+  }
+}
+
 async function main() {
   const requested = parseMonth(process.argv[2]);
   const sourceUrl = archiveUrl(requested);
@@ -571,10 +585,7 @@ async function main() {
       `STEWARDSHIP CHECK FAILED: ${JSON.stringify(stewardshipFindings)}`
     );
   }
-  // D0 contains every other class, so an archive without it is empty or truncated.
-  if (!present.has('D0')) {
-    throw new Error('archive has no D0 drought class file; refusing to publish an empty month');
-  }
+  assertClassesNest(present);
 
   const combined = {
     type: 'FeatureCollection',

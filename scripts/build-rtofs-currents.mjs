@@ -70,7 +70,8 @@ registerHooks({
 
 const { decodeGrib2, readGrib2Header } = await import('../src/layers/flow/grib2.ts');
 const {
-  CURRENTS_FORMAT, CURRENTS_HEADER_FILE, CURRENTS_NO_DATA, CURRENT_COMPONENT_MAX_MS, decodeCurrentsFrame, parseCurrentsHeader
+  CURRENTS_FORMAT, CURRENTS_HEADER_FILE, CURRENTS_MAX_AGE_MS, CURRENTS_NO_DATA, CURRENT_COMPONENT_MAX_MS, decodeCurrentsFrame,
+  parseCurrentsHeader
 } = await import('../src/layers/flow/currents.ts');
 
 /**
@@ -141,6 +142,16 @@ export function encodeGrid(u, v, { ni, nj }) {
   return { raw: new Uint8Array(view.buffer), masked, fastest };
 }
 
+/**
+ * Refuses a valid time the app would refuse as too old (kept files are read
+ * whatever their age). Exported for tests/flow-currents.test.mjs.
+ */
+export function assertFrameFresh(valid, now = Date.now()) {
+  if (now - valid > CURRENTS_MAX_AGE_MS) {
+    throw new Error(`the run is valid ${new Date(valid).toISOString()}, older than the app accepts; empty the kept folder`);
+  }
+}
+
 /** The surface u and v messages of `step` in one regional file, decoded. */
 function surfaceCurrent(bytes, expect) {
   const found = {};
@@ -205,6 +216,7 @@ async function main() {
     throw new Error('the two files are not of one 00Z run');
   }
   const valid = run + SOURCE.step * HOUR;
+  assertFrameFresh(valid);
   const bodies = GRIDS.map((grid, k) => encodeGrid(decoded[k].u.values, decoded[k].v.values, grid.expect));
   const assets = bodies.map((body) => gzipSync(body.raw, { level: 9 }));
   const header = {

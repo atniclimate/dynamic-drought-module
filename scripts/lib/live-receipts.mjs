@@ -103,6 +103,9 @@ export function parseArgs(argv) {
   if (!out.base.endsWith('/')) out.base += '/';
   // `--expect-nonce` takes one run id or a comma-separated set of them.
   out.expectNonces = expectedNonces({ nonce: out.expectNonce });
+  if (!out.expectSha) {
+    throw new Error('--expect-sha <sha> is required: the receipt asserts a named commit, never whatever Pages happens to serve');
+  }
   return out;
 }
 

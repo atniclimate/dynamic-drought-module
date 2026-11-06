@@ -64,3 +64,17 @@ test('the time statement names the committed monthly snapshot beside its month',
   assert.match(spec.stamp.headline, new RegExp(`${monthName} ${year}`));
   assert.match(spec.stamp.headline, new RegExp(snapshotWords));
 });
+
+test('the builder refuses an archive whose classes do not nest, so a dropped member never reads as no drought', () => {
+  // Exercise the builder's class check without running its download or artifact writer.
+  const source = readFileSync(new URL('../scripts/build-cdm-snapshot.mjs', import.meta.url), 'utf8');
+  const body = source.match(/function assertClassesNest\(present\) \{[\s\S]*?\n\}/)?.[0];
+  assert.ok(body, 'the builder keeps its class check in assertClassesNest');
+  const check = new Function(`${body}; return assertClassesNest;`)();
+  const archive = (...classes) => new Map(classes.map((c) => [c, {}]));
+  assert.throws(() => check(archive()), /no D0/);
+  assert.throws(() => check(archive('D1', 'D2')), /no D0/);
+  assert.throws(() => check(archive('D0', 'D2', 'D3')), /D2 without D1/);
+  assert.throws(() => check(archive('D0', 'D1', 'D2', 'D4')), /D4 without D3/);
+  for (const ok of [['D0'], ['D0', 'D1'], ['D0', 'D1', 'D2', 'D3', 'D4']]) check(archive(...ok));
+});

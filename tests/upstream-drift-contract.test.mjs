@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -127,6 +128,27 @@ test('EXPECTED_WORKER_REVISION is truly wired to readWorkerRevision(), not a har
     'utf8',
   );
   assert.equal(EXPECTED_WORKER_REVISION, readWorkerRevision(source));
+});
+
+// The Worker source as last revised: sha256 of workers/proxy/src/index.ts
+// with CRLF read as LF. Two behaviour changes once shipped under one
+// revision string, so /healthz could not tell those Workers apart.
+// shortcut: any edit (comments too) needs a re-pin; an editor could re-pin the hash alone, so review that the revision moved with it.
+const WORKER_SOURCE_PIN = {
+  revision: '2026-10-13-query-pin-v7',
+  sha256: '66b6e74f9c9ef19a4f30c697904a01c2565144fcf28d968b3538aaf58f373a52',
+};
+
+test('an edit to the Worker source changes WORKER_REVISION in the same commit', async () => {
+  const source = (await readFile(new URL('../workers/proxy/src/index.ts', import.meta.url), 'utf8')).replaceAll('\r\n', '\n');
+  const current = { revision: readWorkerRevision(source), sha256: createHash('sha256').update(source).digest('hex') };
+  assert.deepEqual(
+    current,
+    WORKER_SOURCE_PIN,
+    current.revision === WORKER_SOURCE_PIN.revision
+      ? 'workers/proxy/src/index.ts changed under the same WORKER_REVISION: give it a new revision, then pin both values here'
+      : 'WORKER_REVISION moved: pin the new revision and the source hash here',
+  );
 });
 
 test('recognizes only complete, bound soil drift inputs', () => {

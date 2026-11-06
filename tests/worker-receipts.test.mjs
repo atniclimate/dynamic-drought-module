@@ -318,6 +318,15 @@ test('evaluateProbe records an upstream outage as a warning but never masks a Wo
   const refusalOn200 = evaluateProbe(row({ status: 200, error: 'route_not_allowed', headers: CANDIDATE_CORS }), relayExpect);
   assert.equal(refusalOn200.ok, false);
   assert.ok(refusalOn200.reasons.some((r) => r.includes('refused with "route_not_allowed"')));
+
+  // The Worker's own limiter answers 429 rate_limited: the relay refusing the
+  // caller, not an agency outage. A bare upstream 429 stays tolerated.
+  const limited = evaluateProbe(row({ status: 429, error: 'rate_limited', headers: CANDIDATE_CORS }), relayExpect);
+  assert.equal(limited.ok, false);
+  assert.ok(limited.reasons.some((r) => r.includes('status 429')));
+  const agency429 = evaluateProbe(row({ status: 429, error: null, headers: CANDIDATE_CORS }), relayExpect);
+  assert.equal(agency429.ok, true);
+  assert.ok(agency429.warnings.some((w) => w.includes('upstream unavailable')));
 });
 
 test('evaluateProbe warns past the upstream deadline and fails a dead request', () => {
@@ -425,6 +434,12 @@ test('evaluateTransparency calls a non-200 direct leg inconclusive and warns whe
   });
   assert.equal(refused.ok, false);
   assert.ok(refused.reasons.some((r) => r.includes('relayed leg answered 403')));
+  const limited = evaluateTransparency({
+    direct: row({ status: 200, bytes: 1, sha256: HASH }),
+    proxied: row({ status: 429, error: 'rate_limited' }),
+  });
+  assert.equal(limited.ok, false);
+  assert.ok(limited.reasons.some((r) => r.includes('relayed leg answered 429')));
 
   // Two 200 legs that disagree is the failure this row exists to catch.
   const breach = evaluateTransparency({

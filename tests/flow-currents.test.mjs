@@ -48,7 +48,7 @@ const {
 const { FLOW_BINS, classOf, newSample, sampleField } = await import('../src/layers/flow/field.ts');
 const { WIND_PACE, paceFor } = await import('../src/layers/flow/advect.ts');
 const { CurrentsFrameTooOld, FLOW_WORDS, flowAgeWords, flowLiveLine, gridBoxWords } = await import('../src/layers/enso-flow-data.ts');
-const { encodeGrid } = await import('../scripts/build-rtofs-currents.mjs');
+const { assertFrameFresh, encodeGrid } = await import('../scripts/build-rtofs-currents.mjs');
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
@@ -117,6 +117,12 @@ test('the producer writes the issuer values unchanged, north first, and the read
     assert.equal(sampleField(field, 180, 39.5, newSample()), null);
     assert.equal(sampleField(field, 249.5, 0, newSample()), null);
   }
+});
+
+test('the producer refuses to write a frame the app would refuse as too old, such as one from stale kept files', () => {
+  const valid = Date.UTC(2026, 9, 13, 1);
+  assert.doesNotThrow(() => assertFrameFresh(valid, valid + CURRENTS_MAX_AGE_MS));
+  assert.throws(() => assertFrameFresh(valid, valid + CURRENTS_MAX_AGE_MS + 1), /older than the app accepts/);
 });
 
 test('the producer refuses a value it would have to change, and a mask that differs between u and v', () => {
