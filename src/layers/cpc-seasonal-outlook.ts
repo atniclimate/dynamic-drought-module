@@ -1,53 +1,76 @@
 import type * as maplibregl from 'maplibre-gl';
 import type { Feature, FeatureCollection } from 'geojson';
 import { getLayerDef, type LayerActivation, type LayerModule } from '../config/layers';
-import { CPC_SEASONAL_COLORS } from '../config/palette';
+import { CPC_EXTENDED_COLORS, CPC_SEASONAL_COLORS } from '../config/palette';
 import { registry } from '../state/registry';
 import { hideLegend, LEGEND_ORDER, showLegend } from '../ui/legend-registry';
 import { escapeHtml } from '../util/escape';
-import { createCpcSeasonalReader, type CpcSeasonalReadLimits, type CpcSeasonalReadState,
-  type CpcSeasonalVariable } from './cpc-seasonal-read';
+import { createCpcSeasonalReader, type CpcOutlookWindow, type CpcSeasonalReadLimits,
+  type CpcSeasonalReadState, type CpcSeasonalVariable } from './cpc-seasonal-read';
 
 /**
- * The admitted read and display for both outlook layers (ENSO Season ahead,
- * 2026-11-05). maxAllowableOffset 0.05 is the smallest of 0.01, 0.02, 0.05 and
- * 0.1 whose live national body measured under 100 kB gzip (96,953 and 95,212
- * bytes; 529,645 and 527,406 decoded; 18 features each). The decoded cap
- * refuses a body near twice that as unavailable rather than drawing it;
- * 0.48 is the CPC Drought Outlook's fill (src/layers/drought.ts), and the
- * legend swatches carry the same alpha.
+ * The admitted read and display for every CPC outlook layer: the seasonal
+ * pair (ENSO Season ahead, 2026-11-05) and the 6-10 and 8-14 day four (ENSO
+ * Weeks ahead, 2026-11-06). maxAllowableOffset 0.05 is the smallest of 0.01,
+ * 0.02, 0.05 and 0.1 whose live seasonal bodies measured under 100 kB gzip
+ * (96,953 and 95,212 bytes; 529,645 and 527,406 decoded; 18 features each);
+ * the four day-range bodies measured 95,887 to 97,911 bytes gzip at the same
+ * offset. The decoded cap refuses a body near twice that as unavailable
+ * rather than drawing it; 0.48 is the CPC Drought Outlook's fill
+ * (src/layers/drought.ts), and the legend swatches carry the same alpha.
  */
 export const CPC_SEASONAL_PRODUCTION = {
   limits: { timeoutMs: 10_000, maxDecodedBytes: 1_000_000, maxFeatures: 200, maxAllowableOffset: 0.05 },
   fillOpacity: 0.48
 } as const;
 
-/** The issuer renderer's one outline, drawn round every class including Equal Chances. */
+/** The issuer renderers' one outline colour, drawn round every class including Equal Chances. */
 const OUTLINE = 'rgb(110,110,110)';
 
-/** fcst_date is a UTC midnight; a local read would show the day before west of Greenwich. */
+/** One renderer class as both palettes record it; a row with no width has the renderer's 1. */
+interface OutlookClass {
+  readonly cat: string;
+  readonly prob: number;
+  readonly label: string;
+  readonly color: readonly [number, number, number, number];
+  readonly outline?: number;
+}
+
+/** The date fields are UTC midnights; a local read would show the day before west of Greenwich. */
 const formatDay = (time: number): string => new Intl.DateTimeFormat('en-US', {
   month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC'
 }).format(new Date(time));
 
+// vocab-allow: "Forecast Date" is the issuer's own alias for fcst_date, verbatim
+const FORECAST_DATE = 'Forecast Date';
+/** Each product's clock fields and the issuer's own field aliases, in key order. */
+const CLOCK_FIELDS = {
+  seasonal: [['valid_seas', 'Valid Season'], ['fcst_date', FORECAST_DATE]],
+  extended: [['start_date', 'Start Date'], ['end_date', 'End Date'], ['fcst_date', FORECAST_DATE]]
+} as const;
+
 /** One line per distinct issuer clock among the drawn polygons, never two clocks joined. */
-function clockLines(features: readonly Feature[]): string[] {
+function clockLines(features: readonly Feature[], fields: readonly (readonly [string, string])[]): string[] {
   const lines = new Set<string>();
   for (const feature of features) {
-    const season = feature.properties?.['valid_seas'];
-    const issued = feature.properties?.['fcst_date'];
-    const parts: string[] = [];
-    // DRAFT wording (DR-177): the issuer's two field aliases, each with its value, joined by " · "
-    if (typeof season === 'string' && season.trim()) parts.push(`Valid Season ${season.trim()}`);
-    // vocab-allow: "Forecast Date" is the issuer's own alias for fcst_date, verbatim
-    if (typeof issued === 'number' && Number.isFinite(issued)) parts.push(`Forecast Date ${formatDay(issued)}`);
+    const parts = fields.flatMap(([field, alias]) => {
+      const value = feature.properties?.[field];
+      if (typeof value === 'string' && value.trim()) return [`${alias} ${value.trim()}`];
+      return typeof value === 'number' && Number.isFinite(value) ? [`${alias} ${formatDay(value)}`] : [];
+    });
+    // DRAFT wording (DR-177): the issuer's field aliases, each with its value, joined by " · "
     if (parts.length) lines.add(parts.join(' · '));
   }
   return [...lines];
 }
 
+/** The key slots after the active surface's, one per outlook layer, so two never tie. */
+const KEY_ORDER = ['cpc-seasonal-precip', 'cpc-seasonal-temp', 'cpc-610-precip', 'cpc-610-temp', 'cpc-814-precip', 'cpc-814-temp'];
+
 export interface CpcSeasonalAdapterOptions {
   readonly variable: CpcSeasonalVariable;
+  /** The outlook product; the seasonal Lead 1 when omitted. */
+  readonly window?: CpcOutlookWindow;
   readonly limits: CpcSeasonalReadLimits;
   /** Required presentation declaration; must match the admitted key swatches. */
   readonly fillOpacity: number;
@@ -64,20 +87,25 @@ export function createCpcSeasonalAdapter(options: CpcSeasonalAdapterOptions):
   if (!Number.isFinite(options.fillOpacity) || options.fillOpacity < 0 || options.fillOpacity > 1) {
     throw new RangeError('Invalid CPC fill opacity.');
   }
-  const key = options.variable === 'precipitation' ? 'cpc-seasonal-precip' : 'cpc-seasonal-temp';
+  const outlook = options.window ?? 'seasonal';
+  const short = options.variable === 'precipitation' ? 'precip' : 'temp';
+  const key = outlook === 'seasonal' ? `cpc-seasonal-${short}` : `cpc-${outlook.replace('-', '')}-${short}`;
   const fillId = `${key}-fill`;
   const lineId = `${key}-line`;
-  const rows = CPC_SEASONAL_COLORS[options.variable];
+  const rows: readonly OutlookClass[] = (outlook === 'seasonal' ? CPC_SEASONAL_COLORS : CPC_EXTENDED_COLORS)[options.variable];
+  const clockFields = CLOCK_FIELDS[outlook === 'seasonal' ? 'seasonal' : 'extended'];
   const known = (properties: Record<string, unknown> | null): boolean =>
     rows.some(row => properties?.['cat'] === row.cat && properties['prob'] === row.prob);
-  const color: maplibregl.ExpressionSpecification = ['match',
-    ['concat', ['get', 'cat'], ',', ['to-string', ['get', 'prob']]],
-    `${rows[0].cat},${rows[0].prob}`,
-    `rgba(${rows[0].color[0]},${rows[0].color[1]},${rows[0].color[2]},${rows[0].color[3] / 255})`,
-    ...rows.slice(1).flatMap(row => [`${row.cat},${row.prob}`,
-      `rgba(${row.color[0]},${row.color[1]},${row.color[2]},${row.color[3] / 255})`]),
-    'rgba(0,0,0,0)'
-  ];
+  const pair: maplibregl.ExpressionSpecification = ['concat', ['get', 'cat'], ',', ['to-string', ['get', 'prob']]];
+  const [first, ...rest] = rows;
+  if (!first) throw new RangeError('A CPC outlook needs its renderer classes.');
+  const rgba = (row: OutlookClass): string => `rgba(${row.color[0]},${row.color[1]},${row.color[2]},${row.color[3] / 255})`;
+  const color: maplibregl.ExpressionSpecification = ['match', pair, `${first.cat},${first.prob}`, rgba(first),
+    ...rest.flatMap(row => [`${row.cat},${row.prob}`, rgba(row)]), 'rgba(0,0,0,0)'];
+  // The renderer's own outline width per class (1, or 0.4 on some day-range classes).
+  const lineWidth: number | maplibregl.ExpressionSpecification = rows.every(row => (row.outline ?? 1) === 1) ? 1
+    : ['match', pair, `${first.cat},${first.prob}`, first.outline ?? 1,
+      ...rest.flatMap(row => [`${row.cat},${row.prob}`, row.outline ?? 1]), 1];
   let map: maplibregl.Map | null = null;
   let live = false;
   let releaseSignal: (() => void) | null = null;
@@ -88,16 +116,16 @@ export function createCpcSeasonalAdapter(options: CpcSeasonalAdapterOptions):
     if (target.getLayer(fillId)) target.removeLayer(fillId);
     if (target.getSource(key)) target.removeSource(key);
   }
-  /** This layer's own key: the renderer's 17 classes and labels as drawn, plus the drawn polygons' clock. */
+  /** This layer's own key: its renderer's classes and labels as drawn, plus the drawn polygons' clock. */
   function showKey(features: readonly Feature[]): void {
     const title = getLayerDef(key)?.name ?? key;
     const items = rows.map(row => {
       const [r, g, b, a] = row.color;
       return `<li data-cpc-class="${escapeHtml(`${row.cat},${row.prob}`)}"><span class="swatch" style="background:rgba(${r},${g},${b},${(a / 255) * options.fillOpacity});border-color:${OUTLINE}"></span>${escapeHtml(row.label)}</li>`;
     }).join('');
-    const clocks = clockLines(features).map(line => `<p class="legend-note" data-cpc-clock>${escapeHtml(line)}</p>`).join('');
+    const clocks = clockLines(features, clockFields).map(line => `<p class="legend-note" data-cpc-clock>${escapeHtml(line)}</p>`).join('');
     showLegend(key, {
-      order: LEGEND_ORDER.surface + (options.variable === 'precipitation' ? 1 : 2),
+      order: LEGEND_ORDER.surface + 1 + KEY_ORDER.indexOf(key) / 10,
       render: (body) => {
         body.innerHTML = `<h3 class="legend-section-title">${escapeHtml(title)}</h3>${clocks}<ul class="legend">${items}</ul>`;
       }
@@ -129,7 +157,7 @@ export function createCpcSeasonalAdapter(options: CpcSeasonalAdapterOptions):
         }, before);
         if (!target.getLayer(lineId)) target.addLayer({
           id: lineId, type: 'line', source: key,
-          paint: { 'line-color': OUTLINE, 'line-width': 1 }
+          paint: { 'line-color': OUTLINE, 'line-width': lineWidth }
         }, before);
         showKey(features);
       }
@@ -169,7 +197,7 @@ export function createCpcSeasonalAdapter(options: CpcSeasonalAdapterOptions):
       activation.signal.addEventListener('abort', onAbort, { once: true });
       releaseSignal = () => activation.signal.removeEventListener('abort', onAbort);
     }
-    await reader.read(options.variable, options.limits);
+    await reader.read(options.variable, options.limits, outlook);
   }
   return { activate, deactivate, cancelActivation, fadeLayerIds: [fillId, lineId],
     getSnapshot: () => snapshot };

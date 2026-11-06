@@ -15,6 +15,22 @@ const CPC_SEASONAL_LABELS = [
 ];
 
 /**
+ * The 6-10 and 8-14 day outlooks' renderer labels, verbatim from both services'
+ * layer 0 and 1 uniqueValue renderers (cpc_6_10_day_outlk, cpc_8_14_day_outlk,
+ * MapServer/N?f=json, read 2026-11-06), in the renderer's order.
+ */
+const CPC_EXTENDED_LABELS = [
+  'Above, 90%', 'Above, 80%', 'Above, 70%', 'Above, 60%', 'Above, 50%', 'Above, 40%', 'Above, 33%',
+  'Near Normal',
+  'Below, 33%', 'Below, 40%', 'Below, 50%', 'Below, 60%', 'Below, 70%', 'Below, 80%', 'Below, 90%'
+];
+
+/** The CPC outlook keys among the rendered sections, in panel order. */
+async function cpcKeys(page: import('./offline-test').Page): Promise<(string | null)[]> {
+  return (await sectionKeys(page)).filter((key) => key?.startsWith('cpc-'));
+}
+
+/**
  * UX-3 unified legend registry: one panel whose sections are contributed by
  * the active layers, retiring the four ad-hoc per-layer panels.
  *
@@ -214,8 +230,6 @@ test.describe('UX-3 unified legend registry', () => {
     await expect(layerPill(page, 'cpc-seasonal-precip')).toHaveText(PILL.live);
     await expect(layerCheckbox(page, 'cpc-seasonal-temp')).not.toBeChecked();
 
-    const cpcKeys = async (): Promise<(string | null)[]> =>
-      (await sectionKeys(page)).filter((key) => key?.startsWith('cpc-seasonal-'));
     const precip = page.locator('.legend-section[data-legend="cpc-seasonal-precip"]');
     await expect(precip.locator('.legend-section-title')).toHaveText('Seasonal Precipitation Outlook');
     await expect(precip.locator('[data-cpc-clock]')).toHaveText(['Valid Season SON 2026 · Forecast Date Sep 1, 2026']);
@@ -230,7 +244,7 @@ test.describe('UX-3 unified legend registry', () => {
     await expect(enso).toHaveAttribute('aria-pressed', 'true');
     await expect.poll(async () => new URLSearchParams(await search(page)).get('layers') ?? '').toContain('cpc-seasonal-temp');
     // Two keys, never one merged: each lists its own 17 classes.
-    await expect.poll(cpcKeys).toEqual(['cpc-seasonal-precip', 'cpc-seasonal-temp']);
+    await expect.poll(() => cpcKeys(page)).toEqual(['cpc-seasonal-precip', 'cpc-seasonal-temp']);
     const temp = page.locator('.legend-section[data-legend="cpc-seasonal-temp"]');
     await expect(temp.locator('.legend-section-title')).toHaveText('Seasonal Temperature Outlook');
     await expect(temp.locator('.legend li')).toHaveText(CPC_SEASONAL_LABELS);
@@ -238,7 +252,50 @@ test.describe('UX-3 unified legend registry', () => {
     await expect(page.locator('.legend-section[data-legend^="cpc-seasonal-"] .legend li')).toHaveCount(34);
 
     await layerCheckbox(page, 'cpc-seasonal-temp').uncheck();
-    await expect.poll(cpcKeys).toEqual(['cpc-seasonal-precip']);
+    await expect.poll(() => cpcKeys(page)).toEqual(['cpc-seasonal-precip']);
+  });
+
+  /**
+   * The CPC 6-10 and 8-14 day outlook maps, built to the seasonal sentence's
+   * terms: Weeks ahead is its own map now (the 8-14 day precipitation outlook
+   * beside the SST), with the day-range renderer's 15 labels alone and the
+   * issuer's Start Date, End Date and Forecast Date; another day-range
+   * outlook is the mode's own and keeps its own key beside it.
+   */
+  test('ENSO Weeks ahead draws the 8-14 day precipitation outlook with its own issuer key; another day-range outlook adds a second', async ({
+    page
+  }) => {
+    await gotoApp(page, '?view=console');
+    await waitForLayerSettled(page, 'nadm-drought');
+    const enso = page.locator('.shell-cluster-btn[data-cluster="enso"]');
+    await enso.click();
+    await expect(enso).toHaveAttribute('aria-pressed', 'true');
+    const weeks = page.locator('.shell-horizon-btn[data-horizon="weeks-ahead"]');
+    await expect(weeks).not.toHaveAttribute('aria-disabled', 'true');
+    await weeks.click();
+    await expect(weeks).toHaveAttribute('aria-pressed', 'true');
+    await expect.poll(async () => new URLSearchParams(await search(page)).get('horizon')).toBe('weeks-ahead');
+    await expect(layerPill(page, 'cpc-814-precip')).toHaveText(PILL.live);
+    await expect(layerCheckbox(page, 'cpc-seasonal-precip')).not.toBeChecked();
+    await expect.poll(() => cpcKeys(page)).toEqual(['cpc-814-precip']);
+
+    const days = page.locator('.legend-section[data-legend="cpc-814-precip"]');
+    await expect(days.locator('.legend-section-title')).toHaveText('8-14 Day Precipitation Outlook');
+    await expect(days.locator('[data-cpc-clock]')).toHaveText([
+      'Start Date Nov 11, 2026 · End Date Nov 15, 2026 · Forecast Date Nov 5, 2026'
+    ]);
+    await expect(days.locator('.legend li')).toHaveText(CPC_EXTENDED_LABELS);
+    await expect(days.locator('.legend li[data-cpc-class="Normal,36"] .swatch')).toHaveCSS('border-top-color', 'rgb(110, 110, 110)');
+
+    await layerCheckbox(page, 'cpc-610-temp').check();
+    await expect(layerPill(page, 'cpc-610-temp')).toHaveText(PILL.live);
+    await expect(enso).toHaveAttribute('aria-pressed', 'true');
+    await expect.poll(async () => new URLSearchParams(await search(page)).get('layers') ?? '').toContain('cpc-610-temp');
+    await expect.poll(() => cpcKeys(page)).toEqual(['cpc-610-temp', 'cpc-814-precip']);
+    const other = page.locator('.legend-section[data-legend="cpc-610-temp"]');
+    await expect(other.locator('.legend-section-title')).toHaveText('6-10 Day Temperature Outlook');
+    await expect(other.locator('.legend li')).toHaveText(CPC_EXTENDED_LABELS);
+    await expect(page.locator('.legend-section[data-legend^="cpc-"] .legend li')).toHaveCount(30);
   });
 
   test('an ENSO link without horizon= still opens on Current, the sea-surface-temperature anomaly, with no outlook', async ({

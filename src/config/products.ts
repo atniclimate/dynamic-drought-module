@@ -21,14 +21,15 @@ export type UrlsKey = keyof typeof URLS;
  * inferring one from the other's literal keys.
  *
  * One product per DISTINCT issuer data product (the design ruling this file
- * follows, not a rule invented here). The first 25 keys are the layer-backed
+ * follows, not a rule invented here). The first 29 keys are the layer-backed
  * products, one per `LAYER_DEFS` entry in that array's own order; the
  * remaining keys are briefing products, which no map layer draws except
  * `cpcSeasonalTemp`: its own `cpc-seasonal-temp` layer reads the same Lead 1
- * service its lane reads, so the one product backs both. Five more layer
+ * service its lane reads, so the one product backs both. Nine more layer
  * products also carry a briefing lane, because the same issuer endpoint
  * feeds both the map and a matrix cell: `usdm`, `heatrisk`, `nifc-fires`,
- * `nws-alerts`, `spc-fire-weather`.
+ * `nws-alerts`, `spc-fire-weather`, and the four 6-10 and 8-14 day outlook
+ * layers, whose two services the `cpcExtended` lane reads as one product.
  */
 export const PRODUCT_KEYS = Object.freeze([
   'hydrography',
@@ -55,6 +56,10 @@ export const PRODUCT_KEYS = Object.freeze([
   'sst-anomaly',
   'tropical-cyclones',
   'cpc-seasonal-precip',
+  'cpc-610-precip',
+  'cpc-610-temp',
+  'cpc-814-precip',
+  'cpc-814-temp',
   'telemetry',
   // Briefing products (no LayerDef reads them, but for cpcSeasonalTemp, see
   // above): DSCI, the NWS point
@@ -358,6 +363,41 @@ export const PRODUCTS: Readonly<Record<ProductKey, ProductDef>> = Object.freeze(
     lane: null,
     // The service description's "Monthly" update, as cpcSeasonalTemp records it.
     clock: { register: 'outlook', cadence: 'monthly' }
+  },
+  // The 6-10 and 8-14 day outlook layers (each service: layer 0 temperature,
+  // 1 precipitation). Each names the cpcExtended lane, which reads the same
+  // two services; "Daily" is both service descriptions' update frequency.
+  'cpc-610-precip': {
+    key: 'cpc-610-precip',
+    issuer: 'NOAA CPC · MapServer',
+    endpointKey: 'cpc610OutlookMapServer',
+    layerKey: 'cpc-610-precip',
+    lane: 'cpcExtended',
+    clock: { register: 'outlook', cadence: 'daily' }
+  },
+  'cpc-610-temp': {
+    key: 'cpc-610-temp',
+    issuer: 'NOAA CPC · MapServer',
+    endpointKey: 'cpc610OutlookMapServer',
+    layerKey: 'cpc-610-temp',
+    lane: 'cpcExtended',
+    clock: { register: 'outlook', cadence: 'daily' }
+  },
+  'cpc-814-precip': {
+    key: 'cpc-814-precip',
+    issuer: 'NOAA CPC · MapServer',
+    endpointKey: 'cpc814OutlookMapServer',
+    layerKey: 'cpc-814-precip',
+    lane: 'cpcExtended',
+    clock: { register: 'outlook', cadence: 'daily' }
+  },
+  'cpc-814-temp': {
+    key: 'cpc-814-temp',
+    issuer: 'NOAA CPC · MapServer',
+    endpointKey: 'cpc814OutlookMapServer',
+    layerKey: 'cpc-814-temp',
+    lane: 'cpcExtended',
+    clock: { register: 'outlook', cadence: 'daily' }
   },
   telemetry: {
     key: 'telemetry',

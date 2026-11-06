@@ -89,7 +89,7 @@ test('ENSO offers the alert layer off by default at every horizon: in no recipe,
   for (const horizon of TEMPORAL_HORIZON_KEYS) {
     assert.equal(HAZARD_CLUSTERS.enso.recipes[horizon].includes('nws-alerts'), false, horizon);
   }
-  assert.deepEqual(HAZARD_CLUSTERS.enso.optionalLayers, ['cpc-seasonal-temp', 'nws-alerts']);
+  assert.deepEqual(HAZARD_CLUSTERS.enso.optionalLayers, ['cpc-seasonal-temp', 'cpc-610-precip', 'cpc-610-temp', 'cpc-814-temp', 'nws-alerts']);
   assert.equal(getLayerDef('nws-alerts').defaultOn, false);
 });
 

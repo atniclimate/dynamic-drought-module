@@ -832,3 +832,46 @@ export const CPC_SEASONAL_COLORS = {
     { cat: 'EC', prob: 33, label: 'Equal Chances', color: [255, 255, 255, 0] }
   ],
 } as const;
+
+/** CPC 6-10 and 8-14 day outlook uniqueValue renderers, cat+prob, read
+ * 2026-11-06 from cpc_6_10_day_outlk and cpc_8_14_day_outlk MapServer layers
+ * 0 (temperature) and 1 (precipitation): both services carry the same 15
+ * rows per variable. Source RGBA and outline width (points) per class, all
+ * outlines rgb(110,110,110); no Equal Chances class and no default symbol.
+ */
+export const CPC_EXTENDED_COLORS = {
+  precipitation: [
+    { cat: 'Above', prob: 90, label: 'Above, 90%', color: [40, 83, 0, 255], outline: 1 },
+    { cat: 'Above', prob: 80, label: 'Above, 80%', color: [40, 96, 10, 255], outline: 1 },
+    { cat: 'Above', prob: 70, label: 'Above, 70%', color: [0, 120, 20, 255], outline: 1 },
+    { cat: 'Above', prob: 60, label: 'Above, 60%', color: [0, 150, 32, 255], outline: 1 },
+    { cat: 'Above', prob: 50, label: 'Above, 50%', color: [72, 180, 48, 255], outline: 1 },
+    { cat: 'Above', prob: 40, label: 'Above, 40%', color: [149, 206, 127, 255], outline: 1 },
+    { cat: 'Above', prob: 33, label: 'Above, 33%', color: [179, 217, 171, 255], outline: 1 },
+    { cat: 'Normal', prob: 36, label: 'Near Normal', color: [160, 160, 160, 255], outline: 0.4 },
+    { cat: 'Below', prob: 33, label: 'Below, 33%', color: [240, 212, 147, 255], outline: 1 },
+    { cat: 'Below', prob: 40, label: 'Below, 40%', color: [216, 167, 79, 255], outline: 1 },
+    { cat: 'Below', prob: 50, label: 'Below, 50%', color: [187, 109, 51, 255], outline: 1 },
+    { cat: 'Below', prob: 60, label: 'Below, 60%', color: [155, 80, 49, 255], outline: 1 },
+    { cat: 'Below', prob: 70, label: 'Below, 70%', color: [147, 70, 57, 255], outline: 1 },
+    { cat: 'Below', prob: 80, label: 'Below, 80%', color: [128, 64, 0, 255], outline: 1 },
+    { cat: 'Below', prob: 90, label: 'Below, 90%', color: [79, 47, 47, 255], outline: 1 }
+  ],
+  temperature: [
+    { cat: 'Above', prob: 90, label: 'Above, 90%', color: [112, 33, 0, 255], outline: 1 },
+    { cat: 'Above', prob: 80, label: 'Above, 80%', color: [145, 38, 0, 255], outline: 1 },
+    { cat: 'Above', prob: 70, label: 'Above, 70%', color: [179, 46, 5, 255], outline: 1 },
+    { cat: 'Above', prob: 60, label: 'Above, 60%', color: [201, 59, 26, 255], outline: 0.4 },
+    { cat: 'Above', prob: 50, label: 'Above, 50%', color: [218, 87, 49, 255], outline: 0.4 },
+    { cat: 'Above', prob: 40, label: 'Above, 40%', color: [227, 139, 75, 255], outline: 1 },
+    { cat: 'Above', prob: 33, label: 'Above, 33%', color: [231, 177, 104, 255], outline: 0.4 },
+    { cat: 'Normal', prob: 36, label: 'Near Normal', color: [160, 160, 160, 255], outline: 0.4 },
+    { cat: 'Below', prob: 33, label: 'Below, 33%', color: [191, 203, 228, 255], outline: 1 },
+    { cat: 'Below', prob: 40, label: 'Below, 40%', color: [160, 192, 223, 255], outline: 1 },
+    { cat: 'Below', prob: 50, label: 'Below, 50%', color: [119, 181, 226, 255], outline: 1 },
+    { cat: 'Below', prob: 60, label: 'Below, 60%', color: [56, 159, 220, 255], outline: 1 },
+    { cat: 'Below', prob: 70, label: 'Below, 70%', color: [0, 93, 161, 255], outline: 1 },
+    { cat: 'Below', prob: 80, label: 'Below, 80%', color: [46, 33, 111, 255], outline: 1 },
+    { cat: 'Below', prob: 90, label: 'Below, 90%', color: [34, 24, 82, 255], outline: 1 }
+  ]
+} as const;

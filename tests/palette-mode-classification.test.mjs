@@ -41,7 +41,9 @@ const ENTRIES = {
   // the points are neutral circles sized by the issuer's classes (no colour).
   TROPICAL_WW_CLASSES: { module: tropical, classification: 'issuer' },
   // The CPC seasonal outlooks' cat,prob renderer RGBA, both variables.
-  CPC_SEASONAL_COLORS: { module: palette, classification: 'issuer' }
+  CPC_SEASONAL_COLORS: { module: palette, classification: 'issuer' },
+  // The CPC 6-10 and 8-14 day outlooks' cat,prob renderer RGBA and outline widths.
+  CPC_EXTENDED_COLORS: { module: palette, classification: 'issuer' }
 };
 const MEMBERS = {
   'nadm-drought': { entry: 'NADM_CATEGORIES', classification: 'issuer' },
@@ -54,7 +56,8 @@ const MEMBERS = {
   'nws-alerts': { entry: 'NWS_ALERT_COLORS', classification: 'issuer' },
   'sst-anomaly': { entry: 'SST_ANOMALY_SCALE', classification: 'issuer' },
   'tropical-cyclones': { entry: 'TROPICAL_WW_CLASSES', classification: 'issuer' },
-  'cpc-seasonal-precip': { entry: 'CPC_SEASONAL_COLORS', classification: 'issuer' }
+  'cpc-seasonal-precip': { entry: 'CPC_SEASONAL_COLORS', classification: 'issuer' },
+  'cpc-814-precip': { entry: 'CPC_EXTENDED_COLORS', classification: 'issuer' }
 };
 
 function classifyRecipes(clusters, keys, horizons, members = MEMBERS) {

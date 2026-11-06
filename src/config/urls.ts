@@ -97,6 +97,12 @@ export const URLS = Object.freeze({
   // Content-Type application/json, one feature returned for a PNW point, and a
   // browser fetch from the app origin succeeds (Access-Control-Allow-Origin: *
   // confirmed by live in-page fetch, not just by header inspection).
+  // Re-verified 2026-11-06 for the ENSO Weeks ahead map layers
+  // (src/layers/cpc-seasonal-read.ts): each layer's national `where=1=1`
+  // GeoJSON query with `maxAllowableOffset=0.05` echoed
+  // `Access-Control-Allow-Origin: https://atniclimate.github.io` and measured
+  // 96,432 (6-10 temperature), 97,911 (6-10 precipitation), 95,887 (8-14
+  // temperature) and 96,228 (8-14 precipitation) bytes gzip.
   cpc610OutlookMapServer:
     'https://mapservices.weather.noaa.gov/vector/rest/services/outlooks/cpc_6_10_day_outlk/MapServer',
   cpc814OutlookMapServer:
