@@ -341,6 +341,28 @@ export function openImpactPanelShell(
   return current;
 }
 
+/**
+ * Return focus to the control that opened the briefing, never the page body.
+ * Hard close retires the panel-owned selection, which hides the doors that
+ * name it (the sidebar's "See what this means", the Brief report link), and a
+ * popup's door left with its popup on the click. A door the close hid hands
+ * focus to the place-search entry beside it, shown only in Brief mode, and
+ * otherwise to the map; a map popup's door hands it to the map, as the
+ * Technical door does.
+ */
+function returnBriefingFocus(opener: HTMLElement): void {
+  opener.focus();
+  if (document.activeElement === opener) return;
+  const fallbacks = opener.closest('.maplibregl-popup')
+    ? ['.maplibregl-canvas']
+    : ['#brief-search [data-ddm-search]', '.maplibregl-canvas'];
+  for (const selector of fallbacks) {
+    const target = document.querySelector<HTMLElement>(selector);
+    target?.focus();
+    if (target && document.activeElement === target) return;
+  }
+}
+
 /** Close the shared shell and restore its detent and opener. */
 export function closeImpactPanelShell(restoreFocus = true): void {
   if (!shell) return;
@@ -358,15 +380,7 @@ export function closeImpactPanelShell(restoreFocus = true): void {
 
   const opener = shellOpener;
   shellOpener = null;
-  if (restoreFocus && opener && document.contains(opener)) {
-    opener.focus();
-    // Hard close retires the panel-owned selection, hiding the Brief report
-    // door. Return to its visible place-search entry rather than losing
-    // keyboard focus when that now-hidden opener cannot receive it.
-    if (document.activeElement !== opener && opener.id === 'brief-full-report-link') {
-      document.querySelector<HTMLInputElement>('#brief-search [data-ddm-search]')?.focus();
-    }
-  }
+  if (restoreFocus && opener) returnBriefingFocus(opener);
   window.setTimeout(() => {
     if (shell && !shell.panel.classList.contains('open')) {
       shell.panel.hidden = true;
