@@ -166,7 +166,11 @@ test('DR-134 status whitelist stays exact, including unseen and future values', 
 test('BCWS query uses adopted geometry/paging contract and preserves earlier-year current records', async () => {
   const { readBcwsPerimeters } = await import('../src/util/bcws-perimeter-read.ts');
   let requested;
-  await stub(async url => { requested = new URL(url); return new Response(encode(collection([1]))); }, async () => {
+  // The read is bracketed by two whole-table counts (the service empties and refills the layer at each reload).
+  await stub(async url => {
+    if (new URL(url).searchParams.get('returnCountOnly') === 'true') return new Response(encode({ count: 319 }));
+    requested = new URL(url); return new Response(encode(collection([1])));
+  }, async () => {
     const result = await readBcwsPerimeters({ ...options(), endpoint: 'https://fixture.invalid/query', bounds: [-125,46,-116,50] });
     assert.equal(result.complete, true); assert.equal(result.collection.features[0].properties.FIRE_YEAR, 2025);
     for (const [key,value] of Object.entries({ where:'1=1',outSR:'4326',orderByFields:'OBJECTID ASC',resultOffset:'0',

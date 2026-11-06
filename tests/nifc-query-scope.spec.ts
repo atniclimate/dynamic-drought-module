@@ -11,7 +11,8 @@ import {
 import { buildMinimapWildfireQueryBody } from '../src/state/minimap-wildfire';
 import { leafletBoundsToMapLibre } from '../src/util/bbox';
 import { gotoApp, layerPill, regionSelect, waitForLayerSettled } from './helpers';
-import { NIFC_STUB, PNW_POLYGON, stubWildfireFeeds } from './wildfire-fixtures';
+import { BCWS_OUT_FIELDS } from '../src/util/bcws-perimeter-read';
+import { NIFC_STUB, PNW_POLYGON, fulfillBcws, isBcwsRequestUrl, stubWildfireFeeds } from './wildfire-fixtures';
 
 /**
  * FE-16 (2026-08-28): the NIFC WFIGS perimeters query must stay inside the
@@ -1084,5 +1085,120 @@ test.describe('D1 M26a: the NIFC perimeter popup through the frame', () => {
     // No status word is printed: the NIFC status wording waits on its
     // ddm-cite verdict (D1.md:429), and the legacy popup printed none.
     await expect(record.locator('[data-record-slot="status"]')).toHaveCount(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// BC Wildfire Service beside NIFC (the acceptance of 2026-09-25). What only a
+// browser can show: the BC perimeters drawn beside the US ones through the
+// view-envelope query, and the one footprint whose popup lists each agency's
+// own record. Every request is answered here (BC through `fulfillBcws`).
+// ---------------------------------------------------------------------------
+
+/** A square of half-width `half` degrees at the British Columbia region's centre. */
+function bcCentreSquare(half: number): { type: 'Polygon'; coordinates: number[][][] } {
+  const [[south, west], [north, east]] = REGIONS.british_columbia.bounds;
+  const lng = (west + east) / 2;
+  const lat = (south + north) / 2;
+  return {
+    type: 'Polygon',
+    coordinates: [[[lng - half, lat - half], [lng + half, lat - half], [lng + half, lat + half], [lng - half, lat + half], [lng - half, lat - half]]]
+  };
+}
+
+const BC_CENTRE_RECORD = {
+  type: 'Feature',
+  properties: {
+    OBJECTID: 217,
+    FIRE_NUMBER: 'V10885',
+    FIRE_YEAR: 2026,
+    VERSION_NUMBER: 2026092201,
+    FIRE_SIZE_HECTARES: 6595.6,
+    TRACK_DATE: 1790060400000,
+    LOAD_DATE: 1790118047000,
+    FIRE_STATUS: 'Under Control',
+    FIRE_URL: 'https://wildfiresituation.nrs.gov.bc.ca/incidents?fireYear=2026&incidentNumber=V10885'
+  },
+  geometry: bcCentreSquare(0.3)
+};
+
+test.describe('BC Wildfire Service perimeters beside NIFC', () => {
+  test('the Wildfire mode draws the BC perimeters beside the NIFC ones through the view-envelope query, with their own key section', async ({ page }) => {
+    const queries: string[] = [];
+    await stubWildfireFeeds(page);
+    await page.route(
+      (url) => isBcwsRequestUrl(url.href),
+      async (route) => {
+        if (new URL(route.request().url()).searchParams.get('f') === 'geojson') queries.push(route.request().url());
+        await fulfillBcws(route, { type: 'FeatureCollection', features: [BC_CENTRE_RECORD] });
+      }
+    );
+    await gotoApp(page, '?region=british_columbia&view=console&cluster=wildfire');
+    await waitForLayerSettled(page, 'nifc-fires');
+    await waitForLayerSettled(page, 'bcws-fires');
+    await expect(layerPill(page, 'bcws-fires')).toHaveText(/live/);
+    expect(queries.length, 'one BC perimeters read for the view').toBeGreaterThanOrEqual(1);
+    const params = new URL(queries[0]!).searchParams;
+    expect(params.get('outFields')).toBe(BCWS_OUT_FIELDS.join(','));
+    expect(params.get('geometryType')).toBe('esriGeometryEnvelope');
+    expect(params.get('spatialRel')).toBe('esriSpatialRelIntersects');
+    const [west, south, east, north] = (params.get('geometry') ?? '').split(',').map(Number);
+    // Cut to British Columbia's box, never past it.
+    expect(west).toBeGreaterThanOrEqual(-139.5);
+    expect(south).toBeGreaterThanOrEqual(48);
+    expect(east).toBeLessThanOrEqual(-113.5);
+    expect(north).toBeLessThanOrEqual(60);
+    await expect(page.locator('[data-bcws-perimeter-key]')).toContainText('BC Wildfire Service current perimeters');
+    await expect(page.locator('[data-bcws-perimeter-key]')).toContainText('Out of Control, Being Held or Under Control');
+    await expect(page.locator('[data-nifc-perimeter-key]')).toHaveCount(1);
+  });
+
+  test('where a BC and a NIFC perimeter overlap, one footprint answers with each agency\'s own record and nothing merged', async ({ page }) => {
+    const nifcRecord = {
+      type: 'Feature',
+      properties: {
+        attr_IncidentName: 'Border 2',
+        attr_IncidentTypeCategory: 'WF',
+        attr_UniqueFireIdentifier: '2026-WANCP-000266',
+        attr_IncidentSize: 9108,
+        poly_GISAcres: 23856.63,
+        attr_FireDiscoveryDateTime: 1784250840000,
+        attr_ActiveFireCandidate: 1
+      },
+      geometry: bcCentreSquare(0.5)
+    };
+    await stubWildfireFeeds(page);
+    await page.route(
+      (url) => url.href.includes('WFIGS_Interagency_Perimeters_Current') && new URL(url.href).searchParams.get('f') === 'geojson',
+      (route) => route.fulfill({ status: 200, contentType: 'application/geo+json', body: JSON.stringify({ type: 'FeatureCollection', features: [nifcRecord] }) })
+    );
+    await page.route(
+      (url) => isBcwsRequestUrl(url.href),
+      (route) => fulfillBcws(route, { type: 'FeatureCollection', features: [BC_CENTRE_RECORD] })
+    );
+    await gotoApp(page, '?region=british_columbia&view=console&layers=nifc-fires,bcws-fires');
+    await waitForLayerSettled(page, 'nifc-fires');
+    await waitForLayerSettled(page, 'bcws-fires');
+    const canvas = page.locator('#map canvas.maplibregl-canvas');
+    const box = await canvas.boundingBox();
+    if (!box) throw new Error('no map canvas');
+    const frame = page.locator('.maplibregl-popup .maplibregl-popup-content > [data-popup-frame][data-popup-kind="group"]');
+    // The grouping runs in its Worker after both reads; click the centre until the footprint answers.
+    await expect(async () => {
+      await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+      await expect(frame).toHaveCount(1, { timeout: 1500 });
+    }).toPass({ timeout: 30_000 });
+    const records = frame.locator('li[data-record-key]');
+    await expect(records).toHaveCount(2);
+    const bc = frame.locator('li[data-record-key="bcws:2026-V10885"]');
+    await expect(bc.locator('[data-record-identifier]')).toHaveText('Fire Number V10885, Fire Year 2026');
+    await expect(bc.locator('[data-record-slot="sizes"] dd')).toHaveText('6,595.6 ha (about 16,298 acres)');
+    await expect(bc.locator('[data-record-slot="status"]')).toHaveText('Under Control');
+    await expect(bc.locator('[data-record-slot="source"] a')).toHaveAttribute('href', /^https:\/\/wildfiresituation\.nrs\.gov\.bc\.ca\//);
+    const us = frame.locator('li[data-record-key="nifc:2026-WANCP-000266"]');
+    await expect(us.locator('[data-record-slot="sizes"] dd').first()).toHaveText('9,108 acres (about 3,686 ha)');
+    await expect(us.locator('[data-record-slot="status"]')).toHaveCount(0);
+    await expect(frame).toContainText('Overlapping agency perimeters counted as one fire area.');
+    await expect(frame).toContainText('DDM states no combined name, size or status.');
   });
 });

@@ -100,6 +100,7 @@ import type {
   MinimapWildfireSummary,
 } from '../../state/minimap-wildfire';
 import type { EnsoPhaseLabel } from '../../impact/enso';
+import { OVERLAP_COUNT_LABEL } from '../../config/wildfire-presentation';
 import { fitAll, fitFraming, fitOcean } from '../../map/camera-fit';
 import { requestBasemapMode } from '../../map/basemap-switcher';
 import { defaultBasemapFor } from '../../state/basemap-store';
@@ -375,9 +376,11 @@ function wildfireDescription(
   if (status === 'loading' || status === 'idle') {
     return 'Current mapped wildfire perimeter summary loading.';
   }
+  // DRAFT wording (DR-177): a framing that reaches British Columbia names both agencies.
+  const agencies = summary?.bcwsPerimeterCount === undefined ? 'NIFC' : 'NIFC or BC Wildfire Service';
   if (!summary || summary.status === 'unavailable') {
     return (
-      'Current mapped NIFC wildfire perimeter summary unavailable. ' +
+      `Current mapped ${agencies} wildfire perimeter summary unavailable. ` +
       'Static Wildfire Hazard Potential is not substituted when the current-fire check is unresolved.'
     );
   }
@@ -385,14 +388,16 @@ function wildfireDescription(
   const check = checkedTimeLabel(checkedAtUtc);
   const perimeterCount = summary.mappedWildfirePerimeterCount ?? 0;
   if (summary.condition === 'mapped-wildfire') {
+    const merged = (summary.fireAreasMerged ?? 0) > 0 ? `; ${OVERLAP_COUNT_LABEL}` : '';
+    const bcMissing = summary.bcwsPerimeterCount === null ? '; BC Wildfire Service perimeters were unavailable' : '';
     return (
-      `${perimeterCount} current mapped NIFC wildfire ${perimeterCount === 1 ? 'perimeter intersects' : 'perimeters intersect'} this authored framing; prescribed fire is excluded; browser checked ${check}. ` +
+      `${perimeterCount} current mapped ${agencies} wildfire ${perimeterCount === 1 ? 'perimeter intersects' : 'perimeters intersect'} this authored framing${merged}${bcMissing}; prescribed fire is excluded; browser checked ${check}. ` +
       'This is mapped-perimeter evidence, not a count of every active wildfire.'
     );
   }
 
   const noMappedPerimeter =
-    `No current mapped NIFC wildfire perimeter intersected this authored framing when the browser checked ${check}. `;
+    `No current mapped ${agencies} wildfire perimeter intersected this authored framing when the browser checked ${check}. `;
   if (summary.condition === 'no-data') {
     return (
       noMappedPerimeter +

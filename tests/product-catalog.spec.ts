@@ -195,8 +195,8 @@ function locateMakeClaimSites(
   return sites;
 }
 
-/** The count pinned 2026-09-12 (DDM-P14-T05 microtask 3): a genuinely new construction site should move this number, not silence the assertion below it. */
-const EXPECTED_MAKE_CLAIM_SITES = 28;
+/** The count pinned 2026-09-12 (DDM-P14-T05 microtask 3): a genuinely new construction site should move this number, not silence the assertion below it. 29 since the BC Wildfire Service lane's one site (`bcwsClaim` in src/impact/sources.ts). */
+const EXPECTED_MAKE_CLAIM_SITES = 29;
 
 test('every LayerDef in LAYER_DEFS carries a product field naming a PRODUCT_KEYS member', () => {
   const productKeySet = new Set<string>(PRODUCT_KEYS);

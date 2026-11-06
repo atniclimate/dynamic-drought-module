@@ -100,6 +100,74 @@ export const PLANTS_STUB_FC = {
   ]
 };
 
+// ---------------------------------------------------------------------------
+// The BC Wildfire Service current perimeters (src/layers/bcws-fires.ts)
+// ---------------------------------------------------------------------------
+
+/** The name every BC Wildfire Service URL the app builds carries (`URLS.bcwsFirePerimeters`). */
+const BCWS_SERVICE_NAME = 'BCWS_FirePerimeters_PublicView';
+
+/** True for a request to the BC Wildfire Service current-perimeters service. */
+export function isBcwsRequestUrl(url: string): boolean {
+  return url.includes(`/${BCWS_SERVICE_NAME}/`);
+}
+
+/** A steady table with no perimeter in it: the quiet default, so no existing case gains a BC fire. */
+export const BCWS_QUIET = { type: 'FeatureCollection', features: [] } as const;
+
+/**
+ * Answer one BC request as the app issues them (src/util/bcws-perimeter-read.ts):
+ * a GET whole-table count (`returnCountOnly=true`, answered with a steady
+ * count so the reload bracket agrees) or a GET `f=geojson` read, answered with
+ * `collection`. Anything else is a 400 ArcGIS-style envelope, never live.
+ */
+export async function fulfillBcws(route: Route, collection: unknown = BCWS_QUIET): Promise<void> {
+  const request = route.request();
+  const url = new URL(request.url());
+  const json = (status: number, body: unknown): Promise<void> =>
+    route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
+  if (request.method() !== 'GET' || !url.pathname.endsWith('/query')) {
+    await json(400, { error: { code: 400, message: 'Unknown test BCWS request' } });
+    return;
+  }
+  if (url.searchParams.get('returnCountOnly') === 'true') await json(200, { count: 319 });
+  else if (url.searchParams.get('f') === 'geojson') await json(200, collection);
+  else await json(400, { error: { code: 400, message: 'Unknown test BCWS request' } });
+}
+
+/** How a `gotoApp` boot answers the BC Wildfire Service. */
+export type BcwsStubMode = 'fixture' | 'live';
+
+const bcwsStubStates = new WeakMap<BrowserContext, { mode: BcwsStubMode }>();
+
+/**
+ * Route the BC Wildfire Service on the browser CONTEXT, the suite-wide
+ * default `gotoApp` installs on every boot (the NIFC default's pattern):
+ * fail-closed, answering with the quiet table, so no boot reaches the
+ * Province. A spec's own `page.route` wins (Playwright checks Page routes
+ * first). `live` passes every request through.
+ */
+export async function installDefaultBcwsStub(page: Page, mode: BcwsStubMode): Promise<void> {
+  const context = page.context();
+  const existing = bcwsStubStates.get(context);
+  if (existing) {
+    existing.mode = mode;
+    return;
+  }
+  const state = { mode };
+  bcwsStubStates.set(context, state);
+  await context.route(
+    (url) => isBcwsRequestUrl(url.href),
+    async (route) => {
+      if (state.mode === 'live') {
+        await route.fallback();
+        return;
+      }
+      await fulfillBcws(route);
+    }
+  );
+}
+
 /** Route every live wildfire-cluster upstream to a fixed payload. */
 export async function stubWildfireFeeds(page: Page): Promise<void> {
   const fulfillJson = (route: Route, body: unknown): Promise<void> =>
@@ -111,6 +179,11 @@ export async function stubWildfireFeeds(page: Page): Promise<void> {
   await page.route(
     (url) => url.href.includes('WFIGS_Interagency_Perimeters_Current'),
     (route) => fulfillJson(route, NIFC_STUB)
+  );
+  // The BC perimeters beside them: the quiet table, so these feeds' counts stay NIFC's.
+  await page.route(
+    (url) => isBcwsRequestUrl(url.href),
+    (route) => fulfillBcws(route)
   );
   await page.route(
     (url) => url.href.includes('NOAA_Satellite_Smoke_Detection'),

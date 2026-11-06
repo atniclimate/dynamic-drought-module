@@ -32,6 +32,7 @@ import { fileURLToPath } from 'node:url';
 // The product modules import each other without extensions; this hook appends
 // `.ts` to a relative, extensionless specifier whose parent is a `.ts` module.
 const NIFC_LAYER_MODULE = '/src/layers/nifc-fires.ts';
+const BCWS_LAYER_MODULE = '/src/layers/bcws-fires.ts';
 registerHooks({
   resolve(specifier, context, nextResolve) {
     if (
@@ -52,6 +53,14 @@ registerHooks({
         shortCircuit: true,
         source:
           'export function loadedNifcCollection() { return globalThis.__minimapLoaded ?? null; }'
+      };
+    }
+    // The BC layer's fire areas, as its module answers them (src/layers/bcws-fires.ts `fireAreas`).
+    if (url.endsWith(BCWS_LAYER_MODULE)) {
+      return {
+        format: 'module',
+        shortCircuit: true,
+        source: 'export function fireAreas() { return globalThis.__minimapAreas ?? { areaOf: new Map() }; }'
       };
     }
     return nextLoad(url, context);
@@ -112,19 +121,35 @@ function loaded(collection, { truncated, envelope = null }) {
 
 /** Run the retained feed once under a layer status and a loaded snapshot and
  * return the recorded count-only POST bodies plus the published summaries. */
-async function runFeed({ status, snapshot }) {
+/** The BC read's answers: its two whole-table counts and its active perimeters (no live host). */
+const BC_QUIET = { count: 319, features: [] };
+
+async function runFeed({ status, snapshot, bc = BC_QUIET, nifcCount = COUNT_ANSWER, bcStatus, areas }) {
   const original = globalThis.fetch;
   const posts = [];
-  globalThis.fetch = async (_input, init) => {
+  const bcUrls = [];
+  globalThis.fetch = async (input, init) => {
+    const url = String(input);
+    if (url.includes('BCWS_FirePerimeters_PublicView')) {
+      bcUrls.push(url);
+      if (bc === 'fail') return new Response('', { status: 503 });
+      const body = new URL(url).searchParams.get('returnCountOnly') === 'true'
+        ? { count: bc.count }
+        : { type: 'FeatureCollection', features: bc.features };
+      return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
     posts.push(String(init?.body ?? ''));
-    return new Response(JSON.stringify({ count: COUNT_ANSWER }), {
+    return new Response(JSON.stringify({ count: nifcCount }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' }
     });
   };
   globalThis.__minimapLoaded = snapshot;
+  globalThis.__minimapAreas = areas;
   registry.deactivate('nifc-fires');
+  registry.deactivate('bcws-fires');
   if (status !== undefined) registry.setStatus('nifc-fires', status);
+  if (bcStatus !== undefined) registry.setStatus('bcws-fires', bcStatus);
   let release = () => {};
   try {
     const settled = await new Promise((resolve) => {
@@ -132,11 +157,13 @@ async function runFeed({ status, snapshot }) {
         if (next.checkedAtUtc !== null) resolve(next);
       });
     });
-    return { posts, snapshot: settled };
+    return { posts, bcUrls, snapshot: settled };
   } finally {
     release();
     registry.deactivate('nifc-fires');
+    registry.deactivate('bcws-fires');
     globalThis.__minimapLoaded = null;
+    globalThis.__minimapAreas = undefined;
     globalThis.fetch = original;
   }
 }
@@ -289,4 +316,88 @@ test('the missing Nunavut mask sentence is only for framings that can contain Nu
   for (const key of ['hawaii', 'mexico', 'southeast-gulf', 'alaska-northwest']) {
     assert.equal(reach[key], false, `${key} cannot contain Nunavut`);
   }
+});
+
+// ---------------------------------------------------------------------------
+// BC Wildfire Service beside NIFC (the acceptance of 2026-09-25): the framings
+// that reach British Columbia count the issuer's active stages, a known fire
+// area once, and a failed BC read never as zero.
+// ---------------------------------------------------------------------------
+
+/** A small square at the Border 2 fire (49.0 N, 121 W), inside Pacific Coast and British Columbia's box. */
+const BORDER_SQUARE = { type: 'Polygon', coordinates: [[[-121.1, 49.0], [-121.0, 49.0], [-121.0, 49.1], [-121.1, 49.1], [-121.1, 49.0]]] };
+const BC_ACTIVE = { type: 'Feature', properties: { OBJECTID: 217, FIRE_NUMBER: 'V10885', FIRE_YEAR: 2026, FIRE_STATUS: 'Under Control' }, geometry: BORDER_SQUARE };
+const NIFC_BORDER = {
+  type: 'Feature',
+  properties: { attr_ActiveFireCandidate: 1, attr_IncidentTypeCategory: 'WF', attr_UniqueFireIdentifier: '2026-WANCP-000266' },
+  geometry: BORDER_SQUARE
+};
+
+test('setup: the Border square lies in Pacific Coast, and Mexico and Hawaii do not reach British Columbia', async () => {
+  const { geometriesOverlap } = await import('../src/util/polygon-overlap.ts');
+  assert.equal(geometriesOverlap(BORDER_SQUARE, minimap.framingGeometry(COVERED)), true);
+});
+
+test('a framing that reaches British Columbia adds the active BC perimeters to its count; one outside it carries no BC field', async () => {
+  const { bcUrls, snapshot } = await runFeed({ status: undefined, nifcCount: 0, bc: { count: 319, features: [BC_ACTIVE] } });
+  const covered = snapshot.summaries[COVERED];
+  assert.equal(covered.mappedWildfirePerimeterCount, 1);
+  assert.equal(covered.condition, 'mapped-wildfire');
+  assert.equal(covered.bcwsPerimeterCount, 1);
+  assert.equal(covered.fireAreasMerged, 0);
+  for (const key of ['mexico', 'hawaii', 'southeast-gulf']) {
+    assert.equal('bcwsPerimeterCount' in snapshot.summaries[key], false, `${key} is outside British Columbia`);
+    assert.equal(snapshot.summaries[key].mappedWildfirePerimeterCount, 0);
+  }
+  // One province read of the active stages, bracketed by two whole-table counts.
+  assert.equal(bcUrls.length, 3);
+  const read = new URL(bcUrls.find((url) => url.includes('f=geojson')));
+  assert.equal(read.searchParams.get('where'), "FIRE_STATUS IN ('Out of Control','Being Held','Under Control')");
+  assert.equal(read.searchParams.get('geometry'), '-139.5,48,-113.5,60');
+});
+
+test('a failed BC read is never a zero for British Columbia: with no NIFC perimeter the framing is unavailable, with one it stays mapped and names BC unavailable', async () => {
+  const none = await runFeed({ status: undefined, nifcCount: 0, bc: 'fail' });
+  assert.equal(none.snapshot.summaries[COVERED].condition, 'unavailable');
+  assert.equal(none.snapshot.summaries[COVERED].mappedWildfirePerimeterCount, null);
+  assert.equal(none.snapshot.summaries[COVERED].bcwsPerimeterCount, null);
+  assert.notEqual(none.snapshot.summaries.mexico.condition, 'unavailable', 'a framing outside British Columbia keeps its own answer');
+  const some = await runFeed({ status: undefined, nifcCount: 2, bc: 'fail' });
+  assert.equal(some.snapshot.summaries[COVERED].condition, 'mapped-wildfire');
+  assert.equal(some.snapshot.summaries[COVERED].mappedWildfirePerimeterCount, 2);
+  assert.equal(some.snapshot.summaries[COVERED].bcwsPerimeterCount, null);
+});
+
+test('a BC answer taken while the service reloads (its two whole-table counts disagree) is unavailable, never a zero', async () => {
+  let counts = 0;
+  const original = globalThis.Response;
+  const { snapshot } = await runFeed({
+    status: undefined,
+    nifcCount: 0,
+    bc: {
+      get count() { counts += 1; return counts === 1 ? 0 : 319; },
+      features: []
+    }
+  });
+  assert.equal(globalThis.Response, original);
+  assert.equal(snapshot.summaries[COVERED].condition, 'unavailable', 'an emptied layer mid-reload is not "no BC fires"');
+});
+
+test('a known fire area counts once and carries the ratified label; unknown, the two agencies count apart', async () => {
+  const nifc = loaded({ type: 'FeatureCollection', features: [NIFC_BORDER] }, { truncated: false });
+  const areaOf = new Map([['nifc:2026-WANCP-000266', 'fa:x'], ['bcws:2026-V10885', 'fa:x']]);
+  const once = await runFeed({ status: 'ready', snapshot: nifc, bc: { count: 319, features: [BC_ACTIVE] }, bcStatus: 'ready', areas: { areaOf } });
+  assert.equal(once.snapshot.summaries[COVERED].mappedWildfirePerimeterCount, 1);
+  assert.equal(once.snapshot.summaries[COVERED].fireAreasMerged, 1);
+  const apart = await runFeed({ status: 'ready', snapshot: nifc, bc: { count: 319, features: [BC_ACTIVE] } });
+  assert.equal(apart.snapshot.summaries[COVERED].mappedWildfirePerimeterCount, 2);
+  assert.equal(apart.snapshot.summaries[COVERED].fireAreasMerged, 0);
+});
+
+test('the BC stage whitelist decides what the minimap counts: Out and an unstated stage are not active', async () => {
+  const out = { ...BC_ACTIVE, properties: { ...BC_ACTIVE.properties, FIRE_STATUS: 'Out' } };
+  const unstated = { ...BC_ACTIVE, properties: { ...BC_ACTIVE.properties, OBJECTID: 1, FIRE_NUMBER: 'C22352', FIRE_STATUS: null } };
+  const { snapshot } = await runFeed({ status: undefined, nifcCount: 0, bc: { count: 319, features: [out, unstated] } });
+  assert.equal(snapshot.summaries[COVERED].bcwsPerimeterCount, 0);
+  assert.notEqual(snapshot.summaries[COVERED].condition, 'mapped-wildfire');
 });

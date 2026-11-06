@@ -1,6 +1,14 @@
 import { HAZARD_CLUSTER_KEYS, TEMPORAL_HORIZON_KEYS } from '../config/clusters';
 import { HILLSHADE_COVERAGE_SENTENCE } from '../config/terrain-coverage';
-import { HMS_OVERVIEW_QUALIFICATION, NIFC_PERIMETER_TECHNICAL_NOTE } from '../config/wildfire-presentation';
+import {
+  BCWS_CATALOGUE_URL,
+  BCWS_DATA_CAVEAT,
+  BCWS_PERIMETER_TECHNICAL_NOTE,
+  BCWS_STAGE_DEFINITIONS,
+  BCWS_STAGES_URL,
+  HMS_OVERVIEW_QUALIFICATION,
+  NIFC_PERIMETER_TECHNICAL_NOTE
+} from '../config/wildfire-presentation';
 import { escapeHtml } from '../util/escape';
 import { clusterHorizonReason } from './horizon-reason';
 
@@ -21,8 +29,9 @@ const FIRE3D_IDLE_NOTE =
 const notes: Record<Overview, string> = {
   drought:
     'The North American Drought Monitor navigation overview uses an approximate area-weighted mean category index over assessed land. Outline width represents the D1 through D4 share. The overview is inferred from NADM polygons, not an NADM-issued regional category; hatching marks partial coverage.',
+  // DRAFT wording (DR-177): the BC clause.
   wildfire:
-    'The wildfire navigation overview first checks current mapped NIFC wildfire perimeters. A zero count does not establish no active wildfire. Only a successful zero-count check permits the USFS Wildfire Hazard Potential 2023 static overview; failed checks remain unavailable. WHP percentages cover classified land in the covered United States portion. Hatching marks partial coverage; desaturation and stippling identify static potential.',
+    'The wildfire navigation overview first checks current mapped NIFC wildfire perimeters, and in the framings that reach British Columbia the BC Wildfire Service perimeters in its three active stages, with overlapping agency perimeters counted as one fire area. A zero count does not establish no active wildfire. Only a successful zero-count check permits the USFS Wildfire Hazard Potential 2023 static overview; failed checks remain unavailable. WHP percentages cover classified land in the covered United States portion. Hatching marks partial coverage; desaturation and stippling identify static potential.',
   fire3d: FIRE3D_IDLE_NOTE
 };
 /** The Wildfire 3D plant-stress ground's full text, while a product is on the map (src/layers/wildfire-dryness.ts). */
@@ -102,6 +111,11 @@ export function renderMapTechnicalInformation(open = false): string {
     <p id="impact-technical-wildfire">${escapeHtml(notes.wildfire)}</p>
     <h4>Mapped fire perimeters</h4>
     <p>${escapeHtml(NIFC_PERIMETER_TECHNICAL_NOTE)}</p>
+    <h4>BC Wildfire Service perimeters</h4>
+    <p>${escapeHtml(BCWS_PERIMETER_TECHNICAL_NOTE)}</p>
+    <p>"${escapeHtml(BCWS_DATA_CAVEAT)}" <a href="${BCWS_CATALOGUE_URL}" target="_blank" rel="noopener">BC Wildfire Service, BC Data Catalogue</a></p>
+    ${BCWS_STAGE_DEFINITIONS.map((row) => `<p>${escapeHtml(row.stage)}: "${escapeHtml(row.definition)}"</p>`).join('')}
+    <p><a href="${BCWS_STAGES_URL}" target="_blank" rel="noopener">BC Wildfire Service, stages of control</a></p>
     <h4>Smoke Plumes (HMS)</h4>
     <p>${escapeHtml(HMS_OVERVIEW_QUALIFICATION)}</p>
     <h4>3D Fire context</h4>

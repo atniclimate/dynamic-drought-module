@@ -332,8 +332,9 @@ const MINIMAP_PROVENANCE: Readonly<
 > = {
   drought: (key) =>
     key === null ? undefined : FRAMINGS[key].coverage?.minimapProvenance,
+  // DRAFT wording (DR-177): BC Wildfire Service joined the framings that reach British Columbia.
   wildfire: () =>
-    'Current mapped NIFC wildfire perimeters, with the static United States Forest Service Wildfire Hazard Potential 2023 fallback, inform this minimap.',
+    'Current mapped NIFC and BC Wildfire Service wildfire perimeters, with the static United States Forest Service Wildfire Hazard Potential 2023 fallback, inform this minimap.',
   heat: () =>
     'National Weather Service HeatRisk is drawn on the main map and is not summarized per framing, so this minimap shades no framing.',
   enso: () =>

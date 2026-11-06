@@ -47,7 +47,8 @@ export async function groupPerimetersInWorker(sourceJson: string, options: Perim
       const reply = event.data as { operation?: unknown; generation?: unknown; ok?: unknown; result?: PerimeterJobResult } | null;
       if (!reply || reply.operation !== 'group-perimeters' || !Number.isSafeInteger(reply.generation)) { fail(); return; }
       if (reply.generation !== options.generation) return;
-      if (reply.ok !== true || !reply.result || !Array.isArray(reply.result.graph?.versions) || !Array.isArray(reply.result.sources)) { fail(); return; }
+      if (reply.ok !== true || !reply.result || !Array.isArray(reply.result.graph?.versions) || !Array.isArray(reply.result.sources) ||
+        !Array.isArray(reply.result.footprints)) { fail(); return; }
       finish(reply.result);
     };
     if (options.signal.aborted) { cancel(); return; }

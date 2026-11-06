@@ -86,7 +86,8 @@ import {
 } from '../config/wildfire-presentation';
 import { mapRendererClass, type RendererClass } from '../map/gl-capability';
 import { registerClickTarget } from '../map/interaction-coordinator';
-import type { IssuedModel, IssuerSwatch, PopupClock, PopupDetail, RecordBlock, RecordSize } from '../ui/popup-frame';
+import type { IssuedModel, IssuerSwatch, PopupDetail } from '../ui/popup-frame';
+import { nifcRecordBlock, pickIncidentName, textField } from './fire-records';
 import { fetchJsonWithBudget } from '../util/fetch';
 import {
   buildQueryEnvelope,
@@ -887,79 +888,6 @@ export function deactivate(map: maplibregl.Map): void {
   hideLegend(LAYER_KEY);
 }
 
-/**
- * Resolve the most useful incident name from the WFIGS attribute schema.
- * `attr_IncidentName` is canonical, `poly_IncidentName` is the geometry
- * source's name (sometimes more specific), and `IncidentName` and
- * `incidentName` are legacy field names that the scoped query no longer
- * requests (kept for stub fixtures and older responses). Returns a neutral mapped-perimeter label if every candidate
- * is blank.
- */
-function pickIncidentName(props: GeoJsonProperties): string {
-  const p = props ?? {};
-  // Fall through on blank strings, not only on null/undefined: the IRWIN
-  // record (`attr_*`) and the perimeter collector (`poly_*`) can disagree,
-  // and a present-but-empty `attr_IncidentName` must not mask a real name
-  // in `poly_IncidentName`.
-  for (const candidate of [p.attr_IncidentName, p.poly_IncidentName, p.IncidentName, p.incidentName]) {
-    if (candidate === null || candidate === undefined) continue;
-    const s = String(candidate).trim();
-    if (s !== '') return s;
-  }
-  return 'Mapped Fire Perimeter';
-}
-
-/** The frame's explanation for issuer time text DDM does not parse (PF1; the M25 builders' wording). */
-const SUPPLIED_TIME_EXPLANATION = 'As the issuer states it; DDM does not read it as a full date.';
-
-/** Hectares per acre (grouping-contract.md section 4, "Conversion shown"). */
-const HECTARES_PER_ACRE = 0.40468564224;
-
-/** A finite number from a WFIGS numeric field, or null for a missing, blank or non-numeric value. */
-function finiteNumber(value: unknown): number | null {
-  if (value === null || value === undefined || (typeof value === 'string' && value.trim() === '')) return null;
-  const num = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN;
-  return Number.isFinite(num) ? num : null;
-}
-
-/**
- * Whole units, thousands-separated (sub-acre precision exceeds typical
- * perimeter accuracy); a positive value below 1 reads "under 1", never "0".
- */
-function wholeUnits(value: number): string {
-  return value > 0 && value < 1 ? 'under 1' : value.toLocaleString('en-US', { maximumFractionDigits: 0 });
-}
-
-/**
- * A WFIGS size field in its issuer unit (acres) first, with the "about"
- * hectare conversion rounded to whole units (grouping-contract.md 12.1 slot
- * 3), under the field's own name; null when the field carries no size.
- */
-function sizeRow(label: string, value: unknown): RecordSize | null {
-  const acres = finiteNumber(value);
-  if (acres === null) return null;
-  const shown = wholeUnits(acres);
-  const unit = shown === '1' || shown === 'under 1' ? 'acre' : 'acres';
-  const hectares = wholeUnits(acres * HECTARES_PER_ACRE);
-  return { label, text: `${shown} ${unit} (${hectares === 'under 1' ? '' : 'about '}${hectares} ha)` };
-}
-
-/**
- * The discovery time as the WFIGS date field states it: epoch milliseconds
- * read as a UTC instant (the zone named; the old popup cut it to its UTC
- * date). A missing, blank or non-text, non-numeric value is absent (null);
- * other text is shown as supplied, never silently dropped (PF1).
- */
-function discoveredClock(value: unknown): PopupClock | null {
-  if (value === null || value === undefined || (typeof value === 'string' && value.trim() === '')) return null;
-  const ms = finiteNumber(value);
-  if (ms !== null && new Date(ms).getUTCFullYear() >= 1000) {
-    return { kind: 'point', meaning: 'discovered', label: 'Discovered', at: { precision: 'instant', at: ms, zone: 'UTC' } };
-  }
-  if (typeof value !== 'string' && typeof value !== 'number') return null;
-  return { kind: 'point', meaning: 'discovered', label: 'Discovered', at: { precision: 'supplied', text: String(value), explanation: SUPPLIED_TIME_EXPLANATION } };
-}
-
 /** The class the map draws the perimeter as (DDM-UI-006), with its own swatch. */
 function classSwatch(value: unknown): IssuerSwatch {
   const cls = classifyNifcIncidentType(value);
@@ -970,32 +898,6 @@ function classSwatch(value: unknown): IssuerSwatch {
         ? NIFC_INCIDENT_PRESENTATION.prescribed.fillColor
         : NIFC_INCIDENT_PRESENTATION.other.lineColor;
   return { table: 'NIFC_INCIDENT_PRESENTATION', classKey: cls, color };
-}
-
-/** The record's text field, trimmed, or null when missing or blank. */
-function textField(value: unknown): string | null {
-  if (typeof value !== 'string' && typeof value !== 'number') return null;
-  const text = String(value).trim();
-  return text === '' ? null : text;
-}
-
-/**
- * The record key (grouping-contract.md section 4): the UniqueFireIdentifier
- * trimmed and uppercased; else the IRWIN id, braces removed and lowercased,
- * as `nifc:irwin:<guid>`. A record that carries neither (a stub) has no
- * key across responses: names and OBJECTIDs are never keys (item 3 and
- * section 5.1), so the stub is keyed on its feature id inside this one
- * response (section 4's "key plus OBJECTID within one response") under a
- * prefix that says it is unkeyed, `nifc:unkeyed:<id>`, or `nifc:unkeyed`
- * when the response gives the feature no id. Section 5.2's
- * `nifc:geom:<hash>` is the grouping read's key over its generalized
- * coordinates; a clicked feature carries only its tile-clipped rendering.
- */
-function recordKey(ufi: string | null, irwin: string | null, featureId: string | number | undefined): string {
-  if (ufi !== null) return `nifc:${ufi.toUpperCase()}`;
-  if (irwin !== null) return `nifc:irwin:${irwin.replace(/[{}]/g, '').toLowerCase()}`;
-  const id = typeof featureId === 'number' ? (Number.isFinite(featureId) ? String(featureId) : '') : (featureId ?? '').trim();
-  return id === '' ? 'nifc:unkeyed' : `nifc:unkeyed:${id}`;
 }
 
 /**
@@ -1017,41 +919,15 @@ export function buildNifcPopupModel(
 ): IssuedModel {
   const p = props ?? {};
   const incidentName = pickIncidentName(p);
-  const ufi = textField(p.attr_UniqueFireIdentifier);
-  const irwin = textField(p.attr_IrwinID);
   const stateRaw = p.attr_POOState;
   // POOState arrives as `US-XX`; trim the prefix for readable display.
   const state =
     typeof stateRaw === 'string' && stateRaw.startsWith('US-') ? stateRaw.slice(3) : textField(stateRaw) ?? '';
 
-  const discovered = discoveredClock(p.attr_FireDiscoveryDateTime);
-  // The layer's last successful browser check (the time bar's own words),
-  // in the viewer's zone, named.
-  const retrieved: PopupClock | null =
-    retrievedAt === null
-      ? null
-      : {
-          kind: 'point',
-          meaning: 'retrieved',
-          label: 'Last successful browser check',
-          at: { precision: 'instant', at: retrievedAt, zone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' }
-        };
-  const present = [discovered, retrieved].filter((c): c is PopupClock => c !== null);
-  const [firstPresent, ...laterPresent] = present;
-  const recordClocks: readonly [PopupClock, ...PopupClock[]] =
-    firstPresent === undefined ? [{ kind: 'not-stated', label: 'Discovered', reason: 'unavailable' }] : [firstPresent, ...laterPresent];
-
-  const record: RecordBlock = {
-    key: recordKey(ufi, irwin, featureId),
-    issuer: 'nifc',
-    identifier: ufi ?? incidentName,
-    ...(ufi === null ? {} : { name: incidentName }),
-    sizes: [sizeRow('Reported size', p.attr_IncidentSize), sizeRow('Mapped perimeter area', p.poly_GISAcres)].filter(
-      (row): row is RecordSize => row !== null
-    ),
-    clocks: recordClocks,
-    links: []
-  };
+  // The record (src/layers/fire-records.ts, shared with the BC layer's group
+  // popup): the discovery time, then the layer's last successful browser check.
+  const record = nifcRecordBlock(p, retrievedAt, featureId);
+  const recordClocks = record.clocks;
 
   const details: PopupDetail[] = [];
   if (state !== '') details.push({ kind: 'row', label: 'State', text: state });

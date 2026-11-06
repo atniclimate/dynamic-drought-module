@@ -634,6 +634,18 @@ export const URLS = Object.freeze({
   nifcFires:
     'https://services3.arcgis.com/T4QMspbfLg3qTGWY/ArcGIS/rest/services/WFIGS_Interagency_Perimeters_Current/FeatureServer/0',
 
+  // ---------- BC Wildfire Service current fire perimeters ----------------
+  // "Fire Perimeters - Current - View" (BC Data Catalogue record
+  // cdfc2d7b-c046-4bf0-90ac-4897232619e1), an ArcGIS Online FeatureServer
+  // published by the Province. The consumer appends `/query`. Verified
+  // 2026-11-06 with Origin https://atniclimate.github.io: HTTP 200,
+  // Access-Control-Allow-Origin: *, no key; errors arrive as HTTP 200
+  // envelopes. 1,000-record page cap; the layer is emptied and refilled at
+  // each 15-minute reload (src/util/bcws-perimeter-read.ts brackets every
+  // read for it). Open Government Licence - British Columbia.
+  bcwsFirePerimeters:
+    'https://services6.arcgis.com/ubm4tcTYICKBpist/arcgis/rest/services/BCWS_FirePerimeters_PublicView/FeatureServer/0',
+
   // ---------- USDA Forest Service (USFS) Wildfire Hazard Potential ------
   // Wildfire Hazard Potential (WHP), classified five-class raster
   // (1=Very Low through 5=Very High; values 6-7 cover non-burnable

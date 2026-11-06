@@ -141,6 +141,7 @@ globalThis.document = {
 const { createLayerController } = await import('../src/state/layer-controller.ts');
 const heat = await import('../src/layers/heatrisk.ts');
 const alerts = await import('../src/layers/nws-alerts.ts');
+const bcws = await import('../src/layers/bcws-fires.ts');
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const FIRST_TIME = 1_785_153_600_000;
@@ -163,6 +164,8 @@ function fakeMap() {
     on() {},
     off() {},
     getCenter: () => ({ lng: -121, lat: 46 }),
+    // A southern British Columbia view, for the viewport-scoped BC read.
+    getBounds: () => ({ getWest: () => -123, getSouth: () => 48.5, getEast: () => -119, getNorth: () => 50.5 }),
     getSource: (id) => sources.get(id),
     getLayer: (id) => layers.get(id),
     addSource(id, spec) {
@@ -536,3 +539,93 @@ for (const variable of ['precipitation', 'temperature']) {
     });
   }
 }
+
+// ---------------------------------------------------------------------------
+// BC Wildfire Service perimeters (DDM-P1-T06's cancellation pattern): the real
+// controller drives the real src/layers/bcws-fires.ts. Its read is a
+// whole-table count, the perimeters, then a second count (src/util/
+// bcws-perimeter-read.ts); request 1 is the perimeters read.
+// ---------------------------------------------------------------------------
+
+const BC_BODY = JSON.stringify({
+  type: 'FeatureCollection',
+  features: [{
+    type: 'Feature',
+    properties: { OBJECTID: 217, FIRE_NUMBER: 'V10885', FIRE_YEAR: 2026, FIRE_STATUS: 'Under Control' },
+    geometry: { type: 'Polygon', coordinates: [[[-121.1, 49.0], [-121.0, 49.0], [-121.0, 49.1], [-121.1, 49.1], [-121.1, 49.0]]] }
+  }]
+});
+const bcBody = (url) => (url.includes('returnCountOnly=true') ? JSON.stringify({ count: 319 }) : BC_BODY);
+
+test('BC perimeters: off while the perimeters read is held aborts it at once and draws nothing', async (t) => {
+  resetSeen();
+  const net = installFetch(bcBody, { holdIndexes: [1] });
+  const map = fakeMap();
+  t.after(() => {
+    net.release();
+    bcws.deactivate(map);
+  });
+  globalThis.cancelModules.set('bcws-fires', bcws);
+  const controller = harness(map, ['bcws-fires']);
+  const activation = controller.activate('bcws-fires');
+  await settle();
+  assert.equal(net.calls.length, 2, 'the first count answered, the perimeters read is held');
+  assert.equal(net.calls[1].signal.aborted, false);
+
+  controller.deactivate('bcws-fires');
+  assert.equal(net.calls[1].signal.aborted, true, 'the held read aborts at the moment of off');
+
+  net.release();
+  await activation;
+  await settle();
+  assert.equal(net.calls.length, 2, 'no second count and no refresh follows');
+  assert.deepEqual(seen.sources, []);
+  assert.deepEqual(seen.layers, []);
+  assert.deepEqual(seen.legends, []);
+  assert.equal(registry.getActiveKeys().has('bcws-fires'), false);
+});
+
+test('BC perimeters: an answer that lands after the abort is dropped and draws nothing', async (t) => {
+  resetSeen();
+  const net = installFetch(bcBody, { holdIndexes: [1], ignoreAbort: true });
+  const map = fakeMap();
+  t.after(() => {
+    net.release();
+    bcws.deactivate(map);
+  });
+  globalThis.cancelModules.set('bcws-fires', bcws);
+  const controller = harness(map, ['bcws-fires']);
+  const activation = controller.activate('bcws-fires');
+  await settle();
+  controller.deactivate('bcws-fires');
+  assert.equal(net.calls[1].signal.aborted, true);
+
+  net.release();
+  await activation;
+  await settle();
+  assert.deepEqual(seen.sources, []);
+  assert.deepEqual(seen.layers, []);
+  assert.deepEqual(seen.legends, []);
+});
+
+test('BC perimeters: a normal activation reads count, perimeters, count, then draws its source, layers and legend', async (t) => {
+  resetSeen();
+  const net = installFetch(bcBody, { holdIndexes: [] });
+  const map = fakeMap();
+  t.after(() => {
+    net.release();
+    bcws.deactivate(map);
+  });
+  globalThis.cancelModules.set('bcws-fires', bcws);
+  const controller = harness(map, ['bcws-fires']);
+  await controller.activate('bcws-fires');
+  await settle();
+  assert.deepEqual(net.calls.map((call) => (call.url.includes('returnCountOnly=true') ? 'count' : 'perimeters')), ['count', 'perimeters', 'count']);
+  // The DDM-P1-T06 envelope: the view overscanned by a quarter each side, cut to British Columbia's box.
+  assert.equal(new URL(net.calls[1].url).searchParams.get('geometry'), '-124,48,-118,51');
+  assert.deepEqual(seen.sources, ['bcws-fires']);
+  assert.deepEqual(seen.layers, ['bcws-fires-fill', 'bcws-fires-line']);
+  assert.ok(seen.legends.includes('bcws-fires'));
+  assert.equal(registry.getStatus('bcws-fires'), 'ready');
+  assert.equal(registry.getActiveKeys().has('bcws-fires'), true);
+});

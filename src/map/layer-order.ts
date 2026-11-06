@@ -136,6 +136,12 @@ export const EVENT_OVERLAY_IDS: readonly string[] = [
   'nifc-prescribed-fill',
   'nifc-prescribed-outline',
   'nifc-other-outline',
+  // The BC Wildfire Service perimeters beside NIFC's, then the fire areas
+  // where the two overlap, drawn once over both (src/layers/bcws-fires.ts).
+  'bcws-fires-fill',
+  'bcws-fires-line',
+  'fire-footprints-fill',
+  'fire-footprints-line',
   'nws-alerts-fill',
   'nws-alerts-outline',
   // ENSO block B3, above the SST frames, the Nino 3.4 box and the flow

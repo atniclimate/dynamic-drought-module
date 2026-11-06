@@ -29,6 +29,8 @@ const ENTRIES = {
   NADM_CATEGORIES: { module: palette, classification: 'issuer' },
   DROUGHT_COLORS: { module: palette, classification: 'issuer' },
   NIFC_INCIDENT_PRESENTATION: { module: wildfire, classification: 'derived-mark' },
+  // The issuer's stages of control drawn as DDM marks (src/config/wildfire-presentation.ts).
+  BCWS_STATUS_PRESENTATION: { module: wildfire, classification: 'derived-mark' },
   HMS_DENSITY_PRESENTATION: { module: wildfire, classification: 'transform' },
   SPC_FIREWX_CATEGORIES: { module: palette, classification: 'issuer' },
   USFS_WHP_PRESENTATION: { module: wildfire, classification: 'issuer' },
@@ -45,6 +47,7 @@ const MEMBERS = {
   'nadm-drought': { entry: 'NADM_CATEGORIES', classification: 'issuer' },
   drought: { entry: 'DROUGHT_COLORS', classification: 'issuer' },
   'nifc-fires': { entry: 'NIFC_INCIDENT_PRESENTATION', classification: 'derived-mark' },
+  'bcws-fires': { entry: 'BCWS_STATUS_PRESENTATION', classification: 'derived-mark' },
   'hms-smoke': { entry: 'HMS_DENSITY_PRESENTATION', classification: 'transform' },
   'spc-fire-weather': { entry: 'SPC_FIREWX_CATEGORIES', classification: 'issuer' },
   'usfs-whp': { entry: 'WHP_SHADE_CATEGORIES', classification: 'transform' },

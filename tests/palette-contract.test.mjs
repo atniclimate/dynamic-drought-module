@@ -177,6 +177,8 @@ const CLASSIFICATION = {
   wildfire: {
     WILDFIRE_PULSE_COLORS: 'DDM current-perimeter display transform',
     NIFC_INCIDENT_PRESENTATION: 'DDM incident-class marks',
+    BCWS_STATUS_PRESENTATION: 'DDM stage-of-control marks over the issuer stages (DR-134)',
+    FIRE_FOOTPRINT_PRESENTATION: 'DDM fire-area outline',
     HMS_DENSITY_PRESENTATION: 'DDM density display transform',
     HMS_VOLUME_HEIGHT_SCALE_METERS: 'DDM symbolic-height display transform',
     USFS_WHP_PRESENTATION: 'S9 issuer legend decoded; bake checks drift',

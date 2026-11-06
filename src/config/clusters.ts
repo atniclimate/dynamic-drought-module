@@ -155,8 +155,9 @@ export const HAZARD_CLUSTERS: Record<HazardClusterKey, HazardClusterDef> = {
   wildfire: {
     title: 'Wildfire',
     urlToken: 'wildfire',
+    // DRAFT wording (DR-177): the BC Wildfire Service clause.
     description:
-      'Current mapped fire perimeters (NIFC), distinguishing Wildfire and Prescribed fire, plus independently timed NOAA Hazard Mapping System (HMS) smoke plumes; outlook and potential reads at longer horizons. Recent NOAA GOES GeoColor context on request (SAT).',
+      'Current mapped fire perimeters (NIFC), distinguishing Wildfire and Prescribed fire, beside the BC Wildfire Service perimeters in British Columbia, plus independently timed NOAA Hazard Mapping System (HMS) smoke plumes; outlook and potential reads at longer horizons. Recent NOAA GOES GeoColor context on request (SAT).',
     defaultBasemap: 'default',
     recipes: {
       // D-0.7.0-043 part 1: at the current register, perimeters plus
@@ -166,9 +167,10 @@ export const HAZARD_CLUSTERS: Record<HazardClusterKey, HazardClusterDef> = {
       // diverges: it adds the SPC Day 1 outlook to this pair because the
       // phone shell has no horizon control. That is a governed, recorded
       // divergence (docs/design/mobile-map-chrome.md), not drift.
-      current: ['nifc-fires', 'hms-smoke'],
+      // The BC Wildfire Service perimeters ride beside NIFC's wherever NIFC's do.
+      current: ['nifc-fires', 'bcws-fires', 'hms-smoke'],
       // Near-term: the SPC fire-weather outlook over the live events.
-      'weeks-ahead': ['spc-fire-weather', 'nifc-fires', 'hms-smoke'],
+      'weeks-ahead': ['spc-fire-weather', 'nifc-fires', 'bcws-fires', 'hms-smoke'],
       // Long horizon: the static potential read becomes eligible.
       'season-ahead': ['usfs-whp']
     },

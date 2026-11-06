@@ -8,6 +8,13 @@
  * count means at least one current mapped NIFC wildfire perimeter intersects
  * the ATNI-authored framing. It does not mean every active fire is mapped.
  *
+ * A framing that reaches British Columbia also counts the BC Wildfire
+ * Service perimeters in the issuer's three active stages, from one bounded
+ * read of the Province per load; where a BC and a NIFC perimeter are one
+ * known fire area (src/layers/fire-areas.ts) it counts once. A failed BC
+ * read never reads as zero there: with no NIFC perimeter the framing is
+ * unavailable.
+ *
  * When a framing has no intersecting mapped perimeter, the generated 2023
  * United States Forest Service Wildfire Hazard Potential (WHP) overview
  * supplies static strategic context. WHP is approximate, United States-only,
@@ -28,9 +35,11 @@ import { FRAMING_KEYS } from '../config/framings';
 import type { FramingKey } from '../config/framings';
 import { MINIMAP_WHP } from '../config/minimap-whp';
 import type { MinimapWhpFramingSummary } from '../config/minimap-whp';
-import { MINIMAP_ACTIVE_WILDFIRE_FILTER } from '../config/wildfire-presentation';
+import { MINIMAP_ACTIVE_WILDFIRE_FILTER, bcwsStatusClass } from '../config/wildfire-presentation';
 import { URLS } from '../config/urls';
+import { countFireAreas, fireRecordKey, type CountedPerimeter } from '../layers/fire-areas';
 import { bboxCoveredByEnvelope } from '../util/bbox';
+import { BCWS_ACTIVE_WHERE, BCWS_COVERAGE, BCWS_READ_LIMITS, readBcwsPerimeters } from '../util/bcws-perimeter-read';
 import { fetchJsonWithBudget } from '../util/fetch';
 import { geometriesOverlap } from '../util/polygon-overlap';
 import { registry } from './registry';
@@ -66,11 +75,19 @@ export type MinimapWildfireRegionStatus =
 export interface MinimapWildfireSummary {
   readonly condition: MinimapWildfireCondition;
   readonly status: MinimapWildfireRegionStatus;
-  /** Current mapped NIFC wildfire perimeters, or null when that query failed. */
+  /**
+   * Current mapped wildfire perimeters, or null when that query failed: NIFC
+   * alone, or, for a framing that reaches British Columbia, NIFC and BC
+   * Wildfire Service together with each known fire area counted once.
+   */
   readonly mappedWildfirePerimeterCount: number | null;
   readonly highOrVeryHighPercent: number | null;
   readonly moderateOrHigherPercent: number | null;
   readonly whpCoverage: MinimapWhpFramingSummary['coverage'];
+  /** Absent for a framing outside British Columbia; null when the BC read failed (never read as zero). */
+  readonly bcwsPerimeterCount?: number | null;
+  /** Fire areas that joined a BC and a NIFC perimeter into one count; above zero, the count carries the ratified label. */
+  readonly fireAreasMerged?: number;
 }
 
 export type MinimapWildfireStatus =
@@ -257,7 +274,7 @@ export function framingGeometry(key: FramingKey): Geometry {
  */
 async function countFromLoadedNifcCollection(
   key: FramingKey,
-): Promise<number | null> {
+): Promise<{ readonly count: number; readonly rows: readonly CountedPerimeter[] } | null> {
   const bbox = framingBbox(key);
   if (bbox === null || bbox[0] >= bbox[2] || bbox[1] >= bbox[3]) return null;
   const status = registry.getStatus('nifc-fires');
@@ -275,7 +292,7 @@ async function countFromLoadedNifcCollection(
   if (!bboxCoveredByEnvelope(loaded.envelope, bbox)) return null;
 
   const frame = framingGeometry(key);
-  let count = 0;
+  const rows: CountedPerimeter[] = [];
   for (const feature of loaded.collection.features) {
     if (typeof feature !== 'object' || feature === null) continue;
     const properties = (feature as { properties?: unknown }).properties;
@@ -283,9 +300,89 @@ async function countFromLoadedNifcCollection(
     if (!MINIMAP_ACTIVE_WILDFIRE_FILTER.matches(properties as Record<string, unknown>)) continue;
     const geometry = (feature as { geometry?: Geometry | null }).geometry;
     if (!geometriesOverlap(geometry, frame)) continue;
-    count += 1;
+    // The perimeter count stays per feature, as it was; the record key lets a known fire area count once.
+    const recordKey = fireRecordKey('nifc', properties as Record<string, unknown>);
+    rows.push({ identity: `nifc-feature:${rows.length}`, recordKey });
   }
-  return count;
+  return { count: rows.length, rows };
+}
+
+/** The framings whose authored rings reach British Columbia's box, where BC perimeters can be. */
+let bcwsFramings: ReadonlySet<FramingKey> | null = null;
+function framingReachesBc(key: FramingKey): boolean {
+  if (bcwsFramings === null) {
+    const [west, south, east, north] = BCWS_COVERAGE;
+    const box: Geometry = { type: 'Polygon', coordinates: [[[west, south], [east, south], [east, north], [west, north], [west, south]]] };
+    bcwsFramings = new Set(FRAMING_KEYS.filter((framing) => geometriesOverlap(framingGeometry(framing), box)));
+  }
+  return bcwsFramings.has(key);
+}
+
+/**
+ * The province's active BC perimeters (the issuer's three active stages), one
+ * bounded, reload-bracketed read per summary load; null when it failed or
+ * was incomplete, which a framing never reads as zero.
+ */
+async function readBcwsActive(signal: AbortSignal): Promise<readonly { readonly properties: Record<string, unknown> | null; readonly geometry: Geometry | null }[] | null> {
+  try {
+    const result = await readBcwsPerimeters({
+      ...BCWS_READ_LIMITS,
+      endpoint: `${URLS.bcwsFirePerimeters}/query`,
+      bounds: BCWS_COVERAGE,
+      where: BCWS_ACTIVE_WHERE,
+      signal,
+    });
+    if (!result.complete) return null;
+    return result.collection.features
+      .filter((feature) => bcwsStatusClass(feature.properties?.['FIRE_STATUS']) === 'active')
+      .map((feature) => ({ properties: feature.properties, geometry: feature.geometry }));
+  } catch (error) {
+    if (signal.aborted) throw error;
+    return null;
+  }
+}
+
+/** The BC layer's fire areas when it is on, so a known overlapping pair counts once; else none. */
+async function knownFireAreas(): Promise<(recordKey: string) => string | null> {
+  const status = registry.getStatus('bcws-fires');
+  if (status !== 'ready' && status !== 'degraded' && status !== 'no-data') return () => null;
+  const { fireAreas } = await import('../layers/bcws-fires');
+  const areas = fireAreas();
+  return (recordKey) => areas.areaOf.get(recordKey) ?? null;
+}
+
+/**
+ * One framing's current-fire result with BC beside NIFC. A framing outside
+ * British Columbia keeps its NIFC result. Inside it: BC unknown and no NIFC
+ * perimeter is unavailable (never a zero for the Province, never a WHP
+ * fallback); NIFC perimeters with BC unknown are still mapped-wildfire, BC
+ * marked unavailable. Fire areas merge only when both agencies' records are
+ * in hand (NIFC from the layer's loaded answer); a count-only NIFC answer adds
+ * the two agencies' perimeters as they are.
+ */
+function combineWithBc(
+  outcome: FramingCountOutcome,
+  bc: readonly { readonly properties: Record<string, unknown> | null; readonly geometry: Geometry | null }[] | null,
+  areaOf: (recordKey: string) => string | null,
+): { readonly result: MinimapWildfireCountResult; readonly bcwsPerimeterCount?: number | null; readonly fireAreasMerged?: number } {
+  if (!framingReachesBc(outcome.key) || outcome.result.status === 'unavailable') return { result: outcome.result };
+  if (bc === null) {
+    return outcome.result.count > 0
+      ? { result: outcome.result, bcwsPerimeterCount: null, fireAreasMerged: 0 }
+      : { result: { status: 'unavailable', count: null }, bcwsPerimeterCount: null, fireAreasMerged: 0 };
+  }
+  const frame = framingGeometry(outcome.key);
+  const bcRows: CountedPerimeter[] = bc
+    .filter((feature) => geometriesOverlap(feature.geometry, frame))
+    .map((feature, i) => {
+      const recordKey = fireRecordKey('bcws', feature.properties);
+      return { identity: recordKey ?? `bcws-row:${i}`, recordKey };
+    });
+  if (outcome.rows === undefined) {
+    return { result: { status: 'live', count: outcome.result.count + bcRows.length }, bcwsPerimeterCount: bcRows.length, fireAreasMerged: 0 };
+  }
+  const { count, merged } = countFireAreas([...outcome.rows, ...bcRows], areaOf);
+  return { result: { status: 'live', count }, bcwsPerimeterCount: bcRows.length, fireAreasMerged: merged };
 }
 
 /**
@@ -364,6 +461,8 @@ interface FramingCountOutcome {
   readonly key: FramingKey;
   readonly result: MinimapWildfireCountResult;
   readonly error?: unknown;
+  /** The counted NIFC records, when the count came from the layer's loaded answer. */
+  readonly rows?: readonly CountedPerimeter[];
 }
 
 async function queryFramingCount(
@@ -380,7 +479,7 @@ async function queryFramingCount(
   if (nifcLayerStatus === 'ready' || nifcLayerStatus === 'degraded') {
     const fromCollection = await countFromLoadedNifcCollection(key);
     if (fromCollection !== null) {
-      return { key, result: { status: 'live', count: fromCollection } };
+      return { key, result: { status: 'live', count: fromCollection.count }, rows: fromCollection.rows };
     }
   }
   try {
@@ -480,10 +579,15 @@ async function loadSummaries(
   }
 
   try {
-    const outcomes = await Promise.all(
+    // The nine NIFC reads start in this tick, as before; the BC read beside them.
+    const nifcOutcomes = Promise.all(
       FRAMING_KEYS.map((key) => queryFramingCount(key, signal)),
     );
+    const bcActive = readBcwsActive(signal);
+    const [counted, bc, areaOf] = await Promise.all([nifcOutcomes, bcActive, knownFireAreas()]);
     if (signal.aborted || epoch !== loadEpoch || retainCount === 0) return;
+    const combined = counted.map((outcome) => ({ outcome, ...combineWithBc(outcome, bc, areaOf) }));
+    const outcomes = combined.map(({ outcome, result }) => ({ ...outcome, result }));
 
     const failed = outcomes.filter((outcome) => outcome.error !== undefined);
     if (failed.length > 0) {
@@ -496,9 +600,12 @@ async function loadSummaries(
     }
 
     const summaries = Object.fromEntries(
-      outcomes.map(({ key, result }) => [
-        key,
-        deriveMinimapWildfireSummary(result, MINIMAP_WHP.framings[key]),
+      combined.map(({ outcome, result, bcwsPerimeterCount, fireAreasMerged }) => [
+        outcome.key,
+        {
+          ...deriveMinimapWildfireSummary(result, MINIMAP_WHP.framings[outcome.key]),
+          ...(bcwsPerimeterCount === undefined ? {} : { bcwsPerimeterCount, fireAreasMerged: fireAreasMerged ?? 0 }),
+        },
       ]),
     ) as Record<FramingKey, MinimapWildfireSummary>;
     publish({

@@ -26,9 +26,13 @@
 import { URLS } from '../config/urls';
 import { HEATRISK_CATEGORIES, SPC_FIREWX_CATEGORIES } from '../config/palette';
 import {
+  BCWS_CATALOGUE_URL,
   NIFC_AREA_QUERY_RECORD_CAP,
+  buildBcwsAreaPerimeterClaim,
+  buildFireAreaClaim,
   buildNifcAreaPerimeterClaim
 } from '../config/wildfire-presentation';
+import { BCWS_COVERAGE, BCWS_READ_LIMITS, readBcwsPerimeters } from '../util/bcws-perimeter-read';
 import {
   bboxCoveredByEnvelope,
   loadServiceEnvelopePieces,
@@ -1070,6 +1074,125 @@ export async function fetchNifcClaims(
       ok: false,
       note: upstreamNote(err, 'The NIFC current-perimeters service')
     };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Current: BC Wildfire Service perimeters near the selection, and the
+// place's fire areas counted once where they overlap NIFC's
+// ---------------------------------------------------------------------------
+
+const BCWS_AREA_CLAIM_SOURCE = 'BC Wildfire Service current fire perimeters';
+/** The frame's own group issuer line (src/ui/popup-frame.ts), for the cross-agency count. */
+const FIRE_AREA_CLAIM_SOURCE = 'Computed by DDM from NIFC WFIGS and BC Wildfire Service perimeters';
+
+/** The one `makeClaim` site for both BC claims (the product-catalog spec pins the site count). */
+function bcwsClaim(text: string, retrieved: string, combined = false): SourcedClaim {
+  return makeClaim({
+    text,
+    source: combined ? FIRE_AREA_CLAIM_SOURCE : BCWS_AREA_CLAIM_SOURCE,
+    sourceUrl: BCWS_CATALOGUE_URL,
+    product: 'bcws-fires',
+    evidence: combined ? 'derived' : 'observed',
+    dates: { retrieved }
+  });
+}
+
+/** Each BC record once (FIRE_YEAR plus FIRE_NUMBER; OBJECTID is renumbered at every reload). */
+function bcwsStatuses(features: readonly unknown[]): unknown[] {
+  return mergeByStableIdentifier([features], (feature) => {
+    if (!isObject(feature) || !isObject(feature.properties)) return null;
+    const { FIRE_YEAR: year, FIRE_NUMBER: number } = feature.properties;
+    return (typeof year === 'number' || typeof year === 'string') && typeof number === 'string' ? `${year}-${number}` : null;
+  }).map((feature) => (isObject(feature) && isObject(feature.properties) ? feature.properties.FIRE_STATUS : undefined));
+}
+
+function rectanglePolygon([west, south, east, north]: readonly [number, number, number, number]): Polygon {
+  return { type: 'Polygon', coordinates: [[[west, south], [east, south], [east, north], [west, north], [west, south]]] };
+}
+
+/**
+ * The BC layer's own answer, when it is complete and covers this box (the
+ * NIFC fast path's rule, DDM-P14-T07), with the place's fire areas counted
+ * once when NIFC's complete loaded answer covers the same box. Null when the
+ * layer does not answer for this box, so the network read runs.
+ */
+async function bcwsClaimsFromLoaded(rect: readonly [number, number, number, number]): Promise<SourceResult | null> {
+  const bc = await import('../layers/bcws-fires');
+  const loaded = bc.loadedBcwsCollection();
+  if (loaded === null || !loaded.complete || loaded.coverage === null || loaded.fetchedAt === null) return null;
+  if (!bboxCoveredByEnvelope(loaded.coverage, rect)) return null;
+  const { geometriesOverlap } = await import('../util/polygon-overlap');
+  const rectangle = rectanglePolygon(rect);
+  const meets = (feature: unknown): boolean =>
+    isObject(feature) && isObject(feature.properties) && geometriesOverlap(feature.geometry as Geometry | null, rectangle);
+  const bcHits = loaded.collection.features.filter(meets);
+  const retrieved = isoDayLocal(new Date(loaded.fetchedAt));
+  const claims = [bcwsClaim(buildBcwsAreaPerimeterClaim(bcwsStatuses(bcHits)), retrieved)];
+  if (registry.getStatus('nifc-fires') === 'ready') {
+    const { loadedNifcCollection } = await import('../layers/nifc-fires');
+    const nifc = loadedNifcCollection();
+    if (nifc !== null && !nifc.truncated && bboxCoveredByEnvelope(nifc.envelope, rect)) {
+      const { countFireAreas, fireRecordKey } = await import('../layers/fire-areas');
+      const areas = bc.fireAreas();
+      const rows = [
+        ...nifc.collection.features.filter(meets).map((f, i) => ({ issuer: 'nifc' as const, properties: f.properties, i })),
+        ...bcHits.map((f, i) => ({ issuer: 'bcws' as const, properties: f.properties, i }))
+      ].map((row) => {
+        const recordKey = fireRecordKey(row.issuer, row.properties);
+        return { identity: recordKey ?? `${row.issuer}:row:${row.i}`, recordKey };
+      });
+      const { count, merged } = countFireAreas(rows, (key) => areas.areaOf.get(key) ?? null);
+      if (merged > 0) claims.push(bcwsClaim(buildFireAreaClaim(count), retrieved, true));
+    }
+  }
+  return { ok: true, claims };
+}
+
+/**
+ * The BC Wildfire Service perimeters meeting the selection's bounding box
+ * (the NIFC lane's box, cut to the Province's): the layer's loaded answer
+ * when it covers the box, else one bounded, reload-bracketed read. A box
+ * that misses British Columbia states nothing. A failed read is a note,
+ * never a zero; an incomplete one is a lower bound and reads partial.
+ */
+export async function fetchBcwsClaims(context: BoundarySelectionContext, signal: AbortSignal): Promise<SourceResult> {
+  const { lng, lat } = context.lngLat;
+  const requestBbox = context.serviceBbox ?? context.bbox ?? ([lng - 0.5, lat - 0.5, lng + 0.5, lat + 0.5] as const);
+  const pieces = serviceBboxPieces(requestBbox);
+  const [west, south, east, north] = pieces.length === 1 ? serviceRectangle(pieces[0]) : [0, 0, 0, 0];
+  const bounds = [
+    Math.max(west, BCWS_COVERAGE[0]),
+    Math.max(south, BCWS_COVERAGE[1]),
+    Math.min(east, BCWS_COVERAGE[2]),
+    Math.min(north, BCWS_COVERAGE[3])
+  ] as const;
+  // British Columbia does not cross the antimeridian, so a split selection there is outside it.
+  if (pieces.length !== 1 || bounds[0] >= bounds[2] || bounds[1] >= bounds[3]) return { claims: [], ok: true };
+
+  const status = registry.getStatus('bcws-fires');
+  if (status === 'ready' || status === 'no-data') {
+    const fromLayer = await settleLazy(() => bcwsClaimsFromLoaded([west, south, east, north]), signal, 'BC loaded-perimeters read');
+    if (signal.aborted) return { claims: [], ok: false };
+    if (fromLayer !== null) return fromLayer;
+  }
+
+  try {
+    const result = await readBcwsPerimeters({ ...BCWS_READ_LIMITS, endpoint: `${URLS.bcwsFirePerimeters}/query`, bounds, signal });
+    if (signal.aborted) return { claims: [], ok: false };
+    const features = result.collection.features;
+    // DRAFT wording (DR-177): the BC lane's two notes.
+    if (!result.complete && features.length === 0) {
+      return { claims: [], ok: false, note: 'The BC Wildfire Service perimeters service did not answer completely, so no count is stated.' };
+    }
+    const claims = [bcwsClaim(buildBcwsAreaPerimeterClaim(bcwsStatuses(features), { truncated: !result.complete }), todayIso())];
+    return result.complete
+      ? { ok: true, claims }
+      : { ok: true, partial: true, claims, note: 'The BC Wildfire Service perimeters read was incomplete.' };
+  } catch (err) {
+    if (signal.aborted) return { claims: [], ok: false };
+    console.warn('[impact] BC Wildfire Service query failed.', err);
+    return { claims: [], ok: false, note: upstreamNote(err, 'The BC Wildfire Service perimeters service') };
   }
 }
 

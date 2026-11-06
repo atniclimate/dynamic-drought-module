@@ -166,16 +166,28 @@ test("the public-view RAWS notice renders verbatim under DDM's label, never as N
   expect(row).not.toMatch(/class="ack-credit"[^>]*>[^<]*Public-view/);
 });
 
-test('U+2013 appears only inside the published OGL-Canada sentences, and no U+2014 anywhere', () => {
+test('U+2013 appears only inside the published OGL-Canada and OGL-British Columbia sentences, and no U+2014 anywhere', () => {
   const html = renderAcknowledgements({ deployer: DEPLOYER });
   expect(html).not.toContain(EM_DASH);
   for (const id of ACKNOWLEDGEMENT_IDS) {
     for (const sentence of allSentences(id)) {
       if (sentence.text.includes(EN_DASH)) {
-        expect(sentence.text, id).toContain(`Open Government Licence ${EN_DASH} Canada`);
+        expect(sentence.text, id).toMatch(new RegExp(`Open Government Licence ${EN_DASH} (Canada|British Columbia)`));
       }
     }
   }
+});
+
+test('the BC Wildfire Service row carries the OGL-BC attribution sentence verbatim, with its link, and no mark', () => {
+  const html = renderAcknowledgements({});
+  const row = /<li class="ack-row" data-ack-id="bcws">([\s\S]*?)<\/li>/.exec(html)?.[1] ?? '';
+  expect(row).toContain('BC Wildfire Service');
+  const credit = /<p class="ack-credit">([\s\S]*?)<\/p>/.exec(row)?.[1] ?? '';
+  expect(credit.replace(/<[^>]*>/g, '')).toBe('Contains information licensed under the Open Government Licence – British Columbia.');
+  expect(credit).toContain(
+    'href="https://www2.gov.bc.ca/gov/content/data/policy-standards/data-policies/open-data/open-government-licence-bc">Open Government Licence – British Columbia</a>'
+  );
+  expect(row).not.toContain('<img');
 });
 
 test('name-only rows are listed for the owner card (printed, never a failure)', () => {

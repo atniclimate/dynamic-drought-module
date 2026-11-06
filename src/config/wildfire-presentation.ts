@@ -439,6 +439,139 @@ export function buildNifcLinePaint(
   };
 }
 
+/**
+ * BC Wildfire Service current perimeters by the issuer's own stage of control
+ * (`bcwsStatusClass` in src/util/bcws-perimeter-read.ts; DR-134, the owner's
+ * ruling of 2026-09-26). Every BC perimeter is a wildfire perimeter. The
+ * active stages wear the wildfire mark; Out and an unstated stage are drawn
+ * as an outline only, so a season's extinguished fires never read as burning.
+ */
+export const BCWS_STATUS_PRESENTATION = {
+  active: {
+    fillColor: WILDFIRE_STATIC_COLOR,
+    fillOpacity: 0.16,
+    lineColor: WILDFIRE_STATIC_COLOR,
+    lineOpacity: 0.82,
+    lineWidth: 3,
+    // DRAFT wording (DR-177): the issuer's three active stage names, verbatim.
+    legendLabel: 'Out of Control, Being Held or Under Control'
+  },
+  inactive: { fillColor: '#a8a29e', fillOpacity: 0, lineColor: '#a8a29e', lineOpacity: 0.82, lineWidth: 2.4, legendLabel: 'Out' },
+  unknown: {
+    fillColor: '#94a3b8',
+    fillOpacity: 0,
+    lineColor: '#94a3b8',
+    lineOpacity: 0.78,
+    lineWidth: 2.4,
+    // DRAFT wording (DR-177)
+    legendLabel: 'Stage of control not stated'
+  }
+} as const;
+
+/** The stage class the BC map source carries beside the raw record (src/layers/bcws-fires.ts). */
+export const BCWS_STAGE_CLASS_PROPERTY = 'ddm_stage_class';
+
+function bcwsStageMatch(
+  pick: (row: (typeof BCWS_STATUS_PRESENTATION)['active' | 'inactive' | 'unknown']) => string | number
+): maplibregl.ExpressionSpecification {
+  const p = BCWS_STATUS_PRESENTATION;
+  return ['match', ['get', BCWS_STAGE_CLASS_PROPERTY], 'active', pick(p.active), 'inactive', pick(p.inactive), pick(p.unknown)];
+}
+
+export function buildBcwsFillPaint(): NonNullable<maplibregl.FillLayerSpecification['paint']> {
+  return { 'fill-color': bcwsStageMatch((row) => row.fillColor), 'fill-opacity': bcwsStageMatch((row) => row.fillOpacity) };
+}
+
+export function buildBcwsLinePaint(): NonNullable<maplibregl.LineLayerSpecification['paint']> {
+  return {
+    'line-color': bcwsStageMatch((row) => row.lineColor),
+    'line-opacity': bcwsStageMatch((row) => row.lineOpacity),
+    'line-width': bcwsStageMatch((row) => row.lineWidth)
+  };
+}
+
+/** One fire footprint where agency perimeters overlap: the union outline, drawn once over both. */
+export const FIRE_FOOTPRINT_PRESENTATION = { lineColor: '#f8fafc', lineOpacity: 0.95, lineWidth: 2 } as const;
+
+/** The ratified count label (acceptance 2026-09-25), in the minimap, the strip and the place counts. */
+export const OVERLAP_COUNT_LABEL = 'overlapping agency perimeters counted as one fire area';
+
+/** The BC Data Catalogue record of the layer (the item's own metadata link). */
+export const BCWS_CATALOGUE_URL = 'https://catalogue.data.gov.bc.ca/dataset/cdfc2d7b-c046-4bf0-90ac-4897232619e1';
+
+/** The issuer's stage definitions page. */
+export const BCWS_STAGES_URL =
+  'https://www2.gov.bc.ca/gov/content/safety/wildfire-status/wildfire-response/management-strategies/stages-of-control';
+
+/** The dataset's own caveat, verbatim (BCWS_CATALOGUE_URL, read 2026-11-06); the Impact Briefing's small print only. */
+export const BCWS_DATA_CAVEAT =
+  'Wildfire data may not reflect the most current fire situation, and therefore should only be used for reference purposes.';
+
+/** The issuer's four stages of control and their definitions, verbatim (BCWS_STAGES_URL, read 2026-11-06). */
+export const BCWS_STAGE_DEFINITIONS: readonly { readonly stage: string; readonly definition: string }[] = [
+  { stage: 'Out of Control', definition: 'At this stage, the wildfire is spreading or is anticipated to spread beyond the current perimeter, or control line.' },
+  { stage: 'Being Held', definition: 'At this stage, the wildfire is projected, based on fuel and weather conditions and resource availability, to remain within the current perimeter, control line or boundary.' },
+  { stage: 'Under Control', definition: 'At this stage, the wildfire is not projected to spread beyond the current perimeter.' },
+  { stage: 'Out', definition: 'At this stage, the wildfire has been extinguished or winter conditions are present and the wildfire will not spread.' }
+];
+
+/** The BC perimeters' note; reads in the Impact Briefing (src/ui/map-technical-information.ts), not in the legend or popup. */
+// DRAFT wording (DR-177): the NIFC note's form, for the BC service and British Columbia latitudes (0.0005 degree is 56 m of latitude, 37 m of longitude at 48.3 N and 28 m at 60 N).
+export const BCWS_PERIMETER_TECHNICAL_NOTE =
+  'BC Wildfire Service current perimeters, British Columbia only, for the whole fire season until April 1, active and Out alike. Outlines are generalized by the service for display at a 0.0005 degree tolerance (roughly 28 to 56 m across British Columbia latitudes). Each Track Date is the date of the mapped outline, not of the fire\'s present edge. Where a BC and a NIFC perimeter overlap, DDM draws them as one fire area and lists each agency\'s own record; it states no combined name, size or status.';
+
+/** The stage names verbatim, keyed by the lower-case form `bcwsStatusClass` reads. */
+const BCWS_STAGE_NAMES: Readonly<Record<string, string>> = Object.fromEntries(
+  BCWS_STAGE_DEFINITIONS.map((row) => [row.stage.toLowerCase(), row.stage])
+);
+
+/** DR-134 only. Unknown values never enter the issuer-active edge. */
+export function bcwsStatusClass(value: unknown): 'active' | 'inactive' | 'unknown' {
+  if (typeof value !== 'string') return 'unknown';
+  switch (value.trim().toLowerCase()) {
+    case 'out of control':
+    case 'being held':
+    case 'under control': return 'active';
+    case 'out': return 'inactive';
+    default: return 'unknown';
+  }
+}
+
+/** The issuer's stage name for a FIRE_STATUS value, or null for a missing or unrecognized one. */
+export function bcwsStageName(value: unknown): string | null {
+  return typeof value === 'string' ? BCWS_STAGE_NAMES[value.trim().toLowerCase()] ?? null : null;
+}
+
+/**
+ * Source-honest sentence for the BC perimeters a selection's bounding box
+ * meets, by the issuer's own stage names (the NIFC sentence's form, DR-024 b:
+ * the extent is the box, not the place). A truncated read is a lower bound.
+ */
+export function buildBcwsAreaPerimeterClaim(
+  statuses: readonly unknown[],
+  options: { readonly truncated?: boolean } = {}
+): string {
+  if (statuses.length === 0) return `No current BC Wildfire Service perimeters intersect ${NIFC_AREA_QUERY_EXTENT}.`;
+  const counts = new Map<string, number>();
+  for (const status of statuses) {
+    // DRAFT wording (DR-177): the unstated-stage bucket.
+    const stage = bcwsStageName(status) ?? 'with no stage of control stated';
+    counts.set(stage, (counts.get(stage) ?? 0) + 1);
+  }
+  const order = [...BCWS_STAGE_DEFINITIONS.map((row) => row.stage), 'with no stage of control stated'];
+  const parts = order.filter((stage) => counts.has(stage)).map((stage) => `${counts.get(stage)} ${stage}`);
+  const list = parts.length === 1 ? parts[0]! : `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}`;
+  const verb = statuses.length === 1 ? 'perimeter intersects' : 'perimeters intersect';
+  // DRAFT wording (DR-177): the record-cap sentence for the BC read.
+  const floor = options.truncated ? ' The read reached its record limit, so this count is a lower bound.' : '';
+  return `${statuses.length} current BC Wildfire Service ${verb} ${NIFC_AREA_QUERY_EXTENT}: ${list}.${floor}`;
+}
+
+/** The place count across both agencies, each fire area once (DRAFT wording, DR-177; the ratified label). */
+export function buildFireAreaClaim(count: number): string {
+  return `${count} fire ${count === 1 ? 'area' : 'areas'} in ${NIFC_AREA_QUERY_EXTENT} from NIFC WFIGS and BC Wildfire Service perimeters; ${OVERLAP_COUNT_LABEL}.`;
+}
+
 export type HmsDensityClass = 'Light' | 'Medium' | 'Heavy' | 'Unknown';
 
 /** A warm taupe ramp (owner palette, 2026-10-19), darker with density and carried with opacity, and an explicit neutral fallback. */

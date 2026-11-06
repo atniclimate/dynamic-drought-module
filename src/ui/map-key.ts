@@ -46,7 +46,7 @@ import { LAYER_DEFS, getDroughtSurfacePresentation } from '../config/layers';
 import { HAZARD_CLUSTERS } from '../config/clusters';
 import { DETAIL_SECTIONS } from '../config/detail-sections';
 import { ensureDetailSectionHosts } from './detail-section-hosts';
-import { NIFC_INCIDENT_PRESENTATION, USFS_WHP_PRESENTATION } from '../config/wildfire-presentation';
+import { BCWS_STATUS_PRESENTATION, NIFC_INCIDENT_PRESENTATION, USFS_WHP_PRESENTATION } from '../config/wildfire-presentation';
 import { FRAMINGS, framingMinimapProvenance } from '../config/framings';
 import { getFraming, onFramingChange } from '../state/framing-store';
 import { getHazardCluster, getOceanFraming, onHazardClusterChange } from '../state/cluster-store';
@@ -394,7 +394,7 @@ export function resolveMapKeyFamily(
   // named peer of drought, fire, and heat for CSS hooks, disclosure
   // behavior, and tests. Naming the family adds no styling by itself.
   if (active.has('sst-anomaly')) return 'enso';
-  if (active.has('nifc-fires')) return 'fire';
+  if (active.has('nifc-fires') || active.has('bcws-fires')) return 'fire';
   return 'other';
 }
 
@@ -830,11 +830,25 @@ export function buildFireKey(
 ): KeySpec {
   const includeSpcOutlook = activeKeys.has('spc-fire-weather');
   const includeNifcPerimeters = activeKeys.has('nifc-fires');
+  const includeBcwsPerimeters = activeKeys.has('bcws-fires');
   const spcLoading = !includeSpcOutlook && loadingKeys.has('spc-fire-weather');
   const nifcLoading = !includeNifcPerimeters && loadingKeys.has('nifc-fires');
-  if (!includeSpcOutlook && !includeNifcPerimeters && !spcLoading && !nifcLoading) {
+  const bcwsLoading = !includeBcwsPerimeters && loadingKeys.has('bcws-fires');
+  if (!includeSpcOutlook && !includeNifcPerimeters && !includeBcwsPerimeters && !spcLoading && !nifcLoading && !bcwsLoading) {
     throw new Error('A fire key requires at least one active fire product.');
   }
+  // DRAFT wording (DR-177): the BC section's label, its stage rows (src/config/wildfire-presentation.ts) and its name for assistive technology.
+  const bcwsPerimeters =
+    includeBcwsPerimeters || bcwsLoading
+      ? '<span class="map-key-scale" data-bcws-perimeter-key>' +
+        '<strong class="map-key-scale-label">BC Wildfire Service current perimeters</strong>' +
+        (bcwsLoading
+          ? loadingSectionRow('bcws-fires')
+          : (['active', 'inactive', 'unknown'] as const)
+              .map((cls) => swatchItem(BCWS_STATUS_PRESENTATION[cls].lineColor, BCWS_STATUS_PRESENTATION[cls].legendLabel))
+              .join('')) +
+        '</span>'
+      : '';
   const outlook =
     includeSpcOutlook || spcLoading
       ? '<span class="map-key-scale" data-spc-fire-weather-key>' +
@@ -883,10 +897,17 @@ export function buildFireKey(
       'National Interagency Fire Center (NIFC) current mapped fire perimeters loading.'
     );
   }
+  if (includeBcwsPerimeters) {
+    ariaParts.push(
+      'BC Wildfire Service current perimeters by stage of control: Out of Control, Being Held or Under Control; Out; Stage of control not stated. Overlapping agency perimeters are outlined once as one fire area.'
+    );
+  } else if (bcwsLoading) {
+    ariaParts.push('BC Wildfire Service current perimeters loading.');
+  }
   return {
     label: 'Fire',
     ariaLabel: ariaParts.join(' '),
-    itemsHtml: outlook + perimeters
+    itemsHtml: outlook + perimeters + bcwsPerimeters
   };
 }
 
@@ -1095,7 +1116,7 @@ function activeKey(): HazardKeyResult | null {
  * way): a solo NIFC fallback names only 'nifc-fires', never a
  * spc-fire-weather status that is not part of what is drawn. */
 function fireProductKeys(eligible: ReadonlySet<string>): readonly string[] {
-  return (['spc-fire-weather', 'nifc-fires'] as const).filter((key) => eligible.has(key));
+  return (['spc-fire-weather', 'nifc-fires', 'bcws-fires'] as const).filter((key) => eligible.has(key));
 }
 
 /**
@@ -1263,7 +1284,7 @@ function surfaceKey(): HazardKeyResult | null {
   } else if (eligible.has('sst-anomaly')) {
     spec = active.has('sst-anomaly') ? sstKey() : loadingKeySpec('sst-anomaly');
     productKeys = ['sst-anomaly'];
-  } else if (eligible.has('nifc-fires')) {
+  } else if (eligible.has('nifc-fires') || eligible.has('bcws-fires')) {
     spec = buildFireKey(active, loading);
     productKeys = fireProductKeys(eligible);
   }

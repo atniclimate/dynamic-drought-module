@@ -536,6 +536,18 @@ test('the shared boot helper installs the WFIGS default on the context before it
   assert.match(urls, /\/WFIGS_Interagency_Perimeters_Current\/FeatureServer\/0'/);
 });
 
+test('the shared boot helper installs the BC Wildfire Service default on the context before it navigates', async () => {
+  const helpers = await readFile(join(TESTS_DIR, 'helpers.ts'), 'utf8');
+  const wildfire = await readFile(join(TESTS_DIR, 'wildfire-fixtures.ts'), 'utf8');
+  const urls = await readFile(join(ROOT, 'src/config/urls.ts'), 'utf8');
+  const gotoApp = helpers.slice(helpers.indexOf('export async function gotoApp'));
+  const body = gotoApp.slice(0, gotoApp.indexOf('page.goto('));
+  assert.match(body, /await installDefaultBcwsStub\(page, options\.bcws \?\? 'fixture'\);/);
+  assert.match(wildfire, /await context\.route\(\s*\(url\) => isBcwsRequestUrl\(url\.href\)/);
+  assert.match(wildfire, /const BCWS_SERVICE_NAME = 'BCWS_FirePerimeters_PublicView';/);
+  assert.match(urls, /\/BCWS_FirePerimeters_PublicView\/FeatureServer\/0'/);
+});
+
 test('the fixture route patterns still match the URLs the runtime builds', async () => {
   const urls = await readFile(join(ROOT, 'src/config/urls.ts'), 'utf8');
   const aiannhLayer = await readFile(join(ROOT, 'src/layers/aiannh.ts'), 'utf8');

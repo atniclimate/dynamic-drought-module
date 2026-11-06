@@ -50,6 +50,8 @@ import { fileURLToPath } from 'node:url';
 // overlap module loads and its function throws a TypeError, a code defect).
 // Each import resolves to a fresh URL, so no module cache answers it.
 const NIFC_LAYER_MODULE = '/src/layers/nifc-fires.ts';
+// The BC layer, replaced the same way: its two readers answer from globals.
+const BCWS_LAYER_MODULE = '/src/layers/bcws-fires.ts';
 let failedOverlapLoads = 0;
 let lazyLoads = 0;
 globalThis.__p3truthHeld = [];
@@ -107,6 +109,15 @@ registerHooks({
         shortCircuit: true,
         source:
           'export function loadedNifcCollection() { return globalThis.__p3truthLoadedNifc ?? null; }'
+      };
+    }
+    if (url.endsWith(BCWS_LAYER_MODULE)) {
+      return {
+        format: 'module',
+        shortCircuit: true,
+        source:
+          'export function loadedBcwsCollection() { return globalThis.__p3truthLoadedBcws ?? null; }' +
+          ' export function fireAreas() { return globalThis.__p3truthFireAreas ?? { areaOf: new Map() }; }'
       };
     }
     return nextLoad(url, context);
@@ -1229,4 +1240,91 @@ test('an NWS answer with neither alert keeps the one shared all-clear in both ro
   // The Heat row's only current lane is this one; the Fire row also waits on
   // NIFC, which this case does not settle.
   assert.equal(settledCell('current', 'heat', [['nwsAlerts', result]]).status, 'ready');
+});
+
+// ---------------------------------------------------------------------------
+// The BC Wildfire Service lane (the acceptance of 2026-09-25): each agency's
+// own figures, the place's fire areas once where they overlap, and a failed
+// BC read never read as zero fires in British Columbia.
+// ---------------------------------------------------------------------------
+
+const { buildBcwsAreaPerimeterClaim, buildFireAreaClaim, OVERLAP_COUNT_LABEL } = await import('../src/config/wildfire-presentation.ts');
+
+/** A box at the Border 2 fire, both sides of the 49th parallel. */
+const BORDER_BOX = [-121.2, 48.9, -120.9, 49.2];
+const BORDER_SQUARE = { type: 'Polygon', coordinates: [[[-121.1, 49.0], [-121.0, 49.0], [-121.0, 49.1], [-121.1, 49.1], [-121.1, 49.0]]] };
+const bcRecord = (number, status, objectId = 1) =>
+  feature({ OBJECTID: objectId, FIRE_NUMBER: number, FIRE_YEAR: 2026, FIRE_STATUS: status, FIRE_SIZE_HECTARES: 10 }, BORDER_SQUARE);
+/** The BC service: its two whole-table counts (a steady table unless `counts` says otherwise) and its perimeters. */
+function bcService({ features = [], counts = [319, 319], status = 200 } = {}) {
+  const urls = [];
+  let count = 0;
+  const answer = (url) => {
+    urls.push(url);
+    if (status !== 200) return jsonResponse({}, status);
+    if (new URL(url).searchParams.get('returnCountOnly') === 'true') return jsonResponse({ count: counts[Math.min(count++, counts.length - 1)] });
+    return jsonResponse(collection(features));
+  };
+  return { urls, answer };
+}
+
+test('a selection that misses British Columbia states nothing for BC and asks nothing', async () => {
+  const service = bcService();
+  const result = await withFetch(service.answer, () => sources.fetchBcwsClaims(place(-117.3, 40.4, [-117.5, 40.2, -117.1, 40.6]), signal()));
+  assert.deepEqual(result, { claims: [], ok: true });
+  assert.deepEqual(service.urls, []);
+});
+
+test('the BC read sets out the issuer\'s own stage names over the selection box, each record once', async () => {
+  const service = bcService({ features: [bcRecord('V10885', 'Under Control', 1), bcRecord('V10885', 'Under Control', 2), bcRecord('K1', 'Out', 3), bcRecord('K2', null, 4)] });
+  const result = await withFetch(service.answer, () => sources.fetchBcwsClaims(place(-121.05, 49.05, BORDER_BOX), signal()));
+  assert.equal(result.ok, true);
+  assert.equal(result.partial, undefined);
+  assert.deepEqual(result.claims.map((claim) => claim.text), [buildBcwsAreaPerimeterClaim(['Under Control', 'Out', null])]);
+  assert.equal(result.claims[0].text, '3 current BC Wildfire Service perimeters intersect the bounding box around this selection: 1 Under Control, 1 Out and 1 with no stage of control stated.');
+  assert.equal(result.claims[0].product, 'bcws-fires');
+  const read = new URL(service.urls.find((url) => url.includes('f=geojson')));
+  // The box is cut to British Columbia's: the service is never asked south of 48 N.
+  assert.equal(read.searchParams.get('geometry'), '-121.2,48.9,-120.9,49.2');
+  assert.equal(service.urls.length, 3, 'one read between two whole-table counts');
+});
+
+test('a failed or reload-straddling BC read is a note, never a zero for British Columbia', async () => {
+  for (const service of [bcService({ status: 503 }), bcService({ counts: [0, 319] })]) {
+    const result = await withFetch(service.answer, () => sources.fetchBcwsClaims(place(-121.05, 49.05, BORDER_BOX), signal()));
+    assert.equal(result.ok, false);
+    assert.deepEqual(result.claims, [], 'no "No current BC Wildfire Service perimeters" claim');
+    assert.equal(typeof result.note, 'string');
+    const cell = settledCell('current', 'fire', [['nifc', { ok: true, claims: [] }], ['nwsAlerts', { ok: true, claims: [] }], ['bcws', result]]);
+    assert.notEqual(cell.status, 'ready', 'the fire cell never reads live over a failed BC read');
+    assert.ok(cell.note.includes(result.note));
+  }
+});
+
+test('the place counts each fire area once with the ratified label when both agencies\' loaded answers cover the box', async () => {
+  const nifcBorder = feature({ attr_UniqueFireIdentifier: '2026-WANCP-000266', attr_IncidentName: 'Border 2', attr_IncidentTypeCategory: 'WF' }, BORDER_SQUARE);
+  registry.setStatus('bcws-fires', 'ready');
+  registry.setStatus('nifc-fires', 'ready');
+  globalThis.__p3truthLoadedBcws = { collection: collection([bcRecord('V10885', 'Under Control')]), coverage: [-130, 45, -115, 55], fetchedAt: Date.UTC(2026, 10, 5, 12), complete: true };
+  globalThis.__p3truthLoadedNifc = { collection: collection([nifcBorder]), envelope: null, fetchedAt: Date.UTC(2026, 10, 5, 12), truncated: false };
+  globalThis.__p3truthFireAreas = { areaOf: new Map([['nifc:2026-WANCP-000266', 'fa:x'], ['bcws:2026-V10885', 'fa:x']]) };
+  try {
+    const requests = [];
+    const result = await withFetch((url) => { requests.push(url); return jsonResponse({}, 599); }, () =>
+      sources.fetchBcwsClaims(place(-121.05, 49.05, BORDER_BOX), signal()));
+    assert.deepEqual(requests, [], 'the loaded answers suffice');
+    assert.deepEqual(result.claims.map((claim) => claim.text), [buildBcwsAreaPerimeterClaim(['Under Control']), buildFireAreaClaim(1)]);
+    assert.ok(result.claims[1].text.includes(OVERLAP_COUNT_LABEL));
+    assert.equal(result.claims[1].evidence, 'derived');
+    // With no known fire area the two agencies stand apart and no combined count is stated.
+    globalThis.__p3truthFireAreas = { areaOf: new Map() };
+    const apart = await withFetch(() => jsonResponse({}, 599), () => sources.fetchBcwsClaims(place(-121.05, 49.05, BORDER_BOX), signal()));
+    assert.equal(apart.claims.length, 1);
+  } finally {
+    delete globalThis.__p3truthLoadedBcws;
+    delete globalThis.__p3truthLoadedNifc;
+    delete globalThis.__p3truthFireAreas;
+    registry.setStatus('bcws-fires', 'loading');
+    registry.setStatus('nifc-fires', 'loading');
+  }
 });

@@ -15,7 +15,7 @@ import { expect, type BrowserContext, type Page, type Locator, type Route } from
 import { stubRecentSatellite } from './satellite-fixture';
 import { installMinimapAnalysisStubs } from './minimap-fixtures';
 import { installBoundaryStubs, type BoundaryStubMode } from './tribal-fixtures';
-import { installDefaultNifcStub, type NifcStubMode } from './wildfire-fixtures';
+import { installDefaultBcwsStub, installDefaultNifcStub, type BcwsStubMode, type NifcStubMode } from './wildfire-fixtures';
 import { installDefaultNwsWwaStub, type NwsWwaStubMode } from './nws-wwa-fixtures';
 import { installDefaultTropicalStub, type TropicalStubMode } from './tropical-fixtures';
 import { untilAnswered } from './answered-read';
@@ -282,6 +282,8 @@ export interface GotoAppOptions {
    * than to the network.
    */
   readonly nifc?: NifcStubMode;
+  /** How this boot answers the BC Wildfire Service (`installDefaultBcwsStub`); defaults to the quiet `fixture`. */
+  readonly bcws?: BcwsStubMode;
   /**
    * How this boot answers the NOAA NWS WWA watch/warning/advisory MapServer
    * (S30D P2-CI). Defaults to `fixture`: a fail-closed CONTEXT route in
@@ -430,6 +432,10 @@ export async function gotoApp(
   // `installDefaultNifcStub`'s own comment for the three request kinds, the
   // opt-out, and why a spec's own `page.route` for WFIGS still wins.
   await installDefaultNifcStub(page, options.nifc ?? 'fixture');
+  // The BC Wildfire Service beside it (src/layers/bcws-fires.ts and the
+  // minimap's BC read): the quiet table on the context, whatever the query
+  // string names; a spec's own `page.route` still wins.
+  await installDefaultBcwsStub(page, options.bcws ?? 'fixture');
   // S30D P2-CI: every routine boot answers the NWS WWA MapServer with a valid
   // empty collection, whatever the query string names, so a `cluster=heat`
   // boot never waits on NOAA's answer. See `installDefaultNwsWwaStub`'s own

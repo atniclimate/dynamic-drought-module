@@ -97,3 +97,15 @@ test('whole-job consumer accepts matching generation only and preserves measured
   let prevented=false;failed.onerror({preventDefault(){prevented=true;}});
   await assert.rejects(failure,/failed/);assert.equal(prevented,true);assert.equal(failed.terminated,1);
 });
+test('after grouping, a linked group gets one union outline; a refused union leaves it unoutlined, and no link loads no union', async () => {
+  const rows=[a(polygon(ring(-120,45,.1,.1))),b(polygon(ring(-119.98,45.02,.02,.02)))];
+  const result=await runPerimeterJob(json(rows),limits);
+  assert.equal(result.footprints.length,1);assert.equal(result.footprints[0].key,result.graph.groups[0].key);
+  // The containing NIFC square is the union: one component, the outer ring only.
+  assert.equal(result.footprints[0].coordinates.length,1);assert.equal(result.footprints[0].coordinates[0].length,1);
+  const refused=await runPerimeterJob(json(rows),limits,undefined,async()=>()=>{throw new Error('union refused');});
+  assert.deepEqual(refused.footprints,[{key:result.graph.groups[0].key,coordinates:null}]);assert.equal(refused.graph.groups.length,1);
+  let loads=0;
+  const apart=await runPerimeterJob(json([a(polygon(ring(0,0))),b(polygon(ring(1,0)))]),limits,undefined,async()=>{loads++;return()=>[];});
+  assert.equal(loads,0);assert.deepEqual(apart.footprints,[]);
+});

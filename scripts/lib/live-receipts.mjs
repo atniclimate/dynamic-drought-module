@@ -189,7 +189,7 @@ export function evaluateRange(row) {
  * cluster's recipe for the horizon, `coActivateWith` partners expanded;
  * and a bare URL is the default-on set exactly. No boot below passes
  * `?layers=`, and none passes `?horizon=`, so every cluster boot composes
- * at the `current` horizon: wildfire is nifc-fires plus hms-smoke, heat is
+ * at the `current` horizon: wildfire is nifc-fires, bcws-fires and hms-smoke, heat is
  * heatrisk plus nws-alerts, enso is sst-anomaly plus tropical-cyclones, and drought (the bare
  * root boot) is nadm-drought, which composes back to exactly the
  * default-on set.
@@ -200,7 +200,7 @@ export function evaluateRange(row) {
  * proof pass with a layer missing.
  */
 const PERSISTENT_REFERENCE = ['hillshade', 'aiannh', 'bia-reservations', 'states'];
-const WILDFIRE_BOOT = [...PERSISTENT_REFERENCE, 'nifc-fires', 'hms-smoke'];
+const WILDFIRE_BOOT = [...PERSISTENT_REFERENCE, 'nifc-fires', 'bcws-fires', 'hms-smoke'];
 export const EXPECTED_BOOT_LAYERS = Object.freeze({
   root: [...PERSISTENT_REFERENCE, 'nadm-drought'],
   wildfire: WILDFIRE_BOOT,
