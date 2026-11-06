@@ -29,7 +29,7 @@ const FETCH_TIMEOUT_MS = 8_000;
  * to 60 minutes with some transmission lag; the tier-2 hourly window
  * (6 hours, matching the CWMS hourly series) is the honest cutoff.
  */
-const FRESH_WINDOW_MS = 6 * 60 * 60 * 1000;
+export const IV_FRESH_WINDOW_MS = 6 * 60 * 60 * 1000;
 
 export interface UsgsReading {
   readonly value: string;
@@ -149,7 +149,7 @@ export function readLatestUsgsReading(series: UsgsSeries): UsgsReading | null {
 export function ivFreshness(timestampIso: string): TelemetryFreshness {
   const t = Date.parse(timestampIso);
   if (Number.isNaN(t)) return 'stale';
-  return Date.now() - t <= FRESH_WINDOW_MS ? 'fresh' : 'stale';
+  return Date.now() - t <= IV_FRESH_WINDOW_MS ? 'fresh' : 'stale';
 }
 
 /**

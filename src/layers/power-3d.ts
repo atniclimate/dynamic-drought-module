@@ -131,6 +131,8 @@ let lastStatus: LayerStatus | null = null;
 /** The pending re-read of a missing half, and how many this build has used. */
 let retryTimer: ReturnType<typeof setTimeout> | undefined;
 let retriesUsed = 0;
+/** The reporting period of the plants drawn; a zoom back above the gate reuses them. */
+let plantsPeriodLabel: string | null = null;
 
 function plantsQueryUrl(): string {
   const params = new URLSearchParams({
@@ -512,6 +514,7 @@ async function activatePlants(
   map: maplibregl.Map,
   signal: AbortSignal
 ): Promise<string | null> {
+  if (plantsPeriodLabel !== null && map.getSource(PLANTS_SOURCE_ID)) return plantsPeriodLabel;
   let body: FeatureCollection;
   try {
     // fetchJsonWithBudget keeps the BODY READ inside the timeout and the
@@ -589,7 +592,8 @@ async function activatePlants(
       reassertThematicOrder(map);
       reassertLabelOrder(map);
     }
-    return periodLabelOf(body);
+    plantsPeriodLabel = periodLabelOf(body);
+    return plantsPeriodLabel;
   } catch (err) {
     console.warn('[power-3d] power-plant setup failed.', err);
     removePlantSurfaces(map);
@@ -598,6 +602,7 @@ async function activatePlants(
 }
 
 function removePlantSurfaces(map: maplibregl.Map): void {
+  plantsPeriodLabel = null;
   for (const layerId of [
     PLANTS_LAYER_ID,
     PLANTS_CLUSTER_COUNT_LAYER_ID,

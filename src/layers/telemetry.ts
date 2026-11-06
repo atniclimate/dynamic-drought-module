@@ -41,7 +41,9 @@ import {
   STATIC_TELEMETRY_STATION_REGISTRY,
   STATION_MARKER_LEGEND,
   discoverStationsForViewport,
+  distanceMeters,
   mergeTelemetryStations,
+  parseLeadingNumber,
   stationNetworkByKey,
   type RawsWindStationFields
 } from '../config/station-registry';
@@ -89,7 +91,6 @@ const popupOrigins = new WeakMap<maplibregl.Marker, HTMLElement>();
 const LAYER_KEY = 'telemetry';
 const MOVEEND_DEBOUNCE_MS = 350;
 const DISCOVERED_STATION_RENDER_CAP = 50;
-const EARTH_RADIUS_METERS = 6_371_000;
 const CAP_NOTE_ID = 'telemetry-discovery-note';
 // H2 (0.6.2, D-0.7.0-004): a compact count chip in the shared bottom dock;
 // the full explanation lives in the sidebar Water & Snow panel. The old
@@ -422,20 +423,6 @@ const WIND_GLYPH_STROKE_WIDTH_PX = 1.5;
 // SVG's own edge.
 const WIND_GLYPH_PAD_PX = 2;
 
-/**
- * The served speed's leading numeric token, for example 5 out of "5 mph".
- * Mirrors `parseLeadingNumber` in src/config/station-registry.ts (a private,
- * unexported helper; that file's non-doc-comment lines are not owned by this
- * round), duplicated rather than imported for that reason. Never invents a
- * value: a string with no numeric token (the issuer's own "calm" or similar)
- * returns `null`, and the caller draws no directional shape for it, the same
- * way it already does for a parsed speed of exactly 0.
- */
-function parseServedWindSpeedMph(served: string): number | null {
-  const match = /-?\d+(?:\.\d+)?/.exec(served);
-  return match ? Number(match[0]) : null;
-}
-
 function clampWindSpeedForShaft(speedMph: number): number {
   return Math.min(Math.max(speedMph, WIND_GLYPH_SHAFT_MIN_MPH), WIND_GLYPH_SHAFT_MAX_MPH);
 }
@@ -487,7 +474,7 @@ function telemetryMarkerOptions(element: HTMLElement, wind: RawsWindGlyphFields 
  */
 function buildRawsWindGlyph(wind: RawsWindGlyphFields, color: string): SVGSVGElement {
   const accessibleName = buildRawsWindAccessibleName(wind);
-  const parsedSpeedMph = parseServedWindSpeedMph(wind.windSpeedServed);
+  const parsedSpeedMph = parseLeadingNumber(wind.windSpeedServed);
   // Fix F5 (opus-read.md, including its "0 mph with a direction" caveat): a
   // parsed speed of 0, or a speed string with no numeric token at all, draws
   // no directional shape. A calm or unparseable reading has nothing honest
@@ -887,26 +874,6 @@ function freshnessLabel(freshness: TelemetryFreshness): string {
 
 function categoryLabel(category: PrimaryParameterCategory): string {
   return category.replace(/-/g, ' ');
-}
-
-function distanceMeters(
-  a: readonly [number, number],
-  b: readonly [number, number]
-): number {
-  const [lat1, lon1] = a;
-  const [lat2, lon2] = b;
-  const dLat = radians(lat2 - lat1);
-  const dLon = radians(lon2 - lon1);
-  const rLat1 = radians(lat1);
-  const rLat2 = radians(lat2);
-  const h =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(rLat1) * Math.cos(rLat2) * Math.sin(dLon / 2) ** 2;
-  return 2 * EARTH_RADIUS_METERS * Math.asin(Math.min(1, Math.sqrt(h)));
-}
-
-function radians(degrees: number): number {
-  return (degrees * Math.PI) / 180;
 }
 
 // ---------------------------------------------------------------------------

@@ -19,9 +19,11 @@ const stubs = {
     export function showLegend(){ return null; } export function hideLegend(){}
     export function renderSwatchLegend(){}`,
   // The real cache uses a TypeScript parameter property, which type stripping refuses.
+  // Like the real cache, only a resolved frame is kept and peek returns it.
   '/util/frame-stepper': `export class FrameCache { m = new Map();
       peek(k){ return this.m.get(k); }
-      get(k, load){ if (!this.m.has(k)) this.m.set(k, load(k)); return this.m.get(k); }
+      async get(k, load){ if (this.m.has(k)) return this.m.get(k);
+        const f = await load(k); this.m.set(k, f); return f; }
       prefetch(){} }
     export async function crossfadeFrames(){} export function primeForFadeIn(){}`
 };
@@ -51,6 +53,7 @@ globalThis.removeEventListener = () => {};
 
 const usdm = await import('../src/layers/usdm.ts');
 const { registry } = await import('../src/state/registry.ts');
+const { timeline } = await import('../src/state/timeline.ts');
 
 function fakeMap() {
   const sources = new Map();
@@ -119,4 +122,51 @@ test('a FeatureCollection with an unclosed ring and a null geometry still activa
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+/** The current week answers; every other read (an archive week, a change map) fails with 503. */
+async function activateWithFailedRestore(restore) {
+  const originalFetch = globalThis.fetch;
+  const originalWarn = console.warn;
+  console.warn = () => {};
+  const mapDate = Date.UTC(2026, 9, 6);
+  const body = {
+    type: 'FeatureCollection',
+    features: [{ type: 'Feature', properties: { DM: 1, MapDate: mapDate }, geometry: null }]
+  };
+  const failed = [];
+  globalThis.fetch = async (input) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url.includes('where=1%3D1')) return new Response(JSON.stringify(body), { status: 200 });
+    failed.push(url);
+    return new Response('busy', { status: 503, statusText: 'Service Unavailable' });
+  };
+  try {
+    const map = fakeMap();
+    restore();
+    await usdm.activate(map);
+    const status = registry.getStatus('usdm');
+    const drawn = map.sources.has('usdm-frame-a');
+    const week = timeline.usdmWeek;
+    usdm.deactivate(map);
+    return { status, drawn, failed, week };
+  } finally {
+    globalThis.fetch = originalFetch;
+    console.warn = originalWarn;
+  }
+}
+
+test('a shared week whose archive read fails keeps the current week ready, not an error', async () => {
+  const r = await activateWithFailedRestore(() => timeline.setUsdmWeek('20260915'));
+  assert.equal(r.failed.length, 1, 'the archive week was asked for once');
+  assert.equal(r.drawn, true);
+  assert.equal(r.week, null, 'the timeline must not keep a week that never loaded');
+  assert.equal(r.status, 'ready', "'error' would make the controller remove the drawn week");
+});
+
+test('a shared change mode whose change map fails keeps the current week ready, not an error', async () => {
+  const r = await activateWithFailedRestore(() => timeline.setUsdmMode('chg1'));
+  assert.equal(r.failed.length, 1, 'the change map was asked for once');
+  assert.equal(r.drawn, true);
+  assert.equal(r.status, 'ready', "'error' would make the controller remove the drawn week");
 });
