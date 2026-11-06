@@ -335,6 +335,22 @@ const SELF_TEST = [
     make: () => { const s = VALID(); s.roni.values[1].seas = 'XYZ'; return s; }
   },
   {
+    // 0.97 - 0.77 is 0.19999999999999996 in floating point; at the data's
+    // precision it is the 0.2 band, so the direction is strengthening.
+    name: 'a 0.77 to 0.97 rise is strengthening at the 0.2 band edge',
+    mustPass: true,
+    make: () => {
+      const s = VALID();
+      const latest = P({ anom: 0.97 });
+      s.roni = SERIES({
+        state: STATE({ conditions: 'el-nino', direction: 'strengthening', emerging: true }),
+        latest,
+        values: [P({ seas: 'DJF', anom: 0.1 }), P({ seas: 'JFM', anom: 0.2 }), P({ seas: 'FMA', anom: 0.77 }), P({ seas: 'MAM', anom: 0.87 }), latest]
+      });
+      return s;
+    }
+  },
+  {
     name: 'roni.state.direction disagrees with the last three seasons',
     mustPass: false,
     make: () => { const s = VALID(); s.roni.state.direction = 'strengthening'; return s; }

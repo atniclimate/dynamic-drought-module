@@ -3,8 +3,28 @@ import assert from 'node:assert/strict';
 import {
   parseSeasonIndex,
   parseNino34Weekly,
-  parseSoi
+  parseSoi,
+  assertRecentWhenUndated
 } from '../scripts/build-enso-snapshot.mjs';
+
+test('assertRecentWhenUndated refuses a stale series only when CPC sent no Last-Modified date', () => {
+  const now = new Date(Date.UTC(2026, 10, 6));
+  const roni = (seas, year, published) => ({ published, latest: { seas, year } });
+  const weekly = (month, day, published) => ({ published, latest: { year: 2026, month, day } });
+  const fresh = weekly(10, 28, null);
+  // JAS ends in September: two months behind November passes, JJA's August
+  // end passes at three, MAM's May end fails at six.
+  assert.doesNotThrow(() => assertRecentWhenUndated(roni('JAS', 2026, null), fresh, now));
+  assert.doesNotThrow(() => assertRecentWhenUndated(roni('JJA', 2026, null), fresh, now));
+  assert.throws(() => assertRecentWhenUndated(roni('MAM', 2026, null), fresh, now), /RONI/);
+  // NDJ 2025 ends in January 2026 (the label carries the centre month's year).
+  assert.throws(() => assertRecentWhenUndated(roni('NDJ', 2025, null), fresh, now), /RONI/);
+  assert.throws(() => assertRecentWhenUndated(roni('JAS', 2026, null), weekly(10, 1, null), now), /weekly/);
+  // A dated file is aged by the app from that date, so the build does not refuse it.
+  assert.doesNotThrow(() =>
+    assertRecentWhenUndated(roni('MAM', 2026, '2026-06-05'), weekly(10, 1, '2026-10-05'), now)
+  );
+});
 
 // Inline samples in the CPC layouts the parsers document. Each parser has a
 // minimum-length floor, so the filler rows are generated; the rows under test

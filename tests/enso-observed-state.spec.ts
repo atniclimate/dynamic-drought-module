@@ -352,7 +352,8 @@ test.describe('ENSO observed-state repair', () => {
       route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(snapshotInState('la-nina', 'la-nina', 'weakening', -1.1))
+        // The stored direction is the raw sign: a rise toward zero, which is a weakening La Nina.
+        body: JSON.stringify(snapshotInState('la-nina', 'la-nina', 'strengthening', -1.1))
       })
     );
 

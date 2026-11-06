@@ -58,6 +58,15 @@ export const RUN_LENGTH = 5;
 // reader as an issuer rule. The builder and this contract share it.
 export const DIRECTION_BAND = 0.2;
 export const DIRECTION_SPAN = 3;
+/**
+ * The trajectory word for a change between two index values. The change is
+ * rounded to the data's two-decimal precision first, so a printed +0.20 is
+ * never judged inside the band (0.97 - 0.77 is 0.19999999999999996).
+ */
+export function directionOf(change) {
+  const rounded = Math.round(change * 100) / 100;
+  return rounded >= DIRECTION_BAND ? 'strengthening' : rounded <= -DIRECTION_BAND ? 'weakening' : 'steady';
+}
 export const SEASON_NAMES = Object.freeze([
   'DJF',
   'JFM',
@@ -249,9 +258,7 @@ function stateProblems(series, label) {
   if (state.episode !== episode) {
     problems.push(`${label}.state.episode (${state.episode}) does not follow from the last ${RUN_LENGTH} seasons`);
   }
-  const change = values[values.length - 1].anom - values[values.length - DIRECTION_SPAN].anom;
-  const direction =
-    change >= DIRECTION_BAND ? 'strengthening' : change <= -DIRECTION_BAND ? 'weakening' : 'steady';
+  const direction = directionOf(values[values.length - 1].anom - values[values.length - DIRECTION_SPAN].anom);
   if (state.direction !== direction) {
     problems.push(`${label}.state.direction (${state.direction}) does not follow from the last ${DIRECTION_SPAN} seasons`);
   }
