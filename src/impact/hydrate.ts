@@ -41,6 +41,7 @@ import {
   fetchUsdmClaims,
   type SourceResult
 } from './sources';
+import { attachEnsoReading } from './enso-reading';
 import { makeClaim } from './evidence';
 import { synthesizeHeatSources } from './heat-synthesis';
 import {
@@ -106,9 +107,16 @@ async function loadEnsoClaims(
   signal: AbortSignal
 ): Promise<SourceResult> {
   try {
-    const { fetchEnsoClaims } = await import('./enso');
+    const { fetchEnsoClaims, readEnsoPhaseLabel } = await import('./enso');
     if (signal.aborted) return { claims: [], ok: false };
-    return await fetchEnsoClaims(context, signal);
+    // The index state as data rides the same lane (see enso-reading.ts for
+    // why it is attached here and not in enso.ts): it returns the result
+    // unchanged whenever it cannot agree with what the claims already say.
+    return await attachEnsoReading(
+      await fetchEnsoClaims(context, signal),
+      signal,
+      readEnsoPhaseLabel
+    );
   } catch (err) {
     if (signal.aborted) return { claims: [], ok: false };
     console.warn('[impact] ENSO snapshot read failed.', err);

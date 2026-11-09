@@ -101,6 +101,111 @@ export interface ClaimMethod {
 }
 
 /**
+ * A typed reading beside a claim's text (owner direction 2026-11-09 (sprint),
+ * DR-pending): the issuer's own class, as data, for the surfaces that draw a
+ * gauge instead of a sentence (the priority briefing, src/ui/briefing-lead.ts).
+ *
+ * Three rules hold for every member. It is set at the claim's construction
+ * site, from the same parsed issuer field the sentence was built from, never
+ * parsed back out of prose. It adds no claim: source, dates, evidence class
+ * and product key are the claim's own. And it carries only what the issuer
+ * sent: a class the parser could not read yields no reading at all.
+ *
+ * `window`, where present, is the issuer's own validity window as epoch
+ * milliseconds, each edge set only when the issuer field gave it.
+ */
+export interface ReadingWindow {
+  readonly from?: number;
+  readonly to?: number;
+}
+
+/** U.S. Drought Monitor category at a point: `DM` 0 to 4 (D0 to D4), or null
+ * when no D0 to D4 polygon contains the point (never a "no drought" finding). */
+export interface UsdmCategoryReading {
+  readonly kind: 'usdm-category';
+  readonly dm: 0 | 1 | 2 | 3 | 4 | null;
+  readonly window?: ReadingWindow;
+}
+
+/** NWS HeatRisk class at a point for one 24-hour period: 0 to 4, or null for
+ * the service's NoData cell. `day` is the catalog day (1 to 7). */
+export interface HeatRiskLevelReading {
+  readonly kind: 'heatrisk-level';
+  readonly value: 0 | 1 | 2 | 3 | 4 | null;
+  readonly day: number;
+  readonly window?: ReadingWindow;
+}
+
+/**
+ * NWS products in effect at a point, by their verbatim `event` names, for one
+ * hazard row. An empty list is the read "none of this row's products is in
+ * effect", which is an absence the issuer feed established, not an all-clear.
+ */
+export interface NwsProductsReading {
+  readonly kind: 'nws-products';
+  readonly events: readonly string[];
+}
+
+/** Current mapped WFIGS perimeters intersecting the selection's bounding box,
+ * counted by incident class. `lowerBound` marks a count cut at the record cap. */
+export interface WfigsPerimetersReading {
+  readonly kind: 'wfigs-perimeters';
+  readonly wildfire: number;
+  readonly prescribed: number;
+  readonly other: number;
+  readonly lowerBound: boolean;
+}
+
+/**
+ * SPC Fire Weather Outlook at a point for the day or days one claim speaks
+ * for. `category` is the Day 1 or Day 2 `dn` (5, 8, 10); `probability` is the
+ * Days 3 to 8 `label` as the service sends it; neither set means no area is
+ * drawn over the point for those days.
+ */
+export interface SpcFireDaysReading {
+  readonly kind: 'spc-fire-days';
+  readonly days: readonly number[];
+  readonly category?: 5 | 8 | 10;
+  readonly probability?: '0.40' | '0.70' | 'Probability Too Low';
+  readonly window?: ReadingWindow;
+}
+
+/** NOAA CPC tercile outlook at a point: the service's `cat` code and `prob`. */
+export interface CpcTercileReading {
+  readonly kind: 'cpc-tercile';
+  readonly variable: 'temperature';
+  readonly cat: 'Above' | 'Below' | 'Normal' | 'EC';
+  readonly prob: number;
+  /** The issuer's season label as the claim states it, for example "Sep-Oct-Nov 2026". */
+  readonly season: string;
+}
+
+/**
+ * The observed ENSO index state: the newest operational RONI season and the
+ * CPC onset-rule conditions the snapshot states for it.
+ */
+export interface EnsoIndexReading {
+  readonly kind: 'enso-index';
+  readonly index: 'RONI';
+  readonly value: number;
+  readonly season: string;
+  readonly year: number;
+  readonly preliminary: boolean;
+  readonly conditions: 'el-nino' | 'la-nina' | 'neutral';
+  /** The CPC onset threshold, in degrees Celsius, as the snapshot carries it. */
+  readonly threshold: number;
+}
+
+export type ClaimReading =
+  | UsdmCategoryReading
+  | HeatRiskLevelReading
+  | NwsProductsReading
+  | WfigsPerimetersReading
+  | SpcFireDaysReading
+  | CpcTercileReading
+  | EnsoIndexReading;
+
+/**
  * One sourced statement in a horizon, under the evidence/claim contract
  * (T-P0-2): every claim names its evidence class and carries its dates.
  * Build claims ONLY through `makeClaim` in `src/impact/evidence.ts`; the
@@ -179,6 +284,12 @@ export interface SourcedClaim {
    * for.
    */
   readonly horizon?: HorizonKey;
+  /**
+   * The issuer's class as data, beside the sentence (see `ClaimReading`).
+   * Optional: a claim with no single issuer class carries none, and a reader
+   * that finds none falls back to the sentence, never to a guessed class.
+   */
+  readonly reading?: ClaimReading;
 }
 
 /**
