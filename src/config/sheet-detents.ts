@@ -133,19 +133,6 @@ export function releaseStops(
   return stops;
 }
 
-/** The candidate whose offset is nearest `position`. The first wins a tie. */
-export function stopNearest(
-  position: number,
-  candidates: readonly SheetStop[],
-  offsets: SheetOffsets
-): SheetStop {
-  let best = candidates[0] ?? 'closed';
-  for (const stop of candidates) {
-    if (Math.abs(offsets[stop] - position) < Math.abs(offsets[best] - position)) best = stop;
-  }
-  return best;
-}
-
 /**
  * Where the map furniture that rides the sheet's top edge (the credit, the
  * notices, the scale rulers) sits, as a lift in px above its closed seat,
