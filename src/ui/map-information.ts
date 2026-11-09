@@ -88,7 +88,11 @@ function seatMapInformationOnDesktop(
     node: button,
     host: seat,
     home: mapContainer,
-    placeHome: placeButtonHome
+    placeHome: placeButtonHome,
+    // On phones the disclosure rides the right-edge column's map tools
+    // (owner direction 2026-11-09 (sprint), DR-pending), so it can no longer
+    // sit on top of the scale and credit at the bottom edge.
+    phone: { group: 'utility', order: 30, word: 'Info' }
   });
   const releasePanel = watchDesktopMapSeat({
     node: panel,

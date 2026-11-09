@@ -4139,50 +4139,14 @@ button.conditions-metric:hover .conditions-action-hide {
   }
 
   /* --------------------------------------------------------------------------
-     The mobile hazard rail (0.7.0 mobile shell): the quick hazard
-     selections (ENSO / Fire / Drought / Heat) in the lower-right thumb zone,
-     riding just above the footer and the sheet (the mockup seats it 12px
-     over the footer). It exists while the map LEADS: closed and peek;
-     the open sheet covers that zone (exactly as the mockup's sheet
-     covers its rail), and it never exists on desktop or in embed (the
-     detent attribute never appears there).
+     The hazard views and the four panel doors (Brief, Place, Layers,
+     Alerts) are seated by the right-edge column while the phone shell is
+     active (owner direction 2026-11-09 (sprint), DR-pending): one column
+     owns every right-edge control, so the two stacks can no longer meet on
+     a short screen. Seats: src/ui/edge-column.ts; faces:
+     src/styles/edge-column.css. Their base rules below keep both hidden
+     everywhere else.
      -------------------------------------------------------------------------- */
-  #app[data-sheet-detent='closed'] .hazard-rail,
-  #app[data-sheet-detent='peek'] .hazard-rail {
-    display: flex;
-    flex-direction: column;
-    gap: var(--mobile-map-control-gap);
-    position: absolute;
-    right: calc(env(safe-area-inset-right, 0px) + var(--mobile-map-edge));
-    bottom: calc(
-      var(--mobile-footer-h, 56px) +
-      var(--sheet-height, 0px) +
-      var(--mobile-map-edge) +
-      var(--mobile-map-control-size) +
-      var(--mobile-map-control-gap)
-    );
-    z-index: calc(var(--z-map-control) + 30);
-  }
-
-  /* --------------------------------------------------------------------------
-     The footer nav (mobile shell): four persistent doors (Brief, Place,
-     Layers, Alerts) driving the one sheet. It exists exactly when the
-     shell does (the detent attribute), so embeds and desktop stay byte
-     for byte; the safe-area inset parks below the buttons.
-     -------------------------------------------------------------------------- */
-  #app[data-sheet-detent] .mobile-footer {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    height: var(--mobile-footer-h, 56px);
-    padding-bottom: env(safe-area-inset-bottom, 0px);
-    z-index: calc(var(--z-sheet) + 50);
-    border-top: 1px solid var(--line-strong);
-    background: var(--bg-1);
-  }
 
   /* --------------------------------------------------------------------------
      The Alerts pane: the fourth door's content. When the alerts door is
@@ -4216,25 +4180,6 @@ button.conditions-metric:hover .conditions-action-hide {
     max-width: none;
     z-index: calc(var(--z-map-chrome) + 40);
   }
-  #app[data-sheet-detent] .map-overlay-controls {
-    top: calc(env(safe-area-inset-top, 0px) + var(--mobile-map-edge));
-    right: calc(env(safe-area-inset-right, 0px) + var(--mobile-map-edge));
-    gap: var(--mobile-map-control-gap);
-    z-index: calc(var(--z-map-control) + 40);
-  }
-  #app[data-sheet-detent] .map-overlay-controls > #share-btn { order: 1; }
-  #app[data-sheet-detent] .map-overlay-controls > #reset-btn { order: 2; }
-  #app[data-sheet-detent] .map-overlay-controls > .test-preview-badge {
-    order: 3;
-    width: var(--mobile-map-control-size);
-    padding-inline: 2px;
-    text-align: center;
-    white-space: normal;
-  }
-  #app[data-sheet-detent='full'] .map-overlay-controls {
-    display: none;
-  }
-
   /* MapLibre's own corner controls (attribution, scale, the basemap
      switcher) clear the footer. Closed and peek controls additionally clear
      the visible sheet; lower controls yield at half and full. */
@@ -4305,29 +4250,20 @@ button.conditions-metric:hover .conditions-action-hide {
     );
     z-index: calc(var(--z-map-control) + 10);
   }
-  #app[data-sheet-detent='closed'] .basemap-switcher-control,
-  #app[data-sheet-detent='peek'] .basemap-switcher-control {
-    position: fixed;
-    right: calc(env(safe-area-inset-right, 0px) + var(--mobile-map-edge));
-    bottom: calc(
-      var(--mobile-footer-h, 56px) +
-      var(--sheet-height, 0px) +
-      var(--mobile-map-edge)
-    );
-    margin: 0 !important;
-    border-radius: var(--mobile-map-control-radius);
-    z-index: calc(var(--z-map-control) + 30);
-  }
-  #app[data-sheet-detent='half'] .basemap-switcher-control,
-  #app[data-sheet-detent='full'] .basemap-switcher-control {
-    display: none;
-  }
+  /* The satellite control rides the right-edge column's view tools on
+     phones (src/ui/edge-column.ts), so it has no corner seat here. */
 
   /* The bottom dock (notices, the embed stamp slot) clears the rail's
      column so the dock chips and the quick selects never fight for the
      same pixels. */
   #app[data-sheet-detent] .map-bottom-dock {
-    right: 76px;
+    right: calc(
+      env(safe-area-inset-right, 0px) +
+      var(--mobile-map-edge) +
+      var(--mobile-map-control-size) +
+      var(--mobile-map-control-gap) +
+      8px
+    );
   }
 
   /* The loading pulse drops below the top key bar and hugs the LEFT edge
@@ -4349,30 +4285,6 @@ button.conditions-metric:hover .conditions-action-hide {
      control clears 44px. Chips and rows grow their hit box, not their
      type; the half detent scrolls, so taller rows stay reachable.
      -------------------------------------------------------------------------- */
-  #app[data-sheet-detent] :is(.overlay-btn, .hazard-rail-btn, .basemap-switcher-btn) {
-    width: var(--mobile-map-control-size) !important;
-    min-width: 44px;
-    height: var(--mobile-map-control-size);
-    min-height: 44px;
-    padding: 0;
-    border: 1px solid var(--line-strong);
-    border-radius: var(--mobile-map-control-radius) !important;
-    background: rgba(15, 23, 42, 0.9);
-    color: var(--fg-0);
-  }
-  #app[data-sheet-detent]
-    :is(.overlay-btn, .hazard-rail-btn, .basemap-switcher-btn)
-    :is(.map-control-label, .basemap-switcher-label) {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-    border: 0;
-  }
   #app[data-sheet-detent] .basemap-switcher-icon { display: block; }
   #app[data-sheet-detent] .region-select { min-height: 44px; }
   #app[data-sheet-detent] .sheet-report-door { min-height: 44px; }
@@ -6363,8 +6275,6 @@ a.impact-resource-link::after {
 
 @media (max-width: 720px) and (max-height: 720px) {
   #app[data-sheet-detent] {
-    --mobile-map-control-size: 44px;
-    --mobile-map-control-gap: 6px;
     --mobile-map-key-collapsed-height: 190px;
   }
   /* The short narrow embed shares the tighter collapsed capacity. */
@@ -6790,40 +6700,8 @@ a.impact-resource-link::after {
 }
 
 @media (max-width: 720px) {
-  #app[data-sheet-detent='closed'] .map-info-btn,
-  #app[data-sheet-detent='peek'] .map-info-btn {
-    appearance: none;
-    position: fixed;
-    left: calc(
-      env(safe-area-inset-left, 0px) +
-      var(--mobile-map-edge) +
-      var(--mobile-ruler-width, 160px) +
-      var(--mobile-map-control-gap)
-    );
-    bottom: calc(
-      var(--mobile-footer-h, 56px) +
-      var(--sheet-height, 0px) +
-      var(--mobile-map-edge)
-    );
-    z-index: calc(var(--z-map-control) + 40);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 44px;
-    height: 44px;
-    padding: 0;
-    color: var(--fg-0);
-    background: #050708;
-    border: 1px solid rgba(241, 245, 249, 0.42);
-    border-radius: 50%;
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
-    cursor: pointer;
-  }
-  #app[data-sheet-detent] .map-info-btn[aria-expanded='true'] {
-    box-shadow:
-      0 0 0 2px var(--accent),
-      0 4px 14px rgba(0, 0, 0, 0.45);
-  }
+  /* The information disclosure rides the right-edge column's map tools on
+     phones (src/ui/edge-column.ts); only its panel is seated here. */
   #app[data-sheet-detent] .map-info-panel:not([hidden]) {
     position: fixed;
     top: calc(env(safe-area-inset-top, 0px) + var(--mobile-map-edge));

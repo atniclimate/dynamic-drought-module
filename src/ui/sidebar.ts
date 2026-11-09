@@ -1058,17 +1058,20 @@ function applyViewPreset(preset: ViewPreset): void {
 function wireHazardRail(): void {
   const rail = document.getElementById('hazard-rail');
   if (!rail) return;
-  const buttons: Array<{ btn: HTMLButtonElement; surface: string }> = [];
+  const buttons: Array<{ btn: HTMLButtonElement; surface: string; mode: string }> = [];
   for (const btn of rail.querySelectorAll<HTMLButtonElement>('button[data-preset]')) {
     const preset = MOBILE_HAZARD_PRESETS.find((p) => p.key === btn.dataset.preset);
     if (!preset) continue;
     // Accessible name only (W2-D7): a title that duplicates the accessible
     // name verbatim adds a redundant tooltip and double speech, not information.
-    btn.setAttribute('aria-label', preset.description);
+    // The name leads with the word the cell shows (owner direction 2026-11-09
+    // (sprint), DR-pending: the right-edge column labels every hazard view),
+    // so the word a sighted voice-control user reads operates it (WCAG 2.5.3).
+    btn.setAttribute('aria-label', `${preset.label}. ${preset.description}`);
     // The preset's first layer is its condition surface (the table is
     // ordered surface-first); the pressed state mirrors that layer.
     const surface = preset.layers[0] ?? '';
-    buttons.push({ btn, surface });
+    buttons.push({ btn, surface, mode: preset.mode });
     btn.addEventListener('click', () => {
       if (!mapDependentControlsEnabled) return;
       applyViewPreset(preset);
@@ -1079,13 +1082,21 @@ function wireHazardRail(): void {
     });
   }
   if (buttons.length === 0) return;
+  // Pressed while the map is showing that hazard: its surface layer is
+  // active, or its mode is the committed one (a shared `cluster=` link opens
+  // the mode's own recipe, whose surface can differ from the rail preset's;
+  // before 2026-11-09 such a link left all four cells unpressed). A custom
+  // layer set commits no mode, so only the surface rule can press a cell
+  // then, and the rail still never claims a hazard the map is not showing.
   const reflect = (): void => {
     const active = registry.getActiveKeys();
-    for (const { btn, surface } of buttons) {
-      btn.setAttribute('aria-pressed', String(active.has(surface)));
+    const committed = getCommittedSnapshot().cluster;
+    for (const { btn, surface, mode } of buttons) {
+      btn.setAttribute('aria-pressed', String(active.has(surface) || committed === mode));
     }
   };
   registry.on('change', reflect);
+  onCommittedSnapshotChange(reflect);
   reflect();
 }
 

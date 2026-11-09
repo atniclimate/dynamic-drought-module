@@ -2,6 +2,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import './styles/app.css';
 import './styles/hazard-indicators.css';
 import './styles/mobile-panels.css';
+import './styles/edge-column.css';
 
 import type * as maplibregl from 'maplibre-gl';
 import { holdSatellite } from './map/basemap-switcher';
@@ -40,6 +41,7 @@ import {
   showRendererNotice
 } from './ui/renderer-notice';
 import { initMapInformation } from './ui/map-information';
+import { initEdgeColumn } from './ui/edge-column';
 import { initMobileSheet } from './ui/mobile-sheet';
 import { initViewShell } from './ui/view-shell';
 import { initPlaceEmphasis } from './state/place-emphasis';
@@ -483,6 +485,10 @@ function wireMapDependentChrome(map: maplibregl.Map): void {
   // at-hand place picker is the ONE shared search (U3), which the sheet
   // mounts lazily on activation, so no deep-link/impact-panel callback is
   // injected here anymore.
+  // The phone shell's right-edge column (owner direction 2026-11-09 (sprint),
+  // DR-pending): built before the shell activates, so the first activation
+  // finds one column that owns every right-edge control's seat.
+  initEdgeColumn();
   initMobileSheet(map, { deepLinkBoot: select !== null });
 
   // The two doors (U1, D-ARCH-002): mode chrome and the Brief head, after
