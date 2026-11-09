@@ -53,6 +53,37 @@
   color: var(--ink-on-selected);
 }
 
+/* ---- Text-link buttons (the rule, the doors of a single-hazard detail) ---- */
+
+.lead-link {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 11.5px;
+  line-height: 1.3;
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-color: var(--ink-muted);
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.lead-link:hover {
+  color: var(--ink-strong);
+  text-decoration-color: var(--ink-strong);
+}
+.lead-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 18px;
+  margin: 0;
+}
+
 /* ---- The single-hazard head ---------------------------------------------- */
 
 .briefing-focus {
@@ -94,16 +125,17 @@
 .briefing-focus-title {
   margin: 0 0 4px;
   font-family: var(--font-display);
-  font-size: 15px;
+  font-size: 16px;
   font-weight: var(--fw-title);
-  color: var(--fg-0);
+  color: var(--ink-strong);
 }
-.briefing-focus-title:focus-visible {
+.briefing-focus-title:focus-visible,
+.lead-head .impact-section-title:focus-visible {
   outline: 2px solid var(--focus-inner);
   outline-offset: 2px;
 }
 .briefing-focus-note {
-  margin: 0 0 10px;
+  margin: 0 0 4px;
   font-size: 11.5px;
   line-height: 1.5;
   color: var(--fg-2);
@@ -118,13 +150,16 @@
 .lead-head {
   margin: 0 0 10px;
 }
-.lead-head .impact-section-title {
-  margin-bottom: 4px;
-  color: var(--fg-1);
+.lead-head-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0 12px;
 }
-.lead-head .impact-section-title:focus-visible {
-  outline: 2px solid var(--focus-inner);
-  outline-offset: 2px;
+.lead-head .impact-section-title {
+  margin: 0;
+  color: var(--fg-1);
 }
 .lead-order-note,
 .lead-caption {
@@ -135,20 +170,6 @@
 }
 .lead-caption + .lead-caption {
   margin-top: 4px;
-}
-.lead-rule {
-  appearance: none;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--ink);
-  font: inherit;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-  cursor: pointer;
-}
-.lead-rule:hover {
-  color: var(--ink-strong);
 }
 .lead-none {
   margin: 0 0 12px;
@@ -170,7 +191,6 @@
 }
 
 .lead-tiles,
-.lead-more-list,
 .lead-rest-list,
 .lead-together-list {
   margin: 0;
@@ -183,13 +203,13 @@
 }
 /* Every tile is the same size: first in the reading order is read first, it
    is not drawn larger, because the order is not a severity. */
-.lead-tile,
-.lead-more {
+.lead-tile {
   appearance: none;
   display: flex;
   flex-direction: column;
   gap: 6px;
   width: 100%;
+  height: 100%;
   min-height: 44px;
   padding: 11px 12px 10px;
   border: 1px solid var(--line-strong);
@@ -200,12 +220,10 @@
   text-align: left;
   cursor: pointer;
 }
-.lead-tile:hover,
-.lead-more:hover {
+.lead-tile:hover {
   border-color: var(--keyline);
 }
-.lead-tile:active,
-.lead-more:active {
+.lead-tile:active {
   background: var(--surface-hover);
 }
 .lead-tile-top {
@@ -222,52 +240,64 @@
   text-transform: uppercase;
   color: var(--fg-1);
 }
-.lead-tile .impact-claim-badge,
-.lead-more .impact-claim-badge,
-.lead-read-source .impact-claim-badge,
+.briefing-lead .impact-claim-badge,
 .evidence-chain .impact-claim-badge {
-  margin-bottom: 0;
   flex: none;
+  margin-bottom: 0;
 }
 .lead-headline {
   font-family: var(--font-display);
   font-size: 16px;
   font-weight: var(--fw-title);
-  line-height: 1.2;
+  line-height: 1.22;
   letter-spacing: -0.005em;
   color: var(--ink-strong);
   overflow-wrap: anywhere;
-}
-.lead-more-headline {
-  font-family: var(--font-display);
-  font-size: 13px;
-  font-weight: var(--fw-subtitle);
-  line-height: 1.25;
-  color: var(--ink-strong);
 }
 .lead-figure {
   display: block;
   margin: 2px 0 0;
 }
-.lead-reason {
+.lead-scope {
   font-size: 11.5px;
   line-height: 1.45;
   color: var(--fg-1);
 }
+/* The foot: whose read it is and when, and the way in to its text. */
+.lead-foot {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: auto;
+  padding-top: 2px;
+}
 .lead-source {
+  min-width: 0;
   font-size: 10.5px;
   line-height: 1.45;
   color: var(--fg-2);
   letter-spacing: 0.01em;
 }
+.lead-source-name,
+.lead-source-meta {
+  display: block;
+}
+.lead-source-meta {
+  color: var(--fg-1);
+}
+.lead-source-part {
+  white-space: nowrap;
+}
 .lead-open {
-  align-self: flex-end;
+  flex: none;
   display: inline-flex;
   align-items: center;
   gap: 6px;
   font-family: var(--font-display);
   font-size: 10.5px;
   font-weight: var(--fw-subtitle);
+  white-space: nowrap;
   color: var(--ink);
 }
 .lead-open::after {
@@ -278,33 +308,33 @@
   border-right: 1.5px solid currentColor;
   transform: rotate(45deg);
 }
-.lead-more-list {
-  display: grid;
-  gap: 6px;
-}
-.lead-more {
-  gap: 4px;
-  padding: 9px 12px;
-}
 
-/* Product flags: the issuer's own map colour as a keyed swatch BESIDE the
-   product's name. The name is the class; the colour is its echo. */
+/* Flags: the issuer's own map colour as a keyed swatch BESIDE the product's
+   name. The name is the class; the colour is its echo. */
 .lead-flags {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 12px;
+  gap: 4px 14px;
 }
 .lead-flag {
   display: inline-flex;
-  align-items: center;
-  gap: 6px;
+  align-items: flex-start;
+  gap: 8px;
   font-size: 11.5px;
   color: var(--fg-0);
+}
+.lead-headline .lead-flags {
+  flex-direction: column;
+}
+.lead-headline .lead-flag {
+  font: inherit;
+  color: inherit;
 }
 .lead-swatch {
   flex: none;
   width: 14px;
   height: 10px;
+  margin-top: 0.3em;
   border-radius: 2px;
   outline: 1px solid var(--keyline);
   outline-offset: 1px;
@@ -321,44 +351,55 @@
 
 /* ---- Present together ------------------------------------------------------ */
 
+/* A rail with a node per hazard. The rail joins; it has no direction and no
+   arrowhead, because being present together is not one thing leading to the
+   next. */
 .lead-together-list {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: stretch;
+  display: grid;
   margin: 0 0 8px;
   border: 1px solid var(--line-strong);
   border-radius: var(--glass-radius);
   background: var(--bg-2);
 }
-/* The joint between two hazards is a plain rule with a plus sign: together,
-   never one leading to the next. */
 .lead-together-item {
   position: relative;
-  flex: 1 1 96px;
+  display: grid;
+  grid-template-columns: 62px minmax(0, 1fr);
+  gap: 2px 8px;
+  align-items: baseline;
+  padding: 8px 12px 8px 32px;
+}
+.lead-together-item::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 15px;
+  width: 1px;
+  background: var(--ink-muted);
+}
+.lead-together-item:first-child::before {
+  top: 15px;
+}
+.lead-together-item:last-child::before {
+  bottom: calc(100% - 15px);
+}
+.lead-together-item::after {
+  content: '';
+  position: absolute;
+  top: 11px;
+  left: 11px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--ink-strong);
+  box-shadow: 0 0 0 2px var(--bg-2);
+}
+.lead-together-classes {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 2px;
   min-width: 0;
-  padding: 9px 12px;
-}
-.lead-together-item + .lead-together-item {
-  border-left: 1px solid var(--line-strong);
-}
-.lead-together-item + .lead-together-item::before {
-  content: '+';
-  position: absolute;
-  top: 50%;
-  left: 0;
-  transform: translate(-50%, -50%);
-  width: 15px;
-  height: 15px;
-  border: 1px solid var(--line-strong);
-  border-radius: 50%;
-  background: var(--bg-1);
-  color: var(--ink-soft);
-  font-size: 11px;
-  line-height: 13px;
-  text-align: center;
 }
 .lead-together-class {
   font-size: 11.5px;
@@ -366,15 +407,20 @@
   color: var(--ink-strong);
   overflow-wrap: anywhere;
 }
+.lead-together-scope {
+  font-size: 10.5px;
+  line-height: 1.35;
+  color: var(--fg-2);
+}
 
-/* ---- Also read here, and not read ---------------------------------------- */
+/* ---- Other reads and gaps -------------------------------------------------- */
 
 .lead-rest-list {
   margin-top: 8px;
   border-top: 1px solid var(--line);
 }
 .lead-rest-item {
-  padding: 4px 0 10px;
+  padding: 2px 0 10px;
   border-bottom: 1px solid var(--line);
 }
 .lead-rest-open {
@@ -392,7 +438,6 @@
   text-align: left;
 }
 .lead-rest-open .lead-open {
-  align-self: center;
   color: var(--ink-soft);
 }
 .lead-rest-open:hover .lead-open,
@@ -400,17 +445,26 @@
   color: var(--ink-strong);
 }
 .lead-read,
+.lead-text-read,
 .lead-state {
-  padding: 6px 0 2px;
+  padding: 7px 0 3px;
 }
-.lead-read + .lead-read,
-.lead-read + .lead-state,
-.lead-state + .lead-state,
-.lead-text-read + .lead-state {
+.lead-rest-item > :is(.lead-read, .lead-text-read, .lead-state) + :is(.lead-read, .lead-text-read, .lead-state) {
   border-top: 1px dashed var(--line);
 }
-.lead-read-words {
+.lead-state-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
   margin: 0 0 4px;
+}
+:is(.lead-read, .lead-text-read) > .lead-state-line {
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+.lead-read-words {
   font-size: 12.5px;
   line-height: 1.45;
   color: var(--fg-0);
@@ -424,19 +478,9 @@
 }
 .lead-read-source {
   margin: 4px 0 0;
-  font-size: 10.5px;
-  line-height: 1.6;
-  color: var(--fg-2);
-}
-.lead-state-line {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px 8px;
-  margin: 0 0 4px;
 }
 .lead-state-horizon {
-  font-size: 10.5px;
+  font-size: 11px;
   color: var(--fg-1);
 }
 
@@ -610,7 +654,7 @@
 }
 .ddm-gauge text {
   font-family: var(--font-body);
-  font-size: 9px;
+  font-size: 9.5px;
   fill: var(--ink-muted);
 }
 /* Unread classes keep a hairline so a class darker than the panel still
@@ -693,14 +737,64 @@
   fill: var(--ink-soft);
 }
 
+/* ---- Line breaks: no single word left alone where the browser can help ---- */
+
+.lead-headline,
+.briefing-focus-title,
+.evidence-chain-step,
+.evidence-chain-open {
+  text-wrap: balance;
+}
+.lead-order-note,
+.lead-caption,
+.lead-scope,
+.lead-none,
+.lead-read-words,
+.lead-read-caveat,
+.lead-state-note,
+.briefing-focus-note,
+.evidence-chain-caption,
+.evidence-chain-statement,
+.evidence-chain-note,
+.priority-rule-rows li {
+  text-wrap: pretty;
+}
+
 /* ---- Room for more than one column ---------------------------------------- */
 
 @container briefing-lead (min-width: 520px) {
   .lead-tiles {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .lead-more-list {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  /* The rail turns to run across, one column per hazard. */
+  .lead-together-list {
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+  }
+  .lead-together-item {
+    grid-template-columns: minmax(0, 1fr);
+    align-content: start;
+    padding: 30px 12px 10px;
+  }
+  .lead-together-item::before {
+    top: 15px;
+    right: 0;
+    bottom: auto;
+    left: 0;
+    width: auto;
+    height: 1px;
+  }
+  .lead-together-item:first-child::before {
+    top: 15px;
+    left: 16px;
+  }
+  .lead-together-item:last-child::before {
+    right: calc(100% - 16px);
+    bottom: auto;
+  }
+  .lead-together-item::after {
+    top: 11px;
+    left: 12px;
   }
 }
 @container evidence-chain (min-width: 640px) {
@@ -736,13 +830,9 @@
   .briefing-view-btn,
   .briefing-back,
   .lead-door,
+  .lead-link,
   .lead-rest-open,
   .evidence-chain-open {
-    min-height: 44px;
-  }
-  .lead-rule {
-    display: inline-flex;
-    align-items: center;
     min-height: 44px;
   }
 }
@@ -761,11 +851,10 @@
   .briefing-focus,
   .lead-doors,
   .lead-open,
-  .lead-rule {
+  .lead-link {
     display: none !important;
   }
   .lead-tile,
-  .lead-more,
   .lead-together-list,
   .evidence-chain-card {
     background: #fff;

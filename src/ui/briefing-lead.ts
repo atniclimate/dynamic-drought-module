@@ -42,7 +42,8 @@ import type {
   PriorityFamily,
   PriorityMember,
   PriorityOrder,
-  PriorityRest
+  PriorityRest,
+  PriorityUnrankedRead
 } from '../impact/priority';
 import type {
   ClaimReading,
@@ -97,18 +98,17 @@ export function renderViewSwitch(view: BriefingView): string {
  */
 export function renderFocusHead(): string {
   const door = (action: string, words: string): string =>
-    `<button type="button" class="lead-door" data-lead-action="${action}" data-lead-key="focus:${action}">${words}</button>`;
+    `<button type="button" class="lead-link" data-lead-action="${action}" data-lead-key="focus:${action}">${words}</button>`;
   return (
     `<section class="briefing-focus" aria-labelledby="briefing-focus-title" hidden>` +
-    `<button type="button" class="briefing-back" data-lead-action="lead" data-lead-key="focus:back">Back to the priority view</button>` +
+    `<button type="button" class="briefing-back" data-lead-action="lead" data-lead-key="focus:back">Priority view</button>` +
     `<h3 class="briefing-focus-title" id="briefing-focus-title" tabindex="-1"></h3>` +
-    `<p class="briefing-focus-note">The federal text for this hazard at all three horizons, exactly as the full detail holds it. Every claim names its source, its date and its method.</p>` +
-    `<div class="lead-doors">` +
-    door('rule', 'How the priority view is ordered') +
-    door('technical', 'Technical information') +
+    `<p class="briefing-focus-note">The federal text at all three horizons, as the full detail holds it. Each claim names its source, date and method.</p>` +
+    `<p class="lead-links">` +
+    door('rule', 'Method and technical information') +
     door('acknowledgements', 'Acknowledgements') +
     door('matrix', 'All four hazards') +
-    `</div>` +
+    `</p>` +
     `</section>`
   );
 }
@@ -228,7 +228,11 @@ function ensoGauge(reading: ClaimReading | null, state: GaugeState): string {
   });
 }
 
-/** NWS products in effect: each product's own map colour as a keyed flag beside its name. */
+/**
+ * NWS products in effect: each product's own map colour as a keyed flag
+ * beside its name. The name is the class; the flag echoes the colour the map
+ * draws the same product in.
+ */
 function nwsFlags(events: readonly string[]): string {
   return (
     `<span class="lead-flags">` +
@@ -242,14 +246,19 @@ function nwsFlags(events: readonly string[]): string {
   );
 }
 
+/** The map's own wildfire perimeter mark, beside a perimeter count. */
+function perimeterMark(): string {
+  return `<span class="lead-swatch lead-swatch-line" style="border-color:${escapeHtml(NIFC_INCIDENT_PRESENTATION.wildfire.lineColor)}"></span>`;
+}
+
 /** WFIGS perimeters: the counts by incident class, as the read carries them. */
 function wfigsCounts(reading: Extract<ClaimReading, { kind: 'wfigs-perimeters' }>): string {
+  // Only a mixed set needs the split: a wildfire-only count is the headline.
+  if (reading.prescribed === 0 && reading.other === 0) return '';
   const parts: string[] = [];
   const floor = reading.lowerBound ? 'at least ' : '';
   if (reading.wildfire > 0) {
-    parts.push(
-      `<span class="lead-flag"><span class="lead-swatch lead-swatch-line" style="border-color:${escapeHtml(NIFC_INCIDENT_PRESENTATION.wildfire.lineColor)}"></span>${floor}${reading.wildfire} wildfire</span>`
-    );
+    parts.push(`<span class="lead-flag">${perimeterMark()}${floor}${reading.wildfire} wildfire</span>`);
   }
   if (reading.prescribed > 0) {
     parts.push(
@@ -276,9 +285,8 @@ function familyFigure(family: PriorityFamily, members: readonly PriorityMember[]
     case 'enso':
       return ensoGauge(lead.reading, 'read');
     case 'nws':
-      return lead.reading.kind === 'nws-products' && lead.reading.events.length > 0
-        ? nwsFlags(lead.reading.events)
-        : '';
+      // The products are the headline itself (`headlineHtml`); no second figure.
+      return '';
     case 'wfigs':
       return lead.reading.kind === 'wfigs-perimeters' ? wfigsCounts(lead.reading) : '';
     default:
@@ -314,13 +322,23 @@ function unreadFigure(family: PriorityFamily, state: GaugeState): string {
 // Tiles and rows
 // ---------------------------------------------------------------------------
 
-/** Source, date and register: the line every figure carries on its surface. */
+/**
+ * Source, date and register: the line every figure carries on its surface.
+ * The register word (observed or outlook) is printed only where it says
+ * something the evidence badge beside it does not: a Classified HeatRisk read
+ * that is an outlook, a Derived read that is observed.
+ */
 function sourceLine(claim: SourcedClaim): string {
   const date = claimDateLine(claim);
+  const register = claimRegisterTag(claim);
+  const said = EVIDENCE_PRESENTATION[claim.evidence].label.toLowerCase() === register;
+  const meta =
+    (date ? `<span class="lead-source-part">${escapeHtml(date)}</span>` : '') +
+    (said ? '' : ` <span class="lead-source-part">(${escapeHtml(register)})</span>`);
   return (
-    `<span class="lead-source">${escapeHtml(claim.source)}` +
-    (date ? ` <span class="impact-claim-date">${escapeHtml(date)}</span>` : '') +
-    ` <span class="impact-claim-register">${escapeHtml(claimRegisterTag(claim))}</span></span>`
+    `<span class="lead-source"><span class="lead-source-name">${escapeHtml(claim.source)}</span>` +
+    (meta ? ` <span class="lead-source-meta">${meta}</span>` : '') +
+    `</span>`
   );
 }
 
@@ -332,7 +350,46 @@ function detailLabel(hazard: HazardKey): string {
   return `Opens the ${HAZARD_LABELS[hazard]} detail: federal text, method, acknowledgements and source link.`;
 }
 
-/** One ranked entry as a full tile. The whole tile is the button. */
+/** The class in the issuer's words, with the issuer's own mark where it has one. */
+function headlineHtml(entry: PriorityEntry): string {
+  const reading = entry.lead.reading;
+  if (reading.kind === 'nws-products') return nwsFlags(reading.events);
+  if (reading.kind === 'wfigs-perimeters') {
+    return `<span class="lead-flag">${perimeterMark()}${escapeHtml(entry.headline)}</span>`;
+  }
+  return escapeHtml(entry.headline);
+}
+
+/**
+ * Where and for what the read holds, in one short line. It never repeats the
+ * headline, and for the one read that is not about this place (the ENSO
+ * index) it says so first.
+ */
+function scopeWords(entry: PriorityEntry): string {
+  const reading = entry.lead.reading;
+  switch (reading.kind) {
+    case 'nws-products':
+      return 'In effect at the selected point.';
+    case 'wfigs-perimeters':
+      return 'Current perimeters in the bounding box around this selection, which is wider than the place.';
+    case 'usdm-category':
+      return 'This week\'s map, at the selected point.';
+    case 'heatrisk-level':
+      return 'One 24-hour period, at the selected point.';
+    case 'spc-fire-days':
+      return 'At the selected point: Days 1 and 2 by category, Days 3 to 8 by probability.';
+    case 'enso-index':
+      return `A tropical Pacific index, not a read of this place: ${reading.index} ${signedIndex(reading.value)}, ${reading.season} ${reading.year}${reading.preliminary ? ', preliminary' : ''}.`;
+    default:
+      return '';
+  }
+}
+
+/**
+ * One ranked entry as a tile. The whole tile is the button. Every tile is
+ * built the same way and drawn the same size, first or last: the order is a
+ * reading order, so nothing about a tile's weight follows from its place.
+ */
 function renderTile(entry: PriorityEntry): string {
   const claim = entry.lead.claim;
   const pres = EVIDENCE_PRESENTATION[claim.evidence];
@@ -346,25 +403,10 @@ function renderTile(entry: PriorityEntry): string {
     `<button type="button" class="lead-tile ${pres.cssClass}" data-lead-action="detail" data-lead-hazard="${entry.hazard}" ` +
     `data-lead-row="${entry.row}" data-lead-key="tile:${entry.hazard}:${entry.family}" aria-label="${escapeHtml(name)}">` +
     `<span class="lead-tile-top"><span class="lead-hazard">${escapeHtml(HAZARD_LABELS[entry.hazard])}</span>${badge(claim)}</span>` +
-    `<span class="lead-headline">${escapeHtml(entry.headline)}</span>` +
+    `<span class="lead-headline">${headlineHtml(entry)}</span>` +
     (figure ? `<span class="lead-figure">${figure}</span>` : '') +
-    `<span class="lead-reason">${escapeHtml(entry.reason)}</span>` +
-    sourceLine(claim) +
-    `<span class="lead-open" aria-hidden="true">Federal text and source</span>` +
-    `</button></li>`
-  );
-}
-
-/** A ranked entry past the tile limit: one compact row, still in order, still one tap from its detail. */
-function renderMoreRow(entry: PriorityEntry): string {
-  const claim = entry.lead.claim;
-  const pres = EVIDENCE_PRESENTATION[claim.evidence];
-  return (
-    `<li><button type="button" class="lead-more ${pres.cssClass}" data-lead-action="detail" data-lead-hazard="${entry.hazard}" ` +
-    `data-lead-key="more:${entry.hazard}:${entry.family}" aria-label="${escapeHtml(`${HAZARD_LABELS[entry.hazard]}: ${entry.reason}. ${detailLabel(entry.hazard)}`)}">` +
-    `<span class="lead-tile-top"><span class="lead-hazard">${escapeHtml(HAZARD_LABELS[entry.hazard])}</span>${badge(claim)}</span>` +
-    `<span class="lead-more-headline">${escapeHtml(entry.headline)}</span>` +
-    sourceLine(claim) +
+    `<span class="lead-scope">${escapeHtml(scopeWords(entry))}</span>` +
+    `<span class="lead-foot">${sourceLine(claim)}<span class="lead-open" aria-hidden="true">Federal text</span></span>` +
     `</button></li>`
   );
 }
@@ -399,51 +441,68 @@ function renderState(hazard: HazardKey, state: PriorityCellState, familiesRead: 
   );
 }
 
-/** A hazard's reads that hold no ranked class, and its cells that were not read. */
+/** A family that was read and holds no ranked class: its figure at the read position, in the issuer's words. */
+function renderUnrankedRead(read: PriorityUnrankedRead): string {
+  const lead = read.members[0]!;
+  const pres = EVIDENCE_PRESENTATION[lead.claim.evidence];
+  const figure = familyFigure(read.family, read.members, lead);
+  // Where typed data can state the read it does; otherwise the claim's own
+  // short sentence stands, whole. USDM's no-polygon sentence always follows
+  // its figure, because its caveat is the claim.
+  const words = read.headline ?? lead.claim.text;
+  const caveat =
+    lead.reading.kind === 'usdm-category' && lead.reading.dm === null
+      ? `<p class="lead-read-caveat">${escapeHtml(lead.claim.text)}</p>`
+      : '';
+  return (
+    `<div class="lead-read ${pres.cssClass}">` +
+    `<p class="lead-state-line"><span class="lead-read-words">${escapeHtml(words)}</span>${badge(lead.claim)}</p>` +
+    (figure ? `<div class="lead-figure">${figure}</div>` : '') +
+    caveat +
+    `<p class="lead-read-source">${sourceLine(lead.claim)}</p>` +
+    `</div>`
+  );
+}
+
+/**
+ * A read with no class to draw: named by its horizon, source and date, with
+ * its sentence one tap away. Nothing of the sentence is cut here.
+ */
+function renderTextRead(horizon: HorizonKey, claim: SourcedClaim): string {
+  return (
+    `<div class="lead-text-read ${EVIDENCE_PRESENTATION[claim.evidence].cssClass}">` +
+    `<p class="lead-state-line"><span class="lead-state-horizon">${escapeHtml(horizonWord(horizon))}</span>${badge(claim)}</p>` +
+    `<p class="lead-read-source">${sourceLine(claim)}</p></div>`
+  );
+}
+
+/**
+ * A hazard's reads that hold no ranked class, and its cells that were not
+ * read, laid out by horizon (Current Conditions, then Near Term) so each sits
+ * under the clock it speaks for.
+ */
 function renderRest(item: PriorityRest, order: PriorityOrder): string {
   const familiesRead = new Set<PriorityFamily>([
     ...item.reads.map((read) => read.family),
     ...order.ranked.filter((entry) => entry.hazard === item.hazard).map((entry) => entry.family)
   ]);
-  const reads = item.reads
-    .map((read) => {
-      const lead = read.members[0]!;
-      const pres = EVIDENCE_PRESENTATION[lead.claim.evidence];
-      const figure = familyFigure(read.family, read.members, lead);
-      // Where typed data can state the read it does; otherwise the claim's own
-      // short sentence stands, whole. USDM's no-polygon sentence always
-      // follows its figure, because its caveat is the claim.
-      const words = read.headline ?? lead.claim.text;
-      const caveat =
-        lead.reading.kind === 'usdm-category' && lead.reading.dm === null
-          ? `<p class="lead-read-caveat">${escapeHtml(lead.claim.text)}</p>`
-          : '';
-      return (
-        `<div class="lead-read ${pres.cssClass}">` +
-        `<p class="lead-read-words">${escapeHtml(words)}</p>` +
-        (figure ? `<div class="lead-figure">${figure}</div>` : '') +
-        caveat +
-        `<p class="lead-read-source">${badge(lead.claim)} ${sourceLine(lead.claim)}</p>` +
-        `</div>`
-      );
-    })
-    .join('');
-  const texts = item.texts
-    .map(
-      ({ horizon, claim }) =>
-        `<p class="lead-read-source lead-text-read ${EVIDENCE_PRESENTATION[claim.evidence].cssClass}">${badge(claim)} ` +
-        `<span class="lead-state-horizon">${escapeHtml(horizonWord(horizon))}</span> ${sourceLine(claim)}</p>`
-    )
-    .join('');
-  const states = item.states.map((state) => renderState(item.hazard, state, familiesRead)).join('');
+  const blocks: Array<{ readonly horizon: HorizonKey; readonly html: string }> = [
+    ...item.reads.map((read) => ({ horizon: read.members[0]!.horizon, html: renderUnrankedRead(read) })),
+    ...item.texts.map(({ horizon, claim }) => ({ horizon, html: renderTextRead(horizon, claim) })),
+    ...item.states.map((state) => ({
+      horizon: state.horizon,
+      html: renderState(item.hazard, state, familiesRead)
+    }))
+  ];
+  const body = HORIZON_KEYS.flatMap((horizon) =>
+    blocks.filter((block) => block.horizon === horizon).map((block) => block.html)
+  ).join('');
   return (
     `<li class="lead-rest-item" data-lead-hazard="${item.hazard}">` +
     `<button type="button" class="lead-rest-open" data-lead-action="detail" data-lead-hazard="${item.hazard}" data-lead-key="rest:${item.hazard}" ` +
     `aria-label="${escapeHtml(`${HAZARD_LABELS[item.hazard]}. ${detailLabel(item.hazard)}`)}">` +
-    `<span class="lead-hazard">${escapeHtml(HAZARD_LABELS[item.hazard])}</span><span class="lead-open" aria-hidden="true">Detail</span></button>` +
-    reads +
-    texts +
-    states +
+    `<span class="lead-hazard">${escapeHtml(HAZARD_LABELS[item.hazard])}</span><span class="lead-open" aria-hidden="true">Federal text</span></button>` +
+    body +
     `</li>`
   );
 }
@@ -485,7 +544,12 @@ function renderTogether(order: PriorityOrder, now: number): string {
       const own = present.filter((entry) => entry.hazard === hazard);
       return (
         `<li class="lead-together-item"><span class="lead-hazard">${escapeHtml(HAZARD_LABELS[hazard])}</span>` +
-        own.map((entry) => `<span class="lead-together-class">${escapeHtml(entry.headline)}</span>`).join('') +
+        `<span class="lead-together-classes">${own
+          .map((entry) => `<span class="lead-together-class">${escapeHtml(entry.headline)}</span>`)
+          .join('')}${
+          // The index is present in the same weeks, not in this place.
+          hazard === 'enso' ? `<span class="lead-together-scope">tropical Pacific index, not a read of this place</span>` : ''
+        }</span>` +
         `</li>`
       );
     })
@@ -501,7 +565,7 @@ function renderTogether(order: PriorityOrder, now: number): string {
     `<section class="lead-together" aria-labelledby="lead-together-title">` +
     `<h4 class="lead-subtitle" id="lead-together-title">Present together here</h4>` +
     `<ul class="lead-together-list">${chips}</ul>` +
-    `<p class="lead-caption">Each holds a ranked read for this place on ${escapeHtml(dayWords(now))}. They are separate issuer products on their own clocks, shown together because they are present together. DDM draws no cause between them.</p>` +
+    `<p class="lead-caption">Each holds a ranked read on ${escapeHtml(dayWords(now))}. They are separate issuer products on their own clocks, joined here only because they are present together. DDM draws no cause between them.</p>` +
     (unread.length > 0
       ? `<p class="lead-caption">Not fully read for this moment: ${escapeHtml(unread.join(', '))}. This strip joins only what was read.</p>`
       : '') +
@@ -654,20 +718,22 @@ export function renderLeadView(briefing: ImpactBriefing, now: number = Date.now(
   const order = orderBriefing(cellsOf(briefing));
   const tiles = order.ranked.slice(0, LEAD_TILE_MAX);
   const more = order.ranked.slice(LEAD_TILE_MAX);
-  const rule = `<button type="button" class="lead-rule" data-lead-action="rule" data-lead-key="head:rule">How this is ordered</button>`;
+  const rule = `<button type="button" class="lead-link" data-lead-action="rule" data-lead-key="head:rule">How this is ordered</button>`;
   const lead =
     tiles.length > 0
       ? `<ol class="lead-tiles">${tiles.map(renderTile).join('')}</ol>`
       : `<p class="lead-none">No read here holds a class in the reading order yet. That is not an all-clear: each hazard is listed below at its own state.</p>`;
+  // Past the first few, the order simply continues: the same tiles, under
+  // their own heading, so no ranked read loses its figure or its place.
   const further =
     more.length > 0
-      ? `<h4 class="lead-subtitle">Next in the reading order</h4><ol class="lead-more-list">${more.map(renderMoreRow).join('')}</ol>`
+      ? `<h4 class="lead-subtitle">Next in the reading order</h4><ol class="lead-tiles" start="${LEAD_TILE_MAX + 1}">${more.map(renderTile).join('')}</ol>`
       : '';
   const rest =
     order.rest.length > 0
       ? `<section class="lead-rest" aria-labelledby="lead-rest-title">` +
-        `<h4 class="lead-subtitle" id="lead-rest-title">Also read here, and not read</h4>` +
-        `<p class="lead-caption">Reads with no class in the reading order, in the issuer's words, and anything that was not read. Neither is an all-clear.</p>` +
+        `<h4 class="lead-subtitle" id="lead-rest-title">Other reads and gaps</h4>` +
+        `<p class="lead-caption">Reads that hold no class in the reading order, in the issuer's words, and anything that was not read. Neither is an all-clear.</p>` +
         `<ul class="lead-rest-list">${order.rest.map((item) => renderRest(item, order)).join('')}</ul>` +
         `</section>`
       : '';
@@ -680,8 +746,8 @@ export function renderLeadView(briefing: ImpactBriefing, now: number = Date.now(
   return (
     `<section class="briefing-lead" aria-labelledby="briefing-lead-title">` +
     `<div class="lead-head">` +
-    `<h3 class="impact-section-title" id="briefing-lead-title" tabindex="-1">What leads here</h3>` +
-    `<p class="lead-order-note">${escapeHtml(PRIORITY_ORDER_NOTE)} ${rule}</p>` +
+    `<div class="lead-head-row"><h3 class="impact-section-title" id="briefing-lead-title" tabindex="-1">What leads here</h3>${rule}</div>` +
+    `<p class="lead-order-note">${escapeHtml(PRIORITY_ORDER_NOTE)}</p>` +
     `</div>` +
     lead +
     further +
@@ -690,7 +756,7 @@ export function renderLeadView(briefing: ImpactBriefing, now: number = Date.now(
     chain +
     `<div class="lead-doors">` +
     `<button type="button" class="lead-door" data-lead-action="matrix" data-lead-key="door:matrix">Full detail: every hazard at three horizons</button>` +
-    `<button type="button" class="lead-door" data-lead-action="rule" data-lead-key="door:rule">How this is ordered</button>` +
+    `<button type="button" class="lead-door" data-lead-action="rule" data-lead-key="door:rule">Method: how this is ordered</button>` +
     `</div>` +
     `</section>`
   );

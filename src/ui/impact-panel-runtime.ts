@@ -157,6 +157,13 @@ let panelSelection: PlaceSelection | null = null;
 let briefingView: BriefingView | null = null;
 
 /**
+ * The shell's default for the briefing now open, taken once when it opens:
+ * a reader who turns a tablet or resizes a window mid-read keeps the view
+ * they are reading, and only the next place open asks the shell again.
+ */
+let openDefaultView: BriefingView = 'matrix';
+
+/**
  * The one hazard whose cells the full detail is narrowed to, after a tile was
  * opened; null for all four. The cells themselves are the matrix's own nodes:
  * narrowing hides the other hazards' cells and never moves one.
@@ -387,9 +394,9 @@ function phoneShell(): boolean {
   return document.getElementById('app')?.hasAttribute('data-sheet-detent') ?? false;
 }
 
-/** The reader's choice, or the shell's default: priority on phones, full detail elsewhere. */
+/** The reader's choice, or the default the shell gave this briefing when it opened. */
 function currentBriefingView(): BriefingView {
-  return briefingView ?? (phoneShell() ? 'lead' : 'matrix');
+  return briefingView ?? openDefaultView;
 }
 
 /**
@@ -455,7 +462,10 @@ function openHazardDetail(hazard: HazardKey, openerKey: string | null): void {
   focusOpenerKey = openerKey;
   applyBriefingView();
   announceBriefingView(`${HAZARD_LABELS[hazard]} detail.`);
-  focusInView(bodyEl.querySelector<HTMLElement>('.briefing-focus-title'), 'start');
+  // The head comes into view whole (the way back sits above the title);
+  // focus lands on the title, so a screen reader hears what opened.
+  bodyEl.querySelector<HTMLElement>(':scope > .briefing-focus')?.scrollIntoView({ block: 'start' });
+  bodyEl.querySelector<HTMLElement>('.briefing-focus-title')?.focus({ preventScroll: true });
 }
 
 /** Open one of the body's own disclosures and land on a node inside it. */
@@ -1145,9 +1155,11 @@ export function openImpactPanel(
   }
   activeBriefing = briefing;
   activeImpactUnavailableNote = unavailableNote;
-  // A new place opens on the whole view, never on the last place's one hazard.
+  // A new place opens on the whole view, never on the last place's one hazard,
+  // and asks the shell for its default: priority on phones, full detail elsewhere.
   focusHazard = null;
   focusOpenerKey = null;
+  openDefaultView = phoneShell() ? 'lead' : 'matrix';
 
   // The panel takes ownership of the place selection for this briefing (see
   // the panelSelection doc comment above; the stage-5 majors 3/4 fix). The

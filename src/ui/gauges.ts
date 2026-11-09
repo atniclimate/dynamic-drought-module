@@ -146,7 +146,8 @@ function caret(cx: number, tipY: number): string {
  */
 export function classGaugeSvg(options: ClassGaugeOptions): string {
   const { classes, state } = options;
-  const H = 40;
+  // An unread scale has no tick row, so it is drawn on a shorter canvas.
+  const H = state === 'read' ? 40 : 28;
   const mid = 18;
   const thin = 8;
   const tall = 16;
@@ -191,7 +192,7 @@ export function classGaugeSvg(options: ClassGaugeOptions): string {
 
   if (state === 'unavailable') inner += hatch(0, mid - thin / 2, W, thin);
   if (state === 'no-data') {
-    inner += `<path class="g-nodata" d="M${n1(W / 2 - 7)} ${H - 6}H${n1(W / 2 + 7)}"/>`;
+    inner += `<path class="g-nodata" d="M${n1(W / 2 - 7)} ${mid}H${n1(W / 2 + 7)}"/>`;
   }
   return frame(H, options.title, 'class', state, inner);
 }
