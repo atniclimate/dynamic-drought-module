@@ -28,6 +28,7 @@ import { selectBriefNarrativeLine } from '../impact/brief-narrative-selector';
 import { getViewMode, setViewMode } from '../state/view-mode';
 import { escapeHtml } from '../util/escape';
 import { TRIBAL_NATIONS_GROUP } from '../config/layer-groups';
+import { SHEET_DRAWER_QUERY } from '../config/sheet-detents';
 import { enterPlaceStudio } from '../state/studio-route';
 import {
   toggleTribalNationsGroup,
@@ -98,6 +99,12 @@ let motion: SheetMotion | null = null;
 let motionAsked = false;
 
 /**
+ * A text entry raised the sheet to full (see the focus rule in
+ * `initMobileSheet`). Cleared as soon as the sheet leaves full by any road.
+ */
+let raisedForEntry = false;
+
+/**
  * Whether a briefing open may auto-raise the CLOSED sheet to half. The
  * map-first boot must stay closed, so the raise is earned by either a
  * real user gesture (the first pointer or key event) or a `?select=`
@@ -144,7 +151,21 @@ export function sheetAllowsAutoRaise(): boolean {
   return userInteracted || deepLinkRaise;
 }
 
-/** Subscribe to detent settles (after the height transition and map.resize). */
+/**
+ * The bottom band, in px, a camera fit should keep clear so the place it
+ * frames is not left under the sheet: the half stop (half the window) while
+ * the phone sheet is active in its bottom form, and 0 on desktop, in an
+ * embed and for the landscape drawer. A fit made with the sheet closed or at
+ * full uses it too: the briefing it frames answers at half, or is one drag
+ * from it. Transient fit padding only; the map's own padding stays zero, so
+ * Reset and a shared link frame exactly as before.
+ */
+export function sheetCameraInset(): number {
+  if (detent === null || window.matchMedia(SHEET_DRAWER_QUERY).matches) return 0;
+  return Math.round(window.innerHeight / 2);
+}
+
+/** Subscribe to detent settles (after the sheet comes to rest and map.resize). */
 export function onSheetDetentSettle(fn: (active: SheetDetent | null) => void): () => void {
   settleListeners.add(fn);
   return () => {
@@ -197,6 +218,7 @@ export function setSheetDetent(next: SheetDetent, opts: { announce?: boolean } =
   if (next === detent) return;
   const from = detent;
   detent = next;
+  if (next !== 'full') raisedForEntry = false;
   if (next === 'closed') {
     // Closing by any road clears the open door. Focus that was inside the
     // sheet returns to that door (or to the map when no door claimed it),
@@ -283,8 +305,17 @@ function loadMotion(): void {
  * as the honest "open the full report" line).
  */
 export function setSheetBriefing(briefing: ImpactBriefing | null): void {
+  const chosen = briefing !== null && briefing !== sheetBriefing;
   sheetBriefing = briefing;
   renderAtHand();
+  // A place chosen from a text entry that raised the sheet answers at half,
+  // where the map shows it above the sheet; the full report stays one press
+  // away. The Brief door is the report door, so it keeps full.
+  if (chosen && raisedForEntry && detent === 'full' && activeTab !== 'brief') {
+    const held = sidebarEl?.contains(document.activeElement) ?? false;
+    setSheetDetent('half');
+    if (held) document.getElementById('sheet-report-door')?.focus();
+  }
 }
 
 /** The critical-first point-heat or current-horizon line, when available. */
@@ -628,7 +659,10 @@ export function initMobileSheet(
       target instanceof HTMLTextAreaElement ||
       (target instanceof HTMLInputElement && /^(text|search)$/.test(target.type));
     if (typing && !sidebarEl?.querySelector('#sheet-report .impact-panel.open')) {
-      setSheetDetent('full');
+      if (detent !== 'full') {
+        raisedForEntry = true;
+        setSheetDetent('full');
+      }
     } else if (detent === 'peek') {
       setSheetDetent('half');
     }
