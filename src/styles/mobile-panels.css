@@ -180,12 +180,13 @@
   }
   #app[data-sheet-detent] .sheet-grabber {
     position: absolute;
-    inset: 0;
+    /* Up to the close control, never under it: two targets, no overlap. */
+    inset: 0 calc(var(--touch-target) + 4px) 0 0;
     display: block;
-    width: 100%;
+    width: auto;
     min-height: var(--touch-target);
     padding: 0;
-    border-radius: var(--sheet-radius) var(--sheet-radius) 0 0;
+    border-radius: var(--sheet-radius) 0 0 0;
     cursor: grab;
     touch-action: none;
     -webkit-tap-highlight-color: transparent;
@@ -196,7 +197,9 @@
   #app[data-sheet-detent] .sheet-grabber-bar {
     position: absolute;
     top: 7px;
-    left: 50%;
+    /* Centred on the sheet, not on the button, which stops short of the
+       close control. */
+    left: calc(50% + (var(--touch-target) + 4px) / 2);
     width: 36px;
     height: 4px;
     margin-left: -18px;
