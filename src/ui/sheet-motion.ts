@@ -72,7 +72,6 @@ import type { DragSample } from '../util/gesture';
 import { prefersReducedMotion } from '../util/motion';
 import { runSpring } from '../util/spring';
 import type { SpringRun } from '../util/spring';
-import { getSheetDetent, setSheetDetent } from './mobile-sheet';
 import type { SheetDetent, SheetMotion, SheetMotionHost } from './mobile-sheet';
 
 const CLOSE_GLYPH =
@@ -268,7 +267,7 @@ export function attachSheetMotion(
   };
 
   const onStart = (): void => {
-    const at = getSheetDetent();
+    const at = host.detent();
     startStop = at ?? 'half';
     halt();
     begin(startStop);
@@ -293,7 +292,7 @@ export function attachSheetMotion(
       stops.map((stop) => offsets[stop])
     );
     const to = stops.find((stop) => offsets[stop] === landing) ?? startStop;
-    if (to === getSheetDetent()) {
+    if (to === host.detent()) {
       run(to, velocity, () => {
         rest();
         host.settle();
@@ -302,11 +301,11 @@ export function attachSheetMotion(
     }
     flick = velocity;
     released = true;
-    setSheetDetent(to);
+    host.request(to);
   };
 
   const open = (): boolean => {
-    const at = getSheetDetent();
+    const at = host.detent();
     return at !== null && at !== 'closed';
   };
 
@@ -388,10 +387,10 @@ export function attachSheetMotion(
   // -------------------------------------------------------------------------
 
   const step = (kind: SheetStep): void => {
-    const at = getSheetDetent();
+    const at = host.detent();
     if (!at) return;
     const next = stepStop(at, kind);
-    if (next !== at) setSheetDetent(next);
+    if (next !== at) host.request(next);
   };
   grabber?.addEventListener('click', () => step('next'));
   grabber?.addEventListener('keydown', (event) => {
@@ -410,7 +409,7 @@ export function attachSheetMotion(
   close.setAttribute('aria-label', 'Close the panel');
   close.innerHTML = CLOSE_GLYPH;
   // The controller returns focus to the open door when the sheet closes.
-  close.addEventListener('click', () => setSheetDetent('closed'));
+  close.addEventListener('click', () => host.request('closed'));
   head?.append(title, close);
 
   /**

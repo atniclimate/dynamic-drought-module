@@ -71,8 +71,15 @@ let detent: SheetDetent | null = null;
 /** The open door, or null: a closed sheet, or one raised by something else. */
 let activeTab: SheetTab | null = null;
 
-/** What the motion module asks of this controller. */
+/**
+ * What the motion module asks of this controller. Handed over as an object,
+ * not imported, so the lazy module has no runtime tie to this eager one.
+ */
 export interface SheetMotionHost {
+  /** The logical stop, as `getSheetDetent`. */
+  detent(): SheetDetent | null;
+  /** Ask for a stop, as `setSheetDetent`. */
+  request(next: SheetDetent): void;
   /** Stamp the logical stop and door on #app; the content follows. */
   present(): void;
   /** The sheet came to rest: resize the map and tell the listeners. */
@@ -249,7 +256,13 @@ function loadMotion(): void {
   motionAsked = true;
   void import('./sheet-motion')
     .then(({ attachSheetMotion }) => {
-      if (appEl && sidebarEl) motion = attachSheetMotion(appEl, sidebarEl, { present, settle });
+      if (!appEl || !sidebarEl) return;
+      motion = attachSheetMotion(appEl, sidebarEl, {
+        detent: getSheetDetent,
+        request: setSheetDetent,
+        present,
+        settle
+      });
     })
     .catch((err: unknown) => {
       motionAsked = false;
