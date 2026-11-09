@@ -3938,21 +3938,25 @@ button.conditions-metric:hover .conditions-action-hide {
 }
 
 /* ----------------------------------------------------------------------------
-   The mobile bottom sheet (0.7.0 U2; ratified detent model D-0.7.0-017).
+   The phone sheet's content (0.7.0 U2; detent model D-0.7.0-017; the sheet
+   form is owner direction 2026-11-09 (sprint), DR-pending).
 
    Below 720px, when src/ui/mobile-sheet.ts stamps `data-sheet-detent` on
-   #app, the sidebar element becomes the ONE bottom sheet over a
-   full-viewport map. Three detents, keyed off the attribute plus the
-   existing view-brief/view-console mode classes: peek (the conditions
-   strip and its date register), half (the at-hand answer in Brief, the
-   compact controls in console), full (the standalone report in Brief,
-   the whole catalog stack in console).
+   #app, the sidebar element becomes the ONE sheet over a full-viewport
+   map. This section decides WHICH content shows, keyed off that attribute,
+   the open door (`data-sheet-tab`) and the view-brief/view-console mode
+   classes: peek and half show the same content at two heights (the at-hand
+   answer in Brief, the compact controls in console, the Alerts pane behind
+   its door), so a drag between them never swaps what is under the finger;
+   full adds the standalone report in Brief and the whole catalog stack in
+   console.
+
+   The sheet itself (its glass, its heights, its header, its seat beside
+   the right-edge column) is src/styles/mobile-panels.css.
 
    The attribute never appears in embed (`?embed=true` keeps today's
    hidden-chrome semantics byte for byte) and never on desktop; without
    it, the stacked-rows block above is the no-JavaScript fallback.
-   `--sheet-peek` and `--sheet-half` are optional overrides that no
-   script sets; the literals in the rules below are the sheet's values.
    ---------------------------------------------------------------------------- */
 
 /* Sheet-only furniture never renders outside the active sheet. */
@@ -3966,93 +3970,6 @@ button.conditions-metric:hover .conditions-action-hide {
 }
 
 @media (max-width: 720px) {
-  /* The mobile shell (2026-07-14, from the ratified 2026-07-11 mockup):
-     the footer nav is the base chrome; the sheet rides ABOVE it, so the
-     home-indicator safe area belongs to the footer alone and the detent
-     heights never compose it (the Codex-sol geometry ruling). */
-  #app[data-sheet-detent] {
-    --mobile-footer-h: calc(var(--sheet-footer, 56px) + env(safe-area-inset-bottom, 0px));
-  }
-
-  /* Detent heights: the one place the attribute becomes a height. Closed
-     is the edgeless map-first state; full leaves the top gap so the key
-     bar and a strip of map keep the context (the mockup's 86px band). */
-  #app[data-sheet-detent='closed'] { --sheet-height: 0px; }
-  #app[data-sheet-detent='peek'] { --sheet-height: var(--sheet-peek, 132px); }
-  #app[data-sheet-detent='half'] { --sheet-height: calc(100vh * var(--sheet-half, 0.46)); }
-  #app[data-sheet-detent='full'] {
-    --sheet-height: calc(100vh - var(--mobile-footer-h) - var(--sheet-full-gap, 72px));
-  }
-  @supports (height: 1dvh) {
-    #app[data-sheet-detent='half'] { --sheet-height: calc(100dvh * var(--sheet-half, 0.46)); }
-    #app[data-sheet-detent='full'] {
-      --sheet-height: calc(100dvh - var(--mobile-footer-h) - var(--sheet-full-gap, 72px));
-    }
-  }
-
-  /* The map takes the whole shell; the sheet leaves the grid flow. */
-  #app:not(.embed)[data-sheet-detent] {
-    grid-template-columns: 1fr;
-    grid-template-rows: 1fr;
-  }
-
-  #app[data-sheet-detent] .sidebar {
-    position: fixed;
-    top: auto;
-    left: 0;
-    right: 0;
-    /* Above the footer nav: the footer carries the safe-area inset, so
-       the sheet's own geometry stays inset-free (no double count). */
-    bottom: var(--mobile-footer-h, 56px);
-    width: auto;
-    max-height: none;
-    height: var(--sheet-height, 132px);
-    z-index: var(--z-sheet);
-    border-right: none;
-    border-bottom: none;
-    border-top: 1px solid var(--line-strong);
-    border-top-left-radius: var(--radius-lg);
-    border-top-right-radius: var(--radius-lg);
-    box-shadow: 0 -10px 32px rgba(0, 0, 0, 0.55);
-    transition: height 0.25s ease;
-    /* Override the base .sidebar clip: .sidebar-scroll clips the content
-       itself, and the first-peek hint floats ABOVE the sheet's top edge
-       (the inherited overflow:hidden swallowed it; matrix finding,
-       2026-07-10). */
-    overflow: visible;
-  }
-
-  /* Closed: the edgeless map-first state (the mockup's rule 3: with no
-     active door, no grabber or sheet edge peeks above the footer). The
-     height transition animates the collapse, then the delayed visibility
-     flip hides the box outright (padding would otherwise keep a sliver
-     painted); opening reads the base rule's transition, so the sheet
-     reappears instantly and slides up. */
-  #app[data-sheet-detent='closed'] .sidebar {
-    border-top: none;
-    box-shadow: none;
-    overflow: hidden;
-    visibility: hidden;
-    pointer-events: none;
-    transition: height 0.25s ease, visibility 0s linear 0.25s;
-  }
-
-  /* Content scrolls internally at half and full (the mockup's sheet body
-     scrolls at both open depths; the 2026-07-14 build adopted that,
-     retiring the MINOR 6 below-the-fold trap at half-console). Peek stays
-     clipped (it IS the strip); scroll chaining never reaches the page,
-     and the bottom padding keeps the last row clear of the sheet edge. */
-  #app[data-sheet-detent] .sidebar-scroll {
-    overflow: hidden;
-    overscroll-behavior: contain;
-    padding: 0 0 10px;
-  }
-  #app[data-sheet-detent='half'] .sidebar-scroll,
-  #app[data-sheet-detent='full'] .sidebar-scroll {
-    overflow-y: auto;
-    padding-bottom: 18px;
-  }
-
   /* --------------------------------------------------------------------------
      The visibility matrix: hide everything, then re-admit per detent and
      mode. `[hidden]` sections (strip before first data, brief-head in
@@ -4063,20 +3980,14 @@ button.conditions-metric:hover .conditions-action-hide {
   #app[data-sheet-detent] .sidebar-footer,
   #app[data-sheet-detent] .sidebar-scroll > * { display: none; }
 
-  /* The grabber row: every detent. */
+  /* The header strip (the grabber, the title, the close control): every
+     open detent. */
   #app[data-sheet-detent] .sheet-grabber-row {
     display: flex;
-    justify-content: center;
-    flex-shrink: 0;
-    position: relative;
   }
 
-  /* Peek: the conditions strip (the collapsed detent IS the strip),
-     compacted so the tiles and the date register fit. At half the strip
-     stays OUT (the mockup's half panes carry no tiles, and the strip was
-     exactly the MINOR 6 duplication that pushed the at-hand answer and
-     the console door below the fold on short phones). */
-  #app[data-sheet-detent='peek'] #conditions-strip:not([hidden]) { display: block; }
+  /* The conditions strip keeps its compact phone form for the full console
+     stack, the one place the sheet shows it. */
   #app[data-sheet-detent] #conditions-strip {
     padding: 4px 14px 8px;
     border-bottom: none;
@@ -4084,10 +3995,14 @@ button.conditions-metric:hover .conditions-action-hide {
   }
   #app[data-sheet-detent] #conditions-strip .conditions-head { margin-bottom: 6px; }
 
-  /* Half, Brief: the at-hand answer. */
+  /* Peek and half, Brief: the at-hand answer. */
+  #app[data-sheet-detent='peek'].view-brief #sheet-at-hand,
   #app[data-sheet-detent='half'].view-brief #sheet-at-hand { display: block; }
 
-  /* Half, console: the compact controls and the one door to the catalog. */
+  /* Peek and half, console: the compact controls and the one door to the
+     catalog. */
+  #app[data-sheet-detent='peek'].view-console #panel-region,
+  #app[data-sheet-detent='peek'].view-console #sheet-all-layers,
   #app[data-sheet-detent='half'].view-console #panel-region,
   #app[data-sheet-detent='half'].view-console #sheet-all-layers { display: block; }
 
@@ -4129,15 +4044,6 @@ button.conditions-metric:hover .conditions-action-hide {
      is not part of the sheet grammar. */
   #app[data-sheet-detent] #sidebar-collapse { display: none; }
 
-  /* The bottom dock rides above the sheet and the footer while any map is
-     visible; at full the sheet covers it (the map has receded, so has its
-     chrome). */
-  #app[data-sheet-detent='closed'] .map-bottom-dock,
-  #app[data-sheet-detent='peek'] .map-bottom-dock,
-  #app[data-sheet-detent='half'] .map-bottom-dock {
-    bottom: calc(var(--mobile-footer-h, 56px) + var(--sheet-height, 0px) + 10px);
-  }
-
   /* --------------------------------------------------------------------------
      The hazard views and the four panel doors (Brief, Place, Layers,
      Alerts) are seated by the right-edge column while the phone shell is
@@ -4157,6 +4063,7 @@ button.conditions-metric:hover .conditions-action-hide {
   #app[data-sheet-detent][data-sheet-tab='alerts'] .sidebar-scroll > :not(#sheet-alerts) {
     display: none;
   }
+  #app[data-sheet-detent='peek'][data-sheet-tab='alerts'] #sheet-alerts,
   #app[data-sheet-detent='half'][data-sheet-tab='alerts'] #sheet-alerts,
   #app[data-sheet-detent='full'][data-sheet-tab='alerts'] #sheet-alerts {
     display: block;
@@ -4180,21 +4087,8 @@ button.conditions-metric:hover .conditions-action-hide {
     max-width: none;
     z-index: calc(var(--z-map-chrome) + 40);
   }
-  /* MapLibre's own corner controls (attribution, scale, the basemap
-     switcher) clear the footer. Closed and peek controls additionally clear
-     the visible sheet; lower controls yield at half and full. */
-  #app[data-sheet-detent] .maplibregl-ctrl-bottom-left,
-  #app[data-sheet-detent] .maplibregl-ctrl-bottom-right {
-    margin-bottom: var(--mobile-footer-h, 56px);
-  }
-  #app[data-sheet-detent='closed'] .maplibregl-ctrl-bottom-left,
-  #app[data-sheet-detent='closed'] .maplibregl-ctrl-bottom-right,
-  #app[data-sheet-detent='peek'] .maplibregl-ctrl-bottom-left,
-  #app[data-sheet-detent='peek'] .maplibregl-ctrl-bottom-right {
-    margin-bottom: calc(
-      var(--mobile-footer-h, 56px) + var(--sheet-height, 0px)
-    );
-  }
+  /* MapLibre's corner controls and the bottom dock ride the sheet's top
+     edge; their lift is set with the sheet in src/styles/mobile-panels.css. */
   #app[data-sheet-detent] .maplibregl-ctrl-bottom-left {
     margin-left: env(safe-area-inset-left, 0px);
   }
@@ -4449,9 +4343,9 @@ button.conditions-metric:hover .conditions-action-hide {
   white-space: nowrap;
 }
 
-/* The grabber: a real button, the only gesture surface that moves the
-   sheet. The bar is the visual handle; the hit target is the full row
-   (WCAG 2.2 target-size floor is 24px; this exceeds it). */
+/* The grabber: a real button. The bar is the visual handle; inside the
+   phone sheet the button fills the header strip, so the hit target is the
+   strip (src/styles/mobile-panels.css gives it that seat and its faces). */
 .sheet-grabber {
   appearance: none;
   background: transparent;
@@ -4544,30 +4438,20 @@ button.conditions-metric:hover .conditions-action-hide {
 }
 .sheet-at-hand > .sheet-report-door { margin-top: 10px; }
 
-/* On short phones the answer and door exceed the half detent before
-   results even open. Keep the controls inside the detent and let the
-   bounded results open upward as an overlay, like the native picker this
-   search replaced. (The at-rest guidance line this block used to demote
-   to screen-reader-only is gone at the SOURCE since DEG-1, U-UX-FIX-1;
-   the "No matches" zero-result message lives INSIDE .ddm-search-results
-   and stays visible: the honest, non-blaming copy is deliberate, since
-   Tribal Nation names often will not match agency spellings.) */
+/* On short phones the answer and its actions exceed the half detent, so
+   the read clamps harder there and the sheet scrolls for the rest. The
+   search results stay in the flow under their input at every height: a
+   text entry raises the sheet to full (src/ui/mobile-sheet.ts), where the
+   list has room, and an overlay that opened upward would be clipped by
+   the sheet's own scroller. (The "No matches" zero-result message lives
+   INSIDE .ddm-search-results and stays visible: the honest, non-blaming
+   copy is deliberate, since Tribal Nation names often will not match
+   agency spellings.) */
 @media (max-width: 720px) and (max-height: 800px) {
   #app[data-sheet-detent='half'].view-brief .sheet-at-hand-headline {
     -webkit-line-clamp: 1;
   }
   #app[data-sheet-detent='half'].view-brief .sheet-search { margin-top: 6px; }
-  #app[data-sheet-detent='half'].view-brief .sheet-search .ddm-search-results {
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: calc(100% + 6px);
-    padding: 4px;
-    background: var(--bg-1);
-    border: 1px solid var(--line-strong);
-    border-radius: var(--radius-md);
-    z-index: 1;
-  }
   #app[data-sheet-detent='half'].view-brief .sheet-at-hand > .sheet-report-door {
     margin-top: 4px;
   }
