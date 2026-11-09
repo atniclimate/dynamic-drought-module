@@ -28,7 +28,6 @@ import { selectBriefNarrativeLine } from '../impact/brief-narrative-selector';
 import { getViewMode, setViewMode } from '../state/view-mode';
 import { escapeHtml } from '../util/escape';
 import { TRIBAL_NATIONS_GROUP } from '../config/layer-groups';
-import { SHEET_DRAWER_QUERY } from '../config/sheet-detents';
 import { enterPlaceStudio } from '../state/studio-route';
 import {
   toggleTribalNationsGroup,
@@ -161,7 +160,9 @@ export function sheetAllowsAutoRaise(): boolean {
  * Reset and a shared link frame exactly as before.
  */
 export function sheetCameraInset(): number {
-  if (detent === null || window.matchMedia(SHEET_DRAWER_QUERY).matches) return 0;
+  // A sheet as tall as the window is the landscape drawer. Read from the
+  // element, so this eager module shares no constant with the lazy one.
+  if (detent === null || !sidebarEl || sidebarEl.offsetHeight >= window.innerHeight) return 0;
   return Math.round(window.innerHeight / 2);
 }
 
