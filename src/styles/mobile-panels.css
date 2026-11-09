@@ -402,14 +402,19 @@
   #app[data-sheet-detent] .sidebar {
     top: 0;
     right: auto;
-    bottom: 0;
+    /* The box stops 2px short of the bottom edge on purpose (the glass
+       below still reaches it). src/ui/popup-viewport.ts reads any sheet
+       whose box touches the bottom edge as bottom-docked chrome and gives
+       a popup only the room above its top; a full-height drawer would
+       leave a popup none, even while closed. */
+    bottom: 2px;
     left: 0;
     width: var(--sheet-w);
     height: auto;
     padding-left: env(safe-area-inset-left, 0px);
   }
   #app[data-sheet-detent] .sidebar::before {
-    inset: 0 0 0 -120px;
+    inset: 0 0 -2px -120px;
     border: 1px solid var(--glass-edge);
     border-left: 0;
     border-radius: 0 var(--sheet-radius) var(--sheet-radius) 0;
