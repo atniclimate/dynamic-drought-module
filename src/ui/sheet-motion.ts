@@ -138,13 +138,27 @@ export function attachSheetMotion(
   }
   app.appendChild(probe);
 
-  const riders = (): HTMLElement[] =>
-    form === 'sheet'
-      ? [
-          document.getElementById('map-bottom-dock'),
-          document.querySelector<HTMLElement>('#map .maplibregl-ctrl-bottom-left')
-        ].filter((node): node is HTMLElement => node !== null)
-      : [];
+  /**
+   * The map furniture that rides the sheet's top edge, gathered when a
+   * motion begins. The dock itself never takes a transform: the key chip
+   * inside it is `position: fixed`, and a transformed ancestor would become
+   * its frame and carry it off the top of the screen. Its visible children
+   * ride instead (the notices container is `display: contents`, so its own
+   * children do).
+   */
+  let riding: HTMLElement[] = [];
+  const gatherRiders = (): HTMLElement[] => {
+    if (form !== 'sheet') return [];
+    const nodes: Element[] = [];
+    const corner = document.querySelector('#map .maplibregl-ctrl-bottom-left');
+    if (corner) nodes.push(corner);
+    for (const child of document.getElementById('map-bottom-dock')?.children ?? []) {
+      if (child.classList.contains('map-dock-foot')) continue;
+      if (child.id === 'map-notices') nodes.push(...child.children);
+      else nodes.push(child);
+    }
+    return nodes.filter((node): node is HTMLElement => node instanceof HTMLElement);
+  };
 
   const measure = (): void => {
     form = drawerQuery.matches ? 'drawer' : 'sheet';
@@ -171,7 +185,7 @@ export function attachSheetMotion(
         ? riderLift(heights[stamped], heights.half, floor)
         : floor;
     const shift = atRest - riderLift(heights.full - offset, heights.half, floor);
-    for (const node of riders()) {
+    for (const node of riding) {
       node.style.transform = shift === 0 ? '' : `translate3d(0,${shift}px,0)`;
     }
   };
@@ -190,6 +204,7 @@ export function attachSheetMotion(
   const begin = (from: SheetDetent): void => {
     if (moving) return;
     measure();
+    riding = gatherRiders();
     moving = true;
     sheet.setAttribute('data-sheet-moving', '');
     if (form === 'sheet') sheet.style.height = `${heights.full}px`;
@@ -203,7 +218,8 @@ export function attachSheetMotion(
     sheet.removeAttribute('data-sheet-dragging');
     sheet.style.height = '';
     sheet.style.transform = '';
-    for (const node of riders()) node.style.transform = '';
+    for (const node of riding) node.style.transform = '';
+    riding = [];
   };
 
   const halt = (): void => {
