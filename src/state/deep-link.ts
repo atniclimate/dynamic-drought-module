@@ -41,7 +41,7 @@ import {
   openImpactPanel,
   openImpactPanelUnavailable
 } from '../ui/impact-panel';
-import { isSheetActive } from '../ui/mobile-sheet';
+import { isSheetActive, sheetCameraInset } from '../ui/mobile-sheet';
 import { setPlaceSelection } from './place-selection';
 import { getCurrentRegion } from './region-store';
 import { getViewMode } from './view-mode';
@@ -71,8 +71,10 @@ const FETCH_TIMEOUT_MS = 10_000;
  *   clamped to half the viewport so a small window can never be asked
  *   for more padding than it has pixels (MapLibre rejects that). With
  *   no panel coming, symmetric aesthetic margins only.
- * - Mobile with the panel shell active: the rail and top-anchored glass
- *   panel do not create a bottom inset, so the fit uses symmetric margins.
+ * - Mobile with the phone sheet active: the briefing answers in the bottom
+ *   sheet at half, so the fit keeps that band clear (`sheetCameraInset`;
+ *   owner direction 2026-11-09 (sprint), DR-pending). The landscape drawer
+ *   takes no height and adds nothing.
  * - Mobile without the sheet (embed keeps today's hidden-chrome
  *   semantics; the no-JavaScript fallback stacks): the briefing overlay
  *   still covers the lower viewport, so the pre-U2 transient bottom pad
@@ -81,7 +83,12 @@ const FETCH_TIMEOUT_MS = 10_000;
 function briefingCameraPadding(panelWillOpen: boolean): maplibregl.PaddingOptions {
   const mobile = window.matchMedia('(max-width: 720px)').matches;
   if (mobile && isSheetActive()) {
-    return { top: 24, left: 24, right: 24, bottom: 24 };
+    return {
+      top: 24,
+      left: 24,
+      right: 24,
+      bottom: 24 + (panelWillOpen ? sheetCameraInset() : 0)
+    };
   }
   if (mobile) {
     return {
