@@ -25,14 +25,49 @@ convergence doctrine are recorded in [`README.md`](README.md).
 Brief, Place, Layers, and Alerts form one vertical rail along the right edge,
 aligned with the Share, Reset, and hazard controls. Open panels sit to its left.
 Each button remains at least 44px square and exposes `aria-controls` and
-`aria-expanded`. Pressing a closed door drops its glass panel from below the
-top indicators. Pressing the active door again, or pressing Escape, closes the
-panel. Escape restores focus to the active door.
+`aria-expanded`. Pressing a closed door raises its sheet. Pressing the active
+door again, or pressing Escape, closes it. Escape restores focus to the active
+door.
 
-The panel is top-anchored and internally scrollable. It never becomes a bottom
-drawer, has no grabber, and does not add bottom camera padding. Existing legacy
-detent names remain internal compatibility values for report hosting and old
-callers. They do not define visible drawer heights.
+## The sheet
+
+Superseded 2026-11-09 (owner direction, sprint; DR-pending). The panel was
+top-anchored, with no grabber and no drawer form. It is now one glass sheet
+that rises from the bottom edge, docked beside the right-edge column so the two
+never share a pixel. `src/styles/mobile-panels.css` owns its form,
+`src/ui/mobile-sheet.ts` its state, `src/ui/sheet-motion.ts` its motion, and
+`src/config/sheet-detents.ts` its landing rules.
+
+- Stops. The detent names are real heights again: closed (off screen), peek
+  (the header and the first lines, 136px above the bottom safe area), half
+  (half the dynamic viewport), and full (up to the key chip). Peek and half
+  show the same content, so a drag between them never swaps what is under the
+  finger; full adds the standalone report in Brief and the whole catalog stack
+  in console.
+- Doors. Place, Layers, and Alerts open at half. Brief opens at full when
+  there is a briefing to read and at half while no place is chosen.
+- Header. A grabber, the open door's own word as the title, and a 44px close
+  control. The grabber is a real control: Enter, Space, or a tap steps to the
+  next stop; ArrowUp and ArrowDown step up and down. Stop changes are announced
+  through the polite live region.
+- Touch. The header drags the sheet, and so does the content when it has
+  nothing to scroll that way (at peek, when it fits, or at its top with the
+  finger moving down). The sheet follows the finger, rubber-bands past full,
+  and on release settles on the nearest stop from the finger's speed. A flick
+  down from peek, or a drag well below it, closes the sheet; a flick from half
+  or full only lowers it.
+- Motion is transform only, on the shared settle spring. Under reduced motion
+  a stop change lands at once on the same end state.
+- The report opens over the at-hand answer as its own card, a second layer;
+  its close control, or pulling the sheet down to half, is the way back.
+- The scale rulers and the dock (notices and the OpenStreetMap credit) ride
+  the sheet's top edge at peek and half. Camera fits made for a briefing keep
+  the half band clear; the map's own padding stays zero.
+- In a short landscape window inside the phone shell (at most 480px tall) the
+  same element is a drawer from the left edge: one open seat at full height,
+  closed by its close control, Escape, its door, or a drag to the left.
+
+Panel state is presentation only and is never written to the URL.
 
 Embed mode has no rail. Exiting an embed restores the closed mobile shell.
 Phone views do not load or present the 3D Fire controls.
