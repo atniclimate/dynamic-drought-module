@@ -680,7 +680,10 @@
 }
 .ddm-gauge text {
   font-family: var(--font-body);
-  font-size: 9.5px;
+  /* Sizes are canvas units, so a figure drawn narrower than its canvas would
+     shrink its words with it. --g-k grows them back in a narrow column (see
+     "A narrow column" below); it is 1 wherever the figure has its room. */
+  font-size: calc(9.5px * var(--g-k, 1));
   fill: var(--ink-muted);
 }
 /* Unread classes keep a hairline so a class darker than the panel still
@@ -719,17 +722,17 @@
   font-weight: 700;
 }
 .ddm-gauge .g-value {
-  font-size: 10.5px;
+  font-size: calc(10.5px * var(--g-k, 1));
 }
 .ddm-gauge .g-caption,
 .ddm-gauge .g-above {
-  font-size: 8px;
+  font-size: calc(8px * var(--g-k, 1));
 }
 .ddm-gauge .g-above {
   fill: var(--ink);
 }
 .ddm-gauge .g-word {
-  font-size: 7.5px;
+  font-size: calc(7.5px * var(--g-k, 1));
   fill: var(--ink-soft);
 }
 .ddm-gauge .g-hatch {
@@ -786,6 +789,26 @@
   text-wrap: pretty;
 }
 
+/* ---- A narrow column -------------------------------------------------------- */
+
+/* A figure is drawn on a 240 unit canvas and scales with its column. Below
+   that width its words would shrink with it, so they are set larger on the
+   canvas and read at about 9 px on a 360 px phone and on a 320 px one. */
+@container briefing-lead (max-width: 259px) {
+  .ddm-gauge {
+    --g-k: 1.12;
+  }
+}
+@container briefing-lead (max-width: 219px) {
+  .ddm-gauge {
+    --g-k: 1.3;
+  }
+  /* The rail's hazard word stands over its classes instead of beside them. */
+  .lead-together-item {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 /* ---- Room for more than one column ---------------------------------------- */
 
 @container briefing-lead (min-width: 520px) {
@@ -823,7 +846,10 @@
     left: 12px;
   }
 }
-@container evidence-chain (min-width: 640px) {
+/* The chain runs across only where five links and four joints each keep a
+   readable width (five cards of about 150 px and four 64 px joints). The
+   briefing panel never reaches that, so there it always runs down. */
+@container evidence-chain (min-width: 1000px) {
   .evidence-chain-links {
     flex-direction: row;
     align-items: stretch;
