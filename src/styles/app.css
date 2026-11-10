@@ -7913,11 +7913,14 @@ a.impact-resource-link::after {
 }
 
 /* Hawaii is intentionally enlarged and detached from the mainland
-   projection. The dashed frame, not an individual island, is the one
-   complete hit target and fits the real island-chain bounds. It sits
-   under the Alaska and Northwest framing, beside the Pacific coast, and
-   leaves Pacific water on its left and below for the ocean target
-   (owner, 2026-10-19). */
+   projection. Its frame, not an individual island, is the one complete
+   hit target. It sits under the Alaska and Northwest framing, beside the
+   Pacific coast, and leaves Pacific water on its left and below for the
+   ocean target (owner, 2026-10-19). The frame is no longer drawn and has
+   no caption (owner direction 2026-11-09 (sprint), DR-pending): the
+   islands fill the target, hover and selection mark the islands the way
+   they mark a mainland framing, and keyboard focus keeps the app's ring
+   on the target. The 1 px transparent border keeps the target's box. */
 .shell-minimap-hawaii {
   position: absolute;
   left: 16%;
@@ -7926,28 +7929,13 @@ a.impact-resource-link::after {
   appearance: none;
   width: 25.7%;
   height: 39%;
-  background: rgba(11, 18, 32, 0.78);
+  background: transparent;
   color: var(--fg-0);
-  border: 1px dashed rgba(241, 245, 249, 0.72);
-  border-radius: 3px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
   padding: 0;
   text-align: left;
-  transition:
-    border-color 0.12s ease,
-    box-shadow 0.12s ease,
-    color 0.12s ease;
-}
-.shell-minimap-hawaii-label {
-  position: absolute;
-  top: 3px;
-  left: 5px;
-  z-index: 1;
-  font-family: var(--font-display);
-  font-size: 8px;
-  font-weight: var(--fw-subtitle);
-  line-height: 1;
-  white-space: nowrap;
-  text-shadow: 0 1px 3px var(--bg-0), 0 0 5px var(--bg-0);
+  cursor: pointer;
 }
 .shell-minimap-hawaii-islands {
   position: absolute;
@@ -7962,16 +7950,29 @@ a.impact-resource-link::after {
   stroke: var(--fg-0);
   stroke-width: 1.5px;
   paint-order: stroke fill;
+  transition:
+    stroke 0.12s ease,
+    stroke-width 0.12s ease;
 }
-.shell-minimap-hawaii:hover,
-.shell-minimap-hawaii.active,
-.shell-minimap-hawaii:focus-visible {
-  color: var(--fg-0);
+.shell-minimap-hawaii:hover .shell-minimap-island,
+.shell-minimap-hawaii.active .shell-minimap-island,
+.shell-minimap-hawaii:focus-visible .shell-minimap-island {
+  stroke: var(--accent);
+  stroke-width: 2px;
+}
+.shell-minimap-hawaii:hover .shell-minimap-hawaii-islands,
+.shell-minimap-hawaii.active .shell-minimap-hawaii-islands,
+.shell-minimap-hawaii:focus-visible .shell-minimap-hawaii-islands {
+  filter:
+    drop-shadow(0 0 3px var(--accent))
+    drop-shadow(0 0 7px var(--accent-soft));
+}
+/* The chosen framing. A mainland framing shows it with a heavier outline
+   on a coloured fill; these islands are a few pixels across and often
+   pale, so the same outline would not show. While Hawaii is the chosen
+   framing, and only then, its target wears one even hairline. */
+.shell-minimap-hawaii.active {
   border-color: var(--accent);
-  box-shadow:
-    0 0 0 1px var(--accent),
-    0 0 10px var(--accent-soft);
-  outline: none;
 }
 
 .shell-minimap-canvas[data-minimap-status="loading"] .shell-minimap-mainland,
