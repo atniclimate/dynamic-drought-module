@@ -70,7 +70,7 @@ export interface ChainLink {
   readonly sourceUrl?: string;
   /** The claim's own evidence class; drawn as the same badge a claim wears. */
   readonly evidence?: EvidenceClass;
-  /** The claim's own date line, for example "Published 2026-10-03". */
+  /** The claim's own date line: the word the claim uses ("Published", "Valid") and its date. */
   readonly dateLine?: string | null;
   /** Why the link holds no read, or what a partial read is missing. */
   readonly note?: string;

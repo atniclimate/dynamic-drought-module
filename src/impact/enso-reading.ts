@@ -21,9 +21,8 @@
  *     answers, names the same season and year, and names the same conditions;
  *   - no reading past enso.ts's hard staleness cutoff (`staleAsOf`), where the
  *     claim itself has degraded to a dated past-tense sentence;
- *   - no reading when the snapshot carries no state block (a snapshot built
- *     before 2026-09-02): the onset rule lives in enso.ts and is not restated
- *     here.
+ *   - no reading when the snapshot carries no state block (an older
+ *     snapshot): the onset rule lives in enso.ts and is not restated here.
  * A failed or cancelled read returns the lane's result unchanged.
  */
 
