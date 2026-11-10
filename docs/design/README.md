@@ -161,10 +161,12 @@ adds no source, fetches nothing and computes no value
 
 **What leads.** The current and near-term reads that hold a class in the
 reading order, as tiles: the hazard word, the issuer's class in the issuer's
-words, a gauge on the issuer's own scale, the source, the date and the
-evidence class. The first four lead; any further ranked reads follow as the
-same tiles under "Next in the reading order". Every tile is the same size:
-first in the order is read first, it is not drawn larger.
+words, a gauge on the issuer's own scale where the issuer has one (an NWS
+product wears the issuer's map colour beside its name instead), the source,
+the date and the evidence class. The first four lead; any further ranked
+reads follow as the same tiles under "Next in the reading order". Every tile
+is built the same way: first in the order is read first, it is not drawn
+larger.
 
 **The one rule.** The order comes from one table (`PRIORITY_ROWS`,
 `src/impact/priority.ts`): by row, then by the issuer's own class order inside
@@ -197,10 +199,10 @@ joined on a rail with one node each. The rail has no direction: it states
 co-occurrence in place and time, never that one hazard leads to another.
 
 **The evidence chain** (`src/ui/evidence-chain.ts`) is the one shared
-component for laying separate claims side by side as links. Each link is its
-own claim on its own clock with its own evidence class; each joint is a
-labelled relationship, never a cause; a link with no read keeps its place
-under its state word.
+component for laying separate claims one after another as links, down the
+column at every width. Each link is its own claim on its own clock with its
+own evidence class; each joint is a labelled relationship, never a cause; a
+link with no read keeps its place under its state word.
 
 **Reaching the matrix.** A two-way switch, Priority and Full detail, sits at
 the top of the briefing. Any tile or row opens that hazard's own cells in the
@@ -257,7 +259,7 @@ status is static (DR-128).
 Amended 2026-11-09 (owner direction 2026-11-09 (sprint), DR-pending): the
 matrix rows still are never reordered. A separate priority view of the same
 briefing may lead with reads in one published reading order over issuer
-classes; see "Priority view of the Impact Briefing" below.
+classes; see "Priority view of the Impact Briefing" above.
 
 ### Creativity comes from truthful arrangement
 
