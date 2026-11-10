@@ -48,7 +48,8 @@
     /* The doors live in the right-edge column: no footer under the sheet. */
     --mobile-footer-h: 0px;
 
-    --sheet-radius: 20px;
+    /* Tight, like every glass body: the radius the phone panel always had. */
+    --sheet-radius: var(--glass-radius);
     --sheet-head-h: 52px;
     --sheet-rider-gap: 6px;
     --sheet-h-full: calc(100vh - var(--mobile-panel-top));
@@ -262,7 +263,7 @@
     margin: -6px 0 0;
     padding: 0;
     border: 0;
-    border-radius: 50%;
+    border-radius: var(--radius-md);
     background: transparent;
     color: var(--ink-soft);
     cursor: pointer;
@@ -273,7 +274,7 @@
     content: '';
     position: absolute;
     inset: 7px;
-    border-radius: 50%;
+    border-radius: var(--radius-md);
     background: var(--glass-press);
     opacity: 0.55;
     transition: opacity var(--dur-micro) var(--ease-standard);
@@ -343,7 +344,7 @@
   #app[data-sheet-detent] #sheet-report .impact-panel.sheet-hosted {
     overflow: hidden;
     border: 1px solid var(--glass-edge);
-    border-radius: 14px;
+    border-radius: var(--glass-radius);
     box-shadow:
       inset 0 1px 0 var(--glass-sheen),
       0 10px 28px rgba(0, 0, 0, 0.5);

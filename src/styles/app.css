@@ -211,10 +211,19 @@
   --glass-blur: 16px;
   --glass-saturate: 135%;
   --glass-shadow: 0 6px 22px rgba(0, 0, 0, 0.38);
-  --glass-radius: 12px;
-  /* SELECTED INVERTS: a control that is on wears the ink as its face. */
+  /* Corners are tight: a glass body takes the scale's large step, the
+     radius the phone panel has always had, and the controls inside it sit
+     one step in. No phone surface is rounder than that. */
+  --glass-radius: var(--radius-lg);
+  /* SELECTED INVERTS, in every shell: a control that is on wears the ink
+     as its face and the surface colour as its label. Its outline is even
+     on all four sides; no side carries a bar. */
   --face-selected: var(--ink-strong);
   --ink-on-selected: var(--surface-base);
+  /* What a selected control adds to the focus ring. The white ring would
+     merge with a white face, so a 2 px rich-black ring is drawn just
+     inside the face; the ring and its 4 px casing stay where they are. */
+  --selected-focus-inset: inset 0 0 0 2px var(--focus-outer);
   /* The one map-control family width (E2, D-0.7.0-058 ruling 2): Share
      view, Reset, and the Satellite switcher all render at this width on
      phones and in embeds. The desktop shell's column reads --map-cell-w
@@ -1950,12 +1959,14 @@ button.conditions-metric:hover .conditions-action-hide {
   border-radius: 0;
   background: none;
 }
-/* The accent tint over the resting slate, so the pressed face never
-   depends on what lies beneath it (tests/chrome-css-faces.test.mjs). */
+/* Selected inverts: an opaque ink face, so the pressed face never depends
+   on what lies beneath it (tests/chrome-css-faces.test.mjs). The two
+   colours are named directly, not through --face-selected, because that
+   test resolves one level of var(). */
 .basemap-switcher-btn.active {
-  background: linear-gradient(var(--accent-soft), var(--accent-soft)), rgba(15, 23, 42, 0.85) !important;
-  color: var(--accent) !important;
-  box-shadow: inset 0 0 0 1px var(--accent-strong);
+  background: var(--ink-strong) !important;
+  color: var(--surface-base) !important;
+  box-shadow: none;
 }
 
 /* The satellite observation notice: exact UTC frame time and interpretation
@@ -2943,12 +2954,13 @@ button.conditions-metric:hover .conditions-action-hide {
     background: var(--surface-overlay) !important;
     color: var(--ink) !important;
   }
-  /* Pressed: SAT on (aria-pressed) or Help's drawer open (aria-expanded). */
+  /* Pressed: SAT on (aria-pressed) or Help's drawer open (aria-expanded).
+     Selected inverts: the ink is the face and the outline stays even. */
   .app-shell:not(.embed) .map-overlay-controls .map-cell:is([aria-pressed='true'], [aria-expanded='true']) {
-    background: var(--surface-hover) !important;
-    color: var(--ink-strong) !important;
-    border-color: var(--ink-strong);
-    box-shadow: inset 2px 0 0 var(--ink-strong);
+    background: var(--face-selected) !important;
+    color: var(--ink-on-selected) !important;
+    border-color: var(--face-selected);
+    box-shadow: none;
   }
   /* One ring for all chrome (palette-tokens.md section 2, "Focus"): the
      better of the pair is at least 4.45:1 against any backdrop. */
@@ -2959,7 +2971,7 @@ button.conditions-metric:hover .conditions-action-hide {
   }
   .app-shell:not(.embed) .map-overlay-controls .map-cell:is([aria-pressed='true'], [aria-expanded='true']):focus-visible {
     box-shadow:
-      inset 2px 0 0 var(--ink-strong),
+      var(--selected-focus-inset),
       0 0 0 4px var(--focus-outer);
   }
 }
@@ -8840,14 +8852,21 @@ a.impact-resource-link::after {
   .about-card a[href]:not([role='button']) { color: var(--link-on-light); }
   .about-card a[href]:not([role='button']):hover { color: var(--link-on-light-hover); }
 }
+/* SELECTED INVERTS (owner direction 2026-11-09 (sprint), DR-pending). This
+   replaces the pressed plate and its leading bar from the D3 block above:
+   one face for every pressed button in every shell, with ink as the face,
+   the surface colour as the label and an even outline. Nothing is drawn on
+   one side. --selection-shadow is no longer shown at rest; it is the ring
+   the focus rules add inside a white face. */
 :is(.view-switch button, .shell-cluster-btn, .shell-horizon-btn, .shell-fire3d-btn, .shell-fire3d-layer, .place-studio-type, .hazard-rail-btn)[aria-pressed='true']:not(:disabled):not([aria-disabled='true']),
-.time-bar-mode.active:not(:disabled) {
-  --selection-shadow: inset 2px 0 0 var(--ink-strong);
-  background: var(--surface-hover);
-  color: var(--ink-strong);
-  border-color: var(--rule-control);
+.time-bar-mode.active:not(:disabled),
+.shell-minimap-all[aria-checked='true'] {
+  --selection-shadow: var(--selected-focus-inset);
+  background: var(--face-selected);
+  color: var(--ink-on-selected);
+  border-color: var(--face-selected);
   font-weight: var(--fw-strong);
-  box-shadow: var(--selection-shadow);
+  box-shadow: none;
 }
 :is(.view-switch button, .shell-cluster-btn, .shell-horizon-btn, .shell-fire3d-btn, .shell-fire3d-layer, .place-studio-type, .hazard-rail-btn)[aria-pressed='true']:not(:disabled):not([aria-disabled='true']):focus-visible,
 .time-bar-mode.active:not(:disabled):focus-visible {

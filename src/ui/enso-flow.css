@@ -42,13 +42,15 @@
   padding: 6px 8px;
 }
 
+/* Selected inverts, as everywhere else: ink as the face, an even outline,
+   and a rich-black ring inside the face while it holds focus. */
 .enso-flow button[aria-pressed="true"] {
-  --selection-shadow: inset 2px 0 0 var(--ink-strong);
-  border-color: var(--rule-control);
-  background: var(--surface-hover);
-  color: var(--ink-strong);
+  --selection-shadow: var(--selected-focus-inset);
+  border-color: var(--face-selected);
+  background: var(--face-selected);
+  color: var(--ink-on-selected);
   font-weight: var(--fw-strong);
-  box-shadow: var(--selection-shadow);
+  box-shadow: none;
 }
 
 .enso-flow button:focus-visible,
