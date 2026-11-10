@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { registerHooks } from 'node:module';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -18,7 +18,11 @@ import { fileURLToPath } from 'node:url';
  *      and none of them is a zero;
  *   3. the chain draws at most five links, keeps a link with no read in its
  *      place under its state word, never prints a statement for it, labels
- *      its joints as relationships and draws no arrow.
+ *      its joints as relationships and draws no arrow;
+ *   4. nothing the priority view or the chain renders carries the full
+ *      detail's `impact-claim-<class>` names (the browser tests find a claim
+ *      of the full detail by them, and both views stay in one document), and
+ *      the evidence badge still wears the full detail's three form tiers.
  */
 
 // Extensionless relative `.ts` imports (see tests/briefing-truth.test.mjs).
@@ -199,6 +203,10 @@ test('the day strip keeps a class, a probability, no area and no read apart', ()
   assert.equal(count(loading, 'g-hatch') + count(loading, 'g-fill') + count(loading, 'g-caret'), 0);
 });
 
+const EVIDENCE_CLASSES = ['observed', 'analyzed', 'classified', 'modeled-analysis', 'modeled', 'derived', 'outlook'];
+/** The full detail's claim class names: `impact-claim-observed` and its six siblings. */
+const EVIDENCE_CLASS_NAME = /impact-claim-(?:observed|analyzed|classified|modeled|derived|outlook)/;
+
 const claim = {
   source: 'NOAA CPC',
   sourceUrl: 'https://www.cpc.ncep.noaa.gov/',
@@ -227,9 +235,13 @@ test('the chain draws each link as its own claim and its joints as relationships
   assert.match(html, /aria-labelledby="evidence-chain-title-t"/);
   assert.match(html, /<h4 class="evidence-chain-title" id="evidence-chain-title-t">ENSO link<\/h4>/);
   // A read link wears its evidence badge and names its source with a date.
-  assert.match(html, /data-chain-link="a" data-chain-status="ready"/);
-  assert.match(html, /impact-claim-derived/);
+  // Its evidence class is data, never the full detail's claim class name.
+  assert.match(html, /<li class="evidence-chain-link" data-evidence="derived" data-chain-link="a" data-chain-status="ready">/);
+  assert.doesNotMatch(html, EVIDENCE_CLASS_NAME);
   assert.match(html, /<span class="impact-claim-badge">Derived<\/span>/);
+  // A link with no read, and a read link with no evidence class, carry no evidence attribute.
+  assert.match(html, /<li class="evidence-chain-link" data-chain-link="b" data-chain-status="unavailable">/);
+  assert.match(html, /<li class="evidence-chain-link" data-chain-link="d" data-chain-status="ready">/);
   assert.match(html, /<a href="https:\/\/www\.cpc\.ncep\.noaa\.gov\/" target="_blank" rel="noopener">NOAA CPC<\/a> <span class="impact-claim-date">Published 2026-10-03<\/span>/);
   assert.match(html, /data-chain-action="detail:enso" aria-label="Observed index\. Open the ENSO detail"/);
   // A link with no read keeps its place, says its state, and prints no statement and no badge.
@@ -262,4 +274,42 @@ test('a chain never draws more than five links, and escapes what it is given', (
     { heading: '<h1>', caption: '<i>' }
   );
   assert.doesNotMatch(hostile, /<img|<script|<b>|<h1>|<i>/);
+});
+
+const read = (path) => readFileSync(fileURLToPath(new URL(path, import.meta.url)), 'utf8');
+
+/** The declarations of the rule whose selector list holds `selector`, whitespace folded. */
+function declarationsFor(css, selector) {
+  const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)];
+  const found = rules.filter(([, selectors]) =>
+    selectors.replace(/\/\*[\s\S]*?\*\//g, '').split(',').some((part) => part.trim().includes(selector))
+  );
+  assert.equal(found.length, 1, `one rule for ${selector}, found ${found.length}`);
+  return found[0][2].replace(/\s+/g, ' ').trim();
+}
+
+test('the priority view and the chain never wear the full detail claim class names', () => {
+  // src/ui/briefing-lead.ts imports a stylesheet, so node reads it as text:
+  // neither module may put an evidence presentation's cssClass into markup.
+  for (const path of ['../src/ui/briefing-lead.ts', '../src/ui/evidence-chain.ts']) {
+    const source = read(path).replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '');
+    assert.doesNotMatch(source, /cssClass/, `${path} reads no evidence cssClass`);
+    assert.doesNotMatch(source, EVIDENCE_CLASS_NAME, `${path} writes no claim class name`);
+  }
+  const lane = read('../src/styles/briefing-lead.css').replace(/\/\*[\s\S]*?\*\//g, '');
+  assert.doesNotMatch(lane, EVIDENCE_CLASS_NAME, 'the lane stylesheet selects no claim class name');
+});
+
+test('the evidence badge wears the same three form tiers as in the full detail', () => {
+  const app = read('../src/styles/app.css');
+  const lane = read('../src/styles/briefing-lead.css');
+  const tiers = new Set();
+  for (const evidence of EVIDENCE_CLASSES) {
+    // `modeled` is a prefix of `modeled-analysis`: the trailing space or quote pins the whole name.
+    const matrix = declarationsFor(app, `.impact-claim-${evidence} .impact-claim-badge`);
+    const here = declarationsFor(lane, `[data-evidence='${evidence}']`);
+    assert.equal(here, matrix, `${evidence}: the badge tier is the full detail's`);
+    tiers.add(here);
+  }
+  assert.equal(tiers.size, 3, 'three form tiers: filled, keyline, dashed');
 });

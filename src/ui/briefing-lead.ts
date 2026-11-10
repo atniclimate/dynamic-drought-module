@@ -390,6 +390,11 @@ function scopeWords(entry: PriorityEntry): string {
  * One ranked entry as a tile. The whole tile is the button. Every tile is
  * built the same way and drawn the same size, first or last: the order is a
  * reading order, so nothing about a tile's weight follows from its place.
+ *
+ * The evidence class rides on `data-evidence`, here and on every read below,
+ * never as the matrix's `impact-claim-<class>` name: that name marks a claim
+ * of the full detail, which stays in the document beside this view, and the
+ * browser tests find a claim by it.
  */
 function renderTile(entry: PriorityEntry): string {
   const claim = entry.lead.claim;
@@ -401,7 +406,7 @@ function renderTile(entry: PriorityEntry): string {
   const figure = familyFigure(entry.family, entry.members, entry.lead);
   return (
     `<li class="lead-tile-item">` +
-    `<button type="button" class="lead-tile ${pres.cssClass}" data-lead-action="detail" data-lead-hazard="${entry.hazard}" ` +
+    `<button type="button" class="lead-tile" data-evidence="${claim.evidence}" data-lead-action="detail" data-lead-hazard="${entry.hazard}" ` +
     `data-lead-row="${entry.row}" data-lead-key="tile:${entry.hazard}:${entry.family}" aria-label="${escapeHtml(name)}">` +
     `<span class="lead-tile-top"><span class="lead-hazard">${escapeHtml(HAZARD_LABELS[entry.hazard])}</span>${badge(claim)}</span>` +
     `<span class="lead-headline">${headlineHtml(entry)}</span>` +
@@ -445,7 +450,6 @@ function renderState(hazard: HazardKey, state: PriorityCellState, familiesRead: 
 /** A family that was read and holds no ranked class: its figure at the read position, in the issuer's words. */
 function renderUnrankedRead(read: PriorityUnrankedRead): string {
   const lead = read.members[0]!;
-  const pres = EVIDENCE_PRESENTATION[lead.claim.evidence];
   const figure = familyFigure(read.family, read.members, lead);
   // Where typed data can state the read it does; otherwise the claim's own
   // short sentence stands, whole. USDM's no-polygon sentence always follows
@@ -456,7 +460,7 @@ function renderUnrankedRead(read: PriorityUnrankedRead): string {
       ? `<p class="lead-read-caveat">${escapeHtml(lead.claim.text)}</p>`
       : '';
   return (
-    `<div class="lead-read ${pres.cssClass}">` +
+    `<div class="lead-read" data-evidence="${lead.claim.evidence}">` +
     `<p class="lead-state-line"><span class="lead-read-words">${escapeHtml(words)}</span>${badge(lead.claim)}</p>` +
     (figure ? `<div class="lead-figure">${figure}</div>` : '') +
     caveat +
@@ -472,7 +476,7 @@ function renderUnrankedRead(read: PriorityUnrankedRead): string {
  */
 function renderTextRead(horizon: HorizonKey, claim: SourcedClaim): string {
   return (
-    `<div class="lead-text-read ${EVIDENCE_PRESENTATION[claim.evidence].cssClass}">` +
+    `<div class="lead-text-read" data-evidence="${claim.evidence}">` +
     `<p class="lead-state-line"><span class="lead-text-read-words"><span class="lead-state-horizon">${escapeHtml(horizonWord(horizon))}</span>` +
     ` <span class="lead-text-read-where">stated in the federal text</span></span>${badge(claim)}</p>` +
     `<p class="lead-read-source">${sourceLine(claim)}</p></div>`

@@ -145,7 +145,7 @@ function renderLink(link: ChainLink, last: boolean): string {
           : ''
       }</p>`;
   return (
-    `<li class="evidence-chain-link ${pres && read ? pres.cssClass : ''}" data-chain-link="${escapeHtml(link.key)}" data-chain-status="${link.status}">` +
+    `<li class="evidence-chain-link"${pres && read && link.evidence ? ` data-evidence="${escapeHtml(link.evidence)}"` : ''} data-chain-link="${escapeHtml(link.key)}" data-chain-status="${link.status}">` +
     `<div class="evidence-chain-card">` +
     `<div class="evidence-chain-head">${title}${badge}${state}</div>` +
     statement +

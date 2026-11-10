@@ -231,9 +231,11 @@
 }
 .lead-tile-top {
   display: flex;
+  /* In a 200 px embed the badge drops under the hazard word. */
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 4px 8px;
 }
 .lead-hazard {
   font-family: var(--font-display);
@@ -247,6 +249,28 @@
 .evidence-chain .impact-claim-badge {
   flex: none;
   margin-bottom: 0;
+}
+/* The evidence badge wears the full detail's three form tiers (app.css, D3
+   R4: a filled plate for observations, a keyline for analyzed, classified and
+   derived reads, a dashed line for modeled and outlook reads). They are keyed
+   here by data-evidence, not by the full detail's `.impact-claim-<class>`
+   names: those names mark a claim of the full detail, which stays in the
+   document beside this view, and the browser tests find a claim by them.
+   tests/briefing-gauges.test.mjs holds these three blocks equal to app.css's. */
+[data-evidence='observed'] .impact-claim-badge {
+  color: var(--surface-base);
+  background: var(--ink);
+  border: 1px solid var(--ink);
+}
+:is([data-evidence='analyzed'], [data-evidence='classified'], [data-evidence='derived']) .impact-claim-badge {
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--keyline);
+}
+:is([data-evidence='modeled'], [data-evidence='modeled-analysis'], [data-evidence='outlook']) .impact-claim-badge {
+  color: var(--ink-soft);
+  background: transparent;
+  border: 1px dashed var(--ink-muted);
 }
 .lead-headline {
   font-family: var(--font-display);
@@ -875,44 +899,20 @@
 
 /* ---- Paper ------------------------------------------------------------------ */
 
-/* A printed briefing is the whole report: the priority view AND the full
-   detail, whichever was on screen, and none of the switching controls. */
+/* On paper the briefing is the full detail, exactly as it printed before this
+   view existed. The priority view is a screen presentation and does not
+   print, and whatever the screen had hidden of the full detail is shown
+   (these four are block boxes in app.css). */
 @media print {
-  .impact-panel-body > :is(.impact-landscape, .impact-horizons, .briefing-lead)[hidden],
+  .impact-panel-body > :is(.impact-landscape, .impact-horizons)[hidden],
   .impact-horizons .impact-hazard[hidden],
   .impact-horizons .point-heat[hidden] {
     display: block !important;
   }
   .briefing-view-switch,
   .briefing-focus,
-  .lead-doors,
-  .lead-open,
-  .lead-link {
+  .briefing-lead {
     display: none !important;
-  }
-  .lead-tile,
-  .lead-together-list,
-  .evidence-chain-card {
-    background: #fff;
-    border-color: #444;
-    break-inside: avoid;
-  }
-  .ddm-gauge text {
-    fill: #000;
-  }
-  .ddm-gauge :is(.g-seg, .g-seg-empty, .g-slot, .g-frame, .g-axis, .g-zero, .g-hatch, .g-nodata) {
-    stroke: #444;
-    stroke-opacity: 1;
-  }
-  .ddm-gauge .g-read,
-  .ddm-gauge .g-threshold-casing {
-    stroke: #000;
-  }
-  .ddm-gauge :is(.g-caret, .g-dot, .g-fill-ink) {
-    fill: #000;
-  }
-  .ddm-gauge .g-band {
-    fill: #000;
   }
 }
 
