@@ -820,11 +820,13 @@
   .lead-tiles {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  /* The other reads sit in the same two columns as the tiles above them. */
+  /* The other reads sit in two columns under the tiles. Their rows have no
+     side borders, so the gutter is wider than the tiles' to keep one
+     column's door clear of the next column's hazard word. */
   .lead-rest-list {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    column-gap: 8px;
+    column-gap: 24px;
   }
   /* The rail turns to run across, one column per hazard. */
   .lead-together-list {
