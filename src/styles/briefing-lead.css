@@ -49,6 +49,8 @@
 }
 /* A control that is on inverts: the ink is its face. */
 .briefing-view-btn[aria-pressed='true'] {
+  /* The ring the focus rule adds inside a white face (app.css, SELECTED INVERTS). */
+  --selection-shadow: var(--selected-focus-inset);
   background: var(--face-selected);
   color: var(--ink-on-selected);
 }
