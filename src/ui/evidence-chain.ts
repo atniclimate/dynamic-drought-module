@@ -30,6 +30,11 @@
  * (`loading...`, `live (partial)`, `unavailable`) with the caller's reason. A
  * chain never closes ranks over a missing link.
  *
+ * LAYOUT. The chain runs down its column at every width: one card per link,
+ * with the joint between two cards. It is not laid across: five cards and
+ * four joints leave each card too narrow to hold a figure in any host the
+ * briefing has (looked at in a 1063 px harness, 2026-11-09, and dropped).
+ *
  * At most `CHAIN_MAX_LINKS` links are drawn; any beyond that are ignored, so
  * a caller that has more picks its five.
  */

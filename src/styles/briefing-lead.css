@@ -533,9 +533,11 @@
 
 /* ---- The evidence chain (shared component, src/ui/evidence-chain.ts) ------ */
 
+/* The chain runs down at every width. Run across, five links and four joints
+   leave a card too narrow for its figure in any host this module has, so
+   that layout is not offered. */
 .evidence-chain {
   margin: 18px 0 0;
-  container: evidence-chain / inline-size;
 }
 .evidence-chain-title {
   margin: 0 0 4px;
@@ -563,6 +565,9 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
+  /* A link is a card, not a line of prose: it takes its column, and the
+     sentences inside it keep the reading measure (app.css, T4). */
+  max-inline-size: none;
 }
 .evidence-chain-card {
   display: flex;
@@ -815,6 +820,12 @@
   .lead-tiles {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+  /* The other reads sit in the same two columns as the tiles above them. */
+  .lead-rest-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 8px;
+  }
   /* The rail turns to run across, one column per hazard. */
   .lead-together-list {
     grid-auto-flow: column;
@@ -844,35 +855,6 @@
   .lead-together-item::after {
     top: 11px;
     left: 12px;
-  }
-}
-/* The chain runs across only where five links and four joints each keep a
-   readable width (five cards of about 150 px and four 64 px joints). The
-   briefing panel never reaches that, so there it always runs down. */
-@container evidence-chain (min-width: 1000px) {
-  .evidence-chain-links {
-    flex-direction: row;
-    align-items: stretch;
-  }
-  .evidence-chain-link {
-    flex: 1 1 0;
-    flex-direction: row;
-  }
-  .evidence-chain-card {
-    flex: 1 1 auto;
-    min-width: 0;
-  }
-  .evidence-chain-joint {
-    flex: none;
-    align-self: center;
-    width: 64px;
-    min-height: 0;
-    margin: 0;
-    padding: 6px 4px 0;
-    border-left: 0;
-    border-top: 1px solid var(--ink-muted);
-    text-align: center;
-    justify-content: center;
   }
 }
 
