@@ -512,6 +512,19 @@ export function getEdgePlan(): EdgePlan | null {
   return currentPlan;
 }
 
+/**
+ * The band, in px from the right edge of the window, that the column
+ * occupies: its tracks, its inset and any safe area. 0 outside the phone
+ * shell. A camera fit adds it to its right padding, so the place it frames
+ * is not left under the column. Measured, so it follows one track or two.
+ */
+export function edgeColumnInset(): number {
+  if (!currentPlan || !column) return 0;
+  const rect = column.getBoundingClientRect();
+  if (rect.width <= 0) return 0;
+  return Math.max(0, Math.round(window.innerWidth - rect.left));
+}
+
 /** Subscribe to arrangement changes (cell size, tracks, folded groups). */
 export function onEdgePlanChange(fn: (plan: EdgePlan) => void): () => void {
   planListeners.add(fn);
