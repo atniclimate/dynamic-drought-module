@@ -33,7 +33,7 @@ import { isObject } from '../util/guards';
 import { oniLineSvg, ensoPlumeSvg, type OniPoint, type EnsoPlumePoint } from '../ui/charts';
 import { makeClaim } from './evidence';
 import type { SourceResult } from './sources';
-import type { BoundarySelectionContext } from './types';
+import type { BoundarySelectionContext, EnsoIndexReading } from './types';
 
 type EnsoPhase = 'el-nino' | 'la-nina' | 'neutral';
 
@@ -212,6 +212,27 @@ export async function readEnsoPhaseLabel(
 const SOURCE = 'NOAA CPC Relative Oceanic Nino Index (RONI) and observed ENSO indices';
 const MODULATORS = // vocab-allow: honesty disclaimer, denies being a forecast
   'This is a shift in the odds, not a forecast: the Pacific Decadal Oscillation, the event strength and timing, and intraseasonal variability can reinforce or mute the signal.';
+
+/**
+ * The nested truth of every ENSO surface, in this module's governed words
+ * (owner direction 2026-11-09 (sprint), DR-pending): the ENSO mode's chain
+ * (src/ui/enso-chain.ts) keeps these one tap from every link, so a picture of
+ * the ocean beside a place can never be read as a cause.
+ *
+ * `odds` is `MODULATORS` itself, the sentence every regional tendency claim
+ * below already ends with. `events` is NOAA CPC's own sentence on single
+ * storms, verbatim, as the technical section already quotes it
+ * (src/ui/map-technical-information.ts, the ENSO notes, with the same link);
+ * tests/enso-chain.test.mjs holds the two copies equal, so the quotation
+ * cannot drift from the one the briefing shows.
+ */
+export const ENSO_NESTED_TRUTH = {
+  odds: MODULATORS,
+  events:
+    'It is inaccurate to label individual storms or events as a La Niña or El Niño event. Rather, these climate extremes affect the position and intensity of the jet streams, and the normal regions of high and low pressure, which in turn affect the average intensity and track of storms.',
+  eventsSource: 'NOAA Climate Prediction Center, ENSO FAQ',
+  eventsUrl: 'https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/ensostuff/ensofaq.shtml'
+} as const;
 
 /**
  * The CPC and regional pages this module cites, with the date each link and
@@ -1199,6 +1220,23 @@ export async function fetchEnsoClaims(
       }
     }
 
+    // The index state as data, beside the sentence (types.ts `ClaimReading`):
+    // the same validated `roni.latest` point and the same resolved state the
+    // sentence above was built from, for the surfaces that draw the index on
+    // its own scale (the priority briefing and the ENSO chain). Withheld past
+    // the hard staleness cutoff, where the sentence itself has degraded to a
+    // dated past-tense read and a gauge would still look current.
+    const reading: EnsoIndexReading = {
+      kind: 'enso-index',
+      index: 'RONI',
+      value: snap.roni.latest.anom,
+      season: snap.roni.latest.seas,
+      year: snap.roni.latest.year,
+      preliminary: snap.roni.latest.preliminary,
+      conditions: state.conditions,
+      threshold: state.threshold
+    };
+
     return {
       ok: true,
       claims: [
@@ -1228,6 +1266,7 @@ export async function fetchEnsoClaims(
           // under the current horizon; the tendency and the official odds
           // built from the same snapshot stand under the long-range horizon.
           horizon: 'current',
+          ...(stale ? {} : { reading }),
           ...(chartSvg ? { chartSvg } : {})
         }),
         ...authorityClaims,
