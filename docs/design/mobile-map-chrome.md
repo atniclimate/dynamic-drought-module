@@ -12,22 +12,63 @@ convergence doctrine are recorded in [`README.md`](README.md).
 
 ## Tokens
 
-- Glass surfaces use `#004040`, `rgba(0, 64, 64, 0.30)` when backdrop blur is
-  supported, a 15px blur, a subtle matching border, and the existing 4px small
-  radius.
-- Rectangular map controls share a 52px visual size, 8px edge inset, 8px gap,
-  and 4px radius. Compact-height phones reduce the visual size to 44px and the
-  gap to 6px. The touch target never falls below 44px.
-- Safe-area insets participate in every top, right, left, and bottom seat.
+Superseded 2026-11-09 (owner direction, sprint; DR-pending). The teal glass
+(`#004040`) and the per-stack control sizes are retired. The phone chrome
+tokens are one block in `src/styles/app.css`, headed PHONE CHROME TOKENS.
 
-## Panel rail
+- Glass is rich black, never a hue: `--glass-fill` where the browser can blur
+  and `--glass-fill-solid` where it cannot, with one edge (`--glass-edge`) and
+  one shadow. Colour on this instrument belongs to the data.
+- Corners are tight. A glass body (the sheet, the drawer, a capsule in the
+  right-edge column, the report card) takes `--glass-radius`, which is the
+  scale's large step (`--radius-lg`, 8px): the radius the phone panel had
+  before the sheet. A control inside a body sits one step in. Nothing on the
+  phone is rounder than that.
+- Selected inverts, in every shell. A control that is on wears the ink as its
+  face (`--face-selected`) and the surface colour as its label
+  (`--ink-on-selected`). Its outline is even on all four sides; no side
+  carries a bar. This replaces the pressed plate and its leading bar.
+  `aria-pressed`, `aria-expanded`, and `aria-checked` still carry the state;
+  the face only shows it.
+- Focus on a selected control keeps the 2px ring and its 4px casing and adds a
+  2px rich-black ring just inside the white face (`--selected-focus-inset`),
+  so the ring never merges with the face.
+- A layer row is a checklist row, not a button: on desktop a row that is on
+  keeps its leading mark.
+- The touch target never falls below 44px. Safe-area insets participate in
+  every top, right, left, and bottom seat.
 
-Brief, Place, Layers, and Alerts form one vertical rail along the right edge,
-aligned with the Share, Reset, and hazard controls. Open panels sit to its left.
-Each button remains at least 44px square and exposes `aria-controls` and
-`aria-expanded`. Pressing a closed door raises its sheet. Pressing the active
-door again, or pressing Escape, closes it. Escape restores focus to the active
-door.
+## The right-edge column
+
+Superseded 2026-11-09 (owner direction, sprint; DR-pending). The doors were
+anchored from the top and the hazard views from the bottom, so the two stacks
+met on a short screen. Every right-edge control now sits in one column that
+one manager owns (`src/ui/edge-column.ts`), arranged by one pure planner
+(`src/config/edge-column.ts`) and drawn by `src/styles/edge-column.css`.
+
+- Groups, top to bottom: map tools (Share, Reset, Map information), the four
+  doors (Brief, Place, Layers, Alerts), the four hazard views (ENSO, Fire,
+  Drought, Heat), then the view tools (Satellite). Each group is one glass
+  capsule, and each cell shows an icon over one short word.
+- The planner prefers the largest cell with every control displayed: one
+  track at 52px (on viewports at least 380px wide), then 48px, then 44px; then
+  44px with the map tools folded behind one cell; in portrait, with the hazard
+  views folded as well; then two tracks; then two tracks with groups folded.
+  A folded group is one cell that opens its controls as a row beside it.
+  Nothing is dropped, and two controls never share a pixel.
+- A cell is a tile inside its capsule. The selected tile inverts: the open
+  door, the hazard view that is on, Satellite when on, and Map information
+  when open.
+- Each door exposes `aria-controls` and `aria-expanded`. Pressing a closed
+  door raises its sheet. Pressing the open door again, or pressing Escape,
+  closes it, and Escape restores focus to that door.
+- The first four hazard cells use the mobile view presets; Satellite remains
+  the one `BasemapSwitcherControl` backed by the basemap store. A short word
+  never replaces an accessible name, `aria-pressed`, or focus treatment.
+- The same elements move between their desktop seats and the column when the
+  shell changes, so focus order equals visual order in both.
+- Map information rides the column while the map leads (the sheet closed or
+  at peek) and waits while a panel is open.
 
 ## The sheet
 
@@ -72,18 +113,6 @@ Panel state is presentation only and is never written to the URL.
 Embed mode has no rail. Exiting an embed restores the closed mobile shell.
 Phone views do not load or present the 3D Fire controls.
 
-## Right control spine
-
-The upper utility zone is Share followed by Reset. The lower quick-view zone
-is ENSO, Fire, Drought, Heat, and Satellite. The first four controls use mobile
-view presets; Satellite remains the one `BasemapSwitcherControl` backed by the
-basemap store. Icon-only presentation never replaces accessible names,
-`aria-pressed`, or focus treatment.
-
-The lower zone remains reachable while a panel is open when the available width
-can preserve a readable panel. Very narrow phones yield those controls until
-the panel closes.
-
 ## Information surfaces
 
 The compact Fire key owns the upper-left column and reserves the right control
@@ -101,8 +130,8 @@ the outlook as well. This is a governed, intended divergence from the
 desktop current-horizon recipe, not drift; both compositions are recorded
 in `src/config/clusters.ts` and `src/config/presets.ts`.
 
-The circular information control opens a non-modal glass region across the map
-stage. It blocks pointer interaction with the map canvas, while the persistent
+The Map information control (Info in the right-edge column) opens a non-modal
+glass region across the map stage. It blocks pointer interaction with the map canvas, while the persistent
 right controls and the information toggle stay above it. Its content is
 derived from the active key, canonical layer definitions, registry statuses,
 basemap state, and the governed Tribal geography provenance note. Open state is
