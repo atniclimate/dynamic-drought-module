@@ -8534,6 +8534,16 @@ a.impact-resource-link::after {
      #panel-region stays available to the sheet console detent. */
   #shell-panel { display: none; }
   #panel-response { display: none; }
+  /* The full console stop re-admits the whole stack, shell panel included.
+     The minimap draws nothing below 721px (src/ui/island/minimap.tsx gates
+     its geometry and its live reads on the desktop query), so on a phone it
+     was an empty frame under "Jump to region" that never left its loading
+     word. Console does not carry the minimap on desktop either (the
+     view-console rule above); the framing select is the phone's region
+     control. Both the inline map and its "Map areas" door step aside here
+     (owner direction 2026-11-09 (sprint), DR-pending). */
+  #app[data-sheet-detent] .shell-minimap-map,
+  #app[data-sheet-detent] .shell-minimap-popover-wrap { display: none; }
 }
 
 .app-shell.embed #shell-panel { display: none; }
