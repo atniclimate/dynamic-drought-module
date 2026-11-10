@@ -111,11 +111,23 @@ test('a class gauge with no read draws no marker, no tick and no issuer colour',
     assert.match(svg, new RegExp(`data-gauge-state="${state}"`));
     drawings[state] = svg.replace(/aria-label="[^"]*"|<title>[^<]*<\/title>|data-gauge-state="[^"]*"/g, '');
   }
-  // Three states, three drawings: the hatch is unavailable's, the short bar is no data's.
+  // Three states, three drawings: the hatch is unavailable's, the short bars are no data's.
   assert.equal(count(drawings.unavailable, 'g-hatch'), 1);
   assert.equal(count(drawings.loading, 'g-hatch') + count(drawings.loading, 'g-nodata'), 0);
-  assert.equal(count(drawings['no-data'], 'g-nodata'), 1);
+  // No data draws one short bar in EVERY slot, so no single class is singled out.
+  assert.equal(count(drawings['no-data'], 'class="g-nodata"'), HEATRISK_SCALE.length);
   assert.equal(count(drawings['no-data'], 'g-hatch'), 0);
+  const noDataWithNone = classGaugeSvg({ classes: USDM_SCALE, none: USDM_NONE_SLOT, read: 2, state: 'no-data', title: 't' });
+  assert.equal(count(noDataWithNone, 'class="g-nodata"'), USDM_SCALE.length + 1, 'the no-class slot gets its bar too');
+  // Each bar sits inside its own block: the bars' centres are the blocks' centres.
+  const blocks = [...drawings['no-data'].matchAll(/class="g-seg g-seg-empty" x="([\d.]+)" y="[\d.]+" width="([\d.]+)"/g)].map(
+    (m) => Number(m[1]) + Number(m[2]) / 2
+  );
+  const bars = [...drawings['no-data'].matchAll(/class="g-nodata" d="M([\d.]+) [\d.]+H([\d.]+)"/g)].map(
+    (m) => (Number(m[1]) + Number(m[2])) / 2
+  );
+  assert.equal(bars.length, blocks.length);
+  bars.forEach((centre, index) => assert.ok(Math.abs(centre - blocks[index]) < 0.2, `bar ${index} at ${centre}, block at ${blocks[index]}`));
   assert.notEqual(drawings.loading, drawings.unavailable);
   assert.notEqual(drawings.loading, drawings['no-data']);
   assert.notEqual(drawings.unavailable, drawings['no-data']);
@@ -157,7 +169,7 @@ test('the day strip keeps a class, a probability, no area and no read apart', ()
       caption: 'probability',
       days: [
         { tick: '3', cell: { kind: 'probability', percent: 40 } },
-        { tick: '4', cell: { kind: 'word', word: 'low', label: 'Probability Too Low' } },
+        { tick: '4', cell: { kind: 'word', word: 'too low', label: 'Probability Too Low' } },
         { tick: '5', cell: { kind: 'unread' } }
       ]
     }
@@ -168,9 +180,16 @@ test('the day strip keeps a class, a probability, no area and no read apart', ()
   assert.deepEqual(fills(svg), [critical.color], 'only a class wears an issuer colour');
   assert.equal(count(svg, 'g-fill-ink'), 1, 'a probability is neutral ink');
   assert.match(svg, />40%</);
+  // Two words are set on two lines, both whole; the service's own label is the hover title.
+  assert.equal(count(svg, 'class="g-word"'), 2);
+  assert.match(svg, />too</);
   assert.match(svg, />low</);
+  assert.match(svg, /<title>Day 4: Probability Too Low<\/title>/);
   assert.equal(count(svg, 'g-hatch'), 1, 'only the unread day is hatched');
   assert.match(svg, /Day 2: No area drawn/);
+  // The first tick already says "Day 1": its title does not say it twice.
+  assert.match(svg, /<title>Day 1: /);
+  assert.doesNotMatch(svg, /Day Day/);
   // With no read, every day is unread: no fill, no lead, no value.
   const down = dayStripSvg({ groups, state: 'unavailable', title: 't' });
   assert.deepEqual(fills(down), []);

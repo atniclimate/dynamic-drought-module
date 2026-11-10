@@ -18,9 +18,9 @@
  *     src/config/palette.ts or it is neutral ink. Nothing here invents a hue.
  *   - A figure with no read never draws a value. `loading` is an empty
  *     outlined scale; `unavailable` is a hatched plate; `no-data` is the
- *     empty scale with the short no-data bar. None of them places a marker,
- *     so there is no zero needle to misread. The state word and its reason
- *     are the caller's text, beside the figure.
+ *     empty scale with a short bar in every slot. None of them places a
+ *     marker on one class, so there is no zero needle to misread. The state
+ *     word and its reason are the caller's text, beside the figure.
  *   - Every figure carries a text alternative (`title`) the caller writes
  *     with the same facts: the class, the source and the time.
  *
@@ -192,7 +192,14 @@ export function classGaugeSvg(options: ClassGaugeOptions): string {
 
   if (state === 'unavailable') inner += hatch(0, mid - thin / 2, W, thin);
   if (state === 'no-data') {
-    inner += `<path class="g-nodata" d="M${n1(W / 2 - 7)} ${mid}H${n1(W / 2 + 7)}"/>`;
+    // The service answered with no value: a short bar in EVERY slot. One bar
+    // centred on the scale would sit inside a single class's block and read
+    // as that class.
+    const centres = [
+      ...(options.none ? [noneW / 2] : []),
+      ...classes.map((_, index) => x0 + index * (segW + gap) + segW / 2)
+    ];
+    inner += centres.map((cx) => `<path class="g-nodata" d="M${n1(cx - 4)} ${mid}H${n1(cx + 4)}"/>`).join('');
   }
   return frame(H, options.title, 'class', state, inner);
 }
@@ -268,7 +275,7 @@ export type DayStripCell =
   | { readonly kind: 'class'; readonly label: string; readonly color: string; readonly step: number; readonly steps: number }
   /** A probability the issuer mapped, 0 to 100. */
   | { readonly kind: 'probability'; readonly percent: number }
-  /** A service value with a word and no magnitude. */
+  /** A service value with a word and no magnitude; two words are set on two lines. */
   | { readonly kind: 'word'; readonly word: string; readonly label: string }
   /** The issuer drew nothing over the point for this day. */
   | { readonly kind: 'none' }
@@ -336,16 +343,23 @@ export function dayStripSvg(options: DayStripOptions): string {
         above = `${cell.percent}%`;
         hover = `${cell.percent}% probability`;
       } else if (cell.kind === 'word') {
-        fill = `<text class="g-word" x="${n1(cx)}" y="${n1(top + frameH / 2 + 2.5)}" text-anchor="middle">${escapeHtml(cell.word)}</text>`;
+        // At most two short lines, so an issuer's words are not cut to one.
+        const lines = cell.word.split(' ').slice(0, 2);
+        const firstY = top + frameH / 2 + 2.5 - (lines.length - 1) * 4;
+        fill = lines
+          .map((line, index) => `<text class="g-word" x="${n1(cx)}" y="${n1(firstY + index * 8)}" text-anchor="middle">${escapeHtml(line)}</text>`)
+          .join('');
         hover = cell.label;
       } else if (cell.kind === 'none') {
         hover = 'No area drawn';
       } else if (options.state !== 'loading') {
         fill = hatch(x + 1, top + 1, cellW - 2, frameH - 2, 4);
       }
+      // The first tick already says "Day 1"; the rest are the bare number.
+      const dayName = /^day\b/i.test(day.tick) ? day.tick : `Day ${day.tick}`;
       inner +=
         `<rect class="g-frame${lead ? ' g-read' : ''}" x="${n1(x + 0.5)}" y="${top + 0.5}" width="${n1(cellW - 1)}" height="${frameH - 1}" rx="2">` +
-        `<title>Day ${escapeHtml(day.tick)}: ${escapeHtml(hover)}</title></rect>` +
+        `<title>${escapeHtml(dayName)}: ${escapeHtml(hover)}</title></rect>` +
         fill +
         (above ? `<text class="g-above" x="${n1(cx)}" y="${top - 3}" text-anchor="middle">${escapeHtml(above)}</text>` : '') +
         (lead ? caret(cx, top - (above ? 11 : 2)) : '') +

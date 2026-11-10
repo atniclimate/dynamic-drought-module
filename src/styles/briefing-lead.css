@@ -199,6 +199,9 @@
 }
 .lead-tiles {
   display: grid;
+  /* The one track may shrink below a tile's longest unbroken part, so a tile
+     never pushes past a 320 px phone's column. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
 }
 /* Every tile is the same size: first in the reading order is read first, it
@@ -263,12 +266,15 @@
   line-height: 1.45;
   color: var(--fg-1);
 }
-/* The foot: whose read it is and when, and the way in to its text. */
+/* The foot: whose read it is and when, and the way in to its text. The way
+   in sits beside a short source and drops under a long one (or a narrow
+   column), so the source is never squeezed into a ribbon. */
 .lead-foot {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-end;
   justify-content: space-between;
-  gap: 10px;
+  gap: 4px 10px;
   margin-top: auto;
   padding-top: 2px;
 }
@@ -291,6 +297,7 @@
 }
 .lead-open {
   flex: none;
+  margin-left: auto;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -364,10 +371,14 @@
 .lead-together-item {
   position: relative;
   display: grid;
-  grid-template-columns: 62px minmax(0, 1fr);
+  grid-template-columns: 70px minmax(0, 1fr);
   gap: 2px 8px;
   align-items: baseline;
   padding: 8px 12px 8px 32px;
+}
+/* A hazard word is one word: it never breaks inside itself. */
+.lead-together-item > .lead-hazard {
+  white-space: nowrap;
 }
 .lead-together-item::before {
   content: '';
@@ -482,6 +493,13 @@
 .lead-state-horizon {
   font-size: 11px;
   color: var(--fg-1);
+}
+.lead-text-read-words {
+  min-width: 0;
+}
+.lead-text-read-where {
+  font-size: 11px;
+  color: var(--fg-2);
 }
 
 /* ---- Doors ----------------------------------------------------------------- */
@@ -605,6 +623,14 @@
 }
 .evidence-chain-source a {
   color: var(--accent);
+}
+/* The date takes its own line here, so its separator dot (app.css
+   `.impact-claim-date::before`) never opens a wrapped line. */
+.evidence-chain-source .impact-claim-date {
+  display: block;
+}
+.evidence-chain-source .impact-claim-date::before {
+  content: none;
 }
 /* The joint: a plain stem with the relationship written on it. No arrowhead:
    a relationship across past events is not a direction of cause. */

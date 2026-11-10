@@ -159,7 +159,8 @@ function spcCell(reading: Extract<ClaimReading, { kind: 'spc-fire-days' }>): Day
   if (reading.probability === '0.70') return { kind: 'probability', percent: 70 };
   if (reading.probability === '0.40') return { kind: 'probability', percent: 40 };
   if (reading.probability === 'Probability Too Low') {
-    return { kind: 'word', word: 'low', label: 'Probability Too Low' };
+    // The service's own label, under the group's "probability" caption.
+    return { kind: 'word', word: 'too low', label: 'Probability Too Low' };
   }
   return { kind: 'none' };
 }
@@ -465,13 +466,15 @@ function renderUnrankedRead(read: PriorityUnrankedRead): string {
 }
 
 /**
- * A read with no class to draw: named by its horizon, source and date, with
- * its sentence one tap away. Nothing of the sentence is cut here.
+ * A read with no class to draw: named by its horizon, source and date, and
+ * said to be in the federal text, one tap away on the row's own door. Nothing
+ * of the sentence is cut here.
  */
 function renderTextRead(horizon: HorizonKey, claim: SourcedClaim): string {
   return (
     `<div class="lead-text-read ${EVIDENCE_PRESENTATION[claim.evidence].cssClass}">` +
-    `<p class="lead-state-line"><span class="lead-state-horizon">${escapeHtml(horizonWord(horizon))}</span>${badge(claim)}</p>` +
+    `<p class="lead-state-line"><span class="lead-text-read-words"><span class="lead-state-horizon">${escapeHtml(horizonWord(horizon))}</span>` +
+    ` <span class="lead-text-read-where">stated in the federal text</span></span>${badge(claim)}</p>` +
     `<p class="lead-read-source">${sourceLine(claim)}</p></div>`
   );
 }

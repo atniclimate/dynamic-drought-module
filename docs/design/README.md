@@ -189,8 +189,8 @@ taller block) and an ink keyline, never by colour alone. The index gauge draws
 a signed index against the issuer's thresholds. The day strip draws a short
 run of days on one issuer clock. A gauge with no read never draws a value:
 `loading...` is the empty outlined scale, `unavailable` is a hatched plate,
-`no data` is the empty scale with a short bar. None places a marker, so there
-is no zero to misread.
+`no data` is the empty scale with a short bar in every slot. None marks one
+class, so there is no zero to misread.
 
 **Present together.** Hazards that hold a ranked read for the same moment are
 joined on a rail with one node each. The rail has no direction: it states
