@@ -16,11 +16,14 @@
  * HONESTY RULES, the same for all three.
  *   - Colour belongs to the data: a fill is an issuer class colour from
  *     src/config/palette.ts or it is neutral ink. Nothing here invents a hue.
- *   - A figure with no read never draws a value. `loading` is an empty
- *     outlined scale; `unavailable` is a hatched plate; `no-data` is the
- *     empty scale with a short bar in every slot. None of them places a
- *     marker on one class, so there is no zero needle to misread. The state
- *     word and its reason are the caller's text, beside the figure.
+ *   - A figure with no read never draws a value, and each of the three
+ *     no-read states is its own drawing on every figure. `loading` is the
+ *     empty outlined scale. `unavailable` is a hatched plate. `no-data` is
+ *     the empty scale with a short bar in every slot or frame (on the index
+ *     gauge, whose scale is a line, the line itself is broken into short
+ *     bars). None of them places a marker on one class or one value, so
+ *     there is no zero needle to misread. The state word and its reason are
+ *     the caller's text, beside the figure.
  *   - Every figure carries a text alternative (`title`) the caller writes
  *     with the same facts: the class, the source and the time.
  *
@@ -237,7 +240,11 @@ export function indexGaugeSvg(options: IndexGaugeOptions): string {
   const x = (v: number): number => padX + ((v + reach) / (2 * reach)) * (W - padX * 2);
   const guide = ENSO_INDEX_GUIDE_COLORS.RONI;
   const signed = (v: number): string => `${v > 0 ? '+' : ''}${v}`;
-  let inner = `<path class="g-axis" d="M${padX} ${axisY}H${W - padX}"/>`;
+  // The service answered with no value: the axis is broken into short bars,
+  // the same mark the class gauge puts in every slot. No dot is drawn.
+  const axisClass = options.state === 'no-data' ? 'g-axis g-nodata' : 'g-axis';
+  const dash = options.state === 'no-data' ? ' stroke-dasharray="8 6"' : '';
+  let inner = `<path class="${axisClass}"${dash} d="M${padX} ${axisY}H${W - padX}"/>`;
 
   if (options.state === 'unavailable') {
     inner += hatch(padX, axisY - 5, W - padX * 2, 10);
@@ -309,7 +316,9 @@ export interface DayStripOptions {
  * issuer's colour for a class, to its true share of the frame in neutral ink
  * for a probability. An empty frame is "no area drawn"; a hatched frame was
  * not read. Height carries the class beside the colour, so the strip never
- * rests on hue alone.
+ * rests on hue alone. With no read at all the whole strip takes one state:
+ * empty frames while loading, hatched frames when unavailable, a short bar in
+ * every frame when the service answered with no data.
  */
 export function dayStripSvg(options: DayStripOptions): string {
   const H = 58;
@@ -352,6 +361,9 @@ export function dayStripSvg(options: DayStripOptions): string {
         hover = cell.label;
       } else if (cell.kind === 'none') {
         hover = 'No area drawn';
+      } else if (options.state === 'no-data') {
+        hover = 'No data';
+        fill = `<path class="g-nodata" d="M${n1(cx - 4)} ${n1(top + frameH / 2)}H${n1(cx + 4)}"/>`;
       } else if (options.state !== 'loading') {
         fill = hatch(x + 1, top + 1, cellW - 2, frameH - 2, 4);
       }

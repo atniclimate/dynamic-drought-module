@@ -14,8 +14,8 @@ import { fileURLToPath } from 'node:url';
  *      caret, exactly one keylined block), on the issuer's own colours in the
  *      issuer's own order;
  *   2. a figure with no read draws no marker, no value and no issuer colour:
- *      `loading`, `unavailable` and `no-data` are three different drawings,
- *      and none of them is a zero;
+ *      on each of the three figures `loading`, `unavailable` and `no-data`
+ *      are three different drawings, and none of them is a zero;
  *   3. the chain draws at most five links, keeps a link with no read in its
  *      place under its state word, never prints a statement for it, labels
  *      its joints as relationships and draws no arrow;
@@ -150,12 +150,21 @@ test('the index gauge marks the issuer thresholds and holds any value on its axi
   assert.ok(x(far) < 230 && x(far) > x(read), `dot at ${x(far)}`);
   const cold = indexGaugeSvg({ value: -1.2, threshold: 0.5, below: 'La Nina', above: 'El Nino', state: 'read', title: 't' });
   assert.ok(x(cold) < 120);
-  for (const state of ['loading', 'unavailable']) {
+  const unread = {};
+  for (const state of ['loading', 'unavailable', 'no-data']) {
+    // Even when a caller passes a value by mistake, an unread state draws none.
     const none = indexGaugeSvg({ value: 1.69, threshold: 0.5, below: 'La Nina', above: 'El Nino', state, title: 't' });
     assert.equal(count(none, 'g-dot'), 0, `${state}: no value dot`);
     assert.equal(count(none, 'g-value'), 0, `${state}: no value`);
+    unread[state] = none.replace(/aria-label="[^"]*"|<title>[^<]*<\/title>|data-gauge-state="[^"]*"/g, '');
   }
   assert.equal(count(indexGaugeSvg({ value: null, threshold: 0.5, below: 'a', above: 'b', state: 'unavailable', title: 't' }), 'g-hatch'), 1);
+  // Three states, three drawings: a whole axis, a hatched plate, an axis broken into short bars.
+  assert.equal(count(unread.loading, 'g-hatch') + count(unread.loading, 'g-nodata'), 0);
+  assert.equal(count(unread.unavailable, 'g-hatch'), 1);
+  assert.match(unread['no-data'], /class="g-axis g-nodata" stroke-dasharray="8 6"/);
+  assert.equal(count(unread['no-data'], 'g-hatch'), 0);
+  assert.equal(new Set(Object.values(unread)).size, 3);
 });
 
 test('the day strip keeps a class, a probability, no area and no read apart', () => {
@@ -201,6 +210,15 @@ test('the day strip keeps a class, a probability, no area and no read apart', ()
   assert.equal(count(down, 'g-hatch'), 5);
   const loading = dayStripSvg({ groups, state: 'loading', title: 't' });
   assert.equal(count(loading, 'g-hatch') + count(loading, 'g-fill') + count(loading, 'g-caret'), 0);
+  assert.equal(count(loading, 'g-nodata'), 0);
+  // No data is its own drawing: one short bar in every frame, no hatch, no value.
+  const noData = dayStripSvg({ groups, state: 'no-data', title: 't' });
+  assert.equal(count(noData, 'class="g-nodata"'), 5);
+  assert.equal(count(noData, 'g-hatch') + count(noData, 'g-fill') + count(noData, 'g-caret') + count(noData, '>40%<'), 0);
+  assert.deepEqual(fills(noData), []);
+  assert.match(noData, /<title>Day 1: No data<\/title>/);
+  const strip = (svg) => svg.replace(/aria-label="[^"]*"|<title>[^<]*<\/title>|data-gauge-state="[^"]*"/g, '');
+  assert.equal(new Set([strip(loading), strip(down), strip(noData)]).size, 3);
 });
 
 const EVIDENCE_CLASSES = ['observed', 'analyzed', 'classified', 'modeled-analysis', 'modeled', 'derived', 'outlook'];

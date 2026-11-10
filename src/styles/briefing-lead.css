@@ -769,16 +769,19 @@
   stroke: var(--ink-muted);
   stroke-width: 0.9;
 }
-.ddm-gauge .g-nodata {
-  stroke: var(--ink-soft);
-  stroke-width: 1.5;
-  stroke-linecap: round;
-}
 .ddm-gauge .g-axis,
 .ddm-gauge .g-zero {
   fill: none;
   stroke: var(--ink-muted);
   stroke-width: 1;
+}
+/* The no data mark: a short bar. After the axis rule, so an index gauge's
+   axis broken into bars (`g-axis g-nodata`) wears this ink. */
+.ddm-gauge .g-nodata {
+  fill: none;
+  stroke: var(--ink-soft);
+  stroke-width: 1.5;
+  stroke-linecap: round;
 }
 .ddm-gauge .g-band {
   fill: var(--ink);
