@@ -149,6 +149,67 @@ Amended 2026-09-26 (DR-125): EOX Sentinel-2 cloudless is served (2016 to
 2025), not retired; it is excluded as a non-government issuer, CC BY-NC-SA
 from 2018, with on-map attribution required.
 
+## Priority view of the Impact Briefing
+
+Recorded 2026-11-09, owner direction 2026-11-09 (sprint), DR-pending.
+
+The Impact Briefing has two presentations of the same claims. The full detail
+is the matrix: four hazards at three horizons, never reordered. The priority
+view reads the same cells in a different order and draws them as gauges. It
+adds no source, fetches nothing and computes no value
+(`src/ui/briefing-lead.ts`).
+
+**What leads.** The current and near-term reads that hold a class in the
+reading order, as tiles: the hazard word, the issuer's class in the issuer's
+words, a gauge on the issuer's own scale, the source, the date and the
+evidence class. The first four lead; any further ranked reads follow as the
+same tiles under "Next in the reading order". Every tile is the same size:
+first in the order is read first, it is not drawn larger.
+
+**The one rule.** The order comes from one table (`PRIORITY_ROWS`,
+`src/impact/priority.ts`): by row, then by the issuer's own class order inside
+the row, then by the fixed hazard order Drought, Fire, Heat, ENSO. The rows
+are an NWS product in effect at the point, a current mapped wildfire
+perimeter, the U.S. Drought Monitor category, the NWS HeatRisk level, the SPC
+Day 1 or Day 2 category, the SPC Days 3 to 8 probability, and El Nino or La
+Nina conditions. It is a reading order, not a severity score: nothing is
+added, weighted or compared across hazards. The view says so on its surface
+and the rule is rendered from the table at the head of Technical information,
+one tap away ("How this is ordered").
+
+**Absence is not ranked.** A read with no class in the table (no polygon, no
+area drawn, no product in effect, an issuer's lowest class) is listed under
+"Other reads and gaps" in the issuer's words. A cell that was not read is
+listed there under its own state with the reason. Neither is an all-clear, and
+no hazard is dropped.
+
+**Gauges** (`src/ui/gauges.ts`). The class gauge draws the whole issuer scale
+in the issuer's colours and marks the read class by position (a caret and a
+taller block) and an ink keyline, never by colour alone. The index gauge draws
+a signed index against the issuer's thresholds. The day strip draws a short
+run of days on one issuer clock. A gauge with no read never draws a value:
+`loading...` is the empty outlined scale, `unavailable` is a hatched plate,
+`no data` is the empty scale with a short bar. None places a marker, so there
+is no zero to misread.
+
+**Present together.** Hazards that hold a ranked read for the same moment are
+joined on a rail with one node each. The rail has no direction: it states
+co-occurrence in place and time, never that one hazard leads to another.
+
+**The evidence chain** (`src/ui/evidence-chain.ts`) is the one shared
+component for laying separate claims side by side as links. Each link is its
+own claim on its own clock with its own evidence class; each joint is a
+labelled relationship, never a cause; a link with no read keeps its place
+under its state word.
+
+**Reaching the matrix.** A two-way switch, Priority and Full detail, sits at
+the top of the briefing. Any tile or row opens that hazard's own cells in the
+matrix (the federal text, each claim's method and source link) with doors to
+Technical information and Acknowledgements; "Priority view" returns. Phones
+open on the priority view; every other shell opens on the full detail with
+the switch above it. The choice is presentation state and never enters the
+URL.
+
 ## Convergence doctrine
 
 DDM is not merely a map. It is an instrument for making claims responsibly
@@ -192,6 +253,11 @@ colour; it marks the reader's mode, not a severity, and rows are never
 reordered. In the Wildfire 3D scene motion belongs to the flame edge on
 issuer-active records only; the perimeter fill holds its colour and a null
 status is static (DR-128).
+
+Amended 2026-11-09 (owner direction 2026-11-09 (sprint), DR-pending): the
+matrix rows still are never reordered. A separate priority view of the same
+briefing may lead with reads in one published reading order over issuer
+classes; see "Priority view of the Impact Briefing" below.
 
 ### Creativity comes from truthful arrangement
 
