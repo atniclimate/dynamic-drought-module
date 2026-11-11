@@ -271,22 +271,25 @@ function scheduleSettle(): void {
   }, SETTLE_FALLBACK_MS);
 }
 
-/** A door press opened or switched the view; focus has not followed it yet. */
-let pendingViewFocus = false;
+/** The door whose press opened or switched the view; focus has not followed it yet. */
+let pendingFocusDoor: HTMLElement | null = null;
+let settles = 0;
 
 /**
  * Move focus from the pressed door into the view it opened (WCAG 2.4.3): the
  * sheet title, the view's heading, else the first control that does not
  * raise the keyboard (and with it the sheet). Runs at settle, when the view
  * is shown whether or not the motion module (and so the title) arrived, and
- * never takes focus the user already placed outside the doors.
+ * only while focus is still on that door (or nowhere): focus the user moved
+ * meanwhile, even to another door, is never taken.
  */
 function focusShownView(): void {
-  if (!pendingViewFocus) return;
-  pendingViewFocus = false;
+  const door = pendingFocusDoor;
+  pendingFocusDoor = null;
+  if (!door) return;
   const held = document.activeElement;
   if (detent === null || detent === 'closed' || !sidebarEl) return;
-  if (held && held !== document.body && !held.closest('#mobile-footer-nav')) return;
+  if (held && held !== document.body && held !== door) return;
   const title = document.getElementById('sheet-title');
   const shown = (el: HTMLElement): boolean =>
     el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden';
@@ -313,6 +316,8 @@ function settle(): void {
     settleTimer = null;
   }
   focusShownView();
+  // Test seam, like Locate's map stamp: a spec waits for a settle instead of sleeping.
+  document.documentElement.dataset['ddmSheetSettles'] = String(++settles);
   if (!mapRef) return;
   const map = mapRef;
   map.resize();
@@ -647,7 +652,8 @@ function openFooterTab(tab: SheetTab): void {
     if (getViewMode() !== 'console') setViewMode('console');
   }
   syncFooterTab(tab);
-  pendingViewFocus = true;
+  pendingFocusDoor =
+    document.querySelector<HTMLElement>(`#mobile-footer-nav button[data-tab="${tab}"]`) ?? document.body;
   if (tab === 'alerts') {
     // Lazy: the alerts pane module rides the same activation the layer
     // does; an embed or desktop session never downloads it.

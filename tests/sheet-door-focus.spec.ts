@@ -56,6 +56,25 @@ test.describe('sheet doors move focus into the view they open', () => {
     await expect.poll(() => onDoor(page, 'alerts')).toBe(true);
   });
 
+  test('focus moved to another door before the sheet settles stays there', async ({ page }) => {
+    await gotoApp(page);
+    const app = page.locator('#app');
+    // mobile-sheet.ts stamps each settle, so the case waits for the real one instead of sleeping.
+    const settles = (): Promise<number> =>
+      page.evaluate(() => Number(document.documentElement.dataset['ddmSheetSettles'] ?? 0));
+    const before = await settles();
+
+    // Press Place, then move focus to Layers in the same task: before any settle can run.
+    await page.evaluate(() => {
+      document.querySelector<HTMLElement>('#mobile-footer-nav button[data-tab="place"]')?.click();
+      document.querySelector<HTMLElement>('#mobile-footer-nav button[data-tab="layers"]')?.focus();
+    });
+    await expect(app).toHaveAttribute('data-sheet-detent', 'half');
+    await expect.poll(settles).toBeGreaterThan(before);
+    expect(await onDoor(page, 'layers')).toBe(true);
+    expect(await insideSheet(page)).toBe(false);
+  });
+
   test('pressing the lit door still closes and focus stays on that door', async ({ page }) => {
     await gotoApp(page);
     const app = page.locator('#app');
