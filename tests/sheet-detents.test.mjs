@@ -66,7 +66,9 @@ test('the stylesheet declares the numbers the rules mirror', () => {
 
 test('the drawer window is one query, stated once in each language', () => {
   const conditions = SHEET_DRAWER_QUERY.split(' and ');
-  assert.deepEqual(conditions, ['(max-width: 720px)', '(max-height: 480px)', '(orientation: landscape)']);
+  // The width floor keeps an upright phone whose keyboard shrank the window
+  // (360 by 304 is "landscape" to a media query) out of the drawer.
+  assert.deepEqual(conditions, ['(min-width: 481px)', '(max-width: 720px)', '(max-height: 480px)', '(orientation: landscape)']);
   const queries = [...css.matchAll(/@media ([^{]+)\{/g)].map((match) => match[1].trim());
   for (const query of queries.filter((text) => text.includes('orientation'))) {
     assert.equal(query, SHEET_DRAWER_QUERY, 'a drawer rule uses the shared query');

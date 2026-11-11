@@ -29,11 +29,15 @@ export const SHEET_OPEN_STOPS: readonly SheetStop[] = ['peek', 'half', 'full'];
 
 /**
  * The window in which the panel is a left drawer: inside the phone shell,
- * wider than tall, and too short for a sheet with three heights. The
- * stylesheet declares the same query, and the node test keeps them equal.
+ * wider than tall, and too short for a sheet with three heights. The width
+ * floor keeps a phone held upright out of it: where the on-screen keyboard
+ * shrinks the layout viewport, an upright phone is briefly "wider than
+ * tall" (360 by 304, say), and the sheet a person is typing into must not
+ * turn into a 72 px drawer. The stylesheet declares the same query, and the
+ * node test keeps them equal.
  */
 export const SHEET_DRAWER_QUERY =
-  '(max-width: 720px) and (max-height: 480px) and (orientation: landscape)';
+  '(min-width: 481px) and (max-width: 720px) and (max-height: 480px) and (orientation: landscape)';
 
 /** Geometry tokens in CSS px. The stylesheet declares the same numbers. */
 export const SHEET_TOKENS = {

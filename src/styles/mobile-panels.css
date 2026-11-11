@@ -376,7 +376,7 @@
    The stop attribute still decides which content shows. The query is
    SHEET_DRAWER_QUERY in src/config/sheet-detents.ts.
    ============================================================================= */
-@media (max-width: 720px) and (max-height: 480px) and (orientation: landscape) {
+@media (min-width: 481px) and (max-width: 720px) and (max-height: 480px) and (orientation: landscape) {
   #app[data-sheet-detent] {
     /* As wide as the content wants, leaving the map a readable strip
        between the drawer and the column. */
