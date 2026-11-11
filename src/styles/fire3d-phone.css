@@ -13,9 +13,9 @@
      covering it), then clear ground, then THE PAD in the lower right beside
      the column, level with the scale rulers.
    The card's seat is one no sheet stop reaches: while the scene is on, the
-   sheet's full stop ends under the card (--mobile-panel-top below), and the
-   half stop is never taller than full, so the two statements stay on the
-   surface with the sheet closed, at peek, at half and at full.
+   sheet's full stop ends under the card (--mobile-panel-top below) and the
+   half stop ends lower still, so the two statements stay on the surface
+   with the sheet closed, at peek, at half and at full.
 
    The owner's three rules apply to everything here. Corners come from the
    tokens and nothing is rounder than the glass radius; the pad's keys and
@@ -32,11 +32,27 @@
 }
 
 @media (max-width: 720px) {
-  /* While the scene is on, the sheet's full stop ends under the card. */
+  /* While the scene is on, the sheet's full stop ends under the card. The
+     half stop ends lower still, by the height of the map furniture that
+     rides the sheet's top edge at half (the credit and the two scale
+     rulers stand 82 px above it), so the credit is never pushed up under
+     the card. Peek is a fixed height and already clears both. */
   #app[data-sheet-detent][data-fire3d-phone] {
     --mobile-panel-top: calc(
       var(--fire3d-card-bottom, calc(env(safe-area-inset-top, 0px) + 76px)) + var(--mobile-map-edge)
     );
+    --sheet-h-half: min(
+      calc(var(--sheet-h-full) - 84px),
+      max(50vh, calc(var(--sheet-h-peek) + 64px))
+    );
+  }
+  @supports (height: 1dvh) {
+    #app[data-sheet-detent][data-fire3d-phone] {
+      --sheet-h-half: min(
+        calc(var(--sheet-h-full) - 84px),
+        max(50dvh, calc(var(--sheet-h-peek) + 64px))
+      );
+    }
   }
 
   /* An open key drawer leaves the card its room above the credit and the

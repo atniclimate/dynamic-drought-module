@@ -230,6 +230,8 @@ export function createFire3DPhoneScene(map: maplibregl.Map, app: HTMLElement): F
   /** The scene's own sources have all reported loaded at least once in this activation. */
   let settledOnce = false;
   let hold: TouchHold | null = null;
+  /** Where the pad's last press is taking the camera, until the camera stops. */
+  let goal: Fire3DCamera | null = null;
   let announce = false;
   let frame = 0;
   let cardObserver: ResizeObserver | null = null;
@@ -245,9 +247,12 @@ export function createFire3DPhoneScene(map: maplibregl.Map, app: HTMLElement): F
   // -------------------------------------------------------------------------
   function press(name: Fire3DPadAction): void {
     if (!live()) return;
-    const from = camera();
+    // A press made while the last one is still easing starts from where
+    // that one is going, so two quick presses turn two points, not one.
+    const from = goal ?? camera();
     if (fire3dPadAtStop(name, from, limits())) return;
     const target = fire3dPadTarget(name, from, limits());
+    goal = target;
     announce = true;
     if (prefersReducedMotion()) map.jumpTo(target);
     else map.easeTo({ ...target, duration: FIRE3D_PAD_EASE_MS });
@@ -267,11 +272,15 @@ export function createFire3DPhoneScene(map: maplibregl.Map, app: HTMLElement): F
     }
   };
   const nameCompass = (): void => {
-    const now = camera();
-    buttons.get('reset')?.setAttribute('aria-label', fire3dCompassName(now));
+    buttons.get('reset')?.setAttribute('aria-label', fire3dCompassName(camera()));
+  };
+  /** The camera has stopped: name where it stands, and say so once if the pad sent it there. */
+  const onMoveEnd = (): void => {
+    goal = null;
+    nameCompass();
     if (!announce) return;
     announce = false;
-    said.textContent = fire3dCameraAnnouncement(now);
+    said.textContent = fire3dCameraAnnouncement(camera());
   };
 
   function takeTouchHold(): TouchHold {
@@ -413,7 +422,8 @@ export function createFire3DPhoneScene(map: maplibregl.Map, app: HTMLElement): F
     let show = live() && mapLeads && !keyOpen && !app.hasAttribute('data-map-info-open');
     if (show) {
       pad.hidden = false;
-      show = pad.getBoundingClientRect().top >= box.bottom + PAD_CLEARANCE_PX;
+      // The pad's own seat (its layout box), not the box its entrance is still animating.
+      show = pad.offsetTop >= box.bottom + PAD_CLEARANCE_PX;
     }
     if (pad.hidden !== !show) {
       const within = pad.contains(document.activeElement);
@@ -463,7 +473,7 @@ export function createFire3DPhoneScene(map: maplibregl.Map, app: HTMLElement): F
     app.setAttribute(CARD_ATTRIBUTE, '');
     map.on('rotate', paintCompass);
     map.on('pitch', paintCompass);
-    map.on('moveend', nameCompass);
+    map.on('moveend', onMoveEnd);
     offSmoke = registry.on('status-change', (key) => {
       if (key === HMS_SMOKE_LAYER_KEY) render();
     });
@@ -487,7 +497,9 @@ export function createFire3DPhoneScene(map: maplibregl.Map, app: HTMLElement): F
     const within = card.contains(document.activeElement) || pad.contains(document.activeElement);
     map.off('rotate', paintCompass);
     map.off('pitch', paintCompass);
-    map.off('moveend', nameCompass);
+    map.off('moveend', onMoveEnd);
+    goal = null;
+    announce = false;
     offSmoke?.();
     offSmoke = null;
     cardObserver?.disconnect();

@@ -27,6 +27,31 @@ The scene publishes `active` at the end of activateScene (src/map/fire3d.ts) whi
 - A Preact island, not a plain DOM module. src/ui/island/shell.tsx:1-3 records that new UI surfaces are islands; this surface has a reducer, timers, focus, inert state and live regions. v2 mounts an independent island in `#fire3d-loading-root` inside the map container, so it works in embeds where the shell is absent. fire3d.ts keeps only facts.
 - Accessibility restructured. Cancel no longer sits inside a `role="status"`; the stage sentence lives in its own polite, atomic live node; the map canvas and its controls are inerted while the desktop sidebar stays operable; in an embed the cover is the whole surface and traps focus; focus is saved when the cover actually appears and restored only if still connected.
 
+## On phones (built 2026-11-09)
+
+Owner direction 2026-11-09 (sprint; DR-pending) lets a phone enter the scene
+(`mobile-map-chrome.md`, "3D on phones"). The phone's loading surface is
+built, and it is smaller than the cover this note proposes: the card that
+keeps the two statements on the map also shows the entry.
+
+What it takes from this note: Cancel owns the preference
+(`setFire3DPreference(false)`, so the URL drops `fire3d=true` and the
+controller tears down); the card is in the document before the scene's code
+has even arrived; the step sentence is its own polite, atomic live node and
+Cancel is not inside it; the bar is indeterminate, with a name and no value;
+reduced motion stops the bar and the fades; a failure reads `Unavailable.`
+with the reason.
+
+Where it differs, and why. The transaction below is still not built, so the
+phone shows the steps the built one really waits on: the archive probe, then
+smoke and perimeters, then the hazard drape and structures
+(`Fire3DStatus.phase`), and after the scene first reads live, "Loading
+terrain relief" until its own sources first settle. "Tilting the view" is
+not shown, because the built entry does not wait on the tilt. Cancel is ink
+on glass rather than red: the 2026-11-09 direction keeps hazard hues for the
+data. There is no one-second delay, because the card is not a cover that
+could flash; it is where the two statements stand from the first frame.
+
 ## The entry transaction
 
 `Fire3DStatus` gains `activationId: number`, `phase`, and `settledOnce: boolean`; `transport` stays as landed in 283de57. All stamped on the control as `data-fire3d-phase`, `data-fire3d-settled-once` beside the existing stamps.

@@ -132,7 +132,51 @@ never share a pixel. `src/styles/mobile-panels.css` owns its form,
 Panel state is presentation only and is never written to the URL.
 
 Embed mode has no rail. Exiting an embed restores the closed mobile shell.
-Phone views do not load or present the 3D Fire controls.
+
+## 3D on phones
+
+Superseded 2026-11-09 (owner direction, sprint; DR-pending). This note said
+"Phone views do not load or present the 3D Fire controls." A phone may now
+enter the 3D Fire view, through one explicit control and on these terms.
+
+- The 3D cell sits in the right-edge column's view tools, under Satellite.
+  It exists only where a press means something: Fire is the hazard view, the
+  renderer probe found WebGL 2, and the screen is at least 360px wide and
+  600px tall. Anywhere else the cell is absent, never disabled, so the column
+  never shows a dead control. `src/config/fire3d-phone.ts` states the
+  measurement behind each floor.
+- A press sets the same durable preference as the desktop console's button
+  (`fire3d=true`), after committing the Wildfire view as that button does,
+  so one link opens the same way on a phone and on a desk. The selected cell
+  inverts. Pressing it again is the way out, and Cancel while the scene is
+  still loading. Leaving the Fire view ends the scene.
+- The two statements stand on the map. A phone has no sidebar beside the
+  scene, so the terrain coverage statement and the non-prediction disclosure
+  are one glass card under the key chip for as long as the scene is asked
+  for, in the words of `src/config/fire3d-presentation.ts`. The card has no
+  close control while the scene is on. The scene's gate admits a phone only
+  while that card is mounted. No sheet stop covers it: the full stop ends
+  under the card, and the half stop leaves room below the card for the
+  credit and the scale rulers that ride the sheet's top edge. An open key
+  drawer pushes the card down instead of covering it, and closes when a
+  panel rises.
+- The same card is the entry's loading surface: it names the step the scene
+  is waiting on, shows an indeterminate bar, and offers Cancel. A failure
+  leaves the flat map and states its reason on the card until it is closed,
+  retried or left.
+- Touch camera control is two layers. Two-finger tilt and two-finger rotate
+  are on while the scene's chrome is mounted, and what was found before is
+  put back when it leaves. A plus of five 44px keys beside the column gives
+  the same with one thumb: tilt up, tilt down, rotate left, rotate right,
+  and a compass that shows which way the view faces and returns north-up at
+  the opening tilt. The pad waits while a panel leads, while the key or Map
+  information is open, and wherever it would meet the card. Reduced motion
+  jumps. Camera state is presentation and is never written to the URL.
+- A phone that cannot hold the scene but was sent a `fire3d=true` link gets
+  no cell and one sentence, once. The preference is kept, as it is on a
+  short desktop window.
+- The scene's code stays lazy: the entry chunk carries the cell and its
+  decision, and a phone that did not ask downloads nothing more.
 
 ## Information surfaces
 

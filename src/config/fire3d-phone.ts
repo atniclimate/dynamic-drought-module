@@ -29,13 +29,14 @@
  *
  * 360 is a DDM CONVENTION with a measured reason. The two statements have to
  * stay on the surface, word for word, for as long as the scene is on. Their
- * card sits between the left edge and the right-edge column, so its width is
- * the viewport less 72 px (the 8 px edge, a 48 px column and two 8 px gaps).
- * At 320 px that leaves a 248 px card whose text wraps to about 300 px of
- * height, more than half of the tallest 320 px phone in common use (568 px),
- * with the key above it and the camera pad below. 360 px is the next width
- * phones are actually made at, and there the card is the same height it is
- * at 375 and 390. Lower it only with a measurement.
+ * card sits between the left edge and the right-edge column, so the column
+ * sets its width: measured on the production build, 294 px at 360 by 600 and
+ * 288 px at 360 by 740, where the card with the coverage-gap sentence is
+ * 289 px tall, the same as at 375 by 667. A narrower phone gives the text
+ * less width and the card more height, and the one narrower class this
+ * project supports is 320 by 568, which is under the height floor below in
+ * any case. So the floor is the narrowest class that can meet the height
+ * floor at all. Lower it only with a measurement of the card at that width.
  */
 export const FIRE3D_PHONE_MIN_WIDTH_PX = 360;
 
@@ -45,20 +46,30 @@ export const FIRE3D_PHONE_MIN_WIDTH_PX = 360;
  *
  * The desktop floor (FIRE3D_MIN_HEIGHT_PX, 520) exists because a 60-degree
  * camera spends its frame on the far ground and leaves a compressed strip of
- * the near ground on a short viewport. A phone has less to give: the key
- * chip (52 px with its margin), the card that keeps both statements on the
- * surface (measured at 360 px wide: up to 268 px with its gap when the view
- * also earns the coverage-gap sentence), and the 132 px camera pad with its
- * margins (148 px) all stand on the same column of pixels. 52 + 268 + 148 is
- * 468 px of chrome; the floor asks for the height of one more camera pad
- * (132 px) of clear ground between the card and the pad, which is 600.
+ * the near ground on a short viewport. A phone has less to give, because
+ * three things stand on the same column of pixels there: the key chip, the
+ * card that keeps both statements on the surface, and the camera pad.
+ *
+ * Measured on the production build at 360 px wide, the narrowest phone the
+ * cell is offered on: the key chip ends at 54 px and the card begins at 62;
+ * the card is 289 px tall when the view also earns the coverage-gap
+ * sentence (its usual tallest), so it ends at 351. At that width the 132 px
+ * pad stands above the credit and the scale rulers, 218 px from the bottom
+ * edge to its top. The pad needs 8 px of air under the card, so the three
+ * stop fitting at 351 + 8 + 218 = 577 px. The floor is 600: that break-even
+ * plus 23 px, about a line and a half of the card's text, for a phone whose
+ * font wraps the statements differently. At 360 by 600 the card and the pad
+ * stand 31 px apart; every taller phone only adds clear ground (176 px at
+ * 375 by 667, 368 px at 390 by 844).
  *
  * So 600 is a DDM CONVENTION derived from this layout, not a device
  * constant. It admits 360 by 740, 375 by 667, 390 by 844 and 412 by 915, and
  * it leaves out 375 by 553 (a 4.7 inch phone with the browser's bars showing)
  * and every phone on its side. A phone below it gets no cell, and a shared
- * `fire3d=true` link gets one sentence instead of a scene. Raise or lower it
- * only with a measurement of the card.
+ * `fire3d=true` link gets one sentence instead of a scene. The pad itself
+ * also steps aside wherever it would meet the card (a rarer, taller card;
+ * the sheet at peek on a short phone): the two-finger gestures remain.
+ * Raise or lower the floor only with a measurement of the card.
  */
 export const FIRE3D_PHONE_MIN_HEIGHT_PX = 600;
 
