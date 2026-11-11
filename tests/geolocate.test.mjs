@@ -792,3 +792,13 @@ test('every Tribal verdict is its own sentence, and only "inside" names a place 
     assert.ok(!text.includes(String.fromCharCode(0x2014)));
   }
 });
+
+test('the Locate glyph is a crosshair whose outer circle is the ring the busy animation opens', async () => {
+  const control = await source('src/ui/locate-control.ts');
+  const css = await source('src/styles/locate.css');
+  assert.match(control, /<circle class="locate-ring" cx="12" cy="12" r="7"\/>/);
+  assert.doesNotMatch(control, /<circle cx="12" cy="4\.6"/);
+  assert.match(css, /#locate-btn\[aria-busy='true'\] \.locate-ring \{\s*stroke-dasharray/);
+  // Reduced motion keeps the breathing off; the dashed ring is a state, not travel.
+  assert.match(css, /prefers-reduced-motion: reduce\) \{[^]*#locate-btn\[aria-busy='true'\] svg \{\s*animation: none/);
+});

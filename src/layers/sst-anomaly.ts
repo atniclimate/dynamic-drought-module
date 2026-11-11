@@ -789,7 +789,7 @@ export async function activate(map: maplibregl.Map): Promise<void> {
     const pacificHint = (): void => {
       if (signal.aborted || pacificHintShown || viewIncludesNino34(map)) return;
       pacificHintShown = true;
-      showToast('Ocean temperature anomaly is global; zoom out toward the equatorial Pacific to see the ENSO signal.');
+      showToast('Sea surface warmer or cooler than usual, worldwide. Zoom out to the equatorial Pacific for El Nino and La Nina.');
     };
     if (map.isMoving()) map.once('moveend', pacificHint);
     else pacificHint();

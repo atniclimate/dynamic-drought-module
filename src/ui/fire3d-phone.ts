@@ -68,9 +68,9 @@ import { showToast } from './overlay';
 /** The phone shell exists exactly while #app carries this (src/ui/mobile-sheet.ts). */
 const SHELL_ATTRIBUTE = 'data-sheet-detent';
 
-/** Relief standing on a tilted ground plane, in the column's glyph family. */
+/** A map tilted into perspective, which is what the press does. */
 const GLYPH =
-  '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M6.5 14.5 11 5.5l2.6 4.6 1.4-2.3 3.5 6.7M3 20l3.5-5.5h11L21 20z"/></svg>';
+  '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 19 7 7h10l4 12z"/><path d="M5 13h14M10 7l-1 12M14 7l1 12"/></svg>';
 
 /** The failure ladder's own sentence (src/map/fire3d.ts `failScene`), for the one failure that happens before it loads. */
 const UNAVAILABLE = '3D Fire view unavailable; the flat map remains accurate.';

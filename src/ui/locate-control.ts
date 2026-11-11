@@ -45,13 +45,14 @@ export interface LocateApi {
 }
 
 /**
- * A person standing in a ring: the same two parts the map marker and its
- * accuracy ring draw. The ring is open behind the figure.
+ * A location crosshair, not the person-in-a-ring figure (that reads as the
+ * accessibility symbol). The outer circle keeps the locate-ring class so the busy
+ * animation opens it.
  */
 const GLYPH =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">' +
-  '<circle cx="12" cy="4.6" r="2.3"/><path d="M8.7 14.4v-2.2a3.3 3.3 0 0 1 6.6 0v2.2"/>' +
-  '<path class="locate-ring" d="M17.2 15.9a8.5 3.4 0 1 1-10.4 0"/></svg>';
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+  '<circle class="locate-ring" cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.5"/>' +
+  '<path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>';
 
 /**
  * The lazy half. After a failed load the next press asks again under a new
