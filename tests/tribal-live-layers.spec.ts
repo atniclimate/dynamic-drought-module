@@ -491,9 +491,7 @@ test.describe('live Tribal-geography layers: deterministic backbone', () => {
     await expect(layerCheckbox(page, 'aiannh')).not.toBeChecked();
     // The deployer slot keeps its honest placeholder wording (Unit C).
     await waitForLayerSettled(page, 'tribal');
-    await expect(layerPill(page, 'tribal')).toHaveText(
-      'no data (see data/README.md)'
-    );
+    await expect(layerPill(page, 'tribal')).toHaveText('no data');
   });
 });
 

@@ -153,7 +153,7 @@ export const PRIORITY_ROWS: readonly PriorityRow[] = [
     title: 'A U.S. Drought Monitor category at the selected point',
     issuer: 'U.S. Drought Monitor (NDMC / NOAA / USDA)',
     // src/impact/sources.ts fetchUsdmClaims: `DM`, an integer 0 to 4.
-    field: 'DM, 0 (D0) to 4 (D4), on the polygon containing the point',
+    field: 'DM field, 0 (D0) to 4 (D4); where class polygons overlap at the point, the highest class is shown',
     classes: [...USDM_CATEGORIES].reverse().map((category) => `${category.code} ${category.label}`),
     orderBasis: 'the D0 to D4 scale, D4 first',
     basisUrl: 'https://droughtmonitor.unl.edu/About/AbouttheData/DroughtClassification.aspx'

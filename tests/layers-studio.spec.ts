@@ -29,12 +29,14 @@ test.describe('minimal LAYERS studio', () => {
       await expect(input).toBeChecked();
       await expect(studio.locator('[data-layer-status="places"]')).toHaveClass(/\bready\b/);
       await expect(studio.locator('.layers-studio-catalog')).toHaveCSS('background-color', 'rgb(20, 20, 20)');
-      await expect(row).toHaveCSS('background-color', 'rgb(42, 49, 56)');
-      await expect(row).toHaveCSS('box-shadow', 'rgb(255, 255, 255) 2px 0px 0px 0px inset');
+      // In the studio the on row has no plate; the strong name and the inverted checkbox mark it. The sidebar row keeps its plate (asserted below).
+      await expect(row).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+      await expect(row).toHaveCSS('border-top-color', 'rgba(0, 0, 0, 0)');
+      await expect(row).toHaveCSS('box-shadow', 'none');
       await expect(row.locator('.layer-toggle-name')).toHaveCSS('font-weight', '700');
       await expect(input).toHaveCSS('background-color', 'rgb(255, 255, 255)');
       await row.hover();
-      await expect(row).toHaveCSS('background-color', 'rgb(42, 49, 56)');
+      await expect(row).toHaveCSS('background-color', 'rgb(30, 36, 44)');
       await input.focus();
       await expect(input).toHaveCSS('outline-color', 'rgb(255, 255, 255)');
       await expect(input).toHaveCSS('outline-offset', '0px');
@@ -66,7 +68,7 @@ test.describe('minimal LAYERS studio', () => {
     expect(STATUS_PILL_TEXT.ready).toBe('live');
     expect(STATUS_PILL_TEXT.degraded).toBe('live (partial)');
     expect(STATUS_PILL_TEXT.error).toBe('unavailable');
-    expect(STATUS_PILL_TEXT['no-data']).toBe('no data (see data/README.md)');
+    expect(STATUS_PILL_TEXT['no-data']).toBe('no data');
     expect(STATUS_PILL_TEXT['zoom-in']).toBe('zoom in to load');
   });
 

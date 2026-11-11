@@ -87,7 +87,7 @@ export const PILL = {
   live: 'live',
   degraded: 'live (partial)',
   unavailable: 'unavailable',
-  noData: 'no data (see data/README.md)',
+  noData: 'no data',
   zoomIn: 'zoom in to load'
 } as const;
 

@@ -1626,7 +1626,7 @@ function PlaceStudio() {
       : entryUnavailable
         ? 'The list this place belongs to is not available right now, so a briefing is not available yet.'
         : entryMissing
-          ? 'This place is not in the lists this screen can brief from, so a briefing is not available here.'
+          ? 'This screen has no briefing for this place.'
           : entryPending
             ? 'Reading the list this place belongs to...'
             : boundarySentence(selection.kind, read);
