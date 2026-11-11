@@ -317,8 +317,10 @@ export interface DayStripOptions {
  * for a probability. An empty frame is "no area drawn"; a hatched frame was
  * not read. Height carries the class beside the colour, so the strip never
  * rests on hue alone. With no read at all the whole strip takes one state:
- * empty frames while loading, hatched frames when unavailable, a short bar in
- * every frame when the service answered with no data.
+ * dashed frames while loading, hatched frames when unavailable, a short bar in
+ * every frame when the service answered with no data. A loading frame is
+ * dashed because an empty solid frame is a READ ("no area drawn"): a strip
+ * that is still loading must not look like eight days with nothing drawn.
  */
 export function dayStripSvg(options: DayStripOptions): string {
   const H = 58;
@@ -364,13 +366,15 @@ export function dayStripSvg(options: DayStripOptions): string {
       } else if (options.state === 'no-data') {
         hover = 'No data';
         fill = `<path class="g-nodata" d="M${n1(cx - 4)} ${n1(top + frameH / 2)}H${n1(cx + 4)}"/>`;
-      } else if (options.state !== 'loading') {
+      } else if (options.state === 'loading') {
+        hover = 'Loading';
+      } else {
         fill = hatch(x + 1, top + 1, cellW - 2, frameH - 2, 4);
       }
       // The first tick already says "Day 1"; the rest are the bare number.
       const dayName = /^day\b/i.test(day.tick) ? day.tick : `Day ${day.tick}`;
       inner +=
-        `<rect class="g-frame${lead ? ' g-read' : ''}" x="${n1(x + 0.5)}" y="${top + 0.5}" width="${n1(cellW - 1)}" height="${frameH - 1}" rx="2">` +
+        `<rect class="g-frame${lead ? ' g-read' : ''}${options.state === 'loading' ? ' g-frame-pending' : ''}" x="${n1(x + 0.5)}" y="${top + 0.5}" width="${n1(cellW - 1)}" height="${frameH - 1}" rx="2">` +
         `<title>${escapeHtml(dayName)}: ${escapeHtml(hover)}</title></rect>` +
         fill +
         (above ? `<text class="g-above" x="${n1(cx)}" y="${top - 3}" text-anchor="middle">${escapeHtml(above)}</text>` : '') +

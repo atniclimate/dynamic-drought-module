@@ -732,6 +732,11 @@
   stroke-width: 0.75;
   stroke-opacity: 0.9;
 }
+/* A day frame that is still loading. Dashed, because an empty solid frame
+   is a read ("no area drawn"). */
+.ddm-gauge .g-frame-pending {
+  stroke-dasharray: 2 2;
+}
 /* The read class: position (a caret and a taller block) plus an ink keyline.
    Never colour alone. */
 .ddm-gauge .g-read {

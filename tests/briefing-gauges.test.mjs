@@ -219,6 +219,18 @@ test('the day strip keeps a class, a probability, no area and no read apart', ()
   assert.match(noData, /<title>Day 1: No data<\/title>/);
   const strip = (svg) => svg.replace(/aria-label="[^"]*"|<title>[^<]*<\/title>|data-gauge-state="[^"]*"/g, '');
   assert.equal(new Set([strip(loading), strip(down), strip(noData)]).size, 3);
+  // A strip that is still loading must not be the drawing of a READ strip
+  // whose every day is "no area drawn" (an empty solid frame is that read).
+  const allNone = dayStripSvg({
+    groups: groups.map((group) => ({ ...group, days: group.days.map((day) => ({ tick: day.tick, cell: { kind: 'none' } })) })),
+    state: 'read',
+    title: 't'
+  });
+  assert.notEqual(strip(loading), strip(allNone), 'loading is not drawn as "no area drawn on every day"');
+  assert.equal(new Set([strip(loading), strip(down), strip(noData), strip(allNone)]).size, 4);
+  assert.equal(count(loading, 'g-frame-pending'), 5, 'every loading frame is dashed');
+  assert.equal(count(allNone, 'g-frame-pending'), 0);
+  assert.match(loading, /<title>Day 1: Loading<\/title>/);
 });
 
 const EVIDENCE_CLASSES = ['observed', 'analyzed', 'classified', 'modeled-analysis', 'modeled', 'derived', 'outlook'];
