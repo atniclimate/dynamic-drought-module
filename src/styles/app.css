@@ -355,6 +355,86 @@
   --link-on-light-hover: #8C1F19;
 }
 
+/* MORE CONTRAST (owner direction 2026-11-09 (sprint), DR-pending). A reader
+   who asks the system for more contrast gets the chrome without its
+   translucency: the same rich black, solid, with every outline and the
+   secondary inks at full strength, and nothing blurred behind it. Bright
+   light is where this instrument is read. Only tokens move: no size, order,
+   word or selected face changes, so every surface that draws with these
+   names follows without a rule of its own. */
+@media (prefers-contrast: more) {
+  :root {
+    --glass-control: var(--surface-base);
+    --rich-black-glass: var(--surface-base);
+    --rich-black-glass-strong: var(--surface-base);
+    --glass-fill: var(--surface-base);
+    --glass-fill-solid: var(--surface-base);
+    --glass-panel: var(--surface-base);
+    --glass-panel-solid: var(--surface-base);
+    --glass-read: var(--surface-base);
+    --glass-edge: var(--keyline);
+    --glass-hairline: #98A1B4;
+    --glass-sheen: transparent;
+    --glass-blur: 0px;
+    --glass-saturate: 100%;
+    --rich-black-blur: 0px;
+    --ink: #FFFFFF;
+    --ink-soft: #E8ECF0;
+    --ink-muted: #C6CBD4;
+    --ink-faint: #C6CBD4;
+  }
+}
+
+/* FORCED COLOURS (owner direction 2026-11-09 (sprint), DR-pending). The
+   system repaints every authored colour on an element, but it does not
+   reach inside an svg, so a figure's light ink stayed light on the system's
+   own canvas and its words went missing; and a control that is on was told
+   apart by weight alone. The names every surface and figure draws with are
+   handed the system's own colours here, once: canvas and its text for the
+   surfaces, the glass and the inks, and the system's selected pair for the
+   selected face. Every rule that draws that face also sets
+   `forced-color-adjust: none`, so the pair is drawn as authored and the
+   system puts no canvas plate between the face and its label (it would
+   hide a label that is already the selected text colour). Issuer class
+   colours are data, not chrome, and are left as they are. */
+@media (forced-colors: active) {
+  :root {
+    --glass-control: Canvas;
+    --rich-black-glass: Canvas;
+    --rich-black-glass-strong: Canvas;
+    --glass-fill: Canvas;
+    --glass-fill-solid: Canvas;
+    --glass-panel: Canvas;
+    --glass-panel-solid: Canvas;
+    --glass-read: Canvas;
+    --glass-edge: CanvasText;
+    --glass-hairline: CanvasText;
+    --glass-press: Canvas;
+    --surface-base: Canvas;
+    --surface-raised: Canvas;
+    --surface-overlay: Canvas;
+    --surface-hover: Canvas;
+    --ink-strong: CanvasText;
+    --ink: CanvasText;
+    --ink-soft: CanvasText;
+    --ink-muted: CanvasText;
+    --ink-faint: CanvasText;
+    --keyline: CanvasText;
+    --line: CanvasText;
+    --line-strong: CanvasText;
+    --rule-strong: CanvasText;
+    --face-selected: Highlight;
+    --ink-on-selected: HighlightText;
+  }
+  /* The Satellite cell names its colours directly (a contract test reads
+     that rule), so its selected pair is set here, under a selector of its
+     own. */
+  :root .basemap-switcher-btn.active {
+    background: Highlight !important;
+    color: HighlightText !important;
+  }
+}
+
 * {
   box-sizing: border-box;
 }
@@ -1964,6 +2044,7 @@ button.conditions-metric:hover .conditions-action-hide {
    colours are named directly, not through --face-selected, because that
    test resolves one level of var(). */
 .basemap-switcher-btn.active {
+  forced-color-adjust: none; /* FORCED COLOURS, below */
   background: var(--ink-strong) !important;
   color: var(--surface-base) !important;
   box-shadow: none;
@@ -2957,6 +3038,7 @@ button.conditions-metric:hover .conditions-action-hide {
   /* Pressed: SAT on (aria-pressed) or Help's drawer open (aria-expanded).
      Selected inverts: the ink is the face and the outline stays even. */
   .app-shell:not(.embed) .map-overlay-controls .map-cell:is([aria-pressed='true'], [aria-expanded='true']) {
+    forced-color-adjust: none; /* FORCED COLOURS, app.css */
     background: var(--face-selected) !important;
     color: var(--ink-on-selected) !important;
     border-color: var(--face-selected);
@@ -5356,6 +5438,7 @@ button.telemetry-item {
 /* D3 R4: seven unchanged evidence words use three neutral form tiers.
    Only observations receive a filled plate; source evidence owns the words. */
 .impact-claim-observed .impact-claim-badge {
+  forced-color-adjust: none; /* FORCED COLOURS: an inverted plate, like the selected face */
   color: var(--surface-base);
   background: var(--ink);
   border: 1px solid var(--ink);
@@ -8868,6 +8951,7 @@ a.impact-resource-link::after {
 :is(.view-switch button, .shell-cluster-btn, .shell-horizon-btn, .shell-fire3d-btn, .shell-fire3d-layer, .place-studio-type, .hazard-rail-btn)[aria-pressed='true']:not(:disabled):not([aria-disabled='true']),
 .time-bar-mode.active:not(:disabled),
 .shell-minimap-all[aria-checked='true'] {
+  forced-color-adjust: none; /* FORCED COLOURS, app.css */
   --selection-shadow: var(--selected-focus-inset);
   background: var(--face-selected);
   color: var(--ink-on-selected);

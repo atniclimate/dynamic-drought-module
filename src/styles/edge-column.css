@@ -263,6 +263,7 @@
       .edge-fold[data-current],
       .edge-fold[aria-expanded='true']
     ) {
+    forced-color-adjust: none; /* FORCED COLOURS, app.css */
     background-color: var(--face-selected) !important;
     color: var(--ink-on-selected) !important;
     font-weight: var(--fw-strong);
@@ -369,6 +370,7 @@
     }
     #app[data-sheet-detent] .edge-column
       :is(.edge-fold[data-current], .edge-fold[aria-expanded='true']) {
+      forced-color-adjust: none; /* FORCED COLOURS, app.css */
       background: var(--face-selected) !important;
     }
   }

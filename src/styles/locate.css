@@ -180,6 +180,7 @@
     color: var(--ink-on-selected);
   }
   .locate-card-fold[aria-expanded='true']::before {
+    forced-color-adjust: none; /* FORCED COLOURS, app.css */
     background: var(--face-selected);
     opacity: 1;
   }
@@ -362,6 +363,7 @@
     color: transparent;
   }
   .locate-card-check input:checked + .locate-card-check-box {
+    forced-color-adjust: none; /* FORCED COLOURS, app.css */
     border-color: var(--face-selected);
     background: var(--face-selected);
     color: var(--ink-on-selected);

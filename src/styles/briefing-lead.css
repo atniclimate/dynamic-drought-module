@@ -49,6 +49,7 @@
 }
 /* A control that is on inverts: the ink is its face. */
 .briefing-view-btn[aria-pressed='true'] {
+  forced-color-adjust: none; /* FORCED COLOURS, app.css */
   /* The ring the focus rule adds inside a white face (app.css, SELECTED INVERTS). */
   --selection-shadow: var(--selected-focus-inset);
   background: var(--face-selected);
@@ -260,6 +261,7 @@
    document beside this view, and the browser tests find a claim by them.
    tests/briefing-gauges.test.mjs holds these three blocks equal to app.css's. */
 [data-evidence='observed'] .impact-claim-badge {
+  forced-color-adjust: none; /* FORCED COLOURS: an inverted plate, like the selected face */
   color: var(--surface-base);
   background: var(--ink);
   border: 1px solid var(--ink);

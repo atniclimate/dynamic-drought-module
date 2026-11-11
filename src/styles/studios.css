@@ -223,6 +223,7 @@
 /* THE CHOSEN PLACE INVERTS: one of many, so the whole row is the face, and
    its mark is the surface colour with the tick in the face's colour. */
 #place-studio-root .place-studio-option[aria-pressed='true'] {
+  forced-color-adjust: none; /* FORCED COLOURS, app.css */
   --selection-shadow: var(--selected-focus-inset);
   background: var(--face-selected);
   color: var(--ink-on-selected);
@@ -473,6 +474,7 @@
 }
 /* The open disclosure is on, so it inverts. */
 .place-studio-details-toggle[aria-expanded='true'] {
+  forced-color-adjust: none; /* FORCED COLOURS, app.css */
   --selection-shadow: var(--selected-focus-inset);
   background: var(--face-selected);
   color: var(--ink-on-selected);
@@ -735,6 +737,7 @@
   pointer-events: none;
 }
 #layers-studio-root .layer-toggle input[type='radio']:checked {
+  forced-color-adjust: none; /* FORCED COLOURS, app.css */
   --selection-shadow: var(--selected-focus-inset);
   background: var(--face-selected);
   border-color: var(--face-selected);
@@ -765,6 +768,10 @@
 }
 #layers-studio-root .layer-toggle input[type='radio']:checked ~ .layer-toggle-text,
 #layers-studio-root .layer-toggle input[type='radio']:checked ~ .layer-toggle-text :is(.layer-toggle-name, .layer-toggle-status, .layer-toggle-source, .layer-toggle-coverage) {
+  /* The words sit over the radio's face, so they opt out with it: left to the
+     system they would each get a plate that hides the row. FORCED COLOURS,
+     app.css */
+  forced-color-adjust: none;
   color: var(--ink-on-selected) !important;
 }
 #layers-studio-root .layer-toggle input[type='radio']:checked ~ .layer-toggle-text .layer-toggle-name {
@@ -917,6 +924,7 @@
   /* The chosen reach inverts (the face app.css gives every pressed chip,
      restated because the glass face above outranks it). */
   #place-studio-root .place-studio-type[aria-pressed='true'] {
+    forced-color-adjust: none; /* FORCED COLOURS, app.css */
     --selection-shadow: var(--selected-focus-inset);
     background: var(--face-selected);
     border-color: var(--face-selected);
@@ -998,6 +1006,7 @@
   #place-studio-root .place-studio-option[aria-pressed='true'],
   #place-studio-root .place-studio-option[aria-pressed='true']:hover,
   #place-studio-root .place-studio-option[aria-pressed='true']:focus-visible {
+    forced-color-adjust: none; /* FORCED COLOURS, app.css */
     background: var(--face-selected);
     border-color: var(--face-selected);
     color: var(--ink-on-selected);
@@ -1260,6 +1269,7 @@
   }
   /* THE MARK INVERTS when its layer is on. */
   #layers-studio-root .layer-toggle input[type='checkbox']:checked::before {
+    forced-color-adjust: none; /* FORCED COLOURS, app.css */
     border-color: var(--face-selected);
     background: var(--face-selected);
   }

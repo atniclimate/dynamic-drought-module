@@ -45,6 +45,7 @@
 /* Selected inverts, as everywhere else: ink as the face, an even outline,
    and a rich-black ring inside the face while it holds focus. */
 .enso-flow button[aria-pressed="true"] {
+  forced-color-adjust: none; /* FORCED COLOURS, app.css */
   --selection-shadow: var(--selected-focus-inset);
   border-color: var(--face-selected);
   background: var(--face-selected);

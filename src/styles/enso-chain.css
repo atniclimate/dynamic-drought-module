@@ -203,6 +203,7 @@
    this sheet. The state itself is the element's own (`open`). */
 .enso-clocks[open] > .enso-clocks-summary,
 .enso-truth[open] > .enso-truth-summary {
+  forced-color-adjust: none; /* FORCED COLOURS, app.css */
   --selection-shadow: var(--selected-focus-inset);
   background: var(--face-selected);
   color: var(--ink-on-selected);
