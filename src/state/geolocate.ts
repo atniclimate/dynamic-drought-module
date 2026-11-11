@@ -637,7 +637,7 @@ const NAME_KEYS: Readonly<Record<TribalSource, readonly string[]>> = {
 export interface TribalHit {
   readonly source: TribalSource;
   readonly feature: Feature;
-  /** The source's own area name. Never presented as a Tribe's name for itself. */
+  /** The source's own area name; empty when the feature carries none. Never presented as a Tribe's name for itself. */
   readonly name: string;
   /** A Census legal entity (AIANNHCC). Always false for the other sources. */
   readonly legal: boolean;
@@ -654,8 +654,8 @@ export function findTribalHits(
   const hits: TribalHit[] = [];
   for (const { source, collection } of loaded) {
     for (const feature of collection.features ?? []) {
-      const name = firstString(feature.properties, NAME_KEYS[source]);
-      if (!name) continue;
+      // Geometry is tested first: an area that cannot be named still contains the position.
+      const name = firstString(feature.properties, NAME_KEYS[source]) ?? '';
       const reading = classifyDisc(fix.lng, fix.lat, radius, feature.geometry);
       if (reading.relation === 'outside') continue;
       const code = firstString(feature.properties, ['AIANNHCC', 'aiannhcc']);
@@ -728,23 +728,34 @@ export function tribalVerdict(
   const on = layers.filter((layer) => layer.status !== 'off');
   if (on.length === 0) return { kind: 'layers-off' };
 
-  const inside = hits.filter((hit) => hit.reading.relation === 'inside');
+  // An area with no name can hold the position but never titles it.
+  const named = hits.filter((hit) => hit.name !== '');
+  const inside = named.filter((hit) => hit.reading.relation === 'inside');
   if (inside.length > 0) {
     const winner = [...inside].sort((a, b) => rank(a) - rank(b) || b.reading.edgeM - a.reading.edgeM)[0] as TribalHit;
     // A legal Census area keeps the BIA land area under the same point, so a
     // consumer can title it by the Nation name the BIA area's click gives.
     const bia =
       winner.source === 'aiannh' && winner.legal
-        ? hits.find((hit) => hit.source === 'bia-reservation' && hit.reading.centreInside)
+        ? named.find((hit) => hit.source === 'bia-reservation' && hit.reading.centreInside)
         : undefined;
     return { kind: 'inside', hit: winner, biaLandArea: bia?.name ?? null };
   }
 
-  const near = [...hits].sort((a, b) => rank(a) - rank(b) || a.reading.edgeM - b.reading.edgeM);
+  const near = [...named].sort((a, b) => rank(a) - rank(b) || a.reading.edgeM - b.reading.edgeM);
   if (near.length > 0) return { kind: 'near', hits: near };
 
-  const tested = on.filter((layer) => layer.status === 'ready' || layer.status === 'no-data').map((layer) => layer.key);
-  const untested = on.filter((layer) => layer.status !== 'ready' && layer.status !== 'no-data');
+  // A layer that drew an area it did not name is partial for this position: not checked, not clear.
+  // Only unnamed hits remain here: every named one was answered above.
+  const nameless = new Set<string>(hits.map((hit) => (hit.source === 'bia-reservation' ? 'bia-reservations' : hit.source)));
+  const loaded = on.filter((layer) => (layer.status === 'ready' || layer.status === 'no-data') && !nameless.has(layer.key));
+  const tested = loaded.map((layer) => layer.key);
+  const untested: TribalLayerReading[] = on
+    .filter((layer) => !loaded.includes(layer))
+    .map((layer) => (layer.status === 'ready' || layer.status === 'no-data' ? { key: layer.key, status: 'degraded' } : layer));
+  for (const key of nameless) {
+    if (!untested.some((layer) => layer.key === key)) untested.push({ key, status: 'degraded' });
+  }
   if (untested.length > 0) return { kind: 'incomplete', tested, untested, covered };
   if (!covered) return { kind: 'too-wide', tested };
   return { kind: 'none', tested };
@@ -961,7 +972,9 @@ export function tribalCopy(verdict: TribalVerdict, names: (key: string) => strin
         qualifier: 'Tribal lands check incomplete.',
         detail: [
           `Not checked: ${listOf(untested)}.`,
-          ...(verdict.tested.length > 0 ? [`Checked, and you are not inside any area it draws: ${list(verdict.tested)}.`] : [])
+          ...(verdict.tested.length > 0
+            ? [`Checked, and you are not inside any area it draws: ${list(verdict.tested)}.`, NO_AREA_CAVEAT]
+            : [])
         ]
       };
     }

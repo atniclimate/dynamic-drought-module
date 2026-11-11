@@ -552,8 +552,31 @@ test('a loaded area is named only when the whole disc is inside it, by the ruled
   // An unknown or missing subtype takes the statistical rank, the safer one.
   const unknown = collection(feature({ NAME: 'Synthetic Unknown Subtype' }, BIG));
   assert.equal(tribalVerdict(ON, findTribalHits([{ source: 'aiannh', collection: unknown }, LOADED[1]], GOOD, 150), true).hit.source, 'bia-reservation');
-  // A feature with no name is never a place.
-  assert.deepEqual(findTribalHits([{ source: 'aiannh', collection: collection(feature({}, BIG)) }], GOOD, 150), []);
+  // A feature with no name is never a place, but its geometry is still tested:
+  // it is kept (empty name) so the verdict cannot read it as an absence.
+  const unnamedHits = findTribalHits([{ source: 'aiannh', collection: collection(feature({}, BIG)) }], GOOD, 150);
+  assert.equal(unnamedHits.length, 1);
+  assert.equal(unnamedHits[0].name, '');
+  assert.deepEqual(findTribalHits([{ source: 'aiannh', collection: collection(feature({}, BIG)) }], { lng: -110, lat: 44, accuracy: 20 }, 150), []);
+});
+
+test('an unnamed area around the position is never "none", and names no place', () => {
+  const unnamed = { source: 'aiannh', collection: collection(feature({}, BIG)) };
+  const verdict = tribalVerdict(ON, findTribalHits([unnamed, LOADED[1]], { lng: -110, lat: 44, accuracy: 20 }, 150), true);
+  assert.equal(verdict.kind, 'none', 'no unnamed area is near this position');
+  const inUnnamed = findTribalHits([unnamed], GOOD, 150);
+  const incomplete = tribalVerdict(ON, inUnnamed, true);
+  assert.equal(incomplete.kind, 'incomplete');
+  assert.deepEqual(incomplete.tested, ['bia-reservations']);
+  assert.deepEqual(incomplete.untested, [{ key: 'aiannh', status: 'degraded' }]);
+  assert.equal(incomplete.covered, true);
+  // A named area that holds the whole disc is still the answer; the unnamed one never titles it.
+  const mixed = tribalVerdict(ON, findTribalHits([unnamed, LOADED[1]], GOOD, 150), true);
+  assert.equal(mixed.kind, 'inside');
+  assert.equal(mixed.hit.source, 'bia-reservation');
+  // Unnamed in a layer that failed stays one untested entry.
+  const failed = tribalVerdict([{ key: 'aiannh', status: 'error' }], inUnnamed, true);
+  assert.deepEqual(failed.untested, [{ key: 'aiannh', status: 'error' }]);
 });
 
 test('a disc that reaches an edge claims neither side', () => {
@@ -729,7 +752,8 @@ test('every Tribal verdict is its own sentence, and only "inside" names a place 
   assert.equal(partial.qualifier, 'Tribal lands check incomplete.');
   assert.deepEqual(partial.detail, [
     'Not checked: Reservation Boundaries (BIA) (unavailable).',
-    'Checked, and you are not inside any area it draws: Tribal Lands (US Census).'
+    'Checked, and you are not inside any area it draws: Tribal Lands (US Census).',
+    NO_AREA_CAVEAT
   ]);
   // The same layers with the disc reaching past what was loaded: no layer is
   // called checked, and each says why (review finding R2-2).
@@ -742,6 +766,14 @@ test('every Tribal verdict is its own sentence, and only "inside" names a place 
     'Not checked: Reservation Boundaries (BIA) (unavailable) and Tribal Lands (US Census) (the position reaches past the area that was loaded).'
   ]);
   assert.ok(!partialWide.detail.some((line) => /not inside/.test(line)), 'no absence is claimed past the loaded area');
+  // An area that cannot be named around the position is not checked, never "not inside any area".
+  const unnamedCopy = tribalCopy(
+    tribalVerdict(ON, findTribalHits([{ source: 'aiannh', collection: collection(feature({}, BIG)) }], GOOD, 150), true),
+    names
+  );
+  assert.equal(unnamedCopy.qualifier, 'Tribal lands check incomplete.');
+  assert.equal(unnamedCopy.detail[0], 'Not checked: Tribal Lands (US Census) (live (partial)).');
+  assert.ok(!unnamedCopy.detail.join(' ').includes('Tribal Lands (US Census).'), 'the nameless layer is not called checked');
   // The six layer states keep their own words.
   for (const [status, word] of [['degraded', 'live (partial)'], ['loading', 'still loading'], ['zoom-in', 'zoom in to load']]) {
     const copy = tribalCopy(tribalVerdict([{ key: 'aiannh', status }], [], true), names);
