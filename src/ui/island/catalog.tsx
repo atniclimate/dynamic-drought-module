@@ -41,9 +41,12 @@
  *     row is a radio in one radio group instead of a checkbox that unticks
  *     its neighbour by surprise. The input keeps `data-layer-key` and its
  *     id, a choice still goes through the bridge and `controller.activate`
- *     (which turns the other surface off), and a press on the chosen one
- *     turns it off through `controller.deactivate`, so no condition surface
- *     stays a reachable state.
+ *     (which turns the other surface off), and a pointer press on the chosen
+ *     one turns it off through `controller.deactivate`, so no condition
+ *     surface stays a reachable state. A key never turns the chosen
+ *     condition off: a radio group's tab stop is its chosen row, so a key
+ *     pressed on arrival must not clear the map. The keyboard's way off is
+ *     the "Turn off" button in the studio's "On the map now" list.
  *   - each role group folds behind its heading and keeps its count. A
  *     folded group's rows stay mounted and natively `hidden`.
  *
@@ -190,12 +193,14 @@ function LayerRow({
   };
 
   // Arrow keys move among the conditions without choosing one: every choice
-  // starts a read from its source, so Space or Enter makes the choice.
+  // starts a read from its source, so Space or Enter makes the choice. On
+  // the chosen condition Enter only retries a failed read; it never turns a
+  // drawn condition off (Space leaves a chosen radio alone natively).
   const onSingleKeyDown = (event: KeyboardEvent): void => {
     const input = event.currentTarget as HTMLInputElement;
     if (event.key === 'Enter') {
       event.preventDefault();
-      input.click();
+      if (!isOn || isFailedCheckedLayer(def.key)) input.click();
       return;
     }
     const step =
