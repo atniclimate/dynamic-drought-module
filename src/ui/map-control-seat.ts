@@ -120,11 +120,37 @@ function watchSeat(seat: SeatCore): () => void {
     );
   };
 
+  /**
+   * The control inside the node that holds focus, kept while the browser's
+   * focus fixup drops it. The width flips the stylesheet (the phone column is
+   * display:none above 720px) a task before the shell attribute moves the
+   * node, so by the time this watcher runs focus may already sit on the body.
+   */
+  let held: HTMLElement | null = null;
+  const onFocusIn = (event: FocusEvent): void => {
+    const target = event.target;
+    held = target instanceof HTMLElement && seat.node.contains(target) ? target : null;
+  };
+  const onFocusOut = (event: FocusEvent): void => {
+    // Leaving a control that is still rendered is the user's choice; only a
+    // control the stylesheet hid keeps its claim.
+    if (event.target instanceof HTMLElement && event.target.getClientRects().length > 0) {
+      held = null;
+    }
+  };
+  document.addEventListener('focusin', onFocusIn);
+  seat.node.addEventListener('focusout', onFocusOut);
+
   /** Moving a focused node drops focus to the body; hand it back. */
   const keepFocus = (move: () => void): void => {
     const active = document.activeElement;
+    const onBody = active === null || active === document.body;
     const focused =
-      active instanceof HTMLElement && seat.node.contains(active) ? active : null;
+      active instanceof HTMLElement && seat.node.contains(active)
+        ? active
+        : onBody && held !== null && seat.node.contains(held)
+          ? held
+          : null;
     move();
     if (focused?.isConnected && document.activeElement !== focused) {
       focused.focus({ preventScroll: true });
@@ -173,6 +199,8 @@ function watchSeat(seat: SeatCore): () => void {
     observer.disconnect();
     widthQuery.removeEventListener('change', sync);
     phoneSeatWatchers.delete(sync);
+    document.removeEventListener('focusin', onFocusIn);
+    seat.node.removeEventListener('focusout', onFocusOut);
     if (ours()) {
       if (seat.node.parentElement === phoneHost && phoneHost !== null) {
         phoneSeatProvider?.release(seat.node);

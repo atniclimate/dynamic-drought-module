@@ -7715,6 +7715,16 @@ a.impact-resource-link::after {
   overflow: hidden;
 }
 
+/* The drawing is stretched to the canvas, so a region's target is its share of
+   the canvas height. Alaska and Northwest is 32.6% of it: 119.1 x 43.8 px on the
+   255 px card at the tablet band, 0.2 px under the touch floor. A taller canvas
+   (660:362, about 139.7 px high there) makes it 45.6 px without a new box. */
+@media (min-width: 721px) and (max-width: 1024px) {
+  .shell-minimap-canvas {
+    aspect-ratio: 660 / 362;
+  }
+}
+
 .shell-minimap-oceans,
 .shell-minimap-region-group {
   position: absolute;

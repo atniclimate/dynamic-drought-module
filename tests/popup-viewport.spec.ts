@@ -99,12 +99,12 @@ async function bottomChromeTop(page: Page): Promise<number> {
       ? window.visualViewport.offsetTop + window.visualViewport.height
       : document.documentElement.clientHeight;
     let bottom = viewportBottom;
-    const footer = document.getElementById('mobile-footer-nav');
+    const footer = document.getElementById('mobile-footer-nav')?.getBoundingClientRect() ?? null;
     const sheetActive = document.getElementById('app')?.hasAttribute('data-sheet-detent');
-    const rects = [footer, sheetActive ? document.getElementById('sidebar') : null]
-      .filter((el): el is HTMLElement => el !== null)
-      .map((el) => el.getBoundingClientRect())
-      .filter((rect) => rect.width > 0 && rect.height > 0)
+    const sheet = sheetActive ? document.getElementById('sidebar')?.getBoundingClientRect() ?? null : null;
+    // A side rail (taller than wide) is never bottom chrome, even where it straddles the sheet's top.
+    const rects = [footer && footer.width > footer.height ? footer : null, sheet]
+      .filter((rect): rect is DOMRect => rect !== null && rect.width > 0 && rect.height > 0)
       .sort((a, b) => b.top - a.top);
     for (const rect of rects) {
       if (rect.top < bottom && rect.bottom >= bottom - 1) bottom = rect.top;

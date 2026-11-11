@@ -1238,7 +1238,9 @@ export function Minimap({
                 role="radio"
                 aria-checked={isActive}
                 aria-label={accessibleName(key, drought, wildfire, outlook, metricContext, horizon)}
-                tabIndex={roving === key ? 0 : -1}
+                // Lowercase on purpose: on an SVG path Preact writes `tabIndex`
+                // as an attribute of that exact name, which no browser reads.
+                tabindex={roving === key ? 0 : -1}
                 focusable="true"
                 vectorEffect="non-scaling-stroke"
                 clip-path={`url(#${idPrefix}-physical-land)`}

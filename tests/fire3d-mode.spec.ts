@@ -2501,7 +2501,8 @@ test('an embed without the flag never activates and never gains it', async ({
     // nothing (review finding R2-10, src/main.ts fire3dPresentable). A phone outside an
     // embed does enter the scene since the sprint; see the next test.
     await expect(page.locator('#shell-fire3d-refused')).toHaveCount(0);
-    await expect(page.locator('#fire3d-phone-cell')).toHaveCount(0);
+    // The cell is created in every shell and offered only by the phone shell (src/ui/fire3d-phone.ts).
+    await expect(page.locator('#fire3d-phone-cell')).toBeHidden();
     await expect(page.locator('#app[data-fire3d-phone]')).toHaveCount(0);
   });
 
