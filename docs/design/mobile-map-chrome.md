@@ -92,7 +92,11 @@ top-anchored, with no grabber and no drawer form. It is now one glass sheet
 that rises from the bottom edge, docked beside the right-edge column so the two
 never share a pixel. `src/styles/mobile-panels.css` owns its form,
 `src/ui/mobile-sheet.ts` its state, `src/ui/sheet-motion.ts` its motion, and
-`src/config/sheet-detents.ts` its landing rules.
+`src/config/sheet-detents.ts` its landing rules. The motion arrives as its
+own chunk the first time the phone shell activates. If that load fails, the
+sheet keeps working without motion (its doors still open and close it), and
+the next door press or activation asks for the chunk again under a new
+address (`src/util/chunk-retry.ts`).
 
 - Stops. The detent names are real heights again: closed (off screen), peek
   (the header and the first lines, 136px above the bottom safe area), half

@@ -17,9 +17,9 @@ than silently treating either one as a veto.
 | [`README.md`](README.md) | This index and the durable product-design doctrine. |
 | [`../../ROADMAP.md`](../../ROADMAP.md) | Public phase synopsis and route to the canonical task definitions. |
 | [`../ROADMAP.yaml`](../ROADMAP.yaml) | Canonical product plan: phases and tasks with stable ids, decision gates, component tags, and one acceptance sentence per open task. Execution status lives outside the repository. |
-| [`mobile-map-chrome.md`](mobile-map-chrome.md) | Current presentation contract for the map-first phone chrome implemented by pull request 7. |
+| [`mobile-map-chrome.md`](mobile-map-chrome.md) | Current presentation contract for the map-first phone chrome implemented by pull request 7. Sections marked "Superseded 2026-11-09" record the sprint's owner direction (DR-pending) and what it built. |
 | [`fire3d-context.md`](fire3d-context.md) | Honesty framing for the desktop 3D Fire context view: the no-fire-behavior-modeling line, the "not a digital twin" naming decision, and the in-interface non-prediction disclosure. |
-| [`fire3d-entry.md`](fire3d-entry.md) | Proposed entry contract for the 3D Fire scene: staged loading, the deferred loading screen, cancel, and the honest sidebar state (S28, 2026-09-11). |
+| [`fire3d-entry.md`](fire3d-entry.md) | Proposed entry contract for the 3D Fire scene: staged loading, the deferred loading screen, cancel, and the honest sidebar state (S28, 2026-09-11). "On phones" records what the sprint built (2026-11-09). |
 | [`ddm_interface-edits_1.json`](ddm_interface-edits_1.json) and [`ddm_interface-edits_2.json`](ddm_interface-edits_2.json) | Immutable owner-annotation captures that informed pull request 6. They preserve the input as received; they are not an active plan, literal pixel specification, or current completion checklist. |
 
 Owner markup carries hierarchy, relationship, emphasis, and intended
@@ -260,11 +260,18 @@ sheet and returns focus to it. The guide's open state is presentation and
 never enters the URL.
 
 **Lazy and still.** The sea surface temperature layer loads the chain when it
-activates and removes it when it deactivates. An embed loads none of it.
-The two place links ask their sources only while some of the panel is on
-screen, and once per chosen place: a place chosen with the phone guide closed
-costs no request until the guide is opened. Nothing in it moves, so reduced
-motion shows the same picture.
+activates and removes it when it deactivates. An embed loads none of it. If
+the chain fails to load, a short notice says the guide is unavailable and that
+the map and its key are unaffected; the next activation asks for it again
+under a new address, its stylesheets first, because a browser replays a failed
+import of the same address without asking the network
+(`src/util/chunk-retry.ts`, `src/util/chunk-stylesheets.ts`). The guide is
+never drawn without its stylesheet. The two place links ask their sources only
+while some of the panel is on screen, and once per chosen place: a place
+chosen with the phone guide closed costs no request until the guide is opened.
+If the links' reader fails to load, each link says so, and the next showing of
+the panel asks for it again under a new address. Nothing in it moves, so
+reduced motion shows the same picture.
 
 ## Locate
 
@@ -320,7 +327,9 @@ for the point and no boundary is stored. Only a whole accuracy disc inside an
 area names it as the person's, with the agency that draws it. A layer that is
 off is reported as not checked, one that failed as unavailable, and "not
 inside any area" always carries the boundary popups' sentence that absence
-from a layer is not absence of a Nation or of its rights.
+from a layer is not absence of a Nation or of its rights. Where the
+accuracy disc reaches past the area that was loaded, no layer is called
+checked.
 
 **The marker** is a person on a stem with an accuracy ring in true ground
 metres, white on rich black: dashed and hollow-footed when the position is
@@ -334,7 +343,11 @@ inverts while a position is shown. The card stands in the map's dock above
 the sheet and folds to its title; on a short screen unfolding it lowers or
 closes the sheet, so the two never share a pixel. Everything but the cell and
 the launch check is one lazy chunk, loaded on the first press or the first
-eligible launch.
+eligible launch. A chunk that fails to load is asked for again, under a new
+address, by the next press, its stylesheet first, and the card is never
+drawn without its stylesheet (`src/util/chunk-retry.ts`,
+`src/util/chunk-stylesheets.ts`). A press whose chunk arrives after the
+phone shell has gone starts nothing.
 
 ## The Place and Layer studios
 

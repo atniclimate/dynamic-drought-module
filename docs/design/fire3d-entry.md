@@ -40,7 +40,11 @@ controller tears down); the card is in the document before the scene's code
 has even arrived; the step sentence is its own polite, atomic live node and
 Cancel is not inside it; the bar is indeterminate, with a name and no value;
 reduced motion stops the bar and the fades; a failure reads `Unavailable.`
-with the reason.
+with the reason. The card and the pad are never drawn without their
+stylesheet: a press whose chrome could not load says in a short notice
+that the 3D view is unavailable and the flat map remains accurate, and the
+next press asks for the stylesheet again (`src/util/chunk-stylesheets.ts`).
+A phone-width embed loads none of the scene's code.
 
 Where it differs, and why. The transaction below is still not built, so the
 phone shows the steps the built one really waits on: the archive probe, then
@@ -65,6 +69,20 @@ camera, or if anything else has moved the pitch or the bearing since, such
 as a person's own two-finger tilt. A scene that starts again while the
 camera is still owed records the camera it is owed, not the half-turned
 reading.
+
+A PLACE studio round trip, on any screen. The studio's clean display sets
+the Fire layers aside while it is open, which leaves a custom set with no
+Fire event layer, and puts the captured display back when it closes
+(`src/state/display-snapshot.ts`). The scene used to read that as a reason
+to leave, and to enter again from the archive check on the way back
+(measured on a phone: live again after 8 s, settled after 28 s). While the
+studio holds the display (`src/state/place-display-hold.ts`), a scene that
+is already up now stays (`shouldFire3DBeActive`): measured on a phone and
+a desk, it never read inactive or checking through the round trip, and it
+kept the person's camera. A phone link that opens inside the studio with
+3D asked for keeps the ask while the studio holds the display, and the
+scene enters after Back. The hold never enters a scene, never keeps one
+through a switch to another cluster, and never outlasts any other refusal.
 
 ## The entry transaction
 
