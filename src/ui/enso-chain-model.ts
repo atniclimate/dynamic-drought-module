@@ -331,7 +331,7 @@ function patternLink(surface: SurfaceRead): Built {
 function jetLink(jet: JetRead): Built {
   const base = {
     key: 'jet',
-    title: 'Jet and storm track (model guidance)',
+    title: 'Jet-level wind (model guidance)',
     relation: 'one model instant, read beside a season',
     action: 'jet',
     actionLabel: 'Draw the jet-level wind on the map'
@@ -505,7 +505,7 @@ function hereLink(read: PlaceRead, place: EnsoChainInput['place']): Built {
         title: `U.S. Drought Monitor scale, D0 to D4. Read: ${headline}, ${wherePhrase(place)}.`
       }),
       ...(usdm.dm === null
-        ? { note: 'This client has no analyzed-area mask, so this does not confirm no drought.' }
+        ? { note: 'That may mean no drought, or a place outside the analyzed area.' }
         : {})
     },
     // "none" alone under "Here" would read as an all-clear at a glance; the

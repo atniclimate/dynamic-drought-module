@@ -372,7 +372,7 @@ function scopeWords(entry: PriorityEntry): string {
     case 'nws-products':
       return 'In effect at the selected point.';
     case 'wfigs-perimeters':
-      return 'Current perimeters in the bounding box around this selection, which is wider than the place.';
+      return 'Current perimeters in a search area wider than this place.';
     case 'usdm-category':
       // Not "this week's map": that is true only until the next release
       // (src/impact/sources.ts, the map date note). The tile's source line
@@ -424,7 +424,7 @@ function renderTile(entry: PriorityEntry): string {
     (figure ? `<span class="lead-figure">${figure}</span>` : '') +
     (describedBy ? `<span class="sr-only" id="${describedBy}">${figureWords}</span>` : '') +
     `<span class="lead-scope">${escapeHtml(scopeWords(entry))}</span>` +
-    `<span class="lead-foot">${sourceLine(claim)}<span class="lead-open" aria-hidden="true">Federal text</span></span>` +
+    `<span class="lead-foot">${sourceLine(claim)}<span class="lead-open" aria-hidden="true">${SWITCH_WORDS.matrix}</span></span>` +
     `</button></li>`
   );
 }
@@ -526,7 +526,7 @@ function renderRest(item: PriorityRest, order: PriorityOrder): string {
     `<li class="lead-rest-item" data-lead-hazard="${item.hazard}">` +
     `<button type="button" class="lead-rest-open" data-lead-action="detail" data-lead-hazard="${item.hazard}" data-lead-key="rest:${item.hazard}" ` +
     `aria-label="${escapeHtml(`${HAZARD_LABELS[item.hazard]}. ${detailLabel(item.hazard)}`)}">` +
-    `<span class="lead-hazard">${escapeHtml(HAZARD_LABELS[item.hazard])}</span><span class="lead-open" aria-hidden="true">Federal text</span></button>` +
+    `<span class="lead-hazard">${escapeHtml(HAZARD_LABELS[item.hazard])}</span><span class="lead-open" aria-hidden="true">${SWITCH_WORDS.matrix}</span></button>` +
     body +
     `</li>`
   );
@@ -586,7 +586,7 @@ function renderTogether(order: PriorityOrder, now: number): string {
     `<section class="lead-together" aria-labelledby="lead-together-title">` +
     `<h4 class="lead-subtitle" id="lead-together-title">Present together here</h4>` +
     `<ul class="lead-together-list">${chips}</ul>` +
-    `<p class="lead-caption">Each holds a ranked read in this briefing, on its own clock: the date is on each read above. They are separate issuer products, joined here only because they are present together. DDM draws no cause between them.</p>` +
+    `<p class="lead-caption">Separate issuer products, each ranked and dated above. Grouped only because they are present together; DDM draws no cause between them.</p>` +
     (unread.length > 0
       ? `<p class="lead-caption">Not fully read for this moment: ${escapeHtml(unread.join(', '))}. This strip joins only what was read.</p>`
       : '') +
@@ -668,7 +668,7 @@ export function buildEnsoChainLinks(briefing: ImpactBriefing): ChainLink[] {
 
   links.push({
     key: 'jet',
-    title: 'Jet and storm track (model guidance)',
+    title: 'Jet-level wind (model guidance)',
     status: 'unavailable',
     note: 'This briefing reads no jet-level or storm-track product.',
     relation: 'read beside'
@@ -716,7 +716,7 @@ export function buildEnsoChainLinks(briefing: ImpactBriefing): ChainLink[] {
           ...chainFieldsFromClaim(drought),
           statement: `${readingHeadline(usdm)} at the selected point`,
           ...(usdm.dm === null
-            ? { note: 'This client has no analyzed-area mask, so this does not confirm no drought.' }
+            ? { note: 'That may mean no drought, or a place outside the analyzed area.' }
             : {})
         }
       : unreadLink(current.cells.drought))
@@ -746,7 +746,7 @@ export function renderLeadView(briefing: ImpactBriefing, now: number = Date.now(
   const lead =
     tiles.length > 0
       ? `<ol class="lead-tiles">${tiles.map(renderTile).join('')}</ol>`
-      : `<p class="lead-none">No read here holds a class in the reading order yet. That is not an all-clear: each hazard is listed below at its own state.</p>`;
+      : `<p class="lead-none">Nothing here is ranked yet. That is not an all-clear: each hazard is listed below with its state.</p>`;
   // Past the first few, the order simply continues: the same tiles, under
   // their own heading, so no ranked read loses its figure or its place.
   const further =
@@ -779,8 +779,8 @@ export function renderLeadView(briefing: ImpactBriefing, now: number = Date.now(
     rest +
     chain +
     `<div class="lead-doors">` +
-    `<button type="button" class="lead-door" data-lead-action="matrix" data-lead-key="door:matrix">Full detail: every hazard at three horizons</button>` +
-    `<button type="button" class="lead-door" data-lead-action="rule" data-lead-key="door:rule">Method: how this is ordered</button>` +
+    `<button type="button" class="lead-door" data-lead-action="matrix" data-lead-key="door:matrix">${SWITCH_WORDS.matrix}</button>` +
+    `<button type="button" class="lead-door" data-lead-action="rule" data-lead-key="door:rule">How this is ordered</button>` +
     `</div>` +
     `</section>`
   );

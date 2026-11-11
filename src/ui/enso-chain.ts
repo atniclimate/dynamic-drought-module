@@ -103,6 +103,7 @@ import { openImpactPanel, openTechnicalInformation } from './impact-panel';
 import {
   getSheetDetent,
   isSheetActive,
+  onSheetDetentSettle,
   setSheetDetent,
   sheetCameraInset,
   sheetCameraSideInset
@@ -128,7 +129,7 @@ const GUIDE_NAME = 'ENSO guide';
 const loadSources = createChunkLoader(() => import('../impact/sources'), import.meta.url);
 
 const DOOR_GLYPH =
-  '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="5" cy="18.5" r="2.3"/><circle cx="12" cy="12" r="2.3"/><circle cx="19" cy="5.5" r="2.3"/><path d="M6.7 16.9l3.6-3.3M13.7 10.4l3.6-3.3"/></svg>';
+  '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="4" cy="12" r="2.2"/><circle cx="12" cy="12" r="2.2"/><rect x="17.8" y="9.8" width="4.4" height="4.4" rx="0.5"/><path d="M6.2 12h3.6M14.2 12h3.6"/></svg>';
 
 const IDLE_JET: JetRead = { kind: null, status: 'inactive', label: '', line: '', notes: [] };
 
@@ -523,9 +524,58 @@ function standDown(then: () => void, focusId?: string): void {
   (next && !next.hidden && next.offsetParent !== null ? next : state.door).focus({ preventScroll: true });
 }
 
+let offGuideFocus: (() => void) | null = null;
+
+/**
+ * Move focus from the pressed Guide door into the guide it opened (WCAG
+ * 2.4.3), as the four footer doors do (mobile-sheet.ts focusShownView): the
+ * sheet title, else the first control that does not raise the keyboard, at
+ * settle and only while focus is still on the door or nowhere. A sheet that
+ * will not move has no settle to wait for, so it takes focus at once.
+ */
+function focusGuide(state: Held, settleExpected: boolean): void {
+  offGuideFocus?.();
+  const take = (): void => {
+    const active = document.activeElement;
+    if (active && active !== document.body && active !== state.door) return;
+    const shown = (el: HTMLElement): boolean =>
+      el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden';
+    const title = document.getElementById('sheet-title');
+    const target =
+      title && shown(title)
+        ? title
+        : [
+            ...state.panel.querySelectorAll<HTMLElement>(
+              'button:not(:disabled), a[href], select:not(:disabled), [tabindex]:not([tabindex="-1"])'
+            )
+          ].find(shown);
+    if (!target) return;
+    if (!target.hasAttribute('tabindex') && target === title) target.setAttribute('tabindex', '-1');
+    target.focus({ preventScroll: true });
+  };
+  if (!settleExpected) {
+    take();
+    return;
+  }
+  const off = onSheetDetentSettle((detent) => {
+    if (held !== state || !state.guideOpen) {
+      off();
+      return;
+    }
+    // A settle at the closed stop is the hand-off from a door, not the guide's own.
+    if (detent === null || detent === 'closed') return;
+    off();
+    offGuideFocus = null;
+    take();
+  });
+  offGuideFocus = off;
+}
+
 function closeGuide(returnFocus: boolean): void {
   const state = held;
   if (!state || !state.guideOpen) return;
+  offGuideFocus?.();
+  offGuideFocus = null;
   state.guideOpen = false;
   state.app.removeAttribute(GUIDE_FLAG);
   state.app.removeAttribute(SHEET_NAME);
@@ -547,6 +597,7 @@ function openGuide(): void {
   state.app.setAttribute(GUIDE_FLAG, 'open');
   state.app.setAttribute(SHEET_NAME, GUIDE_NAME);
   state.door.setAttribute('aria-expanded', 'true');
+  focusGuide(state, getSheetDetent() === 'closed' || state.app.hasAttribute('data-sheet-tab'));
   // A door that holds the sheet lets go first; the sheet is then raised by
   // no door, which is what the stylesheet reads as the guide's turn.
   if (state.app.hasAttribute('data-sheet-tab') && getSheetDetent() !== 'closed') {

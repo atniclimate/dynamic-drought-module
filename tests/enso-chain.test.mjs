@@ -438,7 +438,7 @@ test('jet link: off until asked for, and then model guidance on its own two cloc
   // The two clocks are the overlay's own line, as data: the same words the panel prints.
   assert.ok(JET_LIVE.line.endsWith(link.dateLine));
   assert.match(link.note, /Model output at one instant, not an observation/);
-  assert.equal(link.title, 'Jet and storm track (model guidance)');
+  assert.equal(link.title, 'Jet-level wind (model guidance)');
   assert.equal(nodeOf(view, 'jet').mark, 'on map');
   assert.equal(nodeOf(view, 'jet').evidence, 'modeled');
   // A drawn frame with no clocks handed over prints no date; it never borrows another link's.
@@ -617,7 +617,7 @@ test('here link: the drought category is marked on the issuer scale; no polygon 
   const link = linkOf(none, 'here');
   assert.equal(link.status, 'ready');
   assert.equal(link.statement, `${USDM_NONE_SWATCH.label}, at a point inside Washington.`);
-  assert.equal(link.note, 'This client has no analyzed-area mask, so this does not confirm no drought.');
+  assert.equal(link.note, 'That may mean no drought, or a place outside the analyzed area.');
   // The marked position is the no-class slot, never D0 and never a colour.
   assert.match(link.figure, /class="g-slot g-read"/);
   assert.doesNotMatch(link.figure, /class="g-seg g-read"/);

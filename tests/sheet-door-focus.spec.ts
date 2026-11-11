@@ -75,6 +75,29 @@ test.describe('sheet doors move focus into the view they open', () => {
     expect(await insideSheet(page)).toBe(false);
   });
 
+  test('the ENSO Guide door focuses the opened guide, Escape returns to the door', async ({ page }) => {
+    await gotoApp(page);
+    const app = page.locator('#app');
+    const settles = (): Promise<number> =>
+      page.evaluate(() => Number(document.documentElement.dataset['ddmSheetSettles'] ?? 0));
+
+    await page.locator('.hazard-rail-btn[data-preset="hazard-enso"]').tap();
+    const door = page.locator('#enso-guide-door');
+    await expect(door).toBeVisible();
+
+    const before = await settles();
+    await door.tap();
+    await expect(door).toHaveAttribute('aria-expanded', 'true');
+    await expect(app).toHaveAttribute('data-sheet-detent', 'half');
+    await expect.poll(settles).toBeGreaterThan(before);
+    await expect.poll(() => insideSheet(page)).toBe(true);
+
+    await page.keyboard.press('Escape');
+    await expect(app).toHaveAttribute('data-sheet-detent', 'closed');
+    await expect(door).toHaveAttribute('aria-expanded', 'false');
+    await expect(door).toBeFocused();
+  });
+
   test('pressing the lit door still closes and focus stays on that door', async ({ page }) => {
     await gotoApp(page);
     const app = page.locator('#app');

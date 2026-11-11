@@ -194,3 +194,27 @@ test('a tile hands its figure\'s words to assistive technology as its descriptio
   assert.equal(words, figureLabel, 'the description is the figure\'s own label, word for word');
   assert.match(words, /D0 to D4/);
 });
+
+test('the doors and tiles use the names the view switch and the head link already use', () => {
+  const none = renderLeadView(briefingOf('unavailable', 'not read in this fixture'), NOW);
+  const doors = [...none.matchAll(/class="lead-door"[^>]*>([^<]*)</g)].map((m) => m[1]);
+  assert.deepEqual(doors, ['Full detail', 'How this is ordered']);
+  assert.match(text(none), /Nothing here is ranked yet\. That is not an all-clear: each hazard is listed below with its state\./);
+  const briefing = briefingOf('unavailable', 'not read in this fixture');
+  briefing.horizons.current.cells.drought = cell('drought', 'current', 'ready', [usdmClaim]);
+  const html = renderLeadView(briefing, NOW);
+  const open = [...html.matchAll(/class="lead-open" aria-hidden="true">([^<]*)</g)].map((m) => m[1]);
+  assert.ok(open.length >= 2, 'a tile and a rest row each carry the word');
+  assert.ok(open.every((word) => word === 'Full detail'), `the word is the view switch's own: ${open}`);
+  assert.ok(!html.includes('Federal text</span>'));
+});
+
+test('the unread-together caption and the wildfire scope say what is drawn, in fewer words', () => {
+  const briefing = briefingOf('unavailable', 'not read in this fixture');
+  briefing.horizons.current.cells.drought = cell('drought', 'current', 'ready', [usdmClaim]);
+  briefing.horizons.current.cells.fire = cell('fire', 'current', 'ready', [nwsClaim]);
+  const html = renderLeadView(briefing, NOW);
+  assert.ok(text(html).includes('Separate issuer products, each ranked and dated above. Grouped only because they are present together; DDM draws no cause between them.'));
+  const jet = buildEnsoChainLinks(briefing).find((link) => link.key === 'jet');
+  assert.equal(jet.title, 'Jet-level wind (model guidance)');
+});
