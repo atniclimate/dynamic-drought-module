@@ -32,6 +32,21 @@
  * as signals from `./index`. The per-group sources disclosure is local
  * ephemeral view state (`useState`), never a URL or registry concern.
  *
+ * THE LAYER STUDIO'S COPY (owner direction 2026-11-09 (sprint), DR-pending).
+ * Everything the `studio` prop changes is presentation, and only in the
+ * studio; the sidebar's own catalog renders exactly as before:
+ *
+ *   - condition surfaces are ONE CHOICE there, because one exclusive
+ *     condition surface at a time is the controller's rule: each surface
+ *     row is a radio in one radio group instead of a checkbox that unticks
+ *     its neighbour by surprise. The input keeps `data-layer-key` and its
+ *     id, a choice still goes through the bridge and `controller.activate`
+ *     (which turns the other surface off), and a press on the chosen one
+ *     turns it off through `controller.deactivate`, so no condition surface
+ *     stays a reachable state.
+ *   - each role group folds behind its heading and keeps its count. A
+ *     folded group's rows stay mounted and natively `hidden`.
+ *
  * Stewardship: no Tribal, Treaty, or sovereign-jurisdiction data is
  * surfaced here. All labels come from the config tables in `src/config/`.
  */
@@ -120,6 +135,9 @@ function coverageCue(source: string): string | null {
   return tail && tail !== source ? tail : null;
 }
 
+/** The one radio group the studio's condition surfaces share. */
+const STUDIO_CONDITION_NAME = 'studio-condition';
+
 /** Rows whose bundled archive is regional, or a dated snapshot, while the layer reads `live`. */
 const COVERAGE_CUE_KEYS: ReadonlySet<string> = new Set(['hillshade', 'ecoregions', 'cdm-drought']);
 
@@ -136,6 +154,8 @@ function LayerRow({
   const isOn = checked.value.get(def.key) ?? false;
   const status = statuses.value.get(def.key);
   const coverage = COVERAGE_CUE_KEYS.has(def.key) ? coverageCue(def.source) : null;
+  // The studio draws the condition surfaces as one choice (see the header).
+  const single = studio === true && def.role === 'surface';
 
   const onChange = (event: Event): void => {
     const input = event.currentTarget as HTMLInputElement;
@@ -156,14 +176,57 @@ function LayerRow({
     }
   };
 
+  // A radio's own click never unchecks it, so a press on the chosen condition
+  // is handled here: it retries a failed read, exactly as the checkbox row
+  // does, and otherwise turns the condition off through the controller.
+  const onSinglePress = (): void => {
+    if (!isOn) return;
+    if (isFailedCheckedLayer(def.key)) {
+      requestLayerOn(def.key);
+      return;
+    }
+    setChecked(def.key, false);
+    controller.deactivate(def.key);
+  };
+
+  // Arrow keys move among the conditions without choosing one: every choice
+  // starts a read from its source, so Space or Enter makes the choice.
+  const onSingleKeyDown = (event: KeyboardEvent): void => {
+    const input = event.currentTarget as HTMLInputElement;
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      input.click();
+      return;
+    }
+    const step =
+      event.key === 'ArrowDown' || event.key === 'ArrowRight'
+        ? 1
+        : event.key === 'ArrowUp' || event.key === 'ArrowLeft'
+          ? -1
+          : 0;
+    if (step === 0) return;
+    event.preventDefault();
+    const choices = Array.from(
+      document.querySelectorAll<HTMLInputElement>(`input[type="radio"][name="${input.name}"]`)
+    ).filter((choice) => choice.offsetParent !== null);
+    choices[choices.indexOf(input) + step]?.focus();
+  };
+
   return (
-    <label class="layer-toggle" for={id} hidden={rowHidden ?? false}>
+    <label
+      class={single ? 'layer-toggle layer-toggle-single' : 'layer-toggle'}
+      for={id}
+      hidden={rowHidden ?? false}
+    >
       <input
-        type="checkbox"
+        type={single ? 'radio' : 'checkbox'}
         id={id}
         data-layer-key={def.key}
         checked={isOn}
         onChange={onChange}
+        {...(single
+          ? { name: STUDIO_CONDITION_NAME, onClick: onSinglePress, onKeyDown: onSingleKeyDown }
+          : {})}
       />
       <span class="layer-toggle-text">
         <span class="layer-toggle-name">{def.name}</span>
@@ -316,6 +379,18 @@ export function Catalog(props: CatalogProps) {
     });
   };
 
+  // Which groups the studio has folded. Ephemeral view state, like the
+  // sources disclosure: every group is open on every mount.
+  const [folded, setFolded] = useState<Set<LayerRole>>(() => new Set());
+  const toggleFold = (role: LayerRole): void => {
+    setFolded((prev) => {
+      const next = new Set(prev);
+      if (next.has(role)) next.delete(role);
+      else next.add(role);
+      return next;
+    });
+  };
+
   return (
     <>
       {LAYER_ROLE_ORDER.map((role) => {
@@ -340,20 +415,8 @@ export function Catalog(props: CatalogProps) {
         const flatDefs = grouped.filter(
           (def) => !def.uiHidden || (checked.value.get(def.key) ?? false)
         );
-        return (
-          <div class="layer-group" role="group" aria-labelledby={headingId} key={role}>
-            <div class="layer-group-title">
-              {/* The group's accessible name is the title + hint only; the
-                  active count sits OUTSIDE the labelledby target so the group
-                  name does not mutate as layers toggle (Opus review nit). */}
-              <span class="layer-group-title-text" id={headingId}>
-                {label.title}
-                {label.hint ? <> <span class="layer-group-hint">{label.hint}</span></> : null}
-              </span>
-              {onCount > 0 ? (
-                <span class="layer-group-count">{onCount} on</span>
-              ) : null}
-            </div>
+        const rows = (
+          <>
             {isReference ? <LayerUmbrella sourcesOpen={sourcesOpen} {...props} /> : null}
             {flatDefs.map((def) => (
               <LayerRow key={def.key} def={def} showSource={sourcesOpen} {...props} />
@@ -366,6 +429,48 @@ export function Catalog(props: CatalogProps) {
             >
               {sourcesOpen ? 'Hide sources' : 'Sources'}
             </button>
+          </>
+        );
+        const isFolded = studio && folded.has(role);
+        const rowsId = `studio-layer-group-rows-${role}`;
+        return (
+          <div
+            class="layer-group"
+            role={studio && role === 'surface' ? 'radiogroup' : 'group'}
+            aria-labelledby={headingId}
+            key={role}
+          >
+            <div class="layer-group-title">
+              {/* The group's accessible name is the title + hint only; the
+                  active count sits OUTSIDE the labelledby target so the group
+                  name does not mutate as layers toggle (Opus review nit). */}
+              <span class="layer-group-title-text" id={headingId}>
+                {label.title}
+                {label.hint ? <> <span class="layer-group-hint">{label.hint}</span></> : null}
+              </span>
+              {onCount > 0 ? (
+                <span class="layer-group-count">{onCount} on</span>
+              ) : null}
+              {studio ? (
+                <button
+                  type="button"
+                  class="layer-group-fold"
+                  aria-expanded={!isFolded}
+                  aria-controls={rowsId}
+                  aria-label={`${isFolded ? 'Show' : 'Hide'} the ${label.title} layers`}
+                  onClick={() => toggleFold(role)}
+                >
+                  {isFolded ? 'Show' : 'Hide'}
+                </button>
+              ) : null}
+            </div>
+            {studio ? (
+              <div id={rowsId} class="layer-group-rows" hidden={isFolded}>
+                {rows}
+              </div>
+            ) : (
+              rows
+            )}
           </div>
         );
       })}
