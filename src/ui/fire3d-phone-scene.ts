@@ -234,6 +234,8 @@ export function createFire3DPhoneScene(map: maplibregl.Map, app: HTMLElement): F
   /** Where the pad's last press is taking the camera, until the camera stops. */
   let goal: Fire3DCamera | null = null;
   let announce = false;
+  /** True while a press is handing the map its next ease (see `press`). */
+  let steering = false;
   let frame = 0;
   let cardObserver: ResizeObserver | null = null;
   let appObserver: MutationObserver | null = null;
@@ -255,8 +257,20 @@ export function createFire3DPhoneScene(map: maplibregl.Map, app: HTMLElement): F
     const target = fire3dPadTarget(name, from, limits());
     goal = target;
     announce = true;
-    if (prefersReducedMotion()) map.jumpTo(target);
-    else map.easeTo({ ...target, duration: FIRE3D_PAD_EASE_MS });
+    if (prefersReducedMotion()) {
+      // A jump ends inside this call, so `onMoveEnd` names the new view at once.
+      map.jumpTo(target);
+      return;
+    }
+    // Starting an ease stops the one in flight, and MapLibre reports that
+    // stop as a `moveend` inside this call. It is not the camera coming to
+    // rest, so `onMoveEnd` lets it pass and waits for this ease's own end.
+    steering = true;
+    try {
+      map.easeTo({ ...target, duration: FIRE3D_PAD_EASE_MS });
+    } finally {
+      steering = false;
+    }
   }
 
   /**
@@ -283,6 +297,7 @@ export function createFire3DPhoneScene(map: maplibregl.Map, app: HTMLElement): F
   };
   /** The camera has stopped: name where it stands, and say so once if the pad sent it there. */
   const onMoveEnd = (): void => {
+    if (steering) return;
     goal = null;
     nameCompass();
     if (!announce) return;
@@ -547,6 +562,7 @@ export function createFire3DPhoneScene(map: maplibregl.Map, app: HTMLElement): F
     offSmoke = null;
     goal = null;
     announce = false;
+    steering = false;
     pad.remove();
     pad.hidden = true;
     said.textContent = '';
