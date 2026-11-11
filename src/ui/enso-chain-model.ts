@@ -18,7 +18,11 @@
  *                own state and its frame's two clocks
  *                (src/layers/enso-flow.ts). Off until a person asks for it.
  *   4. tendency  the NOAA CPC seasonal outlook read at the chosen place:
- *                the claim src/impact/sources.ts builds for the briefing.
+ *                the claim src/impact/sources.ts builds for the briefing (a
+ *                temperature tercile). Its press shows the mode's seasonal
+ *                horizon, which may draw another outlook layer; the host
+ *                hands over what that horizon draws (`seasonDraws`) and the
+ *                link then says so, in the layer's own catalog name.
  *   5. here      what is observed at the chosen place now: the U.S. Drought
  *                Monitor claim the same module builds for the briefing.
  *
@@ -111,6 +115,13 @@ export interface EnsoChainInput {
   readonly place: { readonly label: string; readonly inside: boolean } | null;
   readonly outlook: PlaceRead;
   readonly here: PlaceRead;
+  /**
+   * The layers the seasonal press shows on the map, by their catalog names,
+   * when none of them is the layer of the outlook the link reads (the mode
+   * draws the seasonal precipitation outlook, the link reads the temperature
+   * one). Empty or absent when the map draws what the link states.
+   */
+  readonly seasonDraws?: readonly string[];
 }
 
 /** One node of the overview strip: a link at a glance. */
@@ -283,7 +294,13 @@ function jetLink(jet: JetRead): Built {
       link: { ...base, status: 'idle', idleWord: 'not shown', note: `Press to draw ${source} on the map as model guidance. ${drawn}` }
     };
   }
-  const reason = [jet.line, ...jet.notes].filter((part) => part !== '').join('. ').replace(/\.\./g, '.');
+  // The overlay's state line opens with its status word and a middle dot
+  // ("unavailable · NOAA GFS 250 hPa wind did not load"). The link's pill
+  // already says the word, so the reason starts after it.
+  const lead = `${jet.status} · `;
+  const line = jet.line.startsWith(lead) ? jet.line.slice(lead.length) : jet.line;
+  const joined = [line, ...jet.notes].filter((part) => part !== '').join('. ').replace(/\.\./g, '.');
+  const reason = joined === '' || joined.endsWith('.') ? joined : `${joined}.`;
   switch (jet.status) {
     case 'live':
       return {
@@ -308,7 +325,7 @@ function jetLink(jet: JetRead): Built {
     case 'no data':
       return { link: { ...base, status: 'idle', idleWord: 'no data', note: reason } };
     default:
-      return { link: { ...base, status: 'loading', note: jet.line !== '' ? jet.line : `Loading ${source}.` } };
+      return { link: { ...base, status: 'loading', note: `Loading ${source}.` } };
   }
 }
 
@@ -336,9 +353,13 @@ function unreadPlaceLink(
   return { status: 'unavailable', note: read.note };
 }
 
-function tendencyLink(read: PlaceRead, place: EnsoChainInput['place']): Built {
+function tendencyLink(read: PlaceRead, place: EnsoChainInput['place'], seasonDraws: readonly string[]): Built {
   const base = { key: 'tendency', title: 'Seasonal outlook here', relation: 'read beside' } as const;
-  const lit = { action: 'tendency', actionLabel: 'Show the seasonal outlook on the map' } as const;
+  const drawn = seasonDraws.join(' and ');
+  const lit = {
+    action: 'tendency',
+    actionLabel: drawn !== '' ? `Show the ${drawn} on the map` : 'Show the seasonal outlook on the map'
+  } as const;
   if (read.status !== 'ready' || place === null) {
     const unread = unreadPlaceLink(read.status === 'ready' ? { status: 'none' } : read, place, 'the NOAA Climate Prediction Center seasonal outlook');
     return { link: { ...base, ...lit, ...unread } };
@@ -368,8 +389,14 @@ function tendencyLink(read: PlaceRead, place: EnsoChainInput['place']): Built {
           ? `Equal Chances (no favored tercile), ${tercile.season}`
           : `${tercile.prob}% chance of ${TERCILE_WORDS[tercile.cat] ?? tercile.cat} ${tercile.variable}, ${tercile.season}`
       }, ${wherePhrase(place)}.`,
-      // vocab-allow: honesty disclaimer denying that the CPC seasonal outlook is an ENSO forecast (DR-019, the technical section's own words)
-      note: 'A NOAA Climate Prediction Center seasonal outlook that ENSO informs, not an ENSO forecast.'
+      // The map this press shows may draw another outlook than the one read
+      // here; the sentence keeps the two apart (truthfulness, invariant B1).
+      note:
+        // vocab-allow: honesty disclaimer denying that the CPC seasonal outlook is an ENSO forecast (DR-019, the technical section's own words)
+        'A NOAA Climate Prediction Center seasonal outlook that ENSO informs, not an ENSO forecast.' +
+        (drawn !== ''
+          ? ` Pressing this link shows the ${drawn} on the map; the ${tercile.variable} read above is a separate layer.`
+          : '')
     },
     mark: equal ? 'EC' : `${tercile.prob}%`
   };
@@ -441,7 +468,7 @@ export function buildEnsoChain(input: EnsoChainInput): EnsoChainView {
     indexLink(input.enso),
     patternLink(input.surface),
     jetLink(input.jet),
-    tendencyLink(input.outlook, input.place),
+    tendencyLink(input.outlook, input.place, input.seasonDraws ?? []),
     hereLink(input.here, input.place)
   ];
   return {
@@ -537,7 +564,7 @@ function claimBlock(claim: SourcedClaim, heading: string): string {
     `<span class="impact-claim-badge">${escapeHtml(EVIDENCE_PRESENTATION[claim.evidence].label)}</span></p>` +
     `<p class="enso-truth-text">${escapeHtml(claim.text)}</p>` +
     (claim.uncertainty ? `<p class="enso-truth-qualifier">${escapeHtml(claim.uncertainty.text)}</p>` : '') +
-    `<p class="enso-truth-source">Source: ${name}${date ? `, ${escapeHtml(date)}` : ''}</p>` +
+    `<p class="enso-truth-source">Source: ${name}${date ? `, <span class="enso-truth-date">${escapeHtml(date)}</span>` : ''}</p>` +
     `</div>`
   );
 }

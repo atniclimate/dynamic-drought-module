@@ -22,8 +22,12 @@
  *   pattern   the same ocean view with the model overlay off (`flow=off`),
  *             so the analyzed surface stands alone;
  *   jet       the flow overlay's one door (`flow=jet`);
- *   tendency  the mode at Season ahead (`horizon=season-ahead`), which draws
- *             the NOAA CPC seasonal outlook, framed on the chosen place;
+ *   tendency  the mode at its seasonal horizon (`horizon=season-ahead`),
+ *             framed on the chosen place. What that horizon adds to the map
+ *             is the mode's own recipe (src/config/clusters.ts); when it is
+ *             not the layer of the outlook the link reads, the link and the
+ *             announcement name the layer the map draws, so a precipitation
+ *             map is never read as the temperature outlook the link states;
  *   here      the mode at Current, framed on the chosen place, and that
  *             place's briefing;
  *   place     the Place studio (`studio=place`), when no place is chosen.
@@ -45,7 +49,12 @@
  * the layer registry's, the jet's is the flow overlay's own snapshot. The
  * two place reads are the briefing's own source functions, gated by the
  * briefing's own source policy, for the place selection in force; each is
- * cancelled when the selection changes and when the chain leaves.
+ * cancelled when the selection changes and when the chain leaves. The
+ * source functions are a further dynamic import, made only once a place is
+ * chosen and the policy lets a source run. The policy is a static import on
+ * purpose: asked for dynamically it became a chunk of its own, and three
+ * small modules the entry shares with it left the entry chunk for the boot's
+ * preload list (measured with scripts/check-bundle-size.mjs).
  *
  * NOTHING MOVES. There is no animation here, so reduced motion has no twin
  * to keep in step, and no emphasis is carried by motion.
@@ -56,7 +65,11 @@ import '../styles/enso-chain.css';
 
 import type * as maplibregl from 'maplibre-gl';
 
+import { HAZARD_CLUSTERS } from '../config/clusters';
+import { getLayerDef } from '../config/layers';
+import { PRODUCTS } from '../config/products';
 import { readEnsoClaims } from '../impact/enso';
+import { briefingSourcePolicy, sourceMayRun } from '../impact/source-policy';
 import type { BoundarySelectionContext } from '../impact/types';
 import { requestEnsoFlowKind } from '../layers/enso-flow';
 import { fitOcean } from '../map/camera-fit';
@@ -97,6 +110,27 @@ const DOOR_GLYPH =
 
 const IDLE_JET: JetRead = { kind: null, status: 'inactive', label: '', line: '', notes: [] };
 
+/**
+ * What the mode's seasonal horizon adds to the map: its recipe there, less
+ * its recipe at Current (src/config/clusters.ts), each layer under its own
+ * catalog name. Read from the tables, so the words follow the recipe.
+ */
+const SEASON_ADDS: readonly { readonly key: string; readonly name: string }[] = HAZARD_CLUSTERS.enso.recipes[
+  'season-ahead'
+]
+  .filter((key) => !HAZARD_CLUSTERS.enso.recipes.current.includes(key))
+  .map((key) => ({ key, name: getLayerDef(key)?.name ?? key }));
+
+/**
+ * The layers the seasonal press shows, by name, unless one of them is the
+ * layer of the outlook the link reads (then the map draws what the link
+ * states, and nothing needs saying).
+ */
+function seasonDraws(outlook: PlaceRead): readonly string[] {
+  const own = outlook.status === 'ready' ? PRODUCTS[outlook.claim.product].layerKey : null;
+  return SEASON_ADDS.some((layer) => layer.key === own) ? [] : SEASON_ADDS.map((layer) => layer.name);
+}
+
 interface Held {
   readonly map: maplibregl.Map;
   readonly app: HTMLElement;
@@ -135,7 +169,8 @@ function paint(): void {
       ? { label: state.place.label, inside: state.place.context.pointInsidePlace === true }
       : null,
     outlook: state.outlook,
-    here: state.here
+    here: state.here,
+    seasonDraws: seasonDraws(state.outlook)
   });
   const chain = renderEvidenceChain(view.links, {
     id: 'enso',
@@ -233,48 +268,44 @@ function readPlace(state: Held, selection: PlaceSelection | null): void {
   const signal = controller.signal;
   const current = (): boolean => !signal.aborted && held === state;
   const failed: PlaceRead = { status: 'unavailable', note: 'This source did not respond.' };
-  void Promise.all([import('../impact/source-policy'), import('../impact/sources')]).then(
-    ([policyModule, sources]) => {
+  const settle = (slot: 'outlook' | 'here', read: PlaceRead): void => {
+    if (!current()) return;
+    state[slot] = read;
+    paint();
+  };
+  const policy = briefingSourcePolicy(context);
+  const reads = [
+    { slot: 'outlook', key: 'cpcSeasonalTemp', kind: 'cpc-tercile' },
+    { slot: 'here', key: 'usdm', kind: 'usdm-category' }
+  ] as const;
+  // A source the policy gates off for this place says so in the policy's own sentence.
+  for (const read of reads) {
+    if (!sourceMayRun(policy, read.key)) settle(read.slot, { status: 'unavailable', note: policy.sources[read.key].note });
+  }
+  const open = reads.filter((read) => sourceMayRun(policy, read.key));
+  if (open.length === 0) return;
+  void import('../impact/sources').then(
+    (sources) => {
       if (!current()) return;
-      const policy = policyModule.briefingSourcePolicy(context);
-      const settle = (slot: 'outlook' | 'here', read: PlaceRead): void => {
-        if (!current()) return;
-        state[slot] = read;
-        paint();
-      };
-      const run = (
-        slot: 'outlook' | 'here',
-        key: 'cpcSeasonalTemp' | 'usdm',
-        kind: 'cpc-tercile' | 'usdm-category',
-        fetcher: typeof sources.fetchUsdmClaims
-      ): void => {
-        // A source the policy gates off for this place says so in the policy's own sentence.
-        if (!policyModule.sourceMayRun(policy, key)) {
-          settle(slot, { status: 'unavailable', note: policy.sources[key].note });
-          return;
-        }
-        void fetcher(context, signal).then(
+      const fetchers = { cpcSeasonalTemp: sources.fetchCpcSeasonalTempClaims, usdm: sources.fetchUsdmClaims };
+      for (const read of open) {
+        void fetchers[read.key](context, signal).then(
           (result) => {
             const claim =
-              result.claims.find((candidate) => candidate.reading?.kind === kind) ?? result.claims[0];
+              result.claims.find((candidate) => candidate.reading?.kind === read.kind) ?? result.claims[0];
             settle(
-              slot,
+              read.slot,
               result.ok && claim
                 ? { status: 'ready', claim }
                 : { status: 'unavailable', note: result.note ?? failed.note }
             );
           },
-          () => settle(slot, failed)
+          () => settle(read.slot, failed)
         );
-      };
-      run('outlook', 'cpcSeasonalTemp', 'cpc-tercile', sources.fetchCpcSeasonalTempClaims);
-      run('here', 'usdm', 'usdm-category', sources.fetchUsdmClaims);
+      }
     },
     () => {
-      if (!current()) return;
-      state.outlook = failed;
-      state.here = failed;
-      paint();
+      for (const read of open) settle(read.slot, failed);
     }
   );
 }
@@ -366,16 +397,20 @@ function press(action: EnsoChainAction): void {
       requestHorizon(action === 'tendency' ? 'season-ahead' : 'current');
       framePlace(map, place.context);
       if (action === 'tendency') {
-        say(`The map shows the seasonal outlook, framed on ${place.label}.`);
+        const draws = seasonDraws(state.outlook);
+        say(
+          draws.length > 0
+            ? `The map shows the ${draws.join(' and ')}, framed on ${place.label}.`
+            : `The map shows the seasonal outlook, framed on ${place.label}.`
+        );
         return;
       }
+      say(`The map shows current conditions, framed on ${place.label}. Its briefing is open.`);
       // The briefing takes the phone sheet, so the guide stands down first.
-      closeGuide(false);
-      openImpactPanel(place.context);
+      standDown(() => openImpactPanel(place.context), 'sheet-report-door');
       return;
     case 'place':
-      closeGuide(false);
-      enterPlaceStudio();
+      standDown(enterPlaceStudio);
       return;
   }
 }
@@ -385,8 +420,10 @@ function onPanelClick(event: Event): void {
   const control = target?.closest<HTMLElement>('[data-chain-action], [data-enso-door]') ?? null;
   if (!control || !held?.panel.contains(control)) return;
   if (control.dataset['ensoDoor'] === 'technical') {
-    closeGuide(false);
-    openTechnicalInformation(control);
+    // On a phone the pressed control leaves with the guide, so the Guide
+    // door is the opener that focus returns to when the section closes.
+    const opener = held.guideOpen ? held.door : control;
+    standDown(() => openTechnicalInformation(opener));
     return;
   }
   const action = control.dataset['chainAction'];
@@ -397,6 +434,27 @@ function onPanelClick(event: Event): void {
 // The phone door and the sheet
 // ---------------------------------------------------------------------------
 
+/**
+ * Hand the phone sheet to another surface: the guide closes, `then` opens
+ * what replaces it, and focus that was on a control of the guide moves to
+ * `focusId` when that control is on screen, else to the Guide door, so it
+ * never falls to the page body with the hidden panel. `then` may take focus
+ * itself (a studio, a report at full); that is left alone. Outside the phone
+ * shell the panel stays where it is and only `then` runs.
+ */
+function standDown(then: () => void, focusId?: string): void {
+  const state = held;
+  if (!state) return;
+  const inGuide = state.guideOpen && state.panel.contains(document.activeElement);
+  closeGuide(false);
+  then();
+  if (!inGuide || held !== state) return;
+  const active = document.activeElement;
+  if (active instanceof HTMLElement && active !== document.body && active.isConnected && active.offsetParent !== null) return;
+  const next = focusId ? document.getElementById(focusId) : null;
+  (next && !next.hidden && next.offsetParent !== null ? next : state.door).focus({ preventScroll: true });
+}
+
 function closeGuide(returnFocus: boolean): void {
   const state = held;
   if (!state || !state.guideOpen) return;
@@ -404,6 +462,10 @@ function closeGuide(returnFocus: boolean): void {
   state.app.removeAttribute(GUIDE_FLAG);
   state.app.removeAttribute(SHEET_NAME);
   state.door.setAttribute('aria-expanded', 'false');
+  // The guide is long. Whatever takes an open sheet after it starts at its
+  // own top, never at the offset the guide was scrolled to.
+  const scroll = state.panel.closest<HTMLElement>('.sidebar-scroll');
+  if (scroll && isSheetActive()) scroll.scrollTop = 0;
   // The sheet hands focus to the map when no door claimed it; this door did.
   if (returnFocus && document.activeElement?.classList.contains('maplibregl-canvas')) {
     state.door.focus({ preventScroll: true });

@@ -27,7 +27,11 @@ import { fileURLToPath } from 'node:url';
  *      the one the technical section quotes;
  *   7. the chain never wears the full detail's claim class names, its
  *      stylesheet draws colour and corners through tokens only, its presses
- *      write no history of their own, and it sits behind a dynamic import.
+ *      write no history of their own, and it sits behind a dynamic import;
+ *   8. the seasonal link says which outlook layer its press puts on the map
+ *      whenever that is not the outlook it reads, from the mode's own recipe;
+ *   9. the Guide door makes five doors in the phone column, and the planner
+ *      fits five at every phone viewport the sprint names.
  */
 
 // Extensionless relative `.ts` imports (see tests/briefing-truth.test.mjs).
@@ -64,6 +68,10 @@ const { signedIndex } = await import('../src/impact/priority.ts');
 const { FLOW_WORDS, dateLabel } = await import('../src/layers/enso-flow-data.ts');
 const { READ_STATE_WORD } = await import('../src/ui/gauges.ts');
 const { USDM_CATEGORIES, USDM_NONE_SWATCH } = await import('../src/config/palette.ts');
+const { HAZARD_CLUSTERS } = await import('../src/config/clusters.ts');
+const { getLayerDef } = await import('../src/config/layers.ts');
+const { PRODUCTS } = await import('../src/config/products.ts');
+const { EDGE_COLUMN_TOKENS, planEdgeColumn } = await import('../src/config/edge-column.ts');
 const { ENSO_INDICES_SHARED_KEY, invalidateSharedJsonRequest } = await import('../src/util/fetch.ts');
 
 const read = (path) => readFileSync(fileURLToPath(new URL(path, import.meta.url)), 'utf8');
@@ -445,10 +453,21 @@ test('jet link: loading, partial, unavailable and no data keep the overlay\'s ow
     assert.equal(count(item, 'evidence-chain-statement') + count(item, '<svg') + count(item, 'impact-claim-badge'), 0, label);
   }
   const down = linkOf(buildEnsoChain(input({ jet: cases[3][0] })), 'jet');
-  // The overlay's failure words arrive whole, and its refusal to infer comes with them.
-  assert.equal(down.note, `${failedLine}. ${failedNote}`);
-  assert.equal(linkOf(buildEnsoChain(input({ jet: cases[4][0] })), 'jet').idleWord, 'no data');
-  assert.equal(linkOf(buildEnsoChain(input({ jet: cases[1][0] })), 'jet').note, `Loading ${FLOW_WORDS.source.jet}.`);
+  // The overlay's failure words arrive whole, with its refusal to infer. Its
+  // line opens with the status word the pill already says, so the reason
+  // starts after it and the word is on the card once.
+  assert.equal(down.note, `${FLOW_WORDS.unavailable.jet}. ${failedNote}`);
+  assert.doesNotMatch(down.note, /^unavailable/);
+  const noData = linkOf(buildEnsoChain(input({ jet: cases[4][0] })), 'jet');
+  assert.equal(noData.idleWord, 'no data');
+  assert.equal(noData.note, `${FLOW_WORDS.noOcean}. ${FLOW_WORDS.mask}`);
+  assert.equal(linkOf(buildEnsoChain(input({ jet: cases[2][0] })), 'jet').note, 'part of the view. A part is not covered.');
+  for (const index of [0, 1]) {
+    assert.equal(linkOf(buildEnsoChain(input({ jet: cases[index][0] })), 'jet').note, `Loading ${FLOW_WORDS.source.jet}.`);
+  }
+  // A line with no status lead, and a reason with no closing stop, are kept whole and closed.
+  const odd = { kind: 'jet', status: 'unavailable', label: 'Jet-level wind', line: 'The held frame is past its limit', notes: [] };
+  assert.equal(linkOf(buildEnsoChain(input({ jet: odd })), 'jet').note, 'The held frame is past its limit.');
 });
 
 test('place links: with no place chosen both are idle and their press chooses a place', () => {
@@ -521,6 +540,45 @@ test('tendency link: the outlook is the issuer\'s tercile at the place, and deni
   assert.match(linkOf(untyped, 'tendency').note, /stated in that place's briefing/);
   assert.equal(nodeOf(untyped, 'tendency').mark, 'read');
   assert.equal(linkOf(untyped, 'tendency').source, 'NOAA Climate Prediction Center seasonal temperature outlook');
+});
+
+test('tendency link: when its press draws another outlook than it reads, the link says which', () => {
+  // Today's tables: the mode's seasonal horizon adds the precipitation outlook, and the link reads temperature.
+  const recipes = HAZARD_CLUSTERS.enso.recipes;
+  const adds = recipes['season-ahead'].filter((key) => !recipes.current.includes(key));
+  assert.deepEqual(adds, ['cpc-seasonal-precip']);
+  assert.equal(PRODUCTS.cpcSeasonalTemp.layerKey, 'cpc-seasonal-temp');
+  assert.equal(adds.includes(PRODUCTS.cpcSeasonalTemp.layerKey), false, 'the press does not draw the outlook the link reads');
+  const names = adds.map((key) => getLayerDef(key).name);
+  assert.deepEqual(names, ['Seasonal Precipitation Outlook']);
+  // The host derives exactly that from the same tables, never from a typed name.
+  const host = code('../src/ui/enso-chain.ts');
+  assert.match(host, /HAZARD_CLUSTERS\.enso\.recipes\[\s*'season-ahead'\s*\]/);
+  assert.match(host, /PRODUCTS\[outlook\.claim\.product\]\.layerKey/);
+  assert.doesNotMatch(host, /Seasonal Precipitation Outlook|cpc-seasonal-precip/);
+
+  const view = buildEnsoChain(input({ seasonDraws: names }));
+  const link = linkOf(view, 'tendency');
+  assert.equal(link.statement, '50% chance of above-normal temperature, Sep-Oct-Nov 2026, at a point inside Washington.');
+  assert.equal(
+    link.note,
+    'A NOAA Climate Prediction Center seasonal outlook that ENSO informs, not an ENSO forecast. ' +
+      'Pressing this link shows the Seasonal Precipitation Outlook on the map; the temperature read above is a separate layer.'
+  );
+  assert.equal(link.actionLabel, 'Show the Seasonal Precipitation Outlook on the map');
+  assert.match(drawnLink(view, 'tendency'), /aria-label="Seasonal outlook here\. Show the Seasonal Precipitation Outlook on the map"/);
+  // Two layers are both named; none, and the map draws what the link states, so nothing is added.
+  const two = linkOf(buildEnsoChain(input({ seasonDraws: ['A Outlook', 'B Outlook'] })), 'tendency');
+  assert.match(two.note, /shows the A Outlook and B Outlook on the map/);
+  for (const seasonDraws of [[], undefined]) {
+    const same = linkOf(buildEnsoChain(input({ seasonDraws })), 'tendency');
+    assert.equal(same.note, 'A NOAA Climate Prediction Center seasonal outlook that ENSO informs, not an ENSO forecast.');
+    assert.equal(same.actionLabel, 'Show the seasonal outlook on the map');
+  }
+  // A link with no read states no outlook, so it has nothing to keep apart; its press is still named for the map.
+  const loading = linkOf(buildEnsoChain(input({ outlook: { status: 'loading' }, seasonDraws: names })), 'tendency');
+  assert.doesNotMatch(loading.note, /separate layer/);
+  assert.equal(loading.actionLabel, 'Show the Seasonal Precipitation Outlook on the map');
 });
 
 test('here link: the drought category is marked on the issuer scale; no polygon is not an all-clear', () => {
@@ -706,9 +764,13 @@ test('the chain stylesheet takes colour and corners from tokens, and moves nothi
 test('the presses go through existing doors: the host writes no history and parses no link', () => {
   const host = code('../src/ui/enso-chain.ts');
   assert.doesNotMatch(host, /pushState|replaceState|location\.(?:search|href|hash)\s*=|URLSearchParams|replaceQuery|syncUrl/);
-  for (const door of ['requestOcean', 'requestHorizon', 'requestCluster', 'requestEnsoFlowKind', 'enterPlaceStudio', 'openImpactPanel']) {
-    assert.match(host, new RegExp(`\\b${door}\\(`), `${door} is called`);
+  for (const door of ['requestOcean', 'requestHorizon', 'requestCluster', 'requestEnsoFlowKind', 'enterPlaceStudio', 'openImpactPanel', 'openTechnicalInformation']) {
+    // Once in its import and at least once where a press uses it.
+    assert.ok(count(host, door) >= 2, `${door} is imported and used`);
   }
+  assert.match(host, /from '\.\.\/state\/cluster-service'/);
+  assert.match(host, /from '\.\.\/layers\/enso-flow'/);
+  assert.match(host, /from '\.\.\/state\/studio-route'/);
   // The guide's open state is presentation: an attribute on #app, never a link token.
   assert.match(host, /'data-enso-guide'/);
   assert.equal(read('../src/state/url.ts').includes('enso-guide'), false);
@@ -724,8 +786,70 @@ test('the chain is lazy: the layer holds only its loader, and the loader imports
   const layer = code('../src/layers/sst-anomaly.ts');
   assert.match(layer, /from '\.\.\/ui\/enso-chain-loader'/);
   assert.doesNotMatch(layer, /from '\.\.\/ui\/enso-chain(?:-model)?'/, 'the layer never imports the chain itself');
+  // The briefing's source functions load only when a place is chosen; the
+  // policy that gates them is a static import (a dynamic one made it a chunk
+  // of its own and moved three small modules out of the entry chunk).
+  const host = code('../src/ui/enso-chain.ts');
+  assert.match(host, /import\('\.\.\/impact\/sources'\)/);
+  assert.doesNotMatch(host, /import\('\.\.\/impact\/source-policy'\)/);
+  assert.match(host, /^import \{ briefingSourcePolicy, sourceMayRun \} from '\.\.\/impact\/source-policy';$/m);
   // Nothing outside the chain's own modules imports it statically.
   for (const path of ['../src/main.ts', '../src/ui/sidebar.ts', '../src/ui/mobile-sheet.ts', '../src/ui/edge-column.ts', '../src/ui/sheet-motion.ts']) {
     assert.doesNotMatch(code(path), /enso-chain(?:-model|-loader)?'/, `${path} does not import the chain`);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// 9. Five doors in the phone column
+// ---------------------------------------------------------------------------
+
+test('the Guide door makes five doors, and the planner fits five at every phone viewport', () => {
+  // The door rides the panel group, after the four doors (order 10 is the doors' own seat).
+  const host = code('../src/ui/enso-chain.ts');
+  assert.match(host, /seatEdgeControl\(door, \{ group: 'panels', order: 20 \}\)/);
+  assert.match(code('../src/ui/edge-column.ts'), /phone: \{ group: 'panels', order: 10 \}/);
+
+  const plan = (viewportWidth, viewportHeight, utility) =>
+    planEdgeColumn({
+      availableHeight: viewportHeight - 2 * EDGE_COLUMN_TOKENS.inset,
+      viewportWidth,
+      viewportHeight,
+      // Map information waits while a panel is open, so the map tools are three or two.
+      groups: [
+        { id: 'utility', count: utility },
+        { id: 'panels', count: 5 },
+        { id: 'hazards', count: 4 },
+        { id: 'view', count: 1 }
+      ],
+      badge: true
+    });
+  const expected = [
+    [320, 568, 44, 1, ['utility']],
+    [360, 640, 44, 1, []],
+    [375, 553, 44, 1, ['utility']],
+    [375, 667, 44, 1, []],
+    [390, 844, 52, 1, []],
+    [412, 915, 52, 1, []],
+    [667, 375, 44, 2, []]
+  ];
+  for (const [width, height, size, tracks, folded] of expected) {
+    for (const utility of [3, 2]) {
+      const got = plan(width, height, utility);
+      const where = `${width}x${height}, ${utility} map tools`;
+      assert.equal(got.fits, true, `five doors fit at ${where}`);
+      assert.ok(got.size >= EDGE_COLUMN_TOKENS.minTarget, `44 px cells at ${where}`);
+      assert.equal(got.tracks.flat().includes('panels'), true, `the doors are placed at ${where}`);
+      // The doors themselves are never folded at these sizes: the Guide door is one press away.
+      assert.equal(got.folded.includes('panels'), false, `the doors are not folded at ${where}`);
+      if (utility === 3) assert.deepEqual([got.size, got.tracks.length, got.folded], [size, tracks, folded], where);
+    }
+  }
+  // Across every phone height the plan with five doors fits or is the last arrangement and says so.
+  for (const width of [320, 360, 375, 390, 412, 667, 720]) {
+    for (let height = 240; height <= 1000; height += 1) {
+      const got = plan(width, height, 3);
+      assert.ok(got.size >= 44);
+      if (!got.fits) assert.equal(got.tracks.length, 2, `gave up before two tracks at ${width}x${height}`);
+    }
   }
 });
