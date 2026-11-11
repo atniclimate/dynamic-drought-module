@@ -293,6 +293,13 @@ export function mountLayersStudio(
   controller: LayerController,
   search?: SearchProps
 ): void {
+  // NO STYLESHEET, NO STUDIO (the same check, for the same reason, as
+  // mountPlaceStudio in place-studio.tsx): src/styles/studios.css marks the
+  // studio roots, and a mount that does not find the mark throws before
+  // anything is subscribed, which lands in the shell's "Studio unavailable".
+  if (getComputedStyle(root).getPropertyValue('--ddm-studios-css').trim() !== '1') {
+    throw new Error('[layers-studio] the studio stylesheet is not loaded.');
+  }
   let state = mounted.get(root);
   if (!state) {
     const checked = signal<ReadonlyMap<string, boolean>>(checkedSnapshot());

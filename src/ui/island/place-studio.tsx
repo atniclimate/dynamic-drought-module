@@ -2166,7 +2166,27 @@ function PlaceStudio() {
   );
 }
 
+/**
+ * NO STYLESHEET, NO STUDIO. src/styles/studios.css rides this lazy chunk, so
+ * it is one more request that can fail. On a first open the bundler's
+ * preload waits for it and a failure rejects the import, which the shell
+ * shows as "Studio unavailable". Nothing asks for the stylesheet again in
+ * the same page, though (the preload remembers what it has seen, and the
+ * shell's re-entry imports this chunk's own URL, src/util/chunk-retry.ts),
+ * so a later entry would mount the studio without its styles: measured on
+ * the sprint camera before this check, as bulleted rows and default buttons.
+ * The stylesheet therefore marks the studio roots with a custom property,
+ * and a mount that does not find the mark throws, which lands in the same
+ * "Studio unavailable" state; its "Try again" reloads the page and with it
+ * the stylesheet (src/ui/view-shell.ts renderStudioLoadFailure).
+ */
+function requireStudioStyles(root: HTMLElement): void {
+  if (getComputedStyle(root).getPropertyValue('--ddm-studios-css').trim() === '1') return;
+  throw new Error('[place-studio] the studio stylesheet is not loaded.');
+}
+
 export function mountPlaceStudio(root: HTMLElement): void {
+  requireStudioStyles(root);
   render(<PlaceStudio />, root);
 }
 

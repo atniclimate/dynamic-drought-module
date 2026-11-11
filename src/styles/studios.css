@@ -40,6 +40,16 @@
    its final layout.
    ============================================================================= */
 
+/* THE MARK each studio reads before it renders (mountPlaceStudio in
+   src/ui/island/place-studio.tsx, mountLayersStudio in layers-studio.tsx):
+   proof that this stylesheet, one more lazy request, is applied. Without it a
+   studio shows the shell's "Studio unavailable" state instead of mounting
+   unstyled. */
+#place-studio-root,
+#layers-studio-root {
+  --ddm-studios-css: 1;
+}
+
 /* -----------------------------------------------------------------------------
    Place studio, every width: search, type chips, the list, the selection bar
    ----------------------------------------------------------------------------- */
