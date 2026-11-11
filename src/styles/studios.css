@@ -1351,11 +1351,24 @@
   }
 }
 
-/* A short phone gives the pinned search's strip back to the list. */
+/* A short phone gives the pinned search's strip back to the list, and the
+   bar gives back what it can without dropping a word. */
 @media (max-width: 720px) and (max-height: 620px) {
   #place-studio-root .place-studio-search {
     position: relative;
     background: none;
+  }
+  .place-studio-bar {
+    gap: 6px 10px;
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
+  }
+  #place-selection-title.place-studio-bar-name {
+    font-size: 15px;
+    line-height: 1.2;
+  }
+  .place-studio-bar-caveat {
+    margin-top: 5px;
+    padding-top: 5px;
   }
 }
 
