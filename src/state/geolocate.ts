@@ -129,10 +129,16 @@ export type LocateEvent =
       /** True for the one retry a timeout offers. */
       readonly retry?: boolean;
     }
-  | { readonly type: 'permission'; readonly attempt: number; readonly permission: 'granted' | 'denied' }
+  | { readonly type: 'permission'; readonly attempt: number; readonly permission: 'granted' | 'denied' | 'prompt' }
   | { readonly type: 'fix'; readonly attempt: number; readonly fix: LocateFix }
   | { readonly type: 'settle'; readonly attempt: number }
-  | { readonly type: 'error'; readonly attempt: number; readonly code: number }
+  | {
+      readonly type: 'error';
+      readonly attempt: number;
+      readonly code: number;
+      /** The permission reading taken after a refusal (code 1), where the browser offers one. */
+      readonly permission?: PermissionReading;
+    }
   | { readonly type: 'deadline'; readonly attempt: number }
   | { readonly type: 'cancel' }
   | { readonly type: 'clear' }
@@ -228,9 +234,13 @@ export function reduceLocate(state: LocateState, event: LocateEvent): LocateStat
   switch (event.type) {
     case 'permission':
       if (state.phase !== 'asking') return state;
+      // `prompt` only sharpens the wording: the browser's sheet is known to be up.
+      if (event.permission === 'prompt') {
+        return state.permission === 'prompt' ? state : { ...state, permission: 'prompt' };
+      }
       return event.permission === 'granted'
-        ? { ...state, phase: 'locating' }
-        : fail(state, 'denied', null);
+        ? { ...state, phase: 'locating', permission: 'granted' }
+        : fail({ ...state, permission: 'denied' }, 'denied', null);
     case 'fix': {
       if (!validFix(event.fix)) return state;
       if (event.fix.accuracy <= GOOD_FIX_M) return accept(state, event.fix);
@@ -244,7 +254,11 @@ export function reduceLocate(state: LocateState, event: LocateEvent): LocateStat
       return state.pending ? accept(state, state.pending) : fail(state, 'timeout', null);
     case 'error':
       // 1 PERMISSION_DENIED, 2 POSITION_UNAVAILABLE, 3 TIMEOUT (Geolocation API).
-      if (event.code === 1) return fail(state, 'denied', null);
+      // A refusal keeps the reading taken after it: `denied` means the browser
+      // now blocks this site, anything else that the question was only closed.
+      if (event.code === 1) {
+        return fail({ ...state, permission: event.permission ?? state.permission }, 'denied', null);
+      }
       if (state.pending) return accept(state, state.pending);
       return event.code === 3 ? fail(state, 'timeout', null) : fail(state, 'unavailable', 'no-fix');
     default:
@@ -285,10 +299,21 @@ export function phaseCopy(state: LocateState): PhaseCopy | null {
         next: 'Cancel'
       };
     case 'denied':
+      // Blocked: the browser will not ask, so the way back is its settings.
+      if (state.permission === 'denied') {
+        return {
+          title: 'Location is blocked for this map',
+          body:
+            'Your browser will not ask again by itself. To allow it later, open the settings for this site in your browser and allow Location. On a phone, also check that location is on for the browser. Then press Locate.',
+          next: 'Close'
+        };
+      }
+      // Not allowed this time: the question was closed or answered no, and
+      // the browser may ask again. Nothing here claims a block it did not read.
       return {
-        title: 'Location is blocked for this map',
+        title: 'This map was not allowed to use your position',
         body:
-          'The map will not ask again by itself. To allow it later, open the settings for this site in your browser and allow Location. On a phone, also check that location is on for the browser. Then press Locate.',
+          'Nothing was read. Press Locate when you want to be asked again. If your browser does not ask, open the settings for this site and allow Location. On a phone, also check that location is on for the browser.',
         next: 'Close'
       };
     case 'timeout':
@@ -727,4 +752,198 @@ export function tribalVerdict(
  */
 export function generalizationM(zoomBucket: number): number {
   return (360 / (512 * Math.pow(2, zoomBucket))) * 0.5 * M_PER_DEG;
+}
+
+// ---------------------------------------------------------------------------
+// The words of a located position
+// ---------------------------------------------------------------------------
+
+/** How good the position is, in plain units. The first sentence of every located line. */
+export function accuracyLine(fix: LocateFix): string {
+  return fix.accuracy > LOW_ACCURACY_M
+    ? `Approximate position: good to about ${plainDistance(fix.accuracy)}.`
+    : `Position good to about ${plainDistance(fix.accuracy)}.`;
+}
+
+/** A state's name as a sentence takes it. */
+function stateInSentence(state: StateRef): string {
+  return state.code === 'DC' ? 'the District of Columbia' : state.name;
+}
+
+function listOf(items: readonly string[]): string {
+  if (items.length <= 1) return items[0] ?? '';
+  return `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
+}
+
+/** The head of a located card: the claim, its qualification, and what it offers to open. */
+export interface LocatedCopy {
+  readonly title: string;
+  /** The qualification of the claim the title makes. Follows `accuracyLine` in the card. */
+  readonly qualifier: string;
+  /** States whose briefing the card may open. Empty when no outline was touched. */
+  readonly states: readonly StateRef[];
+  /** True only when the whole disc is inside one state: that briefing opens without asking. */
+  readonly certain: boolean;
+}
+
+/**
+ * Word what the bundled outlines support, and nothing more. `null`: the
+ * outlines could not be read, which is said as that and not as "nowhere".
+ */
+export function locatedCopy(fix: LocateFix, finding: StateFinding | null): LocatedCopy {
+  if (finding === null) {
+    return {
+      title: 'Position found, place not named',
+      qualifier: 'This map could not read its own state outlines.',
+      states: [],
+      certain: false
+    };
+  }
+  if (finding.kind === 'in') {
+    return {
+      title: `You are in ${stateInSentence(finding.state)}`,
+      qualifier: '',
+      states: [finding.state],
+      certain: true
+    };
+  }
+  if (finding.kind === 'outside') {
+    return {
+      title: 'You are outside the states this map names',
+      qualifier: 'Its outlines cover the 50 states, the District of Columbia and Puerto Rico.',
+      states: [],
+      certain: false
+    };
+  }
+  const names = finding.states.map(stateInSentence);
+  if (names.length === 1) {
+    return {
+      title: `You are at the edge of ${names[0]}`,
+      qualifier: 'This map cannot tell which side of its coarse state outline you are on.',
+      states: finding.states,
+      certain: false
+    };
+  }
+  return {
+    title:
+      names.length === 2
+        ? `You are near the ${finding.states[0]?.name} and ${finding.states[1]?.name} line`
+        : `You are near where ${listOf(names)} meet`,
+    qualifier:
+      fix.accuracy > STATE_OUTLINE_MARGIN_M
+        ? 'That reaches more than one state, so this map does not pick one.'
+        : 'That is too close to a state line for the coarse outlines this map carries to pick a side.',
+    states: finding.states,
+    certain: false
+  };
+}
+
+/** Who draws each boundary source, as a sentence names them. */
+const SOURCE_DRAWN_BY: Readonly<Record<TribalSource, string>> = {
+  // The names src/config/acknowledgements.ts gives the two agencies.
+  aiannh: 'the U.S. Census Bureau',
+  'bia-reservation': 'the Bureau of Indian Affairs',
+  tribal: 'the boundary data this map was given'
+};
+
+/** Who draws a boundary source. */
+export function drawnBy(source: TribalSource): string {
+  return SOURCE_DRAWN_BY[source];
+}
+
+/** The six layer states, in the catalog's own words, for a layer that could not be tested. */
+function untestedWord(status: TribalLayerReading['status']): string {
+  switch (status) {
+    case 'error':
+      return 'unavailable';
+    case 'degraded':
+      return 'live (partial)';
+    case 'loading':
+      return 'still loading';
+    case 'zoom-in':
+      return 'zoom in to load';
+    default:
+      return status;
+  }
+}
+
+/**
+ * The one plain line shown BEFORE the map frames the grid square, read
+ * against src/layers/aiannh.ts and src/layers/bia-reservations.ts: each asks
+ * its service for the map view (`buildQueryEnvelope(map.getBounds())`), and
+ * the view is a function of the square. `agencies` are the services of the
+ * boundary layers that are on, so the line never names one that is not asked.
+ */
+export function tribalDisclosure(agencies: readonly string[], cell: Envelope): string {
+  const { widthKm, heightKm } = cellSizeKm(cell);
+  return (
+    `To check, the map moves to a grid square that contains you (about ${widthKm} by ${heightKm} km) ` +
+    `and loads Tribal boundaries there from ${listOf(agencies)}. ` +
+    'Your exact position is not sent: they see the square, not where you are in it.'
+  );
+}
+
+/** What a Tribal lands check may say. `names` maps a layer key to its catalog name. */
+export interface TribalCopy {
+  /** Replaces the card's title when the check places the position; null keeps the state's. */
+  readonly title: string | null;
+  /** Follows `accuracyLine` in the card's head. */
+  readonly qualifier: string;
+  /** Further lines for the card's body. */
+  readonly detail: readonly string[];
+}
+
+/**
+ * The sentence the absence of a boundary carries on this map, verbatim from
+ * the boundary popups (src/ui/popups.ts): no result here is ever an all-clear.
+ */
+export const NO_AREA_CAVEAT =
+  'No federal dataset maps every Tribal Nation; absence from this layer is not absence of a Nation or of its rights.';
+
+/** Word a verdict. Every kind is a different sentence, and only `inside` names a place as the position's. */
+export function tribalCopy(verdict: TribalVerdict, names: (key: string) => string): TribalCopy {
+  const list = (keys: readonly string[]): string => listOf(keys.map(names));
+  switch (verdict.kind) {
+    case 'inside':
+      return {
+        title: `You are within ${verdict.hit.name}`,
+        qualifier: `As ${drawnBy(verdict.hit.source)} draws it.`,
+        detail: []
+      };
+    case 'near': {
+      const first = verdict.hits[0] as TribalHit;
+      return {
+        title: `You are near the edge of ${first.name}`,
+        qualifier: `That reaches the edge ${drawnBy(first.source)} draws, so this map does not place you inside or outside it.`,
+        detail: verdict.hits.length > 1 ? [`The same holds for ${listOf(verdict.hits.slice(1).map((hit) => hit.name))}.`] : []
+      };
+    }
+    case 'none':
+      return {
+        title: null,
+        qualifier: `Not inside any area drawn by ${list(verdict.tested)}.`,
+        detail: [NO_AREA_CAVEAT]
+      };
+    case 'incomplete':
+      return {
+        title: null,
+        qualifier: 'Tribal lands check incomplete.',
+        detail: [
+          `Not checked: ${listOf(verdict.untested.map((layer) => `${names(layer.key)} (${untestedWord(layer.status)})`))}.`,
+          ...(verdict.tested.length > 0 ? [`Checked, and you are not inside any area it draws: ${list(verdict.tested)}.`] : [])
+        ]
+      };
+    case 'too-wide':
+      return {
+        title: null,
+        qualifier: 'That is wider than the area that was loaded, so Tribal lands could not be checked.',
+        detail: []
+      };
+    default:
+      return {
+        title: null,
+        qualifier: 'Tribal lands not checked: no Tribal boundary layer is on.',
+        detail: []
+      };
+  }
 }

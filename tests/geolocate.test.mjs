@@ -43,7 +43,13 @@ const {
   findStates,
   findTribalHits,
   tribalVerdict,
-  generalizationM
+  generalizationM,
+  accuracyLine,
+  locatedCopy,
+  drawnBy,
+  tribalDisclosure,
+  tribalCopy,
+  NO_AREA_CAVEAT
 } = core;
 
 const source = async (path) => readFile(new URL(path, ROOT), 'utf8');
@@ -76,6 +82,15 @@ test('a press asks, an allowed press locates, and a good fix is taken at once', 
   assert.equal(run([start(2, { permission: 'granted' })]).phase, 'locating');
   assert.ok(isInFlight('asking') && isInFlight('locating') && !isInFlight('located'));
   assert.ok(isLocated('located') && isLocated('located-low') && !isLocated('timeout'));
+});
+
+test('learning that the browser is asking sharpens the wording and nothing else', () => {
+  const unsure = run([start(1, { permission: 'unknown' })]);
+  assert.match(phaseCopy(unsure).body, /may be asking/);
+  const sure = run([{ type: 'permission', attempt: 1, permission: 'prompt' }], unsure);
+  assert.equal(sure.phase, 'asking');
+  assert.match(phaseCopy(sure).body, /is asking/);
+  assert.equal(reduceLocate(sure, { type: 'permission', attempt: 1, permission: 'prompt' }), sure);
 });
 
 test('a fix while the permission reading is unknown still locates', () => {
@@ -123,6 +138,30 @@ test('denied, unavailable and timeout are three different states with three reas
   // A refusal while the sheet is up.
   assert.equal(run([start(3), { type: 'permission', attempt: 3, permission: 'denied' }]).phase, 'denied');
   for (const state of [denied, noFix, timedOut]) assert.equal(state.fix, null);
+});
+
+test('a refusal says blocked only when the browser reads blocked', () => {
+  const asking = run([start(1)]);
+  // The question was closed or answered no, and the browser still reads `prompt`: not a block.
+  const closed = run([{ type: 'error', attempt: 1, code: 1, permission: 'prompt' }], asking);
+  assert.equal(closed.phase, 'denied');
+  assert.equal(closed.permission, 'prompt');
+  assert.match(phaseCopy(closed).title, /not allowed/);
+  assert.doesNotMatch(`${phaseCopy(closed).title} ${phaseCopy(closed).body}`, /blocked|will not ask/);
+  // The browser now reads `denied`: blocked, and the way back is its settings.
+  const blocked = run([{ type: 'error', attempt: 1, code: 1, permission: 'denied' }], asking);
+  assert.equal(blocked.permission, 'denied');
+  assert.match(phaseCopy(blocked).title, /blocked/);
+  // The same through the Permissions API's own change event, and when it was blocked before the press.
+  assert.match(phaseCopy(run([{ type: 'permission', attempt: 1, permission: 'denied' }], asking)).title, /blocked/);
+  assert.match(phaseCopy(run([start(2, { permission: 'denied' })])).title, /blocked/);
+  // With no reading after the refusal, the reading the attempt began with stands.
+  assert.match(phaseCopy(run([{ type: 'error', attempt: 1, code: 1 }], asking)).title, /not allowed/);
+  // Both say how to allow it, and neither nags.
+  for (const state of [closed, blocked]) {
+    assert.match(phaseCopy(state).body, /allow Location/);
+    assert.equal(phaseCopy(state).next, 'Close');
+  }
 });
 
 test('a late answer never revives a cancelled, timed-out or superseded attempt', () => {
@@ -191,6 +230,7 @@ test('every state that is not a located one has its own plain line and a next st
     run([start(1, { permission: 'unknown' })]),
     run([start(1, { permission: 'granted' })]),
     run([start(1, { permission: 'denied' })]),
+    run([start(1), { type: 'error', attempt: 1, code: 1, permission: 'prompt' }]),
     run([start(1, { permission: 'granted' }), { type: 'deadline', attempt: 1 }]),
     run([start(1, { permission: 'granted', retry: true }), { type: 'deadline', attempt: 1 }]),
     run([start(1, { permission: 'granted' }), { type: 'error', attempt: 1, code: 2 }]),
@@ -209,7 +249,7 @@ test('every state that is not a located one has its own plain line and a next st
   // The stated bound is the real one.
   assert.equal(LOCATE_TIMEOUT_MS, 12_000);
   assert.match(phaseCopy(states[2]).body, /12 seconds/);
-  assert.match(phaseCopy(states[4]).title, /12 seconds/);
+  assert.match(phaseCopy(states[5]).title, /12 seconds/);
   // Located states are worded from the place, not here; idle says nothing.
   assert.equal(phaseCopy(IDLE_STATE), null);
   assert.equal(phaseCopy(run([start(1, { permission: 'granted' }), { type: 'fix', attempt: 1, fix: GOOD }])), null);
@@ -486,4 +526,111 @@ test('the mirrors of location identity and the boundary layers still match their
   }
   assert.ok(Math.abs(generalizationM(8) - 153) < 1, String(generalizationM(8)));
   assert.ok(Math.abs(generalizationM(9) - 76.4) < 1, String(generalizationM(9)));
+});
+
+// ---------------------------------------------------------------------------
+// The words of a located position
+// ---------------------------------------------------------------------------
+
+test('a located card says what the outlines support and nothing more', async () => {
+  const states = JSON.parse(await source('public/data/us-states.geojson'));
+  const say = (lng, lat, accuracy = 20) => {
+    const fix = { lng, lat, accuracy };
+    return locatedCopy(fix, findStates(states, fix));
+  };
+  const inside = say(-120.31, 46.38);
+  assert.equal(inside.title, 'You are in Washington');
+  assert.equal(inside.certain, true, 'the whole disc is inside: the briefing may open without asking');
+  assert.deepEqual(inside.states.map((s) => s.code), ['WA']);
+  assert.equal(say(-77.03, 38.9).title, 'You are in the District of Columbia');
+  // A state line: both are offered, neither is claimed, nothing opens by itself.
+  const river = say(-122.67, 45.63);
+  assert.equal(river.title, 'You are near the Washington and Oregon line');
+  assert.equal(river.certain, false);
+  assert.deepEqual(river.states.map((s) => s.code), ['WA', 'OR']);
+  assert.match(river.qualifier, /coarse outlines/);
+  assert.match(say(-117.43, 47.66, 30000).qualifier, /reaches more than one state/);
+  // The edge of one state, and nowhere this map names.
+  const coast = say(-124.62, 48.37);
+  assert.equal(coast.title, 'You are at the edge of Washington');
+  assert.equal(coast.certain, false);
+  const abroad = say(-123.12, 49.28);
+  assert.equal(abroad.title, 'You are outside the states this map names');
+  assert.deepEqual(abroad.states, []);
+  // The count the line states is the bundled file's own.
+  assert.match(abroad.qualifier, /50 states, the District of Columbia and Puerto Rico/);
+  const codes = states.features.map((f) => f.properties.STUSPS);
+  assert.equal(codes.length, 52);
+  assert.ok(codes.includes('DC') && codes.includes('PR'));
+  // Outlines that could not be read are said as that, never as "nowhere".
+  const unread = locatedCopy(GOOD, null);
+  assert.match(unread.title, /not named/);
+  assert.equal(unread.certain, false);
+  // The radius is stated in plain units, and a coarse one is called approximate.
+  assert.equal(accuracyLine(GOOD), 'Position good to about 20 m (65 ft).');
+  assert.equal(accuracyLine(COARSE), 'Approximate position: good to about 5 km (3.1 mi).');
+});
+
+test('the line shown before the frame names only who is asked, and what they learn', async () => {
+  const cell = coarseCell(-120.4127, 47.2531);
+  const both = tribalDisclosure([drawnBy('aiannh'), drawnBy('bia-reservation')], cell);
+  assert.match(both, /about 38 by 56 km/);
+  assert.match(both, /from the U\.S\. Census Bureau and the Bureau of Indian Affairs\./);
+  assert.match(both, /Your exact position is not sent: they see the square, not where you are in it\./);
+  const one = tribalDisclosure([drawnBy('bia-reservation')], cell);
+  assert.doesNotMatch(one, /Census/);
+  // The same line for every point of the square: nothing in it is the point's.
+  assert.equal(tribalDisclosure([drawnBy('aiannh'), drawnBy('bia-reservation')], coarseCell(-120.0933, 47.4011)), both);
+  // The two agencies are named as the acknowledgements name them.
+  const credits = await source('src/config/acknowledgements.ts');
+  assert.match(credits, /'U\.S\. Census Bureau'/);
+  assert.match(credits, /'Bureau of Indian Affairs'/);
+  // What the line claims about the request is what both layers do.
+  for (const file of ['src/layers/aiannh.ts', 'src/layers/bia-reservations.ts']) {
+    assert.match(await source(file), /const envelope = buildQueryEnvelope\(map\.getBounds\(\)\);/, file);
+  }
+});
+
+test('every Tribal verdict is its own sentence, and only "inside" names a place as the position\'s', async () => {
+  const names = (key) => ({ aiannh: 'Tribal Lands (US Census)', 'bia-reservations': 'Reservation Boundaries (BIA)' })[key] ?? key;
+  const inside = tribalCopy(tribalVerdict(ON, findTribalHits(LOADED, GOOD, 150), true), names);
+  assert.equal(inside.title, 'You are within Synthetic Legal Fixture Area');
+  assert.equal(inside.qualifier, 'As the U.S. Census Bureau draws it.');
+  const near = tribalCopy(tribalVerdict(ON, findTribalHits(LOADED, { lng: -123.48, lat: 47.3, accuracy: 5000 }, 150), true), names);
+  assert.equal(near.title, 'You are near the edge of Synthetic Legal Fixture Area');
+  assert.match(near.qualifier, /does not place you inside or outside it/);
+  assert.match(near.detail[0], /Synthetic Reservation Fixture/);
+  const away = { lng: -110, lat: 44, accuracy: 20 };
+  const none = tribalCopy(tribalVerdict(ON, findTribalHits(LOADED, away, 150), true), names);
+  assert.equal(none.title, null, 'no place is claimed: the state title stands');
+  assert.equal(none.qualifier, 'Not inside any area drawn by Tribal Lands (US Census) and Reservation Boundaries (BIA).');
+  // "None" always carries the sentence that keeps it from reading as an all-clear, verbatim from the popups.
+  assert.deepEqual(none.detail, [NO_AREA_CAVEAT]);
+  assert.ok((await source('src/ui/popups.ts')).includes(NO_AREA_CAVEAT));
+  const partial = tribalCopy(
+    tribalVerdict([{ key: 'aiannh', status: 'ready' }, { key: 'bia-reservations', status: 'error' }], [], true),
+    names
+  );
+  assert.equal(partial.qualifier, 'Tribal lands check incomplete.');
+  assert.deepEqual(partial.detail, [
+    'Not checked: Reservation Boundaries (BIA) (unavailable).',
+    'Checked, and you are not inside any area it draws: Tribal Lands (US Census).'
+  ]);
+  // The six layer states keep their own words.
+  for (const [status, word] of [['degraded', 'live (partial)'], ['loading', 'still loading'], ['zoom-in', 'zoom in to load']]) {
+    const copy = tribalCopy(tribalVerdict([{ key: 'aiannh', status }], [], true), names);
+    assert.match(copy.detail[0], new RegExp(word.replace(/[()]/g, '\\$&')), status);
+  }
+  const wide = tribalCopy(tribalVerdict(ON, [], false), names);
+  assert.match(wide.qualifier, /could not be checked/);
+  const off = tribalCopy(tribalVerdict([{ key: 'aiannh', status: 'off' }], [], true), names);
+  assert.match(off.qualifier, /no Tribal boundary layer is on/);
+  const all = [inside, near, none, partial, wide, off];
+  assert.equal(new Set(all.map((copy) => copy.qualifier)).size, all.length);
+  // Surface vocabulary (B9) and the em dash rule (B10), on every line.
+  for (const copy of all) {
+    const text = [copy.title ?? '', copy.qualifier, ...copy.detail].join(' ');
+    assert.doesNotMatch(text, /\b(warn|alert|forecast|simulat)/i);
+    assert.ok(!text.includes(String.fromCharCode(0x2014)));
+  }
 });
