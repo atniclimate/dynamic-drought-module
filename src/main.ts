@@ -42,6 +42,7 @@ import {
 } from './ui/renderer-notice';
 import { initMapInformation } from './ui/map-information';
 import { initEdgeColumn } from './ui/edge-column';
+import { initLocateControl } from './ui/locate-control';
 import { initMobileSheet } from './ui/mobile-sheet';
 import { initViewShell } from './ui/view-shell';
 import { initPlaceEmphasis } from './state/place-emphasis';
@@ -489,6 +490,10 @@ function wireMapDependentChrome(map: maplibregl.Map): void {
   // DR-pending): built before the shell activates, so the first activation
   // finds one column that owns every right-edge control's seat.
   initEdgeColumn();
+  // Locate (owner direction 2026-11-09 (sprint), DR-pending): one cell in the
+  // column's view tools and the launch check; everything else is lazy. A
+  // `select=` boot makes no Locate offer: the shared link is the ask.
+  initLocateControl(map, select !== null);
   initMobileSheet(map, { deepLinkBoot: select !== null });
 
   // The two doors (U1, D-ARCH-002): mode chrome and the Brief head, after
