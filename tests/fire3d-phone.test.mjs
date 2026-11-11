@@ -440,6 +440,48 @@ test('the pure gate keeps the console floor unless a shell names its own', () =>
   );
 });
 
+// The PLACE studio's clean display sets the Fire layers aside and puts them
+// back (owner direction 2026-11-09 (sprint), DR-pending). Seen on the sprint
+// camera before the hold: a PLACE round trip tore the scene down and entered
+// it again from the start.
+test('the PLACE studio hold keeps a running scene through its set-aside, and nothing more', () => {
+  const setAside = { ...gateBase, committedCluster: 'custom', activeLayerKeys: new Set(['aiannh']) };
+  assert.equal(shouldFire3DBeActive({ ...setAside, currentlyActive: true }), false, 'without the hold it exits');
+  assert.equal(shouldFire3DBeActive({ ...setAside, currentlyActive: true, studioHold: true }), true, 'held, it stays');
+  assert.equal(shouldFire3DBeActive({ ...setAside, studioHold: true }), false, 'the hold never enters a scene');
+  assert.equal(
+    shouldFire3DBeActive({ ...setAside, committedCluster: 'drought', currentlyActive: true, studioHold: true }),
+    false,
+    'a switch to another cluster still exits'
+  );
+  for (const refusal of [{ preference: false }, { desktopViewport: false }, { webgl2: false }, { viewportHeight: 400 }]) {
+    assert.equal(
+      shouldFire3DBeActive({ ...setAside, currentlyActive: true, studioHold: true, ...refusal }),
+      false,
+      `the hold never outlasts ${JSON.stringify(refusal)}`
+    );
+  }
+});
+
+test('the hold is on from the capture and off only after the restore has finished', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const snap = await readFile(new URL('../src/state/display-snapshot.ts', import.meta.url), 'utf8');
+  const begin = snap.slice(
+    snap.indexOf('export function beginPlaceStudioDisplay'),
+    snap.indexOf('export function setPlaceStudioDisplayKind')
+  );
+  const on = begin.indexOf('setPlaceDisplayHeld(true)');
+  assert.ok(on > begin.indexOf('captureDisplaySnapshot()'), 'on after the capture');
+  assert.ok(on < begin.indexOf('enforceCleanIntent()'), 'on before anything is set aside');
+  const restore = snap.slice(snap.indexOf('export function restoreDisplaySnapshot'));
+  const off = restore.indexOf('setPlaceDisplayHeld(false)');
+  const cluster = restore.indexOf('restoreCommittedCluster(');
+  assert.ok(cluster > 0 && off > cluster, 'off only after the cluster is back');
+  assert.ok(restore.lastIndexOf('finally', off) > cluster, 'released in a finally');
+  const runtime = await readFile(new URL('../src/map/fire3d.ts', import.meta.url), 'utf8');
+  assert.match(runtime, /studioHold: isPlaceDisplayHeld\(\)/, 'the runtime gate reads the hold');
+});
+
 // The orchestrator, driven through the fake phone.
 
 const sources = new Map();

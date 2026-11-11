@@ -177,7 +177,7 @@ current URL.
 | `basemap` | `default` explicitly turns recent satellite imagery off; the legacy `satellite` token remains valid | recent satellite imagery, encoded by absence |
 | `studio` | `layers` or `place` | none |
 | `hazard` | a mode token (`wildfire`, `heat`, `enso`), written only beside `layers` with no `cluster`: the hazard a custom layer set was made from (its alert products, key and strip); it never changes the display | the cluster, encoded by absence |
-| `fire3d` | exact token `true`; entry requires the committed Wildfire cluster and a shell that can present the scene (a desktop viewport, or a phone at least 360px wide and 600px tall, which enters through the 3D cell in its right-edge column), while an active scene may remain through a custom layer stack as long as a Fire event layer remains | `false`, encoded by absence |
+| `fire3d` | exact token `true`; entry requires the committed Wildfire cluster and a shell that can present the scene (a desktop viewport, or a phone at least 360px wide and 600px tall, which enters through the 3D cell in its right-edge column), while an active scene may remain through a custom layer stack as long as a Fire event layer remains, or while the PLACE studio holds the display (its clean display sets the Fire layers aside and puts them back) | `false`, encoded by absence |
 | `spi` | Gridded Drought Index accumulation window in days: `30`, `60`, `180`, or `365`; applies when the `gridded-index` layer is on | `90` day window, encoded by absence |
 
 Temporal display parameters also round-trip (`week` for the USDM archive,

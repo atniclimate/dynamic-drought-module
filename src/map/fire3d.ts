@@ -92,6 +92,7 @@ import {
   onFire3DPreferenceChange,
   setFire3DPreference
 } from '../state/fire3d-store';
+import { isPlaceDisplayHeld } from '../state/place-display-hold';
 import { registry } from '../state/registry';
 import { showToast } from '../ui/overlay';
 import { isObject } from '../util/guards';
@@ -250,6 +251,13 @@ export interface Fire3DGateInput {
    * phone shell.
    */
   readonly minViewportHeight?: number;
+  /**
+   * The PLACE studio holds the map display (src/state/place-display-hold.ts):
+   * it has set the Fire layers aside for its clean display and will put back
+   * the display it captured. Optional, and treated as no hold when absent.
+   * Owner direction 2026-11-09 (sprint), DR-pending.
+   */
+  readonly studioHold?: boolean;
 }
 
 /**
@@ -261,6 +269,13 @@ export interface Fire3DGateInput {
  * removing every fire event layer, toggling the preference off, a viewport
  * no shell can present the scene in, a viewport shorter than that shell's
  * floor, or a device without WebGL 2 always exits.
+ *
+ * The PLACE studio's hold (`studioHold`) keeps a scene that is already up
+ * through the studio's round trip: its clean display sets the Fire layers
+ * aside (a custom set) and puts them back, and a scene torn down for that
+ * would start over on the way back. It never enters a scene, never keeps
+ * one through a switch to another cluster, and never outlasts any refusal
+ * above.
  *
  * DR-025a made the entry test capability plus geometry rather than width
  * alone: a tablet in the 721 to 1024 px band is welcome, a landscape phone
@@ -281,6 +296,9 @@ export function shouldFire3DBeActive(input: Fire3DGateInput): boolean {
   if (!input.currentlyActive || input.committedCluster !== 'custom') {
     return false;
   }
+  // The PLACE studio's clean display demotes the set to custom by setting
+  // the Fire layers aside; the scene holds until the studio puts them back.
+  if (input.studioHold === true) return true;
   return FIRE3D_EVENT_LAYER_KEYS.some((key) =>
     input.activeLayerKeys.has(key)
   );
@@ -1231,6 +1249,7 @@ export function initFire3DController(map: maplibregl.Map): void {
       activeLayerKeys: registry.getActiveKeys(),
       currentlyActive: active || activation !== null,
       webgl2: hasWebGl2(),
+      studioHold: isPlaceDisplayHeld(),
       ...viewportHeightInput(shell)
     });
     if (should) {
