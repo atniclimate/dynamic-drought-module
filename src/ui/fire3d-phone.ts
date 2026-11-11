@@ -19,9 +19,11 @@
  * Wildfire view the way that button does when the display is the phone's
  * own Fire set: the scene enters only from Wildfire's own layers
  * (`shouldFire3DBeActive`), and `cluster=wildfire&fire3d=true` is a link
- * that opens the same way on a phone and on a desk. Pressing the inverted
- * cell clears the preference: that is Exit, and it is Cancel while the
- * entry is still loading.
+ * that opens the same way on a phone and on a desk. It does not touch the
+ * basemap: imagery the person has on is held while the scene is up and
+ * comes back when it leaves. Pressing the inverted cell clears the
+ * preference: that is Exit, and it is Cancel while the entry is still
+ * loading.
  *
  * WHAT STAYS LAZY. This file is all the entry chunk pays: a button and a
  * decision. The scene's own chunk (src/map/fire3d.ts) is loaded by
@@ -46,9 +48,7 @@
 import type * as maplibregl from 'maplibre-gl';
 
 import { FIRE3D_PHONE_MIN_HEIGHT_QUERY, fire3dPhoneOffer } from '../config/fire3d-phone';
-import { requestBasemapMode } from '../map/basemap-switcher';
 import { webGl2Capability } from '../map/gl-capability';
-import { defaultBasemapFor } from '../state/basemap-store';
 import {
   getCommittedSnapshot,
   onCommittedSnapshotChange,
@@ -139,10 +139,13 @@ export function initFire3DPhone(map: maplibregl.Map): void {
   cell.addEventListener('click', () => {
     const asked = getFire3DPreference();
     if (!asked && getCommittedSnapshot().cluster !== 'wildfire') {
-      // The scene enters only from Wildfire's own layers, and a mode switch
-      // applies the mode's basemap default: both as the console's button does.
+      // The scene enters only from Wildfire's own layers, so the phone's own
+      // Fire set is committed as that view first, as the console's button
+      // does. The basemap stays the person's own, which the console's button
+      // does not do: the rail's Fire view opens on imagery, the scene holds
+      // imagery off while it is opening or open (`holdSatellite`, DR-105),
+      // and leaving the scene brings it back.
       requestCluster('wildfire');
-      requestBasemapMode(map, defaultBasemapFor('wildfire'));
     }
     setFire3DPreference(!asked);
   });

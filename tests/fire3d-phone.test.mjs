@@ -228,6 +228,19 @@ test('the scene and the phone chrome stay behind dynamic imports', () => {
   );
 });
 
+test('the phone press commits the Wildfire view and leaves the basemap to the scene\'s own hold', () => {
+  const cell = read('src/ui/fire3d-phone.ts').replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '');
+  assert.match(cell, /requestCluster\('wildfire'\)/);
+  // DR-105 (src/map/basemap-switcher.ts, holdSatellite): the store keeps the
+  // visitor's choice and releasing the hold brings the imagery back. A press
+  // that reset the basemap would leave the phone's Fire view without the
+  // imagery it opened on once the scene left.
+  assert.doesNotMatch(cell, /requestBasemapMode|setBasemapMode|defaultBasemapFor|basemap-switcher|basemap-store/);
+  const switcher = read('src/map/basemap-switcher.ts');
+  assert.match(switcher, /export function holdSatellite\(/);
+  assert.match(read('src/map/fire3d.ts'), /holdSatellite\(map, status\.state === 'checking' \|\| status\.state === 'active'\)/);
+});
+
 test('the phone stylesheet keeps the three design rules', () => {
   const css = read('src/styles/fire3d-phone.css').replace(/\/\*[\s\S]*?\*\//g, '');
   // Colour belongs to the data: glass and ink come from the tokens, never a literal.

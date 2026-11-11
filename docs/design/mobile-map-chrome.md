@@ -147,8 +147,10 @@ enter the 3D Fire view, through one explicit control and on these terms.
   measurement behind each floor.
 - A press sets the same durable preference as the desktop console's button
   (`fire3d=true`), after committing the Wildfire view as that button does,
-  so one link opens the same way on a phone and on a desk. The selected cell
-  inverts. Pressing it again is the way out, and Cancel while the scene is
+  so one link opens the same way on a phone and on a desk. Unlike that
+  button it leaves the basemap alone: the rail's Fire view opens on imagery,
+  the scene holds imagery off while it is opening or open, and leaving the
+  scene brings it back. The selected cell inverts. Pressing it again is the way out, and Cancel while the scene is
   still loading. Leaving the Fire view ends the scene.
 - The two statements stand on the map. A phone has no sidebar beside the
   scene, so the terrain coverage statement and the non-prediction disclosure
