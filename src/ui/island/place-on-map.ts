@@ -34,7 +34,7 @@ import type { StudioBoundaryGeometry } from '../../state/studio-boundary';
 import type { TypedPlaceKind } from '../../state/typed-place';
 import { bboxToContinuousBounds } from '../../util/bbox';
 import { edgeColumnInset } from '../edge-column';
-import { getSheetDetent, isSheetActive, sheetCameraInset } from '../mobile-sheet';
+import { getSheetDetent, isSheetActive, sheetCameraInset, sheetCameraSideInset } from '../mobile-sheet';
 
 /** Drops the neutral boundary this module drew, once its place is no longer the selection. */
 let release: (() => void) | null = null;
@@ -66,12 +66,20 @@ export function showPlaceOnMap(
   const map = getMap();
   if (!map) return;
   // Keep the place clear of the phone chrome that is on screen with it: the
-  // right-edge column always, and the sheet's band while the sheet is up.
+  // right-edge column always, and while the sheet is up, the band it takes.
+  // That band is the lower part of the map for the bottom sheet and the
+  // left part for the landscape drawer; the numbers are the briefing fit's
+  // own (`briefingCameraPadding`, src/state/deep-link.ts).
   const phone = isSheetActive();
-  const sheetBand = phone && getSheetDetent() !== 'closed' ? sheetCameraInset() : 0;
+  const sheetUp = phone && getSheetDetent() !== 'closed';
   map.fitBounds(bboxToContinuousBounds(bbox), {
     padding: phone
-      ? { top: 24, left: 24, right: 24 + edgeColumnInset(), bottom: 24 + sheetBand }
+      ? {
+          top: 24,
+          left: 24 + (sheetUp ? sheetCameraSideInset() : 0),
+          right: 24 + edgeColumnInset(),
+          bottom: 24 + (sheetUp ? sheetCameraInset() : 0)
+        }
       : { top: 40, left: 40, right: 40, bottom: 40 }
   });
   if (kind === 'tribe') {
