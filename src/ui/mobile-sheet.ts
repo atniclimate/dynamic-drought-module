@@ -251,6 +251,8 @@ export function setSheetDetent(next: SheetDetent, opts: { announce?: boolean } =
       '#mobile-footer-nav button.active[data-tab]'
     );
     const held = sidebarEl?.contains(document.activeElement) ?? false;
+    // A press whose view closed before it settled must not focus a later opening.
+    pendingFocusDoor = null;
     syncFooterTab(null);
     if (held) (door ?? document.querySelector<HTMLElement>('.maplibregl-canvas'))?.focus();
   }
