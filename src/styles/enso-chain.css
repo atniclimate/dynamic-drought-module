@@ -153,6 +153,9 @@
   margin: 0 0 10px;
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-md);
+  /* The open summary's face stops at the box's own corners. Its focus ring
+     is drawn inside it, so nothing of the ring is cut. */
+  overflow: hidden;
 }
 .enso-truth-summary {
   position: relative;
@@ -183,13 +186,27 @@
 }
 .enso-truth[open] > .enso-truth-summary::after {
   margin-top: -2px;
+  border-color: var(--ink-on-selected);
   transform: rotate(225deg);
 }
+/* SELECTED INVERTS (app.css): an open disclosure is a control that is on,
+   so its summary wears the ink as its face, like the open door that raised
+   this sheet. The state itself is the element's own (`open`). */
+.enso-truth[open] > .enso-truth-summary {
+  --selection-shadow: var(--selected-focus-inset);
+  background: var(--face-selected);
+  color: var(--ink-on-selected);
+}
+.enso-truth[open] > .enso-truth-summary .enso-truth-lead {
+  color: var(--ink-on-selected);
+}
+/* The two-ring focus model, drawn inside the row: the casing keeps the ring
+   visible on the dark face and on the inverted one, where the selected
+   control's own inset ring is added. */
 .enso-truth-summary:focus-visible {
   outline: 2px solid var(--focus-inner);
   outline-offset: -4px;
-  box-shadow: inset 0 0 0 6px var(--focus-outer);
-  border-radius: var(--radius-md);
+  box-shadow: inset 0 0 0 6px var(--focus-outer), var(--selection-shadow, 0 0 transparent);
 }
 .enso-truth-lead {
   font-family: var(--font-display);
@@ -338,6 +355,16 @@
 /* ---- Forced colours: the marks keep their meaning without their inks ------ */
 
 @media (forced-colors: active) {
+  .enso-truth[open] > .enso-truth-summary {
+    background: Highlight;
+    color: HighlightText;
+  }
+  .enso-truth[open] > .enso-truth-summary .enso-truth-lead {
+    color: HighlightText;
+  }
+  .enso-truth[open] > .enso-truth-summary::after {
+    border-color: HighlightText;
+  }
   .enso-strip .s-node {
     stroke: CanvasText;
   }

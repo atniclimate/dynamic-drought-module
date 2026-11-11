@@ -441,7 +441,9 @@ function hereLink(read: PlaceRead, place: EnsoChainInput['place']): Built {
         ? { note: 'This client has no analyzed-area mask, so this does not confirm no drought.' }
         : {})
     },
-    mark: usdm.dm === null ? 'none' : `D${usdm.dm}`
+    // "none" alone under "Here" would read as an all-clear at a glance; the
+    // node says what the scale position is, in the statement's own words.
+    mark: usdm.dm === null ? 'no D0-D4' : `D${usdm.dm}`
   };
 }
 

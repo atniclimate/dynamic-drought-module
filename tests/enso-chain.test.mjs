@@ -605,7 +605,9 @@ test('here link: the drought category is marked on the issuer scale; no polygon 
   // The marked position is the no-class slot, never D0 and never a colour.
   assert.match(link.figure, /class="g-slot g-read"/);
   assert.doesNotMatch(link.figure, /class="g-seg g-read"/);
-  assert.equal(nodeOf(none, 'here').mark, 'none');
+  // The overview node never says a bare "none" under "Here": that would read as an all-clear.
+  assert.equal(nodeOf(none, 'here').mark, 'no D0-D4');
+  assert.match(ensoStripSvg(none.strip), /Here: no D0-D4, analyzed/);
   const untyped = buildEnsoChain(input({ here: { status: 'ready', claim: usdmClaim(null) } }));
   assert.equal(linkOf(untyped, 'here').statement, undefined);
   assert.equal(linkOf(untyped, 'here').figure, undefined);
@@ -759,6 +761,12 @@ test('the chain stylesheet takes colour and corners from tokens, and moves nothi
   assert.doesNotMatch(sheet, /border-(?:top|right|bottom|left)-width|border-(?:left|right):\s*[2-9]/);
   // Nothing moves, so reduced motion has nothing to switch off.
   assert.doesNotMatch(sheet, /\btransition\b|\banimation\b|@keyframes/);
+  // A control that is on inverts: the open disclosure wears the selected face and sets the focus inset.
+  const open = /\.enso-truth\[open\] > \.enso-truth-summary \{([^}]*)\}/.exec(sheet);
+  assert.ok(open, 'a rule for the open disclosure');
+  assert.match(open[1], /--selection-shadow: var\(--selected-focus-inset\);/);
+  assert.match(open[1], /background: var\(--face-selected\);/);
+  assert.match(open[1], /color: var\(--ink-on-selected\);/);
 });
 
 test('the presses go through existing doors: the host writes no history and parses no link', () => {
