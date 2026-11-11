@@ -381,15 +381,90 @@ test('askAgainForStylesheets re-points only failed stylesheet links and waits fo
     assert.equal(settled, true);
     assert.equal(emptied.listeners.load.length + emptied.listeners.error.length, 0, 'listeners removed');
 
-    const again = link('https://example.test/assets/fire3d-phone-scene-D.css', null);
-    globalThis.document = { querySelectorAll: () => [again] };
-    const refused = askAgainForStylesheets(1);
-    again.fire('error');
-    await assert.rejects(refused, /fire3d-phone-scene-D\.css\?retry=1 did not load/);
   } finally {
     globalThis.document = previous;
     globalThis.location = previousLocation;
   }
+});
+
+function fakeLink(href, sheet = null) {
+  const listeners = { load: [], error: [] };
+  return {
+    href,
+    sheet,
+    addEventListener: (type, fn) => listeners[type].push(fn),
+    removeEventListener: (type, fn) => {
+      listeners[type] = listeners[type].filter((other) => other !== fn);
+    },
+    fire: (type) => {
+      for (const fn of [...listeners[type]]) fn();
+    },
+    listeners
+  };
+}
+
+async function withLinks(links, run) {
+  const { askAgainForStylesheets } = await import('../src/util/chunk-stylesheets.ts');
+  const previous = globalThis.document;
+  const previousLocation = globalThis.location;
+  globalThis.location = { origin: 'https://example.test', href: 'https://example.test/' };
+  globalThis.document = { querySelectorAll: () => links };
+  try {
+    await run(askAgainForStylesheets);
+  } finally {
+    globalThis.document = previous;
+    globalThis.location = previousLocation;
+  }
+}
+
+// Finding 6 (2026-11-11 review): one broken stylesheet must not fail an
+// unrelated door's retry; the door's own stylesheet mark check is the gate.
+test('askAgainForStylesheets does not reject when a stylesheet fails again', async () => {
+  const unrelated = fakeLink('https://example.test/assets/enso-chain-D.css');
+  await withLinks([unrelated], async (askAgainForStylesheets) => {
+    const asked = askAgainForStylesheets(1);
+    unrelated.fire('error');
+    await asked;
+    assert.equal(unrelated.listeners.error.length, 0, 'listeners removed');
+  });
+});
+
+test('askAgainForStylesheets stops waiting on a stalled link at its deadline', async () => {
+  const stalled = fakeLink('https://example.test/assets/locate-runtime-F.css');
+  await withLinks([stalled], async (askAgainForStylesheets) => {
+    await askAgainForStylesheets(1, 10);
+    assert.equal(stalled.listeners.load.length + stalled.listeners.error.length, 0, 'listeners removed');
+  });
+});
+
+test('askAgainForStylesheets asks again after two failures and settles on recovery', async () => {
+  const sheet = fakeLink('https://example.test/assets/locate-runtime-G.css');
+  await withLinks([sheet], async (askAgainForStylesheets) => {
+    const first = askAgainForStylesheets(1);
+    assert.equal(sheet.href, 'https://example.test/assets/locate-runtime-G.css?retry=1');
+    sheet.fire('error');
+    await first;
+    const second = askAgainForStylesheets(2);
+    assert.equal(sheet.href, 'https://example.test/assets/locate-runtime-G.css?retry=2');
+    sheet.fire('error');
+    await second;
+    const third = askAgainForStylesheets(3);
+    assert.equal(sheet.href, 'https://example.test/assets/locate-runtime-G.css?retry=3');
+    sheet.fire('load');
+    await third;
+  });
+});
+
+test('askAgainForStylesheets does not repoint a link that is already being asked again', async () => {
+  const shared = fakeLink('https://example.test/assets/enso-chain-H.css');
+  await withLinks([shared], async (askAgainForStylesheets) => {
+    const one = askAgainForStylesheets(1);
+    const other = askAgainForStylesheets(4);
+    assert.equal(shared.href, 'https://example.test/assets/enso-chain-H.css?retry=1');
+    assert.equal(shared.listeners.load.length, 1, 'one pending request');
+    shared.fire('load');
+    await Promise.all([one, other]);
+  });
 });
 
 test('askAgainForStylesheets resolves at once with no document', async () => {

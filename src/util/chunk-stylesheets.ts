@@ -36,39 +36,51 @@ function failed(link: HTMLLinkElement): boolean {
   }
 }
 
-function askAgain(link: HTMLLinkElement, attempt: number): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const settle = (): void => {
-      link.removeEventListener('load', onLoad);
-      link.removeEventListener('error', onError);
-    };
-    const onLoad = (): void => {
-      settle();
+/** How long a re-asked stylesheet may take before the retry goes on without it. */
+export const STYLESHEET_DEADLINE_MS = 4000;
+
+// A link being asked for right now: a second retry reuses this instead of
+// pointing the same element at another address.
+const pending = new Map<HTMLLinkElement, Promise<void>>();
+
+function askAgain(link: HTMLLinkElement, attempt: number, deadlineMs: number): Promise<void> {
+  const already = pending.get(link);
+  if (already) return already;
+  const asked = new Promise<void>((resolve) => {
+    const done = (): void => {
+      clearTimeout(timer);
+      link.removeEventListener('load', done);
+      link.removeEventListener('error', done);
+      pending.delete(link);
       resolve();
     };
-    const onError = (): void => {
-      settle();
-      reject(new Error(`[chunk-stylesheets] ${link.href} did not load.`));
-    };
-    link.addEventListener('load', onLoad);
-    link.addEventListener('error', onError);
+    const timer = setTimeout(done, deadlineMs);
+    link.addEventListener('load', done);
+    link.addEventListener('error', done);
     // The same element keeps its place in the cascade; the new address is a
     // new request (the failed one is not asked for again by the browser).
     link.href = withRetryQuery(link.href, attempt);
   });
+  pending.set(link, asked);
+  return asked;
 }
 
 /**
  * Point every failed stylesheet link at a fresh address (`retry=<attempt>`)
- * and wait until each has loaded. Rejects if any fails again. Without a
- * document, or with nothing failed, it resolves at once.
+ * and wait until each has loaded, failed again or run out the deadline. It
+ * never rejects: a link that stays broken may belong to another door, and the
+ * requested chunk's own `requireStylesheetMark` refuses unstyled chrome.
+ * Without a document, or with nothing failed, it resolves at once.
  */
-export function askAgainForStylesheets(attempt: number): Promise<void> {
+export function askAgainForStylesheets(
+  attempt: number,
+  deadlineMs: number = STYLESHEET_DEADLINE_MS
+): Promise<void> {
   if (typeof document === 'undefined') return Promise.resolve();
   const links = Array.from(
     document.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]')
   ).filter(failed);
-  return Promise.all(links.map((link) => askAgain(link, attempt))).then(() => undefined);
+  return Promise.all(links.map((link) => askAgain(link, attempt, deadlineMs))).then(() => undefined);
 }
 
 /**
