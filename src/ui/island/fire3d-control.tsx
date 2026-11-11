@@ -65,12 +65,9 @@ import {
   fire3dControlOffer,
   fire3dCoverageNote
 } from '../../config/fire3d-presentation';
-import type * as maplibregl from 'maplibre-gl';
 import { HAZARD_CLUSTERS } from '../../config/clusters';
 import type { HazardClusterKey } from '../../config/clusters';
 import type { Fire3DStatus } from '../../map/fire3d';
-import { requestBasemapMode } from '../../map/basemap-switcher';
-import { defaultBasemapFor } from '../../state/basemap-store';
 import { loadFire3DController } from '../../map/fire3d-chunk';
 // The shared, once-per-page probe result (already in the entry chunk through
 // main.ts, so reading it here adds no eager weight and no second context).
@@ -218,11 +215,9 @@ function outOfCoverageLine(status: Fire3DStatus | null): string {
 }
 
 export function Fire3DControl({
-  cluster,
-  map
+  cluster
 }: {
   readonly cluster: HazardClusterKey | 'custom';
-  readonly map: maplibregl.Map;
 }) {
   // The geometry half of the entry gate (DR-025a): wide enough AND tall
   // enough, watched as two media queries so a phone rotating into landscape
@@ -411,8 +406,6 @@ export function Fire3DControl({
           // The scene enters only from Wildfire; a flat Fuel risk stays on and steps aside for the drape.
           if (!preference && cluster !== 'wildfire') {
             requestCluster('wildfire');
-            // A mode switch applies the mode's basemap default, like the shell's chooser.
-            requestBasemapMode(map, defaultBasemapFor('wildfire'));
           }
           turnedOn3D.current = !preference;
           setFire3DPreference(!preference);

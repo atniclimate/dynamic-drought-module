@@ -29,7 +29,7 @@ const SOURCE = { label: 'National Hurricane Center', href: 'https://www.nhc.noaa
 
 /** Boot the occupied fixture on the Mexico framing; `extra` adds query keys (`&embed=true`). */
 export async function bootStorm(page: Page, options: { readonly view?: 'console' | 'brief'; readonly extra?: string } = {}): Promise<void> {
-  await gotoApp(page, `?framing=mexico&view=${options.view ?? 'console'}&layers=${LAYER_KEY}&basemap=default${options.extra ?? ''}`, {
+  await gotoApp(page, `?framing=mexico&view=${options.view ?? 'console'}&layers=${LAYER_KEY}${options.extra ?? ''}`, {
     tropical: 'occupiedOne'
   });
   await waitForLayerSettled(page, LAYER_KEY);

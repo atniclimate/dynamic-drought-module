@@ -52,37 +52,21 @@ function fakeMap(ids: string[]): {
 }
 
 test.describe('layer-order: bottom-stack insertion', () => {
-  test('satellite inserted late lands under an existing hillshade and data', () => {
-    const map = fakeMap([
-      'background',
-      'basemap',
-      'hillshade',
-      'usdm-fill'
-    ]);
-    // Recent satellite skips the persistent basemap pair, so its anchor is
-    // hillshade: it inserts below hillshade, inside the stack.
-    const beforeId = firstLayerIdAbove(
-      map as never,
-      ['background', 'basemap']
-    );
-    expect(beforeId).toBe('hillshade');
-  });
-
-  test('hillshade inserted late lands above satellite and under data', () => {
-    const map = fakeMap(['background', 'basemap', 'basemap-satellite', 'ecoregions-l3-fill']);
+  test('hillshade inserted late lands above the basemap and under data', () => {
+    const map = fakeMap(['background', 'basemap', 'ecoregions-l3-fill']);
     const beforeId = firstLayerIdAbove(map as never, BOTTOM_STACK_IDS);
     expect(beforeId).toBe('ecoregions-l3-fill');
   });
 
   test('a bottom-stack-only style appends at the top (undefined anchor)', () => {
-    const map = fakeMap(['background', 'basemap', 'basemap-satellite']);
+    const map = fakeMap(['background', 'basemap']);
     expect(firstLayerIdAbove(map as never, BOTTOM_STACK_IDS)).toBeUndefined();
   });
 
-  test('a data layer skipping the whole stack lands above satellite AND hillshade', () => {
-    // The ecoregions case that failed the adversarial review: satellite or
-    // hillshade activated FIRST must not become a data layer's beforeId.
-    const map = fakeMap(['background', 'basemap', 'basemap-satellite', 'hillshade', 'states-line']);
+  test('a data layer skipping the whole stack lands above hillshade', () => {
+    // The ecoregions case that failed the adversarial review: hillshade
+    // activated FIRST must not become a data layer's beforeId.
+    const map = fakeMap(['background', 'basemap', 'hillshade', 'states-line']);
     const beforeId = firstLayerIdAbove(map as never, [
       ...BOTTOM_STACK_IDS,
       'ecoregions-l3-fill',

@@ -313,15 +313,15 @@
              build is still a preview, and hard rule 8 keeps the embed a
              first-class surface rather than one that hides its own status. -->
         <span class="test-preview-badge">Test preview</span>
-        <!-- The desktop column's four fixed slots (S30D D1 M9; rulings R1 a
+        <!-- The desktop column's three fixed slots (S30D D1 M9; rulings R1 a
              and R2 a; the seat table is src/config/map-chrome.ts): 1 Reset,
-             2 SAT, 3 Help with its drawer, 4 Share. On the
+             2 Help with its drawer, 3 Share. On the
              desktop shell the stylesheet places each by `data-map-slot` in a
-             four-row grid, so Share fills slot 4 in Brief and Console alike.
+             grid, so Share fills slot 3 in Brief and Console alike.
              Share and Reset stay direct children in this
              source order, which the phone rail (its `order` rules) and the
              embed stack read unchanged. -->
-        <button id="share-btn" class="overlay-btn map-cell" data-map-slot="4" aria-label="Share view: the link restores region or framing, layers, mode and horizon, not the map position or an open briefing" title="The link restores region or framing, layers, mode and horizon, not the map position or an open briefing">
+        <button id="share-btn" class="overlay-btn map-cell" data-map-slot="3" aria-label="Share view: the link restores region or framing, layers, mode and horizon, not the map position or an open briefing" title="The link restores region or framing, layers, mode and horizon, not the map position or an open briefing">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
           <span class="map-control-label">Share view</span>
         </button>
@@ -333,22 +333,15 @@
           <span class="map-control-label">Reset</span>
         </button>
 
-        <!-- Desktop seat for the satellite control (owner direction,
-             2026-08-19): slot 2. The control is MapLibre's, added
-             bottom-right in src/map/init.ts and moved here by the desktop
-             shell. Phones and embeds keep the bottom-right seat their
-             layouts were designed around. -->
-        <div id="basemap-switcher-overlay-host" class="map-overlay-seat map-spine-slot" data-map-slot="2"></div>
-        <!-- Desktop seat for help and its Map information drawer: slot 3.
+        <!-- Desktop seat for help and its Map information drawer: slot 2.
              src/ui/map-information.ts moves the button and the drawer in
              together on the desktop shell; phones and embeds keep their
              homes beside #map-info-home below. -->
-        <div id="map-info-seat" class="map-overlay-seat map-spine-slot" data-map-slot="3"></div>
+        <div id="map-info-seat" class="map-overlay-seat map-spine-slot" data-map-slot="2"></div>
       </div>
 
       <!-- The mobile hazard rail (0.7.0 mobile shell): the quick hazard
-           selections, seated in the lower-right thumb zone above the one
-           Satellite control. Display is stylesheet-gated: it exists only
+           selections, seated in the lower-right thumb zone. Display is stylesheet-gated: it exists only
            while the bottom sheet is closed or at peek (so never in embed,
            never on desktop, and never where an open sheet owns the zone). Each button
            applies a MOBILE_HAZARD_PRESETS entry through the one layer

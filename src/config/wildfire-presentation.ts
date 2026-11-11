@@ -200,7 +200,7 @@ export function interpolateWildfirePulseColor(elapsedMs: number): string {
  * Perimeter presentation by incident class.
  *
  * Outline weights doubled 2026-08-19 on owner direction (3 / 2.8 / 2.4 from
- * 1.5 / 1.4 / 1.2): at overview framing over the satellite basemap the
+ * 1.5 / 1.4 / 1.2): at overview framing over the basemap the
  * hairlines were too thin to read. The RATIO between the three classes is
  * preserved, so the visual ranking that separates a mapped wildfire from a
  * prescribed burn from an unclassified record is unchanged. Weight is
@@ -480,7 +480,7 @@ export function hmsLegendSwatch(densityClass: HmsDensityClass): string {
 
 /** The smoke plumes' note; reads in the Impact Briefing (src/ui/map-technical-information.ts), not in the legend. */
 export const HMS_OVERVIEW_QUALIFICATION =
-  'NOAA Hazard Mapping System, analyst-drawn from GOES imagery; current or previous UTC day. Its plume observation window is independent of any satellite basemap frame shown. Density opacity is presentation, not ground-level air quality.';
+  'NOAA Hazard Mapping System, analyst-drawn from GOES imagery; current or previous UTC day. Density opacity is presentation, not ground-level air quality.';
 
 export function resolveHmsDensityClass(value: unknown): HmsDensityClass {
   if (typeof value !== 'string') return 'Unknown';

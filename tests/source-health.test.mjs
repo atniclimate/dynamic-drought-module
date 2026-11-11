@@ -22,9 +22,7 @@ test('classifyUrl separates the served app, stubbed basemap tiles, and upstream 
   assert.equal(classifyUrl('http://127.0.0.1:4173/data/us-states.geojson', origin), 'app');
   assert.equal(classifyUrl('https://tile.openstreetmap.org/5/5/11.png', origin), 'stubbed');
   assert.equal(classifyUrl('https://a.tile.opentopomap.org/5/5/11.png', origin), 'stubbed');
-  assert.equal(classifyUrl('https://satellitemaps.nesdis.noaa.gov/arcgis/rest/services/MERGEDGC_Last_24hr/ImageServer/exportImage?bbox=1,2,3,4&f=image', origin), 'stubbed');
-  assert.equal(classifyUrl('https://satellitemaps.nesdis.noaa.gov/arcgis/rest/services/MERGEDGC_Last_24hr/ImageServer/query?where=1%3D1&f=json', origin), 'source');
-  assert.deepEqual(STUBBED_TILE_GLOBS, ['https://satellitemaps.nesdis.noaa.gov/**/exportImage**']);
+  assert.deepEqual(STUBBED_TILE_GLOBS, []);
   assert.equal(
     classifyUrl('https://services3.arcgis.com/T4QMspbfLg3qTGWY/ArcGIS/rest/services/WFIGS_Interagency_Perimeters_Current/FeatureServer/0/query?f=geojson', origin),
     'source',

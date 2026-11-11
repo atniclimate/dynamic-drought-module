@@ -2,8 +2,8 @@
  * The phone shell's 3D cell (owner direction 2026-11-09 (sprint),
  * DR-pending): the one explicit way a phone enters the 3D Fire view.
  *
- * WHERE IT IS. One cell in the right-edge column's view tools, under SAT
- * (and under Locate when that is seated): `seatEdgeControl` with group
+ * WHERE IT IS. One cell in the right-edge column's view tools, under
+ * Locate when that is seated:`seatEdgeControl` with group
  * 'view', order 30, word '3D'. The column gives it the cell face, and
  * `aria-pressed="true"` inverts it, like every selected control.
  *
@@ -20,8 +20,7 @@
  * own Fire set: the scene enters only from Wildfire's own layers
  * (`shouldFire3DBeActive`), and `cluster=wildfire&fire3d=true` is a link
  * that opens the same way on a phone and on a desk. It does not touch the
- * basemap: imagery the person has on is held while the scene is up and
- * comes back when it leaves. Pressing the inverted cell clears the
+ * basemap. Pressing the inverted cell clears the
  * preference: that is Exit, and it is Cancel while the entry is still
  * loading.
  *
@@ -155,10 +154,7 @@ export function initFire3DPhone(map: maplibregl.Map): void {
     if (!asked && getCommittedSnapshot().cluster !== 'wildfire') {
       // The scene enters only from Wildfire's own layers, so the phone's own
       // Fire set is committed as that view first, as the console's button
-      // does. The basemap stays the person's own, which the console's button
-      // does not do: the rail's Fire view opens on imagery, the scene holds
-      // imagery off while it is opening or open (`holdSatellite`, DR-105),
-      // and leaving the scene brings it back.
+      // does.
       requestCluster('wildfire');
     }
     setFire3DPreference(!asked);

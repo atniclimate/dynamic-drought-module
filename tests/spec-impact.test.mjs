@@ -117,19 +117,19 @@ test('touched specs: changed, mentioning, or directly importing a changed module
     { path: 'tests/b.spec.ts', text: "const m = await import('../src/map/index.ts');" },
     { path: 'tests/c.spec.ts', text: "import { y } from '../src/ui/panel-extra';" },
     { path: 'tests/d.spec.ts', text: '' },
-    { path: 'tests/e.spec.ts', text: "import { stubRecentSatellite } from './satellite-fixture';" },
+    { path: 'tests/e.spec.ts', text: "import { gotoApp } from './helpers';" },
     { path: 'tests/flow-measure.spec.ts', text: "import { x } from '../src/ui/panel';" }
   ];
   assert.ok(importsChanged('tests/a.spec.ts', specs[0].text, ['src/ui/panel.ts']));
   assert.ok(importsChanged('tests/b.spec.ts', specs[1].text, ['src/map/index.ts']));
   assert.ok(!importsChanged('tests/c.spec.ts', specs[2].text, ['src/ui/panel.ts']));
-  assert.ok(importsChanged('tests/e.spec.ts', specs[4].text, ['tests/satellite-fixture.ts']));
+  assert.ok(importsChanged('tests/e.spec.ts', specs[4].text, ['tests/helpers.ts']));
   assert.deepEqual(
     touchedSpecs({
       changedSpecs: ['tests/d.spec.ts'],
       mentions: [{ file: 'tests/d.spec.ts' }, { file: 'tests/c.spec.ts' }],
       specs,
-      changedModules: ['src/ui/panel.ts', 'src/map/index.ts', 'tests/satellite-fixture.ts'],
+      changedModules: ['src/ui/panel.ts', 'src/map/index.ts', 'tests/helpers.ts'],
       measureOnly: new Set(['tests/flow-measure.spec.ts'])
     }),
     ['tests/a.spec.ts', 'tests/b.spec.ts', 'tests/c.spec.ts', 'tests/d.spec.ts', 'tests/e.spec.ts']
@@ -212,7 +212,7 @@ test('the measurement-only specs are read from playwright.config.ts', () => {
 test('pure-only changes never become browser runs, while mixed changes retain browser coverage', () => {
   const config = readFileSync(new URL('../playwright.config.ts', import.meta.url), 'utf8');
   const pureOnly = pureSpecs(config);
-  assert.equal(pureOnly.size, 34);
+  assert.equal(pureOnly.size, 33);
   assert(pureOnly.has('tests/antimeridian.spec.ts'));
   assert.throws(() => pureSpecs(''), /Cannot read PURE_SPECS/);
   const selection = {

@@ -4,9 +4,9 @@
  * sections 2.1 to 2.3; owner rulings R1 a and R2 a).
  *
  * THE RULE. On the desktop shell (721 px and wider, outside an embed) the
- * top-right column is a grid of four fixed slots that never move: Reset,
- * SAT, Help (with the Map information drawer it opens), then Share, which
- * fills slot 4 in every view (the 2026-09-13 stable-position rule). Above 1024 px each slot is a
+ * top-right column is a grid of three fixed slots that never move: Reset,
+ * Help (with the Map information drawer it opens), then Share, which
+ * fills slot 3 in every view (the 2026-09-13 stable-position rule). Above 1024 px each slot is a
  * square-edged, labelled cell (R1 a): a fixed 20 px icon column, then the
  * word. Across the 721 to 1024 px tablet band it is a 44 px icon square
  * with the word visually hidden (owner ruling DR-153; MAP_CHROME_TABLET_BAND).
@@ -141,11 +141,11 @@ export const MAP_CELL_ANATOMY = {
   labelFontPx: 14
 } as const;
 
-export type MapChromeSlot = 1 | 2 | 3 | 4;
+export type MapChromeSlot = 1 | 2 | 3;
 
 export interface MapChromeSeat {
   readonly slot: MapChromeSlot;
-  readonly key: 'reset' | 'satellite' | 'help' | 'share';
+  readonly key: 'reset' | 'help' | 'share';
   /** The slot's own box, present whether or not its control is seated. */
   readonly slotSelector: string;
   /** The control that fills the slot on the desktop shell. */
@@ -170,14 +170,6 @@ export const MAP_CHROME_SEATS: readonly MapChromeSeat[] = [
   },
   {
     slot: 2,
-    key: 'satellite',
-    slotSelector: '.map-overlay-controls > #basemap-switcher-overlay-host',
-    controlSelector: '#basemap-switcher-overlay-host .basemap-switcher-btn',
-    word: 'SAT',
-    formula: SLOT_FORMULA
-  },
-  {
-    slot: 3,
     key: 'help',
     slotSelector: '.map-overlay-controls > #map-info-seat',
     controlSelector: '#map-info-seat > #map-info-btn',
@@ -185,7 +177,7 @@ export const MAP_CHROME_SEATS: readonly MapChromeSeat[] = [
     formula: SLOT_FORMULA
   },
   {
-    slot: 4,
+    slot: 3,
     key: 'share',
     slotSelector: '.map-overlay-controls > #share-btn',
     controlSelector: '.map-overlay-controls > #share-btn',

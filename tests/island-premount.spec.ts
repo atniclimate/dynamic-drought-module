@@ -1,6 +1,5 @@
 import { test, expect, type Page } from './offline-test';
 import { urlLayers } from './helpers';
-import { stubRecentSatellite } from './satellite-fixture';
 import { routeAllTribalFixtures } from './tribal-fixtures';
 import { installMinimapAnalysisStubs } from './minimap-fixtures';
 
@@ -128,7 +127,6 @@ async function stubSst(page: Page): Promise<void> {
  * assertion proves the pre-mount window still holds after map readiness.
  */
 async function gotoWithoutIsland(page: Page, query: string): Promise<void> {
-  await stubRecentSatellite(page);
   // This spec tests an island failure, so its initial map must not depend
   // on a live basemap request completing before the controls can wire.
   await page.route('https://tile.openstreetmap.org/**', (route) =>

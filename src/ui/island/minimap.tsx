@@ -119,8 +119,6 @@ import {
 import type { MinimapOutlookSnapshot } from '../../state/minimap-outlook';
 import type { EnsoPhaseLabel } from '../../impact/enso';
 import { fitAll, fitFraming, fitOcean } from '../../map/camera-fit';
-import { requestBasemapMode } from '../../map/basemap-switcher';
-import { defaultBasemapFor } from '../../state/basemap-store';
 import { requestOcean } from '../../state/cluster-service';
 import { setMapTechnicalNote } from '../map-technical-information';
 import { dateTok } from '../../util/text-tokens';
@@ -658,7 +656,6 @@ function choose(map: maplibregl.Map, key: FramingKey | null): void {
  * as the framing dropdown's ocean group (src/ui/sidebar.ts). */
 function chooseOcean(map: maplibregl.Map, key: OceanKey): void {
   requestOcean(key);
-  requestBasemapMode(map, defaultBasemapFor('enso'));
   fitOcean(map, key);
 }
 

@@ -101,8 +101,8 @@ const OSM_TILE_HOST = new URL(BOOT_URLS.basemapOSM.replace(/\{[xyz]\}/g, '0')).h
  * Deterministic answers for the map sources the modes this spec visits read
  * and `gotoApp` does not already answer (found-109). `gotoApp` answers the
  * sovereign boundaries, the minimap's inputs, NADM, the NIFC WFIGS
- * perimeters with the minimap's count POSTs, the recent satellite basemap,
- * and the CPC seasonal and SPC fire outlooks. The rest, by the recipes in
+ * perimeters with the minimap's count POSTs, and the CPC seasonal and SPC
+ * fire outlooks. The rest, by the recipes in
  * src/config/clusters.ts:
  * - every mode: the OpenStreetMap ground, one pixel per tile (the suite's
  *   idiom, tests/layer-cancellation.spec.ts and its peers);

@@ -465,9 +465,8 @@ export { STATE_OUTLINE_COLOR } from './interface-tokens';
  * Municipal place labels (U4e; Natural Earth bundled points)
  *
  * Dark slate text with a light halo: the one combination the corpus's
- * both-basemaps rule accepts unchanged over the desaturated OSM default AND
- * over satellite imagery (the halo carries the contrast, not the text
- * color). These are the map-side tokens for label chrome; on-map paint
+ * basemap rule accepts unchanged over the desaturated OSM default (the halo
+ * carries the contrast, not the text color). These are the map-side tokens for label chrome; on-map paint
  * cannot read CSS custom properties; interface-tokens owns these mirrors.
  * ------------------------------------------------------------------------- */
 
@@ -478,8 +477,8 @@ export { PLACE_LABEL_COLOR, PLACE_LABEL_HALO } from './interface-tokens';
  *
  * SUBTLE by contract (the cartography lens): terrain legibility under the
  * thematic surfaces, never a competing statement. Slate-family shadow and a
- * barely-off-white highlight keep the shading neutral against both the
- * desaturated OSM default and satellite; the low exaggeration constant is
+ * barely-off-white highlight keep the shading neutral against the
+ * desaturated OSM default; the low exaggeration constant is
  * the "subtle" knob and lives here so a design pass tunes one number.
  * ------------------------------------------------------------------------- */
 

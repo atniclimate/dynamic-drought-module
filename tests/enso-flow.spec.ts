@@ -39,7 +39,7 @@ for (const width of [1440, 721, 720, 390]) {
     await page.setViewportSize({ width, height: 900 });
     await page.clock.setFixedTime(LIVE_CLOCK);
     await stubSst(page);
-    await gotoApp(page, '?cluster=enso&ocean=pacific&view=brief&basemap=default&flow=off');
+    await gotoApp(page, '?cluster=enso&ocean=pacific&view=brief&flow=off');
     if (width <= 720) await page.locator('#mobile-footer-nav button[data-tab="layers"]').click();
     const panel = page.locator('.enso-flow');
     await expect(panel).toBeVisible();
@@ -111,7 +111,7 @@ test('all three ENSO overlays remain bounded, independently timed, and preserve 
     const url = new URL(request.url());
     if (CURRENTS_FRAME.test(url.pathname)) calls.push(url);
   });
-  await gotoApp(page, '?cluster=enso&ocean=pacific&view=brief&basemap=default');
+  await gotoApp(page, '?cluster=enso&ocean=pacific&view=brief');
   const panel = page.locator('.enso-flow');
   await expect(panel).toBeVisible();
   // The ENSO boot reads flow iff the cluster's flowDefault is set (E2-4 sets it;
@@ -158,7 +158,7 @@ test('turning an ENSO overlay off aborts its held request and drops the late res
   let held: Route | null = null;
   await page.route(CURRENTS_HEADER, (route) => { held = route; });
   // flow=off: the boot reads nothing, so the only held request is the currents one below (ENSO opens with wind since E2-4).
-  await gotoApp(page, '?cluster=enso&ocean=pacific&view=brief&basemap=default&flow=off');
+  await gotoApp(page, '?cluster=enso&ocean=pacific&view=brief&flow=off');
   const panel = page.locator('.enso-flow');
   // Ocean currents: the read of the committed frame's header is held open (wind and
   // waves: tests/flow-wire.spec.ts "off intent aborts every range").
@@ -193,7 +193,7 @@ test('the same ENSO controls move into the mobile Layers glass panel and return 
   await page.clock.setFixedTime(LIVE_CLOCK);
   await stubSst(page);
   await page.setViewportSize({ width: 721, height: 844 });
-  await gotoApp(page, '?cluster=enso&ocean=pacific&view=brief&basemap=default&flow=wind&flowink=dark');
+  await gotoApp(page, '?cluster=enso&ocean=pacific&view=brief&flow=wind&flowink=dark');
   await expect(page.locator('.sidebar-scroll > #enso-flow-controls .enso-flow')).toBeVisible();
   await page.setViewportSize({ width: 720, height: 844 });
   await page.locator('#mobile-footer-nav button[data-tab="layers"]').click();
@@ -342,7 +342,7 @@ for (const surface of ANNOUNCEMENT_SURFACES) {
       // The read of the committed frame's header is held open, then let through or failed.
       let held: Route | null = null;
       await page.route(CURRENTS_HEADER, (route) => { held = route; });
-      await gotoApp(page, `?cluster=enso&ocean=pacific&flow=currents&basemap=default${surface.query}`);
+      await gotoApp(page, `?cluster=enso&ocean=pacific&flow=currents${surface.query}`);
       await expect.poll(() => held !== null).toBe(true);
       const panel = page.locator('.enso-flow');
       await expect(panel).toHaveAttribute('data-status', 'loading');
@@ -432,7 +432,7 @@ test("found-115 the arrows' Key drawer row follows the open panel: none while of
   await page.clock.setFixedTime(LIVE_CLOCK);
   await stubSst(page);
   // flow=off: this case starts from off ("none while off"); ENSO opens with wind since E2-4.
-  await gotoApp(page, '?cluster=enso&ocean=pacific&view=console&basemap=default&flow=off');
+  await gotoApp(page, '?cluster=enso&ocean=pacific&view=console&flow=off');
   const panel = page.locator('.enso-flow');
   const panelStatus = panel.locator('.enso-flow-status');
   await expect(panel).toBeVisible();
@@ -470,7 +470,7 @@ test('the Key drawer names the Nino 3.4 box as a button: Enter opens the box pop
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.clock.setFixedTime(LIVE_CLOCK);
   await stubSst(page);
-  await gotoApp(page, '?cluster=enso&ocean=pacific&view=console&basemap=default&flow=off');
+  await gotoApp(page, '?cluster=enso&ocean=pacific&view=console&flow=off');
   await openKeyDrawer(page);
   const door = page.locator('#map-key [data-feature-door="nino34"]');
   await expect(door).toHaveText('Nino 3.4 (the ENSO index region)');

@@ -104,7 +104,7 @@ separated as follows:
 | Product configuration | `src/config/` | Regions, layers, views, palettes, URLs, source metadata, and presentation copy |
 | Map lifecycle | `src/map/` | Map creation, ordering, interactions, Fire 3D, popups, and map-level orchestration |
 | Layer modules | `src/layers/` | Source-specific fetching, parsing, rendering, status, cancellation, legends, and cleanup |
-| Governed state | `src/state/` | Registry, URL state, layer controller, basemap, view route, selected place, and map store |
+| Governed state | `src/state/` | Registry, URL state, layer controller, view route, selected place, and map store |
 | Interface | `src/ui/` | Sidebar, mobile sheet, studios, controls, legends, information, and accessibility surfaces |
 | Impact summaries | `src/impact/` | Place-aware interpretation and evidence cards |
 | Visual system | `src/styles/app.css` | CSS custom properties and responsive presentation |
@@ -115,7 +115,7 @@ separated as follows:
 
 The layer registry is the source of truth for active layers. The URL is a
 public state contract, not an export added after the fact. A change to view,
-layer, region, basemap, selected place, horizon, or Fire 3D behavior must be
+layer, region, selected place, horizon, or Fire 3D behavior must be
 checked against share, reset, reload, browser history, and embed operation.
 
 ### Architecture invariants
@@ -174,7 +174,6 @@ current URL.
 | `embed` | `true` or `1` (hides the sidebar for clean iframe presentation) | `false` |
 | `view` | `brief` or `console` | `brief`; only `view=console` opens Console (an embed naming `layers`, `region`, `cluster`, `ocean` or `framing` without `select` still opens Console) |
 | `horizon` | `weeks-ahead` or `season-ahead` | current |
-| `basemap` | `default` explicitly turns recent satellite imagery off; the legacy `satellite` token remains valid | recent satellite imagery, encoded by absence |
 | `studio` | `layers` or `place` | none |
 | `hazard` | a mode token (`wildfire`, `heat`, `enso`), written only beside `layers` with no `cluster`: the hazard a custom layer set was made from (its alert products, key and strip); it never changes the display | the cluster, encoded by absence |
 | `fire3d` | exact token `true`; entry requires the committed Wildfire cluster and a shell that can present the scene (a desktop viewport, or a phone at least 360px wide and 600px tall, which enters through the 3D cell in its right-edge column), while an active scene may remain through a custom layer stack as long as a Fire event layer remains, or while the PLACE studio holds the display (its clean display sets the Fire layers aside and puts them back) | `false`, encoded by absence |
@@ -315,22 +314,8 @@ caveats, verification date). Read it before touching a fetcher.
 
 ### About the basemap and hydrography
 
-The product-default basemap shows recent satellite imagery from
-[NOAA NESDIS merged GOES East and West GeoColor](https://www.nesdis.noaa.gov/imagery/satellite-maps)
-and its rolling 24-hour archive. The lifecycle selects the newest frame
-passing a known-data image probe, pins all tiles to it, displays the exact
-UTC observation range, and checks every 10 minutes. A failed refresh keeps
-the last good frame; if initial activation fails, the URL reverts honestly
-to `default`. The Satellite control turns imagery on and off;
-`basemap=default` records the satellite-off choice, showing subdued
-OpenStreetMap ground. OpenStreetMap also remains underneath because GOES
-coverage ends near 76 degrees north and imagery can contain clouds or
-gaps. GeoColor is context only: daytime areas approximate true color,
-nighttime areas use infrared and static reference lights.
-
-Explicit Fire and Wildfire controls may request recent GeoColor as part of
-their governed scene, but unrelated layer or horizon changes do not
-override a visitor's manual basemap choice. Future satellite-derived
+The map ground is subdued OpenStreetMap; there is no basemap control and no
+`basemap` URL parameter (an incoming `basemap=` is ignored). Satellite-derived
 products belong in separately named layers with their own status,
 timestamp, caveat, and legend; recoloring an existing layer would let a
 display claim what its source does not. Hydrography queries the

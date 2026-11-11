@@ -97,9 +97,7 @@ test('every rule that draws the selected face opts out of the system repaint', (
     }
   }
   assert.ok(faces >= 12, `the selected face is drawn in ${faces} rules`);
-  // The two faces that name their colours directly: Satellite when on, and the observed evidence plate.
-  assert.match(app, /\.basemap-switcher-btn\.active \{\s*forced-color-adjust: none;/);
-  assert.match(app, /:root \.basemap-switcher-btn\.active \{\s*background: Highlight !important;\s*color: HighlightText !important;\s*\}/);
+  // The face that names its colours directly: the observed evidence plate.
   assert.match(app, /\.impact-claim-observed \.impact-claim-badge \{\s*forced-color-adjust: none;/);
   assert.match(read('styles/briefing-lead.css'), /\[data-evidence='observed'\] \.impact-claim-badge \{\s*forced-color-adjust: none;/);
 });

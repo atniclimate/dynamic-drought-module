@@ -468,7 +468,7 @@ function telemetryMarkerOptions(element: HTMLElement, wind: RawsWindGlyphFields 
  * report, WCAG 2.1 non-text contrast, 3:1 minimum): `#ef4444` (raws) against
  * a white basemap area is 3.76:1 (relative luminance 0.2291 vs 1.0), so the
  * network color passes and is used directly, with a white 1px contrast
- * stroke; a live satellite or terrain basemap varies pixel to pixel, so this
+ * stroke; a terrain basemap would vary pixel to pixel, so this
  * is a representative check against the lightest plausible background, not
  * an exhaustive one.
  *

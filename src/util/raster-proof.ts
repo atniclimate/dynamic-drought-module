@@ -12,7 +12,7 @@
  *
  * Kept apart from `raster-status.ts` on purpose: that module also serves
  * raster consumers that need neither the tile-proof configuration nor this
- * wait (HeatRisk, WHP, the satellite basemap), whose activation closures
+ * wait (HeatRisk, WHP), whose activation closures
  * stay free of this one. Neither module is in the Fire 3D activation closure
  * (DR-085, DR-142): src/map/fire3d.ts takes its terrain watch from
  * raster-error-watch.ts, and hillshade, which fire3d also imports, is a

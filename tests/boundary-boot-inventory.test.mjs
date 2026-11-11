@@ -248,11 +248,11 @@ const SECOND_PAGE_REASONS = {
   },
   'tests/mode-switch-cost.spec.ts': {
     reason:
-      'the DDM-P14-T08 mode-switch measurement (DR-095): one page per FRESH browser.newContext(), not a popup in an existing context, because each of the twelve ordered switches has to be measured from cold caches or the previous switch pays for this one. Every one of those pages boots through gotoApp, so it installs the same satellite, sovereign-boundary and minimap stubs as any other boot in this suite, and no page here reaches a live sovereign-geography service. It installs the offline context backstop before page creation and uses the default deterministic feed fixtures. The spec runs only in its own chromium-measure project, which CI never invokes.'
+      'the DDM-P14-T08 mode-switch measurement (DR-095): one page per FRESH browser.newContext(), not a popup in an existing context, because each of the twelve ordered switches has to be measured from cold caches or the previous switch pays for this one. Every one of those pages boots through gotoApp, so it installs the same sovereign-boundary and minimap stubs as any other boot in this suite, and no page here reaches a live sovereign-geography service. It installs the offline context backstop before page creation and uses the default deterministic feed fixtures. The spec runs only in its own chromium-measure project, which CI never invokes.'
   },
   'tests/flow-measure.spec.ts': {
     reason:
-      'the ENSO-FLOW-PLAN E2-2 flow measurement (section 4.2): one page per FRESH browser.newContext(), not a popup in an existing context, because every condition is measured three times from a cold page and one condition must not pay for the previous one. Every page boots through gotoApp, so it installs the same satellite, boundary, minimap, NADM, NIFC, NWS and NOAA NODD suite stubs as any boot here; the spec adds its own SST and basemap-tile routes and a context backstop that aborts and logs any other host, so no page reaches a live service. The spec runs only in the chromium-measure project, which CI never invokes.'
+      'the ENSO-FLOW-PLAN E2-2 flow measurement (section 4.2): one page per FRESH browser.newContext(), not a popup in an existing context, because every condition is measured three times from a cold page and one condition must not pay for the previous one. Every page boots through gotoApp, so it installs the same boundary, minimap, NADM, NIFC, NWS and NOAA NODD suite stubs as any boot here; the spec adds its own SST and basemap-tile routes and a context backstop that aborts and logs any other host, so no page reaches a live service. The spec runs only in the chromium-measure project, which CI never invokes.'
   }
 };
 
@@ -298,11 +298,6 @@ const UNROUTE_REASONS = {
     sites: 3,
     reason:
       'drops the same-origin us-states.geojson stub installed for the file so three cases can serve a narrower state collection instead'
-  },
-  'tests/satellite-fixture.ts': {
-    sites: 1,
-    reason:
-      'replaces its own satellite tile fixture with an aborting handler for the tile-failure path, in the module that owns that route'
   },
   'tests/flow-wire.spec.ts': {
     sites: 1,

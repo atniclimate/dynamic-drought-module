@@ -56,8 +56,6 @@ import {
   requestHorizon
 } from '../../state/cluster-service';
 import type { CommittedShellSnapshot } from '../../state/cluster-service';
-import { requestBasemapMode } from '../../map/basemap-switcher';
-import { defaultBasemapFor } from '../../state/basemap-store';
 import { takeEnsoCamera } from '../../map/enso-camera';
 import { restoreCameraState } from '../../map/camera-fit';
 import {
@@ -417,8 +415,6 @@ function Shell({ map, snap, framing, specTick, onMinimapNoteChange }: ShellProps
   const chooseCluster = (key: HazardClusterKey): void => {
     runDisplayCommand(() => {
       requestCluster(key);
-      // Every switch applies the new mode's default; a SAT press does not outlive its mode.
-      requestBasemapMode(map, defaultBasemapFor(key));
       // Leaving ENSO from a custom composition: the store already said drought, so
       // the cluster subscriber saw no change; the held camera is restored here.
       if (key !== 'enso') {
@@ -531,15 +527,14 @@ function Shell({ map, snap, framing, specTick, onMinimapNoteChange }: ShellProps
 }
 
 /** Variable claims and optional controls do not displace shared navigation. */
-function ShellDetails({ map, snap, framingNote }: {
-  readonly map: maplibregl.Map;
+function ShellDetails({ snap, framingNote }: {
   readonly snap: ReadonlySignal<CommittedShellSnapshot>;
   readonly framingNote: ReadonlySignal<string>;
 }) {
   const snapshot = snap.value;
   return (
     <>
-      <Fire3DControl cluster={snapshot.cluster} map={map} />
+      <Fire3DControl cluster={snapshot.cluster} />
       <section class="shell-summary" id="shell-conditions-summary" aria-labelledby="shell-conditions-heading">
         {/* The strip owns the "Conditions in view" region; this one names what is displayed. */}
         <h2 class="panel-title sr-only" id="shell-conditions-heading">Display summary</h2>
@@ -586,5 +581,5 @@ export function mountShell(host: HTMLElement, map: maplibregl.Map): void {
     host
   );
   const detailsHost = document.getElementById('shell-details-island');
-  if (detailsHost) render(<ShellDetails map={map} snap={snap} framingNote={framingNote} />, detailsHost);
+  if (detailsHost) render(<ShellDetails snap={snap} framingNote={framingNote} />, detailsHost);
 }

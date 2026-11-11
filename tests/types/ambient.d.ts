@@ -2,7 +2,7 @@
  * DDM-P15-T07: ambient module declarations for the one test-only dependency
  * that ships no types of its own. Typed honestly to the handful of members
  * the suite actually uses (tests/m-breadth-heatrisk-days.spec.ts,
- * tests/satellite-fixture.ts): constructing a PNG, writing one to a Buffer,
+ * tests/map-chrome-icons.spec.ts, tests/wildfire3d-ground.spec.ts): constructing a PNG, writing one to a Buffer,
  * reading one back, and its `width`/`height`/`data` fields. Nothing wider.
  */
 declare module 'pngjs' {

@@ -7,8 +7,8 @@ import type * as maplibregl from 'maplibre-gl';
  *
  * The contract, bottom to top:
  *
- *   background -> basemap (OSM fallback)
- *     -> basemap-satellite (recent NOAA) -> wildfire-dryness-ground -> hillshade
+ *   background -> basemap (OSM ground)
+ *     -> wildfire-dryness-ground -> hillshade
  *     -> condition surfaces (the 3D edge fade last) -> event overlays -> reference boundaries
  *     -> reference labels
  *
@@ -32,7 +32,6 @@ import type * as maplibregl from 'maplibre-gl';
 export const BOTTOM_STACK_IDS: readonly string[] = [
   'background',
   'basemap',
-  'basemap-satellite',
   'wildfire-dryness-ground',
   'hillshade'
 ];

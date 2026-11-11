@@ -1,6 +1,5 @@
 import { LAYER_DEFS } from '../config/layers';
 import { TRIBAL_NATIONS_PROVENANCE_NOTE } from '../config/provenance';
-import { getBasemapMode, onBasemapChange } from '../state/basemap-store';
 import { getMap } from '../state/map-store';
 import { registry } from '../state/registry';
 import { openAcknowledgements } from './impact-panel';
@@ -162,11 +161,9 @@ export function initMapInformation(): void {
         (status === 'error' && isChecked(definition.key))
       );
     });
-    const vintage = document.getElementById('basemap-vintage')?.textContent?.trim() ?? '';
 
     // W2-D8: the opening line leads with what this panel uniquely adds
-    // (the active view and the basemap state with its observation window)
-    // instead of restating the on-map key's aria text verbatim while that
+    // (the active view and the basemap) instead of restating the on-map key's aria text verbatim while that
     // key is visible directly beneath the panel.
     // The fallback names a surface still loading, never one that failed.
     const surface =
@@ -179,9 +176,7 @@ export function initMapInformation(): void {
       );
     const contextParts = [
       surface ? `Active view: ${surface.name}.` : 'No condition surface is on.',
-      getBasemapMode() === 'satellite'
-        ? `Satellite imagery basemap.${vintage ? ` ${vintage}` : ''}`
-        : 'Default OpenStreetMap basemap.'
+      'Default OpenStreetMap basemap.'
     ];
     current.textContent = contextParts.join(' ');
 
@@ -349,7 +344,6 @@ export function initMapInformation(): void {
   mobileQuery.addEventListener('change', onMobileChange);
   const releaseLayers = registry.on('change', render);
   const releaseStatuses = registry.on('status-change', render);
-  const releaseBasemap = onBasemapChange(render);
   const releaseSheet = onSheetDetentSettle((detent) => {
     if ((detent === 'half' || detent === 'full') && open) {
       setOpen(false, false);
@@ -364,7 +358,6 @@ export function initMapInformation(): void {
     contentObserver.disconnect();
     releaseLayers();
     releaseStatuses();
-    releaseBasemap();
     releaseSheet();
     button.removeEventListener('click', onButtonClick);
     for (const pointer of pointerButtons) pointer.removeEventListener('click', onPointerClick);

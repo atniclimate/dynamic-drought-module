@@ -2,7 +2,6 @@ import { isExternalHttp } from './offline-test';
 import { expect, test } from './offline-test';
 
 import { awaitQuiescence, ROLE_GROUPS } from './helpers';
-import { stubRecentSatellite } from './satellite-fixture';
 import { routeAllTribalFixtures } from './tribal-fixtures';
 import { installMinimapAnalysisStubs } from './minimap-fixtures';
 
@@ -52,7 +51,6 @@ test('the production artifact boots from the GitHub Pages subpath', async ({
     }
   });
 
-  await stubRecentSatellite(page);
   // A raw boot at the Pages mount point, so the suite-wide boundary stub is
   // installed by hand. `layers=states` leaves both boundary layers off, but
   // the stub is unconditional so a later edit to that query cannot quietly

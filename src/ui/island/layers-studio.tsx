@@ -191,7 +191,6 @@ function OnTheMapNow({
 function LayersStudio({ controller, checked, statuses, search }: LayersStudioProps) {
   const backRef = useRef<HTMLButtonElement>(null);
   const telemetryHostRef = useRef<HTMLDivElement>(null);
-  const basemapHostRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const releaseInertScope = applyStudioInertScope();
@@ -199,11 +198,6 @@ function LayersStudio({ controller, checked, statuses, search }: LayersStudioPro
     const telemetry = moveIntoHost(
       document.getElementById('panel-telemetry'),
       telemetryHostRef.current
-    );
-    const basemapButton = document.querySelector<HTMLButtonElement>('.basemap-switcher-btn');
-    const basemap = moveIntoHost(
-      basemapButton?.closest<HTMLElement>('.maplibregl-ctrl') ?? null,
-      basemapHostRef.current
     );
 
     backRef.current?.focus();
@@ -227,7 +221,6 @@ function LayersStudio({ controller, checked, statuses, search }: LayersStudioPro
 
     return () => {
       telemetryHost?.removeEventListener('click', onStationPress, true);
-      restore(basemap);
       restore(telemetry);
       releaseInertScope();
     };
@@ -245,7 +238,6 @@ function LayersStudio({ controller, checked, statuses, search }: LayersStudioPro
           Back to map
         </button>
         <h2 id="layers-studio-heading">Layer studio</h2>
-        <div class="layers-studio-basemap" ref={basemapHostRef} />
       </header>
       <div class="layers-studio-scroll">
         {search && (

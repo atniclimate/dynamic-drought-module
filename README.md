@@ -236,9 +236,7 @@ commands and population instructions are in
 
 ### About the basemap and hydrography
 
-Recent NOAA NESDIS GOES GeoColor imagery provides context over an
-OpenStreetMap basemap; clouds and coverage gaps can obscure the ground.
-The Satellite control turns imagery on and off. Rivers come from
+The map ground is an OpenStreetMap basemap. Rivers come from
 OpenStreetMap via Overpass. See the [developer guide](DEVELOPER.md#about-the-basemap-and-hydrography)
 for refresh behavior and service limits.
 
@@ -305,8 +303,6 @@ its own clock, method, and caveats.
   temperature and precipitation outlooks (6-to-10-day, 8-to-14-day), ENSO
   index snapshots and diagnostic discussion
 - **SPC** (Storm Prediction Center): Fire Weather Outlook
-- **NESDIS** (National Environmental Satellite, Data, and Information
-  Service): merged GOES GeoColor satellite imagery
 - **OSPO** (Office of Satellite and Product Operations): HMS satellite
   smoke plumes
 - **CO-OPS** (Center for Operational Oceanographic Products and Services):

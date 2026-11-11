@@ -14,8 +14,7 @@
  * town against the USDM outlines or the hover inspector).
  *
  * Legibility: dark slate text with a light halo (palette.ts tokens), the
- * combination that reads over BOTH the desaturated default basemap and the
- * future satellite option (the corpus both-basemaps rule). Glyphs are the
+ * combination that reads over the desaturated default basemap. Glyphs are the
  * self-hosted Noto Sans Regular ranges (U0a); the build gate guarantees
  * every bundled name renders from the ranges that ship.
  *

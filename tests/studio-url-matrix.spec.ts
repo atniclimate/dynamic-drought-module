@@ -5,7 +5,6 @@ import { HAZARD_CLUSTERS, HAZARD_CLUSTER_KEYS } from '../src/config/clusters';
 import { TRIBAL_NATIONS_GROUP } from '../src/config/layer-groups';
 import { parseShellParams, parseStudioParam } from '../src/state/url';
 import { gotoApp, search, stubHeatRiskCatalog, urlLayers, waitForLayerSettled } from './helpers';
-import { stubRecentSatellite } from './satellite-fixture';
 import { AIANNH_ROUTE, BIA_ROUTE, emptyCollectionBody, routeGeojson } from './tribal-fixtures';
 
 const FRAMING = Object.keys(FRAMINGS)[0] as FramingKey;
@@ -56,19 +55,18 @@ const MATRIX: readonly MatrixCase[] = [
     expected: { studio: 'layers', layers: 'places', cluster: null }
   },
   {
-    name: 'LAYERS composes with temporal and basemap tokens',
+    name: 'LAYERS composes with temporal tokens',
     studio: 'layers',
     query:
       '?layers=places&view=brief&week=20240702&dmode=chg1&sst=2024-07-01' +
-      '&outlook=monthly&basemap=satellite&studio=layers',
+      '&outlook=monthly&studio=layers',
     settleKey: 'places',
     expected: {
       studio: 'layers',
       week: '20240702',
       dmode: 'chg1',
       sst: '2024-07-01',
-      outlook: 'monthly',
-      basemap: null
+      outlook: 'monthly'
     }
   },
   {
@@ -113,7 +111,6 @@ async function stubMatrixDependencies(page: Page): Promise<void> {
       })
     );
   }
-  await stubRecentSatellite(page);
   await page.route('**/gibs.earthdata.nasa.gov/**', (route) =>
     route.fulfill({ status: 503, contentType: 'text/plain', body: 'Synthetic offline response' })
   );

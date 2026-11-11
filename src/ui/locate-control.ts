@@ -3,7 +3,7 @@
  * (sprint), DR-pending).
  *
  * This is the EAGER half and it is deliberately almost nothing: one button
- * seated under SAT in the phone column's view tools, one polite status
+ * seated in the phone column's view tools, one polite status
  * region that exists from boot (so a screen reader has found it before the
  * first press), and the launch check. The state machine, the card, the
  * marker, the place resolution and the stylesheet arrive as one lazy chunk

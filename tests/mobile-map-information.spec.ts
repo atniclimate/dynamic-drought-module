@@ -206,7 +206,6 @@ test.describe('mobile map-information disclosure (390x844)', () => {
     const sourceList = page.locator('#map-info-sources');
     const contextLine = page.locator('#map-info-current');
     const ensoButton = page.locator('#hazard-rail button[data-preset="hazard-enso"]');
-    const satelliteButton = page.locator('.basemap-switcher-btn');
 
     await infoButton.click();
     await expect(panel).toBeVisible();
@@ -246,7 +245,6 @@ test.describe('mobile map-information disclosure (390x844)', () => {
       page.locator('#hazard-rail button[data-preset="hazard-fire"]'),
       page.locator('#hazard-rail button[data-preset="hazard-drought"]'),
       page.locator('#hazard-rail button[data-preset="hazard-heat"]'),
-      satelliteButton,
       infoButton
     ]) {
       await expect(control).toBeVisible();
@@ -262,13 +260,11 @@ test.describe('mobile map-information disclosure (390x844)', () => {
         panel: z('#map-info-panel'),
         utility: z('.map-overlay-controls'),
         hazards: z('#hazard-rail'),
-        satellite: z('.basemap-switcher-control'),
         info: z('#map-info-btn')
       };
     });
     expect(stackOrder.utility).toBeGreaterThan(stackOrder.panel);
     expect(stackOrder.hazards).toBeGreaterThan(stackOrder.panel);
-    expect(stackOrder.satellite).toBeGreaterThan(stackOrder.panel);
     expect(stackOrder.info).toBeGreaterThan(stackOrder.panel);
 
     // A click that would be intercepted by a fullscreen modal must remain
@@ -287,12 +283,6 @@ test.describe('mobile map-information disclosure (390x844)', () => {
     await expect(contextLine).toContainText(
       'Active view: Ocean Temperature Anomaly.'
     );
-
-    // The existing Satellite button remains equally usable above the panel.
-    await expect(satelliteButton).toHaveAttribute('aria-pressed', 'true');
-    await satelliteButton.click();
-    await expect(satelliteButton).toHaveAttribute('aria-pressed', 'false');
-    await expect(page).toHaveURL(/(?:\?|&)basemap=default(?:&|$)/);
     await expect(panel).toBeVisible();
   });
 });

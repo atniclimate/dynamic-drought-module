@@ -48,8 +48,7 @@ test.describe('precedence: boot, Reset and embed defaults (DR-109)', () => {
     // Neither 3D key exists in this URL yet (D4 has not shipped).
     expect(params.has('terrain3d')).toBe(false);
     expect(params.has('fire3d')).toBe(false);
-    // No imagery view or sidebar-collapse token: every default is absence.
-    expect(params.has('basemap')).toBe(false);
+    // No sidebar-collapse token: every default is absence.
     expect(params.has('sidebar')).toBe(false);
   });
 
@@ -149,7 +148,6 @@ test.describe('precedence: boot, Reset and embed defaults (DR-109)', () => {
     expect(params.get('region')).toBe('national');
     expect(params.get('framing')).toBeNull();
     expect(params.has('sidebar')).toBe(false);
-    expect(params.has('basemap')).toBe(false);
     expect(params.get('view')).toBe('console');
   });
 
@@ -295,7 +293,6 @@ import {
 import { installFakeBrowser } from './map-harness';
 import { installBoundaryStubs } from './tribal-fixtures';
 import { installMinimapAnalysisStubs } from './minimap-fixtures';
-import { stubRecentSatellite } from './satellite-fixture';
 import { installDefaultNifcStub } from './wildfire-fixtures';
 import { stubCpcSeasonalTempOutlook, stubSpcFireOutlook } from './helpers';
 import { stubCpcDroughtOutlook } from './cpc-outlook-fixtures';
@@ -427,7 +424,6 @@ async function afterFrames(target: Page | Frame): Promise<void> {
  * here.
  */
 async function installRawBootStubs(page: Page): Promise<void> {
-  await stubRecentSatellite(page);
   await installBoundaryStubs(page, 'fixture');
   await installMinimapAnalysisStubs(page);
   await stubCpcSeasonalTempOutlook(page);

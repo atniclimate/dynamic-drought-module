@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
  * (a group with nothing to show). The count once treated that attribute as a
  * reason not to count the group's controls, so a group that was ever empty
  * stayed at zero and stayed hidden for the life of the page: the Layers
- * studio borrows Satellite, the view group empties, and Satellite never came
+ * studio borrows a control, the view group empties, and the control never came
  * back to the column. docs/design/mobile-map-chrome.md says nothing is
  * dropped; this is the rule that keeps that true.
  *

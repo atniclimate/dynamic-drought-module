@@ -3,12 +3,10 @@
  * Web Mercator fit MapLibre's cameraForBounds makes (512px world tiles, the
  * shared 20px inset of src/map/camera-fit.ts). Browser-free.
  *
- * - The Arctic Ocean view stays inside the satellite imagery, whose raster
- *   source stops at 76.4588 degrees north (src/map/satellite.ts); the look of
- *   2026-11-05 found the top 45 percent of the frame flat grey.
+ * - The Arctic Ocean view stays in the high latitudes on landscape canvases.
  * - The Pacific view keeps the Nino 3.4 box clear of the bottom dock, where
- *   the desktop toast and the other notices sit; the same look found the
- *   satellite failure toast over the box's label.
+ *   the desktop toast and the other notices sit; the look of 2026-11-05 found
+ *   a toast over the box's label.
  */
 
 import assert from 'node:assert/strict';
@@ -46,22 +44,14 @@ const LANDSCAPE_CANVASES = [
   [1440, 900]
 ];
 
-const satelliteSource = readFileSync(new URL('../src/map/satellite.ts', import.meta.url), 'utf8');
-const IMAGERY_NORTH = Number(/bounds:\s*\[-180,\s*-?[\d.]+,\s*180,\s*([\d.]+)\]/.exec(satelliteSource)?.[1]);
 // regions.ts does not load under node (extensionless imports), so read the floor from its source.
 const regionsSource = readFileSync(new URL('../src/config/regions.ts', import.meta.url), 'utf8');
 const MAP_MIN_ZOOM = Number(/export const MAP_MIN_ZOOM = ([\d.]+);/.exec(regionsSource)?.[1]);
 
-test('the satellite imagery bound is read from its raster source', () => {
-  assert.ok(IMAGERY_NORTH > 76 && IMAGERY_NORTH < 77, `imagery north ${IMAGERY_NORTH}`);
-});
-
-test('the Arctic Ocean view stays inside the satellite imagery on landscape canvases', () => {
+test('the Arctic Ocean view stays in the high latitudes on landscape canvases', () => {
   const bounds = framingFitBounds(OCEANS.arctic);
   for (const [width, height] of LANDSCAPE_CANVASES) {
     const cam = fit(bounds, width, height);
-    const top = latOf(cam.cy - height / 2 / cam.scale);
-    assert.ok(top <= IMAGERY_NORTH, `${width}x${height}: frame top ${top.toFixed(2)} N is past the imagery`);
     const bottom = latOf(cam.cy + height / 2 / cam.scale);
     assert.ok(bottom >= 50, `${width}x${height}: frame bottom ${bottom.toFixed(2)} N leaves the high latitudes`);
   }

@@ -287,7 +287,6 @@ export function evaluateLayers(rows, ceilingMs, options = {}) {
  * The license obligation is therefore discharged by that button, so the
  * proof is the inverse of what it was before:
  *
- *   - the satellite switcher is still the top hit at its own center;
  *   - the map-information button IS present in the embed and IS the top hit
  *     at its own center, so the credits are reachable in one interaction;
  *   - the removed attribution control has not come back.
@@ -297,7 +296,6 @@ export function evaluateLayers(rows, ceilingMs, options = {}) {
  */
 export function evaluateEmbedCorner(row) {
   const reasons = [];
-  if (row.satHit !== 'satellite') reasons.push(`satellite control hit ${row.satHit ?? 'nothing'}`);
   if (row.infoBtnVisible !== true) {
     reasons.push('map-information button missing from the embed (no reachable credits surface)');
   } else if (row.infoHit !== 'map-information') {

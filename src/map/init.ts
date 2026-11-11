@@ -9,9 +9,7 @@ import * as maplibregl from 'maplibre-gl';
 import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import { pmtilesTransport } from './tile-protocol';
 import { buildBaseStyle } from './style';
-import { BasemapSwitcherControl } from './basemap-switcher';
 import { MAP_MIN_ZOOM } from '../config/regions';
-import { watchDesktopMapSeat } from '../ui/map-control-seat';
 
 /**
  * Register the PMTiles protocol with MapLibre exactly once, so any source
@@ -92,7 +90,7 @@ const SCALE_MAX_WIDTH_PX = 160;
  *
  * Open-data invariant: no proprietary tile providers are configured. The
  * base style uses a subdued OpenStreetMap base (see `buildBaseStyle()`);
- * recent NOAA GeoColor is the default satellite context.
+ * the OSM ground is the only basemap.
  */
 export function createMap(containerId: string): maplibregl.Map {
   registerPmtilesProtocol();
@@ -159,48 +157,6 @@ export function createMap(containerId: string): maplibregl.Map {
       maxWidth: SCALE_MAX_WIDTH_PX
     })
   );
-  // The basemap switcher (U4d): recent NOAA context is one tap away from the
-  // standard base. Present in embeds too; `basemap=` is durable
-  // URL state and an embedding site may pin it in its iframe src.
-  // BOTTOM-right is MapLibre's seat and stays the home for embeds and the
-  // phone shell (whose CSS lifts this same control into the thumb zone
-  // without duplicating its store, URL, or lazy Satellite behavior).
-  map.addControl(new BasemapSwitcherControl(), 'bottom-right');
-
-  // On the desktop shell the same control moves into the app's top-right
-  // column beneath Reset (owner direction, 2026-08-19), which is where the
-  // E2 ruling already said the three map buttons belong as one family. The
-  // node moves; its listeners, aria-pressed state, and store subscription
-  // ride along.
-  seatBasemapSwitcherOnDesktop(map);
 
   return map;
-}
-
-/**
- * Move the satellite control between MapLibre's bottom-right corner and the
- * app's top-right control column as the presentation changes. Returns
- * silently when either seat is missing, so a host page that trims the
- * overlay markup simply keeps MapLibre's own placement.
- */
-function seatBasemapSwitcherOnDesktop(map: maplibregl.Map): void {
-  const node = map
-    .getContainer()
-    .querySelector<HTMLElement>('.basemap-switcher-control');
-  const host = document.getElementById('basemap-switcher-overlay-host');
-  const corner = map
-    .getContainer()
-    .querySelector<HTMLElement>('.maplibregl-ctrl-bottom-right');
-  if (!node || !host || !corner) return;
-  watchDesktopMapSeat({
-    node,
-    host,
-    home: corner,
-    placeHome: () => {
-      if (node.parentElement !== corner) corner.appendChild(node);
-    },
-    // On phones it leads the view tools in the right-edge column (owner
-    // direction 2026-11-09 (sprint), DR-pending; src/ui/edge-column.ts).
-    phone: { group: 'view', order: 10, word: 'SAT' }
-  });
 }

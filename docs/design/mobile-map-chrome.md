@@ -48,7 +48,7 @@ one manager owns (`src/ui/edge-column.ts`), arranged by one pure planner
 
 - Groups, top to bottom: map tools (Share, Reset, Map information), the four
   doors (Brief, Place, Layers, Alerts), the four hazard views (ENSO, Fire,
-  Drought, Heat), then the view tools (Satellite, then Locate). Each group is
+  Drought, Heat), then the view tools (Locate). Each group is
   one glass capsule, and each cell shows an icon over one short word.
 - The planner prefers the largest cell with every control displayed: one
   track at 52px (on viewports at least 380px wide), then 48px, then 44px; then
@@ -57,7 +57,7 @@ one manager owns (`src/ui/edge-column.ts`), arranged by one pure planner
   A folded group is one cell that opens its controls as a row beside it.
   Nothing is dropped, and two controls never share a pixel.
 - A cell is a tile inside its capsule. The selected tile inverts: the open
-  door, the hazard view that is on, Satellite when on, Locate while a position
+  door, the hazard view that is on, Locate while a position
   is shown, and Map information when open.
 - Each door exposes `aria-controls` and `aria-expanded`. Pressing a closed
   door raises its sheet. Pressing the open door again, or pressing Escape,
@@ -68,8 +68,7 @@ one manager owns (`src/ui/edge-column.ts`), arranged by one pure planner
   otherwise Place. Pressing that lit door closes the sheet, as it does for a
   door that was pressed. A sheet that names itself, the ENSO guide, lights
   only its own door (owner direction 2026-11-09 (sprint), DR-pending).
-- The first four hazard cells use the mobile view presets; Satellite remains
-  the one `BasemapSwitcherControl` backed by the basemap store. A short word
+- The first four hazard cells use the mobile view presets. A short word
   never replaces an accessible name, `aria-pressed`, or focus treatment.
 - The same elements move between their desktop seats and the column when the
   shell changes, so focus order equals visual order in both.
@@ -143,7 +142,7 @@ Superseded 2026-11-09 (owner direction, sprint; DR-pending). This note said
 "Phone views do not load or present the 3D Fire controls." A phone may now
 enter the 3D Fire view, through one explicit control and on these terms.
 
-- The 3D cell sits in the right-edge column's view tools, under Satellite.
+- The 3D cell sits in the right-edge column's view tools.
   It exists only where a press means something: Fire is the hazard view, the
   renderer probe found WebGL 2, and the screen is at least 360px wide and
   600px tall. Anywhere else the cell is absent, never disabled, so the column
@@ -151,10 +150,7 @@ enter the 3D Fire view, through one explicit control and on these terms.
   measurement behind each floor.
 - A press sets the same durable preference as the desktop console's button
   (`fire3d=true`), after committing the Wildfire view as that button does,
-  so one link opens the same way on a phone and on a desk. Unlike that
-  button it leaves the basemap alone: the rail's Fire view opens on imagery,
-  the scene holds imagery off while it is opening or open, and leaving the
-  scene brings it back. The selected cell inverts. Pressing it again is the way out, and Cancel while the scene is
+  so one link opens the same way on a phone and on a desk. The selected cell inverts. Pressing it again is the way out, and Cancel while the scene is
   still loading. Leaving the Fire view ends the scene.
 - The two statements stand on the map. A phone has no sidebar beside the
   scene, so the terrain coverage statement and the non-prediction disclosure
@@ -219,7 +215,7 @@ The Map information control (Info in the right-edge column) opens a non-modal
 glass region across the map stage. It blocks pointer interaction with the map canvas, while the persistent
 right controls and the information toggle stay above it. Its content is
 derived from the active key, canonical layer definitions, registry statuses,
-basemap state, and the governed Tribal geography provenance note. Open state is
+and the governed Tribal geography provenance note. Open state is
 presentation-only and is never written to the URL.
 
 ## Motion

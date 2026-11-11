@@ -1,7 +1,7 @@
 import { syncFire3dParam } from './url';
 
 /**
- * Shared 3D Fire mode preference store (W3), shaped like basemap-store.
+ * Shared 3D Fire mode preference store (W3), shaped like the other preference stores.
  *
  * The preference is the user's durable ask ("show the Fire view in 3D"),
  * round-tripped through the URL as the additive `fire3d=true` parameter.
@@ -20,13 +20,12 @@ import { syncFire3dParam } from './url';
  * demotion after a terrain failure) writes the parameter through
  * `syncFire3dParam`; `seedFire3DPreference` (the boot seed from the parsed
  * URL, src/ui/sidebar.ts applyUrlStateSync) never writes the URL, matching
- * the basemap seed's no-redundant-write behavior.
+ * the other stores' no-redundant-write behavior.
  */
 
 /**
  * The width at which the 3D chunk may load (src/main.ts) and a `fire3d=true`
- * boot holds satellite imagery for it (src/ui/sidebar.ts): one value, or a
- * boot hold is taken that no controller ever releases. Equal to
+ * boot loads it (src/ui/sidebar.ts): one value, or the two disagree. Equal to
  * FIRE3D_MIN_WIDTH_QUERY in src/config/fire3d-presentation.ts, which rides
  * the lazy chunk and so cannot be imported here.
  *

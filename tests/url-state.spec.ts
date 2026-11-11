@@ -37,7 +37,7 @@ import type { Map as MlMap } from 'maplibre-gl';
  */
 const RECOGNIZED_URL_KEYS: ReadonlySet<string> = new Set([
   'region', 'layers', 'embed', 'view', 'week', 'dmode', 'sst', 'outlook',
-  'horizon', 'basemap', 'framing', 'cluster', 'hazard', 'ocean', 'studio', 'heatday',
+  'horizon', 'framing', 'cluster', 'hazard', 'ocean', 'studio', 'heatday',
   'spi', 'fire3d', 'flow', 'flowink', 'sidebar', 'select'
 ]);
 
@@ -770,10 +770,10 @@ interface ReloadGroup {
  */
 const RELOAD_GROUPS: readonly ReloadGroup[] = [
   {
-    name: 'camera, display, door, time, imagery, window and sidebar',
+    name: 'camera, display, door, time, window and sidebar',
     query:
       '?region=central_oregon&layers=places&view=console&week=20240702&dmode=chg1' +
-      '&sst=2024-07-01&outlook=monthly&basemap=default&spi=30&sidebar=closed',
+      '&sst=2024-07-01&outlook=monthly&spi=30&sidebar=closed',
     expected: {
       region: 'central_oregon',
       layers: 'places',
@@ -782,7 +782,6 @@ const RELOAD_GROUPS: readonly ReloadGroup[] = [
       dmode: 'chg1',
       sst: '2024-07-01',
       outlook: 'monthly',
-      basemap: 'default',
       spi: '30',
       sidebar: 'closed'
     }
@@ -813,7 +812,7 @@ const RELOAD_GROUPS: readonly ReloadGroup[] = [
   { name: 'embed', query: '?embed=true&layers=places&view=console', expected: { embed: 'true' } },
   {
     name: 'ENSO cluster, ocean and direction overlay',
-    query: '?cluster=enso&ocean=pacific&view=brief&basemap=default&flow=currents&flowink=dark',
+    query: '?cluster=enso&ocean=pacific&view=brief&flow=currents&flowink=dark',
     stubs: stubEnsoForReload,
     expected: { cluster: 'enso', ocean: 'pacific', flow: 'currents', flowink: 'dark' }
   },

@@ -69,7 +69,6 @@ export const PURE_SPECS = [
   'tests/power-layer.spec.ts',
   'tests/product-catalog.spec.ts',
   'tests/s1-substrate.spec.ts',
-  'tests/satellite-source.spec.ts',
   'tests/umbrella-config.spec.ts',
   'tests/usfs-whp.spec.ts',
   'tests/verification-config.spec.ts',
