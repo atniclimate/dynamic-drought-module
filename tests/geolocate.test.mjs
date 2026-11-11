@@ -339,6 +339,21 @@ test('a briefing is opened for the place, never at the position', async () => {
     .map((match) => [...match[0].matchAll(/\bfix\.(lng|lat|accuracy)\b/g)].length)
     .reduce((a, b) => a + b, 0);
   assert.equal(uses, allowed, 'locate-place.ts reads the position somewhere this test does not know');
+  // The camera is never moved to the position. The lane makes two camera calls, both fits of a box
+  // (the grid square, an area's own box), and hands the position to the map once, for the marker.
+  const cameraCalls = [];
+  for (const file of LOCATE_MODULES) {
+    for (const match of (await code(file)).matchAll(
+      /\.(flyTo|easeTo|jumpTo|panTo|panBy|setCenter|setZoom|zoomTo|fitBounds|fitScreenCoordinates|setLngLat)\(/g
+    )) {
+      cameraCalls.push(`${file}: ${match[1]}`);
+    }
+  }
+  assert.deepEqual(cameraCalls.sort(), [
+    'src/map/locate-marker.ts: setLngLat',
+    'src/ui/locate-place.ts: fitBounds',
+    'src/ui/locate-place.ts: fitBounds'
+  ]);
   // Every frame goes through the one padding rule; the card only widens it.
   assert.match(await source('src/state/deep-link.ts'), /export function briefingCameraPadding\(/);
   assert.equal([...place.matchAll(/fitBounds\(/g)].length, 2);
