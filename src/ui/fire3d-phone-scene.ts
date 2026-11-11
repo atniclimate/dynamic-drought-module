@@ -88,6 +88,32 @@ const CARD_HEIGHT_PROPERTY = '--fire3d-card-h';
 /** Clear ground kept between the card and the pad, px. */
 const PAD_CLEARANCE_PX = 8;
 
+/** Locate's card (src/ui/locate-card.ts) and the cell that opened it (src/ui/locate-control.ts). */
+const LOCATE_CARD_ID = 'locate-card';
+const LOCATE_CELL_ID = 'locate-btn';
+/**
+ * On Locate's card while its seat would reach this card: it waits, hidden
+ * and never covered (src/styles/fire3d-phone.css).
+ */
+const LOCATE_WAITS_ATTRIBUTE = 'data-fire3d-waits';
+
+interface Seat {
+  readonly left: number;
+  readonly top: number;
+  readonly right: number;
+  readonly bottom: number;
+}
+
+/** Two seats come closer than the clearance, or cross. */
+function meets(a: Seat, b: Seat): boolean {
+  return (
+    a.left < b.right + PAD_CLEARANCE_PX &&
+    b.left < a.right + PAD_CLEARANCE_PX &&
+    a.top < b.bottom + PAD_CLEARANCE_PX &&
+    b.top < a.bottom + PAD_CLEARANCE_PX
+  );
+}
+
 /**
  * The status sentences, word for word the console control's own
  * (`statusLine` and `emptySmokeLine` in src/ui/island/fire3d-control.tsx;
@@ -420,6 +446,42 @@ export function createFire3DPhoneScene(map: maplibregl.Map, app: HTMLElement): F
   // -------------------------------------------------------------------------
   // Seats: the card under the key, the sheet under the card, the pad where it fits
   // -------------------------------------------------------------------------
+  /**
+   * Locate's card shares this phone (owner direction 2026-11-09 (sprint),
+   * DR-pending). It rides the map dock, above the credit and the scale
+   * rulers, so it moves with the sheet's top edge; this card holds the top
+   * of the map. Where the Locate card's seat would reach this card's
+   * clearance (the sheet at half on every phone, at peek on the shortest),
+   * it WAITS: hidden, so never covered and never reachable under this card,
+   * and back as soon as there is room (the sheet lowered, the 3D view left).
+   * Locate keeps working meanwhile: its cell stays lit, its marker stays,
+   * and its announcements are spoken. The seat is read from the layout
+   * boxes, not the painted ones: while the sheet travels, the dock's
+   * children carry a passing transform (src/ui/sheet-motion.ts), and the
+   * layout box is where they will stand. Returns the seat the Locate card
+   * stands in, or null when it is absent or waiting.
+   */
+  function seatLocateCard(cardBottom: number): Seat | null {
+    const locate = document.getElementById(LOCATE_CARD_ID);
+    const dock = locate?.parentElement ?? null;
+    if (!locate || !dock || locate.hidden) {
+      locate?.removeAttribute(LOCATE_WAITS_ATTRIBUTE);
+      return null;
+    }
+    const at = dock.getBoundingClientRect();
+    const top = at.top + locate.offsetTop;
+    const waits = top < cardBottom + PAD_CLEARANCE_PX;
+    if (waits !== locate.hasAttribute(LOCATE_WAITS_ATTRIBUTE)) {
+      // A card that waits under the focus hands it to the cell that opened it, as Locate itself does.
+      const held = waits && locate.contains(document.activeElement);
+      locate.toggleAttribute(LOCATE_WAITS_ATTRIBUTE, waits);
+      if (held) document.getElementById(LOCATE_CELL_ID)?.focus({ preventScroll: true });
+    }
+    if (waits) return null;
+    const left = at.left + locate.offsetLeft;
+    return { left, top, right: left + locate.offsetWidth, bottom: top + locate.offsetHeight };
+  }
+
   function layout(): void {
     frame = 0;
     if (!mounted) return;
@@ -444,11 +506,19 @@ export function createFire3DPhoneScene(map: maplibregl.Map, app: HTMLElement): F
       window.dispatchEvent(new CustomEvent('ddm:toggle-map-key-details'));
       return;
     }
+    const located = seatLocateCard(box.bottom);
     let show = live() && mapLeads && !keyOpen && !app.hasAttribute('data-map-info-open');
     if (show) {
       pad.hidden = false;
       // The pad's own seat (its layout box), not the box its entrance is still animating.
       show = pad.offsetTop >= box.bottom + PAD_CLEARANCE_PX;
+      // Locate's card on the map is a reading; the pad is a convenience the
+      // two-finger gestures also give. Where the two would meet, the pad waits.
+      if (show && located) {
+        const left = pad.offsetLeft;
+        const top = pad.offsetTop;
+        show = !meets({ left, top, right: left + pad.offsetWidth, bottom: top + pad.offsetHeight }, located);
+      }
     }
     if (pad.hidden !== !show) {
       const within = pad.contains(document.activeElement);
@@ -503,6 +573,9 @@ export function createFire3DPhoneScene(map: maplibregl.Map, app: HTMLElement): F
     if (typeof ResizeObserver === 'function') {
       cardObserver = new ResizeObserver(schedule);
       cardObserver.observe(card);
+      // The dock grows when Locate's card arrives or unfolds, and shrinks when it goes.
+      const dock = document.getElementById(LOCATE_CARD_ID)?.parentElement;
+      if (dock) cardObserver.observe(dock);
     }
     // The card's seat follows the key's measured height and the sheet's stop, both written on #app.
     appObserver = new MutationObserver(schedule);
@@ -527,6 +600,7 @@ export function createFire3DPhoneScene(map: maplibregl.Map, app: HTMLElement): F
     if (frame !== 0) window.cancelAnimationFrame(frame);
     frame = 0;
     card.remove();
+    document.getElementById(LOCATE_CARD_ID)?.removeAttribute(LOCATE_WAITS_ATTRIBUTE);
     app.removeAttribute(CARD_ATTRIBUTE);
     app.style.removeProperty(CARD_BOTTOM_PROPERTY);
     app.style.removeProperty(CARD_HEIGHT_PROPERTY);

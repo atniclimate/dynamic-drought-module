@@ -55,6 +55,34 @@
     }
   }
 
+  /* Locate's card rides the dock above the credit (src/styles/locate.css).
+     Where its seat would reach this card, src/ui/fire3d-phone-scene.ts
+     (`seatLocateCard`) marks it to wait: hidden, so it is never covered and
+     nothing under this card can be reached. Hidden keeps its box, so the
+     dock does not shift while it waits and the decision cannot flicker. */
+  #app[data-sheet-detent][data-fire3d-card] .locate-card[data-fire3d-waits] {
+    visibility: hidden;
+  }
+  /* Unfolded, it scrolls inside the room between this card and the
+     furniture under it, instead of growing up into this card and waiting:
+     90 px is the 8 px of air under this card, the 6 px gap and the 18 px
+     credit under Locate's card, and the 58 px the dock stands above the
+     sheet's edge. The 120 px floor is Locate's own (src/styles/locate.css). */
+  #app[data-sheet-detent][data-fire3d-card] .locate-card-plate {
+    max-height: max(
+      120px,
+      calc(100vh - var(--sheet-lift, 0px) - var(--fire3d-card-bottom, 76px) - 90px)
+    );
+  }
+  @supports (height: 1dvh) {
+    #app[data-sheet-detent][data-fire3d-card] .locate-card-plate {
+      max-height: max(
+        120px,
+        calc(100dvh - var(--sheet-lift, 0px) - var(--fire3d-card-bottom, 76px) - 90px)
+      );
+    }
+  }
+
   /* An open key drawer leaves the card its room above the credit and the
      scale rulers (and above the sheet at peek). The drawer scrolls inside
      what is left; src/ui/fire3d-phone-scene.ts closes it when a panel rises. */

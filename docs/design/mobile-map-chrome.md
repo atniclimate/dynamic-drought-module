@@ -172,8 +172,16 @@ enter the 3D Fire view, through one explicit control and on these terms.
   the same with one thumb: tilt up, tilt down, rotate left, rotate right,
   and a compass that shows which way the view faces and returns north-up at
   the opening tilt. The pad waits while a panel leads, while the key or Map
-  information is open, and wherever it would meet the card. Reduced motion
-  jumps. Camera state is presentation and is never written to the URL.
+  information is open, wherever it would meet the card, and wherever it
+  would meet Locate's card. Reduced motion jumps. Camera state is
+  presentation and is never written to the URL.
+- Locate's card rides the dock above the credit, so it moves with the
+  sheet's top edge while the 3D card holds the top of the map. Where its
+  seat would reach the 3D card (the sheet at half on every phone, at peek on
+  the shortest), it waits: hidden, never covered, and back as soon as there
+  is room. Locate keeps working meanwhile (the lit cell, the marker, the
+  spoken answer), and focus that was in the card goes to the Locate cell.
+  Unfolded, the card scrolls inside the room under the 3D card.
 - A phone that cannot hold the scene but was sent a `fire3d=true` link gets
   no cell and one sentence, once. The preference is kept, as it is on a
   short desktop window.

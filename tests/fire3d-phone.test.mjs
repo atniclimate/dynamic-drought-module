@@ -272,6 +272,30 @@ test('the phone stylesheet keeps the three design rules', () => {
   assert.match(css, /\.fire3d-card,\s*\.fire3d-pad\s*\{\s*display:\s*none;/);
 });
 
+test('Locate\'s card waits where it would meet the 3D card, and the pad waits for Locate\'s card', () => {
+  // Locate's card rides the map dock above the sheet's furniture; this card
+  // holds the top of the map. Where the two would meet, the Locate card is
+  // hidden (never covered, never reachable under the 3D card) and keeps its
+  // box, so the decision cannot flicker; the pad, a convenience the
+  // gestures also give, steps aside for Locate's reading.
+  const scene = read('src/ui/fire3d-phone-scene.ts');
+  const css = read('src/styles/fire3d-phone.css').replace(/\/\*[\s\S]*?\*\//g, '');
+  const attribute = scene.match(/const LOCATE_WAITS_ATTRIBUTE = '([a-z0-9-]+)';/)?.[1];
+  assert.ok(attribute, 'the scene names the attribute it sets');
+  assert.match(scene, /const LOCATE_CARD_ID = 'locate-card';/);
+  assert.match(read('src/ui/locate-card.ts'), /card\.id = 'locate-card';/, 'the id is Locate\'s own');
+  assert.match(scene, /const LOCATE_CELL_ID = 'locate-btn';/);
+  assert.match(read('src/ui/locate-control.ts'), /'locate-btn'/, 'focus goes back to the cell Locate itself uses');
+  const rule = new RegExp(`#app\\[data-sheet-detent\\]\\[data-fire3d-card\\] \\.locate-card\\[${attribute}\\]\\s*\\{\\s*visibility:\\s*hidden;\\s*\\}`);
+  assert.match(css, rule, 'waiting is hidden, not display:none, so the box stays');
+  // The attribute is cleared when the 3D card leaves, so it never outlives the reason.
+  assert.match(scene, /removeAttribute\(LOCATE_WAITS_ATTRIBUTE\)[\s\S]*app\.removeAttribute\(CARD_ATTRIBUTE\)/);
+  // The pad's test against Locate's card uses the same clearance as against the 3D card.
+  assert.match(scene, /show = !meets\(/);
+  // Unfolded, Locate's plate scrolls under this card instead of growing into it.
+  assert.match(css, /\[data-fire3d-card\] \.locate-card-plate\s*\{\s*max-height:/);
+});
+
 // ---------------------------------------------------------------------------
 // What stands where the 3D cell would be
 // ---------------------------------------------------------------------------
