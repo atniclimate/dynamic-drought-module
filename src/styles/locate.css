@@ -1,0 +1,520 @@
+/* =============================================================================
+   Locate: the card, the marker and the cell's busy face (owner direction
+   2026-11-09 (sprint), DR-pending). Loaded with src/ui/locate-runtime.ts on
+   the first press of the Locate cell or the first eligible launch; nothing
+   here is in the boot stylesheet.
+
+   ONE FIGURE, THREE SIZES. A person standing in a ring is the cell's glyph,
+   the head of the card and the marker on the map. The ring carries the state
+   in all three: solid for a good fix, dashed for an approximate one, turning
+   while the device is read, struck when the search stopped.
+
+   Ink on rich-black glass, and nothing else: no hue, so the marker can never
+   be read as a hazard and never as the blue dot. Corners come from the tight
+   tokens (the glass body `--glass-radius`, the controls inside it
+   `--radius-md`); a control that is on inverts; every button has the same
+   outline on all four sides. Motion is transform and opacity only, and each
+   animation has a reduced-motion twin at the end of this file.
+   ============================================================================= */
+
+/* The card exists only inside the phone shell, like the cell that opens it. */
+.locate-card {
+  display: none;
+}
+
+@media (max-width: 720px) {
+  #app[data-sheet-detent] .locate-card:not([hidden]) {
+    display: block;
+    /* Beside the column, where the Locate cell is. */
+    align-self: flex-end;
+    width: min(100%, 360px);
+  }
+
+  /* -----------------------------------------------------------------------
+     The plate: the glass. The outer element belongs to the dock and to the
+     sheet's motion; nothing animates it.
+     ----------------------------------------------------------------------- */
+  .locate-card-plate {
+    /* Never taller than the map band it stands in: above the sheet's top
+       edge and the furniture on it, below the key chip. A longer body
+       scrolls inside the glass. */
+    max-height: max(120px, calc(100vh - var(--sheet-lift, 0px) - 168px));
+    overflow: hidden auto;
+    overscroll-behavior: contain;
+    border: 1px solid var(--glass-edge);
+    border-radius: var(--glass-radius);
+    background: var(--glass-panel-solid);
+    box-shadow:
+      inset 0 1px 0 var(--glass-sheen),
+      var(--glass-shadow);
+    color: var(--ink);
+    transform-origin: 100% 100%;
+  }
+  .locate-card-arriving {
+    animation: locate-card-settle var(--dur-settle) var(--ease-spring) both;
+  }
+
+  /* -----------------------------------------------------------------------
+     The head: the figure, the claim and its qualification, and the tools.
+     ----------------------------------------------------------------------- */
+  .locate-card-head {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 8px 4px 8px 12px;
+  }
+  .locate-figure {
+    flex: none;
+    width: 32px;
+    height: 32px;
+    margin-top: 4px;
+    overflow: visible;
+  }
+  .locate-card-reading {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 5px 0 4px;
+  }
+  .locate-card-title {
+    margin: 0;
+    color: var(--ink-strong);
+    font-family: var(--font-display);
+    font-size: 15px;
+    font-weight: var(--fw-title);
+    letter-spacing: var(--track-display);
+    line-height: 1.25;
+    overflow-wrap: break-word;
+  }
+  /* The title takes focus when an answer lands; it is not a control. */
+  .locate-card-title:focus {
+    outline: none;
+  }
+  .locate-card-title:focus-visible {
+    box-shadow: none;
+    text-decoration: underline;
+    text-decoration-thickness: 2px;
+    text-underline-offset: 3px;
+  }
+  .locate-card-line {
+    margin: 3px 0 0;
+    color: var(--ink-soft);
+    font-family: var(--font-body);
+    font-size: 12.5px;
+    line-height: 1.4;
+  }
+
+  /* The two tools share the sheet's close control's face: a 44 px target
+     with a small tight plate inside it. */
+  .locate-card-tool {
+    appearance: none;
+    position: relative;
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: var(--touch-target);
+    height: var(--touch-target);
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: var(--ink-soft);
+    cursor: pointer;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .locate-card-tool[hidden] {
+    display: none;
+  }
+  .locate-card-tool + .locate-card-tool {
+    margin-left: -10px;
+  }
+  .locate-card-tool::before {
+    content: '';
+    position: absolute;
+    inset: 7px;
+    border-radius: var(--radius-md);
+    background: var(--glass-press);
+    opacity: 0.55;
+    transition: opacity var(--dur-micro) var(--ease-standard);
+  }
+  .locate-card-tool:active::before {
+    opacity: 1;
+  }
+  .locate-card-tool svg {
+    position: relative;
+    transition: transform var(--dur-fast) var(--ease-standard);
+  }
+  .locate-card-tool:focus-visible {
+    outline-offset: -5px;
+    box-shadow: inset 0 0 0 5px var(--focus-outer);
+  }
+  /* SELECTED INVERTS: the fold is on while the body is open. */
+  .locate-card-fold[aria-expanded='true'] {
+    color: var(--ink-on-selected);
+  }
+  .locate-card-fold[aria-expanded='true']::before {
+    background: var(--face-selected);
+    opacity: 1;
+  }
+  .locate-card-fold[aria-expanded='true'] svg {
+    transform: rotate(180deg);
+  }
+  .locate-card-fold[aria-expanded='true']:focus-visible {
+    box-shadow:
+      inset 0 0 0 5px var(--focus-outer),
+      inset 0 0 0 9px var(--face-selected);
+  }
+
+  /* -----------------------------------------------------------------------
+     The figure's faces. `data-tone` is the plate's.
+     ----------------------------------------------------------------------- */
+  .locate-figure-ring {
+    fill: none;
+    stroke: var(--ink);
+    stroke-width: 2;
+    transform-box: fill-box;
+    transform-origin: center;
+  }
+  .locate-figure-badge {
+    fill: var(--surface-base);
+    stroke: var(--ink);
+    stroke-width: 1.5;
+  }
+  .locate-figure-person {
+    fill: var(--ink-strong);
+  }
+  .locate-figure-strike {
+    display: none;
+    fill: none;
+    stroke: var(--ink-strong);
+    stroke-width: 2.5;
+    stroke-linecap: round;
+  }
+  [data-tone='offer'] .locate-figure-ring {
+    stroke: var(--ink-soft);
+    stroke-width: 1.5;
+  }
+  [data-tone='approximate'] .locate-figure-ring {
+    stroke-dasharray: 5.2 3.8;
+  }
+  [data-tone='busy'] .locate-figure-ring {
+    /* An open ring, turning: the device is being read. */
+    stroke-dasharray: 84 30;
+    stroke-linecap: round;
+    animation: locate-turn 1400ms linear infinite;
+  }
+  [data-tone='stopped'] :is(.locate-figure-ring, .locate-figure-badge, .locate-figure-person) {
+    opacity: 0.5;
+  }
+  [data-tone='stopped'] .locate-figure-strike {
+    display: block;
+  }
+
+  /* -----------------------------------------------------------------------
+     The time bound: a hairline that empties over the stated twelve seconds.
+     ----------------------------------------------------------------------- */
+  .locate-card-bound {
+    height: 2px;
+    margin: 0 12px;
+    background: var(--glass-hairline);
+  }
+  .locate-card-bound[hidden] {
+    display: none;
+  }
+  .locate-card-bound span {
+    display: block;
+    height: 100%;
+    background: var(--ink);
+    transform-origin: 0 50%;
+    animation: locate-bound linear both;
+  }
+
+  /* -----------------------------------------------------------------------
+     The body: what the person can do next, and the lines that qualify it.
+     ----------------------------------------------------------------------- */
+  .locate-card-body {
+    display: grid;
+    gap: 8px;
+    margin: 0 12px;
+    padding: 10px 0 12px;
+    border-top: 1px solid var(--glass-hairline);
+  }
+  .locate-card-bound:not([hidden]) + .locate-card-body {
+    border-top: 0;
+  }
+  .locate-card-body[hidden] {
+    display: none;
+  }
+  .locate-card-text {
+    margin: 0;
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 12.5px;
+    line-height: 1.45;
+  }
+  .locate-card-note,
+  .locate-card-caveat {
+    color: var(--ink-soft);
+  }
+  .locate-card-caveat {
+    padding-left: 9px;
+    border-left: 1px solid var(--glass-edge);
+  }
+
+  .locate-card-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .locate-card-action {
+    appearance: none;
+    flex: 1 1 auto;
+    min-height: var(--touch-target);
+    margin: 0;
+    padding: 6px 14px;
+    border: 1px solid var(--glass-edge);
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: var(--ink);
+    font-family: var(--font-display);
+    font-size: 13px;
+    font-weight: var(--fw-subtitle);
+    letter-spacing: 0;
+    line-height: 1.2;
+    cursor: pointer;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    transition: background-color var(--dur-micro) var(--ease-standard);
+  }
+  /* The step the card recommends: a firmer outline and a lifted face. It is
+     not the selected face, which is kept for a control that is on. */
+  .locate-card-action-primary {
+    border-color: var(--keyline);
+    background: var(--glass-press);
+    color: var(--ink-strong);
+    font-weight: var(--fw-strong);
+  }
+  .locate-card-action:active {
+    background: color-mix(in srgb, var(--ink-strong) 26%, transparent);
+  }
+  @media (hover: hover) {
+    .locate-card-action:hover {
+      background: color-mix(in srgb, var(--ink-strong) 22%, transparent);
+    }
+  }
+
+  /* The launch option: a real checkbox behind a 44 px row. Checked, its box
+     inverts like every control that is on. */
+  .locate-card-check {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: var(--touch-target);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .locate-card-check input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: 0;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .locate-card-check-box {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border: 1px solid var(--keyline);
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: transparent;
+  }
+  .locate-card-check input:checked + .locate-card-check-box {
+    border-color: var(--face-selected);
+    background: var(--face-selected);
+    color: var(--ink-on-selected);
+  }
+  .locate-card-check input:focus-visible + .locate-card-check-box {
+    outline: 2px solid var(--focus-inner);
+    box-shadow: 0 0 0 4px var(--focus-outer);
+  }
+  .locate-card-check input:checked:focus-visible + .locate-card-check-box {
+    box-shadow:
+      0 0 0 4px var(--focus-outer),
+      var(--selected-focus-inset);
+  }
+  .locate-card-check-words {
+    display: grid;
+    gap: 1px;
+    min-width: 0;
+  }
+  .locate-card-check-label {
+    color: var(--ink-strong);
+    font-family: var(--font-body);
+    font-size: 13px;
+    font-weight: var(--fw-strong);
+    line-height: 1.3;
+  }
+  .locate-card-check-hint {
+    color: var(--ink-soft);
+    font-family: var(--font-body);
+    font-size: 12px;
+    line-height: 1.35;
+  }
+
+  /* On the narrowest phones the claim needs the figure's room. */
+  @media (max-width: 340px) {
+    .locate-figure {
+      display: none;
+    }
+  }
+
+  /* -----------------------------------------------------------------------
+     The cell while the device is being read: the ring opens and the glyph
+     breathes. Pressed, the cell inverts through the column's own rule.
+     ----------------------------------------------------------------------- */
+  #locate-btn[aria-busy='true'] .locate-ring {
+    stroke-dasharray: 2.6 2.8;
+  }
+  #locate-btn[aria-busy='true'] svg {
+    animation: locate-busy 900ms var(--ease-standard) infinite alternate;
+  }
+}
+
+@supports (height: 1dvh) {
+  @media (max-width: 720px) {
+    .locate-card-plate {
+      max-height: max(120px, calc(100dvh - var(--sheet-lift, 0px) - 168px));
+    }
+  }
+}
+
+/* Real glass where the browser can blur what is behind it. */
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  @media (max-width: 720px) {
+    .locate-card-plate {
+      background: var(--glass-panel);
+      -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+      backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+    }
+  }
+}
+
+/* =============================================================================
+   The marker. The foot's centre is the reported point; the ring around it is
+   a map layer in true ground metres (src/map/locate-marker.ts). The marker
+   takes no press: a tap on it reaches the map underneath.
+   ============================================================================= */
+.locate-marker {
+  width: 34px;
+  height: 52px;
+  pointer-events: none;
+}
+.locate-marker-figure {
+  display: block;
+  overflow: visible;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.5));
+  transform-origin: 17px 46px;
+}
+.locate-marker-halo,
+.locate-marker-ink {
+  fill: var(--ink-strong);
+}
+.locate-marker-badge {
+  fill: var(--surface-base);
+}
+.locate-marker-stem-casing {
+  fill: none;
+  stroke: var(--ink-strong);
+  stroke-width: 5;
+  stroke-linecap: round;
+}
+.locate-marker-stem {
+  fill: none;
+  stroke: var(--surface-base);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+}
+/* A good fix stands on a solid foot; an approximate one on a hollow foot. */
+.locate-marker-foot {
+  fill: var(--ink-strong);
+  stroke: var(--surface-base);
+  stroke-width: 2;
+}
+.locate-marker[data-approximate] .locate-marker-foot {
+  fill: var(--surface-base);
+  stroke: var(--ink-strong);
+}
+.locate-marker[data-arriving] .locate-marker-figure {
+  animation: locate-marker-settle var(--dur-settle) var(--ease-spring) both;
+}
+
+@keyframes locate-card-settle {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 10px, 0) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes locate-marker-settle {
+  from {
+    opacity: 0;
+    transform: translate3d(0, -16px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes locate-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes locate-bound {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+@keyframes locate-busy {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.45;
+  }
+}
+
+/* The same end states, with no travel: the card and the marker are simply
+   there, the open ring stands still, and the words carry the time bound. */
+@media (prefers-reduced-motion: reduce) {
+  .locate-card-arriving,
+  .locate-marker[data-arriving] .locate-marker-figure,
+  [data-tone='busy'] .locate-figure-ring,
+  #locate-btn[aria-busy='true'] svg {
+    animation: none;
+  }
+  /* The hairline stays as a rule; nothing empties. */
+  .locate-card-bound span {
+    animation: none;
+    transform: scaleX(0);
+  }
+  .locate-card-tool::before,
+  .locate-card-tool svg,
+  .locate-card-action {
+    transition: none;
+  }
+}

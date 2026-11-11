@@ -4,7 +4,9 @@ import test from 'node:test';
 
 /**
  * Locate's pure core (owner direction 2026-11-09 (sprint), DR-pending):
- * src/state/geolocate.ts and src/state/locate-preference.ts.
+ * src/state/geolocate.ts and src/state/locate-preference.ts, and the rules
+ * the rest of the lane's modules are held to as text (no storage, no URL,
+ * no request of their own).
  *
  * The person's point is the most sensitive value this application holds, so
  * the rules that protect it are proven here without a browser: a late answer
@@ -282,13 +284,21 @@ test('the launch preference is the word yes or no, and storage failure is surviv
   assert.equal(pref.writeLaunchPreference('yes', refuses), false);
 });
 
+const LOCATE_MODULES = [
+  'src/state/geolocate.ts',
+  'src/state/locate-preference.ts',
+  'src/ui/locate-control.ts',
+  'src/ui/locate-runtime.ts',
+  'src/ui/locate-card.ts',
+  'src/ui/locate-place.ts',
+  'src/map/locate-marker.ts'
+];
+const code = async (file) =>
+  (await source(file)).replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+
 test('no Locate module writes anything but the preference, and none builds a URL from the point', async () => {
-  const files = [
-    'src/state/geolocate.ts',
-    'src/state/locate-preference.ts'
-  ];
-  for (const file of files) {
-    const text = (await source(file)).replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+  for (const file of LOCATE_MODULES) {
+    const text = await code(file);
     const storageWrites = text.match(/\b(?:localStorage|sessionStorage|indexedDB)\b|document\.cookie|\.setItem\(/g) ?? [];
     if (file === 'src/state/locate-preference.ts') {
       assert.deepEqual(storageWrites.sort(), ['.setItem(', 'localStorage'], file);
@@ -296,9 +306,53 @@ test('no Locate module writes anything but the preference, and none builds a URL
       assert.deepEqual(storageWrites, [], `${file} touches storage`);
     }
     // The point never enters history, a link or a request built here.
-    assert.doesNotMatch(text, /history\.(pushState|replaceState)|replaceQuery|syncUrl/, `${file} writes the URL`);
-    assert.doesNotMatch(text, /\bfetch\(|XMLHttpRequest|sendBeacon|new WebSocket|new Image\(/, `${file} opens a request of its own`);
+    assert.doesNotMatch(text, /history\.(pushState|replaceState)|replaceQuery|syncUrl|location\.(href|search|hash|assign|replace)/, `${file} writes the URL`);
+    assert.doesNotMatch(text, /\bfetch\(|XMLHttpRequest|sendBeacon|new WebSocket|new Image\(|navigator\.share|clipboard/, `${file} opens a request of its own`);
+    assert.doesNotMatch(text, /URLSearchParams|encodeURIComponent|new URL\(/, `${file} builds a URL`);
   }
+  // The one read the lane starts is the bundled state outlines: a same-origin file, no parameters.
+  const reads = [];
+  for (const file of LOCATE_MODULES) {
+    for (const match of (await code(file)).matchAll(/\b(fetch[A-Za-z]*)\(\s*([^)]*?)\)/g)) reads.push(`${file}: ${match[1]}`);
+  }
+  assert.deepEqual(reads, ['src/ui/locate-place.ts: fetchSharedJsonWithBudget']);
+  assert.match(await code('src/ui/locate-place.ts'), /fetchSharedJsonWithBudget\(\s*US_STATES_SHARED_KEY,\s*BOOT_URLS\.usStatesLocal,\s*null,/);
+  // Only the preference module is asked to store, and only the two words.
+  const writes = [];
+  for (const file of LOCATE_MODULES) {
+    for (const match of (await code(file)).matchAll(/writeLaunchPreference\(([^)]*)\)/g)) writes.push(match[1].trim());
+  }
+  assert.ok(writes.length > 0);
+  for (const argument of writes) assert.match(argument, /^(value|'yes'|'no')\b/, argument);
+});
+
+test('a briefing is opened for the place, never at the position', async () => {
+  const place = await code('src/ui/locate-place.ts');
+  // The state path hands over a code and nothing else; the opener takes the state's own point.
+  assert.match(place, /openStateBriefing\(map, state\.code, \{/);
+  // The Tribal path reads at a point of the area's geometry and says so.
+  assert.match(place, /representativePoint\(geometry, bbox\)/);
+  assert.match(place, /pointInsidePlace: true/);
+  // The fix is used for exactly three things there: the local test, the square and the disc.
+  const uses = [...place.matchAll(/\bfix\.(lng|lat|accuracy)\b/g)].length;
+  const allowed = [...place.matchAll(/(?:coarseCell|discInsideEnvelope)\(fix\.lng, fix\.lat[^)]*\)/g)]
+    .map((match) => [...match[0].matchAll(/\bfix\.(lng|lat|accuracy)\b/g)].length)
+    .reduce((a, b) => a + b, 0);
+  assert.equal(uses, allowed, 'locate-place.ts reads the position somewhere this test does not know');
+  // Every frame goes through the one padding rule; the card only widens it.
+  assert.match(await source('src/state/deep-link.ts'), /export function briefingCameraPadding\(/);
+  assert.equal([...place.matchAll(/fitBounds\(/g)].length, 2);
+  assert.match(place, /clearOfCard\(briefingCameraPadding\(/);
+  assert.match(place, /padding: clearOfCard\b/);
+});
+
+test('the dock seat the card-aware padding assumes is the stylesheets\' own', async () => {
+  const px = (text, name) => Number(new RegExp(`${name}:\\s*(\\d+)px`).exec(text)?.[1]);
+  const panels = await source('src/styles/mobile-panels.css');
+  const app = await source('src/styles/app.css');
+  const seat = px(app, '--mobile-map-edge') + px(panels, '--mobile-scale-block') + px(panels, '--sheet-rider-gap');
+  assert.equal(seat, 58);
+  assert.match(await source('src/ui/locate-place.ts'), new RegExp(`DOCK_SEAT_PX = ${seat};`));
 });
 
 // ---------------------------------------------------------------------------

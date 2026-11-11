@@ -82,7 +82,7 @@ const FETCH_TIMEOUT_MS = 10_000;
  *   still covers the lower viewport, so the pre-U2 transient bottom pad
  *   stays; with no overlay coming, aesthetic margins only.
  */
-function briefingCameraPadding(panelWillOpen: boolean): maplibregl.PaddingOptions {
+export function briefingCameraPadding(panelWillOpen: boolean): maplibregl.PaddingOptions {
   const mobile = window.matchMedia('(max-width: 720px)').matches;
   if (mobile && isSheetActive()) {
     return {
@@ -177,6 +177,12 @@ export async function openStateBriefing(
      * open-the-briefing requests.
      */
     summaryFirst?: boolean;
+    /**
+     * Widen the fit for chrome only the caller knows is over the map
+     * (Locate's card rides above the sheet). It is handed the panel-aware
+     * padding and returns the padding to use; it never replaces the rule.
+     */
+    padding?: (base: maplibregl.PaddingOptions) => maplibregl.PaddingOptions;
   } = {}
 ): Promise<void> {
   let feature: Feature | undefined;
@@ -274,8 +280,9 @@ export async function openStateBriefing(
   // Mobile full panels leave the map visible, so every requested fit still
   // frames the selected geometry behind the glass surface.
   if (opts.fit && bbox) {
+    const padding = briefingCameraPadding(panelWillOpen);
     map.fitBounds(bboxToContinuousBounds(bbox), {
-      padding: briefingCameraPadding(panelWillOpen)
+      padding: opts.padding ? opts.padding(padding) : padding
     });
   }
 
