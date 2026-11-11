@@ -28,6 +28,8 @@ import { selectBriefNarrativeLine } from '../impact/brief-narrative-selector';
 import { getViewMode, setViewMode } from '../state/view-mode';
 import { escapeHtml } from '../util/escape';
 import { TRIBAL_NATIONS_GROUP } from '../config/layer-groups';
+import { getPlaceSelection, onPlaceSelectionChange } from '../state/place-selection';
+import type { PlaceSelection } from '../state/place-selection';
 import { enterPlaceStudio } from '../state/studio-route';
 import {
   toggleTribalNationsGroup,
@@ -354,25 +356,57 @@ function currentHeadline(briefing: ImpactBriefing): string | null {
   return selectBriefNarrativeLine(briefing);
 }
 
+/**
+ * A place that is selected on the map with no briefing read for it yet
+ * (shown from the Place studio, or chosen while the console view was up).
+ * The at-hand block names it and its one door opens the briefing, so the
+ * sheet never says "Pick a place" under a map that marks one (owner
+ * direction 2026-11-09 (sprint), DR-pending).
+ */
+function selectedWithoutBriefing(): PlaceSelection | null {
+  return sheetBriefing === null ? getPlaceSelection() : null;
+}
+
+/**
+ * Opens the briefing of a selected place. Set by the briefing's own module
+ * (src/ui/impact-panel.ts), which imports this one; the reverse import
+ * would close a cycle.
+ */
+let openSelectedBriefing: ((selection: PlaceSelection) => void) | null = null;
+
+/** Register the opener the at-hand door uses for a selected place with no briefing yet. */
+export function setSheetBriefingOpener(open: (selection: PlaceSelection) => void): void {
+  openSelectedBriefing = open;
+}
+
 function updateAtHandActions(): void {
   const hasBriefing = sheetBriefing !== null;
+  const offersBriefing = hasBriefing || selectedWithoutBriefing() !== null;
   document
     .getElementById('sheet-at-hand-actions')
-    ?.classList.toggle('has-briefing', hasBriefing);
+    ?.classList.toggle('has-briefing', offersBriefing);
   const reportDoor = document.getElementById('sheet-report-door');
-  if (reportDoor) reportDoor.hidden = !hasBriefing;
+  if (!reportDoor) return;
+  reportDoor.hidden = !offersBriefing;
+  // One door, named for what it does next: the report of a briefing that is
+  // read, or the briefing of a place that is only selected.
+  const word = hasBriefing || !offersBriefing ? 'Read the full report' : 'Open briefing';
+  if (reportDoor.textContent !== word) reportDoor.textContent = word;
 }
 
 function renderAtHand(): void {
   updateAtHandActions();
   if (!atHandBodyEl) return;
   const briefing = sheetBriefing;
-  const title = briefing ? briefing.landTitle : 'Pick a place';
+  const selected = selectedWithoutBriefing();
+  const title = briefing ? briefing.landTitle : selected ? selected.label : 'Pick a place';
   const kind = briefing ? briefing.landKind : '';
   const headline = briefing ? currentHeadline(briefing) : null;
   const headlineHtml = headline
     ? `<p class="sheet-at-hand-headline">${escapeHtml(headline)}</p>`
-    : `<p class="sheet-at-hand-headline sheet-at-hand-headline-empty">Open the full report for sourced conditions, outlooks, and resources.</p>`;
+    : selected
+      ? `<p class="sheet-at-hand-headline sheet-at-hand-headline-empty">Selected on the map. Open its briefing for sourced conditions, outlooks, and resources.</p>`
+      : `<p class="sheet-at-hand-headline sheet-at-hand-headline-empty">Open the full report for sourced conditions, outlooks, and resources.</p>`;
 
   // Only the dynamic read is rebuilt here; the search and the report door
   // are stable siblings (see initMobileSheet), so a briefing push never
@@ -729,7 +763,19 @@ export function initMobileSheet(
   // The Brief half detent's one door to the standalone report (stable DOM
   // now, so it is wired once here rather than on every renderAtHand()).
   document.getElementById('sheet-report-door')?.addEventListener('click', () => {
+    // A place that is only selected has no report to rise to: the door
+    // opens its briefing, which answers in this block first.
+    const selected = selectedWithoutBriefing();
+    if (selected) {
+      openSelectedBriefing?.(selected);
+      return;
+    }
     setSheetDetent('full');
+  });
+  // The block names the selected place as soon as there is one, and lets go
+  // of it when the selection is cleared.
+  onPlaceSelectionChange(() => {
+    if (sheetBriefing === null) renderAtHand();
   });
 
   // Nothing takes focus where it cannot be seen. Peek shows only the first
