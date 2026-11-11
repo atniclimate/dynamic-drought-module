@@ -228,10 +228,17 @@ test('the scene and the phone chrome stay behind dynamic imports', () => {
   );
 });
 
-test('the phone press commits the Wildfire view and does not touch the basemap', () => {
+test('the phone press commits the Wildfire view and leaves the basemap to the scene\'s own hold', () => {
   const cell = read('src/ui/fire3d-phone.ts').replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '');
   assert.match(cell, /requestCluster\('wildfire'\)/);
-  assert.doesNotMatch(cell, /basemap/i);
+  // DR-105 (src/map/basemap-switcher.ts, holdSatellite): the store keeps the
+  // visitor's choice and releasing the hold brings the imagery back. A press
+  // that reset the basemap would leave the phone's Fire view without the
+  // imagery it opened on once the scene left.
+  assert.doesNotMatch(cell, /requestBasemapMode|setBasemapMode|defaultBasemapFor|basemap-switcher|basemap-store/);
+  const switcher = read('src/map/basemap-switcher.ts');
+  assert.match(switcher, /export function holdSatellite\(/);
+  assert.match(read('src/map/fire3d.ts'), /holdSatellite\(map, status\.state === 'checking' \|\| status\.state === 'active'\)/);
 });
 
 test('the phone stylesheet keeps the three design rules', () => {
@@ -489,6 +496,13 @@ test('a phone-width embed never loads the 3D chunks at boot', async () => {
   // Leaving the embed is covered by the 3D cell's chrome, which starts the controller itself.
   const chrome = await readFile(new URL('../src/ui/fire3d-phone-scene.ts', import.meta.url), 'utf8');
   assert.match(chrome, /controller\.initFire3DController\(map\);/);
+  // The boot's imagery hold (DR-105) is released only by that controller, so it is taken by the
+  // same rule: a phone-width embed must never hold the imagery with no controller to let it go.
+  const sidebar = await readFile(new URL('../src/ui/sidebar.ts', import.meta.url), 'utf8');
+  assert.match(
+    sidebar,
+    /fire3d &&\s*window\.matchMedia\(FIRE3D_CHUNK_WIDTH_QUERY\)\.matches &&\s*\(window\.matchMedia\(SIDEBAR_DESKTOP_QUERY\)\.matches \|\| !params\.embed\)\s*\) \{\s*holdSatellite\(map, true\);/
+  );
 });
 
 // Review finding R2-5, measured on the sprint camera: a phone link that opens

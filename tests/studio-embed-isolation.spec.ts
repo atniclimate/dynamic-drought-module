@@ -3,6 +3,7 @@ import { expect, test, type Locator, type Page } from './offline-test';
 import { FRAMINGS, type FramingKey } from '../src/config/framings';
 import { gotoApp } from './helpers';
 import { AIANNH_ROUTE, BIA_ROUTE, emptyCollectionBody, routeGeojson } from './tribal-fixtures';
+import { stubRecentSatellite } from './satellite-fixture';
 
 type Box = NonNullable<Awaited<ReturnType<Locator['boundingBox']>>>;
 
@@ -30,6 +31,7 @@ async function stubEmbedDependencies(page: Page): Promise<void> {
       body: JSON.stringify({ type: 'FeatureCollection', features: [] })
     })
   );
+  await stubRecentSatellite(page);
   await page.route('**/gibs.earthdata.nasa.gov/**', (route) =>
     route.fulfill({ status: 503, contentType: 'text/plain', body: 'Synthetic offline response' })
   );
@@ -64,7 +66,7 @@ test.describe('studio embed isolation at 400x600', () => {
         page,
         `?embed=true&view=brief&${scenario.durable}` +
           `&week=20240702&dmode=chg1&sst=2024-07-01&outlook=monthly` +
-          `&studio=${scenario.studio}#studio-state`
+          `&basemap=satellite&studio=${scenario.studio}#studio-state`
       );
 
       await expect(page.locator('#place-studio-root')).toHaveCount(0);
@@ -121,6 +123,7 @@ test.describe('studio embed isolation at 400x600', () => {
         expect(href.searchParams.get('dmode')).toBe('chg1');
         expect(href.searchParams.get('sst')).toBe('2024-07-01');
         expect(href.searchParams.get('outlook')).toBe('monthly');
+        expect(href.searchParams.get('basemap')).toBeNull();
         // No hash assertion: URL fragments are not part of the ruled DDM
         // URL schema (URL-as-state rides the query string), and syncUrl
         // canonicalizes to pathname + query by design. The lane's original

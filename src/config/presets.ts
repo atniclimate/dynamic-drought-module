@@ -10,7 +10,7 @@ import type { LayerKey } from './layers';
  * activation and deactivation paths a manual toggle takes, so the registry,
  * URL sync, and status pills stay honest) and then leaves the user free to
  * adjust: presets set state without locking it. There is no preset
- * parameter, only the granular `layers` state the
+ * parameter, only the granular `layers` and the optional `basemap` state the
  * preset produces. A preset leaves the committed horizon where it is unless
  * its mode declares an entry horizon (`mode` below).
  *
@@ -53,6 +53,8 @@ export interface ViewPreset {
   readonly label: string;
   /** Tooltip / accessible description of the question the preset answers. */
   readonly description: string;
+  /** Basemap requested only by an explicit click on this preset. */
+  readonly preferredBasemap?: 'satellite';
   /** The mode this preset is the phone face of; a press commits that mode's
    * `entryHorizon` when it declares one (an entry into ENSO opens on its
    * Season ahead outlook), undoes a horizon an earlier preset's entry imposed
@@ -106,7 +108,8 @@ export const MOBILE_HAZARD_PRESETS: readonly ViewPreset[] = [
     key: 'hazard-fire',
     label: 'Fire',
     mode: 'wildfire',
-    description: 'Wildfire: the SPC fire-weather outlook with current mapped fire perimeters, including Wildfire and Prescribed fire, plus independently timed NOAA Hazard Mapping System (HMS) smoke plumes',
+    description: 'Wildfire: recent NOAA GOES GeoColor context; the SPC fire-weather outlook with current mapped fire perimeters, including Wildfire and Prescribed fire, plus independently timed NOAA Hazard Mapping System (HMS) smoke plumes',
+    preferredBasemap: 'satellite',
     // hms-smoke is named explicitly (maintainer ruling 2026-07-15): a fire
     // view without smoke is not the full read. Naming it is now the only way
     // the preset brings smoke in: applyPreset takes the non-cascading path,

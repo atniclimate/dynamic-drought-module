@@ -592,9 +592,9 @@ function briefingIncidentTypes(
  * inside it). */
 const WASHINGTON_BRIEFING_BBOX = leafletBoundsToMapLibre(REGIONS.washington_state.bounds);
 
-/** Every live briefing lane besides NIFC and the hosts `gotoApp`
- * already stubs unconditionally (SPC Day 1-8, CPC seasonal temperature, and
- * the boundary/minimap-analysis fixtures): USDM, NWS
+/** Every live briefing lane besides NIFC and the four hosts `gotoApp`
+ * already stubs unconditionally (SPC Day 1-8, CPC seasonal temperature, the
+ * recent satellite, and the boundary/minimap-analysis fixtures): USDM, NWS
  * active alerts, and the Worker resource proxy (waterSupply and friends).
  * Matches `tests/briefing-matrix.spec.ts`'s own `stubBaselineBriefingHosts`,
  * restated rather than imported (that helper is private to that file). */

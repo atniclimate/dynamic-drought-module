@@ -173,7 +173,8 @@ test('the arrangement is the largest one with everything displayed, in the docum
 
 /** Every mode the conditional table names, plus one it does not (a mode that seats nothing extra). */
 const MODES = [...new Set(['drought', ...EDGE_CONDITIONAL_SEATS.flatMap((seat) => seat.modes)])];
-const ALWAYS = { utility: 3, panels: 4, hazards: 4, view: 1 };
+// The view tools every mode shows: SAT and Locate.
+const ALWAYS = { utility: 3, panels: 4, hazards: 4, view: 2 };
 
 /** The demand a phone shows in `mode`: the always-present cells plus that mode's own seats. */
 function demandFor(mode, { reserve }) {

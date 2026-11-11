@@ -32,12 +32,13 @@ export const STUBBED_HOSTS = Object.freeze([
 ]);
 
 /** Tile paths stubbed on hosts that also serve a metadata query the runtime
- * needs answered honestly: a tile path listed here is blanked while the same
- * host's queries go upstream and are measured on the ambient-boot row. No
- * entry is needed today (every stubbed tile host is in STUBBED_HOSTS); the
- * list stays so the route and classifier code paths keep working. Playwright
- * glob per entry. */
-export const STUBBED_TILE_GLOBS = Object.freeze([]);
+ * needs answered honestly: the GOES GeoColor ImageServer's `exportImage`
+ * tiles are blanked, while its `/query` (the frame catalog the recent
+ * satellite basemap reads on every boot) goes upstream and is measured on
+ * the ambient-boot row. Playwright glob per entry. */
+export const STUBBED_TILE_GLOBS = Object.freeze([
+  'https://satellitemaps.nesdis.noaa.gov/**/exportImage**',
+]);
 
 const STUBBED_TILE_MATCHERS = STUBBED_TILE_GLOBS.map((glob) => {
   const u = new URL(glob.replace(/\*+/g, 'STAR'));

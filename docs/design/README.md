@@ -87,16 +87,20 @@ named path was confirmed to exist on 2026-09-01.
 
 ### Decisions
 
-- **DDM-UI-002** (amended 2026-09-25, DR-105). The 2D ground in every mode is
-  OpenStreetMap; there is no basemap control and no `basemap` URL parameter.
-  Each mode has its own default view with a legend in real units (Heat clean
-  infrared; ENSO water vapour). The Wildfire 3D scene's ground is the WHP drape
-  over a plant-stress layer. Drought, Heat and ENSO 3D drape a cloud-free image.
+- **DDM-UI-002** (amended 2026-09-25, DR-105). Recent satellite imagery is the
+  product default in every 2D mode, encoded by absence in the URL;
+  `basemap=default` records the explicit off choice and the legacy `satellite`
+  token stays valid. Each mode has its own default view with a legend in real
+  units (Drought and Wildfire GeoColor; Heat clean infrared; ENSO water vapour).
+  The Wildfire 3D scene never requests imagery: its ground is the WHP drape over
+  a plant-stress layer. Drought, Heat and ENSO 3D drape a cloud-free image
+  (`src/map/satellite.ts`, `src/state/basemap-store.ts`).
   - Amended 2026-09-26 (DR-124, DR-133; layered on the 2026-09-25 DR-105
     amendment above, which gives each mode its own default view with a legend in
     real units): ENSO's default is GOES-West Clean IR Band 13 in degrees C; the
     water-vapour mosaic is a console option while its legend is counts;
-    Heat's Band 13 comes from GOES-West alone with a viewing-geometry
+    GeoColor's colour-meaning key is the real-units legend for Drought and
+    Wildfire; Heat's Band 13 comes from GOES-West alone with a viewing-geometry
     sentence; the cloud-free 3D drape is NASA GIBS Blue Marble, August 2004,
     stated.
 - **DDM-UI-003.** The shell, cluster service, URL sync, and region command are

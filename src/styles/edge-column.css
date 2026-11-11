@@ -228,8 +228,8 @@
   /* The long desktop words stay for assistive technology only; the cell
      shows one short word that also appears in the accessible name. */
   #app[data-sheet-detent] .edge-column
-    :is(.overlay-btn, .map-info-btn)
-    > :is(.map-control-label, .map-cell-label) {
+    :is(.overlay-btn, .basemap-switcher-btn, .map-info-btn)
+    > :is(.map-control-label, .basemap-switcher-label, .map-cell-label) {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -264,8 +264,8 @@
     }
   }
 
-  /* SELECTED INVERTS. The open door, the hazard view that is on,
-     Map information when open, and a folded group's cell
+  /* SELECTED INVERTS. The open door, the hazard view that is on, satellite
+     imagery when on, Map information when open, and a folded group's cell
      while it stands for a control that is on. */
   #app[data-sheet-detent] .edge-column
     :is(

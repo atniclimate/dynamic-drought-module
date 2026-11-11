@@ -111,15 +111,15 @@ test('the chrome tokens in app.css equal MAP_CHROME_SEATS', () => {
   assert.ok(touch, 'app.css declares no --touch-target');
   assert.equal(Number(touch[1]), MAP_CELL_H_COARSE, '--touch-target disagrees with MAP_CELL_H_COARSE');
 
-  // The seat table: three slots in order, one key each, and the formula
+  // The seat table: four slots in order, one key each, and the formula
   // the seat spec measures against.
   assert.deepEqual(
     MAP_CHROME_SEATS.map((seat) => seat.slot),
-    [1, 2, 3]
+    [1, 2, 3, 4]
   );
   assert.deepEqual(
     MAP_CHROME_SEATS.map((seat) => seat.key),
-    ['reset', 'help', 'share']
+    ['reset', 'satellite', 'help', 'share']
   );
   // The formula at the 1280x720 open-sidebar container (W 940), every
   // number derived from the table: x = W - inset - cell width, y = inset +
@@ -257,21 +257,22 @@ test('the column rules read the tokens, and index.html carries every slot', () =
   // Each slot's box exists in the shipped markup with its slot number.
   const slotMarkup = {
     1: /<button id="reset-btn"[^>]*data-map-slot="1"/,
-    2: /<div id="map-info-seat"[^>]*data-map-slot="2"/,
-    3: /<button id="share-btn"[^>]*data-map-slot="3"/
+    2: /<div id="basemap-switcher-overlay-host"[^>]*data-map-slot="2"/,
+    3: /<div id="map-info-seat"[^>]*data-map-slot="3"/,
+    4: /<button id="share-btn"[^>]*data-map-slot="4"/
   };
   for (const seat of MAP_CHROME_SEATS) {
     assert.match(html, slotMarkup[seat.slot], `index.html lost slot ${seat.slot} (${seat.key})`);
   }
-  // Share is slot 3's own box, as Reset is slot 1's: no empty reserve under it.
+  // Share is slot 4's own box, as Reset is slot 1's: no empty reserve under it.
   assert.equal(
-    MAP_CHROME_SEATS.find((seat) => seat.slot === 3)?.slotSelector,
+    MAP_CHROME_SEATS.find((seat) => seat.slot === 4)?.slotSelector,
     '.map-overlay-controls > #share-btn'
   );
-  assert.doesNotMatch(html, /map-spine-reserve/, 'the retired reserve span is gone');
+  assert.doesNotMatch(html, /map-spine-reserve/, 'the retired slot 4 reserve span is gone');
   assert.doesNotMatch(css, /map-spine-reserve/, 'no stylesheet rule for the retired reserve span');
 
-  // Share keeps slot 3 in Brief too (owner 2026-10-19): no sidebar Share seat
+  // Share keeps slot 4 in Brief too (owner 2026-10-19): no sidebar Share seat
   // in the markup and no Share entry in the Brief rehost table.
   assert.doesNotMatch(html, /id="shell-share-host"/, 'the sidebar Share seat is gone');
   assert.doesNotMatch(shellSrc, /nodeId:\s*'share-btn'/, 'Share is not rehosted');

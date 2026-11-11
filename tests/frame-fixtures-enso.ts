@@ -46,7 +46,7 @@ function expectedSource(): { readonly label: string; readonly href: string } {
 /** Boot the ENSO mode on the Pacific and wait for the popup's snapshot read; `extra` adds query keys (`&embed=true`). */
 async function bootEnsoBox(page: Page, options: { readonly view?: 'console' | 'brief'; readonly extra?: string } = {}): Promise<void> {
   const snapshot = page.waitForResponse((r) => r.url().includes('/data/enso-indices.json'), { timeout: 30_000 });
-  await gotoApp(page, `?cluster=enso&ocean=pacific&view=${options.view ?? 'console'}${options.extra ?? ''}`);
+  await gotoApp(page, `?cluster=enso&ocean=pacific&view=${options.view ?? 'console'}&basemap=default${options.extra ?? ''}`);
   await waitForLayerSettled(page, LAYER_KEY);
   await snapshot;
 }

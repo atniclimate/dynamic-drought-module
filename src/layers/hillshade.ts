@@ -10,8 +10,8 @@
  * cartography lens), and the honest trade for an archive that fits the
  * same-origin Pages hosting path (D-0.7.0-029).
  *
- * Stacking: the shading sits directly above the basemap and below every
- * data layer, so terrain
+ * Stacking: the shading sits directly above the basemap (and above the
+ * satellite layer when active) and below every data layer, so terrain
  * texture never competes with a thematic surface's color statement.
  *
  * Status honesty: the archive header is probed with a budgeted fetch before
@@ -125,8 +125,8 @@ export async function resolveHillshadeArchive(
 
 /**
  * Add the hillshade layer over an already-present source, in the bottom
- * stack (layer-order.ts): under every data layer, over the basemap, in any
- * activation order. Factored out so the fresh-activation
+ * stack (layer-order.ts): under every data layer, over the basemap and
+ * satellite, in any activation order. Factored out so the fresh-activation
  * path and the "source survived, layer did not" repair path add the exact
  * same layer definition; the two must never diverge.
  */

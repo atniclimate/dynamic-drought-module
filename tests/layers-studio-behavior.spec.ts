@@ -10,6 +10,7 @@ import {
   routeGeojson,
   syntheticAiannhBody
 } from './tribal-fixtures';
+import { stubRecentSatellite } from './satellite-fixture';
 
 const STUDIO = '#layers-studio-root';
 const STATES_BODY = {
@@ -40,6 +41,10 @@ async function stubPlaces(page: Page): Promise<void> {
       body: JSON.stringify({ places: [{ name: 'Fixture City', lon: -120, lat: 44 }] })
     })
   );
+}
+
+async function stubSatellite(page: Page): Promise<void> {
+  await stubRecentSatellite(page);
 }
 
 test.describe('LAYERS studio behavior', () => {
@@ -108,6 +113,27 @@ test.describe('LAYERS studio behavior', () => {
     await expect(placeGroup.locator('[data-provenance="tribal-nations"]')).toBeVisible();
     await hideSources.click();
     await expect(sources).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  test('the rehosted basemap control reflects pressed state and URL state', async ({ page }) => {
+    await stubSatellite(page);
+    await gotoApp(page, '?layers=&view=brief&studio=layers');
+    let studio = page.locator(STUDIO);
+    let satellite = studio.getByRole('button', { name: 'Satellite imagery' });
+    await expect(satellite).toHaveAttribute('aria-pressed', 'true');
+    await satellite.click();
+    await expect(satellite).toHaveAttribute('aria-pressed', 'false');
+    await expect.poll(async () => new URLSearchParams(await search(page)).get('basemap'))
+      .toBe('default');
+
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    studio = page.locator(STUDIO);
+    satellite = studio.getByRole('button', { name: 'Satellite imagery' });
+    await expect(satellite).toHaveAttribute('aria-pressed', 'false');
+    await satellite.click();
+    await expect(satellite).toHaveAttribute('aria-pressed', 'true');
+    await expect.poll(async () => new URLSearchParams(await search(page)).has('basemap'))
+      .toBe(false);
   });
 
   test('all six canonical statuses render in studio pills and loading settles', async ({ page }) => {

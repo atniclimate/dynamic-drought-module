@@ -262,6 +262,14 @@ const PROBE_SUFFIXES = new Map([
     '/4/query?where=1%3D1&outFields=outlook%2Cfcst_date%2Ctarget%2Cidp_filedate' +
       '&outSR=4326&f=geojson&maxAllowableOffset=0.01&geometryPrecision=4'
   ],
+  // The recent satellite client needs a queryable, time-stamped catalog,
+  // not only a healthy ImageServer root.
+  [
+    'noaaMergedGeoColorImageServer',
+    '/query?where=1%3D1&outFields=objectid%2Cname%2Cstart_time%2Cend_time' +
+      '&returnGeometry=false&orderByFields=end_time%20DESC' +
+      '&resultRecordCount=4&f=json'
+  ],
   // Parameterized APIs: a bare root 400s by design; probe a minimal real call.
   ['usgsIV', '?format=json&sites=01646500&parameterCd=00060&siteStatus=all'],
   ['nrcsAwdbRest', '?stationTriplets=679:WA:SNTL&elements=WTEQ&duration=DAILY&beginDate=2026-01-01&endDate=2026-01-02'],
@@ -336,6 +344,41 @@ const CONTENT_TRIPWIRES = new Map([
         } catch {
           return `proxied NWS point response has an invalid ${key} URL`;
         }
+      }
+      return null;
+    }
+  ],
+  [
+    'noaaMergedGeoColorImageServer',
+    (body) => {
+      let payload;
+      try {
+        payload = JSON.parse(body);
+      } catch {
+        return 'latest-frame query no longer returns JSON';
+      }
+      const now = Date.now();
+      const features = Array.isArray(payload?.features) ? payload.features : [];
+      const validCandidate = features.some((feature) => {
+        const attributes = feature?.attributes;
+        const objectId = Number(attributes?.objectid ?? attributes?.OBJECTID);
+        const startTime = Number(attributes?.start_time ?? attributes?.START_TIME);
+        const endTime = Number(attributes?.end_time ?? attributes?.END_TIME);
+        const age = now - endTime;
+        return (
+          Number.isInteger(objectId) &&
+          objectId > 0 &&
+          Number.isFinite(startTime) &&
+          Number.isFinite(endTime) &&
+          startTime > 0 &&
+          endTime >= startTime &&
+          endTime - startTime <= 30 * 60_000 &&
+          age >= -15 * 60_000 &&
+          age <= 26 * 60 * 60_000
+        );
+      });
+      if (!validCandidate) {
+        return 'latest-frame query has no structurally valid frame inside the 26-hour freshness window';
       }
       return null;
     }
@@ -480,6 +523,7 @@ export function extractUrls(source) {
  */
 export const ARCGIS_FIELD_PROBES = Object.freeze([
   { key: 'nifcRawsFeatureServer', file: 'src/config/station-registry.ts', layer: '' },
+  { key: 'noaaMergedGeoColorImageServer', file: 'src/map/satellite.ts', layer: '' },
   // place-studio.tsx: Level IV is layer 7 (four fields), Level III is layer 11.
   { key: 'epaEcoregionsMapServer', file: 'src/ui/island/place-studio.tsx', layer: '/7', pick: (fields) => fields.includes('US_L4CODE') },
   { key: 'epaEcoregionsMapServer', file: 'src/ui/island/place-studio.tsx', layer: '/11', pick: (fields) => fields.includes('US_L3CODE') && !fields.includes('US_L4CODE') },

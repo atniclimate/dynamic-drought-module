@@ -86,7 +86,8 @@ const CANARY_ZOOM = 8;
  *       WHP's own Water class covers inland water INSIDE the footprint;
  *       ocean beyond the footprint is simply absent
  *    1  the single z0 tile spanning the whole world, which this
- *       ImageServer answers with an empty render
+ *       ImageServer answers with an empty render (the same behavior the
+ *       NOAA satellite service shows for a bbox that wide)
  *
  * The ceiling sits just above that measured 37 rather than at a round
  * doubling: the point of the guard is to catch the server dropping tiles

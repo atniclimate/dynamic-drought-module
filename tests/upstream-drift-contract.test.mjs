@@ -446,6 +446,7 @@ const OUT_FIELDS_SENDERS = [
   'src/layers/spc-fire-weather.ts',
   'src/layers/tropical-read.ts',
   'src/layers/usdm.ts',
+  'src/map/satellite.ts',
   'src/state/display-snapshot.ts',
   'src/state/watershed-geometry.ts',
   'src/ui/heatrisk-sequence.ts',

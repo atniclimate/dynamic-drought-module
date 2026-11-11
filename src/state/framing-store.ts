@@ -5,10 +5,10 @@
  * The framing context is the FIRST named axis of the region-shell
  * selection architecture: a camera-only choice among the nine editorial
  * framings (src/config/framings.ts). It round-trips through the URL as
- * the optional `framing=` parameter (architecture invariant 2): the
- * sidebar subscribes `onFramingChange` so every change re-emits the
- * canonical URL, and `pushUrl` reads `getFraming()` when composing the
- * sync state.
+ * the optional `framing=` parameter (architecture invariant 2), in the
+ * `basemap-store` pattern: the sidebar subscribes `onFramingChange` so
+ * every change re-emits the canonical URL, and `pushUrl` reads
+ * `getFraming()` when composing the sync state.
  *
  * Null means no explicit minimap camera, so the legacy `region=` path owns the
  * view. The minimap's distinct North American ALL camera uses `framing=all`;

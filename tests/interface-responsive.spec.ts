@@ -606,9 +606,9 @@ test.describe('the ENSO ocean key reaches every surface (W2-D1)', () => {
 });
 
 /**
- * Owner direction 2026-08-19 moved pieces of chrome. Some joined the
- * desktop control column (Share and Reset were already there, the on-map
- * key moved in), and the pre-1.0 preview badge moved
+ * Owner direction 2026-08-19 moved four pieces of chrome. Three joined the
+ * desktop control column (Share and Reset were already there, the satellite
+ * toggle and the on-map key moved in), and the pre-1.0 preview badge moved
  * out of that column into the bottom-right corner beside the round buttons.
  *
  * The contract these cases hold is not "the pixels look right"; it is that
@@ -617,24 +617,32 @@ test.describe('the ENSO ocean key reaches every surface (W2-D1)', () => {
  * the embed were designed around the old seats and keep them.
  */
 test.describe('the 2026-08-19 map chrome seats', () => {
-  test('the desktop column holds help and the key, and the preview badge stays clear of help', async ({
+  test('the desktop column holds the satellite control, help and the key, and the preview badge stays clear of help', async ({
     page
   }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await gotoApp(page, '?view=console');
 
+    await expect(
+      page.locator('#basemap-switcher-overlay-host > .basemap-switcher-control')
+    ).toHaveCount(1);
     await expect(page.locator('#map-key-overlay-host > #map-key')).toHaveCount(1);
 
+    // The satellite control seats BELOW Reset, which is what makes the three
+    // buttons one family rather than two conventions in one corner.
     const reset = await rect(page.locator('#reset-btn'));
+    const satellite = await rect(page.locator('.basemap-switcher-control'));
+    expect(satellite.top).toBeGreaterThanOrEqual(reset.bottom - 1);
+    expect(Math.abs(satellite.right - reset.right)).toBeLessThanOrEqual(2);
 
-    // Help sits under Reset in the same column since D1 M9 (2026-09-27;
+    // Help sits under SAT in the same column since D1 M9 (2026-09-27;
     // interface-chrome section 2.2, slot 3; it left the bottom-right corner,
     // which the old wording here described). Its credits still render inside
     // its panel (owner direction 2026-08-31); the preview badge sits clear
     // of the scale bars since D1 M10 (found-019), no longer bottom centre.
     // No overlap.
     const info = await rect(page.locator('.map-info-btn'));
-    expect(info.top).toBeGreaterThanOrEqual(reset.bottom - 1);
+    expect(info.top).toBeGreaterThanOrEqual(satellite.bottom - 1);
     expect(Math.abs(info.right - reset.right)).toBeLessThanOrEqual(2);
     // The column's top band, never the old bottom-right corner (800 / 3).
     expect(info.bottom).toBeLessThan(800 / 3);
@@ -669,23 +677,29 @@ test.describe('the 2026-08-19 map chrome seats', () => {
     await page.keyboard.press('Escape');
   });
 
-  test('a phone keeps the dock key seat', async ({
+  test('a phone keeps the dock key seat and the thumb-zone satellite control', async ({
     page
   }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await gotoApp(page, '');
 
     await expect(page.locator('.map-dock-foot > #map-key')).toHaveCount(1);
+    await expect(
+      page.locator('.maplibregl-ctrl-bottom-right .basemap-switcher-control')
+    ).toHaveCount(1);
     await expect(page.locator('#map-key-overlay-host > #map-key')).toHaveCount(0);
   });
 
-  test('an embed keeps the dock key seat', async ({
+  test('an embed keeps the dock key seat and MapLibre\'s satellite corner', async ({
     page
   }) => {
     await page.setViewportSize({ width: 800, height: 600 });
     await gotoApp(page, '?cluster=wildfire&embed=true');
 
     await expect(page.locator('.map-dock-foot > #map-key')).toHaveCount(1);
+    await expect(
+      page.locator('.maplibregl-ctrl-bottom-right .basemap-switcher-control')
+    ).toHaveCount(1);
   });
 });
 
@@ -1804,8 +1818,8 @@ async function censusEveryCluster(
   const failures: string[] = [];
   for (const { key, pressed } of clusters) {
     if (!pressed) {
-      // Click only the one mode being measured; every other
-      // control on the shell stays untouched.
+      // Click only the one mode being measured; SAT and every other
+      // control on the shell stay untouched.
       const button = page.locator(`.shell-cluster-btn[data-cluster="${key}"]`);
       await button.click();
       await expect(button).toHaveAttribute('aria-pressed', 'true');

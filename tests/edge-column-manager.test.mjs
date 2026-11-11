@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
  * (a group with nothing to show). The count once treated that attribute as a
  * reason not to count the group's controls, so a group that was ever empty
  * stayed at zero and stayed hidden for the life of the page: the Layers
- * studio borrows a control, the view group empties, and the control never came
+ * studio borrows Satellite, the view group empties, and Satellite never came
  * back to the column. docs/design/mobile-map-chrome.md says nothing is
  * dropped; this is the rule that keeps that true.
  *
@@ -106,8 +106,9 @@ test('the conditional table names only real modes and real seats, and tells them
     const other = EDGE_GROUP_ORDER.find((id) => !EDGE_CONDITIONAL_SEATS.some((s) => s.group === id && s.order === seat.order));
     assert.equal(isConditionalCell(other, seated(seat.order)), false);
   }
-  // The four doors, Locate and the hazard views ride the first orders: always present.
+  // The four doors, SAT, Locate and the hazard views ride the first orders: always present.
   assert.equal(isConditionalCell('panels', seated(10)), false);
+  assert.equal(isConditionalCell('view', seated(10)), false);
   assert.equal(isConditionalCell('view', seated(20)), false);
   assert.equal(isConditionalCell('hazards', seated(10)), false);
   // A cell nobody has seated is not conditional.

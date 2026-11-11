@@ -7,7 +7,7 @@ import { gotoApp, stubHeatRiskCatalog, waitForLayerSettled } from './helpers';
  * interface-chrome-popups-text.md section 2.7, "Keyboard reach and focus").
  *
  * THE ORDER. Tab follows today's DOM, with no reorder (a later item). The
- * design record lists Reset, Help, then Share; the DOM puts Share
+ * design record lists Reset, SAT, Help, then Share; the DOM puts Share
  * (`#share-btn`) BEFORE Reset in `.map-overlay-controls` (index.html), and
  * the grid seats it in slot 4 visually. These cases assert the PRESENT
  * order, Share first, and the difference is recorded on the M28 report.
@@ -46,6 +46,7 @@ async function readStop(page: Page): Promise<Stop> {
     else if (inside('#map-key-content')) name = 'key drawer';
     else if (el.id === 'share-btn') name = 'share';
     else if (el.id === 'reset-btn') name = 'reset';
+    else if (el.matches('.basemap-switcher-btn')) name = 'sat';
     else if (el.id === 'map-info-btn') name = 'help';
     else if (inside('#map-info-panel')) name = 'help drawer';
     else if (inside('#map-bottom-dock')) name = 'dock';
@@ -86,7 +87,7 @@ function expectRings(stops: readonly Stop[]): void {
     if (stop.name === 'canvas') {
       expect.soft(parseFloat(stop.outlineOffset), 'the canvas ring is inset').toBeLessThan(0);
     }
-    if (['share', 'reset', 'help'].includes(stop.name)) {
+    if (['share', 'reset', 'sat', 'help'].includes(stop.name)) {
       expect.soft(`${stop.name}: offset ${stop.outlineOffset}`).toBe(`${stop.name}: offset 0px`);
       expect.soft(stop.boxShadow, `${stop.name} keeps the 4 px casing`).toContain('rgb(1, 11, 19) 0px 0px 0px 4px');
     }
@@ -123,7 +124,7 @@ async function clickCentreForPopup(page: Page, withSwitcher = false): Promise<vo
 }
 
 test.describe('map chrome focus (S30D D1 M28)', () => {
-  test('Tab visits expand (collapsed), the canvas, the chip and its drawer, Reset, Help and its drawer, Share and the dock in that order, each with the 2 px ring', async ({
+  test('Tab visits expand (collapsed), the canvas, the chip and its drawer, Reset, SAT, Help and its drawer, Share and the dock in that order, each with the 2 px ring', async ({
     page
   }) => {
     await page.setViewportSize(DESKTOP_VIEWPORT);
@@ -157,6 +158,7 @@ test.describe('map chrome focus (S30D D1 M28)', () => {
       'key drawer',
       'share',
       'reset',
+      'sat',
       'help',
       'help drawer',
       'help',

@@ -17,10 +17,17 @@ test('the retired historical-ground disclosure and tile source stay absent', asy
   expect(historicalRequests).toBe(0);
 });
 
-test('the standard map is the only ground, with its OpenStreetMap credit', async ({
+test('SAT is on by default and toggles to the standard map without provenance copy', async ({
   page
 }) => {
   await gotoApp(page);
-  await expect(page.locator('#map-osm-credit')).toContainText('OpenStreetMap');
+  const button = page.locator('.basemap-switcher-btn');
+  await expect(button).toHaveText('SAT');
+  await expect(button).toHaveAttribute('aria-pressed', 'true');
+  await expect(page).not.toHaveURL(/basemap=/);
+
+  await button.click();
+  await expect(button).toHaveAttribute('aria-pressed', 'false');
+  await expect(page).toHaveURL(/basemap=default/);
   await expect(page.locator('#ground-vintage')).toHaveCount(0);
 });

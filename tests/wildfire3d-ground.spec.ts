@@ -81,7 +81,7 @@ test('STAR weeks follow the issuer\'s 1-to-52 rule and the key states each week 
 test.describe('Wildfire 3D dryness ground', () => {
   test.setTimeout(180_000);
 
-  test('entering Wildfire 3D requests no GIBS GOES, nowCOAST, Blue Marble or D8-ground host and no VHI tile at z8 or deeper', async ({ page }) => {
+  test('entering Wildfire 3D requests no MERGEDGC, GIBS GOES, nowCOAST, Blue Marble or D8-ground host and no VHI tile at z8 or deeper', async ({ page }) => {
     const requests: string[] = [];
     page.on('request', (request) => requests.push(request.url()));
     await bootWith(page, `${WA}&fire3d=true`);
@@ -89,7 +89,7 @@ test.describe('Wildfire 3D dryness ground', () => {
     await reaches(page, 'ddmDryness', 'live');
     expect(await stamp(page, 'ddmDrynessProduct')).toBe('star-vhi');
     const imagery = requests.filter((url) =>
-      /gibs\.earthdata\.nasa\.gov|nowcoast\.noaa\.gov|BlueMarble/i.test(url));
+      /satellitemaps\.nesdis\.noaa\.gov|MERGEDGC|gibs\.earthdata\.nasa\.gov|nowcoast\.noaa\.gov|BlueMarble/i.test(url));
     expect(imagery).toEqual([]);
     const star = drynessStub(page).log.filter((row) => row.host === 'star');
     expect(star.length).toBeGreaterThan(1);

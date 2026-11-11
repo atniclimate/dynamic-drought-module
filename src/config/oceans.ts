@@ -74,12 +74,13 @@ export const OCEANS: Record<OceanKey, OceanDef> = {
     label: 'Arctic Ocean',
     // A Mercator-honest fit this far north is approximate by nature;
     // the zone exists to name and reach the high-latitude anomaly
-    // view, not to bound the ocean. Mercator stretches the poles, so a
-    // wide fit would show mostly empty polar band: the frame is the
+    // view, not to bound the ocean. The satellite imagery stops near
+    // 76.46 N (src/map/satellite.ts), and Mercator stretches the poles,
+    // so a wide fit showed a flat grey band above it: the frame is the
     // Chukchi and Beaufort seas, taller than wide, so a landscape canvas
-    // fits it by height.
-    // shortcut: a portrait canvas (a phone) fits by width and shows more
-    // polar band above; give the fit a north clamp if that view matters.
+    // fits it by height and its top stays inside the imagery.
+    // shortcut: a portrait canvas (a phone) fits by width and still shows
+    // grey above 76.46 N; give the fit a north clamp if that view matters.
     bounds: [[58.0, -162.0], [74.5, -122.0]],
     padding: 1.0,
     provenance: SCHEMATIC_NOTE

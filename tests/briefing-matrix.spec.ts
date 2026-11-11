@@ -357,7 +357,7 @@ function collection(features: unknown[]): string {
 /**
  * The non-default briefing hosts a `?view=brief&select=` boot reaches:
  * USDM, NIFC current perimeters, NWS active alerts, and the Worker proxy
- * (waterSupply and friends). `gotoApp` stubs the boundary,
+ * (waterSupply and friends). `gotoApp` stubs the satellite, boundary,
  * minimap and CPC seasonal temperature reads unconditionally; every other
  * live lane needs its own deterministic answer here so a spec that opens
  * the briefing never reaches a live agency (S17's lesson).
