@@ -266,6 +266,76 @@ screen, and once per chosen place: a place chosen with the phone guide closed
 costs no request until the guide is opened. Nothing in it moves, so reduced
 motion shows the same picture.
 
+## Locate
+
+Owner direction 2026-11-09 (sprint), DR-pending.
+
+Locate finds the person's own position and opens the place they are standing
+in. That position is the most sensitive value the application holds, so the
+design starts from what never happens to it
+(`src/state/geolocate.ts`, `src/ui/locate-runtime.ts`,
+`src/ui/locate-place.ts`).
+
+**What never happens.** The position is held in memory only. It is never
+written to storage, never placed in the address bar or a shared link, and
+never sent in a request. The camera never centres on it: a node test reads
+the Locate modules as text and fails unless their camera calls are exactly two
+fits of a box (`tests/geolocate.test.mjs`). The one value Locate stores is the
+word `yes` or `no`, the answer to "Find my place when I open the map"
+(`src/state/locate-preference.ts`).
+
+**Asking.** A page load never raises the browser's permission question. On
+the phone shell a first launch makes an offer, a card with "Locate me" and
+"Not now"; the browser asks only after "Locate me" or a press of the Locate
+cell. A later launch locates by itself only when the stored answer is `yes`
+and the browser reports the permission as already granted. A shared
+`select=` link or a studio makes no offer: the link is the ask. Desktop and
+embed sessions show no Locate cell and no offer (`src/ui/locate-control.ts`).
+
+**Every outcome is its own state.** Waiting for the answer, finding (twelve
+seconds, with a bar that empties), found, found with low accuracy, blocked by
+the browser, not allowed this time, no position, timed out (with one retry),
+an insecure page, and a browser without location each have their own card,
+cell state and polite announcement. A late answer after a cancel or a timeout
+is discarded.
+
+**The answer is local first.** The state is read from the Census outlines the
+page already holds, with no request. The card says only what that coarse
+outline supports. The device's accuracy radius is widened by two kilometres
+(a DDM margin for the 1:20,000,000 outline, not an issuer figure): "You are in
+Washington" when that whole disc is inside one state, "at the edge of" or
+"near the line" when it reaches a drawn line, and "outside the states this map
+names" when it reaches none. Only the first opens a briefing by itself,
+through the door a shared link uses, so the map frames the state and never
+the person. At an edge or a line the card offers each state within reach by
+name and waits for a press; outside, it offers the Place door.
+
+**Tribal lands are a named step.** "Check Tribal lands near you" first shows
+three sentences: the map moves to a grid square of half a degree that contains
+the position and loads Tribal boundaries there from the agencies whose layers
+are on; the map's sources see that square and not the position in it; and a
+position the check places inside an area opens that area. The test then runs
+in the browser against the boundaries the live layers hold. Nothing is fetched
+for the point and no boundary is stored. Only a whole accuracy disc inside an
+area names it as the person's, with the agency that draws it. A layer that is
+off is reported as not checked, one that failed as unavailable, and "not
+inside any area" always carries the boundary popups' sentence that absence
+from a layer is not absence of a Nation or of its rights.
+
+**The marker** is a person on a stem with an accuracy ring in true ground
+metres, white on rich black: dashed and hollow-footed when the position is
+approximate, never a hazard colour and never the platform's blue dot
+(`src/map/locate-marker.ts`). It settles once on arrival and not at all under
+reduced motion. Removing the position removes the marker, its ring and
+everything read for it.
+
+**Seats.** The cell is the last of the right-edge column's view tools and
+inverts while a position is shown. The card stands in the map's dock above
+the sheet and folds to its title; on a short screen unfolding it lowers or
+closes the sheet, so the two never share a pixel. Everything but the cell and
+the launch check is one lazy chunk, loaded on the first press or the first
+eligible launch.
+
 ## Convergence doctrine
 
 DDM is not merely a map. It is an instrument for making claims responsibly

@@ -48,8 +48,8 @@ one manager owns (`src/ui/edge-column.ts`), arranged by one pure planner
 
 - Groups, top to bottom: map tools (Share, Reset, Map information), the four
   doors (Brief, Place, Layers, Alerts), the four hazard views (ENSO, Fire,
-  Drought, Heat), then the view tools (Satellite). Each group is one glass
-  capsule, and each cell shows an icon over one short word.
+  Drought, Heat), then the view tools (Satellite, then Locate). Each group is
+  one glass capsule, and each cell shows an icon over one short word.
 - The planner prefers the largest cell with every control displayed: one
   track at 52px (on viewports at least 380px wide), then 48px, then 44px; then
   44px with the map tools folded behind one cell; in portrait, with the hazard
@@ -57,11 +57,17 @@ one manager owns (`src/ui/edge-column.ts`), arranged by one pure planner
   A folded group is one cell that opens its controls as a row beside it.
   Nothing is dropped, and two controls never share a pixel.
 - A cell is a tile inside its capsule. The selected tile inverts: the open
-  door, the hazard view that is on, Satellite when on, and Map information
-  when open.
+  door, the hazard view that is on, Satellite when on, Locate while a position
+  is shown, and Map information when open.
 - Each door exposes `aria-controls` and `aria-expanded`. Pressing a closed
   door raises its sheet. Pressing the open door again, or pressing Escape,
   closes it, and Escape restores focus to that door.
+- A raised sheet always shows its door. A sheet that no door raised (a map
+  selection, a shared link, Locate) lights the door whose word its title
+  reads: Brief while the report is open at full, Layers in the console view,
+  otherwise Place. Pressing that lit door closes the sheet, as it does for a
+  door that was pressed. A sheet that names itself, the ENSO guide, lights
+  only its own door (owner direction 2026-11-09 (sprint), DR-pending).
 - The first four hazard cells use the mobile view presets; Satellite remains
   the one `BasemapSwitcherControl` backed by the basemap store. A short word
   never replaces an accessible name, `aria-pressed`, or focus treatment.
@@ -74,6 +80,10 @@ one manager owns (`src/ui/edge-column.ts`), arranged by one pure planner
   surface temperature surface is on the map; the planner counts it like any
   other cell (owner direction 2026-11-09 (sprint), DR-pending; see "The ENSO
   chain and its Guide door" in [`README.md`](README.md)).
+- Locate is the last cell of the view tools, on the phone shell only. Its
+  card stands in the map's dock above the sheet and never under the column
+  (owner direction 2026-11-09 (sprint), DR-pending; see "Locate" in
+  [`README.md`](README.md)).
 
 ## The sheet
 
