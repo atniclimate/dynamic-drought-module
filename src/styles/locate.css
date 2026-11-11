@@ -41,6 +41,9 @@
     max-height: max(120px, calc(100vh - var(--sheet-lift, 0px) - 144px));
     overflow: hidden auto;
     overscroll-behavior: contain;
+    /* A control the keyboard brings into view stops above the fading edge
+       (and below the head: src/ui/locate-card.ts sets that side). */
+    scroll-padding-bottom: 28px;
     border: 1px solid var(--glass-edge);
     border-radius: var(--glass-radius);
     background: var(--glass-panel-solid);
@@ -53,15 +56,37 @@
   .locate-card-arriving {
     animation: locate-card-settle var(--dur-settle) var(--ease-spring) both;
   }
+  /* More below the fold (the narrowest phone, the landscape shell): the cut
+     edge fades into the glass, so a clipped line is not read as the end.
+     src/ui/locate-card.ts sets the mark from the plate's own scroll box. */
+  .locate-card-plate[data-more]::after {
+    content: '';
+    position: sticky;
+    bottom: 0;
+    display: block;
+    height: 28px;
+    margin-top: -28px;
+    background: linear-gradient(to bottom, transparent, var(--glass-panel-solid));
+    pointer-events: none;
+  }
 
   /* -----------------------------------------------------------------------
      The head: the figure, the claim and its qualification, and the tools.
      ----------------------------------------------------------------------- */
   .locate-card-head {
+    /* The claim and the fold control stay when a long body scrolls. */
+    position: sticky;
+    top: 0;
+    z-index: 1;
     display: flex;
     align-items: flex-start;
     gap: 10px;
     padding: 8px 4px 8px 12px;
+  }
+  /* Scrolled, the body passes under the head. */
+  .locate-card-plate[data-scrolled] .locate-card-head {
+    background: var(--glass-panel-solid);
+    box-shadow: 0 1px 0 var(--glass-hairline);
   }
   .locate-figure {
     flex: none;
@@ -379,6 +404,11 @@
   @media (max-height: 480px) and (orientation: landscape) {
     #app:not([data-sheet-detent='closed']) .locate-figure {
       display: none;
+    }
+    /* Short and wide: unfolded, the card takes the dock's width, so its
+       lines are few and the next step stays above the fold. */
+    #app[data-sheet-detent] .locate-card[data-open]:not([hidden]) {
+      width: min(100%, 540px);
     }
   }
 

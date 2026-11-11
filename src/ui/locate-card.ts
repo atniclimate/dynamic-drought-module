@@ -162,6 +162,7 @@ export function createLocateCard(dock: HTMLElement, onEscape: () => void): Locat
   dock.prepend(card);
 
   const plate = card.querySelector<HTMLElement>('.locate-card-plate')!;
+  const head = card.querySelector<HTMLElement>('.locate-card-head')!;
   const title = card.querySelector<HTMLElement>('.locate-card-title')!;
   const reading = card.querySelector<HTMLElement>('.locate-card-reading')!;
   const fold = card.querySelector<HTMLButtonElement>('.locate-card-fold')!;
@@ -173,6 +174,16 @@ export function createLocateCard(dock: HTMLElement, onEscape: () => void): Locat
   let foldRun: () => void = () => {};
   close.addEventListener('click', () => closeRun());
   fold.addEventListener('click', () => foldRun());
+  // A body longer than the map band scrolls inside the plate (the stylesheet's
+  // cap), under the head. One mark says there is more below the fold and
+  // goes at the end; the other says the body has passed under the head.
+  const markScroll = (): void => {
+    plate.toggleAttribute('data-more', plate.scrollHeight - plate.clientHeight - plate.scrollTop > 8);
+    plate.toggleAttribute('data-scrolled', plate.scrollTop > 0);
+  };
+  plate.addEventListener('scroll', markScroll, { passive: true });
+  // The cap follows the sheet's top edge, so the plate's box changes with no redraw here.
+  if (typeof ResizeObserver === 'function') new ResizeObserver(markScroll).observe(plate);
   card.addEventListener('keydown', (event) => {
     if (event.key !== 'Escape') return;
     // The sheet's own Escape must not also fire for this press.
@@ -189,6 +200,8 @@ export function createLocateCard(dock: HTMLElement, onEscape: () => void): Locat
       const active = document.activeElement;
       const focusedId =
         active instanceof HTMLElement && card.contains(active) ? (active.dataset['locateId'] ?? 'title') : null;
+      // A redraw of the same card (a box ticked below the fold) keeps its place; a new claim starts at its title.
+      const scrolled = !card.hidden && title.textContent === view.title ? plate.scrollTop : 0;
 
       plate.dataset['tone'] = view.tone;
       title.textContent = view.title;
@@ -203,6 +216,8 @@ export function createLocateCard(dock: HTMLElement, onEscape: () => void): Locat
       fold.hidden = view.fold === null;
       // Folded, the card may stand as its title alone where the screen is short (the stylesheet decides).
       plate.toggleAttribute('data-folded', view.fold !== null && !view.fold.open);
+      // Unfolded, it may take the dock's width where the screen is short and wide.
+      card.toggleAttribute('data-open', view.fold !== null && view.fold.open);
       if (view.fold) {
         fold.setAttribute('aria-label', view.fold.label);
         fold.setAttribute('aria-expanded', String(view.fold.open));
@@ -233,9 +248,14 @@ export function createLocateCard(dock: HTMLElement, onEscape: () => void): Locat
           focusedId === 'title' ? title : card.querySelector<HTMLElement>(`[data-locate-id="${focusedId}"]:not([hidden])`);
         (next ?? title).focus({ preventScroll: true });
       }
+      // A control brought into view by the keyboard stops below the head, not under it.
+      plate.style.scrollPaddingTop = `${head.offsetHeight}px`;
+      plate.scrollTop = scrolled;
+      markScroll();
     },
     hide(): void {
       card.hidden = true;
+      card.removeAttribute('data-open');
       body.replaceChildren();
     },
     focusTitle(): void {
