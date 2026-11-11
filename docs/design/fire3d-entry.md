@@ -52,6 +52,20 @@ on glass rather than red: the 2026-11-09 direction keeps hazard hues for the
 data. There is no one-second delay, because the card is not a cover that
 could flash; it is where the two statements stand from the first frame.
 
+Leaving, on any screen. The scene hands the flat map back the camera it
+found, by the same 800 ms ease as before, and now finishes the job
+(`restoreCamera` in `src/map/fire3d.ts`). An ease is cancelled by the next
+camera call from anywhere, and on a phone one is routine: the phone sheet
+jumps the camera padding about 150 ms after any viewport change. A phone
+that turned on its side, or otherwise dropped under its height floor while
+the scene was on, was left flat but tilted at the pitch the ease had reached
+(measured: 41.99 degrees). When the ease ends short, the rest is paid by one
+jump once the map is at rest. It stands down if a newer scene has tilted the
+camera, or if anything else has moved the pitch or the bearing since, such
+as a person's own two-finger tilt. A scene that starts again while the
+camera is still owed records the camera it is owed, not the half-turned
+reading.
+
 ## The entry transaction
 
 `Fire3DStatus` gains `activationId: number`, `phase`, and `settledOnce: boolean`; `transport` stays as landed in 283de57. All stamped on the control as `data-fire3d-phase`, `data-fire3d-settled-once` beside the existing stamps.

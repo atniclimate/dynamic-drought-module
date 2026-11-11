@@ -175,6 +175,12 @@ enter the 3D Fire view, through one explicit control and on these terms.
 - A phone that cannot hold the scene but was sent a `fire3d=true` link gets
   no cell and one sentence, once. The preference is kept, as it is on a
   short desktop window.
+- A phone that drops under a floor while the scene is on (turned on its
+  side, for example) loses the scene, the card and the pad, hears the same
+  one sentence, and gets the flat map back at the camera the scene found.
+  The preference is kept, so the scene returns when the screen can hold it
+  again. The restore is finished by a jump if another camera call cuts its
+  ease short (`fire3d-entry.md`, "Leaving, on any screen").
 - The scene's code stays lazy: the entry chunk carries the cell and its
   decision, and a phone that did not ask downloads nothing more.
 

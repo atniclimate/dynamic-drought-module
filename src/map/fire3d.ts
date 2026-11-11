@@ -325,6 +325,17 @@ let coverageMoveListener: (() => void) | null = null;
 let generation = 0;
 let savedCamera: { readonly pitch: number; readonly bearing: number } | null =
   null;
+/**
+ * The camera a leaving scene still owes the flat map (`restoreCamera`): set
+ * while the restoring ease is in flight or has been cut short, null once the
+ * camera is back or something else has taken the pitch and bearing. A scene
+ * that starts again in the meantime found the camera THERE, not at whatever
+ * the unfinished turn happened to read.
+ */
+let owedCamera: { readonly pitch: number; readonly bearing: number } | null =
+  null;
+/** Bumped by each restore and each entry tilt, so an older restore stands down. */
+let cameraIntent = 0;
 let tileWatch: Pick<RasterTileWatch, 'detach'> | null = null;
 let smokeVolumeOn = false;
 let smokeModule: typeof import('../layers/hms-smoke-volume') | null = null;
@@ -596,6 +607,86 @@ function applyCamera(
   }
 }
 
+/** Two angles in degrees name the same direction (bearings wrap at 180). */
+function sameAngle(a: number, b: number): boolean {
+  return Math.abs(((((a - b) % 360) + 540) % 360) - 180) < 0.001;
+}
+
+/**
+ * Give the flat map back the camera the scene found, and FINISH the job
+ * (owner direction 2026-11-09 (sprint), DR-pending).
+ *
+ * The restore is the same ease as before. But an ease is cancelled by the
+ * next camera call from anywhere, and a cancelled restore leaves the flat
+ * map tilted with the scene gone. A phone makes that ordinary: the phone
+ * sheet jumps the camera padding about 150 ms after any viewport change
+ * (src/ui/mobile-sheet.ts, `settle`), so a phone that turns on its side, or
+ * otherwise drops under its height floor while the scene is on, was left at
+ * the pitch the ease had reached (measured: 41.99 degrees). A region fit or
+ * a pan inside the 800 ms does the same on any screen.
+ *
+ * So when the ease ends short of the camera it was heading for, the rest is
+ * paid by one jump as soon as the map is at rest. It stands down, leaving the
+ * camera alone, if a newer scene has tilted it or if anything else has moved
+ * the pitch or the bearing off the place the ease was cut: that is someone
+ * else's camera now (a person's own two-finger tilt, a reset).
+ *
+ * Nothing is armed when the camera is already there, which is every reduced
+ * motion exit (a jump) and every exit that had nothing to turn.
+ */
+function restoreCamera(
+  map: maplibregl.Map,
+  target: { readonly pitch: number; readonly bearing: number }
+): void {
+  const mine = ++cameraIntent;
+  owedCamera = null;
+  applyCamera(map, target);
+  const there = (at: { readonly pitch: number; readonly bearing: number }): boolean =>
+    sameAngle(map.getPitch(), at.pitch) && sameAngle(map.getBearing(), at.bearing);
+  if (there(target)) return;
+
+  owedCamera = target;
+  let cut: { readonly pitch: number; readonly bearing: number } | null = null;
+  let finished = false;
+  const finish = (): void => {
+    finished = true;
+    map.off('moveend', onMoveEnd);
+    if (cameraIntent === mine) owedCamera = null;
+  };
+  const pay = (): void => {
+    if (finished) return;
+    if (cameraIntent !== mine) {
+      finish();
+      return;
+    }
+    // Whatever cut the ease short is still moving the map (a fit, a hand on
+    // the glass): its own moveend comes back through onMoveEnd.
+    if (map.isMoving()) return;
+    const untouched = cut !== null && there(cut);
+    // One payment, then done either way: the jump's own moveend must not
+    // come back here.
+    finish();
+    if (untouched) map.jumpTo(target);
+  };
+  function onMoveEnd(): void {
+    if (finished) return;
+    if (cameraIntent !== mine || there(target)) {
+      finish();
+      return;
+    }
+    if (cut === null) {
+      cut = { pitch: map.getPitch(), bearing: map.getBearing() };
+    } else if (!there(cut)) {
+      finish();
+      return;
+    }
+    // Not from inside this event: the call that cut the ease is still on the
+    // stack, and the camera is its to finish first.
+    queueMicrotask(pay);
+  }
+  map.on('moveend', onMoveEnd);
+}
+
 /** whp-3d.ts's own private SOURCE_ID, mirrored here rather than imported:
  * the module is one of the lazy context chunks (fire3d-context.ts), and a
  * static import into this file would pull it into fire3d's own bundle
@@ -714,7 +805,7 @@ function rollbackScene(map: maplibregl.Map): void {
   map.setSky(FIRE3D_SKY_CLEAR_SPECIFICATION);
   if (map.getSource(TERRAIN_SOURCE_ID)) map.removeSource(TERRAIN_SOURCE_ID);
   if (savedCamera) {
-    applyCamera(map, savedCamera);
+    restoreCamera(map, savedCamera);
     savedCamera = null;
   }
 }
@@ -802,7 +893,10 @@ async function activateScene(map: maplibregl.Map): Promise<void> {
   const myGeneration = ++generation;
   entryPhase = 'probe';
   publishStatus('checking', null);
-  savedCamera = { pitch: map.getPitch(), bearing: map.getBearing() };
+  // The camera as found. While an earlier exit is still handing its camera
+  // back (`restoreCamera`), that is where the flat map stands, not the
+  // reading its unfinished turn happens to give.
+  savedCamera = owedCamera ?? { pitch: map.getPitch(), bearing: map.getBearing() };
 
   let resolved: ResolvedTerrainArchive;
   try {
@@ -873,6 +967,9 @@ async function activateScene(map: maplibregl.Map): Promise<void> {
       exaggeration: FIRE3D_TERRAIN_EXAGGERATION
     });
     map.setSky(FIRE3D_SKY_SPECIFICATION);
+    // The scene's own tilt takes the camera: an exit still owed stands down.
+    cameraIntent += 1;
+    owedCamera = null;
     applyCamera(map, { pitch: FIRE3D_PITCH_DEGREES });
     // Terrain relief fix lane, 2026-09-10: a fire outside the Pacific
     // Northwest bake enters this scene exactly as fully as one inside it

@@ -35,7 +35,10 @@ const env = {
   width: 1280,
   height: 800,
   attributes: new Set(),
-  observers: []
+  observers: [],
+  // Reduced motion by default: the scene's camera changes are jumps unless a
+  // test asks for the eases a person without that preference gets.
+  reduced: true
 };
 globalThis.__fire3dPhoneEnv = env;
 
@@ -52,7 +55,8 @@ const STUBS = {
   '/state/fire3d-store':
     'const env = globalThis.__fire3dPhoneEnv; export function getFire3DPreference() { return env.preference; } export function onFire3DPreferenceChange(fn) { env.preferenceListeners.push(fn); return () => {}; } export function setFire3DPreference(next) { env.preference = next; }',
   '/ui/overlay': 'export function showToast() {}',
-  '/util/motion': 'export function prefersReducedMotion() { return true; }',
+  '/util/motion':
+    'export function prefersReducedMotion() { return globalThis.__fire3dPhoneEnv.reduced; }',
   '/util/raster-error-watch':
     'export function watchRasterTiles() { return { detach() {} }; }',
   '/layers/hms-smoke-volume':
@@ -404,6 +408,34 @@ test('the pure gate keeps the console floor unless a shell names its own', () =>
 const sources = new Map();
 const layers = new Map();
 const listeners = {};
+/** The fake camera. `ease` is an ease in flight; `hand` is a person's gesture. */
+const cam = { pitch: 0, bearing: 0, ease: null, hand: false, calls: [] };
+const emit = (type) => {
+  for (const fn of [...(listeners[type] ?? [])]) fn({});
+};
+const turn = (options) => {
+  if (typeof options.pitch === 'number') cam.pitch = options.pitch;
+  if (typeof options.bearing === 'number') cam.bearing = options.bearing;
+};
+/** Stop the ease in flight where it stands, the way any newer camera call does. */
+function stopEase() {
+  if (cam.ease === null) return;
+  cam.ease = null;
+  emit('moveend');
+}
+/** Move the ease in flight part of its way and leave it running. */
+function easePartWay(fraction) {
+  const { from, to } = cam.ease;
+  if (typeof to.pitch === 'number') cam.pitch = from.pitch + (to.pitch - from.pitch) * fraction;
+  if (typeof to.bearing === 'number') cam.bearing = from.bearing + (to.bearing - from.bearing) * fraction;
+}
+/** Let the ease in flight run its course. */
+function finishEase() {
+  const { to } = cam.ease;
+  turn(to);
+  cam.ease = null;
+  emit('moveend');
+}
 const map = {
   getSource: (id) => sources.get(id),
   addSource: (id, spec) => {
@@ -421,13 +453,25 @@ const map = {
   },
   getStyle: () => ({ layers: [] }),
   moveLayer() {},
-  getPitch: () => 0,
-  getBearing: () => 0,
+  getPitch: () => cam.pitch,
+  getBearing: () => cam.bearing,
   getCenter: () => ({ lng: -119, lat: 45.5 }),
   setTerrain() {},
   setSky() {},
-  jumpTo() {},
-  easeTo() {},
+  isMoving: () => cam.ease !== null || cam.hand,
+  // MapLibre's order: a new camera call first stops the ease in flight, which
+  // ends with that ease's own moveend, and only then does its own work.
+  jumpTo(options) {
+    cam.calls.push(['jumpTo', options]);
+    stopEase();
+    turn(options);
+    emit('moveend');
+  },
+  easeTo(options) {
+    cam.calls.push(['easeTo', options]);
+    stopEase();
+    cam.ease = { from: { pitch: cam.pitch, bearing: cam.bearing }, to: options };
+  },
   on: (type, fn) => {
     (listeners[type] ??= []).push(fn);
   },
@@ -569,4 +613,169 @@ test('growing past the floor lets a kept preference re-apply', async () => {
   await settle();
   assert.equal(getFire3DStatus().state, 'active', 'the preference outlived the short window');
   await leave();
+});
+
+// ---------------------------------------------------------------------------
+// Leaving hands the camera back, and finishes the job
+// ---------------------------------------------------------------------------
+
+/** Enter the scene on the fake phone with eases on, and let the opening tilt run its course. */
+async function enterTilted() {
+  env.reduced = false;
+  cam.pitch = 0;
+  cam.bearing = 0;
+  cam.ease = null;
+  cam.hand = false;
+  resize(390, 844);
+  setChrome(true);
+  setPreference(true);
+  await settle();
+  assert.equal(getFire3DStatus().state, 'active');
+  finishEase();
+  assert.equal(cam.pitch, presentation.FIRE3D_PITCH_DEGREES, 'the opening tilt');
+  cam.calls.length = 0;
+}
+
+/** Leave whatever the test left behind, with the camera flat and eases off again. */
+async function leaveFlat() {
+  if (cam.ease !== null) finishEase();
+  await leave();
+  if (cam.ease !== null) finishEase();
+  await settle();
+  env.reduced = true;
+  cam.pitch = 0;
+  cam.bearing = 0;
+  cam.hand = false;
+  cam.calls.length = 0;
+}
+
+const watchers = () => (listeners['moveend'] ?? []).length;
+const FLAT = { pitch: 0, bearing: 0 };
+
+test('an exit that runs its course is the one ease it always was, and leaves nothing armed', async () => {
+  await enterTilted();
+  const before = watchers();
+  setChrome(false);
+  await settle();
+  assert.equal(getFire3DStatus().state, 'inactive');
+  assert.deepEqual(cam.calls, [
+    ['easeTo', { ...FLAT, duration: presentation.FIRE3D_CAMERA_TRANSITION_MS }]
+  ]);
+  finishEase();
+  await settle();
+  assert.deepEqual({ pitch: cam.pitch, bearing: cam.bearing }, FLAT);
+  assert.equal(cam.calls.length, 1, 'no second camera call');
+  assert.ok(watchers() < before, 'the scene\'s own camera listener is gone and none was left in its place');
+  assert.equal(watchers(), 0);
+  await leaveFlat();
+});
+
+test('an exit cut short by another camera call still ends flat: the phone sheet\'s padding jump', async () => {
+  await enterTilted();
+  setChrome(false);
+  await settle();
+  easePartWay(0.3);
+  assert.equal(cam.pitch, 42, 'the restore is part of the way down');
+  // src/ui/mobile-sheet.ts `settle`: 150 ms after a viewport change.
+  map.jumpTo({ padding: { top: 0, left: 0, right: 0, bottom: 0 } });
+  await settle();
+  assert.deepEqual({ pitch: cam.pitch, bearing: cam.bearing }, FLAT, 'the rest of the turn was paid');
+  assert.deepEqual(cam.calls.at(-1), ['jumpTo', FLAT]);
+  assert.equal(cam.calls.filter(([kind, options]) => kind === 'jumpTo' && options.pitch === 0).length, 1, 'paid once');
+  assert.equal(watchers(), 0, 'nothing is left listening');
+  await leaveFlat();
+});
+
+test('it waits for the movement that cut it short, then pays', async () => {
+  await enterTilted();
+  setChrome(false);
+  await settle();
+  easePartWay(0.5);
+  // A region fit: an ease of its own that says nothing about pitch or bearing.
+  map.easeTo({ center: [-120, 47], zoom: 6 });
+  await settle();
+  assert.equal(cam.pitch, 30, 'not while the map is still moving');
+  finishEase();
+  await settle();
+  assert.deepEqual({ pitch: cam.pitch, bearing: cam.bearing }, FLAT);
+  assert.equal(watchers(), 0);
+  await leaveFlat();
+});
+
+test('it stands down when a person takes the tilt', async () => {
+  await enterTilted();
+  setChrome(false);
+  await settle();
+  easePartWay(0.3);
+  // Two fingers on the glass: the gesture stops the ease, then moves the pitch itself.
+  cam.hand = true;
+  stopEase();
+  await settle();
+  cam.pitch = 25;
+  cam.hand = false;
+  emit('moveend');
+  await settle();
+  assert.equal(cam.pitch, 25, 'the person\'s tilt is theirs');
+  assert.equal(cam.calls.filter(([kind]) => kind === 'jumpTo').length, 0);
+  assert.equal(watchers(), 0);
+  await leaveFlat();
+});
+
+test('a pan during the exit does not keep the scene\'s tilt', async () => {
+  await enterTilted();
+  setChrome(false);
+  await settle();
+  easePartWay(0.3);
+  // One finger drags the map: the ease stops, the pitch is not touched.
+  cam.hand = true;
+  stopEase();
+  await settle();
+  assert.equal(cam.pitch, 42, 'not under the person\'s finger');
+  cam.hand = false;
+  emit('moveend');
+  await settle();
+  assert.deepEqual({ pitch: cam.pitch, bearing: cam.bearing }, FLAT);
+  await leaveFlat();
+});
+
+test('a scene that starts again while the camera is still owed found the flat map, not the half-turned one', async () => {
+  await enterTilted();
+  setChrome(false);
+  await settle();
+  easePartWay(0.3);
+  assert.equal(cam.pitch, 42);
+  // Asked for again before the restore has finished.
+  setChrome(true);
+  await settle();
+  assert.equal(getFire3DStatus().state, 'active');
+  finishEase();
+  assert.equal(cam.pitch, presentation.FIRE3D_PITCH_DEGREES);
+  cam.calls.length = 0;
+  setChrome(false);
+  await settle();
+  assert.deepEqual(cam.calls, [
+    ['easeTo', { ...FLAT, duration: presentation.FIRE3D_CAMERA_TRANSITION_MS }]
+  ], 'the second exit heads for the camera the first scene found');
+  finishEase();
+  await settle();
+  assert.deepEqual({ pitch: cam.pitch, bearing: cam.bearing }, FLAT);
+  assert.equal(watchers(), 0);
+  await leaveFlat();
+});
+
+test('a reduced-motion exit is a jump and arms nothing', async () => {
+  env.reduced = true;
+  cam.pitch = 0;
+  cam.bearing = 0;
+  resize(390, 844);
+  setChrome(true);
+  setPreference(true);
+  await settle();
+  assert.equal(cam.pitch, presentation.FIRE3D_PITCH_DEGREES);
+  cam.calls.length = 0;
+  setChrome(false);
+  await settle();
+  assert.deepEqual(cam.calls, [['jumpTo', FLAT]]);
+  assert.equal(watchers(), 0);
+  await leaveFlat();
 });
