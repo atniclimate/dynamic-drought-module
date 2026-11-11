@@ -425,8 +425,8 @@ function renderAtHand(): void {
  * run once); the sheet activates only on a mobile, non-embed viewport, so the
  * search-controller chunk (and the island it pulls) never loads for an embed
  * (the C1 rule). The container is stable DOM, so the mount survives every
- * `renderAtHand()` rebuild; the component's `useId()` keeps its element ids
- * distinct from the console-catalog and Brief-head mounts.
+ * `renderAtHand()` rebuild; the component's own page-wide sequence keeps its
+ * element ids distinct from the console-catalog and Brief-head mounts.
  */
 function mountSheetSearch(): void {
   if (searchMounted || !mapRef) return;
