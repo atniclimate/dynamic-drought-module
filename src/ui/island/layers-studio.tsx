@@ -101,6 +101,13 @@ function OnTheMapNow({
     }
   }
   const hasCondition = on.some((def) => def.role === 'surface');
+  // The count says what is drawn. A layer whose read failed is counted as
+  // unavailable, never as on the map.
+  const unavailableCount = on.filter((def) => statuses.value.get(def.key) === 'error').length;
+  const drawnCount = on.length - unavailableCount;
+  const countText =
+    (drawnCount === 1 ? '1 layer' : `${drawnCount} layers`) +
+    (unavailableCount > 0 ? `, ${unavailableCount} unavailable` : '');
 
   // The pressed control leaves with its row, so focus moves to the row that
   // takes its place, or to the heading when the list empties: it never
@@ -127,9 +134,7 @@ function OnTheMapNow({
         <h3 id="layers-now-heading" ref={headingRef} tabIndex={-1}>
           On the map now
         </h3>
-        <span class="layers-now-count">
-          {on.length === 1 ? '1 layer' : `${on.length} layers`}
-        </span>
+        <span class="layers-now-count">{countText}</span>
       </div>
       {on.length > 0 ? (
         <ul class="layers-now-list" ref={listRef}>

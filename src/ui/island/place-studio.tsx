@@ -1505,7 +1505,12 @@ function PlaceStudio() {
   const pending = groups.filter((group) => group.status === 'loading' || group.status === 'idle');
   const failed = groups.filter((group) => group.status === 'unavailable');
   const shownRows = listed.flatMap((group) => group.rows);
-  const listedTotal = listed.reduce((sum, group) => sum + group.total, 0);
+  // What a match count is "of": every place the search looked through, in
+  // the types that loaded, whether or not a type had a match.
+  const searchedTotal = groups.reduce(
+    (sum, group) => sum + (group.status === 'ready' ? group.total : 0),
+    0
+  );
   // With nothing to list, one honest line says why: still loading, not
   // available (with a retry), nothing listed for the type, or no match.
   const listStatus: 'loading' | 'unavailable' | 'none' | 'no-match' | null =
@@ -1523,7 +1528,7 @@ function PlaceStudio() {
       ? ''
       : queryTokens.length === 0
         ? `${shownRows.length.toLocaleString('en-US')} ${shownRows.length === 1 ? 'place' : 'places'}`
-        : `${shownRows.length.toLocaleString('en-US')} of ${listedTotal.toLocaleString('en-US')} ${shownRows.length === 1 ? 'place matches' : 'places match'}`;
+        : `${shownRows.length.toLocaleString('en-US')} of ${searchedTotal.toLocaleString('en-US')} ${shownRows.length === 1 ? 'place matches' : 'places match'}`;
 
   // The list is one keyboard stop: the row the arrows last reached, else the
   // chosen row, else the first row.
@@ -1617,8 +1622,30 @@ function PlaceStudio() {
     }
   };
 
-  // Arrow keys walk the list as one widget; Tab leaves it for the selection bar.
+  // Arrow keys walk the list as one widget; Tab leaves it for the selection
+  // bar. With no bar the list is the studio's last stop, and the rows the
+  // arrows have not reached are out of the tab order, so Tab wraps to the
+  // first stop here: focus never leaves the studio for the page behind it.
   const onListKeyDown = (event: KeyboardEvent): void => {
+    if (event.key === 'Tab') {
+      if (event.shiftKey) return;
+      const row = event.currentTarget as HTMLElement;
+      const stops = Array.from(
+        row
+          .closest('.place-studio')
+          ?.querySelectorAll<HTMLElement>(
+            'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]'
+          ) ?? []
+      ).filter((stop) => stop.tabIndex >= 0 && stop.offsetParent !== null);
+      const later = stops.some(
+        (stop) => (row.compareDocumentPosition(stop) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0
+      );
+      if (!later) {
+        event.preventDefault();
+        stops[0]?.focus();
+      }
+      return;
+    }
     const step =
       event.key === 'ArrowDown' ? 1 : event.key === 'ArrowUp' ? -1 : event.key === 'Home' ? -Infinity : event.key === 'End' ? Infinity : 0;
     if (step === 0) return;
@@ -1916,6 +1943,10 @@ function PlaceStudio() {
                               data-place-id={entry.id}
                               aria-pressed={selected}
                               tabIndex={rowKey === tabStop ? 0 : -1}
+                              onFocus={() => {
+                                // The row that holds focus is the list's stop.
+                                if (rowKey !== tabStop) setCursor(rowKey);
+                              }}
                               onKeyDown={onListKeyDown}
                               onClick={() => choose(entry)}
                             >
@@ -2123,10 +2154,14 @@ function PlaceStudio() {
                   </p>
                 ) : null}
                 {/* The representation caveat rides every Tribal Nation
-                    selection, whole and in view: never dropped, never folded. */}
-                <p id="place-selection-caveat" class="place-studio-bar-caveat">
-                  {TRIBAL_OVERLAP_CAVEAT}
-                </p>
+                    selection that has a boundary representation, whole and in
+                    view: never dropped, never folded. A Nation with no matched
+                    boundary has no representation to qualify, and says that. */}
+                {read === 'unmatched' ? null : (
+                  <p id="place-selection-caveat" class="place-studio-bar-caveat">
+                    {TRIBAL_OVERLAP_CAVEAT}
+                  </p>
+                )}
               </>
             ) : null}
           </div>

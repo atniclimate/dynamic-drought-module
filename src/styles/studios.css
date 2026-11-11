@@ -1031,8 +1031,12 @@
   }
 
   /* ---- Layer studio ---- */
+  /* The rehosted imagery switch keeps its face; it gives the title its room. */
   #layers-studio-root .layers-studio-header .basemap-switcher-btn {
+    width: auto;
+    min-width: var(--touch-target);
     min-height: var(--touch-target);
+    padding-inline: 12px;
   }
   #layers-studio-root .layers-studio-search {
     max-width: none;
@@ -1244,6 +1248,14 @@
   #layers-studio-root .layer-toggle input[type='radio'] ~ .layer-toggle-text {
     padding-right: 32px;
   }
+  /* The conditions are a list of choices, ruled like the place list: a
+     hairline between neighbours, drawn short of the row's ends. */
+  #layers-studio-root .layer-toggle-single + .layer-toggle-single {
+    background-image: linear-gradient(var(--glass-hairline), var(--glass-hairline));
+    background-position: top center;
+    background-repeat: no-repeat;
+    background-size: calc(100% - 20px) 1px;
+  }
   #layers-studio-root .layer-toggle input:focus-visible {
     outline: 2px solid var(--focus-inner);
     outline-offset: 0;
@@ -1301,6 +1313,14 @@
   }
 }
 
+/* A short phone gives the pinned search's strip back to the list. */
+@media (max-width: 720px) and (max-height: 620px) {
+  #place-studio-root .place-studio-search {
+    position: relative;
+    background: none;
+  }
+}
+
 /* A phone on its side has no height for a bar under the page, so the bar
    stands beside it instead and the list keeps the full height. */
 @media (max-width: 720px) and (max-height: 480px) and (orientation: landscape) {
@@ -1338,13 +1358,16 @@
    Wider than a phone: the docked studio keeps its opaque cards
    ----------------------------------------------------------------------------- */
 @media (min-width: 721px) {
-  /* The bar spans the studio under the page: the place on the left, what its
-     read says in the middle, the two actions on the right. */
+  /* The bar spans the studio under the page: the place and the two actions
+     on one line, and under them what its read says, with the caveat beside
+     it at full size. */
   .place-studio-bar {
-    grid-template-areas: 'id notes actions clear';
-    grid-template-columns: minmax(240px, 1fr) minmax(0, 1.4fr) auto auto;
+    grid-template-areas:
+      'id actions clear'
+      'notes notes notes';
+    grid-template-columns: minmax(0, 1fr) auto auto;
     align-items: center;
-    gap: 6px 22px;
+    gap: 10px 16px;
     padding: 12px max(18px, calc((100% - var(--studio-header-max, 1080px)) / 2));
     border-top-color: var(--line-strong);
     border-radius: 0;
@@ -1356,10 +1379,24 @@
     height: 30px;
     margin: 0;
   }
+  .place-studio-bar-notes {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+    align-items: start;
+    gap: 2px 22px;
+  }
+  .place-studio-bar-state,
+  .place-studio-bar-note {
+    grid-column: 1;
+    margin-top: 0;
+  }
   .place-studio-bar-caveat {
-    margin-top: 5px;
-    padding-top: 5px;
-    border-top-color: var(--line);
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    margin-top: 0;
+    padding: 0 0 0 22px;
+    border-top: 0;
+    border-left: 1px solid var(--line);
   }
   .place-studio-action,
   .place-studio-details-toggle {
@@ -1387,6 +1424,10 @@
   }
   #place-studio-root .place-studio-option,
   #place-studio-root .place-studio-search input,
+  #place-studio-root .place-studio-type,
+  #place-studio-root .place-studio-retry,
+  :is(#place-studio-root, #layers-studio-root) .layers-studio-header > .layers-studio-back,
+  #layers-studio-root .layer-group-sources-toggle,
   .layer-group-fold {
     min-height: var(--touch-target);
   }
