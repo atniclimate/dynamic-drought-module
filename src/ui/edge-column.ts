@@ -170,12 +170,28 @@ function release(node: HTMLElement): void {
 // Planning
 // ---------------------------------------------------------------------------
 
+/**
+ * Whether a control counts toward its group: it is not hidden itself, nothing
+ * between it and the group's body is hidden, and it is not styled away.
+ *
+ * The group's OWN `hidden` must not count. The manager sets that attribute
+ * on a group the plan did not place (a group with nothing to show), so a
+ * count that read it would stay at zero after the group's controls came
+ * back, and the group would be hidden for the life of the page. That was
+ * the fault: the Layers studio borrows Satellite, the view group empties
+ * and is hidden, and Satellite never returned to the column.
+ */
+export function countsTowardGroup(button: HTMLElement, body: HTMLElement): boolean {
+  if (button.hidden) return false;
+  const hiddenAbove = button.closest<HTMLElement>('[hidden]');
+  if (hiddenAbove !== null && body.contains(hiddenAbove)) return false;
+  return getComputedStyle(button).display !== 'none';
+}
+
 function shownCells(body: HTMLElement): HTMLElement[] {
   const cells: HTMLElement[] = [];
   for (const button of body.querySelectorAll<HTMLElement>('button')) {
-    if (button.hidden || button.closest('[hidden]')) continue;
-    if (getComputedStyle(button).display === 'none') continue;
-    cells.push(button);
+    if (countsTowardGroup(button, body)) cells.push(button);
   }
   return cells;
 }
@@ -329,7 +345,10 @@ function onBodyClick(id: EdgeGroupId, event: Event): void {
   window.setTimeout(() => {
     if (openGroup !== id) return;
     if (button.getAttribute('aria-expanded') === 'true') return;
-    setOpen(null, false);
+    // The row is about to be hidden with the pressed control inside it:
+    // hand focus to the cell that stands for the group, so a keyboard,
+    // switch or screen reader user is not left on a control that is gone.
+    setOpen(null, true);
   }, 0);
 }
 
