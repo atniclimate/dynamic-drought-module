@@ -585,7 +585,13 @@ test('"none" is said only when every layer that is on loaded fully and covers th
     assert.equal(verdict.kind, 'incomplete', status);
     assert.deepEqual(verdict.tested, ['aiannh']);
     assert.deepEqual(verdict.untested, [{ key: 'bia-reservations', status }]);
+    assert.equal(verdict.covered, true, status);
   }
+  // A failed layer AND a disc past what was loaded: still incomplete, and it
+  // carries `covered` so its words never call the loaded layer checked (R2-2).
+  const pastLoaded = tribalVerdict([{ key: 'aiannh', status: 'ready' }, { key: 'bia-reservations', status: 'error' }], hits, false);
+  assert.equal(pastLoaded.kind, 'incomplete');
+  assert.equal(pastLoaded.covered, false);
   // Nothing on: nothing tested, and the verdict says so instead of guessing.
   const off = [{ key: 'aiannh', status: 'off' }, { key: 'bia-reservations', status: 'off' }];
   assert.deepEqual(tribalVerdict(off, [], true), { kind: 'layers-off' });
@@ -712,6 +718,17 @@ test('every Tribal verdict is its own sentence, and only "inside" names a place 
     'Not checked: Reservation Boundaries (BIA) (unavailable).',
     'Checked, and you are not inside any area it draws: Tribal Lands (US Census).'
   ]);
+  // The same layers with the disc reaching past what was loaded: no layer is
+  // called checked, and each says why (review finding R2-2).
+  const partialWide = tribalCopy(
+    tribalVerdict([{ key: 'aiannh', status: 'ready' }, { key: 'bia-reservations', status: 'error' }], [], false),
+    names
+  );
+  assert.equal(partialWide.qualifier, 'Tribal lands check incomplete.');
+  assert.deepEqual(partialWide.detail, [
+    'Not checked: Reservation Boundaries (BIA) (unavailable) and Tribal Lands (US Census) (the position reaches past the area that was loaded).'
+  ]);
+  assert.ok(!partialWide.detail.some((line) => /not inside/.test(line)), 'no absence is claimed past the loaded area');
   // The six layer states keep their own words.
   for (const [status, word] of [['degraded', 'live (partial)'], ['loading', 'still loading'], ['zoom-in', 'zoom in to load']]) {
     const copy = tribalCopy(tribalVerdict([{ key: 'aiannh', status }], [], true), names);

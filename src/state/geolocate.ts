@@ -696,7 +696,9 @@ export interface TribalLayerReading {
  *   inside      the whole disc is inside one loaded area (the ranked winner)
  *   near        the disc reaches a loaded area's edge: neither side is claimed
  *   none        every layer that is on loaded fully, and the disc touches nothing
- *   incomplete  nothing touched, but a layer failed, was partial or was still loading
+ *   incomplete  nothing touched, but a layer failed, was partial or was still loading;
+ *               where the disc also reaches past what was loaded (`covered`
+ *               false), the layers that did load prove nothing either
  *   too-wide    nothing touched, but the disc reaches past what was loaded
  *   layers-off  no Tribal boundary layer is on, so nothing was tested
  */
@@ -705,7 +707,12 @@ export type TribalVerdict =
   | { readonly kind: 'inside'; readonly hit: TribalHit; readonly biaLandArea: string | null }
   | { readonly kind: 'near'; readonly hits: readonly TribalHit[] }
   | { readonly kind: 'none'; readonly tested: readonly string[] }
-  | { readonly kind: 'incomplete'; readonly tested: readonly string[]; readonly untested: readonly TribalLayerReading[] }
+  | {
+      readonly kind: 'incomplete';
+      readonly tested: readonly string[];
+      readonly untested: readonly TribalLayerReading[];
+      readonly covered: boolean;
+    }
   | { readonly kind: 'too-wide'; readonly tested: readonly string[] };
 
 /**
@@ -738,7 +745,7 @@ export function tribalVerdict(
 
   const tested = on.filter((layer) => layer.status === 'ready' || layer.status === 'no-data').map((layer) => layer.key);
   const untested = on.filter((layer) => layer.status !== 'ready' && layer.status !== 'no-data');
-  if (untested.length > 0) return { kind: 'incomplete', tested, untested };
+  if (untested.length > 0) return { kind: 'incomplete', tested, untested, covered };
   if (!covered) return { kind: 'too-wide', tested };
   return { kind: 'none', tested };
 }
@@ -937,15 +944,27 @@ export function tribalCopy(verdict: TribalVerdict, names: (key: string) => strin
         qualifier: `Not inside any area drawn by ${list(verdict.tested)}.`,
         detail: [NO_AREA_CAVEAT]
       };
-    case 'incomplete':
+    case 'incomplete': {
+      const untested = verdict.untested.map((layer) => `${names(layer.key)} (${untestedWord(layer.status)})`);
+      // Past the loaded area a layer that loaded proves nothing either (the
+      // same rule that makes "too-wide"), so it is not called checked.
+      if (!verdict.covered) {
+        const unreached = verdict.tested.map((key) => `${names(key)} (the position reaches past the area that was loaded)`);
+        return {
+          title: null,
+          qualifier: 'Tribal lands check incomplete.',
+          detail: [`Not checked: ${listOf([...untested, ...unreached])}.`]
+        };
+      }
       return {
         title: null,
         qualifier: 'Tribal lands check incomplete.',
         detail: [
-          `Not checked: ${listOf(verdict.untested.map((layer) => `${names(layer.key)} (${untestedWord(layer.status)})`))}.`,
+          `Not checked: ${listOf(untested)}.`,
           ...(verdict.tested.length > 0 ? [`Checked, and you are not inside any area it draws: ${list(verdict.tested)}.`] : [])
         ]
       };
+    }
     case 'too-wide':
       return {
         title: null,
