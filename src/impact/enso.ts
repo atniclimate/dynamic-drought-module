@@ -210,8 +210,14 @@ export async function readEnsoPhaseLabel(
 // here; the full-suite run caught it through tests/evidence-contract.spec.ts,
 // which was outside that lane's fence and outside both review rounds.
 const SOURCE = 'NOAA CPC Relative Oceanic Nino Index (RONI) and observed ENSO indices';
-const MODULATORS = // vocab-allow: honesty disclaimer, denies being a forecast
-  'This is a shift in the odds, not a forecast: the Pacific Decadal Oscillation, the event strength and timing, and intraseasonal variability can reinforce or mute the signal.';
+/**
+ * The lead clause of `MODULATORS`, held on its own so a surface that shows it
+ * alone (the ENSO chain's disclosure summary) shows the same words, never a
+ * cut of the sentence.
+ */
+// vocab-allow: honesty disclaimer, denies being a forecast
+const ODDS_LEAD = 'This is a shift in the odds, not a forecast';
+const MODULATORS = `${ODDS_LEAD}: the Pacific Decadal Oscillation, the event strength and timing, and intraseasonal variability can reinforce or mute the signal.`;
 
 /**
  * The nested truth of every ENSO surface, in this module's governed words
@@ -220,13 +226,14 @@ const MODULATORS = // vocab-allow: honesty disclaimer, denies being a forecast
  * the ocean beside a place can never be read as a cause.
  *
  * `odds` is `MODULATORS` itself, the sentence every regional tendency claim
- * below already ends with. `events` is NOAA CPC's own sentence on single
+ * below already ends with, and `lead` is its lead clause. `events` is NOAA CPC's own sentence on single
  * storms, verbatim, as the technical section already quotes it
  * (src/ui/map-technical-information.ts, the ENSO notes, with the same link);
  * tests/enso-chain.test.mjs holds the two copies equal, so the quotation
  * cannot drift from the one the briefing shows.
  */
 export const ENSO_NESTED_TRUTH = {
+  lead: ODDS_LEAD,
   odds: MODULATORS,
   events:
     'It is inaccurate to label individual storms or events as a La Niña or El Niño event. Rather, these climate extremes affect the position and intensity of the jet streams, and the normal regions of high and low pressure, which in turn affect the average intensity and track of storms.',
@@ -1046,10 +1053,21 @@ function claimDates(retrieved: string, published?: string): {
   return { retrieved, ...(published ? { published } : {}) };
 }
 
-export async function fetchEnsoClaims(
+export function fetchEnsoClaims(
   _context: BoundarySelectionContext,
   signal: AbortSignal
 ): Promise<SourceResult> {
+  return readEnsoClaims(signal);
+}
+
+/**
+ * The same claims with no place in hand. The read never used its selection
+ * (every claim here is about the tropical Pacific index or the regional
+ * tendency this module cites), so the ENSO mode's chain (src/ui/enso-chain.ts)
+ * reads through this door, and the briefing's lane keeps `fetchEnsoClaims`.
+ * One body, so the two surfaces cannot state different claims.
+ */
+export async function readEnsoClaims(signal: AbortSignal): Promise<SourceResult> {
   try {
     const snap = await loadEnsoSnapshot(signal);
     if (signal.aborted) return { claims: [], ok: false };
