@@ -704,6 +704,10 @@ export function createLocate(map: maplibregl.Map, button: HTMLButtonElement, sta
     // A card that closes under the focus hands it to the cell, never to the page.
     const held = card.hasFocus();
     card.hide();
+    // With no card and nothing in flight, a line about a card that is gone
+    // (the offer, a search that stopped) is not left standing in the region.
+    // Whoever closed it speaks next, if there is something to say.
+    if (!isInFlight(state.phase)) status.textContent = '';
     if (held) button.focus({ preventScroll: true });
   }
 
