@@ -1,11 +1,17 @@
 /**
- * Desktop 3D Fire mode orchestrator (W3 terrain + camera + sky, W4 smoke).
+ * 3D Fire mode orchestrator (W3 terrain + camera + sky, W4 smoke).
  *
  * One combined mode: 3D terrain over the bundled Pacific Northwest DEM
  * archive, a pitched camera, a dark-palette sky, and (after terrain
  * succeeds) the lazily imported volumetric smoke presentation. The mode is
  * governed by the fire3d preference store (URL `fire3d=true`) and applies
  * only behind its full activation gate; see `shouldFire3DBeActive`.
+ *
+ * Two shells can present it. The desktop console has since W3. The phone
+ * shell can since owner direction 2026-11-09 (sprint), DR-pending, and only
+ * while its own 3D chrome is mounted (src/ui/fire3d-phone-scene.ts), because
+ * that chrome is where the terrain coverage statement and the non-prediction
+ * disclosure stand on a phone; see `presentingShell`.
  *
  * Terrain source discipline: this module owns its OWN raster-dem source
  * ('fire3d-terrain-dem') and never reuses the hillshade layer's source, so
@@ -43,7 +49,13 @@ import type * as maplibregl from 'maplibre-gl';
 
 import type { HazardClusterKey } from '../config/clusters';
 import {
+  FIRE3D_PHONE_CHROME_ATTRIBUTE,
+  FIRE3D_PHONE_MIN_HEIGHT_PX,
+  FIRE3D_PHONE_MIN_HEIGHT_QUERY
+} from '../config/fire3d-phone';
+import {
   FIRE3D_CAMERA_TRANSITION_MS,
+  FIRE3D_CONSOLE_WIDTH_QUERY,
   FIRE3D_COVERAGE_NOTE,
   FIRE3D_MIN_HEIGHT_PX,
   FIRE3D_MIN_HEIGHT_QUERY,
@@ -62,7 +74,7 @@ import {
   isWithinTerrainCoverage,
   terrainEdgeLine
 } from '../config/fire3d-presentation';
-import type { TerrainCoverageReading } from '../config/fire3d-presentation';
+import type { Fire3DEntryPhase, TerrainCoverageReading } from '../config/fire3d-presentation';
 import { terrainCoverageFor, terrainCoverageFromHeader, FIRE3D_TERRAIN_COVERAGE,
   type TerrainCoverage } from '../config/terrain-coverage';
 import { URLS } from '../config/urls';
@@ -106,6 +118,14 @@ export interface Fire3DStatus {
   readonly state: 'inactive' | 'checking' | 'active' | 'unavailable';
   /** Honest user-facing reason; non-null only for 'unavailable'. */
   readonly reason: string | null;
+  /**
+   * The step of the entry the scene is waiting on, while `checking`; null in
+   * every other state (owner direction 2026-11-09 (sprint), DR-pending). The
+   * steps are the awaits `activateScene` really makes, in order, so a
+   * surface that shows the entry can say what is happening instead of one
+   * word for the whole wait. The console does not render it.
+   */
+  readonly phase: Fire3DEntryPhase | null;
   /** True while the volumetric smoke read is in place beside the terrain;
    * false while active with the flat veil only (partial degrade). */
   readonly smokeVolume: boolean;
@@ -200,6 +220,11 @@ export function deriveSceneTransport(
 
 export interface Fire3DGateInput {
   readonly preference: boolean;
+  /**
+   * A shell that can present the scene has the viewport. The name is from
+   * when only the desktop console could; since 2026-11-09 the phone shell
+   * can too (`presentingShell`), and the runtime passes true for either.
+   */
   readonly desktopViewport: boolean;
   readonly committedCluster: HazardClusterKey | 'custom';
   readonly activeLayerKeys: ReadonlySet<string>;
@@ -217,6 +242,14 @@ export interface Fire3DGateInput {
    * `window.innerHeight`.
    */
   readonly viewportHeight?: number;
+  /**
+   * The height floor of the shell that would present the scene, in CSS
+   * pixels. Optional: absent, it is the console's FIRE3D_MIN_HEIGHT_PX, so
+   * every caller written before the phone shell could present the scene
+   * keeps its answer. The runtime passes FIRE3D_PHONE_MIN_HEIGHT_PX for the
+   * phone shell.
+   */
+  readonly minViewportHeight?: number;
 }
 
 /**
@@ -225,8 +258,9 @@ export interface Fire3DGateInput {
  * 'custom' (the user added a reference layer to the Fire view) keeps the
  * mode alive while a fire event layer remains in the active set, so one
  * extra layer never collapses the scene. Switching to another cluster,
- * removing every fire event layer, toggling the preference off, a narrow
- * viewport, a short viewport, or a device without WebGL 2 always exits.
+ * removing every fire event layer, toggling the preference off, a viewport
+ * no shell can present the scene in, a viewport shorter than that shell's
+ * floor, or a device without WebGL 2 always exits.
  *
  * DR-025a made the entry test capability plus geometry rather than width
  * alone: a tablet in the 721 to 1024 px band is welcome, a landscape phone
@@ -239,7 +273,7 @@ export function shouldFire3DBeActive(input: Fire3DGateInput): boolean {
   if (input.webgl2 === false) return false;
   if (
     input.viewportHeight !== undefined &&
-    input.viewportHeight < FIRE3D_MIN_HEIGHT_PX
+    input.viewportHeight < (input.minViewportHeight ?? FIRE3D_MIN_HEIGHT_PX)
   ) {
     return false;
   }
@@ -259,6 +293,7 @@ export function shouldFire3DBeActive(input: Fire3DGateInput): boolean {
 let status: Fire3DStatus = {
   state: 'inactive',
   reason: null,
+  phase: null,
   smokeVolume: false,
   perimeterRibbon: false,
   contextLayers: [],
@@ -272,6 +307,8 @@ const statusListeners = new Set<() => void>();
 let controllerWired = false;
 let active = false;
 let activation: AbortController | null = null;
+/** Mirrors Fire3DStatus.phase: the awaited step of the entry in flight. */
+let entryPhase: Fire3DEntryPhase | null = null;
 /** Mirrors Fire3DStatus.terrainCoverage; read by publishStatus and by
  * syncEmbedNote, kept current by coverageMoveListener while active. `full`
  * while inactive, so neither coverage sentence renders outside the scene. */
@@ -426,6 +463,7 @@ function publishStatus(
   status = {
     state,
     reason,
+    phase: state === 'checking' ? entryPhase : null,
     smokeVolume: state === 'active' && smokeVolumeOn,
     perimeterRibbon: state === 'active' && ribbonOn,
     contextLayers: state === 'active' ? contextKeys : [],
@@ -441,6 +479,11 @@ function publishStatus(
   if (typeof document !== 'undefined') {
     const root = document.documentElement;
     root.dataset.ddmFire3d = state;
+    if (state === 'checking' && entryPhase !== null) {
+      root.dataset.ddmFire3dPhase = entryPhase;
+    } else {
+      delete root.dataset.ddmFire3dPhase;
+    }
     if (state === 'active') {
       root.dataset.ddmFire3dSmoke = smokeVolumeOn ? 'volume' : 'flat';
       root.dataset.ddmFire3dRibbon = ribbonOn ? 'on' : 'off';
@@ -472,12 +515,36 @@ function republishActive(): void {
   if (status.state === 'active') publishStatus('active', null);
 }
 
-function desktopViewport(): boolean {
-  return (
-    typeof window !== 'undefined' &&
-    typeof window.matchMedia === 'function' &&
-    window.matchMedia(FIRE3D_MIN_WIDTH_QUERY).matches
-  );
+/** Name the step the entry now waits on. Only while the entry is still
+ * `checking`: a rollback or a failure has already published its own state. */
+function enterPhase(phase: Fire3DEntryPhase): void {
+  entryPhase = phase;
+  if (status.state === 'checking') publishStatus('checking', null);
+}
+
+/**
+ * Which shell could present the scene in this viewport, or null when none
+ * can (owner direction 2026-11-09 (sprint), DR-pending).
+ *
+ * At the console's width it is the desktop console, as it always was. Below
+ * it the phone shell may, on one condition read from the document itself:
+ * its 3D chrome is mounted (FIRE3D_PHONE_CHROME_ATTRIBUTE on #app). That
+ * chrome is the card carrying the terrain coverage statement and the
+ * non-prediction disclosure, so a phone cannot hold the scene without them,
+ * whatever order the two lazy chunks arrive in. A phone-width embed has no
+ * phone shell and no such chrome, so it stays flat exactly as before.
+ */
+function presentingShell(): 'console' | 'phone' | null {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+    return null;
+  }
+  if (!window.matchMedia(FIRE3D_MIN_WIDTH_QUERY).matches) return null;
+  if (window.matchMedia(FIRE3D_CONSOLE_WIDTH_QUERY).matches) return 'console';
+  const app =
+    typeof document !== 'undefined' && typeof document.getElementById === 'function'
+      ? document.getElementById('app')
+      : null;
+  return app?.hasAttribute(FIRE3D_PHONE_CHROME_ATTRIBUTE) === true ? 'phone' : null;
 }
 
 /**
@@ -497,10 +564,19 @@ function hasWebGl2(): boolean {
   return webGl2Capability().webgl2;
 }
 
-/** The gate's viewport-height input, omitted where there is no window. */
-function viewportHeightInput(): { readonly viewportHeight?: number } {
+/**
+ * The gate's viewport-height inputs, omitted where there is no window: the
+ * height, and the floor of the shell that would present the scene.
+ */
+function viewportHeightInput(shell: 'console' | 'phone' | null): {
+  readonly viewportHeight?: number;
+  readonly minViewportHeight?: number;
+} {
   if (typeof window !== 'undefined' && typeof window.innerHeight === 'number') {
-    return { viewportHeight: window.innerHeight };
+    return {
+      viewportHeight: window.innerHeight,
+      minViewportHeight: shell === 'phone' ? FIRE3D_PHONE_MIN_HEIGHT_PX : FIRE3D_MIN_HEIGHT_PX
+    };
   }
   return {};
 }
@@ -724,6 +800,7 @@ async function activateScene(map: maplibregl.Map): Promise<void> {
   activation = myController;
   const signal = myController.signal;
   const myGeneration = ++generation;
+  entryPhase = 'probe';
   publishStatus('checking', null);
   savedCamera = { pitch: map.getPitch(), bearing: map.getBearing() };
 
@@ -873,6 +950,9 @@ async function activateScene(map: maplibregl.Map): Promise<void> {
     })
     .catch((err: unknown) => warnComponent('dryness ground', err));
 
+  // The next two awaits are the smoke volume and the perimeter ribbon: say so
+  // to whatever surface is showing the entry (Fire3DStatus.phase).
+  enterPhase('atmosphere');
   // W4: the volumetric smoke rides its own lazy chunk and is non-fatal by
   // contract; terrain stays and the flat veil stays visible on any failure.
   try {
@@ -905,6 +985,7 @@ async function activateScene(map: maplibregl.Map): Promise<void> {
   if (myGeneration !== generation || !active) return;
   if (ribbonModule) readRibbon(map, ribbonModule);
 
+  enterPhase('context');
   // W-CTX: the issuer-published context layers ride their own lazy chunk
   // and are non-fatal by contract; each missing layer degrades alone.
   try {
@@ -1045,14 +1126,15 @@ export function initFire3DController(map: maplibregl.Map): void {
   controllerWired = true;
 
   const evaluate = (): void => {
+    const shell = presentingShell();
     const should = shouldFire3DBeActive({
       preference: getFire3DPreference(),
-      desktopViewport: desktopViewport(),
+      desktopViewport: shell !== null,
       committedCluster: getCommittedSnapshot().cluster,
       activeLayerKeys: registry.getActiveKeys(),
       currentlyActive: active || activation !== null,
       webgl2: hasWebGl2(),
-      ...viewportHeightInput()
+      ...viewportHeightInput(shell)
     });
     if (should) {
       if (!active && activation === null) {
@@ -1096,6 +1178,23 @@ export function initFire3DController(map: maplibregl.Map): void {
     window
       .matchMedia(FIRE3D_MIN_HEIGHT_QUERY)
       .addEventListener('change', evaluate);
+    // Which shell presents the scene turns on the console's width, and the
+    // phone shell has a floor of its own (`presentingShell`).
+    window.matchMedia(FIRE3D_CONSOLE_WIDTH_QUERY).addEventListener('change', evaluate);
+    window.matchMedia(FIRE3D_PHONE_MIN_HEIGHT_QUERY).addEventListener('change', evaluate);
+  }
+  // The phone shell presents the scene only while its 3D chrome is mounted,
+  // and that is a fact of the document, not of a media query: the chrome
+  // arrives in its own lazy chunk and leaves when the phone shell does.
+  const appShell =
+    typeof document !== 'undefined' && typeof document.getElementById === 'function'
+      ? document.getElementById('app')
+      : null;
+  if (appShell && typeof MutationObserver === 'function') {
+    new MutationObserver(evaluate).observe(appShell, {
+      attributes: true,
+      attributeFilter: [FIRE3D_PHONE_CHROME_ATTRIBUTE]
+    });
   }
   if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
     window.addEventListener('ddm:whp-shade', (event) => {
