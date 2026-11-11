@@ -69,6 +69,7 @@ import {
   resolveStates,
   tribalLayerName,
   tribalLayerReadings,
+  tribalLayersActive,
   tribalPlaceWords
 } from './locate-place';
 import type { TribalCheck, TribalPlaceWords } from './locate-place';
@@ -234,6 +235,7 @@ export function createLocate(map: maplibregl.Map, button: HTMLButtonElement, sta
   const cancel = (): void => {
     attempts += 1;
     dispatch({ type: 'cancel' });
+    say('Locate cancelled.');
   };
 
   // -------------------------------------------------------------------------
@@ -276,7 +278,17 @@ export function createLocate(map: maplibregl.Map, button: HTMLButtonElement, sta
     const copy = phaseCopy(state);
     if (copy && (state.phase !== before.phase || state.permission !== before.permission)) {
       say(isInFlight(state.phase) ? `${copy.title}.` : `${copy.title}. ${copy.body}`);
+      if (!isInFlight(state.phase)) focusAnswer();
     }
+  }
+
+  /**
+   * The card is far from the cell in the tab order (it stands in the map's
+   * dock). When an answer lands while the cell still has the focus, the
+   * focus goes to the answer's title; Escape hands it back to the cell.
+   */
+  function focusAnswer(): void {
+    if (document.activeElement === button && card.shown) card.focusTitle();
   }
 
   // -------------------------------------------------------------------------
@@ -327,8 +339,9 @@ export function createLocate(map: maplibregl.Map, button: HTMLButtonElement, sta
       const copy = locatedCopy(mine.fix, finding);
       say(`${copy.title}. ${accuracyLine(mine.fix)} ${copy.qualifier}`.trim());
       const only = copy.certain ? copy.states[0] : undefined;
+      render();
+      focusAnswer();
       if (only) openState(mine, only);
-      else render();
     });
   }
 
@@ -355,10 +368,14 @@ export function createLocate(map: maplibregl.Map, button: HTMLButtonElement, sta
     mine.loweredSheet = false;
     render();
     void openStateBriefingFor(map, place, () => located === mine).then(() => {
-      // A launch has no gesture to earn the sheet's rise; the stored opt-in is the ask.
-      if (located === mine && fromLaunch && isSheetActive() && getSheetDetent() === 'closed') {
-        setSheetDetent('half');
-      }
+      // A launch has no gesture to earn the sheet's rise; the stored opt-in
+      // is the ask. The sheet rises once the camera has framed the place.
+      if (!fromLaunch || !isSheetActive()) return;
+      const raise = (): void => {
+        if (located === mine && getSheetDetent() === 'closed') setSheetDetent('half');
+      };
+      if (map.isMoving()) map.once('moveend', raise);
+      else raise();
     });
   }
 
@@ -456,9 +473,15 @@ export function createLocate(map: maplibregl.Map, button: HTMLButtonElement, sta
       }
     ];
     if (mine.tribal === 'idle') {
-      if (tribalLayerReadings().every((layer) => layer.status === 'off')) {
+      if (!tribalLayersActive()) {
+        const failed = tribalLayerReadings().some((layer) => layer.status === 'error');
         return [
-          { type: 'text', text: 'No Tribal boundary layer is on, so there is nothing loaded to check your position against.' },
+          {
+            type: 'text',
+            text: failed
+              ? 'The Tribal boundary layers are unavailable right now, so there is nothing loaded to check your position against.'
+              : 'No Tribal boundary layer is on, so there is nothing loaded to check your position against.'
+          },
           ...turnOn
         ];
       }
@@ -665,8 +688,14 @@ export function createLocate(map: maplibregl.Map, button: HTMLButtonElement, sta
 
   function render(): void {
     const view = currentView();
-    if (view) card.show(view);
-    else card.hide();
+    if (view) {
+      card.show(view);
+      return;
+    }
+    // A card that closes under the focus hands it to the cell, never to the page.
+    const held = card.hasFocus();
+    card.hide();
+    if (held) button.focus({ preventScroll: true });
   }
 
   /** Escape inside the card: step back once, and hand focus to the cell. */
@@ -690,6 +719,7 @@ export function createLocate(map: maplibregl.Map, button: HTMLButtonElement, sta
     dropLocated();
     state = IDLE_STATE;
     busyShown = false;
+    status.textContent = '';
     syncButton();
     render();
   }).observe(app, { attributes: true, attributeFilter: ['data-sheet-detent'] });
@@ -698,7 +728,6 @@ export function createLocate(map: maplibregl.Map, button: HTMLButtonElement, sta
     press(): void {
       if (isInFlight(state.phase)) {
         cancel();
-        say('Locate cancelled.');
       } else if (isLocated(state.phase)) {
         remove();
       } else {

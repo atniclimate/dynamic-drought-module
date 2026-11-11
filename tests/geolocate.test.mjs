@@ -621,8 +621,8 @@ test('a located card says what the outlines support and nothing more', async () 
   assert.match(unread.title, /not named/);
   assert.equal(unread.certain, false);
   // The radius is stated in plain units, and a coarse one is called approximate.
-  assert.equal(accuracyLine(GOOD), 'Position good to about 20 m (65 ft).');
-  assert.equal(accuracyLine(COARSE), 'Approximate position: good to about 5 km (3.1 mi).');
+  assert.equal(accuracyLine(GOOD), 'Good to about 20 m (65 ft).');
+  assert.equal(accuracyLine(COARSE), 'Approximate: good to about 5 km (3.1 mi).');
 });
 
 test('the line shown before the frame names only who is asked, and what they learn', async () => {

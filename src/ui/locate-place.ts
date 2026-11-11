@@ -152,14 +152,28 @@ export async function resolveStates(fix: LocateFix, signal: AbortSignal): Promis
   }
 }
 
-/** The Tribal boundary layers as the registry reports them now. */
+/**
+ * The Tribal boundary layers as the registry reports them now. A layer whose
+ * activation failed is taken off the active set with its `error` status kept
+ * (src/state/layer-controller.ts): that is "unavailable", never "off", so a
+ * check cannot pass over a source that was asked for and did not answer.
+ */
 export function tribalLayerReadings(): TribalLayerReading[] {
   const active = registry.getActiveKeys();
-  return TRIBAL_LAYERS.map(({ key }) => ({
-    key,
-    // An active layer with no status yet is still loading.
-    status: active.has(key) ? (registry.getStatus(key) ?? 'loading') : 'off'
-  }));
+  return TRIBAL_LAYERS.map(({ key }) => {
+    const status = registry.getStatus(key);
+    return {
+      key,
+      // An active layer with no status yet is still loading.
+      status: active.has(key) ? (status ?? 'loading') : status === 'error' ? 'error' : 'off'
+    };
+  });
+}
+
+/** Whether any Tribal boundary layer is on the map now, and so would load a new view. */
+export function tribalLayersActive(): boolean {
+  const active = registry.getActiveKeys();
+  return TRIBAL_LAYERS.some(({ key }) => active.has(key));
 }
 
 /** A layer's catalog name with its source, for "checked" and "not checked" lines. */
@@ -170,8 +184,8 @@ export function tribalLayerName(key: string): string {
 
 /** Who the boundary layers that are on ask, for the line shown before the frame. */
 export function agenciesAsked(): string[] {
-  const on = new Set(tribalLayerReadings().filter((layer) => layer.status !== 'off').map((layer) => layer.key));
-  return TRIBAL_LAYERS.filter((layer) => on.has(layer.key) && layer.source !== 'tribal').map((layer) =>
+  const active = registry.getActiveKeys();
+  return TRIBAL_LAYERS.filter((layer) => active.has(layer.key) && layer.source !== 'tribal').map((layer) =>
     drawnBy(layer.source)
   );
 }
@@ -245,9 +259,10 @@ export async function checkTribalLands(
   fix: LocateFix,
   signal: AbortSignal
 ): Promise<TribalCheck | null> {
-  // Nothing on means nothing to load and nothing to test: say so, and leave the camera alone.
-  if (tribalLayerReadings().every((layer) => layer.status === 'off')) {
-    return { kind: 'verdict', verdict: { kind: 'layers-off' }, toleranceM: 0 };
+  // Nothing on the map means nothing to load and nothing to test: say so
+  // (off, or asked for and unavailable), and leave the camera alone.
+  if (!tribalLayersActive()) {
+    return { kind: 'verdict', verdict: tribalVerdict(tribalLayerReadings(), [], true), toleranceM: 0 };
   }
 
   const [west, south, east, north] = coarseCell(fix.lng, fix.lat);

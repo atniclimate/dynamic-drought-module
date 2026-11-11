@@ -761,8 +761,8 @@ export function generalizationM(zoomBucket: number): number {
 /** How good the position is, in plain units. The first sentence of every located line. */
 export function accuracyLine(fix: LocateFix): string {
   return fix.accuracy > LOW_ACCURACY_M
-    ? `Approximate position: good to about ${plainDistance(fix.accuracy)}.`
-    : `Position good to about ${plainDistance(fix.accuracy)}.`;
+    ? `Approximate: good to about ${plainDistance(fix.accuracy)}.`
+    : `Good to about ${plainDistance(fix.accuracy)}.`;
 }
 
 /** A state's name as a sentence takes it. */
