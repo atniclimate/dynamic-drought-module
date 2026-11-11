@@ -735,6 +735,51 @@ function cellsOf(briefing: ImpactBriefing): HazardCell[] {
 }
 
 /**
+ * The at-hand glance (owner direction 2026-11-09 (sprint), DR-pending): the
+ * FIRST read of this briefing's reading order, as one row for the phone
+ * sheet's at-hand block, so the sheet's lowest stop already says what leads
+ * here. It is the first tile of the priority view and nothing else: the
+ * same order (`orderBriefing`), the same hazard word, the same headline in
+ * the issuer's words, the same evidence badge and the same accessible name.
+ * Under it one line says how many reads are ranked and that the order is
+ * not a severity score.
+ *
+ * Returns an empty string when no read holds a class in the reading order.
+ * The sheet then keeps the line it showed before; an empty glance is never
+ * drawn, because a row that says "nothing" would read as an all-clear.
+ *
+ * The row is a button carrying its tile's key (`data-glance-key`): the
+ * sheet raises the report and hands focus to that tile
+ * (src/ui/mobile-sheet.ts).
+ */
+export function renderLeadGlance(briefing: ImpactBriefing): string {
+  const order = orderBriefing(cellsOf(briefing));
+  const first = order.ranked[0];
+  if (!first) return '';
+  const claim = first.lead.claim;
+  const pres = EVIDENCE_PRESENTATION[claim.evidence];
+  const date = claimDateLine(claim);
+  const name =
+    `${HAZARD_LABELS[first.hazard]}: ${first.reason}. Source: ${claim.source}. ` +
+    `${date ? `${date}. ` : ''}Evidence: ${pres.label}. Opens the full report at this read.`;
+  const count = order.ranked.length;
+  const note =
+    count === 1
+      ? `The one read in the reading order. ${PRIORITY_ORDER_NOTE}`
+      : `First of ${count} in the reading order. ${PRIORITY_ORDER_NOTE}`;
+  return (
+    `<div class="sheet-glance" data-glance-count="${count}">` +
+    `<button type="button" class="sheet-glance-row" data-evidence="${claim.evidence}" ` +
+    `data-glance-key="tile:${first.hazard}:${first.family}" aria-label="${escapeHtml(name)}">` +
+    `<span class="sheet-glance-top"><span class="sheet-glance-hazard">${escapeHtml(HAZARD_LABELS[first.hazard])}</span>${badge(claim)}</span>` +
+    `<span class="sheet-glance-headline">${headlineHtml(first)}</span>` +
+    `</button>` +
+    `<p class="sheet-glance-note">${escapeHtml(note)}</p>` +
+    `</div>`
+  );
+}
+
+/**
  * Render the priority view for one briefing. `now` is the moment the
  * present-together strip speaks for; the runtime passes the render time.
  */

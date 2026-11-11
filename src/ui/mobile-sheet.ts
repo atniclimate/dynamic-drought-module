@@ -126,6 +126,13 @@ let printReleaseFrame: number | null = null;
 
 /** The briefing the at-hand block renders, pushed by the impact panel. */
 let sheetBriefing: ImpactBriefing | null = null;
+/**
+ * The briefing's glance row, as markup built by the lazy briefing runtime
+ * (`renderLeadGlance`, src/ui/briefing-lead.ts): the first read of its
+ * reading order. Empty while nothing is ranked. Trusted: every word in it
+ * was escaped where it was built.
+ */
+let sheetGlance = '';
 
 let settleTimer: number | null = null;
 const settleListeners = new Set<(active: SheetDetent | null) => void>();
@@ -337,9 +344,10 @@ function loadMotion(): void {
  * report; it never invents a claim (an unhydrated current horizon reads
  * as the honest "open the full report" line).
  */
-export function setSheetBriefing(briefing: ImpactBriefing | null): void {
+export function setSheetBriefing(briefing: ImpactBriefing | null, glance = ''): void {
   const chosen = briefing !== null && briefing !== sheetBriefing;
   sheetBriefing = briefing;
+  sheetGlance = briefing ? glance : '';
   renderAtHand();
   // A place chosen from a text entry that raised the sheet answers at half,
   // where the map shows it above the sheet; the full report stays one press
@@ -411,6 +419,25 @@ function renderAtHand(): void {
   // Only the dynamic read is rebuilt here; the search and the report door
   // are stable siblings (see initMobileSheet), so a briefing push never
   // wipes the mounted search.
+  const glancing = briefing !== null && sheetGlance !== '';
+  // The stylesheet seats the glance row directly under the title (the
+  // lowest stop shows exactly those two); the kind stays next in the
+  // document, so it is still read out with the title it qualifies.
+  atHandBodyEl.classList.toggle('has-glance', glancing);
+  if (glancing) {
+    // The glance: the place, then the first read of its reading order, so
+    // the sheet's lowest stop already says what leads here. The same block
+    // at peek and at half: a drag between them swaps nothing under the
+    // finger. The row keeps the focus a repaint finds on it.
+    const hadFocus = atHandBodyEl.querySelector('.sheet-glance-row') === document.activeElement;
+    atHandBodyEl.innerHTML = `
+      <h2 class="sheet-at-hand-title">${escapeHtml(title)}</h2>
+      ${kind ? `<p class="sheet-at-hand-kind">${escapeHtml(kind)}</p>` : ''}
+      ${sheetGlance}
+    `;
+    if (hadFocus) atHandBodyEl.querySelector<HTMLElement>('.sheet-glance-row')?.focus({ preventScroll: true });
+    return;
+  }
   atHandBodyEl.innerHTML = `
     <p class="sheet-at-hand-kicker">Conditions briefing</p>
     <h2 class="sheet-at-hand-title">${escapeHtml(title)}</h2>
@@ -771,6 +798,21 @@ export function initMobileSheet(
       return;
     }
     setSheetDetent('full');
+  });
+  // The glance row raises the report and hands focus to the same read
+  // there, its tile in the priority view.
+  atHandBodyEl?.addEventListener('click', (event) => {
+    const row = event.target instanceof Element ? event.target.closest<HTMLElement>('[data-glance-key]') : null;
+    const key = row?.dataset['glanceKey'];
+    if (!key) return;
+    setSheetDetent('full');
+    window.requestAnimationFrame(() => {
+      const tile = [...document.querySelectorAll<HTMLElement>('#sheet-report [data-lead-key]')].find(
+        (node) => node.dataset['leadKey'] === key
+      );
+      tile?.focus();
+      tile?.scrollIntoView({ block: 'nearest' });
+    });
   });
   // The block names the selected place as soon as there is one, and lets go
   // of it when the selection is cleared.

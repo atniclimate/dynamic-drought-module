@@ -20,7 +20,9 @@ import { fileURLToPath } from 'node:url';
  *      next release); the map's own date rides the source line;
  *   3. the "Present together" caption states no date of its own: each read
  *      carries its own clock;
- *   4. the briefing's chain relates the unread jet link to nothing.
+ *   4. the briefing's chain relates the unread jet link to nothing;
+ *   5. the at-hand glance is the first tile of the same reading order and
+ *      nothing else, and is not drawn at all when nothing is ranked.
  */
 
 // Extensionless relative `.ts` imports, and the stylesheet the view imports
@@ -45,7 +47,7 @@ registerHooks({
   }
 });
 
-const { renderLeadView, buildEnsoChainLinks } = await import('../src/ui/briefing-lead.ts');
+const { renderLeadGlance, renderLeadView, buildEnsoChainLinks } = await import('../src/ui/briefing-lead.ts');
 const { HAZARD_KEYS, HORIZON_KEYS } = await import('../src/impact/matrix.ts');
 
 const NO_SOURCE = 'No source answered for this hazard at this horizon.';
@@ -193,4 +195,58 @@ test('a tile hands its figure\'s words to assistive technology as its descriptio
   assert.notEqual(figureLabel, '', 'the tile draws a figure');
   assert.equal(words, figureLabel, 'the description is the figure\'s own label, word for word');
   assert.match(words, /D0 to D4/);
+});
+
+// ---------------------------------------------------------------------------
+// 5. The at-hand glance
+// ---------------------------------------------------------------------------
+
+const firstTile = (html) => /<button type="button" class="lead-tile"[\s\S]*?<\/button>/.exec(html)?.[0] ?? '';
+const attr = (html, name) => new RegExp(`${name}="([^"]*)"`).exec(html)?.[1] ?? null;
+
+test('the glance is the first tile of the reading order: same key, hazard, headline and badge', () => {
+  const briefing = briefingOf('loading');
+  briefing.horizons.current.cells.drought = cell('drought', 'current', 'ready', [usdmClaim]);
+  briefing.horizons.current.cells.fire = cell('fire', 'current', 'ready', [nwsClaim]);
+  const tile = firstTile(renderLeadView(briefing, NOW));
+  const glance = renderLeadGlance(briefing);
+  assert.notEqual(tile, '');
+  assert.match(glance, /^<div class="sheet-glance" data-glance-count="2">/);
+  assert.equal([...glance.matchAll(/class="sheet-glance-row"/g)].length, 1, 'one row, never a list');
+  // The row carries the key the sheet hands focus to: the first tile's own.
+  assert.equal(attr(glance, 'data-glance-key'), attr(tile, 'data-lead-key'));
+  assert.equal(attr(glance, 'data-evidence'), attr(tile, 'data-evidence'));
+  // Hazard word, headline and evidence badge are the tile's, word for word.
+  assert.equal(text(/<span class="sheet-glance-hazard">[\s\S]*?<\/span>/.exec(glance)[0]), text(/<span class="lead-hazard">[\s\S]*?<\/span>/.exec(tile)[0]));
+  assert.equal(text(/<span class="impact-claim-badge">[\s\S]*?<\/span>/.exec(glance)[0]), text(/<span class="impact-claim-badge">[\s\S]*?<\/span>/.exec(tile)[0]));
+  assert.ok(text(glance).includes('Red Flag Warning'), 'the NWS product leads, as it leads the tiles');
+  assert.ok(!text(glance).includes('D2'), 'the second read is not folded into the row');
+  // Its name is the tile's reason, source and evidence, and says where the press goes.
+  const name = attr(glance, 'aria-label');
+  assert.ok(name.includes('Source: NWS active alerts.'), name);
+  assert.ok(name.includes('Evidence: '), name);
+  assert.ok(name.endsWith('Opens the full report at this read.'), name);
+  // The one line under it counts the ranked reads and denies a severity score.
+  assert.ok(text(glance).endsWith('First of 2 in the reading order. Reading order, not a severity score.'), text(glance));
+});
+
+test('one ranked read is counted as one, and the glance holds no other number', () => {
+  const briefing = briefingOf('loading');
+  briefing.horizons.current.cells.drought = cell('drought', 'current', 'ready', [usdmClaim]);
+  const glance = renderLeadGlance(briefing);
+  assert.match(glance, /data-glance-count="1"/);
+  assert.ok(text(glance).endsWith('The one read in the reading order. Reading order, not a severity score.'), text(glance));
+  assert.ok(text(glance).includes('D2 Severe drought'));
+});
+
+test('nothing ranked draws no glance at all, in every unread state', () => {
+  for (const status of ['loading', 'unavailable', 'partial']) {
+    assert.equal(renderLeadGlance(briefingOf(status)), '', `${status}: no row that could read as an all-clear`);
+  }
+  // A cell that is read but holds no class in the reading order ranks nothing either.
+  const briefing = briefingOf('unavailable');
+  briefing.horizons.current.cells.drought = cell('drought', 'current', 'ready', [
+    { ...usdmClaim, reading: { kind: 'usdm-category', dm: null } }
+  ]);
+  assert.equal(renderLeadGlance(briefing), '');
 });
