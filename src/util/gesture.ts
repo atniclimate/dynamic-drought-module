@@ -106,7 +106,13 @@ export function attachDrag(target: HTMLElement, options: DragOptions): () => voi
   };
 
   const onDown = (event: PointerEvent): void => {
-    if (pointerId !== null || (event.pointerType === 'mouse' && event.button !== 0)) return;
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
+    // A drag in progress keeps its pointer; a second finger does not take it.
+    // A press that never became a drag is not held on to: its release can
+    // happen where this element does not hear it (the pointer is captured
+    // only once the drag starts), and a remembered pointer would then refuse
+    // every later press.
+    if (pointerId !== null && dragging) return;
     pointerId = event.pointerId;
     originX = event.clientX;
     originY = event.clientY;
@@ -116,7 +122,18 @@ export function attachDrag(target: HTMLElement, options: DragOptions): () => voi
   };
 
   const onMove = (event: PointerEvent): void => {
-    if (event.pointerId !== pointerId || refused) return;
+    if (event.pointerId !== pointerId) return;
+    // A mouse moving with no button down is a hover: the press this
+    // recognizer remembers was released elsewhere. Forget it, and end a drag
+    // that somehow outlived its button as cancelled.
+    if (event.pointerType === 'mouse' && event.buttons === 0) {
+      const wasDragging = dragging;
+      const last = sample(event);
+      release();
+      if (wasDragging) options.onEnd(last, true);
+      return;
+    }
+    if (refused) return;
     const travel = along(event);
     if (!dragging) {
       if (Math.abs(across(event)) > Math.abs(travel) && Math.abs(across(event)) > slop) {

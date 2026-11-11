@@ -26,7 +26,7 @@ const {
   springLinearEasing,
   runSpring
 } = await import(new URL('src/util/spring.ts', ROOT).href);
-const { projectRelease, nearestDetent, rubberBand, trackVelocity } = await import(
+const { projectRelease, nearestDetent, rubberBand, trackVelocity, attachDrag } = await import(
   new URL('src/util/gesture.ts', ROOT).href
 );
 
@@ -144,4 +144,108 @@ test('release velocity reads only the last 100 ms, so a finger that stopped rele
   assert.equal(trackVelocity(stopped, 450), 0);
   assert.equal(trackVelocity([{ t: 10, p: 4 }], 10), 0);
   assert.equal(trackVelocity([], 10), 0);
+});
+
+// ---------------------------------------------------------------------------
+// The drag recognizer, driven with pointer events on a stand-in target.
+// ---------------------------------------------------------------------------
+
+/** The members of an element `attachDrag` uses: listeners and pointer capture. */
+function dragTarget() {
+  const listeners = new Map();
+  const captured = new Set();
+  return {
+    captured,
+    addEventListener(type, fn, options) {
+      const key = type + (options === true ? ':capture' : '');
+      if (!listeners.has(key)) listeners.set(key, []);
+      listeners.get(key).push(fn);
+    },
+    removeEventListener() {},
+    setPointerCapture: (id) => captured.add(id),
+    releasePointerCapture: (id) => captured.delete(id),
+    hasPointerCapture: (id) => captured.has(id),
+    fire(type, event) {
+      for (const key of [`${type}:capture`, type]) for (const fn of listeners.get(key) ?? []) fn(event);
+    }
+  };
+}
+
+const pointer = (type, fields) => ({
+  type,
+  pointerId: 1,
+  pointerType: 'mouse',
+  button: 0,
+  buttons: 1,
+  clientX: 100,
+  clientY: 100,
+  timeStamp: 0,
+  cancelable: true,
+  preventDefault() {},
+  stopPropagation() {},
+  ...fields
+});
+
+function recognizer() {
+  globalThis.window ??= globalThis;
+  const target = dragTarget();
+  const log = [];
+  attachDrag(target, {
+    axis: 'y',
+    canStart: () => true,
+    onStart: () => log.push('start'),
+    onMove: (sample) => log.push(`move ${sample.delta}`),
+    onEnd: (sample, cancelled) => log.push(`end cancelled=${cancelled}`)
+  });
+  return { target, log };
+}
+
+test('an ordinary drag starts past the slop, follows the pointer and ends once', () => {
+  const { target, log } = recognizer();
+  target.fire('pointerdown', pointer('pointerdown', { pointerId: 3, pointerType: 'touch', clientY: 300 }));
+  target.fire('pointermove', pointer('pointermove', { pointerId: 3, pointerType: 'touch', clientY: 304, timeStamp: 8 }));
+  assert.deepEqual(log, [], 'under the 8 px slop nothing has started');
+  target.fire('pointermove', pointer('pointermove', { pointerId: 3, pointerType: 'touch', clientY: 320, timeStamp: 16 }));
+  target.fire('pointerup', pointer('pointerup', { pointerId: 3, pointerType: 'touch', clientY: 320, timeStamp: 32 }));
+  assert.deepEqual(log, ['start', 'move 20', 'end cancelled=false']);
+  assert.equal(target.captured.size, 0, 'the pointer is released at the end');
+});
+
+test('a mouse press released elsewhere does not turn a later hover into a drag', () => {
+  const { target, log } = recognizer();
+  target.fire('pointerdown', pointer('pointerdown', { clientY: 100 }));
+  // Four pixels, under the slop, then the cursor leaves and the button is
+  // released over the map: the target never hears the release.
+  target.fire('pointermove', pointer('pointermove', { clientY: 104, timeStamp: 10 }));
+  // Later the mouse hovers back across the target with no button down.
+  target.fire('pointermove', pointer('pointermove', { clientY: 130, buttons: 0, timeStamp: 5000 }));
+  target.fire('pointermove', pointer('pointermove', { clientY: 150, buttons: 0, timeStamp: 5016 }));
+  assert.deepEqual(log, [], 'a hover moves nothing');
+  assert.equal(target.captured.size, 0);
+  // And the next real press still works.
+  target.fire('pointerdown', pointer('pointerdown', { clientY: 200, timeStamp: 6000 }));
+  target.fire('pointermove', pointer('pointermove', { clientY: 230, timeStamp: 6016 }));
+  target.fire('pointerup', pointer('pointerup', { clientY: 230, timeStamp: 6032 }));
+  assert.deepEqual(log, ['start', 'move 30', 'end cancelled=false']);
+});
+
+test('a touch whose release was never heard does not block the next touch', () => {
+  const { target, log } = recognizer();
+  target.fire('pointerdown', pointer('pointerdown', { pointerId: 7, pointerType: 'touch', clientY: 300 }));
+  // No release for pointer 7 ever reaches the target. A new finger arrives.
+  target.fire('pointerdown', pointer('pointerdown', { pointerId: 8, pointerType: 'touch', clientY: 300, timeStamp: 9000 }));
+  target.fire('pointermove', pointer('pointermove', { pointerId: 8, pointerType: 'touch', clientY: 340, timeStamp: 9016 }));
+  target.fire('pointerup', pointer('pointerup', { pointerId: 8, pointerType: 'touch', clientY: 340, timeStamp: 9032 }));
+  assert.deepEqual(log, ['start', 'move 40', 'end cancelled=false']);
+});
+
+test('a second finger does not take over a drag that is under way', () => {
+  const { target, log } = recognizer();
+  target.fire('pointerdown', pointer('pointerdown', { pointerId: 3, pointerType: 'touch', clientY: 300 }));
+  target.fire('pointermove', pointer('pointermove', { pointerId: 3, pointerType: 'touch', clientY: 330, timeStamp: 16 }));
+  target.fire('pointerdown', pointer('pointerdown', { pointerId: 4, pointerType: 'touch', clientY: 500, timeStamp: 20 }));
+  target.fire('pointermove', pointer('pointermove', { pointerId: 4, pointerType: 'touch', clientY: 560, timeStamp: 30 }));
+  target.fire('pointermove', pointer('pointermove', { pointerId: 3, pointerType: 'touch', clientY: 350, timeStamp: 32 }));
+  target.fire('pointerup', pointer('pointerup', { pointerId: 3, pointerType: 'touch', clientY: 350, timeStamp: 48 }));
+  assert.deepEqual(log, ['start', 'move 30', 'move 50', 'end cancelled=false']);
 });
