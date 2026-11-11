@@ -92,6 +92,7 @@ import {
   ENSO_CHAIN_CAPTION,
   ENSO_CHAIN_HEADING,
   buildEnsoChain,
+  deviceDay,
   ensoStripSvg,
   renderEnsoClocks,
   renderEnsoTruth
@@ -118,9 +119,6 @@ const FEATURE_DOOR_EVENT = 'ddm:feature-door';
 const GUIDE_FLAG = 'data-enso-guide';
 const SHEET_NAME = 'data-sheet-name';
 const GUIDE_NAME = 'ENSO guide';
-/** The clock line's reference moves once an hour. */
-const HOUR_MS = 3_600_000;
-
 /**
  * The place links' reader, a chunk of its own. After a failed load the next
  * showing of the panel asks again under a new URL: Chromium replays a failed
@@ -208,9 +206,8 @@ function paint(): void {
   });
   const strip = ensoStripSvg(view.strip);
   const truth = renderEnsoTruth(state.enso);
-  // The reading device's date, to the hour: the clock line's one reference,
-  // and coarse enough that a repaint inside the hour draws the same figure.
-  const clocks = renderEnsoClocks(view.clocks, Math.floor(Date.now() / HOUR_MS) * HOUR_MS);
+  // The reading device's own calendar day: the clock line's one reference.
+  const clocks = renderEnsoClocks(view.clocks, deviceDay(new Date()));
   const next = `${chain}\u0000${strip}\u0000${truth}\u0000${clocks}`;
   if (next === state.painted) return;
   state.painted = next;

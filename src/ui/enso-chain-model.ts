@@ -649,6 +649,18 @@ function isoDay(at: number): string {
 }
 
 /**
+ * The reading device's calendar day, in its own time zone, as that day's UTC
+ * midnight: the frame every claim day on the line is drawn in (a claim's ISO
+ * day reads as UTC midnight), so the rule sits on the device's own date and
+ * `shortDay` and `isoDay` write that date. Review finding R2-4: the host
+ * passed the instant itself, and the line named the UTC day, which in the
+ * Americas runs a day ahead every evening.
+ */
+export function deviceDay(now: Pick<Date, 'getFullYear' | 'getMonth' | 'getDate'>): number {
+  return Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+}
+
+/**
  * The clock line (owner direction 2026-11-09 (sprint), DR-pending): the
  * caption says the five claims each keep their own clock, and this figure
  * draws that. One row per link, in chain order, on one time axis that runs
@@ -660,8 +672,8 @@ function isoDay(at: number): string {
  * It adds no claim. Every date is the one the link's own date line states
  * (`EnsoClockNode.at` is set beside that line, from the same field), and
  * the figure says nothing about what lies between two dates. `reference` is
- * the reading device's own date, drawn as a plain rule so a reader can see
- * how old each claim is; the host passes it floored to the hour, so the
+ * the reading device's own date (`deviceDay`), drawn as a plain rule so a
+ * reader can see how old each claim is; it changes once a day, so the
  * drawing does not change on every paint. No row is joined to another, and
  * nothing here moves.
  */

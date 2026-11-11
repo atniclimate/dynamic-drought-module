@@ -63,6 +63,7 @@ const {
   ENSO_CLOCKS_LEAD,
   ENSO_CLOCKS_NOTE,
   buildEnsoChain,
+  deviceDay,
   ensoClockSpan,
   ensoClockSvg,
   ensoStripSvg,
@@ -761,6 +762,22 @@ test('clock line: every read link is placed at the date its own date line states
   assert.equal(clockOf(view, 'here').dateWord, 'Valid');
 });
 
+test('clock line: the reference is the device\'s own calendar day, not the UTC day', () => {
+  // An evening in the Americas: the device's own day is the 9th while UTC has
+  // already reached the 10th (review finding R2-4). Only the local getters count.
+  const evening = { getFullYear: () => 2026, getMonth: () => 10, getDate: () => 9 };
+  const reference = deviceDay(evening);
+  assert.equal(reference, Date.UTC(2026, 10, 9), 'that day as UTC midnight, the frame every claim day uses');
+  const view = buildEnsoChain(input({ place: null, outlook: { status: 'none' }, here: { status: 'none' } }));
+  const svg = ensoClockSvg(view.clocks, reference);
+  assert.match(svg, />This device: Nov 9</);
+  assert.match(svg, /This device&#039;s date: 2026-11-09\./);
+  // The host draws from the device's own day, never from the instant itself.
+  const host = code('../src/ui/enso-chain.ts');
+  assert.match(host, /renderEnsoClocks\(view\.clocks, deviceDay\(new Date\(\)\)\)/);
+  assert.doesNotMatch(host, /Date\.now\(\)/, 'no instant reaches the clock line');
+});
+
 test('clock line: a link with no read, or with no stated date, is never placed', () => {
   const view = buildEnsoChain(
     input({
@@ -882,7 +899,8 @@ test('clock line: closed at first behind its own summary, which carries the span
   const host = code('../src/ui/enso-chain.ts');
   assert.match(host, /insertAdjacentHTML\('afterend', truth \+ clocks\)/);
   assert.match(host, /clockDetails\.open = state\.clocksOpen;/);
-  assert.match(host, /Math\.floor\(Date\.now\(\) \/ HOUR_MS\) \* HOUR_MS/);
+  // The reference is the device's own calendar day (review finding R2-4; it was the instant floored to the hour).
+  assert.match(host, /renderEnsoClocks\(view\.clocks, deviceDay\(new Date\(\)\)\)/);
 });
 
 test('the nested truth is the governed words, closed at first with the denial on its summary', () => {
