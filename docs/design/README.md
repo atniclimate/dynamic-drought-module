@@ -212,6 +212,56 @@ open on the priority view; every other shell opens on the full detail with
 the switch above it. The choice is presentation state and never enters the
 URL. Paper carries the full detail only: the priority view does not print.
 
+## The ENSO chain and its Guide door
+
+Owner direction 2026-11-09 (sprint), DR-pending.
+
+While the sea surface temperature surface is on the map, the ENSO mode lays
+five separate claims side by side, from the tropical Pacific to a place, with
+the shared evidence chain: the observed index, the ocean surface the map
+draws, the jet-level wind as model guidance, the published seasonal outlook at
+the chosen place, and what is observed there now
+(`src/ui/enso-chain-model.ts`, `src/ui/enso-chain.ts`).
+
+**Each link is its own claim.** It wears its own source, clock and evidence
+class. A link with no read says which state it is in and why. A link whose
+view was never asked for (the overlay off, no place chosen) is idle in plain
+words: never `unavailable`, never a zero, never an all-clear. An overview
+strip over the links draws a read as a disc in its evidence tier and no read
+as an open square under a state word.
+
+**The words between links** name a relationship the repository can cite
+("measured in the boxed region of", "historically tends to shift") or say only
+that two reads sit side by side ("one model instant, read beside a season",
+"read beside"). None is a cause and none is an arrow.
+
+**The nested truth** is one tap under the caption, and its lead is on screen
+before any tap: "This is a shift in the odds, not a forecast." Open, it
+carries the odds sentence, NOAA CPC's own sentence on single storms, the
+regional tendency claim, the index claim and the pointer to CPC's official
+status, each with its source and date, in the words `src/impact/enso.ts`
+governs.
+
+**The chain is the mode's table of contents.** Pressing a link takes the map
+to that link's view through a door the interface already has: the ocean view,
+the flow overlay's kind, the horizon, the place's briefing, the Place studio.
+The link is then in the address bar, and the chain holds no view state. A
+press replaces the current history entry, as every mode, horizon and layer
+change does; only the Place studio adds one. Where a press shows another
+outlook layer than the link reads, the link names the layer the map draws.
+
+**Seats.** On the desktop shell the chain is a panel of the sidebar. On the
+phone shell it is the content of the sheet behind a fifth door, Guide, which
+rides the right-edge column's panel group only while the chain exists. The
+sheet stays closed until that door is pressed. The door exposes
+`aria-controls` and `aria-expanded` and inverts when open; Escape closes the
+sheet and returns focus to it. The guide's open state is presentation and
+never enters the URL.
+
+**Lazy and still.** The sea surface temperature layer loads the chain when it
+activates and removes it when it deactivates. An embed loads none of it.
+Nothing in it moves, so reduced motion shows the same picture.
+
 ## Convergence doctrine
 
 DDM is not merely a map. It is an instrument for making claims responsibly

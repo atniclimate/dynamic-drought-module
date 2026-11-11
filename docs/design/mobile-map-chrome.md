@@ -69,6 +69,11 @@ one manager owns (`src/ui/edge-column.ts`), arranged by one pure planner
   shell changes, so focus order equals visual order in both.
 - Map information rides the column while the map leads (the sheet closed or
   at peek) and waits while a panel is open.
+- A mode may seat one more door in the panel group while its own guide
+  exists. The ENSO mode seats Guide, after Alerts, for as long as the sea
+  surface temperature surface is on the map; the planner counts it like any
+  other cell (owner direction 2026-11-09 (sprint), DR-pending; see "The ENSO
+  chain and its Guide door" in [`README.md`](README.md)).
 
 ## The sheet
 
