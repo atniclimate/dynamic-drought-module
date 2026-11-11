@@ -271,6 +271,38 @@ function scheduleSettle(): void {
   }, SETTLE_FALLBACK_MS);
 }
 
+/** A door press opened or switched the view; focus has not followed it yet. */
+let pendingViewFocus = false;
+
+/**
+ * Move focus from the pressed door into the view it opened (WCAG 2.4.3): the
+ * sheet title, the view's heading, else the first control that does not
+ * raise the keyboard (and with it the sheet). Runs at settle, when the view
+ * is shown whether or not the motion module (and so the title) arrived, and
+ * never takes focus the user already placed outside the doors.
+ */
+function focusShownView(): void {
+  if (!pendingViewFocus) return;
+  pendingViewFocus = false;
+  const held = document.activeElement;
+  if (detent === null || detent === 'closed' || !sidebarEl) return;
+  if (held && held !== document.body && !held.closest('#mobile-footer-nav')) return;
+  const title = document.getElementById('sheet-title');
+  const shown = (el: HTMLElement): boolean =>
+    el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden';
+  const target =
+    title && shown(title)
+      ? title
+      : [
+          ...sidebarEl.querySelectorAll<HTMLElement>(
+            'button:not(:disabled), a[href], select:not(:disabled), [tabindex]:not([tabindex="-1"])'
+          )
+        ].find(shown);
+  if (!target) return;
+  if (!target.hasAttribute('tabindex') && target === title) target.setAttribute('tabindex', '-1');
+  target.focus({ preventScroll: true });
+}
+
 /**
  * The sheet came to rest (or the shell changed): resize MapLibre, keep the
  * camera free of any retired padding, and tell the listeners.
@@ -280,6 +312,7 @@ function settle(): void {
     window.clearTimeout(settleTimer);
     settleTimer = null;
   }
+  focusShownView();
   if (!mapRef) return;
   const map = mapRef;
   map.resize();
@@ -614,6 +647,7 @@ function openFooterTab(tab: SheetTab): void {
     if (getViewMode() !== 'console') setViewMode('console');
   }
   syncFooterTab(tab);
+  pendingViewFocus = true;
   if (tab === 'alerts') {
     // Lazy: the alerts pane module rides the same activation the layer
     // does; an embed or desktop session never downloads it.

@@ -104,6 +104,25 @@ test('the lit door closes the sheet, and takes focus back, pressed or implied', 
   );
 });
 
+test('an opening door press moves focus into the shown view once the sheet has settled', () => {
+  // WCAG 2.4.3: the press arms a pending move; settle (every road ends there, motion or not) spends it.
+  assert.match(
+    controller,
+    /syncFooterTab\(tab\);\s*pendingViewFocus = true;/,
+    'openFooterTab must arm the focus move after the lit-door early return'
+  );
+  assert.match(controller, /function settle\(\): void \{[\s\S]*?focusShownView\(\);/);
+  // The view's heading is the sheet title; without it the first control that does not raise the keyboard.
+  const focusing = controller.match(/function focusShownView\(\): void \{[\s\S]*?\n\}/)?.[0] ?? '';
+  assert.match(focusing, /getElementById\('sheet-title'\)/);
+  assert.match(focusing, /setAttribute\('tabindex', '-1'\)/);
+  assert.match(focusing, /focus\(\{ preventScroll: true \}\)/);
+  assert.match(focusing, /closest\('#mobile-footer-nav'\)/, 'focus the user already moved elsewhere is never taken');
+  assert.doesNotMatch(focusing, /input/, 'a text input would raise the keyboard and the sheet');
+  // The early return that closes on the lit door sits before the arm, and closing never arms it.
+  assert.ok(controller.indexOf("setSheetDetent('closed');\n    return;") < controller.indexOf('pendingViewFocus = true;'));
+});
+
 test('the controller keeps every export it had', () => {
   const names = [...controller.matchAll(/^export (?:async )?(?:function|type|interface|const) (\w+)/gm)].map((match) => match[1]);
   for (const name of [
