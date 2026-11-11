@@ -208,6 +208,15 @@ test.describe('U1 the report in print', () => {
       const panel = page.locator('#impact-panel');
       await expect(panel).toBeVisible({ timeout: 15_000 });
       await expect(panel.getByRole('link', { name: 'Agricultural drought relief information' })).toBeVisible();
+      if (width === 390) {
+        // Phones open on the priority view; the full detail is one tap away.
+        const lead = panel.locator('.briefing-view-btn[data-briefing-view="lead"]');
+        const full = panel.locator('.briefing-view-btn[data-briefing-view="matrix"]');
+        await expect(lead).toHaveAttribute('aria-pressed', 'true');
+        await expect(panel.locator('.point-heat-card').first()).toBeHidden();
+        await full.click();
+        await expect(full).toHaveAttribute('aria-pressed', 'true');
+      }
       await expect(panel.locator('.point-heat-card').first()).toBeVisible();
       if (width === 390) await expect(panel).toHaveClass(/sheet-hosted/);
 

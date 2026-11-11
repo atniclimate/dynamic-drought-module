@@ -17,7 +17,8 @@ test.describe('U4d: a legacy basemap token in an old link', () => {
       const problems: string[] = [];
       page.on('pageerror', (error) => problems.push(error.message));
       page.on('console', (message) => {
-        if (message.type() === 'error' && !/https?:\/\//.test(message.text())) {
+        // The offline harness answers unstubbed hosts with 503; Chromium logs those without the URL.
+        if (message.type() === 'error' && !/https?:\/\/|^Failed to load resource/.test(message.text())) {
           problems.push(message.text());
         }
       });

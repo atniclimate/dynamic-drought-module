@@ -76,7 +76,7 @@ test.describe('mobile side rail and glass panels', () => {
     expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBe(844);
   });
 
-  test('Place drops a top-anchored glass panel and a second press closes it', async ({ page }) => {
+  test('Place raises a bottom-docked glass sheet beside the rail and a second press closes it', async ({ page }) => {
     await gotoApp(page);
     const app = page.locator('#app');
     const place = page.locator('#mobile-footer-nav button[data-tab="place"]');
@@ -87,24 +87,34 @@ test.describe('mobile side rail and glass panels', () => {
     await expect(place).toHaveAttribute('aria-expanded', 'true');
     await expect(page.locator('#sheet-search [data-ddm-search]')).toBeVisible();
 
+    // While the spring runs the box holds its full height under a transform; it equals its stop only at rest.
+    await expect(page.locator('#sidebar')).not.toHaveAttribute('data-sheet-moving', /.*/);
     const railBox = await rect(page.locator('#mobile-footer-nav'));
     const panelBox = await rect(page.locator('#sidebar'));
     expect(panelBox.y).toBeGreaterThan(40);
     expect(panelBox.x + panelBox.width).toBeLessThanOrEqual(railBox.x);
-    expect(panelBox.y + panelBox.height).toBeLessThanOrEqual(844);
+    // Bottom-docked: the half stop rests on the bottom edge (50dvh at 844).
+    expect(Math.abs(panelBox.y + panelBox.height - 844)).toBeLessThan(1);
+    expect(Math.abs(panelBox.height - 422)).toBeLessThan(1);
+    // The glass and its top corners live on #sidebar::before, not on the box.
     const panelStyle = await page.locator('#sidebar').evaluate((element) => {
-      const style = getComputedStyle(element);
+      const own = getComputedStyle(element);
+      const glass = getComputedStyle(element, '::before');
       return {
-        position: style.position,
-        background: style.backgroundColor,
-        backdrop: style.backdropFilter,
-        radius: style.borderRadius
+        position: own.position,
+        bottom: own.bottom,
+        background: glass.backgroundColor,
+        backdrop: glass.backdropFilter,
+        topLeftRadius: glass.borderTopLeftRadius,
+        bottomLeftRadius: glass.borderBottomLeftRadius
       };
     });
     expect(panelStyle.position).toBe('fixed');
+    expect(panelStyle.bottom).toBe('0px');
     expect(panelStyle.background).toMatch(/rgba\(/);
     expect(panelStyle.backdrop).not.toBe('none');
-    expect(panelStyle.radius).not.toBe('0px');
+    expect(panelStyle.topLeftRadius).not.toBe('0px');
+    expect(panelStyle.bottomLeftRadius).toBe('0px');
 
     await place.click();
     await expect(app).toHaveAttribute('data-sheet-detent', 'closed');
@@ -141,9 +151,10 @@ test.describe('mobile side rail and glass panels', () => {
     await expect(app).toHaveAttribute('data-sheet-detent', 'full');
     await expect(page.locator('#panel-layers')).toBeVisible();
     await expect(page.locator('#mobile-footer-nav')).toBeVisible();
+    await expect(page.locator('#sidebar')).not.toHaveAttribute('data-sheet-moving', /.*/);
     const fullPanel = await rect(page.locator('#sidebar'));
-    expect(fullPanel.y).toBeGreaterThan(40);
-    expect(fullPanel.y + fullPanel.height).toBeLessThanOrEqual(844);
+    expect(Math.abs(fullPanel.y - 76)).toBeLessThan(1);
+    expect(Math.abs(fullPanel.y + fullPanel.height - 844)).toBeLessThan(1);
 
     const alerts = page.locator('#mobile-footer-nav button[data-tab="alerts"]');
     await alerts.click();
@@ -212,11 +223,14 @@ test.describe('mobile side rail and glass panels', () => {
     await input.fill('Yak');
     const results = page.locator('#sheet-search .ddm-search-results');
     await expect(results).toBeVisible();
+    // A text entry raises the sheet to full; measure it once it rests.
+    await expect(page.locator('#app')).toHaveAttribute('data-sheet-detent', 'full');
+    await expect(page.locator('#sidebar')).not.toHaveAttribute('data-sheet-moving', /.*/);
 
     const panelBox = await rect(page.locator('#sidebar'));
     const inputBox = await rect(input);
     const resultsBox = await rect(results);
-    expect(panelBox.y + panelBox.height).toBeLessThanOrEqual(600);
+    expect(Math.abs(panelBox.y + panelBox.height - 600)).toBeLessThan(1);
     expect(inputBox.y + inputBox.height).toBeLessThanOrEqual(600);
     expect(resultsBox.y + resultsBox.height).toBeLessThanOrEqual(600);
   });
@@ -257,9 +271,11 @@ test.describe('mobile side rail and glass panels', () => {
     const beforeCount = envelopes.length;
 
     await page.locator('#mobile-footer-nav button[data-tab="brief"]').click();
-    await expect(page.locator('#app')).toHaveAttribute('data-sheet-detent', 'full');
+    // With no place chosen the Brief door opens at half; a text entry then raises the sheet to full.
+    await expect(page.locator('#app')).toHaveAttribute('data-sheet-detent', 'half');
     const input = page.locator('#sheet-search [data-ddm-search]');
     await input.fill('Washington');
+    await expect(page.locator('#app')).toHaveAttribute('data-sheet-detent', 'full');
     await page.locator('#sheet-search .ddm-search-result').filter({ hasText: 'Washington' }).first().click();
 
     await expect.poll(() => envelopes.length).toBeGreaterThan(beforeCount);

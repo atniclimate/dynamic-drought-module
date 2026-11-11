@@ -933,7 +933,10 @@ test.describe('S4a mobile shape (390x844)', () => {
     await expect(page.locator('#conditions-strip-home + #conditions-strip')).toHaveCount(1);
     await expect(page.locator('#panel-region-home + #panel-region')).toHaveCount(1);
     await expect(page.locator('#brief-head-home + #brief-head')).toHaveCount(1);
-    await expect(page.locator('.map-overlay-controls > #share-btn')).toHaveCount(1);
+    // The phone shell seats Share in the right-edge column's utility group
+    // (src/ui/edge-column.ts); the same node moves, it is not cloned.
+    await expect(page.locator('#edge-column #edge-body-utility > #share-btn')).toHaveCount(1);
+    await expect(page.locator('.map-overlay-controls > #share-btn')).toHaveCount(0);
   });
 });
 
@@ -1012,8 +1015,12 @@ test.describe('S4 r4: off intent during activation reaches the abort path (DG-08
     // 10 seconds is comfortably under the 20-second budget the pre-fix path
     // would have had to exhaust first, and comfortably over any honest
     // teardown cost.
+    // The studio's condition surfaces are one radio group; a press on the
+    // chosen one turns it off through controller.deactivate (catalog.tsx
+    // onSinglePress). uncheck() cannot drive a radio.
+    await expect(studioDrought).toHaveAttribute('type', 'radio');
     const offAt = Date.now();
-    await studioDrought.uncheck();
+    await studioDrought.click();
 
     // THE assertion: the in-flight request is actually aborted, and well
     // inside the 20-second header budget the pre-seam path had to exhaust

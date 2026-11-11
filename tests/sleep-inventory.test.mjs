@@ -165,12 +165,12 @@ const SITES = [
   {
     file: 'fire3d-mode.spec.ts',
     line: 2161,
-    test: 'a mobile viewport never fetches the 3D chunks',
+    test: 'a phone-width embed never fetches the 3D chunks',
     text: 'await page.waitForTimeout(3_000);',
     occurrence: 1,
     class: 'tile-dependent',
     reason:
-      'mobile-viewport settle proving no scene chunk request fires (deferred to M7).'
+      'phone-width embed settle proving no scene chunk request fires; an embed has no phone chrome (deferred to M7).'
   },
   {
     file: 'fire3d-mode.spec.ts',

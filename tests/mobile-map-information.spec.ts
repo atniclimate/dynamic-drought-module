@@ -28,7 +28,7 @@ test.beforeEach(async ({ page }) => {
 test.describe('mobile map-information disclosure (390x844)', () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
-  test('the circular control opens a non-modal region without changing URL state and Escape returns focus', async ({
+  test('the edge-column control opens a non-modal region without changing URL state and Escape returns focus', async ({
     page
   }) => {
     await gotoApp(page);
@@ -69,8 +69,20 @@ test.describe('mobile map-information disclosure (390x844)', () => {
     expect(box!.width).toBeGreaterThanOrEqual(44);
     expect(box!.height).toBeGreaterThanOrEqual(44);
     expect(Math.abs(box!.width - box!.height)).toBeLessThanOrEqual(1);
-    const radius = await button.evaluate((element) => getComputedStyle(element).borderRadius);
-    expect(radius === '50%' || Number.parseFloat(radius) >= box!.width / 2).toBe(true);
+    // A cell of the right-edge column, wearing the same face as its sibling Reset.
+    const edgeColumn = page.locator('#edge-column');
+    await expect(edgeColumn.locator('#map-info-btn')).toHaveCount(1);
+    const resetBox = await page.locator('#reset-btn').boundingBox();
+    expect(resetBox).not.toBeNull();
+    expect(Math.abs(box!.width - resetBox!.width)).toBeLessThanOrEqual(1);
+    const [radius, resetRadius] = await Promise.all([
+      button.evaluate((element) => getComputedStyle(element).borderRadius),
+      page.locator('#reset-btn').evaluate((element) => getComputedStyle(element).borderRadius)
+    ]);
+    expect(radius).toBe(resetRadius);
+    const columnBox = await edgeColumn.boundingBox();
+    expect(columnBox).not.toBeNull();
+    expect(Math.abs(box!.x + box!.width - (columnBox!.x + columnBox!.width))).toBeLessThanOrEqual(1);
 
     const rulers = page.locator('.maplibregl-ctrl-scale');
     await expect(rulers).toHaveCount(2);
@@ -82,14 +94,16 @@ test.describe('mobile map-information disclosure (390x844)', () => {
     const rulerRight = Math.max(
       ...rulerBoxes.map((rulerBox) => rulerBox!.x + rulerBox!.width)
     );
-    const rulerTop = Math.min(...rulerBoxes.map((rulerBox) => rulerBox!.y));
-    const rulerBottom = Math.max(
-      ...rulerBoxes.map((rulerBox) => rulerBox!.y + rulerBox!.height)
-    );
+    // The button rides the right edge and no longer covers the scale and credit.
     expect(box!.x).toBeGreaterThanOrEqual(rulerRight);
-    expect(box!.x - rulerRight).toBeLessThanOrEqual(16);
-    expect(box!.y).toBeLessThan(rulerBottom);
-    expect(box!.y + box!.height).toBeGreaterThan(rulerTop);
+    const overlapsRuler = rulerBoxes.some(
+      (r) =>
+        box!.x < r!.x + r!.width &&
+        box!.x + box!.width > r!.x &&
+        box!.y < r!.y + r!.height &&
+        box!.y + box!.height > r!.y
+    );
+    expect(overlapsRuler).toBe(false);
     const rulerStyles = await rulers.evaluateAll((elements) =>
       elements.map((element) => {
         const style = getComputedStyle(element);
@@ -250,22 +264,35 @@ test.describe('mobile map-information disclosure (390x844)', () => {
       await expect(control).toBeVisible();
     }
 
+    // One stacking context carries every control: the column sits above the panel.
     const stackOrder = await page.evaluate(() => {
       const z = (selector: string): number => {
         const element = document.querySelector<HTMLElement>(selector);
-        if (!element) return Number.NEGATIVE_INFINITY;
-        return Number.parseInt(getComputedStyle(element).zIndex, 10);
+        return element ? Number.parseInt(getComputedStyle(element).zIndex, 10) : Number.NaN;
       };
-      return {
-        panel: z('#map-info-panel'),
-        utility: z('.map-overlay-controls'),
-        hazards: z('#hazard-rail'),
-        info: z('#map-info-btn')
-      };
+      return { panel: z('#map-info-panel'), column: z('#edge-column') };
     });
-    expect(stackOrder.utility).toBeGreaterThan(stackOrder.panel);
-    expect(stackOrder.hazards).toBeGreaterThan(stackOrder.panel);
-    expect(stackOrder.info).toBeGreaterThan(stackOrder.panel);
+    expect(stackOrder.panel).toBeGreaterThan(0);
+    expect(stackOrder.column).toBeGreaterThan(stackOrder.panel);
+    // The topmost element at each control's centre is the control itself.
+    for (const selector of [
+      '#share-btn',
+      '#reset-btn',
+      '#hazard-rail button[data-preset="hazard-enso"]',
+      '#hazard-rail button[data-preset="hazard-fire"]',
+      '#hazard-rail button[data-preset="hazard-drought"]',
+      '#hazard-rail button[data-preset="hazard-heat"]',
+      '#map-info-btn'
+    ]) {
+      const topmost = await page.evaluate((sel) => {
+        const target = document.querySelector<HTMLElement>(sel);
+        if (!target) return false;
+        const r = target.getBoundingClientRect();
+        const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+        return !!hit && (hit === target || target.contains(hit));
+      }, selector);
+      expect(topmost, selector).toBe(true);
+    }
 
     // A click that would be intercepted by a fullscreen modal must remain
     // actionable. It flows through the normal preset controller, updates the

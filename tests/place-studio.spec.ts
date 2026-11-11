@@ -136,8 +136,10 @@ test.describe('PS-CORE PLACE studio', () => {
       'Briefing available',
       'Overlap listing'
     ]);
+    await expect(page.locator('#place-type-all')).toHaveText('All');
+    await expect(page.locator('#place-type-all')).toHaveAttribute('aria-pressed', 'true');
     await expect(page.locator('#place-selection-empty')).toHaveText(
-      'No place selected. Choose a place type, then a place; the full briefing opens when you return to the map.'
+      'No place is chosen yet. Choose one from the list to open its briefing or show it on the map.'
     );
   });
 
@@ -145,6 +147,11 @@ test.describe('PS-CORE PLACE studio', () => {
     page
   }) => {
     await gotoApp(page, '?view=brief&layers=places&studio=place');
+    // The list opens on every type; the Tribal Nations group still holds the whole roster.
+    await expect(page.locator('#place-type-all')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#place-list [data-place-group="tribe"] .place-studio-option')).toHaveCount(573);
+    await page.locator('#place-type-tribe').click();
+    await expect(page.locator('#place-type-tribe')).toHaveAttribute('aria-pressed', 'true');
     await expect(page.locator('#place-list .place-studio-option')).toHaveCount(573);
     await page.locator('#place-studio-search').fill(
       'Absentee-Shawnee Tribe of Indians of Oklahoma'
@@ -196,7 +203,7 @@ test.describe('PS-CORE PLACE studio', () => {
 
     await page.reload({ waitUntil: 'domcontentloaded' });
     await expect(page.locator('#place-selection-empty')).toHaveText(
-      'No place selected. Choose a place type, then a place; the full briefing opens when you return to the map.'
+      'No place is chosen yet. Choose one from the list to open its briefing or show it on the map.'
     );
   });
 

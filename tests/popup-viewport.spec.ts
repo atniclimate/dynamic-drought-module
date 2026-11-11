@@ -259,8 +259,10 @@ test.describe('DEF-3 finding 1: mobile side panel geometry (390x844, touch)', ()
     await gotoApp(page, '?region=washington_state&layers=bia-reservations');
     await waitForLayerSettled(page, 'bia-reservations');
 
-    // The Layers door opens beside the map. It must not be treated as a
-    // bottom drawer by popup viewport calculations.
+    // The Layers door raises the phone sheet to half. While open the sheet is
+    // bottom chrome: the popup region ends at its top edge (src/ui/popup-viewport.ts
+    // containingBounds). Measure it at rest: while it moves, #sidebar holds its
+    // full height plus a transform (data-sheet-moving).
     const app = page.locator('#app');
     await expect(app).toHaveAttribute('data-sheet-detent', 'closed');
     await page.locator('#mobile-footer-nav button[data-tab="layers"]').click();
@@ -268,18 +270,30 @@ test.describe('DEF-3 finding 1: mobile side panel geometry (390x844, touch)', ()
 
     const viewportHeight = await page.evaluate(() => window.innerHeight);
     const sidebar = page.locator('#sidebar');
+    await expect(sidebar).not.toHaveAttribute('data-sheet-moving', /.*/);
+    await expect
+      .poll(
+        async () => {
+          const box = await sidebar.boundingBox();
+          return box ? Math.abs(box.y + box.height - viewportHeight) : Number.POSITIVE_INFINITY;
+        },
+        { message: 'the half sheet never came to rest on the bottom edge' }
+      )
+      .toBeLessThanOrEqual(1);
     const sidebarBox = await sidebar.boundingBox();
     expect(sidebarBox).not.toBeNull();
+    // A half sheet, not the full one, and clear of the top of the screen.
     expect(sidebarBox!.y).toBeGreaterThan(0);
-    expect(sidebarBox!.y + sidebarBox!.height).toBeLessThan(viewportHeight);
-    expect(await bottomChromeTop(page)).toBe(Number.POSITIVE_INFINITY);
+    expect(sidebarBox!.height).toBeLessThan(viewportHeight);
+    // The popup region's bottom edge is the sheet's top edge.
+    expect(Math.abs((await bottomChromeTop(page)) - sidebarBox!.y)).toBeLessThanOrEqual(1);
 
-    // Close the Layers panel before opening the coordinated response. The
-    // popup now receives the map's full vertical region, with no stale
-    // drawer inset left behind.
+    // Close the Layers panel before opening the coordinated response. Closed
+    // leaves no stale inset: the popup gets the map's whole vertical region.
     await page.locator('#mobile-footer-nav button[data-tab="layers"]').click();
     await expect(app).toHaveAttribute('data-sheet-detent', 'closed');
     await expect(sidebar).toBeHidden();
+    expect(await bottomChromeTop(page)).toBe(Number.POSITIVE_INFINITY);
 
     async function targetPoint(): Promise<{ cx: number; cy: number }> {
       const liveMapBox = await page.locator('#map').boundingBox();

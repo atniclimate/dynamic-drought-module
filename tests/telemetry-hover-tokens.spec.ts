@@ -10,6 +10,7 @@ for (const width of [1440, 820]) {
     // The Quick views chips are retired (v0.7.7); the Drought mode button is
     // the sidebar's pressed selection control that shares their tokens. With
     // no layers on, no mode is pressed; Space commits Drought at Current.
+    // A pressed control wears the inverted ink face (selected inverts), not a plate.
     const chip = sidebar.locator('.shell-cluster-btn[data-cluster="drought"]');
     await expect(chip).toHaveAttribute('aria-pressed', 'false');
     await chip.focus();
@@ -18,19 +19,21 @@ for (const width of [1440, 820]) {
     await expect(sidebar.locator('[data-layer-status="nadm-drought"]')).toHaveClass(/\bready\b/);
     await expect(chip).toHaveAttribute('aria-pressed', 'true');
     await expect(chip).toBeFocused();
-    await expect(chip).toHaveCSS('background-color', 'rgb(42, 49, 56)');
-    await expect(chip).toHaveCSS('color', 'rgb(255, 255, 255)');
+    await expect(chip).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+    await expect(chip).toHaveCSS('color', 'rgb(1, 11, 19)');
+    await expect(chip).toHaveCSS('border-top-color', 'rgb(255, 255, 255)');
     await expect(chip).toHaveCSS('font-weight', '700');
     await expect(chip).toHaveCSS('outline-color', 'rgb(255, 255, 255)');
     await expect(chip).toHaveCSS('outline-width', '2px');
     await expect(chip).toHaveCSS('outline-offset', '0px');
     const shadow = await chip.evaluate(node => getComputedStyle(node).boxShadow);
-    expect(shadow).toContain('rgb(255, 255, 255) 2px 0px 0px 0px inset');
+    expect(shadow).toContain('rgb(1, 11, 19) 0px 0px 0px 2px inset');
+    expect(shadow).not.toContain('2px 0px 0px 0px inset');
     expect(shadow).toContain('rgb(1, 11, 19) 0px 0px 0px 4px');
     await expect(sidebar.locator('input[type="checkbox"][data-layer-key="nadm-drought"]')).toBeChecked();
     await chip.hover();
-    await expect(chip).toHaveCSS('background-color', 'rgb(42, 49, 56)');
-    await expect(chip).toHaveCSS('color', 'rgb(255, 255, 255)');
+    await expect(chip).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+    await expect(chip).toHaveCSS('color', 'rgb(1, 11, 19)');
     const briefing = sidebar.locator('#region-briefing-btn');
     await expect(briefing).toBeVisible();
     await expect(briefing).toHaveCSS('background-color', 'rgb(30, 36, 44)');

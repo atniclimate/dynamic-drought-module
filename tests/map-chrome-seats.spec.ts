@@ -520,25 +520,42 @@ test.describe('the desktop column holds its seats (D1 M9)', () => {
     });
   });
 
-  test('phones and embeds keep help and Share in their homes', async ({ page }) => {
-    // The column is desktop-shell-only: at 390x844 and in an embed the
-    // seat helper keeps help beside its home anchor, the slot boxes take no
-    // space, and Share stays a direct child of the stack its phone and
-    // embed rules order.
-    for (const [viewport, query] of [
-      [{ width: 390, height: 844 }, ''],
-      [{ width: 1280, height: 800 }, '?embed=true']
-    ] as const) {
-      await page.setViewportSize(viewport);
-      await gotoApp(page, query);
-      await expect(page.locator('#map-info-home + #map-info-btn + #map-info-panel')).toHaveCount(1);
-      await expect(page.locator('#map-info-seat > *')).toHaveCount(0);
-      await expect(page.locator('.map-overlay-controls > #share-btn')).toHaveCount(1);
-      await expect(page.locator('#map-info-btn .map-cell-label')).toBeHidden();
-      // The word-less home disclosure keeps its name; only the desktop
-      // seat, which shows the word Help, leads with it.
-      await expect(page.locator('#map-info-btn')).toHaveAttribute('aria-label', 'Map information');
-    }
+  test('phones seat help and Share in the edge column; embeds keep them in their homes', async ({ page }) => {
+    // The phone shell seats these controls in #edge-column. An embed has no
+    // phone column: the seat helper keeps help beside its home anchor, the slot
+    // boxes take no space, and Share stays a direct child of the overlay stack.
+    await page.setViewportSize({ width: 390, height: 844 });
+    await gotoApp(page, '');
+    // The phone shell stamps data-sheet-detent; every right-edge control then rides #edge-column.
+    await expect(page.locator('#app[data-sheet-detent] #edge-column')).toHaveCount(1);
+    // Help: a cell of the map tools group, ordered after Share (10) and Reset (20), word Info.
+    await expect(page.locator('#edge-body-utility > #map-info-btn')).toHaveCount(1);
+    await expect(page.locator('#map-info-btn')).toHaveAttribute('data-edge-order', '30');
+    await expect(page.locator('#map-info-btn')).toHaveAttribute('data-edge-word', 'Info');
+    await expect(page.locator('#map-info-home + #map-info-btn')).toHaveCount(0);
+    // Its drawer has no phone seat: it keeps the anchor's place in the map container.
+    await expect(page.locator('#map-info-home + #map-info-panel')).toHaveCount(1);
+    await expect(page.locator('#map-info-seat > *')).toHaveCount(0);
+    // Share rides the map tools and has left the overlay stack.
+    await expect(page.locator('#edge-body-utility > #share-btn')).toHaveCount(1);
+    await expect(page.locator('.map-overlay-controls > #share-btn')).toHaveCount(0);
+    // The long desktop word stays out of the cell; the short word is drawn by ::after.
+    await expect(page.locator('#map-info-btn .map-cell-label')).toBeHidden();
+    expect(
+      await page.locator('#map-info-btn').evaluate((el) => getComputedStyle(el, '::after').content)
+    ).toBe('"Info"');
+    // The cell's name is unchanged by the move.
+    await expect(page.locator('#map-info-btn')).toHaveAttribute('aria-label', 'Map information');
+
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await gotoApp(page, '?embed=true');
+    await expect(page.locator('#map-info-home + #map-info-btn + #map-info-panel')).toHaveCount(1);
+    await expect(page.locator('#map-info-seat > *')).toHaveCount(0);
+    await expect(page.locator('.map-overlay-controls > #share-btn')).toHaveCount(1);
+    await expect(page.locator('#map-info-btn .map-cell-label')).toBeHidden();
+    // The word-less home disclosure keeps its name; only the desktop
+    // seat, which shows the word Help, leads with it.
+    await expect(page.locator('#map-info-btn')).toHaveAttribute('aria-label', 'Map information');
   });
 });
 

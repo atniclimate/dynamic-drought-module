@@ -59,8 +59,10 @@ for (const width of [1440, 721, 720, 390]) {
     })).toEqual(['rgb(255, 255, 255)', 'rgb(232, 236, 240)', 'rgba(255, 255, 255, 0.08)', '', '', '']);
     const off = panel.locator('[data-flow-kind="off"]');
     await expect(off).toHaveAttribute('aria-pressed', 'true');
-    await expect(off).toHaveCSS('background-color', 'rgb(42, 49, 56)');
-    await expect(off).toHaveCSS('color', 'rgb(255, 255, 255)');
+    await expect(off).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+    await expect(off).toHaveCSS('color', 'rgb(1, 11, 19)');
+    await expect(off).toHaveCSS('border-color', 'rgb(255, 255, 255)');
+    await expect(off).toHaveCSS('box-shadow', 'none');
     await expect(off).toHaveCSS('font-weight', '700');
     await expect(off).toHaveCSS('border-radius', width > 720 ? '0px' : '4px');
     await page.keyboard.press('Tab');
@@ -84,11 +86,13 @@ for (const width of [1440, 721, 720, 390]) {
     expect(fits).toBe(true);
     if (width <= 720) {
       const rail = page.locator('#mobile-footer-nav button[data-tab="layers"]');
-      await expect(rail).toHaveCSS('background-color', 'rgba(1, 11, 19, 0.86)');
-      await expect(rail).toHaveCSS('border-radius', '4px');
+      await expect(rail).toHaveAttribute('aria-expanded', 'true');
+      await expect(rail).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+      await expect(rail).toHaveCSS('color', 'rgb(1, 11, 19)');
+      await expect(rail).toHaveCSS('border-radius', '7px');
       await rail.focus();
-      await expect(rail).toHaveCSS('outline-offset', '0px');
-      await expect(rail).toHaveCSS('box-shadow', /rgb\(1, 11, 19\) 0px 0px 0px 4px/);
+      await expect(rail).toHaveCSS('outline-offset', '-4px');
+      await expect(rail).toHaveCSS('box-shadow', /rgb\(1, 11, 19\) 0px 0px 0px 2px inset, rgb\(1, 11, 19\) 0px 0px 0px 6px inset/);
     }
   });
 }

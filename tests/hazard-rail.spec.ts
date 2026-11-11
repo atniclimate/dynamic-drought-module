@@ -8,8 +8,8 @@ import {
 } from './tribal-fixtures';
 
 /**
- * The mobile quick-view spine and the footer doors. Four icon-only hazard
- * controls occupy the lower-right thumb zone.
+ * The mobile quick-view spine and the footer doors. Four labelled hazard
+ * cells occupy the lower-right thumb zone.
  *
  * Contract under test:
  * - The rail stays reachable beside the mobile side panel and stays
@@ -56,7 +56,7 @@ test.beforeEach(async ({ page }) => {
 test.describe('the mobile hazard rail (390x844)', () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
-  test('the map-first boot shows four accessible icon controls in a column', async ({
+  test('the map-first boot shows four labelled hazard cells in a column', async ({
     page
   }) => {
     await gotoApp(page);
@@ -76,30 +76,25 @@ test.describe('the mobile hazard rail (390x844)', () => {
     await expect(buttons.nth(2)).toHaveAccessibleName(/drought/i);
     await expect(buttons.nth(3)).toHaveAccessibleName(/heat/i);
 
-    // Mobile labels remain in the accessibility tree but do not render as
-    // visible map text.
-    const labelStyles = await page
-      .locator('#hazard-rail .map-control-label')
-      .evaluateAll((labels) =>
-        labels.map((label) => {
-          const style = getComputedStyle(label);
-          return {
-            clip: style.clip,
-            height: style.height,
-            overflow: style.overflow,
-            position: style.position,
-            width: style.width
-          };
-        })
-      );
-    expect(labelStyles).toHaveLength(4);
-    for (const style of labelStyles) {
-      expect(style.position).toBe('absolute');
-      expect(style.width).toBe('1px');
-      expect(style.height).toBe('1px');
-      expect(style.overflow).toBe('hidden');
-      expect(style.clip).not.toBe('auto');
+    // Each cell in the phone's right-edge column shows one short word, and that word
+    // leads its accessible name (WCAG 2.5.3).
+    const hazardLabels = rail.locator('.hazard-rail-btn > .map-control-label');
+    await expect(hazardLabels).toHaveText(['ENSO', 'Fire', 'Drought', 'Heat']);
+    for (let i = 0; i < 4; i += 1) {
+      const label = hazardLabels.nth(i);
+      await expect(label).toBeVisible();
+      expect(await label.evaluate((n) => getComputedStyle(n).position)).toBe('static');
+      const lb = (await label.boundingBox())!;
+      const cb = (await buttons.nth(i).boundingBox())!;
+      expect(lb.width).toBeGreaterThan(1);
+      expect(lb.height).toBeGreaterThan(1);
+      expect(lb.x).toBeGreaterThanOrEqual(cb.x);
+      expect(lb.x + lb.width).toBeLessThanOrEqual(cb.x + cb.width);
     }
+    await expect(buttons.nth(0)).toHaveAccessibleName(/^ENSO\b/);
+    await expect(buttons.nth(1)).toHaveAccessibleName(/^Fire\b/);
+    await expect(buttons.nth(2)).toHaveAccessibleName(/^Drought\b/);
+    await expect(buttons.nth(3)).toHaveAccessibleName(/^Heat\b/);
 
     const lowerControls = [
       buttons.nth(0),
@@ -259,17 +254,30 @@ test.describe('the mobile hazard rail (390x844)', () => {
       .poll(async () => (await urlLayers(page)).has('spc-fire-weather'))
       .toBe(true);
 
-    // The Brief door uses the same side-panel geometry and leaves the map
-    // controls reachable.
-    await page.locator('#mobile-footer-nav button[data-tab="brief"]').click();
-    await expect(app).toHaveAttribute('data-sheet-detent', 'full');
+    // The Brief door with no place chosen opens at half: a sheet is only as tall as
+    // what it has to say (owner direction 2026-11-09, sprint). Brief opens at full
+    // only with a briefing to read. The map controls stay reachable beside it.
+    const briefDoor = page.locator('#mobile-footer-nav button[data-tab="brief"]');
+    await briefDoor.click();
+    await expect(app).toHaveAttribute('data-sheet-detent', 'half');
+    await expect(app).toHaveAttribute('data-sheet-tab', 'brief');
+    await expect(briefDoor).toHaveAttribute('aria-expanded', 'true');
     await expect(rail).toBeVisible();
     await expect(share).toBeVisible();
     await expect(reset).toBeVisible();
     await share.evaluate((button) => (button as HTMLButtonElement).focus());
     await expect(share).toBeFocused();
-    await page.locator('#mobile-footer-nav button[data-tab="brief"]').click();
+    await briefDoor.click();
     await expect(app).toHaveAttribute('data-sheet-detent', 'closed');
+    await expect(rail).toBeVisible();
+    await expect(share).toBeVisible();
+    await expect(reset).toBeVisible();
+
+    // The full stop leaves the map controls reachable too.
+    await page.locator('#mobile-footer-nav button[data-tab="layers"]').click();
+    await expect(app).toHaveAttribute('data-sheet-detent', 'half');
+    await page.locator('#sheet-all-layers-btn').click();
+    await expect(app).toHaveAttribute('data-sheet-detent', 'full');
     await expect(rail).toBeVisible();
     await expect(share).toBeVisible();
     await expect(reset).toBeVisible();
