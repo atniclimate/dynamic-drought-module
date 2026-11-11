@@ -28,7 +28,10 @@
  * NO READ. A link whose source did not answer, or that the caller has no
  * source for, is still drawn, in its place, under its state word
  * (`loading...`, `live (partial)`, `unavailable`) with the caller's reason. A
- * chain never closes ranks over a missing link.
+ * chain never closes ranks over a missing link. A link whose view has simply
+ * not been asked for (an overlay that is off, a place not yet chosen) is
+ * `idle`: nothing failed, so it wears the caller's own plain word and never
+ * `unavailable`.
  *
  * LAYOUT. The chain runs down its column at every width: one card per link,
  * with the joint between two cards. It is not laid across: five cards and
@@ -47,6 +50,14 @@ import { READ_STATE_WORD } from './gauges';
 /** The most links one chain draws. */
 export const CHAIN_MAX_LINKS = 5;
 
+/**
+ * A link's state: a read (`ready`), one of the read states that hold none, or
+ * `idle` (the ENSO chain's addition, owner direction 2026-11-09 (sprint),
+ * DR-pending): the link's view has not been asked for, so there is no read
+ * and no failure to report.
+ */
+export type ChainLinkStatus = HorizonStatus | 'idle';
+
 export interface ChainLink {
   /** Stable and unique inside the chain; rendered as `data-chain-link`. */
   readonly key: string;
@@ -56,7 +67,9 @@ export interface ChainLink {
    * `ready` for a link that holds a read; any other status draws the state
    * word and `note` and no statement.
    */
-  readonly status: HorizonStatus;
+  readonly status: ChainLinkStatus;
+  /** The plain state word of an `idle` link, for example "not shown". */
+  readonly idleWord?: string;
   /**
    * The read itself, short, in the issuer's words, built by the caller from
    * typed data (a `ClaimReading`), never cut out of a claim's sentence.
@@ -120,9 +133,13 @@ function renderLink(link: ChainLink, last: boolean): string {
     : `<span class="evidence-chain-step">${escapeHtml(link.title)}</span>`;
   const badge = pres && read ? `<span class="impact-claim-badge">${escapeHtml(pres.label)}</span>` : '';
   // A link with no read says so with the same word and glyph a matrix cell uses.
+  // An idle link wears the pill's plain face (an open mark): it is no read
+  // state, so it borrows neither the word nor the glyph of one.
   const state = read
     ? ''
-    : `<span class="impact-hazard-pill impact-hazard-pill-${link.status}">${escapeHtml(READ_STATE_WORD[link.status])}</span>`;
+    : link.status === 'idle'
+      ? `<span class="impact-hazard-pill">${escapeHtml(link.idleWord ?? 'not shown')}</span>`
+      : `<span class="impact-hazard-pill impact-hazard-pill-${link.status}">${escapeHtml(READ_STATE_WORD[link.status])}</span>`;
   const statement =
     read && link.statement ? `<p class="evidence-chain-statement">${escapeHtml(link.statement)}</p>` : '';
   const figure = read && link.figure ? `<div class="evidence-chain-figure">${link.figure}</div>` : '';
