@@ -68,7 +68,7 @@ let liveRegionEl: HTMLElement | null = null;
 
 /** The active detent, or null when the sheet is inactive (desktop or embed). */
 let detent: SheetDetent | null = null;
-/** The open door, or null: a closed sheet, or one raised by something else. */
+/** The pressed door, or null: a closed sheet, or one raised by something else. */
 let activeTab: SheetTab | null = null;
 
 /**
@@ -465,11 +465,53 @@ export function restoreSheetDetent(): void {
 // ---------------------------------------------------------------------------
 
 /**
- * Record the open door and reflect it on the door buttons at once (the open
- * door inverts through `aria-expanded`). Null clears all four: the closed
- * sheet has no open door, and a sheet raised by something other than a door
- * shows content without claiming one. The `data-sheet-tab` attribute the
- * content gates read is stamped with the stop, in `present`.
+ * The door a raised sheet shows when none was pressed (a map selection, a
+ * shared link, Locate): the one whose word the sheet's title reads. The
+ * same three tests in the same order as `describe` in
+ * src/ui/sheet-motion.ts, so the title and the lit door cannot disagree:
+ * Brief while the report is open at full, Layers in the console view,
+ * otherwise Place (owner direction 2026-11-09 (sprint), DR-pending).
+ */
+function impliedTab(): SheetTab {
+  if (
+    appEl?.getAttribute('data-sheet-detent') === 'full' &&
+    sidebarEl?.querySelector('#sheet-report .impact-panel.open')
+  ) {
+    return 'brief';
+  }
+  return appEl?.classList.contains('view-console') ? 'layers' : 'place';
+}
+
+/** The door shown as open: the pressed one, else the implied one. None while closed. */
+function litTab(): SheetTab | null {
+  return detent === null || detent === 'closed' ? null : (activeTab ?? impliedTab());
+}
+
+/**
+ * Show the lit door on the door buttons (the open door inverts through
+ * `aria-expanded`). An implied door is lit and nothing more: it is never
+ * `activeTab`, so `data-sheet-tab` stays unstamped and a selection keeps its
+ * answer-first content order.
+ */
+function lightDoors(): void {
+  const lit = litTab();
+  for (const btn of document.querySelectorAll<HTMLButtonElement>(
+    '#mobile-footer-nav button[data-tab]'
+  )) {
+    const active = btn.dataset['tab'] === lit;
+    btn.classList.toggle('active', active);
+    if (btn.getAttribute('aria-expanded') !== String(active)) {
+      btn.setAttribute('aria-expanded', String(active));
+    }
+  }
+}
+
+/**
+ * Record the pressed door and reflect it on the door buttons at once. Null
+ * means no door was pressed: the closed sheet lights none, and a sheet
+ * raised by something else lights the door its title names (`impliedTab`).
+ * The `data-sheet-tab` attribute the content gates read is stamped with the
+ * stop, in `present`, and only for a pressed door.
  */
 function syncFooterTab(tab: SheetTab | null): void {
   activeTab = tab;
@@ -477,11 +519,9 @@ function syncFooterTab(tab: SheetTab | null): void {
   if (!footer) return;
   footer.setAttribute('aria-label', 'Mobile panels');
   for (const btn of footer.querySelectorAll<HTMLButtonElement>('button[data-tab]')) {
-    const active = btn.dataset['tab'] === tab;
-    btn.classList.toggle('active', active);
     btn.setAttribute('aria-controls', 'sidebar');
-    btn.setAttribute('aria-expanded', String(active));
   }
+  lightDoors();
 }
 
 /**
@@ -493,11 +533,12 @@ function syncFooterTab(tab: SheetTab | null): void {
  * DR-pending; before this Brief always opened at full). Brief and Place
  * ride the Brief view mode, Layers rides console; the mode is real URL
  * state and moves through the existing `setViewMode` machinery. Pressing
- * the open door again closes the sheet.
+ * the lit door closes the sheet.
  */
 function openFooterTab(tab: SheetTab): void {
   if (detent === null || !appEl) return;
-  if (activeTab === tab && detent !== 'closed') {
+  // The lit door closes the sheet, whether it was pressed or implied.
+  if (litTab() === tab) {
     setSheetDetent('closed');
     return;
   }
@@ -690,6 +731,12 @@ export function initMobileSheet(
   });
 
   wireFooterNav();
+  // The title re-reads on these two attributes (src/ui/sheet-motion.ts);
+  // the lit door re-reads with it, in the same turn.
+  new MutationObserver(lightDoors).observe(appEl, {
+    attributes: true,
+    attributeFilter: ['data-sheet-detent', 'class']
+  });
 
   document.addEventListener('keydown', (event) => {
     if (
