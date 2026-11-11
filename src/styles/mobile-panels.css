@@ -352,6 +352,66 @@
   }
 
   /* ---------------------------------------------------------------------
+     The report's head on a phone (owner direction 2026-11-09 (sprint),
+     DR-pending). Mail, print and the way back are the report's only tools,
+     and each is a full touch target here, as each already is on a tablet.
+     Three of them are 144px of a head under 300px wide, so the head takes
+     the tablet band's stacked arrangement one step further: the kicker
+     shares the tools' row, and the place name has the whole width under it,
+     where a long Tribal name wraps to two lines instead of five. The
+     heading's wrapper is a plain div, so `display: contents` changes the
+     boxes and nothing a screen reader hears; the reading order stays
+     kicker, name, kind, then the tools.
+     --------------------------------------------------------------------- */
+  #app[data-sheet-detent] #sheet-report .impact-panel-header {
+    flex-wrap: wrap;
+    align-items: center;
+    row-gap: 4px;
+  }
+  #app[data-sheet-detent] #sheet-report .impact-panel-heading {
+    display: contents;
+  }
+  #app[data-sheet-detent] #sheet-report .impact-panel-kicker {
+    order: 1;
+    flex: 1 1 0;
+    min-width: 0;
+    margin: 0;
+  }
+  #app[data-sheet-detent] #sheet-report .impact-panel-actions {
+    order: 2;
+  }
+  #app[data-sheet-detent] #sheet-report .impact-panel-title,
+  #app[data-sheet-detent] #sheet-report .impact-panel-kind {
+    order: 3;
+    flex: 1 1 100%;
+  }
+  #app[data-sheet-detent] #sheet-report .impact-panel-kind {
+    margin-top: 0;
+  }
+  #app[data-sheet-detent] #sheet-report .impact-panel-close,
+  #app[data-sheet-detent] #sheet-report .impact-panel-action {
+    min-width: var(--touch-target);
+    min-height: var(--touch-target);
+  }
+
+  /* Two link-like buttons on a phone. The key drawer's "Technical
+     information" stands on a line of its own, so its box takes the touch
+     floor. The credits line's "Acknowledgements" sits inside a sentence:
+     its box stays in the line, and a transparent band above and below it
+     takes the touch, as the minimap's ocean doors do. */
+  #app[data-sheet-detent] .map-info-ack-link[data-open-technical-information] {
+    min-height: var(--touch-target);
+  }
+  #app[data-sheet-detent] .map-info-ack-link[data-open-acknowledgements] {
+    position: relative;
+  }
+  #app[data-sheet-detent] .map-info-ack-link[data-open-acknowledgements]::before {
+    content: '';
+    position: absolute;
+    inset: calc((24px - var(--touch-target)) / 2) 0;
+  }
+
+  /* ---------------------------------------------------------------------
      Map furniture rides the sheet's top edge at peek and half: the scale
      rulers, and above them the dock (notices and the OpenStreetMap
      credit), so neither is ever hidden under the glass while the map
