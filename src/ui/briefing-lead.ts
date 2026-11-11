@@ -407,13 +407,22 @@ function renderTile(entry: PriorityEntry): string {
     `${HAZARD_LABELS[entry.hazard]}: ${entry.reason}. Source: ${claim.source}. ` +
     `${date ? `${date}. ` : ''}Evidence: ${pres.label}. ${detailLabel(entry.hazard)}`;
   const figure = familyFigure(entry.family, entry.members, entry.lead);
+  // The tile is one button with one name, built from its lead member. What
+  // the figure adds for a sighted reader (the other days of a strip, where a
+  // class sits on its scale) is the figure's own label; it is handed to
+  // assistive technology as the button's description, so nothing on the
+  // tile is seen and not said. The label is already escaped by the gauge.
+  const figureWords = figure ? (/aria-label="([^"]*)"/.exec(figure)?.[1] ?? '') : '';
+  const describedBy = figureWords ? `lead-figure-words-${entry.hazard}-${entry.family}` : '';
   return (
     `<li class="lead-tile-item">` +
     `<button type="button" class="lead-tile" data-evidence="${claim.evidence}" data-lead-action="detail" data-lead-hazard="${entry.hazard}" ` +
-    `data-lead-row="${entry.row}" data-lead-key="tile:${entry.hazard}:${entry.family}" aria-label="${escapeHtml(name)}">` +
+    `data-lead-row="${entry.row}" data-lead-key="tile:${entry.hazard}:${entry.family}" aria-label="${escapeHtml(name)}"` +
+    `${describedBy ? ` aria-describedby="${describedBy}"` : ''}>` +
     `<span class="lead-tile-top"><span class="lead-hazard">${escapeHtml(HAZARD_LABELS[entry.hazard])}</span>${badge(claim)}</span>` +
     `<span class="lead-headline">${headlineHtml(entry)}</span>` +
     (figure ? `<span class="lead-figure">${figure}</span>` : '') +
+    (describedBy ? `<span class="sr-only" id="${describedBy}">${figureWords}</span>` : '') +
     `<span class="lead-scope">${escapeHtml(scopeWords(entry))}</span>` +
     `<span class="lead-foot">${sourceLine(claim)}<span class="lead-open" aria-hidden="true">Federal text</span></span>` +
     `</button></li>`

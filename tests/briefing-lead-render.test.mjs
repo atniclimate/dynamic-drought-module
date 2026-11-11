@@ -180,3 +180,17 @@ test('the briefing chain relates the unread jet link to nothing', () => {
     assert.ok(!/\b(causes?|drives?|leads? to|informs)\b/i.test(link.relation ?? ''), `no causal or unsupported joint: ${link.relation}`);
   }
 });
+
+test('a tile hands its figure\'s words to assistive technology as its description', () => {
+  const briefing = briefingOf('unavailable', 'not read in this fixture');
+  briefing.horizons.current.cells.drought = cell('drought', 'current', 'ready', [usdmClaim]);
+  const html = renderLeadView(briefing, NOW);
+  const tile = /<button type="button" class="lead-tile"[\s\S]*?<\/button>/.exec(html)?.[0] ?? '';
+  const describedBy = /aria-describedby="([^"]+)"/.exec(tile)?.[1];
+  assert.ok(describedBy, 'the tile points at a description');
+  const words = new RegExp(`id="${describedBy}">([^<]*)<`).exec(tile)?.[1] ?? '';
+  const figureLabel = /<svg[^>]*aria-label="([^"]*)"/.exec(tile)?.[1] ?? '';
+  assert.notEqual(figureLabel, '', 'the tile draws a figure');
+  assert.equal(words, figureLabel, 'the description is the figure\'s own label, word for word');
+  assert.match(words, /D0 to D4/);
+});
