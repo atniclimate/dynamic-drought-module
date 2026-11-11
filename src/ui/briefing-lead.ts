@@ -705,7 +705,9 @@ export function buildEnsoChainLinks(briefing: ImpactBriefing): ChainLink[] {
   const usdm = drought?.reading?.kind === 'usdm-category' ? drought.reading : null;
   links.push({
     key: 'here',
-    title: 'Observed here now',
+    // Not "observed": the read is the weekly map, an analyzed product, and
+    // the badge beside the title says so.
+    title: 'Conditions here now',
     action: 'detail:drought',
     actionLabel: 'Open the Drought detail',
     ...(drought && usdm

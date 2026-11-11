@@ -231,6 +231,11 @@ function paint(): void {
   }
 }
 
+/**
+ * Announce a press through the polite live region. The words name what was
+ * asked for ("Showing ...", "Drawing ..."), never a result: when a press is
+ * announced no layer has answered yet, and the link itself says what was read.
+ */
 function say(text: string): void {
   if (held) held.live.textContent = text;
 }
@@ -334,7 +339,16 @@ function readPlace(state: Held): void {
       }
     },
     () => {
-      for (const read of open) settle(read.slot, failed);
+      // The reader itself did not load (a dropped connection). No source was
+      // asked, so the link must not say one failed to answer; and the place
+      // is marked unread again, so the next time the panel is shown it is
+      // read.
+      const notLoaded: PlaceRead = {
+        status: 'unavailable',
+        note: 'The reader for this link did not load, so its source was not asked. It is tried again when this panel is next shown.'
+      };
+      for (const read of open) settle(read.slot, notLoaded);
+      if (current()) state.placeUnread = true;
     }
   );
 }
@@ -409,13 +423,13 @@ function press(action: EnsoChainAction): void {
       fitOcean(map, 'pacific');
       if (action === 'pattern') {
         requestEnsoFlowKind('off');
-        say('The map shows the sea surface temperature surface alone, framed on the Pacific.');
+        say('Showing the sea surface temperature surface alone, framed on the Pacific.');
       } else {
         // The index region's own popup, through the map key's door, once the camera rests.
         afterMove(map, () => {
           if (held === state) window.dispatchEvent(new CustomEvent(FEATURE_DOOR_EVENT, { detail: 'nino34' }));
         });
-        say('The map is framed on the Pacific. The boxed region is where the index is measured.');
+        say('Framing the map on the Pacific. The boxed region is where the index is measured.');
       }
       return;
     case 'jet':
@@ -434,12 +448,12 @@ function press(action: EnsoChainAction): void {
         const draws = seasonDraws(state.outlook);
         say(
           draws.length > 0
-            ? `The map shows the ${draws.join(' and ')}, framed on ${place.label}.`
-            : `The map shows the seasonal outlook, framed on ${place.label}.`
+            ? `Showing the ${draws.join(' and ')}, framed on ${place.label}.`
+            : `Showing the seasonal outlook, framed on ${place.label}.`
         );
         return;
       }
-      say(`The map shows current conditions, framed on ${place.label}. Its briefing is open.`);
+      say(`Showing current conditions, framed on ${place.label}, and opening its briefing.`);
       // The briefing takes the phone sheet, so the guide stands down first.
       standDown(() => openImpactPanel(place.context), 'sheet-report-door');
       return;

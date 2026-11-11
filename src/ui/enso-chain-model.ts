@@ -409,7 +409,9 @@ function tendencyLink(read: PlaceRead, place: EnsoChainInput['place'], seasonDra
 }
 
 function hereLink(read: PlaceRead, place: EnsoChainInput['place']): Built {
-  const base = { key: 'here', title: 'Observed here now' } as const;
+  // Not "observed": the read is the weekly map, an analyzed product, and
+  // the badge beside the title says so.
+  const base = { key: 'here', title: 'Conditions here now' } as const;
   const lit = { action: 'here', actionLabel: 'Open the current conditions for this place' } as const;
   if (read.status !== 'ready' || place === null) {
     const unread = unreadPlaceLink(read.status === 'ready' ? { status: 'none' } : read, place, 'what the U.S. Drought Monitor shows');
