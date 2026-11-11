@@ -41,7 +41,7 @@ import {
   openImpactPanel,
   openImpactPanelUnavailable
 } from '../ui/impact-panel';
-import { isSheetActive, sheetCameraInset } from '../ui/mobile-sheet';
+import { isSheetActive, sheetCameraInset, sheetCameraSideInset } from '../ui/mobile-sheet';
 import { edgeColumnInset } from '../ui/edge-column';
 import { setPlaceSelection } from './place-selection';
 import { getCurrentRegion } from './region-store';
@@ -76,7 +76,7 @@ const FETCH_TIMEOUT_MS = 10_000;
  *   sheet at half, so the fit keeps that band clear (`sheetCameraInset`;
  *   owner direction 2026-11-09 (sprint), DR-pending) and the band the
  *   right-edge column occupies (`edgeColumnInset`). The landscape drawer
- *   takes no height and adds nothing.
+ *   takes no height; it takes width on the left (`sheetCameraSideInset`).
  * - Mobile without the sheet (embed keeps today's hidden-chrome
  *   semantics; the no-JavaScript fallback stacks): the briefing overlay
  *   still covers the lower viewport, so the pre-U2 transient bottom pad
@@ -87,7 +87,8 @@ function briefingCameraPadding(panelWillOpen: boolean): maplibregl.PaddingOption
   if (mobile && isSheetActive()) {
     return {
       top: 24,
-      left: 24,
+      // The landscape drawer covers the left of the map.
+      left: 24 + sheetCameraSideInset(),
       // The right-edge column stays on screen with a sheet open.
       right: 24 + edgeColumnInset(),
       bottom: 24 + (panelWillOpen ? sheetCameraInset() : 0)

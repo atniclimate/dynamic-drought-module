@@ -96,7 +96,13 @@ import {
 import type { EnsoChainAction, EnsoRead, JetRead, PlaceRead } from './enso-chain-model';
 import { renderEvidenceChain } from './evidence-chain';
 import { openImpactPanel, openTechnicalInformation } from './impact-panel';
-import { getSheetDetent, isSheetActive, setSheetDetent, sheetCameraInset } from './mobile-sheet';
+import {
+  getSheetDetent,
+  isSheetActive,
+  setSheetDetent,
+  sheetCameraInset,
+  sheetCameraSideInset
+} from './mobile-sheet';
 
 const SURFACE_KEY = 'sst-anomaly';
 /** Mirrors src/layers/enso-flow.ts: the overlay's snapshot and its replay request. */
@@ -371,7 +377,12 @@ function framePlace(map: maplibregl.Map, context: BoundarySelectionContext): voi
         [box[2], box[3]]
       ],
       {
-        padding: { top: 60, right: 40 + edgeColumnInset(), bottom: 40 + sheetCameraInset(), left: 40 },
+        padding: {
+          top: 60,
+          right: 40 + edgeColumnInset(),
+          bottom: 40 + sheetCameraInset(),
+          left: 40 + sheetCameraSideInset()
+        },
         maxZoom: 9,
         animate
       }

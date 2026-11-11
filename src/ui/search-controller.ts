@@ -52,7 +52,7 @@ import {
 } from '../state/tribal-roster';
 import { fetchBufferedWithBudget, fetchJsonWithBudget } from '../util/fetch';
 import { isObject } from '../util/guards';
-import { isSheetActive, sheetCameraInset } from './mobile-sheet';
+import { isSheetActive, sheetCameraInset, sheetCameraSideInset } from './mobile-sheet';
 import { requestLayerOn } from './layer-toggle-command';
 import { isCurrentBriefingIntent, nextBriefingIntent, openImpactPanel } from './impact-panel';
 import { showToast } from './overlay';
@@ -285,8 +285,16 @@ async function locateBoundary(map: maplibregl.Map, spec: LocateSpec): Promise<vo
         [continuous[0], continuous[1]],
         [continuous[2], continuous[3]]
       ],
-      // On a phone the answer opens in the bottom sheet: keep its band clear.
-      { padding: { top: 60, right: 60, bottom: 60 + sheetCameraInset(), left: 60 } }
+      // On a phone the answer opens in the bottom sheet, or in the drawer on
+      // its side: keep whichever band it covers clear.
+      {
+        padding: {
+          top: 60,
+          right: 60,
+          bottom: 60 + sheetCameraInset(),
+          left: 60 + sheetCameraSideInset()
+        }
+      }
     );
   }
 

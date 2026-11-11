@@ -160,10 +160,30 @@ export function sheetAllowsAutoRaise(): boolean {
  * Reset and a shared link frame exactly as before.
  */
 export function sheetCameraInset(): number {
-  // A sheet as tall as the window is the landscape drawer. Read from the
-  // element, so this eager module shares no constant with the lazy one.
-  if (detent === null || !sidebarEl || sidebarEl.offsetHeight >= window.innerHeight) return 0;
+  if (detent === null || !sidebarEl || isDrawerForm()) return 0;
   return Math.round(window.innerHeight / 2);
+}
+
+/**
+ * The band, in px from the left edge, a camera fit should keep clear: the
+ * landscape drawer's width while the panel is in that form, and 0 otherwise.
+ * The drawer covers the left of the map the way the bottom sheet covers its
+ * lower half, so a fit that ignored it framed the place under the drawer.
+ */
+export function sheetCameraSideInset(): number {
+  if (detent === null || !sidebarEl || !isDrawerForm()) return 0;
+  return Math.round(sidebarEl.getBoundingClientRect().width);
+}
+
+/**
+ * Whether the panel is the landscape drawer. Read from the element, so this
+ * eager module shares no constant with the lazy one: the drawer's box starts
+ * at the top edge of the window, and the bottom sheet's box always starts
+ * below it, at every stop and while closed. (Its height is not the tell: the
+ * drawer stops 2 px short of the bottom edge on purpose.)
+ */
+function isDrawerForm(): boolean {
+  return sidebarEl !== null && sidebarEl.getBoundingClientRect().top <= 0;
 }
 
 /** Subscribe to detent settles (after the sheet comes to rest and map.resize). */

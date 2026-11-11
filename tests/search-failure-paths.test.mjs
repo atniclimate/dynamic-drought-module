@@ -50,7 +50,8 @@ const STUBS = {
   '../state/place-selection':
     'export const onPlaceSelectionChange = () => () => {};' +
     ' export const setPlaceSelection = (s) => globalThis.__sfp.selections.push(s);',
-  './mobile-sheet': 'export const isSheetActive = () => false; export const sheetCameraInset = () => 0;',
+  './mobile-sheet':
+    'export const isSheetActive = () => false; export const sheetCameraInset = () => 0; export const sheetCameraSideInset = () => 0;',
   './layer-toggle-command': 'export const requestLayerOn = () => {};',
   './impact-panel':
     'let n = 0; export const nextBriefingIntent = () => ++n;' +
