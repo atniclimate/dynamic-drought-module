@@ -1645,10 +1645,16 @@ function applyUrlStateSync(map: maplibregl.Map): ParsedUrlParams {
   // the Fire3D gate admits no custom boot; read the hazard here only once the gate does.
   const fire3d = params.fire3d && params.cluster === 'wildfire';
   if (params.fire3d && !fire3d) syncFire3dParam(false);
-  // DR-105: a `fire3d=true` boot at the 3D chunk's width (main.ts) holds the
+  // DR-105: a `fire3d=true` boot that loads the 3D chunk (main.ts) holds the
   // imagery until the scene's controller decides; it releases the hold when
-  // the scene does not open.
-  if (fire3d && window.matchMedia(FIRE3D_CHUNK_WIDTH_QUERY).matches) {
+  // the scene does not open. The same rule as main.ts's load: at the chunk's
+  // width, and below the console's width only outside an embed, which never
+  // loads the controller that would release the hold (review finding R2-10).
+  if (
+    fire3d &&
+    window.matchMedia(FIRE3D_CHUNK_WIDTH_QUERY).matches &&
+    (window.matchMedia(SIDEBAR_DESKTOP_QUERY).matches || !params.embed)
+  ) {
     holdSatellite(map, true);
   }
   if (params.basemap === 'satellite') {
