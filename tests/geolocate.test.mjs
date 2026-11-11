@@ -284,6 +284,23 @@ test('the launch preference is the word yes or no, and storage failure is surviv
   assert.equal(pref.writeLaunchPreference('yes', refuses), false);
 });
 
+test('the browser suite seeds the same key, with a value the app reads as declined', async () => {
+  // tests/helpers.ts stores an answer before a routine boot, so no spec meets
+  // the first-launch offer unless it asks for it. A drifted key would seed
+  // nothing and the offer would return to every phone boot unannounced.
+  const helpers = await source('tests/helpers.ts');
+  const key = helpers.match(/export const LOCATE_LAUNCH_STORAGE_KEY = '([^']+)';/)?.[1];
+  assert.equal(key, pref.LAUNCH_PREFERENCE_KEY);
+  assert.match(
+    helpers,
+    /if \(window\.localStorage\.getItem\(key\) === null\) window\.localStorage\.setItem\(key, 'no'\);/,
+    'the seed writes the word no, and only where nothing is stored'
+  );
+  const memory = new Map([[key, 'no']]);
+  const store = () => ({ getItem: (name) => memory.get(name) ?? null, setItem: () => undefined });
+  assert.equal(pref.readLaunchPreference(store), 'no');
+});
+
 const LOCATE_MODULES = [
   'src/state/geolocate.ts',
   'src/state/locate-preference.ts',
