@@ -3483,9 +3483,10 @@ button.conditions-metric:hover .conditions-action-hide {
    list's own height and gave IT a second `overflow: auto`, nested
    inside .layers-studio-scroll's own scroller (near :3009); at 1280x720
    that cut the last row mid-line inside its own tiny scrollbar instead
-   of the single outer one. The phone shell (@media max-width: 720px,
-   below) is the one exception that keeps its own cap and its own
-   overflow, named there. */
+   of the single outer one. The phone shell was the one exception that
+   kept its own cap and its own overflow; it has neither since the
+   sprint of 2026-11-09 (src/styles/studios.css), so the page is the
+   one scroller at every width. */
 .place-studio-list {
   display: flex;
   flex-direction: column;
@@ -3795,16 +3796,11 @@ button.conditions-metric:hover .conditions-action-hide {
 }
 
 @media (max-width: 720px) {
-  .place-studio-type-rail {
-    grid-template-columns: repeat(4, minmax(112px, 1fr));
-    overflow-x: auto;
-  }
   .place-studio-layout { grid-template-columns: 1fr; gap: 10px; }
-  /* The phone shell keeps its own cap and its own scroller (unchanged by
-     D1 M17's "one scroll container" fix above, which targets the
-     1025px-and-wider desktop dock and the 721-1024px tablet band; the
-     phone route is out of this microtask's scope, DR-169 note). */
-  .place-studio-list { max-height: 38dvh; overflow: auto; }
+  /* The phone's type chips wrap and its list has no cap and no scroller
+     of its own (owner direction 2026-11-09 (sprint), DR-pending): the
+     rail that scrolled off the screen edge and the 38dvh box inside the
+     page are gone, and src/styles/studios.css draws both. */
   .place-studio-type-status { align-items: flex-start; flex-direction: column; gap: 3px; }
   .place-overlap-grid { overflow-x: auto; }
   .place-overlap-column { min-width: 120px; }
