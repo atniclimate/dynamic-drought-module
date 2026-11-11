@@ -448,7 +448,11 @@ function wireMapDependentChrome(map: maplibregl.Map): void {
   // ask from paying for the chunk: the committed Wildfire view alone loads
   // it only at the desktop console's width, where the control that needs it
   // is on screen; everywhere the URL naming the mode loads it, which on a
-  // phone happens only through that cell's press or a shared link.
+  // phone happens only through that cell's press or a shared link. Below the
+  // console's width only the phone shell can present the scene, and an embed
+  // never has one, so a phone-width embed loads nothing (review finding
+  // R2-10); if the person leaves the embed, the 3D cell's chrome loads and
+  // starts the controller itself (src/ui/fire3d-phone-scene.ts).
   const fire3dViewport = window.matchMedia(FIRE3D_CHUNK_WIDTH_QUERY);
   const fire3dConsole = window.matchMedia(SIDEBAR_DESKTOP_QUERY);
   let fire3dLoaded = false;
@@ -473,8 +477,10 @@ function wireMapDependentChrome(map: maplibregl.Map): void {
   const fire3dEligible = (): boolean =>
     parseFire3dParam() ||
     (fire3dConsole.matches && getCommittedSnapshot().cluster === 'wildfire');
+  const fire3dPresentable = (): boolean =>
+    fire3dConsole.matches || !(document.getElementById('app')?.classList.contains('embed') ?? false);
   const maybeLoadFire3D = (): void => {
-    if (fire3dViewport.matches && fire3dEligible()) loadFire3D();
+    if (fire3dViewport.matches && fire3dPresentable() && fire3dEligible()) loadFire3D();
   };
   unsubscribeFire3dEligibility = onCommittedSnapshotChange(maybeLoadFire3D);
   unsubscribeFire3dPreference = onFire3DPreferenceChange(maybeLoadFire3D);

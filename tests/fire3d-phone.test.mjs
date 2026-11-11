@@ -482,6 +482,22 @@ test('the hold is on from the capture and off only after the restore has finishe
   assert.match(runtime, /studioHold: isPlaceDisplayHeld\(\)/, 'the runtime gate reads the hold');
 });
 
+// Review finding R2-10, measured on the sprint camera: a phone-width embed
+// with fire3d=true downloaded the 3D chunks though no phone chrome can ever
+// present the scene there.
+test('a phone-width embed never loads the 3D chunks at boot', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const main = await readFile(new URL('../src/main.ts', import.meta.url), 'utf8');
+  assert.match(
+    main,
+    /const fire3dPresentable = \(\): boolean =>\s*fire3dConsole\.matches \|\| !\(document\.getElementById\('app'\)\?\.classList\.contains\('embed'\) \?\? false\);/
+  );
+  assert.match(main, /if \(fire3dViewport\.matches && fire3dPresentable\(\) && fire3dEligible\(\)\) loadFire3D\(\);/);
+  // Leaving the embed is covered by the 3D cell's chrome, which starts the controller itself.
+  const chrome = await readFile(new URL('../src/ui/fire3d-phone-scene.ts', import.meta.url), 'utf8');
+  assert.match(chrome, /controller\.initFire3DController\(map\);/);
+});
+
 // Review finding R2-5, measured on the sprint camera: a phone link that opens
 // inside the PLACE studio with 3D asked for, whose 3D chrome arrived after
 // the studio's clean display, withdrew the ask (fire3d=true left the URL) and,
