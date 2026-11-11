@@ -10,17 +10,24 @@ import test from 'node:test';
  * (`describe` in src/ui/sheet-motion.ts, lazy); the two rules are mirrors,
  * and this test fails when one moves without the other. Read as text: both
  * modules need a document, and the behaviour itself is proven in a browser.
+ *
+ * One sheet is neither pressed nor implied: a surface that names the sheet
+ * itself in `data-sheet-name` (the ENSO guide, src/ui/enso-chain.ts). The
+ * title reads that name and the surface lights its own door, so none of the
+ * four doors is lit for it.
  */
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 const controller = await read('src/ui/mobile-sheet.ts');
 const motion = await read('src/ui/sheet-motion.ts');
+const chain = await read('src/ui/enso-chain.ts');
 
 test('the lit door reads the same three tests, in the same order, as the title', () => {
   // The title: the pressed door, else Brief with the report open at full, else Layers in console, else Place.
+  assert.match(motion, /const door = app\.getAttribute\('data-sheet-tab'\);/);
   assert.match(
     motion,
-    /app\.getAttribute\('data-sheet-tab'\) \?\?\s*\(stamped === 'full' && sheet\.querySelector\('#sheet-report \.impact-panel\.open'\)\s*\? 'brief'\s*: app\.classList\.contains\('view-console'\)\s*\? 'layers'\s*: 'place'\)/,
+    /door \?\?\s*\(stamped === 'full' && sheet\.querySelector\('#sheet-report \.impact-panel\.open'\)\s*\? 'brief'\s*: app\.classList\.contains\('view-console'\)\s*\? 'layers'\s*: 'place'\)/,
     'the title rule in sheet-motion.ts moved: impliedTab in mobile-sheet.ts must move with it'
   );
   assert.match(
@@ -30,18 +37,41 @@ test('the lit door reads the same three tests, in the same order, as the title',
   // The pressed door wins in both, and a closed sheet lights none.
   assert.match(
     controller,
-    /function litTab\(\): SheetTab \| null \{\s*return detent === null \|\| detent === 'closed' \? null : \(activeTab \?\? impliedTab\(\)\);\s*\}/
+    /function litTab\(\): SheetTab \| null \{\s*if \(detent === null \|\| detent === 'closed'\) return null;\s*if \(activeTab\) return activeTab;\s*return appEl\?\.hasAttribute\('data-sheet-name'\) \? null : impliedTab\(\);\s*\}/
   );
 });
 
-test('the lit door re-reads when the title does', () => {
-  // The title observes the stop, the pressed door and the view class on #app.
-  assert.match(motion, /attributeFilter: \['data-sheet-detent', 'data-sheet-tab', 'class'\]/);
-  // The pressed door changes only through syncFooterTab, which relights at once;
-  // the other two are observed here.
+test('a sheet that names itself is titled by that name and lights none of the four doors', () => {
+  // The title: a pressed door outranks the name; with none pressed the name is the word.
+  assert.match(
+    motion,
+    /const named = door === null \? app\.getAttribute\('data-sheet-name'\) : null;/
+  );
+  assert.match(motion, /const word =\s*named \?\?/);
+  // The lit door: the same precedence, read from the same attribute.
   assert.match(
     controller,
-    /new MutationObserver\(lightDoors\)\.observe\(appEl, \{\s*attributes: true,\s*attributeFilter: \['data-sheet-detent', 'class'\]\s*\}\);/
+    /if \(activeTab\) return activeTab;\s*return appEl\?\.hasAttribute\('data-sheet-name'\) \? null : impliedTab\(\);/
+  );
+  // The surface that sets the name sets and clears it with its own door's state.
+  const guide = /state\.app\.setAttribute\(SHEET_NAME, GUIDE_NAME\);\s*state\.door\.setAttribute\('aria-expanded', 'true'\);/;
+  const leave = /state\.app\.removeAttribute\(SHEET_NAME\);\s*state\.door\.setAttribute\('aria-expanded', 'false'\);/;
+  assert.match(chain, guide);
+  assert.match(chain, leave);
+  assert.match(chain, /const SHEET_NAME = 'data-sheet-name';/);
+});
+
+test('the lit door re-reads when the title does', () => {
+  // The title observes the stop, the pressed door, the sheet's own name and the view class on #app.
+  assert.match(
+    motion,
+    /attributeFilter: \['data-sheet-detent', 'data-sheet-tab', 'data-sheet-name', 'class'\]/
+  );
+  // The pressed door changes only through syncFooterTab, which relights at once;
+  // the other three are observed here.
+  assert.match(
+    controller,
+    /new MutationObserver\(lightDoors\)\.observe\(appEl, \{\s*attributes: true,\s*attributeFilter: \['data-sheet-detent', 'data-sheet-name', 'class'\]\s*\}\);/
   );
   assert.match(controller, /function syncFooterTab\(tab: SheetTab \| null\): void \{\s*activeTab = tab;[\s\S]*?lightDoors\(\);\s*\}/);
 });
@@ -85,6 +115,7 @@ test('the controller keeps every export it had', () => {
     'getSheetDetent',
     'sheetAllowsAutoRaise',
     'sheetCameraInset',
+    'sheetCameraSideInset',
     'onSheetDetentSettle',
     'setSheetDetent',
     'setSheetBriefing',

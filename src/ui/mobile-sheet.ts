@@ -480,6 +480,11 @@ export function restoreSheetDetent(): void {
  * src/ui/sheet-motion.ts, so the title and the lit door cannot disagree:
  * Brief while the report is open at full, Layers in the console view,
  * otherwise Place (owner direction 2026-11-09 (sprint), DR-pending).
+ *
+ * One sheet is none of these: a surface that fills a sheet no door pressed
+ * and says its own name in `data-sheet-name` on #app (the ENSO guide,
+ * src/ui/enso-chain.ts). The title reads that name, and the surface lights
+ * its own door, so `litTab` lights none of the four for it.
  */
 function impliedTab(): SheetTab {
   if (
@@ -491,9 +496,14 @@ function impliedTab(): SheetTab {
   return appEl?.classList.contains('view-console') ? 'layers' : 'place';
 }
 
-/** The door shown as open: the pressed one, else the implied one. None while closed. */
+/**
+ * The door shown as open: the pressed one, else the implied one. None while
+ * closed, and none for a sheet that names itself (its own door is lit).
+ */
 function litTab(): SheetTab | null {
-  return detent === null || detent === 'closed' ? null : (activeTab ?? impliedTab());
+  if (detent === null || detent === 'closed') return null;
+  if (activeTab) return activeTab;
+  return appEl?.hasAttribute('data-sheet-name') ? null : impliedTab();
 }
 
 /**
@@ -740,11 +750,11 @@ export function initMobileSheet(
   });
 
   wireFooterNav();
-  // The title re-reads on these two attributes (src/ui/sheet-motion.ts);
+  // The title re-reads on these three attributes (src/ui/sheet-motion.ts);
   // the lit door re-reads with it, in the same turn.
   new MutationObserver(lightDoors).observe(appEl, {
     attributes: true,
-    attributeFilter: ['data-sheet-detent', 'class']
+    attributeFilter: ['data-sheet-detent', 'data-sheet-name', 'class']
   });
 
   document.addEventListener('keydown', (event) => {
