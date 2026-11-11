@@ -169,17 +169,35 @@ export function todayIso(): string {
   return isoDayLocal(new Date());
 }
 
+/** A claim's shown date as data: the word it wears and its ISO day. */
+export interface ClaimClock {
+  readonly word: 'Valid' | 'Issued' | 'Published' | 'Retrieved';
+  /** `YYYY-MM-DD`, as the claim carries it. */
+  readonly date: string;
+}
+
 /**
- * The shown date line for a claim. Precedence: valid, else issued, else
+ * The one date a claim shows, as data. Precedence: valid, else issued, else
  * published, else retrieved (so `retrieved` always shows when nothing more
- * specific exists). Returns null only for a claim with no dates at all.
+ * specific exists). Null only for a claim with no dates at all. A figure
+ * that places a claim in time reads this, so it can never plot another date
+ * than the one the claim's own line states.
  */
-export function claimDateLine(claim: Pick<SourcedClaim, 'dates'>): string | null {
+export function claimClock(claim: Pick<SourcedClaim, 'dates'>): ClaimClock | null {
   const d = claim.dates;
   if (!d) return null;
-  if (d.valid) return `Valid ${d.valid}`;
-  if (d.issued) return `Issued ${d.issued}`;
-  if (d.published) return `Published ${d.published}`;
-  if (d.retrieved) return `Retrieved ${d.retrieved}`;
+  if (d.valid) return { word: 'Valid', date: d.valid };
+  if (d.issued) return { word: 'Issued', date: d.issued };
+  if (d.published) return { word: 'Published', date: d.published };
+  if (d.retrieved) return { word: 'Retrieved', date: d.retrieved };
   return null;
+}
+
+/**
+ * The shown date line for a claim: `claimClock`'s word and date. Returns
+ * null only for a claim with no dates at all.
+ */
+export function claimDateLine(claim: Pick<SourcedClaim, 'dates'>): string | null {
+  const clock = claimClock(claim);
+  return clock ? `${clock.word} ${clock.date}` : null;
 }

@@ -31,7 +31,10 @@ import { fileURLToPath } from 'node:url';
  *   8. the seasonal link says which outlook layer its press puts on the map
  *      whenever that is not the outlook it reads, from the mode's own recipe;
  *   9. the Guide door makes five doors in the phone column, and the planner
- *      fits five at every phone viewport the sprint names.
+ *      fits five at every phone viewport the sprint names;
+ *  10. the clock line places a link only at the date its own date line
+ *      states, draws no mark for a link with no read or no stated date, and
+ *      is the same drawing for the same links and reference.
  */
 
 // Extensionless relative `.ts` imports (see tests/briefing-truth.test.mjs).
@@ -57,13 +60,18 @@ const {
   ENSO_CHAIN_HEADING,
   ENSO_CHAIN_KEYS,
   ENSO_TRUTH_SUMMARY,
+  ENSO_CLOCKS_LEAD,
+  ENSO_CLOCKS_NOTE,
   buildEnsoChain,
+  ensoClockSpan,
+  ensoClockSvg,
   ensoStripSvg,
+  renderEnsoClocks,
   renderEnsoTruth
 } = await import('../src/ui/enso-chain-model.ts');
 const { CHAIN_MAX_LINKS, renderEvidenceChain } = await import('../src/ui/evidence-chain.ts');
 const { ENSO_NESTED_TRUTH, readEnsoClaims } = await import('../src/impact/enso.ts');
-const { claimDateLine, makeClaim } = await import('../src/impact/evidence.ts');
+const { claimClock, claimDateLine, makeClaim } = await import('../src/impact/evidence.ts');
 const { signedIndex } = await import('../src/impact/priority.ts');
 const { FLOW_WORDS, dateLabel } = await import('../src/layers/enso-flow-data.ts');
 const { READ_STATE_WORD } = await import('../src/ui/gauges.ts');
@@ -697,6 +705,185 @@ test('the overview strip draws a read as a disc in its evidence tier and no read
 // ---------------------------------------------------------------------------
 // 6. The nested truth
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// 10. The clock line
+// ---------------------------------------------------------------------------
+
+const REFERENCE = Date.UTC(2026, 10, 10, 15);
+const clockOf = (view, key) => view.clocks.find((node) => node.key === key);
+const marks = (svg) => [...svg.matchAll(/<circle class="c-mark c-mark-(\w+)" cx="([\d.]+)" cy="([\d.]+)"/g)];
+/** Markup as a reader meets it: the escaper's apostrophe turned back. */
+const plain = (html) => html.replaceAll('&#039;', "'");
+const shortDay = (at) => new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }).format(at);
+
+test('a claim shows one date, and its line and its clock are the same field', () => {
+  const cases = [
+    [{ valid: '2026-11-05', issued: '2026-11-01', published: '2026-10-30', retrieved: '2026-11-09' }, 'Valid', '2026-11-05'],
+    [{ issued: '2026-11-01', published: '2026-10-30', retrieved: '2026-11-09' }, 'Issued', '2026-11-01'],
+    [{ published: '2026-10-30', retrieved: '2026-11-09' }, 'Published', '2026-10-30'],
+    [{ retrieved: '2026-11-09' }, 'Retrieved', '2026-11-09']
+  ];
+  for (const [dates, word, date] of cases) {
+    assert.deepEqual(claimClock({ dates }), { word, date });
+    assert.equal(claimDateLine({ dates }), `${word} ${date}`);
+  }
+  assert.equal(claimClock({}), null);
+  assert.equal(claimDateLine({}), null);
+});
+
+test('clock line: every read link is placed at the date its own date line states', () => {
+  const view = buildEnsoChain(input());
+  assert.deepEqual(view.clocks.map((node) => node.key), KEYS);
+  for (const key of KEYS) {
+    const link = linkOf(view, key);
+    const clock = clockOf(view, key);
+    assert.equal(clock.status, 'ready');
+    assert.equal(clock.stateWord, undefined, `${key}: a dated read carries no state word`);
+    assert.equal(clock.evidence, link.evidence, `${key}: the mark wears the link's evidence class`);
+    // The words of the clock are inside the link's own date line, in order.
+    assert.ok(
+      link.dateLine.includes(`${clock.dateWord} ${clock.dateText}`),
+      `${key}: "${clock.dateWord} ${clock.dateText}" is in "${link.dateLine}"`
+    );
+  }
+  // Each is the instant the date line names: a claim's ISO day at 00:00 UTC, the jet's valid instant.
+  const published = fresh.claims.find((claim) => claim.product === 'ensoIndex').dates.published;
+  assert.equal(clockOf(view, 'index').at, Date.parse(`${published}T00:00:00Z`));
+  assert.equal(clockOf(view, 'index').dateWord, 'Published');
+  assert.equal(clockOf(view, 'pattern').at, Date.UTC(2026, 10, 8));
+  assert.equal(clockOf(view, 'pattern').dateWord, 'Observed');
+  assert.equal(clockOf(view, 'jet').at, VALID);
+  assert.equal(clockOf(view, 'jet').dateWord, 'Model valid');
+  assert.equal(clockOf(view, 'tendency').at, Date.UTC(2026, 8, 1));
+  assert.equal(clockOf(view, 'tendency').dateWord, 'Issued');
+  assert.equal(clockOf(view, 'here').at, Date.UTC(2026, 10, 5));
+  assert.equal(clockOf(view, 'here').dateWord, 'Valid');
+});
+
+test('clock line: a link with no read, or with no stated date, is never placed', () => {
+  const view = buildEnsoChain(
+    input({
+      enso: { status: 'loading' },
+      surface: { status: 'ready', date: null },
+      jet: JET_OFF,
+      place: null,
+      outlook: { status: 'none' },
+      here: { status: 'none' }
+    })
+  );
+  for (const key of KEYS) {
+    const clock = clockOf(view, key);
+    assert.equal(clock.at, undefined, `${key}: no instant`);
+    assert.equal(clock.dateWord, undefined, `${key}: no date word`);
+    assert.equal(typeof clock.stateWord, 'string', `${key}: says its state`);
+    assert.doesNotMatch(clock.stateWord, /\d/, `${key}: the state word holds no number`);
+  }
+  // A read whose source stated no date says exactly that; it is not "unavailable".
+  assert.equal(clockOf(view, 'pattern').status, 'ready');
+  assert.equal(clockOf(view, 'pattern').stateWord, 'no date stated');
+  assert.equal(clockOf(view, 'index').stateWord, 'loading...');
+  assert.equal(clockOf(view, 'jet').stateWord, 'not shown');
+  assert.equal(clockOf(view, 'here').stateWord, 'no place');
+
+  const svg = ensoClockSvg(view.clocks, REFERENCE);
+  assert.equal(marks(svg).length, 0, 'no mark is drawn');
+  assert.equal(count(svg, 'class="c-state"'), 5, 'each row carries its state word');
+  assert.equal(count(svg, 'class="c-date"'), 0, 'no date is written');
+  assert.equal(ensoClockSpan(view.clocks), 'No read holds a date yet.');
+
+  // Unavailable and partial reads are not placed either, whatever date an earlier read held.
+  const failed = buildEnsoChain(
+    input({
+      enso: { status: 'unavailable', note: 'The index snapshot did not load.' },
+      surface: { status: 'degraded', date: '2026-11-08' },
+      outlook: { status: 'unavailable', note: 'The outlook service did not answer.' }
+    })
+  );
+  for (const key of ['index', 'pattern', 'tendency']) assert.equal(clockOf(failed, key).at, undefined, key);
+  assert.equal(marks(ensoClockSvg(failed.clocks, REFERENCE)).length, 2, 'only the jet and the drought read are placed');
+});
+
+test('clock line: one row per link, marks left to right in time, each in its evidence tier', () => {
+  const view = buildEnsoChain(input());
+  const svg = ensoClockSvg(view.clocks, REFERENCE);
+  const drawn = marks(svg);
+  assert.equal(drawn.length, 5);
+  // Rows are in chain order, one per link, and never share a height.
+  const ys = drawn.map((m) => Number(m[3]));
+  assert.deepEqual([...ys].sort((a, b) => a - b), ys);
+  assert.equal(new Set(ys).size, 5);
+  // A later date is never drawn to the left of an earlier one.
+  const byTime = KEYS.map((key, index) => ({ at: clockOf(view, key).at, x: Number(drawn[index][2]) })).sort((a, b) => a.at - b.at);
+  for (let i = 1; i < byTime.length; i += 1) {
+    assert.ok(byTime[i].x >= byTime[i - 1].x, 'time runs left to right');
+  }
+  // The strip's three forms: an analyzed or derived read is a keyline, model output and outlooks are dashed.
+  const tiers = Object.fromEntries(KEYS.map((key, index) => [key, drawn[index][1]]));
+  assert.equal(tiers.jet, 'dashed');
+  assert.equal(tiers.tendency, 'dashed');
+  assert.equal(tiers.pattern, 'keyline');
+  assert.equal(tiers.here, 'keyline');
+  assert.notEqual(tiers.jet, 'plate', 'model output never wears the observation plate');
+  // Every mark stays inside the figure, and nothing joins one row to another.
+  for (const m of drawn) assert.ok(Number(m[2]) >= 50 && Number(m[2]) <= 232, `x ${m[2]} is on the track`);
+  assert.equal(count(svg, '<line'), 0);
+  assert.equal(count(svg, 'marker'), 0, 'no arrowhead');
+  for (const path of svg.matchAll(/<path class="c-track" d="([^"]+)"/g)) assert.match(path[1], /^M[\d.]+ [\d.]+H[\d.]+$/, 'a track is horizontal');
+  // The reference is the caller's, written as a day, and is not a link.
+  assert.match(svg, /<path class="c-ref" d="M[\d.]+ [\d.]+V[\d.]+"\/>/);
+  assert.match(svg, />This device: Nov 10<\/text>/);
+  // The name says each link's own word and date, and the reference.
+  const label = plain(/aria-label="([^"]*)"/.exec(svg)[1]);
+  for (const key of KEYS) {
+    const clock = clockOf(view, key);
+    assert.ok(label.includes(`${clock.word}: ${clock.dateWord} ${clock.dateText}`), `${key} is named with its date`);
+  }
+  assert.ok(label.endsWith("This device's date: 2026-11-10."), label);
+  // The span names the first and last of the dates the links show, and no other.
+  const ats = view.clocks.map((node) => node.at);
+  assert.equal(
+    ensoClockSpan(view.clocks),
+    `5 dated reads, from ${shortDay(Math.min(...ats))} to ${shortDay(Math.max(...ats))}.`
+  );
+});
+
+test('clock line: the same links and reference draw the same figure, and a later valid time widens the line', () => {
+  const view = buildEnsoChain(input());
+  assert.equal(ensoClockSvg(view.clocks, REFERENCE), ensoClockSvg(view.clocks, REFERENCE));
+  // A model frame valid after the reference sits to the right of the reference rule.
+  const ahead = buildEnsoChain(input({ jet: { ...JET_LIVE, valid: REFERENCE + 3 * 86_400_000 } }));
+  const svg = ensoClockSvg(ahead.clocks, REFERENCE);
+  const refX = Number(/<path class="c-ref" d="M([\d.]+) /.exec(svg)[1]);
+  const jetX = Number(marks(svg)[2][2]);
+  assert.ok(jetX > refX, 'the valid instant is right of the reference');
+  // One dated read still draws, at the right end of a span that is never zero wide.
+  const one = buildEnsoChain(input({ surface: { status: null, date: null }, jet: JET_OFF, place: null, outlook: { status: 'none' }, here: { status: 'none' } }));
+  const lone = marks(ensoClockSvg(one.clocks, REFERENCE));
+  assert.equal(lone.length, 1);
+  assert.ok(Number.isFinite(Number(lone[0][2])));
+  assert.match(ensoClockSpan(one.clocks), /^One dated read: \w{3} \d{1,2}\.$/);
+});
+
+test('clock line: closed at first behind its own summary, which carries the span in words', () => {
+  const view = buildEnsoChain(input());
+  const html = renderEnsoClocks(view.clocks, REFERENCE);
+  assert.match(html, /^<details class="enso-clocks">/);
+  assert.doesNotMatch(html, /<details[^>]*\bopen\b/, 'closed until asked for');
+  assert.ok(html.includes(`<span class="enso-clocks-lead">${ENSO_CLOCKS_LEAD}</span>`));
+  assert.ok(html.includes(`<span class="enso-clocks-span">${ensoClockSpan(view.clocks)}</span>`));
+  assert.equal(count(html, '<svg'), 1);
+  assert.ok(plain(html).includes(`<p class="enso-clocks-note">${ENSO_CLOCKS_NOTE}</p>`));
+  // The words place nothing in the present tense and promise nothing.
+  for (const words of [ENSO_CLOCKS_LEAD, ENSO_CLOCKS_NOTE, ensoClockSpan(view.clocks)]) {
+    assert.doesNotMatch(words, /\b(?:now|today|currently|latest|real-time|will|causes?|drives?|leads? to)\b/i, words);
+  }
+  // The host puts it under the nested truth, so the denial stays first, and keeps the reader's choice.
+  const host = code('../src/ui/enso-chain.ts');
+  assert.match(host, /insertAdjacentHTML\('afterend', truth \+ clocks\)/);
+  assert.match(host, /clockDetails\.open = state\.clocksOpen;/);
+  assert.match(host, /Math\.floor\(Date\.now\(\) \/ HOUR_MS\) \* HOUR_MS/);
+});
 
 test('the nested truth is the governed words, closed at first with the denial on its summary', () => {
   assert.equal(ENSO_TRUTH_SUMMARY, 'This is a shift in the odds, not a forecast.');

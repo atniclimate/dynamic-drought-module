@@ -91,6 +91,7 @@ import {
   ENSO_CHAIN_HEADING,
   buildEnsoChain,
   ensoStripSvg,
+  renderEnsoClocks,
   renderEnsoTruth
 } from './enso-chain-model';
 import type { EnsoChainAction, EnsoRead, JetRead, PlaceRead } from './enso-chain-model';
@@ -115,6 +116,8 @@ const FEATURE_DOOR_EVENT = 'ddm:feature-door';
 const GUIDE_FLAG = 'data-enso-guide';
 const SHEET_NAME = 'data-sheet-name';
 const GUIDE_NAME = 'ENSO guide';
+/** The clock line's reference moves once an hour. */
+const HOUR_MS = 3_600_000;
 
 const DOOR_GLYPH =
   '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="5" cy="18.5" r="2.3"/><circle cx="12" cy="12" r="2.3"/><circle cx="19" cy="5.5" r="2.3"/><path d="M6.7 16.9l3.6-3.3M13.7 10.4l3.6-3.3"/></svg>';
@@ -163,6 +166,7 @@ interface Held {
   /** The place in force has not been read yet: the panel was not on screen when it was chosen. */
   placeUnread: boolean;
   truthOpen: boolean;
+  clocksOpen: boolean;
   guideOpen: boolean;
   painted: string;
 }
@@ -194,7 +198,10 @@ function paint(): void {
   });
   const strip = ensoStripSvg(view.strip);
   const truth = renderEnsoTruth(state.enso);
-  const next = `${chain}\u0000${strip}\u0000${truth}`;
+  // The reading device's date, to the hour: the clock line's one reference,
+  // and coarse enough that a repaint inside the hour draws the same figure.
+  const clocks = renderEnsoClocks(view.clocks, Math.floor(Date.now() / HOUR_MS) * HOUR_MS);
+  const next = `${chain}\u0000${strip}\u0000${truth}\u0000${clocks}`;
   if (next === state.painted) return;
   state.painted = next;
 
@@ -211,14 +218,18 @@ function paint(): void {
         : inBody.hasAttribute('data-enso-door')
           ? 'door'
           : null;
+  const focusClocks = inBody !== null && inBody.closest('.enso-clocks-summary') !== null;
 
   state.body.innerHTML = chain;
   state.body
     .querySelector('.evidence-chain-title')
     ?.insertAdjacentHTML('afterend', `<div class="enso-strip-figure">${strip}</div>`);
-  state.body.querySelector('.evidence-chain-caption')?.insertAdjacentHTML('afterend', truth);
+  // The denial first, then the clocks: both are closed until asked for.
+  state.body.querySelector('.evidence-chain-caption')?.insertAdjacentHTML('afterend', truth + clocks);
   const details = state.body.querySelector<HTMLDetailsElement>('.enso-truth');
   if (details) details.open = state.truthOpen;
+  const clockDetails = state.body.querySelector<HTMLDetailsElement>('.enso-clocks');
+  if (clockDetails) clockDetails.open = state.clocksOpen;
 
   if (focusKey !== null) {
     state.body
@@ -228,6 +239,8 @@ function paint(): void {
     state.body
       .querySelector<HTMLElement>(focusTruth === 'summary' ? '.enso-truth > summary' : '.enso-truth [data-enso-door]')
       ?.focus({ preventScroll: true });
+  } else if (focusClocks) {
+    state.body.querySelector<HTMLElement>('.enso-clocks > summary')?.focus({ preventScroll: true });
   }
 }
 
@@ -629,6 +642,7 @@ export function mountEnsoChain(map: maplibregl.Map, frameDate: string | null): v
     onScreen: false,
     placeUnread: false,
     truthOpen: false,
+    clocksOpen: false,
     guideOpen: false,
     painted: ''
   };
@@ -640,9 +654,9 @@ export function mountEnsoChain(map: maplibregl.Map, frameDate: string | null): v
     'toggle',
     (event) => {
       const target = event.target;
-      if (target instanceof HTMLDetailsElement && target.classList.contains('enso-truth')) {
-        state.truthOpen = target.open;
-      }
+      if (!(target instanceof HTMLDetailsElement)) return;
+      if (target.classList.contains('enso-truth')) state.truthOpen = target.open;
+      else if (target.classList.contains('enso-clocks')) state.clocksOpen = target.open;
     },
     true
   );

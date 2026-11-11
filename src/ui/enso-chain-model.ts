@@ -50,7 +50,7 @@
  */
 
 import { ENSO_NESTED_TRUTH } from '../impact/enso';
-import { claimDateLine, EVIDENCE_PRESENTATION } from '../impact/evidence';
+import { claimClock, claimDateLine, EVIDENCE_PRESENTATION } from '../impact/evidence';
 import { readingHeadline, signedIndex } from '../impact/priority';
 import type { EvidenceClass, SourcedClaim } from '../impact/types';
 import { FLOW_WORDS, dateLabel } from '../layers/enso-flow-data';
@@ -136,9 +136,33 @@ export interface EnsoStripNode {
   readonly evidence?: EvidenceClass;
 }
 
+/**
+ * One link's clock: the date its own date line states, as data, so the
+ * clock line can place the five claims in time without a second reading of
+ * any source. `at` is absent for a link with no read, and for a read whose
+ * source stated no date.
+ */
+export interface EnsoClockNode {
+  readonly key: EnsoChainKey;
+  /** The node's one word, the strip's. */
+  readonly word: string;
+  readonly status: ChainLinkStatus;
+  /** What the row says in place of a date: the link's state word, or that no date was stated. */
+  readonly stateWord?: string;
+  /** The read's evidence class; absent for a link with no read. */
+  readonly evidence?: EvidenceClass;
+  /** The instant the link's date line states, epoch milliseconds. */
+  readonly at?: number;
+  /** The word that date wears on the link ("Published", "Observed", "Model valid"). */
+  readonly dateWord?: string;
+  /** The date as the link's own line writes it. */
+  readonly dateText?: string;
+}
+
 export interface EnsoChainView {
   readonly links: readonly ChainLink[];
   readonly strip: readonly EnsoStripNode[];
+  readonly clocks: readonly EnsoClockNode[];
 }
 
 export const ENSO_CHAIN_HEADING = 'ENSO: from the ocean to the weather here';
@@ -165,10 +189,33 @@ const TERCILE_WORDS: Readonly<Record<string, string>> = {
   Normal: 'near-normal'
 };
 
+/** A read's shown date as data: the word, the instant and the date as written. */
+interface Clock {
+  readonly at: number;
+  readonly word: string;
+  readonly text: string;
+}
+
 interface Built {
   readonly link: ChainLink;
   /** The strip's short mark for a read; a link with no read takes its state word. */
   readonly mark?: string;
+  /** The date the link's own date line states. Set only beside that line, from the same field. */
+  readonly clock?: Clock;
+}
+
+/** An ISO day (`YYYY-MM-DD`) as the start of that UTC day; undefined for anything else. */
+function dayToMs(iso: string): number | undefined {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return undefined;
+  const at = Date.parse(`${iso}T00:00:00Z`);
+  return Number.isFinite(at) ? at : undefined;
+}
+
+/** The clock of a claim: the one date `chainFieldsFromClaim` writes on the link. */
+function clockOfClaim(claim: SourcedClaim): { readonly clock: Clock } | Record<string, never> {
+  const shown = claimClock(claim);
+  const at = shown ? dayToMs(shown.date) : undefined;
+  return shown && at !== undefined ? { clock: { at, word: shown.word, text: shown.date } } : {};
 }
 
 function findClaim(enso: EnsoRead, product: string): SourcedClaim | null {
@@ -207,7 +254,8 @@ function indexLink(enso: EnsoRead): Built {
         ...chainFieldsFromClaim(claim),
         note: 'This snapshot is old, so the state is given as a dated sentence in the detail above, not as a gauge.'
       },
-      mark: 'dated'
+      mark: 'dated',
+      ...clockOfClaim(claim)
     };
   }
   const value = signedIndex(reading.value);
@@ -229,7 +277,8 @@ function indexLink(enso: EnsoRead): Built {
         title: `ENSO index against the CPC onset thresholds of minus and plus ${reading.threshold}. ${reading.index} ${value}, ${when}: ${headline}.`
       })
     },
-    mark: value
+    mark: value,
+    ...clockOfClaim(claim)
   };
 }
 
@@ -259,7 +308,10 @@ function patternLink(surface: SurfaceRead): Built {
             ? {}
             : { note: 'The provider did not state this frame\'s date this session. The latest frame it publishes is shown.' })
         },
-        mark: 'on map'
+        mark: 'on map',
+        ...(surface.date && dayToMs(surface.date) !== undefined
+          ? { clock: { at: dayToMs(surface.date) as number, word: 'Observed', text: surface.date } }
+          : {})
       };
     case 'degraded':
       return { link: { ...base, status: 'partial', note: 'Some tiles of the sea surface temperature anomaly frame did not load.' } };
@@ -322,7 +374,11 @@ function jetLink(jet: JetRead): Built {
               : null,
           note: 'Model output at one instant, not an observation. It keeps its own time, apart from the sea surface temperature map.'
         },
-        mark: 'on map'
+        mark: 'on map',
+        // The instant the model frame is valid for; the run time stays on the link's own line.
+        ...(jet.cycle !== undefined && jet.valid !== undefined
+          ? { clock: { at: jet.valid, word: 'Model valid', text: dateLabel(jet.valid) } }
+          : {})
       };
     case 'live (partial)':
       return { link: { ...base, status: 'partial', note: reason } };
@@ -380,7 +436,8 @@ function tendencyLink(read: PlaceRead, place: EnsoChainInput['place'], seasonDra
         ...chainFieldsFromClaim(read.claim),
         note: `The outlook at ${place.label} is stated in that place's briefing.`
       },
-      mark: 'read'
+      mark: 'read',
+      ...clockOfClaim(read.claim)
     };
   }
   const equal = tercile.cat === 'EC';
@@ -404,7 +461,8 @@ function tendencyLink(read: PlaceRead, place: EnsoChainInput['place'], seasonDra
           ? ` Pressing this link shows the ${drawn} on the map; the ${tercile.variable} read above is a separate layer.`
           : '')
     },
-    mark: equal ? 'EC' : `${tercile.prob}%`
+    mark: equal ? 'EC' : `${tercile.prob}%`,
+    ...clockOfClaim(read.claim)
   };
 }
 
@@ -427,7 +485,8 @@ function hereLink(read: PlaceRead, place: EnsoChainInput['place']): Built {
         ...chainFieldsFromClaim(read.claim),
         note: `What is observed at ${place.label} is stated in that place's briefing.`
       },
-      mark: 'read'
+      mark: 'read',
+      ...clockOfClaim(read.claim)
     };
   }
   const headline = readingHeadline(usdm) ?? '';
@@ -451,7 +510,8 @@ function hereLink(read: PlaceRead, place: EnsoChainInput['place']): Built {
     },
     // "none" alone under "Here" would read as an all-clear at a glance; the
     // node says what the scale position is, in the statement's own words.
-    mark: usdm.dm === null ? 'no D0-D4' : `D${usdm.dm}`
+    mark: usdm.dm === null ? 'no D0-D4' : `D${usdm.dm}`,
+    ...clockOfClaim(read.claim)
   };
 }
 
@@ -492,6 +552,21 @@ export function buildEnsoChain(input: EnsoChainInput): EnsoChainView {
         status: item.link.status,
         mark: read ? (item.mark ?? 'read') : stateMark(item.link),
         ...(read && item.link.evidence ? { evidence: item.link.evidence } : {})
+      };
+    }),
+    clocks: built.map((item, index) => {
+      const key = ENSO_CHAIN_KEYS[index]!;
+      const read = item.link.status === 'ready';
+      // A clock is drawn only for a read, and only at the date the link's own line states.
+      const clock = read && item.link.dateLine ? item.clock : undefined;
+      return {
+        key,
+        word: STRIP_WORDS[key],
+        status: item.link.status,
+        ...(read && item.link.evidence ? { evidence: item.link.evidence } : {}),
+        ...(clock
+          ? { at: clock.at, dateWord: clock.word, dateText: clock.text }
+          : { stateWord: read ? 'no date stated' : stateMark(item.link) })
       };
     })
   };
@@ -552,6 +627,137 @@ export function ensoStripSvg(strip: readonly EnsoStripNode[]): string {
   return (
     `<svg class="enso-strip" viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" role="img" ` +
     `aria-label="${escapeHtml(title)}" xmlns="http://www.w3.org/2000/svg"><title>${escapeHtml(title)}</title>${inner}</svg>`
+  );
+}
+
+// ---------------------------------------------------------------------------
+// The clock line: the five links placed in time
+// ---------------------------------------------------------------------------
+
+const DAY_MS = 86_400_000;
+/** The shortest span the line draws, so two near dates do not fill the whole width. */
+const CLOCK_MIN_SPAN_MS = 14 * DAY_MS;
+
+/** A UTC day as the line writes it beside a mark, for example "Oct 3". */
+function shortDay(at: number): string {
+  return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }).format(at);
+}
+
+/** The reference day the caller passes, as an ISO day. */
+function isoDay(at: number): string {
+  return new Date(at).toISOString().slice(0, 10);
+}
+
+/**
+ * The clock line (owner direction 2026-11-09 (sprint), DR-pending): the
+ * caption says the five claims each keep their own clock, and this figure
+ * draws that. One row per link, in chain order, on one time axis that runs
+ * left to right. A link with a read and a stated date is a mark in its
+ * evidence tier (the strip's three forms) at that date, with the date
+ * written beside it. A link with no read, or whose source stated no date,
+ * has no mark: its row carries its state word and nothing is placed.
+ *
+ * It adds no claim. Every date is the one the link's own date line states
+ * (`EnsoClockNode.at` is set beside that line, from the same field), and
+ * the figure says nothing about what lies between two dates. `reference` is
+ * the reading device's own date, drawn as a plain rule so a reader can see
+ * how old each claim is; the host passes it floored to the hour, so the
+ * drawing does not change on every paint. No row is joined to another, and
+ * nothing here moves.
+ */
+export function ensoClockSvg(clocks: readonly EnsoClockNode[], reference: number): string {
+  const W = 240;
+  const top = 10;
+  const rowH = 13;
+  const trackL = 50;
+  const trackR = 232;
+  const inset = 6;
+  const axisY = top + clocks.length * rowH - 3;
+  const H = axisY + 13;
+  const dated = clocks.filter((node): node is EnsoClockNode & { at: number } => node.at !== undefined);
+  const latest = Math.max(reference, ...dated.map((node) => node.at));
+  const earliest = Math.min(latest - CLOCK_MIN_SPAN_MS, ...dated.map((node) => node.at));
+  const x = (at: number): number =>
+    trackL + inset + ((at - earliest) / (latest - earliest)) * (trackR - trackL - inset * 2);
+  const mid = (trackL + trackR) / 2;
+
+  const refX = x(reference);
+  // The rule's word sits on whichever side of the rule has the room.
+  const refEnd = refX > W / 2;
+  let inner =
+    `<path class="c-ref" d="M${n1(refX)} ${top - 6}V${axisY}"/>` +
+    `<text class="c-ref-word" x="${n1(refX)}" y="${axisY + 9}" text-anchor="${refEnd ? 'end' : 'start'}">` +
+    `This device: ${escapeHtml(shortDay(reference))}</text>`;
+  const said: string[] = [];
+  clocks.forEach((node, index) => {
+    const y = top + index * rowH;
+    inner +=
+      `<path class="c-track" d="M${trackL} ${y}H${trackR}"/>` +
+      `<text class="c-word" x="0" y="${y + 3}">${escapeHtml(node.word)}</text>`;
+    if (node.at === undefined) {
+      const word = node.stateWord ?? 'no read';
+      inner += `<text class="c-state" x="${trackL + inset}" y="${y + 3}">${escapeHtml(word)}</text>`;
+      said.push(`${node.word}: ${word}`);
+      return;
+    }
+    const cx = x(node.at);
+    const left = cx > mid;
+    inner +=
+      `<circle class="c-mark c-mark-${nodeTier(node.evidence)}" cx="${n1(cx)}" cy="${y}" r="3.6"/>` +
+      `<text class="c-date" x="${n1(left ? cx - 7 : cx + 7)}" y="${y + 3}" text-anchor="${left ? 'end' : 'start'}">` +
+      `${escapeHtml(shortDay(node.at))}</text>`;
+    said.push(
+      `${node.word}: ${node.dateWord ?? 'Dated'} ${node.dateText ?? isoDay(node.at)}` +
+        (node.evidence ? `, ${EVIDENCE_PRESENTATION[node.evidence].label.toLowerCase()}` : '')
+    );
+  });
+  const title =
+    `Each link on its own clock, left to right in time. ${said.join('. ')}. ` +
+    `This device's date: ${isoDay(reference)}.`;
+  return (
+    `<svg class="enso-clock" viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" role="img" ` +
+    `aria-label="${escapeHtml(title)}" xmlns="http://www.w3.org/2000/svg"><title>${escapeHtml(title)}</title>${inner}</svg>`
+  );
+}
+
+/** The disclosure's lead: the caption's own claim about the five links. */
+export const ENSO_CLOCKS_LEAD = 'Each link keeps its own clock';
+/** What the open figure is, and what it does not say. */
+export const ENSO_CLOCKS_NOTE =
+  "Each mark is the date that link's own source states. The line says nothing about the time between two marks.";
+
+/**
+ * The span of the dated reads, in words, for the closed disclosure: the
+ * first thing a reader takes from the figure, said without opening it. It
+ * counts and names dates the links already show and adds nothing to them.
+ */
+export function ensoClockSpan(clocks: readonly EnsoClockNode[]): string {
+  const dated = clocks
+    .map((node) => node.at)
+    .filter((at): at is number => at !== undefined)
+    .sort((a, b) => a - b);
+  const first = dated[0];
+  const last = dated[dated.length - 1];
+  if (first === undefined || last === undefined) return 'No read holds a date yet.';
+  if (dated.length === 1) return `One dated read: ${shortDay(first)}.`;
+  return shortDay(first) === shortDay(last)
+    ? `${dated.length} dated reads, all ${shortDay(first)}.`
+    : `${dated.length} dated reads, from ${shortDay(first)} to ${shortDay(last)}.`;
+}
+
+/**
+ * The clock line behind its own disclosure, closed at first: the summary
+ * carries the span in words, and the figure is one tap away. It sits under
+ * the nested truth, so the denial stays the first thing under the caption.
+ */
+export function renderEnsoClocks(clocks: readonly EnsoClockNode[], reference: number): string {
+  return (
+    `<details class="enso-clocks">` +
+    `<summary class="enso-clocks-summary"><span class="enso-clocks-lead">${escapeHtml(ENSO_CLOCKS_LEAD)}</span>` +
+    `<span class="enso-clocks-span">${escapeHtml(ensoClockSpan(clocks))}</span></summary>` +
+    `<div class="enso-clocks-body"><div class="enso-clock-figure">${ensoClockSvg(clocks, reference)}</div>` +
+    `<p class="enso-clocks-note">${escapeHtml(ENSO_CLOCKS_NOTE)}</p></div>` +
+    `</details>`
   );
 }
 
