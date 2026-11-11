@@ -64,6 +64,15 @@ coverage note, and each active context layer's vintage line directly on
 the map surface (`#fire3d-embed-note`, non-interactive, never
 dismissible).
 
+A phone is the third case (owner direction 2026-11-09, sprint; DR-pending).
+Its sidebar is a sheet that is usually closed, so the two notes stand on
+the map there too: one glass card under the key chip, present for as long
+as the scene is asked for, with no close control while the scene is on.
+The scene's activation gate admits a phone only while that card is mounted
+(`src/map/fire3d.ts`, `presentingShell`), so the scene and its disclosure
+cannot be separated by a slow or failed chunk. The card's heading is the
+view's own name, "3D context view".
+
 ## The perimeter ribbon is not a context layer
 
 DR-064 (owner rendering specification, 2026-09-02) raises the mapped

@@ -1,6 +1,37 @@
-/* Mobile map chrome: side rail with one top-anchored glass panel. */
+/* =============================================================================
+   The phone sheet: its glass, its stops, its header and its seat beside the
+   right-edge column (owner direction 2026-11-09 (sprint), DR-pending; this
+   supersedes the top-anchored panel of docs/design/mobile-map-chrome.md).
+
+   WHAT IT IS. While the phone shell is active (src/ui/mobile-sheet.ts stamps
+   `data-sheet-detent` on #app; never on desktop, never in an embed) the
+   sidebar element is ONE glass sheet that rises from the bottom edge and
+   rests at a stop: closed, peek, half or full. It is docked beside the
+   right-edge column (src/styles/edge-column.css), so the two can never
+   share a pixel. In a short landscape window the same element is a drawer
+   from the left edge instead.
+
+   AT REST the sheet is exactly as tall as its stop and carries no
+   transform, so its box is the glass you see and the content scrolls inside
+   it. IN MOTION src/ui/sheet-motion.ts gives it its full height once and
+   moves it with `transform` alone, then hands it back here. Nothing in this
+   file animates: without that module, or under reduced motion, a stop
+   change lands at once on the same end state.
+
+   WHICH CONTENT shows for each door, stop and view mode is the visibility
+   matrix in src/styles/app.css ("The phone sheet's content"). The numbers
+   here are mirrored by SHEET_TOKENS in src/config/sheet-detents.ts, and
+   tests/sheet-detents.test.mjs fails when the two disagree.
+   ============================================================================= */
 
 .sheet-enso-flow {
+  display: none;
+}
+
+/* The header's title and close control are built by src/ui/sheet-motion.ts
+   and exist only inside the phone sheet. */
+.sheet-title,
+.sheet-close {
   display: none;
 }
 
@@ -10,269 +41,540 @@
   }
 
   #app[data-sheet-detent] {
-    --mobile-panel-edge: 8px;
-    --mobile-panel-rail-size: 50px;
-    --mobile-panel-rail-gap: 7px;
+    /* Height of MapLibre's two stacked scale rulers above the bottom inset. */
+    --mobile-scale-block: 44px;
+    /* The full stop ends under the key chip. */
     --mobile-panel-top: calc(env(safe-area-inset-top, 0px) + 76px);
+    /* The doors live in the right-edge column: no footer under the sheet. */
     --mobile-footer-h: 0px;
+
+    /* Tight, like every glass body: the radius the phone panel always had. */
+    --sheet-radius: var(--glass-radius);
+    --sheet-head-h: 52px;
+    --sheet-rider-gap: 6px;
+    --sheet-h-full: calc(100vh - var(--mobile-panel-top));
+    --sheet-h-peek: calc(136px + env(safe-area-inset-bottom, 0px));
+    --sheet-h-half: min(
+      var(--sheet-h-full),
+      max(50vh, calc(var(--sheet-h-peek) + 64px))
+    );
+    /* What shows of the sheet at the stop in force. Other chrome reads it:
+       the Map information panel and the expanded key end above it. */
     --sheet-height: 0px;
+    /* Where the map furniture that rides the sheet's top edge sits. */
+    --sheet-lift: env(safe-area-inset-bottom, 0px);
+  }
+  @supports (height: 1dvh) {
+    #app[data-sheet-detent] {
+      --sheet-h-full: calc(100dvh - var(--mobile-panel-top));
+      --sheet-h-half: min(
+        var(--sheet-h-full),
+        max(50dvh, calc(var(--sheet-h-peek) + 64px))
+      );
+    }
+  }
+  #app[data-sheet-detent='peek'] { --sheet-height: var(--sheet-h-peek); }
+  #app[data-sheet-detent='half'] { --sheet-height: var(--sheet-h-half); }
+  #app[data-sheet-detent='full'] { --sheet-height: var(--sheet-h-full); }
+  #app[data-sheet-detent='peek'],
+  #app[data-sheet-detent='half'] {
+    --sheet-lift: calc(var(--sheet-height) + var(--sheet-rider-gap));
   }
 
+  /* The map takes the whole shell; the sheet leaves the grid flow. */
   #app:not(.embed)[data-sheet-detent] {
     grid-template-columns: 1fr;
     grid-template-rows: 1fr;
   }
 
-  /* The existing four doors become the persistent side rail. */
-  #app[data-sheet-detent] .mobile-footer {
-    display: grid;
-    grid-template-columns: 1fr;
-    grid-auto-rows: var(--mobile-panel-rail-size);
-    gap: var(--mobile-panel-rail-gap);
-    position: fixed;
-    top: clamp(
-      calc(env(safe-area-inset-top, 0px) + 154px),
-      38dvh,
-      calc(100dvh - env(safe-area-inset-bottom, 0px) - 236px)
-    );
-    left: auto;
-    right: calc(env(safe-area-inset-right, 0px) + var(--mobile-map-edge, 8px));
-    bottom: auto;
-    width: var(--mobile-panel-rail-size);
-    height: auto;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    z-index: calc(var(--z-sheet) + 60);
-  }
-
-  #app[data-sheet-detent] .mobile-footer button {
-    width: var(--mobile-panel-rail-size);
-    min-width: 44px;
-    min-height: 44px;
-    padding: 3px 2px;
-    gap: 2px;
-    border: 1px solid rgba(203, 213, 225, 0.36);
-    border-radius: var(--mobile-map-control-radius, 4px);
-    background: rgba(1, 11, 19, 0.78);
-    color: var(--fg-1);
-    box-shadow: 0 5px 18px rgba(0, 0, 0, 0.34);
-    -webkit-backdrop-filter: blur(13px) saturate(118%);
-    backdrop-filter: blur(13px) saturate(118%);
-  }
-
-  #app[data-sheet-detent] .mobile-footer button.active {
-    border-color: var(--accent);
-    background: rgba(1, 11, 19, 0.86);
-    font-weight: var(--fw-strong);
-    color: var(--fg-0);
-    box-shadow:
-      2px 0 0 0 var(--ink-strong) inset,
-      0 5px 18px rgba(0, 0, 0, 0.36);
-  }
-
-  #app[data-sheet-detent] .mobile-footer button:focus-visible {
-    outline: 2px solid var(--focus-inner);
-    outline-offset: 0;
-    box-shadow: 0 0 0 4px var(--focus-outer), 0 5px 18px rgba(0, 0, 0, 0.34);
-  }
-
-  #app[data-sheet-detent] .mobile-footer button.active:focus-visible {
-    box-shadow: 0 0 0 4px var(--focus-outer), inset 2px 0 0 var(--ink-strong), 0 5px 18px rgba(0, 0, 0, 0.36);
-  }
-
-  /* Open content drops from below the map's top indicators. The legacy
-     detent attribute still selects content, but no state forms a drawer. */
+  /* ---------------------------------------------------------------------
+     The sheet. Left edge on the key chip's margin; right edge one gap short
+     of the column, whatever width the column's plan gives it.
+     --------------------------------------------------------------------- */
   #app[data-sheet-detent] .sidebar {
     position: fixed;
-    top: var(--mobile-panel-top);
-    left: calc(env(safe-area-inset-left, 0px) + var(--mobile-panel-edge));
+    top: auto;
+    bottom: 0;
+    left: calc(env(safe-area-inset-left, 0px) + var(--mobile-map-edge, 8px));
     right: calc(
       env(safe-area-inset-right, 0px) +
-      var(--mobile-panel-edge) +
+      var(--edge-inset, 8px) +
       var(--mobile-map-control-size, 48px) +
       var(--mobile-map-control-gap, 8px)
     );
-    bottom: auto;
+    display: flex;
+    flex-direction: column;
     width: auto;
     min-width: 0;
-    height: min(62dvh, 560px);
-    max-height: calc(
-      100dvh -
-      var(--mobile-panel-top) -
-      env(safe-area-inset-bottom, 0px) -
-      var(--mobile-panel-edge)
-    );
-    overflow: hidden;
-    border: 1px solid rgba(203, 213, 225, 0.28);
-    border-radius: var(--radius-lg);
-    background: rgba(5, 30, 34, 0.79);
-    box-shadow: 0 14px 42px rgba(0, 0, 0, 0.44);
-    -webkit-backdrop-filter: blur(17px) saturate(116%);
-    backdrop-filter: blur(17px) saturate(116%);
-    transform-origin: top center;
-    transition:
-      transform 180ms ease,
-      opacity 150ms ease,
-      visibility 0s linear 0s;
-    z-index: var(--z-sheet);
-  }
-
-  #app[data-sheet-detent='full'] .sidebar {
-    height: calc(
-      100dvh -
-      var(--mobile-panel-top) -
-      env(safe-area-inset-bottom, 0px) -
-      var(--mobile-panel-edge)
-    );
-  }
-
-  #app[data-sheet-detent='closed'] .sidebar {
-    height: min(62dvh, 560px);
-    border: 1px solid rgba(203, 213, 225, 0.28);
-    box-shadow: 0 14px 42px rgba(0, 0, 0, 0.44);
-    opacity: 0;
-    visibility: hidden;
-    pointer-events: none;
-    transform: translateY(-14px) scaleY(0.985);
-    transition:
-      transform 180ms ease,
-      opacity 150ms ease,
-      visibility 0s linear 180ms;
-  }
-
-  #app[data-sheet-detent='peek'] .sidebar,
-  #app[data-sheet-detent='half'] .sidebar,
-  #app[data-sheet-detent='full'] .sidebar {
+    height: var(--sheet-height);
+    max-height: none;
+    /* The glass is the pseudo-element below, which runs past the bottom
+       edge; the content clips itself in .sidebar-scroll. */
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+    color: var(--ink);
     opacity: 1;
     visibility: visible;
     pointer-events: auto;
-    transform: translateY(0) scaleY(1);
+    transform: none;
+    transition: none;
+    z-index: var(--z-sheet);
+  }
+  #app[data-sheet-detent] .sidebar[data-sheet-moving] {
+    will-change: transform;
   }
 
-  #app[data-sheet-detent] .sheet-grabber-row,
-  #app[data-sheet-detent] .sheet-grabber,
-  #app[data-sheet-detent] .sheet-hint {
-    display: none !important;
+  /* The glass plate. It continues below the screen edge so a spring that
+     overshoots full, or a finger pulling past it, never opens a gap. */
+  #app[data-sheet-detent] .sidebar::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 -120px;
+    z-index: -1;
+    border: 1px solid var(--glass-edge);
+    border-bottom: 0;
+    border-radius: var(--sheet-radius) var(--sheet-radius) 0 0;
+    background: var(--glass-panel-solid);
+    box-shadow:
+      inset 0 1px 0 var(--glass-sheen),
+      0 -8px 30px rgba(0, 0, 0, 0.4);
+    pointer-events: none;
   }
 
-  #app[data-sheet-detent] .sidebar-scroll,
-  #app[data-sheet-detent='peek'] .sidebar-scroll,
-  #app[data-sheet-detent='half'] .sidebar-scroll,
-  #app[data-sheet-detent='full'] .sidebar-scroll {
+  /* Closed: off screen and out of the accessibility tree. */
+  #app[data-sheet-detent='closed'] .sidebar {
+    height: var(--sheet-h-peek);
+    visibility: hidden;
+    pointer-events: none;
+    transform: translate3d(0, 120%, 0);
+  }
+
+  /* ---------------------------------------------------------------------
+     The header: the grabber is a real control and fills the strip, so the
+     whole strip drags and a tap anywhere on it steps the stop. The title
+     and the close control sit over it.
+     --------------------------------------------------------------------- */
+  #app[data-sheet-detent] .sheet-grabber-row {
+    position: relative;
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: flex-start;
+    height: var(--sheet-head-h);
+    padding: 12px 4px 0 16px;
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  #app[data-sheet-detent] .sheet-grabber-row::after {
+    content: '';
+    position: absolute;
+    left: 14px;
+    right: 14px;
+    bottom: 0;
+    height: 1px;
+    background: var(--glass-hairline);
+    pointer-events: none;
+  }
+  #app[data-sheet-detent] .sheet-grabber {
+    position: absolute;
+    /* Up to the close control, never under it: two targets, no overlap. */
+    inset: 0 calc(var(--touch-target) + 4px) 0 0;
+    display: block;
+    width: auto;
+    min-height: var(--touch-target);
+    padding: 0;
+    border-radius: var(--sheet-radius) 0 0 0;
+    cursor: grab;
+    touch-action: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #app[data-sheet-detent] .sheet-grabber:active {
+    cursor: grabbing;
+  }
+  #app[data-sheet-detent] .sheet-grabber-bar {
+    position: absolute;
+    top: 7px;
+    /* Centred on the sheet, not on the button, which stops short of the
+       close control. */
+    left: calc(50% + (var(--touch-target) + 4px) / 2);
+    width: 36px;
+    height: 4px;
+    margin-left: -18px;
+    border-radius: 999px;
+    background: var(--ink-muted);
+    transition:
+      background-color var(--dur-micro) var(--ease-standard),
+      transform var(--dur-fast) var(--ease-standard);
+  }
+  /* Held: the handle answers the hand before the sheet moves. */
+  #app[data-sheet-detent] .sheet-grabber:active .sheet-grabber-bar,
+  #app[data-sheet-detent] .sidebar[data-sheet-dragging] .sheet-grabber-bar {
+    background: var(--ink-strong);
+    transform: scaleX(1.22);
+  }
+  @media (hover: hover) {
+    #app[data-sheet-detent] .sheet-grabber:hover .sheet-grabber-bar {
+      background: var(--ink);
+    }
+  }
+  /* Keyboard focus rings the handle, not the whole strip. */
+  #app[data-sheet-detent] .sheet-grabber:focus-visible {
+    outline: none;
+    box-shadow: none;
+  }
+  #app[data-sheet-detent] .sheet-grabber:focus-visible .sheet-grabber-bar {
+    background: var(--ink-strong);
+    outline: 2px solid var(--focus-inner);
+    outline-offset: 3px;
+    box-shadow: 0 0 0 7px var(--focus-outer);
+  }
+
+  #app[data-sheet-detent] .sheet-title {
+    position: relative;
+    display: block;
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
+    overflow: hidden;
+    color: var(--ink-strong);
+    font-family: var(--font-display);
+    font-size: 15px;
+    font-weight: var(--fw-title);
+    letter-spacing: var(--track-display);
+    line-height: 1.2;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    /* The strip under it is the grabber: presses fall through. */
+    pointer-events: none;
+  }
+  #app[data-sheet-detent] .sheet-close {
+    appearance: none;
+    position: relative;
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: var(--touch-target);
+    height: var(--touch-target);
+    margin: -6px 0 0;
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: var(--ink-soft);
+    cursor: pointer;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #app[data-sheet-detent] .sheet-close::before {
+    content: '';
+    position: absolute;
+    inset: 7px;
+    border-radius: var(--radius-md);
+    background: var(--glass-press);
+    opacity: 0.55;
+    transition: opacity var(--dur-micro) var(--ease-standard);
+  }
+  #app[data-sheet-detent] .sheet-close:active::before {
+    opacity: 1;
+  }
+  #app[data-sheet-detent] .sheet-close svg {
+    position: relative;
+  }
+  #app[data-sheet-detent] .sheet-close:focus-visible {
+    outline-offset: -5px;
+    box-shadow: inset 0 0 0 5px var(--focus-outer);
+  }
+
+  /* ---------------------------------------------------------------------
+     The content. One scroll context at half and full; at peek the first
+     lines show and the strip does not scroll (any drag there moves the
+     sheet). The bottom safe area belongs to this padding.
+     --------------------------------------------------------------------- */
+  #app[data-sheet-detent] .sidebar-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
     overflow-x: hidden;
     overflow-y: auto;
     overscroll-behavior: contain;
-    padding: 6px 0 14px;
+    padding: 4px 0 calc(14px + env(safe-area-inset-bottom, 0px));
     -webkit-overflow-scrolling: touch;
   }
+  #app[data-sheet-detent='peek'] .sidebar-scroll {
+    overflow-y: hidden;
+  }
+  #app[data-sheet-detent] .sidebar-scroll > .panel {
+    padding: 10px 16px 14px;
+    border-bottom-color: var(--glass-hairline);
+  }
+  /* The full console stack keeps its brand header and credits, on glass. */
+  #app[data-sheet-detent] .sidebar-header {
+    padding: 10px 16px;
+    border-bottom-color: var(--glass-hairline);
+  }
+  #app[data-sheet-detent] .sidebar-footer {
+    padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
+    border-top-color: var(--glass-hairline);
+  }
+  /* The header names the door, so the pane does not repeat it. */
+  #app[data-sheet-detent] #sheet-alerts > .panel-title {
+    display: none;
+  }
 
+  #app[data-sheet-detent='peek'].view-console[data-sheet-tab='layers'] #sheet-enso-flow-host:not(:empty),
   #app[data-sheet-detent='half'].view-console[data-sheet-tab='layers'] #sheet-enso-flow-host:not(:empty),
   #app[data-sheet-detent='full'].view-console[data-sheet-tab='layers'] #sheet-enso-flow-host:not(:empty) {
     display: block;
   }
 
-  /* The side panel no longer moves map chrome or MapLibre camera geometry. */
-  #app[data-sheet-detent] .maplibregl-ctrl-bottom-left,
-  #app[data-sheet-detent] .maplibregl-ctrl-bottom-right,
-  #app[data-sheet-detent='closed'] .maplibregl-ctrl-bottom-left,
-  #app[data-sheet-detent='closed'] .maplibregl-ctrl-bottom-right,
-  #app[data-sheet-detent='peek'] .maplibregl-ctrl-bottom-left,
-  #app[data-sheet-detent='peek'] .maplibregl-ctrl-bottom-right {
-    margin-bottom: env(safe-area-inset-bottom, 0px);
+  /* ---------------------------------------------------------------------
+     The full report is a second layer. It opens OVER the at-hand answer as
+     its own card (inset, edged, casting a shadow on the sheet's glass) and
+     rises into place, so it reads as depth; the door's header stays above
+     it as the layer underneath. Its own close control is the way back, and
+     so is pulling the sheet down to half.
+     --------------------------------------------------------------------- */
+  #app[data-sheet-detent='full'] #sheet-report:has(.impact-panel.open) {
+    padding: 8px 8px 0;
+  }
+  #app[data-sheet-detent] #sheet-report .impact-panel.sheet-hosted {
+    overflow: hidden;
+    border: 1px solid var(--glass-edge);
+    border-radius: var(--glass-radius);
+    box-shadow:
+      inset 0 1px 0 var(--glass-sheen),
+      0 10px 28px rgba(0, 0, 0, 0.5);
+    animation: sheet-layer-in var(--dur-base) var(--ease-enter);
   }
 
-  #app[data-sheet-detent] .map-bottom-dock,
-  #app[data-sheet-detent='closed'] .map-bottom-dock,
-  #app[data-sheet-detent='peek'] .map-bottom-dock,
-  #app[data-sheet-detent='half'] .map-bottom-dock {
-    bottom: calc(env(safe-area-inset-bottom, 0px) + var(--mobile-map-edge, 8px));
+  /* ---------------------------------------------------------------------
+     The report's head on a phone (owner direction 2026-11-09 (sprint),
+     DR-pending). Mail, print and the way back are the report's only tools,
+     and each is a full touch target here, as each already is on a tablet.
+     Three of them are 144px of a head under 300px wide, so the head takes
+     the tablet band's stacked arrangement one step further: the kicker
+     shares the tools' row, and the place name has the whole width under it,
+     where a long Tribal name wraps to two lines instead of five. The
+     heading's wrapper is a plain div, so `display: contents` changes the
+     boxes and nothing a screen reader hears; the reading order stays
+     kicker, name, kind, then the tools.
+     --------------------------------------------------------------------- */
+  #app[data-sheet-detent] #sheet-report .impact-panel-header {
+    flex-wrap: wrap;
+    align-items: center;
+    row-gap: 4px;
+  }
+  #app[data-sheet-detent] #sheet-report .impact-panel-heading {
+    display: contents;
+  }
+  #app[data-sheet-detent] #sheet-report .impact-panel-kicker {
+    order: 1;
+    flex: 1 1 0;
+    min-width: 0;
+    margin: 0;
+  }
+  #app[data-sheet-detent] #sheet-report .impact-panel-actions {
+    order: 2;
+  }
+  #app[data-sheet-detent] #sheet-report .impact-panel-title,
+  #app[data-sheet-detent] #sheet-report .impact-panel-kind {
+    order: 3;
+    flex: 1 1 100%;
+  }
+  #app[data-sheet-detent] #sheet-report .impact-panel-kind {
+    margin-top: 0;
+  }
+  #app[data-sheet-detent] #sheet-report .impact-panel-close,
+  #app[data-sheet-detent] #sheet-report .impact-panel-action {
+    min-width: var(--touch-target);
+    min-height: var(--touch-target);
   }
 
-  /* Keep the map mode controls reachable while a panel is open. */
-  #app[data-sheet-detent='half'] .hazard-rail,
-  #app[data-sheet-detent='full'] .hazard-rail {
-    display: flex;
-    flex-direction: column;
-    gap: var(--mobile-map-control-gap, 8px);
+  /* Two link-like buttons on a phone. The key drawer's "Technical
+     information" stands on a line of its own, so its box takes the touch
+     floor. The credits line's "Acknowledgements" sits inside a sentence:
+     its box stays in the line, and a transparent band above and below it
+     takes the touch, as the minimap's ocean doors do. */
+  #app[data-sheet-detent] .map-info-ack-link[data-open-technical-information] {
+    min-height: var(--touch-target);
+  }
+  #app[data-sheet-detent] .map-info-ack-link[data-open-acknowledgements] {
+    position: relative;
+  }
+  #app[data-sheet-detent] .map-info-ack-link[data-open-acknowledgements]::before {
+    content: '';
     position: absolute;
-    right: calc(env(safe-area-inset-right, 0px) + var(--mobile-map-edge, 8px));
+    inset: calc((24px - var(--touch-target)) / 2) 0;
+  }
+
+  /* ---------------------------------------------------------------------
+     Map furniture rides the sheet's top edge at peek and half: the scale
+     rulers, and above them the dock (notices and the OpenStreetMap
+     credit), so neither is ever hidden under the glass while the map
+     leads. At full the sheet covers them, as it covers the map.
+     --------------------------------------------------------------------- */
+  #app[data-sheet-detent] .maplibregl-ctrl-bottom-left,
+  #app[data-sheet-detent] .maplibregl-ctrl-bottom-right {
+    margin-bottom: var(--sheet-lift);
+  }
+  #app[data-sheet-detent] .map-bottom-dock {
     bottom: calc(
-      env(safe-area-inset-bottom, 0px) +
-      var(--mobile-map-edge, 8px) +
-      var(--mobile-map-control-size, 48px) +
-      var(--mobile-map-control-gap, 8px)
+      var(--sheet-lift) + var(--mobile-map-edge, 8px) + var(--mobile-scale-block)
     );
-    z-index: calc(var(--z-map-control) + 30);
-  }
-
-  #app[data-sheet-detent='half'] .basemap-switcher-control,
-  #app[data-sheet-detent='full'] .basemap-switcher-control {
-    display: block;
-    position: fixed;
-    right: calc(env(safe-area-inset-right, 0px) + var(--mobile-map-edge, 8px));
-    bottom: calc(env(safe-area-inset-bottom, 0px) + var(--mobile-map-edge, 8px));
-    margin: 0 !important;
-    border-radius: var(--mobile-map-control-radius);
-    z-index: calc(var(--z-map-control) + 30);
-  }
-
-  #app[data-sheet-detent='full'] .map-overlay-controls {
-    display: flex;
   }
 }
 
-@media (max-width: 720px) and (max-height: 720px) {
+/* =============================================================================
+   A short landscape window (a phone on its side, still inside the phone
+   shell): there is no height for three stops, so the same element is a
+   DRAWER from the left edge. It has one open seat, at full height, and it
+   closes by the close control, Escape, its door, or a drag to the left.
+   The stop attribute still decides which content shows. The query is
+   SHEET_DRAWER_QUERY in src/config/sheet-detents.ts.
+   ============================================================================= */
+@media (min-width: 481px) and (max-width: 720px) and (max-height: 480px) and (orientation: landscape) {
   #app[data-sheet-detent] {
-    --mobile-panel-rail-size: 44px;
-    --mobile-panel-rail-gap: 5px;
-    --mobile-panel-top: calc(env(safe-area-inset-top, 0px) + 76px);
-  }
-
-  #app[data-sheet-detent] .mobile-footer {
-    top: clamp(
-      calc(env(safe-area-inset-top, 0px) + 116px),
-      30dvh,
-      calc(100dvh - env(safe-area-inset-bottom, 0px) - 192px)
+    /* As wide as the content wants, leaving the map a readable strip
+       between the drawer and the column. */
+    --sheet-w: min(
+      360px,
+      calc(
+        100vw -
+        env(safe-area-inset-right, 0px) -
+        var(--edge-inset, 8px) -
+        var(--mobile-map-control-size, 48px) -
+        var(--mobile-map-control-gap, 8px) -
+        180px
+      )
     );
   }
-
-  #app[data-sheet-detent] .mobile-footer button {
-    font-size: 9px;
+  /* A drawer takes no height from the map, and nothing rides it upward. */
+  #app[data-sheet-detent='peek'],
+  #app[data-sheet-detent='half'],
+  #app[data-sheet-detent='full'] {
+    --sheet-height: 0px;
+    --sheet-lift: env(safe-area-inset-bottom, 0px);
   }
 
   #app[data-sheet-detent] .sidebar {
-    height: min(70dvh, 500px);
+    top: 0;
+    right: auto;
+    /* The box stops 2px short of the bottom edge on purpose (the glass
+       below still reaches it). src/ui/popup-viewport.ts reads any sheet
+       whose box touches the bottom edge as bottom-docked chrome and gives
+       a popup only the room above its top; a full-height drawer would
+       leave a popup none, even while closed. */
+    bottom: 2px;
+    left: 0;
+    width: var(--sheet-w);
+    height: auto;
+    padding-left: env(safe-area-inset-left, 0px);
   }
-}
-
-@media (max-width: 370px) {
-  #app[data-sheet-detent] {
-    --mobile-panel-edge: 5px;
-    --mobile-panel-rail-size: 44px;
-    --mobile-panel-rail-gap: 5px;
+  #app[data-sheet-detent] .sidebar::before {
+    inset: 0 0 -2px -120px;
+    border: 1px solid var(--glass-edge);
+    border-left: 0;
+    border-radius: 0 var(--sheet-radius) var(--sheet-radius) 0;
+    box-shadow:
+      inset -1px 0 0 var(--glass-sheen),
+      8px 0 30px rgba(0, 0, 0, 0.4);
   }
-
-  #app[data-sheet-detent] .sidebar {
-    right: calc(
-      env(safe-area-inset-right, 0px) +
-      var(--mobile-map-edge, 8px) +
-      var(--mobile-panel-rail-size) +
-      var(--mobile-panel-rail-gap)
-    );
+  #app[data-sheet-detent='closed'] .sidebar {
+    height: auto;
+    transform: translate3d(-110%, 0, 0);
   }
-
-  #app[data-sheet-detent='half'] .hazard-rail,
-  #app[data-sheet-detent='full'] .hazard-rail,
-  #app[data-sheet-detent='half'] .basemap-switcher-control,
-  #app[data-sheet-detent='full'] .basemap-switcher-control {
-    visibility: hidden;
+  /* The handle moves to the edge the drawer leaves by. */
+  #app[data-sheet-detent] .sidebar::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    right: 5px;
+    width: 4px;
+    height: 36px;
+    margin-top: -18px;
+    border-radius: 999px;
+    background: var(--ink-muted);
     pointer-events: none;
+  }
+  #app[data-sheet-detent] .sidebar[data-sheet-dragging]::after {
+    background: var(--ink-strong);
+  }
+  /* Nothing to resize: the strip keeps the title and the close control,
+     and still drags. */
+  #app[data-sheet-detent] .sheet-grabber {
+    display: none;
+  }
+  #app[data-sheet-detent] .sheet-grabber-row {
+    padding-top: 0;
+  }
+  #app[data-sheet-detent] .sheet-close {
+    margin-top: 0;
+  }
+  /* Up and down scroll; left and right belong to the drawer. */
+  #app[data-sheet-detent] .sidebar-scroll,
+  #app[data-sheet-detent='peek'] .sidebar-scroll {
+    overflow-y: auto;
+    touch-action: pan-y;
+  }
+  /* The rulers and the dock step out from under an open drawer. */
+  #app[data-sheet-detent]:not([data-sheet-detent='closed']) .maplibregl-ctrl-bottom-left {
+    margin-left: var(--sheet-w);
+  }
+  #app[data-sheet-detent]:not([data-sheet-detent='closed']) .map-bottom-dock {
+    left: calc(var(--sheet-w) + var(--mobile-map-edge, 8px));
+  }
+}
+
+@keyframes sheet-layer-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 18px, 0) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Real glass where the browser can blur what is behind it. */
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  @media (max-width: 720px) {
+    #app[data-sheet-detent] .sidebar::before {
+      background: var(--glass-panel);
+      -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+      backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+    }
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  #app[data-sheet-detent] .sidebar {
+  #app[data-sheet-detent] .sheet-grabber-bar,
+  #app[data-sheet-detent] .sheet-close::before {
     transition: none;
+  }
+  /* The report layer is simply there: same end state, no rise. */
+  #app[data-sheet-detent] #sheet-report .impact-panel.sheet-hosted {
+    animation: none;
+  }
+}
+
+/* A printed report is page content: no sheet transform or motion state. */
+@media print {
+  #app[data-sheet-detent] .sidebar {
+    transform: none !important;
+  }
+  #app[data-sheet-detent] .sidebar::before,
+  #app[data-sheet-detent] .sidebar::after {
+    display: none;
+  }
+  #app[data-sheet-detent] #sheet-report .impact-panel.sheet-hosted {
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    animation: none;
   }
 }

@@ -1,0 +1,469 @@
+/* =============================================================================
+   The 3D Fire view on a phone: the card that keeps both statements on the
+   surface, and the one-thumb camera pad (owner direction 2026-11-09 (sprint),
+   DR-pending).
+
+   Imported by src/ui/fire3d-phone-scene.ts, so it rides that lazy chunk and
+   no other session downloads it. The 3D cell itself needs nothing from here:
+   it wears the right-edge column's cell face (src/styles/edge-column.css).
+
+   THE SEATS, top to bottom on the left of the column:
+     the key chip, then THE CARD directly under it (it follows the key's
+     measured height, so an open key drawer pushes it down instead of
+     covering it), then clear ground, then THE PAD in the lower right beside
+     the column, level with the scale rulers.
+   The card's seat is one no sheet stop reaches: while the scene is on, the
+   sheet's full stop ends under the card (--mobile-panel-top below) and the
+   half stop ends lower still, so the two statements stay on the surface
+   with the sheet closed, at peek, at half and at full.
+
+   The owner's three rules apply to everything here. Corners come from the
+   tokens and nothing is rounder than the glass radius; the pad's keys and
+   the compass are tight rectangles (only the needle inside the compass
+   turns). Every button's outline is the same on all four sides. Nothing
+   here is a toggle, so nothing inverts: the control that is on is the 3D
+   cell in the column, which inverts there. No colour is introduced: glass
+   and ink only.
+   ============================================================================= */
+
+/* THE MARK the chunk reads before it draws (`createFire3DPhoneScene` in src/ui/fire3d-phone-scene.ts): proof that this
+   stylesheet, one more lazy request, is applied. Without it the door says
+   its one failure line instead of drawing unstyled
+   (src/util/chunk-stylesheets.ts `requireStylesheetMark`). */
+#app {
+  --ddm-fire3d-phone-css: 1;
+}
+
+.fire3d-card,
+.fire3d-pad {
+  display: none;
+}
+
+@media (max-width: 720px) {
+  /* While the scene is on, the sheet's full stop ends under the card. The
+     half stop ends lower still, by the height of the map furniture that
+     rides the sheet's top edge at half (the credit and the two scale
+     rulers stand 82 px above it), so the credit is never pushed up under
+     the card. Peek is a fixed height and already clears both. */
+  #app[data-sheet-detent][data-fire3d-phone] {
+    --mobile-panel-top: calc(
+      var(--fire3d-card-bottom, calc(env(safe-area-inset-top, 0px) + 76px)) + var(--mobile-map-edge)
+    );
+    --sheet-h-half: min(
+      calc(var(--sheet-h-full) - 84px),
+      max(50vh, calc(var(--sheet-h-peek) + 64px))
+    );
+  }
+  @supports (height: 1dvh) {
+    #app[data-sheet-detent][data-fire3d-phone] {
+      --sheet-h-half: min(
+        calc(var(--sheet-h-full) - 84px),
+        max(50dvh, calc(var(--sheet-h-peek) + 64px))
+      );
+    }
+  }
+
+  /* Locate's card rides the dock above the credit (src/styles/locate.css).
+     Where its seat would reach this card, src/ui/fire3d-phone-scene.ts
+     (`seatLocateCard`) marks it to wait: hidden, so it is never covered and
+     nothing under this card can be reached. Hidden keeps its box, so the
+     dock does not shift while it waits and the decision cannot flicker. */
+  #app[data-sheet-detent][data-fire3d-card] .locate-card[data-fire3d-waits] {
+    visibility: hidden;
+  }
+  /* Unfolded, it scrolls inside the room between this card and the
+     furniture under it, instead of growing up into this card and waiting:
+     90 px is the 8 px of air under this card, the 6 px gap and the 18 px
+     credit under Locate's card, and the 58 px the dock stands above the
+     sheet's edge. The 120 px floor is Locate's own (src/styles/locate.css). */
+  #app[data-sheet-detent][data-fire3d-card] .locate-card-plate {
+    max-height: max(
+      120px,
+      calc(100vh - var(--sheet-lift, 0px) - var(--fire3d-card-bottom, 76px) - 90px)
+    );
+  }
+  @supports (height: 1dvh) {
+    #app[data-sheet-detent][data-fire3d-card] .locate-card-plate {
+      max-height: max(
+        120px,
+        calc(100dvh - var(--sheet-lift, 0px) - var(--fire3d-card-bottom, 76px) - 90px)
+      );
+    }
+  }
+
+  /* An open key drawer leaves the card its room above the credit and the
+     scale rulers (and above the sheet at peek). The drawer scrolls inside
+     what is left; src/ui/fire3d-phone-scene.ts closes it when a panel rises. */
+  #app[data-sheet-detent][data-fire3d-phone] #map-key .map-key-content:not([hidden]) {
+    max-height: max(
+      0px,
+      min(
+        55vh,
+        420px,
+        var(--map-key-available-height, 55vh),
+        calc(
+          100vh - env(safe-area-inset-top, 0px) - var(--fire3d-card-h, 200px) -
+          var(--sheet-height, 0px) - 164px
+        )
+      )
+    );
+  }
+
+  /* The loading pulse sits under the key, and a toast of two lines or more
+     reaches down past it; with the card there both step below the card
+     instead of across its first lines. */
+  #app[data-sheet-detent][data-fire3d-card] :is(.loading-indicator, .copy-toast) {
+    top: calc(
+      var(
+        --fire3d-card-bottom,
+        calc(env(safe-area-inset-top, 0px) + var(--mobile-map-key-height, 48px) + 8px)
+      ) + var(--mobile-map-edge)
+    );
+  }
+
+  /* ---------------------------------------------------------------------
+     The card
+     --------------------------------------------------------------------- */
+  #app[data-sheet-detent] .fire3d-card {
+    position: fixed;
+    top: calc(
+      env(safe-area-inset-top, 0px) + var(--mobile-map-edge) +
+      var(--mobile-map-key-height, 44px) + var(--mobile-map-edge)
+    );
+    left: calc(env(safe-area-inset-left, 0px) + var(--mobile-map-edge));
+    right: calc(
+      env(safe-area-inset-right, 0px) + var(--edge-inset, 8px) +
+      var(--mobile-map-control-size) + var(--mobile-map-control-gap)
+    );
+    display: block;
+    max-width: 344px;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 8px 12px 9px;
+    border: 1px solid var(--glass-edge);
+    border-radius: var(--glass-radius);
+    background: var(--glass-panel-solid);
+    box-shadow:
+      inset 0 1px 0 var(--glass-sheen),
+      var(--glass-shadow);
+    color: var(--ink);
+    font-family: var(--font-body);
+    /* Over a popup, so a tap on the scene can never cover the two
+       statements; under the sheet and the column, which never reach it. */
+    z-index: calc(var(--z-popup) + 10);
+    animation: fire3d-card-in var(--dur-base) var(--ease-enter);
+  }
+  /* Map information is a glass panel across the whole stage: the scene
+     behind it is blurred past reading, and the card goes under it with the
+     scene, at the key's level. */
+  #app[data-sheet-detent][data-map-info-open] .fire3d-card {
+    z-index: calc(var(--z-map-chrome) + 40);
+  }
+
+  .fire3d-card-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .fire3d-card-heading {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .fire3d-card-title {
+    margin: 0;
+    color: var(--ink-strong);
+    font-family: var(--font-display);
+    font-size: 12px;
+    font-weight: var(--fw-title);
+    letter-spacing: 0.01em;
+    line-height: 1.3;
+    text-transform: none;
+  }
+  .fire3d-card-status {
+    margin: 1px 0 0;
+    color: var(--ink);
+    font-size: 11.5px;
+    line-height: 1.3;
+  }
+  .fire3d-card[data-state='unavailable'] .fire3d-card-status {
+    color: var(--ink-strong);
+  }
+
+  /* Cancel (while the entry loads) and Close (once a failed scene has said
+     why): a 44 px target whose face is the plate inside it, so the head
+     keeps two lines of height and nothing shifts when the control leaves. */
+  .fire3d-card-action {
+    appearance: none;
+    position: relative;
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 68px;
+    height: var(--touch-target);
+    margin: -8px -4px -8px 0;
+    padding: 0 12px;
+    border: 0;
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: var(--ink-strong);
+    font-family: var(--font-display);
+    font-size: 11.5px;
+    font-weight: var(--fw-subtitle);
+    letter-spacing: 0.01em;
+    line-height: 1;
+    cursor: pointer;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .fire3d-card-action[hidden] {
+    display: none;
+  }
+  .fire3d-card-action::before {
+    content: '';
+    position: absolute;
+    inset: 7px 0;
+    border: 1px solid var(--glass-edge);
+    border-radius: var(--radius-md);
+    background: var(--glass-press);
+    transition: background-color var(--dur-micro) var(--ease-standard);
+  }
+  .fire3d-card-action:active::before {
+    background: var(--glass-edge);
+  }
+  .fire3d-card-action-word {
+    position: relative;
+  }
+
+  /* The rule between the head and the statements is also the entry's bar:
+     while the scene loads a band travels along it, and when the scene is
+     live the same line is simply the rule, so nothing moves when loading
+     ends. Indeterminate on purpose: the steps are unequal, so a measured
+     bar would sit near its end for most of the wait. */
+  .fire3d-card-bar {
+    position: relative;
+    height: 2px;
+    margin: 7px 0 0;
+    overflow: hidden;
+    border-radius: 1px;
+    background: linear-gradient(var(--glass-hairline), var(--glass-hairline)) center / 100% 1px no-repeat;
+  }
+  .fire3d-card-bar[hidden] {
+    display: none;
+  }
+  .fire3d-card-band {
+    position: absolute;
+    inset: 0 auto 0 0;
+    display: none;
+    width: 32%;
+    background: var(--ink);
+    animation: fire3d-band 1400ms linear infinite;
+  }
+  .fire3d-card[data-state='loading'] .fire3d-card-band {
+    display: block;
+  }
+
+  .fire3d-card-notes {
+    margin: 7px 0 0;
+  }
+  .fire3d-card-notes[hidden] {
+    display: none;
+  }
+  .fire3d-card-note {
+    margin: 0;
+    color: var(--ink);
+    font-size: 11px;
+    line-height: 1.38;
+  }
+  .fire3d-card-note[hidden] {
+    display: none;
+  }
+  .fire3d-card-note + .fire3d-card-note {
+    margin-top: 5px;
+  }
+  /* A sentence that answers for this view right now (the ground here is
+     outside the archive; the issuer returned no plumes) reads one step
+     brighter than the two standing statements, as it does in the console. */
+  .fire3d-card-answer {
+    color: var(--ink-strong);
+  }
+
+  /* ---------------------------------------------------------------------
+     The pad: a plus of five 44 px keys beside the column. Its empty corners
+     take no press, so the map under them still pans.
+     --------------------------------------------------------------------- */
+  #app[data-sheet-detent] .fire3d-pad {
+    position: fixed;
+    right: calc(
+      env(safe-area-inset-right, 0px) + var(--edge-inset, 8px) +
+      var(--mobile-map-control-size) + var(--mobile-map-control-gap)
+    );
+    bottom: calc(var(--sheet-lift) + var(--mobile-map-edge) + var(--fire3d-pad-raise, 0px));
+    display: grid;
+    grid-template-columns: repeat(3, var(--touch-target));
+    grid-template-rows: repeat(3, var(--touch-target));
+    grid-template-areas:
+      '. up .'
+      'left home right'
+      '. down .';
+    z-index: calc(var(--z-map-control) + 30);
+    pointer-events: none;
+    animation: fire3d-pad-in var(--dur-base) var(--ease-enter);
+  }
+  #app[data-sheet-detent] .fire3d-pad[hidden] {
+    display: none;
+  }
+
+  .fire3d-pad-btn {
+    appearance: none;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    width: var(--touch-target);
+    height: var(--touch-target);
+    margin: 0;
+    padding: 0;
+    /* Each arm carries the same hairline on all four sides; the compass in
+       the middle is bounded by the arms and adds none of its own. */
+    border: 1px solid var(--glass-edge);
+    border-radius: 0;
+    background: var(--glass-fill-solid);
+    color: var(--ink);
+    font-family: var(--font-display);
+    font-size: 9px;
+    font-weight: var(--fw-subtitle);
+    line-height: 1;
+    cursor: pointer;
+    pointer-events: auto;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    transition: background-color var(--dur-micro) var(--ease-standard);
+  }
+  .fire3d-pad-btn[data-pad='tilt-up'] {
+    grid-area: up;
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
+  }
+  .fire3d-pad-btn[data-pad='tilt-down'] {
+    grid-area: down;
+    border-radius: 0 0 var(--radius-md) var(--radius-md);
+  }
+  .fire3d-pad-btn[data-pad='rotate-left'] {
+    grid-area: left;
+    border-radius: var(--radius-md) 0 0 var(--radius-md);
+  }
+  .fire3d-pad-btn[data-pad='rotate-right'] {
+    grid-area: right;
+    border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  }
+  .fire3d-pad-btn[data-pad='reset'] {
+    grid-area: home;
+    border-color: transparent;
+    color: var(--ink-strong);
+  }
+  .fire3d-pad-btn svg {
+    flex: none;
+  }
+  /* Only the needle turns; it follows the camera, so it has no motion of
+     its own to reduce. */
+  .fire3d-pad-needle {
+    transform-origin: 50% 50%;
+  }
+  .fire3d-pad-btn:active {
+    background-color: var(--glass-panel-solid);
+    color: var(--ink-strong);
+  }
+  .fire3d-pad-btn[aria-disabled='true'] {
+    color: var(--ink-muted);
+    cursor: var(--ctl-pending-cursor);
+  }
+  .fire3d-pad-btn:focus-visible {
+    z-index: 1;
+  }
+
+  /* A phone too narrow for the pad to stand beside the scale rulers lifts
+     it above them and the credit. The longest ruler MapLibre draws ends
+     170 px from the left edge: 160 px (SCALE_MAX_WIDTH_PX, src/map/init.ts)
+     from its 10 px margin. The pad's left edge is the viewport less the
+     column band (58 px with 44 px cells, 64 with 48, 68 with 52) and the
+     132 px pad. Below 380 px wide the column's cells are 48 px at most
+     (narrowViewport, src/config/edge-column.ts), so from 372 px the pad's
+     left edge stands at 176 px or beyond. The least it clears the longest
+     ruler by is 6 px, at exactly 372 px; 9 px at 375 px with 48 px cells,
+     15 px at 375 px with 44 px cells, 10 px at 380 px with 52 px cells. */
+  @media (max-width: 371px) {
+    #app[data-sheet-detent] {
+      --fire3d-pad-raise: calc(var(--mobile-scale-block, 44px) + 34px);
+    }
+  }
+}
+
+/* Real glass where the browser can blur what is behind it. */
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  @media (max-width: 720px) {
+    #app[data-sheet-detent] .fire3d-card {
+      background: var(--glass-panel);
+      -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+      backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+    }
+    .fire3d-pad-btn {
+      background: var(--glass-fill);
+      -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+      backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+    }
+    .fire3d-pad-btn:active {
+      background-color: var(--glass-panel);
+    }
+  }
+}
+
+@keyframes fire3d-card-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, -6px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes fire3d-pad-in {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes fire3d-band {
+  from {
+    transform: translate3d(-100%, 0, 0);
+  }
+  to {
+    transform: translate3d(315%, 0, 0);
+  }
+}
+
+/* Reduced motion: the same end states at once. The bar keeps its place and
+   stops travelling; the word "Loading" beside it carries the state. */
+@media (prefers-reduced-motion: reduce) {
+  #app[data-sheet-detent] .fire3d-card,
+  #app[data-sheet-detent] .fire3d-pad {
+    animation: none;
+  }
+  .fire3d-card-band {
+    width: 100%;
+    opacity: 0.5;
+    animation: none;
+  }
+  .fire3d-card-action::before,
+  .fire3d-pad-btn {
+    transition: none;
+  }
+}

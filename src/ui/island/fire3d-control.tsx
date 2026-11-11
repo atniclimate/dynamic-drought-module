@@ -55,9 +55,9 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 
 import {
+  FIRE3D_CONSOLE_WIDTH_QUERY,
   FIRE3D_COVERAGE_NOTE,
   FIRE3D_MIN_HEIGHT_QUERY,
-  FIRE3D_MIN_WIDTH_QUERY,
   FIRE3D_NON_PREDICTION_NOTE,
   FIRE3D_OUT_OF_COVERAGE_STATUS,
   FIRE3D_PARTIAL_COVERAGE_STATUS,
@@ -231,11 +231,15 @@ export function Fire3DControl({
   //
   // The two are held apart rather than as one boolean because they now have
   // different ANSWERS: a viewport below the desktop breakpoint is the phone
-  // chrome and says nothing about 3D, while a wide but short viewport is a
+  // chrome, which offers the scene from its own cell (src/ui/fire3d-phone.ts)
+  // so this console says nothing there, while a wide but short viewport is a
   // landscape phone that has to be told why the button it saw yesterday is
-  // gone (DDM-P9-T02).
+  // gone (DDM-P9-T02). The width asked is the CONSOLE's, not the scene's own
+  // floor: since 2026-11-09 the scene's floor admits phones, and reading it
+  // here would mount this control inside the phone sheet and load the 3D
+  // chunk for every phone in Wildfire.
   const [wideEnough, setWideEnough] = useState<boolean>(
-    () => window.matchMedia(FIRE3D_MIN_WIDTH_QUERY).matches
+    () => window.matchMedia(FIRE3D_CONSOLE_WIDTH_QUERY).matches
   );
   const [tallEnough, setTallEnough] = useState<boolean>(
     () => window.matchMedia(FIRE3D_MIN_HEIGHT_QUERY).matches
@@ -247,7 +251,7 @@ export function Fire3DControl({
   );
 
   useEffect(() => {
-    const width = window.matchMedia(FIRE3D_MIN_WIDTH_QUERY);
+    const width = window.matchMedia(FIRE3D_CONSOLE_WIDTH_QUERY);
     const height = window.matchMedia(FIRE3D_MIN_HEIGHT_QUERY);
     const onChange = (): void => {
       setWideEnough(width.matches);

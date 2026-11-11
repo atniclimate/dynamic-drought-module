@@ -198,6 +198,9 @@ function seatBasemapSwitcherOnDesktop(map: maplibregl.Map): void {
     home: corner,
     placeHome: () => {
       if (node.parentElement !== corner) corner.appendChild(node);
-    }
+    },
+    // On phones it leads the view tools in the right-edge column (owner
+    // direction 2026-11-09 (sprint), DR-pending; src/ui/edge-column.ts).
+    phone: { group: 'view', order: 10, word: 'SAT' }
   });
 }

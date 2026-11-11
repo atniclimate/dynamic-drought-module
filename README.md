@@ -251,6 +251,11 @@ This is a context view, not a prediction: nothing in it shows or implies
 fire spread, ignition, or an all-clear. See the [developer guide](DEVELOPER.md#the-desktop-3d-fire-view)
 for sources, rendering, and coverage details.
 
+On a phone, the Fire view shows a 3D control at the right edge when the
+screen is large enough and the browser can render the scene. The coverage
+and context statements stay on the map while the 3D view is on, and a
+small pad tilts, turns and resets the camera with one thumb.
+
 ## Development
 
 See [DEVELOPER.md](DEVELOPER.md) for setup, architecture, customization,

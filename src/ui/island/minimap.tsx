@@ -7,6 +7,10 @@
  * framings keep the verified, edge-matched masks promoted from the S4 shell
  * kit, clipped to bundled Natural Earth 1:50m physical coastline linework;
  * Hawaii is the enlarged inset whose whole frame is its hit target. The
+ * frame is not drawn and carries no caption (owner direction 2026-11-09
+ * (sprint), DR-pending): the islands fill the target, and the fact that
+ * they are drawn enlarged and apart from the mainland rides the accessible
+ * name (`HAWAII_INSET_NOTE`). The
  * drawing itself carries no visible labels (D-0.7.0-054; the ocean labels
  * moved to the framing dropdown 2026-10-13); names and provenance framing ride the accessible name
  * and the selected-framing caption below. Pointer hover is deliberately
@@ -218,6 +222,18 @@ const HAWAII_PATHS: readonly string[] = HAWAII_ISLAND_SHAPES.map((shape) =>
 const ROVING_ORDER: ReadonlyArray<FramingKey | null> = [...FRAMING_KEYS, null];
 
 const CAMERA_ONLY_NOTE = 'Click fits the camera. Camera-only; selects nothing.';
+
+/** What the removed caption said, kept where assistive technology reads it. */
+const HAWAII_INSET_NOTE = 'Drawn enlarged and apart from the mainland.';
+
+/**
+ * The window onto the Hawaii islands inside their hit target, in the inset's
+ * own units. The islands span x 13.7 to 76.1 and y 248.4 to 290.7 (measured
+ * from the rendered paths); this window is centred on them and about a third
+ * tighter than the one that left room for a caption, so the group reads a
+ * little larger without moving its target.
+ */
+const HAWAII_VIEW_BOX = '-4 231 97.8 77';
 
 /**
  * DR-040 c: a mode and horizon with no reading in the table
@@ -707,7 +723,8 @@ function accessibleName(
               outlookLabels(reading.outlook, outlook, key),
             )
           : UNSHADED_NOTE;
-  return `${base} ${metric} ${CAMERA_ONLY_NOTE} ${def.provenance}`;
+  const inset = key === 'hawaii' ? ` ${HAWAII_INSET_NOTE}` : '';
+  return `${base}${inset} ${metric} ${CAMERA_ONLY_NOTE} ${def.provenance}`;
 }
 
 export interface MinimapProps {
@@ -1374,7 +1391,6 @@ export function Minimap({
           onClick={() => choose(map, 'hawaii')}
           onFocus={() => setFocused('hawaii')}
         >
-          <span class="shell-minimap-hawaii-label">Hawaii (enlarged)</span>
           {geometryVisible && (() => {
             const hawaiiDrought = showDroughtMetric
               ? drought.summaries.hawaii
@@ -1397,7 +1413,7 @@ export function Minimap({
             return (
               <svg
                 class="shell-minimap-hawaii-islands"
-                viewBox="4 205 132 104"
+                viewBox={HAWAII_VIEW_BOX}
                 aria-hidden="true"
                 focusable="false"
               >

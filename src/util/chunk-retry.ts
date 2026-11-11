@@ -65,11 +65,19 @@ export function withRetryQuery(url: string, attempt: number): string {
  * (by default a real `import()`). If no URL could ever be recorded, a
  * later call just runs `importer()` again. A success does not reset
  * anything: the loader keeps whatever memory it built.
+ *
+ * `beforeRetry`, when given, runs before every call that follows a
+ * rejection, with the attempt number the retry will use, and the retry
+ * waits for it; a rejection from it counts as a failed attempt. A door with
+ * stylesheets passes src/util/chunk-stylesheets.ts `askAgainForStylesheets`
+ * (owner direction 2026-11-09 (sprint), DR-pending): the retry imports the
+ * module alone, so its failed stylesheets must be asked for here.
  */
 export function createChunkLoader<T>(
   importer: () => Promise<T>,
   base: string,
-  importUrl: (url: string) => Promise<unknown> = (url) => import(/* @vite-ignore */ url)
+  importUrl: (url: string) => Promise<unknown> = (url) => import(/* @vite-ignore */ url),
+  beforeRetry?: (attempt: number) => Promise<void>
 ): () => Promise<T> {
   let recordedUrl: string | null = null;
   let attempt = 0;
@@ -84,14 +92,20 @@ export function createChunkLoader<T>(
     throw err;
   };
 
-  return function loadChunk(): Promise<T> {
-    calls += 1;
-    if (calls === 1 || recordedUrl === null) {
+  const load = (first: boolean): Promise<T> => {
+    if (first || recordedUrl === null) {
       return importer().catch(onRejected);
     }
     return importUrl(withRetryQuery(recordedUrl, attempt)).then(
       (module) => module as T,
       onRejected
     );
+  };
+
+  return function loadChunk(): Promise<T> {
+    calls += 1;
+    const first = calls === 1;
+    if (attempt === 0 || beforeRetry === undefined) return load(first);
+    return beforeRetry(attempt).then(() => load(first), onRejected);
   };
 }

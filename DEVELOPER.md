@@ -177,7 +177,7 @@ current URL.
 | `basemap` | `default` explicitly turns recent satellite imagery off; the legacy `satellite` token remains valid | recent satellite imagery, encoded by absence |
 | `studio` | `layers` or `place` | none |
 | `hazard` | a mode token (`wildfire`, `heat`, `enso`), written only beside `layers` with no `cluster`: the hazard a custom layer set was made from (its alert products, key and strip); it never changes the display | the cluster, encoded by absence |
-| `fire3d` | exact token `true`; entry requires a desktop viewport and the committed Wildfire cluster, while an active scene may remain through a custom layer stack as long as a Fire event layer remains | `false`, encoded by absence |
+| `fire3d` | exact token `true`; entry requires the committed Wildfire cluster and a shell that can present the scene (a desktop viewport, or a phone at least 360px wide and 600px tall, which enters through the 3D cell in its right-edge column), while an active scene may remain through a custom layer stack as long as a Fire event layer remains, or while the PLACE studio holds the display (its clean display sets the Fire layers aside and puts them back) | `false`, encoded by absence |
 | `spi` | Gridded Drought Index accumulation window in days: `30`, `60`, `180`, or `365`; applies when the `gridded-index` layer is on | `90` day window, encoded by absence |
 
 Temporal display parameters also round-trip (`week` for the USDM archive,
@@ -374,6 +374,16 @@ tiles (about 380 MB at the shipped z13-14 scheme, 9.16 million footprints
 either way) and cannot ride the same-origin hosting path, so the extract
 script's `--bbox` parameter is the documented route for a deployer to bake
 their own region (see `public/data/README.md`).
+
+On a phone the same scene is entered from a 3D cell in the right-edge
+column, present only in the Fire view on a phone that passes the WebGL 2
+probe and is at least 360px wide and 600px tall. The two always-visible
+notes stand on the map in one card for as long as the scene is asked for,
+and a camera pad beside the column tilts, turns and resets the view with
+one thumb. The cell and its decision are in the entry chunk; the scene and
+the phone's card and pad load on the first press or an eligible
+`fire3d=true` link. `docs/design/mobile-map-chrome.md` ("3D on phones")
+records the contract.
 
 The view is a 3D context view, deliberately not a "digital twin": that
 phrase names systems bundling physics-based fire simulation with rendering,

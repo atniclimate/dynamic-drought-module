@@ -22,7 +22,7 @@ import { fileURLToPath } from 'node:url';
 
 const STUBS = {
   '/ui/mobile-sheet':
-    'export const isSheetActive = () => false, getSheetDetent = () => null, sheetAllowsAutoRaise = () => false, sheetReportHost = () => null; export function onSheetDetentSettle() { return () => {}; } export function driveSheetForReport() {} export function restoreSheetDetent() {} export function setSheetBriefing() {} export function setSheetDetent() {}',
+    'export const isSheetActive = () => false, getSheetDetent = () => null, sheetAllowsAutoRaise = () => false, sheetReportHost = () => null; export function onSheetDetentSettle() { return () => {}; } export function driveSheetForReport() {} export function restoreSheetDetent() {} export function setSheetBriefing() {} export function setSheetBriefingOpener() {} export function setSheetDetent() {}',
   '/ui/overlay': 'export function hideLoading() {} export function showLoading() { return 0; }',
   '/ui/share': 'export function buildShareLink() { return ""; }',
   '/ui/tribal-nations-action': 'export function buildTribalNationsBriefAction() { return null; }',

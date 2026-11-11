@@ -1,0 +1,495 @@
+/* =============================================================================
+   The ENSO chain's panel, its overview strip, its nested truth and its seat
+   in the phone sheet (owner direction 2026-11-09 (sprint), DR-pending).
+   Lane-owned: imported by src/ui/enso-chain.ts, so it rides that lazy chunk
+   and loads only while the sea surface temperature surface is on the map.
+
+   The links themselves are the shared component's
+   (src/ui/evidence-chain.ts; faces in src/styles/briefing-lead.css under
+   `.evidence-chain`). This sheet only seats that component and adds what is
+   the ENSO mode's own.
+
+   Rules of this sheet.
+   - Colour belongs to the data. Every mark here is ink on the panel's own
+     surfaces: no hazard hue, no accent, no new blue. The only issuer colours
+     in the panel are the ones the shared gauges already draw.
+   - Corners come from the tokens (var(--radius-md), var(--radius-sm)); every
+     box has the same border on all four sides.
+   - Nothing here moves, so reduced motion needs no twin, and no emphasis is
+     carried by motion.
+   ============================================================================= */
+
+/* THE MARK the chunk reads before it draws (`mountEnsoChain` in src/ui/enso-chain.ts): proof that this
+   stylesheet, one more lazy request, is applied. Without it the door says
+   its one failure line instead of drawing unstyled
+   (src/util/chunk-stylesheets.ts `requireStylesheetMark`). */
+#app {
+  --ddm-enso-chain-css: 1;
+}
+
+.enso-chain-panel {
+  /* The shared gauges grow their words in a narrow column through this
+     container name (briefing-lead.css, "A narrow column"). */
+  container: briefing-lead / inline-size;
+}
+.enso-chain-panel .evidence-chain {
+  margin: 0;
+}
+
+/* ---- The overview strip: the five links at a glance ------------------------ */
+
+.enso-strip-figure {
+  margin: 6px 0 8px;
+  padding: 7px 4px 3px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  background: var(--bg-2);
+}
+.enso-strip {
+  display: block;
+  width: 100%;
+  max-width: 380px;
+  height: auto;
+  margin: 0 auto;
+  overflow: visible;
+}
+.enso-strip text {
+  font-family: var(--font-body);
+}
+/* A plain rail: no arrowhead and no direction. It joins separate claims. */
+.enso-strip .s-rail {
+  fill: none;
+  stroke: var(--ink-muted);
+  stroke-width: 1;
+}
+/* A read is a disc in its evidence tier, the badge's own three forms. */
+.enso-strip .s-node {
+  fill: var(--bg-2);
+  stroke: var(--ink-strong);
+  stroke-width: 1.6;
+}
+.enso-strip .s-node-plate {
+  fill: var(--ink-strong);
+}
+.enso-strip .s-node-dashed {
+  stroke: var(--ink-soft);
+  stroke-dasharray: 2.6 2.1;
+}
+/* No read: an open square, the state pill's own mark, and never a value. */
+.enso-strip .s-node-open {
+  stroke: var(--ink-muted);
+  stroke-width: 1;
+}
+.enso-strip .s-mark {
+  fill: none;
+  stroke: var(--ink-strong);
+  stroke-width: 1.5;
+}
+.enso-strip .s-fill {
+  fill: var(--ink);
+}
+.enso-strip .s-word {
+  font-family: var(--font-display);
+  font-size: 8.5px;
+  font-weight: var(--fw-subtitle);
+  fill: var(--ink);
+}
+.enso-strip .s-read {
+  font-size: 9px;
+  font-weight: 700;
+  fill: var(--ink-strong);
+}
+.enso-strip .s-state {
+  font-size: 7.6px;
+  fill: var(--ink-soft);
+}
+
+/* ---- The links, numbered: the chain is the mode's table of contents ------- */
+
+.enso-chain-panel .evidence-chain-links {
+  counter-reset: enso-link;
+}
+/* The head keeps a gutter for the number, so a badge or a state pill that
+   wraps under a long title stays in the title's column. */
+.enso-chain-panel .evidence-chain-head {
+  padding-left: 26px;
+}
+/* The number belongs to the title: it is centred on the title's own box, in
+   the gutter, whether or not the badge wraps under it. Out of flow, so the
+   title's underline does not run through it. */
+.enso-chain-panel :is(.evidence-chain-open, .evidence-chain-step) {
+  position: relative;
+}
+.enso-chain-panel :is(.evidence-chain-open, .evidence-chain-step)::before {
+  counter-increment: enso-link;
+  content: counter(enso-link);
+  position: absolute;
+  top: 50%;
+  left: -26px;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  margin-top: -9px;
+  border: 1px solid var(--keyline);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-display);
+  font-size: 10.5px;
+  font-weight: var(--fw-subtitle);
+  line-height: 1;
+  color: var(--ink-strong);
+}
+.enso-chain-panel .evidence-chain-open:focus-visible {
+  outline: 2px solid var(--focus-inner);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 7px var(--focus-outer);
+}
+/* The figure of a read sits under its sentence at one size in every seat. */
+.enso-chain-panel .evidence-chain-figure {
+  max-width: 320px;
+}
+/* A link's clock may be two (a model run and the instant it is valid at).
+   It wraps inside its card and never runs past the card's edge. */
+.enso-chain-panel .evidence-chain-source .impact-claim-date {
+  white-space: normal;
+  text-wrap: balance;
+}
+/* A long source name wraps without leaving one word on its last line. */
+.enso-chain-panel .evidence-chain-source {
+  text-wrap: pretty;
+}
+
+/* ---- The nested truth: one tap under the caption -------------------------- */
+
+.enso-truth,
+.enso-clocks {
+  margin: 0 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  /* The open summary's face stops at the box's own corners. Its focus ring
+     is drawn inside it, so nothing of the ring is cut. */
+  overflow: hidden;
+}
+.enso-truth-summary,
+.enso-clocks-summary {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  min-height: 36px;
+  padding: 7px 34px 7px 11px;
+  list-style: none;
+  cursor: pointer;
+}
+.enso-truth-summary::-webkit-details-marker,
+.enso-clocks-summary::-webkit-details-marker {
+  display: none;
+}
+/* The disclosure's mark: a chevron that points down when closed, up when open. */
+.enso-truth-summary::after,
+.enso-clocks-summary::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: 14px;
+  width: 7px;
+  height: 7px;
+  margin-top: -6px;
+  border-right: 1.5px solid var(--ink);
+  border-bottom: 1.5px solid var(--ink);
+  transform: rotate(45deg);
+}
+.enso-truth[open] > .enso-truth-summary::after,
+.enso-clocks[open] > .enso-clocks-summary::after {
+  margin-top: -2px;
+  border-color: var(--ink-on-selected);
+  transform: rotate(225deg);
+}
+/* SELECTED INVERTS (app.css): an open disclosure is a control that is on,
+   so its summary wears the ink as its face, like the open door that raised
+   this sheet. The state itself is the element's own (`open`). */
+.enso-clocks[open] > .enso-clocks-summary,
+.enso-truth[open] > .enso-truth-summary {
+  forced-color-adjust: none; /* FORCED COLOURS, app.css */
+  --selection-shadow: var(--selected-focus-inset);
+  background: var(--face-selected);
+  color: var(--ink-on-selected);
+}
+.enso-truth[open] > .enso-truth-summary .enso-truth-lead,
+.enso-clocks[open] > .enso-clocks-summary :is(.enso-clocks-lead, .enso-clocks-span) {
+  color: var(--ink-on-selected);
+}
+/* The two-ring focus model, drawn inside the row: the casing keeps the ring
+   visible on the dark face and on the inverted one, where the selected
+   control's own inset ring is added. */
+.enso-truth-summary:focus-visible,
+.enso-clocks-summary:focus-visible {
+  outline: 2px solid var(--focus-inner);
+  outline-offset: -4px;
+  box-shadow: inset 0 0 0 6px var(--focus-outer), var(--selection-shadow, 0 0 transparent);
+}
+.enso-truth-lead,
+.enso-clocks-lead {
+  font-family: var(--font-display);
+  font-size: 11.5px;
+  font-weight: var(--fw-subtitle);
+  line-height: 1.3;
+  color: var(--ink-strong);
+  /* No single word left alone on a last line, where the browser can help
+     (the briefing's rule, src/styles/briefing-lead.css "Line breaks"). */
+  text-wrap: balance;
+}
+.enso-truth-body,
+.enso-clocks-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 11px 12px;
+  border-top: 1px solid var(--line-strong);
+}
+.enso-truth-text,
+.enso-truth-quote p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--fg-0);
+  text-wrap: pretty;
+}
+.enso-truth-quote {
+  margin: 0;
+}
+.enso-truth-quote p::before {
+  content: '\201C';
+}
+.enso-truth-quote p::after {
+  content: '\201D';
+}
+.enso-truth-quote footer,
+.enso-truth-qualifier,
+.enso-truth-source {
+  margin: 4px 0 0;
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--fg-2);
+  text-wrap: pretty;
+}
+/* A claim's date takes its own line under its source, as a link's does. */
+.enso-truth-date {
+  display: block;
+  white-space: nowrap;
+}
+.enso-truth-body a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-muted);
+  text-underline-offset: 2px;
+}
+.enso-truth-claim {
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.enso-truth-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 8px;
+  margin: 0 0 5px;
+}
+.enso-truth-head .impact-claim-badge {
+  flex: none;
+  margin-bottom: 0;
+}
+.enso-truth-title {
+  font-family: var(--font-display);
+  font-size: 11.5px;
+  font-weight: var(--fw-subtitle);
+  line-height: 1.3;
+  color: var(--ink-strong);
+  text-wrap: balance;
+}
+.enso-truth-door {
+  appearance: none;
+  align-self: flex-start;
+  min-height: 36px;
+  padding: 8px 12px;
+  border: 1px solid var(--keyline);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: var(--fw-subtitle);
+  line-height: 1.25;
+  cursor: pointer;
+}
+.enso-truth-door:hover {
+  background: var(--bg-2);
+  color: var(--ink-strong);
+}
+
+/* ---- The clock line: the five links placed in time ------------------------ */
+
+/* The span in words: what the closed disclosure already says. */
+.enso-clocks-span {
+  font-size: 10.5px;
+  line-height: 1.35;
+  color: var(--ink-soft);
+}
+.enso-clock-figure {
+  padding: 6px 4px 2px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  background: var(--bg-2);
+}
+.enso-clock {
+  display: block;
+  width: 100%;
+  max-width: 380px;
+  height: auto;
+  margin: 0 auto;
+  overflow: visible;
+}
+.enso-clock text {
+  font-family: var(--font-body);
+}
+/* A row's track is a hairline to read along, not a link between two rows. */
+.enso-clock .c-track {
+  fill: none;
+  stroke: var(--line-strong);
+  stroke-width: 0.6;
+}
+/* The reading device's own date: a plain rule, drawn under the marks. */
+.enso-clock .c-ref {
+  fill: none;
+  stroke: var(--ink-muted);
+  stroke-width: 0.8;
+  stroke-dasharray: 1.6 1.8;
+}
+/* A read is a disc in its evidence tier, the strip's own three forms. */
+.enso-clock .c-mark {
+  fill: var(--bg-2);
+  stroke: var(--ink-strong);
+  stroke-width: 1.4;
+}
+.enso-clock .c-mark-plate {
+  fill: var(--ink-strong);
+}
+.enso-clock .c-mark-dashed {
+  stroke: var(--ink-soft);
+  stroke-dasharray: 2.2 1.8;
+}
+.enso-clock .c-word {
+  font-family: var(--font-display);
+  font-size: 8.5px;
+  font-weight: var(--fw-subtitle);
+  fill: var(--ink);
+}
+.enso-clock .c-date {
+  font-size: 8px;
+  font-weight: 700;
+  fill: var(--ink-strong);
+}
+/* No read, or no date stated: the state word, and no mark. */
+.enso-clock .c-state,
+.enso-clock .c-ref-word {
+  font-size: 7.6px;
+  fill: var(--ink-soft);
+}
+.enso-clocks-note {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+
+/* ---- Touch: every control clears the 44 px floor --------------------------- */
+
+@media (pointer: coarse), (max-width: 720px) {
+  .enso-truth-summary,
+  .enso-clocks-summary,
+  .enso-truth-door {
+    min-height: 44px;
+  }
+}
+
+/* ---- The phone sheet: the guide is the sheet's one content ---------------- */
+
+@media (max-width: 720px) {
+  /* Raised by its own door (no panel door holds the sheet), the guide is the
+     only thing in it, as the Alerts pane is behind its door. The id in the
+     negation outweighs the visibility matrix's re-admits (app.css, "The
+     phone sheet's content"). */
+  #app[data-sheet-detent][data-enso-guide='open']:not([data-sheet-tab]) .sidebar-scroll > :not(#enso-chain-panel) {
+    display: none;
+  }
+  #app[data-sheet-detent][data-enso-guide='open']:not([data-sheet-tab]) :is(.sidebar-header, .sidebar-footer) {
+    display: none;
+  }
+  #app[data-sheet-detent][data-enso-guide='open']:not([data-sheet-tab]) #enso-chain-panel {
+    display: block;
+    border-bottom: 0;
+  }
+  /* The sheet's header names the guide, so the panel does not repeat it. */
+  #app[data-sheet-detent] #enso-chain-panel .evidence-chain-title {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  #app[data-sheet-detent] #enso-chain-panel .enso-strip-figure {
+    margin-top: 2px;
+  }
+}
+
+/* The whole console stack on a phone (the Layers door at full) lists every
+   sidebar panel; the guide has its own door, so it stays out of that stack. */
+@media (max-width: 720px) {
+  #app[data-sheet-detent]:not([data-enso-guide='open']) #enso-chain-panel,
+  #app[data-sheet-detent][data-sheet-tab] #enso-chain-panel {
+    display: none;
+  }
+}
+
+/* ---- Forced colours: the marks keep their meaning without their inks ------ */
+
+@media (forced-colors: active) {
+  .enso-truth[open] > .enso-truth-summary {
+    background: Highlight;
+    color: HighlightText;
+  }
+  .enso-truth[open] > .enso-truth-summary .enso-truth-lead {
+    color: HighlightText;
+  }
+  .enso-truth[open] > .enso-truth-summary::after {
+    border-color: HighlightText;
+  }
+  .enso-strip .s-node {
+    stroke: CanvasText;
+  }
+  .enso-strip .s-node-plate {
+    fill: CanvasText;
+  }
+  .enso-clocks[open] > .enso-clocks-summary {
+    background: Highlight;
+    color: HighlightText;
+  }
+  .enso-clocks[open] > .enso-clocks-summary :is(.enso-clocks-lead, .enso-clocks-span) {
+    color: HighlightText;
+  }
+  .enso-clocks[open] > .enso-clocks-summary::after {
+    border-color: HighlightText;
+  }
+  .enso-clock .c-mark {
+    stroke: CanvasText;
+  }
+  .enso-clock .c-mark-plate {
+    fill: CanvasText;
+  }
+}

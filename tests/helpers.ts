@@ -350,6 +350,46 @@ export interface GotoAppOptions {
    * `prefers-reduced-motion`, is unaffected by `hold`.
    */
   readonly flowMotion?: FlowMotionHold;
+  /**
+   * How this boot stands toward Locate's first-launch offer (owner direction
+   * 2026-11-09 (sprint), DR-pending). A phone-shell boot with no stored
+   * launch preference, no `select=` and no studio puts an offer card over
+   * the lower map (src/ui/locate-control.ts). Defaults to `declined`: the
+   * page's localStorage carries the stored answer `no`
+   * (`ddm.locate.launch`, read by src/state/locate-preference.ts) before any
+   * script runs, only where the page has no answer of its own. That is the
+   * state of every returning visitor who has answered the offer, so a spec
+   * written before Locate keeps the map it was written against. The Locate
+   * cell itself is unaffected and still starts a search when pressed.
+   * `fresh` is the explicit opt-out for a spec about the offer: storage is
+   * left alone and the first launch makes its offer. A spec that stores its
+   * own answer is unaffected by `declined`.
+   */
+  readonly locateOffer?: LocateOfferMode;
+}
+
+/** `declined` stores the answer `no` for the boot; `fresh` leaves the first launch to the page. */
+export type LocateOfferMode = 'declined' | 'fresh';
+
+/** src/state/locate-preference.ts LAUNCH_PREFERENCE_KEY; tests/geolocate.test.mjs pins the two together. */
+export const LOCATE_LAUNCH_STORAGE_KEY = 'ddm.locate.launch';
+
+/**
+ * Seed the stored answer to Locate's first-launch offer, so a routine phone
+ * boot shows the map without the offer card. Set only where no answer is
+ * stored, so a reload keeps an answer the viewer (or the spec) gave. Storage
+ * can be blocked; then the app makes no offer either, as it does for a
+ * viewer in that state.
+ */
+export async function installLocateOfferSeed(page: Page, mode: LocateOfferMode = 'declined'): Promise<void> {
+  if (mode === 'fresh') return;
+  await page.addInitScript((key) => {
+    try {
+      if (window.localStorage.getItem(key) === null) window.localStorage.setItem(key, 'no');
+    } catch {
+      // storage blocked: nothing to seed
+    }
+  }, LOCATE_LAUNCH_STORAGE_KEY);
 }
 
 /** `hold` pauses the flowing paths' motion loop for the boot; `live` leaves it to the page. */
@@ -452,6 +492,11 @@ export async function gotoApp(
   // the motion loop (still form, same data) and 'idle' stays reachable. See
   // `GotoAppOptions.flowMotion` for the opt-out.
   await installFlowMotionHold(page, options.flowMotion ?? 'hold');
+  // Locate (owner direction 2026-11-09 (sprint), DR-pending): a first launch
+  // on the phone shell makes an offer over the lower map. A routine boot
+  // stores the answer `no` first, so no spec meets that card unless it asks
+  // for it. See `GotoAppOptions.locateOffer` for the opt-out.
+  await installLocateOfferSeed(page, options.locateOffer ?? 'declined');
   // DDM-P9-T13: entering Wildfire 3D reads the NOAA STAR VHI tiles and the
   // USGS Relative Greenness WMS. Every boot answers both from synthetic
   // fixtures (`installDefaultDrynessStub`), so no spec reaches either agency.

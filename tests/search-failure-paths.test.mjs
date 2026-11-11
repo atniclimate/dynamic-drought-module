@@ -50,7 +50,8 @@ const STUBS = {
   '../state/place-selection':
     'export const onPlaceSelectionChange = () => () => {};' +
     ' export const setPlaceSelection = (s) => globalThis.__sfp.selections.push(s);',
-  './mobile-sheet': 'export const isSheetActive = () => false;',
+  './mobile-sheet':
+    'export const isSheetActive = () => false; export const sheetCameraInset = () => 0; export const sheetCameraSideInset = () => 0;',
   './layer-toggle-command': 'export const requestLayerOn = () => {};',
   './impact-panel':
     'let n = 0; export const nextBriefingIntent = () => ++n;' +
@@ -318,8 +319,7 @@ const SEARCH_STUBS = {
     'const H = globalThis.__sh;' +
     ' export function useState(init) { const i = H.i++; if (!(i in H.slots)) H.slots[i] = init;' +
     ' return [H.slots[i], (v) => { H.slots[i] = typeof v === "function" ? v(H.slots[i]) : v; }]; }' +
-    ' export function useRef(init) { const i = H.i++; if (!(i in H.slots)) H.slots[i] = { current: init }; return H.slots[i]; }' +
-    ' export const useId = () => "s";',
+    ' export function useRef(init) { const i = H.i++; if (!(i in H.slots)) H.slots[i] = { current: init }; return H.slots[i]; }',
   'preact/jsx-runtime':
     'export const jsx = (type, props) => ({ type, props }); export const jsxs = jsx; export const Fragment = "f";'
 };
@@ -373,6 +373,7 @@ function mountSearch(loaders) {
     onSelect: (item) => h.selected.push(item),
     placeholder: 'Search'
   };
+  h.tree = () => Search(props);
   h.render = () => {
     H.i = 0;
     const out = { input: undefined, rows: [], loading: 0, unavailable: false, live: '' };
@@ -390,6 +391,41 @@ function mountSearch(loaders) {
   h.key = (key) => h.render().input.onKeyDown({ key, preventDefault() {} });
   return h;
 }
+
+/** The input's listbox reference and the listbox's own id, for one mounted Search. */
+function searchIds(h) {
+  const ids = { controls: undefined, listbox: undefined };
+  H.i = 0;
+  walk(h.tree(), (n) => {
+    if (n.type === 'input') ids.controls = n.props['aria-controls'];
+    if (n.props.role === 'listbox') ids.listbox = n.props.id;
+  });
+  return ids;
+}
+
+test('every mounted search names its own listbox, and keeps that name across renders', () => {
+  // Each mount is its own render root on the page (the console catalog, the
+  // Brief head, the phone sheet, the studios). Three of them once shared
+  // one listbox id, so two inputs pointed at a listbox that was not theirs.
+  const mounts = [mountSearch({}), mountSearch({}), mountSearch({})];
+  const kept = [];
+  const seen = [];
+  for (const h of mounts) {
+    // mountSearch clears the slots, so render each mount from its own.
+    const slots = [];
+    H.slots = slots;
+    const first = searchIds(h);
+    H.slots = slots;
+    const again = searchIds(h);
+    assert.equal(typeof first.listbox, 'string');
+    assert.ok(first.listbox.length > 0);
+    assert.equal(first.controls, first.listbox, 'the input controls its own listbox');
+    assert.deepEqual(again, first, 'a second render of the same mount keeps the id');
+    kept.push(slots);
+    seen.push(first.listbox);
+  }
+  assert.equal(new Set(seen).size, mounts.length, `three mounts, three listbox ids: ${seen.join(', ')}`);
+});
 
 test('while either list loads, the results show one loading line and no rows', async () => {
   const tribal = heldLoader();

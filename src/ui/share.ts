@@ -44,15 +44,56 @@ export function buildShareLink(selectParam?: SelectParam): string {
  * confirmation states the same contract as the button's own name and
  * title in index.html.
  */
+/**
+ * What the copied or shared link restores, stated once so the copy toast and
+ * the share toast cannot drift apart (S30D D1 M13; precedence.md row H4).
+ */
+const LINK_RESTORES =
+  'It restores region or framing, layers, mode and horizon, not the map position or an open briefing.';
+
+/**
+ * Hand the link to the device's own share sheet (Web Share), on phones only
+ * (owner direction 2026-11-09 (sprint), DR-pending). A person in the field
+ * sends a view by message far more often than they paste it, and the sheet
+ * is where their messaging lives. The payload is the same link the copy path
+ * writes and nothing else: no position, no place the URL does not already
+ * carry. Returns `shared` when the sheet completed, `dismissed` when the
+ * person closed it (which needs no toast and no fallback), and `unavailable`
+ * when the browser has no sheet or refused the payload, so the caller falls
+ * back to the clipboard. Must be called inside the press that asked for it.
+ */
+async function shareThroughSystemSheet(
+  url: string
+): Promise<'shared' | 'dismissed' | 'unavailable'> {
+  // The phone shell stamps this attribute; desktop and embeds keep the copy path.
+  if (!document.getElementById('app')?.hasAttribute('data-sheet-detent')) return 'unavailable';
+  if (typeof navigator.share !== 'function') return 'unavailable';
+  const data: ShareData = { title: document.title, url };
+  if (typeof navigator.canShare === 'function' && !navigator.canShare(data)) return 'unavailable';
+  try {
+    await navigator.share(data);
+    return 'shared';
+  } catch (err) {
+    return err instanceof DOMException && err.name === 'AbortError' ? 'dismissed' : 'unavailable';
+  }
+}
+
 export function wireShareButton(buttonId: string): void {
   const btn = document.getElementById(buttonId);
   if (!btn) return;
 
   btn.addEventListener('click', async () => {
-    const ok = await copyToClipboard(buildShareLink());
+    const link = buildShareLink();
+    const sheet = await shareThroughSystemSheet(link);
+    if (sheet === 'dismissed') return;
+    if (sheet === 'shared') {
+      showToast(`Link shared. ${LINK_RESTORES}`);
+      return;
+    }
+    const ok = await copyToClipboard(link);
     showToast(
       ok
-        ? 'Link copied. It restores region or framing, layers, mode and horizon, not the map position or an open briefing.'
+        ? `Link copied. ${LINK_RESTORES}`
         : isPhysicallyFramed()
           // In a frame the address bar belongs to the host page and carries none of this view's state.
           ? 'Copy blocked here. Open this map in its own browser tab to copy this view.'

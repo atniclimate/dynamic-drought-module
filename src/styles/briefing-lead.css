@@ -1,0 +1,944 @@
+/* =============================================================================
+   The priority view of the Impact Briefing, its gauge family and the evidence
+   chain (owner direction 2026-11-09 (sprint), DR-pending). Lane-owned:
+   imported by src/ui/briefing-lead.ts, so it rides the briefing's lazy chunk
+   and never the entry.
+
+   Rules of this sheet.
+   - Colour belongs to the data. Every hue drawn here arrives as an issuer
+     class colour on a mark (a gauge block, a product flag); the chrome is ink
+     on the panel's own surfaces. No hazard hue, no new accent.
+   - Layout answers to the CONTAINER, not the viewport: the briefing is a
+     450 px panel on a desktop, a 264 px slab on a tablet and a 300 px card
+     in the phone sheet. The single column is the base; container queries only
+     add columns where there is room, so a browser without them keeps a sane
+     layout.
+   - Nothing here moves. State changes are instant, so reduced motion needs no
+     twin, and no emphasis is carried by motion.
+   ============================================================================= */
+
+/* ---- The two-way switch -------------------------------------------------- */
+
+.briefing-view-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px;
+  margin: 0 0 14px;
+  padding: 2px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  background: var(--bg-0);
+}
+.briefing-view-btn {
+  appearance: none;
+  min-height: 32px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink-soft);
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: var(--fw-subtitle);
+  letter-spacing: 0.02em;
+  cursor: pointer;
+}
+.briefing-view-btn:hover {
+  color: var(--ink-strong);
+  background: var(--bg-2);
+}
+/* A control that is on inverts: the ink is its face. */
+.briefing-view-btn[aria-pressed='true'] {
+  forced-color-adjust: none; /* FORCED COLOURS, app.css */
+  /* The ring the focus rule adds inside a white face (app.css, SELECTED INVERTS). */
+  --selection-shadow: var(--selected-focus-inset);
+  background: var(--face-selected);
+  color: var(--ink-on-selected);
+}
+
+/* ---- Text-link buttons (the rule, the doors of a single-hazard detail) ---- */
+
+.lead-link {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 11.5px;
+  line-height: 1.3;
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-color: var(--ink-muted);
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.lead-link:hover {
+  color: var(--ink-strong);
+  text-decoration-color: var(--ink-strong);
+}
+.lead-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 18px;
+  margin: 0;
+}
+
+/* ---- The single-hazard head ---------------------------------------------- */
+
+.briefing-focus {
+  margin: 0 0 12px;
+}
+.briefing-focus[hidden],
+.briefing-lead[hidden],
+.briefing-view-switch[hidden] {
+  display: none;
+}
+.briefing-back {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  margin: 0 0 10px;
+  padding: 6px 12px 6px 10px;
+  border: 1px solid var(--keyline);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: var(--fw-subtitle);
+  cursor: pointer;
+}
+.briefing-back::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-left: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg);
+}
+.briefing-back:hover {
+  background: var(--bg-2);
+}
+.briefing-focus-title {
+  margin: 0 0 4px;
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: var(--fw-title);
+  color: var(--ink-strong);
+}
+.briefing-focus-title:focus-visible,
+.lead-head .impact-section-title:focus-visible {
+  outline: 2px solid var(--focus-inner);
+  outline-offset: 2px;
+}
+.briefing-focus-note {
+  margin: 0 0 4px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--fg-2);
+}
+
+/* ---- The priority view ----------------------------------------------------- */
+
+.briefing-lead {
+  margin: 0 0 22px;
+  container: briefing-lead / inline-size;
+}
+.lead-head {
+  margin: 0 0 10px;
+}
+.lead-head-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0 12px;
+}
+.lead-head .impact-section-title {
+  margin: 0;
+  color: var(--fg-1);
+}
+.lead-order-note,
+.lead-caption {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--fg-2);
+}
+.lead-caption + .lead-caption {
+  margin-top: 4px;
+}
+.lead-none {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-md);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--fg-1);
+}
+.lead-subtitle {
+  margin: 18px 0 6px;
+  font-family: var(--font-display);
+  font-size: 10.5px;
+  font-weight: var(--fw-subtitle);
+  letter-spacing: var(--track-caps-sm);
+  text-transform: uppercase;
+  color: var(--fg-1);
+}
+
+.lead-tiles,
+.lead-rest-list,
+.lead-together-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.lead-tiles {
+  display: grid;
+  /* The one track may shrink below a tile's longest unbroken part, so a tile
+     never pushes past a 320 px phone's column. */
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+}
+/* Every tile is the same size: first in the reading order is read first, it
+   is not drawn larger, because the order is not a severity. */
+.lead-tile {
+  appearance: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  height: 100%;
+  min-height: 44px;
+  padding: 11px 12px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--glass-radius);
+  background: var(--bg-2);
+  color: var(--fg-0);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.lead-tile:hover {
+  border-color: var(--keyline);
+}
+.lead-tile:active {
+  background: var(--surface-hover);
+}
+.lead-tile-top {
+  display: flex;
+  /* In a 200 px embed the badge drops under the hazard word. */
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 8px;
+}
+.lead-hazard {
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: var(--fw-title);
+  letter-spacing: var(--track-caps-sm);
+  text-transform: uppercase;
+  color: var(--fg-1);
+}
+.briefing-lead .impact-claim-badge,
+.evidence-chain .impact-claim-badge {
+  flex: none;
+  margin-bottom: 0;
+}
+/* The evidence badge wears the full detail's three form tiers (app.css, D3
+   R4: a filled plate for observations, a keyline for analyzed, classified and
+   derived reads, a dashed line for modeled and outlook reads). They are keyed
+   here by data-evidence, not by the full detail's `.impact-claim-<class>`
+   names: those names mark a claim of the full detail, which stays in the
+   document beside this view, and the browser tests find a claim by them.
+   tests/briefing-gauges.test.mjs holds these three blocks equal to app.css's. */
+[data-evidence='observed'] .impact-claim-badge {
+  forced-color-adjust: none; /* FORCED COLOURS: an inverted plate, like the selected face */
+  color: var(--surface-base);
+  background: var(--ink);
+  border: 1px solid var(--ink);
+}
+:is([data-evidence='analyzed'], [data-evidence='classified'], [data-evidence='derived']) .impact-claim-badge {
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--keyline);
+}
+:is([data-evidence='modeled'], [data-evidence='modeled-analysis'], [data-evidence='outlook']) .impact-claim-badge {
+  color: var(--ink-soft);
+  background: transparent;
+  border: 1px dashed var(--ink-muted);
+}
+.lead-headline {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: var(--fw-title);
+  line-height: 1.22;
+  letter-spacing: -0.005em;
+  color: var(--ink-strong);
+  overflow-wrap: anywhere;
+}
+.lead-figure {
+  display: block;
+  margin: 2px 0 0;
+}
+.lead-scope {
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--fg-1);
+}
+/* The foot: whose read it is and when, and the way in to its text. The way
+   in sits beside a short source and drops under a long one (or a narrow
+   column), so the source is never squeezed into a ribbon. */
+.lead-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 4px 10px;
+  margin-top: auto;
+  padding-top: 2px;
+}
+.lead-source {
+  min-width: 0;
+  font-size: 10.5px;
+  line-height: 1.45;
+  color: var(--fg-2);
+  letter-spacing: 0.01em;
+}
+.lead-source-name,
+.lead-source-meta {
+  display: block;
+}
+.lead-source-meta {
+  color: var(--fg-1);
+}
+.lead-source-part {
+  white-space: nowrap;
+}
+.lead-open {
+  flex: none;
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-display);
+  font-size: 10.5px;
+  font-weight: var(--fw-subtitle);
+  white-space: nowrap;
+  color: var(--ink);
+}
+.lead-open::after {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-top: 1.5px solid currentColor;
+  border-right: 1.5px solid currentColor;
+  transform: rotate(45deg);
+}
+
+/* Flags: the issuer's own map colour as a keyed swatch BESIDE the product's
+   name. The name is the class; the colour is its echo. */
+.lead-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+}
+.lead-flag {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 11.5px;
+  color: var(--fg-0);
+}
+.lead-headline .lead-flags {
+  flex-direction: column;
+}
+.lead-headline .lead-flag {
+  font: inherit;
+  color: inherit;
+}
+.lead-swatch {
+  flex: none;
+  width: 14px;
+  height: 10px;
+  margin-top: 0.3em;
+  border-radius: 2px;
+  outline: 1px solid var(--keyline);
+  outline-offset: 1px;
+}
+.lead-swatch-line {
+  box-sizing: border-box;
+  border: 2px solid;
+  background: transparent;
+  outline: 0;
+}
+.lead-swatch-dashed {
+  border-style: dashed;
+}
+
+/* ---- Present together ------------------------------------------------------ */
+
+/* A rail with a node per hazard. The rail joins; it has no direction and no
+   arrowhead, because being present together is not one thing leading to the
+   next. */
+.lead-together-list {
+  display: grid;
+  margin: 0 0 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--glass-radius);
+  background: var(--bg-2);
+}
+.lead-together-item {
+  position: relative;
+  display: grid;
+  grid-template-columns: 70px minmax(0, 1fr);
+  gap: 2px 8px;
+  align-items: baseline;
+  padding: 8px 12px 8px 32px;
+}
+/* A hazard word is one word: it never breaks inside itself. */
+.lead-together-item > .lead-hazard {
+  white-space: nowrap;
+}
+.lead-together-item::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 15px;
+  width: 1px;
+  background: var(--ink-muted);
+}
+.lead-together-item:first-child::before {
+  top: 15px;
+}
+.lead-together-item:last-child::before {
+  bottom: calc(100% - 15px);
+}
+.lead-together-item::after {
+  content: '';
+  position: absolute;
+  top: 11px;
+  left: 11px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--ink-strong);
+  box-shadow: 0 0 0 2px var(--bg-2);
+}
+.lead-together-classes {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.lead-together-class {
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: var(--ink-strong);
+  overflow-wrap: anywhere;
+}
+.lead-together-scope {
+  font-size: 10.5px;
+  line-height: 1.35;
+  color: var(--fg-2);
+}
+
+/* ---- Other reads and gaps -------------------------------------------------- */
+
+.lead-rest-list {
+  margin-top: 8px;
+  border-top: 1px solid var(--line);
+}
+.lead-rest-item {
+  padding: 2px 0 10px;
+  border-bottom: 1px solid var(--line);
+}
+.lead-rest-open {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-height: 32px;
+  padding: 4px 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+}
+.lead-rest-open .lead-open {
+  color: var(--ink-soft);
+}
+.lead-rest-open:hover .lead-open,
+.lead-rest-open:hover .lead-hazard {
+  color: var(--ink-strong);
+}
+.lead-read,
+.lead-text-read,
+.lead-state {
+  padding: 7px 0 3px;
+}
+.lead-rest-item > :is(.lead-read, .lead-text-read, .lead-state) + :is(.lead-read, .lead-text-read, .lead-state) {
+  border-top: 1px dashed var(--line);
+}
+.lead-state-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  margin: 0 0 4px;
+}
+:is(.lead-read, .lead-text-read) > .lead-state-line {
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+.lead-read-words {
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--fg-0);
+}
+.lead-read-caveat,
+.lead-state-note {
+  margin: 4px 0 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--fg-2);
+}
+.lead-read-source {
+  margin: 4px 0 0;
+}
+.lead-state-horizon {
+  font-size: 11px;
+  color: var(--fg-1);
+}
+.lead-text-read-words {
+  min-width: 0;
+}
+.lead-text-read-where {
+  font-size: 11px;
+  color: var(--fg-2);
+}
+
+/* ---- Doors ----------------------------------------------------------------- */
+
+.lead-doors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+.lead-door {
+  appearance: none;
+  flex: 1 1 140px;
+  min-height: 36px;
+  padding: 8px 12px;
+  border: 1px solid var(--keyline);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: var(--fw-subtitle);
+  line-height: 1.25;
+  text-align: left;
+  cursor: pointer;
+}
+.lead-door:hover {
+  background: var(--bg-2);
+  color: var(--ink-strong);
+}
+
+/* ---- The evidence chain (shared component, src/ui/evidence-chain.ts) ------ */
+
+/* The chain runs down at every width. Run across, five links and four joints
+   leave a card too narrow for its figure in any host this module has, so
+   that layout is not offered. */
+.evidence-chain {
+  margin: 18px 0 0;
+}
+.evidence-chain-title {
+  margin: 0 0 4px;
+  font-family: var(--font-display);
+  font-size: 10.5px;
+  font-weight: var(--fw-subtitle);
+  letter-spacing: var(--track-caps-sm);
+  text-transform: uppercase;
+  color: var(--fg-1);
+}
+.evidence-chain-caption {
+  margin: 0 0 10px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--fg-2);
+}
+.evidence-chain-links {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.evidence-chain-link {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  /* A link is a card, not a line of prose: it takes its column, and the
+     sentences inside it keep the reading measure (app.css, T4). */
+  max-inline-size: none;
+}
+.evidence-chain-card {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 9px 11px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  background: var(--bg-2);
+}
+/* A link with no read keeps its place and is drawn open, not filled. */
+.evidence-chain-link:not([data-chain-status='ready']) .evidence-chain-card {
+  border-style: dashed;
+  background: transparent;
+}
+.evidence-chain-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 8px;
+}
+.evidence-chain-step,
+.evidence-chain-open {
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: var(--fw-subtitle);
+  line-height: 1.25;
+  color: var(--ink-strong);
+}
+.evidence-chain-open {
+  appearance: none;
+  min-height: 24px;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-color: var(--ink-muted);
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.evidence-chain-open:hover {
+  text-decoration-color: var(--ink-strong);
+}
+.evidence-chain-statement {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--fg-0);
+}
+.evidence-chain-note,
+.evidence-chain-source {
+  margin: 0;
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--fg-2);
+}
+.evidence-chain-source a {
+  color: var(--accent);
+}
+/* The date takes its own line here, so its separator dot (app.css
+   `.impact-claim-date::before`) never opens a wrapped line. */
+.evidence-chain-source .impact-claim-date {
+  display: block;
+}
+.evidence-chain-source .impact-claim-date::before {
+  content: none;
+}
+/* The joint: a plain stem with the relationship written on it. No arrowhead:
+   a relationship across past events is not a direction of cause. */
+.evidence-chain-joint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 22px;
+  margin: 0 0 0 18px;
+  padding-left: 10px;
+  border-left: 1px solid var(--ink-muted);
+  font-size: 10.5px;
+  font-style: italic;
+  line-height: 1.3;
+  color: var(--fg-1);
+}
+
+/* ---- The rule in the technical section ------------------------------------ */
+
+.priority-rule-rows {
+  margin: 4px 0 14px;
+  padding-left: 20px;
+}
+.priority-rule-rows li {
+  margin-bottom: 8px;
+}
+.priority-rule-rows strong {
+  color: var(--fg-1);
+}
+.priority-rule-rows a {
+  color: var(--fg-1);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* ---- The gauge family (src/ui/gauges.ts) ---------------------------------- */
+
+.ddm-gauge {
+  display: block;
+  width: 100%;
+  /* A figure is drawn on a 240 unit canvas; capped so its 9 unit marks keep
+     one size wherever the column is wider than this (the briefing charts'
+     own rule, app.css `.impact-claim-chart`). */
+  max-width: 320px;
+  height: auto;
+  overflow: visible;
+}
+.ddm-gauge text {
+  font-family: var(--font-body);
+  /* Sizes are canvas units, so a figure drawn narrower than its canvas would
+     shrink its words with it. --g-k grows them back in a narrow column (see
+     "A narrow column" below); it is 1 wherever the figure has its room. */
+  font-size: calc(9.5px * var(--g-k, 1));
+  fill: var(--ink-muted);
+}
+/* Unread classes keep a hairline so a class darker than the panel still
+   shows where it sits on the scale. */
+.ddm-gauge .g-seg {
+  stroke: var(--keyline);
+  stroke-width: 0.75;
+  stroke-opacity: 0.55;
+}
+.ddm-gauge .g-seg-empty,
+.ddm-gauge .g-slot,
+.ddm-gauge .g-frame {
+  fill: none;
+  stroke: var(--ink-muted);
+  stroke-width: 0.75;
+  stroke-opacity: 0.9;
+}
+/* A day frame that is still loading. Dashed, because an empty solid frame
+   is a read ("no area drawn"). */
+.ddm-gauge .g-frame-pending {
+  stroke-dasharray: 2 2;
+}
+/* The read class: position (a caret and a taller block) plus an ink keyline.
+   Never colour alone. */
+.ddm-gauge .g-read {
+  stroke: var(--ink-strong);
+  stroke-width: 1.75;
+  stroke-opacity: 1;
+}
+.ddm-gauge .g-caret,
+.ddm-gauge .g-dot {
+  fill: var(--ink-strong);
+}
+.ddm-gauge .g-dot {
+  stroke: var(--bg-2);
+  stroke-width: 2;
+}
+.ddm-gauge .g-tick-read,
+.ddm-gauge .g-value {
+  fill: var(--ink-strong);
+  font-weight: 700;
+}
+.ddm-gauge .g-value {
+  font-size: calc(10.5px * var(--g-k, 1));
+}
+.ddm-gauge .g-caption,
+.ddm-gauge .g-above {
+  font-size: calc(8px * var(--g-k, 1));
+}
+.ddm-gauge .g-above {
+  fill: var(--ink);
+}
+.ddm-gauge .g-word {
+  font-size: calc(7.5px * var(--g-k, 1));
+  fill: var(--ink-soft);
+}
+.ddm-gauge .g-hatch {
+  fill: none;
+  stroke: var(--ink-muted);
+  stroke-width: 0.9;
+}
+.ddm-gauge .g-axis,
+.ddm-gauge .g-zero {
+  fill: none;
+  stroke: var(--ink-muted);
+  stroke-width: 1;
+}
+/* The no data mark: a short bar. After the axis rule, so an index gauge's
+   axis broken into bars (`g-axis g-nodata`) wears this ink. */
+.ddm-gauge .g-nodata {
+  fill: none;
+  stroke: var(--ink-soft);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+.ddm-gauge .g-band {
+  fill: var(--ink);
+  fill-opacity: 0.14;
+}
+.ddm-gauge .g-threshold-casing {
+  stroke: var(--ink);
+  stroke-width: 3;
+}
+.ddm-gauge .g-threshold {
+  stroke-width: 1.4;
+}
+.ddm-gauge .g-fill-ink {
+  fill: var(--ink-soft);
+}
+
+/* ---- Line breaks: no single word left alone where the browser can help ---- */
+
+.lead-headline,
+.briefing-focus-title,
+.evidence-chain-step,
+.evidence-chain-open {
+  text-wrap: balance;
+}
+.lead-order-note,
+.lead-caption,
+.lead-scope,
+.lead-none,
+.lead-read-words,
+.lead-read-caveat,
+.lead-state-note,
+.briefing-focus-note,
+.evidence-chain-caption,
+.evidence-chain-statement,
+.evidence-chain-note,
+.priority-rule-rows li {
+  text-wrap: pretty;
+}
+
+/* ---- A narrow column -------------------------------------------------------- */
+
+/* A figure is drawn on a 240 unit canvas and scales with its column. Below
+   that width its words would shrink with it, so they are set larger on the
+   canvas and read at about 9 px on a 360 px phone and on a 320 px one. */
+@container briefing-lead (max-width: 259px) {
+  .ddm-gauge {
+    --g-k: 1.12;
+  }
+}
+@container briefing-lead (max-width: 219px) {
+  .ddm-gauge {
+    --g-k: 1.3;
+  }
+  /* The rail's hazard word stands over its classes instead of beside them. */
+  .lead-together-item {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ---- Room for more than one column ---------------------------------------- */
+
+@container briefing-lead (min-width: 520px) {
+  .lead-tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  /* The other reads sit in two columns under the tiles. Their rows have no
+     side borders, so the gutter is wider than the tiles' to keep one
+     column's door clear of the next column's hazard word. */
+  .lead-rest-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 24px;
+  }
+  /* The rail turns to run across, one column per hazard. */
+  .lead-together-list {
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+  }
+  .lead-together-item {
+    grid-template-columns: minmax(0, 1fr);
+    align-content: start;
+    padding: 30px 12px 10px;
+  }
+  .lead-together-item::before {
+    top: 15px;
+    right: 0;
+    bottom: auto;
+    left: 0;
+    width: auto;
+    height: 1px;
+  }
+  .lead-together-item:first-child::before {
+    top: 15px;
+    left: 16px;
+  }
+  .lead-together-item:last-child::before {
+    right: calc(100% - 16px);
+    bottom: auto;
+  }
+  .lead-together-item::after {
+    top: 11px;
+    left: 12px;
+  }
+}
+
+/* ---- Touch: every control clears the 44 px floor --------------------------- */
+
+@media (pointer: coarse), (max-width: 720px) {
+  .briefing-view-btn,
+  .briefing-back,
+  .lead-door,
+  .lead-link,
+  .lead-rest-open,
+  .evidence-chain-open {
+    min-height: 44px;
+  }
+}
+
+/* ---- Paper ------------------------------------------------------------------ */
+
+/* On paper the briefing is the full detail, exactly as it printed before this
+   view existed. The priority view is a screen presentation and does not
+   print, and whatever the screen had hidden of the full detail is shown
+   (these four are block boxes in app.css). */
+@media print {
+  .impact-panel-body > :is(.impact-landscape, .impact-horizons)[hidden],
+  .impact-horizons .impact-hazard[hidden],
+  .impact-horizons .point-heat[hidden] {
+    display: block !important;
+  }
+  .briefing-view-switch,
+  .briefing-focus,
+  .briefing-lead {
+    display: none !important;
+  }
+}
+
+/* ---- Forced colours: the marks keep their meaning without their hues ------ */
+
+@media (forced-colors: active) {
+  .ddm-gauge .g-read {
+    stroke: CanvasText;
+  }
+  .ddm-gauge :is(.g-caret, .g-dot) {
+    fill: CanvasText;
+  }
+  .briefing-view-btn[aria-pressed='true'] {
+    background: Highlight;
+    color: HighlightText;
+  }
+}

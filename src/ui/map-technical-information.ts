@@ -101,9 +101,18 @@ const ENSO_CURRENT_NOTE = 'At Current the map shows current conditions.';
 // vocab-allow: honesty disclaimer denying that the CPC seasonal outlooks drawn are an ENSO forecast (DR-019)
 const ENSO_SEASON_AHEAD_NOTE = 'At Season ahead the outlooks drawn are NOAA Climate Prediction Center seasonal outlooks that ENSO informs, not an ENSO forecast.';
 
-export function renderMapTechnicalInformation(open = false): string {
+/**
+ * `leadHtml` is a trusted, already-escaped block the briefing puts first in
+ * the section (owner direction 2026-11-09 (sprint), DR-pending): the priority
+ * view's reading order, rendered from its own table by
+ * src/ui/briefing-lead.ts `renderPriorityRule`. It is a parameter, not an
+ * import, so that table stays out of this module's chunk, which the map
+ * island loads for its notes.
+ */
+export function renderMapTechnicalInformation(open = false, leadHtml = ''): string {
   return `<details class="impact-technical-information"${open ? ' open' : ''}>
     <summary>Technical information</summary>
+    ${leadHtml}
     <h4>Drought navigation overview</h4>
     <p id="impact-technical-drought">${escapeHtml(notes.drought)}</p>
     <h4>Wildfire navigation overview</h4>
