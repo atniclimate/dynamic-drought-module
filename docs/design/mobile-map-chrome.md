@@ -116,6 +116,12 @@ never share a pixel. `src/styles/mobile-panels.css` owns its form,
   a stop change lands at once on the same end state.
 - The report opens over the at-hand answer as its own card, a second layer;
   its close control, or pulling the sheet down to half, is the way back.
+- The at-hand block never says "Pick a place" under a map that marks one. A
+  place that is selected with no briefing read yet (shown from the Place
+  studio, or chosen while the console view was up) is named there, in one
+  line that states no condition, and the block's one door reads "Open
+  briefing". Once a briefing is read the door is "Read the full report"
+  (owner direction 2026-11-09 (sprint), DR-pending).
 - The scale rulers and the dock (notices and the OpenStreetMap credit) ride
   the sheet's top edge at peek and half. Camera fits made for a briefing keep
   the half band clear; the map's own padding stays zero.

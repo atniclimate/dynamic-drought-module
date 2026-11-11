@@ -336,6 +336,54 @@ closes the sheet, so the two never share a pixel. Everything but the cell and
 the launch check is one lazy chunk, loaded on the first press or the first
 eligible launch.
 
+## The Place and Layer studios
+
+Owner direction 2026-11-09 (sprint), DR-pending.
+
+The two studios are full-screen surfaces behind the `studio=` route. The
+route, Back, Escape, focus return and the inert scope are unchanged; what
+each studio shows was redrawn for a phone first
+(`src/ui/island/place-studio.tsx`, `src/ui/island/layers-studio.tsx`,
+`src/styles/studios.css`).
+
+**Place studio: search first, action last, one screen.** One search looks
+through every loaded list at once (Tribal Nations, States, Ecoregions,
+Watersheds) with the shared search's matcher. Five chips narrow it: All, then
+the four types. They wrap and never run off the screen. The list is the page:
+full-width rows with the kind in plain words under each name, and one
+scroller at every width. A list that could not be read says so in its place,
+with a retry.
+
+**The selection bar** stands at the bottom edge once a place is chosen: its
+kind, its formal name whole, one sentence on what can be opened, and two
+actions in plain verbs. "Open briefing" is the hand-off the studio has always
+made. "Show on map" selects the place, frames it clear of the phone chrome
+and marks its boundary, and opens no briefing: a Tribal Nation with the
+located overlay, any other kind with a neutral dashed boundary, never the
+Tribal family colour (`src/ui/island/place-on-map.ts`). For a Tribal Nation
+the bar carries the representation caveat in full, never folded, and the
+sentence "Its boundary is read live each time. DDM does not store it." The
+boundary read has its own states: reading, available, could not be read
+(with a retry), nothing came back, and no matched boundary. A Nation with no
+matched boundary shows no caveat, because nothing is represented, and the bar
+says that in a sentence.
+
+**After "Show on map" on a phone** the sheet's at-hand block names the
+selected place, and its one door reads "Open briefing". The block states no
+condition until a briefing is read (`src/ui/mobile-sheet.ts`).
+
+**Layer studio: what is on the map, then what can be added.** "On the map
+now" lists each active layer with its role, its name, its state word and
+"Turn off"; a failed layer also offers "Try again". Under it, conditions are
+one choice in semantics and in look: a radio group whose chosen row inverts
+whole. A pointer press on the chosen condition turns it off; a key never
+does. Overlays stay checkboxes whose mark inverts. Each group folds behind
+Hide or Show and keeps its count. The sidebar's own catalog is unchanged.
+
+**Honest failure.** A studio whose stylesheet did not load never mounts
+unstyled: it shows the existing "Studio unavailable" state, whose retry
+reloads.
+
 ## Convergence doctrine
 
 DDM is not merely a map. It is an instrument for making claims responsibly
