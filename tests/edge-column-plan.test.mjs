@@ -24,8 +24,10 @@ const {
   EDGE_COLUMN_TOKENS,
   EDGE_COLUMN_PROPERTIES,
   EDGE_GROUP_ORDER,
+  EDGE_CONDITIONAL_SEATS,
   EDGE_GROUP_NAMES,
   EDGE_TWO_TRACK_SEATS,
+  conditionalReserve,
   planEdgeColumn
 } = await import(new URL('src/config/edge-column.ts', ROOT).href);
 
@@ -49,7 +51,9 @@ for (const utility of [2, 3]) {
 const WIDTHS = [320, 360, 375, 390, 412, 430, 568, 667, 720];
 
 function recomputeTrackHeights(plan, groups, badge) {
-  const count = new Map(groups.map((group) => [group.id, group.count]));
+  const count = new Map(
+    groups.map((group) => [group.id, group.count > 0 ? Math.max(group.count, group.reserve ?? 0) : 0])
+  );
   return plan.tracks.map((ids, index) => {
     let cells = 0;
     for (const id of ids) {
@@ -165,6 +169,105 @@ test('the arrangement is the largest one with everything displayed, in the docum
     ['panels', 'view'],
     ['utility', 'hazards']
   ]);
+});
+
+/** Every mode the conditional table names, plus one it does not (a mode that seats nothing extra). */
+const MODES = [...new Set(['drought', ...EDGE_CONDITIONAL_SEATS.flatMap((seat) => seat.modes)])];
+const ALWAYS = { utility: 3, panels: 4, hazards: 4, view: 1 };
+
+/** The demand a phone shows in `mode`: the always-present cells plus that mode's own seats. */
+function demandFor(mode, { reserve }) {
+  return EDGE_GROUP_ORDER.map((id) => {
+    const own = EDGE_CONDITIONAL_SEATS.filter((seat) => seat.group === id && seat.modes.includes(mode)).length;
+    return { id, count: ALWAYS[id] + own, ...(reserve ? { reserve: ALWAYS[id] + conditionalReserve(id) } : {}) };
+  });
+}
+
+test('the reserve of a group is the most conditional cells any one mode seats there', () => {
+  assert.ok(MODES.length >= 3, 'the table should name more than one mode');
+  for (const id of EDGE_GROUP_ORDER) {
+    const perMode = MODES.map(
+      (mode) => EDGE_CONDITIONAL_SEATS.filter((seat) => seat.group === id && seat.modes.includes(mode)).length
+    );
+    assert.equal(conditionalReserve(id), Math.max(...perMode), id);
+  }
+  // Today: the ENSO Guide door in panels, the 3D entry in view; nothing else is conditional.
+  assert.deepEqual(
+    EDGE_GROUP_ORDER.map((id) => conditionalReserve(id)),
+    [0, 1, 0, 1]
+  );
+  assert.equal(new Set(EDGE_CONDITIONAL_SEATS.map((seat) => `${seat.group}:${seat.order}`)).size, EDGE_CONDITIONAL_SEATS.length);
+});
+
+test('a mode that adds a cell never changes the plan: every always-present cell keeps its place', () => {
+  let differsWithoutReserve = 0;
+  for (const viewportWidth of WIDTHS) {
+    for (let viewportHeight = 240; viewportHeight <= 1000; viewportHeight += 1) {
+      const availableHeight = viewportHeight - 2 * EDGE_COLUMN_TOKENS.inset;
+      const plans = (reserve) =>
+        MODES.map((mode) =>
+          JSON.stringify(
+            planEdgeColumn({ availableHeight, viewportWidth, viewportHeight, groups: demandFor(mode, { reserve }), badge: true })
+          )
+        );
+      assert.equal(new Set(plans(true)).size, 1, `plan moved between modes at ${viewportWidth}x${viewportHeight}`);
+      if (new Set(plans(false)).size > 1) differsWithoutReserve += 1;
+    }
+  }
+  // The same sweep without the reserve does move, so the assertion above has teeth.
+  assert.ok(differsWithoutReserve > 0);
+});
+
+test('the union folds the map tools in every mode at 360 by 640, as the fullest mode alone would', () => {
+  for (const mode of MODES) {
+    const plan = planEdgeColumn({
+      availableHeight: 640 - 2 * EDGE_COLUMN_TOKENS.inset,
+      viewportWidth: 360,
+      viewportHeight: 640,
+      groups: demandFor(mode, { reserve: true }),
+      badge: true
+    });
+    assert.deepEqual([plan.size, plan.tracks.length, plan.folded], [44, 1, ['utility']], mode);
+  }
+});
+
+test('a reserve never gives room to an empty group, and never lowers a count', () => {
+  const plan = planEdgeColumn({
+    availableHeight: 900,
+    viewportWidth: 390,
+    viewportHeight: 916,
+    groups: [
+      { id: 'utility', count: 0, reserve: 3 },
+      { id: 'panels', count: 5, reserve: 2 },
+      { id: 'hazards', count: 4 },
+      { id: 'view', count: 1, reserve: 2 }
+    ],
+    badge: false
+  });
+  assert.ok(!plan.tracks.flat().includes('utility'));
+  // 5 + 4 + 2 cells at 52 px, two gaps of 8.
+  assert.equal(plan.height, 11 * 52 + 2 * 8);
+});
+
+test('the stylesheet holds each group open to its reserve and keeps the empty slot off the map', () => {
+  assert.equal(EDGE_COLUMN_PROPERTIES.reserve, '--edge-reserve');
+  assert.match(
+    css,
+    /\.edge-group\s*\{[^}]*min-block-size:\s*calc\(var\(--edge-size\)\s*\*\s*var\(--edge-reserve,\s*0\)\s*\+\s*2px\)/
+  );
+  assert.match(css, /\.edge-group\s*\{[^}]*pointer-events:\s*none/);
+  assert.match(css, /\.edge-body,\s*\.edge-fold\s*\{\s*pointer-events:\s*auto/);
+});
+
+test('a framed page keeps its studio link-outs on a phone, beside the column', () => {
+  // Only the empty seats go; the pair, the one route to the studios in a frame, stays.
+  assert.match(
+    css,
+    /#app\[data-sheet-detent\] \.map-overlay-controls > :not\(\.studio-linkout-pair\)\s*\{\s*display:\s*none;/
+  );
+  assert.doesNotMatch(css, /#app\[data-sheet-detent\] \.map-overlay-controls\s*\{\s*display:\s*none/);
+  const shifted = css.match(/#app\[data-sheet-detent\] \.map-overlay-controls\s*\{([^}]*)\}/);
+  assert.ok(shifted && /right:[^;]*var\(--edge-column-w\)/.test(shifted[1]), 'the pair must clear the column');
 });
 
 test('a group with one control is never folded, and an empty group takes no room', () => {

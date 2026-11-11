@@ -31,6 +31,12 @@
  * tests/edge-column-plan.test.mjs reads that stylesheet as text and fails
  * when a token here and its declaration there disagree.
  *
+ * WHY A RESERVE. A mode that adds a cell (EDGE_CONDITIONAL_SEATS) must not
+ * move the cells that are always there. Each group is planned at the most
+ * cells any mode gives it, and the manager holds that room open under the
+ * capsule, so the added cell fills a slot already held. Cost: where the union
+ * does not fit, the map tools fold in every mode, not only in the fuller one.
+ *
  * Kept import-free on purpose, so `node --test` can load it with Node's type
  * stripping and no resolve hook.
  */
@@ -76,7 +82,9 @@ export const EDGE_COLUMN_PROPERTIES = {
   size: '--edge-size',
   gap: '--edge-gap',
   /** The whole column's width, tracks and gaps included: what other chrome reserves. */
-  width: '--edge-column-w'
+  width: '--edge-column-w',
+  /** Written on each group (not on `#app`): the cells of room it holds, its fullest mode's count. */
+  reserve: '--edge-reserve'
 } as const;
 
 /** Which track a group rides when the column splits. Track 0 is at the screen edge. */
@@ -90,10 +98,51 @@ export const EDGE_TWO_TRACK_SEATS: Readonly<Record<EdgeGroupId, 0 | 1>> = {
 /** Groups the planner may fold, in the order it folds them. */
 const FOLD_ORDER: readonly EdgeGroupId[] = ['utility', 'hazards', 'panels', 'view'];
 
+/**
+ * Cells only one mode seats. The column is planned for the union of every
+ * mode's seats, so a mode that adds one fills a slot already held for it and
+ * no always-present cell moves (the 2026-09-13 stable-position rule). `order`
+ * is the seat's order in its group: how the manager tells it from a cell
+ * every mode shows. One row per seat, so a later mode adds a row, not code.
+ */
+export interface EdgeConditionalSeat {
+  readonly group: EdgeGroupId;
+  readonly order: number;
+  /** Cluster keys (src/config/clusters.ts) in which the seat is present. */
+  readonly modes: readonly string[];
+}
+
+export const EDGE_CONDITIONAL_SEATS: readonly EdgeConditionalSeat[] = [
+  // The ENSO Guide door, under the four panel doors (src/ui/enso-chain.ts).
+  { group: 'panels', order: 20, modes: ['enso'] },
+  // The 3D entry, under Locate (src/ui/fire3d-phone.ts).
+  { group: 'view', order: 30, modes: ['wildfire'] }
+];
+
+/** The most conditional cells any one mode seats in a group. */
+export function conditionalReserve(group: EdgeGroupId): number {
+  const perMode = new Map<string, number>();
+  for (const seat of EDGE_CONDITIONAL_SEATS) {
+    if (seat.group !== group) continue;
+    for (const mode of seat.modes) perMode.set(mode, (perMode.get(mode) ?? 0) + 1);
+  }
+  return Math.max(0, ...perMode.values());
+}
+
 export interface EdgeGroupDemand {
   readonly id: EdgeGroupId;
   /** Controls currently displayed in the group. A group of zero takes no room. */
   readonly count: number;
+  /**
+   * Cells to hold for the group in its fullest mode; the plan uses the larger
+   * of this and `count`. Absent means the group is planned as it stands.
+   */
+  readonly reserve?: number;
+}
+
+/** Cells the plan holds for a group: what it shows, or what its fullest mode would. */
+function plannedCount(group: EdgeGroupDemand): number {
+  return group.count <= 0 ? 0 : Math.max(group.count, group.reserve ?? 0);
 }
 
 export interface EdgePlanInput {
@@ -126,9 +175,9 @@ export interface EdgePlan {
 }
 
 function cellsOf(group: EdgeGroupDemand, folded: ReadonlySet<EdgeGroupId>): number {
-  if (group.count <= 0) return 0;
+  const count = plannedCount(group);
   // Folding a single control would trade one cell for one cell.
-  return folded.has(group.id) && group.count > 1 ? 1 : group.count;
+  return folded.has(group.id) && count > 1 ? 1 : count;
 }
 
 function trackHeight(
@@ -159,8 +208,12 @@ function arrange(
 ): EdgePlan {
   const gap = size <= 44 ? EDGE_COLUMN_TOKENS.gapCompact : EDGE_COLUMN_TOKENS.gap;
   const demand = new Map(input.groups.map((group) => [group.id, group]));
-  const present = EDGE_GROUP_ORDER.filter((id) => (demand.get(id)?.count ?? 0) > 0);
-  const folded = new Set(foldedIds.filter((id) => (demand.get(id)?.count ?? 0) > 1));
+  const planned = (id: EdgeGroupId): number => {
+    const group = demand.get(id);
+    return group ? plannedCount(group) : 0;
+  };
+  const present = EDGE_GROUP_ORDER.filter((id) => planned(id) > 0);
+  const folded = new Set(foldedIds.filter((id) => planned(id) > 1));
   const tracks: EdgeGroupId[][] = twoTracks
     ? [
         present.filter((id) => EDGE_TWO_TRACK_SEATS[id] === 0),

@@ -86,7 +86,16 @@
   .edge-group {
     position: relative;
     flex: none;
-    pointer-events: auto;
+    /* The held room never takes a map gesture; the capsule and the fold cell do. */
+    pointer-events: none;
+    /* Room held for the group's fullest mode (the manager writes the count):
+       the capsule stays at the top of it, so a cell only some modes seat
+       fills the slot downward and nothing above it moves. The 2px is the
+       capsule's border. Not a control: the slot takes no press. */
+    min-block-size: calc(var(--edge-size) * var(--edge-reserve, 0) + 2px);
+  }
+  .edge-group[data-folded] {
+    min-block-size: 0;
   }
   .edge-group[hidden] {
     display: none;
@@ -100,6 +109,10 @@
   /* ---------------------------------------------------------------------
      The capsule: one glass body per group.
      --------------------------------------------------------------------- */
+  .edge-body,
+  .edge-fold {
+    pointer-events: auto;
+  }
   .edge-body {
     display: flex;
     flex-direction: column;
@@ -341,9 +354,21 @@
   }
 
   /* Share and Reset have left this container for the column; on phones it
-     holds only empty desktop seats. */
-  #app[data-sheet-detent] .map-overlay-controls {
+     holds only empty desktop seats. The full-site link-outs a framed page
+     that is not an embed gets are the one thing left in it: the only route
+     to the studios there. They sit beside the column, never under it. */
+  #app[data-sheet-detent] .map-overlay-controls > :not(.studio-linkout-pair) {
     display: none;
+  }
+  #app[data-sheet-detent] .map-overlay-controls {
+    right: calc(
+      env(safe-area-inset-right, 0px) + var(--edge-inset) + var(--edge-column-w) + var(--edge-gap)
+    );
+  }
+  #app[data-sheet-detent] .map-overlay-controls > .studio-linkout-pair {
+    max-width: calc(
+      100vw - var(--edge-column-w) - var(--edge-gap) - 2 * var(--edge-inset) - 12px
+    );
   }
 
   /* Map information rides the column while the map leads. With a panel

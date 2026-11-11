@@ -29,12 +29,14 @@
  */
 
 import {
+  conditionalReserve,
   EDGE_COLUMN_PROPERTIES,
+  EDGE_CONDITIONAL_SEATS,
   EDGE_GROUP_NAMES,
   EDGE_GROUP_ORDER,
   planEdgeColumn
 } from '../config/edge-column';
-import type { EdgeGroupId, EdgePlan } from '../config/edge-column';
+import type { EdgeGroupDemand, EdgeGroupId, EdgePlan } from '../config/edge-column';
 import {
   notifyPhoneSeats,
   setPhoneSeatProvider,
@@ -193,20 +195,39 @@ function shownCells(body: HTMLElement): HTMLElement[] {
   return cells;
 }
 
+/** Whether a cell is one only some modes seat (a row of EDGE_CONDITIONAL_SEATS). */
+export function isConditionalCell(id: EdgeGroupId, cell: HTMLElement): boolean {
+  const order = Number(cell.closest(`[${ORDER_ATTRIBUTE}]`)?.getAttribute(ORDER_ATTRIBUTE));
+  return EDGE_CONDITIONAL_SEATS.some((seat) => seat.group === id && seat.order === order);
+}
+
+/** What a group shows now, and the room its fullest mode would take. */
+function demandOf(id: EdgeGroupId): EdgeGroupDemand {
+  const parts = groups.get(id);
+  const cells = parts ? shownCells(parts.body) : [];
+  const always = cells.filter((cell) => !isConditionalCell(id, cell)).length;
+  return { id, count: cells.length, reserve: always + conditionalReserve(id) };
+}
+
 function refresh(): void {
   if (!mounted || applying || !column || !app) return;
   const available = column.clientHeight;
   if (available <= 0) return;
+  const demands = EDGE_GROUP_ORDER.map(demandOf);
   const plan = planEdgeColumn({
     availableHeight: available,
     viewportWidth: window.innerWidth,
     viewportHeight: window.innerHeight,
-    groups: EDGE_GROUP_ORDER.map((id) => {
-      const parts = groups.get(id);
-      return { id, count: parts ? shownCells(parts.body).length : 0 };
-    }),
+    groups: demands,
     badge: badge !== null && badge.parentElement !== badgeHome
   });
+  // The stylesheet holds this many cells of room open under each capsule, so
+  // a cell that arrives with a mode fills its slot and moves nothing above it.
+  for (const demand of demands) {
+    groups
+      .get(demand.id)
+      ?.root.style.setProperty(EDGE_COLUMN_PROPERTIES.reserve, String(demand.reserve ?? 0));
+  }
   const key = JSON.stringify(plan);
   if (key !== planKey) {
     planKey = key;
