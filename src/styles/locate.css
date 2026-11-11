@@ -482,6 +482,10 @@
   height: 52px;
   pointer-events: none;
 }
+/* While its card waits under the phone's 3D card (src/ui/fire3d-phone-scene.ts), the figure waits too. */
+.locate-marker[data-waits] {
+  visibility: hidden;
+}
 .locate-marker-figure {
   display: block;
   overflow: visible;

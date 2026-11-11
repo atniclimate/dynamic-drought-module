@@ -66,6 +66,19 @@ function stamp(map: maplibregl.Map): void {
   document.documentElement.dataset['ddmLocateMap'] = `layers=${layers} sources=${sources} markers=${markers}`;
 }
 
+/**
+ * The card is the marker's continuing legend (src/ui/locate-runtime.ts). While
+ * it waits hidden (src/ui/fire3d-phone-scene.ts), the figure and the ring wait
+ * too: hidden, never removed, and drawn that way if they arrive meanwhile.
+ */
+let waiting = false;
+let applyWaiting: ((waits: boolean) => void) | null = null;
+
+export function setLocateMarkerWaiting(waits: boolean): void {
+  waiting = waits;
+  applyWaiting?.(waits);
+}
+
 /** Draw the marker for a fix. `approximate` is the low-accuracy face. */
 export function showLocateMarker(
   map: maplibregl.Map,
@@ -122,9 +135,20 @@ export function showLocateMarker(
   const offStatus = registry.on('status-change', raise);
   const offSelection = onPlaceSelectionChange(raise);
 
+  const wait = (waits: boolean): void => {
+    element.toggleAttribute('data-waits', waits);
+    for (const id of LAYER_IDS) {
+      if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', waits ? 'none' : 'visible');
+    }
+  };
+  applyWaiting = wait;
+  wait(waiting);
+
   stamp(map);
   return {
     remove(): void {
+      if (applyWaiting === wait) applyWaiting = null;
+      waiting = false;
       cancelAnimationFrame(frame);
       offStatus();
       offSelection();

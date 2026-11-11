@@ -61,6 +61,7 @@ import {
 } from '../config/fire3d-presentation';
 import type { Fire3DStatus } from '../map/fire3d';
 import { loadFire3DController } from '../map/fire3d-chunk';
+import { setLocateMarkerWaiting } from '../map/locate-marker';
 import { getCommittedSnapshot } from '../state/cluster-service';
 import { getFire3DPreference, setFire3DPreference } from '../state/fire3d-store';
 import { isPlaceDisplayHeld } from '../state/place-display-hold';
@@ -458,8 +459,10 @@ export function createFire3DPhoneScene(map: maplibregl.Map, app: HTMLElement): F
    * clearance (the sheet at half on every phone, at peek on the shortest),
    * it WAITS: hidden, so never covered and never reachable under this card,
    * and back as soon as there is room (the sheet lowered, the 3D view left).
-   * Locate keeps working meanwhile: its cell stays lit, its marker stays,
-   * and its announcements are spoken. The seat is read from the layout
+   * Its marker and accuracy ring wait with it (the card is their legend, and
+   * a ring without its accuracy line must not be seen) and return together.
+   * Locate keeps working meanwhile: its cell stays lit and its announcements
+   * are spoken. The seat is read from the layout
    * boxes, not the painted ones: while the sheet travels, the dock's
    * children carry a passing transform (src/ui/sheet-motion.ts), and the
    * layout box is where they will stand. Returns the seat the Locate card
@@ -470,11 +473,13 @@ export function createFire3DPhoneScene(map: maplibregl.Map, app: HTMLElement): F
     const dock = locate?.parentElement ?? null;
     if (!locate || !dock || locate.hidden) {
       locate?.removeAttribute(LOCATE_WAITS_ATTRIBUTE);
+      setLocateMarkerWaiting(false);
       return null;
     }
     const at = dock.getBoundingClientRect();
     const top = at.top + locate.offsetTop;
     const waits = top < cardBottom + PAD_CLEARANCE_PX;
+    setLocateMarkerWaiting(waits);
     if (waits !== locate.hasAttribute(LOCATE_WAITS_ATTRIBUTE)) {
       // A card that waits under the focus hands it to the cell that opened it, as Locate itself does.
       const held = waits && locate.contains(document.activeElement);
@@ -605,6 +610,7 @@ export function createFire3DPhoneScene(map: maplibregl.Map, app: HTMLElement): F
     frame = 0;
     card.remove();
     document.getElementById(LOCATE_CARD_ID)?.removeAttribute(LOCATE_WAITS_ATTRIBUTE);
+    setLocateMarkerWaiting(false);
     app.removeAttribute(CARD_ATTRIBUTE);
     app.style.removeProperty(CARD_BOTTOM_PROPERTY);
     app.style.removeProperty(CARD_HEIGHT_PROPERTY);

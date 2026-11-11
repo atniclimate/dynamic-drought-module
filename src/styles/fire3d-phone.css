@@ -67,7 +67,8 @@
      Where its seat would reach this card, src/ui/fire3d-phone-scene.ts
      (`seatLocateCard`) marks it to wait: hidden, so it is never covered and
      nothing under this card can be reached. Hidden keeps its box, so the
-     dock does not shift while it waits and the decision cannot flicker. */
+     dock does not shift while it waits and the decision cannot flicker.
+     Its map marker and ring wait with it (src/map/locate-marker.ts). */
   #app[data-sheet-detent][data-fire3d-card] .locate-card[data-fire3d-waits] {
     visibility: hidden;
   }

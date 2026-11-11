@@ -896,3 +896,123 @@ test('a reduced-motion exit is a jump and arms nothing', async () => {
   assert.equal(watchers(), 0);
   await leaveFlat();
 });
+
+// ---------------------------------------------------------------------------
+// Locate's marker waits with its card
+// ---------------------------------------------------------------------------
+
+// The marker module is run for real; only its collaborators are stood in for,
+// and only when it is the importer.
+const MARKER_STUBS = {
+  'maplibre-gl':
+    'export class Marker { constructor(o) { this.element = o.element; } setLngLat() { return this; } addTo() { return this; } remove() { this.removed = true; } }',
+  '/state/geolocate': 'export function discRing() { return []; }',
+  '/state/place-selection': 'export function onPlaceSelectionChange() { return () => {}; }',
+  '/state/registry': 'export const registry = { on: () => () => {} };'
+};
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    const stub =
+      typeof context.parentURL === 'string' && context.parentURL.endsWith('/locate-marker.ts')
+        ? Object.entries(MARKER_STUBS).find(([suffix]) => specifier.endsWith(suffix))
+        : undefined;
+    if (stub) {
+      return { url: `data:text/javascript,${encodeURIComponent(stub[1])}`, shortCircuit: true };
+    }
+    return nextResolve(specifier, context);
+  }
+});
+globalThis.requestAnimationFrame ??= () => 1;
+globalThis.cancelAnimationFrame ??= () => {};
+const { showLocateMarker, setLocateMarkerWaiting } = await import('../src/map/locate-marker.ts');
+
+function fakeMarkerMap() {
+  const layers = new Map();
+  const map = {
+    layers,
+    sources: new Set(),
+    addSource: (id) => map.sources.add(id),
+    getSource: (id) => (map.sources.has(id) ? {} : undefined),
+    removeSource: (id) => map.sources.delete(id),
+    addLayer: (layer) => layers.set(layer.id, { visibility: 'visible' }),
+    getLayer: (id) => layers.get(id),
+    removeLayer: (id) => layers.delete(id),
+    moveLayer() {},
+    setLayoutProperty: (id, name, value) => {
+      assert.equal(name, 'visibility');
+      layers.get(id).visibility = value;
+    },
+    getContainer: () => ({ querySelectorAll: () => [] })
+  };
+  return map;
+}
+
+function drawMarker(map) {
+  let element;
+  globalThis.document.createElement = () => (element = {
+    dataset: {},
+    attributes: new Set(),
+    setAttribute() {},
+    toggleAttribute(name, on) {
+      element.attributes[on ? 'add' : 'delete'](name);
+    }
+  });
+  const marker = showLocateMarker(
+    map,
+    { lng: -120, lat: 45, accuracy: 20 },
+    { approximate: false, label: 'Your position.', animate: false }
+  );
+  return { marker, element };
+}
+
+const hidden = (map) => [...map.layers.values()].every((layer) => layer.visibility === 'none');
+const shown = (map) => [...map.layers.values()].every((layer) => layer.visibility === 'visible');
+
+test('Locate\'s marker and ring wait while its card waits, and return together with it', () => {
+  const map = fakeMarkerMap();
+  const { marker, element } = drawMarker(map);
+  assert.equal(map.layers.size, 2, 'the casing and the ring');
+  assert.ok(shown(map) && !(element.attributes.has('data-waits')), 'drawn while the card has room');
+
+  setLocateMarkerWaiting(true);
+  assert.ok(hidden(map), 'both ring layers wait');
+  assert.ok(element.attributes.has('data-waits'), 'the figure waits');
+  assert.equal(map.layers.size, 2, 'waiting hides, it removes nothing');
+
+  setLocateMarkerWaiting(true);
+  assert.ok(hidden(map), 'asking again changes nothing');
+
+  setLocateMarkerWaiting(false);
+  assert.ok(shown(map) && !(element.attributes.has('data-waits')), 'back with the card');
+  marker.remove();
+});
+
+test('a marker drawn while its card waits is drawn waiting, and a removed Locate leaves nothing waiting', () => {
+  const first = fakeMarkerMap();
+  const drawn = drawMarker(first);
+  setLocateMarkerWaiting(true);
+  drawn.marker.remove();
+  assert.equal(first.layers.size, 0, 'removal is total');
+  assert.doesNotThrow(() => setLocateMarkerWaiting(true), 'a wait with no marker is harmless');
+  setLocateMarkerWaiting(false);
+
+  setLocateMarkerWaiting(true);
+  const second = fakeMarkerMap();
+  const again = drawMarker(second);
+  assert.ok(hidden(second) && again.element.attributes.has('data-waits'), 'a marker born under a waiting card waits');
+  again.marker.remove();
+
+  const third = fakeMarkerMap();
+  const next = drawMarker(third);
+  assert.ok(shown(third) && !(next.element.attributes.has('data-waits')), 'nothing is left waiting after a removal');
+  next.marker.remove();
+});
+
+test('the scene tells the marker what it tells the card, and the waiting marker is hidden, not removed', () => {
+  const scene = read('src/ui/fire3d-phone-scene.ts');
+  assert.match(scene, /import \{ setLocateMarkerWaiting \} from '\.\.\/map\/locate-marker';/);
+  assert.match(scene, /setLocateMarkerWaiting\(waits\);/, 'the seat decision reaches the marker every layout');
+  assert.match(scene, /unmount\(\): void \{[\s\S]*setLocateMarkerWaiting\(false\)/, 'leaving the 3D view lets it return');
+  const locateCss = read('src/styles/locate.css').replace(/\/\*[\s\S]*?\*\//g, '');
+  assert.match(locateCss, /\.locate-marker\[data-waits\]\s*\{\s*visibility:\s*hidden;\s*\}/);
+});
