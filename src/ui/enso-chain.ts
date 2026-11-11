@@ -84,6 +84,7 @@ import { getPlaceSelection, onPlaceSelectionChange } from '../state/place-select
 import type { PlaceSelection } from '../state/place-selection';
 import { registry } from '../state/registry';
 import { enterPlaceStudio } from '../state/studio-route';
+import { requireStylesheetMark } from '../util/chunk-stylesheets';
 import { prefersReducedMotion } from '../util/motion';
 import { edgeColumnInset, seatEdgeControl } from './edge-column';
 import {
@@ -606,6 +607,8 @@ export function mountEnsoChain(map: maplibregl.Map, frameDate: string | null): v
   const app = document.getElementById('app');
   const scroll = document.querySelector<HTMLElement>('#sidebar .sidebar-scroll');
   if (!app || !scroll) return;
+  // No stylesheet, no guide: the loader says its failure line instead.
+  requireStylesheetMark(app, '--ddm-enso-chain-css', 'enso-chain');
 
   const panel = document.createElement('section');
   panel.className = 'panel enso-chain-panel';

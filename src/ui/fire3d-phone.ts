@@ -61,6 +61,7 @@ import {
   setFire3DPreference
 } from '../state/fire3d-store';
 import { createChunkLoader } from '../util/chunk-retry';
+import { askAgainForStylesheets } from '../util/chunk-stylesheets';
 import { seatEdgeControl } from './edge-column';
 import type { Fire3DPhoneScene } from './fire3d-phone-scene';
 import { showToast } from './overlay';
@@ -75,7 +76,17 @@ const GLYPH =
 /** The failure ladder's own sentence (src/map/fire3d.ts `failScene`), for the one failure that happens before it loads. */
 const UNAVAILABLE = '3D Fire view unavailable; the flat map remains accurate.';
 
-const loadScene = createChunkLoader(() => import('./fire3d-phone-scene'), import.meta.url);
+/**
+ * The chrome's chunk. After a failure the next ask imports it under a new URL
+ * (src/util/chunk-retry.ts), which brings the module alone, so its failed
+ * stylesheet is asked for first (src/util/chunk-stylesheets.ts).
+ */
+const loadScene = createChunkLoader(
+  () => import('./fire3d-phone-scene'),
+  import.meta.url,
+  undefined,
+  askAgainForStylesheets
+);
 
 let wired = false;
 
@@ -122,18 +133,21 @@ export function initFire3DPhone(map: maplibregl.Map): void {
     // a shared link to answer with one sentence.
     if (loading || !asked || offer === 'silent') return;
     loading = true;
-    void loadScene().then(
-      ({ createFire3DPhoneScene }) => {
-        scene = createFire3DPhoneScene(map, app);
-        sync();
-      },
-      () => {
-        loading = false;
-        // No card, no scene: withdraw the ask and say so.
-        setFire3DPreference(false);
-        showToast(UNAVAILABLE);
-      }
-    );
+    // A chrome that refuses to draw (its stylesheet missing) fails here too.
+    void loadScene()
+      .then(({ createFire3DPhoneScene }) => createFire3DPhoneScene(map, app))
+      .then(
+        (created) => {
+          scene = created;
+          sync();
+        },
+        () => {
+          loading = false;
+          // No card, no scene: withdraw the ask and say so.
+          setFire3DPreference(false);
+          showToast(UNAVAILABLE);
+        }
+      );
   };
 
   cell.addEventListener('click', () => {

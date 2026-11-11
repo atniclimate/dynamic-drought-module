@@ -26,6 +26,14 @@
    and ink only.
    ============================================================================= */
 
+/* THE MARK the chunk reads before it draws (`createFire3DPhoneScene` in src/ui/fire3d-phone-scene.ts): proof that this
+   stylesheet, one more lazy request, is applied. Without it the door says
+   its one failure line instead of drawing unstyled
+   (src/util/chunk-stylesheets.ts `requireStylesheetMark`). */
+#app {
+  --ddm-fire3d-phone-css: 1;
+}
+
 .fire3d-card,
 .fire3d-pad {
   display: none;

@@ -19,6 +19,14 @@
      carried by motion.
    ============================================================================= */
 
+/* THE MARK the chunk reads before it draws (`mountEnsoChain` in src/ui/enso-chain.ts): proof that this
+   stylesheet, one more lazy request, is applied. Without it the door says
+   its one failure line instead of drawing unstyled
+   (src/util/chunk-stylesheets.ts `requireStylesheetMark`). */
+#app {
+  --ddm-enso-chain-css: 1;
+}
+
 .enso-chain-panel {
   /* The shared gauges grow their words in a narrow column through this
      container name (briefing-lead.css, "A narrow column"). */

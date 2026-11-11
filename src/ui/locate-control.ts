@@ -30,6 +30,7 @@ import type * as maplibregl from 'maplibre-gl';
 import { readLaunchPreference } from '../state/locate-preference';
 import { studioOwnsScreen } from '../state/studio-route';
 import { createChunkLoader } from '../util/chunk-retry';
+import { askAgainForStylesheets } from '../util/chunk-stylesheets';
 import { seatEdgeControl } from './edge-column';
 import { showToast } from './overlay';
 
@@ -55,9 +56,16 @@ const GLYPH =
 /**
  * The lazy half. After a failed load the next press asks again under a new
  * URL: Chromium replays a failed import of the same URL without a request,
- * so a plain second import() never recovers (src/util/chunk-retry.ts).
+ * so a plain second import() never recovers (src/util/chunk-retry.ts). The
+ * retry imports the module alone, so a failed stylesheet is asked for first
+ * (src/util/chunk-stylesheets.ts).
  */
-const loadRuntime = createChunkLoader(() => import('./locate-runtime'), import.meta.url);
+const loadRuntime = createChunkLoader(
+  () => import('./locate-runtime'),
+  import.meta.url,
+  undefined,
+  askAgainForStylesheets
+);
 
 export function initLocateControl(map: maplibregl.Map, deepLinkBoot: boolean): void {
   const button = document.createElement('button');

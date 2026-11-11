@@ -64,6 +64,7 @@ import { loadFire3DController } from '../map/fire3d-chunk';
 import { getCommittedSnapshot } from '../state/cluster-service';
 import { getFire3DPreference, setFire3DPreference } from '../state/fire3d-store';
 import { registry } from '../state/registry';
+import { requireStylesheetMark } from '../util/chunk-stylesheets';
 import { prefersReducedMotion } from '../util/motion';
 import { setMapTechnicalNote } from './map-technical-information';
 import { showToast } from './overlay';
@@ -176,6 +177,8 @@ function el<K extends keyof HTMLElementTagNameMap>(
  * first `set(true, ...)`.
  */
 export function createFire3DPhoneScene(map: maplibregl.Map, app: HTMLElement): Fire3DPhoneScene {
+  // No stylesheet, no card, no scene: the 3D cell says its failure line instead.
+  requireStylesheetMark(app, '--ddm-fire3d-phone-css', 'fire3d-phone');
   // -------------------------------------------------------------------------
   // The card
   // -------------------------------------------------------------------------

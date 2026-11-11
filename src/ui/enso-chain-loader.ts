@@ -13,7 +13,9 @@
  *
  * A failed load says so in one line, as the 3D Fire view does
  * (src/ui/fire3d-phone.ts), and the next activation asks again under a new
- * URL (src/util/chunk-retry.ts). The map and its key never wait on this chunk.
+ * URL (src/util/chunk-retry.ts), its failed stylesheets first
+ * (src/util/chunk-stylesheets.ts). The map and its key never wait on this
+ * chunk.
  *
  * The layer announces the date of the frame it displays as an event with no
  * replay (`ddm:sst-snapshot`), and the chain arrives a moment after the layer
@@ -24,6 +26,7 @@
 import type * as maplibregl from 'maplibre-gl';
 
 import { createChunkLoader } from '../util/chunk-retry';
+import { askAgainForStylesheets } from '../util/chunk-stylesheets';
 import { showToast } from './overlay';
 
 type ChainModule = typeof import('./enso-chain');
@@ -34,11 +37,16 @@ const SST_SNAPSHOT_EVENT = 'ddm:sst-snapshot';
 /** The one line a failed load says. GUIDE_NAME in src/ui/enso-chain.ts names the guide. */
 const UNAVAILABLE = 'ENSO guide unavailable; the map and its key are unaffected.';
 
-const loadChain = createChunkLoader(() => import('./enso-chain'), import.meta.url);
+const loadChain = createChunkLoader(
+  () => import('./enso-chain'),
+  import.meta.url,
+  undefined,
+  askAgainForStylesheets
+);
 
 /**
  * The guide's own host (mountEnsoChain in src/ui/enso-chain.ts draws only
- * into #app and the sidebar's scroll). Where neither exists there is no
+ * into #app and the sidebar's scroll). Where either is missing there is no
  * guide to miss, so a failed load there says nothing.
  */
 function guideHostExists(): boolean {
@@ -69,8 +77,10 @@ export function activateEnsoChain(map: maplibregl.Map): void {
       .then((module) => {
         // A deactivate while the chunk was in flight wins: nothing mounts late.
         if (mine !== generation) return;
-        chain = module;
+        // A guide that refuses to draw (its stylesheet missing) throws here,
+        // before it is kept, and lands in the failure line below.
         module.mountEnsoChain(map, frameDate);
+        chain = module;
       })
       .catch((error: unknown) => {
         console.error('[enso-chain] the chain failed to load:', error);

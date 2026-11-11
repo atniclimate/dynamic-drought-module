@@ -17,6 +17,14 @@
    animation has a reduced-motion twin at the end of this file.
    ============================================================================= */
 
+/* THE MARK the chunk reads before it draws (`createLocate` in src/ui/locate-runtime.ts): proof that this
+   stylesheet, one more lazy request, is applied. Without it the door says
+   its one failure line instead of drawing unstyled
+   (src/util/chunk-stylesheets.ts `requireStylesheetMark`). */
+#app {
+  --ddm-locate-css: 1;
+}
+
 /* The card exists only inside the phone shell, like the cell that opens it. */
 .locate-card {
   display: none;

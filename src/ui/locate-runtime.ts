@@ -57,6 +57,7 @@ import type {
 import { readLaunchPreference, writeLaunchPreference } from '../state/locate-preference';
 import type { LaunchPreference } from '../state/locate-preference';
 import { registry } from '../state/registry';
+import { requireStylesheetMark } from '../util/chunk-stylesheets';
 import { prefersReducedMotion } from '../util/motion';
 import { createLocateCard } from './locate-card';
 import type { CardAction, CardBlock, CardView } from './locate-card';
@@ -110,6 +111,8 @@ export function createLocate(map: maplibregl.Map, button: HTMLButtonElement, sta
   const app = document.getElementById('app');
   const dock = document.getElementById('map-bottom-dock');
   if (!app || !dock) throw new Error('Locate needs the map dock');
+  // No stylesheet, no card: the press says its failure line instead.
+  requireStylesheetMark(app, '--ddm-locate-css', 'locate');
 
   let state: LocateState = IDLE_STATE;
   let attempts = 0;
