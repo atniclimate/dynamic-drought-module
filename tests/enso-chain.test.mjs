@@ -396,14 +396,21 @@ test('pattern link: each layer state that holds no read is its own state', () =>
 test('jet link: off until asked for, and then model guidance on its own two clocks', () => {
   // Not asked for: idle in plain words, never `unavailable`.
   const idle = [
-    [JET_OFF, /No model overlay is drawn now\./],
-    [{ kind: 'off', status: 'off', label: 'Off', line: 'Overlay off', notes: [] }, /No model overlay is drawn now\./],
-    [{ kind: 'wind', status: 'live', label: 'Atmospheric currents', line: 'live', notes: [] }, /The overlay drawn now is Atmospheric currents\./],
-    [{ kind: 'pwat', status: 'loading', label: 'Precipitable water', line: 'loading', notes: [] }, /The overlay drawn now is Precipitable water\./]
+    [JET_OFF, /No model overlay is drawn now\.$/],
+    [{ kind: 'off', status: 'off', label: 'Off', line: 'Overlay off', notes: [] }, /No model overlay is drawn now\.$/],
+    [{ kind: 'wind', status: 'live', label: 'Atmospheric currents', line: 'live', notes: [] }, /The overlay drawn now is Atmospheric currents\.$/],
+    [{ kind: 'waves', status: 'live (partial)', label: 'Ocean waves', line: 'live (partial)', notes: [] }, /The overlay drawn now is Ocean waves\.$/],
+    // Another kind that is loading, or that failed, was chosen and is not on the map: the link never says it is drawn.
+    [{ kind: 'pwat', status: 'loading', label: 'Precipitable water', line: 'loading', notes: [] }, /The overlay chosen now is Precipitable water\.$/],
+    [{ kind: 'wind', status: 'unavailable', label: 'Atmospheric currents', line: 'unavailable', notes: [] }, /The overlay chosen now is Atmospheric currents\.$/],
+    [{ kind: 'currents', status: 'no data', label: 'Ocean currents', line: 'no data', notes: [] }, /The overlay chosen now is Ocean currents\.$/],
+    // A snapshot that names no kind (an older publisher) still says only what its status supports.
+    [{ kind: null, status: 'live', label: 'Atmospheric currents', line: 'live', notes: [] }, /The overlay drawn now is Atmospheric currents\.$/]
   ];
   for (const [jet, drawn] of idle) {
     const view = buildEnsoChain(input({ jet }));
-    assertNoRead(view, 'jet', 'idle', `jet idle (${jet.kind})`);
+    assertNoRead(view, 'jet', 'idle', `jet idle (${jet.kind}, ${jet.status})`);
+    assert.doesNotMatch(linkOf(view, 'jet').note, jet.status === 'live' || jet.status === 'live (partial)' ? /chosen now/ : /drawn now is/);
     const link = linkOf(view, 'jet');
     assert.equal(link.idleWord, 'not shown');
     assert.match(link.note, /^Press to draw NOAA GFS 250 hPa wind on the map as model guidance\./);

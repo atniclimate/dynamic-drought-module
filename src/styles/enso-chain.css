@@ -214,6 +214,9 @@
   font-weight: var(--fw-subtitle);
   line-height: 1.3;
   color: var(--ink-strong);
+  /* No single word left alone on a last line, where the browser can help
+     (the briefing's rule, src/styles/briefing-lead.css "Line breaks"). */
+  text-wrap: balance;
 }
 .enso-truth-body {
   display: flex;
@@ -246,6 +249,7 @@
   font-size: 10.5px;
   line-height: 1.5;
   color: var(--fg-2);
+  text-wrap: pretty;
 }
 /* A date is one word: it moves to the next line whole. */
 .enso-truth-date {
@@ -279,6 +283,7 @@
   font-weight: var(--fw-subtitle);
   line-height: 1.3;
   color: var(--ink-strong);
+  text-wrap: balance;
 }
 .enso-truth-door {
   appearance: none;

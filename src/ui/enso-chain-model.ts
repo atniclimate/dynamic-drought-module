@@ -286,10 +286,16 @@ function jetLink(jet: JetRead): Built {
   } as const;
   const source = FLOW_WORDS.source.jet;
   if (jet.kind !== 'jet') {
-    const drawn =
-      jet.kind === null || jet.kind === 'off' || jet.status === 'inactive' || jet.status === 'off'
-        ? 'No model overlay is drawn now.'
-        : `The overlay drawn now is ${jet.label}.`;
+    // Another kind is "drawn" only while the overlay itself reports a drawn
+    // frame. One that is loading, or that failed, was chosen and is not on
+    // the map, and the link must not say it is.
+    const none = jet.label === '' || jet.kind === 'off' || jet.status === 'inactive' || jet.status === 'off';
+    const live = jet.status === 'live' || jet.status === 'live (partial)';
+    const drawn = none
+      ? 'No model overlay is drawn now.'
+      : live
+        ? `The overlay drawn now is ${jet.label}.`
+        : `The overlay chosen now is ${jet.label}.`;
     return {
       link: { ...base, status: 'idle', idleWord: 'not shown', note: `Press to draw ${source} on the map as model guidance. ${drawn}` }
     };
