@@ -160,8 +160,9 @@
     box-shadow: none;
     color: var(--ink) !important;
     font-family: var(--font-display);
-    /* The word scales with the cell: 9 px at 44 and 48, 9.75 px at 52, so
-       the longest word (Drought) keeps air on both sides at every size. */
+    /* The word scales with the cell: 8.25 px at 44, 9 px at 48, 9.75 px at
+       52, so the longest word (Drought) keeps air on both sides at every
+       size. */
     font-size: calc(var(--edge-size) * 0.1875);
     font-weight: var(--fw-subtitle);
     letter-spacing: 0;

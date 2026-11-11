@@ -10,7 +10,7 @@
  * ONE SPRING. `SETTLE_SPRING` is the stiffness and damping every phone
  * surface shares. The stylesheet's `--ease-spring` timing function is the
  * same curve sampled for declarative transitions, and
- * tests/spring.test.mjs fails when the two drift apart.
+ * tests/spring-gesture.test.mjs fails when the two drift apart.
  *
  * REDUCED MOTION. `runSpring` lands on the end value at once when the
  * reader asks for reduced motion: same end state, same meaning, no travel.

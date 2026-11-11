@@ -133,8 +133,10 @@ function renderLink(link: ChainLink, last: boolean): string {
     : `<span class="evidence-chain-step">${escapeHtml(link.title)}</span>`;
   const badge = pres && read ? `<span class="impact-claim-badge">${escapeHtml(pres.label)}</span>` : '';
   // A link with no read says so with the same word and glyph a matrix cell uses.
-  // An idle link wears the pill's plain face (an open mark): it is no read
-  // state, so it borrows neither the word nor the glyph of one.
+  // An idle link wears the pill's plain face (an open mark) and its own
+  // word. That word is "not shown" for a view nobody asked for, or the
+  // layer's own state where the matrix has no status for it ("no data",
+  // "zoom in to load"): never the glyph of a read state it is not in.
   const state = read
     ? ''
     : link.status === 'idle'
