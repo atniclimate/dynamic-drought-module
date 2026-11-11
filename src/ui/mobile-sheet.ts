@@ -301,7 +301,8 @@ function settle(): void {
 /**
  * Load the motion module the first time the phone shell activates. A
  * desktop or embed session never downloads it; a failed load leaves the
- * sheet working without motion.
+ * sheet working without motion, and is tried again when the shell next
+ * activates or a door is next pressed (`openFooterTab`).
  */
 function loadMotion(): void {
   if (motionAsked) return;
@@ -556,6 +557,10 @@ function syncFooterTab(tab: SheetTab | null): void {
  */
 function openFooterTab(tab: SheetTab): void {
   if (detent === null || !appEl) return;
+  // The sheet's title and close control arrive with the motion module. A
+  // load that failed is asked for again by the next door press, and not
+  // only by the next activation of the shell; once loaded this is a no-op.
+  loadMotion();
   // The lit door closes the sheet, whether it was pressed or implied.
   if (litTab() === tab) {
     setSheetDetent('closed');
