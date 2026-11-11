@@ -205,6 +205,56 @@ test('a phone refusal reuses the console\'s sentences and adds only the narrow o
   assert.match(presentation.FIRE3D_PHONE_REFUSAL_TEXT['narrow-window'], /too narrow for the 3D Fire view/);
 });
 
+test('the scene and the phone chrome stay behind dynamic imports', () => {
+  const strip = (source) => source.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '');
+  const cell = strip(read('src/ui/fire3d-phone.ts'));
+  // The entry cell reaches its chrome only through import(), and never the scene's own modules.
+  assert.match(cell, /import\('\.\/fire3d-phone-scene'\)/);
+  assert.doesNotMatch(cell, /import (?!type)[^;]*from '\.\/fire3d-phone-scene'/);
+  assert.doesNotMatch(cell, /from '\.\.\/map\/fire3d'/);
+  assert.doesNotMatch(cell, /fire3d-presentation|fire3d-camera/);
+  // The boot path names the cell module and nothing lazier than it.
+  const main = strip(read('src/main.ts'));
+  assert.match(main, /import \{ initFire3DPhone \} from '\.\/ui\/fire3d-phone'/);
+  assert.doesNotMatch(main, /fire3d-phone-scene|from '\.\/map\/fire3d'/);
+  // A phone loads the scene when the URL names the mode; the committed view alone loads it only for the console.
+  assert.match(
+    main,
+    /parseFire3dParam\(\) \|\|\s*\(fire3dConsole\.matches && getCommittedSnapshot\(\)\.cluster === 'wildfire'\)/
+  );
+});
+
+test('the phone stylesheet keeps the three design rules', () => {
+  const css = read('src/styles/fire3d-phone.css').replace(/\/\*[\s\S]*?\*\//g, '');
+  // Colour belongs to the data: glass and ink come from the tokens, never a literal.
+  assert.doesNotMatch(css, /#[0-9a-fA-F]{3,8}\b/, 'no hex colour');
+  assert.doesNotMatch(css, /\b(?:rgb|rgba|hsl|hsla|oklch|oklab)\(/, 'no literal colour function');
+  // Tight corners: every radius is a token, zero, or the 1 px of the bar.
+  const radii = [...css.matchAll(/border-radius:\s*([^;]+);/g)].map((match) => match[1].trim());
+  assert.ok(radii.length > 0);
+  for (const value of radii) {
+    for (const part of value.split(/\s+/)) {
+      assert.match(part, /^(?:0|1px|var\(--(?:glass-radius|radius-md|radius-sm)\))$/, `radius ${value}`);
+    }
+  }
+  // Even outlines: no side is given a border of its own.
+  assert.doesNotMatch(css, /border-(?:top|right|bottom|left)(?:-width)?\s*:/);
+  // Motion is transform and opacity only.
+  const keyframes = [...css.matchAll(/@keyframes [\w-]+\s*\{((?:[^{}]*\{[^{}]*\})*)\s*\}/g)];
+  assert.equal(keyframes.length, 3, 'the card, the pad and the band');
+  for (const [, body] of keyframes) {
+    const properties = [...body.matchAll(/([a-z-]+)\s*:/g)].map((match) => match[1]);
+    assert.ok(properties.length > 0);
+    for (const property of properties) {
+      assert.ok(['transform', 'opacity'].includes(property), `keyframes animate ${property}`);
+    }
+  }
+  // Every motion has its reduced twin.
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
+  // Phone chrome only: everything is keyed on the phone shell's attribute or sits inside the phone width.
+  assert.match(css, /\.fire3d-card,\s*\.fire3d-pad\s*\{\s*display:\s*none;/);
+});
+
 // ---------------------------------------------------------------------------
 // What stands where the 3D cell would be
 // ---------------------------------------------------------------------------

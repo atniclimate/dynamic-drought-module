@@ -65,6 +65,7 @@ import { getCommittedSnapshot } from '../state/cluster-service';
 import { getFire3DPreference, setFire3DPreference } from '../state/fire3d-store';
 import { registry } from '../state/registry';
 import { prefersReducedMotion } from '../util/motion';
+import { setMapTechnicalNote } from './map-technical-information';
 import { showToast } from './overlay';
 
 /** What the eager cell asks of this chrome. */
@@ -258,15 +259,21 @@ export function createFire3DPhoneScene(map: maplibregl.Map, app: HTMLElement): F
     else map.easeTo({ ...target, duration: FIRE3D_PAD_EASE_MS });
   }
 
-  /** The needle and the stops follow the camera frame by frame; the words wait for it to stop. */
+  /**
+   * The needle and the stops follow the camera frame by frame; the words
+   * wait for it to stop. Runs on every rotate and pitch event, so it writes
+   * only what has changed.
+   */
+  const needle = buttons.get('reset')?.querySelector<SVGElement>('.fire3d-pad-needle') ?? null;
   const paintCompass = (): void => {
     const now = camera();
-    const needle = buttons.get('reset')?.querySelector<SVGElement>('.fire3d-pad-needle');
-    if (needle) needle.style.transform = `rotate(${(-now.bearing).toFixed(1)}deg)`;
+    const turn = `rotate(${(-now.bearing).toFixed(1)}deg)`;
+    if (needle && needle.style.transform !== turn) needle.style.transform = turn;
     const word = fire3dCompassPoint(now.bearing).short;
     if (compassWord.textContent !== word) compassWord.textContent = word;
     for (const [name, button] of buttons) {
       const stopped = fire3dPadAtStop(name, now, limits());
+      if (stopped === button.hasAttribute('aria-disabled')) continue;
       if (stopped) button.setAttribute('aria-disabled', 'true');
       else button.removeAttribute('aria-disabled');
     }
@@ -368,6 +375,9 @@ export function createFire3DPhoneScene(map: maplibregl.Map, app: HTMLElement): F
         ? fire3dCoverageNote(status?.terrainExtent ?? depth)
         : FIRE3D_COVERAGE_NOTE;
     if (coverage.textContent !== note) coverage.textContent = note;
+    // The briefing's Technical information names the same archive while the
+    // scene is up, as the console's control makes it do on a desk.
+    setMapTechnicalNote('fire3d', note, depth !== null);
     const reading = up ? status?.terrainCoverage : 'full';
     const gapText =
       reading === 'none'
@@ -440,7 +450,10 @@ export function createFire3DPhoneScene(map: maplibregl.Map, app: HTMLElement): F
   // -------------------------------------------------------------------------
   function onStatus(next: Fire3DStatus): void {
     status = next;
-    if (next.state === 'unavailable') failure = `Unavailable. ${next.reason ?? ''}`.trim();
+    // Only a failure of the scene this phone asked for is this card's to report.
+    if (next.state === 'unavailable' && wanted) {
+      failure = `Unavailable. ${next.reason ?? ''}`.trim();
+    }
     if (next.state !== 'active') settledOnce = false;
     else if (next.transport === 'settled') settledOnce = true;
     render();
@@ -466,17 +479,12 @@ export function createFire3DPhoneScene(map: maplibregl.Map, app: HTMLElement): F
     );
   }
 
+  /** The card and the seats that make room for it. It is also what a failed scene's reason is read from. */
   function mount(): void {
     if (mounted) return;
     mounted = true;
-    app.append(card, pad);
+    app.appendChild(card);
     app.setAttribute(CARD_ATTRIBUTE, '');
-    map.on('rotate', paintCompass);
-    map.on('pitch', paintCompass);
-    map.on('moveend', onMoveEnd);
-    offSmoke = registry.on('status-change', (key) => {
-      if (key === HMS_SMOKE_LAYER_KEY) render();
-    });
     if (typeof ResizeObserver === 'function') {
       cardObserver = new ResizeObserver(schedule);
       cardObserver.observe(card);
@@ -494,14 +502,7 @@ export function createFire3DPhoneScene(map: maplibregl.Map, app: HTMLElement): F
   function unmount(): void {
     if (!mounted) return;
     mounted = false;
-    const within = card.contains(document.activeElement) || pad.contains(document.activeElement);
-    map.off('rotate', paintCompass);
-    map.off('pitch', paintCompass);
-    map.off('moveend', onMoveEnd);
-    goal = null;
-    announce = false;
-    offSmoke?.();
-    offSmoke = null;
+    const within = card.contains(document.activeElement);
     cardObserver?.disconnect();
     cardObserver = null;
     appObserver?.disconnect();
@@ -511,26 +512,48 @@ export function createFire3DPhoneScene(map: maplibregl.Map, app: HTMLElement): F
     if (frame !== 0) window.cancelAnimationFrame(frame);
     frame = 0;
     card.remove();
-    pad.remove();
-    pad.hidden = true;
-    said.textContent = '';
     app.removeAttribute(CARD_ATTRIBUTE);
     app.style.removeProperty(CARD_BOTTOM_PROPERTY);
     app.style.removeProperty(CARD_HEIGHT_PROPERTY);
     if (within) focusCell();
   }
 
-  /** The gate's attribute and the touch hold stand exactly while a wanted scene has its card. */
+  /**
+   * Everything that stands exactly while a wanted scene has its card: the
+   * gate's attribute, the touch hold, the pad, and the listeners that keep
+   * the compass and the status line true. A failed scene's card keeps none
+   * of them.
+   */
   function holdScene(next: boolean): void {
     if (next === app.hasAttribute(FIRE3D_PHONE_CHROME_ATTRIBUTE)) return;
     if (next) {
       hold = takeTouchHold();
+      app.appendChild(pad);
+      map.on('rotate', paintCompass);
+      map.on('pitch', paintCompass);
+      map.on('moveend', onMoveEnd);
+      offSmoke = registry.on('status-change', (key) => {
+        if (key === HMS_SMOKE_LAYER_KEY) render();
+      });
       app.setAttribute(FIRE3D_PHONE_CHROME_ATTRIBUTE, '');
-    } else {
-      app.removeAttribute(FIRE3D_PHONE_CHROME_ATTRIBUTE);
-      if (hold) releaseTouchHold(hold);
-      hold = null;
+      return;
     }
+    app.removeAttribute(FIRE3D_PHONE_CHROME_ATTRIBUTE);
+    const within = pad.contains(document.activeElement);
+    map.off('rotate', paintCompass);
+    map.off('pitch', paintCompass);
+    map.off('moveend', onMoveEnd);
+    offSmoke?.();
+    offSmoke = null;
+    goal = null;
+    announce = false;
+    pad.remove();
+    pad.hidden = true;
+    said.textContent = '';
+    setMapTechnicalNote('fire3d', '', false);
+    if (hold) releaseTouchHold(hold);
+    hold = null;
+    if (within) focusCell();
   }
 
   action.addEventListener('click', () => {

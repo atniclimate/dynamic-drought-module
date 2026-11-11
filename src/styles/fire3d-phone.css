@@ -73,9 +73,10 @@
     );
   }
 
-  /* The loading pulse sits under the key; with the card there it steps
-     below the card instead of across its first lines. */
-  #app[data-sheet-detent][data-fire3d-card] .loading-indicator {
+  /* The loading pulse sits under the key, and a toast of two lines or more
+     reaches down past it; with the card there both step below the card
+     instead of across its first lines. */
+  #app[data-sheet-detent][data-fire3d-card] :is(.loading-indicator, .copy-toast) {
     top: calc(
       var(
         --fire3d-card-bottom,
@@ -111,9 +112,16 @@
       var(--glass-shadow);
     color: var(--ink);
     font-family: var(--font-body);
-    /* The key's level: under Map information, a popup and the sheet. */
-    z-index: calc(var(--z-map-chrome) + 40);
+    /* Over a popup, so a tap on the scene can never cover the two
+       statements; under the sheet and the column, which never reach it. */
+    z-index: calc(var(--z-popup) + 10);
     animation: fire3d-card-in var(--dur-base) var(--ease-enter);
+  }
+  /* Map information is a glass panel across the whole stage: the scene
+     behind it is blurred past reading, and the card goes under it with the
+     scene, at the key's level. */
+  #app[data-sheet-detent][data-map-info-open] .fire3d-card {
+    z-index: calc(var(--z-map-chrome) + 40);
   }
 
   .fire3d-card-head {
