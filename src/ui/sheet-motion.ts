@@ -430,22 +430,29 @@ export function attachSheetMotion(
 
   /**
    * The title is the open door's own word, read from the door, so the two
-   * can never disagree. A sheet no door claimed is named for what it shows.
+   * can never disagree. A sheet no door claimed is named for what it shows:
+   * a surface that fills such a sheet says its own name in `data-sheet-name`
+   * on #app (the ENSO guide, src/ui/enso-chain.ts), and with none the name
+   * follows the view mode. A door always outranks that name.
    */
   const describe = (): void => {
     const stamped = app.getAttribute('data-sheet-detent') as SheetDetent | null;
     if (!stamped) return;
+    const door = app.getAttribute('data-sheet-tab');
+    const named = door === null ? app.getAttribute('data-sheet-name') : null;
     const tab =
-      app.getAttribute('data-sheet-tab') ??
+      door ??
       (stamped === 'full' && sheet.querySelector('#sheet-report .impact-panel.open')
         ? 'brief'
         : app.classList.contains('view-console')
           ? 'layers'
           : 'place');
     const word =
+      named ??
       document
         .querySelector(`#mobile-footer-nav button[data-tab="${tab}"] span`)
-        ?.textContent?.trim() ?? '';
+        ?.textContent?.trim() ??
+      '';
     if (title.textContent !== word) title.textContent = word;
     grabber?.setAttribute(
       'aria-label',
@@ -454,7 +461,7 @@ export function attachSheetMotion(
   };
   new MutationObserver(describe).observe(app, {
     attributes: true,
-    attributeFilter: ['data-sheet-detent', 'data-sheet-tab', 'class']
+    attributeFilter: ['data-sheet-detent', 'data-sheet-tab', 'data-sheet-name', 'class']
   });
   describe();
 
