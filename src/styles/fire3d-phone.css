@@ -348,9 +348,15 @@
   }
 
   /* A phone too narrow for the pad to stand beside the scale rulers lifts
-     it above them and the credit. 372 px is where the pad's left edge (the
-     viewport less the 64 px column band and the 132 px pad) clears the
-     longest ruler MapLibre draws (160 px from an 8 px margin) by 8 px. */
+     it above them and the credit. The longest ruler MapLibre draws ends
+     170 px from the left edge: 160 px (SCALE_MAX_WIDTH_PX, src/map/init.ts)
+     from its 10 px margin. The pad's left edge is the viewport less the
+     column band (58 px with 44 px cells, 64 with 48, 68 with 52) and the
+     132 px pad. Below 380 px wide the column's cells are 48 px at most
+     (narrowViewport, src/config/edge-column.ts), so from 372 px the pad's
+     left edge stands at 176 px or beyond. The least it clears the longest
+     ruler by is 6 px, at exactly 372 px; 9 px at 375 px with 48 px cells,
+     15 px at 375 px with 44 px cells, 10 px at 380 px with 52 px cells. */
   @media (max-width: 371px) {
     #app[data-sheet-detent] {
       --fire3d-pad-raise: calc(var(--mobile-scale-block, 44px) + 34px);
