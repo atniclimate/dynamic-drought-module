@@ -746,7 +746,10 @@ export function createLocate(map: maplibregl.Map, button: HTMLButtonElement, sta
         cancel();
       } else if (isLocated(state.phase)) {
         remove();
-      } else {
+      } else if (inShell()) {
+        // A press whose chunk landed after the phone shell went (a rotation,
+        // a wider window) starts nothing: there would be no cell or card to
+        // remove it with (review finding R2-12).
         if (offered && preference === 'unset') setPreference('no');
         void begin(false);
       }

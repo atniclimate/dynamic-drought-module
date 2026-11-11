@@ -693,6 +693,19 @@ test('the line shown before the frame names only who is asked, and what they lea
   }
 });
 
+// Review finding R2-12: a press whose chunk landed after the phone shell went
+// must start nothing, since no cell or card would be left to remove it with.
+// offer() and locateOnLaunch() already asked; cancel and remove stay open.
+test('a Locate press starts an attempt only inside the phone shell', async () => {
+  const runtime = await source('src/ui/locate-runtime.ts');
+  const press = runtime.slice(runtime.indexOf('    press(): void {'), runtime.indexOf('    offer(): void {'));
+  assert.match(press, /if \(isInFlight\(state\.phase\)\) \{\s*cancel\(\);\s*\} else if \(isLocated\(state\.phase\)\) \{\s*remove\(\);\s*\} else if \(inShell\(\)\) \{/);
+  assert.ok(press.indexOf('else if (inShell())') < press.indexOf('void begin(false);'), 'the shell is checked before an attempt begins');
+  const offer = runtime.slice(runtime.indexOf('    offer(): void {'));
+  assert.match(offer, /if \(offered \|\| state\.phase !== 'idle' \|\| !inShell\(\)\) return;/);
+  assert.match(offer, /if \(state\.phase === 'idle' && inShell\(\)\) void begin\(false, true\);/);
+});
+
 test('every Tribal verdict is its own sentence, and only "inside" names a place as the position\'s', async () => {
   const names = (key) => ({ aiannh: 'Tribal Lands (US Census)', 'bia-reservations': 'Reservation Boundaries (BIA)' })[key] ?? key;
   const inside = tribalCopy(tribalVerdict(ON, findTribalHits(LOADED, GOOD, 150), true), names);
