@@ -29,6 +29,7 @@ import type * as maplibregl from 'maplibre-gl';
 
 import { readLaunchPreference } from '../state/locate-preference';
 import { studioOwnsScreen } from '../state/studio-route';
+import { createChunkLoader } from '../util/chunk-retry';
 import { seatEdgeControl } from './edge-column';
 import { showToast } from './overlay';
 
@@ -51,6 +52,13 @@ const GLYPH =
   '<circle cx="12" cy="4.6" r="2.3"/><path d="M8.7 14.4v-2.2a3.3 3.3 0 0 1 6.6 0v2.2"/>' +
   '<path class="locate-ring" d="M17.2 15.9a8.5 3.4 0 1 1-10.4 0"/></svg>';
 
+/**
+ * The lazy half. After a failed load the next press asks again under a new
+ * URL: Chromium replays a failed import of the same URL without a request,
+ * so a plain second import() never recovers (src/util/chunk-retry.ts).
+ */
+const loadRuntime = createChunkLoader(() => import('./locate-runtime'), import.meta.url);
+
 export function initLocateControl(map: maplibregl.Map, deepLinkBoot: boolean): void {
   const button = document.createElement('button');
   button.type = 'button';
@@ -70,7 +78,7 @@ export function initLocateControl(map: maplibregl.Map, deepLinkBoot: boolean): v
 
   let runtime: Promise<LocateApi> | null = null;
   const load = (): Promise<LocateApi> => {
-    runtime ??= import('./locate-runtime').then((module) => module.createLocate(map, button, status));
+    runtime ??= loadRuntime().then((module) => module.createLocate(map, button, status));
     // A chunk that failed to load is asked for again by the next press.
     runtime.catch(() => {
       runtime = null;

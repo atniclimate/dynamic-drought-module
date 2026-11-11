@@ -31,6 +31,7 @@ import { TRIBAL_NATIONS_GROUP } from '../config/layer-groups';
 import { getPlaceSelection, onPlaceSelectionChange } from '../state/place-selection';
 import type { PlaceSelection } from '../state/place-selection';
 import { enterPlaceStudio } from '../state/studio-route';
+import { createChunkLoader } from '../util/chunk-retry';
 import {
   toggleTribalNationsGroup,
   wireTribalNationsHealth,
@@ -301,6 +302,13 @@ function settle(): void {
 }
 
 /**
+ * The motion module, asked for again under a new URL after a failure:
+ * Chromium replays a failed import of the same URL without a request, so a
+ * plain second import() never recovers (src/util/chunk-retry.ts).
+ */
+const loadMotionChunk = createChunkLoader(() => import('./sheet-motion'), import.meta.url);
+
+/**
  * Load the motion module the first time the phone shell activates. A
  * desktop or embed session never downloads it; a failed load leaves the
  * sheet working without motion, and is tried again when the shell next
@@ -309,7 +317,7 @@ function settle(): void {
 function loadMotion(): void {
   if (motionAsked) return;
   motionAsked = true;
-  void import('./sheet-motion')
+  void loadMotionChunk()
     .then(({ attachSheetMotion }) => {
       if (!appEl || !sidebarEl) return;
       motion = attachSheetMotion(appEl, sidebarEl, {

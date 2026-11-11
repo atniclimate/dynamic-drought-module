@@ -172,3 +172,27 @@ test('createChunkLoader falls back to the importer again when no URL can be deri
   assert.equal(calls, 2);
   assert.deepEqual(result, { ok: true, calls: 2 });
 });
+
+// The sprint's lazy doors that ask again after a failure (owner direction
+// 2026-11-09 (sprint), DR-pending). A plain second import() of a failed chunk
+// replays the failure with no request, so each must load through
+// createChunkLoader. Seen on the sprint camera: Locate and the sheet's motion
+// module never recovered, and the ENSO guide never asked again.
+test('the sprint lazy doors that retry load through createChunkLoader', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const doors = [
+    ['../src/ui/locate-control.ts', './locate-runtime'],
+    ['../src/ui/mobile-sheet.ts', './sheet-motion'],
+    ['../src/ui/enso-chain-loader.ts', './enso-chain'],
+    ['../src/ui/fire3d-phone.ts', './fire3d-phone-scene']
+  ];
+  for (const [file, chunk] of doors) {
+    const text = await readFile(new URL(file, import.meta.url), 'utf8');
+    const path = chunk.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+    const loads = text.match(new RegExp(`(?<!typeof )import\\('${path}'\\)`, 'g')) ?? [];
+    const wrapped =
+      text.match(new RegExp(`createChunkLoader\\(\\(\\) => import\\('${path}'\\), import\\.meta\\.url\\)`, 'g')) ?? [];
+    assert.equal(loads.length, 1, `${file} loads ${chunk} in one place`);
+    assert.equal(wrapped.length, 1, `${file} loads ${chunk} through createChunkLoader`);
+  }
+});

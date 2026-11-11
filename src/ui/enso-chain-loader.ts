@@ -11,6 +11,10 @@
  * An embed has no sidebar and no phone column, so nothing is loaded there.
  * Leaving the embed (its expand control) loads it then.
  *
+ * A failed load says so in one line, as the 3D Fire view does
+ * (src/ui/fire3d-phone.ts), and the next activation asks again under a new
+ * URL (src/util/chunk-retry.ts). The map and its key never wait on this chunk.
+ *
  * The layer announces the date of the frame it displays as an event with no
  * replay (`ddm:sst-snapshot`), and the chain arrives a moment after the layer
  * does. This module listens from the start and hands the date over, so the
@@ -19,10 +23,30 @@
 
 import type * as maplibregl from 'maplibre-gl';
 
+import { createChunkLoader } from '../util/chunk-retry';
+import { showToast } from './overlay';
+
 type ChainModule = typeof import('./enso-chain');
 
 /** Mirrors src/layers/sst-anomaly.ts `SST_SNAPSHOT_EVENT`. */
 const SST_SNAPSHOT_EVENT = 'ddm:sst-snapshot';
+
+/** The one line a failed load says. GUIDE_NAME in src/ui/enso-chain.ts names the guide. */
+const UNAVAILABLE = 'ENSO guide unavailable; the map and its key are unaffected.';
+
+const loadChain = createChunkLoader(() => import('./enso-chain'), import.meta.url);
+
+/**
+ * The guide's own host (mountEnsoChain in src/ui/enso-chain.ts draws only
+ * into #app and the sidebar's scroll). Where neither exists there is no
+ * guide to miss, so a failed load there says nothing.
+ */
+function guideHostExists(): boolean {
+  return (
+    document.getElementById('app') !== null &&
+    document.querySelector('#sidebar .sidebar-scroll') !== null
+  );
+}
 
 let generation = 0;
 let chain: ChainModule | null = null;
@@ -41,7 +65,7 @@ export function activateEnsoChain(map: maplibregl.Map): void {
   const mine = ++generation;
   window.addEventListener(SST_SNAPSHOT_EVENT, onSstSnapshot);
   const start = (): void => {
-    void import('./enso-chain')
+    void loadChain()
       .then((module) => {
         // A deactivate while the chunk was in flight wins: nothing mounts late.
         if (mine !== generation) return;
@@ -50,6 +74,8 @@ export function activateEnsoChain(map: maplibregl.Map): void {
       })
       .catch((error: unknown) => {
         console.error('[enso-chain] the chain failed to load:', error);
+        // Said only while the surface is still on the map, where the guide draws.
+        if (mine === generation && guideHostExists()) showToast(UNAVAILABLE);
       });
   };
   const app = document.getElementById('app');
