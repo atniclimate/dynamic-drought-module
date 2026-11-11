@@ -146,6 +146,10 @@
   white-space: normal;
   text-wrap: balance;
 }
+/* A long source name wraps without leaving one word on its last line. */
+.enso-chain-panel .evidence-chain-source {
+  text-wrap: pretty;
+}
 
 /* ---- The nested truth: one tap under the caption -------------------------- */
 
@@ -251,8 +255,9 @@
   color: var(--fg-2);
   text-wrap: pretty;
 }
-/* A date is one word: it moves to the next line whole. */
+/* A claim's date takes its own line under its source, as a link's does. */
 .enso-truth-date {
+  display: block;
   white-space: nowrap;
 }
 .enso-truth-body a {

@@ -572,7 +572,8 @@ function claimBlock(claim: SourcedClaim, heading: string): string {
     `<span class="impact-claim-badge">${escapeHtml(EVIDENCE_PRESENTATION[claim.evidence].label)}</span></p>` +
     `<p class="enso-truth-text">${escapeHtml(claim.text)}</p>` +
     (claim.uncertainty ? `<p class="enso-truth-qualifier">${escapeHtml(claim.uncertainty.text)}</p>` : '') +
-    `<p class="enso-truth-source">Source: ${name}${date ? `, <span class="enso-truth-date">${escapeHtml(date)}</span>` : ''}</p>` +
+    // The date takes its own line, as a link's does, so it never ends a wrapped source line alone.
+    `<p class="enso-truth-source">Source: ${name}${date ? ` <span class="enso-truth-date">${escapeHtml(date)}</span>` : ''}</p>` +
     `</div>`
   );
 }
