@@ -137,7 +137,10 @@
   }
 
   /* The two tools share the sheet's close control's face: a 44 px target
-     with a small tight plate inside it. */
+     with a small tight plate inside it. They sit side by side and never
+     overlap, so each keeps its whole target (review finding R2-6: a 10 px
+     overlap, whose sibling rule also pulled Close into the header whenever
+     the fold beside it was hidden). */
   .locate-card-tool {
     appearance: none;
     position: relative;
@@ -159,9 +162,6 @@
   }
   .locate-card-tool[hidden] {
     display: none;
-  }
-  .locate-card-tool + .locate-card-tool {
-    margin-left: -10px;
   }
   .locate-card-tool::before {
     content: '';
