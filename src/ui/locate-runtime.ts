@@ -73,13 +73,20 @@ import {
   tribalPlaceWords
 } from './locate-place';
 import type { TribalCheck, TribalPlaceWords } from './locate-place';
-import { getSheetDetent, isSheetActive, setSheetDetent } from './mobile-sheet';
+import { getSheetDetent, isSheetActive, setSheetDetent, sheetCameraInset } from './mobile-sheet';
+import type { SheetDetent } from './mobile-sheet';
 import { activateTribalNationsGroup } from './tribal-nations-action';
 
 /** A busy card that would only flash is not shown: a quick fix goes straight to its answer. */
 const BUSY_REVEAL_MS = 250;
 /** How long the permission reading may take before the attempt goes on without it. */
 const PERMISSION_READ_MS = 800;
+/**
+ * Below this window height the unfolded card and the sheet's first lines do
+ * not both fit; src/styles/locate.css folds the card to its title at the
+ * same height.
+ */
+const SHORT_SCREEN_PX = 700;
 
 /** What an accepted position has led to. Dropped whole when the position is. */
 interface Located {
@@ -91,8 +98,8 @@ interface Located {
   place: TribalPlaceWords | null;
   /** The card's body is unfolded. */
   open: boolean;
-  /** Unfolding the body lowered the sheet from half; folding it gives the half back. */
-  loweredSheet: boolean;
+  /** The stop unfolding the body lowered the sheet to, from half; folding gives the half back. */
+  loweredTo: SheetDetent | null;
   /** Aborts this position's reads when it is dropped. */
   readonly work: AbortController;
   /** Aborts the Tribal lands check alone. */
@@ -313,7 +320,7 @@ export function createLocate(map: maplibregl.Map, button: HTMLButtonElement, sta
       tribal: 'idle',
       place: null,
       open: true,
-      loweredSheet: false,
+      loweredTo: null,
       work: new AbortController(),
       check: null
     };
@@ -348,16 +355,18 @@ export function createLocate(map: maplibregl.Map, button: HTMLButtonElement, sta
   /**
    * Fold or unfold the card's body. Above a sheet at half there is no room
    * for the body, so the two trade: unfolding lowers the sheet to its first
-   * lines, and folding gives it the half back if nothing else moved it.
+   * lines (or closes it, on a short screen and for the landscape drawer,
+   * where even those leave no room), and folding gives it the half back if
+   * nothing else moved it. The place stays selected throughout.
    */
   function setOpen(mine: Located, open: boolean): void {
     mine.open = open;
     if (open && getSheetDetent() === 'half') {
-      mine.loweredSheet = true;
-      setSheetDetent('peek');
-    } else if (!open && mine.loweredSheet) {
-      mine.loweredSheet = false;
-      if (getSheetDetent() === 'peek') setSheetDetent('half');
+      mine.loweredTo = sheetCameraInset() === 0 || window.innerHeight < SHORT_SCREEN_PX ? 'closed' : 'peek';
+      setSheetDetent(mine.loweredTo);
+    } else if (!open && mine.loweredTo) {
+      if (getSheetDetent() === mine.loweredTo) setSheetDetent('half');
+      mine.loweredTo = null;
     }
     render();
   }
@@ -365,7 +374,7 @@ export function createLocate(map: maplibregl.Map, button: HTMLButtonElement, sta
   function openState(mine: Located, place: StateRef): void {
     // The briefing answers in the sheet: the card stands as its two lines above it.
     mine.open = false;
-    mine.loweredSheet = false;
+    mine.loweredTo = null;
     render();
     void openStateBriefingFor(map, place, () => located === mine).then(() => {
       // A launch has no gesture to earn the sheet's rise; the stored opt-in
@@ -383,7 +392,7 @@ export function createLocate(map: maplibregl.Map, button: HTMLButtonElement, sta
     const named = words ?? (await tribalPlaceWords(hit, null).catch(() => null));
     if (located !== mine || !named) return;
     mine.open = false;
-    mine.loweredSheet = false;
+    mine.loweredTo = null;
     render();
     await openTribalBriefingFor(map, hit, named, () => located === mine);
   }

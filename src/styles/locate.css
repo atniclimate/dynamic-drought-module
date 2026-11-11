@@ -38,7 +38,7 @@
     /* Never taller than the map band it stands in: above the sheet's top
        edge and the furniture on it, below the key chip. A longer body
        scrolls inside the glass. */
-    max-height: max(120px, calc(100vh - var(--sheet-lift, 0px) - 168px));
+    max-height: max(120px, calc(100vh - var(--sheet-lift, 0px) - 144px));
     overflow: hidden auto;
     overscroll-behavior: contain;
     border: 1px solid var(--glass-edge);
@@ -369,16 +369,22 @@
     line-height: 1.35;
   }
 
-  /* On the narrowest phones the claim needs the figure's room. */
-  @media (max-width: 340px) {
+  /* On the narrowest phones the claim needs the figure's room, and so it
+     does in the strip a landscape drawer leaves beside the column. */
+  @media (max-width: 365px) {
     .locate-figure {
       display: none;
     }
   }
+  @media (max-height: 480px) and (orientation: landscape) {
+    #app:not([data-sheet-detent='closed']) .locate-figure {
+      display: none;
+    }
+  }
 
-  /* A short phone has no room above a half sheet for more than the claim:
+  /* A short screen has no room above a half sheet for more than the claim:
      folded, the card is its title, and the fold opens the rest. */
-  @media (max-height: 620px) and (orientation: portrait) {
+  @media (max-height: 700px) {
     .locate-card-plate[data-folded] .locate-card-head {
       align-items: center;
       padding-top: 2px;
@@ -410,7 +416,7 @@
 @supports (height: 1dvh) {
   @media (max-width: 720px) {
     .locate-card-plate {
-      max-height: max(120px, calc(100dvh - var(--sheet-lift, 0px) - 168px));
+      max-height: max(120px, calc(100dvh - var(--sheet-lift, 0px) - 144px));
     }
   }
 }
