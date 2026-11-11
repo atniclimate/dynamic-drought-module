@@ -278,8 +278,17 @@ function settle(): void {
     settleTimer = null;
   }
   if (!mapRef) return;
-  mapRef.resize();
-  mapRef.jumpTo({ padding: { top: 0, left: 0, right: 0, bottom: 0 } });
+  const map = mapRef;
+  map.resize();
+  // `jumpTo` stops a running camera move where it stands, and a briefing
+  // frames its place while the sheet rises: the reset waits for that fit to
+  // land instead of cutting it short (owner direction 2026-11-09 (sprint),
+  // DR-pending).
+  const clearPadding = (): void => {
+    map.jumpTo({ padding: { top: 0, left: 0, right: 0, bottom: 0 } });
+  };
+  if (map.isMoving()) map.once('moveend', clearPadding);
+  else clearPadding();
   for (const fn of [...settleListeners]) {
     try {
       fn(detent);
