@@ -1,0 +1,572 @@
+/**
+ * The ENSO mode's chain: its host and its presses (owner direction
+ * 2026-11-09 (sprint), DR-pending).
+ *
+ * WHAT IT IS. While the sea surface temperature surface is on the map, one
+ * panel lays five separate claims side by side, from the tropical Pacific to
+ * a place: the observed index, the ocean surface the map draws, the
+ * jet-level wind as model guidance, the published seasonal outlook at the
+ * chosen place, and what is observed there now. It is drawn by the shared
+ * link component the priority briefing also feeds (src/ui/evidence-chain.ts)
+ * from data built in src/ui/enso-chain-model.ts, with an overview strip over
+ * it and the nested truth (odds, not outcomes) one tap under its caption.
+ *
+ * THE CHAIN IS THE MODE'S TABLE OF CONTENTS. Pressing a link takes the map
+ * to that link's view through the doors the rest of the interface already
+ * uses, so the link is in the address bar and Back, reload and a shared link
+ * keep working. This module holds no view state of its own:
+ *   index     the ocean door (`requestOcean('pacific')`, cluster=enso and
+ *             ocean=pacific) at the Current horizon, then the map key's own
+ *             door to the Nino 3.4 box, whose popup lists the index and its
+ *             companions, each with its own date;
+ *   pattern   the same ocean view with the model overlay off (`flow=off`),
+ *             so the analyzed surface stands alone;
+ *   jet       the flow overlay's one door (`flow=jet`);
+ *   tendency  the mode at Season ahead (`horizon=season-ahead`), which draws
+ *             the NOAA CPC seasonal outlook, framed on the chosen place;
+ *   here      the mode at Current, framed on the chosen place, and that
+ *             place's briefing;
+ *   place     the Place studio (`studio=place`), when no place is chosen.
+ *
+ * WHERE IT SITS. On the desktop shell it is a panel of the sidebar, above
+ * the ocean and atmosphere controls. On the phone shell it is the content of
+ * the sheet behind its own door, Guide, which this module seats in the
+ * right-edge column's panel group for as long as the chain exists
+ * (src/ui/edge-column.ts `seatEdgeControl`). The sheet stays closed until
+ * that door is pressed: a boot or a hazard press stays map first. While the
+ * guide is open #app carries `data-enso-guide="open"` and
+ * `data-sheet-name`, which the stylesheet (src/styles/enso-chain.css) and
+ * the sheet's header (src/ui/sheet-motion.ts) read; any real door, or the
+ * sheet closing, ends it. That attribute is presentation, like the sheet's
+ * own stop, and never enters the URL.
+ *
+ * READS. The index claims come from src/impact/enso.ts (the bundled
+ * snapshot, through the page's one shared transport). The surface's state is
+ * the layer registry's, the jet's is the flow overlay's own snapshot. The
+ * two place reads are the briefing's own source functions, gated by the
+ * briefing's own source policy, for the place selection in force; each is
+ * cancelled when the selection changes and when the chain leaves.
+ *
+ * NOTHING MOVES. There is no animation here, so reduced motion has no twin
+ * to keep in step, and no emphasis is carried by motion.
+ */
+
+import '../styles/briefing-lead.css';
+import '../styles/enso-chain.css';
+
+import type * as maplibregl from 'maplibre-gl';
+
+import { readEnsoClaims } from '../impact/enso';
+import type { BoundarySelectionContext } from '../impact/types';
+import { requestEnsoFlowKind } from '../layers/enso-flow';
+import { fitOcean } from '../map/camera-fit';
+import { requestCluster, requestHorizon, requestOcean } from '../state/cluster-service';
+import { clearOceanFraming } from '../state/cluster-store';
+import { getPlaceSelection, onPlaceSelectionChange } from '../state/place-selection';
+import type { PlaceSelection } from '../state/place-selection';
+import { registry } from '../state/registry';
+import { enterPlaceStudio } from '../state/studio-route';
+import { prefersReducedMotion } from '../util/motion';
+import { edgeColumnInset, seatEdgeControl } from './edge-column';
+import {
+  ENSO_CHAIN_CAPTION,
+  ENSO_CHAIN_HEADING,
+  buildEnsoChain,
+  ensoStripSvg,
+  renderEnsoTruth
+} from './enso-chain-model';
+import type { EnsoChainAction, EnsoRead, JetRead, PlaceRead } from './enso-chain-model';
+import { renderEvidenceChain } from './evidence-chain';
+import { openImpactPanel, openTechnicalInformation } from './impact-panel';
+import { getSheetDetent, isSheetActive, setSheetDetent, sheetCameraInset } from './mobile-sheet';
+
+const SURFACE_KEY = 'sst-anomaly';
+/** Mirrors src/layers/enso-flow.ts: the overlay's snapshot and its replay request. */
+const FLOW_SNAPSHOT_EVENT = 'ddm:enso-flow-snapshot';
+const FLOW_SNAPSHOT_REQUEST_EVENT = 'ddm:enso-flow-snapshot-request';
+/** Mirrors src/layers/sst-anomaly.ts: the map key's door to the Nino 3.4 box. */
+const FEATURE_DOOR_EVENT = 'ddm:feature-door';
+
+/** The phone sheet's presentation flag and the name its header shows. */
+const GUIDE_FLAG = 'data-enso-guide';
+const SHEET_NAME = 'data-sheet-name';
+const GUIDE_NAME = 'ENSO guide';
+
+const DOOR_GLYPH =
+  '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="5" cy="18.5" r="2.3"/><circle cx="12" cy="12" r="2.3"/><circle cx="19" cy="5.5" r="2.3"/><path d="M6.7 16.9l3.6-3.3M13.7 10.4l3.6-3.3"/></svg>';
+
+const IDLE_JET: JetRead = { kind: null, status: 'inactive', label: '', line: '', notes: [] };
+
+interface Held {
+  readonly map: maplibregl.Map;
+  readonly app: HTMLElement;
+  readonly panel: HTMLElement;
+  readonly body: HTMLElement;
+  readonly live: HTMLElement;
+  readonly door: HTMLButtonElement;
+  readonly offs: Array<() => void>;
+  readonly ensoController: AbortController;
+  placeController: AbortController | null;
+  enso: EnsoRead;
+  frameDate: string | null;
+  jet: JetRead;
+  place: { readonly label: string; readonly context: BoundarySelectionContext } | null;
+  outlook: PlaceRead;
+  here: PlaceRead;
+  truthOpen: boolean;
+  guideOpen: boolean;
+  painted: string;
+}
+
+let held: Held | null = null;
+
+// ---------------------------------------------------------------------------
+// Painting
+// ---------------------------------------------------------------------------
+
+function paint(): void {
+  const state = held;
+  if (!state) return;
+  const view = buildEnsoChain({
+    enso: state.enso,
+    surface: { status: registry.getStatus(SURFACE_KEY) ?? null, date: state.frameDate },
+    jet: state.jet,
+    place: state.place
+      ? { label: state.place.label, inside: state.place.context.pointInsidePlace === true }
+      : null,
+    outlook: state.outlook,
+    here: state.here
+  });
+  const chain = renderEvidenceChain(view.links, {
+    id: 'enso',
+    heading: ENSO_CHAIN_HEADING,
+    caption: ENSO_CHAIN_CAPTION
+  });
+  const strip = ensoStripSvg(view.strip);
+  const truth = renderEnsoTruth(state.enso);
+  const next = `${chain}\u0000${strip}\u0000${truth}`;
+  if (next === state.painted) return;
+  state.painted = next;
+
+  // The links are reborn by this render. Each press control carries its
+  // link's key, so focus returns to the same control, as the briefing does.
+  const active = document.activeElement;
+  const inBody = active instanceof HTMLElement && state.body.contains(active) ? active : null;
+  const focusKey = inBody?.closest<HTMLElement>('[data-chain-link]')?.dataset['chainLink'] ?? null;
+  const focusTruth: 'summary' | 'door' | null =
+    inBody === null || inBody.closest('.enso-truth') === null
+      ? null
+      : inBody.tagName === 'SUMMARY'
+        ? 'summary'
+        : inBody.hasAttribute('data-enso-door')
+          ? 'door'
+          : null;
+
+  state.body.innerHTML = chain;
+  state.body
+    .querySelector('.evidence-chain-title')
+    ?.insertAdjacentHTML('afterend', `<div class="enso-strip-figure">${strip}</div>`);
+  state.body.querySelector('.evidence-chain-caption')?.insertAdjacentHTML('afterend', truth);
+  const details = state.body.querySelector<HTMLDetailsElement>('.enso-truth');
+  if (details) details.open = state.truthOpen;
+
+  if (focusKey !== null) {
+    state.body
+      .querySelector<HTMLElement>(`[data-chain-link="${focusKey}"] [data-chain-action]`)
+      ?.focus({ preventScroll: true });
+  } else if (focusTruth !== null) {
+    state.body
+      .querySelector<HTMLElement>(focusTruth === 'summary' ? '.enso-truth > summary' : '.enso-truth [data-enso-door]')
+      ?.focus({ preventScroll: true });
+  }
+}
+
+function say(text: string): void {
+  if (held) held.live.textContent = text;
+}
+
+// ---------------------------------------------------------------------------
+// Reads
+// ---------------------------------------------------------------------------
+
+function readIndex(state: Held): void {
+  const signal = state.ensoController.signal;
+  void readEnsoClaims(signal).then(
+    (result) => {
+      if (signal.aborted || held !== state) return;
+      state.enso = result.ok
+        ? { status: 'ready', claims: result.claims }
+        : { status: 'unavailable', note: result.note ?? 'The ENSO index snapshot was unavailable.' };
+      paint();
+    },
+    () => {
+      if (signal.aborted || held !== state) return;
+      state.enso = { status: 'unavailable', note: 'The ENSO index snapshot was unavailable.' };
+      paint();
+    }
+  );
+}
+
+/**
+ * Read the two place links for the selection in force, through the
+ * briefing's own source functions and its own source policy, so the chain
+ * and the briefing state the same claims. A new selection, a cleared one and
+ * an unmount each abort what was in flight.
+ */
+function readPlace(state: Held, selection: PlaceSelection | null): void {
+  state.placeController?.abort();
+  state.placeController = null;
+  if (selection === null) {
+    state.place = null;
+    state.outlook = { status: 'none' };
+    state.here = { status: 'none' };
+    paint();
+    return;
+  }
+  const context = selection.context;
+  state.place = { label: selection.label, context };
+  state.outlook = { status: 'loading' };
+  state.here = { status: 'loading' };
+  paint();
+  const controller = new AbortController();
+  state.placeController = controller;
+  const signal = controller.signal;
+  const current = (): boolean => !signal.aborted && held === state;
+  const failed: PlaceRead = { status: 'unavailable', note: 'This source did not respond.' };
+  void Promise.all([import('../impact/source-policy'), import('../impact/sources')]).then(
+    ([policyModule, sources]) => {
+      if (!current()) return;
+      const policy = policyModule.briefingSourcePolicy(context);
+      const settle = (slot: 'outlook' | 'here', read: PlaceRead): void => {
+        if (!current()) return;
+        state[slot] = read;
+        paint();
+      };
+      const run = (
+        slot: 'outlook' | 'here',
+        key: 'cpcSeasonalTemp' | 'usdm',
+        kind: 'cpc-tercile' | 'usdm-category',
+        fetcher: typeof sources.fetchUsdmClaims
+      ): void => {
+        // A source the policy gates off for this place says so in the policy's own sentence.
+        if (!policyModule.sourceMayRun(policy, key)) {
+          settle(slot, { status: 'unavailable', note: policy.sources[key].note });
+          return;
+        }
+        void fetcher(context, signal).then(
+          (result) => {
+            const claim =
+              result.claims.find((candidate) => candidate.reading?.kind === kind) ?? result.claims[0];
+            settle(
+              slot,
+              result.ok && claim
+                ? { status: 'ready', claim }
+                : { status: 'unavailable', note: result.note ?? failed.note }
+            );
+          },
+          () => settle(slot, failed)
+        );
+      };
+      run('outlook', 'cpcSeasonalTemp', 'cpc-tercile', sources.fetchCpcSeasonalTempClaims);
+      run('here', 'usdm', 'usdm-category', sources.fetchUsdmClaims);
+    },
+    () => {
+      if (!current()) return;
+      state.outlook = failed;
+      state.here = failed;
+      paint();
+    }
+  );
+}
+
+function onFlowSnapshot(event: Event): void {
+  const state = held;
+  if (!state) return;
+  const detail = (event as CustomEvent<Partial<JetRead> | null>).detail;
+  if (!detail || typeof detail.status !== 'string') return;
+  state.jet = {
+    kind: typeof detail.kind === 'string' ? detail.kind : null,
+    status: detail.status,
+    label: typeof detail.label === 'string' ? detail.label : '',
+    line: typeof detail.line === 'string' ? detail.line : '',
+    notes: Array.isArray(detail.notes) ? detail.notes.filter((note): note is string => typeof note === 'string') : [],
+    ...(typeof detail.cycle === 'number' ? { cycle: detail.cycle } : {}),
+    ...(typeof detail.valid === 'number' ? { valid: detail.valid } : {})
+  };
+  paint();
+}
+
+// ---------------------------------------------------------------------------
+// Presses: every one goes through an existing door
+// ---------------------------------------------------------------------------
+
+/** Run `then` once the camera rests (at once when it is not moving). */
+function afterMove(map: maplibregl.Map, then: () => void): void {
+  if (map.isMoving()) map.once('moveend', then);
+  else then();
+}
+
+/** Frame the chosen place, clear of the phone sheet and the right-edge column. */
+function framePlace(map: maplibregl.Map, context: BoundarySelectionContext): void {
+  const animate = !prefersReducedMotion();
+  const box = context.bboxCrossesAntimeridian ? undefined : context.bbox;
+  if (box) {
+    map.fitBounds(
+      [
+        [box[0], box[1]],
+        [box[2], box[3]]
+      ],
+      {
+        padding: { top: 60, right: 40 + edgeColumnInset(), bottom: 40 + sheetCameraInset(), left: 40 },
+        maxZoom: 9,
+        animate
+      }
+    );
+    return;
+  }
+  const view = { center: [context.lngLat.lng, context.lngLat.lat] as [number, number], zoom: Math.max(map.getZoom(), 5) };
+  if (animate) map.easeTo(view);
+  else map.jumpTo(view);
+}
+
+function press(action: EnsoChainAction): void {
+  const state = held;
+  if (!state) return;
+  const { map } = state;
+  const place = state.place;
+  switch (action) {
+    case 'index':
+    case 'pattern':
+      // The ocean door: the mode, the Pacific camera claim and the fit, as the
+      // region menu's ocean views do it (src/ui/sidebar.ts).
+      requestOcean('pacific');
+      requestHorizon('current');
+      fitOcean(map, 'pacific');
+      if (action === 'pattern') {
+        requestEnsoFlowKind('off');
+        say('The map shows the sea surface temperature surface alone, framed on the Pacific.');
+      } else {
+        // The index region's own popup, through the map key's door, once the camera rests.
+        afterMove(map, () => {
+          if (held === state) window.dispatchEvent(new CustomEvent(FEATURE_DOOR_EVENT, { detail: 'nino34' }));
+        });
+        say('The map is framed on the Pacific. The boxed region is where the index is measured.');
+      }
+      return;
+    case 'jet':
+      requestEnsoFlowKind('jet');
+      say('Drawing NOAA GFS 250 hPa wind on the map as model guidance.');
+      return;
+    case 'tendency':
+    case 'here':
+      if (!place) return;
+      // The camera leaves the ocean fit, so the link stops claiming it.
+      requestCluster('enso');
+      clearOceanFraming();
+      requestHorizon(action === 'tendency' ? 'season-ahead' : 'current');
+      framePlace(map, place.context);
+      if (action === 'tendency') {
+        say(`The map shows the seasonal outlook, framed on ${place.label}.`);
+        return;
+      }
+      // The briefing takes the phone sheet, so the guide stands down first.
+      closeGuide(false);
+      openImpactPanel(place.context);
+      return;
+    case 'place':
+      closeGuide(false);
+      enterPlaceStudio();
+      return;
+  }
+}
+
+function onPanelClick(event: Event): void {
+  const target = event.target instanceof Element ? event.target : null;
+  const control = target?.closest<HTMLElement>('[data-chain-action], [data-enso-door]') ?? null;
+  if (!control || !held?.panel.contains(control)) return;
+  if (control.dataset['ensoDoor'] === 'technical') {
+    closeGuide(false);
+    openTechnicalInformation(control);
+    return;
+  }
+  const action = control.dataset['chainAction'];
+  if (action !== undefined) press(action as EnsoChainAction);
+}
+
+// ---------------------------------------------------------------------------
+// The phone door and the sheet
+// ---------------------------------------------------------------------------
+
+function closeGuide(returnFocus: boolean): void {
+  const state = held;
+  if (!state || !state.guideOpen) return;
+  state.guideOpen = false;
+  state.app.removeAttribute(GUIDE_FLAG);
+  state.app.removeAttribute(SHEET_NAME);
+  state.door.setAttribute('aria-expanded', 'false');
+  // The sheet hands focus to the map when no door claimed it; this door did.
+  if (returnFocus && document.activeElement?.classList.contains('maplibregl-canvas')) {
+    state.door.focus({ preventScroll: true });
+  }
+}
+
+function openGuide(): void {
+  const state = held;
+  if (!state || !isSheetActive()) return;
+  state.guideOpen = true;
+  state.app.setAttribute(GUIDE_FLAG, 'open');
+  state.app.setAttribute(SHEET_NAME, GUIDE_NAME);
+  state.door.setAttribute('aria-expanded', 'true');
+  // A door that holds the sheet lets go first; the sheet is then raised by
+  // no door, which is what the stylesheet reads as the guide's turn.
+  if (state.app.hasAttribute('data-sheet-tab') && getSheetDetent() !== 'closed') {
+    setSheetDetent('closed', { announce: false });
+  }
+  if (getSheetDetent() === 'closed') setSheetDetent('half');
+  const scroll = state.panel.closest<HTMLElement>('.sidebar-scroll');
+  if (scroll) scroll.scrollTop = 0;
+}
+
+/** A real door took the sheet, or the sheet closed or went away: the guide ends. */
+function syncGuide(): void {
+  const state = held;
+  if (!state || !state.guideOpen) return;
+  const detent = state.app.getAttribute('data-sheet-detent');
+  if (detent === null || detent === 'closed' || state.app.hasAttribute('data-sheet-tab')) {
+    closeGuide(detent === 'closed');
+  }
+}
+
+function buildDoor(): HTMLButtonElement {
+  const door = document.createElement('button');
+  door.type = 'button';
+  door.id = 'enso-guide-door';
+  door.className = 'enso-guide-door';
+  // The name leads with the word the cell shows (WCAG 2.5.3), as the hazard cells do.
+  door.setAttribute('aria-label', 'Guide. ENSO, from the ocean to the weather here');
+  door.setAttribute('aria-controls', 'sidebar');
+  door.setAttribute('aria-expanded', 'false');
+  door.innerHTML = `${DOOR_GLYPH}<span>Guide</span>`;
+  door.addEventListener('click', () => {
+    if (!held) return;
+    if (held.guideOpen) setSheetDetent('closed');
+    else openGuide();
+  });
+  door.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape' || !held?.guideOpen) return;
+    event.preventDefault();
+    setSheetDetent('closed');
+  });
+  return door;
+}
+
+// ---------------------------------------------------------------------------
+// Mounting
+// ---------------------------------------------------------------------------
+
+/** The loader hands over the frame date the layer announced (no replay exists for it). */
+export function setEnsoChainFrameDate(date: string | null): void {
+  if (!held || held.frameDate === date) return;
+  held.frameDate = date;
+  paint();
+}
+
+/** Mount the chain for the map. Idempotent: a second call refreshes the frame date only. */
+export function mountEnsoChain(map: maplibregl.Map, frameDate: string | null): void {
+  if (held) {
+    if (held.map === map) {
+      setEnsoChainFrameDate(frameDate);
+      return;
+    }
+    unmountEnsoChain();
+  }
+  const app = document.getElementById('app');
+  const scroll = document.querySelector<HTMLElement>('#sidebar .sidebar-scroll');
+  if (!app || !scroll) return;
+
+  const panel = document.createElement('section');
+  panel.className = 'panel enso-chain-panel';
+  panel.id = 'enso-chain-panel';
+  panel.setAttribute('aria-label', 'ENSO, from the ocean to the weather here');
+  const body = document.createElement('div');
+  body.className = 'enso-chain';
+  const live = document.createElement('p');
+  live.className = 'sr-only';
+  live.setAttribute('aria-live', 'polite');
+  panel.append(body, live);
+  // Above the ocean and atmosphere controls, which follow this seat in the page.
+  const anchor = document.getElementById('brief-display');
+  if (anchor?.parentElement === scroll) anchor.after(panel);
+  else scroll.append(panel);
+
+  const door = buildDoor();
+  const state: Held = {
+    map,
+    app,
+    panel,
+    body,
+    live,
+    door,
+    offs: [],
+    ensoController: new AbortController(),
+    placeController: null,
+    enso: { status: 'loading' },
+    frameDate,
+    jet: IDLE_JET,
+    place: null,
+    outlook: { status: 'none' },
+    here: { status: 'none' },
+    truthOpen: false,
+    guideOpen: false,
+    painted: ''
+  };
+  held = state;
+
+  panel.addEventListener('click', onPanelClick);
+  // `toggle` does not bubble: caught on the way down, so a repaint keeps the reader's choice.
+  panel.addEventListener(
+    'toggle',
+    (event) => {
+      const target = event.target;
+      if (target instanceof HTMLDetailsElement && target.classList.contains('enso-truth')) {
+        state.truthOpen = target.open;
+      }
+    },
+    true
+  );
+  window.addEventListener(FLOW_SNAPSHOT_EVENT, onFlowSnapshot);
+  state.offs.push(() => window.removeEventListener(FLOW_SNAPSHOT_EVENT, onFlowSnapshot));
+  state.offs.push(
+    registry.on('status-change', (key) => {
+      if (key === SURFACE_KEY) paint();
+    })
+  );
+  state.offs.push(onPlaceSelectionChange((selection) => readPlace(state, selection)));
+  const shell = new MutationObserver(syncGuide);
+  shell.observe(app, { attributes: true, attributeFilter: ['data-sheet-detent', 'data-sheet-tab'] });
+  state.offs.push(() => shell.disconnect());
+  // The door rides the column's panel group, under the four doors, on phones only.
+  state.offs.push(seatEdgeControl(door, { group: 'panels', order: 20 }));
+
+  paint();
+  readIndex(state);
+  readPlace(state, getPlaceSelection());
+  // The overlay answers with what it is drawing now.
+  window.dispatchEvent(new Event(FLOW_SNAPSHOT_REQUEST_EVENT));
+}
+
+/** Remove the chain: every read is aborted, the door leaves the column, an open guide closes. */
+export function unmountEnsoChain(): void {
+  const state = held;
+  if (!state) return;
+  const showing = state.guideOpen;
+  closeGuide(false);
+  held = null;
+  state.ensoController.abort();
+  state.placeController?.abort();
+  for (const off of state.offs) off();
+  state.door.remove();
+  state.panel.remove();
+  // The sheet was showing the guide and nothing else: it goes with it.
+  if (showing && isSheetActive() && getSheetDetent() !== 'closed') setSheetDetent('closed');
+}
