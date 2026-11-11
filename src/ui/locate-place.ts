@@ -35,6 +35,14 @@
  *      `representativePoint` of the area's geometry with
  *      `pointInsidePlace: true`, exactly as the search does
  *      (src/ui/search-controller.ts).
+ *   6. OPENING AN AREA NARROWS WHAT IS ASKED FOR. A check that places the
+ *      position inside an area opens that area, and `openTribalBriefingFor`
+ *      frames it: from then on the by-view sources and the briefing's are
+ *      asked about the area, which can be far smaller than the square. No
+ *      request carries the position, but one for a small area says about as
+ *      much. The note shown before the check says this too, so the person
+ *      agrees to it first; an area the position only reaches the edge of is
+ *      never opened without a press.
  *
  * EVERY FRAME USES ONE PADDING RULE: `briefingCameraPadding`
  * (src/state/deep-link.ts), which keeps a framed place clear of the half

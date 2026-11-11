@@ -868,18 +868,31 @@ function untestedWord(status: TribalLayerReading['status']): string {
 }
 
 /**
- * The one plain line shown BEFORE the map frames the grid square, read
- * against src/layers/aiannh.ts and src/layers/bia-reservations.ts: each asks
- * its service for the map view (`buildQueryEnvelope(map.getBounds())`), and
- * the view is a function of the square. `agencies` are the services of the
- * boundary layers that are on, so the line never names one that is not asked.
+ * The plain note shown BEFORE the map frames the grid square. Three
+ * sentences, each read against the code it describes:
+ *
+ *   - What moves, and who is asked. src/layers/aiannh.ts and
+ *     src/layers/bia-reservations.ts each ask their service for the map view
+ *     (`buildQueryEnvelope(map.getBounds())`). `agencies` are the services of
+ *     the boundary layers that are on, so none is named that is not asked.
+ *   - What any source can learn from that. Everything that loads by map view
+ *     (those two, the base map, imagery) is asked for a view that is a
+ *     function of the square, so the sentence speaks of the map's sources
+ *     and not of the two agencies alone.
+ *   - What follows. A position the check places inside an area opens that
+ *     area (`openTribalBriefingFor`, src/ui/locate-place.ts): the map frames
+ *     it and its briefing is read, as the search does for a place found by
+ *     name. From then on sources are asked about the area, which can be far
+ *     smaller than the square, so the note says so before the person agrees
+ *     and does not leave "the square" as the last word.
  */
 export function tribalDisclosure(agencies: readonly string[], cell: Envelope): string {
   const { widthKm, heightKm } = cellSizeKm(cell);
   return (
     `To check, the map moves to a grid square that contains you (about ${widthKm} by ${heightKm} km) ` +
     `and loads Tribal boundaries there from ${listOf(agencies)}. ` +
-    'Your exact position is not sent: they see the square, not where you are in it.'
+    "Your exact position is not sent: the map's sources see that square, not where you are in it. " +
+    'If the check places you inside an area, the map opens that area, and its sources see the area asked for.'
   );
 }
 

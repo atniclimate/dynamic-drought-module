@@ -630,7 +630,17 @@ test('the line shown before the frame names only who is asked, and what they lea
   const both = tribalDisclosure([drawnBy('aiannh'), drawnBy('bia-reservation')], cell);
   assert.match(both, /about 38 by 56 km/);
   assert.match(both, /from the U\.S\. Census Bureau and the Bureau of Indian Affairs\./);
-  assert.match(both, /Your exact position is not sent: they see the square, not where you are in it\./);
+  // Every by-view source is asked for the same view, so the sentence is not about the two agencies alone.
+  assert.match(both, /Your exact position is not sent: the map's sources see that square, not where you are in it\./);
+  // The square is not the last word: a position placed inside an area opens that area, and the note says so first.
+  assert.match(both, /If the check places you inside an area, the map opens that area, and its sources see the area asked for\.$/);
+  const runtime = await source('src/ui/locate-runtime.ts');
+  assert.match(runtime, /if \(inside && words\) void openArea\(mine, inside\.hit, words\);/);
+  assert.match(runtime, /await openTribalBriefingFor\(map, hit, named, \(\) => located === mine\);/);
+  assert.match(
+    await source('src/ui/locate-place.ts'),
+    /map\.fitBounds\(bboxToContinuousBounds\(bbox\), \{ padding: clearOfCard\(briefingCameraPadding\(true\)\) \}\);/
+  );
   const one = tribalDisclosure([drawnBy('bia-reservation')], cell);
   assert.doesNotMatch(one, /Census/);
   // The same line for every point of the square: nothing in it is the point's.
