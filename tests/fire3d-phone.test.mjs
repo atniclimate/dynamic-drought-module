@@ -482,6 +482,21 @@ test('the hold is on from the capture and off only after the restore has finishe
   assert.match(runtime, /studioHold: isPlaceDisplayHeld\(\)/, 'the runtime gate reads the hold');
 });
 
+// Review finding R2-5, measured on the sprint camera: a phone link that opens
+// inside the PLACE studio with 3D asked for, whose 3D chrome arrived after
+// the studio's clean display, withdrew the ask (fire3d=true left the URL) and,
+// after Back, blamed "the layers you added" on layers nobody added.
+test('the phone chrome lets a 3D ask wait while the PLACE studio holds the display', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const chrome = await readFile(new URL('../src/ui/fire3d-phone-scene.ts', import.meta.url), 'utf8');
+  const set = chrome.slice(chrome.indexOf('set(offer: Fire3DPhoneOffer, asked: boolean): void {'));
+  const wait = set.indexOf('if (isPlaceDisplayHeld()) return;');
+  const refuse = set.indexOf('failure = CUSTOM_SET_UNAVAILABLE;');
+  assert.ok(wait > 0 && refuse > wait, 'the hold is read before the custom-set refusal');
+  assert.ok(set.indexOf('setFire3DPreference(false)') > wait, 'and before the ask is withdrawn');
+  assert.match(chrome, /import \{ isPlaceDisplayHeld \} from '\.\.\/state\/place-display-hold';/);
+});
+
 // The orchestrator, driven through the fake phone.
 
 const sources = new Map();

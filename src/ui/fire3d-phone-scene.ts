@@ -63,6 +63,7 @@ import type { Fire3DStatus } from '../map/fire3d';
 import { loadFire3DController } from '../map/fire3d-chunk';
 import { getCommittedSnapshot } from '../state/cluster-service';
 import { getFire3DPreference, setFire3DPreference } from '../state/fire3d-store';
+import { isPlaceDisplayHeld } from '../state/place-display-hold';
 import { registry } from '../state/registry';
 import { requireStylesheetMark } from '../util/chunk-stylesheets';
 import { prefersReducedMotion } from '../util/motion';
@@ -686,6 +687,11 @@ export function createFire3DPhoneScene(map: maplibregl.Map, app: HTMLElement): F
         state !== 'active' &&
         state !== 'checking'
       ) {
+        // The PLACE studio's clean display sets the Fire layers aside, which
+        // reads as a custom set nobody made: the ask waits for the display
+        // the studio puts back, and the scene enters then (review finding
+        // R2-5; src/state/place-display-hold.ts).
+        if (isPlaceDisplayHeld()) return;
         // The ask cannot be met from a custom set: withdraw it and say why.
         // The withdrawal re-enters this function with `asked` false, which
         // shows the reason below.
