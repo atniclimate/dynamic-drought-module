@@ -374,7 +374,10 @@ function scopeWords(entry: PriorityEntry): string {
     case 'wfigs-perimeters':
       return 'Current perimeters in the bounding box around this selection, which is wider than the place.';
     case 'usdm-category':
-      return 'This week\'s map, at the selected point.';
+      // Not "this week's map": that is true only until the next release
+      // (src/impact/sources.ts, the map date note). The tile's source line
+      // carries the map's own date.
+      return 'The weekly map, at the selected point.';
     case 'heatrisk-level':
       return 'One 24-hour period, at the selected point.';
     case 'spc-fire-days':
@@ -433,10 +436,16 @@ function renderState(hazard: HazardKey, state: PriorityCellState, familiesRead: 
     family !== undefined && !familiesRead.has(family)
       ? `<div class="lead-figure">${unreadFigure(family, gaugeStateOf(state.status))}</div>`
       : '';
+  // "No source answered" is true only of a settled cell that holds nothing
+  // and was given no words. A partly read cell did get an answer (the full
+  // detail shows it), and the matrix marks a cell whose lane answered with
+  // nothing to say by an empty note: neither may wear that sentence.
   const note =
     state.status === 'loading'
       ? 'Reading sources.'
-      : (state.note ?? 'No source answered for this hazard at this horizon.');
+      : state.status === 'unavailable'
+        ? (state.note ?? 'No source answered for this hazard at this horizon.')
+        : (state.note ?? '');
   return (
     `<div class="lead-state" data-lead-status="${state.status}">` +
     `<p class="lead-state-line"><span class="impact-hazard-pill impact-hazard-pill-${state.status}">${escapeHtml(READ_STATE_WORD[state.status])}</span>` +
@@ -533,10 +542,6 @@ function presentNow(entry: PriorityEntry, now: number): boolean {
   return entry.lead.horizon === 'current' || windowHolds(entry.lead.reading, now);
 }
 
-function dayWords(now: number): string {
-  return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(now));
-}
-
 /**
  * The hazards that hold a ranked read for the same moment, joined as
  * co-occurrence in place and time. No arrow, no order between them beyond the
@@ -572,7 +577,7 @@ function renderTogether(order: PriorityOrder, now: number): string {
     `<section class="lead-together" aria-labelledby="lead-together-title">` +
     `<h4 class="lead-subtitle" id="lead-together-title">Present together here</h4>` +
     `<ul class="lead-together-list">${chips}</ul>` +
-    `<p class="lead-caption">Each holds a ranked read on ${escapeHtml(dayWords(now))}. They are separate issuer products on their own clocks, joined here only because they are present together. DDM draws no cause between them.</p>` +
+    `<p class="lead-caption">Each holds a ranked read in this briefing, on its own clock: the date is on each read above. They are separate issuer products, joined here only because they are present together. DDM draws no cause between them.</p>` +
     (unread.length > 0
       ? `<p class="lead-caption">Not fully read for this moment: ${escapeHtml(unread.join(', '))}. This strip joins only what was read.</p>`
       : '') +
@@ -604,8 +609,9 @@ function unreadLink(cell: HazardCell): Pick<ChainLink, 'status' | 'note'> {
  * shows: "companion" is how src/impact/enso.ts names the Nino 3.4 reads beside
  * the index; "historically tends to shift" stands on the NOAA CPC ENSO FAQ
  * sentence the technical section quotes (src/ui/map-technical-information.ts,
- * the ENSO notes); "informs" is the same section's wording for the CPC
- * seasonal outlooks; "read beside" claims no relationship at all.
+ * the ENSO notes); "read beside" claims no relationship at all, and it is
+ * all the joint after the unread jet link says: this briefing reads no
+ * jet-level product, so it relates that link to nothing.
  */
 export function buildEnsoChainLinks(briefing: ImpactBriefing): ChainLink[] {
   const { current, nearTerm, longRange } = briefing.horizons;
@@ -656,7 +662,7 @@ export function buildEnsoChainLinks(briefing: ImpactBriefing): ChainLink[] {
     title: 'Jet and storm track (model guidance)',
     status: 'unavailable',
     note: 'This briefing reads no jet-level or storm-track product.',
-    relation: 'informs'
+    relation: 'read beside'
   });
 
   const outlook = findClaim(longRange.cells.heat, (claim) => claim.reading?.kind === 'cpc-tercile');

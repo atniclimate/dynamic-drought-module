@@ -581,7 +581,10 @@ export function orderBriefing(cells: readonly PriorityCell[]): PriorityOrder {
         states.push({
           horizon: cell.horizon,
           status: cell.status,
-          ...(cell.note ? { note: cell.note } : {})
+          // An empty note is a statement too: the matrix sets it on a cell
+          // whose lane answered with nothing to say, to keep the absence
+          // sentence off it. It travels as it is.
+          ...(cell.note !== undefined ? { note: cell.note } : {})
         });
       }
     }
