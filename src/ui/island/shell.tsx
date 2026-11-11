@@ -544,7 +544,7 @@ function ShellDetails({ snap, framingNote }: {
           {snapshot.summary.caveat ?? ''}
         </p>
       </section>
-      <p class="shell-minimap-note" id="shell-framing-note" aria-live="polite">{framingNote.value}</p>
+      <p class="sr-only" id="shell-framing-note" aria-live="polite">{framingNote.value}</p>
       {/* The disabled chips' reasons ride each chip's title; their visible text reads in Technical information. */}
     </>
   );

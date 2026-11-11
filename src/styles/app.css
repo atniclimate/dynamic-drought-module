@@ -565,6 +565,8 @@ a:hover {
 }
 .app-shell.embed .sidebar-expand-btn {
   display: inline-flex;
+  min-width: var(--touch-target);
+  min-height: var(--touch-target);
 }
 
 /* ----------------------------------------------------------------------------
@@ -1155,8 +1157,24 @@ button.conditions-metric:hover .conditions-action-hide {
 
 #layers-studio-entry-host { margin-top: 12px; }
 #layers-studio-entry-host:empty { display: none; }
-#brief-secondary-actions .tribal-nations-brief-row { padding: 10px 0 0; }
+/* The count sits at the button's right edge, so the row is one line tall and
+   clears the sticky dock in every mode (1440x900 measured in
+   interface-responsive.spec.ts). */
+#brief-secondary-actions .tribal-nations-brief-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 0 0;
+}
+#brief-secondary-actions .tribal-nations-health {
+  flex: 0 1 auto;
+  margin-top: 0;
+  text-align: end;
+}
 #brief-secondary-actions .tribal-nations-brief-action {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
   min-height: 32px;
   background: transparent;
   border-color: var(--line);
@@ -6491,10 +6509,11 @@ a.impact-resource-link::after {
      joined scales' top edge while clearing the credits button's corner seat. */
   margin-bottom: 46px;
 }
-/* The embed corner is two pixels tighter than the desktop corner, so the
-   embed shell carries its own diameter for the same token. */
+/* An embed has no browser chrome to fall back on and is often held in a
+   thumb, so its disclosure meets the touch floor at every size. The dock
+   already lifts 92px, clear of a 44px disclosure. */
 .app-shell.embed {
-  --map-info-size: 26px;
+  --map-info-size: var(--touch-target);
 }
 .app-shell.embed .map-info-btn {
   appearance: none;
@@ -7412,9 +7431,10 @@ a.impact-resource-link::after {
 
 /* Optional controls and live explanations expand below the shared doors. */
 .shell-details-panel { display: none; }
-#shell-framing-note:empty { margin: 0; }
 #shell-details-island > .shell-fire3d { margin-block: 10px; }
 #shell-details-island > .shell-summary { margin-block: 6px; }
+/* An empty caveat leaves nothing to space; the dock below is short of room. */
+#shell-details-island > .shell-summary:has(> .shell-summary-caveat:empty) { margin-block: 0; }
 
 /* VIEW: the four hazard cluster buttons. */
 .shell-view {
@@ -7685,25 +7705,12 @@ a.impact-resource-link::after {
   white-space: nowrap;
 }
 
-.shell-minimap-scale {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  color: var(--fg-3);
-  font-family: var(--font-display);
-  font-size: 9px;
-  font-weight: var(--fw-subtitle);
-  letter-spacing: var(--track-caps-sm);
-  line-height: 1;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
 .shell-minimap-canvas {
   position: relative;
   width: 100%;
   aspect-ratio: 660 / 348;
   background: var(--bg-1);
-  border: 1px solid var(--line);
+  border: 0;
   border-radius: var(--radius-md);
   overflow: hidden;
 }
@@ -7726,52 +7733,20 @@ a.impact-resource-link::after {
   pointer-events: none;
 }
 
+/* Painted transparent, not none, so the zone stays clickable without
+   drawing its diagonal edge down the coast. Only keyboard focus shows it. */
 .shell-minimap-ocean {
   cursor: pointer;
   pointer-events: auto;
-  fill: rgba(34, 211, 238, 0.04);
+  fill: transparent;
   stroke: transparent;
   stroke-width: 1.2px;
-  transition:
-    fill 0.12s ease,
-    stroke 0.12s ease,
-    filter 0.12s ease;
 }
 
-.shell-minimap-ocean:hover {
-  fill: rgba(34, 211, 238, 0.09);
-  stroke: rgba(34, 211, 238, 0.72);
-}
-
-.shell-minimap-ocean.active {
-  fill: rgba(34, 211, 238, 0.09);
-  stroke: rgba(34, 211, 238, 0.72);
-  filter: drop-shadow(0 0 5px rgba(34, 211, 238, 0.34));
-}
-
-/* After .active, and unlike it, so focus also shows on the pressed zone
-   (the mainland region's pattern). */
 .shell-minimap-ocean:focus-visible {
   outline: none;
-  fill: rgba(34, 211, 238, 0.09);
   stroke: var(--accent);
   stroke-width: 2px;
-}
-
-/* ENSO's scale label names the RONI phase, so this line says why the
-   framings carry no fill (the full wording is in each framing's name). */
-.shell-minimap-unshaded-line {
-  display: block;
-  min-height: 8px;
-  margin: -3px 0 6px;
-  color: var(--fg-3);
-  font-family: var(--font-display);
-  font-size: 8px;
-  font-weight: var(--fw-subtitle);
-  letter-spacing: var(--track-caps-sm);
-  line-height: 1;
-  text-transform: uppercase;
-  text-align: right;
 }
 
 .shell-minimap-drawing {
@@ -7907,11 +7882,10 @@ a.impact-resource-link::after {
     drop-shadow(0 0 7px var(--accent-soft));
 }
 /* The chosen framing. A mainland framing shows it with a heavier outline
-   on a coloured fill; these islands are a few pixels across and often
-   pale, so the same outline would not show. While Hawaii is the chosen
-   framing, and only then, its target wears one even hairline. */
-.shell-minimap-hawaii.active {
-  border-color: var(--accent);
+   on a coloured fill; the islands are small and often pale, so Hawaii
+   thickens its own strokes instead of boxing its target. */
+.shell-minimap-hawaii.active .shell-minimap-island {
+  stroke-width: 2.5px;
 }
 
 .shell-minimap-canvas[data-minimap-status="loading"] .shell-minimap-mainland,
@@ -7926,58 +7900,6 @@ a.impact-resource-link::after {
   to {
     fill-opacity: 0.9;
   }
-}
-
-.shell-minimap-all {
-  position: absolute;
-  right: 1.52%;
-  bottom: 5.61%;
-  z-index: 3;
-  appearance: none;
-  min-width: 36px;
-  height: 30px;
-  background: var(--bg-2);
-  color: var(--fg-1);
-  border: 1px solid var(--fg-3);
-  border-radius: var(--radius-sm);
-  font-family: var(--font-display);
-  font-size: 9px;
-  font-weight: var(--fw-subtitle);
-  letter-spacing: var(--track-caps-sm);
-  text-transform: uppercase;
-  padding: 3px 6px;
-  cursor: pointer;
-  pointer-events: auto;
-  transition:
-    background 0.12s ease,
-    border-color 0.12s ease,
-    color 0.12s ease;
-}
-.shell-minimap-all:hover,
-.shell-minimap-all:focus-visible {
-  border-color: var(--accent);
-  color: var(--fg-0);
-  outline: none;
-}
-.shell-minimap-all[aria-checked='true'] {
-  background: var(--accent-soft);
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-.shell-minimap-divider {
-  width: 100%;
-  margin: 8px 0 0;
-  border: 0;
-  border-top: 1px solid var(--line);
-}
-
-.shell-minimap-note {
-  margin: 6px 0 0;
-  font-family: var(--font-body);
-  font-size: 10.5px;
-  line-height: 1.45;
-  color: var(--fg-2);
 }
 
 .shell-minimap-metric-note {
@@ -7996,7 +7918,6 @@ a.impact-resource-link::after {
   .shell-minimap-ocean,
   .shell-minimap-hawaii,
   .shell-minimap-island,
-  .shell-minimap-all,
   .shell-cluster-btn {
     transition: none;
   }
@@ -8013,7 +7934,10 @@ a.impact-resource-link::after {
 }
 .shell-horizon-btn {
   appearance: none;
-  flex: 1;
+  /* min-width 0 lets a long title wrap at its space instead of pushing the
+     row past the sidebar edge. */
+  flex: 1 1 auto;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -8040,6 +7964,7 @@ a.impact-resource-link::after {
 .shell-horizon-btn-title {
   /* The supplied Spartan face needs room for its full ascent/descent. */
   line-height: 1.4;
+  text-align: center;
 }
 .shell-horizon-btn-sub {
   font-size: 9px;
@@ -8425,22 +8350,6 @@ a.impact-resource-link::after {
      src/ui/island/minimap.tsx; this rule is presentation only). */
   #app.view-console .shell-minimap-map,
   #app.view-console .shell-minimap-popover-wrap { display: none; }
-  /* S30D D1 M27 (owner-1l): the scale beside "Jump to region" never
-     ellipsizes. It wraps, balanced and right-aligned, inside a two-line
-     reserve every mode shares, so the ENSO reading ("RONI ... · JJA 2026")
-     shows in full and a mode switch never moves the map below it. */
-  .shell-minimap-scale {
-    overflow: visible;
-    text-overflow: clip;
-    white-space: normal;
-    text-wrap: balance;
-    text-align: end;
-    /* 10px, not the base 1 (9px): League Spartan's 9px content area is
-       11px, and on a 9px line the last line's overhang read as overflow
-       past the two-line reserve. The reserve is 20px. */
-    line-height: 10px;
-    min-block-size: 2lh;
-  }
 }
 
 /* The shell panel exists only once its island has mounted; an empty
@@ -8502,10 +8411,6 @@ a.impact-resource-link::after {
   .shell-popover-door,
   .panel-response-close.icon-btn {
     min-height: var(--touch-target);
-  }
-  .shell-minimap-all {
-    min-height: var(--touch-target);
-    min-width: var(--touch-target);
   }
   .shell-time { min-height: var(--touch-target); }
 }
@@ -8805,8 +8710,7 @@ a.impact-resource-link::after {
    one side. --selection-shadow is no longer shown at rest; it is the ring
    the focus rules add inside a white face. */
 :is(.view-switch button, .shell-cluster-btn, .shell-horizon-btn, .shell-fire3d-btn, .shell-fire3d-layer, .place-studio-type, .hazard-rail-btn)[aria-pressed='true']:not(:disabled):not([aria-disabled='true']),
-.time-bar-mode.active:not(:disabled),
-.shell-minimap-all[aria-checked='true'] {
+.time-bar-mode.active:not(:disabled) {
   forced-color-adjust: none; /* FORCED COLOURS, app.css */
   --selection-shadow: var(--selected-focus-inset);
   background: var(--face-selected);

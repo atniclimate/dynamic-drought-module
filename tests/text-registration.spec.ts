@@ -57,7 +57,6 @@ const FIT_SELECTORS = [
   ".conditions-metric[data-tone='off'] .conditions-value",
   ".conditions-metric[data-tone='loading'] .conditions-value",
   '.shell-minimap-title',
-  '.shell-minimap-scale',
   '.shell-cluster-btn',
   '.shell-horizon-btn-title',
   '.shell-horizon-btn-sub',
@@ -662,6 +661,16 @@ for (const viewport of VIEWPORTS) {
           const where = `${view}/${mode}`;
           await chooseMode(page, mode);
           await fit(where);
+          // The minimap scale words are an accessible name only (owner: no
+          // captions in the minimap), so no mode may draw them as text.
+          const caption = await page.evaluate(() => {
+            const box = document.querySelector('.shell-minimap-scale')?.getBoundingClientRect();
+            return box ? { width: box.width, height: box.height } : null;
+          });
+          expect(
+            caption === null || (caption.width <= 1 && caption.height <= 1),
+            `${where}: the minimap scale draws a caption (${JSON.stringify(caption)})`
+          ).toBe(true);
           await measureChip(where);
           await readDrought(where);
         }
@@ -677,7 +686,6 @@ for (const viewport of VIEWPORTS) {
 
       const evidence = [
         ".conditions-metric[data-tone='off'] .conditions-value",
-        '.shell-minimap-scale',
         '.shell-cluster-btn',
         '.map-key-chip-label'
       ];
