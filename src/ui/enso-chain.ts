@@ -84,6 +84,7 @@ import { getPlaceSelection, onPlaceSelectionChange } from '../state/place-select
 import type { PlaceSelection } from '../state/place-selection';
 import { registry } from '../state/registry';
 import { enterPlaceStudio } from '../state/studio-route';
+import { createChunkLoader } from '../util/chunk-retry';
 import { requireStylesheetMark } from '../util/chunk-stylesheets';
 import { prefersReducedMotion } from '../util/motion';
 import { edgeColumnInset, seatEdgeControl } from './edge-column';
@@ -119,6 +120,14 @@ const SHEET_NAME = 'data-sheet-name';
 const GUIDE_NAME = 'ENSO guide';
 /** The clock line's reference moves once an hour. */
 const HOUR_MS = 3_600_000;
+
+/**
+ * The place links' reader, a chunk of its own. After a failed load the next
+ * showing of the panel asks again under a new URL: Chromium replays a failed
+ * import of the same URL without a request, so a plain second import() never
+ * recovers (src/util/chunk-retry.ts; review finding R2-3).
+ */
+const loadSources = createChunkLoader(() => import('../impact/sources'), import.meta.url);
 
 const DOOR_GLYPH =
   '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="5" cy="18.5" r="2.3"/><circle cx="12" cy="12" r="2.3"/><circle cx="19" cy="5.5" r="2.3"/><path d="M6.7 16.9l3.6-3.3M13.7 10.4l3.6-3.3"/></svg>';
@@ -332,7 +341,7 @@ function readPlace(state: Held): void {
   }
   const open = reads.filter((read) => sourceMayRun(policy, read.key));
   if (open.length === 0) return;
-  void import('../impact/sources').then(
+  void loadSources().then(
     (sources) => {
       if (!current()) return;
       const fetchers = { cpcSeasonalTemp: sources.fetchCpcSeasonalTempClaims, usdm: sources.fetchUsdmClaims };

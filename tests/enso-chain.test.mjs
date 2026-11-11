@@ -1015,12 +1015,13 @@ test('the two place links ask their sources only once the panel is on screen, an
   assert.match(take, /state\.placeController\?\.abort\(\);/, 'a new selection cancels the last read');
   assert.match(take, /state\.placeUnread = true;/);
   assert.match(take, /if \(state\.onScreen\) readPlace\(state\);/);
-  assert.doesNotMatch(take, /import\(|fetch[A-Z]|briefingSourcePolicy/, 'taking a selection asks nothing');
+  assert.doesNotMatch(take, /import\(|loadSources\(|fetch[A-Z]|briefingSourcePolicy/, 'taking a selection asks nothing');
   // The read spends the unread mark before it asks, so one place is read once
   // however often the panel comes and goes.
   const readFn = body('readPlace');
   assert.match(readFn, /if \(!state\.place \|\| !state\.placeUnread\) return;\s*state\.placeUnread = false;/);
-  assert.ok(readFn.indexOf('state.placeUnread = false;') < readFn.indexOf("import('../impact/sources')"), 'spent before the sources load');
+  // The reader loads through its retry loader (src/util/chunk-retry.ts; review finding R2-3).
+  assert.ok(readFn.indexOf('state.placeUnread = false;') < readFn.indexOf('loadSources()'), 'spent before the sources load');
   // On screen is the browser's own answer for the panel, dropped when the chain leaves.
   assert.match(host, /new IntersectionObserver\(/);
   assert.match(host, /state\.onScreen = last\.isIntersecting;\s*if \(state\.onScreen\) readPlace\(state\);/);

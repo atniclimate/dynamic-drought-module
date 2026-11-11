@@ -206,7 +206,9 @@ const DOORS = [
   { file: '../src/ui/locate-control.ts', chunk: './locate-runtime', stylesheets: true },
   { file: '../src/ui/mobile-sheet.ts', chunk: './sheet-motion', stylesheets: false },
   { file: '../src/ui/enso-chain-loader.ts', chunk: './enso-chain', stylesheets: true },
-  { file: '../src/ui/fire3d-phone.ts', chunk: './fire3d-phone-scene', stylesheets: true }
+  { file: '../src/ui/fire3d-phone.ts', chunk: './fire3d-phone-scene', stylesheets: true },
+  // The ENSO guide's place links promise a read the next time the panel shows (R2-3).
+  { file: '../src/ui/enso-chain.ts', chunk: '../impact/sources', stylesheets: false }
 ];
 
 test('the sprint lazy doors that retry load through createChunkLoader', async () => {
