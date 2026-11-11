@@ -1600,23 +1600,36 @@ function PlaceStudio() {
   };
 
   // WHAT THE BAR CAN SAY AND DO. `selectionEntry` is null while the chosen
-  // place's own list is still loading (a studio reopened on a durable place)
-  // or could not load; the bar says which, and offers the retry that fits.
-  const selectionCatalog = selection ? catalogs[selection.kind].status : 'idle';
+  // place's own list is still loading (a studio reopened on a durable place),
+  // when that list could not load, and for a place picked on the map that the
+  // list does not hold (a territory, say). The bar says which of the three,
+  // and offers the retry only where a retry can help.
+  const selectionCatalog = selection ? catalogs[selection.kind] : CATALOG_IDLE;
   const entryPending = selection !== null && selectionEntry === null;
-  const entryUnavailable =
-    entryPending && (selectionCatalog === 'unavailable' || selectionCatalog === 'ready');
-  const read: BoundaryRead = entryPending ? (entryUnavailable ? 'unreachable' : 'loading') : boundary;
+  const entryUnavailable = entryPending && selectionCatalog.status === 'unavailable';
+  const entryMissing =
+    entryPending &&
+    selectionCatalog.status === 'ready' &&
+    !selectionCatalog.entries.some((candidate) => candidate.id === selection?.id);
+  const read: BoundaryRead = entryPending
+    ? entryUnavailable
+      ? 'unreachable'
+      : entryMissing
+        ? 'unmatched'
+        : 'loading'
+    : boundary;
   const canAct = !entryPending && (read === 'loading' || read === 'ready');
   const canRetry = read === 'unreachable' || read === 'empty';
   const stateSentence =
     selection === null
       ? ''
-      : entryPending
-        ? entryUnavailable
-          ? 'The list this place belongs to is not available right now, so a briefing is not available yet.'
-          : 'Reading the list this place belongs to...'
-        : boundarySentence(selection.kind, read);
+      : entryUnavailable
+        ? 'The list this place belongs to is not available right now, so a briefing is not available yet.'
+        : entryMissing
+          ? 'This place is not in the lists this screen can brief from, so a briefing is not available here.'
+          : entryPending
+            ? 'Reading the list this place belongs to...'
+            : boundarySentence(selection.kind, read);
 
   const retryRead = (): void => {
     if (!selection) return;
