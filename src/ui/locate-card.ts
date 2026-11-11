@@ -105,10 +105,19 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, te
   return node;
 }
 
+/** Keep a measure and its unit, and a distance and its conversion, on one line: "20 m (65 ft)". */
+function keepUnits(text: string): string {
+  return text.replace(/(\d) (km|mi|m|ft)\b( \()?/g, (_, digit: string, unit: string, open?: string) =>
+    `${digit}\u00a0${unit}${open ? '\u00a0(' : ''}`
+  );
+}
+
 function renderBlocks(host: HTMLElement, blocks: readonly CardBlock[]): void {
   for (const block of blocks) {
     if (block.type === 'text') {
-      host.appendChild(el('p', `locate-card-text${block.style ? ` locate-card-${block.style}` : ''}`, block.text));
+      host.appendChild(
+        el('p', `locate-card-text${block.style ? ` locate-card-${block.style}` : ''}`, keepUnits(block.text))
+      );
     } else if (block.type === 'actions') {
       const row = el('div', 'locate-card-actions');
       for (const item of block.items) {
@@ -184,7 +193,7 @@ export function createLocateCard(dock: HTMLElement, onEscape: () => void): Locat
       plate.dataset['tone'] = view.tone;
       title.textContent = view.title;
       for (const line of reading.querySelectorAll('.locate-card-line')) line.remove();
-      for (const line of view.lines) reading.appendChild(el('p', 'locate-card-line', line));
+      for (const line of view.lines) reading.appendChild(el('p', 'locate-card-line', keepUnits(line)));
       close.hidden = view.close === null;
       if (view.close) {
         close.setAttribute('aria-label', view.close.label);
@@ -192,6 +201,8 @@ export function createLocateCard(dock: HTMLElement, onEscape: () => void): Locat
       }
 
       fold.hidden = view.fold === null;
+      // Folded, the card may stand as its title alone where the screen is short (the stylesheet decides).
+      plate.toggleAttribute('data-folded', view.fold !== null && !view.fold.open);
       if (view.fold) {
         fold.setAttribute('aria-label', view.fold.label);
         fold.setAttribute('aria-expanded', String(view.fold.open));

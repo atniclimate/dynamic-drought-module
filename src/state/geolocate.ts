@@ -819,7 +819,7 @@ export function locatedCopy(fix: LocateFix, finding: StateFinding | null): Locat
   if (names.length === 1) {
     return {
       title: `You are at the edge of ${names[0]}`,
-      qualifier: 'This map cannot tell which side of its coarse state outline you are on.',
+      qualifier: 'The state outline this map carries is too coarse to tell which side you are on.',
       states: finding.states,
       certain: false
     };
@@ -832,7 +832,7 @@ export function locatedCopy(fix: LocateFix, finding: StateFinding | null): Locat
     qualifier:
       fix.accuracy > STATE_OUTLINE_MARGIN_M
         ? 'That reaches more than one state, so this map does not pick one.'
-        : 'That is too close to a state line for the coarse outlines this map carries to pick a side.',
+        : 'The state outlines this map carries are too coarse to pick a side here.',
     states: finding.states,
     certain: false
   };

@@ -113,8 +113,8 @@ const MOVE_BOUND_MS = 6_000;
  * both stylesheets and fails when the sum moves.
  */
 export const DOCK_SEAT_PX = 58;
-/** A fit is never squeezed below this much free height by the card's band. */
-const MIN_FRAME_PX = 150;
+/** A fit is never squeezed below this much free height by the card's band (two touch targets). */
+const MIN_FRAME_PX = 88;
 
 /**
  * Widen the panel-aware fit padding by the band Locate's card and the dock

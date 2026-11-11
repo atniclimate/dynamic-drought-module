@@ -376,6 +376,25 @@
     }
   }
 
+  /* A short phone has no room above a half sheet for more than the claim:
+     folded, the card is its title, and the fold opens the rest. */
+  @media (max-height: 620px) and (orientation: portrait) {
+    .locate-card-plate[data-folded] .locate-card-head {
+      align-items: center;
+      padding-top: 2px;
+      padding-bottom: 2px;
+    }
+    .locate-card-plate[data-folded] .locate-figure {
+      margin-top: 0;
+    }
+    .locate-card-plate[data-folded] .locate-card-reading {
+      padding: 0;
+    }
+    .locate-card-plate[data-folded] .locate-card-line {
+      display: none;
+    }
+  }
+
   /* -----------------------------------------------------------------------
      The cell while the device is being read: the ring opens and the glyph
      breathes. Pressed, the cell inverts through the column's own rule.

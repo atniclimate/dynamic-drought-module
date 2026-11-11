@@ -602,7 +602,7 @@ test('a located card says what the outlines support and nothing more', async () 
   assert.equal(river.title, 'You are near the Washington and Oregon line');
   assert.equal(river.certain, false);
   assert.deepEqual(river.states.map((s) => s.code), ['WA', 'OR']);
-  assert.match(river.qualifier, /coarse outlines/);
+  assert.match(river.qualifier, /too coarse to pick a side/);
   assert.match(say(-117.43, 47.66, 30000).qualifier, /reaches more than one state/);
   // The edge of one state, and nowhere this map names.
   const coast = say(-124.62, 48.37);
