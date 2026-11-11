@@ -46,7 +46,6 @@ import type { PhoneSeat } from './map-control-seat';
 const SHELL_ATTRIBUTE = 'data-sheet-detent';
 const ORDER_ATTRIBUTE = 'data-edge-order';
 const WORD_ATTRIBUTE = 'data-edge-word';
-const RESERVE_PROPERTY = '--edge-reserve-bottom';
 
 /** Glyphs for a folded group with no single control to stand for it. */
 const MORE_GLYPH =
@@ -75,7 +74,6 @@ let applying = false;
 let planKey = '';
 let currentPlan: EdgePlan | null = null;
 let openGroup: EdgeGroupId | null = null;
-const planListeners = new Set<(plan: EdgePlan) => void>();
 
 function el(tag: string, className: string): HTMLElement {
   const node = document.createElement(tag);
@@ -215,7 +213,6 @@ function refresh(): void {
     planKey = key;
     currentPlan = plan;
     apply(plan);
-    for (const fn of [...planListeners]) fn(plan);
   }
   mirrorFolds();
 }
@@ -510,28 +507,6 @@ export function seatEdgeControl(node: HTMLElement, seat: PhoneSeat): () => void 
 }
 
 /**
- * Reserve room under the column for a surface that rises from the bottom
- * edge (a sheet at its resting height). The column re-plans for what is
- * left. Pass 0 to release.
- */
-export function setEdgeReserveBottom(px: number): void {
-  if (!app) return;
-  if (px > 0) app.style.setProperty(RESERVE_PROPERTY, `${Math.round(px)}px`);
-  else app.style.removeProperty(RESERVE_PROPERTY);
-  refresh();
-}
-
-/** Re-plan now. For a change the column cannot observe (a stylesheet-driven hide). */
-export function refreshEdgeColumn(): void {
-  refresh();
-}
-
-/** The arrangement in force, or null outside the phone shell. */
-export function getEdgePlan(): EdgePlan | null {
-  return currentPlan;
-}
-
-/**
  * The band, in px from the right edge of the window, that the column
  * occupies: its tracks, its inset and any safe area. 0 outside the phone
  * shell. A camera fit adds it to its right padding, so the place it frames
@@ -542,12 +517,4 @@ export function edgeColumnInset(): number {
   const rect = column.getBoundingClientRect();
   if (rect.width <= 0) return 0;
   return Math.max(0, Math.round(window.innerWidth - rect.left));
-}
-
-/** Subscribe to arrangement changes (cell size, tracks, folded groups). */
-export function onEdgePlanChange(fn: (plan: EdgePlan) => void): () => void {
-  planListeners.add(fn);
-  return () => {
-    planListeners.delete(fn);
-  };
 }

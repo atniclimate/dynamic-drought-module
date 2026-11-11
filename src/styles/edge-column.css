@@ -36,9 +36,7 @@
     position: fixed;
     top: calc(env(safe-area-inset-top, 0px) + var(--edge-inset));
     right: calc(env(safe-area-inset-right, 0px) + var(--edge-inset));
-    bottom: calc(
-      env(safe-area-inset-bottom, 0px) + var(--edge-inset) + var(--edge-reserve-bottom, 0px)
-    );
+    bottom: calc(env(safe-area-inset-bottom, 0px) + var(--edge-inset));
     display: flex;
     /* Track 0 sits at the screen edge; a second track opens toward the map. */
     flex-direction: row-reverse;

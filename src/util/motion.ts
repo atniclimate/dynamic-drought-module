@@ -14,22 +14,3 @@ export function prefersReducedMotion(): boolean {
     window.matchMedia('(prefers-reduced-motion: reduce)').matches
   );
 }
-
-/**
- * Run a DOM update as a view transition where the browser offers one, so a
- * surface can grow out of the control that opened it (owner direction
- * 2026-11-09 (sprint), DR-pending). Progressive enhancement only: without
- * the API, or when the reader asks for reduced motion, the update runs at
- * once and lands on the same end state. The update must be synchronous.
- */
-export function withViewTransition(update: () => void): void {
-  const doc =
-    typeof document !== 'undefined'
-      ? (document as Document & { startViewTransition?: (callback: () => void) => unknown })
-      : null;
-  if (!doc || prefersReducedMotion() || typeof doc.startViewTransition !== 'function') {
-    update();
-    return;
-  }
-  doc.startViewTransition(update);
-}
