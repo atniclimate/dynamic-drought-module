@@ -1363,22 +1363,18 @@ function chipStateFromKeys(productKeys: readonly string[]): ChipState | undefine
 }
 
 /**
- * The chip's four grammar slots (interface-chrome-popups-text.md section
- * 2.4): a swatch (empty, no classed reading, since the chip names a
- * PRODUCT rather than one current value; the conditions strip in
- * conditions-strip.tsx carries the single-reading swatch), one label line,
- * the six-state glyph, and an SVG plus/minus disclosure replacing the CSS
- * `::after` character so its centring can be measured (D1.md M10 Notes).
+ * The chip's three grammar slots (interface-chrome-popups-text.md section
+ * 2.4): one label line, the six-state glyph, and an SVG chevron disclosure
+ * (turned when the key is open) replacing the CSS `::after` character so
+ * its centring can be measured (D1.md M10 Notes). There is no swatch: the
+ * chip names a PRODUCT rather than one current value, so an empty box read
+ * as an unticked layer; the conditions strip in conditions-strip.tsx
+ * carries the single-reading swatch.
  */
 function buildChipGrammar(button: HTMLButtonElement): {
-  readonly swatch: HTMLSpanElement;
   readonly label: HTMLSpanElement;
   readonly state: HTMLSpanElement;
 } {
-  const swatch = document.createElement('span');
-  swatch.className = 'map-key-chip-swatch';
-  swatch.setAttribute('aria-hidden', 'true');
-
   const label = document.createElement('span');
   label.className = 'map-key-chip-label';
 
@@ -1393,21 +1389,17 @@ function buildChipGrammar(button: HTMLButtonElement): {
   disclosure.setAttribute('height', '16');
   disclosure.setAttribute('aria-hidden', 'true');
   disclosure.setAttribute('focusable', 'false');
-  const horizontal = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-  horizontal.setAttribute('d', 'M2 8h12');
-  horizontal.setAttribute('stroke', 'currentColor');
-  horizontal.setAttribute('stroke-width', '2');
-  horizontal.setAttribute('stroke-linecap', 'round');
-  const vertical = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-  vertical.setAttribute('class', 'map-key-chip-disclosure-vert');
-  vertical.setAttribute('d', 'M8 2v12');
-  vertical.setAttribute('stroke', 'currentColor');
-  vertical.setAttribute('stroke-width', '2');
-  vertical.setAttribute('stroke-linecap', 'round');
-  disclosure.append(horizontal, vertical);
+  const chevron = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  chevron.setAttribute('d', 'M4 6l4 4 4-4');
+  chevron.setAttribute('fill', 'none');
+  chevron.setAttribute('stroke', 'currentColor');
+  chevron.setAttribute('stroke-width', '2');
+  chevron.setAttribute('stroke-linecap', 'round');
+  chevron.setAttribute('stroke-linejoin', 'round');
+  disclosure.append(chevron);
 
-  button.replaceChildren(swatch, label, state, disclosure);
-  return { swatch, label, state };
+  button.replaceChildren(label, state, disclosure);
+  return { label, state };
 }
 
 /** Build the swatch strip once and keep it synced to the registry. */

@@ -16,7 +16,7 @@ import { gotoApp, layerCheckbox, waitForLayerSettled } from './helpers';
  * The desktop map chrome holds its seats to 1 px (S30D D1 M9; register
  * owner-1f, DDM-P10-T11; the 2026-09-13 stable-position rule; design
  * record interface-chrome-popups-text.md section 5, "1 px stability",
- * restricted here to the column's four slots). M10 and M11 append their
+ * restricted here to the column's slots). M10 and M11 append their
  * seats (the chip, TL-0, the pill, the dock, the drawers) to this file.
  *
  * METHOD. Every rectangle is read relative to `#map-container`, over three
@@ -33,7 +33,7 @@ import { gotoApp, layerCheckbox, waitForLayerSettled } from './helpers';
  *   width when the sidebar opens or closes, because the column is right
  *   anchored; its viewport x does not. The right inset is that invariant
  *   written in container px, and the formula check pins x itself.)
- * Any |d| over 1 px fails. The four slots must also be pairwise disjoint by
+ * Any |d| over 1 px fails. The slots must also be pairwise disjoint by
  * at least 4 px and lie inside the container.
  *
  * Slot 4 is the Share slot (ruling R2 a). Its box and the Share button
@@ -60,8 +60,8 @@ import { gotoApp, layerCheckbox, waitForLayerSettled } from './helpers';
  * Predicted red on the pre-M9 tree (93ebe44 to dbbe24b): the module import
  * fails (no src/config/map-chrome.ts); with the table supplied, help sits
  * at the bottom right (y about H - 36, not 100), the old column is 104 wide
- * at x W - 116 (not 128 wide at W - 140), and Reset and SAT move 38 px when
- * Share returns to the column.
+ * at x W - 116 (not 128 wide at W - 140), and Reset moves 38 px when Share
+ * returns to the column.
  */
 
 const DESKTOP_VIEWPORTS = [
@@ -105,6 +105,9 @@ const SEAT_QUERIES = MAP_CHROME_SEATS.map((seat) => ({
   slotSelector: seat.slotSelector,
   controlSelector: seat.controlSelector
 }));
+
+/** The Share slot, read from the seat table rather than written as a number. */
+const SHARE_SLOT = MAP_CHROME_SEATS.find((seat) => seat.key === 'share')!.slot;
 
 /** Three consecutive painted frames of every seat, relative to the map. */
 async function sampleSeats(page: Page, phase: string): Promise<Sample[]> {
@@ -321,9 +324,9 @@ async function setView(page: Page, view: 'brief' | 'console'): Promise<void> {
 
 const shareInColumn = (page: Page) => page.locator('.map-overlay-controls > #share-btn');
 
-test.describe('the desktop column holds its four seats (D1 M9)', () => {
+test.describe('the desktop column holds its seats (D1 M9)', () => {
   for (const viewport of DESKTOP_VIEWPORTS) {
-    test(`Reset, SAT, Help and Share hold their MAP_CHROME_SEATS rects within 1 px across modes, horizons, loading, selection and the views at ${viewport.width}x${viewport.height}`, async ({
+    test(`Reset, Help and Share hold their MAP_CHROME_SEATS rects within 1 px across modes, horizons, loading, selection and the views at ${viewport.width}x${viewport.height}`, async ({
       page
     }) => {
       test.setTimeout(240_000);
@@ -337,7 +340,7 @@ test.describe('the desktop column holds its four seats (D1 M9)', () => {
       try {
         await gotoApp(page);
         await settleLayout(page);
-        // The default desktop boot: Brief, sidebar open, Share in slot 4.
+        // The default desktop boot: Brief, sidebar open, Share in its slot.
         await expect(shareInColumn(page)).toHaveCount(1);
         await sample('Brief, sidebar open, settled');
 
@@ -404,10 +407,10 @@ test.describe('the desktop column holds its four seats (D1 M9)', () => {
         await sample('Help drawer closed');
 
         // Brief and Console, each with the sidebar open and collapsed: the
-        // Share staying in slot 4, and the column's right anchoring.
+        // Share staying in its slot, and the column's right anchoring.
         await setView(page, 'console');
         await expect(shareInColumn(page)).toHaveCount(1);
-        await sample('Console, sidebar open (Share in slot 4)');
+        await sample('Console, sidebar open (Share in its slot)');
         await setSidebar(page, 'collapsed');
         await expect(shareInColumn(page)).toHaveCount(1);
         await sample('Console, sidebar collapsed');
@@ -430,9 +433,9 @@ test.describe('the desktop column holds its four seats (D1 M9)', () => {
         gate.release();
       }
 
-      // Share filled slot 4 exactly whenever it was home.
-      const shareHome = samples.filter((s) => s.seats.find((seat) => seat.slot === 4)?.control);
-      expect(shareHome.length, 'Share was never measured in slot 4').toBeGreaterThan(0);
+      // Share filled its slot exactly whenever it was home.
+      const shareHome = samples.filter((s) => s.seats.find((seat) => seat.slot === SHARE_SLOT)?.control);
+      expect(shareHome.length, 'Share was never measured in its slot').toBeGreaterThan(0);
       expect(seatProblems(samples)).toEqual([]);
     });
   }
@@ -445,11 +448,13 @@ test.describe('the desktop column holds its four seats (D1 M9)', () => {
       expect(await page.evaluate(() => window.matchMedia('(pointer: coarse)').matches)).toBe(true);
       await settleLayout(page);
       const samples = await sampleSeats(page, 'coarse, Console, sidebar open');
-      expect(samples[0]?.seats.find((s) => s.slot === 4)?.control).toBeTruthy();
+      expect(samples[0]?.seats.find((s) => s.slot === SHARE_SLOT)?.control).toBeTruthy();
       expect(seatProblems(samples)).toEqual([]);
-      const cell = mapChromeSeatRect(3, samples[0]!.containerWidth, samples[0]!.viewportWidth, true);
+      const cell = mapChromeSeatRect(SHARE_SLOT, samples[0]!.containerWidth, samples[0]!.viewportWidth, true);
       expect(cell.height).toBe(44);
-      expect(cell.y).toBe(MAP_CHROME_TOKENS.chromeInset + 2 * (44 + MAP_CHROME_TOKENS.mapCellGap));
+      expect(cell.y).toBe(
+        MAP_CHROME_TOKENS.chromeInset + (SHARE_SLOT - 1) * (44 + MAP_CHROME_TOKENS.mapCellGap)
+      );
     });
   });
 
@@ -460,7 +465,6 @@ test.describe('the desktop column holds its four seats (D1 M9)', () => {
     // and title kept (DR-154); from 1025 px the labelled cells of R1 a.
     const NAMES: Readonly<Record<string, string>> = {
       '#reset-btn': 'Reset map view',
-      '#basemap-switcher-overlay-host .basemap-switcher-btn': 'SAT: satellite imagery',
       '#map-info-seat > #map-info-btn': 'Help and map information',
       '.map-overlay-controls > #share-btn':
         'Share view: the link restores region or framing, layers, mode and horizon, not the map position or an open briefing'
@@ -479,7 +483,7 @@ test.describe('the desktop column holds its four seats (D1 M9)', () => {
       for (const scenario of SCENARIOS) {
         const where = `${scenario.width}x${scenario.height}, sidebar ${scenario.sidebar}`;
         await page.setViewportSize({ width: scenario.width, height: scenario.height });
-        // Console keeps Share home in slot 4, so all four cells are measured.
+        // Console keeps Share home in its slot, so every cell is measured.
         await gotoApp(page, '?view=console');
         if (scenario.sidebar === 'collapsed') await setSidebar(page, 'collapsed');
         await settleLayout(page);
@@ -516,28 +520,42 @@ test.describe('the desktop column holds its four seats (D1 M9)', () => {
     });
   });
 
-  test('phones and embeds keep help, SAT and Share in their homes', async ({ page }) => {
-    // The column is desktop-shell-only: at 390x844 and in an embed the
-    // seat helper keeps help beside its home anchor and SAT in MapLibre's
-    // corner, the slot boxes take no space, and Share stays a direct child
-    // of the stack its phone and embed rules order.
-    for (const [viewport, query] of [
-      [{ width: 390, height: 844 }, ''],
-      [{ width: 1280, height: 800 }, '?embed=true']
-    ] as const) {
-      await page.setViewportSize(viewport);
-      await gotoApp(page, query);
-      await expect(page.locator('#map-info-home + #map-info-btn + #map-info-panel')).toHaveCount(1);
-      await expect(page.locator('#map-info-seat > *')).toHaveCount(0);
-      await expect(
-        page.locator('.maplibregl-ctrl-bottom-right .basemap-switcher-control')
-      ).toHaveCount(1);
-      await expect(page.locator('.map-overlay-controls > #share-btn')).toHaveCount(1);
-      await expect(page.locator('#map-info-btn .map-cell-label')).toBeHidden();
-      // The word-less home disclosure keeps its name; only the desktop
-      // seat, which shows the word Help, leads with it.
-      await expect(page.locator('#map-info-btn')).toHaveAttribute('aria-label', 'Map information');
-    }
+  test('phones seat help and Share in the edge column; embeds keep them in their homes', async ({ page }) => {
+    // The phone shell seats these controls in #edge-column. An embed has no
+    // phone column: the seat helper keeps help beside its home anchor, the slot
+    // boxes take no space, and Share stays a direct child of the overlay stack.
+    await page.setViewportSize({ width: 390, height: 844 });
+    await gotoApp(page, '');
+    // The phone shell stamps data-sheet-detent; every right-edge control then rides #edge-column.
+    await expect(page.locator('#app[data-sheet-detent] #edge-column')).toHaveCount(1);
+    // Help: a cell of the map tools group, ordered after Share (10) and Reset (20), word Info.
+    await expect(page.locator('#edge-body-utility > #map-info-btn')).toHaveCount(1);
+    await expect(page.locator('#map-info-btn')).toHaveAttribute('data-edge-order', '30');
+    await expect(page.locator('#map-info-btn')).toHaveAttribute('data-edge-word', 'Info');
+    await expect(page.locator('#map-info-home + #map-info-btn')).toHaveCount(0);
+    // Its drawer has no phone seat: it keeps the anchor's place in the map container.
+    await expect(page.locator('#map-info-home + #map-info-panel')).toHaveCount(1);
+    await expect(page.locator('#map-info-seat > *')).toHaveCount(0);
+    // Share rides the map tools and has left the overlay stack.
+    await expect(page.locator('#edge-body-utility > #share-btn')).toHaveCount(1);
+    await expect(page.locator('.map-overlay-controls > #share-btn')).toHaveCount(0);
+    // The long desktop word stays out of the cell; the short word is drawn by ::after.
+    await expect(page.locator('#map-info-btn .map-cell-label')).toBeHidden();
+    expect(
+      await page.locator('#map-info-btn').evaluate((el) => getComputedStyle(el, '::after').content)
+    ).toBe('"Info"');
+    // The cell's name is unchanged by the move.
+    await expect(page.locator('#map-info-btn')).toHaveAttribute('aria-label', 'Map information');
+
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await gotoApp(page, '?embed=true');
+    await expect(page.locator('#map-info-home + #map-info-btn + #map-info-panel')).toHaveCount(1);
+    await expect(page.locator('#map-info-seat > *')).toHaveCount(0);
+    await expect(page.locator('.map-overlay-controls > #share-btn')).toHaveCount(1);
+    await expect(page.locator('#map-info-btn .map-cell-label')).toBeHidden();
+    // The word-less home disclosure keeps its name; only the desktop
+    // seat, which shows the word Help, leads with it.
+    await expect(page.locator('#map-info-btn')).toHaveAttribute('aria-label', 'Map information');
   });
 });
 
@@ -953,7 +971,7 @@ test.describe('the chip, TL-0, the pill and the dock hold their D1 M10 seats', (
  * S30D D1 M11 (register owner-1h; DDM-P10-T11; design record
  * interface-chrome-popups-text.md section 5, "Drawers"): opening the Key
  * drawer grows `#map-key` downward from its fixed TL-1 seat, never moving
- * the column's four slots, and never reaching into the column, the scale
+ * the column's slots, and never reaching into the column, the scale
  * bars, or a dock child.
  *
  * Predicted red on the pre-M11 tree: this passes today by coincidence at

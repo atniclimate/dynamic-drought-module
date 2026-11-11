@@ -8,11 +8,9 @@ import {
   waitForLayerSettled,
   stubCpcSeasonalTempOutlook,
   stubSpcFireOutlook,
-  coverFuturePages,
   assertBuildIdentity,
   ROLE_GROUPS
 } from './helpers';
-import { stubRecentSatellite } from './satellite-fixture';
 import { installBoundaryStubs } from './tribal-fixtures';
 import { installMinimapAnalysisStubs } from './minimap-fixtures';
 
@@ -57,12 +55,10 @@ const SEARCH_CONTROLLER_CHUNK = /\/search-controller-[^/?]*\.js(\?|$)/;
  * `tests/boundary-boot-inventory.test.mjs` under this file's name.
  */
 async function bootBriefWithoutCatalog(page: Page, query: string): Promise<void> {
-  await stubRecentSatellite(page);
   await installBoundaryStubs(page, 'fixture');
   await installMinimapAnalysisStubs(page);
   await stubCpcSeasonalTempOutlook(page);
   await stubSpcFireOutlook(page);
-  coverFuturePages(page);
   await page.goto(query, { waitUntil: 'domcontentloaded' });
   await expect(page.locator('#region-select option')).not.toHaveCount(0);
   await assertBuildIdentity(page);

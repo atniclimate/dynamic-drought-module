@@ -1,7 +1,6 @@
 import { continueLocalRoute } from './offline-test';
 import { test, expect } from './offline-test';
 import { gotoApp, search, urlLayers } from './helpers';
-import { stubRecentSatellite } from './satellite-fixture';
 import { routeAllTribalFixtures } from './tribal-fixtures';
 import {
   installMinimapAnalysisStubs,
@@ -192,7 +191,6 @@ test.describe('U1 the two doors (view mode)', () => {
       if (/island-[^/]*\.js/.test(req.url())) islandRequests.push(req.url());
     });
 
-    await stubRecentSatellite(page);
     await page.route('**/NADM-current.geojson', (route) =>
       route.fulfill({
         status: 200,

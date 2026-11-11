@@ -361,10 +361,13 @@ test.describe('NIFC WFIGS query scope', () => {
     async function popupTitleAtMapCenter(page: Page): Promise<string> {
       const mapBox = await page.locator('#map').boundingBox();
       if (!mapBox) throw new Error('map container has no box');
-      const title = page.locator('.popup-title').first();
-      // found-105: a click that lands while the settled collection is not
-      // yet queryable opens no popup, and a loaded runner can stretch that
-      // window. Retry the click until the popup title shows, as
+      const title = page
+        .locator('[data-popup-frame][data-popup-product="nifc-fires"] .popup-title')
+        .first();
+      // found-105: a click that lands before the settled perimeter fill is
+      // queryable falls through to the state fill and opens the state popup, and
+      // a loaded runner can stretch that window. Retry the click until the NIFC
+      // popup title shows, as
       // text-registration's `openPlaceResponse` does. Only the wait changed:
       // what the title reads is still asserted by the callers.
       await expect(async () => {
@@ -589,9 +592,9 @@ function briefingIncidentTypes(
  * inside it). */
 const WASHINGTON_BRIEFING_BBOX = leafletBoundsToMapLibre(REGIONS.washington_state.bounds);
 
-/** Every live briefing lane besides NIFC and the four hosts `gotoApp`
- * already stubs unconditionally (SPC Day 1-8, CPC seasonal temperature, the
- * recent satellite, and the boundary/minimap-analysis fixtures): USDM, NWS
+/** Every live briefing lane besides NIFC and the hosts `gotoApp`
+ * already stubs unconditionally (SPC Day 1-8, CPC seasonal temperature, and
+ * the boundary/minimap-analysis fixtures): USDM, NWS
  * active alerts, and the Worker resource proxy (waterSupply and friends).
  * Matches `tests/briefing-matrix.spec.ts`'s own `stubBaselineBriefingHosts`,
  * restated rather than imported (that helper is private to that file). */

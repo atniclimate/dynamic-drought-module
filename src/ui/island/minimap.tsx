@@ -3,10 +3,14 @@
  * four-round region-selector spike, D-0.7.0-039/041/051/054).
  *
  * A schematic chooser over the nine editorial camera framings
- * (src/config/framings.ts) plus the ALL reset. The eight mainland
+ * (src/config/framings.ts); the region select holds the All reset. The eight mainland
  * framings keep the verified, edge-matched masks promoted from the S4 shell
  * kit, clipped to bundled Natural Earth 1:50m physical coastline linework;
  * Hawaii is the enlarged inset whose whole frame is its hit target. The
+ * frame is not drawn and carries no caption (owner direction 2026-11-09
+ * (sprint), DR-pending): the islands fill the target, and the fact that
+ * they are drawn enlarged and apart from the mainland rides the accessible
+ * name (`HAWAII_INSET_NOTE`). The
  * drawing itself carries no visible labels (D-0.7.0-054; the ocean labels
  * moved to the framing dropdown 2026-10-13); names and provenance framing ride the accessible name
  * and the selected-framing caption below. Pointer hover is deliberately
@@ -31,7 +35,7 @@
  * because it changes display and camera. The Arctic is reached from the
  * framing dropdown (src/ui/sidebar.ts).
  *
- * Keyboard model: one radiogroup (ALL plus the nine framings) with the
+ * Keyboard model: one radiogroup (the nine framings) with the
  * repository's roving-tabindex idiom (the region radiogroup pattern),
  * but with COMMIT DEFERRED to Enter/Space: a framing commit is
  * expensive and stateful (a camera flight, an ocean-claim clear, a URL
@@ -114,9 +118,7 @@ import {
 } from '../../state/minimap-outlook';
 import type { MinimapOutlookSnapshot } from '../../state/minimap-outlook';
 import type { EnsoPhaseLabel } from '../../impact/enso';
-import { fitAll, fitFraming, fitOcean } from '../../map/camera-fit';
-import { requestBasemapMode } from '../../map/basemap-switcher';
-import { defaultBasemapFor } from '../../state/basemap-store';
+import { fitFraming, fitOcean } from '../../map/camera-fit';
 import { requestOcean } from '../../state/cluster-service';
 import { setMapTechnicalNote } from '../map-technical-information';
 import { dateTok } from '../../util/text-tokens';
@@ -214,10 +216,22 @@ const HAWAII_PATHS: readonly string[] = HAWAII_ISLAND_SHAPES.map((shape) =>
   shapePath(shape, projectHawaii),
 );
 
-/** The roving order follows the drawing: nine framings, then ALL. */
-const ROVING_ORDER: ReadonlyArray<FramingKey | null> = [...FRAMING_KEYS, null];
+/** The roving order follows the drawing. All of North America is the region select's first option, not a tile here. */
+const ROVING_ORDER: ReadonlyArray<FramingKey> = FRAMING_KEYS;
 
 const CAMERA_ONLY_NOTE = 'Click fits the camera. Camera-only; selects nothing.';
+
+/** What the removed caption said, kept where assistive technology reads it. */
+const HAWAII_INSET_NOTE = 'Drawn enlarged and apart from the mainland.';
+
+/**
+ * The window onto the Hawaii islands inside their hit target, in the inset's
+ * own units. The islands span x 13.7 to 76.1 and y 248.4 to 290.7 (measured
+ * from the rendered paths); this window is centred on them and about a third
+ * tighter than the one that left room for a caption, so the group reads a
+ * little larger without moving its target.
+ */
+const HAWAII_VIEW_BOX = '-4 231 97.8 77';
 
 /**
  * DR-040 c: a mode and horizon with no reading in the table
@@ -628,21 +642,19 @@ function fillTreatment(
 }
 
 /** Commit a minimap choice: store write plus camera fit, one gesture. */
-function choose(map: maplibregl.Map, key: FramingKey | null): void {
+function choose(map: maplibregl.Map, key: FramingKey): void {
   // A framing choice is an explicit camera gesture: it drops any ocean
   // camera claim so the URL never asserts two cameras at once
   // (D-0.7.0-053; the selectRegion precedent in src/ui/sidebar.ts).
   clearOceanFraming();
-  setFraming(key ?? 'all');
-  if (key === null) fitAll(map);
-  else fitFraming(map, key);
+  setFraming(key);
+  fitFraming(map, key);
 }
 
 /** One ocean gesture enters ENSO and fits that ocean, the same three calls
  * as the framing dropdown's ocean group (src/ui/sidebar.ts). */
 function chooseOcean(map: maplibregl.Map, key: OceanKey): void {
   requestOcean(key);
-  requestBasemapMode(map, defaultBasemapFor('enso'));
   fitOcean(map, key);
 }
 
@@ -707,7 +719,8 @@ function accessibleName(
               outlookLabels(reading.outlook, outlook, key),
             )
           : UNSHADED_NOTE;
-  return `${base} ${metric} ${CAMERA_ONLY_NOTE} ${def.provenance}`;
+  const inset = key === 'hawaii' ? ` ${HAWAII_INSET_NOTE}` : '';
+  return `${base}${inset} ${metric} ${CAMERA_ONLY_NOTE} ${def.provenance}`;
 }
 
 export interface MinimapProps {
@@ -748,9 +761,7 @@ export function Minimap({
   // The roving-focus position, independent of the committed selection
   // (deferred commit; see the header note). `undefined` means "no
   // browsing in progress": the tab stop sits on the committed option.
-  const [focused, setFocused] = useState<FramingKey | null | undefined>(
-    undefined,
-  );
+  const [focused, setFocused] = useState<FramingKey | undefined>(undefined);
   const [drought, setDrought] = useState<MinimapDroughtSnapshot>(
     getMinimapDroughtSnapshot,
   );
@@ -769,7 +780,8 @@ export function Minimap({
   // component needs no change from shell.tsx, which is reserved.
   const [viewMode, setViewMode] = useState(getViewMode);
   useEffect(() => onViewModeChange(setViewMode), []);
-  const roving = focused === undefined ? active : focused;
+  // With nothing committed (All) the first framing holds the one Tab stop.
+  const roving: FramingKey = focused ?? active ?? ROVING_ORDER[0];
 
   // DDM-P11-T01 clause 3: this is the ONE shell.tsx mounts the popover
   // instance under (idPrefix "shell-minimap-pop", shell.tsx:309); the
@@ -910,7 +922,7 @@ export function Minimap({
     if (target === undefined) return;
     // Move focus only; the commit waits for Enter/Space or a click.
     setFocused(target);
-    const el = document.getElementById(`${idPrefix}-${target ?? 'all'}`);
+    const el = document.getElementById(`${idPrefix}-${target}`);
     el?.focus();
   };
 
@@ -1015,7 +1027,7 @@ export function Minimap({
         </h2>
         <span
           id={`${idPrefix}-scale`}
-          class="shell-minimap-scale"
+          class="shell-minimap-scale sr-only"
           aria-label={scaleAccessibleText}
           title={
             showDroughtMetric
@@ -1034,10 +1046,6 @@ export function Minimap({
           {scaleText}
         </span>
       </div>
-      {/* Mounted in every mode so ENSO's extra line never resizes the card. */}
-      <span class="shell-minimap-unshaded-line">
-        {ensoScaleText !== null ? UNSHADED_SCALE_TEXT : ''}
-      </span>
       <div
         class="shell-minimap-canvas"
         data-drought-status={showDroughtMetric ? drought.status : 'neutral'}
@@ -1230,7 +1238,9 @@ export function Minimap({
                 role="radio"
                 aria-checked={isActive}
                 aria-label={accessibleName(key, drought, wildfire, outlook, metricContext, horizon)}
-                tabIndex={roving === key ? 0 : -1}
+                // Lowercase on purpose: on an SVG path Preact writes `tabIndex`
+                // as an attribute of that exact name, which no browser reads.
+                tabindex={roving === key ? 0 : -1}
                 focusable="true"
                 vectorEffect="non-scaling-stroke"
                 clip-path={`url(#${idPrefix}-physical-land)`}
@@ -1374,7 +1384,6 @@ export function Minimap({
           onClick={() => choose(map, 'hawaii')}
           onFocus={() => setFocused('hawaii')}
         >
-          <span class="shell-minimap-hawaii-label">Hawaii (enlarged)</span>
           {geometryVisible && (() => {
             const hawaiiDrought = showDroughtMetric
               ? drought.summaries.hawaii
@@ -1397,7 +1406,7 @@ export function Minimap({
             return (
               <svg
                 class="shell-minimap-hawaii-islands"
-                viewBox="4 205 132 104"
+                viewBox={HAWAII_VIEW_BOX}
                 aria-hidden="true"
                 focusable="false"
               >
@@ -1452,34 +1461,8 @@ export function Minimap({
           })()}
         </button>
 
-        <button
-          type="button"
-          id={`${idPrefix}-all`}
-          class="shell-minimap-all"
-          role="radio"
-          aria-checked={landSelectionIsCurrent && active === null}
-          aria-label="All: fit North America"
-          tabIndex={roving === null ? 0 : -1}
-          onClick={() => choose(map, null)}
-          onFocus={() => setFocused(null)}
-        >
-          All
-        </button>
         </div>
       </div>
-      <hr class="shell-minimap-divider" />
-      {/* A committed framing names itself and any live-data partial-coverage
-          note (Nunavut's analysis-mask proxy, the WHP US-only fallback).
-          The framing's own coverageNote (British Columbia, Mexico, and the
-          rest are outside US-scoped sources) does NOT render here: it read
-          as an unwanted popup (owner, 2026-09-10) and duplicated the same
-          sentence already in the on-map key, so the key is now its one
-          home (src/ui/map-key.ts). ALL uses the divider alone so the
-          default state does not repeat itself. */}
-      {onNoteChange === undefined && framingNote !== '' ? (
-        <p class="shell-minimap-note" aria-live="polite">{framingNote}</p>
-      ) : null}
-
     </div>
   );
 }

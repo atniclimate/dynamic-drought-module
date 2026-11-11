@@ -128,6 +128,11 @@ async function tapRail(page: Page, preset: ViewPreset, moment: string): Promise<
     'true'
   );
   await button.tap();
+  // A rail press closes an open sheet to the map; #app is stamped closed only when the close comes to rest.
+  await expect(page.locator('#app'), `${moment}: the ${preset.label} rail tap left the sheet open`).toHaveAttribute(
+    'data-sheet-detent',
+    'closed'
+  );
   await expectPresetAtRest(page, preset, moment);
   await expect(button, `${moment}: the ${preset.label} rail button`).toHaveAttribute('aria-pressed', 'true');
 }

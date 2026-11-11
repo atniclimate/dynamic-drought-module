@@ -1,4 +1,5 @@
 import type * as maplibregl from 'maplibre-gl';
+import type { Fire3DPhoneRefusal } from './fire3d-phone';
 import {
   FIRE3D_TERRAIN_COVERAGE, terrainCoverageSentence, type TerrainBox, type TerrainCoverage
 } from './terrain-coverage';
@@ -331,11 +332,35 @@ export const FIRE3D_PARTIAL_COVERAGE_STATUS =
 export const FIRE3D_NON_PREDICTION_NOTE =
   'The 3D view shows each source\'s published data as context. It computes no fire behavior: nothing here shows or implies spread, ignition, or an all-clear.';
 
-/** The desktop gate; mirrors the shell's DESKTOP_SHELL_QUERY breakpoint. */
-export const FIRE3D_MIN_WIDTH_QUERY = '(min-width: 721px)';
+/**
+ * The narrowest viewport the scene may be presented in.
+ *
+ * Until 2026-11-09 this was the desktop breakpoint, so no phone ever entered
+ * the scene. Owner direction 2026-11-09 (sprint), DR-pending, lifts that:
+ * a phone enters through one cell in its right-edge column
+ * (src/ui/fire3d-phone.ts), so the floor is now the narrowest phone that
+ * cell is offered on, FIRE3D_PHONE_MIN_WIDTH_PX in src/config/fire3d-phone.ts,
+ * which states the measurement behind it. Equal to FIRE3D_CHUNK_WIDTH_QUERY
+ * in src/state/fire3d-store.ts; the two move together, and
+ * tests/fire3d-phone.test.mjs fails when they part.
+ *
+ * Width alone no longer says which shell presents the scene: at and above
+ * FIRE3D_CONSOLE_WIDTH_QUERY it is the desktop console, below it the phone
+ * shell, and each keeps its own height floor (`shouldFire3DBeActive`).
+ */
+export const FIRE3D_MIN_WIDTH_QUERY = '(min-width: 360px)';
 
 /**
- * Viewport-height floor for the tilted camera, in CSS pixels.
+ * The desktop console's width: mirrors the shell's DESKTOP_SHELL_QUERY
+ * breakpoint. At and above it the sidebar control offers the scene and the
+ * 520 px floor below applies. Under it the console says nothing about 3D,
+ * because the phone shell offers the scene from its own cell.
+ */
+export const FIRE3D_CONSOLE_WIDTH_QUERY = '(min-width: 721px)';
+
+/**
+ * Viewport-height floor for the tilted camera, in CSS pixels, wherever the
+ * desktop console presents the scene.
  *
  * DR-025a admits tablets (the 721 to 1024 px band of DR-036) and excludes
  * landscape phones, which a width query alone cannot separate: a landscape
@@ -349,6 +374,10 @@ export const FIRE3D_MIN_WIDTH_QUERY = '(min-width: 721px)';
  * phones) and well below the shortest tablet landscape viewport (768 CSS px),
  * so it separates the two classes with margin on both sides rather than
  * tracking any one model. Raise it only with a measurement.
+ *
+ * The phone shell keeps a taller floor of its own
+ * (FIRE3D_PHONE_MIN_HEIGHT_PX, src/config/fire3d-phone.ts), because there the
+ * two statements stand on the map itself and take their height from it.
  */
 export const FIRE3D_MIN_HEIGHT_PX = 520;
 
@@ -386,9 +415,53 @@ export const FIRE3D_REFUSAL_TEXT: Readonly<Record<Fire3DRefusal, string>> = {
     'This window is too short for the 3D Fire view, so there is nothing here to turn on.'
 };
 
+/**
+ * What the phone shell says once when a shared `fire3d=true` link opens on a
+ * phone that cannot hold the scene (owner direction 2026-11-09 (sprint),
+ * DR-pending). The console's two sentences are reused word for word; the
+ * third covers the one refusal only a phone can meet, in the same voice:
+ * what was observed, no cause, no fix, nothing to do.
+ */
+export const FIRE3D_PHONE_REFUSAL_TEXT: Readonly<Record<Fire3DPhoneRefusal, string>> = {
+  'no-webgl2': FIRE3D_REFUSAL_TEXT['no-webgl2'],
+  'short-window': FIRE3D_REFUSAL_TEXT['short-window'],
+  'narrow-window':
+    'This screen is too narrow for the 3D Fire view, so there is nothing here to turn on.'
+};
+
+/**
+ * The steps of an entry into the scene that the orchestrator WAITS on, in
+ * order (docs/design/fire3d-entry.md, "The entry transaction"; owner
+ * direction 2026-11-09 (sprint), DR-pending).
+ *
+ * That note names six phases for a transaction that is not built: it would
+ * hold the camera flat until the terrain for the view had loaded. The built
+ * transaction does not wait there (src/map/fire3d.ts `activateScene` installs
+ * terrain, sky and the tilt in one turn), so only the three steps it really
+ * awaits are published as phases, and the terrain's own loading is read
+ * afterwards from `Fire3DStatus.transport`. A phase is a fact about what the
+ * scene is doing now, never a promise about how long it will take.
+ */
+export type Fire3DEntryPhase = 'probe' | 'atmosphere' | 'context';
+
+/**
+ * The sentence each step shows while it runs, in the words of
+ * docs/design/fire3d-entry.md's phase table. `terrain` is the sentence for
+ * the stretch after the scene first reads live while its own sources are
+ * still streaming, and `chunk` the one for the moment before the scene's
+ * code has arrived, when no phase exists yet.
+ */
+export const FIRE3D_ENTRY_TEXT: Readonly<Record<Fire3DEntryPhase | 'chunk' | 'terrain', string>> = {
+  chunk: 'Loading the 3D view',
+  probe: 'Checking the terrain archive',
+  atmosphere: 'Loading smoke and perimeters',
+  context: 'Loading the hazard drape and structures',
+  terrain: 'Loading terrain relief'
+};
+
 /** What the shell island reads about the device and the committed view. */
 export interface Fire3DOfferInput {
-  /** The viewport meets FIRE3D_MIN_WIDTH_QUERY. */
+  /** The viewport meets FIRE3D_CONSOLE_WIDTH_QUERY. */
   readonly wideEnough: boolean;
   /** The viewport meets FIRE3D_MIN_HEIGHT_QUERY. */
   readonly tallEnough: boolean;
@@ -414,10 +487,11 @@ export interface Fire3DOfferInput {
  * The two silences are deliberate and are NOT refusals to explain:
  *  - another hazard view has no 3D toggle to miss, so naming one would be
  *    an advertisement rather than an answer;
- *  - a viewport below the desktop breakpoint is the phone chrome, where 3D
- *    is deferred by owner ruling rather than refused by this device, and a
- *    standing notice on every phone would be a nag about a decision that
- *    has nothing to do with the hardware in the reader's hand.
+ *  - a viewport below the desktop breakpoint is the phone chrome, which
+ *    since 2026-11-09 offers the scene from its own cell in the right-edge
+ *    column and answers for itself (`fire3dPhoneOffer`,
+ *    src/config/fire3d-phone.ts); a second answer here, inside a sheet the
+ *    reader may never open, would only repeat it.
  *
  * Capability is tested before geometry so the deeper refusal wins: a device
  * that cannot render the scene at all would not begin to hold it in a

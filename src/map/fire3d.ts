@@ -1,11 +1,17 @@
 /**
- * Desktop 3D Fire mode orchestrator (W3 terrain + camera + sky, W4 smoke).
+ * 3D Fire mode orchestrator (W3 terrain + camera + sky, W4 smoke).
  *
  * One combined mode: 3D terrain over the bundled Pacific Northwest DEM
  * archive, a pitched camera, a dark-palette sky, and (after terrain
  * succeeds) the lazily imported volumetric smoke presentation. The mode is
  * governed by the fire3d preference store (URL `fire3d=true`) and applies
  * only behind its full activation gate; see `shouldFire3DBeActive`.
+ *
+ * Two shells can present it. The desktop console has since W3. The phone
+ * shell can since owner direction 2026-11-09 (sprint), DR-pending, and only
+ * while its own 3D chrome is mounted (src/ui/fire3d-phone-scene.ts), because
+ * that chrome is where the terrain coverage statement and the non-prediction
+ * disclosure stand on a phone; see `presentingShell`.
  *
  * Terrain source discipline: this module owns its OWN raster-dem source
  * ('fire3d-terrain-dem') and never reuses the hillshade layer's source, so
@@ -43,7 +49,13 @@ import type * as maplibregl from 'maplibre-gl';
 
 import type { HazardClusterKey } from '../config/clusters';
 import {
+  FIRE3D_PHONE_CHROME_ATTRIBUTE,
+  FIRE3D_PHONE_MIN_HEIGHT_PX,
+  FIRE3D_PHONE_MIN_HEIGHT_QUERY
+} from '../config/fire3d-phone';
+import {
   FIRE3D_CAMERA_TRANSITION_MS,
+  FIRE3D_CONSOLE_WIDTH_QUERY,
   FIRE3D_COVERAGE_NOTE,
   FIRE3D_MIN_HEIGHT_PX,
   FIRE3D_MIN_HEIGHT_QUERY,
@@ -62,13 +74,12 @@ import {
   isWithinTerrainCoverage,
   terrainEdgeLine
 } from '../config/fire3d-presentation';
-import type { TerrainCoverageReading } from '../config/fire3d-presentation';
+import type { Fire3DEntryPhase, TerrainCoverageReading } from '../config/fire3d-presentation';
 import { terrainCoverageFor, terrainCoverageFromHeader, FIRE3D_TERRAIN_COVERAGE,
   type TerrainCoverage } from '../config/terrain-coverage';
 import { URLS } from '../config/urls';
 import { resolveHillshadeArchive } from '../layers/hillshade';
 import { probeArchiveHeader } from '../util/pmtiles-probe';
-import { holdSatellite } from './basemap-switcher';
 import { BOTTOM_STACK_IDS, firstLayerIdAbove, reassertLabelOrder, reassertThematicOrder } from './layer-order';
 import { watchContextLoss, webGl2Capability } from './gl-capability';
 import {
@@ -80,6 +91,7 @@ import {
   onFire3DPreferenceChange,
   setFire3DPreference
 } from '../state/fire3d-store';
+import { isPlaceDisplayHeld } from '../state/place-display-hold';
 import { registry } from '../state/registry';
 import { showToast } from '../ui/overlay';
 import { isObject } from '../util/guards';
@@ -106,6 +118,14 @@ export interface Fire3DStatus {
   readonly state: 'inactive' | 'checking' | 'active' | 'unavailable';
   /** Honest user-facing reason; non-null only for 'unavailable'. */
   readonly reason: string | null;
+  /**
+   * The step of the entry the scene is waiting on, while `checking`; null in
+   * every other state (owner direction 2026-11-09 (sprint), DR-pending). The
+   * steps are the awaits `activateScene` really makes, in order, so a
+   * surface that shows the entry can say what is happening instead of one
+   * word for the whole wait. The console does not render it.
+   */
+  readonly phase: Fire3DEntryPhase | null;
   /** True while the volumetric smoke read is in place beside the terrain;
    * false while active with the flat veil only (partial degrade). */
   readonly smokeVolume: boolean;
@@ -200,6 +220,11 @@ export function deriveSceneTransport(
 
 export interface Fire3DGateInput {
   readonly preference: boolean;
+  /**
+   * A shell that can present the scene has the viewport. The name is from
+   * when only the desktop console could; since 2026-11-09 the phone shell
+   * can too (`presentingShell`), and the runtime passes true for either.
+   */
   readonly desktopViewport: boolean;
   readonly committedCluster: HazardClusterKey | 'custom';
   readonly activeLayerKeys: ReadonlySet<string>;
@@ -217,6 +242,21 @@ export interface Fire3DGateInput {
    * `window.innerHeight`.
    */
   readonly viewportHeight?: number;
+  /**
+   * The height floor of the shell that would present the scene, in CSS
+   * pixels. Optional: absent, it is the console's FIRE3D_MIN_HEIGHT_PX, so
+   * every caller written before the phone shell could present the scene
+   * keeps its answer. The runtime passes FIRE3D_PHONE_MIN_HEIGHT_PX for the
+   * phone shell.
+   */
+  readonly minViewportHeight?: number;
+  /**
+   * The PLACE studio holds the map display (src/state/place-display-hold.ts):
+   * it has set the Fire layers aside for its clean display and will put back
+   * the display it captured. Optional, and treated as no hold when absent.
+   * Owner direction 2026-11-09 (sprint), DR-pending.
+   */
+  readonly studioHold?: boolean;
 }
 
 /**
@@ -225,8 +265,16 @@ export interface Fire3DGateInput {
  * 'custom' (the user added a reference layer to the Fire view) keeps the
  * mode alive while a fire event layer remains in the active set, so one
  * extra layer never collapses the scene. Switching to another cluster,
- * removing every fire event layer, toggling the preference off, a narrow
- * viewport, a short viewport, or a device without WebGL 2 always exits.
+ * removing every fire event layer, toggling the preference off, a viewport
+ * no shell can present the scene in, a viewport shorter than that shell's
+ * floor, or a device without WebGL 2 always exits.
+ *
+ * The PLACE studio's hold (`studioHold`) keeps a scene that is already up
+ * through the studio's round trip: its clean display sets the Fire layers
+ * aside (a custom set) and puts them back, and a scene torn down for that
+ * would start over on the way back. It never enters a scene, never keeps
+ * one through a switch to another cluster, and never outlasts any refusal
+ * above.
  *
  * DR-025a made the entry test capability plus geometry rather than width
  * alone: a tablet in the 721 to 1024 px band is welcome, a landscape phone
@@ -239,7 +287,7 @@ export function shouldFire3DBeActive(input: Fire3DGateInput): boolean {
   if (input.webgl2 === false) return false;
   if (
     input.viewportHeight !== undefined &&
-    input.viewportHeight < FIRE3D_MIN_HEIGHT_PX
+    input.viewportHeight < (input.minViewportHeight ?? FIRE3D_MIN_HEIGHT_PX)
   ) {
     return false;
   }
@@ -247,6 +295,9 @@ export function shouldFire3DBeActive(input: Fire3DGateInput): boolean {
   if (!input.currentlyActive || input.committedCluster !== 'custom') {
     return false;
   }
+  // The PLACE studio's clean display demotes the set to custom by setting
+  // the Fire layers aside; the scene holds until the studio puts them back.
+  if (input.studioHold === true) return true;
   return FIRE3D_EVENT_LAYER_KEYS.some((key) =>
     input.activeLayerKeys.has(key)
   );
@@ -259,6 +310,7 @@ export function shouldFire3DBeActive(input: Fire3DGateInput): boolean {
 let status: Fire3DStatus = {
   state: 'inactive',
   reason: null,
+  phase: null,
   smokeVolume: false,
   perimeterRibbon: false,
   contextLayers: [],
@@ -272,6 +324,8 @@ const statusListeners = new Set<() => void>();
 let controllerWired = false;
 let active = false;
 let activation: AbortController | null = null;
+/** Mirrors Fire3DStatus.phase: the awaited step of the entry in flight. */
+let entryPhase: Fire3DEntryPhase | null = null;
 /** Mirrors Fire3DStatus.terrainCoverage; read by publishStatus and by
  * syncEmbedNote, kept current by coverageMoveListener while active. `full`
  * while inactive, so neither coverage sentence renders outside the scene. */
@@ -288,6 +342,17 @@ let coverageMoveListener: (() => void) | null = null;
 let generation = 0;
 let savedCamera: { readonly pitch: number; readonly bearing: number } | null =
   null;
+/**
+ * The camera a leaving scene still owes the flat map (`restoreCamera`): set
+ * while the restoring ease is in flight or has been cut short, null once the
+ * camera is back or something else has taken the pitch and bearing. A scene
+ * that starts again in the meantime found the camera THERE, not at whatever
+ * the unfinished turn happened to read.
+ */
+let owedCamera: { readonly pitch: number; readonly bearing: number } | null =
+  null;
+/** Bumped by each restore and each entry tilt, so an older restore stands down. */
+let cameraIntent = 0;
 let tileWatch: Pick<RasterTileWatch, 'detach'> | null = null;
 let smokeVolumeOn = false;
 let smokeModule: typeof import('../layers/hms-smoke-volume') | null = null;
@@ -426,6 +491,7 @@ function publishStatus(
   status = {
     state,
     reason,
+    phase: state === 'checking' ? entryPhase : null,
     smokeVolume: state === 'active' && smokeVolumeOn,
     perimeterRibbon: state === 'active' && ribbonOn,
     contextLayers: state === 'active' ? contextKeys : [],
@@ -441,6 +507,11 @@ function publishStatus(
   if (typeof document !== 'undefined') {
     const root = document.documentElement;
     root.dataset.ddmFire3d = state;
+    if (state === 'checking' && entryPhase !== null) {
+      root.dataset.ddmFire3dPhase = entryPhase;
+    } else {
+      delete root.dataset.ddmFire3dPhase;
+    }
     if (state === 'active') {
       root.dataset.ddmFire3dSmoke = smokeVolumeOn ? 'volume' : 'flat';
       root.dataset.ddmFire3dRibbon = ribbonOn ? 'on' : 'off';
@@ -472,12 +543,36 @@ function republishActive(): void {
   if (status.state === 'active') publishStatus('active', null);
 }
 
-function desktopViewport(): boolean {
-  return (
-    typeof window !== 'undefined' &&
-    typeof window.matchMedia === 'function' &&
-    window.matchMedia(FIRE3D_MIN_WIDTH_QUERY).matches
-  );
+/** Name the step the entry now waits on. Only while the entry is still
+ * `checking`: a rollback or a failure has already published its own state. */
+function enterPhase(phase: Fire3DEntryPhase): void {
+  entryPhase = phase;
+  if (status.state === 'checking') publishStatus('checking', null);
+}
+
+/**
+ * Which shell could present the scene in this viewport, or null when none
+ * can (owner direction 2026-11-09 (sprint), DR-pending).
+ *
+ * At the console's width it is the desktop console, as it always was. Below
+ * it the phone shell may, on one condition read from the document itself:
+ * its 3D chrome is mounted (FIRE3D_PHONE_CHROME_ATTRIBUTE on #app). That
+ * chrome is the card carrying the terrain coverage statement and the
+ * non-prediction disclosure, so a phone cannot hold the scene without them,
+ * whatever order the two lazy chunks arrive in. A phone-width embed has no
+ * phone shell and no such chrome, so it stays flat exactly as before.
+ */
+function presentingShell(): 'console' | 'phone' | null {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+    return null;
+  }
+  if (!window.matchMedia(FIRE3D_MIN_WIDTH_QUERY).matches) return null;
+  if (window.matchMedia(FIRE3D_CONSOLE_WIDTH_QUERY).matches) return 'console';
+  const app =
+    typeof document !== 'undefined' && typeof document.getElementById === 'function'
+      ? document.getElementById('app')
+      : null;
+  return app?.hasAttribute(FIRE3D_PHONE_CHROME_ATTRIBUTE) === true ? 'phone' : null;
 }
 
 /**
@@ -497,10 +592,19 @@ function hasWebGl2(): boolean {
   return webGl2Capability().webgl2;
 }
 
-/** The gate's viewport-height input, omitted where there is no window. */
-function viewportHeightInput(): { readonly viewportHeight?: number } {
+/**
+ * The gate's viewport-height inputs, omitted where there is no window: the
+ * height, and the floor of the shell that would present the scene.
+ */
+function viewportHeightInput(shell: 'console' | 'phone' | null): {
+  readonly viewportHeight?: number;
+  readonly minViewportHeight?: number;
+} {
   if (typeof window !== 'undefined' && typeof window.innerHeight === 'number') {
-    return { viewportHeight: window.innerHeight };
+    return {
+      viewportHeight: window.innerHeight,
+      minViewportHeight: shell === 'phone' ? FIRE3D_PHONE_MIN_HEIGHT_PX : FIRE3D_MIN_HEIGHT_PX
+    };
   }
   return {};
 }
@@ -518,6 +622,86 @@ function applyCamera(
   } else {
     map.easeTo({ ...target, duration: FIRE3D_CAMERA_TRANSITION_MS });
   }
+}
+
+/** Two angles in degrees name the same direction (bearings wrap at 180). */
+function sameAngle(a: number, b: number): boolean {
+  return Math.abs(((((a - b) % 360) + 540) % 360) - 180) < 0.001;
+}
+
+/**
+ * Give the flat map back the camera the scene found, and FINISH the job
+ * (owner direction 2026-11-09 (sprint), DR-pending).
+ *
+ * The restore is the same ease as before. But an ease is cancelled by the
+ * next camera call from anywhere, and a cancelled restore leaves the flat
+ * map tilted with the scene gone. A phone makes that ordinary: the phone
+ * sheet jumps the camera padding about 150 ms after any viewport change
+ * (src/ui/mobile-sheet.ts, `settle`), so a phone that turns on its side, or
+ * otherwise drops under its height floor while the scene is on, was left at
+ * the pitch the ease had reached (measured: 41.99 degrees). A region fit or
+ * a pan inside the 800 ms does the same on any screen.
+ *
+ * So when the ease ends short of the camera it was heading for, the rest is
+ * paid by one jump as soon as the map is at rest. It stands down, leaving the
+ * camera alone, if a newer scene has tilted it or if anything else has moved
+ * the pitch or the bearing off the place the ease was cut: that is someone
+ * else's camera now (a person's own two-finger tilt, a reset).
+ *
+ * Nothing is armed when the camera is already there, which is every reduced
+ * motion exit (a jump) and every exit that had nothing to turn.
+ */
+function restoreCamera(
+  map: maplibregl.Map,
+  target: { readonly pitch: number; readonly bearing: number }
+): void {
+  const mine = ++cameraIntent;
+  owedCamera = null;
+  applyCamera(map, target);
+  const there = (at: { readonly pitch: number; readonly bearing: number }): boolean =>
+    sameAngle(map.getPitch(), at.pitch) && sameAngle(map.getBearing(), at.bearing);
+  if (there(target)) return;
+
+  owedCamera = target;
+  let cut: { readonly pitch: number; readonly bearing: number } | null = null;
+  let finished = false;
+  const finish = (): void => {
+    finished = true;
+    map.off('moveend', onMoveEnd);
+    if (cameraIntent === mine) owedCamera = null;
+  };
+  const pay = (): void => {
+    if (finished) return;
+    if (cameraIntent !== mine) {
+      finish();
+      return;
+    }
+    // Whatever cut the ease short is still moving the map (a fit, a hand on
+    // the glass): its own moveend comes back through onMoveEnd.
+    if (map.isMoving()) return;
+    const untouched = cut !== null && there(cut);
+    // One payment, then done either way: the jump's own moveend must not
+    // come back here.
+    finish();
+    if (untouched) map.jumpTo(target);
+  };
+  function onMoveEnd(): void {
+    if (finished) return;
+    if (cameraIntent !== mine || there(target)) {
+      finish();
+      return;
+    }
+    if (cut === null) {
+      cut = { pitch: map.getPitch(), bearing: map.getBearing() };
+    } else if (!there(cut)) {
+      finish();
+      return;
+    }
+    // Not from inside this event: the call that cut the ease is still on the
+    // stack, and the camera is its to finish first.
+    queueMicrotask(pay);
+  }
+  map.on('moveend', onMoveEnd);
 }
 
 /** whp-3d.ts's own private SOURCE_ID, mirrored here rather than imported:
@@ -638,7 +822,7 @@ function rollbackScene(map: maplibregl.Map): void {
   map.setSky(FIRE3D_SKY_CLEAR_SPECIFICATION);
   if (map.getSource(TERRAIN_SOURCE_ID)) map.removeSource(TERRAIN_SOURCE_ID);
   if (savedCamera) {
-    applyCamera(map, savedCamera);
+    restoreCamera(map, savedCamera);
     savedCamera = null;
   }
 }
@@ -724,8 +908,12 @@ async function activateScene(map: maplibregl.Map): Promise<void> {
   activation = myController;
   const signal = myController.signal;
   const myGeneration = ++generation;
+  entryPhase = 'probe';
   publishStatus('checking', null);
-  savedCamera = { pitch: map.getPitch(), bearing: map.getBearing() };
+  // The camera as found. While an earlier exit is still handing its camera
+  // back (`restoreCamera`), that is where the flat map stands, not the
+  // reading its unfinished turn happens to give.
+  savedCamera = owedCamera ?? { pitch: map.getPitch(), bearing: map.getBearing() };
 
   let resolved: ResolvedTerrainArchive;
   try {
@@ -796,6 +984,9 @@ async function activateScene(map: maplibregl.Map): Promise<void> {
       exaggeration: FIRE3D_TERRAIN_EXAGGERATION
     });
     map.setSky(FIRE3D_SKY_SPECIFICATION);
+    // The scene's own tilt takes the camera: an exit still owed stands down.
+    cameraIntent += 1;
+    owedCamera = null;
     applyCamera(map, { pitch: FIRE3D_PITCH_DEGREES });
     // Terrain relief fix lane, 2026-09-10: a fire outside the Pacific
     // Northwest bake enters this scene exactly as fully as one inside it
@@ -873,6 +1064,9 @@ async function activateScene(map: maplibregl.Map): Promise<void> {
     })
     .catch((err: unknown) => warnComponent('dryness ground', err));
 
+  // The next two awaits are the smoke volume and the perimeter ribbon: say so
+  // to whatever surface is showing the entry (Fire3DStatus.phase).
+  enterPhase('atmosphere');
   // W4: the volumetric smoke rides its own lazy chunk and is non-fatal by
   // contract; terrain stays and the flat veil stays visible on any failure.
   try {
@@ -905,6 +1099,7 @@ async function activateScene(map: maplibregl.Map): Promise<void> {
   if (myGeneration !== generation || !active) return;
   if (ribbonModule) readRibbon(map, ribbonModule);
 
+  enterPhase('context');
   // W-CTX: the issuer-published context layers ride their own lazy chunk
   // and are non-fatal by contract; each missing layer degrades alone.
   try {
@@ -1045,14 +1240,16 @@ export function initFire3DController(map: maplibregl.Map): void {
   controllerWired = true;
 
   const evaluate = (): void => {
+    const shell = presentingShell();
     const should = shouldFire3DBeActive({
       preference: getFire3DPreference(),
-      desktopViewport: desktopViewport(),
+      desktopViewport: shell !== null,
       committedCluster: getCommittedSnapshot().cluster,
       activeLayerKeys: registry.getActiveKeys(),
       currentlyActive: active || activation !== null,
       webgl2: hasWebGl2(),
-      ...viewportHeightInput()
+      studioHold: isPlaceDisplayHeld(),
+      ...viewportHeightInput(shell)
     });
     if (should) {
       if (!active && activation === null) {
@@ -1096,6 +1293,23 @@ export function initFire3DController(map: maplibregl.Map): void {
     window
       .matchMedia(FIRE3D_MIN_HEIGHT_QUERY)
       .addEventListener('change', evaluate);
+    // Which shell presents the scene turns on the console's width, and the
+    // phone shell has a floor of its own (`presentingShell`).
+    window.matchMedia(FIRE3D_CONSOLE_WIDTH_QUERY).addEventListener('change', evaluate);
+    window.matchMedia(FIRE3D_PHONE_MIN_HEIGHT_QUERY).addEventListener('change', evaluate);
+  }
+  // The phone shell presents the scene only while its 3D chrome is mounted,
+  // and that is a fact of the document, not of a media query: the chrome
+  // arrives in its own lazy chunk and leaves when the phone shell does.
+  const appShell =
+    typeof document !== 'undefined' && typeof document.getElementById === 'function'
+      ? document.getElementById('app')
+      : null;
+  if (appShell && typeof MutationObserver === 'function') {
+    new MutationObserver(evaluate).observe(appShell, {
+      attributes: true,
+      attributeFilter: [FIRE3D_PHONE_CHROME_ATTRIBUTE]
+    });
   }
   if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
     window.addEventListener('ddm:whp-shade', (event) => {
@@ -1105,12 +1319,5 @@ export function initFire3DController(map: maplibregl.Map): void {
       syncEmbedNote(status.state === 'active');
     });
   }
-  // DR-105: no satellite imagery while the scene is opening or open. Synced
-  // once after the first evaluation too, which releases a boot hold
-  // (src/ui/sidebar.ts) when the scene does not open.
-  const syncSatelliteHold = (): void =>
-    holdSatellite(map, status.state === 'checking' || status.state === 'active');
-  onFire3DStatusChange(syncSatelliteHold);
   evaluate();
-  syncSatelliteHold();
 }

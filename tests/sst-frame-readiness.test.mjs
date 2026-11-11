@@ -1079,7 +1079,10 @@ test('the zoom-out toast is judged where the camera settles, never during the fl
       await flyFromLand();
       map.emit('moveend');
       assert.equal(shown.length, 1);
-      assert.match(shown[0], /zoom out toward the equatorial Pacific/);
+      assert.match(
+        shown[0],
+        /Sea surface warmer or cooler than usual, worldwide\. Zoom out to the equatorial Pacific for El Nino and La Nina\./
+      );
       await mod.activate(map);
       assert.equal(shown.length, 1);
     });

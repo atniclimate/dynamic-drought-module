@@ -53,7 +53,14 @@ test('R8 USDM change map and both keys use eleven signed issuer classes', async 
   await gotoApp(page, '?region=washington_state&view=console&layers=usdm');
   await expect(layerPill(page, 'usdm')).toHaveText('live');
   for (const mode of ['chg1', 'chg4']) {
+    const sidebar = page.locator('[data-legend="usdm"]');
     await page.locator('#time-bar [data-mode="' + mode + '"]').click();
+    // Wait for this mode's keys to replace the previous mode's before reading swatches;
+    // the two modes share one fixture, so only the span in the title tells them apart.
+    const keyTitle = 'Drought change key (' + (mode === 'chg4' ? '4-week' : '1-week') + ')';
+    await expect(page.locator('#time-bar [data-mode="' + mode + '"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(sidebar.locator('.legend-section-title')).toHaveText(keyTitle);
+    await expect(page.locator('#map-key-legend .map-key-label')).toHaveText(keyTitle);
     await expect.poll(() => page.evaluate(() => {
       const map = (window as unknown as OutlookWindow).__issuerOutlookMaps.find(m => m.getContainer().id === 'map');
       try { return [...new Set(map?.queryRenderedFeatures({ layers: ['usdm-change-fill'] })
@@ -71,7 +78,6 @@ test('R8 USDM change map and both keys use eleven signed issuer classes', async 
       const bytes = [1,3,5].map(i => parseInt(hex.slice(i,i+2),16));
       return 'rgb(' + bytes.join(', ') + ')';
     });
-    const sidebar = page.locator('[data-legend="usdm"]');
     await expect(sidebar.locator('li')).toHaveText(labels);
     expect(await sidebar.locator('.swatch').evaluateAll(nodes => nodes.map(n => getComputedStyle(n).backgroundColor))).toEqual(rgb);
     await expect(page.locator('#map-key-legend .map-key-item')).toHaveText(labels);

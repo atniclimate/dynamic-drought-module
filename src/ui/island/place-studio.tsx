@@ -1,5 +1,26 @@
+/**
+ * The Place studio: search first, action last, one screen.
+ *
+ * PRESENTATION (owner direction 2026-11-09 (sprint), DR-pending). One search
+ * looks across every place type at once; type chips narrow it; the list is
+ * the page (one scroller, no box inside it); and choosing a row raises a
+ * selection bar pinned to the bottom that carries the place's gated formal
+ * name, its kind in plain words, the honest state of its live boundary read,
+ * the representation caveat on every Tribal Nation, and two actions that do
+ * what their labels say: open its briefing, or show it on the map.
+ *
+ * WHAT DID NOT CHANGE. The catalogs are names only. A boundary is read live
+ * when a place is chosen (a Tribal Nation's with `cache: 'no-store'`) and is
+ * never bundled or kept. The durable typed place, the display snapshot, the
+ * restore-then-brief exit and the newest-intent guards are the same code as
+ * before, so Back, Escape and browser Back still hand a chosen place's
+ * briefing to the map. The search matches with the shared search's own fold,
+ * token rule and prefix-first rank (src/util/search-fold.ts) and rules Enter
+ * with its `enterChoice`; it does not copy src/ui/search-controller.ts.
+ */
+
 import { render } from 'preact';
-import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import type { Feature, FeatureCollection, GeoJsonProperties } from 'geojson';
 
 import {
@@ -64,9 +85,11 @@ import {
 } from '../../util/arcgis-features';
 import type { ArealGeometry } from '../../util/arcgis-features';
 import { fetchJsonWithBudget, fetchSharedJsonWithBudget, US_STATES_SHARED_KEY } from '../../util/fetch';
-import { foldSearchText } from '../../util/search-fold';
+import { enterChoice, foldSearchText, matchesTokens, prefixFirst } from '../../util/search-fold';
 import { openImpactPanel } from '../impact-panel';
+import { releaseShownPlace, showPlaceOnMap } from './place-on-map';
 import { applyStudioInertScope } from './studio-inert';
+import '../../styles/studios.css';
 
 const CAPABILITY_ORDER: readonly PlaceCapabilityKey[] = [
   'selectable',
@@ -100,6 +123,103 @@ const TRIBAL_OVERLAP_SOURCE =
   'Tribal Nations: names from the Bureau of Indian Affairs Federal Register list of federally recognized Tribes (2026-01-30); boundaries from the Bureau of Indian Affairs American Indian and Alaska Native Land Area Representation (AIAN-LAR).';
 const PLACE_DATA_TIMEOUT_MS = 8_000;
 const PNW_BOUNDS = [-125, 41.5, -110.5, 49.5] as const;
+
+/** The list's reach: every place type, or one. */
+type PlaceScope = 'all' | TypedPlaceKind;
+
+/** One place type's names-only catalog, as the list reads it. */
+interface CatalogState {
+  readonly status: 'idle' | 'loading' | 'ready' | 'unavailable';
+  readonly entries: readonly PlaceCatalogEntry[];
+}
+
+const CATALOG_IDLE: CatalogState = { status: 'idle', entries: [] };
+const CATALOG_LOADING: CatalogState = { status: 'loading', entries: [] };
+const CATALOG_UNAVAILABLE: CatalogState = { status: 'unavailable', entries: [] };
+const NO_ATTEMPTS: Readonly<Record<TypedPlaceKind, number>> = {
+  tribe: 0,
+  state: 0,
+  ecoregion: 0,
+  watershed: 0
+};
+
+/** One listed place with its folded search text, built once per catalog. */
+interface PlaceRow {
+  readonly entry: PlaceCatalogEntry;
+  readonly label: string;
+  readonly haystack: string;
+}
+
+const rowCache = new WeakMap<readonly PlaceCatalogEntry[], readonly PlaceRow[]>();
+
+/** The rows of one catalog. The folded text is the filter's own, unchanged: label, id and detail. */
+function rowsOf(entries: readonly PlaceCatalogEntry[]): readonly PlaceRow[] {
+  let rows = rowCache.get(entries);
+  if (!rows) {
+    rows = entries.map((entry) => ({
+      entry,
+      label: entry.label,
+      haystack: foldSearchText(`${entry.label} ${entry.id} ${entry.detail ?? ''}`)
+    }));
+    rowCache.set(entries, rows);
+  }
+  return rows;
+}
+
+/** A place type in one plain word or two, for a row and for the selection bar. */
+const KIND_WORD: Readonly<Record<TypedPlaceKind, string>> = {
+  tribe: 'Tribal Nation',
+  state: 'State',
+  ecoregion: 'Ecoregion',
+  watershed: 'Watershed'
+};
+
+/** A place's kind in plain words, with the catalog's own level where it has one. */
+function kindWords(kind: TypedPlaceKind, detail: string | null): string {
+  return detail ? `${KIND_WORD[kind]}, ${detail}` : KIND_WORD[kind];
+}
+
+/**
+ * Where each kind's boundary is read from, in the words the instrument
+ * already uses: the search's own name for the BIA service, and the source
+ * labels of PLACE_CATALOG.
+ */
+const BOUNDARY_SOURCE: Readonly<Record<TypedPlaceKind, string>> = {
+  tribe: 'the BIA land area service',
+  state: 'the bundled Census state boundaries',
+  ecoregion: 'the EPA ecoregions service',
+  watershed: 'the USGS Watershed Boundary Dataset service'
+};
+
+/**
+ * The live boundary read of the chosen place, as the selection bar states
+ * it. `unmatched` is a Tribal Nation the roster names but no land-area
+ * representation was safely matched to; `empty` is a source that answered
+ * with no boundary; `unreachable` is a read that failed.
+ */
+type BoundaryRead = 'loading' | 'ready' | 'unreachable' | 'empty' | 'unmatched';
+
+/** The one sentence the bar says about the read. Never a claim the read did not earn. */
+function boundarySentence(kind: TypedPlaceKind, read: BoundaryRead): string {
+  const source = BOUNDARY_SOURCE[kind];
+  switch (read) {
+    case 'loading':
+      return `Reading the boundary from ${source}...`;
+    case 'ready':
+      return 'A briefing is available for this place.';
+    case 'unreachable':
+      return `The boundary could not be read from ${source} just now, so a briefing is not available yet.`;
+    case 'empty':
+      return `No boundary came back from ${source} for this place, so a briefing is not available.`;
+    case 'unmatched':
+      return kind === 'tribe'
+        ? "DDM has not matched this Nation's name to a boundary in the BIA land area data, so a briefing is not available from this list."
+        : 'No boundary is listed for this place, so a briefing is not available.';
+  }
+}
+
+/** The stewardship note every Tribal Nation read carries beside its caveat. */
+const TRIBAL_LIVE_READ_NOTE = 'Its boundary is read live each time. DDM does not store it.';
 
 type NarrativeStatus = 'loading' | 'ready' | 'unavailable';
 type OverlapStatus = 'loading' | 'ready';
@@ -868,18 +988,76 @@ function openReturnBriefing(entry: PlaceCatalogEntry, resolved: ResolvedPlaceSel
   if (entry.kind === 'tribe') showStudioReturnBoundary(resolved.geometry);
 }
 
+/**
+ * The exit for "Show on map": the chosen place framed and marked, and no
+ * briefing (src/ui/island/place-on-map.ts, which is the one step that
+ * touches the map; nothing in this file does). It rides the same exit
+ * hand-off slot as the briefing, so it runs after the display is restored.
+ */
+function showReturnPlace(entry: PlaceCatalogEntry, resolved: ResolvedPlaceSelection): void {
+  showPlaceOnMap(entry.kind, resolved.context, resolved.geometry, resolved.bbox);
+}
+
+/**
+ * One place type's names-only catalog, loaded while the list wants it under
+ * the same master-abort plus timeout contract as before (`loadPlaceCatalog`).
+ * A failure is its own honest state for that type and never an empty list;
+ * a new `attempt` is the retry.
+ */
+function useCatalog(kind: TypedPlaceKind, wanted: boolean, attempt: number): CatalogState {
+  const [state, setState] = useState<CatalogState>(CATALOG_IDLE);
+  useEffect(() => {
+    if (!wanted) return;
+    const masterAbort = new AbortController();
+    setState((prior) => (prior.status === 'ready' ? prior : CATALOG_LOADING));
+    void loadPlaceCatalog(kind, masterAbort.signal)
+      .then((entries) => {
+        if (masterAbort.signal.aborted) return;
+        setState({ status: 'ready', entries });
+      })
+      .catch((err: unknown) => {
+        if (masterAbort.signal.aborted) return;
+        console.warn('[place-studio] catalog load failed.', err);
+        setState(CATALOG_UNAVAILABLE);
+      });
+    return () => masterAbort.abort();
+  }, [attempt, kind, wanted]);
+  return state;
+}
+
 function PlaceStudio() {
   const initialSelection = getTypedPlace();
   const [kind, setKind] = useState<TypedPlaceKind>(
     initialSelection?.kind ?? 'tribe'
   );
+  // The list's reach. A studio that reopens on a chosen place opens on that
+  // place's type, so its row is in view; otherwise it opens on every type.
+  const [scope, setScope] = useState<PlaceScope>(initialSelection?.kind ?? 'all');
   const [selection, setSelection] = useState<TypedPlaceRef | null>(initialSelection);
   const [selectionEntry, setSelectionEntry] = useState<PlaceCatalogEntry | null>(null);
-  const [entries, setEntries] = useState<readonly PlaceCatalogEntry[]>([]);
   const [query, setQuery] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [unavailable, setUnavailable] = useState(false);
-  const [catalogAttempt, setCatalogAttempt] = useState(0);
+  const [attempts, setAttempts] = useState(NO_ATTEMPTS);
+  // A catalog loads while the list shows its type, the map shows its
+  // reference layers (`kind`), or the chosen place belongs to it.
+  const wants = (placeKind: TypedPlaceKind): boolean =>
+    scope === 'all' || scope === placeKind || kind === placeKind || selection?.kind === placeKind;
+  const catalogs: Readonly<Record<TypedPlaceKind, CatalogState>> = {
+    tribe: useCatalog('tribe', wants('tribe'), attempts.tribe),
+    state: useCatalog('state', wants('state'), attempts.state),
+    ecoregion: useCatalog('ecoregion', wants('ecoregion'), attempts.ecoregion),
+    watershed: useCatalog('watershed', wants('watershed'), attempts.watershed)
+  };
+  const retryCatalog = (placeKind: TypedPlaceKind): void =>
+    setAttempts((prior) => ({ ...prior, [placeKind]: prior[placeKind] + 1 }));
+  // The display kind's catalog, as the technical view and the selection read it.
+  const entries = catalogs[kind].entries;
+  const loading = catalogs[kind].status === 'loading' || catalogs[kind].status === 'idle';
+  const unavailable = catalogs[kind].status === 'unavailable';
+  const [boundary, setBoundary] = useState<BoundaryRead>('loading');
+  const [boundaryAttempt, setBoundaryAttempt] = useState(0);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  // The list's one keyboard stop (a roving tab index), by place key.
+  const [cursor, setCursor] = useState<string | null>(null);
   const [narrativeStatus, setNarrativeStatus] =
     useState<NarrativeStatus>('unavailable');
   const [narrativeKindLabel, setNarrativeKindLabel] = useState(
@@ -890,6 +1068,8 @@ function PlaceStudio() {
     useState<OverlapViewState>(EMPTY_OVERLAP_VIEW);
   const [backPending, setBackPending] = useState(false);
   const backRef = useRef<HTMLButtonElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const listScrollRef = useRef(0);
   const explicitSelectionKeyRef = useRef<string | null>(null);
   const resolvedSelectionRef = useRef<{
     readonly key: string;
@@ -902,6 +1082,8 @@ function PlaceStudio() {
   const kindRef = useRef(kind);
 
   useEffect(() => {
+    // A boundary an earlier "Show on map" left belongs to the map, not to this session.
+    releaseShownPlace();
     beginPlaceStudioDisplay(kind);
     const releaseInertScope = applyStudioInertScope();
     backRef.current?.focus();
@@ -955,30 +1137,16 @@ function PlaceStudio() {
         setSelectionEntry((entry) =>
           place && entry?.kind === place.kind && entry.id === place.id ? entry : null
         );
-        if (place) setKind(place.kind);
+        if (place) {
+          setKind(place.kind);
+          // A narrowed list widens to the chosen place's type; "all" already holds it.
+          setScope((reach) => (reach === 'all' || reach === place.kind ? reach : place.kind));
+        } else {
+          setDetailsOpen(false);
+        }
       }),
     []
   );
-
-  useEffect(() => {
-    const masterAbort = new AbortController();
-    setLoading(true);
-    setUnavailable(false);
-    setEntries([]);
-    void loadPlaceCatalog(kind, masterAbort.signal)
-      .then((next) => {
-        if (masterAbort.signal.aborted) return;
-        setEntries(next);
-        setLoading(false);
-      })
-      .catch((err: unknown) => {
-        if (masterAbort.signal.aborted) return;
-        console.warn('[place-studio] catalog load failed.', err);
-        setUnavailable(true);
-        setLoading(false);
-      });
-    return () => masterAbort.abort();
-  }, [catalogAttempt, kind]);
 
   useEffect(() => {
     if (!selection || selection.kind !== kind) return;
@@ -998,6 +1166,7 @@ function PlaceStudio() {
     );
     setNarrativeLine(null);
     setNarrativeStatus(selectionEntry ? 'loading' : 'unavailable');
+    setBoundary('loading');
     setOverlapView(
       selectionEntry
         ? EMPTY_OVERLAP_VIEW
@@ -1027,6 +1196,7 @@ function PlaceStudio() {
       coverage['overlap-computable'].state !== 'available'
     ) {
       setNarrativeStatus('unavailable');
+      setBoundary('unmatched');
       setOverlapView({
         status: 'ready',
         rows: [],
@@ -1081,6 +1251,7 @@ function PlaceStudio() {
             emphasizeTypedPlace(selection, selectionEntry);
           }
           setNarrativeStatus('unavailable');
+          setBoundary('empty');
           setOverlapView({
             status: 'ready',
             rows: [],
@@ -1093,6 +1264,7 @@ function PlaceStudio() {
         }
 
         resolvedSelectionRef.current = { key: selectionKey, value: resolved };
+        setBoundary('ready');
         if (selectionEntry.kind === 'tribe' && selectionStillCurrent()) {
           // The emphasis cache is warm here: resolveTribeSelection seeded it
           // from this SAME response before resolving, so this call reads the
@@ -1201,6 +1373,7 @@ function PlaceStudio() {
             emphasizeTypedPlace(selection, selectionEntry);
           }
           setNarrativeStatus('unavailable');
+          setBoundary('unreachable');
           setOverlapView({
             status: 'ready',
             rows: [],
@@ -1218,7 +1391,8 @@ function PlaceStudio() {
         setStudioWatershedBoundary(null);
       }
     };
-  }, [selection, selectionEntry]);
+    // `boundaryAttempt` is the selection bar's retry: the same read, asked again.
+  }, [selection, selectionEntry, boundaryAttempt]);
 
   const handleBack = async (): Promise<void> => {
     if (backPending) return;
@@ -1242,27 +1416,72 @@ function PlaceStudio() {
   };
 
   const definition = PLACE_CATALOG[kind];
-  // The shared search fold on BOTH sides (wave A finding 1): the roster's
-  // formal Tribal Nation names carry hyphens and apostrophes, and this
-  // surface must match punctuation-free typing exactly like the shared
-  // search does ("Absentee Shawnee" finds "Absentee-Shawnee Tribe of
-  // Indians of Oklahoma"). Token-AND over the folded haystack, same as
-  // the shared component's matcher.
-  const queryTokens = foldSearchText(query)
-    .split(' ')
-    .filter((token) => token.length > 0);
-  const filteredEntries = useMemo(
-    () =>
+  const selectionKey = selection ? `${selection.kind}:${selection.id}` : null;
+
+  // ONE SEARCH ACROSS PLACE TYPES. The shared search's fold on both sides
+  // (wave A finding 1): the roster's formal Tribal Nation names carry hyphens
+  // and apostrophes, and this surface must match punctuation-free typing
+  // exactly like the shared search does ("Absentee Shawnee" finds
+  // "Absentee-Shawnee Tribe of Indians of Oklahoma"). Its token rule and its
+  // one rank too: every token in the folded text, labels that start with the
+  // query first, and no confidence score.
+  const foldedQuery = foldSearchText(query);
+  const queryTokens = foldedQuery.split(' ').filter((token) => token.length > 0);
+  const scopeKinds = scope === 'all' ? PLACE_TYPE_ORDER : [scope];
+  const groups = scopeKinds.map((placeKind) => {
+    const catalog = catalogs[placeKind];
+    const all = rowsOf(catalog.entries);
+    const rows =
       queryTokens.length === 0
-        ? entries
-        : entries.filter((entry) => {
-            const haystack = foldSearchText(
-              `${entry.label} ${entry.id} ${entry.detail ?? ''}`
-            );
-            return queryTokens.every((token) => haystack.includes(token));
-          }),
-    [entries, queryTokens.join(' ')]
+        ? all
+        : prefixFirst(
+            all.filter((row) => matchesTokens(row.haystack, queryTokens, false)),
+            foldedQuery
+          );
+    return { kind: placeKind, status: catalog.status, total: all.length, rows };
+  });
+  const listed = groups.filter((group) => group.status === 'ready' && group.rows.length > 0);
+  const pending = groups.filter((group) => group.status === 'loading' || group.status === 'idle');
+  const failed = groups.filter((group) => group.status === 'unavailable');
+  const shownRows = listed.flatMap((group) => group.rows);
+  // What a match count is "of": every place the search looked through, in
+  // the types that loaded, whether or not a type had a match.
+  const searchedTotal = groups.reduce(
+    (sum, group) => sum + (group.status === 'ready' ? group.total : 0),
+    0
   );
+  // With nothing to list, one honest line says why: still loading, not
+  // available (with a retry), nothing listed for the type, or no match.
+  const listStatus: 'loading' | 'unavailable' | 'none' | 'no-match' | null =
+    listed.length > 0
+      ? null
+      : pending.length > 0
+        ? 'loading'
+        : failed.length === groups.length
+          ? 'unavailable'
+          : queryTokens.length === 0
+            ? 'none'
+            : 'no-match';
+  const summary =
+    listed.length === 0
+      ? ''
+      : queryTokens.length === 0
+        ? `${shownRows.length.toLocaleString('en-US')} ${shownRows.length === 1 ? 'place' : 'places'}`
+        : `${shownRows.length.toLocaleString('en-US')} of ${searchedTotal.toLocaleString('en-US')} ${shownRows.length === 1 ? 'place matches' : 'places match'}`;
+
+  // The list is one keyboard stop: the row the arrows last reached, else the
+  // chosen row, else the first row.
+  const shownKeys = new Set(shownRows.map((row) => `${row.entry.kind}:${row.entry.id}`));
+  const firstRow = shownRows[0];
+  const tabStop =
+    cursor !== null && shownKeys.has(cursor)
+      ? cursor
+      : selectionKey !== null && shownKeys.has(selectionKey)
+        ? selectionKey
+        : firstRow
+          ? `${firstRow.entry.kind}:${firstRow.entry.id}`
+          : null;
+
   const coverage = runtimeCoverage(
     kind,
     selection,
@@ -1271,8 +1490,246 @@ function PlaceStudio() {
     unavailable
   );
 
+  /** Choose a place: the row's press, and Enter on an unambiguous search. */
+  const choose = (entry: PlaceCatalogEntry): void => {
+    const chosenKey = `${entry.kind}:${entry.id}`;
+    explicitSelectionKeyRef.current = chosenKey;
+    setPlaceReturnBriefing(null);
+    const resolved = resolvedSelectionRef.current;
+    if (coverageForEntry(entry).briefable.state === 'available') {
+      // FE-23: register the hand-off in the click's
+      // own task. The selection effect that would
+      // otherwise register it runs after the next
+      // frame, and Preact drops it if a browser Back
+      // unmounts the studio first (a slow device), so
+      // the briefing was lost. The effect replaces
+      // this action with its own once it runs.
+      if (resolved?.key === chosenKey) {
+        queueReturnBriefing(() => openReturnBriefing(entry, resolved.value));
+      } else {
+        queueReturnBriefing(chaseBriefingOnReturn(entry, null));
+      }
+    }
+    setCursor(chosenKey);
+    setSelectionEntry(entry);
+    setTypedPlace(typedPlaceRef(entry));
+  };
+
+  const focusOption = (key: string | null): void => {
+    if (key === null) return;
+    const [optionKind, ...rest] = key.split(':');
+    const option = Array.from(
+      scrollRef.current?.querySelectorAll<HTMLButtonElement>('.place-studio-option') ?? []
+    ).find(
+      (button) =>
+        button.dataset['placeKind'] === optionKind && button.dataset['placeId'] === rest.join(':')
+    );
+    option?.focus();
+  };
+
+  // The shared search's keys: Escape clears a typed query before it can
+  // close the studio, the down arrow enters the list, and Enter opens only an
+  // unambiguous match (`enterChoice`); otherwise it moves to the first row,
+  // so a second Enter chooses what the person can see.
+  const onSearchKeyDown = (event: KeyboardEvent): void => {
+    if (event.key === 'Escape' && query) {
+      event.preventDefault();
+      setQuery('');
+    } else if (event.key === 'ArrowDown') {
+      if (tabStop === null) return;
+      event.preventDefault();
+      focusOption(tabStop);
+    } else if (event.key === 'Enter') {
+      if (shownRows.length === 0) return;
+      event.preventDefault();
+      const chosen =
+        queryTokens.length === 0
+          ? undefined
+          : enterChoice(
+              shownRows.map((row) => ({
+                label: row.label,
+                id: row.entry.id,
+                // `enterChoice` names a state row 'place'.
+                kind: row.entry.kind === 'state' ? 'place' : row.entry.kind,
+                entry: row.entry
+              })),
+              foldedQuery
+            );
+      if (chosen) choose(chosen.entry);
+      else focusOption(firstRow ? `${firstRow.entry.kind}:${firstRow.entry.id}` : null);
+    }
+  };
+
+  // Arrow keys walk the list as one widget; Tab leaves it for the selection
+  // bar. With no bar the list is the studio's last stop, and the rows the
+  // arrows have not reached are out of the tab order, so Tab wraps to the
+  // first stop here: focus never leaves the studio for the page behind it.
+  const onListKeyDown = (event: KeyboardEvent): void => {
+    if (event.key === 'Tab') {
+      if (event.shiftKey) return;
+      const row = event.currentTarget as HTMLElement;
+      const stops = Array.from(
+        row
+          .closest('.place-studio')
+          ?.querySelectorAll<HTMLElement>(
+            'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]'
+          ) ?? []
+      ).filter((stop) => stop.tabIndex >= 0 && stop.offsetParent !== null);
+      const later = stops.some(
+        (stop) => (row.compareDocumentPosition(stop) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0
+      );
+      if (!later) {
+        event.preventDefault();
+        stops[0]?.focus();
+      }
+      return;
+    }
+    const step =
+      event.key === 'ArrowDown' ? 1 : event.key === 'ArrowUp' ? -1 : event.key === 'Home' ? -Infinity : event.key === 'End' ? Infinity : 0;
+    if (step === 0) return;
+    const options = Array.from(
+      scrollRef.current?.querySelectorAll<HTMLButtonElement>('.place-studio-option') ?? []
+    );
+    const at = options.indexOf(event.currentTarget as HTMLButtonElement);
+    if (at < 0) return;
+    event.preventDefault();
+    const next = options[Math.min(Math.max(at + step, 0), options.length - 1)];
+    if (!next) return;
+    setCursor(`${next.dataset['placeKind'] ?? ''}:${next.dataset['placeId'] ?? ''}`);
+    next.focus();
+  };
+
+  // WHAT THE BAR CAN SAY AND DO. `selectionEntry` is null while the chosen
+  // place's own list is still loading (a studio reopened on a durable place),
+  // when that list could not load, and for a place picked on the map that the
+  // list does not hold (a territory, say). The bar says which of the three,
+  // and offers the retry only where a retry can help.
+  const selectionCatalog = selection ? catalogs[selection.kind] : CATALOG_IDLE;
+  const entryPending = selection !== null && selectionEntry === null;
+  const entryUnavailable = entryPending && selectionCatalog.status === 'unavailable';
+  const entryMissing =
+    entryPending &&
+    selectionCatalog.status === 'ready' &&
+    !selectionCatalog.entries.some((candidate) => candidate.id === selection?.id);
+  const read: BoundaryRead = entryPending
+    ? entryUnavailable
+      ? 'unreachable'
+      : entryMissing
+        ? 'unmatched'
+        : 'loading'
+    : boundary;
+  const canAct = !entryPending && (read === 'loading' || read === 'ready');
+  const canRetry = read === 'unreachable' || read === 'empty';
+  const stateSentence =
+    selection === null
+      ? ''
+      : entryUnavailable
+        ? 'The list this place belongs to is not available right now, so a briefing is not available yet.'
+        : entryMissing
+          ? 'This screen has no briefing for this place.'
+          : entryPending
+            ? 'Reading the list this place belongs to...'
+            : boundarySentence(selection.kind, read);
+
+  const retryRead = (): void => {
+    if (!selection) return;
+    if (entryPending) retryCatalog(selection.kind);
+    else setBoundaryAttempt((attempt) => attempt + 1);
+  };
+
+  /**
+   * Leave the studio with the chosen place: its briefing, or the map alone.
+   * The exit is the same one step Back takes, and the hand-off rides the
+   * slot the selection already uses, so it runs after the display is
+   * restored. While the boundary read is still in flight the exit waits for
+   * it, as Back does; if the read then fails, the studio stays and the bar
+   * says so. A place the bar finds chosen from an earlier session is
+   * registered here, as its own row press would have.
+   */
+  const leaveWith = async (view: 'briefing' | 'map'): Promise<void> => {
+    if (backPending || !selectionEntry || selectionKey === null) return;
+    const entry = selectionEntry;
+    const hand = view === 'map' ? showReturnPlace : openReturnBriefing;
+    explicitSelectionKeyRef.current = selectionKey;
+    const resolved = resolvedSelectionRef.current;
+    if (resolved?.key === selectionKey) {
+      queueReturnBriefing(() => hand(entry, resolved.value));
+      backToMap();
+      return;
+    }
+    const inFlight = selectionPromiseRef.current;
+    if (inFlight?.key !== selectionKey) return;
+    // Until the read lands the standing hand-off covers a browser Back: the briefing.
+    queueReturnBriefing(chaseBriefingOnReturn(entry, inFlight.value));
+    setBackPending(true);
+    let landed: ResolvedPlaceSelection | null = null;
+    try {
+      landed = await inFlight.value;
+    } catch {
+      // The bar already states the failed read.
+    }
+    // Browser Back during the wait already left the studio; a second back would leave the site.
+    if (getStudioRoute() !== 'place') return;
+    if (!landed) {
+      setBackPending(false);
+      return;
+    }
+    const value = landed;
+    queueReturnBriefing(() => hand(entry, value));
+    backToMap();
+  };
+
+  /** Drop the choice: the durable place's explicit clear, so Back hands nothing to the map. */
+  const clearChoice = (): void => {
+    explicitSelectionKeyRef.current = null;
+    setPlaceReturnBriefing(null);
+    setDetailsOpen(false);
+    setTypedPlace(null);
+  };
+
+  // The technical view is one press away. In a single column it takes the
+  // list's place and gives it back, scroll position included.
+  const toggleDetails = (): void => {
+    const scroller = scrollRef.current;
+    if (!detailsOpen) listScrollRef.current = scroller?.scrollTop ?? 0;
+    const restore = detailsOpen ? listScrollRef.current : 0;
+    setDetailsOpen(!detailsOpen);
+    requestAnimationFrame(() => scroller?.scrollTo({ top: restore }));
+  };
+
+  // The page's own height, published for the stylesheet: in two columns the
+  // technical view stays beside the list while the list scrolls, and it may
+  // be no taller than the page it stands in.
+  useEffect(() => {
+    const scroller = scrollRef.current;
+    if (!scroller || typeof ResizeObserver === 'undefined') return;
+    const publish = (): void => {
+      scroller.style.setProperty('--place-page-h', `${scroller.clientHeight}px`);
+    };
+    const observer = new ResizeObserver(publish);
+    observer.observe(scroller);
+    publish();
+    return () => observer.disconnect();
+  }, []);
+
+  // A chosen row stays in view when the bar rises and takes its strip of the page.
+  useEffect(() => {
+    if (selectionKey === null) return;
+    const frame = requestAnimationFrame(() => {
+      scrollRef.current
+        ?.querySelector<HTMLElement>('.place-studio-option[aria-pressed="true"]')
+        ?.scrollIntoView({ block: 'nearest' });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [selectionKey]);
+
   return (
-    <section class="layers-studio place-studio" aria-labelledby="place-studio-heading">
+    <section
+      class="layers-studio place-studio"
+      aria-labelledby="place-studio-heading"
+      data-place-details={detailsOpen ? 'open' : 'closed'}
+      data-place-chosen={selection ? 'true' : 'false'}
+    >
       <header class="layers-studio-header place-studio-header">
         <button
           ref={backRef}
@@ -1288,67 +1745,105 @@ function PlaceStudio() {
         <div />
       </header>
 
-      <div class="layers-studio-scroll place-studio-scroll">
-        <nav class="place-studio-type-rail" aria-label="Place type">
-          {PLACE_TYPE_ORDER.map((placeKind) => {
-            const type = PLACE_CATALOG[placeKind];
-            const active = placeKind === kind;
-            return (
-              <button
-                key={placeKind}
-                id={`place-type-${placeKind}`}
-                type="button"
-                class="place-studio-type"
-                aria-pressed={active}
-                aria-controls="place-list-panel"
-                onClick={() => setKind(placeKind)}
-              >
-                {type.label}
-              </button>
-            );
-          })}
-        </nav>
-
+      <div class="layers-studio-scroll place-studio-scroll" ref={scrollRef}>
         <div class="place-studio-layout">
           <section
             id="place-list-panel"
             class="place-studio-list-panel"
-            aria-labelledby={`place-type-${kind}`}
-            aria-busy={loading ? 'true' : 'false'}
+            aria-labelledby={`place-type-${scope}`}
+            aria-busy={pending.length > 0 ? 'true' : 'false'}
           >
-            <div class="place-studio-type-status">
-              <strong id="place-type-availability">
-                {unavailable ? 'unavailable' : definition.availability}
-              </strong>
-              {definition.coverage ? (
-                <span id="place-type-coverage">{definition.coverage}</span>
-              ) : null}
-            </div>
             <label class="place-studio-search" for="place-studio-search">
-              <span class="sr-only">Search</span>
-              {/* Item 14, 2026-09-10: the field was correctly NAMED for
-                  assistive technology (the sr-only span and the aria-label
-                  above) and completely UNLABELLED for everyone else, so it
-                  rendered as an empty bordered box above a long list with
-                  nothing saying it filtered that list. The visible
-                  placeholder states what typing here does, in the sidebar
-                  search's own voice; it is a hint, never a substitute for
-                  the accessible name, which is unchanged. */}
+              <span class="sr-only">Search places</span>
+              {/* The field is named for assistive technology and says what
+                  typing does for everyone else; the placeholder is a hint,
+                  never the accessible name. */}
               <input
                 id="place-studio-search"
                 type="search"
                 value={query}
-                aria-label="Search"
-                placeholder="Filter this list"
+                aria-label="Search places"
+                aria-controls="place-list-panel"
+                placeholder="Search places"
+                autocomplete="off"
+                autocapitalize="off"
+                spellcheck={false}
+                enterkeyhint="search"
                 onInput={(event) => setQuery(event.currentTarget.value)}
+                onKeyDown={onSearchKeyDown}
               />
             </label>
 
-            {loading ? (
+            <nav class="place-studio-type-rail" aria-label="Place type">
+              <button
+                id="place-type-all"
+                type="button"
+                class="place-studio-type"
+                aria-pressed={scope === 'all'}
+                aria-controls="place-list-panel"
+                onClick={() => setScope('all')}
+              >
+                All
+              </button>
+              {PLACE_TYPE_ORDER.map((placeKind) => (
+                <button
+                  key={placeKind}
+                  id={`place-type-${placeKind}`}
+                  type="button"
+                  class="place-studio-type"
+                  aria-pressed={scope === placeKind}
+                  aria-controls="place-list-panel"
+                  onClick={() => {
+                    setScope(placeKind);
+                    setKind(placeKind);
+                  }}
+                >
+                  {PLACE_CATALOG[placeKind].label}
+                </button>
+              ))}
+            </nav>
+
+            {!selection ? (
+              <p class="place-studio-lead">
+                Choose a place to open its briefing or show it on the map.
+              </p>
+            ) : null}
+
+            <p id="place-list-summary" class="place-studio-summary" aria-live="polite">
+              {summary}
+            </p>
+
+            {/* In the all-types list a type that is still loading or could
+                not load says so here, above the rows, never as an empty group. */}
+            {listed.length > 0 && (pending.length > 0 || failed.length > 0) ? (
+              <ul class="place-studio-type-notes">
+                {pending.map((group) => (
+                  <li key={group.kind} data-place-note={group.kind}>
+                    Loading {PLACE_CATALOG[group.kind].label}...
+                  </li>
+                ))}
+                {failed.map((group) => (
+                  <li key={group.kind} data-place-note={group.kind}>
+                    <span>{PLACE_CATALOG[group.kind].label} are not available right now.</span>
+                    {/* Its own class only: `.layers-studio-back` in this root is the header's Back and the one-list failure's retry. */}
+                    <button
+                      type="button"
+                      class="place-studio-retry"
+                      aria-label={`Try ${PLACE_CATALOG[group.kind].label} again`}
+                      onClick={() => retryCatalog(group.kind)}
+                    >
+                      Try again
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+
+            {listStatus === 'loading' ? (
               <p id="place-list-status" class="place-studio-list-status" role="status">
                 Loading places...
               </p>
-            ) : unavailable ? (
+            ) : listStatus === 'unavailable' ? (
               <div class="place-studio-list-failure">
                 <p id="place-list-status" class="place-studio-list-status" role="status">
                   This list is not available right now.
@@ -1356,63 +1851,72 @@ function PlaceStudio() {
                 <button
                   type="button"
                   class="layers-studio-back place-studio-retry"
-                  onClick={() => setCatalogAttempt((attempt) => attempt + 1)}
+                  onClick={() => {
+                    for (const group of failed) retryCatalog(group.kind);
+                  }}
                 >
                   Try again
                 </button>
               </div>
-            ) : filteredEntries.length === 0 ? (
+            ) : listStatus !== null ? (
               <p id="place-list-status" class="place-studio-list-status" role="status">
-                {queryTokens.length === 0
+                {listStatus === 'none'
                   ? 'No places are listed for this type yet.'
                   : 'No places match this search.'}
               </p>
             ) : (
-              <ul id="place-list" class="place-studio-list">
-                {filteredEntries.map((entry, index) => {
-                  const selected =
-                    selection?.kind === entry.kind && selection.id === entry.id;
-                  return (
-                    <li key={`${entry.kind}:${entry.id}:${entry.detail ?? ''}`}>
-                      <button
-                        id={`place-option-${kind}-${index}`}
-                        type="button"
-                        class={`place-studio-option${selected ? ' selected' : ''}`}
-                        data-place-kind={entry.kind}
-                        data-place-id={entry.id}
-                        aria-pressed={selected}
-                        onClick={() => {
-                          const selectionKey = `${entry.kind}:${entry.id}`;
-                          explicitSelectionKeyRef.current = selectionKey;
-                          setPlaceReturnBriefing(null);
-                          const resolved = resolvedSelectionRef.current;
-                          if (coverageForEntry(entry).briefable.state === 'available') {
-                            // FE-23: register the hand-off in the click's
-                            // own task. The selection effect that would
-                            // otherwise register it runs after the next
-                            // frame, and Preact drops it if a browser Back
-                            // unmounts the studio first (a slow device), so
-                            // the briefing was lost. The effect replaces
-                            // this action with its own once it runs.
-                            if (resolved?.key === selectionKey) {
-                              queueReturnBriefing(() =>
-                                openReturnBriefing(entry, resolved.value)
-                              );
-                            } else {
-                              queueReturnBriefing(chaseBriefingOnReturn(entry, null));
-                            }
-                          }
-                          setSelectionEntry(entry);
-                          setTypedPlace(typedPlaceRef(entry));
-                        }}
-                      >
-                        <span>{entry.label}</span>
-                        {entry.detail ? <small>{entry.detail}</small> : null}
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
+              <div id="place-list" class="place-studio-list">
+                {listed.map((group) => (
+                  <section
+                    key={group.kind}
+                    class="place-studio-group"
+                    data-place-group={group.kind}
+                    aria-labelledby={`place-group-${group.kind}`}
+                  >
+                    <h3 class="place-studio-group-head" id={`place-group-${group.kind}`}>
+                      <span>{PLACE_CATALOG[group.kind].label}</span>
+                      <span class="place-studio-group-count">
+                        {group.rows.length === group.total
+                          ? group.total.toLocaleString('en-US')
+                          : `${group.rows.length.toLocaleString('en-US')} of ${group.total.toLocaleString('en-US')}`}
+                      </span>
+                    </h3>
+                    <ul>
+                      {group.rows.map(({ entry }, index) => {
+                        const rowKey = `${entry.kind}:${entry.id}`;
+                        const selected = rowKey === selectionKey;
+                        return (
+                          <li key={`${rowKey}:${entry.detail ?? ''}`}>
+                            <button
+                              id={`place-option-${entry.kind}-${index}`}
+                              type="button"
+                              class={`place-studio-option${selected ? ' selected' : ''}`}
+                              data-place-kind={entry.kind}
+                              data-place-id={entry.id}
+                              aria-pressed={selected}
+                              tabIndex={rowKey === tabStop ? 0 : -1}
+                              onFocus={() => {
+                                // The row that holds focus is the list's stop.
+                                if (rowKey !== tabStop) setCursor(rowKey);
+                              }}
+                              onKeyDown={onListKeyDown}
+                              onClick={() => choose(entry)}
+                            >
+                              <span class="place-studio-option-text">
+                                <span class="place-studio-option-name">{entry.label}</span>
+                                <span class="place-studio-option-kind">
+                                  {kindWords(entry.kind, entry.detail)}
+                                </span>
+                              </span>
+                              <span class="place-studio-option-mark" aria-hidden="true" />
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </section>
+                ))}
+              </div>
             )}
           </section>
 
@@ -1421,36 +1925,27 @@ function PlaceStudio() {
             class="place-studio-selection-panel"
             aria-labelledby="place-selection-panel-heading"
           >
-            <h3 id="place-selection-panel-heading">Selection panel</h3>
+            <h3 id="place-selection-panel-heading">About this place</h3>
             {!selection ? (
               <p id="place-selection-empty">
-                No place selected. Choose a place type, then a place; the full briefing
-                opens when you return to the map.
+                No place is chosen yet. Choose one from the list to open its briefing or show it
+                on the map.
               </p>
             ) : (
               <div id="place-selection-current">
                 <section id="place-brief-narrative">
-                  <h5>Brief narrative</h5>
+                  <h5>Current read</h5>
                   <p class="place-studio-selection-kind">
                     {narrativeKindLabel}
                   </p>
-                  <h4 id="place-selection-title">{selection.label}</h4>
                   <p id="place-brief-line" role="status">
                     {narrativeStatus === 'ready'
                       ? narrativeLine
                       : narrativeStatus}
                   </p>
                 </section>
-                <p class="place-studio-selection-availability">
-                  {PLACE_CATALOG[selection.kind].availability}
-                </p>
-                {PLACE_CATALOG[selection.kind].coverage ? (
-                  <p class="place-studio-selection-coverage">
-                    {PLACE_CATALOG[selection.kind].coverage}
-                  </p>
-                ) : null}
                 <section id="place-overlap-columns">
-                  <h5>Overlap columns</h5>
+                  <h5>Overlapping places</h5>
                   {overlapView.status === 'loading' ? (
                     <p id="place-overlap-status" role="status">
                       loading
@@ -1543,6 +2038,17 @@ function PlaceStudio() {
                 </section>
               </div>
             )}
+            <section class="place-studio-technical" aria-labelledby="place-technical-heading">
+              <h5 id="place-technical-heading">What this list can do</h5>
+              <div class="place-studio-type-status">
+                <span class="place-studio-type-name">{definition.label}</span>
+                <strong id="place-type-availability">
+                  {unavailable ? 'unavailable' : definition.availability}
+                </strong>
+                {definition.coverage ? (
+                  <span id="place-type-coverage">{definition.coverage}</span>
+                ) : null}
+              </div>
             <dl id="place-coverage-matrix" class="place-studio-coverage-matrix">
               {CAPABILITY_ORDER.map((capability) => (
                 <div key={capability}>
@@ -1556,14 +2062,131 @@ function PlaceStudio() {
                 </div>
               ))}
             </dl>
+            </section>
           </aside>
         </div>
       </div>
+
+      {selection ? (
+        <section
+          id="place-selection-bar"
+          class="place-studio-bar"
+          aria-label="Chosen place"
+          data-boundary={read}
+        >
+          <div class="place-studio-bar-id">
+            <p id="place-selection-kind" class="place-studio-bar-kind">
+              {kindWords(selection.kind, selectionEntry?.detail ?? null)}
+            </p>
+            {/* The gated formal name, whole: a Nation's name is never abbreviated. */}
+            <h3 id="place-selection-title" class="place-studio-bar-name">
+              {selection.label}
+            </h3>
+          </div>
+          <button
+            id="place-selection-clear"
+            type="button"
+            class="place-studio-bar-clear"
+            aria-label="Clear this choice"
+            onClick={clearChoice}
+          >
+            <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
+              <path d="M3.5 3.5l9 9M12.5 3.5l-9 9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" />
+            </svg>
+          </button>
+          <div class="place-studio-bar-notes">
+            <p id="place-selection-state" class="place-studio-bar-state" role="status">
+              {stateSentence}
+            </p>
+            {selection.kind === 'tribe' ? (
+              <>
+                {read === 'loading' || read === 'ready' ? (
+                  <p id="place-selection-live-read" class="place-studio-bar-note">
+                    {TRIBAL_LIVE_READ_NOTE}
+                  </p>
+                ) : null}
+                {/* The representation caveat rides every Tribal Nation
+                    selection that has a boundary representation, whole and in
+                    view: never dropped, never folded. A Nation with no matched
+                    boundary has no representation to qualify, and says that. */}
+                {read === 'unmatched' ? null : (
+                  <p id="place-selection-caveat" class="place-studio-bar-caveat">
+                    {TRIBAL_OVERLAP_CAVEAT}
+                  </p>
+                )}
+              </>
+            ) : null}
+          </div>
+          <div class="place-studio-bar-actions">
+            {canAct ? (
+              <>
+                <button
+                  id="place-open-briefing"
+                  type="button"
+                  class="place-studio-action"
+                  disabled={backPending}
+                  onClick={() => void leaveWith('briefing')}
+                >
+                  Open briefing
+                </button>
+                <button
+                  id="place-show-on-map"
+                  type="button"
+                  class="place-studio-action"
+                  disabled={backPending}
+                  onClick={() => void leaveWith('map')}
+                >
+                  Show on map
+                </button>
+              </>
+            ) : canRetry ? (
+              <button
+                id="place-selection-retry"
+                type="button"
+                class="place-studio-action"
+                onClick={retryRead}
+              >
+                Try again
+              </button>
+            ) : null}
+            <button
+              id="place-details-toggle"
+              type="button"
+              class="place-studio-details-toggle"
+              aria-expanded={detailsOpen}
+              aria-controls="place-selection-panel"
+              onClick={toggleDetails}
+            >
+              Details
+            </button>
+          </div>
+        </section>
+      ) : null}
     </section>
   );
 }
 
+/**
+ * NO STYLESHEET, NO STUDIO. src/styles/studios.css rides this lazy chunk, so
+ * it is one more request that can fail. On a first open the bundler's
+ * preload waits for it and a failure rejects the import, which the shell
+ * shows as "Studio unavailable". Nothing asks for the stylesheet again in
+ * the same page, though (the preload remembers what it has seen, and the
+ * shell's re-entry imports this chunk's own URL, src/util/chunk-retry.ts),
+ * so a later entry would mount the studio without its styles: measured on
+ * the sprint camera before this check, as bulleted rows and default buttons.
+ * The stylesheet therefore marks the studio roots with a custom property,
+ * and a mount that does not find the mark throws, which lands in the same
+ * "Studio unavailable" state; its "Try again" reloads the page and with it
+ * the stylesheet (src/ui/view-shell.ts renderStudioLoadFailure).
+ */
+function requireStudioStyles(root: HTMLElement): void {
+  if (getComputedStyle(root).getPropertyValue('--ddm-studios-css').trim() === '1') return;
+  throw new Error('[place-studio] the studio stylesheet is not loaded.');
+}
+
 export function mountPlaceStudio(root: HTMLElement): void {
+  requireStudioStyles(root);
   render(<PlaceStudio />, root);
 }
 

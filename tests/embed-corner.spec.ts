@@ -7,16 +7,14 @@ import { stubWildfireFeeds } from './wildfire-fixtures';
  * FE-18 (2026-08-28): the embed corner.
  *
  * Embeds keep the seats that predate the 2026-08-19 desktop chrome moves:
- * the preview badge in the top-right overlay stack, the satellite control
- * above MapLibre's compact attribution in the bottom-right, the key and the
- * brand pill in the shared bottom dock, and no app map-information button.
+ * the preview badge in the top-right overlay stack, MapLibre's compact
+ * attribution in the bottom-right, the key and the brand pill in the shared
+ * bottom dock, and no app map-information button.
  * Measured on the live build 2026-08-28, the desktop corner rules leaked
  * into wide embeds (fixed badge, absolute information button, shifted
- * attribution) and the dock's brand pill sat on the satellite control at
- * every width, including the 200px floor. This spec holds the corner by
- * hit-testing the two controls a person must be able to reach (satellite
- * and attribution) and by pairwise non-overlap of everything that shares
- * the bottom edge, at the widths the roadmap names.
+ * attribution). This spec holds the corner by hit-testing the credits
+ * control a person must be able to reach and by pairwise non-overlap of
+ * everything that shares the bottom edge, at the widths the roadmap names.
  */
 
 interface Rect {
@@ -79,18 +77,14 @@ for (const [width, height] of SIZES) {
     expect(badgeBox.top, 'the preview badge left the top-right stack').toBeLessThan(overlay.bottom);
     expect(badgeBox.bottom).toBeLessThan(height / 2);
 
-    // The two controls a person must reach, hit-tested at their centers.
-    const satellite = page.locator('.maplibregl-ctrl-bottom-right .basemap-switcher-btn');
+    // The credits control a person must reach, hit-tested at its center.
     const credits = page.locator('#map-info-btn');
-    await expect(satellite).toBeVisible();
     await expect(credits).toBeVisible();
-    expect(await hitAt(page, satellite, '.basemap-switcher-control'), 'the satellite control is covered').toBe(true);
     expect(await hitAt(page, credits, '.map-info-btn'), 'the credits button is covered').toBe(true);
 
     // Everything that shares the bottom edge stays apart.
     const named: Array<[string, Rect]> = [];
     for (const [name, selector] of [
-      ['satellite', '.maplibregl-ctrl-bottom-right .basemap-switcher-control'],
       ['credits', '.map-info-btn'],
       ['brand', '.embed-brand'],
       ['key', '#map-key'],

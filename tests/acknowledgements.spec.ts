@@ -210,7 +210,6 @@ const ATTRIBUTION_SITES: Readonly<Record<string, ProductKey | ProviderKey>> = {
   'src/layers/usdm.ts': 'usdm',
   'src/layers/usfs-whp.ts': 'usfs-whp',
   'src/layers/whp-3d.ts': 'whp-3d',
-  'src/map/satellite.ts': 'satellite-geocolor',
   'src/map/style.ts': 'basemap-ground',
   // The station chart's source line, printed by the popup frame.
   'src/ui/popups.ts': 'telemetry',

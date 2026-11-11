@@ -110,9 +110,6 @@
   text-align: left;
   cursor: pointer;
 }
-.map-key-chip-swatch {
-  display: none;
-}
 .map-key-chip-label {
   flex: 1 1 auto;
   min-width: 0;
@@ -126,12 +123,15 @@
 .map-key-chip-disclosure {
   flex: 0 0 auto;
   color: var(--fg-2);
+  transition: transform var(--dur-fast) var(--ease-standard);
 }
-.map-key-chip-disclosure-vert {
-  transition: none;
+#map-key .map-key-details-toggle[aria-expanded='true'] .map-key-chip-disclosure {
+  transform: rotate(180deg);
 }
-#map-key .map-key-details-toggle[aria-expanded='true'] .map-key-chip-disclosure-vert {
-  display: none;
+@media (prefers-reduced-motion: reduce) {
+  .map-key-chip-disclosure {
+    transition: none;
+  }
 }
 #map-key {
   padding: 0;
@@ -146,7 +146,7 @@
   .app-shell:not(.embed) #map-key .map-key-details-toggle {
     padding: 0 12px;
     display: grid;
-    grid-template-columns: 10px minmax(0, 1fr) 8px 16px;
+    grid-template-columns: minmax(0, 1fr) 8px 16px;
     align-items: center;
     gap: 8px;
     /* Repair round on M10 (map-chrome-seats.spec.ts "chip height"): the
@@ -158,14 +158,6 @@
     text-transform: none;
     font-size: 13px;
     font-weight: var(--fw-strong, 700);
-  }
-  .app-shell:not(.embed) .map-key-chip-swatch {
-    display: block;
-    width: 10px;
-    height: 10px;
-    border: 1px solid var(--keyline, #C6CBD4);
-    border-radius: 2px;
-    background: transparent;
   }
   .app-shell:not(.embed) .map-key-chip-state {
     display: block;

@@ -27,6 +27,7 @@ import {
   type StudioBoundaryGeometry
 } from './studio-boundary';
 import { escapeSql } from '../util/arcgis-features';
+import { setPlaceDisplayHeld } from './place-display-hold';
 import { registry } from './registry';
 import { holdStudioReturnDisplay } from './url';
 import type { TypedPlaceKind, TypedPlaceRef } from './typed-place';
@@ -111,6 +112,9 @@ function captureDisplaySnapshot(): DisplaySnapshot {
 export function beginPlaceStudioDisplay(kind: TypedPlaceKind): DisplaySnapshot {
   if (!activeSnapshot) {
     activeSnapshot = captureDisplaySnapshot();
+    // On from the capture, before the clean display sets anything aside,
+    // until the restore has finished (src/state/place-display-hold.ts).
+    setPlaceDisplayHeld(true);
     holdStudioReturnDisplay(activeSnapshot);
     failedKeys.clear();
     unsubscribeIntent = onCheckedChange(() => queueCleanIntentEnforcement());
@@ -273,42 +277,49 @@ export function restoreDisplaySnapshot(): DisplaySnapshot | null {
   if (!snapshot) return null;
 
   activeSnapshot = null;
-  holdStudioReturnDisplay(null);
-  unsubscribeIntent?.();
-  unsubscribeIntent = null;
-  unsubscribeRegistry?.();
-  unsubscribeRegistry = null;
-  emphasisGeneration += 1;
-  emphasisAbort?.abort();
-  emphasisAbort = null;
-  currentPlace = null;
-  currentEntry = null;
-  failedKeys.clear();
-  const map = getMap();
-  if (map) {
-    clearStudioBoundary(map);
-    // Put the user's ecoregion detail level back if the studio moved it
-    // for a selection (R2 H3).
-    const priorLevel = ecoregionLevelBeforeStudio;
-    if (priorLevel !== null) {
-      void import('../layers/ecoregions')
-        .then((m) => m.setEcoregionDisplayLevel(map, priorLevel))
-        .catch(() => undefined);
+  try {
+    holdStudioReturnDisplay(null);
+    unsubscribeIntent?.();
+    unsubscribeIntent = null;
+    unsubscribeRegistry?.();
+    unsubscribeRegistry = null;
+    emphasisGeneration += 1;
+    emphasisAbort?.abort();
+    emphasisAbort = null;
+    currentPlace = null;
+    currentEntry = null;
+    failedKeys.clear();
+    const map = getMap();
+    if (map) {
+      clearStudioBoundary(map);
+      // Put the user's ecoregion detail level back if the studio moved it
+      // for a selection (R2 H3).
+      const priorLevel = ecoregionLevelBeforeStudio;
+      if (priorLevel !== null) {
+        void import('../layers/ecoregions')
+          .then((m) => m.setEcoregionDisplayLevel(map, priorLevel))
+          .catch(() => undefined);
+      }
     }
-  }
-  ecoregionLevelBeforeStudio = null;
+    ecoregionLevelBeforeStudio = null;
 
-  syncIntent(snapshot.intentKeys);
-  // found-011 (CODEMAP:1749): restore through the cluster service, not the
-  // raw store setter, which only notifies on a VALUE change and misses the
-  // common case where the captured cluster (often Drought, the store's
-  // ever-present default) never actually left the store even though the
-  // studio's clean-display enforcement demoted the service's OWN committed
-  // claim to 'custom' by unchecking a set-aside hazard surface. The
-  // service door forces the re-derivation a real store change would have
-  // triggered either way, so the hazard re-presses on every restore, not
-  // only when the captured cluster differs from whatever it degraded to.
-  restoreCommittedCluster(snapshot.cluster, snapshot.ocean, snapshot.selectedHazard);
+    syncIntent(snapshot.intentKeys);
+    // found-011 (CODEMAP:1749): restore through the cluster service, not the
+    // raw store setter, which only notifies on a VALUE change and misses the
+    // common case where the captured cluster (often Drought, the store's
+    // ever-present default) never actually left the store even though the
+    // studio's clean-display enforcement demoted the service's OWN committed
+    // claim to 'custom' by unchecking a set-aside hazard surface. The
+    // service door forces the re-derivation a real store change would have
+    // triggered either way, so the hazard re-presses on every restore, not
+    // only when the captured cluster differs from whatever it degraded to.
+    restoreCommittedCluster(snapshot.cluster, snapshot.ocean, snapshot.selectedHazard);
+  } finally {
+    // Released only now, so no reader sees the half-restored set; and
+    // released even if a step above throws, so a stale hold never keeps a
+    // scene up in another view (src/state/place-display-hold.ts).
+    setPlaceDisplayHeld(false);
+  }
   return snapshot;
 }
 

@@ -82,6 +82,16 @@ interface FlowSnapshot {
   readonly notes: readonly string[];
   readonly motion?: FlowViewState['motion'];
   readonly provenance?: string;
+  /**
+   * The kind the words above speak for, and a drawn frame's own two clocks as
+   * epoch milliseconds (its model run and the instant it is valid at): the
+   * same values `line` prints, as data, for a reader that states them itself
+   * (the ENSO chain, src/ui/enso-chain.ts) and must never cut them out of the
+   * sentence. Absent while no frame is drawn.
+   */
+  readonly kind?: EnsoFlowKind;
+  readonly cycle?: number;
+  readonly valid?: number;
 }
 const SNAPSHOT_EVENT = 'ddm:enso-flow-snapshot';
 const SNAPSHOT_REQUEST_EVENT = 'ddm:enso-flow-snapshot-request';
@@ -145,11 +155,11 @@ function announceFlowStatus(text: string): void {
 
 function setStatus(
   status: FlowStatus, text: string, kind: EnsoFlowKind, notes: readonly string[] = [],
-  extra: Pick<FlowSnapshot, 'motion' | 'provenance'> = {}
+  extra: Pick<FlowSnapshot, 'motion' | 'provenance' | 'cycle' | 'valid'> = {}
 ): void {
   if (panel) panel.dataset['status'] = status;
   if (statusNode) statusNode.textContent = text;
-  const next: FlowSnapshot = { status, label: LABELS[kind], line: text, notes, ...extra };
+  const next: FlowSnapshot = { status, kind, label: LABELS[kind], line: text, notes, ...extra };
   if (next.status === snapshot.status && next.label === snapshot.label && next.line === snapshot.line &&
       next.motion === snapshot.motion && next.provenance === snapshot.provenance &&
       next.notes.join('\n') === snapshot.notes.join('\n')) return;
@@ -261,7 +271,9 @@ function presentShade(kind: ActiveFlowKind, field: ScalarField): void {
   stampForm({ form: 'shade', motion: 'none', features: 0 }, kind);
   const notes = [FLOW_WORDS.bins[kind]];
   const { cycle, validTime } = field.meta;
-  setStatus('live', flowLiveLine('live', kind, cycle ?? validTime, validTime), kind, notes, { motion: 'none', provenance: FLOW_WORDS.provenance[kind] });
+  setStatus('live', flowLiveLine('live', kind, cycle ?? validTime, validTime), kind, notes, {
+    motion: 'none', provenance: FLOW_WORDS.provenance[kind], cycle: cycle ?? validTime, valid: validTime
+  });
   if (detailNode) detailNode.textContent = notes.join(' ');
 }
 
@@ -292,7 +304,7 @@ function presentFieldState(kind: ActiveFlowKind, field: FlowField, state: FlowVi
   const { cycle, validTime } = field.meta;
   // The currents frame is dated, never "now": its line ends with its age.
   const line = flowLiveLine(status, kind, cycle ?? validTime, validTime, kind === 'currents' ? Date.now() : undefined);
-  setStatus(status, line, kind, notes, { motion: state.motion, provenance });
+  setStatus(status, line, kind, notes, { motion: state.motion, provenance, cycle: cycle ?? validTime, valid: validTime });
   if (detailNode) detailNode.textContent = notes.join(' ');
 }
 
@@ -441,12 +453,7 @@ function mountControls(): boolean {
     button.type = 'button';
     button.textContent = LABELS[kind];
     button.dataset['flowKind'] = kind;
-    button.addEventListener('click', () => {
-      preference = { ...preference, kind };
-      syncEnsoFlowParams(preference);
-      updateSelection();
-      void loadArea();
-    });
+    button.addEventListener('click', () => requestEnsoFlowKind(kind));
     options.append(button);
   }
   const toolbar = document.createElement('div');
@@ -485,6 +492,21 @@ function mountControls(): boolean {
   updateSelection();
   void loadArea();
   return true;
+}
+
+/**
+ * Choose a flow kind: the one door. The panel's own buttons call it, and so
+ * does a surface outside the panel that takes the map to a kind (the ENSO
+ * chain's jet link, src/ui/enso-chain.ts), so the preference, its `flow=`
+ * link, the pressed button and the read can never be set apart. Nothing
+ * happens while the layer is off.
+ */
+export function requestEnsoFlowKind(kind: EnsoFlowKind): void {
+  if (!map) return;
+  preference = { ...preference, kind };
+  syncEnsoFlowParams(preference);
+  updateSelection();
+  void loadArea();
 }
 
 function onMoveEnd(): void {

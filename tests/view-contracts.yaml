@@ -10,8 +10,7 @@
 # was missing was a single place that says what must stay true ACROSS the
 # views as a person moves between them, and that a later change extends by
 # adding a row rather than by writing a new spec file. Groups later in this
-# refinement run add their rows here (power toggle, zoom gates, globe,
-# satellite issuer per zoom).
+# refinement run add their rows here (power toggle, zoom gates, globe).
 #
 # Schema
 # ------

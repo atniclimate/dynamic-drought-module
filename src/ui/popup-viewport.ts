@@ -387,7 +387,10 @@ function containingBounds(popup: HTMLElement): Bounds {
   // Bottom-docked stacks are processed from the viewport edge upward.
   const occluders: HTMLElement[] = [];
   const footer = document.getElementById('mobile-footer-nav');
-  if (footer) occluders.push(footer);
+  const footerBox = footer?.getBoundingClientRect();
+  // A side rail (taller than wide) is never bottom chrome: chained after the
+  // half sheet, a rail straddling the sheet's top would lift the region to its own top.
+  if (footer && footerBox && footerBox.width > footerBox.height) occluders.push(footer);
   if (document.getElementById('app')?.hasAttribute('data-sheet-detent')) {
     const sheet = document.getElementById('sidebar');
     if (sheet) occluders.push(sheet);

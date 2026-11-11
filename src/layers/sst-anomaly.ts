@@ -64,6 +64,7 @@ import { setTimeBar, clearTimeBar } from '../ui/time-bar';
 import { showLegend, hideLegend, LEGEND_ORDER } from '../ui/legend-registry';
 import { showToast } from '../ui/overlay';
 import { activateEnsoFlow, cancelEnsoFlowLoad, deactivateEnsoFlow } from './enso-flow';
+import { activateEnsoChain, deactivateEnsoChain } from '../ui/enso-chain-loader';
 import { identifyAt, registerClickTarget } from '../map/interaction-coordinator';
 import {
   buildEnsoBoxPopupModel,
@@ -776,6 +777,8 @@ export async function activate(map: maplibregl.Map): Promise<void> {
       );
     }
     activateEnsoFlow(map);
+    // The mode's chain exists exactly while this surface does (src/ui/enso-chain-loader.ts).
+    activateEnsoChain(map);
 
     showLegend(LAYER_KEY, {
       order: LEGEND_ORDER.surface,
@@ -786,7 +789,7 @@ export async function activate(map: maplibregl.Map): Promise<void> {
     const pacificHint = (): void => {
       if (signal.aborted || pacificHintShown || viewIncludesNino34(map)) return;
       pacificHintShown = true;
-      showToast('Ocean temperature anomaly is global; zoom out toward the equatorial Pacific to see the ENSO signal.');
+      showToast('Sea surface warmer or cooler than usual, worldwide. Zoom out to the equatorial Pacific for El Nino and La Nina.');
     };
     if (map.isMoving()) map.once('moveend', pacificHint);
     else pacificHint();
@@ -917,6 +920,7 @@ export function cancelActivation(): void {
  */
 export function deactivate(map: maplibregl.Map): void {
   deactivateEnsoFlow();
+  deactivateEnsoChain();
   viewModeOff?.();
   viewModeOff = null;
   playing = false;

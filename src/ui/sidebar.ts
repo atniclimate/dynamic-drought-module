@@ -121,8 +121,7 @@ import {
   setViewMode
 } from '../state/view-mode';
 import { installPopupViewportContainment } from './popup-viewport';
-import { defaultBasemapFor, getBasemapMode, onBasemapChange, setBasemapMode } from '../state/basemap-store';
-import { FIRE3D_CHUNK_WIDTH_QUERY, getFire3DPreference, seedFire3DPreference, setFire3DPreference } from '../state/fire3d-store';
+import { getFire3DPreference, seedFire3DPreference, setFire3DPreference } from '../state/fire3d-store';
 import { getFraming, onFramingChange, setFraming } from '../state/framing-store';
 import {
   clearOceanFraming,
@@ -150,7 +149,6 @@ import {
 import type { FramingKey } from '../config/framings';
 import { OCEAN_KEYS, OCEANS } from '../config/oceans';
 import type { OceanKey } from '../config/oceans';
-import { applyBasemapMode, holdSatellite, requestBasemapMode } from '../map/basemap-switcher';
 import {
   cameraMatchesTarget,
   cameraStateUnchanged,
@@ -724,7 +722,6 @@ function pushUrl(): void {
     sstDate: timeline.sstDate,
     outlookRange: timeline.outlookRange,
     horizon: timeline.horizon,
-    basemap: getBasemapMode(),
     framing,
     cluster: getHazardCluster(),
     ocean: getOceanFraming(),
@@ -877,7 +874,6 @@ function buildRegionSelect(): void {
       // framing store is untouched so the prior land framing survives a clear.
       const key = rawKey as OceanKey;
       requestOcean(key);
-      requestBasemapMode(map, defaultBasemapFor('enso'));
       fitOcean(map, key);
       return;
     }
@@ -1030,16 +1026,12 @@ function updateRegionBriefingTrigger(regionKey: RegionKey | null | undefined): v
  *      register only (a custom set keeps its layers; ENSO's rail entry
  *      commits Season ahead, which its layers already show, and a later
  *      preset of another mode undoes it, `requestPresetHorizon`).
- *   3. The explicit preferred basemap, if any.
  */
 function applyViewPreset(preset: ViewPreset): void {
   const map = mapRef;
   if (!map || !controllerRef) return;
   controllerRef.applyPreset(preset);
   requestPresetHorizon(preset.mode);
-  if (preset.preferredBasemap) {
-    requestBasemapMode(map, preset.preferredBasemap);
-  }
 }
 
 /**
@@ -1047,8 +1039,8 @@ function applyViewPreset(preset: ViewPreset): void {
  * mockup's lower-right thumb rail). The rail's markup is static in
  * index.html; visibility is stylesheet-gated to the mobile shell's
  * map-visible detents, so this wiring is inert on desktop and in embed.
- * Each button applies its hazard preset through the one controller, requests
- * its preferred basemap when declared, and then an open sheet closes to the
+ * Each button applies its hazard preset through the one controller, and then
+ * an open sheet closes to the
  * edgeless map (the mockup: a quick select is a
  * request to SEE the hazard map). The pressed state REFLECTS the registry
  * (the rail and the catalog share one state, per the mockup): a button
@@ -1058,17 +1050,20 @@ function applyViewPreset(preset: ViewPreset): void {
 function wireHazardRail(): void {
   const rail = document.getElementById('hazard-rail');
   if (!rail) return;
-  const buttons: Array<{ btn: HTMLButtonElement; surface: string }> = [];
+  const buttons: Array<{ btn: HTMLButtonElement; surface: string; mode: string }> = [];
   for (const btn of rail.querySelectorAll<HTMLButtonElement>('button[data-preset]')) {
     const preset = MOBILE_HAZARD_PRESETS.find((p) => p.key === btn.dataset.preset);
     if (!preset) continue;
     // Accessible name only (W2-D7): a title that duplicates the accessible
     // name verbatim adds a redundant tooltip and double speech, not information.
-    btn.setAttribute('aria-label', preset.description);
+    // The name leads with the word the cell shows (owner direction 2026-11-09
+    // (sprint), DR-pending: the right-edge column labels every hazard view),
+    // so the word a sighted voice-control user reads operates it (WCAG 2.5.3).
+    btn.setAttribute('aria-label', `${preset.label}. ${preset.description}`);
     // The preset's first layer is its condition surface (the table is
     // ordered surface-first); the pressed state mirrors that layer.
     const surface = preset.layers[0] ?? '';
-    buttons.push({ btn, surface });
+    buttons.push({ btn, surface, mode: preset.mode });
     btn.addEventListener('click', () => {
       if (!mapDependentControlsEnabled) return;
       applyViewPreset(preset);
@@ -1079,13 +1074,21 @@ function wireHazardRail(): void {
     });
   }
   if (buttons.length === 0) return;
+  // Pressed while the map is showing that hazard: its surface layer is
+  // active, or its mode is the committed one (a shared `cluster=` link opens
+  // the mode's own recipe, whose surface can differ from the rail preset's;
+  // before 2026-11-09 such a link left all four cells unpressed). A custom
+  // layer set commits no mode, so only the surface rule can press a cell
+  // then, and the rail still never claims a hazard the map is not showing.
   const reflect = (): void => {
     const active = registry.getActiveKeys();
-    for (const { btn, surface } of buttons) {
-      btn.setAttribute('aria-pressed', String(active.has(surface)));
+    const committed = getCommittedSnapshot().cluster;
+    for (const { btn, surface, mode } of buttons) {
+      btn.setAttribute('aria-pressed', String(active.has(surface) || committed === mode));
     }
   };
   registry.on('change', reflect);
+  onCommittedSnapshotChange(reflect);
   reflect();
 }
 
@@ -1517,7 +1520,6 @@ function wireTopLevelEvents(map: maplibregl.Map): void {
         STATE.desktopSidebarClosed = false;
         applyDesktopSidebarPreference();
       }
-      requestBasemapMode(map, defaultBasemapFor(cluster));
       const home = STATE.embed ? embedHomeRegion : DEFAULT_REGION;
       // An explicit choice: clears framing= and ocean=, fits, writes the URL.
       selectRegion(map, home);
@@ -1622,30 +1624,14 @@ function applyUrlStateSync(map: maplibregl.Map): ParsedUrlParams {
   // the rendered drought surface commits its own honest temporal claim.
   timeline.setHorizon(params.horizon);
 
-  // Seed the basemap mode BEFORE the first pushUrl for the same reason as
-  // the view mode: a `basemap=satellite` deep link must survive the first
-  // canonical write. The satellite layer itself rides a lazy chunk, so the
-  // visual switch is kicked off here and settles asynchronously (the
-  // desaturated default paints first; the U1 boot-split precedent).
-  setBasemapMode(params.basemap);
   // DR-122: fire3d= is Wildfire-scoped, so an old link outside Wildfire
-  // boots flat and drops the token (before the hold below is ever taken).
+  // boots flat and drops the token.
   // shortcut: a custom set made in Wildfire also boots flat and drops it, since
   // the Fire3D gate admits no custom boot; read the hazard here only once the gate does.
   const fire3d = params.fire3d && params.cluster === 'wildfire';
   if (params.fire3d && !fire3d) syncFire3dParam(false);
-  // DR-105: a `fire3d=true` boot at the 3D chunk's width (main.ts) holds the
-  // imagery until the scene's controller decides; it releases the hold when
-  // the scene does not open.
-  if (fire3d && window.matchMedia(FIRE3D_CHUNK_WIDTH_QUERY).matches) {
-    holdSatellite(map, true);
-  }
-  if (params.basemap === 'satellite') {
-    void applyBasemapMode(map, 'satellite');
-  }
 
-  // Seed the 3D Fire mode preference beside the basemap seed and for the
-  // same reason: a `fire3d=true` deep link must survive the first canonical
+  // Seed the 3D Fire mode preference: a `fire3d=true` deep link must survive the first canonical
   // write (syncUrl re-reads the parameter fresh). The seed never writes the
   // URL; the orchestrator (src/map/fire3d.ts, a desktop-only lazy chunk
   // loaded from main.ts) observes the store and applies the map side.
@@ -2039,10 +2025,6 @@ function wireSidebar(map: maplibregl.Map, onRegionSelect: (key: RegionKey) => vo
   // Temporal-state changes re-sync the URL the same way layer changes do
   // (invariant 2: the selected week / mode / SST frame is shareable state).
   timeline.onChange(pushUrl);
-
-  // Basemap-mode changes are durable shareable state too (U4d,
-  // D-0.7.0-031): `basemap=satellite` must survive every later syncUrl.
-  onBasemapChange(pushUrl);
 
   // The region-shell stores re-sync the URL the same way (S2): a
   // framing change rewrites `framing=`/`region=`, and a cluster change

@@ -11,7 +11,7 @@ import { gotoApp } from './helpers';
 /**
  * Every column icon is optically centred, measured (S30D D1 M9; register
  * owner-1f, DDM-P10-T11; design record interface-chrome-popups-text.md
- * section 5, "Optical centring", for the four family icons: no 3D seat,
+ * section 5, "Optical centring", for the family icons: no 3D seat,
  * no TL-0 and no chip yet, which arrive with D4 and M10).
  *
  * METHOD. At deviceScaleFactor 2, with the map canvas hidden over a flat
@@ -25,7 +25,7 @@ import { gotoApp } from './helpers';
  *   middle);
  * - the ink-weighted centroid is within 1 px on each axis the glyph is
  *   symmetric about (GLYPH_OPTICS);
- * - all four icons share one x within 0.5 px, and that x is the formula's
+ * - all the icons share one x within 0.5 px, and that x is the formula's
  *   (`mapCellIconCentreX`: W - 120 in container px at the 128 px cell).
  * Under R1 a the words are checked too: their left edges share one x
  * within 0.5 px, each word's trimmed box centres in its cell within 1 px,
@@ -35,7 +35,7 @@ import { gotoApp } from './helpers';
  * 2.4 px into the padding with scrollWidth equal to clientWidth (the
  * director's probe, 2026-09-27), which raised --map-cell-w to 128 px
  * (D1.md :295: the measured need, never an ellipsis).
- * At rest, on hover, and pressed (SAT on, Help open), then again in 44 px
+ * At rest, on hover, and pressed (Help open), then again in 44 px
  * cells under a coarse pointer.
  *
  * Predicted red on the pre-M9 tree: the module import fails; with the table
@@ -52,8 +52,6 @@ const GLYPH_OPTICS: Readonly<Record<MapChromeSeat['key'], readonly Axis[]>> = {
   // Feather rotate-ccw: an open arc and an arrowhead, no axis of symmetry;
   // only its ink box is centred.
   reset: [],
-  // The satellite: point symmetric about (12, 12), so both axes.
-  satellite: ['x', 'y'],
   // A circle around a question mark: the mark is not mirror symmetric.
   help: [],
   // The tray and the arrow mirror about x = 12.
@@ -264,17 +262,6 @@ async function measureColumn(page: Page, mode: string): Promise<string[]> {
   }));
   for (const { control } of controls) await expect(control).toBeVisible();
 
-  // SAT boots ON (DR-105), so its state is set explicitly for each phase
-  // rather than toggled blind: off for rest and hover, on for pressed, and
-  // back to its boot state at the end (the director's M9 gate, 2026-09-27).
-  const sat = page.locator('#basemap-switcher-overlay-host .basemap-switcher-btn');
-  const satBoot = await sat.getAttribute('aria-pressed');
-  const setSat = async (on: boolean): Promise<void> => {
-    if ((await sat.getAttribute('aria-pressed')) !== String(on)) await sat.click();
-    await expect(sat).toHaveAttribute('aria-pressed', String(on));
-  };
-  await setSat(false);
-
   const rest: IconReading[] = [];
   const hover: IconReading[] = [];
   for (const { key, control } of controls) {
@@ -287,22 +274,20 @@ async function measureColumn(page: Page, mode: string): Promise<string[]> {
   problems.push(...iconProblems(rest), ...iconProblems(hover));
   problems.push(...(await labelProblems(page, `${mode}, rest`)));
 
-  // Pressed: SAT on (aria-pressed) and Help open (aria-expanded), measured
-  // together with the two neighbours at rest so the shared x still holds.
+  // Pressed: Help open (aria-expanded), measured together with its
+  // neighbours at rest so the shared x still holds.
   const help = page.locator('#map-info-seat > #map-info-btn');
-  await setSat(true);
   await help.click();
   await expect(help).toHaveAttribute('aria-expanded', 'true');
   await page.mouse.move(0, 0);
   const pressed: IconReading[] = [];
   for (const { key, control } of controls) {
-    pressed.push(await readIcon(page, key, `${mode}, SAT and Help pressed`, control));
+    pressed.push(await readIcon(page, key, `${mode}, Help pressed`, control));
   }
   problems.push(...iconProblems(pressed));
-  problems.push(...(await labelProblems(page, `${mode}, SAT and Help pressed`)));
+  problems.push(...(await labelProblems(page, `${mode}, Help pressed`)));
   await page.keyboard.press('Escape');
   await expect(help).toHaveAttribute('aria-expanded', 'false');
-  await setSat(satBoot === 'true');
   return problems;
 }
 
@@ -313,7 +298,7 @@ test.describe('the desktop column icons (D1 M9)', () => {
     page
   }) => {
     test.setTimeout(120_000);
-    // Console keeps Share home in slot 4, so all four icons are measured.
+    // Console keeps Share home in its slot, so every icon is measured.
     await gotoApp(page, '?view=console');
     await hideCanvas(page);
     expect(await measureColumn(page, 'fine pointer')).toEqual([]);

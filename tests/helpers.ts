@@ -12,7 +12,6 @@ import { execSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { crc32, deflateSync } from 'node:zlib';
 import { expect, type BrowserContext, type Page, type Locator, type Route } from '@playwright/test';
-import { stubRecentSatellite } from './satellite-fixture';
 import { installMinimapAnalysisStubs } from './minimap-fixtures';
 import { installBoundaryStubs, type BoundaryStubMode } from './tribal-fixtures';
 import { installDefaultNifcStub, type NifcStubMode } from './wildfire-fixtures';
@@ -78,36 +77,6 @@ async function installDefaultNadmStub(page: Page, mode: NadmStubMode): Promise<v
   });
 }
 
-const coveredContexts = new WeakSet<BrowserContext>();
-
-/**
- * Carry the PAGE-level stubs onto any Page this context opens later.
- *
- * The four stubs that matter most for a retained artifact, the sovereign
- * boundaries, the minimap's continental analysis inputs, the NADM
- * continental snapshot (DDM-P1-T09 step 2 part d), and the NIFC WFIGS
- * current perimeters (J12, `installDefaultNifcStub` in
- * `tests/wildfire-fixtures.ts`), are registered on the
- * CONTEXT, so a popup or a `context.newPage()` inherits them with no help
- * from here. The satellite stub is still page-level, and a Page this helper
- * never navigated would reach that service live. Nothing in this suite opens
- * a second Page today (`tests/boundary-boot-inventory.test.mjs` fails the
- * gate on the first `newPage(` or popup wait that is not recorded), so this
- * hook is defense in depth for the day one appears: it closes the page-level
- * half of the same hole context routing already closed.
- */
-export function coverFuturePages(page: Page): void {
-  const context = page.context();
-  if (coveredContexts.has(context)) return;
-  coveredContexts.add(context);
-  context.on('page', (opened) => {
-    // A popup can close before the route lands; a rejected stub must not fail
-    // the test that opened it, because the guarantee that matters is already
-    // held by the context-level routes above.
-    void stubRecentSatellite(opened).catch(() => undefined);
-  });
-}
-
 /**
  * The six canonical status-pill strings, from `STATUS_PILL_TEXT` in
  * `src/ui/sidebar.ts`. A layer that is off (never activated, or deactivated)
@@ -118,7 +87,7 @@ export const PILL = {
   live: 'live',
   degraded: 'live (partial)',
   unavailable: 'unavailable',
-  noData: 'no data (see data/README.md)',
+  noData: 'no data',
   zoomIn: 'zoom in to load'
 } as const;
 
@@ -350,6 +319,46 @@ export interface GotoAppOptions {
    * `prefers-reduced-motion`, is unaffected by `hold`.
    */
   readonly flowMotion?: FlowMotionHold;
+  /**
+   * How this boot stands toward Locate's first-launch offer (owner direction
+   * 2026-11-09 (sprint), DR-pending). A phone-shell boot with no stored
+   * launch preference, no `select=` and no studio puts an offer card over
+   * the lower map (src/ui/locate-control.ts). Defaults to `declined`: the
+   * page's localStorage carries the stored answer `no`
+   * (`ddm.locate.launch`, read by src/state/locate-preference.ts) before any
+   * script runs, only where the page has no answer of its own. That is the
+   * state of every returning visitor who has answered the offer, so a spec
+   * written before Locate keeps the map it was written against. The Locate
+   * cell itself is unaffected and still starts a search when pressed.
+   * `fresh` is the explicit opt-out for a spec about the offer: storage is
+   * left alone and the first launch makes its offer. A spec that stores its
+   * own answer is unaffected by `declined`.
+   */
+  readonly locateOffer?: LocateOfferMode;
+}
+
+/** `declined` stores the answer `no` for the boot; `fresh` leaves the first launch to the page. */
+export type LocateOfferMode = 'declined' | 'fresh';
+
+/** src/state/locate-preference.ts LAUNCH_PREFERENCE_KEY; tests/geolocate.test.mjs pins the two together. */
+export const LOCATE_LAUNCH_STORAGE_KEY = 'ddm.locate.launch';
+
+/**
+ * Seed the stored answer to Locate's first-launch offer, so a routine phone
+ * boot shows the map without the offer card. Set only where no answer is
+ * stored, so a reload keeps an answer the viewer (or the spec) gave. Storage
+ * can be blocked; then the app makes no offer either, as it does for a
+ * viewer in that state.
+ */
+export async function installLocateOfferSeed(page: Page, mode: LocateOfferMode = 'declined'): Promise<void> {
+  if (mode === 'fresh') return;
+  await page.addInitScript((key) => {
+    try {
+      if (window.localStorage.getItem(key) === null) window.localStorage.setItem(key, 'no');
+    } catch {
+      // storage blocked: nothing to seed
+    }
+  }, LOCATE_LAUNCH_STORAGE_KEY);
 }
 
 /** `hold` pauses the flowing paths' motion loop for the boot; `live` leaves it to the page. */
@@ -383,9 +392,6 @@ export async function gotoApp(
   query = '',
   options: GotoAppOptions = {}
 ): Promise<void> {
-  // Routine deterministic browser tests stub the recent-satellite service so
-  // the full suite neither depends on nor floods the public endpoint.
-  await stubRecentSatellite(page);
   // DDM-P1-T08: EVERY boot answers the two sovereign-boundary queries from
   // synthetic fixtures, locally and in CI alike. Stubbing only under `CI`
   // would make a local green and a CI green mean different things, and the
@@ -452,11 +458,15 @@ export async function gotoApp(
   // the motion loop (still form, same data) and 'idle' stays reachable. See
   // `GotoAppOptions.flowMotion` for the opt-out.
   await installFlowMotionHold(page, options.flowMotion ?? 'hold');
+  // Locate (owner direction 2026-11-09 (sprint), DR-pending): a first launch
+  // on the phone shell makes an offer over the lower map. A routine boot
+  // stores the answer `no` first, so no spec meets that card unless it asks
+  // for it. See `GotoAppOptions.locateOffer` for the opt-out.
+  await installLocateOfferSeed(page, options.locateOffer ?? 'declined');
   // DDM-P9-T13: entering Wildfire 3D reads the NOAA STAR VHI tiles and the
   // USGS Relative Greenness WMS. Every boot answers both from synthetic
   // fixtures (`installDefaultDrynessStub`), so no spec reaches either agency.
   await installDefaultDrynessStub(page);
-  coverFuturePages(page);
   // shortcut: a full-site display boot written before 0.7.7 derived the console; pin it so those specs keep their door; drop once specs name view=console themselves.
   if (!options.derivedView && !/[?&]embed=(true|1)\b/.test(query) && !/[?&](view|select)=/.test(query) && /[?&](layers=|region=|cluster=|ocean=|framing=)/.test(query)) query += '&view=console';
   await page.goto(query, { waitUntil: 'domcontentloaded' });
@@ -856,7 +866,7 @@ export interface StubCpcSeasonalTempOutlookOptions extends CpcSeasonalTempReadin
  * unconditionally with its defaults (S17's lesson: an unstubbed briefing
  * lane reaches the live agency).
  *
- * De-duplicated per page (mirrors `stubRecentSatellite`): a spec that needs
+ * De-duplicated per page: a spec that needs
  * a specific reading, a failure arm, or a held-open supersession race calls
  * this itself, WITH its own options, BEFORE `gotoApp`; `gotoApp`'s own later
  * call then finds this page already stubbed and is a no-op, so the spec's
@@ -1072,7 +1082,7 @@ export async function stubSpcFireOutlook(
 
 // Keyed on the CONTEXT the route lives on (not the page), so a second page in
 // one context can never register a second context-level default that would
-// shadow the first page's fixture (the `coveredContexts` precedent above).
+// shadow the first page's fixture.
 const spcFireOutlookStubbedContexts = new WeakSet<BrowserContext>();
 
 /**

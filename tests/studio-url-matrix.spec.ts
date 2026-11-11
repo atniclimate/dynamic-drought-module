@@ -5,7 +5,6 @@ import { HAZARD_CLUSTERS, HAZARD_CLUSTER_KEYS } from '../src/config/clusters';
 import { TRIBAL_NATIONS_GROUP } from '../src/config/layer-groups';
 import { parseShellParams, parseStudioParam } from '../src/state/url';
 import { gotoApp, search, stubHeatRiskCatalog, urlLayers, waitForLayerSettled } from './helpers';
-import { stubRecentSatellite } from './satellite-fixture';
 import { AIANNH_ROUTE, BIA_ROUTE, emptyCollectionBody, routeGeojson } from './tribal-fixtures';
 
 const FRAMING = Object.keys(FRAMINGS)[0] as FramingKey;
@@ -56,19 +55,18 @@ const MATRIX: readonly MatrixCase[] = [
     expected: { studio: 'layers', layers: 'places', cluster: null }
   },
   {
-    name: 'LAYERS composes with temporal and basemap tokens',
+    name: 'LAYERS composes with temporal tokens',
     studio: 'layers',
     query:
       '?layers=places&view=brief&week=20240702&dmode=chg1&sst=2024-07-01' +
-      '&outlook=monthly&basemap=satellite&studio=layers',
+      '&outlook=monthly&studio=layers',
     settleKey: 'places',
     expected: {
       studio: 'layers',
       week: '20240702',
       dmode: 'chg1',
       sst: '2024-07-01',
-      outlook: 'monthly',
-      basemap: null
+      outlook: 'monthly'
     }
   },
   {
@@ -113,7 +111,6 @@ async function stubMatrixDependencies(page: Page): Promise<void> {
       })
     );
   }
-  await stubRecentSatellite(page);
   await page.route('**/gibs.earthdata.nasa.gov/**', (route) =>
     route.fulfill({ status: 503, contentType: 'text/plain', body: 'Synthetic offline response' })
   );
@@ -433,7 +430,8 @@ test.describe('studio URL precedence matrix', () => {
         .toEqual(before);
     };
     /** Place studio: two canonical writes through the studio's own type rail
-     * (src/ui/island/place-studio.tsx #place-type-*, setKind, then
+     * (the list opens on All while the display kind is tribe;
+     * src/ui/island/place-studio.tsx #place-type-*, setKind, then
      * setPlaceStudioDisplayKind swaps the rail's reference layers through
      * syncIntent). The studio shows its own clean display, so the checked
      * rows move with the rail, while layers= keeps the display the studio set
@@ -444,10 +442,18 @@ test.describe('studio URL precedence matrix', () => {
       const sidebarRows = 'input[id^="layer-toggle-"]:checked';
       const tribe = page.locator('#place-type-tribe');
       const state = page.locator('#place-type-state');
-      await expect(tribe, `${moment}: the tribe rail is pressed`).toHaveAttribute(
+      const all = page.locator('#place-type-all');
+      // The list opens on every type (scope 'all'); the map still shows the
+      // tribe chip's reference layers (display kind defaults to 'tribe'), which
+      // the members poll below proves.
+      await expect(all, `${moment}: the list opens on All`).toHaveAttribute(
         'aria-pressed',
         'true'
       );
+      await expect(
+        tribe,
+        `${moment}: the tribe chip is not pressed while All is`
+      ).toHaveAttribute('aria-pressed', 'false');
       // The pressed rail renders before its effects install the reference
       // intent. Capture only after the tribe rail's shipped members are checked.
       await expect
@@ -469,6 +475,10 @@ test.describe('studio URL precedence matrix', () => {
         'aria-pressed',
         'true'
       );
+      await expect(all, `${moment}: the state chip releases All`).toHaveAttribute(
+        'aria-pressed',
+        'false'
+      );
       await expect
         .poll(() => checkedKeys(sidebarRows), {
           message: `${moment}: the state rail changed the checked rows`
@@ -481,6 +491,14 @@ test.describe('studio URL precedence matrix', () => {
       await expect(tribe, `${moment}: the tribe rail is pressed again`).toHaveAttribute(
         'aria-pressed',
         'true'
+      );
+      await expect(
+        state,
+        `${moment}: the tribe chip releases the state chip`
+      ).toHaveAttribute('aria-pressed', 'false');
+      await expect(all, `${moment}: All stays released`).toHaveAttribute(
+        'aria-pressed',
+        'false'
       );
       await expect
         .poll(() => checkedKeys(sidebarRows), {

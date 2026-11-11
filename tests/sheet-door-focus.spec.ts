@@ -1,0 +1,113 @@
+import { test, expect, type Page } from './offline-test';
+import { gotoApp } from './helpers';
+
+/**
+ * WCAG 2.4.3 on the phone: a door press that opens or switches the sheet moves
+ * focus into the view it shows, and closing returns focus to the door. Without
+ * this a keyboard or switch user tabs past unrelated map controls to reach
+ * the content (src/ui/mobile-sheet.ts, `focusShownView`).
+ */
+
+const insideSheet = (page: Page): Promise<boolean> =>
+  page.evaluate(() => document.getElementById('sidebar')?.contains(document.activeElement) ?? false);
+
+const onDoor = (page: Page, tab: string): Promise<boolean> =>
+  page.evaluate(
+    (name) => document.activeElement === document.querySelector(`#mobile-footer-nav button[data-tab="${name}"]`),
+    tab
+  );
+
+test.describe('sheet doors move focus into the view they open', () => {
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true });
+
+  test('an opening press focuses the view, Escape returns to the door', async ({ page }) => {
+    await gotoApp(page);
+    const app = page.locator('#app');
+    const place = page.locator('#mobile-footer-nav button[data-tab="place"]');
+
+    await place.tap();
+    await expect(app).toHaveAttribute('data-sheet-detent', 'half');
+    await expect.poll(() => insideSheet(page)).toBe(true);
+
+    await page.keyboard.press('Escape');
+    await expect(app).toHaveAttribute('data-sheet-detent', 'closed');
+    await expect.poll(() => onDoor(page, 'place')).toBe(true);
+  });
+
+  test('switching doors at the same stop moves focus into the new view', async ({ page }) => {
+    await gotoApp(page);
+    const app = page.locator('#app');
+    const layers = page.locator('#mobile-footer-nav button[data-tab="layers"]');
+    const alerts = page.locator('#mobile-footer-nav button[data-tab="alerts"]');
+
+    await layers.tap();
+    await expect(app).toHaveAttribute('data-sheet-detent', 'half');
+    await expect.poll(() => insideSheet(page)).toBe(true);
+
+    // Layers and Alerts both open at half: same stop, new door.
+    await alerts.tap();
+    await expect(app).toHaveAttribute('data-sheet-tab', 'alerts');
+    await expect(app).toHaveAttribute('data-sheet-detent', 'half');
+    await expect.poll(() => insideSheet(page)).toBe(true);
+    await expect(page.locator('#sheet-title')).toHaveText(/alerts/i);
+
+    await page.keyboard.press('Escape');
+    await expect(app).toHaveAttribute('data-sheet-detent', 'closed');
+    await expect.poll(() => onDoor(page, 'alerts')).toBe(true);
+  });
+
+  test('focus moved to another door before the sheet settles stays there', async ({ page }) => {
+    await gotoApp(page);
+    const app = page.locator('#app');
+    // mobile-sheet.ts stamps each settle, so the case waits for the real one instead of sleeping.
+    const settles = (): Promise<number> =>
+      page.evaluate(() => Number(document.documentElement.dataset['ddmSheetSettles'] ?? 0));
+    const before = await settles();
+
+    // Press Place, then move focus to Layers in the same task: before any settle can run.
+    await page.evaluate(() => {
+      document.querySelector<HTMLElement>('#mobile-footer-nav button[data-tab="place"]')?.click();
+      document.querySelector<HTMLElement>('#mobile-footer-nav button[data-tab="layers"]')?.focus();
+    });
+    await expect(app).toHaveAttribute('data-sheet-detent', 'half');
+    await expect.poll(settles).toBeGreaterThan(before);
+    expect(await onDoor(page, 'layers')).toBe(true);
+    expect(await insideSheet(page)).toBe(false);
+  });
+
+  test('the ENSO Guide door focuses the opened guide, Escape returns to the door', async ({ page }) => {
+    await gotoApp(page);
+    const app = page.locator('#app');
+    const settles = (): Promise<number> =>
+      page.evaluate(() => Number(document.documentElement.dataset['ddmSheetSettles'] ?? 0));
+
+    await page.locator('.hazard-rail-btn[data-preset="hazard-enso"]').tap();
+    const door = page.locator('#enso-guide-door');
+    await expect(door).toBeVisible();
+
+    const before = await settles();
+    await door.tap();
+    await expect(door).toHaveAttribute('aria-expanded', 'true');
+    await expect(app).toHaveAttribute('data-sheet-detent', 'half');
+    await expect.poll(settles).toBeGreaterThan(before);
+    await expect.poll(() => insideSheet(page)).toBe(true);
+
+    await page.keyboard.press('Escape');
+    await expect(app).toHaveAttribute('data-sheet-detent', 'closed');
+    await expect(door).toHaveAttribute('aria-expanded', 'false');
+    await expect(door).toBeFocused();
+  });
+
+  test('pressing the lit door still closes and focus stays on that door', async ({ page }) => {
+    await gotoApp(page);
+    const app = page.locator('#app');
+    const place = page.locator('#mobile-footer-nav button[data-tab="place"]');
+
+    await place.tap();
+    await expect(app).toHaveAttribute('data-sheet-detent', 'half');
+    await expect.poll(() => insideSheet(page)).toBe(true);
+    await place.tap();
+    await expect(app).toHaveAttribute('data-sheet-detent', 'closed');
+    await expect.poll(() => onDoor(page, 'place')).toBe(true);
+  });
+});

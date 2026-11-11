@@ -1,6 +1,5 @@
 import { test, expect, type Page } from './offline-test';
 import { gotoApp } from './helpers';
-import { stubRecentSatellite } from './satellite-fixture';
 import { routeAllTribalFixtures } from './tribal-fixtures';
 import { installMinimapAnalysisStubs } from './minimap-fixtures';
 
@@ -121,7 +120,6 @@ test.describe('Embed at 200x600 (minimum-width iframe floor)', () => {
   test('opens inside an iframe with contained map chrome and no mobile navigation', async ({
     page
   }) => {
-    await stubRecentSatellite(page);
     // A raw boot: the app comes up inside an iframe on a host page, so
     // gotoApp never runs and the suite-wide boundary stub has to be
     // installed here. Page-level routes cover every frame of the page.
@@ -298,20 +296,6 @@ test.describe('Embed at 200x600 (minimum-width iframe floor)', () => {
       return { top: box.top, bottom: box.bottom, left: box.left, right: box.right };
     });
     expect(collapsedKey.bottom - collapsedKey.top).toBeLessThanOrEqual(600 * 0.45);
-
-    // The collapsed key no longer runs underneath the SAT control.
-    const sat = await page
-      .locator('.basemap-switcher-control')
-      .evaluate((element) => {
-        const box = element.getBoundingClientRect();
-        return { top: box.top, bottom: box.bottom, left: box.left, right: box.right };
-      });
-    const intersects =
-      collapsedKey.left < sat.right &&
-      sat.left < collapsedKey.right &&
-      collapsedKey.top < sat.bottom &&
-      sat.top < collapsedKey.bottom;
-    expect(intersects, 'the collapsed key overlaps the SAT control').toBe(false);
 
     // One disclosure reveals the full source key. Extra rows scroll within
     // its map bounds and are reachable without a second expansion control.

@@ -228,7 +228,7 @@ test('the notes taken off the key, the storm popup and the smoke legend read in 
   const { renderMapTechnicalInformation } = await import('../src/ui/map-technical-information.ts');
   const html = renderMapTechnicalInformation().replace(/&#039;/g, "'");
   for (const note of [
-    'NOAA Hazard Mapping System, analyst-drawn from GOES imagery; current or previous UTC day. Its plume observation window is independent of any satellite basemap frame shown. Density opacity is presentation, not ground-level air quality.',
+    'NOAA Hazard Mapping System, analyst-drawn from GOES imagery; current or previous UTC day. Density opacity is presentation, not ground-level air quality.',
     'Surface temperature anomalies are shown for large lakes and inland seas as well as the ocean.',
     'Basins covered: Atlantic, Eastern North Pacific, Central North Pacific.',
     "Circles are sized by the issuer's wind classes; the issuer's icons are not reproduced.",

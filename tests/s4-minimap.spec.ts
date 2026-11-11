@@ -117,7 +117,7 @@ test.describe('S4b minimap', () => {
     await expect(pacificPath).toHaveCSS('fill', 'rgb(252, 210, 126)');
   });
 
-  test('renders the nine framings plus ALL, with the ALL radio checked at boot', async ({
+  test('renders the nine framings with none checked at boot, and no caption, tile or box', async ({
     page,
   }) => {
     await gotoApp(page, '?region=washington_state&view=brief');
@@ -169,9 +169,14 @@ test.describe('S4b minimap', () => {
     await expect(
       page.locator('.shell-minimap-map .shell-minimap-viewport'),
     ).toHaveCount(0);
-    await expect(
-      page.locator('.shell-minimap-map .shell-minimap-hawaii-label'),
-    ).toHaveText('Hawaii (enlarged)');
+    // The caption and the dashed frame are gone (owner direction 2026-11-09, sprint); the islands fill the target and what the caption said rides the accessible name.
+    const hawaiiInset = page.locator('.shell-minimap-map [data-framing="hawaii"]');
+    await expect(page.locator('.shell-minimap-map .shell-minimap-hawaii-label')).toHaveCount(0);
+    await expect(hawaiiInset).toHaveText('');
+    await expect(hawaiiInset).toHaveAttribute('aria-label', /Drawn enlarged and apart from the mainland\./);
+    await expect(hawaiiInset).toHaveCSS('border-top-style', 'solid');
+    await expect(hawaiiInset).toHaveCSS('border-top-color', 'rgba(0, 0, 0, 0)');
+    await expect(hawaiiInset).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
     const pacificPath = page.locator(
       '.shell-minimap-map [data-framing="pacific-coast"]',
     );
@@ -201,15 +206,29 @@ test.describe('S4b minimap', () => {
     await expect(
       page.locator('.shell-minimap-map .shell-minimap-drought-legend'),
     ).toHaveCount(0);
-    await expect(
-      page.locator('.shell-minimap-map .shell-minimap-all'),
-    ).toHaveAttribute('aria-checked', 'true');
-    await expect(
-      page.locator('.shell-minimap-map .shell-minimap-all'),
-    ).toHaveAttribute('aria-label', 'All: fit North America');
-    await expect(
-      page.locator('.shell-minimap-map .shell-minimap-divider'),
-    ).toBeVisible();
+    // All of North America is the region select's first option, not a tile in
+    // the drawing: a radiogroup may have none checked, and the group keeps
+    // one Tab stop, on the first framing.
+    await expect(page.locator('.shell-minimap-map .shell-minimap-all')).toHaveCount(0);
+    await expect(page.locator('#region-select option[value="framing:all"]')).toHaveText('All of North America');
+    const radios = page.locator('.shell-minimap-map [role="radiogroup"] [role="radio"]');
+    await expect(radios).toHaveCount(FRAMING_KEYS.length);
+    await expect(radios.and(page.locator('[aria-checked="true"]'))).toHaveCount(0);
+    await expect(radios.and(page.locator('[tabindex="0"]'))).toHaveCount(1);
+    await expect(radios.first()).toHaveAttribute('data-framing', FRAMING_KEYS[0]!);
+    await expect(radios.first()).toHaveAttribute('tabindex', '0');
+    // No caption, second caption line, rule under the drawing or frame
+    // around it (owner direction): the scale words ride the accessible name only.
+    await expect(page.locator('.shell-minimap-map .shell-minimap-divider')).toHaveCount(0);
+    await expect(page.locator('.shell-minimap-map .shell-minimap-unshaded-line')).toHaveCount(0);
+    await expect(page.locator('.shell-minimap-map .shell-minimap-scale')).toHaveClass(/\bsr-only\b/);
+    await expect(page.locator('.shell-minimap-map .shell-minimap-scale')).toHaveAttribute(
+      'aria-label',
+      /North American Drought Monitor monthly consensus/,
+    );
+    await expect(page.locator('.shell-minimap-map .shell-minimap-canvas')).toHaveCSS('border-top-width', '0px');
+    await expect(page.locator('.shell-minimap-map .shell-minimap-ocean').first()).toHaveCSS('fill', 'rgba(0, 0, 0, 0)');
+    await expect(page.locator('#shell-framing-note')).toHaveClass(/\bsr-only\b/);
     await expect(
       page.locator('#shell-framing-note'),
     ).toHaveText('');
@@ -360,10 +379,12 @@ test.describe('S4b minimap', () => {
     ).toBeNull();
     await page.locator('.shell-cluster-btn[data-cluster="enso"]').click();
     await expect(minimap.locator('.shell-minimap-metric-note')).toHaveCount(0);
-    // A sighted person learns why the card is dark: the visible line, not
-    // only the aria-label, says the framings are unshaded.
-    await expect(minimap.locator('.shell-minimap-unshaded-line')).toHaveText(
-      'Unshaded · see main map',
+    // The visible second line is gone (owner direction); the scale's own
+    // accessible name carries why the framings are unshaded.
+    await expect(minimap.locator('.shell-minimap-unshaded-line')).toHaveCount(0);
+    await expect(minimap.locator('.shell-minimap-scale')).toHaveAttribute(
+      'aria-label',
+      /^Framings are unshaded in this display\./,
     );
     await expect(pacific).toHaveAttribute('aria-label', /Framings are unshaded/);
     await expect(pacific).toHaveAttribute('aria-label', /Relative Oceanic Nino Index/);
@@ -793,7 +814,7 @@ test.describe('S4b minimap', () => {
     await expect(page.locator('.shell-minimap-map .shell-minimap-ocean.active')).toHaveCount(0);
   });
 
-  test('ALL writes a restorable North America camera and survives reload', async ({
+  test('All of North America, from the region select, writes a restorable camera and survives reload', async ({
     page,
   }) => {
     await gotoApp(page);
@@ -810,28 +831,26 @@ test.describe('S4b minimap', () => {
     await expect(page.locator('#map-key')).toContainText(
       'North American Drought Monitor informs this minimap in Mexico',
     );
-    await page.locator('.shell-minimap-map .shell-minimap-all').click();
+    // All of North America is the region select's first option (the minimap
+    // has no All tile); choosing it writes the same camera.
+    const checkedRadios = page.locator(
+      '.shell-minimap-map [role="radiogroup"] [role="radio"][aria-checked="true"]',
+    );
+    await expect(checkedRadios).toHaveCount(1);
+    await page.locator('#region-select').selectOption('framing:all');
     await page.waitForFunction(
       () => new URLSearchParams(window.location.search).get('framing') === 'all',
     );
     expect(new URLSearchParams(await search(page)).get('region')).toBeNull();
-    await expect(
-      page.locator('.shell-minimap-map .shell-minimap-all'),
-    ).toHaveAttribute('aria-checked', 'true');
-    await expect(
-      page.locator('.shell-minimap-map .shell-minimap-all'),
-    ).toHaveAttribute('aria-label', 'All: fit North America');
+    await expect(page.locator('#region-select')).toHaveValue('framing:all');
+    await expect(checkedRadios).toHaveCount(0);
     await expect(
       page.locator('#shell-framing-note'),
     ).toHaveText('');
-    await expect(
-      page.locator('.shell-minimap-map .shell-minimap-divider'),
-    ).toBeVisible();
 
     await page.reload();
-    await expect(
-      page.locator('.shell-minimap-map .shell-minimap-all'),
-    ).toHaveAttribute('aria-checked', 'true');
+    await expect(page.locator('#region-select')).toHaveValue('framing:all');
+    await expect(checkedRadios).toHaveCount(0);
     expect(new URLSearchParams(await search(page)).get('framing')).toBe('all');
     expect(new URLSearchParams(await search(page)).get('region')).toBeNull();
   });
@@ -992,7 +1011,7 @@ test.describe('S4b minimap: compact height band geometry gating (DDM-P11-T01 cla
     await door.scrollIntoViewIfNeeded();
     await door.click();
     await expect(popover).toBeVisible();
-    // Focus lands on the current framing, never on an ocean zone (Enter there switches to ENSO).
+    // Focus lands on the current framing (the first one when none is chosen), never on an ocean zone (Enter there switches to ENSO).
     await expect(
       popover.locator('[role="radiogroup"] [role="radio"][tabindex="0"]'),
     ).toBeFocused();

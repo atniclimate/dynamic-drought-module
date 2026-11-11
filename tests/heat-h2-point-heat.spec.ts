@@ -684,8 +684,15 @@ test.describe('H2 critical-first surfaces', () => {
         });
         try {
           await gotoApp(page, '?select=state:WA');
-          if (width === 390) await page.locator('#sheet-report-door').click();
           const panel = page.locator('#impact-panel');
+          const fullDetail = panel.locator('.briefing-view-btn[data-briefing-view="matrix"]');
+          if (width === 390) {
+            // A phone opens the briefing on the priority view; Full detail is the explicit step.
+            await page.locator('#sheet-report-door').click();
+            await expect(fullDetail).toHaveAttribute('aria-pressed', 'false');
+            await fullDetail.click();
+            await expect(fullDetail).toHaveAttribute('aria-pressed', 'true');
+          }
           const point = panel.locator('.point-heat[aria-label="Heat at selected point"] > .impact-horizon-head .point-heat-pill');
           const currentHeat = panel.locator('.impact-hazard[data-horizon="current"][data-hazard="heat"] .impact-hazard-pill');
           await expectReadPill(point, 'loading');
@@ -718,6 +725,11 @@ test.describe('H2 critical-first surfaces', () => {
       /Heat at the selected point: Near Station, [\d.]+ mi \([\d.]+ km\) from the selected point, reports temperature 90 °F \(32 °C\), heat index 95 °F \(35 °C\)/
     );
     await page.locator('#sheet-report-door').click();
+    // The briefing opens on the priority view on a phone; point heat leads the full detail.
+    const fullDetail = page.locator('#sheet-report .briefing-view-btn[data-briefing-view="matrix"]');
+    await expect(fullDetail).toHaveAttribute('aria-pressed', 'false');
+    await fullDetail.click();
+    await expect(fullDetail).toHaveAttribute('aria-pressed', 'true');
     const pointHeat = page.locator(
       '#sheet-report .point-heat[aria-label="Heat at selected point"]'
     );

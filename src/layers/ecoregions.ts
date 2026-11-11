@@ -306,10 +306,10 @@ export function setEcoregionDisplayLevel(
  * basemap, which is still the bottom of the overlay stack).
  */
 function bottomOverlayBeforeId(map: maplibregl.Map): string | undefined {
-  // Skip the WHOLE permanent bottom stack (background, basemap, satellite,
-  // hillshade; layer-order.ts), not a hardcoded pair: with satellite or
-  // hillshade activated first, the old two-id skip made them the beforeId
-  // and buried the ecoregions under opaque imagery (the U4 stage-5
+  // Skip the WHOLE permanent bottom stack (background, basemap,
+  // hillshade; layer-order.ts), not a hardcoded pair: with hillshade
+  // activated first, the old two-id skip made it the beforeId
+  // and buried the ecoregions under it (the U4 stage-5
   // adversarial major 2).
   return firstLayerIdAbove(map, [
     ...BOTTOM_STACK_IDS,

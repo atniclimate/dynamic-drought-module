@@ -1,0 +1,420 @@
+/* =============================================================================
+   The phone shell's right-edge column (owner direction 2026-11-09 (sprint),
+   DR-pending).
+
+   One column holds every right-edge control while the phone shell is active:
+   map tools, the four panel doors, the four hazard views, the view tools.
+   src/ui/edge-column.ts owns the seats and applies the arrangement the pure
+   planner in src/config/edge-column.ts chooses for the measured height. This
+   file owns the faces. tests/edge-column-plan.test.mjs keeps the numbers here
+   and in the planner's token table equal.
+
+   Faces, in one sentence: rich-black glass at rest, and a SELECTED control
+   inverts (white face, rich-black ink). Selection never borrows a hazard
+   colour; the map carries those.
+   ============================================================================= */
+
+.edge-column,
+.edge-bench {
+  display: none;
+}
+
+@media (max-width: 720px) {
+  #app[data-sheet-detent] {
+    /* Planner defaults; the manager overrides the first three with the plan. */
+    --edge-size: 52px;
+    --edge-gap: 8px;
+    --edge-column-w: var(--edge-size);
+    --edge-inset: 8px;
+    --edge-badge-block: 26px;
+    /* Every older reservation of "the control column" reads the real width. */
+    --mobile-map-control-size: var(--edge-column-w);
+    --mobile-map-control-gap: var(--edge-gap);
+  }
+
+  #app[data-sheet-detent] .edge-column {
+    position: fixed;
+    top: calc(env(safe-area-inset-top, 0px) + var(--edge-inset));
+    right: calc(env(safe-area-inset-right, 0px) + var(--edge-inset));
+    bottom: calc(env(safe-area-inset-bottom, 0px) + var(--edge-inset));
+    display: flex;
+    /* Track 0 sits at the screen edge; a second track opens toward the map. */
+    flex-direction: row-reverse;
+    gap: var(--edge-gap);
+    z-index: calc(var(--z-sheet) + 60);
+    /* The empty stretch between the stacks never takes a map gesture. */
+    pointer-events: none;
+  }
+  #app[data-sheet-detent] .edge-column[hidden] {
+    display: none;
+  }
+
+  .edge-track {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: var(--edge-gap);
+    width: var(--edge-size);
+    min-height: 0;
+  }
+  .edge-column[data-tracks='1'] .edge-track[data-track='1'] {
+    display: none;
+  }
+  .edge-stack {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    gap: var(--edge-gap);
+  }
+  .edge-stack:empty {
+    display: none;
+  }
+  /* A track with nothing at its top still packs its controls into the thumb zone. */
+  .edge-stack[data-stack='bottom'] {
+    margin-top: auto;
+  }
+
+  /* The last arrangement did not fit (a keyboard is up, or the window is
+     tiny): the track scrolls, so every control stays reachable. */
+  .edge-column[data-fits='false'] .edge-track {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: none;
+    pointer-events: auto;
+  }
+
+  .edge-group {
+    position: relative;
+    flex: none;
+    /* The held room never takes a map gesture; the capsule and the fold cell do. */
+    pointer-events: none;
+    /* Room held for the group's fullest mode (the manager writes the count):
+       the capsule stays at the top of it, so a cell only some modes seat
+       fills the slot downward and nothing above it moves. The 2px is the
+       capsule's border. Not a control: the slot takes no press. */
+    min-block-size: calc(var(--edge-size) * var(--edge-reserve, 0) + 2px);
+  }
+  .edge-group[data-folded] {
+    min-block-size: 0;
+  }
+  .edge-group[hidden] {
+    display: none;
+  }
+  /* The cell face below forces its own display, so absence is restated at
+     the same strength: a hidden control takes no room and no press. */
+  #app[data-sheet-detent] .edge-column :is(.edge-body button, .edge-fold)[hidden] {
+    display: none !important;
+  }
+
+  /* ---------------------------------------------------------------------
+     The capsule: one glass body per group.
+     --------------------------------------------------------------------- */
+  .edge-body,
+  .edge-fold {
+    pointer-events: auto;
+  }
+  .edge-body {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid var(--glass-edge);
+    border-radius: var(--glass-radius);
+    background: var(--glass-fill-solid);
+    box-shadow:
+      inset 0 1px 0 var(--glass-sheen),
+      var(--glass-shadow);
+  }
+  .edge-body:empty {
+    display: none;
+  }
+  /* Adopted containers (the doors' nav, the hazard group, MapLibre's control
+     wrapper) lay their buttons out in the capsule's own direction. */
+  #app[data-sheet-detent] .edge-body > :is(.mobile-footer, .hazard-rail, .maplibregl-ctrl) {
+    position: static;
+    display: flex;
+    flex-direction: column;
+    float: none;
+    width: auto;
+    height: auto;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+    transform: none;
+    z-index: auto;
+    gap: 0;
+  }
+
+  /* ---------------------------------------------------------------------
+     The cell: every control in the column wears this face.
+     --------------------------------------------------------------------- */
+  #app[data-sheet-detent] .edge-column :is(.edge-body button, .edge-fold) {
+    appearance: none;
+    position: relative;
+    display: flex !important;
+    flex: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    width: var(--edge-size) !important;
+    min-width: var(--touch-target);
+    height: var(--edge-size);
+    min-height: var(--touch-target);
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent !important;
+    box-shadow: none;
+    color: var(--ink) !important;
+    font-family: var(--font-display);
+    /* The word scales with the cell: 8.25 px at 44, 9 px at 48, 9.75 px at
+       52, so the longest word (Drought) keeps air on both sides at every
+       size. */
+    font-size: calc(var(--edge-size) * 0.1875);
+    font-weight: var(--fw-subtitle);
+    letter-spacing: 0;
+    line-height: 1;
+    text-transform: none;
+    white-space: nowrap;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    transition:
+      background-color var(--dur-micro) var(--ease-standard),
+      color var(--dur-micro) var(--ease-standard),
+      transform var(--dur-micro) var(--ease-standard);
+  }
+  /* Inside a capsule each cell is a tile: its face stops 1 px short of the
+     capsule on every side and its corner is the capsule's corner moved in
+     by that much, so a selected or pressed cell reads as one tight rounded
+     button with an even margin. The border is the margin; it is part of
+     the cell, so the touch target is still the whole cell, and at 1 px the
+     longest word (Drought) keeps its air at the 44 px size. */
+  #app[data-sheet-detent] .edge-column .edge-body button {
+    border: 1px solid transparent;
+    border-radius: calc(var(--glass-radius) - 1px);
+    background-clip: padding-box !important;
+    overflow: visible;
+  }
+  #app[data-sheet-detent] .edge-column :is(.edge-body button, .edge-fold) svg {
+    flex: none;
+    width: 20px;
+    height: 20px;
+  }
+  /* A hairline between neighbouring cells, drawn short of the capsule edge. */
+  #app[data-sheet-detent] .edge-column .edge-body button::before {
+    content: '';
+    position: absolute;
+    top: -1px;
+    left: 22%;
+    right: 22%;
+    height: 1px;
+    background: var(--glass-hairline);
+    pointer-events: none;
+  }
+  #app[data-sheet-detent] .edge-column .edge-body > button:first-child::before,
+  #app[data-sheet-detent] .edge-column .edge-body > :first-child > button:first-child::before,
+  #app[data-sheet-detent] .edge-column .edge-body
+    button:is([aria-pressed='true'], [aria-expanded='true'])::before,
+  #app[data-sheet-detent] .edge-column .edge-body
+    button:is([aria-pressed='true'], [aria-expanded='true']) + button::before {
+    display: none;
+  }
+
+  /* The long desktop words stay for assistive technology only; the cell
+     shows one short word that also appears in the accessible name. */
+  #app[data-sheet-detent] .edge-column
+    :is(.overlay-btn, .map-info-btn)
+    > :is(.map-control-label, .map-cell-label) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  #app[data-sheet-detent] .edge-column [data-edge-word]::after {
+    content: attr(data-edge-word);
+  }
+  #app[data-sheet-detent] .edge-column .hazard-rail-btn > .map-control-label,
+  #app[data-sheet-detent] .edge-column .mobile-footer button > span {
+    position: static;
+    width: auto;
+    height: auto;
+    margin: 0;
+    overflow: visible;
+    clip: auto;
+    font-size: inherit;
+  }
+
+  /* Pressed under the finger: the glass lifts before the state changes. */
+  #app[data-sheet-detent] .edge-column :is(.edge-body button, .edge-fold):active {
+    background-color: var(--glass-press) !important;
+  }
+  @media (hover: hover) {
+    #app[data-sheet-detent] .edge-column :is(.edge-body button, .edge-fold):hover {
+      background-color: var(--glass-press) !important;
+    }
+  }
+
+  /* SELECTED INVERTS. The open door, the hazard view that is on,
+     Map information when open, and a folded group's cell
+     while it stands for a control that is on. */
+  #app[data-sheet-detent] .edge-column
+    :is(
+      .edge-body button[aria-pressed='true'],
+      .edge-body button[aria-expanded='true'],
+      .edge-fold[data-current],
+      .edge-fold[aria-expanded='true']
+    ) {
+    forced-color-adjust: none; /* FORCED COLOURS, app.css */
+    background-color: var(--face-selected) !important;
+    color: var(--ink-on-selected) !important;
+    font-weight: var(--fw-strong);
+  }
+
+  /* Honest disablement keeps its one vocabulary inside the column. */
+  #app[data-sheet-detent] .edge-column .edge-body button:is([aria-disabled='true'], :disabled) {
+    opacity: var(--ctl-pending-opacity);
+    cursor: var(--ctl-pending-cursor);
+  }
+
+  /* Focus: the app's two-ring model, drawn inside the cell so the capsule
+     never clips it. The rich-black casing keeps the ring visible on the
+     white selected face. */
+  #app[data-sheet-detent] .edge-column :is(.edge-body button, .edge-fold):focus-visible {
+    outline: 2px solid var(--focus-inner);
+    outline-offset: -4px;
+    box-shadow: inset 0 0 0 2px var(--focus-outer), inset 0 0 0 6px var(--focus-outer);
+  }
+
+  /* ---------------------------------------------------------------------
+     A folded group: one cell in the track, its controls as a row beside it.
+     --------------------------------------------------------------------- */
+  .edge-fold {
+    overflow: hidden;
+    border: 1px solid var(--glass-edge) !important;
+    border-radius: var(--glass-radius) !important;
+    background: var(--glass-fill-solid) !important;
+    box-shadow:
+      inset 0 1px 0 var(--glass-sheen),
+      var(--glass-shadow) !important;
+  }
+  .edge-group[data-folded] > .edge-body {
+    display: none;
+  }
+  .edge-group[data-folded][data-open] > .edge-body {
+    position: absolute;
+    top: 0;
+    right: calc(100% + var(--edge-gap));
+    display: flex;
+    flex-direction: row;
+    transform-origin: right center;
+    animation: edge-row-open var(--dur-fast) var(--ease-enter);
+  }
+  #app[data-sheet-detent] .edge-group[data-folded] > .edge-body > :is(.mobile-footer, .hazard-rail, .maplibregl-ctrl) {
+    flex-direction: row;
+  }
+  /* In a row the hairline runs down the cell's leading edge. */
+  #app[data-sheet-detent] .edge-column .edge-group[data-folded] .edge-body button::before {
+    top: 22%;
+    bottom: 22%;
+    left: -1px;
+    right: auto;
+    width: 1px;
+    height: auto;
+  }
+
+  /* The pre-release badge rides the top of a track. It stays non-interactive. */
+  #app[data-sheet-detent] .edge-column .test-preview-badge {
+    flex: none;
+    width: var(--edge-size);
+    height: calc(var(--edge-badge-block) - var(--edge-gap));
+    margin: 0;
+    padding: 2px 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 8px;
+    letter-spacing: 0.03em;
+    line-height: 1.05;
+    text-align: center;
+    white-space: normal;
+    color: var(--ink-soft);
+    background: var(--glass-fill-solid);
+    border: 1px solid var(--glass-edge);
+    border-radius: var(--radius-md);
+  }
+
+  /* Share and Reset have left this container for the column; on phones it
+     holds only empty desktop seats. The full-site link-outs a framed page
+     that is not an embed gets are the one thing left in it: the only route
+     to the studios there. They sit beside the column, never under it. */
+  #app[data-sheet-detent] .map-overlay-controls > :not(.studio-linkout-pair) {
+    display: none;
+  }
+  #app[data-sheet-detent] .map-overlay-controls {
+    right: calc(
+      env(safe-area-inset-right, 0px) + var(--edge-inset) + var(--edge-column-w) + var(--edge-gap)
+    );
+  }
+  #app[data-sheet-detent] .map-overlay-controls > .studio-linkout-pair {
+    max-width: calc(
+      100vw - var(--edge-column-w) - var(--edge-gap) - 2 * var(--edge-inset) - 12px
+    );
+  }
+
+  /* Map information rides the column while the map leads. With a panel
+     open its drawer would sit under the panel, so the cell waits. */
+  #app[data-sheet-detent] .edge-column .map-info-btn {
+    display: none !important;
+  }
+  #app[data-sheet-detent='closed'] .edge-column .map-info-btn,
+  #app[data-sheet-detent='peek'] .edge-column .map-info-btn {
+    display: flex !important;
+  }
+}
+
+
+/* Real glass where the browser can blur what is behind it. */
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  @media (max-width: 720px) {
+    #app[data-sheet-detent] .edge-column :is(.edge-body, .edge-fold, .test-preview-badge) {
+      background: var(--glass-fill) !important;
+      -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+      backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+    }
+    #app[data-sheet-detent] .edge-column
+      :is(.edge-fold[data-current], .edge-fold[aria-expanded='true']) {
+      forced-color-adjust: none; /* FORCED COLOURS, app.css */
+      background: var(--face-selected) !important;
+    }
+  }
+}
+
+@keyframes edge-row-open {
+  from {
+    opacity: 0;
+    transform: scaleX(0.6);
+  }
+  to {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #app[data-sheet-detent] .edge-column :is(.edge-body button, .edge-fold) {
+    transition: none;
+  }
+  .edge-group[data-folded][data-open] > .edge-body {
+    animation: none;
+  }
+}

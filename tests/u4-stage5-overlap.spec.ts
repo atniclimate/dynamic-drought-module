@@ -1,14 +1,12 @@
 import { test, expect } from './offline-test';
 
 import { gotoApp, layerCheckbox } from './helpers';
-import { stubRecentSatellite } from './satellite-fixture';
 
 /**
  * U4 stage-5 matrix findings, pinned (the browser pass caught three
  * bottom-chrome collisions): the embed viewport gets the auto-compact
  * attribution control; the desktop attribution bar never reaches the joined
- * scale controls; satellite observation detail remains available through SAT
- * without placing a card over the map.
+ * scale controls.
  */
 
 async function box(page: import('./offline-test').Page, selector: string) {
@@ -39,10 +37,6 @@ function intersects(
 }
 
 test.describe('U4 stage-5: bottom-chrome collisions stay fixed', () => {
-  test.beforeEach(async ({ page }) => {
-    await stubRecentSatellite(page);
-  });
-
   test('the 400x600 embed seats the credits disclosure closed', async ({ page }) => {
     await page.setViewportSize({ width: 400, height: 600 });
     await gotoApp(page, '?embed=true&view=console');
@@ -74,15 +68,11 @@ test.describe('U4 stage-5: bottom-chrome collisions stay fixed', () => {
     ).toBe(false);
   });
 
-  test('at 1024 with satellite on, the credits button clears the joined scales and no status card covers the map', async ({
+  test('at 1024 the credits button clears the joined scales', async ({
     page
   }) => {
     await page.setViewportSize({ width: 1024, height: 768 });
-    await gotoApp(page, '?view=console&basemap=satellite');
-    await expect(page.locator('#basemap-vintage')).toHaveAttribute(
-      'data-status',
-      'live'
-    );
+    await gotoApp(page, '?view=console');
     await page.evaluate(() => document.fonts.ready);
 
     const credits = await box(page, '.map-info-btn');
@@ -99,45 +89,6 @@ test.describe('U4 stage-5: bottom-chrome collisions stay fixed', () => {
       Math.abs(orderedScales[1]!.x - orderedScales[0]!.x),
       'joined scale controls do not share a left edge'
     ).toBeLessThanOrEqual(1);
-    await expect(page.locator('#basemap-vintage')).not.toBeInViewport();
-  });
-
-  test('mobile keeps the assistive satellite status off the map and its controls reachable', async ({
-    page
-  }) => {
-    await page.setViewportSize({ width: 390, height: 844 });
-    await page.emulateMedia({ reducedMotion: 'reduce' });
-    await gotoApp(page, '?view=console&basemap=satellite');
-    await expect(page.locator('#app')).toHaveAttribute('data-sheet-detent', 'closed');
-    const chip = page.locator('#basemap-vintage');
-    await expect(chip).toHaveAttribute('data-status', 'live');
-    await page.evaluate(() => document.fonts.ready);
-
-    const creditsButton = await box(page, '.map-info-btn');
-    const switcher = await box(
-      page,
-      '.maplibregl-ctrl-group:has(.basemap-switcher-btn)'
-    );
-    expect(intersects(creditsButton, switcher), 'the credits button overlaps SAT').toBe(false);
-    await expect(chip).not.toBeInViewport();
-
-    await page.locator('#mobile-footer-nav button[data-tab="layers"]').click();
-    const app = page.locator('#app');
-    await expect(app).toHaveAttribute('data-sheet-detent', 'half');
-    await expect(chip).not.toBeInViewport();
-  });
-
-  test('the observation status remains an accessible SAT description at 400px', async ({
-    page
-  }) => {
-    await page.setViewportSize({ width: 400, height: 600 });
-    await gotoApp(page, '?embed=true&view=console&basemap=satellite');
-    const chip = page.locator('#basemap-vintage');
-    await expect(chip).toHaveAttribute('data-status', 'live');
-    await expect(chip).not.toBeInViewport();
-    await expect(page.locator('.basemap-switcher-btn')).toHaveAccessibleDescription(
-      /NOAA GOES GeoColor/
-    );
   });
 
   test('places labels stay above a surface activated after them (the reassert hook)', async ({

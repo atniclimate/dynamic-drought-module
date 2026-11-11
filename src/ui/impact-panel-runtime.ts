@@ -28,7 +28,7 @@
 import { createBriefingSkeleton } from '../impact/briefing';
 import { SHELL_HAZARD_KEY } from '../impact/horizon-chrome';
 import { hydrateBriefing } from '../impact/hydrate';
-import { HAZARD_KEYS, markHorizonCells } from '../impact/matrix';
+import { HAZARD_KEYS, HAZARD_LABELS, markHorizonCells } from '../impact/matrix';
 import {
   formatDistanceKm,
   formatPointHeatInterval,
@@ -40,7 +40,16 @@ import {
 } from '../impact/landscape-resolution';
 import type { LandscapeEcoregionKey } from '../impact/landscape-resolution';
 import { getLayerDef } from '../config/layers';
+import {
+  PRIORITY_RULE_ANCHOR,
+  renderFocusHead,
+  renderLeadView,
+  renderPriorityRule,
+  renderViewSwitch
+} from './briefing-lead';
+import type { BriefingView } from './briefing-lead';
 import { renderClaim } from './claim-render';
+import { READ_STATE_WORD } from './gauges';
 import { renderLandscapeContext } from './landscape-context';
 import { renderMapTechnicalInformation } from './map-technical-information';
 import { renderAcknowledgements } from './acknowledgements';
@@ -60,9 +69,9 @@ import { setSheetBriefing } from './mobile-sheet';
 import type {
   BoundarySelectionContext,
   HazardCell,
+  HazardKey,
   HeatSynthesis,
   Horizon,
-  HorizonStatus,
   ImpactBriefing,
   PointHeatBriefing,
   PointHeatMetricSeries,
@@ -136,6 +145,37 @@ let activeController: AbortController | null = null;
  */
 let panelSelection: PlaceSelection | null = null;
 
+/**
+ * Which presentation of the briefing is showing (owner direction 2026-11-09
+ * (sprint), DR-pending): the priority view (src/ui/briefing-lead.ts) or the
+ * full detail, the matrix. Null until the reader picks one, and until then
+ * the shell decides: the phone shell leads with the priority view, every
+ * other shell opens the full detail with the switch above it. A choice holds
+ * for the session, across places. Pure presentation state: it never enters
+ * the URL, and the matrix is always in the document under either view.
+ */
+let briefingView: BriefingView | null = null;
+
+/**
+ * The shell's default for the briefing now open, taken once when it opens:
+ * a reader who turns a tablet or resizes a window mid-read keeps the view
+ * they are reading, and only the next place open asks the shell again.
+ */
+let openDefaultView: BriefingView = 'matrix';
+
+/**
+ * The one hazard whose cells the full detail is narrowed to, after a tile was
+ * opened; null for all four. The cells themselves are the matrix's own nodes:
+ * narrowing hides the other hazards' cells and never moves one.
+ */
+let focusHazard: HazardKey | null = null;
+
+/** The control that opened the single-hazard detail, to return focus to. */
+let focusOpenerKey: string | null = null;
+
+/** The panel's polite live region for view changes; created once. */
+let viewLiveEl: HTMLElement | null = null;
+
 // ---------------------------------------------------------------------------
 // Status pill text
 // ---------------------------------------------------------------------------
@@ -146,14 +186,11 @@ let panelSelection: PlaceSelection | null = null;
  * layer-side table). A horizon has only four states; each maps to its
  * canonical string, never a per-surface synonym: the pre-U2 "partial"
  * drifted from "live (partial)" and was flagged by the 2026-07-10 design
- * corpus (dataviz lens; fixed with U2 per the BRIEF).
+ * corpus (dataviz lens; fixed with U2 per the BRIEF). The four words live in
+ * one table, `READ_STATE_WORD` (src/ui/gauges.ts), which the priority view and
+ * the evidence chain read too, so a cell reads the same word in every view.
  */
-const HORIZON_PILL_TEXT: Record<HorizonStatus, string> = {
-  loading: 'loading...',
-  ready: 'live',
-  partial: 'live (partial)',
-  unavailable: 'unavailable'
-};
+const HORIZON_PILL_TEXT = READ_STATE_WORD;
 
 const SOURCE_PILL_TEXT: Record<LayerStatus, string> = {
   loading: 'loading...',
@@ -269,6 +306,13 @@ function ensurePanel(): HTMLElement {
   // innerHTML, so a listener on the child would be lost on every
   // hydration re-render, DDM-P13-T02 correction, clause 3).
   panelEl.addEventListener('click', handleLegendLinkClick);
+  // The priority view's controls (the switch, the tiles, the doors) are
+  // delegated the same way and for the same reason.
+  panelEl.addEventListener('click', handleBriefingViewClick);
+  viewLiveEl = document.createElement('div');
+  viewLiveEl.className = 'sr-only';
+  viewLiveEl.setAttribute('aria-live', 'polite');
+  panelEl.appendChild(viewLiveEl);
   // DDM-P2-T07: keep the matrix's active-row emphasis in step with the
   // shell's committed hazard mode on a LIVE switch, not only on the next
   // open. Registered once, alongside every other one-time wire-up in this
@@ -335,6 +379,173 @@ function applyActiveHazardEmphasis(): void {
     const youMarker = row.querySelector<HTMLElement>('.impact-hazard-you');
     if (youMarker) youMarker.hidden = !isActive;
   });
+}
+
+// ---------------------------------------------------------------------------
+// The priority view and the full detail (owner direction 2026-11-09 (sprint),
+// DR-pending)
+// ---------------------------------------------------------------------------
+
+/** The two headings that can hold focus without being controls. */
+const LEAD_FOCUS_IDS: readonly string[] = ['briefing-focus-title', 'briefing-lead-title'];
+
+/** The phone shell exists exactly while `#app` carries `data-sheet-detent`. */
+function phoneShell(): boolean {
+  return document.getElementById('app')?.hasAttribute('data-sheet-detent') ?? false;
+}
+
+/** The reader's choice, or the default the shell gave this briefing when it opened. */
+function currentBriefingView(): BriefingView {
+  return briefingView ?? openDefaultView;
+}
+
+/**
+ * Show the current view on the nodes the last render produced. Only
+ * `hidden`, `aria-pressed` and one heading's text change: no node is created,
+ * moved or reordered, so the matrix under the priority view is the same
+ * matrix, in the same order, as under the full detail. A body with no switch
+ * (impact synthesis unavailable, or a no-place presentation) is left as it
+ * was rendered.
+ */
+function applyBriefingView(): void {
+  if (!bodyEl) return;
+  const switchEl = bodyEl.querySelector<HTMLElement>(':scope > .briefing-view-switch');
+  const lead = bodyEl.querySelector<HTMLElement>(':scope > .briefing-lead');
+  if (!switchEl || !lead) {
+    delete bodyEl.dataset['briefingView'];
+    return;
+  }
+  const view = currentBriefingView();
+  const focus = view === 'matrix' ? focusHazard : null;
+  bodyEl.dataset['briefingView'] = focus !== null ? 'hazard' : view;
+  lead.hidden = view !== 'lead';
+  switchEl.hidden = focus !== null;
+  switchEl.querySelectorAll<HTMLElement>('[data-briefing-view]').forEach((button) => {
+    button.setAttribute('aria-pressed', String(button.dataset['briefingView'] === view));
+  });
+  const landscape = bodyEl.querySelector<HTMLElement>(':scope > .impact-landscape');
+  if (landscape) landscape.hidden = view === 'lead' || focus !== null;
+  const horizons = bodyEl.querySelector<HTMLElement>(':scope > .impact-horizons');
+  if (horizons) horizons.hidden = view === 'lead';
+  bodyEl.querySelectorAll<HTMLElement>('.impact-horizons .impact-hazard').forEach((cell) => {
+    cell.hidden = focus !== null && cell.dataset['hazard'] !== focus;
+  });
+  // Point heat sits in the heat row of Current Conditions, so it shows with
+  // the heat cells and with all four.
+  const pointHeat = bodyEl.querySelector<HTMLElement>('.impact-horizons .point-heat');
+  if (pointHeat) pointHeat.hidden = focus !== null && focus !== 'heat';
+  const head = bodyEl.querySelector<HTMLElement>(':scope > .briefing-focus');
+  if (head) {
+    head.hidden = focus === null;
+    const title = head.querySelector<HTMLElement>('.briefing-focus-title');
+    if (title) title.textContent = focus !== null ? `${HAZARD_LABELS[focus]} detail` : '';
+  }
+}
+
+/** Say a view change once, politely; the words are the view's own name. */
+function announceBriefingView(words: string): void {
+  if (viewLiveEl) viewLiveEl.textContent = words;
+}
+
+/** Move focus to a node of the current view and bring it into the scroller. */
+function focusInView(target: HTMLElement | null, block: ScrollLogicalPosition): void {
+  if (!target) return;
+  target.scrollIntoView({ block });
+  target.focus({ preventScroll: true });
+}
+
+/** Narrow the full detail to one hazard's own cells, from a tile or a row. */
+function openHazardDetail(hazard: HazardKey, openerKey: string | null): void {
+  if (!bodyEl) return;
+  briefingView = 'matrix';
+  focusHazard = hazard;
+  focusOpenerKey = openerKey;
+  applyBriefingView();
+  announceBriefingView(`${HAZARD_LABELS[hazard]} detail.`);
+  // The head comes into view whole (the way back sits above the title);
+  // focus lands on the title, so a screen reader hears what opened.
+  bodyEl.querySelector<HTMLElement>(':scope > .briefing-focus')?.scrollIntoView({ block: 'start' });
+  bodyEl.querySelector<HTMLElement>('.briefing-focus-title')?.focus({ preventScroll: true });
+}
+
+/** Open one of the body's own disclosures and land on a node inside it. */
+function openBriefingDisclosure(selector: string, landOn: string): void {
+  const details = bodyEl?.querySelector<HTMLDetailsElement>(selector);
+  if (!details) return;
+  details.open = true;
+  focusInView(details.querySelector<HTMLElement>(landOn) ?? details.querySelector('summary'), 'start');
+}
+
+/**
+ * The one delegated listener for the switch, the tiles, the rows, the chain
+ * links and the doors. Every control it serves is a real button carrying its
+ * intent as data, so the keyboard path is the browser's own.
+ */
+function handleBriefingViewClick(event: MouseEvent): void {
+  if (!bodyEl || !(event.target instanceof Element)) return;
+  const control = event.target.closest<HTMLElement>(
+    '[data-briefing-view], [data-lead-action], [data-chain-action]'
+  );
+  if (!control || !bodyEl.contains(control)) return;
+  const key = control.dataset['leadKey'] ?? null;
+
+  const chosen = control.dataset['briefingView'];
+  if (chosen === 'lead' || chosen === 'matrix') {
+    briefingView = chosen;
+    focusHazard = null;
+    applyBriefingView();
+    announceBriefingView(chosen === 'lead' ? 'Priority view.' : 'Full detail: every hazard at three horizons.');
+    return;
+  }
+
+  const chain = control.dataset['chainAction'];
+  if (chain !== undefined) {
+    const hazard = chain.startsWith('detail:') ? chain.slice('detail:'.length) : '';
+    if ((HAZARD_KEYS as readonly string[]).includes(hazard)) {
+      openHazardDetail(hazard as HazardKey, null);
+    }
+    return;
+  }
+
+  switch (control.dataset['leadAction']) {
+    case 'detail': {
+      const hazard = control.dataset['leadHazard'] ?? '';
+      if ((HAZARD_KEYS as readonly string[]).includes(hazard)) {
+        openHazardDetail(hazard as HazardKey, key);
+      }
+      return;
+    }
+    case 'lead': {
+      const opener = focusOpenerKey;
+      briefingView = 'lead';
+      focusHazard = null;
+      focusOpenerKey = null;
+      applyBriefingView();
+      announceBriefingView('Priority view.');
+      // Back to where the reader was: the tile that opened the detail.
+      const tile = opener !== null ? bodyEl.querySelector<HTMLElement>(`[data-lead-key="${opener}"]`) : null;
+      if (tile) focusInView(tile, 'nearest');
+      else focusInView(bodyEl.querySelector<HTMLElement>('#briefing-lead-title'), 'start');
+      return;
+    }
+    case 'matrix':
+      briefingView = 'matrix';
+      focusHazard = null;
+      applyBriefingView();
+      announceBriefingView('Full detail: every hazard at three horizons.');
+      focusInView(bodyEl.querySelector<HTMLElement>('[data-briefing-view="matrix"]'), 'start');
+      return;
+    case 'rule':
+      openBriefingDisclosure('.impact-technical-information', `#${PRIORITY_RULE_ANCHOR}`);
+      return;
+    case 'technical':
+      openBriefingDisclosure('.impact-technical-information', 'summary');
+      return;
+    case 'acknowledgements':
+      openBriefingDisclosure('.impact-acknowledgements', 'summary');
+      return;
+    default:
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -831,12 +1042,21 @@ function renderBriefingSections(
         ${renderHorizon(briefing.horizons.longRange)}
       </section>
     `;
+  // The priority view and its switch exist only where the matrix does: with
+  // impact synthesis unavailable every cell holds the one same note, and a
+  // second arrangement of it would say nothing more. Both views are always
+  // rendered; `applyBriefingView` shows one, so a switch never re-renders and
+  // the matrix is never out of the document.
+  const lead = impactUnavailableNote
+    ? ''
+    : `${renderViewSwitch(currentBriefingView())}${renderFocusHead()}${renderLeadView(briefing)}`;
   return `
     ${caveat}
+    ${lead}
     ${renderLandscapeContext(briefing.landscape)}
     ${impact}
     ${renderResources(briefing.resources)}
-    ${renderMapTechnicalInformation()}
+    ${renderMapTechnicalInformation(false, renderPriorityRule())}
   `;
 }
 
@@ -877,6 +1097,7 @@ function paint(
     bodyEl.innerHTML = renderBody(briefing, impactUnavailableNote);
     discloseLegendAnchorTitles(bodyEl);
     applyActiveHazardEmphasis();
+    applyBriefingView();
   }
 }
 
@@ -934,6 +1155,11 @@ export function openImpactPanel(
   }
   activeBriefing = briefing;
   activeImpactUnavailableNote = unavailableNote;
+  // A new place opens on the whole view, never on the last place's one hazard,
+  // and asks the shell for its default: priority on phones, full detail elsewhere.
+  focusHazard = null;
+  focusOpenerKey = null;
+  openDefaultView = phoneShell() ? 'lead' : 'matrix';
 
   // The panel takes ownership of the place selection for this briefing (see
   // the panelSelection doc comment above; the stage-5 majors 3/4 fix). The
@@ -1115,6 +1341,12 @@ export function refreshOpenBriefing(token: number): void {
   if (!isCurrentBriefing(token) || !activeBriefing || !bodyEl) return;
   refreshBriefingActions(activeBriefing.landTitle, activeBriefing.context);
   const hadFocusInBody = bodyEl.contains(document.activeElement);
+  // The priority view's controls are reborn by this render. Each carries a
+  // stable key, so focus returns to the same control instead of falling back
+  // to the close button every time a lane settles.
+  const focused = hadFocusInBody && document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  const leadFocusKey = focused?.closest<HTMLElement>('[data-lead-key]')?.dataset['leadKey'] ?? null;
+  const leadFocusId = focused && LEAD_FOCUS_IDS.includes(focused.id) ? focused.id : null;
   const preservedOpen = new Map<string, boolean>();
   let focusedDisclosureKey: string | null = null;
   bodyEl
@@ -1181,6 +1413,14 @@ export function refreshOpenBriefing(token: number): void {
   if (printing) openAllDisclosuresForPrint();
   discloseLegendAnchorTitles(bodyEl);
   applyActiveHazardEmphasis();
+  applyBriefingView();
+  if (leadFocusKey !== null || leadFocusId !== null) {
+    const reborn =
+      leadFocusKey !== null
+        ? bodyEl.querySelector<HTMLElement>(`[data-lead-key="${leadFocusKey}"]`)
+        : document.getElementById(leadFocusId ?? '');
+    if (reborn && reborn.offsetParent !== null) reborn.focus({ preventScroll: true });
+  }
   if (hadFocusInBody && panelEl && !panelEl.contains(document.activeElement)) {
     panelEl.querySelector<HTMLButtonElement>('.impact-panel-close')?.focus();
   }
@@ -1255,7 +1495,8 @@ export function openNoPlacePanel(section: NoPlaceSection, opener: HTMLElement | 
   ensurePanel();
   if (titleEl) titleEl.textContent = NO_PLACE_HEADS[section].title;
   if (kindEl) kindEl.textContent = NO_PLACE_HEADS[section].kind;
-  if (bodyEl) bodyEl.innerHTML = section === 'technical' ? renderMapTechnicalInformation(true) : renderAcknowledgements({ open: true });
+  if (bodyEl) bodyEl.innerHTML = section === 'technical' ? renderMapTechnicalInformation(true, renderPriorityRule()) : renderAcknowledgements({ open: true });
+  applyBriefingView();
   setMailActionEnabled(false);
   openImpactPanelShell(closeImpactPanel, opener);
   // The shell focused its close button; the expanded notes' summary takes that focus (never grabbed when the shell did not).

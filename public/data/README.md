@@ -24,7 +24,7 @@ turns them on. They exist so a deployer
 (most importantly a Tribal Nation) can display its own boundary data,
 under its own governance and authorization, without that data ever
 entering this repository. When the file is empty the layer reports
-`no data (see data/README.md)`; when the file cannot be fetched it
+`no data`; when the file cannot be fetched it
 reports `unavailable`.
 
 > **Stewardship note.** Anyone populating these files is responsible for
@@ -313,7 +313,7 @@ npm run dev
 # open http://localhost:5173/?layers=tribal
 ```
 
-If the layer toggle reports `no data (see data/README.md)`, the file is
+If the layer toggle reports `no data`, the file is
 loading but contains zero features. If it reports `unavailable`, check
 the path and that the file is valid JSON.
 

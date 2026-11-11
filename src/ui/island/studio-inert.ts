@@ -74,8 +74,7 @@ const FOCUSABLE_SELECTOR =
  * Bound on `document` in the CAPTURE phase rather than on `root` itself:
  * `root` is a plain DOM node this module's caller creates and removes
  * directly (view-shell.ts, sidebar.ts), outside the Preact tree that
- * later rehosts controls (the telemetry panel, the basemap switcher) into
- * it, so a listener attached once at mount time on `root` would still see
+ * later rehosts controls (the telemetry panel) into it, so a listener attached once at mount time on `root` would still see
  * every later Tab whose target is a `root` descendant; capturing at the
  * document is only to run ahead of any other document-level key handling,
  * with no side effect on calls not inside `root`. Elements are re-queried on every Tab rather than

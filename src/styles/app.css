@@ -193,8 +193,39 @@
   --mobile-map-control-gap: 8px;
   --mobile-map-control-radius: 4px;
   --mobile-map-key-collapsed-height: 224px;
+  /* PHONE CHROME TOKENS (owner direction 2026-11-09 (sprint), DR-pending).
+     One glass, one selected face and one motion vocabulary for every phone
+     surface: the right-edge column, sheets and drawers, and cards that ride
+     above the map. Glass is rich black, never a hue: colour on this
+     instrument belongs to the data. The fill's alpha is set for sunlight:
+     over a pure white map --glass-fill still gives --ink about 6.4:1.
+     --glass-fill-solid is the same face where the browser cannot blur. */
+  --glass-fill: rgba(1, 11, 19, 0.70);
+  --glass-fill-solid: rgba(1, 11, 19, 0.92);
+  --glass-panel: rgba(1, 11, 19, 0.82);
+  --glass-panel-solid: rgba(1, 11, 19, 0.96);
+  --glass-edge: rgba(232, 236, 240, 0.26);
+  --glass-hairline: rgba(232, 236, 240, 0.14);
+  --glass-sheen: rgba(255, 255, 255, 0.07);
+  --glass-press: rgba(232, 236, 240, 0.16);
+  --glass-blur: 16px;
+  --glass-saturate: 135%;
+  --glass-shadow: 0 6px 22px rgba(0, 0, 0, 0.38);
+  /* Corners are tight: a glass body takes the scale's large step, the
+     radius the phone panel has always had, and the controls inside it sit
+     one step in. No phone surface is rounder than that. */
+  --glass-radius: var(--radius-lg);
+  /* SELECTED INVERTS, in every shell: a control that is on wears the ink
+     as its face and the surface colour as its label. Its outline is even
+     on all four sides; no side carries a bar. */
+  --face-selected: var(--ink-strong);
+  --ink-on-selected: var(--surface-base);
+  /* What a selected control adds to the focus ring. The white ring would
+     merge with a white face, so a 2 px rich-black ring is drawn just
+     inside the face; the ring and its 4 px casing stay where they are. */
+  --selected-focus-inset: inset 0 0 0 2px var(--focus-outer);
   /* The one map-control family width (E2, D-0.7.0-058 ruling 2): Share
-     view, Reset, and the Satellite switcher all render at this width on
+     view and Reset render at this width on
      phones and in embeds. The desktop shell's column reads --map-cell-w
      instead (S30D D1 M9, THE DESKTOP COLUMN). */
   --map-ctrl-w: 104px;
@@ -247,8 +278,8 @@
   --z-map-control: 1000;  /* overlay controls and the loading pulse;
                              +1 sidebar expand, +10 the sheet's MapLibre
                              corner, +20 the map-information family,
-                             +30 the sheet's hazard rail and basemap
-                             switcher, +40 the sheet's raised controls */
+                             +30 the sheet's hazard rail,
+                             +40 the sheet's raised controls */
   --z-popup: 1200;        /* an open MapLibre popup */
   --z-sheet: 1350;        /* the mobile sheet; +50 footer, impact panel */
   --z-toast: 1500;        /* the copy toast */
@@ -274,6 +305,22 @@
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --ease-enter: cubic-bezier(0, 0, 0, 1);
   --ease-exit: cubic-bezier(0.3, 0, 1, 1);
+  /* Interaction motion (owner direction 2026-11-09 (sprint), DR-pending).
+     A surface the hand moves (a sheet, a drawer, a card) settles on a
+     spring; src/util/spring.ts integrates the same stiffness and damping
+     when a gesture hands its velocity over. --ease-spring is that settle
+     as a timing function for declarative transitions, and a browser
+     without linear() falls back to the default ease. Motion here is
+     transform and opacity only, and every rule that reads these has a
+     reduced-motion twin that lands on the same end state at once. */
+  --dur-settle: 430ms;
+  --ease-spring: linear(
+    0, 0.055, 0.179, 0.329, 0.477, 0.61, 0.721, 0.809, 0.877, 0.925, 0.959,
+    0.982, 0.996, 1.004, 1.008, 1.009, 1.009, 1.008, 1.007, 1.005, 1.004,
+    1.003, 1.002, 1.001, 1
+  );
+  --spring-stiffness: 420;
+  --spring-damping: 34;
 
   /* D1 CHROME TOKENS (S30D D1 M9, DR-101; the one labelled D1 block).
      Only the names D1's map-chrome faces need, with the names and values
@@ -305,6 +352,79 @@
 :root {
   --link-on-light: #B02821;
   --link-on-light-hover: #8C1F19;
+}
+
+/* MORE CONTRAST (owner direction 2026-11-09 (sprint), DR-pending). A reader
+   who asks the system for more contrast gets the chrome without its
+   translucency: the same rich black, solid, with every outline and the
+   secondary inks at full strength, and nothing blurred behind it. Bright
+   light is where this instrument is read. Only tokens move: no size, order,
+   word or selected face changes, so every surface that draws with these
+   names follows without a rule of its own. */
+@media (prefers-contrast: more) {
+  :root {
+    --glass-control: var(--surface-base);
+    --rich-black-glass: var(--surface-base);
+    --rich-black-glass-strong: var(--surface-base);
+    --glass-fill: var(--surface-base);
+    --glass-fill-solid: var(--surface-base);
+    --glass-panel: var(--surface-base);
+    --glass-panel-solid: var(--surface-base);
+    --glass-read: var(--surface-base);
+    --glass-edge: var(--keyline);
+    --glass-hairline: #98A1B4;
+    --glass-sheen: transparent;
+    --glass-blur: 0px;
+    --glass-saturate: 100%;
+    --rich-black-blur: 0px;
+    --ink: #FFFFFF;
+    --ink-soft: #E8ECF0;
+    --ink-muted: #C6CBD4;
+    --ink-faint: #C6CBD4;
+  }
+}
+
+/* FORCED COLOURS (owner direction 2026-11-09 (sprint), DR-pending). The
+   system repaints every authored colour on an element, but it does not
+   reach inside an svg, so a figure's light ink stayed light on the system's
+   own canvas and its words went missing; and a control that is on was told
+   apart by weight alone. The names every surface and figure draws with are
+   handed the system's own colours here, once: canvas and its text for the
+   surfaces, the glass and the inks, and the system's selected pair for the
+   selected face. Every rule that draws that face also sets
+   `forced-color-adjust: none`, so the pair is drawn as authored and the
+   system puts no canvas plate between the face and its label (it would
+   hide a label that is already the selected text colour). Issuer class
+   colours are data, not chrome, and are left as they are. */
+@media (forced-colors: active) {
+  :root {
+    --glass-control: Canvas;
+    --rich-black-glass: Canvas;
+    --rich-black-glass-strong: Canvas;
+    --glass-fill: Canvas;
+    --glass-fill-solid: Canvas;
+    --glass-panel: Canvas;
+    --glass-panel-solid: Canvas;
+    --glass-read: Canvas;
+    --glass-edge: CanvasText;
+    --glass-hairline: CanvasText;
+    --glass-press: Canvas;
+    --surface-base: Canvas;
+    --surface-raised: Canvas;
+    --surface-overlay: Canvas;
+    --surface-hover: Canvas;
+    --ink-strong: CanvasText;
+    --ink: CanvasText;
+    --ink-soft: CanvasText;
+    --ink-muted: CanvasText;
+    --ink-faint: CanvasText;
+    --keyline: CanvasText;
+    --line: CanvasText;
+    --line-strong: CanvasText;
+    --rule-strong: CanvasText;
+    --face-selected: Highlight;
+    --ink-on-selected: HighlightText;
+  }
 }
 
 * {
@@ -445,6 +565,8 @@ a:hover {
 }
 .app-shell.embed .sidebar-expand-btn {
   display: inline-flex;
+  min-width: var(--touch-target);
+  min-height: var(--touch-target);
 }
 
 /* ----------------------------------------------------------------------------
@@ -1035,8 +1157,24 @@ button.conditions-metric:hover .conditions-action-hide {
 
 #layers-studio-entry-host { margin-top: 12px; }
 #layers-studio-entry-host:empty { display: none; }
-#brief-secondary-actions .tribal-nations-brief-row { padding: 10px 0 0; }
+/* The count sits at the button's right edge, so the row is one line tall and
+   clears the sticky dock in every mode (1440x900 measured in
+   interface-responsive.spec.ts). */
+#brief-secondary-actions .tribal-nations-brief-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 0 0;
+}
+#brief-secondary-actions .tribal-nations-health {
+  flex: 0 1 auto;
+  margin-top: 0;
+  text-align: end;
+}
 #brief-secondary-actions .tribal-nations-brief-action {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
   min-height: 32px;
   background: transparent;
   border-color: var(--line);
@@ -1873,90 +2011,6 @@ button.conditions-metric:hover .conditions-action-hide {
   border-radius: 0 0 var(--radius-sm) var(--radius-sm);
 }
 
-/* The basemap switcher button (U4d): the DESIGN MODEL of the map control
-   family since E2 (D-0.7.0-058 ruling 2): sharp rectangle, transparent
-   slate, and the shared family width, relabeled "Satellite" so it reads
-   with the Share view / Reset stack. The pressed (satellite) state lights
-   with the accent tokens. One button, real semantics; aria-pressed is set
-   by the control. Since S30D D1 M9 these faces hold where the control sits
-   in MapLibre's corner (phones, embeds) and in the LAYERS studio header;
-   in the desktop column's slot 2 the cell faces of THE DESKTOP COLUMN
-   replace them, the cyan on-state included. */
-.basemap-switcher-btn {
-  width: var(--map-ctrl-w) !important;
-  padding: 0 7px;
-  background: rgba(15, 23, 42, 0.85) !important;
-  color: var(--fg-1) !important;
-  border: none;
-  font-family: var(--font-display);
-  font-weight: var(--fw-subtitle);
-  font-size: 10px;
-  letter-spacing: 0.06em;
-  cursor: pointer;
-  display: flex !important;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-}
-.basemap-switcher-icon { flex: 0 0 auto; }
-.basemap-switcher-btn:hover {
-  background: rgba(27, 41, 66, 0.9) !important;
-  color: var(--fg-0) !important;
-}
-/* The family's sharp-rectangle model: MapLibre's control group would
-   otherwise round and clip the switcher's corners, and its white card
-   showed through the translucent faces (SAT on read white on white in the
-   LAYERS studio header, the embed and the phone seat). */
-.maplibregl-ctrl-group:has(.basemap-switcher-btn) {
-  border-radius: 0;
-  background: none;
-}
-/* The accent tint over the resting slate, so the pressed face never
-   depends on what lies beneath it (tests/chrome-css-faces.test.mjs). */
-.basemap-switcher-btn.active {
-  background: linear-gradient(var(--accent-soft), var(--accent-soft)), rgba(15, 23, 42, 0.85) !important;
-  color: var(--accent) !important;
-  box-shadow: inset 0 0 0 1px var(--accent-strong);
-}
-
-/* The satellite observation notice: exact UTC frame time and interpretation
-   cautions, distinct from legal attribution and visible in embeds. */
-.basemap-imagery-chip {
-  max-width: min(720px, calc(100% - 24px));
-  background: rgba(15, 23, 42, 0.85);
-  color: var(--fg-1);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-sm);
-  font-family: var(--font-body);
-  font-size: 10.5px;
-  line-height: 1.35;
-  letter-spacing: 0.02em;
-  padding: 3px 9px;
-  pointer-events: none;
-  text-align: center;
-}
-
-.basemap-imagery-chip[data-status="loading"] {
-  border-style: dashed;
-}
-
-.map-bottom-dock > .basemap-imagery-chip {
-  pointer-events: none;
-}
-
-/* The SAT control exposes this live status as its accessible description.
-   The former full-width observation card no longer covers the map. */
-#basemap-vintage.basemap-imagery-chip.sr-only {
-  left: -10000px;
-  width: 1px;
-  max-width: 1px;
-  height: 1px;
-  margin: -1px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-}
-
 .legend-semantic-note.sr-only {
   left: -10000px;
 }
@@ -2638,11 +2692,9 @@ button.conditions-metric:hover .conditions-action-hide {
   color: var(--fg-3);
 }
 
-/* E2 (D-0.7.0-058 ruling 2): the top-right controls adopt the SAT box's
-   design model (sharp rectangles, background transparency): Share view and
-   Reset stack vertically at ONE uniform width, and the basemap switcher
-   below carries the same width and chrome so the three buttons read as one
-   family. The width token is shared with .basemap-switcher-btn.
+/* E2 (D-0.7.0-058 ruling 2): the top-right controls adopt one design model
+   (sharp rectangles, background transparency): Share view and Reset stack
+   vertically at ONE uniform width so the buttons read as one family.
 
    Since S30D D1 M9 this base rule and the E2 faces hold for phones (720px
    and below, re-seated by the sheet rules) and embeds only. The desktop
@@ -2661,8 +2713,7 @@ button.conditions-metric:hover .conditions-action-hide {
 }
 
 /* Desktop seats for chrome that lives elsewhere on phones and in embeds
-   (the satellite control and the on-map key; see
-   src/ui/map-control-seat.ts). `display: contents` keeps the seat out of
+   (the on-map key and Help; see src/ui/map-control-seat.ts). `display: contents` keeps the seat out of
    the layout entirely, so the moved node becomes a direct flex item of the
    column and the existing child rules keep meaning what they say. */
 .map-overlay-seat {
@@ -2693,8 +2744,8 @@ button.conditions-metric:hover .conditions-action-hide {
    Deliberately non-interactive: pointer-events: none means it can never
    intercept a click meant for the map or for the overlay buttons it sits
    above, which is the failure mode this corner has already produced once
-   (the U4d basemap-switcher spec moved that control to bottom-right
-   precisely because this stack swallows pointer events). It is a plain
+   (an earlier control had to move out of this stack because it swallows
+   pointer events). It is a plain
    span, not a control and not a live region, so it reads once in document
    order and never announces itself again. Muted on purpose: it states the
    build's status honestly without competing with data for attention. */
@@ -2756,11 +2807,10 @@ button.conditions-metric:hover .conditions-action-hide {
 
    Faces (DR-101; the D1 token block in :root): opaque S1 with a 1px
    keyline edge at rest, S2 on hover, the S3 plate with a white edge and a
-   2px leading bar when pressed (SAT on, Help open). Opaque because SAT and
-   the words are text and need 4.5:1, which no glass gives over white
-   imagery. No red, no blur, no radius, no shadow. The `!important` marks
-   answer the base .basemap-switcher-btn rule and MapLibre's control-group
-   rules, which the phone and embed seats still use.
+   2px leading bar when pressed (Help open). Opaque because the words are
+   text and need 4.5:1, which no glass gives over a light map. No red, no
+   blur, no radius, no shadow. The `!important` marks answer MapLibre's
+   control-group rules, which the phone and embed seats still use.
 
    Every rule is desktop-only and outside an embed: phones and embeds keep
    today's seats and faces, and --map-ctrl-w stays theirs.
@@ -2835,18 +2885,6 @@ button.conditions-metric:hover .conditions-action-hide {
     pointer-events: auto;
   }
 
-  /* MapLibre's control group, borrowed into slot 2, loses its white card
-     and rounded corners and fills the slot. */
-  .app-shell:not(.embed) #basemap-switcher-overlay-host > .basemap-switcher-control {
-    width: 100%;
-    height: 100%;
-    margin: 0;
-    float: none;
-    background: none;
-    border-radius: 0;
-    box-shadow: none;
-  }
-
   /* The cell (R1 a): a fixed 20px icon column, an 8px gap, then the word.
      The 1px edge plus 9px padding puts every icon centre 20px in from the
      cell's left edge: one x for the whole column, W - 12 - --map-cell-w
@@ -2904,12 +2942,14 @@ button.conditions-metric:hover .conditions-action-hide {
     background: var(--surface-overlay) !important;
     color: var(--ink) !important;
   }
-  /* Pressed: SAT on (aria-pressed) or Help's drawer open (aria-expanded). */
+  /* Pressed: SAT on (aria-pressed) or Help's drawer open (aria-expanded).
+     Selected inverts: the ink is the face and the outline stays even. */
   .app-shell:not(.embed) .map-overlay-controls .map-cell:is([aria-pressed='true'], [aria-expanded='true']) {
-    background: var(--surface-hover) !important;
-    color: var(--ink-strong) !important;
-    border-color: var(--ink-strong);
-    box-shadow: inset 2px 0 0 var(--ink-strong);
+    forced-color-adjust: none; /* FORCED COLOURS, app.css */
+    background: var(--face-selected) !important;
+    color: var(--ink-on-selected) !important;
+    border-color: var(--face-selected);
+    box-shadow: none;
   }
   /* One ring for all chrome (palette-tokens.md section 2, "Focus"): the
      better of the pair is at least 4.45:1 against any backdrop. */
@@ -2920,7 +2960,7 @@ button.conditions-metric:hover .conditions-action-hide {
   }
   .app-shell:not(.embed) .map-overlay-controls .map-cell:is([aria-pressed='true'], [aria-expanded='true']):focus-visible {
     box-shadow:
-      inset 2px 0 0 var(--ink-strong),
+      var(--selected-focus-inset),
       0 0 0 4px var(--focus-outer);
   }
 }
@@ -3141,15 +3181,6 @@ button.conditions-metric:hover .conditions-action-hide {
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 18px;
-}
-
-.layers-studio-basemap {
-  justify-self: end;
-}
-
-.layers-studio-basemap .maplibregl-ctrl {
-  float: none;
-  margin: 0;
 }
 
 .layers-studio-scroll {
@@ -3432,9 +3463,10 @@ button.conditions-metric:hover .conditions-action-hide {
    list's own height and gave IT a second `overflow: auto`, nested
    inside .layers-studio-scroll's own scroller (near :3009); at 1280x720
    that cut the last row mid-line inside its own tiny scrollbar instead
-   of the single outer one. The phone shell (@media max-width: 720px,
-   below) is the one exception that keeps its own cap and its own
-   overflow, named there. */
+   of the single outer one. The phone shell was the one exception that
+   kept its own cap and its own overflow; it has neither since the
+   sprint of 2026-11-09 (src/styles/studios.css), so the page is the
+   one scroller at every width. */
 .place-studio-list {
   display: flex;
   flex-direction: column;
@@ -3744,16 +3776,11 @@ button.conditions-metric:hover .conditions-action-hide {
 }
 
 @media (max-width: 720px) {
-  .place-studio-type-rail {
-    grid-template-columns: repeat(4, minmax(112px, 1fr));
-    overflow-x: auto;
-  }
   .place-studio-layout { grid-template-columns: 1fr; gap: 10px; }
-  /* The phone shell keeps its own cap and its own scroller (unchanged by
-     D1 M17's "one scroll container" fix above, which targets the
-     1025px-and-wider desktop dock and the 721-1024px tablet band; the
-     phone route is out of this microtask's scope, DR-169 note). */
-  .place-studio-list { max-height: 38dvh; overflow: auto; }
+  /* The phone's type chips wrap and its list has no cap and no scroller
+     of its own (owner direction 2026-11-09 (sprint), DR-pending): the
+     rail that scrolled off the screen edge and the 38dvh box inside the
+     page are gone, and src/styles/studios.css draws both. */
   .place-studio-type-status { align-items: flex-start; flex-direction: column; gap: 3px; }
   .place-overlap-grid { overflow-x: auto; }
   .place-overlap-column { min-width: 120px; }
@@ -3899,21 +3926,25 @@ button.conditions-metric:hover .conditions-action-hide {
 }
 
 /* ----------------------------------------------------------------------------
-   The mobile bottom sheet (0.7.0 U2; ratified detent model D-0.7.0-017).
+   The phone sheet's content (0.7.0 U2; detent model D-0.7.0-017; the sheet
+   form is owner direction 2026-11-09 (sprint), DR-pending).
 
    Below 720px, when src/ui/mobile-sheet.ts stamps `data-sheet-detent` on
-   #app, the sidebar element becomes the ONE bottom sheet over a
-   full-viewport map. Three detents, keyed off the attribute plus the
-   existing view-brief/view-console mode classes: peek (the conditions
-   strip and its date register), half (the at-hand answer in Brief, the
-   compact controls in console), full (the standalone report in Brief,
-   the whole catalog stack in console).
+   #app, the sidebar element becomes the ONE sheet over a full-viewport
+   map. This section decides WHICH content shows, keyed off that attribute,
+   the open door (`data-sheet-tab`) and the view-brief/view-console mode
+   classes: peek and half show the same content at two heights (the at-hand
+   answer in Brief, the compact controls in console, the Alerts pane behind
+   its door), so a drag between them never swaps what is under the finger;
+   full adds the standalone report in Brief and the whole catalog stack in
+   console.
+
+   The sheet itself (its glass, its heights, its header, its seat beside
+   the right-edge column) is src/styles/mobile-panels.css.
 
    The attribute never appears in embed (`?embed=true` keeps today's
    hidden-chrome semantics byte for byte) and never on desktop; without
    it, the stacked-rows block above is the no-JavaScript fallback.
-   `--sheet-peek` and `--sheet-half` are optional overrides that no
-   script sets; the literals in the rules below are the sheet's values.
    ---------------------------------------------------------------------------- */
 
 /* Sheet-only furniture never renders outside the active sheet. */
@@ -3927,93 +3958,6 @@ button.conditions-metric:hover .conditions-action-hide {
 }
 
 @media (max-width: 720px) {
-  /* The mobile shell (2026-07-14, from the ratified 2026-07-11 mockup):
-     the footer nav is the base chrome; the sheet rides ABOVE it, so the
-     home-indicator safe area belongs to the footer alone and the detent
-     heights never compose it (the Codex-sol geometry ruling). */
-  #app[data-sheet-detent] {
-    --mobile-footer-h: calc(var(--sheet-footer, 56px) + env(safe-area-inset-bottom, 0px));
-  }
-
-  /* Detent heights: the one place the attribute becomes a height. Closed
-     is the edgeless map-first state; full leaves the top gap so the key
-     bar and a strip of map keep the context (the mockup's 86px band). */
-  #app[data-sheet-detent='closed'] { --sheet-height: 0px; }
-  #app[data-sheet-detent='peek'] { --sheet-height: var(--sheet-peek, 132px); }
-  #app[data-sheet-detent='half'] { --sheet-height: calc(100vh * var(--sheet-half, 0.46)); }
-  #app[data-sheet-detent='full'] {
-    --sheet-height: calc(100vh - var(--mobile-footer-h) - var(--sheet-full-gap, 72px));
-  }
-  @supports (height: 1dvh) {
-    #app[data-sheet-detent='half'] { --sheet-height: calc(100dvh * var(--sheet-half, 0.46)); }
-    #app[data-sheet-detent='full'] {
-      --sheet-height: calc(100dvh - var(--mobile-footer-h) - var(--sheet-full-gap, 72px));
-    }
-  }
-
-  /* The map takes the whole shell; the sheet leaves the grid flow. */
-  #app:not(.embed)[data-sheet-detent] {
-    grid-template-columns: 1fr;
-    grid-template-rows: 1fr;
-  }
-
-  #app[data-sheet-detent] .sidebar {
-    position: fixed;
-    top: auto;
-    left: 0;
-    right: 0;
-    /* Above the footer nav: the footer carries the safe-area inset, so
-       the sheet's own geometry stays inset-free (no double count). */
-    bottom: var(--mobile-footer-h, 56px);
-    width: auto;
-    max-height: none;
-    height: var(--sheet-height, 132px);
-    z-index: var(--z-sheet);
-    border-right: none;
-    border-bottom: none;
-    border-top: 1px solid var(--line-strong);
-    border-top-left-radius: var(--radius-lg);
-    border-top-right-radius: var(--radius-lg);
-    box-shadow: 0 -10px 32px rgba(0, 0, 0, 0.55);
-    transition: height 0.25s ease;
-    /* Override the base .sidebar clip: .sidebar-scroll clips the content
-       itself, and the first-peek hint floats ABOVE the sheet's top edge
-       (the inherited overflow:hidden swallowed it; matrix finding,
-       2026-07-10). */
-    overflow: visible;
-  }
-
-  /* Closed: the edgeless map-first state (the mockup's rule 3: with no
-     active door, no grabber or sheet edge peeks above the footer). The
-     height transition animates the collapse, then the delayed visibility
-     flip hides the box outright (padding would otherwise keep a sliver
-     painted); opening reads the base rule's transition, so the sheet
-     reappears instantly and slides up. */
-  #app[data-sheet-detent='closed'] .sidebar {
-    border-top: none;
-    box-shadow: none;
-    overflow: hidden;
-    visibility: hidden;
-    pointer-events: none;
-    transition: height 0.25s ease, visibility 0s linear 0.25s;
-  }
-
-  /* Content scrolls internally at half and full (the mockup's sheet body
-     scrolls at both open depths; the 2026-07-14 build adopted that,
-     retiring the MINOR 6 below-the-fold trap at half-console). Peek stays
-     clipped (it IS the strip); scroll chaining never reaches the page,
-     and the bottom padding keeps the last row clear of the sheet edge. */
-  #app[data-sheet-detent] .sidebar-scroll {
-    overflow: hidden;
-    overscroll-behavior: contain;
-    padding: 0 0 10px;
-  }
-  #app[data-sheet-detent='half'] .sidebar-scroll,
-  #app[data-sheet-detent='full'] .sidebar-scroll {
-    overflow-y: auto;
-    padding-bottom: 18px;
-  }
-
   /* --------------------------------------------------------------------------
      The visibility matrix: hide everything, then re-admit per detent and
      mode. `[hidden]` sections (strip before first data, brief-head in
@@ -4024,20 +3968,14 @@ button.conditions-metric:hover .conditions-action-hide {
   #app[data-sheet-detent] .sidebar-footer,
   #app[data-sheet-detent] .sidebar-scroll > * { display: none; }
 
-  /* The grabber row: every detent. */
+  /* The header strip (the grabber, the title, the close control): every
+     open detent. */
   #app[data-sheet-detent] .sheet-grabber-row {
     display: flex;
-    justify-content: center;
-    flex-shrink: 0;
-    position: relative;
   }
 
-  /* Peek: the conditions strip (the collapsed detent IS the strip),
-     compacted so the tiles and the date register fit. At half the strip
-     stays OUT (the mockup's half panes carry no tiles, and the strip was
-     exactly the MINOR 6 duplication that pushed the at-hand answer and
-     the console door below the fold on short phones). */
-  #app[data-sheet-detent='peek'] #conditions-strip:not([hidden]) { display: block; }
+  /* The conditions strip keeps its compact phone form for the full console
+     stack, the one place the sheet shows it. */
   #app[data-sheet-detent] #conditions-strip {
     padding: 4px 14px 8px;
     border-bottom: none;
@@ -4045,10 +3983,14 @@ button.conditions-metric:hover .conditions-action-hide {
   }
   #app[data-sheet-detent] #conditions-strip .conditions-head { margin-bottom: 6px; }
 
-  /* Half, Brief: the at-hand answer. */
+  /* Peek and half, Brief: the at-hand answer. */
+  #app[data-sheet-detent='peek'].view-brief #sheet-at-hand,
   #app[data-sheet-detent='half'].view-brief #sheet-at-hand { display: block; }
 
-  /* Half, console: the compact controls and the one door to the catalog. */
+  /* Peek and half, console: the compact controls and the one door to the
+     catalog. */
+  #app[data-sheet-detent='peek'].view-console #panel-region,
+  #app[data-sheet-detent='peek'].view-console #sheet-all-layers,
   #app[data-sheet-detent='half'].view-console #panel-region,
   #app[data-sheet-detent='half'].view-console #sheet-all-layers { display: block; }
 
@@ -4090,60 +4032,15 @@ button.conditions-metric:hover .conditions-action-hide {
      is not part of the sheet grammar. */
   #app[data-sheet-detent] #sidebar-collapse { display: none; }
 
-  /* The bottom dock rides above the sheet and the footer while any map is
-     visible; at full the sheet covers it (the map has receded, so has its
-     chrome). */
-  #app[data-sheet-detent='closed'] .map-bottom-dock,
-  #app[data-sheet-detent='peek'] .map-bottom-dock,
-  #app[data-sheet-detent='half'] .map-bottom-dock {
-    bottom: calc(var(--mobile-footer-h, 56px) + var(--sheet-height, 0px) + 10px);
-  }
-
   /* --------------------------------------------------------------------------
-     The mobile hazard rail (0.7.0 mobile shell): the quick hazard
-     selections (ENSO / Fire / Drought / Heat) in the lower-right thumb zone,
-     riding just above the footer and the sheet (the mockup seats it 12px
-     over the footer). It exists while the map LEADS: closed and peek;
-     the open sheet covers that zone (exactly as the mockup's sheet
-     covers its rail), and it never exists on desktop or in embed (the
-     detent attribute never appears there).
+     The hazard views and the four panel doors (Brief, Place, Layers,
+     Alerts) are seated by the right-edge column while the phone shell is
+     active (owner direction 2026-11-09 (sprint), DR-pending): one column
+     owns every right-edge control, so the two stacks can no longer meet on
+     a short screen. Seats: src/ui/edge-column.ts; faces:
+     src/styles/edge-column.css. Their base rules below keep both hidden
+     everywhere else.
      -------------------------------------------------------------------------- */
-  #app[data-sheet-detent='closed'] .hazard-rail,
-  #app[data-sheet-detent='peek'] .hazard-rail {
-    display: flex;
-    flex-direction: column;
-    gap: var(--mobile-map-control-gap);
-    position: absolute;
-    right: calc(env(safe-area-inset-right, 0px) + var(--mobile-map-edge));
-    bottom: calc(
-      var(--mobile-footer-h, 56px) +
-      var(--sheet-height, 0px) +
-      var(--mobile-map-edge) +
-      var(--mobile-map-control-size) +
-      var(--mobile-map-control-gap)
-    );
-    z-index: calc(var(--z-map-control) + 30);
-  }
-
-  /* --------------------------------------------------------------------------
-     The footer nav (mobile shell): four persistent doors (Brief, Place,
-     Layers, Alerts) driving the one sheet. It exists exactly when the
-     shell does (the detent attribute), so embeds and desktop stay byte
-     for byte; the safe-area inset parks below the buttons.
-     -------------------------------------------------------------------------- */
-  #app[data-sheet-detent] .mobile-footer {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    height: var(--mobile-footer-h, 56px);
-    padding-bottom: env(safe-area-inset-bottom, 0px);
-    z-index: calc(var(--z-sheet) + 50);
-    border-top: 1px solid var(--line-strong);
-    background: var(--bg-1);
-  }
 
   /* --------------------------------------------------------------------------
      The Alerts pane: the fourth door's content. When the alerts door is
@@ -4154,6 +4051,7 @@ button.conditions-metric:hover .conditions-action-hide {
   #app[data-sheet-detent][data-sheet-tab='alerts'] .sidebar-scroll > :not(#sheet-alerts) {
     display: none;
   }
+  #app[data-sheet-detent='peek'][data-sheet-tab='alerts'] #sheet-alerts,
   #app[data-sheet-detent='half'][data-sheet-tab='alerts'] #sheet-alerts,
   #app[data-sheet-detent='full'][data-sheet-tab='alerts'] #sheet-alerts {
     display: block;
@@ -4177,40 +4075,8 @@ button.conditions-metric:hover .conditions-action-hide {
     max-width: none;
     z-index: calc(var(--z-map-chrome) + 40);
   }
-  #app[data-sheet-detent] .map-overlay-controls {
-    top: calc(env(safe-area-inset-top, 0px) + var(--mobile-map-edge));
-    right: calc(env(safe-area-inset-right, 0px) + var(--mobile-map-edge));
-    gap: var(--mobile-map-control-gap);
-    z-index: calc(var(--z-map-control) + 40);
-  }
-  #app[data-sheet-detent] .map-overlay-controls > #share-btn { order: 1; }
-  #app[data-sheet-detent] .map-overlay-controls > #reset-btn { order: 2; }
-  #app[data-sheet-detent] .map-overlay-controls > .test-preview-badge {
-    order: 3;
-    width: var(--mobile-map-control-size);
-    padding-inline: 2px;
-    text-align: center;
-    white-space: normal;
-  }
-  #app[data-sheet-detent='full'] .map-overlay-controls {
-    display: none;
-  }
-
-  /* MapLibre's own corner controls (attribution, scale, the basemap
-     switcher) clear the footer. Closed and peek controls additionally clear
-     the visible sheet; lower controls yield at half and full. */
-  #app[data-sheet-detent] .maplibregl-ctrl-bottom-left,
-  #app[data-sheet-detent] .maplibregl-ctrl-bottom-right {
-    margin-bottom: var(--mobile-footer-h, 56px);
-  }
-  #app[data-sheet-detent='closed'] .maplibregl-ctrl-bottom-left,
-  #app[data-sheet-detent='closed'] .maplibregl-ctrl-bottom-right,
-  #app[data-sheet-detent='peek'] .maplibregl-ctrl-bottom-left,
-  #app[data-sheet-detent='peek'] .maplibregl-ctrl-bottom-right {
-    margin-bottom: calc(
-      var(--mobile-footer-h, 56px) + var(--sheet-height, 0px)
-    );
-  }
+  /* MapLibre's corner controls and the bottom dock ride the sheet's top
+     edge; their lift is set with the sheet in src/styles/mobile-panels.css. */
   #app[data-sheet-detent] .maplibregl-ctrl-bottom-left {
     margin-left: env(safe-area-inset-left, 0px);
   }
@@ -4266,29 +4132,17 @@ button.conditions-metric:hover .conditions-action-hide {
     );
     z-index: calc(var(--z-map-control) + 10);
   }
-  #app[data-sheet-detent='closed'] .basemap-switcher-control,
-  #app[data-sheet-detent='peek'] .basemap-switcher-control {
-    position: fixed;
-    right: calc(env(safe-area-inset-right, 0px) + var(--mobile-map-edge));
-    bottom: calc(
-      var(--mobile-footer-h, 56px) +
-      var(--sheet-height, 0px) +
-      var(--mobile-map-edge)
-    );
-    margin: 0 !important;
-    border-radius: var(--mobile-map-control-radius);
-    z-index: calc(var(--z-map-control) + 30);
-  }
-  #app[data-sheet-detent='half'] .basemap-switcher-control,
-  #app[data-sheet-detent='full'] .basemap-switcher-control {
-    display: none;
-  }
-
   /* The bottom dock (notices, the embed stamp slot) clears the rail's
      column so the dock chips and the quick selects never fight for the
      same pixels. */
   #app[data-sheet-detent] .map-bottom-dock {
-    right: 76px;
+    right: calc(
+      env(safe-area-inset-right, 0px) +
+      var(--mobile-map-edge) +
+      var(--mobile-map-control-size) +
+      var(--mobile-map-control-gap) +
+      8px
+    );
   }
 
   /* The loading pulse drops below the top key bar and hugs the LEFT edge
@@ -4310,31 +4164,6 @@ button.conditions-metric:hover .conditions-action-hide {
      control clears 44px. Chips and rows grow their hit box, not their
      type; the half detent scrolls, so taller rows stay reachable.
      -------------------------------------------------------------------------- */
-  #app[data-sheet-detent] :is(.overlay-btn, .hazard-rail-btn, .basemap-switcher-btn) {
-    width: var(--mobile-map-control-size) !important;
-    min-width: 44px;
-    height: var(--mobile-map-control-size);
-    min-height: 44px;
-    padding: 0;
-    border: 1px solid var(--line-strong);
-    border-radius: var(--mobile-map-control-radius) !important;
-    background: rgba(15, 23, 42, 0.9);
-    color: var(--fg-0);
-  }
-  #app[data-sheet-detent]
-    :is(.overlay-btn, .hazard-rail-btn, .basemap-switcher-btn)
-    :is(.map-control-label, .basemap-switcher-label) {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-    border: 0;
-  }
-  #app[data-sheet-detent] .basemap-switcher-icon { display: block; }
   #app[data-sheet-detent] .region-select { min-height: 44px; }
   #app[data-sheet-detent] .sheet-report-door { min-height: 44px; }
   #app[data-sheet-detent] .time-bar-step,
@@ -4498,9 +4327,9 @@ button.conditions-metric:hover .conditions-action-hide {
   white-space: nowrap;
 }
 
-/* The grabber: a real button, the only gesture surface that moves the
-   sheet. The bar is the visual handle; the hit target is the full row
-   (WCAG 2.2 target-size floor is 24px; this exceeds it). */
+/* The grabber: a real button. The bar is the visual handle; inside the
+   phone sheet the button fills the header strip, so the hit target is the
+   strip (src/styles/mobile-panels.css gives it that seat and its faces). */
 .sheet-grabber {
   appearance: none;
   background: transparent;
@@ -4593,30 +4422,20 @@ button.conditions-metric:hover .conditions-action-hide {
 }
 .sheet-at-hand > .sheet-report-door { margin-top: 10px; }
 
-/* On short phones the answer and door exceed the half detent before
-   results even open. Keep the controls inside the detent and let the
-   bounded results open upward as an overlay, like the native picker this
-   search replaced. (The at-rest guidance line this block used to demote
-   to screen-reader-only is gone at the SOURCE since DEG-1, U-UX-FIX-1;
-   the "No matches" zero-result message lives INSIDE .ddm-search-results
-   and stays visible: the honest, non-blaming copy is deliberate, since
-   Tribal Nation names often will not match agency spellings.) */
+/* On short phones the answer and its actions exceed the half detent, so
+   the read clamps harder there and the sheet scrolls for the rest. The
+   search results stay in the flow under their input at every height: a
+   text entry raises the sheet to full (src/ui/mobile-sheet.ts), where the
+   list has room, and an overlay that opened upward would be clipped by
+   the sheet's own scroller. (The "No matches" zero-result message lives
+   INSIDE .ddm-search-results and stays visible: the honest, non-blaming
+   copy is deliberate, since Tribal Nation names often will not match
+   agency spellings.) */
 @media (max-width: 720px) and (max-height: 800px) {
   #app[data-sheet-detent='half'].view-brief .sheet-at-hand-headline {
     -webkit-line-clamp: 1;
   }
   #app[data-sheet-detent='half'].view-brief .sheet-search { margin-top: 6px; }
-  #app[data-sheet-detent='half'].view-brief .sheet-search .ddm-search-results {
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: calc(100% + 6px);
-    padding: 4px;
-    background: var(--bg-1);
-    border: 1px solid var(--line-strong);
-    border-radius: var(--radius-md);
-    z-index: 1;
-  }
   #app[data-sheet-detent='half'].view-brief .sheet-at-hand > .sheet-report-door {
     margin-top: 4px;
   }
@@ -5513,6 +5332,7 @@ button.telemetry-item {
 /* D3 R4: seven unchanged evidence words use three neutral form tiers.
    Only observations receive a filled plate; source evidence owns the words. */
 .impact-claim-observed .impact-claim-badge {
+  forced-color-adjust: none; /* FORCED COLOURS: an inverted plate, like the selected face */
   color: var(--surface-base);
   background: var(--ink);
   border: 1px solid var(--ink);
@@ -6324,8 +6144,6 @@ a.impact-resource-link::after {
 
 @media (max-width: 720px) and (max-height: 720px) {
   #app[data-sheet-detent] {
-    --mobile-map-control-size: 44px;
-    --mobile-map-control-gap: 6px;
     --mobile-map-key-collapsed-height: 190px;
   }
   /* The short narrow embed shares the tighter collapsed capacity. */
@@ -6340,7 +6158,7 @@ a.impact-resource-link::after {
     transition: none;
   }
   #app[data-sheet-detent]
-    :is(.overlay-btn, .hazard-rail-btn, .basemap-switcher-btn, .map-info-btn) {
+    :is(.overlay-btn, .hazard-rail-btn, .map-info-btn) {
     transition: none;
   }
 }
@@ -6644,16 +6462,13 @@ a.impact-resource-link::after {
 /* ----------------------------------------------------------------------------
    The embed corner (FE-18, 2026-08-28)
 
-   Embeds keep MapLibre's bottom-right stack (the satellite control above the
-   compact attribution circle) and the preview badge in the top-right overlay
-   stack, so the desktop corner rules above are scoped :not(.embed). The
-   shared bottom dock lifts above that native stack (29px control, 24px
-   attribution, their margins) so the brand pill and the key can never cover
-   the satellite control, the attribution button, or the bottom-left scale
-   controls. Measured on the live build 2026-08-28: the brand pill sat on the
-   satellite control at 200, 390, 400, 800, and 1280 pixel widths, the
-   attribution button was under the brand at 800 and 1280, and the key
-   covered the scale bar at 800x600.
+   Embeds keep MapLibre's bottom-right stack and the preview badge in the
+   top-right overlay stack, so the desktop corner rules above are scoped
+   :not(.embed). The shared bottom dock lifts above that native stack so the
+   brand pill and the key can never cover its controls, the attribution
+   button, or the bottom-left scale controls. Measured on the live build
+   2026-08-28: the attribution button was under the brand at 800 and 1280,
+   and the key covered the scale bar at 800x600.
    ---------------------------------------------------------------------------- */
 .app-shell.embed .map-bottom-dock {
   --map-dock-bottom: 92px;
@@ -6680,12 +6495,6 @@ a.impact-resource-link::after {
     top: 204px;
     max-width: calc(100% - 16px);
   }
-  /* At the floor the 104px satellite control and the 130px scale bar cannot
-     share the width, and their rows met by two pixels (measured 2026-08-28).
-     The control steps up four pixels; the lifted dock still clears it. */
-  .app-shell.embed .maplibregl-ctrl-bottom-right .basemap-switcher-control {
-    margin-bottom: 14px;
-  }
 }
 
 /* The embed credits seat (owner direction, 2026-08-31): with MapLibre's
@@ -6693,18 +6502,18 @@ a.impact-resource-link::after {
    question-mark disclosure in the old attribution corner at every size.
    It is the embed's reachable credits surface (a license obligation),
    which is why it is not gated on the desktop breakpoint. The bottom-right
-   control stack (the satellite switcher) steps above the seat. */
+   control stack steps above the seat. */
 .app-shell.embed .maplibregl-ctrl-bottom-right {
-  /* Measured at the 200x600 floor (2026-08-31): the satellite control's
-     free band sits between the brand chip's bottom edge and the joined
-     scales' top edge; a 46px step (plus the control's own 14px) parks it
-     there while clearing the credits button's corner seat. */
+  /* Measured at the 200x600 floor (2026-08-31): a 46px step (plus the
+     stack's own 14px) parks it between the brand chip's bottom edge and the
+     joined scales' top edge while clearing the credits button's corner seat. */
   margin-bottom: 46px;
 }
-/* The embed corner is two pixels tighter than the desktop corner, so the
-   embed shell carries its own diameter for the same token. */
+/* An embed has no browser chrome to fall back on and is often held in a
+   thumb, so its disclosure meets the touch floor at every size. The dock
+   already lifts 92px, clear of a 44px disclosure. */
 .app-shell.embed {
-  --map-info-size: 26px;
+  --map-info-size: var(--touch-target);
 }
 .app-shell.embed .map-info-btn {
   appearance: none;
@@ -6751,40 +6560,8 @@ a.impact-resource-link::after {
 }
 
 @media (max-width: 720px) {
-  #app[data-sheet-detent='closed'] .map-info-btn,
-  #app[data-sheet-detent='peek'] .map-info-btn {
-    appearance: none;
-    position: fixed;
-    left: calc(
-      env(safe-area-inset-left, 0px) +
-      var(--mobile-map-edge) +
-      var(--mobile-ruler-width, 160px) +
-      var(--mobile-map-control-gap)
-    );
-    bottom: calc(
-      var(--mobile-footer-h, 56px) +
-      var(--sheet-height, 0px) +
-      var(--mobile-map-edge)
-    );
-    z-index: calc(var(--z-map-control) + 40);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 44px;
-    height: 44px;
-    padding: 0;
-    color: var(--fg-0);
-    background: #050708;
-    border: 1px solid rgba(241, 245, 249, 0.42);
-    border-radius: 50%;
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
-    cursor: pointer;
-  }
-  #app[data-sheet-detent] .map-info-btn[aria-expanded='true'] {
-    box-shadow:
-      0 0 0 2px var(--accent),
-      0 4px 14px rgba(0, 0, 0, 0.45);
-  }
+  /* The information disclosure rides the right-edge column's map tools on
+     phones (src/ui/edge-column.ts); only its panel is seated here. */
   #app[data-sheet-detent] .map-info-panel:not([hidden]) {
     position: fixed;
     top: calc(env(safe-area-inset-top, 0px) + var(--mobile-map-edge));
@@ -7014,12 +6791,6 @@ a.impact-resource-link::after {
     padding: 5px 3px;
     font-size: 9.5px;
     line-height: 1.15;
-  }
-  .basemap-imagery-chip {
-    max-width: 100%;
-    padding: 3px 5px;
-    font-size: 9.5px;
-    line-height: 1.2;
   }
   .map-key {
     gap: 4px;
@@ -7660,9 +7431,10 @@ a.impact-resource-link::after {
 
 /* Optional controls and live explanations expand below the shared doors. */
 .shell-details-panel { display: none; }
-#shell-framing-note:empty { margin: 0; }
 #shell-details-island > .shell-fire3d { margin-block: 10px; }
 #shell-details-island > .shell-summary { margin-block: 6px; }
+/* An empty caveat leaves nothing to space; the dock below is short of room. */
+#shell-details-island > .shell-summary:has(> .shell-summary-caveat:empty) { margin-block: 0; }
 
 /* VIEW: the four hazard cluster buttons. */
 .shell-view {
@@ -7933,27 +7705,24 @@ a.impact-resource-link::after {
   white-space: nowrap;
 }
 
-.shell-minimap-scale {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  color: var(--fg-3);
-  font-family: var(--font-display);
-  font-size: 9px;
-  font-weight: var(--fw-subtitle);
-  letter-spacing: var(--track-caps-sm);
-  line-height: 1;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
 .shell-minimap-canvas {
   position: relative;
   width: 100%;
   aspect-ratio: 660 / 348;
   background: var(--bg-1);
-  border: 1px solid var(--line);
+  border: 0;
   border-radius: var(--radius-md);
   overflow: hidden;
+}
+
+/* The drawing is stretched to the canvas, so a region's target is its share of
+   the canvas height. Alaska and Northwest is 32.6% of it: 119.1 x 43.8 px on the
+   255 px card at the tablet band, 0.2 px under the touch floor. A taller canvas
+   (660:362, about 139.7 px high there) makes it 45.6 px without a new box. */
+@media (min-width: 721px) and (max-width: 1024px) {
+  .shell-minimap-canvas {
+    aspect-ratio: 660 / 362;
+  }
 }
 
 .shell-minimap-oceans,
@@ -7974,52 +7743,20 @@ a.impact-resource-link::after {
   pointer-events: none;
 }
 
+/* Painted transparent, not none, so the zone stays clickable without
+   drawing its diagonal edge down the coast. Only keyboard focus shows it. */
 .shell-minimap-ocean {
   cursor: pointer;
   pointer-events: auto;
-  fill: rgba(34, 211, 238, 0.04);
+  fill: transparent;
   stroke: transparent;
   stroke-width: 1.2px;
-  transition:
-    fill 0.12s ease,
-    stroke 0.12s ease,
-    filter 0.12s ease;
 }
 
-.shell-minimap-ocean:hover {
-  fill: rgba(34, 211, 238, 0.09);
-  stroke: rgba(34, 211, 238, 0.72);
-}
-
-.shell-minimap-ocean.active {
-  fill: rgba(34, 211, 238, 0.09);
-  stroke: rgba(34, 211, 238, 0.72);
-  filter: drop-shadow(0 0 5px rgba(34, 211, 238, 0.34));
-}
-
-/* After .active, and unlike it, so focus also shows on the pressed zone
-   (the mainland region's pattern). */
 .shell-minimap-ocean:focus-visible {
   outline: none;
-  fill: rgba(34, 211, 238, 0.09);
   stroke: var(--accent);
   stroke-width: 2px;
-}
-
-/* ENSO's scale label names the RONI phase, so this line says why the
-   framings carry no fill (the full wording is in each framing's name). */
-.shell-minimap-unshaded-line {
-  display: block;
-  min-height: 8px;
-  margin: -3px 0 6px;
-  color: var(--fg-3);
-  font-family: var(--font-display);
-  font-size: 8px;
-  font-weight: var(--fw-subtitle);
-  letter-spacing: var(--track-caps-sm);
-  line-height: 1;
-  text-transform: uppercase;
-  text-align: right;
 }
 
 .shell-minimap-drawing {
@@ -8100,11 +7837,14 @@ a.impact-resource-link::after {
 }
 
 /* Hawaii is intentionally enlarged and detached from the mainland
-   projection. The dashed frame, not an individual island, is the one
-   complete hit target and fits the real island-chain bounds. It sits
-   under the Alaska and Northwest framing, beside the Pacific coast, and
-   leaves Pacific water on its left and below for the ocean target
-   (owner, 2026-10-19). */
+   projection. Its frame, not an individual island, is the one complete
+   hit target. It sits under the Alaska and Northwest framing, beside the
+   Pacific coast, and leaves Pacific water on its left and below for the
+   ocean target (owner, 2026-10-19). The frame is no longer drawn and has
+   no caption (owner direction 2026-11-09 (sprint), DR-pending): the
+   islands fill the target, hover and selection mark the islands the way
+   they mark a mainland framing, and keyboard focus keeps the app's ring
+   on the target. The 1 px transparent border keeps the target's box. */
 .shell-minimap-hawaii {
   position: absolute;
   left: 16%;
@@ -8113,28 +7853,13 @@ a.impact-resource-link::after {
   appearance: none;
   width: 25.7%;
   height: 39%;
-  background: rgba(11, 18, 32, 0.78);
+  background: transparent;
   color: var(--fg-0);
-  border: 1px dashed rgba(241, 245, 249, 0.72);
-  border-radius: 3px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
   padding: 0;
   text-align: left;
-  transition:
-    border-color 0.12s ease,
-    box-shadow 0.12s ease,
-    color 0.12s ease;
-}
-.shell-minimap-hawaii-label {
-  position: absolute;
-  top: 3px;
-  left: 5px;
-  z-index: 1;
-  font-family: var(--font-display);
-  font-size: 8px;
-  font-weight: var(--fw-subtitle);
-  line-height: 1;
-  white-space: nowrap;
-  text-shadow: 0 1px 3px var(--bg-0), 0 0 5px var(--bg-0);
+  cursor: pointer;
 }
 .shell-minimap-hawaii-islands {
   position: absolute;
@@ -8149,16 +7874,28 @@ a.impact-resource-link::after {
   stroke: var(--fg-0);
   stroke-width: 1.5px;
   paint-order: stroke fill;
+  transition:
+    stroke 0.12s ease,
+    stroke-width 0.12s ease;
 }
-.shell-minimap-hawaii:hover,
-.shell-minimap-hawaii.active,
-.shell-minimap-hawaii:focus-visible {
-  color: var(--fg-0);
-  border-color: var(--accent);
-  box-shadow:
-    0 0 0 1px var(--accent),
-    0 0 10px var(--accent-soft);
-  outline: none;
+.shell-minimap-hawaii:hover .shell-minimap-island,
+.shell-minimap-hawaii.active .shell-minimap-island,
+.shell-minimap-hawaii:focus-visible .shell-minimap-island {
+  stroke: var(--accent);
+  stroke-width: 2px;
+}
+.shell-minimap-hawaii:hover .shell-minimap-hawaii-islands,
+.shell-minimap-hawaii.active .shell-minimap-hawaii-islands,
+.shell-minimap-hawaii:focus-visible .shell-minimap-hawaii-islands {
+  filter:
+    drop-shadow(0 0 3px var(--accent))
+    drop-shadow(0 0 7px var(--accent-soft));
+}
+/* The chosen framing. A mainland framing shows it with a heavier outline
+   on a coloured fill; the islands are small and often pale, so Hawaii
+   thickens its own strokes instead of boxing its target. */
+.shell-minimap-hawaii.active .shell-minimap-island {
+  stroke-width: 2.5px;
 }
 
 .shell-minimap-canvas[data-minimap-status="loading"] .shell-minimap-mainland,
@@ -8173,58 +7910,6 @@ a.impact-resource-link::after {
   to {
     fill-opacity: 0.9;
   }
-}
-
-.shell-minimap-all {
-  position: absolute;
-  right: 1.52%;
-  bottom: 5.61%;
-  z-index: 3;
-  appearance: none;
-  min-width: 36px;
-  height: 30px;
-  background: var(--bg-2);
-  color: var(--fg-1);
-  border: 1px solid var(--fg-3);
-  border-radius: var(--radius-sm);
-  font-family: var(--font-display);
-  font-size: 9px;
-  font-weight: var(--fw-subtitle);
-  letter-spacing: var(--track-caps-sm);
-  text-transform: uppercase;
-  padding: 3px 6px;
-  cursor: pointer;
-  pointer-events: auto;
-  transition:
-    background 0.12s ease,
-    border-color 0.12s ease,
-    color 0.12s ease;
-}
-.shell-minimap-all:hover,
-.shell-minimap-all:focus-visible {
-  border-color: var(--accent);
-  color: var(--fg-0);
-  outline: none;
-}
-.shell-minimap-all[aria-checked='true'] {
-  background: var(--accent-soft);
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-.shell-minimap-divider {
-  width: 100%;
-  margin: 8px 0 0;
-  border: 0;
-  border-top: 1px solid var(--line);
-}
-
-.shell-minimap-note {
-  margin: 6px 0 0;
-  font-family: var(--font-body);
-  font-size: 10.5px;
-  line-height: 1.45;
-  color: var(--fg-2);
 }
 
 .shell-minimap-metric-note {
@@ -8243,7 +7928,6 @@ a.impact-resource-link::after {
   .shell-minimap-ocean,
   .shell-minimap-hawaii,
   .shell-minimap-island,
-  .shell-minimap-all,
   .shell-cluster-btn {
     transition: none;
   }
@@ -8260,7 +7944,10 @@ a.impact-resource-link::after {
 }
 .shell-horizon-btn {
   appearance: none;
-  flex: 1;
+  /* min-width 0 lets a long title wrap at its space instead of pushing the
+     row past the sidebar edge. */
+  flex: 1 1 auto;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -8287,6 +7974,7 @@ a.impact-resource-link::after {
 .shell-horizon-btn-title {
   /* The supplied Spartan face needs room for its full ascent/descent. */
   line-height: 1.4;
+  text-align: center;
 }
 .shell-horizon-btn-sub {
   font-size: 9px;
@@ -8672,22 +8360,6 @@ a.impact-resource-link::after {
      src/ui/island/minimap.tsx; this rule is presentation only). */
   #app.view-console .shell-minimap-map,
   #app.view-console .shell-minimap-popover-wrap { display: none; }
-  /* S30D D1 M27 (owner-1l): the scale beside "Jump to region" never
-     ellipsizes. It wraps, balanced and right-aligned, inside a two-line
-     reserve every mode shares, so the ENSO reading ("RONI ... · JJA 2026")
-     shows in full and a mode switch never moves the map below it. */
-  .shell-minimap-scale {
-    overflow: visible;
-    text-overflow: clip;
-    white-space: normal;
-    text-wrap: balance;
-    text-align: end;
-    /* 10px, not the base 1 (9px): League Spartan's 9px content area is
-       11px, and on a 9px line the last line's overhang read as overflow
-       past the two-line reserve. The reserve is 20px. */
-    line-height: 10px;
-    min-block-size: 2lh;
-  }
 }
 
 /* The shell panel exists only once its island has mounted; an empty
@@ -8720,6 +8392,16 @@ a.impact-resource-link::after {
      #panel-region stays available to the sheet console detent. */
   #shell-panel { display: none; }
   #panel-response { display: none; }
+  /* The full console stop re-admits the whole stack, shell panel included.
+     The minimap draws nothing below 721px (src/ui/island/minimap.tsx gates
+     its geometry and its live reads on the desktop query), so on a phone it
+     was an empty frame under "Jump to region" that never left its loading
+     word. Console does not carry the minimap on desktop either (the
+     view-console rule above); the framing select is the phone's region
+     control. Both the inline map and its "Map areas" door step aside here
+     (owner direction 2026-11-09 (sprint), DR-pending). */
+  #app[data-sheet-detent] .shell-minimap-map,
+  #app[data-sheet-detent] .shell-minimap-popover-wrap { display: none; }
 }
 
 .app-shell.embed #shell-panel { display: none; }
@@ -8739,10 +8421,6 @@ a.impact-resource-link::after {
   .shell-popover-door,
   .panel-response-close.icon-btn {
     min-height: var(--touch-target);
-  }
-  .shell-minimap-all {
-    min-height: var(--touch-target);
-    min-width: var(--touch-target);
   }
   .shell-time { min-height: var(--touch-target); }
 }
@@ -8808,15 +8486,13 @@ a.impact-resource-link::after {
     min-height: var(--touch-target);
   }
 
-  /* The map's own controls: Share view and Reset (34px), the basemap
-     switcher (29px), and the round map-information disclosure (28px),
-     which grows through its token so the panel it opens and the bottom
+  /* The map's own controls: Share view and Reset (34px) and the round
+     map-information disclosure (28px), which grows through its token so the panel it opens and the bottom
      dock both step out of its way rather than meeting it. On the desktop
      shell outside an embed the column's cells take the floor through
      --map-cell-h instead (S30D D1 M9); these floors then agree with it,
      and the round disclosure is the embed's alone. */
-  .overlay-btn,
-  .basemap-switcher-btn {
+  .overlay-btn {
     min-height: var(--touch-target);
   }
   .app-shell,
@@ -8828,11 +8504,9 @@ a.impact-resource-link::after {
   .app-shell:not(.embed) .map-bottom-dock {
     --map-dock-bottom: 60px;
   }
-  /* An embed's dock rides above MapLibre's own bottom-right stack, which
-     the taller basemap switcher lifts too: the corner's 46px step plus
-     the control's own 14px margin plus the switcher at the touch floor
-     plus one 8px gap. At the shipped 92px the switcher's top edge and
-     the dock's brand link crossed by 12px (measured at 820x615). */
+  /* An embed's dock rides above MapLibre's own bottom-right stack: the
+     corner's 46px step plus the stack's own 14px margin plus a control at
+     the touch floor plus one 8px gap. */
   .app-shell.embed .map-bottom-dock {
     --map-dock-bottom: calc(46px + 14px + var(--touch-target) + 8px);
   }
@@ -8907,8 +8581,8 @@ a.impact-resource-link::after {
   /* An OPEN popup is the map area's transient topmost surface: the clamp
      keeps the card (at minimum its close corner; the canonical tier
      table in popup-viewport.ts states which, per region size) in
-     reachable pixels, so the persistent map chrome (the Share/Reset/
-     basemap family at 1000-1001, the (?) map-information disclosure
+     reachable pixels, so the persistent map chrome (the Share/Reset
+     family at 1000-1001, the (?) map-information disclosure
      that replaced the attribution control on 2026-08-31 in PR 54, the
      scale bar, the embed linkouts) must not cover the very controls
      that contract points at. Kept below the mobile sheet (1350) and
@@ -9039,14 +8713,21 @@ a.impact-resource-link::after {
   .about-card a[href]:not([role='button']) { color: var(--link-on-light); }
   .about-card a[href]:not([role='button']):hover { color: var(--link-on-light-hover); }
 }
+/* SELECTED INVERTS (owner direction 2026-11-09 (sprint), DR-pending). This
+   replaces the pressed plate and its leading bar from the D3 block above:
+   one face for every pressed button in every shell, with ink as the face,
+   the surface colour as the label and an even outline. Nothing is drawn on
+   one side. --selection-shadow is no longer shown at rest; it is the ring
+   the focus rules add inside a white face. */
 :is(.view-switch button, .shell-cluster-btn, .shell-horizon-btn, .shell-fire3d-btn, .shell-fire3d-layer, .place-studio-type, .hazard-rail-btn)[aria-pressed='true']:not(:disabled):not([aria-disabled='true']),
 .time-bar-mode.active:not(:disabled) {
-  --selection-shadow: inset 2px 0 0 var(--ink-strong);
-  background: var(--surface-hover);
-  color: var(--ink-strong);
-  border-color: var(--rule-control);
+  forced-color-adjust: none; /* FORCED COLOURS, app.css */
+  --selection-shadow: var(--selected-focus-inset);
+  background: var(--face-selected);
+  color: var(--ink-on-selected);
+  border-color: var(--face-selected);
   font-weight: var(--fw-strong);
-  box-shadow: var(--selection-shadow);
+  box-shadow: none;
 }
 :is(.view-switch button, .shell-cluster-btn, .shell-horizon-btn, .shell-fire3d-btn, .shell-fire3d-layer, .place-studio-type, .hazard-rail-btn)[aria-pressed='true']:not(:disabled):not([aria-disabled='true']):focus-visible,
 .time-bar-mode.active:not(:disabled):focus-visible {

@@ -236,9 +236,7 @@ commands and population instructions are in
 
 ### About the basemap and hydrography
 
-Recent NOAA NESDIS GOES GeoColor imagery provides context over an
-OpenStreetMap basemap; clouds and coverage gaps can obscure the ground.
-The Satellite control turns imagery on and off. Rivers come from
+The map ground is an OpenStreetMap basemap. Rivers come from
 OpenStreetMap via Overpass. See the [developer guide](DEVELOPER.md#about-the-basemap-and-hydrography)
 for refresh behavior and service limits.
 
@@ -250,6 +248,11 @@ do not have the same terrain detail.
 This is a context view, not a prediction: nothing in it shows or implies
 fire spread, ignition, or an all-clear. See the [developer guide](DEVELOPER.md#the-desktop-3d-fire-view)
 for sources, rendering, and coverage details.
+
+On a phone, the Fire view shows a 3D control at the right edge when the
+screen is large enough and the browser can render the scene. The coverage
+and context statements stay on the map while the 3D view is on, and a
+small pad tilts, turns and resets the camera with one thumb.
 
 ## Development
 
@@ -300,8 +303,6 @@ its own clock, method, and caveats.
   temperature and precipitation outlooks (6-to-10-day, 8-to-14-day), ENSO
   index snapshots and diagnostic discussion
 - **SPC** (Storm Prediction Center): Fire Weather Outlook
-- **NESDIS** (National Environmental Satellite, Data, and Information
-  Service): merged GOES GeoColor satellite imagery
 - **OSPO** (Office of Satellite and Product Operations): HMS satellite
   smoke plumes
 - **CO-OPS** (Center for Operational Oceanographic Products and Services):

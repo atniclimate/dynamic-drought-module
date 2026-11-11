@@ -10,7 +10,6 @@ import {
   routeGeojson,
   syntheticAiannhBody
 } from './tribal-fixtures';
-import { stubRecentSatellite } from './satellite-fixture';
 
 const STUDIO = '#layers-studio-root';
 const STATES_BODY = {
@@ -43,17 +42,13 @@ async function stubPlaces(page: Page): Promise<void> {
   );
 }
 
-async function stubSatellite(page: Page): Promise<void> {
-  await stubRecentSatellite(page);
-}
-
 test.describe('LAYERS studio behavior', () => {
   test('the six-label mapping is explicit by status key', () => {
     expect(STATUS_PILL_TEXT.loading).toBe('loading...');
     expect(STATUS_PILL_TEXT.ready).toBe('live');
     expect(STATUS_PILL_TEXT.degraded).toBe('live (partial)');
     expect(STATUS_PILL_TEXT.error).toBe('unavailable');
-    expect(STATUS_PILL_TEXT['no-data']).toBe('no data (see data/README.md)');
+    expect(STATUS_PILL_TEXT['no-data']).toBe('no data');
     expect(STATUS_PILL_TEXT['zoom-in']).toBe('zoom in to load');
   });
 
@@ -115,27 +110,6 @@ test.describe('LAYERS studio behavior', () => {
     await expect(sources).toHaveAttribute('aria-expanded', 'false');
   });
 
-  test('the rehosted basemap control reflects pressed state and URL state', async ({ page }) => {
-    await stubSatellite(page);
-    await gotoApp(page, '?layers=&view=brief&studio=layers');
-    let studio = page.locator(STUDIO);
-    let satellite = studio.getByRole('button', { name: 'Satellite imagery' });
-    await expect(satellite).toHaveAttribute('aria-pressed', 'true');
-    await satellite.click();
-    await expect(satellite).toHaveAttribute('aria-pressed', 'false');
-    await expect.poll(async () => new URLSearchParams(await search(page)).get('basemap'))
-      .toBe('default');
-
-    await page.reload({ waitUntil: 'domcontentloaded' });
-    studio = page.locator(STUDIO);
-    satellite = studio.getByRole('button', { name: 'Satellite imagery' });
-    await expect(satellite).toHaveAttribute('aria-pressed', 'false');
-    await satellite.click();
-    await expect(satellite).toHaveAttribute('aria-pressed', 'true');
-    await expect.poll(async () => new URLSearchParams(await search(page)).has('basemap'))
-      .toBe(false);
-  });
-
   test('all six canonical statuses render in studio pills and loading settles', async ({ page }) => {
     let releasePlaces!: () => void;
     const placesRelease = new Promise<void>((resolve) => {
@@ -191,7 +165,7 @@ test.describe('LAYERS studio behavior', () => {
     await expect(pill('states')).toHaveText('live');
     await expect(pill('aiannh')).toHaveText('live (partial)');
     await expect(pill('bia-reservations')).toHaveText('unavailable');
-    await expect(pill('tribal')).toHaveText('no data (see data/README.md)');
+    await expect(pill('tribal')).toHaveText('no data');
     await expect(pill('telemetry')).toHaveText('zoom in to load');
 
     releasePlaces();

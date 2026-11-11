@@ -97,7 +97,7 @@ export interface RasterTileWatchOptions {
   /**
    * Outcome for an open cycle whose view holds no tile of the selected
    * frame, when the map idles or the source settles. The default remains
-   * `ready` for the bounded-coverage consumers (HeatRisk, WHP, satellite).
+   * `ready` for the bounded-coverage consumers (HeatRisk, WHP).
    * gridded-index and the SST anomaly set `error` through TILE_PROOF_WATCH
    * because they must prove at least one visible tile (DR-050 a). The
    * deadline reads an empty open cycle as `error` whichever is set (with the

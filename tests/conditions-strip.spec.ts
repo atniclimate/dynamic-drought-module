@@ -7,9 +7,7 @@ import {
   waitForLayerSettled,
   PILL
 } from './helpers';
-import { stubRecentSatellite } from './satellite-fixture';
 import { isNifcRequestUrl } from './wildfire-fixtures';
-import { SATELLITE_PROBE_BBOX } from '../src/map/satellite';
 import { HAZARD_CLUSTERS, HAZARD_CLUSTER_KEYS } from '../src/config/clusters';
 import { composeClusterIntent } from '../src/state/cluster-service';
 
@@ -25,24 +23,12 @@ import { composeClusterIntent } from '../src/state/cluster-service';
  * ddm-ui-verifier lane, not this gate.
  */
 test.describe('UX-3 conditions strip', () => {
-  test('the drought indicator updates after its polygons render while unrelated satellite tiles remain pending', async ({ page }) => {
-    // Satellite is installed after the base map loads. Hold its rendered
-    // tiles, but let its probe succeed, so map controls work while global
-    // idle cannot fire. The independently held NADM source resolves later.
-    await stubRecentSatellite(page);
-    let releaseSatellite!: () => void;
+  test('the drought indicator updates after its polygons render', async ({ page }) => {
+    // The NADM source is held so the loading tone is the real source state,
+    // then released so the indicator reads the rendered polygons.
     let releaseDrought!: () => void;
-    const satelliteGate = new Promise<void>((resolve) => { releaseSatellite = resolve; });
     const droughtGate = new Promise<void>((resolve) => { releaseDrought = resolve; });
-    let heldSatelliteTiles = 0;
     let droughtRequested = false;
-    await page.route('**/MERGEDGC_Last_24hr/ImageServer/exportImage?**', async (route) => {
-      if (new URL(route.request().url()).searchParams.get('bbox') !== SATELLITE_PROBE_BBOX) {
-        heldSatelliteTiles += 1;
-        await satelliteGate;
-      }
-      await route.fallback();
-    });
     await page.route('**/NADM-current.geojson', async (route) => {
       droughtRequested = true;
       await droughtGate;
@@ -64,9 +50,8 @@ test.describe('UX-3 conditions strip', () => {
     });
 
     try {
-      await gotoApp(page, '?view=brief&layers=nadm-drought&basemap=satellite', { bootIdle: false });
+      await gotoApp(page, '?view=brief&layers=nadm-drought', { bootIdle: false });
       await expect.poll(() => droughtRequested).toBe(true);
-      await expect.poll(() => heldSatelliteTiles).toBeGreaterThan(0);
       // Desktop Brief seats the strip in the sidebar's bottom dock, off the
       // map, so the map's read-glass backing and inks no longer apply to it.
       const drought = page.locator('#conditions-strip-dock .conditions-metric[data-metric="drought"]');
@@ -79,12 +64,11 @@ test.describe('UX-3 conditions strip', () => {
       await expect(drought.locator('.conditions-value')).toHaveCSS('font-variant-numeric', /^(?:lining-nums tabular-nums|tabular-nums lining-nums)$/);
       await expect(drought.locator('.conditions-sublabel')).toContainText('Extreme drought');
       await expect(drought).toHaveCSS('opacity', '1');
-      // No satellite response has been released: this read must follow the
-      // drought source's render, rather than depend on whole-map idle.
+      // This read must follow the drought source's render, rather than
+      // depend on whole-map idle.
       await expect(drought).not.toContainText('No polygon');
     } finally {
       releaseDrought();
-      releaseSatellite();
     }
   });
 

@@ -2,16 +2,16 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import './styles/app.css';
 import './styles/hazard-indicators.css';
 import './styles/mobile-panels.css';
+import './styles/edge-column.css';
 
 import type * as maplibregl from 'maplibre-gl';
-import { holdSatellite } from './map/basemap-switcher';
 import { createMap } from './map/init';
 import { loadFire3DController } from './map/fire3d-chunk';
 import { FIRE3D_CHUNK_WIDTH_QUERY, onFire3DPreferenceChange } from './state/fire3d-store';
 import { initInteractionCoordinator } from './map/interaction-coordinator';
 import { setMap } from './state/map-store';
 import { applyDeepLink } from './state/deep-link';
-import { parseFire3dParam, parseSelectParam } from './state/url';
+import { SIDEBAR_DESKTOP_QUERY, parseFire3dParam, parseSelectParam } from './state/url';
 import type { SelectParam } from './state/url';
 import {
   getStudioRoute,
@@ -40,7 +40,10 @@ import {
   showRendererNotice
 } from './ui/renderer-notice';
 import { initMapInformation } from './ui/map-information';
+import { initEdgeColumn } from './ui/edge-column';
+import { initLocateControl } from './ui/locate-control';
 import { initMobileSheet } from './ui/mobile-sheet';
+import { initFire3DPhone } from './ui/fire3d-phone';
 import { initViewShell } from './ui/view-shell';
 import { initPlaceEmphasis } from './state/place-emphasis';
 import { initLocatedBoundary } from './state/located-boundary';
@@ -437,7 +440,20 @@ function wireMapDependentChrome(map: maplibregl.Map): void {
   // A boot below the breakpoint still arms a widen listener; the
   // same eligibility rule applies when it fires, so a later resize into
   // desktop width finds a live controller rather than an inert control.
+  //
+  // Owner direction 2026-11-09 (sprint), DR-pending: a phone may enter the
+  // scene through its own 3D cell (src/ui/fire3d-phone.ts), so the width
+  // above is now the phone floor. The rule below keeps a phone that did not
+  // ask from paying for the chunk: the committed Wildfire view alone loads
+  // it only at the desktop console's width, where the control that needs it
+  // is on screen; everywhere the URL naming the mode loads it, which on a
+  // phone happens only through that cell's press or a shared link. Below the
+  // console's width only the phone shell can present the scene, and an embed
+  // never has one, so a phone-width embed loads nothing (review finding
+  // R2-10); if the person leaves the embed, the 3D cell's chrome loads and
+  // starts the controller itself (src/ui/fire3d-phone-scene.ts).
   const fire3dViewport = window.matchMedia(FIRE3D_CHUNK_WIDTH_QUERY);
+  const fire3dConsole = window.matchMedia(SIDEBAR_DESKTOP_QUERY);
   let fire3dLoaded = false;
   let unsubscribeFire3dEligibility: (() => void) | null = null;
   let unsubscribeFire3dPreference: (() => void) | null = null;
@@ -449,21 +465,24 @@ function wireMapDependentChrome(map: maplibregl.Map): void {
       unsubscribeFire3dEligibility?.();
       unsubscribeFire3dPreference?.();
       fire3dViewport.removeEventListener('change', maybeLoadFire3D);
+      fire3dConsole.removeEventListener('change', maybeLoadFire3D);
     }).catch((error: unknown) => {
       fire3dLoaded = false;
-      // No controller will release a boot hold on the imagery (DR-105).
-      holdSatellite(map, false);
       console.warn('Fire 3D controller could not load:', error);
     });
   };
   const fire3dEligible = (): boolean =>
-    getCommittedSnapshot().cluster === 'wildfire' || parseFire3dParam();
+    parseFire3dParam() ||
+    (fire3dConsole.matches && getCommittedSnapshot().cluster === 'wildfire');
+  const fire3dPresentable = (): boolean =>
+    fire3dConsole.matches || !(document.getElementById('app')?.classList.contains('embed') ?? false);
   const maybeLoadFire3D = (): void => {
-    if (fire3dViewport.matches && fire3dEligible()) loadFire3D();
+    if (fire3dViewport.matches && fire3dPresentable() && fire3dEligible()) loadFire3D();
   };
   unsubscribeFire3dEligibility = onCommittedSnapshotChange(maybeLoadFire3D);
   unsubscribeFire3dPreference = onFire3DPreferenceChange(maybeLoadFire3D);
   fire3dViewport.addEventListener('change', maybeLoadFire3D);
+  fire3dConsole.addEventListener('change', maybeLoadFire3D);
   maybeLoadFire3D();
 
   // Selected-place emphasis (U3h, headroom A1): the chosen boundary stays lit
@@ -483,7 +502,19 @@ function wireMapDependentChrome(map: maplibregl.Map): void {
   // at-hand place picker is the ONE shared search (U3), which the sheet
   // mounts lazily on activation, so no deep-link/impact-panel callback is
   // injected here anymore.
+  // The phone shell's right-edge column (owner direction 2026-11-09 (sprint),
+  // DR-pending): built before the shell activates, so the first activation
+  // finds one column that owns every right-edge control's seat.
+  initEdgeColumn();
+  // Locate (owner direction 2026-11-09 (sprint), DR-pending): one cell in the
+  // column's view tools and the launch check; everything else is lazy. A
+  // `select=` boot makes no Locate offer: the shared link is the ask.
+  initLocateControl(map, select !== null);
   initMobileSheet(map, { deepLinkBoot: select !== null });
+  // The phone's 3D cell rides the column's view tools, present only where
+  // pressing it means something (owner direction 2026-11-09 (sprint),
+  // DR-pending). The scene and its chrome stay lazy behind the press.
+  initFire3DPhone(map);
 
   // The two doors (U1, D-ARCH-002): mode chrome and the Brief head, after
   // the sidebar (which seeds the mode from the URL). The U1 answer-first

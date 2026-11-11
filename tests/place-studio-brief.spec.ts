@@ -311,9 +311,10 @@ test.describe('PS-BRIEF PLACE studio rendering', () => {
     await expect(narrative.locator('.place-studio-selection-kind')).toHaveText(
       'State (Census cartographic boundary)'
     );
-    await expect(narrative.locator('#place-selection-title')).toHaveText(
-      'Washington'
-    );
+    await expect(
+      page.locator('#place-selection-bar #place-selection-title')
+    ).toHaveText('Washington');
+    await expect(narrative.locator('#place-selection-title')).toHaveCount(0);
     await expect(narrative.locator('#place-brief-line')).toHaveText(
       "This location is in D2 Severe Drought as of this week's U.S. Drought Monitor. Crop or pasture losses are likely; water shortages are common and restrictions are imposed."
     );

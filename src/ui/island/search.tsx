@@ -53,7 +53,7 @@
  */
 
 import type * as preact from 'preact';
-import { useId, useRef, useState } from 'preact/hooks';
+import { useRef, useState } from 'preact/hooks';
 
 import { enterChoice, foldSearchText, matchesTokens, prefixFirst } from '../../util/search-fold';
 
@@ -160,6 +160,18 @@ function useLazyItems(load: (() => Promise<SearchItem[]>) | undefined): LazyItem
   return { items, pending, failed, start };
 }
 
+/**
+ * One number per mounted search, counted across the whole page.
+ *
+ * Preact's `useId()` numbers a component within ITS render root, and every
+ * mount of this search is a root of its own, so each of them answered
+ * "P0-0": three listboxes on one page shared one id, and `aria-controls`
+ * on two of the three inputs named a listbox that was not theirs (found by
+ * the sprint's scan of the built page, owner direction 2026-11-09 (sprint),
+ * DR-pending). A module counter is one sequence for every root.
+ */
+let searchSequence = 0;
+
 export function Search(props: SearchProps): preact.JSX.Element {
   const [query, setQuery] = useState('');
   // The keyboard highlight is keyed by the ITEM (kind + id), never by list
@@ -170,9 +182,16 @@ export function Search(props: SearchProps): preact.JSX.Element {
   const tribal = useLazyItems(props.loadTribal);
   const cities = useLazyItems(props.loadCities);
   // A per-instance id prefix so multiple mounts (the console catalog, the Brief
-  // head, the mobile sheet) never collide on element ids (invalid HTML that
-  // would break the aria-controls / aria-activedescendant references).
-  const uid = useId();
+  // head, the mobile sheet, the studios) never collide on element ids (invalid
+  // HTML that would break the aria-controls / aria-activedescendant
+  // references). Counted across the page, not by `useId()`: see
+  // `searchSequence`.
+  const uidRef = useRef('');
+  if (uidRef.current === '') {
+    searchSequence += 1;
+    uidRef.current = `ddm-search-${searchSequence}`;
+  }
+  const uid = uidRef.current;
 
   const rawTrimmed = query.trim();
   // The ONE search folding, shared with every other surface (wave A finding

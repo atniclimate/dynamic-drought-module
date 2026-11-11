@@ -1,6 +1,8 @@
 import { expect, test, type Locator, type Page } from './offline-test';
 
 import { gotoApp } from './helpers';
+import { HAZARD_CLUSTER_KEYS } from '../src/config/clusters';
+import { FRAMING_KEYS } from '../src/config/framings';
 import { routeAllTribalFixtures } from './tribal-fixtures';
 import { installMinimapAnalysisStubs } from './minimap-fixtures';
 
@@ -106,14 +108,17 @@ async function expectMobileKeyClearance(
   contentSelector: string
 ): Promise<void> {
   const key = page.locator('#map-key');
-  const controls = page.locator('.map-overlay-controls');
+  const controls = page.locator('#edge-column');
   await openMapKey(page);
   await expect(key).toBeVisible();
   await expect(key.locator(contentSelector).first()).toBeVisible();
   await expect(controls).toBeVisible();
+  await expect(page.locator('.map-overlay-controls')).toBeHidden();
+  await expect(controls.locator('#edge-body-utility > #share-btn')).toBeVisible();
 
-  // Utilities now own an independent right column at the same safe-area top.
-  // The key reserves that column horizontally instead of pushing it down.
+  // The utilities ride the phone's right-edge column at the same safe-area
+  // top, and the key reserves --edge-column-w horizontally instead of being
+  // pushed down.
   await expect
     .poll(async () => {
       const [keyBox, controlsBox] = await Promise.all([rect(key), rect(controls)]);
@@ -178,7 +183,9 @@ test.describe('the exact desktop and mobile boundary', () => {
 
     await expect(app).toHaveAttribute('data-sheet-detent', 'closed');
     await expect(page.locator('#shell-panel')).toBeHidden();
-    await expect(page.locator('.map-overlay-controls > #share-btn')).toHaveCount(1);
+    // The phone shell seats the same node in the right-edge column.
+    await expect(page.locator('.map-overlay-controls > #share-btn')).toHaveCount(0);
+    await expect(page.locator('#edge-column #edge-body-utility > #share-btn')).toHaveCount(1);
     await expect(share).toBeFocused();
     expect(
       await shareHandle!.evaluate(
@@ -599,9 +606,9 @@ test.describe('the ENSO ocean key reaches every surface (W2-D1)', () => {
 });
 
 /**
- * Owner direction 2026-08-19 moved four pieces of chrome. Three joined the
- * desktop control column (Share and Reset were already there, the satellite
- * toggle and the on-map key moved in), and the pre-1.0 preview badge moved
+ * Owner direction 2026-08-19 moved pieces of chrome. Some joined the
+ * desktop control column (Share and Reset were already there, the on-map
+ * key moved in), and the pre-1.0 preview badge moved
  * out of that column into the bottom-right corner beside the round buttons.
  *
  * The contract these cases hold is not "the pixels look right"; it is that
@@ -610,32 +617,24 @@ test.describe('the ENSO ocean key reaches every surface (W2-D1)', () => {
  * the embed were designed around the old seats and keep them.
  */
 test.describe('the 2026-08-19 map chrome seats', () => {
-  test('the desktop column holds the satellite control, help and the key, and the preview badge stays clear of help', async ({
+  test('the desktop column holds help and the key, and the preview badge stays clear of help', async ({
     page
   }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await gotoApp(page, '?view=console');
 
-    await expect(
-      page.locator('#basemap-switcher-overlay-host > .basemap-switcher-control')
-    ).toHaveCount(1);
     await expect(page.locator('#map-key-overlay-host > #map-key')).toHaveCount(1);
 
-    // The satellite control seats BELOW Reset, which is what makes the three
-    // buttons one family rather than two conventions in one corner.
     const reset = await rect(page.locator('#reset-btn'));
-    const satellite = await rect(page.locator('.basemap-switcher-control'));
-    expect(satellite.top).toBeGreaterThanOrEqual(reset.bottom - 1);
-    expect(Math.abs(satellite.right - reset.right)).toBeLessThanOrEqual(2);
 
-    // Help sits under SAT in the same column since D1 M9 (2026-09-27;
+    // Help sits under Reset in the same column since D1 M9 (2026-09-27;
     // interface-chrome section 2.2, slot 3; it left the bottom-right corner,
     // which the old wording here described). Its credits still render inside
     // its panel (owner direction 2026-08-31); the preview badge sits clear
     // of the scale bars since D1 M10 (found-019), no longer bottom centre.
     // No overlap.
     const info = await rect(page.locator('.map-info-btn'));
-    expect(info.top).toBeGreaterThanOrEqual(satellite.bottom - 1);
+    expect(info.top).toBeGreaterThanOrEqual(reset.bottom - 1);
     expect(Math.abs(info.right - reset.right)).toBeLessThanOrEqual(2);
     // The column's top band, never the old bottom-right corner (800 / 3).
     expect(info.bottom).toBeLessThan(800 / 3);
@@ -670,29 +669,23 @@ test.describe('the 2026-08-19 map chrome seats', () => {
     await page.keyboard.press('Escape');
   });
 
-  test('a phone keeps the dock key seat and the thumb-zone satellite control', async ({
+  test('a phone keeps the dock key seat', async ({
     page
   }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await gotoApp(page, '');
 
     await expect(page.locator('.map-dock-foot > #map-key')).toHaveCount(1);
-    await expect(
-      page.locator('.maplibregl-ctrl-bottom-right .basemap-switcher-control')
-    ).toHaveCount(1);
     await expect(page.locator('#map-key-overlay-host > #map-key')).toHaveCount(0);
   });
 
-  test('an embed keeps the dock key seat and MapLibre\'s satellite corner', async ({
+  test('an embed keeps the dock key seat', async ({
     page
   }) => {
     await page.setViewportSize({ width: 800, height: 600 });
     await gotoApp(page, '?cluster=wildfire&embed=true');
 
     await expect(page.locator('.map-dock-foot > #map-key')).toHaveCount(1);
-    await expect(
-      page.locator('.maplibregl-ctrl-bottom-right .basemap-switcher-control')
-    ).toHaveCount(1);
   });
 });
 
@@ -719,6 +712,8 @@ test.describe('short landscape coarse-pointer shell', () => {
       '.shell-cluster-btn',
       '.shell-horizon-btn',
       '#shell-minimap-door',
+      // Its first option, All of North America, replaced the minimap's All tile.
+      '#region-select',
       '.map-overlay-controls > #share-btn'
     ]) {
       const target = page.locator(selector).first();
@@ -729,11 +724,11 @@ test.describe('short landscape coarse-pointer shell', () => {
     const minimapDoor = page.locator('#shell-minimap-door');
     await minimapDoor.scrollIntoViewIfNeeded();
     await minimapDoor.click();
-    const allAreas = page.locator('#shell-minimap-popover .shell-minimap-all');
-    await expect(allAreas).toBeVisible();
-    const allAreasBox = await rect(allAreas);
-    expect(allAreasBox.width).toBeGreaterThanOrEqual(44);
-    expect(allAreasBox.height).toBeGreaterThanOrEqual(44);
+    await expect(page.locator('#shell-minimap-popover')).toBeVisible();
+    await expect(page.locator('#shell-minimap-popover .shell-minimap-all')).toHaveCount(0);
+    await expect(
+      page.locator('#shell-minimap-popover [role="radiogroup"] [role="radio"]')
+    ).toHaveCount(FRAMING_KEYS.length);
 
     for (const selector of [
       '.shell-cluster-btn',
@@ -749,6 +744,78 @@ test.describe('short landscape coarse-pointer shell', () => {
 
     await expectNoHorizontalOverflow(page, 844);
   });
+});
+
+test.describe('desktop Tribal Nations action above the sticky dock (1440x900)', () => {
+  test.use({ viewport: { width: 1440, height: 900 } });
+
+  test('at rest, in every hazard mode, the action and its count end at least 8px above the dock border', async ({
+    page
+  }) => {
+    await gotoApp(page);
+    const scroller = page.locator('.sidebar-scroll');
+    const dock = page.locator('.sidebar-bottom-dock');
+    const action = page.locator('#tribal-nations-brief-action');
+    const count = page.locator('#tribal-nations-brief-action ~ .tribal-nations-health');
+
+    for (const key of HAZARD_CLUSTER_KEYS) {
+      const chip = page.locator(`.shell-cluster-btn[data-cluster="${key}"]`);
+      await chip.click();
+      await expect(chip).toHaveAttribute('aria-pressed', 'true');
+      await expect(action).toBeVisible();
+      await expect(count).toBeVisible();
+      await expect
+        .poll(
+          async () => {
+            await scroller.evaluate((element) => {
+              element.scrollTop = 0;
+            });
+            const [dockBox, actionBox, countBox] = await Promise.all([
+              rect(dock),
+              rect(action),
+              rect(count)
+            ]);
+            return dockBox.top - Math.max(actionBox.bottom, countBox.bottom);
+          },
+          { message: `${key}: the Tribal Nations action sits under the dock` }
+        )
+        .toBeGreaterThanOrEqual(8);
+    }
+  });
+});
+
+test.describe('an embed meets the touch floor', () => {
+  test.use({ viewport: { width: 390, height: 700 } });
+
+  test('the sidebar expander and the map information button are at least 44 pixels square', async ({ page }) => {
+    await gotoApp(page, '?embed=true');
+    for (const selector of ['#sidebar-expand', '#map-info-btn']) {
+      const target = page.locator(selector);
+      await expect(target).toBeVisible();
+      const box = await rect(target);
+      expect(box.width, `${selector} is narrower than the touch floor`).toBeGreaterThanOrEqual(44);
+      expect(box.height, `${selector} is shorter than the touch floor`).toBeGreaterThanOrEqual(44);
+    }
+  });
+});
+
+test.describe('the horizon row stays inside the sidebar', () => {
+  for (const [width, height] of [[768, 1024], [1440, 900]] as const) {
+    test(`every horizon button ends inside its row at ${width}x${height}`, async ({ page }) => {
+      await page.setViewportSize({ width, height });
+      await gotoApp(page);
+      const row = page.locator('.shell-horizons');
+      await expect(row).toBeVisible();
+      const rowBox = await rect(row);
+      const buttons = await page.locator('.shell-horizon-btn').all();
+      expect(buttons.length).toBeGreaterThan(0);
+      for (const button of buttons) {
+        const box = await rect(button);
+        expect(box.right, 'a horizon button runs past its row').toBeLessThanOrEqual(rowBox.right + 0.5);
+        expect(box.left).toBeGreaterThanOrEqual(rowBox.left - 0.5);
+      }
+    });
+  }
 });
 
 test.describe('desktop Brief region band', () => {
@@ -1737,8 +1804,8 @@ async function censusEveryCluster(
   const failures: string[] = [];
   for (const { key, pressed } of clusters) {
     if (!pressed) {
-      // Click only the one mode being measured; SAT and every other
-      // control on the shell stay untouched.
+      // Click only the one mode being measured; every other
+      // control on the shell stays untouched.
       const button = page.locator(`.shell-cluster-btn[data-cluster="${key}"]`);
       await button.click();
       await expect(button).toHaveAttribute('aria-pressed', 'true');

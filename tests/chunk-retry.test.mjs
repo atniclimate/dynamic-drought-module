@@ -9,7 +9,28 @@
  */
 
 import assert from 'node:assert/strict';
+import { existsSync } from 'node:fs';
+import { registerHooks } from 'node:module';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
+
+// src/util/chunk-stylesheets.ts imports './chunk-retry' the bundler's way
+// (no extension); resolve that to the TypeScript source, as
+// tests/fire3d-phone.test.mjs does.
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    if (
+      specifier.startsWith('.') &&
+      !/\.[a-z]+$/i.test(specifier) &&
+      typeof context.parentURL === 'string' &&
+      context.parentURL.endsWith('.ts') &&
+      existsSync(fileURLToPath(new URL(`${specifier}.ts`, context.parentURL)))
+    ) {
+      return nextResolve(`${specifier}.ts`, context);
+    }
+    return nextResolve(specifier, context);
+  }
+});
 
 import {
   chunkPathFromImporter,
@@ -171,4 +192,288 @@ test('createChunkLoader falls back to the importer again when no URL can be deri
   const result = await loader();
   assert.equal(calls, 2);
   assert.deepEqual(result, { ok: true, calls: 2 });
+});
+
+// The sprint's lazy doors that ask again after a failure (owner direction
+// 2026-11-09 (sprint), DR-pending). A plain second import() of a failed chunk
+// replays the failure with no request, so each must load through
+// createChunkLoader. Seen on the sprint camera: Locate and the sheet's motion
+// module never recovered, and the ENSO guide never asked again. A door whose
+// chunk carries stylesheets also asks for its failed stylesheets before the
+// retry (the retry imports the module alone): seen on the camera, the Locate
+// card, the 3D card and the ENSO guide drew unstyled after a failed stylesheet.
+const DOORS = [
+  { file: '../src/ui/locate-control.ts', chunk: './locate-runtime', stylesheets: true },
+  { file: '../src/ui/mobile-sheet.ts', chunk: './sheet-motion', stylesheets: false },
+  { file: '../src/ui/enso-chain-loader.ts', chunk: './enso-chain', stylesheets: true },
+  { file: '../src/ui/fire3d-phone.ts', chunk: './fire3d-phone-scene', stylesheets: true },
+  // The ENSO guide's place links promise a read the next time the panel shows (R2-3).
+  { file: '../src/ui/enso-chain.ts', chunk: '../impact/sources', stylesheets: false }
+];
+
+test('the sprint lazy doors that retry load through createChunkLoader', async () => {
+  const { readFile } = await import('node:fs/promises');
+  for (const { file, chunk, stylesheets } of DOORS) {
+    const text = await readFile(new URL(file, import.meta.url), 'utf8');
+    const path = chunk.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+    const loads = text.match(new RegExp(`(?<!typeof )import\\('${path}'\\)`, 'g')) ?? [];
+    const tail = stylesheets ? ',\\s*undefined,\\s*askAgainForStylesheets\\s*' : '\\s*';
+    const wrapped =
+      text.match(
+        new RegExp(`createChunkLoader\\(\\s*\\(\\) => import\\('${path}'\\),\\s*import\\.meta\\.url${tail}\\)`, 'g')
+      ) ?? [];
+    assert.equal(loads.length, 1, `${file} loads ${chunk} in one place`);
+    assert.equal(
+      wrapped.length,
+      1,
+      `${file} loads ${chunk} through createChunkLoader${stylesheets ? ', asking for its stylesheets first' : ''}`
+    );
+  }
+});
+
+// NO STYLESHEET, NO CHROME: each door's chunk reads its stylesheet's mark
+// before it draws anything, and the stylesheet sets that mark on #app.
+test('each stylesheet door refuses to draw without its own stylesheet', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const marks = [
+    ['../src/ui/locate-runtime.ts', 'createLocate', '../src/styles/locate.css', '--ddm-locate-css'],
+    ['../src/ui/fire3d-phone-scene.ts', 'createFire3DPhoneScene', '../src/styles/fire3d-phone.css', '--ddm-fire3d-phone-css'],
+    ['../src/ui/enso-chain.ts', 'mountEnsoChain', '../src/styles/enso-chain.css', '--ddm-enso-chain-css']
+  ];
+  for (const [file, factory, sheet, property] of marks) {
+    const text = await readFile(new URL(file, import.meta.url), 'utf8');
+    const body = text.slice(text.indexOf(`export function ${factory}(`));
+    const check = body.indexOf(`requireStylesheetMark(app, '${property}',`);
+    assert.ok(check > 0, `${factory} checks ${property}`);
+    const firstDraw = Math.min(
+      ...[/createElement\(/, /\bel\(/, /appendChild\(/, /\.append\(/]
+        .map((re) => body.search(re))
+        .filter((index) => index >= 0)
+    );
+    assert.ok(check < firstDraw, `${factory} checks its stylesheet before it draws`);
+    const css = await readFile(new URL(sheet, import.meta.url), 'utf8');
+    assert.match(css, new RegExp(`#app \\{\\s*${property}: 1;\\s*\\}`), `${sheet} marks #app with ${property}`);
+  }
+});
+
+test('createChunkLoader skips beforeRetry on the first call, and runs it before the importer when no URL was recorded', async () => {
+  const order = [];
+  let calls = 0;
+  const loader = createChunkLoader(
+    () => {
+      calls += 1;
+      order.push('importer');
+      return calls === 1 ? Promise.reject(new Error('no url here')) : Promise.resolve({ ok: true });
+    },
+    'https://example.test/assets/index.js',
+    () => {
+      throw new Error('importUrl must not run without a recorded URL');
+    },
+    async (attempt) => {
+      order.push(`before ${attempt}`);
+    }
+  );
+  await assert.rejects(loader(), /no url here/);
+  assert.deepEqual(order, ['importer']);
+  assert.deepEqual(await loader(), { ok: true });
+  assert.deepEqual(order, ['importer', 'before 1', 'importer']);
+});
+
+test('createChunkLoader asks beforeRetry before each retry under the same attempt number', async () => {
+  const order = [];
+  let failures = 1;
+  const loader = createChunkLoader(
+    new Function('return import(`./door-Ab12Cd34.js`)'),
+    'https://example.test/assets/index.js',
+    (url) => {
+      order.push(`import ${new URL(url).search}`);
+      if (failures > 0) {
+        failures -= 1;
+        return Promise.reject(new Error('retry failed'));
+      }
+      return Promise.resolve({ ok: true });
+    },
+    async (attempt) => {
+      order.push(`before ${attempt}`);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      order.push(`before ${attempt} done`);
+    }
+  );
+  await assert.rejects(loader());
+  assert.deepEqual(order, [], 'the first call runs the importer alone');
+  await assert.rejects(loader(), /retry failed/);
+  assert.deepEqual(order, ['before 1', 'before 1 done', 'import ?retry=1']);
+  assert.deepEqual(await loader(), { ok: true });
+  assert.deepEqual(order.slice(3), ['before 2', 'before 2 done', 'import ?retry=2']);
+});
+
+test('createChunkLoader counts a beforeRetry rejection as a failed attempt and does not import', async () => {
+  const order = [];
+  let refuse = true;
+  const loader = createChunkLoader(
+    new Function('return import(`./door-Ab12Cd34.js`)'),
+    'https://example.test/assets/index.js',
+    (url) => {
+      order.push(`import ${new URL(url).search}`);
+      return Promise.resolve({ ok: true });
+    },
+    (attempt) => {
+      order.push(`before ${attempt}`);
+      if (refuse) {
+        refuse = false;
+        return Promise.reject(new Error('stylesheet failed again'));
+      }
+      return Promise.resolve();
+    }
+  );
+  await assert.rejects(loader());
+  await assert.rejects(loader(), /stylesheet failed again/);
+  assert.deepEqual(order, ['before 1']);
+  assert.deepEqual(await loader(), { ok: true });
+  assert.deepEqual(order, ['before 1', 'before 2', 'import ?retry=2']);
+});
+
+test('askAgainForStylesheets re-points only failed stylesheet links and waits for them', async () => {
+  const { askAgainForStylesheets } = await import('../src/util/chunk-stylesheets.ts');
+  const link = (href, sheet) => {
+    const listeners = { load: [], error: [] };
+    return {
+      href,
+      sheet,
+      addEventListener: (type, fn) => listeners[type].push(fn),
+      removeEventListener: (type, fn) => {
+        listeners[type] = listeners[type].filter((other) => other !== fn);
+      },
+      fire: (type) => {
+        for (const fn of [...listeners[type]]) fn();
+      },
+      listeners
+    };
+  };
+  const loaded = link('https://example.test/assets/index-A.css', { cssRules: { length: 40 } });
+  const emptied = link('https://example.test/assets/locate-runtime-B.css', { cssRules: { length: 0 } });
+  const missing = link('https://example.test/assets/enso-chain-C.css?retry=1', null);
+  const hidden = { get cssRules() { throw new Error('SecurityError'); } };
+  // Chromium keeps a failed sheet whose rules cannot be read (sprint camera).
+  const unreadable = link('https://example.test/assets/fire3d-phone-scene-E.css', hidden);
+  // A sheet from another origin hides its rules even when it loaded.
+  const foreign = link('https://fonts.example.test/x.css', hidden);
+  const previous = globalThis.document;
+  const previousLocation = globalThis.location;
+  globalThis.location = { origin: 'https://example.test', href: 'https://example.test/' };
+  globalThis.document = { querySelectorAll: () => [loaded, emptied, missing, unreadable, foreign] };
+  try {
+    let settled = false;
+    const asked = askAgainForStylesheets(2).then(() => {
+      settled = true;
+    });
+    assert.equal(loaded.href, 'https://example.test/assets/index-A.css');
+    assert.equal(foreign.href, 'https://fonts.example.test/x.css');
+    assert.equal(emptied.href, 'https://example.test/assets/locate-runtime-B.css?retry=2');
+    assert.equal(missing.href, 'https://example.test/assets/enso-chain-C.css?retry=2');
+    assert.equal(unreadable.href, 'https://example.test/assets/fire3d-phone-scene-E.css?retry=2');
+    emptied.fire('load');
+    missing.fire('load');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(settled, false, 'it waits for every link it asked again');
+    unreadable.fire('load');
+    await asked;
+    assert.equal(settled, true);
+    assert.equal(emptied.listeners.load.length + emptied.listeners.error.length, 0, 'listeners removed');
+
+  } finally {
+    globalThis.document = previous;
+    globalThis.location = previousLocation;
+  }
+});
+
+function fakeLink(href, sheet = null) {
+  const listeners = { load: [], error: [] };
+  return {
+    href,
+    sheet,
+    addEventListener: (type, fn) => listeners[type].push(fn),
+    removeEventListener: (type, fn) => {
+      listeners[type] = listeners[type].filter((other) => other !== fn);
+    },
+    fire: (type) => {
+      for (const fn of [...listeners[type]]) fn();
+    },
+    listeners
+  };
+}
+
+async function withLinks(links, run) {
+  const { askAgainForStylesheets } = await import('../src/util/chunk-stylesheets.ts');
+  const previous = globalThis.document;
+  const previousLocation = globalThis.location;
+  globalThis.location = { origin: 'https://example.test', href: 'https://example.test/' };
+  globalThis.document = { querySelectorAll: () => links };
+  try {
+    await run(askAgainForStylesheets);
+  } finally {
+    globalThis.document = previous;
+    globalThis.location = previousLocation;
+  }
+}
+
+// Finding 6 (2026-11-11 review): one broken stylesheet must not fail an
+// unrelated door's retry; the door's own stylesheet mark check is the gate.
+test('askAgainForStylesheets does not reject when a stylesheet fails again', async () => {
+  const unrelated = fakeLink('https://example.test/assets/enso-chain-D.css');
+  await withLinks([unrelated], async (askAgainForStylesheets) => {
+    const asked = askAgainForStylesheets(1);
+    unrelated.fire('error');
+    await asked;
+    assert.equal(unrelated.listeners.error.length, 0, 'listeners removed');
+  });
+});
+
+test('askAgainForStylesheets stops waiting on a stalled link at its deadline', async () => {
+  const stalled = fakeLink('https://example.test/assets/locate-runtime-F.css');
+  await withLinks([stalled], async (askAgainForStylesheets) => {
+    await askAgainForStylesheets(1, 10);
+    assert.equal(stalled.listeners.load.length + stalled.listeners.error.length, 0, 'listeners removed');
+  });
+});
+
+test('askAgainForStylesheets asks again after two failures and settles on recovery', async () => {
+  const sheet = fakeLink('https://example.test/assets/locate-runtime-G.css');
+  await withLinks([sheet], async (askAgainForStylesheets) => {
+    const first = askAgainForStylesheets(1);
+    assert.equal(sheet.href, 'https://example.test/assets/locate-runtime-G.css?retry=1');
+    sheet.fire('error');
+    await first;
+    const second = askAgainForStylesheets(2);
+    assert.equal(sheet.href, 'https://example.test/assets/locate-runtime-G.css?retry=2');
+    sheet.fire('error');
+    await second;
+    const third = askAgainForStylesheets(3);
+    assert.equal(sheet.href, 'https://example.test/assets/locate-runtime-G.css?retry=3');
+    sheet.fire('load');
+    await third;
+  });
+});
+
+test('askAgainForStylesheets does not repoint a link that is already being asked again', async () => {
+  const shared = fakeLink('https://example.test/assets/enso-chain-H.css');
+  await withLinks([shared], async (askAgainForStylesheets) => {
+    const one = askAgainForStylesheets(1);
+    const other = askAgainForStylesheets(4);
+    assert.equal(shared.href, 'https://example.test/assets/enso-chain-H.css?retry=1');
+    assert.equal(shared.listeners.load.length, 1, 'one pending request');
+    shared.fire('load');
+    await Promise.all([one, other]);
+  });
+});
+
+test('askAgainForStylesheets resolves at once with no document', async () => {
+  const { askAgainForStylesheets } = await import('../src/util/chunk-stylesheets.ts');
+  const previous = globalThis.document;
+  delete globalThis.document;
+  try {
+    await askAgainForStylesheets(1);
+  } finally {
+    if (previous !== undefined) globalThis.document = previous;
+  }
 });

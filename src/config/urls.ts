@@ -48,23 +48,6 @@ export const URLS = Object.freeze({
   // The literal lives in `urls-boot.ts` (the base style reads it at boot).
   basemapOSM: BOOT_URLS.basemapOSM,
 
-  // NOAA NESDIS merged GOES East and West GeoColor, the opt-in recent
-  // satellite basemap. This is the rolling, time-enabled 24-hour archive,
-  // not the similarly named current-only service. Runtime queries a bounded
-  // set of recent frames, rejects stale or future-dated records, probes them
-  // newest to oldest, then pins every exportImage tile to the selected object
-  // id and observation time. This prevents a viewport from mixing scans and
-  // defeats the service's otherwise ambiguous 12-hour tile cache. New frames
-  // arrive every 10 or 15 minutes; the client refreshes metadata every 10
-  // minutes while active. Coverage ends near 76.46 degrees north and south,
-  // so the subdued OpenStreetMap layer remains underneath.
-  // Verified 2026-08-05: query and exportImage return HTTP 200 without
-  // authentication, correctly reflect browser origins for CORS, and expose
-  // objectid, name, start_time, and end_time. Direct browser access only; no
-  // Worker proxy is involved.
-  noaaMergedGeoColorImageServer:
-    'https://satellitemaps.nesdis.noaa.gov/arcgis/rest/services/MERGEDGC_Last_24hr/ImageServer',
-
   // ---------- Hydrography (live OSM via Overpass API) ----------
   // Mirrors are tried in order with a 12s per-call timeout and 350ms
   // backoff between failures. All must respond with `Access-Control-

@@ -57,7 +57,7 @@ const { HAZARD_CLUSTER_KEYS, HAZARD_CLUSTERS } = await import(
 const { KEY_ELIGIBLE_LABELS, chipFallbackLabel } = await import(
   new URL('src/config/chip-labels.ts', ROOT).href
 );
-const { chipStateForStatus, aggregateChipState, chipStateFromStatuses, imageryFailureState } = await import(
+const { chipStateForStatus, aggregateChipState, chipStateFromStatuses } = await import(
   new URL('src/config/chip-state.ts', ROOT).href
 );
 
@@ -70,15 +70,6 @@ test('every HAZARD_CLUSTER_KEYS entry resolves a chip label (DR-113, N modes)', 
     // The fallback label is the committed mode's own button word
     // (D-0.7.0-042): the chip never has to invent one.
     assert.equal(label, HAZARD_CLUSTERS[mode].title);
-  }
-});
-
-test('every HAZARD_CLUSTER_KEYS entry declares a defaultBasemap (N modes)', () => {
-  for (const mode of HAZARD_CLUSTER_KEYS) {
-    assert.ok(
-      ['satellite', 'default'].includes(HAZARD_CLUSTERS[mode].defaultBasemap),
-      `${mode} declares no defaultBasemap of 'satellite' or 'default'`
-    );
   }
 });
 
@@ -147,65 +138,6 @@ test('chipStateForStatus maps every LayerStatus to its chip state', () => {
   // An unset status (activated, no setStatus call yet) reads as 'loading',
   // never a silent 'live'.
   assert.equal(chipStateForStatus(undefined), 'loading');
-});
-
-test('imageryFailureState: a finished satellite lookup never reads loading', async () => {
-  // Verified absence (service answered, no recent frame) -> no data;
-  // failed fetch, error envelope, timeout or probe -> unavailable.
-  assert.equal(imageryFailureState(true), 'no-data');
-  assert.equal(imageryFailureState(false), 'unavailable');
-  // The wiring: both parse throws are the absence class, the revert writes
-  // the terminal chip text before it hides the chip.
-  const src = await readFile(new URL('src/map/satellite.ts', ROOT), 'utf8');
-  assert.equal((src.match(/new NoRecentFrameError\(/g) ?? []).length, 2);
-  assert.match(src, /imageryFailureState\(error instanceof NoRecentFrameError\)/);
-  assert.match(src, /showChip\(state, null\);\s+deactivate\(map\);/);
-});
-
-test('satellite revert is silent on boot and toasts only for a pressed SAT', async () => {
-  const sat = await readFile(new URL('src/map/satellite.ts', ROOT), 'utf8');
-  const sw = await readFile(new URL('src/map/basemap-switcher.ts', ROOT), 'utf8');
-  // The chip and store still land on the terminal state; only the toast is gated.
-  assert.match(sat, /revertBasemapForFailure\(\);\s+if \(!announceRevert\) return;\s+showToast\(/);
-  assert.match(sat, /announceRevert = announce;/);
-  // Only the SAT button announces; a mode default, boot, URL restore and 3D release do not.
-  assert.match(sw, /announce = false/);
-  assert.match(sw, /void applyBasemapMode\(map, mode, announce\);/);
-  assert.match(sw, /requestBasemapMode\(map, next, true\);/);
-  // Any third argument up to the statement's `;`, so a nested second argument cannot hide it.
-  const announces = /requestBasemapMode\([^;]*,[^;]*,[^;]*;/;
-  assert.match('requestBasemapMode(map, defaultBasemapFor(key), true);', announces);
-  assert.doesNotMatch('requestBasemapMode(map, defaultBasemapFor(key));', announces);
-  for (const path of ['src/ui/sidebar.ts', 'src/ui/island/shell.tsx', 'src/ui/island/minimap.tsx', 'src/ui/island/fire3d-control.tsx']) {
-    const caller = await readFile(new URL(path, ROOT), 'utf8');
-    assert.doesNotMatch(caller, announces, `${path} must not announce`);
-  }
-  assert.equal((sw.match(/applyBasemapMode\(map, 'satellite'\)/g) ?? []).length, 1);
-  assert.match(sw, /if \(announce\) showToast\(/);
-  const sidebar = await readFile(new URL('src/ui/sidebar.ts', ROOT), 'utf8');
-  assert.match(sidebar, /void applyBasemapMode\(map, 'satellite'\);/);
-});
-
-test('a failed imagery load leaves basemap= out of the URL; an explicit plain choice writes it', async () => {
-  globalThis.fetch = () => { throw new Error('unexpected network in URL unit test'); };
-  const { syncUrl } = await import(new URL('src/state/url.ts', ROOT).href);
-  const store = await import(new URL('src/state/basemap-store.ts', ROOT).href);
-  const { installFakeBrowser } = await import('./map-harness.ts');
-  const cluster = HAZARD_CLUSTER_KEYS.find((key) => HAZARD_CLUSTERS[key].defaultBasemap === 'satellite');
-  assert.ok(cluster, 'no mode opens on satellite');
-  const written = () => {
-    const browser = installFakeBrowser({ search: '' });
-    try {
-      syncUrl({ region: null, layers: new Set(), embed: false, view: 'console', cluster, basemap: store.getBasemapMode() });
-      return new URLSearchParams(browser.search()).get('basemap');
-    } finally { browser.restore(); }
-  };
-  store.setBasemapMode('satellite');
-  store.revertBasemapForFailure();
-  assert.equal(store.getBasemapMode(), 'default');
-  assert.equal(written(), null);
-  store.setBasemapMode('default');
-  assert.equal(written(), 'default');
 });
 
 test('aggregateChipState: all ready -> live', () => {
@@ -442,41 +374,3 @@ test('every surface-role layer in a cluster recipe has a key label and branch', 
   }
 });
 
-// The owner's live review: NOAA's frozen satellite catalog drew a metadata
-// lookup on every Reset and mode switch. A failed lookup now holds automatic
-// requests off for ten minutes; a SAT press always looks again.
-test('a failed satellite lookup is not repeated automatically for ten minutes; a SAT press looks again', async () => {
-  const { setSatelliteActive } = await import(new URL('src/map/satellite.ts', ROOT).href);
-  const store = await import(new URL('src/state/basemap-store.ts', ROOT).href);
-  const savedFetch = globalThis.fetch;
-  const savedDocument = globalThis.document;
-  let lookups = 0;
-  const stale = Date.now() - 48 * 3600e3;
-  globalThis.document = { getElementById: () => null };
-  globalThis.fetch = async () => {
-    lookups++;
-    return new Response(JSON.stringify({ features: [{ attributes: {
-      objectid: 1, name: 'MERGEDGC.10-minute.stale.color', start_time: stale - 540e3, end_time: stale
-    } }] }), { status: 200, headers: { 'content-type': 'application/json' } });
-  };
-  const map = { getLayer: () => undefined, getSource: () => undefined, removeLayer() {}, removeSource() {} };
-  try {
-    store.setBasemapMode('satellite');
-    await setSatelliteActive(map, true, false);
-    assert.equal(lookups, 1);
-    assert.equal(store.getBasemapMode(), 'default');
-    assert.equal(store.isImageryUnavailable(), true);
-
-    store.setBasemapMode('satellite');
-    await setSatelliteActive(map, true, false);
-    assert.equal(lookups, 1, 'an automatic request inside the hold made a lookup');
-    assert.equal(store.getBasemapMode(), 'default');
-
-    await setSatelliteActive(map, true, true);
-    assert.equal(lookups, 2, 'a SAT press did not look again');
-  } finally {
-    globalThis.fetch = savedFetch;
-    if (savedDocument === undefined) delete globalThis.document;
-    else globalThis.document = savedDocument;
-  }
-});

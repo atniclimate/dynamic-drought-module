@@ -2471,9 +2471,9 @@ test('an embed without the flag never activates and never gains it', async ({
     await expect(page.locator('#fire3d-embed-note')).toHaveCount(0);
   });
 
-  test('a mobile viewport never fetches the 3D chunks', async ({ page }) => {
+  test('a phone-width embed never fetches the 3D chunks', async ({ page }) => {
     await stubWildfireFeeds(page);
-    // Only the 3D chunks themselves are forbidden on mobile. The tiny
+    // Only the 3D chunks themselves are forbidden here. The tiny
     // fire3d-presentation constants chunk legitimately rides the shell
     // island (the control needs the coverage note and breakpoint), and
     // the document URL itself carries the fire3d parameter.
@@ -2491,14 +2491,33 @@ test('an embed without the flag never activates and never gains it', async ({
     });
 
     await page.setViewportSize({ width: 390, height: 844 });
-    await gotoApp(page, '?region=washington_state&cluster=wildfire&fire3d=true');
+    await gotoApp(page, '?region=washington_state&cluster=wildfire&fire3d=true&embed=true');
     await page.waitForTimeout(3_000);
 
     expect(chunkRequests).toEqual([]);
     expect(await fire3dStamp(page)).toBeUndefined();
-    // The phone chrome says nothing about 3D. Mobile 3D is deferred by
-    // owner ruling, not refused by this device, so a standing notice here
-    // would be a nag about a decision the hardware did not make.
+    // An embed has no phone shell and so no 3D chrome. Below the console width only
+    // that chrome can present the scene, so a phone-width embed stays flat and fetches
+    // nothing (review finding R2-10, src/main.ts fire3dPresentable). A phone outside an
+    // embed does enter the scene since the sprint; see the next test.
+    await expect(page.locator('#shell-fire3d-refused')).toHaveCount(0);
+    // The cell is created in every shell and offered only by the phone shell (src/ui/fire3d-phone.ts).
+    await expect(page.locator('#fire3d-phone-cell')).toBeHidden();
+    await expect(page.locator('#app[data-fire3d-phone]')).toHaveCount(0);
+  });
+
+  test('a phone that opens a fire3d=true link enters the scene behind its card', async ({
+    page
+  }) => {
+    test.setTimeout(150_000);
+    await stubWildfireFeeds(page);
+    await stubDeepTerrainArchive(page);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await gotoApp(page, '?region=washington_state&cluster=wildfire&fire3d=true');
+    await expect.poll(() => fire3dStamp(page), { timeout: 60_000 }).toBe('active');
+    await expect(page.locator('#app[data-fire3d-phone]')).toHaveCount(1);
+    await expect(page.locator('#fire3d-phone-card')).toBeVisible();
+    await expect(page.locator('#fire3d-phone-cell')).toHaveAttribute('aria-pressed', 'true');
     await expect(page.locator('#shell-fire3d-refused')).toHaveCount(0);
   });
 

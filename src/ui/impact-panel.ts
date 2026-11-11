@@ -34,6 +34,7 @@ import {
   onSheetDetentSettle,
   restoreSheetDetent,
   setSheetBriefing,
+  setSheetBriefingOpener,
   setSheetDetent,
   sheetAllowsAutoRaise,
   sheetReportHost
@@ -778,6 +779,14 @@ export function openImpactPanel(context: BoundarySelectionContext): number {
   );
   return token;
 }
+
+// The phone sheet's at-hand door opens the briefing of a place that is
+// selected with none read yet (owner direction 2026-11-09 (sprint),
+// DR-pending). Registered here because this module imports the sheet's; the
+// sheet importing this one would close a cycle.
+setSheetBriefingOpener((selection) => {
+  openImpactPanel(selection.context);
+});
 
 /** Report an unavailable briefing when a prerequisite lazy module failed. */
 export function openImpactPanelUnavailable(
