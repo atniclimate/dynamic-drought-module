@@ -42,7 +42,6 @@ import { buildBoundaryContext, caveatFor } from '../../impact/context';
 import {
   bboxIntersection,
   bboxIntersects,
-  bboxToContinuousBounds,
   loadServiceEnvelopePieces,
   mergeByStableIdentifier
 } from '../../util/bbox';
@@ -71,11 +70,8 @@ import {
   setStudioWatershedBoundary,
   showStudioReturnBoundary
 } from '../../state/display-snapshot';
-import { getMap } from '../../state/map-store';
 import { getEmphasisTargets } from '../../state/place-emphasis';
 import { setPlaceReturnBriefing, takePlaceReturn } from '../../state/place-return';
-import { onPlaceSelectionChange, setPlaceSelection } from '../../state/place-selection';
-import { clearStudioBoundary, showStudioBoundary } from '../../state/studio-boundary';
 import { backToMap, getStudioRoute } from '../../state/studio-route';
 import {
   loadWatershedCandidates,
@@ -90,9 +86,8 @@ import {
 import type { ArealGeometry } from '../../util/arcgis-features';
 import { fetchJsonWithBudget, fetchSharedJsonWithBudget, US_STATES_SHARED_KEY } from '../../util/fetch';
 import { enterChoice, foldSearchText, matchesTokens, prefixFirst } from '../../util/search-fold';
-import { edgeColumnInset } from '../edge-column';
 import { openImpactPanel } from '../impact-panel';
-import { getSheetDetent, isSheetActive, sheetCameraInset } from '../mobile-sheet';
+import { releaseShownPlace, showPlaceOnMap } from './place-on-map';
 import { applyStudioInertScope } from './studio-inert';
 import '../../styles/studios.css';
 
@@ -987,75 +982,20 @@ function queueReturnBriefing(action: () => void): void {
   });
 }
 
-/**
- * What the exit hand-off does with the chosen place. `briefing` is the
- * standing behaviour and the default, so Back, Escape and browser Back are
- * unchanged; the selection bar's "Show on map" sets `map` for its own exit.
- * Read when the hand-off RUNS, so every path that queues it (the click, the
- * resolution's start and its completion, the chase) honours the last choice.
- */
-let returnView: 'briefing' | 'map' = 'briefing';
-
-/** Drops the boundary a "Show on map" exit drew, once its place is no longer the selection. */
-let releaseShownBoundary: (() => void) | null = null;
-
-/**
- * "Show on map": frame the place, mark its boundary and make it the selected
- * place, as a search result or a map click does (summary first, D-0.7.0-070).
- * No briefing opens; the shell names the place and offers its briefing.
- *
- * The geometry is the one the studio already read live for this selection;
- * nothing is fetched again and nothing is kept past the selection. A Tribal
- * Nation is drawn with the located overlay the exit briefing uses, which
- * clears with its selection. Any other kind is drawn with the studio's own
- * neutral selection boundary (never the Tribal family colour) and dropped
- * here when the selection moves on.
- */
-function showReturnPlaceOnMap(entry: PlaceCatalogEntry, resolved: ResolvedPlaceSelection): void {
-  const { context, geometry, bbox } = resolved;
-  releaseShownBoundary?.();
-  const selection = { label: context.title, context };
-  // Selection first: the located overlay records the selection current when it is shown.
-  setPlaceSelection(selection);
-  const map = getMap();
-  if (!map) return;
-  // Keep the place clear of the phone chrome that is on screen with it.
-  const sheetBand = isSheetActive() && getSheetDetent() !== 'closed' ? sheetCameraInset() : 0;
-  map.fitBounds(bboxToContinuousBounds(bbox), {
-    padding: isSheetActive()
-      ? { top: 24, left: 24, right: 24 + edgeColumnInset(), bottom: 24 + sheetBand }
-      : { top: 40, left: 40, right: 40, bottom: 40 }
-  });
-  if (entry.kind === 'tribe') {
-    showStudioReturnBoundary(geometry);
-    return;
-  }
-  clearStudioEmphasis();
-  showStudioBoundary(map, geometry);
-  const stop = onPlaceSelectionChange((next) => {
-    if (next && next.label === selection.label && next.context.kind === context.kind) return;
-    releaseShownBoundary?.();
-  });
-  releaseShownBoundary = () => {
-    releaseShownBoundary = null;
-    stop();
-    clearStudioBoundary(map);
-  };
+/** The exit briefing; a Nation's boundary is drawn after the open, so the overlay records the Nation's selection. */
+function openReturnBriefing(entry: PlaceCatalogEntry, resolved: ResolvedPlaceSelection): void {
+  openImpactPanel(resolved.context);
+  if (entry.kind === 'tribe') showStudioReturnBoundary(resolved.geometry);
 }
 
 /**
- * The exit hand-off for the chosen place: its briefing, or the map alone
- * when the selection bar asked for that. A Nation's boundary is drawn after
- * the open, so the overlay records the Nation's selection.
+ * The exit for "Show on map": the chosen place framed and marked, and no
+ * briefing (src/ui/island/place-on-map.ts, which is the one step that
+ * touches the map; nothing in this file does). It rides the same exit
+ * hand-off slot as the briefing, so it runs after the display is restored.
  */
-function openReturnBriefing(entry: PlaceCatalogEntry, resolved: ResolvedPlaceSelection): void {
-  if (returnView === 'map') {
-    returnView = 'briefing';
-    showReturnPlaceOnMap(entry, resolved);
-    return;
-  }
-  openImpactPanel(resolved.context);
-  if (entry.kind === 'tribe') showStudioReturnBoundary(resolved.geometry);
+function showReturnPlace(entry: PlaceCatalogEntry, resolved: ResolvedPlaceSelection): void {
+  showPlaceOnMap(entry.kind, resolved.context, resolved.geometry, resolved.bbox);
 }
 
 /**
@@ -1142,9 +1082,8 @@ function PlaceStudio() {
   const kindRef = useRef(kind);
 
   useEffect(() => {
-    returnView = 'briefing';
-    // A boundary an earlier "Show on map" drew belongs to the map, not to this session.
-    releaseShownBoundary?.();
+    // A boundary an earlier "Show on map" left belongs to the map, not to this session.
+    releaseShownPlace();
     beginPlaceStudioDisplay(kind);
     const releaseInertScope = applyStudioInertScope();
     backRef.current?.focus();
@@ -1555,7 +1494,6 @@ function PlaceStudio() {
   const choose = (entry: PlaceCatalogEntry): void => {
     const chosenKey = `${entry.kind}:${entry.id}`;
     explicitSelectionKeyRef.current = chosenKey;
-    returnView = 'briefing';
     setPlaceReturnBriefing(null);
     const resolved = resolvedSelectionRef.current;
     if (coverageForEntry(entry).briefable.state === 'available') {
@@ -1688,49 +1626,49 @@ function PlaceStudio() {
 
   /**
    * Leave the studio with the chosen place: its briefing, or the map alone.
-   * The exit is the same one step Back takes; the hand-off it runs is the
-   * one the selection already queues. A place the bar finds chosen from an
-   * earlier session is registered here, as its own row press would have.
-   * While the boundary read is still in flight the exit waits for it, as
-   * Back does; if the read then fails, the studio stays and says so.
+   * The exit is the same one step Back takes, and the hand-off rides the
+   * slot the selection already uses, so it runs after the display is
+   * restored. While the boundary read is still in flight the exit waits for
+   * it, as Back does; if the read then fails, the studio stays and the bar
+   * says so. A place the bar finds chosen from an earlier session is
+   * registered here, as its own row press would have.
    */
   const leaveWith = async (view: 'briefing' | 'map'): Promise<void> => {
     if (backPending || !selectionEntry || selectionKey === null) return;
     const entry = selectionEntry;
-    returnView = view;
+    const hand = view === 'map' ? showReturnPlace : openReturnBriefing;
     explicitSelectionKeyRef.current = selectionKey;
     const resolved = resolvedSelectionRef.current;
-    const inFlight = selectionPromiseRef.current;
     if (resolved?.key === selectionKey) {
-      queueReturnBriefing(() => openReturnBriefing(entry, resolved.value));
-    } else {
-      queueReturnBriefing(
-        chaseBriefingOnReturn(entry, inFlight?.key === selectionKey ? inFlight.value : null)
-      );
-      if (inFlight?.key === selectionKey) {
-        setBackPending(true);
-        let landed = false;
-        try {
-          landed = (await inFlight.value) !== null;
-        } catch {
-          // The bar already states the failed read.
-        }
-        // Browser Back during the wait already left the studio; a second back would leave the site.
-        if (getStudioRoute() !== 'place') return;
-        if (!landed) {
-          returnView = 'briefing';
-          setBackPending(false);
-          return;
-        }
-      }
+      queueReturnBriefing(() => hand(entry, resolved.value));
+      backToMap();
+      return;
     }
+    const inFlight = selectionPromiseRef.current;
+    if (inFlight?.key !== selectionKey) return;
+    // Until the read lands the standing hand-off covers a browser Back: the briefing.
+    queueReturnBriefing(chaseBriefingOnReturn(entry, inFlight.value));
+    setBackPending(true);
+    let landed: ResolvedPlaceSelection | null = null;
+    try {
+      landed = await inFlight.value;
+    } catch {
+      // The bar already states the failed read.
+    }
+    // Browser Back during the wait already left the studio; a second back would leave the site.
+    if (getStudioRoute() !== 'place') return;
+    if (!landed) {
+      setBackPending(false);
+      return;
+    }
+    const value = landed;
+    queueReturnBriefing(() => hand(entry, value));
     backToMap();
   };
 
   /** Drop the choice: the durable place's explicit clear, so Back hands nothing to the map. */
   const clearChoice = (): void => {
     explicitSelectionKeyRef.current = null;
-    returnView = 'briefing';
     setPlaceReturnBriefing(null);
     setDetailsOpen(false);
     setTypedPlace(null);
@@ -1874,9 +1812,10 @@ function PlaceStudio() {
                 {failed.map((group) => (
                   <li key={group.kind} data-place-note={group.kind}>
                     <span>{PLACE_CATALOG[group.kind].label} are not available right now.</span>
+                    {/* Its own class only: `.layers-studio-back` in this root is the header's Back and the one-list failure's retry. */}
                     <button
                       type="button"
-                      class="layers-studio-back place-studio-retry"
+                      class="place-studio-retry"
                       aria-label={`Try ${PLACE_CATALOG[group.kind].label} again`}
                       onClick={() => retryCatalog(group.kind)}
                     >

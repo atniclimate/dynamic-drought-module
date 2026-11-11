@@ -18,6 +18,15 @@
    (src/ui/view-shell.ts syncPlaceStudioRoute, src/ui/sidebar.ts
    syncStudioRoute), so the width alone names the phone shell here.
 
+   TEXT ON THE PHONE GLASS. app.css requires an opaque card under every
+   block of studio text, because its 0.55 studio glass over a bright map
+   leaves --fg-0 at 3.72:1. That rule still holds above 720 px, where the
+   cards stay. On a phone the surface is --glass-panel (0.82): composited
+   over a pure white map patch, before any blur, it is rgb(46.7, 54.9, 61.5),
+   against which --ink is 10.21:1, --ink-soft 7.44:1 and --ink-muted 4.67:1.
+   So text may sit on this glass, and --ink-muted is the faintest ink that
+   may; anything set on a lifted plate over it uses --ink-soft or stronger.
+
    SELECTED, in every shell: one thing chosen out of many (a type chip, the
    chosen place, the condition surface) inverts whole. A layer that is on
    among others that may also be on inverts its mark and keeps its row, so a
@@ -110,6 +119,25 @@
   align-items: center;
   justify-content: space-between;
   gap: 6px 10px;
+}
+/* The retry beside a type that did not load: the studio's small button face. */
+.place-studio-type-notes .place-studio-retry {
+  margin: 0;
+  padding: 7px 11px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  background: var(--bg-2);
+  color: var(--fg-1);
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: var(--fw-subtitle);
+  cursor: pointer;
+}
+@media (hover: hover) {
+  .place-studio-type-notes .place-studio-retry:hover {
+    border-color: var(--accent-strong);
+    color: var(--fg-0);
+  }
 }
 
 #place-studio-root .place-studio-list {
@@ -1096,8 +1124,13 @@
     padding: 8px 8px 8px 12px;
     border-top-color: var(--glass-hairline);
   }
+  /* On the lifted plate the faintest ink steps up one (see the header). */
   .layers-now-role {
+    color: var(--ink-soft);
     font-size: 12px;
+  }
+  .layers-now-count {
+    color: var(--ink-soft);
   }
   .layers-now-name {
     font-size: 14.5px;
@@ -1299,6 +1332,11 @@
     border: 0;
     border-top: 1px solid var(--glass-hairline);
     border-radius: 0;
+  }
+  /* The rehosted Water & Snow panel is the sidebar's; in the studio its
+     controls still have to be a thumb's size. */
+  #layers-studio-root .layers-studio-depth button {
+    min-height: var(--touch-target);
   }
 }
 
