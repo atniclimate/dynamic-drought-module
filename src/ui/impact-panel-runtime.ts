@@ -43,7 +43,6 @@ import { getLayerDef } from '../config/layers';
 import {
   PRIORITY_RULE_ANCHOR,
   renderFocusHead,
-  renderLeadGlance,
   renderLeadView,
   renderPriorityRule,
   renderViewSwitch
@@ -1173,9 +1172,8 @@ export function openImpactPanel(
   openImpactPanelShell(closeImpactPanel, opener);
 
   // Mirror the briefing into the sheet's at-hand block (the half
-  // detent's Brief content; an invisible no-op everywhere else), with the
-  // first read of its reading order for the block's glance row.
-  setSheetBriefing(briefing, renderLeadGlance(briefing));
+  // detent's Brief content; an invisible no-op everywhere else).
+  setSheetBriefing(briefing);
 
   // The 531 kB landscape artifact and its consumer stay out of every
   // unsupported briefing. Exact ecoregion selections activate the lazy
@@ -1427,9 +1425,8 @@ export function refreshOpenBriefing(token: number): void {
     panelEl.querySelector<HTMLButtonElement>('.impact-panel-close')?.focus();
   }
   // Hydration just landed new horizon content; the sheet's at-hand block
-  // mirrors the same model (its glance row is the first ranked read, and
-  // its headline the current-horizon read when nothing is ranked).
-  setSheetBriefing(activeBriefing, activeBriefing ? renderLeadGlance(activeBriefing) : '');
+  // mirrors the same model (its headline is the current-horizon read).
+  setSheetBriefing(activeBriefing);
 }
 
 /** Close the panel and supersede any in-flight hydration. */

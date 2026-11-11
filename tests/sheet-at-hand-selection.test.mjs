@@ -53,28 +53,3 @@ test('the briefing module registers the opener, and the sheet never imports it',
   assert.doesNotMatch(sheet, /from '\.\/impact-panel(?:-runtime)?'/, 'no import cycle through the briefing facade');
   assert.match(sheet, /export function setSheetBriefingOpener\(/);
 });
-
-test('the glance replaces the kicker and the line only for a briefing that ranks a read', async () => {
-  // The lazy runtime hands the markup over with the briefing; no briefing, no glance.
-  assert.match(
-    sheet,
-    /export function setSheetBriefing\(briefing: ImpactBriefing \| null, glance = ''\): void \{/
-  );
-  assert.match(sheet, /sheetGlance = briefing \? glance : '';/);
-  assert.match(sheet, /const glancing = briefing !== null && sheetGlance !== '';/);
-  // The class the stylesheet keys the row's seat on is set from the same test.
-  assert.match(sheet, /atHandBodyEl\.classList\.toggle\('has-glance', glancing\);\s*if \(glancing\) \{/);
-  const css = await read('src/styles/briefing-lead.css');
-  // Seen under the title; still read out after the kind (the document order is untouched).
-  assert.match(css, /#sheet-at-hand-body\.has-glance \.sheet-glance-row \{\s*order: 1;\s*\}/);
-  assert.match(css, /#sheet-at-hand-body\.has-glance \.sheet-at-hand-kind \{\s*order: 2;/);
-  assert.match(sheet, /<h2 class="sheet-at-hand-title">\$\{escapeHtml\(title\)\}<\/h2>\s*\$\{kind \? `<p class="sheet-at-hand-kind">\$\{escapeHtml\(kind\)\}<\/p>` : ''\}\s*\$\{sheetGlance\}/);
-  const runtime = strip(await read('src/ui/impact-panel-runtime.ts'));
-  assert.equal([...runtime.matchAll(/setSheetBriefing\([^)]*renderLeadGlance\(/g)].length, 2);
-  // The row raises the report and hands focus to its own tile there, by key.
-  assert.match(
-    sheet,
-    /const key = row\?\.dataset\['glanceKey'\];\s*if \(!key\) return;\s*setSheetDetent\('full'\);/
-  );
-  assert.match(sheet, /node\.dataset\['leadKey'\] === key/);
-});
