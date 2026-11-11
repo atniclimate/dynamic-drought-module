@@ -355,6 +355,11 @@ export function attachSheetMotion(
   drawerQuery.addEventListener('change', () => {
     halt();
     if (moving) {
+      // The halted run may have been a close, whose stop is stamped only
+      // when its spring rests. Stamp the controller's stop now, or #app
+      // would keep the old one while the controller already holds closed,
+      // and every way of closing the sheet would do nothing.
+      host.present();
       rest();
       host.settle();
     }
