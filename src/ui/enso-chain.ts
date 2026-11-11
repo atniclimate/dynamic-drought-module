@@ -49,12 +49,17 @@
  * the layer registry's, the jet's is the flow overlay's own snapshot. The
  * two place reads are the briefing's own source functions, gated by the
  * briefing's own source policy, for the place selection in force; each is
- * cancelled when the selection changes and when the chain leaves. The
+ * cancelled when the selection changes and when the chain leaves. They are
+ * made only while some of the panel is on screen (or holds focus): a place
+ * chosen with the phone guide closed, or with the panel out of view in the
+ * sidebar, asks no source anything until the chain is looked at, so a map
+ * click in this mode costs no request the reader did not ask for. The
  * source functions are a further dynamic import, made only once a place is
- * chosen and the policy lets a source run. The policy is a static import on
- * purpose: asked for dynamically it became a chunk of its own, and three
- * small modules the entry shares with it left the entry chunk for the boot's
- * preload list (measured with scripts/check-bundle-size.mjs).
+ * chosen, the panel is on screen and the policy lets a source run. The
+ * policy is a static import on purpose: asked for dynamically it became a
+ * chunk of its own, and three small modules the entry shares with it left
+ * the entry chunk for the boot's preload list (measured with
+ * scripts/check-bundle-size.mjs).
  *
  * NOTHING MOVES. There is no animation here, so reduced motion has no twin
  * to keep in step, and no emphasis is carried by motion.
@@ -147,6 +152,10 @@ interface Held {
   place: { readonly label: string; readonly context: BoundarySelectionContext } | null;
   outlook: PlaceRead;
   here: PlaceRead;
+  /** Whether any of the panel is on screen. The two place links read only then. */
+  onScreen: boolean;
+  /** The place in force has not been read yet: the panel was not on screen when it was chosen. */
+  placeUnread: boolean;
   truthOpen: boolean;
   guideOpen: boolean;
   painted: string;
@@ -243,14 +252,16 @@ function readIndex(state: Held): void {
 }
 
 /**
- * Read the two place links for the selection in force, through the
- * briefing's own source functions and its own source policy, so the chain
- * and the briefing state the same claims. A new selection, a cleared one and
- * an unmount each abort what was in flight.
+ * Take the selection in force for the two place links. A new selection, a
+ * cleared one and an unmount each abort what was in flight. The reads start
+ * at once when the panel is on screen, and otherwise wait until it is
+ * (`readPlace`); until then the links say they are loading, and no one can
+ * see them.
  */
-function readPlace(state: Held, selection: PlaceSelection | null): void {
+function setPlace(state: Held, selection: PlaceSelection | null): void {
   state.placeController?.abort();
   state.placeController = null;
+  state.placeUnread = false;
   if (selection === null) {
     state.place = null;
     state.outlook = { status: 'none' };
@@ -258,11 +269,23 @@ function readPlace(state: Held, selection: PlaceSelection | null): void {
     paint();
     return;
   }
-  const context = selection.context;
-  state.place = { label: selection.label, context };
+  state.place = { label: selection.label, context: selection.context };
   state.outlook = { status: 'loading' };
   state.here = { status: 'loading' };
+  state.placeUnread = true;
   paint();
+  if (state.onScreen) readPlace(state);
+}
+
+/**
+ * Read the two place links for the place in force, once, through the
+ * briefing's own source functions and its own source policy, so the chain
+ * and the briefing state the same claims.
+ */
+function readPlace(state: Held): void {
+  if (!state.place || !state.placeUnread) return;
+  state.placeUnread = false;
+  const context = state.place.context;
   const controller = new AbortController();
   state.placeController = controller;
   const signal = controller.signal;
@@ -578,6 +601,8 @@ export function mountEnsoChain(map: maplibregl.Map, frameDate: string | null): v
     place: null,
     outlook: { status: 'none' },
     here: { status: 'none' },
+    onScreen: false,
+    placeUnread: false,
     truthOpen: false,
     guideOpen: false,
     painted: ''
@@ -603,7 +628,26 @@ export function mountEnsoChain(map: maplibregl.Map, frameDate: string | null): v
       if (key === SURFACE_KEY) paint();
     })
   );
-  state.offs.push(onPlaceSelectionChange((selection) => readPlace(state, selection)));
+  state.offs.push(onPlaceSelectionChange((selection) => setPlace(state, selection)));
+  // The two place links read only while some of the panel is on screen: the
+  // phone guide open, or the sidebar showing this panel. Focus inside it
+  // counts as well. Where the browser cannot say, the panel counts as on
+  // screen, which is the chain reading as soon as a place is chosen.
+  if (typeof IntersectionObserver === 'function') {
+    const seen = new IntersectionObserver((entries) => {
+      const last = entries[entries.length - 1];
+      if (held !== state || !last) return;
+      state.onScreen = last.isIntersecting;
+      if (state.onScreen) readPlace(state);
+    });
+    seen.observe(panel);
+    state.offs.push(() => seen.disconnect());
+  } else {
+    state.onScreen = true;
+  }
+  panel.addEventListener('focusin', () => {
+    if (held === state) readPlace(state);
+  });
   const shell = new MutationObserver(syncGuide);
   shell.observe(app, { attributes: true, attributeFilter: ['data-sheet-detent', 'data-sheet-tab'] });
   state.offs.push(() => shell.disconnect());
@@ -612,7 +656,7 @@ export function mountEnsoChain(map: maplibregl.Map, frameDate: string | null): v
 
   paint();
   readIndex(state);
-  readPlace(state, getPlaceSelection());
+  setPlace(state, getPlaceSelection());
   // The overlay answers with what it is drawing now.
   window.dispatchEvent(new Event(FLOW_SNAPSHOT_REQUEST_EVENT));
 }

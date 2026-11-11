@@ -260,7 +260,10 @@ never enters the URL.
 
 **Lazy and still.** The sea surface temperature layer loads the chain when it
 activates and removes it when it deactivates. An embed loads none of it.
-Nothing in it moves, so reduced motion shows the same picture.
+The two place links ask their sources only while some of the panel is on
+screen, and once per chosen place: a place chosen with the phone guide closed
+costs no request until the guide is opened. Nothing in it moves, so reduced
+motion shows the same picture.
 
 ## Convergence doctrine
 

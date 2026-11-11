@@ -814,6 +814,36 @@ test('the chain is lazy: the layer holds only its loader, and the loader imports
   }
 });
 
+test('the two place links ask their sources only once the panel is on screen, and once per place', () => {
+  const host = code('../src/ui/enso-chain.ts');
+  const body = (name) => {
+    const start = host.indexOf(`function ${name}(`);
+    assert.ok(start >= 0, `${name} exists`);
+    const next = host.indexOf('\nfunction ', start + 1);
+    return host.slice(start, next < 0 ? undefined : next);
+  };
+  // Taking a selection asks nothing by itself: it marks the place unread and
+  // reads only when the panel is on screen.
+  const take = body('setPlace');
+  assert.match(take, /state\.placeController\?\.abort\(\);/, 'a new selection cancels the last read');
+  assert.match(take, /state\.placeUnread = true;/);
+  assert.match(take, /if \(state\.onScreen\) readPlace\(state\);/);
+  assert.doesNotMatch(take, /import\(|fetch[A-Z]|briefingSourcePolicy/, 'taking a selection asks nothing');
+  // The read spends the unread mark before it asks, so one place is read once
+  // however often the panel comes and goes.
+  const readFn = body('readPlace');
+  assert.match(readFn, /if \(!state\.place \|\| !state\.placeUnread\) return;\s*state\.placeUnread = false;/);
+  assert.ok(readFn.indexOf('state.placeUnread = false;') < readFn.indexOf("import('../impact/sources')"), 'spent before the sources load');
+  // On screen is the browser's own answer for the panel, dropped when the chain leaves.
+  assert.match(host, /new IntersectionObserver\(/);
+  assert.match(host, /state\.onScreen = last\.isIntersecting;\s*if \(state\.onScreen\) readPlace\(state\);/);
+  assert.match(host, /seen\.observe\(panel\);\s*state\.offs\.push\(\(\) => seen\.disconnect\(\)\);/);
+  // The selection in force at mount and every later one go through the same gate.
+  assert.equal(count(host, 'readPlace(state)'), 3, 'three callers: a selection, the panel coming on screen, focus inside it');
+  assert.match(host, /onPlaceSelectionChange\(\(selection\) => setPlace\(state, selection\)\)/);
+  assert.match(host, /setPlace\(state, getPlaceSelection\(\)\);/);
+});
+
 // ---------------------------------------------------------------------------
 // 9. Five doors in the phone column
 // ---------------------------------------------------------------------------
