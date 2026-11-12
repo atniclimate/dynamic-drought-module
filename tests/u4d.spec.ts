@@ -1,12 +1,19 @@
 import { test, expect } from './offline-test';
 
+import type { Locator, Page } from '@playwright/test';
+
 import { ACKNOWLEDGEMENTS, PROVIDERS } from '../src/config/acknowledgements';
-import { SATELLITE_COVERAGE_NOTE } from '../src/map/satellite';
+import {
+  SATELLITE_CAVEAT_NOTE,
+  SATELLITE_COVERAGE_NOTE,
+  SATELLITE_UNAVAILABLE_NOTE
+} from '../src/ui/map-technical-information';
 import { gotoApp, layerCheckbox, search, waitForLayerSettled } from './helpers';
 import {
   failRecentSatelliteTiles,
   SATELLITE_FRAME,
   SATELLITE_NEW_FRAME,
+  SATELLITE_OLDER_FRAME,
   satelliteObservationRangeText,
   type SatelliteStubController,
   stubRecentSatellite
@@ -25,7 +32,17 @@ import {
 
 const SWITCHER = '.basemap-switcher-btn';
 const IMAGERY_CHIP = '#basemap-vintage';
+/** The frame the map holds, stamped from the installed source (src/map/satellite.ts). */
+const SATELLITE_STAMP = 'data-ddm-satellite';
 let satelliteStub: SatelliteStubController;
+
+/** The Impact Briefing's Technical information, opened through the map key's link. */
+async function openTechnicalInformation(page: Page): Promise<Locator> {
+  await page.locator('button[data-open-technical-information]').first().dispatchEvent('click');
+  const notes = page.locator('#impact-panel .impact-technical-information');
+  await expect(notes).toHaveJSProperty('open', true);
+  return notes;
+}
 
 test.beforeEach(async ({ page }) => {
   satelliteStub = await stubRecentSatellite(page);
@@ -138,17 +155,23 @@ test.describe('U4d: the switcher control and assistive observation status', () =
   }) => {
     await gotoApp(page, '?view=console&basemap=satellite');
     const chip = page.locator(IMAGERY_CHIP);
+    const btn = page.locator(SWITCHER);
     await expect(chip).not.toBeInViewport();
     await expect(chip).toContainText(satelliteObservationRangeText(SATELLITE_FRAME));
-    await expect(chip).toContainText('Context only');
-    await expect(chip).toContainText('daytime approximate true color');
-    await expect(chip).toContainText('nighttime infrared with static lights');
-    // The coverage clause names the product's real geometry (two GOES
-    // disks, not a rectangle) and its inherent daylight seam, so a viewer
-    // reading a bright edge or a base-map gap knows which it is. Asserted
-    // against the exported constant so the copy and the spec cannot drift.
-    await expect(chip).toContainText(SATELLITE_COVERAGE_NOTE);
-    await expect(page.locator(SWITCHER)).toHaveAccessibleDescription(/NOAA GOES GeoColor/);
+    await expect(btn).toHaveAccessibleDescription(/NOAA GOES GeoColor/);
+    // Live imagery never reads as unavailable.
+    await expect(btn).not.toHaveAccessibleDescription(/unavailable/);
+    await expect(btn).not.toHaveAttribute('title', /unavailable/);
+    await expect(btn).not.toHaveAttribute('data-imagery-unavailable');
+    await expect(page.locator('html')).toHaveAttribute(SATELLITE_STAMP, String(SATELLITE_FRAME.objectId));
+    // The caveats and the coverage clause (the product's real geometry, two
+    // GOES disks, and its daylight seam) read in the Impact Briefing, not in
+    // the hidden chip (owner rule 2026-10-13). Asserted against the exported
+    // constants so the copy and the spec cannot drift.
+    const notes = await openTechnicalInformation(page);
+    await expect(notes).toContainText(SATELLITE_CAVEAT_NOTE);
+    await expect(notes).toContainText(SATELLITE_COVERAGE_NOTE);
+    await expect(notes).not.toContainText(SATELLITE_UNAVAILABLE_NOTE);
   });
 
   test('a bad newest frame falls back to the previous recent candidate', async ({
@@ -181,6 +204,49 @@ test.describe('U4d: the switcher control and assistive observation status', () =
     expect(satelliteStub.renderedFrameIds).not.toContain(SATELLITE_NEW_FRAME.objectId);
   });
 
+  test('when the two newest frames serve placeholder map tiles the selection walks back to the third', async ({
+    page
+  }) => {
+    // Both probes see imagery, so each frame is installed and dropped at tile time in turn.
+    satelliteStub.setFrames([SATELLITE_NEW_FRAME, SATELLITE_FRAME, SATELLITE_OLDER_FRAME]);
+    satelliteStub.servePlaceholderFrame(SATELLITE_NEW_FRAME.objectId, 'tiles');
+    satelliteStub.servePlaceholderFrame(SATELLITE_FRAME.objectId, 'tiles');
+
+    await gotoApp(page, '?view=console&basemap=satellite');
+    const chip = page.locator(IMAGERY_CHIP);
+    await expect(chip).toContainText(satelliteObservationRangeText(SATELLITE_OLDER_FRAME), { timeout: 30_000 });
+    await expect(page.locator(SWITCHER)).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('html')).toHaveAttribute(SATELLITE_STAMP, String(SATELLITE_OLDER_FRAME.objectId));
+    expect(satelliteStub.probeFrameIds).toEqual(expect.arrayContaining([
+      SATELLITE_NEW_FRAME.objectId,
+      SATELLITE_FRAME.objectId,
+      SATELLITE_OLDER_FRAME.objectId
+    ]));
+    expect(satelliteStub.renderedFrameIds).toEqual(expect.arrayContaining([
+      SATELLITE_NEW_FRAME.objectId,
+      SATELLITE_FRAME.objectId,
+      SATELLITE_OLDER_FRAME.objectId
+    ]));
+  });
+
+  test('placeholder map tiles from the newest frame walk back to the previous frame', async ({
+    page
+  }) => {
+    // The newest frame's probe sees imagery, so it is installed; its map
+    // tiles come back as the placeholder, and the selection walks back.
+    satelliteStub.setFrames([SATELLITE_NEW_FRAME, SATELLITE_FRAME]);
+    satelliteStub.servePlaceholderFrame(SATELLITE_NEW_FRAME.objectId, 'tiles');
+
+    await gotoApp(page, '?view=console&basemap=satellite');
+    const chip = page.locator(IMAGERY_CHIP);
+    await expect(chip).toContainText(satelliteObservationRangeText(SATELLITE_FRAME), { timeout: 30_000 });
+    await expect(page.locator(SWITCHER)).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator(SWITCHER)).not.toHaveAttribute('data-imagery-unavailable');
+    await expect(page.locator('html')).toHaveAttribute(SATELLITE_STAMP, String(SATELLITE_FRAME.objectId));
+    expect(satelliteStub.renderedFrameIds).toContain(SATELLITE_NEW_FRAME.objectId);
+    expect(await search(page)).not.toContain('basemap=');
+  });
+
   test('when every frame serves the placeholder image the map falls back to the plain map', async ({
     page
   }) => {
@@ -198,15 +264,21 @@ test.describe('U4d: the switcher control and assistive observation status', () =
     expect(await search(page)).not.toContain('basemap=');
     // No frame was installed: the placeholder frames never reached the map.
     expect(satelliteStub.renderedFrameIds).toEqual([]);
+    await expect(page.locator('html')).not.toHaveAttribute(SATELLITE_STAMP);
     await expect(page.locator(IMAGERY_CHIP)).toBeHidden();
     await expect(page.locator('#map-osm-credit')).toBeVisible();
+    // The words a sighted visitor can read: the Impact Briefing says so, with no observation time.
+    const notes = await openTechnicalInformation(page);
+    await expect(notes).toContainText(SATELLITE_UNAVAILABLE_NOTE);
+    await expect(notes).not.toContainText(SATELLITE_CAVEAT_NOTE);
   });
 
   test('placeholder map tiles from a frame whose probe passed are never drawn', async ({
     page
   }) => {
     // The probe sees imagery but the map tiles come back as the placeholder:
-    // each is answered transparent and the frame is dropped.
+    // each is answered transparent and the frame is dropped; with no other
+    // frame the walk back ends on the plain map.
     satelliteStub.servePlaceholderFrame(SATELLITE_FRAME.objectId, 'tiles');
 
     await gotoApp(page, '?view=console&basemap=satellite');
@@ -214,6 +286,7 @@ test.describe('U4d: the switcher control and assistive observation status', () =
     await expect(btn).toHaveAttribute('aria-pressed', 'false', { timeout: 30_000 });
     await expect(btn).toHaveAttribute('data-imagery-unavailable', '');
     expect(satelliteStub.renderedFrameIds).toContain(SATELLITE_FRAME.objectId);
+    await expect(page.locator('html')).not.toHaveAttribute(SATELLITE_STAMP);
     await expect(page.locator(IMAGERY_CHIP)).toBeHidden();
     await expect.poll(async () => search(page)).not.toContain('basemap=');
   });
@@ -240,6 +313,32 @@ test.describe('U4d: the switcher control and assistive observation status', () =
     }, { intervals: [100] }).toContain('refresh delayed');
     await expect(chip).toContainText(satelliteObservationRangeText(SATELLITE_FRAME));
     await expect(page.locator(SWITCHER)).toHaveAttribute('aria-pressed', 'true');
+    expect(await search(page)).not.toContain('basemap=');
+  });
+
+  test('a refresh whose frame serves placeholder tiles restores the last known-good frame', async ({
+    page
+  }) => {
+    await page.clock.install();
+    await gotoApp(page, '?view=console&basemap=satellite');
+    const chip = page.locator(IMAGERY_CHIP);
+    await expect(chip).toContainText(satelliteObservationRangeText(SATELLITE_FRAME));
+
+    satelliteStub.setFrames([SATELLITE_NEW_FRAME, SATELLITE_FRAME]);
+    satelliteStub.servePlaceholderFrame(SATELLITE_NEW_FRAME.objectId, 'tiles');
+    await page.clock.fastForward(10 * 60_000);
+
+    await expect.poll(() =>
+      satelliteStub.renderedFrameIds.includes(SATELLITE_NEW_FRAME.objectId)
+    ).toBe(true);
+    // Stop advancing at rollback so the restored frame can load before its own deadline.
+    await expect.poll(async () => {
+      await page.clock.fastForward(1_000);
+      return chip.textContent();
+    }, { intervals: [100] }).toContain('refresh delayed');
+    await expect(chip).toContainText(satelliteObservationRangeText(SATELLITE_FRAME));
+    await expect(page.locator(SWITCHER)).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('html')).toHaveAttribute(SATELLITE_STAMP, String(SATELLITE_FRAME.objectId));
     expect(await search(page)).not.toContain('basemap=');
   });
 

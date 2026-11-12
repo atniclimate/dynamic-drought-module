@@ -197,6 +197,17 @@ test('HTTP errors, an ArcGIS error envelope at HTTP 200, a blank body and a corr
   assert.deepEqual(heard, []);
 });
 
+test('a body larger than the image cap is a tile error and reports nothing', async () => {
+  const { heard, onTile } = recorder();
+  const { MAX_SATELLITE_IMAGE_BYTES } = await import('../src/map/satellite-guard.ts');
+  assert.equal(MAX_SATELLITE_IMAGE_BYTES, 1024 * 1024);
+  const oversized = Buffer.concat([recorded('night-ocean.jpg'), Buffer.alloc(MAX_SATELLITE_IMAGE_BYTES)]);
+  await withFetch(async () => imageResponse(oversized, 'image/jpeg'), async () => {
+    await assert.rejects(satelliteTileAction(onTile, decodeByType)(request, new AbortController()), RangeError);
+  });
+  assert.deepEqual(heard, []);
+});
+
 test('an abort during the body read rejects as AbortError, cancels the body and reports nothing', { timeout: 1000 }, async () => {
   const { heard, onTile } = recorder();
   const owner = new AbortController();

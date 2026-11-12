@@ -18,6 +18,8 @@ import { fetchBufferedWithBudget } from '../util/fetch';
 
 export const SATELLITE_TILE_SCHEME = 'satellite-guard';
 const TILE_TIMEOUT_MS = 15_000;
+/** The largest probe or tile body read; a 256 px image needs well under this. A larger body is a failed read. */
+export const MAX_SATELLITE_IMAGE_BYTES = 1024 * 1024;
 
 export interface DecodedImage {
   readonly width: number;
@@ -149,7 +151,7 @@ export function satelliteTileAction(
   return async (request, abortController) => {
     const signal = abortController.signal;
     const url = request.url.slice(`${SATELLITE_TILE_SCHEME}://`.length);
-    const response = await fetchBufferedWithBudget(url, { credentials: 'omit' }, signal, timeoutMs);
+    const response = await fetchBufferedWithBudget(url, { credentials: 'omit' }, signal, timeoutMs, MAX_SATELLITE_IMAGE_BYTES);
     if (!response.ok) throw new Error(`Satellite tile HTTP ${response.status}`);
     const contentType = (response.headers.get('content-type') ?? '').toLowerCase();
     const data = await response.arrayBuffer();

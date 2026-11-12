@@ -5,7 +5,7 @@ import { CHIP_STATE_WORDS, imageryFailureState } from '../config/chip-state';
 import { URLS } from '../config/urls';
 import { revertBasemapForFailure } from '../state/basemap-store';
 import { showToast } from '../ui/overlay';
-import { fetchBufferedWithBudget, fetchJsonWithBudget } from '../util/fetch';
+import { fetchBufferedWithBudget, fetchJsonWithBudget, sleepUnlessAborted } from '../util/fetch';
 import { isObject } from '../util/guards';
 import {
   watchRasterTiles,
@@ -16,6 +16,7 @@ import {
   decodeImage,
   isPlaceholderImage,
   isSupportedRaster,
+  MAX_SATELLITE_IMAGE_BYTES,
   SATELLITE_TILE_SCHEME,
   satelliteTileAction
 } from './satellite-guard';
@@ -29,19 +30,28 @@ import {
  * pins every exportImage tile to the selected object id and observation time.
  * The probe and every drawn tile pass the placeholder guard
  * (./satellite-guard.ts): the service can answer a valid request with a
- * black and white placeholder image, which is never drawn as imagery.
+ * black and white placeholder image, which is never drawn as imagery. A
+ * frame that serves it at tile time is skipped for the rest of the session
+ * and the selection walks back to an older frame.
+ * The last frame whose tiles loaded is held: turning imagery back on puts it
+ * on the map at once while it is still recent, and the refresh looks for a
+ * newer one; a catalog query that fails is asked once more before imagery
+ * reads unavailable.
  * That pin is load-bearing: the image endpoint advertises a 12-hour cache, and
  * an unpinned "latest" request could mix scans across one viewport.
  *
  * OpenStreetMap stays visible underneath. GOES coverage stops near 76 degrees
  * latitude, and transparent or missing imagery must reveal the default map,
- * never a blank surface. The chip keeps observation time and interpretation
- * caveats separate from the hazard layers above it.
+ * never a blank surface. The chip keeps the observation time separate from
+ * the hazard layers above it; the imagery's caveats read in the Impact
+ * Briefing's Technical information (src/ui/map-technical-information.ts).
  */
 
 const SOURCE_ID = 'basemap-satellite';
 const LAYER_ID = 'basemap-satellite';
 const METADATA_TIMEOUT_MS = 10_000;
+/** The pause before a failed catalog query is asked once more; both fit the selection budget. */
+const CATALOG_RETRY_DELAY_MS = 1_000;
 const TILE_COMPLETENESS_DEADLINE_MS = 30_000;
 const CANDIDATE_PROBE_TIMEOUT_MS = 35_000;
 const FRAME_SELECTION_TIMEOUT_MS = 55_000;
@@ -91,7 +101,31 @@ let frameStatus: FrameStatus | null = null;
 let failInstalledFrame: ((reason: string) => void) | null = null;
 // Placeholder tiles answered transparent since the page loaded.
 let placeholderTiles = 0;
+// Frames that served a placeholder at tile time; never selected again this session.
+const placeholderFrameIds = new Set<number>();
+// The last frame whose tiles loaded: reinstalled at once on the next activation while recent.
+let heldFrame: SatelliteFrame | null = null;
 let protocolRegistered = false;
+
+/**
+ * What the Impact Briefing says about the imagery: 'on' while a frame is
+ * drawn, 'unavailable' while the plain map stands in for failed imagery,
+ * null while the plain map is a choice. Sent as an event (mirrored literals
+ * of src/ui/map-technical-information.ts, which owns the words) so the
+ * briefing module stays out of this lazy chunk.
+ */
+type ImageryBriefing = 'on' | 'unavailable' | null;
+let imageryBriefing: ImageryBriefing = null;
+
+function publishImageryBriefing(state: ImageryBriefing): void {
+  imageryBriefing = state;
+  if (typeof window === 'undefined' || typeof window.dispatchEvent !== 'function') return;
+  window.dispatchEvent(new CustomEvent('ddm:satellite-imagery', { detail: { state } }));
+}
+
+if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+  window.addEventListener('ddm:satellite-imagery-request', () => publishImageryBriefing(imageryBriefing));
+}
 
 function finiteNumber(value: unknown): number | null {
   const number = typeof value === 'number' ? value : Number(value);
@@ -269,7 +303,8 @@ async function proveFrameAvailable(
     satelliteProbeUrl(frame),
     { cache: 'no-store', credentials: 'omit' },
     masterSignal,
-    CANDIDATE_PROBE_TIMEOUT_MS
+    CANDIDATE_PROBE_TIMEOUT_MS,
+    MAX_SATELLITE_IMAGE_BYTES
   );
   if (!response.ok) {
     throw new Error(`Satellite probe returned HTTP ${response.status}.`);
@@ -282,10 +317,12 @@ async function proveFrameAvailable(
 
 /**
  * Every satellite tile is read through the placeholder guard. A placeholder
- * from the installed frame drops that frame: the last good frame comes back
- * if a refresh brought it, otherwise the plain map and the unavailable state.
- * One placeholder is enough because the service serves it for whole
- * requests, not for single cells of a real frame.
+ * from the installed frame drops that frame and marks it for the session:
+ * the last good frame comes back if a refresh brought it, otherwise the
+ * selection walks back to an older frame, and the plain map and the
+ * unavailable state come only when none is left. One placeholder is enough
+ * because the service serves it for whole requests, not for single cells of
+ * a real frame.
  */
 function onSatelliteTile(url: string, placeholder: boolean): void {
   if (!placeholder) return;
@@ -294,6 +331,7 @@ function onSatelliteTile(url: string, placeholder: boolean): void {
   if (frame === null || !url.endsWith(satelliteTileTemplate(frame).split('{bbox-epsg-3857}')[1]!)) {
     return;
   }
+  placeholderFrameIds.add(frame.objectId);
   failInstalledFrame?.(
     `the service answered with a placeholder image (${placeholderTiles} placeholder tiles this page)`
   );
@@ -355,29 +393,8 @@ function observationRange(frame: SatelliteFrame): string {
 
 type ImageryStatus = 'loading' | 'live' | 'live-partial' | 'no-data' | 'unavailable';
 
-/**
- * What this imagery covers, and what its edges are.
- *
- * The product is a merged mosaic of the GOES East and West full disks, so
- * its geometry is two circles, not a rectangle: coverage ends near 76
- * degrees north and south AND runs out on the far side of both disks
- * (roughly between the eastern Atlantic and the western Pacific), where the
- * service returns fully transparent pixels and the subdued base map shows
- * through. Probed live 2026-08-19: `exportImage` over central Africa and
- * south Asia returned a 334-byte fully transparent PNG at every sample,
- * while the service's own declared extent claims the whole globe. The
- * declared extent is what the raster source's `bounds` follow, because a
- * single rectangle cannot describe a footprint that wraps the
- * antimeridian; the honest move is to say what the edges mean rather than
- * to cull tiles that might carry data.
- *
- * The daylight boundary is likewise inherent: GeoColor renders the lit and
- * unlit halves differently, so a visible seam crosses the mosaic wherever
- * the terminator falls. Neither edge is a fault to hide.
- */
-export const SATELLITE_COVERAGE_NOTE =
-  'Coverage is the GOES East and West disks: it ends near 76 degrees north and south, and the base map shows through beyond the disks. The daylight boundary crosses the mosaic as a visible seam.';
-
+// The imagery's caveats and coverage note read in the Impact Briefing (SATELLITE_CAVEAT_NOTE and
+// SATELLITE_COVERAGE_NOTE in src/ui/map-technical-information.ts); the chip carries state and time.
 function showChip(
   status: ImageryStatus,
   frame: SatelliteFrame | null,
@@ -403,9 +420,7 @@ function showChip(
   const delayed = refreshDelayed ? ' · refresh delayed' : '';
   chip.textContent =
     `NOAA GOES GeoColor · ${state} · observed ${observationRange(frame)} · ` +
-    `${freshness}${delayed}. Context only; daytime approximate true color, nighttime ` +
-    'infrared with static lights; clouds can obscure land and smoke. ' +
-    `${SATELLITE_COVERAGE_NOTE}`;
+    `${freshness}${delayed}.`;
 }
 
 function clearRefreshTimer(): void {
@@ -423,6 +438,15 @@ function removeSatelliteSource(map: maplibregl.Map): void {
   tileWatch = null;
   failInstalledFrame = null;
   removeSatelliteArtifacts(map);
+  stampFrame(null);
+}
+
+/** Production-observable stamp of the frame the map holds (the src/map/fire3d.ts pattern). */
+function stampFrame(frame: SatelliteFrame | null): void {
+  const root: HTMLElement | undefined = typeof document === 'undefined' ? undefined : document.documentElement;
+  if (!root) return;
+  if (frame) root.dataset.ddmSatellite = String(frame.objectId);
+  else delete root.dataset.ddmSatellite;
 }
 
 function deactivate(map: maplibregl.Map): void {
@@ -450,6 +474,7 @@ function revertToDefault(
   // accessible description and must not keep reading "loading".
   showChip(state, null);
   deactivate(map);
+  publishImageryBriefing('unavailable');
   revertBasemapForFailure();
   if (!announceRevert) return;
   showToast(
@@ -477,7 +502,8 @@ function watchFrameTiles(
   frame: SatelliteFrame,
   epoch: number,
   previous: InstalledFrame | null,
-  refreshDelayed: boolean
+  refreshDelayed: boolean,
+  reused: boolean
 ): void {
   let rollback = previous;
   const stillInstalled = (): boolean =>
@@ -489,7 +515,12 @@ function watchFrameTiles(
     if (!stillInstalled()) return;
     const fallback = rollback;
     rollback = null;
-    if (fallback && isSatelliteFrameRecent(fallback.frame)) {
+    if (heldFrame !== null && sameFrame(heldFrame, frame)) heldFrame = null;
+    if (
+      fallback &&
+      isSatelliteFrameRecent(fallback.frame) &&
+      !placeholderFrameIds.has(fallback.frame.objectId)
+    ) {
       console.warn(
         `[basemap] selected satellite refresh frame failed (${reason}); restoring the previous frame.`
       );
@@ -508,6 +539,19 @@ function watchFrameTiles(
       }
       return;
     }
+    // A held frame that fails may have left NOAA's catalog: ask it, as a press without a held frame does.
+    if (reused || placeholderFrameIds.has(frame.objectId)) {
+      // Walk back: choose again among the frames not yet marked; the plain map comes when none passes.
+      console.warn(
+        `[basemap] satellite frame ${frame.objectId} failed at tile time (${reason}); choosing a frame again.`
+      );
+      removeSatelliteSource(map);
+      currentFrame = null;
+      frameStatus = null;
+      showChip('loading', null);
+      void refreshFrame(map, epoch, true);
+      return;
+    }
     revertToDefault(map, reason);
   };
   failInstalledFrame = fail;
@@ -522,8 +566,10 @@ function watchFrameTiles(
         return;
       }
       rollback = null;
+      heldFrame = frame;
       frameStatus = status === 'degraded' ? 'live-partial' : 'live';
       showChip(frameStatus, currentFrame, refreshDelayed);
+      publishImageryBriefing('on');
     },
     {
       reportInitialSuccess: true,
@@ -538,7 +584,8 @@ function installFrame(
   epoch: number,
   previous: InstalledFrame | null,
   initialStatus: FrameStatus | null = null,
-  refreshDelayed = false
+  refreshDelayed = false,
+  reused = false
 ): void {
   registerSatelliteProtocol();
   const tiles = [`${SATELLITE_TILE_SCHEME}://${satelliteTileTemplate(frame)}`];
@@ -547,7 +594,7 @@ function installFrame(
   showChip(initialStatus ?? 'loading', frame, refreshDelayed);
 
   try {
-    watchFrameTiles(map, frame, epoch, previous, refreshDelayed);
+    watchFrameTiles(map, frame, epoch, previous, refreshDelayed, reused);
     map.addSource(SOURCE_ID, {
       type: 'raster',
       tiles,
@@ -570,6 +617,7 @@ function installFrame(
       },
       firstLayerIdAbove(map, ['background', 'basemap'])
     );
+    stampFrame(frame);
   } catch (error) {
     removeSatelliteSource(map);
     if (currentFrame !== null && sameFrame(currentFrame, frame)) {
@@ -612,7 +660,7 @@ function replaceFrame(
   }
 }
 
-async function fetchCandidateFrames(
+async function queryCandidateFrames(
   signal: AbortSignal
 ): Promise<readonly SatelliteFrame[]> {
   const value = await fetchJsonWithBudget(
@@ -622,6 +670,27 @@ async function fetchCandidateFrames(
     METADATA_TIMEOUT_MS
   );
   return parseSatelliteFrames(value);
+}
+
+/**
+ * The catalog query, asked once more after a short pause when it fails (an
+ * HTTP error, an error envelope, a corrupt body or its own timeout): the
+ * service failed 2 of about 9 queries in one session (2026-11-11) while the
+ * next one answered.
+ * A verified absence and a cancellation are answers and are not repeated.
+ */
+async function fetchCandidateFrames(
+  signal: AbortSignal
+): Promise<readonly SatelliteFrame[]> {
+  try {
+    return await queryCandidateFrames(signal);
+  } catch (error) {
+    if (signal.aborted || error instanceof NoRecentFrameError) throw error;
+    console.warn('[basemap] satellite frame lookup failed; asking once more.', error);
+    await sleepUnlessAborted(CATALOG_RETRY_DELAY_MS, signal);
+    if (signal.aborted) throw abortError();
+    return queryCandidateFrames(signal);
+  }
 }
 
 interface CandidateSelection {
@@ -636,6 +705,7 @@ async function selectUsableFrame(
 ): Promise<CandidateSelection> {
   let attempted = false;
   for (const frame of frames) {
+    if (placeholderFrameIds.has(frame.objectId)) continue;
     if (installed) {
       if (sameFrame(frame, installed)) continue;
       if (frame.endTime < installed.endTime) continue;
@@ -782,6 +852,7 @@ export async function setSatelliteActive(
       // Do not abort or detach another map's active source during teardown.
       removeSatelliteArtifacts(map);
     }
+    if (activeMap === null) publishImageryBriefing(null);
     return;
   }
 
@@ -790,6 +861,7 @@ export async function setSatelliteActive(
   // press looks again.
   if (!announce && Date.now() - lastFailureAt < FAILED_LOOKUP_RETRY_MS) {
     revertBasemapForFailure();
+    publishImageryBriefing('unavailable');
     return;
   }
   if (activeMap && activeMap !== map) deactivate(activeMap);
@@ -799,7 +871,19 @@ export async function setSatelliteActive(
   activeMap = map;
   announceRevert = announce;
   showChip('loading', null);
-  await refreshFrame(map, epoch, true);
+  // The held frame goes back on the map at once; the refresh then only looks
+  // for a newer one, and a failed look keeps it (the refresh path).
+  const held = heldFrame;
+  let reused = false;
+  if (held && isSatelliteFrameRecent(held) && !placeholderFrameIds.has(held.objectId)) {
+    try {
+      installFrame(map, held, epoch, null, null, false, true);
+      reused = true;
+    } catch (error) {
+      console.warn('[basemap] the held satellite frame could not be reinstalled.', error);
+    }
+  }
+  await refreshFrame(map, epoch, !reused);
   if (epoch === activationEpoch && activeMap === map) {
     scheduleRefresh(map, epoch);
   }
