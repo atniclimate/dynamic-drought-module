@@ -12,6 +12,7 @@ import { execSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { crc32, deflateSync } from 'node:zlib';
 import { expect, type BrowserContext, type Page, type Locator, type Route } from '@playwright/test';
+import { stubRecentSatellite } from './satellite-fixture';
 import { installMinimapAnalysisStubs } from './minimap-fixtures';
 import { installBoundaryStubs, type BoundaryStubMode } from './tribal-fixtures';
 import { installDefaultNifcStub, type NifcStubMode } from './wildfire-fixtures';
@@ -74,6 +75,36 @@ async function installDefaultNadmStub(page: Page, mode: NadmStubMode): Promise<v
       contentType: 'application/geo+json',
       body: JSON.stringify(TEST_NADM_SNAPSHOT)
     });
+  });
+}
+
+const coveredContexts = new WeakSet<BrowserContext>();
+
+/**
+ * Carry the PAGE-level stubs onto any Page this context opens later.
+ *
+ * The four stubs that matter most for a retained artifact, the sovereign
+ * boundaries, the minimap's continental analysis inputs, the NADM
+ * continental snapshot (DDM-P1-T09 step 2 part d), and the NIFC WFIGS
+ * current perimeters (J12, `installDefaultNifcStub` in
+ * `tests/wildfire-fixtures.ts`), are registered on the
+ * CONTEXT, so a popup or a `context.newPage()` inherits them with no help
+ * from here. The satellite stub is still page-level, and a Page this helper
+ * never navigated would reach that service live. Nothing in this suite opens
+ * a second Page today (`tests/boundary-boot-inventory.test.mjs` fails the
+ * gate on the first `newPage(` or popup wait that is not recorded), so this
+ * hook is defense in depth for the day one appears: it closes the page-level
+ * half of the same hole context routing already closed.
+ */
+export function coverFuturePages(page: Page): void {
+  const context = page.context();
+  if (coveredContexts.has(context)) return;
+  coveredContexts.add(context);
+  context.on('page', (opened) => {
+    // A popup can close before the route lands; a rejected stub must not fail
+    // the test that opened it, because the guarantee that matters is already
+    // held by the context-level routes above.
+    void stubRecentSatellite(opened).catch(() => undefined);
   });
 }
 
@@ -392,6 +423,9 @@ export async function gotoApp(
   query = '',
   options: GotoAppOptions = {}
 ): Promise<void> {
+  // Routine deterministic browser tests stub the recent-satellite service so
+  // the full suite neither depends on nor floods the public endpoint.
+  await stubRecentSatellite(page);
   // DDM-P1-T08: EVERY boot answers the two sovereign-boundary queries from
   // synthetic fixtures, locally and in CI alike. Stubbing only under `CI`
   // would make a local green and a CI green mean different things, and the
@@ -467,6 +501,7 @@ export async function gotoApp(
   // USGS Relative Greenness WMS. Every boot answers both from synthetic
   // fixtures (`installDefaultDrynessStub`), so no spec reaches either agency.
   await installDefaultDrynessStub(page);
+  coverFuturePages(page);
   // shortcut: a full-site display boot written before 0.7.7 derived the console; pin it so those specs keep their door; drop once specs name view=console themselves.
   if (!options.derivedView && !/[?&]embed=(true|1)\b/.test(query) && !/[?&](view|select)=/.test(query) && /[?&](layers=|region=|cluster=|ocean=|framing=)/.test(query)) query += '&view=console';
   await page.goto(query, { waitUntil: 'domcontentloaded' });
@@ -866,7 +901,7 @@ export interface StubCpcSeasonalTempOutlookOptions extends CpcSeasonalTempReadin
  * unconditionally with its defaults (S17's lesson: an unstubbed briefing
  * lane reaches the live agency).
  *
- * De-duplicated per page: a spec that needs
+ * De-duplicated per page (mirrors `stubRecentSatellite`): a spec that needs
  * a specific reading, a failure arm, or a held-open supersession race calls
  * this itself, WITH its own options, BEFORE `gotoApp`; `gotoApp`'s own later
  * call then finds this page already stubbed and is a no-op, so the spec's
@@ -1082,7 +1117,7 @@ export async function stubSpcFireOutlook(
 
 // Keyed on the CONTEXT the route lives on (not the page), so a second page in
 // one context can never register a second context-level default that would
-// shadow the first page's fixture.
+// shadow the first page's fixture (the `coveredContexts` precedent above).
 const spcFireOutlookStubbedContexts = new WeakSet<BrowserContext>();
 
 /**

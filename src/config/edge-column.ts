@@ -6,7 +6,8 @@
  * embed) every right-edge control sits in ONE column that one manager owns
  * (src/ui/edge-column.ts). The controls are grouped, top to bottom: map
  * tools (Share, Reset, Map information), the four panel doors, the four
- * hazard views, then the view tools (Locate, 3D and any later seat). Because the groups share one flow, two controls can never
+ * hazard views, then the view tools (Satellite and any later seat such as
+ * Locate or 3D). Because the groups share one flow, two controls can never
  * occupy the same pixels; what changes with the available height is only
  * how the flow is arranged, and this file decides that arrangement.
  *

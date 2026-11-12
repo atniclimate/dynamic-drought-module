@@ -21,7 +21,7 @@ function glyphTemplate(): string {
  * Build the base MapLibre GL JavaScript style specification.
  *
  * Returns a minimal shared scene: a dark background and subdued OpenStreetMap
- * (OSM) ground. Per-feature layer modules append
+ * (OSM) ground beneath the default-on recent satellite context. Per-feature layer modules append
  * their own sources and layers on top at runtime via `map.addSource()` /
  * `map.addLayer()`, so the style file stays small and each layer owns its own
  * paint and visibility logic.
@@ -79,7 +79,7 @@ export function buildBaseStyle(): maplibregl.StyleSpecification {
         type: 'raster',
         source: 'basemap',
         paint: {
-          // Dark, desaturated OSM ground.
+          // Dark fallback in the same visual family as the satellite basemap.
           'raster-saturation': -1,
           'raster-brightness-min': 0.04,
           'raster-brightness-max': 0.42,

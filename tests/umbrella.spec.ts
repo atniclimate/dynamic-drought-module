@@ -6,6 +6,7 @@ import {
   openTribalNationsDetails,
   ROLE_GROUPS
 } from './helpers';
+import { stubRecentSatellite } from './satellite-fixture';
 import {
   AIANNH_ROUTE,
   BIA_ROUTE,
@@ -395,6 +396,7 @@ test.describe('partial-outage visibility (the final-pass finding 2)', () => {
     page
   }) => {
     await page.setViewportSize({ width: 400, height: 600 });
+    await stubRecentSatellite(page);
     const islandRequests: string[] = [];
     page.on('request', (req) => {
       if (/island-[^/]*\.js/.test(req.url())) islandRequests.push(req.url());
@@ -476,6 +478,7 @@ test.describe('the Brief-door Tribal Nations action', () => {
   }) => {
     await routeAllTribalFixtures(page);
     await installMinimapAnalysisStubs(page);
+    await stubRecentSatellite(page);
     // An embed boot hosts the action on the impact panel only (the
     // sidebar is collapsed); expanding exits embed mode and the Brief
     // head must gain the one instance so the umbrella's default-Brief
@@ -527,6 +530,7 @@ test.describe('the Brief-door action at 400px (mobile and embed)', () => {
   }) => {
     await routeAllTribalFixtures(page);
     await installMinimapAnalysisStubs(page);
+    await stubRecentSatellite(page);
     // A raw boot misses gotoApp's WFIGS default, and the WA briefing sends
     // its bounded WFIGS read: answer it from the fixture (found-078, J12).
     await installDefaultNifcStub(page, 'fixture');

@@ -16,7 +16,8 @@
  * returns to its home seat when the phone shell goes away. The moving is
  * done by the seat watchers in src/ui/map-control-seat.ts, which this
  * module serves as the phone seat provider; a control another surface has
- * borrowed is left alone until it is returned.
+ * borrowed (the LAYERS studio borrows the satellite control) is left alone
+ * until it is returned.
  *
  * WHAT FITS is decided by the pure planner in src/config/edge-column.ts
  * from the column's measured height and the number of controls each group
@@ -177,8 +178,8 @@ function release(node: HTMLElement): void {
  * on a group the plan did not place (a group with nothing to show), so a
  * count that read it would stay at zero after the group's controls came
  * back, and the group would be hidden for the life of the page. That was
- * the fault: a surface borrows a control, the group empties and is hidden,
- * and the control never returned to the column.
+ * the fault: the Layers studio borrows Satellite, the view group empties
+ * and is hidden, and Satellite never returned to the column.
  */
 export function countsTowardGroup(button: HTMLElement, body: HTMLElement): boolean {
   if (button.hidden) return false;
@@ -429,7 +430,7 @@ export function initEdgeColumn(): void {
   const mapContainer = document.getElementById('map-container');
   const share = document.getElementById('share-btn');
   const reset = document.getElementById('reset-btn');
-  const desktopSeat = document.getElementById('map-info-seat');
+  const desktopSeat = document.getElementById('basemap-switcher-overlay-host');
   if (overlay && share) {
     watchPhoneSeat({
       node: share,

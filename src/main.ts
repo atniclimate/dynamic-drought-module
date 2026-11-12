@@ -5,6 +5,7 @@ import './styles/mobile-panels.css';
 import './styles/edge-column.css';
 
 import type * as maplibregl from 'maplibre-gl';
+import { holdSatellite } from './map/basemap-switcher';
 import { createMap } from './map/init';
 import { loadFire3DController } from './map/fire3d-chunk';
 import { FIRE3D_CHUNK_WIDTH_QUERY, onFire3DPreferenceChange } from './state/fire3d-store';
@@ -468,6 +469,8 @@ function wireMapDependentChrome(map: maplibregl.Map): void {
       fire3dConsole.removeEventListener('change', maybeLoadFire3D);
     }).catch((error: unknown) => {
       fire3dLoaded = false;
+      // No controller will release a boot hold on the imagery (DR-105).
+      holdSatellite(map, false);
       console.warn('Fire 3D controller could not load:', error);
     });
   };

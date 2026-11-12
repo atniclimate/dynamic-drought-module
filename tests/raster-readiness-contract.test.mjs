@@ -240,7 +240,7 @@ function scanRasterSources(dir = join(ROOT, 'src'), baseDir = ROOT) {
     while ((match = re.exec(text)) !== null) {
       const object = enclosingObject(text, match.index);
       if (!object) continue;
-      // `tiles` may be shorthand (`{ type: 'raster', tiles, ... }`).
+      // `tiles` may be shorthand (`{ type: 'raster', tiles, ... }`, satellite.ts).
       const isSource =
         /\b(tiles|url)\b\s*[:,}]/.test(object.body) && !/\bsource\s*:/.test(object.body);
       if (!isSource) continue;
@@ -341,6 +341,10 @@ const EXCEPTIONS = new Map([
   [
     'src/layers/whp-3d.ts#SOURCE_ID',
     'the Fire 3D hazard drape: it writes no registry status and no pill; activation probes the archive header and returns a boolean to the 3D scene'
+  ],
+  [
+    'src/map/satellite.ts#SOURCE_ID',
+    'the satellite basemap chip, not a registry layer: frame-pinned completeness with a 30 s deadline drives the chip text, never a layer pill'
   ],
   [
     'src/map/fire3d.ts#TERRAIN_SOURCE_ID',

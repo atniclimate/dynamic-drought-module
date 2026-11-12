@@ -6,8 +6,9 @@
  * serializes from (D-0.7.0-044): while the display is a clean cluster,
  * `syncUrl` emits ONLY the one-word `cluster=` token in place of the
  * granular `layers=` list; Drought, the default display, is absence.
- * The sidebar subscribes `onHazardClusterChange(pushUrl)` and reads the
- * getters when composing the sync state.
+ * The store follows the `basemap-store` pattern: the sidebar subscribes
+ * `onHazardClusterChange(pushUrl)` and reads the getters when composing
+ * the sync state.
  *
  * The ocean framing rides here rather than in its own store because it
  * is VALID ONLY WITH THE ENSO CLUSTER (D-0.7.0-042/053): an ocean click

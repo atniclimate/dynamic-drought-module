@@ -7,6 +7,7 @@ import { URLS } from '../src/config/urls';
 import { resolveHillshadeArchiveUrl } from '../src/layers/hillshade';
 import { gotoApp, layerCheckbox, waitForLayerSettled, search } from './helpers';
 import { pmtilesHeaderResponse } from './map-harness';
+import { stubRecentSatellite } from './satellite-fixture';
 
 /**
  * U4g: the terrain-shading (hillshade) layer over the bundled raster-dem
@@ -100,11 +101,12 @@ test.describe('U4g: terrain shading', () => {
     await expect.poll(async () => search(page)).not.toContain('hillshade');
   });
 
-  test('the boot console stays clean with hillshade and a data surface together', async ({
+  test('the boot console stays clean with hillshade and satellite together', async ({
     page
   }) => {
-    // Hillshade plus one surface over the dark ground: the style must
-    // validate with all of them stacked.
+    await stubRecentSatellite(page);
+    // Combination 5 of the cartography matrix (satellite + hillshade + one
+    // surface): the style must validate with all three stacked.
     const styleErrors: string[] = [];
     page.on('console', (m) => {
       if (m.type() !== 'error') return;
@@ -114,7 +116,7 @@ test.describe('U4g: terrain shading', () => {
       }
     });
 
-    await gotoApp(page, '?view=console');
+    await gotoApp(page, '?view=console&basemap=satellite');
     await waitForLayerSettled(page, 'nadm-drought');
     // Hillshade is default-on since E1 deliverable 4, so the combination
     // stacks at boot; settle it rather than re-toggling.

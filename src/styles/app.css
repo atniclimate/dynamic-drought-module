@@ -225,7 +225,7 @@
      inside the face; the ring and its 4 px casing stay where they are. */
   --selected-focus-inset: inset 0 0 0 2px var(--focus-outer);
   /* The one map-control family width (E2, D-0.7.0-058 ruling 2): Share
-     view and Reset render at this width on
+     view, Reset, and the Satellite switcher all render at this width on
      phones and in embeds. The desktop shell's column reads --map-cell-w
      instead (S30D D1 M9, THE DESKTOP COLUMN). */
   --map-ctrl-w: 104px;
@@ -278,8 +278,8 @@
   --z-map-control: 1000;  /* overlay controls and the loading pulse;
                              +1 sidebar expand, +10 the sheet's MapLibre
                              corner, +20 the map-information family,
-                             +30 the sheet's hazard rail,
-                             +40 the sheet's raised controls */
+                             +30 the sheet's hazard rail and basemap
+                             switcher, +40 the sheet's raised controls */
   --z-popup: 1200;        /* an open MapLibre popup */
   --z-sheet: 1350;        /* the mobile sheet; +50 footer, impact panel */
   --z-toast: 1500;        /* the copy toast */
@@ -424,6 +424,13 @@
     --rule-strong: CanvasText;
     --face-selected: Highlight;
     --ink-on-selected: HighlightText;
+  }
+  /* The Satellite cell names its colours directly (a contract test reads
+     that rule), so its selected pair is set here, under a selector of its
+     own. */
+  :root .basemap-switcher-btn.active {
+    background: Highlight !important;
+    color: HighlightText !important;
   }
 }
 
@@ -2011,6 +2018,96 @@ button.conditions-metric:hover .conditions-action-hide {
   border-radius: 0 0 var(--radius-sm) var(--radius-sm);
 }
 
+/* The basemap switcher button (U4d): the DESIGN MODEL of the map control
+   family since E2 (D-0.7.0-058 ruling 2): sharp rectangle, transparent
+   slate, and the shared family width, relabeled "Satellite" so it reads
+   with the Share view / Reset stack. The pressed (satellite) state lights
+   with the accent tokens. One button, real semantics; aria-pressed is set
+   by the control. Since S30D D1 M9 these faces hold where the control sits
+   in MapLibre's corner (phones, embeds) and in the LAYERS studio header;
+   in the desktop column's slot 2 the cell faces of THE DESKTOP COLUMN
+   replace them, the cyan on-state included. */
+.basemap-switcher-btn {
+  width: var(--map-ctrl-w) !important;
+  padding: 0 7px;
+  background: rgba(15, 23, 42, 0.85) !important;
+  color: var(--fg-1) !important;
+  border: none;
+  font-family: var(--font-display);
+  font-weight: var(--fw-subtitle);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+.basemap-switcher-icon { flex: 0 0 auto; }
+/* Imagery failed and the plain map is a fallback: the glyph dims and the
+   title says why, so an unpressed SAT is not read as a choice. */
+.basemap-switcher-btn[data-imagery-unavailable] .basemap-switcher-icon { opacity: 0.45; }
+.basemap-switcher-btn:hover {
+  background: rgba(27, 41, 66, 0.9) !important;
+  color: var(--fg-0) !important;
+}
+/* The family's sharp-rectangle model: MapLibre's control group would
+   otherwise round and clip the switcher's corners, and its white card
+   showed through the translucent faces (SAT on read white on white in the
+   LAYERS studio header, the embed and the phone seat). */
+.maplibregl-ctrl-group:has(.basemap-switcher-btn) {
+  border-radius: 0;
+  background: none;
+}
+/* Selected inverts: an opaque ink face, so the pressed face never depends
+   on what lies beneath it (tests/chrome-css-faces.test.mjs). The two
+   colours are named directly, not through --face-selected, because that
+   test resolves one level of var(). */
+.basemap-switcher-btn.active {
+  forced-color-adjust: none; /* FORCED COLOURS, below */
+  background: var(--ink-strong) !important;
+  color: var(--surface-base) !important;
+  box-shadow: none;
+}
+
+/* The satellite observation notice: exact UTC frame time and interpretation
+   cautions, distinct from legal attribution and visible in embeds. */
+.basemap-imagery-chip {
+  max-width: min(720px, calc(100% - 24px));
+  background: rgba(15, 23, 42, 0.85);
+  color: var(--fg-1);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-body);
+  font-size: 10.5px;
+  line-height: 1.35;
+  letter-spacing: 0.02em;
+  padding: 3px 9px;
+  pointer-events: none;
+  text-align: center;
+}
+
+.basemap-imagery-chip[data-status="loading"] {
+  border-style: dashed;
+}
+
+.map-bottom-dock > .basemap-imagery-chip {
+  pointer-events: none;
+}
+
+/* The SAT control exposes this live status as its accessible description.
+   The former full-width observation card no longer covers the map. */
+#basemap-vintage.basemap-imagery-chip.sr-only {
+  left: -10000px;
+  width: 1px;
+  max-width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
 .legend-semantic-note.sr-only {
   left: -10000px;
 }
@@ -2692,9 +2789,11 @@ button.conditions-metric:hover .conditions-action-hide {
   color: var(--fg-3);
 }
 
-/* E2 (D-0.7.0-058 ruling 2): the top-right controls adopt one design model
-   (sharp rectangles, background transparency): Share view and Reset stack
-   vertically at ONE uniform width so the buttons read as one family.
+/* E2 (D-0.7.0-058 ruling 2): the top-right controls adopt the SAT box's
+   design model (sharp rectangles, background transparency): Share view and
+   Reset stack vertically at ONE uniform width, and the basemap switcher
+   below carries the same width and chrome so the three buttons read as one
+   family. The width token is shared with .basemap-switcher-btn.
 
    Since S30D D1 M9 this base rule and the E2 faces hold for phones (720px
    and below, re-seated by the sheet rules) and embeds only. The desktop
@@ -2713,7 +2812,8 @@ button.conditions-metric:hover .conditions-action-hide {
 }
 
 /* Desktop seats for chrome that lives elsewhere on phones and in embeds
-   (the on-map key and Help; see src/ui/map-control-seat.ts). `display: contents` keeps the seat out of
+   (the satellite control and the on-map key; see
+   src/ui/map-control-seat.ts). `display: contents` keeps the seat out of
    the layout entirely, so the moved node becomes a direct flex item of the
    column and the existing child rules keep meaning what they say. */
 .map-overlay-seat {
@@ -2744,8 +2844,8 @@ button.conditions-metric:hover .conditions-action-hide {
    Deliberately non-interactive: pointer-events: none means it can never
    intercept a click meant for the map or for the overlay buttons it sits
    above, which is the failure mode this corner has already produced once
-   (an earlier control had to move out of this stack because it swallows
-   pointer events). It is a plain
+   (the U4d basemap-switcher spec moved that control to bottom-right
+   precisely because this stack swallows pointer events). It is a plain
    span, not a control and not a live region, so it reads once in document
    order and never announces itself again. Muted on purpose: it states the
    build's status honestly without competing with data for attention. */
@@ -2807,10 +2907,11 @@ button.conditions-metric:hover .conditions-action-hide {
 
    Faces (DR-101; the D1 token block in :root): opaque S1 with a 1px
    keyline edge at rest, S2 on hover, the S3 plate with a white edge and a
-   2px leading bar when pressed (Help open). Opaque because the words are
-   text and need 4.5:1, which no glass gives over a light map. No red, no
-   blur, no radius, no shadow. The `!important` marks answer MapLibre's
-   control-group rules, which the phone and embed seats still use.
+   2px leading bar when pressed (SAT on, Help open). Opaque because SAT and
+   the words are text and need 4.5:1, which no glass gives over white
+   imagery. No red, no blur, no radius, no shadow. The `!important` marks
+   answer the base .basemap-switcher-btn rule and MapLibre's control-group
+   rules, which the phone and embed seats still use.
 
    Every rule is desktop-only and outside an embed: phones and embeds keep
    today's seats and faces, and --map-ctrl-w stays theirs.
@@ -2883,6 +2984,18 @@ button.conditions-metric:hover .conditions-action-hide {
     grid-row: 5;
     justify-self: end;
     pointer-events: auto;
+  }
+
+  /* MapLibre's control group, borrowed into slot 2, loses its white card
+     and rounded corners and fills the slot. */
+  .app-shell:not(.embed) #basemap-switcher-overlay-host > .basemap-switcher-control {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    float: none;
+    background: none;
+    border-radius: 0;
+    box-shadow: none;
   }
 
   /* The cell (R1 a): a fixed 20px icon column, an 8px gap, then the word.
@@ -3181,6 +3294,15 @@ button.conditions-metric:hover .conditions-action-hide {
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 18px;
+}
+
+.layers-studio-basemap {
+  justify-self: end;
+}
+
+.layers-studio-basemap .maplibregl-ctrl {
+  float: none;
+  margin: 0;
 }
 
 .layers-studio-scroll {
@@ -4132,6 +4254,9 @@ button.conditions-metric:hover .conditions-action-hide {
     );
     z-index: calc(var(--z-map-control) + 10);
   }
+  /* The satellite control rides the right-edge column's view tools on
+     phones (src/ui/edge-column.ts), so it has no corner seat here. */
+
   /* The bottom dock (notices, the embed stamp slot) clears the rail's
      column so the dock chips and the quick selects never fight for the
      same pixels. */
@@ -4164,6 +4289,7 @@ button.conditions-metric:hover .conditions-action-hide {
      control clears 44px. Chips and rows grow their hit box, not their
      type; the half detent scrolls, so taller rows stay reachable.
      -------------------------------------------------------------------------- */
+  #app[data-sheet-detent] .basemap-switcher-icon { display: block; }
   #app[data-sheet-detent] .region-select { min-height: 44px; }
   #app[data-sheet-detent] .sheet-report-door { min-height: 44px; }
   #app[data-sheet-detent] .time-bar-step,
@@ -6158,7 +6284,7 @@ a.impact-resource-link::after {
     transition: none;
   }
   #app[data-sheet-detent]
-    :is(.overlay-btn, .hazard-rail-btn, .map-info-btn) {
+    :is(.overlay-btn, .hazard-rail-btn, .basemap-switcher-btn, .map-info-btn) {
     transition: none;
   }
 }
@@ -6462,13 +6588,16 @@ a.impact-resource-link::after {
 /* ----------------------------------------------------------------------------
    The embed corner (FE-18, 2026-08-28)
 
-   Embeds keep MapLibre's bottom-right stack and the preview badge in the
-   top-right overlay stack, so the desktop corner rules above are scoped
-   :not(.embed). The shared bottom dock lifts above that native stack so the
-   brand pill and the key can never cover its controls, the attribution
-   button, or the bottom-left scale controls. Measured on the live build
-   2026-08-28: the attribution button was under the brand at 800 and 1280,
-   and the key covered the scale bar at 800x600.
+   Embeds keep MapLibre's bottom-right stack (the satellite control above the
+   compact attribution circle) and the preview badge in the top-right overlay
+   stack, so the desktop corner rules above are scoped :not(.embed). The
+   shared bottom dock lifts above that native stack (29px control, 24px
+   attribution, their margins) so the brand pill and the key can never cover
+   the satellite control, the attribution button, or the bottom-left scale
+   controls. Measured on the live build 2026-08-28: the brand pill sat on the
+   satellite control at 200, 390, 400, 800, and 1280 pixel widths, the
+   attribution button was under the brand at 800 and 1280, and the key
+   covered the scale bar at 800x600.
    ---------------------------------------------------------------------------- */
 .app-shell.embed .map-bottom-dock {
   --map-dock-bottom: 92px;
@@ -6495,6 +6624,12 @@ a.impact-resource-link::after {
     top: 204px;
     max-width: calc(100% - 16px);
   }
+  /* At the floor the 104px satellite control and the 130px scale bar cannot
+     share the width, and their rows met by two pixels (measured 2026-08-28).
+     The control steps up four pixels; the lifted dock still clears it. */
+  .app-shell.embed .maplibregl-ctrl-bottom-right .basemap-switcher-control {
+    margin-bottom: 14px;
+  }
 }
 
 /* The embed credits seat (owner direction, 2026-08-31): with MapLibre's
@@ -6502,11 +6637,12 @@ a.impact-resource-link::after {
    question-mark disclosure in the old attribution corner at every size.
    It is the embed's reachable credits surface (a license obligation),
    which is why it is not gated on the desktop breakpoint. The bottom-right
-   control stack steps above the seat. */
+   control stack (the satellite switcher) steps above the seat. */
 .app-shell.embed .maplibregl-ctrl-bottom-right {
-  /* Measured at the 200x600 floor (2026-08-31): a 46px step (plus the
-     stack's own 14px) parks it between the brand chip's bottom edge and the
-     joined scales' top edge while clearing the credits button's corner seat. */
+  /* Measured at the 200x600 floor (2026-08-31): the satellite control's
+     free band sits between the brand chip's bottom edge and the joined
+     scales' top edge; a 46px step (plus the control's own 14px) parks it
+     there while clearing the credits button's corner seat. */
   margin-bottom: 46px;
 }
 /* An embed has no browser chrome to fall back on and is often held in a
@@ -6791,6 +6927,12 @@ a.impact-resource-link::after {
     padding: 5px 3px;
     font-size: 9.5px;
     line-height: 1.15;
+  }
+  .basemap-imagery-chip {
+    max-width: 100%;
+    padding: 3px 5px;
+    font-size: 9.5px;
+    line-height: 1.2;
   }
   .map-key {
     gap: 4px;
@@ -8486,13 +8628,15 @@ a.impact-resource-link::after {
     min-height: var(--touch-target);
   }
 
-  /* The map's own controls: Share view and Reset (34px) and the round
-     map-information disclosure (28px), which grows through its token so the panel it opens and the bottom
+  /* The map's own controls: Share view and Reset (34px), the basemap
+     switcher (29px), and the round map-information disclosure (28px),
+     which grows through its token so the panel it opens and the bottom
      dock both step out of its way rather than meeting it. On the desktop
      shell outside an embed the column's cells take the floor through
      --map-cell-h instead (S30D D1 M9); these floors then agree with it,
      and the round disclosure is the embed's alone. */
-  .overlay-btn {
+  .overlay-btn,
+  .basemap-switcher-btn {
     min-height: var(--touch-target);
   }
   .app-shell,
@@ -8504,9 +8648,11 @@ a.impact-resource-link::after {
   .app-shell:not(.embed) .map-bottom-dock {
     --map-dock-bottom: 60px;
   }
-  /* An embed's dock rides above MapLibre's own bottom-right stack: the
-     corner's 46px step plus the stack's own 14px margin plus a control at
-     the touch floor plus one 8px gap. */
+  /* An embed's dock rides above MapLibre's own bottom-right stack, which
+     the taller basemap switcher lifts too: the corner's 46px step plus
+     the control's own 14px margin plus the switcher at the touch floor
+     plus one 8px gap. At the shipped 92px the switcher's top edge and
+     the dock's brand link crossed by 12px (measured at 820x615). */
   .app-shell.embed .map-bottom-dock {
     --map-dock-bottom: calc(46px + 14px + var(--touch-target) + 8px);
   }
@@ -8581,8 +8727,8 @@ a.impact-resource-link::after {
   /* An OPEN popup is the map area's transient topmost surface: the clamp
      keeps the card (at minimum its close corner; the canonical tier
      table in popup-viewport.ts states which, per region size) in
-     reachable pixels, so the persistent map chrome (the Share/Reset
-     family at 1000-1001, the (?) map-information disclosure
+     reachable pixels, so the persistent map chrome (the Share/Reset/
+     basemap family at 1000-1001, the (?) map-information disclosure
      that replaced the attribution control on 2026-08-31 in PR 54, the
      scale bar, the embed linkouts) must not cover the very controls
      that contract points at. Kept below the mobile sheet (1350) and

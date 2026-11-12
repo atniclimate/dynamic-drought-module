@@ -9,7 +9,8 @@ import {
 
 /**
  * The mobile quick-view spine and the footer doors. Four labelled hazard
- * cells occupy the lower-right thumb zone.
+ * cells occupy the lower-right thumb zone, and the one authoritative
+ * Satellite control leads the view tools in the same right-edge column.
  *
  * Contract under test:
  * - The rail stays reachable beside the mobile side panel and stays
@@ -56,7 +57,7 @@ test.beforeEach(async ({ page }) => {
 test.describe('the mobile hazard rail (390x844)', () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
-  test('the map-first boot shows four labelled hazard cells in a column', async ({
+  test('the map-first boot shows four labelled hazard cells in a column and Satellite in the view tools', async ({
     page
   }) => {
     await gotoApp(page);
@@ -91,6 +92,21 @@ test.describe('the mobile hazard rail (390x844)', () => {
       expect(lb.x).toBeGreaterThanOrEqual(cb.x);
       expect(lb.x + lb.width).toBeLessThanOrEqual(cb.x + cb.width);
     }
+
+    // The one Satellite control leads the view tools (order 10) in the same
+    // column, outside the hazard rail. Its long word stays for assistive
+    // technology; the cell draws the short word SAT, which leads its name.
+    const satellite = page.locator('.basemap-switcher-btn');
+    await expect(satellite).toHaveCount(1);
+    await expect(satellite).toBeVisible();
+    await expect(satellite).toHaveAccessibleName(/^SAT\b.*satellite imagery/i);
+    await expect(page.locator('#hazard-rail .basemap-switcher-btn')).toHaveCount(0);
+    await expect(page.locator('#edge-body-view > .basemap-switcher-control')).toHaveCount(1);
+    await expect(page.locator('#edge-body-view > .basemap-switcher-control')).toHaveAttribute(
+      'data-edge-order',
+      '10'
+    );
+    await expect(satellite).toHaveAttribute('data-edge-word', 'SAT');
     await expect(buttons.nth(0)).toHaveAccessibleName(/^ENSO\b/);
     await expect(buttons.nth(1)).toHaveAccessibleName(/^Fire\b/);
     await expect(buttons.nth(2)).toHaveAccessibleName(/^Drought\b/);
@@ -100,7 +116,8 @@ test.describe('the mobile hazard rail (390x844)', () => {
       buttons.nth(0),
       buttons.nth(1),
       buttons.nth(2),
-      buttons.nth(3)
+      buttons.nth(3),
+      satellite
     ];
     const boxes = [];
     for (const control of lowerControls) {
@@ -112,7 +129,7 @@ test.describe('the mobile hazard rail (390x844)', () => {
     }
 
     // Shared right edge and strictly increasing centers establish the visual
-    // order ENSO, Fire, Drought, Heat without hardcoded pixels.
+    // order ENSO, Fire, Drought, Heat, Satellite without hardcoded pixels.
     const rightEdges = boxes.map((box) => box.x + box.width);
     expect(Math.max(...rightEdges) - Math.min(...rightEdges)).toBeLessThanOrEqual(1);
     const centers = boxes.map((box) => box.y + box.height / 2);
@@ -230,9 +247,11 @@ test.describe('the mobile hazard rail (390x844)', () => {
     await gotoApp(page);
     const app = page.locator('#app');
     const rail = page.locator('#hazard-rail');
+    const satellite = page.locator('.basemap-switcher-btn');
     const share = page.locator('#share-btn');
     const reset = page.locator('#reset-btn');
     await expect(rail).toBeVisible();
+    await expect(satellite).toBeVisible();
     await expect(share).toBeVisible();
     await expect(reset).toBeVisible();
 
@@ -240,14 +259,18 @@ test.describe('the mobile hazard rail (390x844)', () => {
     await page.locator('#mobile-footer-nav button[data-tab="layers"]').click();
     await expect(app).toHaveAttribute('data-sheet-detent', 'half');
     await expect(rail).toBeVisible();
+    await expect(satellite).toBeVisible();
     await expect(share).toBeVisible();
     await expect(reset).toBeVisible();
+    await satellite.evaluate((button) => (button as HTMLButtonElement).focus());
+    await expect(satellite).toBeFocused();
 
     // A rail button applies its preset AND closes the sheet (the
     // mockup's rule 5: the map answers).
     await page.locator('#hazard-rail button[data-preset="hazard-fire"]').click();
     await expect(app).toHaveAttribute('data-sheet-detent', 'closed');
     await expect(rail).toBeVisible();
+    await expect(satellite).toBeVisible();
     await expect(share).toBeVisible();
     await expect(reset).toBeVisible();
     await expect
@@ -263,6 +286,7 @@ test.describe('the mobile hazard rail (390x844)', () => {
     await expect(app).toHaveAttribute('data-sheet-tab', 'brief');
     await expect(briefDoor).toHaveAttribute('aria-expanded', 'true');
     await expect(rail).toBeVisible();
+    await expect(satellite).toBeVisible();
     await expect(share).toBeVisible();
     await expect(reset).toBeVisible();
     await share.evaluate((button) => (button as HTMLButtonElement).focus());
@@ -270,6 +294,7 @@ test.describe('the mobile hazard rail (390x844)', () => {
     await briefDoor.click();
     await expect(app).toHaveAttribute('data-sheet-detent', 'closed');
     await expect(rail).toBeVisible();
+    await expect(satellite).toBeVisible();
     await expect(share).toBeVisible();
     await expect(reset).toBeVisible();
 
@@ -292,6 +317,7 @@ test.describe('the mobile hazard rail (390x844)', () => {
       page.locator('#share-btn'),
       page.locator('#reset-btn'),
       page.locator('#hazard-rail .hazard-rail-btn').first(),
+      page.locator('.basemap-switcher-btn'),
       page.locator('#map-info-btn')
     ]) {
       await expect(control).toBeVisible();

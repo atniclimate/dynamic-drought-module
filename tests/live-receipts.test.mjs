@@ -328,25 +328,30 @@ test('EXPECTED_BOOT_LAYERS still matches src/config/layers.ts and src/config/clu
   }
 });
 
-test('evaluateEmbedCorner proves a reachable map-information credits button', () => {
+test('evaluateEmbedCorner proves the satellite switcher and a reachable map-information credits button', () => {
   // The row a PR 54 embed actually produces: no attribution control in the
   // DOM, so its hit is null, and the question-mark button is present and is
   // the top hit at its own center.
-  const live = { attribHit: null, infoBtnVisible: true, infoHit: 'map-information' };
+  const live = { satHit: 'satellite', attribHit: null, infoBtnVisible: true, infoHit: 'map-information' };
   assert.equal(evaluateEmbedCorner(live).ok, true);
 
+  // The satellite switcher covered by the brand pill (the FE-18 regression).
+  const covered = evaluateEmbedCorner({ ...live, satHit: 'brand-pill' });
+  assert.equal(covered.ok, false);
+  assert.match(covered.reasons.join(' '), /satellite control hit brand-pill/);
+
   // The credits surface gone from the embed: a license failure.
-  const noCredits = evaluateEmbedCorner({ attribHit: null, infoBtnVisible: false });
+  const noCredits = evaluateEmbedCorner({ satHit: 'satellite', attribHit: null, infoBtnVisible: false });
   assert.equal(noCredits.ok, false);
   assert.match(noCredits.reasons.join(' '), /map-information button missing from the embed/);
 
   // Present but covered by another control: visible is not the same as reachable.
-  const buried = evaluateEmbedCorner({ ...live, infoHit: 'brand-pill' });
+  const buried = evaluateEmbedCorner({ ...live, infoHit: 'satellite' });
   assert.equal(buried.ok, false);
-  assert.match(buried.reasons.join(' '), /map-information button is covered: its own center hit brand-pill/);
+  assert.match(buried.reasons.join(' '), /map-information button is covered: its own center hit satellite/);
 
   // A receipt written before this contract carries no infoHit at all.
-  assert.equal(evaluateEmbedCorner({ attribHit: null, infoBtnVisible: true }).ok, false);
+  assert.equal(evaluateEmbedCorner({ satHit: 'satellite', attribHit: null, infoBtnVisible: true }).ok, false);
 
   // The removed attribution control coming back is itself a finding.
   const regressed = evaluateEmbedCorner({ ...live, attribHit: 'attribution' });

@@ -55,16 +55,17 @@ async function openPointer(page: Page): Promise<void> {
 }
 
 /**
- * The map's own ground and relief traffic, by explicit name: the
- * OpenStreetMap raster ground's tile host (src/map/style.ts), and the Pacific
- * Northwest relief archive with its hosting fallback
- * (URLS.hillshadePmtilesLocal and URLS.hillshadePmtilesFallback). MapLibre
- * keeps fetching these tiles after a cold boot, on its own schedule, whatever
- * the panel shows. None of these names can match a briefing read: those go to
- * the Worker proxy (NWS, SPC, CPC and the rest), the same-origin resource
- * catalog under /data/resources/, the landscape signature, or the bundled
- * boundaries, and the self-check in the case below proves the named ground
- * hosts still count.
+ * The map's own ground and relief traffic, by explicit name: the recent
+ * satellite basemap service (its frame query and exportImage tiles,
+ * src/map/satellite.ts), the OpenStreetMap raster ground's tile host
+ * (src/map/style.ts), and the Pacific Northwest relief archive with its
+ * hosting fallback (URLS.hillshadePmtilesLocal and
+ * URLS.hillshadePmtilesFallback). MapLibre keeps fetching these tiles after a
+ * cold boot, on its own schedule, whatever the panel shows. None of these
+ * names can match a briefing read: those go to the Worker proxy (NWS, SPC,
+ * CPC and the rest), the same-origin resource catalog under /data/resources/,
+ * the landscape signature, or the bundled boundaries, and the self-check in
+ * the case below proves the first two still count.
  */
 const OSM_TILE_HOST = new URL(BOOT_URLS.basemapOSM.replace(/\{[xyz]\}/g, '0')).hostname;
 // The archive's path below the deploy base (the preview serves it from `/`,
@@ -73,6 +74,7 @@ const RELIEF_ARCHIVE_PATH = `/${URLS.hillshadePmtilesLocal.slice(BASE_URL.length
 function isMapGroundRead(url: string): boolean {
   const parsed = new URL(url);
   return (
+    url.startsWith(`${URLS.noaaMergedGeoColorImageServer}/`) ||
     parsed.hostname === OSM_TILE_HOST ||
     parsed.pathname.endsWith(RELIEF_ARCHIVE_PATH) ||
     url === URLS.hillshadePmtilesFallback

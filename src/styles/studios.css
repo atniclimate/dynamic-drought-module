@@ -1078,6 +1078,13 @@
   }
 
   /* ---- Layer studio ---- */
+  /* The rehosted imagery switch keeps its face; it gives the title its room. */
+  #layers-studio-root .layers-studio-header .basemap-switcher-btn {
+    width: auto;
+    min-width: var(--touch-target);
+    min-height: var(--touch-target);
+    padding-inline: 12px;
+  }
   #layers-studio-root .layers-studio-search {
     max-width: none;
     margin: 0;

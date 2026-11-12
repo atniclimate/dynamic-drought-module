@@ -104,5 +104,6 @@ test('Reset is the bare link: default region, the Pacific in ENSO, base map, des
     'the Pacific fit follows the region fit, or the national fit wins'
   );
   assert.ok(sidebar.includes('if (params.embed) embedHomeRegion = params.region;'), 'an embed remembers its link region');
+  assert.ok(reset.includes('requestBasemapMode(map, defaultBasemapFor(cluster))'));
   assert.ok(reset.includes('STATE.desktopSidebarClosed = false'));
 });

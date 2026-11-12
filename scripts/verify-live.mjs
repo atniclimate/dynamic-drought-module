@@ -28,8 +28,9 @@
  *      terminal state honestly; it is a failure when EVERY active layer is
  *      unavailable, or when a layer that was `ready` in --previous (a
  *      receipt for the same base) is unavailable now. The embed boots also
- *      prove that the map-information button, which since PR 54 (2026-08-31)
- *      is the embed's credits surface, is present and is the top hit at its
+ *      prove the satellite switcher is the top hit at its own center and
+ *      that the map-information button, which since PR 54 (2026-08-31) is
+ *      the embed's credits surface, is present and is the top hit at its
  *      own center, with the removed attribution control absent.
  *
  * Receipts hold URLs, HTTP status, bytes, milliseconds, and status words.
@@ -314,7 +315,8 @@ async function checkRanges() {
 }
 
 // Runs inside the page: which control is the top hit at the center of the
-// map-information button (the embed corner contract, FE-18). Since PR 54 (da2efab, 2026-08-31, owner direction) the
+// satellite switcher and of the map-information button (the embed corner
+// contract, FE-18). Since PR 54 (da2efab, 2026-08-31, owner direction) the
 // MapLibre attribution control is gone and the map-information button is
 // the embed's credits surface, so the button must be present and reachable
 // rather than absent; `attribHit` stays only to catch the removed control
@@ -327,12 +329,14 @@ const cornerProbe = () => {
     const b = el.getBoundingClientRect();
     const top = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
     if (!top) return null;
+    if (top.closest('.basemap-switcher-control')) return 'satellite';
     if (top.closest('.map-info-btn')) return 'map-information';
     if (top.closest('.maplibregl-ctrl-attrib')) return 'attribution';
     return (top.className || top.tagName).toString().slice(0, 40);
   };
   const info = document.querySelector('.map-info-btn');
   return {
+    satHit: hit('.maplibregl-ctrl-bottom-right .basemap-switcher-btn'),
     attribHit: hit('.maplibregl-ctrl-attrib-button'),
     infoHit: hit('.map-info-btn'),
     infoBtnVisible: !!info && getComputedStyle(info).display !== 'none',

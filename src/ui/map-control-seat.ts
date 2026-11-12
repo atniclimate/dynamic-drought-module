@@ -1,9 +1,12 @@
 /**
  * Seats for map chrome that lives in different places on different shells.
  *
- * Owner direction 2026-08-19 moved the on-map key into the top-right
- * control column on the desktop shell. That move is not right inside an
- * embed, which stacks the key full width in the bottom dock.
+ * Owner direction 2026-08-19 moved two pieces of chrome into the top-right
+ * control column on the desktop shell: the satellite toggle (so the three
+ * map buttons finally read as the one family the E2 ruling describes) and
+ * the on-map key. Neither move is right inside an embed, which stacks the
+ * key full width in the bottom dock and keeps the satellite button in
+ * MapLibre's corner.
  *
  * Owner direction 2026-11-09 (sprint), DR-pending, adds a third seat: while
  * the phone shell is active every right-edge control sits in the ONE column
@@ -17,9 +20,12 @@
  * the desktop Brief shell already uses for the legend
  * (src/ui/island/shell.tsx), narrowed to one node and one condition.
  *
- * COOPERATION IS THE HARD PART. Another surface may rehost a control and
- * restore it on close. Two watchers pulling one node in opposite directions
- * is a fight neither wins, so this watcher claims
+ * COOPERATION IS THE HARD PART. The LAYERS studio also rehosts the
+ * satellite control, into its own header, and restores it on close
+ * (src/ui/island/layers-studio.tsx). Two watchers pulling one node in
+ * opposite directions is a fight neither wins: the first version of this
+ * helper moved the control out of the studio header the moment the studio
+ * opened, and the studio's own specs caught it. So this watcher claims
  * ownership only while the node sits in one of the seats it manages.
  * Anything else holding the node is left alone, and the node returns to
  * this watcher's care when that owner puts it back.

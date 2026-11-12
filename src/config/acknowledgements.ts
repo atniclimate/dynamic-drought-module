@@ -35,6 +35,7 @@ import type { ProductKey } from './products';
 
 /** Every row id, in no rendered order (the renderer groups and sorts). */
 export const ACKNOWLEDGEMENT_IDS = [
+  'noaa-nesdis',
   'noaa-star',
   'nasa',
   'noaa-nws',
@@ -82,6 +83,7 @@ export type AcknowledgementId = (typeof ACKNOWLEDGEMENT_IDS)[number];
  */
 export const PROVIDER_KEYS = [
   'basemap-ground',
+  'satellite-geocolor',
   'enso-flow',
   'structures',
   'terrain-archive',
@@ -182,6 +184,7 @@ function nameOnly(
 }
 
 export const ACKNOWLEDGEMENTS: Readonly<Record<AcknowledgementId, AcknowledgementRow>> = {
+  'noaa-nesdis': nameOnly('noaa-nesdis', 'NOAA NESDIS Satellite Maps'),
   // ledger: star-vhi names the issuer and no credit sentence; STAR's disclaimer shows beside its data (Technical information).
   'noaa-star': nameOnly('noaa-star', 'NOAA NESDIS Center for Satellite Applications and Research (STAR)'),
   nasa: nameOnly(
@@ -479,8 +482,9 @@ export const PRODUCT_CREDITS: Readonly<Record<ProductKey, CreditRows>> = {
 export const PROVIDERS: Readonly<
   Record<ProviderKey, readonly [AcknowledgementId, ...AcknowledgementId[]]>
 > = {
-  // The OSM raster ground, drawn by default.
+  // The OSM raster ground, drawn by default and under satellite.
   'basemap-ground': ['osm'],
+  'satellite-geocolor': ['noaa-nesdis'],
   // The ENSO flow overlay (src/layers/enso-flow.ts): NOAA GFS and GFS-Wave
   // read at runtime, and the committed NOAA RTOFS surface-current frame, all
   // NCEP products (admission rtofs-currents-producer line 11). The overlay

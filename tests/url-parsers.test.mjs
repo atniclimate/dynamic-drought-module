@@ -68,15 +68,16 @@ const TABLE = [
 
 // A mode's optional layer beyond its recipe (Fuel risk over Wildfire) is not
 // the mode's link: the link writes `layers=` beside the mode token, so a share
-// or reload keeps the layer and the mode.
-test('a mode plus an optional layer beyond its recipe round-trips the mode and the layers', async () => {
+// or reload keeps the layer, the mode and the mode's base map.
+test('a mode plus an optional layer beyond its recipe round-trips the mode, the layers and the base map', async () => {
   const { HAZARD_CLUSTERS } = await import('../src/config/clusters.ts');
   const { getLayerDef } = await import('../src/config/layers.ts');
   const { composeClusterIntent } = await import('../src/state/cluster-service.ts');
+  const { defaultBasemapFor } = await import('../src/state/basemap-store.ts');
   const sync = (cluster, horizon, layers) => {
     const browser = installFakeBrowser({ search: '' });
     try {
-      url.syncUrl({ region: null, layers, embed: false, view: 'console', cluster, horizon });
+      url.syncUrl({ region: null, layers, embed: false, view: 'console', cluster, horizon, basemap: defaultBasemapFor(cluster) });
       return new URLSearchParams(browser.search());
     } finally { browser.restore(); }
   };
@@ -105,31 +106,12 @@ test('a mode plus an optional layer beyond its recipe round-trips the mode and t
         assert.equal(back.cluster, cluster, `${label} reload`);
         assert.equal(back.horizon, horizon, `${label} reload`);
         assert.deepEqual(back.layers, shown, `${label} reload`);
+        assert.equal(back.basemap, defaultBasemapFor(cluster), `${label} reload`);
         checked += 1;
       }
     }
   }
   assert.ok(checked > 0, 'some mode has an optional layer outside a recipe');
-});
-
-// An old link may still carry `basemap=`; it is ignored without a word, and the
-// canonical URL never writes it.
-test('an incoming basemap parameter is ignored and never written back', () => {
-  const parse = (search) => {
-    const browser = installFakeBrowser({ search });
-    try { return url.parseUrlParams(); } finally { browser.restore(); }
-  };
-  const plain = parse('?layers=usdm');
-  for (const value of ['satellite', 'default', 'bogus']) {
-    const parsed = parse(`?layers=usdm&basemap=${value}`);
-    assert.equal('basemap' in parsed, false, `basemap=${value} produced a basemap field`);
-    assert.deepEqual(parsed, plain, `basemap=${value} changed the parse`);
-  }
-  const browser = installFakeBrowser({ search: '?layers=usdm&basemap=satellite' });
-  try {
-    url.syncUrl({ region: null, layers: new Set(['usdm']), embed: false, view: 'console', cluster: 'drought' });
-    assert.equal(new URLSearchParams(browser.search()).has('basemap'), false);
-  } finally { browser.restore(); }
 });
 
 for (const [name, parse, rows] of TABLE) {
