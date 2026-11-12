@@ -56,6 +56,58 @@ if (typeof window !== 'undefined' && typeof window.addEventListener === 'functio
   window.dispatchEvent(new Event('ddm:dryness-ground-request'));
 }
 
+/**
+ * What the recent NOAA satellite imagery covers, and what its edges are.
+ *
+ * The product is a merged mosaic of the GOES East and West full disks, so
+ * its geometry is two circles, not a rectangle: coverage ends near 76
+ * degrees north and south AND runs out on the far side of both disks
+ * (roughly between the eastern Atlantic and the western Pacific), where the
+ * service returns fully transparent pixels and the subdued base map shows
+ * through. Probed live 2026-08-19: `exportImage` over central Africa and
+ * south Asia returned a 334-byte fully transparent PNG at every sample,
+ * while the service's own declared extent claims the whole globe. The
+ * declared extent is what the raster source's `bounds` follow, because a
+ * single rectangle cannot describe a footprint that wraps the
+ * antimeridian; the honest move is to say what the edges mean rather than
+ * to cull tiles that might carry data.
+ *
+ * The daylight boundary is likewise inherent: GeoColor renders the lit and
+ * unlit halves differently, so a visible seam crosses the mosaic wherever
+ * the terminator falls. Neither edge is a fault to hide.
+ */
+export const SATELLITE_COVERAGE_NOTE =
+  'Coverage is the GOES East and West disks: it ends near 76 degrees north and south, and the base map shows through beyond the disks. The daylight boundary crosses the mosaic as a visible seam.';
+/** The imagery's caveat, moved word for word from the SAT button's hidden status text (src/map/satellite.ts). */
+export const SATELLITE_CAVEAT_NOTE =
+  'Context only; daytime approximate true color, nighttime infrared with static lights; clouds can obscure land and smoke.';
+// DRAFT wording (DR-177): new; needs ddm-cite and the owner's read-back. No observation time: no frame is shown.
+export const SATELLITE_UNAVAILABLE_NOTE =
+  'Recent NOAA satellite imagery is unavailable right now, so the map shows the plain base map.';
+
+/** 'on' while a frame is drawn, 'unavailable' while the plain map stands in for failed imagery, null otherwise. */
+type SatelliteImagery = 'on' | 'unavailable' | null;
+let satelliteImagery: SatelliteImagery = null;
+
+function satelliteHtml(): string {
+  if (satelliteImagery === null) return '';
+  const lines = satelliteImagery === 'on' ? [SATELLITE_CAVEAT_NOTE, SATELLITE_COVERAGE_NOTE] : [SATELLITE_UNAVAILABLE_NOTE];
+  return `<h4>Satellite imagery</h4>${lines.map((line) => `<p>${escapeHtml(line)}</p>`).join('')}`;
+}
+
+export function setSatelliteImageryBriefing(state: SatelliteImagery): void {
+  satelliteImagery = state;
+  const node = typeof document === 'undefined' ? null : document.getElementById('impact-technical-satellite');
+  if (node) node.innerHTML = satelliteHtml();
+}
+
+if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+  // Mirrored literals of src/map/satellite.ts, a lazy chunk this module stays out of; the request replays its last state.
+  window.addEventListener('ddm:satellite-imagery', (event) =>
+    setSatelliteImageryBriefing((event as CustomEvent<{ state?: SatelliteImagery } | null>).detail?.state ?? null));
+  window.dispatchEvent(new Event('ddm:satellite-imagery-request'));
+}
+
 // vocab-allow: the National Hurricane Center's own definition of its cone, verbatim (nhc.noaa.gov/aboutcone.shtml, read 2026-10-13)
 const NHC_CONE_DEFINITION = 'The cone represents the probable track of the center of a tropical cyclone, and is formed by enclosing the area swept out by a set of circles (not shown) along the forecast track (at 12, 24, 36, 48, 60, 72, 96, 120 hours). The size of each circle is set so that two-thirds of historical official forecast errors over a 5-year sample fall within the circle.';
 
@@ -146,6 +198,7 @@ export function renderMapTechnicalInformation(open = false, leadHtml = ''): stri
     <p>Basins covered: Atlantic, Eastern North Pacific, Central North Pacific.</p>
     <p>${escapeHtml("Circles are sized by the issuer's wind classes; the issuer's icons are not reproduced.")}</p>
     <p>Times are as the issuer states them; DDM does not read them as full dates.</p>
+    <div id="impact-technical-satellite">${satelliteHtml()}</div>
     <h4>Time horizon</h4>
     ${horizonReasonsHtml()}
   </details>`;

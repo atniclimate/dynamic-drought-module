@@ -16,6 +16,14 @@ export const SATELLITE_FRAME: SatelliteFrame = Object.freeze({
   endTime: FIXTURE_NOW - 15 * 60_000
 });
 
+/** A third, older frame, so a walk back across two bad frames can be shown. */
+export const SATELLITE_OLDER_FRAME: SatelliteFrame = Object.freeze({
+  objectId: 9024,
+  name: 'MERGEDGC.10-minute.fixture_older.color',
+  startTime: FIXTURE_NOW - 34 * 60_000,
+  endTime: FIXTURE_NOW - 25 * 60_000
+});
+
 export const SATELLITE_NEW_FRAME: SatelliteFrame = Object.freeze({
   objectId: 9027,
   name: 'MERGEDGC.10-minute.fixture_newest.color',

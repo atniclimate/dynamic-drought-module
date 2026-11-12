@@ -94,7 +94,8 @@ interface Located {
   readonly fix: LocateFix;
   /** `undefined`: the outlines are still being read. `null`: they could not be. */
   finding: StateFinding | null | undefined;
-  tribal: 'idle' | 'running' | TribalCheck;
+  /** `failed`: the check threw before it could test the position. */
+  tribal: 'idle' | 'running' | 'failed' | TribalCheck;
   /** The area a check placed the position in, as a click on it would title it. */
   place: TribalPlaceWords | null;
   /** The card's body is unfolded. */
@@ -409,19 +410,31 @@ export function createLocate(map: maplibregl.Map, button: HTMLButtonElement, sta
     mine.place = null;
     render();
     say('Checking Tribal lands near you.');
-    void checkTribalLands(map, mine.fix, check.signal).then(async (result) => {
-      if (located !== mine || mine.check !== check || check.signal.aborted || !result) return;
-      const inside = result.kind === 'verdict' && result.verdict.kind === 'inside' ? result.verdict : null;
-      const words = inside ? await tribalPlaceWords(inside.hit, inside.biaLandArea).catch(() => null) : null;
-      if (located !== mine || mine.check !== check || check.signal.aborted) return;
+    const current = (): boolean => located === mine && mine.check === check && !check.signal.aborted;
+    const finish = (result: TribalCheck | 'failed', words: TribalPlaceWords | null): void => {
       mine.tribal = result;
       mine.place = words;
       mine.check = null;
       const view = locatedView(mine);
       say(`${view.title}. ${view.lines.join(' ')}`);
-      if (inside && words) void openArea(mine, inside.hit, words);
-      else render();
-    });
+    };
+    void checkTribalLands(map, mine.fix, check.signal)
+      .then(async (result) => {
+        if (!current() || !result) return;
+        const inside = result.kind === 'verdict' && result.verdict.kind === 'inside' ? result.verdict : null;
+        const words = inside ? await tribalPlaceWords(inside.hit, inside.biaLandArea).catch(() => null) : null;
+        if (!current()) return;
+        finish(result, words);
+        if (inside && words) void openArea(mine, inside.hit, words);
+        else render();
+      })
+      .catch((err: unknown) => {
+        // A failed check says only that it could not be completed, never what is or is not there.
+        if (!current()) return;
+        console.warn('[locate] Tribal lands check failed.', err);
+        finish('failed', null);
+        render();
+      });
   }
 
   function stopTribal(mine: Located): void {
@@ -514,7 +527,7 @@ export function createLocate(map: maplibregl.Map, button: HTMLButtonElement, sta
       ];
     }
     if (mine.tribal === 'running') return [];
-    if (mine.tribal.kind === 'moved') return [{ type: 'actions', items: [again] }];
+    if (mine.tribal === 'failed' || mine.tribal.kind === 'moved') return [{ type: 'actions', items: [again] }];
     const { verdict } = mine.tribal;
     const copy = tribalCopy(verdict, tribalLayerName);
     const blocks: CardBlock[] = copy.detail.map((text) => ({ type: 'text', text }));
@@ -588,6 +601,8 @@ export function createLocate(map: maplibregl.Map, button: HTMLButtonElement, sta
     if (copy.states.length > 0) {
       if (mine.tribal === 'idle') {
         qualifier = `${qualifier} Tribal lands not checked.`.trim();
+      } else if (mine.tribal === 'failed') {
+        qualifier = `${qualifier} Tribal lands not checked: the check could not be completed.`.trim();
       } else if (mine.tribal.kind === 'moved') {
         qualifier = `${qualifier} Tribal lands not checked: the map moved before the check finished.`.trim();
       } else {

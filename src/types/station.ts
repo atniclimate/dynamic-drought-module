@@ -1,7 +1,7 @@
 /**
  * Telemetry station: a marker on the map representing a real agency
  * monitoring station. Most stations expose either a `usgsSite` (live data
- * via USGS Water Services Instantaneous Values API) or an `awdbStation`
+ * via the USGS Water Data APIs, src/util/usgs.ts) or an `awdbStation`
  * (NRCS Snow Telemetry); some have neither and surface only deep links to
  * the agency portal.
  *
@@ -97,4 +97,6 @@ export interface StationValue {
     | 'cocorahs'
     | 'nwrfc'
     | 'usgs-iv';
+  /** Set only when the issuer marked the reading estimated (USGS ESTIMATED). */
+  readonly estimated?: true;
 }

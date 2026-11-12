@@ -237,7 +237,7 @@ test.describe('InteractionCoordinator: one click, one response', () => {
     // point-event. Discovery upstreams are aborted so the curated seed
     // markers render deterministically offline (the honest catch path).
     await page.route('**/ddm-proxy.atniclimate.workers.dev/**', (route) => route.abort('failed'));
-    await page.route('**/waterservices.usgs.gov/**', (route) => route.abort('failed'));
+    await page.route('**/api.waterdata.usgs.gov/**', (route) => route.abort('failed'));
     await gotoApp(page, '?region=washington_state&view=console&layers=aiannh,bia-reservations,telemetry');
     await waitForLayerSettled(page, 'bia-reservations');
     await waitForLayerSettled(page, 'telemetry');
@@ -265,7 +265,7 @@ test.describe('InteractionCoordinator: one click, one response', () => {
       // Keep the curated markers fixed while testing the actual MapLibre
       // marker key handler. Discovery failure is an intentional offline fixture.
       await page.route('**/ddm-proxy.atniclimate.workers.dev/**', (route) => route.abort('failed'));
-      await page.route('**/waterservices.usgs.gov/**', (route) => route.abort('failed'));
+      await page.route('**/api.waterdata.usgs.gov/**', (route) => route.abort('failed'));
       await gotoApp(page, '?region=washington_state&view=console&layers=telemetry');
       await waitForLayerSettled(page, 'telemetry');
       const marker = page.locator('[data-telemetry-station-id="ps_vital_signs"]');
@@ -294,7 +294,7 @@ test.describe('InteractionCoordinator: one click, one response', () => {
     test(`Escape after a Water & Snow ${view} opener returns to its visible button or the canvas`, async ({ page }) => {
       await page.setViewportSize({ width: 1440, height: 900 });
       await page.route('**/ddm-proxy.atniclimate.workers.dev/**', (route) => route.abort('failed'));
-      await page.route('**/waterservices.usgs.gov/**', (route) => route.abort('failed'));
+      await page.route('**/api.waterdata.usgs.gov/**', (route) => route.abort('failed'));
       await gotoApp(page, `?region=washington_state&view=${view}&layers=telemetry`);
       await waitForLayerSettled(page, 'telemetry');
       if (view === 'brief') await page.locator('#layers-studio-entry').click();

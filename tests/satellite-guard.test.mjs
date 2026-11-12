@@ -77,6 +77,13 @@ test('a two-level black and white image is a placeholder, as PNG and through JPE
   assert.equal(isPlaceholderImage(decodeJpeg(jpg)), true, 'JPEG edges stay within the between-tone allowance');
 });
 
+test('a placeholder that is transparent over its top two thirds is still a placeholder', () => {
+  // Cells of 32 px (7 changes a row): enough for the opaque rows, too few for all 256 rows.
+  const { width, height, data } = decodePng(twoLevelPng(32));
+  for (let i = 0; i < Math.floor(height / 3) * 2 * width * 4; i += 4) data[i + 3] = 0;
+  assert.equal(isPlaceholderImage({ width, height, data }), true);
+});
+
 test('a natural image is never a placeholder', () => {
   const windows = naturalWindows();
   assert.equal(windows.length, 35);
@@ -194,6 +201,17 @@ test('HTTP errors, an ArcGIS error envelope at HTTP 200, a blank body and a corr
       await assert.rejects(action(request, new AbortController()));
     });
   }
+  assert.deepEqual(heard, []);
+});
+
+test('a body larger than the image cap is a tile error and reports nothing', async () => {
+  const { heard, onTile } = recorder();
+  const { MAX_SATELLITE_IMAGE_BYTES } = await import('../src/map/satellite-guard.ts');
+  assert.equal(MAX_SATELLITE_IMAGE_BYTES, 1024 * 1024);
+  const oversized = Buffer.concat([recorded('night-ocean.jpg'), Buffer.alloc(MAX_SATELLITE_IMAGE_BYTES)]);
+  await withFetch(async () => imageResponse(oversized, 'image/jpeg'), async () => {
+    await assert.rejects(satelliteTileAction(onTile, decodeByType)(request, new AbortController()), RangeError);
+  });
   assert.deepEqual(heard, []);
 });
 

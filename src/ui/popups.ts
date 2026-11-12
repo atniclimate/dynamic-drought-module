@@ -1053,19 +1053,16 @@ function usgsChart(series: UsgsSeries[]): StationChart | null {
     data: sampled,
     title: `${label} over the past 7 days (USGS)`,
     unit,
-    source: 'USGS Water Services, past 7 days',
+    source: 'USGS Water Data APIs, past 7 days',
     parameter: code === '00060' ? 'discharge_cfs' : undefined
   };
 }
 
 /**
- * The readings of a USGS Instantaneous Values payload: per series, its
- * latest value with its unit and its own time. The IV JSON nests a series'
- * code at `variable.variableCode[0].value`, its unit at
- * `variable.unit.unitCode`, its name at `variable.variableName` and its
- * readings at `values[0].value[]`; every step is type-narrowed in
- * src/util/usgs.ts. USGS encodes "no reading" as the literal `'-999999'`;
- * those series are dropped.
+ * The readings of a USGS gauge's 7-day payload: per series, its latest
+ * value with its unit and its own time. src/util/usgs.ts groups the Water
+ * Data rows into one series per parameter and keeps only real readings, so
+ * a series with none is dropped here.
  */
 function usgsRead(payload: unknown, retrievedAt: number): StationRead {
   const series = extractTimeSeries(payload);
@@ -1078,8 +1075,9 @@ function usgsRead(payload: unknown, retrievedAt: number): StationRead {
     const label = code === '00060' ? 'Discharge' : code === '00065' ? 'Gage height' : readVariableName(s) || code || '';
     readings.push({
       label,
-      text: `${formatStationNumber(Number(last.value), code === '00060' ? 'discharge_cfs' : undefined)} ${readUnitCode(s) ?? ''}`.trim(),
-      issuer: 'USGS Water Services',
+      text: `${formatStationNumber(Number(last.value), code === '00060' ? 'discharge_cfs' : undefined)} ${readUnitCode(s) ?? ''}`.trim() +
+        (last.estimated ? ' (Estimated)' : ''),
+      issuer: 'USGS Water Data APIs',
       observed: observedAt(last.dateTime),
       stale: !!last.dateTime && freshnessForNetwork('usgs-iv', last.dateTime, retrievedAt) === 'stale'
     });

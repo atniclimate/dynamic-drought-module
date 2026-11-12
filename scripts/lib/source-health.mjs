@@ -134,7 +134,6 @@ export function countRecords(contentType, text) {
   }
   if (Array.isArray(data)) return data.length;
   if (data && Array.isArray(data.features)) return data.features.length;
-  if (data && data.value && Array.isArray(data.value.timeSeries)) return data.value.timeSeries.length;
   return null;
 }
 

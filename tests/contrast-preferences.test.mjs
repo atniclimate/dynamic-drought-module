@@ -81,6 +81,36 @@ test('forced colours: surfaces, glass and inks take the system canvas and text; 
   }
 });
 
+test('every pressed button that paints its own face has a forced-colours selected face', () => {
+  // The selected-face rules: the pair is drawn as authored, so Highlight on HighlightText under forced colours.
+  const faceSelectors = [];
+  for (const path of sheets) {
+    for (const rule of read(path).matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      if (/background(?:-color)?:\s*var\(--face-selected\)/.test(rule[2]) && /forced-color-adjust:\s*none;/.test(rule[2])) {
+        faceSelectors.push(rule[1]);
+      }
+    }
+  }
+  const faces = faceSelectors.join(' ');
+  // The Brief's Tribal Nations toggle, in the sidebar (an id rule outranks the class) and in the phone Brief sheet.
+  assert.match(faces, /#brief-secondary-actions \.tribal-nations-brief-action\[aria-pressed='true'\]/);
+  assert.match(faces, /(?:^|[\s,])\.tribal-nations-brief-action\[aria-pressed='true'\]/);
+  let pressed = 0;
+  for (const path of sheets) {
+    for (const rule of read(path).matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const selector = rule[1].trim().replace(/\s+/g, ' ');
+      // A single pressed selector that paints a background; lists and :is() groups are the face rules themselves.
+      if (/[,(]/.test(selector.replace(/:not\([^)]*\)/g, '')) || !/\[aria-pressed='true'\](?::not\([^)]*\))*$/.test(selector)) continue;
+      if (!/(?:^|[\s;])background(?:-color)?:/.test(rule[2])) continue;
+      pressed += 1;
+      for (const cls of selector.match(/\.[a-z][\w-]*/g) ?? []) {
+        assert.ok(faces.includes(cls), `${path}: ${selector} paints a pressed face with no forced-colours selected face for ${cls}`);
+      }
+    }
+  }
+  assert.ok(pressed >= 1, 'the pressed-face scan matched a rule');
+});
+
 test('every rule that draws the selected face opts out of the system repaint', () => {
   let faces = 0;
   for (const path of sheets) {

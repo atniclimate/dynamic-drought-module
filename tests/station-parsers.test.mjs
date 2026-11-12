@@ -214,9 +214,9 @@ test('a cached USGS answer is served only to a view its queried box contains', a
   const boxes = [];
   globalThis.fetch = async (input) => {
     const url = decodeURIComponent(String(input));
-    if (!url.includes('waterservices.usgs.gov')) throw new TypeError('network down');
-    boxes.push(url.match(/bBox=([^&]+)/)?.[1]);
-    return new Response(JSON.stringify({ value: { timeSeries: [] } }), { status: 200 });
+    if (!url.includes('api.waterdata.usgs.gov')) throw new TypeError('network down');
+    boxes.push(url.match(/bbox=([^&]+)/)?.[1]);
+    return new Response(JSON.stringify({ type: 'FeatureCollection', features: [] }), { status: 200 });
   };
   const view = (west, east) => ({
     bounds: { south: 46, west, north: 47.5, east },
@@ -255,15 +255,20 @@ test('a USGS answer is cut to the requested view, and the margin station is serv
   mock.timers.tick(61 * 60 * 1000);
   let requests = 0;
   const site = (code, longitude) => ({
-    sourceInfo: { siteCode: [{ value: code }], siteName: code, geoLocation: { geogLocation: { latitude: 46.5, longitude } } },
-    variable: { variableCode: [{ value: '00060' }], unit: { unitCode: 'ft3/s' } },
-    values: [{ value: [{ value: '5', dateTime: '2026-10-13T00:00:00.000Z' }] }]
+    type: 'Feature',
+    properties: { monitoring_location_id: `USGS-${code}`, parameter_code: '00060', time: '2026-10-13T00:00:00+00:00', value: '5', unit_of_measure: 'ft^3/s', qualifier: null },
+    geometry: { type: 'Point', coordinates: [longitude, 46.5] }
   });
+  const named = (code) => ({ type: 'Feature', id: `USGS-${code}`, properties: { monitoring_location_name: code }, geometry: null });
   globalThis.fetch = async (input) => {
-    if (!String(input).includes('waterservices.usgs.gov')) throw new TypeError('network down');
+    const url = String(input);
+    if (!url.includes('api.waterdata.usgs.gov')) throw new TypeError('network down');
+    if (url.includes('/monitoring-locations/')) {
+      return new Response(JSON.stringify({ type: 'FeatureCollection', features: [named('IN'), named('MARGIN')] }), { status: 200 });
+    }
     requests += 1;
     // -119 is inside the view below; -120.1 is only inside its 0.375-degree overscan margin.
-    return new Response(JSON.stringify({ value: { timeSeries: [site('IN', -119), site('MARGIN', -120.1)] } }), { status: 200 });
+    return new Response(JSON.stringify({ type: 'FeatureCollection', features: [site('IN', -119), site('MARGIN', -120.1)] }), { status: 200 });
   };
   const view = (west, east) => ({ bounds: { south: 46, west, north: 47.5, east }, center: [46.75, (west + east) / 2], signal: null });
   const usgs = (result) => result.records.filter((r) => r.network === 'usgs-iv').map((r) => r.station.id);
@@ -318,10 +323,10 @@ test('fast sources are painted before a slow USGS read settles, and not after an
   installFetch(fast);
   const answerFast = globalThis.fetch;
   globalThis.fetch = async (input, init) => {
-    if (String(input).includes('waterservices.usgs.gov')) {
+    if (String(input).includes('api.waterdata.usgs.gov')) {
       await usgsHeld;
       if (init?.signal?.aborted) throw new DOMException('aborted', 'AbortError');
-      return new Response(JSON.stringify({ value: { timeSeries: [] } }), { status: 200 });
+      return new Response(JSON.stringify({ type: 'FeatureCollection', features: [] }), { status: 200 });
     }
     return answerFast(input);
   };
@@ -374,31 +379,32 @@ async function withFetch(handler, run) {
   }
 }
 
-test('a USGS series whose newest value is -999999 falls back to the last real value', async () => {
-  const { readLatestUsgsReading, usgsLatestStationValue } = await import('../src/util/usgs.ts');
-  const series = {
-    variable: { variableCode: [{ value: '00060' }], unit: { unitCode: 'ft3/s' } },
-    values: [
-      {
-        value: [
-          { value: '1234.00', dateTime: '2026-10-12T09:45:00.000-07:00' },
-          { value: '1250.50', dateTime: '2026-10-12T10:00:00.000-07:00' },
-          { value: '-999999', dateTime: '2026-10-12T10:15:00.000-07:00' }
-        ]
-      }
+test('a USGS series whose newest row has no value falls back to the last real value', async () => {
+  const { extractTimeSeries, readLatestUsgsReading, usgsLatestStationValue } = await import('../src/util/usgs.ts');
+  const row = (time, value) => ({
+    type: 'Feature',
+    properties: { time_series_id: 'a', parameter_code: '00060', time, value, unit_of_measure: 'ft^3/s', qualifier: null },
+    geometry: null
+  });
+  // The Water Data APIs mark "no reading" with null, and send rows in no set order.
+  const payload = {
+    features: [
+      row('2026-10-12T17:15:00+00:00', null),
+      row('2026-10-12T16:45:00+00:00', '1234.00'),
+      row('2026-10-12T17:00:00+00:00', '1250.50')
     ]
   };
-  assert.deepEqual(readLatestUsgsReading(series), {
+  assert.deepEqual(readLatestUsgsReading(extractTimeSeries(payload)[0]), {
     value: '1250.50',
-    dateTime: '2026-10-12T10:00:00.000-07:00'
+    dateTime: '2026-10-12T17:00:00+00:00'
   });
-  const value = usgsLatestStationValue('usgs-1', { value: { timeSeries: [series] } });
+  const value = usgsLatestStationValue('usgs-1', payload);
   assert.equal(value?.value, 1250.5);
-  assert.equal(value?.timestamp, '2026-10-12T10:00:00.000-07:00');
+  assert.equal(value?.timestamp, '2026-10-12T17:00:00+00:00');
   assert.equal(value?.unit, 'ft3/s');
 
-  const dead = { ...series, values: [{ value: [{ value: '-999999', dateTime: 'x' }, { value: ' ' }] }] };
-  assert.equal(readLatestUsgsReading(dead), null);
+  const dead = { features: [row('2026-10-12T17:15:00+00:00', null), row('2026-10-12T17:30:00+00:00', ' ')] };
+  assert.equal(readLatestUsgsReading(extractTimeSeries(dead)[0]), null);
 });
 
 test('a Hydromet NO RECORD on the newest day is skipped for the last posted day', async () => {

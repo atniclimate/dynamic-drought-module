@@ -271,7 +271,7 @@ const PROBE_SUFFIXES = new Map([
       '&resultRecordCount=4&f=json'
   ],
   // Parameterized APIs: a bare root 400s by design; probe a minimal real call.
-  ['usgsIV', '?format=json&sites=01646500&parameterCd=00060&siteStatus=all'],
+  ['usgsWaterData', 'collections/latest-continuous/items?f=json&monitoring_location_id=USGS-01646500&parameter_code=00060&limit=2'],
   ['nrcsAwdbRest', '?stationTriplets=679:WA:SNTL&elements=WTEQ&duration=DAILY&beginDate=2026-01-01&endDate=2026-01-02'],
   ['usdmDataServices', USDM_DSCI_PROBE_PATH],
   // Tile ROOT with the template living in the consumer; probe one real tile.

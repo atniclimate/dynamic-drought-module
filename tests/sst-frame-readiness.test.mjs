@@ -854,6 +854,18 @@ test('the fallback statement clears once the user steps to a frame', async () =>
   });
 });
 
+test('an earlier SST day names its own date on the horizon line; the newest day stays "now"', async () => {
+  await withSst({ sst: '2026-08-01', answer: () => domainsOk() }, async ({ map }) => {
+    await mod.activate(map);
+    assert.equal(timeBars.get(KEY)?.stamp.asOf, undefined, 'the newest day is current');
+    timeBars.get(KEY).rail.onStep(2); // 2026-09-22
+    map.requestTile(frameSource('2026-09-22'), 'f1');
+    map.loadTile(frameSource('2026-09-22'), 'f1', true);
+    await settle();
+    assert.equal(timeBars.get(KEY)?.stamp.asOf, 'Sep 22, 2026');
+  });
+});
+
 for (const [name, body] of [
   ['a blank 200 body', ''],
   ['an HTML page at 200', '<!doctype html><html><body>maintenance</body></html>'],

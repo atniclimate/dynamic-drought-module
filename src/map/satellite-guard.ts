@@ -18,6 +18,8 @@ import { fetchBufferedWithBudget } from '../util/fetch';
 
 export const SATELLITE_TILE_SCHEME = 'satellite-guard';
 const TILE_TIMEOUT_MS = 15_000;
+/** The largest probe or tile body read; a 256 px image needs well under this. A larger body is a failed read. */
+export const MAX_SATELLITE_IMAGE_BYTES = 1024 * 1024;
 
 export interface DecodedImage {
   readonly width: number;
@@ -82,12 +84,20 @@ export function isPlaceholderImage(image: DecodedImage): boolean {
   let changes = 0;
   // The last level seen in the current row: 0 none yet, 1 near black, 2 near white.
   let last = 0;
+  // Rows holding an opaque pixel: the level shares count only opaque pixels, so the row test must too.
+  let rows = 0;
+  let rowOpaque = false;
   for (let index = 0, column = 0; index + 3 < pixels.length; index += 4, column++) {
     if (column === width) {
       column = 0;
       last = 0;
+      rowOpaque = false;
     }
     if (pixels[index + 3]! < 128) continue;
+    if (!rowOpaque) {
+      rowOpaque = true;
+      rows++;
+    }
     opaque++;
     const r = pixels[index]!;
     const g = pixels[index + 1]!;
@@ -103,7 +113,6 @@ export function isPlaceholderImage(image: DecodedImage): boolean {
     last = level;
   }
   if (opaque === 0) return false;
-  const rows = Math.ceil(pixels.length / 4 / width);
   return (
     dark >= opaque * MIN_LEVEL_SHARE &&
     light >= opaque * MIN_LEVEL_SHARE &&
@@ -149,7 +158,7 @@ export function satelliteTileAction(
   return async (request, abortController) => {
     const signal = abortController.signal;
     const url = request.url.slice(`${SATELLITE_TILE_SCHEME}://`.length);
-    const response = await fetchBufferedWithBudget(url, { credentials: 'omit' }, signal, timeoutMs);
+    const response = await fetchBufferedWithBudget(url, { credentials: 'omit' }, signal, timeoutMs, MAX_SATELLITE_IMAGE_BYTES);
     if (!response.ok) throw new Error(`Satellite tile HTTP ${response.status}`);
     const contentType = (response.headers.get('content-type') ?? '').toLowerCase();
     const data = await response.arrayBuffer();

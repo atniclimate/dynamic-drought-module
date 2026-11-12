@@ -19,7 +19,7 @@ test.describe('telemetry discovery zoom gates', () => {
     let usgsDiscoveryRequests = 0;
     page.on('request', (req) => {
       if (req.url().includes('/PublicView_RAWS/')) rawsRequests++;
-      if (req.url().includes('waterservices.usgs.gov') && req.url().includes('bBox')) {
+      if (req.url().includes('api.waterdata.usgs.gov') && req.url().includes('bbox=')) {
         usgsDiscoveryRequests++;
       }
     });

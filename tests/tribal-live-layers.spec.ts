@@ -784,7 +784,7 @@ test.describe('DDM-P9-T05: RAWS popup readings', () => {
    */
   async function abortOtherDiscoverySources(page: Page): Promise<void> {
     const abort = (route: import('./offline-test').Route): unknown => route.abort('failed');
-    await page.route('**/waterservices.usgs.gov/**', abort);
+    await page.route('**/api.waterdata.usgs.gov/**', abort);
     await page.route('**/wcc.sc.egov.usda.gov/**', abort);
     await page.route('**/api.tidesandcurrents.noaa.gov/**', abort);
     await page.route('**/mesonet.agron.iastate.edu/**', abort);
@@ -956,7 +956,7 @@ test.describe('DDM-P9-T05: RAWS popup readings', () => {
 test.describe('DDM-P9-T06: RAWS wind symbol', () => {
   async function abortOtherDiscoverySources(page: Page): Promise<void> {
     const abort = (route: import('./offline-test').Route): unknown => route.abort('failed');
-    await page.route('**/waterservices.usgs.gov/**', abort);
+    await page.route('**/api.waterdata.usgs.gov/**', abort);
     await page.route('**/wcc.sc.egov.usda.gov/**', abort);
     await page.route('**/api.tidesandcurrents.noaa.gov/**', abort);
     await page.route('**/mesonet.agron.iastate.edu/**', abort);

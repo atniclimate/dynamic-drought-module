@@ -543,6 +543,8 @@ function installStampOnlyTimeBar(linked: string | null = null, shown: string | n
       ariaLabel: 'Sea surface temperature anomaly date',
       stamp: {
         horizon: 'current',
+        // Without the axis the day cannot be shown to be the newest, so it is named, never "now".
+        asOf: dateLabel(shown),
         headline: `Observed ${dateLabel(shown)}`,
         detail:
           "GHRSST MUR daily SST anomaly · the provider's time axis could not be read this session, so stepping stays off",
@@ -595,6 +597,8 @@ function installTimeBar(map: maplibregl.Map): void {
       // horizon chip; the stamp says Current Conditions even under the Long
       // Range chip, because that is what the surface is.
       horizon: 'current',
+      // An earlier day is not "now": the horizon line names its date.
+      ...(date === dates[dates.length - 1] ? {} : { asOf: dateLabel(date) }),
       headline: `Observed ${dateLabel(date)}`,
       detail: buffering
         ? 'GHRSST MUR daily SST anomaly · buffering tiles'
