@@ -688,21 +688,8 @@ a:hover {
   line-height: 1.15;
   white-space: nowrap;
 }
-.brand-text p {
-  margin: 3px 0 0;
-  font-family: var(--font-body);
-  font-size: 11px;
-  font-weight: var(--fw-body);
-  color: var(--fg-2);
-  letter-spacing: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 /* The wider adopted wordmark shares the header without truncating its words. */
-.brand-text h1,
-.brand-text p {
+.brand-text h1 {
   white-space: normal;
   overflow: visible;
   text-overflow: clip;
@@ -2918,16 +2905,13 @@ button.conditions-metric:hover .conditions-action-hide {
      and read by nothing yet. --popup-measure is the sidebar foot's content
      width at the 340px sidebar (340 minus two 18px paddings), provisional
      until M23 measures it.
-     --map-cell-w is the design record's 124px raised to the measured need
-     (D1.md :295, one token). The director's probe, 2026-09-27, in the
-     built app at 1280x900 and 1440x900, ?view=console, Lexend: the
-     "Share view" word is about 78.4px wide and at 124px its ink ended at
-     x 1260.42 in a cell whose right edge is 1268, about 2.4px into the
-     1px edge plus 9px padding. The need is 1 + 9 + 20 + 8 + 78.4 + 9 + 1
-     = 126.4px; 128px is the next 4px step. */
+     --map-cell-w is sized for the longest word, "Share" (one token; owner,
+     2026-11-12). Measured 39.0px in DDM Heros at 1920x943 on 2026-11-12,
+     so the need is 1 + 9 + 20 + 8 + 39 + 9 + 1 = 87px; 96px keeps room
+     for a zoomed or wider face. */
   .app-shell:not(.embed) {
     --chrome-inset: 12px;
-    --map-cell-w: 128px;
+    --map-cell-w: 96px;
     --map-cell-h: 40px;
     --map-cell-gap: 4px;
     --chip-w: 288px;
@@ -2997,7 +2981,7 @@ button.conditions-metric:hover .conditions-action-hide {
   /* The cell (R1 a): a fixed 20px icon column, an 8px gap, then the word.
      The 1px edge plus 9px padding puts every icon centre 20px in from the
      cell's left edge: one x for the whole column, W - 12 - --map-cell-w
-     + 20 (W - 120 at 128px). */
+     + 20 (W - 88 at 96px). */
   .app-shell:not(.embed) .map-overlay-controls .map-cell {
     box-sizing: border-box;
     display: grid !important;
@@ -6358,7 +6342,7 @@ a.impact-resource-link::after {
    neighbours (THE DESKTOP COLUMN, above), and its panel is the right-hand
    drawer: it docks against the column, its top on the help slot's top and
    its right edge 8px left of the column (container right 12 +
-   --map-cell-w + 8, so 148 at 128px), and it slides out from behind the
+   --map-cell-w + 8, so 116 at 96px), and it slides out from behind the
    column. The panel still answers
    "what am I looking at?" and "who says so?": the license credits stay
    one click away, never absorbed into silence. It is ephemeral (no URL

@@ -63,8 +63,7 @@ const FIT_SELECTORS = [
   '.map-key-chip-label',
   '.overlay-btn',
   '.layers-studio-linkout',
-  '.brand-text h1',
-  '.brand-text p'
+  '.brand-text h1'
 ] as const;
 
 /** Deterministic answers for the briefing hosts a WA boot reaches (codex C6). */

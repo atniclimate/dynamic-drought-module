@@ -26,15 +26,15 @@ import { gotoApp } from './helpers';
  * - the ink-weighted centroid is within 1 px on each axis the glyph is
  *   symmetric about (GLYPH_OPTICS);
  * - all four icons share one x within 0.5 px, and that x is the formula's
- *   (`mapCellIconCentreX`: W - 120 in container px at the 128 px cell).
+ *   (`mapCellIconCentreX`: W - 88 in container px at the 96 px cell).
  * Under R1 a the words are checked too: their left edges share one x
  * within 0.5 px, each word's trimmed box centres in its cell within 1 px,
  * and each word's text ends at least the 1 px edge plus 9 px padding
  * inside its cell's right edge. That inset check exists because
  * scrollWidth cannot see the failure: at 124 px "Share view" ran about
  * 2.4 px into the padding with scrollWidth equal to clientWidth (the
- * director's probe, 2026-09-27), which raised --map-cell-w to 128 px
- * (D1.md :295: the measured need, never an ellipsis).
+ * director's probe, 2026-09-27), which once raised --map-cell-w to 128 px;
+ * the word is now "Share" and the cell 96 px (never an ellipsis).
  * At rest, on hover, and pressed (SAT on, Help open), then again in 44 px
  * cells under a coarse pointer.
  *

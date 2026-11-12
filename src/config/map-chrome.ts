@@ -34,13 +34,13 @@ export const MAP_CHROME_TOKENS = {
   /** The one corner inset every chrome seat keeps from the map's edge. */
   chromeInset: 12,
   /**
-   * A labelled cell's width (R1 a): the design record's 124 raised to the
-   * measured need (D1.md :295). The director's probe, 2026-09-27, 1280x900
-   * and 1440x900, Lexend: "Share view" is about 78.4 px, so the cell needs
-   * 1 + 9 + 20 + 8 + 78.4 + 9 + 1 = 126.4; 128 is the next 4 px step.
+   * A labelled cell's width (R1 a), sized for the longest word, "Share"
+   * (owner, 2026-11-12: "Share view" became "Share"). Measured 39.0 px in DDM
+   * Heros at 1920x943 on 2026-11-12, so the cell needs
+   * 1 + 9 + 20 + 8 + 39 + 9 + 1 = 87; 96 keeps room for a zoomed or wider face.
    * The tablet band's icon square is MAP_CHROME_TABLET_BAND.cell.
    */
-  mapCellW: 128,
+  mapCellW: 96,
   /** A cell's height on a fine pointer. */
   mapCellH: 40,
   /** The vertical gap between two slots. */
@@ -189,7 +189,7 @@ export const MAP_CHROME_SEATS: readonly MapChromeSeat[] = [
     key: 'share',
     slotSelector: '.map-overlay-controls > #share-btn',
     controlSelector: '.map-overlay-controls > #share-btn',
-    word: 'Share view',
+    word: 'Share',
     formula: SLOT_FORMULA
   }
 ];

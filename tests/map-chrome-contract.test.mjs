@@ -147,12 +147,12 @@ test('the chrome tokens in app.css equal MAP_CHROME_SEATS', () => {
     W - chromeInset - mapCellW + edge + paddingInline + iconColumn / 2
   );
 
-  // The cell holds the widest word with its designed right inset. The
-  // director's probe, 2026-09-27 (1280x900 and 1440x900, ?view=console,
-  // Lexend): "Share view" is about 78.4 px wide, so the need is
-  // edge + padding + icon + gap + word + padding + edge = 126.4 px.
-  const SHARE_VIEW_WORD_PX = 78.4;
-  const need = edge + paddingInline + iconColumn + iconGap + SHARE_VIEW_WORD_PX + paddingInline + edge;
+  // The cell holds the widest word with its designed right inset. "Share"
+  // measured 39.0 px in DDM Heros at 1920x943, 2026-11-12 ("Reset" 38.1), so
+  // the need is edge + padding + icon + gap + word + padding + edge = 87 px;
+  // the check keeps 5 px of room for a zoomed or wider face.
+  const SHARE_WORD_PX = 44;
+  const need = edge + paddingInline + iconColumn + iconGap + SHARE_WORD_PX + paddingInline + edge;
   assert.ok(mapCellW >= need, `--map-cell-w ${mapCellW}px is under the measured need of ${need}px`);
 });
 
