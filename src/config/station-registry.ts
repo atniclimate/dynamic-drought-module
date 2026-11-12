@@ -23,7 +23,14 @@ import {
   type ViewEnvelope
 } from '../util/bbox';
 import { isObject } from '../util/guards';
-import { IV_FRESH_WINDOW_MS, readLatestUsgsReading, readUnitCode, readVariableCode } from '../util/usgs';
+import {
+  fetchUsgsFeatures,
+  IV_FRESH_WINDOW_MS,
+  usgsLocationId,
+  usgsReading,
+  usgsUnit,
+  type UsgsReading
+} from '../util/usgs';
 import { ExpiringLruCache } from '../util/bounded-cache';
 
 const MINUTE_MS = 60 * 1000;
@@ -66,6 +73,17 @@ const COOPS_DISCOVERY_TIMEOUT_MS = 12_000;
 const USGS_BBOX_AREA_CAP = 25;
 const USGS_EXTREME_AREA_FACTOR = 64;
 const USGS_DISCOVERY_PARAMETER_CODES = '00060,00065';
+// Rows per discovery page: a 25-square-degree view over western Washington
+// answered 712 rows (2026-11-06), so a view inside the gate fits one page.
+const USGS_DISCOVERY_PAGE_ROWS = 2_000;
+// Latest readings this recent are asked for: the legacy service counted a
+// site active with automated data "within the last 183 days", so a gauge
+// silent for days still shows, marked stale, as it did (14 of 378 gauges in
+// that view; a one-day window drops them).
+const USGS_DISCOVERY_WINDOW = 'P183D';
+// Ids per name request: 300 measured a 4,955-character URL.
+const USGS_NAME_IDS_PER_REQUEST = 300;
+const USGS_SITE_NAME_TTL_MS = 12 * HOUR_MS;
 const AWDB_DISCOVERY_NETWORKS = ['SNTL', 'SCAN'] as const;
 const AGRIMET_DISCOVERY_TIMEOUT_MS = 12_000;
 const COCORAHS_DISCOVERY_TIMEOUT_MS = 15_000;
@@ -363,6 +381,9 @@ const USGS_DISCOVERY_CACHE = new ExpiringLruCache<string, DiscoveryCacheEntry>(
 const RAWS_DISCOVERY_CACHE = new ExpiringLruCache<string, DiscoveryCacheEntry>(
   DISCOVERY_CACHE_MAX_ENTRIES
 );
+// USGS site names by bare site code, asked once a session (value rows carry
+// none); null remembers a site the answer did not name.
+const USGS_SITE_NAMES = new ExpiringLruCache<string, string | null>(5_000);
 
 /** Quantized cache key for a viewport bbox (mirrors hydrography's HYDRO_CACHE). */
 function discoveryCacheKey(bounds: ViewportBounds): string {
@@ -550,29 +571,67 @@ async function discoverUsgsStations(
   signal: AbortSignal | null
 ): Promise<readonly StationDiscoveryRecord[]> {
   const params = new URLSearchParams({
-    format: 'json',
-    bBox: [
+    f: 'json',
+    bbox: [
       queryBounds.west,
       queryBounds.south,
       queryBounds.east,
       queryBounds.north
     ].map(formatBboxNumber).join(','),
-    parameterCd: USGS_DISCOVERY_PARAMETER_CODES,
-    siteStatus: 'active'
+    parameter_code: USGS_DISCOVERY_PARAMETER_CODES,
+    time: USGS_DISCOVERY_WINDOW,
+    limit: String(USGS_DISCOVERY_PAGE_ROWS),
+    properties: 'monitoring_location_id,parameter_code,time,value,unit_of_measure,qualifier'
   });
-
-  const response = await fetchBufferedWithBudget(
-    `${URLS.usgsIV}?${params.toString()}`,
-    {},
+  const features = await fetchUsgsFeatures(
+    `${URLS.usgsWaterData}collections/latest-continuous/items?${params.toString()}`,
     signal,
     USGS_DISCOVERY_TIMEOUT_MS
   );
-  if (!response.ok) {
-    throw new Error(`USGS IV discovery HTTP ${response.status}`);
-  }
+  const sites = usgsDiscoverySites(features);
+  const names = await usgsSiteNames([...sites.keys()], signal);
+  return usgsDiscoveryRecords(sites, names);
+}
 
-  const payload: unknown = await response.json();
-  return usgsDiscoveryRecordsFromPayload(payload);
+/**
+ * Names for these sites: the session's own first, then one request per
+ * USGS_NAME_IDS_PER_REQUEST sites it has not named yet.
+ */
+async function usgsSiteNames(
+  siteCodes: readonly string[],
+  signal: AbortSignal | null
+): Promise<ReadonlyMap<string, string>> {
+  const names = new Map<string, string>();
+  const unnamed: string[] = [];
+  for (const code of siteCodes) {
+    const known = USGS_SITE_NAMES.get(code);
+    if (known === undefined) unnamed.push(code);
+    else if (known !== null) names.set(code, known);
+  }
+  for (let i = 0; i < unnamed.length; i += USGS_NAME_IDS_PER_REQUEST) {
+    const chunk = unnamed.slice(i, i + USGS_NAME_IDS_PER_REQUEST);
+    const params = new URLSearchParams({
+      f: 'json',
+      id: chunk.map(usgsLocationId).join(','),
+      properties: 'monitoring_location_name',
+      skipGeometry: 'true',
+      // One more than asked: a page as long as its limit always links a next page, here an empty one.
+      limit: String(chunk.length + 1)
+    });
+    const features = await fetchUsgsFeatures(
+      `${URLS.usgsWaterData}collections/monitoring-locations/items?${params.toString()}`,
+      signal,
+      USGS_DISCOVERY_TIMEOUT_MS
+    );
+    for (const feature of features) {
+      if (!isObject(feature) || !isObject(feature.properties)) continue;
+      const code = usgsSiteCode(feature.id);
+      const name = readNonEmptyString(feature.properties.monitoring_location_name);
+      if (code && name) names.set(code, name);
+    }
+    for (const code of chunk) USGS_SITE_NAMES.set(code, names.get(code) ?? null, USGS_SITE_NAME_TTL_MS);
+  }
+  return names;
 }
 
 export function stationNetworkByKey(key: StationNetworkKey): StationNetwork {
@@ -938,32 +997,47 @@ function boundsFromCenter(
   };
 }
 
-function usgsDiscoveryRecordsFromPayload(payload: unknown): readonly StationDiscoveryRecord[] {
+/** Each USGS site's coordinates and readings, from the one-row-per-observation answer. */
+function usgsDiscoverySites(features: readonly unknown[]): ReadonlyMap<string, UsgsDiscoverySite> {
   const bySite = new Map<string, UsgsDiscoverySite>();
-  for (const series of readUsgsTimeSeries(payload)) {
-    const siteCode = readUsgsSiteCode(series);
-    const siteName = readUsgsSiteName(series);
-    const coords = readUsgsCoords(series);
-    const value = readUsgsStationValue(siteCode, series);
-    if (!siteCode || !siteName || !coords || !value) continue;
+  for (const feature of features) {
+    if (!isObject(feature) || !isObject(feature.properties)) continue;
+    const row = feature.properties;
+    const siteCode = usgsSiteCode(row.monitoring_location_id);
+    const coords = readGeoJsonCoords(feature);
+    const reading = usgsReading(row);
+    if (!siteCode || !coords || !reading) continue;
 
+    const value = usgsDiscoveryValue(siteCode, row.parameter_code, reading, usgsUnit(row.unit_of_measure));
     const current = bySite.get(siteCode);
     if (!current) {
-      bySite.set(siteCode, { siteCode, siteName, coords, values: [value] });
+      bySite.set(siteCode, { siteCode, coords, values: [value] });
       continue;
     }
     current.values.push(value);
   }
+  return bySite;
+}
 
+/** The bare site code of a `USGS-` id (the station handle and page link use it), or null for another agency. */
+function usgsSiteCode(id: unknown): string | null {
+  return typeof id === 'string' && id.startsWith('USGS-') && id.length > 5 ? id.slice(5) : null;
+}
+
+function usgsDiscoveryRecords(
+  sites: ReadonlyMap<string, UsgsDiscoverySite>,
+  names: ReadonlyMap<string, string>
+): readonly StationDiscoveryRecord[] {
   const records: StationDiscoveryRecord[] = [];
-  for (const site of bySite.values()) {
+  for (const site of sites.values()) {
+    const name = names.get(site.siteCode);
     const value = preferredUsgsValue(site.values);
-    if (!value) continue;
+    if (!name || !value) continue;
     records.push({
       network: 'usgs-iv',
       station: {
         id: `usgs-${site.siteCode}`,
-        name: site.siteName,
+        name,
         coords: site.coords,
         region: 'discovered',
         type: 'gage',
@@ -986,71 +1060,35 @@ function usgsDiscoveryRecordsFromPayload(payload: unknown): readonly StationDisc
   return records;
 }
 
-function readUsgsTimeSeries(payload: unknown): readonly Record<string, unknown>[] {
-  if (!isObject(payload) || !isObject(payload.value)) return [];
-  const timeSeries = payload.value.timeSeries;
-  if (!Array.isArray(timeSeries)) return [];
-  return timeSeries.filter(isObject);
-}
-
-function readUsgsSiteCode(series: Record<string, unknown>): string | null {
-  const sourceInfo = series.sourceInfo;
-  if (!isObject(sourceInfo)) return null;
-  const siteCode = sourceInfo.siteCode;
-  if (!Array.isArray(siteCode) || siteCode.length === 0) return null;
-  const first = siteCode[0];
-  if (!isObject(first)) return null;
-  return typeof first.value === 'string' ? first.value : null;
-}
-
-function readUsgsSiteName(series: Record<string, unknown>): string | null {
-  const sourceInfo = series.sourceInfo;
-  if (!isObject(sourceInfo)) return null;
-  return typeof sourceInfo.siteName === 'string' ? sourceInfo.siteName : null;
-}
-
-function readUsgsCoords(series: Record<string, unknown>): readonly [number, number] | null {
-  const sourceInfo = series.sourceInfo;
-  if (!isObject(sourceInfo) || !isObject(sourceInfo.geoLocation)) return null;
-  const geogLocation = sourceInfo.geoLocation.geogLocation;
-  if (!isObject(geogLocation)) return null;
-  const latitude = geogLocation.latitude;
-  const longitude = geogLocation.longitude;
-  if (typeof latitude !== 'number' || typeof longitude !== 'number') return null;
-  return [latitude, longitude];
-}
-
-function readUsgsStationValue(
-  siteCode: string | null,
-  series: Record<string, unknown>
-): StationValue | null {
-  if (!siteCode) return null;
-  const code = readVariableCode(series);
-  const latest = readLatestUsgsReading(series);
-  if (!latest) return null;
-  const value = Number(latest.value);
-
-  const timestamp = latest.dateTime ?? '';
-  const freshness = freshnessForNetwork('usgs-iv', timestamp);
+function usgsDiscoveryValue(
+  siteCode: string,
+  code: unknown,
+  reading: UsgsReading,
+  unit: string | null
+): StationValue {
+  const timestamp = reading.dateTime ?? '';
   return {
     stationId: `usgs-${siteCode}`,
     parameter: code === '00065' ? 'gage_height_ft' : 'discharge_cfs',
     label: code === '00065' ? 'Gage height' : 'Discharge',
-    value: Math.round(value * 100) / 100,
-    unit: readUnitCode(series) ?? '',
+    value: Math.round(Number(reading.value) * 100) / 100,
+    unit: unit ?? '',
     timestamp,
-    freshness,
+    freshness: freshnessForNetwork('usgs-iv', timestamp),
     source: 'usgs-iv'
   };
 }
 
+/** Discharge before gage height; of two sensors on one, the newer reading (rows arrive in no set order). */
 function preferredUsgsValue(values: readonly StationValue[]): StationValue | null {
-  return (
-    values.find((value) => value.parameter === 'discharge_cfs') ??
-    values.find((value) => value.parameter === 'gage_height_ft') ??
-    values[0] ??
-    null
-  );
+  const newest = (parameter: string): StationValue | null =>
+    values
+      .filter((value) => value.parameter === parameter)
+      .reduce<StationValue | null>(
+        (best, value) => (best === null || Date.parse(value.timestamp) > Date.parse(best.timestamp) ? value : best),
+        null
+      );
+  return newest('discharge_cfs') ?? newest('gage_height_ft');
 }
 
 function formatBboxNumber(value: number): string {
@@ -2021,7 +2059,6 @@ function clamp(value: number, min: number, max: number): number {
 
 interface UsgsDiscoverySite {
   readonly siteCode: string;
-  readonly siteName: string;
   readonly coords: readonly [number, number];
   readonly values: StationValue[];
 }

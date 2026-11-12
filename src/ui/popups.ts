@@ -1059,13 +1059,10 @@ function usgsChart(series: UsgsSeries[]): StationChart | null {
 }
 
 /**
- * The readings of a USGS Instantaneous Values payload: per series, its
- * latest value with its unit and its own time. The IV JSON nests a series'
- * code at `variable.variableCode[0].value`, its unit at
- * `variable.unit.unitCode`, its name at `variable.variableName` and its
- * readings at `values[0].value[]`; every step is type-narrowed in
- * src/util/usgs.ts. USGS encodes "no reading" as the literal `'-999999'`;
- * those series are dropped.
+ * The readings of a USGS gauge's 7-day payload: per series, its latest
+ * value with its unit and its own time. src/util/usgs.ts groups the Water
+ * Data rows into one series per parameter and keeps only real readings, so
+ * a series with none is dropped here.
  */
 function usgsRead(payload: unknown, retrievedAt: number): StationRead {
   const series = extractTimeSeries(payload);

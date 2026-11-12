@@ -17,8 +17,8 @@
  *     (WMS) endpoint. WMS is an Open Geospatial Consortium (OGC) open
  *     standard, so this is not a proprietary Environmental Systems Research
  *     Institute (ESRI) dependency.
- *   - United States Geological Survey (USGS) Water Services is open data,
- *     Cross-Origin Resource Sharing (CORS) enabled, JavaScript Object
+ *   - The United States Geological Survey (USGS) Water Data APIs are open
+ *     data, Cross-Origin Resource Sharing (CORS) enabled, JavaScript Object
  *     Notation (JSON).
  */
 
@@ -146,44 +146,43 @@ export const URLS = Object.freeze({
   cpcSeasonalPrecipOutlookMapServer:
     'https://mapservices.weather.noaa.gov/vector/rest/services/outlooks/cpc_sea_precip_outlk/MapServer',
 
-  // ---------- USGS Water Services Instantaneous Values (open data, CORS-OK) ----------
-  // United States Geological Survey (USGS) Water Services, Instantaneous
-  // Values (IV). Two query shapes share this base URL:
-  //   - Single-site value fetch (existing use): `${usgsIV}?format=json
-  //     &sites=<siteCode>&parameterCd=<codes>&siteStatus=active`.
-  //   - Viewport DISCOVERY (unit A2 slice 2): `${usgsIV}?format=json
-  //     &bBox=<west,south,east,north>&parameterCd=00060,00065
-  //     &siteStatus=active` (no `sites`). With no period, the service
-  //     defaults to mode=LATEST (one instantaneous point per
-  //     site-parameter pair), which is what discovery needs.
-  // Response is WaterML JSON; the site list is at value.timeSeries[]:
-  //   .sourceInfo.siteName                              site name
-  //   .sourceInfo.siteCode[0].value                     USGS site code
-  //   .sourceInfo.geoLocation.geogLocation.latitude     decimal degrees (EPSG:4326)
-  //   .sourceInfo.geoLocation.geogLocation.longitude    decimal degrees
-  //   .variable.variableCode[0].value                   parameter code (00060, 00065)
-  //   .variable.unit.unitCode                           unit (ft3/s, ft)
-  //   .values[0].value[0].value                         latest reading (string; parse float)
-  //   .values[0].value[0].dateTime                      ISO 8601, station-local offset
-  // A gage reporting multiple parameters emits multiple timeSeries sharing
-  // one siteCode; group by `sourceInfo.siteCode[0].value` before applying
-  // the 50-nearest cap, or a station double-counts.
-  // CAVEAT (load-bearing): the bBox size limit varies by latitude (an
-  // equal-area cap, not a flat degree cap): roughly
-  // width_deg * cos(latitude) * height_deg <= 25. A box that exceeds it
-  // returns HTTP 400 with a `text/html` body (do not JSON-parse the error).
-  // A low-zoom viewport can exceed it, so the consumer must clamp the query
-  // bBox from the viewport center latitude, or fall back to "zoom in to
-  // load". CAVEAT: `siteStatus=active` does not guarantee a current reading
-  // (some active sites were months stale in testing); read `dateTime` per
-  // series and treat anything past a telemetry window (for example 24
-  // hours) as stale, not live.
-  // Verified 2026-07-06 (ddm-source-verifier): HTTP 200, Content-Type
-  // application/json, Access-Control-Allow-Origin: * (genuine wildcard,
-  // confirmed with an unrelated test origin, not a reflection). Direct
-  // fetch; no Worker proxy needed (host is not on the allow-list and does
-  // not need to be).
-  usgsIV: 'https://waterservices.usgs.gov/nwis/iv/',
+  // ---------- USGS Water Data APIs (open data, CORS-OK, no API key) ----------
+  // United States Geological Survey (USGS) Water Data APIs, OGC API Features.
+  // They replace the Water Services Instantaneous Values service, which USGS
+  // slows from 2026-11-16 and ends on 2027-02-22. Three query shapes share
+  // this base (built in src/util/usgs.ts and src/config/station-registry.ts):
+  //   - One gauge's 7-day series (the popup's latest values and sparkline,
+  //     the sidebar value): `collections/continuous/items?f=json
+  //     &monitoring_location_id=USGS-<site>&parameter_code=00060,00065
+  //     &time=P7D&limit=5000&skipGeometry=true&properties=time_series_id,
+  //     parameter_code,time,value,unit_of_measure,qualifier`.
+  //   - Viewport DISCOVERY: `collections/latest-continuous/items?f=json
+  //     &bbox=<west,south,east,north>&parameter_code=00060,00065
+  //     &time=P183D&limit=2000&properties=monitoring_location_id,
+  //     parameter_code,time,value,unit_of_measure,qualifier`; with no time
+  //     window it also returns series that ended years ago.
+  //   - Site names, which value rows do not carry, only for sites not yet
+  //     named this session: `collections/monitoring-locations/items?f=json
+  //     &id=USGS-<a>,USGS-<b>&properties=monitoring_location_name
+  //     &skipGeometry=true&limit=<count + 1>`. A page as long as its limit
+  //     always links a next page, which for this id list is empty.
+  // Response: a GeoJSON FeatureCollection with ONE FEATURE PER OBSERVATION,
+  // in no guaranteed order: properties.monitoring_location_id
+  // ('USGS-14103000'), parameter_code, time (UTC, +00:00), value (a string,
+  // or null for no reading), unit_of_measure ('ft^3/s' where the legacy said
+  // 'ft3/s'; 'ft'), qualifier (null or a list such as ["ESTIMATED"]);
+  // geometry coordinates are [longitude, latitude].
+  // CAVEATS (load-bearing): the id needs its `USGS-` prefix (a bare number
+  // answers HTTP 200 with zero features); the default page is 10 rows, the
+  // maximum 50,000, and a further page is the answer's own links[] entry
+  // with rel "next"; error bodies are JSON. NO API KEY, EVER: a keyless
+  // address may make 50 requests an hour, so every read is frugal and a 429
+  // pauses them (src/util/usgs.ts).
+  // Verified 2026-11-06 (UTC) with Origin https://atniclimate.github.io:
+  // Access-Control-Allow-Origin: * on 200, 400, 403 and 404; the three
+  // shapes above answered 200 with it at 05:39 UTC. Direct fetch; no Worker
+  // route.
+  usgsWaterData: 'https://api.waterdata.usgs.gov/ogcapi/v1/',
   // STREAMFLOW PERCENTILES, recorded as verified NOT wired (2026-09-01).
   // Nothing here is fetched today; this note exists so the next plan does not
   // reach for a decommissioned service.
@@ -191,20 +190,12 @@ export const URLS = Object.freeze({
   //     ?id=romap3` now 301-redirects to
   //     `waterdata.usgs.gov/blog/wdfn-stats-delivery/`, which states that
   //     WaterWatch and Water Quality Watch were expected to be decommissioned
-  //     by the end of 2025. The app never used it (it reads Instantaneous
-  //     Values above directly), so nothing is broken; any older plan or note
-  //     naming WaterWatch percentiles is stale.
-  //   - The live percentile path is the NWIS Statistics Service, on the same
-  //     `waterservices.usgs.gov` host this entry already trusts:
-  //     `.../nwis/stat/?format=rdb&sites=<siteCode>&statReportType=daily
-  //     &statTypeCd=p10,p25,p50,p75,p90&parameterCd=00060`. Verified HTTP 200,
-  //     Content-Type text/plain (RDB, not JSON: a tab-delimited body with
-  //     `#` comment lines and a two-row header, so it needs its own parser),
-  //     Access-Control-Allow-Origin: * (genuine wildcard). Day-of-year
-  //     statistics, so a reading's percentile is a comparison against that
-  //     calendar day's record, not against the year.
-  //   - The newer OGC API at `api.waterdata.usgs.gov/ogcapi/v0/collections`
-  //     is also wildcard-CORS and returns JSON; verified HTTP 200.
+  //     by the end of 2025. The app never used it, so nothing is broken; any
+  //     older plan or note naming WaterWatch percentiles is stale.
+  //   - The percentile path verified then was the NWIS Statistics Service
+  //     (RDB, day-of-year statistics) on the legacy Water Services host that
+  //     USGS is retiring; its successor is the statistics of the Water Data
+  //     APIs above, not yet verified here.
 
   // ---------- NRCS AWDB REST (SNOTEL / SCAN station data) ----------
   // Natural Resources Conservation Service Air-Water Database REST service.
