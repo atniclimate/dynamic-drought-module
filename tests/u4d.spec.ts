@@ -37,6 +37,15 @@ const SATELLITE_STAMP = 'data-ddm-satellite';
 let satelliteStub: SatelliteStubController;
 
 /** The Impact Briefing's Technical information, opened through the map key's link. */
+/** Console warnings the app logs when it rejects the service's placeholder image; collect before navigation. */
+function collectPlaceholderWarnings(page: Page): string[] {
+  const warnings: string[] = [];
+  page.on('console', (message) => {
+    if (message.type() === 'warning' && /placeholder image/.test(message.text())) warnings.push(message.text());
+  });
+  return warnings;
+}
+
 async function openTechnicalInformation(page: Page): Promise<Locator> {
   await page.locator('button[data-open-technical-information]').first().dispatchEvent('click');
   const notes = page.locator('#impact-panel .impact-technical-information');
@@ -195,6 +204,7 @@ test.describe('U4d: the switcher control and assistive observation status', () =
     // and white placeholder image (2026-11-11). The probe must reject it.
     satelliteStub.setFrames([SATELLITE_NEW_FRAME, SATELLITE_FRAME]);
     satelliteStub.servePlaceholderFrame(SATELLITE_NEW_FRAME.objectId);
+    const warnings = collectPlaceholderWarnings(page);
 
     await gotoApp(page, '?view=console&basemap=satellite');
     const chip = page.locator(IMAGERY_CHIP);
@@ -202,6 +212,8 @@ test.describe('U4d: the switcher control and assistive observation status', () =
     await expect(page.locator(SWITCHER)).toHaveAttribute('aria-pressed', 'true');
     expect(satelliteStub.probeFrameIds).toContain(SATELLITE_NEW_FRAME.objectId);
     expect(satelliteStub.renderedFrameIds).not.toContain(SATELLITE_NEW_FRAME.objectId);
+    // Rejected as the placeholder, not merely undecodable.
+    expect(warnings.length).toBeGreaterThan(0);
   });
 
   test('when the two newest frames serve placeholder map tiles the selection walks back to the third', async ({
@@ -211,10 +223,12 @@ test.describe('U4d: the switcher control and assistive observation status', () =
     satelliteStub.setFrames([SATELLITE_NEW_FRAME, SATELLITE_FRAME, SATELLITE_OLDER_FRAME]);
     satelliteStub.servePlaceholderFrame(SATELLITE_NEW_FRAME.objectId, 'tiles');
     satelliteStub.servePlaceholderFrame(SATELLITE_FRAME.objectId, 'tiles');
+    const warnings = collectPlaceholderWarnings(page);
 
     await gotoApp(page, '?view=console&basemap=satellite');
     const chip = page.locator(IMAGERY_CHIP);
     await expect(chip).toContainText(satelliteObservationRangeText(SATELLITE_OLDER_FRAME), { timeout: 30_000 });
+    expect(warnings.length).toBeGreaterThan(0);
     await expect(page.locator(SWITCHER)).toHaveAttribute('aria-pressed', 'true');
     await expect(page.locator('html')).toHaveAttribute(SATELLITE_STAMP, String(SATELLITE_OLDER_FRAME.objectId));
     expect(satelliteStub.probeFrameIds).toEqual(expect.arrayContaining([
@@ -236,10 +250,12 @@ test.describe('U4d: the switcher control and assistive observation status', () =
     // tiles come back as the placeholder, and the selection walks back.
     satelliteStub.setFrames([SATELLITE_NEW_FRAME, SATELLITE_FRAME]);
     satelliteStub.servePlaceholderFrame(SATELLITE_NEW_FRAME.objectId, 'tiles');
+    const warnings = collectPlaceholderWarnings(page);
 
     await gotoApp(page, '?view=console&basemap=satellite');
     const chip = page.locator(IMAGERY_CHIP);
     await expect(chip).toContainText(satelliteObservationRangeText(SATELLITE_FRAME), { timeout: 30_000 });
+    expect(warnings.length).toBeGreaterThan(0);
     await expect(page.locator(SWITCHER)).toHaveAttribute('aria-pressed', 'true');
     await expect(page.locator(SWITCHER)).not.toHaveAttribute('data-imagery-unavailable');
     await expect(page.locator('html')).toHaveAttribute(SATELLITE_STAMP, String(SATELLITE_FRAME.objectId));
@@ -253,11 +269,13 @@ test.describe('U4d: the switcher control and assistive observation status', () =
     satelliteStub.setFrames([SATELLITE_NEW_FRAME, SATELLITE_FRAME]);
     satelliteStub.servePlaceholderFrame(SATELLITE_NEW_FRAME.objectId);
     satelliteStub.servePlaceholderFrame(SATELLITE_FRAME.objectId);
+    const warnings = collectPlaceholderWarnings(page);
 
     // Drought opens on satellite by default; the guard keeps that default safe.
     await gotoApp(page, '?view=console');
     const btn = page.locator(SWITCHER);
     await expect(btn).toHaveAttribute('aria-pressed', 'false', { timeout: 30_000 });
+    expect(warnings.length).toBeGreaterThan(0);
     await expect(btn).toHaveAttribute('data-imagery-unavailable', '');
     await expect(btn).toHaveAttribute('title', /unavailable/);
     await expect(btn).toHaveAccessibleDescription(/unavailable/);
@@ -280,10 +298,12 @@ test.describe('U4d: the switcher control and assistive observation status', () =
     // each is answered transparent and the frame is dropped; with no other
     // frame the walk back ends on the plain map.
     satelliteStub.servePlaceholderFrame(SATELLITE_FRAME.objectId, 'tiles');
+    const warnings = collectPlaceholderWarnings(page);
 
     await gotoApp(page, '?view=console&basemap=satellite');
     const btn = page.locator(SWITCHER);
     await expect(btn).toHaveAttribute('aria-pressed', 'false', { timeout: 30_000 });
+    expect(warnings.length).toBeGreaterThan(0);
     await expect(btn).toHaveAttribute('data-imagery-unavailable', '');
     expect(satelliteStub.renderedFrameIds).toContain(SATELLITE_FRAME.objectId);
     await expect(page.locator('html')).not.toHaveAttribute(SATELLITE_STAMP);
@@ -319,6 +339,7 @@ test.describe('U4d: the switcher control and assistive observation status', () =
   test('a refresh whose frame serves placeholder tiles restores the last known-good frame', async ({
     page
   }) => {
+    const warnings = collectPlaceholderWarnings(page);
     await page.clock.install();
     await gotoApp(page, '?view=console&basemap=satellite');
     const chip = page.locator(IMAGERY_CHIP);
@@ -340,6 +361,7 @@ test.describe('U4d: the switcher control and assistive observation status', () =
     await expect(page.locator(SWITCHER)).toHaveAttribute('aria-pressed', 'true');
     await expect(page.locator('html')).toHaveAttribute(SATELLITE_STAMP, String(SATELLITE_FRAME.objectId));
     expect(await search(page)).not.toContain('basemap=');
+    expect(warnings.length).toBeGreaterThan(0);
   });
 
   test('an installed frame is removed after it ages beyond the source policy', async ({

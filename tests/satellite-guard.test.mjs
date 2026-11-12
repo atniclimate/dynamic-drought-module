@@ -77,6 +77,13 @@ test('a two-level black and white image is a placeholder, as PNG and through JPE
   assert.equal(isPlaceholderImage(decodeJpeg(jpg)), true, 'JPEG edges stay within the between-tone allowance');
 });
 
+test('a placeholder that is transparent over its top two thirds is still a placeholder', () => {
+  // Cells of 32 px (7 changes a row): enough for the opaque rows, too few for all 256 rows.
+  const { width, height, data } = decodePng(twoLevelPng(32));
+  for (let i = 0; i < Math.floor(height / 3) * 2 * width * 4; i += 4) data[i + 3] = 0;
+  assert.equal(isPlaceholderImage({ width, height, data }), true);
+});
+
 test('a natural image is never a placeholder', () => {
   const windows = naturalWindows();
   assert.equal(windows.length, 35);

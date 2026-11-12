@@ -84,12 +84,20 @@ export function isPlaceholderImage(image: DecodedImage): boolean {
   let changes = 0;
   // The last level seen in the current row: 0 none yet, 1 near black, 2 near white.
   let last = 0;
+  // Rows holding an opaque pixel: the level shares count only opaque pixels, so the row test must too.
+  let rows = 0;
+  let rowOpaque = false;
   for (let index = 0, column = 0; index + 3 < pixels.length; index += 4, column++) {
     if (column === width) {
       column = 0;
       last = 0;
+      rowOpaque = false;
     }
     if (pixels[index + 3]! < 128) continue;
+    if (!rowOpaque) {
+      rowOpaque = true;
+      rows++;
+    }
     opaque++;
     const r = pixels[index]!;
     const g = pixels[index + 1]!;
@@ -105,7 +113,6 @@ export function isPlaceholderImage(image: DecodedImage): boolean {
     last = level;
   }
   if (opaque === 0) return false;
-  const rows = Math.ceil(pixels.length / 4 / width);
   return (
     dark >= opaque * MIN_LEVEL_SHARE &&
     light >= opaque * MIN_LEVEL_SHARE &&
