@@ -80,6 +80,13 @@ export interface TimeBarStamp {
    * observed week is `current`), never inferred from the pressed chip.
    */
   readonly horizon: HorizonKey;
+  /**
+   * The shown data's own date ("Jun 23, 2026"), set by the owning layer when
+   * what is on the map is older than the newest it offers (a past drought
+   * week, an earlier SST day). The horizon line names it in place of the
+   * horizon subtitle, so a past frame is never stamped "now".
+   */
+  readonly asOf?: string;
   /** Headline line ("VALID JUN 30, 2026" / "ISSUED JUN 30 · THROUGH JUL"). */
   readonly headline: string;
   /** Context line (product name and register description). */
@@ -93,10 +100,10 @@ export interface TimeBarStamp {
   readonly register: StampRegister;
 }
 
-/** The horizon line's text: "Near Term · days to weeks". */
-export function stampHorizonText(horizon: HorizonKey): string {
+/** The horizon line's text: "Near Term · days to weeks", or the shown data's date in place of the subtitle. */
+export function stampHorizonText(horizon: HorizonKey, asOf?: string): string {
   const chrome = HORIZON_CHROME[horizon];
-  return `${chrome.title} · ${chrome.subtitle}`;
+  return `${chrome.title} · ${asOf ?? chrome.subtitle}`;
 }
 
 export function freshnessDate(stamp: TimeBarStamp): string {
@@ -150,6 +157,12 @@ export interface TimeBarSpec {
 
 let currentOwner: string | null = null;
 let currentSpec: TimeBarSpec | null = null;
+/**
+ * The stop last asked for since the owner's last install. An owner
+ * re-installs only once the asked-for stop has loaded (or failed), so a
+ * second quick press counts from here, not from the stop still shown.
+ */
+let askedIndex: number | null = null;
 
 /**
  * The compact/detail spec facade (S4c; the S4 design record section 3).
@@ -307,6 +320,7 @@ export function setTimeBar(owner: string, spec: TimeBarSpec): void {
   const sameOwner = currentOwner === owner;
   currentOwner = owner;
   currentSpec = spec;
+  askedIndex = null;
   render(sameOwner);
   notifySpecChange();
 }
@@ -316,6 +330,7 @@ export function clearTimeBar(owner: string): void {
   if (currentOwner !== owner) return;
   currentOwner = null;
   currentSpec = null;
+  askedIndex = null;
   render();
   notifySpecChange();
 }
@@ -438,7 +453,7 @@ function render(preserveFeedDisclosure = false): void {
     );
   } else parts.push(
     '<div class="time-bar-stamp" aria-live="polite" aria-atomic="true">' +
-      `<span class="time-bar-stamp-horizon" data-horizon="${escapeHtml(spec.stamp.horizon)}">${escapeHtml(stampHorizonText(spec.stamp.horizon))}</span>` +
+      `<span class="time-bar-stamp-horizon" data-horizon="${escapeHtml(spec.stamp.horizon)}">${escapeHtml(stampHorizonText(spec.stamp.horizon, spec.stamp.asOf))}</span>` +
       `<span class="time-bar-stamp-headline">${escapeHtml(spec.stamp.headline)}</span>` +
       `<span class="time-bar-stamp-detail">${escapeHtml(spec.stamp.detail)}</span>` +
       '</div>'
@@ -510,12 +525,17 @@ function render(preserveFeedDisclosure = false): void {
     const step = (delta: number): void => {
       const r = currentSpec?.rail;
       if (!r) return;
-      const next = Math.min(r.count - 1, Math.max(0, r.index + delta));
-      if (next !== r.index) r.onStep(next);
+      const from = askedIndex ?? r.index;
+      const next = Math.min(r.count - 1, Math.max(0, from + delta));
+      if (next === from) return;
+      askedIndex = next;
+      r.onStep(next);
     };
     rail?.addEventListener('change', () => {
       const v = Number(rail.value);
-      if (Number.isInteger(v)) currentSpec?.rail?.onStep(v);
+      if (!Number.isInteger(v)) return;
+      askedIndex = v;
+      currentSpec?.rail?.onStep(v);
     });
     // `input` fires per notch while dragging; stepping per notch would
     // spam fetches, so the fetch-triggering step waits for `change`

@@ -328,13 +328,23 @@ async function readStamp(page: Page): Promise<StampRead> {
   };
 }
 
-/** The horizon line is exactly one HORIZON_CHROME entry, title and subtitle. */
+/**
+ * The horizon line is exactly one HORIZON_CHROME entry, title and subtitle,
+ * or the title and the shown data's own date when that data is not the
+ * newest (the date its headline names; a past frame is never "now").
+ */
 function expectHorizonLine(stamp: StampRead, key: HorizonKey): void {
   const chrome = HORIZON_CHROME[key];
   expect(stamp.horizonKey, 'stamp data-horizon').toBe(key);
-  expect(stamp.horizon, 'stamp horizon line').toBe(
-    stamp.horizon === 'Current Conditions' ? chrome.title : `${chrome.title} · ${chrome.subtitle}`
-  );
+  const shownDate = /[A-Z][a-z]{2} \d{1,2}, \d{4}/.exec(stamp.headline)?.[0];
+  const dated = shownDate !== undefined && stamp.horizon === `${chrome.title} · ${shownDate}`;
+  const expected =
+    stamp.horizon === 'Current Conditions'
+      ? chrome.title
+      : dated
+        ? `${chrome.title} · ${shownDate}`
+        : `${chrome.title} · ${chrome.subtitle}`;
+  expect(stamp.horizon, 'stamp horizon line').toBe(expected);
 }
 
 /**
@@ -982,6 +992,8 @@ test.describe('DDM-P8-T02: the Drought and ENSO screens state their horizon in t
       issuer: 'GHRSST MUR'
     });
     expect(stamp.headline).toBe('Observed Jul 3, 2026');
+    // Jul 3 is not the newest of the stubbed days, so the line names it rather than "now".
+    expect(stamp.horizon).toBe(`${HORIZON_CHROME.current.title} · Jul 3, 2026`);
     // FLIPPED BACK 2026-11-05: ENSO's Season ahead now adds the CPC seasonal
     // precipitation outlook, a map its Current does not show, so the link
     // keeps its own horizon and Long Range is pressed again over the

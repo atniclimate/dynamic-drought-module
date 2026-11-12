@@ -491,6 +491,8 @@ function installTimeBar(map: maplibregl.Map): void {
       mode === 'absolute'
         ? {
             horizon: 'current',
+            // A past week is not "now": the horizon line names its date.
+            ...(atLatestStop() ? {} : { asOf: weekLabel(currentKey) }),
             headline: `Valid ${weekLabel(currentKey)}`,
             detail: 'US Drought Monitor week',
             register: 'observed'

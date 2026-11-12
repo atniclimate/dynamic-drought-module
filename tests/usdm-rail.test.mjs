@@ -248,6 +248,17 @@ test('a rail step during the Drought level crossfade leaves no change map querya
   });
 });
 
+test('a past week names its own date on the horizon line; the newest week stays "now"', async () => {
+  await withRail(Date.UTC(2020, 9, 6), async (map, handlers) => {
+    assert.equal(globalThis.__bar.stamp.asOf, undefined, 'the newest week is current');
+    handlers.archive = async () => json(week(1));
+    globalThis.__bar.rail.onStep(globalThis.__bar.rail.index - 1);
+    await settle();
+    assert.equal(globalThis.__bar.stamp.headline, 'Valid Sep 29, 2020');
+    assert.equal(globalThis.__bar.stamp.asOf, 'Sep 29, 2020');
+  });
+});
+
 test('a rail step during a change-map crossfade leaves no week queryable under it (R6-3)', async () => {
   await withRail(Date.UTC(2021, 9, 5), async (map, handlers) => {
     handlers.change = async () => json({ ...week(0), date: '20211005' });

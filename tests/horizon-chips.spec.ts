@@ -791,8 +791,9 @@ test.describe('DDM-P8-T03 clauses 2 and 3: one grammar, product-specific registe
     // for it rather than reading a pre-boot placeholder.
     const stampHorizonEl = page.locator('.time-bar-stamp-horizon');
     // The rendered text is "<title> · <subtitle>" (stampHorizonText,
-    // src/ui/time-bar.ts:94-97), not the bare title.
-    const expectedStampHorizon = `${HORIZON_CHROME.current.title} · ${HORIZON_CHROME.current.subtitle}`;
+    // src/ui/time-bar.ts), not the bare title; Jul 3 is not the newest of
+    // the stubbed days, so the shown day's own date stands for "now".
+    const expectedStampHorizon = `${HORIZON_CHROME.current.title} · Jul 3, 2026`;
     await expect(stampHorizonEl).toHaveText(expectedStampHorizon, { timeout: 25_000 });
     expect(expectedStampHorizon).not.toBe(chipTitle);
     // The link's horizon holds: Long Range pressed and enabled, Current not.
