@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import type { Page } from '@playwright/test';
 import { PNG } from 'pngjs';
 
@@ -39,23 +40,8 @@ function makeProbeTile(): Buffer {
 
 const VALID_TILE = makeProbeTile();
 
-/** A stand-in for the service's placeholder image: black and white blocks, nothing between. */
-function makePlaceholderTile(): Buffer {
-  const png = new PNG({ width: 256, height: 256 });
-  for (let y = 0; y < png.height; y++) {
-    for (let x = 0; x < png.width; x++) {
-      const offset = (y * png.width + x) * 4;
-      const value = (Math.floor(x / 16) + Math.floor(y / 16)) % 2 === 0 ? 0 : 255;
-      png.data[offset] = value;
-      png.data[offset + 1] = value;
-      png.data[offset + 2] = value;
-      png.data[offset + 3] = 255;
-    }
-  }
-  return PNG.sync.write(png);
-}
-
-const PLACEHOLDER_TILE = makePlaceholderTile();
+/** The service's own placeholder, recorded 2026-11-11 (tests/fixtures/satellite/README.md): a resampled black and white grid, served as JPEG. */
+const PLACEHOLDER_TILE = readFileSync(new URL('./fixtures/satellite/placeholder-tile.jpg', import.meta.url));
 
 function frameObjectId(requestUrl: string): number | null {
   const encodedRule = new URL(requestUrl).searchParams.get('mosaicRule');
@@ -160,7 +146,7 @@ export async function stubRecentSatellite(
         (isProbe ? placeholderProbeFrameIds : placeholderRenderedFrameIds).has(objectId);
       return route.fulfill({
         status: 200,
-        contentType: 'image/png',
+        contentType: placeholder ? 'image/jpeg' : 'image/png',
         body: placeholder ? PLACEHOLDER_TILE : VALID_TILE
       });
     }
