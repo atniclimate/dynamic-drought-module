@@ -67,8 +67,10 @@ import {
 
 const ONI_URL = 'https://www.cpc.ncep.noaa.gov/data/indices/oni.ascii.txt';
 const RONI_URL = 'https://www.cpc.ncep.noaa.gov/data/indices/RONI.ascii.txt';
-const NINO34_URL =
-  'https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/ensostuff/detrend.nino34.ascii.txt';
+// The data/indices copy is the one CPC keeps current (Last-Modified 2026-11-03,
+// newest row October 2026). The same name under products/analysis_monitoring/
+// ensostuff/ stopped at June 2026 (Last-Modified 2026-08-05). Checked 2026-11-11.
+const NINO34_URL = 'https://www.cpc.ncep.noaa.gov/data/indices/detrend.nino34.ascii.txt';
 const SOI_URL = 'https://www.cpc.ncep.noaa.gov/data/indices/soi';
 // DR-031 (a): the weekly Nino-region file. Wire the 9120 file and ONLY the 9120
 // file. Its sibling wksst8110.for still answers HTTP 200 with 102 kB, but its
@@ -287,7 +289,7 @@ async function fetchSeasonIndex(url, expectedHeader, label) {
   };
 }
 
-function parseNino34(text) {
+export function parseNino34(text) {
   const lines = text.replace(/\r/g, '').split('\n');
   const expectedHeader = 'YR MON TOTAL ClimAdjust ANOM';
   const headerIndex = lines.findIndex((line) => normalized(line) === expectedHeader);
