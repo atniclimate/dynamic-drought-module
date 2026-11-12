@@ -50,6 +50,7 @@ test.describe('DEG-2 desktop keeps the compact control family', () => {
       className: string;
       removed: boolean;
       setAttribute: (name: string, value: string) => void;
+      toggleAttribute: (name: string, force?: boolean) => boolean;
       addEventListener: () => void;
       appendChild: (child: FakeElement) => FakeElement;
       remove: () => void;
@@ -68,6 +69,12 @@ test.describe('DEG-2 desktop keeps the compact control family', () => {
         removed: false,
         setAttribute(name, value) {
           element.attributes.set(name, value);
+        },
+        toggleAttribute(name, force) {
+          const on = force ?? !element.attributes.has(name);
+          if (on) element.attributes.set(name, '');
+          else element.attributes.delete(name);
+          return on;
         },
         addEventListener: () => {},
         appendChild(child) {
