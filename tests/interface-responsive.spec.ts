@@ -677,16 +677,19 @@ test.describe('the 2026-08-19 map chrome seats', () => {
     await page.keyboard.press('Escape');
   });
 
-  test('a phone keeps the dock key seat and the thumb-zone satellite control', async ({
+  test('a phone keeps the dock key seat and seats the satellite control in the column view tools', async ({
     page
   }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await gotoApp(page, '');
 
     await expect(page.locator('.map-dock-foot > #map-key')).toHaveCount(1);
+    // The phone sprint moved SAT from MapLibre's corner into the right-edge
+    // column's view tools (map-chrome-seats.spec.ts holds the full contract).
+    await expect(page.locator('#edge-body-view > .basemap-switcher-control')).toHaveCount(1);
     await expect(
       page.locator('.maplibregl-ctrl-bottom-right .basemap-switcher-control')
-    ).toHaveCount(1);
+    ).toHaveCount(0);
     await expect(page.locator('#map-key-overlay-host > #map-key')).toHaveCount(0);
   });
 
