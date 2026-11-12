@@ -7,7 +7,13 @@
  * In motion the light core lays over the map as the inverse of the ground
  * (ribbon-layer.ts), so there it carries the ground's complementary hue; the
  * still form draws these tokens as they are.
+ * Ocean currents are the recorded departure (owner, 2026-11-11: light neon
+ * blues that hold across day and night): in light ink they take CURRENTS_INK
+ * laid plainly over, never inverted, so a cloud edge or the day-night line
+ * cannot flip them.
  */
+import type { FlowKind } from './field';
+
 export type FlowInkName = 'light' | 'dark';
 
 export interface FlowInk {
@@ -22,6 +28,22 @@ export const FLOW_INK: Readonly<Record<FlowInkName, FlowInk>> = {
   // dark ink (flowink=dark)
   dark: { core: ['#3B3B3B', '#1E242C', '#010B13'], casing: '#FFFFFF' }
 };
+
+/**
+ * Ocean currents in light ink: each core clears 3:1 over any ground through
+ * its casing and sits at least CIEDE2000 10 from every opaque SST anomaly class.
+ */
+export const CURRENTS_INK: FlowInk = { core: ['#99CCFF', '#BFE0FF', '#E8F4FF'], casing: '#010B13' };
+
+/** The ink a kind draws in: currents take the blue ramp in light ink, every other case its named ink. */
+export function inkFor(name: FlowInkName, kind: FlowKind): FlowInk {
+  return name === 'light' && kind === 'currents' ? CURRENTS_INK : FLOW_INK[name];
+}
+
+/** Whether the moving form lays the ink as the inverse of the ground (light ink, every kind but currents). */
+export function invertsGround(name: FlowInkName, kind: FlowKind): boolean {
+  return name === 'light' && kind !== 'currents';
+}
 
 /** Core line width in CSS px per class. */
 export const FLOW_CORE_WIDTH_PX: readonly [number, number, number] = [1.0, 1.5, 2.0];

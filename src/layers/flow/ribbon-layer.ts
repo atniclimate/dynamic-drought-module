@@ -7,7 +7,8 @@
  *
  * - Colours are premultiplied. The trails draw with MapLibre's
  *   blendFunc(ONE, ONE_MINUS_SRC_ALPHA) into the layer's own RGBA8 target,
- *   then one full-screen pass lays the target over the map. Light ink lays it
+ *   then one full-screen pass lays the target over the map. Ocean currents and
+ *   dark ink lay it plainly over. Light ink for every other kind lays it
  *   as the inverse of the ground beneath: blendFuncSeparate(ONE_MINUS_DST_COLOR,
  *   ONE_MINUS_SRC_ALPHA, ONE, ONE_MINUS_SRC_ALPHA). Joints and crossings
  *   settle in the target first, so no pixel inverts twice; the near-black
@@ -33,7 +34,7 @@ import {
   Particles, SLOTS, cellPx, markCount,
   paceFor, particleCount, viewCenter, viewQuadFromCorners
 } from './advect';
-import { FLOW_CASING_ALPHA, FLOW_CASING_WIDTH_PX, FLOW_CORE_WIDTH_PX, FLOW_HEAD_ALPHA, FLOW_INK, type FlowInkName, inkRgb } from './ink';
+import { FLOW_CASING_ALPHA, FLOW_CASING_WIDTH_PX, FLOW_CORE_WIDTH_PX, FLOW_HEAD_ALPHA, type FlowInkName, inkFor, inkRgb, invertsGround } from './ink';
 
 /** Widest ring texture row; WebGL2 guarantees MAX_TEXTURE_SIZE of at least 2048. */
 const MAX_RING_WIDTH = 1024;
@@ -593,7 +594,7 @@ export class FlowRibbonLayer implements CustomLayerInterface {
     const [ox, oy] = this.particles
       ? [this.particles.originX, this.particles.originY]
       : this.marks ? [this.marks.originX, this.marks.originY] : viewCenter(this.view as ViewQuad);
-    const ink = FLOW_INK[this.ink];
+    const ink = inkFor(this.ink, this.field.kind);
     gl.useProgram(program);
     gl.uniformMatrix4fv(this.uniform(gl, program, 'u_matrix'), false,
       originMatrix(options.defaultProjectionData.mainMatrix as ArrayLike<number>, ox, oy));
@@ -627,8 +628,8 @@ export class FlowRibbonLayer implements CustomLayerInterface {
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, target.texture);
     gl.disable(gl.DEPTH_TEST);
-    // Light ink: each line is the inverse of the ground beneath, at its alpha; alpha itself stays plain over.
-    if (this.ink === 'light') gl.blendFuncSeparate(gl.ONE_MINUS_DST_COLOR, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    // Light ink (not currents): each line is the inverse of the ground beneath, at its alpha; alpha stays plain over.
+    if (invertsGround(this.ink, this.field.kind)) gl.blendFuncSeparate(gl.ONE_MINUS_DST_COLOR, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
     gl.bindVertexArray(g.ringVao);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     gl.bindVertexArray(null);

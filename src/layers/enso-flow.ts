@@ -465,7 +465,7 @@ function mountControls(): boolean {
   for (const value of ['light', 'dark'] as const) {
     const option = document.createElement('option');
     option.value = value;
-    // Light ink moves as the inverse of the ground beneath (ribbon-layer.ts), so it is not named White.
+    // Light ink moves as the inverse of the ground (ribbon-layer.ts) or, for currents, as pale blue, so it is not named White.
     option.textContent = value === 'light' ? 'Contrast' : 'Dark';
     ink.append(option);
   }

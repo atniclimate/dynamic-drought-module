@@ -46,7 +46,7 @@ const {
   MARK_SMOOTH_NODES, waveDirections,
   markCount, particleCount, ribbonCoverage, mulberry32, advance, planForm, FADE_S
 } = advect;
-const { FLOW_CORE_WIDTH_PX, FLOW_CASING_WIDTH_PX } = await import('../src/layers/flow/ink.ts');
+const { FLOW_CORE_WIDTH_PX, FLOW_CASING_WIDTH_PX, inkRgb } = await import('../src/layers/flow/ink.ts');
 
 const META = Object.freeze({
   issuer: 'test', model: 'synthetic', transport: 'none', cycle: 0, forecastHour: 6,
@@ -926,6 +926,29 @@ function fakeMap(lon, lat, zoom, w = 1440, h = 900) {
 }
 
 const RENDER_INPUT = { defaultProjectionData: { mainMatrix: new Float64Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]) } };
+
+test('Ocean currents lay their pale blue light ink over the map plainly, never as the inverse of the ground', () => {
+  let t = 0;
+  const currents = gridField('currents', GLOBAL_1P00, (lon, lat) =>
+    [0.4 * Math.sin((lon * Math.PI) / 30), 0.3 * Math.cos((lat * Math.PI) / 30)]);
+  const layer = new ribbon.FlowRibbonLayer({ id: 'flow-paths', field: currents, now: () => t });
+  const map = fakeMap(-145, 0, 3);
+  const gl = fakeGl();
+  layer.onAdd(map, gl);
+  layer.setRunning(true);
+  for (let i = 0; i < 5; i++) {
+    t += STEP_S;
+    layer.render(gl, RENDER_INPUT);
+  }
+  const ink0 = gl.calls.findLast((c) => c[0] === 'uniform3fv' && c[1]?.uniform === 'u_ink0');
+  assert.deepEqual(ink0[2], inkRgb('#99CCFF'), 'the slow core is the palest step of the blue ramp');
+  const back = gl.calls.findLastIndex((c) => c[0] === 'bindFramebuffer' && c[2] === null);
+  const composite = gl.calls.findIndex((c, i) => i > back && c[0] === 'drawArrays');
+  assert.deepEqual(gl.calls[composite].slice(1), ['TRIANGLES', 0, 3], 'the full-screen composite still draws');
+  assert.ok(!gl.calls.some((c) => c.includes('ONE_MINUS_DST_COLOR')), 'currents never invert the ground');
+  assert.deepEqual(gl.calls.findLast((c) => c[0].startsWith('blendFunc')).slice(1), ['ONE', 'ONE_MINUS_SRC_ALPHA'],
+    'plain premultiplied over');
+});
 
 test('the ribbon layer binds its own vertex array, leaves none bound, and outputs premultiplied colour', () => {
   let t = 0;

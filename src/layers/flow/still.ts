@@ -20,12 +20,12 @@
  *   grid node in view replaces the paths: nothing is interpolated there.
  */
 import type { ExpressionSpecification, LayerSpecification } from 'maplibre-gl';
-import { type FlowClass, type FlowField, type FlowSample, classOf, latOf, lonOf, mercX, mercY, newSample, nodeLonLat, sampleField } from './field';
+import { type FlowClass, type FlowField, type FlowKind, type FlowSample, classOf, latOf, lonOf, mercX, mercY, newSample, nodeLonLat, sampleField } from './field';
 import {
   type FlowForm, type ViewQuad, CrestMarks, MARK_CRESTS, MARK_SEG_FLOATS, MARK_SEGS_PER_SET, STEP_S, advance, insideView,
   mulberry32, paceFor, viewPoint, CSS_PX2_PER_PARTICLE
 } from './advect';
-import { FLOW_CASING_ALPHA, FLOW_CASING_WIDTH_PX, FLOW_CORE_WIDTH_PX, FLOW_INK, type FlowInkName } from './ink';
+import { FLOW_CASING_ALPHA, FLOW_CASING_WIDTH_PX, FLOW_CORE_WIDTH_PX, type FlowInkName, inkFor } from './ink';
 
 export const STILL_SOURCE_ID = 'flow-still';
 export const STILL_LAYER_IDS = {
@@ -280,9 +280,9 @@ export function buildStillForm(field: FlowField, view: ViewQuad, form: FlowForm,
   return { type: 'FeatureCollection', features };
 }
 
-/** The three native layers for the still source, in draw order (casing first). */
-export function stillLayers(ink: FlowInkName, sourceId: string = STILL_SOURCE_ID): LayerSpecification[] {
-  const t = FLOW_INK[ink];
+/** The three native layers for the still source, in draw order (casing first), in the kind's ink. */
+export function stillLayers(ink: FlowInkName, sourceId: string = STILL_SOURCE_ID, kind: FlowKind = 'wind'): LayerSpecification[] {
+  const t = inkFor(ink, kind);
   const color: ExpressionSpecification = ['match', ['get', 'cls'], 0, t.core[0], 1, t.core[1], t.core[2]];
   const width: ExpressionSpecification = ['get', 'w'];
   const layout = { 'line-cap': 'round', 'line-join': 'round' } as const;
