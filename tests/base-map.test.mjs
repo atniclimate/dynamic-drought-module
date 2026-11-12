@@ -1,0 +1,93 @@
+/**
+ * DDM's own base map (DDM-P17-T12): the shipped archives, the style's stacking,
+ * and the Tribal-area street envelope.
+ *
+ * Run: node --test tests/base-map.test.mjs
+ */
+
+import assert from 'node:assert/strict';
+import { existsSync, readFileSync, statSync } from 'node:fs';
+import { registerHooks } from 'node:module';
+import test from 'node:test';
+import { fileURLToPath } from 'node:url';
+import { PMTiles } from 'pmtiles';
+
+registerHooks({ resolve(specifier, context, nextResolve) {
+  if (specifier.startsWith('.') && !/\.[a-z]+$/i.test(specifier) && context.parentURL?.endsWith('.ts') &&
+      existsSync(fileURLToPath(new URL(specifier + '.ts', context.parentURL)))) return nextResolve(specifier + '.ts', context);
+  return nextResolve(specifier, context);
+} });
+
+const root = new URL('../', import.meta.url);
+const read = (rel) => readFileSync(new URL(rel, root));
+
+async function open(rel) {
+  const bytes = read(rel);
+  const reader = new PMTiles({
+    getKey: () => rel,
+    getBytes: async (offset, length) => {
+      const s = bytes.subarray(offset, offset + length);
+      return { data: s.buffer.slice(s.byteOffset, s.byteOffset + s.byteLength) };
+    }
+  });
+  return { header: await reader.getHeader(), meta: await reader.getMetadata(), size: statSync(new URL(rel, root)).size };
+}
+
+const ARCHIVES = [
+  ['public/data/ddm-base-na-2026-11.pmtiles', 8, ['land', 'water', 'river', 'boundary', 'county', 'place', 'water_label']],
+  ['public/data/ddm-roads-na-2026-11.pmtiles', 8, ['road']],
+  ['public/data/ddm-base-world-2026-11.pmtiles', 5, ['land', 'water', 'boundary', 'place', 'water_label']]
+];
+
+for (const [rel, maxZoom, layers] of ARCHIVES) {
+  test(`${rel} ships its layers, zooms and credits under the 20 MB line`, async () => {
+    const { header, meta, size } = await open(rel);
+    assert.ok(size <= 20 * 1024 * 1024, `${size} bytes is over the public-tree line (DR-150)`);
+    assert.equal(header.minZoom, 0);
+    assert.equal(header.maxZoom, maxZoom);
+    assert.deepEqual(meta.vector_layers.map((l) => l.id).sort(), [...layers].sort());
+    for (const l of meta.vector_layers) assert.doesNotMatch(l.id, /tribal|treaty|aiannh|reserv/i, 'Tribal and Treaty boundaries stay live-read');
+    for (const issuer of ['U.S. Census Bureau', 'U.S. Geological Survey', 'Natural Resources Canada', 'Natural Earth']) {
+      assert.ok(meta.attribution.includes(issuer), `attribution names ${issuer}`);
+    }
+  });
+}
+
+test('every base map input is pinned by hash and retrieval date', () => {
+  const receipt = JSON.parse(read('scripts/data/base-tiles-inputs.json'));
+  assert.ok(receipt.inputs.length >= 70);
+  for (const input of receipt.inputs) {
+    assert.match(input.sha256, /^[0-9a-f]{64}$/, input.url);
+    assert.match(input.retrieved, /^\d{4}-\d{2}-\d{2}$/, input.url);
+    assert.doesNotMatch(input.url, /openstreetmap|overpass/i);
+  }
+});
+
+test('the base style asks no tile host and stacks every base layer by the ruled order', async () => {
+  const style = read('src/map/style.ts').toString();
+  assert.doesNotMatch(style, /openstreetmap\.org|opentopomap|tile\./i);
+  const { BASE_GROUND_IDS, BASE_LINE_IDS, TOP_LABEL_IDS, BOTTOM_STACK_IDS, REFERENCE_BOUNDARY_IDS } = await import('../src/map/layer-order.ts');
+  // The Hydrography lake fill has a seat in the chain, directly under its rivers (never on top of every surface).
+  assert.equal(REFERENCE_BOUNDARY_IDS.indexOf('hydrography-water'), REFERENCE_BOUNDARY_IDS.indexOf('hydrography') - 1);
+  const ids = [...style.matchAll(/(?:id: |Layer\()'(base-[a-z-]+)'/g)].map((m) => m[1]);
+  assert.ok(ids.length >= 18, `found ${ids.length} base layer ids`);
+  for (const id of ids) {
+    assert.ok([...BASE_GROUND_IDS, ...BASE_LINE_IDS, ...TOP_LABEL_IDS].includes(id), `${id} has no seat in src/map/layer-order.ts`);
+  }
+  // Ground under the satellite imagery, lines above the terrain shading.
+  assert.ok(BOTTOM_STACK_IDS.indexOf('base-land') < BOTTOM_STACK_IDS.indexOf('basemap-satellite'));
+  assert.ok(BOTTOM_STACK_IDS.indexOf('base-road') > BOTTOM_STACK_IDS.indexOf('hillshade'));
+});
+
+test('Tribal-area streets query only the part of the view that touches a Tribal area', async () => {
+  const { streetsEnvelope } = await import('../src/layers/tribal-streets.ts');
+  const view = [-121, 46, -120, 47];
+  assert.equal(streetsEnvelope(view, []), null);
+  assert.equal(streetsEnvelope(view, [[-110, 30, -109, 31]]), null, 'an area outside the view reads nothing');
+  assert.deepEqual(streetsEnvelope(view, [[-120.5, 46.2, -119, 46.6]]), [-120.5, 46.2, -120, 46.6], 'cut to the view');
+  assert.deepEqual(
+    streetsEnvelope(view, [[-120.8, 46.1, -120.7, 46.2], [-120.3, 46.5, -120.2, 46.9], [-100, 10, -99, 11]]),
+    [-120.8, 46.1, -120.2, 46.9],
+    'the bounds of every area in view, and only those'
+  );
+});

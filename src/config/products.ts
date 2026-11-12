@@ -144,11 +144,12 @@ export interface ProductDef {
 export const PRODUCTS: Readonly<Record<ProductKey, ProductDef>> = Object.freeze({
   hydrography: {
     key: 'hydrography',
-    issuer: 'OpenStreetMap (Overpass)',
-    endpointKey: 'overpassMirrors',
+    // Matches the layer's source line in layers.ts.
+    issuer: 'USGS · Natural Resources Canada · Natural Earth · bundled',
+    endpointKey: 'baseNaPmtiles',
     layerKey: 'hydrography',
     lane: null,
-    clock: { register: 'observed', cadence: 'on demand' }
+    clock: { register: 'observed', cadence: 'bundled, static' }
   },
   ecoregions: {
     key: 'ecoregions',

@@ -71,6 +71,7 @@ import { fetchBufferedWithBudget, linkAbort } from '../util/fetch';
 import { buildQueryEnvelope, envelopeCovers, toCoverageEnvelope } from '../util/bbox';
 import { assertFeatureCollection, isTruncated } from '../util/geojson-checks';
 import { registry } from '../state/registry';
+import { cancelTribalStreets, setTribalStreetAreas, startTribalStreets, stopTribalStreets } from './tribal-streets';
 
 const LAYER_KEY = 'aiannh';
 const SOURCE_ID = 'aiannh';
@@ -462,6 +463,8 @@ function applyFeatureCollection(
     addSourceAndLayers(map, geojson);
   }
   appliedData = geojson;
+  // The street names inside these areas from zoom 12 (src/layers/tribal-streets.ts).
+  setTribalStreetAreas(geojson);
   lastAppliedStatus = opts?.partial
     ? 'degraded'
     : (geojson.features ?? []).length === 0
@@ -590,6 +593,7 @@ export async function activate(
 ): Promise<void> {
   activationSignal = activation?.signal ?? null;
   attachRefresh(map);
+  startTribalStreets(map);
   if (map.getSource(SOURCE_ID)) {
     return;
   }
@@ -614,6 +618,7 @@ export function cancelActivation(): void {
     masterController.abort();
     masterController = null;
   }
+  cancelTribalStreets();
   // Invalidate any response that already raced past its abort check.
   requestSeq++;
   // If rendered data survives this cancellation (a refresh was cancelled,
@@ -639,6 +644,7 @@ export function deactivate(map: maplibregl.Map): void {
   requestSeq++;
   lastAppliedStatus = null;
   appliedData = null;
+  stopTribalStreets(map);
   if (map.getLayer(FILL_LAYER_ID)) map.removeLayer(FILL_LAYER_ID);
   if (map.getLayer(OUTLINE_LAYER_ID)) map.removeLayer(OUTLINE_LAYER_ID);
   if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);

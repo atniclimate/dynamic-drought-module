@@ -64,6 +64,7 @@ export const ACKNOWLEDGEMENT_IDS = [
   'epa',
   'aafc',
   'statcan',
+  'nrcan',
   'usdm-partners',
   'nadm',
   'natural-earth',
@@ -148,8 +149,9 @@ const CC_BY_4_URL = 'https://creativecommons.org/licenses/by/4.0/';
 // this table; re-exported here for every other reader.
 export { DDM_NOTICE_LABEL, RAWS_PUBLIC_VIEW_NOTICE };
 
-/** The one OpenStreetMap credit string (DR-117, DR-162; src/map/style.ts:47-48). */
-// ledger: osm-basemap-ground-credit (cite sheet c02); osm-overpass-hydrography (c03)
+/** The one OpenStreetMap credit string (DR-117, DR-162). Since DDM's own base map
+ * (DDM-P17-T12) it credits only the OpenStreetMap-derived 3D Fire buildings. */
+// ledger: osm-basemap-ground-credit (cite sheet c02); the same words now credit the 3D Fire buildings (PROVIDERS.structures)
 export const OSM_CREDIT: CreditSentence = {
   text: '© OpenStreetMap contributors',
   html: `© <a href="${OSM_COPYRIGHT_URL}">OpenStreetMap</a> contributors`,
@@ -219,6 +221,12 @@ export const ACKNOWLEDGEMENTS: Readonly<Record<AcknowledgementId, Acknowledgemen
   usgs: {
     ...nameOnly('usgs', 'U.S. Geological Survey'),
     credits: [
+      // DRAFT wording for the owner's citation check (the base map, DDM-P17-T12); null citeId never renders (DR-147).
+      {
+        text:
+          'Base map lakes, reservoirs, wetlands, glaciers, rivers, canals and town names: U.S. Geological Survey, 1:1,000,000-Scale Waterbodies and Wetlands, Streams, and Cities and Towns of the United States, 2014 (National Atlas small-scale data).',
+        citeId: null
+      },
       // ledger: usgs-3dep-landscape-signature (cite sheet c17)
       {
         text:
@@ -283,6 +291,12 @@ export const ACKNOWLEDGEMENTS: Readonly<Record<AcknowledgementId, Acknowledgemen
         text:
           'Source: U.S. Census Bureau, 2023 Cartographic Boundary File, State and Equivalent Entities for United States, 1:20,000,000; TIGERweb, American Indian, Alaska Native, and Native Hawaiian Areas.',
         citeId: 'census-cb-2023-state-20m'
+      },
+      // DRAFT wording for the owner's citation check (the base map, DDM-P17-T12); null citeId never renders (DR-147).
+      {
+        text:
+          'Base map: U.S. Census Bureau, 2025 Cartographic Boundary Files, States and Counties, 1:500,000; TIGER/Line Shapefiles 2025, Primary and Secondary Roads; TIGERweb, Transportation, Local Roads (street names inside Tribal areas, read live).',
+        citeId: null
       }
     ]
   },
@@ -335,6 +349,19 @@ export const ACKNOWLEDGEMENTS: Readonly<Record<AcknowledgementId, Acknowledgemen
           'Nunavut analysis exclusion adapted from Statistics Canada, 2021 Digital Boundary Files. This does not constitute an endorsement by Statistics Canada of this product. Contains information licensed under the Open Government Licence – Canada.',
         html: `Nunavut analysis exclusion adapted from Statistics Canada, 2021 Digital Boundary Files. This does not constitute an endorsement by Statistics Canada of this product. Contains information licensed under the <a href="${OGL_CANADA_URL}">Open Government Licence – Canada</a>.`,
         citeId: 'statcan-2021-digital-boundary-files'
+      }
+    ],
+    licence: { name: 'Open Government Licence – Canada', url: OGL_CANADA_URL }
+  },
+  nrcan: {
+    ...nameOnly('nrcan', 'Natural Resources Canada', 'canada'),
+    credits: [
+      // DRAFT wording for the owner's citation check (the base map, DDM-P17-T12); null citeId never renders (DR-147).
+      {
+        text:
+          'Base map land, lakes, rivers, highways, provincial and territorial lines and place names for Canada adapted from Natural Resources Canada, Atlas of Canada National Scale Data 1:1,000,000. Contains information licensed under the Open Government Licence – Canada.',
+        html: `Base map land, lakes, rivers, highways, provincial and territorial lines and place names for Canada adapted from Natural Resources Canada, Atlas of Canada National Scale Data 1:1,000,000. Contains information licensed under the <a href="${OGL_CANADA_URL}">Open Government Licence – Canada</a>.`,
+        citeId: null
       }
     ],
     licence: { name: 'Open Government Licence – Canada', url: OGL_CANADA_URL }
@@ -435,7 +462,7 @@ export type CreditRows = readonly [AcknowledgementId, ...AcknowledgementId[]];
  * 33.8 kB); nothing that closure imports statically may import this module.
  */
 export const PRODUCT_CREDITS: Readonly<Record<ProductKey, CreditRows>> = {
-  hydrography: ['osm'],
+  hydrography: ['usgs', 'nrcan', 'natural-earth'],
   ecoregions: ['epa'],
   hillshade: ['usgs'],
   drought: ['noaa-cpc'],
@@ -482,15 +509,16 @@ export const PRODUCT_CREDITS: Readonly<Record<ProductKey, CreditRows>> = {
 export const PROVIDERS: Readonly<
   Record<ProviderKey, readonly [AcknowledgementId, ...AcknowledgementId[]]>
 > = {
-  // The OSM raster ground, drawn by default and under satellite.
-  'basemap-ground': ['osm'],
+  // DDM's own base map (src/map/style.ts; scripts/build-base-tiles.mjs), drawn by default.
+  'basemap-ground': ['census', 'usgs', 'nrcan', 'natural-earth'],
   'satellite-geocolor': ['noaa-nesdis'],
   // The ENSO flow overlay (src/layers/enso-flow.ts): NOAA GFS and GFS-Wave
   // read at runtime, and the committed NOAA RTOFS surface-current frame, all
   // NCEP products (admission rtofs-currents-producer line 11). The overlay
   // declares no map attribution: its credit is text in its own panel and key.
   'enso-flow': ['noaa-ncep'],
-  structures: ['overture'],
+  // The 3D Fire buildings are Overture's, which fuses OpenStreetMap (ODbL).
+  structures: ['overture', 'osm'],
   'terrain-archive': ['usgs'],
   'whp-3d': ['usfs'],
   // The Wildfire 3D plant-stress ground: STAR's index, USGS Relative Greenness as the fallback.

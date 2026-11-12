@@ -599,8 +599,8 @@ false`).
 **May appear, and is accepted.** Response bodies from the other public
 agency sources a boot touches: NIFC and WFIGS fire perimeters, drought
 polygons (NADM, USDM, CDM), NOAA weather alerts, HMS smoke, EPA ecoregions,
-watersheds, station telemetry. OpenStreetMap raster tile bodies from the live
-basemap.
+watersheds, station telemetry. (The basemap is DDM's own same-origin archives,
+not a live tile host.)
 
 One of those is not hypothetical, and it is worth naming with its evidence,
 as history. `gotoApp` used to stub `NADM-current.geojson` only when the

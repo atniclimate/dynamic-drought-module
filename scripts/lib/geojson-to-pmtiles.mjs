@@ -44,8 +44,11 @@ function fieldsOf(featureCollection) {
 /**
  * Build a PMTiles archive from named GeoJSON layers.
  *
- * @param {Record<string, GeoJSON.FeatureCollection>} layers Source-layer name
- *   to FeatureCollection. The names become the MapLibre `source-layer` ids.
+ * @param {Record<string, GeoJSON.FeatureCollection | {data: GeoJSON.FeatureCollection, minZoom?: number, maxZoom?: number, as?: string}>} layers
+ *   Source-layer name to FeatureCollection, or to `{data, minZoom, maxZoom, as}`
+ *   when a layer is stored over fewer zooms than the archive. The names (or
+ *   `as`, which merges several inputs into one tile layer) become the
+ *   MapLibre `source-layer` ids.
  * @param {object} opts
  * @param {number} [opts.minZoom=0]
  * @param {number} [opts.maxZoom=10] Highest stored zoom; MapLibre overzooms above.
@@ -65,16 +68,30 @@ export function geojsonLayersToPmtiles(layers, opts) {
 
   const indexes = {};
   const vectorLayers = [];
-  for (const [name, fc] of Object.entries(layers)) {
-    indexes[name] = geojsonvt(fc, {
-      maxZoom,
-      indexMaxZoom: maxZoom,
-      tolerance,
+  for (const [name, spec] of Object.entries(layers)) {
+    const fc = spec.type === 'FeatureCollection' ? spec : spec.data;
+    const layerMin = Math.max(minZoom, spec.minZoom ?? minZoom);
+    const layerMax = Math.min(maxZoom, spec.maxZoom ?? maxZoom);
+    const index = geojsonvt(fc, {
+      maxZoom: layerMax,
+      indexMaxZoom: layerMax,
+      tolerance: spec.tolerance ?? tolerance,
       extent: 4096,
       buffer: 64,
       generateId: true
     });
-    vectorLayers.push({ id: name, minzoom: minZoom, maxzoom: maxZoom, fields: fieldsOf(fc) });
+    // `as` writes several inputs into one tile layer, each over its own zooms
+    // (a zoom band: small features stored only from the zoom that shows them).
+    const id = spec.as ?? name;
+    indexes[name] = { index, id, minZoom: layerMin, maxZoom: layerMax };
+    const prior = vectorLayers.find((l) => l.id === id);
+    if (prior) {
+      prior.minzoom = Math.min(prior.minzoom, layerMin);
+      prior.maxzoom = Math.max(prior.maxzoom, layerMax);
+      prior.fields = { ...prior.fields, ...fieldsOf(fc) };
+    } else {
+      vectorLayers.push({ id, minzoom: layerMin, maxzoom: layerMax, fields: fieldsOf(fc) });
+    }
   }
 
   const tiles = [];
@@ -89,10 +106,12 @@ export function geojsonLayersToPmtiles(layers, opts) {
       for (let y = yMin; y <= yMax; y++) {
         const tileLayers = {};
         let hasData = false;
-        for (const [name, index] of Object.entries(indexes)) {
+        for (const { index, id, minZoom: lo, maxZoom: hi } of Object.values(indexes)) {
+          if (z < lo || z > hi) continue;
           const t = index.getTile(z, x, y);
           if (t && t.features && t.features.length > 0) {
-            tileLayers[name] = t;
+            const prior = tileLayers[id];
+            tileLayers[id] = prior ? { ...prior, features: [...prior.features, ...t.features] } : t;
             hasData = true;
           }
         }

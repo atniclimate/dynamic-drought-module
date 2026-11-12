@@ -6304,25 +6304,6 @@ a.impact-resource-link::after {
   cursor: pointer;
 }
 
-/* The one OpenStreetMap credit on the map (DR-162; found-027): a dock
-   item, so it stacks with the notices and never takes a chrome seat. */
-.map-osm-credit {
-  margin: 0;
-  align-self: flex-end;
-  padding: 1px 6px;
-  border-radius: var(--radius-sm);
-  background: var(--bg-1);
-  color: var(--fg-2);
-  font-size: 10.5px;
-  line-height: 1.5;
-}
-.map-osm-credit[hidden] { display: none; }
-/* Phones keep the lower-right thumb zone for the hazard rail, so the
-   credit takes the dock's left edge there. */
-@media (max-width: 720px) {
-  .map-osm-credit { align-self: flex-start; }
-}
-.map-osm-credit a { color: var(--fg-1); }
 .enso-flow-credit { margin: 4px 0 0; font-size: 11px; color: var(--fg-2); }
 .enso-flow-credit[hidden] { display: none; }
 

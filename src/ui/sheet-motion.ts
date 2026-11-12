@@ -40,7 +40,7 @@
  * own.
  *
  * The map furniture that sits on the sheet's top edge (the scale rulers,
- * the dock with its notices and the OpenStreetMap credit) rides along by
+ * the dock with its notices) rides along by
  * transform while the sheet moves, so it is never left under the glass.
  *
  * Presentation only. Nothing here enters the URL or reads map state.

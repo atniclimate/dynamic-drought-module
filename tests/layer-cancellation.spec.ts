@@ -14,9 +14,9 @@ import { continueLocalRoute } from './offline-test';
  * activation attempt (`src/state/layer-controller.ts`, `attempts`), hands
  * its signal to the module as `LayerActivation`, and aborts it the instant
  * off intent is recorded, when a newer activate of the same key supersedes
- * the attempt, and when the attempt stands down. The four modules named by
- * the task (`aiannh.ts`, `bia-reservations.ts`, `hms-smoke.ts`,
- * `hydrography.ts`) link every fetch they issue to it through
+ * the attempt, and when the attempt stands down. The modules named by the
+ * task (`aiannh.ts`, `bia-reservations.ts`, `hms-smoke.ts`; `hydrography.ts`
+ * stopped fetching when it moved onto DDM's own base map) link every fetch they issue to it through
  * `linkAbort` (`src/util/fetch.ts`) and drop a response whose request token
  * is no longer current.
  *
@@ -87,7 +87,6 @@ const ONE_PIXEL_PNG = Buffer.from(
 
 const HMS_PATTERN = 'NOAA_Satellite_Smoke_Detection';
 const NIFC_PATTERN = 'WFIGS_Interagency_Perimeters_Current';
-const OVERPASS_PATH = '/api/interpreter';
 const ECOREGIONS_ARCHIVE = '/ecoregions-pnw.pmtiles';
 
 const ECOREGIONS_ARCHIVE_PATH = join(process.cwd(), 'public', 'data', 'ecoregions-pnw.pmtiles');
@@ -248,52 +247,6 @@ test.describe('DDM-P1-T02: held JSON requests abort promptly', () => {
     const layers = await urlLayers(page);
     expect(layers.has('aiannh')).toBe(false);
     expect(layers.has('bia-reservations')).toBe(false);
-  });
-
-  test('Hydrography, which had no module seam of its own, aborts a held Overpass query', async ({
-    page
-  }) => {
-    await stubCommon(page);
-    const held = makeHeld();
-    await page.route(
-      (url) => url.pathname.endsWith(OVERPASS_PATH),
-      (route) => {
-        held.releases.push(
-          fulfilLater(route, JSON.stringify({ elements: [] }), 'application/json')
-        );
-      }
-    );
-    const failures = watchFailures(page, (url) => url.endsWith(OVERPASS_PATH));
-
-    // The layer is dormant below zoom 7 and issues no query there, so the
-    // boot camera is the Central Oregon framing, which fits well above it
-    // at the suite's viewport. Booting there (rather than selecting the
-    // region after boot) matters: the query held below must be the
-    // ACTIVATION's own, issued inside `activate` while the controller's op
-    // chain is blocked on it. A refresh issued after a region animation
-    // settles is aborted by the old teardown path too (the chain is free
-    // by then), and would not tell the seam apart from its absence.
-    await gotoApp(page, '?view=console&region=central_oregon');
-    await layerCheckbox(page, 'hydrography').check();
-    await expect.poll(() => held.releases.length, { timeout: 30_000 }).toBeGreaterThan(0);
-    await expect(layerPill(page, 'hydrography')).toHaveText('loading...');
-
-    const offAt = Date.now();
-    await layerCheckbox(page, 'hydrography').uncheck();
-
-    // Before S16 this query ran out its 12 s per-mirror budget behind the
-    // serialized teardown (Hydrography exported no cancelActivation); the
-    // controller-owned signal now reaches it. Verified as the negative
-    // control on 2026-09-08: with the base commit's controller and
-    // hydrography restored, this assertion is the one that fails.
-    await expectAbortedWithin(failures, offAt);
-
-    await expect(layerCheckbox(page, 'hydrography')).not.toBeChecked();
-    await expect(layerPill(page, 'hydrography')).toHaveText('', { timeout: 10_000 });
-    held.releaseAll();
-    await page.waitForTimeout(STALE_SETTLE_MS);
-    await expect(layerPill(page, 'hydrography')).toHaveText('');
-    expect((await urlLayers(page)).has('hydrography')).toBe(false);
   });
 
   test('Smoke Plumes toggled off mid-load aborts its held HMS query', async ({ page }) => {

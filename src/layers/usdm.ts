@@ -143,7 +143,7 @@ let activeSlot: Slot = 0;
 /** Monotonic step counter; a resolved load for a stale step is dropped. */
 let stepEpoch = 0;
 
-/** Session cache of weekly frames (survives toggle-off, like HYDRO_CACHE). */
+/** Session cache of weekly frames (survives toggle-off). */
 const frameCache = new FrameCache<GeoJSON.FeatureCollection>(12);
 /** Change maps expire so a new weekly issue lands within the hour; an expired
  * one refetches behind the view already on the map. */

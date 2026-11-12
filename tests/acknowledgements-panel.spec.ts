@@ -2,7 +2,7 @@ import { continueLocalRoute } from './offline-test';
 import { expect, test, type Page, type Request } from './offline-test';
 
 import { URLS } from '../src/config/urls';
-import { BASE_URL, BOOT_URLS } from '../src/config/urls-boot';
+import { BASE_URL } from '../src/config/urls-boot';
 import { renderAcknowledgements } from '../src/ui/acknowledgements';
 import { gotoApp, layerPill, waitForLayerSettled } from './helpers';
 import { RAWS_ROUTE, rawsHappyBody } from './fixtures/raws-fixtures';
@@ -57,9 +57,9 @@ async function openPointer(page: Page): Promise<void> {
 /**
  * The map's own ground and relief traffic, by explicit name: the recent
  * satellite basemap service (its frame query and exportImage tiles,
- * src/map/satellite.ts), the OpenStreetMap raster ground's tile host
- * (src/map/style.ts), and the Pacific Northwest relief archive with its
- * hosting fallback (URLS.hillshadePmtilesLocal and
+ * src/map/satellite.ts), DDM's own base map archives and the label glyph
+ * ranges they ask for (src/map/style.ts), and the Pacific Northwest relief
+ * archive with its hosting fallback (URLS.hillshadePmtilesLocal and
  * URLS.hillshadePmtilesFallback). MapLibre keeps fetching these tiles after a
  * cold boot, on its own schedule, whatever the panel shows. None of these
  * names can match a briefing read: those go to the Worker proxy (NWS, SPC,
@@ -67,15 +67,18 @@ async function openPointer(page: Page): Promise<void> {
  * the landscape signature, or the bundled boundaries, and the self-check in
  * the case below proves the first two still count.
  */
-const OSM_TILE_HOST = new URL(BOOT_URLS.basemapOSM.replace(/\{[xyz]\}/g, '0')).hostname;
-// The archive's path below the deploy base (the preview serves it from `/`,
+// The archives' paths below the deploy base (the preview serves them from `/`,
 // while BASE_URL outside a Vite build reads the Pages base).
 const RELIEF_ARCHIVE_PATH = `/${URLS.hillshadePmtilesLocal.slice(BASE_URL.length)}`;
+const BASE_ARCHIVE_PATHS = [URLS.baseNaPmtiles, URLS.baseRoadsPmtiles, URLS.baseWorldPmtiles].map(
+  (u) => `/${u.slice(BASE_URL.length)}`
+);
 function isMapGroundRead(url: string): boolean {
   const parsed = new URL(url);
   return (
     url.startsWith(`${URLS.noaaMergedGeoColorImageServer}/`) ||
-    parsed.hostname === OSM_TILE_HOST ||
+    BASE_ARCHIVE_PATHS.some((p) => parsed.pathname.endsWith(p)) ||
+    parsed.pathname.includes('/fonts/glyphs/') ||
     parsed.pathname.endsWith(RELIEF_ARCHIVE_PATH) ||
     url === URLS.hillshadePmtilesFallback
   );
@@ -178,6 +181,8 @@ test.describe('the acknowledgements pointer and section (D1 M22)', () => {
     expect(isMapGroundRead('http://127.0.0.1:4173/data/landscape-signature-pnw.json')).toBe(false);
     // And it does name the relief archive the gate saw read after boot.
     expect(isMapGroundRead('http://127.0.0.1:4173/data/hillshade-dem-pnw.pmtiles')).toBe(true);
+    // And DDM's own base map, which every boot reads.
+    expect(isMapGroundRead('http://127.0.0.1:4173/data/ddm-base-na-2026-11.pmtiles')).toBe(true);
     await gotoApp(page, '');
     const reads: string[] = [];
     page.on('request', (request) => {
@@ -406,7 +411,7 @@ test.describe('the acknowledgements pointer and section (D1 M22)', () => {
     await expect(panel.locator('[data-ack-id="osm"]')).toBeVisible();
   });
 
-  test('no issuer name, copyright sign or licence link in #map-info-attribution, the sidebar footer or the map container except the OSM string while an OSM-derived source draws', async ({
+  test('no issuer name, copyright sign or licence link in #map-info-attribution, the sidebar footer or the map container', async ({
     page
   }) => {
     await gotoApp(page, '?view=console');
@@ -454,9 +459,9 @@ test.describe('the acknowledgements pointer and section (D1 M22)', () => {
     expect(reading.footerLicenceLinks).toBe(0);
     expect(reading.containerLinks).toEqual([]);
     expect(reading.containerCopyright).toBe(0);
-    // The one exception: the OSM ground draws on every default boot.
-    expect(reading.osmHidden).toBe(false);
-    expect(reading.osmText).toBe('© OpenStreetMap contributors');
+    // The base map is DDM's own public data (DDM-P17-T12): no on-map credit remains.
+    expect(reading.osmHidden).toBe(null);
+    expect(reading.osmText).toBe('');
   });
 
   test("the station legend and the briefing carry the public-view notice verbatim, as DDM's notice (DR-159)", async ({

@@ -11,7 +11,7 @@ import {
   watchRasterTiles,
   type RasterTileWatch
 } from '../util/raster-status';
-import { firstLayerIdAbove } from './layer-order';
+import { BOTTOM_STACK_IDS, firstLayerIdAbove } from './layer-order';
 import {
   decodeImage,
   isPlaceholderImage,
@@ -40,7 +40,7 @@ import {
  * That pin is load-bearing: the image endpoint advertises a 12-hour cache, and
  * an unpinned "latest" request could mix scans across one viewport.
  *
- * OpenStreetMap stays visible underneath. GOES coverage stops near 76 degrees
+ * DDM's own base map stays visible underneath. GOES coverage stops near 76 degrees
  * latitude, and transparent or missing imagery must reveal the default map,
  * never a blank surface. The chip keeps the observation time separate from
  * the hazard layers above it; the imagery's caveats read in the Impact
@@ -619,7 +619,7 @@ function installFrame(
           'raster-contrast': 0.04
         }
       },
-      firstLayerIdAbove(map, ['background', 'basemap'])
+      firstLayerIdAbove(map, BOTTOM_STACK_IDS.slice(0, BOTTOM_STACK_IDS.indexOf(LAYER_ID)))
     );
     stampFrame(frame);
   } catch (error) {

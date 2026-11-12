@@ -194,7 +194,7 @@ for layer lists, views, time controls, defaults, and legacy links.
 | `bia-reservations` | Reservation Boundaries | reference | BIA AIAN-LAR FeatureServer (live, default-on) |
 | `tribal` | Tribal Lands (your own data) | reference | deployer slot, bundled EMPTY PLACEHOLDER, default-off, URL-only (no catalog row until turned on) |
 | `treaty` | Treaty Areas (your own data) | reference | deployer slot, bundled EMPTY PLACEHOLDER, default-off, URL-only (no catalog row until turned on) |
-| `hydrography` | Rivers | reference | OpenStreetMap via Overpass (live) |
+| `hydrography` | Rivers | reference | USGS, Natural Resources Canada and Natural Earth (bundled basemap) |
 | `nifc-fires` | Current Mapped Fire Perimeters (NIFC) | event | NIFC WFIGS FeatureServer (live) |
 | `hms-smoke` | Smoke plumes | event | NOAA OSPO FeatureServer (live) |
 | `nws-alerts` | Heat & Fire Weather Alerts | event | NOAA NWS MapServer (live) |
@@ -236,11 +236,16 @@ commands and population instructions are in
 
 ### About the basemap and hydrography
 
-Recent NOAA NESDIS GOES GeoColor imagery provides context over an
-OpenStreetMap basemap; clouds and coverage gaps can obscure the ground.
-The Satellite control turns imagery on and off. Rivers come from
-OpenStreetMap via Overpass. See the [developer guide](DEVELOPER.md#about-the-basemap-and-hydrography)
-for refresh behavior and service limits.
+Recent NOAA NESDIS GOES GeoColor imagery provides context over DDM's own
+basemap, built from public files (U.S. Census, USGS, Natural Resources
+Canada and Natural Earth) and served from this site: land, lakes and
+reservoirs, wetlands, glaciers, rivers, county, state, province and
+national lines, federal and state highways, and place names, at a regional
+scale. Inside Tribal areas, street names are read live from the Census at
+close zoom. Clouds and coverage gaps in the imagery can obscure the ground.
+The Satellite control turns imagery on and off. The Rivers layer draws the
+same files' rivers and lakes brighter. See the [developer guide](DEVELOPER.md#about-the-basemap-and-hydrography)
+for how the basemap is built.
 
 ### The desktop 3D Fire view
 
@@ -374,13 +379,19 @@ Nebraska-Lincoln)
 
 **OpenStreetMap contributors**
 
-- Standard raster basemap
-- **Overpass API**: waterway and hydrography features
+- Building footprints in the 3D Fire view, through the Overture Maps
+  Foundation buildings theme (ODbL)
+
+**Natural Resources Canada**
+
+- **Atlas of Canada National Scale Data 1:1,000,000**: Canadian land, lakes,
+  rivers, highways, provincial and territorial lines and place names in the
+  basemap (Open Government Licence - Canada)
 
 **Natural Earth**
 
 - **Natural Earth Data project**: populated places and physical land/lake
-  boundaries
+  boundaries; the basemap outside the United States and Canada
 
 **HIFLD** (Homeland Infrastructure Foundation-Level Data, archived)
 

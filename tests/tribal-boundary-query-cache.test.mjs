@@ -114,11 +114,15 @@ function fakeMap(view) {
     getLayer: (id) => (layers.has(id) ? { id } : undefined),
     addLayer: (layer) => layers.add(layer.id),
     removeLayer: (id) => layers.delete(id),
-    on: (event, handler) => handlers.set(event, handler),
-    off: (event) => handlers.delete(event),
+    // Several handlers per event, as MapLibre keeps (Tribal Lands' refresh and its street reader both listen).
+    on: (event, handler) => {
+      if (!handlers.has(event)) handlers.set(event, new Set());
+      handlers.get(event).add(handler);
+    },
+    off: (event, handler) => handlers.get(event)?.delete(handler),
     async moveTo(next) {
       Object.assign(view, next);
-      handlers.get('moveend')?.();
+      for (const handler of handlers.get('moveend') ?? []) handler();
       runPendingTimers();
       await settle();
     }

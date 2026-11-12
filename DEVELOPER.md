@@ -327,10 +327,9 @@ requests (src/map/satellite-guard.ts): a placeholder tile is drawn
 transparent and drops its frame, so the previous good frame or the plain
 map shows instead, and the Satellite control reads unavailable.
 The Satellite control turns imagery on and off;
-`basemap=default` records the satellite-off choice, showing subdued
-OpenStreetMap ground. OpenStreetMap also remains underneath because GOES
-coverage ends near 76 degrees north and imagery can contain clouds or
-gaps. GeoColor is context only: daytime areas approximate true color,
+`basemap=default` records the satellite-off choice, showing DDM's own
+ground. That ground also remains underneath because GOES coverage ends near
+76 degrees north and imagery can contain clouds or gaps. GeoColor is context only: daytime areas approximate true color,
 nighttime areas use infrared and static reference lights.
 
 Explicit Fire and Wildfire controls may request recent GeoColor as part of
@@ -338,10 +337,25 @@ their governed scene, but unrelated layer or horizon changes do not
 override a visitor's manual basemap choice. Future satellite-derived
 products belong in separately named layers with their own status,
 timestamp, caveat, and legend; recoloring an existing layer would let a
-display claim what its source does not. Hydrography queries the
-volunteer-run Overpass API (two-mirror failover, viewport-driven, dormant
-below zoom 7); institutional deployments expecting heavy concurrency should
-plan for the planned National Hydrography Dataset PMTiles bundle.
+display claim what its source does not.
+
+DDM's basemap is three same-origin PMTiles vector archives in `public/data/`
+built by `scripts/build-base-tiles.mjs` (run with
+`node --max-old-space-size=16000`; about 810 MB of public downloads cached
+outside the repository, every input pinned by SHA-256 in
+`scripts/data/base-tiles-inputs.json`, a changed input refused unless
+`DDM_BASE_REPIN=1`). North America is stored to zoom 8 and the world to zoom
+5; the map overzooms both, so the basemap stays regional in scale. The
+highways ride their own archive so each file stays under the 20 MB
+public-tree line. Each feature group is stored only from the zoom that first
+shows it (`bands` in the build), which keeps the opening view light. The
+ground fills draw under satellite imagery and the lines and names above it
+(`src/map/layer-order.ts`). The Hydrography layer draws the same archive's
+rivers and water bodies brighter and makes no request. Inside Census-defined
+Tribal areas, `src/layers/tribal-streets.ts` (started by the Tribal Lands
+layer) reads TIGERweb Local Roads live from zoom 12 and draws the streets
+with their names only within those areas. No Tribal or Treaty boundary is
+written into an archive.
 
 ### The desktop 3D Fire view
 

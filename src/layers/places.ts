@@ -3,9 +3,9 @@
  *
  * A symbol layer over the small bundled Natural Earth place-point source
  * (public/data/us-places.json, built by scripts/build-places.mjs with the
- * build-failing glyph gate). The raster basemap's baked-in labels cannot be
- * toggled, so this bundled layer is the only honest municipal-labels
- * delivery: OFF by default, one checkbox, no third-party request.
+ * build-failing glyph gate). OFF by default, one checkbox, no third-party
+ * request; DDM's own base map (src/map/style.ts) carries the default place
+ * names, so this layer adds Natural Earth's ranking on top.
  *
  * Density: Natural Earth's SCALERANK rides each point as `rank`; the layer
  * filter steps the admitted rank by zoom so national framings show only

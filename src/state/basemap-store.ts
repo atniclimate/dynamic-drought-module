@@ -9,8 +9,8 @@
  * sync state. The store deliberately knows nothing about MapLibre; the
  * switcher control (src/map/basemap-switcher.ts) owns the map side.
  *
- * The mode vocabulary is the stable URL token set: 'default' (the subdued
- * OpenStreetMap ground) and 'satellite' (recent NOAA imagery context). Each
+ * The mode vocabulary is the stable URL token set: 'default' (DDM's own
+ * base map) and 'satellite' (recent NOAA imagery context). Each
  * hazard mode declares the basemap it opens on (`defaultBasemap` in
  * src/config/clusters.ts, owner 2026-10-13). The canonical URL carries
  * `basemap=` only when the live mode differs from the active mode's default.

@@ -115,11 +115,11 @@ for (const [width, height] of SIZES) {
 
     // The credits disclosure still opens, and the base map is still named.
     // Value-only migration (S30D D1 M22, DR-162): the credits line is the
-    // pointer to the Acknowledgements now, and the one OpenStreetMap credit
-    // is on the map itself while the OSM ground draws.
+    // pointer to the Acknowledgements; the base map is DDM's own public data
+    // since DDM-P17-T12, so no credit rides the map itself.
     await credits.click();
     await expect(page.locator('#map-info-attribution')).toContainText('Acknowledgements');
-    await expect(page.locator('#map-osm-credit')).toContainText('OpenStreetMap');
+    await expect(page.locator('#map-osm-credit')).toHaveCount(0);
   });
 
   test(`the ${width}x${height} embed loading pulse leaves Share and Reset alone`, async ({

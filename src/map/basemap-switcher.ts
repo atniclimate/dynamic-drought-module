@@ -13,7 +13,7 @@ import { showToast } from '../ui/overlay';
  * The basemap switcher (U4d, D-0.7.0-005 / D-0.7.0-031).
  *
  * One `IControl` button that flips recent satellite context on and off over
- * the subdued OpenStreetMap ground; deliberately NOT a style
+ * DDM's own base map; deliberately NOT a style
  * gallery (the corpus's product-lens guardrail). The control stacks with
  * the existing attribution and scale controls, carries real button
  * semantics (aria-pressed reflects the satellite state), and stays

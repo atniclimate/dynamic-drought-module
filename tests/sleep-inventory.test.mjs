@@ -284,16 +284,6 @@ const SITES = [
   },
   {
     file: 'layer-cancellation.spec.ts',
-    line: 290,
-    test: 'Hydrography, which had no module seam of its own, aborts a held Overpass query',
-    text: 'await page.waitForTimeout(STALE_SETTLE_MS);',
-    occurrence: 1,
-    class: 'absence-window',
-    reason:
-      'STALE_SETTLE_MS after releasing aborted hydrography responses; proves nothing resurrects the removed layer.'
-  },
-  {
-    file: 'layer-cancellation.spec.ts',
     line: 323,
     test: 'Smoke Plumes toggled off mid-load aborts its held HMS query',
     text: 'await page.waitForTimeout(STALE_SETTLE_MS);',

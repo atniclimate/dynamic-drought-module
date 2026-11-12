@@ -91,7 +91,7 @@ const SCALE_MAX_WIDTH_PX = 160;
  * stays a single, side-effect-light call.
  *
  * Open-data invariant: no proprietary tile providers are configured. The
- * base style uses a subdued OpenStreetMap base (see `buildBaseStyle()`);
+ * base style is DDM's own base map from public files (see `buildBaseStyle()`);
  * recent NOAA GeoColor is the default satellite context.
  */
 export function createMap(containerId: string): maplibregl.Map {

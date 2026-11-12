@@ -42,7 +42,6 @@ const EM_DASH = String.fromCharCode(0x2014);
 const CITED = new Set<string>([
   'nifc-raws-public-view',
   'osm-basemap-ground-credit',
-  'osm-overpass-hydrography',
   'eia-power-plants',
   'esri-fuc-transmission-lines-host',
   'overture-buildings-theme',
@@ -199,7 +198,6 @@ const ATTRIBUTION_SITES: Readonly<Record<string, ProductKey | ProviderKey>> = {
   'src/layers/gridded-index.ts': 'gridded-index',
   'src/layers/heatrisk.ts': 'heatrisk',
   'src/layers/hms-smoke.ts': 'hms-smoke',
-  'src/layers/hydrography.ts': 'hydrography',
   'src/layers/nadm-drought.ts': 'nadm-drought',
   'src/layers/nifc-fires.ts': 'nifc-fires',
   'src/layers/nws-alerts.ts': 'nws-alerts',
@@ -211,7 +209,6 @@ const ATTRIBUTION_SITES: Readonly<Record<string, ProductKey | ProviderKey>> = {
   'src/layers/usfs-whp.ts': 'usfs-whp',
   'src/layers/whp-3d.ts': 'whp-3d',
   'src/map/satellite.ts': 'satellite-geocolor',
-  'src/map/style.ts': 'basemap-ground',
   // The station chart's source line, printed by the popup frame.
   'src/ui/popups.ts': 'telemetry',
   // The Nino 3.4 box popup's RONI chart, from the bundled CPC snapshot.

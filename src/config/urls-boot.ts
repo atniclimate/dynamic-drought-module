@@ -4,9 +4,8 @@
  * `src/config/urls.ts` is the service-endpoint catalog: about seventy
  * entries with their verification notes, the single largest source in the
  * entry chunk before this split, and read at boot by exactly two eager
- * modules for exactly two values: the base style wants the OpenStreetMap
- * tile template, and the deep-link resolver wants the bundled state
- * polygons. Everything else that reads the catalog is a lazily loaded layer,
+ * modules for these values: the base style wants its two base-map
+ * archives, and the deep-link resolver wants the bundled state polygons. Everything else that reads the catalog is a lazily loaded layer,
  * adapter, or briefing module. This module holds those two values so the
  * eager graph imports it instead of the catalog, and the catalog re-exports
  * them under their old keys so every lazy reader and every script that
@@ -30,13 +29,16 @@ export const BASE_URL: string =
 
 export const BOOT_URLS = Object.freeze({
   /**
-   * OpenStreetMap standard raster, subdued via raster paint in
-   * `src/map/style.ts` so the hazard layers dominate. Verified live
-   * 2026-05-30; the OSM tile usage policy applies (attribution stays
-   * reachable through the map-information panel, owner direction
-   * 2026-08-31).
+   * DDM's own base map (DDM-P17-T12): two same-origin PMTiles vector
+   * archives baked from public files by `scripts/build-base-tiles.mjs`
+   * (Census, USGS, Natural Resources Canada, Natural Earth; inputs pinned in
+   * `scripts/data/base-tiles-inputs.json`). The edition is in the name, so a
+   * rebuild is a new URL. North America to zoom 8 (the highways in their
+   * own file); the world to zoom 5.
    */
-  basemapOSM: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+  baseNaPmtiles: BASE_URL + 'data/ddm-base-na-2026-11.pmtiles',
+  baseRoadsPmtiles: BASE_URL + 'data/ddm-roads-na-2026-11.pmtiles',
+  baseWorldPmtiles: BASE_URL + 'data/ddm-base-world-2026-11.pmtiles',
 
   /**
    * Bundled United States state boundaries, read by the deep-link resolver

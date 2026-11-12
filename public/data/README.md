@@ -90,6 +90,26 @@ state-curated set).
 
 ## Bundled public reference data (not placeholders)
 
+- `ddm-base-na-2026-11.pmtiles`, `ddm-roads-na-2026-11.pmtiles`,
+  `ddm-base-world-2026-11.pmtiles`: DDM's own base map, which replaced the
+  OpenStreetMap raster ground and the Overpass river lookups (built by
+  `node --max-old-space-size=16000 scripts/build-base-tiles.mjs`; every input
+  pinned by SHA-256 in `scripts/data/base-tiles-inputs.json`). North America
+  (180°W to 50°W, 14°N to 84°N) zoom 0 to 8, overzoomed by the map to 14:
+  land, lakes, reservoirs, wetlands and glaciers, rivers and canals by stream
+  order, country, province and Mexican state lines, county lines, place, lake
+  and sea names (15,877,625 bytes); federal and state highways in the U.S. and
+  principal highways in Canada, with route names (7,274,532 bytes); the rest
+  of the world zoom 0 to 5 (1,602,607 bytes). Sources: U.S. Census Bureau 2025
+  cartographic boundary files and TIGER/Line 2025 roads (public domain); USGS
+  1:1,000,000-scale waterbodies, streams and cities, 2014 (public domain);
+  Natural Resources Canada, Atlas of Canada National Scale Data 1:1,000,000
+  (Open Government Licence - Canada); Natural Earth 1:10m v5.1.2 (public
+  domain) for Mexico, Central America, the Caribbean and the world. Mesoscale
+  by design; inside Tribal areas the street names are read live from the
+  Census at zoom 12 and above (`src/layers/tribal-streets.ts`). No Tribal or
+  Treaty boundary is stored in these files: those stay live-read. Retrieved
+  2026-11-12.
 - `us-states.geojson`: state boundaries (US Census, public domain).
 - `ecoregions-pnw.pmtiles`: EPA Omernik ecoregions, the served artifact
   (built by `npm run build:ecoregion-tiles`).

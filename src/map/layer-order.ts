@@ -7,10 +7,11 @@ import type * as maplibregl from 'maplibre-gl';
  *
  * The contract, bottom to top:
  *
- *   background -> basemap (OSM fallback)
+ *   background -> base ground (land, water, rivers)
  *     -> basemap-satellite (recent NOAA) -> wildfire-dryness-ground -> hillshade
+ *     -> base lines (boundaries, highways)
  *     -> condition surfaces (the 3D edge fade last) -> event overlays -> reference boundaries
- *     -> reference labels
+ *     -> reference labels (base names first)
  *
  * Three mechanisms enforce it:
  *   1. `firstLayerIdAbove(map, skip)` computes an insertion anchor by
@@ -26,19 +27,53 @@ import type * as maplibregl from 'maplibre-gl';
  *      them.
  */
 
+/** DDM's own base map (src/map/style.ts): the ground fills draw under
+ * satellite imagery, so imagery replaces them where it covers. */
+export const BASE_GROUND_IDS: readonly string[] = [
+  'base-world-land',
+  'base-land',
+  'base-world-water',
+  'base-water',
+  'base-wetland',
+  'base-glacier',
+  'base-river'
+];
+
+/** The base map's lines, above imagery and terrain shading and below every
+ * condition surface. The Tribal-area streets (src/layers/tribal-streets.ts,
+ * mirrored literal) read live at street zoom and sit with them. */
+export const BASE_LINE_IDS: readonly string[] = [
+  'base-county',
+  'base-region',
+  'base-world-country',
+  'base-country',
+  'base-road',
+  'tribal-streets-line'
+];
+
 /** The permanent bottom-stack ids, in stacking order. The Wildfire 3D
  * dryness ground (DDM-P9-T13; src/layers/wildfire-dryness.ts, mirrored
  * literal) sits under the hillshade and every drape, present only in that scene. */
 export const BOTTOM_STACK_IDS: readonly string[] = [
   'background',
-  'basemap',
+  ...BASE_GROUND_IDS,
   'basemap-satellite',
   'wildfire-dryness-ground',
-  'hillshade'
+  'hillshade',
+  ...BASE_LINE_IDS
 ];
 
-/** Reference label layers that always read above every data layer. */
-const TOP_LABEL_IDS: readonly string[] = ['us-places-labels'];
+/** Reference label layers that always read above every data layer, bottom to top. */
+export const TOP_LABEL_IDS: readonly string[] = [
+  'base-river-label',
+  'base-road-label',
+  'tribal-streets-label',
+  'base-world-water-label',
+  'base-water-label',
+  'base-world-place',
+  'base-place',
+  'us-places-labels'
+];
 
 /**
  * Condition surfaces, bottom to top. Every known surface is named here so
@@ -168,6 +203,8 @@ export const EVENT_OVERLAY_IDS: readonly string[] = [
  * only and does not change the source or stewardship caveats of any module.
  */
 export const REFERENCE_BOUNDARY_IDS: readonly string[] = [
+  // The Hydrography lake fill (src/layers/hydrography.ts) sits directly under its river lines.
+  'hydrography-water',
   'hydrography',
   'us-states-fill',
   'us-states-casing',

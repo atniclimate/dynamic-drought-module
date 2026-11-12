@@ -218,7 +218,7 @@ test('a field that is not a whole global grid is refused, never stretched', () =
 
 /** A recording map: sources, layers in paint order and listeners, as much of MapLibre as the view touches. */
 const ENSO_STYLE = [
-  'background', 'basemap', 'sst-anomaly', 'nino34-box-fill', 'nino34-box-line', 'nino34-box-label',
+  'background', 'base-land', 'sst-anomaly', 'nino34-box-fill', 'nino34-box-line', 'nino34-box-label',
   'tropical-cyclones-points', 'us-states-outline', 'us-places-labels'
 ];
 
@@ -327,7 +327,7 @@ test('the shade sits above the SST and the Nino box, and under the tropical cycl
   const map = fakeMap();
   const view = mountShadeView(map, moist(), { onStale: () => undefined });
   assert.deepEqual(map.order(), [
-    'background', 'basemap', 'sst-anomaly', 'nino34-box-fill', 'nino34-box-line', 'flow-shade',
+    'background', 'base-land', 'sst-anomaly', 'nino34-box-fill', 'nino34-box-line', 'flow-shade',
     'nino34-box-label', 'tropical-cyclones-points', 'us-states-outline', 'us-places-labels'
   ]);
   view.dispose();
@@ -336,7 +336,7 @@ test('the shade sits above the SST and the Nino box, and under the tropical cycl
 test('with a dated SST frame on the map the shade still seats above it, and the outlines stay above both', () => {
   // src/layers/sst-anomaly.ts inserts a dated frame directly under the Nino box's line, inside the ruled chain.
   const style = [
-    'background', 'basemap', 'sst-anomaly', 'nino34-box-fill', 'sst-frame-2026-09-06', 'sst-frame-2026-09-07',
+    'background', 'base-land', 'sst-anomaly', 'nino34-box-fill', 'sst-frame-2026-09-06', 'sst-frame-2026-09-07',
     'nino34-box-line', 'nino34-box-label', 'tropical-cyclones-points', 'us-states-outline', 'us-places-labels'
   ];
   const map = fakeMap({ style });

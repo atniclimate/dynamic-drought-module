@@ -213,8 +213,8 @@ export interface LayerDef {
  * are default-off AND ui-hidden: they are only
  * meaningful once a deployer populates them with their own authorized
  * data. Hydrography is
- * intentionally off by default; the live Overpass query is slow and
- * fragile, so leading the bare URL with it produced a flaky first paint.
+ * off by default: it repeats the base map's own rivers and lakes in a
+ * brighter blue, for a reader who wants water to lead.
  */
 /**
  * The honest zero-state wording for LIVE viewport-queried layers: the agency
@@ -289,7 +289,7 @@ const DROUGHT_CONDITIONS_DEF: LayerDef = {
 };
 
 export const LAYER_DEFS: readonly LayerDef[] = [
-  { key: 'hydrography', product: 'hydrography', name: 'Hydrography', source: 'OpenStreetMap (Overpass)', role: 'reference', defaultOn: false, load: () => import('../layers/hydrography') },
+  { key: 'hydrography', product: 'hydrography', name: 'Hydrography', source: 'USGS · Natural Resources Canada · Natural Earth · bundled', role: 'reference', defaultOn: false, load: () => import('../layers/hydrography') },
   // Audit 10: the bundled archive covers only the Pacific Northwest (its
   // PMTiles header bounds [-125, 41.5, -110.5, 49.5]) and the layer reads
   // `live` at any viewport, so the coverage tail rides the source line the
