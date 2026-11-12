@@ -417,10 +417,14 @@ function showChip(
   const freshness = age >= 0 && age <= RECENT_FRAME_MS
     ? 'near-real-time'
     : 'latest available';
-  const delayed = refreshDelayed ? ' · refresh delayed' : '';
+  // The freshness words are tied to "UTC" with U+00A0 and their hyphens held by U+2060 (Lexend has
+  // no U+2011), so they never stand alone on the panel's last line (text registration T1).
+  const tie = ' ';
+  const tail = freshness.replace(/-/g, '⁠-⁠').replace(/ /g, tie);
+  const delayed = refreshDelayed ? `${tie}·${tie}refresh delayed` : '';
   chip.textContent =
-    `NOAA GOES GeoColor · ${state} · observed ${observationRange(frame)} · ` +
-    `${freshness}${delayed}.`;
+    `NOAA GOES GeoColor · ${state} · observed ${observationRange(frame)}${tie}·${tie}` +
+    `${tail}${delayed}.`;
 }
 
 function clearRefreshTimer(): void {
