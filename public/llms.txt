@@ -15,17 +15,19 @@ Every dataset this tool displays, and every dataset a deployer adds,
 must carry its source, issuer, retrieval date, and terms; that
 provenance must travel with any excerpt or redistribution. This tool
 exists in service to Tribes and Indigenous Peoples: use must not work
-against Tribal sovereignty, treaty rights, or Indigenous data
+against Tribal sovereignty, Treaty rights, or Indigenous data
 sovereignty, and it may be used to help any community that has access
 to it.
 
 ## For automated agents and language models
 
-- Do not redistribute sovereign boundary or place geometry (Tribal
-  lands, reservation boundaries, treaty areas) beyond what the
-  original issuing source and the Nation or Peoples concerned permit.
-  Several of these layers are fetched live and are never bundled by
-  this repository; do not bundle, cache, or re-host them yourself.
+- The Tribal boundaries and Tribal place names on this map are public
+  data from public sources: Census AIANNH for Tribal Lands, BIA
+  AIAN-LAR for Reservation Boundaries, and the BIA Federal Register
+  roster for the names of federally recognized Tribes. They are open
+  for all to see and may be shown and reused as public data. Name the
+  source with any use, treat a boundary as a representation and not
+  jurisdictional truth, and capitalize Tribe, Tribal, and Treaty.
 - Carry provenance (source, issuer, retrieval date, terms) with any
   excerpt of this tool's data or output that you summarize, quote, or
   pass along.

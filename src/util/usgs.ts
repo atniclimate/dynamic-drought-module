@@ -50,6 +50,8 @@ let pausedUntil = 0;
 export interface UsgsReading {
   readonly value: string;
   readonly dateTime?: string;
+  /** Set only when USGS qualified the row ESTIMATED; shown as USGS's own word "Estimated". */
+  readonly estimated?: true;
 }
 
 /** One parameter's usable readings at a site, oldest first. */
@@ -107,11 +109,12 @@ export function usgsReading(row: Record<string, unknown>): UsgsReading | null {
   const { value, time, qualifier } = row;
   if (typeof value !== 'string' || value.trim() === '' || !Number.isFinite(Number(value))) return null;
   if (typeof time !== 'string' || Number.isNaN(Date.parse(time))) return null;
-  const known =
-    qualifier === null ||
-    qualifier === undefined ||
-    (Array.isArray(qualifier) && qualifier.every((q) => q === 'ESTIMATED'));
-  return known ? { value, dateTime: time } : null;
+  if (qualifier === null || qualifier === undefined || (Array.isArray(qualifier) && qualifier.length === 0)) {
+    return { value, dateTime: time };
+  }
+  return Array.isArray(qualifier) && qualifier.every((q) => q === 'ESTIMATED')
+    ? { value, dateTime: time, estimated: true }
+    : null;
 }
 
 /** The unit as the legacy service wrote it ('ft^3/s' reads 'ft3/s'), or null. */
@@ -262,7 +265,8 @@ export function usgsLatestStationValue(
       unit: readUnitCode(s) ?? '',
       timestamp,
       freshness: timestamp ? ivFreshness(timestamp) : 'stale',
-      source: 'usgs-iv'
+      source: 'usgs-iv',
+      ...(r.estimated ? { estimated: true as const } : {})
     };
   }
   return null;

@@ -1276,7 +1276,8 @@ function formatStationValue(value: StationValue): string {
   const num = formatStationNumber(value.value, value.parameter);
   const day = value.timestamp ? ` · ${shortReadingDate(value.timestamp)}` : '';
   const staleNote = value.freshness === 'stale' ? ' (stale)' : '';
-  return `${label} ${num} ${value.unit}${day}${staleNote}`;
+  const estimatedNote = value.estimated ? ' (Estimated)' : '';
+  return `${label} ${num} ${value.unit}${estimatedNote}${day}${staleNote}`;
 }
 
 /**

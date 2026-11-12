@@ -97,4 +97,6 @@ export interface StationValue {
     | 'cocorahs'
     | 'nwrfc'
     | 'usgs-iv';
+  /** Set only when the issuer marked the reading estimated (USGS ESTIMATED). */
+  readonly estimated?: true;
 }

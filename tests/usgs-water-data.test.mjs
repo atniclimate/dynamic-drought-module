@@ -252,14 +252,14 @@ test('one gauge week reads exactly as the legacy service gave it, whatever the r
 test('the popup shows the same reading, units, time and sparkline as before', async () => {
   stubFetch(() => json(collection([...SERIES.features].reverse())));
   const paint = await hydrateTelemetryPopup(MODO3, new AbortController().signal);
-  assert.deepEqual(head(paint), { label: 'Discharge', text: '4,350 ft3/s', issuer: 'USGS Water Services' });
+  assert.deepEqual(head(paint), { label: 'Discharge', text: '4,350 ft3/s', issuer: 'USGS Water Data APIs' });
   assert.equal(paint.model.clocks[0].at.at, LEGACY.at);
   const reading = paint.model.details.find((detail) => detail.kind === 'reading');
   assert.deepEqual([reading.label, reading.text], ['Gage height', LEGACY.gageHeight]);
   const chart = paint.model.details.find((detail) => detail.kind === 'chart');
   assert.deepEqual(
     [chart.label, chart.unit, chart.attribution],
-    ['Discharge over the past 7 days (USGS)', 'ft3/s', 'USGS Water Services, past 7 days']
+    ['Discharge over the past 7 days (USGS)', 'ft3/s', 'USGS Water Data APIs, past 7 days']
   );
   const discharge = SERIES.features.filter((f) => f.properties.parameter_code === '00060').map((f) => Number(f.properties.value));
   assert.deepEqual(chart.data, discharge, 'the sparkline runs oldest to newest');
@@ -289,6 +289,23 @@ test('a null value or an unknown qualifier is unknown, never a number', async ()
   stubFetch(() => json(collection([row(0, null, ['ICE']), row(15, null, null), row(30, '0', ['DRY'])])));
   const paint = await hydrateTelemetryPopup(MODO3, new AbortController().signal);
   assert.deepEqual(head(paint), { text: 'No active sensors at this site.', state: 'no data' });
+});
+
+test('an ESTIMATED reading carries USGS\'s word Estimated beside its value; a null qualifier does not', async () => {
+  const discharge = SERIES.features.filter((f) => f.properties.parameter_code === '00060');
+  const estimated = {
+    type: 'Feature',
+    properties: { ...discharge[0].properties, time: '2026-11-06T05:00:00+00:00', value: '4400', qualifier: ['ESTIMATED'] },
+    id: 'row-estimated',
+    geometry: null
+  };
+  assert.equal(usgs.usgsLatestStationValue('modo3', { features: [estimated, ...discharge] }).estimated, true);
+  assert.equal(usgs.usgsLatestStationValue('modo3', { features: discharge }).estimated, undefined);
+
+  stubFetch(() => json(collection([estimated, ...SERIES.features])));
+  assert.equal(head(await hydrateTelemetryPopup(MODO3, new AbortController().signal)).text, '4,400 ft3/s (Estimated)');
+  stubFetch(() => json(SERIES));
+  assert.equal(head(await hydrateTelemetryPopup(MODO3, new AbortController().signal)).text, '4,350 ft3/s');
 });
 
 test('a week with no rows reads as no recent values, in the legacy words; a failed read stays unavailable', async () => {
