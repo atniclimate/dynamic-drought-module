@@ -1,4 +1,4 @@
-import { expect, test, type Page } from './offline-test';
+import { continueLocalRoute, expect, test, type Page } from './offline-test';
 
 import { gotoApp, search, urlLayers, waitForLayerSettled } from './helpers';
 import { stubUsdmWeeks } from './usdm-fixtures';
@@ -98,6 +98,9 @@ test.describe('PS-MAP clean-selection display', () => {
   });
 
   test('a direct studio URL keeps only its own session snapshot', async ({ page }) => {
+    // usdm must be a working layer here: unstubbed it fails offline, and a failed
+    // layer in a custom set unchecks and leaves the URL before the studio sets it aside.
+    await stubUsdmWeeks(page);
     await gotoApp(page, '?view=brief&layers=usdm,places&studio=place');
     await expect(page.locator(PLACE_ROOT)).toBeVisible();
     await expect(page.locator('#layer-toggle-usdm')).not.toBeChecked();
@@ -109,6 +112,28 @@ test.describe('PS-MAP clean-selection display', () => {
     expect(params.get('layers') ?? '').toContain('usdm');
     expect(params.has('place')).toBe(false);
     expect(params.has('typed-place')).toBe(false);
+  });
+
+  test('a direct studio URL that mounts after the deferred boot still names the display it set aside', async ({
+    page
+  }) => {
+    await stubUsdmWeeks(page);
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await page.route(/\/place-studio-[^/?]*\.js(\?|$)/, async (route) => {
+      await held;
+      await continueLocalRoute(route);
+    });
+    await gotoApp(page, '?view=brief&layers=usdm,places&studio=place');
+    // The studio chunk is held, so the deferred boot settles the URL's layers first.
+    await waitForLayerSettled(page, 'usdm');
+    await expect(page.locator(`${PLACE_ROOT} #place-studio-back`)).toHaveCount(0);
+    release();
+    await expect(page.locator(`${PLACE_ROOT} #place-studio-back`)).toBeVisible();
+    await expect(page.locator('#layer-toggle-usdm')).not.toBeChecked();
+    expect(new URLSearchParams(await search(page)).get('layers') ?? '').toContain('usdm');
   });
 
   test('Back restores a clean cluster claim after temporary controller changes', async ({
