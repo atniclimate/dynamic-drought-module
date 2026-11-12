@@ -83,6 +83,18 @@ test('a natural image is never a placeholder', () => {
   for (const window of windows) assert.equal(isPlaceholderImage(window), false, window.where);
 });
 
+/** Recorded answers of the service (tests/fixtures/satellite/README.md). */
+const recorded = (name) => readFileSync(new URL(`./fixtures/satellite/${name}`, import.meta.url));
+
+test("the service's recorded placeholder is caught and its recorded imagery is kept", () => {
+  for (const name of ['placeholder-probe.jpg', 'placeholder-tile.jpg']) {
+    assert.equal(isPlaceholderImage(decodeJpeg(recorded(name))), true, name);
+  }
+  for (const name of ['night-ocean.jpg', 'night-convection.jpg', 'day-probe.jpg']) {
+    assert.equal(isPlaceholderImage(decodeJpeg(recorded(name))), false, name);
+  }
+});
+
 test('transparent, uniform, one-level and two-colour tiles are not placeholders', () => {
   const solid = (r, g, b, a) => {
     const data = new Uint8Array(256 * 256 * 4);
@@ -96,10 +108,14 @@ test('transparent, uniform, one-level and two-colour tiles are not placeholders'
   const twoColour = solid(34, 91, 132, 255);
   for (let i = 0; i < twoColour.data.length; i += 8) twoColour.data.set([174, 126, 57, 255], i);
   assert.equal(isPlaceholderImage(twoColour), false);
-  // A dark tinted ocean under white cloud is imagery, not grey levels.
-  const ocean = solid(6, 18, 48, 255);
-  for (let i = 0; i < ocean.data.length / 2; i += 4) ocean.data.set([250, 250, 250, 255], i);
-  assert.equal(isPlaceholderImage(ocean), false);
+  // A sharp cloud edge over black night ocean: two grey levels, nothing between, but one change a row.
+  const edge = solid(4, 4, 4, 255);
+  for (let i = 0; i < edge.data.length; i += 4) if ((i / 4) % 256 < 128) edge.data.set([250, 250, 250, 255], i);
+  assert.equal(isPlaceholderImage(edge), false, 'one edge');
+  // Three bands of cloud: two changes a row, still not the grid.
+  const bands = solid(4, 4, 4, 255);
+  for (let i = 0; i < bands.data.length; i += 4) if (Math.floor(((i / 4) % 256) / 86) === 1) bands.data.set([250, 250, 250, 255], i);
+  assert.equal(isPlaceholderImage(bands), false, 'bands');
 });
 
 const TILE = 'https://satellitemaps.nesdis.noaa.gov/arcgis/rest/services/MERGEDGC_Last_24hr/ImageServer/exportImage?bbox=1,2,3,4&f=image';
@@ -133,6 +149,21 @@ test('a placeholder tile is answered transparent and counted; imagery passes thr
   await withFetch(async () => imageResponse(natural), async () => {
     const answer = await action(request, new AbortController());
     assert.deepEqual(Buffer.from(answer.data), natural);
+  });
+  assert.deepEqual(heard, [{ url: TILE, placeholder: true }, { url: TILE, placeholder: false }]);
+});
+
+test('the recorded placeholder tile is answered transparent; a recorded night tile passes unchanged', async () => {
+  const { heard, onTile } = recorder();
+  const action = satelliteTileAction(onTile, decodeByType);
+  await withFetch(async () => imageResponse(recorded('placeholder-tile.jpg'), 'image/jpeg'), async () => {
+    const answer = await action(request, new AbortController());
+    assert.equal(answer.data.byteLength, 0);
+  });
+  const night = recorded('night-ocean.jpg');
+  await withFetch(async () => imageResponse(night, 'image/jpeg'), async () => {
+    const answer = await action(request, new AbortController());
+    assert.deepEqual(Buffer.from(answer.data), night);
   });
   assert.deepEqual(heard, [{ url: TILE, placeholder: true }, { url: TILE, placeholder: false }]);
 });
