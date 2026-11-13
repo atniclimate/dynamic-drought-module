@@ -181,7 +181,7 @@ test('S13 operational RONI reference guides render its own CPC colors in the act
  */
 async function waitForSettled(page: Page, horizon: string): Promise<void> {
   const pill = ensoCell(page, horizon).locator('.impact-hazard-pill');
-  await expect(pill).not.toHaveText('loading...');
+  await expect(pill).not.toHaveText('loading');
 }
 
 async function ensoTexts(page: Page): Promise<Record<string, string>> {

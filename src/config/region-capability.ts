@@ -46,6 +46,12 @@ export function regionCapabilityLevel(
 }
 
 /** The matrix note paired with `regionCapabilityLevel`, for honest UI copy. */
+/** Whether a region's coverage family is a United States one, where the briefing reads (DR-256). */
+export function regionIsUnitedStates(regionKey: RuntimeRegionKey): boolean {
+  const family = regionCoverageFamily(regionKey);
+  return family === 'pnw' || family === 'conus' || family === 'ak-hi';
+}
+
 export function regionCapabilityNote(
   regionKey: RuntimeRegionKey,
   axis: CapabilityAxisKey

@@ -30,7 +30,13 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { fetchBufferedWithBudget, fetchJsonWithBudget, sleepUnlessAborted } from '../src/util/fetch.ts';
+import {
+  fetchBufferedWithBudget,
+  fetchJsonWithBudget,
+  fetchSharedJsonWithBudget,
+  isFetchTimeout,
+  sleepUnlessAborted
+} from '../src/util/fetch.ts';
 
 test('completed sleeps release their abort listeners', async () => {
   const controller = new AbortController();
@@ -145,6 +151,133 @@ test('fetchJsonWithBudget: an abort of the owning signal after headers cancels t
     await assert.rejects(raced(request, 2000, 'the aborted read'), { name: 'AbortError' });
     await raced(stub.cancelled, 2000, 'stream cancel');
   });
+});
+
+// B7: a budget timeout is told apart from a cancel and from a failure, while it
+// stays an AbortError by name for the callers that retry a helper abort.
+test('a budget timeout is a FetchTimeoutError (an AbortError by name); a cancel and a failure are not', async () => {
+  for (const [label, read] of [
+    ['buffered', (signal, ms) => fetchBufferedWithBudget('/stalled.json', null, signal, ms)],
+    ['json', (signal, ms) => fetchJsonWithBudget('/stalled.json', null, signal, ms)]
+  ]) {
+    const stalledBody = stubFetch({ chunks: ['{"partial":'], close: false });
+    await withFetch(stalledBody, async () => {
+      const err = await raced(read(null, 40), 2000, `${label} timeout`).catch((e) => e);
+      assert.equal(err.name, 'AbortError', label);
+      assert.equal(isFetchTimeout(err), true, `${label}: a stalled body is a timeout`);
+      await raced(stalledBody.cancelled, 2000, 'stream cancel');
+    });
+
+    // Headers never arrive: fetch itself rejects when the budget aborts it.
+    const noHeaders = {
+      fetchImpl: (url, init) =>
+        new Promise((_, reject) => {
+          init.signal.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')));
+        })
+    };
+    await withFetch(noHeaders, async () => {
+      const err = await raced(read(null, 40), 2000, `${label} header timeout`).catch((e) => e);
+      assert.equal(isFetchTimeout(err), true, `${label}: a header stall is a timeout`);
+    });
+
+    // The owner cancels mid-body: a cancel, never a timeout.
+    const cancelled = stubFetch({ chunks: ['{"partial":'], close: false });
+    await withFetch(cancelled, async () => {
+      const master = new AbortController();
+      const request = read(master.signal, 10_000);
+      await raced(cancelled.headersReturned, 2000, 'headers');
+      master.abort();
+      const err = await raced(request, 2000, `${label} cancel`).catch((e) => e);
+      assert.equal(err.name, 'AbortError', label);
+      assert.equal(isFetchTimeout(err), false, `${label}: a cancel is not a timeout`);
+    });
+
+    // A failure keeps its own error.
+    await withFetch(stubFetch({ status: 503, chunks: ['{}'] }), async () => {
+      const err = await read(null, 5000).catch((e) => e);
+      if (label === 'json') assert.match(err.message, /HTTP 503/);
+      assert.equal(isFetchTimeout(err), false);
+    });
+  }
+});
+
+test('fetchSharedJsonWithBudget: a timed-out transport rejects its consumer as a timeout, and a leaving consumer is a cancel', async () => {
+  const stalled = stubFetch({ chunks: ['{"partial":'], close: false });
+  await withFetch(stalled, async () => {
+    const err = await raced(
+      fetchSharedJsonWithBudget('b7-timeout', '/stalled.json', null, new AbortController().signal, 40),
+      2000,
+      'shared timeout'
+    ).catch((e) => e);
+    assert.equal(isFetchTimeout(err), true);
+  });
+  const waiting = stubFetch({ chunks: ['{"partial":'], close: false });
+  await withFetch(waiting, async () => {
+    const consumer = new AbortController();
+    const request = fetchSharedJsonWithBudget('b7-cancel', '/stalled.json', null, consumer.signal, 10_000);
+    await raced(waiting.headersReturned, 2000, 'headers');
+    consumer.abort();
+    const err = await raced(request, 2000, 'shared cancel').catch((e) => e);
+    assert.equal(err.name, 'AbortError');
+    assert.equal(isFetchTimeout(err), false);
+    await raced(waiting.cancelled, 2000, 'stream cancel');
+  });
+});
+
+test('the SPC read gives timeout, cancel and failure three outcomes; upstreamNote words a timeout as not answering in time', async () => {
+  const { registerHooks } = await import('node:module');
+  const { existsSync } = await import('node:fs');
+  registerHooks({
+    resolve(specifier, context, nextResolve) {
+      if (
+        specifier.startsWith('.') &&
+        !/\.[a-z]+$/i.test(specifier) &&
+        typeof context.parentURL === 'string' &&
+        context.parentURL.endsWith('.ts') &&
+        existsSync(fileURLToPath(new URL(`${specifier}.ts`, context.parentURL)))
+      ) {
+        return nextResolve(`${specifier}.ts`, context);
+      }
+      return nextResolve(specifier, context);
+    }
+  });
+  const { FetchTimeoutError } = await import('../src/util/fetch.ts');
+  const { fetchSpcFireOutlookClaims, upstreamNote } = await import('../src/impact/sources.ts');
+  const service = 'The NOAA Storm Prediction Center Day 1-8 Fire Weather Outlook';
+  assert.equal(upstreamNote(new FetchTimeoutError(1), service), `${service} did not answer in time.`);
+  assert.equal(upstreamNote(new Error('boom'), service), `${service} did not respond.`);
+
+  const context = { lngLat: { lng: -120, lat: 45 }, title: 'Test place' };
+  const originalWarn = console.warn;
+  const run = async (fetchImpl, signal) => {
+    const warnings = [];
+    console.warn = (...args) => warnings.push(args.join(' '));
+    try {
+      const result = await withFetch({ fetchImpl }, () => fetchSpcFireOutlookClaims(context, signal));
+      return { result, warnings };
+    } finally {
+      console.warn = originalWarn;
+    }
+  };
+
+  const timedOut = await run(async () => { throw new FetchTimeoutError(1); }, new AbortController().signal);
+  assert.equal(timedOut.result.ok, false);
+  assert.equal(timedOut.result.note, `${service} did not answer in time.`);
+  assert.equal(timedOut.warnings.length, 1, 'a timeout logs once');
+  assert.match(timedOut.warnings[0], /did not answer in time/);
+
+  const failed = await run(async () => { throw new TypeError('network'); }, new AbortController().signal);
+  assert.equal(failed.result.note, `${service} did not respond.`);
+  assert.equal(failed.warnings.length, 1);
+  assert.match(failed.warnings[0], /failed/);
+
+  const master = new AbortController();
+  const cancelled = await run(async () => {
+    master.abort();
+    throw new DOMException('Aborted', 'AbortError');
+  }, master.signal);
+  assert.deepEqual(cancelled.result, { claims: [], ok: false });
+  assert.equal(cancelled.warnings.length, 0, 'a cancel logs nothing');
 });
 
 test('an already-aborted owning signal never reaches fetch', async () => {

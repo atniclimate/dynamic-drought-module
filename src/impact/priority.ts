@@ -18,8 +18,9 @@
  * ABSENCE. A read with no ranked class (no polygon, no area drawn, no product
  * in effect, the issuer's lowest class) is not good news and is not ranked as
  * such: it is returned in `rest`, in the issuer's words. A cell that was not
- * read is returned in `rest` under its own state. Every hazard appears in
- * `ranked`, in `rest`, or in both; none is dropped.
+ * read is returned in `rest` under its own state. A hazard that was read, with
+ * nothing this order can place and no gap, has no row (the full detail holds
+ * it); every other hazard appears in `ranked`, in `rest`, or in both.
  *
  * Pure: no DOM, no fetch, no clock. `tests/briefing-priority.test.mjs`
  * exercises it under plain node.
@@ -31,7 +32,7 @@ import {
   USDM_CATEGORIES,
   USDM_NONE_SWATCH
 } from '../config/palette';
-import { HAZARD_KEYS } from './matrix';
+import { HAZARD_KEYS, HAZARD_LABELS } from './matrix';
 import type {
   ClaimReading,
   HazardCell,
@@ -150,7 +151,7 @@ export const PRIORITY_ROWS: readonly PriorityRow[] = [
   },
   {
     key: 'usdm-category',
-    title: 'A U.S. Drought Monitor category at the selected point',
+    title: 'A U.S. Drought Monitor category at the selected point, or the worst in the selected area',
     issuer: 'U.S. Drought Monitor (NDMC / NOAA / USDA)',
     // src/impact/sources.ts fetchUsdmClaims: `DM`, an integer 0 to 4.
     field: 'DM field, 0 (D0) to 4 (D4); where class polygons overlap at the point, the highest class is shown',
@@ -211,16 +212,24 @@ export const PRIORITY_ORDER_NOTE = 'Reading order, not a severity score.';
 
 /** What the order does and does not do, rendered with the table. */
 export const PRIORITY_RULE_STATEMENTS: readonly string[] = [
-  'The priority view lists the reads for the selected place in the order below: by row, then by the issuer\'s own class order inside the row. Ties keep one fixed hazard order: Drought, Fire, Heat, ENSO.',
+  `The priority view lists the reads for the selected place with the active mode's hazard first, whether or not it holds a ranked read. Inside that and after it the order is the one below: by row, then by the issuer's own class order inside the row. Ties keep one fixed hazard order: ${HAZARD_KEYS.map((hazard) => HAZARD_LABELS[hazard]).join(', ')}.`,
   'This is a reading order, not a severity score. DDM adds, weights and compares nothing across hazards, and computes no number: a read in a higher row is met sooner, it is not stated to be worse.',
   'One issuer product is one entry. Where a product answers for several days, its days share the entry, placed by its first class in this order.',
   'A read with no class in the table (no polygon, no area drawn, no product in effect, an issuer\'s lowest class) is listed after the ranked reads in the issuer\'s words. It is not an all-clear.',
-  'A hazard that was not read is listed after the ranked reads under its own state (loading, live (partial) or unavailable) with the reason. It is never dropped and never shown as clear.',
-  'Only current and near-term reads enter the order. Seasonal outlooks stay in the full detail, which this order never rearranges.'
+  'A hazard that was not read is listed after the ranked reads under its own state (loading, live (partial) or unavailable) with the reason. It is never shown as clear.',
+  'Only the reads of the horizon the map shows enter the order. The full detail holds all three horizons, and this order never rearranges it.'
 ];
 
-/** The horizons whose cells enter the order. */
+/** The horizons whose cells enter the order when no map horizon is given. */
 export const PRIORITY_HORIZONS: readonly HorizonKey[] = ['current', 'nearTerm'];
+
+/** What the map shows, which the order follows. */
+export interface PriorityView {
+  /** The active mode's hazard: its reads lead, every other keeps its place (DESIGN B3). */
+  readonly hazard?: HazardKey;
+  /** The map's horizon: only its cells enter the order (DESIGN B4). Unset: PRIORITY_HORIZONS. */
+  readonly horizon?: HorizonKey;
+}
 
 /** A claim that carries a reading, with the cell it was read in. */
 export interface PriorityMember {
@@ -257,12 +266,6 @@ export interface PriorityUnrankedRead {
   readonly headline: string | null;
 }
 
-/** A cell that holds claims but no reading: its leading claim, as text. */
-export interface PriorityTextRead {
-  readonly horizon: HorizonKey;
-  readonly claim: SourcedClaim;
-}
-
 /** A cell that is not fully read: its own state and reason. */
 export interface PriorityCellState {
   readonly horizon: HorizonKey;
@@ -274,14 +277,13 @@ export interface PriorityCellState {
 export interface PriorityRest {
   readonly hazard: HazardKey;
   readonly reads: readonly PriorityUnrankedRead[];
-  readonly texts: readonly PriorityTextRead[];
   readonly states: readonly PriorityCellState[];
 }
 
 export interface PriorityOrder {
   /** Ranked entries in reading order. */
   readonly ranked: readonly PriorityEntry[];
-  /** Everything else, by hazard in the fixed hazard order. */
+  /** Everything else, by hazard: the mode's first, then the fixed hazard order. */
   readonly rest: readonly PriorityRest[];
 }
 
@@ -452,7 +454,7 @@ function reasonFor(reading: ClaimReading): string {
       return `${floor}${reading.wildfire} current mapped NIFC wildfire ${verb} the bounding box around this selection`;
     }
     case 'usdm-category':
-      return `U.S. Drought Monitor: ${readingHeadline(reading)} at the selected point`;
+      return `U.S. Drought Monitor: ${readingHeadline(reading)}${reading.scope === 'area' ? ', the worst in this area' : ' at the selected point'}`;
     case 'heatrisk-level':
       return `NWS HeatRisk: ${reading.value} ${HEATRISK_CATEGORIES[reading.value ?? 0]!.label} at the selected point, on the 0 to 4 scale`;
     case 'spc-fire-days': {
@@ -493,13 +495,18 @@ function unrankedHeadline(family: PriorityFamily, members: readonly PriorityMemb
 }
 
 /**
- * Order one place's current and near-term cells by the table.
+ * Order one place's cells at the map's horizon by the table, the active
+ * mode's hazard first (with no view given: current and near-term, no mode).
  *
  * `cells` may be given in any order; the result does not depend on it beyond
  * the stated ties. Cells of other horizons are ignored.
  */
-export function orderBriefing(cells: readonly PriorityCell[]): PriorityOrder {
-  const considered = PRIORITY_HORIZONS.flatMap((horizon) =>
+export function orderBriefing(cells: readonly PriorityCell[], view: PriorityView = {}): PriorityOrder {
+  const horizons = view.horizon !== undefined ? [view.horizon] : PRIORITY_HORIZONS;
+  const mode = view.hazard;
+  // The mode's hazard first; the others keep the fixed hazard order.
+  const modeRank = (hazard: HazardKey): number => (hazard === mode ? 0 : 1);
+  const considered = horizons.flatMap((horizon) =>
     HAZARD_KEYS.map((hazard) =>
       cells.find((cell) => cell.horizon === horizon && cell.hazard === hazard)
     ).filter((cell): cell is PriorityCell => cell !== undefined)
@@ -559,24 +566,19 @@ export function orderBriefing(cells: readonly PriorityCell[]): PriorityOrder {
   }
   ranked.sort(
     (a, b) =>
+      modeRank(a.entry.hazard) - modeRank(b.entry.hazard) ||
       compareRank(a.rank, b.rank) ||
       HAZARD_KEYS.indexOf(a.entry.hazard) - HAZARD_KEYS.indexOf(b.entry.hazard) ||
       a.order - b.order
   );
 
   const rest: PriorityRest[] = [];
-  for (const hazard of HAZARD_KEYS) {
+  for (const hazard of [...HAZARD_KEYS].sort((a, b) => modeRank(a) - modeRank(b))) {
     const own = considered.filter((cell) => cell.hazard === hazard);
-    const texts: PriorityTextRead[] = [];
     const states: PriorityCellState[] = [];
     for (const cell of own) {
-      // A cell whose claims carry no reading this order can place still has
-      // something to say: its leading claim stands in, as text.
-      const placed = cell.claims.some(
-        (claim) => claim.reading !== undefined && familyOf(claim.reading) !== null
-      );
-      const leading = cell.claims[0];
-      if (!placed && leading !== undefined) texts.push({ horizon: cell.horizon, claim: leading });
+      // A ready cell with no reading this order can place has no row: the
+      // full detail holds its sentence. Only a gap (any other state) is listed.
       if (cell.status !== 'ready') {
         states.push({
           horizon: cell.horizon,
@@ -590,13 +592,14 @@ export function orderBriefing(cells: readonly PriorityCell[]): PriorityOrder {
     }
     const reads = unranked.get(hazard) ?? [];
     const isRanked = ranked.some(({ entry }) => entry.hazard === hazard);
-    if (reads.length === 0 && texts.length === 0 && states.length === 0) {
-      if (isRanked) continue;
+    if (reads.length === 0 && states.length === 0) {
+      // Read, with nothing to list, is not "given no cell".
+      if (isRanked || own.length > 0) continue;
       // Nothing was given for this hazard at all (no cell in the input). It
       // is still listed, as not read, never left out.
-      states.push({ horizon: 'current', status: 'unavailable' });
+      states.push({ horizon: horizons[0]!, status: 'unavailable' });
     }
-    rest.push({ hazard, reads, texts, states });
+    rest.push({ hazard, reads, states });
   }
 
   return { ranked: ranked.map(({ entry }) => entry), rest };

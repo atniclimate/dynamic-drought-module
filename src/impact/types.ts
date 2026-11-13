@@ -18,6 +18,7 @@
  * supplies the long-range modifier.
  */
 
+import type { Geometry } from 'geojson';
 import type { RegionKey } from '../config/regions';
 import type { PlaceRef } from '../config/entities';
 import type { BriefingSourcePolicy } from './source-policy';
@@ -125,6 +126,8 @@ export interface UsdmCategoryReading {
   readonly kind: 'usdm-category';
   readonly dm: 0 | 1 | 2 | 3 | 4 | null;
   readonly window?: ReadingWindow;
+  /** 'area' when `dm` is the worst category meeting the place's own outline; omitted for a point read. */
+  readonly scope?: 'area';
 }
 
 /** NWS HeatRisk class at a point for one 24-hour period: 0 to 4, or null for
@@ -572,6 +575,13 @@ export interface BoundarySelectionContext {
    * not a click, so point reads must not say "the clicked point". Omitted for a click.
    */
   readonly pointInsidePlace?: boolean;
+  /**
+   * The place's whole outline as its publishing service supplied it, set only
+   * beside `pointInsidePlace` (a search, Locate, Place Studio or State
+   * briefing). The USDM read is made over it (sources.ts `fetchUsdmClaims`).
+   * Never a click's tile-clipped outline.
+   */
+  readonly placeGeometry?: Geometry | null;
   /**
    * The service's own area name ('Census area: Creek OTSA'), set only when a
    * search titles the selection with a trusted formal Nation name. Shown beside

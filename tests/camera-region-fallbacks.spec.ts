@@ -288,7 +288,7 @@ test.describe('briefingSourcePolicy: impact synthesis gated by the place, with o
     expect(policy.geography.basis).toBe('region-framing');
     expect(policy.droughtImpact.enabled).toBe(false);
     expect(policy.droughtImpact.note).toBe(
-      'The briefing synthesis and resource routing are not validated outside the Pacific Northwest.'
+      'Northwest-curated resources and the Pacific Northwest ENSO tendency are not read outside the Pacific Northwest; every other briefing source reads where its issuer covers the place.'
     );
   });
 
@@ -319,7 +319,7 @@ test.describe('briefingSourcePolicy: impact synthesis gated by the place, with o
     // synthesis leaks onto a real Alaska place under the WA camera.
     expect(policy.droughtImpact.enabled).toBe(false);
     expect(policy.droughtImpact.note).toBe(
-      'No briefing support for Alaska or Hawaii.'
+      'Northwest-curated resources and the Pacific Northwest ENSO tendency are not read for Alaska or Hawaii; every other briefing source reads where its issuer covers the place.'
     );
   });
 
@@ -333,14 +333,15 @@ test.describe('briefingSourcePolicy: impact synthesis gated by the place, with o
     expect(policy.geography.postalCode).toBe('TX');
     expect(policy.droughtImpact.enabled).toBe(false);
     expect(policy.droughtImpact.note).toBe(
-      'The briefing synthesis and resource routing are not validated outside the Pacific Northwest.'
+      'Northwest-curated resources and the Pacific Northwest ENSO tendency are not read outside the Pacific Northwest; every other briefing source reads where its issuer covers the place.'
     );
     // DR-075 a's gate is a separate branch of the same policy (the national
-    // heat capability by geography key) and DR-090 does not reach it. That
-    // the matrix collapse in hydrate.ts hides this available lane is a
-    // rendering question on the S30 owner card, not a policy change here.
+    // heat capability by geography key) and DR-090 does not reach it. Since
+    // DR-256 the disabled synthesis gates only the Northwest-curated
+    // resources: the drought sources read by their own coverage too.
     expect(policy.sources.cpcSeasonalTemp.state).toBe('available');
     expect(policy.sources.pointHeat.state).toBe('available');
+    expect(policy.sources.usdm.state).toBe('available');
   });
 
   test('a place with its own containing.state (OR) reads the place, not the national camera: synthesis stays enabled', () => {

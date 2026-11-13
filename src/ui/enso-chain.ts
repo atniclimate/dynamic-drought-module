@@ -344,7 +344,8 @@ function readPlace(state: Held): void {
       if (!current()) return;
       const fetchers = { cpcSeasonalTemp: sources.fetchCpcSeasonalTempClaims, usdm: sources.fetchUsdmClaims };
       for (const read of open) {
-        void fetchers[read.key](context, signal).then(
+        // The chain's "here" link states a point read (wherePhrase); the place's outline is the Drought tile's area read.
+        void fetchers[read.key]({ ...context, placeGeometry: null }, signal).then(
           (result) => {
             const claim =
               result.claims.find((candidate) => candidate.reading?.kind === read.kind) ?? result.claims[0];

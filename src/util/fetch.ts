@@ -14,6 +14,47 @@
  */
 
 /**
+ * A request that ran out its own time budget. It is an `AbortError` by name so
+ * every caller that already treats a helper abort as transient keeps working,
+ * and it is told apart from the caller's cancel by `isFetchTimeout`: a cancel
+ * logs nothing, a timeout says the source did not answer in time (B7).
+ */
+export class FetchTimeoutError extends DOMException {
+  constructor(timeoutMs: number) {
+    super(`Request exceeded its ${timeoutMs} ms budget.`, 'AbortError');
+  }
+}
+
+/** True for a budget timeout raised by these helpers, never for a cancel. */
+export function isFetchTimeout(err: unknown): boolean {
+  return err instanceof FetchTimeoutError;
+}
+
+/**
+ * One budget timer: aborts `ctrl` when `timeoutMs` passes, and turns the
+ * resulting abort into a `FetchTimeoutError` unless the master signal also
+ * aborted (that is a cancel and stays an ordinary `AbortError`).
+ */
+function armBudget(
+  ctrl: AbortController,
+  masterSignal: AbortSignal | null,
+  timeoutMs: number
+): { stop: () => void; classify: (err: unknown) => unknown } {
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    ctrl.abort();
+  }, timeoutMs);
+  return {
+    stop: () => clearTimeout(timer),
+    classify: (err) =>
+      timedOut && !masterSignal?.aborted && err instanceof DOMException && err.name === 'AbortError'
+        ? new FetchTimeoutError(timeoutMs)
+        : err
+  };
+}
+
+/**
  * Read the body through an explicit reader so an abort can cancel a stalled
  * stream before consumption finishes.
  */
@@ -78,7 +119,7 @@ export async function fetchJsonWithBudget(
 
   const onMasterAbort = (): void => ctrl.abort();
   if (masterSignal) masterSignal.addEventListener('abort', onMasterAbort);
-  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  const budget = armBudget(ctrl, masterSignal, timeoutMs);
 
   try {
     const response = await fetch(url, { ...(opts ?? {}), signal: ctrl.signal });
@@ -88,8 +129,10 @@ export async function fetchJsonWithBudget(
     }
     const bytes = await readBodyBytes(response, ctrl.signal, maxDecodedBytes);
     return JSON.parse(new TextDecoder().decode(bytes ?? new Uint8Array())) as unknown;
+  } catch (err) {
+    throw budget.classify(err);
   } finally {
-    clearTimeout(timer);
+    budget.stop();
     if (masterSignal) masterSignal.removeEventListener('abort', onMasterAbort);
   }
 }
@@ -126,7 +169,7 @@ export async function fetchBufferedWithBudget(
   }
   const onMasterAbort = (): void => ctrl.abort();
   masterSignal?.addEventListener('abort', onMasterAbort);
-  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  const budget = armBudget(ctrl, masterSignal, timeoutMs);
   try {
     const response = await fetch(url, { ...(opts ?? {}), signal: ctrl.signal });
     const body = await readBodyBytes(response, ctrl.signal, maxDecodedBytes);
@@ -141,8 +184,10 @@ export async function fetchBufferedWithBudget(
       statusText: response.statusText,
       headers: response.headers
     });
+  } catch (err) {
+    throw budget.classify(err);
   } finally {
-    clearTimeout(timer);
+    budget.stop();
     masterSignal?.removeEventListener('abort', onMasterAbort);
   }
 }

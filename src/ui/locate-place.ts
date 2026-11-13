@@ -392,6 +392,7 @@ export async function openTribalBriefingFor(
     ...raw,
     bbox,
     pointInsidePlace: true,
+    placeGeometry: geometry,
     ...(words.areaLabel ? { areaLabel: words.areaLabel } : {})
   };
   // The briefing answers in the sheet at half: frame for it, as the state path does.

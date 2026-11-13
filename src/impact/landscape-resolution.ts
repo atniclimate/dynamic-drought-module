@@ -6,6 +6,9 @@
  * the 531 kB artifact.
  */
 
+import { CAPABILITY_AXIS_LABELS } from '../config/capability-matrix';
+import type { CanonicalGeography } from '../config/geography';
+import { placeCapabilityNote } from '../config/place-coverage';
 import type { BoundarySelectionContext } from './types';
 
 export interface LandscapeEcoregionKey {
@@ -24,7 +27,7 @@ export type LandscapeSelectionResolution =
     };
 
 export const UNSUPPORTED_LANDSCAPE_SELECTION_NOTE =
-  'The shipped landscape signature is indexed by EPA Omernik ecoregion. This selected boundary does not resolve to one exact bundle, so DDM does not substitute a centroid or click point. Select a Pacific Northwest Level III or Level IV ecoregion to read this context.';
+  'The shipped landscape signature is indexed by EPA Omernik ecoregion. This selected boundary does not resolve to one exact bundle, so DDM does not substitute a centroid or click point.';
 
 export const UNKEYED_ECOREGION_LANDSCAPE_NOTE =
   'This ecoregion selection does not carry an EPA Level III or Level IV code, so it cannot be matched to the baked signature.';
@@ -48,6 +51,26 @@ export function selectedLandscapeEcoregion(
   if (level4) return { level: 4, code: level4 };
   const level3 = textProperty(context.properties, 'US_L3CODE');
   return level3 ? { level: 3, code: level3 } : null;
+}
+
+/** The Landscape context section draws only for an ecoregion selection, the one place the signature is indexed by. */
+export function landscapeContextShown(context: BoundarySelectionContext): boolean {
+  return context.kind === 'ecoregion';
+}
+
+/**
+ * Any other place lists the signature among the sources that do not cover it
+ * (DR-256, B2), with the place's own capability note and no instruction.
+ */
+export function landscapeUncoveredGroup(
+  context: BoundarySelectionContext,
+  geography: CanonicalGeography
+): { readonly labels: readonly string[]; readonly note: string } | null {
+  if (landscapeContextShown(context)) return null;
+  return {
+    labels: [CAPABILITY_AXIS_LABELS.landscapeSignature],
+    note: placeCapabilityNote(geography, 'landscapeSignature')
+  };
 }
 
 export function resolveLandscapeSelection(

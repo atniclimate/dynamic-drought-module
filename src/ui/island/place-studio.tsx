@@ -39,6 +39,8 @@ import type {
 import { URLS } from '../../config/urls';
 import { createBriefingSkeleton } from '../../impact/briefing';
 import { selectBriefNarrativeLine } from '../../impact/brief-narrative-selector';
+import { SHELL_HAZARD_KEY } from '../../impact/horizon-chrome';
+import { getCommittedSnapshot } from '../../state/cluster-service';
 import { buildBoundaryContext, caveatFor } from '../../impact/context';
 import {
   bboxIntersection,
@@ -438,7 +440,7 @@ function resolvedSelection(
     title
   );
   return {
-    context: { ...rawContext, bbox, pointInsidePlace: true },
+    context: { ...rawContext, bbox, pointInsidePlace: true, placeGeometry: geometry },
     geometry,
     bbox
   };
@@ -1309,9 +1311,10 @@ function PlaceStudio() {
           const { context } = resolved;
           const { signal } = masterAbort;
           setNarrativeKindLabel(briefing.landKind);
+          const modeHazard = SHELL_HAZARD_KEY[getCommittedSnapshot().selectedHazard];
           const publish = (): void => {
             if (signal.aborted) return;
-            const line = selectBriefNarrativeLine(briefing);
+            const line = selectBriefNarrativeLine(briefing, modeHazard);
             if (line) {
               setNarrativeLine(line);
               setNarrativeStatus('ready');
@@ -1332,7 +1335,6 @@ function PlaceStudio() {
                 .catch(warn)
             : Promise.resolve();
           const drought =
-            briefing.sourcePolicy.droughtImpact.enabled &&
             sourceMayRun(briefing.sourcePolicy, 'usdm')
               ? fetchUsdmClaims(context, signal)
                   .then((result) => {
@@ -1342,7 +1344,7 @@ function PlaceStudio() {
                   .catch(warn)
               : Promise.resolve();
           void Promise.all([heat, drought]).then(() => {
-            if (!signal.aborted && !selectBriefNarrativeLine(briefing)) {
+            if (!signal.aborted && !selectBriefNarrativeLine(briefing, modeHazard)) {
               setNarrativeStatus('unavailable');
             }
           });

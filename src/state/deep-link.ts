@@ -277,6 +277,8 @@ export async function openStateBriefing(
     feature.geometry,
     lngLat
   );
-  const context = bbox ? { ...rawContext, bbox, pointInsidePlace: true } : rawContext;
+  const context = bbox
+    ? { ...rawContext, bbox, pointInsidePlace: true, placeGeometry: feature.geometry }
+    : rawContext;
   openImpactPanel(context);
 }

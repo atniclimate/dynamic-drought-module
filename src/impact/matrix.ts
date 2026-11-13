@@ -24,7 +24,9 @@
  * settles lanes and calls `applyMatrix` after each one.
  */
 
+import { HAZARD_CLUSTER_KEYS } from '../config/clusters';
 import type { BriefingSourceKey } from '../config/source-capability';
+import { SHELL_HAZARD_KEY } from './horizon-chrome';
 import type {
   HazardCell,
   HazardKey,
@@ -34,13 +36,8 @@ import type {
   SourcedClaim
 } from './types';
 
-/** The hazard rows in display order. */
-export const HAZARD_KEYS: readonly HazardKey[] = [
-  'drought',
-  'fire',
-  'heat',
-  'enso'
-];
+/** The hazard rows in display order: one per mode, in the mode table's order (DR-113). */
+export const HAZARD_KEYS: readonly HazardKey[] = HAZARD_CLUSTER_KEYS.map((key) => SHELL_HAZARD_KEY[key]);
 
 /** The horizon columns in display order. */
 export const HORIZON_KEYS: readonly HorizonKey[] = [

@@ -142,7 +142,7 @@ const WARNED = {
   warningLabel: 'Mapped wildfire perimeter'
 };
 
-const NOTHING_MAPPED = "Nothing mapped here on the active condition layers; each layer's reading is below.";
+const NOTHING_MAPPED = "Nothing mapped in this area on the active condition layers; each layer's reading is below.";
 
 /** A PlaceConditions with the given body rows and a present-only head line. */
 function conditionsOf(rows, headText, warningLabel = null) {
@@ -459,7 +459,7 @@ test('drought rows carry the issuer clock the read feature states, and only that
     ).rows[0];
   assert.deepEqual(nadm({ DROUGHTCAT: 'd2', YEAR_MONTH: '202608' }), {
     label: 'Drought',
-    text: 'D2 Severe drought (North American Drought Monitor)',
+    text: 'D2 Severe drought, the worst in this area (North American Drought Monitor)',
     clock: { kind: 'point', meaning: 'month', label: 'Consensus month', at: { precision: 'month', month: '2026-08' } }
   });
   assert.equal(nadm({ DROUGHTCAT: 'D2' }).clock, undefined, 'an absent YEAR_MONTH fabricated a clock');
@@ -469,7 +469,7 @@ test('drought rows carry the issuer clock the read feature states, and only that
     explanation: 'As the issuer states it; DDM does not read it as a full date.'
   });
   const absence = nadm({ DROUGHTCAT: 'none here' });
-  assert.deepEqual(absence, { label: 'Drought', text: 'No drought category polygon here (North American Drought Monitor).' });
+  assert.deepEqual(absence, { label: 'Drought', text: 'No drought category polygon in this area (North American Drought Monitor).' });
 
   const usdm = (props) =>
     withLayers(['usdm'], () =>
@@ -486,6 +486,51 @@ test('drought rows carry the issuer clock the read feature states, and only that
   // A clock the frame renders, and a supplied value it shows as supplied.
   const html = buildStatePopupHtml({ NAME: 'Fixture State' }, conditionsOf([usdm({ DM: 1, MapDate: 'Tuesday' })], 'Drought'));
   assert.ok(textOf(slot(html, 'conditions')).includes('Map date Tuesday As the issuer states it; DDM does not read it as a full date.'));
+});
+
+// B8 (2026-11-13): a place's drought row reads the place's area, not the clicked pixel.
+// The double answers the place's box (a pair of corners) with the polygons and a bare point with nothing, as a State's clear corner does.
+function patchyMap(fills, container) {
+  const map = fakeMap(fills, container);
+  return {
+    ...map,
+    queryRenderedFeatures: (region, options) => (Array.isArray(region) && Array.isArray(region[0]) ? map.queryRenderedFeatures(region, options) : [])
+  };
+}
+
+test('drought in a place reads the worst category touching the place, not the pixel; a clipped place answers a state word', () => {
+  const polygons = (cats) => cats.map((DROUGHTCAT, i) => ({ properties: { DROUGHTCAT }, geometry: square(-122 + i, 47) }));
+  const nadm = (cats, container, place = PLACE) =>
+    withLayers(['nadm-drought'], () => buildPlaceConditionsHtml(patchyMap({ 'nadm-drought-fill': polygons(cats) }, container), [0, 0], place));
+  const read = nadm(['D0', 'D3', 'D1']);
+  assert.equal(read.rows[0].text, 'D3 Extreme drought, the worst in this area (North American Drought Monitor)');
+  assert.deepEqual(read.head, [{ text: 'Drought' }]);
+  // A polygon outside the place is not the place's.
+  assert.equal(nadm(['D2'], undefined, square(-100, 30)).rows[0].text, 'No drought category polygon in this area (North American Drought Monitor).');
+  // The box reaches the screen edge: only part of the place was rendered, so the layer's state word answers, never an absence.
+  const clipped = nadm([], { clientWidth: 600, clientHeight: 100_000 });
+  assert.deepEqual(clipped.rows, [{ label: 'Drought', text: getLayerDef('nadm-drought').name, state: 'live' }]);
+  assert.doesNotMatch(clipped.head[0].text, /Nothing mapped/);
+  // A clipped read that did find a category names no class (the visible part's worst is not the place's): the state word answers.
+  const clippedHit = nadm(['D2'], { clientWidth: 600, clientHeight: 100_000 });
+  assert.deepEqual(clippedHit.rows, [{ label: 'Drought', text: getLayerDef('nadm-drought').name, state: 'live' }]);
+  const clippedUsdm = withLayers(['usdm'], () =>
+    buildPlaceConditionsHtml(
+      patchyMap({ 'usdm-frame-a-fill': [{ properties: { DM: 2 }, geometry: square(-122, 47) }] }, { clientWidth: 600, clientHeight: 100_000 }),
+      [0, 0],
+      PLACE
+    )
+  );
+  assert.doesNotMatch(clippedUsdm.rows[0].text, /D2/);
+  assert.equal(clippedUsdm.rows[0].state, 'live');
+  // USDM behaves alike.
+  const usdm = withLayers(['usdm'], () =>
+    buildPlaceConditionsHtml(patchyMap({ 'usdm-frame-a-fill': [{ properties: { DM: 2 }, geometry: square(-122, 47) }] }), [0, 0], PLACE)
+  );
+  assert.equal(usdm.rows[0].text, 'D2 Severe drought, the worst in this area (U.S. Drought Monitor, NDMC/NOAA/USDA)');
+  // With no place geometry the read is the pixel, and says so.
+  const pixel = withLayers(['nadm-drought'], () => buildPlaceConditionsHtml(patchyMap({ 'nadm-drought-fill': polygons(['D3']) }), [0, 0]));
+  assert.equal(pixel.rows[0].text, 'No drought category polygon here (North American Drought Monitor).');
 });
 
 test('an alert window end is an instant only with its zone; anything else is shown as supplied', () => {
@@ -615,7 +660,7 @@ test('a feature value that is not text is absent, never String()-ed into a throw
   assert.deepEqual(
     rows.map((row) => row.items ?? row.text),
     [
-      'No drought category polygon here (North American Drought Monitor).',
+      'No drought category polygon in this area (North American Drought Monitor).',
       'No active NWS heat or fire weather watch, warning, or advisory in this area. Only those products are requested.',
       ['Mapped fire perimeter']
     ]
@@ -679,7 +724,7 @@ test('the head names only the conditions present at the place; an absence row is
   );
   assert.deepEqual(PRESENT_ONLY.head, [{ text: 'Drought' }]);
   assert.deepEqual(PRESENT_ONLY.rows.map((row) => row.text), [
-    'D1 Moderate drought (North American Drought Monitor)',
+    'D1 Moderate drought, the worst in this area (North American Drought Monitor)',
     'No mapped wildfire perimeter in this area (NIFC WFIGS).'
   ]);
   const html = buildAiannhPopupHtml({ NAME: 'Fixture Area', AIANNHCC: 'D1' }, PRESENT_ONLY);
@@ -785,7 +830,7 @@ test('a present condition names the head even beside an unread layer (head branc
   );
   assert.deepEqual(result.head, [{ text: 'Drought' }]);
   assert.deepEqual(result.rows, [
-    { label: 'Drought', text: 'D1 Moderate drought (North American Drought Monitor)' },
+    { label: 'Drought', text: 'D1 Moderate drought, the worst in this area (North American Drought Monitor)' },
     { label: 'NWS alert', text: 'Unavailable, so this card cannot say whether one is active in this area.' }
   ]);
 });
@@ -808,7 +853,7 @@ test('a confirmed empty read on every active layer still says "Nothing mapped he
   assert.deepEqual(
     result.rows.map((row) => row.text),
     [
-      'No drought category polygon here (North American Drought Monitor).',
+      'No drought category polygon in this area (North American Drought Monitor).',
       'No active NWS heat or fire weather watch, warning, or advisory in this area. Only those products are requested.',
       'No mapped wildfire perimeter in this area (NIFC WFIGS).'
     ]
@@ -1036,7 +1081,7 @@ test('a layer that failed to activate beside a complete read: not every layer re
   );
   assert.deepEqual(result.head, [{ text: NOT_EVERY_READ }]);
   assert.deepEqual(result.rows, [
-    { label: 'Drought', text: 'No drought category polygon here (North American Drought Monitor).' },
+    { label: 'Drought', text: 'No drought category polygon in this area (North American Drought Monitor).' },
     { label: 'Wildfire', text: layerName('nifc-fires'), state: 'unavailable' }
   ]);
 });
@@ -1052,9 +1097,9 @@ test('an off-intent failed custom-set layer has no switched-on sentence and no r
     const beside = withRegistry([{ key: 'nadm-drought', status: 'ready', on: true }], () =>
       buildPlaceConditionsHtml(fakeMap({ 'nadm-drought-fill': [] }), [0, 0], PLACE)
     );
-    assert.deepEqual(beside.head, [{ text: "Nothing mapped here on the active condition layers; each layer's reading is below." }]);
+    assert.deepEqual(beside.head, [{ text: "Nothing mapped in this area on the active condition layers; each layer's reading is below." }]);
     assert.deepEqual(beside.rows, [
-      { label: 'Drought', text: 'No drought category polygon here (North American Drought Monitor).' }
+      { label: 'Drought', text: 'No drought category polygon in this area (North American Drought Monitor).' }
     ]);
   });
 });
@@ -1072,7 +1117,7 @@ test('an enabled failed layer keeps its unavailable row until its on-intent is c
     const disabled = buildPlaceConditionsHtml(map, [0, 0], PLACE);
     assert.equal(registry.getStatus('nifc-fires'), 'error', 'the failure status remains');
     assert.ok(disabled.rows.every((row) => row.label !== 'Wildfire'));
-    assert.deepEqual(disabled.head, [{ text: "Nothing mapped here on the active condition layers; each layer's reading is below." }]);
+    assert.deepEqual(disabled.head, [{ text: "Nothing mapped in this area on the active condition layers; each layer's reading is below." }]);
   });
 });
 
@@ -1106,9 +1151,14 @@ test('a ready USDM change register does not assert nothing is mapped (Codex P2 1
         [0, 0]
       )
     );
-    assert.match(result.rows[0].text, /change register/);
-    assert.doesNotMatch(result.head[0].text, /Nothing mapped here/, JSON.stringify(result));
+    assert.match(result.rows[0].text, /change register.*displayed at this point\.$/);
+    assert.doesNotMatch(result.head[0].text, /Nothing mapped/, JSON.stringify(result));
     assert.deepEqual(result.head, [{ text: NOT_EVERY_READ }]);
+    // A place's card speaks of the area, as its other drought sentences do.
+    const area = withRegistry([{ key: 'usdm', status: 'ready', on: true }], () =>
+      buildPlaceConditionsHtml(fakeMap({ 'usdm-change-fill': [], 'usdm-frame-a-fill': [], 'usdm-frame-b-fill': [] }), [0, 0], PLACE)
+    );
+    assert.match(area.rows[0].text, /change register.*displayed in this area\.$/);
   } finally {
     timeline.setUsdmMode('absolute');
   }
@@ -1121,8 +1171,11 @@ test('the CPC Drought Outlook alone is a register row, never "no condition layer
   );
   assert.equal(result.rows.length, 1, JSON.stringify(result));
   assert.equal(result.rows[0].label, 'Drought');
-  assert.match(result.rows[0].text, /CPC Drought Outlook.*no current category/);
+  assert.match(result.rows[0].text, /CPC Drought Outlook.*no current category is displayed in this area\.$/);
   assert.deepEqual(result.head, [{ text: NOT_EVERY_READ }]);
+  // A pixel read keeps the pixel's words.
+  const pixel = withRegistry([{ key: 'drought', status: 'ready', on: true }], () => buildPlaceConditionsHtml(fakeMap({}), [0, 0]));
+  assert.match(pixel.rows[0].text, /no current category is displayed at this point\.$/);
   // An outlook asked for that failed to activate joins the unread check.
   const failed = withRegistry([{ key: 'drought', status: 'error', on: false }], () =>
     buildPlaceConditionsHtml(fakeMap({}), [0, 0], PLACE)

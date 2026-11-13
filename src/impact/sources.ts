@@ -38,7 +38,7 @@ import {
 } from '../util/bbox';
 import { naiveBboxSuggestsAntimeridianCrossing } from '../util/antimeridian';
 import { ExpiringLruCache } from '../util/bounded-cache';
-import { fetchJsonWithBudget } from '../util/fetch';
+import { fetchJsonWithBudget, isFetchTimeout } from '../util/fetch';
 import { heatRiskMoment, isoDayLocal } from '../util/iso-day';
 import { isObject } from '../util/guards';
 import { trendLineSvg, type TrendPoint } from '../ui/charts';
@@ -237,9 +237,20 @@ export function featuresOf(json: unknown): unknown[] {
  * for example "The U.S. Drought Monitor".
  */
 export function upstreamNote(err: unknown, service: string): string {
+  if (isFetchTimeout(err)) return `${service} did not answer in time.`;
   return err instanceof EsriServiceError
     ? `${service} is unavailable: it answered with an error rather than data.`
     : `${service} did not respond.`;
+}
+
+/**
+ * Log one failed source read, by outcome (B7). A cancel never reaches here (each
+ * caller returns quietly when its signal aborted); a budget timeout logs once as
+ * a timeout; any other failure logs today's line with the error.
+ */
+function warnSourceFailure(what: string, err: unknown): void {
+  if (isFetchTimeout(err)) console.warn(`[impact] ${what} did not answer in time.`);
+  else console.warn(`[impact] ${what} failed.`, err);
 }
 
 /** An epoch-millisecond upstream Date field, or null when absent or unusable. */
@@ -442,11 +453,11 @@ export async function fetchHeatRiskClaims(
     };
   } catch (err) {
     if (signal.aborted) return { claims: [], ok: false };
-    console.warn('[impact] HeatRisk identify failed.', err);
+    warnSourceFailure('HeatRisk identify', err);
     return {
       claims: [],
       ok: false,
-      note: 'The National Weather Service HeatRisk classification did not respond.'
+      note: upstreamNote(err, 'The National Weather Service HeatRisk classification')
     };
   }
 }
@@ -478,31 +489,176 @@ const USDM_OUT_FIELDS = 'DM,MapDate,ValidStart,ValidEnd';
 const USDM_PERCENTILE_BASIS =
   'The U.S. Drought Monitor assigns D0 to D4 by percentile; the NDMC\'s "example percentile range for most indicators" is D0 20.01-30.00, D1 10.01-20.00, D2 5.01-10.00, D3 2.01-5.00, D4 0.00-2.00 (NDMC, Drought Classification).';
 
+/** About 10,000 vertices: a form body near 280 KB, posted inside the read's own time limit. */
+const MAX_OUTLINE_CHARS = 200_000;
+
 /**
- * Query the United States Drought Monitor FeatureServer for the polygons that
- * contain the clicked point and translate the worst (highest) category present
- * into claims: the analyzed drought state, then the derived wildfire
- * implication. (The former extreme-heat companion was removed by ruling
- * D-0.8.0-047 and is not rebuilt here.) If no polygon contains the point, the
- * claim says only that, in the popup's own words: with no analyzed-area mask
- * in the client, no polygon does not confirm no drought.
+ * Simplification tolerances in degrees, tried in turn until the outline fits:
+ * about 110 m doubling to about 7 km. A simplified outline can miss or add a
+ * sliver at its edge, which matters nothing at the drought map's scale (the
+ * USDM draws its categories over whole regions).
+ */
+const OUTLINE_TOLERANCES = [0.001, 0.002, 0.004, 0.008, 0.016, 0.032, 0.064];
+
+/** Squared distance from `p` to the segment `a`-`b` (to `a` when the segment is a point). */
+function segmentDistance2(p: number[], a: number[], b: number[]): number {
+  const dx = b[0]! - a[0]!;
+  const dy = b[1]! - a[1]!;
+  const length2 = dx * dx + dy * dy;
+  const t = length2 === 0 ? 0 : Math.max(0, Math.min(1, ((p[0]! - a[0]!) * dx + (p[1]! - a[1]!) * dy) / length2));
+  const ex = p[0]! - a[0]! - t * dx;
+  const ey = p[1]! - a[1]! - t * dy;
+  return ex * ex + ey * ey;
+}
+
+/** The index in (from, to) farthest from the segment `from`-`to`, with its squared distance. */
+function farthest(ring: number[][], from: number, to: number): [number, number] {
+  let index = -1;
+  let best = -1;
+  for (let i = from + 1; i < to; i += 1) {
+    const d = segmentDistance2(ring[i]!, ring[from]!, ring[to]!);
+    if (d > best) [index, best] = [i, d];
+  }
+  return [index, best];
+}
+
+/**
+ * Douglas-Peucker over one closed ring (first vertex equals last), keeping
+ * the place's own vertices only and never fewer than four points, so a tiny
+ * islet or hole is still sent.
+ */
+function simplifyRing(ring: number[][], tolerance: number): number[][] {
+  const last = ring.length - 1;
+  if (last < 4) return ring;
+  const keep = new Uint8Array(ring.length);
+  keep[0] = keep[last] = 1;
+  // The closing segment is a point, so the first split is the vertex farthest from the start.
+  const [far] = farthest(ring, 0, last);
+  keep[far] = 1;
+  const limit = tolerance * tolerance;
+  const spans: [number, number][] = [[0, far], [far, last]];
+  for (let span = spans.pop(); span; span = spans.pop()) {
+    const [from, to] = span;
+    const [i, d] = farthest(ring, from, to);
+    if (i < 0 || d <= limit) continue;
+    keep[i] = 1;
+    spans.push([from, i], [i, to]);
+  }
+  if (keep.reduce((sum, k) => sum + k, 0) < 4) {
+    const [a, da] = farthest(ring, 0, far);
+    const [b, db] = farthest(ring, far, last);
+    keep[da >= db ? a : b] = 1;
+  }
+  return ring.filter((_, i) => keep[i] === 1);
+}
+
+/**
+ * A place's own Polygon or MultiPolygon as an ArcGIS `esriGeometryPolygon` in
+ * WGS 84: rings in the ArcGIS winding (exterior clockwise, holes
+ * counter-clockwise; GeoJSON winds the other way) and rounded as the point
+ * query is, each rounded vertex sent once. An outline longer than
+ * `MAX_OUTLINE_CHARS` is simplified (`OUTLINE_TOLERANCES`) until it fits.
+ * Null when the geometry is not a polygon, a ring is malformed, a longitude
+ * leaves [-180, 180] (an unwrapped ring across the antimeridian, which the
+ * service would read as a different place), or the outline does not fit even
+ * at the coarsest tolerance.
+ */
+export function esriPlacePolygon(geometry: Geometry | null | undefined): string | null {
+  const polygons =
+    geometry?.type === 'Polygon' ? [geometry.coordinates] : geometry?.type === 'MultiPolygon' ? geometry.coordinates : null;
+  if (!polygons) return null;
+  const rounded: { ring: number[][]; exterior: boolean }[] = [];
+  for (const polygon of polygons) {
+    for (const [index, source] of polygon.entries()) {
+      if (source.length < 4) return null;
+      const ring: number[][] = [];
+      for (const [lng, lat] of source) {
+        if (!Number.isFinite(lng) || !Number.isFinite(lat) || Math.abs(lng!) > 180 || Math.abs(lat!) > 90) return null;
+        const point = [round4(lng!), round4(lat!)];
+        const last = ring[ring.length - 1];
+        if (!last || last[0] !== point[0] || last[1] !== point[1]) ring.push(point);
+      }
+      // A ring smaller than the rounding (an islet or hole under about 11 m) has nothing to send.
+      if (ring.length < 4) continue;
+      rounded.push({ ring, exterior: index === 0 });
+    }
+  }
+  if (rounded.length === 0) return null;
+  for (const tolerance of [0, ...OUTLINE_TOLERANCES]) {
+    const rings = rounded.map(({ ring: source, exterior }) => {
+      const ring = tolerance === 0 ? [...source] : simplifyRing(source, tolerance);
+      // Twice the signed area: positive is counter-clockwise.
+      let turn = 0;
+      for (const [i, [x, y]] of ring.entries()) {
+        const [nx, ny] = ring[(i + 1) % ring.length]!;
+        turn += x! * ny! - nx! * y!;
+      }
+      if (exterior === turn > 0) ring.reverse();
+      return ring;
+    });
+    const outline = JSON.stringify({ rings, spatialReference: { wkid: 4326 } });
+    if (outline.length <= MAX_OUTLINE_CHARS) return outline;
+  }
+  return null;
+}
+
+/**
+ * Query the United States Drought Monitor FeatureServer and translate the
+ * worst (highest) category present into claims: the analyzed drought state,
+ * then the derived wildfire implication. (The former extreme-heat companion
+ * was removed by ruling D-0.8.0-047 and is not rebuilt here.)
+ *
+ * A place that carries its own outline (`placeGeometry`) is read over that
+ * outline: the outline is posted to the issuer's service, which returns every
+ * category polygon intersecting it, and the claim names the worst of them in
+ * the place card's words ("the worst in this area"). Any other selection (a
+ * click, or an outline the service cannot take) reads the polygons that
+ * contain its one point, stated as a point. If no polygon is found, the claim
+ * says only that, in the popup's own words: with no analyzed-area mask in the
+ * client, no polygon does not confirm no drought. An area answer the service
+ * cut at its transfer limit names no category and no absence (live, partial).
  */
 export async function fetchUsdmClaims(
   context: BoundarySelectionContext,
   signal: AbortSignal
 ): Promise<SourceResult> {
   const { lng, lat } = context.lngLat;
-  const url = `${URLS.usdmFeatureServer}/query?${esriPointQuery(lng, lat, USDM_OUT_FIELDS).toString()}`;
+  const pointQuery = esriPointQuery(lng, lat, USDM_OUT_FIELDS);
+  const outline = esriPlacePolygon(context.placeGeometry);
+  const area = outline !== null;
   const source = 'U.S. Drought Monitor (NDMC / NOAA / USDA)';
   const sourceUrl = 'https://droughtmonitor.unl.edu/';
-  // Where the read is: the user's click, or a point the app chose inside a selected place.
-  const at = context.pointInsidePlace ? 'at a point inside the selected place' : 'at the clicked point';
+  // Where the read is: the place's own area, the user's click, or a point the app chose inside a selected place.
+  const at = area ? 'in this area' : context.pointInsidePlace ? 'at a point inside the selected place' : 'at the clicked point';
 
   try {
-    const json: unknown = await fetchJson(url, GEOJSON_ACCEPT, signal);
+    let json: unknown;
+    if (outline !== null) {
+      // The outline can be far longer than a URL allows, so the same query is posted as a form.
+      // `f` stays in the URL (the service merges it with the form), so the read keeps the point read's `/query?` shape.
+      pointQuery.set('geometry', outline);
+      pointQuery.set('geometryType', 'esriGeometryPolygon');
+      pointQuery.delete('f');
+      json = await fetchJsonWithBudget(
+        `${URLS.usdmFeatureServer}/query?f=geojson`,
+        {
+          method: 'POST',
+          headers: { ...GEOJSON_ACCEPT, 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+          body: pointQuery
+        },
+        signal,
+        TIMEOUT_MS
+      );
+    } else {
+      json = await fetchJson(`${URLS.usdmFeatureServer}/query?${pointQuery.toString()}`, GEOJSON_ACCEPT, signal);
+    }
     if (signal.aborted) return { claims: [], ok: false };
 
     const features = featuresOf(json);
+    // A cut answer may have dropped a worse category: it states neither a class nor an absence.
+    if (isObject(json) && (json.exceededTransferLimit === true || (isObject(json.properties) && json.properties.exceededTransferLimit === true))) {
+      return { claims: [], ok: true, partial: true };
+    }
     let worst = -1;
     let mapDate: number | null = null;
     // The window the map speaks for, as the service states it: `ValidStart`
@@ -524,10 +680,11 @@ export async function fetchUsdmClaims(
     }
     // The class as data, beside the sentence (types.ts `ClaimReading`): the
     // same `worst` integer `DM` the sentences below state (0 is D0, 4 is D4),
-    // or null when no D0 to D4 polygon contains the point.
+    // or null when no D0 to D4 polygon contains the point (or meets the area).
     const usdmReading: UsdmCategoryReading = {
       kind: 'usdm-category',
       dm: worst < 0 ? null : (worst as 0 | 1 | 2 | 3 | 4),
+      ...(area ? { scope: 'area' as const } : {}),
       ...(validStart !== null || validEnd !== null
         ? {
             window: {
@@ -550,8 +707,10 @@ export async function fetchUsdmClaims(
         mapDate === null
           ? { retrieved: todayIso() }
           : { valid: isoDayUtc(mapDate), retrieved: todayIso() },
-      support: { reporting: `the USDM polygon ${at}` }
+      support: { reporting: area ? 'the USDM polygons in this area' : `the USDM polygon ${at}` }
     };
+    // The place card's area words (popup-conditions.ts droughtRow) for a category read over the place.
+    const worstHere = 'is the worst in this area';
     // "this week's map" is only true until Thursday's release: NDMC publishes
     // on Thursday using data through the previous Tuesday morning, so the map
     // date is named whenever the service returns it.
@@ -572,7 +731,7 @@ export async function fetchUsdmClaims(
         claims: [
           makeClaim({
             // For a click, the popup's no-polygon sentence (popup-conditions.ts), word for word.
-            text: `No D0-D4 category polygon ${context.pointInsidePlace ? at : 'here'} (U.S. Drought Monitor). This client has no analyzed-area mask, so this does not confirm no drought.${mapProduct}`,
+            text: `No D0-D4 category polygon ${area || context.pointInsidePlace ? at : 'here'} (U.S. Drought Monitor). This client has no analyzed-area mask, so this does not confirm no drought.${mapProduct}`,
             ...usdmShared,
             reading: usdmReading
           })
@@ -586,7 +745,9 @@ export async function fetchUsdmClaims(
         ok: true,
         claims: [
           makeClaim({
-            text: `This location is in a mapped drought category (DM ${worst}) in ${asOfMap}.${mapProduct}`,
+            text: area
+              ? `A mapped drought category (DM ${worst}) ${worstHere} in ${asOfMap}.${mapProduct}`
+              : `This location is in a mapped drought category (DM ${worst}) in ${asOfMap}.${mapProduct}`,
             ...usdmShared,
             support: { ...usdmShared.support, legendKey: 'usdm' },
             method: { basis: USDM_PERCENTILE_BASIS },
@@ -600,7 +761,7 @@ export async function fetchUsdmClaims(
       ok: true,
       claims: [
         makeClaim({
-          text: `This location is in ${impact.code} ${impact.label} as of ${asOfMap}. ${impact.summary}${mapProduct}`,
+          text: `${area ? `${impact.code} ${impact.label} ${worstHere}` : `This location is in ${impact.code} ${impact.label}`} as of ${asOfMap}. ${impact.summary}${mapProduct}`,
           ...usdmShared,
           support: { ...usdmShared.support, legendKey: 'usdm' },
           method: { basis: USDM_PERCENTILE_BASIS },
@@ -626,7 +787,7 @@ export async function fetchUsdmClaims(
           // attribute (DR-058 a): "ddm-drought-impact-modeling causal-chain
           // reads" was internal vocabulary inside a public claim.
           lineage: [
-            `USDM category ${at}`,
+            area ? 'USDM category, the worst in this area' : `USDM category ${at}`,
             'the documented USDM impact profile for that category, read through the DDM drought-impact model'
           ],
           lineageRef: 'ddm-drought-impact-modeling',
@@ -636,7 +797,7 @@ export async function fetchUsdmClaims(
     };
   } catch (err) {
     if (signal.aborted) return { claims: [], ok: false };
-    console.warn('[impact] USDM point query failed.', err);
+    warnSourceFailure(area ? 'USDM area query' : 'USDM point query', err);
     return { claims: [], ok: false, note: upstreamNote(err, 'The U.S. Drought Monitor') };
   }
 }
@@ -866,8 +1027,8 @@ export async function fetchDsciTrendClaims(
     };
   } catch (err) {
     if (signal.aborted) return { claims: [], ok: false };
-    console.warn('[impact] DSCI trend query failed.', err);
-    return { claims: [], ok: false, note: 'The USDM drought-severity trend did not respond.' };
+    warnSourceFailure('DSCI trend query', err);
+    return { claims: [], ok: false, note: upstreamNote(err, 'The USDM drought-severity trend') };
   }
 }
 
@@ -1145,7 +1306,7 @@ export async function fetchNifcClaims(
     };
   } catch (err) {
     if (signal.aborted) return { claims: [], ok: false };
-    console.warn('[impact] NIFC query failed.', err);
+    warnSourceFailure('NIFC query', err);
     return {
       claims: [],
       ok: false,
@@ -1313,9 +1474,10 @@ export async function fetchNwsAlertClaims(
     };
   } catch (err) {
     if (signal.aborted) return { claims: [], ok: false };
-    console.warn('[impact] NWS alerts query failed.', err);
+    // vocab-allow: names the NWS alerts service in a console warning, upstream product
+    warnSourceFailure('NWS alerts query', err);
     // vocab-allow: names the NWS alerts service, upstream product
-    return { claims: [], ok: false, note: 'The NWS alerts service did not respond.' };
+    return { claims: [], ok: false, note: upstreamNote(err, 'The NWS alerts service') };
   }
 }
 
@@ -1499,7 +1661,7 @@ export async function fetchCpcSeasonalTempClaims(
     };
   } catch (err) {
     if (signal.aborted) return { claims: [], ok: false };
-    console.warn('[impact] CPC seasonal temperature outlook query failed.', err);
+    warnSourceFailure('CPC seasonal temperature outlook query', err);
     return {
       claims: [],
       ok: false,
@@ -1787,13 +1949,19 @@ export async function fetchSpcFireOutlookClaims(
   if (signal.aborted) return { claims: [], ok: false };
 
   const allOutcomes: readonly SpcLayerOutcome[] = [day1, day2, ...probOutcomes];
+  // B7: the eight queries run on the briefing's signal, so a cancel never gets here
+  // (the abort check above). One log per read: a timeout as a timeout, else the error.
+  const failure =
+    allOutcomes.find((o) => o.err instanceof EsriServiceError)?.err ??
+    allOutcomes.find((o) => isFetchTimeout(o.err))?.err ??
+    allOutcomes.find((o) => !o.ok)?.err;
+  if (failure !== undefined) warnSourceFailure('SPC fire weather outlook query', failure);
   const anySucceeded = allOutcomes.some((o) => o.ok);
   if (!anySucceeded) {
-    const serviceError = allOutcomes.find((o) => o.err instanceof EsriServiceError)?.err;
     return {
       claims: [],
       ok: false,
-      note: upstreamNote(serviceError, 'The NOAA Storm Prediction Center Day 1-8 Fire Weather Outlook')
+      note: upstreamNote(failure, 'The NOAA Storm Prediction Center Day 1-8 Fire Weather Outlook')
     };
   }
 
@@ -2028,8 +2196,9 @@ export async function fetchNwsForecastClaims(
     };
   } catch (err) {
     if (signal.aborted) return { claims: [], ok: false };
-    console.warn('[impact] NWS forecast query failed.', err);
+    // vocab-allow: names the NWS point forecast in a console warning, upstream product
+    warnSourceFailure('NWS forecast query', err);
     // vocab-allow: names the NWS point forecast, upstream product
-    return { claims: [], ok: false, note: 'The NWS point forecast did not respond.' };
+    return { claims: [], ok: false, note: upstreamNote(err, 'The NWS point forecast') };
   }
 }
