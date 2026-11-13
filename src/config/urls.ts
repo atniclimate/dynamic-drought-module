@@ -3,12 +3,9 @@
  * change.
  *
  * Open-source design notes:
- *   - Basemap is the OpenStreetMap (OSM) standard raster, subdued via
- *     raster paint in `src/map/style.ts` so the drought layers dominate.
- *     OpenTopoMap is retained below as a pre-approved alternative.
- *   - Hydrography is queried live from OSM via the Overpass Application
- *     Programming Interface (API). No API key required; fair-use rate
- *     limits apply.
+ *   - The base map is DDM's own, baked from public government files and
+ *     Natural Earth into same-origin PMTiles (`src/map/style.ts`); the
+ *     Hydrography layer reads the same archive. No tile host is contacted.
  *   - Reference polygon layers (ecoregions, Tribal lands, Treaty areas)
  *     load from `public/data/` (Vite serves this directory at the site
  *     root, hence the leading slash).
@@ -31,22 +28,15 @@ import { LANDSCAPE_SIGNATURE_LOCAL_URL } from './landscape-url';
 import { BASE_URL, BOOT_URLS } from './urls-boot';
 
 export const URLS = Object.freeze({
-  // ---------- Basemaps (raster tiles) ----------
-  // MapLibre GL JavaScript raster sources do not natively expand the `{s}`
-  // subdomain placeholder used by Leaflet templates. Pin a single subdomain
-  // (`a`) for the primary template. If a future migration moves to a hosted
-  // vector tile bundle, this comment can go.
-  basemapTopo: 'https://a.tile.opentopomap.org/{z}/{x}/{y}.png',
-
-  // OSM standard tiles: the active basemap, subdued via raster paint in
-  // `src/map/style.ts`. The bare hostname is the OSM tile policy's ONLY
-  // supported form (U4f, policy fetched live 2026-07-12): the legacy a/b/c
-  // sharding subdomains "may be slower or withdrawn without notice".
-  // Policy invariants: never append cache-busting query params to tile
-  // URLs, and never add a Referrer-Policy that strips the Referer from
-  // tile requests (the policy's web-traffic attribution branch).
-  // The literal lives in `urls-boot.ts` (the base style reads it at boot).
-  basemapOSM: BOOT_URLS.basemapOSM,
+  // ---------- Base map (DDM's own, from public files) ----------
+  // Same-origin PMTiles vector archives baked by scripts/build-base-tiles.mjs
+  // (DDM-P17-T12): North America to zoom 8, its highways in their own file,
+  // and the world to zoom 5. The Hydrography layer reads the North America
+  // archive's rivers and water bodies. The literals live in `urls-boot.ts`
+  // (the base style reads them at boot).
+  baseNaPmtiles: BOOT_URLS.baseNaPmtiles,
+  baseRoadsPmtiles: BOOT_URLS.baseRoadsPmtiles,
+  baseWorldPmtiles: BOOT_URLS.baseWorldPmtiles,
 
   // NOAA NESDIS merged GOES East and West GeoColor, the opt-in recent
   // satellite basemap. This is the rolling, time-enabled 24-hour archive,
@@ -57,25 +47,13 @@ export const URLS = Object.freeze({
   // defeats the service's otherwise ambiguous 12-hour tile cache. New frames
   // arrive every 10 or 15 minutes; the client refreshes metadata every 10
   // minutes while active. Coverage ends near 76.46 degrees north and south,
-  // so the subdued OpenStreetMap layer remains underneath.
+  // so DDM's own base map remains underneath.
   // Verified 2026-08-05: query and exportImage return HTTP 200 without
   // authentication, correctly reflect browser origins for CORS, and expose
   // objectid, name, start_time, and end_time. Direct browser access only; no
   // Worker proxy is involved.
   noaaMergedGeoColorImageServer:
     'https://satellitemaps.nesdis.noaa.gov/arcgis/rest/services/MERGEDGC_Last_24hr/ImageServer',
-
-  // ---------- Hydrography (live OSM via Overpass API) ----------
-  // Mirrors are tried in order with a 12s per-call timeout and 350ms
-  // backoff between failures. All must respond with `Access-Control-
-  // Allow-Origin: *`. Verified during the v0.1.1 polish pass; sizes
-  // and freshness can drift, so retest before reordering.
-  // The OSM France host is excluded: it now requires allowlisted usage
-  // (HTTP 403 verified 2026-10-19), so it cannot serve this public browser app.
-  overpassMirrors: [
-    'https://overpass-api.de/api/interpreter',          // canonical, freshest
-    'https://overpass.kumi.systems/api/interpreter'     // independent operator
-  ],
 
   // ---------- Drought outlook (NOAA CPC, OGC WMS) ----------
   cpcDroughtWMS: 'https://mapservices.weather.noaa.gov/vector/services/outlooks/cpc_drought_outlk/MapServer/WMSServer',
@@ -736,6 +714,36 @@ export const URLS = Object.freeze({
   censusAiannhMapServer:
     'https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/AIANNHA/MapServer',
 
+  // ---------- US Census Bureau TIGERweb Transportation (live) ----------
+  // Local roads with street names inside Tribal areas from zoom 12
+  // (src/layers/tribal-streets.ts, started by the Tribal Lands layer). The
+  // consumer appends `/8/query?...&geometry=<bbox>&geometryType=
+  // esriGeometryEnvelope&inSR=4326&outFields=NAME,MTFCC&f=geojson`. Layer 8 "Local
+  // Roads" (MTFCC S1400), maxRecordCount 100000. Verified 2026-11-12: HTTP 200,
+  // application/geo+json, Access-Control-Allow-Origin echoes
+  // https://atniclimate.github.io; a zoom 12 view of Toppenish returned 1,436
+  // streets, 361 KB, in 1.1 s. Direct fetch, no proxy.
+  tigerwebTransportation:
+    'https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/Transportation/MapServer',
+  // Community names inside Tribal areas (owner decision 4, 2026-11-12): the
+  // TIGERweb Census Designated Places layer (5), read live with the streets,
+  // names and internal points only. Verified 2026-11-12: HTTP 200,
+  // Access-Control-Allow-Origin echoes https://atniclimate.github.io.
+  tigerwebPlaces:
+    'https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/Places_CouSub_ConCity_SubMCD/MapServer',
+  // Named streams (6, Flowline - Large Scale) and lakes (12, Waterbody - Large
+  // Scale) inside Tribal areas from the USGS National Hydrography Dataset,
+  // read live with the streets. Verified 2026-11-12: HTTP 200,
+  // Access-Control-Allow-Origin *; a Toppenish view returned 335 named
+  // flowlines, 106 KB. Direct fetch, no proxy.
+  usgsNhdMapServer: 'https://hydro.nationalmap.gov/arcgis/rest/services/nhd/MapServer',
+  // Public and protected lands for the Public Lands layer: USGS PAD-US 4.1,
+  // manager type (USGS Gap Analysis Project; public domain). Verified
+  // 2026-11-12: HTTP 200, Access-Control-Allow-Origin *; a zoom 10 view of the
+  // Wenatchee country returned 136 areas, 1.3 MB, in 1.5 s. Direct fetch.
+  padusManagerType:
+    'https://services.arcgis.com/v01gqwM5QqNysAAi/arcgis/rest/services/Manager_Type_PADUS/FeatureServer/0',
+
   // ---------- BIA Tribal Leaders Directory (headquarters points, live) ----------
   // Administrative-headquarters POINT layer (not a boundary), proposed to give
   // spatial representation to the 314 federally recognized Tribal Nations with
@@ -944,6 +952,9 @@ export const URLS = Object.freeze({
   // and retrieval date are baked into the archive attribution so the overlay
   // never implies precision the source does not carry.
   ecoregionsPmtilesLocal: BASE_URL + 'data/ecoregions-pnw.pmtiles',
+  // National forest boundaries (USDA Forest Service, CC0), baked into their own
+  // archive by scripts/build-base-tiles.mjs for the National Forests layer.
+  forestsPmtiles: BASE_URL + 'data/ddm-forests-2026-11.pmtiles',
   // The PNW hillshade raster-dem archive (U4g, D-0.7.0-012/-029): terrarium
   // PNG tiles, 512 px, z0-8, whole-meter quantized, baked by
   // Built from the USGS 3DEP ImageServer (public domain; vintage and
@@ -1008,18 +1019,6 @@ export const URLS = Object.freeze({
   // carries the mandatory currency caveat. Loaded only while the 3D Fire
   // mode is active.
   powerLinesPmtilesLocal: BASE_URL + 'data/power-lines-pnw.pmtiles',
-  // Central Oregon building footprints for the desktop 3D Fire mode:
-  // Overture Maps Foundation buildings theme (ODbL; fuses OpenStreetMap,
-  // Microsoft, Esri, and Google open building sets), extracted by
-  // scripts/extract-overture-buildings.py and baked by
-  // scripts/build-structures-tiles.mjs (`npm run build:structures-tiles`).
-  // The committed default covers the central_oregon region framing only
-  // (a full-PNW bake was PROJECTED at roughly 240 MB for z14-only tiles,
-  // about 380 MB at the shipped z13-14 scheme, from the measured
-  // per-building rate, and rejected; the extract script's --bbox
-  // parameter is the deployer path for other regions).
-  // z13-14 vector tiles; loaded only while the 3D Fire mode is active.
-  structuresPmtilesLocal: BASE_URL + 'data/structures-central-oregon.pmtiles',
   tribalLandsLocal: BASE_URL + 'data/tribal-lands.geojson',
   treatyAreasLocal: BASE_URL + 'data/treaty-areas.geojson',
   // United States state boundaries, baked from the Census Bureau cartographic
@@ -1060,7 +1059,7 @@ export const URLS = Object.freeze({
   // temperature (SST) anomaly, daily, ~1 km. The ENSO ocean surface: the
   // equatorial warm/cool tongue rendered as map tiles. MapLibre raster tile
   // template; the GIBS path order is {z}/{y}/{x} (TileMatrix/TileRow/TileCol),
-  // the REVERSE of the OSM z/x/y convention; MapLibre substitutes tokens by
+  // the REVERSE of the usual web tile z/x/y order; MapLibre substitutes tokens by
   // name so the template below is correct as written.
   // Verified 2026-07-06 (ddm-source-verifier): HTTP 200, Content-Type
   // image/png, Access-Control-Allow-Origin: * (genuine wildcard, confirmed

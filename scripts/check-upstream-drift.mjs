@@ -43,9 +43,8 @@ import { readCurrentWorkerRevision, readWorkerRevision } from './lib/worker-revi
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const URLS_PATH = join(__dirname, '..', 'src', 'config', 'urls.ts');
 /** The catalog's boot slice (DR-008a, 2026-09-03): the literals the eager
- * boot graph reads (the OpenStreetMap tile template among them) live here and
- * are re-exported by urls.ts under their old keys, so extraction must read
- * both files or the basemap probe silently disappears. */
+ * boot graph reads live here and are re-exported by urls.ts under their old
+ * keys, so extraction must read both files or a boot probe silently disappears. */
 const URLS_BOOT_PATH = join(__dirname, '..', 'src', 'config', 'urls-boot.ts');
 /** The Wildfire 3D ground's NOAA STAR land-cover tile template (2026-10-11):
  * kept beside the ground's own config so the catalog chunk does not grow,
@@ -76,7 +75,6 @@ export const DRIFT_TIERS = Object.freeze({
  * New keys default to runtime: a maintainer must explicitly lower an endpoint
  * to candidate or build-only status instead of silently losing protection. */
 export const CANDIDATE_SOURCE_KEYS = new Set([
-  'basemapTopo',
   'cpcDroughtWMS',
   'biaTribalLeadersDirectory',
   'waEcologyCededLands',
@@ -532,6 +530,13 @@ export const ARCGIS_FIELD_PROBES = Object.freeze([
   { key: 'wbdMapServer', file: 'src/config/place-catalog.ts', layer: '/2' },
   { key: 'nifcFires', file: 'src/layers/nifc-fires.ts', layer: '', constName: 'NIFC_OUT_FIELDS' },
   { key: 'censusAiannhMapServer', file: 'src/layers/aiannh.ts', layer: '/47' },
+  // The detail inside Tribal areas: TIGERweb Local Roads, USGS NHD named streams
+  // and lakes, and Census Designated Places.
+  { key: 'tigerwebTransportation', file: 'src/layers/tribal-streets.ts', layer: '/8', constName: 'STREET_OUT_FIELDS' },
+  { key: 'usgsNhdMapServer', file: 'src/layers/tribal-streets.ts', layer: '/6', constName: 'STREAM_OUT_FIELDS' },
+  { key: 'usgsNhdMapServer', file: 'src/layers/tribal-streets.ts', layer: '/12', constName: 'WATERBODY_OUT_FIELDS' },
+  { key: 'tigerwebPlaces', file: 'src/layers/tribal-streets.ts', layer: '/5', constName: 'COMMUNITY_OUT_FIELDS' },
+  { key: 'padusManagerType', file: 'src/layers/public-lands.ts', layer: '', constName: 'PUBLIC_LANDS_OUT_FIELDS' },
   { key: 'biaLarFeatureServer', file: 'src/layers/bia-reservations.ts', layer: '' },
   // RANGE_LAYER_INDEX in drought.ts: monthly 1, seasonal 4.
   { key: 'cpcDroughtOutlookVectorMapServer', file: 'src/layers/drought.ts', layer: '/1' },

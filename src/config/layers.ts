@@ -34,6 +34,10 @@ export interface LayerActivation {
  */
 export const LAYER_KEYS = Object.freeze([
   'hydrography',
+  'forests',
+  'railroads',
+  'dams',
+  'public-lands',
   'ecoregions',
   'hillshade',
   'drought',
@@ -213,8 +217,8 @@ export interface LayerDef {
  * are default-off AND ui-hidden: they are only
  * meaningful once a deployer populates them with their own authorized
  * data. Hydrography is
- * intentionally off by default; the live Overpass query is slow and
- * fragile, so leading the bare URL with it produced a flaky first paint.
+ * off by default: it repeats the base map's own rivers and lakes in a
+ * brighter blue, for a reader who wants water to lead.
  */
 /**
  * The honest zero-state wording for LIVE viewport-queried layers: the agency
@@ -289,7 +293,11 @@ const DROUGHT_CONDITIONS_DEF: LayerDef = {
 };
 
 export const LAYER_DEFS: readonly LayerDef[] = [
-  { key: 'hydrography', product: 'hydrography', name: 'Hydrography', source: 'OpenStreetMap (Overpass)', role: 'reference', defaultOn: false, load: () => import('../layers/hydrography') },
+  { key: 'hydrography', product: 'hydrography', name: 'Hydrography', source: 'USGS · Natural Resources Canada · Natural Earth · bundled', role: 'reference', defaultOn: false, load: () => import('../layers/hydrography') },
+  { key: 'forests', product: 'forests', name: 'National Forests', source: 'USDA Forest Service · bundled', role: 'reference', defaultOn: false, load: () => import('../layers/forests') },
+  { key: 'railroads', product: 'railroads', name: 'Railroads', source: 'US Census · bundled', role: 'reference', defaultOn: false, load: () => import('../layers/railroads') },
+  { key: 'dams', product: 'dams', name: 'Dams', source: 'US Army Corps of Engineers · bundled', role: 'reference', defaultOn: false, load: () => import('../layers/dams') },
+  { key: 'public-lands', product: 'public-lands', name: 'Public Lands', source: 'USGS PAD-US · live from zoom 10', role: 'reference', defaultOn: false, load: () => import('../layers/public-lands') },
   // Audit 10: the bundled archive covers only the Pacific Northwest (its
   // PMTiles header bounds [-125, 41.5, -110.5, 49.5]) and the layer reads
   // `live` at any viewport, so the coverage tail rides the source line the

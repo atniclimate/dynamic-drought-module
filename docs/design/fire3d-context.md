@@ -159,15 +159,9 @@ absence here is not evidence that none are present. Wording matters:
 belongs to the issuers, and a viewer looking at a sparse transmission
 network could otherwise conclude it is the whole grid.
 
-The remaining option, declined for now and recorded as a follow-up
-rather than a silent gap: OpenStreetMap `power=minor_line` and
-`power=line` could carry a volunteer-mapped distribution layer under
-ODbL. It would have to arrive as its own visibly distinct layer with its
-own legend row, its own attribution, and an explicit "incomplete,
-volunteer-mapped" disclosure, because its coverage varies enormously by
-locality. It must never be blended into the HIFLD layer: one issuer, one
-legend, per layer, and a mixed layer would let sparse volunteer coverage
-read as a federal statement of absence.
+A volunteer-mapped distribution layer was also considered and declined:
+it would need its own credit on the map, and the owner keeps credits off
+the main display (2026-11-13).
 
 A California-only CPUC High
 Fire Threat District layer was evaluated and declined: its license is a
@@ -176,28 +170,12 @@ affirmative open-data grant, and an uncaptioned state-specific layer
 would falsely imply lower risk where the true difference is that no
 equivalent dataset exists elsewhere.
 
-The structures context specifically: Overture Maps Foundation building
-footprints (ODbL), chosen over Microsoft's standalone footprint sets
-because Overture fuses them with OpenStreetMap and carries real height
-attributes largely derived from public USGS 3DEP lidar. Scope is the
-run's recorded fork: the full PNW terrain box holds 9,160,813 footprints,
-PROJECTED (never baked) at roughly 240 MB of z14-only vector tiles from
-the empirically measured 26 bytes per building, and roughly 380 MB at
-the shipped z13-14 scheme's measured 42 bytes per building; neither fits
-any same-origin Pages path. The committed
-bake therefore covers the central_oregon region framing only, the
-coverage note and legend both say so, and the extract script's --bbox
-parameter is the deployer path for any other region (the losing
-argument, a many-state split-archive scheme, loses on repository weight
-and clone cost). Height honesty is a two-layer split: published heights
-extrude verbatim in the measured tone; everything else draws visibly
-dimmer at a disclosed placeholder rule (three meters per published
-floor, otherwise four meters), because fill-extrusion opacity is not
-data-driven and a single tone would let placeholders pass as
-measurements. The bake never estimates a height the issuer did not
-publish. Azure and Bing 3D city meshes were disqualified outright
-(API-key-gated commercial services covering curated metros, not the
-rural and Tribal geography this project serves).
+The structures context (building footprints for central Oregon) was
+removed on 2026-11-13: its licence asked for a credit on the map, and the
+owner keeps credits off the main display. A building source that needs no
+on-map credit is the next step. Azure and Bing 3D city meshes stay
+disqualified (API-key-gated commercial services covering curated metros,
+not the rural and Tribal geography this project serves).
 
 The hazard drape specifically: USFS Wildfire Hazard Potential 2023 from the
 same public service used by the flat `usfs-whp` catalog layer. WHP is a static

@@ -20,7 +20,7 @@ export function buildShareLink(selectParam?: SelectParam): string {
 }
 
 /**
- * Wire the "Share view" button to copy the current location URL to the
+ * Wire the "Share" button to copy the current location URL to the
  * clipboard and surface a toast indicating success or failure. The
  * caller passes the DOM `id` of the button (the vanilla baseline used
  * `share-btn`).

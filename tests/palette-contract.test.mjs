@@ -183,8 +183,7 @@ const CLASSIFICATION = {
     USFS_WHP_PRESENTATION: 'S9 issuer legend decoded; bake checks drift',
     FBFM40_PRESENTATION: 'S10 LANDFIRE pinned while present',
     POWER_PLANT_PRESENTATION: 'DDM infrastructure context',
-    POWER_PLANT_CLUSTER_PRESENTATION: 'DDM infrastructure context',
-    STRUCTURES_PRESENTATION: 'DDM infrastructure context'
+    POWER_PLANT_CLUSTER_PRESENTATION: 'DDM infrastructure context'
   }
 };
 function assertClassified(actual, expected) {

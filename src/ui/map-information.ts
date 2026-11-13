@@ -1,7 +1,6 @@
 import { LAYER_DEFS } from '../config/layers';
 import { TRIBAL_NATIONS_PROVENANCE_NOTE } from '../config/provenance';
 import { getBasemapMode, onBasemapChange } from '../state/basemap-store';
-import { getMap } from '../state/map-store';
 import { registry } from '../state/registry';
 import { openAcknowledgements } from './impact-panel';
 import { isChecked } from './island/bridge';
@@ -10,12 +9,6 @@ import { watchDesktopMapSeat } from './map-control-seat';
 import { onSheetDetentSettle } from './mobile-sheet';
 
 const MOBILE_MAP_QUERY = '(max-width: 720px)';
-/**
- * The style sources whose data is OpenStreetMap's (S30D D1 M22; DR-162):
- * the OSM raster ground (`src/map/style.ts`) and the Overpass hydrography
- * (`src/layers/hydrography.ts`). Both leave with OSM in D8 (DDM-P17-T04).
- */
-const OSM_SOURCE_IDS = ['basemap', 'hydrography'] as const;
 const TRIBAL_REFERENCE_KEYS = new Set([
   'aiannh',
   'bia-reservations',
@@ -181,7 +174,7 @@ export function initMapInformation(): void {
       surface ? `Active view: ${surface.name}.` : 'No condition surface is on.',
       getBasemapMode() === 'satellite'
         ? `Satellite imagery basemap.${vintage ? ` ${vintage}` : ''}`
-        : 'Default OpenStreetMap basemap.'
+        : 'DDM basemap from public data.'
     ];
     current.textContent = contextParts.join(' ');
 
@@ -213,9 +206,8 @@ export function initMapInformation(): void {
       : '';
 
     // S30D D1 M22 (DDM-P7-T11; DR-106 Q-CREDIT): the credits line is a
-    // pointer to the acknowledgements section now, built once below; the
-    // one OpenStreetMap credit rides the map itself (renderOsmCredit).
-    renderOsmCredit();
+    // pointer to the acknowledgements section, built once below. The base
+    // map is public data, so no credit rides the map itself (DDM-P17-T12).
   };
 
   // The pointer (design record acknowledgements-table.md section 4.1): the
@@ -245,44 +237,6 @@ export function initMapInformation(): void {
     openAcknowledgements(fromPanel ? button : pointer);
   };
   for (const pointer of pointerButtons) pointer.addEventListener('click', onPointerClick);
-
-  // The one OpenStreetMap credit (DR-117, DR-162; found-027): on the map,
-  // in the bottom dock (a seat disjoint from every chrome seat), exactly
-  // while a source whose data is OpenStreetMap's draws. The string is the
-  // source's own first-party attribution HTML (src/map/style.ts, the
-  // hydrography layer), read live from the style, never retyped here.
-  const osmCredit = document.createElement('p');
-  osmCredit.id = 'map-osm-credit';
-  osmCredit.className = 'map-osm-credit';
-  osmCredit.hidden = true;
-  const dockFoot = bottomDock?.querySelector('.map-dock-foot') ?? null;
-  if (bottomDock) bottomDock.insertBefore(osmCredit, dockFoot);
-  function renderOsmCredit(): void {
-    const activeMap = getMap();
-    const style = activeMap?.getStyle();
-    let credit: string | null = null;
-    if (activeMap && style) {
-      for (const sourceId of OSM_SOURCE_IDS) {
-        const source = style.sources[sourceId] as { attribution?: unknown } | undefined;
-        const drawing = style.layers.some(
-          (layer) =>
-            'source' in layer &&
-            layer.source === sourceId &&
-            layer.layout?.visibility !== 'none'
-        );
-        if (drawing && typeof source?.attribution === 'string' && source.attribution.trim() !== '') {
-          credit = source.attribution;
-          break;
-        }
-      }
-    }
-    if (credit === null) {
-      osmCredit.hidden = true;
-      return;
-    }
-    if (osmCredit.innerHTML !== credit) osmCredit.innerHTML = credit;
-    osmCredit.hidden = false;
-  }
 
   const setOpen = (next: boolean, returnFocus = true): void => {
     open = next;
@@ -368,7 +322,6 @@ export function initMapInformation(): void {
     releaseSheet();
     button.removeEventListener('click', onButtonClick);
     for (const pointer of pointerButtons) pointer.removeEventListener('click', onPointerClick);
-    osmCredit.remove();
     document.removeEventListener('keydown', onKeyDown);
     mobileQuery.removeEventListener('change', onMobileChange);
     mapContainer.style.removeProperty('--mobile-ruler-width');

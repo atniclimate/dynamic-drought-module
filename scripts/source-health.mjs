@@ -13,9 +13,9 @@
  * boots once per catalog layer with `?layers=<key>&view=console` and
  * records every request to an upstream host: URL, HTTP status, content
  * type, bytes, milliseconds, record count (parsed and discarded), cache
- * headers, and requests that failed without a response. Basemap tiles are
- * answered with a blank tile so the probe never taxes OpenStreetMap,
- * OpenTopoMap, or the GOES image service (its frame catalog query still
+ * headers, and requests that failed without a response. Satellite tiles are
+ * answered with a blank tile so the probe never taxes the GOES image service
+ * (DDM's own base map is same-origin; the GOES frame catalog query still
  * goes upstream, once, on the ambient row); everything else goes where the
  * runtime sends it, with a named User-Agent. Surfaces are exclusive in the
  * product, so one layer per boot is also the honest per-source

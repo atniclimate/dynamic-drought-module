@@ -230,14 +230,11 @@ test.describe('mobile map-information disclosure (390x844)', () => {
     // only credits surface, so the live per-source attribution strings,
     // links included, must render here.
     // Value-only migration (S30D D1 M22, DR-162): the credits line is the
-    // pointer to the Acknowledgements, and the OpenStreetMap credit with its
-    // link rides the map itself while the OSM ground draws.
+    // pointer to the Acknowledgements. The base map is DDM's own public data
+    // since DDM-P17-T12, so no credit rides the map itself.
     const creditsLine = page.locator('#map-info-attribution');
     await expect(creditsLine).toContainText('Acknowledgements');
     expect(await creditsLine.locator('button[data-open-acknowledgements]').count()).toBeGreaterThan(0);
-    const osmCredit = page.locator('#map-osm-credit');
-    await expect(osmCredit).toContainText('OpenStreetMap');
-    expect(await osmCredit.locator('a').count()).toBeGreaterThan(0);
 
     // W2-D8: the panel opens with what it uniquely adds (the active view
     // and the basemap state), never a verbatim restatement of the on-map

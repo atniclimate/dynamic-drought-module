@@ -23,7 +23,7 @@ test('R8 USDM change popup uses all exact signed issuer classes and rejects inva
 });
 
 // Codex block 2 review, P2: every external request a fixture does not route
-// (the OSM raster tiles, an unstubbed service) is answered 503 locally, as in
+// (an unstubbed service) is answered 503 locally, as in
 // popup-viewport.spec.ts's tier dispatcher. Registered first, so gotoApp's
 // context stubs and each fixture's page routes are checked before it.
 test.beforeEach(async ({ context }) => {

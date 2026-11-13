@@ -33,6 +33,10 @@ export type UrlsKey = keyof typeof URLS;
  */
 export const PRODUCT_KEYS = Object.freeze([
   'hydrography',
+  'forests',
+  'railroads',
+  'dams',
+  'public-lands',
   'ecoregions',
   'hillshade',
   'drought',
@@ -144,11 +148,48 @@ export interface ProductDef {
 export const PRODUCTS: Readonly<Record<ProductKey, ProductDef>> = Object.freeze({
   hydrography: {
     key: 'hydrography',
-    issuer: 'OpenStreetMap (Overpass)',
-    endpointKey: 'overpassMirrors',
+    // Matches the layer's source line in layers.ts.
+    issuer: 'USGS · Natural Resources Canada · Natural Earth · bundled',
+    endpointKey: 'baseNaPmtiles',
     layerKey: 'hydrography',
     lane: null,
-    clock: { register: 'observed', cadence: 'on demand' }
+    clock: { register: 'observed', cadence: 'bundled, static' }
+  },
+  forests: {
+    key: 'forests',
+    // Matches the layer's source line in layers.ts.
+    issuer: 'USDA Forest Service · bundled',
+    endpointKey: 'forestsPmtiles',
+    layerKey: 'forests',
+    lane: null,
+    clock: { register: 'observed', cadence: 'bundled, static' }
+  },
+  railroads: {
+    key: 'railroads',
+    // Matches the layer's source line in layers.ts.
+    issuer: 'US Census · bundled',
+    endpointKey: 'baseRoadsPmtiles',
+    layerKey: 'railroads',
+    lane: null,
+    clock: { register: 'observed', cadence: 'bundled, static' }
+  },
+  dams: {
+    key: 'dams',
+    // Matches the layer's source line in layers.ts.
+    issuer: 'US Army Corps of Engineers · bundled',
+    endpointKey: 'baseRoadsPmtiles',
+    layerKey: 'dams',
+    lane: null,
+    clock: { register: 'observed', cadence: 'bundled, static' }
+  },
+  'public-lands': {
+    key: 'public-lands',
+    // Matches the layer's source line in layers.ts.
+    issuer: 'USGS PAD-US · live from zoom 10',
+    endpointKey: 'padusManagerType',
+    layerKey: 'public-lands',
+    lane: null,
+    clock: { register: 'observed', cadence: 'live read, annual releases' }
   },
   ecoregions: {
     key: 'ecoregions',

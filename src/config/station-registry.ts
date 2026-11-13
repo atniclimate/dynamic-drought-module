@@ -88,10 +88,10 @@ const AWDB_DISCOVERY_NETWORKS = ['SNTL', 'SCAN'] as const;
 const AGRIMET_DISCOVERY_TIMEOUT_MS = 12_000;
 const COCORAHS_DISCOVERY_TIMEOUT_MS = 15_000;
 // Per-viewport discovery cache + RAWS zoom gate (#3). Quantizing the query
-// bounds (same 0.25-degree step hydrography's HYDRO_CACHE uses) coalesces nearby
+// bounds (0.25-degree step) coalesces nearby
 // pans onto one key, so USGS Instantaneous Values and NIFC RAWS are fetched once
 // per quantized viewport instead of on every settled pan; the caches live for
-// the session like HYDRO_CACHE (station existence is stable within a session;
+// the session (station existence is stable within a session;
 // popup hydration still re-fetches live values on click). RAWS additionally
 // skips entirely above the area cap, so a national or multi-state framing does
 // not fire a NIFC envelope query for a layer that only reads at regional zoom.
@@ -385,7 +385,7 @@ const RAWS_DISCOVERY_CACHE = new ExpiringLruCache<string, DiscoveryCacheEntry>(
 // none); null remembers a site the answer did not name.
 const USGS_SITE_NAMES = new ExpiringLruCache<string, string | null>(5_000);
 
-/** Quantized cache key for a viewport bbox (mirrors hydrography's HYDRO_CACHE). */
+/** Quantized cache key for a viewport bbox (0.25-degree step). */
 function discoveryCacheKey(bounds: ViewportBounds): string {
   return quantizeBbox(
     [bounds.south, bounds.west, bounds.north, bounds.east],

@@ -100,11 +100,8 @@ async function fulfilJson(route: Route, body: unknown): Promise<void> {
   });
 }
 
-/** The basemap and every non-fire, non-heat live source, answered locally. */
+/** Every non-fire, non-heat live source, answered locally. */
 async function stubCommon(page: Page): Promise<void> {
-  await page.route('https://tile.openstreetmap.org/**', (route) =>
-    route.fulfill({ status: 200, contentType: 'image/png', body: ONE_PIXEL_PNG })
-  );
   // Broad first, specific later: Playwright matches the most recently
   // registered route, so the fire and heat handlers below win.
   await page.route('https://services5.arcgis.com/**', (route) =>

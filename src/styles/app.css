@@ -688,21 +688,8 @@ a:hover {
   line-height: 1.15;
   white-space: nowrap;
 }
-.brand-text p {
-  margin: 3px 0 0;
-  font-family: var(--font-body);
-  font-size: 11px;
-  font-weight: var(--fw-body);
-  color: var(--fg-2);
-  letter-spacing: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 /* The wider adopted wordmark shares the header without truncating its words. */
-.brand-text h1,
-.brand-text p {
+.brand-text h1 {
   white-space: normal;
   overflow: visible;
   text-overflow: clip;
@@ -2918,16 +2905,13 @@ button.conditions-metric:hover .conditions-action-hide {
      and read by nothing yet. --popup-measure is the sidebar foot's content
      width at the 340px sidebar (340 minus two 18px paddings), provisional
      until M23 measures it.
-     --map-cell-w is the design record's 124px raised to the measured need
-     (D1.md :295, one token). The director's probe, 2026-09-27, in the
-     built app at 1280x900 and 1440x900, ?view=console, Lexend: the
-     "Share view" word is about 78.4px wide and at 124px its ink ended at
-     x 1260.42 in a cell whose right edge is 1268, about 2.4px into the
-     1px edge plus 9px padding. The need is 1 + 9 + 20 + 8 + 78.4 + 9 + 1
-     = 126.4px; 128px is the next 4px step. */
+     --map-cell-w is sized for the longest word, "Share" (one token; owner,
+     2026-11-12). Measured 39.0px in DDM Heros at 1920x943 on 2026-11-12,
+     so the need is 1 + 9 + 20 + 8 + 39 + 9 + 1 = 87px; 96px keeps room
+     for a zoomed or wider face. */
   .app-shell:not(.embed) {
     --chrome-inset: 12px;
-    --map-cell-w: 128px;
+    --map-cell-w: 96px;
     --map-cell-h: 40px;
     --map-cell-gap: 4px;
     --chip-w: 288px;
@@ -2997,7 +2981,7 @@ button.conditions-metric:hover .conditions-action-hide {
   /* The cell (R1 a): a fixed 20px icon column, an 8px gap, then the word.
      The 1px edge plus 9px padding puts every icon centre 20px in from the
      cell's left edge: one x for the whole column, W - 12 - --map-cell-w
-     + 20 (W - 120 at 128px). */
+     + 20 (W - 88 at 96px). */
   .app-shell:not(.embed) .map-overlay-controls .map-cell {
     box-sizing: border-box;
     display: grid !important;
@@ -3915,7 +3899,7 @@ button.conditions-metric:hover .conditions-action-hide {
 /* (Two removals, in order. The static attribution overlay went in the
    0.3.0 design pass: it was the third statement of the same credits on
    one screen and collided with the scale bar, leaving MapLibre's live
-   attribution control to carry the OpenStreetMap and per-layer credits.
+   attribution control to carry the base map and per-layer credits.
    That control went too on 2026-08-31 (PR 54, owner direction): the
    license credits now render inside the map-information panel, the (?)
    disclosure, from src/ui/map-information.ts. No map corner states
@@ -6320,25 +6304,6 @@ a.impact-resource-link::after {
   cursor: pointer;
 }
 
-/* The one OpenStreetMap credit on the map (DR-162; found-027): a dock
-   item, so it stacks with the notices and never takes a chrome seat. */
-.map-osm-credit {
-  margin: 0;
-  align-self: flex-end;
-  padding: 1px 6px;
-  border-radius: var(--radius-sm);
-  background: var(--bg-1);
-  color: var(--fg-2);
-  font-size: 10.5px;
-  line-height: 1.5;
-}
-.map-osm-credit[hidden] { display: none; }
-/* Phones keep the lower-right thumb zone for the hazard rail, so the
-   credit takes the dock's left edge there. */
-@media (max-width: 720px) {
-  .map-osm-credit { align-self: flex-start; }
-}
-.map-osm-credit a { color: var(--fg-1); }
 .enso-flow-credit { margin: 4px 0 0; font-size: 11px; color: var(--fg-2); }
 .enso-flow-credit[hidden] { display: none; }
 
@@ -6358,7 +6323,7 @@ a.impact-resource-link::after {
    neighbours (THE DESKTOP COLUMN, above), and its panel is the right-hand
    drawer: it docks against the column, its top on the help slot's top and
    its right edge 8px left of the column (container right 12 +
-   --map-cell-w + 8, so 148 at 128px), and it slides out from behind the
+   --map-cell-w + 8, so 116 at 96px), and it slides out from behind the
    column. The panel still answers
    "what am I looking at?" and "who says so?": the license credits stay
    one click away, never absorbed into silence. It is ephemeral (no URL

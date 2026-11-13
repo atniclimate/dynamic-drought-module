@@ -71,21 +71,10 @@ function rectangleFeature(
   };
 }
 
-async function stubBasemap(page: Page): Promise<void> {
-  await page.route('https://tile.openstreetmap.org/**', (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: 'image/png',
-      body: ONE_PIXEL_PNG
-    })
-  );
-}
-
 async function stubHeatRisk(
   page: Page,
   tileMode: 'success' | 'missing' | 'mixed' = 'success'
 ): Promise<void> {
-  await stubBasemap(page);
   let tileRequestCount = 0;
   await page.route(
     (url) => url.pathname.startsWith(HEATRISK_PATH),
@@ -135,7 +124,6 @@ async function stubNwsSnapshot(
   page: Page,
   truncated: boolean
 ): Promise<void> {
-  await stubBasemap(page);
   await page.route(
     (url) => url.pathname.endsWith(WWA_PATH),
     (route) =>
@@ -311,7 +299,6 @@ for (const embedViewport of [
 test('the National Weather Service snapshot prunes expired products and exposes truncation and as-of time', async ({
   page
 }) => {
-  await stubBasemap(page);
   const now = Date.now();
   await page.route(
     (url) => url.pathname.endsWith(WWA_PATH),
@@ -350,7 +337,6 @@ test('the National Weather Service snapshot prunes expired products and exposes 
 test('the NWS expiry timer removes a product before the next network refresh', async ({
   page
 }) => {
-  await stubBasemap(page);
   let requestCount = 0;
   // scheduleExpiryPrune (src/layers/nws-alerts.ts) schedules its setTimeout
   // from `nextExpiry - Date.now()` the moment this fetch response is
@@ -409,7 +395,6 @@ test('the NWS layer pauses while hidden and refreshes one stale snapshot on retu
       offset += milliseconds;
     };
   });
-  await stubBasemap(page);
   let requestCount = 0;
   await page.route(
     (url) => url.pathname.endsWith(WWA_PATH),
@@ -467,7 +452,6 @@ test('the NWS layer pauses while hidden and refreshes one stale snapshot on retu
 test('an invalid NWS MapServer body stays unavailable through activation cleanup', async ({
   page
 }) => {
-  await stubBasemap(page);
   await page.route(
     (url) => url.pathname.endsWith(WWA_PATH),
     (route) =>
@@ -487,7 +471,6 @@ test('an invalid NWS MapServer body stays unavailable through activation cleanup
 test('ENSO offers its flood, storm, wind and coastal products off by default; on, ENSO stays the mode and its key lists the ones in force', async ({
   page
 }) => {
-  await stubBasemap(page);
   const asked: string[] = [];
   // Two of ENSO's products, answered out of the set's order; nothing else is in force.
   await page.route(
@@ -533,7 +516,6 @@ test('ENSO offers its flood, storm, wind and coastal products off by default; on
 test('an invalid NWS active-products body is unavailable, never an all-clear', async ({
   page
 }) => {
-  await stubBasemap(page);
   await page.route('**/USDM_current/FeatureServer/0/query?*', (route) =>
     route.fulfill({
       status: 200,

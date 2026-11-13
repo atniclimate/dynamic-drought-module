@@ -80,6 +80,17 @@ const ROSTER_TIMEOUT_MS = 10_000;
 interface RosterFile {
   readonly areas: readonly TribalRosterArea[];
   readonly censusAreas: readonly TribalCensusArea[];
+  /** Census AIANNH code to the Nations' Federal Register names, for the Tribal Lands labels. */
+  readonly labelAreas: ReadonlyMap<string, readonly string[]>;
+}
+
+function labelAreasOf(raw: unknown): ReadonlyMap<string, readonly string[]> {
+  return new Map(
+    Object.entries(isObject(raw) ? raw : {}).filter(
+      (entry): entry is [string, string[]] =>
+        /^\d{4}$/.test(entry[0]) && Array.isArray(entry[1]) && entry[1].every((n) => typeof n === 'string')
+    )
+  );
 }
 
 let rosterCache: RosterFile | null = null;
@@ -112,7 +123,8 @@ function loadRosterFile(): Promise<RosterFile> {
       const census = isObject(json) ? json['censusAreas'] : undefined;
       rosterCache = {
         areas: Array.isArray(areas) ? (areas as readonly TribalRosterArea[]) : [],
-        censusAreas: Array.isArray(census) ? census.filter(isCensusArea) : []
+        censusAreas: Array.isArray(census) ? census.filter(isCensusArea) : [],
+        labelAreas: labelAreasOf(isObject(json) ? json['labelAreas'] : undefined)
       };
       return rosterCache;
     } catch (err) {
@@ -137,4 +149,9 @@ export function loadTribalRoster(): Promise<readonly TribalRosterArea[]> {
 /** The Census area rows from the same cached load; rejects like loadTribalRoster. */
 export function loadTribalCensusAreas(): Promise<readonly TribalCensusArea[]> {
   return loadRosterFile().then((f) => f.censusAreas);
+}
+
+/** The Tribal Lands label map from the same cached load; rejects like loadTribalRoster. */
+export function loadTribalLabelAreas(): Promise<ReadonlyMap<string, readonly string[]>> {
+  return loadRosterFile().then((f) => f.labelAreas);
 }

@@ -431,14 +431,24 @@ export function initEdgeColumn(): void {
   const share = document.getElementById('share-btn');
   const reset = document.getElementById('reset-btn');
   const desktopSeat = document.getElementById('basemap-switcher-overlay-host');
+  const helpSeat = document.getElementById('map-info-seat');
   if (overlay && share) {
     watchPhoneSeat({
       node: share,
       home: overlay,
       placeHome: () => {
-        if (share.parentElement === overlay) return;
+        // Outside an embed the desktop grid seats Share in slot 4, under
+        // Help, so Share follows Help's seat in the DOM and Tab runs down the
+        // column as it reads (WCAG 2.4.3). An embed stacks the overlay in
+        // source order, so Share stays above Reset there, as index.html ships.
+        if (helpSeat?.parentElement === overlay && !host.classList.contains('embed')) {
+          if (helpSeat.nextElementSibling !== share) helpSeat.after(share);
+          return;
+        }
         const next = reset?.parentElement === overlay ? reset : desktopSeat;
-        overlay.insertBefore(share, next?.parentElement === overlay ? next : null);
+        const before = next?.parentElement === overlay ? next : null;
+        if (share.parentElement === overlay && share.nextElementSibling === before) return;
+        overlay.insertBefore(share, before);
       },
       phone: { group: 'utility', order: 10, word: 'Share' }
     });

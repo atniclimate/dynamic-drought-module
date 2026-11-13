@@ -48,7 +48,7 @@ A phone-width embed loads none of the scene's code.
 
 Where it differs, and why. The transaction below is still not built, so the
 phone shows the steps the built one really waits on: the archive probe, then
-smoke and perimeters, then the hazard drape and structures
+smoke and perimeters, then the hazard drape
 (`Fire3DStatus.phase`), and after the scene first reads live, "Loading
 terrain relief" until its own sources first settle. "Tilting the view" is
 not shown, because the built entry does not wait on the tilt. Cancel is ink
@@ -94,7 +94,7 @@ through a switch to another cluster, and never outlasts any other refusal.
 | `terrain` | `setTerrain` done at pitch 0 and the DEM source reports loaded for the flat view, or the 8 s ceiling passed | Loading terrain relief |
 | `camera` | the pitch easing's own `moveend` (not a blind timer); instant under reduced motion | Tilting the view |
 | `atmosphere` | smoke volume and perimeter ribbon activated or degraded (live (partial) semantics, never a seventh state) | Loading smoke and perimeters |
-| `context` | hazard drape and structures activated or degraded | Loading the hazard drape and structures |
+| `context` | hazard drape activated or degraded | Loading the hazard drape |
 | `settled` | `transport` reads settled AND one frame has committed after it (a `requestAnimationFrame` after the settle) | (cover closes) |
 
 The terrain wait listens to that one source, handles an already-loaded source, cleans up on abort, error and timeout, and distinguishes the 8 s "tilt anyway" from a terrain failure (which is `unavailable` as today). Every await checks the generation and races the signal. Optional component failure keeps today's live (partial) meaning.

@@ -134,20 +134,6 @@ async function stubEveryStudioLayer(page: Page): Promise<void> {
     })
   );
 
-  // hydrography: the live Overpass API, both public mirrored hosts
-  // (src/config/urls.ts overpassMirrors).
-  await page.route(
-    (url) =>
-      url.href.includes('overpass-api.de') ||
-      url.href.includes('overpass.kumi.systems'),
-    (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ elements: [] })
-      })
-  );
-
   // telemetry: activating it hydrates the Water & Snow station VALUES
   // (src/ui/sidebar.ts hydrateStationValues) independently of the layer's
   // own registry status; abort each wired agency deterministically (the
@@ -164,7 +150,7 @@ async function stubEveryStudioLayer(page: Page): Promise<void> {
   // aiannh, bia-reservations and nadm-drought are stubbed by gotoApp's own
   // defaults (installBoundaryStubs, installDefaultNadmStub); nifc-fires is
   // covered twice over (installDefaultNifcStub in gotoApp, stubWildfireFeeds
-  // above). cdm-drought, states, places, hillshade, ecoregions and the
+  // above). cdm-drought, states, places, hillshade, hydrography (the base map's own archive), ecoregions and the
   // power-lines half of power-infrastructure read bundled `public/data/*`
   // files served same-origin by the local build, so no live host is ever
   // reached for them. telemetry's OWN registry status needs no stub either:

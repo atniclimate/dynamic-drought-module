@@ -22,14 +22,11 @@
  */
 
 /** Basemap tile hosts the probe answers with a blank tile instead of
- * fetching: the map still loads, and a daily automated boot per layer never
- * taxes OpenStreetMap (tile policy) or OpenTopoMap. Every host here must
+ * fetching. Empty since DDM's own base map (DDM-P17-T12): the ground is
+ * same-origin, so no tile host remains to spare. Every host here must
  * appear in src/config/urls.ts or its boot slice src/config/urls-boot.ts
  * (the test pins that). */
-export const STUBBED_HOSTS = Object.freeze([
-  'tile.openstreetmap.org',
-  'a.tile.opentopomap.org',
-]);
+export const STUBBED_HOSTS = Object.freeze([]);
 
 /** Tile paths stubbed on hosts that also serve a metadata query the runtime
  * needs answered honestly: the GOES GeoColor ImageServer's `exportImage`

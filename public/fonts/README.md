@@ -20,6 +20,12 @@ no-tracking and self-hosted static architecture.
   Downloaded 2026-07-14 from the same MapLibre demotiles endpoint
   (95,728 bytes). Lazy at runtime:
   MapLibre fetches a range file only when a rendered label needs it.
+- `glyphs/Noto Sans Regular/8192-8447.pbf`: the General Punctuation range,
+  carrying the right single quotation mark (U+2019) that Natural Resources
+  Canada's Atlas of Canada place names use in Dene names such as Sambaa K’e,
+  and the en dash (U+2013) in merged Quebec municipality names. Downloaded
+  2026-11-12 from the same MapLibre demotiles endpoint (34,070 bytes, 111
+  glyphs), so the base map draws these names as published.
 
 ## Provenance and license
 

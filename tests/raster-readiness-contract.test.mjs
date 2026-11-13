@@ -349,10 +349,6 @@ const EXCEPTIONS = new Map([
   [
     'src/map/fire3d.ts#TERRAIN_SOURCE_ID',
     'the Fire 3D terrain source, not a registry layer: its watcher only fails the scene on error and writes no layer status'
-  ],
-  [
-    'src/map/style.ts#basemap',
-    'the base style\'s basemap raster, declared in the style JSON rather than added by a layer module; it has no pill'
   ]
 ]);
 

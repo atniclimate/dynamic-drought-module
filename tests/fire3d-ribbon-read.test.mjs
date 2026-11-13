@@ -14,8 +14,8 @@ import { fileURLToPath } from 'node:url';
  * found-130: the transport stamp settles within a bounded time after the
  * scene's sources finish loading, even when no sourcedata or idle event
  * follows (a frozen main thread coalesces them away).
- * found-143: DEM, WHP and structures are all held; each can be the last
- * outstanding source after a real partial release of the other two.
+ * found-143: DEM and WHP are both held; each can be the last
+ * outstanding source after a real partial release of the other.
  *
  * Runs under plain `node --test` (Node 24 strips types).
  */
@@ -59,11 +59,10 @@ const STUBS = {
   './fire3d-context': [
     'export async function activateContextLayers(map) {',
     '  map.addSource("whp-2023", { type: "raster", tiles: [] });',
-    '  map.addSource("structures-3d", { type: "vector", tiles: [] });',
-    '  return { keys: ["whp", "structures"], embedLines: [] };',
+    '  return { keys: ["whp"], embedLines: [] };',
     '}',
     'export function deactivateContextLayers(map) {',
-    '  for (const id of ["whp-2023", "structures-3d"]) if (map.getSource(id)) map.removeSource(id);',
+    '  for (const id of ["whp-2023"]) if (map.getSource(id)) map.removeSource(id);',
     '}'
   ].join('\n'),
   '/map/layer-order':
@@ -269,24 +268,24 @@ initFire3DController(map);
 
 test.afterEach(reset);
 
-const SCENE_SOURCE_IDS = ['fire3d-terrain-dem', 'whp-2023', 'structures-3d'];
+const SCENE_SOURCE_IDS = ['fire3d-terrain-dem', 'whp-2023'];
 
 for (const lastSource of SCENE_SOURCE_IDS) {
   test(`the transport stamp settles within a bounded time after the last scene request is released with no further map event: ${lastSource}`, async () => {
     requests.held = true;
     await enterScene();
     assert.deepEqual([...requests.inFlight].sort(), [...SCENE_SOURCE_IDS].sort(),
-      'DEM, WHP and structures requests must all be held before any partial release');
+      'DEM and WHP requests must both be held before any partial release');
     assert.equal(dataset.ddmFire3dTransport, 'streaming');
 
-    // Release two requests; the map raises no sourcedata or idle
+    // Release one request; the map raises no sourcedata or idle
     // (a frozen main thread has coalesced them away).
     requests.held = false;
     const releasedSources = [...requests.inFlight].filter((id) => id !== lastSource);
-    assert.equal(releasedSources.length, 2, 'the partial release actually releases two requests');
+    assert.equal(releasedSources.length, 1, 'the partial release actually releases one request');
     for (const id of releasedSources) requests.inFlight.delete(id);
     assert.deepEqual([...requests.inFlight], [lastSource], 'exactly the selected source stays held');
-    assert.ok(releasedSources.every((id) => map.isSourceLoaded(id)), 'the other two sources report loaded');
+    assert.ok(releasedSources.every((id) => map.isSourceLoaded(id)), 'the other source reports loaded');
     await new Promise((resolve) => setTimeout(resolve, 600));
     assert.equal(dataset.ddmFire3dTransport, 'streaming', 'one request still out keeps it streaming');
 

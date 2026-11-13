@@ -33,6 +33,6 @@ test('D3 M5 actual map ground, place label and state outline use adopted neutral
       cssShade: getComputedStyle(document.documentElement).getPropertyValue('--surface-overlay').trim().toUpperCase()
     };
   });
-  expect(colors).toEqual({ ground: '#010B13', label: '#010B13', halo: '#F4F7FB',
-    haloWidth: 1.4, state: '#636363', cssGround: '#010B13', cssShade: '#1E242C' });
+  expect(colors).toEqual({ ground: '#010B13', label: '#C6CBD4', halo: '#010B13',
+    haloWidth: 1.4, state: '#8A94A6', cssGround: '#010B13', cssShade: '#1E242C' });
 });

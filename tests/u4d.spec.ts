@@ -284,7 +284,6 @@ test.describe('U4d: the switcher control and assistive observation status', () =
     expect(satelliteStub.renderedFrameIds).toEqual([]);
     await expect(page.locator('html')).not.toHaveAttribute(SATELLITE_STAMP);
     await expect(page.locator(IMAGERY_CHIP)).toBeHidden();
-    await expect(page.locator('#map-osm-credit')).toBeVisible();
     // The words a sighted visitor can read: the Impact Briefing says so, with no observation time.
     const notes = await openTechnicalInformation(page);
     await expect(notes).toContainText(SATELLITE_UNAVAILABLE_NOTE);
@@ -399,12 +398,9 @@ test.describe('U4d: the switcher control and assistive observation status', () =
     // Owner direction 2026-08-31: the credits render in the map-information
     // panel; the attribution control is gone.
     // Value-only migration (S30D D1 M22, DR-162; design record
-    // acknowledgements-table.md section 4.3): the OpenStreetMap underlay's
-    // credit is on the map itself while it draws, and the NOAA imagery is
-    // credited by its row in the Acknowledgements, reached through the
-    // credits line's pointer.
-    await expect(page.locator('#map-osm-credit')).toBeVisible();
-    await expect(page.locator('#map-osm-credit')).toContainText('OpenStreetMap');
+    // acknowledgements-table.md section 4.3): the NOAA imagery is credited by
+    // its row in the Acknowledgements, reached through the credits line's
+    // pointer.
     await page.locator('#map-info-btn').click();
     await page.locator('#map-info-attribution button[data-open-acknowledgements]').click();
     // The GOES GeoColor imagery (src/map/satellite.ts, the
@@ -436,9 +432,6 @@ test.describe('U4d: the switcher control and assistive observation status', () =
     await expect(btn).toHaveAttribute('aria-pressed', 'false', { timeout: 30_000 });
     await expect.poll(async () => search(page)).not.toContain('basemap=');
     await expect(page.locator(IMAGERY_CHIP)).toBeHidden();
-    // The default basemap is back on screen (its credit returns).
-    // Value-only migration (S30D D1 M22, DR-162): that credit is on the map.
-    await expect(page.locator('#map-osm-credit')).toBeVisible();
-    await expect(page.locator('#map-osm-credit')).toContainText('OpenStreetMap');
+    // The default basemap is back on screen.
   });
 });

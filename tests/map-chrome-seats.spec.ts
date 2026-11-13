@@ -23,7 +23,7 @@ import { gotoApp, layerCheckbox, waitForLayerSettled } from './helpers';
  * consecutive animation frames per phase, and checked two ways:
  * - against the token formula in src/config/map-chrome.ts
  *   (`mapChromeSeatRect`): x = W - chromeInset - mapCellW, y = chromeInset
- *   + (slot - 1) * (mapCellH + mapCellGap), mapCellW x mapCellH (128 x 40
+ *   + (slot - 1) * (mapCellH + mapCellGap), mapCellW x mapCellH (96 x 40
  *   on a fine pointer since the director's 2026-09-27 fit measurement;
  *   44 x 44 icon squares on every pointer in the 721 to 1024 px tablet
  *   band, owner ruling DR-153);
@@ -463,7 +463,7 @@ test.describe('the desktop column holds its four seats (D1 M9)', () => {
       '#basemap-switcher-overlay-host .basemap-switcher-btn': 'SAT: satellite imagery',
       '#map-info-seat > #map-info-btn': 'Help and map information',
       '.map-overlay-controls > #share-btn':
-        'Share view: the link restores region or framing, layers, mode and horizon, not the map position or an open briefing'
+        'Share: the link restores region or framing, layers, mode and horizon, not the map position or an open briefing'
     };
     const SCENARIOS = [
       { width: 820, height: 1180, sidebar: 'open' },

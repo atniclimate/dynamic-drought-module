@@ -40,7 +40,7 @@ const stubs = {
   '../ui/overlay': 'export function showToast(text) { globalThis.satelliteSeen.toasts.push(text); }',
   '../util/raster-status':
     'export function watchRasterTiles(map, id, report) { const watch = { report, detached: false, detach() { watch.detached = true; } }; globalThis.satelliteSeen.watches.push(watch); return watch; }',
-  './layer-order': 'export function firstLayerIdAbove() { return undefined; }',
+  './layer-order': "export const BOTTOM_STACK_IDS = ['background', 'basemap-satellite']; export function firstLayerIdAbove() { return undefined; }",
   // The real guard, with the page decoder swapped for Node's PNG and JPEG decoders.
   './satellite-guard': `import * as real from ${JSON.stringify(GUARD_URL)};
 export const { isPlaceholderImage, isSupportedRaster, SATELLITE_TILE_SCHEME, MAX_SATELLITE_IMAGE_BYTES } = real;

@@ -245,7 +245,7 @@ export default defineConfig({
     // tests/boundary-boot-inventory.test.mjs keep it answered.
     //
     // The PIXEL objection is not answered, so pixels stay out. The basemap is
-    // live OpenStreetMap raster (src/map/style.ts), and a rendered frame of
+    // DDM's own map of real places (src/map/style.ts), and a rendered frame of
     // synthetic rectangles labelled as Tribal geography can be mistaken for
     // real boundaries once it is detached from its test. So in CI:
     // `screenshots: false` drops the trace's own timeline frames, `screenshot`

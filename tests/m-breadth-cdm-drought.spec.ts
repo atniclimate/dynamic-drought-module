@@ -12,11 +12,6 @@ const ARTIFACT_ROUTE = '**/data/cdm-drought-areas.json';
 const LICENSE_TITLE = 'Open Government Licence - Canada';
 const LICENSE_URL =
   'https://open.canada.ca/en/open-government-licence-canada';
-const TRANSPARENT_PNG = Buffer.from(
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
-  'base64'
-);
-
 function classRows(present: readonly number[]) {
   return [0, 1, 2, 3, 4].map((dm) => ({
     class: `D${dm}`,
@@ -104,16 +99,6 @@ function artifactFixture(present: readonly number[] = [2]) {
   };
 }
 
-async function routeBasemap(page: Page): Promise<void> {
-  await page.route('https://tile.openstreetmap.org/**', (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: 'image/png',
-      body: TRANSPARENT_PNG
-    })
-  );
-}
-
 async function routeArtifact(
   page: Page,
   body: unknown,
@@ -150,7 +135,6 @@ test.describe('Canadian Drought Monitor committed monthly snapshot', () => {
         }
       });
     });
-    await routeBasemap(page);
     const fixture = artifactFixture([0, 1, 2, 3, 4]);
     // Separate class interiors, all visible inside the BC initial view.
     fixture.data.features.forEach((feature, dm) => {
@@ -263,7 +247,6 @@ test.describe('Canadian Drought Monitor committed monthly snapshot', () => {
         upstreamRequests.push(url);
       }
     });
-    await routeBasemap(page);
 
     await gotoApp(
       page,
@@ -316,7 +299,6 @@ test.describe('Canadian Drought Monitor committed monthly snapshot', () => {
   test('embed on-map key renders the exact licence title and link', async ({
     page
   }) => {
-    await routeBasemap(page);
     await gotoApp(
       page,
       '?embed=true&region=british_columbia&layers=cdm-drought&view=console'
@@ -335,7 +317,6 @@ test.describe('Canadian Drought Monitor committed monthly snapshot', () => {
   test('a polygon popup names the Canadian product, issuer, and month without blending', async ({
     page
   }) => {
-    await routeBasemap(page);
     await routeArtifact(page, artifactFixture([2]));
     await gotoApp(
       page,
@@ -365,7 +346,6 @@ test.describe('Canadian Drought Monitor committed monthly snapshot', () => {
   test('a published month with no occupied classes is live, not missing data', async ({
     page
   }) => {
-    await routeBasemap(page);
     await routeArtifact(page, artifactFixture([]));
     await gotoApp(
       page,
@@ -388,7 +368,6 @@ test.describe('Canadian Drought Monitor committed monthly snapshot', () => {
   test('a missing monthly artifact is unavailable and cannot read as no drought', async ({
     page
   }) => {
-    await routeBasemap(page);
     await routeArtifact(page, null, 404);
     await gotoApp(
       page,

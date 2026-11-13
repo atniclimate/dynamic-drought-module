@@ -215,8 +215,8 @@ function loadMapKey(): void {
 
 /**
  * The chrome that needs no renderer: the on-map key and the map-information
- * disclosure, which is where the OpenStreetMap and per-source attribution
- * lives. Booted on the degraded paths (DR-035a) so a map that never paints
+ * disclosure, which points to the per-source attribution in the
+ * Acknowledgements. Booted on the degraded paths (DR-035a) so a map that never paints
  * still leaves a reachable, honest interface rather than a complete-looking
  * skeleton. Idempotent.
  */

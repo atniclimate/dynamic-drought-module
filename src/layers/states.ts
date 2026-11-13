@@ -1,10 +1,13 @@
 /**
  * United States state-boundary layer (E1, national framing).
  *
- * Renders the bundled Census Bureau cartographic boundary file
- * (public/data/us-states.geojson, baked by scripts/build-states.mjs at
- * 1:20,000,000 generalization) as a quiet slate outline with a fully
- * transparent fill that serves as the click target. States are the fourth
+ * Draws the state lines from the base map's own archive (source `base`, layer
+ * `boundary`, kind `state`: the Census 1:500,000 inner lines baked by
+ * scripts/build-base-tiles.mjs, so they meet the coast and the borders at the
+ * base map's scale) as a quiet slate line on a dark casing. The bundled Census
+ * cartographic boundary file (public/data/us-states.geojson, 1:20,000,000,
+ * scripts/build-states.mjs) stays the fully transparent click target and
+ * carries the selected-state tint and outline. States are the fourth
  * selectable space alongside the Tribal, Treaty / BIA, and ecoregion
  * boundaries: clicking a state opens the impact briefing with the resource
  * routing resolved to that state.
@@ -30,6 +33,7 @@ import type { FeatureCollection, GeoJsonProperties } from 'geojson';
 
 import { URLS } from '../config/urls';
 import { STATE_OUTLINE_COLOR } from '../config/palette';
+import { MAP_GROUND_COLOR } from '../config/interface-tokens';
 import { buildStatePopupModel } from '../ui/popups';
 import { buildPlaceConditionsHtml } from '../ui/popup-conditions';
 import { buildBoundaryContext, resolveBoundaryTitle } from '../impact/context';
@@ -42,12 +46,21 @@ const SOURCE_ID = 'us-states';
 const FILL_LAYER_ID = 'us-states-fill';
 const CASING_LAYER_ID = 'us-states-casing';
 const OUTLINE_LAYER_ID = 'us-states-outline';
+const SELECTED_LAYER_ID = 'us-states-selected';
+/** The base map's North America archive (src/map/style.ts) and its state lines. */
+const BASE_SOURCE_ID = 'base';
+const STATE_LINES = {
+  source: BASE_SOURCE_ID,
+  'source-layer': 'boundary',
+  filter: ['==', ['get', 'kind'], 'state'] as maplibregl.FilterSpecification
+};
 
 /** Fade targets for the sidebar's toggle transitions (LayerModule contract). */
 export const fadeLayerIds = [
   FILL_LAYER_ID,
   CASING_LAYER_ID,
-  OUTLINE_LAYER_ID
+  OUTLINE_LAYER_ID,
+  SELECTED_LAYER_ID
 ] as const;
 
 /**
@@ -70,8 +83,9 @@ const OUTLINE_WIDTH_NATIONAL = 0.4;
 const OUTLINE_WIDTH_REGIONAL = 1.5;
 const OUTLINE_WIDTH_SELECTED = 2.4;
 const OUTLINE_OPACITY_NATIONAL = 0.5;
-const OUTLINE_OPACITY_REGIONAL = 0.7;
-const CASING_COLOR = '#07111f';
+// Above every state highway and under the interstates at regional zoom (design pass 2026-11-13).
+const OUTLINE_OPACITY_REGIONAL = 0.8;
+const CASING_COLOR = MAP_GROUND_COLOR;
 
 type Status = 'loading' | 'ready' | 'error' | 'no-data';
 
@@ -161,7 +175,7 @@ export async function activate(map: maplibregl.Map): Promise<void> {
     {
       id: CASING_LAYER_ID,
       type: 'line',
-      source: SOURCE_ID,
+      ...STATE_LINES,
       paint: {
         'line-color': CASING_COLOR,
         'line-width': [
@@ -212,59 +226,42 @@ export async function activate(map: maplibregl.Map): Promise<void> {
     {
       id: OUTLINE_LAYER_ID,
       type: 'line',
-      source: SOURCE_ID,
+      ...STATE_LINES,
       paint: {
         'line-color': STATE_OUTLINE_COLOR,
         // U4c chrome weights (headroom A5): with states default-on, the
-        // outline must stay a quiet reference frame at EVERY zoom: hairline
-        // at the whole-US framing, a touch heavier once a region fills the
-        // view. The selected boost stays a constant that reads against the
-        // interpolated base at any zoom. STRUCTURE MATTERS: MapLibre only
-        // accepts ["zoom"] as input to a TOP-LEVEL step/interpolate, so the
-        // zoom curve wraps the feature-state case, not the other way around
-        // (the inverted form validates but logs a style error and falls
-        // back to the default width; caught by the 2026-07-12 console
-        // inspection).
-        'line-width': [
-          'interpolate',
-          ['linear'],
-          ['zoom'],
-          3,
-          [
-            'case',
-            ['boolean', ['feature-state', 'selected'], false],
-            OUTLINE_WIDTH_SELECTED,
-            OUTLINE_WIDTH_NATIONAL
-          ],
-          8,
-          [
-            'case',
-            ['boolean', ['feature-state', 'selected'], false],
-            OUTLINE_WIDTH_SELECTED,
-            OUTLINE_WIDTH_REGIONAL
-          ]
-        ],
-        // Same zoom-curve-wraps-the-case structure as the width above (the
-        // inverted form logs a style error; see the width comment). E1 quiets
-        // the hairline to roughly half strength at the national framing.
+        // line must stay a quiet reference frame at EVERY zoom: hairline at
+        // the whole-US framing, a touch heavier once a region fills the view.
+        // E1 quiets it to roughly half strength at the national framing.
+        'line-width': ['interpolate', ['linear'], ['zoom'], 3, OUTLINE_WIDTH_NATIONAL, 8, OUTLINE_WIDTH_REGIONAL],
+        'line-opacity': ['interpolate', ['linear'], ['zoom'], 3, OUTLINE_OPACITY_NATIONAL, 8, OUTLINE_OPACITY_REGIONAL]
+      }
+    },
+    beforeId
+  );
+
+  // The selected state's outline, on the coarse click shape. STRUCTURE
+  // MATTERS: MapLibre only accepts ["zoom"] as input to a TOP-LEVEL
+  // step/interpolate, so the zoom curve wraps the feature-state case (the
+  // inverted form validates but logs a style error; the 2026-07-12 console
+  // inspection). It fades out by zoom 9, where the 1:20,000,000 shape strays
+  // visibly from the drawn line; the selected tint stays.
+  map.addLayer(
+    {
+      id: SELECTED_LAYER_ID,
+      type: 'line',
+      source: SOURCE_ID,
+      paint: {
+        'line-color': STATE_OUTLINE_COLOR,
+        'line-width': OUTLINE_WIDTH_SELECTED,
         'line-opacity': [
           'interpolate',
           ['linear'],
           ['zoom'],
-          3,
-          [
-            'case',
-            ['boolean', ['feature-state', 'selected'], false],
-            1,
-            OUTLINE_OPACITY_NATIONAL
-          ],
-          8,
-          [
-            'case',
-            ['boolean', ['feature-state', 'selected'], false],
-            1,
-            OUTLINE_OPACITY_REGIONAL
-          ]
+          7,
+          ['case', ['boolean', ['feature-state', 'selected'], false], 1, 0],
+          9,
+          0
         ]
       }
     },
@@ -285,6 +282,7 @@ export function deactivate(map: maplibregl.Map): void {
     masterController = null;
   }
   if (map.getLayer(FILL_LAYER_ID)) map.removeLayer(FILL_LAYER_ID);
+  if (map.getLayer(SELECTED_LAYER_ID)) map.removeLayer(SELECTED_LAYER_ID);
   if (map.getLayer(OUTLINE_LAYER_ID)) map.removeLayer(OUTLINE_LAYER_ID);
   if (map.getLayer(CASING_LAYER_ID)) map.removeLayer(CASING_LAYER_ID);
   if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);

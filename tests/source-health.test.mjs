@@ -20,8 +20,7 @@ import {
 test('classifyUrl separates the served app, stubbed basemap tiles, and upstream sources', () => {
   const origin = 'http://127.0.0.1:4173';
   assert.equal(classifyUrl('http://127.0.0.1:4173/data/us-states.geojson', origin), 'app');
-  assert.equal(classifyUrl('https://tile.openstreetmap.org/5/5/11.png', origin), 'stubbed');
-  assert.equal(classifyUrl('https://a.tile.opentopomap.org/5/5/11.png', origin), 'stubbed');
+  assert.equal(classifyUrl('http://127.0.0.1:4173/data/ddm-base-na-2026-11.pmtiles', origin), 'app');
   assert.equal(classifyUrl('https://satellitemaps.nesdis.noaa.gov/arcgis/rest/services/MERGEDGC_Last_24hr/ImageServer/exportImage?bbox=1,2,3,4&f=image', origin), 'stubbed');
   assert.equal(classifyUrl('https://satellitemaps.nesdis.noaa.gov/arcgis/rest/services/MERGEDGC_Last_24hr/ImageServer/query?where=1%3D1&f=json', origin), 'source');
   assert.deepEqual(STUBBED_TILE_GLOBS, ['https://satellitemaps.nesdis.noaa.gov/**/exportImage**']);
@@ -29,14 +28,15 @@ test('classifyUrl separates the served app, stubbed basemap tiles, and upstream 
     classifyUrl('https://services3.arcgis.com/T4QMspbfLg3qTGWY/ArcGIS/rest/services/WFIGS_Interagency_Perimeters_Current/FeatureServer/0/query?f=geojson', origin),
     'source',
   );
-  assert.ok(STUBBED_HOSTS.includes('tile.openstreetmap.org'));
+  // DDM's own base map is same-origin: no tile host is stubbed any more.
+  assert.deepEqual(STUBBED_HOSTS, []);
   assert.ok(CACHE_HEADERS.includes('age'));
 });
 
 test('every stubbed host and tile glob names a host the runtime registry actually uses', async () => {
-  // The catalog plus its boot slice (DR-008a, 2026-09-03): the OpenStreetMap
-  // tile template lives in urls-boot.ts and is re-exported by urls.ts under
-  // its old key, so the literal host appears only in the boot file.
+  // The catalog plus its boot slice (DR-008a, 2026-09-03): a boot literal
+  // lives in urls-boot.ts and is re-exported by urls.ts under its old key,
+  // so its host may appear only in the boot file.
   const urls =
     (await readFile(new URL('../src/config/urls.ts', import.meta.url), 'utf8')) +
     (await readFile(new URL('../src/config/urls-boot.ts', import.meta.url), 'utf8'));

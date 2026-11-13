@@ -8,11 +8,6 @@ import {
 
 const NADM_URL =
   'https://www.ncei.noaa.gov/pub/data/nidis/geojson/na/nadm/NADM-current.geojson';
-const TRANSPARENT_PNG = Buffer.from(
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
-  'base64'
-);
-
 function feature(category: string, yearMonth = '202606') {
   return {
     type: 'Feature',
@@ -42,16 +37,6 @@ function fixture(features = [feature('d0'), feature('d3')]) {
     type: 'FeatureCollection',
     features
   };
-}
-
-async function routeBasemap(page: Page): Promise<void> {
-  await page.route('https://tile.openstreetmap.org/**', (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: 'image/png',
-      body: TRANSPARENT_PNG
-    })
-  );
 }
 
 async function routeNadm(
@@ -91,7 +76,6 @@ test.describe('North American Drought Monitor continental context', () => {
         }
       });
     });
-    await routeBasemap(page);
     const body = fixture([0, 1, 2, 3, 4].map(dm => feature('d' + dm)));
     body.features.forEach((entry, dm) => {
       const west = -132 + dm * 3;
@@ -129,7 +113,6 @@ test.describe('North American Drought Monitor continental context', () => {
     page
   }) => {
     const requests: string[] = [];
-    await routeBasemap(page);
     await routeNadm(page, fixture(), requests);
 
     await gotoApp(
@@ -175,7 +158,6 @@ test.describe('North American Drought Monitor continental context', () => {
   test('popup names the consensus product and never infers a polygon issuer', async ({
     page
   }) => {
-    await routeBasemap(page);
     await routeNadm(page, fixture([feature('d3')]), []);
     await gotoApp(
       page,
@@ -204,7 +186,6 @@ test.describe('North American Drought Monitor continental context', () => {
   test('does not require every class to be occupied in a valid published response', async ({
     page
   }) => {
-    await routeBasemap(page);
     await routeNadm(page, fixture([feature('d2')]), []);
     await gotoApp(
       page,
@@ -221,7 +202,6 @@ test.describe('North American Drought Monitor continental context', () => {
   test('mixed or malformed consensus months fail unavailable, not no drought', async ({
     page
   }) => {
-    await routeBasemap(page);
     await routeNadm(
       page,
       fixture([feature('d0', '202606'), feature('d1', '202607')]),
@@ -248,7 +228,6 @@ test.describe('North American Drought Monitor continental context', () => {
   test('an empty valid collection reports no data instead of unavailable', async ({
     page
   }) => {
-    await routeBasemap(page);
     await routeNadm(page, fixture([]), []);
     await gotoApp(
       page,
@@ -267,7 +246,6 @@ test.describe('North American Drought Monitor continental context', () => {
   test('malformed polygon coordinates leave no ready state and a later retry can recover', async ({
     page
   }) => {
-    await routeBasemap(page);
     // Two consumers share the 'nadm-current' fetch key (the layer and the
     // drought minimap, src/state/minimap-drought.ts) and each invalidates it
     // on a malformed payload. Which one fetches first, and whether the other
@@ -328,7 +306,6 @@ test.describe('North American Drought Monitor continental context', () => {
   test('fetch failure is unavailable and cannot serialize as a clean month', async ({
     page
   }) => {
-    await routeBasemap(page);
     await routeNadm(page, null, [], 503);
     await gotoApp(
       page,

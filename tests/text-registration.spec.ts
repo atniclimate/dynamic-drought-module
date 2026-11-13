@@ -27,7 +27,6 @@ import { expect, test, type Page } from './offline-test';
 import { KEY_ELIGIBLE_LABELS } from '../src/config/chip-labels';
 import { HAZARD_CLUSTERS, HAZARD_CLUSTER_KEYS } from '../src/config/clusters';
 import { NADM_CATEGORIES, USDM_CATEGORIES } from '../src/config/palette';
-import { BOOT_URLS } from '../src/config/urls-boot';
 import { awaitQuiescence, gotoApp, stubHeatRiskCatalog, waitForLayerSettled } from './helpers';
 import {
   describeFindings,
@@ -63,8 +62,7 @@ const FIT_SELECTORS = [
   '.map-key-chip-label',
   '.overlay-btn',
   '.layers-studio-linkout',
-  '.brand-text h1',
-  '.brand-text p'
+  '.brand-text h1'
 ] as const;
 
 /** Deterministic answers for the briefing hosts a WA boot reaches (codex C6). */
@@ -93,18 +91,14 @@ const ONE_PIXEL_PNG = Buffer.from(
   'base64'
 );
 
-/** The OpenStreetMap raster ground's tile host (src/map/style.ts, `BOOT_URLS.basemapOSM`). */
-const OSM_TILE_HOST = new URL(BOOT_URLS.basemapOSM.replace(/\{[xyz]\}/g, '0')).hostname;
-
 /**
  * Deterministic answers for the map sources the modes this spec visits read
  * and `gotoApp` does not already answer (found-109). `gotoApp` answers the
  * sovereign boundaries, the minimap's inputs, NADM, the NIFC WFIGS
  * perimeters with the minimap's count POSTs, the recent satellite basemap,
  * and the CPC seasonal and SPC fire outlooks. The rest, by the recipes in
- * src/config/clusters.ts:
- * - every mode: the OpenStreetMap ground, one pixel per tile (the suite's
- *   idiom, tests/layer-cancellation.spec.ts and its peers);
+ * src/config/clusters.ts (the ground is DDM's own same-origin base map, so it
+ * needs no answer):
  * - Wildfire: `hms-smoke` reads the NOAA HMS FeatureServer directly
  *   (src/layers/hms-smoke.ts), answered with the shared `HMS_STUB`. Not
  *   `stubWildfireFeeds` whole: its page-level WFIGS route would outrank
@@ -118,9 +112,6 @@ const OSM_TILE_HOST = new URL(BOOT_URLS.basemapOSM.replace(/\{[xyz]\}/g, '0')).h
  */
 async function stubModeSources(page: Page): Promise<void> {
   const emptyCollection = JSON.stringify({ type: 'FeatureCollection', features: [] });
-  await page.route(`https://${OSM_TILE_HOST}/**`, (route) =>
-    route.fulfill({ status: 200, contentType: 'image/png', body: ONE_PIXEL_PNG })
-  );
   await page.route(
     (url) => url.href.includes('NOAA_Satellite_Smoke_Detection'),
     (route) => route.fulfill({ status: 200, contentType: 'application/geo+json', body: JSON.stringify(HMS_STUB) })

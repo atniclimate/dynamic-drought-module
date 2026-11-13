@@ -1,18 +1,19 @@
 {
-  "_comment": "NAMES ONLY search index for Tribal land areas (U3b, D-STD-012; safe matcher and provenance gate per D-0.7.0-026). No polygons or coordinates: a search selection queries the live AIAN-LAR service for the extent at selection time. provenance safe-match: displayName is the formal Federal Register Tribe name, matched under the safety rules in scripts/build-tribal-roster.mjs. provenance lar-label: displayName is the BIA land-area label verbatim (no Tribe mapping is guessed). censusAreas: Census AIANNH federal areas (names only; a search selection queries the live Census service): every OTSA, TDSA and ANVSA, plus reservation and trust land areas only for Tribes AIAN-LAR does not locate, so a Nation can appear both as a LAR land area and as a Census statistical area. provenance census-label keeps the Census name verbatim. Regenerate with `npm run build:tribal-roster`.",
+  "_comment": "NAMES ONLY search index for Tribal land areas (U3b, D-STD-012; safe matcher and provenance gate per D-0.7.0-026). No polygons or coordinates: a search selection queries the live AIAN-LAR service for the extent at selection time. provenance safe-match: displayName is the formal Federal Register Tribe name, matched under the safety rules in scripts/build-tribal-roster.mjs. provenance lar-label: displayName is the BIA land-area label verbatim (no Tribe mapping is guessed). censusAreas: Census AIANNH federal areas (names only; a search selection queries the live Census service): every OTSA, TDSA and ANVSA, plus reservation and trust land areas only for Tribes AIAN-LAR does not locate, so a Nation can appear both as a LAR land area and as a Census statistical area. provenance census-label keeps the Census name verbatim. labelAreas: Census AIANNH code to the Federal Register names the Tribal Lands layer labels that area with (every federal row the Census matcher resolves, reservations included; \"(previously listed as ...)\" dropped). Regenerate with `npm run build:tribal-roster`.",
   "meta": {
     "rosterSource": "Federal Register 2026-01899 (2026-01-30)",
     "landAreaSource": "BIA AIAN-LAR FeatureServer (distinct LARNAME)",
     "matcher": "LAR areas, safe-match v2 (D-0.7.0-026): unique whole-phrase containment, state-constrained, distinctive-token guard; plus the maintainer-curated known-ambiguous gate (D-0.7.0-026a)",
     "censusMatcher": "Census areas (rule 7): maintainer-curated known-ambiguous gate (D-0.7.0-026a) first; then unique whole-phrase containment of BASENAME outside the roster name parentheses, or equality with a parenthetical, distinctive-token guard; several candidates resolve only when exactly one carries BASENAME as its parenthetical; no state constraint",
-    "generated": "2026-11-06",
+    "generated": "2026-11-13",
     "rosterCount": 573,
     "landAreaCount": 335,
     "safeMatchCount": 258,
     "larLabelCount": 77,
     "censusSource": "US Census Bureau TIGERweb AIANNH layer 47 (names only)",
     "censusAreaCount": 272,
-    "censusSafeMatchCount": 232
+    "censusSafeMatchCount": 232,
+    "labelAreaCount": 452
   },
   "areas": [
     {
@@ -3324,5 +3325,1363 @@
       "displayName": "Yavapai-Prescott Indian Tribe",
       "provenance": "safe-match"
     }
-  ]
+  ],
+  "labelAreas": {
+    "1010": [
+      "Elk Valley Rancheria, California"
+    ],
+    "1040": [
+      "Ely Shoshone Tribe of Nevada"
+    ],
+    "1055": [
+      "Enterprise Rancheria of Maidu Indians of California"
+    ],
+    "1065": [
+      "Ewiiaapaayp Band of Kumeyaay Indians"
+    ],
+    "1100": [
+      "Flandreau Santee Sioux Tribe of South Dakota"
+    ],
+    "1110": [
+      "Confederated Salish and Kootenai Tribes of the Flathead Reservation"
+    ],
+    "1135": [
+      "Forest County Potawatomi Community, Wisconsin"
+    ],
+    "1140": [
+      "White Mountain Apache Tribe of the Fort Apache Reservation, Arizona"
+    ],
+    "1150": [
+      "Fort Belknap Indian Community of the Fort Belknap Reservation of Montana"
+    ],
+    "1160": [
+      "Three Affiliated Tribes of the Fort Berthold Reservation, North Dakota"
+    ],
+    "1170": [
+      "Fort Bidwell Indian Community of the Fort Bidwell Reservation of California"
+    ],
+    "1185": [
+      "Shoshone-Bannock Tribes of the Fort Hall Reservation"
+    ],
+    "1195": [
+      "Fort Independence Indian Community of Paiute Indians of the Fort Independence Reservation, California"
+    ],
+    "1210": [
+      "Fort McDermitt Paiute and Shoshone Tribes of the Fort McDermitt Indian Reservation, Nevada and Oregon"
+    ],
+    "1220": [
+      "Fort McDowell Yavapai Nation, Arizona"
+    ],
+    "1235": [
+      "Fort Mojave Indian Tribe of Arizona, California & Nevada"
+    ],
+    "1250": [
+      "Assiniboine and Sioux Tribes of the Fort Peck Indian Reservation, Montana"
+    ],
+    "1280": [
+      "Quechan Tribe of the Fort Yuma Indian Reservation, California & Arizona"
+    ],
+    "1310": [
+      "Gila River Indian Community of the Gila River Indian Reservation, Arizona"
+    ],
+    "1365": [
+      "Confederated Tribes of the Grand Ronde Community of Oregon"
+    ],
+    "1370": [
+      "Grand Traverse Band of Ottawa and Chippewa Indians, Michigan"
+    ],
+    "1380": [
+      "Greenville Rancheria"
+    ],
+    "1395": [
+      "Grindstone Indian Rancheria of Wintun-Wailaki Indians of California"
+    ],
+    "1400": [
+      "Guidiville Rancheria of California"
+    ],
+    "1410": [
+      "Hannahville Indian Community, Michigan"
+    ],
+    "1440": [
+      "Havasupai Tribe of the Havasupai Reservation, Arizona"
+    ],
+    "1450": [
+      "Ho-Chunk Nation of Wisconsin"
+    ],
+    "1460": [
+      "Hoh Indian Tribe"
+    ],
+    "1490": [
+      "Hoopa Valley Tribe, California"
+    ],
+    "1505": [
+      "Hopi Tribe of Arizona"
+    ],
+    "1515": [
+      "Hopland Band of Pomo Indians, California"
+    ],
+    "1545": [
+      "Hualapai Indian Tribe of the Hualapai Indian Reservation, Arizona"
+    ],
+    "1560": [
+      "Inaja Band of Diegueno Mission Indians of the Inaja and Cosmit Reservation, California"
+    ],
+    "1625": [
+      "Pueblo of Isleta, New Mexico"
+    ],
+    "1640": [
+      "Jackson Band of Miwuk Indians"
+    ],
+    "1655": [
+      "Jamestown S'Klallam Tribe"
+    ],
+    "1670": [
+      "Jamul Indian Village of California"
+    ],
+    "1685": [
+      "Pueblo of Jemez, New Mexico"
+    ],
+    "1690": [
+      "Jena Band of Choctaw Indians"
+    ],
+    "1700": [
+      "Jicarilla Apache Nation, New Mexico"
+    ],
+    "1720": [
+      "Kaibab Band of Paiute Indians of the Kaibab Indian Reservation, Arizona"
+    ],
+    "1735": [
+      "Kalispel Indian Community of the Kalispel Reservation"
+    ],
+    "1750": [
+      "Karuk Tribe"
+    ],
+    "1785": [
+      "Klamath Tribes"
+    ],
+    "1815": [
+      "Lac Courte Oreilles Band of Lake Superior Chippewa Indians of Wisconsin"
+    ],
+    "1825": [
+      "Lac du Flambeau Band of Lake Superior Chippewa Indians of the Lac du Flambeau Reservation of Wisconsin"
+    ],
+    "1830": [
+      "Lac Vieux Desert Band of Lake Superior Chippewa Indians of Michigan"
+    ],
+    "1840": [
+      "Pueblo of Laguna, New Mexico"
+    ],
+    "1850": [
+      "La Jolla Band of Luiseno Indians, California"
+    ],
+    "1860": [
+      "Sisseton-Wahpeton Oyate of the Lake Traverse Reservation, South Dakota"
+    ],
+    "1895": [
+      "La Posta Band of Diegueno Mission Indians of the La Posta Indian Reservation, California"
+    ],
+    "1915": [
+      "Las Vegas Tribe of Paiute Indians of the Las Vegas Indian Colony, Nevada"
+    ],
+    "1925": [
+      "Cahto Tribe of the Laytonville Rancheria"
+    ],
+    "1963": [
+      "Little Traverse Bay Bands of Odawa Indians, Michigan"
+    ],
+    "1970": [
+      "Lone Pine Paiute-Shoshone Tribe"
+    ],
+    "1995": [
+      "Los Coyotes Band of Cahuilla and Cupeno Indians, California"
+    ],
+    "2015": [
+      "Lovelock Paiute Tribe of the Lovelock Indian Colony, Nevada"
+    ],
+    "2030": [
+      "Lower Brule Sioux Tribe of the Lower Brule Reservation, South Dakota"
+    ],
+    "2040": [
+      "Lower Elwha Tribal Community"
+    ],
+    "2055": [
+      "Lower Sioux Indian Community in the State of Minnesota"
+    ],
+    "2070": [
+      "Lummi Tribe of the Lummi Reservation"
+    ],
+    "2075": [
+      "Lytton Rancheria of California"
+    ],
+    "2085": [
+      "Makah Indian Tribe of the Makah Indian Reservation"
+    ],
+    "2115": [
+      "Manzanita Band of Diegueno Mission Indians of the Manzanita Reservation, California"
+    ],
+    "2145": [
+      "Mashantucket Pequot Indian Tribe"
+    ],
+    "2147": [
+      "Mashpee Wampanoag Tribe"
+    ],
+    "2150": [
+      "Match-E-Be-Nash-She-Wish Band of Pottawatomi"
+    ],
+    "2175": [
+      "Menominee Indian Tribe of Wisconsin"
+    ],
+    "2190": [
+      "Mesa Grande Band of Diegueno Mission Indians of the Mesa Grande Reservation, California"
+    ],
+    "2205": [
+      "Mescalero Apache Tribe of the Mescalero Reservation, New Mexico"
+    ],
+    "2240": [
+      "Miccosukee Tribe of Indians"
+    ],
+    "2255": [
+      "Middletown Rancheria of Pomo Indians of California"
+    ],
+    "2285": [
+      "Minnesota Chippewa Tribe, Minnesota (Six component reservations: Bois Forte Band (Nett Lake); Fond du Lac Band; Grand Portage Band; Leech Lake Band; Mille Lacs Band; White Earth Band)"
+    ],
+    "2315": [
+      "Moapa Band of Paiute Indians of the Moapa River Indian Reservation, Nevada"
+    ],
+    "2320": [
+      "Mohegan Tribe of Indians of Connecticut"
+    ],
+    "2340": [
+      "Mooretown Rancheria of Maidu Indians of California"
+    ],
+    "2360": [
+      "Morongo Band of Mission Indians, California"
+    ],
+    "2375": [
+      "Muckleshoot Indian Tribe"
+    ],
+    "2400": [
+      "Pueblo of Nambe, New Mexico"
+    ],
+    "2415": [
+      "Narragansett Indian Tribe"
+    ],
+    "2430": [
+      "Navajo Nation, Arizona, New Mexico, & Utah"
+    ],
+    "2445": [
+      "Nez Perce Tribe"
+    ],
+    "2460": [
+      "Nisqually Indian Tribe"
+    ],
+    "2475": [
+      "Nooksack Indian Tribe"
+    ],
+    "2490": [
+      "Northern Cheyenne Tribe of the Northern Cheyenne Indian Reservation, Montana"
+    ],
+    "2510": [
+      "Ohkay Owingeh, New Mexico"
+    ],
+    "2550": [
+      "Omaha Tribe of Nebraska"
+    ],
+    "2555": [
+      "Oneida Indian Nation"
+    ],
+    "2570": [
+      "Onondaga Nation"
+    ],
+    "2595": [
+      "The Osage Nation"
+    ],
+    "2635": [
+      "Pala Band of Mission Indians"
+    ],
+    "2685": [
+      "Paskenta Band of Nomlaki Indians of California"
+    ],
+    "2695": [
+      "Passamaquoddy Tribe"
+    ],
+    "2745": [
+      "Pechanga Band of Indians"
+    ],
+    "2760": [
+      "Penobscot Nation"
+    ],
+    "2775": [
+      "Picayune Rancheria of Chukchansi Indians of California"
+    ],
+    "2785": [
+      "Pueblo of Picuris, New Mexico"
+    ],
+    "2820": [
+      "Pinoleville Pomo Nation, California"
+    ],
+    "2835": [
+      "Pit River Tribe, California (includes XL Ranch, Big Bend, Likely, Lookout, Montgomery Creek, and Roaring Creek Rancherias)"
+    ],
+    "2890": [
+      "Pokagon Band of Potawatomi Indians, Michigan and Indiana"
+    ],
+    "2910": [
+      "Port Gamble S'Klallam Tribe"
+    ],
+    "2925": [
+      "Suquamish Indian Tribe of the Port Madison Reservation"
+    ],
+    "2985": [
+      "Prairie Island Indian Community in the State of Minnesota"
+    ],
+    "2990": [
+      "Pueblo of Pojoaque, New Mexico"
+    ],
+    "3000": [
+      "Puyallup Tribe of the Puyallup Reservation"
+    ],
+    "3010": [
+      "Pyramid Lake Paiute Tribe of the Pyramid Lake Reservation, Nevada"
+    ],
+    "3020": [
+      "Quartz Valley Indian Community of the Quartz Valley Reservation of California"
+    ],
+    "3030": [
+      "Quileute Tribe of the Quileute Reservation"
+    ],
+    "3040": [
+      "Quinault Indian Nation"
+    ],
+    "3070": [
+      "Ramona Band of Cahuilla, California"
+    ],
+    "3075": [
+      "Rappahannock Tribe, Inc."
+    ],
+    "3085": [
+      "Red Cliff Band of Lake Superior Chippewa Indians of Wisconsin"
+    ],
+    "3095": [
+      "Redding Rancheria, California"
+    ],
+    "3100": [
+      "Red Lake Band of Chippewa Indians, Minnesota"
+    ],
+    "3115": [
+      "Redwood Valley or Little River Band of Pomo Indians of the Redwood Valley Rancheria California"
+    ],
+    "3130": [
+      "Reno-Sparks Indian Colony, Nevada"
+    ],
+    "3165": [
+      "Rincon Band of Luiseno Indians"
+    ],
+    "3195": [
+      "Robinson Rancheria"
+    ],
+    "3205": [
+      "Chippewa Cree Indians of the Rocky Boy's Reservation, Montana"
+    ],
+    "3220": [
+      "Bear River Band of the Rohnerville Rancheria, California"
+    ],
+    "3235": [
+      "Rosebud Sioux Tribe of the Rosebud Indian Reservation, South Dakota"
+    ],
+    "3250": [
+      "Round Valley Indian Tribes, Round Valley Reservation, California"
+    ],
+    "3305": [
+      "St. Croix Chippewa Indians of Wisconsin"
+    ],
+    "3340": [
+      "Salt River Pima-Maricopa Indian Community of the Salt River Reservation, Arizona"
+    ],
+    "3355": [
+      "San Carlos Apache Tribe of the San Carlos Reservation, Arizona"
+    ],
+    "3370": [
+      "Pueblo of Sandia, New Mexico"
+    ],
+    "3400": [
+      "Pueblo of San Felipe, New Mexico"
+    ],
+    "3415": [
+      "Pueblo of San Ildefonso, New Mexico"
+    ],
+    "3445": [
+      "Yuhaaviatam of San Manuel Nation"
+    ],
+    "3460": [
+      "San Pasqual Band of Diegueno Mission Indians of California"
+    ],
+    "3480": [
+      "Pueblo of Santa Ana, New Mexico"
+    ],
+    "3495": [
+      "Pueblo of Santa Clara, New Mexico"
+    ],
+    "3540": [
+      "Santa Ynez Band of Chumash Mission Indians of the Santa Ynez Reservation, California"
+    ],
+    "3550": [
+      "Iipay Nation of Santa Ysabel, California"
+    ],
+    "3585": [
+      "Santo Domingo Pueblo"
+    ],
+    "3625": [
+      "Sauk-Suiattle Indian Tribe"
+    ],
+    "3635": [
+      "Sault Ste. Marie Tribe of Chippewa Indians, Michigan"
+    ],
+    "3680": [
+      "Shakopee Mdewakanton Sioux Community of Minnesota"
+    ],
+    "3735": [
+      "Sherwood Valley Rancheria of Pomo Indians of California"
+    ],
+    "3750": [
+      "Shingle Springs Band of Miwok Indians, Shingle Springs Rancheria (Verona Tract), California"
+    ],
+    "3780": [
+      "Shoalwater Bay Indian Tribe of the Shoalwater Bay Indian Reservation"
+    ],
+    "3795": [
+      "Confederated Tribes of Siletz Indians of Oregon"
+    ],
+    "3825": [
+      "Skokomish Indian Tribe"
+    ],
+    "3840": [
+      "Skull Valley Band of Goshute Indians of Utah"
+    ],
+    "3860": [
+      "Snoqualmie Indian Tribe"
+    ],
+    "3870": [
+      "Soboba Band of Luiseno Indians, California"
+    ],
+    "3885": [
+      "Sokaogon Chippewa Community, Wisconsin"
+    ],
+    "3925": [
+      "Southern Ute Indian Tribe of the Southern Ute Reservation, Colorado"
+    ],
+    "3935": [
+      "Spirit Lake Tribe, North Dakota"
+    ],
+    "3940": [
+      "Spokane Tribe of the Spokane Reservation"
+    ],
+    "3955": [
+      "Squaxin Island Tribe of the Squaxin Island Reservation"
+    ],
+    "3970": [
+      "Standing Rock Sioux Tribe of North & South Dakota"
+    ],
+    "3985": [
+      "Kashia Band of Pomo Indians of the Stewarts Point Rancheria, California"
+    ],
+    "4000": [
+      "Stillaguamish Tribe of Indians of Washington"
+    ],
+    "4015": [
+      "Stockbridge Munsee Community, Wisconsin"
+    ],
+    "4030": [
+      "Elem Indian Colony of Pomo Indians of the Sulphur Bank Rancheria, California"
+    ],
+    "4045": [
+      "Summit Lake Paiute Tribe of Nevada"
+    ],
+    "4060": [
+      "Susanville Indian Rancheria, California"
+    ],
+    "4075": [
+      "Swinomish Indian Tribal Community"
+    ],
+    "4090": [
+      "Sycuan Band of the Kumeyaay Nation"
+    ],
+    "4110": [
+      "Table Mountain Rancheria"
+    ],
+    "4140": [
+      "Pueblo of Taos, New Mexico"
+    ],
+    "4170": [
+      "Pueblo of Tesuque, New Mexico"
+    ],
+    "4200": [
+      "Tohono O'odham Nation of Arizona"
+    ],
+    "4225": [
+      "Tonawanda Band of Seneca"
+    ],
+    "4235": [
+      "Tonto Apache Tribe of Arizona"
+    ],
+    "4255": [
+      "Torres Martinez Desert Cahuilla Indians, California"
+    ],
+    "4275": [
+      "Cher-Ae Heights Indian Community of the Trinidad Rancheria, California"
+    ],
+    "4290": [
+      "Tulalip Tribes of Washington"
+    ],
+    "4300": [
+      "Tule River Indian Tribe of the Tule River Reservation, California"
+    ],
+    "4315": [
+      "Tunica-Biloxi Indian Tribe"
+    ],
+    "4330": [
+      "Tuolumne Band of Me-Wuk Indians of the Tuolumne Rancheria of California"
+    ],
+    "4345": [
+      "Turtle Mountain Band of Chippewa Indians of North Dakota"
+    ],
+    "4360": [
+      "Tuscarora Nation"
+    ],
+    "4375": [
+      "Twenty-Nine Palms Band of Mission Indians of California"
+    ],
+    "4405": [
+      "Confederated Tribes of the Umatilla Indian Reservation"
+    ],
+    "4430": [
+      "Habematolel Pomo of Upper Lake, California"
+    ],
+    "4445": [
+      "Upper Sioux Community, Minnesota"
+    ],
+    "4455": [
+      "Upper Skagit Indian Tribe"
+    ],
+    "4470": [
+      "Ute Mountain Ute Tribe"
+    ],
+    "4515": [
+      "Walker River Paiute Tribe of the Walker River Reservation, Nevada"
+    ],
+    "4625": [
+      "Winnebago Tribe of Nebraska"
+    ],
+    "4635": [
+      "Winnemucca Indian Colony of Nevada"
+    ],
+    "4690": [
+      "Confederated Tribes and Bands of the Yakama Nation"
+    ],
+    "4700": [
+      "Yankton Sioux Tribe of South Dakota"
+    ],
+    "4708": [
+      "Yavapai-Apache Nation of the Camp Verde Indian Reservation, Arizona"
+    ],
+    "4710": [
+      "Yavapai-Prescott Indian Tribe"
+    ],
+    "4725": [
+      "Yerington Paiute Tribe of the Yerington Colony & Campbell Ranch, Nevada"
+    ],
+    "4740": [
+      "Yomba Shoshone Tribe of the Yomba Reservation, Nevada"
+    ],
+    "4755": [
+      "Ysleta del Sur Pueblo"
+    ],
+    "4770": [
+      "Pueblo of Zia, New Mexico"
+    ],
+    "4785": [
+      "Zuni Tribe of the Zuni Reservation, New Mexico"
+    ],
+    "5560": [
+      "Cheyenne and Arapaho Tribes, Oklahoma"
+    ],
+    "5580": [
+      "The Chickasaw Nation"
+    ],
+    "5620": [
+      "The Muscogee (Creek) Nation"
+    ],
+    "5640": [
+      "Eastern Shawnee Tribe of Oklahoma"
+    ],
+    "5690": [
+      "Kaw Nation, Oklahoma"
+    ],
+    "5730": [
+      "Miami Tribe of Oklahoma"
+    ],
+    "5740": [
+      "Modoc Nation"
+    ],
+    "5760": [
+      "Otoe-Missouria Tribe of Indians, Oklahoma"
+    ],
+    "5780": [
+      "Pawnee Nation of Oklahoma"
+    ],
+    "5795": [
+      "Peoria Tribe of Indians of Oklahoma"
+    ],
+    "5810": [
+      "Quapaw Nation"
+    ],
+    "5835": [
+      "Seneca-Cayuga Nation"
+    ],
+    "5860": [
+      "Tonkawa Tribe of Indians of Oklahoma"
+    ],
+    "5890": [
+      "Wyandotte Nation"
+    ],
+    "6015": [
+      "Native Village of Akhiok"
+    ],
+    "6020": [
+      "Akiachak Native Community"
+    ],
+    "6025": [
+      "Akiak Native Community"
+    ],
+    "6030": [
+      "Native Village of Akutan"
+    ],
+    "6035": [
+      "Village of Alakanuk"
+    ],
+    "6040": [
+      "Alatna Village"
+    ],
+    "6045": [
+      "Native Village of Aleknagik"
+    ],
+    "6065": [
+      "Algaaciq Native Village (St. Mary's)"
+    ],
+    "6070": [
+      "Allakaket Village"
+    ],
+    "6075": [
+      "Native Village of Ambler"
+    ],
+    "6080": [
+      "Village of Anaktuvuk Pass"
+    ],
+    "6100": [
+      "Angoon Community Association"
+    ],
+    "6105": [
+      "Village of Aniak"
+    ],
+    "6125": [
+      "Anvik Village"
+    ],
+    "6150": [
+      "Native Village of Atka"
+    ],
+    "6160": [
+      "Village of Atmautluak"
+    ],
+    "6165": [
+      "Native Village of Atqasuk"
+    ],
+    "6175": [
+      "Native Village of Barrow Inupiat Traditional Government"
+    ],
+    "6190": [
+      "Beaver Village"
+    ],
+    "6195": [
+      "Native Village of Belkofski"
+    ],
+    "6225": [
+      "Village of Bill Moore's Slough"
+    ],
+    "6235": [
+      "Birch Creek Tribe"
+    ],
+    "6240": [
+      "Native Village of Brevig Mission"
+    ],
+    "6250": [
+      "Native Village of Buckland"
+    ],
+    "6255": [
+      "Native Village of Cantwell"
+    ],
+    "6265": [
+      "Chalkyitsik Village"
+    ],
+    "6275": [
+      "Village of Chefornak"
+    ],
+    "6280": [
+      "Native Village of Chenega"
+    ],
+    "6285": [
+      "Chevak Native Village"
+    ],
+    "6290": [
+      "Chickaloon Native Village"
+    ],
+    "6300": [
+      "Native Village of Chignik Lagoon"
+    ],
+    "6305": [
+      "Chignik Lake Village"
+    ],
+    "6310": [
+      "Chilkat Indian Village (Klukwan)"
+    ],
+    "6315": [
+      "Chilkoot Indian Association (Haines)"
+    ],
+    "6330": [
+      "Native Village of Chitina"
+    ],
+    "6335": [
+      "Native Village of Chuathbaluk (Russian Mission, Kuskokwim)"
+    ],
+    "6340": [
+      "Chuloonawick Native Village"
+    ],
+    "6350": [
+      "Circle Native Community"
+    ],
+    "6360": [
+      "Village of Clarks Point"
+    ],
+    "6365": [
+      "Native Village of Kluti Kaah (aka Copper Center)"
+    ],
+    "6385": [
+      "Craig Tribal Association"
+    ],
+    "6390": [
+      "Village of Crooked Creek"
+    ],
+    "6400": [
+      "Native Village of Deering"
+    ],
+    "6415": [
+      "Village of Dot Lake"
+    ],
+    "6420": [
+      "Douglas Indian Association"
+    ],
+    "6430": [
+      "Native Village of Eagle"
+    ],
+    "6440": [
+      "Native Village of Eek"
+    ],
+    "6445": [
+      "Egegik Village"
+    ],
+    "6450": [
+      "Eklutna Native Village"
+    ],
+    "6455": [
+      "Native Village of Ekuk"
+    ],
+    "6460": [
+      "Native Village of Ekwok"
+    ],
+    "6470": [
+      "Native Village of Elim"
+    ],
+    "6480": [
+      "Emmonak Village"
+    ],
+    "6490": [
+      "Evansville Village (aka Bettles Field)"
+    ],
+    "6495": [
+      "Native Village of Eyak (Cordova)"
+    ],
+    "6500": [
+      "Native Village of False Pass"
+    ],
+    "6515": [
+      "Native Village of Fort Yukon"
+    ],
+    "6520": [
+      "Native Village of Gakona"
+    ],
+    "6530": [
+      "Native Village of Gambell"
+    ],
+    "6535": [
+      "Native Village of Georgetown"
+    ],
+    "6540": [
+      "Chinik Eskimo Community (Golovin)"
+    ],
+    "6545": [
+      "Native Village of Goodnews Bay"
+    ],
+    "6550": [
+      "Organized Village of Grayling (aka Holikachuk)"
+    ],
+    "6560": [
+      "Gulkana Village Council"
+    ],
+    "6570": [
+      "Native Village of Hamilton"
+    ],
+    "6575": [
+      "Healy Lake Village"
+    ],
+    "6585": [
+      "Holy Cross Tribe"
+    ],
+    "6590": [
+      "Hoonah Indian Association"
+    ],
+    "6595": [
+      "Native Village of Hooper Bay"
+    ],
+    "6605": [
+      "Hughes Village"
+    ],
+    "6610": [
+      "Huslia Village"
+    ],
+    "6615": [
+      "Hydaburg Cooperative Association"
+    ],
+    "6620": [
+      "Igiugig Village"
+    ],
+    "6625": [
+      "Village of Iliamna"
+    ],
+    "6630": [
+      "Native Village of Diomede (aka Inalik)"
+    ],
+    "6650": [
+      "Ivanof Bay Tribe"
+    ],
+    "6670": [
+      "Organized Village of Kake"
+    ],
+    "6680": [
+      "Kaktovik Village (aka Barter Island)"
+    ],
+    "6690": [
+      "Village of Kaltag"
+    ],
+    "6700": [
+      "Native Village of Karluk"
+    ],
+    "6705": [
+      "Organized Village of Kasaan"
+    ],
+    "6710": [
+      "Kasigluk Traditional Elders Council"
+    ],
+    "6720": [
+      "Kenaitze Indian Tribe"
+    ],
+    "6725": [
+      "Ketchikan Indian Community"
+    ],
+    "6730": [
+      "Native Village of Kiana"
+    ],
+    "6735": [
+      "Agdaagux Tribe of King Cove"
+    ],
+    "6740": [
+      "King Salmon Tribe"
+    ],
+    "6750": [
+      "Native Village of Kipnuk"
+    ],
+    "6755": [
+      "Native Village of Kivalina"
+    ],
+    "6765": [
+      "Klawock Cooperative Association"
+    ],
+    "6785": [
+      "Knik Tribe"
+    ],
+    "6790": [
+      "Native Village of Kobuk"
+    ],
+    "6795": [
+      "Sun'aq Tribe of Kodiak"
+    ],
+    "6800": [
+      "Kokhanok Village"
+    ],
+    "6810": [
+      "Native Village of Kongiganak"
+    ],
+    "6815": [
+      "Village of Kotlik"
+    ],
+    "6820": [
+      "Native Village of Kotzebue"
+    ],
+    "6825": [
+      "Native Village of Koyuk"
+    ],
+    "6830": [
+      "Koyukuk Native Village"
+    ],
+    "6835": [
+      "Organized Village of Kwethluk"
+    ],
+    "6840": [
+      "Native Village of Kwigillingok"
+    ],
+    "6845": [
+      "Native Village of Kwinhagak (aka Quinhagak)"
+    ],
+    "6855": [
+      "Native Village of Larsen Bay"
+    ],
+    "6865": [
+      "Levelock Village"
+    ],
+    "6875": [
+      "Lime Village"
+    ],
+    "6890": [
+      "Village of Lower Kalskag"
+    ],
+    "6895": [
+      "McGrath Native Village"
+    ],
+    "6900": [
+      "Manley Hot Springs Village"
+    ],
+    "6905": [
+      "Manokotak Village"
+    ],
+    "6910": [
+      "Native Village of Marshall (aka Fortuna Ledge)"
+    ],
+    "6915": [
+      "Native Village of Mary's Igloo"
+    ],
+    "6935": [
+      "Native Village of Mekoryuk"
+    ],
+    "6965": [
+      "Native Village of Minto"
+    ],
+    "6995": [
+      "Native Village of Nanwalek (aka English Bay)"
+    ],
+    "7005": [
+      "Native Village of Napaimute"
+    ],
+    "7010": [
+      "Native Village of Napakiak"
+    ],
+    "7020": [
+      "Native Village of Napaskiak"
+    ],
+    "7025": [
+      "Native Village of Nelson Lagoon"
+    ],
+    "7030": [
+      "Nenana Native Association"
+    ],
+    "7035": [
+      "Newhalen Village"
+    ],
+    "7040": [
+      "New Koliganek Village Council"
+    ],
+    "7050": [
+      "New Stuyahok Village"
+    ],
+    "7055": [
+      "Newtok Village"
+    ],
+    "7065": [
+      "Native Village of Nightmute"
+    ],
+    "7070": [
+      "Nikolai Village"
+    ],
+    "7075": [
+      "Native Village of Nikolski"
+    ],
+    "7080": [
+      "Ninilchik Village"
+    ],
+    "7085": [
+      "Native Village of Noatak"
+    ],
+    "7095": [
+      "Nome Eskimo Community"
+    ],
+    "7100": [
+      "Nondalton Tribe"
+    ],
+    "7110": [
+      "Noorvik Native Community"
+    ],
+    "7115": [
+      "Northway Village"
+    ],
+    "7125": [
+      "Native Village of Nuiqsut (aka Nooiksut)"
+    ],
+    "7130": [
+      "Nulato Village"
+    ],
+    "7133": [
+      "Native Village of Nunam Iqua"
+    ],
+    "7135": [
+      "Native Village of Nunapitchuk"
+    ],
+    "7145": [
+      "Village of Ohogamiut"
+    ],
+    "7150": [
+      "Alutiiq Tribe of Old Harbor"
+    ],
+    "7175": [
+      "Oscarville Traditional Village"
+    ],
+    "7180": [
+      "Native Village of Ouzinkie"
+    ],
+    "7185": [
+      "Native Village of Paimiut"
+    ],
+    "7205": [
+      "Pedro Bay Village"
+    ],
+    "7215": [
+      "Native Village of Perryville"
+    ],
+    "7220": [
+      "Petersburg Indian Association"
+    ],
+    "7225": [
+      "Native Village of Pilot Point"
+    ],
+    "7230": [
+      "Pilot Station Traditional Village"
+    ],
+    "7245": [
+      "Platinum Traditional Village"
+    ],
+    "7250": [
+      "Native Village of Point Hope"
+    ],
+    "7255": [
+      "Native Village of Point Lay"
+    ],
+    "7260": [
+      "Portage Creek Village (aka Ohgsenakale)"
+    ],
+    "7265": [
+      "Native Village of Port Graham"
+    ],
+    "7270": [
+      "Native Village of Port Heiden"
+    ],
+    "7275": [
+      "Native Village of Port Lions"
+    ],
+    "7300": [
+      "Rampart Village"
+    ],
+    "7305": [
+      "Village of Red Devil"
+    ],
+    "7310": [
+      "Native Village of Ruby"
+    ],
+    "7400": [
+      "Salamatof Tribe"
+    ],
+    "7410": [
+      "Qagan Tayagungin Tribe of Sand Point"
+    ],
+    "7415": [
+      "Native Village of Savoonga"
+    ],
+    "7420": [
+      "Organized Village of Saxman"
+    ],
+    "7425": [
+      "Native Village of Scammon Bay"
+    ],
+    "7430": [
+      "Native Village of Selawik"
+    ],
+    "7435": [
+      "Seldovia Village Tribe"
+    ],
+    "7440": [
+      "Shageluk Native Village"
+    ],
+    "7450": [
+      "Native Village of Shaktoolik"
+    ],
+    "7465": [
+      "Native Village of Shishmaref"
+    ],
+    "7470": [
+      "Native Village of Shungnak"
+    ],
+    "7475": [
+      "Sitka Tribe of Alaska"
+    ],
+    "7485": [
+      "Skagway Village"
+    ],
+    "7495": [
+      "Village of Sleetmute"
+    ],
+    "7500": [
+      "Village of Solomon"
+    ],
+    "7505": [
+      "Native Village of South Naknek"
+    ],
+    "7510": [
+      "Stebbins Community Association"
+    ],
+    "7525": [
+      "Village of Stony River"
+    ],
+    "7530": [
+      "Takotna Village"
+    ],
+    "7535": [
+      "Native Village of Tanacross"
+    ],
+    "7540": [
+      "Native Village of Tanana"
+    ],
+    "7555": [
+      "Native Village of Tatitlek"
+    ],
+    "7560": [
+      "Native Village of Tazlina"
+    ],
+    "7565": [
+      "Telida Village"
+    ],
+    "7570": [
+      "Native Village of Teller"
+    ],
+    "7580": [
+      "Native Village of Tetlin"
+    ],
+    "7605": [
+      "Traditional Village of Togiak"
+    ],
+    "7630": [
+      "Tuluksak Native Community"
+    ],
+    "7640": [
+      "Native Village of Tuntutuliak"
+    ],
+    "7645": [
+      "Native Village of Tununak"
+    ],
+    "7650": [
+      "Twin Hills Village"
+    ],
+    "7655": [
+      "Native Village of Tyonek"
+    ],
+    "7665": [
+      "Ugashik Village"
+    ],
+    "7690": [
+      "Native Village of Unalakleet"
+    ],
+    "7695": [
+      "Qawalangin Tribe of Unalaska"
+    ],
+    "7735": [
+      "Village of Wainwright"
+    ],
+    "7740": [
+      "Native Village of Wales"
+    ],
+    "7755": [
+      "Wrangell Cooperative Association"
+    ],
+    "7765": [
+      "Yakutat Tlingit Tribe"
+    ],
+    "8300": [
+      "Ione Band of Miwok Indians of California"
+    ],
+    "8450": [
+      "Mechoopda Indian Tribe of Chico Rancheria, California"
+    ],
+    "8750": [
+      "Samish Indian Nation"
+    ],
+    "0010": [
+      "Pueblo of Acoma, New Mexico"
+    ],
+    "0020": [
+      "Agua Caliente Band of Cahuilla Indians of the Agua Caliente Indian Reservation, California"
+    ],
+    "0050": [
+      "Alabama-Coushatta Tribe of Texas"
+    ],
+    "0095": [
+      "Alturas Indian Rancheria, California"
+    ],
+    "0110": [
+      "Metlakatla Indian Community, Annette Island Reserve"
+    ],
+    "0120": [
+      "United Auburn Indian Community of the Auburn Rancheria of California"
+    ],
+    "0125": [
+      "Augustine Band of Cahuilla Indians, California"
+    ],
+    "0140": [
+      "Bad River Band of the Lake Superior Tribe of Chippewa Indians of the Bad River Reservation, Wisconsin"
+    ],
+    "0170": [
+      "Bay Mills Indian Community, Michigan"
+    ],
+    "0185": [
+      "Utu Utu Gwaitu Paiute Tribe of the Benton Paiute Reservation, California"
+    ],
+    "0200": [
+      "Berry Creek Rancheria of Maidu Indians of California"
+    ],
+    "0240": [
+      "Big Lagoon Rancheria, California"
+    ],
+    "0250": [
+      "Big Pine Paiute Tribe of the Owens Valley"
+    ],
+    "0265": [
+      "Big Sandy Rancheria of Western Mono Indians of California"
+    ],
+    "0275": [
+      "Big Valley Band of Pomo Indians of the Big Valley Rancheria, California"
+    ],
+    "0290": [
+      "Bishop Paiute Tribe"
+    ],
+    "0305": [
+      "Blackfeet Tribe of the Blackfeet Indian Reservation of Montana"
+    ],
+    "0325": [
+      "Blue Lake Rancheria, California"
+    ],
+    "0350": [
+      "Bridgeport Indian Colony"
+    ],
+    "0400": [
+      "Burns Paiute Tribe"
+    ],
+    "0415": [
+      "Cabazon Band of Cahuilla Indians"
+    ],
+    "0440": [
+      "Yerington Paiute Tribe of the Yerington Colony & Campbell Ranch, Nevada"
+    ],
+    "0450": [
+      "Campo Band of Diegueno Mission Indians of the Campo Indian Reservation, California"
+    ],
+    "0495": [
+      "Capitan Grande Band of Diegueno Mission Indians of California (Barona Group of Capitan Grande Band of Mission Indians of the Barona Reservation, California; Viejas (Baron Long) Group of Capitan Grande Band of Mission Indians of the Viejas Reservation, California)"
+    ],
+    "0525": [
+      "Catawba Indian Nation"
+    ],
+    "0555": [
+      "Cedarville Rancheria, California"
+    ],
+    "0575": [
+      "Confederated Tribes of the Chehalis Reservation"
+    ],
+    "0585": [
+      "Chemehuevi Indian Tribe of the Chemehuevi Reservation, California"
+    ],
+    "0605": [
+      "Cheyenne River Sioux Tribe of the Cheyenne River Reservation, South Dakota"
+    ],
+    "0620": [
+      "Chicken Ranch Rancheria of Me-Wuk Indians of California"
+    ],
+    "0635": [
+      "Chitimacha Tribe of Louisiana"
+    ],
+    "0680": [
+      "Pueblo of Cochiti, New Mexico"
+    ],
+    "0695": [
+      "Cocopah Tribe of Arizona"
+    ],
+    "0705": [
+      "Coeur D'Alene Tribe"
+    ],
+    "0720": [
+      "Cold Springs Rancheria of Mono Indians of California"
+    ],
+    "0735": [
+      "Colorado River Indian Tribes of the Colorado River Indian Reservation, Arizona and California"
+    ],
+    "0750": [
+      "Cachil DeHe Band of Wintun Indians of the Colusa Indian Community of the Colusa Rancheria, California"
+    ],
+    "0760": [
+      "Confederated Tribes of the Colville Reservation"
+    ],
+    "0770": [
+      "Confederated Tribes of the Coos, Lower Umpqua and Siuslaw Indians"
+    ],
+    "0775": [
+      "Coquille Indian Tribe"
+    ],
+    "0780": [
+      "Kletsel Dehe Wintun Nation of the Cortina Rancheria"
+    ],
+    "0815": [
+      "Cow Creek Band of Umpqua Tribe of Indians"
+    ],
+    "0820": [
+      "Cowlitz Indian Tribe"
+    ],
+    "0825": [
+      "Coyote Valley Band of Pomo Indians of California"
+    ],
+    "0855": [
+      "Crow Creek Sioux Tribe of the Crow Creek Reservation, South Dakota"
+    ],
+    "0955": [
+      "Dry Creek Rancheria Band of Pomo Indians, California"
+    ],
+    "0965": [
+      "Shoshone-Paiute Tribes of the Duck Valley Reservation, Nevada"
+    ],
+    "0975": [
+      "Duckwater Shoshone Tribe"
+    ]
+  }
 }

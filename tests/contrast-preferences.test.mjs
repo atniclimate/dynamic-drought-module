@@ -30,7 +30,8 @@ const sheets = [
   ...readdirSync(new URL('ui/', root)).filter((name) => name.endsWith('.css')).map((name) => `ui/${name}`)
 ];
 const strip = (text) => text.replace(/\/\*[\s\S]*?\*\//g, '');
-const read = (path) => strip(readFileSync(fileURLToPath(new URL(path, root)), 'utf8'));
+// CRLF to LF: a Windows working copy checks the sheets out with CRLF, and the block search below looks for LF.
+const read = (path) => strip(readFileSync(fileURLToPath(new URL(path, root)), 'utf8').replace(/\r\n/g, '\n'));
 const app = read('styles/app.css');
 
 /** The body of the first `@media (<query>) { :root { ... } }` block. */

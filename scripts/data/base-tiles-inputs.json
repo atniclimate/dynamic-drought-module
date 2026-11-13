@@ -1,0 +1,671 @@
+{
+  "edition": "2026-11",
+  "built": "2026-11-13",
+  "outputs": [
+    {
+      "file": "ddm-base-na-2026-11.pmtiles",
+      "bytes": 16155213,
+      "tiles": 6470,
+      "features": {
+        "land": 3,
+        "water": 22656,
+        "river": 2581,
+        "boundary": 384,
+        "county": 8968,
+        "place": 17288,
+        "water_label": 3272,
+        "region_label": 97,
+        "range_label": 33,
+        "peak": 127
+      }
+    },
+    {
+      "file": "ddm-roads-na-2026-11.pmtiles",
+      "bytes": 10575287,
+      "tiles": 1717,
+      "features": {
+        "road": 9573,
+        "rail": 1,
+        "dam": 19348
+      }
+    },
+    {
+      "file": "ddm-base-world-2026-11.pmtiles",
+      "bytes": 1602643,
+      "tiles": 872,
+      "features": {
+        "land": 11,
+        "water": 238,
+        "boundary": 495,
+        "place": 923,
+        "water_label": 57
+      }
+    },
+    {
+      "file": "ddm-forests-2026-11.pmtiles",
+      "bytes": 3194065,
+      "tiles": 4663,
+      "features": {
+        "forest": 5250
+      }
+    }
+  ],
+  "inputs": [
+    {
+      "key": "ne-land",
+      "url": "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/v5.1.2/geojson/ne_10m_land.geojson",
+      "issuer": "Natural Earth (public domain)",
+      "sha256": "1ac90796408bc6ad6911d69448485d3c4dbf2190370080368a09976e1c9f7416",
+      "bytes": 10157965,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "ne-countries",
+      "url": "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/v5.1.2/geojson/ne_10m_admin_0_countries.geojson",
+      "issuer": "Natural Earth (public domain)",
+      "sha256": "239eec57ac17f100a11e2536cffc56752c318b50ae765b0918ff7aab4ce8f255",
+      "bytes": 13287234,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "ne-lakes",
+      "url": "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/v5.1.2/geojson/ne_10m_lakes.geojson",
+      "issuer": "Natural Earth (public domain)",
+      "sha256": "2d036f53dedec578001c5c30c2959ee7d4eebc1306900fa4367c49929ec8f2d9",
+      "bytes": 5043554,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "ne-rivers",
+      "url": "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/v5.1.2/geojson/ne_10m_rivers_lake_centerlines.geojson",
+      "issuer": "Natural Earth (public domain)",
+      "sha256": "bb854a900ecbd3b408df46d5e16e3e0f974ba55993f9d8b5c26e855273c0905a",
+      "bytes": 7307743,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "ne-country-lines",
+      "url": "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/v5.1.2/geojson/ne_10m_admin_0_boundary_lines_land.geojson",
+      "issuer": "Natural Earth (public domain)",
+      "sha256": "74d9c16229c095fde65943a9919e337682f044bcebccb120764f38edf3b70f4a",
+      "bytes": 2284669,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "ne-region-lines",
+      "url": "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/v5.1.2/geojson/ne_10m_admin_1_states_provinces_lines.geojson",
+      "issuer": "Natural Earth (public domain)",
+      "sha256": "1a1f30ccaaf4cc9c4bde34266f0b8cbb955d3a4cf254b756912255f2ec7c75b6",
+      "bytes": 21092537,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "ne-places",
+      "url": "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/v5.1.2/geojson/ne_10m_populated_places_simple.geojson",
+      "issuer": "Natural Earth (public domain)",
+      "sha256": "fd3fa867a320cbd5c5b6bb5bc550afeec2939fb2cef688e508007282a55ac42f",
+      "bytes": 4932147,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "ne-marine",
+      "url": "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/v5.1.2/geojson/ne_10m_geography_marine_polys.geojson",
+      "issuer": "Natural Earth (public domain)",
+      "sha256": "53f865e8ffa966cdd402145c82c5cd14ee7ce974cd0eb9a3f59f03a4cfd2d66c",
+      "bytes": 1692635,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "ne-admin1",
+      "url": "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/v5.1.2/geojson/ne_10m_admin_1_states_provinces.geojson",
+      "issuer": "Natural Earth (public domain)",
+      "sha256": "22d0e3ad85eb3e27f17cabf8ba2d50e554fbc27a87796ff891d958185da62fb5",
+      "bytes": 40726851,
+      "retrieved": "2026-11-13"
+    },
+    {
+      "key": "ne-peaks",
+      "url": "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/v5.1.2/geojson/ne_10m_geography_regions_elevation_points.geojson",
+      "issuer": "Natural Earth (public domain)",
+      "sha256": "f98a16867867146ec4146d6d4b18c823eeedb2825947de666116cf9a4e3f43cb",
+      "bytes": 862686,
+      "retrieved": "2026-11-13"
+    },
+    {
+      "key": "ne-regions",
+      "url": "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/v5.1.2/geojson/ne_10m_geography_regions_polys.geojson",
+      "issuer": "Natural Earth (public domain)",
+      "sha256": "b7b26e50ea917d3696aec87f932def2bf5f890f5770e441d59c162c6f4c92a77",
+      "bytes": 5583870,
+      "retrieved": "2026-11-13"
+    },
+    {
+      "key": "us-states",
+      "url": "https://www2.census.gov/geo/tiger/GENZ2025/shp/cb_2025_us_state_500k.zip",
+      "issuer": "U.S. Census Bureau (public domain; cite the Census Bureau as the source)",
+      "sha256": "9cbfe171dad1555e11770c981d8f4db9e687a65c86f5bdae684eeb487e2e9b80",
+      "bytes": 3245373,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "us-counties",
+      "url": "https://www2.census.gov/geo/tiger/GENZ2025/shp/cb_2025_us_county_500k.zip",
+      "issuer": "U.S. Census Bureau (public domain; cite the Census Bureau as the source)",
+      "sha256": "aa976c00b181939755d0da757f4c7c2dc0103c3b3b4530fb2a91c2bb62fc777c",
+      "bytes": 11758981,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "us-roads-01",
+      "url": "https://www2.census.gov/geo/tiger/TIGER2025/PRISECROADS/tl_2025_01_prisecroads.zip",
+      "issuer": "U.S. Census Bureau (public domain; cite the Census Bureau as the source)",
+      "sha256": "e43196ea2a67b4d8eaed1906ba0fd6743d1ca472653dabd9c57d690b81b8e125",
+      "bytes": 6404922,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "us-roads-02",
+      "url": "https://www2.census.gov/geo/tiger/TIGER2025/PRISECROADS/tl_2025_02_prisecroads.zip",
+      "issuer": "U.S. Census Bureau (public domain; cite the Census Bureau as the source)",
+      "sha256": "0164c0cc132404972b6b8e97c6babdaefeafc99e0705663cc451400b465f81ba",
+      "bytes": 1396541,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "us-roads-04",
+      "url": "https://www2.census.gov/geo/tiger/TIGER2025/PRISECROADS/tl_2025_04_prisecroads.zip",
+      "issuer": "U.S. Census Bureau (public domain; cite the Census Bureau as the source)",
+      "sha256": "cbcea97b375bd62233b6ee6070c94b119e964f4bdf00eedc9ca3c90ae719d0bd",
+      "bytes": 2585481,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "us-roads-05",
+      "url": "https://www2.census.gov/geo/tiger/TIGER2025/PRISECROADS/tl_2025_05_prisecroads.zip",
+      "issuer": "U.S. Census Bureau (public domain; cite the Census Bureau as the source)",
+      "sha256": "0c181b8023c36e5fa7c9e9f62d4b2e453552b30da9989031ad7abc77404944b2",
+      "bytes": 8189783,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "us-roads-06",
+      "url": "https://www2.census.gov/geo/tiger/TIGER2025/PRISECROADS/tl_2025_06_prisecroads.zip",
+      "issuer": "U.S. Census Bureau (public domain; cite the Census Bureau as the source)",
+      "sha256": "79d8485a0ed8e1971390efb55f4e832e449c857a28be97db1ded3850b9f5f8cf",
+      "bytes": 12776420,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "us-roads-08",
+      "url": "https://www2.census.gov/geo/tiger/TIGER2025/PRISECROADS/tl_2025_08_prisecroads.zip",
+      "issuer": "U.S. Census Bureau (public domain; cite the Census Bureau as the source)",
+      "sha256": "1f7ebfad36d1cc13d892b8db3911a51adbc5ff9c4d75fe6d32cd94b4880cb6b8",
+      "bytes": 3959651,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "us-roads-09",
+      "url": "https://www2.census.gov/geo/tiger/TIGER2025/PRISECROADS/tl_2025_09_prisecroads.zip",
+      "issuer": "U.S. Census Bureau (public domain; cite the Census Bureau as the source)",
+      "sha256": "c4d783d7ae271d63b8f3ac70c4f17a229469117ef633f88f40020dc19b745698",
+      "bytes": 3699350,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "us-roads-10",
+      "url": "https://www2.census.gov/geo/tiger/TIGER2025/PRISECROADS/tl_2025_10_prisecroads.zip",
+      "issuer": "U.S. Census Bureau (public domain; cite the Census Bureau as the source)",
+      "sha256": "702366d39de6b7c5dd55d85ead0f3250033da621652f6e733678880f802a9e3b",
+      "bytes": 1227712,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "us-roads-11",
+      "url": "https://www2.census.gov/geo/tiger/TIGER2025/PRISECROADS/tl_2025_11_prisecroads.zip",
+      "issuer": "U.S. Census Bureau (public domain; cite the Census Bureau as the source)",
+      "sha256": "e2de714bdd27dd7a79bed4416cec14273b04936a0a5f691afbe8e2c930ee9288",
+      "bytes": 82744,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "us-roads-12",
+      "url": "https://www2.census.gov/geo/tiger/TIGER2025/PRISECROADS/tl_2025_12_prisecroads.zip",
+      "issuer": "U.S. Census Bureau (public domain; cite the Census Bureau as the source)",
+      "sha256": "4aed3d13d94f1e3433839b3ce9b7b07c9b919b214bd93b6254cbb6dfb479d166",
+      "bytes": 8559096,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "us-roads-13",
+      "url": "https://www2.census.gov/geo/tiger/TIGER2025/PRISECROADS/tl_2025_13_prisecroads.zip",
+      "issuer": "U.S. Census Bureau (public domain; cite the Census Bureau as the source)",
+      "sha256": "172a11c5d7bc9d17b125868d43af418cbf734d4c6d9f6f7168f0e215bddc93cd",
+      "bytes": 10138124,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "us-roads-15",
+      "url": "https://www2.census.gov/geo/tiger/TIGER2025/PRISECROADS/tl_2025_15_prisecroads.zip",
+      "issuer": "U.S. Census Bureau (public domain; cite the Census Bureau as the source)",
+      "sha256": "1814a94b6857d749c81559a984eb2e7fed78ab9b6896ffd622b4495984240293",
+      "bytes": 1494761,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "us-roads-16",
+      "url": "https://www2.census.gov/geo/tiger/TIGER2025/PRISECROADS/tl_2025_16_prisecroads.zip",
+      "issuer": "U.S. Census Bureau (public domain; cite the Census Bureau as the source)",
+      "sha256": "1a728ce252d64e1cf14f80683bc1d4b9f998c7b8f7ce07f4d4607cc4c5e169cc",
+      "bytes": 2097445,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "us-roads-17",
+      "url": "https://www2.census.gov/geo/tiger/TIGER2025/PRISECROADS/tl_2025_17_prisecroads.zip",
+      "issuer": "U.S. Census Bureau (public domain; cite the Census Bureau as the source)",
+      "sha256": "f0852da8f07689189b4cd8d202e9da452326e4234ff49ddea31d3ea3573a4bb4",
+      "bytes": 6958097,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "us-roads-18",
+      "url": "https://www2.census.gov/geo/tiger/TIGER2025/PRISECROADS/tl_2025_18_prisecroads.zip",
+      "issuer": "U.S. Census Bureau (public domain; cite the Census Bureau as the source)",
+      "sha256": "d6193f990a73982df887a9c16f48bd7c614146906404ac091ec91f4b0d5317ce",
+      "bytes": 6123420,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "us-roads-19",
+      "url": "https://www2.census.gov/geo/tiger/TIGER2025/PRISECROADS/tl_2025_19_prisecroads.zip",
+      "issuer": "U.S. Census Bureau (public domain; cite the Census Bureau as the source)",
+      "sha256": "687b91fb8f2ef234fdc9d1ec949ce9b3f8ae4c63ce03415ea00573121df139de",
+      "bytes": 3096571,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "us-roads-20",
+      "url": "https://www2.census.gov/geo/tiger/TIGER2025/PRISECROADS/tl_2025_20_prisecroads.zip",
+      "issuer": "U.S. Census Bureau (public domain; cite the Census Bureau as the source)",
+      "sha256": "e227b9f9cab383420e26efc90b0c093ff41a010ca1fa0a07e41938da201bd800",
+      "bytes": 3050767,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "us-roads-21",
+      "url": "https://www2.census.gov/geo/tiger/TIGER2025/PRISECROADS/tl_2025_21_prisecroads.zip",
+      "issuer": "U.S. Census Bureau (public domain; cite the Census Bureau as the source)",
+      "sha256": "a0c703e78262ed2fa631305a930b27b21c22930664598558f3f69683d2dea78b",
+      "bytes": 24214739,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "us-roads-22",
+      "url": "https://www2.census.gov/geo/tiger/TIGER2025/PRISECROADS/tl_2025_22_prisecroads.zip",
+      "issuer": "U.S. Census Bureau (public domain; cite the Census Bureau as the source)",
+      "sha256": "e284ed7e8937157d5da4efd1728a1b6a03409c33263db531fb01a3f51515bc55",
+      "bytes": 8600527,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "us-roads-23",
+      "url": "https://www2.census.gov/geo/tiger/TIGER2025/PRISECROADS/tl_2025_23_prisecroads.zip",
+      "issuer": "U.S. Census Bureau (public domain; cite the Census Bureau as the source)",
+      "sha256": "7d66dd55eda92de357c6a0c87f452fec09a867451f2c03d0f3f4302978d3b941",
+      "bytes": 5470949,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "us-roads-24",
+      "url": "https://www2.census.gov/geo/tiger/TIGER2025/PRISECROADS/tl_2025_24_prisecroads.zip",
+      "issuer": "U.S. Census Bureau (public domain; cite the Census Bureau as the source)",
+      "sha256": "f7651ff470980f567454d4f6357542d0ab442084f961de11c8887924eff73d76",
+      "bytes": 5240557,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "us-roads-25",
+      "url": "https://www2.census.gov/geo/tiger/TIGER2025/PRISECROADS/tl_2025_25_prisecroads.zip",
+      "issuer": "U.S. Census Bureau (public domain; cite the Census Bureau as the source)",
+      "sha256": "59cea676388e5c14bc19796fb45047e15c15c10d3e2f05a1b763feed0f740d42",
+      "bytes": 4501832,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "us-roads-26",
+      "url": "https://www2.census.gov/geo/tiger/TIGER2025/PRISECROADS/tl_2025_26_prisecroads.zip",
+      "issuer": "U.S. Census Bureau (public domain; cite the Census Bureau as the source)",
+      "sha256": "d5e388e53d871aca8c230921454555da328905a688bf45ad7c8aaad6f908eb67",
+      "bytes": 3298039,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "us-roads-27",
+      "url": "https://www2.census.gov/geo/tiger/TIGER2025/PRISECROADS/tl_2025_27_prisecroads.zip",
+      "issuer": "U.S. Census Bureau (public domain; cite the Census Bureau as the source)",
+      "sha256": "dd87b5ad647c6efa8f822651d2457e8043d9090f7eb3a400b2d4de2d5a3fa342",
+      "bytes": 4058931,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "us-roads-28",
+      "url": "https://www2.census.gov/geo/tiger/TIGER2025/PRISECROADS/tl_2025_28_prisecroads.zip",
+      "issuer": "U.S. Census Bureau (public domain; cite the Census Bureau as the source)",
+      "sha256": "afb49e6a20a28df944e3aca2e2a1b0967dff151829e386cdeb61dc583e189ea3",
+      "bytes": 5949668,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "us-roads-29",
+      "url": "https://www2.census.gov/geo/tiger/TIGER2025/PRISECROADS/tl_2025_29_prisecroads.zip",
+      "issuer": "U.S. Census Bureau (public domain; cite the Census Bureau as the source)",
+      "sha256": "a6e4dd2df027908fbd5a1c2a2c0500b7864d43f557e20e90751f49c1e26d4d74",
+      "bytes": 6062021,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "us-roads-30",
+      "url": "https://www2.census.gov/geo/tiger/TIGER2025/PRISECROADS/tl_2025_30_prisecroads.zip",
+      "issuer": "U.S. Census Bureau (public domain; cite the Census Bureau as the source)",
+      "sha256": "0c7c1d7af2436f56ae61fe9ae57f02f0f304b05254d5e54bcf4d21c8e23c5b99",
+      "bytes": 2617735,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "us-roads-31",
+      "url": "https://www2.census.gov/geo/tiger/TIGER2025/PRISECROADS/tl_2025_31_prisecroads.zip",
+      "issuer": "U.S. Census Bureau (public domain; cite the Census Bureau as the source)",
+      "sha256": "26afda8ad38b0c270b08ef6242271d4128736b191ad1527b738adfb53203d2ed",
+      "bytes": 2506970,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "us-roads-32",
+      "url": "https://www2.census.gov/geo/tiger/TIGER2025/PRISECROADS/tl_2025_32_prisecroads.zip",
+      "issuer": "U.S. Census Bureau (public domain; cite the Census Bureau as the source)",
+      "sha256": "0dbf3fdc4c666e3f9c20d097fe1d49d6ecef129c0dc117b40e54dc3e642e8652",
+      "bytes": 2044950,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "us-roads-33",
+      "url": "https://www2.census.gov/geo/tiger/TIGER2025/PRISECROADS/tl_2025_33_prisecroads.zip",
+      "issuer": "U.S. Census Bureau (public domain; cite the Census Bureau as the source)",
+      "sha256": "dabe081a28e065598e395f2f81ace44204d30498820133ac761fcec434e7545f",
+      "bytes": 2567398,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "us-roads-34",
+      "url": "https://www2.census.gov/geo/tiger/TIGER2025/PRISECROADS/tl_2025_34_prisecroads.zip",
+      "issuer": "U.S. Census Bureau (public domain; cite the Census Bureau as the source)",
+      "sha256": "3a539b3ec10fae675c7215086be9da06714f78ddcf3c753a39c6d2f8af24daf7",
+      "bytes": 2390964,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "us-roads-35",
+      "url": "https://www2.census.gov/geo/tiger/TIGER2025/PRISECROADS/tl_2025_35_prisecroads.zip",
+      "issuer": "U.S. Census Bureau (public domain; cite the Census Bureau as the source)",
+      "sha256": "b2aa1cc17c3d0e623aed7dfd1ec9ad5ac4db4f123f3188737adeeb5366951f7a",
+      "bytes": 3950948,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "us-roads-36",
+      "url": "https://www2.census.gov/geo/tiger/TIGER2025/PRISECROADS/tl_2025_36_prisecroads.zip",
+      "issuer": "U.S. Census Bureau (public domain; cite the Census Bureau as the source)",
+      "sha256": "f96453fdc03029be40d78203559e8833f34fa79d006d8d35901ed58340661a2f",
+      "bytes": 8182789,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "us-roads-37",
+      "url": "https://www2.census.gov/geo/tiger/TIGER2025/PRISECROADS/tl_2025_37_prisecroads.zip",
+      "issuer": "U.S. Census Bureau (public domain; cite the Census Bureau as the source)",
+      "sha256": "cce2cbc384adf5f0158cee51ef6c312ba277ab939809d2d02ba1aca1e21fdb51",
+      "bytes": 10340716,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "us-roads-38",
+      "url": "https://www2.census.gov/geo/tiger/TIGER2025/PRISECROADS/tl_2025_38_prisecroads.zip",
+      "issuer": "U.S. Census Bureau (public domain; cite the Census Bureau as the source)",
+      "sha256": "eda6c94392d352e8d4fd86422080e12511e32b410fd7516d0d56cdeb2e4e9eba",
+      "bytes": 1859330,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "us-roads-39",
+      "url": "https://www2.census.gov/geo/tiger/TIGER2025/PRISECROADS/tl_2025_39_prisecroads.zip",
+      "issuer": "U.S. Census Bureau (public domain; cite the Census Bureau as the source)",
+      "sha256": "865913308b530235fb2bea969eba19d36b3769df248366ff2e61a768b3b6b08b",
+      "bytes": 10502177,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "us-roads-40",
+      "url": "https://www2.census.gov/geo/tiger/TIGER2025/PRISECROADS/tl_2025_40_prisecroads.zip",
+      "issuer": "U.S. Census Bureau (public domain; cite the Census Bureau as the source)",
+      "sha256": "bb6921db25bc03f0321ccadcdb5ac9b709a837369ebb66234ce55bb1390f2a27",
+      "bytes": 4592624,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "us-roads-41",
+      "url": "https://www2.census.gov/geo/tiger/TIGER2025/PRISECROADS/tl_2025_41_prisecroads.zip",
+      "issuer": "U.S. Census Bureau (public domain; cite the Census Bureau as the source)",
+      "sha256": "0901d1af70d2150fea90b09db30407dddb6ab0bc3aa6a6175798c60bceba7b67",
+      "bytes": 5906378,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "us-roads-42",
+      "url": "https://www2.census.gov/geo/tiger/TIGER2025/PRISECROADS/tl_2025_42_prisecroads.zip",
+      "issuer": "U.S. Census Bureau (public domain; cite the Census Bureau as the source)",
+      "sha256": "fdeed89517877a3be8f3e692dc1ba1794e6f90da382fa528bce67ec44451a00e",
+      "bytes": 15501240,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "us-roads-44",
+      "url": "https://www2.census.gov/geo/tiger/TIGER2025/PRISECROADS/tl_2025_44_prisecroads.zip",
+      "issuer": "U.S. Census Bureau (public domain; cite the Census Bureau as the source)",
+      "sha256": "c22789c4753b253bd83642a36944c036999c7d869c4cf278be4b25130039472b",
+      "bytes": 839408,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "us-roads-45",
+      "url": "https://www2.census.gov/geo/tiger/TIGER2025/PRISECROADS/tl_2025_45_prisecroads.zip",
+      "issuer": "U.S. Census Bureau (public domain; cite the Census Bureau as the source)",
+      "sha256": "068f6e302458122441dfa1c53f6b78e971ab2564e06cdcf42da1fc48ccd22eae",
+      "bytes": 7083901,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "us-roads-46",
+      "url": "https://www2.census.gov/geo/tiger/TIGER2025/PRISECROADS/tl_2025_46_prisecroads.zip",
+      "issuer": "U.S. Census Bureau (public domain; cite the Census Bureau as the source)",
+      "sha256": "ff120346ad861fcbccefb9dcf15ddfd04987d11fd410f5209f5446063fee0207",
+      "bytes": 3207046,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "us-roads-47",
+      "url": "https://www2.census.gov/geo/tiger/TIGER2025/PRISECROADS/tl_2025_47_prisecroads.zip",
+      "issuer": "U.S. Census Bureau (public domain; cite the Census Bureau as the source)",
+      "sha256": "4fcc9893c002af72ec0ef3608d86303171a798710ae2720768883ed59e9e653d",
+      "bytes": 14126658,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "us-roads-48",
+      "url": "https://www2.census.gov/geo/tiger/TIGER2025/PRISECROADS/tl_2025_48_prisecroads.zip",
+      "issuer": "U.S. Census Bureau (public domain; cite the Census Bureau as the source)",
+      "sha256": "ab9b94248f46577b22e3bc87acdf03d1d7b988d93a7d4b6a32d46b9fc9edb56a",
+      "bytes": 12161852,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "us-roads-49",
+      "url": "https://www2.census.gov/geo/tiger/TIGER2025/PRISECROADS/tl_2025_49_prisecroads.zip",
+      "issuer": "U.S. Census Bureau (public domain; cite the Census Bureau as the source)",
+      "sha256": "b736ecd5c107f39fa272ffa45b93231d8d20ee2bcf1ec0924669d6e6edfba7c1",
+      "bytes": 2678643,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "us-roads-50",
+      "url": "https://www2.census.gov/geo/tiger/TIGER2025/PRISECROADS/tl_2025_50_prisecroads.zip",
+      "issuer": "U.S. Census Bureau (public domain; cite the Census Bureau as the source)",
+      "sha256": "dc904d7bb3161397eea234f110227293f6292e385b66fb122d518bf6aa368b86",
+      "bytes": 1896608,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "us-roads-51",
+      "url": "https://www2.census.gov/geo/tiger/TIGER2025/PRISECROADS/tl_2025_51_prisecroads.zip",
+      "issuer": "U.S. Census Bureau (public domain; cite the Census Bureau as the source)",
+      "sha256": "13930357044ab577aa7f3e77fa4f361ccc2882ef4d8437534724098d7031af44",
+      "bytes": 10546945,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "us-roads-53",
+      "url": "https://www2.census.gov/geo/tiger/TIGER2025/PRISECROADS/tl_2025_53_prisecroads.zip",
+      "issuer": "U.S. Census Bureau (public domain; cite the Census Bureau as the source)",
+      "sha256": "a2e2e66452b4a991e4252ff18a66222bc09ba0073b57ca26d36e95e6fd0cb092",
+      "bytes": 3961341,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "us-roads-54",
+      "url": "https://www2.census.gov/geo/tiger/TIGER2025/PRISECROADS/tl_2025_54_prisecroads.zip",
+      "issuer": "U.S. Census Bureau (public domain; cite the Census Bureau as the source)",
+      "sha256": "e6b66d18976073d385a7df3e9485aae690e8227fd81f9016cd3887a106972bfc",
+      "bytes": 6427333,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "us-roads-55",
+      "url": "https://www2.census.gov/geo/tiger/TIGER2025/PRISECROADS/tl_2025_55_prisecroads.zip",
+      "issuer": "U.S. Census Bureau (public domain; cite the Census Bureau as the source)",
+      "sha256": "9f0ecc924f87dc2e4d6816b085047e867a1c6e217c50a15a4c0ea62ba617e6e4",
+      "bytes": 5257602,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "us-roads-56",
+      "url": "https://www2.census.gov/geo/tiger/TIGER2025/PRISECROADS/tl_2025_56_prisecroads.zip",
+      "issuer": "U.S. Census Bureau (public domain; cite the Census Bureau as the source)",
+      "sha256": "9310a7852a0d7b3a678ebc51583e8766948772679a01e61b64903621033c648f",
+      "bytes": 2613637,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "us-roads-72",
+      "url": "https://www2.census.gov/geo/tiger/TIGER2025/PRISECROADS/tl_2025_72_prisecroads.zip",
+      "issuer": "U.S. Census Bureau (public domain; cite the Census Bureau as the source)",
+      "sha256": "104056b337527890844cf483a23d36149bb4748da6c65c513eb69e3d93d167b6",
+      "bytes": 1136753,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "us-rails",
+      "url": "https://www2.census.gov/geo/tiger/TIGER2025/RAILS/tl_2025_us_rails.zip",
+      "issuer": "U.S. Census Bureau (public domain; cite the Census Bureau as the source)",
+      "sha256": "e969ffd49f119655ac478035b7f206fb861b70c4dddb926f8cac911182e7a113",
+      "bytes": 34200737,
+      "retrieved": "2026-11-13"
+    },
+    {
+      "key": "us-water",
+      "url": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Small-scale/data/Hydrography/wtrbdyp010g.shp_nt00886.tar.gz",
+      "issuer": "U.S. Geological Survey (U.S. public domain)",
+      "sha256": "e1f724e566a671ed1d6ce824cf533f9a0e84533d40c17e60f0c2b78a59d5e348",
+      "bytes": 35248712,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "us-streams",
+      "url": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Small-scale/data/Hydrography/streaml010g.shp_nt00885.tar.gz",
+      "issuer": "U.S. Geological Survey (U.S. public domain)",
+      "sha256": "437e423140c3880e8d40f1c15822e7f80022df848b782da2f78e5b96797dec31",
+      "bytes": 239953647,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "us-cities",
+      "url": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Small-scale/data/Boundaries/citiesx010g_shp_nt00962.tar.gz",
+      "issuer": "U.S. Geological Survey (U.S. public domain)",
+      "sha256": "1b1963e63a3d455af1297a5095706e8ea74fc2fb1a76537cf989ac266bf1de3e",
+      "bytes": 2473672,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "ca-land",
+      "url": "https://ftp.maps.canada.ca/pub/nrcan_rncan/vector/framework_cadre/Atlas_of_Canada_1M/boundary/AC_1M_BoundaryPolygons.shp.zip",
+      "issuer": "Natural Resources Canada (Open Government Licence - Canada)",
+      "sha256": "c4f8ab7eba55697dcfe90b0c85da1b64e57281d2075e7b50cd06748ba963142a",
+      "bytes": 22518960,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "ca-lines",
+      "url": "https://ftp.maps.canada.ca/pub/nrcan_rncan/vector/framework_cadre/Atlas_of_Canada_1M/boundary/AC_1M_BoundaryLines.shp.zip",
+      "issuer": "Natural Resources Canada (Open Government Licence - Canada)",
+      "sha256": "9af1e0489b3c0b137d4370b714f09c757b6e55a6863c5dcc76551b0cae58e458",
+      "bytes": 1233433,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "ca-water",
+      "url": "https://ftp.maps.canada.ca/pub/nrcan_rncan/vector/framework_cadre/Atlas_of_Canada_1M/hydrology/AC_1M_Waterbodies.shp.zip",
+      "issuer": "Natural Resources Canada (Open Government Licence - Canada)",
+      "sha256": "2b6b1465b605c29b3800f60caf0f3fa0e7e0203d0cb6e36581145cc1ac3176ac",
+      "bytes": 64277053,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "ca-rivers",
+      "url": "https://ftp.maps.canada.ca/pub/nrcan_rncan/vector/framework_cadre/Atlas_of_Canada_1M/hydrology/AC_1M_Rivers.shp.zip",
+      "issuer": "Natural Resources Canada (Open Government Licence - Canada)",
+      "sha256": "420a5715cabac22ead3c14fb25c2edc696c131357f1397185c4f4d66d8e699ba",
+      "bytes": 72306228,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "ca-roads",
+      "url": "https://ftp.maps.canada.ca/pub/nrcan_rncan/vector/framework_cadre/Atlas_of_Canada_1M/transportation/AC_1M_Roads.shp.zip",
+      "issuer": "Natural Resources Canada (Open Government Licence - Canada)",
+      "sha256": "39cc1a48904fae024b1105da345bd2e9d759a732509576e2b3ee915a8bc878a5",
+      "bytes": 7746982,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "ca-places",
+      "url": "https://ftp.maps.canada.ca/pub/nrcan_rncan/vector/framework_cadre/Atlas_of_Canada_1M/place_names/AC_1M_PlaceNames.shp.zip",
+      "issuer": "Natural Resources Canada (Open Government Licence - Canada)",
+      "sha256": "9e4fb46dd3b727ff071047dbde6a2563ecb5e71337406497d3d2fec8b77ac187",
+      "bytes": 923747,
+      "retrieved": "2026-11-12"
+    },
+    {
+      "key": "usfs-forests",
+      "url": "https://data.fs.usda.gov/geodata/edw/edw_resources/shp/S_USA.AdministrativeForest.zip",
+      "issuer": "USDA Forest Service (CC0 1.0)",
+      "sha256": "a13d25243fe121c8800c13cca2a9823f64aeaeb9467d63b34c4d22352bd1d4da",
+      "bytes": 45012944,
+      "retrieved": "2026-11-13"
+    },
+    {
+      "key": "us-dams",
+      "url": "https://geospatial.sec.usace.army.mil/dls/rest/services/NID/National_Inventory_of_Dams_Public_Service/FeatureServer/0/query?where=NID_HEIGHT%20%3E%3D%2050%20OR%20HAZARD_POTENTIAL%20%3D%20'High'&outFields=NAME,NID_HEIGHT&orderByFields=OBJECTID&outSR=4326&f=geojson",
+      "issuer": "U.S. Army Corps of Engineers, National Inventory of Dams (public)",
+      "sha256": "6918b5bae88c62612c1a4bb1a010f2649feb46eba7371953442a770984a8d4e7",
+      "bytes": 3116573,
+      "retrieved": "2026-11-13"
+    }
+  ]
+}

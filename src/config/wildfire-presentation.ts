@@ -886,56 +886,6 @@ export const POWER_SHARED_QUALIFICATION =
   'Not comprehensive or current; never for siting or safety-critical decisions. Substations and distribution circuits are absent because no authoritative public national source publishes them: distribution networks are held privately by utilities, and substation locations have been withheld for security since 2022. Their absence here is not evidence that none are present.';
 
 /**
- * Structures context for the desktop 3D Fire mode: Overture Maps
- * Foundation building footprints (ODbL), central Oregon pilot bake.
- *
- * Height honesty is carried in the paint split: footprints with an
- * issuer-published height extrude to it in the measured tone; the rest
- * draw in a visibly DIMMER tone at a disclosed placeholder height (three
- * meters per published floor, otherwise a fixed four meters).
- * fill-extrusion-opacity is not data-driven in the MapLibre style
- * specification, so the distinction rides color, exactly like the smoke
- * volume's constant-opacity constraint.
- */
-export const STRUCTURES_PRESENTATION = {
-  measuredColor: '#cfc8bd',
-  placeholderColor: '#78706a',
-  opacity: 0.85,
-  metersPerFloor: 3,
-  placeholderMeters: 4
-} as const;
-
-export function buildStructuresMeasuredPaint(): NonNullable<
-  maplibregl.FillExtrusionLayerSpecification['paint']
-> {
-  return {
-    'fill-extrusion-color': STRUCTURES_PRESENTATION.measuredColor,
-    'fill-extrusion-height': ['get', 'h'],
-    'fill-extrusion-base': 0,
-    'fill-extrusion-opacity': STRUCTURES_PRESENTATION.opacity
-  };
-}
-
-export function buildStructuresPlaceholderPaint(): NonNullable<
-  maplibregl.FillExtrusionLayerSpecification['paint']
-> {
-  return {
-    'fill-extrusion-color': STRUCTURES_PRESENTATION.placeholderColor,
-    'fill-extrusion-height': [
-      'case',
-      ['has', 'f'],
-      ['*', ['get', 'f'], STRUCTURES_PRESENTATION.metersPerFloor],
-      STRUCTURES_PRESENTATION.placeholderMeters
-    ],
-    'fill-extrusion-base': 0,
-    'fill-extrusion-opacity': STRUCTURES_PRESENTATION.opacity
-  };
-}
-
-export const STRUCTURES_QUALIFICATION =
-  'Overture Maps Foundation building footprints (ODbL; includes OpenStreetMap and other open sources), release 2026-07-22.0, central Oregon pilot coverage only, drawn from zoom 13. Buildings extrude to the issuer\'s published height where one exists (72 percent of this bake); the dimmer tone marks a disclosed placeholder height (three meters per published floor, otherwise four meters), never a measured value. Footprints and heights are open-data representations, not parcel, occupancy, or condition records.';
-
-/**
  * NIFC WFIGS query scope (FE-16, 2026-08-28).
  *
  * The national perimeters query used to ask for every attribute and

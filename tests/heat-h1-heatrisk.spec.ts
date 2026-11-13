@@ -98,13 +98,6 @@ async function stubHeatH1(
     options.metadataExtent ??
     ([catalogTimes[0]!, catalogTimes.at(-1)!] as const);
 
-  await page.route('https://tile.openstreetmap.org/**', (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: 'image/png',
-      body: ONE_PIXEL_PNG
-    })
-  );
 
   await page.route(
     (url) => url.pathname.startsWith(HEATRISK_PATH),

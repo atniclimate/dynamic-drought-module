@@ -401,13 +401,6 @@ async function stubHeatRisk(
     route: import('./offline-test').Route
   ) => Promise<void>
 ): Promise<void> {
-  await page.route('https://tile.openstreetmap.org/**', (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: 'image/png',
-      body: TRANSPARENT_PNG
-    })
-  );
   await page.route(
     (url) => url.pathname.startsWith(HEAT_SERVICE_PATH),
     async (route) => {

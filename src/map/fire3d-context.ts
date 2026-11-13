@@ -31,13 +31,9 @@ import { WHP_SHADE_QUALIFICATION } from '../config/whp-shade';
 import { activateWhpDrape, deactivateWhpDrape } from '../layers/whp-3d';
 import { getPowerContextState } from '../state/power-context';
 import type { PowerContextState } from '../state/power-context';
-import {
-  activateStructures,
-  deactivateStructures
-} from '../layers/structures-3d';
 
 /** Stable keys for the context layers, in activation order. */
-export type Fire3DContextKey = 'whp' | 'power' | 'structures';
+export type Fire3DContextKey = 'whp' | 'power';
 
 /** What the orchestrator publishes: the active keys, and one embed
  * disclosure line per active key describing exactly what is rendered. */
@@ -50,10 +46,6 @@ export interface Fire3DContextActivation {
  * only while the last `ddm:whp-shade` event says the drape is mounted. */
 export const WHP_EMBED_LINE =
   `${WHP_SHADE_QUALIFICATION} Pacific Northwest; reduced resolution.`;
-
-/** Exported for the disclosure cross-gate test beside the archive. */
-export const STRUCTURES_EMBED_LINE =
-  'Buildings: Overture footprints (ODbL), central Oregon pilot, zoom 13+; dimmer buildings use placeholder heights.';
 
 /** Compose the power embed line from the surfaces actually in the scene. */
 export function buildPowerEmbedLine(state: PowerContextState): string {
@@ -106,15 +98,6 @@ export async function activateContextLayers(
     embedLines.push(buildPowerEmbedLine(power));
   }
 
-  try {
-    if (await activateStructures(map, signal)) {
-      keys.push('structures');
-      embedLines.push(STRUCTURES_EMBED_LINE);
-    }
-  } catch (err) {
-    console.warn('[fire3d-context] structures activation failed.', err);
-  }
-
   if (signal.aborted) {
     deactivateContextLayers(map);
     return EMPTY_ACTIVATION;
@@ -130,5 +113,4 @@ export async function activateContextLayers(
  */
 export function deactivateContextLayers(map: maplibregl.Map): void {
   deactivateWhpDrape(map);
-  deactivateStructures(map);
 }

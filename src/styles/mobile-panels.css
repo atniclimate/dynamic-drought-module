@@ -413,8 +413,7 @@
 
   /* ---------------------------------------------------------------------
      Map furniture rides the sheet's top edge at peek and half: the scale
-     rulers, and above them the dock (notices and the OpenStreetMap
-     credit), so neither is ever hidden under the glass while the map
+     rulers, and above them the dock (its notices), so neither is ever hidden under the glass while the map
      leads. At full the sheet covers them, as it covers the map.
      --------------------------------------------------------------------- */
   #app[data-sheet-detent] .maplibregl-ctrl-bottom-left,

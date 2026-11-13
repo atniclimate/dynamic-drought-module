@@ -342,7 +342,6 @@ test.describe('E1-5 flow plumbing (ENSO-FLOW-PLAN block E1)', () => {
     // Every region change is one instant jump (src/ui/sidebar.ts fitBounds
     // with animate: !prefersReducedMotion()), as in raster-current-view.
     await page.emulateMedia({ reducedMotion: 'reduce' });
-    await page.route('https://tile.openstreetmap.org/**', fulfillPng);
     await stubSstDomains(page);
     let phase: 'boot' | 'hold' | 'return' = 'boot';
     const returned: string[] = [];

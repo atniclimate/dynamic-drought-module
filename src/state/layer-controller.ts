@@ -169,7 +169,7 @@ export function createLayerController(
    * newer activate of the same key supersedes it, and when the attempt stands
    * down or fails. The modules' own `cancelActivation` seam stays beside it
    * for the modules that keep private controllers; this signal is what lets a
-   * module without one (hydrography) abort just as promptly.
+   * module without one abort just as promptly.
    */
   const attempts = new Map<string, AbortController>();
 

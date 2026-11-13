@@ -6,11 +6,17 @@ import { gotoApp, stubHeatRiskCatalog, waitForLayerSettled } from './helpers';
  * owner-1f, owner-1h and found-088; task DDM-P10-T11; design record
  * interface-chrome-popups-text.md section 2.7, "Keyboard reach and focus").
  *
- * THE ORDER. Tab follows today's DOM, with no reorder (a later item). The
- * design record lists Reset, SAT, Help, then Share; the DOM puts Share
- * (`#share-btn`) BEFORE Reset in `.map-overlay-controls` (index.html), and
- * the grid seats it in slot 4 visually. These cases assert the PRESENT
- * order, Share first, and the difference is recorded on the M28 report.
+ * THE ORDER. Tab runs down the column as it reads (WCAG 2.4.3), the order
+ * the design record lists: Reset, SAT, Help with its drawer, then Share.
+ * index.html ships Share (`#share-btn`) BEFORE Reset, the order an embed
+ * stacks them in; outside an embed src/ui/edge-column.ts seats Share after
+ * Help's seat in the DOM, where the grid shows it (slot 4). Until 2026-11-13
+ * Tab reached Share first; that recorded difference is closed.
+ *
+ * THE DOCK. The bottom dock is no stop. Its one focusable control was the
+ * link in the on-map OpenStreetMap credit, which left with OpenStreetMap
+ * (commit 7979a6a, the base map from public files); the embed's brand link
+ * shows in embeds only. Share is the last stop of the map chrome.
  *
  * THE RING. Every stop shows a 2 px solid outline when reached by keyboard:
  * the column's cells keep the chrome ring (2 px #FFFFFF at offset 0 on a
@@ -124,7 +130,7 @@ async function clickCentreForPopup(page: Page, withSwitcher = false): Promise<vo
 }
 
 test.describe('map chrome focus (S30D D1 M28)', () => {
-  test('Tab visits expand (collapsed), the canvas, the chip and its drawer, Reset, SAT, Help and its drawer, Share and the dock in that order, each with the 2 px ring', async ({
+  test('Tab visits expand (collapsed), the canvas, the chip and its drawer, Reset, SAT, Help and its drawer, then Share last, in that order, each with the 2 px ring', async ({
     page
   }) => {
     await page.setViewportSize(DESKTOP_VIEWPORT);
@@ -143,28 +149,49 @@ test.describe('map chrome focus (S30D D1 M28)', () => {
     await expect(page.locator('#map-info-btn')).toHaveAttribute('aria-expanded', 'true');
     const intoHelpDrawer = await tabUntil(page, (s) => s.name === 'help drawer');
     // Escape in a drawer returns to its trigger (the focus table); the next
-    // Tab with the drawer closed reaches the dock.
+    // Tab with the drawer closed reaches Share, the cell under Help.
     await page.keyboard.press('Escape');
     await expect(page.locator('#map-info-btn')).toBeFocused();
     const backToHelp = await readStop(page);
-    const toDock = await tabUntil(page, (s) => s.name === 'dock');
+    const toShare = await tabUntil(page, (s) => s.name === 'share');
 
-    const walk = [...toChip, ...toHelp, ...intoHelpDrawer, backToHelp, ...toDock];
-    // PRESENT DOM ORDER: Share precedes Reset (recorded difference; no reorder here).
+    const walk = [...toChip, ...toHelp, ...intoHelpDrawer, backToHelp, ...toShare];
+    // The column top to bottom: Reset, SAT, Help, Share.
     expect(seats(walk)).toEqual([
       'expand',
       'canvas',
       'chip',
       'key drawer',
-      'share',
       'reset',
       'sat',
       'help',
       'help drawer',
       'help',
-      'dock'
+      'share'
     ]);
     expectRings(walk);
+
+    // Share is the last stop: the dock holds no control since the on-map
+    // OpenStreetMap credit left (7979a6a), so the next Tab leaves the page.
+    await page.keyboard.press('Tab');
+    expect((await readStop(page)).name, 'nothing after Share takes focus').toBe('body');
+  });
+
+  test('an embed keeps Share above Reset, in the order Tab reaches them', async ({ page }) => {
+    await page.setViewportSize(DESKTOP_VIEWPORT);
+    await gotoApp(page, '?embed=true');
+    const share = page.locator('#share-btn');
+    const reset = page.locator('#reset-btn');
+    await expect(share).toBeVisible();
+    await expect(reset).toBeVisible();
+
+    const [shareBox, resetBox] = [await share.boundingBox(), await reset.boundingBox()];
+    expect(shareBox!.y + shareBox!.height, 'Share sits above Reset in the embed stack').toBeLessThanOrEqual(
+      resetBox!.y
+    );
+    await share.focus();
+    await page.keyboard.press('Tab');
+    await expect(reset).toBeFocused();
   });
 
   test('a focused drawer control that disappears hands focus to the drawer heading', async ({ page }) => {

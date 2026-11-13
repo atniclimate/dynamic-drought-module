@@ -15,7 +15,7 @@ set of public upstream services.
 - Node.js 24 (Active LTS); `.nvmrc` pins the exact patch, 24.20.0
 - npm, using the committed `package-lock.json`
 - A browser supported by Playwright for browser testing
-- Python only for the offline landscape and Overture structures pipelines
+- Python only for the offline landscape pipeline
 
 Install and start the development server:
 
@@ -281,7 +281,6 @@ npm run build:states
 npm run build:ecoregion-tiles
 npm run build:whp-tiles
 npm run build:power-tiles
-npm run build:structures-tiles
 npm run build:coverage-matrix
 ```
 
@@ -327,10 +326,9 @@ requests (src/map/satellite-guard.ts): a placeholder tile is drawn
 transparent and drops its frame, so the previous good frame or the plain
 map shows instead, and the Satellite control reads unavailable.
 The Satellite control turns imagery on and off;
-`basemap=default` records the satellite-off choice, showing subdued
-OpenStreetMap ground. OpenStreetMap also remains underneath because GOES
-coverage ends near 76 degrees north and imagery can contain clouds or
-gaps. GeoColor is context only: daytime areas approximate true color,
+`basemap=default` records the satellite-off choice, showing DDM's own
+ground. That ground also remains underneath because GOES coverage ends near
+76 degrees north and imagery can contain clouds or gaps. GeoColor is context only: daytime areas approximate true color,
 nighttime areas use infrared and static reference lights.
 
 Explicit Fire and Wildfire controls may request recent GeoColor as part of
@@ -338,10 +336,25 @@ their governed scene, but unrelated layer or horizon changes do not
 override a visitor's manual basemap choice. Future satellite-derived
 products belong in separately named layers with their own status,
 timestamp, caveat, and legend; recoloring an existing layer would let a
-display claim what its source does not. Hydrography queries the
-volunteer-run Overpass API (two-mirror failover, viewport-driven, dormant
-below zoom 7); institutional deployments expecting heavy concurrency should
-plan for the planned National Hydrography Dataset PMTiles bundle.
+display claim what its source does not.
+
+DDM's basemap is three same-origin PMTiles vector archives in `public/data/`
+built by `scripts/build-base-tiles.mjs` (run with
+`node --max-old-space-size=16000`; about 810 MB of public downloads cached
+outside the repository, every input pinned by SHA-256 in
+`scripts/data/base-tiles-inputs.json`, a changed input refused unless
+`DDM_BASE_REPIN=1`). North America is stored to zoom 8 and the world to zoom
+5; the map overzooms both, so the basemap stays regional in scale. The
+highways ride their own archive so each file stays under the 20 MB
+public-tree line. Each feature group is stored only from the zoom that first
+shows it (`bands` in the build), which keeps the opening view light. The
+ground fills draw under satellite imagery and the lines and names above it
+(`src/map/layer-order.ts`). The Hydrography layer draws the same archive's
+rivers and water bodies brighter and makes no request. Inside Census-defined
+Tribal areas, `src/layers/tribal-streets.ts` (started by the Tribal Lands
+layer) reads TIGERweb Local Roads live from zoom 12 and draws the streets
+with their names only within those areas. No Tribal or Treaty boundary is
+written into an archive.
 
 ### The desktop 3D Fire view
 
@@ -368,17 +381,6 @@ Administration, labeled with the issuer's own reporting period. Substations
 and distribution lines are absent: substation locations are withheld by
 publishing agencies for security reasons, and no authoritative public
 national distribution-circuit dataset exists.
-
-Building structures come from the Overture Maps Foundation buildings theme
-(ODbL, https://opendatacommons.org/licenses/odbl/1-0/), extruded over the terrain from zoom 13: footprints with an
-issuer-published height rise to it; the rest draw in a visibly dimmer tone
-at a disclosed placeholder height. The committed bake covers the central
-Oregon region framing only; a full Pacific Northwest bake was projected
-from the measured per-building tile rate at roughly 240 MB for z14-only
-tiles (about 380 MB at the shipped z13-14 scheme, 9.16 million footprints
-either way) and cannot ride the same-origin hosting path, so the extract
-script's `--bbox` parameter is the documented route for a deployer to bake
-their own region (see `public/data/README.md`).
 
 On a phone the same scene is entered from a 3D cell in the right-edge
 column, present only in the Fire view on a phone that passes the WebGL 2

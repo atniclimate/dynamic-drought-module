@@ -126,7 +126,7 @@ address (`src/util/chunk-retry.ts`).
   line that states no condition, and the block's one door reads "Open
   briefing". Once a briefing is read the door is "Read the full report"
   (owner direction 2026-11-09 (sprint), DR-pending).
-- The scale rulers and the dock (notices and the OpenStreetMap credit) ride
+- The scale rulers and the dock (its notices) ride
   the sheet's top edge at peek and half. Camera fits made for a briefing keep
   the half band clear; the map's own padding stays zero.
 - In a short landscape window inside the phone shell (at most 480px tall) the

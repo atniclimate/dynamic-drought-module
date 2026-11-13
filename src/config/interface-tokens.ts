@@ -3,9 +3,15 @@
  * Source: D3 M5, palette-tokens section "Map-side mirrors".
  */
 export const MAP_GROUND_COLOR = '#010B13'; // app.css --surface-base
-export const PLACE_LABEL_COLOR = '#010B13'; // app.css --surface-base
-export const PLACE_LABEL_HALO = '#F4F7FB'; // adopted light/print tint
-export const STATE_OUTLINE_COLOR = '#636363'; // adopted light/print body
+// Light names on a dark halo since DDM's own dark base map (design pass 2026-11-13): the white halos
+// were the loudest marks on the map, made for the retired raster ground.
+export const PLACE_LABEL_COLOR = '#C6CBD4'; // app.css --ink-soft
+export const PLACE_LABEL_HALO = '#010B13'; // app.css --surface-base
+export const STATE_OUTLINE_COLOR = '#8A94A6'; // app.css --ink-faint
+export const BASE_LAND_COLOR = '#1E242C'; // app.css --surface-overlay
+export const BASE_GLACIER_COLOR = '#2A3138'; // app.css --surface-hover
+export const BASE_REGION_LINE_COLOR = '#636363'; // app.css --rule-strong
+export const BASE_WATER_LABEL_COLOR = '#8A94A6'; // app.css --ink-faint
 export const HILLSHADE_SHADOW = '#1E242C'; // app.css --surface-overlay
 export const HILLSHADE_HIGHLIGHT = '#F4F7FB'; // adopted light/print tint
 export const STUDIO_SELECTION_COLOR = '#FFFFFF'; // app.css --ink-strong

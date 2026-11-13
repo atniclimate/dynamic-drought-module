@@ -72,6 +72,10 @@ const NO_POPUP_MODULES: Readonly<Record<string, string>> = {
   'src/layers/heatrisk.ts': 'the Key drawer carries it',
   'src/layers/heatrisk-coverage.ts': 'the Key drawer carries it',
   'src/layers/hydrography.ts': 'hover only',
+  'src/layers/forests.ts': 'the name is on the map',
+  'src/layers/railroads.ts': 'a line for context, nothing to read',
+  'src/layers/dams.ts': 'the name is on the map at close zoom',
+  'src/layers/public-lands.ts': 'the unit name is on the map at street zoom',
   'src/ui/hover-inspector.ts': 'a hover readout, never a click response'
 };
 

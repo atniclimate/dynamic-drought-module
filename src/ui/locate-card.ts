@@ -3,7 +3,7 @@
  *
  * One glass card says what Locate is doing and what it found. It rides the
  * shared bottom dock (`#map-bottom-dock`), the flex column where notices
- * and the OpenStreetMap credit already stack, so it can never cover them
+ * already stack, so it can never cover them
  * and they can never cover it. With the phone sheet closed it sits beside
  * the Locate cell that opened it; when a place's briefing raises the sheet,
  * the dock (and so the card) rides the sheet's top edge.
