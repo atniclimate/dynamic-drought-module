@@ -61,8 +61,8 @@ import type * as maplibregl from 'maplibre-gl';
 import type { Feature, FeatureCollection, GeoJsonProperties, Point } from 'geojson';
 
 import { URLS } from '../config/urls';
-import { PLACE_LABEL_HALO } from '../config/interface-tokens';
-import { AIANNH_FILL_COLOR, AIANNH_OUTLINE_COLOR } from '../config/palette';
+import { MAP_GROUND_COLOR } from '../config/interface-tokens';
+import { AIANNH_FILL_COLOR, AIANNH_OUTLINE_COLOR, TRIBAL_LABEL_COLOR } from '../config/palette';
 import { buildAiannhPopupModel } from '../ui/popups';
 import { buildPlaceConditionsHtml } from '../ui/popup-conditions';
 import { buildBoundaryContext, censusNationNames, loadCensusNationNames, resolveBoundaryTitle } from '../impact/context';
@@ -97,7 +97,8 @@ export const fadeLayerIds = [FILL_LAYER_ID, OUTLINE_LAYER_ID, LABEL_LAYER_ID] as
  * later because its names stack taller.
  */
 const LADDER_FLOORS_KM2 = [5000, 1000, 200, 50, 0] as const;
-const LADDER_ZOOMS = [5, 6, 7, 8, 9.5, 10.5] as const;
+// The smallest areas from zoom 9 (design pass 2026-11-13: the Kitsap and Puget Sound Nations were unnamed at 8.5).
+const LADDER_ZOOMS = [5, 6, 7, 8, 9, 10] as const;
 const STATISTICAL_CLASSES: ReadonlySet<string> = new Set(['D6', 'E1']);
 /** The federal classes a Nation's name may label; joint-use, state and Hawaiian Home Land areas never. */
 const LABELLED_CLASSES: ReadonlySet<string> = new Set(['D1', 'D2', 'D3', 'D6', 'E1']);
@@ -633,13 +634,14 @@ function addSourceAndLayers(map: maplibregl.Map, geojson: FeatureCollection): vo
     layout: {
       'text-field': ['get', 'text'],
       'text-font': ['Noto Sans Regular'],
-      'text-size': 11.5,
+      // Never smaller than the city names beside them (design pass 2026-11-13).
+      'text-size': ['interpolate', ['linear'], ['zoom'], 5, 12.5, 8, 14, 12, 15],
       'text-max-width': 10,
       'text-variable-anchor': ['center', 'top', 'bottom'],
       'text-radial-offset': 0.5,
       'symbol-sort-key': ['-', ['get', 'km2']]
     },
-    paint: { 'text-color': AIANNH_OUTLINE_COLOR, 'text-halo-color': PLACE_LABEL_HALO, 'text-halo-width': 1.4 }
+    paint: { 'text-color': TRIBAL_LABEL_COLOR, 'text-halo-color': MAP_GROUND_COLOR, 'text-halo-width': 1.4 }
   });
 }
 

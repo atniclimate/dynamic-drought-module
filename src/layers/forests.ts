@@ -55,7 +55,7 @@ export async function activate(map: maplibregl.Map): Promise<void> {
       minzoom: 8,
       filter: ['>=', ['get', 'km2'], 40],
       layout: {
-        'text-padding': 48,
+        'text-padding': 160,
         'text-field': ['get', 'name'],
         'text-font': ['Noto Sans Regular'],
         'text-size': 11,

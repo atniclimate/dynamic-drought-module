@@ -34,7 +34,8 @@ export async function activate(map: maplibregl.Map): Promise<void> {
       paint: {
         'line-color': COLOR,
         'line-width': ['interpolate', ['linear'], ['zoom'], 8, 0.7, 12, 1.4],
-        'line-opacity': ['interpolate', ['linear'], ['zoom'], 7.5, 0, 8.5, 0.8],
+        // Between the U.S. and state highways in weight, so a railroad never outshines an interstate.
+        'line-opacity': ['interpolate', ['linear'], ['zoom'], 7.5, 0, 8.5, 0.55],
         'line-dasharray': [3, 2]
       }
     });

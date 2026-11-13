@@ -84,7 +84,7 @@ const READS: readonly DetailRead[] = [
         type: 'symbol',
         source: 'tribal-streets',
         filter: ['has', 'NAME'],
-        layout: { 'symbol-placement': 'line', 'text-field': ['get', 'NAME'], 'text-font': FONT, 'text-size': 10.5, 'symbol-spacing': 300 },
+        layout: { 'symbol-placement': 'line', 'text-field': ['get', 'NAME'], 'text-font': FONT, 'text-size': 10.5, 'symbol-spacing': 500 },
         paint: { 'text-color': PLACE_LABEL_COLOR, 'text-halo-color': PLACE_LABEL_HALO, 'text-halo-width': 1.2 }
       }
     ]

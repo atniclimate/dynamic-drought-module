@@ -35,8 +35,8 @@ test('the label ladder: by land area, a statistical area one step later', () => 
   const cases = [
     [6000 * KM2, 'D1', 5], [5000 * KM2, 'D2', 5], [4999 * KM2, 'D1', 6], [1000 * KM2, 'D3', 6],
     [999 * KM2, 'D1', 7], [200 * KM2, 'D2', 7], [199 * KM2, 'D1', 8], [50 * KM2, 'D1', 8],
-    [49 * KM2, 'D1', 9.5], [0, 'D2', 9.5], [Number.NaN, 'D1', 9.5],
-    [6000 * KM2, 'D6', 6], [1000 * KM2, 'E1', 7], [200 * KM2, 'D6', 8], [50 * KM2, 'E1', 9.5], [10 * KM2, 'E1', 10.5]
+    [49 * KM2, 'D1', 9], [0, 'D2', 9], [Number.NaN, 'D1', 9],
+    [6000 * KM2, 'D6', 6], [1000 * KM2, 'E1', 7], [200 * KM2, 'D6', 8], [50 * KM2, 'E1', 9], [10 * KM2, 'E1', 10]
   ];
   for (const [area, cls, zoom] of cases) assert.equal(labelMinZoom(area, cls), zoom, `${area / KM2} km2, ${cls}`);
 });

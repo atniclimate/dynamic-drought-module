@@ -33,6 +33,7 @@ import type { FeatureCollection, GeoJsonProperties } from 'geojson';
 
 import { URLS } from '../config/urls';
 import { STATE_OUTLINE_COLOR } from '../config/palette';
+import { MAP_GROUND_COLOR } from '../config/interface-tokens';
 import { buildStatePopupModel } from '../ui/popups';
 import { buildPlaceConditionsHtml } from '../ui/popup-conditions';
 import { buildBoundaryContext, resolveBoundaryTitle } from '../impact/context';
@@ -82,8 +83,9 @@ const OUTLINE_WIDTH_NATIONAL = 0.4;
 const OUTLINE_WIDTH_REGIONAL = 1.5;
 const OUTLINE_WIDTH_SELECTED = 2.4;
 const OUTLINE_OPACITY_NATIONAL = 0.5;
-const OUTLINE_OPACITY_REGIONAL = 0.7;
-const CASING_COLOR = '#07111f';
+// Above every state highway and under the interstates at regional zoom (design pass 2026-11-13).
+const OUTLINE_OPACITY_REGIONAL = 0.8;
+const CASING_COLOR = MAP_GROUND_COLOR;
 
 type Status = 'loading' | 'ready' | 'error' | 'no-data';
 

@@ -47,8 +47,10 @@ const placeLayer = (id: string, source: string): maplibregl.SymbolLayerSpecifica
     'text-field': NAME,
     'text-font': FONT,
     'text-size': ['interpolate', ['linear'], ['zoom'], 3, ['match', ['get', 'rank'], 1, 12, 10.5], 8, ['match', ['get', 'rank'], 1, 15, 2, 14, 3, 13, 12]],
-    'symbol-sort-key': ['get', 'rank'],
-    'text-padding': 4,
+    // Within a rank the larger place first, and room around each name, so the suburbs thin out
+    // and isolated small towns stay (design pass 2026-11-13).
+    'symbol-sort-key': ['-', ['*', ['get', 'rank'], 1e8], ['get', 'pop']],
+    'text-padding': 12,
     'text-max-width': 8
   },
   paint: { 'text-color': PLACE_LABEL_COLOR, 'text-halo-color': PLACE_LABEL_HALO, 'text-halo-width': 1.4 }
@@ -73,7 +75,8 @@ const waterLabelLayer = (id: string, source: string): maplibregl.SymbolLayerSpec
   type: 'symbol',
   source,
   'source-layer': 'water_label',
-  filter: ['<=', ['get', 'rank'], ['step', ['zoom'], 1, 4, 2, 6, 3, 7.5, 4]] as maplibregl.FilterSpecification,
+  // Below zoom 4 only the oceans and seas are named, so bays do not outnumber cities in the national view.
+  filter: ['<=', ['get', 'rank'], ['step', ['zoom'], ['match', ['get', 'kind'], 'sea', 1, 0], 4, 2, 6, 3, 8, 4]] as maplibregl.FilterSpecification,
   layout: {
     'text-field': NAME,
     'text-font': FONT,
@@ -260,7 +263,7 @@ export function buildBaseStyle(): maplibregl.StyleSpecification {
         maxzoom: 9,
         filter: ['<=', ['get', 'rank'], ['step', ['zoom'], 2, 5.5, 3, 6.5, 9]],
         layout: quietCapitals(10, 0.3),
-        paint: { 'text-color': PEAK_LABEL_COLOR, 'text-opacity': 0.6, 'text-halo-color': MAP_GROUND_COLOR, 'text-halo-width': 1 }
+        paint: { 'text-color': PEAK_LABEL_COLOR, 'text-opacity': 0.75, 'text-halo-color': MAP_GROUND_COLOR, 'text-halo-width': 1 }
       },
       {
         id: 'base-peak',
@@ -280,7 +283,8 @@ export function buildBaseStyle(): maplibregl.StyleSpecification {
         minzoom: 3.5,
         maxzoom: 7.5,
         layout: quietCapitals(['interpolate', ['linear'], ['zoom'], 3.5, 9.5, 6, 12], 0.25),
-        paint: { 'text-color': BASE_WATER_LABEL_COLOR, 'text-opacity': 0.55, 'text-halo-color': MAP_GROUND_COLOR, 'text-halo-width': 1 }
+        // Quiet by the muted ink, not by transparency: 5.11:1 on land (design pass 2026-11-13).
+        paint: { 'text-color': BASE_WATER_LABEL_COLOR, 'text-halo-color': MAP_GROUND_COLOR, 'text-halo-width': 1 }
       },
       waterLabelLayer('base-world-water-label', WORLD),
       waterLabelLayer('base-water-label', NA),

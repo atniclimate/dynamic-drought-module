@@ -417,6 +417,10 @@ export function pickTreatyColor(name: string | null | undefined): string {
 /** The one ruled Tribal boundary family hex (D-0.7.0-058 ruling 3). */
 export const TRIBAL_FAMILY_COLOR = '#8d006b';
 
+/** The Nations' names on the dark map: a text shade of the family hue (OKLab hue of #8d006b, lightness 0.80,
+ * chroma 0.10), not a second hue; 10.15:1 on its dark halo, 7.99:1 on land (design pass 2026-11-13). */
+export const TRIBAL_LABEL_COLOR = '#EBA4CF';
+
 /** Tribal Lands (bundled, deployer-populated). The family hex; the deployer
  * slot fills strongest (deployer-authorized data), per the hierarchy note. */
 export const TRIBAL_FILL_COLOR = TRIBAL_FAMILY_COLOR;
@@ -464,10 +468,10 @@ export { STATE_OUTLINE_COLOR } from './interface-tokens';
 /* ---------------------------------------------------------------------------
  * Municipal place labels (U4e; Natural Earth bundled points)
  *
- * Dark slate text with a light halo: the one combination the corpus's
- * both-basemaps rule accepts unchanged over the desaturated OSM default AND
- * over satellite imagery (the halo carries the contrast, not the text
- * color). These are the map-side tokens for label chrome; on-map paint
+ * Light text on a dark halo (design pass 2026-11-13): over DDM's own dark
+ * base map and over satellite imagery alike the halo carries the contrast.
+ * The earlier dark-on-white pair was made for the retired OpenStreetMap
+ * ground. These are the map-side tokens for label chrome; on-map paint
  * cannot read CSS custom properties; interface-tokens owns these mirrors.
  * ------------------------------------------------------------------------- */
 

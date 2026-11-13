@@ -117,7 +117,8 @@ export async function activate(map: maplibregl.Map): Promise<void> {
     map.addLayer({ id: FILL_ID, type: 'fill', source: SOURCE_ID, paint: { 'fill-color': TINT, 'fill-opacity': 0.09 } });
   }
   if (!map.getLayer(LINE_ID)) {
-    map.addLayer({ id: LINE_ID, type: 'line', source: SOURCE_ID, paint: { 'line-color': TINT, 'line-width': 0.8, 'line-opacity': 0.5 } });
+    // The tint carries the manager from zoom 10; the edges strengthen toward zoom 13, where names appear.
+    map.addLayer({ id: LINE_ID, type: 'line', source: SOURCE_ID, paint: { 'line-color': TINT, 'line-width': 0.8, 'line-opacity': ['interpolate', ['linear'], ['zoom'], 10, 0.15, 13, 0.5] } });
   }
   if (!map.getLayer(LABEL_ID)) {
     map.addLayer({
