@@ -922,23 +922,13 @@ function renderPointHeat(
   `;
 }
 
-/** Render one resource link, or the empty-by-default Tribe's-own affordance. */
+/** Render one resource link. */
 function renderResource(resource: ResourceLink): string {
   const href = checkPopupHref(resource.url);
   const hasLink = href !== null;
   const desc = resource.description
     ? `<p class="impact-resource-desc">${escapeHtml(resource.description)}</p>`
     : '';
-  if (resource.tier === 'tribe-own' && !hasLink) {
-    // Empty-by-default deployer slot: a "populate" affordance, never a broken link.
-    return `
-      <div class="impact-resource impact-resource-empty">
-        <p class="impact-resource-label">${escapeHtml(resource.label)}</p>
-        ${desc}
-        <p class="impact-resource-agency">${escapeHtml(resource.agency)}</p>
-      </div>
-    `;
-  }
   const labelHtml = hasLink
     ? `<a class="impact-resource-label impact-resource-link" href="${escapeHtml(href)}" target="_blank" rel="noopener">${escapeHtml(resource.label)}</a>`
     : `<p class="impact-resource-label">${escapeHtml(resource.label)}</p>`;
@@ -965,9 +955,14 @@ function unavailableTitle(): string {
 /**
  * Render the resources, grouped by tier in stewardship order; nothing at all
  * when there are none (D4: no empty heading over zero links where routing is
- * off).
+ * off). The Nation's-own slot ships empty, and an empty slot draws nothing,
+ * its heading included (visual uniformity D10): a "populate this" note is a
+ * deployer's instruction, not a reader's resource.
+ * shortcut: the slot has no link in any build today, so no place draws it; when
+ * a deployer can fill it, show it only for a place that is a Tribal Nation.
  */
-function renderResources(resources: readonly ResourceLink[]): string {
+function renderResources(all: readonly ResourceLink[]): string {
+  const resources = all.filter((r) => r.tier !== 'tribe-own' || checkPopupHref(r.url) !== null);
   if (resources.length === 0) return '';
   const groups = TIER_ORDER.map((tier) => {
     const items = resources.filter((r) => r.tier === tier);

@@ -352,8 +352,8 @@ function locateTribalLandArea(map: maplibregl.Map, larName: string, labels: Loca
     url: `${URLS.biaLarFeatureServer}/query?${params.toString()}`,
     kind: 'bia-reservation',
     layerKey: 'bia-reservations',
-    failToast: 'Could not reach the BIA land area service. Try again in a moment.',
-    emptyToast: 'The BIA land area service returned no boundary for this land area.',
+    failToast: 'Could not reach the BIA Land Area Representation (AIAN-LAR) service. Try again in a moment.',
+    emptyToast: 'The BIA Land Area Representation (AIAN-LAR) service returned no boundary for this land area.',
     ...labels
   });
 }

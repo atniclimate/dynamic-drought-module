@@ -712,6 +712,7 @@ function restoreCamera(
  * for the deep-archive resolver, and the mobile test above asserts the
  * chunk boundary this would otherwise break). */
 const WHP_DRAPE_SOURCE_ID = 'whp-2023';
+const STRUCTURES_SOURCE_ID = 'structures-3d';
 
 /** The scene's own source ids that are ACTUALLY on the map right now: the
  * terrain DEM always, plus whichever context sources this activation added
@@ -722,6 +723,7 @@ const WHP_DRAPE_SOURCE_ID = 'whp-2023';
 function currentSceneSourceIds(map: maplibregl.Map): string[] {
   const ids = [TERRAIN_SOURCE_ID];
   if (contextKeys.includes('whp')) ids.push(WHP_DRAPE_SOURCE_ID);
+  if (contextKeys.includes('structures')) ids.push(STRUCTURES_SOURCE_ID);
   const dryness = drynessModule?.getDrynessSourceId();
   if (dryness) ids.push(dryness);
   return ids.filter((id) => Boolean(map.getSource(id)));

@@ -58,7 +58,6 @@ const FIT_SELECTORS = [
   '.shell-minimap-title',
   '.shell-cluster-btn',
   '.shell-horizon-btn-title',
-  '.shell-horizon-btn-sub',
   '.map-key-chip-label',
   '.overlay-btn',
   '.layers-studio-linkout',
@@ -555,7 +554,10 @@ for (const viewport of VIEWPORTS) {
       expect(findings, describeFindings(findings)).toEqual([]);
     });
 
-    test('the horizon titles are control labels that read on one line (codex C1: "Current Conditions")', async ({
+    // Visual uniformity wave 1, D4 (2026-11-13): the horizon buttons are equal
+    // columns and a title may take two balanced lines ("Current Conditions"),
+    // where codex C1 once held every title to one line in unequal buttons.
+    test('the horizon buttons are equal columns and a title takes at most two lines, inside its button', async ({
       page
     }) => {
       await gotoApp(page, '?view=brief');
@@ -563,9 +565,19 @@ for (const viewport of VIEWPORTS) {
       const titles = await lineCounts(page, '.shell-horizon-btn-title');
       expect(titles.length, 'every horizon renders its title').toBeGreaterThan(0);
       expect(
-        titles.filter((t) => t.lines !== 1),
+        titles.filter((t) => t.lines < 1 || t.lines > 2),
         titles.map((t) => `"${t.text}" ${t.lines} lines`).join('; ')
       ).toEqual([]);
+      const widths = await page
+        .locator('.shell-horizon-btn')
+        .evaluateAll((buttons) => buttons.map((b) => b.getBoundingClientRect().width));
+      expect(widths.length, 'one button per title').toBe(titles.length);
+      expect(
+        Math.max(...widths) - Math.min(...widths),
+        `the horizon buttons are not one width: ${widths.join(', ')}`
+      ).toBeLessThanOrEqual(1);
+      const fit = await scanFit(page, ['.shell-horizon-btn-title']);
+      expect(fit.findings, describeFindings(fit.findings)).toEqual([]);
     });
 
     test('no chrome label or seat text overflows its box', async ({ page }) => {
@@ -729,7 +741,7 @@ for (const viewport of VIEWPORTS) {
 test.describe('text registration leaves the phone layout alone (codex C5)', () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
-  test('at 390x844 the touched selectors keep the phone rules: no desktop wrapping, measure or trim reaches them', async ({
+  test('at 390x844 the touched selectors keep the phone rules: prose wraps without a lone last word, and no desktop measure or trim reaches them', async ({
     page
   }) => {
     await gotoApp(page, '?view=console&layers=nws-alerts');
@@ -748,8 +760,11 @@ test.describe('text registration leaves the phone layout alone (codex C5)', () =
         horizonTitle: style('.shell-horizon-btn-title', 'text-wrap-mode')
       };
     });
-    // The phone keeps the browser defaults the desktop block overrides.
-    expect(reading.prose === null || reading.prose === 'auto', `prose ${reading.prose}`).toBe(true);
+    // Visual uniformity wave 1, D8 (2026-11-13): the two wrapping rules left
+    // the 721 px gate, so phone prose takes `pretty` (it moves a line break
+    // and no box). Before: asserted the browser default, `auto`.
+    expect(reading.prose === null || reading.prose === 'pretty', `prose ${reading.prose}`).toBe(true);
+    // The rest of the desktop block still stops at 721 px.
     expect(reading.measure === null || reading.measure === 'none', `measure ${reading.measure}`).toBe(true);
     expect(reading.overflowWrap === null || reading.overflowWrap === 'normal', `overflow-wrap ${reading.overflowWrap}`).toBe(true);
     expect(reading.offWord === null || /cap/.test(reading.offWord), `off word ${reading.offWord}`).toBe(true);

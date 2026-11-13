@@ -77,7 +77,7 @@ test.describe('minimal LAYERS studio', () => {
     const beforeLength = await page.evaluate(() => window.history.length);
 
     const entry = page.locator('#layers-studio-entry');
-    await expect(entry).toHaveText('LAYERS');
+    await expect(entry).toHaveText('Layers'); // mixed case since visual uniformity wave 1, D1
     await expect(entry).toHaveAttribute(
       'aria-label',
       'Open the LAYERS studio: layer search, toggles, and sources'

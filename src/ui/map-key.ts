@@ -40,11 +40,14 @@ import {
   NWS_ALERT_LEGEND,
   OUTLOOK_LEGEND,
   SST_ANOMALY_LABELS,
+  TRIBAL_FAMILY_COLOR,
+  TRIBAL_LINE_COLOR,
   USDM_CATEGORIES,
   USDM_NONE_SWATCH,
   SPC_FIREWX_CATEGORIES
 } from '../config/palette';
 import { LAYER_DEFS, getDroughtSurfacePresentation } from '../config/layers';
+import { TRIBAL_NATIONS_GROUP } from '../config/layer-groups';
 import { HAZARD_CLUSTERS, HEAT_FIRE_ALERTS } from '../config/clusters';
 import { DETAIL_SECTIONS } from '../config/detail-sections';
 import { ensureDetailSectionHosts } from './detail-section-hosts';
@@ -68,7 +71,7 @@ import { openTechnicalInformation } from './impact-panel';
 import { watchDesktopMapSeat } from './map-control-seat';
 import { getTimeBarSpec, onTimeBarSpecChange } from './time-bar';
 import { MAP_GROUND_COLOR } from '../config/interface-tokens';
-import { WHP_3D_SHADE_CATEGORIES, WHP_3D_SHADE_QUALIFICATION, WHP_SHADE_CATEGORIES, WHP_SHADE_QUALIFICATION, WHP_SURFACE_OPACITY } from '../config/whp-shade';
+import { WHP_3D_SHADE_CATEGORIES, WHP_SHADE_CATEGORIES, WHP_SHADE_QUALIFICATION, WHP_SURFACE_OPACITY } from '../config/whp-shade';
 import { FUEL_RISK_TITLE, fireKeySections, noSurfaceKeyAria } from './fire3d-fuel-risk';
 import {
   TROPICAL_CONE,
@@ -221,6 +224,22 @@ function drynessKeyHtml(): string {
     ground.rows.map((row) => swatchItem(whiteShade(row.alpha), row.label)).join('') +
     ground.lines.map((line) => `<span class="map-key-qualification">${escapeHtml(line)}</span>`).join('') +
     '</span>';
+}
+
+/**
+ * Last in every mode's key while a Tribal Nations layer is on (visual uniformity D9): the outline as the map
+ * paints it and the group's own name, no caveat. Not a `.map-key-item`: those rows are an issuer's classes.
+ * Not gated on status: every pan re-read reports `loading` while the outlines stay drawn, so the row would blink.
+ */
+function tribalNationsKeyHtml(): string {
+  const active = registry.getActiveKeys();
+  if (!TRIBAL_NATIONS_GROUP.members.some((key) => active.has(key))) return '';
+  const box = (color: string, width: number): string =>
+    `<rect x="2" y="2" width="10" height="7" fill="none" stroke="${color}" stroke-width="${width}"/>`;
+  return '<span class="map-key-scale" data-tribal-nations-key>' +
+    '<svg width="14" height="11" viewBox="0 0 14 11" style="flex:none" aria-hidden="true" focusable="false">' +
+    `${box(TRIBAL_FAMILY_COLOR, 3)}${box(TRIBAL_LINE_COLOR, 1)}</svg>` +
+    `<span>${escapeHtml(TRIBAL_NATIONS_GROUP.label)}</span></span>`;
 }
 
 /**
@@ -1598,15 +1617,20 @@ export function initMapKey(): void {
     // no productKeys either: `chipStateFromKeys` below returns undefined
     // for it, same as `active`'s own coverage-only synthetic spec.
     const productKeys: readonly string[] = active?.productKeys ?? [];
-    keyLabel = spec.label;
+    // The title names the mode with the word on its button (visual uniformity D8); the product keeps the drawer's
+    // own title line. An embed has no mode button and keeps the product. The toggle's accessible name carries
+    // both, the visible word first (WCAG 2.5.3).
+    const chipTitle = app?.classList.contains('embed') ? spec.label : chipFallbackLabel(getSelectedHazard());
+    keyLabel = chipTitle === spec.label ? spec.label : `${chipTitle}, ${spec.label}`;
     const shadeKey = whpShadeActive
       ? '<span class="map-key-scale" data-whp-shade-key><strong>3D wildfire potential</strong>' +
         WHP_3D_SHADE_CATEGORIES.map((category) => swatchItem(
           whiteShade(category.opacity), category.label
-        )).join('') + `<span class="map-key-qualification">${escapeHtml(WHP_3D_SHADE_QUALIFICATION)}</span></span>`
+        )).join('') + '</span>'
       : '';
     const html =
-      `<span class="map-key-label">${escapeHtml(spec.label)}</span>` + spec.itemsHtml + shadeKey + drynessKeyHtml();
+      `<span class="map-key-label">${escapeHtml(spec.label)}</span>` + spec.itemsHtml + shadeKey + drynessKeyHtml() +
+      tribalNationsKeyHtml();
     if (html !== rendered) {
       // A re-render replaces every node in the strip, so anything the
       // person was operating loses focus. The HeatRisk valid-date select
@@ -1662,11 +1686,11 @@ export function initMapKey(): void {
     }
     // The four chip grammar slots (section 2.4): an empty, keylined swatch
     // (the chip names a product, not one reading; the conditions strip
-    // carries the single-reading swatch), the label in the issuer's own
-    // words with no text-transform (replacing the family ternary that used
+    // carries the single-reading swatch), the title computed above with no
+    // text-transform, read from the mode table (replacing the family ternary that used
     // to hardcode 'FIRE' / 'HEAT RISK' / 'ENSO', a cluster literal DR-113
     // forbids), and the six-state glyph.
-    chipGrammar.label.textContent = spec.label;
+    chipGrammar.label.textContent = chipTitle;
     const chipState = chipStateFromKeys(productKeys);
     if (chipState) {
       chipGrammar.state.dataset.chipState = chipState;

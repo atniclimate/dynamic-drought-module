@@ -311,15 +311,6 @@
     padding: 10px 16px 14px;
     border-bottom-color: var(--glass-hairline);
   }
-  /* The full console stack keeps its brand header and credits, on glass. */
-  #app[data-sheet-detent] .sidebar-header {
-    padding: 10px 16px;
-    border-bottom-color: var(--glass-hairline);
-  }
-  #app[data-sheet-detent] .sidebar-footer {
-    padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
-    border-top-color: var(--glass-hairline);
-  }
   /* The header names the door, so the pane does not repeat it. */
   #app[data-sheet-detent] #sheet-alerts > .panel-title {
     display: none;
@@ -394,22 +385,9 @@
     min-height: var(--touch-target);
   }
 
-  /* Two link-like buttons on a phone. The key drawer's "Technical
-     information" stands on a line of its own, so its box takes the touch
-     floor. The credits line's "Acknowledgements" sits inside a sentence:
-     its box stays in the line, and a transparent band above and below it
-     takes the touch, as the minimap's ocean doors do. */
-  #app[data-sheet-detent] .map-info-ack-link[data-open-technical-information] {
-    min-height: var(--touch-target);
-  }
-  #app[data-sheet-detent] .map-info-ack-link[data-open-acknowledgements] {
-    position: relative;
-  }
-  #app[data-sheet-detent] .map-info-ack-link[data-open-acknowledgements]::before {
-    content: '';
-    position: absolute;
-    inset: calc((24px - var(--touch-target)) / 2) 0;
-  }
+  /* The two link-like buttons ("Technical information", "Acknowledgements")
+     take the touch floor from the grouped rule in src/styles/app.css
+     ("THE TOUCH FLOOR, EVERY HAND"), which a tablet shares. */
 
   /* ---------------------------------------------------------------------
      Map furniture rides the sheet's top edge at peek and half: the scale

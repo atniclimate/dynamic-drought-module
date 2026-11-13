@@ -183,7 +183,8 @@ const CLASSIFICATION = {
     USFS_WHP_PRESENTATION: 'S9 issuer legend decoded; bake checks drift',
     FBFM40_PRESENTATION: 'S10 LANDFIRE pinned while present',
     POWER_PLANT_PRESENTATION: 'DDM infrastructure context',
-    POWER_PLANT_CLUSTER_PRESENTATION: 'DDM infrastructure context'
+    POWER_PLANT_CLUSTER_PRESENTATION: 'DDM infrastructure context',
+    STRUCTURES_PRESENTATION: 'DDM infrastructure context'
   }
 };
 function assertClassified(actual, expected) {
@@ -510,4 +511,18 @@ test('the ruled Tribal family is preserved independently of ATNI brand tokens', 
     'RESERVATION_FILL_COLOR', 'RESERVATION_OUTLINE_COLOR', 'AIANNH_FILL_COLOR', 'AIANNH_OUTLINE_COLOR']) {
     assert.equal(palette[name], '#8d006b', name);
   }
+});
+// Visual uniformity D9 (2026-11-13): a Tribal area is a line, never a fill over the hazard class under it.
+test('Tribal areas draw a light line over the ruled hex with no visible fill, the chosen place included', () => {
+  assert.equal(palette.TRIBAL_LINE_COLOR, palette.TRIBAL_LABEL_COLOR, 'the line wears the light shade the name uses');
+  for (const [file, edge] of [['aiannh', 'AIANNH_OUTLINE_COLOR'], ['bia-reservations', 'RESERVATION_OUTLINE_COLOR']]) {
+    const src = readFileSync(new URL(`../src/layers/${file}.ts`, import.meta.url), 'utf8');
+    assert.match(src, /'fill-opacity': 0\s+\}/, `${file}: the fill is the click area only`);
+    assert.doesNotMatch(src, /'fill-opacity': \[/, `${file}: no selected fill either`);
+    assert.match(src, new RegExp(`'line-color': ${edge},`), `${file}: the ruled hex is the dark edge`);
+    assert.match(src, /'line-color': TRIBAL_LINE_COLOR,/, `${file}: the light line`);
+  }
+  const located = readFileSync(new URL('../src/state/located-boundary.ts', import.meta.url), 'utf8');
+  assert.doesNotMatch(located, /type: 'fill'/, 'the chosen place has no fill');
+  assert.match(located, /'line-color': TRIBAL_LINE_COLOR,/);
 });

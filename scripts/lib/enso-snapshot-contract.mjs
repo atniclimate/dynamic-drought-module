@@ -406,30 +406,8 @@ function isSoiSeries(value) {
   );
 }
 
-function isPlumePoint(value) {
-  return (
-    isObject(value) &&
-    typeof value.seas === 'string' &&
-    typeof value.laNina === 'number' &&
-    typeof value.neutral === 'number' &&
-    typeof value.elNino === 'number'
-  );
-}
-
-function isProbabilities(value) {
-  return (
-    isObject(value) &&
-    typeof value.sourceUrl === 'string' &&
-    typeof value.baseline === 'string' &&
-    (typeof value.issued === 'string' || value.issued === null) &&
-    Array.isArray(value.seasons) &&
-    value.seasons.length >= 2 &&
-    value.seasons.every(isPlumePoint)
-  );
-}
-
 /** The optional series keys a snapshot may carry beyond the required pair. */
-export const OPTIONAL_SERIES = ['nino34', 'nino34Weekly', 'soi', 'probabilities'];
+export const OPTIONAL_SERIES = ['nino34', 'nino34Weekly', 'soi'];
 
 /**
  * The CPC rule pages the state block cites, exported so the builder and the
@@ -615,8 +593,9 @@ export function validateEnsoSnapshot(parsed) {
   if (parsed.soi !== undefined && !isSoiSeries(parsed.soi)) {
     warnings.push('soi is present but malformed (the consumer would drop it)');
   }
-  if (parsed.probabilities !== undefined && !isProbabilities(parsed.probabilities)) {
-    warnings.push('probabilities is present but malformed (the consumer would drop it)');
+  // No issuer publishes machine-readable ENSO odds (DDM-D06), so no block is accepted.
+  if (parsed.probabilities !== undefined) {
+    errors.push('probabilities is present, but no ENSO probability block is accepted until an issuer feed exists');
   }
   if (parsed.sourceQuotes !== undefined && !isSourceQuotes(parsed.sourceQuotes)) {
     warnings.push('sourceQuotes is present but malformed (each quote needs text, source, and an https url)');

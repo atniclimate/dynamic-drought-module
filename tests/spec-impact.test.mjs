@@ -175,7 +175,8 @@ test('cross-cutting rules stay small, name real non-measurement specs, and join 
 });
 
 test('modules the browser specs reach only through the app pick their own specs', () => {
-  // The nine changed in the week of 2026-11-02 that picked no spec at all.
+  // The nine changed in the week of 2026-11-02 that picked no spec at all, then the
+  // two whose specs went red unpicked on 2026-11-13 (map chrome, Tribal Lands).
   assert.deepEqual(Object.keys(MODULE_SPECS), [
     'src/main.ts',
     'src/map/interaction-coordinator.ts',
@@ -185,7 +186,10 @@ test('modules the browser specs reach only through the app pick their own specs'
     'src/ui/time-bar.ts',
     'src/ui/heatrisk-sequence.ts',
     'src/ui/sheet-alerts.ts',
-    'src/ui/popup-conditions.ts'
+    'src/ui/popup-conditions.ts',
+    'src/config/map-chrome.ts',
+    'src/layers/aiannh.ts',
+    'src/ui/hazard-rail.ts'
   ]);
   const config = readFileSync(new URL('../playwright.config.ts', import.meta.url), 'utf8');
   const specPaths = new Set(readdirSync(new URL('./', import.meta.url)).filter((name) => name.endsWith('.spec.ts')).map((name) => `tests/${name}`));

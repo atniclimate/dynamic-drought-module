@@ -199,7 +199,7 @@ export const PRIORITY_ROWS: readonly PriorityRow[] = [
     title: 'El Nino or La Nina conditions present',
     issuer: 'NOAA Climate Prediction Center',
     // src/impact/enso.ts fetchEnsoClaims: `roni.state.conditions` of the bundled snapshot.
-    field: 'the newest operational RONI season against the CPC onset threshold',
+    field: 'the newest operational RONI season against the CPC threshold of plus or minus 0.5 degrees Celsius',
     classes: ['El Nino conditions', 'La Nina conditions'],
     orderBasis: 'presence only; neutral conditions are read and listed, not ranked',
     basisUrl: 'https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/enso/roni/'

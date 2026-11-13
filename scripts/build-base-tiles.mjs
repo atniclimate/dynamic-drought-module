@@ -16,7 +16,8 @@
  *                                      lakes, country lines, major places, seas.
  *   ddm-forests-<edition>.pmtiles     National forest boundaries, zoom 0 to 10,
  *                                      for the National Forests layer (not the
- *                                      base map): USDA Forest Service, CC0.
+ *                                      base map): USDA Forest Service, public;
+ *                                      data.gov lists CC BY 4.0.
  *
  * Sources (all public; the receipt table scripts/data/base-tiles-inputs.json
  * pins every file by SHA-256 and retrieval date):
@@ -86,7 +87,7 @@ const ISSUERS = {
   usgs: 'U.S. Geological Survey (U.S. public domain)',
   nrcan: 'Natural Resources Canada (Open Government Licence - Canada)',
   ne: 'Natural Earth (public domain)',
-  usfs: 'USDA Forest Service (CC0 1.0)',
+  usfs: 'USDA Forest Service (public; data.gov lists CC BY 4.0)',
   usace: 'U.S. Army Corps of Engineers, National Inventory of Dams (public)'
 };
 const NID = 'https://geospatial.sec.usace.army.mil/dls/rest/services/NID/National_Inventory_of_Dams_Public_Service/FeatureServer/0';

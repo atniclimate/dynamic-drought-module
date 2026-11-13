@@ -421,7 +421,11 @@ test('the place briefing door is named without a mode word (DR-113)', async () =
   const text = await readFile(new URL('src/ui/sidebar.ts', ROOT), 'utf8');
   // assert.ok, not doesNotMatch: a failure must not print the whole file.
   assert.ok(!/See what the \w+ means/.test(text), 'the door names one mode in every mode');
-  assert.ok(text.includes("'aria-label', `See what this means for ${place.label}`"));
+  // Visual uniformity wave 1, D6: the door reads "Open briefing"; its name starts with those words and adds the place.
+  // Repair R2: the door also shows the place's name, on its own line above those words.
+  assert.ok(text.includes("action.textContent = 'Open briefing';"));
+  assert.ok(text.includes('name.textContent = place.label;'));
+  assert.ok(text.includes("'aria-label', `Open briefing for ${place.label}`"));
 });
 
 // Audit 7 finding 2: the chip's fallback sentence ("No classed layer is drawn")
@@ -440,6 +444,44 @@ test('every surface-role layer in a cluster recipe has a key label and branch', 
     assert.ok(KEY_ELIGIBLE_LABELS[key], `${key} is a recipe surface with no KEY_ELIGIBLE_LABELS entry`);
     assert.ok(mapKey.includes(`'${key}'`), `${key} is a recipe surface with no branch in map-key.ts`);
   }
+});
+
+// The phone hazard rail (DR-113): its cells are generated from the mode table,
+// one per HAZARD_CLUSTER_KEYS entry, instead of hand-written in index.html.
+// The rail keeps its own order (ENSO, Fire, Drought, Heat), which differs from
+// the desktop column's (the HAZARD_CLUSTERS table order).
+test('the hazard rail is generated with one cell per mode, keeping the former markup (DR-113)', async () => {
+  const { HAZARD_RAIL_ICONS, hazardRailCells, hazardRailMarkup } = await import(
+    new URL('src/ui/hazard-rail.ts', ROOT).href
+  );
+  const { MOBILE_HAZARD_PRESETS } = await import(new URL('src/config/presets.ts', ROOT).href);
+  assert.deepEqual([...Object.keys(HAZARD_RAIL_ICONS)].sort(), [...HAZARD_CLUSTER_KEYS].sort());
+  const cells = hazardRailCells();
+  assert.deepEqual(cells.map((c) => c.preset.mode), Object.keys(HAZARD_RAIL_ICONS), 'a mode has no rail preset');
+  for (const { preset } of cells) {
+    assert.ok(MOBILE_HAZARD_PRESETS.includes(preset));
+  }
+
+  // The four cells index.html carried by hand before 2026-11-13, verbatim.
+  const svg = (paths) => `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${paths}</svg>`;
+  const cell = (key, paths, label) => `<button type="button" class="hazard-rail-btn" data-preset="${key}">${svg(paths)}<span class="map-control-label">${label}</span></button>`;
+  const former = [
+    cell('hazard-enso', '<path d="M3 8c2.25-3 4.75-3 7 0s4.75 3 7 0 3.5-2.5 4-2.5"/><path d="M3 14c2.25-3 4.75-3 7 0s4.75 3 7 0 3.5-2.5 4-2.5"/><path d="M5 19c1.5-1.5 3-1.5 4.5 0s3 1.5 4.5 0"/>', 'ENSO'),
+    cell('hazard-fire', '<path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>', 'Fire'),
+    cell('hazard-drought', '<path d="M12 21.5a6.5 6.5 0 0 0 6.5-6.5c0-1.9-.9-3.6-2.8-5.1S12.5 6 12 3c-.5 3-1.8 5.4-3.7 6.9S5.5 13.1 5.5 15a6.5 6.5 0 0 0 6.5 6.5z"/>', 'Drought'),
+    cell('hazard-heat', '<path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/>', 'Heat')
+  ];
+  // A later mode adds a cell; the former cells keep their markup and order.
+  const generated = hazardRailMarkup().match(/<button[\s\S]*?<\/button>/g) ?? [];
+  assert.equal(generated.length, HAZARD_CLUSTER_KEYS.length);
+  assert.deepEqual(generated.filter((b) => former.some((f) => f.includes(b.match(/data-preset="[^"]+"/)[0]))), former);
+
+  // The rail's container stays in index.html; its cells live only in the table.
+  const html = await readFile(new URL('index.html', ROOT), 'utf8');
+  assert.ok(html.includes('<div id="hazard-rail" class="hazard-rail" role="group" aria-label="Quick hazard views"></div>'));
+  assert.ok(!html.includes('data-preset='), 'a hand-written rail cell is back in index.html');
+  const sidebar = await readFile(new URL('src/ui/sidebar.ts', ROOT), 'utf8');
+  assert.ok(sidebar.includes('rail.innerHTML = hazardRailMarkup();'), 'wireHazardRail no longer generates the cells');
 });
 
 // The owner's live review: NOAA's frozen satellite catalog drew a metadata

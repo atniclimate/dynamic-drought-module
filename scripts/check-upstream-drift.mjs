@@ -528,6 +528,7 @@ export const ARCGIS_FIELD_PROBES = Object.freeze([
   // place-catalog.ts watershedQueryUrl: layers 1 (huc2) and 2 (huc4).
   { key: 'wbdMapServer', file: 'src/config/place-catalog.ts', layer: '/1' },
   { key: 'wbdMapServer', file: 'src/config/place-catalog.ts', layer: '/2' },
+  { key: 'wbdMapServer', file: 'src/impact/water-supply.ts', layer: '/4' },
   { key: 'nifcFires', file: 'src/layers/nifc-fires.ts', layer: '', constName: 'NIFC_OUT_FIELDS' },
   { key: 'censusAiannhMapServer', file: 'src/layers/aiannh.ts', layer: '/47' },
   // The detail inside Tribal areas: TIGERweb Local Roads, USGS NHD named streams

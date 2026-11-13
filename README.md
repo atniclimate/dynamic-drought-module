@@ -24,9 +24,9 @@ drought status, wildfire and heat risk, water and snowpack telemetry, and
 the public resources that address the impacts. Coverage is rich for the
 United States, the source of most layers, and limited for Canada and
 Mexico: the tri-national North American Drought Monitor covers all three
-countries, and Canada adds its Canadian Drought Monitor and British
-Columbia's basin drought levels. Built by ATNI Climate (Affiliated Tribes
-of Northwest Indians).
+countries, and Canada adds its Canadian Drought Monitor. The default view
+frames the contiguous United States. Built by ATNI Climate (Affiliated
+Tribes of Northwest Indians).
 
 **For a deployer, the module is a static folder.** Build it once, serve it
 from any web host, embed it in any page with an `<iframe>`. No backend, no
@@ -74,14 +74,19 @@ layers that answer it. Each kind answers a different question about conditions a
 
 - **Condition surfaces** answer the severity question for the visible
   area, shown one at a time so they never fight visually: the US Drought
-  Monitor (USDM), the gridded Standardized Precipitation Index (SPI)
-  with a 30-to-365-day window selector, the NOAA Climate Prediction
-  Center (CPC) Seasonal Drought Outlook, NWS HeatRisk, the Storm
-  Prediction Center fire-weather outlook, and USDA Forest Service
-  Wildfire Hazard Potential.
+  Monitor (USDM), the North American Drought Monitor, the Canadian
+  Drought Monitor monthly snapshot, the gridded Standardized
+  Precipitation Index (SPI) with a 30-to-365-day window selector, the
+  NOAA Climate Prediction Center (CPC) Seasonal Drought Outlook, NWS
+  HeatRisk, the Storm Prediction Center fire-weather outlook, USDA
+  Forest Service Wildfire Hazard Potential, and the NASA GIBS ocean
+  temperature anomaly.
 - **Place** tells you where you are and whose land you are looking at:
-  state boundaries, EPA Omernik Level III and Level IV ecoregions,
-  rivers, and the Tribal Nations umbrella: Tribal Lands (live from the
+  state boundaries, EPA Omernik Level III and Level IV ecoregions
+  (Pacific Northwest bundle only), hydrography (rivers and lakes),
+  National Forest boundaries, Public Lands (USGS PAD-US, live from zoom
+  10), railroads, dams, terrain shading (Pacific Northwest bake only),
+  and the Tribal Nations umbrella: Tribal Lands (live from the
   US Census AIANNH service, covering legal AND statistical geographies
   including Oklahoma Tribal Statistical Areas), Reservation Boundaries
   (live from the Bureau of Indian Affairs (BIA) AIAN-LAR service,
@@ -93,12 +98,21 @@ layers that answer it. Each kind answers a different question about conditions a
 - **Events** show what is actively happening: current mapped fire
   perimeters from the National Interagency Fire Center (Wildfire and
   Wildfire Complex, Prescribed fire, and other or unclassified perimeters
-  kept distinct), NOAA Hazard Mapping System smoke plumes, and active
-  National Weather Service (NWS) heat and fire-weather alerts.
+  kept distinct), NOAA Hazard Mapping System smoke plumes, active
+  National Weather Service (NWS) alerts (the alert set follows the open
+  mode; heat and fire-weather alerts are the default set), active
+  tropical cyclones from the National Hurricane Center and the Central
+  Pacific Hurricane Center, and the NOAA CPC 6-to-10-day, 8-to-14-day
+  and seasonal temperature and precipitation outlooks, drawn as
+  overlays.
 - **Stations** report what the instruments on the ground are reading,
   with live values in the sidebar and popups: USGS streamgages, NRCS
-  SNOTEL snowpack, USBR Hydromet reservoir storage and AgriMet
-  agricultural observations, and USACE reservoir forebay elevations.
+  SNOTEL snowpack and SCAN soil climate, NIFC RAWS fire-weather
+  stations, NOAA Tides and Currents (CO-OPS) stations, USBR AgriMet
+  agricultural stations, and CoCoRaHS volunteer precipitation reports
+  (Washington, Oregon and Idaho), plus USBR Hydromet reservoir storage,
+  USACE reservoir forebay elevations and Northwest River Forecast Center
+  water-supply forecasts for the stations those networks serve.
 - **The impact briefing** answers what the data means for one place.
   Click any boundary (state, ecoregion, Tribal, or reservation) and the
   module composes it from land identity, current / near-term / long-range
@@ -150,8 +164,8 @@ directly or in an iframe. Common parameters:
 
 | Parameter | Example | Purpose |
 | --- | --- | --- |
-| `region` | `region=washington_state` | Choose the starting region |
-| `cluster` | `cluster=wildfire` | Open Wildfire; `heat` and `enso` are also available |
+| `region` | `region=washington_state` | Choose the starting region. With no `region` the map opens on the `national` framing, the contiguous United States (add `region=washington_state&view=brief` to keep the prior Washington framing) |
+| `cluster` | `cluster=wildfire` | Open Wildfire; `heat` and `enso` are also available, and no `cluster` opens Drought |
 | `select` | `select=state:WA` | Focus a state and open its impact briefing |
 | `embed` | `embed=true` | Use the iframe presentation |
 
@@ -170,6 +184,15 @@ for layer lists, views, time controls, defaults, and legacy links.
 </iframe>
 ```
 
+`embed=true` (or `embed=1`) hides the sidebar for the iframe presentation.
+The example opens Washington's impact briefing through `select=state:WA`.
+An embed with no `region` opens on the national framing, the contiguous
+United States, as the full site does; an embedder that wants the prior
+Washington framing and the Brief view adds
+`region=washington_state&view=brief` to its `src`. An embed that names
+`layers`, `region`, `cluster`, `ocean` or `framing` without `select`
+opens Console.
+
 ---
 
 ## Layers and data sources
@@ -177,33 +200,45 @@ for layer lists, views, time controls, defaults, and legacy links.
 | Key | Layer | Role | Source |
 | --- | ----- | ---- | ------ |
 | `usdm` | US Drought Monitor | surface | NDMC FeatureServer (live) |
-| `gridded-index` | Gridded Drought Index (SPI) | surface | NOAA NIDIS raster tiles (live) |
-| `drought` | Seasonal Drought Outlook | surface | NOAA CPC vector MapServer (live) |
-| `heatrisk` | HeatRisk (seven published days) | surface | NOAA NWS/WPC ImageServer (live) |
+| `nadm-drought` | North American Drought Monitor | surface | NOAA NCEI GeoJSON (live, default-on) |
+| `cdm-drought` | Canadian Drought Monitor | surface | Agriculture and Agri-Food Canada, committed monthly snapshot |
+| `gridded-index` | Gridded Drought Index (SPI) | surface | NOAA NIDIS raster tiles (live, contiguous United States only) |
+| `drought` | Drought Outlook (CPC) | surface | NOAA CPC vector MapServer (live, monthly and seasonal) |
+| `heatrisk` | HeatRisk (Experimental) | surface | NOAA NWS/WPC ImageServer (live) |
 | `spc-fire-weather` | Fire Weather Outlook (Day 1) | surface | NOAA SPC MapServer (live) |
 | `usfs-whp` | Wildfire Hazard Potential | surface | USFS GeoPlatform ImageServer (live) |
 | `usfs-whp-classes` | Wildfire Hazard Potential (USFS colors) | surface | USFS GeoPlatform ImageServer (live) |
-| `cdm-drought` | Canadian Drought Monitor (snapshot) | surface | Agriculture and Agri-Food Canada, bundled monthly snapshot |
-| `nadm-drought` | North American Drought Monitor | surface | NOAA NCEI GeoJSON (live) |
-| `sst-anomaly` | Ocean Temperature Anomaly | surface | NASA GIBS WMTS (live) |
-| `states` | State Boundaries | reference | US Census, bundled GeoJSON (default-on) |
-| `hillshade` | Terrain shading | reference | USGS 3DEP, bundled PMTiles (default-on) |
-| `ecoregions` | Ecoregions (Level III/IV) | reference | EPA Omernik, bundled PMTiles |
-| `places` | Municipal place labels | reference | Natural Earth, bundled (display-only) |
+| `sst-anomaly` | Ocean Temperature Anomaly | surface | NASA GIBS WMTS, GHRSST MUR (live) |
+| `hydrography` | Hydrography | reference | USGS, Natural Resources Canada and Natural Earth, bundled |
+| `forests` | National Forests | reference | USDA Forest Service boundaries, bundled PMTiles |
+| `railroads` | Railroads | reference | US Census, bundled PMTiles |
+| `dams` | Dams | reference | US Army Corps of Engineers National Inventory of Dams (large or high-hazard-potential dams), bundled PMTiles |
+| `public-lands` | Public Lands | reference | USGS PAD-US (live from zoom 10) |
+| `ecoregions` | Ecoregions (Level III/IV) | reference | EPA Omernik, bundled PMTiles (Pacific Northwest bundle only) |
+| `hillshade` | Terrain Shading | reference | USGS 3DEP, bundled PMTiles (Pacific Northwest bake only, default-on) |
 | `aiannh` | Tribal Lands | reference | US Census AIANNH MapServer (live, default-on) |
 | `bia-reservations` | Reservation Boundaries | reference | BIA AIAN-LAR FeatureServer (live, default-on) |
 | `tribal` | Tribal Lands (your own data) | reference | deployer slot, bundled EMPTY PLACEHOLDER, default-off, URL-only (no catalog row until turned on) |
 | `treaty` | Treaty Areas (your own data) | reference | deployer slot, bundled EMPTY PLACEHOLDER, default-off, URL-only (no catalog row until turned on) |
-| `hydrography` | Rivers | reference | USGS, Natural Resources Canada and Natural Earth (bundled basemap) |
+| `states` | State Boundaries | reference | US Census, bundled GeoJSON (default-on) |
+| `places` | City & Town Labels | reference | Natural Earth, bundled |
+| `power-infrastructure` | Power Lines & Plants | reference | archived HIFLD transmission lines (2024-09-30) and live EIA plants, default-off |
 | `nifc-fires` | Current Mapped Fire Perimeters (NIFC) | event | NIFC WFIGS FeatureServer (live) |
-| `hms-smoke` | Smoke plumes | event | NOAA OSPO FeatureServer (live) |
-| `nws-alerts` | Heat & Fire Weather Alerts | event | NOAA NWS MapServer (live) |
-| `telemetry` | Telemetry Stations | stations | USGS, NRCS, USBR, USACE, NIFC, NOAA CO-OPS, Iowa State IEM (live) |
-| `power-infrastructure` | Power Lines & Plants | reference | archived HIFLD transmission lines and live EIA plants, default-off |
+| `nws-alerts` | Heat & Fire Weather Alerts (the name and set follow the open mode) | event | NOAA NWS MapServer (live) |
+| `hms-smoke` | Smoke Plumes (HMS) | event | NOAA OSPO FeatureServer (live) |
+| `tropical-cyclones` | Active Tropical Cyclones | event | NOAA NHC and CPHC MapServer (live) |
+| `cpc-seasonal-precip` | Seasonal Precipitation Outlook | event | NOAA CPC MapServer (live) |
+| `cpc-seasonal-temp` | Seasonal Temperature Outlook | event | NOAA CPC MapServer (live) |
+| `cpc-610-precip` | 6-10 Day Precipitation Outlook | event | NOAA CPC MapServer (live) |
+| `cpc-610-temp` | 6-10 Day Temperature Outlook | event | NOAA CPC MapServer (live) |
+| `cpc-814-precip` | 8-14 Day Precipitation Outlook | event | NOAA CPC MapServer (live) |
+| `cpc-814-temp` | 8-14 Day Temperature Outlook | event | NOAA CPC MapServer (live) |
+| `telemetry` | Monitoring stations | stations | USGS streamgages, NRCS SNOTEL and SCAN, NIFC RAWS, NOAA CO-OPS tides and currents, USBR AgriMet and Hydromet, USACE CWMS, Northwest River Forecast Center, and CoCoRaHS through the Iowa Environmental Mesonet (live) |
 
-(The British Columbia drought-levels surface swaps in for the US Drought
-Monitor inside the `british_columbia` framing; it has no separate layer
-key. Table aligned with the runtime registry on 2026-08-20.)
+The Province of British Columbia's basin drought-levels edition is held
+and not shown: British Columbia shows the US Drought Monitor like any other
+region. Table aligned with the layer registry (`src/config/layers.ts`) and
+the product catalog (`src/config/products.ts`).
 
 The framing minimap uses the North American Drought Monitor and a
 Statistics Canada analysis mask. The [method and source notice](DEVELOPER.md#framing-minimap-and-nunavut-proxy)
@@ -243,7 +278,7 @@ reservoirs, wetlands, glaciers, rivers, county, state, province and
 national lines, federal and state highways, and place names, at a regional
 scale. Inside Tribal areas, street names are read live from the Census at
 close zoom. Clouds and coverage gaps in the imagery can obscure the ground.
-The Satellite control turns imagery on and off. The Rivers layer draws the
+The Satellite control turns imagery on and off. The Hydrography layer draws the
 same files' rivers and lakes brighter. See the [developer guide](DEVELOPER.md#about-the-basemap-and-hydrography)
 for how the basemap is built.
 
@@ -310,6 +345,8 @@ its own clock, method, and caveats.
   temperature and precipitation outlooks (6-to-10-day, 8-to-14-day), ENSO
   index snapshots and diagnostic discussion
 - **SPC** (Storm Prediction Center): Fire Weather Outlook
+- **NHC** (National Hurricane Center) and **CPHC** (Central Pacific
+  Hurricane Center): active tropical cyclones
 - **NESDIS** (National Environmental Satellite, Data, and Information
   Service): merged GOES GeoColor satellite imagery
 - **OSPO** (Office of Satellite and Product Operations): HMS satellite
@@ -328,7 +365,7 @@ Nebraska-Lincoln)
 **DOI** (Department of the Interior)
 
 - **USGS**: 3DEP elevation tiles, instantaneous-values streamflow,
-  Watershed Boundary Dataset
+  Watershed Boundary Dataset, PAD-US (Public Lands)
 - **Bureau of Indian Affairs**: AIAN-LAR reservation boundaries and
   LARNAME crosswalk
 - **USBR** (Bureau of Reclamation): Hydromet daily values and AgriMet
@@ -337,7 +374,7 @@ Nebraska-Lincoln)
 **USDA** (Department of Agriculture)
 
 - **Forest Service**: Wildfire Hazard Potential 2023 (ImageServer and
-  baked PMTiles)
+  baked PMTiles), National Forest boundaries
 - **NRCS** (Natural Resources Conservation Service): SNOTEL and SCAN
   station data via AWDB
 - **Farm Service Agency**: drought-relief and disaster-assistance resource
@@ -347,6 +384,7 @@ Nebraska-Lincoln)
 
 - **TIGERweb**: AIANNH Tribal legal and statistical areas
 - Cartographic boundary files (states)
+- Main-line railroads (TIGER)
 
 **NIFC** (National Interagency Fire Center)
 
@@ -356,6 +394,8 @@ Nebraska-Lincoln)
 **USACE** (Army Corps of Engineers)
 
 - **CWMS**: reservoir and water-control data
+- **National Inventory of Dams**: dam locations (large or
+  high-hazard-potential dams)
 
 **Government of Canada**
 
@@ -363,10 +403,6 @@ Nebraska-Lincoln)
   snapshot
 - **Statistics Canada**: 2021 Digital Boundary Files (provincial
   boundaries, Nunavut analysis mask)
-
-**Province of British Columbia**
-
-- **GeoBC / Water Management Branch**: drought levels by water basin
 
 **EPA** (Environmental Protection Agency)
 

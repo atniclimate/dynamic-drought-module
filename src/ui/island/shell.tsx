@@ -493,14 +493,16 @@ function Shell({ map, snap, framing, specTick, onMinimapNoteChange }: ShellProps
                 data-horizon={key}
                 aria-pressed={snapshot.horizon === key}
                 aria-disabled={disabledReason !== null ? 'true' : undefined}
-                title={disabledReason ?? undefined}
+                // The sub-line ("now", "days to weeks") left the face (visual
+                // uniformity wave 1, D4): it is the tooltip and the accessible
+                // description. A disabled chip states its reason there instead;
+                // the briefing's horizon headings carry the sub-line always.
+                title={disabledReason ?? chrome.subtitle}
                 onClick={() => {
                   if (disabledReason === null) chooseHorizon(key);
                 }}
               >
                 <span class="shell-horizon-btn-title">{chrome.title}</span>
-                {/* The last two words stay together, so a wrap never leaves one word alone on a line. */}
-                <span class="shell-horizon-btn-sub">{chrome.subtitle.replace(/ (\S+)$/, '\u00a0$1')}</span>
               </button>
             );
           })}

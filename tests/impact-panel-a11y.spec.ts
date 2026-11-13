@@ -183,6 +183,8 @@ test.describe('impact panel accessibility', () => {
     await expect(
       panel.getByRole('link', { name: 'Agricultural drought relief information' })
     ).toBeVisible();
+    // Visual uniformity D10: the empty Nation's-own slot draws nothing, its heading included.
+    await expect(panel.locator('.impact-resources')).not.toContainText("Nation's own resources");
     await lastResource.focus();
     await page.keyboard.press('Tab');
     await expect(summary).toBeFocused();

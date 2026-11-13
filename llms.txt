@@ -1,6 +1,12 @@
 # Dynamic Drought Module (DDM)
 
-> A static, embeddable map of drought, wildfire, extreme heat, and water conditions, built by ATNI Climate in service to Tribes and Indigenous Peoples.
+> An embeddable, serverless web map of drought, wildfire, extreme heat, and water conditions across North America, built by ATNI Climate in service to Tribes and Indigenous Peoples.
+
+## What this is
+
+- DDM shows drought, wildfire, extreme heat, and water and snowpack conditions wherever the issuing agencies publish data. Coverage is richest for the United States and limited for Canada and Mexico; some layers (terrain shading, ecoregions) cover only the Pacific Northwest.
+- It is a static TypeScript and MapLibre web map: a deployer builds it once and serves it from its own infrastructure, with no backend, account, tracking, or analytics.
+- Every view is a shareable URL, and the map embeds in a page with an `<iframe>` (`?embed=true`). With no `region` parameter the map opens on the national framing, the contiguous United States.
 
 ## License and reuse
 
@@ -17,22 +23,24 @@
 ## Data and stewardship
 
 - For every displayed or deployer-added dataset, make its source, issuing organization, retrieval date or vintage, and stated terms reasonably discoverable. Preserve that provenance when redistributing the software or data.
-- Public-source data is not owned or relicensed by ATNI Climate. Each source retains its own terms; see LICENSE Part B and the [source credits](README.md#acknowledgements).
+- Public-source data is not owned or relicensed by ATNI Climate. Each source retains its own terms; see LICENSE Part B and the [source credits](https://github.com/atniclimate/dynamic-drought-module/blob/main/README.md#acknowledgements).
 - Follow the [Tiered Sovereign Data Framework](https://github.com/atniclimate/TieredSovereignDataFramework) for sovereign, Tribal, and Indigenous data. Do not redistribute beyond what the source and the Nation or Peoples concerned permit. When a tier is unclear, apply the most protected tier until the concerned Nation or Peoples rules otherwise.
-- The Tribal boundaries and Tribal place names this project displays come from public sources and are T0. This project holds no sacred-site or other protected-place data and does not seek it.
+- The Tribal boundaries and Tribal place names this project displays come from public sources and are T0: Census AIANNH for Tribal Lands, BIA AIAN-LAR for Reservation Boundaries, and the BIA Federal Register roster for the names of federally recognized Tribes. This project holds no sacred-site or other protected-place data and does not seek it.
 - Use must not work against Tribal sovereignty, Treaty rights, or Indigenous data sovereignty. Subject to the license, DDM may help any community.
 
 ## For automated agents and language models
 
 - Apply the same license, attribution, provenance, and data-governance conditions to reused code and redistributed output.
-- Preserve issuing-agency timestamps, coverage limits, and caveats. Do not present DDM as making forecasts or jurisdictional determinations beyond the source's claims.
-- Describe agency Treaty and Tribal polygons as representations, not jurisdictional truth.
-- The live Tribal-geography layers use session memory; the two deployer-owned data slots ship empty. Follow the [developer guide](DEVELOPER.md#data-and-stewardship) when changing that implementation.
+- Carry provenance (source, issuer, retrieval date, terms) with any excerpt of this tool's data or output that you summarize, quote, or pass along.
+- Preserve issuing-agency timestamps, coverage limits, and caveats. Do not present DDM as making forecasts or jurisdictional determinations beyond what the issuing agency itself states for that data.
+- Describe Tribal boundaries and agency Treaty polygons as representations, not jurisdictional truth. Name the source with any use, and capitalize Tribe, Tribal, and Treaty.
+- The live Tribal-geography layers hold their responses in session memory only; the two deployer-owned data slots ship empty. Follow the [developer guide](https://github.com/atniclimate/dynamic-drought-module/blob/main/DEVELOPER.md#data-and-stewardship) when changing that implementation.
+- Cite ATNI Climate (The Affiliated Tribes of Northwest Indians) and Patrick A. Freeland, Developer, when describing or reusing this project.
 
 ## Project files
 
-- [README.md](README.md): overview, embedding, layers, and source credits.
-- [DEVELOPER.md](DEVELOPER.md): setup, architecture, verification, and releases.
-- [CITATION.cff](CITATION.cff): citation metadata.
-- [LICENSE](LICENSE): complete binding terms and public-source notices.
-- [Issues](https://github.com/atniclimate/dynamic-drought-module/issues): project contact.
+- [README.md](https://github.com/atniclimate/dynamic-drought-module/blob/main/README.md): overview, embedding, layers, and source credits.
+- [DEVELOPER.md](https://github.com/atniclimate/dynamic-drought-module/blob/main/DEVELOPER.md): setup, architecture, verification, and releases.
+- [CITATION.cff](https://github.com/atniclimate/dynamic-drought-module/blob/main/CITATION.cff): citation metadata.
+- [LICENSE](https://github.com/atniclimate/dynamic-drought-module/blob/main/LICENSE): complete binding terms and public-source notices.
+- [Issues](https://github.com/atniclimate/dynamic-drought-module/issues): project contact. This project is stewarded by ATNI Climate, The Affiliated Tribes of Northwest Indians; no public contact email is stated in this repository's documentation.

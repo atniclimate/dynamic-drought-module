@@ -162,6 +162,27 @@
      --touch-target's tablet floor. Also a FLOOR (min-height only): a
      control already at or above 24px keeps its own geometry. */
   --pointer-target: 24px;
+  /* One control face for the left column (visual uniformity wave 1, D1):
+     the mode, horizon, Place and Layers, Tribal Nations and 3D Fire buttons
+     read one gap, one height floor and one label. A coarse pointer lifts
+     the floor to --touch-target (the rule after :root). */
+  --ctl-gap: 6px;
+  --ctl-min-h: 36px;
+  --ctl-pad: 8px 10px;
+  --ctl-fs: 11.5px;
+  --ctl-track: 0.02em;
+  /* One gutter for the column and the briefing (D7). The phone sheet sets
+     its own value. --col-scrollbar is the column scroller's bar, which the
+     header's second row steps in by to share the mode grid's right edge. */
+  --gutter: 18px;
+  --col-scrollbar: 8px;
+  /* One reading measure per surface, never per paragraph (D12): a length
+     that does not follow each paragraph's own type size, so text and ruled
+     rows end on one edge. 520 px is about 75 characters of the briefing's
+     12.5 px body, the top of the 50 to 75 range, and is wider than the
+     briefing's column up to a 1440 px window, where text and boxes share
+     the column's edge. Wave 3's type scale may restate it. */
+  --measure: 520px;
   /* Honest disablement (2026-09-03 launch ruling section 4). The one
      visual vocabulary for a control that EXISTS but cannot act yet,
      because the map it drives is not ready. The opacity matches the two
@@ -352,6 +373,11 @@
 :root {
   --link-on-light: #B02821;
   --link-on-light-hover: #8C1F19;
+}
+
+/* A hand on the column: the shared control face takes the touch floor (D1). */
+@media (pointer: coarse) {
+  :root { --ctl-min-h: var(--touch-target); }
 }
 
 /* MORE CONTRAST (owner direction 2026-11-09 (sprint), DR-pending). A reader
@@ -616,13 +642,15 @@ a:hover {
 }
 
 .sidebar-header {
-  padding: 18px 18px 14px;
+  padding: var(--gutter) var(--gutter) 14px;
   border-bottom: 1px solid var(--line);
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   grid-template-rows: auto auto;
   align-items: center;
-  gap: 6px 12px;
+  /* 8px between the wordmark, the name and the collapse control leaves the
+     name room for two lines in the 300 px tablet column (D7). */
+  gap: var(--ctl-gap) 8px;
   flex-shrink: 0;
 }
 
@@ -634,7 +662,7 @@ a:hover {
 .brand {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   min-width: 0;
   grid-column: 1;
   grid-row: 1;
@@ -646,6 +674,9 @@ a:hover {
   height: auto;
   min-height: 40px;
   padding: 4px;
+  /* The plate hangs out by its own padding, so the wordmark's letters stand
+     on the gutter with every other first word in the column (D7). */
+  margin-inline-start: -4px;
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
@@ -701,7 +732,7 @@ a:hover {
   overflow-x: hidden;
   padding: 4px 0;
 }
-.sidebar-scroll::-webkit-scrollbar { width: 8px; }
+.sidebar-scroll::-webkit-scrollbar { width: var(--col-scrollbar); }
 .sidebar-scroll::-webkit-scrollbar-track { background: transparent; }
 .sidebar-scroll::-webkit-scrollbar-thumb {
   background: var(--line-strong);
@@ -709,8 +740,10 @@ a:hover {
 }
 .sidebar-scroll::-webkit-scrollbar-thumb:hover { background: var(--fg-3); }
 
+/* The credit ends the scroll column (D7): it is the last block inside
+   .sidebar-scroll, never a pinned band over the layer list. */
 .sidebar-footer {
-  padding: 12px 18px;
+  padding: 12px var(--gutter);
   border-top: 1px solid var(--line);
   font-size: 10.5px;
   color: var(--fg-2);
@@ -808,7 +841,7 @@ html:not([data-ddm-controls='ready']) .app-shell .sidebar-expand-btn {
    ---------------------------------------------------------------------------- */
 
 .panel {
-  padding: 16px 18px 18px;
+  padding: 16px var(--gutter) 18px;
   border-bottom: 1px solid var(--line);
 }
 .panel:last-child { border-bottom: none; }
@@ -1071,28 +1104,33 @@ button.conditions-metric:hover .conditions-action-hide {
    #app are the mode hooks (set by src/ui/view-shell.ts).
    ---------------------------------------------------------------------------- */
 
+/* Brief and Console are ONE joined control across the header's second row
+   (D3): equal halves on the mode grid's edges, one outline, a shared rule
+   between them and no gap, so it never reads as a fifth and sixth mode. */
 .view-switch {
-  display: flex;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
   grid-column: 1 / -1;
   grid-row: 2;
-  justify-self: end;
-  gap: 2px;
-  padding: 2px;
   background: var(--bg-2);
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
 }
+@media (min-width: 721px) {
+  /* The column below keeps a stable scrollbar gutter; the header has none. */
+  #app:not(.embed) .view-switch { margin-inline-end: var(--col-scrollbar); }
+}
 
 .view-switch button {
   font-family: var(--font-display);
-  font-size: 10px;
+  font-size: var(--ctl-fs);
   font-weight: var(--fw-subtitle);
-  letter-spacing: var(--track-caps-sm);
-  text-transform: uppercase;
+  letter-spacing: var(--ctl-track);
   color: var(--fg-2);
   background: transparent;
   border: 0;
-  border-radius: calc(var(--radius-md) - 2px);
+  border-radius: 0;
   padding: 4px 8px;
   cursor: pointer;
   /* DDM-P17-T07 (found-020): Brief/Console measured 43x17 and 65x17 at
@@ -1101,6 +1139,10 @@ button.conditions-metric:hover .conditions-action-hide {
      fine-pointer counterpart, always in force. */
   min-height: var(--pointer-target);
 }
+.view-switch button + button { border-inline-start: 1px solid var(--line); }
+/* The outer corners follow the outline; the shared edge stays square. */
+.view-switch button:first-child { border-start-start-radius: inherit; border-end-start-radius: inherit; }
+.view-switch button:last-child { border-start-end-radius: inherit; border-end-end-radius: inherit; }
 
 .view-switch button:hover {
   color: var(--fg-0);
@@ -1119,110 +1161,18 @@ button.conditions-metric:hover .conditions-action-hide {
   margin: 6px 0 10px;
 }
 
-.brief-place-context {
-  display: grid;
-  gap: 2px;
-  margin: 0 0 9px;
-  padding: 8px 10px;
-  background: var(--accent-soft);
-  border-left: 2px solid var(--accent);
-  border-radius: var(--radius-sm);
-  color: var(--fg-1);
-}
-.brief-place-context[hidden] { display: none; }
-.brief-place-context span {
-  font-family: var(--font-display);
-  font-size: 9px;
-  font-weight: var(--fw-subtitle);
-  letter-spacing: var(--track-caps-sm);
-  text-transform: uppercase;
-  color: var(--fg-3);
-}
-.brief-place-context strong {
-  font-family: var(--font-display);
-  font-size: 14px;
-  font-weight: var(--fw-title);
-  color: var(--fg-0);
-}
-.brief-place-context small {
-  font-size: 10px;
-  color: var(--fg-2);
-}
-
 #layers-studio-entry-host { margin-top: 12px; }
 #layers-studio-entry-host:empty { display: none; }
-/* The count sits at the button's right edge, so the row is one line tall and
-   clears the sticky dock in every mode (1440x900 measured in
-   interface-responsive.spec.ts). */
+/* The Tribal Nations button spans the row under the two doors, one control
+   gap below them (D5). Its count reads in the button's accessible name; a
+   fault takes its own line under the button (.tribal-nations-health). */
 #brief-secondary-actions .tribal-nations-brief-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 0 0;
+  padding: var(--ctl-gap) 0 0;
 }
-#brief-secondary-actions .tribal-nations-health {
-  flex: 0 1 auto;
-  margin-top: 0;
-  text-align: end;
-}
-#brief-secondary-actions .tribal-nations-brief-action {
-  flex: 1 1 auto;
-  width: auto;
-  min-width: 0;
-  min-height: 32px;
-  background: transparent;
-  border-color: var(--line);
-  color: var(--fg-1);
-  font-size: 11px;
-}
-.brief-selection-summary {
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid var(--line);
-}
-.brief-selection-summary[hidden] { display: none; }
-.brief-selection-summary p {
-  margin: 0 0 6px;
-  font-size: 11.5px;
-  line-height: 1.45;
-  color: var(--fg-1);
-}
-.brief-full-report-link {
-  appearance: none;
-  padding: 0;
-  background: transparent;
-  border: 0;
-  color: var(--accent);
-  font: inherit;
-  font-size: 11.5px;
-  font-weight: var(--fw-strong);
-  text-align: left;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-  cursor: pointer;
-}
-.brief-full-report-link:hover { color: var(--fg-0); }
-
+/* The Place and Layers doors wear THE CONTROL FACE (the shell section). */
 .brief-console-door {
   display: block;
   width: 100%;
-  font-family: var(--font-display);
-  font-size: 11px;
-  font-weight: var(--fw-subtitle);
-  letter-spacing: var(--track-caps-sm);
-  text-transform: uppercase;
-  color: var(--fg-1);
-  background: var(--bg-2);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-md);
-  padding: 8px 10px;
-  cursor: pointer;
-  text-align: center;
-}
-
-.brief-console-door:hover {
-  border-color: var(--accent-strong);
-  color: var(--fg-0);
 }
 
 /* found-012: the held-chunk entry feedback (view-shell.ts, sidebar.ts). Not
@@ -1273,7 +1223,9 @@ button.conditions-metric:hover .conditions-action-hide {
   appearance: none;
   width: 100%;
   margin-top: 8px;
-  padding: 9px 12px;
+  /* Four pixels above and below: the door's two lines (the chosen place's
+     name, then "Open briefing") fit the row the shell reserves for it. */
+  padding: 4px 12px;
   min-height: 38px;
   background: var(--accent-soft);
   color: var(--fg-0);
@@ -1286,6 +1238,19 @@ button.conditions-metric:hover .conditions-action-hide {
   text-align: left;
   cursor: pointer;
   transition: all 0.12s ease;
+}
+/* The one door carries the chosen place's name (visual uniformity wave 1,
+   repair R2): the name whole, on as many balanced lines as it needs and
+   never cut, over the words "Open briefing". Both lines keep the door's
+   colour, so the hover and pressed faces hold. */
+.region-briefing-place,
+.region-briefing-action {
+  display: block;
+  line-height: 1.4;
+}
+.region-briefing-place {
+  font-weight: var(--fw-title);
+  overflow-wrap: break-word;
 }
 .region-briefing-btn:hover {
   background: var(--accent);
@@ -1362,6 +1327,13 @@ button.conditions-metric:hover .conditions-action-hide {
   margin-bottom: 2px;
 }
 .layer-group-title-text { min-width: 0; }
+/* In the desktop column the group heads, their Sources door and its note
+   start on the gutter, under the search box, not 10 px inside it (D7). */
+@media (min-width: 721px) {
+  #sidebar .layer-group-title { padding-inline: 0; }
+  #sidebar .layer-group-sources-toggle { margin-inline-start: 0; }
+  #sidebar .layer-group-provenance { margin-inline: 0; }
+}
 
 .layer-group-hint {
   font-family: var(--font-body);
@@ -1539,13 +1511,14 @@ button.conditions-metric:hover .conditions-action-hide {
    hosted by the impact panel's static chrome). One labeled row; no child
    rows, no provenance paragraph (those stay in the catalog). */
 .tribal-nations-brief-row {
-  padding: 8px 18px 0;
+  padding: 8px var(--gutter) 0;
 }
 /* The at-hand mirror rides its section's own gutters. */
 .tribal-nations-at-hand-row {
   padding: 10px 0 0;
 }
-/* The visible intent-versus-outcome line under each Brief-door action. */
+/* The fault line under each Brief-door action: it has text only while an
+   agency is unavailable (D5), and draws nothing otherwise. */
 .tribal-nations-health {
   display: block;
   margin-top: 4px;
@@ -1553,6 +1526,8 @@ button.conditions-metric:hover .conditions-action-hide {
   color: var(--fg-2);
   font-feature-settings: 'tnum' 1;
 }
+/* Still rendered while empty, so the live region announces a fault reliably. */
+.tribal-nations-health:empty { margin-top: 0; }
 .tribal-nations-brief-action {
   display: block;
   width: 100%;
@@ -2367,31 +2342,47 @@ button.conditions-metric:hover .conditions-action-hide {
 /* D1 M23, THE CLOSE SEAT (DDM-P17-T11, DR-149). MapLibre appends the close
    button LAST inside .maplibregl-popup-content, absolutely positioned in
    its top-right corner at the pointer floor: 24px on a fine pointer (the
-   close-button rule above), the 44px touch floor on a coarse pointer at
-   desktop widths (the coarse block near the end of this file). The card's
+   close-button rule above), the 44px touch floor on a coarse pointer and in
+   every phone-width window (the two blocks near the end of this file). The card's
    own right padding (16px, or 8px compact) covers only part of that, so
    every coordinated map head reserves the rest as an inline-end band
    across ALL of its rows: the title and every later row alike, since the
    44px control reaches the rows beneath the title too. The control stays
    out of the head's own shrinking and scrolling flow, in its reachable
    corner; no head child is added (a margin on the title alone would clear
-   its first line only). Desktop widths only: the phone size waits for the
-   mobile pass (DR-149), so every phone rule is unchanged. The panel foot
-   keeps its own close control in its bar (panel-response.tsx). */
-@media (min-width: 721px) {
-  .ddm-coordinated-popup .maplibregl-popup-content {
-    --popup-close-seat: var(--pointer-target);
-  }
-  .ddm-coordinated-popup .coordinated-response-head {
-    padding-inline-end: calc(var(--popup-close-seat) - 16px);
-  }
-  .ddm-coordinated-popup .maplibregl-popup-content.ddm-popup-compact .coordinated-response-head {
-    padding-inline-end: calc(var(--popup-close-seat) - 8px);
-  }
+   its first line only). Every width: the phone took the touch floor and its
+   seat in visual uniformity wave 1 (D8), the mobile pass DR-149 left it
+   to. The panel foot keeps its own close control in its bar
+   (panel-response.tsx). */
+.ddm-coordinated-popup .maplibregl-popup-content {
+  --popup-close-seat: var(--pointer-target);
 }
-@media (pointer: coarse) and (min-width: 721px) {
+.ddm-coordinated-popup .coordinated-response-head {
+  padding-inline-end: calc(var(--popup-close-seat) - 16px);
+}
+.ddm-coordinated-popup .maplibregl-popup-content.ddm-popup-compact .coordinated-response-head {
+  padding-inline-end: calc(var(--popup-close-seat) - 8px);
+}
+@media (pointer: coarse), (max-width: 720px) {
   .ddm-coordinated-popup .maplibregl-popup-content {
     --popup-close-seat: var(--touch-target);
+  }
+}
+/* A narrow iframe under a mouse is not a phone. The width half of the query
+   above reads the frame's own width, so a 200 px embed on a desktop page
+   took the 44 px corner and its 28 px band, and the band cut the card's
+   date (one unbreakable run) at the embed's width floor. An embed with a
+   fine pointer keeps the compact corner and gives the head its full width,
+   as it had before wave 1; a finger in an embed still gets the touch floor
+   and its seat from the query above. */
+@media (pointer: fine) and (max-width: 720px) {
+  .app-shell.embed .maplibregl-popup-close-button {
+    min-width: var(--pointer-target) !important;
+    min-height: var(--pointer-target) !important;
+  }
+  .app-shell.embed .ddm-coordinated-popup .coordinated-response-head,
+  .app-shell.embed .ddm-coordinated-popup .maplibregl-popup-content.ddm-popup-compact .coordinated-response-head {
+    padding-inline-end: 0;
   }
 }
 
@@ -3377,8 +3368,9 @@ button.conditions-metric:hover .conditions-action-hide {
 
 .studio-entry-pair {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: var(--ctl-gap);
 }
 
 .studio-linkout-pair {
@@ -4106,13 +4098,17 @@ button.conditions-metric:hover .conditions-action-hide {
     display: none;
   }
 
-  /* Full, console: the whole stack (today's sidebar content) with the
-     brand header and the footer attribution. */
-  #app[data-sheet-detent='full'].view-console .sidebar-header { display: flex; }
-  #app[data-sheet-detent='full'].view-console .sidebar-footer { display: block; }
+  /* Full, console: the whole stack (today's sidebar content). The desktop
+     header, its Brief and Console switch and the pinned footer stay out of
+     the sheet at every stop, and so does the mode grid: the rail carries the
+     modes and the doors carry the view (visual uniformity wave 1, D8). */
+  #app[data-sheet-detent] .shell-view { display: none; }
+  /* The horizon row leads the sheet's controls now; its rule separated it
+     from the mode grid. */
+  #app[data-sheet-detent] .shell-when { padding-top: 0; border-top: 0; }
   #app[data-sheet-detent='full'].view-console
     .sidebar-scroll
-    > *:not([hidden]):not(.sheet-at-hand):not(.sheet-all-layers):not(.sheet-report) {
+    > *:not([hidden]):not(.sheet-at-hand):not(.sheet-all-layers):not(.sheet-report):not(.sidebar-footer) {
     display: block;
   }
   /* Full, console, with an OPEN report (a console briefing open drives
@@ -4121,10 +4117,6 @@ button.conditions-metric:hover .conditions-action-hide {
   #app[data-sheet-detent='full'].view-console:has(#sheet-report .impact-panel.open)
     .sidebar-scroll
     > *:not(.sheet-report) {
-    display: none;
-  }
-  #app[data-sheet-detent='full'].view-console:has(#sheet-report .impact-panel.open) .sidebar-header,
-  #app[data-sheet-detent='full'].view-console:has(#sheet-report .impact-panel.open) .sidebar-footer {
     display: none;
   }
   #app[data-sheet-detent='full'].view-console #sheet-report:has(.impact-panel.open) {
@@ -4315,6 +4307,18 @@ button.conditions-metric:hover .conditions-action-hide {
   #app[data-sheet-detent][data-sheet-tab='place'] .sheet-search {
     order: -1;
     margin: 2px 0 12px;
+  }
+
+  /* The Brief door (visual uniformity wave 1, D8): the Place door sits one
+     cell below it on the rail, so the PLACE button that repeats it leaves
+     this door and the report door takes the row. The button stays under
+     the Place door and on a sheet no door pressed, where it is the phone's
+     one way into the Place studio (D-0.7.0-054). */
+  #app[data-sheet-detent][data-sheet-tab='brief'] #sheet-place-studio-entry {
+    display: none;
+  }
+  #app[data-sheet-detent][data-sheet-tab='brief'] .sheet-at-hand-actions.has-briefing {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -4754,7 +4758,7 @@ button.telemetry-item {
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  padding: 16px 18px 14px;
+  padding: 16px var(--gutter) 14px;
   border-bottom: 1px solid var(--line);
   flex-shrink: 0;
 }
@@ -4843,7 +4847,7 @@ button.telemetry-item {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 16px 18px 22px;
+  padding: 16px var(--gutter) 22px;
 }
 .impact-panel-body::-webkit-scrollbar { width: 8px; }
 .impact-panel-body::-webkit-scrollbar-track { background: transparent; }
@@ -5522,11 +5526,6 @@ button.telemetry-item {
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
 }
-.impact-resource-empty {
-  background: transparent;
-  border-style: dashed;
-  border-color: var(--line-strong);
-}
 .impact-resource-label {
   display: block;
   margin: 0;
@@ -5755,41 +5754,56 @@ a.impact-resource-link::after {
    interface-chrome-popups-text.md section 4.1, T1 to T7; T8 is the
    .impact-hazard gutter, already built). Every selector sits inside
    :where(), so the block carries zero specificity and any authored rule
-   still wins. Desktop and tablet only, outside an embed: the phone and
-   embed layouts are unchanged. The briefing mounts on <body>, outside
-   #app, so the embed test reads the body's direct child. */
+   still wins. Outside an embed, whose layout is unchanged. The briefing
+   mounts on <body>, outside #app, so the embed test reads the body's
+   direct child.
+
+   T1 and T2 change where a line breaks and no box size, so they hold at
+   every width, the phone included (visual uniformity wave 1, D8); T3 to T7
+   stay with the desktop and the tablet. */
+/* T1 prose: no single-word last line (ATNI README:157). Sentences of
+   any length take pretty, which holds at any line count. */
+:where(body:not(:has(> .app-shell.embed)))
+  :where(p, li, dd, figcaption, [data-popup-slot='note'], .map-key-qualification, .shell-summary-primary) {
+  text-wrap: pretty;
+}
+/* T2 headings and short labels that may take two lines (README:157):
+   the sidebar layer name, the popup's kind-of-place line and its
+   briefing door among them; since D8 also the date stamps, a place's
+   name in the Place studio, the briefing's title, its resource and source
+   names, and the phone's report door. A resource's description and agency
+   line balance too: pretty reads a last word with a hyphen in it
+   ("sub-programs.") as two and leaves it alone on its line. So do the
+   chosen place's name on its briefing door and a tap card's view line. */
+:where(body:not(:has(> .app-shell.embed)))
+  :where(h1, h2, h3, h4, summary, legend, [data-popup-slot='title'], .panel-title, .map-key-label,
+    .shell-time-headline, .heatrisk-sequence-heading, .layer-toggle-name, .popup-agency, .popup-impact-btn,
+    .impact-resource-label, .time-bar-stamp-headline, .shell-time-headline-detail, .lead-together-class,
+    .lead-source-name, .place-studio-option-name, #sheet-report-door, .ack-name, #impact-panel-title,
+    .impact-resource-desc, .impact-resource-agency, .region-briefing-place, .panel-response-context) {
+  text-wrap: balance;
+}
 @media (min-width: 721px) {
-  /* T1 prose: no single-word last line (ATNI README:157). Sentences of
-     any length take pretty, which holds at any line count. */
-  :where(body:not(:has(> .app-shell.embed)))
-    :where(p, li, dd, figcaption, [data-popup-slot='note'], .map-key-qualification, .shell-summary-primary) {
-    text-wrap: pretty;
-  }
-  /* T2 headings and short labels that may take two lines (README:157):
-     the sidebar layer name, the popup's kind-of-place line and its
-     briefing door among them. */
-  :where(body:not(:has(> .app-shell.embed)))
-    :where(h1, h2, h3, h4, summary, legend, [data-popup-slot='title'], .panel-title, .map-key-label,
-      .shell-time-headline, .heatrisk-sequence-heading, .layer-toggle-name, .popup-agency, .popup-impact-btn) {
-    text-wrap: balance;
-  }
   /* T3 control labels: one line in their box, never ellipsized or clamped;
      the fit test (tests/text-registration.spec.ts) proves they fit. The
      design's min-inline-size: 0 is left out: it would let a flex item
      shrink below its one-line label, the overflow the fit test forbids.
-     The horizon title is the title span, so "Current Conditions" reads on
-     one line and its button keeps its own sub line. */
+     The horizon title is not in this list: it stacks one word per line in
+     its equal column (visual uniformity wave 1, D4). */
   /* A layer row's status line is a sentence, not a label: it wraps
      (tests/chrome-css-faces.test.mjs). */
   :where(body:not(:has(> .app-shell.embed)))
-    :where(.map-cell, .map-key-chip-label, .shell-cluster-btn, .shell-horizon-btn-title, .status-pill) {
+    :where(.map-cell, .map-key-chip-label, .shell-cluster-btn, .status-pill) {
     white-space: nowrap;
   }
-  /* T4 measure: 50 to 75 characters, 66 ideal (README:153). */
+  /* T4 measure: 50 to 75 characters (README:153), set ONCE per surface as
+     --measure and not per paragraph (D12): 66ch followed each paragraph's
+     own type size, so text stopped at five right edges and a ruled list row
+     ended short of the box beside it. */
   :where(body:not(:has(> .app-shell.embed)))
     :where(#map-key-content, #map-info-panel, .coordinated-response-body, .impact-panel)
     :where(p, li, dd) {
-    max-inline-size: 66ch;
+    max-inline-size: var(--measure);
   }
   /* T5 prose never hyphenates; only identifiers and URLs may break anywhere. */
   :where(body:not(:has(> .app-shell.embed))) :where(p, li, dd) {
@@ -6172,6 +6186,14 @@ a.impact-resource-link::after {
     font-size: 10.5px;
     line-height: 1.25;
     white-space: normal;
+  }
+  #app[data-sheet-detent] #map-key .map-key-scale[data-tribal-nations-key] {
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+    min-height: 18px;
+    font-size: 10.5px;
+    line-height: 1.25;
   }
   #app[data-sheet-detent] #map-key .map-key-item:has(> .map-key-swatch) {
     display: grid;
@@ -7076,20 +7098,20 @@ a.impact-resource-link::after {
 }
 
 .time-bar-modes {
-  display: flex;
-  gap: 4px;
-  /* Defect 4 investigation (owner report, 2026-09-10): three-label rows
-     ("Drought level" / "1-wk change" / "4-wk change") come close to or
-     exceed the sidebar's narrow-end width (300px clamp floor) once the
-     card's margins and padding are subtracted, and with no wrap the
-     overflow is clipped by the sidebar's own overflow:hidden ancestors
-     rather than the chip degrading, making the last chip look "dead" at a
-     real width even though its click handler is fine. */
-  flex-wrap: wrap;
+  /* Equal columns sized by the number of modes (D2). Defect 4 (owner report,
+     2026-09-10): three labels ("Drought level" / "1-wk change" / "4-wk
+     change") outran the 300 px column and the last chip was clipped; a
+     column cannot outrun the card, and a long label wraps inside its chip. */
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: var(--ctl-gap);
 }
 .time-bar-mode {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  text-align: center;
   min-height: 24px;
   padding: 2px 9px;
   background: transparent;
@@ -7515,11 +7537,14 @@ a.impact-resource-link::after {
    plain-text alternate there instead (D1 M4 repair, found-024): the row
    keeps var(--shell-region-row) in every state, so it is never an empty
    reserved band and #brief-search below never moves when the door appears
-   or disappears (the 2026-09-13 stable-position rule). */
+   or disappears (the 2026-09-13 stable-position rule). The door's row is
+   the touch floor on every pointer: that holds its two lines, a chosen
+   place's one-line name over "Open briefing" (repair R2). A name that
+   needs a second line is never cut, so it alone grows the row. */
 #shell-region-host > #panel-region {
   --shell-region-row: 38px;
   display: grid;
-  grid-template-rows: repeat(2, minmax(var(--shell-region-row), auto));
+  grid-template-rows: minmax(var(--shell-region-row), auto) minmax(var(--touch-target), auto);
   gap: 8px;
 }
 #shell-region-host .region-briefing-btn,
@@ -7539,11 +7564,11 @@ a.impact-resource-link::after {
 /* An empty caveat leaves nothing to space; the dock below is short of room. */
 #shell-details-island > .shell-summary:has(> .shell-summary-caveat:empty) { margin-block: 0; }
 
-/* VIEW: the four hazard cluster buttons. */
+/* VIEW: the hazard mode buttons, N of them in two equal columns (D2). */
 .shell-view {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--ctl-gap);
   /* Stays in sight when the sidebar scrolls to reveal the 3D Fire view
      controls; the padding and matching negative margin cover the scroll
      box's edge without moving the layout. Above the minimap's own overlays. */
@@ -7556,6 +7581,8 @@ a.impact-resource-link::after {
   margin-block: -8px -10px;
   background: var(--bg-1);
 }
+/* An odd count leaves no lone button in the left cell: the last spans the row. */
+.shell-view > :last-child:nth-child(odd) { grid-column: 1 / -1; }
 
 /* Hazard first, then time: one shared order across all four views. */
 .shell-when {
@@ -7563,7 +7590,7 @@ a.impact-resource-link::after {
   border-top: 1px solid var(--line-strong);
 }
 
-.sidebar-legend-disclosure { margin: 0 18px 12px; }
+.sidebar-legend-disclosure { margin: 0 var(--gutter) 12px; }
 .sidebar-legend-disclosure:not(:has(#legend-panel:not([hidden]))) { display: none; }
 .sidebar-legend-disclosure > summary {
   color: var(--fg-2);
@@ -7573,7 +7600,7 @@ a.impact-resource-link::after {
 }
 .sidebar-legend-disclosure #legend-panel { padding: 10px 0; border: 0; }
 .sidebar-bottom-dock { margin-top: auto; }
-.sidebar-bottom-dock > .conditions-strip-dock { margin: 0 18px 12px; }
+.sidebar-bottom-dock > .conditions-strip-dock { margin: 0 var(--gutter) 12px; }
 @media (min-width: 721px) {
   /* Brief pins the strip and Layer legends to the column foot when the
      column has free space; margin-top: auto is inert elsewhere. */
@@ -7693,28 +7720,48 @@ a.impact-resource-link::after {
   }
 }
 
-.shell-cluster-btn {
+/* THE CONTROL FACE (visual uniformity wave 1, D1). One face for every button
+   in the left column: the modes, the horizons, the Place and Layers doors,
+   the Tribal Nations button and the 3D Fire stack. Its values are the
+   --ctl-* tokens; a coarse pointer lifts --ctl-min-h to the touch floor.
+   Labels are mixed case; uppercase belongs to section heads. The pressed
+   face is SELECTED INVERTS, near the end of this file. */
+.shell-cluster-btn,
+.shell-horizon-btn,
+.shell-fire3d-btn,
+.shell-fire3d-layer,
+.brief-console-door,
+#brief-secondary-actions .tribal-nations-brief-action {
   appearance: none;
+  min-width: 0;
+  min-height: var(--ctl-min-h);
+  padding: var(--ctl-pad);
   background: var(--bg-2);
   color: var(--fg-1);
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
-  padding: 8px 10px;
   font-family: var(--font-display);
-  font-size: 11.5px;
+  font-size: var(--ctl-fs);
   font-weight: var(--fw-subtitle);
-  letter-spacing: 0.02em;
+  letter-spacing: var(--ctl-track);
+  text-align: center;
   cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  transition:
+    background var(--dur-micro) var(--ease-standard),
+    color var(--dur-micro) var(--ease-standard),
+    border-color var(--dur-micro) var(--ease-standard);
 }
-.shell-cluster-btn:hover {
+:is(.shell-cluster-btn, .shell-horizon-btn, .shell-fire3d-btn, .shell-fire3d-layer, .brief-console-door):hover,
+#brief-secondary-actions .tribal-nations-brief-action:hover {
+  background: var(--bg-2);
   border-color: var(--line-strong);
   color: var(--fg-0);
 }
-.shell-cluster-btn[aria-pressed='true'] {
-  background: var(--accent-soft);
-  border-color: var(--accent);
-  color: var(--accent);
+@media (prefers-reduced-motion: reduce) {
+  :is(.shell-cluster-btn, .shell-horizon-btn, .shell-fire3d-btn, .shell-fire3d-layer, .brief-console-door),
+  #brief-secondary-actions .tribal-nations-brief-action {
+    transition: none;
+  }
 }
 /* The committed button while its recipe is still settling: a quiet
    working mark, never a claim that more is displayed than is. */
@@ -7722,40 +7769,14 @@ a.impact-resource-link::after {
   border-style: dashed;
 }
 
-/* The desktop 3D Fire view toggle (W3/W4): one button in the shared shell
-   button family, an honest status line, and the always-visible coverage
-   note. Rendered only while the committed cluster is Wildfire on desktop
-   widths (the component gates itself). */
+/* The desktop 3D Fire view toggle (W3/W4): a stack of full-width buttons on
+   the control face, an honest status line and the coverage note. Rendered
+   only while the committed cluster is Wildfire on desktop widths (the
+   component gates itself). */
 .shell-fire3d {
   display: grid;
-  gap: 4px;
-}
-/* The two ground switches under the toggle (Plant stress, Fuel risk) are the
-   same button: full width, same padding, so their hit target is the toggle's. */
-.shell-fire3d-btn,
-.shell-fire3d-layer {
-  appearance: none;
-  width: 100%;
-  background: var(--bg-2);
-  color: var(--fg-1);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-md);
-  padding: 8px 10px;
-  font-family: var(--font-display);
-  font-size: 11.5px;
-  font-weight: var(--fw-subtitle);
-  letter-spacing: 0.02em;
-  cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
-}
-:is(.shell-fire3d-btn, .shell-fire3d-layer):hover {
-  border-color: var(--line-strong);
-  color: var(--fg-0);
-}
-:is(.shell-fire3d-btn, .shell-fire3d-layer)[aria-pressed='true'] {
-  background: var(--accent-soft);
-  border-color: var(--accent);
-  color: var(--accent);
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--ctl-gap);
 }
 .shell-fire3d-status {
   margin: 0;
@@ -7769,7 +7790,10 @@ a.impact-resource-link::after {
 .shell-fire3d-status[data-fire3d-status='unavailable'] {
   color: var(--fg-1);
 }
-.shell-fire3d-note {
+/* The fuel note is the Fuel risk key's caveat, moved here (D6). It has its
+   own class so the two standing notes stay countable. */
+.shell-fire3d-note,
+.shell-fire3d-fuel-note {
   margin: 0;
   color: var(--fg-3);
   font-size: 10px;
@@ -8040,61 +8064,44 @@ a.impact-resource-link::after {
   }
 }
 
-/* WHEN: horizon chips plus the compact temporal row. */
+/* WHEN: the horizon buttons, N equal columns (D2, D4), plus the compact
+   temporal row. The face is THE CONTROL FACE above. */
 .shell-horizons {
-  display: flex;
-  gap: 4px;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: var(--ctl-gap);
 }
 .shell-horizon-btn {
-  appearance: none;
-  /* min-width 0 lets a long title wrap at its space instead of pushing the
-     row past the sidebar edge. */
-  flex: 1 1 auto;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 1px;
-  background: var(--bg-2);
-  color: var(--fg-2);
-  border: 1px solid var(--line);
-  /* Item 9: these are the Current Conditions / Near Term / Long Range
-     controls the owner named. A segmented row of pills reads as three
-     separate badges; the design system radius reads as one control set.
-     See the Item 9 control-radius note. */
-  border-radius: var(--radius-md);
-  padding: 4px 6px;
-  font-family: var(--font-display);
-  font-size: 10px;
-  font-weight: var(--fw-subtitle);
-  letter-spacing: 0.02em;
-  cursor: pointer;
+  /* Every title stacks its words (D4), so the row is never under 40 px; the
+     tighter padding holds two lines and, in the narrow tablet column, the
+     longest word. */
+  min-height: max(var(--ctl-min-h), 40px);
+  padding: 4px;
 }
-.shell-horizon-btn:hover { color: var(--fg-0); }
-/* Title and subtitle from HORIZON_CHROME (DDM-P8-T03, R1, 2026-09-07):
-   text only, same tokens the button already carried. */
+/* Title from HORIZON_CHROME (DDM-P8-T03, R1, 2026-09-07). The sub-line
+   ("now", "days to weeks") is the button's title: its tooltip and its
+   accessible description (D4). One word per line at every width, so the N
+   buttons read alike ("Current / Conditions", "Near / Term"): the box is as
+   wide as its longest word and sits in the middle of its column. */
 .shell-horizon-btn-title {
+  display: block;
+  inline-size: min-content;
+  max-inline-size: 100%;
+  margin-inline: auto;
   /* The supplied Spartan face needs room for its full ascent/descent. */
   line-height: 1.4;
-  text-align: center;
-}
-.shell-horizon-btn-sub {
-  font-size: 9px;
-  font-weight: 400;
-  letter-spacing: normal;
-  text-transform: none;
-  opacity: 0.75;
-  line-height: 1.15;
+  overflow-wrap: break-word;
 }
 /* Honest disablement for custom compositions (DG-080 r2 finding 1):
    the chip stays perceivable and focusable so its title/accessible
    reason is reachable, but reads and behaves as unavailable. */
 .shell-horizon-btn[aria-disabled='true'] {
-  opacity: 0.45;
-  cursor: not-allowed;
+  opacity: var(--ctl-pending-opacity);
+  cursor: var(--ctl-pending-cursor);
 }
-.shell-horizon-btn[aria-disabled='true']:hover { color: var(--fg-2); }
+/* A disabled chip does not answer a hover as though it would act. */
+.shell-horizon-btn[aria-disabled='true']:hover { color: var(--fg-1); border-color: var(--line); }
 .shell-horizon-btn[aria-pressed='true'] {
   background: var(--accent-soft);
   border-color: var(--accent);
@@ -8269,9 +8276,8 @@ a.impact-resource-link::after {
   font-weight: var(--fw-subtitle);
   line-height: 1.2;
   text-transform: capitalize;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  /* A long label wraps onto a second balanced line; it is never cut with an
+     ellipsis (D7). The tile's 40 px is a floor, so it grows with the label. */
 }
 /* The docked tile is the tightest seat this control has (Defect 3): a
    trailing, right-pushed hint reads clearly as "there is more to this
@@ -8424,7 +8430,7 @@ a.impact-resource-link::after {
   #app:not(.embed) .sidebar-scroll { scrollbar-gutter: stable; }
   #app.shell-ready:not(.embed) .shell-details-panel {
     display: block;
-    padding: 0 18px 12px;
+    padding: 0 var(--gutter) 12px;
   }
   #app.view-console #shell-framing-note { display: none; }
   /* Island-mount honesty: the full #time-bar stands down only once the
@@ -8575,7 +8581,7 @@ a.impact-resource-link::after {
   /* Sidebar body: the place search (31px), the
      region select and its briefing trigger (38px), the Tribal Nations
      action (32px), the two studio doors (28px), the conditions metrics
-     (37px), the full-report link (17px), and the key disclosure (38px). */
+     (37px), and the key disclosure (38px). */
   .ddm-search-input,
   .region-select,
   .region-briefing-btn,
@@ -8583,7 +8589,6 @@ a.impact-resource-link::after {
   #brief-secondary-actions .tribal-nations-brief-action,
   .brief-console-door,
   .conditions-metric,
-  .brief-full-report-link,
   .layer-umbrella-details-toggle,
   .layer-toggle {
     min-height: var(--touch-target);
@@ -8668,6 +8673,70 @@ a.impact-resource-link::after {
   .maplibregl-popup-close-button {
     min-width: var(--touch-target) !important;
     min-height: var(--touch-target) !important;
+  }
+}
+
+/* ----------------------------------------------------------------------------
+   THE TOUCH FLOOR, EVERY HAND (visual uniformity wave 1, D8). One list of the
+   controls that measured under 44 px at 820 and at 390: the 3D Fire stack,
+   the disclosures, the link-like buttons, the popup's doors and an embed's
+   own controls. A coarse pointer at any width reads it, and so does every
+   phone-width window. Each line is a floor (min-height, min-width), so a
+   control already at the floor keeps its box. It sits after the control face
+   and the tablet block above, so it wins at equal specificity.
+   ---------------------------------------------------------------------------- */
+@media (pointer: coarse), (max-width: 720px) {
+  .shell-fire3d-btn,
+  .shell-fire3d-layer,
+  .shell-fire3d-details > summary,
+  .layer-group-sources-toggle,
+  .panel-reveal,
+  .map-key-door,
+  #app[data-sheet-detent] #map-key .map-key-door,
+  .map-info-ack-link,
+  .map-info-tribal summary,
+  .impact-panel summary,
+  .popup-other-features > summary,
+  .popup-other-item,
+  .popup-impact-btn,
+  .overlay-btn,
+  .basemap-switcher-btn,
+  #map-key > .map-key-flow-pause {
+    min-height: var(--touch-target);
+  }
+  #map-key > .map-key-flow-pause,
+  .time-bar-play,
+  .panel-response-close.icon-btn {
+    min-width: var(--touch-target);
+  }
+  /* A popup's close corner, the one way to dismiss it with a finger; the
+     close seat above reserves the same square in the head. */
+  .maplibregl-popup-close-button {
+    min-width: var(--touch-target) !important;
+    min-height: var(--touch-target) !important;
+  }
+  /* A summary's one line sits in the middle of its taller box. */
+  .shell-fire3d-details > summary,
+  .map-info-tribal summary,
+  .popup-other-features > summary {
+    align-content: center;
+  }
+  /* "Acknowledgements" sits inside a sentence. Its box takes the floor and
+     its block margins give the extra height back, so the line keeps its
+     leading and the box reaches over the lines beside it. */
+  .map-info-ack-link[data-open-acknowledgements] {
+    margin-block: calc((var(--pointer-target) - var(--touch-target)) / 2);
+  }
+  /* The seven HeatRisk days keep one row in the phone's key; one pixel
+     between them is what lets each reach the floor at 390 px (43 px wide at
+     the base 3 px gap). */
+  #app[data-sheet-detent] .heatrisk-sequence-grid {
+    gap: 1px;
+  }
+  /* A phone-width embed: the taller satellite control lifts the dock, by the
+     tablet block's own sum. */
+  .app-shell.embed .map-bottom-dock {
+    --map-dock-bottom: calc(46px + 14px + var(--touch-target) + 8px);
   }
 }
 

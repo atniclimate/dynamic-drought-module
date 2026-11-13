@@ -109,8 +109,9 @@ test.describe('PS-CORE PLACE studio', () => {
 
     await gotoApp(page, '?view=brief&layers=places');
     const pair = page.locator('#studio-entry-pair');
-    await expect(pair.locator('#place-studio-entry')).toHaveText('PLACE');
-    await expect(pair.locator('#layers-studio-entry')).toHaveText('LAYERS');
+    // Mixed case since visual uniformity wave 1, D1; the accessible names keep the studio names.
+    await expect(pair.locator('#place-studio-entry')).toHaveText('Place');
+    await expect(pair.locator('#layers-studio-entry')).toHaveText('Layers');
     // W2-D7: the accessible name stands alone; no title duplicates it.
     await expect(pair.locator('#place-studio-entry')).toHaveAttribute(
       'aria-label',
@@ -185,8 +186,17 @@ test.describe('PS-CORE PLACE studio', () => {
     await page.locator('#place-studio-search').fill('Puerto Rico');
     await expect(page.locator('#place-list .place-studio-option')).toHaveCount(0);
 
+    // Typed text searches every place type, whatever chip is pressed (visual
+    // uniformity D11): one State matches, listed first under the pressed
+    // States chip, and the Nations with Oregon in their names follow.
     await page.locator('#place-studio-search').fill('Oregon');
-    await expect(page.locator('#place-list .place-studio-option')).toHaveCount(1);
+    await expect(page.locator('#place-list [data-place-group="state"] .place-studio-option')).toHaveCount(1);
+    await expect(page.locator('#place-list .place-studio-group').first()).toHaveAttribute('data-place-group', 'state');
+    await expect(
+      page.locator('#place-list [data-place-group="tribe"] .place-studio-option', {
+        hasText: 'Confederated Tribes of Siletz Indians of Oregon'
+      })
+    ).toHaveCount(1);
     await page.locator('#place-option-state-0').click();
     await expect(page.locator('#place-selection-title')).toHaveText('Oregon');
     await expect(page.locator('#place-capability-selectable')).toContainText('available');
@@ -292,7 +302,10 @@ test.describe('PS-CORE PLACE studio', () => {
       'No places are listed for this type yet.'
     );
 
-    await listPanel.locator('#place-studio-search').fill('Yakima');
+    // A search looks through every place type (visual uniformity D11), and
+    // "Yakima" names two bundled ecoregions, so the zero-match text is one
+    // no catalog holds.
+    await listPanel.locator('#place-studio-search').fill('No such place fixture');
     await expect(listPanel.locator('#place-list-status')).toHaveText(
       'No places match this search.'
     );

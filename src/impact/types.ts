@@ -182,7 +182,7 @@ export interface CpcTercileReading {
 
 /**
  * The observed ENSO index state: the newest operational RONI season and the
- * CPC onset-rule conditions the snapshot states for it.
+ * CPC threshold conditions the snapshot states for it.
  */
 export interface EnsoIndexReading {
   readonly kind: 'enso-index';
@@ -192,7 +192,7 @@ export interface EnsoIndexReading {
   readonly year: number;
   readonly preliminary: boolean;
   readonly conditions: 'el-nino' | 'la-nina' | 'neutral';
-  /** The CPC onset threshold, in degrees Celsius, as the snapshot carries it. */
+  /** The CPC threshold, in degrees Celsius, as the snapshot carries it. */
   readonly threshold: number;
 }
 

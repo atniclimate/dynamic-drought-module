@@ -382,7 +382,10 @@ async function expectChipsStillHonest(page: Page): Promise<void> {
     const chrome = HORIZON_CHROME[SHELL_HORIZON_KEY[key]];
     const btn = page.locator(`.shell-horizon-btn[data-horizon="${key}"]`);
     expect((await btn.locator('.shell-horizon-btn-title').innerText()).trim()).toBe(chrome.title);
-    expect((await btn.locator('.shell-horizon-btn-sub').innerText()).replace(/\u00a0/g, ' ').trim()).toBe(chrome.subtitle);
+    // The subtitle is the chip's tooltip now (visual uniformity wave 1, D4); a disabled chip states its reason there.
+    if ((await btn.getAttribute('aria-disabled')) !== 'true') {
+      expect(await btn.getAttribute('title')).toBe(chrome.subtitle);
+    }
   }
   const stray = await page.evaluate(() =>
     /\bWeeks ahead\b|\bSeason ahead\b/.test(document.body.textContent ?? '') // spec-impact: intended, asserts retired wording is absent

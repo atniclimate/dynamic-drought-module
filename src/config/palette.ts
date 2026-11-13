@@ -400,11 +400,11 @@ export function pickTreatyColor(name: string | null | undefined): string {
  * empty-placeholder stewardship rule), so on the reference deployment the BIA
  * magenta is what a reader actually sees.
  *
- * Opacity hierarchy (ddm-visual-styling-and-readability, the 0.3 to 0.6 fill
- * band): Tribal Lands (deployer-authorized, so fillable) sits highest; BIA
- * reservations fill lower, as a representation and not a jurisdictional claim.
- * These are starting values, best refined in the browser (that skill owns the
- * tuning).
+ * Fill (visual uniformity D9, 2026-11-13): the two live layers (Census
+ * AIANNH and BIA AIAN-LAR) draw no visible fill in any mode, because a fill
+ * over a hazard colour hides the class under it; they are a line, with
+ * TRIBAL_LINE_COLOR over the ruled hex below. The bundled deployer slot
+ * (tribal.ts) keeps its own fill.
  *
  * E2 (D-0.7.0-058 ruling 3): the maintainer pinned the ONE Tribal boundary
  * color family to #8d006b on rendered v0.6.15 evidence. Every fill and
@@ -421,6 +421,13 @@ export const TRIBAL_FAMILY_COLOR = '#8d006b';
  * chroma 0.10), not a second hue; 10.15:1 on its dark halo, 7.99:1 on land (design pass 2026-11-13). */
 export const TRIBAL_LABEL_COLOR = '#EBA4CF';
 
+/** A Tribal area's boundary on the map (visual uniformity D9, 2026-11-13): the light shade its name wears, drawn
+ * over the ruled family hex as its dark edge, with no visible fill, so the hazard class under it stays readable.
+ * One hue, two depths: 4.58:1 between the two, 10.15:1 light on the dark ground, 8.34:1 dark on USDM D0 yellow.
+ * Weakest on a mid-tone ground (NWS HeatRisk red #E22F33: light 2.29:1, dark 2.00:1); a near-black edge would
+ * lift that to 4.43:1 but takes the ruled hex off the boundary, which is the owner's call (D-0.7.0-058 ruling 3). */
+export const TRIBAL_LINE_COLOR = TRIBAL_LABEL_COLOR;
+
 /** Tribal Lands (bundled, deployer-populated). The family hex; the deployer
  * slot fills strongest (deployer-authorized data), per the hierarchy note. */
 export const TRIBAL_FILL_COLOR = TRIBAL_FAMILY_COLOR;
@@ -432,9 +439,9 @@ export const TRIBAL_OUTLINE_COLOR = TRIBAL_FAMILY_COLOR;
  * the family as the AIANNH Tribal Lands layer: one Tribal color family,
  * never two competing hues; E2 (D-0.7.0-058 ruling 3) pins that pole to
  * #8d006b. The two representations stay distinguishable through a
- * NON-COLOR channel: bia-reservations.ts carries the stronger fill and the
- * heavier outline, aiannh.ts the lighter wash and the finer outline, and
- * the popup and pill wording name each agency source.
+ * NON-COLOR channel: bia-reservations.ts carries the heavier outline,
+ * aiannh.ts the finer one (neither fills since D9, see the family note),
+ * and the popup and pill wording name each agency source.
  */
 export const RESERVATION_FILL_COLOR = TRIBAL_FAMILY_COLOR;
 export const RESERVATION_OUTLINE_COLOR = TRIBAL_FAMILY_COLOR;
@@ -444,11 +451,9 @@ export const RESERVATION_OUTLINE_COLOR = TRIBAL_FAMILY_COLOR;
  * BIA reservation pair (see the note above): the deliberate AIANNH +
  * AIAN-LAR double-draw (D-0.7.0-033) reads as two agencies'
  * representations through weight and strength, never through two unrelated
- * hues and never as one blended dataset. The fill sits BELOW the BIA
- * reservation fill in the opacity hierarchy (see the header note): AIANNH
- * covers broad statistical geographies (Oklahoma Tribal Statistical Areas
- * span most of the state), so it renders as a light wash the stronger
- * reservation pair stays legible over.
+ * hues and never as one blended dataset. AIANNH covers broad statistical
+ * geographies (Oklahoma Tribal Statistical Areas span most of the state),
+ * so it draws the finer line, under the heavier reservation pair.
  */
 export const AIANNH_FILL_COLOR = TRIBAL_FAMILY_COLOR;
 export const AIANNH_OUTLINE_COLOR = TRIBAL_FAMILY_COLOR;

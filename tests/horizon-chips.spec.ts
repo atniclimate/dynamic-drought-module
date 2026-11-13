@@ -136,10 +136,17 @@ test.describe('DDM-P8-T03: the shell horizon chips read HORIZON_CHROME', () => {
       const chrome = HORIZON_CHROME[SHELL_HORIZON_KEY[key]];
       const btn = page.locator(`.shell-horizon-btn[data-horizon="${key}"]`);
       const title = (await btn.locator('.shell-horizon-btn-title').innerText()).trim();
-      // The chip joins its last two words with a no-break space so a wrap never orphans one; the words are the same.
-      const subtitle = (await btn.locator('.shell-horizon-btn-sub').innerText()).replace(/\u00a0/g, ' ').trim();
       expect(title, `${key} chip title`).toBe(chrome.title);
-      expect(subtitle, `${key} chip subtitle`).toBe(chrome.subtitle);
+      // The subtitle left the chip's face (visual uniformity wave 1, D4): it is
+      // the chip's tooltip and accessible description. A disabled chip states
+      // its reason there instead (the custom-composition pattern).
+      await expect(btn.locator('.shell-horizon-btn-sub'), `${key} chip draws no sub-line`).toHaveCount(0);
+      if ((await btn.getAttribute('aria-disabled')) === 'true') {
+        expect((await btn.getAttribute('title'))?.trim(), `${key} disabled chip reason`).toBeTruthy();
+      } else {
+        await expect(btn, `${key} chip subtitle`).toHaveAccessibleDescription(chrome.subtitle);
+        await expect(btn, `${key} chip tooltip`).toHaveAttribute('title', chrome.subtitle);
+      }
     }
 
     // The retired chip wording must not survive anywhere in the DOM.

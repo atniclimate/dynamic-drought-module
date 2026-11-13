@@ -235,7 +235,8 @@ test('impactSynthesis none keeps unrelated sources off while independent point h
     }
   });
 
-  await page.locator('#brief-full-report-link').click();
+  // The chosen place's one briefing door (visual uniformity wave 1, D6).
+  await page.locator('#region-briefing-btn').click();
   const panel = page.locator('#impact-panel');
   await expect(panel).toBeVisible();
   await expect(panel.locator('.impact-capability-unavailable')).toContainText(

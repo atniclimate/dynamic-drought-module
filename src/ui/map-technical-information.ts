@@ -1,5 +1,6 @@
 import { HAZARD_CLUSTER_KEYS, TEMPORAL_HORIZON_KEYS } from '../config/clusters';
 import { HILLSHADE_COVERAGE_SENTENCE } from '../config/terrain-coverage';
+import { WHP_3D_SHADE_QUALIFICATION } from '../config/whp-shade';
 import { HMS_OVERVIEW_QUALIFICATION, NIFC_PERIMETER_TECHNICAL_NOTE } from '../config/wildfire-presentation';
 import { escapeHtml } from '../util/escape';
 import { clusterHorizonReason } from './horizon-reason';
@@ -177,6 +178,7 @@ export function renderMapTechnicalInformation(open = false, leadHtml = ''): stri
     <p id="impact-technical-fire3d">${escapeHtml(notes.fire3d)}</p>
     <p>The 3D view shows published source data as context. It computes no fire behavior and does not show or imply spread, ignition, or an all-clear.</p>
     <p>Wildfire Hazard Potential 2023 reflects landscape conditions as of the end of 2020 (USFS), so areas burned since then still show their earlier class.</p>
+    <p>${escapeHtml(WHP_3D_SHADE_QUALIFICATION)}</p>
     <p>In Wildfire 3D, fuel risk is not drawn inside current fire perimeters (NIFC).</p>
     <div id="impact-technical-plant-stress">${plantStressHtml()}</div>
     <h4>Extreme Heat</h4>

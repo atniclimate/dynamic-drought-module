@@ -65,6 +65,7 @@ import {
   fire3dControlOffer,
   fire3dCoverageNote
 } from '../../config/fire3d-presentation';
+import { WHP_3D_SHADE_QUALIFICATION } from '../../config/whp-shade';
 import type * as maplibregl from 'maplibre-gl';
 import { HAZARD_CLUSTERS } from '../../config/clusters';
 import type { HazardClusterKey } from '../../config/clusters';
@@ -449,8 +450,9 @@ export function Fire3DControl({
       <details class="shell-fire3d-details">
         <summary>
           3D information
+          {/* A state that needs a reader's attention rides the summary; plain "live" does not (D6). */}
           {chunkUnavailable ? ' · unavailable' : status?.state === 'checking' ? ' · loading' :
-            status?.state === 'active' ? (status.smokeVolume ? ' · live' : ' · live (partial)') :
+            status?.state === 'active' ? (status.smokeVolume ? '' : ' · live (partial)') :
               status?.state === 'unavailable' ? ' · unavailable' : ''}
         </summary>
       {/* Persistently rendered live region (the shell summary pattern):
@@ -479,6 +481,10 @@ export function Fire3DControl({
       <p class="shell-fire3d-note" data-fire3d-disclosure>
         {FIRE3D_NON_PREDICTION_NOTE}
       </p>
+      {/* The Fuel risk key's caveat, word for word, while the drape it speaks of is drawn (D6). */}
+      {fuelTarget === 'drape' ? (
+        <p class="shell-fire3d-fuel-note" data-fire3d-fuel-note>{WHP_3D_SHADE_QUALIFICATION}</p>
+      ) : null}
       </details>
     </div>
   );

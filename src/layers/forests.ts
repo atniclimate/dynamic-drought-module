@@ -1,6 +1,6 @@
 /**
  * National Forests layer: the USDA Forest Service's administrative forest
- * boundaries (112 units, CC0), drawn as a quiet green outline from zoom 6 with
+ * boundaries (112 units; public, data.gov lists CC BY 4.0), drawn as a quiet green outline from zoom 6 with
  * the forest's name from zoom 8, and no fill (owner, 2026-11-12: minimal, a
  * name at close zoom). An administrative boundary takes in lands the Forest
  * Service does not own. Read from DDM's own archive

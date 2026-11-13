@@ -77,7 +77,8 @@ import type { FeatureCollection, GeoJsonProperties } from 'geojson';
 import { URLS } from '../config/urls';
 import {
   RESERVATION_FILL_COLOR,
-  RESERVATION_OUTLINE_COLOR
+  RESERVATION_OUTLINE_COLOR,
+  TRIBAL_LINE_COLOR
 } from '../config/palette';
 import { buildBiaReservationPopupModel } from '../ui/popups';
 import { buildPlaceConditionsHtml } from '../ui/popup-conditions';
@@ -94,9 +95,11 @@ const LAYER_KEY = 'bia-reservations';
 const SOURCE_ID = 'bia-reservations';
 const FILL_LAYER_ID = 'bia-reservations-fill';
 const OUTLINE_LAYER_ID = 'bia-reservations-outline';
+/** The light line drawn over the outline, which is its dark edge (visual uniformity D9; palette.ts TRIBAL_LINE_COLOR). */
+const CORE_LAYER_ID = 'bia-reservations-outline-core';
 
 /** Fade targets for the sidebar's toggle transitions (LayerModule contract). */
-export const fadeLayerIds = [FILL_LAYER_ID, OUTLINE_LAYER_ID] as const;
+export const fadeLayerIds = [FILL_LAYER_ID, OUTLINE_LAYER_ID, CORE_LAYER_ID] as const;
 
 /**
  * Symbol layer ID used as the `beforeId` anchor so the boundary stacks below
@@ -138,18 +141,23 @@ const GEOMETRY_PRECISION = 5;
 /**
  * E1 composition targets (D-0.7.0-041 part 2, review E1.3; D-0.7.0-043
  * part 4): starting values for the stewardship visual review at unit
- * close. The reservation fill calms from 0.26 to 0.18 with a 1.1 px
- * outline, still the STRONGER of the two present-day Tribal-geography
- * layers (the AIANNH wash in aiannh.ts sits at 0.12 with a 0.9 px
- * outline). With both layers now in the one Tribal family
- * (src/config/palette.ts; pinned to #8d006b by E2, D-0.7.0-058 ruling 3),
- * outline weight and fill strength are the honest non-color channel that
- * keeps the two representations distinguishable. The selected boosts stay.
+ * close. The reservation line is 1.1 px, the HEAVIER of the two
+ * present-day Tribal-geography layers (aiannh.ts draws 0.9 px). With both
+ * layers in the one Tribal family (src/config/palette.ts; pinned to
+ * #8d006b by E2, D-0.7.0-058 ruling 3), outline weight is the honest
+ * non-color channel that keeps the two representations distinguishable.
+ * The selected boost stays.
+ *
+ * Visual uniformity D9 (2026-11-13): no visible fill in any mode. A fill
+ * over a hazard colour hid the class under it and read as a warning in
+ * Extreme Heat and Wildfire. The area is a light line over the ruled hex
+ * as its dark edge; the fill layer stays, invisible, as the click area.
+ * The chosen land area is the same line, heavier.
  */
-const FILL_OPACITY_BASE = 0.18;
-const FILL_OPACITY_SELECTED = 0.5;
 const OUTLINE_WIDTH_BASE = 1.1;
 const OUTLINE_WIDTH_SELECTED = 2.6;
+/** The ruled-hex edge shows 1 px on each side of the light line. */
+const EDGE_WIDTH = 2;
 
 type Status = 'loading' | 'ready' | 'degraded' | 'error' | 'no-data';
 
@@ -509,18 +517,10 @@ function addSourceAndLayers(map: maplibregl.Map, geojson: FeatureCollection): vo
       type: 'fill',
       source: SOURCE_ID,
       paint: {
-        // The visible reservation surface of record (D-0.7.0-019, calmed by
-        // E1): the stronger fill of the magenta pair, still light enough
-        // that the basemap and the drought surface stay legible underneath.
-        // The selected land area (U3h) lifts higher so it stays legible
-        // under an open briefing. See the E1 constants above.
+        // Invisible: MapLibre still hit-tests a fill at opacity zero, so a
+        // click anywhere inside the land area opens it (D9, constants above).
         'fill-color': RESERVATION_FILL_COLOR,
-        'fill-opacity': [
-          'case',
-          ['boolean', ['feature-state', 'selected'], false],
-          FILL_OPACITY_SELECTED,
-          FILL_OPACITY_BASE
-        ]
+        'fill-opacity': 0
       }
     },
     beforeId
@@ -536,14 +536,27 @@ function addSourceAndLayers(map: maplibregl.Map, geojson: FeatureCollection): vo
         'line-width': [
           'case',
           ['boolean', ['feature-state', 'selected'], false],
-          OUTLINE_WIDTH_SELECTED,
-          OUTLINE_WIDTH_BASE
-        ],
-        'line-opacity': [
+          OUTLINE_WIDTH_SELECTED + EDGE_WIDTH,
+          OUTLINE_WIDTH_BASE + EDGE_WIDTH
+        ]
+      }
+    },
+    beforeId
+  );
+
+  // Same anchor, so it lands directly above the outline it lightens.
+  map.addLayer(
+    {
+      id: CORE_LAYER_ID,
+      type: 'line',
+      source: SOURCE_ID,
+      paint: {
+        'line-color': TRIBAL_LINE_COLOR,
+        'line-width': [
           'case',
           ['boolean', ['feature-state', 'selected'], false],
-          1,
-          0.9
+          OUTLINE_WIDTH_SELECTED,
+          OUTLINE_WIDTH_BASE
         ]
       }
     },
@@ -645,6 +658,7 @@ export function deactivate(map: maplibregl.Map): void {
   appliedData = null;
   if (map.getLayer(FILL_LAYER_ID)) map.removeLayer(FILL_LAYER_ID);
   if (map.getLayer(OUTLINE_LAYER_ID)) map.removeLayer(OUTLINE_LAYER_ID);
+  if (map.getLayer(CORE_LAYER_ID)) map.removeLayer(CORE_LAYER_ID);
   if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);
 }
 

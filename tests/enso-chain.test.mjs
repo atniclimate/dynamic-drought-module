@@ -90,7 +90,7 @@ const code = (path) => read(path).replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '');
 
 const KEYS = ['index', 'pattern', 'jet', 'tendency', 'here'];
 const RELATIONS = [
-  'measured in the boxed region of',
+  'computed from the boxed region of',
   'historically tends to shift',
   'one model instant, read beside a season',
   'read beside'
@@ -362,7 +362,7 @@ test('pattern link: the surface is an analyzed product on its own frame date', (
   assert.equal(link.statement, 'On the map: daily sea surface temperature anomaly.');
   assert.equal(link.source, 'NASA GIBS, GHRSST MUR sea surface temperature anomaly');
   assert.match(link.sourceUrl, /^https:\/\/www\.earthdata\.nasa\.gov\//);
-  assert.equal(link.dateLine, 'Observed 2026-11-08');
+  assert.equal(link.dateLine, 'Analysis for 2026-11-08');
   assert.equal(link.note, undefined);
   assert.equal(link.figure, undefined, 'the map is the figure');
   assert.equal(nodeOf(view, 'pattern').mark, 'on map');
@@ -753,7 +753,7 @@ test('clock line: every read link is placed at the date its own date line states
   assert.equal(clockOf(view, 'index').at, Date.parse(`${published}T00:00:00Z`));
   assert.equal(clockOf(view, 'index').dateWord, 'Published');
   assert.equal(clockOf(view, 'pattern').at, Date.UTC(2026, 10, 8));
-  assert.equal(clockOf(view, 'pattern').dateWord, 'Observed');
+  assert.equal(clockOf(view, 'pattern').dateWord, 'Analysis for');
   assert.equal(clockOf(view, 'jet').at, VALID);
   assert.equal(clockOf(view, 'jet').dateWord, 'Model valid');
   assert.equal(clockOf(view, 'tendency').at, Date.UTC(2026, 8, 1));

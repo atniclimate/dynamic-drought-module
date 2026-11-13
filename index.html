@@ -129,13 +129,14 @@
           <!-- DisplaySummary owns the live summary in the shell; do not duplicate it here. -->
           <div id="layers-studio-entry-host"></div>
           <div id="brief-secondary-actions"></div>
+          <!-- The chosen place's name, announced and not drawn: the one
+               briefing door (#region-briefing-btn, the region row's, in
+               Brief and Console alike) shows it. -->
           <div class="brief-selection-summary" id="brief-selection-summary" hidden>
-            <p class="brief-place-context" id="brief-place-context" aria-live="polite" hidden>
+            <p class="brief-place-context sr-only" id="brief-place-context" aria-live="polite" hidden>
               <span>Selected place</span>
               <strong id="brief-place-name"></strong>
             </p>
-            <p id="brief-selection-read"></p>
-            <button type="button" class="brief-full-report-link" id="brief-full-report-link">Open the full briefing</button>
           </div>
         </section>
         <div id="enso-flow-controls"></div>
@@ -255,6 +256,16 @@
           </details>
         </div>
 
+        <!-- The credit ends the scroll column; it is not pinned under it. -->
+        <footer class="sidebar-footer">
+          <p>A project of ATNI Climate (Affiliated Tribes of Northwest Indians)</p>
+          <p id="footer-credits"></p>
+          <p class="muted">
+            <a href="https://github.com/atniclimate/dynamic-drought-module" target="_blank" rel="noopener">atniclimate/dynamic-drought-module</a>
+            · <span id="footer-version"></span>
+          </p>
+        </footer>
+
       </div>
 
       <!-- The S4c panel-foot response: place-bearing map clicks rehost their
@@ -265,15 +276,6 @@
            OUTSIDE .sidebar-scroll so the no-scroll contract and the foot's
            own scroll region cannot fight. -->
       <div id="panel-response" class="panel-response"></div>
-
-      <footer class="sidebar-footer">
-        <p>A project of ATNI Climate (Affiliated Tribes of Northwest Indians)</p>
-        <p id="footer-credits"></p>
-        <p class="muted">
-          <a href="https://github.com/atniclimate/dynamic-drought-module" target="_blank" rel="noopener">atniclimate/dynamic-drought-module</a>
-          · <span id="footer-version"></span>
-        </p>
-      </footer>
     </aside>
 
     <button id="sidebar-expand" class="icon-btn sidebar-expand-btn" aria-label="Expand sidebar" hidden>
@@ -352,25 +354,9 @@
            never on desktop, and never where an open sheet owns the zone). Each button
            applies a MOBILE_HAZARD_PRESETS entry through the one layer
            controller and returns an open sheet to the map (you asked for a
-           hazard map; the map should show); wired in src/ui/sidebar.ts. -->
-      <div id="hazard-rail" class="hazard-rail" role="group" aria-label="Quick hazard views">
-        <button type="button" class="hazard-rail-btn" data-preset="hazard-enso">
-          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 8c2.25-3 4.75-3 7 0s4.75 3 7 0 3.5-2.5 4-2.5"/><path d="M3 14c2.25-3 4.75-3 7 0s4.75 3 7 0 3.5-2.5 4-2.5"/><path d="M5 19c1.5-1.5 3-1.5 4.5 0s3 1.5 4.5 0"/></svg>
-          <span class="map-control-label">ENSO</span>
-        </button>
-        <button type="button" class="hazard-rail-btn" data-preset="hazard-fire">
-          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>
-          <span class="map-control-label">Fire</span>
-        </button>
-        <button type="button" class="hazard-rail-btn" data-preset="hazard-drought">
-          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M7 12a5 5 0 0 1 10 0"/><path d="M2 12h20"/><path d="M12 3v2M5.6 5.6 7 7M18.4 5.6 17 7"/><path d="M8.5 12 7 15.5l2 4.5M15 12l1.5 3.5-1.5 4.5"/></svg>
-          <span class="map-control-label">Drought</span>
-        </button>
-        <button type="button" class="hazard-rail-btn" data-preset="hazard-heat">
-          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/></svg>
-          <span class="map-control-label">Heat</span>
-        </button>
-      </div>
+           hazard map; the map should show); wired in src/ui/sidebar.ts. The
+           buttons are generated, one per mode, by src/ui/hazard-rail.ts. -->
+      <div id="hazard-rail" class="hazard-rail" role="group" aria-label="Quick hazard views"></div>
 
       <!-- The map-information disclosure. The glyph is a QUESTION MARK
            (owner direction, 2026-08-19): the round button asks "what am I

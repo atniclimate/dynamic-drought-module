@@ -282,7 +282,7 @@ test.describe('U3 stage-5: honest search failure states (major 5)', () => {
 
     const toast = page.locator('#copy-toast');
     await expect(toast).toBeVisible();
-    await expect(toast).toContainText('Could not reach the BIA land area service');
+    await expect(toast).toContainText('Could not reach the BIA Land Area Representation (AIAN-LAR) service');
   });
 });
 

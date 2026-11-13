@@ -37,7 +37,7 @@ test.describe('E1 deliverable 1: Brief-mode progressive disclosure', () => {
     // switch is the honest console escape that restores the instrument.
     const entry = page.locator('#layers-studio-entry');
     await expect(entry).toBeVisible();
-    await expect(entry).toHaveText('LAYERS');
+    await expect(entry).toHaveText('Layers'); // mixed case since visual uniformity wave 1, D1
     await page.locator('.view-switch [data-view="console"]').click();
 
     await expect(page.locator('#app')).toHaveClass(/\bview-console\b/);

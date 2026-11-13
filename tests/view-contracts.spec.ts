@@ -284,9 +284,9 @@ async function runStep(
     // renderer's draw queue do not decide whether that context was restored.
     await untilAnswered(
       () => fire3dContextStamp(page),
-      (value) => value === 'whp',
+      (value) => value === 'whp structures',
       30_000,
-      '3D scene context whp'
+      '3D scene context whp structures'
     );
     return;
   }

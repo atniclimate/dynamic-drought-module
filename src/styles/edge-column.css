@@ -332,27 +332,6 @@
     height: auto;
   }
 
-  /* The pre-release badge rides the top of a track. It stays non-interactive. */
-  #app[data-sheet-detent] .edge-column .test-preview-badge {
-    flex: none;
-    width: var(--edge-size);
-    height: calc(var(--edge-badge-block) - var(--edge-gap));
-    margin: 0;
-    padding: 2px 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 8px;
-    letter-spacing: 0.03em;
-    line-height: 1.05;
-    text-align: center;
-    white-space: normal;
-    color: var(--ink-soft);
-    background: var(--glass-fill-solid);
-    border: 1px solid var(--glass-edge);
-    border-radius: var(--radius-md);
-  }
-
   /* Share and Reset have left this container for the column; on phones it
      holds only empty desktop seats. The full-site link-outs a framed page
      that is not an embed gets are the one thing left in it: the only route
@@ -360,12 +339,44 @@
   #app[data-sheet-detent] .map-overlay-controls > :not(.studio-linkout-pair) {
     display: none;
   }
+  /* The pre-release mark is off the column (visual uniformity wave 1, D8)
+     and holds one fixed corner (repair R3): the top of the map, against the
+     column's inner edge, level with the column's first cell. Beside the
+     scale rulers it rode the sheet's top edge into the middle of the map
+     and lay under the 3D tilt pad. Up here no sheet stop reaches it (the
+     full stop ends under the key chip's row) and the title chip, the
+     rulers and the pad are elsewhere. It is the lowest chrome on the map:
+     whatever opens across this band (the key's drawer, Map information,
+     the loading pill, a folded group's row) covers it and is never drawn
+     under it. It stays non-interactive.
+     --edge-badge-block above stays declared for the planner's mirror test;
+     no rule reads it now. */
+  #app[data-sheet-detent] .map-overlay-controls > .test-preview-badge {
+    display: block;
+    position: fixed;
+    top: calc(env(safe-area-inset-top, 0px) + var(--edge-inset));
+    right: calc(
+      env(safe-area-inset-right, 0px) + var(--edge-inset) + var(--edge-column-w) + var(--edge-gap)
+    );
+    z-index: var(--z-map-chrome);
+    /* The phone's glass and ink, as the mark wore on the column: about
+       10:1 over a white map. */
+    color: var(--ink-soft);
+    background: var(--glass-fill-solid);
+    border-color: var(--glass-edge);
+  }
+  /* The container gives up its own layer here, so the mark's level above is
+     read against the map's chrome and not inside the controls' layer; the
+     link-outs, the one other thing drawn in it, keep the controls' level. */
   #app[data-sheet-detent] .map-overlay-controls {
     right: calc(
       env(safe-area-inset-right, 0px) + var(--edge-inset) + var(--edge-column-w) + var(--edge-gap)
     );
+    z-index: auto;
   }
   #app[data-sheet-detent] .map-overlay-controls > .studio-linkout-pair {
+    position: relative;
+    z-index: var(--z-map-control);
     max-width: calc(
       100vw - var(--edge-column-w) - var(--edge-gap) - 2 * var(--edge-inset) - 12px
     );
@@ -386,7 +397,7 @@
 /* Real glass where the browser can blur what is behind it. */
 @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   @media (max-width: 720px) {
-    #app[data-sheet-detent] .edge-column :is(.edge-body, .edge-fold, .test-preview-badge) {
+    #app[data-sheet-detent] .edge-column :is(.edge-body, .edge-fold) {
       background: var(--glass-fill) !important;
       -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
       backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));

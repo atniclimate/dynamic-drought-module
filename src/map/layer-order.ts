@@ -171,6 +171,7 @@ export const CONDITION_SURFACE_IDS: readonly string[] = [
  * their seat is unchanged, which is the point of listing them here.
  */
 export const CONTEXT_OVERLAY_IDS: readonly string[] = [
+  'structures-3d',
   'power-lines',
   'power-lines-unknown',
   'power-plants-clusters',
@@ -232,8 +233,10 @@ export const REFERENCE_BOUNDARY_IDS: readonly string[] = [
   'tribal-lands-outline',
   'aiannh-fill',
   'aiannh-outline',
+  'aiannh-outline-core',
   'bia-reservations-fill',
   'bia-reservations-outline',
+  'bia-reservations-outline-core',
   'treaty-areas-outline'
 ];
 

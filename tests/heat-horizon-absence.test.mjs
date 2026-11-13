@@ -55,7 +55,8 @@ test('heat: the first horizon has a surface, the other two are off for stated re
 test('the shell carries the disabled-chip reasons on the chip; the visible text reads in Technical information', () => {
   assert.doesNotMatch(shellSource, /id="shell-horizon-note"/);
   assert.match(shellSource, /horizonDisabledReason\(snapshot, key\)/);
-  assert.match(shellSource, /title=\{disabledReason \?\? undefined\}/);
+  // The reason keeps the chip's title; an enabled chip's title is its sub-line (visual uniformity wave 1, D4).
+  assert.match(shellSource, /title=\{disabledReason \?\? chrome\.subtitle\}/);
 });
 
 test('the sequence states an all-zero week only when every day was read as 0', () => {

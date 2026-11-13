@@ -25,6 +25,7 @@ for (const [name, browserExit, failures, status, attempts] of [
         if [ "$calls" -le "$FAILURES" ]; then return 17; fi
       }
       sleep() { echo "SLEEP:$1"; }
+      timeout() { echo "LIMIT:$1"; shift; "$@"; }
     `;
     const run = spawnSync(bash, ['-c', mock + script], {
       encoding: 'utf8', windowsHide: true, timeout: 10000,
@@ -35,5 +36,22 @@ for (const [name, browserExit, failures, status, attempts] of [
     assert.equal((run.stdout.match(/^DEPENDENCY:/gm) ?? []).length, attempts);
     const sleeps = [...run.stdout.matchAll(/^SLEEP:(\d+)$/gm)].map((match) => Number(match[1]));
     assert.deepEqual(sleeps, [10, 20].slice(0, Math.max(0, attempts - 1)));
+    // Every attempt carries its own limit, and three of them fit the action's 600 s.
+    const limits = [...run.stdout.matchAll(/^LIMIT:(\d+)$/gm)].map((match) => Number(match[1]));
+    assert.deepEqual(limits, Array(attempts).fill(170));
+    assert.ok(3 * 170 + 10 + 20 < 600);
   });
 }
+
+test('Chromium provisioning: a timed-out dependency attempt is retried, not fatal', () => {
+  const mock = `
+    calls=0
+    npx() { :; }
+    sleep() { :; }
+    timeout() { calls=$((calls + 1)); echo "ATTEMPT:$calls"; [ "$calls" -gt 1 ] || return 124; }
+  `;
+  const run = spawnSync(bash, ['-c', mock + script], { encoding: 'utf8', windowsHide: true, timeout: 10000 });
+  assert.ifError(run.error);
+  assert.equal(run.status, 0, run.stderr);
+  assert.equal((run.stdout.match(/^ATTEMPT:/gm) ?? []).length, 2);
+});

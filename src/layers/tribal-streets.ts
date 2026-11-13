@@ -8,8 +8,9 @@
  *   - streets with their names (Census TIGERweb Local Roads), drawn only
  *     within the areas (MapLibre `within`, so a street crossing a boundary
  *     is left off);
- *   - named streams and lakes (USGS National Hydrography Dataset, large
- *     scale), drawn like the base map's water;
+ *   - named streams and lakes (USGS National Hydrography Dataset, its
+ *     flowline layer and its "Waterbody - Large Scale" layer), drawn like the
+ *     base map's water;
  *   - community names (Census Designated Places, at the Census internal
  *     point), drawn only within the areas.
  * Streams and lakes are drawn for the whole envelope, not only within the

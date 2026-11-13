@@ -29,6 +29,12 @@
 # exclusion's rationale forward rather than contradicting it. Validate's
 # gate job (.github/workflows/validate.yml) now also runs `npm audit`
 # against this same lockfile on every pull request.
+#
+# Monthly and grouped since 2026-11-13: each ecosystem proposes its
+# version updates as one combined pull request a month. Weekly single-package
+# updates had opened 25 pull requests in eleven weeks, 13 of them closed
+# unmerged because the next week's bump replaced them. The cost is that a
+# version update for an Action pin can arrive up to a month later.
 version: 2
 updates:
   - package-ecosystem: "github-actions"
@@ -36,14 +42,22 @@ updates:
       - "/"
       - "/.github/actions/playwright-chromium"
     schedule:
-      interval: "weekly"
+      interval: "monthly"
+    groups:
+      actions:
+        patterns:
+          - "*"
     open-pull-requests-limit: 3
     commit-message:
       prefix: "ci"
   - package-ecosystem: "npm"
     directory: "/workers/proxy"
     schedule:
-      interval: "weekly"
+      interval: "monthly"
+    groups:
+      worker-tools:
+        patterns:
+          - "*"
     open-pull-requests-limit: 3
     commit-message:
       prefix: "ci"

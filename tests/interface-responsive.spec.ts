@@ -385,13 +385,15 @@ test.describe('mobile key growth at 390x844', () => {
     const content = page.locator('#map-key-content');
     await expect(content).toBeHidden();
     await expect(page.locator('#map-key-details-toggle')).toHaveAttribute('aria-expanded', 'false');
-    // Value-only migration (S30D D1 M10; interface-chrome-popups-text.md
-    // section 2.4): the toggle's visible text now comes straight from the
-    // KeySpec's own label ('Fire', buildFireKey) with no family-ternary
-    // uppercasing; CSS keeps the visual capitals (text-transform:
-    // uppercase on the phone rule, unchanged), but toHaveText reads the
-    // DOM text content, not the rendered case.
-    await expect(page.locator('#map-key-details-toggle')).toHaveText('Fire');
+    // Visual uniformity wave 1, D8 (2026-11-13): the map's title names the
+    // mode with the word on its button, in that word's own case at every
+    // width; the product ('Fire', buildFireKey) keeps the drawer's own title
+    // line and the toggle's accessible name. Before: asserted 'Fire',
+    // drawn in capitals by the phone rule.
+    const toggle = page.locator('#map-key-details-toggle');
+    await expect(toggle).toHaveText('Wildfire');
+    await expect(toggle).toHaveCSS('text-transform', 'none');
+    await expect(toggle).toHaveAccessibleName('Open Wildfire, Fire details and key');
     await openMapKey(page);
     await expect(key.locator('[data-nifc-perimeter-key]')).toBeVisible();
     // Wait for the READY key: during activation the sections render W2-D6
@@ -761,33 +763,33 @@ test.describe('short landscape coarse-pointer shell', () => {
 test.describe('desktop Tribal Nations action above the sticky dock (1440x900)', () => {
   test.use({ viewport: { width: 1440, height: 900 } });
 
-  test('at rest, in every hazard mode, the action and its count end at least 8px above the dock border', async ({
+  // Visual uniformity wave 1, D5 (2026-11-13): the selected count left the
+  // display for the action's accessible name, so the line under the button is
+  // the fault line and draws nothing while both agencies answer.
+  test('at rest, in every hazard mode, the action ends at least 8px above the dock border and its fault line is empty', async ({
     page
   }) => {
     await gotoApp(page);
     const scroller = page.locator('.sidebar-scroll');
     const dock = page.locator('.sidebar-bottom-dock');
     const action = page.locator('#tribal-nations-brief-action');
-    const count = page.locator('#tribal-nations-brief-action ~ .tribal-nations-health');
+    const fault = page.locator('#tribal-nations-brief-action ~ .tribal-nations-health');
 
     for (const key of HAZARD_CLUSTER_KEYS) {
       const chip = page.locator(`.shell-cluster-btn[data-cluster="${key}"]`);
       await chip.click();
       await expect(chip).toHaveAttribute('aria-pressed', 'true');
       await expect(action).toBeVisible();
-      await expect(count).toBeVisible();
+      await expect(fault).toHaveText('');
+      await expect(fault).toBeHidden();
       await expect
         .poll(
           async () => {
             await scroller.evaluate((element) => {
               element.scrollTop = 0;
             });
-            const [dockBox, actionBox, countBox] = await Promise.all([
-              rect(dock),
-              rect(action),
-              rect(count)
-            ]);
-            return dockBox.top - Math.max(actionBox.bottom, countBox.bottom);
+            const [dockBox, actionBox] = await Promise.all([rect(dock), rect(action)]);
+            return dockBox.top - actionBox.bottom;
           },
           { message: `${key}: the Tribal Nations action sits under the dock` }
         )

@@ -69,8 +69,6 @@ let column: HTMLElement | null = null;
 let bench: HTMLElement | null = null;
 const tracks: TrackParts[] = [];
 const groups = new Map<EdgeGroupId, GroupParts>();
-let badge: HTMLElement | null = null;
-let badgeHome: HTMLElement | null = null;
 let mounted = false;
 let applying = false;
 let planKey = '';
@@ -220,7 +218,9 @@ function refresh(): void {
     viewportWidth: window.innerWidth,
     viewportHeight: window.innerHeight,
     groups: demands,
-    badge: badge !== null && badge.parentElement !== badgeHome
+    // The pre-release mark no longer rides a track (visual uniformity D8): it
+    // keeps its home seat and src/styles/edge-column.css places it by the scale rulers.
+    badge: false
   });
   // The stylesheet holds this many cells of room open under each capsule, so
   // a cell that arrives with a mode fills its slot and moves nothing above it.
@@ -272,10 +272,6 @@ function apply(plan: EdgePlan): void {
       parts.fold.hidden = !folded;
       if (!folded && openGroup === id) setOpen(null, false);
       if (!folded) parts.root.removeAttribute('data-open');
-    }
-    if (badge && badge.parentElement !== badgeHome) {
-      const track = tracks[plan.badgeTrack ?? 0];
-      if (track && badge.parentElement !== track.top) track.top.prepend(badge);
     }
     if (focused?.isConnected && document.activeElement !== focused) {
       focused.focus({ preventScroll: true });
@@ -389,7 +385,6 @@ function setMounted(next: boolean): void {
   mounted = next;
   if (next) {
     column.hidden = false;
-    if (badge && badgeHome && tracks[0]) tracks[0].top.prepend(badge);
     notifyPhoneSeats();
     planKey = '';
     refresh();
@@ -398,7 +393,6 @@ function setMounted(next: boolean): void {
   setOpen(null, false);
   // Seats leave first, while the column is still in the document.
   notifyPhoneSeats();
-  if (badge && badgeHome) badgeHome.prepend(badge);
   column.hidden = true;
   planKey = '';
   currentPlan = null;
@@ -491,9 +485,6 @@ export function initEdgeColumn(): void {
       phone: { group: 'hazards', order: 10 }
     });
   }
-  badge = overlay?.querySelector<HTMLElement>('.test-preview-badge') ?? null;
-  badgeHome = badge ? overlay : null;
-
   // Controls come and go (a lane seats one, a mode hides one) and pressed
   // states change; either can alter what fits or what a folded cell shows.
   const mutation = new MutationObserver(() => refresh());

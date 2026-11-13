@@ -5,7 +5,9 @@ npx playwright install chromium
 
 for attempt in 1 2 3; do
   echo "Playwright OS dependency install attempt $attempt/3"
-  if npx playwright install-deps chromium; then
+  # A stalled package mirror once used the caller's whole 600 s on attempt 1.
+  # 3 x 170 s plus the 10 s and 20 s pauses is 540 s, inside that envelope.
+  if timeout 170 npx playwright install-deps chromium; then
     exit 0
   else
     status=$?

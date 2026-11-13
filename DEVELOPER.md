@@ -15,7 +15,7 @@ set of public upstream services.
 - Node.js 24 (Active LTS); `.nvmrc` pins the exact patch, 24.20.0
 - npm, using the committed `package-lock.json`
 - A browser supported by Playwright for browser testing
-- Python only for the offline landscape pipeline
+- Python only for the offline landscape and USA Structures pipelines
 
 Install and start the development server:
 
@@ -281,6 +281,7 @@ npm run build:states
 npm run build:ecoregion-tiles
 npm run build:whp-tiles
 npm run build:power-tiles
+npm run build:structures-tiles
 npm run build:coverage-matrix
 ```
 
@@ -381,6 +382,12 @@ Administration, labeled with the issuer's own reporting period. Substations
 and distribution lines are absent: substation locations are withheld by
 publishing agencies for security reasons, and no authoritative public
 national distribution-circuit dataset exists.
+
+Building footprints come from USA Structures, 2023 edition (Oak Ridge
+National Laboratory for the FEMA Geospatial Response Office, CC0 on Figshare,
+DR-126), extruded over the terrain from zoom 13 at one stated 4 m height in
+one tone, because the edition publishes no height in this box. The committed
+bake covers the central Oregon region framing only (see `public/data/README.md`).
 
 On a phone the same scene is entered from a 3D cell in the right-edge
 column, present only in the Fire view on a phone that passes the WebGL 2
@@ -890,7 +897,7 @@ The seams a local full-service server would replace:
 4. **Large archives ride the code deploy.** The PMTiles archives are committed
    under `public/data/` and republished with the site on every deploy:
    hillshade 35,252,210 bytes, Wildfire Hazard Potential 13.6 MB, structures
-   7.9 MB, power lines 3.8 MB, ecoregions 2.5 MB. The host's limits already
+   5.2 MB, power lines 3.8 MB, ecoregions 2.5 MB. The host's limits already
    shape the product. The z9 hillshade build is a reproducible artifact that is
    deliberately not shipped, the full Pacific Northwest structures bake was
    projected at 240 to 380 MB and rejected, and the retired fuel-model drape

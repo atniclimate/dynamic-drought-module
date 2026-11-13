@@ -365,9 +365,16 @@ test.describe('partial-outage visibility (the final-pass finding 2)', () => {
   // checked (M5's rule, extended from the recipe to the composition), so the
   // BIA outage leaves both selected and one unavailable; it used to uncheck
   // BIA and demote the Drought view to a custom set.
-  const HEALTH_DEGRADED = '2 of 2 selected · 1 unavailable';
+  // The visible line is the fault alone (visual uniformity wave 1, D5); the
+  // selected count reads in the action's accessible name.
+  const HEALTH_DEGRADED = '1 unavailable';
   const BRIEF_HEALTH =
     '.tribal-nations-brief-row:not(.tribal-nations-at-hand-row) .tribal-nations-health';
+  // found-073's pin: the failed layer stays checked, so the name still reads
+  // "2 of 2 selected" beside the fault.
+  const BRIEF_ACTION =
+    '.tribal-nations-brief-row:not(.tribal-nations-at-hand-row) .tribal-nations-brief-action';
+  const NAME_DEGRADED = 'Hide Tribal Nations layers, 2 of 2 selected · 1 unavailable';
 
   async function oneAgencyDown(page: import('./offline-test').Page): Promise<void> {
     await routeGeojsonPair(page);
@@ -390,6 +397,7 @@ test.describe('partial-outage visibility (the final-pass finding 2)', () => {
     await expect(page.locator(BRIEF_HEALTH)).toHaveText(HEALTH_DEGRADED, {
       timeout: 25_000
     });
+    await expect(page.locator(BRIEF_ACTION)).toHaveAccessibleName(NAME_DEGRADED);
   });
 
   test('brief embed at 400x600: the outage is visible with zero island requests', async ({
@@ -416,6 +424,7 @@ test.describe('partial-outage visibility (the final-pass finding 2)', () => {
     await expect(page.locator(BRIEF_HEALTH)).toHaveText(HEALTH_DEGRADED, {
       timeout: 25_000
     });
+    await expect(page.locator(BRIEF_ACTION)).toHaveAccessibleName(NAME_DEGRADED);
     expect(islandRequests).toEqual([]);
     // The briefing's WFIGS read was answered by the fixture, not the live
     // service (found-078).
@@ -440,8 +449,11 @@ test.describe('partial-outage visibility on mobile (390x844)', () => {
     await expect(page.locator('#sheet-at-hand')).toBeVisible();
     // found-073: the failed BIA layer stays checked in the committed view.
     await expect(page.locator('#tribal-nations-at-hand-health')).toHaveText(
-      '2 of 2 selected · 1 unavailable',
+      '1 unavailable',
       { timeout: 25_000 }
+    );
+    await expect(page.locator('#tribal-nations-at-hand-action')).toHaveAccessibleName(
+      'Hide Tribal Nations layers, 2 of 2 selected · 1 unavailable'
     );
   });
 });
@@ -453,7 +465,7 @@ test.describe('the Brief-door Tribal Nations action', () => {
     await expect(action).toBeVisible();
     // Both Tribal members (aiannh, bia-reservations) default on (found-006):
     // a bare boot is the pressed state, so the accessible name reads Hide.
-    await expect(action).toHaveAccessibleName('Hide Tribal Nations layers');
+    await expect(action).toHaveAccessibleName('Hide Tribal Nations layers, 2 of 2 selected');
     await expect(action).toHaveAttribute('aria-pressed', 'true');
   });
 
@@ -509,7 +521,7 @@ test.describe('the Brief-door action at 400px (mobile and embed)', () => {
 
     const atHandAction = page.locator('#tribal-nations-at-hand-action');
     await expect(atHandAction).toBeVisible();
-    await expect(atHandAction).toHaveAccessibleName('Show Tribal Nations layers');
+    await expect(atHandAction).toHaveAccessibleName('Show Tribal Nations layers, 0 of 2 selected');
     // The report-hosted twin is not this surface's instance.
     await expect(page.locator('#tribal-nations-brief-action')).not.toBeVisible();
 

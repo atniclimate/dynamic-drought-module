@@ -411,7 +411,7 @@ test.describe('ENSO observed-state repair', () => {
     });
     await expect(derived.first()).toBeVisible({ timeout: 30_000 });
     await expect(derived.first()).toContainText('ENSO conditions are neutral');
-    await expect(derived.first()).toContainText('onset thresholds');
+    await expect(derived.first()).toContainText('CPC thresholds');
     // The uncited forecast-skill assertion is gone; the redirection stays.
     await expect(panel).not.toContainText('offers little long-range signal');
     const tendency = panel.locator('.impact-claim', {

@@ -53,7 +53,13 @@ const CITED = new Set<string>([
   'nadm-ncei',
   'nws-web-disclaimer',
   'cocorahs-data-usage-policy',
-  'census-cb-2023-state-20m'
+  'census-cb-2023-state-20m',
+  // The base map cite pass, verdicts read 2026-11-12.
+  'census-base-map-2025',
+  'nrcan-atlas-of-canada-1m',
+  'usgs-nhd-tribal-streets',
+  'usgs-padus-4-1',
+  'usfs-administrative-forest-boundaries'
 ]);
 
 const DEPLOYER = { name: 'Fixture GIS office' };

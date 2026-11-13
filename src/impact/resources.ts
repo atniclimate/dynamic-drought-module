@@ -190,7 +190,7 @@ function federalResources(state: StateCode | null): ResourceLink[] {
  * The deployer-owned Tribe's-own-resources slot. Always present, always first,
  * empty by default. No specific Tribe's links are shipped; a deployer with
  * authorization populates this slot (documented in data/README.md). The panel
- * renders the empty slot as a "populate" affordance, not a broken link.
+ * leaves the slot out, heading included, until it carries a link.
  */
 function tribeOwnSlot(): ResourceLink {
   return {

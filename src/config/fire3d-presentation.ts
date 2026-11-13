@@ -38,8 +38,9 @@ import {
  *  - the smoke volume's extrusion heights are literal meters and stay
  *    literal, so raising this makes stylized plumes read shorter against
  *    the relief (see HMS_VOLUME_HEIGHT_SCALE_METERS);
- *  - building extrusions are the issuer's published heights in meters and
- *    must stay so; they are not to be scaled to "match" the terrain.
+ *  - building extrusions are one stated presentation height in meters (the
+ *    source publishes none) and must stay literal; they are not to be
+ *    scaled to "match" the terrain.
  */
 export const FIRE3D_TERRAIN_EXAGGERATION = 2.4;
 
@@ -255,10 +256,7 @@ export function terrainEdgeLine(
  * implies national relief or a precision the archive does not carry.
  */
 export function fire3dCoverageNote(terrain: number | TerrainCoverage): string {
-  return (
-    `${fire3dTerrainCoverageSentence(terrain)} Bundled structure data covers the ` +
-    'central Oregon pilot area only, from zoom 13.'
-  );
+  return fire3dTerrainCoverageSentence(terrain);
 }
 
 /**

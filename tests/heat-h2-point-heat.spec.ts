@@ -952,7 +952,8 @@ test.describe('H2 critical-first surfaces', () => {
           '#brief-search [data-search-kind="place"][data-search-id="OR"]'
         )
         .click();
-      await page.locator('#brief-full-report-link').click();
+      // The chosen place's one briefing door (visual uniformity wave 1, D6).
+      await page.locator('#region-briefing-btn').click();
       await expect(page.locator('.point-heat-station')).toContainText(
         'New Station'
       );
@@ -1455,7 +1456,8 @@ test.describe('DDM-P7-T07: the season-ahead heat cell', () => {
           '#brief-search [data-search-kind="place"][data-search-id="OR"]'
         )
         .click();
-      await page.locator('#brief-full-report-link').click();
+      // The chosen place's one briefing door (visual uniformity wave 1, D6).
+      await page.locator('#region-briefing-btn').click();
 
       const cell = page.locator(CELL);
       await expect(cell.locator('.impact-claim')).toContainText(
