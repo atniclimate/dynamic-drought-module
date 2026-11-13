@@ -468,7 +468,7 @@ test('the hazard rail is generated with one cell per mode, keeping the former ma
   const former = [
     cell('hazard-enso', '<path d="M3 8c2.25-3 4.75-3 7 0s4.75 3 7 0 3.5-2.5 4-2.5"/><path d="M3 14c2.25-3 4.75-3 7 0s4.75 3 7 0 3.5-2.5 4-2.5"/><path d="M5 19c1.5-1.5 3-1.5 4.5 0s3 1.5 4.5 0"/>', 'ENSO'),
     cell('hazard-fire', '<path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>', 'Fire'),
-    cell('hazard-drought', '<path d="M7 12a5 5 0 0 1 10 0"/><path d="M2 12h20"/><path d="M12 3v2M5.6 5.6 7 7M18.4 5.6 17 7"/><path d="M8.5 12 7 15.5l2 4.5M15 12l1.5 3.5-1.5 4.5"/>', 'Drought'),
+    cell('hazard-drought', '<rect x="3" y="3" width="18" height="18" rx="2.5"/><path d="M9.5 3l1 5.5 5.5 1.5 5-2M10.5 8.5 8 14l-5 1.5M8 14l6 1.5 2-5.5M14 15.5l1.5 5.5"/>', 'Drought'),
     cell('hazard-heat', '<path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/>', 'Heat')
   ];
   // A later mode adds a cell; the former cells keep their markup and order.
