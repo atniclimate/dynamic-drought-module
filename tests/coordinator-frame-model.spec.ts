@@ -433,24 +433,31 @@ test.describe('the coordinator is the popup frame\'s one caller', () => {
     });
   }
 
-  test('a studio route change during the hold wins: nothing reaches the panel sink after release, and a later click does', async ({
+  test('a studio route change during the hold wins: nothing paints after release, and a later click does', async ({
     page
   }) => {
     const gate = await gateFrameChunk(page, 'hold');
-    await bootModelTarget(page, '?region=washington_state&view=brief&layers=bia-reservations', [{ model: PLACE_MODEL, place: true }]);
+    // A held commit exists only off the Brief place route (a place click in
+    // Brief opens its briefing at once, owner 2026-11-13), so the case runs in
+    // the Console. The Console has no studio door; the studio is entered by
+    // history instead: a direct studio boot records the map entry before it
+    // (tests/studio-url-matrix.spec.ts), Back leaves the studio and Forward
+    // re-enters it, a studio route change with no view-mode change.
+    await bootModelTarget(page, `${CONSOLE}&studio=place`, [{ model: PLACE_MODEL, place: true }]);
     const url = await warmed(gate);
+    await page.goBack();
+    await expect(page).not.toHaveURL(/studio=/);
     const centre = await mapPoint(page, 0.5, 0.5);
     const before = await readLog(page);
-    const foot = page.locator('#panel-response .coordinated-response');
 
     await clickUntilAnswered(page, centre, 1);
-    await page.locator('#place-studio-entry').click();
+    await page.goForward();
     await expect(page).toHaveURL(/studio=place/);
 
     gate.release();
     await frameSettled(page, url);
     const after = await readLog(page);
-    expect(after.paints, 'the commit superseded by the studio never reaches a sink').toEqual([]);
+    expect(after.paints, 'the commit superseded by the studio never paints').toEqual([]);
     expect(after.selection, 'the superseded commit wrote no selection').toEqual(before.selection);
     // Entering the studio clears the emphasis itself (an empty stamp); the
     // superseded place commit would have lit its reservation.
@@ -458,14 +465,13 @@ test.describe('the coordinator is the popup frame\'s one caller', () => {
       after.emphasis.slice(before.emphasis.length).filter((stamp) => stamp !== ''),
       'the superseded commit lit no emphasis'
     ).toEqual([]);
-    await expect(foot).toHaveCount(0);
     await expect(page.locator('.maplibregl-popup')).toHaveCount(0);
 
     await page.goBack();
     await expect(page).not.toHaveURL(/studio=/);
     await clickUntilAnswered(page, centre, 2);
     await expect.poll(async () => (await readLog(page)).paints).toEqual([PLACE_TITLE]);
-    await expect(foot).toHaveCount(1);
+    await expect(page.locator('.maplibregl-popup')).toHaveCount(1);
   });
 
   test('a frame chunk that fails to load dismisses the open response and writes nothing, and a later click loads it under a retry URL and paints', async ({
@@ -545,11 +551,21 @@ test.describe('the coordinator is the popup frame\'s one caller', () => {
     expect(after.emphasis, 'the superseded commit wrote no emphasis').toEqual(before.emphasis);
   });
 
-  test('the mobile Brief sheet activating during the hold (a resize to phone width, no view-mode change) wins: nothing paints or reaches the panel sink', async ({
+  // A held commit exists only off the Brief place route: since the owner's
+  // 2026-11-13 ruling a place click in Brief opens its briefing at once, with
+  // no wait for the frame. The two sheet cases therefore hold a Console
+  // commit, and the mobile Brief sheet takes it over: a resize to phone width
+  // activates the sheet (the Console keeps its commit there), and the sheet's
+  // Place door turns the view to Brief, whose sheet is the place's answer.
+  // Those view and door changes may clear an emphasis that was never lit (an
+  // empty stamp), so the emphasis claim reads the stamps that light anything.
+  const PLACE_DOOR = '#mobile-footer-nav button[data-tab="place"]';
+
+  test('the mobile Brief sheet taking over during the hold (a resize to phone width, then the Place door into Brief) wins: nothing paints or reaches the panel sink', async ({
     page
   }) => {
     const gate = await gateFrameChunk(page, 'hold');
-    await bootModelTarget(page, '?region=washington_state&view=brief&layers=bia-reservations', [{ model: PLACE_MODEL, place: true }]);
+    await bootModelTarget(page, CONSOLE, [{ model: PLACE_MODEL, place: true }]);
     const url = await warmed(gate);
     const centre = await mapPoint(page, 0.5, 0.5);
     expect(await page.locator('#app').getAttribute('data-sheet-detent'), 'the desktop shell: no mobile sheet yet').toBeNull();
@@ -558,28 +574,33 @@ test.describe('the coordinator is the popup frame\'s one caller', () => {
     await clickUntilAnswered(page, centre, 1);
     expect((await readLog(page)).paints, 'nothing paints while the chunk is held').toEqual([]);
     // The real sheet: its (max-width: 720px) media query activates it on the
-    // resize; nothing changes the view mode, so no view-mode listener runs.
+    // resize; then its Place door turns the view to Brief.
     const height = page.viewportSize()?.height ?? 800;
     await page.setViewportSize({ width: 600, height });
-    await expect(page.locator('#app'), 'the mobile Brief sheet activated').toHaveAttribute('data-sheet-detent', /\S/);
+    await expect(page.locator('#app'), 'the mobile sheet activated').toHaveAttribute('data-sheet-detent', /\S/);
+    await page.locator(PLACE_DOOR).click();
+    await expect(page.locator('#app'), 'the Place door turned the view to Brief').toHaveClass(/\bview-brief\b/);
 
     gate.release();
     await frameSettled(page, url);
     const after = await readLog(page);
     expect(after.paints, 'the commit the sheet superseded never paints nor reaches the panel sink').toEqual([]);
     expect(after.selection, 'the superseded commit wrote no selection').toEqual(before.selection);
-    expect(after.emphasis, 'the superseded commit wrote no emphasis').toEqual(before.emphasis);
+    expect(
+      after.emphasis.slice(before.emphasis.length).filter((stamp) => stamp !== ''),
+      'the superseded commit lit no emphasis'
+    ).toEqual([]);
     await expect(page.locator('.maplibregl-popup')).toHaveCount(0);
     await expect(page.locator('#panel-response .coordinated-response')).toHaveCount(0);
   });
 
-  // S30D P1-FRAME repair round 2 (2026-10-04): the activation is remembered,
+  // S30D P1-FRAME repair round 2 (2026-10-04): the takeover is remembered,
   // not only checked when the wait ends.
-  test('the mobile Brief sheet activating and deactivating again during the hold (a resize to phone width and back) still wins: nothing paints or reaches the panel sink', async ({
+  test('the mobile Brief sheet taking over and standing down again during the hold (phone width and the Place door, then desktop and the Console door) still wins: nothing paints or reaches the panel sink', async ({
     page
   }) => {
     const gate = await gateFrameChunk(page, 'hold');
-    await bootModelTarget(page, '?region=washington_state&view=brief&layers=bia-reservations', [{ model: PLACE_MODEL, place: true }]);
+    await bootModelTarget(page, CONSOLE, [{ model: PLACE_MODEL, place: true }]);
     const url = await warmed(gate);
     const centre = await mapPoint(page, 0.5, 0.5);
     const desktop = page.viewportSize() ?? { width: 1280, height: 800 };
@@ -589,19 +610,28 @@ test.describe('the coordinator is the popup frame\'s one caller', () => {
     await clickUntilAnswered(page, centre, 1);
     expect((await readLog(page)).paints, 'nothing paints while the chunk is held').toEqual([]);
     // The real sheet both ways: its (max-width: 720px) media query activates
-    // it on the narrow resize and deactivates it on the way back, so when the
-    // wait ends the sheet is inactive again, exactly as at the click.
+    // it on the narrow resize, where the Place door takes the view to Brief,
+    // and deactivates it on the way back, where the Console door returns the
+    // view; so when the wait ends the shell is the desktop Console again,
+    // exactly as at the click, and only a remembered takeover keeps it unpainted.
     await page.setViewportSize({ width: 600, height: desktop.height });
-    await expect(page.locator('#app'), 'the mobile Brief sheet activated').toHaveAttribute('data-sheet-detent', /\S/);
+    await expect(page.locator('#app'), 'the mobile sheet activated').toHaveAttribute('data-sheet-detent', /\S/);
+    await page.locator(PLACE_DOOR).click();
+    await expect(page.locator('#app'), 'the Place door turned the view to Brief').toHaveClass(/\bview-brief\b/);
     await page.setViewportSize(desktop);
-    await expect(page.locator('#app'), 'the mobile Brief sheet deactivated again').not.toHaveAttribute('data-sheet-detent');
+    await expect(page.locator('#app'), 'the mobile sheet deactivated again').not.toHaveAttribute('data-sheet-detent');
+    await page.locator('.view-switch [data-view="console"]').click();
+    await expect(page.locator('#app'), 'the Console door returned the view').toHaveClass(/\bview-console\b/);
 
     gate.release();
     await frameSettled(page, url);
     const after = await readLog(page);
     expect(after.paints, 'the commit the transient sheet superseded never paints nor reaches the panel sink').toEqual([]);
     expect(after.selection, 'the superseded commit wrote no selection').toEqual(before.selection);
-    expect(after.emphasis, 'the superseded commit wrote no emphasis').toEqual(before.emphasis);
+    expect(
+      after.emphasis.slice(before.emphasis.length).filter((stamp) => stamp !== ''),
+      'the superseded commit lit no emphasis'
+    ).toEqual([]);
     await expect(page.locator('.maplibregl-popup')).toHaveCount(0);
     await expect(page.locator('#panel-response .coordinated-response')).toHaveCount(0);
   });

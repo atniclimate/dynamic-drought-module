@@ -63,7 +63,6 @@ import { HAZARD_CLUSTERS, type HazardClusterKey } from '../src/config/clusters';
 import {
   AIANNH_CAVEATS,
   MAP_ROOT,
-  PANEL_ROOT,
   PLACE_FRAME_FIXTURES,
   bootPlace,
   clickCentreUntilFramed,
@@ -79,9 +78,13 @@ import {
  *      perimeter touches the place, and the condition's words stand in its
  *      value row (design 3.3, "The door pulse").
  *   2. A fire condition lists its names as list items, never one sentence.
- *   3. Every place builder keeps its named fields in its frame, in both sinks
- *      (the Codex Tier 2 review :213, :224), AIANNH in all three branches.
- *   4. The deployer Tribal popup links nowhere, in both sinks (plan_rules 7).
+ *   3. Every place builder keeps its named fields in its frame, in the map
+ *      popup (the Codex Tier 2 review :213, :224), AIANNH in all three
+ *      branches.
+ *   4. The deployer Tribal popup links nowhere, in the map popup (plan_rules 7).
+ *
+ * The panel-foot sink no longer receives a place (owner, 2026-11-13: a place
+ * click in Brief opens the place's briefing), so 3 and 4 run in the Console.
  *
  * The D1.md:424 case "in ENSO mode with the SST anomaly on, a place popup
  * lists that mode's placeConditionRow" is not built: ENSO's place row moves
@@ -349,24 +352,24 @@ test.describe('place popups: a fire condition', () => {
   });
 });
 
-test.describe('place popups: named fields in both sinks', () => {
+// The map popup in the Console. The panel-foot half retired with the owner's
+// 2026-11-13 ruling: a place click in Brief opens the place's briefing, so no
+// place response reaches the panel foot.
+test.describe('place popups: named fields in the map popup', () => {
   for (const fixture of Object.values(PLACE_FRAME_FIXTURES)) {
-    test(`every place builder keeps its named fields in its frame, in both sinks: ${fixture.id}`, async ({ page }) => {
+    test(`every place builder keeps its named fields in its frame, in the map popup: ${fixture.id}`, async ({ page }) => {
       test.setTimeout(120_000);
       await holdExternalNetwork(page);
       await fixture.prepare(page);
       for (const target of fixture.targets) {
         await bootPlace(page, fixture, target, 'console');
         await expectPlaceFields(await clickCentreUntilFramed(page, MAP_ROOT, target.layerId), target.expected, `${fixture.id} ${target.layerId} map`);
-        if (!target.panel) continue;
-        await bootPlace(page, fixture, target, 'brief');
-        await expectPlaceFields(await clickCentreUntilFramed(page, PANEL_ROOT, target.layerId), target.expected, `${fixture.id} ${target.layerId} panel`);
       }
     });
   }
 
   // The three AIANNH caveat branches (the review :224: removing the
-  // OTSA/legal/statistical branch must red), each in both sinks.
+  // OTSA/legal/statistical branch must red).
   const aiannh = PLACE_FRAME_FIXTURES['aiannh']!;
   const branches = [
     { code: 'D1', type: 'Federal reservation', variant: 'legal' },
@@ -374,7 +377,7 @@ test.describe('place popups: named fields in both sinks', () => {
     { code: 'E1', type: 'Alaska Native Village Statistical Area (statistical)', variant: 'statistical' }
   ] as const;
   for (const branch of branches) {
-    test(`every place builder keeps its named fields in its frame, in both sinks: AIANNH ${branch.code}`, async ({ page }) => {
+    test(`every place builder keeps its named fields in its frame, in the map popup: AIANNH ${branch.code}`, async ({ page }) => {
       test.setTimeout(120_000);
       await holdExternalNetwork(page);
       const title = `Synthetic ${branch.code} Fixture Area`;
@@ -398,29 +401,22 @@ test.describe('place popups: named fields in both sinks', () => {
       };
       await bootPlace(page, aiannh, target, 'console');
       await expectPlaceFields(await clickCentreUntilFramed(page, MAP_ROOT), expected, `AIANNH ${branch.code} map`);
-      await bootPlace(page, aiannh, target, 'brief');
-      await expectPlaceFields(await clickCentreUntilFramed(page, PANEL_ROOT), expected, `AIANNH ${branch.code} panel`);
     });
   }
 });
 
 test.describe('place popups: the deployer slot', () => {
-  test('the deployer Tribal popup links nowhere, in both sinks', async ({ page }) => {
+  test('the deployer Tribal popup links nowhere, in the map popup', async ({ page }) => {
     test.setTimeout(120_000);
     await holdExternalNetwork(page);
     const tribal = PLACE_FRAME_FIXTURES['tribal']!;
     await tribal.prepare(page);
     const target = tribal.targets[0];
-    for (const [view, rootSelector] of [
-      ['console', MAP_ROOT],
-      ['brief', PANEL_ROOT]
-    ] as const) {
-      await bootPlace(page, tribal, target, view);
-      const root = await clickCentreUntilFramed(page, rootSelector);
-      await expect(root).toHaveAttribute('data-popup-product', 'tribal');
-      await expect(root.locator('a[href]')).toHaveCount(0);
-      // Nothing around the frame in its sink links either.
-      await expect(page.locator(rootSelector.replace(/ > \[data-popup-frame\]$/, '')).locator('a[href]')).toHaveCount(0);
-    }
+    await bootPlace(page, tribal, target, 'console');
+    const root = await clickCentreUntilFramed(page, MAP_ROOT);
+    await expect(root).toHaveAttribute('data-popup-product', 'tribal');
+    await expect(root.locator('a[href]')).toHaveCount(0);
+    // Nothing around the frame in its popup links either.
+    await expect(page.locator(MAP_ROOT.replace(/ > \[data-popup-frame\]$/, '')).locator('a[href]')).toHaveCount(0);
   });
 });

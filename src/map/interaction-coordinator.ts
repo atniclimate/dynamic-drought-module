@@ -367,6 +367,9 @@ export function initInteractionCoordinator(map: maplibregl.Map): void {
   // console mode would be a second response beside it.
   onViewModeChange((mode) => {
     if (mode === 'brief' && isSheetActive()) dismissResponse();
+    // A Console place click still waiting for the frame would, once in Brief, paint where Brief never shows a
+    // place (the panel-foot card): retire it, as a resize that hands it to the sheet does.
+    if (pendingCommit?.briefRoute()) pendingCommit = null;
   });
   // A mode or horizon switch replaces the drawn surfaces, so an open response
   // (popup or panel foot) would describe what is no longer on the map. A

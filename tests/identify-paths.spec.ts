@@ -18,7 +18,7 @@ import {
 import { serializePopupFrame } from '../src/ui/popup-frame';
 import type { IssuedModel, PopupModel } from '../src/ui/popup-frame';
 import { CENSUS_FIXTURES, type CensusFixture } from './frame-fixtures';
-import { MAP_ROOT, PANEL_ROOT, PLACE_FRAME_FIXTURES, bootPlace, expectPlaceFields } from './frame-fixtures-places';
+import { MAP_ROOT, PLACE_FRAME_FIXTURES, bootPlace, expectPlaceFields } from './frame-fixtures-places';
 
 /**
  * S30D D1 M23: "every identify path" (DDM-P11-T04), as the Codex Tier 2
@@ -698,14 +698,15 @@ test.describe('identify paths: the census', () => {
 
 /**
  * S30D D1 M24: "every place-kind click target yields the frame" (D1.md:424),
- * in BOTH sinks (the Codex Tier 2 review :220, "frame root owns content in
- * map and panel sinks": a missing or empty marker, a lost title
- * announcement, host overflow or detached regions must fail). One test per
- * place builder of tests/frame-fixtures-places.ts (never migratedBuilders():
- * the surfaces have no panel sink). Each part boots offline with the
- * observer installed, so a response is audited as it appears, then the ONE
- * validator (window.__ddmFrameCheck) runs on the displayed root and the
- * builder's named fields are read from it.
+ * in the map popup (the Codex Tier 2 review :220, "frame root owns content":
+ * a missing or empty marker or detached regions must fail). One test per
+ * place builder of tests/frame-fixtures-places.ts. Each boots the Console
+ * offline with the observer installed, so a response is audited as it
+ * appears, then the ONE validator (window.__ddmFrameCheck) runs on the
+ * displayed root and the builder's named fields are read from it. The
+ * panel-foot half retired with the owner's 2026-11-13 ruling: in Brief a
+ * place click opens the place's briefing, so no place response reaches the
+ * panel foot.
  *
  * Red on a94eee5 once the six allowance lines are deleted: the observer
  * reports "map: an unframed response for <layer id>, outside the legacy
@@ -719,9 +720,9 @@ function frameVerdict(selector: string): string | null {
   return check ? check(root, sink) : 'the observer is not installed';
 }
 
-test.describe('identify paths: every place builder yields the frame in both sinks (D1 M24)', () => {
+test.describe('identify paths: every place builder yields the frame in the map popup (D1 M24)', () => {
   for (const fixture of Object.values(PLACE_FRAME_FIXTURES)) {
-    test(`${fixture.id} yields the frame in the map popup and the panel foot`, async ({ page }) => {
+    test(`${fixture.id} yields the frame in the map popup`, async ({ page }) => {
       test.setTimeout(180_000);
       expect(migratedBuilders().map((b) => b.id), `${fixture.id} has left LEGACY_ALLOWANCE`).toContain(fixture.id);
       await holdExternalNetwork(page);
@@ -738,38 +739,12 @@ test.describe('identify paths: every place builder yields the frame in both sink
         expect((await readAudit(page)).violations, `${label}: map audit`).toEqual([]);
         expect(await page.evaluate(frameVerdict, MAP_ROOT), `${label}: map frame check`).toBeNull();
         await expectPlaceFields(page.locator(MAP_ROOT), target.expected, `${label} map`);
-        if (!target.panel) continue;
-
-        // The panel-foot sink (desktop Brief).
-        await bootPlace(page, fixture, target, 'brief');
-        await clickCenterUntilSeen(page, `panel:${target.layerId}`);
-        expect((await readAudit(page)).violations, `${label}: panel audit`).toEqual([]);
-        expect(await page.evaluate(frameVerdict, PANEL_ROOT), `${label}: panel frame check`).toBeNull();
-        const title = await expectPlaceFields(page.locator(PANEL_ROOT), target.expected, `${label} panel`);
-        // The sink's title announcement is built from the frame's title slot
-        // (src/ui/island/panel-response.tsx).
-        await expect(page.locator('#panel-response [aria-live="polite"]')).toHaveText(
-          `Map selection response: ${title}. The response is at the foot of the panel.`
-        );
-        // The host caps the frame: neither the frame nor its content runs past the host.
-        const fit = await page.evaluate((selector) => {
-          const frame = document.querySelector(selector);
-          const host = frame?.parentElement;
-          if (!frame || !host) return null;
-          const f = frame.getBoundingClientRect();
-          const h = host.getBoundingClientRect();
-          return { left: f.left - h.left, right: h.right - f.right, overflow: host.scrollWidth - host.clientWidth };
-        }, PANEL_ROOT);
-        expect(fit, `${label}: the panel host`).not.toBeNull();
-        expect(fit!.left, `${label}: the frame starts outside the host`).toBeGreaterThanOrEqual(-0.5);
-        expect(fit!.right, `${label}: the frame runs past the host`).toBeGreaterThanOrEqual(-0.5);
-        expect(fit!.overflow, `${label}: the host overflows`).toBeLessThanOrEqual(1);
       }
     });
   }
 });
 
-test.describe('identify paths: the observer over both sinks', () => {
+test.describe('identify paths: the observer over the map popup', () => {
   test('the observer passes only framed responses, stamped allowance responses and the adopted external popup', async ({
     page
   }) => {
@@ -799,14 +774,9 @@ test.describe('identify paths: the observer over both sinks', () => {
       await expect.poll(async () => (await readAudit(page)).seen, { timeout: 1500 }).toContain('map:external');
     }).toPass({ timeout: 20_000 });
     expect((await readAudit(page)).violations).toEqual([]);
-
-    // The panel-foot sink: a place-bearing click in the Brief shell.
-    await gotoApp(page, '?region=washington_state&view=brief&layers=bia-reservations');
-    await waitForLayerSettled(page, 'bia-reservations');
-    await clickCenterUntilSeen(page, 'panel:bia-reservations-fill');
-    await expect(page.locator('#panel-response .panel-response-host > .coordinated-response')).toHaveCount(1);
-    const panelAudit = await readAudit(page);
-    expect(panelAudit.violations).toEqual([]);
+    // The panel-foot part retired with the owner's 2026-11-13 ruling: a place
+    // click in the Brief shell opens the place's briefing, so no place response
+    // reaches the panel foot for the observer to pass.
   });
 });
 

@@ -10,8 +10,13 @@
  *   - PLACE_TIER_FIXTURES: the PF3 tier rows per builder (the popup-viewport
  *     spec runs each on a fresh page);
  *   - PLACE_FRAME_FIXTURES: the per-builder boot, click targets and expected
- *     fields, read by the two-sink describe in tests/identify-paths.spec.ts
+ *     fields, read by the map-popup describe in tests/identify-paths.spec.ts
  *     and by tests/place-popups.spec.ts.
+ *
+ * Every place response here is read in the Console's map popup. The Brief
+ * panel-foot sink no longer receives a place (owner, 2026-11-13: a place
+ * click in Brief opens the place's briefing), so its half of each case, and
+ * the long-title host-cap row it carried, retired with it.
  *
  * NO-REDISTRIBUTION GUARD (AGENTS.md rule 1): every geometry below is a
  * hand-authored rectangle or comb over the pinned Washington framing, and
@@ -79,14 +84,11 @@ function treatyComb(properties: Record<string, unknown>): unknown {
   };
 }
 
-/** A title long enough to wrap the head over several lines (the PF3 long-head rows). */
-export const LONG_TITLE_SUFFIX = ' With A Deliberately Long Synthetic Name That Wraps Across Several Lines Of The Head';
-
 /**
  * The longest REALISTIC title for the PF3 no-scroll row (the director's Tier 1
  * test-design call, block 2, 2026-10-05, option 1: the no-scroll row measures
- * each builder with its longest realistic title, and the 107-character
- * LONG_TITLE_SUFFIX title stays only for the host-cap row). 72 characters, above
+ * each builder with its longest realistic title; the 107-character title kept
+ * for the panel-foot host-cap row retired with that row). 72 characters, above
  * the longest Census AIANNH name form, about 61 characters ("... Reservation
  * and Off-Reservation Trust Land"), for BIA, AIANNH, deployer Tribal and
  * Treaty. The state builder's is "District of Columbia" (20), the longest NAME
@@ -145,8 +147,6 @@ export interface PlaceTarget {
   readonly layerId: string;
   /** Run after the boot settles (the ecoregion Level IV switch). */
   readonly afterBoot?: (page: Page) => Promise<void>;
-  /** Whether the panel-foot (brief) half runs for this target. */
-  readonly panel: boolean;
   readonly expected: PlaceExpectation;
 }
 
@@ -156,14 +156,11 @@ export interface PlaceFrameFixture {
   /** The layers= key, and the key the boot waits on. */
   readonly layerKey: string;
   /**
-   * The page routes the builder's data needs, before gotoApp; `long` gives the
-   * place a long title where its data allows; `title` names the place exactly
-   * (the realistic-title no-scroll row) and wins over `long`.
+   * The page routes the builder's data needs, before gotoApp; `title` names
+   * the place exactly (the realistic-title no-scroll row).
    */
-  prepare(page: Page, options?: { readonly long?: boolean; readonly title?: string }): Promise<void>;
+  prepare(page: Page, options?: { readonly title?: string }): Promise<void>;
   readonly targets: readonly [PlaceTarget, ...PlaceTarget[]];
-  /** Whether `prepare({ long: true })` really lengthens the title (false where bundled data names the place). */
-  readonly longTitle: boolean;
   /** The builder's longest realistic title for the PF3 no-scroll row (REALISTIC_LONG_TITLE), absent where the bundled data names the place. */
   readonly realisticTitle?: string;
 }
@@ -194,13 +191,12 @@ export const PLACE_FRAME_FIXTURES: Readonly<Record<string, PlaceFrameFixture>> =
   state: {
     id: 'state',
     layerKey: 'states',
-    longTitle: true,
     realisticTitle: REALISTIC_STATE_TITLE,
     async prepare(page, options) {
       // The bundled Census file names Washington at the centre; the long-head
-      // rows serve one synthetic state rectangle instead.
-      if (options?.long || options?.title !== undefined) {
-        const name = options.title ?? `Synthetic State Fixture${LONG_TITLE_SUFFIX}`;
+      // row serves one synthetic state rectangle instead.
+      if (options?.title !== undefined) {
+        const name = options.title;
         await page.route('**/data/us-states.geojson', (route) =>
           fulfillJson(route, centreBody({ STATEFP: '53', STUSPS: 'WA', NAME: name }, rect(-124.8, 45.5, -116.9, 49.0)))
         );
@@ -209,7 +205,6 @@ export const PLACE_FRAME_FIXTURES: Readonly<Record<string, PlaceFrameFixture>> =
     targets: [
       {
         layerId: 'us-states-fill',
-        panel: true,
         expected: {
           title: 'Washington',
           issuer: 'Boundary from: U.S. Census Bureau (cartographic boundary)',
@@ -224,10 +219,9 @@ export const PLACE_FRAME_FIXTURES: Readonly<Record<string, PlaceFrameFixture>> =
   tribal: {
     id: 'tribal',
     layerKey: 'tribal',
-    longTitle: true,
     realisticTitle: REALISTIC_LONG_TITLE,
     async prepare(page, options) {
-      const name = options?.title ?? `Synthetic Deployer Lands Fixture${options?.long ? LONG_TITLE_SUFFIX : ''}`;
+      const name = options?.title ?? 'Synthetic Deployer Lands Fixture';
       await page.route('**/data/tribal-lands.geojson', (route) =>
         fulfillJson(
           route,
@@ -238,7 +232,6 @@ export const PLACE_FRAME_FIXTURES: Readonly<Record<string, PlaceFrameFixture>> =
     targets: [
       {
         layerId: 'tribal-lands-fill',
-        panel: true,
         expected: {
           title: 'Synthetic Deployer Lands Fixture',
           issuer: 'Supplied by this deployment',
@@ -253,18 +246,17 @@ export const PLACE_FRAME_FIXTURES: Readonly<Record<string, PlaceFrameFixture>> =
   bia: {
     id: 'bia',
     layerKey: 'bia-reservations',
-    longTitle: true,
     realisticTitle: REALISTIC_LONG_TITLE,
     async prepare(page, options) {
       // The suite stub's syntheticBiaBody (tests/tribal-fixtures.ts) serves
-      // the ordinary boot; the long-head rows rename the same rectangle.
-      if (options?.long || options?.title !== undefined) {
+      // the ordinary boot; the long-head row renames the same rectangle.
+      if (options?.title !== undefined) {
         await routeGeojson(
           page,
           BIA_ROUTE,
           centreBody({
             LARID: '99001',
-            LARNAME: options.title ?? `Synthetic Reservation Fixture${LONG_TITLE_SUFFIX}`,
+            LARNAME: options.title,
             CLASSIFICATION: 'Fixture Classification',
             GISACRES: 1000,
             REGION: 'Fixture Region'
@@ -275,7 +267,6 @@ export const PLACE_FRAME_FIXTURES: Readonly<Record<string, PlaceFrameFixture>> =
     targets: [
       {
         layerId: 'bia-reservations-fill',
-        panel: true,
         get expected(): PlaceExpectation {
           return {
             title: 'Synthetic Reservation Fixture',
@@ -292,23 +283,21 @@ export const PLACE_FRAME_FIXTURES: Readonly<Record<string, PlaceFrameFixture>> =
   aiannh: {
     id: 'aiannh',
     layerKey: 'aiannh',
-    longTitle: true,
     realisticTitle: REALISTIC_LONG_TITLE,
     async prepare(page, options) {
       // The suite stub's syntheticAiannhBody puts its D1 legal fixture at the
-      // centre; the long-head rows serve one D1 feature with a long name.
-      if (options?.long || options?.title !== undefined) {
+      // centre; the long-head row serves one D1 feature with a long name.
+      if (options?.title !== undefined) {
         await routeGeojson(
           page,
           AIANNH_ROUTE,
-          centreBody({ NAME: options.title ?? `Synthetic Legal Fixture Area${LONG_TITLE_SUFFIX}`, AIANNHCC: 'D1', AIANNHNS: '90000001' })
+          centreBody({ NAME: options.title, AIANNHCC: 'D1', AIANNHNS: '90000001' })
         );
       }
     },
     targets: [
       {
         layerId: 'aiannh-fill',
-        panel: true,
         expected: {
           title: 'Synthetic Legal Fixture Area',
           issuer: 'Boundary from: U.S. Census Bureau (AIANNH)',
@@ -323,10 +312,9 @@ export const PLACE_FRAME_FIXTURES: Readonly<Record<string, PlaceFrameFixture>> =
   treaty: {
     id: 'treaty',
     layerKey: 'treaty',
-    longTitle: true,
     realisticTitle: REALISTIC_LONG_TITLE,
     async prepare(page, options) {
-      const name = options?.title ?? `Synthetic Treaty Fixture Area${options?.long ? LONG_TITLE_SUFFIX : ''}`;
+      const name = options?.title ?? 'Synthetic Treaty Fixture Area';
       await page.route('**/data/treaty-areas.geojson', (route) =>
         fulfillJson(route, treatyComb({ name, treaty_year: '1800', tribe: 'Synthetic Fixture Tribe' }))
       );
@@ -334,7 +322,6 @@ export const PLACE_FRAME_FIXTURES: Readonly<Record<string, PlaceFrameFixture>> =
     targets: [
       {
         layerId: 'treaty-areas-outline',
-        panel: true,
         expected: {
           title: 'Synthetic Treaty Fixture Area',
           issuer: 'Boundary from: deployer · bundled GeoJSON',
@@ -349,13 +336,11 @@ export const PLACE_FRAME_FIXTURES: Readonly<Record<string, PlaceFrameFixture>> =
   ecoregion: {
     id: 'ecoregion',
     layerKey: 'ecoregions',
-    // The bundled EPA PMTiles names the ecoregion; no long title is possible.
-    longTitle: false,
+    // The bundled EPA PMTiles names the ecoregion; no realistic title is routed.
     async prepare() {},
     targets: [
       {
         layerId: 'ecoregions-l3-fill',
-        panel: true,
         expected: {
           title: null,
           issuer: 'Boundary from: U.S. EPA (Omernik Level III)',
@@ -367,10 +352,9 @@ export const PLACE_FRAME_FIXTURES: Readonly<Record<string, PlaceFrameFixture>> =
       },
       {
         // The Level IV switch lives in the map key's legend section, which the
-        // console shell shows; the panel-foot half runs at Level III only.
+        // console shell shows.
         layerId: 'ecoregions-l4-fill',
         afterBoot: selectEcoregionLevelIV,
-        panel: false,
         expected: {
           title: null,
           issuer: 'Boundary from: U.S. EPA (Omernik Level IV)',
@@ -389,7 +373,6 @@ export const PLACE_FRAME_FIXTURES: Readonly<Record<string, PlaceFrameFixture>> =
 // ---------------------------------------------------------------------------
 
 export const MAP_ROOT = '.maplibregl-popup-content > [data-popup-frame]';
-export const PANEL_ROOT = '#panel-response .panel-response-host > [data-popup-frame]';
 
 /** Boot one target of a fixture in a view, its data routed, settled. */
 export async function bootPlace(
@@ -664,8 +647,9 @@ async function longHeadAndPanel(page: Page, fixture: PlaceFrameFixture): Promise
     // builder's longest REALISTIC title (REALISTIC_LONG_TITLE, 72 characters,
     // above the longest Census AIANNH name form of about 61; the state's
     // "District of Columbia"), the director's Tier 1 test-design call of
-    // 2026-10-05 (option 1); the 107-character long title stays for the
-    // host-cap row below. A later page route wins, so each half routes its own.
+    // 2026-10-05 (option 1). The panel-foot half that followed (the
+    // 107-character title's host-cap row) retired with the owner's 2026-11-13
+    // ruling: a place click in Brief opens the place's briefing, not the foot.
     if (fixture.realisticTitle !== undefined) await fixture.prepare(page, { title: fixture.realisticTitle });
     await bootPlace(page, fixture, target, 'console', { layers: CONDITION_LAYERS });
     const root = await clickCentreUntilFramed(page, MAP_ROOT, target.layerId);
@@ -687,32 +671,6 @@ async function longHeadAndPanel(page: Page, fixture: PlaceFrameFixture): Promise
     const overflowY = await root.locator('[data-popup-region="body"]').evaluate((el) => getComputedStyle(el).overflowY);
     expect(overflowY, `${where}: the body is a scroll region`).toBe('auto');
     await expectBodyTargetsReachable(root, target.expected, `${where}, map popup`);
-
-    // The panel foot: the same frame at the foot of the Brief panel; the
-    // source and the caveat stay reachable there (its head may scroll: the
-    // panel caps it, app.css .panel-response-host). The host-cap row keeps
-    // the 107-character long title.
-    await fixture.prepare(page, { long: true });
-    await bootPlace(page, fixture, target, 'brief', { layers: CONDITION_LAYERS });
-    const panel = await clickCentreUntilFramed(page, PANEL_ROOT, target.layerId);
-    if (fixture.longTitle) await expect(panel.locator('[data-popup-slot="title"]')).toContainText(LONG_TITLE_SUFFIX.trim());
-    // The host caps the frame (PF3 "cap width by the host"), long title included.
-    const fit = await panel.evaluate((frame) => {
-      const host = frame.parentElement;
-      if (!host) return null;
-      const f = frame.getBoundingClientRect();
-      const h = host.getBoundingClientRect();
-      return { left: f.left - h.left, right: h.right - f.right, overflow: host.scrollWidth - host.clientWidth };
-    });
-    expect(fit, `${where}: the panel host`).not.toBeNull();
-    expect(fit!.left, `${where}: the frame starts outside the host`).toBeGreaterThanOrEqual(-0.5);
-    expect(fit!.right, `${where}: the frame runs past the host`).toBeGreaterThanOrEqual(-0.5);
-    expect(fit!.overflow, `${where}: the host overflows`).toBeLessThanOrEqual(1);
-    await expectBodyTargetsReachable(panel, target.expected, `${where}, panel foot`);
-    if ('link' in target.expected.source) {
-      const headSource = panel.locator('[data-popup-region="head"] [data-popup-slot="source"] a[href]');
-      await expect(headSource).toHaveAttribute('href', target.expected.source.link.href);
-    }
   }
 }
 

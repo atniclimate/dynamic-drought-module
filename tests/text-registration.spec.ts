@@ -7,8 +7,10 @@
  *
  * 1. No block of two or more lines and three or more words ends in a
  *    single-word line in the sidebar (Brief and console), both drawers,
- *    both popup sinks and the briefing (WA per DR-109, and the national
- *    default with no place). The 20 builder fixtures join after M26.
+ *    the map popup and the briefing (WA per DR-109, and the national
+ *    default with no place). The 20 builder fixtures join after M26. The
+ *    Brief panel-foot sink no longer receives a place (owner, 2026-11-13: a
+ *    place click in Brief opens the place's briefing), so it is not scanned.
  * 2. No chrome label or seat text overflows its box: scroll size within
  *    client size plus 0.5 px, no engaged ellipsis or clamp, and the text's
  *    rendered rectangle inside its box (codex C3).
@@ -471,7 +473,7 @@ for (const viewport of VIEWPORTS) {
   test.describe(`text registration at ${viewport.width}x${viewport.height} (DDM-P10-T12)`, () => {
     test.use({ viewport });
 
-    test('no block of two or more lines and three or more words ends in a single-word line in the sidebar, the drawers, both popup sinks and the briefing for WA and CONUS', async ({
+    test('no block of two or more lines and three or more words ends in a single-word line in the sidebar, the drawers, the map popup and the briefing for WA and CONUS', async ({
       page
     }) => {
       // Offline and deterministic since found-109, this case's green runs
@@ -531,17 +533,14 @@ for (const viewport of VIEWPORTS) {
         ).toBeGreaterThan(0);
       }
 
-      // Both popup sinks with what exists in this wave: the map popup under
-      // console and the panel foot under Brief (popup-viewport.spec.ts's
-      // fixture path: the WA framing and the reservation fixture fill).
+      // The map popup under console (popup-viewport.spec.ts's fixture path:
+      // the WA framing and the reservation fixture fill). The panel foot under
+      // Brief no longer receives a place (owner, 2026-11-13: a place click in
+      // Brief opens the place's briefing, scanned below).
       await gotoApp(page, '?region=washington_state&view=console&layers=bia-reservations');
       await waitForLayerSettled(page, 'bia-reservations');
       await openPlaceResponse(page, '.maplibregl-popup-content');
       await scan('console popup', ['.maplibregl-popup-content']);
-      await gotoApp(page, '?region=washington_state&view=brief&layers=bia-reservations');
-      await waitForLayerSettled(page, 'bia-reservations');
-      await openPlaceResponse(page, '#panel-response .coordinated-response');
-      await scan('brief panel foot', ['#panel-response']);
 
       // The briefing for WA (DR-109).
       await gotoApp(page, '?view=brief&layers=places&select=state:WA&region=washington_state');

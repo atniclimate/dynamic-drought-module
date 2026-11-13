@@ -1446,77 +1446,47 @@ test.describe('the tablet band sidebar is fluid, not a 340px constant', () => {
 });
 
 /**
- * The Brief panel response never trades its caveat away for its head (Codex
- * adversarial review 2026-09-10, finding 4).
+ * A place tap on a short coarse-pointer desktop in Brief opens the place's
+ * briefing (owner, 2026-11-13: "clicking on a place should open the impact
+ * briefing drawer").
  *
- * The exact viewport the review named: 1280x600 with a coarse pointer, where
- * the card is 34vh (about 204px) and the 44px close-control row plus padding
- * leave roughly 113px for the whole response. The head grew on 2026-09-10 (an
- * agency line and a conditions block that can run to several rows joined the
- * title and the briefing door) while the head was non-shrinking and the body
- * could shrink to zero, so the body lost. The body is where the
- * representation caveat and the source links live, and D-0.7.0-072 requires
- * that caveat to scroll rather than be truncated. This pins the outcome, not
- * the mechanism: whatever the layout does, the body keeps a real reading
- * window and everything in the head stays reachable.
+ * This viewport (1280x600 with a coarse pointer) is the one the Codex
+ * adversarial review of 2026-09-10 (finding 4) named for the panel-foot card,
+ * whose frozen head could collapse the body that carried the caveat and the
+ * source links. A place response no longer reaches that card: in Brief the
+ * briefing is the answer at every width, so the card's geometry is no longer
+ * a place path, and the case now pins the route at the same viewport, where a
+ * touch-capable desktop is still not the phone's sheet.
  */
-test.describe('short desktop coarse-pointer Brief response', () => {
+test.describe('short desktop coarse-pointer Brief place tap', () => {
   test.use({
     viewport: { width: 1280, height: 600 },
     hasTouch: true
   });
 
-  test('the frozen head never collapses the body that carries the caveat and the source links', async ({
+  test('a place tap opens the briefing, never the panel-foot card or a popup', async ({
     page
   }) => {
-    await gotoApp(page, '?view=brief&layers=states');
+    // The Washington framing puts Washington under the map's centre (DR-109).
+    await gotoApp(page, '?view=brief&region=washington_state&layers=states');
     expect(
       await page.evaluate(() => window.matchMedia('(pointer: coarse)').matches)
     ).toBe(true);
+    // The desktop shell, not the phone's sheet.
+    await expect(page.locator('#app')).not.toHaveAttribute('data-sheet-detent');
 
-    // The sidebar response, not the Console MapLibre popup: this is the path
-    // the finding is about, and the two have different geometry.
-    const map = page.locator('#map');
-    const box = await map.boundingBox();
+    const box = await page.locator('#map').boundingBox();
     if (!box) throw new Error('map container has no box');
-    const card = page.locator('.panel-response-card');
-    const body = card.locator('.coordinated-response-body');
+    const panel = page.locator('#impact-panel');
     await expect(async () => {
       await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
-      await expect(card).toBeVisible({ timeout: 1500 });
-      await expect(body).toBeVisible({ timeout: 1500 });
+      await expect(panel).toBeVisible({ timeout: 1500 });
     }).toPass({ timeout: 20_000 });
 
-    const head = card.locator('.coordinated-response-head');
-    const headBox = await head.boundingBox();
-    const bodyBox = await body.boundingBox();
-    if (!headBox || !bodyBox) throw new Error('response head and body must both lay out');
-
-    // The defect, stated as a measurement: a body of zero (or near-zero)
-    // height has no usable scroll window, and its content is unreachable.
-    expect(bodyBox.height).toBeGreaterThan(24);
-
-    // And the head is bounded rather than unbounded, so it cannot win that
-    // space back by growing. Both halves stay inside the card.
-    const cardBox = await card.boundingBox();
-    if (!cardBox) throw new Error('response card must lay out');
-    expect(headBox.height).toBeLessThanOrEqual(cardBox.height);
-    expect(headBox.height + bodyBox.height).toBeLessThanOrEqual(cardBox.height + 2);
-
-    // Nothing in the head is lost to the bound: if it does not fit, it
-    // scrolls, which is what keeps the briefing door and the conditions rows
-    // reachable at this viewport.
-    const headReachable = await head.evaluate(
-      (el) => el.scrollHeight <= el.clientHeight || el.scrollHeight > 0
-    );
-    expect(headReachable).toBe(true);
-
-    // The body's own content is scrollable rather than clipped, which is the
-    // D-0.7.0-072 contract for the representation caveat.
-    const bodyScrolls = await body.evaluate(
-      (el) => getComputedStyle(el).overflowY
-    );
-    expect(bodyScrolls).toBe('auto');
+    await expect(page.locator('#impact-panel-title')).toHaveText('Washington');
+    await expect(page.locator('.maplibregl-popup')).toHaveCount(0);
+    await expect(page.locator('#panel-response .coordinated-response')).toHaveCount(0);
+    await expect(page.locator('[data-ddm-impact-trigger]')).toHaveCount(0);
   });
 });
 

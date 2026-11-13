@@ -86,6 +86,37 @@ async function clickCenterUntilPrimary(
   }).toPass({ timeout: 20_000 });
 }
 
+/** A synthetic SPC Day 1 polygon covering the whole fixture area. */
+async function routeSpcBlanket(page: Page): Promise<void> {
+  await page.route('**/SPC_firewx/MapServer/**', (route) =>
+    route.fulfill({
+      contentType: 'application/geo+json',
+      body: JSON.stringify({
+        type: 'FeatureCollection',
+        features: [
+          {
+            type: 'Feature',
+            id: 1,
+            properties: { dn: 5, valid: '202607171200', expire: '209912312359' },
+            geometry: {
+              type: 'Polygon',
+              coordinates: [
+                [
+                  [-124.5, 45.6],
+                  [-117.0, 45.6],
+                  [-117.0, 48.9],
+                  [-124.5, 48.9],
+                  [-124.5, 45.6]
+                ]
+              ]
+            }
+          }
+        ]
+      })
+    })
+  );
+}
+
 /** Boot with both live Tribal layers settled over the collision fixtures. */
 async function bootCollision(page: Page): Promise<void> {
   // The layers= order deliberately activates aiannh FIRST: under the old
@@ -323,34 +354,7 @@ test.describe('InteractionCoordinator: one click, one response', () => {
   test('a broad surface never blankets a boundary: SPC ranks as a condition surface', async ({
     page
   }) => {
-    // A synthetic Day 1 polygon covering the whole fixture area.
-    await page.route('**/SPC_firewx/MapServer/**', (route) =>
-      route.fulfill({
-        contentType: 'application/geo+json',
-        body: JSON.stringify({
-          type: 'FeatureCollection',
-          features: [
-            {
-              type: 'Feature',
-              id: 1,
-              properties: { dn: 5, valid: '202607171200', expire: '209912312359' },
-              geometry: {
-                type: 'Polygon',
-                coordinates: [
-                  [
-                    [-124.5, 45.6],
-                    [-117.0, 45.6],
-                    [-117.0, 48.9],
-                    [-124.5, 48.9],
-                    [-124.5, 45.6]
-                  ]
-                ]
-              }
-            }
-          ]
-        })
-      })
-    );
+    await routeSpcBlanket(page);
     await gotoApp(page, '?region=washington_state&view=console&layers=aiannh,bia-reservations,spc-fire-weather');
     // Settle ALL THREE hit layers before the click: the disclosure-count
     // assertion needs every fixture rendered, and under full-suite load a
@@ -451,28 +455,24 @@ test.describe('InteractionCoordinator: one click, one response', () => {
   });
 
   test('entering a studio dismisses the open response', async ({ page }) => {
-    await gotoApp(page, '?region=washington_state&view=brief&layers=aiannh,bia-reservations');
-    await waitForLayerSettled(page, 'bia-reservations');
-    // S4: in desktop Brief the place-bearing response rehosts at the
-    // panel foot (the coordinator's swappable sink); the dismissal seam
-    // under test is the same coordinator seam, whichever surface holds
-    // the response.
-    const box = await page.locator('#map').boundingBox();
-    if (!box) throw new Error('map container has no box');
-    const foot = page.locator('#panel-response .coordinated-response');
-    await expect(async () => {
-      await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
-      await expect(foot).toBeVisible({ timeout: 1500 });
-    }).toPass({ timeout: 20_000 });
-    await expect(page.locator('.maplibregl-popup')).toHaveCount(0);
+    // The studio doors stand in the desktop Brief shell, where a place click
+    // opens its briefing (owner, 2026-11-13) and no response is held; a
+    // non-place response still opens the coordinator's map popup there, so
+    // the case opens one on the SPC surface. The dismissal seam under test
+    // is the same coordinator seam, whatever the response answers on.
+    await routeSpcBlanket(page);
+    await gotoApp(page, '?region=washington_state&view=brief&layers=spc-fire-weather');
+    await waitForLayerSettled(page, 'spc-fire-weather');
+    await clickCenterForResponse(page);
+    await expect(page.locator('.maplibregl-popup')).toHaveCount(1);
 
     // The PLACE studio is a left-side route on desktop: without the
     // dismissal seam the response would stay painted beside the studio
     // (adversarial finding 5).
     await page.locator('#place-studio-entry').click();
     await expect(page).toHaveURL(/studio=place/);
-    await expect(foot).toHaveCount(0);
     await expect(page.locator('.maplibregl-popup')).toHaveCount(0);
+    await expect(page.locator('#panel-response .coordinated-response')).toHaveCount(0);
   });
 });
 
