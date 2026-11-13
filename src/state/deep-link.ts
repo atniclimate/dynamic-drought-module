@@ -102,13 +102,15 @@ export function briefingCameraPadding(panelWillOpen: boolean): maplibregl.Paddin
     };
   }
   // The drawer is clamp(440px, 38vw, 880px) wide (--impact-panel-w, app.css; tests/map-chrome-contract.test.mjs
-  // pins the two together): the pad is its width plus the usual 40 px margin, so a framed place ends clear of it.
+  // pins the two together) and sits left of the map-button column (MAP_COLUMN_CLEAR, the drawer's `right` in
+  // app.css): the pad is both plus the usual 40 px margin, so a framed place ends clear of the drawer.
   const drawer = Math.min(Math.max(440, Math.round(window.innerWidth * 0.38)), 880);
+  const MAP_COLUMN_CLEAR = window.innerWidth <= 1024 ? 24 + 44 : 120;
   return {
     top: 40,
     left: 40,
     bottom: 40,
-    right: panelWillOpen ? Math.min(drawer + 40, Math.round(window.innerWidth * 0.5)) : 40
+    right: panelWillOpen ? Math.min(drawer + MAP_COLUMN_CLEAR + 40, Math.round(window.innerWidth * 0.5)) : 40
   };
 }
 

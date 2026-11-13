@@ -4653,85 +4653,36 @@ button.telemetry-item {
   text-align: left;
 }
 
-/* The open briefing leaves the map's buttons usable (owner, 2026-11-13: a
-   State or city pick opens the drawer, and #reset-btn sat under it). While the
-   desktop or tablet drawer is open, the Reset, SAT, Help and Share column
-   follows its width, one gap left of its edge, and the Key chip is held to
-   the room left of it so its disclosure chevron never sits under the drawer.
-   The column moves by `translate`, never `right`, so the slide runs on the
-   compositor with the shared motion tokens and the grid is not re-laid-out;
-   --impact-panel-w is the token the drawer and the dock read, so none of the
-   three can drift. Phones (the sheet-hosted panel) and embeds are outside
-   this block. Below 1240px the drawer and the 288px chip leave no room for
-   the column beside the chip (container less drawer less column is under the
-   chip's 300px), so the column also drops one cell height under the chip
-   instead of overlapping it; from 1240px up it stays in its row. This block
-   sits after the column rules so the contract test that reads the first
-   .map-overlay-controls rule still finds the column's own. */
+/* The open briefing leaves the map's buttons usable AND in their seats (owner,
+   2026-11-13: a State or city pick opens the drawer, and #reset-btn sat under
+   it; DR-102: the desktop keeps its controls in fixed places, pinned by
+   tests/map-chrome-seats.spec.ts). On desktop and tablet the drawer's right
+   edge sits one gap left of the Reset, SAT, Help and Share column, so the
+   column never moves and is never under the drawer, and the Key chip is held
+   to the room left of the drawer so its disclosure chevron stays clear.
+   The drawer is appended to <body>, outside .app-shell, so the column tokens
+   (--chrome-inset 12px, --map-cell-w, the 12px gap) do not reach it: its
+   inset repeats them, 12 + 96 + 12 on desktop and 12 + --touch-target + 12 in
+   the tablet band, and src/state/deep-link.ts adds the same clearance to the
+   camera pad (MAP_COLUMN_CLEAR). Phones (the sheet-hosted panel) and embeds
+   are outside this block. */
 @media (min-width: 721px) {
-  /* The slots move, never the column: a transform on the column would make it
-     the containing block of the fixed Test preview badge and carry the badge
-     off its seat beside the scale bar. */
-  .app-shell:not(.embed) .map-overlay-controls > :is([data-map-slot], .studio-linkout-pair) {
-    transition: translate var(--dur-base) var(--ease-standard);
-  }
   body:has(.impact-panel.open:not(.sheet-hosted)) .app-shell:not(.embed) {
-    --briefing-clear: calc(var(--impact-panel-w) + var(--impact-panel-gap));
+    --briefing-clear: calc(
+      var(--impact-panel-w) + 2 * var(--impact-panel-gap) + var(--chrome-inset) + var(--map-cell-w)
+    );
     --briefing-chip-left: 12px;
   }
   body:has(.impact-panel.open:not(.sheet-hosted)) .app-shell.sidebar-collapsed:not(.embed) {
     --briefing-chip-left: 60px;
   }
-  body:has(.impact-panel.open:not(.sheet-hosted)) .app-shell:not(.embed) .map-overlay-controls > :is([data-map-slot], .studio-linkout-pair) {
-    translate: calc(-1 * var(--briefing-clear)) 0;
-  }
   body:has(.impact-panel.open:not(.sheet-hosted)) .app-shell:not(.embed) #map-condition-indicator {
     max-width: calc(100% - var(--briefing-clear) - var(--briefing-chip-left));
-  }
-  /* The Help drawer opens left of the column, so it takes the shift too. */
-  body:has(.impact-panel.open:not(.sheet-hosted)) .app-shell:not(.embed) .map-overlay-controls .map-info-panel:not([hidden]) {
-    width: min(
-      var(--info-drawer-w),
-      max(
-        240px,
-        calc(
-          100vw - var(--sidebar-w) - 2 * var(--chrome-inset) - var(--map-cell-w) - 8px -
-            var(--briefing-clear)
-        )
-      )
-    );
-  }
-  body:has(.impact-panel.open:not(.sheet-hosted)) .app-shell.sidebar-collapsed:not(.embed) .map-overlay-controls .map-info-panel:not([hidden]) {
-    width: min(
-      var(--info-drawer-w),
-      max(
-        240px,
-        calc(100vw - 2 * var(--chrome-inset) - var(--map-cell-w) - 8px - var(--briefing-clear))
-      )
-    );
   }
 }
 @media (min-width: 721px) and (pointer: coarse) {
   body:has(.impact-panel.open:not(.sheet-hosted)) .app-shell.sidebar-collapsed:not(.embed) {
     --briefing-chip-left: 64px;
-  }
-}
-@media (min-width: 721px) and (max-width: 1239px) {
-  body:has(.impact-panel.open:not(.sheet-hosted)) .app-shell:not(.embed) .map-overlay-controls > :is([data-map-slot], .studio-linkout-pair) {
-    translate: calc(-1 * var(--briefing-clear)) calc(var(--map-cell-h) + var(--map-cell-gap));
-  }
-  /* An open Key hangs down from the chip over the spot the dropped column
-     takes, so the column drops below the Key's tallest height instead
-     (the Key's own cap, hazard-indicators.css, is min(55vh, 420px)). */
-  body:has(.impact-panel.open:not(.sheet-hosted)):has(#map-key[data-key-details-open='true']) .app-shell:not(.embed) .map-overlay-controls > :is([data-map-slot], .studio-linkout-pair) {
-    translate:
-      calc(-1 * var(--briefing-clear))
-      calc(2 * (var(--map-cell-h) + var(--map-cell-gap)) + min(55vh, 420px));
-  }
-}
-@media (min-width: 721px) and (prefers-reduced-motion: reduce) {
-  .app-shell:not(.embed) .map-overlay-controls > :is([data-map-slot], .studio-linkout-pair) {
-    transition: none;
   }
 }
 
@@ -4756,6 +4707,7 @@ button.telemetry-item {
   flex-direction: column;
   background: var(--bg-1);
   border-left: 1px solid var(--line-strong);
+  border-right-color: var(--line-strong);
   box-shadow: -10px 0 32px rgba(0, 0, 0, 0.55);
   transform: translateX(100%);
   transition: transform 0.25s ease;
@@ -4788,12 +4740,30 @@ button.telemetry-item {
       --fg-3: var(--ink-soft);
       background: var(--glass-read);
       border-left-color: var(--keyline);
+      border-right-color: var(--keyline);
       -webkit-backdrop-filter: blur(var(--rich-black-blur));
       backdrop-filter: blur(var(--rich-black-blur));
     }
     .impact-panel:not(.sheet-hosted) .impact-panel-header a[href] {
       color: var(--ink);
     }
+  }
+}
+
+/* The drawer's inset left of the map-button column (the block above the
+   briefing panel explains it). After the glass rule so the first
+   `.impact-panel:not(.sheet-hosted)` rule a contract test reads stays the
+   glass one. */
+@media (min-width: 721px) {
+  body:has(.app-shell:not(.embed)) .impact-panel:not(.sheet-hosted) {
+    right: 120px;
+    border-right-style: solid;
+    border-right-width: 1px;
+  }
+}
+@media (min-width: 721px) and (max-width: 1024px) {
+  body:has(.app-shell:not(.embed)) .impact-panel:not(.sheet-hosted) {
+    right: calc(24px + var(--touch-target));
   }
 }
 
