@@ -3,13 +3,13 @@
   "meta": {
     "rosterSource": "Federal Register 2026-01899 (2026-01-30)",
     "landAreaSource": "BIA AIAN-LAR FeatureServer (distinct LARNAME)",
-    "matcher": "LAR areas, safe-match v2 (D-0.7.0-026): unique whole-phrase containment, state-constrained, distinctive-token guard; plus the maintainer-curated known-ambiguous gate (D-0.7.0-026a)",
+    "matcher": "LAR areas, safe-match v2 (D-0.7.0-026): unique whole-phrase containment, state-constrained, distinctive-token guard; plus the maintainer-curated known-ambiguous gate (D-0.7.0-026a); then rule 10: a remaining BIA label takes the Nations of its one same-name Census reservation",
     "censusMatcher": "Census areas (rule 7): maintainer-curated known-ambiguous gate (D-0.7.0-026a) first; then unique whole-phrase containment of BASENAME outside the roster name parentheses, or equality with a parenthetical, distinctive-token guard; several candidates resolve only when exactly one carries BASENAME as its parenthetical; no state constraint",
     "generated": "2026-11-13",
     "rosterCount": 573,
     "landAreaCount": 335,
-    "safeMatchCount": 258,
-    "larLabelCount": 77,
+    "safeMatchCount": 289,
+    "larLabelCount": 46,
     "censusSource": "US Census Bureau TIGERweb AIANNH layer 47 (names only)",
     "censusAreaCount": 272,
     "censusSafeMatchCount": 232,
@@ -28,13 +28,13 @@
       "provenance": "safe-match"
     },
     {
-      "larName": "Alabama and Coushatta",
-      "displayName": "Alabama and Coushatta",
-      "provenance": "lar-label"
+      "larName": "Maricopa (Ak-Chin)",
+      "displayName": "Ak-Chin Indian Community",
+      "provenance": "safe-match"
     },
     {
-      "larName": "Allegany",
-      "displayName": "Allegany",
+      "larName": "Alabama and Coushatta",
+      "displayName": "Alabama and Coushatta",
       "provenance": "lar-label"
     },
     {
@@ -71,11 +71,6 @@
       "larName": "Berry Creek",
       "displayName": "Berry Creek Rancheria of Maidu Indians of California",
       "provenance": "safe-match"
-    },
-    {
-      "larName": "Big Cypress",
-      "displayName": "Big Cypress",
-      "provenance": "lar-label"
     },
     {
       "larName": "Big Lagoon",
@@ -138,11 +133,6 @@
       "provenance": "safe-match"
     },
     {
-      "larName": "Brighton",
-      "displayName": "Brighton",
-      "provenance": "lar-label"
-    },
-    {
       "larName": "Buena Vista",
       "displayName": "Buena Vista Rancheria of Me-Wuk Indians of California",
       "provenance": "safe-match"
@@ -169,8 +159,8 @@
     },
     {
       "larName": "Cahuilla",
-      "displayName": "Cahuilla",
-      "provenance": "lar-label"
+      "displayName": "Cahuilla Band of Indians",
+      "provenance": "safe-match"
     },
     {
       "larName": "Campo",
@@ -198,11 +188,6 @@
       "provenance": "safe-match"
     },
     {
-      "larName": "Cattaraugus",
-      "displayName": "Cattaraugus",
-      "provenance": "lar-label"
-    },
-    {
       "larName": "Cedar City",
       "displayName": "Cedar City",
       "provenance": "lar-label"
@@ -211,11 +196,6 @@
       "larName": "Cedarville",
       "displayName": "Cedarville Rancheria, California",
       "provenance": "safe-match"
-    },
-    {
-      "larName": "Celilo",
-      "displayName": "Celilo",
-      "provenance": "lar-label"
     },
     {
       "larName": "Chemehuevi",
@@ -283,6 +263,11 @@
       "provenance": "safe-match"
     },
     {
+      "larName": "Celilo",
+      "displayName": "Confederated Tribes and Bands of the Yakama Nation; Confederated Tribes of the Umatilla Indian Reservation; Confederated Tribes of the Warm Springs Reservation of Oregon",
+      "provenance": "safe-match"
+    },
+    {
       "larName": "Siletz",
       "displayName": "Confederated Tribes of Siletz Indians of Oregon",
       "provenance": "safe-match"
@@ -298,6 +283,11 @@
       "provenance": "safe-match"
     },
     {
+      "larName": "Goshute",
+      "displayName": "Confederated Tribes of the Goshute Reservation, Nevada and Utah",
+      "provenance": "safe-match"
+    },
+    {
       "larName": "Grand Ronde",
       "displayName": "Confederated Tribes of the Grand Ronde Community of Oregon",
       "provenance": "safe-match"
@@ -305,6 +295,11 @@
     {
       "larName": "Umatilla",
       "displayName": "Confederated Tribes of the Umatilla Indian Reservation",
+      "provenance": "safe-match"
+    },
+    {
+      "larName": "Warm Springs",
+      "displayName": "Confederated Tribes of the Warm Springs Reservation of Oregon",
       "provenance": "safe-match"
     },
     {
@@ -319,8 +314,8 @@
     },
     {
       "larName": "Coushatta",
-      "displayName": "Coushatta",
-      "provenance": "lar-label"
+      "displayName": "Coushatta Tribe of Louisiana",
+      "provenance": "safe-match"
     },
     {
       "larName": "Cow Creek",
@@ -338,13 +333,13 @@
       "provenance": "safe-match"
     },
     {
-      "larName": "Crow",
-      "displayName": "Crow",
-      "provenance": "lar-label"
-    },
-    {
       "larName": "Crow Creek",
       "displayName": "Crow Creek Sioux Tribe of the Crow Creek Reservation, South Dakota",
+      "provenance": "safe-match"
+    },
+    {
+      "larName": "Crow",
+      "displayName": "Crow Tribe of Montana",
       "provenance": "safe-match"
     },
     {
@@ -360,6 +355,11 @@
     {
       "larName": "Duckwater",
       "displayName": "Duckwater Shoshone Tribe (previously listed as Duckwater Shoshone Tribe of the Duckwater Reservation, Nevada)",
+      "provenance": "safe-match"
+    },
+    {
+      "larName": "Wind River",
+      "displayName": "Eastern Shoshone Tribe of the Wind River Reservation, Wyoming; Northern Arapaho Tribe of the Wind River Reservation, Wyoming",
       "provenance": "safe-match"
     },
     {
@@ -428,11 +428,6 @@
       "provenance": "safe-match"
     },
     {
-      "larName": "Fort Pierce",
-      "displayName": "Fort Pierce",
-      "provenance": "lar-label"
-    },
-    {
       "larName": "Fort Sill Arizona",
       "displayName": "Fort Sill Arizona",
       "provenance": "lar-label"
@@ -451,11 +446,6 @@
       "larName": "Gila River",
       "displayName": "Gila River Indian Community of the Gila River Indian Reservation, Arizona",
       "provenance": "safe-match"
-    },
-    {
-      "larName": "Goshute",
-      "displayName": "Goshute",
-      "provenance": "lar-label"
     },
     {
       "larName": "Grand Traverse",
@@ -533,19 +523,9 @@
       "provenance": "safe-match"
     },
     {
-      "larName": "Huron Potawatomi",
-      "displayName": "Huron Potawatomi",
-      "provenance": "lar-label"
-    },
-    {
       "larName": "Santa Ysabel",
       "displayName": "Iipay Nation of Santa Ysabel, California",
       "provenance": "safe-match"
-    },
-    {
-      "larName": "Immokalee",
-      "displayName": "Immokalee",
-      "provenance": "lar-label"
     },
     {
       "larName": "Inaja and Cosmit",
@@ -555,11 +535,6 @@
     {
       "larName": "Iowa",
       "displayName": "Iowa",
-      "provenance": "lar-label"
-    },
-    {
-      "larName": "Isabella",
-      "displayName": "Isabella",
       "provenance": "lar-label"
     },
     {
@@ -608,6 +583,11 @@
       "provenance": "safe-match"
     },
     {
+      "larName": "L'Anse",
+      "displayName": "Keweenaw Bay Indian Community, Michigan",
+      "provenance": "safe-match"
+    },
+    {
       "larName": "Kickapoo Traditional (Texas)",
       "displayName": "Kickapoo Traditional Tribe of Texas",
       "provenance": "safe-match"
@@ -624,13 +604,8 @@
     },
     {
       "larName": "Kootenai",
-      "displayName": "Kootenai",
-      "provenance": "lar-label"
-    },
-    {
-      "larName": "L'Anse",
-      "displayName": "L'Anse",
-      "provenance": "lar-label"
+      "displayName": "Kootenai Tribe of Idaho",
+      "provenance": "safe-match"
     },
     {
       "larName": "L'Anse Ontonagon",
@@ -674,8 +649,8 @@
     },
     {
       "larName": "Little River",
-      "displayName": "Little River",
-      "provenance": "lar-label"
+      "displayName": "Little River Band of Ottawa Indians, Michigan",
+      "provenance": "safe-match"
     },
     {
       "larName": "Little Traverse Bay",
@@ -729,18 +704,13 @@
     },
     {
       "larName": "Manchester Point Arena",
-      "displayName": "Manchester Point Arena",
-      "provenance": "lar-label"
+      "displayName": "Manchester Band of Pomo Indians of the Manchester Rancheria, California",
+      "provenance": "safe-match"
     },
     {
       "larName": "Manzanita",
       "displayName": "Manzanita Band of Diegueno Mission Indians of the Manzanita Reservation, California",
       "provenance": "safe-match"
-    },
-    {
-      "larName": "Maricopa (Ak-Chin)",
-      "displayName": "Maricopa (Ak-Chin)",
-      "provenance": "lar-label"
     },
     {
       "larName": "Mashnantucket Pequot",
@@ -903,14 +873,19 @@
       "provenance": "lar-label"
     },
     {
+      "larName": "Huron Potawatomi",
+      "displayName": "Nottawaseppi Huron Band of the Potawatomi, Michigan",
+      "provenance": "safe-match"
+    },
+    {
       "larName": "Odgers Ranch",
       "displayName": "Odgers Ranch",
       "provenance": "lar-label"
     },
     {
-      "larName": "Oil Springs",
-      "displayName": "Oil Springs",
-      "provenance": "lar-label"
+      "larName": "Pine Ridge",
+      "displayName": "Oglala Sioux Tribe",
+      "provenance": "safe-match"
     },
     {
       "larName": "Omaha",
@@ -979,8 +954,8 @@
     },
     {
       "larName": "Pauma and Yuima",
-      "displayName": "Pauma and Yuima",
-      "provenance": "lar-label"
+      "displayName": "Pauma Band of Luiseno Mission Indians of the Pauma & Yuima Reservation, California",
+      "provenance": "safe-match"
     },
     {
       "larName": "Pechanga",
@@ -996,11 +971,6 @@
       "larName": "Picayune",
       "displayName": "Picayune Rancheria of Chukchansi Indians of California",
       "provenance": "safe-match"
-    },
-    {
-      "larName": "Pine Ridge",
-      "displayName": "Pine Ridge",
-      "provenance": "lar-label"
     },
     {
       "larName": "Pinoleville",
@@ -1039,8 +1009,8 @@
     },
     {
       "larName": "Poarch Creek",
-      "displayName": "Poarch Creek",
-      "provenance": "lar-label"
+      "displayName": "Poarch Band of Creek Indians",
+      "provenance": "safe-match"
     },
     {
       "larName": "Pokagon of Potawatomi",
@@ -1248,6 +1218,16 @@
       "provenance": "lar-label"
     },
     {
+      "larName": "Isabella",
+      "displayName": "Saginaw Chippewa Indian Tribe of Michigan",
+      "provenance": "safe-match"
+    },
+    {
+      "larName": "St. Regis Mohawk",
+      "displayName": "Saint Regis Mohawk Tribe",
+      "provenance": "safe-match"
+    },
+    {
       "larName": "Salt River",
       "displayName": "Salt River Pima-Maricopa Indian Community of the Salt River Reservation, Arizona",
       "provenance": "safe-match"
@@ -1289,8 +1269,8 @@
     },
     {
       "larName": "Santee",
-      "displayName": "Santee",
-      "provenance": "lar-label"
+      "displayName": "Santee Sioux Nation, Nebraska",
+      "provenance": "safe-match"
     },
     {
       "larName": "Santo Domingo",
@@ -1313,9 +1293,49 @@
       "provenance": "safe-match"
     },
     {
+      "larName": "Big Cypress",
+      "displayName": "Seminole Tribe of Florida",
+      "provenance": "safe-match"
+    },
+    {
+      "larName": "Brighton",
+      "displayName": "Seminole Tribe of Florida",
+      "provenance": "safe-match"
+    },
+    {
+      "larName": "Fort Pierce",
+      "displayName": "Seminole Tribe of Florida",
+      "provenance": "safe-match"
+    },
+    {
+      "larName": "Immokalee",
+      "displayName": "Seminole Tribe of Florida",
+      "provenance": "safe-match"
+    },
+    {
+      "larName": "Tampa",
+      "displayName": "Seminole Tribe of Florida",
+      "provenance": "safe-match"
+    },
+    {
       "larName": "Seneca",
       "displayName": "Seneca",
       "provenance": "lar-label"
+    },
+    {
+      "larName": "Allegany",
+      "displayName": "Seneca Nation of Indians",
+      "provenance": "safe-match"
+    },
+    {
+      "larName": "Cattaraugus",
+      "displayName": "Seneca Nation of Indians",
+      "provenance": "safe-match"
+    },
+    {
+      "larName": "Oil Springs",
+      "displayName": "Seneca Nation of Indians",
+      "provenance": "safe-match"
     },
     {
       "larName": "Shakopee",
@@ -1368,11 +1388,6 @@
       "provenance": "safe-match"
     },
     {
-      "larName": "Smith River",
-      "displayName": "Smith River",
-      "provenance": "lar-label"
-    },
-    {
       "larName": "Soboba",
       "displayName": "Soboba Band of Luiseno Indians, California",
       "provenance": "safe-match"
@@ -1396,11 +1411,6 @@
       "larName": "St. Croix",
       "displayName": "St. Croix Chippewa Indians of Wisconsin",
       "provenance": "safe-match"
-    },
-    {
-      "larName": "St. Regis Mohawk",
-      "displayName": "St. Regis Mohawk",
-      "provenance": "lar-label"
     },
     {
       "larName": "Standing Rock",
@@ -1443,19 +1453,9 @@
       "provenance": "safe-match"
     },
     {
-      "larName": "Table Bluff",
-      "displayName": "Table Bluff",
-      "provenance": "lar-label"
-    },
-    {
       "larName": "Table Mountain",
       "displayName": "Table Mountain Rancheria",
       "provenance": "safe-match"
-    },
-    {
-      "larName": "Tampa",
-      "displayName": "Tampa",
-      "provenance": "lar-label"
     },
     {
       "larName": "Battle Mountain",
@@ -1495,6 +1495,11 @@
     {
       "larName": "Tohono O'odham",
       "displayName": "Tohono O'odham Nation of Arizona",
+      "provenance": "safe-match"
+    },
+    {
+      "larName": "Smith River",
+      "displayName": "Tolowa Dee-ni' Nation",
       "provenance": "safe-match"
     },
     {
@@ -1548,11 +1553,6 @@
       "provenance": "safe-match"
     },
     {
-      "larName": "Uintah and Ouray",
-      "displayName": "Uintah and Ouray",
-      "provenance": "lar-label"
-    },
-    {
       "larName": "Auburn",
       "displayName": "United Auburn Indian Community of the Auburn Rancheria of California",
       "provenance": "safe-match"
@@ -1565,6 +1565,11 @@
     {
       "larName": "Upper Skagit",
       "displayName": "Upper Skagit Indian Tribe",
+      "provenance": "safe-match"
+    },
+    {
+      "larName": "Uintah and Ouray",
+      "displayName": "Ute Indian Tribe of the Uintah & Ouray Reservation, Utah",
       "provenance": "safe-match"
     },
     {
@@ -1586,11 +1591,6 @@
       "larName": "Aquinnah",
       "displayName": "Wampanoag Tribe of Gay Head (Aquinnah)",
       "provenance": "safe-match"
-    },
-    {
-      "larName": "Warm Springs",
-      "displayName": "Warm Springs",
-      "provenance": "lar-label"
     },
     {
       "larName": "Carson",
@@ -1628,11 +1628,6 @@
       "provenance": "safe-match"
     },
     {
-      "larName": "Wind River",
-      "displayName": "Wind River",
-      "provenance": "lar-label"
-    },
-    {
       "larName": "Winnebago",
       "displayName": "Winnebago Tribe of Nebraska",
       "provenance": "safe-match"
@@ -1640,6 +1635,11 @@
     {
       "larName": "Winnemucca",
       "displayName": "Winnemucca Indian Colony of Nevada",
+      "provenance": "safe-match"
+    },
+    {
+      "larName": "Table Bluff",
+      "displayName": "Wiyot Tribe, California",
       "provenance": "safe-match"
     },
     {
@@ -1684,8 +1684,8 @@
     },
     {
       "larName": "Yurok",
-      "displayName": "Yurok",
-      "provenance": "lar-label"
+      "displayName": "Yurok Tribe of the Yurok Reservation, California",
+      "provenance": "safe-match"
     },
     {
       "larName": "Zuni",

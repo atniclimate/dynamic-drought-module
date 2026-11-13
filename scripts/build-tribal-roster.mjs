@@ -103,6 +103,15 @@
  *        never pinned, and neither is a place or band that one Nation's
  *        Federal Register name lists among several: those wait for the
  *        maintainer's word.
+ *    10. A BIA land area still on its BIA label (rule 4) takes the Nation
+ *        names of the one federal Census reservation or trust land (D1 to
+ *        D3) whose BASENAME equals its LARNAME, when the label map names that
+ *        area (owner, 2026-11-13: a click on a Nation's land opens a briefing
+ *        under its full name, and where the Reservation Boundaries layer lies
+ *        over the Census area the BIA row answers). Never a statistical area
+ *        (OTSA, TDSA, ANVSA): a BIA "Choctaw" or "Iowa" land area outside
+ *        Oklahoma is not the Oklahoma Nation's. Two same-name Census areas
+ *        (Santa Rosa) settle nothing. Several Nations join with "; ".
  *   Every emitted area row carries a `provenance` field ("safe-match" or
  *   "lar-label"; "bia-authoritative" is reserved for a future BIA-published
  *   association). The runtime search (src/ui/search-controller.ts) renders
@@ -636,6 +645,26 @@ export function censusLabelAreas(features, roster, confirmed = CENSUS_LABEL_CONF
   return Object.fromEntries([...labels].sort(([a], [b]) => a.localeCompare(b)));
 }
 
+/**
+ * Rule 10 in the header: the BIA land areas still on their BIA label that one
+ * same-name federal Census reservation or trust land names. Returns LARNAME to
+ * the Nations' names joined by "; ". Exported for the test.
+ */
+export function larNamesFromCensus(larLabelNames, features, labelAreas) {
+  const legal = new Map();
+  for (const { attributes: a = {} } of features) {
+    if (!CENSUS_FED_LEGAL.has(a.AIANNHCC) || typeof a.BASENAME !== 'string') continue;
+    const key = norm(a.BASENAME);
+    legal.set(key, [...(legal.get(key) ?? []), a.AIANNH]);
+  }
+  const named = new Map();
+  for (const larName of larLabelNames) {
+    const codes = legal.get(norm(larName)) ?? [];
+    if (codes.length === 1 && labelAreas[codes[0]]) named.set(larName, labelAreas[codes[0]].join('; '));
+  }
+  return named;
+}
+
 async function main() {
   console.log('[tribal-roster] discovering the current Federal Register notice...');
   const search = await getJson(FR_SEARCH);
@@ -781,6 +810,18 @@ async function main() {
   const labelAreas = censusLabelAreas(censusJson.features, roster);
   console.log(`[tribal-roster] Census areas labelled with a Nation's name: ${Object.keys(labelAreas).length}`);
 
+  // Rule 10: a BIA label row that one same-name Census reservation names takes its Nations.
+  const larCensus = larNamesFromCensus(larLabelFallback, censusJson.features, labelAreas);
+  for (const area of areas) {
+    const nations = larCensus.get(area.larName);
+    if (!nations) continue;
+    Object.assign(area, { displayName: nations, provenance: 'safe-match' });
+    matchedPairs.push({ larName: area.larName, tribe: nations, rule: 'census-reservation-name (rule 10)' });
+  }
+  larLabelFallback.splice(0, larLabelFallback.length, ...larLabelFallback.filter((n) => !larCensus.has(n)));
+  ambiguous.splice(0, ambiguous.length, ...ambiguous.filter((a) => !larCensus.has(a.larName)));
+  console.log(`[tribal-roster] BIA land areas named through their Census reservation (rule 10): ${larCensus.size}`);
+
   areas.sort((a, b) => a.displayName.localeCompare(b.displayName));
 
   const generated = process.env.SOURCE_DATE_EPOCH
@@ -810,7 +851,8 @@ async function main() {
       landAreaSource: 'BIA AIAN-LAR FeatureServer (distinct LARNAME)',
       matcher:
         'LAR areas, safe-match v2 (D-0.7.0-026): unique whole-phrase containment, state-constrained, ' +
-        'distinctive-token guard; plus the maintainer-curated known-ambiguous gate (D-0.7.0-026a)',
+        'distinctive-token guard; plus the maintainer-curated known-ambiguous gate (D-0.7.0-026a); ' +
+        'then rule 10: a remaining BIA label takes the Nations of its one same-name Census reservation',
       censusMatcher:
         'Census areas (rule 7): maintainer-curated known-ambiguous gate (D-0.7.0-026a) first; ' +
         'then unique whole-phrase containment of BASENAME outside the roster name parentheses, ' +

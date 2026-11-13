@@ -10,7 +10,7 @@ the file public/fonts/MANIFEST.json records under sourceRetrievals; its SHA-256 
 
 The face holds Basic Latin, Latin-1 and Latin Extended-A whole, the letters and marks North American Latin
 orthographies add to them (LETTERS), and every character of every curated name in
-public/data/tribal-own-names.json, so a new row can never outrun the face once it is re-cut. Mark positioning
+public/data/tribal-label-names.json (ownNames), so a new row can never outrun the face once it is re-cut. Mark positioning
 (ccmp, mark, mkmk) is kept: MapLibre draws a letter with its marks as one cluster through the browser, which
 places the marks from these tables. A whole-range cut of the same blocks measured 154,908 bytes; this one is
 printed at the end and recorded in the manifest.
@@ -27,7 +27,7 @@ from fontTools.ttLib import TTFont
 ROOT = Path(__file__).resolve().parent.parent
 SOURCE_SHA256 = 'b85c38ecea8a7cfb39c24e395a4007474fa5a4fc864f6ee33309eb4948d232d5'
 DEST = ROOT / 'public' / 'fonts' / 'ddm-nation-names.woff2'
-NAMES = ROOT / 'public' / 'data' / 'tribal-own-names.json'
+NAMES = ROOT / 'public' / 'data' / 'tribal-label-names.json'
 MANIFEST = ROOT / 'public' / 'fonts' / 'ddm-nation-names.json'
 
 BLOCKS = [(0x0020, 0x007E), (0x00A0, 0x017F)]
@@ -48,7 +48,7 @@ source = Path(sys.argv[1])
 if hashlib.sha256(source.read_bytes()).hexdigest() != SOURCE_SHA256:
     sys.exit(f'{source} is not the Noto Sans Regular file the manifest records (SHA-256 differs)')
 
-rows = json.loads(NAMES.read_text(encoding='utf-8'))['rows'] if NAMES.exists() else []
+rows = json.loads(NAMES.read_text(encoding='utf-8'))['ownNames'] if NAMES.exists() else []
 wanted = {cp for lo, hi in BLOCKS for cp in range(lo, hi + 1)} | {ord(c) for c in LETTERS} | set(MARKS)
 wanted |= {ord(c) for row in rows for c in row['ownName']}
 

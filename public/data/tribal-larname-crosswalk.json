@@ -3,13 +3,13 @@
   "meta": {
     "rosterSource": "Federal Register 2026-01899 (2026-01-30)",
     "landAreaSource": "BIA AIAN-LAR FeatureServer (distinct LARNAME)",
-    "matcher": "LAR areas, safe-match v2 (D-0.7.0-026): unique whole-phrase containment, state-constrained, distinctive-token guard; plus the maintainer-curated known-ambiguous gate (D-0.7.0-026a)",
+    "matcher": "LAR areas, safe-match v2 (D-0.7.0-026): unique whole-phrase containment, state-constrained, distinctive-token guard; plus the maintainer-curated known-ambiguous gate (D-0.7.0-026a); then rule 10: a remaining BIA label takes the Nations of its one same-name Census reservation",
     "censusMatcher": "Census areas (rule 7): maintainer-curated known-ambiguous gate (D-0.7.0-026a) first; then unique whole-phrase containment of BASENAME outside the roster name parentheses, or equality with a parenthetical, distinctive-token guard; several candidates resolve only when exactly one carries BASENAME as its parenthetical; no state constraint",
     "generated": "2026-11-13",
     "rosterCount": 573,
     "landAreaCount": 335,
-    "safeMatchCount": 258,
-    "larLabelCount": 77,
+    "safeMatchCount": 289,
+    "larLabelCount": 46,
     "censusSource": "US Census Bureau TIGERweb AIANNH layer 47 (names only)",
     "censusAreaCount": 272,
     "censusSafeMatchCount": 232,
@@ -1310,47 +1310,184 @@
       "larName": "Zuni",
       "tribe": "Zuni Tribe of the Zuni Reservation, New Mexico",
       "rule": "unique-containment"
+    },
+    {
+      "larName": "Allegany",
+      "tribe": "Seneca Nation of Indians",
+      "rule": "census-reservation-name (rule 10)"
+    },
+    {
+      "larName": "Big Cypress",
+      "tribe": "Seminole Tribe of Florida",
+      "rule": "census-reservation-name (rule 10)"
+    },
+    {
+      "larName": "Brighton",
+      "tribe": "Seminole Tribe of Florida",
+      "rule": "census-reservation-name (rule 10)"
+    },
+    {
+      "larName": "Cahuilla",
+      "tribe": "Cahuilla Band of Indians",
+      "rule": "census-reservation-name (rule 10)"
+    },
+    {
+      "larName": "Cattaraugus",
+      "tribe": "Seneca Nation of Indians",
+      "rule": "census-reservation-name (rule 10)"
+    },
+    {
+      "larName": "Celilo",
+      "tribe": "Confederated Tribes and Bands of the Yakama Nation; Confederated Tribes of the Umatilla Indian Reservation; Confederated Tribes of the Warm Springs Reservation of Oregon",
+      "rule": "census-reservation-name (rule 10)"
+    },
+    {
+      "larName": "Coushatta",
+      "tribe": "Coushatta Tribe of Louisiana",
+      "rule": "census-reservation-name (rule 10)"
+    },
+    {
+      "larName": "Crow",
+      "tribe": "Crow Tribe of Montana",
+      "rule": "census-reservation-name (rule 10)"
+    },
+    {
+      "larName": "Fort Pierce",
+      "tribe": "Seminole Tribe of Florida",
+      "rule": "census-reservation-name (rule 10)"
+    },
+    {
+      "larName": "Goshute",
+      "tribe": "Confederated Tribes of the Goshute Reservation, Nevada and Utah",
+      "rule": "census-reservation-name (rule 10)"
+    },
+    {
+      "larName": "Huron Potawatomi",
+      "tribe": "Nottawaseppi Huron Band of the Potawatomi, Michigan",
+      "rule": "census-reservation-name (rule 10)"
+    },
+    {
+      "larName": "Immokalee",
+      "tribe": "Seminole Tribe of Florida",
+      "rule": "census-reservation-name (rule 10)"
+    },
+    {
+      "larName": "Isabella",
+      "tribe": "Saginaw Chippewa Indian Tribe of Michigan",
+      "rule": "census-reservation-name (rule 10)"
+    },
+    {
+      "larName": "Kootenai",
+      "tribe": "Kootenai Tribe of Idaho",
+      "rule": "census-reservation-name (rule 10)"
+    },
+    {
+      "larName": "L'Anse",
+      "tribe": "Keweenaw Bay Indian Community, Michigan",
+      "rule": "census-reservation-name (rule 10)"
+    },
+    {
+      "larName": "Little River",
+      "tribe": "Little River Band of Ottawa Indians, Michigan",
+      "rule": "census-reservation-name (rule 10)"
+    },
+    {
+      "larName": "Manchester Point Arena",
+      "tribe": "Manchester Band of Pomo Indians of the Manchester Rancheria, California",
+      "rule": "census-reservation-name (rule 10)"
+    },
+    {
+      "larName": "Maricopa (Ak-Chin)",
+      "tribe": "Ak-Chin Indian Community",
+      "rule": "census-reservation-name (rule 10)"
+    },
+    {
+      "larName": "Oil Springs",
+      "tribe": "Seneca Nation of Indians",
+      "rule": "census-reservation-name (rule 10)"
+    },
+    {
+      "larName": "Pauma and Yuima",
+      "tribe": "Pauma Band of Luiseno Mission Indians of the Pauma & Yuima Reservation, California",
+      "rule": "census-reservation-name (rule 10)"
+    },
+    {
+      "larName": "Pine Ridge",
+      "tribe": "Oglala Sioux Tribe",
+      "rule": "census-reservation-name (rule 10)"
+    },
+    {
+      "larName": "Poarch Creek",
+      "tribe": "Poarch Band of Creek Indians",
+      "rule": "census-reservation-name (rule 10)"
+    },
+    {
+      "larName": "Santee",
+      "tribe": "Santee Sioux Nation, Nebraska",
+      "rule": "census-reservation-name (rule 10)"
+    },
+    {
+      "larName": "Smith River",
+      "tribe": "Tolowa Dee-ni' Nation",
+      "rule": "census-reservation-name (rule 10)"
+    },
+    {
+      "larName": "St. Regis Mohawk",
+      "tribe": "Saint Regis Mohawk Tribe",
+      "rule": "census-reservation-name (rule 10)"
+    },
+    {
+      "larName": "Table Bluff",
+      "tribe": "Wiyot Tribe, California",
+      "rule": "census-reservation-name (rule 10)"
+    },
+    {
+      "larName": "Tampa",
+      "tribe": "Seminole Tribe of Florida",
+      "rule": "census-reservation-name (rule 10)"
+    },
+    {
+      "larName": "Uintah and Ouray",
+      "tribe": "Ute Indian Tribe of the Uintah & Ouray Reservation, Utah",
+      "rule": "census-reservation-name (rule 10)"
+    },
+    {
+      "larName": "Warm Springs",
+      "tribe": "Confederated Tribes of the Warm Springs Reservation of Oregon",
+      "rule": "census-reservation-name (rule 10)"
+    },
+    {
+      "larName": "Wind River",
+      "tribe": "Eastern Shoshone Tribe of the Wind River Reservation, Wyoming; Northern Arapaho Tribe of the Wind River Reservation, Wyoming",
+      "rule": "census-reservation-name (rule 10)"
+    },
+    {
+      "larName": "Yurok",
+      "tribe": "Yurok Tribe of the Yurok Reservation, California",
+      "rule": "census-reservation-name (rule 10)"
     }
   ],
   "larLabel": [
     "Acoma (Red Lake)",
     "Alabama and Coushatta",
-    "Allegany",
-    "Big Cypress",
     "Big Sandy (Truxton Canyon)",
     "Bois Fort (Nett Lake)",
     "Bois Forte (Deer Creek)",
     "Bois Forte (Vermillion Lake)",
-    "Brighton",
-    "Cahuilla",
-    "Cattaraugus",
     "Cedar City",
-    "Celilo",
     "Choctaw",
     "Coquille of Oregon",
     "Cortina Indian",
-    "Coushatta",
-    "Crow",
     "Cuyapaipe",
-    "Fort Pierce",
     "Fort Sill Arizona",
     "Fort Yuma (Quechan)",
     "Gila Bend",
-    "Goshute",
     "Hollywood (Dania)",
     "Houlton of the Maliseet",
-    "Huron Potawatomi",
-    "Immokalee",
     "Iowa",
-    "Isabella",
     "Jena of the Choctaw",
-    "Kootenai",
     "Lake Traverse (Sisseton)",
-    "L'Anse",
     "L'Anse Ontonagon",
-    "Little River",
-    "Manchester Point Arena",
-    "Maricopa (Ak-Chin)",
     "Mashnantucket Pequot",
     "Mohegan of Connecticut",
     "Mole Lake",
@@ -1358,14 +1495,10 @@
     "Navajo (Ramah)",
     "Northwestern Shoshoni",
     "Odgers Ranch",
-    "Oil Springs",
     "Oneida",
     "Oneida (New York)",
     "Passamaquoddy (Indian Township)",
     "Passamaquoddy (Pleasant Point)",
-    "Pauma and Yuima",
-    "Pine Ridge",
-    "Poarch Creek",
     "Pokagon of Potawatomi",
     "Potawatomi (Kansas)",
     "Rocky Boys",
@@ -1376,35 +1509,13 @@
     "San Xavier",
     "Santa Rosa",
     "Santa Rosa Cahuilla",
-    "Santee",
     "Seneca",
     "Sheep Ranch",
     "Shivwitz",
-    "Smith River",
-    "St. Regis Mohawk",
-    "Table Bluff",
-    "Tampa",
     "The Dalles Unit",
-    "Uintah and Ouray",
-    "Warm Springs",
-    "Wind River",
-    "Yavapai",
-    "Yurok"
+    "Yavapai"
   ],
   "ambiguous": [
-    {
-      "larName": "Cahuilla",
-      "candidates": [
-        "Agua Caliente Band of Cahuilla Indians of the Agua Caliente Indian Reservation, California",
-        "Augustine Band of Cahuilla Indians, California",
-        "Cabazon Band of Cahuilla Indians (previously listed as Cabazon Band of Mission Indians, California)",
-        "Cahuilla Band of Indians",
-        "Los Coyotes Band of Cahuilla and Cupeno Indians, California",
-        "Ramona Band of Cahuilla, California",
-        "Santa Rosa Band of Cahuilla Indians, California",
-        "Torres Martinez Desert Cahuilla Indians, California"
-      ]
-    },
     {
       "larName": "Choctaw",
       "candidates": [
@@ -1414,46 +1525,11 @@
       ]
     },
     {
-      "larName": "Coushatta",
-      "candidates": [
-        "Alabama-Coushatta Tribe of Texas",
-        "Coushatta Tribe of Louisiana"
-      ]
-    },
-    {
-      "larName": "Crow",
-      "candidates": [
-        "Crow Creek Sioux Tribe of the Crow Creek Reservation, South Dakota",
-        "Crow Tribe of Montana"
-      ]
-    },
-    {
-      "larName": "Goshute",
-      "candidates": [
-        "Confederated Tribes of the Goshute Reservation, Nevada and Utah",
-        "Skull Valley Band of Goshute Indians of Utah"
-      ]
-    },
-    {
       "larName": "Iowa",
       "candidates": [
         "Iowa Tribe of Kansas and Nebraska",
         "Iowa Tribe of Oklahoma",
         "Sac & Fox Tribe of the Mississippi in Iowa"
-      ]
-    },
-    {
-      "larName": "Kootenai",
-      "candidates": [
-        "Confederated Salish and Kootenai Tribes of the Flathead Reservation",
-        "Kootenai Tribe of Idaho"
-      ]
-    },
-    {
-      "larName": "Little River",
-      "candidates": [
-        "Little River Band of Ottawa Indians, Michigan",
-        "Redwood Valley or Little River Band of Pomo Indians of the Redwood Valley Rancheria California"
       ]
     },
     {
@@ -1479,13 +1555,6 @@
       ]
     },
     {
-      "larName": "Santee",
-      "candidates": [
-        "Flandreau Santee Sioux Tribe of South Dakota",
-        "Santee Sioux Nation, Nebraska"
-      ]
-    },
-    {
       "larName": "Seneca",
       "candidates": [
         "Seneca Nation of Indians",
@@ -1494,32 +1563,11 @@
       ]
     },
     {
-      "larName": "Warm Springs",
-      "candidates": [
-        "Confederated Tribes of the Warm Springs Reservation of Oregon",
-        "Fort Sill-Chiricahua-Warm Springs-Apache Tribe (previously listed as Fort Sill Apache Tribe of Oklahoma)"
-      ]
-    },
-    {
-      "larName": "Wind River",
-      "candidates": [
-        "Eastern Shoshone Tribe of the Wind River Reservation, Wyoming",
-        "Northern Arapaho Tribe of the Wind River Reservation, Wyoming"
-      ]
-    },
-    {
       "larName": "Yavapai",
       "candidates": [
         "Fort McDowell Yavapai Nation, Arizona",
         "Yavapai-Apache Nation of the Camp Verde Indian Reservation, Arizona",
         "Yavapai-Prescott Indian Tribe"
-      ]
-    },
-    {
-      "larName": "Yurok",
-      "candidates": [
-        "Pulikla Tribe of Yurok People (previously listed as Resighini Rancheria, California)",
-        "Yurok Tribe of the Yurok Reservation, California"
       ]
     }
   ],

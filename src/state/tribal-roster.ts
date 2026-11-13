@@ -156,30 +156,42 @@ export function loadTribalLabelAreas(): Promise<ReadonlyMap<string, readonly str
   return loadRosterFile().then((f) => f.labelAreas);
 }
 
-const OWN_NAMES_URL = (import.meta.env?.BASE_URL ?? '/dynamic-drought-module/') + 'data/tribal-own-names.json';
-let ownNamesLoad: Promise<ReadonlyMap<string, string>> | null = null;
+const LABEL_NAMES_URL = (import.meta.env?.BASE_URL ?? '/dynamic-drought-module/') + 'data/tribal-label-names.json';
+
+/** How the map label names a Nation, each keyed by its Federal Register name. */
+export interface TribalLabelNames {
+  /** Its name in its own language (DR-247), drawn above. */
+  readonly own: ReadonlyMap<string, string>;
+  /** The shorter name it is generally known by (owner, 2026-11-13), drawn in place of a long formal name. */
+  readonly short: ReadonlyMap<string, string>;
+}
+
+let labelNamesLoad: Promise<TribalLabelNames> | null = null;
+
+/** One curated column of public/data/tribal-label-names.json, NFC (MapLibre does no Unicode normalization). */
+function namesOf(json: unknown, list: string, field: string): ReadonlyMap<string, string> {
+  const rows = isObject(json) && Array.isArray(json[list]) ? (json[list] as unknown[]) : [];
+  return new Map(
+    rows.flatMap((r) =>
+      isObject(r) && typeof r['nation'] === 'string' && typeof r[field] === 'string'
+        ? [[r['nation'], (r[field] as string).normalize('NFC')] as const]
+        : []
+    )
+  );
+}
 
 /**
- * A Nation's name in its own language, keyed by its Federal Register label
- * name (DR-247: curated row by row from the Nation's own public pages,
- * public/data/tribal-own-names.json). Loaded once; rejects on failure, and a
- * later call retries.
+ * The curated label names (public/data/tribal-label-names.json): loaded once;
+ * rejects on failure, and a later call retries. The briefing never reads them:
+ * it carries the full Federal Register name.
  */
-export function loadTribalOwnNames(): Promise<ReadonlyMap<string, string>> {
-  ownNamesLoad ??= fetchJsonWithBudget(OWN_NAMES_URL, null, null, ROSTER_TIMEOUT_MS).then(
-    (json) => {
-      const rows = isObject(json) && Array.isArray(json['rows']) ? json['rows'] : [];
-      return new Map(
-        rows
-          .filter((r): r is { nation: string; ownName: string } => isObject(r) && typeof r['nation'] === 'string' && typeof r['ownName'] === 'string')
-          // MapLibre does no Unicode normalization; a composed letter must arrive composed.
-          .map((r) => [r.nation, r.ownName.normalize('NFC')])
-      );
-    },
+export function loadTribalLabelNames(): Promise<TribalLabelNames> {
+  labelNamesLoad ??= fetchJsonWithBudget(LABEL_NAMES_URL, null, null, ROSTER_TIMEOUT_MS).then(
+    (json) => ({ own: namesOf(json, 'ownNames', 'ownName'), short: namesOf(json, 'shortNames', 'shortName') }),
     (err: unknown) => {
-      ownNamesLoad = null;
+      labelNamesLoad = null;
       throw err instanceof Error ? err : new Error(String(err));
     }
   );
-  return ownNamesLoad;
+  return labelNamesLoad;
 }

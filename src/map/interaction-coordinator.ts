@@ -15,12 +15,13 @@
  * reachable through the "Other map features here (n)" disclosure inside
  * the one response; choosing one replaces the response in place.
  *
- * Response sinks (pre-S4): the active mobile Brief sheet keeps its
- * shipped route (a place-bearing tap raises the briefing at the half
- * detent; no popup paints); every other surface (desktop both modes,
- * embed) gets the one coordinator-owned MapLibre popup. S4's single
- * shell can rehost the response at the foot of the left panel by
- * swapping the sink; the arbitration above it does not change.
+ * Response sinks: in Brief a place-bearing click opens the place's
+ * briefing at every width (the phone's sheet at the half detent, the
+ * desktop drawer; owner, 2026-11-13) and no popup paints; the Console,
+ * an embed without its sheet, and every non-place response get the one
+ * coordinator-owned MapLibre popup. S4's single shell can rehost that
+ * response at the foot of the left panel by swapping the sink; the
+ * arbitration above it does not change.
  *
  * While a studio route owns the screen the coordinator is inert: a
  * studio selection is an explicit catalog act, and no popup may paint
@@ -200,8 +201,8 @@ let initialized = false;
 const loadFrameChunk = createChunkLoader(() => import('../ui/popup-frame'), import.meta.url);
 let serializeFrame: typeof serializePopupFrame | null = null;
 let paintAdoptedFrame: typeof paintAdoptedPopupFrame | null = null;
-/** The waiting commit; `sheetRoute` says whether the mobile Brief sheet would now take it. */
-let pendingCommit: { readonly sheetRoute: () => boolean } | null = null;
+/** The waiting commit; `briefRoute` says whether the place's briefing would now take it. */
+let pendingCommit: { readonly briefRoute: () => boolean } | null = null;
 
 function loadFrame(): Promise<void> {
   return loadFrameChunk().then((frame) => {
@@ -390,7 +391,7 @@ export function initInteractionCoordinator(map: maplibregl.Map): void {
   // so activation wins and is remembered even if the sheet deactivates again
   // before the wait ends. Any other resize re-checks the same predicate.
   map.on('resize', () => {
-    if (pendingCommit?.sheetRoute()) pendingCommit = null;
+    if (pendingCommit?.briefRoute()) pendingCommit = null;
   });
   // The map's removal retires a commit still waiting for the frame: a popup
   // on the map retires one through its own close, but a first cold click
@@ -881,19 +882,24 @@ function commit(
     return;
   }
 
-  // The active mobile Brief sheet is its own response surface: a
-  // place-bearing tap answers at the half detent (the at-hand block),
-  // and no popup paints (the shipped U2 route, moved here from
-  // attachImpactTrigger). Non-place responses keep their popups: the
-  // map is the instrument for those. Decided before the selection writes
-  // below, which it once followed: nothing those writes notify changes
-  // the view mode or the sheet detent, so it is the same decision.
-  const sheetRoute = (): boolean => !!response.selection && isSheetActive() && getViewMode() === 'brief';
-  const sheet = sheetRoute();
+  // In Brief, a place-bearing click opens that place's briefing at every
+  // width and no popup paints (owner, 2026-11-13: "clicking on a place
+  // should open the impact briefing drawer"): the phone's sheet at the half
+  // detent, as the shipped U2 route did, and the desktop drawer in place of
+  // the panel-foot card and its door. The Console is the instrument and
+  // keeps its popup; an embed keeps its popup unless its sheet is up.
+  // Non-place responses keep their popups everywhere. Decided before the
+  // selection writes below: nothing those writes notify changes the view
+  // mode, the sheet detent or the embed class, so it is the same decision.
+  const briefRoute = (): boolean =>
+    !!response.selection &&
+    getViewMode() === 'brief' &&
+    (isSheetActive() || !document.getElementById('app')?.classList.contains('embed'));
+  const brief = briefRoute();
   // The markup, always taken before `finish` writes anything, so a refused
   // model throws before any write.
   const markup = (): string | HTMLElement | undefined =>
-    sheet || response.model === undefined ? response.content : serializeFrame!(response.model);
+    brief || response.model === undefined ? response.content : serializeFrame!(response.model);
 
   const finish = (content: string | HTMLElement | undefined): void => {
     // Selection FIRST, so the outgoing response's close (which clears the
@@ -913,7 +919,7 @@ function commit(
       emphasizePlaces(map, response.emphasis ?? []);
     }
 
-    if (sheet && response.selection) {
+    if (brief && response.selection) {
       dismissResponse();
       openImpactPanel(response.selection);
       return;
@@ -922,11 +928,11 @@ function commit(
     renderPopup(map, response, content!, selection, hits, primary, click);
   };
 
-  if (response.model === undefined || sheet || serializeFrame) {
+  if (response.model === undefined || brief || serializeFrame) {
     finish(markup());
     return;
   }
-  const record = { sheetRoute };
+  const record = { briefRoute };
   pendingCommit = record;
   // Escape during the wait retires the commit: nothing is on screen yet, so
   // no popup's own Escape handler exists. This one lives exactly as long as

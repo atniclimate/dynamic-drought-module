@@ -52,8 +52,8 @@ test('the Nation-name face is hash-bound, licensed, keeps mark positioning and c
   assert.ok(readFileSync(new URL(`public/fonts/${receipt.licence}`, root), 'utf8').length > 100);
   for (const feature of ['ccmp', 'mark', 'mkmk']) assert.ok(receipt.layoutFeatures.includes(feature), feature);
   const covered = new Set(receipt.codepoints.map(code => parseInt(code.slice(2), 16)));
-  const { rows } = JSON.parse(readFileSync(new URL('public/data/tribal-own-names.json', root), 'utf8'));
-  for (const row of rows) {
+  const { ownNames } = JSON.parse(readFileSync(new URL('public/data/tribal-label-names.json', root), 'utf8'));
+  for (const row of ownNames) {
     for (const char of row.ownName) {
       assert.ok(covered.has(char.codePointAt(0)),
         `${row.nation}: U+${char.codePointAt(0).toString(16).toUpperCase()} is not in the face; re-cut it (scripts/cut-nation-names-font.py)`);

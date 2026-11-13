@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { registerHooks } from 'node:module';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -24,7 +24,7 @@ registerHooks({
   }
 });
 
-const { censusLabelAreas, labelName } = await import('../scripts/build-tribal-roster.mjs');
+const { censusLabelAreas, labelName, larNamesFromCensus } = await import('../scripts/build-tribal-roster.mjs');
 const { fadeLayerIds, labelMinZoom, nationLabelPoints, nationTextField } = await import('../src/layers/aiannh.ts');
 const { TOP_LABEL_IDS } = await import('../src/map/layer-order.ts');
 
@@ -81,13 +81,17 @@ test('one point per labelled area at the Census internal point, every Nation set
     'before the label map loads, no label');
 });
 
-test('a curated own-language name leads its Nation, in the Nation-name face, the English name beneath', () => {
-  const labels = new Map([['9010', ['Nez Perce Tribe', 'Kialegee Tribal Town']], ['9011', ['Kialegee Tribal Town']]]);
-  const own = new Map([['Nez Perce Tribe', 'Stand-in ə̓']]);
+test('a curated own-language name leads its Nation, a curated shorter name replaces its long one, and the click finds the area', () => {
+  const warmSprings = 'Confederated Tribes of the Warm Springs Reservation of Oregon';
+  const labels = new Map([['9010', ['Nez Perce Tribe', 'Kialegee Tribal Town']], ['9011', [warmSprings]]]);
+  const curated = {
+    own: new Map([['Nez Perce Tribe', 'Stand-in ə̓']]),
+    short: new Map([[warmSprings, 'Stand-in Short Name']])
+  };
   const [shared, single] = nationLabelPoints(
-    { type: 'FeatureCollection', features: [area('9010', 'D1'), area('9011', 'D1')] },
+    { type: 'FeatureCollection', features: [area('9010', 'D1', { NAME: 'Shared Area' }), area('9011', 'D1')] },
     labels,
-    own
+    curated
   ).features.map((f) => f.properties);
   assert.equal(shared.text, 'Stand-in ə̓\nNez Perce Tribe\n\nKialegee Tribal Town');
   assert.deepEqual(
@@ -95,7 +99,9 @@ test('a curated own-language name leads its Nation, in the Nation-name face, the
     ['Stand-in ə̓', 'Nez Perce Tribe', undefined, 'Kialegee Tribal Town'],
     'a Nation with no curated row carries its Federal Register name alone, never a guess'
   );
-  assert.equal(single.text, 'Kialegee Tribal Town');
+  assert.equal(single.text, 'Stand-in Short Name', 'the label draws the shorter name; the briefing keeps the full one');
+  assert.equal(single.en0, 'Stand-in Short Name');
+  assert.deepEqual([shared.AIANNH, shared.NAME], ['9010', 'Shared Area'], 'a click on the name finds its area by code');
   // One slot per Nation: the own name in its face, then the Federal Register name; a blank line before a later Nation.
   const field = nationTextField(2);
   assert.equal(field[0], 'format');
@@ -106,18 +112,30 @@ test('a curated own-language name leads its Nation, in the Nation-name face, the
   assert.equal(JSON.stringify(nationTextField(1)).includes('\\n\\n'), false, 'one Nation, no separator');
 });
 
-test('the shipped own-language rows name labelled Nations once each, with the page and the date read', () => {
-  const { rows } = JSON.parse(readFileSync(new URL('../public/data/tribal-own-names.json', import.meta.url), 'utf8'));
+test('the shipped label names: labelled Nations once each, sourced and dated; a shorter name is shorter and draws from shipped glyphs', () => {
+  const { ownNames, shortNames } = JSON.parse(readFileSync(new URL('../public/data/tribal-label-names.json', import.meta.url), 'utf8'));
   const labelled = new Set(Object.values(ROSTER.labelAreas).flat());
-  const seen = new Set();
-  for (const row of rows) {
-    assert.ok(labelled.has(row.nation), `${row.nation} is not a name the Tribal Lands layer labels`);
-    assert.ok(!seen.has(row.nation), `${row.nation} has two rows`);
-    seen.add(row.nation);
-    assert.ok(row.ownName && row.ownName === row.ownName.normalize('NFC') && row.ownName === row.ownName.trim(), row.nation);
-    assert.match(row.page, /^https:\/\/\S+$/, row.nation);
-    assert.match(row.read, /^\d{4}-\d{2}-\d{2}$/, row.nation);
-    assert.ok(row.premise.length > 20, `${row.nation}: what the page says the form is`);
+  // The glyph ranges the map's Noto Sans Regular files cover (public/fonts/glyphs); a shorter name draws from them.
+  const ranges = readdirSync(new URL('../public/fonts/glyphs/Noto Sans Regular/', import.meta.url)).map((file) => file.replace('.pbf', '').split('-').map(Number));
+  for (const [rows, field, why] of [[ownNames, 'ownName', 'premise'], [shortNames, 'shortName', 'basis']]) {
+    const seen = new Set();
+    for (const row of rows) {
+      assert.ok(labelled.has(row.nation), `${row.nation} is not a name the Tribal Lands layer labels`);
+      assert.ok(!seen.has(row.nation), `${row.nation} has two ${field} rows`);
+      seen.add(row.nation);
+      const name = row[field];
+      assert.ok(name && name === name.normalize('NFC') && name === name.trim(), row.nation);
+      assert.match(row.page, /^(https:\/\/\S+|BIA Tribal Leaders Directory)$/, row.nation);
+      assert.match(row.read, /^\d{4}-\d{2}-\d{2}$/, row.nation);
+      assert.ok(row[why].length > 20, `${row.nation}: why this form`);
+    }
+  }
+  for (const { nation, shortName } of shortNames) {
+    assert.ok(shortName.length < nation.length, `${nation}: the shorter name is shorter`);
+    for (const char of shortName) {
+      const cp = char.codePointAt(0);
+      assert.ok(ranges.some(([lo, hi]) => cp >= lo && cp <= hi), `${nation}: U+${cp.toString(16).toUpperCase()} has no shipped glyph range`);
+    }
   }
 });
 
@@ -185,6 +203,25 @@ test('a confirmed row names an area its Census name cannot settle, and reopens w
   reopened(['9020', 'Warm Spring', [warmSprings]], /REOPENED: the Census now names the area "Warm Springs"/);
   reopened(['9020', 'Warm Springs', ['Kiowa Indian Tribe of Oklahoma']], /is not a name in the Federal Register roster/);
   reopened(['9022', 'Kialegee', ['Kiowa Tribe']], /the name matcher now answers "Kialegee Tribal Town"/);
+});
+
+test('a BIA land area on its BIA label takes the Nations of its one same-name Census reservation, never a statistical area', () => {
+  const feature = (BASENAME, AIANNH, AIANNHCC) => ({ attributes: { BASENAME, AIANNH, AIANNHCC } });
+  const features = [
+    feature('Warm Springs', '9020', 'D1'),
+    feature('Choctaw', '9021', 'D6'),
+    feature('Santa Rosa', '9022', 'D2'),
+    feature('Santa Rosa', '9023', 'D2'),
+    feature('Unlabelled', '9024', 'D1'),
+    feature('Wind River', '9025', 'D1')
+  ];
+  const labels = { 9020: ['Warm Springs Nation'], 9021: ['Choctaw Nation'], 9022: ['A'], 9023: ['B'], 9025: ['East', 'North'] };
+  const named = larNamesFromCensus(['Warm Springs', 'Choctaw', 'Santa Rosa', 'Unlabelled', 'Wind River', 'Elsewhere'], features, labels);
+  assert.deepEqual(Object.fromEntries(named), { 'Warm Springs': 'Warm Springs Nation', 'Wind River': 'East; North' });
+  const shipped = Object.fromEntries(ROSTER.areas.map((a) => [a.larName, a]));
+  assert.equal(shipped['Warm Springs'].displayName, 'Confederated Tribes of the Warm Springs Reservation of Oregon');
+  assert.equal(shipped['Warm Springs'].provenance, 'safe-match');
+  for (const open of ['Choctaw', 'Iowa', 'Santa Rosa']) assert.equal(shipped[open].provenance, 'lar-label', open);
 });
 
 test('the shipped roster labels at least 540 areas: Creek OTSA, Warm Springs, both Nations of Wind River', () => {

@@ -1,6 +1,6 @@
 {
-  "_comment": "A Tribal Nation's name in its own language, as the Nation itself publishes it (decision DR-247). One row per Nation, added by hand, only from the Nation's own public pages and only where the page presents the form as the Nation's own name for itself. nation: the Federal Register name as the Tribal Lands label shows it (public/data/tribal-roster.json labelAreas). ownName: the form exactly as the page writes it (capitals, apostrophes and marks kept; Unicode NFC). page: the address read. read: the date read. premise: what the page says the form is. Never from an aggregator, never translated, transliterated or corrected. A Nation whose pages give more than one form, or only a people's or language's name shared with other Nations, has no row. A new letter may need the label face re-cut (scripts/cut-nation-names-font.py; tests/font-coverage.test.mjs says so).",
-  "rows": [
+  "_comment": "How the Tribal Lands labels name a Nation, beside the Federal Register name the Impact Briefing always carries in full. nation: the Federal Register name as public/data/tribal-roster.json labelAreas holds it. ownNames (decision DR-247): the Nation's name in its own language, one row per Nation, added by hand, only from the Nation's own public pages and only where the page presents the form as the Nation's own name for itself; ownName exactly as the page writes it (capitals, apostrophes and marks kept; Unicode NFC); page, the address read; read, the date read; premise, what the page says the form is. Never from an aggregator, never translated, transliterated or corrected; a Nation whose pages give more than one form, or only a people's or language's name shared with other Nations, has no row; a new letter may need the label face re-cut (scripts/cut-nation-names-font.py; tests/font-coverage.test.mjs says so). shortNames (owner, 2026-11-13): the shorter name a Nation is generally known by, drawn on the map in place of a long formal name; shortName exactly as its source writes it; page and read, the source; basis, why this form was chosen. A Nation with no row keeps its full Federal Register name on the map.",
+  "ownNames": [
     {
       "nation": "Coeur D'Alene Tribe",
       "ownName": "Schitsu’umsh",
@@ -22,5 +22,6 @@
       "read": "2026-11-13",
       "premise": "The Nation's home page says: \"We are the Lhaq'temish, the Lummi People.\" A menu entry for the Lhaqtemish Foundation, an organization's name, drops the apostrophe."
     }
-  ]
+  ],
+  "shortNames": []
 }
