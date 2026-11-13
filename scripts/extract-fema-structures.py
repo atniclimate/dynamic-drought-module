@@ -1,7 +1,8 @@
 """Clip FEMA USA Structures state files to the central Oregon pilot box.
 
-Step one of the 3D Fire buildings pipeline; scripts/build-structures-tiles.mjs
-is step two. Each input is one state's USA Structures zip (an Esri File
+Step one of the 3D Fire buildings pipeline; scripts/sample-gba-heights.py
+(a height per footprint, from the GBA.Height raster) is step two and
+scripts/build-structures-tiles.mjs is step three. Each input is one state's USA Structures zip (an Esri File
 Geodatabase plus its FGDC metadata), kept OUTSIDE the repository. The script
 hashes every zip, reads the release date and credit from the zip's own
 metadata, clips the footprints to the pilot box and writes newline-delimited

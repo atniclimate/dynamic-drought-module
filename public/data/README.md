@@ -145,17 +145,31 @@ state-curated set).
   views, is never activated automatically by Fire 3D, and reports `zoom in to
   load` below zoom 6. Its live power-plant companion comes from EIA and is not
   stored in this archive.
-- `structures-central-oregon-2023.pmtiles`: building outlines for the 3D Fire
-  view (USA Structures, 2023 edition, Oak Ridge National Laboratory for the
-  FEMA Geospatial Response Office; published on Figshare under CC0 1.0).
-  153,805 footprints, 4,074 tiles, 5,186,150 bytes, z13-14, outlines only; the
-  edition publishes no height in this box and the app draws every building at
-  one stated height. Coverage is the `central_oregon` region framing only.
-  Rebuild: download the two state zips outside the repository, run
+- `structures-central-oregon-2026-11.pmtiles`: buildings for the 3D Fire
+  view. Outlines: USA Structures, 2023 edition (Oak Ridge National Laboratory
+  for the FEMA Geospatial Response Office; published on Figshare under CC0
+  1.0). Heights: GBA.Height (GlobalBuildingAtlas, Zhu et al. 2025,
+  https://doi.org/10.14459/2025mp1782307; CC BY-NC 4.0,
+  https://creativecommons.org/licenses/by-nc/4.0/, non-commercial use only),
+  estimates modeled from 2019 satellite imagery (2018 where 2019 was cloudy),
+  not surveyed. 153,805 footprints, 4,074 tiles, 5,468,311 bytes, z13-14,
+  SHA-256 ed70e5a6334299e22813adcc618ea7e26f2ab5f5cb71dac2cb95e2b64ab74679.
+  One property, `h`, the drawn height in whole metres: the largest raster
+  value among the cells the outline touches, taken only from the cell file
+  whose own 0.2 degree box the outline intersects, rounded, and raised to 3 m
+  where lower (38,488 footprints). 153,710 footprints carry `h`; 95 have no
+  estimate, carry no property and are drawn 4 m tall. Coverage is the
+  `central_oregon` region framing only. Rebuild: download the two state zips
+  outside the repository, run
   `.venv/Scripts/python.exe -I scripts/extract-fema-structures.py --zip <Oregon zip> --zip <Washington zip>`,
-  then `npm run build:structures-tiles`; inputs and output are pinned by
-  SHA-256 in `scripts/data/structures-tiles-receipt.json`. Loaded only while
-  the 3D Fire view is active.
+  then `.venv/Scripts/python.exe -I scripts/sample-gba-heights.py fetch --box pilot`
+  (16.7 GB to a folder outside the repository; the share name comes from the
+  environment variable `DDM_GBA_HEIGHT_SHARE`, which the issuer's record page
+  prints) and `.venv/Scripts/python.exe -I scripts/sample-gba-heights.py sample`,
+  then `npm run build:structures-tiles`. The two zips, the 93 raster cells,
+  the sampled heights and the output are pinned by SHA-256 in
+  `scripts/data/structures-tiles-receipt.json`. Loaded only while the 3D Fire
+  view is active.
 - `us-places.json`: municipal label points (Natural Earth, built by
   `npm run build:places`; see scripts/).
 - `tribal-roster.json` + `tribal-larname-crosswalk.json`: the

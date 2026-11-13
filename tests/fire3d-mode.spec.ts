@@ -510,10 +510,10 @@ test('activation builds terrain, sky, camera, and the smoke volume; deactivation
     expect(harness.sources.has('power-lines')).toBe(false);
     expect(harness.sources.has('power-plants')).toBe(false);
 
-    // Buildings: one source and ONE extrusion layer with no filter (every
-    // footprint at the same stated height; tests/structures-3d.test.mjs
-    // holds the paint), seated with the context overlays under every event
-    // overlay.
+    // Buildings: one source and ONE extrusion layer with no filter (each
+    // footprint at its own sampled height, in one tone;
+    // tests/structures-3d.test.mjs holds the paint), seated with the
+    // context overlays under every event overlay.
     expect(harness.sources.get('structures-3d')).toMatchObject({
       type: 'vector',
       url: `pmtiles://${URLS.structuresPmtilesLocal}`
@@ -2349,9 +2349,9 @@ test.describe('W3/W4 browser truth', () => {
       .poll(() => embedNote.textContent())
       .not.toContain('HIFLD transmission lines');
     // The buildings add no line of their own: nothing about their source
-    // prints on the map (owner, 2026-11-12).
+    // or how their heights were made prints on the map (owner, 2026-11-12).
     expect(await embedNote.textContent()).not.toMatch(
-      /FEMA|Oak Ridge|USA Structures|structure data|pilot area/i
+      /FEMA|Oak Ridge|USA Structures|structure data|pilot area|OpenStreetMap|Overture|GlobalBuildingAtlas|TU Munich|Technical University of Munich|modeled/i
     );
     if (CAPTURE_EVIDENCE) {
       await page.screenshot({

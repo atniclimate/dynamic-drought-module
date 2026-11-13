@@ -443,7 +443,7 @@ const FEATURE_BUDGETS = [
     }, {
       // MUST equal MAX_ARCHIVE_BYTES in scripts/build-structures-tiles.mjs
       // (same cross-gate agreement rule; tests/structures-3d.test.mjs).
-      path: 'data/structures-central-oregon-2023.pmtiles',
+      path: 'data/structures-central-oregon-2026-11.pmtiles',
       maxBytes: 16_000_000,
     }],
   },

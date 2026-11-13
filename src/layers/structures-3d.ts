@@ -8,13 +8,14 @@
  * only (a whole state is far past same-origin hosting) and stores z13-14
  * only, so buildings appear when zoomed in.
  *
- * Height: the source publishes none for any footprint in that box, so one
- * layer draws every building at one low stated height in one quiet tone
- * (STRUCTURES_PRESENTATION), never implying a measurement.
+ * Height: each footprint stands at the whole-metre height the bake sampled
+ * for it from the GBA.Height raster (GlobalBuildingAtlas), and at one low
+ * stand-in where it has none; one layer, one quiet tone
+ * (STRUCTURES_PRESENTATION). The heights are modeled, not surveyed.
  *
- * Nothing but the word: the map and its key carry no credit, source line or
- * caveat for this layer (owner, 2026-11-12). The credit is the
- * Acknowledgements row.
+ * Nothing but the word: the map, its key and the embed chip carry no credit,
+ * source line or caveat for this layer (owner, 2026-11-12). The credits are
+ * the Acknowledgements rows.
  *
  * Failure posture: the caller treats a false return as a NON-fatal
  * partial degrade (the scene keeps everything else).

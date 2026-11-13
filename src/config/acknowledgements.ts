@@ -61,6 +61,7 @@ export const ACKNOWLEDGEMENT_IDS = [
   'bia',
   'hifld',
   'usa-structures',
+  'globalbuildingatlas',
   'eia',
   'epa',
   'aafc',
@@ -347,6 +348,36 @@ export const ACKNOWLEDGEMENTS: Readonly<Record<AcknowledgementId, Acknowledgemen
     'usa-structures',
     'Oak Ridge National Laboratory (ORNL); Federal Emergency Management Agency (FEMA) Geospatial Response Office'
   ),
+  // GBA.Height (CC BY-NC 4.0): the building heights sampled under the USA Structures outlines
+  // (scripts/sample-gba-heights.py). The licence asks for the credit, a link to the licence and a
+  // statement of changes; all three are here and nothing prints on the map (owner, 2026-11-12).
+  globalbuildingatlas: {
+    ...nameOnly(
+      'globalbuildingatlas',
+      'GlobalBuildingAtlas (Technical University of Munich; Munich Center for Machine Learning)',
+      'partnerships-and-other'
+    ),
+    credits: [
+      // ledger: gba-height-credit (the LICENSE file shipped with the raster and the paper's own "How to cite" line)
+      {
+        text:
+          'Building heights: GBA.Height, part of GlobalBuildingAtlas (GBA): An Open Global and Complete Dataset of Building Polygons, Heights and LoD1 3D Models (c) by Xiaoxiang Zhu, Sining Chen, Fahong Zhang, Yilei Shi, Yuanyuan Wang, https://doi.org/10.14459/2025mp1782307, licensed under the Creative Commons Attribution-NonCommercial 4.0 International License and provided without warranties. Zhu, X. X., Chen, S., Zhang, F., Shi, Y., and Wang, Y.: GlobalBuildingAtlas: an open global and complete dataset of building polygons, heights and LoD1 3D models, Earth Syst. Sci. Data, 17, 6647-6668, https://doi.org/10.5194/essd-17-6647-2025, 2025.',
+        citeId: 'gba-height-credit'
+      }
+    ],
+    changes: [
+      // ledger: gba-height-changes (DDM's own statement of its method, M-100)
+      {
+        text:
+          'Changes by DDM: the height raster was sampled under USA Structures building outlines in central Oregon, taking the largest value among the raster cells each outline touches; each height was rounded to whole metres and raised to 3 m where lower. The GlobalBuildingAtlas authors have not approved or endorsed these changes.',
+        citeId: 'gba-height-changes'
+      }
+    ],
+    licence: {
+      name: 'Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0)',
+      url: 'https://creativecommons.org/licenses/by-nc/4.0/'
+    }
+  },
   eia: nameOnly('eia', 'U.S. Energy Information Administration'),
   epa: nameOnly('epa', 'U.S. Environmental Protection Agency'),
   aafc: {
@@ -492,8 +523,8 @@ export const PROVIDERS: Readonly<
   'enso-flow': ['noaa-ncep'],
   'terrain-archive': ['usgs'],
   'whp-3d': ['usfs'],
-  // The 3D Fire building footprints (src/layers/structures-3d.ts), central Oregon only.
-  structures: ['usa-structures'],
+  // The 3D Fire buildings (src/layers/structures-3d.ts), central Oregon only: outlines and sampled heights.
+  structures: ['usa-structures', 'globalbuildingatlas'],
   // The Wildfire 3D plant-stress ground: STAR's index, USGS Relative Greenness as the fallback.
   'dryness-ground': ['noaa-star', 'usgs'],
   // public/data/landscape-signature-pnw.json, the briefing's terrain, soil, land cover and fuels facts.

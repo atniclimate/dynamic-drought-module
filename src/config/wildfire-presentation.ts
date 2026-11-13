@@ -890,17 +890,21 @@ export const POWER_SHARED_QUALIFICATION =
  * (Oak Ridge National Laboratory for the FEMA Geospatial Response Office),
  * central Oregon pilot bake (scripts/build-structures-tiles.mjs).
  *
- * The source publishes no height for any footprint in the pilot box (the
- * bake refuses to run if one appears), so every building stands at ONE low
- * height, about one storey, in ONE quiet tone: a shape on the ground, never
- * a measured rise. Both are constants on purpose; a data-driven height or
- * tone would imply a measurement the source does not carry. The map and its
- * key carry no credit, source line or caveat (owner, 2026-11-12); the credit
- * is the Acknowledgements row.
+ * That source publishes no height in the pilot box, so the bake gives each
+ * footprint one sampled from the GBA.Height raster (GlobalBuildingAtlas;
+ * scripts/sample-gba-heights.py): whole metres, never under 3, stored as the
+ * tile property `heightProperty`. A footprint with no estimate carries no
+ * property and stands at `heightMeters`, about one storey. The heights are
+ * modeled from 2019 satellite imagery, not surveyed, so they vary the
+ * skyline and nothing else: ONE quiet tone, a constant on purpose, so no
+ * building reads as more certain or more at risk than another. The map, its
+ * key and the embed chip carry no credit, source line or caveat (owner,
+ * 2026-11-12); the credits are the Acknowledgements rows.
  */
 export const STRUCTURES_PRESENTATION = {
   color: '#78706a',
   opacity: 0.85,
+  heightProperty: 'h',
   heightMeters: 4
 } as const;
 
@@ -909,7 +913,13 @@ export function buildStructuresPaint(): NonNullable<
 > {
   return {
     'fill-extrusion-color': STRUCTURES_PRESENTATION.color,
-    'fill-extrusion-height': STRUCTURES_PRESENTATION.heightMeters,
+    // `number` takes the first operand that is a number, so a missing or
+    // malformed height draws the stand-in instead of a flat footprint.
+    'fill-extrusion-height': [
+      'number',
+      ['get', STRUCTURES_PRESENTATION.heightProperty],
+      STRUCTURES_PRESENTATION.heightMeters
+    ],
     'fill-extrusion-base': 0,
     'fill-extrusion-opacity': STRUCTURES_PRESENTATION.opacity
   };
@@ -917,9 +927,10 @@ export function buildStructuresPaint(): NonNullable<
 
 // DRAFT wording (the owner's call): new public wording, held here and read by
 // nothing, so it renders nowhere. Its home, once approved, is the Impact
-// Briefing, never the map or its key (tests/structures-3d.test.mjs holds that).
+// Briefing, never the map, its key or the embed chip
+// (tests/structures-3d.test.mjs holds that).
 export const STRUCTURES_HEIGHT_NOTE_DRAFT =
-  `Building heights in the 3D view are not measured. The source publishes no height for these buildings, so each one is drawn ${STRUCTURES_PRESENTATION.heightMeters} meters tall, about one story, to show where buildings stand.`;
+  `Building heights in the 3D view are estimates modeled from 2019 satellite imagery (GlobalBuildingAtlas, Technical University of Munich), not surveyed. Where no estimate exists a building is drawn ${STRUCTURES_PRESENTATION.heightMeters} meters tall.`;
 
 /**
  * NIFC WFIGS query scope (FE-16, 2026-08-28).
