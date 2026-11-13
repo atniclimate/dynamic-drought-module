@@ -433,6 +433,7 @@ const OUT_FIELDS_SENDERS = [
   'src/config/station-registry.ts',
   'src/config/urls.ts',
   'src/impact/sources.ts',
+  'src/impact/water-supply.ts',
   'src/layers/aiannh.ts',
   'src/layers/bc-drought.ts',
   'src/layers/bia-reservations.ts',
