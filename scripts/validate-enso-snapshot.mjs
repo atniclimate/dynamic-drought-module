@@ -180,9 +180,20 @@ const SELF_TEST = [
     make: () => ({ ...VALID(), soi: { sourceUrl: 'x', block: 'raw', latest: { year: 2026, month: 6, value: 1 }, values: [] } })
   },
   {
-    name: 'present malformed probabilities (strict transport rejects)',
+    name: 'any probabilities block, even well formed (rejected until an issuer feed exists)',
     mustPass: false,
-    make: () => ({ ...VALID(), probabilities: { sourceUrl: 'x', baseline: 'b', issued: null, seasons: [] } })
+    make: () => ({
+      ...VALID(),
+      probabilities: {
+        sourceUrl: 'https://example.org',
+        baseline: 'b',
+        issued: null,
+        seasons: [
+          { seas: 'DJF', laNina: 10, neutral: 60, elNino: 30 },
+          { seas: 'JFM', laNina: 10, neutral: 60, elNino: 30 }
+        ]
+      }
+    })
   },
   { name: 'not valid JSON', mustPass: false, raw: '{nope' },
   // ENSOSCI-01 regression classes. Each red fixture below reproduces one way

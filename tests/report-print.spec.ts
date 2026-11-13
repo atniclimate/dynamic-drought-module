@@ -3,7 +3,7 @@ import { test, expect } from './offline-test';
 import type { Page } from './offline-test';
 import { URLS } from '../src/config/urls';
 import { gotoApp } from './helpers';
-import { oniLineSvg, ensoPlumeSvg, cpcOutlookBarsSvg, trendLineSvg } from '../src/ui/charts';
+import { oniLineSvg, cpcOutlookBarsSvg, trendLineSvg } from '../src/ui/charts';
 
 test('D3 chart helpers print readable neutral series and preserve issuer colors', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -14,8 +14,6 @@ test('D3 chart helpers print readable neutral series and preserve issuer colors'
   const phases = [{ seas: 'DJF', year: 2025, anom: -0.7 }, { seas: 'JFM', year: 2025, anom: 0.6 }];
   const charts = [
     oniLineSvg(phases, { title: 'ONI fixture', source: 'Offline fixture', compare: { label: 'RONI', values: phases } }),
-    ensoPlumeSvg([{ seas: 'DJF', elNino: 20, neutral: 30, laNina: 50 }, { seas: 'JFM', elNino: 30, neutral: 40, laNina: 30 }],
-      { title: 'Plume fixture', source: 'Offline fixture' }),
     cpcOutlookBarsSvg({ variable: 'temperature', cat: 'Above', prob: 70, window: '6-10 day' }),
     trendLineSvg([{ t: 1, v: 10 }, { t: 2, v: 20 }], { title: 'Trend fixture', yMax: 500, yLabel: 'DSCI' })
   ];
@@ -30,7 +28,6 @@ test('D3 chart helpers print readable neutral series and preserve issuer colors'
   const invariantColors = [
     ['line[stroke="#ff0000"]', 'stroke', 'rgb(255, 0, 0)'],
     ['line[stroke="#0000ff"]', 'stroke', 'rgb(0, 0, 255)'],
-    ['line[stroke="#f59e0b"],polyline[stroke="#f59e0b"]', 'stroke', 'rgb(245, 158, 11)'],
     ['line[stroke="#06b6d4"],polyline[stroke="#06b6d4"]', 'stroke', 'rgb(6, 182, 212)'],
     ['rect[fill="#B32E05"]', 'fill', 'rgb(179, 46, 5)']
   ] as const;

@@ -30,7 +30,7 @@
 import { URLS } from '../config/urls';
 import { fetchSharedJsonWithBudget, ENSO_INDICES_SHARED_KEY } from '../util/fetch';
 import { isObject } from '../util/guards';
-import { oniLineSvg, ensoPlumeSvg, type OniPoint, type EnsoPlumePoint } from '../ui/charts';
+import { oniLineSvg, type OniPoint } from '../ui/charts';
 import { makeClaim } from './evidence';
 import type { SourceResult } from './sources';
 import type { BoundarySelectionContext, EnsoIndexReading } from './types';
@@ -129,17 +129,8 @@ interface SoiSeries {
   readonly values: SoiPoint[];
 }
 
-/** The optional probabilities block. The CPC Hypertext Markup Language (HTML)
- * scrape that once produced it was removed 2026-07-21 (T-P0-1), so current
- * snapshots never carry it; absent is the honest no-plume state, never an
- * error. The shape is retained only for a future documented machine feed. */
-interface EnsoProbabilities {
-  readonly sourceUrl: string;
-  readonly issued: string | null;
-  readonly baseline: string;
-  readonly seasons: EnsoPlumePoint[];
-}
-
+/** No probabilities block: no issuer machine feed exists (DDM-D06), so a
+ * snapshot that carried one is ignored here, never drawn (DDM-P4-T07). */
 interface EnsoSnapshot {
   readonly retrieved: string;
   readonly oni: IndexSeries;
@@ -147,7 +138,6 @@ interface EnsoSnapshot {
   readonly nino34?: Nino34Series;
   readonly nino34Weekly?: Nino34WeeklySeries;
   readonly soi?: SoiSeries;
-  readonly probabilities?: EnsoProbabilities;
 }
 
 /** A label-only read of the bundled snapshot's operational RONI state. */
@@ -934,40 +924,6 @@ function isSoiSeries(value: unknown): value is SoiSeries {
   );
 }
 
-function isPlumePoint(value: unknown): value is EnsoPlumePoint {
-  return (
-    isObject(value) &&
-    typeof value.seas === 'string' &&
-    typeof value.laNina === 'number' &&
-    typeof value.neutral === 'number' &&
-    typeof value.elNino === 'number'
-  );
-}
-
-function isProbabilities(value: unknown): value is EnsoProbabilities {
-  return (
-    isObject(value) &&
-    typeof value.sourceUrl === 'string' &&
-    typeof value.baseline === 'string' &&
-    (typeof value.issued === 'string' || value.issued === null) &&
-    Array.isArray(value.seasons) &&
-    value.seasons.length >= 2 &&
-    value.seasons.every(isPlumePoint)
-  );
-}
-
-function plumeHeadline(probabilities: EnsoProbabilities): string {
-  const far = probabilities.seasons[probabilities.seasons.length - 1]!;
-  const categories = [
-    { name: 'El Nino', pct: far.elNino },
-    { name: 'ENSO-neutral', pct: far.neutral },
-    { name: 'La Nina', pct: far.laNina }
-  ].sort((a, b) => b.pct - a.pct);
-  const lead = categories[0]!;
-  const issued = probabilities.issued ? ` (issued ${probabilities.issued})` : '';
-  return `The official CPC probabilistic outlook${issued} puts the ${far.seas} odds at ${lead.pct}% ${lead.name}.`;
-}
-
 /**
  * Load and validate the bundled snapshot. RONI and ONI are required. The new
  * Nino 3.4 and SOI blocks are optional and are dropped independently when
@@ -1025,24 +981,13 @@ async function loadEnsoSnapshot(signal: AbortSignal): Promise<EnsoSnapshot> {
     console.warn('[enso] malformed SOI block in snapshot; seasonal indices still render.');
   }
 
-  const probabilities =
-    json.probabilities === undefined
-      ? undefined
-      : isProbabilities(json.probabilities)
-        ? json.probabilities
-        : null;
-  if (probabilities === null) {
-    console.warn('[enso] malformed probabilities block in snapshot; plume omitted.');
-  }
-
   return {
     retrieved: json.retrieved,
     oni: json.oni,
     roni: json.roni,
     ...(nino34 ? { nino34 } : {}),
     ...(nino34Weekly ? { nino34Weekly } : {}),
-    ...(soi ? { soi } : {}),
-    ...(probabilities ? { probabilities } : {})
+    ...(soi ? { soi } : {})
   };
 }
 
@@ -1202,42 +1147,6 @@ export async function readEnsoClaims(signal: AbortSignal): Promise<SourceResult>
           ]
         : [];
 
-    // The forward plume remains absent unless a future snapshot carries a
-    // probabilities block from a documented machine source.
-    const plumeClaims = [];
-    if (snap.probabilities) {
-      const probabilities = snap.probabilities;
-      const plumeSvg = ensoPlumeSvg(probabilities.seasons, {
-        title: 'Official CPC odds of El Nino, neutral, and La Nina by season',
-        source: `NOAA CPC probabilistic ENSO outlook${probabilities.issued ? `, issued ${probabilities.issued}` : ''}`
-      });
-      if (plumeSvg) {
-        plumeClaims.push(
-          makeClaim({
-            text: // vocab-allow: honesty disclaimer, denies being a forecast
-              `${plumeHeadline(probabilities)} These are odds across overlapping three-month seasons, not a forecast of outcomes; ` +
-              `the categories are defined against the ${probabilities.baseline}.`,
-            source: 'NOAA CPC official probabilistic ENSO outlook (CPC/IRI consensus)',
-            sourceUrl: probabilities.sourceUrl,
-            product: 'ensoOutlook',
-            evidence: 'outlook',
-            dates: {
-              retrieved: snap.retrieved,
-              ...(probabilities.issued ? { issued: probabilities.issued } : {})
-            },
-            uncertainty: {
-              kind: 'categorical',
-              text: // vocab-allow: honesty disclaimer, denies being a forecast
-                'category odds by overlapping three-month season, not a forecast of outcomes'
-            },
-            // Odds by overlapping three-month season: the long-range horizon.
-            horizon: 'longRange',
-            ...(plumeSvg ? { chartSvg: plumeSvg } : {})
-          })
-        );
-      }
-    }
-
     // The index state as data, beside the sentence (types.ts `ClaimReading`):
     // the same validated `roni.latest` point and the same resolved state the
     // sentence above was built from, for the surfaces that draw the index on
@@ -1281,8 +1190,8 @@ export async function readEnsoClaims(signal: AbortSignal): Promise<SourceResult>
             text: 'the newest seasons are preliminary: CPC states that RONI values may change up to two months after the initial real-time value is posted, because of the high frequency filter applied to the ERSSTv6 data'
           },
           // An index-state read of the season now in progress, so it belongs
-          // under the current horizon; the tendency and the official odds
-          // built from the same snapshot stand under the long-range horizon.
+          // under the current horizon; the tendency built from the same
+          // snapshot stands under the long-range horizon.
           horizon: 'current',
           ...(stale ? {} : { reading }),
           ...(chartSvg ? { chartSvg } : {})
@@ -1290,8 +1199,7 @@ export async function readEnsoClaims(signal: AbortSignal): Promise<SourceResult>
         ...authorityClaims,
         ...tendencyClaims,
         ...observedCompanionClaims,
-        ...weeklyObservationClaims,
-        ...plumeClaims
+        ...weeklyObservationClaims
       ]
     };
   } catch (err) {

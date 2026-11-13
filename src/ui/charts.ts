@@ -20,7 +20,7 @@
  */
 
 import { escapeHtml } from '../util/escape';
-import { ENSO_PHASE_COLORS, ENSO_INDEX_GUIDE_COLORS, CPC_OUTLOOK_TERCILE_COLORS, OBSERVATION_SERIES_COLOR, INDEX_SERIES_COLORS } from '../config/palette';
+import { ENSO_INDEX_GUIDE_COLORS, CPC_OUTLOOK_TERCILE_COLORS, OBSERVATION_SERIES_COLOR, INDEX_SERIES_COLORS } from '../config/palette';
 
 /**
  * Wrap chart inner markup in an accessible, responsive SVG. `title` is the text
@@ -169,7 +169,7 @@ export function trendLineSvg(points: readonly TrendPoint[], opts: TrendOptions):
 }
 
 // ---------------------------------------------------------------------------
-// Stacked probability bar (shared by CPC outlook terciles and ENSO)
+// Stacked probability bar (CPC outlook terciles)
 // ---------------------------------------------------------------------------
 
 export interface ProbSegment {
@@ -185,8 +185,7 @@ export interface ProbSegment {
 /**
  * Render a horizontal stacked-probability bar with each segment directly
  * labeled by name and percent, so meaning never rests on hue alone. Used for a
- * Climate Prediction Center below/near/above tercile split and for an El Nino /
- * Southern Oscillation (ENSO) probability split. Probabilities are rendered as
+ * Climate Prediction Center below/near/above tercile split. Probabilities are rendered as
  * probabilities, never collapsed to a single value.
  */
 export function stackedProbabilityBarsSvg(segments: readonly ProbSegment[], title: string, source?: string): string {
@@ -347,107 +346,6 @@ export function oniLineSvg(values: readonly OniPoint[], opts: OniLineOptions): s
     ? `${opts.title}. Preliminary plotted values may change.`
     : opts.title;
   return `<figure class="ddm-chart-fig">${svgWrap(w, h, accessibleTitle, inner)}</figure>`;
-}
-
-// ---------------------------------------------------------------------------
-// ENSO probability plume (DORMANT since 2026-07-21, T-P0-1: the CPC HTML
-// scrape that fed it was removed per the anti-scrape doctrine, so no current
-// snapshot carries a probabilities block and this chart never renders. The
-// machinery is reserved for a documented machine feed or an explicitly-labeled
-// modeled NMME ensemble (workplan T-V0-3 / U-ENSO-REPAIR).
-// ---------------------------------------------------------------------------
-
-export interface EnsoPlumePoint {
-  /** Overlapping three-month season code, for example "MJJ". */
-  readonly seas: string;
-  /** Integer percent chance of La Nina. */
-  readonly laNina: number;
-  /** Integer percent chance of ENSO-neutral. */
-  readonly neutral: number;
-  /** Integer percent chance of El Nino. */
-  readonly elNino: number;
-}
-
-export interface EnsoPlumeOptions {
-  readonly title: string;
-  readonly source: string;
-}
-
-/**
- * The ENSO probability plume: three probability lines (chance of El Nino,
- * neutral, and La Nina) across the CPC outlook's overlapping three-month
- * seasons. Odds, never outcomes: the y axis is percent probability, every
- * line is labeled with its terminal value, and guides sit at 25/50/75 so
- * "likely" reads against an explicit scale rather than an impression. Warm
- * amber for El Nino, cool cyan for La Nina, grey for neutral, matching the
- * tilt-color language used in the outlook bars.
- */
-export function ensoPlumeSvg(
-  seasons: readonly EnsoPlumePoint[],
-  opts: EnsoPlumeOptions
-): string {
-  const pts = seasons.filter(
-    (p) =>
-      Number.isFinite(p.laNina) && Number.isFinite(p.neutral) && Number.isFinite(p.elNino)
-  );
-  if (pts.length < 2) return '';
-
-  const w = 280;
-  const h = 130;
-  const padL = 26;
-  const padR = 8;
-  const padTop = 22;
-  const padBottom = 24;
-  const plotW = w - padL - padR;
-  const plotH = h - padTop - padBottom;
-
-  const xOf = (i: number): number => padL + (i / (pts.length - 1)) * plotW;
-  const y = (pct: number): number => padTop + (1 - pct / 100) * plotH;
-
-  const line = (read: (p: EnsoPlumePoint) => number): string =>
-    pts.map((p, i) => `${xOf(i).toFixed(1)},${y(read(p)).toFixed(1)}`).join(' ');
-
-  const lastPt = pts[pts.length - 1]!;
-  const series = [
-    { label: 'El Nino', color: ENSO_PHASE_COLORS.elNino, points: line((p) => p.elNino), last: lastPt.elNino, dash: '' },
-    { label: 'Neutral', color: ENSO_PHASE_COLORS.neutral, points: line((p) => p.neutral), last: lastPt.neutral, dash: ' stroke-dasharray="4 2"' },
-    { label: 'La Nina', color: ENSO_PHASE_COLORS.laNina, points: line((p) => p.laNina), last: lastPt.laNina, dash: ' stroke-dasharray="2 2"' }
-  ];
-
-  const guides = [25, 50, 75]
-    .map((pct) => {
-      const gy = y(pct).toFixed(1);
-      return (
-        `<line x1="${padL}" y1="${gy}" x2="${w - padR}" y2="${gy}" stroke="var(--line-strong)" stroke-width="0.6" stroke-dasharray="3 3"/>` +
-        `<text x="${padL - 3}" y="${(Number(gy) + 2.5).toFixed(1)}" fill="var(--fg-3)" font-size="7" text-anchor="end">${pct}%</text>`
-      );
-    })
-    .join('');
-
-  const legend = series
-    .map(
-      (s, i) =>
-        `<line x1="${padL + i * 88}" y1="6" x2="${padL + i * 88 + 12}" y2="6" stroke="${s.color}" stroke-width="1.6"${s.dash}/>` +
-        `<text x="${padL + i * 88 + 16}" y="9" fill="var(--fg-1)" font-size="8">${escapeHtml(s.label)} ${s.last}%</text>`
-    )
-    .join('');
-
-  const polylines = series
-    .map(
-      (s) =>
-        `<polyline points="${s.points}" fill="none" stroke="${s.color}" stroke-width="1.4" stroke-linejoin="round"${s.dash}/>`
-    )
-    .join('');
-
-  const inner =
-    guides +
-    legend +
-    polylines +
-    `<text x="${padL}" y="${h - 12}" fill="var(--fg-3)" font-size="7.5">${escapeHtml(pts[0]!.seas)}</text>` +
-    `<text x="${w - padR}" y="${h - 12}" fill="var(--fg-3)" font-size="7.5" text-anchor="end">${escapeHtml(lastPt.seas)}</text>` +
-    attribution(padL, h - 2, opts.source);
-
-  return `<figure class="ddm-chart-fig">${svgWrap(w, h, opts.title, inner)}</figure>`;
 }
 
 // ---------------------------------------------------------------------------

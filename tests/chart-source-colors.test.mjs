@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { registerHooks } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
@@ -83,17 +83,17 @@ test('ONI reference guides use historical CPC colors while measured series stay 
   assert.match(svg, /El Nino \+0\.5/);
   assert.match(svg, /La Nina -0\.5/);
 });
-test('ENSO plume lines preserve three phase colors and redundant line styles', () => {
-  const svg = charts.ensoPlumeSvg([
-    { seas: 'DJF', elNino: 20, neutral: 30, laNina: 50 },
-    { seas: 'JFM', elNino: 30, neutral: 40, laNina: 30 }
-  ], { title: 'Fixture', source: 'Fixture' });
-  const lines = [...svg.matchAll(/<polyline\b[^>]*>/g)].map(m => m[0]);
-  assert.equal(lines.length, 3);
-  ['#f59e0b', '#94a3b8', '#06b6d4'].forEach((color, i) =>
-    assert.ok(lines[i].includes('stroke="' + color + '"')));
-  assert.match(lines[1], /stroke-dasharray="4 2"/);
-  assert.match(lines[2], /stroke-dasharray="2 2"/);
+test('no module in src/impact or src/ui carries a probability plume type, headline or chart', () => {
+  // DDM-P4-T07: no issuer machine feed exists (DDM-D06), so the plume code was dead.
+  assert.equal('ensoPlumeSvg' in charts, false);
+  for (const dir of ['impact', 'ui']) {
+    const root = new URL('../src/' + dir + '/', import.meta.url);
+    for (const file of readdirSync(root, { recursive: true })) {
+      if (!/\.tsx?$/.test(file)) continue;
+      const source = readFileSync(new URL(file.replaceAll('\\', '/'), root), 'utf8');
+      assert.doesNotMatch(source, /ensoPlumeSvg|EnsoPlume|EnsoProbabilities|plumeHeadline|isPlumePoint/, dir + '/' + file);
+    }
+  }
 });
 const INDEX_GUIDE_EXPECTED = {
   ONI: { warm: '#ff0000', cold: '#0000ff' },
@@ -122,12 +122,9 @@ test('S13 guide source is explicit and does not follow arbitrary primary-label w
     assert.ok(svg.includes('fill="var(--fg-1)" font-size="7.5" text-anchor="end">La Nina -0.5'));
   }
 });
-test('S13 source-table mutation reaches actual guide markup and leaves the plume untouched', () => {
+test('S13 source-table mutation reaches actual guide markup', () => {
   assert.deepEqual(palette.ENSO_INDEX_GUIDE_COLORS, INDEX_GUIDE_EXPECTED);
-  const plumeValues = [{ seas: 'DJF', elNino: 20, neutral: 30, laNina: 50 },
-    { seas: 'JFM', elNino: 30, neutral: 40, laNina: 30 }];
   const opts = { title: 'Fixture', source: 'Fixture' };
-  const beforePlume = charts.ensoPlumeSvg(plumeValues, opts);
   const beforeOni = charts.oniLineSvg(phases, opts);
   const saved = palette.ENSO_INDEX_GUIDE_COLORS.RONI.warm;
   try {
@@ -136,7 +133,6 @@ test('S13 source-table mutation reaches actual guide markup and leaves the plume
     assert.deepEqual(indexGuideMarks(charts.oniLineSvg(phases, { ...opts, guideSource: 'RONI' })),
       ['#123456', '#195fe4']);
     assert.equal(charts.oniLineSvg(phases, opts), beforeOni);
-    assert.equal(charts.ensoPlumeSvg(plumeValues, opts), beforePlume);
   } finally {
     palette.ENSO_INDEX_GUIDE_COLORS.RONI.warm = saved;
   }
