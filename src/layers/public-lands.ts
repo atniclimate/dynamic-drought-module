@@ -7,9 +7,10 @@
  * unit's name from zoom 12. American Indian lands (manager type TRIB) are left
  * out: the Tribal layers draw them from their own publishing services.
  *
- * Public data at T0, read live and never stored. A read is abortable and
+ * Public data at T0, read live; the app keeps no copy. A read is abortable and
  * superseded by the next view; a failed read leaves the layer empty and its
- * status unavailable until the next view answers.
+ * status unavailable until the next view answers, and an answer cut at the
+ * service's record limit draws what came and reports live (partial).
  */
 
 import type * as maplibregl from 'maplibre-gl';
@@ -19,6 +20,7 @@ import { MAP_GROUND_COLOR } from '../config/interface-tokens';
 import { URLS } from '../config/urls';
 import { registry } from '../state/registry';
 import { fetchBufferedWithBudget } from '../util/fetch';
+import { isTruncated } from '../util/geojson-checks';
 
 const LAYER_KEY = 'public-lands';
 const SOURCE_ID = 'public-lands';
@@ -66,7 +68,8 @@ async function refresh(): Promise<void> {
   const b = map.getBounds();
   const envelope = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()];
   const key = envelope.map((v) => v.toFixed(3)).join(',');
-  if (key === shownKey) return;
+  // A read still in flight is for some other view: supersede it even when this view is the one shown.
+  if (key === shownKey && !controller) return;
   controller?.abort();
   const own = new AbortController();
   controller = own;
@@ -92,10 +95,11 @@ async function refresh(): Promise<void> {
     if (data?.type !== 'FeatureCollection' || !Array.isArray(data.features)) throw new Error('not a FeatureCollection');
     setData(map, data);
     shownKey = key;
-    registry.setStatus(LAYER_KEY, 'ready');
+    registry.setStatus(LAYER_KEY, isTruncated(data) ? 'degraded' : 'ready');
   } catch (err) {
     if (own.signal.aborted) return;
     console.warn('[public-lands] PAD-US read failed; the layer stays empty for this view.', err);
+    shownKey = '';
     setData(map, EMPTY);
     registry.setStatus(LAYER_KEY, 'error');
   } finally {

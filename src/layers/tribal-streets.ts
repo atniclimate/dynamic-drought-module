@@ -6,7 +6,8 @@
  * Native Hawaiian Areas that the Tribal Lands layer (src/layers/aiannh.ts)
  * already holds:
  *   - streets with their names (Census TIGERweb Local Roads), drawn only
- *     within the areas (MapLibre `within`);
+ *     within the areas (MapLibre `within`, so a street crossing a boundary
+ *     is left off);
  *   - named streams and lakes (USGS National Hydrography Dataset, large
  *     scale), drawn like the base map's water;
  *   - community names (Census Designated Places, at the Census internal
@@ -16,8 +17,8 @@
  * crossing a boundary would vanish.
  *
  * Tribal boundaries, roads, water and place names are public data at T0
- * (CLAUDE.md). All are read live and never stored: nothing here is written to
- * the repository or to disk. Tribal Lands starts and stops this module and
+ * (CLAUDE.md). All are read live and the app keeps no copy: nothing here is
+ * written to the repository. Tribal Lands starts and stops this module and
  * hands it the areas each time it applies data, so it runs exactly while that
  * layer is on. Each read fails on its own and leaves only its own detail off;
  * the mesoscale base map stays.
@@ -31,6 +32,7 @@ import { BASE_WATER_LABEL_COLOR, MAP_GROUND_COLOR, PLACE_LABEL_COLOR, PLACE_LABE
 import { URLS } from '../config/urls';
 import { BOTTOM_STACK_IDS, TOP_LABEL_IDS, firstLayerIdAbove } from '../map/layer-order';
 import { fetchBufferedWithBudget } from '../util/fetch';
+import { isTruncated } from '../util/geojson-checks';
 
 /** Street zoom: a zoom 12 view of a Tribal town reads about 1,500 streets (360 KB, measured 2026-11-12). */
 export const TRIBAL_STREETS_MIN_ZOOM = 12;
@@ -287,6 +289,7 @@ async function readOne(map: maplibregl.Map, read: DetailRead, envelope: Box, sig
     const data = (await res.json()) as FeatureCollection;
     if (signal.aborted || activeMap !== map) return true;
     if (data?.type !== 'FeatureCollection' || !Array.isArray(data.features)) throw new Error('not a FeatureCollection');
+    if (isTruncated(data)) console.warn(`[tribal-detail] ${read.source} answer was cut at the service's record limit; drawing the part that came.`);
     ensureLayers(map, read);
     if (read.withinAreas) {
       const inside: FeatureCollection = { type: 'FeatureCollection', features: areas.map((a) => a.feature) };
