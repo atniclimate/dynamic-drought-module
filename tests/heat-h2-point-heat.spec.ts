@@ -34,6 +34,7 @@ import {
   gotoApp,
   layerCheckbox,
   layerPill,
+  showFullDetail,
   stubCpcSeasonalTempOutlook,
   stubHeatRiskCatalog as stubHeatRiskCatalogShared,
   waitForLayerSettled
@@ -686,13 +687,11 @@ test.describe('H2 critical-first surfaces', () => {
           await gotoApp(page, '?select=state:WA');
           const panel = page.locator('#impact-panel');
           const fullDetail = panel.locator('.briefing-view-btn[data-briefing-view="matrix"]');
-          if (width === 390) {
-            // A phone opens the briefing on the priority view; Full detail is the explicit step.
-            await page.locator('#sheet-report-door').click();
-            await expect(fullDetail).toHaveAttribute('aria-pressed', 'false');
-            await fullDetail.click();
-            await expect(fullDetail).toHaveAttribute('aria-pressed', 'true');
-          }
+          if (width === 390) await page.locator('#sheet-report-door').click();
+          // Every shell opens the briefing on the priority view; Full detail is the explicit step.
+          await expect(fullDetail).toHaveAttribute('aria-pressed', 'false');
+          await fullDetail.click();
+          await expect(fullDetail).toHaveAttribute('aria-pressed', 'true');
           const point = panel.locator('.point-heat[aria-label="Heat at selected point"] > .impact-horizon-head .point-heat-pill');
           const currentHeat = panel.locator('.impact-hazard[data-horizon="current"][data-hazard="heat"] .impact-hazard-pill');
           await expectReadPill(point, 'loading');
@@ -725,7 +724,7 @@ test.describe('H2 critical-first surfaces', () => {
       /Heat at the selected point: Near Station, [\d.]+ mi \([\d.]+ km\) from the selected point, reports temperature 90 °F \(32 °C\), heat index 95 °F \(35 °C\)/
     );
     await page.locator('#sheet-report-door').click();
-    // The briefing opens on the priority view on a phone; point heat leads the full detail.
+    // The briefing opens on the priority view; point heat leads the full detail.
     const fullDetail = page.locator('#sheet-report .briefing-view-btn[data-briefing-view="matrix"]');
     await expect(fullDetail).toHaveAttribute('aria-pressed', 'false');
     await fullDetail.click();
@@ -767,6 +766,7 @@ test.describe('H2 critical-first surfaces', () => {
     const pointHeat = page.locator(
       '#impact-panel .point-heat[aria-label="Heat at selected point"]'
     );
+    await showFullDetail(page);
     await expect(pointHeat).toBeVisible();
     const identity = pointHeat.locator(
       '.point-heat-card[aria-label="NWS grid guidance"] .point-heat-meta'
@@ -842,6 +842,7 @@ test.describe('H2 critical-first surfaces', () => {
     const pointHeat = page.locator(
       '#impact-panel .point-heat[aria-label="Heat at selected point"]'
     );
+    await showFullDetail(page);
     await expect(pointHeat).toBeVisible();
     await expect(
       pointHeat.locator(
@@ -952,8 +953,7 @@ test.describe('H2 critical-first surfaces', () => {
           '#brief-search [data-search-kind="place"][data-search-id="OR"]'
         )
         .click();
-      // The chosen place's one briefing door (visual uniformity wave 1, D6).
-      await page.locator('#region-briefing-btn').click();
+      // The pick opens the chosen place's briefing (owner 2026-11-13).
       await expect(page.locator('.point-heat-station')).toContainText(
         'New Station'
       );
@@ -1456,8 +1456,7 @@ test.describe('DDM-P7-T07: the season-ahead heat cell', () => {
           '#brief-search [data-search-kind="place"][data-search-id="OR"]'
         )
         .click();
-      // The chosen place's one briefing door (visual uniformity wave 1, D6).
-      await page.locator('#region-briefing-btn').click();
+      // The pick opens the chosen place's briefing (owner 2026-11-13).
 
       const cell = page.locator(CELL);
       await expect(cell.locator('.impact-claim')).toContainText(

@@ -27,7 +27,7 @@ import { expect, test, type Page } from './offline-test';
 import { KEY_ELIGIBLE_LABELS } from '../src/config/chip-labels';
 import { HAZARD_CLUSTERS, HAZARD_CLUSTER_KEYS } from '../src/config/clusters';
 import { NADM_CATEGORIES, USDM_CATEGORIES } from '../src/config/palette';
-import { awaitQuiescence, gotoApp, stubHeatRiskCatalog, waitForLayerSettled } from './helpers';
+import { awaitQuiescence, gotoApp, showFullDetail, stubHeatRiskCatalog, waitForLayerSettled } from './helpers';
 import {
   describeFindings,
   lineCounts,
@@ -208,8 +208,8 @@ async function chooseMode(page: Page, mode: string): Promise<void> {
 }
 
 /**
- * The Key drawer trigger. Since the Brief strip moved to the sidebar's
- * bottom dock, src/ui/map-key.ts no longer sets `data-key-metric-trigger`,
+ * The Key drawer trigger. Since the Brief strip moved out of the Key into its
+ * own seat under the Key chip, src/ui/map-key.ts no longer sets `data-key-metric-trigger`,
  * so the Key toggle is the trigger in every view; the metric branch below
  * stays inert unless the attribute returns.
  */
@@ -313,7 +313,7 @@ async function closeKeyDrawer(page: Page, where: string): Promise<void> {
 }
 
 /**
- * The drought READING: the docked drought tile on the desktop shell, whose
+ * The drought READING: the drought tile seated under the Key chip on the desktop shell, whose
  * code and category name the design's "D4 Exceptional Drought" case names.
  */
 const DROUGHT_READING = '#conditions-strip-dock .conditions-metric[data-metric="drought"]';
@@ -542,6 +542,8 @@ for (const viewport of VIEWPORTS) {
       // The briefing for WA (DR-109).
       await gotoApp(page, '?view=brief&layers=places&select=state:WA&region=washington_state');
       await expect(page.locator('#impact-panel')).toBeVisible({ timeout: 15_000 });
+      // The scan reads visible text only: step to the full detail so the matrix is scanned too.
+      await showFullDetail(page);
       await expect(page.locator('.impact-horizons .impact-hazard').first()).toBeVisible();
       await settle(page);
       await scan('WA briefing', ['#impact-panel']);

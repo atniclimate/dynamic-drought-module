@@ -346,10 +346,7 @@ export function Fire3DControl({
     const box = root.current?.closest('.sidebar-scroll');
     if (!root.current || !box) return;
     if (!shouldRevealScroll({ firstRun, sceneRequested: turnedOn3D.current && preference, fuelRowChanged, recipeChanged })) return;
-    // A hidden dock (the phone sheet) has no box and would read top 0.
-    const dock = box.querySelector('.sidebar-bottom-dock');
-    const dockTop = dock?.getClientRects().length ? dock.getBoundingClientRect().top : undefined;
-    box.scrollTop += revealScroll(root.current.getBoundingClientRect(), box.getBoundingClientRect(), dockTop);
+    box.scrollTop += revealScroll(root.current.getBoundingClientRect(), box.getBoundingClientRect());
   }, [visible, status?.state, fuelTarget]);
 
   useEffect(() => {

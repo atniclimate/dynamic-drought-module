@@ -7,7 +7,7 @@ import {
 } from '../src/impact/evidence';
 import type { EvidenceClass } from '../src/impact/types';
 import { renderClaim } from '../src/ui/claim-render';
-import { gotoApp } from './helpers';
+import { gotoApp, showFullDetail } from './helpers';
 
 /**
  * The evidence/claim contract (0.8.0 T-P0-2; D-0.8.0-012).
@@ -386,6 +386,7 @@ test.describe('rendered briefing under the contract', () => {
 
     const panel = page.locator('#impact-panel');
     await expect(panel).toBeVisible({ timeout: 15_000 });
+    await showFullDetail(page);
 
     // The USDM category claim is analyzed, never plain "Observed".
     const usdmClaim = panel.locator('.impact-claim', {
@@ -520,6 +521,7 @@ test.describe('legend reachable from the claim (DDM-P13-T02 correction)', () => 
     await gotoApp(page, '?select=state:WA');
     const panel = page.locator('#impact-panel');
     await expect(panel).toBeVisible({ timeout: 15_000 });
+    await showFullDetail(page);
 
     // The USDM layer starts off: no `layers=` naming it yet.
     expect(new URL(page.url()).searchParams.get('layers') ?? '').not.toContain('usdm');
@@ -549,5 +551,8 @@ test.describe('legend reachable from the claim (DDM-P13-T02 correction)', () => 
         { timeout: 10_000 }
       )
       .toEqual({ panelHidden: false, sectionExists: true });
+    // The desktop Brief draws no legend panel (display: none), so the link
+    // opens the on-map Key, where the layer's legend reads.
+    await expect(page.locator('#map-key')).toHaveAttribute('data-key-details-open', 'true');
   });
 });

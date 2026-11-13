@@ -172,15 +172,16 @@ test.describe('U1 the two doors (view mode)', () => {
       releaseBoundary();
     }
 
-    // Summary-first (D-0.7.0-070): the pick sets the SELECTION (the
-    // briefing opens only through the panel link), so the newest-intent
-    // contract now reads: the summary shows the user's pick and the held
+    // A search pick opens its briefing (owner 2026-11-13), so the
+    // newest-intent contract reads: the user's pick opens, and the held
     // deep-link open YIELDS entirely (no Washington panel ever).
     await expect(page.locator('#brief-place-name')).toHaveText('Oregon', {
       timeout: 15_000
     });
+    await expect(page.locator('#impact-panel.open')).toBeVisible();
+    await expect(page.locator('#impact-panel-title')).toHaveText('Oregon');
     await expect(page.locator('html')).toHaveAttribute('data-ddm-boot', 'idle');
-    await expect(page.locator('#impact-panel.open')).toHaveCount(0);
+    await expect(page.locator('#impact-panel-title')).toHaveText('Oregon');
     await expect(page.locator('#brief-place-name')).toHaveText('Oregon');
   });
 

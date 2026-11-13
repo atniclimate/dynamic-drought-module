@@ -3,7 +3,7 @@ import { test, expect } from './offline-test';
 import type { Page } from './offline-test';
 import { HAZARD_CLUSTERS, HAZARD_CLUSTER_KEYS } from '../src/config/clusters';
 import { URLS } from '../src/config/urls';
-import { gotoApp, waitForLayerSettled } from './helpers';
+import { gotoApp, showFullDetail, waitForLayerSettled } from './helpers';
 
 /**
  * A minimal NWS point-heat stub (mirrors `stubBrowserNwsHeat` in
@@ -347,6 +347,7 @@ test.describe('impact panel accessibility', () => {
 
       const panel = page.locator('#impact-panel');
       await expect(panel).toBeVisible({ timeout: 15_000 });
+      await showFullDetail(page);
       const series = panel.locator('.point-heat-series');
       await expect(series.first(), `${key}: grid guidance renders`).toBeVisible();
       expect(
@@ -376,6 +377,7 @@ test.describe('impact panel accessibility', () => {
 
     const panel = page.locator('#impact-panel');
     await expect(panel).toBeVisible({ timeout: 15_000 });
+    await showFullDetail(page);
     const series = panel.locator('.point-heat-series');
     await expect(series.first()).toBeVisible();
     await expect(panel.locator('.point-heat-series[open]')).toHaveCount(0);

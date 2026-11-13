@@ -14,7 +14,8 @@
  *            frames it, lights it, and opens its briefing (locateBoundary).
  *   - place  a state; opens its drought briefing (openStateBriefing).
  *   - city   a major city from the shipped Natural Earth points; moves the
- *            camera and clears the selected place (no briefing, no layer change).
+ *            camera and opens the briefing of the State that holds it (no
+ *            layer change).
  *   - layer  a catalog layer; turns it on through the shared toggle command
  *            (which syncs the checkbox and respects surface exclusivity,
  *            exactly like a catalog toggle; no layer co-activates a partner
@@ -39,10 +40,9 @@ import { buildBoundaryContext } from '../impact/context';
 import { escapeSql, mergeArealGeometry } from '../util/arcgis-features';
 import { bboxCenter, bboxToContinuousBounds } from '../util/bbox';
 import { geometryBboxAcrossAntimeridian } from '../util/antimeridian';
-import { openStateBriefing } from '../state/deep-link';
+import { briefingCameraPadding, openStateBriefing } from '../state/deep-link';
 import { showLocatedBoundary } from '../state/located-boundary';
 import { clearEmphasis } from '../state/place-emphasis';
-import { getViewMode } from '../state/view-mode';
 import { onPlaceSelectionChange, setPlaceSelection } from '../state/place-selection';
 import {
   loadTribalRoster,
@@ -52,7 +52,6 @@ import {
 } from '../state/tribal-roster';
 import { fetchBufferedWithBudget, fetchJsonWithBudget } from '../util/fetch';
 import { isObject } from '../util/guards';
-import { isSheetActive, sheetCameraInset, sheetCameraSideInset } from './mobile-sheet';
 import { requestLayerOn } from './layer-toggle-command';
 import { isCurrentBriefingIntent, nextBriefingIntent, openImpactPanel } from './impact-panel';
 import { showToast } from './overlay';
@@ -285,16 +284,10 @@ async function locateBoundary(map: maplibregl.Map, spec: LocateSpec): Promise<vo
         [continuous[0], continuous[1]],
         [continuous[2], continuous[3]]
       ],
-      // On a phone the answer opens in the bottom sheet, or in the drawer on
-      // its side: keep whichever band it covers clear.
-      {
-        padding: {
-          top: 60,
-          right: 60,
-          bottom: 60 + sheetCameraInset(),
-          left: 60 + sheetCameraSideInset()
-        }
-      }
+      // The pick opens its briefing on every shell, so the fit keeps the band
+      // it covers clear: the drawer's side on a desktop or tablet, the bottom
+      // sheet or its side drawer on a phone (the shared rule every briefing fit uses).
+      { padding: briefingCameraPadding(true) }
     );
   }
 
@@ -317,10 +310,10 @@ async function locateBoundary(map: maplibregl.Map, spec: LocateSpec): Promise<vo
   // ORDER MATTERS: the located-boundary highlight records the selection
   // current when it is shown and clears on a close or a different subject
   // (the stage-5 major 4 fix), so the selection is set first and the
-  // highlight for THIS subject renders after; any prior subject's is gone. Summary-first (D-0.7.0-070): the search
-  // selection behaves like a map click, so the briefing opens through the
-  // left panel's one link; on the active mobile Brief sheet it still opens
-  // directly (map-click parity, the at-hand half detent IS the summary).
+  // highlight for THIS subject renders after; any prior subject's is gone. A
+  // search pick asks for the place, so its briefing opens on every shell
+  // (owner 2026-11-13), as Locate and the Place studio do; a map click keeps
+  // summary-first (D-0.7.0-070) in the interaction coordinator.
   const rawContext = buildBoundaryContext(
     spec.kind,
     primary.properties ?? null,
@@ -333,7 +326,7 @@ async function locateBoundary(map: maplibregl.Map, spec: LocateSpec): Promise<vo
     ...(spec.areaLabel ? { areaLabel: spec.areaLabel } : {})
   };
   setPlaceSelection({ label: context.title, context });
-  if (isSheetActive() && getViewMode() === 'brief') openImpactPanel(context);
+  openImpactPanel(context);
   // The located overlay marks this subject; a place an earlier click lit is unlit.
   clearEmphasis(map);
   showLocatedBoundary(map, aggregateGeometry);
@@ -380,6 +373,34 @@ function locateCensusArea(map: maplibregl.Map, code: string, labels: LocateLabel
   });
 }
 
+/**
+ * A city's briefing is its State's: the State that holds the city's point
+ * (the shared resolver, rendered states layer first, then the bundled Census
+ * outlines) opens with its own header, and the camera stays on the city
+ * (fit: false). A point no State holds opens nothing; a newer choice wins.
+ */
+async function openContainingStateBriefing(
+  map: maplibregl.Map,
+  [lng, lat]: [number, number],
+  intent: number
+): Promise<void> {
+  const abort = new AbortController();
+  locateAbort = abort;
+  try {
+    // Briefing-cluster code, kept out of the eager bundle as the Tribal path keeps point-in-polygon.
+    const { resolveContainingState } = await import('../state/location-identity');
+    if (abort.signal.aborted || !isCurrentBriefingIntent(intent)) return;
+    const state = await resolveContainingState(map, { lng, lat }, abort.signal);
+    if (!state || abort.signal.aborted || !isCurrentBriefingIntent(intent)) return;
+    await openStateBriefing(map, state.code, { fit: false, guard: () => isCurrentBriefingIntent(intent) });
+  } catch (err) {
+    // A newer pick aborted this lookup on purpose: nothing failed. Any other failure is shown, never silent (invariant 6).
+    if (abort.signal.aborted || !isCurrentBriefingIntent(intent)) return;
+    console.warn('[search] City State lookup failed.', err);
+    showToast("Could not open the briefing for this city's State. Try again in a moment.");
+  }
+}
+
 /** Route a chosen search result to its action. */
 function selectResult(map: maplibregl.Map, item: SearchItem): void {
   if (item.kind === 'layer') {
@@ -392,28 +413,33 @@ function selectResult(map: maplibregl.Map, item: SearchItem): void {
     // subscription above would fire too late; supersede the locate NOW.
     locateAbort?.abort();
     locateAbort = null;
-    // Summary-first (D-0.7.0-070): a search selection behaves like a map
-    // click; the briefing opens only through the panel's one link (the
-    // active mobile Brief sheet keeps map-click parity inside the helper).
+    // A search pick opens the State's briefing on every shell (owner 2026-11-13).
     void openStateBriefing(map, item.id, {
       fit: true,
-      guard: () => isCurrentBriefingIntent(intent),
-      summaryFirst: true
+      guard: () => isCurrentBriefingIntent(intent)
     });
     return;
   }
   if (item.kind === 'city') {
-    // A city only moves the camera; no briefing and no layer change, so the mode stays as it is.
-    nextBriefingIntent();
+    // A city moves the camera and opens its State's briefing; no layer change, so the mode stays as it is.
+    const intent = nextBriefingIntent();
     locateAbort?.abort();
     locateAbort = null;
-    // The earlier place no longer describes the view; a city is not a place, so none is set.
+    // The earlier place no longer describes the view; a city has no outline of its own, so none is set yet.
     setPlaceSelection(null);
     const center = cityCoords.get(item.id);
     if (center) {
-      map.easeTo({ center, zoom: Math.max(map.getZoom(), 8) });
+      // The State's briefing opens beside it, so the city lands in the part of the map the briefing leaves clear
+      // (the centre of the padded view; `offset` shifts this move only, unlike a persistent `padding`).
+      const pad = briefingCameraPadding(true);
+      map.easeTo({
+        center,
+        zoom: Math.max(map.getZoom(), 8),
+        offset: [((pad.left ?? 0) - (pad.right ?? 0)) / 2, ((pad.top ?? 0) - (pad.bottom ?? 0)) / 2]
+      });
       // Every search host passes here; the sidebar's region menu listens (it is not imported into this chunk).
       window.dispatchEvent(new Event('ddm:city-view'));
+      void openContainingStateBriefing(map, center, intent);
     }
     return;
   }

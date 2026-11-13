@@ -388,9 +388,11 @@ test.describe('InteractionCoordinator: one click, one response', () => {
     await waitForLayerSettled(page, 'bia-reservations');
     await waitForLayerSettled(page, 'states');
 
-    // Select Washington through the shared search (summary-first: a
-    // selection with no popup and no feature-state emphasis; the promotion
-    // must ride the place-selection label, not the emphasis store).
+    // Select Washington through the shared search: the pick opens its
+    // briefing drawer (owner 2026-11-13) and sets a selection with no popup
+    // and no feature-state emphasis; the promotion must ride the
+    // place-selection label, not the emphasis store. The drawer sits on the
+    // map's right; the probe below stays west of it.
     await page.locator('#catalog-search [data-ddm-search]').fill('washington');
     await page
       .locator('[data-search-group="place"] [data-search-kind="place"]', {
@@ -399,6 +401,7 @@ test.describe('InteractionCoordinator: one click, one response', () => {
       .first()
       .click();
     await expect(page.locator('#app')).toHaveAttribute('data-place-selected', '');
+    await expect(page.locator('#impact-panel.open')).toBeVisible();
 
     // The search flew the camera to Washington; the flyTo briefly widens
     // the view before settling, so the click must wait until the camera has

@@ -483,8 +483,8 @@ const SITES = [
   },
   {
     file: 'search-fit.spec.ts',
-    line: 88,
-    test: 'selecting Washington frames the state, not a 480px-padded phantom panel',
+    line: 99,
+    test: 'selecting Washington frames the state in the map left of the open briefing',
     text: 'await page.waitForTimeout(600);',
     occurrence: 1,
     class: 'animation-settle',

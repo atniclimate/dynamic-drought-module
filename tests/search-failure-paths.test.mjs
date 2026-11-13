@@ -41,7 +41,9 @@ const STUBS = {
   '../util/bbox':
     'export const bboxCenter = () => ({ lng: 0, lat: 0 }); export const bboxToContinuousBounds = (b) => b;',
   '../util/antimeridian': 'export const geometryBboxAcrossAntimeridian = () => [0, 0, 1, 1];',
-  '../state/deep-link': 'export const openStateBriefing = async () => {};',
+  '../state/deep-link':
+    'export const openStateBriefing = async () => {};' +
+    ' export const briefingCameraPadding = () => ({ top: 40, left: 40, bottom: 40, right: 480 });',
   '../state/located-boundary':
     'export const showLocatedBoundary = (_m, g) => globalThis.__sfp.highlights.push(g);',
   '../state/place-emphasis':

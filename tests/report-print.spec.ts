@@ -2,7 +2,7 @@ import { continueLocalRoute } from './offline-test';
 import { test, expect } from './offline-test';
 import type { Page } from './offline-test';
 import { URLS } from '../src/config/urls';
-import { gotoApp } from './helpers';
+import { gotoApp, showFullDetail } from './helpers';
 import { oniLineSvg, cpcOutlookBarsSvg, trendLineSvg } from '../src/ui/charts';
 
 test('D3 chart helpers print readable neutral series and preserve issuer colors', async ({ page }) => {
@@ -205,15 +205,13 @@ test.describe('U1 the report in print', () => {
       const panel = page.locator('#impact-panel');
       await expect(panel).toBeVisible({ timeout: 15_000 });
       await expect(panel.getByRole('link', { name: 'Agricultural drought relief information' })).toBeVisible();
-      if (width === 390) {
-        // Phones open on the priority view; the full detail is one tap away.
-        const lead = panel.locator('.briefing-view-btn[data-briefing-view="lead"]');
-        const full = panel.locator('.briefing-view-btn[data-briefing-view="matrix"]');
-        await expect(lead).toHaveAttribute('aria-pressed', 'true');
-        await expect(panel.locator('.point-heat-card').first()).toBeHidden();
-        await full.click();
-        await expect(full).toHaveAttribute('aria-pressed', 'true');
-      }
+      // Every shell opens on the priority view; the full detail is one tap away.
+      const lead = panel.locator('.briefing-view-btn[data-briefing-view="lead"]');
+      const full = panel.locator('.briefing-view-btn[data-briefing-view="matrix"]');
+      await expect(lead).toHaveAttribute('aria-pressed', 'true');
+      await expect(panel.locator('.point-heat-card').first()).toBeHidden();
+      await full.click();
+      await expect(full).toHaveAttribute('aria-pressed', 'true');
       await expect(panel.locator('.point-heat-card').first()).toBeVisible();
       if (width === 390) await expect(panel).toHaveClass(/sheet-hosted/);
 
@@ -308,6 +306,7 @@ test.describe('U1 the report in print', () => {
 
     const panel = page.locator('#impact-panel');
     await expect(panel).toBeVisible({ timeout: 15_000 });
+    await showFullDetail(page);
     const series = panel.locator('.point-heat-series');
     await expect(series.first()).toBeVisible();
 
@@ -396,6 +395,7 @@ test.describe('U1 the report in print', () => {
 
     const panel = page.locator('#impact-panel');
     await expect(panel).toBeVisible({ timeout: 15_000 });
+    await showFullDetail(page);
     const series = panel.locator('.point-heat-series');
     await expect(series.first()).toBeVisible();
 

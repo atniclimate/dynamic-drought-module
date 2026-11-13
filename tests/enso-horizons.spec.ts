@@ -26,7 +26,7 @@ import { join } from 'node:path';
 
 import { HORIZON_CHROME } from '../src/impact/horizon-chrome';
 import { expectNoForecastLanguage as expectClean } from './enso-forecast-language';
-import { gotoApp, stubHeatRiskCatalog } from './helpers';
+import { gotoApp, showFullDetail, stubHeatRiskCatalog } from './helpers';
 
 const SNAPSHOT_PATH = join(process.cwd(), 'public', 'data', 'enso-indices.json');
 
@@ -131,6 +131,8 @@ async function openBriefing(page: Page, snapshot: Snapshot): Promise<void> {
   // independently of the map layer (DR-014 a), so this boot reaches it too.
   await stubHeatRiskCatalog(page);
   await gotoApp(page, '?view=brief&layers=places&select=state:WA');
+  // Every open lands on the priority view; the cells and charts read in the full detail.
+  await showFullDetail(page);
 }
 
 function ensoCell(page: Page, horizon: string) {

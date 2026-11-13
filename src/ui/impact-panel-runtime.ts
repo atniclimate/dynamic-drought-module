@@ -148,20 +148,13 @@ let panelSelection: PlaceSelection | null = null;
 /**
  * Which presentation of the briefing is showing (owner direction 2026-11-09
  * (sprint), DR-pending): the priority view (src/ui/briefing-lead.ts) or the
- * full detail, the matrix. Null until the reader picks one, and until then
- * the shell decides: the phone shell leads with the priority view, every
- * other shell opens the full detail with the switch above it. A choice holds
- * for the session, across places. Pure presentation state: it never enters
- * the URL, and the matrix is always in the document under either view.
+ * full detail, the matrix. Null means the priority view: every open starts
+ * there in every shell (owner direction 2026-11-13), and a reader's choice
+ * holds only for the briefing it was made in (across hydration re-renders),
+ * never across a close and a new open. Pure presentation state: it never
+ * enters the URL, and the matrix is always in the document under either view.
  */
 let briefingView: BriefingView | null = null;
-
-/**
- * The shell's default for the briefing now open, taken once when it opens:
- * a reader who turns a tablet or resizes a window mid-read keeps the view
- * they are reading, and only the next place open asks the shell again.
- */
-let openDefaultView: BriefingView = 'matrix';
 
 /**
  * The one hazard whose cells the full detail is narrowed to, after a tile was
@@ -389,14 +382,9 @@ function applyActiveHazardEmphasis(): void {
 /** The two headings that can hold focus without being controls. */
 const LEAD_FOCUS_IDS: readonly string[] = ['briefing-focus-title', 'briefing-lead-title'];
 
-/** The phone shell exists exactly while `#app` carries `data-sheet-detent`. */
-function phoneShell(): boolean {
-  return document.getElementById('app')?.hasAttribute('data-sheet-detent') ?? false;
-}
-
-/** The reader's choice, or the default the shell gave this briefing when it opened. */
+/** The reader's choice for this briefing, or the priority view. */
 function currentBriefingView(): BriefingView {
-  return briefingView ?? openDefaultView;
+  return briefingView ?? 'lead';
 }
 
 /**
@@ -625,9 +613,22 @@ function discloseLegendAnchorTitles(root: ParentNode): void {
 }
 
 /**
+ * True when the SHELL does not draw the legend panel (desktop Brief, the phone sheet), as opposed to the
+ * registry's own empty-state `hidden`, which Console shows again the moment a section arrives (review, 2026-11-13).
+ */
+function legendPanelHiddenByShell(panel: HTMLElement): boolean {
+  const emptyHidden = panel.hidden;
+  if (emptyHidden) panel.hidden = false;
+  const display = getComputedStyle(panel).display;
+  if (emptyHidden) panel.hidden = true;
+  return display === 'none';
+}
+
+/**
  * Delegated handler for every `a[data-legend-key]` a rendered claim carries
  * (`src/ui/claim-render.ts`). The href stays `#legend-panel` as the
- * no-script fallback; this makes the link reach the SECTION, whether the
+ * no-script fallback; where that panel is not displayed the link opens the
+ * on-map Key instead. Otherwise this makes the link reach the SECTION, whether the
  * product's map layer is already on (the section exists now) or off (the
  * layer is turned on first, through the same intent-first door every other
  * UI caller uses, `requestLayerOn`).
@@ -647,6 +648,17 @@ function handleLegendLinkClick(event: MouseEvent): void {
   legendPollGeneration++;
 
   const existing = getLegendSection(key);
+  // The column's legend panel is not drawn in the desktop Brief (the Layer
+  // legends bar left it); there the on-map Key is the legend, opened through
+  // its own toggle event and never closed by this link.
+  const panel = document.getElementById('legend-panel');
+  if (!panel || legendPanelHiddenByShell(panel)) {
+    if (!existing) requestLayerOn(key);
+    if (document.getElementById('map-key')?.dataset['keyDetailsOpen'] !== 'true') {
+      window.dispatchEvent(new Event('ddm:toggle-map-key-details'));
+    }
+    return;
+  }
   if (existing) {
     focusLegendSection(existing);
     return;
@@ -1150,11 +1162,11 @@ export function openImpactPanel(
   }
   activeBriefing = briefing;
   activeImpactUnavailableNote = unavailableNote;
-  // A new place opens on the whole view, never on the last place's one hazard,
-  // and asks the shell for its default: priority on phones, full detail elsewhere.
+  // A new open starts on the whole view, never on the last place's one hazard,
+  // and on the priority view in every shell, never on the last open's choice.
   focusHazard = null;
   focusOpenerKey = null;
-  openDefaultView = phoneShell() ? 'lead' : 'matrix';
+  briefingView = null;
 
   // The panel takes ownership of the place selection for this briefing (see
   // the panelSelection doc comment above; the stage-5 majors 3/4 fix). The
