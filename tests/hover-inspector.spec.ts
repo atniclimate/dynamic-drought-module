@@ -28,22 +28,25 @@ test.describe('UX-4 hover inspector', () => {
     const cx = box.x + box.width * 0.5;
     const cy = box.y + box.height * 0.5;
 
-    // Nudge the pointer until the readout appears. The just-activated state
-    // fill needs a paint before queryRenderedFeatures returns it, and the
+    // Nudge the pointer until the readout names the State. The just-activated
+    // state fill needs a paint before queryRenderedFeatures returns it, and the
     // readout only samples on a fresh mousemove, so each poll re-moves the
-    // pointer rather than re-checking a stale frame.
+    // pointer rather than re-checking a stale frame. The poll waits for the
+    // State item itself: the readout can appear first with another layer's
+    // reading (the drought class under the cursor) while the state fill is
+    // still unpainted, and a poll that stopped there left a stale readout.
     await expect
       .poll(
         async () => {
           await page.mouse.move(cx, cy);
           await page.mouse.move(cx + 8, cy + 4);
           await page.waitForTimeout(120);
-          return inspector.isVisible();
+          return inspector.locator('.hover-item', { hasText: 'State' }).count();
         },
-        { timeout: 8000, message: 'hover readout never appeared over the state fill' }
+        { timeout: 15_000, message: 'the hover readout never named the State under the cursor' }
       )
-      .toBe(true);
-    await expect(inspector.locator('.hover-item', { hasText: 'State' })).toHaveCount(1);
+      .toBe(1);
+    await expect(inspector).toBeVisible();
 
     // Moving the pointer off the map canvas clears the readout.
     await page.mouse.move(box.x - 60, cy);
