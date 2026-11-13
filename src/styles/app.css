@@ -2714,6 +2714,14 @@ button.conditions-metric:hover .conditions-action-hide {
       calc(100% - var(--impact-panel-gap) - var(--dock-min-w))
     );
   }
+  /* Outside an embed the drawer stands left of the map-button column (the
+     block above the briefing panel), so the dock clears that column too. */
+  body:has(.impact-panel.open:not(.sheet-hosted)) .app-shell:not(.embed) .map-bottom-dock {
+    right: min(
+      calc(var(--impact-panel-w) + 2 * var(--impact-panel-gap) + var(--chrome-inset) + var(--map-cell-w)),
+      calc(100% - var(--impact-panel-gap) - var(--dock-min-w))
+    );
+  }
 }
 
 /* ----------------------------------------------------------------------------
