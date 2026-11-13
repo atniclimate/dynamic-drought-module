@@ -180,7 +180,10 @@ export const MODULE_SPECS = {
   'src/ui/time-bar.ts': ['tests/temporal-axis.spec.ts', 'tests/fire-heat-time-bar.spec.ts', 'tests/raster-status.spec.ts', 'tests/usdm-time.spec.ts'],
   'src/ui/heatrisk-sequence.ts': ['tests/heat-h1-heatrisk.spec.ts', 'tests/map-drawers.spec.ts', 'tests/heat-h2-point-heat.spec.ts', 'tests/map-chrome-focus.spec.ts'],
   'src/ui/sheet-alerts.ts': ['tests/mobile-sheet.spec.ts', 'tests/heat-h0-integrity.spec.ts', 'tests/hazard-rail.spec.ts', 'tests/retry-doors.spec.ts'],
-  'src/ui/popup-conditions.ts': ['tests/interaction-coordinator.spec.ts', 'tests/place-popups.spec.ts']
+  'src/ui/popup-conditions.ts': ['tests/interaction-coordinator.spec.ts', 'tests/place-popups.spec.ts'],
+  // 2026-11-13: both changed in one block and picked neither spec that then went red.
+  'src/config/map-chrome.ts': ['tests/map-chrome-focus.spec.ts', 'tests/map-chrome-seats.spec.ts', 'tests/map-chrome-icons.spec.ts'],
+  'src/layers/aiannh.ts': ['tests/trio-hardening.spec.ts']
 };
 const MODULE_RULES = Object.entries(MODULE_SPECS).map(([module, specs]) => ({ rule: `specs of ${module}`, match: (path) => path === module, specs }));
 
