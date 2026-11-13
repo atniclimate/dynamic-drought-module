@@ -58,9 +58,10 @@
  */
 
 import type * as maplibregl from 'maplibre-gl';
-import type { FeatureCollection, GeoJsonProperties } from 'geojson';
+import type { Feature, FeatureCollection, GeoJsonProperties, Point } from 'geojson';
 
 import { URLS } from '../config/urls';
+import { PLACE_LABEL_HALO } from '../config/interface-tokens';
 import { AIANNH_FILL_COLOR, AIANNH_OUTLINE_COLOR } from '../config/palette';
 import { buildAiannhPopupModel } from '../ui/popups';
 import { buildPlaceConditionsHtml } from '../ui/popup-conditions';
@@ -71,6 +72,7 @@ import { fetchBufferedWithBudget, linkAbort } from '../util/fetch';
 import { buildQueryEnvelope, envelopeCovers, toCoverageEnvelope } from '../util/bbox';
 import { assertFeatureCollection, isTruncated } from '../util/geojson-checks';
 import { registry } from '../state/registry';
+import { loadTribalLabelAreas } from '../state/tribal-roster';
 import { cancelTribalStreets, setTribalStreetAreas, startTribalStreets, stopTribalStreets } from './tribal-streets';
 
 const LAYER_KEY = 'aiannh';
@@ -81,9 +83,80 @@ const SOURCE_ID = 'aiannh';
  */
 const FILL_LAYER_ID = 'aiannh-fill';
 const OUTLINE_LAYER_ID = 'aiannh-outline';
+/** The Nations' names (owner, 2026-11-12): one point per area at its Census internal point. */
+const LABEL_SOURCE_ID = 'aiannh-nation-labels';
+const LABEL_LAYER_ID = 'aiannh-nation-labels';
 
 /** Fade targets for the sidebar's toggle transitions (LayerModule contract). */
-export const fadeLayerIds = [FILL_LAYER_ID, OUTLINE_LAYER_ID] as const;
+export const fadeLayerIds = [FILL_LAYER_ID, OUTLINE_LAYER_ID, LABEL_LAYER_ID] as const;
+
+/**
+ * The label ladder (methods log M-092): a Nation's name appears from the zoom
+ * its area is about 35 to 40 pixels across, by Census land area (floors in
+ * km2, largest first), and a statistical area (OTSA, TDSA, ANVSA) one step
+ * later because its names stack taller.
+ */
+const LADDER_FLOORS_KM2 = [5000, 1000, 200, 50, 0] as const;
+const LADDER_ZOOMS = [5, 6, 7, 8, 9.5, 10.5] as const;
+const STATISTICAL_CLASSES: ReadonlySet<string> = new Set(['D6', 'E1']);
+/** The federal classes a Nation's name may label; joint-use, state and Hawaiian Home Land areas never. */
+const LABELLED_CLASSES: ReadonlySet<string> = new Set(['D1', 'D2', 'D3', 'D6', 'E1']);
+
+/** The zoom an area's label appears from, given AREALAND (square metres) and AIANNHCC. */
+export function labelMinZoom(areaLand: number, cls: string): number {
+  const step = LADDER_FLOORS_KM2.findIndex((floor) => areaLand / 1e6 >= floor);
+  return LADDER_ZOOMS[(step === -1 ? LADDER_FLOORS_KM2.length - 1 : step) + (STATISTICAL_CLASSES.has(cls) ? 1 : 0)] ?? 9.5;
+}
+
+/**
+ * One label point per area the label map names, at the Census internal point
+ * (INTPTLAT, INTPTLON), every Nation on its own line and never shortened.
+ */
+export function nationLabelPoints(
+  geojson: FeatureCollection,
+  labels: ReadonlyMap<string, readonly string[]> | null
+): FeatureCollection<Point> {
+  const features: Feature<Point>[] = [];
+  for (const f of geojson.features ?? []) {
+    const p = f.properties ?? {};
+    const cls = String(p['AIANNHCC'] ?? '');
+    const names = LABELLED_CLASSES.has(cls) ? labels?.get(String(p['AIANNH'] ?? '')) : undefined;
+    const lat = parseFloat(String(p['INTPTLAT']));
+    const lng = parseFloat(String(p['INTPTLON']));
+    if (!names?.length || !Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+    const areaLand = parseFloat(String(p['AREALAND']));
+    features.push({
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [lng, lat] },
+      properties: { text: names.join('\n'), km2: areaLand / 1e6 || 0, minzoom: labelMinZoom(areaLand, cls) }
+    });
+  }
+  return { type: 'FeatureCollection', features };
+}
+
+/** The roster's label map (Census AIANNH code to the Nations' names) once read; null before. */
+let nationLabels: ReadonlyMap<string, readonly string[]> | null = null;
+let nationLabelsLoad: Promise<void> | null = null;
+
+/** Read the label map once, from the roster's one shared load. A failure is retried by the next activation, never by a pan. */
+function loadNationLabels(map: maplibregl.Map): void {
+  if (nationLabels || nationLabelsLoad) return;
+  nationLabelsLoad = loadTribalLabelAreas()
+    .then((labels) => {
+      nationLabels = labels;
+      if (appliedData) setLabelData(map, appliedData);
+    })
+    .catch((err: unknown) => console.warn('[aiannh] Tribal name labels unavailable: the roster did not load.', err))
+    .finally(() => {
+      nationLabelsLoad = null;
+    });
+}
+
+/** Rebuild the label points from the areas the layer holds. */
+function setLabelData(map: maplibregl.Map, geojson: FeatureCollection): void {
+  const labels = map.getSource(LABEL_SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
+  labels?.setData(nationLabelPoints(geojson, nationLabels));
+}
 
 /** Symbol anchor so the boundary stacks below basemap labels (shared idiom). */
 const BEFORE_ID = 'first-symbol';
@@ -313,7 +386,9 @@ function resolveMaxAllowableOffset(zoomBucket: number): number {
  * the popup, identity, and briefing read. Geometry is generalized
  * server-side by the zoom-bucket-keyed `maxAllowableOffset` plus a fixed
  * `geometryPrecision`; note AREALAND/AREAWATER arrive STRING-typed (catalog
- * caveat), so any consumer doing area math must parse first.
+ * caveat), so any consumer doing area math must parse first. AIANNH and the
+ * internal point (INTPTLAT, INTPTLON) place the Nations' name labels from the
+ * same response.
  */
 function buildQueryUrl(
   envelope: readonly [number, number, number, number],
@@ -326,7 +401,7 @@ function buildQueryUrl(
     inSR: '4326',
     outSR: '4326',
     spatialRel: 'esriSpatialRelIntersects',
-    outFields: 'NAME,AIANNHCC,MTFCC,BASENAME,AIANNHNS,AREALAND,AREAWATER',
+    outFields: 'NAME,AIANNHCC,MTFCC,BASENAME,AIANNHNS,AREALAND,AREAWATER,AIANNH,INTPTLAT,INTPTLON',
     returnGeometry: 'true',
     geometryPrecision: String(GEOMETRY_PRECISION),
     maxAllowableOffset: resolveMaxAllowableOffset(zoomBucket).toFixed(6),
@@ -343,6 +418,7 @@ function buildQueryUrl(
 function clearRenderedFeatures(map: maplibregl.Map): void {
   const existing = map.getSource(SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
   if (existing) existing.setData(EMPTY_FEATURE_COLLECTION);
+  setLabelData(map, EMPTY_FEATURE_COLLECTION);
   lastAppliedStatus = null;
   appliedData = null;
 }
@@ -459,6 +535,7 @@ function applyFeatureCollection(
   }
   if (existing) {
     existing.setData(geojson);
+    setLabelData(map, geojson);
   } else {
     addSourceAndLayers(map, geojson);
   }
@@ -474,7 +551,8 @@ function applyFeatureCollection(
 }
 
 /**
- * Add the source and both style layers. Unlike the pre-umbrella BIA module,
+ * Add the source and both style layers, then the Nations' name labels and
+ * their point source. Unlike the pre-umbrella BIA module,
  * the layers are added even for an empty collection: the viewport refresh
  * swaps data into the existing source with `setData`, so a view that starts
  * empty (an ocean view, say) must still have layers ready for the features a
@@ -541,6 +619,28 @@ function addSourceAndLayers(map: maplibregl.Map, geojson: FeatureCollection): vo
     },
     beforeId
   );
+
+  map.addSource(LABEL_SOURCE_ID, { type: 'geojson', data: nationLabelPoints(geojson, nationLabels) });
+  // Added on top; reassertLabelOrder keeps it the topmost label (TOP_LABEL_IDS, src/map/layer-order.ts),
+  // which MapLibre places first, so a Nation's name wins a collision with a city name.
+  map.addLayer({
+    id: LABEL_LAYER_ID,
+    type: 'symbol',
+    source: LABEL_SOURCE_ID,
+    minzoom: LADDER_ZOOMS[0],
+    // The ladder per point. A filter reads the tile's whole zoom, so the 9.5 step shows from zoom 10.
+    filter: ['>=', ['zoom'], ['get', 'minzoom']],
+    layout: {
+      'text-field': ['get', 'text'],
+      'text-font': ['Noto Sans Regular'],
+      'text-size': 11.5,
+      'text-max-width': 10,
+      'text-variable-anchor': ['center', 'top', 'bottom'],
+      'text-radial-offset': 0.5,
+      'symbol-sort-key': ['-', ['get', 'km2']]
+    },
+    paint: { 'text-color': AIANNH_OUTLINE_COLOR, 'text-halo-color': PLACE_LABEL_HALO, 'text-halo-width': 1.4 }
+  });
 }
 
 /**
@@ -594,6 +694,7 @@ export async function activate(
   activationSignal = activation?.signal ?? null;
   attachRefresh(map);
   startTribalStreets(map);
+  loadNationLabels(map);
   if (map.getSource(SOURCE_ID)) {
     return;
   }
@@ -630,7 +731,7 @@ export function cancelActivation(): void {
 
 /**
  * Stop the viewport refresh, abort any in-flight fetch, and remove the fill,
- * outline, and source (layers before source, per MapLibre). Safe to call when
+ * outline, name labels and both sources (layers before sources, per MapLibre). Safe to call when
  * never activated.
  */
 export function deactivate(map: maplibregl.Map): void {
@@ -647,7 +748,9 @@ export function deactivate(map: maplibregl.Map): void {
   stopTribalStreets(map);
   if (map.getLayer(FILL_LAYER_ID)) map.removeLayer(FILL_LAYER_ID);
   if (map.getLayer(OUTLINE_LAYER_ID)) map.removeLayer(OUTLINE_LAYER_ID);
+  if (map.getLayer(LABEL_LAYER_ID)) map.removeLayer(LABEL_LAYER_ID);
   if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);
+  if (map.getSource(LABEL_SOURCE_ID)) map.removeSource(LABEL_SOURCE_ID);
 }
 
 /**

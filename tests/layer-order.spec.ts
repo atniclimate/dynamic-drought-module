@@ -179,10 +179,12 @@ test.describe('layer-order: thematic reassert (E1 deliverable 2)', () => {
       'bia-reservations-outline',
       'aiannh-fill',
       'aiannh-outline',
+      'aiannh-nation-labels',
       'us-places-labels'
     ]);
     reassertThematicOrder(map as never);
     reassertLabelOrder(map as never);
+    // The Nations' names read above the city names, so MapLibre places them first.
     expect(map.order()).toEqual([
       'background',
       'base-land',
@@ -195,7 +197,8 @@ test.describe('layer-order: thematic reassert (E1 deliverable 2)', () => {
       'aiannh-outline',
       'bia-reservations-fill',
       'bia-reservations-outline',
-      'us-places-labels'
+      'us-places-labels',
+      'aiannh-nation-labels'
     ]);
   });
 

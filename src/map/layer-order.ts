@@ -28,15 +28,19 @@ import type * as maplibregl from 'maplibre-gl';
  */
 
 /** DDM's own base map (src/map/style.ts): the ground fills draw under
- * satellite imagery, so imagery replaces them where it covers. */
+ * satellite imagery, so imagery replaces them where it covers. The named
+ * lakes and streams read live inside Tribal areas (src/layers/tribal-streets.ts,
+ * mirrored literals) sit with the base map's water. */
 export const BASE_GROUND_IDS: readonly string[] = [
   'base-world-land',
   'base-land',
   'base-world-water',
   'base-water',
+  'tribal-waterbodies',
   'base-wetland',
   'base-glacier',
-  'base-river'
+  'base-river',
+  'tribal-streams'
 ];
 
 /** The base map's lines, above imagery and terrain shading and below every
@@ -63,17 +67,28 @@ export const BOTTOM_STACK_IDS: readonly string[] = [
   ...BASE_LINE_IDS
 ];
 
-/** Reference label layers that always read above every data layer, bottom to top. */
+/** Reference label layers that always read above every data layer, bottom to top. MapLibre
+ * places the topmost first, so the Nations' names on the Tribal Lands layer
+ * (src/layers/aiannh.ts, mirrored literal) win a collision with a city name. */
 export const TOP_LABEL_IDS: readonly string[] = [
   'base-river-label',
   'base-road-label',
   'forests-label',
   'tribal-streets-label',
+  'public-lands-label',
+  'dams-label',
+  'tribal-streams-label',
+  'tribal-waterbodies-label',
+  'base-range-label',
+  'base-peak',
+  'base-region-label',
   'base-world-water-label',
   'base-water-label',
+  'tribal-communities-label',
   'base-world-place',
   'base-place',
-  'us-places-labels'
+  'us-places-labels',
+  'aiannh-nation-labels'
 ];
 
 /**
@@ -207,7 +222,10 @@ export const REFERENCE_BOUNDARY_IDS: readonly string[] = [
   // The Hydrography lake fill (src/layers/hydrography.ts) sits directly under its river lines.
   'hydrography-water',
   'hydrography',
+  'public-lands-fill',
+  'public-lands-line',
   'railroads',
+  'dams',
   'forests-outline',
   'us-states-fill',
   'us-states-casing',

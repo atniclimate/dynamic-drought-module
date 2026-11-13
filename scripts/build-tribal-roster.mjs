@@ -85,6 +85,11 @@
  *        statistical area; a reservation or trust land row ships only when it
  *        safe-matches a Tribe with no LAR land area, so it never duplicates
  *        a LAR row.
+ *     8. The label map (`labelAreas`, owner 2026-11-12: Tribal names on the
+ *        Tribal Lands layer, not Census titles). Rule 7's matcher on every
+ *        federal row with no LAR skip (a map label duplicates no search
+ *        row); a Nation's name with only "(previously listed as ...)"
+ *        dropped. An unresolved row gets no label; no guess is added.
  *   Every emitted area row carries a `provenance` field ("safe-match" or
  *   "lar-label"; "bia-authoritative" is reserved for a future BIA-published
  *   association). The runtime search (src/ui/search-controller.ts) renders
@@ -95,7 +100,8 @@
  *   - tribal-roster.json         the runtime search index (one entry per
  *                                locatable land area: larName + displayName +
  *                                a normalized search string; censusAreas
- *                                adds Census AIANNH name + code rows)
+ *                                adds Census AIANNH name + code rows;
+ *                                labelAreas the layer's label map, rule 8)
  *   - tribal-larname-crosswalk.json  the audit for the maintainer review:
  *                                matched pairs, LARNAME values with no roster
  *                                match (the mismatch report), and roster names
@@ -425,6 +431,26 @@ export function censusPass(features, roster, noLarSet) {
   return { censusAreas, censusMatched, censusLabel, censusAmbiguous };
 }
 
+/** A Federal Register name as a map label shows it: only the list's "(previously listed as ...)" note is dropped. */
+export function labelName(name) {
+  return name.replace(/\s*\(previously listed as [^()]*(?:\([^()]*\)[^()]*)*\)/gi, '').trim();
+}
+
+/**
+ * The Tribal Lands layer's label map (rule 8, `labelAreas`): Census AIANNH
+ * code to the Nations' Federal Register names. The same Census pass, run on
+ * every federal row with no skip for a reservation AIAN-LAR also locates (the
+ * label is drawn on the Census layer, so it duplicates no search row). A row
+ * the pass does not resolve to one Nation gets no label; joint-use, state and
+ * Hawaiian Home Land rows never reach the matcher. Exported for the test.
+ */
+export function censusLabelAreas(features, roster) {
+  const { censusMatched } = censusPass(features, roster, new Set(roster));
+  return Object.fromEntries(
+    censusMatched.map((m) => [m.aiannh, [labelName(m.tribe)]]).sort(([a], [b]) => a.localeCompare(b))
+  );
+}
+
 async function main() {
   console.log('[tribal-roster] discovering the current Federal Register notice...');
   const search = await getJson(FR_SEARCH);
@@ -567,6 +593,8 @@ async function main() {
   console.log(
     `[tribal-roster] Census areas: ${censusAreas.length} (${censusMatched.length} safe-matched)`
   );
+  const labelAreas = censusLabelAreas(censusJson.features, roster);
+  console.log(`[tribal-roster] Census areas labelled with a Nation's name: ${Object.keys(labelAreas).length}`);
 
   areas.sort((a, b) => a.displayName.localeCompare(b.displayName));
 
@@ -586,7 +614,10 @@ async function main() {
       'the live Census service): every OTSA, TDSA and ANVSA, plus reservation and trust ' +
       'land areas only for Tribes AIAN-LAR does not locate, so a Nation can appear both ' +
       'as a LAR land area and as a Census statistical area. provenance census-label keeps ' +
-      'the Census name verbatim. Regenerate with `npm run build:tribal-roster`.',
+      'the Census name verbatim. labelAreas: Census AIANNH code to the Federal Register ' +
+      'names the Tribal Lands layer labels that area with (every federal row the Census ' +
+      'matcher resolves, reservations included; "(previously listed as ...)" dropped). ' +
+      'Regenerate with `npm run build:tribal-roster`.',
     meta: {
       rosterSource: `Federal Register ${doc.document_number} (${doc.publication_date})`,
       landAreaSource: 'BIA AIAN-LAR FeatureServer (distinct LARNAME)',
@@ -605,10 +636,12 @@ async function main() {
       larLabelCount: larLabelFallback.length,
       censusSource: 'US Census Bureau TIGERweb AIANNH layer 47 (names only)',
       censusAreaCount: censusAreas.length,
-      censusSafeMatchCount: censusMatched.length
+      censusSafeMatchCount: censusMatched.length,
+      labelAreaCount: Object.keys(labelAreas).length
     },
     areas,
-    censusAreas
+    censusAreas,
+    labelAreas
   };
 
   const crosswalkOut = {
