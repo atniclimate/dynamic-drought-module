@@ -7,12 +7,12 @@ import { MOBILE_HAZARD_PRESETS, type ViewPreset } from '../config/presets';
  * `tsc` refuses a mode without a rail icon; the key order is the rail's order
  * (ENSO, Fire, Drought, Heat), which deliberately differs from the desktop
  * column's HAZARD_CLUSTER_KEYS order. Each value is the icon's SVG shapes.
- * Drought is a tile of dry soil split into plates by drying cracks (owner, 2026-11-13).
+ * Drought is a simple hollow water droplet (owner, 2026-11-13).
  */
 export const HAZARD_RAIL_ICONS: Readonly<Record<HazardClusterKey, string>> = {
   enso: '<path d="M3 8c2.25-3 4.75-3 7 0s4.75 3 7 0 3.5-2.5 4-2.5"/><path d="M3 14c2.25-3 4.75-3 7 0s4.75 3 7 0 3.5-2.5 4-2.5"/><path d="M5 19c1.5-1.5 3-1.5 4.5 0s3 1.5 4.5 0"/>',
   wildfire: '<path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>',
-  drought: '<rect x="3" y="3" width="18" height="18" rx="2.5"/><path d="M9.5 3l1 5.5 5.5 1.5 5-2M10.5 8.5 8 14l-5 1.5M8 14l6 1.5 2-5.5M14 15.5l1.5 5.5"/>',
+  drought: '<path d="M12 21.5a6.5 6.5 0 0 0 6.5-6.5c0-1.9-.9-3.6-2.8-5.1S12.5 6 12 3c-.5 3-1.8 5.4-3.7 6.9S5.5 13.1 5.5 15a6.5 6.5 0 0 0 6.5 6.5z"/>',
   heat: '<path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/>'
 };
 
