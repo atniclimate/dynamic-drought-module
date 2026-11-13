@@ -320,22 +320,6 @@ EPA (Omernik Level III and IV Ecoregions), bundled as tiles: terms not
 itemized in this repository's documentation beyond the source
 citation.
 
-Oak Ridge National Laboratory and the Federal Emergency Management
-Agency Geospatial Response Office (USA Structures, 2023 edition):
-issuer of the building outlines bundled as tiles for central Oregon,
-published on Figshare under CC0 1.0.
-
-GlobalBuildingAtlas (Xiaoxiang Zhu, Sining Chen, Fahong Zhang, Yilei
-Shi, Yuanyuan Wang; Technical University of Munich, and Munich Center
-for Machine Learning): issuer of GBA.Height, the raster the building
-heights in those tiles were sampled from. The issuer's record,
-https://doi.org/10.14459/2025mp1782307, states the dataset is licensed
-under the Creative Commons Attribution-NonCommercial 4.0 International
-License, https://creativecommons.org/licenses/by-nc/4.0/. The heights
-were sampled under building outlines, rounded to whole metres and
-raised to 3 m where lower. That licence does not permit commercial use
-of the heights, whatever terms apply to the rest of this software.
-
 Natural Earth: issuer of the bundled, display-only municipal place
 labels; terms not itemized in this repository's documentation beyond
 the source citation.

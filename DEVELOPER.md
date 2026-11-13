@@ -15,7 +15,7 @@ set of public upstream services.
 - Node.js 24 (Active LTS); `.nvmrc` pins the exact patch, 24.20.0
 - npm, using the committed `package-lock.json`
 - A browser supported by Playwright for browser testing
-- Python only for the offline landscape and buildings pipelines
+- Python only for the offline landscape and USA Structures pipelines
 
 Install and start the development server:
 
@@ -385,16 +385,9 @@ national distribution-circuit dataset exists.
 
 Building footprints come from USA Structures, 2023 edition (Oak Ridge
 National Laboratory for the FEMA Geospatial Response Office, CC0 on Figshare,
-DR-126), extruded over the terrain from zoom 13 in one tone. That edition
-publishes no height in this box, so each footprint carries one sampled from
-the GBA.Height raster (GlobalBuildingAtlas, Technical University of Munich,
-CC BY-NC 4.0; DR-250): the largest value among the raster cells its outline
-touches, in whole metres, never under 3 m. The heights are estimates modeled
-from 2019 satellite imagery (2018 where 2019 was cloudy), not surveyed; a
-footprint with no estimate is drawn 4 m tall. Both credits, the licence link
-and the statement of changes are Acknowledgements rows; nothing about either
-source prints on the map, in its key or in the embed chip. The committed bake
-covers the central Oregon region framing only (see `public/data/README.md`).
+DR-126), extruded over the terrain from zoom 13 at one stated 4 m height in
+one tone, because the edition publishes no height in this box. The committed
+bake covers the central Oregon region framing only (see `public/data/README.md`).
 
 On a phone the same scene is entered from a 3D cell in the right-edge
 column, present only in the Fire view on a phone that passes the WebGL 2

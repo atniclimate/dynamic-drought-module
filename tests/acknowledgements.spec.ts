@@ -59,10 +59,7 @@ const CITED = new Set<string>([
   'nrcan-atlas-of-canada-1m',
   'usgs-nhd-tribal-streets',
   'usgs-padus-4-1',
-  'usfs-administrative-forest-boundaries',
-  // The building heights cite pass, verdicts read 2026-11-13.
-  'gba-height-credit',
-  'gba-height-changes'
+  'usfs-administrative-forest-boundaries'
 ]);
 
 const DEPLOYER = { name: 'Fixture GIS office' };

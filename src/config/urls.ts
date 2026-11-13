@@ -1023,13 +1023,11 @@ export const URLS = Object.freeze({
   // Central Oregon building footprints for the desktop 3D Fire mode: USA
   // Structures (Oak Ridge National Laboratory for the FEMA Geospatial
   // Response Office), the 2023 edition published under CC0 (DR-126), clipped
-  // by scripts/extract-fema-structures.py, each given a height sampled from
-  // the GBA.Height raster (GlobalBuildingAtlas, CC BY-NC 4.0) by
-  // scripts/sample-gba-heights.py, and baked by
+  // by scripts/extract-fema-structures.py and baked by
   // scripts/build-structures-tiles.mjs; inputs and output pinned by SHA-256
-  // in scripts/data/structures-tiles-receipt.json. Outlines and one height
-  // property, z13-14; loaded only while the 3D Fire mode is active.
-  structuresPmtilesLocal: BASE_URL + 'data/structures-central-oregon-2026-11.pmtiles',
+  // in scripts/data/structures-tiles-receipt.json. Outlines only, z13-14;
+  // loaded only while the 3D Fire mode is active.
+  structuresPmtilesLocal: BASE_URL + 'data/structures-central-oregon-2023.pmtiles',
   tribalLandsLocal: BASE_URL + 'data/tribal-lands.geojson',
   treatyAreasLocal: BASE_URL + 'data/treaty-areas.geojson',
   // United States state boundaries, baked from the Census Bureau cartographic

@@ -176,17 +176,10 @@ affirmative open-data grant, and an uncaptioned state-specific layer
 would falsely imply lower risk where the true difference is that no
 equivalent dataset exists elsewhere.
 
-The structures context (building footprints for central Oregon) comes from
-USA Structures, 2023 edition, published under CC0 (DR-126), with one height
-per footprint sampled from the GBA.Height raster (GlobalBuildingAtlas, CC
-BY-NC 4.0; owner, 2026-11-13, DR-250). CC0 asks for no credit, and CC BY-NC
-lets its conditions be met "in any reasonable manner based on the medium,
-means, and context", so neither needs a credit on the map: the credit, the
-licence link and the statement of changes are an Acknowledgements row. One
-extrusion layer in one tone, each building at its sampled height (4 m where it
-has none), keyed only as "Buildings" while a building can draw. The heights
-are modeled estimates, not surveyed: they vary the skyline and say nothing
-reliable about any one building, so no layer may read them as exposure. Azure and Bing 3D city meshes stay
+The structures context (building footprints for central Oregon) now comes
+from USA Structures, 2023 edition, published under CC0 (DR-126), so it needs
+no credit on the map: one extrusion at a stated 4 m height in one tone, keyed
+only as "Buildings" while a building can draw. Azure and Bing 3D city meshes stay
 disqualified (API-key-gated commercial services covering curated metros,
 not the rural and Tribal geography this project serves).
 
