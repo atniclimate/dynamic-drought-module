@@ -413,6 +413,10 @@ test.describe('InteractionCoordinator: one click, one response', () => {
     // single click mid-fly would commit the wrong state and overwrite it, so
     // the settle gate must precede one deliberate click.
     const box = await page.locator('#map').boundingBox();
+    // Measured after the drawer's 0.25 s slide ends: mid-slide its box sits further right.
+    await page
+      .locator('#impact-panel')
+      .evaluate((el) => Promise.all(el.getAnimations().map((animation) => animation.finished)));
     const drawerBox = await page.locator('#impact-panel').boundingBox();
     if (!box || !drawerBox) throw new Error('map container or drawer has no box');
     // The probe sits in the middle of the map the briefing fit frames Washington in: from the fit's 40 px left

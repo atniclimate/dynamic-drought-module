@@ -83,6 +83,9 @@ test.describe('DEF-5 the search fit frames the place beside the briefing drawer 
     // side, so the fit's right pad is the drawer's.
     const drawer = page.locator('#impact-panel.open');
     await expect(drawer).toBeVisible();
+    // The drawer slides in over 0.25 s. Measured mid-slide its box sits further right, which put the probe on the
+    // drawer's final footprint (off the map, so no hover readout ever came): wait for the slide to end.
+    await drawer.evaluate((el) => Promise.all(el.getAnimations().map((animation) => animation.finished)));
     const mapBox = await page.locator('#map').boundingBox();
     const drawerBox = await drawer.boundingBox();
     if (!mapBox || !drawerBox) throw new Error('map or drawer has no box');
