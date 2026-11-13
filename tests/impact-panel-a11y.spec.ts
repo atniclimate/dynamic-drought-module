@@ -348,14 +348,14 @@ test.describe('impact panel accessibility', () => {
       const panel = page.locator('#impact-panel');
       await expect(panel).toBeVisible({ timeout: 15_000 });
       await showFullDetail(page);
-      const series = panel.locator('.point-heat-series');
+      const series = panel.locator('.impact-horizons .point-heat-series');
       await expect(series.first(), `${key}: grid guidance renders`).toBeVisible();
       expect(
         await series.count(),
         `${key}: at least one NWS grid disclosure renders`
       ).toBeGreaterThan(0);
       await expect(
-        panel.locator('.point-heat-series[open]'),
+        panel.locator('.impact-horizons .point-heat-series[open]'),
         `${key}: no NWS grid disclosure starts open`
       ).toHaveCount(0);
     }

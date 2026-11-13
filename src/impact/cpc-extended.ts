@@ -14,6 +14,7 @@
 
 import { URLS } from '../config/urls';
 import { cpcOutlookBarsSvg } from '../ui/charts';
+import { isFetchTimeout } from '../util/fetch';
 import { isObject } from '../util/guards';
 import { makeClaim, todayIso } from './evidence';
 import {
@@ -188,13 +189,26 @@ export async function readCpcOutlookClaims(
     if (err instanceof EsriServiceError && serviceError === null) serviceError = err;
     return null;
   };
+  // B7: a request that ran out its budget is a timeout, not a cancel and not a
+  // failure. The first one is kept (it words the all-failed note) and logged once;
+  // a window note says "in time" only when every unanswered request timed out.
+  let firstTimeout: unknown = null;
+  let windowFailedOther = false;
   await Promise.all(
     windows.map(async ({ label, base }, ordinal) => {
       let failed = 0;
       let silent = 0;
+      let timeouts = 0;
       const miss = (err: unknown): null => {
         failed += 1;
         if (!(err instanceof EsriServiceError)) silent += 1;
+        if (isFetchTimeout(err)) {
+          timeouts += 1;
+          if (firstTimeout === null && !signal.aborted) {
+            firstTimeout = err;
+            console.warn('[impact] CPC outlook query did not answer in time.');
+          }
+        }
         return keepServiceError(err);
       };
       try {
@@ -213,7 +227,10 @@ export async function readCpcOutlookClaims(
         // respond": the read did not establish that variable, so it is
         // incomplete, and no note is attached (none would be true).
         if (failed > 0 || (temp !== null && !tempPhrase) || (precip !== null && !precipPhrase)) incomplete = true;
-        if (silent > 1) windowFailed = true;
+        if (silent > 1) {
+          windowFailed = true;
+          if (timeouts < silent) windowFailedOther = true;
+        }
         if (failed < 2) answered = true;
         const parts = [tempPhrase, precipPhrase].filter((p): p is string => p !== null);
         if (parts.length === 0) return;
@@ -264,7 +281,7 @@ export async function readCpcOutlookClaims(
     return {
       claims: [],
       ok: false,
-      note: upstreamNote(serviceError, 'The CPC extended-range outlooks')
+      note: upstreamNote(serviceError ?? firstTimeout, 'The CPC extended-range outlooks')
     };
   }
   // S30D P3-TRUTH: a read that answered is ok, even with nothing to state.
@@ -277,6 +294,8 @@ export async function readCpcOutlookClaims(
     claims,
     ok: true,
     ...(incomplete ? { partial: true } : {}),
-    ...(windowFailed ? { note: 'One CPC outlook window did not respond.' } : {})
+    ...(windowFailed
+      ? { note: `One CPC outlook window did not ${windowFailedOther ? 'respond' : 'answer in time'}.` }
+      : {})
   };
 }

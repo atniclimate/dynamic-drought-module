@@ -249,15 +249,19 @@ test('canonical geography gives explicit selected-place identity precedence over
   ).toBe('canada');
 });
 
-test('per-source policy enables national heat without enabling regional drought and fire sources', () => {
+// DR-256: every source reads where its issuer covers the place; the drought and
+// fire sources no longer wait on the Northwest family (the water-supply adapter
+// keeps its own NWRFC domain gate inside src/impact/water-supply.ts).
+test('per-source policy reads national heat, drought and fire sources by their own coverage', () => {
   const kansas = briefingSourcePolicy(context('KS'));
   expect(kansas.sources.pointHeat.state).toBe('available');
   expect(kansas.sources.nwsForecast.state).toBe('available');
   expect(kansas.sources.nwsAlerts.state).toBe('available');
-  expect(kansas.sources.usdm.state).toBe('unavailable');
-  expect(kansas.sources.nifc.state).toBe('unavailable');
-  expect(kansas.sources.cpcExtended.state).toBe('unavailable');
-  expect(kansas.sources.waterSupply.state).toBe('unavailable');
+  expect(kansas.sources.usdm.state).toBe('available');
+  expect(kansas.sources.nifc.state).toBe('available');
+  expect(kansas.sources.cpcExtended.state).toBe('available');
+  expect(kansas.sources.waterSupply.state).toBe('available');
+  expect(kansas.droughtImpact.enabled).toBe(false);
 
   const americanSamoa = briefingSourcePolicy(context('AS'));
   expect(americanSamoa.sources.pointHeat.state).toBe('conditional');
@@ -268,6 +272,7 @@ test('per-source policy enables national heat without enabling regional drought 
   );
   expect(canada.sources.pointHeat.state).toBe('unavailable');
   expect(canada.sources.nwsAlerts.state).toBe('unavailable');
+  expect(canada.sources.usdm.state).toBe('unavailable');
 });
 
 test('point heat selects the geometrically nearest station and preserves sparse issuer intervals', async () => {
@@ -1515,25 +1520,16 @@ test.describe('DDM-P7-T07: the season-ahead heat cell', () => {
     );
   });
 
-  test('(e) a United States selection outside the Pacific Northwest (Texas) reads the honest conus matrix note under any camera (DR-090 owner ruling; DR-075 a survives at the source gate)', async ({
+  test('(e) a United States selection outside the Pacific Northwest (Texas) reads its season-ahead heat cell live, with no regional gate (DR-096 widened by DR-256; DR-075 a at the source gate)', async ({
     page
   }) => {
     // History, so the change of assertion is not mistaken for a weakening.
-    // Until DDM-P2-T08 microtask 5 (DR-090), briefingSourcePolicy gated the
-    // whole horizon matrix on the CAMERA region, so a Texas selection under
-    // the default washington_state framing rendered the matrix, and this
-    // case proved the season-ahead heat cell inside it went live (DR-075 a,
-    // director ruling: the cell's coverage gate follows the issuer's service
-    // extent). The same Texas selection under the national camera never
-    // rendered the matrix at all (tests/m-breadth-honesty.spec.ts, the
-    // Kansas case). DR-090 reads the PLACE, so Texas now gets the conus
-    // family's honest note under every camera, and the matrix collapse in
-    // src/impact/hydrate.ts (matrixEnabled) takes the heat cell with it.
-    // DR-075 a itself is untouched: the Texas cpcSeasonalTemp source cell is
-    // still 'available' (proven browser-free in
-    // tests/camera-region-fallbacks.spec.ts); whether the matrix should
-    // render nationally available lanes under impactSynthesis 'none' is the
-    // owner's call (S30 owner card), not this spec's.
+    // From DR-090 until DR-256 a Texas selection got only the conus family's
+    // "not validated outside the Pacific Northwest" block: the matrix
+    // collapse in src/impact/hydrate.ts (matrixEnabled) took this cell with
+    // it. DR-096 ruled the matrix render per cell; DR-256 (the owner,
+    // 2026-11-13) lifted the regional gate and widened that ruling, so the
+    // cell reads wherever the issuer's service covers the place again.
     await stubBrowserNwsHeat(page);
     await stubHeatRiskCatalogShared(page);
     await stubCpcSeasonalTempOutlook(page, {
@@ -1546,13 +1542,14 @@ test.describe('DDM-P7-T07: the season-ahead heat cell', () => {
 
     const panel = page.locator('#impact-panel');
     await expect(panel).toBeVisible();
-    const unavailable = panel.locator('.impact-capability-unavailable');
-    await expect(unavailable).toBeVisible();
-    await expect(unavailable.locator('.impact-horizon-note')).toHaveText(
-      'The briefing synthesis and resource routing are not validated outside the Pacific Northwest.'
+    await expect(panel.locator('.impact-capability-unavailable')).toHaveCount(0);
+    const cell = page.locator(CELL);
+    await expect(cell.locator('.impact-hazard-pill')).toHaveText('live');
+    const claim = cell.locator('.impact-claim');
+    await expect(claim).toHaveCount(1);
+    await expect(claim).toContainText(
+      'for Jun-Jul-Aug 2027: 40% chance of below-normal temperature, at the selected point.'
     );
-    await expect(panel.locator('.impact-hazard')).toHaveCount(0);
-    await expect(page.locator(CELL)).toHaveCount(0);
   });
 
   test('(g) an Equal Chances reading renders "Equal Chances (no favored tercile)" with no percent (the issuer\'s own EC semantics, not a forecast confidence)', async ({

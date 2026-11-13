@@ -66,7 +66,6 @@ import type { ViewPreset } from '../config/presets';
 import { hazardRailMarkup } from './hazard-rail';
 import { REGIONS, DEFAULT_REGION } from '../config/regions';
 import type { RegionKey, Region } from '../config/regions';
-import { regionCapabilityLevel } from '../config/region-capability';
 // The featured-station table (`src/config/telemetry.ts`) is imported
 // dynamically inside `ensureTelemetryList` below, not here (DR-008a,
 // 2026-09-03). It feeds only the Water & Snow list, which sits behind a
@@ -80,8 +79,7 @@ import { openStateBriefing } from '../state/deep-link';
 import {
   isCurrentBriefingIntent,
   nextBriefingIntent,
-  openImpactPanel,
-  closeImpactPanel
+  openImpactPanel
 } from './impact-panel';
 import { getPlaceSelection, onPlaceSelectionChange } from '../state/place-selection';
 import type { PlaceSelection } from '../state/place-selection';
@@ -611,29 +609,12 @@ function selectRegion(
   const region: Region | undefined = REGIONS[key];
   if (!region) return;
 
-  // A region without impact-synthesis capability cannot inherit a briefing
-  // from the prior region. The matrix is authoritative: closing here aborts
-  // hydration, clears the panel-owned place selection, and drops the mobile
-  // at-hand briefing before the new region is presented or printed.
-  //
-  // DR-109 precedence D2 / Q6: this must fire only on an EXPLICIT change
-  // into a none-synthesis region, never on the silent boot fit (`silent`)
-  // or a same-region Reset (`key === priorRegion`; Reset targets the default
-  // region, so this is a Reset from national). Without both guards,
-  // Reset under the national default (impactSynthesis 'none',
-  // src/config/capability-matrix.ts:124-127) would close a briefing it just
-  // opened, because the check used to fire on every selectRegion call for
-  // such a region regardless of whether the region actually changed or the
-  // call was the boot's own silent fit.
-  const priorRegion = STATE.currentRegion;
+  // A region move no longer closes an open briefing (DR-256): the briefing
+  // belongs to the chosen place and reads wherever its sources cover it, so
+  // no region is one a briefing cannot be read in. (Before DR-256 an explicit
+  // move into an impactSynthesis 'none' region closed it; DR-109 Q6 kept a
+  // same-region Reset from doing so, which still holds.)
   dropPlaceView();
-  if (
-    !silent &&
-    key !== priorRegion &&
-    regionCapabilityLevel(key, 'impactSynthesis') === 'none'
-  ) {
-    closeImpactPanel();
-  }
 
   // An EXPLICIT region choice (click or arrow-key; silent marks the boot
   // fit) is a legacy camera gesture: it clears the minimap camera and drops

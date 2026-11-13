@@ -26,9 +26,10 @@
  */
 
 import { createBriefingSkeleton } from '../impact/briefing';
-import { SHELL_HAZARD_KEY } from '../impact/horizon-chrome';
+import { SHELL_HAZARD_KEY, SHELL_HORIZON_KEY } from '../impact/horizon-chrome';
 import { hydrateBriefing } from '../impact/hydrate';
-import { HAZARD_KEYS, HAZARD_LABELS, markHorizonCells } from '../impact/matrix';
+import { HAZARD_KEYS, HAZARD_LABELS, MATRIX_LANE_KEYS } from '../impact/matrix';
+import { sourceMayRun, uncoveredSourceGroups } from '../impact/source-policy';
 import {
   formatDistanceKm,
   formatPointHeatInterval,
@@ -57,7 +58,6 @@ import { getLegendSection } from './legend-registry';
 import { legendPanelUsable } from './map-key';
 import { requestLayerOn } from './layer-toggle-command';
 import { loadFederalResources, resourcesForIdentity } from '../impact/resource-catalog';
-import { HAZARD_CLUSTERS } from '../config/clusters';
 import {
   getCommittedSnapshot,
   onCommittedSnapshotChange
@@ -104,8 +104,6 @@ let onClose: (() => void) | null = null;
 
 /** The briefing currently shown, so Phase 3 hydration can re-render in place. */
 let activeBriefing: ImpactBriefing | null = null;
-/** Matrix note shown instead of unsupported impact synthesis. */
-let activeImpactUnavailableNote: string | null = null;
 
 /**
  * Supersede token. Incremented on every open and on close so an async
@@ -312,7 +310,16 @@ function ensurePanel(): HTMLElement {
   // open. Registered once, alongside every other one-time wire-up in this
   // block (the module is a page-lifetime singleton once loaded, same as
   // view-shell's own subscription to this service).
-  onCommittedSnapshotChange(applyActiveHazardEmphasis);
+  // The Priority view follows the mode and the map's horizon (DESIGN B3, B4):
+  // re-render only when either one actually changed.
+  let leadShell = '';
+  onCommittedSnapshotChange(() => {
+    applyActiveHazardEmphasis();
+    const { selectedHazard, horizon } = getCommittedSnapshot();
+    if (`${selectedHazard}:${horizon}` === leadShell) return;
+    leadShell = `${selectedHazard}:${horizon}`;
+    refreshOpenBriefing(openToken);
+  });
   // Print listeners (owner-1o): registered once, here, so they exist by the
   // time any disclosure this module renders could need opening for print.
   window.addEventListener('beforeprint', handleBeforePrint);
@@ -351,13 +358,6 @@ function ensurePanel(): HTMLElement {
  */
 function applyActiveHazardEmphasis(): void {
   if (!bodyEl) return;
-  // D4: the unavailable block follows a mode change while the panel is open.
-  const unavailable = unavailableTitle();
-  bodyEl.querySelectorAll<HTMLElement>('.impact-capability-unavailable').forEach((section) => {
-    section.setAttribute('aria-label', unavailable);
-    const heading = section.querySelector('h3');
-    if (heading) heading.textContent = unavailable;
-  });
   const activeHazard = SHELL_HAZARD_KEY[getCommittedSnapshot().selectedHazard];
   bodyEl.querySelectorAll<HTMLElement>('.impact-hazard').forEach((row) => {
     const isActive = row.dataset['hazard'] === activeHazard;
@@ -393,7 +393,7 @@ function currentBriefingView(): BriefingView {
  * `hidden`, `aria-pressed` and one heading's text change: no node is created,
  * moved or reordered, so the matrix under the priority view is the same
  * matrix, in the same order, as under the full detail. A body with no switch
- * (impact synthesis unavailable, or a no-place presentation) is left as it
+ * (no matrix source covers the place, or a no-place presentation) is left as it
  * was rendered.
  */
 function applyBriefingView(): void {
@@ -963,17 +963,6 @@ function renderResource(resource: ResourceLink): string {
 }
 
 /**
- * The title of the block that stands in for the horizon matrix when impact
- * synthesis is unavailable: the active mode's own name (D4, 2026-11-05: a
- * Wildfire or ENSO briefing was titled "Drought"). The Drought mode keeps
- * the shipped "Drought impact unavailable".
- */
-function unavailableTitle(): string {
-  // DRAFT wording: "<mode title> impact unavailable" for the non-Drought modes.
-  return `${HAZARD_CLUSTERS[getCommittedSnapshot().selectedHazard].title} impact unavailable`;
-}
-
-/**
  * Render the resources, grouped by tier in stewardship order; nothing at all
  * when there are none (D4: no empty heading over zero links where routing is
  * off). The Nation's-own slot ships empty, and an empty slot draws nothing,
@@ -1006,51 +995,41 @@ function renderResources(all: readonly ResourceLink[]): string {
 }
 
 /** Render the whole briefing body (everything below the static header). */
-function renderBody(
-  briefing: ImpactBriefing,
-  impactUnavailableNote: string | null
-): string {
-  return `${renderBriefingSections(briefing, impactUnavailableNote)}
+function renderBody(briefing: ImpactBriefing): string {
+  return `${renderBriefingSections(briefing)}
     ${acknowledgementsHtml()}
   `;
+}
+
+/**
+ * The sources that do not cover this place, named once under one heading in
+ * Technical information, each with its own capability note (DR-256, B2).
+ * Nothing when every source covers the place.
+ */
+function renderUncoveredSources(briefing: ImpactBriefing): string {
+  const groups = uncoveredSourceGroups(briefing.sourcePolicy);
+  if (groups.length === 0) return '';
+  return `<h4>Sources that do not cover this place</h4>${groups
+    .map(({ labels, note }) => `<p><strong>${escapeHtml(labels.join(', '))}.</strong> ${escapeHtml(note)}</p>`)
+    .join('')}`;
 }
 
 /**
  * Every section of the briefing body above the acknowledgements, the part a
  * hydration refresh re-renders (`refreshOpenBriefing`).
  */
-function renderBriefingSections(
-  briefing: ImpactBriefing,
-  impactUnavailableNote: string | null
-): string {
+function renderBriefingSections(briefing: ImpactBriefing): string {
   const caveat = briefing.landCaveat
     ? `<p class="impact-land-caveat">${escapeHtml(briefing.landCaveat)}</p>`
     : '';
   const pointHeatSection = renderPointHeat(briefing.pointHeat, briefing.heatSynthesis);
-  const impact = impactUnavailableNote
-    ? // Drought impact (the horizon matrix) can be disabled on its own
-      // source-policy switch while point heat, which reads NWS directly and
-      // not through that capability, still has something to say. Keeping it
-      // here (rather than dropping it with the matrix it would otherwise
-      // nest inside) is this lane's call, not one the owner's B/C wording
-      // covered; see the completion report.
-      `
-      ${pointHeatSection}
-      <section class="impact-capability-unavailable" aria-label="${escapeHtml(unavailableTitle())}">
-        <h3 class="impact-section-title">${escapeHtml(unavailableTitle())}</h3>
-        <p class="impact-horizon-note">${escapeHtml(impactUnavailableNote)}</p>
-      </section>
-    `
-    : // The block now holds four hazards, so it can no longer be titled
-      // "Drought impact": that heading would speak for Fire, Heat and ENSO
-      // as well. The wording here is the plainest one that stays true to
-      // what the block contains; the briefing's names are an open question
-      // (DR-013) and this does not answer it.
-      // Point heat no longer floats above the horizons (owner ruling B/C):
-      // it renders inside Current Conditions, after the heat cell and
-      // before the ENSO cell, so the briefing leads with Current Conditions
-      // and the point-heat material sits in the heat row.
-      `
+  // The block holds four hazards, so it is not titled "Drought impact"; the
+  // briefing's names are an open question (DR-013) and this does not answer
+  // it. Point heat renders inside Current Conditions, after the heat cell and
+  // before the ENSO cell (owner ruling B/C). DR-256: the matrix renders cell
+  // by cell everywhere; a source that does not cover the place leaves its
+  // cells and is named in Technical information.
+  const impact = `
       <section class="impact-horizons" aria-label="Impact across three horizons">
         <h3 class="impact-section-title">Impact across three horizons</h3>
         ${renderHorizon(briefing.horizons.current, pointHeatSection)}
@@ -1058,21 +1037,26 @@ function renderBriefingSections(
         ${renderHorizon(briefing.horizons.longRange)}
       </section>
     `;
-  // The priority view and its switch exist only where the matrix does: with
-  // impact synthesis unavailable every cell holds the one same note, and a
-  // second arrangement of it would say nothing more. Both views are always
-  // rendered; `applyBriefingView` shows one, so a switch never re-renders and
-  // the matrix is never out of the document.
-  const lead = impactUnavailableNote
-    ? ''
-    : `${renderViewSwitch(currentBriefingView())}${renderFocusHead()}${renderLeadView(briefing)}`;
+  // The priority view and its switch show wherever any cell can read (DR-256,
+  // B1); a place no matrix source covers keeps only the matrix's own states.
+  // Both views are always rendered; `applyBriefingView` shows one, so a switch
+  // never re-renders and the matrix is never out of the document.
+  const anyCellReads = MATRIX_LANE_KEYS.some((key) => sourceMayRun(briefing.sourcePolicy, key));
+  const shell = getCommittedSnapshot();
+  const lead = anyCellReads
+    ? `${renderViewSwitch(currentBriefingView())}${renderFocusHead()}${renderLeadView(briefing, Date.now(), {
+        hazard: SHELL_HAZARD_KEY[shell.selectedHazard],
+        horizon: SHELL_HORIZON_KEY[shell.horizon],
+        pointHeat: pointHeatSection
+      })}`
+    : '';
   return `
     ${caveat}
     ${lead}
     ${renderLandscapeContext(briefing.landscape)}
     ${impact}
     ${renderResources(briefing.resources)}
-    ${renderMapTechnicalInformation(false, renderPriorityRule())}
+    ${renderMapTechnicalInformation(false, renderPriorityRule() + renderUncoveredSources(briefing))}
   `;
 }
 
@@ -1100,35 +1084,17 @@ export function briefingAcknowledgementsHtml(): string {
 }
 
 /** Write the briefing into the panel chrome. */
-function paint(
-  briefing: ImpactBriefing,
-  impactUnavailableNote: string | null
-): void {
+function paint(briefing: ImpactBriefing): void {
   ensurePanel();
   if (titleEl) titleEl.textContent = briefing.landTitle;
   if (kindEl) kindEl.textContent = briefing.landKind;
   setMailActionEnabled(true);
   refreshBriefingActions(briefing.landTitle, briefing.context);
   if (bodyEl) {
-    bodyEl.innerHTML = renderBody(briefing, impactUnavailableNote);
+    bodyEl.innerHTML = renderBody(briefing);
     discloseLegendAnchorTitles(bodyEl);
     applyActiveHazardEmphasis();
     applyBriefingView();
-  }
-}
-
-/** Put every mirrored horizon and every cell into the same explicit state. */
-function markImpactSynthesisUnavailable(
-  briefing: ImpactBriefing,
-  note: string
-): void {
-  for (const horizon of [
-    briefing.horizons.current,
-    briefing.horizons.nearTerm,
-    briefing.horizons.longRange
-  ]) {
-    markHorizonCells(horizon, 'unavailable', note);
-    horizon.note = note;
   }
 }
 
@@ -1163,14 +1129,7 @@ export function openImpactPanel(
       sources: []
     };
   }
-  const unavailableNote = briefing.sourcePolicy.droughtImpact.enabled
-    ? null
-    : briefing.sourcePolicy.droughtImpact.note;
-  if (unavailableNote) {
-    markImpactSynthesisUnavailable(briefing, unavailableNote);
-  }
   activeBriefing = briefing;
-  activeImpactUnavailableNote = unavailableNote;
   // A new open starts on the whole view, never on the last place's one hazard,
   // and on the priority view in every shell, never on the last open's choice.
   focusHazard = null;
@@ -1184,7 +1143,7 @@ export function openImpactPanel(
   panelSelection = { label: context.title, context };
   setPlaceSelection(panelSelection);
 
-  paint(briefing, unavailableNote);
+  paint(briefing);
   openImpactPanelShell(closeImpactPanel, opener);
 
   // Mirror the briefing into the sheet's at-hand block (the half
@@ -1203,9 +1162,7 @@ export function openImpactPanel(
     );
   }
 
-  // Hydration applies the independent policy for every source. This runs even
-  // when regional drought synthesis is unavailable because point heat may be
-  // supported for the selected geography.
+  // Hydration applies the independent policy for every source (DR-256).
   void hydrateBriefing(
     briefing,
     signal,
@@ -1219,8 +1176,8 @@ export function openImpactPanel(
   if (briefing.sourcePolicy.droughtImpact.enabled) {
     // In parallel, resolve the selection's location identity and swap in the
     // state-tier resources from the verified catalog (F3; D-0.6.0-009). The
-    // same capability evidence gates resource routing, so unsupported or
-    // unknown contexts start no catalog route.
+    // Northwest-curated resources keep their data limit (DR-256), so a place
+    // outside it starts no catalog route.
     void rehydrateResourcesFromCatalog(briefing, context, signal, token);
   }
 
@@ -1329,7 +1286,8 @@ const PRESERVED_DISCLOSURE_SELECTOR =
 function preservedDisclosureKey(details: HTMLDetailsElement): string {
   if (details.classList.contains('impact-technical-information')) return 'technical-information';
   if (details.classList.contains('impact-acknowledgements')) return 'acknowledgements';
-  return `point-heat-series:${details.dataset['metricKey'] ?? ''}`;
+  // Point heat renders twice in Extreme Heat mode (the lead and the matrix).
+  return `${details.closest('.briefing-lead') ? 'lead:' : ''}point-heat-series:${details.dataset['metricKey'] ?? ''}`;
 }
 
 /** The open acknowledgements section's top, relative to the scrolling
@@ -1386,10 +1344,10 @@ export function refreshOpenBriefing(token: number): void {
     }
     keptAcknowledgements.insertAdjacentHTML(
       'beforebegin',
-      renderBriefingSections(activeBriefing, activeImpactUnavailableNote)
+      renderBriefingSections(activeBriefing)
     );
   } else {
-    bodyEl.innerHTML = renderBody(activeBriefing, activeImpactUnavailableNote);
+    bodyEl.innerHTML = renderBody(activeBriefing);
   }
   bodyEl
     .querySelectorAll<HTMLDetailsElement>(PRESERVED_DISCLOSURE_SELECTOR)
@@ -1455,7 +1413,6 @@ export function closeImpactPanel(): void {
   // cannot focus a section after the user has left the panel.
   legendPollGeneration++;
   activeBriefing = null;
-  activeImpactUnavailableNote = null;
   setSheetBriefing(null);
   // Panel-owned selection clear (the stage-5 majors 3/4 fix): closing the
   // briefing ends the selection, which drops the feature-state emphasis and
@@ -1502,7 +1459,6 @@ export function openNoPlacePanel(section: NoPlaceSection, opener: HTMLElement | 
   openToken++;
   legendPollGeneration++;
   activeBriefing = null;
-  activeImpactUnavailableNote = null;
   if (panelSelection !== null && getPlaceSelection() === panelSelection) {
     setPlaceSelection(null);
   }

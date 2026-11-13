@@ -16,8 +16,9 @@
  * T-M0-4 honest-disablement hooks in
  * src/config/region-capability.ts (a separate module so this one stays
  * import-free for the coverage-matrix generator's native type-stripping
- * import). N2-A's impact panel is the first behavioral consumer: unsupported
- * synthesis renders the matrix note and starts no briefing hydration.
+ * import). Since DR-256 the impact briefing reads each source where its
+ * issuer covers the place; `impactSynthesis` gates only the Northwest-curated
+ * resources and the Pacific Northwest ENSO tendency.
  */
 
 import type {
@@ -123,8 +124,10 @@ export const CAPABILITY_MATRIX: CapabilityMatrix = {
     },
     impactSynthesis: {
       level: 'none',
-      // DRAFT wording: "PNW" written out (D4, 2026-11-05); this note is the briefing's public coverage line.
-      note: 'The briefing synthesis and resource routing are not validated outside the Pacific Northwest.'
+      // Since DR-256 (owner, 2026-11-13) each briefing source reads where its issuer covers the place
+      // (src/impact/source-policy.ts); this level gates only the Northwest-curated resources and the Pacific
+      // Northwest ENSO tendency, and the note says exactly that.
+      note: 'Northwest-curated resources and the Pacific Northwest ENSO tendency are not read outside the Pacific Northwest; every other briefing source reads where its issuer covers the place.'
     }
   },
   'ak-hi': {
@@ -146,7 +149,7 @@ export const CAPABILITY_MATRIX: CapabilityMatrix = {
     },
     impactSynthesis: {
       level: 'none',
-      note: 'No briefing support for Alaska or Hawaii.'
+      note: 'Northwest-curated resources and the Pacific Northwest ENSO tendency are not read for Alaska or Hawaii; every other briefing source reads where its issuer covers the place.'
     }
   },
   canada: {

@@ -25,6 +25,8 @@ import type * as maplibregl from 'maplibre-gl';
 
 import type { ImpactBriefing } from '../impact/types';
 import { selectBriefNarrativeLine } from '../impact/brief-narrative-selector';
+import { SHELL_HAZARD_KEY } from '../impact/horizon-chrome';
+import { getCommittedSnapshot } from '../state/cluster-service';
 import { getViewMode, setViewMode } from '../state/view-mode';
 import { escapeHtml } from '../util/escape';
 import { TRIBAL_NATIONS_GROUP } from '../config/layer-groups';
@@ -401,7 +403,7 @@ export function setSheetBriefing(briefing: ImpactBriefing | null): void {
 
 /** The critical-first point-heat or current-horizon line, when available. */
 function currentHeadline(briefing: ImpactBriefing): string | null {
-  return selectBriefNarrativeLine(briefing);
+  return selectBriefNarrativeLine(briefing, SHELL_HAZARD_KEY[getCommittedSnapshot().selectedHazard]);
 }
 
 /**

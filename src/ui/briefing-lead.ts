@@ -25,7 +25,7 @@ import '../styles/briefing-lead.css';
 import { NWS_ALERT_COLORS, NWS_ALERT_DEFAULT_COLOR } from '../config/palette';
 import { NIFC_INCIDENT_PRESENTATION } from '../config/wildfire-presentation';
 import { claimDateLine, claimRegisterTag, EVIDENCE_PRESENTATION } from '../impact/evidence';
-import { HORIZON_CHROME } from '../impact/horizon-chrome';
+import { HORIZON_CHROME, POINT_HEAT_HAZARD } from '../impact/horizon-chrome';
 import { HAZARD_KEYS, HAZARD_LABELS, HORIZON_KEYS } from '../impact/matrix';
 import {
   PRIORITY_ORDER_NOTE,
@@ -43,7 +43,8 @@ import type {
   PriorityMember,
   PriorityOrder,
   PriorityRest,
-  PriorityUnrankedRead
+  PriorityUnrankedRead,
+  PriorityView
 } from '../impact/priority';
 import type {
   ClaimReading,
@@ -107,7 +108,7 @@ export function renderFocusHead(): string {
     `<p class="lead-links">` +
     door('rule', 'Method and technical information') +
     door('acknowledgements', 'Acknowledgements') +
-    door('matrix', 'All four hazards') +
+    door('matrix', 'All hazards') +
     `</p>` +
     `</section>`
   );
@@ -403,8 +404,9 @@ function renderTile(entry: PriorityEntry): string {
   const claim = entry.lead.claim;
   const pres = EVIDENCE_PRESENTATION[claim.evidence];
   const date = claimDateLine(claim);
+  const scope = scopeWords(entry);
   const name =
-    `${HAZARD_LABELS[entry.hazard]}: ${entry.reason}. Source: ${claim.source}. ` +
+    `${HAZARD_LABELS[entry.hazard]}: ${entry.reason}. ${scope ? `${scope} ` : ''}Source: ${claim.source}. ` +
     `${date ? `${date}. ` : ''}Evidence: ${pres.label}. ${detailLabel(entry.hazard)}`;
   const figure = familyFigure(entry.family, entry.members, entry.lead);
   // The tile is one button with one name, built from its lead member. What
@@ -423,7 +425,7 @@ function renderTile(entry: PriorityEntry): string {
     `<span class="lead-headline">${headlineHtml(entry)}</span>` +
     (figure ? `<span class="lead-figure">${figure}</span>` : '') +
     (describedBy ? `<span class="sr-only" id="${describedBy}">${figureWords}</span>` : '') +
-    `<span class="lead-scope">${escapeHtml(scopeWords(entry))}</span>` +
+    `<span class="lead-scope">${escapeHtml(scope)}</span>` +
     `<span class="lead-foot">${sourceLine(claim)}<span class="lead-open" aria-hidden="true">${SWITCH_WORDS.matrix}</span></span>` +
     `</button></li>`
   );
@@ -488,14 +490,16 @@ function renderUnrankedRead(read: PriorityUnrankedRead): string {
 }
 
 /**
- * A read with no class to draw: named by its horizon, source and date, and
- * said to be in the federal text, one tap away on the row's own door. Nothing
- * of the sentence is cut here.
+ * A read with no class to draw: its cell's state, named by its horizon,
+ * source and date, and said to be in the federal text, one tap away on the
+ * row's own door. Nothing of the sentence is cut here, and the state word
+ * keeps the line from being a horizon label alone (DESIGN B5).
  */
-function renderTextRead(horizon: HorizonKey, claim: SourcedClaim): string {
+function renderTextRead(horizon: HorizonKey, status: HorizonStatus, claim: SourcedClaim): string {
   return (
     `<div class="lead-text-read" data-evidence="${claim.evidence}">` +
-    `<p class="lead-state-line"><span class="lead-text-read-words"><span class="lead-state-horizon">${escapeHtml(horizonWord(horizon))}</span>` +
+    `<p class="lead-state-line"><span class="impact-hazard-pill impact-hazard-pill-${status}">${escapeHtml(READ_STATE_WORD[status])}</span>` +
+    `<span class="lead-text-read-words"><span class="lead-state-horizon">${escapeHtml(horizonWord(horizon))}</span>` +
     ` <span class="lead-text-read-where">stated in the federal text</span></span>${badge(claim)}</p>` +
     `<p class="lead-read-source">${sourceLine(claim)}</p></div>`
   );
@@ -513,7 +517,7 @@ function renderRest(item: PriorityRest, order: PriorityOrder): string {
   ]);
   const blocks: Array<{ readonly horizon: HorizonKey; readonly html: string }> = [
     ...item.reads.map((read) => ({ horizon: read.members[0]!.horizon, html: renderUnrankedRead(read) })),
-    ...item.texts.map(({ horizon, claim }) => ({ horizon, html: renderTextRead(horizon, claim) })),
+    ...item.texts.map(({ horizon, status, claim }) => ({ horizon, html: renderTextRead(horizon, status, claim) })),
     ...item.states.map((state) => ({
       horizon: state.horizon,
       html: renderState(item.hazard, state, familiesRead)
@@ -556,7 +560,7 @@ function presentNow(entry: PriorityEntry, now: number): boolean {
  * co-occurrence in place and time. No arrow, no order between them beyond the
  * fixed hazard order, and the caption says what the joint is not.
  */
-function renderTogether(order: PriorityOrder, now: number): string {
+function renderTogether(order: PriorityOrder, now: number, horizon: HorizonKey): string {
   const present = order.ranked.filter((entry) => presentNow(entry, now));
   const hazards = HAZARD_KEYS.filter((hazard) => present.some((entry) => entry.hazard === hazard));
   if (hazards.length < 2) return '';
@@ -575,11 +579,11 @@ function renderTogether(order: PriorityOrder, now: number): string {
       );
     })
     .join('');
-  // A hazard that was not read cannot be counted in or out: say so.
+  // A hazard that was not read cannot be counted in or out: say so, at the horizon read.
   const unread = order.rest
-    .filter((item) => !hazards.includes(item.hazard) && item.states.some((state) => state.horizon === 'current'))
+    .filter((item) => !hazards.includes(item.hazard) && item.states.some((state) => state.horizon === horizon))
     .map((item) => {
-      const state = item.states.find((candidate) => candidate.horizon === 'current')!;
+      const state = item.states.find((candidate) => candidate.horizon === horizon)!;
       return `${HAZARD_LABELS[item.hazard]} (${READ_STATE_WORD[state.status]})`;
     });
   return (
@@ -734,19 +738,47 @@ function cellsOf(briefing: ImpactBriefing): HazardCell[] {
   );
 }
 
+/** What the map shows, and the point-heat section the runtime renders. */
+export interface LeadViewOptions extends PriorityView {
+  /** The point-heat section's markup; shown as the lead's detail only in its own mode (DESIGN B6). */
+  readonly pointHeat?: string;
+}
+
+function tileList(entries: readonly PriorityEntry[], start: number): string {
+  if (entries.length === 0) return '';
+  return `<ol class="lead-tiles"${start > 1 ? ` start="${start}"` : ''}>${entries.map(renderTile).join('')}</ol>`;
+}
+
 /**
  * Render the priority view for one briefing. `now` is the moment the
  * present-together strip speaks for; the runtime passes the render time.
+ * `options` carries the map's mode and horizon: the mode's hazard leads,
+ * ranked or not, and only the map's horizon is read.
  */
-export function renderLeadView(briefing: ImpactBriefing, now: number = Date.now()): string {
-  const order = orderBriefing(cellsOf(briefing));
+export function renderLeadView(
+  briefing: ImpactBriefing,
+  now: number = Date.now(),
+  options: LeadViewOptions = {}
+): string {
+  const mode = options.hazard;
+  const order = orderBriefing(cellsOf(briefing), options);
   const tiles = order.ranked.slice(0, LEAD_TILE_MAX);
   const more = order.ranked.slice(LEAD_TILE_MAX);
   const rule = `<button type="button" class="lead-link" data-lead-action="rule" data-lead-key="head:rule">How this is ordered</button>`;
+  // The mode's ranked reads are the first tiles; a mode with none leads with its own state instead.
+  const modeTiles = tiles.filter((entry) => entry.hazard === mode).length;
+  const modeRest = modeTiles === 0 && mode !== undefined ? order.rest.find((item) => item.hazard === mode) : undefined;
+  const modeRestHtml = modeRest ? `<ul class="lead-rest-list">${renderRest(modeRest, order)}</ul>` : '';
+  const detail = mode !== undefined && mode === POINT_HEAT_HAZARD ? (options.pointHeat ?? '') : '';
+  // The detail follows the mode's own tiles, so the tile list splits there only when it has one.
+  const split = detail ? modeTiles : 0;
   const lead =
     tiles.length > 0
-      ? `<ol class="lead-tiles">${tiles.map(renderTile).join('')}</ol>`
-      : `<p class="lead-none">Nothing here is ranked yet. That is not an all-clear: each hazard is listed below with its state.</p>`;
+      ? modeRestHtml + tileList(tiles.slice(0, split), 1) + detail + tileList(tiles.slice(split), split + 1)
+      : `<p class="lead-none">Nothing here is ranked yet. That is not an all-clear: each hazard is listed below with its state.</p>` +
+        modeRestHtml +
+        detail;
+  const others = order.rest.filter((item) => item !== modeRest);
   // Past the first few, the order simply continues: the same tiles, under
   // their own heading, so no ranked read loses its figure or its place.
   const further =
@@ -754,11 +786,11 @@ export function renderLeadView(briefing: ImpactBriefing, now: number = Date.now(
       ? `<h4 class="lead-subtitle">Next in the reading order</h4><ol class="lead-tiles" start="${LEAD_TILE_MAX + 1}">${more.map(renderTile).join('')}</ol>`
       : '';
   const rest =
-    order.rest.length > 0
+    others.length > 0
       ? `<section class="lead-rest" aria-labelledby="lead-rest-title">` +
         `<h4 class="lead-subtitle" id="lead-rest-title">Other reads and gaps</h4>` +
         `<p class="lead-caption">Reads that hold no class in the reading order, in the issuer's words, and anything that was not read. Neither is an all-clear.</p>` +
-        `<ul class="lead-rest-list">${order.rest.map((item) => renderRest(item, order)).join('')}</ul>` +
+        `<ul class="lead-rest-list">${others.map((item) => renderRest(item, order)).join('')}</ul>` +
         `</section>`
       : '';
   const chain = renderEvidenceChain(buildEnsoChainLinks(briefing), {
@@ -775,7 +807,7 @@ export function renderLeadView(briefing: ImpactBriefing, now: number = Date.now(
     `</div>` +
     lead +
     further +
-    renderTogether(order, now) +
+    renderTogether(order, now, options.horizon ?? 'current') +
     rest +
     chain +
     `<div class="lead-doors">` +

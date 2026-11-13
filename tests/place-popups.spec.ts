@@ -249,7 +249,7 @@ async function routeEmptyAlerts(page: Page): Promise<void> {
   );
 }
 
-const NOTHING_MAPPED = "Nothing mapped here on the active condition layers; each layer's reading is below.";
+const NOTHING_MAPPED = "Nothing mapped in this area on the active condition layers; each layer's reading is below.";
 const NOT_EVERY_READ = "Not every condition layer has been read here yet; each layer's state is below.";
 
 /**

@@ -53,7 +53,9 @@ const {
   readingHeadline,
   sortNwsEvents
 } = await import('../src/impact/priority.ts');
-const { HAZARD_KEYS } = await import('../src/impact/matrix.ts');
+const { HAZARD_KEYS, HAZARD_LABELS } = await import('../src/impact/matrix.ts');
+const { HAZARD_CLUSTER_KEYS } = await import('../src/config/clusters.ts');
+const { SHELL_HAZARD_KEY } = await import('../src/impact/horizon-chrome.ts');
 const { HEATRISK_CATEGORIES, SPC_FIREWX_CATEGORIES, USDM_CATEGORIES, NWS_ALERT_COLORS } = await import(
   '../src/config/palette.ts'
 );
@@ -389,7 +391,86 @@ test('a cell whose claims carry no reading still speaks: its leading claim stand
     place({ 'drought:nearTerm': cell('drought', 'nearTerm', [first, claim(null)]) })
   );
   const drought = order.rest.find((item) => item.hazard === 'drought');
-  assert.deepEqual(drought.texts, [{ horizon: 'nearTerm', claim: first }]);
+  // B5: the text read carries its cell's own state, so it is never a bare horizon label.
+  assert.deepEqual(drought.texts, [{ horizon: 'nearTerm', status: 'ready', claim: first }]);
+});
+
+test('the hazard rows are the modes, in the mode table\'s order (DR-113)', () => {
+  assert.deepEqual(HAZARD_KEYS, HAZARD_CLUSTER_KEYS.map((key) => SHELL_HAZARD_KEY[key]));
+  const tieLine = PRIORITY_RULE_STATEMENTS.find((line) => /Ties keep one fixed hazard order/.test(line));
+  assert.ok(tieLine.includes(HAZARD_KEYS.map((hazard) => HAZARD_LABELS[hazard]).join(', ')));
+});
+
+test('the active mode\'s hazard leads; every other entry keeps the order it had (B3)', () => {
+  const cells = busyPlace();
+  const today = keysOf(orderBriefing(cells));
+  for (const hazard of HAZARD_KEYS) {
+    const order = orderBriefing(cells, { hazard });
+    const got = keysOf(order);
+    const own = today.filter((key) => key.startsWith(`${hazard}:`));
+    assert.deepEqual(got, [...own, ...today.filter((key) => !own.includes(key))], hazard);
+    // The rest leads with the mode's hazard too, where it has one; the others keep their order.
+    const restHazards = order.rest.map((item) => item.hazard);
+    const others = restHazards.filter((key) => key !== hazard);
+    assert.deepEqual(restHazards, restHazards.includes(hazard) ? [hazard, ...others] : others);
+    assert.deepEqual(others, HAZARD_KEYS.filter((key) => others.includes(key)));
+  }
+  // An unranked mode hazard heads the rest.
+  for (const hazard of HAZARD_KEYS) {
+    const order = orderBriefing(place(), { hazard });
+    assert.deepEqual(order.ranked, []);
+    assert.deepEqual(order.rest.map((item) => item.hazard), [hazard, ...HAZARD_KEYS.filter((key) => key !== hazard)]);
+  }
+});
+
+test('the at-hand line leads with point heat only in its own mode (B3, B6)', async () => {
+  const { selectBriefNarrativeLine } = await import('../src/impact/brief-narrative-selector.ts');
+  const { POINT_HEAT_HAZARD } = await import('../src/impact/horizon-chrome.ts');
+  const temperature = { key: 'temperature', values: [{ value: 32, unitCode: 'wmoUnit:degC' }] };
+  const cells = Object.fromEntries(
+    HAZARD_KEYS.map((hazard) => [hazard, { claims: [{ text: `${hazard} current claim` }] }])
+  );
+  const briefing = {
+    pointHeat: { observation: { status: 'ready', stationName: 'Near Station', metrics: [temperature] }, grid: { status: 'no-data', metrics: [] } },
+    horizons: { current: { cells, claims: HAZARD_KEYS.map((hazard) => cells[hazard].claims[0]) } }
+  };
+  for (const hazard of HAZARD_KEYS) {
+    const line = selectBriefNarrativeLine(briefing, hazard);
+    if (hazard === POINT_HEAT_HAZARD) assert.match(line, /^Heat at the selected point: Near Station/);
+    else assert.equal(line, `${hazard} current claim`);
+  }
+  // No mode given: the shipped order, point heat first.
+  assert.match(selectBriefNarrativeLine(briefing), /^Heat at the selected point/);
+  // A mode with no current claim falls back to point heat.
+  const empty = { ...briefing, horizons: { current: { cells: { ...cells, drought: { claims: [] } }, claims: [] } } };
+  assert.match(selectBriefNarrativeLine(empty, 'drought'), /^Heat at the selected point/);
+  // Point heat not ready in its own mode: the mode's own cell, never another hazard's claim.
+  const unready = { ...briefing, pointHeat: { observation: { status: 'loading', metrics: [] }, grid: { status: 'loading', metrics: [] } } };
+  assert.equal(selectBriefNarrativeLine(unready, POINT_HEAT_HAZARD), `${POINT_HEAT_HAZARD} current claim`);
+});
+
+test('only the map\'s horizon enters the order (B4)', () => {
+  const near = orderBriefing(busyPlace(), { horizon: 'nearTerm' });
+  assert.deepEqual(keysOf(near), ['heat:heatrisk:heatrisk-level', 'fire:spc:spc-category']);
+  const current = orderBriefing(busyPlace(), { horizon: 'current' });
+  assert.ok(keysOf(current).every((key) => !/heatrisk|spc/.test(key)));
+  for (const entry of current.ranked) assert.equal(entry.lead.horizon, 'current');
+  // Long Range: a seasonal claim with no ranked reading speaks as text, with its state.
+  const seasonal = claim({ kind: 'cpc-tercile', variable: 'temperature', cat: 'Above', prob: 50, season: 'Sep-Oct-Nov 2026' });
+  const long = orderBriefing(
+    [
+      ...busyPlace(),
+      cell('heat', 'longRange', [seasonal], 'partial', 'One window did not respond.'),
+      cell('drought', 'longRange', [], 'unavailable', 'no long-range drought read')
+    ],
+    { horizon: 'longRange' }
+  );
+  assert.deepEqual(long.ranked, []);
+  const heat = long.rest.find((item) => item.hazard === 'heat');
+  assert.deepEqual(heat.texts, [{ horizon: 'longRange', status: 'partial', claim: seasonal }]);
+  // A hazard with no cell at this horizon is listed as not read, at this horizon.
+  const fire = long.rest.find((item) => item.hazard === 'fire');
+  assert.deepEqual(fire.states, [{ horizon: 'longRange', status: 'unavailable' }]);
 });
 
 test('seasonal reads and long-range cells never enter the order', () => {

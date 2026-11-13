@@ -45,8 +45,9 @@ registerHooks({
   }
 });
 
-const { renderLeadView, buildEnsoChainLinks } = await import('../src/ui/briefing-lead.ts');
+const { renderLeadView, renderFocusHead, buildEnsoChainLinks } = await import('../src/ui/briefing-lead.ts');
 const { HAZARD_KEYS, HORIZON_KEYS } = await import('../src/impact/matrix.ts');
+const { POINT_HEAT_HAZARD } = await import('../src/impact/horizon-chrome.ts');
 
 const NO_SOURCE = 'No source answered for this hazard at this horizon.';
 const NOW = Date.UTC(2026, 10, 9, 20);
@@ -217,4 +218,76 @@ test('the unread-together caption and the wildfire scope say what is drawn, in f
   assert.ok(text(html).includes('Separate issuer products, each ranked and dated above. Grouped only because they are present together; DDM draws no cause between them.'));
   const jet = buildEnsoChainLinks(briefing).find((link) => link.key === 'jet');
   assert.equal(jet.title, 'Jet-level wind (model guidance)');
+});
+
+const textClaim = {
+  text: 'CPC 6-10 day outlook: above-normal temperature.',
+  source: 'NOAA Climate Prediction Center',
+  product: 'cpc-extended',
+  evidence: 'modeled',
+  kind: 'outlook',
+  dates: { retrieved: '2026-11-09' }
+};
+
+const firstTileName = (html) =>
+  /<button type="button" class="lead-tile"[^>]*aria-label="([^"]*)"/.exec(html)?.[1] ?? '';
+
+test('a tile\'s accessible name carries the scope words its face shows (B9)', () => {
+  const briefing = briefingOf('unavailable', 'not read in this fixture');
+  briefing.horizons.current.cells.drought = cell('drought', 'current', 'ready', [usdmClaim]);
+  briefing.horizons.current.cells.fire = cell('fire', 'current', 'ready', [
+    { ...nwsClaim, reading: { kind: 'wfigs-perimeters', wildfire: 2, prescribed: 0, other: 0, lowerBound: false } }
+  ]);
+  const html = renderLeadView(briefing, NOW);
+  const names = [...html.matchAll(/class="lead-tile"[^>]*aria-label="([^"]*)"/g)].map((m) => m[1]);
+  assert.ok(names.some((name) => name.includes('The weekly map, at the selected point.')), names.join(' | '));
+  assert.ok(names.some((name) => name.includes('Current perimeters in a search area wider than this place.')), names.join(' | '));
+});
+
+test('a text read in other reads and gaps wears its state, never a bare horizon label (B5)', () => {
+  const briefing = briefingOf('unavailable', 'not read in this fixture');
+  briefing.horizons.nearTerm.cells.drought = cell('drought', 'nearTerm', 'ready', [textClaim]);
+  const row = restRow(renderLeadView(briefing, NOW), 'drought');
+  assert.match(row, /live Near Term stated in the federal text/, row);
+});
+
+test('the active mode\'s hazard leads the view, ranked or not (B3)', () => {
+  const briefing = briefingOf('unavailable', 'not read in this fixture');
+  briefing.horizons.current.cells.drought = cell('drought', 'current', 'ready', [usdmClaim]);
+  briefing.horizons.current.cells.fire = cell('fire', 'current', 'ready', [nwsClaim]);
+  // Fire's NWS product outranks the drought class in the table; Drought mode reads Drought first.
+  assert.match(firstTileName(renderLeadView(briefing, NOW)), /^Fire:/);
+  assert.match(firstTileName(renderLeadView(briefing, NOW, { hazard: 'drought' })), /^Drought:/);
+  // A mode whose hazard holds no ranked read: its own state comes before every tile.
+  for (const hazard of HAZARD_KEYS.filter((key) => key !== 'drought' && key !== 'fire')) {
+    const html = renderLeadView(briefing, NOW, { hazard });
+    const own = html.indexOf(`<li class="lead-rest-item" data-lead-hazard="${hazard}">`);
+    assert.ok(own >= 0 && own < html.indexOf('class="lead-tile"'), hazard);
+    assert.equal(html.split(`data-lead-hazard="${hazard}" data-lead-key="rest:`).length, 2, 'listed once');
+  }
+});
+
+test('the view reads the map\'s horizon only (B4)', () => {
+  const briefing = briefingOf('unavailable', 'not read in this fixture');
+  briefing.horizons.current.cells.drought = cell('drought', 'current', 'ready', [usdmClaim]);
+  briefing.horizons.longRange.cells.drought = cell('drought', 'longRange', 'ready', [textClaim]);
+  assert.match(text(renderLeadView(briefing, NOW, { horizon: 'current' })), /D2 Severe drought/);
+  const long = renderLeadView(briefing, NOW, { horizon: 'longRange' });
+  assert.doesNotMatch(long, /class="lead-tile"/);
+  assert.match(restRow(long, 'drought'), /live Long Range stated in the federal text/);
+  assert.doesNotMatch(text(long), /Current Conditions|Near Term/);
+});
+
+test('point heat is the lead\'s detail in its own mode only (B6)', () => {
+  const pointHeat = '<section class="point-heat" aria-label="Heat at selected point">station read</section>';
+  const briefing = briefingOf('unavailable', 'not read in this fixture');
+  for (const hazard of HAZARD_KEYS) {
+    const html = renderLeadView(briefing, NOW, { hazard, pointHeat });
+    assert.equal(html.includes(pointHeat), hazard === POINT_HEAT_HAZARD, hazard);
+  }
+  assert.ok(!renderLeadView(briefing, NOW, { pointHeat }).includes(pointHeat), 'no mode, no point heat');
+});
+
+test('the focus head names no count of hazards (DR-113)', () => {
+  assert.doesNotMatch(text(renderFocusHead()), /\b(four|4) hazards\b/i);
 });

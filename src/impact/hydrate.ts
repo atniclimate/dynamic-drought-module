@@ -43,12 +43,7 @@ import {
 } from './sources';
 import { makeClaim } from './evidence';
 import { synthesizeHeatSources } from './heat-synthesis';
-import {
-  applyMatrix,
-  markHorizonCells,
-  MATRIX_LANE_KEYS,
-  type MatrixLaneKey
-} from './matrix';
+import { applyMatrix, MATRIX_LANE_KEYS, type MatrixLaneKey } from './matrix';
 import { createNwsRequestSession } from './nws-point';
 import { sourceMayRun } from './source-policy';
 import { fetchWaterSupplyClaims } from './water-supply';
@@ -88,10 +83,10 @@ const CPC_SEASONAL_OUTLOOK: SourcedClaim = makeClaim({
 /**
  * Load the ENSO reader on demand.
  *
- * The long-range horizon gates the ENSO read on its own capability cell, so
- * outside the validated regional impact synthesis `fetchEnsoClaims` is never
- * called; a static import downloaded the whole ENSO module (its guards, its
- * chart builder and its cited prose) on every briefing regardless. The import
+ * The ENSO read is gated on its own capability cell, so where that source
+ * does not cover the place `fetchEnsoClaims` is never called; a static import
+ * downloaded the whole ENSO module (its guards, its chart builder and its
+ * cited prose) on every briefing regardless. The import
  * runs inside the horizon's existing await, after the panel is open and while
  * the other horizons fetch, so it costs no visible latency, and the minimap's
  * phase-label consumer already reaches this module the same way.
@@ -142,50 +137,37 @@ export async function hydrateBriefing(
     initialHeatSources.length +
     (sourceMayRun(sourcePolicy, 'pointHeat') ? 1 : 0);
 
-  // The matrix is rendered only where the capability matrix validates impact
-  // synthesis for the selection; elsewhere the panel replaces it with one
-  // named unavailable state, so the lanes below settle without publishing.
-  const matrixEnabled = sourcePolicy.droughtImpact.enabled;
+  // DR-256 (widening DR-096): the matrix renders cell by cell wherever any
+  // source covers the place; no regional switch holds it back.
   const laneResults = new Map<MatrixLaneKey, SourceResult>();
 
   const publishMatrix = (): void => {
-    if (signal.aborted || !matrixEnabled) return;
+    if (signal.aborted) return;
     applyMatrix(horizons, laneResults);
     onUpdate();
   };
 
+  // The Pacific Northwest ENSO tendency speaks for the Northwest only, so a
+  // place outside it keeps the index reads and not that claim.
+  const placeClaims = (key: MatrixLaneKey, result: SourceResult): SourceResult =>
+    key === 'enso' && !sourcePolicy.droughtImpact.enabled
+      ? { ...result, claims: result.claims.filter((claim) => claim.product !== 'ensoTendency') }
+      : result;
+
   /** Record one lane's outcome and repaint every cell it can reach. */
   const settleLane = (key: MatrixLaneKey, result: SourceResult): void => {
     if (signal.aborted) return;
-    laneResults.set(key, result);
+    laneResults.set(key, placeClaims(key, result));
     publishMatrix();
   };
 
-  if (!matrixEnabled) {
-    const note =
-      sourcePolicy.droughtImpact.note ??
-      'Drought impact synthesis is unavailable for this selection.';
-    for (const horizon of [
-      horizons.current,
-      horizons.nearTerm,
-      horizons.longRange
-    ]) {
-      markHorizonCells(horizon, 'unavailable', note);
-      horizon.note = note;
-    }
-    onUpdate();
-  }
-
-  // A source the policy gates off settles immediately with the policy's own
-  // sentence, so its cells name what is missing and why from the first paint
-  // instead of spinning on a fetch that will never start.
+  // A source that does not cover the place leaves the reading (DR-256, B2):
+  // it settles at once as answered with nothing to state, so its cells never
+  // spin and never read partial for it, and its own capability note is named
+  // once in Technical information instead of in the cell.
   for (const key of MATRIX_LANE_KEYS) {
     if (!sourceMayRun(sourcePolicy, key)) {
-      laneResults.set(key, {
-        claims: [],
-        ok: false,
-        note: sourcePolicy.sources[key].note
-      });
+      laneResults.set(key, { claims: [], ok: true });
     }
   }
   // The seasonal outlook is fixed cited prose rather than a fetch, so its

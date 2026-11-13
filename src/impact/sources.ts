@@ -38,7 +38,7 @@ import {
 } from '../util/bbox';
 import { naiveBboxSuggestsAntimeridianCrossing } from '../util/antimeridian';
 import { ExpiringLruCache } from '../util/bounded-cache';
-import { fetchJsonWithBudget } from '../util/fetch';
+import { fetchJsonWithBudget, isFetchTimeout } from '../util/fetch';
 import { heatRiskMoment, isoDayLocal } from '../util/iso-day';
 import { isObject } from '../util/guards';
 import { trendLineSvg, type TrendPoint } from '../ui/charts';
@@ -237,9 +237,20 @@ export function featuresOf(json: unknown): unknown[] {
  * for example "The U.S. Drought Monitor".
  */
 export function upstreamNote(err: unknown, service: string): string {
+  if (isFetchTimeout(err)) return `${service} did not answer in time.`;
   return err instanceof EsriServiceError
     ? `${service} is unavailable: it answered with an error rather than data.`
     : `${service} did not respond.`;
+}
+
+/**
+ * Log one failed source read, by outcome (B7). A cancel never reaches here (each
+ * caller returns quietly when its signal aborted); a budget timeout logs once as
+ * a timeout; any other failure logs today's line with the error.
+ */
+function warnSourceFailure(what: string, err: unknown): void {
+  if (isFetchTimeout(err)) console.warn(`[impact] ${what} did not answer in time.`);
+  else console.warn(`[impact] ${what} failed.`, err);
 }
 
 /** An epoch-millisecond upstream Date field, or null when absent or unusable. */
@@ -442,11 +453,11 @@ export async function fetchHeatRiskClaims(
     };
   } catch (err) {
     if (signal.aborted) return { claims: [], ok: false };
-    console.warn('[impact] HeatRisk identify failed.', err);
+    warnSourceFailure('HeatRisk identify', err);
     return {
       claims: [],
       ok: false,
-      note: 'The National Weather Service HeatRisk classification did not respond.'
+      note: upstreamNote(err, 'The National Weather Service HeatRisk classification')
     };
   }
 }
@@ -636,7 +647,7 @@ export async function fetchUsdmClaims(
     };
   } catch (err) {
     if (signal.aborted) return { claims: [], ok: false };
-    console.warn('[impact] USDM point query failed.', err);
+    warnSourceFailure('USDM point query', err);
     return { claims: [], ok: false, note: upstreamNote(err, 'The U.S. Drought Monitor') };
   }
 }
@@ -866,8 +877,8 @@ export async function fetchDsciTrendClaims(
     };
   } catch (err) {
     if (signal.aborted) return { claims: [], ok: false };
-    console.warn('[impact] DSCI trend query failed.', err);
-    return { claims: [], ok: false, note: 'The USDM drought-severity trend did not respond.' };
+    warnSourceFailure('DSCI trend query', err);
+    return { claims: [], ok: false, note: upstreamNote(err, 'The USDM drought-severity trend') };
   }
 }
 
@@ -1145,7 +1156,7 @@ export async function fetchNifcClaims(
     };
   } catch (err) {
     if (signal.aborted) return { claims: [], ok: false };
-    console.warn('[impact] NIFC query failed.', err);
+    warnSourceFailure('NIFC query', err);
     return {
       claims: [],
       ok: false,
@@ -1313,9 +1324,10 @@ export async function fetchNwsAlertClaims(
     };
   } catch (err) {
     if (signal.aborted) return { claims: [], ok: false };
-    console.warn('[impact] NWS alerts query failed.', err);
+    // vocab-allow: names the NWS alerts service in a console warning, upstream product
+    warnSourceFailure('NWS alerts query', err);
     // vocab-allow: names the NWS alerts service, upstream product
-    return { claims: [], ok: false, note: 'The NWS alerts service did not respond.' };
+    return { claims: [], ok: false, note: upstreamNote(err, 'The NWS alerts service') };
   }
 }
 
@@ -1499,7 +1511,7 @@ export async function fetchCpcSeasonalTempClaims(
     };
   } catch (err) {
     if (signal.aborted) return { claims: [], ok: false };
-    console.warn('[impact] CPC seasonal temperature outlook query failed.', err);
+    warnSourceFailure('CPC seasonal temperature outlook query', err);
     return {
       claims: [],
       ok: false,
@@ -1787,13 +1799,19 @@ export async function fetchSpcFireOutlookClaims(
   if (signal.aborted) return { claims: [], ok: false };
 
   const allOutcomes: readonly SpcLayerOutcome[] = [day1, day2, ...probOutcomes];
+  // B7: the eight queries run on the briefing's signal, so a cancel never gets here
+  // (the abort check above). One log per read: a timeout as a timeout, else the error.
+  const failure =
+    allOutcomes.find((o) => o.err instanceof EsriServiceError)?.err ??
+    allOutcomes.find((o) => isFetchTimeout(o.err))?.err ??
+    allOutcomes.find((o) => !o.ok)?.err;
+  if (failure !== undefined) warnSourceFailure('SPC fire weather outlook query', failure);
   const anySucceeded = allOutcomes.some((o) => o.ok);
   if (!anySucceeded) {
-    const serviceError = allOutcomes.find((o) => o.err instanceof EsriServiceError)?.err;
     return {
       claims: [],
       ok: false,
-      note: upstreamNote(serviceError, 'The NOAA Storm Prediction Center Day 1-8 Fire Weather Outlook')
+      note: upstreamNote(failure, 'The NOAA Storm Prediction Center Day 1-8 Fire Weather Outlook')
     };
   }
 
@@ -2028,8 +2046,9 @@ export async function fetchNwsForecastClaims(
     };
   } catch (err) {
     if (signal.aborted) return { claims: [], ok: false };
-    console.warn('[impact] NWS forecast query failed.', err);
+    // vocab-allow: names the NWS point forecast in a console warning, upstream product
+    warnSourceFailure('NWS forecast query', err);
     // vocab-allow: names the NWS point forecast, upstream product
-    return { claims: [], ok: false, note: 'The NWS point forecast did not respond.' };
+    return { claims: [], ok: false, note: upstreamNote(err, 'The NWS point forecast') };
   }
 }

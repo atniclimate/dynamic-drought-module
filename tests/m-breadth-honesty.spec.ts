@@ -120,7 +120,11 @@ for (const provenance of [
   });
 }
 
-test('impactSynthesis none keeps unrelated sources off while independent point heat runs', async ({
+// DR-256 (widening DR-096; this was the Kansas collapse case): a place outside
+// the Northwest reads every source whose issuer covers it, cell by cell, with
+// the Priority / Full detail switch; only the Northwest-curated resources and
+// the NWRFC water-supply domain keep their data limits.
+test('a place outside the Northwest reads every source that covers it, with no regional gate', async ({
   page
 }) => {
   await page.clock.setFixedTime('2026-07-29T12:30:00+00:00');
@@ -206,7 +210,10 @@ test('impactSynthesis none keeps unrelated sources off while independent point h
     });
   });
 
-  const unrelatedSourceRequests: string[] = [];
+  // The national sources reach the offline backstop (503), so their cells
+  // settle on their own failure states; this case reads only who was asked.
+  const nationalSourceRequests: string[] = [];
+  const waterSupplyRequests: string[] = [];
   const nwsRequests: string[] = [];
   page.on('request', (request) => {
     const url = request.url();
@@ -214,16 +221,17 @@ test('impactSynthesis none keeps unrelated sources off while independent point h
       nwsRequests.push(nwsUpstreamUrl(url));
       return;
     }
+    if (url.includes('nwrfc.noaa.gov/water_supply/') || url.includes(encodeURIComponent('nwrfc.noaa.gov/water_supply/'))) {
+      waterSupplyRequests.push(url);
+      return;
+    }
     if (
-      url.includes('/data/enso-indices.json') ||
       url.includes('/USDM_current/FeatureServer/0/query') ||
       url.includes('/StateStatistics/GetDSCI') ||
-      url.includes('/WFIGS_Interagency_Perimeters_Current/') ||
-      url.includes('/cpc_610_outlk/') ||
-      url.includes('/cpc_814_outlk/') ||
-      url.includes('nwrfc.noaa.gov/water_supply/')
+      url.includes(encodeURIComponent('/StateStatistics/GetDSCI')) ||
+      url.includes('/WFIGS_Interagency_Perimeters_Current/')
     ) {
-      unrelatedSourceRequests.push(url);
+      nationalSourceRequests.push(url);
     }
   });
 
@@ -238,14 +246,11 @@ test('impactSynthesis none keeps unrelated sources off while independent point h
   await expect(page.locator('#brief-place-name')).toHaveText('Kansas');
   const panel = page.locator('#impact-panel');
   await expect(panel).toBeVisible();
-  await expect(panel.locator('.impact-capability-unavailable')).toContainText(
-    'The briefing synthesis and resource routing are not validated outside the Pacific Northwest.'
-  );
-  // D4 (the look of 2026-11-05): the Drought mode names its own block, and no
-  // empty Resources heading stands over zero links.
-  await expect(panel.locator('.impact-capability-unavailable > h3')).toHaveText(
-    'Drought impact unavailable'
-  );
+  await expect(panel.locator('.impact-capability-unavailable')).toHaveCount(0);
+  await expect(panel).not.toContainText('not validated outside the Pacific Northwest');
+  await expect(panel.locator('.briefing-view-switch')).toBeVisible();
+  // D4 (the look of 2026-11-05): no empty Resources heading stands over zero
+  // links; the Northwest-curated resources keep their data limit.
   await expect(panel.locator('.impact-resources')).toHaveCount(0);
   await expect(
     panel.locator('.point-heat > .impact-horizon-head .point-heat-pill-ready')
@@ -253,7 +258,10 @@ test('impactSynthesis none keeps unrelated sources off while independent point h
   await expect(panel.locator('.point-heat-station')).toContainText(
     'Test Station'
   );
-  expect(unrelatedSourceRequests).toEqual([]);
+  await expect
+    .poll(() => nationalSourceRequests.some((url) => url.includes('/USDM_current/FeatureServer/0/query')))
+    .toBe(true);
+  expect(waterSupplyRequests).toEqual([]);
   expect(nwsRequests).toHaveLength(6);
   expect(nwsRequests.filter((url) => url.includes('/points/'))).toHaveLength(1);
   await expect(panel.locator('.impact-resource-link')).toHaveCount(0);

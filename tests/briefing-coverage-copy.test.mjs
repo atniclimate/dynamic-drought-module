@@ -7,10 +7,10 @@ import { fileURLToPath } from 'node:url';
 /**
  * Public briefing copy outside the Pacific Northwest (the look of 2026-11-05):
  *
- *  - D4: the coverage line a briefing prints when impact synthesis is
- *    unavailable (`CAPABILITY_MATRIX[family].impactSynthesis.note`, read by
- *    src/impact/source-policy.ts) writes "Pacific Northwest" out, never the
- *    bare abbreviation "PNW".
+ *  - D4: the family coverage line (`CAPABILITY_MATRIX[family].impactSynthesis.note`,
+ *    read by src/impact/source-policy.ts) writes "Pacific Northwest" out,
+ *    never the bare abbreviation "PNW". Since DR-256 the briefing prints a
+ *    family line only for a place outside the United States geographies.
  *  - P3-26: the Tribe's-own resource slot names no repository path
  *    ("see data/README.md") in public copy.
  *
@@ -35,6 +35,59 @@ registerHooks({
 
 const { CAPABILITY_MATRIX, COVERAGE_FAMILY_KEYS } = await import('../src/config/capability-matrix.ts');
 const { buildResources } = await import('../src/impact/resources.ts');
+const { briefingSourcePolicy, sourceMayRun, uncoveredSourceGroups } = await import('../src/impact/source-policy.ts');
+
+/** A State selection that carries its own postal code, as a clicked State boundary does. */
+function stateContext(code, lng, lat) {
+  return {
+    kind: 'state',
+    title: code,
+    properties: { STUSPS: code },
+    lngLat: { lng, lat },
+    regionKey: 'national',
+    containing: { state: code, basis: 'feature-property' }
+  };
+}
+
+// DR-256: coverage is decided per source by its issuer's service, never by the Northwest family.
+const NATIONAL_US_SOURCES = ['usdm', 'dsci', 'nifc', 'cpcExtended', 'enso', 'waterSupply', 'cpcSeasonal'];
+
+test('outside the Northwest every United States source runs where its issuer covers the place', () => {
+  for (const [code, lng, lat] of [['AZ', -111.7, 34.3], ['MT', -109.6, 47.0], ['AK', -150.0, 64.0], ['HI', -155.5, 19.6]]) {
+    const policy = briefingSourcePolicy(stateContext(code, lng, lat));
+    for (const key of NATIONAL_US_SOURCES) {
+      assert.ok(sourceMayRun(policy, key), `${code}: ${key} reads`);
+    }
+    // The Northwest-curated resources keep their data limit.
+    assert.equal(policy.droughtImpact.enabled, false, `${code}: resources stay Northwest`);
+    for (const group of uncoveredSourceGroups(policy)) {
+      assert.doesNotMatch(group.note, /not validated outside|No briefing support/, `${code}: ${group.note}`);
+    }
+  }
+  const washington = briefingSourcePolicy(stateContext('WA', -120.5, 47.4));
+  assert.equal(washington.droughtImpact.enabled, true);
+  assert.deepEqual(uncoveredSourceGroups(washington), []);
+});
+
+test('a source that does not cover the place is named once with its own capability note', () => {
+  const alaska = briefingSourcePolicy(stateContext('AK', -150.0, 64.0));
+  const groups = uncoveredSourceGroups(alaska);
+  const names = groups.flatMap((group) => group.labels);
+  assert.equal(new Set(names).size, names.length, 'each source once');
+  assert.ok(groups.some((group) => group.note === alaska.sources.heatRisk.note && group.labels.includes('NWS HeatRisk')));
+  assert.ok(groups.some((group) => group.note === alaska.sources.spcFireOutlook.note));
+  assert.ok(!names.includes('NWS point observation and grid guidance'), 'point heat keeps its own section');
+  // Canada keeps the regional gate it had: no United States drought source reads there.
+  const canada = briefingSourcePolicy({
+    kind: 'state',
+    title: 'Canada test place',
+    properties: null,
+    lngLat: { lng: -123.1, lat: 49.3 },
+    regionKey: 'british_columbia',
+    containing: { state: null, basis: 'none' }
+  });
+  for (const key of NATIONAL_US_SOURCES) assert.ok(!sourceMayRun(canada, key), `Canada: ${key} gated`);
+});
 
 test('every family\'s briefing coverage line writes the Pacific Northwest out', () => {
   for (const family of COVERAGE_FAMILY_KEYS) {
@@ -43,7 +96,7 @@ test('every family\'s briefing coverage line writes the Pacific Northwest out', 
   }
   assert.equal(
     CAPABILITY_MATRIX.conus.impactSynthesis.note,
-    'The briefing synthesis and resource routing are not validated outside the Pacific Northwest.'
+    'Northwest-curated resources and the Pacific Northwest ENSO tendency are not read outside the Pacific Northwest; every other briefing source reads where its issuer covers the place.'
   );
 });
 

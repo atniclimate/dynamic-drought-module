@@ -38,15 +38,17 @@
  * the coordinator's own arbitration resolves THAT feature as the primary
  * response instead of the boundary beneath it; a boundary popup can only
  * ever exist at a pixel with no coincident point-event hit. Querying
- * alerts/fires at the bare click point (as drought is queried below, and
- * as `fire-context.ts` queries drought for a fire-perimeter popup) would
+ * alerts/fires at the bare click point (as `fire-context.ts` queries drought
+ * for a fire-perimeter popup) would
  * therefore almost never find one FROM a boundary popup, even when a real
  * warning covers most of the clicked place. `screenBoxForGeometry` below
  * queries the CLICKED PLACE'S OWN rendered extent instead: still "at that
  * place" (never the whole viewport, only this one feature's geometry), but
- * actually reachable. Drought is unaffected: `condition-surface` is the
- * LOWEST-ranked kind, so a boundary always wins over it regardless, and
- * the point-exact read stays consistent with `fire-context.ts`.
+ * actually reachable. Drought is read the same way (B8, 2026-11-13): a
+ * place's drought row is the worst category touching the place, never the
+ * one pixel clicked (a State's click in a clear corner told the reader
+ * "nothing here" about the whole State). `fire-context.ts` keeps the point
+ * read through `droughtRow`'s default, a perimeter click being a point.
  *
  * ATTRIBUTION FIX (2026-09-10, Codex adversarial review finding 3). The box
  * above is the right RETRIEVAL shape and the wrong ATTRIBUTION shape. A
@@ -426,11 +428,21 @@ function withClock(row: ValueRow, clock: PopupClock | undefined): ValueRow {
  * drought layer is on. A layer that is
  * on but has no fill yet, or whose read is not complete and found no
  * category here, gives its state row, never an absence (draft DR-179). */
-export function droughtRow(map: maplibregl.Map, point: maplibregl.PointLike): MarkedRow | null {
+export function droughtRow(
+  map: maplibregl.Map,
+  point: maplibregl.PointLike,
+  // The place's own read (B8): the same region, place, scope and whole-ness the alerts row gets. Omitted, the read is the bare point, as the fire-context caller wants.
+  context?: Pick<RowContext, 'region' | 'place' | 'scope' | 'whole'>
+): MarkedRow | null {
+  const { region, place, scope, whole } = context ?? { region: point, place: null, scope: 'point' as const, whole: true };
+  // A whole read of the place's area names its worst category; a clipped or partial one only names what was seen in the area; a point read names the category at the point.
+  const worst = scope === 'area' ? `${whole ? ', the worst' : ''} ${scopePhrase(scope)}` : '';
+  // The register notes speak of the same place the other drought sentences do.
+  const where = scope === 'area' ? scopePhrase(scope) : 'at this point';
   if (isLayerOn(NADM_KEY)) {
     if (!map.getLayer(NADM_FILL)) return unreadRow('Drought', NADM_KEY);
-    const complete = isReadComplete(NADM_KEY);
-    const feats = map.queryRenderedFeatures(point, { layers: [NADM_FILL] });
+    const complete = whole && isReadComplete(NADM_KEY);
+    const feats = touchingPlace(map.queryRenderedFeatures(region, { layers: [NADM_FILL] }), place);
     let maxIndex = -1;
     let maxProps: GeoJsonProperties = null;
     for (const f of feats) {
@@ -447,7 +459,7 @@ export function droughtRow(map: maplibregl.Map, point: maplibregl.PointLike): Ma
         withClock(
           {
             label: 'Drought',
-            text: `${category.code} ${category.label} (North American Drought Monitor)`
+            text: `${category.code} ${category.label}${worst} (North American Drought Monitor)`
           },
           nadmMonthClock(maxProps?.['YEAR_MONTH'])
         ),
@@ -455,12 +467,12 @@ export function droughtRow(map: maplibregl.Map, point: maplibregl.PointLike): Ma
       );
     }
     return complete
-      ? unreported({ label: 'Drought', text: 'No drought category polygon here (North American Drought Monitor).' }, true)
+      ? unreported({ label: 'Drought', text: `No drought category polygon ${scopePhrase(scope)} (North American Drought Monitor).` }, true)
       : unreadRow('Drought', NADM_KEY);
   }
 
   if (isLayerOn(USDM_KEY)) {
-    const complete = isReadComplete(USDM_KEY);
+    const complete = whole && isReadComplete(USDM_KEY);
     // The change register displays `usdm-change-fill` and HIDES both frame
     // slots (src/layers/usdm.ts, showChange), while leaving the slot layers
     // in the style. Querying the slots in that mode therefore returns nothing
@@ -478,14 +490,14 @@ export function droughtRow(map: maplibregl.Map, point: maplibregl.PointLike): Ma
       return unreported(
         {
           label: 'Drought',
-          text: 'The map is showing the U.S. Drought Monitor change register, so no current category is displayed at this point.'
+          text: `The map is showing the U.S. Drought Monitor change register, so no current category is displayed ${where}.`
         },
         false
       );
     }
     const presentFills = USDM_FILLS.filter((id) => map.getLayer(id));
     if (presentFills.length === 0) return unreadRow('Drought', USDM_KEY);
-    const feats = map.queryRenderedFeatures(point, { layers: [...presentFills] });
+    const feats = touchingPlace(map.queryRenderedFeatures(region, { layers: [...presentFills] }), place);
     let maxDm = -1;
     let maxProps: GeoJsonProperties = null;
     for (const f of feats) {
@@ -503,7 +515,7 @@ export function droughtRow(map: maplibregl.Map, point: maplibregl.PointLike): Ma
         ? unreported(
             {
               label: 'Drought',
-              text: 'No D0-D4 category polygon here (U.S. Drought Monitor). This client has no analyzed-area mask, so this does not confirm no drought.'
+              text: `No D0-D4 category polygon ${scopePhrase(scope)} (U.S. Drought Monitor). This client has no analyzed-area mask, so this does not confirm no drought.`
             },
             true
           )
@@ -511,7 +523,7 @@ export function droughtRow(map: maplibregl.Map, point: maplibregl.PointLike): Ma
     }
     return reported(
       withClock(
-        { label: 'Drought', text: `${cat.code} ${cat.label} (U.S. Drought Monitor, NDMC/NOAA/USDA)` },
+        { label: 'Drought', text: `${cat.code} ${cat.label}${worst} (U.S. Drought Monitor, NDMC/NOAA/USDA)` },
         usdmMapDateClock(maxProps?.['MapDate'] ?? maxProps?.['mapDate'])
       ),
       complete
@@ -527,7 +539,7 @@ export function droughtRow(map: maplibregl.Map, point: maplibregl.PointLike): Ma
         label: 'Drought',
         // DRAFT wording (pending the owner's read-back): the change-register sentence above, with the outlook's "forecast register" (src/layers/drought.ts).
         // vocab-allow: names the CPC outlook (an upstream forecast product) and says no current category is read from it
-        text: 'The map is showing the CPC Drought Outlook, a forecast register, so no current category is displayed at this point.'
+        text: `The map is showing the CPC Drought Outlook, a forecast register, so no current category is displayed ${where}.`
       },
       false
     );
@@ -879,8 +891,8 @@ const ROW_LABEL: Readonly<Record<PlaceConditionRowKey, string>> = {
 
 /** One builder per declared row (a row key with no builder fails tsc). */
 const ROW_BUILDERS: Readonly<Record<PlaceConditionRowKey, (context: RowContext) => RowResult>> = {
-  drought: ({ map, point }) => {
-    const row = droughtRow(map, point);
+  drought: ({ map, point, region, place, scope, whole }) => {
+    const row = droughtRow(map, point, { region, place, scope, whole });
     return row === null ? NO_ROWS : { rows: [row], hasWarning: false, warningLabel: null };
   },
   'nws-alerts': ({ map, region, place, scope, whole }) => alertRows(map, region, place, scope, whole),
@@ -889,12 +901,10 @@ const ROW_BUILDERS: Readonly<Record<PlaceConditionRowKey, (context: RowContext) 
 
 /**
  * Build the Conditions rows for a boundary popup at the clicked screen
- * point. `point` is the click's screen-pixel position, used point-exact
- * for drought (matching `fire-context.ts`'s convention: a boundary always
- * outranks the lowest-ranked `condition-surface` kind, so the exact pixel
- * is always reachable there). `clicked` is the CLICKED rendered feature
+ * point. `point` is the click's screen-pixel position, the read when there
+ * is no place geometry. `clicked` is the CLICKED rendered feature
  * (its pieces in every tile are joined, `placeGeometry`) or a whole place
- * geometry, when the caller has one; alerts and fires are read
+ * geometry, when the caller has one; drought, alerts and fires are read
  * against ITS screen-space bounding box instead of the bare point (see the
  * REACHABILITY FINDING in this module's header) so that a real warning
  * covering the place, not only the exact pixel, is not missed, and are
@@ -994,7 +1004,7 @@ export function buildPlaceConditionsHtml(
       ? [{ text: presentLabels.join(' · ') }]
       : rows.length > 0
         ? everyReadComplete
-          ? [{ text: "Nothing mapped here on the active condition layers; each layer's reading is below." }]
+          ? [{ text: `Nothing mapped ${scopePhrase(scope)} on the active condition layers; each layer's reading is below.` }]
           : // DRAFT wording by the director, draft DR-179, pending the owner's
             // read-back (RATIFICATION-11 row 6, "Not sure"); verbatim as drafted.
             [{ text: "Not every condition layer has been read here yet; each layer's state is below." }]

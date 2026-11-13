@@ -94,3 +94,11 @@ export const SHELL_HAZARD_KEY: Readonly<Record<HazardClusterKey, HazardKey>> = {
   heat: 'heat',
   enso: 'enso'
 };
+
+/**
+ * The row whose detail the point-heat section is: it sits after this row's
+ * cell in Current Conditions, and leads the priority view and the at-hand
+ * line only in this row's mode (DESIGN B6). Here, not in the matrix module,
+ * so the eager at-hand line can read it without the matrix's prose.
+ */
+export const POINT_HEAT_HAZARD: HazardKey = 'heat';
