@@ -58,34 +58,12 @@
   -webkit-backdrop-filter: blur(var(--rich-black-blur, 15px));
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.16);
 }
-/* The docked strip's single-reading swatch (palette-tokens.md, "Swatches
-   and value text"): the class colour leaves the text (it used to be
-   conditions-strip.tsx's inline `color:${m.color}`, D1.md M10 Notes) and
-   becomes a 10px keylined square beside the value instead. Scoped to the
-   Brief sidebar's bottom dock; the Console copy keeps its home styling. */
-#conditions-strip-dock .conditions-value {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-#conditions-strip-dock .conditions-swatch {
-  display: inline-block;
-  width: 10px;
-  height: 10px;
-  flex: 0 0 auto;
-  border: 1px solid var(--keyline, #C6CBD4);
-  border-radius: 2px;
-}
-/* Brief shows every live reading; with none live, the strip keeps its seat
-   and its status line (owner 2026-10-19: the seat never comes and goes). */
-#conditions-strip-dock .conditions-metric[data-layer-on='false'] {
-  display: none;
-}
-#conditions-strip-dock .conditions-metric[data-layer-on='true'] ~ .conditions-empty {
+/* shortcut: the strip is parked here unseen in desktop Brief so it keeps computing the Key chip's reading; give it a Brief-hidden home of its own if the island ever needs a visible map seat again. */
+#conditions-strip-dock {
   display: none;
 }
 /* The chip's grammar (S30D D1 M10; interface-chrome-popups-text.md section
-   2.4): a swatch, one label line, the six-state glyph, and an SVG
+   2.4): a key glyph, one label line, the six-state glyph, and an SVG
    plus/minus disclosure, in that order. The phone and embed toggle keeps
    today's flex row with the label reading uppercase; the desktop shell
    (721px and up, outside an embed) becomes the four-column grid the
@@ -119,6 +97,10 @@
 .map-key-chip-state {
   display: none;
 }
+/* The decorative key glyph before the title (item 4): it inherits the toggle's colour, so it reads as strongly as the title. */
+.map-key-chip-icon {
+  flex: 0 0 auto;
+}
 .map-key-chip-disclosure {
   flex: 0 0 auto;
   color: var(--fg-2);
@@ -143,11 +125,15 @@
 }
 @media (min-width: 721px) {
   .app-shell:not(.embed) #map-key .map-key-details-toggle {
-    padding: 0 12px;
+    /* The fixed 288 px seat must hold "D4 Exceptional drought" and the stale
+       tag on one line (text-registration.spec.ts, the Key chip reading), so the
+       chip's own padding and gaps are tight: 208 px of label at 10 and 6 px
+       against 198 at 12 and 8 (Spartan MB, measured). */
+    padding: 0 10px;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 8px 16px;
+    grid-template-columns: 16px minmax(0, 1fr) 8px 16px;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     /* Repair round on M10 (map-chrome-seats.spec.ts "chip height"): the
        seat's total height is set on the PARENT below (border included,
        box-sizing: border-box), not here, so the toggle just fills it;
@@ -156,6 +142,44 @@
     height: 100%;
     font-size: 13px;
     font-weight: var(--fw-strong, 700);
+  }
+  /* One box (owner 2026-11-13): the title is the mode's own lead reading,
+     [swatch] [bold value] text [muted tag], in the issuer's own case (no
+     text-transform). The text ellipsizes first; the tag never shrinks. */
+  .app-shell:not(.embed) #map-key .map-key-chip-label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .app-shell:not(.embed) .map-key-chip-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .app-shell:not(.embed) .map-key-chip-swatch {
+    flex: none;
+    width: 10px;
+    height: 10px;
+    box-sizing: border-box;
+    border: 1px solid var(--keyline, #C6CBD4);
+    border-radius: 2px;
+  }
+  .app-shell:not(.embed) .map-key-chip-value {
+    flex: none;
+    font-size: 15px;
+    font-weight: var(--fw-strong, 700);
+    font-variant-numeric: lining-nums tabular-nums;
+  }
+  .app-shell:not(.embed) .map-key-chip-value + .map-key-chip-text {
+    font-size: 12px;
+    font-weight: var(--fw-subtitle);
+  }
+  .app-shell:not(.embed) .map-key-chip-tag {
+    flex: none;
+    font-size: 10.5px;
+    font-weight: var(--fw-subtitle);
+    color: var(--ink-soft, #C6CBD4);
   }
   .app-shell:not(.embed) .map-key-chip-state {
     display: block;
@@ -273,6 +297,22 @@
     max-width: 100%;
   }
 }
+/* 'Also on the map' (src/ui/map-key.ts alsoOnMapHtml): the legend sections the
+   Key does not key itself, last in the drawer, under one rule. The sections keep
+   the Legend panel's own .legend-section, .legend and .swatch faces. */
+#map-key .map-key-also {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  align-self: stretch;
+  padding-top: 7px;
+  border-top: 1px solid var(--line);
+}
+/* A section with a control (ecoregion level, gridded index product) is moved in
+   whole from the Legend panel; its notes stay in the panel and the briefing, never on the map. */
+#map-key .map-key-also-live .legend-note {
+  display: none;
+}
 #map-key[data-key-details-open='true'] .map-key-details-toggle {
   border-bottom: 1px solid var(--line);
 }
@@ -315,12 +355,6 @@
     --accent: var(--ink);
     --accent-strong: var(--ink-soft);
     --indicator-border: var(--ink-soft);
-  }
-  /* Loading remains a word/state. Fading the entire tile would also fade
-     its .72 backing and defeat the allowed-ink contrast calculation. */
-  #app:not(.embed) #map-condition-indicator .conditions-metric,
-  #app:not(.embed) #map-condition-indicator .conditions-date {
-    opacity: 1;
   }
   #app:not(.embed) #map-condition-indicator :is(button, select, summary):focus-visible {
     outline: 2px solid var(--focus-inner);

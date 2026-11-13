@@ -418,6 +418,24 @@ export async function installFlowMotionHold(page: Page, mode: FlowMotionHold = '
   }, FLOW_MOTION_STORAGE_KEY);
 }
 
+/**
+ * Step the open Impact Briefing from the priority view, where every open lands
+ * (owner 2026-11-13), to its full detail, so a spec can see or click matrix
+ * nodes. A briefing with no switch (impact synthesis unavailable) already
+ * shows its one presentation and is left as it is.
+ */
+export async function showFullDetail(page: Page): Promise<void> {
+  const panel = page.locator('#impact-panel');
+  await expect(panel).toBeVisible();
+  const full = panel.locator('.briefing-view-btn[data-briefing-view="matrix"]');
+  if ((await full.count()) === 0) return;
+  // A hydration re-render replaces the switch; a click on a node it removed is retried.
+  await expect(async () => {
+    if ((await full.getAttribute('aria-pressed')) !== 'true') await full.click();
+    await expect(full).toHaveAttribute('aria-pressed', 'true', { timeout: 1_000 });
+  }).toPass();
+}
+
 export async function gotoApp(
   page: Page,
   query = '',

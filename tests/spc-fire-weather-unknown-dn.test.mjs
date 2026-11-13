@@ -33,6 +33,8 @@ globalThis.document = { getElementById: () => null };
 
 const spc = await import('../src/layers/spc-fire-weather.ts');
 const { registry } = await import('../src/state/registry.ts');
+const { getTimeBarSpec } = await import('../src/ui/time-bar.ts');
+const { isSpcNoArea } = await import('../src/state/spc-no-area.ts');
 // After the imports: modules that probe `window` at load (mobile-sheet) see none.
 globalThis.window = { setTimeout: () => 0, clearTimeout: () => {} };
 
@@ -78,6 +80,8 @@ async function activateWith(features) {
     return {
       drawn: map.sources.get('spc-fire-weather')?.data,
       status: registry.getStatus('spc-fire-weather'),
+      headline: getTimeBarSpec()?.stamp.headline,
+      noAreaAnswer: isSpcNoArea(),
       warnings
     };
   } finally {
@@ -98,6 +102,34 @@ test('a response of only unrecognized areas is degraded, never a false no-data',
   const { drawn, status } = await activateWith([area(6)]);
   assert.equal(drawn.features.length, 0);
   assert.equal(status, 'degraded');
+});
+
+test("the issuer's no-area answer leads the stamp headline with SPC's own term and reads no-data", async () => {
+  const noArea = { type: 'Feature', geometry: null, properties: { dn: 0, valid: '202609261200', expire: '202609271200' } };
+  const { status, headline } = await activateWith([noArea]);
+  assert.equal(status, 'no-data');
+  assert.equal(headline, 'No Risk Areas Forecast · valid Sep 26, 2026, 12:00 UTC to Sep 27, 2026, 12:00 UTC');
+});
+
+test("the Key's no-risk wording holds only for the issuer's own no-area answer inside its period", async () => {
+  const noArea = (expire) => ({ type: 'Feature', geometry: null, properties: { dn: 0, valid: '209812311200', expire } });
+  // The issuer's no-area answer, still valid.
+  assert.equal((await activateWith([noArea(later)])).noAreaAnswer, true);
+  // The same answer past its expire time is not today's answer.
+  assert.equal((await activateWith([noArea('202609271200')])).noAreaAnswer, false);
+  // An empty collection is no-data too, but SPC said nothing of the kind.
+  const empty = await activateWith([]);
+  assert.equal(empty.status, 'no-data');
+  assert.equal(empty.noAreaAnswer, false);
+  // An outlined area is not a no-area answer.
+  assert.equal((await activateWith([area(5)])).noAreaAnswer, false);
+  // Deactivation clears it.
+  assert.equal(isSpcNoArea(), false);
+});
+
+test('an outlined area keeps the Outlook headline', async () => {
+  const { headline } = await activateWith([area(5)]);
+  assert.match(headline, /^Outlook valid /);
 });
 
 test('known categories draw as before and read ready', async () => {

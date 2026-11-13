@@ -43,9 +43,7 @@ import {
 } from '../ui/impact-panel';
 import { isSheetActive, sheetCameraInset, sheetCameraSideInset } from '../ui/mobile-sheet';
 import { edgeColumnInset } from '../ui/edge-column';
-import { setPlaceSelection } from './place-selection';
 import { getCurrentRegion } from './region-store';
-import { getViewMode } from './view-mode';
 import { showToast } from '../ui/overlay';
 import type { SelectParam } from './url';
 
@@ -59,9 +57,8 @@ const FETCH_TIMEOUT_MS = 10_000;
  *
  * THE PAD FOLLOWS THE PANEL THAT WILL ACTUALLY RENDER (U-UX-FIX-1
  * DEF-5): `panelWillOpen` says whether THIS open will put the impact
- * panel over the map. The summary-first desktop path (a search
- * selection, D-0.7.0-070) renders in the LEFT sidebar column and never
- * opens the right-side panel, so reserving the desktop right pad there
+ * panel over the map. A path that opens no right-side panel (Locate while
+ * its sheet is closed) must not reserve the desktop right pad: that
  * shrank the effective viewport by up to 480px and computed a fit zoom
  * for a panel that never appeared (Washington at 5.71 instead of ~6.52,
  * Alberta in frame). Paths where the panel does open keep their exact
@@ -104,11 +101,17 @@ export function briefingCameraPadding(panelWillOpen: boolean): maplibregl.Paddin
         : 24
     };
   }
+  // The drawer is clamp(440px, 38vw, 880px) wide (--impact-panel-w, app.css; tests/map-chrome-contract.test.mjs
+  // pins the two together) and sits left of the map-button column (MAP_COLUMN_CLEAR, the drawer's `right` in
+  // app.css): the pad is both plus the usual 40 px margin, so a framed place ends clear of the drawer.
+  const drawer = Math.min(Math.max(440, Math.round(window.innerWidth * 0.38)), 880);
+  // shortcut: the inset applies from 1025 px only (the tablet drawer keeps the right edge); the numbers mirror app.css.
+  const MAP_COLUMN_CLEAR = window.innerWidth <= 1024 ? 0 : 120;
   return {
     top: 40,
     left: 40,
     bottom: 40,
-    right: panelWillOpen ? Math.min(480, Math.round(window.innerWidth * 0.5)) : 40
+    right: panelWillOpen ? Math.min(drawer + MAP_COLUMN_CLEAR + 40, Math.round(window.innerWidth * 0.5)) : 40
   };
 }
 
@@ -167,16 +170,6 @@ export async function openStateBriefing(
      * interacted with meanwhile.
      */
     guard?: () => boolean;
-    /**
-     * Summary-first (D-0.7.0-070): set the place selection and let the
-     * left panel offer the one full-report link instead of opening the
-     * briefing directly; on the active mobile Brief sheet the briefing
-     * still opens (map-click parity: the at-hand half detent IS the
-     * mobile summary). The select= deep link and the keyboard
-     * region-briefing trigger stay direct: both are explicit
-     * open-the-briefing requests.
-     */
-    summaryFirst?: boolean;
     /**
      * Widen the fit for chrome only the caller knows is over the map
      * (Locate's card rides above the sheet). It is handed the panel-aware
@@ -266,21 +259,13 @@ export async function openStateBriefing(
   }
   if (opts.guard && !opts.guard()) return;
 
-  // ONE shared decision (U-UX-FIX-1 DEF-5; DG-080-REVIEW finding 3):
-  // whether THIS open will put the impact panel over the map. On the
-  // summary-first path the panel opens ONLY on the active mobile Brief
-  // sheet (map-click parity); every direct open (deep link, the
-  // region-briefing trigger) opens it unconditionally. Computed once and
-  // used by BOTH the camera padding and the open branch below, so the
-  // two can never drift apart. Everything between the two uses is
-  // synchronous, so the single read equals the former pair of reads.
-  const panelWillOpen =
-    !opts.summaryFirst || (isSheetActive() && getViewMode() === 'brief');
-
-  // Mobile full panels leave the map visible, so every requested fit still
-  // frames the selected geometry behind the glass surface.
+  // Every open here puts the impact panel over the map (a search pick, the
+  // deep link and the region-briefing trigger all open it), so the camera pad
+  // always reserves the panel's side. Mobile full panels leave the map
+  // visible, so every requested fit still frames the selected geometry behind
+  // the glass surface.
   if (opts.fit && bbox) {
-    const padding = briefingCameraPadding(panelWillOpen);
+    const padding = briefingCameraPadding(true);
     map.fitBounds(bboxToContinuousBounds(bbox), {
       padding: opts.padding ? opts.padding(padding) : padding
     });
@@ -293,12 +278,5 @@ export async function openStateBriefing(
     lngLat
   );
   const context = bbox ? { ...rawContext, bbox, pointInsidePlace: true } : rawContext;
-  if (opts.summaryFirst) {
-    setPlaceSelection({ label: context.title, context });
-    // The shared decision: on this branch `panelWillOpen` is exactly
-    // "the mobile Brief sheet is active" (see its computation above).
-    if (panelWillOpen) openImpactPanel(context);
-    return;
-  }
   openImpactPanel(context);
 }

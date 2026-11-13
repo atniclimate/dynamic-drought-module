@@ -1,6 +1,6 @@
 import { continueLocalRoute } from './offline-test';
 import { test, expect } from './offline-test';
-import { gotoApp, search } from './helpers';
+import { gotoApp, search, showFullDetail } from './helpers';
 
 const PANEL_RUNTIME_PRIMARY =
   '**/assets/impact-panel-runtime-primary-*.js';
@@ -19,6 +19,7 @@ test.describe('lazy impact briefing cluster', () => {
     const panel = page.locator('#impact-panel');
     await expect(panel).toBeVisible({ timeout: 15_000 });
     await expect(panel.locator('#impact-panel-title')).toHaveText('Washington');
+    await showFullDetail(page);
     await expect(
       panel.locator('.impact-claim-derived', {
         hasText: 'Relative Oceanic Nino Index'
@@ -128,6 +129,7 @@ test.describe('lazy impact briefing cluster', () => {
     await page.keyboard.press('Enter');
     await expect(panel).toBeVisible({ timeout: 15_000 });
     await expect(panel.locator('#impact-panel-title')).toHaveText('Washington');
+    await showFullDetail(page);
     await expect(panel.locator('.impact-horizons')).toBeVisible();
     await expect(panel.locator('.impact-capability-unavailable')).toHaveCount(0);
 

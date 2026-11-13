@@ -79,6 +79,49 @@ test('the North America archive draws state lines and both U.S. borders at its o
   assert.ok((await kinds(7, -110, 49)).has('country'), 'the U.S.-Canada border on the 49th parallel');
 });
 
+test('the States layer draws the national border above the fills, not only the state lines', () => {
+  const states = read('src/layers/states.ts').toString().replace(/\r\n/g, '\n');
+  const filter = states.match(/const STATE_LINES = \{[\s\S]*?\n\};/)?.[0] ?? '';
+  assert.match(filter, /'state'/, 'the filter keeps the state lines');
+  assert.match(filter, /'country'/, 'the filter keeps the U.S./Canada and U.S./Mexico lines (they dropped out in 83d4564)');
+});
+
+test('a national border is drawn as a state line, and the coast is a line above the fills from the land edge', async () => {
+  const states = read('src/layers/states.ts').toString().replace(/\r\n/g, '\n');
+  assert.doesNotMatch(states, /byKind|BORDER_(WIDTH|COLOR|OPACITY)/, 'one look for state lines and national borders');
+  assert.match(states, /const OUTLINE_PAINT[\s\S]*?'line-color': STATE_OUTLINE_COLOR/, 'the coast and the lines share the state grey');
+  assert.match(states, /\{ id: 'us-coast', source: BASE_SOURCE_ID, 'source-layer': 'land' \}/, 'the coast is the edge of the base archive land polygons');
+  assert.match(states, /'source-layer': 'water'[\s\S]*?\['==', \['get', 'kind'\], 'lake'\]/, 'the Great Lakes shore comes from the water polygons');
+  const { REFERENCE_BOUNDARY_IDS: ids } = await import('../src/map/layer-order.ts');
+  const { fadeLayerIds } = await import('../src/layers/states.ts');
+  for (const id of ['us-coast-casing', 'us-coast-outline', 'us-coast-lakes-casing', 'us-coast-lakes-outline']) {
+    assert.ok(ids.includes(id), `${id} sits in the reference band, above every condition fill`);
+    assert.ok(fadeLayerIds.includes(id), `${id} fades with the State Boundaries layer`);
+  }
+  assert.ok(ids.indexOf('us-coast-casing') < ids.indexOf('us-states-outline') && ids.indexOf('us-states-outline') < ids.indexOf('us-coast-outline'), 'casings under every line');
+  // The archive keeps no coast line: a land polygon is there to outline, and a tile buffer keeps its clip edge off the tile.
+  const { PMTiles } = await import('pmtiles');
+  const { VectorTile } = await import('@mapbox/vector-tile');
+  const { default: Pbf } = await import('pbf');
+  const bytes = read('public/data/ddm-base-na-2026-11.pmtiles');
+  const reader = new PMTiles({
+    getKey: () => 'na',
+    getBytes: async (offset, length) => {
+      const s = bytes.subarray(offset, offset + length);
+      return { data: s.buffer.slice(s.byteOffset, s.byteOffset + s.byteLength) };
+    }
+  });
+  const layersAt = async (z, lon, lat) => {
+    const x = Math.floor(((lon + 180) / 360) * 2 ** z);
+    const y = Math.floor(((1 - Math.asinh(Math.tan((lat * Math.PI) / 180)) / Math.PI) / 2) * 2 ** z);
+    return new VectorTile(new Pbf(new Uint8Array((await reader.getZxy(z, x, y)).data))).layers;
+  };
+  assert.ok((await layersAt(8, -124.05, 44.6)).land.length > 0, 'a land polygon at the Oregon coast');
+  const water = (await layersAt(5, -87, 43.8)).water;
+  const lakeNames = new Set(Array.from({ length: water.length }, (_, i) => water.feature(i).properties.name));
+  for (const name of ['Lake Michigan', 'Lake Superior', 'Lake Huron']) assert.ok(lakeNames.has(name), `${name} is a named water polygon`);
+});
+
 test('every base map input is pinned by hash and retrieval date', () => {
   const receipt = JSON.parse(read('scripts/data/base-tiles-inputs.json'));
   assert.ok(receipt.inputs.length >= 70);

@@ -208,10 +208,11 @@ link with no read keeps its place under its state word.
 **Reaching the matrix.** A two-way switch, Priority and Full detail, sits at
 the top of the briefing. Any tile or row opens that hazard's own cells in the
 matrix (the federal text, each claim's method and source link) with doors to
-Technical information and Acknowledgements; "Priority view" returns. Phones
-open on the priority view; every other shell opens on the full detail with
-the switch above it. The choice is presentation state and never enters the
-URL. Paper carries the full detail only: the priority view does not print.
+Technical information and Acknowledgements; "Priority view" returns. Every
+open lands on the priority view, in every shell (owner direction 2026-11-13);
+a step to Full detail holds until the briefing closes. The choice is
+presentation state and never enters the URL. Paper carries the full detail
+only: the priority view does not print.
 
 ## The ENSO chain and its Guide door
 

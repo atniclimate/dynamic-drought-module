@@ -279,9 +279,10 @@ test('the column rules read the tokens, and index.html carries every slot', () =
 });
 
 // Owner 2026-10-19: controls stay put across modes. The Console strip sits
-// below the hazard buttons, the ENSO buttons above the mode-sized view
-// details, and desktop Brief docks the strip above Layer legends at the
-// sidebar's foot, off the map.
+// below the hazard buttons and the ENSO buttons above the mode-sized view
+// details. Owner 2026-11-13 (items 11 and 13): desktop Brief seats the strip
+// on the map under the Key chip, and the sidebar's foot dock with Layer
+// legends is gone.
 test('sidebar seats: no mode-sized block sits above a control', () => {
   const at = (s) => {
     const i = html.indexOf(s);
@@ -301,12 +302,15 @@ test('sidebar seats: no mode-sized block sits above a control', () => {
     at('id="brief-display"') < at('id="enso-flow-controls"') && at('id="enso-flow-controls"') < at('id="shell-details-panel"'),
     'the ENSO buttons sit above the variable view details'
   );
-  const dock = html.slice(at('class="sidebar-bottom-dock"'));
-  const strip = dock.indexOf('id="conditions-strip-dock"');
-  assert.ok(strip >= 0 && strip < dock.indexOf('sidebar-legend-disclosure'), 'the strip dock sits in the bottom dock above Layer legends');
   const indicator = html.slice(at('id="map-condition-indicator"'), at('id="hover-inspector"'));
-  assert.ok(!indicator.includes('conditions-strip-dock'), 'the strip no longer seats on the map');
-  assert.match(code, /\.sidebar-bottom-dock\s*\{\s*margin-top:\s*auto;/);
+  const keyHost = indicator.indexOf('id="map-key-overlay-host"');
+  const strip = indicator.indexOf('id="conditions-strip-dock"');
+  assert.ok(keyHost >= 0 && strip > keyHost, 'the strip seat follows the Key chip in the floating window');
+  assert.doesNotMatch(html, /sidebar-bottom-dock|sidebar-legend-disclosure|sidebar-key-host|legend-panel-home/, 'the foot dock and Layer legends are gone');
+  assert.match(html, /id="legend-panel"/, 'Console keeps its legend panel');
+  assert.match(code, /#app\.view-brief:not\(\.embed\) #legend-panel \{ display: none; \}/, 'Brief hides the Console legend panel');
+  assert.doesNotMatch(shellSrc, /legend-panel|holdSummarySeat|--dock-h/);
+  assert.doesNotMatch(code, /sidebar-bottom-dock|sidebar-legend-disclosure|--dock-h/, 'no rule for the retired dock');
   assert.match(code, /#app\.view-brief:not\(\.embed\) \.sidebar-scroll \{ display: flex; flex-direction: column; \}/);
 });
 
@@ -315,54 +319,6 @@ test('sidebar seats: no mode-sized block sits above a control', () => {
 // held here.
 test('the Key door buttons keep the 24 px pointer floor', () => {
   assert.match(ruleBody('.map-key-door'), /min-height:\s*var\(--pointer-target\);/);
-});
-
-test('Layer legends opens upward and its summary keeps its seat under the pointer', async () => {
-  // The dock is pinned to the column foot, so content opening below the
-  // summary would lift it; the open legend renders above the summary instead.
-  assert.match(code, /#app\.view-brief:not\(\.embed\) \.sidebar-legend-disclosure\[open\] \{ display: flex; flex-direction: column-reverse; \}/);
-
-  // When the opened legend overflows the column, the summary is pushed down;
-  // the column scrolls by that shift so the summary stays where it was clicked.
-  const { holdSummarySeat } = await import(new URL('src/ui/disclosure-seat.ts', ROOT).href);
-  let frame = null;
-  globalThis.requestAnimationFrame = (fn) => { frame = fn; return 1; };
-  globalThis.cancelAnimationFrame = () => { frame = null; };
-  const listeners = new Map();
-  let top = 500;
-  const summary = {
-    getBoundingClientRect: () => ({ top }),
-    addEventListener: (type, fn) => listeners.set(type, fn),
-    removeEventListener: (type) => listeners.delete(type)
-  };
-  const details = { querySelector: () => summary };
-  const scroller = { scrollTop: 40 };
-  const release = holdSummarySeat(details, scroller);
-
-  listeners.get('click')();
-  top = 620; // the native toggle opens the legend above, pushing the summary 120px down
-  frame();
-  assert.equal(scroller.scrollTop, 160, 'the column scrolls by the summary shift');
-
-  listeners.get('click')();
-  frame(); // free space absorbed the legend: the summary did not move
-  assert.equal(scroller.scrollTop, 160);
-
-  release();
-  assert.equal(listeners.size, 0, 'release removes the listener');
-});
-
-// Owner 2026-10-19: in Brief, Conditions in view sits where Layer legends is,
-// at the foot of the sidebar's visible area in every mode, however tall the
-// mode's own controls run; content scrolls beneath it.
-test('the Brief bottom dock sticks to the visible foot and its open legend scrolls inside it', () => {
-  const dock = ruleBody('#app.view-brief:not(.embed) .sidebar-bottom-dock');
-  assert.match(dock, /position:\s*sticky;/);
-  assert.match(dock, /bottom:\s*-4px;/, 'reaches the scroller padding strip, as the mode row does at the top');
-  assert.match(dock, /background:\s*var\(--bg-1\);/, 'the sidebar background, so content scrolls beneath it');
-  assert.match(ruleBody('#app.view-brief:not(.embed) #sidebar-key-host'), /max-height:\s*\d+vh;\s*overflow-y:\s*auto;/);
-  const desktop = code.slice(code.indexOf('#app.view-brief:not(.embed) .sidebar-scroll { display: flex;'));
-  assert.ok(desktop.indexOf('.sidebar-bottom-dock {') < desktop.search(/\n\}/), 'desktop only: inside the 721 px block');
 });
 
 // The 3D reveal scrolls the sidebar; the horizon row sticks under the sticky
@@ -376,39 +332,97 @@ test('the Brief horizon row sticks under the mode row', () => {
 });
 
 // A control reached by Tab scrolls only to the scroller's edge; the scroll
-// padding keeps its focus ring clear of the sticky rows and the dock (WCAG 2.4.11).
-test('the Brief column scroll padding clears the sticky rows and the dock', () => {
+// padding keeps its focus ring clear of the sticky rows (WCAG 2.4.11).
+test('the Brief column scroll padding clears the sticky rows', () => {
   assert.match(
     code,
-    /#app\.view-brief:not\(\.embed\) \.sidebar-scroll \{\s*scroll-padding-block:\s*calc\(var\(--shell-view-h, 0px\) \+ var\(--shell-when-h, 0px\)\) var\(--dock-h, 0px\);/
+    /#app\.view-brief:not\(\.embed\) \.sidebar-scroll \{\s*scroll-padding-top:\s*calc\(var\(--shell-view-h, 0px\) \+ var\(--shell-when-h, 0px\)\);/
   );
   assert.match(shellSrc, /setProperty\('--shell-when-h', `\$\{when\.offsetHeight\}px`\)/);
-  assert.match(shellSrc, /setProperty\('--dock-h', `\$\{dock\.offsetHeight\}px`\)/);
   // Custom properties inherit downward only: the scroller itself must carry them.
   assert.match(shellSrc, /const scroller = shell\.closest<HTMLElement>\('\.sidebar-scroll'\) \?\? shell;/);
 });
 
-// Owner 2026-10-19: Conditions in view keeps one seat of one height in the
-// Brief dock in every mode and horizon, and is the page's one region of that name.
-test('Conditions in view keeps a stable seat and is one landmark', async () => {
+// Owner 2026-11-13 (item 11 and "one single box"): in desktop Brief the Key chip
+// carries the mode's own lead Conditions-in-view reading as its title; the strip
+// is parked unseen in the dock and is still the page's one region of that name.
+test('Conditions in view leads the Key chip in one box', async () => {
   const stripSrc = await readFile(new URL('src/ui/island/conditions-strip.tsx', ROOT), 'utf8');
+  const keySrc = await readFile(new URL('src/ui/map-key.ts', ROOT), 'utf8');
   const timeSrc = await readFile(new URL('src/ui/island/time-popover.tsx', ROOT), 'utf8');
   assert.match(html, /id="conditions-strip" aria-label="Conditions in view"/);
   assert.doesNotMatch(shellSrc, />Conditions in view</, 'the shell summary is not a second region of the same name');
-  // Every tone (a zero count, an off or loading tile) takes the docked row, not only a data reading.
-  const tile = ruleBody('#conditions-strip-dock .conditions-metric');
-  assert.match(tile, /flex-flow:\s*row nowrap;/);
-  assert.match(tile, /min-height:\s*40px;/);
-  assert.match(ruleBody('#conditions-strip-dock .conditions-metric .conditions-action'), /margin-left:\s*auto;/);
-  // With no tile shown, one short status line holds the same 40 px seat; the
-  // dock no longer hides itself when no reading is live (ENSO, Near Term).
   const indicators = (await readFile(new URL('src/styles/hazard-indicators.css', ROOT), 'utf8')).replace(/\/\*[\s\S]*?\*\//g, '');
+  assert.match(indicators, /#conditions-strip-dock \{\s*display: none;\s*\}/, 'the strip is parked unseen');
+  assert.match(indicators, /(^|\})\s*#map-condition-indicator \.map-key \{/, 'the Key chip glass, with no reading line beside it');
+  assert.doesNotMatch(indicators, /#map-condition-indicator \.conditions-metric/);
+  const chipText = indicators.match(/\.map-key-chip-text \{([^}]*)\}/);
+  assert.ok(chipText, 'the chip text rule');
+  assert.match(chipText[1], /white-space:\s*nowrap;/);
+  assert.match(chipText[1], /text-overflow:\s*ellipsis;/);
+  assert.doesNotMatch(code, /#conditions-strip-dock \./, 'no rule for the retired reading line');
+  assert.match(stripSrc, /setConditionsHeadline\(/);
+  assert.match(keySrc, /onConditionsHeadline\(/);
+  assert.match(html, /<span id="map-key-reading-status" class="sr-only" role="status"/);
+  // Console still shows its status line when no tile renders.
   assert.match(stripSrc, /<p class="conditions-empty">[^<]+<\/p>\s*<\/>/, 'the status line renders last');
-  assert.match(ruleBody('#conditions-strip-dock .conditions-empty'), /min-height:\s*40px;/);
   assert.match(code, /\.conditions-metric ~ \.conditions-empty \{ display: none; \}/);
-  assert.doesNotMatch(indicators, /#conditions-strip-dock:not\(/, 'the dock never collapses');
-  assert.match(indicators, /#conditions-strip-dock \.conditions-metric\[data-layer-on='true'\] ~ \.conditions-empty \{\s*display: none;/);
   // The WHEN line's freshness square keeps a gap from the horizon words.
   assert.match(timeSrc, /class="shell-time-headline-horizon"[^\n]*\n\s*\{spec\.stamp\.freshness \? \(\s*<span class="feed-current"/);
   assert.match(ruleBody('.shell-time-headline .feed-current'), /margin-left:\s*\d+px;/);
+});
+
+// Owner 2026-11-13 (items 8, 10 and 14): Brief carries no loading or
+// availability ledger and no date line; Console draws both, the date line as
+// the column's very last element.
+test('Brief clips the display caveat and the date line is the Console column foot', () => {
+  // The caveat stays a mounted polite live region, clipped in Brief, never display:none.
+  assert.match(shellSrc, /<p class="shell-summary-caveat" id="shell-summary-caveat" aria-live="polite">/);
+  const clip = ruleBody('#app.view-brief .shell-summary-caveat');
+  assert.match(clip, /clip:\s*rect\(0, 0, 0, 0\);/);
+  assert.doesNotMatch(clip, /display:\s*none/);
+  assert.match(ruleBody('#app.view-brief #shell-details-island > .shell-summary'), /margin-block:\s*0;/);
+
+  // One date line, rendered into its own host after the credit, at the end of the scroll column.
+  assert.match(
+    html,
+    /<\/footer>\s*<!--[\s\S]*?-->\s*<div id="shell-time-island" class="shell-time-foot"><\/div>\s*<\/div>\s*<!-- The S4c panel-foot/
+  );
+  assert.equal(shellSrc.match(/<TimeCompact /g)?.length, 1, 'exactly one date line (one id="shell-time")');
+  const shellBody = shellSrc.slice(shellSrc.indexOf('function Shell('), shellSrc.indexOf('function ShellDetails('));
+  assert.doesNotMatch(shellBody, /<TimeCompact/, 'the horizon row no longer carries the date line');
+  assert.match(shellSrc, /getElementById\('shell-time-island'\)/);
+  assert.match(shellSrc, /render\(<ShellTimeFoot /);
+  assert.match(ruleBody('.shell-time-foot'), /display:\s*none;/);
+  assert.match(ruleBody('#app.view-console:not(.embed) .shell-time-foot'), /display:\s*block;/);
+});
+
+// Owner 2026-11-13 (items 7, 8 and 15): the four map cells and the desktop
+// briefing drawer wear the Key's glass and blur, by token.
+test('the map cells and the briefing drawer wear the Key glass', () => {
+  const cell = ruleBody('.app-shell:not(.embed) .map-overlay-controls .map-cell');
+  assert.match(cell, /background:\s*var\(--glass-read\) !important;/);
+  assert.match(cell, /(?:^|[^-])backdrop-filter:\s*blur\(var\(--rich-black-blur\)\);/);
+  assert.match(ruleBody('.app-shell:not(.embed) .map-overlay-controls .map-cell:hover'), /var\(--glass-press\)[^;]*var\(--glass-read\) !important;/);
+  const drawer = ruleBody('.impact-panel:not(.sheet-hosted)');
+  assert.match(drawer, /background:\s*var\(--glass-read\);/);
+  assert.match(drawer, /(?:^|[^-])backdrop-filter:\s*blur\(var\(--rich-black-blur\)\);/);
+  // The opaque base stays the fallback where the browser cannot blur.
+  assert.match(ruleBody('.impact-panel'), /background:\s*var\(--bg-1\);/);
+  assert.match(code, /@supports \(\(backdrop-filter: blur\(1px\)\) or \(-webkit-backdrop-filter: blur\(1px\)\)\) \{\s*@media screen and \(min-width: 721px\) \{\s*\.impact-panel:not\(\.sheet-hosted\) \{/);
+});
+
+// The camera pad that keeps a framed place clear of the briefing drawer follows the drawer's own width formula.
+// It stopped at 480 px while the drawer grew to 38vw, which left a picked place's east edge under the drawer at
+// 1440 px (browser look, 2026-11-13).
+test('the briefing camera pad follows the drawer width formula in the stylesheet', async () => {
+  assert.match(code, /--impact-panel-w-min:\s*440px;/);
+  assert.match(code, /--impact-panel-w:\s*clamp\(var\(--impact-panel-w-min\),\s*38vw,\s*880px\);/);
+  const deepLink = (await readFile(new URL('src/state/deep-link.ts', ROOT), 'utf8')).replace(/\r\n/g, '\n');
+  assert.match(deepLink, /Math\.min\(Math\.max\(440,\s*Math\.round\(window\.innerWidth \* 0\.38\)\),\s*880\)/);
+  assert.match(deepLink, /right:\s*panelWillOpen \? Math\.min\(drawer \+ MAP_COLUMN_CLEAR \+ 40,/);
+  // The drawer sits left of the map-button column so the column keeps its seats (DR-102): the stylesheet's inset
+  // and the camera pad's clearance are the same numbers.
+  assert.match(deepLink, /const MAP_COLUMN_CLEAR = window\.innerWidth <= 1024 \? 0 : 120;/);
+  assert.match(code, /@media \(min-width: 1025px\) \{\s*body:has\(\.app-shell:not\(\.embed\)\) \.impact-panel:not\(\.sheet-hosted\) \{\s*right: 120px;/);
 });

@@ -8,8 +8,14 @@
  * so every retry here appends a `retry=<n>` query parameter to force a new
  * cache key and a new fetch.
  *
- * Pure and DOM-free: no import of a MapLibre, Preact, or app-state module.
+ * A failure can also mean a deploy replaced the hashed chunks under an open
+ * tab; then no retry can succeed, and `reloadIfDeployChanged` reloads the page
+ * once (the URL holds the display state, so the person keeps their place).
+ *
+ * No import of a MapLibre, Preact, or app-state module.
  */
+
+import { fetchBufferedWithBudget } from './fetch';
 
 const IMPORT_SPECIFIER = /import\(\s*(['"`])([^'"`]*)\1/;
 
@@ -51,6 +57,83 @@ export function withRetryQuery(url: string, attempt: number): string {
   return parsed.toString();
 }
 
+/** The sessionStorage key holding when this tab last reloaded for a new deploy. */
+export const DEPLOY_RELOAD_KEY = 'ddm-deploy-reload';
+/** A second deploy reload inside this window could be a loop, so it is refused. */
+export const DEPLOY_RELOAD_WINDOW_MS = 10 * 60 * 1000;
+
+const MODULE_SCRIPT_SRC = /<script\b(?=[^>]*\btype=["']?module\b)[^>]*\bsrc=["']?([^"'\s>]+)/i;
+
+/** The first module script a page's HTML names, resolved against `base`, or null. */
+export function entryScriptUrl(html: string, base: string): string | null {
+  const src = MODULE_SCRIPT_SRC.exec(html)?.[1];
+  if (src === undefined) return null;
+  try {
+    return new URL(src, base).href;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Reload at most once per window, stamped in `storage`. Absent storage, a
+ * throwing one, or one that does not keep the stamp refuses: without a stamp
+ * that survives the reload, nothing could stop a reload loop.
+ */
+export function reloadOnce(
+  storage: Pick<Storage, 'getItem' | 'setItem'> | null,
+  now: number,
+  reload: () => void
+): boolean {
+  try {
+    if (storage === null) return false;
+    const last = Number(storage.getItem(DEPLOY_RELOAD_KEY) ?? Number.NaN);
+    if (now - last >= 0 && now - last < DEPLOY_RELOAD_WINDOW_MS) return false;
+    storage.setItem(DEPLOY_RELOAD_KEY, String(now));
+    if (storage.getItem(DEPLOY_RELOAD_KEY) !== String(now)) return false;
+  } catch {
+    return false;
+  }
+  reload();
+  return true;
+}
+
+let deployCheck: Promise<boolean> | null = null;
+
+/**
+ * After a chunk import failed: when the page's own HTML now names a different
+ * entry script than the one running, a deploy replaced this build's chunks,
+ * so reload once. Same build, an offline read, or a failed read: no reload,
+ * and the caller's own failure handling stands. One check runs at a time.
+ */
+export function reloadIfDeployChanged(): Promise<boolean> {
+  if (typeof document === 'undefined' || typeof location === 'undefined') return Promise.resolve(false);
+  deployCheck ??= checkDeploy().finally(() => {
+    deployCheck = null;
+  });
+  return deployCheck;
+}
+
+async function checkDeploy(): Promise<boolean> {
+  try {
+    const running = document.querySelector<HTMLScriptElement>('script[type="module"][src]')?.src;
+    if (!running) return false;
+    const page = await fetchBufferedWithBudget(location.pathname, { cache: 'no-store' }, null, 8000, 1024 * 1024);
+    if (!page.ok) return false;
+    const served = entryScriptUrl(await page.text(), location.href);
+    if (served === null || served === running) return false;
+    let storage: Storage | null = null;
+    try {
+      storage = sessionStorage;
+    } catch {
+      // Blocked storage: no stamp, so reloadOnce refuses.
+    }
+    return reloadOnce(storage, Date.now(), () => location.reload());
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Wrap a lazy `import()` so that after a rejection, later calls retry under
  * a new URL instead of replaying the same cached failure.
@@ -89,6 +172,8 @@ export function createChunkLoader<T>(
       recordedUrl = specifier ? new URL(specifier, base).toString() : failedChunkUrl(err);
     }
     attempt += 1;
+    // A deploy under this open tab fails every retry too; that case reloads once.
+    void reloadIfDeployChanged();
     throw err;
   };
 

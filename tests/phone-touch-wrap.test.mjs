@@ -165,6 +165,69 @@ test('the map title reads the mode table outside an embed, and the accessible na
   assert.ok(!/\.map-key-details-toggle\s*\{[^}]*text-transform/.test(app), 'app.css overrides the title case again');
 });
 
+test('the Key chip carries a decorative key glyph, and the desktop grid has a track for it', () => {
+  const glyph = mapKey.match(/const KEY_GLYPH =([\s\S]*?);\r?\n/)?.[1] ?? '';
+  assert.ok(glyph.includes('class="map-key-chip-icon"'), 'the glyph lost its class');
+  assert.ok(glyph.includes('aria-hidden="true"'), 'the glyph is no longer decorative');
+  assert.ok(!/<title|<text/.test(glyph), 'a title or text would change the chip text and name');
+  assert.match(mapKey, /button\.insertAdjacentHTML\('afterbegin', KEY_GLYPH\);/);
+  // Four children, four tracks: three tracks wrap the chevron onto a second row in the fixed-height seat.
+  assert.match(indicators, /grid-template-columns:\s*16px minmax\(0, 1fr\) 8px 16px;/);
+});
+
+test('the Tribal Nations key row draws the map\'s outline over a semi-transparent fill', () => {
+  const row = mapKey.match(/function tribalNationsKeyHtml[\s\S]*?\r?\n\}/)?.[0] ?? '';
+  assert.match(row, /fill="\$\{TRIBAL_FAMILY_COLOR\}" fill-opacity=/);
+  assert.match(row, /stroke="\$\{TRIBAL_FAMILY_COLOR\}"/);
+  assert.ok(!row.includes('TRIBAL_LINE_COLOR'), 'the retired light line is back in the key');
+  assert.ok(row.includes('data-tribal-nations-key'));
+});
+
+// Item 13 follow-through (2026-11-13): with the Layer legends bar gone, the Key
+// drawer carries every shown legend section it does not key itself, through the
+// legend registry, wherever the Legend panel has no box.
+test('the legend registry reports shown sections in panel order and tells the Key when one comes or goes', async () => {
+  const { registerHooks } = await import('node:module');
+  registerHooks({
+    resolve: (specifier, context, nextResolve) =>
+      specifier.startsWith('.') && !/\.[a-z]+$/i.test(specifier) && context.parentURL?.endsWith('.ts')
+        ? nextResolve(`${specifier}.ts`, context)
+        : nextResolve(specifier, context)
+  });
+  // No Legend panel in this shell: the registry still records the section for the Key.
+  globalThis.document ??= { getElementById: () => null };
+  const legends = await import('../src/ui/legend-registry.ts');
+  let calls = 0;
+  const stop = legends.onLegendChange(() => { calls += 1; });
+  const render = () => {};
+  legends.showLegend('telemetry', { order: legends.LEGEND_ORDER.stations, render });
+  legends.showLegend('hms-smoke', { order: legends.LEGEND_ORDER.event + 2, render });
+  legends.showLegend('cdm-drought', { order: legends.LEGEND_ORDER.surface, render });
+  assert.deepEqual(legends.getActiveLegends().map(({ key }) => key), ['cdm-drought', 'hms-smoke', 'telemetry']);
+  legends.hideLegend('hms-smoke');
+  legends.hideLegend('hms-smoke');
+  assert.deepEqual(legends.getActiveLegends().map(({ key }) => key), ['cdm-drought', 'telemetry']);
+  assert.equal(calls, 4, 'three shows and one real hide; hiding what is not shown is silent');
+  stop();
+  legends.hideLegend('telemetry');
+  assert.equal(calls, 4, 'an unsubscribed listener was still called');
+});
+
+test('the Key renders other shown legends only where the Legend panel has no box, and refreshes on a legend change', () => {
+  const also = mapKey.match(/function alsoOnMapHtml[\s\S]*?\r?\n\}/)?.[0] ?? '';
+  assert.match(also, /getActiveLegends\(\)\.filter\(\(\{ key \}\) => !keyed\.has\(key\)\)/);
+  assert.match(also, /legendPanelUsable\(\)\) return '';/);
+  const usable = mapKey.match(/export function legendPanelUsable[\s\S]*?\r?\n\}/)?.[0] ?? '';
+  assert.match(usable, /node = node\.parentElement/, 'the usable test no longer walks the ancestors');
+  assert.match(usable, /style\.visibility === 'hidden'/);
+  const section = mapKey.match(/function alsoSectionHtml[\s\S]*?\r?\n\}/)?.[0] ?? '';
+  assert.match(section, /spec\.render\(body\)/, 'the rows no longer come from the section\'s own render');
+  assert.match(section, /querySelectorAll\('\.legend-note'\)/, 'a caveat or credit reaches the map again');
+  assert.match(mapKey, /onLegendChange\(update\);/);
+  assert.match(mapKey, /attributeFilter: \['class', 'data-sheet-detent'\]/);
+  assert.match(indicators, /#map-key \.map-key-also\s*\{/);
+});
+
 test('the Tribal Nations key row keeps its swatch beside its word on a phone', () => {
   assert.match(
     app,

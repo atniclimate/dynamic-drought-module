@@ -3,8 +3,15 @@ import { test, expect, type Page } from './offline-test';
 import { gotoApp, waitForLayerSettled } from './helpers';
 
 /**
- * U-UX-FIX-1 DEF-5: the summary-first search fit pads only for a panel
- * that will actually render.
+ * U-UX-FIX-1 DEF-5: the search fit pads only for a panel that will
+ * actually render.
+ *
+ * Owner 2026-11-13: a search pick now opens the briefing drawer on every
+ * shell, so the right pad is reserved on this path again and Washington is
+ * framed in the map left of the drawer. The history below is the original
+ * fault; the probe now sits just west of the open drawer's left edge, where
+ * Washington's eastern side (or Idaho at the seam) lands under the padded
+ * fit. A fit that never ran leaves the boot's wide framing there instead.
  *
  * The proven cause (2026-07-24 reproduction): briefingCameraPadding() in
  * src/state/deep-link.ts unconditionally reserved the desktop right
@@ -50,10 +57,10 @@ async function stateUnderProbe(page: Page, fx: number, fy: number): Promise<stri
   return text.replace(/^\s*State/, '').trim();
 }
 
-test.describe('DEF-5 the summary-first search fit uses the full map container (desktop)', () => {
+test.describe('DEF-5 the search fit frames the place beside the briefing drawer (desktop)', () => {
   test.use({ viewport: { width: 1440, height: 900 } });
 
-  test('selecting Washington frames the state, not a 480px-padded phantom panel', async ({
+  test('selecting Washington frames the state in the map left of the open briefing', async ({
     page
   }) => {
     await gotoApp(page, '?view=console');
@@ -61,9 +68,8 @@ test.describe('DEF-5 the summary-first search fit uses the full map container (d
     // so the default-on states layer must be painted and queryable.
     await waitForLayerSettled(page, 'states');
 
-    // Select Washington through the shared search (the summary-first path,
-    // D-0.7.0-070: the selection renders in the left sidebar; no popup, no
-    // right-side briefing panel).
+    // Select Washington through the shared search: the pick opens its
+    // briefing drawer over the map's right side (owner 2026-11-13).
     await page.locator('#catalog-search [data-ddm-search]').fill('washington');
     await page
       .locator('#catalog-search [data-search-group="place"] [data-search-kind="place"]', {
@@ -73,10 +79,15 @@ test.describe('DEF-5 the summary-first search fit uses the full map container (d
       .click();
     await expect(page.locator('#app')).toHaveAttribute('data-place-selected', '');
 
-    // PREMISE PIN: on desktop this path opens NO impact panel over the
-    // map's right side. If a ratified change ever makes the panel open
-    // here, the pad should follow it and this spec must be rethought.
-    await expect(page.locator('#impact-panel.open')).toHaveCount(0);
+    // PREMISE PIN: this path opens the impact panel over the map's right
+    // side, so the fit's right pad is the drawer's.
+    const drawer = page.locator('#impact-panel.open');
+    await expect(drawer).toBeVisible();
+    const mapBox = await page.locator('#map').boundingBox();
+    const drawerBox = await drawer.boundingBox();
+    if (!mapBox || !drawerBox) throw new Error('map or drawer has no box');
+    // Just west of the drawer's left edge, on the midline, as a map fraction.
+    const fx = (drawerBox.x - 40 - mapBox.x) / mapBox.width;
 
     // Let the fit's fly settle: the probe must read a STABLE state, not a
     // frame of the animation. Two identical non-empty reads 600ms apart
@@ -84,24 +95,20 @@ test.describe('DEF-5 the summary-first search fit uses the full map container (d
     // fixed pixel is still moving).
     let settled = '';
     await expect(async () => {
-      const first = await stateUnderProbe(page, 0.9, 0.5);
+      const first = await stateUnderProbe(page, fx, 0.5);
       await page.waitForTimeout(600);
-      const second = await stateUnderProbe(page, 0.9, 0.5);
+      const second = await stateUnderProbe(page, fx, 0.5);
       expect(first).not.toBe('');
       expect(first).toBe(second);
       settled = second;
     }).toPass({ timeout: 25_000 });
 
-    // The load-bearing assertion. Correct fit (symmetric margins, zoom
-    // ~6.52 at this viewport): 90% of the map width on the midline is at
-    // roughly longitude -117.4, inside eastern Washington (Idaho is
-    // accepted as border-seam tolerance; the state spans barely 0.4 deg
-    // of margin here). Buggy fit (480px phantom right pad, zoom 5.71):
-    // the same probe is at roughly -111.9, firmly inside Montana.
+    // The load-bearing assertion: the padded fit puts Washington's eastern
+    // side (Idaho accepted at the border seam) just west of the drawer.
     expect(
       ['Washington', 'Idaho'],
-      `the right-edge probe read "${settled}": the fitted viewport extends far east of ` +
-        'Washington, which means the camera padded for an impact panel that never opened'
+      `the probe west of the drawer read "${settled}": the fit did not frame ` +
+        'Washington in the map left of the open briefing'
     ).toContain(settled);
   });
 });

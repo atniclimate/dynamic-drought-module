@@ -333,18 +333,21 @@ test.describe('S4a desktop shell boot', () => {
     await expect(page.locator('#shell-details-island > #shell-conditions-summary')).toHaveCount(1);
     await expect(page.locator('#shell-panel #shell-conditions-summary')).toHaveCount(0);
 
-    for (const id of ['conditions-strip', 'legend-panel', 'panel-region', 'share-btn', 'brief-head']) {
+    for (const id of ['conditions-strip', 'panel-region', 'share-btn', 'brief-head']) {
       await expect(page.locator(`#${id}`)).toHaveCount(1);
     }
     await expect(page.locator('#conditions-strip-dock > #conditions-strip')).toHaveCount(1);
-    await expect(page.locator('#sidebar-key-host > #legend-panel')).toHaveCount(1);
     await expect(page.locator('#shell-region-host > #panel-region')).toHaveCount(1);
     await expect(page.locator('.map-overlay-controls > #share-btn')).toHaveCount(1);
-    await expect(page.locator('.sidebar-bottom-dock #conditions-strip')).toHaveCount(1);
+    // Conditions in view is parked unseen in the floating window, and the Key
+    // chip carries its lead reading (owner 2026-11-13, one box); the bottom
+    // Layer legends is gone (item 13).
+    await expect(page.locator('#map-condition-indicator #conditions-strip')).toHaveCount(1);
+    await expect(page.locator('#legend-panel')).toBeHidden();
     await expect(page.locator('#brief-head-lede')).toHaveCount(0);
     await expect(page.locator('#shell-refine-host > #brief-head')).toHaveCount(1);
     await expect(page.locator('#shell-conditions-heading')).toHaveText('Display summary');
-    await expect(page.locator('#conditions-strip-dock .conditions-title')).toBeVisible();
+    await expect(page.locator('#conditions-strip-dock .conditions-title')).toBeHidden();
 
     // Existing behavior rides the moved nodes: region navigation still owns
     // URL state, and the one share listener still produces its toast.
@@ -356,15 +359,15 @@ test.describe('S4a desktop shell boot', () => {
 
     await page.locator('.view-switch [data-view="console"]').click();
     await expect(page.locator('#conditions-strip-home + #conditions-strip')).toHaveCount(1);
-    await expect(page.locator('#legend-panel-home + #legend-panel')).toHaveCount(1);
+    await expect(page.locator('#legend-panel')).toBeVisible();
     await expect(page.locator('#panel-region-home + #panel-region')).toHaveCount(1);
     await expect(page.locator('#brief-head-home + #brief-head')).toHaveCount(1);
     await expect(page.locator('.map-overlay-controls > #share-btn')).toHaveCount(1);
 
     await page.locator('.view-switch [data-view="brief"]').click();
     await page.locator('#sidebar-collapse').click();
-    await expect(page.locator('#conditions-strip-home + #conditions-strip')).toHaveCount(1);
-    await expect(page.locator('#legend-panel-home + #legend-panel')).toHaveCount(1);
+    // The map seat stays while the sidebar is collapsed; the column seats return home.
+    await expect(page.locator('#conditions-strip-dock > #conditions-strip')).toHaveCount(1);
     await expect(page.locator('#panel-region-home + #panel-region')).toHaveCount(1);
     await expect(page.locator('.map-overlay-controls > #share-btn')).toHaveCount(1);
     await expect(page.locator('#brief-head-home + #brief-head')).toHaveCount(1);
@@ -499,12 +502,15 @@ test.describe('S4 temporal register coherence (DG-080 review blocker 1)', () => 
     // pre-fix, wrapped the headline to a second line with no reserved
     // height, pushing every control below it down. app.css's
     // .shell-time-headline now reserves a fixed two-line box, so this
-    // switch must not move the regional navigation seated after it.
+    // switch must not move the regional navigation seated after it. Since
+    // owner 2026-11-13 the line is Console-only at the column foot, so in
+    // Brief it is attached but not drawn; the case still guards Brief
+    // against any shift should the line reappear.
     await routeCpcOutlook(page);
     await gotoApp(page);
 
     const headline = page.locator('.shell-time-headline');
-    await expect(headline).toBeVisible();
+    await expect(headline).toBeAttached();
     await expect(headline).toContainText('Consensus month');
 
     const navigation = page.locator('#shell-minimap-heading');
@@ -543,8 +549,9 @@ test.describe('S4 temporal register coherence (DG-080 review blocker 1)', () => 
       await routeCpcOutlook(page);
       await gotoApp(page);
 
+      // Attached, not drawn: Brief carries no date line (owner 2026-11-13).
       const headline = page.locator('.shell-time-headline');
-      await expect(headline).toBeVisible();
+      await expect(headline).toBeAttached();
       await expect(headline).toContainText('Consensus month');
 
       const navigation = page.locator('#shell-minimap-heading');

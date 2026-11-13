@@ -740,8 +740,8 @@ a:hover {
 }
 .sidebar-scroll::-webkit-scrollbar-thumb:hover { background: var(--fg-3); }
 
-/* The credit ends the scroll column (D7): it is the last block inside
-   .sidebar-scroll, never a pinned band over the layer list. */
+/* The credit ends the scroll column (D7), followed only by the Console date
+   line (owner 2026-11-13); never a pinned band over the layer list. */
 .sidebar-footer {
   padding: 12px var(--gutter);
   border-top: 1px solid var(--line);
@@ -1875,15 +1875,18 @@ button.conditions-metric:hover .conditions-action-hide {
 /* D3 M5/M6: ordinary actions on the opaque sidebar use neutral selection
    and the adopted two-tone focus boundary. Phone sheets keep their own pass. */
 @media (min-width: 721px) {
+  /* The briefing door is the column's one way into the briefing after a map
+     click (owner 2026-11-13): the accent outline sets it apart from the
+     neutral controls around it without wearing the selected (inverted) face. */
   .app-shell:not(.embed) #sidebar .region-briefing-btn {
-    background: var(--surface-overlay);
+    background: var(--accent-soft);
     color: var(--ink);
-    border-color: var(--rule-control);
+    border-color: var(--accent);
   }
   .app-shell:not(.embed) #sidebar .region-briefing-btn:hover {
     background: var(--surface-hover);
     color: var(--ink);
-    border-color: var(--rule-control);
+    border-color: var(--accent);
   }
   .app-shell:not(.embed) #sidebar .region-briefing-btn:focus-visible {
     outline: 2px solid var(--focus-inner);
@@ -2712,6 +2715,17 @@ button.conditions-metric:hover .conditions-action-hide {
     );
   }
 }
+/* From 1025px, outside an embed, the drawer stands left of the map-button
+   column (the block above the briefing panel), so the dock clears that
+   column too. */
+@media (min-width: 1025px) {
+  body:has(.impact-panel.open:not(.sheet-hosted)) .app-shell:not(.embed) .map-bottom-dock {
+    right: min(
+      calc(var(--impact-panel-w) + 2 * var(--impact-panel-gap) + var(--chrome-inset) + var(--map-cell-w)),
+      calc(100% - var(--impact-panel-gap) - var(--dock-min-w))
+    );
+  }
+}
 
 /* ----------------------------------------------------------------------------
    Map overlay controls
@@ -2772,7 +2786,7 @@ button.conditions-metric:hover .conditions-action-hide {
    Since S30D D1 M9 this base rule and the E2 faces hold for phones (720px
    and below, re-seated by the sheet rules) and embeds only. The desktop
    shell outside an embed turns the same element into the four-slot column
-   of "THE DESKTOP COLUMN" below: one family still, now opaque, square,
+   of "THE DESKTOP COLUMN" below: one family still, now glass, square,
    labelled cells (owner rulings R1 a and R2 a). */
 .map-overlay-controls {
   position: absolute;
@@ -2879,11 +2893,12 @@ button.conditions-metric:hover .conditions-action-hide {
    src/config/map-chrome.ts and tests/map-chrome-contract.test.mjs keeps
    these tokens equal to it.
 
-   Faces (DR-101; the D1 token block in :root): opaque S1 with a 1px
-   keyline edge at rest, S2 on hover, the S3 plate with a white edge and a
-   2px leading bar when pressed (SAT on, Help open). Opaque because SAT and
-   the words are text and need 4.5:1, which no glass gives over white
-   imagery. No red, no blur, no radius, no shadow. The `!important` marks
+   Faces (DR-101; the D1 token block in :root): the Key's glass at rest
+   (--glass-read under --rich-black-blur, owner 2026-11-13) with a 1px
+   keyline edge; --ink on it holds 6.98:1 over white imagery
+   (tests/contrast-contract.test.mjs). Hover lays the --glass-press veil
+   over the same glass; pressed (SAT on, Help open) stays the opaque
+   --face-selected. No red, no radius, no shadow. The `!important` marks
    answer the base .basemap-switcher-btn rule and MapLibre's control-group
    rules, which the phone and embed seats still use.
 
@@ -2986,7 +3001,9 @@ button.conditions-metric:hover .conditions-action-hide {
     padding: 0 9px;
     border: 1px solid var(--keyline);
     border-radius: 0;
-    background: var(--surface-raised) !important;
+    background: var(--glass-read) !important;
+    -webkit-backdrop-filter: blur(var(--rich-black-blur));
+    backdrop-filter: blur(var(--rich-black-blur));
     color: var(--ink) !important;
     box-shadow: none;
     font-family: var(--font-body);
@@ -3023,7 +3040,7 @@ button.conditions-metric:hover .conditions-action-hide {
     text-box: trim-both cap alphabetic;
   }
   .app-shell:not(.embed) .map-overlay-controls .map-cell:hover {
-    background: var(--surface-overlay) !important;
+    background: linear-gradient(var(--glass-press), var(--glass-press)), var(--glass-read) !important;
     color: var(--ink) !important;
   }
   /* Pressed: SAT on (aria-pressed) or Help's drawer open (aria-expanded).
@@ -4647,6 +4664,45 @@ button.telemetry-item {
   text-align: left;
 }
 
+/* The open briefing leaves the map's buttons usable AND in their seats (owner,
+   2026-11-13: a State or city pick opens the drawer, and #reset-btn sat under
+   it; DR-102: the desktop keeps its controls in fixed places, pinned by
+   tests/map-chrome-seats.spec.ts). On desktop and tablet the drawer's right
+   edge sits one gap left of the Reset, SAT, Help and Share column, so the
+   column never moves and is never under the drawer, and the Key chip is held
+   to the room left of the drawer so its disclosure chevron stays clear.
+   The drawer is appended to <body>, outside .app-shell, so the column tokens
+   (--chrome-inset 12px, --map-cell-w, the 12px gap) do not reach it: its
+   inset repeats them, 12 + 96 + 12 on desktop and 12 + --touch-target + 12 in
+   the tablet band, and src/state/deep-link.ts adds the same clearance to the
+   camera pad (MAP_COLUMN_CLEAR). Phones (the sheet-hosted panel) and embeds
+   are outside this block. */
+@media (min-width: 721px) {
+  body:has(.impact-panel.open:not(.sheet-hosted)) .app-shell:not(.embed) {
+    --briefing-clear: calc(var(--impact-panel-w) + var(--impact-panel-gap));
+    --briefing-chip-left: 12px;
+  }
+  body:has(.impact-panel.open:not(.sheet-hosted)) .app-shell.sidebar-collapsed:not(.embed) {
+    --briefing-chip-left: 60px;
+  }
+  body:has(.impact-panel.open:not(.sheet-hosted)) .app-shell:not(.embed) #map-condition-indicator {
+    max-width: calc(100% - var(--briefing-clear) - var(--briefing-chip-left));
+  }
+}
+@media (min-width: 721px) and (pointer: coarse) {
+  body:has(.impact-panel.open:not(.sheet-hosted)) .app-shell.sidebar-collapsed:not(.embed) {
+    --briefing-chip-left: 64px;
+  }
+}
+/* From 1025px the drawer stands left of the button column, so the chip clears the column too. */
+@media (min-width: 1025px) {
+  body:has(.impact-panel.open:not(.sheet-hosted)) .app-shell:not(.embed) {
+    --briefing-clear: calc(
+      var(--impact-panel-w) + 2 * var(--impact-panel-gap) + var(--chrome-inset) + var(--map-cell-w)
+    );
+  }
+}
+
 /* ----------------------------------------------------------------------------
    Drought-impact briefing panel
    The headline kernel-integration feature: a slide-in panel over the map that
@@ -4668,6 +4724,7 @@ button.telemetry-item {
   flex-direction: column;
   background: var(--bg-1);
   border-left: 1px solid var(--line-strong);
+  border-right-color: var(--line-strong);
   box-shadow: -10px 0 32px rgba(0, 0, 0, 0.55);
   transform: translateX(100%);
   transition: transform 0.25s ease;
@@ -4682,6 +4739,47 @@ button.telemetry-item {
 }
 .impact-panel.open {
   transform: translateX(0);
+}
+
+/* The desktop drawer is glass over the map, the same face as the Key (owner
+   2026-11-13): --glass-read under --rich-black-blur, so more-contrast and
+   forced colours turn it solid through the tokens, with no rule of their
+   own. Only the gaps between cards are translucent; every content box keeps
+   its own opaque --bg-1 / --bg-2 fill. Text on bare glass is held to T0-T2
+   as on the Key, and the header mail link takes --ink because the red link
+   ink is banned on glass. The opaque --bg-1 above is the fallback where the
+   browser cannot blur; the phone sheet card, the narrow overlay and print
+   never reach this rule. */
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  @media screen and (min-width: 721px) {
+    .impact-panel:not(.sheet-hosted) {
+      --fg-2: var(--ink-soft);
+      --fg-3: var(--ink-soft);
+      background: var(--glass-read);
+      border-left-color: var(--keyline);
+      border-right-color: var(--keyline);
+      -webkit-backdrop-filter: blur(var(--rich-black-blur));
+      backdrop-filter: blur(var(--rich-black-blur));
+    }
+    .impact-panel:not(.sheet-hosted) .impact-panel-header a[href] {
+      color: var(--ink);
+    }
+  }
+}
+
+/* The drawer's inset left of the map-button column (the block above the
+   briefing panel explains it), from 1025px only: in the tablet band the
+   sidebar, the dock and the column leave no readable drawer beside them
+   (149 px at 721, measured 2026-11-13), so there the drawer keeps the right
+   edge and covers the column, as it always has on tablets. After the glass
+   rule so the first `.impact-panel:not(.sheet-hosted)` rule a contract test
+   reads stays the glass one. */
+@media (min-width: 1025px) {
+  body:has(.app-shell:not(.embed)) .impact-panel:not(.sheet-hosted) {
+    right: 120px;
+    border-right-style: solid;
+    border-right-width: 1px;
+  }
 }
 
 /* The tablet band (UI-02 collision B, 02-impact-briefing EF-9 / IB-15).
@@ -7561,8 +7659,9 @@ a.impact-resource-link::after {
 .shell-details-panel { display: none; }
 #shell-details-island > .shell-fire3d { margin-block: 10px; }
 #shell-details-island > .shell-summary { margin-block: 6px; }
-/* An empty caveat leaves nothing to space; the dock below is short of room. */
-#shell-details-island > .shell-summary:has(> .shell-summary-caveat:empty) { margin-block: 0; }
+/* An empty caveat leaves nothing to space, and Brief clips it out of sight. */
+#shell-details-island > .shell-summary:has(> .shell-summary-caveat:empty),
+#app.view-brief #shell-details-island > .shell-summary { margin-block: 0; }
 
 /* VIEW: the hazard mode buttons, N of them in two equal columns (D2). */
 .shell-view {
@@ -7590,42 +7689,19 @@ a.impact-resource-link::after {
   border-top: 1px solid var(--line-strong);
 }
 
-.sidebar-legend-disclosure { margin: 0 var(--gutter) 12px; }
-.sidebar-legend-disclosure:not(:has(#legend-panel:not([hidden]))) { display: none; }
-.sidebar-legend-disclosure > summary {
-  color: var(--fg-2);
-  cursor: pointer;
-  font-size: 11px;
-  padding-block: 8px;
-}
-.sidebar-legend-disclosure #legend-panel { padding: 10px 0; border: 0; }
-.sidebar-bottom-dock { margin-top: auto; }
-.sidebar-bottom-dock > .conditions-strip-dock { margin: 0 var(--gutter) 12px; }
 @media (min-width: 721px) {
-  /* Brief pins the strip and Layer legends to the column foot when the
-     column has free space; margin-top: auto is inert elsewhere. */
+  /* Kept from the retired foot dock: the column's spacing was tuned in flex
+     layout, where margins do not collapse. */
   #app.view-brief:not(.embed) .sidebar-scroll { display: flex; flex-direction: column; }
-  /* The shell island measures the sticky mode and horizon rows and the sticky
-     dock below, so a control reached by Tab stops clear of all three. */
+  /* The shell island measures the sticky mode and horizon rows, so a control
+     reached by Tab stops clear of both. */
   #app.view-brief:not(.embed) .sidebar-scroll {
-    scroll-padding-block: calc(var(--shell-view-h, 0px) + var(--shell-when-h, 0px)) var(--dock-h, 0px);
+    scroll-padding-top: calc(var(--shell-view-h, 0px) + var(--shell-when-h, 0px));
   }
   #app.view-brief:not(.embed) .sidebar-scroll > * { flex-shrink: 0; }
-  /* The dock grows upward from the foot, so the open legend renders above its
-     summary; holdSummarySeat scrolls back any push past the foot. */
-  #app.view-brief:not(.embed) .sidebar-legend-disclosure[open] { display: flex; flex-direction: column-reverse; }
-  /* Where a mode's controls outrun the column, the dock sticks to the visible
-     foot (-4px reaches the scroller's padding strip) and content scrolls
-     beneath it; the open legend scrolls inside it. */
-  #app.view-brief:not(.embed) .sidebar-bottom-dock {
-    position: sticky;
-    bottom: -4px;
-    z-index: 4;
-    padding-top: 8px;
-    border-top: 1px solid var(--line);
-    background: var(--bg-1);
-  }
-  #app.view-brief:not(.embed) #sidebar-key-host { max-height: 30vh; overflow-y: auto; }
+  /* The map Key carries every mode's legend in Brief (owner 2026-11-13: the
+     bottom Layer legends was redundant); Console keeps this panel. */
+  #app.view-brief:not(.embed) #legend-panel { display: none; }
   /* The 3D reveal scrolls the column: the horizon row sticks under the mode
      row, whose height the shell island measures, instead of sliding beneath. */
   #app.view-brief:not(.embed) .shell-when {
@@ -7711,7 +7787,6 @@ a.impact-resource-link::after {
 .ack-notice-label { color: var(--fg-1); font-weight: 600; }
 
 @media (pointer: coarse), (max-width: 720px) {
-  .sidebar-legend-disclosure > summary,
   .impact-technical-information > summary,
   .impact-acknowledgements > summary,
   .time-bar-feed-details > summary {
@@ -8112,7 +8187,6 @@ a.impact-resource-link::after {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-top: 6px;
   min-height: 24px;
 }
 .shell-time-headline {
@@ -8151,6 +8225,15 @@ a.impact-resource-link::after {
   font-family: var(--font-body);
   font-size: 10.5px;
   color: var(--fg-3);
+}
+/* The date line is the column's last element and reads in Console only
+   (owner 2026-11-13); Brief keeps it mounted and hidden. The box is on the
+   inner row so an empty host draws nothing; the 16px foot clears the
+   column's bottom fade. */
+.shell-time-foot { display: none; }
+.shell-time-foot > .shell-time {
+  padding: 8px var(--gutter) 16px;
+  border-top: 1px solid var(--line);
 }
 .shell-popover-door {
   appearance: none;
@@ -8202,42 +8285,7 @@ a.impact-resource-link::after {
    just collapses its margin. */
 .shell-summary-caveat:empty { margin: 0; }
 
-.conditions-strip-dock {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-.conditions-strip-dock:empty { display: none; }
-#conditions-strip-dock > #conditions-strip {
-  padding: 0;
-  border: 0;
-}
-#conditions-strip-dock .conditions-head {
-  margin-bottom: 5px;
-}
-#conditions-strip-dock .conditions-metrics {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 5px;
-}
-/* Every tone takes the one-line row (owner 2026-10-19: the seat never
-   changes size between modes); a zero count no longer stacks three lines. */
-#conditions-strip-dock .conditions-metric {
-  display: flex;
-  flex-flow: row nowrap;
-  align-items: baseline;
-  gap: 7px;
-  padding: 8px 10px;
-  /* Repair round on M10 (map-chrome-seats.spec.ts "the chip holds its
-     seat"): the docked tile shares the TL-1 seat with the key toggle
-     (interface-chrome-popups-text.md section 2.4, "The chip is 288 x 40
-     in every mode"), so its box has to match the toggle's 40px height
-     exactly, not whatever its text happens to need. */
-  box-sizing: border-box;
-  min-height: 40px;
-}
-/* No tile shown (an ENSO view): one muted line holds the tile's seat. The
-   Brief dock also hides off tiles, so it decides by live tiles instead
-   (hazard-indicators.css). */
+/* No tile shown (an ENSO view in Console): one muted line holds the seat. */
 .conditions-empty {
   margin: 0;
   font-family: var(--font-body);
@@ -8245,49 +8293,6 @@ a.impact-resource-link::after {
   color: var(--fg-3);
 }
 .conditions-metric ~ .conditions-empty { display: none; }
-#conditions-strip-dock .conditions-empty {
-  display: flex;
-  align-items: center;
-  box-sizing: border-box;
-  min-height: 40px;
-}
-/* DR-153: the 721 to 1024 px tablet band is touch-first on every pointer
-   (RATIFICATION-6 Q2/Q2b), the same rule THE DESKTOP COLUMN's cell size
-   and chipSeatRect (src/config/map-chrome.ts) apply; repair round on M10
-   (interface-responsive.spec.ts "touch floor": this tile measured 288x40
-   with the briefing open, under the 44px floor). Declared after the base
-   rule above so it wins at equal specificity. */
-@media (min-width: 721px) and (max-width: 1024px) {
-  #conditions-strip-dock .conditions-metric,
-  #conditions-strip-dock .conditions-empty {
-    min-height: 44px;
-  }
-}
-#conditions-strip-dock .conditions-metric:is([data-tone='data'], [data-tone='none']) .conditions-value {
-  flex: 0 0 auto;
-  font-size: 18px;
-  text-shadow: 0 0 1px rgba(241, 245, 249, 0.72);
-}
-#conditions-strip-dock .conditions-metric[data-tone='data'] .conditions-sublabel {
-  min-width: 0;
-  color: var(--fg-1);
-  font-family: var(--font-display);
-  font-size: 12px;
-  font-weight: var(--fw-subtitle);
-  line-height: 1.2;
-  text-transform: capitalize;
-  /* A long label wraps onto a second balanced line; it is never cut with an
-     ellipsis (D7). The tile's 40 px is a floor, so it grows with the label. */
-}
-/* The docked tile is the tightest seat this control has (Defect 3): a
-   trailing, right-pushed hint reads clearly as "there is more to this
-   control" without competing with the capitalized category readout for
-   the eye's first landing spot. */
-#conditions-strip-dock .conditions-metric .conditions-action {
-  flex: 0 0 auto;
-  margin-left: auto;
-  padding-left: 4px;
-}
 
 /* ----------------------------------------------------------------------------
    S4c: the panel-foot response. Outside .sidebar-scroll, so the frozen
@@ -8403,8 +8408,9 @@ a.impact-resource-link::after {
      - #panel-region moves into the ordered Brief shell after the conditions
        read and before the minimap. The original node returns to its static
        seat for console, mobile, embed, collapse, and pre-mount.
-     - The desktop Brief column hides the full #time-bar in favor of the
-       shell compact WHEN row (console and mobile keep the full rail).
+     - The desktop Brief column hides the full #time-bar (console and
+       mobile keep the full rail); the compact date line sits at the
+       column foot and reads in Console only (owner 2026-11-13).
    Height bands (desktop Brief, the launch-pad view):
      - >= 700px: full shell (inline minimap). Honest scroll is the
        SHIPPED contract for this band, not a stopgap: the maintainer
@@ -8433,6 +8439,21 @@ a.impact-resource-link::after {
     padding: 0 var(--gutter) 12px;
   }
   #app.view-console #shell-framing-note { display: none; }
+  /* Brief carries no loading or availability ledger (owner 2026-11-13); the
+     caveat stays a mounted polite live region clipped out of sight, never
+     display:none (see .shell-summary-caveat). Console draws it. */
+  #app.view-brief .shell-summary-caveat {
+    position: absolute;
+    left: -10000px;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
+  /* The column-foot date line (.shell-time-foot) reads in Console only. */
+  #app.view-console:not(.embed) .shell-time-foot { display: block; }
   /* Island-mount honesty: the full #time-bar stands down only once the
      shell island has actually mounted (#app.shell-ready, stamped by the
      island chunk). If the lazy chunk never arrives, the shipped temporal
@@ -8489,10 +8510,6 @@ a.impact-resource-link::after {
   .shell-minimap-map { display: none; }
   .shell-minimap-popover-wrap { display: block; }
   .panel-response-card { max-height: 30vh; }
-  /* A short column has no room for a sticky foot: the Brief dock flows after the
-     content again, so it never covers the compact Map areas door. */
-  #app.view-brief:not(.embed) .sidebar-bottom-dock { position: static; }
-  #app.view-brief:not(.embed) .sidebar-scroll { scroll-padding-bottom: 0; }
 }
 
 @media (max-width: 720px) {

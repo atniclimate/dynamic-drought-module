@@ -512,17 +512,24 @@ test('the ruled Tribal family is preserved independently of ATNI brand tokens', 
     assert.equal(palette[name], '#8d006b', name);
   }
 });
-// Visual uniformity D9 (2026-11-13): a Tribal area is a line, never a fill over the hazard class under it.
-test('Tribal areas draw a light line over the ruled hex with no visible fill, the chosen place included', () => {
-  assert.equal(palette.TRIBAL_LINE_COLOR, palette.TRIBAL_LABEL_COLOR, 'the line wears the light shade the name uses');
-  for (const [file, edge] of [['aiannh', 'AIANNH_OUTLINE_COLOR'], ['bia-reservations', 'RESERVATION_OUTLINE_COLOR']]) {
-    const src = readFileSync(new URL(`../src/layers/${file}.ts`, import.meta.url), 'utf8');
-    assert.match(src, /'fill-opacity': 0\s+\}/, `${file}: the fill is the click area only`);
-    assert.doesNotMatch(src, /'fill-opacity': \[/, `${file}: no selected fill either`);
-    assert.match(src, new RegExp(`'line-color': ${edge},`), `${file}: the ruled hex is the dark edge`);
-    assert.match(src, /'line-color': TRIBAL_LINE_COLOR,/, `${file}: the light line`);
+// Owner, 2026-11-13: Tribal areas are an outline plus a semi-transparent fill in the ruled family colour.
+test('Tribal areas draw an outline plus a semi-transparent family fill, the chosen place included', () => {
+  const read = (rel) => readFileSync(new URL(rel, import.meta.url), 'utf8').replace(/\r\n/g, '\n');
+  for (const [file, base, sel, edge, fill] of [
+    ['aiannh', '0.12', '0.4', 'AIANNH_OUTLINE_COLOR', 'AIANNH_FILL_COLOR'],
+    ['bia-reservations', '0.18', '0.5', 'RESERVATION_OUTLINE_COLOR', 'RESERVATION_FILL_COLOR'],
+  ]) {
+    const src = read(`../src/layers/${file}.ts`);
+    assert.ok(src.includes(`const FILL_OPACITY_BASE = ${base};`), `${file}: base fill ${base}`);
+    assert.ok(src.includes(`const FILL_OPACITY_SELECTED = ${sel};`), `${file}: selected fill ${sel}`);
+    assert.match(src, /'fill-opacity': \[\n\s+'case',/, `${file}: the fill follows the selected state`);
+    assert.ok(src.includes(`'fill-color': ${fill},`), `${file}: the family fill`);
+    assert.ok(src.includes(`'line-color': ${edge},`), `${file}: the family outline`);
+    assert.doesNotMatch(src, /outline-core|TRIBAL_LINE_COLOR/, `${file}: no light line`);
   }
-  const located = readFileSync(new URL('../src/state/located-boundary.ts', import.meta.url), 'utf8');
-  assert.doesNotMatch(located, /type: 'fill'/, 'the chosen place has no fill');
-  assert.match(located, /'line-color': TRIBAL_LINE_COLOR,/);
+  const located = read('../src/state/located-boundary.ts');
+  assert.ok(located.includes("type: 'fill'"), 'the chosen place has a fill');
+  assert.ok(located.includes("'fill-opacity': 0.5"), 'at half strength');
+  assert.ok(located.includes("'fill-color': RESERVATION_FILL_COLOR"), 'in the family colour');
+  assert.doesNotMatch(located, /TRIBAL_LINE_COLOR/, 'no light line');
 });

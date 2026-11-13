@@ -11,6 +11,7 @@ import {
   type MapChromeSlot
 } from '../src/config/map-chrome';
 import { gotoApp, layerCheckbox, waitForLayerSettled } from './helpers';
+import { HAZARD_CLUSTER_KEYS } from '../src/config/clusters';
 
 /**
  * The desktop map chrome holds its seats to 1 px (S30D D1 M9; register
@@ -654,15 +655,66 @@ function assertNoTransientOverlap(
   }
 }
 
+/**
+ * One box (owner 2026-11-13): no reading line under the chip; the chip's title
+ * holds one line, fitting or ending in an ellipsis; its accessible name carries
+ * the visible words (WCAG 2.5.3); and a press only opens and closes the Key,
+ * never changing the layer set or the link (item 9).
+ */
+async function expectOneBox(page: Page, phase: string, press: boolean): Promise<void> {
+  const read = await page.evaluate(() => {
+    const dock = document.getElementById('conditions-strip-dock');
+    const toggle = document.getElementById('map-key-details-toggle');
+    const parts = Array.from(toggle?.querySelectorAll<HTMLElement>('.map-key-chip-value, .map-key-chip-text') ?? []);
+    return {
+      dockShown: !!dock && dock.getClientRects().length > 0,
+      name: toggle?.getAttribute('aria-label') ?? '',
+      words: parts.map((el) => (el.textContent ?? '').trim()).filter(Boolean),
+      texts: parts
+        .filter((el) => el.classList.contains('map-key-chip-text'))
+        .map((el) => {
+          const style = getComputedStyle(el);
+          return {
+            text: el.textContent ?? '',
+            width: el.clientWidth,
+            // One line: it fits, or nowrap plus ellipsis cuts it visibly.
+            oneLine: style.whiteSpace === 'nowrap' && (el.scrollWidth <= el.clientWidth + 0.5 || style.textOverflow === 'ellipsis')
+          };
+        })
+    };
+  });
+  expect(read.dockShown, `${phase}: the parked strip draws a box under the chip`).toBe(false);
+  expect(read.texts.length, `${phase}: the chip has one title text`).toBe(1);
+  for (const t of read.texts) {
+    expect(t.width, `${phase}: "${t.text}" has no width`).toBeGreaterThan(0);
+    expect(t.oneLine, `${phase}: "${t.text}" is not held to one line`).toBe(true);
+  }
+  for (const word of read.words) {
+    expect(read.name, `${phase}: the name carries the visible "${word}"`).toContain(word);
+  }
+  if (!press) return;
+  const toggle = page.locator('#map-key-details-toggle');
+  const before = page.url();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await toggle.click();
+  await expect(toggle, `${phase}: a press opens the Key`).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('#map-key-content')).toBeVisible();
+  expect(page.url(), `${phase}: a press changes no layer or link state`).toBe(before);
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  expect(page.url()).toBe(before);
+}
+
 test.describe('the chip, TL-0, the pill and the dock hold their D1 M10 seats', () => {
   const MODE_VIEWPORT = { width: 1440, height: 900 } as const;
 
   /** The chip's box relative to #map-container, or null if it has no
    * rendered box (the pre-M10 hidden state). The TL-1 seat holds
-   * `#map-key` (the toggle, closed) in every mode; the docked drought tile
-   * now sits in the sidebar's bottom dock, never in this seat. */
-  async function chipBox(page: Page): Promise<{ x: number; y: number; width: number; height: number } | null> {
-    return page.evaluate(() => {
+   * `#map-key` (the toggle, closed) in every mode; since the one box (owner
+   * 2026-11-13) the Brief reading is the chip's own title, and the strip's
+   * dock (`#conditions-strip-dock`) has no box. */
+  async function chipBox(page: Page, id = 'map-key'): Promise<{ x: number; y: number; width: number; height: number } | null> {
+    return page.evaluate((id) => {
       const container = document.getElementById('map-container');
       if (!container) return null;
       const c = container.getBoundingClientRect();
@@ -674,10 +726,10 @@ test.describe('the chip, TL-0, the pill and the dock hold their D1 M10 seats', (
         if (r.width === 0 && r.height === 0) return null;
         return r;
       };
-      const r = visibleBox(document.getElementById('map-key'));
+      const r = visibleBox(document.getElementById(id));
       if (!r) return null;
       return { x: r.left - c.left, y: r.top - c.top, width: r.width, height: r.height };
-    });
+    }, id);
   }
 
   test('the chip holds its seat in every mode and horizon, held through a loading phase, at 1440x900', async ({
@@ -690,7 +742,7 @@ test.describe('the chip, TL-0, the pill and the dock hold their D1 M10 seats', (
       await gotoApp(page);
       await settleLayout(page);
 
-      const check = async (phase: string): Promise<void> => {
+      const check = async (phase: string, press = true): Promise<void> => {
         const box = await chipBox(page);
         expect(box, `${phase}: the chip has no box`).not.toBeNull();
         const expected = chipSeatRect(false, false, MODE_VIEWPORT.width);
@@ -698,6 +750,7 @@ test.describe('the chip, TL-0, the pill and the dock hold their D1 M10 seats', (
         expect(box!.y, `${phase}: chip y`).toBeCloseTo(expected.y, 0);
         expect(box!.width, `${phase}: chip width`).toBeCloseTo(expected.width, 0);
         expect(box!.height, `${phase}: chip height`).toBeCloseTo(expected.height, 0);
+        await expectOneBox(page, phase, press);
       };
 
       await check('settled boot');
@@ -711,7 +764,7 @@ test.describe('the chip, TL-0, the pill and the dock hold their D1 M10 seats', (
         gate.hold();
         try {
           await button.click();
-          await check(`${key}, held loading`);
+          await check(`${key}, held loading`, false);
         } finally {
           gate.release();
         }
@@ -739,6 +792,29 @@ test.describe('the chip, TL-0, the pill and the dock hold their D1 M10 seats', (
       }
     } finally {
       gate.release();
+    }
+  });
+
+  test('the one box holds 44 px in the tablet band in every mode, at 900x675', async ({ page }) => {
+    test.setTimeout(120_000);
+    const viewport = { width: 900, height: 675 } as const;
+    await page.setViewportSize(viewport);
+    await gotoApp(page);
+    await settleLayout(page);
+    const modes = await page
+      .locator('.shell-cluster-btn[data-cluster]')
+      .evaluateAll((buttons) => buttons.map((b) => b.getAttribute('data-cluster') ?? ''));
+    expect(modes.length).toBe(HAZARD_CLUSTER_KEYS.length);
+    for (const key of modes) {
+      const button = page.locator(`.shell-cluster-btn[data-cluster="${key}"]`);
+      if ((await button.getAttribute('aria-pressed')) !== 'true') await button.click();
+      await expect(button).toHaveAttribute('data-pending', 'false', { timeout: 30_000 });
+      await settleLayout(page);
+      const box = await chipBox(page);
+      expect(box, `${key}: the chip has no box`).not.toBeNull();
+      expect(box!.width, `${key}: chip width`).toBeCloseTo(chipSeatRect(false, false, viewport.width).width, 0);
+      expect(Math.round(box!.height), `${key}: chip height`).toBe(44);
+      await expectOneBox(page, `900/${key}`, true);
     }
   });
 

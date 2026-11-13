@@ -2,8 +2,8 @@
  * The conditions strip's Hide hand-off (src/ui/island/strip-focus.ts).
  *
  * The Alerts and Fires tiles render only while their layer is on, so a
- * keyboard Hide unmounts the focused button. Desktop Brief's dock also hides
- * off tiles and collapses with its last live reading. These cases pin where
+ * keyboard Hide unmounts the focused button. Desktop Brief's map seat also
+ * hides off tiles and hides with its last live reading. These cases pin where
  * focus goes instead of the page body. Fake elements stand in for the DOM:
  * `rendered` is what getClientRects reports.
  *
@@ -42,16 +42,16 @@ test('with no rendered tile after it, the previous rendered tile takes focus', (
   assert.equal(stripFocusAfterHide(fires)?.name, alerts.name);
 });
 
-// Not the Layer legends summary: hiding the last legend-bearing layer hides
-// the whole disclosure, which would drop focus to the page body.
-test('the last live reading in the Brief dock hands focus to the strip, not Layer legends', () => {
-  const summary = el('legends-summary');
-  const dock = el('dock', { query: { '.sidebar-legend-disclosure > summary': summary } });
+// On the map the reading line hides with its last live tile, so the strip
+// would drop focus to the page body; the Key chip in the same window takes it.
+test('the last live reading on the map hands focus to the Key chip', () => {
+  const chip = el('key-chip');
+  const indicator = el('indicator', { query: { '#map-key-details-toggle': chip } });
   const strip = el('strip');
-  const fires = el('fires', { closest: { '.sidebar-bottom-dock': dock, '#conditions-strip': strip } });
+  const fires = el('fires', { closest: { '#map-condition-indicator': indicator, '#conditions-strip': strip } });
   row([fires, el('drought', { rendered: false })]);
-  assert.equal(stripFocusAfterHide(fires)?.name, 'strip');
-  assert.equal(strip.tabIndex, -1);
+  assert.equal(stripFocusAfterHide(fires)?.name, 'key-chip');
+  assert.equal(strip.tabIndex, 0, 'the strip is left alone');
 });
 
 test('outside the dock, a lone tile hands focus to the strip, made focusable', () => {

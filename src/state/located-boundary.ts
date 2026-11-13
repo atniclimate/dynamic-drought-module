@@ -11,9 +11,7 @@
  * viewport's subject, cleared when the briefing closes.
  *
  * It is a highlight, not a data layer: it renders exactly what the search
- * located, as the chosen land area's own heavier line with no fill (visual
- * uniformity D9: a fill hid the hazard class under the place), above the
- * reference layers.
+ * located, in the selected magenta emphasis tone, above the reference layers.
  * No sovereign polygons are bundled; the geometry is fetched live at selection
  * time (exactly the live-not-redistribute posture the BIA layer takes).
  *
@@ -24,12 +22,12 @@
 import type * as maplibregl from 'maplibre-gl';
 import type { Geometry } from 'geojson';
 
-import { RESERVATION_OUTLINE_COLOR, TRIBAL_LINE_COLOR } from '../config/palette';
+import { RESERVATION_FILL_COLOR, RESERVATION_OUTLINE_COLOR } from '../config/palette';
 import { getPlaceSelection, onPlaceSelectionChange } from './place-selection';
 import type { PlaceSelection } from './place-selection';
 
 const SOURCE_ID = 'ddm-located-boundary';
-const EDGE_LAYER_ID = 'ddm-located-boundary-edge';
+const FILL_LAYER_ID = 'ddm-located-boundary-fill';
 const LINE_LAYER_ID = 'ddm-located-boundary-line';
 
 /** The place the shown highlight depicts (null when none is shown). */
@@ -70,26 +68,33 @@ export function showLocatedBoundary(map: maplibregl.Map, geometry: Geometry | nu
   }
   map.addSource(SOURCE_ID, { type: 'geojson', data });
   // Appended above every reference layer (no beforeId) so the located subject
-  // reads over the BIA line and the basemap labels: it is the one thing the
-  // user just asked to see. The widths are bia-reservations.ts's selected pair.
+  // reads over the BIA fill and the basemap labels: it is the one thing the
+  // user just asked to see.
   map.addLayer({
-    id: EDGE_LAYER_ID,
-    type: 'line',
+    id: FILL_LAYER_ID,
+    type: 'fill',
     source: SOURCE_ID,
-    paint: { 'line-color': RESERVATION_OUTLINE_COLOR, 'line-width': 4.6 }
+    paint: {
+      'fill-color': RESERVATION_FILL_COLOR,
+      'fill-opacity': 0.5
+    }
   });
   map.addLayer({
     id: LINE_LAYER_ID,
     type: 'line',
     source: SOURCE_ID,
-    paint: { 'line-color': TRIBAL_LINE_COLOR, 'line-width': 2.6 }
+    paint: {
+      'line-color': RESERVATION_OUTLINE_COLOR,
+      'line-width': 2.6,
+      'line-opacity': 1
+    }
   });
 }
 
 /** Remove the located-boundary highlight. Safe to call when nothing is shown. */
 export function clearLocatedBoundary(map: maplibregl.Map): void {
   shown = null;
-  if (map.getLayer(EDGE_LAYER_ID)) map.removeLayer(EDGE_LAYER_ID);
+  if (map.getLayer(FILL_LAYER_ID)) map.removeLayer(FILL_LAYER_ID);
   if (map.getLayer(LINE_LAYER_ID)) map.removeLayer(LINE_LAYER_ID);
   if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);
 }

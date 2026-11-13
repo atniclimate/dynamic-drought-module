@@ -109,7 +109,8 @@ export interface HazardClusterDef {
    * The horizon an in-session entry into this mode commits (the mode
    * switcher, the minimap ocean door, the phone rail), read only through the
    * cluster service and the rail, never as a mode literal (DR-113). Unset
-   * keeps the held horizon where the mode can show it (DR-190). A shared link
+   * keeps the held horizon where the mode can show it (DR-190; amended
+   * 2026-11-13: Drought, Wildfire and Extreme Heat set Current). A shared link
    * keeps its own `horizon=`, and an absent one means Current.
    */
   readonly entryHorizon?: TemporalHorizonKey;
@@ -193,6 +194,10 @@ export const HAZARD_CLUSTERS: Record<HazardClusterKey, HazardClusterDef> = {
       'weeks-ahead': ['drought'],
       'season-ahead': ['drought']
     },
+    // A move into this mode opens on Current Conditions: a Near Term or Long
+    // Range carried in from another mode showed the CPC outlook in place of the
+    // current drought map (owner's report, 2026-11-13: "drought layers don't load").
+    entryHorizon: 'current',
     placeConditionRow: 'drought',
     // Drought is also the committed mode of every custom layer set (a
     // `layers=` link, the phone hazard rail, a studio choice), which read
@@ -225,6 +230,8 @@ export const HAZARD_CLUSTERS: Record<HazardClusterKey, HazardClusterDef> = {
     // The console's Fuel risk switch (src/ui/fire3d-fuel-risk.ts), and the
     // National Forests outline (owner, 2026-11-12: a Wildfire console option).
     optionalLayers: ['usfs-whp', 'forests'],
+    // Opens on Current Conditions, as Drought does (owner's report, 2026-11-13).
+    entryHorizon: 'current',
     placeConditionRow: 'wildfire-perimeter',
     alerts: HEAT_FIRE_ALERTS
   },
@@ -250,6 +257,8 @@ export const HAZARD_CLUSTERS: Record<HazardClusterKey, HazardClusterDef> = {
     // HeatRisk first (S30D D1 M11): the seven-day point sequence is
     // Heat's one Key drawer section.
     detailSections: ['heatrisk-sequence'],
+    // Opens on Current Conditions, as Drought does (owner's report, 2026-11-13).
+    entryHorizon: 'current',
     // HeatRisk has no verified per-point read (src/ui/popup-conditions.ts),
     // so Heat's place row is the active NWS heat and fire weather products.
     placeConditionRow: 'nws-alerts',

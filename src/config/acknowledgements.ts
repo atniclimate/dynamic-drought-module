@@ -339,14 +339,16 @@ export const ACKNOWLEDGEMENTS: Readonly<Record<AcknowledgementId, Acknowledgemen
       }
     ]
   },
-  // The EIA sentence (cite sheet c04) carries the live reporting period, so
-  // it renders in the power layer's own key while the plants draw
-  // (src/layers/power-3d.ts); this row is the issuer's name.
   // USA Structures 2023 edition (Figshare, CC0; DR-126). Name-only until ddm-cite records a credit sentence.
   'usa-structures': nameOnly(
     'usa-structures',
     'Oak Ridge National Laboratory (ORNL); Federal Emergency Management Agency (FEMA) Geospatial Response Office'
   ),
+  // The EIA sentence (cite sheet c04, ledger eia-power-plants) carries the live
+  // reporting period, which this static table cannot hold, so it renders from
+  // the power layer's own legend (src/layers/power-3d.ts) in the Console legend
+  // and, while the plants draw, in the Impact Briefing's Technical information
+  // (src/ui/map-technical-information.ts); this row is the issuer's name.
   eia: nameOnly('eia', 'U.S. Energy Information Administration'),
   epa: nameOnly('epa', 'U.S. Environmental Protection Agency'),
   aafc: {

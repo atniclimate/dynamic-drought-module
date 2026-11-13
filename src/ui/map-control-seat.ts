@@ -17,7 +17,7 @@
  *
  * The SAME node moves; nothing is cloned or rebuilt, so live content,
  * listeners, control state, and focus survive the move. This is the idiom
- * the desktop Brief shell already uses for the legend
+ * the desktop Brief shell already uses for the conditions strip
  * (src/ui/island/shell.tsx), narrowed to one node and one condition.
  *
  * COOPERATION IS THE HARD PART. The LAYERS studio also rehosts the

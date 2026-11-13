@@ -33,7 +33,7 @@ import {
 } from '../src/impact/matrix';
 import type { HazardCell, Horizon, HorizonKey } from '../src/impact/types';
 import type { ProductKey } from '../src/config/products';
-import { gotoApp, stubSpcFireOutlook } from './helpers';
+import { gotoApp, showFullDetail, stubSpcFireOutlook } from './helpers';
 // M20 (DDM-P7-T10, DR-113): the mode loop below reads HAZARD_CLUSTER_KEYS
 // itself rather than a hardcoded four, and the horizon loop reads the
 // rendered `.shell-horizon-btn` chips through the same crosswalk the shell
@@ -669,6 +669,8 @@ test('D6 CPC high-probability chart preserves the actual 70-percent source claim
   await page.route('**/cpc_8_14_day_outlk/MapServer/*/query?*', route =>
     route.fulfill({ status: 200, contentType: 'application/geo+json', body: collection([]) }));
   await gotoApp(page, '?view=brief&layers=places&select=state:WA');
+  // The chart and its badge are measured on screen: step to the full detail.
+  await showFullDetail(page);
   const cell = cellAt(page, 'nearTerm', 'drought');
   await expect(cell).toContainText(
     'CPC 6-10 day outlook: above-normal temperature (70% odds), below-normal precipitation (40% odds).'
@@ -1155,6 +1157,7 @@ test("the four hazard boxes in every horizon compute equal border, padding and b
   await stubBaselineBriefingHosts(page);
   await stubSpcFireOutlook(page, {});
   await gotoApp(page, '?view=brief&layers=places&select=state:WA');
+  await showFullDetail(page);
 
   const horizons = await renderedHorizonKeys(page);
 
@@ -1205,6 +1208,8 @@ test('the committed-mode row names itself in words and draws no edge line', asyn
   await stubBaselineBriefingHosts(page);
   await stubSpcFireOutlook(page, {});
   await gotoApp(page, '?view=brief&layers=places&select=state:WA');
+  // The marker's visibility is measured: step to the full detail.
+  await showFullDetail(page);
 
   const horizons = await renderedHorizonKeys(page);
 
@@ -1298,6 +1303,7 @@ test('chart label text renders at a fixed CSS size within 1 px at 1280x720, 1440
   ]) {
     await page.setViewportSize(viewport);
     await gotoApp(page, '?view=brief&layers=places&select=state:WA');
+    await showFullDetail(page);
     const chart = page.locator('#impact-panel .impact-claim-chart svg.ddm-chart[aria-label*="DSCI"]').first();
     await expect(chart).toBeVisible({ timeout: 15_000 });
     // Fonts first, outside the read: a read that awaits inside evaluate can

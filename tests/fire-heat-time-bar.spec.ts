@@ -574,6 +574,9 @@ test.describe('DDM-P8-T02: the Wildfire screen has a time control at every horiz
     await page.route((url) => url.href.includes('SPC_firewx/MapServer/1/query'), (route) =>
       route.fulfill({ status: 200, contentType: 'application/geo+json', body })
     );
+    // The Key says "No Risk Areas Forecast today" only for the issuer's own no-area answer still inside its
+    // period (valid Sep 26 12:00 UTC to Sep 27 12:00 UTC in the fixture), so the page clock sits inside it.
+    await page.clock.setFixedTime(new Date('2026-09-26T18:00:00Z'));
     await gotoApp(page, '?view=console&cluster=wildfire&horizon=weeks-ahead');
 
     // One of the six states: the layer's own no-features label, never
@@ -606,13 +609,19 @@ test.describe('DDM-P8-T02: the Wildfire screen has a time control at every horiz
       issuer: 'NOAA SPC Day 1 Fire Weather Outlook'
     });
     expect(stamp.headline).toBe(
-      'Outlook valid Sep 26, 2026, 12:00 UTC to Sep 27, 2026, 12:00 UTC'
+      'No Risk Areas Forecast · valid Sep 26, 2026, 12:00 UTC to Sep 27, 2026, 12:00 UTC'
     );
     expect(stamp.detail).toContain(
       "No Risk Areas Forecast (DDM's reading of the service's no-area response, using SPC's own term for this state from its Day 1 Fire Weather Outlook page)"
     );
     expect(stamp.detail).not.toContain('no fire-weather area is outlined');
     expect(stamp.detail).not.toContain('states no valid period');
+
+    // The key says the same in one row instead of listing three classes the map does not draw
+    // (attached, not visible: the drawer may be closed).
+    const spcKey = page.locator('#map-key [data-spc-fire-weather-key]');
+    await expect(spcKey.locator('[data-spc-no-area]')).toHaveText('No Risk Areas Forecast today');
+    await expect(spcKey.locator('.map-key-item')).toHaveCount(1);
   });
 
   test('a malformed SPC polygon still reads unavailable', async ({ page }) => {
@@ -925,7 +934,7 @@ test.describe('DDM-P8-T02: the Extreme Heat screen has a seven-day time control'
     await expect(page.locator('#shell-time .shell-time-empty')).toHaveCount(0);
     await expect(page.locator('#time-bar .time-bar-stamp-detail')).toContainText('NWS HeatRisk');
     await expect(page.locator('#time-bar .time-bar-stamp-headline')).toContainText('2026');
-    // Console keeps the full rail; only Brief substitutes the compact row.
+    // Console keeps the full rail; the compact row is the Console column's foot and Brief does not draw it.
     await expect(page.locator('#time-bar')).toBeVisible();
   });
 

@@ -127,14 +127,6 @@ test('impactSynthesis none keeps unrelated sources off while independent point h
   await gotoApp(page, '?region=national&layers=states&view=brief');
   expect(new URL(page.url()).searchParams.get('region')).toBe('national');
 
-  await page.locator('#brief-search [data-ddm-search]').fill('kansas');
-  await page
-    .locator(
-      '#brief-search [data-search-kind="place"][data-search-id="KS"]'
-    )
-    .click();
-  await expect(page.locator('#brief-place-name')).toHaveText('Kansas');
-
   await page.route(NWS_PROXY_ROUTE, (route) => {
     const url = new URL(nwsUpstreamUrl(route.request().url()));
     let body: unknown;
@@ -235,8 +227,15 @@ test('impactSynthesis none keeps unrelated sources off while independent point h
     }
   });
 
-  // The chosen place's one briefing door (visual uniformity wave 1, D6).
-  await page.locator('#region-briefing-btn').click();
+  // The pick opens the chosen place's briefing (owner 2026-11-13), so the
+  // routes and the request log above are in place before it.
+  await page.locator('#brief-search [data-ddm-search]').fill('kansas');
+  await page
+    .locator(
+      '#brief-search [data-search-kind="place"][data-search-id="KS"]'
+    )
+    .click();
+  await expect(page.locator('#brief-place-name')).toHaveText('Kansas');
   const panel = page.locator('#impact-panel');
   await expect(panel).toBeVisible();
   await expect(panel.locator('.impact-capability-unavailable')).toContainText(

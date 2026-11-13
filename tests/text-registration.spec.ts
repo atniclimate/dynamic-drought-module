@@ -27,7 +27,7 @@ import { expect, test, type Page } from './offline-test';
 import { KEY_ELIGIBLE_LABELS } from '../src/config/chip-labels';
 import { HAZARD_CLUSTERS, HAZARD_CLUSTER_KEYS } from '../src/config/clusters';
 import { NADM_CATEGORIES, USDM_CATEGORIES } from '../src/config/palette';
-import { awaitQuiescence, gotoApp, stubHeatRiskCatalog, waitForLayerSettled } from './helpers';
+import { awaitQuiescence, gotoApp, showFullDetail, stubHeatRiskCatalog, waitForLayerSettled } from './helpers';
 import {
   describeFindings,
   lineCounts,
@@ -208,12 +208,13 @@ async function chooseMode(page: Page, mode: string): Promise<void> {
 }
 
 /**
- * The Key drawer trigger. Since the Brief strip moved to the sidebar's
- * bottom dock, src/ui/map-key.ts no longer sets `data-key-metric-trigger`,
- * so the Key toggle is the trigger in every view; the metric branch below
- * stays inert unless the attribute returns.
+ * The Key drawer trigger. src/ui/map-key.ts no longer sets
+ * `data-key-metric-trigger`, and since the one box (owner 2026-11-13) the
+ * drought reading is the Key toggle's own title, so the Key toggle is the
+ * trigger in every view; the metric branch below stays inert unless the
+ * attribute returns.
  */
-const DROUGHT_METRIC = '#conditions-strip-dock .conditions-metric[data-metric="drought"][data-layer-on="true"]';
+const DROUGHT_METRIC = '#map-key .map-key-details-toggle:has(.map-key-chip-value)';
 const KEY_TOGGLE = '#map-key .map-key-details-toggle';
 
 interface KeyTriggerState {
@@ -313,10 +314,11 @@ async function closeKeyDrawer(page: Page, where: string): Promise<void> {
 }
 
 /**
- * The drought READING: the docked drought tile on the desktop shell, whose
- * code and category name the design's "D4 Exceptional Drought" case names.
+ * The drought READING: the desktop Key chip's title (owner 2026-11-13, one box), whose
+ * code (`.map-key-chip-value`) and category name (`.map-key-chip-text`) the design's
+ * "D4 Exceptional drought" case names. A class swatch marks a category reading.
  */
-const DROUGHT_READING = '#conditions-strip-dock .conditions-metric[data-metric="drought"]';
+const DROUGHT_READING = '#map-key .map-key-chip-label';
 
 /** Every drought category code and name the reading can show (USDM and NADM share D0 to D4). */
 const DROUGHT_CATEGORIES = [...USDM_CATEGORIES, ...NADM_CATEGORIES]
@@ -350,9 +352,10 @@ interface DroughtReading {
  * the original text restored before the evaluate returns.
  */
 async function readDroughtReading(page: Page, where: string): Promise<DroughtReading> {
-  // A tile still loading has no category yet: wait for its tone to settle.
-  const tile = page.locator(DROUGHT_READING).first();
-  if (await tile.isVisible()) {
+  // A live drought tile still loading has no category yet: wait for the strip's tone to settle
+  // (the strip computes the reading; in Brief it is parked unseen).
+  const tile = page.locator('#conditions-metrics .conditions-metric[data-metric="drought"][data-layer-on="true"]').first();
+  if ((await tile.count()) > 0) {
     await expect
       .poll(async () => (await tile.getAttribute('data-tone')) ?? '', {
         timeout: 15_000,
@@ -364,17 +367,18 @@ async function readDroughtReading(page: Page, where: string): Promise<DroughtRea
     ([sel, categories]) => {
       const none = (why: string, tone: string) => ({ rendered: false, why, tone, code: '', label: '', lines: [] });
       const tile = document.querySelector<HTMLElement>(sel);
-      if (!tile) return none('no tile', '(none)');
-      const tone = tile.dataset.tone ?? '(unset)';
+      if (!tile) return none('no chip label', '(none)');
+      // A class swatch marks a category reading; a bare value is a count or a change span.
+      const tone = tile.querySelector('.map-key-chip-swatch') ? 'data' : tile.querySelector('.map-key-chip-value') ? 'value' : 'none';
       const probe = tile as HTMLElement & { checkVisibility?: (options?: object) => boolean };
       if (
         tile.getClientRects().length === 0 ||
         (typeof probe.checkVisibility === 'function' && !probe.checkVisibility({ checkVisibilityCSS: true }))
       ) {
-        return none('tile hidden', tone);
+        return none('chip label hidden', tone);
       }
-      const value = tile.querySelector<HTMLElement>('.conditions-value');
-      const sub = tile.querySelector<HTMLElement>('.conditions-sublabel');
+      const value = tile.querySelector<HTMLElement>('.map-key-chip-value');
+      const sub = tile.querySelector<HTMLElement>('.map-key-chip-text');
       const ownText = (el: HTMLElement | null): Text | null =>
         el
           ? ((Array.from(el.childNodes).find((n) => n.nodeType === Node.TEXT_NODE && (n.textContent ?? '').trim() !== '') as
@@ -542,6 +546,8 @@ for (const viewport of VIEWPORTS) {
       // The briefing for WA (DR-109).
       await gotoApp(page, '?view=brief&layers=places&select=state:WA&region=washington_state');
       await expect(page.locator('#impact-panel')).toBeVisible({ timeout: 15_000 });
+      // The scan reads visible text only: step to the full detail so the matrix is scanned too.
+      await showFullDetail(page);
       await expect(page.locator('.impact-horizons .impact-hazard').first()).toBeVisible();
       await settle(page);
       await scan('WA briefing', ['#impact-panel']);
@@ -625,13 +631,14 @@ for (const viewport of VIEWPORTS) {
           if (!el || !rendered) {
             return { hiddenByDesign, rendered: false, width: el ? el.clientWidth : -1, overflow: [] as string[] };
           }
-          const original = el.textContent;
+          // The desktop label holds parts (swatch, value, text, tag): restore the nodes, not the text.
+          const original = Array.from(el.childNodes);
           const overflow: string[] = [];
           for (const text of labels) {
             el.textContent = text;
             if (el.scrollWidth > el.clientWidth + 0.5) overflow.push(`"${text}" ${el.scrollWidth} > ${el.clientWidth}`);
           }
-          el.textContent = original;
+          el.replaceChildren(...original);
           return { hiddenByDesign, rendered: true, width: el.clientWidth, overflow };
         }, words);
         if (chip.rendered) {
@@ -643,9 +650,9 @@ for (const viewport of VIEWPORTS) {
       };
 
       // "The drought reading is 'D4 Exceptional Drought' on one line" (design
-      // record section 5 "Fit"): the READING is the docked drought tile, its
-      // code (`.conditions-value`) beside its category name
-      // (`.conditions-sublabel`); the Key drawer shows code chips only. Read
+      // record section 5 "Fit"): the READING is the Key chip's title (one box,
+      // owner 2026-11-13), its code (`.map-key-chip-value`) beside its category
+      // name (`.map-key-chip-text`); the Key drawer shows code chips only. Read
       // in every view and mode where the tile renders: the category it draws
       // as it is, then every palette category (D4 among them) set into the
       // same two text nodes and restored in the same evaluate, as the chip
@@ -709,7 +716,7 @@ for (const viewport of VIEWPORTS) {
       const categoryReadings = readings.filter((r) => r.rendered && r.tone === 'data');
       expect(
         categoryReadings.length,
-        `the docked drought reading (${DROUGHT_READING}) rendered a category in no view and mode:\n${seen.join('\n')}`
+        `the Key chip's drought reading (${DROUGHT_READING}) rendered a category in no view and mode:\n${seen.join('\n')}`
       ).toBeGreaterThan(0);
       const unpaired = categoryReadings.filter(
         (r) => !DROUGHT_CATEGORIES.some((c) => c.code === r.code && c.label.toLowerCase() === r.label.toLowerCase())

@@ -470,12 +470,15 @@ test.describe('E2-1 flowing paths in ENSO mode', () => {
   });
 
   test('an all-land wave view reads no data, never calm', async ({ page }) => {
-    await page.setViewportSize({ width: 1280, height: 800 });
+    // 1920 wide: the deep link opens the briefing, which now stands left of the map-button column, so at 1280 the
+    // framed view of Utah reached past the fixture's crop and read "outside the area" (honestly); at 1920 the
+    // view is about 114.3 W to 102.1 W and 35.3 N to 43.7 N, inside the crop below.
+    await page.setViewportSize({ width: 1920, height: 1080 });
     await page.clock.setFixedTime(LIVE_CLOCK);
     await stubSst(page);
     // Utah, framed by the state deep link: every GFS-Wave node in view is masked
     // (decoded in Node, the fixture's crop holds no water node from 118 W to
-    // 100.5 W and 34.5 N to 44 N, which contains this view with room to spare).
+    // 100.5 W and 34.5 N to 44 N, which contains this view).
     await gotoApp(page, '?cluster=enso&select=state:UT&flow=waves');
     await expect(panel(page)).toHaveAttribute('data-status', 'no data');
     await expect(panel(page)).toHaveAttribute('data-flow-form', 'none');

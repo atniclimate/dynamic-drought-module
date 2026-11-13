@@ -67,21 +67,22 @@ test.describe('UX-3 conditions strip', () => {
       await gotoApp(page, '?view=brief&layers=nadm-drought&basemap=satellite', { bootIdle: false });
       await expect.poll(() => droughtRequested).toBe(true);
       await expect.poll(() => heldSatelliteTiles).toBeGreaterThan(0);
-      // Desktop Brief seats the strip in the sidebar's bottom dock, off the
-      // map, so the map's read-glass backing and inks no longer apply to it.
+      // Desktop Brief parks the strip unseen; the Key chip carries its lead reading (owner 2026-11-13, one box).
       const drought = page.locator('#conditions-strip-dock .conditions-metric[data-metric="drought"]');
+      const chipLabel = page.locator('#map-key .map-key-chip-label');
       // The real held source, not a manufactured status class.
       await expect(drought).toHaveAttribute('data-tone', 'loading');
+      await expect(chipLabel.locator('.map-key-chip-value')).toHaveCount(0);
       releaseDrought();
       await expect(drought).toHaveAttribute('data-tone', 'data');
-      await expect(drought.locator('.conditions-value')).toHaveText('D3');
-      await expect(drought.locator('.conditions-value')).toHaveCSS('font-family', /^"?DDM Heros"?,/);
-      await expect(drought.locator('.conditions-value')).toHaveCSS('font-variant-numeric', /^(?:lining-nums tabular-nums|tabular-nums lining-nums)$/);
-      await expect(drought.locator('.conditions-sublabel')).toContainText('Extreme drought');
-      await expect(drought).toHaveCSS('opacity', '1');
+      await expect(chipLabel.locator('.map-key-chip-value')).toHaveText('D3');
+      await expect(chipLabel.locator('.map-key-chip-value')).toHaveCSS('font-variant-numeric', /^(?:lining-nums tabular-nums|tabular-nums lining-nums)$/);
+      // The issuer's own words, in its own case.
+      await expect(chipLabel.locator('.map-key-chip-text')).toHaveText('Extreme drought');
+      await expect(page.locator('#map-key-details-toggle')).toHaveAttribute('aria-label', /^D3 Extreme drought in view\. (Reading is stale\. )?Open /);
       // No satellite response has been released: this read must follow the
       // drought source's render, rather than depend on whole-map idle.
-      await expect(drought).not.toContainText('No polygon');
+      await expect(chipLabel).not.toContainText('No polygon');
     } finally {
       releaseDrought();
       releaseSatellite();
@@ -94,7 +95,9 @@ test.describe('UX-3 conditions strip', () => {
     await gotoApp(page);
 
     const strip = page.locator('#conditions-strip');
-    await expect(strip).toBeVisible();
+    // Desktop Brief parks the strip unseen; it still computes the Key chip's reading.
+    await expect(strip).toBeAttached();
+    await expect(strip).toBeHidden();
 
     // The two event layers are off by default, so only the drought tile
     // renders; the retired "Layer off / Show" cards never appear.
@@ -102,32 +105,45 @@ test.describe('UX-3 conditions strip', () => {
     await expect(tiles).toHaveCount(1);
     await expect(tiles.nth(0)).toHaveAttribute('data-metric', 'drought');
 
-    // Desktop Brief moves the original strip to the sidebar's bottom dock,
-    // above Layer legends. Its title shows there, while the valid-date slot
-    // and the one metric root stay on the same node.
-    await expect(page.locator('#conditions-strip-dock > #conditions-strip')).toHaveCount(1);
-    await expect(page.locator('.sidebar-bottom-dock #conditions-strip')).toHaveCount(1);
-    await expect(page.locator('#map-condition-indicator #conditions-strip')).toHaveCount(0);
+    // Desktop Brief parks the original strip in the floating window's dock,
+    // unseen (owner 2026-11-13, one box): the Key chip carries its lead reading.
+    // The valid-date slot and the one metric root stay on the same node.
+    await expect(page.locator('#map-condition-indicator #conditions-strip-dock > #conditions-strip')).toHaveCount(1);
+    await expect(page.locator('#map-key-overlay-host + #conditions-strip-dock')).toHaveCount(1);
     // One region carries the name: the shell summary names the display instead.
     await expect(page.locator('#shell-conditions-heading')).toHaveText('Display summary');
-    await expect(page.getByRole('region', { name: 'Conditions in view', exact: true })).toHaveCount(1);
-    await expect(strip.locator('.conditions-title')).toBeVisible();
+    // The strip is parked under a display:none dock, so no role query can see it: uniqueness is structural,
+    // and the visible Key's accessible name is asserted on its own.
+    await expect(page.locator('[aria-label="Conditions in view"]')).toHaveCount(1);
+    await expect(page.locator('#conditions-strip')).toHaveAttribute('aria-label', 'Conditions in view');
+    await expect(page.getByRole('button', { name: /^(D\d|No polygon)[^.]* in view\. (Reading is stale\. )?(Open|Close) / })).toHaveCount(1);
+    await expect(strip.locator('.conditions-title')).toBeHidden();
     await expect(strip.locator('#conditions-date')).toBeAttached();
+    // The bottom Layer legends is gone (owner 2026-11-13, item 13); the Key carries the legend.
+    await expect(page.locator('#legend-panel')).toBeHidden();
 
     await waitForLayerSettled(page, 'nadm-drought');
     const drought = tiles.nth(0);
     await expect(drought).toHaveAttribute('data-tone', 'data');
-    const oneLine = await drought.evaluate((tile) => {
-      const value = tile.querySelector<HTMLElement>('.conditions-value');
-      const label = tile.querySelector<HTMLElement>('.conditions-sublabel');
-      if (!value || !label) return false;
+    // One box: the chip's title is the reading, on one line, and nothing sits under it.
+    const chipLabel = page.locator('#map-key .map-key-chip-label');
+    await expect(chipLabel.locator('.map-key-chip-value')).toHaveText(/^D\d$/);
+    const oneLine = await chipLabel.evaluate((label) => {
+      const value = label.querySelector<HTMLElement>('.map-key-chip-value');
+      const text = label.querySelector<HTMLElement>('.map-key-chip-text');
+      if (!value || !text) return false;
       const valueRect = value.getBoundingClientRect();
-      const labelRect = label.getBoundingClientRect();
-      return valueRect.bottom >= labelRect.top && labelRect.bottom >= valueRect.top;
+      const textRect = text.getBoundingClientRect();
+      return valueRect.bottom >= textRect.top && textRect.bottom >= valueRect.top;
     });
     expect(oneLine).toBe(true);
-    await expect(drought.locator('.conditions-sublabel')).not.toContainText('in view');
-    await expect(drought).toHaveAttribute('aria-label', /in view/i);
+    await expect(chipLabel.locator('.map-key-chip-text')).not.toContainText('in view');
+    await expect(page.locator('#map-key-details-toggle')).toHaveAttribute('aria-label', /^D\d [^.]+ in view\. (Reading is stale\. )?Open /);
+    await expect(page.locator('#conditions-strip-dock')).toBeHidden();
+    const chip = await page.locator('#map-key').boundingBox();
+    expect(chip).not.toBeNull();
+    expect(chip!.width).toBeCloseTo(288, 0);
+    expect([40, 44]).toContain(Math.round(chip!.height));
 
     await page.locator('.view-switch [data-view="console"]').click();
     await expect(page.locator('#conditions-strip-home + #conditions-strip')).toHaveCount(1);
@@ -159,16 +175,28 @@ test.describe('UX-3 conditions strip', () => {
       .not.toBe('US Drought Monitor');
   });
 
-  test('desktop Brief keeps the full categorical legend behind Layer legends', async ({
-    page
-  }) => {
-    await gotoApp(page);
-    await waitForLayerSettled(page, 'nadm-drought');
-    const key = page.locator('.sidebar-legend-disclosure > summary');
-    await expect(key).toBeVisible();
-    await expect(page.locator('#sidebar-key-host > #legend-panel')).toBeHidden();
-    await key.click();
-    await expect(page.locator('#sidebar-key-host > #legend-panel')).toBeVisible();
+  // Owner item 9 (2026-11-13): "clicking 'Conditions in View' in Wildfire mode
+  // makes information disappear". The mode's own Fires reading used to be a
+  // Hide button that switched the mode's main layer off. In desktop Brief the
+  // reading is now the Key chip's title (one box), and a press only opens the Key.
+  test('the Fires reading in Wildfire opens the Key and never switches its layer off', async ({ page }) => {
+    await gotoApp(page, '?cluster=wildfire&view=brief');
+    await waitForLayerSettled(page, 'nifc-fires');
+    const toggle = page.locator('#map-key-details-toggle');
+    await expect(toggle.locator('.map-key-chip-text')).toContainText('mapped wildfire perimeter');
+    await expect(toggle.locator('.map-key-chip-value')).toHaveText(/^\d+$/);
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await expect(toggle).toHaveAttribute('aria-label', /^\d+ mapped wildfire perimeters? in view\. Open .+ details and key$/);
+    const beforeUrl = page.url();
+
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.locator('#map-key-content')).toBeVisible();
+    expect(page.url()).toBe(beforeUrl);
+    await expect(toggle.locator('.map-key-chip-text')).toContainText('mapped wildfire perimeter');
+    await expect(page.locator('.conditions-metric[data-metric="fires"]')).toHaveAttribute('data-layer-on', 'true');
+    await expect(layerPill(page, 'nifc-fires')).toHaveText(PILL.live);
+    await expect(page.locator('.shell-cluster-btn[data-cluster="wildfire"]')).toHaveAttribute('aria-pressed', 'true');
   });
 
   test('the fires tile appears and reflects the wildfire layer once it is on', async ({
@@ -215,7 +243,7 @@ test.describe('UX-3 conditions strip', () => {
     await expect(fires).toHaveAttribute('data-tone', 'none');
     await expect(fires).toHaveAttribute(
       'aria-label',
-      /^0 mapped wildfire perimeters in view\. Current Mapped Fire Perimeters/
+      /^0 mapped wildfire perimeters in view\. Open Current Mapped Fire Perimeters/
     );
   });
 
@@ -477,12 +505,9 @@ test.describe('the drought tile swatch (D1 M10)', () => {
     page
   }) => {
     // `region=` and `layers=` alone derive CONSOLE (src/state/view-mode.ts,
-    // the legacy-URL rule): the swatch this test checks is scoped to the
-    // desktop Brief rehost (`#conditions-strip-dock`, the sidebar's bottom
-    // dock, hazard-indicators.css), which never applies in Console.
-    // `view=brief` is explicit so the docked tile, not the Console home copy,
-    // is what gets measured (repair round on M10; predicted red without it:
-    // "element(s) not found", since the node never moves into the dock).
+    // the legacy-URL rule); `view=brief` is explicit so the desktop Key chip
+    // that carries the lead reading in Brief (owner 2026-11-13, one box) is
+    // what gets measured.
     await page.route('**/USDM_current/**', (route) =>
       route.fulfill({
         status: 200,
@@ -504,14 +529,16 @@ test.describe('the drought tile swatch (D1 M10)', () => {
     await expect(layerPill(page, 'usdm')).toHaveText(PILL.live);
     await expect(layerCheckbox(page, 'usdm')).toBeChecked();
     await expect.poll(async () => (await urlLayers(page)).has('usdm')).toBe(true);
-    const drought = page.locator('#conditions-strip-dock .conditions-metric[data-metric="drought"]');
-    await expect(drought.locator('.conditions-value')).toHaveText('D3');
-    const swatch = drought.locator('.conditions-swatch');
+    const chipLabel = page.locator('#map-key .map-key-chip-label');
+    await expect(chipLabel.locator('.map-key-chip-value')).toHaveText('D3');
+    const swatch = chipLabel.locator('.map-key-chip-swatch');
     await expect(swatch).toBeVisible();
+    const box = await swatch.boundingBox();
+    expect(box && Math.round(box.width)).toBe(10);
     const bg = await swatch.evaluate((el) => getComputedStyle(el).backgroundColor);
     expect(bg, 'the swatch carries the class colour as a fill').not.toBe('rgba(0, 0, 0, 0)');
-    const valueColor = await drought
-      .locator('.conditions-value')
+    const valueColor = await chipLabel
+      .locator('.map-key-chip-value')
       .evaluate((el) => getComputedStyle(el).color);
     expect(valueColor, 'the value text itself is no longer classed').not.toBe(bg);
   });
@@ -555,8 +582,9 @@ test.describe('found-008: Conditions in view offers only the current mode\'s sur
       // is not this mode's own recipe: no "Layer off. Press to show." drought
       // chip is offered here.
       await expect(page.locator('.conditions-metric[data-metric="drought"]')).toHaveCount(0);
-      // The strip never collapses: a tile or the one status line holds its seat.
-      await expect.poll(() => page.locator('#conditions-metrics > :is(.conditions-metric, .conditions-empty):visible').count()).toBeGreaterThan(0);
+      // The strip has rendered, so the count above tests something. In Brief the
+      // strip is parked unseen (the Key chip carries its reading), so presence, not visibility.
+      await expect.poll(() => page.locator('#conditions-metrics > :is(.conditions-metric, .conditions-empty)').count()).toBeGreaterThan(0);
     });
 
     // Audit round 3: a custom set reads the person's hazard, never the store's Drought.

@@ -227,16 +227,19 @@ export const REFERENCE_BOUNDARY_IDS: readonly string[] = [
   'forests-outline',
   'us-states-fill',
   'us-states-casing',
+  // The coast (src/layers/states.ts COASTS): land edge, then the Great Lakes' water edge; casings under lines.
+  'us-coast-casing',
+  'us-coast-lakes-casing',
   'us-states-outline',
+  'us-coast-outline',
+  'us-coast-lakes-outline',
   'us-states-selected',
   'tribal-lands-fill',
   'tribal-lands-outline',
   'aiannh-fill',
   'aiannh-outline',
-  'aiannh-outline-core',
   'bia-reservations-fill',
   'bia-reservations-outline',
-  'bia-reservations-outline-core',
   'treaty-areas-outline'
 ];
 

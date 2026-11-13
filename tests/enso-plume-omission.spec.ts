@@ -1,6 +1,6 @@
 import { test, expect } from './offline-test';
 import { execFileSync } from 'node:child_process';
-import { gotoApp } from './helpers';
+import { gotoApp, showFullDetail } from './helpers';
 
 /**
  * ENSO plume omission (0.8.0 T-P0-1). The CPC probabilistic-outlook plume was
@@ -61,6 +61,7 @@ test.describe('ENSO plume omission (indices-only snapshot)', () => {
 
     const panel = page.locator('#impact-panel');
     await expect(panel).toBeVisible({ timeout: 15_000 });
+    await showFullDetail(page);
 
     // The observed-index ENSO claim renders (the honest surviving surface).
     const ensoClaim = panel.locator('.impact-claim', {

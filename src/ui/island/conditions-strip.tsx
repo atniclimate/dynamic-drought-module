@@ -1,12 +1,16 @@
 /**
  * Live readings computed from the rendered map by `strip-metrics`.
- * The active drought reading opens its details and key without changing the
- * condition surface. This prevents a category readout from acting as an
- * unexpected layer-off control. Off drought and event tiles in Console
- * retain their explicit layer actions through the shared toggle command.
+ * A live reading of the active mode's own layer (the drought surface, the
+ * Wildfire fires, the Heat alerts) opens the map key without changing the
+ * condition surface, so a readout never acts as an unexpected layer-off
+ * control (owner item 9, 2026-11-13). A failed tile keeps Retry; off tiles
+ * and extras outside the mode keep their explicit layer actions through the
+ * shared toggle command.
  *
- * The same strip node seats in the Brief sidebar's bottom dock and in the
- * Console sidebar below the hazard buttons.
+ * The strip publishes the mode's own lead reading (conditions-headline.ts),
+ * which the desktop Key chip shows as its title (owner 2026-11-13, one box).
+ * In desktop Brief the strip node is parked unseen in the map's dock so it
+ * keeps computing; Console shows it in the sidebar below the hazard buttons.
  * Source status, historical-week dates, and stale flags stay authoritative.
  */
 
@@ -29,6 +33,7 @@ import {
 } from './strip-metrics';
 import type { Metric } from './strip-metrics';
 import { stripFocusAfterHide } from './strip-focus';
+import { setConditionsHeadline } from '../../state/conditions-headline';
 
 /**
  * The tile-to-layer mapping. `disclose` marks the drought tile's
@@ -51,11 +56,15 @@ const TILE_LAYER: Record<string, { key: string; disclose: boolean }> = {
  */
 const DROUGHT_FAMILY_KEYS: readonly string[] = ['nadm-drought', 'drought', 'usdm'];
 
-function clusterOffersDroughtFamily(clusterKey: HazardClusterKey): boolean {
-  const recipes = HAZARD_CLUSTERS[clusterKey].recipes;
-  return Object.values(recipes).some((recipe) =>
-    recipe.some((key) => DROUGHT_FAMILY_KEYS.includes(key))
+/** Whether any horizon recipe of the mode draws `layerKey` (enumerated from HAZARD_CLUSTERS, DR-113). */
+function clusterOffersLayer(clusterKey: HazardClusterKey, layerKey: string): boolean {
+  return Object.values(HAZARD_CLUSTERS[clusterKey].recipes).some((recipe) =>
+    recipe.some((key) => key === layerKey)
   );
+}
+
+function clusterOffersDroughtFamily(clusterKey: HazardClusterKey): boolean {
+  return DROUGHT_FAMILY_KEYS.some((key) => clusterOffersLayer(clusterKey, key));
 }
 
 /**
@@ -65,23 +74,20 @@ function clusterOffersDroughtFamily(clusterKey: HazardClusterKey): boolean {
  * state ("Show") and accessible-plus-hover elsewhere, so the strip
  * still reads as a summary first, not a second catalog.
  */
-function tileAriaLabel(name: string, m: Metric, isOn: boolean, disclose: boolean, retries: boolean): string {
-  let status: string;
+function tileStatus(name: string, m: Metric): string {
   // A count reads as one phrase ("0 mapped wildfire perimeters in view"); only
   // a word value ("No polygon, no NADM category polygon...") takes the comma.
-  if (m.tone === 'data' || /^\d+$/.test(m.value)) {
-    status = `${m.value} ${m.sublabel}.`;
-  } else if (m.tone === 'none') {
-    status = `${m.value}, ${m.sublabel}.`;
-  } else if (m.tone === 'loading') {
-    status = `${name} loading.`;
-  } else if (m.value === 'Layer off') {
-    status = `${name} layer off.`;
-  } else {
-    // The pending tile: an honest canonical status word ("unavailable",
-    // "no data", "zoom in to load", "live (partial)").
-    status = `${name} ${m.sublabel}.`;
-  }
+  if (m.tone === 'data' || /^\d+$/.test(m.value)) return `${m.value} ${m.sublabel}.`;
+  if (m.tone === 'none') return `${m.value}, ${m.sublabel}.`;
+  if (m.tone === 'loading') return `${name} loading.`;
+  if (m.value === 'Layer off') return `${name} layer off.`;
+  // The pending tile: an honest canonical status word ("unavailable",
+  // "no data", "zoom in to load", "live (partial)").
+  return `${name} ${m.sublabel}.`;
+}
+
+function tileAriaLabel(name: string, m: Metric, isOn: boolean, disclose: boolean, retries: boolean): string {
+  const status = tileStatus(name, m);
   const stale = m.stale ? ' Reading is stale.' : '';
   // DRAFT wording (DR-177): "Press to retry." names the failed checked tile's action.
   const action = retries ? ' Press to retry.' : isOn
@@ -96,19 +102,24 @@ function MetricTile({
   id,
   m,
   isOn,
-  tile
+  tile,
+  inMode
 }: {
   id: string;
   m: Metric;
   isOn: boolean;
   tile: { key: string; disclose: boolean };
+  /** The active mode's own recipe draws this layer, so its live tile opens the key. */
+  inMode: boolean;
 }) {
   const name = getLayerDef(tile.key)?.name ?? tile.key;
-  const showsDetails = id === 'drought' && isOn;
-  const retries = !showsDetails && isFailedCheckedLayer(tile.key);
+  const retries = !(id === 'drought' && isOn) && isFailedCheckedLayer(tile.key);
+  const showsDetails = isOn && !retries && (id === 'drought' || inMode);
+  const keyNoun = id === 'drought' ? 'drought' : name;
   // DRAFT wording (DR-177): failed checked tile action "Retry" and title "Retry {layer name}".
   const action = retries ? 'Retry' : 'Hide';
-  const [detailsOpen, setDetailsOpen] = useState(false);
+  // A tile mounted while the Key is already open (a layer just turned on) reads it.
+  const [detailsOpen, setDetailsOpen] = useState(() => document.getElementById('map-key')?.dataset['keyDetailsOpen'] === 'true');
   useEffect(() => {
     const update = (event: Event): void => {
       setDetailsOpen(Boolean((event as CustomEvent<{ open: boolean }>).detail?.open));
@@ -145,11 +156,11 @@ function MetricTile({
       aria-expanded={showsDetails ? detailsOpen : undefined}
       aria-controls={showsDetails ? 'map-key-content' : undefined}
       aria-label={showsDetails
-        ? `${m.value} ${m.sublabel}.${m.stale ? ' Reading is stale.' : ''} ${detailsOpen ? 'Close' : 'Open'} drought details and key.`
+        ? `${tileStatus(name, m)}${m.stale ? ' Reading is stale.' : ''} ${detailsOpen ? 'Close' : 'Open'} ${keyNoun} details and key.`
         : tileAriaLabel(name, m, isOn, tile.disclose, retries)}
       title={
         showsDetails
-          ? 'Drought details and key'
+          ? `${id === 'drought' ? 'Drought' : name} details and key`
           : isOn
           ? `${action} ${name}`
           : tile.disclose
@@ -176,8 +187,8 @@ function MetricTile({
         {m.stale ? <span class="conditions-stale-tag">stale</span> : null}
       </span>
       {!isOn && m.tone === 'off' ? <span class="conditions-action">Show</span> : null}
-      {/* Name the action visibly: active drought opens the key; event tiles
-          retry failed activation or hide their active layer. */}
+      {/* Name the action visibly: a live in-mode reading opens the key; other
+          tiles retry failed activation or hide their active layer. */}
       {isOn && m.tone !== 'loading' ? (
         <span class="conditions-action conditions-action-hide">{showsDetails ? 'Key' : action}</span>
       ) : null}
@@ -270,7 +281,7 @@ export function ConditionsStrip({ map, tick, checked }: StripProps) {
   // off state; the drought tile is the strip's identity), but the two event
   // tiles render only while their layers are ON; turning a layer on (the
   // catalog today, the cluster buttons at S4) brings its tile back as the
-  // live reading plus the hide action.
+  // live reading plus its action.
   const alertsOn = isOn('alerts');
   const firesOn = isOn('fires');
   // W2-D10: in a non-drought view the strip leads with the ACTIVE hazard's
@@ -288,16 +299,37 @@ export function ConditionsStrip({ map, tick, checked }: StripProps) {
   // never hides a layer that is actually drawing.
   const droughtInMode = droughtOn || clusterOffersDroughtFamily(cluster);
   const droughtTileNode = droughtInMode ? (
-    <MetricTile id="drought" m={droughtTile} isOn={droughtOn} tile={droughtLayer} />
+    <MetricTile key="drought" id="drought" m={droughtTile} isOn={droughtOn} tile={droughtLayer} inMode />
   ) : null;
+  const eventTile = (id: 'alerts' | 'fires', m: Metric) => (
+    <MetricTile key={id} id={id} m={m} isOn tile={TILE_LAYER[id]!} inMode={clusterOffersLayer(cluster, TILE_LAYER[id]!.key)} />
+  );
+  // The mode's OWN readings lead and any other live layer follows, so the Key chip's title (the first, when it is
+  // the mode's own) never names another mode's reading: a Wildfire view with Alerts added leads with its fires.
+  const live = [
+    droughtOn ? { own: clusterOffersDroughtFamily(cluster), node: droughtTileNode, m: droughtTile, key: droughtLayer.key } : null,
+    alertsOn ? { own: clusterOffersLayer(cluster, TILE_LAYER.alerts!.key), node: eventTile('alerts', alerts), m: alerts, key: TILE_LAYER.alerts!.key } : null,
+    firesOn ? { own: clusterOffersLayer(cluster, TILE_LAYER.fires!.key), node: eventTile('fires', fires), m: fires, key: TILE_LAYER.fires!.key } : null
+  ].filter((tile): tile is NonNullable<typeof tile> => tile !== null);
+  const ordered = [...live.filter((tile) => tile.own), ...live.filter((tile) => !tile.own)];
+  const first = ordered[0];
+  const lead = first?.own && (first.m.tone === 'data' || first.m.tone === 'none') ? first : null;
+  // Every render; the store drops an unchanged reading.
+  useEffect(() => setConditionsHeadline(lead ? {
+    value: lead.m.value,
+    sublabel: lead.m.sublabel,
+    ...(lead.m.color ? { color: lead.m.color } : {}),
+    stale: Boolean(lead.m.stale),
+    tone: lead.m.tone as 'data' | 'none',
+    aria: tileStatus(getLayerDef(lead.key)?.name ?? lead.key, lead.m) + (lead.m.stale ? ' Reading is stale.' : '')
+  } : null));
+  useEffect(() => () => setConditionsHeadline(null), []);
   return (
     <>
-      {droughtOn ? droughtTileNode : null}
-      {alertsOn ? <MetricTile id="alerts" m={alerts} isOn={alertsOn} tile={TILE_LAYER.alerts!} /> : null}
-      {firesOn ? <MetricTile id="fires" m={fires} isOn={firesOn} tile={TILE_LAYER.fires!} /> : null}
+      {ordered.map((tile) => tile.node)}
       {!droughtOn ? droughtTileNode : null}
       {/* Last, so the stylesheet shows it only while no tile is shown (an ENSO
-          view; a Brief dock whose only tile is off) and the seat never collapses. */}
+          view in Console). */}
       {/* DRAFT wording (DR-177) */}
       <p class="conditions-empty">No readings for this view</p>
     </>

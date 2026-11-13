@@ -109,6 +109,8 @@ test('a city chosen from any search host leaves the menu on Selected place', () 
     window: { dispatchEvent: (event) => { if (event.type === 'ddm:city-view') h.noteViewLeftRegion(); } },
     nextBriefingIntent: () => 0,
     setPlaceSelection: () => {},
+    openContainingStateBriefing: () => {},
+    briefingCameraPadding: () => ({ top: 40, left: 40, bottom: 40, right: 480 }),
     cityCoords: new Map([['seattle', [-122.33, 47.61]]])
   };
   const selectResult = new Function(

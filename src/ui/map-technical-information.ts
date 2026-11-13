@@ -4,6 +4,7 @@ import { WHP_3D_SHADE_QUALIFICATION } from '../config/whp-shade';
 import { HMS_OVERVIEW_QUALIFICATION, NIFC_PERIMETER_TECHNICAL_NOTE } from '../config/wildfire-presentation';
 import { escapeHtml } from '../util/escape';
 import { clusterHorizonReason } from './horizon-reason';
+import { getActiveLegends, onLegendChange } from './legend-registry';
 
 type Overview = 'drought' | 'wildfire' | 'fire3d';
 type PlantStress = import('../layers/wildfire-dryness').DrynessBriefing | null;
@@ -203,7 +204,49 @@ export function renderMapTechnicalInformation(open = false, leadHtml = ''): stri
     <div id="impact-technical-satellite">${satelliteHtml()}</div>
     <h4>Time horizon</h4>
     ${horizonReasonsHtml()}
+    <div id="impact-technical-layer-notes">${layerNotesHtml()}</div>
   </details>`;
+}
+
+/**
+ * Legend sections whose notes this briefing already carries above (the NWS products
+ * note, the GHRSST paragraph and the 3D Wildfire hazard shade qualification), so
+ * they are not read out twice.
+ */
+const NOTES_CARRIED_ABOVE: ReadonlySet<string> = new Set(['nws-alerts', 'sst-anomaly', 'whp-2023']);
+
+// A layer can come or go while the briefing is open (phone sheet, desktop drawer, a late load): refresh in place.
+onLegendChange(() => {
+  const node = typeof document === 'undefined' ? null : document.getElementById('impact-technical-layer-notes');
+  if (node) node.innerHTML = layerNotesHtml();
+});
+const LEGEND_NOTE = /<p class="([^"]*\blegend-note\b[^"]*)"[^>]*>([\s\S]*?)<\/p>/g;
+const LEGEND_TITLE = /<h3 class="legend-section-title">([\s\S]*?)<\/h3>/;
+
+/**
+ * The notes, qualifications and credits of the layers on the map. The one-box Key
+ * leaves every `.legend-note` out (src/ui/map-key.ts), so they read here: each
+ * shown legend section is rendered by its own builder (src/ui/legend-registry.ts),
+ * so no sentence is retyped and a layer added later is covered. The RAWS notice
+ * (`legend-ddm-notice`) stays in Acknowledgements, where DR-159 puts it; ids are
+ * dropped so the copy never doubles one in the legend panel.
+ */
+function layerNotesHtml(): string {
+  if (typeof document === 'undefined') return '';
+  const blocks: string[] = [];
+  for (const { key, spec } of getActiveLegends()) {
+    if (NOTES_CARRIED_ABOVE.has(key)) continue;
+    const body = document.createElement('div');
+    spec.render(body);
+    const html = body.innerHTML;
+    const notes = [...html.matchAll(LEGEND_NOTE)]
+      .filter(([, classes]) => !classes!.includes('legend-ddm-notice'))
+      .map(([, , inner]) => inner!.replace(/ id="[^"]*"/g, ''));
+    if (notes.length === 0) continue;
+    const title = LEGEND_TITLE.exec(html)?.[1];
+    blocks.push(notes.map((note, index) => `<p>${index === 0 && title ? `<strong>${title}.</strong> ` : ''}${note}</p>`).join(''));
+  }
+  return blocks.length ? `<h4>Notes for the layers on the map</h4>${blocks.join('')}` : '';
 }
 
 /** Each mode's disabled-chip reasons, which left the sidebar for here (the chips keep them as their titles). */

@@ -1,7 +1,7 @@
 import { test, expect, type Page } from './offline-test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { gotoApp } from './helpers';
+import { gotoApp, showFullDetail } from './helpers';
 
 const SNAPSHOT_PATH = join(process.cwd(), 'public', 'data', 'enso-indices.json');
 
@@ -180,6 +180,7 @@ test.describe('ENSO observed-state repair', () => {
 
     const panel = page.locator('#impact-panel');
     await expect(panel).toBeVisible({ timeout: 15_000 });
+    await showFullDetail(page);
     const derived = panel.locator('.impact-claim-derived', {
       hasText: 'operational RONI'
     });
@@ -243,6 +244,7 @@ test.describe('ENSO observed-state repair', () => {
 
     const panel = page.locator('#impact-panel');
     await expect(panel).toBeVisible({ timeout: 15_000 });
+    await showFullDetail(page);
 
     const derived = panel.locator('.impact-claim-derived', {
       hasText: 'operational RONI'
@@ -326,6 +328,7 @@ test.describe('ENSO observed-state repair', () => {
     await gotoApp(page, '?select=state:WA');
     const panel = page.locator('#impact-panel');
     await expect(panel).toBeVisible({ timeout: 15_000 });
+    await showFullDetail(page);
 
     const derived = panel.locator('.impact-claim-derived', {
       hasText: 'operational RONI'
@@ -375,6 +378,7 @@ test.describe('ENSO observed-state repair', () => {
     await gotoApp(page, '?select=state:WA');
     const panel = page.locator('#impact-panel');
     await expect(panel).toBeVisible({ timeout: 15_000 });
+    await showFullDetail(page);
 
     const derived = panel.locator('.impact-claim-derived', {
       hasText: 'operational RONI'
@@ -405,6 +409,7 @@ test.describe('ENSO observed-state repair', () => {
     await gotoApp(page, '?select=state:WA');
     const panel = page.locator('#impact-panel');
     await expect(panel).toBeVisible({ timeout: 15_000 });
+    await showFullDetail(page);
 
     const derived = panel.locator('.impact-claim-derived', {
       hasText: 'operational RONI'

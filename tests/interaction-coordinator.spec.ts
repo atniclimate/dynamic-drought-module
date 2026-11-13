@@ -388,9 +388,11 @@ test.describe('InteractionCoordinator: one click, one response', () => {
     await waitForLayerSettled(page, 'bia-reservations');
     await waitForLayerSettled(page, 'states');
 
-    // Select Washington through the shared search (summary-first: a
-    // selection with no popup and no feature-state emphasis; the promotion
-    // must ride the place-selection label, not the emphasis store).
+    // Select Washington through the shared search: the pick opens its
+    // briefing drawer (owner 2026-11-13) and sets a selection with no popup
+    // and no feature-state emphasis; the promotion must ride the
+    // place-selection label, not the emphasis store. The drawer sits on the
+    // map's right; the probe below stays west of it.
     await page.locator('#catalog-search [data-ddm-search]').fill('washington');
     await page
       .locator('[data-search-group="place"] [data-search-kind="place"]', {
@@ -399,6 +401,7 @@ test.describe('InteractionCoordinator: one click, one response', () => {
       .first()
       .click();
     await expect(page.locator('#app')).toHaveAttribute('data-place-selected', '');
+    await expect(page.locator('#impact-panel.open')).toBeVisible();
 
     // The search flew the camera to Washington; the flyTo briefly widens
     // the view before settling, so the click must wait until the camera has
@@ -410,13 +413,12 @@ test.describe('InteractionCoordinator: one click, one response', () => {
     // single click mid-fly would commit the wrong state and overwrite it, so
     // the settle gate must precede one deliberate click.
     const box = await page.locator('#map').boundingBox();
-    if (!box) throw new Error('map container has no box');
-    // Bias the probe WEST of screen centre: the briefing fit pads for the
-    // sidebar, which pushes Washington's centre toward the right and leaves
-    // screen centre near the eastern WA / Idaho border. A left-of-centre
-    // point lands firmly in central-western Washington, over the fixtures
-    // and well clear of the border.
-    const cx = box.x + box.width * 0.32;
+    const drawerBox = await page.locator('#impact-panel').boundingBox();
+    if (!box || !drawerBox) throw new Error('map container or drawer has no box');
+    // The probe sits in the middle of the map the briefing fit frames Washington in: from the fit's 40 px left
+    // pad to 40 px west of the drawer, which now stands left of the map-button column. A fixed fraction of the map
+    // landed on the Idaho border once the drawer moved; this follows the geometry instead.
+    const cx = (box.x + 40 + (drawerBox.x - 40)) / 2;
     const cy = box.y + box.height / 2;
     const inspector = page.locator('#hover-inspector');
     const stateReadout = inspector.locator('.hover-item', { hasText: 'State' });

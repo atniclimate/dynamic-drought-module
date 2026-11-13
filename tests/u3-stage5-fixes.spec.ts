@@ -415,10 +415,9 @@ test.describe('U3 stage-5 round 2: LARNAME abort on supersede and close', () => 
       if (req.url().includes('BIA_AIAN_National_LAR')) larAborted = true;
     });
 
-    // A briefing is already open via the select= deep link (an explicitly
-    // direct open; the SEARCH path is summary-first under D-0.7.0-070 and
-    // no longer opens the panel), so the panel's close control exists
-    // while the locate is in flight.
+    // A briefing is already open via the select= deep link, so the panel's
+    // close control exists while the locate is in flight (the held LAR
+    // query never lets the search pick open its own briefing).
     // The BIA route above holds its response open on purpose, so the boot
     // cannot settle: opt out of the boot-idle wait.
     await gotoApp(page, '?view=console&select=state:WA', { bootIdle: false });

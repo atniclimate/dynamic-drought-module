@@ -1039,7 +1039,7 @@ function updateRegionBriefingTrigger(regionKey: RegionKey | null | undefined): v
  *   2. The horizon an entry into the preset's mode lands on, on the
  *      register only (a custom set keeps its layers; ENSO's rail entry
  *      commits Season ahead, which its layers already show, and a later
- *      preset of another mode undoes it, `requestPresetHorizon`).
+ *      preset of another mode lands on Current, `requestPresetHorizon`).
  *   3. The explicit preferred basemap, if any.
  */
 function applyViewPreset(preset: ViewPreset): void {

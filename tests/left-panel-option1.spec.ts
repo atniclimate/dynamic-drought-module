@@ -23,7 +23,7 @@ test.describe('D-0.7.0-067 contextual time rail', () => {
     await expect(page.locator('.map-overlay-controls > #share-btn')).toHaveCount(1);
     // Settled runtime order: syncTimeBarHost seats the bar right after the
     // shell panel, but the hidden conditions-strip home marker (and the
-    // strip itself when not docked) still sits between the bar and Brief
+    // strip itself when it is not on the map) still sits between the bar and Brief
     // display, so only the document order is asserted for that pair. The
     // ENSO buttons sit between Brief display and the view details.
     const settledOrder = await page.evaluate(() => {
@@ -36,13 +36,14 @@ test.describe('D-0.7.0-067 contextual time rail', () => {
     await expect(page.locator('#shell-details-island > #shell-conditions-summary')).toHaveCount(1);
 
     // S4 supersession (the 2026-07-18 design record, S4c): on the
-    // desktop Brief shell the compact WHEN row carries the date statement,
-    // and the full #time-bar stands
-    // down (attached for console/mobile, display gone here). The
-    // D-0.7.0-067 stable-node contract above still holds on the DOM.
+    // desktop Brief shell the full #time-bar stands down (attached for
+    // console/mobile, display gone here), and the compact date line moved
+    // to the Console column foot (owner 2026-11-13): attached, not drawn.
+    // The D-0.7.0-067 stable-node contract above still holds on the DOM.
     await expect(page.locator('#time-bar')).toBeHidden();
     await expect(page.locator('#time-bar')).toBeAttached();
-    await expect(page.locator('#shell-time')).toBeVisible();
+    await expect(page.locator('#shell-time')).toBeAttached();
+    await expect(page.locator('#shell-time')).toBeHidden();
     await expect(page.locator('#brief-display')).toBeVisible();
     await expect(page.locator('#brief-display #studio-entry-pair')).toBeVisible();
     await expect(page.locator('#brief-display #enso-driver')).toHaveCount(0);
@@ -69,11 +70,8 @@ test.describe('D-0.7.0-067 contextual time rail', () => {
     await expect(door.locator('.region-briefing-action')).toHaveText('Open briefing');
     await expect(door).toHaveAccessibleName('Open briefing for Oregon');
 
-    // Summary-first (D-0.7.0-070): the desktop search select behaves like
-    // a map click; NO briefing opens until the one door is used, and the
-    // door then opens it for the selected place.
-    await expect(page.locator('#impact-panel.open')).toHaveCount(0);
-    await door.click();
+    // A search pick asks for the place, so its briefing opens at once on
+    // every shell (owner 2026-11-13); the door stays the way back to it.
     const panel = page.locator('#impact-panel');
     await expect(panel).toBeVisible();
     await expect(panel.locator('.impact-panel-title')).toHaveText('Oregon');
@@ -87,16 +85,25 @@ test.describe('D-0.7.0-067 contextual time rail', () => {
     await expect(search).toBeFocused();
     await search.fill('oregon');
     await page.locator('#brief-search [data-search-kind="place"][data-search-id="OR"]').click();
-    await expect(door).toBeVisible();
-    await door.focus();
-    await expect(door).toBeFocused();
-    await page.keyboard.press('Enter');
     await expect(panel).toBeVisible();
     await expect(panel.locator('.impact-panel-close')).toBeFocused();
     await page.keyboard.press('Escape');
     await expect(panel).toBeHidden();
     await expect(page.locator('#brief-selection-summary')).toBeHidden();
     await expect(search).toBeFocused();
+  });
+
+  test('the date line is the Console column foot and steps aside in Brief', async ({ page }) => {
+    await stubUsdmWeeks(page);
+    await gotoApp(page, '?view=console&layers=usdm');
+    const line = page.locator('#shell-time[data-has-spec="true"]');
+    await expect(line).toBeVisible({ timeout: 45_000 });
+    await expect(page.locator('.shell-when #shell-time')).toHaveCount(0);
+    expect(
+      await page.locator('.sidebar-scroll').evaluate((el) => el.lastElementChild?.id)
+    ).toBe('shell-time-island');
+    await page.locator('.view-switch [data-view="brief"]').click();
+    await expect(page.locator('#shell-time')).toBeHidden();
   });
 
   test('mobile Brief moves the same focused control between stable hosts', async ({ page }) => {
@@ -158,8 +165,8 @@ test.describe('D-0.7.0-067 contextual time rail', () => {
     // between the brief head and the shell (DG-080 review finding 4).
     await expect(page.locator('#shell-panel + #time-bar')).toHaveCount(1);
     // S4 supersession: the rehosted rail is attached in its desktop slot
-    // but display-gone in desktop Brief (the shell's compact WHEN row is
-    // that surface now), so the cross-host FOCUS carry ends at the
+    // but display-gone in desktop Brief (Brief states no date in the
+    // column), so the cross-host FOCUS carry ends at the
     // desktop line; the rehost itself (the D-0.7.0-067 stable-host
     // contract) is still pinned above.
     await expect(page.locator('#time-bar')).toBeHidden();

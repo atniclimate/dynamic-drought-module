@@ -2,7 +2,7 @@ import { test, expect } from './offline-test';
 import type { Page, Response } from './offline-test';
 
 import { placeRefFromBoundary } from '../src/config/entities';
-import { gotoApp, layerCheckbox } from './helpers';
+import { gotoApp, layerCheckbox, showFullDetail } from './helpers';
 
 /**
  * Capture the WA feature's own properties from the bundled
@@ -153,18 +153,64 @@ test.describe('DDM-P2-T09: search resolves the same canonical place reference', 
       await gotoApp(page, '?view=console');
       await page.locator(searchInput).fill('washington');
       await page.locator('[data-search-kind="place"][data-search-id="WA"]').click();
-      // Summary-first (D-0.7.0-070): the pick sets the place selection; the
-      // region-briefing trigger becomes this place's "Open briefing" door
-      // (src/ui/sidebar.ts updateRegionBriefingTrigger; visual uniformity
-      // wave 1, D6: one name for the door. Before: 'See what this means').
-      // Repair R2: the door shows the place's name above those words.
+      // The pick opens the place's briefing at once (owner 2026-11-13) and
+      // sets the place selection, so the region-briefing trigger becomes this
+      // place's "Open briefing" door (src/ui/sidebar.ts
+      // updateRegionBriefingTrigger), the way back after a close. Repair R2:
+      // the door shows the place's name above those words.
+      await expect(page.locator('#impact-panel.open')).toBeVisible();
+      await expect(page.locator('#impact-panel-title')).toHaveText('Washington');
       await expect(briefingBtn.locator('.region-briefing-place')).toHaveText('Washington');
       await expect(briefingBtn.locator('.region-briefing-action')).toHaveText('Open briefing');
-      await briefingBtn.click();
-      await expect(page.locator('#impact-panel-title')).toHaveText('Washington');
     });
 
     expect(waProperties).not.toBeNull();
     expect(placeRefFromBoundary('state', waProperties)).toEqual({ scheme: 'state', code: 'WA' });
+  });
+});
+
+test.describe('Owner 2026-11-13: a search pick opens the briefing, on Priority', () => {
+  test('a Tribal land area chosen in the desktop Brief column opens its briefing on Priority, and a new open returns there', async ({
+    page
+  }) => {
+    // The LARNAME locate is answered by the suite's synthetic AIAN-LAR fixture (tests/tribal-fixtures.ts).
+    await gotoApp(page, '?view=brief');
+    const search = page.locator('#brief-search [data-ddm-search]');
+    await search.fill('yakama');
+    await page.locator('#brief-search [data-search-kind="tribal"][data-search-id="Yakama"]').first().click();
+
+    const panel = page.locator('#impact-panel');
+    await expect(panel).toHaveClass(/\bopen\b/, { timeout: 15_000 });
+    await expect(panel).toBeVisible();
+    await expect(page.locator('#impact-panel-title')).toContainText('Yakama');
+    const priority = panel.locator('.briefing-view-btn[data-briefing-view="lead"]');
+    const full = panel.locator('.briefing-view-btn[data-briefing-view="matrix"]');
+    await expect(priority).toHaveAttribute('aria-pressed', 'true');
+    await expect(full).toBeVisible();
+    await expect(full).toHaveAttribute('aria-pressed', 'false');
+
+    // The reader steps to Full detail; that choice ends with this briefing.
+    await showFullDetail(page);
+    await expect(priority).toHaveAttribute('aria-pressed', 'false');
+    await panel.locator('.impact-panel-close').click();
+    await expect(panel).toBeHidden();
+
+    await search.fill('washington');
+    await page.locator('#brief-search [data-search-kind="place"][data-search-id="WA"]').click();
+    await expect(page.locator('#impact-panel-title')).toHaveText('Washington', { timeout: 15_000 });
+    await expect(priority).toHaveAttribute('aria-pressed', 'true');
+    await expect(full).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  test('a city chosen in the desktop Brief column opens the briefing of the State that holds it', async ({
+    page
+  }) => {
+    await gotoApp(page, '?view=brief');
+    await page.locator('#brief-search [data-ddm-search]').fill('tulsa');
+    await page.locator('#brief-search [data-search-kind="city"][data-search-id="Tulsa"]').click();
+    // The State's own briefing (its header is the State's name), resolved from the bundled outlines.
+    await expect(page.locator('#impact-panel.open')).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator('#impact-panel-title')).toHaveText('Oklahoma');
+    await expect(page.locator('#region-briefing-note')).toBeHidden();
   });
 });

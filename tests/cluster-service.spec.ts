@@ -7,7 +7,9 @@ import {
   onCommittedSnapshotChange,
   reconcileClusterWithLayerIntent,
   requestCluster,
-  requestOcean
+  requestHorizon,
+  requestOcean,
+  resolveHorizonForCluster
 } from '../src/state/cluster-service';
 import { LAYER_DEFS, getLayerDef } from '../src/config/layers';
 import { HAZARD_CLUSTER_KEYS, HAZARD_CLUSTERS, TEMPORAL_HORIZON_KEYS } from '../src/config/clusters';
@@ -195,27 +197,36 @@ test.describe('S3 requestCluster (the transaction)', () => {
     }
   });
 
-  test('temporal persistence: the committed horizon survives cluster flips and re-resolves each recipe', () => {
+  test('temporal persistence: a horizon picked inside a mode re-resolves its recipe, and a move into another mode opens on Current', () => {
     resetWorld();
     const dispose = initClusterService();
     try {
-      timeline.setHorizon('season-ahead');
+      // DR-190 as amended 2026-11-13: a move into Wildfire opens on Current Conditions.
       requestCluster('wildfire');
+      expect(getCommittedSnapshot().horizon).toBe('current');
+      requestHorizon('season-ahead');
       expect(getCommittedSnapshot().horizon).toBe('season-ahead');
       expect(getCommittedSnapshot().intendedKeys.has('usfs-whp')).toBe(true);
       // DR-022: live perimeters in every horizon, Long Range included.
       expect(getCommittedSnapshot().intendedKeys.has('nifc-fires')).toBe(true);
 
-      // Flip clusters: the register persists; the flip re-resolves at
-      // the same horizon.
+      // Flip clusters: Drought opens on Current Conditions too. A Long Range
+      // carried in had drawn the CPC outlook instead of the current drought map
+      // (the owner's report of 2026-11-13).
       requestCluster('drought');
-      expect(timeline.horizon).toBe('season-ahead');
+      expect(timeline.horizon).toBe('current');
+      expect(getCommittedSnapshot().horizon).toBe('current');
+      expect(getCommittedSnapshot().intendedKeys.has('nadm-drought')).toBe(true);
+      expect(getCommittedSnapshot().intendedKeys.has('drought')).toBe(false);
+
+      // A horizon picked inside Drought re-resolves its recipe at that horizon.
+      requestHorizon('season-ahead');
       expect(getCommittedSnapshot().horizon).toBe('season-ahead');
       expect(getCommittedSnapshot().intendedKeys.has('drought')).toBe(true);
       expect(getCommittedSnapshot().intendedKeys.has('nadm-drought')).toBe(false);
       // The timeline owns the horizon-to-register mapping.
       expect(timeline.outlookRange).toBe('seasonal');
-      timeline.setHorizon('weeks-ahead');
+      requestHorizon('weeks-ahead');
       expect(timeline.outlookRange).toBe('monthly');
     } finally {
       dispose();
@@ -290,8 +301,9 @@ test.describe('S3 requestCluster (the transaction)', () => {
     const dispose = initClusterService();
     let unsubscribe = () => {};
     try {
-      timeline.setHorizon('season-ahead');
+      // Wildfire opens on Current; the person then picks Long Range inside it.
       requestCluster('wildfire');
+      requestHorizon('season-ahead');
       expect(getCommittedSnapshot().horizon).toBe('season-ahead');
       const revisions: ReturnType<typeof getCommittedSnapshot>[] = [];
       unsubscribe = onCommittedSnapshotChange(() => revisions.push(getCommittedSnapshot()));
@@ -314,6 +326,78 @@ test.describe('S3 requestCluster (the transaction)', () => {
     } finally {
       unsubscribe();
       dispose();
+      timeline.reset();
+    }
+  });
+
+  test('DR-190 (amended 2026-11-13): an entry into a mode that opens on Current lands on its current map, not the horizon carried in', () => {
+    // The owner's report: Wildfire's Near Term or Long Range carried into
+    // Drought showed the CPC outlook instead of the current drought map.
+    const opensOnCurrent = HAZARD_CLUSTER_KEYS.filter((key) => HAZARD_CLUSTERS[key].entryHorizon === 'current');
+    expect(opensOnCurrent).toContain('drought');
+    for (const carried of ['weeks-ahead', 'season-ahead'] as const) {
+      for (const destination of opensOnCurrent) {
+        // Leave from a mode that can show the carried horizon, so it is really held.
+        const source = HAZARD_CLUSTER_KEYS.find(
+          (key) => key !== destination && resolveHorizonForCluster(key, carried) === carried
+        );
+        expect(source, `a mode that shows ${carried}`).toBeDefined();
+        if (source === undefined) continue;
+        resetWorld();
+        const dispose = initClusterService();
+        try {
+          requestCluster(source);
+          requestHorizon(carried);
+          expect(timeline.horizon, `${source} holds ${carried}`).toBe(carried);
+          requestCluster(destination);
+          const snapshot = getCommittedSnapshot();
+          const moment = `${source} at ${carried} to ${destination}`;
+          expect(snapshot.cluster, moment).toBe(destination);
+          expect(snapshot.horizon, moment).toBe('current');
+          expect(timeline.horizon, moment).toBe('current');
+          expect([...snapshot.intendedKeys].sort(), moment).toEqual(
+            [...composeClusterIntent(destination, 'current')].sort()
+          );
+        } finally {
+          dispose();
+        }
+      }
+    }
+    // The named case: Wildfire at Long Range or Near Term, then Drought, draws the current drought map.
+    for (const carried of ['weeks-ahead', 'season-ahead'] as const) {
+      resetWorld();
+      const dispose = initClusterService();
+      try {
+        requestCluster('wildfire');
+        requestHorizon(carried);
+        requestCluster('drought');
+        const snapshot = getCommittedSnapshot();
+        expect(snapshot.horizon, carried).toBe('current');
+        expect(snapshot.intendedKeys.has('nadm-drought'), carried).toBe(true);
+        expect(snapshot.intendedKeys.has('drought'), carried).toBe(false);
+        expect(registry.getActiveKeys().has('nadm-drought'), carried).toBe(true);
+      } finally {
+        dispose();
+      }
+    }
+    // Current holds for a custom set too: Places on does not let Long Range carry in.
+    resetWorld();
+    const dispose = initClusterService();
+    try {
+      requestLayerOn('places');
+      requestCluster('wildfire');
+      requestHorizon('season-ahead');
+      expect(timeline.horizon).toBe('season-ahead');
+      requestCluster('drought');
+      const snapshot = getCommittedSnapshot();
+      expect(snapshot.cluster).toBe('custom');
+      expect(timeline.horizon).toBe('current');
+      expect(snapshot.intendedKeys.has('nadm-drought')).toBe(true);
+      expect(snapshot.intendedKeys.has('places')).toBe(true);
+      expect(snapshot.intendedKeys.has('drought')).toBe(false);
+    } finally {
+      dispose();
+      requestLayerOff('places');
       timeline.reset();
     }
   });

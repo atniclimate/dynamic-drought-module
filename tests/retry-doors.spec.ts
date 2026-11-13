@@ -56,10 +56,27 @@ async function bootFailedHeat(page: Page): Promise<void> {
   await expectHeatIntent(page);
 }
 
-async function expectTileAction(page: Page, action: 'Retry' | 'Hide'): Promise<void> {
-  await expect(alertsTile(page)).toHaveAttribute('title', `${action} ${ALERTS_NAME}`);
-  await expect(alertsTile(page)).toHaveAttribute('aria-label', new RegExp(`Press to ${action.toLowerCase()}\\.$`));
-  await expect(alertsTile(page)).toHaveAttribute('aria-pressed', 'true');
+/** A failed tile retries; once live, Heat's own alerts reading opens the Key
+ * (owner item 9, 2026-11-13: a mode's reading never switches its layer off). */
+async function expectTileAction(page: Page, action: 'Retry' | 'Key'): Promise<void> {
+  if (action === 'Retry') {
+    await expect(alertsTile(page)).toHaveAttribute('title', `Retry ${ALERTS_NAME}`);
+    await expect(alertsTile(page)).toHaveAttribute('aria-label', /Press to retry\.$/);
+    await expect(alertsTile(page)).toHaveAttribute('aria-pressed', 'true');
+    return;
+  }
+  await expect(alertsTile(page)).toHaveAttribute('title', `${ALERTS_NAME} details and key`);
+  await expect(alertsTile(page)).toHaveAttribute('aria-label', new RegExp(`Open ${ALERTS_NAME} details and key\\.$`));
+  await expect(alertsTile(page)).toHaveAttribute('aria-expanded', 'false');
+  await expect(alertsTile(page)).not.toHaveAttribute('aria-pressed', /.*/);
+}
+
+/** The strip's Key door: the Key opens, the layer, mode and URL stay. */
+async function expectKeyOpened(page: Page, before: string): Promise<void> {
+  await expect(alertsTile(page)).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('#map-key-content')).toBeVisible();
+  await expectHeatIntent(page);
+  expect(await search(page)).toBe(before);
 }
 
 async function useDoor(page: Page, door: string): Promise<void> {
@@ -90,7 +107,7 @@ test.describe('found-075: explicit doors retry a failed checked layer', () => {
         await expect(layerPill(page, ALERTS)).toHaveClass(/\bloading\b/);
         await expectHeatIntent(page);
         expect(await search(page)).toBe(before);
-        await expectTileAction(page, 'Hide');
+        await expectTileAction(page, 'Key');
         await expect(alertsTile(page).locator('.conditions-action')).toHaveCount(0);
 
         if (door === 'Alerts pane') {
@@ -109,13 +126,17 @@ test.describe('found-075: explicit doors retry a failed checked layer', () => {
         await expectHeatIntent(page);
         expect(await search(page)).toBe(before);
         expect(gate.calls()).toBe(2);
-        await expectTileAction(page, 'Hide');
+        await expectTileAction(page, 'Key');
 
-        if (door !== 'Alerts pane') {
-          // Once the retry succeeds, the same toggle retains its normal
-          // hide action. A clean empty read is active, not a failed retry.
-          if (door === 'conditions strip') await alertsTile(page).click();
-          else await layerCheckbox(page, ALERTS).click();
+        if (door === 'conditions strip') {
+          // A clean empty read is active, not a failed retry: the reading
+          // opens the Key and the mode's layer stays on.
+          await alertsTile(page).click();
+          await expectKeyOpened(page, before);
+          expect(gate.calls()).toBe(2);
+        } else if (door !== 'Alerts pane') {
+          // The catalog checkbox keeps its normal hide action.
+          await layerCheckbox(page, ALERTS).click();
           await expect(layerCheckbox(page, ALERTS)).not.toBeChecked();
           await expect.poll(async () => (await urlLayers(page)).has(ALERTS)).toBe(false);
           await expect(page.locator('.shell-cluster-btn[data-cluster="heat"]')).toHaveAttribute('aria-pressed', 'false');
@@ -160,11 +181,13 @@ test.describe('found-075: explicit doors retry a failed checked layer', () => {
       await expect(layerPill(page, ALERTS)).toHaveClass(/\berror\b/);
       await expectHeatIntent(page);
       expect(await search(page)).toBe(before);
-      await expectTileAction(page, 'Hide');
-      await expect(alertsTile(page).locator('.conditions-action')).toHaveText('Hide');
+      await expectTileAction(page, 'Key');
+      await expect(alertsTile(page).locator('.conditions-action')).toHaveText('Key');
 
       await useDoor(page, door);
-      if (door === 'Alerts pane') {
+      if (door === 'conditions strip') {
+        await expectKeyOpened(page, before);
+      } else if (door === 'Alerts pane') {
         await expect(page.locator('#sheet-alerts-body')).toContainText('The National Weather Service alert feed is not reachable right now.');
         await expectHeatIntent(page);
         expect(await search(page)).toBe(before);

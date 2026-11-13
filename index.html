@@ -106,8 +106,9 @@
 
         <!-- Stable fallback seat for the one conditions strip, below the hazard
              buttons so its changing height never moves them. Desktop Brief
-             moves the SAME section into the sidebar's bottom dock; every other
-             surface and the island pre-mount fallback retain this seat. -->
+             parks the SAME section unseen in the map's dock, and the Key chip
+             carries its lead reading; every other surface and the island
+             pre-mount fallback retain this seat. -->
         <span id="conditions-strip-home" hidden></span>
         <section class="panel conditions-strip" id="conditions-strip" aria-label="Conditions in view" hidden>
           <div class="conditions-head">
@@ -223,7 +224,6 @@
           </div>
         </section>
 
-        <span id="legend-panel-home" hidden></span>
         <section class="panel legend-panel" id="legend-panel" hidden>
           <h2 class="panel-title">Legend</h2>
           <div id="legend-sections"></div>
@@ -245,18 +245,7 @@
              overlay. Display is stylesheet-gated. -->
         <div class="sheet-report" id="sheet-report"></div>
 
-        <!-- Desktop Brief pins this group to the foot of the column's visible
-             area in every mode: the conditions strip, then Layer legends last
-             so its summary keeps one seat. -->
-        <div class="sidebar-bottom-dock">
-          <div id="conditions-strip-dock" class="conditions-strip-dock"></div>
-          <details class="sidebar-legend-disclosure">
-            <summary>Layer legends</summary>
-            <div id="sidebar-key-host"></div>
-          </details>
-        </div>
-
-        <!-- The credit ends the scroll column; it is not pinned under it. -->
+        <!-- The credit and the date line end the scroll column; neither is pinned under it. -->
         <footer class="sidebar-footer">
           <p>A project of ATNI Climate (Affiliated Tribes of Northwest Indians)</p>
           <p id="footer-credits"></p>
@@ -266,6 +255,9 @@
           </p>
         </footer>
 
+        <!-- The date line is the column's last element, drawn in Console only
+             (stylesheet-gated) and filled by the shell island. -->
+        <div id="shell-time-island" class="shell-time-foot"></div>
       </div>
 
       <!-- The S4c panel-foot response: place-bearing map clicks rehost their
@@ -287,6 +279,12 @@
 
       <div id="map-condition-indicator" class="map-condition-indicator">
         <div id="map-key-overlay-host" class="map-overlay-seat"></div>
+        <!-- Desktop Brief parks Conditions in view here, unseen, so it keeps
+             computing; the Key chip above carries its lead reading as its
+             title (owner 2026-11-13, one box). The status region speaks a
+             changed reading while the strip's own live region is parked. -->
+        <div id="conditions-strip-dock" class="conditions-strip-dock"></div>
+        <span id="map-key-reading-status" class="sr-only" role="status" aria-atomic="true"></span>
       </div>
 
       <div id="hover-inspector" class="hover-inspector" aria-hidden="true" hidden></div>
