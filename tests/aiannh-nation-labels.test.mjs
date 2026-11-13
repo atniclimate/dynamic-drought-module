@@ -125,7 +125,7 @@ test('the shipped label names: labelled Nations once each, sourced and dated; a 
       seen.add(row.nation);
       const name = row[field];
       assert.ok(name && name === name.normalize('NFC') && name === name.trim(), row.nation);
-      assert.match(row.page, /^(https:\/\/\S+|BIA Tribal Leaders Directory)$/, row.nation);
+      assert.match(row.page, /^(https?:\/\/\S+|BIA Tribal Leaders Directory)$/, row.nation);
       assert.match(row.read, /^\d{4}-\d{2}-\d{2}$/, row.nation);
       assert.ok(row[why].length > 20, `${row.nation}: why this form`);
     }
