@@ -173,8 +173,19 @@ test.describe('NIFC WFIGS query scope', () => {
           url.searchParams.get('f') === 'geojson',
         async (route) => {
           const url = new URL(route.request().url());
-          queries.push(url.toString());
           const envelope = parseEnvelope(url);
+          // A place pick also opens that place's briefing, which reads this service for its own fire tile (an
+          // attribute-only query, returnGeometry=false; since DR-256 the briefing reads nationally). It is answered
+          // at once and not counted: only the layer's perimeter queries are under test.
+          if (url.searchParams.get('returnGeometry') === 'false') {
+            await route.fulfill({
+              status: 200,
+              contentType: 'application/geo+json',
+              body: JSON.stringify(respond(envelope))
+            });
+            return;
+          }
+          queries.push(url.toString());
           if (isFarEastEnvelope(envelope)) {
             if (opts.holdFarEast) {
               await held;
