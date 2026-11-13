@@ -18,10 +18,11 @@
     },
     {
       "file": "ddm-roads-na-2026-11.pmtiles",
-      "bytes": 7274532,
-      "tiles": 1695,
+      "bytes": 9058627,
+      "tiles": 1696,
       "features": {
-        "road": 9573
+        "road": 9573,
+        "rail": 1
       }
     },
     {
@@ -34,6 +35,14 @@
         "boundary": 495,
         "place": 923,
         "water_label": 57
+      }
+    },
+    {
+      "file": "ddm-forests-2026-11.pmtiles",
+      "bytes": 3194065,
+      "tiles": 4663,
+      "features": {
+        "forest": 5250
       }
     }
   ],
@@ -535,6 +544,14 @@
       "retrieved": "2026-11-12"
     },
     {
+      "key": "us-rails",
+      "url": "https://www2.census.gov/geo/tiger/TIGER2025/RAILS/tl_2025_us_rails.zip",
+      "issuer": "U.S. Census Bureau (public domain; cite the Census Bureau as the source)",
+      "sha256": "e969ffd49f119655ac478035b7f206fb861b70c4dddb926f8cac911182e7a113",
+      "bytes": 34200737,
+      "retrieved": "2026-11-13"
+    },
+    {
       "key": "us-water",
       "url": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Small-scale/data/Hydrography/wtrbdyp010g.shp_nt00886.tar.gz",
       "issuer": "U.S. Geological Survey (U.S. public domain)",
@@ -605,6 +622,14 @@
       "sha256": "9e4fb46dd3b727ff071047dbde6a2563ecb5e71337406497d3d2fec8b77ac187",
       "bytes": 923747,
       "retrieved": "2026-11-12"
+    },
+    {
+      "key": "usfs-forests",
+      "url": "https://data.fs.usda.gov/geodata/edw/edw_resources/shp/S_USA.AdministrativeForest.zip",
+      "issuer": "USDA Forest Service (CC0 1.0)",
+      "sha256": "a13d25243fe121c8800c13cca2a9823f64aeaeb9467d63b34c4d22352bd1d4da",
+      "bytes": 45012944,
+      "retrieved": "2026-11-13"
     }
   ]
 }

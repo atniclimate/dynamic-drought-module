@@ -67,6 +67,7 @@ export const BOTTOM_STACK_IDS: readonly string[] = [
 export const TOP_LABEL_IDS: readonly string[] = [
   'base-river-label',
   'base-road-label',
+  'forests-label',
   'tribal-streets-label',
   'base-world-water-label',
   'base-water-label',
@@ -206,6 +207,8 @@ export const REFERENCE_BOUNDARY_IDS: readonly string[] = [
   // The Hydrography lake fill (src/layers/hydrography.ts) sits directly under its river lines.
   'hydrography-water',
   'hydrography',
+  'railroads',
+  'forests-outline',
   'us-states-fill',
   'us-states-casing',
   'us-states-outline',

@@ -33,13 +33,15 @@ async function open(rel) {
   return { header: await reader.getHeader(), meta: await reader.getMetadata(), size: statSync(new URL(rel, root)).size };
 }
 
+const BASE_ISSUERS = ['U.S. Census Bureau', 'U.S. Geological Survey', 'Natural Resources Canada', 'Natural Earth'];
 const ARCHIVES = [
-  ['public/data/ddm-base-na-2026-11.pmtiles', 8, ['land', 'water', 'river', 'boundary', 'county', 'place', 'water_label']],
-  ['public/data/ddm-roads-na-2026-11.pmtiles', 8, ['road']],
-  ['public/data/ddm-base-world-2026-11.pmtiles', 5, ['land', 'water', 'boundary', 'place', 'water_label']]
+  ['public/data/ddm-base-na-2026-11.pmtiles', 8, ['land', 'water', 'river', 'boundary', 'county', 'place', 'water_label'], BASE_ISSUERS],
+  ['public/data/ddm-roads-na-2026-11.pmtiles', 8, ['road', 'rail'], BASE_ISSUERS],
+  ['public/data/ddm-base-world-2026-11.pmtiles', 5, ['land', 'water', 'boundary', 'place', 'water_label'], BASE_ISSUERS],
+  ['public/data/ddm-forests-2026-11.pmtiles', 10, ['forest'], ['USDA Forest Service']]
 ];
 
-for (const [rel, maxZoom, layers] of ARCHIVES) {
+for (const [rel, maxZoom, layers, issuers] of ARCHIVES) {
   test(`${rel} ships its layers, zooms and credits under the 20 MB line`, async () => {
     const { header, meta, size } = await open(rel);
     assert.ok(size <= 20 * 1024 * 1024, `${size} bytes is over the public-tree line (DR-150)`);
@@ -47,7 +49,7 @@ for (const [rel, maxZoom, layers] of ARCHIVES) {
     assert.equal(header.maxZoom, maxZoom);
     assert.deepEqual(meta.vector_layers.map((l) => l.id).sort(), [...layers].sort());
     for (const l of meta.vector_layers) assert.doesNotMatch(l.id, /tribal|treaty|aiannh|reserv/i, 'Tribal and Treaty boundaries stay live-read');
-    for (const issuer of ['U.S. Census Bureau', 'U.S. Geological Survey', 'Natural Resources Canada', 'Natural Earth']) {
+    for (const issuer of issuers) {
       assert.ok(meta.attribution.includes(issuer), `attribution names ${issuer}`);
     }
   });

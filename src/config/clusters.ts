@@ -222,8 +222,9 @@ export const HAZARD_CLUSTERS: Record<HazardClusterKey, HazardClusterDef> = {
       // WHP first: the activation-failure spec fails recipe[0], so this keeps a WHP failure tested.
       'season-ahead': ['usfs-whp', 'nifc-fires']
     },
-    // The console's Fuel risk switch (src/ui/fire3d-fuel-risk.ts).
-    optionalLayers: ['usfs-whp'],
+    // The console's Fuel risk switch (src/ui/fire3d-fuel-risk.ts), and the
+    // National Forests outline (owner, 2026-11-12: a Wildfire console option).
+    optionalLayers: ['usfs-whp', 'forests'],
     placeConditionRow: 'wildfire-perimeter',
     alerts: HEAT_FIRE_ALERTS
   },

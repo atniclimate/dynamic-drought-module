@@ -934,6 +934,9 @@ export const URLS = Object.freeze({
   // and retrieval date are baked into the archive attribution so the overlay
   // never implies precision the source does not carry.
   ecoregionsPmtilesLocal: BASE_URL + 'data/ecoregions-pnw.pmtiles',
+  // National forest boundaries (USDA Forest Service, CC0), baked into their own
+  // archive by scripts/build-base-tiles.mjs for the National Forests layer.
+  forestsPmtiles: BASE_URL + 'data/ddm-forests-2026-11.pmtiles',
   // The PNW hillshade raster-dem archive (U4g, D-0.7.0-012/-029): terrarium
   // PNG tiles, 512 px, z0-8, whole-meter quantized, baked by
   // Built from the USGS 3DEP ImageServer (public domain; vintage and

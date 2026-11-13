@@ -33,6 +33,8 @@ export type UrlsKey = keyof typeof URLS;
  */
 export const PRODUCT_KEYS = Object.freeze([
   'hydrography',
+  'forests',
+  'railroads',
   'ecoregions',
   'hillshade',
   'drought',
@@ -148,6 +150,24 @@ export const PRODUCTS: Readonly<Record<ProductKey, ProductDef>> = Object.freeze(
     issuer: 'USGS · Natural Resources Canada · Natural Earth · bundled',
     endpointKey: 'baseNaPmtiles',
     layerKey: 'hydrography',
+    lane: null,
+    clock: { register: 'observed', cadence: 'bundled, static' }
+  },
+  forests: {
+    key: 'forests',
+    // Matches the layer's source line in layers.ts.
+    issuer: 'USDA Forest Service · bundled',
+    endpointKey: 'forestsPmtiles',
+    layerKey: 'forests',
+    lane: null,
+    clock: { register: 'observed', cadence: 'bundled, static' }
+  },
+  railroads: {
+    key: 'railroads',
+    // Matches the layer's source line in layers.ts.
+    issuer: 'US Census · bundled',
+    endpointKey: 'baseRoadsPmtiles',
+    layerKey: 'railroads',
     lane: null,
     clock: { register: 'observed', cadence: 'bundled, static' }
   },

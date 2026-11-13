@@ -34,6 +34,8 @@ export interface LayerActivation {
  */
 export const LAYER_KEYS = Object.freeze([
   'hydrography',
+  'forests',
+  'railroads',
   'ecoregions',
   'hillshade',
   'drought',
@@ -290,6 +292,8 @@ const DROUGHT_CONDITIONS_DEF: LayerDef = {
 
 export const LAYER_DEFS: readonly LayerDef[] = [
   { key: 'hydrography', product: 'hydrography', name: 'Hydrography', source: 'USGS · Natural Resources Canada · Natural Earth · bundled', role: 'reference', defaultOn: false, load: () => import('../layers/hydrography') },
+  { key: 'forests', product: 'forests', name: 'National Forests', source: 'USDA Forest Service · bundled', role: 'reference', defaultOn: false, load: () => import('../layers/forests') },
+  { key: 'railroads', product: 'railroads', name: 'Railroads', source: 'US Census · bundled', role: 'reference', defaultOn: false, load: () => import('../layers/railroads') },
   // Audit 10: the bundled archive covers only the Pacific Northwest (its
   // PMTiles header bounds [-125, 41.5, -110.5, 49.5]) and the layer reads
   // `live` at any viewport, so the coverage tail rides the source line the

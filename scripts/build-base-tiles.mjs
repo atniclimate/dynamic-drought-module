@@ -15,6 +15,9 @@
  *                                      so each stays under the 20 MB line.
  *   ddm-base-world-<edition>.pmtiles  The rest of the world, zoom 0 to 5: land,
  *                                      lakes, country lines, major places, seas.
+ *   ddm-forests-<edition>.pmtiles     National forest boundaries, zoom 0 to 10,
+ *                                      for the National Forests layer (not the
+ *                                      base map): USDA Forest Service, CC0.
  *
  * Sources (all public; the receipt table scripts/data/base-tiles-inputs.json
  * pins every file by SHA-256 and retrieval date):
@@ -66,6 +69,9 @@ const RECEIPT_PATH = join(ROOT, 'scripts/data/base-tiles-inputs.json');
 const OUT_NA = join(ROOT, `public/data/ddm-base-na-${EDITION}.pmtiles`);
 const OUT_WORLD = join(ROOT, `public/data/ddm-base-world-${EDITION}.pmtiles`);
 const OUT_ROADS = join(ROOT, `public/data/ddm-roads-na-${EDITION}.pmtiles`);
+const OUT_FORESTS = join(ROOT, `public/data/ddm-forests-${EDITION}.pmtiles`);
+/** Forest outlines are read up close in the Wildfire view, so they keep two more zooms of detail than the base. */
+const FOREST_MAX_ZOOM = 10;
 const GLYPH_DIR = join(ROOT, 'public/fonts/glyphs/Noto Sans Regular');
 const HI_CROSSWALK = join(ROOT, 'scripts/data/hi-gnis-crosswalk.json');
 
@@ -80,7 +86,8 @@ const ISSUERS = {
   census: 'U.S. Census Bureau (public domain; cite the Census Bureau as the source)',
   usgs: 'U.S. Geological Survey (U.S. public domain)',
   nrcan: 'Natural Resources Canada (Open Government Licence - Canada)',
-  ne: 'Natural Earth (public domain)'
+  ne: 'Natural Earth (public domain)',
+  usfs: 'USDA Forest Service (CC0 1.0)'
 };
 
 /** Every input file: key, URL, issuer. */
@@ -96,6 +103,7 @@ const INPUTS = [
   ['us-states', `${TIGER}/GENZ2025/shp/cb_2025_us_state_500k.zip`, 'census'],
   ['us-counties', `${TIGER}/GENZ2025/shp/cb_2025_us_county_500k.zip`, 'census'],
   ...STATE_FIPS.map((f) => [`us-roads-${f}`, `${TIGER}/TIGER2025/PRISECROADS/tl_2025_${f}_prisecroads.zip`, 'census']),
+  ['us-rails', `${TIGER}/TIGER2025/RAILS/tl_2025_us_rails.zip`, 'census'],
   ['us-water', `${SMALL}/Hydrography/wtrbdyp010g.shp_nt00886.tar.gz`, 'usgs'],
   ['us-streams', `${SMALL}/Hydrography/streaml010g.shp_nt00885.tar.gz`, 'usgs'],
   ['us-cities', `${SMALL}/Boundaries/citiesx010g_shp_nt00962.tar.gz`, 'usgs'],
@@ -104,7 +112,8 @@ const INPUTS = [
   ['ca-water', `${AC}/hydrology/AC_1M_Waterbodies.shp.zip`, 'nrcan'],
   ['ca-rivers', `${AC}/hydrology/AC_1M_Rivers.shp.zip`, 'nrcan'],
   ['ca-roads', `${AC}/transportation/AC_1M_Roads.shp.zip`, 'nrcan'],
-  ['ca-places', `${AC}/place_names/AC_1M_PlaceNames.shp.zip`, 'nrcan']
+  ['ca-places', `${AC}/place_names/AC_1M_PlaceNames.shp.zip`, 'nrcan'],
+  ['usfs-forests', 'https://data.fs.usda.gov/geodata/edw/edw_resources/shp/S_USA.AdministrativeForest.zip', 'usfs']
 ];
 
 /** Download once into the cache (a .part file keeps a broken download from passing as whole). */
@@ -323,6 +332,8 @@ async function northAmerica(paths, hiNames) {
   }
   const caRoads = await ms(`-i ${await member(p('ca-roads'), 'AC_1M_Roads.shp')} -filter "CARTO == 'Multi-lane Highway' || CARTO == 'Principal Highway' || CARTO == 'Secondary Highway'" -proj wgs84 -clip ${BOX} -each "cls = CARTO == 'Multi-lane Highway' || TYPE == 'Freeway' ? 1 : CARTO == 'Principal Highway' ? 2 : 3; name = ''" -filter-fields cls,name ${SIMPLE}`);
   const road = fc([...seen.values(), ...caRoads.features]);
+  // Main-line railroads (TIGER MTFCC R1011; carlines and cog railways left out), U.S. only, unnamed, for the Railroads layer.
+  const rail = await ms(`-i ${await member(p('us-rails'), 'tl_2025_us_rails.shp')} -filter "MTFCC == 'R1011'" -proj wgs84 -clip ${BOX} ${SIMPLE} -filter-fields -dissolve`);
 
   console.log('places');
   const usPlaces = await ms(`-i ${await member(p('us-cities'), 'citiesx010g.shp')} -proj wgs84 -clip ${BOX} -filter "POP_2010 >= 1000 || FEATURE2 != '-999'" -each "cap = FEATURE2 == 'National Capital' ? 'national' : FEATURE2.indexOf('State Capital') > -1 ? 'region' : ''; pop = Math.max(POP_2010, 0); gnis = GNIS_ID; name = NAME" -filter-fields name,pop,cap,gnis`);
@@ -354,6 +365,7 @@ async function northAmerica(paths, hiNames) {
     boundary,
     county: { data: county, minZoom: 5, tolerance: 4 },
     ...bands('road', roads, ({ cls }) => 3 + cls, 4),
+    rail: { data: rail, minZoom: 6, tolerance: 4 },
     ...bands('place', place, ({ rank }) => (rank <= 2 ? 0 : rank <= 5 ? rank + 2 : 8)),
     ...bands('water_label', water_label, ({ rank }) => [0, 0, 4, 6, 7][rank] ?? 7)
   };
@@ -369,6 +381,17 @@ async function world(paths) {
   for (const feat of place.features) feat.properties.rank = placeRank(feat.properties.pop, feat.properties.cap);
   const water_label = await ms(`-i ${p('ne-marine')} -filter "!!name && scalerank <= 3" -points inner -filter "!(this.x >= ${NA_BOX[0]} && this.x <= ${NA_BOX[2]} && this.y >= ${NA_BOX[1]} && this.y <= ${NA_BOX[3]})" -each "rank = Math.min(scalerank, 4) || 1; kind = 'sea'" -filter-fields name,rank,kind`);
   return { land, water, boundary, place, water_label };
+}
+
+/**
+ * National forest boundaries, the National Forests layer's own archive: the Forest Service's administrative
+ * units (each takes in lands the Forest Service does not own), with their names, one feature per part with its
+ * area (km2), so the layer can name the large parts and leave the checkerboard pieces unlabelled.
+ */
+async function forests(paths) {
+  const shp = await member(paths['usfs-forests'], 'S_USA.AdministrativeForest.shp');
+  const forest = await ms(`-i ${shp} -proj wgs84 -clip ${BOX} ${SIMPLE} -explode -each "name = FORESTNAME; km2 = Math.round(this.area / 1e6)" -filter-fields name,km2`);
+  return { forest: { data: forest, minZoom: 4 } };
 }
 
 /** Fail the build on a name the shipped glyph ranges cannot draw, NFC-normalizing first. */
@@ -438,7 +461,8 @@ async function main() {
 
   const na = await northAmerica(paths, hiNames);
   const ww = await world(paths);
-  for (const layers of [na, ww]) {
+  const fo = await forests(paths);
+  for (const layers of [na, ww, fo]) {
     refuseSovereignLayers(layers);
     await glyphGate(layers);
   }
@@ -455,19 +479,22 @@ async function main() {
     return;
   }
 
-  const sources = [...new Set(INPUTS.map(([, , issuer]) => ISSUERS[issuer]))].join('; ');
+  const sources = [...new Set(INPUTS.filter(([, , issuer]) => issuer !== 'usfs').map(([, , issuer]) => ISSUERS[issuer]))].join('; ');
   const attribution = `DDM base map, edition ${EDITION}. Sources: ${sources}. Changes by DDM: reprojected, clipped, generalized and merged for display; boundaries are representations, not legal land descriptions. Contains information licensed under the Open Government Licence - Canada.`;
+  const forestAttribution = `DDM national forest boundaries, edition ${EDITION}. Source: ${ISSUERS.usfs}, Administrative Forest Boundaries. Changes by DDM: reprojected, clipped and generalized for display; an administrative boundary takes in lands the Forest Service does not own and is not a legal land description.`;
   const results = [];
-  // The highways ride their own archive (the roads archive of DDM-P17-T08), so each file stays under the line.
-  const roads = Object.fromEntries(Object.entries(na).filter(([, spec]) => spec.as === 'road'));
-  const base = Object.fromEntries(Object.entries(na).filter(([, spec]) => spec.as !== 'road'));
-  for (const [out, layers, maxZoom, bounds, canaries] of [
+  // The highways and railroads ride their own archive (the roads archive of DDM-P17-T08), so each file stays under the line.
+  const transport = ([name, spec]) => ['road', 'rail'].includes(spec.as ?? name);
+  const roads = Object.fromEntries(Object.entries(na).filter(transport));
+  const base = Object.fromEntries(Object.entries(na).filter((entry) => !transport(entry)));
+  for (const [out, layers, maxZoom, bounds, canaries, credit] of [
     [OUT_NA, base, NA_MAX_ZOOM, NA_BOX, [
       ['Columbia mouth', 6, -123.9, 46.25], ['Great Lakes', 5, -84, 45], ['Puget Sound', 8, -122.45, 47.6],
       ['Hawaii', 6, -155.5, 19.6], ['Aleutians', 6, -170, 52.5], ['Rio Grande', 7, -106.6, 35.1], ['BC coast', 7, -125.5, 50.2]
     ]],
-    [OUT_ROADS, roads, NA_MAX_ZOOM, NA_BOX, [['I-5 Seattle', 8, -122.32, 47.6], ['Trans-Canada Kamloops', 7, -120.3, 50.7], ['I-80 Nebraska', 6, -99, 40.7]]],
-    [OUT_WORLD, ww, WORLD_MAX_ZOOM, [-180, -85, 180, 85], [['Peru coast', 5, -77, -12], ['Japan', 4, 139.7, 35.7]]]
+    [OUT_ROADS, roads, NA_MAX_ZOOM, NA_BOX, [['I-5 Seattle', 8, -122.32, 47.6], ['Trans-Canada Kamloops', 7, -120.3, 50.7], ['I-80 Nebraska', 6, -99, 40.7], ['Pasco rail yard', 8, -119.1, 46.24]]],
+    [OUT_WORLD, ww, WORLD_MAX_ZOOM, [-180, -85, 180, 85], [['Peru coast', 5, -77, -12], ['Japan', 4, 139.7, 35.7]]],
+    [OUT_FORESTS, fo, FOREST_MAX_ZOOM, NA_BOX, [['Gifford Pinchot', 10, -121.8, 46.2], ['Tongass', 6, -133, 56], ['El Yunque', 8, -65.8, 18.3]], forestAttribution]
   ]) {
     console.log(`\nbaking ${basename(out)} ...`);
     const { archive, tileCount } = geojsonLayersToPmtiles(layers, {
@@ -476,7 +503,7 @@ async function main() {
       bounds,
       tolerance: 3,
       name: basename(out, '.pmtiles'),
-      attribution
+      attribution: credit ?? attribution
     });
     if (archive.length > SIZE_LINE_BYTES) throw new Error(`${basename(out)} is ${archive.length} bytes, over the ${SIZE_LINE_BYTES}-byte public-tree line (DR-150)`);
     const { header, meta } = await readBack(archive, canaries);
