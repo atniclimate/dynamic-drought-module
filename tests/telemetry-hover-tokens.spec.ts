@@ -36,8 +36,8 @@ for (const width of [1440, 820]) {
     await expect(chip).toHaveCSS('color', 'rgb(1, 11, 19)');
     const briefing = sidebar.locator('#region-briefing-btn');
     await expect(briefing).toBeVisible();
-    await expect(briefing).toHaveCSS('background-color', 'rgb(30, 36, 44)');
-    await expect(briefing).toHaveCSS('border-top-color', 'rgb(138, 148, 166)');
+    await expect(briefing).toHaveCSS('background-color', 'rgba(255, 255, 255, 0.08)');
+    await expect(briefing).toHaveCSS('border-top-color', 'rgb(255, 255, 255)');
     await briefing.hover();
     await expect(briefing).toHaveCSS('background-color', 'rgb(42, 49, 56)');
     await expect(briefing).toHaveCSS('color', 'rgb(232, 236, 240)');

@@ -93,10 +93,7 @@ async function stubWildfireMapProducts(page: Page): Promise<void> {
 }
 
 async function openMapKey(page: Page): Promise<void> {
-  const drought = page.locator('#conditions-strip-dock .conditions-metric[data-metric="drought"][data-layer-on="true"]');
-  if (await drought.isVisible() && await drought.getAttribute('aria-expanded') === 'false') {
-    await drought.click();
-  }
+  // One box (owner 2026-11-13): the Key toggle carries the reading and is the only door.
   const toggle = page.locator('#map-key-details-toggle');
   if (await toggle.isVisible() && await toggle.getAttribute('aria-expanded') === 'false') {
     await toggle.click();
@@ -260,10 +257,12 @@ test.describe('mobile key growth at 390x844', () => {
     await expectMobileKeyClearance(page, '.map-key-item');
 
     // An explicitly opened key remains open when the viewport grows.
-    // The desktop drought metric in the sidebar's bottom dock tracks it too.
+    // The desktop Key chip, titled by the drought reading (one box), tracks it too.
     await page.setViewportSize({ width: 1280, height: 800 });
     await expect(key).toBeVisible();
-    await expect(page.locator('#conditions-strip-dock .conditions-metric[data-metric="drought"]')).toHaveAttribute('aria-expanded', 'true');
+    const toggle = page.locator('#map-key-details-toggle');
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    await expect(toggle).toHaveAttribute('aria-label', /^(D\d|No polygon)[^.]* in view\. Close /);
     await expect
       .poll(() =>
         page
@@ -760,18 +759,18 @@ test.describe('short landscape coarse-pointer shell', () => {
   });
 });
 
-test.describe('desktop Tribal Nations action above the sticky dock (1440x900)', () => {
+test.describe('desktop Tribal Nations action in the visible column (1440x900)', () => {
   test.use({ viewport: { width: 1440, height: 900 } });
 
   // Visual uniformity wave 1, D5 (2026-11-13): the selected count left the
   // display for the action's accessible name, so the line under the button is
-  // the fault line and draws nothing while both agencies answer.
-  test('at rest, in every hazard mode, the action ends at least 8px above the dock border and its fault line is empty', async ({
+  // the fault line and draws nothing while both agencies answer. The column's
+  // foot dock is gone (owner items 11 and 13), so the column's own foot bounds it.
+  test('at rest, in every hazard mode, the action ends at least 8px above the column foot and its fault line is empty', async ({
     page
   }) => {
     await gotoApp(page);
     const scroller = page.locator('.sidebar-scroll');
-    const dock = page.locator('.sidebar-bottom-dock');
     const action = page.locator('#tribal-nations-brief-action');
     const fault = page.locator('#tribal-nations-brief-action ~ .tribal-nations-health');
 
@@ -788,10 +787,10 @@ test.describe('desktop Tribal Nations action above the sticky dock (1440x900)', 
             await scroller.evaluate((element) => {
               element.scrollTop = 0;
             });
-            const [dockBox, actionBox] = await Promise.all([rect(dock), rect(action)]);
-            return dockBox.top - actionBox.bottom;
+            const [columnBox, actionBox] = await Promise.all([rect(scroller), rect(action)]);
+            return columnBox.bottom - actionBox.bottom;
           },
-          { message: `${key}: the Tribal Nations action sits under the dock` }
+          { message: `${key}: the Tribal Nations action runs past the column foot` }
         )
         .toBeGreaterThanOrEqual(8);
     }

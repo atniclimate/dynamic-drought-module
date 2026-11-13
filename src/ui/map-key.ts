@@ -25,6 +25,7 @@
  */
 
 import { registry } from '../state/registry';
+import { isSpcNoArea } from '../state/spc-no-area';
 import { sstAnomalyScaleHtml } from './sst-anomaly-legend';
 import { timeline } from '../state/timeline';
 import { usdmChangeLegendItems } from '../config/usdm-change';
@@ -41,7 +42,6 @@ import {
   OUTLOOK_LEGEND,
   SST_ANOMALY_LABELS,
   TRIBAL_FAMILY_COLOR,
-  TRIBAL_LINE_COLOR,
   USDM_CATEGORIES,
   USDM_NONE_SWATCH,
   SPC_FIREWX_CATEGORIES
@@ -63,6 +63,7 @@ import { escapeHtml } from '../util/escape';
 import { formatSnapshotTime } from '../util/snapshot-time';
 import { KEY_ELIGIBLE_LABELS, chipFallbackLabel } from '../config/chip-labels';
 import { CHIP_STATE_WORDS, chipStateFromStatuses, type ChipState } from '../config/chip-state';
+import { onConditionsHeadline, type ConditionsHeadline } from '../state/conditions-headline';
 import {
   createHeatRiskSequenceLoader,
   type HeatRiskFrameEventDetail
@@ -70,6 +71,7 @@ import {
 import { openTechnicalInformation } from './impact-panel';
 import { watchDesktopMapSeat } from './map-control-seat';
 import { getTimeBarSpec, onTimeBarSpecChange } from './time-bar';
+import { getActiveLegends, onLegendChange, type LegendSpec } from './legend-registry';
 import { MAP_GROUND_COLOR } from '../config/interface-tokens';
 import { WHP_3D_SHADE_CATEGORIES, WHP_SHADE_CATEGORIES, WHP_SHADE_QUALIFICATION, WHP_SURFACE_OPACITY } from '../config/whp-shade';
 import { FUEL_RISK_TITLE, fireKeySections, noSurfaceKeyAria } from './fire3d-fuel-risk';
@@ -227,18 +229,17 @@ function drynessKeyHtml(): string {
 }
 
 /**
- * Last in every mode's key while a Tribal Nations layer is on (visual uniformity D9): the outline as the map
- * paints it and the group's own name, no caveat. Not a `.map-key-item`: those rows are an issuer's classes.
+ * Last in every mode's key while a Tribal Nations layer is on (visual uniformity D9): the outline and
+ * semi-transparent fill as the map paints them and the group's own name, no caveat. Not a `.map-key-item`: those rows are an issuer's classes.
  * Not gated on status: every pan re-read reports `loading` while the outlines stay drawn, so the row would blink.
  */
 function tribalNationsKeyHtml(): string {
   const active = registry.getActiveKeys();
   if (!TRIBAL_NATIONS_GROUP.members.some((key) => active.has(key))) return '';
-  const box = (color: string, width: number): string =>
-    `<rect x="2" y="2" width="10" height="7" fill="none" stroke="${color}" stroke-width="${width}"/>`;
+  // The map's own pair: an outline over a semi-transparent family fill (about what a reservation shows where AIANNH and BIA overlap).
   return '<span class="map-key-scale" data-tribal-nations-key>' +
     '<svg width="14" height="11" viewBox="0 0 14 11" style="flex:none" aria-hidden="true" focusable="false">' +
-    `${box(TRIBAL_FAMILY_COLOR, 3)}${box(TRIBAL_LINE_COLOR, 1)}</svg>` +
+    `<rect x="2" y="2" width="10" height="7" fill="${TRIBAL_FAMILY_COLOR}" fill-opacity="0.28" stroke="${TRIBAL_FAMILY_COLOR}" stroke-width="1.1" stroke-opacity="0.9"/></svg>` +
     `<span>${escapeHtml(TRIBAL_NATIONS_GROUP.label)}</span></span>`;
 }
 
@@ -877,13 +878,20 @@ export function buildFireKey(
   if (!includeSpcOutlook && !includeNifcPerimeters && !spcLoading && !nifcLoading) {
     throw new Error('A fire key requires at least one active fire product.');
   }
+  // The issuer's no-area answer draws nothing, so the key says so instead of listing three classes that are not on the map.
+  // Only SPC's own answer counts: an empty collection or an expired issuance is no-data too, and says no such thing.
+  const spcNoArea = includeSpcOutlook && registry.getStatus('spc-fire-weather') === 'no-data' && isSpcNoArea();
+  // vocab-allow: verbatim SPC term for this state, from its Day 1 Fire Weather Outlook product page (2026-09-27, found-079)
+  const SPC_NO_AREA_WORDS = 'No Risk Areas Forecast today';
   const outlook =
     includeSpcOutlook || spcLoading
       ? '<span class="map-key-scale" data-spc-fire-weather-key>' +
         '<strong class="map-key-scale-label">SPC Day 1 outlook</strong>' +
         (spcLoading
           ? loadingSectionRow('spc-fire-weather')
-          : SPC_FIREWX_CATEGORIES.map((c) => swatchItem(c.color, c.label)).join('')) +
+          : spcNoArea
+            ? `<span class="map-key-item" data-spc-no-area>${SPC_NO_AREA_WORDS}</span>`
+            : SPC_FIREWX_CATEGORIES.map((c) => swatchItem(c.color, c.label)).join('')) +
         '</span>'
       : '';
   const perimeters =
@@ -907,7 +915,9 @@ export function buildFireKey(
         '</span>'
       : '';
   const ariaParts: string[] = [];
-  if (includeSpcOutlook) {
+  if (spcNoArea) {
+    ariaParts.push(`Storm Prediction Center (SPC) Day 1 fire-weather outlook: ${SPC_NO_AREA_WORDS}.`);
+  } else if (includeSpcOutlook) {
     ariaParts.push(
       'Storm Prediction Center (SPC) Day 1 fire-weather outlook categories.'
     );
@@ -1367,6 +1377,66 @@ function surfaceKey(): HazardKeyResult | null {
 }
 
 /**
+ * Legend sections the builders above already draw, by legend-registry key, so
+ * 'Also on the map' below never repeats one: the keyed products, the NWS
+ * products row, the CPC rows under the SST key, and the 3D shade row
+ * (src/layers/whp-3d.ts shows its section as 'whp-2023').
+ */
+function keyedLegendKeys(productKeys: readonly string[]): ReadonlySet<string> {
+  const keyed = new Set(productKeys);
+  if (keyEligibility().eligible.has('nws-alerts')) keyed.add('nws-alerts');
+  if (keyed.has('sst-anomaly')) for (const [key] of CPC_OUTLOOK_CLASSES) keyed.add(key);
+  if (whpShadeActive) keyed.add('whp-2023');
+  return keyed;
+}
+
+const alsoSectionCache = new WeakMap<LegendSpec, string>();
+
+/**
+ * One section's rows from its own `render` (a spec is rendered once; a layer
+ * that changes its legend shows it again with a new spec). Notes (caveats,
+ * credits, notices) stay in the Legend panel and the Impact Briefing, never on
+ * the map (DR-106; uncluttered rule). A section with a control or an element
+ * id (the ecoregion level selector) cannot be copied without breaking it, so
+ * it is left to the Legend panel: ''.
+ */
+function alsoSectionHtml(spec: LegendSpec): string {
+  let html = alsoSectionCache.get(spec);
+  if (html === undefined) {
+    const body = document.createElement('div');
+    spec.render(body);
+    body.querySelectorAll('.legend-note').forEach((note) => note.remove());
+    html = body.querySelector('[id], button, select, input, textarea') ? '' : body.innerHTML.trim();
+    alsoSectionCache.set(spec, html);
+  }
+  return html;
+}
+
+/**
+ * 'Also on the map' (owner 2026-11-13, item 13 follow-through): every shown
+ * legend section the Key does not already carry, ONLY where the Legend panel
+ * (#legend-panel) has no box (desktop and tablet Brief, every phone sheet
+ * detent; Console's column shows it), so a future layer's legend is reachable with no
+ * code here. Absent when empty.
+ */
+function alsoOnMapHtml(productKeys: readonly string[]): string {
+  const keyed = keyedLegendKeys(productKeys);
+  const rows = getActiveLegends().filter(({ key }) => !keyed.has(key));
+  if (rows.length === 0) return '';
+  const panel = document.getElementById('legend-panel');
+  if (panel && panel.getClientRects().length > 0) return '';
+  const sections = rows
+    .map(({ key, spec }) => ({ key, html: alsoSectionHtml(spec) }))
+    .filter(({ html }) => html)
+    .map(({ key, html }) => `<div class="legend-section" data-legend-also="${escapeHtml(key)}">${html}</div>`)
+    .join('');
+  // DRAFT wording (DR-177)
+  return sections
+    ? `<div class="map-key-also" data-map-key-also><strong class="map-key-scale-label">Also on the map</strong>${sections}</div>`
+    : '';
+}
+
+/**
  * The chip's six-state glyph, read from the layer REGISTRY's own recorded
  * status for the product key(s) `productKeys` names, never from a spec's
  * rendered text (repair round on M10: the old `chipStateFromSpec`
@@ -1382,13 +1452,23 @@ function chipStateFromKeys(productKeys: readonly string[]): ChipState | undefine
 }
 
 /**
- * The chip's three grammar slots (interface-chrome-popups-text.md section
- * 2.4): one label line, the six-state glyph, and an SVG chevron disclosure
+ * A legend glyph (three swatches, three lines) that tells a reader the title opens the key (owner 2026-11-13,
+ * item 4). Decorative: aria-hidden, no title or text, so the chip's name and text stay the mode word.
+ */
+const KEY_GLYPH =
+  '<svg class="map-key-chip-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">' +
+  '<rect x="3" y="3" width="4" height="4" rx="1"/><path d="M11 5h10"/>' +
+  '<rect x="3" y="10" width="4" height="4" rx="1"/><path d="M11 12h10"/>' +
+  '<rect x="3" y="17" width="4" height="4" rx="1"/><path d="M11 19h10"/></svg>';
+
+/**
+ * The chip's grammar slots (interface-chrome-popups-text.md section
+ * 2.4): a decorative key glyph, one label line, the six-state glyph, and an SVG chevron disclosure
  * (turned when the key is open) replacing the CSS `::after` character so
- * its centring can be measured (D1.md M10 Notes). There is no swatch: the
- * chip names a PRODUCT rather than one current value, so an empty box read
- * as an unticked layer; the conditions strip in conditions-strip.tsx
- * carries the single-reading swatch.
+ * its centring can be measured (D1.md M10 Notes). On the desktop chip the
+ * label carries the mode's own lead Conditions-in-view reading, with its
+ * class swatch, when one is live (owner 2026-11-13, one box); otherwise the
+ * keyed product. No empty swatch is ever drawn: it read as an unticked layer.
  */
 function buildChipGrammar(button: HTMLButtonElement): {
   readonly label: HTMLSpanElement;
@@ -1418,6 +1498,7 @@ function buildChipGrammar(button: HTMLButtonElement): {
   disclosure.append(chevron);
 
   button.replaceChildren(label, state, disclosure);
+  button.insertAdjacentHTML('afterbegin', KEY_GLYPH);
   return { label, state };
 }
 
@@ -1498,13 +1579,60 @@ export function initMapKey(): void {
   let family: MapKeyFamily = 'other';
   let keyLabel = '';
   let detailsOpen = false;
+  let headline: ConditionsHeadline | null = null;
+  /** The headline the chip shows: desktop chip only (phone and embed keep their title). */
+  let shown: ConditionsHeadline | null = null;
+  let labelSig = '';
+  let announced = '';
+  let announcedMode = '';
+  // The reading first (the visible label's words), then what a press does (WCAG 2.5.3).
+  const chipName = (): string =>
+    `${shown ? shown.aria + ' ' : ''}${detailsOpen ? 'Close' : 'Open'} ${keyLabel || 'map'} details and key`;
+
+  /**
+   * The desktop chip's title: [swatch] [bold value] text [muted tag]. The lead
+   * reading when one is shown; else the keyed product and, for a failed or
+   * empty source, its canonical status word; else the mode word. Text only,
+   * and the nodes are replaced only when the parts change.
+   */
+  const fillChipLabel = (productLabel: string, keyed: boolean, chipState: ChipState | undefined): void => {
+    const parts: Array<{ cls: string; text: string; color?: string }> = [];
+    if (shown) {
+      if (shown.color) parts.push({ cls: 'map-key-chip-swatch', text: '', color: shown.color });
+      if (shown.tone === 'data' || /^\d+$/.test(shown.value)) {
+        parts.push({ cls: 'map-key-chip-value', text: shown.value });
+        parts.push({ cls: 'map-key-chip-text', text: shown.sublabel.replace(/ in view$/i, '') });
+      } else {
+        parts.push({ cls: 'map-key-chip-text', text: shown.value });
+      }
+      if (shown.stale) parts.push({ cls: 'map-key-chip-tag', text: 'stale' });
+    } else {
+      parts.push({ cls: 'map-key-chip-text', text: keyed ? productLabel : chipFallbackLabel(getSelectedHazard()) });
+      if (keyed && (chipState === 'unavailable' || chipState === 'no-data' || chipState === 'zoom-in')) {
+        parts.push({ cls: 'map-key-chip-tag', text: CHIP_STATE_WORDS[chipState] });
+      }
+    }
+    const sig = JSON.stringify(parts);
+    if (sig === labelSig) return;
+    labelSig = sig;
+    chipGrammar.label.replaceChildren(...parts.map(({ cls, text, color }) => {
+      const span = document.createElement('span');
+      span.className = cls;
+      span.textContent = text;
+      if (color) {
+        span.setAttribute('aria-hidden', 'true');
+        span.style.background = color;
+      }
+      return span;
+    }));
+  };
 
   const setDetailsOpen = (next: boolean): void => {
     detailsOpen = next;
     host.dataset.keyDetailsOpen = String(next);
     content.hidden = !next;
     detailsButton.setAttribute('aria-expanded', String(next));
-    detailsButton.setAttribute('aria-label', `${next ? 'Close' : 'Open'} ${keyLabel || 'map'} details and key`);
+    detailsButton.setAttribute('aria-label', chipName());
     window.dispatchEvent(new CustomEvent('ddm:map-key-details-change', { detail: { open: next } }));
     layout.schedule();
   };
@@ -1516,7 +1644,8 @@ export function initMapKey(): void {
 
   const appPresentationObserver = new MutationObserver(() => update());
   const app = document.getElementById('app');
-  if (app) appPresentationObserver.observe(app, { attributes: true, attributeFilter: ['class'] });
+  // The sheet detent decides, with the class, whether the Legend panel has a box ('Also on the map').
+  if (app) appPresentationObserver.observe(app, { attributes: true, attributeFilter: ['class', 'data-sheet-detent'] });
   // Crossing the phone breakpoint re-renders the strip as well as
   // re-measuring it. `update` diffs against the last rendered html, so this
   // is cheap.
@@ -1630,7 +1759,7 @@ export function initMapKey(): void {
       : '';
     const html =
       `<span class="map-key-label">${escapeHtml(spec.label)}</span>` + spec.itemsHtml + shadeKey + drynessKeyHtml() +
-      tribalNationsKeyHtml();
+      tribalNationsKeyHtml() + alsoOnMapHtml(productKeys);
     if (html !== rendered) {
       // A re-render replaces every node in the strip, so anything the
       // person was operating loses focus. The HeatRisk valid-date select
@@ -1684,14 +1813,21 @@ export function initMapKey(): void {
       const sectionEl = document.getElementById(def.homeId);
       if (sectionEl) sectionEl.hidden = !activeSections.includes(def.key);
     }
-    // The four chip grammar slots (section 2.4): an empty, keylined swatch
-    // (the chip names a product, not one reading; the conditions strip
-    // carries the single-reading swatch), the title computed above with no
-    // text-transform, read from the mode table (replacing the family ternary that used
-    // to hardcode 'FIRE' / 'HEAT RISK' / 'ENSO', a cluster literal DR-113
-    // forbids), and the six-state glyph.
-    chipGrammar.label.textContent = chipTitle;
+    // The chip grammar slots (section 2.4): the key glyph, the title, and the
+    // six-state glyph. On the desktop chip the title is the mode's own lead
+    // reading (with its class swatch) when one is live, else the keyed
+    // product with a failed or empty source's canonical status word, else the
+    // mode word; no text-transform, so issuer words stay verbatim (owner
+    // 2026-11-13, one box). Phones and embeds keep the title computed above,
+    // read from the mode table (DR-113 forbids a cluster literal).
     const chipState = chipStateFromKeys(productKeys);
+    shown = isDesktopChip ? headline : null;
+    if (isDesktopChip) {
+      fillChipLabel(spec.label, productKeys.length > 0, chipState);
+    } else {
+      labelSig = '';
+      chipGrammar.label.textContent = chipTitle;
+    }
     if (chipState) {
       chipGrammar.state.dataset.chipState = chipState;
       chipGrammar.state.title = CHIP_STATE_WORDS[chipState];
@@ -1702,7 +1838,23 @@ export function initMapKey(): void {
       delete chipGrammar.state.dataset.chipState;
       chipGrammar.state.title = '';
     }
-    detailsButton.setAttribute('aria-label', `${detailsOpen ? 'Close' : 'Open'} ${keyLabel} details and key`);
+    detailsButton.setAttribute('aria-label', chipName());
+    // A reading cut off by the ellipsis stays readable on hover.
+    detailsButton.title = shown ? shown.aria : '';
+    // In Brief the strip (and its own aria-live) is parked unseen, so the chip
+    // announces a changed reading; with the strip shown (Console) it stays silent.
+    // The first reading after boot or a mode switch is the switch's own result, not news: it is not announced.
+    const sentence = shown ? shown.aria : '';
+    const strip = document.getElementById('conditions-strip');
+    if (sentence && sentence !== announced) {
+      const mode = getSelectedHazard();
+      if (mode === announcedMode && !(strip && strip.getClientRects().length > 0)) {
+        const status = document.getElementById('map-key-reading-status');
+        if (status) status.textContent = sentence;
+      }
+      announcedMode = mode;
+    }
+    announced = sentence;
     syncFlowPause(host, pauseButton, ensoFlowSnapshot);
     // A MIRROR of the owning layer's own declared register (never
     // computed from the pressed horizon chip, never invented for a
@@ -1823,8 +1975,15 @@ export function initMapKey(): void {
   // The drawer sections follow the selected hazard, which a requestCluster
   // publishes only after its store write (cluster-service.ts publish).
   onCommittedSnapshotChange(update);
+  // The strip's lead reading titles the desktop chip (owner 2026-11-13, one box).
+  onConditionsHeadline((next) => {
+    headline = next;
+    update();
+  });
 
   registry.on('change', update);
+  // A layer shows its legend after its registry change, so 'Also on the map' follows the legend registry itself.
+  onLegendChange(update);
   // Every status transition can change the strip now that a loading key
   // renders a placeholder (W2-D6); the render diffs, so a status that does
   // not change the HTML is a cheap no-op.

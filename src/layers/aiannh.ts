@@ -62,7 +62,7 @@ import type { Feature, FeatureCollection, GeoJsonProperties, Point } from 'geojs
 
 import { URLS } from '../config/urls';
 import { MAP_GROUND_COLOR } from '../config/interface-tokens';
-import { AIANNH_FILL_COLOR, AIANNH_OUTLINE_COLOR, TRIBAL_LABEL_COLOR, TRIBAL_LINE_COLOR } from '../config/palette';
+import { AIANNH_FILL_COLOR, AIANNH_OUTLINE_COLOR, TRIBAL_LABEL_COLOR } from '../config/palette';
 import { buildAiannhPopupModel } from '../ui/popups';
 import { buildPlaceConditionsHtml } from '../ui/popup-conditions';
 import { buildBoundaryContext, censusNationNames, loadCensusNationNames, resolveBoundaryTitle } from '../impact/context';
@@ -89,8 +89,6 @@ const SOURCE_ID = 'aiannh';
  */
 const FILL_LAYER_ID = 'aiannh-fill';
 const OUTLINE_LAYER_ID = 'aiannh-outline';
-/** The light line drawn over the outline, which is its dark edge (visual uniformity D9; palette.ts TRIBAL_LINE_COLOR). */
-const CORE_LAYER_ID = 'aiannh-outline-core';
 /** The Nations' names (owner, 2026-11-12): one point per area at its Census internal point. */
 const LABEL_SOURCE_ID = 'aiannh-nation-labels';
 const LABEL_LAYER_ID = 'aiannh-nation-labels';
@@ -100,7 +98,7 @@ const LABEL_LAYER_ID = 'aiannh-nation-labels';
  * the boundary, the Nations' names, and the street-zoom detail drawn inside
  * the areas, so it eases out with the boundary instead of popping off.
  */
-export const fadeLayerIds = [FILL_LAYER_ID, OUTLINE_LAYER_ID, CORE_LAYER_ID, LABEL_LAYER_ID, ...TRIBAL_DETAIL_LAYER_IDS] as const;
+export const fadeLayerIds = [FILL_LAYER_ID, OUTLINE_LAYER_ID, LABEL_LAYER_ID, ...TRIBAL_DETAIL_LAYER_IDS] as const;
 
 /**
  * The label ladder (methods log M-092): a Nation's name appears from the zoom
@@ -212,22 +210,18 @@ const GEOMETRY_PRECISION = 5;
 /**
  * E1 composition targets (D-0.7.0-041 part 2, review E1.3; D-0.7.0-043
  * part 4): starting values for the stewardship visual review at unit
- * close. Tribal Lands draws a 0.9 px line; the Reservation Boundaries pair
- * (bia-reservations.ts) carries the heavier one (1.1 px). With both layers
- * in the one Tribal family (src/config/palette.ts; pinned to #8d006b by E2,
- * D-0.7.0-058 ruling 3), outline weight is the honest non-color channel
- * that keeps the two representations distinguishable. The selected boost
- * stays.
- *
- * Visual uniformity D9 (2026-11-13): no visible fill in any mode. A wash
- * over a hazard colour hid the class under it and read as a warning in
- * Extreme Heat and Wildfire. The area is a light line over the ruled hex
- * as its dark edge; the fill layer stays, invisible, as the click area.
+ * close. The Tribal Lands wash lightens to 0.12 with a 0.9 px outline; the
+ * Reservation Boundaries pair (bia-reservations.ts) carries the STRONGER
+ * fill (0.18) and the heavier outline (1.1 px). With both layers now in
+ * the one Tribal family (src/config/palette.ts; pinned to #8d006b by E2,
+ * D-0.7.0-058 ruling 3), outline weight and fill strength are the honest
+ * non-color channel that keeps the two representations distinguishable.
+ * The selected boosts stay.
  */
+const FILL_OPACITY_BASE = 0.12;
+const FILL_OPACITY_SELECTED = 0.4;
 const OUTLINE_WIDTH_BASE = 0.9;
 const OUTLINE_WIDTH_SELECTED = 2.4;
-/** The ruled-hex edge shows 1 px on each side of the light line. */
-const EDGE_WIDTH = 2;
 
 type Status = 'loading' | 'ready' | 'degraded' | 'error' | 'no-data';
 
@@ -313,7 +307,7 @@ const responseCache = new Map<string, CachedResponse>();
 /**
  * The BIA reservation fill layer id (src/layers/bia-reservations.ts). When
  * present it is this layer's preferred insertion anchor, so the documented
- * double-draw hierarchy (the finer AIANNH line BELOW the heavier
+ * double-draw hierarchy (the lighter AIANNH wash BELOW the stronger
  * reservation pair) holds
  * regardless of toggle order: without it, toggling AIANNH off and on while
  * BIA is active would reinsert AIANNH on top (Codex Unit B finding 4,
@@ -599,10 +593,17 @@ function addSourceAndLayers(map: maplibregl.Map, geojson: FeatureCollection): vo
       type: 'fill',
       source: SOURCE_ID,
       paint: {
-        // Invisible: MapLibre still hit-tests a fill at opacity zero, so a
-        // click anywhere inside the area opens it (D9, constants above).
+        // A light wash, deliberately below the BIA reservation fill (0.18)
+        // in the family hierarchy so the double-draw stays legible: the
+        // lighter AIANNH wash underneath, the stronger reservation pair on
+        // top (see palette.ts and the E1 constants above).
         'fill-color': AIANNH_FILL_COLOR,
-        'fill-opacity': 0
+        'fill-opacity': [
+          'case',
+          ['boolean', ['feature-state', 'selected'], false],
+          FILL_OPACITY_SELECTED,
+          FILL_OPACITY_BASE
+        ]
       }
     },
     beforeId
@@ -618,27 +619,14 @@ function addSourceAndLayers(map: maplibregl.Map, geojson: FeatureCollection): vo
         'line-width': [
           'case',
           ['boolean', ['feature-state', 'selected'], false],
-          OUTLINE_WIDTH_SELECTED + EDGE_WIDTH,
-          OUTLINE_WIDTH_BASE + EDGE_WIDTH
-        ]
-      }
-    },
-    beforeId
-  );
-
-  // Same anchor, so it lands directly above the outline it lightens.
-  map.addLayer(
-    {
-      id: CORE_LAYER_ID,
-      type: 'line',
-      source: SOURCE_ID,
-      paint: {
-        'line-color': TRIBAL_LINE_COLOR,
-        'line-width': [
-          'case',
-          ['boolean', ['feature-state', 'selected'], false],
           OUTLINE_WIDTH_SELECTED,
           OUTLINE_WIDTH_BASE
+        ],
+        'line-opacity': [
+          'case',
+          ['boolean', ['feature-state', 'selected'], false],
+          1,
+          0.85
         ]
       }
     },
@@ -774,7 +762,6 @@ export function deactivate(map: maplibregl.Map): void {
   stopTribalStreets(map);
   if (map.getLayer(FILL_LAYER_ID)) map.removeLayer(FILL_LAYER_ID);
   if (map.getLayer(OUTLINE_LAYER_ID)) map.removeLayer(OUTLINE_LAYER_ID);
-  if (map.getLayer(CORE_LAYER_ID)) map.removeLayer(CORE_LAYER_ID);
   if (map.getLayer(LABEL_LAYER_ID)) map.removeLayer(LABEL_LAYER_ID);
   if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);
   if (map.getSource(LABEL_SOURCE_ID)) map.removeSource(LABEL_SOURCE_ID);

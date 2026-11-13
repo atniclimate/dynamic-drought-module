@@ -5,7 +5,7 @@
  * Shared desktop order: hazard, time horizon, regional navigation, and place
  * search. Variable view details follow Place, Layers, and Tribal Nations.
  * Share stays in the map column's slot 4 in every view. The
- * active condition readout lives in the sidebar's bottom dock in Brief and
+ * active condition readout is one line under the map's Key chip in Brief and
  * below the hazard buttons in Console; source details stay available
  * through the map key and the Impact Briefing.
  * Place and Layers studios keep their existing route and restoration logic.
@@ -71,30 +71,28 @@ import { Fire3DControl } from './fire3d-control';
 import { Minimap } from './minimap';
 import { TimeCompact } from './time-popover';
 import { wireShellPopover } from './popover-discipline';
-import { holdSummarySeat } from '../disclosure-seat';
 
 const DESKTOP_SHELL_QUERY = '(min-width: 721px)';
 
 const SHELL_REHOST_SEATS = [
   {
+    // Parked unseen in the floating window's dock; the Key chip carries its lead reading (owner 2026-11-13).
     nodeId: 'conditions-strip',
     homeId: 'conditions-strip-home',
-    hostId: 'conditions-strip-dock'
-  },
-  {
-    nodeId: 'legend-panel',
-    homeId: 'legend-panel-home',
-    hostId: 'sidebar-key-host'
+    hostId: 'conditions-strip-dock',
+    onMap: true
   },
   {
     nodeId: 'panel-region',
     homeId: 'panel-region-home',
-    hostId: 'shell-region-host'
+    hostId: 'shell-region-host',
+    onMap: false
   },
   {
     nodeId: 'brief-head',
     homeId: 'brief-head-home',
-    hostId: 'shell-refine-host'
+    hostId: 'shell-refine-host',
+    onMap: false
   }
 ] as const;
 
@@ -102,6 +100,7 @@ interface ShellRehostSeat {
   readonly node: HTMLElement;
   readonly home: HTMLElement;
   readonly host: HTMLElement;
+  readonly onMap: boolean;
 }
 
 function shellRehostSeats(): readonly ShellRehostSeat[] | null {
@@ -111,17 +110,18 @@ function shellRehostSeats(): readonly ShellRehostSeat[] | null {
     const home = document.getElementById(ids.homeId);
     const host = document.getElementById(ids.hostId);
     if (!node || !home || !host) return null;
-    seats.push({ node, home, host });
+    seats.push({ node, home, host, onMap: ids.onMap });
   }
   return seats;
 }
 
 /**
  * Seat the existing region and Brief-head nodes inside the ordered
- * desktop Brief shell, and its condition readout and legend in the
- * sidebar's bottom dock (the legend inside its collapsed disclosure). No surface is cloned or rewired: moving each node preserves
+ * desktop Brief shell, and park its condition readout, unseen, in the
+ * floating window's dock, where it keeps computing the Key chip's lead
+ * reading. No surface is cloned or rewired: moving each node preserves
  * its island root, controls, listeners, and live state. Every ineligible
- * presentation returns all four nodes to static HTML homes.
+ * presentation returns all three nodes to static HTML homes.
  */
 function useDesktopBriefRehost(): void {
   useLayoutEffect(() => {
@@ -166,17 +166,17 @@ function useDesktopBriefRehost(): void {
         seats.some(({ node }) => node.contains(lastRehostFocus))
           ? lastRehostFocus
           : null);
-      const useShell =
+      const briefShell =
         seats.every(({ node, home, host }) =>
           node.isConnected && home.isConnected && host.isConnected
         ) &&
         widthQuery.matches &&
         app.classList.contains('view-brief') &&
-        !app.classList.contains('embed') &&
-        !app.classList.contains('sidebar-collapsed');
+        !app.classList.contains('embed');
+      const useShell = briefShell && !app.classList.contains('sidebar-collapsed');
 
-      for (const { node, home, host } of seats) {
-        if (useShell) {
+      for (const { node, home, host, onMap } of seats) {
+        if (onMap ? briefShell : useShell) {
           if (node.parentElement !== host) host.appendChild(node);
         } else if (
           node.parentElement !== home.parentElement ||
@@ -201,22 +201,7 @@ function useDesktopBriefRehost(): void {
     widthQuery.addEventListener('change', sync);
     sync();
 
-    const legendDisclosure = document.querySelector<HTMLDetailsElement>('.sidebar-legend-disclosure');
-    const sidebarScroll = document.querySelector<HTMLElement>('.sidebar-scroll');
-    const releaseLegendSeat =
-      legendDisclosure && sidebarScroll ? holdSummarySeat(legendDisclosure, sidebarScroll) : null;
-    // Desktop Brief's sticky dock covers the column foot; its height feeds the
-    // column's scroll-padding so keyboard focus never lands under it.
-    const dock = sidebarScroll?.querySelector<HTMLElement>('.sidebar-bottom-dock');
-    const dockObserver =
-      sidebarScroll && dock && typeof ResizeObserver === 'function'
-        ? new ResizeObserver(() => sidebarScroll.style.setProperty('--dock-h', `${dock.offsetHeight}px`))
-        : null;
-    if (dock) dockObserver?.observe(dock);
-
     return () => {
-      dockObserver?.disconnect();
-      releaseLegendSeat?.();
       observer.disconnect();
       widthQuery.removeEventListener('change', sync);
       document.removeEventListener('focusin', rememberRehostFocus);
@@ -282,7 +267,6 @@ interface ShellProps {
   readonly map: maplibregl.Map;
   readonly snap: ReadonlySignal<CommittedShellSnapshot>;
   readonly framing: ReadonlySignal<FramingSelection>;
-  readonly specTick: ReadonlySignal<number>;
   readonly onMinimapNoteChange: (note: string) => void;
 }
 
@@ -344,7 +328,7 @@ function MinimapPopover({
   );
 }
 
-function Shell({ map, snap, framing, specTick, onMinimapNoteChange }: ShellProps) {
+function Shell({ map, snap, framing, onMinimapNoteChange }: ShellProps) {
   useDesktopBriefRehost();
 
   // The sticky horizon row sits under the sticky mode row, so it needs that
@@ -507,7 +491,6 @@ function Shell({ map, snap, framing, specTick, onMinimapNoteChange }: ShellProps
             );
           })}
         </div>
-        <TimeCompact specTick={specTick} pressedHorizon={snapshot.horizon} />
       </div>
 
       <div class="shell-minimap-map">
@@ -558,6 +541,18 @@ function ShellDetails({ map, snap, framingNote }: {
 }
 
 /**
+ * The date line at the very foot of the column (owner 2026-11-13): drawn in
+ * Console only by CSS, so Brief keeps it mounted for text and attributes.
+ * A wrapper so this root subscribes to the committed snapshot.
+ */
+function ShellTimeFoot({ snap, specTick }: {
+  readonly snap: ReadonlySignal<CommittedShellSnapshot>;
+  readonly specTick: ReadonlySignal<number>;
+}) {
+  return <TimeCompact specTick={specTick} pressedHorizon={snap.value.horizon} />;
+}
+
+/**
  * Mount the shell island into its static host. Called from
  * mountSidebarIsland; idempotent by construction (a re-render into the
  * same host replaces the tree). Initializes the S3 cluster service (the
@@ -584,9 +579,11 @@ export function mountShell(host: HTMLElement, map: maplibregl.Map): void {
   const framingNote = signal('');
   const onMinimapNoteChange = (note: string): void => { framingNote.value = note; };
   render(
-    <Shell map={map} snap={snap} framing={framing} specTick={specTick} onMinimapNoteChange={onMinimapNoteChange} />,
+    <Shell map={map} snap={snap} framing={framing} onMinimapNoteChange={onMinimapNoteChange} />,
     host
   );
   const detailsHost = document.getElementById('shell-details-island');
   if (detailsHost) render(<ShellDetails map={map} snap={snap} framingNote={framingNote} />, detailsHost);
+  const timeHost = document.getElementById('shell-time-island');
+  if (timeHost) render(<ShellTimeFoot snap={snap} specTick={specTick} />, timeHost);
 }

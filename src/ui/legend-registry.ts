@@ -40,6 +40,36 @@ export interface LegendSpec {
   render(body: HTMLElement): void;
 }
 
+/**
+ * The shown sections' specs, so a surface that shows legends where this panel
+ * is not displayed (the map Key's 'Also on the map', src/ui/map-key.ts) renders
+ * them from the same `render` and follows them on and off.
+ */
+const shown = new Map<string, LegendSpec>();
+const listeners = new Set<() => void>();
+
+export interface ActiveLegend {
+  readonly key: string;
+  readonly spec: LegendSpec;
+}
+
+/** Every shown section, in panel order (ties keep the order they were shown in). */
+export function getActiveLegends(): readonly ActiveLegend[] {
+  return [...shown]
+    .map(([key, spec]) => ({ key, spec }))
+    .sort((a, b) => a.spec.order - b.spec.order);
+}
+
+/** Called after every show and every hide that removed a section; returns the unsubscribe. */
+export function onLegendChange(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+function notify(): void {
+  for (const listener of listeners) listener();
+}
+
 function panelEl(): HTMLElement | null {
   return document.getElementById(PANEL_ID);
 }
@@ -62,9 +92,15 @@ function sectionFor(key: string): HTMLElement | null {
  * the legend panel is not in the DOM.
  */
 export function showLegend(key: string, spec: LegendSpec): HTMLElement | null {
+  // Recorded first, so the Key still carries a section in a shell without the panel.
+  shown.delete(key);
+  shown.set(key, spec);
   const container = sectionsEl();
   const panel = panelEl();
-  if (!container || !panel) return null;
+  if (!container || !panel) {
+    notify();
+    return null;
+  }
 
   // Rebuild cleanly on a re-activation: drop any stale section for this key.
   sectionFor(key)?.remove();
@@ -77,17 +113,20 @@ export function showLegend(key: string, spec: LegendSpec): HTMLElement | null {
 
   insertOrdered(container, section, spec.order);
   panel.hidden = false;
+  notify();
   return section;
 }
 
 /** Remove a layer's legend section; hide the panel when the last one goes. */
 export function hideLegend(key: string): void {
+  const removed = shown.delete(key);
   sectionFor(key)?.remove();
   const container = sectionsEl();
   const panel = panelEl();
   if (container && panel && container.childElementCount === 0) {
     panel.hidden = true;
   }
+  if (removed) notify();
 }
 
 /** The section element for a key, for in-place dynamic updates (ecoregion list). */

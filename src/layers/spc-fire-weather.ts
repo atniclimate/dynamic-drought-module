@@ -42,6 +42,7 @@ import { buildSpcFireWeatherPopupModel } from '../ui/popups';
 import { clearTimeBar, setTimeBar } from '../ui/time-bar';
 import { fetchJsonWithBudget } from '../util/fetch';
 import { registry } from '../state/registry';
+import { setSpcNoArea } from '../state/spc-no-area';
 
 const LAYER_KEY = 'spc-fire-weather';
 const SOURCE_ID = 'spc-fire-weather';
@@ -213,11 +214,19 @@ function installTimeBar(
   const first = features[0]?.properties ?? noArea ?? null;
   const from = spcMomentUtc(first?.['valid']);
   const until = spcMomentUtc(first?.['expire']);
-  const headline =
+  const period =
     from !== null && until !== null
-      ? `Outlook valid ${from} to ${until}`
+      ? `valid ${from} to ${until}`
       : from !== null
-        ? `Outlook valid from ${from}`
+        ? `valid from ${from}`
+        : null;
+  // The Brief row draws only the headline, so the no-area answer leads it (owner 2026-11-13, item 3).
+  const headline =
+    features.length === 0 && noArea !== null
+      ? // vocab-allow: verbatim SPC term for this state, from its Day 1 Fire Weather Outlook product page (2026-09-27, found-079)
+        `No Risk Areas Forecast · ${period ?? 'valid period not stated by the response'}`
+      : period !== null
+        ? `Outlook ${period}`
         : 'Outlook · valid period not stated by the response';
   const detail =
     features.length > 0
@@ -304,6 +313,7 @@ async function load(map: maplibregl.Map, initial: boolean): Promise<void> {
     // The last good outlook must not stay up as current beside an error.
     (map.getSource(SOURCE_ID) as maplibregl.GeoJSONSource | undefined)?.setData(EMPTY);
     clearTimeBar(LAYER_KEY);
+    setSpcNoArea(false);
     reportStatus('error');
     scheduleRefresh(map);
     return;
@@ -342,6 +352,9 @@ async function load(map: maplibregl.Map, initial: boolean): Promise<void> {
   // The outlook is the displayed surface from here on, outlined areas or
   // none; its time statement stands for both.
   installTimeBar(features, noArea);
+  // The Key says "No Risk Areas Forecast" only for the issuer's own no-area answer still inside its period.
+  const noAreaExpireMs = noArea === null ? null : spcMs(noArea['expire']);
+  setSpcNoArea(noArea !== null && (noAreaExpireMs === null || noAreaExpireMs > Date.now()));
 
   if (drawn.features.length === 0) {
     reportStatus(partial && !expired ? 'degraded' : 'no-data');
@@ -418,6 +431,7 @@ export function deactivate(map: maplibregl.Map): void {
   if (map.getLayer(OUTLINE_LAYER_ID)) map.removeLayer(OUTLINE_LAYER_ID);
   if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);
   clearTimeBar(LAYER_KEY);
+  setSpcNoArea(false);
 }
 
 /**

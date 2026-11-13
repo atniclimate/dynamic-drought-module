@@ -1,6 +1,7 @@
 import { test, expect, type Page } from './offline-test';
 import { gotoApp, layerPill, PILL, search, stubHeatRiskCatalog } from './helpers';
 import { isNwsWwaRequestUrl, NWS_WWA_EMPTY, nwsWwaStubLog } from './nws-wwa-fixtures';
+import { stubWildfireFeeds } from './wildfire-fixtures';
 
 /**
  * S30D D1 M11 (register item owner-1h; task DDM-P10-T11; design record
@@ -127,13 +128,14 @@ test.describe('the Key drawer (S30D D1 M11)', () => {
     await gotoApp(page, '?view=console');
 
     await openKeyDrawer(page);
-    // Visual uniformity wave 1, D8 (2026-11-13): the toggle names the mode
-    // with the word on its button; the product is the drawer's own title
-    // line. Before: the toggle read 'North America drought'. The default
-    // boot (Drought, Current) reads the tri-national NADM key, not the USDM
-    // key (nadmKey vs droughtKey; the latter serves only the outlook
-    // horizons).
-    await expect(page.locator('#map-key-details-toggle')).toHaveText('Drought');
+    // One box (owner 2026-11-13): the desktop toggle's title is the mode's
+    // own lead reading, or the keyed product while none is live, never the
+    // mode word the pressed mode button already shows. The default boot
+    // (Drought, Current) reads the tri-national NADM key, not the USDM key
+    // (nadmKey vs droughtKey; the latter serves only the outlook horizons).
+    await expect(page.locator('#map-key-details-toggle')).toHaveText(/^(D\d|No polygon|North America drought)/);
+    // Item 4 (2026-11-13): a decorative key glyph beside the title tells a reader the chip opens the key.
+    await expect(page.locator('#map-key-details-toggle > svg.map-key-chip-icon')).toHaveAttribute('aria-hidden', 'true');
     await expect(page.locator('#map-key .map-key-label')).toHaveText('North America drought');
 
     const heatButton = page.locator('.shell-cluster-btn[data-cluster="heat"]');
@@ -143,10 +145,10 @@ test.describe('the Key drawer (S30D D1 M11)', () => {
     // Persistence (design record section 2.6): the drawer never closed.
     await expect(page.locator('#map-key-details-toggle')).toHaveAttribute('aria-expanded', 'true');
     await expect(page.locator('#map-key-content')).toBeVisible();
-    // Re-render for the new mode: the toggle names the new mode (before D8
-    // it read 'HeatRisk'), and the drawer's title line follows the new
-    // KeySpec (Heat), not the mode it opened under.
-    await expect(page.locator('#map-key-details-toggle')).toHaveText('Extreme Heat');
+    // Re-render for the new mode: the toggle carries the new mode's own
+    // reading (its alert count) or product, and the drawer's title line
+    // follows the new KeySpec (Heat), not the mode it opened under.
+    await expect(page.locator('#map-key-details-toggle')).toHaveText(/heat\/fire alerts?|HeatRisk/);
     await expect(page.locator('#map-key .map-key-label')).toHaveText('HeatRisk');
   });
 
@@ -415,6 +417,31 @@ test.describe('the Key drawer (S30D D1 M11)', () => {
     });
     expect(embedSeat.inDock, 'embed: the sequence left the dock').toBe(true);
     expect(embedSeat.inSection, 'embed: the sequence entered the drawer section').toBe(false);
+  });
+
+  // Item 13 follow-through (2026-11-13): the Layer legends bar is gone and Brief
+  // hides the Legend panel, so the drawer carries the smoke plumes' legend the
+  // Fire key does not; Console shows the panel, so its drawer does not repeat it.
+  test('in Brief the drawer carries the smoke plumes legend under Also on the map; Console leaves it to the Legend panel', async ({
+    page
+  }) => {
+    await page.setViewportSize(DESKTOP_VIEWPORT);
+    await stubWildfireFeeds(page);
+    await gotoApp(page, '?cluster=fire');
+    await openKeyDrawer(page);
+    const also = page.locator('#map-key-content [data-map-key-also]');
+    await expect(also.locator('.map-key-scale-label')).toHaveText('Also on the map');
+    const smoke = also.locator('[data-legend-also="hms-smoke"]');
+    await expect(smoke.locator('.legend-section-title')).toHaveText('Satellite smoke plumes');
+    await expect(smoke.locator('.legend li')).toHaveCount(4);
+    // The Fire key draws the perimeters itself; notes stay off the map.
+    await expect(also.locator('[data-legend-also="nifc-fires"]')).toHaveCount(0);
+    await expect(also.locator('.legend-note')).toHaveCount(0);
+
+    await gotoApp(page, '?view=console&cluster=fire');
+    await expect(page.locator('#legend-panel .legend-section[data-legend="hms-smoke"]')).toBeVisible();
+    await openKeyDrawer(page);
+    await expect(page.locator('#map-key-content [data-map-key-also]')).toHaveCount(0);
   });
 });
 

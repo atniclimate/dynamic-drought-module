@@ -5,8 +5,9 @@
  * stamp headline (the smallest honest date statement, same doctrine as the
  * embed date chip), FROM the exact TimeBarSpec the owning surface installed.
  * The full temporal controls (rail, mode chips, jumps, play) live in the
- * `#time-bar` rail, which Console and mobile keep; Brief states the date
- * and nothing more.
+ * `#time-bar` rail, which Console and mobile keep. The row sits at the very
+ * foot of the column (#shell-time-island, owner 2026-11-13) and is drawn in
+ * Console only; Brief keeps it mounted but hidden.
  *
  * When no surface owns a spec the row says so honestly rather than
  * hiding: "No dated product is displayed."

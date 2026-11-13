@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 import { test, expect } from './offline-test';
 
 import {
@@ -126,6 +128,28 @@ test.describe('layer-order: thematic reassert (E1 deliverable 2)', () => {
     expect(idx('hms-smoke-fill')).toBeLessThan(idx('us-states-casing'));
     expect(idx('us-states-outline')).toBeLessThan(idx('aiannh-fill'));
     expect(idx('aiannh-fill')).toBeLessThan(idx('bia-reservations-fill'));
+  });
+
+  test('the national border draws above the Drought fill (owner item 12)', () => {
+    const idx = (id: string): number => THEMATIC_STACK_IDS.indexOf(id);
+    expect(idx('nadm-drought-fill')).toBeGreaterThanOrEqual(0);
+    expect(idx('nadm-drought-fill')).toBeLessThan(idx('us-states-outline'));
+    expect(idx('nadm-drought-fill')).toBeLessThan(idx('us-states-casing'));
+    // The outline layer's filter carries kind 'country' as well as 'state'.
+    const states = readFileSync(new URL('../src/layers/states.ts', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
+    const filter = states.match(/const STATE_LINES = \{[\s\S]*?\n\};/)?.[0] ?? '';
+    expect(filter).toContain("'country'");
+    expect(filter).toContain("'state'");
+  });
+
+  test('the coast lines draw above the Drought fill, casings under the lines (owner, 2026-11-13)', () => {
+    const idx = (id: string): number => THEMATIC_STACK_IDS.indexOf(id);
+    for (const id of ['us-coast-casing', 'us-coast-lakes-casing', 'us-coast-outline', 'us-coast-lakes-outline']) {
+      expect(idx(id), id).toBeGreaterThan(idx('nadm-drought-fill'));
+      expect(idx(id), id).toBeLessThan(idx('aiannh-fill'));
+    }
+    expect(idx('us-coast-lakes-casing')).toBeLessThan(idx('us-states-outline'));
+    expect(idx('us-states-outline')).toBeLessThan(idx('us-coast-outline'));
   });
 
   test('the complete chain has explicit condition, event, and reference bands', () => {

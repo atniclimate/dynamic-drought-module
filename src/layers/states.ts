@@ -1,10 +1,17 @@
 /**
  * United States state-boundary layer (E1, national framing).
  *
- * Draws the state lines from the base map's own archive (source `base`, layer
- * `boundary`, kind `state`: the Census 1:500,000 inner lines baked by
- * scripts/build-base-tiles.mjs, so they meet the coast and the borders at the
- * base map's scale) as a quiet slate line on a dark casing. The bundled Census
+ * Draws the state lines and the national border from the base map's own
+ * archive (source `base`, layer `boundary`, kinds `state` and `country`: the
+ * Census 1:500,000 inner lines and the U.S./Canada and U.S./Mexico lines baked
+ * by scripts/build-base-tiles.mjs, so they meet the coast and each other at the
+ * base map's scale) as a quiet slate line on a dark casing, the national border
+ * the same as a state line, and the coast beside them (the archive has no
+ * coastline: the land edge, and the Great Lakes' water edge, are drawn).
+ * They sit in the reference band above the condition fills, so the border and
+ * the coast stay legible over the Drought fill; the
+ * hairline `base-country` under every fill (src/map/style.ts) remains the
+ * fallback when States is off. The bundled Census
  * cartographic boundary file (public/data/us-states.geojson, 1:20,000,000,
  * scripts/build-states.mjs) stays the fully transparent click target and
  * carries the selected-state tint and outline. States are the fourth
@@ -47,20 +54,46 @@ const FILL_LAYER_ID = 'us-states-fill';
 const CASING_LAYER_ID = 'us-states-casing';
 const OUTLINE_LAYER_ID = 'us-states-outline';
 const SELECTED_LAYER_ID = 'us-states-selected';
-/** The base map's North America archive (src/map/style.ts) and its state lines. */
+/**
+ * The base map's North America archive (src/map/style.ts): its state lines and every national border it
+ * holds (the U.S. with Canada and with Mexico, and Natural Earth's other borders inside the archive's box,
+ * such as Mexico with Guatemala), all kind `state` or `country` in its `boundary` layer.
+ */
 const BASE_SOURCE_ID = 'base';
 const STATE_LINES = {
   source: BASE_SOURCE_ID,
   'source-layer': 'boundary',
-  filter: ['==', ['get', 'kind'], 'state'] as maplibregl.FilterSpecification
+  filter: ['match', ['get', 'kind'], ['state', 'country'], true, false] as maplibregl.FilterSpecification
 };
+
+/**
+ * The coast: the archive holds no coastline, so the edge of its `land` polygons is the coast (the line sits on
+ * the land fill's own edge). The Atlas of Canada landmass takes in the Canadian Great Lakes while the Census
+ * land leaves them out, so the five Great Lakes and Georgian Bay also get their own `water` polygon edge: it
+ * lies on the land edge wherever one exists (within half a pixel at zoom 8) and fills in the Canadian shores.
+ * Every other lake keeps no line. The box clip at 14N, 84N and 50W also leaves an edge there (far from the U.S.).
+ * Tile clip edges are not drawn: the archive buffers 64 of 4096 units and MapLibre clips each tile's lines to it.
+ */
+const GREAT_LAKES = ['Lake Superior', 'Lake Michigan', 'Lake Huron', 'Lake Erie', 'Lake Ontario', 'Georgian Bay'];
+const COASTS = [
+  { id: 'us-coast', source: BASE_SOURCE_ID, 'source-layer': 'land' },
+  {
+    id: 'us-coast-lakes',
+    source: BASE_SOURCE_ID,
+    'source-layer': 'water',
+    filter: ['all', ['==', ['get', 'kind'], 'lake'], ['match', ['get', 'name'], GREAT_LAKES, true, false]] as maplibregl.FilterSpecification
+  }
+] as const;
+const coastCasingId = (id: string): string => `${id}-casing`;
+const coastOutlineId = (id: string): string => `${id}-outline`;
 
 /** Fade targets for the sidebar's toggle transitions (LayerModule contract). */
 export const fadeLayerIds = [
   FILL_LAYER_ID,
   CASING_LAYER_ID,
   OUTLINE_LAYER_ID,
-  SELECTED_LAYER_ID
+  SELECTED_LAYER_ID,
+  ...COASTS.flatMap(({ id }) => [coastCasingId(id), coastOutlineId(id)])
 ] as const;
 
 /**
@@ -86,6 +119,25 @@ const OUTLINE_OPACITY_NATIONAL = 0.5;
 // Above every state highway and under the interstates at regional zoom (design pass 2026-11-13).
 const OUTLINE_OPACITY_REGIONAL = 0.8;
 const CASING_COLOR = MAP_GROUND_COLOR;
+
+/**
+ * One look for every line this module draws from the base archive: state lines, national borders (owner,
+ * 2026-11-13: the same colour and weight as the state lines) and the coast. ["zoom"] stays the top-level input.
+ */
+type LinePaint = NonNullable<maplibregl.LineLayerSpecification['paint']>;
+const CASING_PAINT: LinePaint = {
+  'line-color': CASING_COLOR,
+  'line-width': ['interpolate', ['linear'], ['zoom'], 3, 1.4, 8, 2.8],
+  'line-opacity': ['interpolate', ['linear'], ['zoom'], 3, 0.72, 8, 0.84]
+};
+// U4c chrome weights (headroom A5): with states default-on, the line must stay a quiet reference frame at
+// EVERY zoom: hairline at the whole-US framing, a touch heavier once a region fills the view (E1: about half
+// strength at the national framing).
+const OUTLINE_PAINT: LinePaint = {
+  'line-color': STATE_OUTLINE_COLOR,
+  'line-width': ['interpolate', ['linear'], ['zoom'], 3, OUTLINE_WIDTH_NATIONAL, 8, OUTLINE_WIDTH_REGIONAL],
+  'line-opacity': ['interpolate', ['linear'], ['zoom'], 3, OUTLINE_OPACITY_NATIONAL, 8, OUTLINE_OPACITY_REGIONAL]
+};
 
 type Status = 'loading' | 'ready' | 'error' | 'no-data';
 
@@ -176,27 +228,7 @@ export async function activate(map: maplibregl.Map): Promise<void> {
       id: CASING_LAYER_ID,
       type: 'line',
       ...STATE_LINES,
-      paint: {
-        'line-color': CASING_COLOR,
-        'line-width': [
-          'interpolate',
-          ['linear'],
-          ['zoom'],
-          3,
-          1.4,
-          8,
-          2.8
-        ],
-        'line-opacity': [
-          'interpolate',
-          ['linear'],
-          ['zoom'],
-          3,
-          0.72,
-          8,
-          0.84
-        ]
-      }
+      paint: CASING_PAINT
     },
     beforeId
   );
@@ -227,18 +259,18 @@ export async function activate(map: maplibregl.Map): Promise<void> {
       id: OUTLINE_LAYER_ID,
       type: 'line',
       ...STATE_LINES,
-      paint: {
-        'line-color': STATE_OUTLINE_COLOR,
-        // U4c chrome weights (headroom A5): with states default-on, the
-        // line must stay a quiet reference frame at EVERY zoom: hairline at
-        // the whole-US framing, a touch heavier once a region fills the view.
-        // E1 quiets it to roughly half strength at the national framing.
-        'line-width': ['interpolate', ['linear'], ['zoom'], 3, OUTLINE_WIDTH_NATIONAL, 8, OUTLINE_WIDTH_REGIONAL],
-        'line-opacity': ['interpolate', ['linear'], ['zoom'], 3, OUTLINE_OPACITY_NATIONAL, 8, OUTLINE_OPACITY_REGIONAL]
-      }
+      paint: OUTLINE_PAINT
     },
     beforeId
   );
+
+  // The coast, in the state lines' own grey on the same casing, in the same reference band above the fills.
+  for (const { id, ...spec } of COASTS) {
+    const line = (lineId: string, paint: LinePaint): maplibregl.LineLayerSpecification =>
+      ({ id: lineId, type: 'line', ...spec, layout: { 'line-join': 'round' }, paint });
+    map.addLayer(line(coastCasingId(id), CASING_PAINT), beforeId);
+    map.addLayer(line(coastOutlineId(id), OUTLINE_PAINT), beforeId);
+  }
 
   // The selected state's outline, on the coarse click shape. STRUCTURE
   // MATTERS: MapLibre only accepts ["zoom"] as input to a TOP-LEVEL
@@ -285,6 +317,9 @@ export function deactivate(map: maplibregl.Map): void {
   if (map.getLayer(SELECTED_LAYER_ID)) map.removeLayer(SELECTED_LAYER_ID);
   if (map.getLayer(OUTLINE_LAYER_ID)) map.removeLayer(OUTLINE_LAYER_ID);
   if (map.getLayer(CASING_LAYER_ID)) map.removeLayer(CASING_LAYER_ID);
+  for (const { id } of COASTS) {
+    for (const layerId of [coastOutlineId(id), coastCasingId(id)]) if (map.getLayer(layerId)) map.removeLayer(layerId);
+  }
   if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);
 }
 
