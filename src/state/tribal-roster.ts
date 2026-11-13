@@ -155,3 +155,31 @@ export function loadTribalCensusAreas(): Promise<readonly TribalCensusArea[]> {
 export function loadTribalLabelAreas(): Promise<ReadonlyMap<string, readonly string[]>> {
   return loadRosterFile().then((f) => f.labelAreas);
 }
+
+const OWN_NAMES_URL = (import.meta.env?.BASE_URL ?? '/dynamic-drought-module/') + 'data/tribal-own-names.json';
+let ownNamesLoad: Promise<ReadonlyMap<string, string>> | null = null;
+
+/**
+ * A Nation's name in its own language, keyed by its Federal Register label
+ * name (DR-247: curated row by row from the Nation's own public pages,
+ * public/data/tribal-own-names.json). Loaded once; rejects on failure, and a
+ * later call retries.
+ */
+export function loadTribalOwnNames(): Promise<ReadonlyMap<string, string>> {
+  ownNamesLoad ??= fetchJsonWithBudget(OWN_NAMES_URL, null, null, ROSTER_TIMEOUT_MS).then(
+    (json) => {
+      const rows = isObject(json) && Array.isArray(json['rows']) ? json['rows'] : [];
+      return new Map(
+        rows
+          .filter((r): r is { nation: string; ownName: string } => isObject(r) && typeof r['nation'] === 'string' && typeof r['ownName'] === 'string')
+          // MapLibre does no Unicode normalization; a composed letter must arrive composed.
+          .map((r) => [r.nation, r.ownName.normalize('NFC')])
+      );
+    },
+    (err: unknown) => {
+      ownNamesLoad = null;
+      throw err instanceof Error ? err : new Error(String(err));
+    }
+  );
+  return ownNamesLoad;
+}

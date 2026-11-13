@@ -25,7 +25,7 @@ registerHooks({
 });
 
 const { censusLabelAreas, labelName } = await import('../scripts/build-tribal-roster.mjs');
-const { fadeLayerIds, labelMinZoom, nationLabelPoints } = await import('../src/layers/aiannh.ts');
+const { fadeLayerIds, labelMinZoom, nationLabelPoints, nationTextField } = await import('../src/layers/aiannh.ts');
 const { TOP_LABEL_IDS } = await import('../src/map/layer-order.ts');
 
 const ROSTER = JSON.parse(readFileSync(new URL('../public/data/tribal-roster.json', import.meta.url), 'utf8'));
@@ -79,6 +79,46 @@ test('one point per labelled area at the Census internal point, every Nation set
   assert.ok(first.properties.km2 > 0 && second.properties.km2 > first.properties.km2, 'the sort key reads land area');
   assert.equal(nationLabelPoints({ type: 'FeatureCollection', features: [area('9010', 'D1')] }, null).features.length, 0,
     'before the label map loads, no label');
+});
+
+test('a curated own-language name leads its Nation, in the Nation-name face, the English name beneath', () => {
+  const labels = new Map([['9010', ['Nez Perce Tribe', 'Kialegee Tribal Town']], ['9011', ['Kialegee Tribal Town']]]);
+  const own = new Map([['Nez Perce Tribe', 'Stand-in ə̓']]);
+  const [shared, single] = nationLabelPoints(
+    { type: 'FeatureCollection', features: [area('9010', 'D1'), area('9011', 'D1')] },
+    labels,
+    own
+  ).features.map((f) => f.properties);
+  assert.equal(shared.text, 'Stand-in ə̓\nNez Perce Tribe\n\nKialegee Tribal Town');
+  assert.deepEqual(
+    [shared.own0, shared.en0, shared.own1, shared.en1],
+    ['Stand-in ə̓', 'Nez Perce Tribe', undefined, 'Kialegee Tribal Town'],
+    'a Nation with no curated row carries its Federal Register name alone, never a guess'
+  );
+  assert.equal(single.text, 'Kialegee Tribal Town');
+  // One slot per Nation: the own name in its face, then the Federal Register name; a blank line before a later Nation.
+  const field = nationTextField(2);
+  assert.equal(field[0], 'format');
+  const flat = JSON.stringify(field);
+  for (const key of ['own0', 'en0', 'own1', 'en1']) assert.ok(flat.includes(`"${key}"`), key);
+  assert.ok(!flat.includes('"en2"'), 'no slot beyond the most Nations an area holds');
+  assert.equal(flat.split('"DDM Nation Names"').length - 1, 2, 'the Nation-name face only on the own-language sections');
+  assert.equal(JSON.stringify(nationTextField(1)).includes('\\n\\n'), false, 'one Nation, no separator');
+});
+
+test('the shipped own-language rows name labelled Nations once each, with the page and the date read', () => {
+  const { rows } = JSON.parse(readFileSync(new URL('../public/data/tribal-own-names.json', import.meta.url), 'utf8'));
+  const labelled = new Set(Object.values(ROSTER.labelAreas).flat());
+  const seen = new Set();
+  for (const row of rows) {
+    assert.ok(labelled.has(row.nation), `${row.nation} is not a name the Tribal Lands layer labels`);
+    assert.ok(!seen.has(row.nation), `${row.nation} has two rows`);
+    seen.add(row.nation);
+    assert.ok(row.ownName && row.ownName === row.ownName.normalize('NFC') && row.ownName === row.ownName.trim(), row.nation);
+    assert.match(row.page, /^https:\/\/\S+$/, row.nation);
+    assert.match(row.read, /^\d{4}-\d{2}-\d{2}$/, row.nation);
+    assert.ok(row.premise.length > 20, `${row.nation}: what the page says the form is`);
+  }
 });
 
 test('joint-use, state and Hawaiian Home Land areas never carry a label', () => {

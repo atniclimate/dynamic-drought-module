@@ -12,8 +12,19 @@ no-tracking and self-hosted static architecture.
   and Latin Extended ranges of Noto Sans Regular, which cover every map
   label the module currently renders (place labels, power cluster counts
   and the Nino 3.4 region label). New
-  labels that use other scripts need their ranges added here; a missing
-  range fails visibly (the label does not draw), never silently.
+  labels that use other scripts need their ranges added here; since
+  MapLibre 6.7 a missing range is drawn in the viewer's system font with
+  one console warning, so the look depends on the machine until the range
+  is added.
+- `ddm-nation-names.woff2` (receipt: `ddm-nation-names.json`): the face the
+  Tribal Lands labels draw a Nation's own-language name with, cut from Noto
+  Sans Regular by `scripts/cut-nation-names-font.py` and named in the map
+  style's `font-faces` (`src/map/style.ts`). It is fetched only when such a
+  name is on screen. It is a font file and not a glyph range because
+  MapLibre draws a letter with its combining marks as one cluster through
+  the browser, and the file's mark tables place the marks. A curated name
+  with a letter the face lacks fails `tests/font-coverage.test.mjs`; re-cut
+  the face with the script.
 - `glyphs/Noto Sans Regular/512-767.pbf`: the Spacing Modifier Letters
   range carrying the okina (U+02BB), needed by the GNIS-official Hawaiian
   municipal names (as of 2026-07-14, only Līhuʻe).

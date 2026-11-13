@@ -9,6 +9,7 @@ import {
   BASE_REGION_LINE_COLOR,
   BASE_WATER_LABEL_COLOR,
   MAP_GROUND_COLOR,
+  NATION_NAME_FONT,
   PLACE_LABEL_COLOR,
   PLACE_LABEL_HALO,
   STATE_OUTLINE_COLOR
@@ -119,6 +120,9 @@ export function buildBaseStyle(): maplibregl.StyleSpecification {
   return {
     version: 8,
     glyphs: glyphTemplate(),
+    'font-faces': {
+      [NATION_NAME_FONT]: new URL(`${import.meta.env.BASE_URL}fonts/ddm-nation-names.woff2`, document.baseURI).href
+    },
     sources: {
       // atni-geobase: terrain-source seam. The ATNI-GeoBase T0 elevation
       // baseline registers here as a `raster-dem` source (a LOCAL tile set

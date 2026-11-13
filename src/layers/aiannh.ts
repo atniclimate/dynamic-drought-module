@@ -61,7 +61,7 @@ import type * as maplibregl from 'maplibre-gl';
 import type { Feature, FeatureCollection, GeoJsonProperties, Point } from 'geojson';
 
 import { URLS } from '../config/urls';
-import { MAP_GROUND_COLOR } from '../config/interface-tokens';
+import { MAP_GROUND_COLOR, NATION_NAME_FONT } from '../config/interface-tokens';
 import { AIANNH_FILL_COLOR, AIANNH_OUTLINE_COLOR, TRIBAL_LABEL_COLOR } from '../config/palette';
 import { buildAiannhPopupModel } from '../ui/popups';
 import { buildPlaceConditionsHtml } from '../ui/popup-conditions';
@@ -72,7 +72,7 @@ import { fetchBufferedWithBudget, linkAbort } from '../util/fetch';
 import { buildQueryEnvelope, envelopeCovers, toCoverageEnvelope } from '../util/bbox';
 import { assertFeatureCollection, isTruncated } from '../util/geojson-checks';
 import { registry } from '../state/registry';
-import { loadTribalLabelAreas } from '../state/tribal-roster';
+import { loadTribalLabelAreas, loadTribalOwnNames } from '../state/tribal-roster';
 import {
   TRIBAL_DETAIL_LAYER_IDS,
   cancelTribalStreets,
@@ -127,7 +127,8 @@ export function labelMinZoom(areaLand: number, cls: string): number {
  */
 export function nationLabelPoints(
   geojson: FeatureCollection,
-  labels: ReadonlyMap<string, readonly string[]> | null
+  labels: ReadonlyMap<string, readonly string[]> | null,
+  own: ReadonlyMap<string, string> | null = null
 ): FeatureCollection<Point> {
   const features: Feature<Point>[] = [];
   for (const f of geojson.features ?? []) {
@@ -138,37 +139,94 @@ export function nationLabelPoints(
     const lng = parseFloat(String(p['INTPTLON']));
     if (!names?.length || !Number.isFinite(lat) || !Number.isFinite(lng)) continue;
     const areaLand = parseFloat(String(p['AREALAND']));
-    features.push({
-      type: 'Feature',
-      geometry: { type: 'Point', coordinates: [lng, lat] },
-      properties: { text: names.join('\n\n'), km2: areaLand / 1e6 || 0, minzoom: labelMinZoom(areaLand, cls) }
+    // `text` is the whole label as read; en0, own0, en1, ... are the slots nationTextField draws.
+    const properties: Record<string, string | number> = {
+      text: names.map((name) => (own?.has(name) ? `${own.get(name)}\n${name}` : name)).join('\n\n'),
+      km2: areaLand / 1e6 || 0,
+      minzoom: labelMinZoom(areaLand, cls)
+    };
+    names.forEach((name, i) => {
+      properties[`en${i}`] = name;
+      const ownName = own?.get(name);
+      if (ownName) properties[`own${i}`] = ownName;
     });
+    features.push({ type: 'Feature', geometry: { type: 'Point', coordinates: [lng, lat] }, properties });
   }
   return { type: 'FeatureCollection', features };
+}
+
+/** The Federal Register name's size beside the own-language name above it (11.25 px at the label's smallest). */
+const ENGLISH_UNDER_OWN_SCALE = 0.9;
+
+/**
+ * The label's text. Per Nation: its name in its own language, where its row is
+ * curated (DR-247), in the Nation-name face, above its Federal Register name;
+ * a blank line between Nations. One slot per Nation, `slots` being the most
+ * Nations any one area holds: a format expression cannot loop.
+ */
+export function nationTextField(slots: number): maplibregl.ExpressionSpecification {
+  const sections: unknown[] = [];
+  for (let i = 0; i < slots; i++) {
+    if (i) sections.push(['case', ['has', `en${i}`], '\n\n', ''], {});
+    sections.push(
+      ['case', ['has', `own${i}`], ['concat', ['get', `own${i}`], '\n'], ''],
+      { 'text-font': ['literal', [NATION_NAME_FONT]] },
+      ['coalesce', ['get', `en${i}`], ''],
+      { 'font-scale': ['case', ['has', `own${i}`], ENGLISH_UNDER_OWN_SCALE, 1] }
+    );
+  }
+  return ['format', ...sections] as maplibregl.ExpressionSpecification;
 }
 
 /** The roster's label map (Census AIANNH code to the Nations' names) once read; null before. */
 let nationLabels: ReadonlyMap<string, readonly string[]> | null = null;
 let nationLabelsLoad: Promise<void> | null = null;
+/** The Nations' own-language names (Federal Register label name to own name) once read; null before. */
+let ownNames: ReadonlyMap<string, string> | null = null;
+let ownNamesLoad: Promise<void> | null = null;
 
-/** Read the label map once, from the roster's one shared load. A failure is retried by the next activation, never by a pan. */
+/** The most Nations any one labelled area holds (one before the label map is read). */
+function labelSlots(): number {
+  let most = 1;
+  for (const names of nationLabels?.values() ?? []) most = Math.max(most, names.length);
+  return most;
+}
+
+/**
+ * Read the label map once, from the roster's one shared load, and the Nations'
+ * own-language names beside it. A failure of either is retried by the next
+ * activation, never by a pan; the English names never wait for the own names.
+ */
 function loadNationLabels(map: maplibregl.Map): void {
-  if (nationLabels || nationLabelsLoad) return;
-  nationLabelsLoad = loadTribalLabelAreas()
-    .then((labels) => {
-      nationLabels = labels;
-      if (appliedData) setLabelData(map, appliedData);
-    })
-    .catch((err: unknown) => console.warn('[aiannh] Tribal name labels unavailable: the roster did not load.', err))
-    .finally(() => {
-      nationLabelsLoad = null;
-    });
+  if (!nationLabels && !nationLabelsLoad) {
+    nationLabelsLoad = loadTribalLabelAreas()
+      .then((labels) => {
+        nationLabels = labels;
+        if (map.getLayer(LABEL_LAYER_ID)) map.setLayoutProperty(LABEL_LAYER_ID, 'text-field', nationTextField(labelSlots()));
+        if (appliedData) setLabelData(map, appliedData);
+      })
+      .catch((err: unknown) => console.warn('[aiannh] Tribal name labels unavailable: the roster did not load.', err))
+      .finally(() => {
+        nationLabelsLoad = null;
+      });
+  }
+  if (!ownNames && !ownNamesLoad) {
+    ownNamesLoad = loadTribalOwnNames()
+      .then((names) => {
+        ownNames = names;
+        if (appliedData) setLabelData(map, appliedData);
+      })
+      .catch((err: unknown) => console.warn('[aiannh] Own-language Nation names unavailable: their file did not load.', err))
+      .finally(() => {
+        ownNamesLoad = null;
+      });
+  }
 }
 
 /** Rebuild the label points from the areas the layer holds. */
 function setLabelData(map: maplibregl.Map, geojson: FeatureCollection): void {
   const labels = map.getSource(LABEL_SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
-  labels?.setData(nationLabelPoints(geojson, nationLabels));
+  labels?.setData(nationLabelPoints(geojson, nationLabels, ownNames));
 }
 
 /** Symbol anchor so the boundary stacks below basemap labels (shared idiom). */
@@ -635,7 +693,7 @@ function addSourceAndLayers(map: maplibregl.Map, geojson: FeatureCollection): vo
     beforeId
   );
 
-  map.addSource(LABEL_SOURCE_ID, { type: 'geojson', data: nationLabelPoints(geojson, nationLabels) });
+  map.addSource(LABEL_SOURCE_ID, { type: 'geojson', data: nationLabelPoints(geojson, nationLabels, ownNames) });
   // Added on top; reassertLabelOrder keeps it the topmost label (TOP_LABEL_IDS, src/map/layer-order.ts),
   // which MapLibre places first, so a Nation's name wins a collision with a city name.
   map.addLayer({
@@ -646,7 +704,7 @@ function addSourceAndLayers(map: maplibregl.Map, geojson: FeatureCollection): vo
     // The ladder per point. A filter reads the tile's whole zoom, so the 9.5 step shows from zoom 10.
     filter: ['>=', ['zoom'], ['get', 'minzoom']],
     layout: {
-      'text-field': ['get', 'text'],
+      'text-field': nationTextField(labelSlots()),
       'text-font': ['Noto Sans Regular'],
       // Never smaller than the city names beside them (design pass 2026-11-13).
       'text-size': ['interpolate', ['linear'], ['zoom'], 5, 12.5, 8, 14, 12, 15],

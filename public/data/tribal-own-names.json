@@ -1,0 +1,26 @@
+{
+  "_comment": "A Tribal Nation's name in its own language, as the Nation itself publishes it (decision DR-247). One row per Nation, added by hand, only from the Nation's own public pages and only where the page presents the form as the Nation's own name for itself. nation: the Federal Register name as the Tribal Lands label shows it (public/data/tribal-roster.json labelAreas). ownName: the form exactly as the page writes it (capitals, apostrophes and marks kept; Unicode NFC). page: the address read. read: the date read. premise: what the page says the form is. Never from an aggregator, never translated, transliterated or corrected. A Nation whose pages give more than one form, or only a people's or language's name shared with other Nations, has no row. A new letter may need the label face re-cut (scripts/cut-nation-names-font.py; tests/font-coverage.test.mjs says so).",
+  "rows": [
+    {
+      "nation": "Coeur D'Alene Tribe",
+      "ownName": "Schitsu’umsh",
+      "page": "https://www.cdatribe-nsn.gov/our-tribe/",
+      "read": "2026-11-13",
+      "premise": "The page is titled \"The Coeur d’Alene Tribe (Schitsu’umsh)\" and says: \"The original name of the Coeur d’Alene Tribe was Schitsu’umsh ... This has been our name since time immemorial.\" The same page spells a memorial's name \"Shitsu’umsh Warriors\", and the site footer writes the name with a straight apostrophe; the form carried is the one the page states as the name."
+    },
+    {
+      "nation": "Kalispel Indian Community of the Kalispel Reservation",
+      "ownName": "Qlispé",
+      "page": "https://kalispeltribe.com/",
+      "read": "2026-11-13",
+      "premise": "The Tribe's home page says the name Qlispé \"reflects the traditional language of the Tribe\" and quotes its Executive Director of Language and Culture: \"We are Qlispé. We are Camas People.\""
+    },
+    {
+      "nation": "Lummi Tribe of the Lummi Reservation",
+      "ownName": "Lhaq'temish",
+      "page": "https://www.lummi-nsn.gov/",
+      "read": "2026-11-13",
+      "premise": "The Nation's home page says: \"We are the Lhaq'temish, the Lummi People.\" A menu entry for the Lhaqtemish Foundation, an organization's name, drops the apostrophe."
+    }
+  ]
+}
