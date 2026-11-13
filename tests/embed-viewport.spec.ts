@@ -217,6 +217,13 @@ test.describe('Embed at 200x600 (minimum-width iframe floor)', () => {
     // and the credits links must land in the panel DOM.
     const infoButton = embedded.locator('#map-info-btn');
     await expect(infoButton).toBeVisible();
+    // This raw boot has no boot-idle wait, and the canvas above is visible
+    // before the disclosure is wired (initMapInformation runs after the map
+    // is made). The credits pointer is built in the same synchronous pass
+    // that binds the button's click, so its presence is the wired signal;
+    // a click before it opened nothing and read zero pointers (run
+    // 43391207193, green on the retry).
+    await expect(embedded.locator('#map-info-attribution button[data-open-acknowledgements]')).toHaveCount(1);
     await infoButton.click();
     // Value-only migration (S30D D1 M22, DR-162): the credits line holds
     // the pointer to the Acknowledgements; no credit rides the map itself

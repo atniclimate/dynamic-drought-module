@@ -157,7 +157,9 @@ test.describe('DDM-P2-T09: search resolves the same canonical place reference', 
       // region-briefing trigger becomes this place's "Open briefing" door
       // (src/ui/sidebar.ts updateRegionBriefingTrigger; visual uniformity
       // wave 1, D6: one name for the door. Before: 'See what this means').
-      await expect(briefingBtn).toHaveText('Open briefing');
+      // Repair R2: the door shows the place's name above those words.
+      await expect(briefingBtn.locator('.region-briefing-place')).toHaveText('Washington');
+      await expect(briefingBtn.locator('.region-briefing-action')).toHaveText('Open briefing');
       await briefingBtn.click();
       await expect(page.locator('#impact-panel-title')).toHaveText('Washington');
     });

@@ -129,10 +129,11 @@
           <!-- DisplaySummary owns the live summary in the shell; do not duplicate it here. -->
           <div id="layers-studio-entry-host"></div>
           <div id="brief-secondary-actions"></div>
-          <!-- The chosen place's name. Its one briefing door is the region
-               row's (#region-briefing-btn), in Brief and Console alike. -->
+          <!-- The chosen place's name, announced and not drawn: the one
+               briefing door (#region-briefing-btn, the region row's, in
+               Brief and Console alike) shows it. -->
           <div class="brief-selection-summary" id="brief-selection-summary" hidden>
-            <p class="brief-place-context" id="brief-place-context" aria-live="polite" hidden>
+            <p class="brief-place-context sr-only" id="brief-place-context" aria-live="polite" hidden>
               <span>Selected place</span>
               <strong id="brief-place-name"></strong>
             </p>

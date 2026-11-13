@@ -339,30 +339,44 @@
   #app[data-sheet-detent] .map-overlay-controls > :not(.studio-linkout-pair) {
     display: none;
   }
-  /* The pre-release mark is off the column (visual uniformity wave 1, D8):
-     it keeps its home seat in this container and sits beside the scale
-     rulers, as on the desktop (180px is the rulers' reach plus 8px, the
-     desktop rule's own number in app.css), and rides the sheet's top edge
-     with them. It stays non-interactive and under the sheet's glass.
+  /* The pre-release mark is off the column (visual uniformity wave 1, D8)
+     and holds one fixed corner (repair R3): the top of the map, against the
+     column's inner edge, level with the column's first cell. Beside the
+     scale rulers it rode the sheet's top edge into the middle of the map
+     and lay under the 3D tilt pad. Up here no sheet stop reaches it (the
+     full stop ends under the key chip's row) and the title chip, the
+     rulers and the pad are elsewhere. It is the lowest chrome on the map:
+     whatever opens across this band (the key's drawer, Map information,
+     the loading pill, a folded group's row) covers it and is never drawn
+     under it. It stays non-interactive.
      --edge-badge-block above stays declared for the planner's mirror test;
      no rule reads it now. */
   #app[data-sheet-detent] .map-overlay-controls > .test-preview-badge {
     display: block;
     position: fixed;
-    left: calc(env(safe-area-inset-left, 0px) + 180px);
-    bottom: calc(var(--sheet-lift, 0px) + 12px);
+    top: calc(env(safe-area-inset-top, 0px) + var(--edge-inset));
+    right: calc(
+      env(safe-area-inset-right, 0px) + var(--edge-inset) + var(--edge-column-w) + var(--edge-gap)
+    );
+    z-index: var(--z-map-chrome);
     /* The phone's glass and ink, as the mark wore on the column: about
        10:1 over a white map. */
     color: var(--ink-soft);
     background: var(--glass-fill-solid);
     border-color: var(--glass-edge);
   }
+  /* The container gives up its own layer here, so the mark's level above is
+     read against the map's chrome and not inside the controls' layer; the
+     link-outs, the one other thing drawn in it, keep the controls' level. */
   #app[data-sheet-detent] .map-overlay-controls {
     right: calc(
       env(safe-area-inset-right, 0px) + var(--edge-inset) + var(--edge-column-w) + var(--edge-gap)
     );
+    z-index: auto;
   }
   #app[data-sheet-detent] .map-overlay-controls > .studio-linkout-pair {
+    position: relative;
+    z-index: var(--z-map-control);
     max-width: calc(
       100vw - var(--edge-column-w) - var(--edge-gap) - 2 * var(--edge-inset) - 12px
     );

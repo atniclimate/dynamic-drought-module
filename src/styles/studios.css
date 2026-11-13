@@ -66,15 +66,24 @@
   /* "All" takes its own row; the place types share the next in equal
      columns, one per type however many there are. A flex row, not auto-fit
      tracks: a spanning "All" keeps every track open, so a wide rail drew
-     more columns than there are types. A long name wraps inside its chip. */
+     more columns than there are types.
+
+     A chip's name is one line and never breaks inside a word (repair R4:
+     at 820 "Watersheds" broke and "Tribal Nations" wrapped). While the rail
+     is at least --place-type-row wide the types share one row; under it the
+     basis flips to half the rail and they go two by two. The measure is the
+     room today's longest name needs in each of today's four chips, in rem
+     so it grows with the text; a longer list than that wraps whole chips
+     onto the next row (no chip shrinks under its name). */
   #place-studio-root .place-studio-type-rail {
+    --place-type-row: 26rem;
     display: flex;
     flex-wrap: wrap;
   }
   #place-studio-root .place-studio-type {
-    flex: 1 1 0;
-    min-width: 0;
-    overflow-wrap: break-word;
+    flex: 1 1 clamp(0px, (var(--place-type-row) - 100%) * 999, 50% - var(--ctl-gap) / 2);
+    padding-inline: 6px;
+    white-space: nowrap;
   }
   #place-studio-root .place-studio-type:first-child {
     flex-basis: 100%;

@@ -975,10 +975,18 @@ function updateRegionBriefingTrigger(regionKey: RegionKey | null | undefined): v
   // A selected map place takes precedence over the region anchor (F3, the
   // answer-first front door): the button becomes "Open briefing" for the
   // place the user just clicked, the phone's and the Place studio's words.
+  // The door carries the place's name on its first line, whole (repair R2):
+  // it is the one place the column names the chosen place.
   const place = getPlaceSelection();
   if (place) {
     btn.hidden = false;
-    btn.textContent = 'Open briefing';
+    const name = document.createElement('span');
+    name.className = 'region-briefing-place';
+    name.textContent = place.label;
+    const action = document.createElement('span');
+    action.className = 'region-briefing-action';
+    action.textContent = 'Open briefing';
+    btn.replaceChildren(name, action);
     // Mode-neutral on purpose: the door opens the same briefing in every mode.
     // The name starts with the visible words (WCAG 2.5.3) and adds the place.
     btn.setAttribute('aria-label', `Open briefing for ${place.label}`);

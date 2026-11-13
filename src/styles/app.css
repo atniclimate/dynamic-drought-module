@@ -1161,36 +1161,6 @@ button.conditions-metric:hover .conditions-action-hide {
   margin: 6px 0 10px;
 }
 
-.brief-place-context {
-  display: grid;
-  gap: 2px;
-  margin: 0;
-  padding: 8px 10px;
-  background: var(--accent-soft);
-  border-left: 2px solid var(--accent);
-  border-radius: var(--radius-sm);
-  color: var(--fg-1);
-}
-.brief-place-context[hidden] { display: none; }
-.brief-place-context span {
-  font-family: var(--font-display);
-  font-size: 9px;
-  font-weight: var(--fw-subtitle);
-  letter-spacing: var(--track-caps-sm);
-  text-transform: uppercase;
-  color: var(--fg-3);
-}
-.brief-place-context strong {
-  font-family: var(--font-display);
-  font-size: 14px;
-  font-weight: var(--fw-title);
-  color: var(--fg-0);
-}
-.brief-place-context small {
-  font-size: 10px;
-  color: var(--fg-2);
-}
-
 #layers-studio-entry-host { margin-top: 12px; }
 #layers-studio-entry-host:empty { display: none; }
 /* The Tribal Nations button spans the row under the two doors, one control
@@ -1199,14 +1169,6 @@ button.conditions-metric:hover .conditions-action-hide {
 #brief-secondary-actions .tribal-nations-brief-row {
   padding: var(--ctl-gap) 0 0;
 }
-/* The chosen place: its name. Its one briefing door is the region row's. */
-.brief-selection-summary {
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid var(--line);
-}
-.brief-selection-summary[hidden] { display: none; }
-
 /* The Place and Layers doors wear THE CONTROL FACE (the shell section). */
 .brief-console-door {
   display: block;
@@ -1261,7 +1223,9 @@ button.conditions-metric:hover .conditions-action-hide {
   appearance: none;
   width: 100%;
   margin-top: 8px;
-  padding: 9px 12px;
+  /* Four pixels above and below: the door's two lines (the chosen place's
+     name, then "Open briefing") fit the row the shell reserves for it. */
+  padding: 4px 12px;
   min-height: 38px;
   background: var(--accent-soft);
   color: var(--fg-0);
@@ -1274,6 +1238,19 @@ button.conditions-metric:hover .conditions-action-hide {
   text-align: left;
   cursor: pointer;
   transition: all 0.12s ease;
+}
+/* The one door carries the chosen place's name (visual uniformity wave 1,
+   repair R2): the name whole, on as many balanced lines as it needs and
+   never cut, over the words "Open briefing". Both lines keep the door's
+   colour, so the hover and pressed faces hold. */
+.region-briefing-place,
+.region-briefing-action {
+  display: block;
+  line-height: 1.4;
+}
+.region-briefing-place {
+  font-weight: var(--fw-title);
+  overflow-wrap: break-word;
 }
 .region-briefing-btn:hover {
   background: var(--accent);
@@ -2389,6 +2366,23 @@ button.conditions-metric:hover .conditions-action-hide {
 @media (pointer: coarse), (max-width: 720px) {
   .ddm-coordinated-popup .maplibregl-popup-content {
     --popup-close-seat: var(--touch-target);
+  }
+}
+/* A narrow iframe under a mouse is not a phone. The width half of the query
+   above reads the frame's own width, so a 200 px embed on a desktop page
+   took the 44 px corner and its 28 px band, and the band cut the card's
+   date (one unbreakable run) at the embed's width floor. An embed with a
+   fine pointer keeps the compact corner and gives the head its full width,
+   as it had before wave 1; a finger in an embed still gets the touch floor
+   and its seat from the query above. */
+@media (pointer: fine) and (max-width: 720px) {
+  .app-shell.embed .maplibregl-popup-close-button {
+    min-width: var(--pointer-target) !important;
+    min-height: var(--pointer-target) !important;
+  }
+  .app-shell.embed .ddm-coordinated-popup .coordinated-response-head,
+  .app-shell.embed .ddm-coordinated-popup .maplibregl-popup-content.ddm-popup-compact .coordinated-response-head {
+    padding-inline-end: 0;
   }
 }
 
@@ -5777,12 +5771,16 @@ a.impact-resource-link::after {
    the sidebar layer name, the popup's kind-of-place line and its
    briefing door among them; since D8 also the date stamps, a place's
    name in the Place studio, the briefing's title, its resource and source
-   names, and the phone's report door. */
+   names, and the phone's report door. A resource's description and agency
+   line balance too: pretty reads a last word with a hyphen in it
+   ("sub-programs.") as two and leaves it alone on its line. So do the
+   chosen place's name on its briefing door and a tap card's view line. */
 :where(body:not(:has(> .app-shell.embed)))
   :where(h1, h2, h3, h4, summary, legend, [data-popup-slot='title'], .panel-title, .map-key-label,
     .shell-time-headline, .heatrisk-sequence-heading, .layer-toggle-name, .popup-agency, .popup-impact-btn,
     .impact-resource-label, .time-bar-stamp-headline, .shell-time-headline-detail, .lead-together-class,
-    .lead-source-name, .place-studio-option-name, #sheet-report-door, .ack-name, #impact-panel-title) {
+    .lead-source-name, .place-studio-option-name, #sheet-report-door, .ack-name, #impact-panel-title,
+    .impact-resource-desc, .impact-resource-agency, .region-briefing-place, .panel-response-context) {
   text-wrap: balance;
 }
 @media (min-width: 721px) {
@@ -5790,7 +5788,7 @@ a.impact-resource-link::after {
      the fit test (tests/text-registration.spec.ts) proves they fit. The
      design's min-inline-size: 0 is left out: it would let a flex item
      shrink below its one-line label, the overflow the fit test forbids.
-     The horizon title is not in this list: it takes two balanced lines in
+     The horizon title is not in this list: it stacks one word per line in
      its equal column (visual uniformity wave 1, D4). */
   /* A layer row's status line is a sentence, not a label: it wraps
      (tests/chrome-css-faces.test.mjs). */
@@ -7539,11 +7537,14 @@ a.impact-resource-link::after {
    plain-text alternate there instead (D1 M4 repair, found-024): the row
    keeps var(--shell-region-row) in every state, so it is never an empty
    reserved band and #brief-search below never moves when the door appears
-   or disappears (the 2026-09-13 stable-position rule). */
+   or disappears (the 2026-09-13 stable-position rule). The door's row is
+   the touch floor on every pointer: that holds its two lines, a chosen
+   place's one-line name over "Open briefing" (repair R2). A name that
+   needs a second line is never cut, so it alone grows the row. */
 #shell-region-host > #panel-region {
   --shell-region-row: 38px;
   display: grid;
-  grid-template-rows: repeat(2, minmax(var(--shell-region-row), auto));
+  grid-template-rows: minmax(var(--shell-region-row), auto) minmax(var(--touch-target), auto);
   gap: 8px;
 }
 #shell-region-host .region-briefing-btn,
@@ -8072,20 +8073,24 @@ a.impact-resource-link::after {
   gap: var(--ctl-gap);
 }
 .shell-horizon-btn {
-  /* The title may take two balanced lines (D4), so the row is never under
-     40 px; the tighter padding holds two lines and, in the narrow tablet
-     column, the longest word. */
+  /* Every title stacks its words (D4), so the row is never under 40 px; the
+     tighter padding holds two lines and, in the narrow tablet column, the
+     longest word. */
   min-height: max(var(--ctl-min-h), 40px);
   padding: 4px;
 }
 /* Title from HORIZON_CHROME (DDM-P8-T03, R1, 2026-09-07). The sub-line
    ("now", "days to weeks") is the button's title: its tooltip and its
-   accessible description (D4). */
+   accessible description (D4). One word per line at every width, so the N
+   buttons read alike ("Current / Conditions", "Near / Term"): the box is as
+   wide as its longest word and sits in the middle of its column. */
 .shell-horizon-btn-title {
   display: block;
+  inline-size: min-content;
+  max-inline-size: 100%;
+  margin-inline: auto;
   /* The supplied Spartan face needs room for its full ascent/descent. */
   line-height: 1.4;
-  text-wrap: balance;
   overflow-wrap: break-word;
 }
 /* Honest disablement for custom compositions (DG-080 r2 finding 1):

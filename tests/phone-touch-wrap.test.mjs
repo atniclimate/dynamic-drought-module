@@ -95,6 +95,41 @@ test('the popup close corner takes the floor and its seat on a phone as on a coa
   );
 });
 
+// The repair batch after look 2 and the first Validate run (2026-11-13).
+test('a narrow embed under a mouse keeps the compact popup corner and the full head', () => {
+  const block = app.match(/@media \(pointer: fine\) and \(max-width: 720px\) \{([\s\S]*?)\r?\n\}/);
+  assert.ok(block, 'the fine-pointer embed exception is gone');
+  assert.match(
+    block[1],
+    /\.app-shell\.embed \.maplibregl-popup-close-button\s*\{\s*min-width:\s*var\(--pointer-target\) !important;\s*min-height:\s*var\(--pointer-target\) !important;/
+  );
+  assert.match(
+    block[1],
+    /\.app-shell\.embed \.ddm-coordinated-popup \.coordinated-response-head,\s*\.app-shell\.embed \.ddm-coordinated-popup \.maplibregl-popup-content\.ddm-popup-compact \.coordinated-response-head\s*\{\s*padding-inline-end:\s*0;/
+  );
+  // Every selector in it is an embed's: a phone-width full page keeps the touch floor.
+  for (const selector of block[1].replace(/\{[^}]*\}/g, ',').split(',').map((s) => s.trim()).filter(Boolean)) {
+    assert.ok(selector.startsWith('.app-shell.embed '), `the exception reaches the full page: ${selector}`);
+  }
+});
+
+test('the repaired wrapping: stacked horizon titles, whole type chips, balanced last lines', async () => {
+  const title = app.match(/^\.shell-horizon-btn-title\s*\{([^}]*)\}/m);
+  assert.ok(title, 'the horizon title rule is gone');
+  assert.match(title[1], /inline-size:\s*min-content;/);
+  assert.match(title[1], /margin-inline:\s*auto;/);
+  const balance = app.match(/^:where\(body:not\(:has\(> \.app-shell\.embed\)\)\)\s+:where\(h1, h2, h3, h4,([^{]*)\{\s*text-wrap:\s*balance;/m);
+  for (const selector of ['.impact-resource-desc', '.impact-resource-agency', '.region-briefing-place', '.panel-response-context']) {
+    assert.ok(balance?.[1].includes(selector), `${selector} is not balanced`);
+  }
+  const studios = strip(await read('src/styles/studios.css'));
+  const chip = studios.match(/@media \(min-width: 721px\) \{[\s\S]*?#place-studio-root \.place-studio-type\s*\{([^}]*)\}/);
+  assert.ok(chip, 'the desktop and tablet type chip rule is gone');
+  assert.match(chip[1], /white-space:\s*nowrap;/);
+  assert.match(chip[1], /flex:\s*1 1 clamp\(0px, \(var\(--place-type-row\) - 100%\) \* 999, 50% - var\(--ctl-gap\) \/ 2\);/);
+  assert.ok(!/overflow-wrap|min-width:\s*0/.test(chip[1]), 'a type chip may break or shrink under its name again');
+});
+
 test('the Brief door drops the PLACE button, and only that door does', () => {
   const hides = [...app.matchAll(/([^{}]*#sheet-place-studio-entry[^{}]*)\{\s*display:\s*none;/g)].map((m) => m[1].trim());
   assert.deepEqual(hides, ["#app[data-sheet-detent][data-sheet-tab='brief'] #sheet-place-studio-entry"]);
@@ -103,10 +138,18 @@ test('the Brief door drops the PLACE button, and only that door does', () => {
 test('the pre-release mark is off the column and still drawn on a phone', () => {
   assert.doesNotMatch(manager, /test-preview-badge|\.prepend\(/, 'the column manager seats the mark again');
   assert.doesNotMatch(column, /\.edge-column[^{]*\.test-preview-badge/, 'a column face for the mark is back');
-  assert.match(
-    column,
-    /#app\[data-sheet-detent\] \.map-overlay-controls > \.test-preview-badge\s*\{\s*display:\s*block;\s*position:\s*fixed;/
+  const mark = column.match(
+    /#app\[data-sheet-detent\] \.map-overlay-controls > \.test-preview-badge\s*\{\s*display:\s*block;\s*position:\s*fixed;([^}]*)\}/
   );
+  assert.ok(mark, 'the mark is no longer drawn on a phone');
+  // Repair R3: one fixed corner at the top of the map, beside the column; it
+  // no longer rides the sheet's top edge into the middle of the map, and it
+  // is the lowest chrome, so what opens across that band covers it.
+  assert.match(mark[1], /top:\s*calc\(env\(safe-area-inset-top, 0px\) \+ var\(--edge-inset\)\);/);
+  assert.match(mark[1], /right:\s*calc\(\s*env\(safe-area-inset-right, 0px\) \+ var\(--edge-inset\) \+ var\(--edge-column-w\) \+ var\(--edge-gap\)\s*\);/);
+  assert.match(mark[1], /z-index:\s*var\(--z-map-chrome\);/);
+  assert.ok(!/sheet-lift|bottom:/.test(mark[1]), 'the mark rides the sheet again');
+  assert.match(column, /#app\[data-sheet-detent\] \.map-overlay-controls\s*\{[^}]*z-index:\s*auto;/);
 });
 
 test('the map title reads the mode table outside an embed, and the accessible name keeps the product', () => {

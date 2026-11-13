@@ -53,15 +53,21 @@ test.describe('D-0.7.0-067 contextual time rail', () => {
     await search.fill('oregon');
     await page.locator('#brief-search [data-search-kind="place"][data-search-id="OR"]').click();
     await expect(page.locator('#brief-place-name')).toHaveText('Oregon');
-    await expect(page.locator('#brief-secondary-actions + #brief-selection-summary #brief-place-context')).toBeVisible();
+    // Repair R2 (2026-11-13): the name card left the column; its paragraph
+    // stays as the visually hidden live region that announces the choice.
+    await expect(page.locator('#brief-secondary-actions + #brief-selection-summary #brief-place-context')).toHaveClass(/\bsr-only\b/);
     await expect(page.locator('#brief-head #brief-place-context')).toHaveCount(0);
-    // Visual uniformity wave 1, D6 (2026-11-13): the card names the place and
-    // the sentence that repeated it is gone; the chosen place has ONE briefing
-    // door, the region row's, where the Brief column once added a second.
+    // Visual uniformity wave 1, D6 (2026-11-13): the sentence that repeated
+    // the name is gone; the chosen place has ONE briefing door, the region
+    // row's, where the Brief column once added a second.
     await expect(page.locator('#brief-selection-summary')).not.toContainText('focused on');
     await expect(page.locator('#brief-full-report-link')).toHaveCount(0);
     const door = page.locator('#shell-region-host #region-briefing-btn');
     await expect(door).toBeVisible();
+    // The door carries the name on its own line, over its two words (R2).
+    await expect(door.locator('.region-briefing-place')).toHaveText('Oregon');
+    await expect(door.locator('.region-briefing-action')).toHaveText('Open briefing');
+    await expect(door).toHaveAccessibleName('Open briefing for Oregon');
 
     // Summary-first (D-0.7.0-070): the desktop search select behaves like
     // a map click; NO briefing opens until the one door is used, and the

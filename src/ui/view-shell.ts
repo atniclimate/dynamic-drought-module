@@ -459,10 +459,11 @@ function syncBriefingTitle(): void {
 
 /**
  * Reflect the existing place-selection store into the Brief display: the
- * chosen place's name and nothing more. Its one briefing door is the region
- * row's (#region-briefing-btn, src/ui/sidebar.ts), in Brief and Console alike;
- * the sentence that repeated the name left the display (visual uniformity
- * wave 1, D6). Presentation only: the store, report opener, and URL behavior
+ * chosen place's name, announced through a visually hidden live region and
+ * nothing more. The name is drawn on its one briefing door, the region row's
+ * (#region-briefing-btn, src/ui/sidebar.ts), in Brief and Console alike; the
+ * card and the sentence that repeated it left the display (visual uniformity
+ * wave 1, D6 and repair R2). Presentation only: the store, report opener, and URL behavior
  * remain the single authorities, and nothing shows before an explicit
  * selection exists.
  */
