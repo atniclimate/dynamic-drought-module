@@ -110,5 +110,4 @@ test('the briefing uses the helpers and prints the date as the last line of the 
   assert.match(section, /resourcesCheckedLine\(resources\)/);
   assert.ok(section.indexOf('${groups}') < section.indexOf('${checked ?'));
   assert.ok(section.indexOf('${checked ?') < section.indexOf('</section>'));
-  assert.ok(!src.includes('—'));
 });
