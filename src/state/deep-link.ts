@@ -175,8 +175,6 @@ export async function openStateBriefing(
      * padding and returns the padding to use; it never replaces the rule.
      */
     padding?: (base: maplibregl.PaddingOptions) => maplibregl.PaddingOptions;
-    /** False keeps the drought read at the State's interior point (a city's briefing); otherwise it reads the State's outline. */
-    area?: boolean;
   } = {}
 ): Promise<void> {
   let feature: Feature | undefined;
@@ -279,7 +277,7 @@ export async function openStateBriefing(
     lngLat
   );
   const context = bbox
-    ? { ...rawContext, bbox, pointInsidePlace: true, ...(opts.area === false ? {} : { placeGeometry: feature.geometry }) }
+    ? { ...rawContext, bbox, pointInsidePlace: true, placeGeometry: feature.geometry }
     : rawContext;
   openImpactPanel(context);
 }

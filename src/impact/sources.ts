@@ -493,19 +493,81 @@ const USDM_PERCENTILE_BASIS =
 const MAX_OUTLINE_CHARS = 200_000;
 
 /**
+ * Simplification tolerances in degrees, tried in turn until the outline fits:
+ * about 110 m doubling to about 7 km. A simplified outline can miss or add a
+ * sliver at its edge, which matters nothing at the drought map's scale (the
+ * USDM draws its categories over whole regions).
+ */
+const OUTLINE_TOLERANCES = [0.001, 0.002, 0.004, 0.008, 0.016, 0.032, 0.064];
+
+/** Squared distance from `p` to the segment `a`-`b` (to `a` when the segment is a point). */
+function segmentDistance2(p: number[], a: number[], b: number[]): number {
+  const dx = b[0]! - a[0]!;
+  const dy = b[1]! - a[1]!;
+  const length2 = dx * dx + dy * dy;
+  const t = length2 === 0 ? 0 : Math.max(0, Math.min(1, ((p[0]! - a[0]!) * dx + (p[1]! - a[1]!) * dy) / length2));
+  const ex = p[0]! - a[0]! - t * dx;
+  const ey = p[1]! - a[1]! - t * dy;
+  return ex * ex + ey * ey;
+}
+
+/** The index in (from, to) farthest from the segment `from`-`to`, with its squared distance. */
+function farthest(ring: number[][], from: number, to: number): [number, number] {
+  let index = -1;
+  let best = -1;
+  for (let i = from + 1; i < to; i += 1) {
+    const d = segmentDistance2(ring[i]!, ring[from]!, ring[to]!);
+    if (d > best) [index, best] = [i, d];
+  }
+  return [index, best];
+}
+
+/**
+ * Douglas-Peucker over one closed ring (first vertex equals last), keeping
+ * the place's own vertices only and never fewer than four points, so a tiny
+ * islet or hole is still sent.
+ */
+function simplifyRing(ring: number[][], tolerance: number): number[][] {
+  const last = ring.length - 1;
+  if (last < 4) return ring;
+  const keep = new Uint8Array(ring.length);
+  keep[0] = keep[last] = 1;
+  // The closing segment is a point, so the first split is the vertex farthest from the start.
+  const [far] = farthest(ring, 0, last);
+  keep[far] = 1;
+  const limit = tolerance * tolerance;
+  const spans: [number, number][] = [[0, far], [far, last]];
+  for (let span = spans.pop(); span; span = spans.pop()) {
+    const [from, to] = span;
+    const [i, d] = farthest(ring, from, to);
+    if (i < 0 || d <= limit) continue;
+    keep[i] = 1;
+    spans.push([from, i], [i, to]);
+  }
+  if (keep.reduce((sum, k) => sum + k, 0) < 4) {
+    const [a, da] = farthest(ring, 0, far);
+    const [b, db] = farthest(ring, far, last);
+    keep[da >= db ? a : b] = 1;
+  }
+  return ring.filter((_, i) => keep[i] === 1);
+}
+
+/**
  * A place's own Polygon or MultiPolygon as an ArcGIS `esriGeometryPolygon` in
  * WGS 84: rings in the ArcGIS winding (exterior clockwise, holes
  * counter-clockwise; GeoJSON winds the other way) and rounded as the point
- * query is, each rounded vertex sent once. Null when the geometry is not a
- * polygon, a ring is malformed, a longitude leaves [-180, 180] (an unwrapped
- * ring across the antimeridian, which the service would read as a different
- * place), or the outline is longer than `MAX_OUTLINE_CHARS`.
+ * query is, each rounded vertex sent once. An outline longer than
+ * `MAX_OUTLINE_CHARS` is simplified (`OUTLINE_TOLERANCES`) until it fits.
+ * Null when the geometry is not a polygon, a ring is malformed, a longitude
+ * leaves [-180, 180] (an unwrapped ring across the antimeridian, which the
+ * service would read as a different place), or the outline does not fit even
+ * at the coarsest tolerance.
  */
 export function esriPlacePolygon(geometry: Geometry | null | undefined): string | null {
   const polygons =
     geometry?.type === 'Polygon' ? [geometry.coordinates] : geometry?.type === 'MultiPolygon' ? geometry.coordinates : null;
   if (!polygons) return null;
-  const rings: number[][][] = [];
+  const rounded: { ring: number[][]; exterior: boolean }[] = [];
   for (const polygon of polygons) {
     for (const [index, source] of polygon.entries()) {
       if (source.length < 4) return null;
@@ -518,20 +580,26 @@ export function esriPlacePolygon(geometry: Geometry | null | undefined): string 
       }
       // A ring smaller than the rounding (an islet or hole under about 11 m) has nothing to send.
       if (ring.length < 4) continue;
+      rounded.push({ ring, exterior: index === 0 });
+    }
+  }
+  if (rounded.length === 0) return null;
+  for (const tolerance of [0, ...OUTLINE_TOLERANCES]) {
+    const rings = rounded.map(({ ring: source, exterior }) => {
+      const ring = tolerance === 0 ? [...source] : simplifyRing(source, tolerance);
       // Twice the signed area: positive is counter-clockwise.
       let turn = 0;
       for (const [i, [x, y]] of ring.entries()) {
         const [nx, ny] = ring[(i + 1) % ring.length]!;
         turn += x! * ny! - nx! * y!;
       }
-      if ((index === 0) === turn > 0) ring.reverse();
-      rings.push(ring);
-    }
+      if (exterior === turn > 0) ring.reverse();
+      return ring;
+    });
+    const outline = JSON.stringify({ rings, spatialReference: { wkid: 4326 } });
+    if (outline.length <= MAX_OUTLINE_CHARS) return outline;
   }
-  if (rings.length === 0) return null;
-  const outline = JSON.stringify({ rings, spatialReference: { wkid: 4326 } });
-  // shortcut: an outline over the cap (an unsimplified ecoregion) keeps the point read; simplify it first if one must read as an area.
-  return outline.length > MAX_OUTLINE_CHARS ? null : outline;
+  return null;
 }
 
 /**

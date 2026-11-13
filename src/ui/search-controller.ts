@@ -392,7 +392,7 @@ async function openContainingStateBriefing(
     const state = await resolveContainingState(map, { lng, lat }, abort.signal);
     // null: no State holds the point (silent, as a click outside every State). A failed read rejects into the catch.
     if (!state || abort.signal.aborted || !isCurrentBriefingIntent(intent)) return;
-    await openStateBriefing(map, state.code, { fit: false, area: false, guard: () => isCurrentBriefingIntent(intent) });
+    await openStateBriefing(map, state.code, { fit: false, guard: () => isCurrentBriefingIntent(intent) });
   } catch (err) {
     // A newer pick aborted this lookup on purpose: nothing failed. Any other failure is shown, never silent (invariant 6).
     if (abort.signal.aborted || !isCurrentBriefingIntent(intent)) return;

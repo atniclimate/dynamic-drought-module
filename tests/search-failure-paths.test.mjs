@@ -27,6 +27,7 @@ const S = (globalThis.__sfp = {
   emphasis: [],
   held: [],
   opened: [],
+  openOpts: [],
   toasts: [],
   lazyLoads: 0
 });
@@ -43,7 +44,7 @@ const STUBS = {
     'export const bboxCenter = () => ({ lng: 0, lat: 0 }); export const bboxToContinuousBounds = (b) => b;',
   '../util/antimeridian': 'export const geometryBboxAcrossAntimeridian = () => [0, 0, 1, 1];',
   '../state/deep-link':
-    'export const openStateBriefing = async (_m, code) => { globalThis.__sfp.opened.push(code); };' +
+    'export const openStateBriefing = async (_m, code, opts) => { globalThis.__sfp.opened.push(code); globalThis.__sfp.openOpts.push(opts); };' +
     ' export const briefingCameraPadding = () => ({ top: 40, left: 40, bottom: 40, right: 480 });',
   '../state/located-boundary':
     'export const showLocatedBoundary = (_m, g) => globalThis.__sfp.highlights.push(g);',
@@ -249,6 +250,15 @@ test('a city pick opens its containing State; a point no State holds says nothin
   for (let i = 0; i < 20; i += 1) await flush();
   assert.deepEqual(S.opened, [], 'no containing State: nothing opens');
   assert.deepEqual(S.toasts, [], 'a verified absence is silent, as before');
+});
+
+// G1 wave 1c (lane OUTLINE): the briefing a city opens is its State's, so it reads the State's outline.
+test('a city pick opens its State briefing as any State pick does, reading the State outline', async () => {
+  await pickSeattle(() => json(stateBox(-123, 'WA')));
+  await waitFor(() => S.opened.length === 1);
+  const opts = S.openOpts.at(-1);
+  assert.equal(opts.fit, false, 'the camera stays on the city');
+  assert.ok(!('area' in opts), 'no point-only read: the State opener takes the outline');
 });
 
 test('a city pick whose bundled State read fails shows the failure message, and the next pick retries', async () => {

@@ -374,9 +374,9 @@ test('an outline the service cannot take keeps the point read, stated as a point
   }
 });
 
-// A full-resolution outline (an unsimplified ecoregion runs to megabytes) is not posted:
-// points that round to the same place are sent once, and an outline still too long
-// for a bounded request keeps the point read, stated as a point.
+// A full-resolution outline (an unsimplified ecoregion runs to megabytes) is not posted
+// as it is: points that round to the same place are sent once, and an outline still too
+// long for a bounded request is simplified until it fits.
 const circle = (count, step) => {
   const ring = Array.from({ length: count }, (_, i) => {
     const a = (2 * Math.PI * i) / count;
@@ -402,18 +402,82 @@ test('an area outline sends each rounded vertex once', async () => {
   assert.deepEqual(ring[0], ring[ring.length - 1], 'the ring stays closed');
 });
 
-test('an outline too long for a bounded request keeps the point read, stated as a point', async () => {
+// G1 wave 1c (lane OUTLINE): an outline over the cap (the Navajo Nation's) is simplified
+// until it fits and still read as an area; only an outline that cannot fit keeps the point.
+const POSTED_CAP = 200_000;
+
+test('an outline too long for a bounded request is simplified under the cap and still read as an area', async () => {
   // 40,000 distinct rounded vertices: about a megabyte of outline.
   const huge = circle(40000, 0.0001);
+  const requests = [];
+  let posted = null;
+  await withFetch((url, init) => {
+    requests.push(init?.method ?? 'GET');
+    posted = new URLSearchParams(String(init.body));
+    return jsonResponse(collection([feature({ DM: 4, MapDate: Date.UTC(2026, 10, 10) })]));
+  }, async () => {
+    const [claim] = (await sources.fetchUsdmClaims(areaPlace(huge), signal())).claims;
+    assert.deepEqual(requests, ['POST']);
+    assert.equal(claim.reading.scope, 'area');
+    assert.equal(claim.reading.dm, 4);
+  });
+  const geometry = posted.get('geometry');
+  assert.ok(geometry.length <= POSTED_CAP, `posted ${geometry.length} characters`);
+  const [ring] = JSON.parse(geometry).rings;
+  assert.ok(ring.length >= 4 && ring.length < 40000, `posted ${ring.length} vertices`);
+  assert.deepEqual(ring[0], ring[ring.length - 1], 'the ring stays closed');
+  assert.ok(ringTurn(ring) < 0, 'the ArcGIS exterior ring stays clockwise');
+  // Every posted vertex is one of the place's own rounded vertices, on the circle to within the rounding.
+  assert.ok(ring.every(([x, y]) => Math.abs(Math.hypot(x + 110, y - 46) - 4) < 0.001));
+});
+
+test('simplifying a large outline never drops a tiny ring below four points', () => {
+  // The large ring forces simplification; the islet beside it is far smaller than any tolerance tried.
+  const [large] = circle(40000, 0.0001).coordinates;
+  const islet = Array.from({ length: 200 }, (_, i) => {
+    const a = (2 * Math.PI * i) / 200;
+    return [-100 + 0.003 * Math.cos(a), 40 + 0.003 * Math.sin(a)];
+  });
+  const outline = sources.esriPlacePolygon({ type: 'MultiPolygon', coordinates: [[large], [[...islet, islet[0]]]] });
+  assert.ok(outline !== null && outline.length <= POSTED_CAP);
+  const { rings } = JSON.parse(outline);
+  assert.equal(rings.length, 2, 'the islet is still sent');
+  assert.ok(rings[1].length >= 4, `the islet keeps ${rings[1].length} points`);
+  assert.deepEqual(rings[1][0], rings[1][rings[1].length - 1], 'the islet stays closed');
+  assert.ok(ringTurn(rings[1]) < 0, 'the islet is an exterior, clockwise');
+});
+
+test('an outline that still does not fit at the coarsest tolerance keeps the point read, stated as a point', async () => {
+  // 4,096 separate small squares: four points each is the floor, and that alone is over the cap.
+  const squares = Array.from({ length: 4096 }, (_, i) => {
+    const x = -120 + (i % 64) * 0.2;
+    const y = 30 + Math.floor(i / 64) * 0.2;
+    return [[[x, y], [x + 0.1, y], [x + 0.1, y + 0.1], [x, y + 0.1], [x, y]]];
+  });
   const requests = [];
   await withFetch((url, init) => {
     requests.push(init?.method ?? 'GET');
     return jsonResponse(collection([]));
   }, async () => {
-    const [claim] = (await sources.fetchUsdmClaims(areaPlace(huge), signal())).claims;
+    const [claim] = (await sources.fetchUsdmClaims(areaPlace({ type: 'MultiPolygon', coordinates: squares }), signal())).claims;
     assert.deepEqual(requests, ['GET']);
     assert.match(claim.text, /^No D0-D4 category polygon at a point inside the selected place/);
     assert.equal(claim.reading.scope, undefined);
+  });
+});
+
+test('the phone at-hand line of a large area place carries the area reading and its scope words', async () => {
+  const { selectBriefNarrativeLine } = await import('../src/impact/brief-narrative-selector.ts');
+  await withFetch(() => jsonResponse(collection([feature({ DM: 3, MapDate: Date.UTC(2026, 10, 10) })])), async () => {
+    const result = await sources.fetchUsdmClaims(areaPlace(circle(40000, 0.0001)), signal());
+    const cell = settledCell('current', 'drought', [['usdm', result]]);
+    const line = selectBriefNarrativeLine(
+      { pointHeat: { observation: { status: 'no-data' }, grid: { status: 'no-data', metrics: [] } },
+        horizons: { current: { claims: cell.claims, cells: { drought: cell } } } },
+      'drought'
+    );
+    assert.match(line, /^D3 Extreme Drought is the worst in this area as of /);
+    assert.doesNotMatch(line, /This location is in/);
   });
 });
 
