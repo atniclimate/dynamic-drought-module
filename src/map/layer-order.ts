@@ -82,8 +82,8 @@ export const CONDITION_SURFACE_IDS: readonly string[] = [
   'flow-still',
   'flow-still-marks',
   'flow-paths',
-  // The Nino 3.4 label reads above the paths, which invert the ground beneath
-  // them (the block's browser look, 2026-10-19).
+  // The Nino 3.4 label reads above the paths, which (wind and waves in light
+  // ink) invert the ground beneath them (the block's browser look, 2026-10-19).
   'nino34-box-label',
   'heatrisk',
   'usfs-whp',

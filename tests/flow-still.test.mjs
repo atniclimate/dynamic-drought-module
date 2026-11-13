@@ -280,6 +280,37 @@ test('the still layers are flow-still-casing, flow-still and flow-still-marks wi
   assert.equal(layers[0].paint['line-color'], '#010B13');
   assert.deepEqual(layers[1].paint['line-color'], ['match', ['get', 'cls'], 0, '#C6CBD4', 1, '#E8ECF0', '#FFFFFF']);
   assert.deepEqual(still.stillLayers('dark')[2].paint['line-color'], ['match', ['get', 'cls'], 0, '#3B3B3B', 1, '#1E242C', '#010B13']);
+  // Ocean currents take the pale blue ramp in light ink; wind and the dark ink keep theirs.
+  const currents = still.stillLayers('light', still.STILL_SOURCE_ID, 'currents');
+  assert.equal(currents[0].paint['line-color'], '#010B13');
+  assert.deepEqual(currents[1].paint['line-color'], ['match', ['get', 'cls'], 0, '#99CCFF', 1, '#BFE0FF', '#E8F4FF']);
+  assert.deepEqual(still.stillLayers('dark', still.STILL_SOURCE_ID, 'currents')[1].paint['line-color'],
+    ['match', ['get', 'cls'], 0, '#3B3B3B', 1, '#1E242C', '#010B13']);
+});
+
+test('Ocean currents take three pale blues that clear 3:1 over any ground and read as no SST class', async () => {
+  const { de } = await import('./road-color-math.mjs');
+  const { SST_ANOMALY_SCALE } = await import('../src/config/palette.ts');
+  const t = ink.inkFor('light', 'currents');
+  assert.deepEqual(t, { core: ['#99CCFF', '#BFE0FF', '#E8F4FF'], casing: '#010B13' });
+  let previous = 0;
+  for (const core of t.core) {
+    const ratio = Math.sqrt(ink.contrastRatio(core, t.casing));
+    assert.ok(ratio >= 3, `${core} clears ${ratio.toFixed(2)}:1 over the worst ground`);
+    const lum = ink.relativeLuminance(core);
+    assert.ok(lum > previous, `${core} steps up in luminance`);
+    previous = lum;
+    for (const cls of SST_ANOMALY_SCALE.filter((c) => !c.transparent)) {
+      const d = de(core, cls.color);
+      assert.ok(d >= 10, `${core} is CIEDE2000 ${d.toFixed(1)} from SST class ${cls.color}`);
+    }
+  }
+  assert.equal(ink.inkFor('light', 'wind'), ink.FLOW_INK.light);
+  assert.equal(ink.inkFor('dark', 'currents'), ink.FLOW_INK.dark);
+  assert.equal(ink.invertsGround('light', 'currents'), false);
+  assert.equal(ink.invertsGround('light', 'wind'), true);
+  assert.equal(ink.invertsGround('light', 'waves'), true);
+  assert.equal(ink.invertsGround('dark', 'wind'), false);
 });
 
 test('the ink tokens clear 3:1 over any ground', () => {

@@ -340,7 +340,7 @@ export function mountFlowView(map: MlMap, field: FlowField, options: FlowViewOpt
   /** The still source and its three layers, added wherever the style lacks them. */
   const attachStill = (): void => {
     if (!map.getSource(STILL_SOURCE_ID)) map.addSource(STILL_SOURCE_ID, { type: 'geojson', data: EMPTY });
-    for (const layer of stillLayers(ink)) if (!map.getLayer(layer.id)) map.addLayer(layer);
+    for (const layer of stillLayers(ink, STILL_SOURCE_ID, field.kind)) if (!map.getLayer(layer.id)) map.addLayer(layer);
   };
   /** Add the ribbon layer; its onAdd builds the programs from CPU state. False if that throws. */
   const attachRibbon = (layer: FlowRibbonLayer): boolean => {
@@ -592,7 +592,7 @@ export function mountFlowView(map: MlMap, field: FlowField, options: FlowViewOpt
     setInk(next: FlowInkName) {
       ink = next;
       ribbon?.setInk(next);
-      for (const layer of stillLayers(next)) {
+      for (const layer of stillLayers(next, STILL_SOURCE_ID, field.kind)) {
         if (!map.getLayer(layer.id) || layer.type !== 'line') continue;
         map.setPaintProperty(layer.id, 'line-color', layer.paint?.['line-color']);
       }
