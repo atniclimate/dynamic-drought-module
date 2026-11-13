@@ -1,5 +1,5 @@
 import { test, expect, type Page } from './offline-test';
-import { gotoApp, layerPill, PILL, search, stubHeatRiskCatalog } from './helpers';
+import { gotoApp, layerPill, PILL, search, stubHeatRiskCatalog, waitForLayerSettled } from './helpers';
 import { isNwsWwaRequestUrl, NWS_WWA_EMPTY, nwsWwaStubLog } from './nws-wwa-fixtures';
 import { stubWildfireFeeds } from './wildfire-fixtures';
 
@@ -427,7 +427,8 @@ test.describe('the Key drawer (S30D D1 M11)', () => {
   }) => {
     await page.setViewportSize(DESKTOP_VIEWPORT);
     await stubWildfireFeeds(page);
-    await gotoApp(page, '?cluster=fire');
+    // The mode's URL token is "wildfire" (src/config/clusters.ts urlToken); "fire" fell back to Drought.
+    await gotoApp(page, '?cluster=wildfire');
     await openKeyDrawer(page);
     const also = page.locator('#map-key-content [data-map-key-also]');
     await expect(also.locator('.map-key-scale-label')).toHaveText('Also on the map');
@@ -438,7 +439,7 @@ test.describe('the Key drawer (S30D D1 M11)', () => {
     await expect(also.locator('[data-legend-also="nifc-fires"]')).toHaveCount(0);
     await expect(also.locator('.legend-note')).toHaveCount(0);
 
-    await gotoApp(page, '?view=console&cluster=fire');
+    await gotoApp(page, '?view=console&cluster=wildfire');
     await expect(page.locator('#legend-panel .legend-section[data-legend="hms-smoke"]')).toBeVisible();
     await openKeyDrawer(page);
     await expect(page.locator('#map-key-content [data-map-key-also]')).toHaveCount(0);
@@ -451,6 +452,8 @@ test.describe('the Key drawer (S30D D1 M11)', () => {
   }) => {
     await page.setViewportSize(DESKTOP_VIEWPORT);
     await gotoApp(page, '?layers=ecoregions');
+    // The ecoregion legend registers once its archive has drawn; GitHub's software renderer is slower than 10 s.
+    await waitForLayerSettled(page, 'ecoregions');
     await openKeyDrawer(page);
     const live = page.locator('#map-key-content [data-legend-also="ecoregions"]');
     await expect(page.locator('#map-key-content [data-map-key-also] .map-key-scale-label')).toHaveText('Also on the map');
