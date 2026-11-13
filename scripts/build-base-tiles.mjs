@@ -87,8 +87,12 @@ const ISSUERS = {
   usgs: 'U.S. Geological Survey (U.S. public domain)',
   nrcan: 'Natural Resources Canada (Open Government Licence - Canada)',
   ne: 'Natural Earth (public domain)',
-  usfs: 'USDA Forest Service (CC0 1.0)'
+  usfs: 'USDA Forest Service (CC0 1.0)',
+  usace: 'U.S. Army Corps of Engineers, National Inventory of Dams (public)'
 };
+const NID = 'https://geospatial.sec.usace.army.mil/dls/rest/services/NID/National_Inventory_of_Dams_Public_Service/FeatureServer/0';
+/** Large or high-hazard-potential dams only (owner, 2026-11-12: dams with discretion): 19,349 of 92,628 on 2026-11-12. */
+const DAM_WHERE = encodeURIComponent("NID_HEIGHT >= 50 OR HAZARD_POTENTIAL = 'High'");
 
 /** Every input file: key, URL, issuer. */
 const INPUTS = [
@@ -100,6 +104,9 @@ const INPUTS = [
   ['ne-region-lines', `${NE}/ne_10m_admin_1_states_provinces_lines.geojson`, 'ne'],
   ['ne-places', `${NE}/ne_10m_populated_places_simple.geojson`, 'ne'],
   ['ne-marine', `${NE}/ne_10m_geography_marine_polys.geojson`, 'ne'],
+  ['ne-admin1', `${NE}/ne_10m_admin_1_states_provinces.geojson`, 'ne'],
+  ['ne-peaks', `${NE}/ne_10m_geography_regions_elevation_points.geojson`, 'ne'],
+  ['ne-regions', `${NE}/ne_10m_geography_regions_polys.geojson`, 'ne'],
   ['us-states', `${TIGER}/GENZ2025/shp/cb_2025_us_state_500k.zip`, 'census'],
   ['us-counties', `${TIGER}/GENZ2025/shp/cb_2025_us_county_500k.zip`, 'census'],
   ...STATE_FIPS.map((f) => [`us-roads-${f}`, `${TIGER}/TIGER2025/PRISECROADS/tl_2025_${f}_prisecroads.zip`, 'census']),
@@ -113,7 +120,8 @@ const INPUTS = [
   ['ca-rivers', `${AC}/hydrology/AC_1M_Rivers.shp.zip`, 'nrcan'],
   ['ca-roads', `${AC}/transportation/AC_1M_Roads.shp.zip`, 'nrcan'],
   ['ca-places', `${AC}/place_names/AC_1M_PlaceNames.shp.zip`, 'nrcan'],
-  ['usfs-forests', 'https://data.fs.usda.gov/geodata/edw/edw_resources/shp/S_USA.AdministrativeForest.zip', 'usfs']
+  ['usfs-forests', 'https://data.fs.usda.gov/geodata/edw/edw_resources/shp/S_USA.AdministrativeForest.zip', 'usfs'],
+  ['us-dams', `${NID}/query?where=${DAM_WHERE}&outFields=NAME,NID_HEIGHT&orderByFields=OBJECTID&outSR=4326&f=geojson`, 'usace']
 ];
 
 /** Download once into the cache (a .part file keeps a broken download from passing as whole). */
@@ -125,6 +133,25 @@ async function fetchCached(url) {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`download failed: ${url} -> HTTP ${res.status}`);
   await writeFile(`${path}.part`, Buffer.from(await res.arrayBuffer()));
+  await rename(`${path}.part`, path);
+  return path;
+}
+
+/** Page an ArcGIS query, 2,000 records a request in a fixed order, into one cached GeoJSON file. */
+async function fetchArcgisCached(url, key) {
+  const path = `${CACHE}/${key}.geojson`;
+  if (existsSync(path) && (await stat(path)).size > 0) return path;
+  console.log(`  querying ${url.split('?')[0]}`);
+  const features = [];
+  for (let offset = 0; ; offset += 2000) {
+    const res = await fetch(`${url}&resultOffset=${offset}&resultRecordCount=2000`);
+    if (!res.ok) throw new Error(`download failed: ${url} -> HTTP ${res.status}`);
+    const page = await res.json();
+    if (!Array.isArray(page.features)) throw new Error(`not a FeatureCollection at offset ${offset}: ${url}`);
+    features.push(...page.features);
+    if (page.features.length < 2000) break;
+  }
+  await writeFile(`${path}.part`, JSON.stringify(fc(features)));
   await rename(`${path}.part`, path);
   return path;
 }
@@ -332,6 +359,8 @@ async function northAmerica(paths, hiNames) {
   }
   const caRoads = await ms(`-i ${await member(p('ca-roads'), 'AC_1M_Roads.shp')} -filter "CARTO == 'Multi-lane Highway' || CARTO == 'Principal Highway' || CARTO == 'Secondary Highway'" -proj wgs84 -clip ${BOX} -each "cls = CARTO == 'Multi-lane Highway' || TYPE == 'Freeway' ? 1 : CARTO == 'Principal Highway' ? 2 : 3; name = ''" -filter-fields cls,name ${SIMPLE}`);
   const road = fc([...seen.values(), ...caRoads.features]);
+  // Large or high-hazard-potential dams (National Inventory of Dams), name and height only, for the Dams layer.
+  const dam = await ms(`-i ${p('us-dams')} -clip ${BOX} -each "name = NAME || ''; height = Math.round(NID_HEIGHT || 0)" -filter-fields name,height`);
   // Main-line railroads (TIGER MTFCC R1011; carlines and cog railways left out), U.S. only, unnamed, for the Railroads layer.
   const rail = await ms(`-i ${await member(p('us-rails'), 'tl_2025_us_rails.shp')} -filter "MTFCC == 'R1011'" -proj wgs84 -clip ${BOX} ${SIMPLE} -filter-fields -dissolve`);
 
@@ -355,6 +384,13 @@ async function northAmerica(paths, hiNames) {
   const seaLabels = await ms(`-i ${p('ne-marine')} -filter "!!name && featurecla != 'reef'" -points inner -clip ${BOX} -each "rank = Math.min(scalerank, 4) || 1; kind = 'sea'" -filter-fields name,rank,kind`);
   const water_label = fc([...lakeLabels.features, ...caLakeLabels.features, ...seaLabels.features]);
 
+  console.log('region, range and peak names');
+  // Visual ideas 3 and 4 (owner, 2026-11-12): state, province and Mexican state names, one interior point per
+  // Natural Earth admin-1 polygon (its largest part), and the major mountain ranges and peaks.
+  const region_label = await ms(`-i ${p('ne-admin1')} -filter "['USA','CAN','MEX'].indexOf(adm0_a3) > -1" -points inner -clip ${BOX} -filter-fields name`);
+  const range_label = await ms(`-i ${p('ne-regions')} -filter "FEATURECLA == 'Range/mtn' && REGION == 'North America'" -points inner -clip ${BOX} -each "name = NAME; rank = SCALERANK" -filter-fields name,rank`);
+  const peak = await ms(`-i ${p('ne-peaks')} -filter "featurecla == 'mountain'" -clip ${BOX} -each "elev = Math.round(elevation)" -filter-fields name,elev`);
+
   const roads = await msData('-i in.json -dissolve cls,name', road);
   // Tolerance is in 1/4096 of a tile: 5 is about 190 m at zoom 8, under one screen pixel there.
   return {
@@ -366,8 +402,12 @@ async function northAmerica(paths, hiNames) {
     county: { data: county, minZoom: 5, tolerance: 4 },
     ...bands('road', roads, ({ cls }) => 3 + cls, 4),
     rail: { data: rail, minZoom: 6, tolerance: 4 },
+    dam: { data: dam, minZoom: 6 },
     ...bands('place', place, ({ rank }) => (rank <= 2 ? 0 : rank <= 5 ? rank + 2 : 8)),
-    ...bands('water_label', water_label, ({ rank }) => [0, 0, 4, 6, 7][rank] ?? 7)
+    ...bands('water_label', water_label, ({ rank }) => [0, 0, 4, 6, 7][rank] ?? 7),
+    region_label,
+    range_label: { data: range_label, minZoom: 3 },
+    peak: { data: peak, minZoom: 4 }
   };
 }
 
@@ -445,7 +485,7 @@ async function main() {
   const receipt = [];
   const paths = {};
   for (const [key, url, issuer] of INPUTS) {
-    const file = await fetchCached(url);
+    const file = url.includes('/query?') ? await fetchArcgisCached(url, key) : await fetchCached(url);
     const sha256 = createHash('sha256').update(await readFile(file)).digest('hex');
     const pinned = prior?.inputs?.find((i) => i.url === url);
     if (pinned && pinned.sha256 !== sha256 && process.env.DDM_BASE_REPIN !== '1') {
@@ -484,7 +524,7 @@ async function main() {
   const forestAttribution = `DDM national forest boundaries, edition ${EDITION}. Source: ${ISSUERS.usfs}, Administrative Forest Boundaries. Changes by DDM: reprojected, clipped and generalized for display; an administrative boundary takes in lands the Forest Service does not own and is not a legal land description.`;
   const results = [];
   // The highways and railroads ride their own archive (the roads archive of DDM-P17-T08), so each file stays under the line.
-  const transport = ([name, spec]) => ['road', 'rail'].includes(spec.as ?? name);
+  const transport = ([name, spec]) => ['road', 'rail', 'dam'].includes(spec.as ?? name);
   const roads = Object.fromEntries(Object.entries(na).filter(transport));
   const base = Object.fromEntries(Object.entries(na).filter((entry) => !transport(entry)));
   for (const [out, layers, maxZoom, bounds, canaries, credit] of [

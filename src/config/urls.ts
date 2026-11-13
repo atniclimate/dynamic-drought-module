@@ -725,6 +725,24 @@ export const URLS = Object.freeze({
   // streets, 361 KB, in 1.1 s. Direct fetch, no proxy.
   tigerwebTransportation:
     'https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/Transportation/MapServer',
+  // Community names inside Tribal areas (owner decision 4, 2026-11-12): the
+  // TIGERweb Census Designated Places layer (5), read live with the streets,
+  // names and internal points only. Verified 2026-11-12: HTTP 200,
+  // Access-Control-Allow-Origin echoes https://atniclimate.github.io.
+  tigerwebPlaces:
+    'https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/Places_CouSub_ConCity_SubMCD/MapServer',
+  // Named streams (6, Flowline - Large Scale) and lakes (12, Waterbody - Large
+  // Scale) inside Tribal areas from the USGS National Hydrography Dataset,
+  // read live with the streets. Verified 2026-11-12: HTTP 200,
+  // Access-Control-Allow-Origin *; a Toppenish view returned 335 named
+  // flowlines, 106 KB. Direct fetch, no proxy.
+  usgsNhdMapServer: 'https://hydro.nationalmap.gov/arcgis/rest/services/nhd/MapServer',
+  // Public and protected lands for the Public Lands layer: USGS PAD-US 4.1,
+  // manager type (USGS Gap Analysis Project; public domain). Verified
+  // 2026-11-12: HTTP 200, Access-Control-Allow-Origin *; a zoom 10 view of the
+  // Wenatchee country returned 136 areas, 1.3 MB, in 1.5 s. Direct fetch.
+  padusManagerType:
+    'https://services.arcgis.com/v01gqwM5QqNysAAi/arcgis/rest/services/Manager_Type_PADUS/FeatureServer/0',
 
   // ---------- BIA Tribal Leaders Directory (headquarters points, live) ----------
   // Administrative-headquarters POINT layer (not a boundary), proposed to give

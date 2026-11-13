@@ -35,6 +35,8 @@ export const PRODUCT_KEYS = Object.freeze([
   'hydrography',
   'forests',
   'railroads',
+  'dams',
+  'public-lands',
   'ecoregions',
   'hillshade',
   'drought',
@@ -170,6 +172,24 @@ export const PRODUCTS: Readonly<Record<ProductKey, ProductDef>> = Object.freeze(
     layerKey: 'railroads',
     lane: null,
     clock: { register: 'observed', cadence: 'bundled, static' }
+  },
+  dams: {
+    key: 'dams',
+    // Matches the layer's source line in layers.ts.
+    issuer: 'US Army Corps of Engineers · bundled',
+    endpointKey: 'baseRoadsPmtiles',
+    layerKey: 'dams',
+    lane: null,
+    clock: { register: 'observed', cadence: 'bundled, static' }
+  },
+  'public-lands': {
+    key: 'public-lands',
+    // Matches the layer's source line in layers.ts.
+    issuer: 'USGS PAD-US · live from zoom 10',
+    endpointKey: 'padusManagerType',
+    layerKey: 'public-lands',
+    lane: null,
+    clock: { register: 'observed', cadence: 'live read, annual releases' }
   },
   ecoregions: {
     key: 'ecoregions',

@@ -4,7 +4,7 @@
   "outputs": [
     {
       "file": "ddm-base-na-2026-11.pmtiles",
-      "bytes": 16097258,
+      "bytes": 16155213,
       "tiles": 6470,
       "features": {
         "land": 3,
@@ -13,21 +13,25 @@
         "boundary": 384,
         "county": 8968,
         "place": 17288,
-        "water_label": 3272
+        "water_label": 3272,
+        "region_label": 97,
+        "range_label": 33,
+        "peak": 127
       }
     },
     {
       "file": "ddm-roads-na-2026-11.pmtiles",
-      "bytes": 9058627,
-      "tiles": 1696,
+      "bytes": 10575287,
+      "tiles": 1717,
       "features": {
         "road": 9573,
-        "rail": 1
+        "rail": 1,
+        "dam": 19348
       }
     },
     {
       "file": "ddm-base-world-2026-11.pmtiles",
-      "bytes": 1602607,
+      "bytes": 1602643,
       "tiles": 872,
       "features": {
         "land": 11,
@@ -110,6 +114,30 @@
       "sha256": "53f865e8ffa966cdd402145c82c5cd14ee7ce974cd0eb9a3f59f03a4cfd2d66c",
       "bytes": 1692635,
       "retrieved": "2026-11-12"
+    },
+    {
+      "key": "ne-admin1",
+      "url": "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/v5.1.2/geojson/ne_10m_admin_1_states_provinces.geojson",
+      "issuer": "Natural Earth (public domain)",
+      "sha256": "22d0e3ad85eb3e27f17cabf8ba2d50e554fbc27a87796ff891d958185da62fb5",
+      "bytes": 40726851,
+      "retrieved": "2026-11-13"
+    },
+    {
+      "key": "ne-peaks",
+      "url": "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/v5.1.2/geojson/ne_10m_geography_regions_elevation_points.geojson",
+      "issuer": "Natural Earth (public domain)",
+      "sha256": "f98a16867867146ec4146d6d4b18c823eeedb2825947de666116cf9a4e3f43cb",
+      "bytes": 862686,
+      "retrieved": "2026-11-13"
+    },
+    {
+      "key": "ne-regions",
+      "url": "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/v5.1.2/geojson/ne_10m_geography_regions_polys.geojson",
+      "issuer": "Natural Earth (public domain)",
+      "sha256": "b7b26e50ea917d3696aec87f932def2bf5f890f5770e441d59c162c6f4c92a77",
+      "bytes": 5583870,
+      "retrieved": "2026-11-13"
     },
     {
       "key": "us-states",
@@ -629,6 +657,14 @@
       "issuer": "USDA Forest Service (CC0 1.0)",
       "sha256": "a13d25243fe121c8800c13cca2a9823f64aeaeb9467d63b34c4d22352bd1d4da",
       "bytes": 45012944,
+      "retrieved": "2026-11-13"
+    },
+    {
+      "key": "us-dams",
+      "url": "https://geospatial.sec.usace.army.mil/dls/rest/services/NID/National_Inventory_of_Dams_Public_Service/FeatureServer/0/query?where=NID_HEIGHT%20%3E%3D%2050%20OR%20HAZARD_POTENTIAL%20%3D%20'High'&outFields=NAME,NID_HEIGHT&orderByFields=OBJECTID&outSR=4326&f=geojson",
+      "issuer": "U.S. Army Corps of Engineers, National Inventory of Dams (public)",
+      "sha256": "6918b5bae88c62612c1a4bb1a010f2649feb46eba7371953442a770984a8d4e7",
+      "bytes": 3116573,
       "retrieved": "2026-11-13"
     }
   ]

@@ -35,8 +35,8 @@ async function open(rel) {
 
 const BASE_ISSUERS = ['U.S. Census Bureau', 'U.S. Geological Survey', 'Natural Resources Canada', 'Natural Earth'];
 const ARCHIVES = [
-  ['public/data/ddm-base-na-2026-11.pmtiles', 8, ['land', 'water', 'river', 'boundary', 'county', 'place', 'water_label'], BASE_ISSUERS],
-  ['public/data/ddm-roads-na-2026-11.pmtiles', 8, ['road', 'rail'], BASE_ISSUERS],
+  ['public/data/ddm-base-na-2026-11.pmtiles', 8, ['land', 'water', 'river', 'boundary', 'county', 'place', 'water_label', 'region_label', 'range_label', 'peak'], BASE_ISSUERS],
+  ['public/data/ddm-roads-na-2026-11.pmtiles', 8, ['road', 'rail', 'dam'], BASE_ISSUERS],
   ['public/data/ddm-base-world-2026-11.pmtiles', 5, ['land', 'water', 'boundary', 'place', 'water_label'], BASE_ISSUERS],
   ['public/data/ddm-forests-2026-11.pmtiles', 10, ['forest'], ['USDA Forest Service']]
 ];
@@ -103,6 +103,36 @@ test('the base style asks no tile host and stacks every base layer by the ruled 
   // Ground under the satellite imagery, lines above the terrain shading.
   assert.ok(BOTTOM_STACK_IDS.indexOf('base-land') < BOTTOM_STACK_IDS.indexOf('basemap-satellite'));
   assert.ok(BOTTOM_STACK_IDS.indexOf('base-road') > BOTTOM_STACK_IDS.indexOf('hillshade'));
+});
+
+test('Tribal-area community names become one point each at the Census internal point', async () => {
+  const { communityPoints } = await import('../src/layers/tribal-streets.ts');
+  const rows = (props) => ({ type: 'FeatureCollection', features: props.map((properties) => ({ type: 'Feature', properties, geometry: null })) });
+  const out = communityPoints(rows([
+    { BASENAME: 'Buena', INTPTLAT: '+46.4276867', INTPTLON: '-120.3182446' },
+    { BASENAME: '', INTPTLAT: '+46.1', INTPTLON: '-120.1' },
+    { BASENAME: 'Nowhere', INTPTLAT: 'x', INTPTLON: '-120.1' }
+  ]));
+  assert.equal(out.features.length, 1, 'rows with no name or no point are dropped');
+  assert.deepEqual(out.features[0].geometry.coordinates, [-120.3182446, 46.4276867]);
+  assert.deepEqual(out.features[0].properties, { BASENAME: 'Buena' });
+});
+
+test('Tribal-area streams join their touching reaches by name, whichever way each reach runs', async () => {
+  const { mergeStreams } = await import('../src/layers/tribal-streets.ts');
+  const reach = (name, coordinates, lengthkm) => ({ type: 'Feature', properties: { gnis_name: name, lengthkm }, geometry: { type: 'LineString', coordinates } });
+  const out = mergeStreams({ type: 'FeatureCollection', features: [
+    reach('Toppenish Creek', [[0, 0], [1, 0]], 0.4),
+    reach('Toppenish Creek', [[2, 0], [1, 0]], 0.5), // drawn the other way
+    reach('Toppenish Creek', [[2, 0], [3, 1]], 0.3),
+    reach('Toppenish Creek', [[9, 9], [9, 8]], 0.2), // does not touch: its own line
+    reach('Marion Drain', [[3, 1], [4, 1]], 0.6) // touches, but another name
+  ] });
+  const creek = out.features.filter((f) => f.properties.gnis_name === 'Toppenish Creek').sort((a, b) => b.properties.km - a.properties.km);
+  assert.equal(creek.length, 2);
+  assert.equal(creek[0].geometry.coordinates.length, 4, 'three reaches joined into one line');
+  assert.ok(Math.abs(creek[0].properties.km - 1.2) < 1e-9);
+  assert.equal(out.features.filter((f) => f.properties.gnis_name === 'Marion Drain').length, 1);
 });
 
 test('Tribal-area streets query only the part of the view that touches a Tribal area', async () => {

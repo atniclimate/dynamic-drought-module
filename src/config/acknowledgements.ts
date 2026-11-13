@@ -465,6 +465,8 @@ export const PRODUCT_CREDITS: Readonly<Record<ProductKey, CreditRows>> = {
   hydrography: ['usgs', 'nrcan', 'natural-earth'],
   forests: ['usfs'],
   railroads: ['census'],
+  dams: ['usace'],
+  'public-lands': ['usgs'],
   ecoregions: ['epa'],
   hillshade: ['usgs'],
   drought: ['noaa-cpc'],

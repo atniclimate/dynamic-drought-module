@@ -54,6 +54,20 @@ const placeLayer = (id: string, source: string): maplibregl.SymbolLayerSpecifica
   paint: { 'text-color': PLACE_LABEL_COLOR, 'text-halo-color': PLACE_LABEL_HALO, 'text-halo-width': 1.4 }
 });
 
+/** Peak names in a warm grey, so a summit never reads as a water name. */
+const PEAK_LABEL_COLOR = '#C2B89F';
+
+/** Faint spaced capitals for the large names under the cities: states and provinces, then ranges. */
+const quietCapitals = (size: maplibregl.DataDrivenPropertyValueSpecification<number>, spacing: number): NonNullable<maplibregl.SymbolLayerSpecification['layout']> => ({
+  'text-field': NAME,
+  'text-font': FONT,
+  'text-size': size,
+  'text-transform': 'uppercase',
+  'text-letter-spacing': spacing,
+  'text-max-width': 9,
+  'text-padding': 6
+});
+
 const waterLabelLayer = (id: string, source: string): maplibregl.SymbolLayerSpecification => ({
   id,
   type: 'symbol',
@@ -234,6 +248,39 @@ export function buildBaseStyle(): maplibregl.StyleSpecification {
         filter: ['all', HAS_NAME, ['<=', ['get', 'cls'], ['step', ['zoom'], 2, 10, 3]]],
         layout: { 'symbol-placement': 'line', 'text-field': NAME, 'text-font': FONT, 'text-size': 10, 'symbol-spacing': 500 },
         paint: { 'text-color': PLACE_LABEL_COLOR, 'text-halo-color': PLACE_LABEL_HALO, 'text-halo-width': 1.2 }
+      },
+      // Mountain ranges and peaks (visual idea 4: they appear as the regional cities do),
+      // then state, province and Mexican state names at national to regional zoom (idea 3).
+      {
+        id: 'base-range-label',
+        type: 'symbol',
+        source: NA,
+        'source-layer': 'range_label',
+        minzoom: 4.5,
+        maxzoom: 9,
+        filter: ['<=', ['get', 'rank'], ['step', ['zoom'], 2, 5.5, 3, 6.5, 9]],
+        layout: quietCapitals(10, 0.3),
+        paint: { 'text-color': PEAK_LABEL_COLOR, 'text-opacity': 0.6, 'text-halo-color': MAP_GROUND_COLOR, 'text-halo-width': 1 }
+      },
+      {
+        id: 'base-peak',
+        type: 'symbol',
+        source: NA,
+        'source-layer': 'peak',
+        minzoom: 5,
+        filter: ['>=', ['get', 'elev'], ['step', ['zoom'], 4000, 6, 3000, 7, 0]],
+        layout: { 'text-field': NAME, 'text-font': FONT, 'text-size': 10.5, 'text-max-width': 7, 'symbol-sort-key': ['-', 0, ['get', 'elev']] },
+        paint: { 'text-color': PEAK_LABEL_COLOR, 'text-halo-color': MAP_GROUND_COLOR, 'text-halo-width': 1.2 }
+      },
+      {
+        id: 'base-region-label',
+        type: 'symbol',
+        source: NA,
+        'source-layer': 'region_label',
+        minzoom: 3.5,
+        maxzoom: 7.5,
+        layout: quietCapitals(['interpolate', ['linear'], ['zoom'], 3.5, 9.5, 6, 12], 0.25),
+        paint: { 'text-color': BASE_WATER_LABEL_COLOR, 'text-opacity': 0.55, 'text-halo-color': MAP_GROUND_COLOR, 'text-halo-width': 1 }
       },
       waterLabelLayer('base-world-water-label', WORLD),
       waterLabelLayer('base-water-label', NA),
