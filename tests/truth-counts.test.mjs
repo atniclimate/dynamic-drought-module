@@ -154,6 +154,43 @@ test('count 4: a click on a labelled Census area is titled with the Nations its 
   }
 });
 
+test('count 6: for ten places a briefing can open on, every United States source whose issuer covers the place may run', async () => {
+  const { briefingSourcePolicy, sourceMayRun } = await import('../src/impact/source-policy.ts');
+  const { BRIEFING_SOURCE_KEYS } = await import('../src/config/source-capability.ts');
+  // A place as the briefing reads it: a Tribal area carries no State of its own, so the panel resolves the State
+  // that holds its point (src/impact/containing-state.ts) before any source is asked.
+  const place = (kind, title, state, lng, lat, properties) => ({
+    kind, title, properties, lngLat: { lng, lat }, regionKey: 'national',
+    containing: { state, basis: kind === 'state' ? 'feature-property' : 'point-in-polygon' }
+  });
+  // [place, the sources whose issuer does not cover it]. HeatRisk and the SPC fire weather outlook are issued for the
+  // contiguous States only; every other source answers across the United States.
+  const NONE = [];
+  const OUTSIDE_CONUS = ['heatRisk', 'spcFireOutlook'];
+  const places = [
+    [place('aiannh', 'Warm Springs', 'OR', -121.3, 44.85, { NAME: 'Warm Springs Reservation and Off-Reservation Trust Land', AIANNH: '4545' }), NONE],
+    [place('bia-reservation', 'Warm Springs (BIA)', 'OR', -121.3, 44.85, { LARNAME: 'Warm Springs' }), NONE],
+    [place('aiannh', 'Navajo Nation', 'AZ', -109.5, 36.2, { NAME: 'Navajo Nation Reservation and Off-Reservation Trust Land', AIANNH: '2430' }), NONE],
+    [place('aiannh', "Tohono O'odham Nation", 'AZ', -112.0, 32.1, { NAME: "Tohono O'odham Nation Reservation and Off-Reservation Trust Land", AIANNH: '4200' }), NONE],
+    [place('aiannh', 'Creek OTSA', 'OK', -96.0, 35.6, { NAME: 'Creek OTSA', AIANNH: '5620' }), NONE],
+    [place('aiannh', 'Annette Island Reserve', 'AK', -131.5, 55.1, { NAME: 'Annette Island Reserve', AIANNH: '0110' }), OUTSIDE_CONUS],
+    [place('aiannh', 'Bethel ANVSA', 'AK', -161.76, 60.79, { NAME: 'Bethel ANVSA', AIANNH: '6205' }), OUTSIDE_CONUS],
+    [place('state', 'Washington', 'WA', -122.33, 47.6, { STUSPS: 'WA' }), NONE],
+    [place('state', 'Montana', 'MT', -109.6, 47.0, { STUSPS: 'MT' }), NONE],
+    [place('state', 'Hawaii', 'HI', -155.5, 19.6, { STUSPS: 'HI' }), OUTSIDE_CONUS]
+  ];
+  const wrong = [];
+  for (const [context, uncovered] of places) {
+    // The camera never decides: the same answer from the United States view, a State view and no view at all.
+    for (const regionKey of ['national', 'washington_state', null]) {
+      const policy = briefingSourcePolicy({ ...context, regionKey });
+      const silent = BRIEFING_SOURCE_KEYS.filter((key) => !sourceMayRun(policy, key));
+      if (silent.join() !== uncovered.join()) wrong.push(`${context.title} (view ${regionKey}): silent ${silent.join(', ') || 'none'}`);
+    }
+  }
+  assert.deepEqual(wrong, [], `of ${places.length} places, a source is silent that should read or reads where it cannot, ${some(wrong)}`);
+});
+
 test('the rules behind the counts: label-map search rows, and an unlabelled area on no list fails the build', () => {
   const roster = ['Kiowa Tribe (previously listed as Kiowa Indian Tribe of Oklahoma)', 'Comanche Nation, Oklahoma', 'Cherokee Nation', 'Kialegee Tribal Town'];
   const feature = (NAME, AIANNH, AIANNHCC) => ({ attributes: { NAME, BASENAME: NAME, AIANNH, AIANNHCC } });
