@@ -59,7 +59,7 @@ const area = (AIANNH, AIANNHCC, extra = {}) => ({
   geometry: { type: 'Polygon', coordinates: [[[-113, 36], [-112, 36], [-112, 37], [-113, 36]]] }
 });
 
-test('one point per labelled area at the Census internal point, every Nation on its own line', () => {
+test('one point per labelled area at the Census internal point, every Nation set apart', () => {
   const windRiver = [
     'Eastern Shoshone Tribe of the Wind River Reservation, Wyoming',
     'Northern Arapaho Tribe of the Wind River Reservation, Wyoming'
@@ -72,7 +72,7 @@ test('one point per labelled area at the Census internal point, every Nation on 
   assert.equal(points.features.length, 2, 'an area with no label map entry gets no point');
   const [first, second] = points.features;
   assert.deepEqual(first.geometry, { type: 'Point', coordinates: [-112.6673019, 36.9097094] });
-  assert.equal(first.properties.text, windRiver.join('\n'), 'one name per line, never shortened');
+  assert.equal(first.properties.text, windRiver.join('\n\n'), 'a blank line between Nations, never shortened');
   assert.equal(first.properties.minzoom, 7, 'the string AREALAND (489 km2) is parsed');
   assert.equal(second.properties.text, 'The Muscogee (Creek) Nation');
   assert.equal(second.properties.minzoom, 6, 'a statistical area of 29,000 km2 one step after zoom 5');
@@ -115,12 +115,51 @@ test('joint-use, state and Hawaiian Home Land areas never carry a label', () => 
   assert.equal(points.features.length, 0);
 });
 
-test('the shipped roster labels at least 440 areas, Creek OTSA by The Muscogee (Creek) Nation', () => {
+test('a confirmed row names an area its Census name cannot settle, and reopens when its evidence moves', () => {
+  const warmSprings = 'Confederated Tribes of the Warm Springs Reservation of Oregon';
+  const roster = [
+    warmSprings,
+    'Fort Sill-Chiricahua-Warm Springs-Apache Tribe (previously listed as Fort Sill Apache Tribe of Oklahoma)',
+    'Kiowa Tribe (previously listed as Kiowa Indian Tribe of Oklahoma)',
+    'Kialegee Tribal Town'
+  ];
+  const feature = (BASENAME, AIANNH, AIANNHCC) => ({ attributes: { NAME: `${BASENAME} area`, BASENAME, AIANNH, AIANNHCC } });
+  const features = [feature('Warm Springs', '9020', 'D1'), feature('Pine Ridge', '9021', 'D2'), feature('Kialegee', '9022', 'D1'),
+    feature('Warm Springs', '9023', 'D4')];
+  assert.deepEqual(censusLabelAreas(features, roster, []), { 9022: ['Kialegee Tribal Town'] }, 'two roster names hold "Warm Springs"');
+  const rows = [
+    ['9020', 'Warm Springs', [warmSprings]],
+    // Several Nations in the order given, in label form; a row the matcher already answers the same way is harmless.
+    ['9021', 'Pine Ridge', ['Kiowa Tribe', 'Kialegee Tribal Town']],
+    ['9022', 'Kialegee', ['Kialegee Tribal Town']],
+    // A state area and an area the Census no longer publishes never take a row.
+    ['9023', 'Warm Springs', [warmSprings]],
+    ['9099', 'Gone', [warmSprings]]
+  ];
+  assert.deepEqual(censusLabelAreas(features, roster, rows), {
+    9020: [warmSprings],
+    9021: ['Kiowa Tribe', 'Kialegee Tribal Town'],
+    9022: ['Kialegee Tribal Town']
+  });
+  const reopened = (row, why) => assert.throws(() => censusLabelAreas(features, roster, [row]), why);
+  reopened(['9020', 'Warm Spring', [warmSprings]], /REOPENED: the Census now names the area "Warm Springs"/);
+  reopened(['9020', 'Warm Springs', ['Kiowa Indian Tribe of Oklahoma']], /is not a name in the Federal Register roster/);
+  reopened(['9022', 'Kialegee', ['Kiowa Tribe']], /the name matcher now answers "Kialegee Tribal Town"/);
+});
+
+test('the shipped roster labels at least 540 areas: Creek OTSA, Warm Springs, both Nations of Wind River', () => {
   const labels = ROSTER.labelAreas;
   assert.ok(labels && typeof labels === 'object', 'the roster carries labelAreas');
-  assert.ok(Object.keys(labels).length >= 440, `${Object.keys(labels).length} labelled areas`);
+  assert.ok(Object.keys(labels).length >= 540, `${Object.keys(labels).length} labelled areas`);
   const creek = ROSTER.censusAreas.find((a) => a.name === 'Creek OTSA');
   assert.deepEqual(labels[creek.aiannh], ['The Muscogee (Creek) Nation']);
+  assert.deepEqual(labels['4545'], ['Confederated Tribes of the Warm Springs Reservation of Oregon']);
+  assert.deepEqual(labels['4610'], [
+    'Eastern Shoshone Tribe of the Wind River Reservation, Wyoming',
+    'Northern Arapaho Tribe of the Wind River Reservation, Wyoming'
+  ]);
+  // A place or band one Nation's Federal Register name lists among several waits for the maintainer's word.
+  for (const held of ['4595', '7390', '7725']) assert.equal(labels[held], undefined, held);
   for (const [code, names] of Object.entries(labels)) {
     assert.match(code, /^\d{4}$/);
     assert.ok(Array.isArray(names) && names.length > 0, code);

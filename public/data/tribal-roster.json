@@ -1,5 +1,5 @@
 {
-  "_comment": "NAMES ONLY search index for Tribal land areas (U3b, D-STD-012; safe matcher and provenance gate per D-0.7.0-026). No polygons or coordinates: a search selection queries the live AIAN-LAR service for the extent at selection time. provenance safe-match: displayName is the formal Federal Register Tribe name, matched under the safety rules in scripts/build-tribal-roster.mjs. provenance lar-label: displayName is the BIA land-area label verbatim (no Tribe mapping is guessed). censusAreas: Census AIANNH federal areas (names only; a search selection queries the live Census service): every OTSA, TDSA and ANVSA, plus reservation and trust land areas only for Tribes AIAN-LAR does not locate, so a Nation can appear both as a LAR land area and as a Census statistical area. provenance census-label keeps the Census name verbatim. labelAreas: Census AIANNH code to the Federal Register names the Tribal Lands layer labels that area with (every federal row the Census matcher resolves, reservations included; \"(previously listed as ...)\" dropped). Regenerate with `npm run build:tribal-roster`.",
+  "_comment": "NAMES ONLY search index for Tribal land areas (U3b, D-STD-012; safe matcher and provenance gate per D-0.7.0-026). No polygons or coordinates: a search selection queries the live AIAN-LAR service for the extent at selection time. provenance safe-match: displayName is the formal Federal Register Tribe name, matched under the safety rules in scripts/build-tribal-roster.mjs. provenance lar-label: displayName is the BIA land-area label verbatim (no Tribe mapping is guessed). censusAreas: Census AIANNH federal areas (names only; a search selection queries the live Census service): every OTSA, TDSA and ANVSA, plus reservation and trust land areas only for Tribes AIAN-LAR does not locate, so a Nation can appear both as a LAR land area and as a Census statistical area. provenance census-label keeps the Census name verbatim. labelAreas: Census AIANNH code to the Federal Register names the Tribal Lands layer labels that area with (every federal row the Census matcher resolves, reservations included, plus the rows confirmed against the US EPA Tribal Areas tables, which publish the Census area id beside the Tribe; \"(previously listed as ...)\" dropped). Regenerate with `npm run build:tribal-roster`.",
   "meta": {
     "rosterSource": "Federal Register 2026-01899 (2026-01-30)",
     "landAreaSource": "BIA AIAN-LAR FeatureServer (distinct LARNAME)",
@@ -13,7 +13,8 @@
     "censusSource": "US Census Bureau TIGERweb AIANNH layer 47 (names only)",
     "censusAreaCount": 272,
     "censusSafeMatchCount": 232,
-    "labelAreaCount": 452
+    "labelAreaCount": 545,
+    "labelConfirmedCount": 93
   },
   "areas": [
     {
@@ -3339,6 +3340,12 @@
     "1065": [
       "Ewiiaapaayp Band of Kumeyaay Indians"
     ],
+    "1070": [
+      "Paiute-Shoshone Tribe of the Fallon Reservation and Colony, Nevada"
+    ],
+    "1075": [
+      "Paiute-Shoshone Tribe of the Fallon Reservation and Colony, Nevada"
+    ],
     "1100": [
       "Flandreau Santee Sioux Tribe of South Dakota"
     ],
@@ -3378,11 +3385,20 @@
     "1250": [
       "Assiniboine and Sioux Tribes of the Fort Peck Indian Reservation, Montana"
     ],
+    "1260": [
+      "Seminole Tribe of Florida"
+    ],
+    "1270": [
+      "Fort Sill-Chiricahua-Warm Springs-Apache Tribe"
+    ],
     "1280": [
       "Quechan Tribe of the Fort Yuma Indian Reservation, California & Arizona"
     ],
     "1310": [
       "Gila River Indian Community of the Gila River Indian Reservation, Arizona"
+    ],
+    "1340": [
+      "Confederated Tribes of the Goshute Reservation, Nevada and Utah"
     ],
     "1365": [
       "Confederated Tribes of the Grand Ronde Community of Oregon"
@@ -3411,6 +3427,9 @@
     "1460": [
       "Hoh Indian Tribe"
     ],
+    "1475": [
+      "Seminole Tribe of Florida"
+    ],
     "1490": [
       "Hoopa Valley Tribe, California"
     ],
@@ -3420,11 +3439,26 @@
     "1515": [
       "Hopland Band of Pomo Indians, California"
     ],
+    "1530": [
+      "Houlton Band of Maliseet Indians"
+    ],
     "1545": [
       "Hualapai Indian Tribe of the Hualapai Indian Reservation, Arizona"
     ],
+    "1550": [
+      "Nottawaseppi Huron Band of the Potawatomi, Michigan"
+    ],
+    "1555": [
+      "Seminole Tribe of Florida"
+    ],
     "1560": [
       "Inaja Band of Diegueno Mission Indians of the Inaja and Cosmit Reservation, California"
+    ],
+    "1590": [
+      "Iowa Tribe of Kansas and Nebraska"
+    ],
+    "1610": [
+      "Saginaw Chippewa Indian Tribe of Michigan"
     ],
     "1625": [
       "Pueblo of Isleta, New Mexico"
@@ -3456,8 +3490,17 @@
     "1750": [
       "Karuk Tribe"
     ],
+    "1770": [
+      "Kickapoo Tribe of Indians of the Kickapoo Reservation in Kansas"
+    ],
+    "1775": [
+      "Kickapoo Traditional Tribe of Texas"
+    ],
     "1785": [
       "Klamath Tribes"
+    ],
+    "1800": [
+      "Kootenai Tribe of Idaho"
     ],
     "1815": [
       "Lac Courte Oreilles Band of Lake Superior Chippewa Indians of Wisconsin"
@@ -3477,6 +3520,9 @@
     "1860": [
       "Sisseton-Wahpeton Oyate of the Lake Traverse Reservation, South Dakota"
     ],
+    "1880": [
+      "Keweenaw Bay Indian Community, Michigan"
+    ],
     "1895": [
       "La Posta Band of Diegueno Mission Indians of the La Posta Indian Reservation, California"
     ],
@@ -3485,6 +3531,9 @@
     ],
     "1925": [
       "Cahto Tribe of the Laytonville Rancheria"
+    ],
+    "1960": [
+      "Little River Band of Ottawa Indians, Michigan"
     ],
     "1963": [
       "Little Traverse Bay Bands of Odawa Indians, Michigan"
@@ -3516,8 +3565,14 @@
     "2085": [
       "Makah Indian Tribe of the Makah Indian Reservation"
     ],
+    "2100": [
+      "Manchester Band of Pomo Indians of the Manchester Rancheria, California"
+    ],
     "2115": [
       "Manzanita Band of Diegueno Mission Indians of the Manzanita Reservation, California"
+    ],
+    "2130": [
+      "Ak-Chin Indian Community"
     ],
     "2145": [
       "Mashantucket Pequot Indian Tribe"
@@ -3545,6 +3600,9 @@
     ],
     "2285": [
       "Minnesota Chippewa Tribe, Minnesota (Six component reservations: Bois Forte Band (Nett Lake); Fond du Lac Band; Grand Portage Band; Leech Lake Band; Mille Lacs Band; White Earth Band)"
+    ],
+    "2300": [
+      "Mississippi Band of Choctaw Indians"
     ],
     "2315": [
       "Moapa Band of Paiute Indians of the Moapa River Indian Reservation, Nevada"
@@ -3582,8 +3640,17 @@
     "2490": [
       "Northern Cheyenne Tribe of the Northern Cheyenne Indian Reservation, Montana"
     ],
+    "2495": [
+      "Northfork Rancheria of Mono Indians of California"
+    ],
+    "2505": [
+      "Northwestern Band of the Shoshone Nation"
+    ],
     "2510": [
       "Ohkay Owingeh, New Mexico"
+    ],
+    "2535": [
+      "Seneca Nation of Indians"
     ],
     "2550": [
       "Omaha Tribe of Nebraska"
@@ -3591,20 +3658,35 @@
     "2555": [
       "Oneida Indian Nation"
     ],
+    "2560": [
+      "Oneida Nation"
+    ],
     "2570": [
       "Onondaga Nation"
+    ],
+    "2580": [
+      "Keweenaw Bay Indian Community, Michigan"
     ],
     "2595": [
       "The Osage Nation"
     ],
+    "2625": [
+      "Paiute Indian Tribe of Utah (Cedar Band of Paiutes, Kanosh Band of Paiutes, Koosharem Band of Paiutes, Indian Peaks Band of Paiutes, and Shivwits Band of Paiutes)"
+    ],
     "2635": [
       "Pala Band of Mission Indians"
+    ],
+    "2680": [
+      "Pascua Yaqui Tribe of Arizona"
     ],
     "2685": [
       "Paskenta Band of Nomlaki Indians of California"
     ],
     "2695": [
       "Passamaquoddy Tribe"
+    ],
+    "2715": [
+      "Pauma Band of Luiseno Mission Indians of the Pauma & Yuima Reservation, California"
     ],
     "2745": [
       "Pechanga Band of Indians"
@@ -3618,20 +3700,32 @@
     "2785": [
       "Pueblo of Picuris, New Mexico"
     ],
+    "2810": [
+      "Oglala Sioux Tribe"
+    ],
     "2820": [
       "Pinoleville Pomo Nation, California"
     ],
     "2835": [
       "Pit River Tribe, California (includes XL Ranch, Big Bend, Likely, Lookout, Montgomery Creek, and Roaring Creek Rancherias)"
     ],
+    "2865": [
+      "Poarch Band of Creek Indians"
+    ],
     "2890": [
       "Pokagon Band of Potawatomi Indians, Michigan and Indiana"
+    ],
+    "2900": [
+      "Ponca Tribe of Nebraska"
     ],
     "2910": [
       "Port Gamble S'Klallam Tribe"
     ],
     "2925": [
       "Suquamish Indian Tribe of the Port Madison Reservation"
+    ],
+    "2980": [
+      "Prairie Band Potawatomi Nation"
     ],
     "2985": [
       "Prairie Island Indian Community in the State of Minnesota"
@@ -3644,6 +3738,9 @@
     ],
     "3010": [
       "Pyramid Lake Paiute Tribe of the Pyramid Lake Reservation, Nevada"
+    ],
+    "3015": [
+      "Eastern Band of Cherokee Indians"
     ],
     "3020": [
       "Quartz Valley Indian Community of the Quartz Valley Reservation of California"
@@ -3675,6 +3772,9 @@
     "3130": [
       "Reno-Sparks Indian Colony, Nevada"
     ],
+    "3145": [
+      "Pulikla Tribe of Yurok People"
+    ],
     "3165": [
       "Rincon Band of Luiseno Indians"
     ],
@@ -3693,8 +3793,20 @@
     "3250": [
       "Round Valley Indian Tribes, Round Valley Reservation, California"
     ],
+    "3265": [
+      "Yocha Dehe Wintun Nation, California"
+    ],
+    "3280": [
+      "Sac & Fox Tribe of the Mississippi in Iowa"
+    ],
+    "3285": [
+      "Sac & Fox Nation of Missouri in Kansas and Nebraska"
+    ],
     "3305": [
       "St. Croix Chippewa Indians of Wisconsin"
+    ],
+    "3320": [
+      "Saint Regis Mohawk Tribe"
     ],
     "3340": [
       "Salt River Pima-Maricopa Indian Community of the Salt River Reservation, Arizona"
@@ -3723,11 +3835,20 @@
     "3495": [
       "Pueblo of Santa Clara, New Mexico"
     ],
+    "3520": [
+      "Santa Rosa Indian Community of the Santa Rosa Rancheria, California"
+    ],
+    "3525": [
+      "Santa Rosa Band of Cahuilla Indians, California"
+    ],
     "3540": [
       "Santa Ynez Band of Chumash Mission Indians of the Santa Ynez Reservation, California"
     ],
     "3550": [
       "Iipay Nation of Santa Ysabel, California"
+    ],
+    "3565": [
+      "Santee Sioux Nation, Nebraska"
     ],
     "3585": [
       "Santo Domingo Pueblo"
@@ -3738,8 +3859,14 @@
     "3635": [
       "Sault Ste. Marie Tribe of Chippewa Indians, Michigan"
     ],
+    "3665": [
+      "Seminole Tribe of Florida"
+    ],
     "3680": [
       "Shakopee Mdewakanton Sioux Community of Minnesota"
+    ],
+    "3695": [
+      "Shawnee Tribe"
     ],
     "3735": [
       "Sherwood Valley Rancheria of Pomo Indians of California"
@@ -3758,6 +3885,9 @@
     ],
     "3840": [
       "Skull Valley Band of Goshute Indians of Utah"
+    ],
+    "3855": [
+      "Tolowa Dee-ni' Nation"
     ],
     "3860": [
       "Snoqualmie Indian Tribe"
@@ -3807,14 +3937,23 @@
     "4090": [
       "Sycuan Band of the Kumeyaay Nation"
     ],
+    "4095": [
+      "Wiyot Tribe, California"
+    ],
     "4110": [
       "Table Mountain Rancheria"
+    ],
+    "4130": [
+      "Seminole Tribe of Florida"
     ],
     "4140": [
       "Pueblo of Taos, New Mexico"
     ],
     "4170": [
       "Pueblo of Tesuque, New Mexico"
+    ],
+    "4180": [
+      "Timbisha Shoshone Tribe"
     ],
     "4200": [
       "Tohono O'odham Nation of Arizona"
@@ -3852,6 +3991,9 @@
     "4375": [
       "Twenty-Nine Palms Band of Mission Indians of California"
     ],
+    "4390": [
+      "Ute Indian Tribe of the Uintah & Ouray Reservation, Utah"
+    ],
     "4405": [
       "Confederated Tribes of the Umatilla Indian Reservation"
     ],
@@ -3869,6 +4011,16 @@
     ],
     "4515": [
       "Walker River Paiute Tribe of the Walker River Reservation, Nevada"
+    ],
+    "4530": [
+      "Wampanoag Tribe of Gay Head (Aquinnah)"
+    ],
+    "4545": [
+      "Confederated Tribes of the Warm Springs Reservation of Oregon"
+    ],
+    "4610": [
+      "Eastern Shoshone Tribe of the Wind River Reservation, Wyoming",
+      "Northern Arapaho Tribe of the Wind River Reservation, Wyoming"
     ],
     "4625": [
       "Winnebago Tribe of Nebraska"
@@ -3897,11 +4049,22 @@
     "4755": [
       "Ysleta del Sur Pueblo"
     ],
+    "4760": [
+      "Yurok Tribe of the Yurok Reservation, California"
+    ],
     "4770": [
       "Pueblo of Zia, New Mexico"
     ],
     "4785": [
       "Zuni Tribe of the Zuni Reservation, New Mexico"
+    ],
+    "5540": [
+      "Caddo Nation of Oklahoma",
+      "Wichita and Affiliated Tribes (Wichita, Keechi, Waco, & Tawakonie), Oklahoma",
+      "Delaware Nation, Oklahoma"
+    ],
+    "5550": [
+      "Cherokee Nation"
     ],
     "5560": [
       "Cheyenne and Arapaho Tribes, Oklahoma"
@@ -3909,14 +4072,33 @@
     "5580": [
       "The Chickasaw Nation"
     ],
+    "5590": [
+      "The Choctaw Nation of Oklahoma"
+    ],
+    "5600": [
+      "Citizen Potawatomi Nation, Oklahoma",
+      "Absentee-Shawnee Tribe of Indians of Oklahoma"
+    ],
     "5620": [
       "The Muscogee (Creek) Nation"
     ],
     "5640": [
       "Eastern Shawnee Tribe of Oklahoma"
     ],
+    "5670": [
+      "Iowa Tribe of Oklahoma"
+    ],
     "5690": [
       "Kaw Nation, Oklahoma"
+    ],
+    "5700": [
+      "Kickapoo Tribe of Oklahoma"
+    ],
+    "5720": [
+      "Kiowa Tribe",
+      "Comanche Nation, Oklahoma",
+      "Apache Tribe of Oklahoma",
+      "Fort Sill-Chiricahua-Warm Springs-Apache Tribe"
     ],
     "5730": [
       "Miami Tribe of Oklahoma"
@@ -3927,14 +4109,26 @@
     "5760": [
       "Otoe-Missouria Tribe of Indians, Oklahoma"
     ],
+    "5770": [
+      "Ottawa Tribe of Oklahoma"
+    ],
     "5780": [
       "Pawnee Nation of Oklahoma"
     ],
     "5795": [
       "Peoria Tribe of Indians of Oklahoma"
     ],
+    "5800": [
+      "Ponca Tribe of Indians of Oklahoma"
+    ],
     "5810": [
       "Quapaw Nation"
+    ],
+    "5820": [
+      "Sac & Fox Nation, Oklahoma"
+    ],
+    "5830": [
+      "The Seminole Nation of Oklahoma"
     ],
     "5835": [
       "Seneca-Cayuga Nation"
@@ -3978,6 +4172,9 @@
     "6080": [
       "Village of Anaktuvuk Pass"
     ],
+    "6095": [
+      "Yupiit of Andreafski"
+    ],
     "6100": [
       "Angoon Community Association"
     ],
@@ -4004,6 +4201,9 @@
     ],
     "6195": [
       "Native Village of Belkofski"
+    ],
+    "6205": [
+      "Orutsararmiut Traditional Native Council"
     ],
     "6225": [
       "Village of Bill Moore's Slough"
@@ -4035,6 +4235,9 @@
     "6290": [
       "Chickaloon Native Village"
     ],
+    "6295": [
+      "Chignik Bay Tribal Council"
+    ],
     "6300": [
       "Native Village of Chignik Lagoon"
     ],
@@ -4046,6 +4249,9 @@
     ],
     "6315": [
       "Chilkoot Indian Association (Haines)"
+    ],
+    "6325": [
+      "Cheesh-Na Tribe"
     ],
     "6330": [
       "Native Village of Chitina"
@@ -4065,6 +4271,9 @@
     "6365": [
       "Native Village of Kluti Kaah (aka Copper Center)"
     ],
+    "6380": [
+      "Native Village of Council"
+    ],
     "6385": [
       "Craig Tribal Association"
     ],
@@ -4073,6 +4282,9 @@
     ],
     "6400": [
       "Native Village of Deering"
+    ],
+    "6405": [
+      "Curyung Tribal Council"
     ],
     "6415": [
       "Village of Dot Lake"
@@ -4118,6 +4330,9 @@
     ],
     "6520": [
       "Native Village of Gakona"
+    ],
+    "6525": [
+      "Louden Tribe"
     ],
     "6530": [
       "Native Village of Gambell"
@@ -4178,6 +4393,9 @@
     ],
     "6680": [
       "Kaktovik Village (aka Barter Island)"
+    ],
+    "6685": [
+      "Village of Kalskag"
     ],
     "6690": [
       "Village of Kaltag"
@@ -4254,6 +4472,9 @@
     "6855": [
       "Native Village of Larsen Bay"
     ],
+    "6860": [
+      "Tangirnaq Native Village"
+    ],
     "6865": [
       "Levelock Village"
     ],
@@ -4281,8 +4502,17 @@
     "6935": [
       "Native Village of Mekoryuk"
     ],
+    "6945": [
+      "Mentasta Traditional Council"
+    ],
     "6965": [
       "Native Village of Minto"
+    ],
+    "6975": [
+      "Asa'carsarmiut Tribe"
+    ],
+    "6990": [
+      "Naknek Native Village"
     ],
     "6995": [
       "Native Village of Nanwalek (aka English Bay)"
@@ -4383,6 +4613,9 @@
     "7230": [
       "Pilot Station Traditional Village"
     ],
+    "7235": [
+      "Pitka's Point Traditional Council"
+    ],
     "7245": [
       "Platinum Traditional Village"
     ],
@@ -4412,6 +4645,12 @@
     ],
     "7310": [
       "Native Village of Ruby"
+    ],
+    "7315": [
+      "Iqugmiut Traditional Council"
+    ],
+    "7375": [
+      "Native Village of Saint Michael"
     ],
     "7400": [
       "Salamatof Tribe"
@@ -4464,6 +4703,9 @@
     "7510": [
       "Stebbins Community Association"
     ],
+    "7520": [
+      "Native Village of Stevens"
+    ],
     "7525": [
       "Village of Stony River"
     ],
@@ -4493,6 +4735,9 @@
     ],
     "7605": [
       "Traditional Village of Togiak"
+    ],
+    "7625": [
+      "Nunakauyarmiut Tribe"
     ],
     "7630": [
       "Tuluksak Native Community"
@@ -4524,11 +4769,23 @@
     "7740": [
       "Native Village of Wales"
     ],
+    "7745": [
+      "Native Village of White Mountain"
+    ],
     "7755": [
       "Wrangell Cooperative Association"
     ],
     "7765": [
       "Yakutat Tlingit Tribe"
+    ],
+    "8100": [
+      "Cayuga Nation"
+    ],
+    "8150": [
+      "Chickahominy Indian Tribe"
+    ],
+    "8160": [
+      "Chickahominy Indian Tribe-Eastern Division"
     ],
     "8300": [
       "Ione Band of Miwok Indians of California"
@@ -4548,11 +4805,17 @@
     "0050": [
       "Alabama-Coushatta Tribe of Texas"
     ],
+    "0080": [
+      "Seneca Nation of Indians"
+    ],
     "0095": [
       "Alturas Indian Rancheria, California"
     ],
     "0110": [
       "Metlakatla Indian Community, Annette Island Reserve"
+    ],
+    "0115": [
+      "Mi'kmaq Nation"
     ],
     "0120": [
       "United Auburn Indian Community of the Auburn Rancheria of California"
@@ -4571,6 +4834,9 @@
     ],
     "0200": [
       "Berry Creek Rancheria of Maidu Indians of California"
+    ],
+    "0225": [
+      "Seminole Tribe of Florida"
     ],
     "0240": [
       "Big Lagoon Rancheria, California"
@@ -4596,11 +4862,17 @@
     "0350": [
       "Bridgeport Indian Colony"
     ],
+    "0360": [
+      "Seminole Tribe of Florida"
+    ],
     "0400": [
       "Burns Paiute Tribe"
     ],
     "0415": [
       "Cabazon Band of Cahuilla Indians"
+    ],
+    "0435": [
+      "Cahuilla Band of Indians"
     ],
     "0440": [
       "Yerington Paiute Tribe of the Yerington Colony & Campbell Ranch, Nevada"
@@ -4614,8 +4886,16 @@
     "0525": [
       "Catawba Indian Nation"
     ],
+    "0540": [
+      "Seneca Nation of Indians"
+    ],
     "0555": [
       "Cedarville Rancheria, California"
+    ],
+    "0560": [
+      "Confederated Tribes and Bands of the Yakama Nation",
+      "Confederated Tribes of the Umatilla Indian Reservation",
+      "Confederated Tribes of the Warm Springs Reservation of Oregon"
     ],
     "0575": [
       "Confederated Tribes of the Chehalis Reservation"
@@ -4634,6 +4914,9 @@
     ],
     "0680": [
       "Pueblo of Cochiti, New Mexico"
+    ],
+    "0690": [
+      "Seminole Tribe of Florida"
     ],
     "0695": [
       "Cocopah Tribe of Arizona"
@@ -4662,6 +4945,9 @@
     "0780": [
       "Kletsel Dehe Wintun Nation of the Cortina Rancheria"
     ],
+    "0795": [
+      "Coushatta Tribe of Louisiana"
+    ],
     "0815": [
       "Cow Creek Band of Umpqua Tribe of Indians"
     ],
@@ -4670,6 +4956,9 @@
     ],
     "0825": [
       "Coyote Valley Band of Pomo Indians of California"
+    ],
+    "0845": [
+      "Crow Tribe of Montana"
     ],
     "0855": [
       "Crow Creek Sioux Tribe of the Crow Creek Reservation, South Dakota"

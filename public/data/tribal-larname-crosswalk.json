@@ -13,7 +13,8 @@
     "censusSource": "US Census Bureau TIGERweb AIANNH layer 47 (names only)",
     "censusAreaCount": 272,
     "censusSafeMatchCount": 232,
-    "labelAreaCount": 452
+    "labelAreaCount": 545,
+    "labelConfirmedCount": 93
   },
   "matched": [
     {

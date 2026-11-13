@@ -90,6 +90,19 @@
  *        federal row with no LAR skip (a map label duplicates no search
  *        row); a Nation's name with only "(previously listed as ...)"
  *        dropped. An unresolved row gets no label; no guess is added.
+ *     9. Confirmed label rows (CENSUS_LABEL_CONFIRMED, 2026-11-13). Rule 8
+ *        left 126 of 578 federal areas unnamed: a Census name alone cannot
+ *        settle "Warm Springs" (two roster names hold the phrase) or "Pine
+ *        Ridge" (none does). The US EPA Tribal Areas tables publish the
+ *        Census area id beside the Tribe's name, and agree with every one of
+ *        the 437 rule 8 labels they cover. Each confirmed row was read from
+ *        those tables and is pinned by Census code. The build does not fetch
+ *        them; it checks every row against the live Census name and the live
+ *        roster, and FAILS when either has changed or when the matcher now
+ *        answers differently (the row reopens). Rule 5's listed names are
+ *        never pinned, and neither is a place or band that one Nation's
+ *        Federal Register name lists among several: those wait for the
+ *        maintainer's word.
  *   Every emitted area row carries a `provenance` field ("safe-match" or
  *   "lar-label"; "bia-authoritative" is reserved for a future BIA-published
  *   association). The runtime search (src/ui/search-controller.ts) renders
@@ -330,6 +343,155 @@ const MAINTAINER_CONFIRMED = new Map([
   ]
 ]);
 
+// CONFIRMED LABEL ROWS (rule 9): Census AIANNH code, the Census BASENAME the
+// row was confirmed for, and the Nations as a label shows them (labelName
+// form), in the order the Census name lists them, else Federal Register
+// order. Evidence, row by row: the US EPA Tribal Areas tables (EMEF/Tribal
+// MapServer, extracted 2026-04-29 to 2026-05-12, read 2026-11-13), which
+// carry the Census area id beside the Tribe's name for reservations, trust
+// lands and OTSAs, and the village name beside the Tribe's name and its name
+// history for Alaska (6095 to 7745). The last three rows rest on the names
+// alone: the Census area carries the Tribe's own Federal Register name.
+const CENSUS_LABEL_CONFIRMED = [
+  ['0080', 'Allegany', ['Seneca Nation of Indians']],
+  ['0115', 'Aroostook Band of Micmac', ["Mi'kmaq Nation"]],
+  ['0225', 'Big Cypress', ['Seminole Tribe of Florida']],
+  ['0360', 'Brighton', ['Seminole Tribe of Florida']],
+  ['0435', 'Cahuilla', ['Cahuilla Band of Indians']],
+  ['0540', 'Cattaraugus', ['Seneca Nation of Indians']],
+  [
+    '0560',
+    'Celilo',
+    [
+      'Confederated Tribes and Bands of the Yakama Nation',
+      'Confederated Tribes of the Umatilla Indian Reservation',
+      'Confederated Tribes of the Warm Springs Reservation of Oregon'
+    ]
+  ],
+  ['0690', 'Coconut Creek', ['Seminole Tribe of Florida']],
+  ['0795', 'Coushatta', ['Coushatta Tribe of Louisiana']],
+  ['0845', 'Crow', ['Crow Tribe of Montana']],
+  ['1070', 'Fallon Paiute-Shoshone', ['Paiute-Shoshone Tribe of the Fallon Reservation and Colony, Nevada']],
+  ['1075', 'Fallon Paiute-Shoshone', ['Paiute-Shoshone Tribe of the Fallon Reservation and Colony, Nevada']],
+  ['1260', 'Fort Pierce', ['Seminole Tribe of Florida']],
+  ['1270', 'Fort Sill Apache', ['Fort Sill-Chiricahua-Warm Springs-Apache Tribe']],
+  ['1340', 'Goshute', ['Confederated Tribes of the Goshute Reservation, Nevada and Utah']],
+  ['1475', 'Hollywood', ['Seminole Tribe of Florida']],
+  ['1530', 'Houlton Maliseet', ['Houlton Band of Maliseet Indians']],
+  ['1550', 'Huron Potawatomi', ['Nottawaseppi Huron Band of the Potawatomi, Michigan']],
+  ['1555', 'Immokalee', ['Seminole Tribe of Florida']],
+  ['1590', 'Iowa (KS-NE)', ['Iowa Tribe of Kansas and Nebraska']],
+  ['1610', 'Isabella', ['Saginaw Chippewa Indian Tribe of Michigan']],
+  ['1770', 'Kickapoo (KS)', ['Kickapoo Tribe of Indians of the Kickapoo Reservation in Kansas']],
+  ['1775', 'Kickapoo (TX)', ['Kickapoo Traditional Tribe of Texas']],
+  ['1800', 'Kootenai', ['Kootenai Tribe of Idaho']],
+  ['1880', "L'Anse", ['Keweenaw Bay Indian Community, Michigan']],
+  ['1960', 'Little River', ['Little River Band of Ottawa Indians, Michigan']],
+  ['2100', 'Manchester-Point Arena', ['Manchester Band of Pomo Indians of the Manchester Rancheria, California']],
+  ['2130', 'Maricopa (Ak Chin)', ['Ak-Chin Indian Community']],
+  ['2300', 'Mississippi Choctaw', ['Mississippi Band of Choctaw Indians']],
+  ['2495', 'North Fork', ['Northfork Rancheria of Mono Indians of California']],
+  ['2505', 'Northwestern Shoshone', ['Northwestern Band of the Shoshone Nation']],
+  ['2535', 'Oil Springs', ['Seneca Nation of Indians']],
+  ['2560', 'Oneida (WI)', ['Oneida Nation']],
+  ['2580', 'Ontonagon', ['Keweenaw Bay Indian Community, Michigan']],
+  [
+    '2625',
+    'Paiute (UT)',
+    [
+      'Paiute Indian Tribe of Utah (Cedar Band of Paiutes, Kanosh Band of Paiutes, Koosharem Band of Paiutes, ' +
+        'Indian Peaks Band of Paiutes, and Shivwits Band of Paiutes)'
+    ]
+  ],
+  ['2680', 'Pascua Pueblo Yaqui', ['Pascua Yaqui Tribe of Arizona']],
+  ['2715', 'Pauma and Yuima', ['Pauma Band of Luiseno Mission Indians of the Pauma & Yuima Reservation, California']],
+  ['2810', 'Pine Ridge', ['Oglala Sioux Tribe']],
+  ['2865', 'Poarch Creek', ['Poarch Band of Creek Indians']],
+  ['2900', 'Ponca (NE)', ['Ponca Tribe of Nebraska']],
+  ['2980', 'Prairie Band of Potawatomi Nation', ['Prairie Band Potawatomi Nation']],
+  ['3015', 'Qualla Boundary', ['Eastern Band of Cherokee Indians']],
+  ['3145', 'Resighini', ['Pulikla Tribe of Yurok People']],
+  ['3265', 'Rumsey', ['Yocha Dehe Wintun Nation, California']],
+  ['3280', 'Sac and Fox/Meskwaki', ['Sac & Fox Tribe of the Mississippi in Iowa']],
+  ['3285', 'Sac and Fox Nation', ['Sac & Fox Nation of Missouri in Kansas and Nebraska']],
+  ['3320', 'St. Regis Mohawk', ['Saint Regis Mohawk Tribe']],
+  // Two areas share the Census BASENAME: 3520 is the Rancheria, 3525 the Reservation.
+  ['3520', 'Santa Rosa', ['Santa Rosa Indian Community of the Santa Rosa Rancheria, California']],
+  ['3525', 'Santa Rosa', ['Santa Rosa Band of Cahuilla Indians, California']],
+  ['3565', 'Santee', ['Santee Sioux Nation, Nebraska']],
+  ['3665', 'Seminole (FL)', ['Seminole Tribe of Florida']],
+  ['3695', 'Shawnee', ['Shawnee Tribe']],
+  ['3855', 'Smith River', ["Tolowa Dee-ni' Nation"]],
+  ['4095', 'Table Bluff', ['Wiyot Tribe, California']],
+  ['4130', 'Tampa', ['Seminole Tribe of Florida']],
+  ['4180', 'Timbi-Sha Shoshone', ['Timbisha Shoshone Tribe']],
+  ['4390', 'Uintah and Ouray', ['Ute Indian Tribe of the Uintah & Ouray Reservation, Utah']],
+  ['4530', 'Wampanoag-Aquinnah', ['Wampanoag Tribe of Gay Head (Aquinnah)']],
+  ['4545', 'Warm Springs', ['Confederated Tribes of the Warm Springs Reservation of Oregon']],
+  [
+    '4610',
+    'Wind River',
+    [
+      'Eastern Shoshone Tribe of the Wind River Reservation, Wyoming',
+      'Northern Arapaho Tribe of the Wind River Reservation, Wyoming'
+    ]
+  ],
+  ['4760', 'Yurok', ['Yurok Tribe of the Yurok Reservation, California']],
+  [
+    '5540',
+    'Caddo-Wichita-Delaware',
+    [
+      'Caddo Nation of Oklahoma',
+      'Wichita and Affiliated Tribes (Wichita, Keechi, Waco, & Tawakonie), Oklahoma',
+      'Delaware Nation, Oklahoma'
+    ]
+  ],
+  ['5550', 'Cherokee', ['Cherokee Nation']],
+  ['5590', 'Choctaw', ['The Choctaw Nation of Oklahoma']],
+  [
+    '5600',
+    'Citizen Potawatomi Nation-Absentee Shawnee',
+    ['Citizen Potawatomi Nation, Oklahoma', 'Absentee-Shawnee Tribe of Indians of Oklahoma']
+  ],
+  ['5670', 'Iowa', ['Iowa Tribe of Oklahoma']],
+  ['5700', 'Kickapoo', ['Kickapoo Tribe of Oklahoma']],
+  [
+    '5720',
+    'Kiowa-Comanche-Apache-Fort Sill Apache',
+    [
+      'Kiowa Tribe',
+      'Comanche Nation, Oklahoma',
+      'Apache Tribe of Oklahoma',
+      'Fort Sill-Chiricahua-Warm Springs-Apache Tribe'
+    ]
+  ],
+  ['5770', 'Ottawa', ['Ottawa Tribe of Oklahoma']],
+  ['5800', 'Ponca', ['Ponca Tribe of Indians of Oklahoma']],
+  ['5820', 'Sac and Fox', ['Sac & Fox Nation, Oklahoma']],
+  ['5830', 'Seminole', ['The Seminole Nation of Oklahoma']],
+  ['6095', 'Andreafsky', ['Yupiit of Andreafski']],
+  ['6205', 'Bethel', ['Orutsararmiut Traditional Native Council']],
+  ['6295', 'Chignik', ['Chignik Bay Tribal Council']],
+  ['6325', 'Chistochina', ['Cheesh-Na Tribe']],
+  ['6380', 'Council', ['Native Village of Council']],
+  ['6405', 'Dillingham', ['Curyung Tribal Council']],
+  ['6525', 'Galena', ['Louden Tribe']],
+  ['6685', 'Kalskag', ['Village of Kalskag']],
+  ['6860', 'Lesnoi', ['Tangirnaq Native Village']],
+  ['6945', 'Mentasta Lake', ['Mentasta Traditional Council']],
+  ['6975', 'Mountain Village', ["Asa'carsarmiut Tribe"]],
+  ['6990', 'Naknek', ['Naknek Native Village']],
+  ['7235', 'Pitkas Point', ["Pitka's Point Traditional Council"]],
+  ['7315', 'Russian Mission', ['Iqugmiut Traditional Council']],
+  ['7375', 'St. Michael', ['Native Village of Saint Michael']],
+  ['7520', 'Stevens Village', ['Native Village of Stevens']],
+  ['7625', 'Toksook Bay', ['Nunakauyarmiut Tribe']],
+  ['7745', 'White Mountain', ['Native Village of White Mountain']],
+  ['8100', 'Cayuga Nation', ['Cayuga Nation']],
+  ['8150', 'Chickahominy', ['Chickahominy Indian Tribe']],
+  ['8160', 'Eastern Chickahominy', ['Chickahominy Indian Tribe-Eastern Division']]
+];
+
 function norm(s) {
   return s
     .toLowerCase()
@@ -441,14 +603,37 @@ export function labelName(name) {
  * code to the Nations' Federal Register names. The same Census pass, run on
  * every federal row with no skip for a reservation AIAN-LAR also locates (the
  * label is drawn on the Census layer, so it duplicates no search row). A row
- * the pass does not resolve to one Nation gets no label; joint-use, state and
- * Hawaiian Home Land rows never reach the matcher. Exported for the test.
+ * the pass does not resolve to one Nation takes its confirmed row (rule 9) or
+ * gets no label; joint-use, state and Hawaiian Home Land rows never reach the
+ * matcher or a confirmed row. Exported for the test.
  */
-export function censusLabelAreas(features, roster) {
+export function censusLabelAreas(features, roster, confirmed = CENSUS_LABEL_CONFIRMED) {
   const { censusMatched } = censusPass(features, roster, new Set(roster));
-  return Object.fromEntries(
-    censusMatched.map((m) => [m.aiannh, [labelName(m.tribe)]]).sort(([a], [b]) => a.localeCompare(b))
+  const labels = new Map(censusMatched.map((m) => [m.aiannh, [labelName(m.tribe)]]));
+  const rosterLabels = new Set(roster.map(labelName));
+  const federal = new Map(
+    features
+      .map((f) => f.attributes ?? {})
+      .filter((a) => CENSUS_FED_LEGAL.has(a.AIANNHCC) || CENSUS_FED_STAT.has(a.AIANNHCC))
+      .map((a) => [a.AIANNH, a.BASENAME])
   );
+  for (const [code, basename, nations] of confirmed) {
+    if (!federal.has(code)) continue; // Census no longer publishes the area as federal: nothing to label.
+    const gone = nations.find((n) => !rosterLabels.has(n));
+    const reopened =
+      federal.get(code) !== basename
+        ? `the Census now names the area "${federal.get(code)}"`
+        : gone
+          ? `"${gone}" is not a name in the Federal Register roster`
+          : labels.has(code) && labels.get(code).join('|') !== nations.join('|')
+            ? `the name matcher now answers "${labels.get(code).join('; ')}"`
+            : null;
+    if (reopened) {
+      throw new Error(`confirmed label row ${code} (${basename}) is REOPENED: ${reopened}. Re-confirm the row; do not ship this build.`);
+    }
+    labels.set(code, nations);
+  }
+  return Object.fromEntries([...labels].sort(([a], [b]) => a.localeCompare(b)));
 }
 
 async function main() {
@@ -616,7 +801,9 @@ async function main() {
       'as a LAR land area and as a Census statistical area. provenance census-label keeps ' +
       'the Census name verbatim. labelAreas: Census AIANNH code to the Federal Register ' +
       'names the Tribal Lands layer labels that area with (every federal row the Census ' +
-      'matcher resolves, reservations included; "(previously listed as ...)" dropped). ' +
+      'matcher resolves, reservations included, plus the rows confirmed against the US EPA ' +
+      'Tribal Areas tables, which publish the Census area id beside the Tribe; "(previously ' +
+      'listed as ...)" dropped). ' +
       'Regenerate with `npm run build:tribal-roster`.',
     meta: {
       rosterSource: `Federal Register ${doc.document_number} (${doc.publication_date})`,
@@ -637,7 +824,8 @@ async function main() {
       censusSource: 'US Census Bureau TIGERweb AIANNH layer 47 (names only)',
       censusAreaCount: censusAreas.length,
       censusSafeMatchCount: censusMatched.length,
-      labelAreaCount: Object.keys(labelAreas).length
+      labelAreaCount: Object.keys(labelAreas).length,
+      labelConfirmedCount: CENSUS_LABEL_CONFIRMED.filter(([code]) => labelAreas[code]).length
     },
     areas,
     censusAreas,

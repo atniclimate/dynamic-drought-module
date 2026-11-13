@@ -121,7 +121,9 @@ export function labelMinZoom(areaLand: number, cls: string): number {
 
 /**
  * One label point per area the label map names, at the Census internal point
- * (INTPTLAT, INTPTLON), every Nation on its own line and never shortened.
+ * (INTPTLAT, INTPTLON), never shortened. A blank line sets each Nation apart:
+ * a long name wraps, and wrapped lines alone do not say where one Nation's
+ * name ends (look of 2026-11-13, the Kiowa-Comanche-Apache-Fort Sill Apache area).
  */
 export function nationLabelPoints(
   geojson: FeatureCollection,
@@ -139,7 +141,7 @@ export function nationLabelPoints(
     features.push({
       type: 'Feature',
       geometry: { type: 'Point', coordinates: [lng, lat] },
-      properties: { text: names.join('\n'), km2: areaLand / 1e6 || 0, minzoom: labelMinZoom(areaLand, cls) }
+      properties: { text: names.join('\n\n'), km2: areaLand / 1e6 || 0, minzoom: labelMinZoom(areaLand, cls) }
     });
   }
   return { type: 'FeatureCollection', features };
