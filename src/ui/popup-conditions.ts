@@ -435,13 +435,15 @@ export function droughtRow(
   context?: Pick<RowContext, 'region' | 'place' | 'scope' | 'whole'>
 ): MarkedRow | null {
   const { region, place, scope, whole } = context ?? { region: point, place: null, scope: 'point' as const, whole: true };
-  // A whole read of the place's area names its worst category; a clipped or partial one only names what was seen in the area; a point read names the category at the point.
-  const worst = scope === 'area' ? `${whole ? ', the worst' : ''} ${scopePhrase(scope)}` : '';
+  // A whole read of the place's area names its worst category; a point read names the category at the point. A clipped or partial area read names no class (the layer's state word answers, below): the visible part's worst is not the place's.
+  const worst = scope === 'area' ? `, the worst ${scopePhrase(scope)}` : '';
+  const partOnly = scope === 'area' && !whole;
   // The register notes speak of the same place the other drought sentences do.
   const where = scope === 'area' ? scopePhrase(scope) : 'at this point';
   if (isLayerOn(NADM_KEY)) {
     if (!map.getLayer(NADM_FILL)) return unreadRow('Drought', NADM_KEY);
-    const complete = whole && isReadComplete(NADM_KEY);
+    if (partOnly) return unreadRow('Drought', NADM_KEY);
+    const complete = isReadComplete(NADM_KEY);
     const feats = touchingPlace(map.queryRenderedFeatures(region, { layers: [NADM_FILL] }), place);
     let maxIndex = -1;
     let maxProps: GeoJsonProperties = null;
@@ -472,7 +474,7 @@ export function droughtRow(
   }
 
   if (isLayerOn(USDM_KEY)) {
-    const complete = whole && isReadComplete(USDM_KEY);
+    const complete = isReadComplete(USDM_KEY);
     // The change register displays `usdm-change-fill` and HIDES both frame
     // slots (src/layers/usdm.ts, showChange), while leaving the slot layers
     // in the style. Querying the slots in that mode therefore returns nothing
@@ -496,7 +498,7 @@ export function droughtRow(
       );
     }
     const presentFills = USDM_FILLS.filter((id) => map.getLayer(id));
-    if (presentFills.length === 0) return unreadRow('Drought', USDM_KEY);
+    if (presentFills.length === 0 || partOnly) return unreadRow('Drought', USDM_KEY);
     const feats = touchingPlace(map.queryRenderedFeatures(region, { layers: [...presentFills] }), place);
     let maxDm = -1;
     let maxProps: GeoJsonProperties = null;

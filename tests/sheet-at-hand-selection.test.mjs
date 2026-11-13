@@ -45,6 +45,13 @@ test('the one door is named for what it does next, and opens the briefing of a s
   assert.match(sheet, /onPlaceSelectionChange\(\(\) => \{\s*if \(sheetBriefing === null\) renderAtHand\(\);\s*\}\);/);
 });
 
+test('a new place\'s briefing releases a pressed Place door, so the at-hand answer leads (a search pick, DR-252)', () => {
+  assert.match(
+    sheet,
+    /const newPlace = briefing !== null && briefing\.landTitle !== sheetBriefing\?\.landTitle;\s*sheetBriefing = briefing;\s*if \(newPlace && activeTab === 'place' && detent !== null && detent !== 'closed'\) \{\s*syncFooterTab\(null\);\s*present\(\);\s*\}/
+  );
+});
+
 test('the briefing module registers the opener, and the sheet never imports it', () => {
   assert.match(
     panel,

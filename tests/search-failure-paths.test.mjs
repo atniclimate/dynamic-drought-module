@@ -292,6 +292,35 @@ test('a city pick superseded during its State read is silent', async () => {
   }
 });
 
+test('a Tribal locate superseded during its read logs and toasts nothing; a real failure still logs and toasts', async () => {
+  const warned = [];
+  const warn = console.warn;
+  console.warn = (...args) => warned.push(args.join(' '));
+  try {
+    let reads = 0;
+    answers.set(LAR_URL, (init) => {
+      reads += 1;
+      return new Promise((_, reject) => {
+        init.signal.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')));
+      });
+    });
+    S.toasts.length = 0;
+    wiring.onSelect(tribalItem);
+    await waitFor(() => reads === 1);
+    wiring.onSelect({ kind: 'place', id: 'OR', label: 'Oregon', haystack: 'oregon' });
+    for (let i = 0; i < 20; i += 1) await flush();
+    assert.deepEqual(warned.filter((w) => /locate failed/.test(w)), [], 'a cancel by a newer pick is not a failure');
+    assert.deepEqual(S.toasts, []);
+
+    answers.set(LAR_URL, () => json({ error: 'gone' }, 503));
+    wiring.onSelect(tribalItem);
+    await waitFor(() => S.toasts.length === 1);
+    assert.equal(warned.filter((w) => /locate failed/.test(w)).length, 1, 'a real failure still logs');
+  } finally {
+    console.warn = warn;
+  }
+});
+
 test('a census: result locates against the Census service; an HTTP 200 error envelope is unavailable', async () => {
   const censusItem = {
     kind: 'tribal',

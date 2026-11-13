@@ -511,9 +511,18 @@ test('drought in a place reads the worst category touching the place, not the pi
   const clipped = nadm([], { clientWidth: 600, clientHeight: 100_000 });
   assert.deepEqual(clipped.rows, [{ label: 'Drought', text: getLayerDef('nadm-drought').name, state: 'live' }]);
   assert.doesNotMatch(clipped.head[0].text, /Nothing mapped/);
-  // A clipped read that did find a category only names what it saw, never "the worst" of the place.
+  // A clipped read that did find a category names no class (the visible part's worst is not the place's): the state word answers.
   const clippedHit = nadm(['D2'], { clientWidth: 600, clientHeight: 100_000 });
-  assert.equal(clippedHit.rows[0].text, 'D2 Severe drought in this area (North American Drought Monitor)');
+  assert.deepEqual(clippedHit.rows, [{ label: 'Drought', text: getLayerDef('nadm-drought').name, state: 'live' }]);
+  const clippedUsdm = withLayers(['usdm'], () =>
+    buildPlaceConditionsHtml(
+      patchyMap({ 'usdm-frame-a-fill': [{ properties: { DM: 2 }, geometry: square(-122, 47) }] }, { clientWidth: 600, clientHeight: 100_000 }),
+      [0, 0],
+      PLACE
+    )
+  );
+  assert.doesNotMatch(clippedUsdm.rows[0].text, /D2/);
+  assert.equal(clippedUsdm.rows[0].state, 'live');
   // USDM behaves alike.
   const usdm = withLayers(['usdm'], () =>
     buildPlaceConditionsHtml(patchyMap({ 'usdm-frame-a-fill': [{ properties: { DM: 2 }, geometry: square(-122, 47) }] }), [0, 0], PLACE)

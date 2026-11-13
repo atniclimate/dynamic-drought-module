@@ -158,6 +158,17 @@ test('the Drought tile names the weekly map and leaves the date to the source li
   assert.ok(all.includes('2026-10-20'), 'the map\'s own date is on the tile');
 });
 
+test('a Drought read over the place says the worst in this area, never a point (lane AREA wiring)', () => {
+  const briefing = briefingOf('unavailable', 'not read in this fixture');
+  const areaClaim = { ...usdmClaim, reading: { ...usdmClaim.reading, scope: 'area' } };
+  briefing.horizons.current.cells.drought = cell('drought', 'current', 'ready', [areaClaim]);
+  const all = text(renderLeadView(briefing, NOW));
+  assert.ok(all.includes('The weekly map, the worst in this area.'), all);
+  assert.ok(!all.includes('at the selected point'), all);
+  const here = buildEnsoChainLinks(briefing).find((link) => link.key === 'here');
+  assert.match(here.statement, /^D2 .+ in this area$/);
+});
+
 test('the together strip joins reads without stamping a date of its own', () => {
   const briefing = briefingOf('unavailable', 'not read in this fixture');
   briefing.horizons.current.cells.drought = cell('drought', 'current', 'ready', [usdmClaim]);
@@ -244,11 +255,52 @@ test('a tile\'s accessible name carries the scope words its face shows (B9)', ()
   assert.ok(names.some((name) => name.includes('Current perimeters in a search area wider than this place.')), names.join(' | '));
 });
 
-test('a text read in other reads and gaps wears its state, never a bare horizon label (B5)', () => {
-  const briefing = briefingOf('unavailable', 'not read in this fixture');
+test('a cell with no reading leaves other reads and gaps; a gap stays with its state (B5)', () => {
+  const briefing = briefingOf('ready');
   briefing.horizons.nearTerm.cells.drought = cell('drought', 'nearTerm', 'ready', [textClaim]);
-  const row = restRow(renderLeadView(briefing, NOW), 'drought');
-  assert.match(row, /live Near Term stated in the federal text/, row);
+  const html = renderLeadView(briefing, NOW, { horizon: 'nearTerm' });
+  assert.doesNotMatch(html, /stated in the federal text/);
+  assert.equal(restRow(html, 'drought'), '', 'a ready cell with no reading is not listed');
+  // The same cell, partly read: the gap stays with its state word.
+  briefing.horizons.nearTerm.cells.drought = cell('drought', 'nearTerm', 'partial', [textClaim], 'One window did not respond.');
+  const gap = restRow(renderLeadView(briefing, NOW, { horizon: 'nearTerm' }), 'drought');
+  assert.match(gap, /live \(partial\) Near Term/);
+  assert.match(gap, /One window did not respond\./);
+  assert.doesNotMatch(gap, /stated in the federal text/);
+});
+
+test('an all-ready, text-only briefing claims no list below it, at either horizon (B5)', () => {
+  const briefing = briefingOf('ready');
+  for (const horizon of ['nearTerm', 'longRange']) {
+    for (const hazard of HAZARD_KEYS) briefing.horizons[horizon].cells[hazard] = cell(hazard, horizon, 'ready', [textClaim]);
+    const html = renderLeadView(briefing, NOW, { horizon });
+    const said = text(/<p class="lead-none">[\s\S]*?<\/p>/.exec(html)?.[0] ?? '');
+    assert.equal(said, 'Nothing here is ranked yet. That is not an all-clear.', horizon);
+    assert.ok(!html.includes('lead-rest-list'), `${horizon}: no rest list is drawn`);
+    assert.doesNotMatch(html, /listed below/, horizon);
+  }
+});
+
+test('an ENSO link that only points to the detail is a door, with no pointer sentence', () => {
+  const briefing = briefingOf('unavailable', 'not read in this fixture');
+  const plain = { ...usdmClaim, product: 'ensoNino34Monthly', reading: undefined };
+  briefing.horizons.current.cells.enso = cell('enso', 'current', 'ready', [plain]);
+  const links = buildEnsoChainLinks(briefing);
+  const pattern = links.find((link) => link.key === 'pattern');
+  assert.equal(pattern.status, 'ready');
+  assert.equal(pattern.action, 'detail:enso');
+  assert.equal(pattern.note, undefined);
+  const index = buildEnsoChainLinks(
+    Object.assign(briefing, {
+      horizons: {
+        ...briefing.horizons,
+        current: { ...briefing.horizons.current, cells: { ...briefing.horizons.current.cells, enso: cell('enso', 'current', 'ready', [{ ...plain, product: 'ensoIndex' }]) } }
+      }
+    })
+  ).find((link) => link.key === 'index');
+  assert.equal(index.action, 'detail:enso');
+  assert.equal(index.note, undefined);
+  for (const link of links) assert.doesNotMatch(link.note ?? '', /stated in the ENSO detail/);
 });
 
 test('the active mode\'s hazard leads the view, ranked or not (B3)', () => {
@@ -274,7 +326,7 @@ test('the view reads the map\'s horizon only (B4)', () => {
   assert.match(text(renderLeadView(briefing, NOW, { horizon: 'current' })), /D2 Severe drought/);
   const long = renderLeadView(briefing, NOW, { horizon: 'longRange' });
   assert.doesNotMatch(long, /class="lead-tile"/);
-  assert.match(restRow(long, 'drought'), /live Long Range stated in the federal text/);
+  assert.equal(restRow(long, 'drought'), '', 'a ready cell with no reading is not listed');
   assert.doesNotMatch(text(long), /Current Conditions|Near Term/);
 });
 

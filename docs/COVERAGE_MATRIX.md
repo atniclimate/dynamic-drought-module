@@ -25,7 +25,7 @@ supported; the note says why).
 - **Display** (full): The shipped framings render the PNW as the primary region.
 - **Selectable place** (full): Tribal Nations, states, ecoregions, and watersheds are selectable typed places (watershed lists come from the live USGS WBD service); municipal labels are display-only.
 - **Drought state** (partial): US Drought Monitor (USDM) polygons, DSCI, and the NIDIS SPI raster display; no gridded index feeds analysis or the briefing yet.
-- **Landscape signature** (partial): The briefing lazily renders the baked terrain, soil, land-cover, and fuels signature for exact PNW Level III and IV ecoregion selections; other boundary kinds stay explicitly unavailable rather than being remapped to one ecoregion.
+- **Landscape signature** (partial): The landscape signature is shown for Pacific Northwest Level III and IV ecoregions; for any other place it is not shown.
 - **Impact synthesis** (partial): The shipped briefing composes USDM, outlooks, and telemetry with the evidence contract and shows the signature as separately labeled static ecoregion context; no gridded index input or signature-derived claim yet.
 
 ### Contiguous United States (CONUS)
@@ -33,7 +33,7 @@ supported; the note says why).
 - **Display** (full): The national framing renders CONUS on the same basemap and condition surfaces.
 - **Selectable place** (partial): AIANNH/BIA and state selection exist nationally, but the behavior is unproven outside the PNW.
 - **Drought state** (partial): USDM polygons and the NIDIS SPI raster display cover CONUS; no gridded index feeds analysis or the briefing.
-- **Landscape signature** (none): No signature inputs are baked outside the planned PNW pipeline.
+- **Landscape signature** (none): No signature inputs exist outside the Pacific Northwest.
 - **Impact synthesis** (none): Northwest-curated resources and the Pacific Northwest ENSO tendency are not read outside the Pacific Northwest; every other briefing source reads where its issuer covers the place.
 
 ### Alaska and Hawaii

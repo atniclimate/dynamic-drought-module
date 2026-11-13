@@ -440,7 +440,7 @@ function resolvedSelection(
     title
   );
   return {
-    context: { ...rawContext, bbox, pointInsidePlace: true },
+    context: { ...rawContext, bbox, pointInsidePlace: true, placeGeometry: geometry },
     geometry,
     bbox
   };

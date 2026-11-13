@@ -37,6 +37,8 @@ import {
   formatPointHeatValue
 } from '../impact/point-heat-format';
 import {
+  landscapeContextShown,
+  landscapeUncoveredGroup,
   resolveLandscapeSelection
 } from '../impact/landscape-resolution';
 import type { LandscapeEcoregionKey } from '../impact/landscape-resolution';
@@ -182,10 +184,10 @@ let viewLiveEl: HTMLElement | null = null;
  * one table, `READ_STATE_WORD` (src/ui/gauges.ts), which the priority view and
  * the evidence chain read too, so a cell reads the same word in every view.
  */
-const HORIZON_PILL_TEXT = READ_STATE_WORD;
+const HORIZON_PILL_TEXT = { ...READ_STATE_WORD, loading: 'loading' };
 
 const SOURCE_PILL_TEXT: Record<LayerStatus, string> = {
-  loading: 'loading...',
+  loading: 'loading',
   ready: 'live',
   degraded: 'live (partial)',
   error: 'unavailable',
@@ -1007,7 +1009,8 @@ function renderBody(briefing: ImpactBriefing): string {
  * Nothing when every source covers the place.
  */
 function renderUncoveredSources(briefing: ImpactBriefing): string {
-  const groups = uncoveredSourceGroups(briefing.sourcePolicy);
+  const landscape = landscapeUncoveredGroup(briefing.context, briefing.sourcePolicy.geography);
+  const groups = [...uncoveredSourceGroups(briefing.sourcePolicy), ...(landscape ? [landscape] : [])];
   if (groups.length === 0) return '';
   return `<h4>Sources that do not cover this place</h4>${groups
     .map(({ labels, note }) => `<p><strong>${escapeHtml(labels.join(', '))}.</strong> ${escapeHtml(note)}</p>`)
@@ -1053,7 +1056,7 @@ function renderBriefingSections(briefing: ImpactBriefing): string {
   return `
     ${caveat}
     ${lead}
-    ${renderLandscapeContext(briefing.landscape)}
+    ${landscapeContextShown(briefing.context) ? renderLandscapeContext(briefing.landscape) : ''}
     ${impact}
     ${renderResources(briefing.resources)}
     ${renderMapTechnicalInformation(false, renderPriorityRule() + renderUncoveredSources(briefing))}

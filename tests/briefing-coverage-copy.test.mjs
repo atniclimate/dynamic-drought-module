@@ -91,13 +91,38 @@ test('a source that does not cover the place is named once with its own capabili
 
 test('every family\'s briefing coverage line writes the Pacific Northwest out', () => {
   for (const family of COVERAGE_FAMILY_KEYS) {
-    const note = CAPABILITY_MATRIX[family].impactSynthesis.note;
-    assert.doesNotMatch(note, /\bPNW\b/, `${family}: ${note}`);
+    // The landscape signature note now reads in Technical information's "not covered" list too.
+    for (const axis of ['impactSynthesis', 'landscapeSignature']) {
+      const note = CAPABILITY_MATRIX[family][axis].note;
+      assert.doesNotMatch(note, /\bPNW\b/, `${family} ${axis}: ${note}`);
+    }
   }
   assert.equal(
     CAPABILITY_MATRIX.conus.impactSynthesis.note,
     'Northwest-curated resources and the Pacific Northwest ENSO tendency are not read outside the Pacific Northwest; every other briefing source reads where its issuer covers the place.'
   );
+});
+
+test('Landscape context draws only for an ecoregion; every other place lists the signature as not covering it, with no instruction', async () => {
+  const { landscapeContextShown, landscapeUncoveredGroup, UNSUPPORTED_LANDSCAPE_SELECTION_NOTE } = await import('../src/impact/landscape-resolution.ts');
+  assert.doesNotMatch(UNSUPPORTED_LANDSCAPE_SELECTION_NOTE, /\bSelect an?\b/);
+  const ecoregion = {
+    kind: 'ecoregion',
+    title: 'Cascades',
+    properties: { US_L3CODE: '4' },
+    lngLat: { lng: -122, lat: 46 },
+    regionKey: 'washington_state',
+    containing: { state: 'WA', basis: 'feature-property' }
+  };
+  assert.equal(landscapeContextShown(ecoregion), true);
+  assert.equal(landscapeUncoveredGroup(ecoregion, briefingSourcePolicy(ecoregion).geography), null);
+  for (const [code, lng, lat, family] of [['AZ', -111.7, 34.3, 'conus'], ['WA', -120.5, 47.4, 'pnw'], ['AK', -150.0, 64.0, 'ak-hi']]) {
+    const state = stateContext(code, lng, lat);
+    assert.equal(landscapeContextShown(state), false, `${code}: no Landscape section`);
+    const group = landscapeUncoveredGroup(state, briefingSourcePolicy(state).geography);
+    assert.deepEqual(group?.labels, ['Landscape signature'], code);
+    assert.equal(group?.note, CAPABILITY_MATRIX[family].landscapeSignature.note, `${code}: its own capability note`);
+  }
 });
 
 test('the briefing resources name no repository path', () => {

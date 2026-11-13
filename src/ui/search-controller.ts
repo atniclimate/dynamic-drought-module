@@ -253,12 +253,11 @@ async function locateBoundary(map: maplibregl.Map, spec: LocateSpec): Promise<vo
     if (isObject(json) && 'error' in json) throw new Error('ArcGIS error envelope');
     fc = json as FeatureCollection;
   } catch (err) {
-    console.warn('[search] Tribal land area locate failed.', err);
-    // A deliberate supersede is not an error to report; anything else is
+    // A deliberate supersede is not an error to log or report; anything else is
     // surfaced honestly (the service failed, no result will appear).
-    if (!abort.signal.aborted && isCurrentBriefingIntent(intent)) {
-      showToast(spec.failToast);
-    }
+    if (abort.signal.aborted || !isCurrentBriefingIntent(intent)) return;
+    console.warn('[search] Tribal land area locate failed.', err);
+    showToast(spec.failToast);
     return;
   }
 
@@ -322,7 +321,7 @@ async function locateBoundary(map: maplibregl.Map, spec: LocateSpec): Promise<vo
     spec.title
   );
   const context = {
-    ...(bbox ? { ...rawContext, bbox, pointInsidePlace: true } : rawContext),
+    ...(bbox ? { ...rawContext, bbox, pointInsidePlace: true, placeGeometry: aggregateGeometry } : rawContext),
     ...(spec.areaLabel ? { areaLabel: spec.areaLabel } : {})
   };
   setPlaceSelection({ label: context.title, context });
@@ -393,7 +392,7 @@ async function openContainingStateBriefing(
     const state = await resolveContainingState(map, { lng, lat }, abort.signal);
     // null: no State holds the point (silent, as a click outside every State). A failed read rejects into the catch.
     if (!state || abort.signal.aborted || !isCurrentBriefingIntent(intent)) return;
-    await openStateBriefing(map, state.code, { fit: false, guard: () => isCurrentBriefingIntent(intent) });
+    await openStateBriefing(map, state.code, { fit: false, area: false, guard: () => isCurrentBriefingIntent(intent) });
   } catch (err) {
     // A newer pick aborted this lookup on purpose: nothing failed. Any other failure is shown, never silent (invariant 6).
     if (abort.signal.aborted || !isCurrentBriefingIntent(intent)) return;

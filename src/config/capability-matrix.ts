@@ -98,7 +98,7 @@ export const CAPABILITY_MATRIX: CapabilityMatrix = {
     },
     landscapeSignature: {
       level: 'partial',
-      note: 'The briefing lazily renders the baked terrain, soil, land-cover, and fuels signature for exact PNW Level III and IV ecoregion selections; other boundary kinds stay explicitly unavailable rather than being remapped to one ecoregion.'
+      note: 'The landscape signature is shown for Pacific Northwest Level III and IV ecoregions; for any other place it is not shown.'
     },
     impactSynthesis: {
       level: 'partial',
@@ -120,7 +120,7 @@ export const CAPABILITY_MATRIX: CapabilityMatrix = {
     },
     landscapeSignature: {
       level: 'none',
-      note: 'No signature inputs are baked outside the planned PNW pipeline.'
+      note: 'No signature inputs exist outside the Pacific Northwest.'
     },
     impactSynthesis: {
       level: 'none',

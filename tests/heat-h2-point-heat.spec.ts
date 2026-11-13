@@ -615,7 +615,7 @@ test.describe('H2 critical-first surfaces', () => {
     state: 'loading' | 'ready' | 'partial' | 'unavailable' | 'no-data'
   ): Promise<void> {
     const labels = {
-      loading: 'loading...', ready: 'live', partial: 'live (partial)',
+      loading: 'loading', ready: 'live', partial: 'live (partial)',
       unavailable: 'unavailable', 'no-data': 'no data'
     };
     const ink = state === 'unavailable' ? 'rgb(255, 255, 255)'

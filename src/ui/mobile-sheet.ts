@@ -389,7 +389,14 @@ function loadMotion(): void {
  */
 export function setSheetBriefing(briefing: ImpactBriefing | null): void {
   const chosen = briefing !== null && briefing !== sheetBriefing;
+  // A place picked from the Place door's search (DR-252) answers as a place tap does: the door is released so the
+  // at-hand briefing leads the sheet (data-sheet-tab='place' puts the search first, and its list hides the answer).
+  const newPlace = briefing !== null && briefing.landTitle !== sheetBriefing?.landTitle;
   sheetBriefing = briefing;
+  if (newPlace && activeTab === 'place' && detent !== null && detent !== 'closed') {
+    syncFooterTab(null);
+    present();
+  }
   renderAtHand();
   // A place chosen from a text entry that raised the sheet answers at half,
   // where the map shows it above the sheet; the full report stays one press

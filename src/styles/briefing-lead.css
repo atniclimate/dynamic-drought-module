@@ -484,11 +484,10 @@
   color: var(--ink-strong);
 }
 .lead-read,
-.lead-text-read,
 .lead-state {
   padding: 7px 0 3px;
 }
-.lead-rest-item > :is(.lead-read, .lead-text-read, .lead-state) + :is(.lead-read, .lead-text-read, .lead-state) {
+.lead-rest-item > :is(.lead-read, .lead-state) + :is(.lead-read, .lead-state) {
   border-top: 1px dashed var(--line);
 }
 .lead-state-line {
@@ -498,7 +497,7 @@
   gap: 6px 8px;
   margin: 0 0 4px;
 }
-:is(.lead-read, .lead-text-read) > .lead-state-line {
+.lead-read > .lead-state-line {
   flex-wrap: nowrap;
   align-items: flex-start;
   justify-content: space-between;
@@ -521,13 +520,6 @@
 .lead-state-horizon {
   font-size: 11px;
   color: var(--fg-1);
-}
-.lead-text-read-words {
-  min-width: 0;
-}
-.lead-text-read-where {
-  font-size: 11px;
-  color: var(--fg-2);
 }
 
 /* ---- Doors ----------------------------------------------------------------- */

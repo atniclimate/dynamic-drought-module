@@ -378,7 +378,7 @@ function scopeWords(entry: PriorityEntry): string {
       // Not "this week's map": that is true only until the next release
       // (src/impact/sources.ts, the map date note). The tile's source line
       // carries the map's own date.
-      return 'The weekly map, at the selected point.';
+      return reading.scope === 'area' ? 'The weekly map, the worst in this area.' : 'The weekly map, at the selected point.';
     case 'heatrisk-level':
       return 'One 24-hour period, at the selected point.';
     case 'spc-fire-days':
@@ -490,25 +490,10 @@ function renderUnrankedRead(read: PriorityUnrankedRead): string {
 }
 
 /**
- * A read with no class to draw: its cell's state, named by its horizon,
- * source and date, and said to be in the federal text, one tap away on the
- * row's own door. Nothing of the sentence is cut here, and the state word
- * keeps the line from being a horizon label alone (DESIGN B5).
- */
-function renderTextRead(horizon: HorizonKey, status: HorizonStatus, claim: SourcedClaim): string {
-  return (
-    `<div class="lead-text-read" data-evidence="${claim.evidence}">` +
-    `<p class="lead-state-line"><span class="impact-hazard-pill impact-hazard-pill-${status}">${escapeHtml(READ_STATE_WORD[status])}</span>` +
-    `<span class="lead-text-read-words"><span class="lead-state-horizon">${escapeHtml(horizonWord(horizon))}</span>` +
-    ` <span class="lead-text-read-where">stated in the federal text</span></span>${badge(claim)}</p>` +
-    `<p class="lead-read-source">${sourceLine(claim)}</p></div>`
-  );
-}
-
-/**
  * A hazard's reads that hold no ranked class, and its cells that were not
  * read, laid out by horizon (Current Conditions, then Near Term) so each sits
- * under the clock it speaks for.
+ * under the clock it speaks for. A cell with no reading and no gap has no row
+ * (DESIGN B5): the Full detail holds its sentence.
  */
 function renderRest(item: PriorityRest, order: PriorityOrder): string {
   const familiesRead = new Set<PriorityFamily>([
@@ -517,7 +502,6 @@ function renderRest(item: PriorityRest, order: PriorityOrder): string {
   ]);
   const blocks: Array<{ readonly horizon: HorizonKey; readonly html: string }> = [
     ...item.reads.map((read) => ({ horizon: read.members[0]!.horizon, html: renderUnrankedRead(read) })),
-    ...item.texts.map(({ horizon, status, claim }) => ({ horizon, html: renderTextRead(horizon, status, claim) })),
     ...item.states.map((state) => ({
       horizon: state.horizon,
       html: renderState(item.hazard, state, familiesRead)
@@ -642,12 +626,13 @@ export function buildEnsoChainLinks(briefing: ImpactBriefing): ChainLink[] {
       ? {
           status: 'ready' as const,
           ...chainFieldsFromClaim(index),
+          // With no typed reading the link is its door to the ENSO detail alone.
           ...(indexReading
             ? {
                 statement: `${readingHeadline(indexReading)}: ${indexReading.index} ${signedIndex(indexReading.value)} (${indexReading.season} ${indexReading.year}${indexReading.preliminary ? ', preliminary' : ''})`,
                 figure: ensoGauge(indexReading, 'read')
               }
-            : { note: 'The index state is stated in the ENSO detail.' })
+            : {})
         }
       : unreadLink(current.cells.enso))
   });
@@ -664,8 +649,7 @@ export function buildEnsoChainLinks(briefing: ImpactBriefing): ChainLink[] {
     ...(surface
       ? {
           status: 'ready' as const,
-          ...chainFieldsFromClaim(surface),
-          note: 'The sea surface temperature observation is stated in the ENSO detail.'
+          ...chainFieldsFromClaim(surface)
         }
       : unreadLink(weekly === null ? nearTerm.cells.enso : current.cells.enso))
   });
@@ -718,7 +702,7 @@ export function buildEnsoChainLinks(briefing: ImpactBriefing): ChainLink[] {
       ? {
           status: 'ready' as const,
           ...chainFieldsFromClaim(drought),
-          statement: `${readingHeadline(usdm)} at the selected point`,
+          statement: `${readingHeadline(usdm)} ${usdm.scope === 'area' ? 'in this area' : 'at the selected point'}`,
           ...(usdm.dm === null
             ? { note: 'That may mean no drought, or a place outside the analyzed area.' }
             : {})
@@ -772,13 +756,15 @@ export function renderLeadView(
   const detail = mode !== undefined && mode === POINT_HEAT_HAZARD ? (options.pointHeat ?? '') : '';
   // The detail follows the mode's own tiles, so the tile list splits there only when it has one.
   const split = detail ? modeTiles : 0;
+  const others = order.rest.filter((item) => item !== modeRest);
+  // "Listed below with its state" is true only when a row is drawn: a hazard read with nothing the order can place has none.
+  const listed = modeRest !== undefined || others.length > 0;
   const lead =
     tiles.length > 0
       ? modeRestHtml + tileList(tiles.slice(0, split), 1) + detail + tileList(tiles.slice(split), split + 1)
-      : `<p class="lead-none">Nothing here is ranked yet. That is not an all-clear: each hazard is listed below with its state.</p>` +
+      : `<p class="lead-none">Nothing here is ranked yet. That is not an all-clear${listed ? ': each hazard is listed below with its state' : ''}.</p>` +
         modeRestHtml +
         detail;
-  const others = order.rest.filter((item) => item !== modeRest);
   // Past the first few, the order simply continues: the same tiles, under
   // their own heading, so no ranked read loses its figure or its place.
   const further =

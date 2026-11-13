@@ -317,7 +317,7 @@ test.describe('PS-BRIEF PLACE studio rendering', () => {
     ).toHaveText('Washington');
     await expect(narrative.locator('#place-selection-title')).toHaveCount(0);
     await expect(narrative.locator('#place-brief-line')).toHaveText(
-      "This location is in D2 Severe Drought as of this week's U.S. Drought Monitor. Crop or pasture losses are likely; water shortages are common and restrictions are imposed."
+      "D2 Severe Drought is the worst in this area as of this week's U.S. Drought Monitor. Crop or pasture losses are likely; water shortages are common and restrictions are imposed."
     );
 
     const columns = page.locator('#place-overlap-columns');

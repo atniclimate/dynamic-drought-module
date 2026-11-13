@@ -138,9 +138,9 @@ let openFetchScopes = 0;
 async function withFetch(answer, body) {
   const original = globalThis.fetch;
   openFetchScopes += 1;
-  globalThis.fetch = async (input) => {
+  globalThis.fetch = async (input, init) => {
     const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
-    return answer(url);
+    return answer(url, init);
   };
   try {
     return await body();
@@ -252,6 +252,199 @@ test('a selected place reads USDM at a point inside it; a click keeps the clicke
       assert.equal(claims[1].lineage[0], `USDM category ${at}`);
     });
   }
+});
+
+// G1 wave 1b (lane AREA): a place that carries its own outline reads the USDM over
+// that outline (the service intersects it with the issuer's polygons), names the
+// worst category among them in the card's words, and never reads one interior point.
+// A ring in the RFC 7946 winding: exterior counter-clockwise, hole clockwise.
+const AREA_OUTLINE = {
+  type: 'Polygon',
+  coordinates: [
+    [[-116, 44.4], [-104, 44.4], [-104, 49], [-116, 49], [-116, 44.4]],
+    [[-111, 46], [-111, 47], [-110, 47], [-110, 46], [-111, 46]]
+  ]
+};
+const areaPlace = (placeGeometry = AREA_OUTLINE) => ({ ...place(-110.5, 46.5), pointInsidePlace: true, placeGeometry });
+const AREA_ABSENCE =
+  'No D0-D4 category polygon in this area (U.S. Drought Monitor). This client has no analyzed-area mask, so this does not confirm no drought.';
+/** Twice the signed area of a ring: positive is counter-clockwise. */
+const ringTurn = (ring) => ring.reduce((sum, [x, y], i) => {
+  const [nx, ny] = ring[(i + 1) % ring.length];
+  return sum + x * ny - nx * y;
+}, 0);
+
+test('an area place reads the USDM over its outline: a category away from the interior point is the worst in this area', async () => {
+  const requests = [];
+  await withFetch((url, init) => {
+    requests.push({ url, init });
+    // The interior point (a hole here) has no polygon; the outline meets D1 and D3.
+    return jsonResponse(
+      init?.method === 'POST'
+        ? collection([feature({ DM: 1, MapDate: Date.UTC(2026, 10, 10) }), feature({ DM: 3 })])
+        : collection([])
+    );
+  }, async () => {
+    const result = await sources.fetchUsdmClaims(areaPlace(), signal());
+    assert.equal(requests.length, 1);
+    const [{ url, init }] = requests;
+    // `f` rides in the URL so spec stubs on `query?*` still match the area read.
+    assert.ok(url.endsWith('/USDM_current/FeatureServer/0/query?f=geojson'), url);
+    assert.equal(new URLSearchParams(String(init.body)).get('f'), null);
+    assert.equal(init.method, 'POST');
+    const body = new URLSearchParams(String(init.body));
+    assert.equal(body.get('geometryType'), 'esriGeometryPolygon');
+    assert.equal(body.get('spatialRel'), 'esriSpatialRelIntersects');
+    assert.equal(body.get('returnGeometry'), 'false');
+    assert.equal(body.get('outFields'), 'DM,MapDate,ValidStart,ValidEnd');
+    const { rings, spatialReference } = JSON.parse(body.get('geometry'));
+    assert.deepEqual(spatialReference, { wkid: 4326 });
+    assert.equal(rings.length, 2);
+    assert.ok(ringTurn(rings[0]) < 0, 'the ArcGIS exterior ring is clockwise');
+    assert.ok(ringTurn(rings[1]) > 0, 'the ArcGIS hole is counter-clockwise');
+
+    assert.equal(result.ok, true);
+    assert.equal(result.partial, undefined);
+    const [claim, wildfire] = result.claims;
+    assert.equal(claim.reading.dm, 3);
+    assert.equal(claim.reading.scope, 'area');
+    assert.ok(claim.text.startsWith('D3 Extreme Drought is the worst in this area as of the U.S. Drought Monitor map dated Nov 10, 2026.'), claim.text);
+    assert.equal(claim.support.reporting, 'the USDM polygons in this area');
+    assert.equal(claim.dates.valid, '2026-11-10');
+    assert.equal(wildfire.lineage[0], 'USDM category, the worst in this area');
+  });
+});
+
+test('an area place whose outline meets no USDM polygon states the card area absence, never more', async () => {
+  await withFetch(() => jsonResponse(collection([])), async () => {
+    const result = await sources.fetchUsdmClaims(areaPlace(), signal());
+    assert.equal(result.ok, true);
+    assert.equal(result.claims.length, 1);
+    assert.equal(result.claims[0].text, AREA_ABSENCE);
+    assert.equal(result.claims[0].reading.dm, null);
+    assert.equal(result.claims[0].reading.scope, 'area');
+  });
+});
+
+test('a failed area read is unavailable, never an absence: HTTP error, blank body, corrupt body, error envelope', async (t) => {
+  const warn = t.mock.method(console, 'warn', () => {});
+  const answers = [
+    () => jsonResponse({ error: 'down' }, 500),
+    () => new Response('', { status: 200 }),
+    () => new Response('{"type":"FeatureCollection","feat', { status: 200 }),
+    () => jsonResponse({ status: 'error', messages: ['Could not access any server machines.'] }),
+    () => jsonResponse(collection([feature({ DM: 7 })]))
+  ];
+  for (const answer of answers) {
+    await withFetch(answer, async () => {
+      const result = await sources.fetchUsdmClaims(areaPlace(), signal());
+      assert.equal(result.ok, false);
+      assert.deepEqual(result.claims, []);
+      assert.match(result.note, /^The U\.S\. Drought Monitor /);
+    });
+  }
+  assert.ok(warn.mock.calls.every((call) => String(call.arguments[0]).startsWith('[impact] USDM area query')));
+});
+
+test('an area read the service cut at its transfer limit names no class and no absence: live (partial)', async () => {
+  const cut = { ...collection([feature({ DM: 1 })]), properties: { exceededTransferLimit: true } };
+  await withFetch(() => jsonResponse(cut), async () => {
+    const result = await sources.fetchUsdmClaims(areaPlace(), signal());
+    assert.deepEqual(result, { claims: [], ok: true, partial: true });
+    const cell = settledCell('current', 'drought', [['usdm', result]]);
+    assert.notEqual(cell.status, 'ready');
+    assert.deepEqual(cell.claims, []);
+    assert.doesNotMatch(cell.note ?? '', /No |does not confirm/);
+  });
+});
+
+test('an outline the service cannot take keeps the point read, stated as a point', async () => {
+  const unwrapped = { type: 'Polygon', coordinates: [[[179, 51], [181, 51], [181, 52], [179, 52], [179, 51]]] };
+  for (const outline of [unwrapped, { type: 'Point', coordinates: [-110, 46] }, null]) {
+    const requests = [];
+    await withFetch((url, init) => {
+      requests.push(init?.method ?? 'GET');
+      return jsonResponse(collection([]));
+    }, async () => {
+      const [claim] = (await sources.fetchUsdmClaims(areaPlace(outline), signal())).claims;
+      assert.deepEqual(requests, ['GET']);
+      assert.match(claim.text, /^No D0-D4 category polygon at a point inside the selected place/);
+      assert.equal(claim.reading.scope, undefined);
+    });
+  }
+});
+
+// A full-resolution outline (an unsimplified ecoregion runs to megabytes) is not posted:
+// points that round to the same place are sent once, and an outline still too long
+// for a bounded request keeps the point read, stated as a point.
+const circle = (count, step) => {
+  const ring = Array.from({ length: count }, (_, i) => {
+    const a = (2 * Math.PI * i) / count;
+    return [-110 + step * count * Math.cos(a), 46 + step * count * Math.sin(a)];
+  });
+  return { type: 'Polygon', coordinates: [[...ring, ring[0]]] };
+};
+
+test('an area outline sends each rounded vertex once', async () => {
+  // 4,000 vertices on a ring about 0.004 degrees round: far fewer distinct 4-decimal points.
+  const dense = circle(4000, 0.000001);
+  let posted = null;
+  await withFetch((url, init) => {
+    posted = new URLSearchParams(String(init.body));
+    return jsonResponse(collection([feature({ DM: 2 })]));
+  }, async () => {
+    const [claim] = (await sources.fetchUsdmClaims(areaPlace(dense), signal())).claims;
+    assert.equal(claim.reading.scope, 'area');
+  });
+  const [ring] = JSON.parse(posted.get('geometry')).rings;
+  assert.ok(ring.length < 400, `posted ${ring.length} vertices`);
+  assert.ok(ring.every((p, i) => i === 0 || p[0] !== ring[i - 1][0] || p[1] !== ring[i - 1][1]));
+  assert.deepEqual(ring[0], ring[ring.length - 1], 'the ring stays closed');
+});
+
+test('an outline too long for a bounded request keeps the point read, stated as a point', async () => {
+  // 40,000 distinct rounded vertices: about a megabyte of outline.
+  const huge = circle(40000, 0.0001);
+  const requests = [];
+  await withFetch((url, init) => {
+    requests.push(init?.method ?? 'GET');
+    return jsonResponse(collection([]));
+  }, async () => {
+    const [claim] = (await sources.fetchUsdmClaims(areaPlace(huge), signal())).claims;
+    assert.deepEqual(requests, ['GET']);
+    assert.match(claim.text, /^No D0-D4 category polygon at a point inside the selected place/);
+    assert.equal(claim.reading.scope, undefined);
+  });
+});
+
+test('an area read abandoned during the body read stops there with nothing pending', async () => {
+  const controller = new AbortController();
+  let cancelled = false;
+  await withFetch(() => new Response(new ReadableStream({
+    start(stream) {
+      stream.enqueue(new TextEncoder().encode('{"type":"FeatureCollection",'));
+      setTimeout(() => controller.abort(), 0);
+    },
+    cancel() {
+      cancelled = true;
+    }
+  })), async () => {
+    const result = await sources.fetchUsdmClaims(areaPlace(), controller.signal);
+    assert.deepEqual(result, { claims: [], ok: false });
+  });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(cancelled, true, 'the body stream must be cancelled, leaving no pending read');
+});
+
+test('an area answer that lands after the briefing was superseded states nothing', async () => {
+  const controller = new AbortController();
+  await withFetch(() => {
+    controller.abort();
+    return jsonResponse(collection([feature({ DM: 4 })]));
+  }, async () => {
+    const result = await sources.fetchUsdmClaims(areaPlace(), controller.signal);
+    assert.deepEqual(result, { claims: [], ok: false });
+  });
 });
 
 // Audit round 5 (R5-10): with the North American Drought Monitor drawn (Drought

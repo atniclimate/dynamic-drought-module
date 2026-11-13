@@ -385,14 +385,19 @@ test('a hazard that was not read is listed under its own state with its reason',
   for (const item of missing.rest) assert.equal(item.states[0].status, 'unavailable');
 });
 
-test('a cell whose claims carry no reading still speaks: its leading claim stands in as text', () => {
+test('a ready cell whose claims carry no reading leaves the order; it is not a gap (B5)', () => {
   const first = claim(null, { text: 'CPC 6-10 day outlook: above-normal temperature.' });
   const order = orderBriefing(
-    place({ 'drought:nearTerm': cell('drought', 'nearTerm', [first, claim(null)]) })
+    [cell('drought', 'nearTerm', [first, claim(null)]), cell('fire', 'nearTerm', [], 'unavailable', 'SPC did not respond.')],
+    { horizon: 'nearTerm' }
   );
-  const drought = order.rest.find((item) => item.hazard === 'drought');
-  // B5: the text read carries its cell's own state, so it is never a bare horizon label.
-  assert.deepEqual(drought.texts, [{ horizon: 'nearTerm', status: 'ready', claim: first }]);
+  // Nothing to read and nothing failed: not listed, and not mistaken for a hazard given no cell.
+  assert.equal(order.rest.find((item) => item.hazard === 'drought'), undefined);
+  assert.equal('texts' in order.rest[0], false);
+  // A gap keeps its state and its words.
+  assert.deepEqual(order.rest.find((item) => item.hazard === 'fire').states, [
+    { horizon: 'nearTerm', status: 'unavailable', note: 'SPC did not respond.' }
+  ]);
 });
 
 test('the hazard rows are the modes, in the mode table\'s order (DR-113)', () => {
@@ -455,7 +460,7 @@ test('only the map\'s horizon enters the order (B4)', () => {
   const current = orderBriefing(busyPlace(), { horizon: 'current' });
   assert.ok(keysOf(current).every((key) => !/heatrisk|spc/.test(key)));
   for (const entry of current.ranked) assert.equal(entry.lead.horizon, 'current');
-  // Long Range: a seasonal claim with no ranked reading speaks as text, with its state.
+  // Long Range: a seasonal claim with no ranked reading is not a row; its partial state is the gap.
   const seasonal = claim({ kind: 'cpc-tercile', variable: 'temperature', cat: 'Above', prob: 50, season: 'Sep-Oct-Nov 2026' });
   const long = orderBriefing(
     [
@@ -467,7 +472,7 @@ test('only the map\'s horizon enters the order (B4)', () => {
   );
   assert.deepEqual(long.ranked, []);
   const heat = long.rest.find((item) => item.hazard === 'heat');
-  assert.deepEqual(heat.texts, [{ horizon: 'longRange', status: 'partial', claim: seasonal }]);
+  assert.deepEqual(heat.states, [{ horizon: 'longRange', status: 'partial', note: 'One window did not respond.' }]);
   // A hazard with no cell at this horizon is listed as not read, at this horizon.
   const fire = long.rest.find((item) => item.hazard === 'fire');
   assert.deepEqual(fire.states, [{ horizon: 'longRange', status: 'unavailable' }]);
