@@ -262,7 +262,7 @@ test.describe('mobile key growth at 390x844', () => {
     await expect(key).toBeVisible();
     const toggle = page.locator('#map-key-details-toggle');
     await expect(toggle).toHaveAttribute('aria-expanded', 'true');
-    await expect(toggle).toHaveAttribute('aria-label', /^(D\d|No polygon)[^.]* in view\. Close /);
+    await expect(toggle).toHaveAttribute('aria-label', /^(D\d|No polygon)[^.]* in view\. (Reading is stale\. )?Close /);
     await expect
       .poll(() =>
         page

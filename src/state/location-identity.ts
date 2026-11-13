@@ -173,7 +173,11 @@ function stateFromProps(props: GeoJsonProperties): StateIdentity | null {
   return { code: code.toUpperCase(), name: name ?? code.toUpperCase() };
 }
 
-/** Load the bundled state boundaries; null on any failure. */
+/**
+ * Load the bundled state boundaries. null only when this caller was superseded
+ * (its signal aborted); a failed read throws, so a caller that must tell a
+ * failed lookup from "no State holds this point" can (search-controller).
+ */
 async function loadBundledStates(signal: AbortSignal): Promise<FeatureCollection | null> {
   try {
     // Shared, page-lifetime transport (DDM-P14-T06) is the session cache: a
@@ -190,17 +194,18 @@ async function loadBundledStates(signal: AbortSignal): Promise<FeatureCollection
     )) as FeatureCollection;
   } catch (err) {
     // An aborted wait is a superseded click, not a real failure.
-    if (!signal.aborted) {
-      console.warn('[location-identity] bundled state boundaries fetch failed.', err);
-    }
-    return null;
+    if (signal.aborted) return null;
+    console.warn('[location-identity] bundled state boundaries fetch failed.', err);
+    throw err;
   }
 }
 
 /**
  * Resolve the containing state: the rendered `states` layer first (matching
  * what the user sees), then a point-in-polygon test against the bundled Census
- * boundaries so a click resolves even when the state layer is off.
+ * boundaries so a click resolves even when the state layer is off. Resolves null
+ * when no State holds the point or the caller was superseded; rejects when the
+ * bundled read failed.
  */
 async function resolveState(
   map: maplibregl.Map,
@@ -292,7 +297,8 @@ function resolveContainingTribal(
  * containing-state enrichment, DDM-P2-T08 microtask 2b), this is the narrow
  * tool: same `resolveState` implementation, same rendered-layer-first then
  * bundled-boundary-fallback order, same session cache, so there is exactly
- * one state-resolution codepath rather than two that could drift.
+ * one state-resolution codepath rather than two that could drift. A failed
+ * bundled read rejects here (unlike `resolveLocationIdentity`, which degrades).
  */
 export function resolveContainingState(
   map: maplibregl.Map,
@@ -316,7 +322,8 @@ export async function resolveLocationIdentity(
   const point = map.project([lngLat.lng, lngLat.lat]);
   const ecoregion = resolveEcoregion(map, point);
   const containingTribal = resolveContainingTribal(map, point);
-  const state = await resolveState(map, point, lngLat, signal);
+  // The identity of a click degrades to "no State" on a failed read (already warned); only the city pick surfaces it.
+  const state = await resolveState(map, point, lngLat, signal).catch(() => null);
   return {
     lngLat: { lng: lngLat.lng, lat: lngLat.lat },
     state,

@@ -216,7 +216,10 @@ test('the legend registry reports shown sections in panel order and tells the Ke
 test('the Key renders other shown legends only where the Legend panel has no box, and refreshes on a legend change', () => {
   const also = mapKey.match(/function alsoOnMapHtml[\s\S]*?\r?\n\}/)?.[0] ?? '';
   assert.match(also, /getActiveLegends\(\)\.filter\(\(\{ key \}\) => !keyed\.has\(key\)\)/);
-  assert.match(also, /panel\.getClientRects\(\)\.length > 0\) return '';/);
+  assert.match(also, /legendPanelUsable\(\)\) return '';/);
+  const usable = mapKey.match(/export function legendPanelUsable[\s\S]*?\r?\n\}/)?.[0] ?? '';
+  assert.match(usable, /node = node\.parentElement/, 'the usable test no longer walks the ancestors');
+  assert.match(usable, /style\.visibility === 'hidden'/);
   const section = mapKey.match(/function alsoSectionHtml[\s\S]*?\r?\n\}/)?.[0] ?? '';
   assert.match(section, /spec\.render\(body\)/, 'the rows no longer come from the section\'s own render');
   assert.match(section, /querySelectorAll\('\.legend-note'\)/, 'a caveat or credit reaches the map again');

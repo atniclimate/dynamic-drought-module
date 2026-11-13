@@ -554,5 +554,12 @@ test.describe('legend reachable from the claim (DDM-P13-T02 correction)', () => 
     // The desktop Brief draws no legend panel (display: none), so the link
     // opens the on-map Key, where the layer's legend reads.
     await expect(page.locator('#map-key')).toHaveAttribute('data-key-details-open', 'true');
+    // Opening the box is not reaching the legend: focus moves into the Key's legend content, and the
+    // content a reader finds there is the issuer's classes, not an empty drawer.
+    await expect
+      .poll(() => page.evaluate(() => Boolean(document.activeElement?.closest('#map-key-legend'))), { timeout: 10_000 })
+      .toBe(true);
+    await expect(page.locator('#map-key-legend .map-key-swatch').first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('#map-key-legend .map-key-item').first()).not.toBeEmpty();
   });
 });

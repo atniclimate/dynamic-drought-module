@@ -4653,6 +4653,88 @@ button.telemetry-item {
   text-align: left;
 }
 
+/* The open briefing leaves the map's buttons usable (owner, 2026-11-13: a
+   State or city pick opens the drawer, and #reset-btn sat under it). While the
+   desktop or tablet drawer is open, the Reset, SAT, Help and Share column
+   follows its width, one gap left of its edge, and the Key chip is held to
+   the room left of it so its disclosure chevron never sits under the drawer.
+   The column moves by `translate`, never `right`, so the slide runs on the
+   compositor with the shared motion tokens and the grid is not re-laid-out;
+   --impact-panel-w is the token the drawer and the dock read, so none of the
+   three can drift. Phones (the sheet-hosted panel) and embeds are outside
+   this block. Below 1240px the drawer and the 288px chip leave no room for
+   the column beside the chip (container less drawer less column is under the
+   chip's 300px), so the column also drops one cell height under the chip
+   instead of overlapping it; from 1240px up it stays in its row. This block
+   sits after the column rules so the contract test that reads the first
+   .map-overlay-controls rule still finds the column's own. */
+@media (min-width: 721px) {
+  /* The slots move, never the column: a transform on the column would make it
+     the containing block of the fixed Test preview badge and carry the badge
+     off its seat beside the scale bar. */
+  .app-shell:not(.embed) .map-overlay-controls > :is([data-map-slot], .studio-linkout-pair) {
+    transition: translate var(--dur-base) var(--ease-standard);
+  }
+  body:has(.impact-panel.open:not(.sheet-hosted)) .app-shell:not(.embed) {
+    --briefing-clear: calc(var(--impact-panel-w) + var(--impact-panel-gap));
+    --briefing-chip-left: 12px;
+  }
+  body:has(.impact-panel.open:not(.sheet-hosted)) .app-shell.sidebar-collapsed:not(.embed) {
+    --briefing-chip-left: 60px;
+  }
+  body:has(.impact-panel.open:not(.sheet-hosted)) .app-shell:not(.embed) .map-overlay-controls > :is([data-map-slot], .studio-linkout-pair) {
+    translate: calc(-1 * var(--briefing-clear)) 0;
+  }
+  body:has(.impact-panel.open:not(.sheet-hosted)) .app-shell:not(.embed) #map-condition-indicator {
+    max-width: calc(100% - var(--briefing-clear) - var(--briefing-chip-left));
+  }
+  /* The Help drawer opens left of the column, so it takes the shift too. */
+  body:has(.impact-panel.open:not(.sheet-hosted)) .app-shell:not(.embed) .map-overlay-controls .map-info-panel:not([hidden]) {
+    width: min(
+      var(--info-drawer-w),
+      max(
+        240px,
+        calc(
+          100vw - var(--sidebar-w) - 2 * var(--chrome-inset) - var(--map-cell-w) - 8px -
+            var(--briefing-clear)
+        )
+      )
+    );
+  }
+  body:has(.impact-panel.open:not(.sheet-hosted)) .app-shell.sidebar-collapsed:not(.embed) .map-overlay-controls .map-info-panel:not([hidden]) {
+    width: min(
+      var(--info-drawer-w),
+      max(
+        240px,
+        calc(100vw - 2 * var(--chrome-inset) - var(--map-cell-w) - 8px - var(--briefing-clear))
+      )
+    );
+  }
+}
+@media (min-width: 721px) and (pointer: coarse) {
+  body:has(.impact-panel.open:not(.sheet-hosted)) .app-shell.sidebar-collapsed:not(.embed) {
+    --briefing-chip-left: 64px;
+  }
+}
+@media (min-width: 721px) and (max-width: 1239px) {
+  body:has(.impact-panel.open:not(.sheet-hosted)) .app-shell:not(.embed) .map-overlay-controls > :is([data-map-slot], .studio-linkout-pair) {
+    translate: calc(-1 * var(--briefing-clear)) calc(var(--map-cell-h) + var(--map-cell-gap));
+  }
+  /* An open Key hangs down from the chip over the spot the dropped column
+     takes, so the column drops below the Key's tallest height instead
+     (the Key's own cap, hazard-indicators.css, is min(55vh, 420px)). */
+  body:has(.impact-panel.open:not(.sheet-hosted)):has(#map-key[data-key-details-open='true']) .app-shell:not(.embed) .map-overlay-controls > :is([data-map-slot], .studio-linkout-pair) {
+    translate:
+      calc(-1 * var(--briefing-clear))
+      calc(2 * (var(--map-cell-h) + var(--map-cell-gap)) + min(55vh, 420px));
+  }
+}
+@media (min-width: 721px) and (prefers-reduced-motion: reduce) {
+  .app-shell:not(.embed) .map-overlay-controls > :is([data-map-slot], .studio-linkout-pair) {
+    transition: none;
+  }
+}
+
 /* ----------------------------------------------------------------------------
    Drought-impact briefing panel
    The headline kernel-integration feature: a slide-in panel over the map that

@@ -26,6 +26,7 @@ const S = (globalThis.__sfp = {
   highlights: [],
   emphasis: [],
   held: [],
+  opened: [],
   toasts: [],
   lazyLoads: 0
 });
@@ -42,7 +43,7 @@ const STUBS = {
     'export const bboxCenter = () => ({ lng: 0, lat: 0 }); export const bboxToContinuousBounds = (b) => b;',
   '../util/antimeridian': 'export const geometryBboxAcrossAntimeridian = () => [0, 0, 1, 1];',
   '../state/deep-link':
-    'export const openStateBriefing = async () => {};' +
+    'export const openStateBriefing = async (_m, code) => { globalThis.__sfp.opened.push(code); };' +
     ' export const briefingCameraPadding = () => ({ top: 40, left: 40, bottom: 40, right: 480 });',
   '../state/located-boundary':
     'export const showLocatedBoundary = (_m, g) => globalThis.__sfp.highlights.push(g);',
@@ -209,6 +210,86 @@ test('a city pick clears an earlier place selection and sets none of its own', a
   wiring.onSelect({ kind: 'city', id: 'Seattle', label: 'Seattle', haystack: 'seattle' });
   assert.deepEqual(S.selections.slice(1), [null], 'the old place no longer reads as current');
   assert.deepEqual(windowEvents, ['ddm:city-view'], 'the region menu hears of the city view');
+});
+
+// A city's State is found by the real resolver: rendered states layer (none here), then the bundled outlines.
+const STATES_URL = '/dynamic-drought-module/data/us-states.geojson';
+const SEATTLE = { kind: 'city', id: 'Seattle', label: 'Seattle', haystack: 'seattle' };
+const stateBox = (west, code) => ({
+  type: 'FeatureCollection',
+  features: [{
+    type: 'Feature',
+    properties: { STUSPS: code, NAME: code },
+    geometry: { type: 'Polygon', coordinates: [[[west, 47], [west + 1, 47], [west + 1, 48], [west, 48], [west, 47]]] }
+  }]
+});
+
+async function pickSeattle(statesAnswer) {
+  // The shared bundled-states read is page-lifetime; each case starts it afresh.
+  const { invalidateSharedJsonRequest, US_STATES_SHARED_KEY } = await import('../src/util/fetch.ts');
+  invalidateSharedJsonRequest(US_STATES_SHARED_KEY);
+  answers.set(CITY_URL, () => json({ places: [{ name: 'Seattle', lon: -122.5, lat: 47.5, rank: 1 }] }));
+  answers.set(STATES_URL, statesAnswer);
+  const cityMap = { ...map, project: () => ({ x: 0, y: 0 }), getLayer: () => undefined, queryRenderedFeatures: () => [] };
+  const cityWiring = buildSearchWiring(cityMap);
+  await cityWiring.loadCities();
+  S.opened.length = 0;
+  S.toasts.length = 0;
+  cityWiring.onSelect(SEATTLE);
+  return cityWiring;
+}
+
+test('a city pick opens its containing State; a point no State holds says nothing', async () => {
+  await pickSeattle(() => json(stateBox(-123, 'WA')));
+  await waitFor(() => S.opened.length === 1);
+  assert.deepEqual(S.opened, ['WA']);
+  assert.deepEqual(S.toasts, []);
+
+  await pickSeattle(() => json(stateBox(-100, 'KS')));
+  for (let i = 0; i < 20; i += 1) await flush();
+  assert.deepEqual(S.opened, [], 'no containing State: nothing opens');
+  assert.deepEqual(S.toasts, [], 'a verified absence is silent, as before');
+});
+
+test('a city pick whose bundled State read fails shows the failure message, and the next pick retries', async () => {
+  const warn = console.warn;
+  console.warn = () => {};
+  try {
+    const failed = await pickSeattle(() => json({ error: 'gone' }, 503));
+    await waitFor(() => S.toasts.length === 1);
+    assert.match(S.toasts[0], /^Could not open the briefing for this city's State/);
+    assert.deepEqual(S.opened, [], 'a failed lookup opens nothing');
+
+    answers.set(STATES_URL, () => json(stateBox(-123, 'WA')));
+    S.toasts.length = 0;
+    failed.onSelect(SEATTLE);
+    await waitFor(() => S.opened.length === 1);
+    assert.deepEqual(S.toasts, [], 'the failure was evicted, so the retry succeeds');
+  } finally {
+    console.warn = warn;
+  }
+});
+
+test('a city pick superseded during its State read is silent', async () => {
+  const warn = console.warn;
+  console.warn = () => {};
+  try {
+    let reads = 0;
+    const cityWiring = await pickSeattle((init) => {
+      reads += 1;
+      return new Promise((_, reject) => {
+        init.signal.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')));
+      });
+    });
+    await waitFor(() => reads === 1);
+    // A State chosen next supersedes the lookup: the earlier read ends aborted, not as a failure.
+    cityWiring.onSelect({ kind: 'place', id: 'OR', label: 'Oregon', haystack: 'oregon' });
+    for (let i = 0; i < 20; i += 1) await flush();
+    assert.deepEqual(S.opened, ['OR'], 'only the newer choice opens');
+    assert.deepEqual(S.toasts, [], 'a superseded lookup is not a failure');
+  } finally {
+    console.warn = warn;
+  }
 });
 
 test('a census: result locates against the Census service; an HTTP 200 error envelope is unavailable', async () => {

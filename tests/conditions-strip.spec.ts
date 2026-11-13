@@ -79,7 +79,7 @@ test.describe('UX-3 conditions strip', () => {
       await expect(chipLabel.locator('.map-key-chip-value')).toHaveCSS('font-variant-numeric', /^(?:lining-nums tabular-nums|tabular-nums lining-nums)$/);
       // The issuer's own words, in its own case.
       await expect(chipLabel.locator('.map-key-chip-text')).toHaveText('Extreme drought');
-      await expect(page.locator('#map-key-details-toggle')).toHaveAttribute('aria-label', /^D3 Extreme drought in view\. Open /);
+      await expect(page.locator('#map-key-details-toggle')).toHaveAttribute('aria-label', /^D3 Extreme drought in view\. (Reading is stale\. )?Open /);
       // No satellite response has been released: this read must follow the
       // drought source's render, rather than depend on whole-map idle.
       await expect(chipLabel).not.toContainText('No polygon');
@@ -112,7 +112,11 @@ test.describe('UX-3 conditions strip', () => {
     await expect(page.locator('#map-key-overlay-host + #conditions-strip-dock')).toHaveCount(1);
     // One region carries the name: the shell summary names the display instead.
     await expect(page.locator('#shell-conditions-heading')).toHaveText('Display summary');
-    await expect(page.getByRole('region', { name: 'Conditions in view', exact: true })).toHaveCount(1);
+    // The strip is parked under a display:none dock, so no role query can see it: uniqueness is structural,
+    // and the visible Key's accessible name is asserted on its own.
+    await expect(page.locator('[aria-label="Conditions in view"]')).toHaveCount(1);
+    await expect(page.locator('#conditions-strip')).toHaveAttribute('aria-label', 'Conditions in view');
+    await expect(page.getByRole('button', { name: /^(D\d|No polygon)[^.]* in view\. (Reading is stale\. )?(Open|Close) / })).toHaveCount(1);
     await expect(strip.locator('.conditions-title')).toBeHidden();
     await expect(strip.locator('#conditions-date')).toBeAttached();
     // The bottom Layer legends is gone (owner 2026-11-13, item 13); the Key carries the legend.
@@ -134,7 +138,7 @@ test.describe('UX-3 conditions strip', () => {
     });
     expect(oneLine).toBe(true);
     await expect(chipLabel.locator('.map-key-chip-text')).not.toContainText('in view');
-    await expect(page.locator('#map-key-details-toggle')).toHaveAttribute('aria-label', /^D\d [^.]+ in view\. Open /);
+    await expect(page.locator('#map-key-details-toggle')).toHaveAttribute('aria-label', /^D\d [^.]+ in view\. (Reading is stale\. )?Open /);
     await expect(page.locator('#conditions-strip-dock')).toBeHidden();
     const chip = await page.locator('#map-key').boundingBox();
     expect(chip).not.toBeNull();

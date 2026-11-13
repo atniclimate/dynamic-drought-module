@@ -54,6 +54,7 @@ import { renderLandscapeContext } from './landscape-context';
 import { renderMapTechnicalInformation } from './map-technical-information';
 import { renderAcknowledgements } from './acknowledgements';
 import { getLegendSection } from './legend-registry';
+import { legendPanelUsable } from './map-key';
 import { requestLayerOn } from './layer-toggle-command';
 import { loadFederalResources, resourcesForIdentity } from '../impact/resource-catalog';
 import { HAZARD_CLUSTERS } from '../config/clusters';
@@ -570,13 +571,14 @@ function focusLegendSection(section: HTMLElement): void {
  */
 function waitForLegendSection(
   key: string,
-  onFound: (section: HTMLElement) => void
+  onFound: (section: HTMLElement) => void,
+  find: () => HTMLElement | null = () => getLegendSection(key)
 ): void {
   const generation = legendPollGeneration;
   const deadlineMs = Date.now() + 10_000;
   const poll = (): void => {
     if (generation !== legendPollGeneration) return;
-    const section = getLegendSection(key);
+    const section = find();
     if (section) {
       onFound(section);
       return;
@@ -613,15 +615,14 @@ function discloseLegendAnchorTitles(root: ParentNode): void {
 }
 
 /**
- * True when the SHELL does not draw the legend panel (desktop Brief, the phone sheet), as opposed to the
- * registry's own empty-state `hidden`, which Console shows again the moment a section arrives (review, 2026-11-13).
+ * Where the legend reads when the Legend panel cannot be used (`legendPanelUsable`, shared with the Key's
+ * 'Also on the map'): the section 'Also on the map' carries, else the Key's own title for the product.
  */
-function legendPanelHiddenByShell(panel: HTMLElement): boolean {
-  const emptyHidden = panel.hidden;
-  if (emptyHidden) panel.hidden = false;
-  const display = getComputedStyle(panel).display;
-  if (emptyHidden) panel.hidden = true;
-  return display === 'none';
+function keyLegendTarget(key: string): HTMLElement | null {
+  return (
+    document.querySelector<HTMLElement>(`#map-key [data-legend-also="${CSS.escape(key)}"]`) ??
+    document.querySelector<HTMLElement>('#map-key-legend .map-key-label')
+  );
 }
 
 /**
@@ -648,15 +649,23 @@ function handleLegendLinkClick(event: MouseEvent): void {
   legendPollGeneration++;
 
   const existing = getLegendSection(key);
-  // The column's legend panel is not drawn in the desktop Brief (the Layer
-  // legends bar left it); there the on-map Key is the legend, opened through
-  // its own toggle event and never closed by this link.
-  const panel = document.getElementById('legend-panel');
-  if (!panel || legendPanelHiddenByShell(panel)) {
-    if (!existing) requestLayerOn(key);
+  // Where the column's legend panel cannot be used (desktop Brief, a collapsed sidebar, an embed, the
+  // phone sheet) the on-map Key is the legend: opened through its own toggle event, never closed by this
+  // link, and focus moves into its legend content so a keyboard reader lands where the legend reads.
+  if (!legendPanelUsable()) {
     if (document.getElementById('map-key')?.dataset['keyDetailsOpen'] !== 'true') {
       window.dispatchEvent(new Event('ddm:toggle-map-key-details'));
     }
+    // A section the Key carries live (a control inside) has left the panel, so the Key's slot counts too.
+    const shown = (): boolean =>
+      Boolean(getLegendSection(key) || document.querySelector(`#map-key [data-legend-also="${CSS.escape(key)}"]`));
+    if (shown()) {
+      const target = keyLegendTarget(key);
+      if (target) focusLegendSection(target);
+      return;
+    }
+    requestLayerOn(key);
+    waitForLegendSection(key, focusLegendSection, () => (shown() ? keyLegendTarget(key) : null));
     return;
   }
   if (existing) {

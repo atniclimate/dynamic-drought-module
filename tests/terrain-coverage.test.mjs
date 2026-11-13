@@ -379,3 +379,72 @@ test('the flow explanations taken off the ENSO key read in the Impact Briefing u
   assert.doesNotMatch(flowWords(), /Not for navigation|never joined/, 'the key keeps only the short credit');
   assert.doesNotMatch(flowWords(), /Line pace shows|Lines show the modeled flow|Model output, not an observation|Display bins, not thresholds|The marks move in the direction/);
 });
+
+test('the notes, qualifications and credits of the layers on the map read in Technical information, from their own builders', async () => {
+  const { renderMapTechnicalInformation } = await import('../src/ui/map-technical-information.ts');
+  const { LEGEND_ORDER, hideLegend, renderSwatchLegend, showLegend } = await import('../src/ui/legend-registry.ts');
+  const { HMS_VOLUME_QUALIFICATION } = await import('../src/config/wildfire-presentation.ts');
+  const { PERIMETER_RIBBON_QUALIFICATION } = await import('../src/config/fire3d-presentation.ts');
+  // Just enough DOM for the builders: innerHTML and append, as a real element serializes them.
+  const element = (tag) => ({
+    tag, className: '', dataset: {}, textContent: '', innerHTML: '',
+    append(...children) { this.innerHTML += children.map((child) => child.outerHTML).join(''); },
+    get outerHTML() {
+      const data = Object.keys(this.dataset).map((name) => ` data-${name.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)}=""`).join('');
+      return `<${this.tag} class="${this.className}"${data}>${this.textContent.replace(/&/g, '&amp;')}</${this.tag}>`;
+    }
+  });
+  const savedDocument = globalThis.document;
+  globalThis.document = { createElement: element, getElementById: () => null };
+  const keys = ['hms-smoke-volume', 'nifc-perimeter-ribbon', 'power-context', 'telemetry', 'nws-alerts', 'whp-2023'];
+  try {
+    assert.ok(!renderMapTechnicalInformation().includes('Notes for the layers on the map'), 'no layer on the map, no heading');
+    const credit = 'Power plants: Source: U.S. Energy Information Administration (reporting period 2025-06), Forms EIA-860/860M, via the Esri Federal User Community (ArcGIS Living Atlas) copy.';
+    showLegend('hms-smoke-volume', { order: 1, render: (body) => renderSwatchLegend(body, 'Smoke volume (3D view)', [], HMS_VOLUME_QUALIFICATION) });
+    showLegend('nifc-perimeter-ribbon', { order: 2, render: (body) => renderSwatchLegend(body, 'Perimeter ribbon (3D view)', [], PERIMETER_RIBBON_QUALIFICATION) });
+    showLegend('power-context', {
+      order: 3,
+      render: (body) => {
+        renderSwatchLegend(body, 'Power infrastructure', [], 'Not comprehensive or current.');
+        const line = element('p');
+        line.className = 'legend-note legend-credit';
+        line.dataset.powerCredit = '';
+        line.textContent = credit;
+        body.append(line);
+      }
+    });
+    showLegend('telemetry', {
+      order: 4,
+      render: (body) => {
+        renderSwatchLegend(body, 'Monitoring stations', [], 'Featured stations keep their own marker colors.');
+        body.innerHTML += '<p class="legend-note legend-ddm-notice"><span class="ack-notice-label">DDM notice:</span> Public-view station data</p>';
+      }
+    });
+    showLegend('nws-alerts', { order: 5, render: (body) => renderSwatchLegend(body, 'Heat & fire weather alerts', [], 'Active National Weather Service products. As of 9:00 AM.') });
+    const { WHP_3D_SHADE_QUALIFICATION } = await import('../src/config/whp-shade.ts');
+    showLegend('whp-2023', { order: 6, render: (body) => renderSwatchLegend(body, 'Wildfire Hazard Potential', [], WHP_3D_SHADE_QUALIFICATION) });
+    const html = renderMapTechnicalInformation();
+    assert.equal(html.replace(/&#039;/g, "'").split(WHP_3D_SHADE_QUALIFICATION).length - 1, 1, 'the 3D hazard shade sentence is read once');
+    const section = html.slice(html.indexOf('<h4>Notes for the layers on the map</h4>'));
+    assert.ok(section.startsWith('<h4>'), 'one heading');
+    for (const sentence of [HMS_VOLUME_QUALIFICATION, PERIMETER_RIBBON_QUALIFICATION, 'Not comprehensive or current.', 'Featured stations keep their own marker colors.', credit]) {
+      assert.ok(section.replace(/&#039;/g, "'").includes(sentence), sentence);
+    }
+    assert.ok(section.includes('<strong>Power infrastructure.</strong> Not comprehensive or current.'), 'a note names its layer');
+    assert.ok(!section.includes('Public-view station data'), 'the RAWS notice stays in Acknowledgements');
+    assert.ok(!section.includes('Active National Weather Service products'), 'a note the briefing already carries is not read twice');
+    hideLegend('hms-smoke-volume');
+    assert.ok(!renderMapTechnicalInformation().includes(HMS_VOLUME_QUALIFICATION), 'a layer taken off the map takes its note with it');
+    // An open briefing follows the map: the wrapper is rewritten when a legend comes or goes.
+    const wrapper = { innerHTML: '' };
+    globalThis.document.getElementById = (id) => (id === 'impact-technical-layer-notes' ? wrapper : null);
+    showLegend('hms-smoke-volume', { order: 1, render: (body) => renderSwatchLegend(body, 'Smoke volume (3D view)', [], HMS_VOLUME_QUALIFICATION) });
+    assert.ok(wrapper.innerHTML.includes('Smoke volume (3D view)'), 'a layer turned on after render adds its note');
+    hideLegend('hms-smoke-volume');
+    assert.ok(!wrapper.innerHTML.includes('Smoke volume (3D view)'), 'a layer taken off after render drops its note');
+  } finally {
+    for (const key of keys) hideLegend(key);
+    if (savedDocument === undefined) delete globalThis.document;
+    else globalThis.document = savedDocument;
+  }
+});

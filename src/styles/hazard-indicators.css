@@ -125,11 +125,15 @@
 }
 @media (min-width: 721px) {
   .app-shell:not(.embed) #map-key .map-key-details-toggle {
-    padding: 0 12px;
+    /* The fixed 288 px seat must hold "D4 Exceptional drought" and the stale
+       tag on one line (text-registration.spec.ts, the Key chip reading), so the
+       chip's own padding and gaps are tight: 208 px of label at 10 and 6 px
+       against 198 at 12 and 8 (Spartan MB, measured). */
+    padding: 0 10px;
     display: grid;
     grid-template-columns: 16px minmax(0, 1fr) 8px 16px;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     /* Repair round on M10 (map-chrome-seats.spec.ts "chip height"): the
        seat's total height is set on the PARENT below (border included,
        box-sizing: border-box), not here, so the toggle just fills it;
@@ -145,7 +149,7 @@
   .app-shell:not(.embed) #map-key .map-key-chip-label {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 4px;
   }
   .app-shell:not(.embed) .map-key-chip-text {
     min-width: 0;
@@ -163,16 +167,17 @@
   }
   .app-shell:not(.embed) .map-key-chip-value {
     flex: none;
-    font-size: 16px;
+    font-size: 15px;
     font-weight: var(--fw-strong, 700);
     font-variant-numeric: lining-nums tabular-nums;
   }
   .app-shell:not(.embed) .map-key-chip-value + .map-key-chip-text {
+    font-size: 12px;
     font-weight: var(--fw-subtitle);
   }
   .app-shell:not(.embed) .map-key-chip-tag {
     flex: none;
-    font-size: 11px;
+    font-size: 10.5px;
     font-weight: var(--fw-subtitle);
     color: var(--ink-soft, #C6CBD4);
   }
@@ -302,6 +307,11 @@
   align-self: stretch;
   padding-top: 7px;
   border-top: 1px solid var(--line);
+}
+/* A section with a control (ecoregion level, gridded index product) is moved in
+   whole from the Legend panel; its notes stay in the panel and the briefing, never on the map. */
+#map-key .map-key-also-live .legend-note {
+  display: none;
 }
 #map-key[data-key-details-open='true'] .map-key-details-toggle {
   border-bottom: 1px solid var(--line);

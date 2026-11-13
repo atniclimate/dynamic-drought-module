@@ -443,6 +443,27 @@ test.describe('the Key drawer (S30D D1 M11)', () => {
     await openKeyDrawer(page);
     await expect(page.locator('#map-key-content [data-map-key-also]')).toHaveCount(0);
   });
+
+  // A section with a control (the ecoregion level) cannot be copied, so Brief carries it live in the
+  // drawer, selector included, and Console gets it back in the Legend panel.
+  test('in Brief the drawer carries the ecoregion key live under Also on the map; Console takes it back', async ({
+    page
+  }) => {
+    await page.setViewportSize(DESKTOP_VIEWPORT);
+    await gotoApp(page, '?layers=ecoregions');
+    await openKeyDrawer(page);
+    const live = page.locator('#map-key-content [data-legend-also="ecoregions"]');
+    await expect(page.locator('#map-key-content [data-map-key-also] .map-key-scale-label')).toHaveText('Also on the map');
+    await expect(live.locator('.legend-section-title')).toHaveText('Ecoregion key');
+    await expect(live.locator('#ecoregion-level')).toBeVisible();
+    await expect(live.locator('.legend-note')).toBeHidden();
+    await live.locator('#ecoregion-level').selectOption('ecoregions-l4');
+    await expect(live.locator('#ecoregion-level')).toHaveValue('ecoregions-l4');
+
+    await page.locator('.view-switch [data-view="console"]').click();
+    await expect(page.locator('#legend-sections .legend-section[data-legend="ecoregions"] #ecoregion-level')).toBeVisible();
+    await expect(page.locator('#map-key-content [data-legend-also="ecoregions"]')).toHaveCount(0);
+  });
 });
 
 /**

@@ -1390,45 +1390,117 @@ function keyedLegendKeys(productKeys: readonly string[]): ReadonlySet<string> {
   return keyed;
 }
 
-const alsoSectionCache = new WeakMap<LegendSpec, string>();
+const alsoSectionCache = new WeakMap<LegendSpec, string | null>();
+
+/**
+ * Whether a reader can use the Legend panel (#legend-panel) right now: it has a box, and neither it nor
+ * any ancestor is display none, visibility hidden, or a clipped box with no width or height (desktop and
+ * tablet Brief, a collapsed sidebar, an embed's zero-width sidebar, the phone sheet). The ONE test for
+ * the Key's 'Also on the map' and the briefing's Legend link, so the two never disagree about where a
+ * legend is read. The registry's own empty-state `hidden` is not the shell's doing (Console shows the
+ * panel again with its first section), so it is lifted for the reading.
+ */
+export function legendPanelUsable(panel: HTMLElement | null = document.getElementById('legend-panel')): boolean {
+  if (!panel) return false;
+  const emptyHidden = panel.hidden;
+  if (emptyHidden) panel.hidden = false;
+  try {
+    for (let node: HTMLElement | null = panel; node; node = node.parentElement) {
+      const style = getComputedStyle(node);
+      if (style.display === 'none' || style.visibility === 'hidden') return false;
+      const clipped = style.overflowX !== 'visible' || style.overflowY !== 'visible';
+      if (node === panel || clipped) {
+        const box = node.getBoundingClientRect();
+        if (box.width === 0 || box.height === 0) return false;
+      }
+    }
+    return panel.getClientRects().length > 0;
+  } finally {
+    if (emptyHidden) panel.hidden = true;
+  }
+}
 
 /**
  * One section's rows from its own `render` (a spec is rendered once; a layer
  * that changes its legend shows it again with a new spec). Notes (caveats,
  * credits, notices) stay in the Legend panel and the Impact Briefing, never on
  * the map (DR-106; uncluttered rule). A section with a control or an element
- * id (the ecoregion level selector) cannot be copied without breaking it, so
- * it is left to the Legend panel: ''.
+ * id (the ecoregion level selector, the gridded index product) cannot be copied
+ * without breaking it, so it is carried live instead: null (see
+ * `adoptLiveLegendSections`).
  */
-function alsoSectionHtml(spec: LegendSpec): string {
+function alsoSectionHtml(spec: LegendSpec): string | null {
   let html = alsoSectionCache.get(spec);
   if (html === undefined) {
     const body = document.createElement('div');
     spec.render(body);
     body.querySelectorAll('.legend-note').forEach((note) => note.remove());
-    html = body.querySelector('[id], button, select, input, textarea') ? '' : body.innerHTML.trim();
+    html = body.querySelector('[id], button, select, input, textarea') ? null : body.innerHTML.trim();
     alsoSectionCache.set(spec, html);
   }
   return html;
 }
 
+function legendSectionIn(root: ParentNode, key: string): HTMLElement | null {
+  return root.querySelector<HTMLElement>(`.legend-section[data-legend="${CSS.escape(key)}"]`);
+}
+
+/**
+ * A section with a control is MOVED from the Legend panel into its slot in the Key, with its handlers and
+ * ids intact, so the level selector still works and the layer's own refresh still finds its list by id.
+ * Run after every update: a section the registry rebuilt lands in the panel's container and replaces the
+ * stale one here.
+ */
+function adoptLiveLegendSections(strip: HTMLElement): void {
+  const container = document.getElementById('legend-sections');
+  if (!container) return;
+  strip.querySelectorAll<HTMLElement>('[data-legend-live]').forEach((slot) => {
+    const fresh = legendSectionIn(container, slot.dataset['legendAlso'] ?? '');
+    if (fresh) slot.replaceChildren(fresh);
+  });
+}
+
+/**
+ * The reverse, run before the strip is rewritten (and so whenever the panel is usable again): a section
+ * whose layer is still shown goes back to the panel in its place; one whose layer went off is dropped.
+ */
+function releaseLiveLegendSections(strip: HTMLElement): void {
+  const container = document.getElementById('legend-sections');
+  const shownKeys = new Set(getActiveLegends().map(({ key }) => key));
+  strip.querySelectorAll<HTMLElement>('[data-legend-live] > .legend-section').forEach((section) => {
+    const key = section.dataset['legend'] ?? '';
+    if (!container || !shownKeys.has(key) || legendSectionIn(container, key)) {
+      section.remove();
+      return;
+    }
+    const order = Number(section.dataset['order'] ?? '0');
+    const after = Array.from(container.children).find((el) => Number((el as HTMLElement).dataset['order'] ?? '0') > order);
+    container.insertBefore(section, after ?? null);
+    const panel = document.getElementById('legend-panel');
+    if (panel) panel.hidden = false;
+  });
+}
+
 /**
  * 'Also on the map' (owner 2026-11-13, item 13 follow-through): every shown
  * legend section the Key does not already carry, ONLY where the Legend panel
- * (#legend-panel) has no box (desktop and tablet Brief, every phone sheet
- * detent; Console's column shows it), so a future layer's legend is reachable with no
- * code here. Absent when empty.
+ * cannot be used (`legendPanelUsable`: desktop and tablet Brief, a collapsed
+ * sidebar, an embed, every phone sheet detent; Console's column shows it), so a
+ * future layer's legend is reachable with no code here. Absent when empty.
  */
 function alsoOnMapHtml(productKeys: readonly string[]): string {
   const keyed = keyedLegendKeys(productKeys);
   const rows = getActiveLegends().filter(({ key }) => !keyed.has(key));
   if (rows.length === 0) return '';
-  const panel = document.getElementById('legend-panel');
-  if (panel && panel.getClientRects().length > 0) return '';
+  if (legendPanelUsable()) return '';
   const sections = rows
     .map(({ key, spec }) => ({ key, html: alsoSectionHtml(spec) }))
-    .filter(({ html }) => html)
-    .map(({ key, html }) => `<div class="legend-section" data-legend-also="${escapeHtml(key)}">${html}</div>`)
+    .filter(({ html }) => html !== '')
+    .map(({ key, html }) =>
+      html === null
+        ? `<div class="map-key-also-live" data-legend-also="${escapeHtml(key)}" data-legend-live></div>`
+        : `<div class="legend-section" data-legend-also="${escapeHtml(key)}">${html}</div>`
+    )
     .join('');
   // DRAFT wording (DR-177)
   return sections
@@ -1778,16 +1850,21 @@ export function initMapKey(): void {
             ? '[data-heatrisk-day]'
             : door !== undefined
               ? `[data-feature-door="${CSS.escape(door)}"]`
-              : null
+              : active.id && active.closest('[data-legend-live]')
+                ? `#${CSS.escape(active.id)}`
+                : null
           : null;
       rendered = html;
+      releaseLiveLegendSections(legend);
       legend.innerHTML = html;
+      adoptLiveLegendSections(legend);
       host.setAttribute('aria-label', spec.ariaLabel);
       if (refocus) {
         const restored = legend.querySelector(refocus);
         if (restored instanceof HTMLElement) restored.focus();
       }
     }
+    adoptLiveLegendSections(legend);
     // The family follows what the strip acknowledges (active plus loading
     // placeholders), so a loading key seats under the same CSS its ready
     // form will use.
