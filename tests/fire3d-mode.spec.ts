@@ -2242,6 +2242,11 @@ test.describe('W3/W4 browser truth', () => {
   test('a shared fire3d link boots active and ordinary URL writes preserve the flag', async ({
     page
   }) => {
+    // The region write moves the scene to central Oregon, where the buildings
+    // draw. On the software renderer that took this case from 33 s to 52 to 66 s
+    // (Validate 43374700820, 43391207193, 43398503201), past the default 60 s
+    // in teardown with every assertion passing. Same budget as its neighbours.
+    test.setTimeout(120_000);
     await stubWildfireFeeds(page);
     await stubDeepTerrainArchive(page);
     await gotoApp(page, '?region=washington_state&cluster=wildfire&fire3d=true', {
