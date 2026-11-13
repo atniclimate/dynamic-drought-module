@@ -13,7 +13,7 @@
  * (the cartography-lens requirement that low zooms never place every small
  * town against the USDM outlines or the hover inspector).
  *
- * Legibility: dark slate text with a light halo (palette.ts tokens), the
+ * Legibility: light text with a dark halo (palette.ts tokens), the
  * combination that reads over BOTH the desaturated default basemap and the
  * future satellite option (the corpus both-basemaps rule). Glyphs are the
  * self-hosted Noto Sans Regular ranges (U0a); the build gate guarantees

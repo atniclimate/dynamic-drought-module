@@ -7,19 +7,23 @@
  * unit's name from zoom 12. American Indian lands (manager type TRIB) are left
  * out: the Tribal layers draw them from their own publishing services.
  *
- * Public data at T0, read live; the app keeps no copy. A read is abortable and
- * superseded by the next view; a failed read leaves the layer empty and its
- * status unavailable until the next view answers, and an answer cut at the
- * service's record limit draws what came and reports live (partial).
+ * Public data at T0, read live; the app keeps no copy. A read is abortable
+ * (switching the layer off aborts it) and superseded by the next view. Below
+ * zoom 10 the layer reads zoom in to load and sends nothing. A failed first
+ * read reports unavailable and the controller takes the layer off; a failed
+ * later read leaves it empty and unavailable until the next view answers. An
+ * answer cut at the service's record limit draws what came and reports live
+ * (partial).
  */
 
 import type * as maplibregl from 'maplibre-gl';
 import type { FeatureCollection } from 'geojson';
 
 import { MAP_GROUND_COLOR } from '../config/interface-tokens';
+import type { LayerActivation } from '../config/layers';
 import { URLS } from '../config/urls';
 import { registry } from '../state/registry';
-import { fetchBufferedWithBudget } from '../util/fetch';
+import { fetchBufferedWithBudget, linkAbort } from '../util/fetch';
 import { isTruncated } from '../util/geojson-checks';
 
 const LAYER_KEY = 'public-lands';
@@ -55,14 +59,14 @@ function setData(map: maplibregl.Map, data: FeatureCollection): void {
   (map.getSource(SOURCE_ID) as maplibregl.GeoJSONSource | undefined)?.setData(data);
 }
 
-async function refresh(): Promise<void> {
+async function refresh(activationSignal: AbortSignal | null = null): Promise<void> {
   const map = activeMap;
   if (!map) return;
   if (map.getZoom() < PUBLIC_LANDS_MIN_ZOOM) {
     controller?.abort();
     shownKey = '';
     setData(map, EMPTY);
-    registry.setStatus(LAYER_KEY, 'ready');
+    registry.setStatus(LAYER_KEY, 'zoom-in');
     return;
   }
   const b = map.getBounds();
@@ -73,6 +77,8 @@ async function refresh(): Promise<void> {
   controller?.abort();
   const own = new AbortController();
   controller = own;
+  // The controller's off intent aborts the first read at once, not after its budget (plan rule 5).
+  const unlink = linkAbort(own, activationSignal);
   registry.setStatus(LAYER_KEY, 'loading');
   const params = new URLSearchParams({
     where: "Mang_Type <> 'TRIB'",
@@ -103,6 +109,7 @@ async function refresh(): Promise<void> {
     setData(map, EMPTY);
     registry.setStatus(LAYER_KEY, 'error');
   } finally {
+    unlink();
     if (controller === own) controller = null;
   }
 }
@@ -115,7 +122,7 @@ function schedule(): void {
   }, DEBOUNCE_MS);
 }
 
-export async function activate(map: maplibregl.Map): Promise<void> {
+export async function activate(map: maplibregl.Map, activation?: LayerActivation): Promise<void> {
   if (!map.getSource(SOURCE_ID)) map.addSource(SOURCE_ID, { type: 'geojson', data: EMPTY });
   if (!map.getLayer(FILL_ID)) {
     map.addLayer({ id: FILL_ID, type: 'fill', source: SOURCE_ID, paint: { 'fill-color': TINT, 'fill-opacity': 0.09 } });
@@ -140,7 +147,7 @@ export async function activate(map: maplibregl.Map): Promise<void> {
     map.on('moveend', schedule);
   }
   shownKey = '';
-  await refresh();
+  await refresh(activation?.signal ?? null);
 }
 
 export function deactivate(map: maplibregl.Map): void {

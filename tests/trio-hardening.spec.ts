@@ -169,6 +169,11 @@ test.describe('R2: truncated responses are degraded and never cached as complete
       await openTribalNationsDetails(page);
       await layerCheckbox(page, key).click();
       await expect(layerCheckbox(page, key)).not.toBeChecked();
+      // The off toggle eases the layer out before it is removed
+      // (src/util/layer-fade.ts) and the pill keeps its last words until
+      // then. Wait for the removal, or the settle wait below reads the OLD
+      // "live (partial)" pill and the count is taken before the re-fetch.
+      await expect(layerPill(page, key)).toHaveText('');
       await layerCheckbox(page, key).click();
       await waitForLayerSettled(page, key);
 

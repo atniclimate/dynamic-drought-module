@@ -73,7 +73,13 @@ import { buildQueryEnvelope, envelopeCovers, toCoverageEnvelope } from '../util/
 import { assertFeatureCollection, isTruncated } from '../util/geojson-checks';
 import { registry } from '../state/registry';
 import { loadTribalLabelAreas } from '../state/tribal-roster';
-import { cancelTribalStreets, setTribalStreetAreas, startTribalStreets, stopTribalStreets } from './tribal-streets';
+import {
+  TRIBAL_DETAIL_LAYER_IDS,
+  cancelTribalStreets,
+  setTribalStreetAreas,
+  startTribalStreets,
+  stopTribalStreets
+} from './tribal-streets';
 
 const LAYER_KEY = 'aiannh';
 const SOURCE_ID = 'aiannh';
@@ -87,8 +93,12 @@ const OUTLINE_LAYER_ID = 'aiannh-outline';
 const LABEL_SOURCE_ID = 'aiannh-nation-labels';
 const LABEL_LAYER_ID = 'aiannh-nation-labels';
 
-/** Fade targets for the sidebar's toggle transitions (LayerModule contract). */
-export const fadeLayerIds = [FILL_LAYER_ID, OUTLINE_LAYER_ID, LABEL_LAYER_ID] as const;
+/**
+ * Fade targets for the sidebar's toggle transitions (LayerModule contract):
+ * the boundary, the Nations' names, and the street-zoom detail drawn inside
+ * the areas, so it eases out with the boundary instead of popping off.
+ */
+export const fadeLayerIds = [FILL_LAYER_ID, OUTLINE_LAYER_ID, LABEL_LAYER_ID, ...TRIBAL_DETAIL_LAYER_IDS] as const;
 
 /**
  * The label ladder (methods log M-092): a Nation's name appears from the zoom
@@ -420,6 +430,8 @@ function clearRenderedFeatures(map: maplibregl.Map): void {
   const existing = map.getSource(SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
   if (existing) existing.setData(EMPTY_FEATURE_COLLECTION);
   setLabelData(map, EMPTY_FEATURE_COLLECTION);
+  // The streets, water and community names drawn inside those areas go with them.
+  setTribalStreetAreas(EMPTY_FEATURE_COLLECTION);
   lastAppliedStatus = null;
   appliedData = null;
 }

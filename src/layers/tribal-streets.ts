@@ -156,6 +156,9 @@ const READS: readonly DetailRead[] = [
   }
 ];
 
+/** Every detail layer id, so Tribal Lands fades them out with its boundary. */
+export const TRIBAL_DETAIL_LAYER_IDS: readonly string[] = READS.flatMap((read) => read.layers.map((layer) => layer.id));
+
 let activeMap: maplibregl.Map | null = null;
 let areas: { readonly feature: Feature; readonly box: Box }[] = [];
 let controller: AbortController | null = null;
@@ -261,10 +264,24 @@ function seatOf(map: maplibregl.Map, id: string): string | undefined {
   return TOP_LABEL_IDS.slice(TOP_LABEL_IDS.indexOf(id) + 1).find((above) => map.getLayer(above));
 }
 
+/**
+ * Cut a `withinAreas` read's layers to the areas now held: when its layers are added and when the areas
+ * change, never per read. No area is skipped (MapLibre refuses `within` with no polygon; the data is cleared).
+ */
+function applyWithin(map: maplibregl.Map, read: DetailRead): void {
+  if (!read.withinAreas || !areas.length || !map.getSource(read.source)) return;
+  const inside: FeatureCollection = { type: 'FeatureCollection', features: areas.map((a) => a.feature) };
+  for (const layer of read.layers) {
+    const own = 'filter' in layer && layer.filter ? [layer.filter] : [];
+    map.setFilter(layer.id, ['all', ...own, ['within', inside]] as maplibregl.FilterSpecification);
+  }
+}
+
 function ensureLayers(map: maplibregl.Map, read: DetailRead): void {
   if (map.getSource(read.source)) return;
   map.addSource(read.source, { type: 'geojson', data: EMPTY });
   for (const layer of read.layers) map.addLayer(layer, seatOf(map, layer.id));
+  applyWithin(map, read);
 }
 
 /** One read for the envelope; false when it failed (not when it was superseded). */
@@ -291,13 +308,6 @@ async function readOne(map: maplibregl.Map, read: DetailRead, envelope: Box, sig
     if (data?.type !== 'FeatureCollection' || !Array.isArray(data.features)) throw new Error('not a FeatureCollection');
     if (isTruncated(data)) console.warn(`[tribal-detail] ${read.source} answer was cut at the service's record limit; drawing the part that came.`);
     ensureLayers(map, read);
-    if (read.withinAreas) {
-      const inside: FeatureCollection = { type: 'FeatureCollection', features: areas.map((a) => a.feature) };
-      for (const layer of read.layers) {
-        const own = 'filter' in layer && layer.filter ? [layer.filter] : [];
-        map.setFilter(layer.id, ['all', ...own, ['within', inside]] as maplibregl.FilterSpecification);
-      }
-    }
     (map.getSource(read.source) as maplibregl.GeoJSONSource).setData(read.shape ? read.shape(data) : data);
     return true;
   } catch (err) {
@@ -348,12 +358,23 @@ export function startTribalStreets(map: maplibregl.Map): void {
   map.on('moveend', schedule);
 }
 
-/** The Tribal areas Tribal Lands now holds; polygons only. */
+/**
+ * The Tribal areas Tribal Lands now holds; polygons only. The reads depend only on the envelope, so the
+ * key of what is shown stays: the same view over the same area bounds reads nothing again, and only the
+ * cut to the areas is renewed. With no area left (a failed Tribal Lands refresh, or a view that holds
+ * none) the detail is cleared now, not after the debounce.
+ */
 export function setTribalStreetAreas(collection: FeatureCollection): void {
   areas = collection.features
     .filter((f) => f.geometry?.type === 'Polygon' || f.geometry?.type === 'MultiPolygon')
     .map((feature) => ({ feature, box: boxOf(feature) }));
-  shownKey = '';
+  const map = activeMap;
+  if (!areas.length) {
+    cancelTribalStreets();
+    if (map) clear(map);
+    return;
+  }
+  if (map) for (const read of READS) applyWithin(map, read);
   schedule();
 }
 
