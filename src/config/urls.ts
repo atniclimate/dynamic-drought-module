@@ -975,19 +975,13 @@ export const URLS = Object.freeze({
   // exercised in both directions against a live scene on 2026-09-10 (the
   // MapLibre terrain source swaps at runtime with no page errors).
   //
-  // A coarse elevation model does not lower a landscape, it flattens it, and
-  // the mountain is what it removes. (The 931 m and 50 m Mount Jefferson
-  // figures once quoted here compared two camera zooms, not two archives.)
-  //
-  // Since 2026-11-12 (DDM-P9-T19) this is the national USGS 3DEP bake of
-  // 2026-11-06, zoom 0 to 10 over CONUS, Alaska, Hawaii, Puerto Rico with the
-  // U.S. Virgin Islands and American Samoa (3,755,250,972 bytes; receipts in
-  // I:/ddm-terrain-bake/out). Decoded at the same zoom, it reads Jefferson,
-  // South Sister, Bachelor, Bend and Rainier exactly as the Pacific Northwest
-  // archive it replaces at zoom 10, and 10 to 25 m closer at zoom 8. The
-  // Worker still serves the old key, so a rollback of this line still reads.
+  // The measurement that justified it, taken in the running scene through
+  // queryTerrainElevation: the bundled archive reads the Mount Jefferson
+  // summit 931 m low and this one reads it 50 m low, while both read the Bend
+  // valley floor within 20 m. A coarse elevation model does not lower a
+  // landscape, it flattens it, and the mountain is what it removes.
   terrainPmtilesDeep:
-    'https://ddm-terrain.atniclimate.workers.dev/us-z10-2026-11-06.pmtiles',
+    'https://ddm-terrain.atniclimate.workers.dev/pnw-z10-2026-09-10.pmtiles',
   // The PNW Wildfire Hazard Potential drape for the desktop 3D Fire mode:
   // the USDA Forest Service Rocky Mountain Research Station's 2023 WHP
   // classification, rendered server-side in the issuer's own class colors

@@ -5,12 +5,15 @@
  * WHY THIS EXISTS. The 3D Fire scene answers one question: is a fire at the
  * foot of a mountain, and would it run uphill. The bundled archive
  * (public/data/hillshade-dem-pnw.pmtiles, zooms 0 to 8, about 212 m per pixel
- * at 46N) cannot answer it: a coarse elevation model does not lower a
- * landscape, it flattens it, and the mountain is exactly what it removes. The
- * zoom 10 archives can. The Pacific Northwest one is 436 MB and the national
- * one (2026-11-06) 3.76 GB, past the GitHub Pages 1 GB site cap and far past
- * the 25 MiB per-file ceiling on Cloudflare's own static assets, so they live
- * in R2 and are read through here.
+ * at 46N) cannot answer it. Measured in the running scene through
+ * queryTerrainElevation on 2026-09-10, it reads the Mount Jefferson summit
+ * 931 m low while reading the Bend valley floor within 19 m: a coarse
+ * elevation model does not lower a landscape, it flattens it, and the mountain
+ * is exactly what it removes. The same box at zoom 10 reads that summit 50 m
+ * low, which is the read the feature was asked for. That archive is 415 MB,
+ * past the GitHub Pages 1 GB site cap once anything else ships beside it and
+ * far past the 25 MiB per-file ceiling on Cloudflare's own static assets, so
+ * it lives in R2 and is read through here.
  *
  * WHAT IT IS NOT. It is not a proxy, it has no allow-list, and it reaches no
  * upstream. It reads one bucket and returns bytes. It is deliberately a
@@ -28,7 +31,7 @@
  * RANGE SUPPORT IS THE WHOLE POINT. A PMTiles reader opens an archive by
  * asking for its first 16,384 bytes and then reads individual tiles by offset.
  * Without `Range`, `Accept-Ranges` and a correct `Content-Range`, a client
- * would have to download the whole archive to draw one hillside. `Content-Range` and
+ * would have to download 415 MB to draw one hillside. `Content-Range` and
  * `Accept-Ranges` must also be in `Access-Control-Expose-Headers` or a
  * cross-origin reader cannot see them, which is the failure mode that reads as
  * "the terrain silently never loads".
@@ -43,12 +46,7 @@ export interface Env {
 /** Object keys this Worker will serve. A versioned archive name only: no
  *  traversal, no wildcards, no directory listing. Adding a version means
  *  adding a line here and republishing, which is deliberate. */
-const ALLOWED_KEYS = new Set<string>([
-  // The national USGS 3DEP bake (DDM-P9-T19), the app's deep archive since 2026-11-12.
-  'us-z10-2026-11-06.pmtiles',
-  // The Pacific Northwest archive it replaced, kept so a rollback of the app still reads.
-  'pnw-z10-2026-09-10.pmtiles'
-]);
+const ALLOWED_KEYS = new Set<string>(['pnw-z10-2026-09-10.pmtiles']);
 
 const CORS_HEADERS: Record<string, string> = {
   'access-control-allow-origin': '*',

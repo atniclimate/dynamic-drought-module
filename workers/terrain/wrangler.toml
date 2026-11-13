@@ -1,8 +1,8 @@
 # Cloudflare Workers configuration for ddm-terrain, the Dynamic Drought
 # Module's terrain elevation archive reader.
 #
-# This Worker exists solely to serve the R2 objects named in ALLOWED_KEYS, the
-# baked USGS 3D Elevation Program archives (national and Pacific Northwest), with byte-range and
+# This Worker exists solely to serve ONE R2 object, the baked USGS 3D
+# Elevation Program archive for the Pacific Northwest, with byte-range and
 # CORS support so a PMTiles reader in the browser can open it. It reaches no
 # upstream, holds no allow-list of foreign hosts, transforms no bodies,
 # authenticates nothing, logs nothing, and writes nothing. See
@@ -18,11 +18,9 @@
 #      `npm run dev`.
 #   2. The published Worker URL goes into `URLS.terrainPmtilesDeep` in
 #      `src/config/urls.ts` (root project).
-#   3. The bucket must contain every object named in ALLOWED_KEYS
-#      (src/index.ts), uploaded before the publish that lists it. Wrangler
-#      refuses files over 300 MiB, so upload with rclone (multipart) through
-#      an R2 remote the owner configures with a bucket-scoped token:
-#      `rclone copyto <archive> r2:ddm-terrain/<key> --s3-chunk-size 64M -P`
+#   3. The bucket must contain the object named in ALLOWED_KEYS
+#      (src/index.ts). Upload with:
+#      `wrangler r2 object put ddm-terrain/<key> --file <archive> --remote`
 #   4. There are no secrets. Do not add any.
 
 name = "ddm-terrain"
