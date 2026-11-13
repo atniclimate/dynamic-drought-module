@@ -427,8 +427,9 @@ test.describe('the Key drawer (S30D D1 M11)', () => {
   }) => {
     await page.setViewportSize(DESKTOP_VIEWPORT);
     await stubWildfireFeeds(page);
-    // The mode's URL token is "wildfire" (src/config/clusters.ts urlToken); "fire" fell back to Drought.
-    await gotoApp(page, '?cluster=wildfire');
+    // The mode's URL token is "wildfire" (src/config/clusters.ts urlToken); "fire" fell back to Drought. The view
+    // is named: gotoApp adds view=console to a cluster query that names none.
+    await gotoApp(page, '?view=brief&cluster=wildfire');
     await openKeyDrawer(page);
     const also = page.locator('#map-key-content [data-map-key-also]');
     await expect(also.locator('.map-key-scale-label')).toHaveText('Also on the map');
@@ -451,7 +452,7 @@ test.describe('the Key drawer (S30D D1 M11)', () => {
     page
   }) => {
     await page.setViewportSize(DESKTOP_VIEWPORT);
-    await gotoApp(page, '?layers=ecoregions');
+    await gotoApp(page, '?view=brief&layers=ecoregions');
     // The ecoregion legend registers once its archive has drawn; GitHub's software renderer is slower than 10 s.
     await waitForLayerSettled(page, 'ecoregions');
     await openKeyDrawer(page);
