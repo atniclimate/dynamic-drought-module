@@ -2714,8 +2714,11 @@ button.conditions-metric:hover .conditions-action-hide {
       calc(100% - var(--impact-panel-gap) - var(--dock-min-w))
     );
   }
-  /* Outside an embed the drawer stands left of the map-button column (the
-     block above the briefing panel), so the dock clears that column too. */
+}
+/* From 1025px, outside an embed, the drawer stands left of the map-button
+   column (the block above the briefing panel), so the dock clears that
+   column too. */
+@media (min-width: 1025px) {
   body:has(.impact-panel.open:not(.sheet-hosted)) .app-shell:not(.embed) .map-bottom-dock {
     right: min(
       calc(var(--impact-panel-w) + 2 * var(--impact-panel-gap) + var(--chrome-inset) + var(--map-cell-w)),
@@ -4676,9 +4679,7 @@ button.telemetry-item {
    are outside this block. */
 @media (min-width: 721px) {
   body:has(.impact-panel.open:not(.sheet-hosted)) .app-shell:not(.embed) {
-    --briefing-clear: calc(
-      var(--impact-panel-w) + 2 * var(--impact-panel-gap) + var(--chrome-inset) + var(--map-cell-w)
-    );
+    --briefing-clear: calc(var(--impact-panel-w) + var(--impact-panel-gap));
     --briefing-chip-left: 12px;
   }
   body:has(.impact-panel.open:not(.sheet-hosted)) .app-shell.sidebar-collapsed:not(.embed) {
@@ -4691,6 +4692,14 @@ button.telemetry-item {
 @media (min-width: 721px) and (pointer: coarse) {
   body:has(.impact-panel.open:not(.sheet-hosted)) .app-shell.sidebar-collapsed:not(.embed) {
     --briefing-chip-left: 64px;
+  }
+}
+/* From 1025px the drawer stands left of the button column, so the chip clears the column too. */
+@media (min-width: 1025px) {
+  body:has(.impact-panel.open:not(.sheet-hosted)) .app-shell:not(.embed) {
+    --briefing-clear: calc(
+      var(--impact-panel-w) + 2 * var(--impact-panel-gap) + var(--chrome-inset) + var(--map-cell-w)
+    );
   }
 }
 
@@ -4759,19 +4768,17 @@ button.telemetry-item {
 }
 
 /* The drawer's inset left of the map-button column (the block above the
-   briefing panel explains it). After the glass rule so the first
-   `.impact-panel:not(.sheet-hosted)` rule a contract test reads stays the
-   glass one. */
-@media (min-width: 721px) {
+   briefing panel explains it), from 1025px only: in the tablet band the
+   sidebar, the dock and the column leave no readable drawer beside them
+   (149 px at 721, measured 2026-11-13), so there the drawer keeps the right
+   edge and covers the column, as it always has on tablets. After the glass
+   rule so the first `.impact-panel:not(.sheet-hosted)` rule a contract test
+   reads stays the glass one. */
+@media (min-width: 1025px) {
   body:has(.app-shell:not(.embed)) .impact-panel:not(.sheet-hosted) {
     right: 120px;
     border-right-style: solid;
     border-right-width: 1px;
-  }
-}
-@media (min-width: 721px) and (max-width: 1024px) {
-  body:has(.app-shell:not(.embed)) .impact-panel:not(.sheet-hosted) {
-    right: calc(24px + var(--touch-target));
   }
 }
 

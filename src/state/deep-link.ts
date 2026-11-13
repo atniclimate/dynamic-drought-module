@@ -105,7 +105,8 @@ export function briefingCameraPadding(panelWillOpen: boolean): maplibregl.Paddin
   // pins the two together) and sits left of the map-button column (MAP_COLUMN_CLEAR, the drawer's `right` in
   // app.css): the pad is both plus the usual 40 px margin, so a framed place ends clear of the drawer.
   const drawer = Math.min(Math.max(440, Math.round(window.innerWidth * 0.38)), 880);
-  const MAP_COLUMN_CLEAR = window.innerWidth <= 1024 ? 24 + 44 : 120;
+  // shortcut: the inset applies from 1025 px only (the tablet drawer keeps the right edge); the numbers mirror app.css.
+  const MAP_COLUMN_CLEAR = window.innerWidth <= 1024 ? 0 : 120;
   return {
     top: 40,
     left: 40,

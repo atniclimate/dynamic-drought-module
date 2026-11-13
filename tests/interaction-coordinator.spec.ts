@@ -413,13 +413,12 @@ test.describe('InteractionCoordinator: one click, one response', () => {
     // single click mid-fly would commit the wrong state and overwrite it, so
     // the settle gate must precede one deliberate click.
     const box = await page.locator('#map').boundingBox();
-    if (!box) throw new Error('map container has no box');
-    // Bias the probe WEST of screen centre: the briefing fit pads for the
-    // sidebar, which pushes Washington's centre toward the right and leaves
-    // screen centre near the eastern WA / Idaho border. A left-of-centre
-    // point lands firmly in central-western Washington, over the fixtures
-    // and well clear of the border.
-    const cx = box.x + box.width * 0.32;
+    const drawerBox = await page.locator('#impact-panel').boundingBox();
+    if (!box || !drawerBox) throw new Error('map container or drawer has no box');
+    // The probe sits in the middle of the map the briefing fit frames Washington in: from the fit's 40 px left
+    // pad to 40 px west of the drawer, which now stands left of the map-button column. A fixed fraction of the map
+    // landed on the Idaho border once the drawer moved; this follows the geometry instead.
+    const cx = (box.x + 40 + (drawerBox.x - 40)) / 2;
     const cy = box.y + box.height / 2;
     const inspector = page.locator('#hover-inspector');
     const stateReadout = inspector.locator('.hover-item', { hasText: 'State' });

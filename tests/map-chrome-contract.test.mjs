@@ -423,7 +423,6 @@ test('the briefing camera pad follows the drawer width formula in the stylesheet
   assert.match(deepLink, /right:\s*panelWillOpen \? Math\.min\(drawer \+ MAP_COLUMN_CLEAR \+ 40,/);
   // The drawer sits left of the map-button column so the column keeps its seats (DR-102): the stylesheet's inset
   // and the camera pad's clearance are the same numbers.
-  assert.match(deepLink, /const MAP_COLUMN_CLEAR = window\.innerWidth <= 1024 \? 24 \+ 44 : 120;/);
-  assert.match(code, /\.impact-panel:not\(\.sheet-hosted\) \{\s*right: 120px;/);
-  assert.match(code, /\.impact-panel:not\(\.sheet-hosted\) \{\s*right: calc\(24px \+ var\(--touch-target\)\);/);
+  assert.match(deepLink, /const MAP_COLUMN_CLEAR = window\.innerWidth <= 1024 \? 0 : 120;/);
+  assert.match(code, /@media \(min-width: 1025px\) \{\s*body:has\(\.app-shell:not\(\.embed\)\) \.impact-panel:not\(\.sheet-hosted\) \{\s*right: 120px;/);
 });
