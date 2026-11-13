@@ -416,10 +416,14 @@ test.describe('S4b minimap', () => {
     expect(await canvas.getAttribute('data-minimap-status')).toBeNull();
     await pacific.click();
     await expect(page.locator('#map-key')).not.toContainText(/informs (this|the) minimap/);
-    // Wildfire keeps Weeks ahead, which draws the perimeters too, so the
-    // shipped perimeter count reads there as at Current.
+    // Wildfire opens on Current (DR-190 as amended 2026-11-13). Weeks ahead draws the
+    // perimeters too, so the shipped perimeter count reads there as at Current.
     await page.locator('.shell-cluster-btn[data-cluster="wildfire"]').click();
     await expect(canvas).toHaveAttribute('data-metric-context', 'wildfire');
+    await expect(
+      page.locator('.shell-horizon-btn[data-horizon="current"]'),
+    ).toHaveAttribute('aria-pressed', 'true');
+    await page.locator('.shell-horizon-btn[data-horizon="weeks-ahead"]').click();
     await expect(
       page.locator('.shell-horizon-btn[data-horizon="weeks-ahead"]'),
     ).toHaveAttribute('aria-pressed', 'true');

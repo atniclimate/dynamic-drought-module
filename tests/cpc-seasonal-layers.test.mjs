@@ -339,9 +339,11 @@ test('ENSO draws the 8-14 day precipitation outlook at Weeks ahead and the seaso
   }
   // Every ENSO horizon is now its own map, so no chip of it is a duplicate.
   for (const horizon of TEMPORAL_HORIZON_KEYS) assert.equal(clusterHorizonReason('enso', horizon), null, horizon);
-  // Every mode-level read is N-mode: only ENSO declares an entry horizon today.
-  assert.deepEqual(HAZARD_CLUSTER_KEYS.filter((key) => HAZARD_CLUSTERS[key].entryHorizon), ['enso']);
-  assert.equal(enso.entryHorizon, 'season-ahead');
+  // Every mode-level read is N-mode: ENSO opens on its outlook, every other mode on Current
+  // (DR-190 as amended 2026-11-13, after the owner's report of a mode switch that kept the outlook).
+  for (const key of HAZARD_CLUSTER_KEYS) {
+    assert.equal(HAZARD_CLUSTERS[key].entryHorizon, key === 'enso' ? 'season-ahead' : 'current', key);
+  }
   // The phone rail names its mode; the ENSO face shows the outlook it commits.
   const rail = MOBILE_HAZARD_PRESETS.find((preset) => preset.mode === 'enso');
   assert.deepEqual(rail.layers, ['sst-anomaly', 'cpc-seasonal-precip', 'aiannh']);
@@ -428,8 +430,8 @@ test('an in-session entry into ENSO commits Season ahead and leaving undoes it; 
     service.requestCluster('heat');
     assert.equal(service.getCommittedSnapshot().horizon, 'current');
 
-    // Leaving undoes the horizon the entry imposed, for every mode with no entry horizon of its own.
-    for (const dest of HAZARD_CLUSTER_KEYS.filter((key) => !HAZARD_CLUSTERS[key].entryHorizon)) {
+    // Leaving ENSO for a mode that opens on Current lands on Current.
+    for (const dest of HAZARD_CLUSTER_KEYS.filter((key) => (HAZARD_CLUSTERS[key].entryHorizon ?? 'current') === 'current')) {
       reset();
       service.requestCluster('enso');
       service.requestCluster('enso');
@@ -439,14 +441,15 @@ test('an in-session entry into ENSO commits Season ahead and leaving undoes it; 
       assert.equal(service.getCommittedSnapshot().horizon, 'current', dest);
       assert.deepEqual([...service.getCommittedSnapshot().intendedKeys], service.composeClusterIntent(dest, 'current'), dest);
     }
-    // The horizon picked before entering comes back.
+    // Drought opens on Current, whatever horizon was held before ENSO.
     reset();
     service.requestHorizon('weeks-ahead');
     service.requestCluster('enso');
     assert.equal(timeline.horizon, 'season-ahead');
     service.requestCluster('drought');
-    assert.equal(service.getCommittedSnapshot().horizon, 'weeks-ahead');
-    // A horizon picked inside ENSO carries out of it.
+    assert.equal(service.getCommittedSnapshot().horizon, 'current');
+    assert.ok(service.getCommittedSnapshot().intendedKeys.has('nadm-drought'));
+    // So does a horizon picked inside ENSO.
     reset();
     service.requestHorizon('weeks-ahead');
     service.requestCluster('enso');
@@ -458,21 +461,22 @@ test('an in-session entry into ENSO commits Season ahead and leaving undoes it; 
     service.requestHorizon('weeks-ahead');
     assert.equal(timeline.horizon, 'weeks-ahead');
     service.requestCluster('drought');
-    assert.equal(service.getCommittedSnapshot().horizon, 'weeks-ahead');
-    // A pick back to the entry horizon is still the person's.
+    assert.equal(service.getCommittedSnapshot().horizon, 'current');
+    // And a pick back to ENSO's entry horizon.
     reset();
     service.requestCluster('enso');
     service.requestHorizon('weeks-ahead');
     service.requestHorizon('season-ahead');
     service.requestCluster('wildfire');
-    assert.equal(service.getCommittedSnapshot().horizon, 'season-ahead');
-    // A link's Season ahead was never imposed by an entry, so it carries.
+    assert.equal(service.getCommittedSnapshot().horizon, 'current');
+    // A link's Season ahead in ENSO, then Drought: Current too.
     reset();
     timeline.setHorizon('season-ahead');
     setHazardCluster('enso', null);
     service.requestCluster('drought');
-    assert.equal(service.getCommittedSnapshot().horizon, 'season-ahead');
+    assert.equal(service.getCommittedSnapshot().horizon, 'current');
     // A reference layer demotes the entry to a custom set, which keeps the held horizon.
+    // An earlier entry on Current leaves no undo behind to hand back a stale horizon here.
     reset();
     requestLayerOn('places');
     service.requestCluster('enso');
@@ -483,7 +487,17 @@ test('an in-session entry into ENSO commits Season ahead and leaving undoes it; 
     assert.ok(!snap.intendedKeys.has('cpc-seasonal-precip'));
     service.requestCluster('enso');
     assert.equal(timeline.horizon, 'current');
-    // The phone rail: an ENSO preset commits Season ahead, a later preset of another mode undoes it.
+    // An entry on Current holds for a custom set too: Wildfire's Long Range with Places on
+    // still opens Drought on Current Conditions.
+    service.requestCluster('wildfire');
+    service.requestHorizon('season-ahead');
+    service.requestCluster('drought');
+    snap = service.getCommittedSnapshot();
+    assert.equal(snap.cluster, 'custom');
+    assert.equal(timeline.horizon, 'current');
+    assert.ok(snap.intendedKeys.has('nadm-drought') && snap.intendedKeys.has('places'));
+    assert.ok(!snap.intendedKeys.has('drought'));
+    // The phone rail: an ENSO preset commits Season ahead, a later preset of a mode that opens on Current commits Current.
     const tapPreset = (mode) => {
       const preset = MOBILE_HAZARD_PRESETS.find((entry) => entry.mode === mode);
       for (const key of on()) if (!preset.layers.includes(key)) requestLayerOff(key);
@@ -491,7 +505,7 @@ test('an in-session entry into ENSO commits Season ahead and leaving undoes it; 
       service.requestPresetHorizon(mode);
     };
     reset();
-    for (const mode of HAZARD_CLUSTER_KEYS.filter((key) => !HAZARD_CLUSTERS[key].entryHorizon)) {
+    for (const mode of HAZARD_CLUSTER_KEYS.filter((key) => (HAZARD_CLUSTERS[key].entryHorizon ?? 'current') === 'current')) {
       tapPreset('enso');
       assert.equal(timeline.horizon, 'season-ahead');
       tapPreset('enso');
@@ -503,10 +517,10 @@ test('an in-session entry into ENSO commits Season ahead and leaving undoes it; 
       assert.equal(service.getSelectedHazard(), mode);
       assert.equal(service.getCommittedSnapshot().selectedHazard, mode);
     }
-    // Otherwise a preset leaves the horizon where it is, and still publishes the hazard.
+    // A held Near Term does not survive a preset of a mode that opens on Current; the hazard still publishes.
     service.requestHorizon('weeks-ahead');
     tapPreset('heat');
-    assert.equal(timeline.horizon, 'weeks-ahead');
+    assert.equal(timeline.horizon, 'current');
     assert.equal(service.getCommittedSnapshot().selectedHazard, 'heat');
     assert.equal(service.getCommittedSnapshot().cluster, 'custom');
   } finally {

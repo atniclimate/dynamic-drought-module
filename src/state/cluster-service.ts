@@ -360,14 +360,17 @@ export function resolveHorizonForCluster(
 /**
  * The horizon a move into `mode` lands on: `entry` (its entry horizon, passed
  * only when the move commits the mode's own layers), else the held horizon.
- * A horizon an earlier entry imposed is undone first while it still stands, so
+ * A horizon an earlier entry imposed (only ENSO's Season ahead now; an entry
+ * on Current is never handed back) is undone first while it still stands, so
  * leaving that mode returns the person to the horizon they held before it.
  * The mode switcher, the ocean door and the phone rail all enter through here.
  */
 function enterHorizon(mode: HazardClusterKey, entry: TemporalHorizonKey | undefined): TemporalHorizonKey {
   const held = entryUndo !== null && timeline.horizon === entryUndo.imposed ? entryUndo.held : timeline.horizon;
   const next = entry === undefined ? held : resolveHorizonForCluster(mode, entry);
-  entryUndo = next === held ? null : { held, imposed: next };
+  // An entry on Current is the general rule, not an imposition to hand back: recording it would restore a
+  // horizon from before it, on a screen showing Current, at a later demoted entry (review, 2026-11-13).
+  entryUndo = next === held || next === 'current' ? null : { held, imposed: next };
   return next;
 }
 
@@ -384,7 +387,8 @@ function survivesSwitch(key: string): boolean {
  *   1. Resolve the timeline's horizon for the destination cluster. A press
  *      entering it from another hazard goes through `enterHorizon`: the
  *      mode's `entryHorizon` when the entry commits its own composition (no
- *      reference extra would demote it), with any horizon the mode being
+ *      reference extra would demote it; an entry on Current holds for a
+ *      demoted custom set too), with any horizon the mode being
  *      left imposed undone. Retain a supported horizon; otherwise commit
  *      Current (DR-190).
  *   2. Resolve the intent: the persistent reference set union the
@@ -425,7 +429,9 @@ function applyCluster(
   // A re-press, an ocean change inside the mode and a horizon re-resolve keep
   // the held horizon; an entry from another hazard goes through enterHorizon.
   let entry = selectedHazard === key ? undefined : HAZARD_CLUSTERS[key].entryHorizon;
-  if (entry !== undefined) {
+  // Current suits every set, so an entry on Current holds for a custom set too:
+  // Wildfire's Long Range must not carry into Drought because Places is on.
+  if (entry !== undefined && entry !== 'current') {
     // An extra that will demote the commit to a custom set keeps the held horizon,
     // whose chips stay usable; the entry horizon belongs to the mode's own set.
     const composed = composeClusterIntent(key, resolveHorizonForCluster(key, entry));
@@ -587,8 +593,8 @@ export function requestHorizon(next: TemporalHorizonKey): void {
 /**
  * The phone rail's horizon after a preset for `mode` has replaced the layer
  * set: the entry into that mode through `enterHorizon`, so an ENSO preset
- * commits Season ahead and a later preset of a mode with no entry horizon
- * returns to the horizon held before it; otherwise the horizon stays. The
+ * commits Season ahead and a later preset of Drought, Wildfire or Extreme Heat
+ * lands on Current Conditions (DR-190 as amended 2026-11-13). The
  * preset's mode becomes the person's hazard; its layer set stays custom (DR-156).
  */
 export function requestPresetHorizon(mode: HazardClusterKey): void {

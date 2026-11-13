@@ -32,12 +32,18 @@ registerHooks({
   }
 });
 
-import {
+// Imported after the hook: chunk-retry.ts imports './fetch' the bundler's way.
+const {
   chunkPathFromImporter,
   failedChunkUrl,
   withRetryQuery,
-  createChunkLoader
-} from '../src/util/chunk-retry.ts';
+  createChunkLoader,
+  entryScriptUrl,
+  reloadOnce,
+  reloadIfDeployChanged,
+  DEPLOY_RELOAD_KEY,
+  DEPLOY_RELOAD_WINDOW_MS
+} = await import('../src/util/chunk-retry.ts');
 
 test('chunkPathFromImporter reads a minified built importer using backticks', () => {
   const importer = new Function('return import(`./island-Cv_ZPl0o.js`)');
@@ -465,6 +471,135 @@ test('askAgainForStylesheets does not repoint a link that is already being asked
     shared.fire('load');
     await Promise.all([one, other]);
   });
+});
+
+// A tab left open across a deploy: the hashed chunks it never fetched are gone,
+// so every retry fails too. The page reloads once when its own HTML names a new
+// entry script; the URL keeps the person's place.
+function memoryStorage() {
+  const values = new Map();
+  return {
+    getItem: (key) => (values.has(key) ? values.get(key) : null),
+    setItem: (key, value) => values.set(key, String(value))
+  };
+}
+
+test('entryScriptUrl reads the module script a page names, whatever its attribute order', () => {
+  const base = 'https://example.test/ddm/?cluster=wildfire';
+  assert.equal(
+    entryScriptUrl('<script type="module" crossorigin src="/ddm/assets/index-AbC123.js"></script>', base),
+    'https://example.test/ddm/assets/index-AbC123.js'
+  );
+  assert.equal(
+    entryScriptUrl('<script id="boot">1</script><script src="./assets/index-X.js" type="module"></script>', base),
+    'https://example.test/ddm/assets/index-X.js'
+  );
+  assert.equal(entryScriptUrl('<script src="/classic.js"></script>', base), null);
+});
+
+test('reloadOnce reloads once per window and refuses without a storage that keeps its stamp', () => {
+  let reloads = 0;
+  const reload = () => {
+    reloads += 1;
+  };
+  const storage = memoryStorage();
+  assert.equal(reloadOnce(storage, 1_000, reload), true);
+  assert.equal(storage.getItem(DEPLOY_RELOAD_KEY), '1000');
+  assert.equal(reloadOnce(storage, 1_000 + DEPLOY_RELOAD_WINDOW_MS - 1, reload), false, 'no loop inside the window');
+  assert.equal(reloadOnce(storage, 1_000 + DEPLOY_RELOAD_WINDOW_MS, reload), true, 'a later deploy may reload again');
+  assert.equal(reloads, 2);
+  // A corrupt stamp does not block the one reload.
+  const corrupt = memoryStorage();
+  corrupt.setItem(DEPLOY_RELOAD_KEY, 'not a time');
+  assert.equal(reloadOnce(corrupt, 5, reload), true);
+  // Blocked, throwing or forgetful storage: no reload, since nothing could stop a loop.
+  const throwing = { getItem: () => { throw new Error('SecurityError'); }, setItem: () => {} };
+  const forgetful = { getItem: () => null, setItem: () => {} };
+  const full = { getItem: () => null, setItem: () => { throw new Error('QuotaExceededError'); } };
+  for (const blocked of [null, throwing, forgetful, full]) assert.equal(reloadOnce(blocked, 9, reload), false);
+  assert.equal(reloads, 3);
+});
+
+test('a failed chunk reloads the page once when a deploy replaced the build, and never for the same build or a failed read', async () => {
+  const saved = {
+    document: Object.getOwnPropertyDescriptor(globalThis, 'document'),
+    location: Object.getOwnPropertyDescriptor(globalThis, 'location'),
+    sessionStorage: Object.getOwnPropertyDescriptor(globalThis, 'sessionStorage'),
+    fetch: Object.getOwnPropertyDescriptor(globalThis, 'fetch')
+  };
+  const set = (name, value) => Object.defineProperty(globalThis, name, { configurable: true, writable: true, value });
+  let reloads = 0;
+  let served = '';
+  const pages = [];
+  set('document', {
+    querySelector: (selector) =>
+      selector === 'script[type="module"][src]' ? { src: 'https://example.test/ddm/assets/index-OLD.js' } : null
+  });
+  set('location', {
+    pathname: '/ddm/',
+    href: 'https://example.test/ddm/?cluster=wildfire',
+    reload: () => {
+      reloads += 1;
+    }
+  });
+  set('sessionStorage', memoryStorage());
+  set('fetch', async (url, init) => {
+    pages.push(String(url));
+    assert.equal(init.cache, 'no-store');
+    if (served === 'offline') throw new TypeError('Failed to fetch');
+    return new Response(served, { status: 200 });
+  });
+  try {
+    const failingLoader = () =>
+      createChunkLoader(
+        new Function('return import(`./nadm-drought-Ab12Cd34.js`)'),
+        'https://example.test/ddm/assets/index-OLD.js',
+        () => Promise.reject(new Error('gone'))
+      );
+    // Same build: the failure is the layer's own, and stands.
+    served = '<script type="module" crossorigin src="/ddm/assets/index-OLD.js"></script>';
+    // The check a rejection starts settles within a task (the fetch is stubbed).
+    const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+    await assert.rejects(failingLoader()());
+    await settle();
+    assert.equal(pages.length, 1, 'the loader\'s own rejection asks the page');
+    // Offline: no reload into a page that cannot load.
+    served = 'offline';
+    await assert.rejects(failingLoader()());
+    await settle();
+    assert.equal(reloads, 0);
+    // A deploy replaced the build: one reload, and only one.
+    served = '<script type="module" crossorigin src="/ddm/assets/index-NEW.js"></script>';
+    const loader = failingLoader();
+    await assert.rejects(loader());
+    await settle();
+    assert.equal(reloads, 1);
+    await assert.rejects(loader(), /gone/);
+    await settle();
+    assert.equal(reloads, 1, 'the stamp stops a second reload');
+    assert.equal(pages.length, 4, 'one page read per failed load');
+    // One check at a time: a second ask while one is in flight shares it.
+    assert.equal(reloadIfDeployChanged(), reloadIfDeployChanged());
+    await settle();
+    assert.equal(pages.length, 5);
+    assert.ok(pages.every((url) => url === '/ddm/'), 'only the page itself is read');
+    // Storage blocked: the failure stands, with no reload.
+    globalThis.sessionStorage.setItem(DEPLOY_RELOAD_KEY, '0');
+    Object.defineProperty(globalThis, 'sessionStorage', {
+      configurable: true,
+      get() {
+        throw new Error('SecurityError');
+      }
+    });
+    await assert.rejects(failingLoader()());
+    await settle();
+    assert.equal(reloads, 1);
+  } finally {
+    for (const [name, descriptor] of Object.entries(saved)) {
+      if (descriptor) Object.defineProperty(globalThis, name, descriptor);
+      else Reflect.deleteProperty(globalThis, name);
+    }
+  }
 });
 
 test('askAgainForStylesheets resolves at once with no document', async () => {
