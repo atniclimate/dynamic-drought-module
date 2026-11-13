@@ -388,7 +388,7 @@ function showPowerLegend(state: PowerContextState): void {
           `Power plants: Source: U.S. Energy Information Administration (reporting period ${state.periodLabel}), Forms EIA-860/860M, via the Esri Federal User Community (ArcGIS Living Atlas) copy.`
         ]
       : []),
-    // ledger: esri-fuc-transmission-lines-host (cite sheet c05; DR-163 cut the OSM clause)
+    // ledger: esri-fuc-transmission-lines-host (cite sheet c05; DR-163)
     ...(state.linesOn
       ? [
           'Transmission lines: U.S. Electric Power Transmission Lines (U.S. Government), archived copy last updated 2024-09-30, via the Esri Federal User Community.'

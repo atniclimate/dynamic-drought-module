@@ -5,9 +5,9 @@ import { pmtilesHeaderResponse, pmtilesObjectSize, pmtilesV3Header } from './map
 
 /**
  * The PMTiles archive-header probe (DR-083 step 2; Codex 2026-09-10 finding
- * S1). Node-level against a stubbed global fetch: the probe gates six
- * archives (3D terrain deep and bundled, hillshade, WHP, structures, power
- * lines), and every caller already has a fallback for a rejection, so what
+ * S1). Node-level against a stubbed global fetch: the probe gates the
+ * archives (3D terrain deep and bundled, hillshade, WHP, power lines), and
+ * every caller already has a fallback for a rejection, so what
  * matters is that a truncated or foreign object is rejected HERE rather
  * than accepted and torn down later where no fallback exists.
  */

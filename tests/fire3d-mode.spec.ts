@@ -31,7 +31,6 @@ import {
 } from '../src/config/fire3d-presentation';
 import {
   HMS_VOLUME_QUALIFICATION,
-  STRUCTURES_QUALIFICATION,
   WILDFIRE_STATIC_COLOR
 } from '../src/config/wildfire-presentation';
 import { WHP_SHADE_QUALIFICATION } from '../src/config/whp-shade';
@@ -150,17 +149,13 @@ test('deriveSceneTransport reads streaming until every known source is loaded, t
   );
 
   // Several sources: every one of them must report loaded, not just one.
-  const loaded = new Set(['fire3d-terrain-dem', 'whp-2023']);
+  const loaded = new Set(['fire3d-terrain-dem']);
   expect(
-    deriveSceneTransport(['fire3d-terrain-dem', 'whp-2023', 'structures-3d'], (id) =>
-      loaded.has(id)
-    )
+    deriveSceneTransport(['fire3d-terrain-dem', 'whp-2023'], (id) => loaded.has(id))
   ).toBe('streaming');
-  loaded.add('structures-3d');
+  loaded.add('whp-2023');
   expect(
-    deriveSceneTransport(['fire3d-terrain-dem', 'whp-2023', 'structures-3d'], (id) =>
-      loaded.has(id)
-    )
+    deriveSceneTransport(['fire3d-terrain-dem', 'whp-2023'], (id) => loaded.has(id))
   ).toBe('settled');
 });
 
@@ -485,7 +480,7 @@ test('activation builds terrain, sky, camera, and the smoke volume; deactivation
     // Power infrastructure left this list on 2026-08-19: it is a catalog
     // layer now, off by default, and this orchestrator only reports it when
     // a person has turned it on (tests/power-layer.spec.ts owns its truth).
-    expect(getFire3DStatus().contextLayers).toEqual(['whp', 'structures']);
+    expect(getFire3DStatus().contextLayers).toEqual(['whp']);
     expect(shadeEvents.at(-1)).toEqual({ layer: 'whp-2023', active: true, mounted: true });
     expect(harness.sources.get('whp-2023')).toMatchObject({
       type: 'raster',
@@ -515,31 +510,6 @@ test('activation builds terrain, sky, camera, and the smoke volume; deactivation
     expect(harness.sources.has('power-lines')).toBe(false);
     expect(harness.sources.has('power-plants')).toBe(false);
 
-    // Structures: one source, two extrusion layers splitting published
-    // heights from disclosed placeholders, seated with the context
-    // overlays under every event overlay.
-    expect(harness.sources.get('structures-3d')).toMatchObject({
-      type: 'vector'
-    });
-    // The height-honesty split is load-bearing: published heights and
-    // placeholders may never share a layer, so the filters are pinned.
-    expect(harness.layerSpecs.get('structures-3d')).toMatchObject({
-      type: 'fill-extrusion',
-      source: 'structures-3d',
-      filter: ['has', 'h']
-    });
-    expect(harness.layerSpecs.get('structures-3d-est')).toMatchObject({
-      type: 'fill-extrusion',
-      source: 'structures-3d',
-      filter: ['!', ['has', 'h']]
-    });
-    expect(harness.layerOrder.indexOf('structures-3d')).toBeGreaterThan(
-      harness.layerOrder.indexOf('whp-2023')
-    );
-    expect(harness.layerOrder.indexOf('structures-3d-est')).toBeLessThan(
-      harness.layerOrder.indexOf('hms-smoke-fill')
-    );
-
     setFire3DActive(map, false);
     expect(getFire3DStatus().state).toBe('inactive');
     expect(getFire3DStatus().contextLayers).toEqual([]);
@@ -553,9 +523,6 @@ test('activation builds terrain, sky, camera, and the smoke volume; deactivation
     expect(harness.layerSpecs.has('power-lines')).toBe(false);
     expect(harness.layerSpecs.has('power-lines-unknown')).toBe(false);
     expect(harness.layerSpecs.has('power-plants')).toBe(false);
-    expect(harness.sources.has('structures-3d')).toBe(false);
-    expect(harness.layerSpecs.has('structures-3d')).toBe(false);
-    expect(harness.layerSpecs.has('structures-3d-est')).toBe(false);
     expect(harness.skyCalls.at(-1)).toEqual(FIRE3D_SKY_CLEAR_SPECIFICATION);
     expect(harness.layerSpecs.has('hms-smoke-volume')).toBe(false);
     expect(harness.layoutChanges.at(-1)).toEqual({
@@ -1404,12 +1371,11 @@ test('a corrupt hazard archive degrades only the drape; the scene stays active',
     await expect.poll(() => getFire3DStatus().state).toBe('active');
 
     // Terrain succeeded; the hazard drape alone degraded, with no partial
-    // drape state left on the map, while the other context stayed.
+    // drape state left on the map.
     expect(harness.getTerrain()).not.toBeNull();
-    expect(getFire3DStatus().contextLayers).toEqual(['structures']);
+    expect(getFire3DStatus().contextLayers).toEqual([]);
     expect(harness.sources.has('whp-2023')).toBe(false);
     expect(harness.layerSpecs.has('whp-2023')).toBe(false);
-    expect(harness.layerSpecs.has('structures-3d')).toBe(true);
     // Only the drape warned; the scene itself raised nothing.
     expect(warnings.messages).toEqual([
       expect.stringMatching(/^\[whp-3d\] invalid or unavailable archive\./)
@@ -1419,44 +1385,6 @@ test('a corrupt hazard archive degrades only the drape; the scene stays active',
     setFire3DActive(map, false);
     setFire3DPreference(false);
     restoreFetch();
-    browser.restore();
-  }
-});
-
-test('a corrupt structures archive degrades only the buildings; the rest stays', async () => {
-  const browser = installFakeBrowser({ desktop: true, reducedMotion: false });
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = (async (input: RequestInfo | URL) => {
-    const url = String(input);
-    if (url.includes('structures-central-oregon')) {
-      return new Response('<html>not tiles</html>', { status: 200 });
-    }
-    if (url.includes('Power_Plants_in_the_US')) {
-      return new Response(JSON.stringify(PLANTS_STUB_FC), { status: 200 });
-    }
-    return pmtilesHeaderResponse();
-  }) as typeof fetch;
-  const harness = fakeMapHarness({ pitch: 0, bearing: 0 });
-  const { map } = harness;
-  const warnings = captureWarnings();
-
-  try {
-    setFire3DActive(map, true);
-    await expect.poll(() => getFire3DStatus().state).toBe('active');
-
-    expect(getFire3DStatus().contextLayers).toEqual(['whp']);
-    expect(harness.sources.has('structures-3d')).toBe(false);
-    expect(harness.layerSpecs.has('structures-3d')).toBe(false);
-    expect(harness.layerSpecs.has('structures-3d-est')).toBe(false);
-    // Only the structures context warned; the scene itself raised nothing.
-    expect(warnings.messages).toEqual([
-      expect.stringMatching(/^\[structures-3d\] invalid or unavailable archive\./)
-    ]);
-  } finally {
-    warnings.restore();
-    setFire3DActive(map, false);
-    setFire3DPreference(false);
-    globalThis.fetch = originalFetch;
     browser.restore();
   }
 });
@@ -1712,29 +1640,6 @@ const CAPTURE_EVIDENCE =
 // single allowance and requires the CI guard.
 const EVIDENCE_BOUNDARIES = CAPTURE_EVIDENCE ? ('live' as const) : ('fixture' as const);
 
-/** A one-pixel PNG for the basemap tiles (the shape tests/flow-plumb.spec.ts
- * and tests/heat-h0-integrity.spec.ts fulfil OpenStreetMap with). */
-const BASEMAP_TILE_PNG = Buffer.from(
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
-  'base64'
-);
-
-/**
- * Answer the OpenStreetMap basemap tiles from a fixture. The scene cases
- * below read them live otherwise: GitHub's retry traces of the three cases
- * found-145 names (runs 37317297848 and 37347470195) carry 76 to 84 live
- * tile.openstreetmap.org reads each and no other unrouted host, and every
- * arriving tile re-renders the pitched scene on the software renderer. No
- * assertion here reads the basemap, so a routine run needs none of it; the
- * deliberate evidence capture keeps the real basemap it photographs.
- */
-async function routeBasemapTiles(page: Page): Promise<void> {
-  if (CAPTURE_EVIDENCE) return;
-  await page.route('https://tile.openstreetmap.org/**', (route) =>
-    route.fulfill({ status: 200, contentType: 'image/png', body: BASEMAP_TILE_PNG })
-  );
-}
-
 /** Freeze the page's main thread for `ms` (a busy loop, as a blocked GPU
  * readback does), starting `delayMs` from now, then optionally stamp
  * `data-probe="done"` `stampAfterMs` after the freeze ends. Returns at once. */
@@ -1804,7 +1709,6 @@ test.describe('W3/W4 browser truth', () => {
     test.setTimeout(180_000);
     await stubWildfireFeeds(page);
     await stubDeepTerrainArchive(page);
-    await routeBasemapTiles(page);
 
     // Measure the terrain archive's real transport for the activation
     // budget row (logged, not asserted; the preview serves the bundled
@@ -1815,8 +1719,6 @@ test.describe('W3/W4 browser truth', () => {
     let drapeRequests = 0;
     let powerBytes = 0;
     let powerRequests = 0;
-    let structuresBytes = 0;
-    let structuresRequests = 0;
     page.on('response', (response) => {
       const url = response.url();
       const length = Number(response.headers()['content-length']);
@@ -1829,9 +1731,6 @@ test.describe('W3/W4 browser truth', () => {
       } else if (url.includes('power-lines-pnw.pmtiles')) {
         powerRequests += 1;
         if (Number.isFinite(length)) powerBytes += length;
-      } else if (url.includes('structures-central-oregon.pmtiles')) {
-        structuresRequests += 1;
-        if (Number.isFinite(length)) structuresBytes += length;
       }
     });
 
@@ -1882,9 +1781,9 @@ test.describe('W3/W4 browser truth', () => {
     await stampReaches(
       page,
       fire3dContextStamp,
-      'whp structures',
+      'whp',
       30_000,
-      'the context layers never stamped whp structures'
+      'the context layers never stamped whp'
     );
     const hazardLegendSelector = '.legend-section[data-legend="whp-2023"]';
     const hazardLegend = page.locator(hazardLegendSelector);
@@ -1894,10 +1793,6 @@ test.describe('W3/W4 browser truth', () => {
       '.legend-section[data-legend="power-context"]'
     );
     await expect(powerLegend).toHaveCount(0);
-    const structuresLegendSelector = '.legend-section[data-legend="structures-3d"]';
-    const structuresLegend = page.locator(structuresLegendSelector);
-    await expect(structuresLegend).toHaveCount(1);
-    await textComesToContain(page, structuresLegendSelector, STRUCTURES_QUALIFICATION, 10_000);
     // The embed disclosure chip is embed-only chrome; the desktop shell
     // already carries the notes, so no chip appears here.
     await expect(page.locator('#fire3d-embed-note')).toHaveCount(0);
@@ -1923,9 +1818,6 @@ test.describe('W3/W4 browser truth', () => {
     console.log(
       `[fire3d-budget] power-lines archive transport: ${powerBytes} bytes over ${powerRequests} requests (ZERO is the expected reading since 2026-08-19: power is a catalog layer, off by default, so the 3D scene no longer pulls it. Its own budget row lives under the power-infrastructure feature in scripts/check-activation-budget.mjs)`
     );
-    console.log(
-      `[fire3d-budget] structures archive transport: ${structuresBytes} bytes over ${structuresRequests} requests (z13-14 tiles load only when zoomed into the pilot area; this view measures the activation-time header and directory reads)`
-    );
 
     // Toggle off: the flat scene returns and the flag drops.
     await toggle.click();
@@ -1935,7 +1827,6 @@ test.describe('W3/W4 browser truth', () => {
     await expect(volumeLegend).toHaveCount(0);
     await expect(hazardLegend).toHaveCount(0);
     await expect(powerLegend).toHaveCount(0);
-    await expect(structuresLegend).toHaveCount(0);
     expect(await fire3dContextStamp(page)).toBeUndefined();
   });
 
@@ -1990,7 +1881,7 @@ test.describe('W3/W4 browser truth', () => {
     // A longer budget than most other browser cases in this file (mirrors
     // the perimeter-ribbon test's own 180_000 two tests down, "a terrain
     // build plus the perimeter fetch on the software renderer"): the scene
-    // carries the full terrain/hazard/structures archive load (measured at
+    // carries the full terrain/hazard archive load (measured at
     // 6.3 MB terrain plus 1.1 MB hazard drape in the run right above this
     // one) AND the telemetry panel's own viewport-based discovery. The
     // worst-case poll sum is 30 s to 'active', 60 s to 'settled', 25 s for
@@ -2061,8 +1952,8 @@ test.describe('W3/W4 browser truth', () => {
       .toBe('active');
     // The scene publishes 'active' as soon as its context layers activate
     // (src/map/fire3d.ts:`activateScene`, the final `publishStatus('active',
-    // null)`), while the terrain DEM, the hazard drape, and the structures
-    // archive can still be streaming tiles under it; on the software
+    // null)`), while the terrain DEM and the hazard drape
+    // can still be streaming tiles under it; on the software
     // renderer every arriving tile re-renders the pitch-60 scene, and that
     // traffic starved telemetry's own first activation (a dynamic import,
     // six stubbed fetches, and the marker render) when it was checked
@@ -2185,7 +2076,6 @@ test.describe('W3/W4 browser truth', () => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await stubWildfireFeeds(page);
     await stubDeepTerrainArchive(page);
-    await routeBasemapTiles(page);
     await gotoApp(page, '?region=washington_state&cluster=wildfire&fire3d=true');
 
     await stampReaches(page, fire3dStamp, 'active', 30_000, 'the scene never stamped active');
@@ -2253,7 +2143,6 @@ test.describe('W3/W4 browser truth', () => {
     });
     await stubWildfireFeeds(page);
     await stubDeepTerrainArchive(page);
-    await routeBasemapTiles(page);
     await gotoApp(page, '?region=washington_state&cluster=wildfire&fire3d=true');
     await stampReaches(page, fire3dStamp, 'active', 30_000, 'the animated scene never stamped active');
     await layerSettles(page, 'nifc-fires');
@@ -2382,9 +2271,6 @@ test.describe('W3/W4 browser truth', () => {
     await expect
       .poll(() => embedNote.textContent(), { timeout: 30_000 })
       .toContain('Wildfire Hazard Potential 2023');
-    await expect
-      .poll(() => embedNote.textContent(), { timeout: 30_000 })
-      .toContain('Overture footprints');
     // ...and it describes ONLY what rendered. Power infrastructure is a
     // catalog layer since 2026-08-19 and is off in this embed, so the chip
     // must not claim a grid the viewer cannot see.
@@ -2661,7 +2547,6 @@ test('an embed without the flag never activates and never gains it', async ({
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await stubWildfireFeeds(page);
     await stubDeepTerrainArchive(page);
-    await routeBasemapTiles(page);
     // found-126: the scene is held streaming while `places` comes on. Every
     // hazard drape tile read is parked (the header and root directory reads,
     // `bytes=0-...`, pass, so the drape still activates and the scene still
@@ -2811,7 +2696,6 @@ async function bootW2Consumers(page: Page): Promise<void> {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await stubWildfireFeeds(page);
   await stubDeepTerrainArchive(page);
-  await routeBasemapTiles(page);
   await gotoApp(page, '?region=washington_state&cluster=wildfire&fire3d=true');
   // On the answered-read clock, like the scene cases above: GitHub run
   // 38304871630 failed five of these boots at a wall-clock 30 s still reading
@@ -2930,7 +2814,6 @@ test.describe('W2 registered native consumers', () => {
 
   test('hillshade native deadline downgrades its real pill; checkbox Off cancels the retry', async ({ page }) => {
     await observeW2Map(page);
-    await routeBasemapTiles(page);
     const fixture = await w2ArchiveServer('body', 'hillshade-dem-pnw.pmtiles', true);
     try {
       // Preserve the application's exact archive URL and actual DEM bytes.

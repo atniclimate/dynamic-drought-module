@@ -15,7 +15,7 @@ set of public upstream services.
 - Node.js 24 (Active LTS); `.nvmrc` pins the exact patch, 24.20.0
 - npm, using the committed `package-lock.json`
 - A browser supported by Playwright for browser testing
-- Python only for the offline landscape and Overture structures pipelines
+- Python only for the offline landscape pipeline
 
 Install and start the development server:
 
@@ -281,7 +281,6 @@ npm run build:states
 npm run build:ecoregion-tiles
 npm run build:whp-tiles
 npm run build:power-tiles
-npm run build:structures-tiles
 npm run build:coverage-matrix
 ```
 
@@ -382,17 +381,6 @@ Administration, labeled with the issuer's own reporting period. Substations
 and distribution lines are absent: substation locations are withheld by
 publishing agencies for security reasons, and no authoritative public
 national distribution-circuit dataset exists.
-
-Building structures come from the Overture Maps Foundation buildings theme
-(ODbL, https://opendatacommons.org/licenses/odbl/1-0/), extruded over the terrain from zoom 13: footprints with an
-issuer-published height rise to it; the rest draw in a visibly dimmer tone
-at a disclosed placeholder height. The committed bake covers the central
-Oregon region framing only; a full Pacific Northwest bake was projected
-from the measured per-building tile rate at roughly 240 MB for z14-only
-tiles (about 380 MB at the shipped z13-14 scheme, 9.16 million footprints
-either way) and cannot ride the same-origin hosting path, so the extract
-script's `--bbox` parameter is the documented route for a deployer to bake
-their own region (see `public/data/README.md`).
 
 On a phone the same scene is entered from a 3D cell in the right-edge
 column, present only in the Fire view on a phone that passes the WebGL 2

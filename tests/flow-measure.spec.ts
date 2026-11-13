@@ -11,8 +11,7 @@ import {
   type BrowserContext,
   type CDPSession,
   type Locator,
-  type Page,
-  type Route
+  type Page
 } from './offline-test';
 
 import { gotoApp, NODD_FIXTURES, noddStubLog } from './helpers';
@@ -29,8 +28,7 @@ import { gotoApp, NODD_FIXTURES, noddStubLog } from './helpers';
  * Fixtures only, zero egress. Every NODD read is answered by
  * tests/helpers.ts `installDefaultNoddStub` from the committed 2026-10-05 06Z
  * f006 messages (the real wave pair is 1.3 MB, so the bytes are real);
- * ocean currents read the app's own committed frame (public/data/); the OSM
- * basemap is answered from here; a context backstop aborts and logs any other host.
+ * ocean currents read the app's own committed frame (public/data/); a context backstop aborts and logs any other host.
  *
  * WHAT THE NUMBERS ARE, and are not (the plan's labels):
  * - Headless Chromium here runs ANGLE over SwiftShader, a software GL. When
@@ -293,8 +291,6 @@ async function boot(browser: Browser, options: BootOptions): Promise<Booted> {
   });
   const aborted = await installBackstop(context);
   const page = await context.newPage();
-  await page.route('https://tile.openstreetmap.org/**', (route: Route) =>
-    route.fulfill({ status: 200, contentType: 'image/png', body: ONE_PIXEL_PNG }));
   await page.clock.setFixedTime(LIVE_CLOCK);
   await stubSst(page);
   await page.addInitScript(INSTRUMENTS);
@@ -977,8 +973,6 @@ test.describe('flow measure (ENSO-FLOW-PLAN 4.2 and 4.4)', () => {
       const aborted = await installBackstop(context);
       const page = await context.newPage();
       try {
-        await page.route('https://tile.openstreetmap.org/**', (route: Route) =>
-          route.fulfill({ status: 200, contentType: 'image/png', body: ONE_PIXEL_PNG }));
         await page.clock.setFixedTime(LIVE_CLOCK);
         await stubSst(page);
         const cdp = await context.newCDPSession(page);
@@ -1080,8 +1074,6 @@ test.describe('flow measure (ENSO-FLOW-PLAN 4.2 and 4.4)', () => {
       const aborted = await installBackstop(context);
       const page = await context.newPage();
       try {
-        await page.route('https://tile.openstreetmap.org/**', (route: Route) =>
-          route.fulfill({ status: 200, contentType: 'image/png', body: ONE_PIXEL_PNG }));
         await page.clock.setFixedTime(LIVE_CLOCK);
         await stubSst(page);
         // One shared link: each request waits its latency, then queues behind the bytes already on the wire.

@@ -455,7 +455,7 @@ export const FIRE3D_ENTRY_TEXT: Readonly<Record<Fire3DEntryPhase | 'chunk' | 'te
   chunk: 'Loading the 3D view',
   probe: 'Checking the terrain archive',
   atmosphere: 'Loading smoke and perimeters',
-  context: 'Loading the hazard drape and structures',
+  context: 'Loading the hazard drape',
   terrain: 'Loading terrain relief'
 };
 

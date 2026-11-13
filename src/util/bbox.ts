@@ -9,8 +9,7 @@ import {
 /**
  * Quantize a bounding box to a fixed grid step, padded outward by one step
  * on every side. Used to coalesce nearby viewport states into a stable
- * cache key (so panning a few pixels does not refetch; first written for
- * the retired Overpass hydrography read).
+ * cache key (so panning a few pixels does not refetch).
  *
  * Bbox is in Leaflet's `[south, west, north, east]` order, matching the
  * vanilla baseline's `quantizeBbox` (`app.js` v0.1.x). The hydrography

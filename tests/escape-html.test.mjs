@@ -2,7 +2,7 @@
  * `escapeHtml` (src/util/escape.ts).
  *
  * Every popup factory and every tooltip that renders an agency-supplied
- * string (OSM `name` tags, GeoJSON properties, ArcGIS attributes) passes it
+ * string (map feature `name` properties, GeoJSON properties, ArcGIS attributes) passes it
  * through this one function before interpolating into HTML. These cases pin
  * the five substitutions, the order they run in (ampersand first, so an
  * entity already present in the input is re-escaped rather than passed

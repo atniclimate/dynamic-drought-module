@@ -1019,18 +1019,6 @@ export const URLS = Object.freeze({
   // carries the mandatory currency caveat. Loaded only while the 3D Fire
   // mode is active.
   powerLinesPmtilesLocal: BASE_URL + 'data/power-lines-pnw.pmtiles',
-  // Central Oregon building footprints for the desktop 3D Fire mode:
-  // Overture Maps Foundation buildings theme (ODbL; fuses OpenStreetMap,
-  // Microsoft, Esri, and Google open building sets), extracted by
-  // scripts/extract-overture-buildings.py and baked by
-  // scripts/build-structures-tiles.mjs (`npm run build:structures-tiles`).
-  // The committed default covers the central_oregon region framing only
-  // (a full-PNW bake was PROJECTED at roughly 240 MB for z14-only tiles,
-  // about 380 MB at the shipped z13-14 scheme, from the measured
-  // per-building rate, and rejected; the extract script's --bbox
-  // parameter is the deployer path for other regions).
-  // z13-14 vector tiles; loaded only while the 3D Fire mode is active.
-  structuresPmtilesLocal: BASE_URL + 'data/structures-central-oregon.pmtiles',
   tribalLandsLocal: BASE_URL + 'data/tribal-lands.geojson',
   treatyAreasLocal: BASE_URL + 'data/treaty-areas.geojson',
   // United States state boundaries, baked from the Census Bureau cartographic
@@ -1071,7 +1059,7 @@ export const URLS = Object.freeze({
   // temperature (SST) anomaly, daily, ~1 km. The ENSO ocean surface: the
   // equatorial warm/cool tongue rendered as map tiles. MapLibre raster tile
   // template; the GIBS path order is {z}/{y}/{x} (TileMatrix/TileRow/TileCol),
-  // the REVERSE of the OSM z/x/y convention; MapLibre substitutes tokens by
+  // the REVERSE of the usual web tile z/x/y order; MapLibre substitutes tokens by
   // name so the template below is correct as written.
   // Verified 2026-07-06 (ddm-source-verifier): HTTP 200, Content-Type
   // image/png, Access-Control-Allow-Origin: * (genuine wildcard, confirmed

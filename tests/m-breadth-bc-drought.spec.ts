@@ -22,11 +22,6 @@ const BC_PATH =
 const USDM_CURRENT_PATH = '/USDM_current/FeatureServer/0/query';
 const SOURCE_DATE_MS = 1784822456530;
 
-const TRANSPARENT_PNG = Buffer.from(
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
-  'base64'
-);
-
 const BC_FIXTURE = {
   type: 'FeatureCollection',
   features: [
@@ -121,13 +116,6 @@ async function routeDroughtSources(
   bcStatus = 200,
   bcGate: Promise<void> | null = null
 ): Promise<void> {
-  await page.route('https://tile.openstreetmap.org/**', (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: 'image/png',
-      body: TRANSPARENT_PNG
-    })
-  );
   await page.route(
     (url) => url.host === BC_HOST && decodeURIComponent(url.pathname) === BC_PATH,
     async (route) => {

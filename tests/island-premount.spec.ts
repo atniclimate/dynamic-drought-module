@@ -129,11 +129,6 @@ async function stubSst(page: Page): Promise<void> {
  */
 async function gotoWithoutIsland(page: Page, query: string): Promise<void> {
   await stubRecentSatellite(page);
-  // This spec tests an island failure, so its initial map must not depend
-  // on a live basemap request completing before the controls can wire.
-  await page.route('https://tile.openstreetmap.org/**', (route) =>
-    route.fulfill({ status: 200, contentType: 'image/png', body: PNG_1PX })
-  );
   // A raw boot (the island chunk is aborted, so gotoApp's catalog signal
   // cannot be used); the suite-wide boundary stub is installed by hand.
   await routeAllTribalFixtures(page);

@@ -38,7 +38,7 @@ test('coordinator frame setup answers external HTTP requests offline before boot
   for (const setup of setups) {
     await setup({ context: { route: async (matches, handle) => routes.push({ matches, handle }) } });
   }
-  for (const address of ['https://tile.openstreetmap.org/0/0/0.png', 'https://example.org/service', 'http://example.org/service']) {
+  for (const address of ['https://tiles.example.org/0/0/0.png', 'https://example.org/service', 'http://example.org/service']) {
     const route = routes.find(({ matches }) => matches(new URL(address)));
     assert.ok(route, `no offline backstop for ${address}`);
     let response;

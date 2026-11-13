@@ -91,7 +91,7 @@ const waterLabelLayer = (id: string, source: string): maplibregl.SymbolLayerSpec
  * Build the base MapLibre GL JavaScript style specification.
  *
  * DDM's own base map from public files (DDM-P17-T12): no request leaves for
- * OpenStreetMap or any tile host. Three same-origin PMTiles vector archives,
+ * any tile host. Three same-origin PMTiles vector archives,
  * baked by `scripts/build-base-tiles.mjs`: North America to zoom 8 (land,
  * lakes, reservoirs, wetlands, glaciers, rivers and canals, country, province
  * and county lines, federal and state highways, place, lake and sea names;

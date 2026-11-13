@@ -166,14 +166,11 @@ export const CONDITION_SURFACE_IDS: readonly string[] = [
  * above condition fields so lines and plant points stay readable over a
  * drape, below event overlays so mapped incidents always read on top.
  *
- * The structures pair is present only while the 3D Fire mode is active.
  * The power surfaces became an ordinary catalog layer 2026-08-19 and can
  * now appear in any view from zoom 6, so this band is no longer 3D-only;
  * their seat is unchanged, which is the point of listing them here.
  */
 export const CONTEXT_OVERLAY_IDS: readonly string[] = [
-  'structures-3d',
-  'structures-3d-est',
   'power-lines',
   'power-lines-unknown',
   'power-plants-clusters',

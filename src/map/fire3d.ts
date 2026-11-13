@@ -168,8 +168,8 @@ export interface Fire3DStatus {
    */
   readonly terrainCoverage: TerrainCoverageReading;
   /**
-   * Whether the scene's OWN sources (the terrain DEM and any drape/
-   * structures sources this activation added) are still streaming tiles, or
+   * Whether the scene's OWN sources (the terrain DEM and any drape
+   * source this activation added) are still streaming tiles, or
    * have all reported loaded. 'streaming' from the moment the scene first
    * publishes 'active' until every scene source reports loaded via
    * `map.isSourceLoaded`, then 'settled'; back to 'streaming' if a source
@@ -179,8 +179,8 @@ export interface Fire3DStatus {
    *
    * Exists because the scene publishes 'active' as soon as its context
    * layers activate (`publishStatus('active', null)` at the end of
-   * `activateScene`, below), while the terrain DEM, the hazard drape, and
-   * the structures archive can still be streaming tiles under it on the
+   * `activateScene`, below), while the terrain DEM and the hazard drape
+   * can still be streaming tiles under it on the
    * software renderer; a caller that treats 'active' alone as "the scene is
    * ready" can starve a layer it activates in the same breath. Recorded
    * 2026-09-10/11: the RAWS station marker case in tests/fire3d-mode.spec.ts
@@ -712,8 +712,6 @@ function restoreCamera(
  * for the deep-archive resolver, and the mobile test above asserts the
  * chunk boundary this would otherwise break). */
 const WHP_DRAPE_SOURCE_ID = 'whp-2023';
-/** structures-3d.ts's own private SOURCE_ID, mirrored for the same reason. */
-const STRUCTURES_SOURCE_ID = 'structures-3d';
 
 /** The scene's own source ids that are ACTUALLY on the map right now: the
  * terrain DEM always, plus whichever context sources this activation added
@@ -724,7 +722,6 @@ const STRUCTURES_SOURCE_ID = 'structures-3d';
 function currentSceneSourceIds(map: maplibregl.Map): string[] {
   const ids = [TERRAIN_SOURCE_ID];
   if (contextKeys.includes('whp')) ids.push(WHP_DRAPE_SOURCE_ID);
-  if (contextKeys.includes('structures')) ids.push(STRUCTURES_SOURCE_ID);
   const dryness = drynessModule?.getDrynessSourceId();
   if (dryness) ids.push(dryness);
   return ids.filter((id) => Boolean(map.getSource(id)));

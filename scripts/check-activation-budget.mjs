@@ -440,11 +440,6 @@ const FEATURE_BUDGETS = [
       // builder stays as a restore path and would need its row back.
       path: 'data/whp-2023-pnw.pmtiles',
       maxBytes: 16_000_000,
-    }, {
-      // MUST equal MAX_ARCHIVE_BYTES in scripts/build-structures-tiles.mjs
-      // (same cross-gate agreement rule).
-      path: 'data/structures-central-oregon.pmtiles',
-      maxBytes: 16_000_000,
     }],
   },
   {

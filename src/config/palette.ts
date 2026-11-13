@@ -470,8 +470,8 @@ export { STATE_OUTLINE_COLOR } from './interface-tokens';
  *
  * Light text on a dark halo (design pass 2026-11-13): over DDM's own dark
  * base map and over satellite imagery alike the halo carries the contrast.
- * The earlier dark-on-white pair was made for the retired OpenStreetMap
- * ground. These are the map-side tokens for label chrome; on-map paint
+ * The earlier dark-on-white pair was made for the retired raster ground.
+ * These are the map-side tokens for label chrome; on-map paint
  * cannot read CSS custom properties; interface-tokens owns these mirrors.
  * ------------------------------------------------------------------------- */
 
@@ -483,7 +483,7 @@ export { PLACE_LABEL_COLOR, PLACE_LABEL_HALO } from './interface-tokens';
  * SUBTLE by contract (the cartography lens): terrain legibility under the
  * thematic surfaces, never a competing statement. Slate-family shadow and a
  * barely-off-white highlight keep the shading neutral against both the
- * desaturated OSM default and satellite; the low exaggeration constant is
+ * dark base map and satellite; the low exaggeration constant is
  * the "subtle" knob and lives here so a design pass tunes one number.
  * ------------------------------------------------------------------------- */
 

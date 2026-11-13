@@ -167,7 +167,6 @@ test.describe('a raster pill follows the current view, cache restores included (
       new URL(baseURL ?? 'http://127.0.0.1:4173/').origin
     );
     await page.emulateMedia({ reducedMotion: 'reduce' });
-    await page.route('https://tile.openstreetmap.org/**', fulfillPng);
     await stubGriddedInfo(page);
     const tiles = await routeGriddedTiles(page);
     const pill = layerPill(page, 'gridded-index');

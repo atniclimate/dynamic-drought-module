@@ -47,8 +47,6 @@ for (const viewport of [{ width: 1440, height: 1000 }, { width: 958, height: 935
       await gates.get('enso')!.promise;
       await continueLocalRoute(route);
     });
-    await page.route('https://tile.openstreetmap.org/**', (route) =>
-      route.fulfill({ status: 200, contentType: 'image/png', body: pixel }));
     await page.route((url) => url.href.includes('NOAA_Satellite_Smoke_Detection') ||
       url.hostname === 'api.weather.gov' || url.pathname.endsWith('/WWA/watch_warn_adv/MapServer/1/query'),
     (route) => route.fulfill({ status: 200, contentType: 'application/geo+json', body: empty }));
@@ -1096,17 +1094,6 @@ test.describe('M8: the refit on a sidebar toggle (found-029, DDM-P10-T07)', () =
   // with margin. It only decides WHEN reading may start; the proof is the
   // assertion on the settled value, which must also hold for two reads.
   const SETTLE_FLOOR_MS = 900;
-  const PIXEL = Buffer.from(
-    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
-    'base64'
-  );
-
-  test.beforeEach(async ({ page }) => {
-    // The OSM tile stub from the top of this file: no live tile decides a case.
-    await page.route('https://tile.openstreetmap.org/**', (route) =>
-      route.fulfill({ status: 200, contentType: 'image/png', body: PIXEL }));
-  });
-
   const parseBounds = (raw: string): Bounds => {
     const [west, south, east, north] = raw.split(',').map(Number);
     if (

@@ -41,13 +41,8 @@ const EM_DASH = String.fromCharCode(0x2014);
  */
 const CITED = new Set<string>([
   'nifc-raws-public-view',
-  'osm-basemap-ground-credit',
   'eia-power-plants',
   'esri-fuc-transmission-lines-host',
-  'overture-buildings-theme',
-  'overture-source-esri-community-maps',
-  'overture-source-microsoft-ml-buildings',
-  'overture-source-usgs-3dep',
   'noto-sans-glyphs-ofl',
   'usgs-3dep-hillshade-pnw-changes',
   'usgs-3dep-terrain-archive-changes',

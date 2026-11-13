@@ -224,7 +224,6 @@ test.describe('Embed at 200x600 (minimum-width iframe floor)', () => {
     expect(
       await embedded.locator('#map-info-attribution button[data-open-acknowledgements]').count()
     ).toBeGreaterThan(0);
-    expect(await embedded.locator('#map-osm-credit').count()).toBe(0);
     await page.keyboard.press('Escape');
 
     for (const selector of [

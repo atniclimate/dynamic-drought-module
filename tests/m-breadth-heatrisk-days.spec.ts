@@ -21,11 +21,6 @@ const TIMES = [
   1785672000000
 ] as const;
 
-const TRANSPARENT_PNG = Buffer.from(
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
-  'base64'
-);
-
 function solidPng(red: number, green: number, blue: number): Buffer {
   const png = new PNG({ width: 1, height: 1 });
   png.data[0] = red;
@@ -51,13 +46,6 @@ async function routeHeatRisk(
   exportedTimes: number[],
   options: HeatRouteOptions = {}
 ): Promise<void> {
-  await page.route('https://tile.openstreetmap.org/**', (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: 'image/png',
-      body: TRANSPARENT_PNG
-    })
-  );
 
   await page.route(
     (url) => url.pathname.startsWith(SERVICE_PATH),

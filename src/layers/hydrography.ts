@@ -3,8 +3,8 @@
  * base map's own archive (src/map/style.ts, source `base`; baked by
  * scripts/build-base-tiles.mjs from the USGS 1:1,000,000-scale streams and
  * waterbodies, the Atlas of Canada 1:1,000,000 rivers and waterbodies, and
- * Natural Earth elsewhere). It replaced the live OpenStreetMap Overpass read
- * (DDM-P17-T12): no request leaves the app for it, so it has no fetch, no
+ * Natural Earth elsewhere). Since DDM-P17-T12 it is part of the base map's
+ * own archive: no request leaves the app for it, so it has no fetch, no
  * cancellation and no zoom floor; it draws from the national view, larger
  * rivers first, by stream order.
  *

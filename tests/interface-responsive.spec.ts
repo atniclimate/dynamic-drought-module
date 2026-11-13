@@ -666,9 +666,7 @@ test.describe('the 2026-08-19 map chrome seats', () => {
     expect(info.bottom).toBeLessThanOrEqual(800);
 
     // The credits disclosure is still one click away: the credits line points
-    // to the Acknowledgements (S30D D1 M22, DR-162). The base map is DDM's own
-    // public data since DDM-P17-T12, so no credit rides the map itself.
-    await expect(page.locator('#map-osm-credit')).toHaveCount(0);
+    // to the Acknowledgements (S30D D1 M22, DR-162).
     await page.locator('#map-info-btn').click();
     await expect(page.locator('#map-info-attribution')).toContainText('Acknowledgements');
     await page.keyboard.press('Escape');

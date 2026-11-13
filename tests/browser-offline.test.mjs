@@ -57,7 +57,7 @@ test('the context fixture installs the external HTTP backstop before use without
   assert.equal(used, true);
   const [{ matches, handle }] = routes;
   for (const address of [
-    'https://tile.openstreetmap.org/0/0/0.png', 'http://example.org/service',
+    'https://tiles.example.org/0/0/0.png', 'http://example.org/service',
     'https://new-upstream.example/endpoint', 'http://127.0.0.2/sentinel',
     'https://localhost.example/service', 'https://127.0.0.1.example/service'
   ]) {

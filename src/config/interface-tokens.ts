@@ -4,7 +4,7 @@
  */
 export const MAP_GROUND_COLOR = '#010B13'; // app.css --surface-base
 // Light names on a dark halo since DDM's own dark base map (design pass 2026-11-13): the white halos
-// were the loudest marks on the map, made for the retired OpenStreetMap ground.
+// were the loudest marks on the map, made for the retired raster ground.
 export const PLACE_LABEL_COLOR = '#C6CBD4'; // app.css --ink-soft
 export const PLACE_LABEL_HALO = '#010B13'; // app.css --surface-base
 export const STATE_OUTLINE_COLOR = '#8A94A6'; // app.css --ink-faint

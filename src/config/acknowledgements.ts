@@ -68,8 +68,6 @@ export const ACKNOWLEDGEMENT_IDS = [
   'usdm-partners',
   'nadm',
   'natural-earth',
-  'osm',
-  'overture',
   'cocorahs-iem',
   'deployer'
 ] as const;
@@ -86,7 +84,6 @@ export const PROVIDER_KEYS = [
   'basemap-ground',
   'satellite-geocolor',
   'enso-flow',
-  'structures',
   'terrain-archive',
   'whp-3d',
   'dryness-ground',
@@ -139,24 +136,12 @@ export const ACKNOWLEDGEMENT_GROUPS: readonly {
   { key: 'deployer', heading: "This deployment's own data" }
 ];
 
-const OSM_COPYRIGHT_URL = 'https://www.openstreetmap.org/copyright';
-const ODBL_URL = 'https://opendatacommons.org/licenses/odbl/1-0/';
 const OGL_CANADA_URL = 'https://open.canada.ca/en/open-government-licence-canada';
-const CC_BY_4_URL = 'https://creativecommons.org/licenses/by/4.0/';
 
 // The public-view RAWS notice and the DDM notice label (DR-159) live in
 // their own two-literal module so the station legend's chunk never carries
 // this table; re-exported here for every other reader.
 export { DDM_NOTICE_LABEL, RAWS_PUBLIC_VIEW_NOTICE };
-
-/** The one OpenStreetMap credit string (DR-117, DR-162). Since DDM's own base map
- * (DDM-P17-T12) it credits only the OpenStreetMap-derived 3D Fire buildings. */
-// ledger: osm-basemap-ground-credit (cite sheet c02); the same words now credit the 3D Fire buildings (PROVIDERS.structures)
-export const OSM_CREDIT: CreditSentence = {
-  text: '© OpenStreetMap contributors',
-  html: `© <a href="${OSM_COPYRIGHT_URL}">OpenStreetMap</a> contributors`,
-  citeId: 'osm-basemap-ground-credit'
-};
 
 // ledger: nws-web-disclaimer (cite sheet c26), the shared NWS-family line
 const NWS_FAMILY_LINE: CreditSentence = {
@@ -322,7 +307,7 @@ export const ACKNOWLEDGEMENTS: Readonly<Record<AcknowledgementId, Acknowledgemen
   hifld: {
     ...nameOnly('hifld', 'HIFLD (U.S. Government)'),
     credits: [
-      // ledger: esri-fuc-transmission-lines-host (cite sheet c05; DR-163 cut the OSM clause)
+      // ledger: esri-fuc-transmission-lines-host (cite sheet c05; DR-163)
       {
         text:
           'Transmission lines: U.S. Electric Power Transmission Lines (U.S. Government), archived copy last updated 2024-09-30, via the Esri Federal User Community.',
@@ -389,51 +374,6 @@ export const ACKNOWLEDGEMENTS: Readonly<Record<AcknowledgementId, Acknowledgemen
     ]
   },
   'natural-earth': nameOnly('natural-earth', 'Natural Earth', 'partnerships-and-other'),
-  osm: {
-    ...nameOnly('osm', 'OpenStreetMap contributors', 'partnerships-and-other'),
-    credits: [OSM_CREDIT],
-    licence: { name: 'Open Database License', url: ODBL_URL }
-  },
-  overture: {
-    ...nameOnly('overture', 'Overture Maps Foundation', 'partnerships-and-other'),
-    credits: [
-      // ledger: overture-buildings-theme (cite sheet c06; DR-164)
-      {
-        text:
-          'Building footprints (3D Fire, central Oregon pilot): © OpenStreetMap contributors, Overture Maps Foundation. Overture buildings theme, release 2026-07-22.0, available under the Open Database License (ODbL 1.0).',
-        html: `Building footprints (3D Fire, central Oregon pilot): © <a href="${OSM_COPYRIGHT_URL}">OpenStreetMap contributors</a>, <a href="https://docs.overturemaps.org/attribution/">Overture Maps Foundation</a>. Overture buildings theme, release 2026-07-22.0, available under the <a href="${ODBL_URL}">Open Database License</a> (ODbL 1.0).`,
-        citeId: 'overture-buildings-theme'
-      },
-      // ledger: overture-buildings-theme (cite sheet c07, the lead-in to c08 to c10)
-      { text: "Overture's buildings theme credits these sources:", citeId: 'overture-buildings-theme' },
-      // ledger: overture-source-esri-community-maps (cite sheet c08)
-      {
-        text: 'Esri Community Maps contributors. Available under CC BY 4.0.',
-        html: `<a href="https://communitymaps.arcgis.com/home/">Esri Community Maps contributors</a>. Available under <a href="${CC_BY_4_URL}">CC BY 4.0</a>.`,
-        citeId: 'overture-source-esri-community-maps'
-      },
-      // ledger: overture-source-microsoft-ml-buildings (cite sheet c09)
-      {
-        text: 'Global ML Building Footprints. Licensed by Microsoft under the Open Database License.',
-        citeId: 'overture-source-microsoft-ml-buildings'
-      },
-      // ledger: overture-source-usgs-3dep (cite sheet c10)
-      {
-        text: 'USGS 3D Elevation Program Digital Elevation Program.',
-        html: '<a href="https://www.usgs.gov/3d-elevation-program">USGS 3D Elevation Program Digital Elevation Program</a>.',
-        citeId: 'overture-source-usgs-3dep'
-      }
-    ],
-    changes: [
-      // ledger: overture-buildings-theme (cite sheet c11)
-      {
-        text:
-          'DDM selected these footprints within a central Oregon bounding box, kept outline, height and floor count only, rounded heights to 0.1 m and cut them into map tiles.',
-        citeId: 'overture-buildings-theme'
-      }
-    ],
-    licence: { name: 'Open Database License', url: ODBL_URL }
-  },
   'cocorahs-iem': {
     ...nameOnly('cocorahs-iem', 'CoCoRaHS, through the Iowa Environmental Mesonet', 'partnerships-and-other'),
     credits: [
@@ -521,8 +461,6 @@ export const PROVIDERS: Readonly<
   // NCEP products (admission rtofs-currents-producer line 11). The overlay
   // declares no map attribution: its credit is text in its own panel and key.
   'enso-flow': ['noaa-ncep'],
-  // The 3D Fire buildings are Overture's, which fuses OpenStreetMap (ODbL).
-  structures: ['overture', 'osm'],
   'terrain-archive': ['usgs'],
   'whp-3d': ['usfs'],
   // The Wildfire 3D plant-stress ground: STAR's index, USGS Relative Greenness as the fallback.

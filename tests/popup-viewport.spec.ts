@@ -1918,8 +1918,8 @@ test.describe('D1 M23 PF3: framed heads keep the tier promises (generic over mig
     // holdExternalNetwork, and its fixture pages share that context).
     // gotoApp's context stubs, registered later, are
     // checked first and keep their fixtures; each fixture's page routes are
-    // checked before both. Any other external request (the OSM raster tiles,
-    // an unstubbed service) is answered 503 with a synthetic text body, so no
+    // checked before both. Any other external request (an unstubbed
+    // service) is answered 503 with a synthetic text body, so no
     // live service decides a result, for M24's place fixtures and for every
     // batch module TIER_FIXTURES spreads.
     await context.route(

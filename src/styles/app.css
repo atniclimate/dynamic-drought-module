@@ -3899,7 +3899,7 @@ button.conditions-metric:hover .conditions-action-hide {
 /* (Two removals, in order. The static attribution overlay went in the
    0.3.0 design pass: it was the third statement of the same credits on
    one screen and collided with the scale bar, leaving MapLibre's live
-   attribution control to carry the OpenStreetMap and per-layer credits.
+   attribution control to carry the base map and per-layer credits.
    That control went too on 2026-08-31 (PR 54, owner direction): the
    license credits now render inside the map-information panel, the (?)
    disclosure, from src/ui/map-information.ts. No map corner states

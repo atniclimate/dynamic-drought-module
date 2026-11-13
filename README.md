@@ -377,11 +377,6 @@ Nebraska-Lincoln)
 
 - **EOSDIS GIBS**: GHRSST sea-surface temperature anomaly tiles
 
-**OpenStreetMap contributors**
-
-- Building footprints in the 3D Fire view, through the Overture Maps
-  Foundation buildings theme (ODbL)
-
 **Natural Resources Canada**
 
 - **Atlas of Canada National Scale Data 1:1,000,000**: Canadian land, lakes,
@@ -401,10 +396,6 @@ Nebraska-Lincoln)
 **EIA** (Energy Information Administration)
 
 - Power plant locations and attributes (Forms 860 / 860M)
-
-**Overture Maps Foundation**
-
-- Building footprints (central Oregon extract, ODbL, https://opendatacommons.org/licenses/odbl/1-0/)
 
 **Iowa State University**
 

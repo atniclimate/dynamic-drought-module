@@ -1,6 +1,5 @@
 /**
- * Build DDM's own base map from public files (DDM-P17-T12), replacing the
- * OpenStreetMap raster ground and the Overpass river lookups.
+ * Build DDM's own base map from public files (DDM-P17-T12).
  *
  * Three PMTiles vector archives land in public/data/:
  *   ddm-base-na-<edition>.pmtiles     North America box, zoom 0 to 8 (the map

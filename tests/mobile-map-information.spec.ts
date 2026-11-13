@@ -235,7 +235,6 @@ test.describe('mobile map-information disclosure (390x844)', () => {
     const creditsLine = page.locator('#map-info-attribution');
     await expect(creditsLine).toContainText('Acknowledgements');
     expect(await creditsLine.locator('button[data-open-acknowledgements]').count()).toBeGreaterThan(0);
-    await expect(page.locator('#map-osm-credit')).toHaveCount(0);
 
     // W2-D8: the panel opens with what it uniquely adds (the active view
     // and the basemap state), never a verbatim restatement of the on-map

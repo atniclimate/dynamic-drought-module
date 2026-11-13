@@ -236,8 +236,8 @@ async function runStep(
   if ('set_layer' in step) {
     // A layer switched on while the 3D scene is up starts its first read
     // inside the scene's own startup stall, ON PURPOSE (S30D B6-POWER,
-    // found-125). The scene publishes 'active' while terrain, the drape and
-    // the structures are still streaming, and on the software renderer the
+    // found-125). The scene publishes 'active' while terrain and the drape
+    // are still streaming, and on the software renderer the
     // draw queue then blocks the page for up to about 12 s
     // (tests/fire3d-mode.spec.ts, the RAWS marker case, measured 5.8 to
     // 11.9 s), long enough for the power layer's 10 s archive probe
@@ -284,9 +284,9 @@ async function runStep(
     // renderer's draw queue do not decide whether that context was restored.
     await untilAnswered(
       () => fire3dContextStamp(page),
-      (value) => value === 'whp structures',
+      (value) => value === 'whp',
       30_000,
-      '3D scene context whp structures'
+      '3D scene context whp'
     );
     return;
   }

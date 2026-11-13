@@ -14,7 +14,7 @@ import { stubWildfireFeeds } from './wildfire-fixtures';
  * 5.3; DR-159, DR-162, DR-163): the map-information pointer reaches the
  * acknowledgements with or without a place, the section survives a
  * hydration refresh and prints open, the embed reaches it, the chrome
- * carries no credit except the one OpenStreetMap string on the map, and
+ * and the map carry no credit, and
  * the station legend and the power key carry their ruled lines.
  *
  * Every boot goes through `gotoApp` (its suite-wide stubs keep sovereign
@@ -408,7 +408,7 @@ test.describe('the acknowledgements pointer and section (D1 M22)', () => {
     const panel = page.locator('#impact-panel');
     await expect(panel).toBeVisible();
     await expect(panel.locator('.impact-acknowledgements')).toHaveJSProperty('open', true);
-    await expect(panel.locator('[data-ack-id="osm"]')).toBeVisible();
+    await expect(panel.locator('[data-ack-id="natural-earth"]')).toBeVisible();
   });
 
   test('no issuer name, copyright sign or licence link in #map-info-attribution, the sidebar footer or the map container', async ({
@@ -424,14 +424,10 @@ test.describe('the acknowledgements pointer and section (D1 M22)', () => {
       const attribution = document.querySelector('#map-info-attribution');
       const footer = document.querySelector('.sidebar-footer');
       const container = document.querySelector('#map-container');
-      const osm = document.querySelector('#map-osm-credit');
-      const outsideOsm = (node: Element) => !osm || !osm.contains(node);
       const containerLinks = Array.from(container?.querySelectorAll<HTMLAnchorElement>('a[href]') ?? [])
-        .filter(outsideOsm)
         .filter((a) => LICENCE.test(a.href))
         .map((a) => a.href);
       const containerCopyright = Array.from(container?.querySelectorAll('*') ?? [])
-        .filter(outsideOsm)
         .filter((el) =>
           Array.from(el.childNodes).some((n) => n.nodeType === 3 && (n.textContent ?? '').includes('©'))
         ).length;
@@ -445,9 +441,7 @@ test.describe('the acknowledgements pointer and section (D1 M22)', () => {
           (a) => LICENCE.test(a.href)
         ).length,
         containerLinks,
-        containerCopyright,
-        osmHidden: osm instanceof HTMLElement ? osm.hidden : null,
-        osmText: osm?.textContent ?? ''
+        containerCopyright
       };
     });
     expect(reading.attribution).toContain('Acknowledgements');
@@ -459,9 +453,6 @@ test.describe('the acknowledgements pointer and section (D1 M22)', () => {
     expect(reading.footerLicenceLinks).toBe(0);
     expect(reading.containerLinks).toEqual([]);
     expect(reading.containerCopyright).toBe(0);
-    // The base map is DDM's own public data (DDM-P17-T12): no on-map credit remains.
-    expect(reading.osmHidden).toBe(null);
-    expect(reading.osmText).toBe('');
   });
 
   test("the station legend and the briefing carry the public-view notice verbatim, as DDM's notice (DR-159)", async ({

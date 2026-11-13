@@ -8,7 +8,7 @@ import { continueLocalRoute } from './offline-test';
  *
  * Before S16 (2026-09-08) each layer module aborted its own fetches, and the
  * controller could reach them only through the optional `cancelActivation`
- * seam, which Hydrography never exported: an Overpass query held open waited
+ * seam, which Hydrography never exported: a hydrography read held open waited
  * out its per-mirror budget behind the serialized teardown after the user
  * had turned the layer off. The controller now owns one AbortController per
  * activation attempt (`src/state/layer-controller.ts`, `attempts`), hands
@@ -41,7 +41,8 @@ import { continueLocalRoute } from './offline-test';
  * "Promptly" is a bound: an abort is prompt when it lands well inside the
  * network budget the pre-seam path would first have had to exhaust
  * (`FETCH_TIMEOUT_MS` 15 s in the three ArcGIS-style modules,
- * `PER_MIRROR_TIMEOUT_MS` 12 s per Overpass mirror). Ten seconds is the
+ * `PER_MIRROR_TIMEOUT_MS` 12 s per mirror in Hydrography, which now draws
+ * from the base map's own archive). Ten seconds is the
  * bound used here: under every budget, and over any honest teardown cost on
  * a slow CI runner.
  */
@@ -170,11 +171,8 @@ async function pillClasses(page: Page, key: string): Promise<string> {
   return (await layerPill(page, key).getAttribute('class')) ?? '';
 }
 
-/** The basemap and every live condition source, answered locally. */
+/** Every live condition source, answered locally. */
 async function stubCommon(page: Page): Promise<void> {
-  await page.route('https://tile.openstreetmap.org/**', (route) =>
-    route.fulfill({ status: 200, contentType: 'image/png', body: ONE_PIXEL_PNG })
-  );
   // Broad first, specific later: Playwright matches the most recently
   // registered route, so a test's own held route below wins.
   for (const host of ['services5', 'services3', 'services2']) {

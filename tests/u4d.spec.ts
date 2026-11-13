@@ -284,8 +284,6 @@ test.describe('U4d: the switcher control and assistive observation status', () =
     expect(satelliteStub.renderedFrameIds).toEqual([]);
     await expect(page.locator('html')).not.toHaveAttribute(SATELLITE_STAMP);
     await expect(page.locator(IMAGERY_CHIP)).toBeHidden();
-    // DDM's own base map (DDM-P17-T12) carries no on-map credit.
-    await expect(page.locator('#map-osm-credit')).toHaveCount(0);
     // The words a sighted visitor can read: the Impact Briefing says so, with no observation time.
     const notes = await openTechnicalInformation(page);
     await expect(notes).toContainText(SATELLITE_UNAVAILABLE_NOTE);
@@ -402,9 +400,7 @@ test.describe('U4d: the switcher control and assistive observation status', () =
     // Value-only migration (S30D D1 M22, DR-162; design record
     // acknowledgements-table.md section 4.3): the NOAA imagery is credited by
     // its row in the Acknowledgements, reached through the credits line's
-    // pointer; DDM's own base map beneath it carries no on-map credit
-    // (DDM-P17-T12).
-    await expect(page.locator('#map-osm-credit')).toHaveCount(0);
+    // pointer.
     await page.locator('#map-info-btn').click();
     await page.locator('#map-info-attribution button[data-open-acknowledgements]').click();
     // The GOES GeoColor imagery (src/map/satellite.ts, the
@@ -436,8 +432,6 @@ test.describe('U4d: the switcher control and assistive observation status', () =
     await expect(btn).toHaveAttribute('aria-pressed', 'false', { timeout: 30_000 });
     await expect.poll(async () => search(page)).not.toContain('basemap=');
     await expect(page.locator(IMAGERY_CHIP)).toBeHidden();
-    // The default basemap is back on screen; DDM's own base map (DDM-P17-T12)
-    // carries no on-map credit.
-    await expect(page.locator('#map-osm-credit')).toHaveCount(0);
+    // The default basemap is back on screen.
   });
 });
