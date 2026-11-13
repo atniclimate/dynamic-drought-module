@@ -53,6 +53,30 @@ for (const [rel, maxZoom, layers] of ARCHIVES) {
   });
 }
 
+test('the North America archive draws state lines and both U.S. borders at its own scale', async () => {
+  // @mapbox/vector-tile and pbf arrive with vt-pbf (a dev dependency); the app never imports them.
+  const { VectorTile } = await import('@mapbox/vector-tile');
+  const { default: Pbf } = await import('pbf');
+  const bytes = read('public/data/ddm-base-na-2026-11.pmtiles');
+  const reader = new PMTiles({
+    getKey: () => 'na',
+    getBytes: async (offset, length) => {
+      const s = bytes.subarray(offset, offset + length);
+      return { data: s.buffer.slice(s.byteOffset, s.byteOffset + s.byteLength) };
+    }
+  });
+  const kinds = async (z, lon, lat) => {
+    const x = Math.floor(((lon + 180) / 360) * 2 ** z);
+    const y = Math.floor(((1 - Math.asinh(Math.tan((lat * Math.PI) / 180)) / Math.PI) / 2) * 2 ** z);
+    const tile = await reader.getZxy(z, x, y); // the reader unzips the tile
+    const layer = new VectorTile(new Pbf(new Uint8Array(tile.data))).layers.boundary;
+    return new Set(Array.from({ length: layer?.length ?? 0 }, (_, i) => layer.feature(i).properties.kind));
+  };
+  assert.ok((await kinds(8, -121.0, 45.65)).has('state'), 'the Washington-Oregon line on the Columbia');
+  assert.ok((await kinds(7, -106.5, 31.76)).has('country'), 'the U.S.-Mexico border at El Paso');
+  assert.ok((await kinds(7, -110, 49)).has('country'), 'the U.S.-Canada border on the 49th parallel');
+});
+
 test('every base map input is pinned by hash and retrieval date', () => {
   const receipt = JSON.parse(read('scripts/data/base-tiles-inputs.json'));
   assert.ok(receipt.inputs.length >= 70);

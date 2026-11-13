@@ -209,6 +209,7 @@ export const REFERENCE_BOUNDARY_IDS: readonly string[] = [
   'us-states-fill',
   'us-states-casing',
   'us-states-outline',
+  'us-states-selected',
   'tribal-lands-fill',
   'tribal-lands-outline',
   'aiannh-fill',

@@ -1,16 +1,16 @@
 {
   "edition": "2026-11",
-  "built": "2026-11-12",
+  "built": "2026-11-13",
   "outputs": [
     {
       "file": "ddm-base-na-2026-11.pmtiles",
-      "bytes": 15983456,
+      "bytes": 16097258,
       "tiles": 6470,
       "features": {
         "land": 3,
         "water": 22656,
         "river": 2581,
-        "boundary": 226,
+        "boundary": 384,
         "county": 8968,
         "place": 17288,
         "water_label": 3272

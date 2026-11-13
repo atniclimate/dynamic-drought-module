@@ -189,6 +189,36 @@ function inBounds(geometry, [x, y]) {
   return x >= w && x <= e && y >= s && y <= n;
 }
 
+const km = ([x1, y1], [x2, y2]) => {
+  const r = Math.PI / 180;
+  const a = Math.sin(((y2 - y1) * r) / 2) ** 2 + Math.cos(y1 * r) * Math.cos(y2 * r) * Math.sin(((x2 - x1) * r) / 2) ** 2;
+  return 12742 * Math.asin(Math.sqrt(a));
+};
+const lineKm = (line) => line.slice(1).reduce((sum, pt, i) => sum + km(line[i], pt), 0);
+
+/**
+ * The U.S.-Mexico border as the stretch of the Census border states' outline between its two ends, the
+ * Pacific terminus and the Rio Grande mouth, taken the shorter way round so no coast joins it. Fails the
+ * build if an end has no outline vertex within 2 km or the length is far from the border's 3,145 km.
+ */
+function borderArc(collection, from, to) {
+  const rings = collection.features.flatMap(({ geometry: g }) => (g.type === 'Polygon' ? [g.coordinates[0]] : g.coordinates.map((poly) => poly[0])));
+  const ring = rings.reduce((a, b) => (b.length > a.length ? b : a));
+  const nearest = (pt) => {
+    let best = 0;
+    ring.forEach((v, i) => { if (km(v, pt) < km(ring[best], pt)) best = i; });
+    if (km(ring[best], pt) > 2) throw new Error(`border end ${pt} has no outline vertex within 2 km`);
+    return best;
+  };
+  const [i, j] = [nearest(from), nearest(to)].sort((a, b) => a - b);
+  const inside = ring.slice(i, j + 1);
+  const around = [...ring.slice(j), ...ring.slice(1, i + 1)]; // the ring is closed: its first and last vertex are one point
+  const arc = lineKm(inside) <= lineKm(around) ? inside : around;
+  const length = lineKm(arc);
+  if (length < 2800 || length > 3600) throw new Error(`U.S.-Mexico border measured ${Math.round(length)} km, expected about 3,145`);
+  return arc;
+}
+
 /** Run mapshaper over an in-memory collection (`-i in.json` in the command). */
 async function msData(cmd, collection) {
   const out = await mapshaper.applyCommands(`${cmd} -o out.json format=geojson precision=0.0001`, { 'in.json': JSON.stringify(collection) });
@@ -260,10 +290,22 @@ async function northAmerica(paths, hiNames) {
   const river = fc([...usRivers.features, ...caRivers.features, ...restRivers.features]);
 
   console.log('boundaries');
-  const countryLines = await ms(`-i ${p('ne-country-lines')} -clip ${BOX} -each "kind = 'country'" -filter-fields kind`);
+  // Each border comes from the source that drew the land beside it (owner decision 2 A, 2026-11-12), so it
+  // meets the coast it ends at: U.S.-Canada from the Atlas of Canada, U.S.-Mexico from the Census state
+  // edge, Natural Earth for every other border.
+  const statesShp = await member(p('us-states'), 'cb_2025_us_state_500k.shp');
+  const countryLines = await ms(`-i ${p('ne-country-lines')} -filter "ADM0_A3_L != 'USA' && ADM0_A3_R != 'USA'" -clip ${BOX} -each "kind = 'country'" -filter-fields kind`);
+  // The south-bound filter drops the one offshore line (Gulf of Maine): the map draws land and lake borders, not sea ones.
+  const usCanada = await ms(`-i ${await member(p('ca-lines'), 'AC_1M_BoundaryLines.shp')} -filter "TYPE == 'International'" -proj wgs84 -filter "this.bounds[1] > 41" -clip ${BOX} -each "kind = 'country'" ${SIMPLE} -filter-fields kind`);
+  const borderStates = await ms(`-i ${statesShp} -proj wgs84 -filter "['CA','AZ','NM','TX'].indexOf(STUSPS) > -1" -dissolve`);
+  const usMexico = await msData(`-i in.json ${SIMPLE} -each "kind = 'country'"`,
+    fc([{ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: borderArc(borderStates, [-117.124, 32.534], [-97.146, 25.956]) } }]));
+  // State lines at the base map's scale (owner decision 1 A): inner lines only, the coast is the land edge.
+  // Drawn by the State Boundaries layer (src/layers/states.ts), which keeps the bundled coarse file as its click target.
+  const stateLines = await ms(`-i ${statesShp} -proj wgs84 -clip ${BOX} -innerlines ${SIMPLE} -each "kind = 'state'"`);
   const caRegions = await ms(`-i ${await member(p('ca-lines'), 'AC_1M_BoundaryLines.shp')} -filter "TYPE == 'Provincial or Territorial'" -proj wgs84 -clip ${BOX} -each "kind = 'region'" ${SIMPLE} -filter-fields kind`);
   const mxRegions = await ms(`-i ${p('ne-region-lines')} -filter "ADM0_A3 == 'MEX'" -clip ${BOX} -each "kind = 'region'" -filter-fields kind`);
-  const boundary = fc([...countryLines.features, ...caRegions.features, ...mxRegions.features]);
+  const boundary = fc([...countryLines.features, ...usCanada.features, ...usMexico.features, ...stateLines.features, ...caRegions.features, ...mxRegions.features]);
   const county = await ms(`-i ${await member(p('us-counties'), 'cb_2025_us_county_500k.shp')} -proj wgs84 -clip ${BOX} -innerlines ${SIMPLE} -each "kind = 'county'"`);
 
   console.log('roads');
