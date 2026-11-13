@@ -1257,7 +1257,7 @@ test.describe('found-006: the Brief-door Tribal Nations control is a real toggle
     await expect(action).toBeVisible();
 
     // State 0 (boot): off. The description reads the activate sentence.
-    await expect(action).toHaveAccessibleName('Show Tribal Nations layers');
+    await expect(action).toHaveAccessibleName('Show Tribal Nations layers, 0 of 2 selected');
     expect(await action.getAttribute('aria-pressed')).toBe('false');
     await expect(desc).toHaveText('Turns on Tribal Lands and Reservation Boundaries.');
     await expect
@@ -1270,7 +1270,7 @@ test.describe('found-006: the Brief-door Tribal Nations control is a real toggle
     // State 1 (press 1): on. The description switches to the off sentence
     // (found-006 repair: a pressed toggle's next press turns the set off).
     await action.click();
-    await expect(action).toHaveAccessibleName('Hide Tribal Nations layers');
+    await expect(action).toHaveAccessibleName('Hide Tribal Nations layers, 2 of 2 selected');
     expect(await action.getAttribute('aria-pressed')).toBe('true');
     await expect(desc).toHaveText('Turns off Tribal Lands and Reservation Boundaries.');
     await expect
@@ -1285,7 +1285,7 @@ test.describe('found-006: the Brief-door Tribal Nations control is a real toggle
 
     // State 2 (press 2): off again, proving the control has a real off half.
     await action.click();
-    await expect(action).toHaveAccessibleName('Show Tribal Nations layers');
+    await expect(action).toHaveAccessibleName('Show Tribal Nations layers, 0 of 2 selected');
     expect(await action.getAttribute('aria-pressed')).toBe('false');
     await expect(desc).toHaveText('Turns on Tribal Lands and Reservation Boundaries.');
     await expect
@@ -1301,7 +1301,7 @@ test.describe('found-006: the Brief-door Tribal Nations control is a real toggle
     // State 3 (press 3): on again, proving the toggle round-trips rather
     // than sticking after the first off.
     await action.click();
-    await expect(action).toHaveAccessibleName('Hide Tribal Nations layers');
+    await expect(action).toHaveAccessibleName('Hide Tribal Nations layers, 2 of 2 selected');
     expect(await action.getAttribute('aria-pressed')).toBe('true');
     await expect(desc).toHaveText('Turns off Tribal Lands and Reservation Boundaries.');
     await expect
@@ -1337,7 +1337,7 @@ test.describe('found-090: the phone at-hand Tribal Nations control is a real tog
     await expect(action).toBeVisible();
 
     // State 0 (boot): off.
-    await expect(action).toHaveAccessibleName('Show Tribal Nations layers');
+    await expect(action).toHaveAccessibleName('Show Tribal Nations layers, 0 of 2 selected');
     expect(await action.getAttribute('aria-pressed')).toBe('false');
     await expect
       .poll(async () => {
@@ -1348,7 +1348,7 @@ test.describe('found-090: the phone at-hand Tribal Nations control is a real tog
 
     // State 1 (press 1): on.
     await action.click();
-    await expect(action).toHaveAccessibleName('Hide Tribal Nations layers');
+    await expect(action).toHaveAccessibleName('Hide Tribal Nations layers, 2 of 2 selected');
     expect(await action.getAttribute('aria-pressed')).toBe('true');
     await expect
       .poll(
@@ -1363,7 +1363,7 @@ test.describe('found-090: the phone at-hand Tribal Nations control is a real tog
     // State 2 (press 2): off again, proving the mirror has a real off half
     // (before this fix, a second press was a no-op: both layers stayed on).
     await action.click();
-    await expect(action).toHaveAccessibleName('Show Tribal Nations layers');
+    await expect(action).toHaveAccessibleName('Show Tribal Nations layers, 0 of 2 selected');
     expect(await action.getAttribute('aria-pressed')).toBe('false');
     await expect
       .poll(
@@ -1378,7 +1378,7 @@ test.describe('found-090: the phone at-hand Tribal Nations control is a real tog
     // State 3 (press 3): on again, proving the toggle round-trips rather
     // than sticking after the first off.
     await action.click();
-    await expect(action).toHaveAccessibleName('Hide Tribal Nations layers');
+    await expect(action).toHaveAccessibleName('Hide Tribal Nations layers, 2 of 2 selected');
     expect(await action.getAttribute('aria-pressed')).toBe('true');
     await expect
       .poll(

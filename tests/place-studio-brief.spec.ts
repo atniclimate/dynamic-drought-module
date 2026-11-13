@@ -245,7 +245,8 @@ async function stubWatershedCandidates(page: Page): Promise<void> {
 async function selectWashington(page: Page): Promise<void> {
   await page.locator('#place-type-state').click();
   await page.locator('#place-studio-search').fill('Washington');
-  const stateList = page.locator('#place-list-panel');
+  // The States group: a search lists every place type (visual uniformity D11), and two Nations carry "Washington" in their names.
+  const stateList = page.locator('#place-list-panel [data-place-group="state"]');
   await stateList.locator('.place-studio-option').click();
   await expect(page.locator('#place-selection-title')).toHaveText('Washington');
 }
@@ -408,7 +409,8 @@ test.describe('PS-BRIEF PLACE studio rendering', () => {
     await gotoApp(page, '?view=brief&layers=places&studio=place');
     await page.locator('#place-type-watershed').click();
     await page.locator('#place-studio-search').fill('Yakima');
-    await page.locator('#place-list-panel .place-studio-option').click();
+    // The Watersheds group: a search lists every place type (visual uniformity D11), and "Yakima" also names two ecoregions.
+    await page.locator('#place-list-panel [data-place-group="watershed"] .place-studio-option').click();
 
     await expect(page.locator('#place-capability-briefable')).toContainText('available');
     await expect(page.locator('#place-capability-overlap-computable')).toContainText(
@@ -616,7 +618,8 @@ test.describe('PS-BRIEF return hand-off', () => {
     await page.locator('#studio-entry-pair #place-studio-entry').click();
     await page.locator('#place-type-watershed').click();
     await page.locator('#place-studio-search').fill('Yakima');
-    await page.locator('#place-list-panel .place-studio-option').click();
+    // The Watersheds group: a search lists every place type (visual uniformity D11), and "Yakima" also names two ecoregions.
+    await page.locator('#place-list-panel [data-place-group="watershed"] .place-studio-option').click();
 
     const back = page.locator('#place-studio-back');
     await back.click();

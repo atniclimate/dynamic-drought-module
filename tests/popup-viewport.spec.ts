@@ -1695,9 +1695,9 @@ test.describe('found-099: the Key drawer exclusion applies only on the desktop n
  * read, not asserted from CSS. The long title fills the control's band
  * with title lines; the one-word title leaves the band to the rows beneath
  * it, which is what a title-margin-only seat would fail at the coarse
- * size. The phone size waits for the mobile pass (DR-149, recorded
- * 2026-09-30): no phone viewport is asserted here, and the phone rules are
- * unchanged.
+ * size. A phone-width window takes the 44px floor and its seat on either
+ * pointer (visual uniformity wave 1, D8, the mobile pass DR-149 left the
+ * phone size to), so 390x844 is asserted beside the desktop sizes.
  *
  * Predicted red at cb836fe (no seat): at the fine size the title block and
  * its first line reach 8px under the 24px control (the card's 16px right
@@ -1705,6 +1705,7 @@ test.describe('found-099: the Key drawer exclusion applies only on the desktop n
  * one-word title's agency line beneath it intersects the 44px control too.
  */
 const SEAT_VIEWPORTS = [
+  { width: 390, height: 844 },
   { width: 1280, height: 720 },
   { width: 1440, height: 900 },
   { width: 1920, height: 1080 },
@@ -1786,7 +1787,9 @@ for (const viewport of SEAT_VIEWPORTS) {
       test('the close control owns its seat: no head content intersects it, long title and one-word title', async ({
         page
       }) => {
-        const floor = coarse ? 44 : 24;
+        // The touch floor: a coarse pointer at any width, and every phone-width window.
+        const touch = coarse || viewport.width <= 720;
+        const floor = touch ? 44 : 24;
         let larName: string = SEAT_LONG_TITLE;
         await routeBoundary(page, BIA_ROUTE, (route: Route) =>
           route.fulfill({ contentType: 'application/geo+json', body: JSON.stringify(biaBodyNamed(larName)) })
@@ -1819,7 +1822,7 @@ for (const viewport of SEAT_VIEWPORTS) {
           // Not vacuous: the measured content really shares the control's band.
           if (name === SEAT_LONG_TITLE) {
             expect(seat.boxes.some((b) => b.title && b.top < c.bottom), 'the title never reached the control band').toBe(true);
-          } else if (coarse) {
+          } else if (touch) {
             expect(
               seat.boxes.some((b) => !b.title && b.top < c.bottom),
               'no head row below the one-word title reached the 44px control band'

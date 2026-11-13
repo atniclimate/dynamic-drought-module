@@ -2,7 +2,8 @@
  * The Place studio: search first, action last, one screen.
  *
  * PRESENTATION (owner direction 2026-11-09 (sprint), DR-pending). One search
- * looks across every place type at once; type chips narrow it; the list is
+ * looks across every place type at once; type chips narrow the unsearched
+ * list and only order a search (visual uniformity D11); the list is
  * the page (one scroller, no box inside it); and choosing a row raises a
  * selection bar pinned to the bottom that carries the place's gated formal
  * name, its kind in plain words, the honest state of its live boundary read,
@@ -1049,10 +1050,13 @@ function PlaceStudio() {
   const [selectionEntry, setSelectionEntry] = useState<PlaceCatalogEntry | null>(null);
   const [query, setQuery] = useState('');
   const [attempts, setAttempts] = useState(NO_ATTEMPTS);
+  // Typed text searches every place type, whatever type chip is pressed
+  // (visual uniformity D11): "Umatilla" under States said no place matched.
+  const searching = foldSearchText(query) !== '';
   // A catalog loads while the list shows its type, the map shows its
   // reference layers (`kind`), or the chosen place belongs to it.
   const wants = (placeKind: TypedPlaceKind): boolean =>
-    scope === 'all' || scope === placeKind || kind === placeKind || selection?.kind === placeKind;
+    searching || scope === 'all' || scope === placeKind || kind === placeKind || selection?.kind === placeKind;
   const catalogs: Readonly<Record<TypedPlaceKind, CatalogState>> = {
     tribe: useCatalog('tribe', wants('tribe'), attempts.tribe),
     state: useCatalog('state', wants('state'), attempts.state),
@@ -1439,7 +1443,13 @@ function PlaceStudio() {
   // query first, and no confidence score.
   const foldedQuery = foldSearchText(query);
   const queryTokens = foldedQuery.split(' ').filter((token) => token.length > 0);
-  const scopeKinds = scope === 'all' ? PLACE_TYPE_ORDER : [scope];
+  // A pressed type narrows the list until text is typed; a search lists that type first, then the others.
+  const scopeKinds =
+    scope === 'all'
+      ? PLACE_TYPE_ORDER
+      : searching
+        ? [scope, ...PLACE_TYPE_ORDER.filter((placeKind) => placeKind !== scope)]
+        : [scope];
   const groups = scopeKinds.map((placeKind) => {
     const catalog = catalogs[placeKind];
     const all = rowsOf(catalog.entries);
@@ -1762,7 +1772,7 @@ function PlaceStudio() {
           <section
             id="place-list-panel"
             class="place-studio-list-panel"
-            aria-labelledby={`place-type-${scope}`}
+            aria-labelledby={`place-type-${searching ? 'all' : scope}`}
             aria-busy={pending.length > 0 ? 'true' : 'false'}
           >
             <label class="place-studio-search" for="place-studio-search">

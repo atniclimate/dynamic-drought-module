@@ -233,8 +233,10 @@ export const REFERENCE_BOUNDARY_IDS: readonly string[] = [
   'tribal-lands-outline',
   'aiannh-fill',
   'aiannh-outline',
+  'aiannh-outline-core',
   'bia-reservations-fill',
   'bia-reservations-outline',
+  'bia-reservations-outline-core',
   'treaty-areas-outline'
 ];
 

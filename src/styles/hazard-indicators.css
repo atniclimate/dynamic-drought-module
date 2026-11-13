@@ -106,7 +106,6 @@
   font-family: var(--font-display);
   font-size: 12px;
   font-weight: var(--fw-subtitle);
-  text-transform: uppercase;
   text-align: left;
   cursor: pointer;
 }
@@ -155,7 +154,6 @@
        a min-height here used to add its own 40px on top of the parent's
        border, landing the measured box at 42 instead of 40. */
     height: 100%;
-    text-transform: none;
     font-size: 13px;
     font-weight: var(--fw-strong, 700);
   }

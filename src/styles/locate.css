@@ -297,14 +297,16 @@
     border-left: 1px solid var(--glass-edge);
   }
 
+  /* Equal columns, as many as fit (visual uniformity wave 1, D2): "Locate
+     me" and "Not now" are one width, and a longer run of offers wraps into
+     the same columns. 120 px holds the shortest offer on one line. */
   .locate-card-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 120px), 1fr));
+    gap: var(--ctl-gap);
   }
   .locate-card-action {
     appearance: none;
-    flex: 1 1 auto;
     min-height: var(--touch-target);
     margin: 0;
     padding: 6px 14px;

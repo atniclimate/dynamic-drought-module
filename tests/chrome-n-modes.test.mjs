@@ -421,7 +421,9 @@ test('the place briefing door is named without a mode word (DR-113)', async () =
   const text = await readFile(new URL('src/ui/sidebar.ts', ROOT), 'utf8');
   // assert.ok, not doesNotMatch: a failure must not print the whole file.
   assert.ok(!/See what the \w+ means/.test(text), 'the door names one mode in every mode');
-  assert.ok(text.includes("'aria-label', `See what this means for ${place.label}`"));
+  // Visual uniformity wave 1, D6: the door reads "Open briefing"; its name starts with those words and adds the place.
+  assert.ok(text.includes("btn.textContent = 'Open briefing';"));
+  assert.ok(text.includes("'aria-label', `Open briefing for ${place.label}`"));
 });
 
 // Audit 7 finding 2: the chip's fallback sentence ("No classed layer is drawn")

@@ -54,17 +54,31 @@
    Place studio, every width: search, type chips, the list, the selection bar
    ----------------------------------------------------------------------------- */
 
-/* The chips ride inside the list column now, after the search. */
+/* The chips ride inside the list column now, after the search (visual
+   uniformity wave 1, D2). The phone block below sets its own three over two. */
 #place-studio-root .place-studio-type-rail {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--ctl-gap);
   width: auto;
   margin: 0 0 10px;
   overflow: visible;
 }
-#place-studio-root .place-studio-type {
-  flex: 1 1 auto;
+@media (min-width: 721px) {
+  /* "All" takes its own row; the place types share the next in equal
+     columns, one per type however many there are. A flex row, not auto-fit
+     tracks: a spanning "All" keeps every track open, so a wide rail drew
+     more columns than there are types. A long name wraps inside its chip. */
+  #place-studio-root .place-studio-type-rail {
+    display: flex;
+    flex-wrap: wrap;
+  }
+  #place-studio-root .place-studio-type {
+    flex: 1 1 0;
+    min-width: 0;
+    overflow-wrap: break-word;
+  }
+  #place-studio-root .place-studio-type:first-child {
+    flex-basis: 100%;
+  }
 }
 
 #place-studio-root .place-studio-search {
@@ -419,10 +433,13 @@
   color: var(--ink-soft);
   font-size: 11.5px;
 }
+/* Equal columns sized by the number of actions (visual uniformity wave 1, D2). */
 .place-studio-bar-actions {
   grid-area: actions;
-  display: flex;
-  gap: 8px;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: var(--ctl-gap);
   min-width: 0;
 }
 /* The sheet's own action face: ink on a lifted glass plate, an even edge. */
@@ -442,11 +459,7 @@
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
 }
-.place-studio-action {
-  flex: 1 1 0;
-}
 .place-studio-details-toggle {
-  flex: 0 0 auto;
   border-color: var(--glass-edge);
   background: transparent;
   color: var(--ink);
@@ -1420,8 +1433,9 @@
       inset 1px 0 0 var(--glass-sheen),
       -8px 0 30px rgba(0, 0, 0, 0.4);
   }
+  /* The side bar is too narrow for a row of actions: they stack, full width. */
   #place-studio-root .place-studio-bar-actions {
-    flex-wrap: wrap;
+    grid-auto-flow: row;
   }
 }
 
@@ -1475,9 +1489,6 @@
     padding: 6px 14px;
     font-size: 12px;
     white-space: nowrap;
-  }
-  .place-studio-action {
-    flex: 0 0 auto;
   }
 }
 

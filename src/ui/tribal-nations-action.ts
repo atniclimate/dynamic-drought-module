@@ -70,7 +70,8 @@ export function toggleTribalNationsGroup(): void {
 
 /**
  * One shared format for the group's intent-versus-outcome line, used by the
- * Brief-door hosts (via `wireTribalNationsHealth`) and the catalog card, so
+ * Brief-door hosts (in the button's accessible name, `wireTribalNationsToggle`)
+ * and the catalog card (its visible count), so
  * the wording can never drift between surfaces (the pill-text lesson).
  * "Selected" is intent (the bridge checkbox state, never a readiness
  * claim); "unavailable" is outcome (an agency that terminally failed).
@@ -81,7 +82,13 @@ export function formatGroupHealth(
   unavailable: number
 ): string {
   const base = `${selected} of ${total} selected`;
-  return unavailable > 0 ? `${base} · ${unavailable} unavailable` : base;
+  const fault = formatGroupFault(unavailable);
+  return fault ? `${base} · ${fault}` : base;
+}
+
+/** The fault half of the shared format alone: what the Brief-door fault line shows. */
+function formatGroupFault(unavailable: number): string {
+  return unavailable > 0 ? `${unavailable} unavailable` : '';
 }
 
 /**
@@ -95,26 +102,27 @@ export function formatGroupHealth(
  * owns its presentation), so it stays out of the unavailable count.
  */
 export function tribalNationsHealthText(): string {
-  const total = TRIBAL_NATIONS_GROUP.buttonActivates.length;
-  let selected = 0;
-  let unavailable = 0;
-  for (const key of TRIBAL_NATIONS_GROUP.buttonActivates) {
-    if (isChecked(key)) selected += 1;
-    if (registry.getStatus(key) === 'error') unavailable += 1;
-  }
-  return formatGroupHealth(selected, total, unavailable);
+  const keys = TRIBAL_NATIONS_GROUP.buttonActivates;
+  return formatGroupHealth(keys.filter((key) => isChecked(key)).length, keys.length, unavailableCount());
+}
+
+function unavailableCount(): number {
+  return TRIBAL_NATIONS_GROUP.buttonActivates.filter((key) => registry.getStatus(key) === 'error').length;
 }
 
 /**
- * Keep an element's text mirroring the group health (Codex final-pass
+ * Keep an element's text mirroring the group's FAULT (Codex final-pass
  * finding 2: a partial agency outage must be VISIBLE on the default Brief,
  * mobile at-hand, and brief-embed surfaces, not only inside the lazy
- * catalog's hidden details). Eager wiring only; both Brief-door hosts call
- * this once at build time.
+ * catalog's hidden details). The line reads "1 unavailable" while an agency
+ * has failed and is empty otherwise: the selected count left the display
+ * (visual uniformity wave 1, D5) and reads in the button's accessible name
+ * (`wireTribalNationsToggle`) and the catalog card. Eager wiring only; both
+ * Brief-door hosts call this once at build time.
  */
 export function wireTribalNationsHealth(el: HTMLElement): void {
   const update = (): void => {
-    el.textContent = tribalNationsHealthText();
+    el.textContent = formatGroupFault(unavailableCount());
   };
   update();
   onCheckedChange(update);
@@ -128,7 +136,9 @@ export function wireTribalNationsHealth(el: HTMLElement): void {
  * asserted states, not a static label). "Show" when the set is not fully
  * on (off, or only partially on from some other door); "Hide" once every
  * member is on. The visible label (the group's plain name) never changes;
- * only the accessible name and the pressed state track intent.
+ * only the accessible name and the pressed state track intent. The name
+ * ends with the group health in the shared format ("2 of 2 selected"), the
+ * count the display no longer shows.
  *
  * `descEl`, when given, also tracks the state: the pressed description
  * (`actionOffDescription`, "Turns off...") while every member is on, the
@@ -146,7 +156,7 @@ export function wireTribalNationsToggle(
     button.setAttribute('aria-pressed', String(pressed));
     button.setAttribute(
       'aria-label',
-      `${pressed ? 'Hide' : 'Show'} ${TRIBAL_NATIONS_GROUP.label} layers`
+      `${pressed ? 'Hide' : 'Show'} ${TRIBAL_NATIONS_GROUP.label} layers, ${tribalNationsHealthText()}`
     );
     if (descEl) {
       descEl.textContent = pressed
@@ -156,13 +166,16 @@ export function wireTribalNationsToggle(
   };
   update();
   onCheckedChange(update);
+  // The name carries the outcome too, so it follows the registry as the fault line does.
+  registry.on('change', update);
+  registry.on('status-change', update);
 }
 
 /**
  * Build the compact Brief-door action row: the visible "Tribal Nations"
- * button, its screen-reader effect description, and the visible group
- * health line. The caller owns placement (the impact panel inserts it
- * between its header and body).
+ * button, its screen-reader effect description, and the fault line under
+ * it, empty unless an agency is unavailable. The caller owns placement (the
+ * impact panel inserts it between its header and body).
  */
 export function buildTribalNationsBriefAction(): HTMLElement {
   const row = document.createElement('div');

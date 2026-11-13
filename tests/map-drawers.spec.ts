@@ -127,10 +127,14 @@ test.describe('the Key drawer (S30D D1 M11)', () => {
     await gotoApp(page, '?view=console');
 
     await openKeyDrawer(page);
-    // The default boot (Drought, Current) reads the tri-national NADM
-    // key, not the USDM key (nadmKey vs droughtKey; the latter serves
-    // only the outlook horizons).
-    await expect(page.locator('#map-key-details-toggle')).toHaveText('North America drought');
+    // Visual uniformity wave 1, D8 (2026-11-13): the toggle names the mode
+    // with the word on its button; the product is the drawer's own title
+    // line. Before: the toggle read 'North America drought'. The default
+    // boot (Drought, Current) reads the tri-national NADM key, not the USDM
+    // key (nadmKey vs droughtKey; the latter serves only the outlook
+    // horizons).
+    await expect(page.locator('#map-key-details-toggle')).toHaveText('Drought');
+    await expect(page.locator('#map-key .map-key-label')).toHaveText('North America drought');
 
     const heatButton = page.locator('.shell-cluster-btn[data-cluster="heat"]');
     await heatButton.click();
@@ -139,9 +143,11 @@ test.describe('the Key drawer (S30D D1 M11)', () => {
     // Persistence (design record section 2.6): the drawer never closed.
     await expect(page.locator('#map-key-details-toggle')).toHaveAttribute('aria-expanded', 'true');
     await expect(page.locator('#map-key-content')).toBeVisible();
-    // Re-render for the new mode: the toggle's own label text follows the
-    // new KeySpec (Heat), not the mode it opened under.
-    await expect(page.locator('#map-key-details-toggle')).toHaveText('HeatRisk');
+    // Re-render for the new mode: the toggle names the new mode (before D8
+    // it read 'HeatRisk'), and the drawer's title line follows the new
+    // KeySpec (Heat), not the mode it opened under.
+    await expect(page.locator('#map-key-details-toggle')).toHaveText('Extreme Heat');
+    await expect(page.locator('#map-key .map-key-label')).toHaveText('HeatRisk');
   });
 
   test('Escape closes the Key drawer and returns focus to its trigger', async ({ page }) => {

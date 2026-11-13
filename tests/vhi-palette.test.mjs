@@ -264,10 +264,13 @@ test('the Impact Briefing carries the plant-stress full text, with NOAA STAR\'s 
   // The fuel-risk vintage stays in the briefing whether or not Plant stress is switched on.
   const vintage = '<p>Wildfire Hazard Potential 2023 reflects landscape conditions as of the end of 2020 (USFS), so areas burned since then still show their earlier class.</p>';
   assert.ok(!renderMapTechnicalInformation().includes('Plant stress ground') && renderMapTechnicalInformation().includes(vintage));
-  // The cut is said in the briefing, and in five words in the Wildfire 3D key only.
+  // The cut is said in the briefing, and in five words at the end of the Wildfire 3D drape's caveat only.
   assert.ok(renderMapTechnicalInformation().includes('<p>In Wildfire 3D, fuel risk is not drawn inside current fire perimeters (NIFC).</p>'));
   const shade = await import('../src/config/whp-shade.ts');
   assert.equal(shade.WHP_3D_SHADE_QUALIFICATION, `${shade.WHP_SHADE_QUALIFICATION} Not drawn inside fire perimeters.`);
+  // Visual uniformity wave 1, D6: that caveat left the map key for the 3D information disclosure and for here, word for word.
+  assert.ok(renderMapTechnicalInformation().includes(`<p>${escapeHtml(shade.WHP_3D_SHADE_QUALIFICATION)}</p>`));
+  assert.ok(!readFileSync(new URL('../src/ui/map-key.ts', import.meta.url), 'utf8').includes('WHP_3D_SHADE_QUALIFICATION'));
   setPlantStressBriefing(drynessBriefing(frame('star-vhi')));
   const star = renderMapTechnicalInformation();
   for (const line of [DRYNESS_KEY.starTitle, 'Week 40: Oct 1 to Oct 7, 2026', notes.starMeaning, notes.starScope, notes.starRevision,

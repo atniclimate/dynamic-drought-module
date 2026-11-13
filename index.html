@@ -129,13 +129,13 @@
           <!-- DisplaySummary owns the live summary in the shell; do not duplicate it here. -->
           <div id="layers-studio-entry-host"></div>
           <div id="brief-secondary-actions"></div>
+          <!-- The chosen place's name. Its one briefing door is the region
+               row's (#region-briefing-btn), in Brief and Console alike. -->
           <div class="brief-selection-summary" id="brief-selection-summary" hidden>
             <p class="brief-place-context" id="brief-place-context" aria-live="polite" hidden>
               <span>Selected place</span>
               <strong id="brief-place-name"></strong>
             </p>
-            <p id="brief-selection-read"></p>
-            <button type="button" class="brief-full-report-link" id="brief-full-report-link">Open the full briefing</button>
           </div>
         </section>
         <div id="enso-flow-controls"></div>
@@ -255,6 +255,16 @@
           </details>
         </div>
 
+        <!-- The credit ends the scroll column; it is not pinned under it. -->
+        <footer class="sidebar-footer">
+          <p>A project of ATNI Climate (Affiliated Tribes of Northwest Indians)</p>
+          <p id="footer-credits"></p>
+          <p class="muted">
+            <a href="https://github.com/atniclimate/dynamic-drought-module" target="_blank" rel="noopener">atniclimate/dynamic-drought-module</a>
+            · <span id="footer-version"></span>
+          </p>
+        </footer>
+
       </div>
 
       <!-- The S4c panel-foot response: place-bearing map clicks rehost their
@@ -265,15 +275,6 @@
            OUTSIDE .sidebar-scroll so the no-scroll contract and the foot's
            own scroll region cannot fight. -->
       <div id="panel-response" class="panel-response"></div>
-
-      <footer class="sidebar-footer">
-        <p>A project of ATNI Climate (Affiliated Tribes of Northwest Indians)</p>
-        <p id="footer-credits"></p>
-        <p class="muted">
-          <a href="https://github.com/atniclimate/dynamic-drought-module" target="_blank" rel="noopener">atniclimate/dynamic-drought-module</a>
-          · <span id="footer-version"></span>
-        </p>
-      </footer>
     </aside>
 
     <button id="sidebar-expand" class="icon-btn sidebar-expand-btn" aria-label="Expand sidebar" hidden>

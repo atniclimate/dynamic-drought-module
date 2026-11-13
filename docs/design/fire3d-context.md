@@ -50,10 +50,16 @@ communication tool," *Fire Ecology* 20:45, 2024,
 DOI 10.1186/s42408-024-00278-8) found viewers consistently over-trust
 fire visualizations even when a physics model produced them, and warned
 that a self-service web page is where that correction "cannot occur or
-can be overlooked" if it lives only in documentation. Consequently the 3D
-Fire control renders an always-visible non-prediction disclosure
-(`FIRE3D_NON_PREDICTION_NOTE`) beside the always-visible coverage note,
-never a dismissible tooltip and never documentation-only.
+can be overlooked" if it lives only in documentation. Consequently the
+non-prediction disclosure (`FIRE3D_NON_PREDICTION_NOTE`) and the coverage
+note stay in the interface, one press from the 3D Fire control: they are the
+body of its "3D information" disclosure, which is closed by default, and the
+Impact Briefing's Technical information states the same limit. The
+owner's rule of 2026-10-13 keeps small print off the main display, so the
+two notes are no longer drawn open under the button (visual uniformity wave
+1, 2026-11-13); they are never a hover-only tooltip and never
+documentation-only. The Fuel risk key's caveat reads in the same disclosure
+while the drape is drawn.
 
 Embeds are the sharpest case: they hide the sidebar chrome (the control's
 notes and the legend panel) while a URL-named `fire3d=true` still drives

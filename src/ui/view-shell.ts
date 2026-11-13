@@ -437,9 +437,8 @@ function selectedHazardTitle(): string {
 
 /**
  * Keep every hazard-named briefing surface in step with the selected cluster
- * (UI-14f). Before this, the Brief head's accessible name followed the hazard
- * while the visible lede, the full-report door, and the mobile at-hand
- * landmark stayed hardcoded to drought on all four screens.
+ * (UI-14f): the Brief head's accessible name and the mobile at-hand
+ * landmark, which once stayed hardcoded to drought on every screen.
  *
  * The wording deliberately names the BRIEFING, not its contents: the panel
  * synthesizes several hazards behind one door, and the per-hazard depth
@@ -453,38 +452,18 @@ function syncBriefingTitle(): void {
   const label = `${title} briefing`;
   head.setAttribute('aria-label', label);
 
-  const reportLink = document.getElementById('brief-full-report-link');
-  if (reportLink) reportLink.textContent = `Open the full ${label}`;
-
   document
     .getElementById('sheet-at-hand')
     ?.setAttribute('aria-label', `At-hand ${title} answer`);
-
-  // The selected-place read names the briefing too, so it has to follow the
-  // same switch rather than waiting for the next selection change.
-  syncBriefSelection(getPlaceSelection());
 }
 
 /**
- * Fill and wire the generated portion of the post-time display block. Static
- * hosts in index.html preserve the El Nino / Southern Oscillation disclosure
- * across lazy hydration and keep #time-bar outside every regenerated region.
- */
-function buildBriefDisplay(): void {
-  // The shell island renders the live, status-derived DisplaySummary.
-  // Keeping a static sentence here would create a second, stale account
-  // of the map state.
-
-  document.getElementById('brief-full-report-link')?.addEventListener('click', () => {
-    const place = getPlaceSelection();
-    if (place) openImpactPanel(place.context);
-  });
-}
-
-/**
- * Reflect the existing place-selection store into the two Brief regions. This
- * is presentation only: the store, report opener, and URL behavior remain the
- * single authorities. No selected-place response is exposed before an explicit
+ * Reflect the existing place-selection store into the Brief display: the
+ * chosen place's name and nothing more. Its one briefing door is the region
+ * row's (#region-briefing-btn, src/ui/sidebar.ts), in Brief and Console alike;
+ * the sentence that repeated the name left the display (visual uniformity
+ * wave 1, D6). Presentation only: the store, report opener, and URL behavior
+ * remain the single authorities, and nothing shows before an explicit
  * selection exists.
  */
 function syncBriefSelection(selection: PlaceSelection | null): void {
@@ -494,22 +473,10 @@ function syncBriefSelection(selection: PlaceSelection | null): void {
   const context = document.getElementById('brief-place-context');
   const name = document.getElementById('brief-place-name');
   const selectionSummary = document.getElementById('brief-selection-summary');
-  const selectionRead = document.getElementById('brief-selection-read');
 
-  if (!selection) {
-    if (context) context.hidden = true;
-    if (name) name.textContent = '';
-    if (selectionSummary) selectionSummary.hidden = true;
-    if (selectionRead) selectionRead.textContent = '';
-    return;
-  }
-
-  if (name) name.textContent = selection.label;
-  if (context) context.hidden = false;
-  if (selectionRead) {
-    selectionRead.textContent = `The map and ${selectedHazardTitle()} briefing are focused on ${selection.label}.`;
-  }
-  if (selectionSummary) selectionSummary.hidden = false;
+  if (name) name.textContent = selection?.label ?? '';
+  if (context) context.hidden = selection === null;
+  if (selectionSummary) selectionSummary.hidden = selection === null;
 }
 
 /**
@@ -571,7 +538,8 @@ export function refreshLayersStudioEntry(): void {
   placeButton.type = 'button';
   placeButton.id = PLACE_STUDIO_ENTRY_ID;
   placeButton.className = 'brief-console-door place-studio-entry';
-  placeButton.textContent = 'PLACE';
+  // Mixed case, as the phone rail writes it (visual uniformity wave 1, D1).
+  placeButton.textContent = 'Place';
   // Accessible name only (W2-D7): no title that duplicates it verbatim.
   placeButton.setAttribute('aria-label', PLACE_STUDIO_ENTRY_TITLE);
   placeButton.addEventListener('click', () => {
@@ -583,7 +551,7 @@ export function refreshLayersStudioEntry(): void {
   layersButton.type = 'button';
   layersButton.id = LAYERS_STUDIO_ENTRY_ID;
   layersButton.className = 'brief-console-door layers-studio-entry';
-  layersButton.textContent = 'LAYERS';
+  layersButton.textContent = 'Layers';
   layersButton.setAttribute('aria-label', LAYERS_STUDIO_ENTRY_TITLE);
   layersButton.addEventListener('click', enterLayersStudio);
 
@@ -660,7 +628,6 @@ export function initViewShell(map: maplibregl.Map): void {
   document.addEventListener(PLACE_STUDIO_OPENER_EVENT, capturePlaceStudioOpener);
   onStudioRouteChange(syncPlaceStudioRoute);
   buildModeSwitch();
-  buildBriefDisplay();
   buildBriefHead(map);
   onCommittedSnapshotChange(syncBriefingTitle);
   syncBriefSelection(getPlaceSelection());

@@ -332,33 +332,30 @@
     height: auto;
   }
 
-  /* The pre-release badge rides the top of a track. It stays non-interactive. */
-  #app[data-sheet-detent] .edge-column .test-preview-badge {
-    flex: none;
-    width: var(--edge-size);
-    height: calc(var(--edge-badge-block) - var(--edge-gap));
-    margin: 0;
-    padding: 2px 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 8px;
-    letter-spacing: 0.03em;
-    line-height: 1.05;
-    text-align: center;
-    white-space: normal;
-    color: var(--ink-soft);
-    background: var(--glass-fill-solid);
-    border: 1px solid var(--glass-edge);
-    border-radius: var(--radius-md);
-  }
-
   /* Share and Reset have left this container for the column; on phones it
      holds only empty desktop seats. The full-site link-outs a framed page
      that is not an embed gets are the one thing left in it: the only route
      to the studios there. They sit beside the column, never under it. */
   #app[data-sheet-detent] .map-overlay-controls > :not(.studio-linkout-pair) {
     display: none;
+  }
+  /* The pre-release mark is off the column (visual uniformity wave 1, D8):
+     it keeps its home seat in this container and sits beside the scale
+     rulers, as on the desktop (180px is the rulers' reach plus 8px, the
+     desktop rule's own number in app.css), and rides the sheet's top edge
+     with them. It stays non-interactive and under the sheet's glass.
+     --edge-badge-block above stays declared for the planner's mirror test;
+     no rule reads it now. */
+  #app[data-sheet-detent] .map-overlay-controls > .test-preview-badge {
+    display: block;
+    position: fixed;
+    left: calc(env(safe-area-inset-left, 0px) + 180px);
+    bottom: calc(var(--sheet-lift, 0px) + 12px);
+    /* The phone's glass and ink, as the mark wore on the column: about
+       10:1 over a white map. */
+    color: var(--ink-soft);
+    background: var(--glass-fill-solid);
+    border-color: var(--glass-edge);
   }
   #app[data-sheet-detent] .map-overlay-controls {
     right: calc(
@@ -386,7 +383,7 @@
 /* Real glass where the browser can blur what is behind it. */
 @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   @media (max-width: 720px) {
-    #app[data-sheet-detent] .edge-column :is(.edge-body, .edge-fold, .test-preview-badge) {
+    #app[data-sheet-detent] .edge-column :is(.edge-body, .edge-fold) {
       background: var(--glass-fill) !important;
       -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
       backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));

@@ -313,7 +313,8 @@ test('an immediate browser Back still delivers the promised briefing (wave A fin
   await studio.locator('#place-type-watershed').click();
   await expect(studio.locator('#place-list .place-studio-option')).toHaveCount(2);
   await studio.locator('#place-studio-search').fill('Yakima');
-  await studio.locator('#place-list-panel .place-studio-option').click();
+  // The Watersheds group: a search lists every place type (visual uniformity D11), and "Yakima" also names two ecoregions.
+  await studio.locator('#place-list-panel [data-place-group="watershed"] .place-studio-option').click();
   await expect(studio.locator('#place-selection-title')).toHaveText('Yakima (HUC 1703)');
   await expect.poll(() => gateEngaged).toBe(true);
 

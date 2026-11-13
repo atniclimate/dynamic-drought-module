@@ -973,14 +973,15 @@ function updateRegionBriefingTrigger(regionKey: RegionKey | null | undefined): v
   // path keeps it the exact inverse of the door below.
   const note = document.getElementById('region-briefing-note');
   // A selected map place takes precedence over the region anchor (F3, the
-  // answer-first front door): the button becomes "See what this means" for the
-  // place the user just clicked.
+  // answer-first front door): the button becomes "Open briefing" for the
+  // place the user just clicked, the phone's and the Place studio's words.
   const place = getPlaceSelection();
   if (place) {
     btn.hidden = false;
-    btn.textContent = 'See what this means';
+    btn.textContent = 'Open briefing';
     // Mode-neutral on purpose: the door opens the same briefing in every mode.
-    btn.setAttribute('aria-label', `See what this means for ${place.label}`);
+    // The name starts with the visible words (WCAG 2.5.3) and adds the place.
+    btn.setAttribute('aria-label', `Open briefing for ${place.label}`);
     if (note) note.hidden = true;
     return;
   }
@@ -2122,7 +2123,7 @@ function wireSidebar(map: maplibregl.Map, onRegionSelect: (key: RegionKey) => vo
   });
 
   // The front-door trigger (F3): when a map place is selected or cleared, the
-  // region-briefing button relabels to "See what this means" for that place, or
+  // region-briefing button relabels to "Open briefing" for that place, or
   // reverts to the region anchor.
   onPlaceSelectionChange((place) => {
     updateRegionBriefingTrigger(STATE.currentRegion);

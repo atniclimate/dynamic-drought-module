@@ -150,6 +150,9 @@ async function stubWatersheds(
   });
 }
 
+/** The Watersheds group's rows: a search lists every place type (visual uniformity D11), and "Yakima" also names two ecoregions. */
+const WATERSHED_OPTION = '#place-list-panel [data-place-group="watershed"] .place-studio-option';
+
 async function openWatersheds(page: Page): Promise<void> {
   await gotoApp(page, '?view=brief&layers=places&studio=place');
   await page.locator('#place-type-watershed').click();
@@ -177,7 +180,7 @@ test.describe('PS-WATER provider and studio wiring', () => {
     }
 
     await page.locator('#place-studio-search').fill('Yakima');
-    await page.locator('#place-list-panel .place-studio-option').click();
+    await page.locator(WATERSHED_OPTION).click();
     await expect(
       page.locator('#place-brief-narrative .place-studio-selection-kind')
     ).toHaveText('Watershed (USGS Watershed Boundary Dataset)');
@@ -250,7 +253,7 @@ test.describe('PS-WATER provider and studio wiring', () => {
       const url = new URL(request.url());
       return url.searchParams.get('where') === "huc4='1703'";
     });
-    await page.locator('#place-list-panel .place-studio-option').click();
+    await page.locator(WATERSHED_OPTION).click();
     await pendingYakima;
 
     await page.locator('#place-studio-search').fill('Pacific Northwest');
