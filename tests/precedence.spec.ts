@@ -76,7 +76,10 @@ test.describe('precedence: boot, Reset and embed defaults (DR-109)', () => {
     await expect(app).toHaveAttribute('data-sheet-detent', 'half');
     await expect(panel).toHaveClass(/\bopen\b/);
     await expect(panel.locator('#impact-panel-title')).toHaveText('Washington');
-    await expect(regionSelect(page)).toHaveValue('region:national');
+    // The deep link's camera leaves the national framing for Washington, so the menu may show the neutral place
+    // entry (src/ui/sidebar.ts notePlaceView, as after a search pick) or, if its settle ran before the flight, the
+    // region: either way it names no other region. What this case proves is Reset, below.
+    await expect(regionSelect(page)).toHaveValue(/^(view:place|region:national)$/);
 
     // Reset re-selects the SAME region (national). Before the Q6 fix,
     // selectRegion's closeImpactPanel guard fires unconditionally whenever

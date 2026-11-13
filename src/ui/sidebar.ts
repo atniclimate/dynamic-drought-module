@@ -79,8 +79,10 @@ import { openStateBriefing } from '../state/deep-link';
 import {
   isCurrentBriefingIntent,
   nextBriefingIntent,
-  openImpactPanel
+  openImpactPanel,
+  closeImpactPanel
 } from './impact-panel';
+import { regionIsUnitedStates } from '../config/region-capability';
 import { getPlaceSelection, onPlaceSelectionChange } from '../state/place-selection';
 import type { PlaceSelection } from '../state/place-selection';
 import {
@@ -609,12 +611,18 @@ function selectRegion(
   const region: Region | undefined = REGIONS[key];
   if (!region) return;
 
-  // A region move no longer closes an open briefing (DR-256): the briefing
-  // belongs to the chosen place and reads wherever its sources cover it, so
-  // no region is one a briefing cannot be read in. (Before DR-256 an explicit
-  // move into an impactSynthesis 'none' region closed it; DR-109 Q6 kept a
-  // same-region Reset from doing so, which still holds.)
+  // A move between United States regions keeps an open briefing (DR-256: it
+  // reads wherever its sources cover the place). An EXPLICIT move into a region
+  // outside the United States (Canada, transboundary) still closes it, so a
+  // United States briefing is never presented or printed over a Canadian map;
+  // closing aborts hydration, clears the panel-owned place selection and drops
+  // the mobile at-hand briefing. DR-109 precedence D2 / Q6: never on the silent
+  // boot fit (`silent`) or a same-region Reset (`key === priorRegion`).
+  const priorRegion = STATE.currentRegion;
   dropPlaceView();
+  if (!silent && key !== priorRegion && !regionIsUnitedStates(key)) {
+    closeImpactPanel();
+  }
 
   // An EXPLICIT region choice (click or arrow-key; silent marks the boot
   // fit) is a legacy camera gesture: it clears the minimap camera and drops
