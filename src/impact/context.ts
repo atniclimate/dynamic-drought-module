@@ -129,7 +129,8 @@ let censusNamesLoad: Promise<ReadonlyMap<string, string>> | null = null;
  * resolves (a failure is retried on the next call), a Census area titles itself.
  */
 export function loadCensusNationNames(): Promise<ReadonlyMap<string, string>> {
-  censusNamesLoad ??= loadTribalCensusAreas().then((areas) => {
+  // The label map comes with it (one roster file): a title needs both to name a shared area.
+  censusNamesLoad ??= Promise.all([loadTribalCensusAreas(), loadCensusLabelNames()]).then(([areas]) => {
     censusNames = new Map(areas.map((area) => [area.name, gatedCensusName(area)]));
     return censusNames;
   }, (err: unknown) => {
@@ -191,6 +192,8 @@ function resolveTitle(kind: BoundaryKind, props: GeoJsonProperties): string {
       if (!censusLabelsLoad) loadCensusLabelNames().catch(() => {});
       const area = censusArea(props);
       const nations = censusLabels?.get(firstString(props, ['AIANNH']) ?? '');
+      // An area several Nations share names every one, as its map label does; each of its search rows names one.
+      if (nations && nations.length > 1) return nations.join('; ');
       return censusNames?.get(area) ?? (nations?.length ? nations.join('; ') : area);
     }
     case 'treaty':

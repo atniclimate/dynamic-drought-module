@@ -116,6 +116,26 @@
  *        land area under its Nation, so a joined name would list a Nation
  *        that does not exist. Those keep the BIA label; the Census label on
  *        the map names every Nation.
+ *    11. The label map names the search's Census rows too (2026-11-13: a
+ *        count against the Federal Register list found 81 of 573 Nations
+ *        with no search row under their own name, 54 of them named on the
+ *        map; the search reached 22 of the 81 only under a Census title or
+ *        another Nation's row and 59 not at all; and 32 labelled areas had a
+ *        click still titled with the Census name, Cherokee OTSA among
+ *        them). A Census row on its Census name whose area the label map
+ *        names with one Nation takes that Nation. Then every Nation the label
+ *        map names that still has no trusted search row (BIA or Census) gets
+ *        one Census row per area that names it, so an area several Nations
+ *        share (Wind River, the Kiowa-Comanche-Apache-Fort Sill Apache OTSA)
+ *        is found under each Nation's own name.
+ *    12. The Census total adds up. Every federal Census area is labelled, or
+ *        is on one of two short lists below, and the build FAILS on an area
+ *        that is on none: CENSUS_LABEL_HELD (one band or place among several
+ *        in one Nation's Federal Register name; the form of its label waits
+ *        for the maintainer) and CENSUS_LABEL_NO_NATION (no name in the
+ *        Federal Register list or the US EPA Tribal Areas tables names the
+ *        area). The crosswalk carries both lists (`censusUnlabelled`) and
+ *        the meta carries the federal total (`censusFederalCount`).
  *   Every emitted area row carries a `provenance` field ("safe-match" or
  *   "lar-label"; "bia-authoritative" is reserved for a future BIA-published
  *   association). The runtime search (src/ui/search-controller.ts) renders
@@ -505,6 +525,48 @@ const CENSUS_LABEL_CONFIRMED = [
   ['8160', 'Eastern Chickahominy', ['Chickahominy Indian Tribe-Eastern Division']]
 ];
 
+// HELD LABEL ROWS (rule 12): federal Census areas left without a label on
+// purpose, by Census code, with the Nation whose Federal Register name lists
+// the area's band or place among several. Naming the whole Nation on one
+// band's land would claim it for that band, and the form of a band's own
+// label is the maintainer's to rule. A row leaves this list when its area is
+// labelled; the build fails on a row whose area is labelled or gone.
+const MINNESOTA_CHIPPEWA =
+  'Minnesota Chippewa Tribe, Minnesota (Six component reservations: Bois Forte Band (Nett Lake); Fond du Lac Band; ' +
+  'Grand Portage Band; Leech Lake Band; Mille Lacs Band; White Earth Band)';
+const TE_MOAK =
+  'Te-Moak Tribe of Western Shoshone Indians of Nevada (Four constituent bands: Battle Mountain Band; Elko Band; ' +
+  'South Fork Band; and Wells Band)';
+const WASHOE =
+  'Washoe Tribe of Nevada & California (Carson Colony, Dresslerville Colony, Woodfords Community, Stewart Community, ' +
+  '& Washoe Ranches)';
+const PIT_RIVER =
+  'Pit River Tribe, California (includes XL Ranch, Big Bend, Likely, Lookout, Montgomery Creek, and Roaring Creek Rancherias)';
+const CAPITAN_GRANDE =
+  'Capitan Grande Band of Diegueno Mission Indians of California (Barona Group of Capitan Grande Band of Mission ' +
+  'Indians of the Barona Reservation, California; Viejas (Baron Long) Group of Capitan Grande Band of Mission ' +
+  'Indians of the Viejas Reservation, California)';
+const PRIBILOF =
+  'Pribilof Islands Aleut Communities of St. Paul & St. George Islands (St. George Island and Saint Paul Island)';
+const VENETIE = 'Native Village of Venetie Tribal Government (Arctic Village and Village of Venetie)';
+const CENSUS_LABEL_HELD = [
+  ...['0335', '1125', '1355', '1940', '2270', '4595'].map((code) => [code, MINNESOTA_CHIPPEWA]),
+  ...['0165', '1005', '3930', '4580'].map((code) => [code, TE_MOAK]),
+  ...['0510', '0940', '3980', '4560', '4665'].map((code) => [code, WASHOE]),
+  ...['0215', '1955', '1980', '2330', '3185', '4680'].map((code) => [code, PIT_RIVER]),
+  ...['0155', '4500'].map((code) => [code, CAPITAN_GRANDE]),
+  ...['1575', '2850'].map((code) => [code, 'Passamaquoddy Tribe']),
+  ...['7340', '7390'].map((code) => [code, PRIBILOF]),
+  ...['6140', '7725'].map((code) => [code, VENETIE])
+];
+
+// Federal Census areas no source names a Nation for (rule 12): Canyon
+// Village, Lake Minchumina, Port Alsworth and Uyak, each an Alaska Native
+// village statistical area. No Federal Register name holds the place name,
+// and the US EPA Tribal Areas tables (read 2026-11-13) carry no row for any
+// of the four. They keep their Census name and no label.
+const CENSUS_LABEL_NO_NATION = ['6257', '6850', '7263', '7705'];
+
 function norm(s) {
   return s
     .toLowerCase()
@@ -647,6 +709,70 @@ export function censusLabelAreas(features, roster, confirmed = CENSUS_LABEL_CONF
     labels.set(code, nations);
   }
   return Object.fromEntries([...labels].sort(([a], [b]) => a.localeCompare(b)));
+}
+
+/**
+ * Rule 11 in the header: the search's Census rows, named by the label map.
+ * `larTrusted` holds the Nations (label form) a trusted BIA row already
+ * finds. Exported for the test.
+ */
+export function censusSearchRows(censusAreas, features, roster, labelAreas, larTrusted) {
+  const fullName = new Map(roster.map((name) => [labelName(name), name]));
+  const censusName = new Map(
+    features.map((f) => f.attributes ?? {}).map((a) => [a.AIANNH, noEmDash(String(a.NAME ?? '').trim())])
+  );
+  const rows = censusAreas.map((row) => {
+    const nations = labelAreas[row.aiannh];
+    return row.provenance === 'census-label' && nations?.length === 1
+      ? { ...row, displayName: fullName.get(nations[0]) ?? nations[0], provenance: 'safe-match' }
+      : row;
+  });
+  const found = new Set([
+    ...larTrusted,
+    ...rows.filter((row) => row.provenance === 'safe-match').map((row) => labelName(row.displayName))
+  ]);
+  for (const [code, nations] of Object.entries(labelAreas)) {
+    for (const nation of nations) {
+      // `found` is not added to here: a Nation with no row is found under every area that names it.
+      if (found.has(nation)) continue;
+      rows.push({ aiannh: code, name: censusName.get(code), displayName: fullName.get(nation) ?? nation, provenance: 'safe-match' });
+    }
+  }
+  return rows.sort((a, b) => a.displayName.localeCompare(b.displayName) || a.aiannh.localeCompare(b.aiannh));
+}
+
+/**
+ * Rule 12 in the header: the federal Census areas with no label, each held
+ * for a Nation or named by no source, and the federal total they and the
+ * labelled areas add up to. Throws on an unlabelled area on neither list and
+ * on a listed row whose area is labelled or gone. Exported for the test.
+ */
+export function censusUnlabelled(features, roster, labelAreas, held = CENSUS_LABEL_HELD, noNation = CENSUS_LABEL_NO_NATION) {
+  const rosterLabels = new Set(roster.map(labelName));
+  const federal = features
+    .map((f) => f.attributes ?? {})
+    .filter((a) => CENSUS_FED_LEGAL.has(a.AIANNHCC) || CENSUS_FED_STAT.has(a.AIANNHCC));
+  const open = new Map(federal.filter((a) => !labelAreas[a.AIANNH]).map((a) => [a.AIANNH, noEmDash(String(a.NAME ?? '').trim())]));
+  const heldFor = new Map(held);
+  for (const code of [...heldFor.keys(), ...noNation]) {
+    if (!open.has(code)) {
+      throw new Error(`unlabelled-area row ${code} is REOPENED: its area now carries a label or is no longer a federal Census area. Remove the row; do not ship this build.`);
+    }
+  }
+  const rows = [...open].sort(([a], [b]) => a.localeCompare(b)).map(([aiannh, name]) => {
+    const nation = heldFor.get(aiannh) ?? null;
+    if (nation && !rosterLabels.has(labelName(nation))) {
+      throw new Error(`held label row ${aiannh} (${name}) is REOPENED: "${nation}" is not a name in the Federal Register roster.`);
+    }
+    if (!nation && !noNation.includes(aiannh)) {
+      throw new Error(
+        `federal Census area ${aiannh} (${name}) carries no Nation's name and is on neither unlabelled list. ` +
+          'Confirm its Nation (rule 9) or list it with its reason (rule 12); do not ship this build.'
+      );
+    }
+    return { aiannh, name, nation };
+  });
+  return { federalCount: federal.length, rows };
 }
 
 /**
@@ -803,16 +929,18 @@ async function main() {
         ')'
     );
   }
-  const { censusAreas, censusMatched, censusLabel, censusAmbiguous } = censusPass(
+  const { censusAreas: matcherRows, censusMatched, censusAmbiguous } = censusPass(
     censusJson.features,
     roster,
     new Set(rosterNoLar)
   );
-  console.log(
-    `[tribal-roster] Census areas: ${censusAreas.length} (${censusMatched.length} safe-matched)`
-  );
   const labelAreas = censusLabelAreas(censusJson.features, roster);
   console.log(`[tribal-roster] Census areas labelled with a Nation's name: ${Object.keys(labelAreas).length}`);
+  const unlabelled = censusUnlabelled(censusJson.features, roster, labelAreas);
+  console.log(
+    `[tribal-roster] federal Census areas: ${unlabelled.federalCount} = ${Object.keys(labelAreas).length} labelled + ` +
+      `${unlabelled.rows.filter((row) => row.nation).length} held + ${unlabelled.rows.filter((row) => !row.nation).length} no source names`
+  );
 
   // Rule 10: a BIA label row that one same-name Census reservation names takes its Nations.
   const larCensus = larNamesFromCensus(larLabelFallback, censusJson.features, labelAreas);
@@ -825,6 +953,20 @@ async function main() {
   larLabelFallback.splice(0, larLabelFallback.length, ...larLabelFallback.filter((n) => !larCensus.has(n)));
   ambiguous.splice(0, ambiguous.length, ...ambiguous.filter((a) => !larCensus.has(a.larName)));
   console.log(`[tribal-roster] BIA land areas named through their Census reservation (rule 10): ${larCensus.size}`);
+
+  // Rule 11: the label map names the search's Census rows too.
+  const censusAreas = censusSearchRows(
+    matcherRows,
+    censusJson.features,
+    roster,
+    labelAreas,
+    new Set(areas.filter((area) => area.provenance === 'safe-match').map((area) => labelName(area.displayName)))
+  );
+  const censusLabel = censusAreas.filter((row) => row.provenance === 'census-label').map((row) => row.name);
+  console.log(
+    `[tribal-roster] Census search rows: ${censusAreas.length} (${censusMatched.length} by the name matcher, ` +
+      `${censusAreas.length - censusLabel.length - censusMatched.length} more through the label map, ${censusLabel.length} on the Census name)`
+  );
 
   areas.sort((a, b) => a.displayName.localeCompare(b.displayName));
 
@@ -844,7 +986,9 @@ async function main() {
       'the live Census service): every OTSA, TDSA and ANVSA, plus reservation and trust ' +
       'land areas only for Tribes AIAN-LAR does not locate, so a Nation can appear both ' +
       'as a LAR land area and as a Census statistical area. provenance census-label keeps ' +
-      'the Census name verbatim. labelAreas: Census AIANNH code to the Federal Register ' +
+      'the Census name verbatim. A statistical area the label map names with one Nation ' +
+      'carries that Nation, and a Nation the label map names that has no other row has one ' +
+      'row per area that names it, so an area several Nations share has several rows. labelAreas: Census AIANNH code to the Federal Register ' +
       'names the Tribal Lands layer labels that area with (every federal row the Census ' +
       'matcher resolves, reservations included, plus the rows confirmed against the US EPA ' +
       'Tribal Areas tables, which publish the Census area id beside the Tribe; "(previously ' +
@@ -870,6 +1014,7 @@ async function main() {
       censusSource: 'US Census Bureau TIGERweb AIANNH layer 47 (names only)',
       censusAreaCount: censusAreas.length,
       censusSafeMatchCount: censusMatched.length,
+      censusFederalCount: unlabelled.federalCount,
       labelAreaCount: Object.keys(labelAreas).length,
       labelConfirmedCount: CENSUS_LABEL_CONFIRMED.filter(([code]) => labelAreas[code]).length
     },
@@ -895,9 +1040,14 @@ async function main() {
       'recognized Tribes with no matched land area in AIAN-LAR (landless Tribes, Alaska ' +
       'Native villages, or differently-named areas). censusMatched: Census AIANNH ' +
       'areas matched to a roster name under rule 7 of the build script, with the rule ' +
-      'that matched. censusLabel: Census areas that keep the Census name (no unique match). ' +
-      'censusAmbiguous: the subset of censusLabel with several candidates or a ' +
-      'maintainer-curated known-ambiguous BASENAME (rule field), candidates listed.',
+      'that matched. censusLabel: Census search rows that keep the Census name (no one Nation ' +
+      'named). censusAmbiguous: the Census areas the name matcher met with several candidates or a ' +
+      'maintainer-curated known-ambiguous BASENAME (rule field), candidates listed. ' +
+      'censusUnlabelled: the federal Census areas the Tribal Lands layer draws no Nation name ' +
+      'on; with the labelled areas they add up to meta.censusFederalCount. A row with a nation ' +
+      'is one band or place among several in that Nation\'s Federal Register name, held until ' +
+      'the form of its label is settled; a row with nation null is an area no name in the ' +
+      'Federal Register list or the US EPA Tribal Areas tables names.',
     meta: rosterOut.meta,
     matched: matchedPairs,
     larLabel: larLabelFallback,
@@ -905,7 +1055,8 @@ async function main() {
     rosterNoLar,
     censusMatched,
     censusLabel,
-    censusAmbiguous
+    censusAmbiguous,
+    censusUnlabelled: unlabelled.rows
   };
 
   // The runtime index ships in public/data (fetched lazily on first search).

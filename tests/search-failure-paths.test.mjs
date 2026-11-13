@@ -415,9 +415,21 @@ test('a formal Oklahoma Nation name lists its Census area first, never a land ar
   const choctaw = hits('Choctaw Nation of Oklahoma');
   assert.equal(choctaw[0]?.id, `census:${code('Choctaw OTSA')}`);
   assert.ok(!choctaw.some((i) => i.label.includes('Jena Band')), 'the Louisiana Band is not listed');
-  assert.equal(hits('Sac and Fox Nation')[0]?.id, `census:${code('Sac and Fox OTSA')}`);
+  // Two Nations carry "Sac & Fox Nation": the bare phrase lists both under their own names, the State settles it.
+  assert.equal(hits('Sac and Fox Nation, Oklahoma')[0]?.id, `census:${code('Sac and Fox OTSA')}`);
+  assert.deepEqual(
+    hits('Sac and Fox Nation').map((i) => i.label).filter((label) => label.startsWith('Sac & Fox Nation')).sort(),
+    ['Sac & Fox Nation of Missouri in Kansas and Nebraska', 'Sac & Fox Nation, Oklahoma']
+  );
   assert.equal(hits('Iowa Tribe of Oklahoma')[0]?.id, `census:${code('Iowa OTSA')}`);
   assert.equal(hits('Cherokee Nation')[0]?.id, `census:${code('Cherokee OTSA')}`);
+  assert.equal(hits('Cherokee Nation')[0]?.label, 'Cherokee Nation', 'under the Nation\'s name, the Census title beside it');
+  // An area several Nations share: each Nation answers to its own name, the area's row to the area's.
+  assert.deepEqual(hits('comanche').map((i) => i.label), ['Comanche Nation, Oklahoma', 'Kiowa-Comanche-Apache-Fort Sill Apache OTSA']);
+  assert.deepEqual(hits('Northern Arapaho').map((i) => i.label), ['Northern Arapaho Tribe of the Wind River Reservation, Wyoming']);
+  const windRiver = hits('wind river').map((i) => i.label);
+  for (const nation of ['Eastern Shoshone', 'Northern Arapaho']) assert.ok(windRiver.some((label) => label.startsWith(nation)), nation);
+  assert.equal(new Set(items.map((i) => i.id)).size, items.length, 'every row has its own id');
 
   // Opening that row asks the Census service for the Kickapoo OTSA's AIANNH code.
   answers.set(CENSUS_URL, () => json(fc));

@@ -1,5 +1,5 @@
 {
-  "_comment": "Crosswalk audit for maintainer review (U3b; safe matcher per D-0.7.0-026). matched: land area LARNAME to the formal Federal Register Tribe name, with the safety rule that matched it; rows carrying a confirmed field were explicitly maintainer-confirmed against a flagged historical-renaming collision on the parallel-LAR premise (D-0.7.0-026b; parallelLar names the LAR row held by the other claimant Nation). larLabel: land areas that keep the BIA land-area label (no unambiguous match; NOT mapped to a guessed Tribe name, per hard rules 5 and 6 and D-0.7.0-026); this is the maintainer residue list. ambiguous: the subset of larLabel rows where several roster names contained the LARNAME phrase OR the maintainer curated the row as known-ambiguous (D-0.7.0-026a; curated rows carry a rule field naming that ruling; the candidates are listed; automation refuses to pick). rosterNoLar: federally recognized Tribes with no matched land area in AIAN-LAR (landless Tribes, Alaska Native villages, or differently-named areas). censusMatched: Census AIANNH areas matched to a roster name under rule 7 of the build script, with the rule that matched. censusLabel: Census areas that keep the Census name (no unique match). censusAmbiguous: the subset of censusLabel with several candidates or a maintainer-curated known-ambiguous BASENAME (rule field), candidates listed.",
+  "_comment": "Crosswalk audit for maintainer review (U3b; safe matcher per D-0.7.0-026). matched: land area LARNAME to the formal Federal Register Tribe name, with the safety rule that matched it; rows carrying a confirmed field were explicitly maintainer-confirmed against a flagged historical-renaming collision on the parallel-LAR premise (D-0.7.0-026b; parallelLar names the LAR row held by the other claimant Nation). larLabel: land areas that keep the BIA land-area label (no unambiguous match; NOT mapped to a guessed Tribe name, per hard rules 5 and 6 and D-0.7.0-026); this is the maintainer residue list. ambiguous: the subset of larLabel rows where several roster names contained the LARNAME phrase OR the maintainer curated the row as known-ambiguous (D-0.7.0-026a; curated rows carry a rule field naming that ruling; the candidates are listed; automation refuses to pick). rosterNoLar: federally recognized Tribes with no matched land area in AIAN-LAR (landless Tribes, Alaska Native villages, or differently-named areas). censusMatched: Census AIANNH areas matched to a roster name under rule 7 of the build script, with the rule that matched. censusLabel: Census search rows that keep the Census name (no one Nation named). censusAmbiguous: the Census areas the name matcher met with several candidates or a maintainer-curated known-ambiguous BASENAME (rule field), candidates listed. censusUnlabelled: the federal Census areas the Tribal Lands layer draws no Nation name on; with the labelled areas they add up to meta.censusFederalCount. A row with a nation is one band or place among several in that Nation's Federal Register name, held until the form of its label is settled; a row with nation null is an area no name in the Federal Register list or the US EPA Tribal Areas tables names.",
   "meta": {
     "rosterSource": "Federal Register 2026-01899 (2026-01-30)",
     "landAreaSource": "BIA AIAN-LAR FeatureServer (distinct LARNAME)",
@@ -11,8 +11,9 @@
     "safeMatchCount": 287,
     "larLabelCount": 48,
     "censusSource": "US Census Bureau TIGERweb AIANNH layer 47 (names only)",
-    "censusAreaCount": 272,
+    "censusAreaCount": 299,
     "censusSafeMatchCount": 232,
+    "censusFederalCount": 578,
     "labelAreaCount": 545,
     "labelConfirmedCount": 93
   },
@@ -3302,46 +3303,17 @@
     }
   ],
   "censusLabel": [
-    "Pitkas Point ANVSA",
-    "Naknek ANVSA",
-    "Mountain Village ANVSA",
-    "Andreafsky ANVSA",
-    "Chistochina ANVSA",
-    "St. Paul ANVSA",
-    "Kalskag ANVSA",
+    "Arctic Village ANVSA",
+    "Caddo-Wichita-Delaware OTSA",
+    "Canyon Village ANVSA",
+    "Citizen Potawatomi Nation-Absentee Shawnee OTSA",
+    "Kiowa-Comanche-Apache-Fort Sill Apache OTSA",
+    "Lake Minchumina ANVSA",
     "Port Alsworth ANVSA",
     "St. George ANVSA",
-    "Council ANVSA",
-    "Chignik ANVSA",
-    "Lake Minchumina ANVSA",
-    "Lesnoi ANVSA",
-    "Galena ANVSA",
-    "Arctic Village ANVSA",
-    "Canyon Village ANVSA",
-    "Venetie ANVSA",
-    "Stevens Village ANVSA",
-    "Bethel ANVSA",
-    "Toksook Bay ANVSA",
-    "St. Michael ANVSA",
-    "Mentasta Lake ANVSA",
-    "Russian Mission ANVSA",
-    "Seminole OTSA",
-    "Kiowa-Comanche-Apache-Fort Sill Apache OTSA",
-    "Citizen Potawatomi Nation-Absentee Shawnee OTSA",
-    "Sac and Fox OTSA",
-    "Ottawa OTSA",
-    "Iowa OTSA",
-    "Cherokee OTSA",
-    "Caddo-Wichita-Delaware OTSA",
-    "Kickapoo OTSA",
-    "Ponca OTSA",
-    "Choctaw OTSA",
-    "Chickahominy TDSA",
-    "Cayuga Nation TDSA",
-    "Eastern Chickahominy TDSA",
+    "St. Paul ANVSA",
     "Uyak ANVSA",
-    "Dillingham ANVSA",
-    "White Mountain ANVSA"
+    "Venetie ANVSA"
   ],
   "censusAmbiguous": [
     {
@@ -3494,6 +3466,173 @@
         "White Mountain Apache Tribe of the Fort Apache Reservation, Arizona",
         "Native Village of White Mountain"
       ]
+    }
+  ],
+  "censusUnlabelled": [
+    {
+      "aiannh": "0155",
+      "name": "Barona Reservation and Off-Reservation Trust Land",
+      "nation": "Capitan Grande Band of Diegueno Mission Indians of California (Barona Group of Capitan Grande Band of Mission Indians of the Barona Reservation, California; Viejas (Baron Long) Group of Capitan Grande Band of Mission Indians of the Viejas Reservation, California)"
+    },
+    {
+      "aiannh": "0165",
+      "name": "Battle Mountain Reservation and Off-Reservation Trust Land",
+      "nation": "Te-Moak Tribe of Western Shoshone Indians of Nevada (Four constituent bands: Battle Mountain Band; Elko Band; South Fork Band; and Wells Band)"
+    },
+    {
+      "aiannh": "0215",
+      "name": "Big Bend Rancheria",
+      "nation": "Pit River Tribe, California (includes XL Ranch, Big Bend, Likely, Lookout, Montgomery Creek, and Roaring Creek Rancherias)"
+    },
+    {
+      "aiannh": "0335",
+      "name": "Bois Forte Reservation and Off-Reservation Trust Land",
+      "nation": "Minnesota Chippewa Tribe, Minnesota (Six component reservations: Bois Forte Band (Nett Lake); Fond du Lac Band; Grand Portage Band; Leech Lake Band; Mille Lacs Band; White Earth Band)"
+    },
+    {
+      "aiannh": "0510",
+      "name": "Carson Colony",
+      "nation": "Washoe Tribe of Nevada & California (Carson Colony, Dresslerville Colony, Woodfords Community, Stewart Community, & Washoe Ranches)"
+    },
+    {
+      "aiannh": "0940",
+      "name": "Dresslerville Colony",
+      "nation": "Washoe Tribe of Nevada & California (Carson Colony, Dresslerville Colony, Woodfords Community, Stewart Community, & Washoe Ranches)"
+    },
+    {
+      "aiannh": "1005",
+      "name": "Elko Colony",
+      "nation": "Te-Moak Tribe of Western Shoshone Indians of Nevada (Four constituent bands: Battle Mountain Band; Elko Band; South Fork Band; and Wells Band)"
+    },
+    {
+      "aiannh": "1125",
+      "name": "Fond du Lac Reservation and Off-Reservation Trust Land",
+      "nation": "Minnesota Chippewa Tribe, Minnesota (Six component reservations: Bois Forte Band (Nett Lake); Fond du Lac Band; Grand Portage Band; Leech Lake Band; Mille Lacs Band; White Earth Band)"
+    },
+    {
+      "aiannh": "1355",
+      "name": "Grand Portage Reservation and Off-Reservation Trust Land",
+      "nation": "Minnesota Chippewa Tribe, Minnesota (Six component reservations: Bois Forte Band (Nett Lake); Fond du Lac Band; Grand Portage Band; Leech Lake Band; Mille Lacs Band; White Earth Band)"
+    },
+    {
+      "aiannh": "1575",
+      "name": "Indian Township Reservation",
+      "nation": "Passamaquoddy Tribe"
+    },
+    {
+      "aiannh": "1940",
+      "name": "Leech Lake Reservation and Off-Reservation Trust Land",
+      "nation": "Minnesota Chippewa Tribe, Minnesota (Six component reservations: Bois Forte Band (Nett Lake); Fond du Lac Band; Grand Portage Band; Leech Lake Band; Mille Lacs Band; White Earth Band)"
+    },
+    {
+      "aiannh": "1955",
+      "name": "Likely Rancheria",
+      "nation": "Pit River Tribe, California (includes XL Ranch, Big Bend, Likely, Lookout, Montgomery Creek, and Roaring Creek Rancherias)"
+    },
+    {
+      "aiannh": "1980",
+      "name": "Lookout Rancheria",
+      "nation": "Pit River Tribe, California (includes XL Ranch, Big Bend, Likely, Lookout, Montgomery Creek, and Roaring Creek Rancherias)"
+    },
+    {
+      "aiannh": "2270",
+      "name": "Mille Lacs Reservation and Off-Reservation Trust Land",
+      "nation": "Minnesota Chippewa Tribe, Minnesota (Six component reservations: Bois Forte Band (Nett Lake); Fond du Lac Band; Grand Portage Band; Leech Lake Band; Mille Lacs Band; White Earth Band)"
+    },
+    {
+      "aiannh": "2330",
+      "name": "Montgomery Creek Rancheria",
+      "nation": "Pit River Tribe, California (includes XL Ranch, Big Bend, Likely, Lookout, Montgomery Creek, and Roaring Creek Rancherias)"
+    },
+    {
+      "aiannh": "2850",
+      "name": "Pleasant Point Reservation",
+      "nation": "Passamaquoddy Tribe"
+    },
+    {
+      "aiannh": "3185",
+      "name": "Roaring Creek Rancheria",
+      "nation": "Pit River Tribe, California (includes XL Ranch, Big Bend, Likely, Lookout, Montgomery Creek, and Roaring Creek Rancherias)"
+    },
+    {
+      "aiannh": "3930",
+      "name": "South Fork Reservation and Off-Reservation Trust Land",
+      "nation": "Te-Moak Tribe of Western Shoshone Indians of Nevada (Four constituent bands: Battle Mountain Band; Elko Band; South Fork Band; and Wells Band)"
+    },
+    {
+      "aiannh": "3980",
+      "name": "Stewart Community",
+      "nation": "Washoe Tribe of Nevada & California (Carson Colony, Dresslerville Colony, Woodfords Community, Stewart Community, & Washoe Ranches)"
+    },
+    {
+      "aiannh": "4500",
+      "name": "Viejas Reservation and Off-Reservation Trust Land",
+      "nation": "Capitan Grande Band of Diegueno Mission Indians of California (Barona Group of Capitan Grande Band of Mission Indians of the Barona Reservation, California; Viejas (Baron Long) Group of Capitan Grande Band of Mission Indians of the Viejas Reservation, California)"
+    },
+    {
+      "aiannh": "4560",
+      "name": "Washoe Ranches Trust Land",
+      "nation": "Washoe Tribe of Nevada & California (Carson Colony, Dresslerville Colony, Woodfords Community, Stewart Community, & Washoe Ranches)"
+    },
+    {
+      "aiannh": "4580",
+      "name": "Wells Colony",
+      "nation": "Te-Moak Tribe of Western Shoshone Indians of Nevada (Four constituent bands: Battle Mountain Band; Elko Band; South Fork Band; and Wells Band)"
+    },
+    {
+      "aiannh": "4595",
+      "name": "White Earth Reservation and Off-Reservation Trust Land",
+      "nation": "Minnesota Chippewa Tribe, Minnesota (Six component reservations: Bois Forte Band (Nett Lake); Fond du Lac Band; Grand Portage Band; Leech Lake Band; Mille Lacs Band; White Earth Band)"
+    },
+    {
+      "aiannh": "4665",
+      "name": "Woodfords Community",
+      "nation": "Washoe Tribe of Nevada & California (Carson Colony, Dresslerville Colony, Woodfords Community, Stewart Community, & Washoe Ranches)"
+    },
+    {
+      "aiannh": "4680",
+      "name": "XL Ranch Rancheria",
+      "nation": "Pit River Tribe, California (includes XL Ranch, Big Bend, Likely, Lookout, Montgomery Creek, and Roaring Creek Rancherias)"
+    },
+    {
+      "aiannh": "6140",
+      "name": "Arctic Village ANVSA",
+      "nation": "Native Village of Venetie Tribal Government (Arctic Village and Village of Venetie)"
+    },
+    {
+      "aiannh": "6257",
+      "name": "Canyon Village ANVSA",
+      "nation": null
+    },
+    {
+      "aiannh": "6850",
+      "name": "Lake Minchumina ANVSA",
+      "nation": null
+    },
+    {
+      "aiannh": "7263",
+      "name": "Port Alsworth ANVSA",
+      "nation": null
+    },
+    {
+      "aiannh": "7340",
+      "name": "St. George ANVSA",
+      "nation": "Pribilof Islands Aleut Communities of St. Paul & St. George Islands (St. George Island and Saint Paul Island)"
+    },
+    {
+      "aiannh": "7390",
+      "name": "St. Paul ANVSA",
+      "nation": "Pribilof Islands Aleut Communities of St. Paul & St. George Islands (St. George Island and Saint Paul Island)"
+    },
+    {
+      "aiannh": "7705",
+      "name": "Uyak ANVSA",
+      "nation": null
+    },
+    {
+      "aiannh": "7725",
+      "name": "Venetie ANVSA",
+      "nation": "Native Village of Venetie Tribal Government (Arctic Village and Village of Venetie)"
     }
   ]
 }

@@ -225,10 +225,9 @@ test('a BIA land area on its BIA label takes the one Nation of its one same-name
   for (const open of ['Choctaw', 'Iowa', 'Santa Rosa', 'Wind River', 'Celilo']) assert.equal(shipped[open].provenance, 'lar-label', open);
 });
 
-test('the shipped roster labels at least 540 areas: Creek OTSA, Warm Springs, both Nations of Wind River', () => {
+test('the shipped roster labels Creek OTSA, Warm Springs and both Nations of Wind River (the count is tests/truth-counts.test.mjs)', () => {
   const labels = ROSTER.labelAreas;
   assert.ok(labels && typeof labels === 'object', 'the roster carries labelAreas');
-  assert.ok(Object.keys(labels).length >= 540, `${Object.keys(labels).length} labelled areas`);
   const creek = ROSTER.censusAreas.find((a) => a.name === 'Creek OTSA');
   assert.deepEqual(labels[creek.aiannh], ['The Muscogee (Creek) Nation']);
   assert.deepEqual(labels['4545'], ['Confederated Tribes of the Warm Springs Reservation of Oregon']);

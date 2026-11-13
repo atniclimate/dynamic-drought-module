@@ -159,15 +159,23 @@ function loadTribal(): Promise<SearchItem[]> {
   tribalInFlight = (async () => {
     try {
       const [areas, census] = await Promise.all([loadTribalRoster(), loadTribalCensusAreas()]);
+      const seen = new Map<string, number>();
+      // Areas with a row on their own Census name: there, a Nation's row answers to the Nation's name alone,
+      // so "comanche" does not also list the three Nations that share the Comanche Nation's statistical area.
+      const ownRow = new Set(census.filter((a) => gatedCensusName(a) === a.name).map((a) => a.aiannh));
       const censusItems: SearchItem[] = census.map((a) => {
         const label = gatedCensusName(a);
+        const areaName = label !== a.name && ownRow.has(a.aiannh) ? '' : `${a.name} `;
+        // An area several Nations share has one row per Nation: the first keeps the plain id, later ones a suffix.
+        const nth = seen.get(a.aiannh) ?? 0;
+        seen.set(a.aiannh, nth + 1);
         return {
           kind: 'tribal' as const,
-          id: `census:${a.aiannh}`,
+          id: `census:${a.aiannh}${nth ? `:${nth}` : ''}`,
           label,
           ...(label !== a.name ? { sublabel: `Census area: ${a.name}` } : {}),
           // An OTSA is an Oklahoma Tribal Statistical Area: "of Oklahoma" finds it, never a same-named area elsewhere.
-          haystack: foldSearchText(`${a.name} ${label}${a.name.endsWith(' OTSA') ? ' oklahoma' : ''}`)
+          haystack: foldSearchText(`${areaName}${label}${a.name.endsWith(' OTSA') ? ' oklahoma' : ''}`)
         };
       });
       const items: SearchItem[] = areas.map((a) => {
@@ -446,7 +454,7 @@ function selectResult(map: maplibregl.Map, item: SearchItem): void {
   // The row's gated label titles the selection (a formal Nation name is never abbreviated).
   const labels = { title: item.label, ...(item.sublabel ? { areaLabel: item.sublabel } : {}) };
   if (item.id.startsWith('census:')) {
-    void locateCensusArea(map, item.id.slice('census:'.length), labels);
+    void locateCensusArea(map, item.id.slice('census:'.length, 'census:'.length + 4), labels);
     return;
   }
   void locateTribalLandArea(map, item.id, labels);

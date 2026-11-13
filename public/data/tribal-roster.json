@@ -1,5 +1,5 @@
 {
-  "_comment": "NAMES ONLY search index for Tribal land areas (U3b, D-STD-012; safe matcher and provenance gate per D-0.7.0-026). No polygons or coordinates: a search selection queries the live AIAN-LAR service for the extent at selection time. provenance safe-match: displayName is the formal Federal Register Tribe name, matched under the safety rules in scripts/build-tribal-roster.mjs. provenance lar-label: displayName is the BIA land-area label verbatim (no Tribe mapping is guessed). censusAreas: Census AIANNH federal areas (names only; a search selection queries the live Census service): every OTSA, TDSA and ANVSA, plus reservation and trust land areas only for Tribes AIAN-LAR does not locate, so a Nation can appear both as a LAR land area and as a Census statistical area. provenance census-label keeps the Census name verbatim. labelAreas: Census AIANNH code to the Federal Register names the Tribal Lands layer labels that area with (every federal row the Census matcher resolves, reservations included, plus the rows confirmed against the US EPA Tribal Areas tables, which publish the Census area id beside the Tribe; \"(previously listed as ...)\" dropped). Regenerate with `npm run build:tribal-roster`.",
+  "_comment": "NAMES ONLY search index for Tribal land areas (U3b, D-STD-012; safe matcher and provenance gate per D-0.7.0-026). No polygons or coordinates: a search selection queries the live AIAN-LAR service for the extent at selection time. provenance safe-match: displayName is the formal Federal Register Tribe name, matched under the safety rules in scripts/build-tribal-roster.mjs. provenance lar-label: displayName is the BIA land-area label verbatim (no Tribe mapping is guessed). censusAreas: Census AIANNH federal areas (names only; a search selection queries the live Census service): every OTSA, TDSA and ANVSA, plus reservation and trust land areas only for Tribes AIAN-LAR does not locate, so a Nation can appear both as a LAR land area and as a Census statistical area. provenance census-label keeps the Census name verbatim. A statistical area the label map names with one Nation carries that Nation, and a Nation the label map names that has no other row has one row per area that names it, so an area several Nations share has several rows. labelAreas: Census AIANNH code to the Federal Register names the Tribal Lands layer labels that area with (every federal row the Census matcher resolves, reservations included, plus the rows confirmed against the US EPA Tribal Areas tables, which publish the Census area id beside the Tribe; \"(previously listed as ...)\" dropped). Regenerate with `npm run build:tribal-roster`.",
   "meta": {
     "rosterSource": "Federal Register 2026-01899 (2026-01-30)",
     "landAreaSource": "BIA AIAN-LAR FeatureServer (distinct LARNAME)",
@@ -11,8 +11,9 @@
     "safeMatchCount": 287,
     "larLabelCount": 48,
     "censusSource": "US Census Bureau TIGERweb AIANNH layer 47 (names only)",
-    "censusAreaCount": 272,
+    "censusAreaCount": 299,
     "censusSafeMatchCount": 232,
+    "censusFederalCount": 578,
     "labelAreaCount": 545,
     "labelConfirmedCount": 93
   },
@@ -1695,6 +1696,12 @@
   ],
   "censusAreas": [
     {
+      "aiannh": "5600",
+      "name": "Citizen Potawatomi Nation-Absentee Shawnee OTSA",
+      "displayName": "Absentee-Shawnee Tribe of Indians of Oklahoma",
+      "provenance": "safe-match"
+    },
+    {
       "aiannh": "6735",
       "name": "King Cove ANVSA",
       "displayName": "Agdaagux Tribe of King Cove",
@@ -1743,12 +1750,6 @@
       "provenance": "safe-match"
     },
     {
-      "aiannh": "6095",
-      "name": "Andreafsky ANVSA",
-      "displayName": "Andreafsky ANVSA",
-      "provenance": "census-label"
-    },
-    {
       "aiannh": "6100",
       "name": "Angoon ANVSA",
       "displayName": "Angoon Community Association",
@@ -1761,10 +1762,22 @@
       "provenance": "safe-match"
     },
     {
+      "aiannh": "5720",
+      "name": "Kiowa-Comanche-Apache-Fort Sill Apache OTSA",
+      "displayName": "Apache Tribe of Oklahoma",
+      "provenance": "safe-match"
+    },
+    {
       "aiannh": "6140",
       "name": "Arctic Village ANVSA",
       "displayName": "Arctic Village ANVSA",
       "provenance": "census-label"
+    },
+    {
+      "aiannh": "6975",
+      "name": "Mountain Village ANVSA",
+      "displayName": "Asa'carsarmiut Tribe",
+      "provenance": "safe-match"
     },
     {
       "aiannh": "6190",
@@ -1773,15 +1786,15 @@
       "provenance": "safe-match"
     },
     {
-      "aiannh": "6205",
-      "name": "Bethel ANVSA",
-      "displayName": "Bethel ANVSA",
-      "provenance": "census-label"
-    },
-    {
       "aiannh": "6235",
       "name": "Birch Creek ANVSA",
       "displayName": "Birch Creek Tribe",
+      "provenance": "safe-match"
+    },
+    {
+      "aiannh": "5540",
+      "name": "Caddo-Wichita-Delaware OTSA",
+      "displayName": "Caddo Nation of Oklahoma",
       "provenance": "safe-match"
     },
     {
@@ -1799,8 +1812,8 @@
     {
       "aiannh": "8100",
       "name": "Cayuga Nation TDSA",
-      "displayName": "Cayuga Nation TDSA",
-      "provenance": "census-label"
+      "displayName": "Cayuga Nation",
+      "provenance": "safe-match"
     },
     {
       "aiannh": "6265",
@@ -1809,10 +1822,16 @@
       "provenance": "safe-match"
     },
     {
+      "aiannh": "6325",
+      "name": "Chistochina ANVSA",
+      "displayName": "Cheesh-Na Tribe",
+      "provenance": "safe-match"
+    },
+    {
       "aiannh": "5550",
       "name": "Cherokee OTSA",
-      "displayName": "Cherokee OTSA",
-      "provenance": "census-label"
+      "displayName": "Cherokee Nation",
+      "provenance": "safe-match"
     },
     {
       "aiannh": "6285",
@@ -1829,8 +1848,14 @@
     {
       "aiannh": "8150",
       "name": "Chickahominy TDSA",
-      "displayName": "Chickahominy TDSA",
-      "provenance": "census-label"
+      "displayName": "Chickahominy Indian Tribe",
+      "provenance": "safe-match"
+    },
+    {
+      "aiannh": "8160",
+      "name": "Eastern Chickahominy TDSA",
+      "displayName": "Chickahominy Indian Tribe-Eastern Division",
+      "provenance": "safe-match"
     },
     {
       "aiannh": "6290",
@@ -1841,8 +1866,8 @@
     {
       "aiannh": "6295",
       "name": "Chignik ANVSA",
-      "displayName": "Chignik ANVSA",
-      "provenance": "census-label"
+      "displayName": "Chignik Bay Tribal Council",
+      "provenance": "safe-match"
     },
     {
       "aiannh": "6305",
@@ -1875,18 +1900,6 @@
       "provenance": "safe-match"
     },
     {
-      "aiannh": "6325",
-      "name": "Chistochina ANVSA",
-      "displayName": "Chistochina ANVSA",
-      "provenance": "census-label"
-    },
-    {
-      "aiannh": "5590",
-      "name": "Choctaw OTSA",
-      "displayName": "Choctaw OTSA",
-      "provenance": "census-label"
-    },
-    {
       "aiannh": "6340",
       "name": "Chuloonawick ANVSA",
       "displayName": "Chuloonawick Native Village",
@@ -1905,6 +1918,18 @@
       "provenance": "census-label"
     },
     {
+      "aiannh": "5600",
+      "name": "Citizen Potawatomi Nation-Absentee Shawnee OTSA",
+      "displayName": "Citizen Potawatomi Nation, Oklahoma",
+      "provenance": "safe-match"
+    },
+    {
+      "aiannh": "5720",
+      "name": "Kiowa-Comanche-Apache-Fort Sill Apache OTSA",
+      "displayName": "Comanche Nation, Oklahoma",
+      "provenance": "safe-match"
+    },
+    {
       "aiannh": "0770",
       "name": "Coos, Lower Umpqua, and Siuslaw Reservation and Off-Reservation Trust Land",
       "displayName": "Confederated Tribes of the Coos, Lower Umpqua and Siuslaw Indians",
@@ -1917,12 +1942,6 @@
       "provenance": "safe-match"
     },
     {
-      "aiannh": "6380",
-      "name": "Council ANVSA",
-      "displayName": "Council ANVSA",
-      "provenance": "census-label"
-    },
-    {
       "aiannh": "6385",
       "name": "Craig ANVSA",
       "displayName": "Craig Tribal Association",
@@ -1931,8 +1950,14 @@
     {
       "aiannh": "6405",
       "name": "Dillingham ANVSA",
-      "displayName": "Dillingham ANVSA",
-      "provenance": "census-label"
+      "displayName": "Curyung Tribal Council",
+      "provenance": "safe-match"
+    },
+    {
+      "aiannh": "5540",
+      "name": "Caddo-Wichita-Delaware OTSA",
+      "displayName": "Delaware Nation, Oklahoma",
+      "provenance": "safe-match"
     },
     {
       "aiannh": "6420",
@@ -1941,15 +1966,21 @@
       "provenance": "safe-match"
     },
     {
-      "aiannh": "8160",
-      "name": "Eastern Chickahominy TDSA",
-      "displayName": "Eastern Chickahominy TDSA",
-      "provenance": "census-label"
+      "aiannh": "3015",
+      "name": "Qualla Boundary and Off-Reservation Trust Land",
+      "displayName": "Eastern Band of Cherokee Indians",
+      "provenance": "safe-match"
     },
     {
       "aiannh": "5640",
       "name": "Eastern Shawnee OTSA",
       "displayName": "Eastern Shawnee Tribe of Oklahoma",
+      "provenance": "safe-match"
+    },
+    {
+      "aiannh": "4610",
+      "name": "Wind River Reservation and Off-Reservation Trust Land",
+      "displayName": "Eastern Shoshone Tribe of the Wind River Reservation, Wyoming",
       "provenance": "safe-match"
     },
     {
@@ -1983,10 +2014,16 @@
       "provenance": "safe-match"
     },
     {
-      "aiannh": "6525",
-      "name": "Galena ANVSA",
-      "displayName": "Galena ANVSA",
-      "provenance": "census-label"
+      "aiannh": "1270",
+      "name": "Fort Sill Apache Indian Reservation",
+      "displayName": "Fort Sill-Chiricahua-Warm Springs-Apache Tribe (previously listed as Fort Sill Apache Tribe of Oklahoma)",
+      "provenance": "safe-match"
+    },
+    {
+      "aiannh": "5720",
+      "name": "Kiowa-Comanche-Apache-Fort Sill Apache OTSA",
+      "displayName": "Fort Sill-Chiricahua-Warm Springs-Apache Tribe (previously listed as Fort Sill Apache Tribe of Oklahoma)",
+      "provenance": "safe-match"
     },
     {
       "aiannh": "6560",
@@ -2010,6 +2047,12 @@
       "aiannh": "6590",
       "name": "Hoonah ANVSA",
       "displayName": "Hoonah Indian Association",
+      "provenance": "safe-match"
+    },
+    {
+      "aiannh": "1530",
+      "name": "Houlton Maliseet Reservation and Off-Reservation Trust Land",
+      "displayName": "Houlton Band of Maliseet Indians",
       "provenance": "safe-match"
     },
     {
@@ -2043,10 +2086,22 @@
       "provenance": "safe-match"
     },
     {
+      "aiannh": "1590",
+      "name": "Iowa (KS-NE) Reservation and Off-Reservation Trust Land",
+      "displayName": "Iowa Tribe of Kansas and Nebraska",
+      "provenance": "safe-match"
+    },
+    {
       "aiannh": "5670",
       "name": "Iowa OTSA",
-      "displayName": "Iowa OTSA",
-      "provenance": "census-label"
+      "displayName": "Iowa Tribe of Oklahoma",
+      "provenance": "safe-match"
+    },
+    {
+      "aiannh": "7315",
+      "name": "Russian Mission ANVSA",
+      "displayName": "Iqugmiut Traditional Council",
+      "provenance": "safe-match"
     },
     {
       "aiannh": "6650",
@@ -2065,12 +2120,6 @@
       "name": "Kaktovik ANVSA",
       "displayName": "Kaktovik Village (aka Barter Island)",
       "provenance": "safe-match"
-    },
-    {
-      "aiannh": "6685",
-      "name": "Kalskag ANVSA",
-      "displayName": "Kalskag ANVSA",
-      "provenance": "census-label"
     },
     {
       "aiannh": "6710",
@@ -2099,13 +2148,19 @@
     {
       "aiannh": "5700",
       "name": "Kickapoo OTSA",
-      "displayName": "Kickapoo OTSA",
-      "provenance": "census-label"
+      "displayName": "Kickapoo Tribe of Oklahoma",
+      "provenance": "safe-match"
     },
     {
       "aiannh": "6740",
       "name": "King Salmon ANVSA",
       "displayName": "King Salmon Tribe",
+      "provenance": "safe-match"
+    },
+    {
+      "aiannh": "5720",
+      "name": "Kiowa-Comanche-Apache-Fort Sill Apache OTSA",
+      "displayName": "Kiowa Tribe (previously listed as Kiowa Indian Tribe of Oklahoma)",
       "provenance": "safe-match"
     },
     {
@@ -2151,12 +2206,6 @@
       "provenance": "census-label"
     },
     {
-      "aiannh": "6860",
-      "name": "Lesnoi ANVSA",
-      "displayName": "Lesnoi ANVSA",
-      "provenance": "census-label"
-    },
-    {
       "aiannh": "6865",
       "name": "Levelock ANVSA",
       "displayName": "Levelock Village",
@@ -2166,6 +2215,12 @@
       "aiannh": "6875",
       "name": "Lime Village ANVSA",
       "displayName": "Lime Village",
+      "provenance": "safe-match"
+    },
+    {
+      "aiannh": "6525",
+      "name": "Galena ANVSA",
+      "displayName": "Louden Tribe (previously listed as Galena Village (aka Louden Village))",
       "provenance": "safe-match"
     },
     {
@@ -2201,13 +2256,19 @@
     {
       "aiannh": "6945",
       "name": "Mentasta Lake ANVSA",
-      "displayName": "Mentasta Lake ANVSA",
-      "provenance": "census-label"
+      "displayName": "Mentasta Traditional Council",
+      "provenance": "safe-match"
     },
     {
       "aiannh": "5730",
       "name": "Miami OTSA",
       "displayName": "Miami Tribe of Oklahoma",
+      "provenance": "safe-match"
+    },
+    {
+      "aiannh": "2300",
+      "name": "Mississippi Choctaw Reservation and Off-Reservation Trust Land",
+      "displayName": "Mississippi Band of Choctaw Indians",
       "provenance": "safe-match"
     },
     {
@@ -2223,16 +2284,10 @@
       "provenance": "safe-match"
     },
     {
-      "aiannh": "6975",
-      "name": "Mountain Village ANVSA",
-      "displayName": "Mountain Village ANVSA",
-      "provenance": "census-label"
-    },
-    {
       "aiannh": "6990",
       "name": "Naknek ANVSA",
-      "displayName": "Naknek ANVSA",
-      "provenance": "census-label"
+      "displayName": "Naknek Native Village",
+      "provenance": "safe-match"
     },
     {
       "aiannh": "6015",
@@ -2322,6 +2377,12 @@
       "aiannh": "6335",
       "name": "Chuathbaluk ANVSA",
       "displayName": "Native Village of Chuathbaluk (Russian Mission, Kuskokwim)",
+      "provenance": "safe-match"
+    },
+    {
+      "aiannh": "6380",
+      "name": "Council ANVSA",
+      "displayName": "Native Village of Council",
       "provenance": "safe-match"
     },
     {
@@ -2643,6 +2704,12 @@
       "provenance": "safe-match"
     },
     {
+      "aiannh": "7375",
+      "name": "St. Michael ANVSA",
+      "displayName": "Native Village of Saint Michael",
+      "provenance": "safe-match"
+    },
+    {
       "aiannh": "7415",
       "name": "Savoonga ANVSA",
       "displayName": "Native Village of Savoonga",
@@ -2682,6 +2749,12 @@
       "aiannh": "7505",
       "name": "South Naknek ANVSA",
       "displayName": "Native Village of South Naknek (previously listed as South Naknek Village)",
+      "provenance": "safe-match"
+    },
+    {
+      "aiannh": "7520",
+      "name": "Stevens Village ANVSA",
+      "displayName": "Native Village of Stevens",
       "provenance": "safe-match"
     },
     {
@@ -2751,6 +2824,12 @@
       "provenance": "safe-match"
     },
     {
+      "aiannh": "7745",
+      "name": "White Mountain ANVSA",
+      "displayName": "Native Village of White Mountain",
+      "provenance": "safe-match"
+    },
+    {
       "aiannh": "7030",
       "name": "Nenana ANVSA",
       "displayName": "Nenana Native Association",
@@ -2811,15 +2890,33 @@
       "provenance": "safe-match"
     },
     {
+      "aiannh": "4610",
+      "name": "Wind River Reservation and Off-Reservation Trust Land",
+      "displayName": "Northern Arapaho Tribe of the Wind River Reservation, Wyoming",
+      "provenance": "safe-match"
+    },
+    {
       "aiannh": "7115",
       "name": "Northway ANVSA",
       "displayName": "Northway Village",
       "provenance": "safe-match"
     },
     {
+      "aiannh": "2505",
+      "name": "Northwestern Shoshone Reservation",
+      "displayName": "Northwestern Band of the Shoshone Nation",
+      "provenance": "safe-match"
+    },
+    {
       "aiannh": "7130",
       "name": "Nulato ANVSA",
       "displayName": "Nulato Village",
+      "provenance": "safe-match"
+    },
+    {
+      "aiannh": "7625",
+      "name": "Toksook Bay ANVSA",
+      "displayName": "Nunakauyarmiut Tribe",
       "provenance": "safe-match"
     },
     {
@@ -2832,6 +2929,12 @@
       "aiannh": "2555",
       "name": "Oneida Indian Nation Reservation",
       "displayName": "Oneida Indian Nation",
+      "provenance": "safe-match"
+    },
+    {
+      "aiannh": "2560",
+      "name": "Oneida (WI) Reservation and Off-Reservation Trust Land",
+      "displayName": "Oneida Nation",
       "provenance": "safe-match"
     },
     {
@@ -2865,6 +2968,12 @@
       "provenance": "safe-match"
     },
     {
+      "aiannh": "6205",
+      "name": "Bethel ANVSA",
+      "displayName": "Orutsararmiut Traditional Native Council",
+      "provenance": "safe-match"
+    },
+    {
       "aiannh": "7175",
       "name": "Oscarville ANVSA",
       "displayName": "Oscarville Traditional Village",
@@ -2879,8 +2988,20 @@
     {
       "aiannh": "5770",
       "name": "Ottawa OTSA",
-      "displayName": "Ottawa OTSA",
-      "provenance": "census-label"
+      "displayName": "Ottawa Tribe of Oklahoma",
+      "provenance": "safe-match"
+    },
+    {
+      "aiannh": "1070",
+      "name": "Fallon Paiute-Shoshone Colony and Off-Reservation Trust Land",
+      "displayName": "Paiute-Shoshone Tribe of the Fallon Reservation and Colony, Nevada",
+      "provenance": "safe-match"
+    },
+    {
+      "aiannh": "1075",
+      "name": "Fallon Paiute-Shoshone Reservation and Off-Reservation Trust Land",
+      "displayName": "Paiute-Shoshone Tribe of the Fallon Reservation and Colony, Nevada",
+      "provenance": "safe-match"
     },
     {
       "aiannh": "5780",
@@ -2915,8 +3036,8 @@
     {
       "aiannh": "7235",
       "name": "Pitkas Point ANVSA",
-      "displayName": "Pitkas Point ANVSA",
-      "provenance": "census-label"
+      "displayName": "Pitka's Point Traditional Council",
+      "provenance": "safe-match"
     },
     {
       "aiannh": "7245",
@@ -2933,8 +3054,14 @@
     {
       "aiannh": "5800",
       "name": "Ponca OTSA",
-      "displayName": "Ponca OTSA",
-      "provenance": "census-label"
+      "displayName": "Ponca Tribe of Indians of Oklahoma",
+      "provenance": "safe-match"
+    },
+    {
+      "aiannh": "2900",
+      "name": "Ponca (NE) Trust Land",
+      "displayName": "Ponca Tribe of Nebraska",
+      "provenance": "safe-match"
     },
     {
       "aiannh": "7263",
@@ -2946,6 +3073,12 @@
       "aiannh": "7260",
       "name": "Portage Creek ANVSA",
       "displayName": "Portage Creek Village (aka Ohgsenakale)",
+      "provenance": "safe-match"
+    },
+    {
+      "aiannh": "2980",
+      "name": "Prairie Band of Potawatomi Nation Reservation and Off-Reservation Trust Land",
+      "displayName": "Prairie Band Potawatomi Nation",
       "provenance": "safe-match"
     },
     {
@@ -2985,16 +3118,22 @@
       "provenance": "safe-match"
     },
     {
-      "aiannh": "7315",
-      "name": "Russian Mission ANVSA",
-      "displayName": "Russian Mission ANVSA",
-      "provenance": "census-label"
+      "aiannh": "3285",
+      "name": "Sac and Fox Nation Reservation and Off-Reservation Trust Land",
+      "displayName": "Sac & Fox Nation of Missouri in Kansas and Nebraska",
+      "provenance": "safe-match"
     },
     {
       "aiannh": "5820",
       "name": "Sac and Fox OTSA",
-      "displayName": "Sac and Fox OTSA",
-      "provenance": "census-label"
+      "displayName": "Sac & Fox Nation, Oklahoma",
+      "provenance": "safe-match"
+    },
+    {
+      "aiannh": "3280",
+      "name": "Sac and Fox/Meskwaki Settlement and Off-Reservation Trust Land",
+      "displayName": "Sac & Fox Tribe of the Mississippi in Iowa",
+      "provenance": "safe-match"
     },
     {
       "aiannh": "7400",
@@ -3009,16 +3148,22 @@
       "provenance": "safe-match"
     },
     {
+      "aiannh": "3525",
+      "name": "Santa Rosa Reservation",
+      "displayName": "Santa Rosa Band of Cahuilla Indians, California",
+      "provenance": "safe-match"
+    },
+    {
+      "aiannh": "3520",
+      "name": "Santa Rosa Rancheria",
+      "displayName": "Santa Rosa Indian Community of the Santa Rosa Rancheria, California",
+      "provenance": "safe-match"
+    },
+    {
       "aiannh": "7435",
       "name": "Seldovia ANVSA",
       "displayName": "Seldovia Village Tribe",
       "provenance": "safe-match"
-    },
-    {
-      "aiannh": "5830",
-      "name": "Seminole OTSA",
-      "displayName": "Seminole OTSA",
-      "provenance": "census-label"
     },
     {
       "aiannh": "5835",
@@ -3030,6 +3175,12 @@
       "aiannh": "7440",
       "name": "Shageluk ANVSA",
       "displayName": "Shageluk Native Village",
+      "provenance": "safe-match"
+    },
+    {
+      "aiannh": "3695",
+      "name": "Shawnee Trust Land",
+      "displayName": "Shawnee Tribe",
       "provenance": "safe-match"
     },
     {
@@ -3075,12 +3226,6 @@
       "provenance": "census-label"
     },
     {
-      "aiannh": "7375",
-      "name": "St. Michael ANVSA",
-      "displayName": "St. Michael ANVSA",
-      "provenance": "census-label"
-    },
-    {
       "aiannh": "7390",
       "name": "St. Paul ANVSA",
       "displayName": "St. Paul ANVSA",
@@ -3093,12 +3238,6 @@
       "provenance": "safe-match"
     },
     {
-      "aiannh": "7520",
-      "name": "Stevens Village ANVSA",
-      "displayName": "Stevens Village ANVSA",
-      "provenance": "census-label"
-    },
-    {
       "aiannh": "6795",
       "name": "Kodiak ANVSA",
       "displayName": "Sun'aq Tribe of Kodiak",
@@ -3108,6 +3247,12 @@
       "aiannh": "7530",
       "name": "Takotna ANVSA",
       "displayName": "Takotna Village",
+      "provenance": "safe-match"
+    },
+    {
+      "aiannh": "6860",
+      "name": "Lesnoi ANVSA",
+      "displayName": "Tangirnaq Native Village",
       "provenance": "safe-match"
     },
     {
@@ -3123,6 +3268,12 @@
       "provenance": "safe-match"
     },
     {
+      "aiannh": "5590",
+      "name": "Choctaw OTSA",
+      "displayName": "The Choctaw Nation of Oklahoma",
+      "provenance": "safe-match"
+    },
+    {
       "aiannh": "5620",
       "name": "Creek OTSA",
       "displayName": "The Muscogee (Creek) Nation",
@@ -3135,10 +3286,10 @@
       "provenance": "safe-match"
     },
     {
-      "aiannh": "7625",
-      "name": "Toksook Bay ANVSA",
-      "displayName": "Toksook Bay ANVSA",
-      "provenance": "census-label"
+      "aiannh": "5830",
+      "name": "Seminole OTSA",
+      "displayName": "The Seminole Nation of Oklahoma",
+      "provenance": "safe-match"
     },
     {
       "aiannh": "5860",
@@ -3243,6 +3394,12 @@
       "provenance": "safe-match"
     },
     {
+      "aiannh": "6685",
+      "name": "Kalskag ANVSA",
+      "displayName": "Village of Kalskag",
+      "provenance": "safe-match"
+    },
+    {
       "aiannh": "6690",
       "name": "Kaltag ANVSA",
       "displayName": "Village of Kaltag",
@@ -3297,10 +3454,10 @@
       "provenance": "safe-match"
     },
     {
-      "aiannh": "7745",
-      "name": "White Mountain ANVSA",
-      "displayName": "White Mountain ANVSA",
-      "provenance": "census-label"
+      "aiannh": "5540",
+      "name": "Caddo-Wichita-Delaware OTSA",
+      "displayName": "Wichita and Affiliated Tribes (Wichita, Keechi, Waco, & Tawakonie), Oklahoma",
+      "provenance": "safe-match"
     },
     {
       "aiannh": "7755",
@@ -3324,6 +3481,12 @@
       "aiannh": "4710",
       "name": "Yavapai-Prescott Reservation",
       "displayName": "Yavapai-Prescott Indian Tribe",
+      "provenance": "safe-match"
+    },
+    {
+      "aiannh": "6095",
+      "name": "Andreafsky ANVSA",
+      "displayName": "Yupiit of Andreafski",
       "provenance": "safe-match"
     }
   ],
