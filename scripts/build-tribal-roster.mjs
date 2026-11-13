@@ -111,7 +111,11 @@
  *        over the Census area the BIA row answers). Never a statistical area
  *        (OTSA, TDSA, ANVSA): a BIA "Choctaw" or "Iowa" land area outside
  *        Oklahoma is not the Oklahoma Nation's. Two same-name Census areas
- *        (Santa Rosa) settle nothing. Several Nations join with "; ".
+ *        (Santa Rosa) settle nothing, and neither does an area several
+ *        Nations share (Wind River, Celilo): the place catalog lists each
+ *        land area under its Nation, so a joined name would list a Nation
+ *        that does not exist. Those keep the BIA label; the Census label on
+ *        the map names every Nation.
  *   Every emitted area row carries a `provenance` field ("safe-match" or
  *   "lar-label"; "bia-authoritative" is reserved for a future BIA-published
  *   association). The runtime search (src/ui/search-controller.ts) renders
@@ -647,8 +651,8 @@ export function censusLabelAreas(features, roster, confirmed = CENSUS_LABEL_CONF
 
 /**
  * Rule 10 in the header: the BIA land areas still on their BIA label that one
- * same-name federal Census reservation or trust land names. Returns LARNAME to
- * the Nations' names joined by "; ". Exported for the test.
+ * same-name federal Census reservation or trust land names with exactly one
+ * Nation. Returns LARNAME to that Nation's name. Exported for the test.
  */
 export function larNamesFromCensus(larLabelNames, features, labelAreas) {
   const legal = new Map();
@@ -660,7 +664,7 @@ export function larNamesFromCensus(larLabelNames, features, labelAreas) {
   const named = new Map();
   for (const larName of larLabelNames) {
     const codes = legal.get(norm(larName)) ?? [];
-    if (codes.length === 1 && labelAreas[codes[0]]) named.set(larName, labelAreas[codes[0]].join('; '));
+    if (codes.length === 1 && labelAreas[codes[0]]?.length === 1) named.set(larName, labelAreas[codes[0]][0]);
   }
   return named;
 }

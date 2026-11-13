@@ -8,8 +8,8 @@
     "generated": "2026-11-13",
     "rosterCount": 573,
     "landAreaCount": 335,
-    "safeMatchCount": 289,
-    "larLabelCount": 46,
+    "safeMatchCount": 287,
+    "larLabelCount": 48,
     "censusSource": "US Census Bureau TIGERweb AIANNH layer 47 (names only)",
     "censusAreaCount": 272,
     "censusSafeMatchCount": 232,
@@ -1337,11 +1337,6 @@
       "rule": "census-reservation-name (rule 10)"
     },
     {
-      "larName": "Celilo",
-      "tribe": "Confederated Tribes and Bands of the Yakama Nation; Confederated Tribes of the Umatilla Indian Reservation; Confederated Tribes of the Warm Springs Reservation of Oregon",
-      "rule": "census-reservation-name (rule 10)"
-    },
-    {
       "larName": "Coushatta",
       "tribe": "Coushatta Tribe of Louisiana",
       "rule": "census-reservation-name (rule 10)"
@@ -1457,11 +1452,6 @@
       "rule": "census-reservation-name (rule 10)"
     },
     {
-      "larName": "Wind River",
-      "tribe": "Eastern Shoshone Tribe of the Wind River Reservation, Wyoming; Northern Arapaho Tribe of the Wind River Reservation, Wyoming",
-      "rule": "census-reservation-name (rule 10)"
-    },
-    {
       "larName": "Yurok",
       "tribe": "Yurok Tribe of the Yurok Reservation, California",
       "rule": "census-reservation-name (rule 10)"
@@ -1475,6 +1465,7 @@
     "Bois Forte (Deer Creek)",
     "Bois Forte (Vermillion Lake)",
     "Cedar City",
+    "Celilo",
     "Choctaw",
     "Coquille of Oregon",
     "Cortina Indian",
@@ -1513,6 +1504,7 @@
     "Sheep Ranch",
     "Shivwitz",
     "The Dalles Unit",
+    "Wind River",
     "Yavapai"
   ],
   "ambiguous": [
@@ -1560,6 +1552,13 @@
         "Seneca Nation of Indians",
         "Seneca-Cayuga Nation",
         "Tonawanda Band of Seneca"
+      ]
+    },
+    {
+      "larName": "Wind River",
+      "candidates": [
+        "Eastern Shoshone Tribe of the Wind River Reservation, Wyoming",
+        "Northern Arapaho Tribe of the Wind River Reservation, Wyoming"
       ]
     },
     {

@@ -205,7 +205,7 @@ test('a confirmed row names an area its Census name cannot settle, and reopens w
   reopened(['9022', 'Kialegee', ['Kiowa Tribe']], /the name matcher now answers "Kialegee Tribal Town"/);
 });
 
-test('a BIA land area on its BIA label takes the Nations of its one same-name Census reservation, never a statistical area', () => {
+test('a BIA land area on its BIA label takes the one Nation of its one same-name Census reservation, never a statistical area', () => {
   const feature = (BASENAME, AIANNH, AIANNHCC) => ({ attributes: { BASENAME, AIANNH, AIANNHCC } });
   const features = [
     feature('Warm Springs', '9020', 'D1'),
@@ -217,11 +217,12 @@ test('a BIA land area on its BIA label takes the Nations of its one same-name Ce
   ];
   const labels = { 9020: ['Warm Springs Nation'], 9021: ['Choctaw Nation'], 9022: ['A'], 9023: ['B'], 9025: ['East', 'North'] };
   const named = larNamesFromCensus(['Warm Springs', 'Choctaw', 'Santa Rosa', 'Unlabelled', 'Wind River', 'Elsewhere'], features, labels);
-  assert.deepEqual(Object.fromEntries(named), { 'Warm Springs': 'Warm Springs Nation', 'Wind River': 'East; North' });
+  // An area two Nations share keeps its BIA label: the place catalog would list a joined name as a Nation.
+  assert.deepEqual(Object.fromEntries(named), { 'Warm Springs': 'Warm Springs Nation' });
   const shipped = Object.fromEntries(ROSTER.areas.map((a) => [a.larName, a]));
   assert.equal(shipped['Warm Springs'].displayName, 'Confederated Tribes of the Warm Springs Reservation of Oregon');
   assert.equal(shipped['Warm Springs'].provenance, 'safe-match');
-  for (const open of ['Choctaw', 'Iowa', 'Santa Rosa']) assert.equal(shipped[open].provenance, 'lar-label', open);
+  for (const open of ['Choctaw', 'Iowa', 'Santa Rosa', 'Wind River', 'Celilo']) assert.equal(shipped[open].provenance, 'lar-label', open);
 });
 
 test('the shipped roster labels at least 540 areas: Creek OTSA, Warm Springs, both Nations of Wind River', () => {

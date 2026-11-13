@@ -8,8 +8,8 @@
     "generated": "2026-11-13",
     "rosterCount": 573,
     "landAreaCount": 335,
-    "safeMatchCount": 289,
-    "larLabelCount": 46,
+    "safeMatchCount": 287,
+    "larLabelCount": 48,
     "censusSource": "US Census Bureau TIGERweb AIANNH layer 47 (names only)",
     "censusAreaCount": 272,
     "censusSafeMatchCount": 232,
@@ -198,6 +198,11 @@
       "provenance": "safe-match"
     },
     {
+      "larName": "Celilo",
+      "displayName": "Celilo",
+      "provenance": "lar-label"
+    },
+    {
       "larName": "Chemehuevi",
       "displayName": "Chemehuevi Indian Tribe of the Chemehuevi Reservation, California",
       "provenance": "safe-match"
@@ -260,11 +265,6 @@
     {
       "larName": "Yakama",
       "displayName": "Confederated Tribes and Bands of the Yakama Nation",
-      "provenance": "safe-match"
-    },
-    {
-      "larName": "Celilo",
-      "displayName": "Confederated Tribes and Bands of the Yakama Nation; Confederated Tribes of the Umatilla Indian Reservation; Confederated Tribes of the Warm Springs Reservation of Oregon",
       "provenance": "safe-match"
     },
     {
@@ -355,11 +355,6 @@
     {
       "larName": "Duckwater",
       "displayName": "Duckwater Shoshone Tribe (previously listed as Duckwater Shoshone Tribe of the Duckwater Reservation, Nevada)",
-      "provenance": "safe-match"
-    },
-    {
-      "larName": "Wind River",
-      "displayName": "Eastern Shoshone Tribe of the Wind River Reservation, Wyoming; Northern Arapaho Tribe of the Wind River Reservation, Wyoming",
       "provenance": "safe-match"
     },
     {
@@ -1626,6 +1621,11 @@
       "larName": "Wilton",
       "displayName": "Wilton Rancheria, California",
       "provenance": "safe-match"
+    },
+    {
+      "larName": "Wind River",
+      "displayName": "Wind River",
+      "provenance": "lar-label"
     },
     {
       "larName": "Winnebago",

@@ -35,7 +35,8 @@ export const BUILDERS: readonly BuilderEntry[] = [
   { id: 'state', layerKey: 'states', path: 'coordinated', targets: ['state-boundary:us-states-fill'] },
   { id: 'tribal', layerKey: 'tribal', path: 'coordinated', targets: ['tribal-lands:tribal-lands-fill'] },
   { id: 'bia', layerKey: 'bia-reservations', path: 'coordinated', targets: ['reservation-boundary:bia-reservations-fill'] },
-  { id: 'aiannh', layerKey: 'aiannh', path: 'coordinated', targets: ['tribal-lands:aiannh-fill'] },
+  // The Nation's name answers a click for its area too (DR-257): one registration, two layers.
+  { id: 'aiannh', layerKey: 'aiannh', path: 'coordinated', targets: ['tribal-lands:aiannh-fill,aiannh-nation-labels'] },
   { id: 'treaty', layerKey: 'treaty', path: 'coordinated', targets: ['treaty-cession:treaty-areas-outline'] },
   { id: 'ecoregion', layerKey: 'ecoregions', path: 'coordinated', targets: ['ecoregion-watershed:ecoregions-l3-fill,ecoregions-l4-fill'] },
   { id: 'nifc', layerKey: 'nifc-fires', path: 'coordinated', targets: ['point-event:nifc-fires-fill,nifc-prescribed-fill,nifc-other-outline'] },
