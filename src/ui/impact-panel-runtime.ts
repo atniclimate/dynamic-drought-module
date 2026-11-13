@@ -60,6 +60,8 @@ import { getLegendSection } from './legend-registry';
 import { legendPanelUsable } from './map-key';
 import { requestLayerOn } from './layer-toggle-command';
 import { loadFederalResources, resourcesForIdentity } from '../impact/resource-catalog';
+import { orderFederalByCondition, resourceAgencyLine, resourcesCheckedLine } from '../impact/resources';
+import type { CatalogResource } from '../impact/resources';
 import {
   getCommittedSnapshot,
   onCommittedSnapshotChange
@@ -946,7 +948,7 @@ function renderPointHeat(
 }
 
 /** Render one resource link. */
-function renderResource(resource: ResourceLink): string {
+function renderResource(resource: CatalogResource): string {
   const href = checkPopupHref(resource.url);
   const hasLink = href !== null;
   const desc = resource.description
@@ -959,7 +961,7 @@ function renderResource(resource: ResourceLink): string {
     <div class="impact-resource">
       ${labelHtml}
       ${desc}
-      <p class="impact-resource-agency">${escapeHtml(resource.agency)}</p>
+      <p class="impact-resource-agency">${escapeHtml(resourceAgencyLine(resource))}</p>
     </div>
   `;
 }
@@ -976,8 +978,9 @@ function renderResource(resource: ResourceLink): string {
 function renderResources(all: readonly ResourceLink[]): string {
   const resources = all.filter((r) => r.tier !== 'tribe-own' || checkPopupHref(r.url) !== null);
   if (resources.length === 0) return '';
+  const ordered = orderFederalByCondition(resources, getCommittedSnapshot().selectedHazard);
   const groups = TIER_ORDER.map((tier) => {
-    const items = resources.filter((r) => r.tier === tier);
+    const items = ordered.filter((r) => r.tier === tier);
     if (items.length === 0) return '';
     return `
       <div class="impact-resource-group">
@@ -987,11 +990,13 @@ function renderResources(all: readonly ResourceLink[]): string {
     `;
   }).join('');
 
+  const checked = resourcesCheckedLine(resources);
   return `
     <section class="impact-resources" aria-label="Resources">
       <h3 class="impact-section-title">Resources to route</h3>
       <p class="impact-resources-framing">Tribal sovereignty is primary; external resources are supplementary. Each link below is plainly attributed to its agency as regional context, never as governing a Tribal Nation.</p>
       ${groups}
+      ${checked ? `<p class="impact-resources-framing">${escapeHtml(checked)}</p>` : ''}
     </section>
   `;
 }
