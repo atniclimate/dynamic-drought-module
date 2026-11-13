@@ -60,6 +60,7 @@ export const ACKNOWLEDGEMENT_IDS = [
   'census',
   'bia',
   'hifld',
+  'usa-structures',
   'eia',
   'epa',
   'aafc',
@@ -86,6 +87,7 @@ export const PROVIDER_KEYS = [
   'enso-flow',
   'terrain-archive',
   'whp-3d',
+  'structures',
   'dryness-ground',
   'landscape-signature',
   'minimap-drought-metric'
@@ -206,11 +208,23 @@ export const ACKNOWLEDGEMENTS: Readonly<Record<AcknowledgementId, Acknowledgemen
   usgs: {
     ...nameOnly('usgs', 'U.S. Geological Survey'),
     credits: [
-      // DRAFT wording for the owner's citation check (the base map, DDM-P17-T12); null citeId never renders (DR-147).
+      // DRAFT wording for the owner's citation check (the base map, DDM-P17-T12); held until the three ScienceBase titles are read; null citeId never renders (DR-147).
       {
         text:
-          'Base map lakes, reservoirs, wetlands, glaciers, rivers, canals and town names: U.S. Geological Survey, 1:1,000,000-Scale Waterbodies and Wetlands, Streams, and Cities and Towns of the United States, 2014 (National Atlas small-scale data).',
+          'Base map lakes, reservoirs, wetlands, glaciers, rivers, canals and town names: U.S. Geological Survey, 1:1,000,000-Scale Waterbodies and Wetlands of the United States, 2014; 1:1,000,000-Scale Streams of the United States, 2014; Cities and Towns of the United States, 2014 (legacy National Atlas small-scale data, not maintained by USGS). USGS-authored data are in the U.S. public domain; USGS has not reviewed or endorsed this map.',
         citeId: null
+      },
+      // ledger: usgs-nhd-tribal-streets (cite sheet: this pass)
+      {
+        text:
+          'Named streams and lakes inside Tribal areas: U.S. Geological Survey, The National Map, National Hydrography Dataset (NHD), read live. USGS retired the NHD on October 1, 2023. USGS has not reviewed or endorsed this map.',
+        citeId: 'usgs-nhd-tribal-streets'
+      },
+      // ledger: usgs-padus-4-1 (cite sheet: this pass)
+      {
+        text:
+          'Public and protected lands: U.S. Geological Survey Gap Analysis Project, 2025, Protected Areas Database of the United States (PAD-US) 4.1, https://doi.org/10.5066/P96WBCHS, read live by manager type.',
+        citeId: 'usgs-padus-4-1'
       },
       // ledger: usgs-3dep-landscape-signature (cite sheet c17)
       {
@@ -234,7 +248,17 @@ export const ACKNOWLEDGEMENTS: Readonly<Record<AcknowledgementId, Acknowledgemen
       }
     ]
   },
-  usfs: nameOnly('usfs', 'USDA Forest Service'),
+  usfs: {
+    ...nameOnly('usfs', 'USDA Forest Service'),
+    credits: [
+      // ledger: usfs-administrative-forest-boundaries (cite sheet: this pass)
+      {
+        text:
+          "National Forest boundaries: USDA Forest Service, Administrative Forest Boundaries, Enterprise Data Warehouse. These boundaries are generalized by DDM for display. The Forest Service's data are not legal documents.",
+        citeId: 'usfs-administrative-forest-boundaries'
+      }
+    ]
+  },
   'usda-nrcs': nameOnly('usda-nrcs', 'USDA Natural Resources Conservation Service'),
   'usda-nw-climate-hub': nameOnly('usda-nw-climate-hub', 'USDA Northwest Climate Hub'),
   landfire: {
@@ -277,11 +301,11 @@ export const ACKNOWLEDGEMENTS: Readonly<Record<AcknowledgementId, Acknowledgemen
           'Source: U.S. Census Bureau, 2023 Cartographic Boundary File, State and Equivalent Entities for United States, 1:20,000,000; TIGERweb, American Indian, Alaska Native, and Native Hawaiian Areas.',
         citeId: 'census-cb-2023-state-20m'
       },
-      // DRAFT wording for the owner's citation check (the base map, DDM-P17-T12); null citeId never renders (DR-147).
+      // ledger: census-base-map-2025 (cite sheet: this pass)
       {
         text:
-          'Base map: U.S. Census Bureau, 2025 Cartographic Boundary Files, States and Counties, 1:500,000; TIGER/Line Shapefiles 2025, Primary and Secondary Roads; TIGERweb, Transportation, Local Roads (street names inside Tribal areas, read live).',
-        citeId: null
+          'Base map: U.S. Census Bureau, 2025 Cartographic Boundary Files, State and Equivalent and County and Equivalent, 1:500,000; TIGER/Line Shapefiles 2025, Primary and Secondary Roads and Rails; TIGERweb, Transportation, Local Roads (street names inside Tribal areas, read live).',
+        citeId: 'census-base-map-2025'
       }
     ]
   },
@@ -318,6 +342,11 @@ export const ACKNOWLEDGEMENTS: Readonly<Record<AcknowledgementId, Acknowledgemen
   // The EIA sentence (cite sheet c04) carries the live reporting period, so
   // it renders in the power layer's own key while the plants draw
   // (src/layers/power-3d.ts); this row is the issuer's name.
+  // USA Structures 2023 edition (Figshare, CC0; DR-126). Name-only until ddm-cite records a credit sentence.
+  'usa-structures': nameOnly(
+    'usa-structures',
+    'Oak Ridge National Laboratory (ORNL); Federal Emergency Management Agency (FEMA) Geospatial Response Office'
+  ),
   eia: nameOnly('eia', 'U.S. Energy Information Administration'),
   epa: nameOnly('epa', 'U.S. Environmental Protection Agency'),
   aafc: {
@@ -341,12 +370,12 @@ export const ACKNOWLEDGEMENTS: Readonly<Record<AcknowledgementId, Acknowledgemen
   nrcan: {
     ...nameOnly('nrcan', 'Natural Resources Canada', 'canada'),
     credits: [
-      // DRAFT wording for the owner's citation check (the base map, DDM-P17-T12); null citeId never renders (DR-147).
+      // ledger: nrcan-atlas-of-canada-1m (cite sheet: this pass)
       {
         text:
-          'Base map land, lakes, rivers, highways, provincial and territorial lines and place names for Canada adapted from Natural Resources Canada, Atlas of Canada National Scale Data 1:1,000,000. Contains information licensed under the Open Government Licence – Canada.',
-        html: `Base map land, lakes, rivers, highways, provincial and territorial lines and place names for Canada adapted from Natural Resources Canada, Atlas of Canada National Scale Data 1:1,000,000. Contains information licensed under the <a href="${OGL_CANADA_URL}">Open Government Licence – Canada</a>.`,
-        citeId: null
+          'Base map for Canada adapted from Natural Resources Canada, Atlas of Canada National Scale Data 1:1,000,000. Contains information licensed under the Open Government Licence – Canada.',
+        html: `Base map for Canada adapted from Natural Resources Canada, Atlas of Canada National Scale Data 1:1,000,000. Contains information licensed under the <a href="${OGL_CANADA_URL}">Open Government Licence – Canada</a>.`,
+        citeId: 'nrcan-atlas-of-canada-1m'
       }
     ],
     licence: { name: 'Open Government Licence – Canada', url: OGL_CANADA_URL }
@@ -463,6 +492,8 @@ export const PROVIDERS: Readonly<
   'enso-flow': ['noaa-ncep'],
   'terrain-archive': ['usgs'],
   'whp-3d': ['usfs'],
+  // The 3D Fire building footprints (src/layers/structures-3d.ts), central Oregon only.
+  structures: ['usa-structures'],
   // The Wildfire 3D plant-stress ground: STAR's index, USGS Relative Greenness as the fallback.
   'dryness-ground': ['noaa-star', 'usgs'],
   // public/data/landscape-signature-pnw.json, the briefing's terrain, soil, land cover and fuels facts.

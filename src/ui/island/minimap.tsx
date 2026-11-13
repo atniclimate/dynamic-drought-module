@@ -950,7 +950,7 @@ export function Minimap({
   // the popped-up caption was noise); it renders once, in the on-map key
   // (src/ui/map-key.ts), independent of this component's mount state.
   // EF-6: the ENSO scale slot names the current operational RONI CONDITIONS
-  // (the CPC onset rule on the newest season) and the season they are read
+  // (the CPC threshold on the newest season) and the season they are read
   // from, never the historical five-season episode classification, which
   // lags an event by months. It replaces a label, not a metric: the framings
   // stay neutral (DDM-UI-004), and the accessible name keeps saying so

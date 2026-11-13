@@ -170,10 +170,10 @@ affirmative open-data grant, and an uncaptioned state-specific layer
 would falsely imply lower risk where the true difference is that no
 equivalent dataset exists elsewhere.
 
-The structures context (building footprints for central Oregon) was
-removed on 2026-11-13: its licence asked for a credit on the map, and the
-owner keeps credits off the main display. A building source that needs no
-on-map credit is the next step. Azure and Bing 3D city meshes stay
+The structures context (building footprints for central Oregon) now comes
+from USA Structures, 2023 edition, published under CC0 (DR-126), so it needs
+no credit on the map: one extrusion at a stated 4 m height in one tone, keyed
+only as "Buildings" while a building can draw. Azure and Bing 3D city meshes stay
 disqualified (API-key-gated commercial services covering curated metros,
 not the rural and Tribal geography this project serves).
 

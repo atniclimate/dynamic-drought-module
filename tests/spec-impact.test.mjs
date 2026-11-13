@@ -188,7 +188,8 @@ test('modules the browser specs reach only through the app pick their own specs'
     'src/ui/sheet-alerts.ts',
     'src/ui/popup-conditions.ts',
     'src/config/map-chrome.ts',
-    'src/layers/aiannh.ts'
+    'src/layers/aiannh.ts',
+    'src/ui/hazard-rail.ts'
   ]);
   const config = readFileSync(new URL('../playwright.config.ts', import.meta.url), 'utf8');
   const specPaths = new Set(readdirSync(new URL('./', import.meta.url)).filter((name) => name.endsWith('.spec.ts')).map((name) => `tests/${name}`));

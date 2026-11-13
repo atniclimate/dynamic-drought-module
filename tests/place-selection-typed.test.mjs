@@ -36,7 +36,7 @@ registerHooks({
   }
 });
 
-const { setPlaceSelection } = await import('../src/state/place-selection.ts');
+const { setPlaceSelection, standingBriefingDoor } = await import('../src/state/place-selection.ts');
 const { getTypedPlace, onTypedPlaceChange, setTypedPlace } = await import('../src/state/typed-place.ts');
 
 function selection(kind, title, properties) {
@@ -90,6 +90,38 @@ test('the same place again (the studio exit opening its own briefing) does not r
   stop();
   assert.equal(writes, 0);
   assert.equal(getTypedPlace(), OREGON);
+});
+
+test('a watershed click names its HUC code, HUC4 before HUC2, padded as the studio catalog pads it', () => {
+  setPlaceSelection(selection('watershed', 'Kootenai-Pend Oreille-Spokane', { huc4: '1701', name: 'Kootenai-Pend Oreille-Spokane' }));
+  assert.deepEqual(getTypedPlace(), { kind: 'watershed', id: '1701', label: 'Kootenai-Pend Oreille-Spokane' });
+  setPlaceSelection(null);
+  assert.deepEqual(getTypedPlace(), { kind: 'watershed', id: '1701', label: 'Kootenai-Pend Oreille-Spokane' });
+  // A numeric HUC2 reads as the catalog's two-digit code (src/config/place-catalog.ts pads it).
+  setPlaceSelection(selection('watershed', 'New England Region', { huc2: 1, name: 'New England Region' }));
+  assert.deepEqual(getTypedPlace(), { kind: 'watershed', id: '01', label: 'New England Region' });
+});
+
+test('a watershed code the studio catalog cannot hold leaves the studio place', () => {
+  setPlaceSelection(selection('watershed', 'Somewhere', { huc4: '17x1' }));
+  setPlaceSelection(selection('watershed', 'Somewhere', { huc2: '170101' }));
+  setPlaceSelection(selection('watershed', 'Somewhere', { name: 'Somewhere' }));
+  assert.equal(getTypedPlace(), OREGON);
+});
+
+test('a hazard-surface popup reads the selected place for its door and leaves the studio place', () => {
+  // A condition or event tap never calls setPlaceSelection (interaction-coordinator.ts `finish`
+  // writes only a response's place); its door only reads the selection.
+  setPlaceSelection(selection('watershed', 'Kootenai-Pend Oreille-Spokane', { huc4: '1701' }));
+  const typed = getTypedPlace();
+  let writes = 0;
+  const stop = onTypedPlaceChange(() => {
+    writes += 1;
+  });
+  assert.deepEqual(standingBriefingDoor(), [{ kind: 'briefing', place: 'Kootenai-Pend Oreille-Spokane' }]);
+  stop();
+  assert.equal(writes, 0);
+  assert.equal(getTypedPlace(), typed);
 });
 
 test('a place with no catalog code, or a kind the studio reaches only through the roster crosswalk, leaves the studio place', () => {

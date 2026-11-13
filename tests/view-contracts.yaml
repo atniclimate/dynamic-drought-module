@@ -33,7 +33,7 @@
 #   wait_settled: <layer key>        wait for a terminal status pill
 #   wait_fire3d: <active|inactive>   wait for the document stamp
 #   settle_scene: true               wait for the application-reported 3D
-#                                    context to equal "whp"
+#                                    context to equal "whp structures"
 #   hold_first_power_probe: <ms>     hold the power layer's first line archive
 #                                    header read for <ms> (past its 10 s probe
 #                                    budget) before letting it through
@@ -90,7 +90,7 @@ rows:
     description: >
       The 3D toggle activates the scene, writes the durable preference to the
       URL, and brings up the context layers the mode owns: the WHP hazard
-      drape. Power is not among them, since it
+      drape and the buildings. Power is not among them, since it
       became a catalog layer on 2026-08-19 and is off unless someone asks
       for it (see the power rows below).
     url: '?region=washington_state&cluster=wildfire'
@@ -106,7 +106,7 @@ rows:
         fire3d: 'true'
       fire3d_stamp: active
       fire3d_toggle: pressed
-      fire3d_context_includes: [whp]
+      fire3d_context_includes: [whp, structures]
 
   - id: leaving-3d-clears-the-scene-and-the-parameter
     description: >
@@ -218,7 +218,7 @@ rows:
       - wait_fire3d: active
     expect:
       layers_unchecked: [power-infrastructure]
-      fire3d_context_includes: [whp]
+      fire3d_context_includes: [whp, structures]
       fire3d_context_excludes: [power]
 
   - id: the-power-toggle-governs-the-3d-scene-too
@@ -231,7 +231,7 @@ rows:
       display to custom, so power must be switched on after the scene rather
       than before it. The same is true of any extra layer; it is not
       something power introduced. The scene's context stamp is written once
-      at activation and therefore still reads 'whp' here. That
+      at activation and therefore still reads 'whp structures' here. That
       under-claims rather than over-claims, and no user-facing disclosure is
       affected: the legend is written by the power layer itself, and the
       embed chip only renders in embeds, where the layer set is fixed at

@@ -225,7 +225,7 @@ function ensoGauge(reading: ClaimReading | null, state: GaugeState): string {
     above: 'El Nino',
     ...(index ? { valueLabel: signedIndex(index.value) } : {}),
     state,
-    title: `ENSO index against the CPC onset thresholds of minus and plus ${threshold}. ${said}`
+    title: `ENSO index against the CPC thresholds of minus and plus ${threshold}. ${said}`
   });
 }
 
@@ -383,7 +383,7 @@ function scopeWords(entry: PriorityEntry): string {
     case 'spc-fire-days':
       return 'At the selected point: Days 1 and 2 by category, Days 3 to 8 by probability.';
     case 'enso-index':
-      return `A tropical Pacific index, not a read of this place: ${reading.index} ${signedIndex(reading.value)}, ${reading.season} ${reading.year}${reading.preliminary ? ', preliminary' : ''}.`;
+      return `An equatorial Pacific index, not a read of this place: ${reading.index} ${signedIndex(reading.value)}, ${reading.season} ${reading.year}${reading.preliminary ? ', which CPC calls an estimate' : ''}.`;
     default:
       return '';
   }
@@ -569,7 +569,7 @@ function renderTogether(order: PriorityOrder, now: number): string {
           .map((entry) => `<span class="lead-together-class">${escapeHtml(entry.headline)}</span>`)
           .join('')}${
           // The index is present in the same weeks, not in this place.
-          hazard === 'enso' ? `<span class="lead-together-scope">tropical Pacific index, not a read of this place</span>` : ''
+          hazard === 'enso' ? `<span class="lead-together-scope">equatorial Pacific index, not a read of this place</span>` : ''
         }</span>` +
         `</li>`
       );
@@ -670,7 +670,7 @@ export function buildEnsoChainLinks(briefing: ImpactBriefing): ChainLink[] {
     key: 'jet',
     title: 'Jet-level wind (model guidance)',
     status: 'unavailable',
-    note: 'This briefing reads no jet-level or storm-track product.',
+    note: 'This briefing reads no jet-level wind product.',
     relation: 'read beside'
   });
 

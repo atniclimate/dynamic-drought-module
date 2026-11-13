@@ -1,0 +1,58 @@
+{
+  "edition": "2023",
+  "built": "2026-11-13",
+  "bbox": [
+    -122,
+    43.5,
+    -120.3,
+    45.65
+  ],
+  "output": {
+    "file": "structures-central-oregon-2023.pmtiles",
+    "bytes": 5186150,
+    "sha256": "ab138fc436d146da883263d6c3f2d1ec54aa436650b196dc1a51cbd98c1e8453",
+    "tiles": 4074,
+    "zooms": [
+      13,
+      14
+    ],
+    "footprints": 153805,
+    "withHeight": 0
+  },
+  "extract": {
+    "sha256": "f5ed1f7bf1904ba7d3639bf387b0ce959b21cef79b1814c4624da7204c3220b1",
+    "bytes": 44036719
+  },
+  "inputs": [
+    {
+      "file": "Deliverable20230526OR.zip",
+      "sha256": "a15793a8e34334af26c9367c1d3c01e374b59c0e8fa8d5db809c86da6496bd37",
+      "bytes": 462288251,
+      "retrieved": "2026-11-13",
+      "release": "20230526",
+      "credit": "Oak Ridge National Laboratory (ORNL); Federal Emergency Management Agency (FEMA) Geospatial Response Office",
+      "useConstraints": "None",
+      "layer": "OR_Structures",
+      "footprintsInState": 1699228,
+      "footprintsInBox": 152668,
+      "record": "https://doi.org/10.6084/m9.figshare.24428884.v1",
+      "url": "https://ndownloader.figshare.com/files/42887026",
+      "licence": "CC0 1.0"
+    },
+    {
+      "file": "Deliverable20230831WA.zip",
+      "sha256": "dfda4a89331207371fdb890b08ed9da036c438f4ff56abf1f06a891f97c46aac",
+      "bytes": 769403940,
+      "retrieved": "2026-11-13",
+      "release": "20230831",
+      "credit": "Oak Ridge National Laboratory (ORNL); Federal Emergency Management Agency (FEMA) Geospatial Response Office",
+      "useConstraints": "None",
+      "layer": "WA_Structures",
+      "footprintsInState": 2829968,
+      "footprintsInBox": 1137,
+      "record": "https://doi.org/10.6084/m9.figshare.24428845.v1",
+      "url": "https://ndownloader.figshare.com/files/42886972",
+      "licence": "CC0 1.0"
+    }
+  ]
+}

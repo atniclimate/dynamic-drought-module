@@ -392,6 +392,49 @@ test('repeated directory 416 is bounded to one archive retry', async () => {
   } finally { globalThis.fetch = previous; }
 });
 
+test('a PMTiles layer switched on: TileJSON reads, a stalled tile body is cut by the budget, a cancel and a superseding read leave nothing pending', async () => {
+  let stall = false;
+  const f = fixture(offset => stall && offset === 16389 ? 'stall' : archive());
+  const realSet = globalThis.setInterval, realClear = globalThis.clearInterval;
+  const timers = new Set();
+  globalThis.setInterval = (...args) => { const id = realSet(...args); timers.add(id); return id; };
+  globalThis.clearInterval = id => { timers.delete(id); realClear(id); };
+  const idle = () => { assert.equal(f.active(), 0, 'no body read left open'); assert.equal(timers.size, 0, 'no budget timer left running'); };
+  const entered = async () => { while (f.active() === 0) await new Promise(setImmediate); };
+  try {
+    const p = createPmtilesTransport(100);
+    // Layer on: MapLibre asks for the TileJSON first; the header range read succeeds.
+    assert.equal((await p.tilev4(json, new AbortController())).data.maxzoom, 0);
+    idle();
+    // The tile's range body stalls after its headers; the budget cuts it off.
+    stall = true;
+    await assert.rejects(p.tilev4(tile, new AbortController()), { name: 'TimeoutError' });
+    idle();
+    // Switched off mid-read: the owner's cancel ends the stalled body.
+    const off = new AbortController();
+    const cancelled = p.tilev4(tile, off);
+    await entered();
+    assert.ok(timers.size > 0, 'the budget is running while the body stalls');
+    off.abort();
+    await assert.rejects(cancelled, { name: 'AbortError' });
+    idle();
+    // Superseded: a fresh read succeeds while the old one is still stalled, then the old owner lets go.
+    const old = new AbortController();
+    const stale = p.tilev4(tile, old);
+    await entered();
+    stall = false;
+    assert.deepEqual([...(await p.tilev4(tile, new AbortController())).data], [10, 20, 30, 40]);
+    assert.equal(f.active(), 1, 'the superseded body is still held until its owner cancels');
+    old.abort();
+    await assert.rejects(stale, { name: 'AbortError' });
+    idle();
+    assert.deepEqual(f.reads.map(r => r.offset), [0, 16384, 16389, 16389, 16389, 16389], 'header and leaf read once');
+  } finally {
+    globalThis.setInterval = realSet; globalThis.clearInterval = realClear;
+    f.restore();
+  }
+});
+
 // D5 actual transport/transform orchestration with browser codec seams only.
 const { readDrynessTile, createDrynessMasks, isDrynessSourceFault, DrynessLocalError } = await import('../src/layers/dryness-grey-protocol.ts');
 const { default: drynessPngJs } = await import('pngjs');

@@ -183,7 +183,9 @@ export const MODULE_SPECS = {
   'src/ui/popup-conditions.ts': ['tests/interaction-coordinator.spec.ts', 'tests/place-popups.spec.ts'],
   // 2026-11-13: both changed in one block and picked neither spec that then went red.
   'src/config/map-chrome.ts': ['tests/map-chrome-focus.spec.ts', 'tests/map-chrome-seats.spec.ts', 'tests/map-chrome-icons.spec.ts'],
-  'src/layers/aiannh.ts': ['tests/trio-hardening.spec.ts']
+  'src/layers/aiannh.ts': ['tests/trio-hardening.spec.ts'],
+  // 2026-11-13: the phone rail's cells are generated here; only the rail spec reads them.
+  'src/ui/hazard-rail.ts': ['tests/hazard-rail.spec.ts']
 };
 const MODULE_RULES = Object.entries(MODULE_SPECS).map(([module, specs]) => ({ rule: `specs of ${module}`, match: (path) => path === module, specs }));
 

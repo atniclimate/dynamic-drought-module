@@ -480,7 +480,7 @@ test('activation builds terrain, sky, camera, and the smoke volume; deactivation
     // Power infrastructure left this list on 2026-08-19: it is a catalog
     // layer now, off by default, and this orchestrator only reports it when
     // a person has turned it on (tests/power-layer.spec.ts owns its truth).
-    expect(getFire3DStatus().contextLayers).toEqual(['whp']);
+    expect(getFire3DStatus().contextLayers).toEqual(['whp', 'structures']);
     expect(shadeEvents.at(-1)).toEqual({ layer: 'whp-2023', active: true, mounted: true });
     expect(harness.sources.get('whp-2023')).toMatchObject({
       type: 'raster',
@@ -510,6 +510,26 @@ test('activation builds terrain, sky, camera, and the smoke volume; deactivation
     expect(harness.sources.has('power-lines')).toBe(false);
     expect(harness.sources.has('power-plants')).toBe(false);
 
+    // Buildings: one source and ONE extrusion layer with no filter (every
+    // footprint at the same stated height; tests/structures-3d.test.mjs
+    // holds the paint), seated with the context overlays under every event
+    // overlay.
+    expect(harness.sources.get('structures-3d')).toMatchObject({
+      type: 'vector',
+      url: `pmtiles://${URLS.structuresPmtilesLocal}`
+    });
+    expect(harness.layerSpecs.get('structures-3d')).toMatchObject({
+      type: 'fill-extrusion',
+      source: 'structures-3d'
+    });
+    expect(harness.layerSpecs.get('structures-3d')).not.toHaveProperty('filter');
+    expect(harness.layerOrder.indexOf('structures-3d')).toBeGreaterThan(
+      harness.layerOrder.indexOf('whp-2023')
+    );
+    expect(harness.layerOrder.indexOf('structures-3d')).toBeLessThan(
+      harness.layerOrder.indexOf('hms-smoke-fill')
+    );
+
     setFire3DActive(map, false);
     expect(getFire3DStatus().state).toBe('inactive');
     expect(getFire3DStatus().contextLayers).toEqual([]);
@@ -518,6 +538,8 @@ test('activation builds terrain, sky, camera, and the smoke volume; deactivation
     expect(harness.sources.has('fire3d-terrain-dem')).toBe(false);
     expect(harness.sources.has('whp-2023')).toBe(false);
     expect(harness.layerSpecs.has('whp-2023')).toBe(false);
+    expect(harness.sources.has('structures-3d')).toBe(false);
+    expect(harness.layerSpecs.has('structures-3d')).toBe(false);
     expect(harness.sources.has('power-lines')).toBe(false);
     expect(harness.sources.has('power-plants')).toBe(false);
     expect(harness.layerSpecs.has('power-lines')).toBe(false);
@@ -1371,11 +1393,12 @@ test('a corrupt hazard archive degrades only the drape; the scene stays active',
     await expect.poll(() => getFire3DStatus().state).toBe('active');
 
     // Terrain succeeded; the hazard drape alone degraded, with no partial
-    // drape state left on the map.
+    // drape state left on the map, while the buildings stayed.
     expect(harness.getTerrain()).not.toBeNull();
-    expect(getFire3DStatus().contextLayers).toEqual([]);
+    expect(getFire3DStatus().contextLayers).toEqual(['structures']);
     expect(harness.sources.has('whp-2023')).toBe(false);
     expect(harness.layerSpecs.has('whp-2023')).toBe(false);
+    expect(harness.layerSpecs.has('structures-3d')).toBe(true);
     // Only the drape warned; the scene itself raised nothing.
     expect(warnings.messages).toEqual([
       expect.stringMatching(/^\[whp-3d\] invalid or unavailable archive\./)
@@ -1385,6 +1408,43 @@ test('a corrupt hazard archive degrades only the drape; the scene stays active',
     setFire3DActive(map, false);
     setFire3DPreference(false);
     restoreFetch();
+    browser.restore();
+  }
+});
+
+test('a corrupt buildings archive degrades only the buildings; the rest stays', async () => {
+  const browser = installFakeBrowser({ desktop: true, reducedMotion: false });
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url.includes('structures-central-oregon')) {
+      return new Response('<html>not tiles</html>', { status: 200 });
+    }
+    if (url.includes('Power_Plants_in_the_US')) {
+      return new Response(JSON.stringify(PLANTS_STUB_FC), { status: 200 });
+    }
+    return pmtilesHeaderResponse();
+  }) as typeof fetch;
+  const harness = fakeMapHarness({ pitch: 0, bearing: 0 });
+  const { map } = harness;
+  const warnings = captureWarnings();
+
+  try {
+    setFire3DActive(map, true);
+    await expect.poll(() => getFire3DStatus().state).toBe('active');
+
+    expect(getFire3DStatus().contextLayers).toEqual(['whp']);
+    expect(harness.sources.has('structures-3d')).toBe(false);
+    expect(harness.layerSpecs.has('structures-3d')).toBe(false);
+    // Only the buildings warned; the scene itself raised nothing.
+    expect(warnings.messages).toEqual([
+      expect.stringMatching(/^\[structures-3d\] invalid or unavailable archive\./)
+    ]);
+  } finally {
+    warnings.restore();
+    setFire3DActive(map, false);
+    setFire3DPreference(false);
+    globalThis.fetch = originalFetch;
     browser.restore();
   }
 });
@@ -1781,9 +1841,9 @@ test.describe('W3/W4 browser truth', () => {
     await stampReaches(
       page,
       fire3dContextStamp,
-      'whp',
+      'whp structures',
       30_000,
-      'the context layers never stamped whp'
+      'the context layers never stamped whp structures'
     );
     const hazardLegendSelector = '.legend-section[data-legend="whp-2023"]';
     const hazardLegend = page.locator(hazardLegendSelector);
@@ -1793,6 +1853,11 @@ test.describe('W3/W4 browser truth', () => {
       '.legend-section[data-legend="power-context"]'
     );
     await expect(powerLegend).toHaveCount(0);
+    // The buildings' key row shows only where a building can draw. This
+    // state view sits below the archive's zoom 13 floor, so the key lists
+    // none (the central Oregon case below holds the row itself).
+    const structuresLegend = page.locator('.legend-section[data-legend="structures-3d"]');
+    await expect(structuresLegend).toHaveCount(0);
     // The embed disclosure chip is embed-only chrome; the desktop shell
     // already carries the notes, so no chip appears here.
     await expect(page.locator('#fire3d-embed-note')).toHaveCount(0);
@@ -1827,6 +1892,7 @@ test.describe('W3/W4 browser truth', () => {
     await expect(volumeLegend).toHaveCount(0);
     await expect(hazardLegend).toHaveCount(0);
     await expect(powerLegend).toHaveCount(0);
+    await expect(structuresLegend).toHaveCount(0);
     expect(await fire3dContextStamp(page)).toBeUndefined();
   });
 
@@ -2277,11 +2343,46 @@ test.describe('W3/W4 browser truth', () => {
     await expect
       .poll(() => embedNote.textContent())
       .not.toContain('HIFLD transmission lines');
+    // The buildings add no line of their own: nothing about their source
+    // prints on the map (owner, 2026-11-12).
+    expect(await embedNote.textContent()).not.toMatch(
+      /FEMA|Oak Ridge|USA Structures|structure data|pilot area/i
+    );
     if (CAPTURE_EVIDENCE) {
       await page.screenshot({
         path: 'fire3d-evidence/fire3d-embed-disclosure.png'
       });
     }
+  });
+
+  test('the Buildings key row shows only where a building can draw', async ({ page }) => {
+    test.setTimeout(120_000);
+    // The real map, observed at its constructor (no production test handle).
+    await observeW2Map(page);
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await stubWildfireFeeds(page);
+    await stubDeepTerrainArchive(page);
+    await gotoApp(page, '?region=washington_state&cluster=wildfire&fire3d=true');
+    await stampReaches(page, fire3dStamp, 'active', 30_000, 'the scene never stamped active');
+    await stampReaches(
+      page,
+      fire3dContextStamp,
+      'whp structures',
+      30_000,
+      'the context layers never stamped whp structures'
+    );
+    // The state view is below the archive's zoom 13 floor: no row.
+    const structuresLegend = page.locator('.legend-section[data-legend="structures-3d"]');
+    await expect(structuresLegend).toHaveCount(0);
+
+    // Bend, inside the archive's box, at its first stored zoom. The key is
+    // one swatch and the one word: no credit, source line or caveat on the
+    // map or in its key (owner, 2026-11-12).
+    await page.evaluate(() => {
+      const map = (window as unknown as W2Window).__w2Maps.find((candidate) => candidate.getContainer().id === 'map')!;
+      map.jumpTo({ center: [-121.31, 44.06], zoom: 13 });
+    });
+    await expect(structuresLegend).toHaveText('Buildings');
   });
 
   test('an empty smoke read says so in the 3D control instead of looking broken', async ({

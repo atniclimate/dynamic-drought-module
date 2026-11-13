@@ -952,8 +952,9 @@ export const URLS = Object.freeze({
   // and retrieval date are baked into the archive attribution so the overlay
   // never implies precision the source does not carry.
   ecoregionsPmtilesLocal: BASE_URL + 'data/ecoregions-pnw.pmtiles',
-  // National forest boundaries (USDA Forest Service, CC0), baked into their own
-  // archive by scripts/build-base-tiles.mjs for the National Forests layer.
+  // National forest boundaries (USDA Forest Service; public, data.gov lists
+  // CC BY 4.0), baked into their own archive by scripts/build-base-tiles.mjs
+  // for the National Forests layer.
   forestsPmtiles: BASE_URL + 'data/ddm-forests-2026-11.pmtiles',
   // The PNW hillshade raster-dem archive (U4g, D-0.7.0-012/-029): terrarium
   // PNG tiles, 512 px, z0-8, whole-meter quantized, baked by
@@ -1019,6 +1020,14 @@ export const URLS = Object.freeze({
   // carries the mandatory currency caveat. Loaded only while the 3D Fire
   // mode is active.
   powerLinesPmtilesLocal: BASE_URL + 'data/power-lines-pnw.pmtiles',
+  // Central Oregon building footprints for the desktop 3D Fire mode: USA
+  // Structures (Oak Ridge National Laboratory for the FEMA Geospatial
+  // Response Office), the 2023 edition published under CC0 (DR-126), clipped
+  // by scripts/extract-fema-structures.py and baked by
+  // scripts/build-structures-tiles.mjs; inputs and output pinned by SHA-256
+  // in scripts/data/structures-tiles-receipt.json. Outlines only, z13-14;
+  // loaded only while the 3D Fire mode is active.
+  structuresPmtilesLocal: BASE_URL + 'data/structures-central-oregon-2023.pmtiles',
   tribalLandsLocal: BASE_URL + 'data/tribal-lands.geojson',
   treatyAreasLocal: BASE_URL + 'data/treaty-areas.geojson',
   // United States state boundaries, baked from the Census Bureau cartographic

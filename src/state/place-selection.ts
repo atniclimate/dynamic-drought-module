@@ -67,12 +67,25 @@ function codeProperty(context: BoundarySelectionContext, key: string): string | 
 }
 
 /**
+ * A watershed's HUC4 else HUC2 code, zero-padded to its level as the studio
+ * catalog pads it (src/config/place-catalog.ts); null unless it is that many digits.
+ */
+function hucCode(context: BoundarySelectionContext): string | null {
+  for (const [key, digits] of [['huc4', 4], ['huc2', 2]] as const) {
+    const code = codeProperty(context, key)?.padStart(digits, '0');
+    if (code !== undefined) return new RegExp(`^\\d{${digits}}$`).test(code) ? code : null;
+  }
+  return null;
+}
+
+/**
  * The Place studio catalog entry a selected boundary names, read from the
  * feature's own code exactly as `placeRefFromBoundary` (src/config/entities.ts,
  * kept out of this eager module) reads it: STUSPS for a state, US_L4CODE else
- * US_L3CODE for an ecoregion. Null for the other kinds: a BIA or AIANNH area
- * reaches a Tribal Nation only through the lazily loaded roster crosswalk, and
- * one land area can represent more than one Nation.
+ * US_L3CODE for an ecoregion, huc4 else huc2 for a watershed. Null for the
+ * other kinds: a BIA or AIANNH area reaches a Tribal Nation only through the
+ * lazily loaded roster crosswalk, and one land area can represent more than
+ * one Nation.
  */
 function typedPlaceFor(context: BoundarySelectionContext): TypedPlaceRef | null {
   const id =
@@ -80,17 +93,20 @@ function typedPlaceFor(context: BoundarySelectionContext): TypedPlaceRef | null 
       ? codeProperty(context, 'STUSPS')
       : context.kind === 'ecoregion'
         ? (codeProperty(context, 'US_L4CODE') ?? codeProperty(context, 'US_L3CODE'))
-        : null;
-  return id ? { kind: context.kind as 'state' | 'ecoregion', id, label: context.title } : null;
+        : context.kind === 'watershed'
+          ? hucCode(context)
+          : null;
+  return id ? { kind: context.kind as 'state' | 'ecoregion' | 'watershed', id, label: context.title } : null;
 }
 
 /**
  * Set (or clear, with null) the current place selection and notify listeners.
  * A listener that throws does not stop the others.
  *
- * DR-099 (DDM-P2-T13): a selected state or ecoregion also replaces the durable
- * typed place, newest intent wins, so the Place studio reopens on the place
- * last picked on the map. Clearing (a popup closing) leaves the durable place.
+ * DR-099 (DDM-P2-T13): a selected state, ecoregion or watershed also replaces
+ * the durable typed place, newest intent wins, so the Place studio reopens on
+ * the place last picked on the map. Clearing (a popup closing) leaves the
+ * durable place; a hazard-surface tap never reaches this setter.
  */
 export function setPlaceSelection(selection: PlaceSelection | null): void {
   current = selection;

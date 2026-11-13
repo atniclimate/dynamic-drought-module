@@ -56,7 +56,7 @@ test('the exact held probe event and rows without a hold retain their outcomes',
 function stepRunner(overrides = {}) {
   const bindings = {
     expect, FIRE3D_STAMP_TIMEOUT_MS: 60_000,
-    fire3dStamp: async () => 'active', fire3dContextStamp: async () => 'whp',
+    fire3dStamp: async () => 'active', fire3dContextStamp: async () => 'whp structures',
     untilAnswered: async (read, accept, budget, what) => {
       const value = await read();
       assert.ok(accept(value), what);
@@ -76,7 +76,7 @@ test('the legacy scene step waits for the reported context at the unchanged 30 s
   const run = stepRunner({ untilAnswered: async (read, accept, budget) => {
     waits.push(budget);
     assert.equal(accept(undefined), false);
-    assert.equal(accept('power'), false);
+    assert.equal(accept('whp'), false);
     assert.equal(accept(await read()), true);
   } });
   await run({}, { settle_scene: true }, power());

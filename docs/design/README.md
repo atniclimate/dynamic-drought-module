@@ -232,7 +232,7 @@ strip over the links draws a read as a disc in its evidence tier and no read
 as an open square under a state word.
 
 **The words between links** name a relationship the repository can cite
-("measured in the boxed region of", "historically tends to shift") or say only
+("computed from the boxed region of", "historically tends to shift") or say only
 that two reads sit side by side ("one model instant, read beside a season",
 "read beside"). None is a cause and none is an arrow.
 

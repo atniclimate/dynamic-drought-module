@@ -255,6 +255,7 @@ const { getPlaceSelection, setPlaceSelection } = await import('../src/state/plac
 const { setCurrentRegion } = await import('../src/state/region-store.ts');
 const { clearEmphasis, getEmphasisTargets } = await import('../src/state/place-emphasis.ts');
 const { setViewMode } = await import('../src/state/view-mode.ts');
+const { getTypedPlace, setTypedPlace } = await import('../src/state/typed-place.ts');
 
 /** The frame import has resolved and every continuation queued on it has run. */
 async function settle() {
@@ -1259,4 +1260,19 @@ test('a mode or horizon change closes the open response, popup or panel foot, an
   assert.equal(dismissed, 1, 'a mode switch dismisses the panel-foot response');
   assert.equal(getPlaceSelection(), briefing, 'the briefing keeps its place');
   assert.equal(keydownListeners(), 0, 'no Escape handler outlives the response');
+});
+
+test('a hazard-surface tap leaves the place the Place studio reopens on (DR-099)', async () => {
+  const { click, ready } = harness({ surface: [{ content: 'fixture surface' }] }, { warm: true });
+  await ready;
+  const watershed = { kind: 'watershed', id: '1701', label: 'Kootenai-Pend Oreille-Spokane' };
+  setTypedPlace(watershed);
+  try {
+    click();
+    assert.deepEqual(rendered, ['fixture surface'], 'the surface answered');
+    assert.equal(getPlaceSelection(), null, 'no place selection was written');
+    assert.equal(getTypedPlace(), watershed, 'the studio place is unchanged');
+  } finally {
+    setTypedPlace(null);
+  }
 });

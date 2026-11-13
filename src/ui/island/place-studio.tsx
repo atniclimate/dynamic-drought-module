@@ -174,18 +174,30 @@ const KIND_WORD: Readonly<Record<TypedPlaceKind, string>> = {
   watershed: 'Watershed'
 };
 
+/**
+ * USGS's own names for the two hydrologic unit levels the list holds (its
+ * Watershed Boundary Dataset layer names). Added to the shown text only: the
+ * catalog detail stays the bare level, which src/state/watershed-geometry.ts
+ * compares to pick its layer.
+ */
+const USGS_UNIT_NAME = new Map([
+  ['HUC2', 'USGS Region'],
+  ['HUC4', 'USGS Subregion']
+]);
+
 /** A place's kind in plain words, with the catalog's own level where it has one. */
 function kindWords(kind: TypedPlaceKind, detail: string | null): string {
-  return detail ? `${KIND_WORD[kind]}, ${detail}` : KIND_WORD[kind];
+  if (!detail) return KIND_WORD[kind];
+  const usgs = USGS_UNIT_NAME.get(detail);
+  return `${KIND_WORD[kind]}, ${detail}${usgs ? ` (${usgs})` : ''}`;
 }
 
 /**
- * Where each kind's boundary is read from, in the words the instrument
- * already uses: the search's own name for the BIA service, and the source
- * labels of PLACE_CATALOG.
+ * Where each kind's boundary is read from: BIA's own name for its land area
+ * dataset (it is a representation), and the source labels of PLACE_CATALOG.
  */
 const BOUNDARY_SOURCE: Readonly<Record<TypedPlaceKind, string>> = {
-  tribe: 'the BIA land area service',
+  tribe: 'the BIA American Indian and Alaska Native Land Area Representation (AIAN-LAR) service',
   state: 'the bundled Census state boundaries',
   ecoregion: 'the EPA ecoregions service',
   watershed: 'the USGS Watershed Boundary Dataset service'
@@ -213,7 +225,7 @@ function boundarySentence(kind: TypedPlaceKind, read: BoundaryRead): string {
       return `No boundary came back from ${source} for this place, so a briefing is not available.`;
     case 'unmatched':
       return kind === 'tribe'
-        ? "DDM has not matched this Nation's name to a boundary in the BIA land area data, so a briefing is not available from this list."
+        ? "DDM has not matched this Nation's name to a land area in the BIA American Indian and Alaska Native Land Area Representation (AIAN-LAR), so a briefing is not available from this list."
         : 'No boundary is listed for this place, so a briefing is not available.';
   }
 }

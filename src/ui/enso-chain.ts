@@ -450,7 +450,7 @@ function press(action: EnsoChainAction): void {
         afterMove(map, () => {
           if (held === state) window.dispatchEvent(new CustomEvent(FEATURE_DOOR_EVENT, { detail: 'nino34' }));
         });
-        say('Framing the map on the Pacific. The boxed region is where the index is measured.');
+        say('Framing the map on the Pacific. The boxed region is the Nino 3.4 region the index is computed from.');
       }
       return;
     case 'jet':

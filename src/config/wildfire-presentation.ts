@@ -886,6 +886,42 @@ export const POWER_SHARED_QUALIFICATION =
   'Not comprehensive or current; never for siting or safety-critical decisions. Substations and distribution circuits are absent because no authoritative public national source publishes them: distribution networks are held privately by utilities, and substation locations have been withheld for security since 2022. Their absence here is not evidence that none are present.';
 
 /**
+ * Buildings for the desktop 3D Fire mode: USA Structures footprints
+ * (Oak Ridge National Laboratory for the FEMA Geospatial Response Office),
+ * central Oregon pilot bake (scripts/build-structures-tiles.mjs).
+ *
+ * The source publishes no height for any footprint in the pilot box (the
+ * bake refuses to run if one appears), so every building stands at ONE low
+ * height, about one storey, in ONE quiet tone: a shape on the ground, never
+ * a measured rise. Both are constants on purpose; a data-driven height or
+ * tone would imply a measurement the source does not carry. The map and its
+ * key carry no credit, source line or caveat (owner, 2026-11-12); the credit
+ * is the Acknowledgements row.
+ */
+export const STRUCTURES_PRESENTATION = {
+  color: '#78706a',
+  opacity: 0.85,
+  heightMeters: 4
+} as const;
+
+export function buildStructuresPaint(): NonNullable<
+  maplibregl.FillExtrusionLayerSpecification['paint']
+> {
+  return {
+    'fill-extrusion-color': STRUCTURES_PRESENTATION.color,
+    'fill-extrusion-height': STRUCTURES_PRESENTATION.heightMeters,
+    'fill-extrusion-base': 0,
+    'fill-extrusion-opacity': STRUCTURES_PRESENTATION.opacity
+  };
+}
+
+// DRAFT wording (the owner's call): new public wording, held here and read by
+// nothing, so it renders nowhere. Its home, once approved, is the Impact
+// Briefing, never the map or its key (tests/structures-3d.test.mjs holds that).
+export const STRUCTURES_HEIGHT_NOTE_DRAFT =
+  `Building heights in the 3D view are not measured. The source publishes no height for these buildings, so each one is drawn ${STRUCTURES_PRESENTATION.heightMeters} meters tall, about one story, to show where buildings stand.`;
+
+/**
  * NIFC WFIGS query scope (FE-16, 2026-08-28).
  *
  * The national perimeters query used to ask for every attribute and

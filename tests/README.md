@@ -347,8 +347,9 @@ first attempt locally with no retries, and in Validate runs 33452141530 and
 (1m33s and 2m00s, then 1m48s and 2m29s). The isolation may simply have worked.
 The grouping stays until something is measured that says otherwise, but nobody
 should read it as a standing claim that these specs flake today. `chromium-3d`
-holds `fire3d-mode.spec.ts` and
-`view-contracts.spec.ts`, the two files whose 3D cases build terrain, a sky, a
+holds `fire3d-mode.spec.ts`,
+`view-contracts.spec.ts` and `wildfire3d-ground.spec.ts` (`FIRE3D_SPECS` in the
+config), the files whose 3D cases build terrain, a sky, a
 smoke volume, and context tiles on the software renderer and carry their own
 120 to 180 second budgets (the Node-level cases in `fire3d-mode` and the
 three non-3D contract rows ride along; the split is by file, and all three
@@ -367,29 +368,31 @@ Public-repo standard runners are 4 vCPU / 16 GB, not the 2-core machine an
 older comment here assumed; that assumption was measured on a developer
 laptop and has never been re-tested on CI.
 
-Counts, re-measured with `npx playwright test --list --project=<p>` on
-`d5aaac1` (2026-09-01): `chromium` **778** tests in 101 files over 4 shards,
-`chromium-interaction` **42** tests in 4 files over 2 shards, `chromium-3d`
-**32** tests in 2 files over 2 shards. Suite total **852 tests in 107 spec
-files**. The earlier figure recorded here and in
-`.github/workflows/browser-suite.yml`, 763 for `chromium` on 56dd46a
-(2026-08-29), is 15 low; the other two projects have not moved. Of the 852,
-about 292 (34 percent) open no browser page at all: 25 spec files are pure
-`fakeMapHarness` suites, plus the first ten cases of `fire3d-mode.spec.ts`.
-Re-fit these when the suite grows.
+Shard layout and counts. The layout is the matrix in
+`.github/workflows/browser-suite.yml`: `chromium` over 8 shards,
+`chromium-interaction` over 2, `chromium-3d` over 4, 14 shard jobs in all. The
+last test counts recorded are in that workflow's re-fit note (2026-10-12):
+`chromium` about 1,630 tests and `chromium-3d` 84 tests; `chromium-interaction`
+was 42 tests on 2026-09-01 and has not been re-measured since. The checkout
+holds 168 spec files under `tests/` (the `*.spec.ts` files), 34 of them in the
+pure lane (`PURE_SPECS` in `playwright.config.ts`). The 2026-09-01 figures
+this paragraph used to carry (778, 42 and 32 tests; 852 in 107 files) are
+superseded. Re-measure with `npx playwright test --list --project=<p>` when
+the suite is next re-fitted, and replace this paragraph with that result.
 
 `chromium-3d` moved from 3 shards to 2 to pay for `chromium-interaction`'s two
-runners without raising the total shard count more than by one. **That reshard
-was not time-neutral, and the note here previously said it was.** Measured
-across Validate runs 33452141530 and 33444784737: the 2-way split runs 4m49s
-against 10m31s, and 4m43s against 12m26s. `chromium-3d 2/2` is now the
+runners without raising the total shard count more than by one, and moved to
+4 shards on 2026-10-12. **The 2-shard split was not time-neutral, and the note
+here previously said it was.** Measured
+across Validate runs 33452141530 and 33444784737: the 2-way split ran 4m49s
+against 10m31s, and 4m43s against 12m26s, so `chromium-3d 2/2` was the
 critical path of the whole browser suite, at roughly double the next slowest
 shard and five to eight times the cheapest. The split is by file order over 32
-tests whose first 10 run in milliseconds, so shard 1 is nearly free by
-construction. Splitting `chromium-3d` three ways again, or moving
-`view-contracts.spec.ts` into its own project so the split is by cost rather
-than by file order, would rebalance it. Not done here: it is a CI-shape change,
-and GitHub's Validate run is where the full browser suite runs.
+tests whose first 10 run in milliseconds, so shard 1 was nearly free by
+construction. The four-way split replaced it; moving `view-contracts.spec.ts`
+into its own project, so the split is by cost rather than by file order, remains
+an option and a CI-shape change. GitHub's Validate run is where the full
+browser suite runs.
 
 `browser-suite.yml` also takes `workers` and `retries` experiment inputs
 (mirrored as `workflow_dispatch` inputs on `validate.yml`), both defaulted to

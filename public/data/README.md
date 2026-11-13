@@ -104,7 +104,8 @@ state-curated set).
   zoom 0 to 5 (1,602,643 bytes); the National Forests' administrative
   boundaries (3,194,065 bytes). Sources: U.S. Census Bureau 2025 cartographic
   boundary files and TIGER/Line 2025 roads and railroads (public domain); USDA
-  Forest Service administrative forest boundaries (CC0); U.S. Army Corps of
+  Forest Service administrative forest boundaries (public; data.gov lists CC
+  BY 4.0); U.S. Army Corps of
   Engineers National Inventory of Dams; USGS
   1:1,000,000-scale waterbodies, streams and cities, 2014 (public domain);
   Natural Resources Canada, Atlas of Canada National Scale Data 1:1,000,000
@@ -144,6 +145,17 @@ state-curated set).
   views, is never activated automatically by Fire 3D, and reports `zoom in to
   load` below zoom 6. Its live power-plant companion comes from EIA and is not
   stored in this archive.
+- `structures-central-oregon-2023.pmtiles`: building outlines for the 3D Fire
+  view (USA Structures, 2023 edition, Oak Ridge National Laboratory for the
+  FEMA Geospatial Response Office; published on Figshare under CC0 1.0).
+  153,805 footprints, 4,074 tiles, 5,186,150 bytes, z13-14, outlines only; the
+  edition publishes no height in this box and the app draws every building at
+  one stated height. Coverage is the `central_oregon` region framing only.
+  Rebuild: download the two state zips outside the repository, run
+  `.venv/Scripts/python.exe -I scripts/extract-fema-structures.py --zip <Oregon zip> --zip <Washington zip>`,
+  then `npm run build:structures-tiles`; inputs and output are pinned by
+  SHA-256 in `scripts/data/structures-tiles-receipt.json`. Loaded only while
+  the 3D Fire view is active.
 - `us-places.json`: municipal label points (Natural Earth, built by
   `npm run build:places`; see scripts/).
 - `tribal-roster.json` + `tribal-larname-crosswalk.json`: the

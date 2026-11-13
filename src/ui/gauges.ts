@@ -9,7 +9,7 @@
  *                   marked by POSITION (a caret and a taller block) and an
  *                   ink keyline, never by colour alone.
  *   indexGaugeSvg   a signed index against the issuer's thresholds (the ENSO
- *                   index and its onset thresholds).
+ *                   index and its CPC thresholds).
  *   dayStripSvg     a short run of daily classes on one issuer clock (the SPC
  *                   outlook days).
  *

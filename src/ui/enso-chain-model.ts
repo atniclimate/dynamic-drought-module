@@ -33,9 +33,10 @@
  *
  * THE WORDS BETWEEN LINKS name a relationship the repository can cite, or
  * say only that two reads sit side by side. None is a cause:
- *   1 to 2  the index is measured in the box the map draws
- *           (src/ui/sst-anomaly-legend.ts: "the dashed box is Nino 3.4, the
- *           region the ENSO index measures").
+ *   1 to 2  the index is computed from the box the map draws: NOAA CPC's
+ *           RONI is the Nino 3.4 anomaly "with average tropical mean
+ *           (20N-20S) SST anomalies subtracted", so "measured in" said too
+ *           little.
  *   2 to 3  "historically tends to shift" stands on the NOAA CPC ENSO FAQ
  *           sentence the technical section quotes and src/impact/enso.ts
  *           `ENSO_NESTED_TRUTH.events` carries (the briefing's chain uses the
@@ -153,7 +154,7 @@ export interface EnsoClockNode {
   readonly evidence?: EvidenceClass;
   /** The instant the link's date line states, epoch milliseconds. */
   readonly at?: number;
-  /** The word that date wears on the link ("Published", "Observed", "Model valid"). */
+  /** The word that date wears on the link ("Published", "Analysis for", "Model valid"). */
   readonly dateWord?: string;
   /** The date as the link's own line writes it. */
   readonly dateText?: string;
@@ -226,7 +227,7 @@ function indexLink(enso: EnsoRead): Built {
   const base = {
     key: 'index',
     title: 'Observed index',
-    relation: 'measured in the boxed region of',
+    relation: 'computed from the boxed region of',
     action: 'index',
     actionLabel: 'Show the index region and its values on the map'
   } as const;
@@ -274,7 +275,7 @@ function indexLink(enso: EnsoRead): Built {
         above: 'El Nino',
         valueLabel: value,
         state: 'read',
-        title: `ENSO index against the CPC onset thresholds of minus and plus ${reading.threshold}. ${reading.index} ${value}, ${when}: ${headline}.`
+        title: `ENSO index against the CPC thresholds of minus and plus ${reading.threshold}. ${reading.index} ${value}, ${when}: ${headline}.`
       })
     },
     mark: value,
@@ -303,14 +304,14 @@ function patternLink(surface: SurfaceRead): Built {
           // quotes them ("Level 4, MUR sea surface temperature analysis
           // product"), so it wears the analyzed tier and never the observed plate.
           evidence: 'analyzed',
-          dateLine: surface.date ? `Observed ${surface.date}` : null,
+          dateLine: surface.date ? `Analysis for ${surface.date}` : null,
           ...(surface.date
             ? {}
             : { note: 'The provider did not state this frame\'s date this session. The latest frame it publishes is shown.' })
         },
         mark: 'on map',
         ...(surface.date && dayToMs(surface.date) !== undefined
-          ? { clock: { at: dayToMs(surface.date) as number, word: 'Observed', text: surface.date } }
+          ? { clock: { at: dayToMs(surface.date) as number, word: 'Analysis for', text: surface.date } }
           : {})
       };
     case 'degraded':

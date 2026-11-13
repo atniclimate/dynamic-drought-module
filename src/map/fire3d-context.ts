@@ -31,12 +31,17 @@ import { WHP_SHADE_QUALIFICATION } from '../config/whp-shade';
 import { activateWhpDrape, deactivateWhpDrape } from '../layers/whp-3d';
 import { getPowerContextState } from '../state/power-context';
 import type { PowerContextState } from '../state/power-context';
+import {
+  activateStructures,
+  deactivateStructures
+} from '../layers/structures-3d';
 
 /** Stable keys for the context layers, in activation order. */
-export type Fire3DContextKey = 'whp' | 'power';
+export type Fire3DContextKey = 'whp' | 'power' | 'structures';
 
-/** What the orchestrator publishes: the active keys, and one embed
- * disclosure line per active key describing exactly what is rendered. */
+/** What the orchestrator publishes: the active keys, and the embed
+ * disclosure lines describing exactly what is rendered (the buildings
+ * add none: nothing about them prints on the map, owner 2026-11-12). */
 export interface Fire3DContextActivation {
   readonly keys: readonly Fire3DContextKey[];
   readonly embedLines: readonly string[];
@@ -98,6 +103,12 @@ export async function activateContextLayers(
     embedLines.push(buildPowerEmbedLine(power));
   }
 
+  try {
+    if (await activateStructures(map, signal)) keys.push('structures');
+  } catch (err) {
+    console.warn('[fire3d-context] structures activation failed.', err);
+  }
+
   if (signal.aborted) {
     deactivateContextLayers(map);
     return EMPTY_ACTIVATION;
@@ -113,4 +124,5 @@ export async function activateContextLayers(
  */
 export function deactivateContextLayers(map: maplibregl.Map): void {
   deactivateWhpDrape(map);
+  deactivateStructures(map);
 }

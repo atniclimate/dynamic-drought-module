@@ -484,7 +484,7 @@ function conditionsSentence(state: IndexState, latest: SeasonalIndexPoint): stri
   const roni = latestStr(latest);
   const threshold = state.threshold.toFixed(1);
   if (state.conditions === 'neutral') {
-    return `ENSO conditions are neutral${NEUTRAL_TREND[state.direction]}: the newest operational RONI season is ${roni}, inside the CPC onset thresholds of plus or minus ${threshold} degrees Celsius.`;
+    return `ENSO conditions are neutral${NEUTRAL_TREND[state.direction]}: the newest operational RONI season is ${roni}, inside the CPC thresholds of plus or minus ${threshold} degrees Celsius.`;
   }
   const side = state.conditions === 'el-nino' ? 'above' : 'below';
   const sign = state.conditions === 'el-nino' ? 'plus' : 'minus';
@@ -496,7 +496,7 @@ function conditionsSentence(state: IndexState, latest: SeasonalIndexPoint): stri
     state.conditions === 'la-nina'
       ? ({ strengthening: 'weakening', weakening: 'strengthening', steady: 'steady' } as const)[state.direction]
       : state.direction;
-  return `${PHASE_NAME[state.conditions]} conditions are present${EVENT_TREND[trend]}: the newest operational RONI season is ${roni}, ${side} the CPC onset threshold of ${sign} ${threshold} degrees Celsius for a single three-month season.`;
+  return `${PHASE_NAME[state.conditions]} conditions are present${EVENT_TREND[trend]}: the newest operational RONI season is ${roni}, ${side} the CPC threshold of ${sign} ${threshold} degrees Celsius for a single three-month season.`;
 }
 
 /**
@@ -538,8 +538,8 @@ function observedStateText(
         : `about ${weeks} weeks old, so a new RONI season has likely posted and the state may have changed`;
     const wasConditions =
       state.conditions === 'neutral'
-        ? 'inside the CPC onset thresholds'
-        : `past the CPC onset threshold for ${PHASE_NAME[state.conditions]} conditions`;
+        ? 'inside the CPC thresholds'
+        : `past the CPC threshold for ${PHASE_NAME[state.conditions]} conditions`;
     return `As of the CPC snapshot dated ${retrieved} (${ageClause}), the newest operational RONI season was ${latestStr(latest)}, ${wasConditions}, and the historical five-season episode classification read ${PHASE_NAME[state.episode]}. Refresh the snapshot for the current state, and read the CPC ENSO Diagnostic Discussion for the official status.`;
   }
   return `${conditionsSentence(state, latest)} ${episodeSentence(state)}`;
