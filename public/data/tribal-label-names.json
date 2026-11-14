@@ -1,5 +1,5 @@
 {
-  "_comment": "How the Tribal Lands labels name a Nation, beside the Federal Register name the Impact Briefing always carries in full. nation: the Federal Register name as public/data/tribal-roster.json labelAreas holds it. ownNames (decision DR-247): the Nation's name in its own language, one row per Nation, added by hand, only from the Nation's own public pages and only where the page presents the form as the Nation's own name for itself; ownName exactly as the page writes it (capitals, apostrophes and marks kept; Unicode NFC); page, the address read; read, the date read; premise, what the page says the form is. Never from an aggregator, never translated, transliterated or corrected; a Nation whose pages give more than one form, or only a people's or language's name shared with other Nations, has no row; a new letter may need the label face re-cut (scripts/cut-nation-names-font.py; tests/font-coverage.test.mjs says so). shortNames (owner, 2026-11-13): the shorter name a Nation is generally known by, drawn on the map in place of a long formal name; shortName exactly as its source writes it; page and read, the source; basis, why this form was chosen. A Nation with no row keeps its full Federal Register name on the map.",
+  "_comment": "How the Tribal Lands labels name a Nation, beside the Federal Register name the Impact Briefing always carries in full. nation: the Federal Register name as public/data/tribal-roster.json labelAreas holds it. ownNames (decision DR-247): the Nation's name in its own language, one row per Nation, added by hand, only from the Nation's own public pages and only where the page presents the form as the Nation's own name for itself; ownName exactly as the page writes it (capitals, apostrophes and marks kept; Unicode NFC); page, the address read; read, the date read; premise, what the page says the form is. Never from an aggregator, never translated, transliterated or corrected; a Nation whose pages give more than one form, or only a people's or language's name shared with other Nations, has no row; a new letter may need the label face re-cut (scripts/cut-nation-names-font.py; tests/font-coverage.test.mjs says so). shortNames (owner, 2026-11-13): the shorter name a Nation is generally known by, drawn on the map in place of a long formal name; shortName exactly as its source writes it; page and read, the source; basis, why this form was chosen. A Nation with no row keeps its full Federal Register name on the map. areaNames (owner, 2026-11-13): the label of one Census area that its Nation's Federal Register name lists among several bands, places or communities, drawn on that area in place of the Nation's name; the build pins the area to the Nation (scripts/build-tribal-roster.mjs rule 9), so the briefing and the search carry the full Federal Register name. aiannh, the Census area code; census, the Census BASENAME (a Census rename reopens the row); nation, the Federal Register name; areaName as chosen from its source (the Jev judge and the session, 2026-11-13); page and read, the source; premise, what the source says.",
   "ownNames": [
     {
       "nation": "Coeur D'Alene Tribe",
@@ -1521,6 +1521,233 @@
       "page": "https://ashiwi.org/",
       "read": "2026-11-13",
       "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, home page body; also 'The mission of the Pueblo of Zuni Tribal Government is to deliver effective community-oriented services': \"To receive Pueblo of Zuni Alerts, Updates, and Notifications, text the word\""
+    }
+  ],
+  "areaNames": [
+    {
+      "aiannh": "0155",
+      "census": "Barona",
+      "nation": "Capitan Grande Band of Diegueno Mission Indians of California (Barona Group of Capitan Grande Band of Mission Indians of the Barona Reservation, California; Viejas (Baron Long) Group of Capitan Grande Band of Mission Indians of the Viejas Reservation, California)",
+      "areaName": "Barona Band of Mission Indians",
+      "page": "https://www.barona-nsn.gov/",
+      "read": "2026-11-13",
+      "premise": "The Band's own site is headed \"BARONA BAND OF MISSION INDIANS\" and says: \"The Barona Band of Mission Indians is always eager to share their culture and heritage.\""
+    },
+    {
+      "aiannh": "0215",
+      "census": "Big Bend",
+      "nation": "Pit River Tribe, California (includes XL Ranch, Big Bend, Likely, Lookout, Montgomery Creek, and Roaring Creek Rancherias)",
+      "areaName": "Big Bend Rancheria, Pit River Tribe",
+      "page": "https://pitrivertribe.gov/constitution/",
+      "read": "2026-11-13",
+      "premise": "The Tribe's constitution names its lands \"specifically including, but not limited to, the XL Ranch, Montgomery Creek, Roaring Creek, Big Bend, Burney, Lookout, and Likely Rancherias\". The Nation's shorter name follows the area's own, the form chosen for the Tribe's rancherias."
+    },
+    {
+      "aiannh": "0335",
+      "census": "Bois Forte",
+      "nation": "Minnesota Chippewa Tribe, Minnesota (Six component reservations: Bois Forte Band (Nett Lake); Fond du Lac Band; Grand Portage Band; Leech Lake Band; Mille Lacs Band; White Earth Band)",
+      "areaName": "Bois Forte Band of Chippewa",
+      "page": "https://mnchippewatribe.org/about",
+      "read": "2026-11-13",
+      "premise": "The Minnesota Chippewa Tribe's page lists its six component Bands, this one as \"Bois Forte Band of Chippewa / Zagaakwaandagowininiwag\"."
+    },
+    {
+      "aiannh": "0510",
+      "census": "Carson",
+      "nation": "Washoe Tribe of Nevada & California (Carson Colony, Dresslerville Colony, Woodfords Community, Stewart Community, & Washoe Ranches)",
+      "areaName": "Carson Colony, Washoe Tribe",
+      "page": "https://washoetribe.us/departmentlandingpage/163-Page-tribal-council",
+      "read": "2026-11-13",
+      "premise": "The Tribe's Tribal Council page says: \"The Washoe Tribe has four residential communities/colonies: Carson Colony, Stewart Community, Dresslerville Community, and Woodfords Community.\" The Tribe's shorter name follows the community's own, the form chosen for its communities."
+    },
+    {
+      "aiannh": "0940",
+      "census": "Dresslerville",
+      "nation": "Washoe Tribe of Nevada & California (Carson Colony, Dresslerville Colony, Woodfords Community, Stewart Community, & Washoe Ranches)",
+      "areaName": "Dresslerville Community, Washoe Tribe",
+      "page": "https://washoetribe.us/departmentlandingpage/163-Page-tribal-council",
+      "read": "2026-11-13",
+      "premise": "The Tribe's Tribal Council page says: \"The Washoe Tribe has four residential communities/colonies: Carson Colony, Stewart Community, Dresslerville Community, and Woodfords Community.\" The Tribe writes \"Community\" where the Census writes \"Colony\". The Tribe's shorter name follows the community's own, the form chosen for its communities."
+    },
+    {
+      "aiannh": "1125",
+      "census": "Fond du Lac",
+      "nation": "Minnesota Chippewa Tribe, Minnesota (Six component reservations: Bois Forte Band (Nett Lake); Fond du Lac Band; Grand Portage Band; Leech Lake Band; Mille Lacs Band; White Earth Band)",
+      "areaName": "Fond du Lac Band of Lake Superior Chippewa",
+      "page": "https://mnchippewatribe.org/about",
+      "read": "2026-11-13",
+      "premise": "The Minnesota Chippewa Tribe's page lists its six component Bands, this one as \"Fond du Lac Band of Lake Superior Chippewa\"."
+    },
+    {
+      "aiannh": "1355",
+      "census": "Grand Portage",
+      "nation": "Minnesota Chippewa Tribe, Minnesota (Six component reservations: Bois Forte Band (Nett Lake); Fond du Lac Band; Grand Portage Band; Leech Lake Band; Mille Lacs Band; White Earth Band)",
+      "areaName": "Grand Portage Band of Lake Superior Chippewa",
+      "page": "https://www.grandportageband.com/",
+      "read": "2026-11-13",
+      "premise": "The Band's own page names it \"Grand Portage Band of Lake Superior Chippewa\", under the heading \"Gichi Onigaming ... Community\"."
+    },
+    {
+      "aiannh": "1575",
+      "census": "Indian Township",
+      "nation": "Passamaquoddy Tribe",
+      "areaName": "Passamaquoddy (Indian Township)",
+      "page": "https://www.passamaquoddy.com/",
+      "read": "2026-11-13",
+      "premise": "The community's own site is titled \"Passamaquoddy Tribe @ Indian Township | Peskotomuhkati Motahkomikuk\" and says: \"Welcome to the website for the Passamaquoddy Tribe of Indian Township, Maine\"."
+    },
+    {
+      "aiannh": "1940",
+      "census": "Leech Lake",
+      "nation": "Minnesota Chippewa Tribe, Minnesota (Six component reservations: Bois Forte Band (Nett Lake); Fond du Lac Band; Grand Portage Band; Leech Lake Band; Mille Lacs Band; White Earth Band)",
+      "areaName": "Leech Lake Band of Ojibwe",
+      "page": "https://mnchippewatribe.org/about",
+      "read": "2026-11-13",
+      "premise": "The Minnesota Chippewa Tribe's page lists its six component Bands, this one as \"Leech Lake Band of Ojibwe\"."
+    },
+    {
+      "aiannh": "1955",
+      "census": "Likely",
+      "nation": "Pit River Tribe, California (includes XL Ranch, Big Bend, Likely, Lookout, Montgomery Creek, and Roaring Creek Rancherias)",
+      "areaName": "Likely Rancheria, Pit River Tribe",
+      "page": "https://pitrivertribe.gov/constitution/",
+      "read": "2026-11-13",
+      "premise": "The Tribe's constitution names its lands \"specifically including, but not limited to, the XL Ranch, Montgomery Creek, Roaring Creek, Big Bend, Burney, Lookout, and Likely Rancherias\". The Nation's shorter name follows the area's own, the form chosen for the Tribe's rancherias."
+    },
+    {
+      "aiannh": "1980",
+      "census": "Lookout",
+      "nation": "Pit River Tribe, California (includes XL Ranch, Big Bend, Likely, Lookout, Montgomery Creek, and Roaring Creek Rancherias)",
+      "areaName": "Lookout Rancheria, Pit River Tribe",
+      "page": "https://pitrivertribe.gov/constitution/",
+      "read": "2026-11-13",
+      "premise": "The Tribe's constitution names its lands \"specifically including, but not limited to, the XL Ranch, Montgomery Creek, Roaring Creek, Big Bend, Burney, Lookout, and Likely Rancherias\". The Nation's shorter name follows the area's own, the form chosen for the Tribe's rancherias."
+    },
+    {
+      "aiannh": "2270",
+      "census": "Mille Lacs",
+      "nation": "Minnesota Chippewa Tribe, Minnesota (Six component reservations: Bois Forte Band (Nett Lake); Fond du Lac Band; Grand Portage Band; Leech Lake Band; Mille Lacs Band; White Earth Band)",
+      "areaName": "Mille Lacs Band of Ojibwe",
+      "page": "https://millelacsband.com/",
+      "read": "2026-11-13",
+      "premise": "The Band's own site names \"the Non-Removable Mille Lacs Band of Ojibwe\" and says: \"The Band is one of the six component Bands that came together in 1936 to form the organization of the Minnesota Chippewa Tribe ...\""
+    },
+    {
+      "aiannh": "2330",
+      "census": "Montgomery Creek",
+      "nation": "Pit River Tribe, California (includes XL Ranch, Big Bend, Likely, Lookout, Montgomery Creek, and Roaring Creek Rancherias)",
+      "areaName": "Montgomery Creek Rancheria, Pit River Tribe",
+      "page": "https://pitrivertribe.gov/constitution/",
+      "read": "2026-11-13",
+      "premise": "The Tribe's constitution names its lands \"specifically including, but not limited to, the XL Ranch, Montgomery Creek, Roaring Creek, Big Bend, Burney, Lookout, and Likely Rancherias\". The Nation's shorter name follows the area's own, the form chosen for the Tribe's rancherias."
+    },
+    {
+      "aiannh": "2850",
+      "census": "Pleasant Point",
+      "nation": "Passamaquoddy Tribe",
+      "areaName": "Sipayik, Passamaquoddy Tribe",
+      "page": "https://www.sipayik.gov/culture",
+      "read": "2026-11-13",
+      "premise": "The community's own site says: \"The Passamaquoddy Tribe at Sipayik (Pleasant Point), located on a peninsula between the Passamaquoddy and Cobscook bays in Washington County, Maine\"."
+    },
+    {
+      "aiannh": "3185",
+      "census": "Roaring Creek",
+      "nation": "Pit River Tribe, California (includes XL Ranch, Big Bend, Likely, Lookout, Montgomery Creek, and Roaring Creek Rancherias)",
+      "areaName": "Roaring Creek, Pit River Tribe",
+      "page": "https://pitrivertribe.gov/tribal-history/",
+      "read": "2026-11-13",
+      "premise": "The Tribe's history page names its lands \"specifically including, but not limited to, the XL Ranch, Montgomery Creek, Roaring Creek, Big Bend, Burney, Lookout, and Likely Rancherias\". The Nation's shorter name follows the area's own, the form chosen for the Tribe's rancherias."
+    },
+    {
+      "aiannh": "3980",
+      "census": "Stewart",
+      "nation": "Washoe Tribe of Nevada & California (Carson Colony, Dresslerville Colony, Woodfords Community, Stewart Community, & Washoe Ranches)",
+      "areaName": "Stewart Community, Washoe Tribe",
+      "page": "https://washoetribe.us/departmentlandingpage/163-Page-tribal-council",
+      "read": "2026-11-13",
+      "premise": "The Tribe's Tribal Council page says: \"The Washoe Tribe has four residential communities/colonies: Carson Colony, Stewart Community, Dresslerville Community, and Woodfords Community.\" The Tribe's shorter name follows the community's own, the form chosen for its communities."
+    },
+    {
+      "aiannh": "4500",
+      "census": "Viejas",
+      "nation": "Capitan Grande Band of Diegueno Mission Indians of California (Barona Group of Capitan Grande Band of Mission Indians of the Barona Reservation, California; Viejas (Baron Long) Group of Capitan Grande Band of Mission Indians of the Viejas Reservation, California)",
+      "areaName": "Viejas Band of Kumeyaay Indians",
+      "page": "https://viejasbandofkumeyaay.org/viejas-community/kumeyaay-history/",
+      "read": "2026-11-13",
+      "premise": "The Band's own page says: \"The Viejas Band of Kumeyaay Indians, one of the remaining 12 bands of the Kumeyaay Indian Nation, resides on a 1,600-acre reservation in the Viejas Valley\"."
+    },
+    {
+      "aiannh": "4560",
+      "census": "Washoe Ranches",
+      "nation": "Washoe Tribe of Nevada & California (Carson Colony, Dresslerville Colony, Woodfords Community, Stewart Community, & Washoe Ranches)",
+      "areaName": "Washoe Ranches",
+      "page": "https://washoetribe.us/documents/1/Constitution.pdf",
+      "read": "2026-11-13",
+      "premise": "The Tribe's constitution says: \"The Washoe Ranches consist of those lands included in the Faletti Purchase\". The name already carries the Tribe's."
+    },
+    {
+      "aiannh": "4595",
+      "census": "White Earth",
+      "nation": "Minnesota Chippewa Tribe, Minnesota (Six component reservations: Bois Forte Band (Nett Lake); Fond du Lac Band; Grand Portage Band; Leech Lake Band; Mille Lacs Band; White Earth Band)",
+      "areaName": "White Earth Nation",
+      "page": "http://mnchippewatribe.org/about",
+      "read": "2026-11-13",
+      "premise": "The Minnesota Chippewa Tribe's page lists its six component Bands, this one as \"White Earth Nation Gaa-waabaabiganikaag\"."
+    },
+    {
+      "aiannh": "4665",
+      "census": "Woodfords",
+      "nation": "Washoe Tribe of Nevada & California (Carson Colony, Dresslerville Colony, Woodfords Community, Stewart Community, & Washoe Ranches)",
+      "areaName": "Hung A Lel Ti (Woodfords), Washoe Tribe",
+      "page": "https://washoetribe.us/departmentlandingpage/516-Page-hungalelti",
+      "read": "2026-11-13",
+      "premise": "The Tribe's page says: \"The Woodfords Community is located in the Woodfords/Markleeville area ... Two of its members represent the Hung-A-Lel-Ti Community on the main, twelve member Washoe Tribal Council.\" The community council's own site (https://www.woodfordscommunitycouncil.org/what-we-do) writes \"Hung A Lel Ti\". The Tribe's shorter name follows the community's own, the form chosen for its communities."
+    },
+    {
+      "aiannh": "4680",
+      "census": "XL Ranch",
+      "nation": "Pit River Tribe, California (includes XL Ranch, Big Bend, Likely, Lookout, Montgomery Creek, and Roaring Creek Rancherias)",
+      "areaName": "XL Ranch, Pit River Tribe",
+      "page": "https://pitrivertribe.gov/tribal-history/",
+      "read": "2026-11-13",
+      "premise": "The Tribe's history page names its lands \"specifically including, but not limited to, the XL Ranch, Montgomery Creek, Roaring Creek, Big Bend, Burney, Lookout, and Likely Rancherias\". The Nation's shorter name follows the area's own, the form chosen for the Tribe's rancherias."
+    },
+    {
+      "aiannh": "6140",
+      "census": "Arctic Village",
+      "nation": "Native Village of Venetie Tribal Government (Arctic Village and Village of Venetie)",
+      "areaName": "Arctic Village, Native Village of Venetie",
+      "page": "https://www.tananachiefs.org/wp-content/uploads/2026/01/AV-Community-Plan-2026-2031.pdf",
+      "read": "2026-11-13",
+      "premise": "The village's community plan, published by the Tanana Chiefs Conference (not the Nation's own page), is titled \"VASHRAII K'OO (ARCTIC VILLAGE) COMMUNITY PLAN 2021-2031\". The Federal Register lists Arctic Village under the Native Village of Venetie Tribal Government."
+    },
+    {
+      "aiannh": "7340",
+      "census": "St. George",
+      "nation": "Pribilof Islands Aleut Communities of St. Paul & St. George Islands (St. George Island and Saint Paul Island)",
+      "areaName": "St. George, Aleut Community of St. George Island",
+      "page": "https://stgtribe.com/wp-content/uploads/2024/03/368709-St-George_enrollment.pdf",
+      "read": "2026-11-13",
+      "premise": "The Tribe's enrollment form is titled \"Instructions for Aleut Community of St. George Island Member Enrollment\"."
+    },
+    {
+      "aiannh": "7390",
+      "census": "St. Paul",
+      "nation": "Pribilof Islands Aleut Communities of St. Paul & St. George Islands (St. George Island and Saint Paul Island)",
+      "areaName": "St. Paul, Aleut Community of St. Paul Island",
+      "page": "https://www.aleut.com/",
+      "read": "2026-11-13",
+      "premise": "The Tribe's own site says: \"The Tribal Government is the representative sovereign government for the Aleut Community of St. Paul Island - one of the thirteen federally recognized Aleut tribes in the region.\""
+    },
+    {
+      "aiannh": "7725",
+      "census": "Venetie",
+      "nation": "Native Village of Venetie Tribal Government (Arctic Village and Village of Venetie)",
+      "areaName": "Venetie, Native Village of Venetie",
+      "page": "https://www.tribalsafety.org/wp-content/uploads/2025/10/VenetieTTSP_2024Dec.pdf",
+      "read": "2026-11-13",
+      "premise": "The village's Tribal transportation safety plan (a federal program page, not the Nation's own) lists \"Village Council - Village of Venetie ... Tribal Government - Native Village of Venetie\"."
     }
   ]
 }

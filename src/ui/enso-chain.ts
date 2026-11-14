@@ -194,7 +194,11 @@ function paint(): void {
     surface: { status: registry.getStatus(SURFACE_KEY) ?? null, date: state.frameDate },
     jet: state.jet,
     place: state.place
-      ? { label: state.place.label, inside: state.place.context.pointInsidePlace === true }
+      ? {
+          label: state.place.label,
+          inside: state.place.context.pointInsidePlace === true,
+          ...(state.place.context.readAt ? { readAt: state.place.context.readAt } : {})
+        }
       : null,
     outlook: state.outlook,
     here: state.here,

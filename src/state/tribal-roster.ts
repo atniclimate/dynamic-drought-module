@@ -8,7 +8,8 @@
  * need trusted formal names. Extracted with Unit I so the STRUCTURAL
  * provenance gate lives in exactly one place.
  *
- * Stewardship: the roster carries NAMES ONLY (no geometry). A formal Tribal
+ * Stewardship: the roster carries NAMES ONLY (no geometry), apart from the
+ * headquarters rows' town points (build rule 14). A formal Tribal
  * Nation name may be used ONLY from a row whose provenance is trusted; any
  * other row keeps the BIA land-area label verbatim (hard rules 5 and 6,
  * D-0.7.0-026). Consumers must not soften this gate.
@@ -57,6 +58,37 @@ export interface TribalCensusArea {
   readonly name: string;
   readonly displayName: string;
   readonly provenance?: string;
+  /** A state-recognized Census area pinned to a Nation no other row finds (build rule 13). */
+  readonly stateArea?: boolean;
+}
+
+/**
+ * A Nation's headquarters town (`headquarters`, build rule 14): for a Nation
+ * no boundary source draws an area for. The point is the Census place's
+ * internal point, a town and never the Nation's land.
+ */
+export interface TribalHeadquarters {
+  readonly displayName: string;
+  readonly provenance?: string;
+  readonly town: string;
+  /** Postal code. */
+  readonly state: string;
+  readonly point: readonly [number, number];
+  readonly source: string;
+}
+
+function isHeadquarters(row: unknown): row is TribalHeadquarters {
+  if (!isObject(row)) return false;
+  const point = row['point'];
+  return (
+    typeof row['displayName'] === 'string' &&
+    typeof row['town'] === 'string' &&
+    typeof row['state'] === 'string' &&
+    typeof row['source'] === 'string' &&
+    Array.isArray(point) &&
+    point.length === 2 &&
+    point.every((n) => typeof n === 'number' && Number.isFinite(n))
+  );
 }
 
 /** The same gate for a Census row: untrusted rows keep the Census name. */
@@ -82,6 +114,8 @@ interface RosterFile {
   readonly censusAreas: readonly TribalCensusArea[];
   /** Census AIANNH code to the Nations' Federal Register names, for the Tribal Lands labels. */
   readonly labelAreas: ReadonlyMap<string, readonly string[]>;
+  /** Trusted rows only: a Nation's name is never shown from any other. */
+  readonly headquarters: readonly TribalHeadquarters[];
 }
 
 function labelAreasOf(raw: unknown): ReadonlyMap<string, readonly string[]> {
@@ -121,10 +155,14 @@ function loadRosterFile(): Promise<RosterFile> {
       const areas = isObject(json) ? json['areas'] : undefined;
       // An older roster (and every test fixture) has no censusAreas: none.
       const census = isObject(json) ? json['censusAreas'] : undefined;
+      const headquarters = isObject(json) ? json['headquarters'] : undefined;
       rosterCache = {
         areas: Array.isArray(areas) ? (areas as readonly TribalRosterArea[]) : [],
         censusAreas: Array.isArray(census) ? census.filter(isCensusArea) : [],
-        labelAreas: labelAreasOf(isObject(json) ? json['labelAreas'] : undefined)
+        labelAreas: labelAreasOf(isObject(json) ? json['labelAreas'] : undefined),
+        headquarters: Array.isArray(headquarters)
+          ? headquarters.filter(isHeadquarters).filter((row) => TRUSTED_PROVENANCE.has(row.provenance ?? ''))
+          : []
       };
       return rosterCache;
     } catch (err) {
@@ -151,6 +189,11 @@ export function loadTribalCensusAreas(): Promise<readonly TribalCensusArea[]> {
   return loadRosterFile().then((f) => f.censusAreas);
 }
 
+/** The headquarters-town rows from the same cached load; rejects like loadTribalRoster. */
+export function loadTribalHeadquarters(): Promise<readonly TribalHeadquarters[]> {
+  return loadRosterFile().then((f) => f.headquarters);
+}
+
 /** The Tribal Lands label map from the same cached load; rejects like loadTribalRoster. */
 export function loadTribalLabelAreas(): Promise<ReadonlyMap<string, readonly string[]>> {
   return loadRosterFile().then((f) => f.labelAreas);
@@ -164,17 +207,22 @@ export interface TribalLabelNames {
   readonly own: ReadonlyMap<string, string>;
   /** The shorter name it is generally known by (owner, 2026-11-13), drawn in place of a long formal name. */
   readonly short: ReadonlyMap<string, string>;
+  /**
+   * By Census AIANNH code: the label of one area that its Nation's Federal Register name lists among
+   * several bands, places or communities (owner, 2026-11-13), drawn on that area in place of the Nation's name.
+   */
+  readonly area: ReadonlyMap<string, string>;
 }
 
 let labelNamesLoad: Promise<TribalLabelNames> | null = null;
 
 /** One curated column of public/data/tribal-label-names.json, NFC (MapLibre does no Unicode normalization). */
-function namesOf(json: unknown, list: string, field: string): ReadonlyMap<string, string> {
+function namesOf(json: unknown, list: string, field: string, key = 'nation'): ReadonlyMap<string, string> {
   const rows = isObject(json) && Array.isArray(json[list]) ? (json[list] as unknown[]) : [];
   return new Map(
     rows.flatMap((r) =>
-      isObject(r) && typeof r['nation'] === 'string' && typeof r[field] === 'string'
-        ? [[r['nation'], (r[field] as string).normalize('NFC')] as const]
+      isObject(r) && typeof r[key] === 'string' && typeof r[field] === 'string'
+        ? [[r[key] as string, (r[field] as string).normalize('NFC')] as const]
         : []
     )
   );
@@ -187,7 +235,11 @@ function namesOf(json: unknown, list: string, field: string): ReadonlyMap<string
  */
 export function loadTribalLabelNames(): Promise<TribalLabelNames> {
   labelNamesLoad ??= fetchJsonWithBudget(LABEL_NAMES_URL, null, null, ROSTER_TIMEOUT_MS).then(
-    (json) => ({ own: namesOf(json, 'ownNames', 'ownName'), short: namesOf(json, 'shortNames', 'shortName') }),
+    (json) => ({
+      own: namesOf(json, 'ownNames', 'ownName'),
+      short: namesOf(json, 'shortNames', 'shortName'),
+      area: namesOf(json, 'areaNames', 'areaName', 'aiannh')
+    }),
     (err: unknown) => {
       labelNamesLoad = null;
       throw err instanceof Error ? err : new Error(String(err));

@@ -629,7 +629,13 @@ export async function fetchUsdmClaims(
   const source = 'U.S. Drought Monitor (NDMC / NOAA / USDA)';
   const sourceUrl = 'https://droughtmonitor.unl.edu/';
   // Where the read is: the place's own area, the user's click, or a point the app chose inside a selected place.
-  const at = area ? 'in this area' : context.pointInsidePlace ? 'at a point inside the selected place' : 'at the clicked point';
+  const at = area
+    ? 'in this area'
+    : context.readAt
+      ? `at ${context.readAt}`
+      : context.pointInsidePlace
+        ? 'at a point inside the selected place'
+        : 'at the clicked point';
 
   try {
     let json: unknown;
@@ -731,7 +737,7 @@ export async function fetchUsdmClaims(
         claims: [
           makeClaim({
             // For a click, the popup's no-polygon sentence (popup-conditions.ts), word for word.
-            text: `No D0-D4 category polygon ${area || context.pointInsidePlace ? at : 'here'} (U.S. Drought Monitor). This client has no analyzed-area mask, so this does not confirm no drought.${mapProduct}`,
+            text: `No D0-D4 category polygon ${area || context.pointInsidePlace || context.readAt ? at : 'here'} (U.S. Drought Monitor). This client has no analyzed-area mask, so this does not confirm no drought.${mapProduct}`,
             ...usdmShared,
             reading: usdmReading
           })

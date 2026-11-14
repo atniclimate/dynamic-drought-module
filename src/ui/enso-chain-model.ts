@@ -113,7 +113,7 @@ export interface EnsoChainInput {
    * is the selection's `pointInsidePlace`: the reads are made at a point the
    * app chose inside the place (a search, a link), not at a click.
    */
-  readonly place: { readonly label: string; readonly inside: boolean } | null;
+  readonly place: { readonly label: string; readonly inside: boolean; readonly readAt?: string } | null;
   readonly outlook: PlaceRead;
   readonly here: PlaceRead;
   /**
@@ -393,7 +393,8 @@ function jetLink(jet: JetRead): Built {
 }
 
 /** Where a place read was made, in the claim's own sense (src/impact/sources.ts: a point inside the place, or the click). */
-function wherePhrase(place: { readonly label: string; readonly inside: boolean }): string {
+function wherePhrase(place: { readonly label: string; readonly inside: boolean; readonly readAt?: string }): string {
+  if (place.readAt) return `at ${place.readAt}`;
   return place.inside ? `at a point inside ${place.label}` : `at the clicked point (${place.label})`;
 }
 

@@ -12,6 +12,8 @@
  *   - tribal a Tribal land area (LARNAME) or a Census AIANNH area
  *            (census:<code>) for a Tribe LAR cannot locate; locates it live,
  *            frames it, lights it, and opens its briefing (locateBoundary).
+ *            A Nation neither source draws (hq:<Nation name>) opens at its
+ *            headquarters town (openHeadquarters).
  *   - place  a state; opens its drought briefing (openStateBriefing).
  *   - city   a major city from the shipped Natural Earth points; moves the
  *            camera and opens the briefing of the State that holds it (no
@@ -36,7 +38,7 @@ import { LAYER_DEFS } from '../config/layers';
 import { URLS } from '../config/urls';
 import { STATE_LABEL } from '../impact/resources';
 import type { StateCode } from '../impact/resources';
-import { buildBoundaryContext } from '../impact/context';
+import { buildBoundaryContext, stateAreaNote } from '../impact/context';
 import { escapeSql, mergeArealGeometry } from '../util/arcgis-features';
 import { bboxCenter, bboxToContinuousBounds } from '../util/bbox';
 import { geometryBboxAcrossAntimeridian } from '../util/antimeridian';
@@ -47,9 +49,11 @@ import { onPlaceSelectionChange, setPlaceSelection } from '../state/place-select
 import {
   loadTribalRoster,
   loadTribalCensusAreas,
+  loadTribalHeadquarters,
   gatedDisplayName,
   gatedCensusName
 } from '../state/tribal-roster';
+import type { TribalHeadquarters } from '../state/tribal-roster';
 import { fetchBufferedWithBudget, fetchJsonWithBudget } from '../util/fetch';
 import { isObject } from '../util/guards';
 import { requestLayerOn } from './layer-toggle-command';
@@ -94,6 +98,12 @@ function buildSyncItems(
 
 let tribalCache: SearchItem[] | null = null;
 let tribalInFlight: Promise<SearchItem[]> | null = null;
+/** The headquarters-town rows (build rule 14), keyed by item id. */
+const headquartersById = new Map<string, TribalHeadquarters>();
+/** The briefing line of a state-recognized Census area's row (build rule 13), keyed by item id. */
+const stateAreaNotes = new Map<string, string>();
+
+const stateName = (code: string): string => STATE_LABEL[code as StateCode] ?? code;
 
 // shortcut: rank <= 4 keeps names unique (111 cities); a deeper cut needs a state field in us-places.json
 const MAJOR_CITY_MAX_RANK = 4;
@@ -158,7 +168,11 @@ function loadTribal(): Promise<SearchItem[]> {
   if (tribalInFlight) return tribalInFlight;
   tribalInFlight = (async () => {
     try {
-      const [areas, census] = await Promise.all([loadTribalRoster(), loadTribalCensusAreas()]);
+      const [areas, census, headquarters] = await Promise.all([
+        loadTribalRoster(),
+        loadTribalCensusAreas(),
+        loadTribalHeadquarters()
+      ]);
       const seen = new Map<string, number>();
       // Areas with a row on their own Census name: there, a Nation's row answers to the Nation's name alone,
       // so "comanche" does not also list the three Nations that share the Comanche Nation's statistical area.
@@ -169,9 +183,13 @@ function loadTribal(): Promise<SearchItem[]> {
         // An area several Nations share has one row per Nation: the first keeps the plain id, later ones a suffix.
         const nth = seen.get(a.aiannh) ?? 0;
         seen.set(a.aiannh, nth + 1);
+        const id = `census:${a.aiannh}${nth ? `:${nth}` : ''}`;
+        if (a.stateArea) {
+          stateAreaNotes.set(id, stateAreaNote(a.name));
+        }
         return {
           kind: 'tribal' as const,
-          id: `census:${a.aiannh}${nth ? `:${nth}` : ''}`,
+          id,
           label,
           ...(label !== a.name ? { sublabel: `Census area: ${a.name}` } : {}),
           // An OTSA is an Oklahoma Tribal Statistical Area: "of Oklahoma" finds it, never a same-named area elsewhere.
@@ -192,7 +210,19 @@ function loadTribal(): Promise<SearchItem[]> {
           ...(label !== a.larName ? { sublabel: `Land area: ${a.larName}` } : {})
         };
       });
-      tribalCache = [...items, ...censusItems];
+      // A Nation no boundary source draws: found under its own name, opened at its headquarters town.
+      const headquartersItems: SearchItem[] = headquarters.map((row) => {
+        const id = `hq:${row.displayName}`;
+        headquartersById.set(id, row);
+        return {
+          kind: 'tribal' as const,
+          id,
+          label: row.displayName,
+          sublabel: `Headquarters town: ${row.town}, ${stateName(row.state)}`,
+          haystack: foldSearchText(row.displayName)
+        };
+      });
+      tribalCache = [...items, ...censusItems, ...headquartersItems];
       return tribalCache;
     } catch (err) {
       console.warn('[search] Tribal roster load failed.', err);
@@ -232,8 +262,10 @@ interface LocateSpec {
   readonly title: string;
   /** The row's sublabel, the service's own area name, set only when the title differs from it. */
   readonly areaLabel?: string;
+  /** The row's plain briefing line, set only for a state-recognized Census area. */
+  readonly landNote?: string;
 }
-type LocateLabels = Pick<LocateSpec, 'title' | 'areaLabel'>;
+type LocateLabels = Pick<LocateSpec, 'title' | 'areaLabel' | 'landNote'>;
 
 /**
  * Locate a Tribal land area: one live boundary query (AIAN-LAR by LARNAME, or
@@ -330,7 +362,8 @@ async function locateBoundary(map: maplibregl.Map, spec: LocateSpec): Promise<vo
   );
   const context = {
     ...(bbox ? { ...rawContext, bbox, pointInsidePlace: true, placeGeometry: aggregateGeometry } : rawContext),
-    ...(spec.areaLabel ? { areaLabel: spec.areaLabel } : {})
+    ...(spec.areaLabel ? { areaLabel: spec.areaLabel } : {}),
+    ...(spec.landNote ? { landNote: spec.landNote } : {})
   };
   setPlaceSelection({ label: context.title, context });
   openImpactPanel(context);
@@ -409,6 +442,47 @@ async function openContainingStateBriefing(
   }
 }
 
+/** Move the camera to a point (a city, a headquarters town), clear of the briefing that opens beside it. */
+function easeToPoint(map: maplibregl.Map, center: [number, number]): void {
+  // The point lands in the part of the map the briefing leaves clear (the centre of the padded view;
+  // `offset` shifts this move only, unlike a persistent `padding`).
+  const pad = briefingCameraPadding(true);
+  map.easeTo({
+    center,
+    zoom: Math.max(map.getZoom(), 8),
+    offset: [((pad.left ?? 0) - (pad.right ?? 0)) / 2, ((pad.top ?? 0) - (pad.bottom ?? 0)) / 2]
+  });
+  // Every search host passes here; the sidebar's region menu listens (it is not imported into this chunk).
+  window.dispatchEvent(new Event('ddm:city-view'));
+}
+
+/**
+ * A Nation neither boundary source draws (build rule 14): its briefing, under
+ * its full Federal Register name, opens at its headquarters town. No outline
+ * is lit and no service asked: the town is where the office is, not the
+ * Nation's land, and the briefing says so in one line.
+ */
+function openHeadquarters(map: maplibregl.Map, row: TribalHeadquarters): void {
+  nextBriefingIntent();
+  locateAbort?.abort();
+  locateAbort = null;
+  const [lng, lat] = row.point;
+  easeToPoint(map, [lng, lat]);
+  requestLayerOn('aiannh');
+  const context = {
+    ...buildBoundaryContext('aiannh', { NAME: row.displayName, STUSPS: row.state }, null, { lng, lat }, row.displayName),
+    kindLabel: 'Headquarters town (US Census place)',
+    // Nobody clicked: point readings say they are read at the town.
+    readAt: `the headquarters town, ${row.town}`,
+    landNote:
+      "Neither of the map's boundary sources (BIA, Census) draws an area for this Nation. " +
+      `The map opens at its headquarters town, ${row.town}, ${stateName(row.state)}.`
+  };
+  setPlaceSelection({ label: context.title, context });
+  openImpactPanel(context);
+  clearEmphasis(map);
+}
+
 /** Route a chosen search result to its action. */
 function selectResult(map: maplibregl.Map, item: SearchItem): void {
   if (item.kind === 'layer') {
@@ -437,22 +511,23 @@ function selectResult(map: maplibregl.Map, item: SearchItem): void {
     setPlaceSelection(null);
     const center = cityCoords.get(item.id);
     if (center) {
-      // The State's briefing opens beside it, so the city lands in the part of the map the briefing leaves clear
-      // (the centre of the padded view; `offset` shifts this move only, unlike a persistent `padding`).
-      const pad = briefingCameraPadding(true);
-      map.easeTo({
-        center,
-        zoom: Math.max(map.getZoom(), 8),
-        offset: [((pad.left ?? 0) - (pad.right ?? 0)) / 2, ((pad.top ?? 0) - (pad.bottom ?? 0)) / 2]
-      });
-      // Every search host passes here; the sidebar's region menu listens (it is not imported into this chunk).
-      window.dispatchEvent(new Event('ddm:city-view'));
+      easeToPoint(map, center);
       void openContainingStateBriefing(map, center, intent);
     }
     return;
   }
+  const headquarters = headquartersById.get(item.id);
+  if (headquarters) {
+    openHeadquarters(map, headquarters);
+    return;
+  }
   // The row's gated label titles the selection (a formal Nation name is never abbreviated).
-  const labels = { title: item.label, ...(item.sublabel ? { areaLabel: item.sublabel } : {}) };
+  const landNote = stateAreaNotes.get(item.id);
+  const labels = {
+    title: item.label,
+    ...(item.sublabel ? { areaLabel: item.sublabel } : {}),
+    ...(landNote ? { landNote } : {})
+  };
   if (item.id.startsWith('census:')) {
     void locateCensusArea(map, item.id.slice('census:'.length, 'census:'.length + 4), labels);
     return;

@@ -1,21 +1,25 @@
 {
-  "_comment": "NAMES ONLY search index for Tribal land areas (U3b, D-STD-012; safe matcher and provenance gate per D-0.7.0-026). No polygons or coordinates: a search selection queries the live AIAN-LAR service for the extent at selection time. provenance safe-match: displayName is the formal Federal Register Tribe name, matched under the safety rules in scripts/build-tribal-roster.mjs. provenance lar-label: displayName is the BIA land-area label verbatim (no Tribe mapping is guessed). censusAreas: Census AIANNH federal areas (names only; a search selection queries the live Census service): every OTSA, TDSA and ANVSA, plus reservation and trust land areas only for Tribes AIAN-LAR does not locate, so a Nation can appear both as a LAR land area and as a Census statistical area. provenance census-label keeps the Census name verbatim. A statistical area the label map names with one Nation carries that Nation, and a Nation the label map names that has no other row has one row per area that names it, so an area several Nations share has several rows. labelAreas: Census AIANNH code to the Federal Register names the Tribal Lands layer labels that area with (every federal row the Census matcher resolves, reservations included, plus the rows confirmed against the US EPA Tribal Areas tables, which publish the Census area id beside the Tribe; \"(previously listed as ...)\" dropped). Regenerate with `npm run build:tribal-roster`.",
+  "_comment": "NAMES ONLY search index for Tribal land areas (U3b, D-STD-012; safe matcher and provenance gate per D-0.7.0-026). No polygons, and no coordinates outside headquarters: a search selection queries the live AIAN-LAR service for the extent at selection time. provenance safe-match: displayName is the formal Federal Register Tribe name, matched under the safety rules in scripts/build-tribal-roster.mjs. provenance lar-label: displayName is the BIA land-area label verbatim (no Tribe mapping is guessed). censusAreas: Census AIANNH federal areas (names only; a search selection queries the live Census service): every OTSA, TDSA and ANVSA, plus reservation and trust land areas only for Tribes AIAN-LAR does not locate, so a Nation can appear both as a LAR land area and as a Census statistical area. provenance census-label keeps the Census name verbatim. A statistical area the label map names with one Nation carries that Nation, and a Nation the label map names that has no other row has one row per area that names it, so an area several Nations share has several rows. labelAreas: Census AIANNH code to the Federal Register names the Tribal Lands layer labels that area with (every federal row the Census matcher resolves, reservations included, plus the rows confirmed against the US EPA Tribal Areas tables, which publish the Census area id beside the Tribe, and the areas tribal-label-names.json areaNames labels as one band, place or community of its Nation; \"(previously listed as ...)\" dropped). A censusAreas row with stateArea true is a state-recognized Census area pinned to a Nation no other row finds (never in labelAreas). headquarters: for each other Nation neither boundary source draws, its headquarters town (Census place code, town, State, source page) and the place's Census internal point [lon, lat]: a town point, never an area. Regenerate with `npm run build:tribal-roster`.",
   "meta": {
     "rosterSource": "Federal Register 2026-01899 (2026-01-30)",
     "landAreaSource": "BIA AIAN-LAR FeatureServer (distinct LARNAME)",
     "matcher": "LAR areas, safe-match v2 (D-0.7.0-026): unique whole-phrase containment, state-constrained, distinctive-token guard; plus the maintainer-curated known-ambiguous gate (D-0.7.0-026a); then rule 10: a remaining BIA label takes the Nations of its one same-name Census reservation",
     "censusMatcher": "Census areas (rule 7): maintainer-curated known-ambiguous gate (D-0.7.0-026a) first; then unique whole-phrase containment of BASENAME outside the roster name parentheses, or equality with a parenthetical, distinctive-token guard; several candidates resolve only when exactly one carries BASENAME as its parenthetical; no state constraint",
-    "generated": "2026-11-13",
+    "generated": "2026-11-14",
     "rosterCount": 573,
     "landAreaCount": 335,
     "safeMatchCount": 287,
     "larLabelCount": 48,
     "censusSource": "US Census Bureau TIGERweb AIANNH layer 47 (names only)",
-    "censusAreaCount": 299,
+    "censusAreaCount": 302,
     "censusSafeMatchCount": 232,
     "censusFederalCount": 578,
-    "labelAreaCount": 545,
-    "labelConfirmedCount": 93
+    "labelAreaCount": 570,
+    "labelConfirmedCount": 93,
+    "labelAreaNameCount": 25,
+    "stateAreaCount": 3,
+    "headquartersCount": 22,
+    "headquartersSource": "US Census Bureau TIGERweb Places, incorporated and census designated places (internal point)"
   },
   "areas": [
     {
@@ -1768,12 +1772,6 @@
       "provenance": "safe-match"
     },
     {
-      "aiannh": "6140",
-      "name": "Arctic Village ANVSA",
-      "displayName": "Arctic Village ANVSA",
-      "provenance": "census-label"
-    },
-    {
       "aiannh": "6975",
       "name": "Mountain Village ANVSA",
       "displayName": "Asa'carsarmiut Tribe",
@@ -2222,6 +2220,13 @@
       "name": "Galena ANVSA",
       "displayName": "Louden Tribe (previously listed as Galena Village (aka Louden Village))",
       "provenance": "safe-match"
+    },
+    {
+      "aiannh": "9815",
+      "name": "Lumbee SDTSA",
+      "displayName": "Lumbee Tribe of North Carolina",
+      "provenance": "safe-match",
+      "stateArea": true
     },
     {
       "aiannh": "6900",
@@ -2818,6 +2823,18 @@
       "provenance": "safe-match"
     },
     {
+      "aiannh": "6140",
+      "name": "Arctic Village ANVSA",
+      "displayName": "Native Village of Venetie Tribal Government (Arctic Village and Village of Venetie)",
+      "provenance": "safe-match"
+    },
+    {
+      "aiannh": "7725",
+      "name": "Venetie ANVSA",
+      "displayName": "Native Village of Venetie Tribal Government (Arctic Village and Village of Venetie)",
+      "provenance": "safe-match"
+    },
+    {
       "aiannh": "7740",
       "name": "Wales ANVSA",
       "displayName": "Native Village of Wales",
@@ -3004,6 +3021,13 @@
       "provenance": "safe-match"
     },
     {
+      "aiannh": "9260",
+      "name": "Pamunkey (state) Reservation",
+      "displayName": "Pamunkey Indian Tribe",
+      "provenance": "safe-match",
+      "stateArea": true
+    },
+    {
       "aiannh": "5780",
       "name": "Pawnee OTSA",
       "displayName": "Pawnee Nation of Oklahoma",
@@ -3079,6 +3103,18 @@
       "aiannh": "2980",
       "name": "Prairie Band of Potawatomi Nation Reservation and Off-Reservation Trust Land",
       "displayName": "Prairie Band Potawatomi Nation",
+      "provenance": "safe-match"
+    },
+    {
+      "aiannh": "7340",
+      "name": "St. George ANVSA",
+      "displayName": "Pribilof Islands Aleut Communities of St. Paul & St. George Islands (St. George Island and Saint Paul Island)",
+      "provenance": "safe-match"
+    },
+    {
+      "aiannh": "7390",
+      "name": "St. Paul ANVSA",
+      "displayName": "Pribilof Islands Aleut Communities of St. Paul & St. George Islands (St. George Island and Saint Paul Island)",
       "provenance": "safe-match"
     },
     {
@@ -3184,6 +3220,13 @@
       "provenance": "safe-match"
     },
     {
+      "aiannh": "9370",
+      "name": "Shinnecock (state) Reservation",
+      "displayName": "Shinnecock Indian Nation",
+      "provenance": "safe-match",
+      "stateArea": true
+    },
+    {
       "aiannh": "1860",
       "name": "Lake Traverse Reservation and Off-Reservation Trust Land",
       "displayName": "Sisseton-Wahpeton Oyate of the Lake Traverse Reservation, South Dakota",
@@ -3218,18 +3261,6 @@
       "name": "Spirit Lake Reservation",
       "displayName": "Spirit Lake Tribe, North Dakota",
       "provenance": "safe-match"
-    },
-    {
-      "aiannh": "7340",
-      "name": "St. George ANVSA",
-      "displayName": "St. George ANVSA",
-      "provenance": "census-label"
-    },
-    {
-      "aiannh": "7390",
-      "name": "St. Paul ANVSA",
-      "displayName": "St. Paul ANVSA",
-      "provenance": "census-label"
     },
     {
       "aiannh": "7510",
@@ -3325,12 +3356,6 @@
       "aiannh": "7705",
       "name": "Uyak ANVSA",
       "displayName": "Uyak ANVSA",
-      "provenance": "census-label"
-    },
-    {
-      "aiannh": "7725",
-      "name": "Venetie ANVSA",
-      "displayName": "Venetie ANVSA",
       "provenance": "census-label"
     },
     {
@@ -3515,6 +3540,9 @@
     "1110": [
       "Confederated Salish and Kootenai Tribes of the Flathead Reservation"
     ],
+    "1125": [
+      "Minnesota Chippewa Tribe, Minnesota (Six component reservations: Bois Forte Band (Nett Lake); Fond du Lac Band; Grand Portage Band; Leech Lake Band; Mille Lacs Band; White Earth Band)"
+    ],
     "1135": [
       "Forest County Potawatomi Community, Wisconsin"
     ],
@@ -3562,6 +3590,9 @@
     ],
     "1340": [
       "Confederated Tribes of the Goshute Reservation, Nevada and Utah"
+    ],
+    "1355": [
+      "Minnesota Chippewa Tribe, Minnesota (Six component reservations: Bois Forte Band (Nett Lake); Fond du Lac Band; Grand Portage Band; Leech Lake Band; Mille Lacs Band; White Earth Band)"
     ],
     "1365": [
       "Confederated Tribes of the Grand Ronde Community of Oregon"
@@ -3616,6 +3647,9 @@
     ],
     "1560": [
       "Inaja Band of Diegueno Mission Indians of the Inaja and Cosmit Reservation, California"
+    ],
+    "1575": [
+      "Passamaquoddy Tribe"
     ],
     "1590": [
       "Iowa Tribe of Kansas and Nebraska"
@@ -3695,6 +3729,12 @@
     "1925": [
       "Cahto Tribe of the Laytonville Rancheria"
     ],
+    "1940": [
+      "Minnesota Chippewa Tribe, Minnesota (Six component reservations: Bois Forte Band (Nett Lake); Fond du Lac Band; Grand Portage Band; Leech Lake Band; Mille Lacs Band; White Earth Band)"
+    ],
+    "1955": [
+      "Pit River Tribe, California (includes XL Ranch, Big Bend, Likely, Lookout, Montgomery Creek, and Roaring Creek Rancherias)"
+    ],
     "1960": [
       "Little River Band of Ottawa Indians, Michigan"
     ],
@@ -3703,6 +3743,9 @@
     ],
     "1970": [
       "Lone Pine Paiute-Shoshone Tribe"
+    ],
+    "1980": [
+      "Pit River Tribe, California (includes XL Ranch, Big Bend, Likely, Lookout, Montgomery Creek, and Roaring Creek Rancherias)"
     ],
     "1995": [
       "Los Coyotes Band of Cahuilla and Cupeno Indians, California"
@@ -3761,6 +3804,9 @@
     "2255": [
       "Middletown Rancheria of Pomo Indians of California"
     ],
+    "2270": [
+      "Minnesota Chippewa Tribe, Minnesota (Six component reservations: Bois Forte Band (Nett Lake); Fond du Lac Band; Grand Portage Band; Leech Lake Band; Mille Lacs Band; White Earth Band)"
+    ],
     "2285": [
       "Minnesota Chippewa Tribe, Minnesota (Six component reservations: Bois Forte Band (Nett Lake); Fond du Lac Band; Grand Portage Band; Leech Lake Band; Mille Lacs Band; White Earth Band)"
     ],
@@ -3772,6 +3818,9 @@
     ],
     "2320": [
       "Mohegan Tribe of Indians of Connecticut"
+    ],
+    "2330": [
+      "Pit River Tribe, California (includes XL Ranch, Big Bend, Likely, Lookout, Montgomery Creek, and Roaring Creek Rancherias)"
     ],
     "2340": [
       "Mooretown Rancheria of Maidu Indians of California"
@@ -3872,6 +3921,9 @@
     "2835": [
       "Pit River Tribe, California (includes XL Ranch, Big Bend, Likely, Lookout, Montgomery Creek, and Roaring Creek Rancherias)"
     ],
+    "2850": [
+      "Passamaquoddy Tribe"
+    ],
     "2865": [
       "Poarch Band of Creek Indians"
     ],
@@ -3940,6 +3992,9 @@
     ],
     "3165": [
       "Rincon Band of Luiseno Indians"
+    ],
+    "3185": [
+      "Pit River Tribe, California (includes XL Ranch, Big Bend, Likely, Lookout, Montgomery Creek, and Roaring Creek Rancherias)"
     ],
     "3195": [
       "Robinson Rancheria"
@@ -4076,6 +4131,9 @@
     "3970": [
       "Standing Rock Sioux Tribe of North & South Dakota"
     ],
+    "3980": [
+      "Washoe Tribe of Nevada & California (Carson Colony, Dresslerville Colony, Woodfords Community, Stewart Community, & Washoe Ranches)"
+    ],
     "3985": [
       "Kashia Band of Pomo Indians of the Stewarts Point Rancheria, California"
     ],
@@ -4172,6 +4230,9 @@
     "4470": [
       "Ute Mountain Ute Tribe"
     ],
+    "4500": [
+      "Capitan Grande Band of Diegueno Mission Indians of California (Barona Group of Capitan Grande Band of Mission Indians of the Barona Reservation, California; Viejas (Baron Long) Group of Capitan Grande Band of Mission Indians of the Viejas Reservation, California)"
+    ],
     "4515": [
       "Walker River Paiute Tribe of the Walker River Reservation, Nevada"
     ],
@@ -4180,6 +4241,12 @@
     ],
     "4545": [
       "Confederated Tribes of the Warm Springs Reservation of Oregon"
+    ],
+    "4560": [
+      "Washoe Tribe of Nevada & California (Carson Colony, Dresslerville Colony, Woodfords Community, Stewart Community, & Washoe Ranches)"
+    ],
+    "4595": [
+      "Minnesota Chippewa Tribe, Minnesota (Six component reservations: Bois Forte Band (Nett Lake); Fond du Lac Band; Grand Portage Band; Leech Lake Band; Mille Lacs Band; White Earth Band)"
     ],
     "4610": [
       "Eastern Shoshone Tribe of the Wind River Reservation, Wyoming",
@@ -4190,6 +4257,12 @@
     ],
     "4635": [
       "Winnemucca Indian Colony of Nevada"
+    ],
+    "4665": [
+      "Washoe Tribe of Nevada & California (Carson Colony, Dresslerville Colony, Woodfords Community, Stewart Community, & Washoe Ranches)"
+    ],
+    "4680": [
+      "Pit River Tribe, California (includes XL Ranch, Big Bend, Likely, Lookout, Montgomery Creek, and Roaring Creek Rancherias)"
     ],
     "4690": [
       "Confederated Tribes and Bands of the Yakama Nation"
@@ -4346,6 +4419,9 @@
     ],
     "6125": [
       "Anvik Village"
+    ],
+    "6140": [
+      "Native Village of Venetie Tribal Government (Arctic Village and Village of Venetie)"
     ],
     "6150": [
       "Native Village of Atka"
@@ -4812,8 +4888,14 @@
     "7315": [
       "Iqugmiut Traditional Council"
     ],
+    "7340": [
+      "Pribilof Islands Aleut Communities of St. Paul & St. George Islands (St. George Island and Saint Paul Island)"
+    ],
     "7375": [
       "Native Village of Saint Michael"
+    ],
+    "7390": [
+      "Pribilof Islands Aleut Communities of St. Paul & St. George Islands (St. George Island and Saint Paul Island)"
     ],
     "7400": [
       "Salamatof Tribe"
@@ -4926,6 +5008,9 @@
     "7695": [
       "Qawalangin Tribe of Unalaska"
     ],
+    "7725": [
+      "Native Village of Venetie Tribal Government (Arctic Village and Village of Venetie)"
+    ],
     "7735": [
       "Village of Wainwright"
     ],
@@ -4989,6 +5074,9 @@
     "0140": [
       "Bad River Band of the Lake Superior Tribe of Chippewa Indians of the Bad River Reservation, Wisconsin"
     ],
+    "0155": [
+      "Capitan Grande Band of Diegueno Mission Indians of California (Barona Group of Capitan Grande Band of Mission Indians of the Barona Reservation, California; Viejas (Baron Long) Group of Capitan Grande Band of Mission Indians of the Viejas Reservation, California)"
+    ],
     "0170": [
       "Bay Mills Indian Community, Michigan"
     ],
@@ -4997,6 +5085,9 @@
     ],
     "0200": [
       "Berry Creek Rancheria of Maidu Indians of California"
+    ],
+    "0215": [
+      "Pit River Tribe, California (includes XL Ranch, Big Bend, Likely, Lookout, Montgomery Creek, and Roaring Creek Rancherias)"
     ],
     "0225": [
       "Seminole Tribe of Florida"
@@ -5022,6 +5113,9 @@
     "0325": [
       "Blue Lake Rancheria, California"
     ],
+    "0335": [
+      "Minnesota Chippewa Tribe, Minnesota (Six component reservations: Bois Forte Band (Nett Lake); Fond du Lac Band; Grand Portage Band; Leech Lake Band; Mille Lacs Band; White Earth Band)"
+    ],
     "0350": [
       "Bridgeport Indian Colony"
     ],
@@ -5045,6 +5139,9 @@
     ],
     "0495": [
       "Capitan Grande Band of Diegueno Mission Indians of California (Barona Group of Capitan Grande Band of Mission Indians of the Barona Reservation, California; Viejas (Baron Long) Group of Capitan Grande Band of Mission Indians of the Viejas Reservation, California)"
+    ],
+    "0510": [
+      "Washoe Tribe of Nevada & California (Carson Colony, Dresslerville Colony, Woodfords Community, Stewart Community, & Washoe Ranches)"
     ],
     "0525": [
       "Catawba Indian Nation"
@@ -5126,6 +5223,9 @@
     "0855": [
       "Crow Creek Sioux Tribe of the Crow Creek Reservation, South Dakota"
     ],
+    "0940": [
+      "Washoe Tribe of Nevada & California (Carson Colony, Dresslerville Colony, Woodfords Community, Stewart Community, & Washoe Ranches)"
+    ],
     "0955": [
       "Dry Creek Rancheria Band of Pomo Indians, California"
     ],
@@ -5135,5 +5235,293 @@
     "0975": [
       "Duckwater Shoshone Tribe"
     ]
-  }
+  },
+  "headquarters": [
+    {
+      "displayName": "Alabama-Quassarte Tribal Town",
+      "provenance": "safe-match",
+      "town": "Wetumka",
+      "state": "OK",
+      "placeGeoid": "4080500",
+      "placeName": "Wetumka city",
+      "point": [
+        -96.23374,
+        35.24213
+      ],
+      "source": "https://www.aqtt.org/contact"
+    },
+    {
+      "displayName": "California Valley Miwok Tribe, California",
+      "provenance": "safe-match",
+      "town": "La Grange",
+      "state": "CA",
+      "placeGeoid": "0639164",
+      "placeName": "La Grange CDP",
+      "point": [
+        -120.46315,
+        37.66346
+      ],
+      "source": "https://californiavalleymiwok.us/contact-us/"
+    },
+    {
+      "displayName": "Central Council of the Tlingit & Haida Indian Tribes",
+      "provenance": "safe-match",
+      "town": "Juneau",
+      "state": "AK",
+      "placeGeoid": "0236400",
+      "placeName": "Juneau city and borough",
+      "point": [
+        -134.17844,
+        58.3729
+      ],
+      "source": "https://tlingitandhaida.gov/"
+    },
+    {
+      "displayName": "Delaware Tribe of Indians",
+      "provenance": "safe-match",
+      "town": "Bartlesville",
+      "state": "OK",
+      "placeGeoid": "4004450",
+      "placeName": "Bartlesville city",
+      "point": [
+        -95.94848,
+        36.73791
+      ],
+      "source": "https://delawaretribe.org/contact-us"
+    },
+    {
+      "displayName": "Inupiat Community of the Arctic Slope",
+      "provenance": "safe-match",
+      "town": "Utqiaġvik",
+      "state": "AK",
+      "placeGeoid": "0281920",
+      "placeName": "Utqiaġvik city",
+      "point": [
+        -156.75369,
+        71.26437
+      ],
+      "source": "https://icas-nsn.gov/about-us"
+    },
+    {
+      "displayName": "Kaguyak Village",
+      "provenance": "safe-match",
+      "town": "Akhiok",
+      "state": "AK",
+      "placeGeoid": "0200650",
+      "placeName": "Akhiok city",
+      "point": [
+        -154.21522,
+        56.94832
+      ],
+      "source": "https://maps.commerce.alaska.gov/server/rest/services/Contacts/CDO_Contacts_Federally_Recognized_Tribes/MapServer/0"
+    },
+    {
+      "displayName": "Kialegee Tribal Town",
+      "provenance": "safe-match",
+      "town": "Wetumka",
+      "state": "OK",
+      "placeGeoid": "4080500",
+      "placeName": "Wetumka city",
+      "point": [
+        -96.23374,
+        35.24213
+      ],
+      "source": "https://oklahomanativenews.com/tribal-directory/kialegee-tribal-town"
+    },
+    {
+      "displayName": "King Island Native Community",
+      "provenance": "safe-match",
+      "town": "Nome",
+      "state": "AK",
+      "placeGeoid": "0254920",
+      "placeName": "Nome city",
+      "point": [
+        -165.41529,
+        64.50574
+      ],
+      "source": "https://www.kingislandnativecommunity.org/"
+    },
+    {
+      "displayName": "Koi Nation of Northern California",
+      "provenance": "safe-match",
+      "town": "Santa Rosa",
+      "state": "CA",
+      "placeGeoid": "0670098",
+      "placeName": "Santa Rosa city",
+      "point": [
+        -122.70618,
+        38.44582
+      ],
+      "source": "https://cdtfa.ca.gov/industry/native-americans/getting-started.htm"
+    },
+    {
+      "displayName": "Little Shell Tribe of Chippewa Indians of Montana",
+      "provenance": "safe-match",
+      "town": "Great Falls",
+      "state": "MT",
+      "placeGeoid": "3032800",
+      "placeName": "Great Falls city",
+      "point": [
+        -111.29997,
+        47.50252
+      ],
+      "source": "https://montanalittleshelltribe.org/wp-content/uploads/2025/02/Draft-Little-Shell-Tribe-Long-Range-Transportation-Plan_v5_250227.pdf"
+    },
+    {
+      "displayName": "Monacan Indian Nation",
+      "provenance": "safe-match",
+      "town": "Madison Heights",
+      "state": "VA",
+      "placeGeoid": "5148520",
+      "placeName": "Madison Heights CDP",
+      "point": [
+        -79.10821,
+        37.4503
+      ],
+      "source": "https://www.monacannation.gov/contact-us.html"
+    },
+    {
+      "displayName": "Nansemond Indian Nation",
+      "provenance": "safe-match",
+      "town": "Suffolk",
+      "state": "VA",
+      "placeGeoid": "5176432",
+      "placeName": "Suffolk city",
+      "point": [
+        -76.63478,
+        36.69716
+      ],
+      "source": "https://nansemond.gov/contact"
+    },
+    {
+      "displayName": "Native Village of Afognak",
+      "provenance": "safe-match",
+      "town": "Kodiak",
+      "state": "AK",
+      "placeGeoid": "0240950",
+      "placeName": "Kodiak city",
+      "point": [
+        -152.42218,
+        57.79059
+      ],
+      "source": "https://www.afognak.org/contact"
+    },
+    {
+      "displayName": "Native Village of Kanatak",
+      "provenance": "safe-match",
+      "town": "Wasilla",
+      "state": "AK",
+      "placeGeoid": "0283080",
+      "placeName": "Wasilla city",
+      "point": [
+        -149.47633,
+        61.57851
+      ],
+      "source": "https://maps.commerce.alaska.gov/server/rest/services/Contacts/CDO_Contacts_Federally_Recognized_Tribes/MapServer/0/89"
+    },
+    {
+      "displayName": "Native Village of Unga",
+      "provenance": "safe-match",
+      "town": "Sand Point",
+      "state": "AK",
+      "placeGeoid": "0267020",
+      "placeName": "Sand Point city",
+      "point": [
+        -160.48555,
+        55.31446
+      ],
+      "source": "https://maps.commerce.alaska.gov/server/rest/services/Contacts/CDO_Contacts_Federally_Recognized_Tribes/MapServer/0/218"
+    },
+    {
+      "displayName": "Pauloff Harbor Village",
+      "provenance": "safe-match",
+      "town": "Sand Point",
+      "state": "AK",
+      "placeGeoid": "0267020",
+      "placeName": "Sand Point city",
+      "point": [
+        -160.48555,
+        55.31446
+      ],
+      "source": "https://data.nativemi.org/tribal-directory/Details/pauloff-harbor-village-198235"
+    },
+    {
+      "displayName": "San Juan Southern Paiute Tribe of Arizona",
+      "provenance": "safe-match",
+      "town": "Tuba City",
+      "state": "AZ",
+      "placeGeoid": "0476010",
+      "placeName": "Tuba City CDP",
+      "point": [
+        -111.24666,
+        36.12507
+      ],
+      "source": "https://www.sanjuanpaiute-nsn.gov/contact"
+    },
+    {
+      "displayName": "Tejon Indian Tribe",
+      "provenance": "safe-match",
+      "town": "Bakersfield",
+      "state": "CA",
+      "placeGeoid": "0603526",
+      "placeName": "Bakersfield city",
+      "point": [
+        -119.03788,
+        35.35317
+      ],
+      "source": "https://cniga.com/tribal_offices/tejon-indian-tribe"
+    },
+    {
+      "displayName": "Thlopthlocco Tribal Town",
+      "provenance": "safe-match",
+      "town": "Okemah",
+      "state": "OK",
+      "placeGeoid": "4054200",
+      "placeName": "Okemah city",
+      "point": [
+        -96.30031,
+        35.42927
+      ],
+      "source": "https://www.ttribaltown.org/getpage.php?name=About_Us"
+    },
+    {
+      "displayName": "Umkumiut Native Village",
+      "provenance": "safe-match",
+      "town": "Nightmute",
+      "state": "AK",
+      "placeGeoid": "0253930",
+      "placeName": "Nightmute city",
+      "point": [
+        -164.83475,
+        60.46241
+      ],
+      "source": "https://maps.commerce.alaska.gov/server/rest/services/Contacts/CDO_Contacts_Federally_Recognized_Tribes/MapServer/0/215"
+    },
+    {
+      "displayName": "United Keetoowah Band of Cherokee Indians in Oklahoma",
+      "provenance": "safe-match",
+      "town": "Tahlequah",
+      "state": "OK",
+      "placeGeoid": "4072100",
+      "placeName": "Tahlequah city",
+      "point": [
+        -94.97772,
+        35.9105
+      ],
+      "source": "https://www.ukb-nsn.gov/about-us"
+    },
+    {
+      "displayName": "Upper Mattaponi Tribe",
+      "provenance": "safe-match",
+      "town": "King William",
+      "state": "VA",
+      "placeGeoid": "5142792",
+      "placeName": "King William CDP",
+      "point": [
+        -77.02976,
+        37.68323
+      ],
+      "source": "https://www.commonwealth.virginia.gov/virginia-indians/state-recognized-tribes"
+    }
+  ]
 }

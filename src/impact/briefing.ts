@@ -62,8 +62,10 @@ export function createBriefingSkeleton(
     context,
     sourcePolicy,
     landTitle: context.title,
-    landKind: context.areaLabel ? `${kindLabel(context.kind)} · ${context.areaLabel}` : kindLabel(context.kind),
-    landCaveat: caveatFor(context.kind),
+    landKind:
+      context.kindLabel ??
+      (context.areaLabel ? `${kindLabel(context.kind)} · ${context.areaLabel}` : kindLabel(context.kind)),
+    landCaveat: [context.landNote, context.kindLabel ? '' : caveatFor(context.kind)].filter(Boolean).join(' '),
     landscape: {
       status: 'loading',
       facts: [],

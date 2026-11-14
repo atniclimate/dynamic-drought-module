@@ -576,6 +576,11 @@ export interface BoundarySelectionContext {
    */
   readonly pointInsidePlace?: boolean;
   /**
+   * Where a non-click point read is made when the point is not inside the place's
+   * land (a headquarters town): point reads say "at <readAt>", never "the clicked point".
+   */
+  readonly readAt?: string;
+  /**
    * The place's whole outline as its publishing service supplied it, set only
    * beside `pointInsidePlace` (a search, Locate, Place Studio or State
    * briefing). The USDM read is made over it (sources.ts `fetchUsdmClaims`).
@@ -588,6 +593,18 @@ export interface BoundarySelectionContext {
    * the kind in the briefing subtitle.
    */
   readonly areaLabel?: string;
+  /**
+   * One plain line the briefing carries first, set by a search row for a
+   * Nation no federal area the map names finds: a state-recognized Census
+   * area, or the Nation's headquarters town.
+   */
+  readonly landNote?: string;
+  /**
+   * The briefing subtitle in place of the kind's own label, for a selection
+   * no boundary service drew (a Nation's headquarters town). Such a selection
+   * carries no boundary caveat: there is no boundary.
+   */
+  readonly kindLabel?: string;
   /**
    * Compatibility feature bounding box `[west, south, east, north]`, when
    * derivable. A crossing geometry retains its naive min/max walk here.

@@ -37,9 +37,11 @@ const STUBS = {
   '../config/urls':
     'export const URLS = { usPlacesLocal: "https://stub.test/us-places.json",' +
     ' biaLarFeatureServer: "https://stub.test/lar", censusAiannhMapServer: "https://stub.test/census" };',
-  '../impact/resources': 'export const STATE_LABEL = {};',
+  '../impact/resources': 'export const STATE_LABEL = { OK: "Oklahoma" };',
   '../impact/context':
-    'export const buildBoundaryContext = (_k, _p, _g, _l, t) => ({ title: t || "Located area" });',
+    'export const buildBoundaryContext = (_k, _p, _g, _l, t) => ({ title: t || "Located area" });' +
+    // The real sentence: the test below pins what the row's click carries.
+    ' export const stateAreaNote = (n) => `${n} is a state-recognized area in the Census list; the map\'s Tribal Lands layer draws its outline but names federal areas only.`;',
   '../util/bbox':
     'export const bboxCenter = () => ({ lng: 0, lat: 0 }); export const bboxToContinuousBounds = (b) => b;',
   '../util/antimeridian': 'export const geometryBboxAcrossAntimeridian = () => [0, 0, 1, 1];',
@@ -442,6 +444,96 @@ test('a formal Oklahoma Nation name lists its Census area first, never a land ar
   const sent = fetchUrls.slice(callsBefore);
   assert.equal(sent[0].split('?')[0], CENSUS_URL);
   assert.equal(new URL(sent[0]).searchParams.get('where'), `AIANNH='${code('Kickapoo OTSA')}'`);
+});
+
+// The search line of src/ui/island/search.tsx, run over the real loadTribal items.
+async function tribalHits() {
+  const items = (await wiring.loadTribal()).filter((i) => i.kind === 'tribal');
+  return (q) => {
+    const folded = foldSearchText(q);
+    const tokens = folded.split(' ');
+    return prefixFirst(items.filter((i) => matchesTokens(i.haystack, tokens, i.id.startsWith('census:'))), folded);
+  };
+}
+
+test('every Nation on the Federal Register list reaches a row under its own name through the search matcher', async () => {
+  const { labelName } = await import('../scripts/build-tribal-roster.mjs');
+  const crosswalk = JSON.parse(readFileSync(new URL('../public/data/tribal-larname-crosswalk.json', import.meta.url), 'utf8'));
+  const nations = [...new Set([
+    ...crosswalk.rosterNoLar,
+    ...crosswalk.matched.filter((row) => !row.rule.includes('rule 10')).map((row) => row.tribe)
+  ])];
+  const roster = JSON.parse(readFileSync(new URL('../public/data/tribal-roster.json', import.meta.url), 'utf8'));
+  assert.equal(nations.length, roster.meta.rosterCount);
+  const hits = await tribalHits();
+  // The search list shows only GROUP_CAP rows per group (search.tsx); a row past it is not on screen.
+  const cap = Number(/const GROUP_CAP = (\d+);/.exec(readFileSync(new URL('../src/ui/island/search.tsx', import.meta.url), 'utf8'))?.[1]);
+  assert.ok(cap > 0, 'GROUP_CAP is readable from search.tsx');
+  // The name as a person reads it on the list or the map ("previously listed as ..." dropped).
+  const unreached = nations.filter((name) => {
+    const at = hits(labelName(name)).findIndex((i) => labelName(i.label) === labelName(name));
+    return at < 0 || at >= cap;
+  });
+  assert.deepEqual(unreached, [], `${unreached.length} Nations a search for the name does not reach: ${unreached.slice(0, 10).join(' | ')}`);
+});
+
+test('a headquarters-town row opens the Nation\'s briefing at the town with one plain line, and asks no service', async () => {
+  const hits = await tribalHits();
+  const row = hits('Kialegee Tribal Town')[0];
+  assert.equal(row?.label, 'Kialegee Tribal Town');
+  assert.equal(row.sublabel, 'Headquarters town: Wetumka, Oklahoma');
+  S.selections.length = 0;
+  S.highlights.length = 0;
+  const callsBefore = fetchUrls.length;
+  const moves = [];
+  const prior = map.easeTo;
+  map.easeTo = (opts) => moves.push(opts);
+  try {
+    wiring.onSelect(row);
+  } finally {
+    map.easeTo = prior;
+  }
+  assert.equal(S.selections.length, 1);
+  const { label, context } = S.selections[0];
+  assert.equal(label, 'Kialegee Tribal Town', 'titled with the full Federal Register name');
+  assert.equal(
+    context.landNote,
+    "Neither of the map's boundary sources (BIA, Census) draws an area for this Nation. The map opens at its headquarters town, Wetumka, Oklahoma."
+  );
+  assert.equal(context.kindLabel, 'Headquarters town (US Census place)');
+  assert.equal(context.readAt, 'the headquarters town, Wetumka', 'point readings say where they are read: nobody clicked');
+  assert.deepEqual(moves.map((m) => m.center.map((n) => Math.round(n * 10) / 10)), [[-96.2, 35.2]]);
+  assert.equal(fetchUrls.length, callsBefore, 'the town point is in the roster: no live request');
+  assert.equal(S.highlights.length, 0, 'no outline is lit: the town is not the Nation\'s land');
+});
+
+test('a state-recognized Census area row locates the area by code and carries its plain line', async () => {
+  const hits = await tribalHits();
+  const row = hits('Lumbee Tribe of North Carolina')[0];
+  assert.equal(row?.id, 'census:9815');
+  assert.equal(row.sublabel, 'Census area: Lumbee SDTSA');
+  answers.set(CENSUS_URL, () => json(fc));
+  S.selections.length = 0;
+  const callsBefore = fetchUrls.length;
+  const heldBefore = S.held.length;
+  wiring.onSelect(row);
+  await waitFor(() => S.held.length > heldBefore);
+  S.held.at(-1)();
+  await waitFor(() => S.selections.length === 1);
+  assert.equal(new URL(fetchUrls[callsBefore]).searchParams.get('where'), "AIANNH='9815'");
+  assert.equal(S.selections[0].label, 'Lumbee Tribe of North Carolina');
+  assert.equal(
+    S.selections[0].context.landNote,
+    "Lumbee SDTSA is a state-recognized area in the Census list; the map's Tribal Lands layer draws its outline but names federal areas only."
+  );
+  // A federal area's row carries no such line.
+  S.selections.length = 0;
+  const creekHeld = S.held.length;
+  wiring.onSelect(hits('The Muscogee (Creek) Nation')[0]);
+  await waitFor(() => S.held.length > creekHeld);
+  S.held.at(-1)();
+  await waitFor(() => S.selections.length === 1);
+  assert.equal(S.selections[0].context.landNote, undefined);
 });
 
 // The REAL src/ui/island/search.tsx, transpiled by the installed rolldown (oxc) and

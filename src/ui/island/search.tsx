@@ -59,7 +59,7 @@ import { enterChoice, foldSearchText, matchesTokens, prefixFirst } from '../../u
 
 export interface SearchItem {
   kind: 'place' | 'tribal' | 'city' | 'layer';
-  id: string; // state code | LARNAME or census:<AIANNH code> | city name | layer key
+  id: string; // state code | LARNAME, census:<AIANNH code> or hq:<Nation name> | city name | layer key
   label: string; // primary display text
   sublabel?: string; // secondary line (layer source, or a land-area label)
   haystack: string; // pre-normalized lowercase search string (already includes label+sublabel tokens)

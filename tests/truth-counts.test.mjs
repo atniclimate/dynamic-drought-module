@@ -17,8 +17,11 @@ import { fileURLToPath } from 'node:url';
  * reached 22 only under a Census title or another Nation's row, 59 not at
  * all), and 32 labelled areas had a click titled with the Census name
  * (Cherokee OTSA among them). Rule 11 of the build closed both: 546 Nations
- * now have a row under their own name and the 27 others are listed below.
- * Names here are public Federal Register and Census names.
+ * then had a row under their own name; with the area labels of 2026-11-13
+ * (the Venetie and Pribilof communities) 548 did. The other 25 had no area in
+ * either boundary source the map reads; rules 13 and 14 of the build gave each
+ * a row (three state-recognized Census areas, 22 headquarters towns), so all
+ * 573 have one. Names here are public Federal Register and Census names.
  */
 
 registerHooks({
@@ -29,7 +32,7 @@ registerHooks({
   }
 });
 
-const { censusSearchRows, censusUnlabelled, labelName } = await import('../scripts/build-tribal-roster.mjs');
+const { censusSearchRows, censusUnlabelled, headquartersRows, labelName, stateAreaRows } = await import('../scripts/build-tribal-roster.mjs');
 const context = await import('../src/impact/context.ts');
 const { TRUSTED_PROVENANCE } = await import('../src/state/tribal-roster.ts');
 
@@ -54,46 +57,19 @@ test('count 1: every federal Census Tribal area is labelled, held for a Nation, 
   const both = unlabelled.filter((row) => ROSTER.labelAreas[row.aiannh]).map((row) => row.name);
   assert.deepEqual(both, [], `on an unlabelled list and labelled, ${some(both)}`);
   assert.equal(new Set(unlabelled.map((row) => row.aiannh)).size, unlabelled.length, 'an unlabelled area is listed once');
-  // The two lists only shrink: a new unlabelled area is a finding, never a quiet addition.
-  assert.ok(held.length <= 29, `held areas grew, ${some(held.map((row) => row.name))}`);
+  // The two lists only shrink: a new unlabelled area is a finding, never a quiet addition. The four Te-Moak bands
+  // wait for the owner's word on the form of their labels (2026-11-13); the other bands and places carry an area label.
+  assert.ok(held.length <= 4, `held areas grew, ${some(held.map((row) => row.name))}`);
+  assert.deepEqual(held.map((row) => row.aiannh), ['0165', '1005', '3930', '4580']);
   assert.deepEqual(noNation.map((row) => row.name), ['Canyon Village ANVSA', 'Lake Minchumina ANVSA', 'Port Alsworth ANVSA', 'Uyak ANVSA']);
   const nations = new Set([...CROSSWALK.rosterNoLar, ...CROSSWALK.matched.map((row) => row.tribe)]);
   for (const row of held) assert.ok(nations.has(row.nation), `${row.name}: held for a name the roster does not carry`);
 });
 
-// Federal Register Nations a search cannot find: no trusted BIA row, no trusted
-// Census row. Each is here for one of two reasons, and the list only shrinks.
-const NO_SEARCH_ROW = [
-  // Its communities each have a Census area held until the form of a band's or place's label is settled (count 1).
-  'Native Village of Venetie Tribal Government (Arctic Village and Village of Venetie)',
-  'Pribilof Islands Aleut Communities of St. Paul & St. George Islands (St. George Island and Saint Paul Island)',
-  // Neither public source the map reads (BIA AIAN-LAR, Census AIANNH) names an area for the Nation alone.
-  'Alabama-Quassarte Tribal Town',
-  'California Valley Miwok Tribe, California',
-  'Central Council of the Tlingit & Haida Indian Tribes',
-  'Delaware Tribe of Indians',
-  'Inupiat Community of the Arctic Slope',
-  'Kaguyak Village',
-  'Kialegee Tribal Town',
-  'King Island Native Community',
-  'Koi Nation of Northern California',
-  'Little Shell Tribe of Chippewa Indians of Montana',
-  'Lumbee Tribe of North Carolina',
-  'Monacan Indian Nation',
-  'Nansemond Indian Nation',
-  'Native Village of Afognak',
-  'Native Village of Kanatak',
-  'Native Village of Unga',
-  'Pamunkey Indian Tribe',
-  'Pauloff Harbor Village',
-  'San Juan Southern Paiute Tribe of Arizona',
-  'Shinnecock Indian Nation',
-  'Tejon Indian Tribe',
-  'Thlopthlocco Tribal Town',
-  'Umkumiut Native Village',
-  'United Keetoowah Band of Cherokee Indians in Oklahoma',
-  'Upper Mattaponi Tribe'
-];
+// Federal Register Nations a search cannot find: no trusted BIA row, Census row
+// or headquarters row. Each would be here with its reason, and the list only
+// shrinks. Empty since rules 13 and 14 (2026-11-13): every Nation has a row.
+const NO_SEARCH_ROW = [];
 
 test('count 2: every Nation on the Federal Register list is found by search, or is on the named list of those no area names', () => {
   // The whole list, from the audit file: Nations the BIA matcher located and those it did not (rule 10 rows repeat a name in label form).
@@ -105,7 +81,8 @@ test('count 2: every Nation on the Federal Register list is found by search, or 
   assert.equal(ROSTER.meta.rosterCount, 573, 'the Federal Register list moved: a new notice, look at what changed');
   const found = new Set([
     ...ROSTER.areas.filter(trusted).map((row) => labelName(row.displayName)),
-    ...ROSTER.censusAreas.filter(trusted).map((row) => labelName(row.displayName))
+    ...ROSTER.censusAreas.filter(trusted).map((row) => labelName(row.displayName)),
+    ...ROSTER.headquarters.filter(trusted).map((row) => labelName(row.displayName))
   ]);
   const missing = [...federalRegister].filter((name) => !found.has(labelName(name))).sort();
   const unexplained = missing.filter((name) => !NO_SEARCH_ROW.includes(name));
@@ -117,6 +94,85 @@ test('count 2: every Nation on the Federal Register list is found by search, or 
   const labelled = new Set(Object.values(ROSTER.labelAreas).flat());
   const namedNotFound = missing.filter((name) => labelled.has(labelName(name)));
   assert.deepEqual(namedNotFound, [], `named on the map, not found by search, ${some(namedNotFound)}`);
+});
+
+test('count 2, the last 25: a state-recognized Census area or a headquarters town, each only for a Nation no area row finds', () => {
+  const stateRows = ROSTER.censusAreas.filter((row) => row.stateArea);
+  assert.deepEqual(
+    stateRows.map((row) => `${row.aiannh} ${row.name}: ${row.displayName}`).sort(),
+    ['9260 Pamunkey (state) Reservation: Pamunkey Indian Tribe', '9370 Shinnecock (state) Reservation: Shinnecock Indian Nation',
+      '9815 Lumbee SDTSA: Lumbee Tribe of North Carolina']
+  );
+  for (const row of stateRows) assert.equal(row.provenance, 'safe-match', row.name);
+  assert.equal(ROSTER.headquarters.length, 22);
+  const kialegee = ROSTER.headquarters.find((row) => row.displayName === 'Kialegee Tribal Town');
+  assert.deepEqual(
+    { ...kialegee, point: kialegee.point.map((n) => Math.round(n * 10) / 10) },
+    {
+      displayName: 'Kialegee Tribal Town',
+      provenance: 'safe-match',
+      town: 'Wetumka',
+      state: 'OK',
+      placeGeoid: '4080500',
+      placeName: 'Wetumka city',
+      point: [-96.2, 35.2],
+      source: 'https://oklahomanativenews.com/tribal-directory/kialegee-tribal-town'
+    }
+  );
+  for (const row of ROSTER.headquarters) {
+    assert.match(row.placeGeoid, /^\d{7}$/, row.displayName);
+    assert.ok(row.point.every(Number.isFinite) && row.point[1] > 18 && row.point[1] < 72, `${row.displayName}: a United States town point`);
+    assert.match(row.source, /^https:\/\//, `${row.displayName}: the source is recorded`);
+  }
+  // A Nation an area row finds gains no headquarters or state-area row.
+  const areaFound = new Set([
+    ...ROSTER.areas.filter(trusted).map((row) => labelName(row.displayName)),
+    ...ROSTER.censusAreas.filter((row) => trusted(row) && !row.stateArea).map((row) => labelName(row.displayName))
+  ]);
+  const doubled = [...stateRows, ...ROSTER.headquarters].map((row) => row.displayName).filter((name) => areaFound.has(labelName(name)));
+  assert.deepEqual(doubled, [], `found twice, ${some(doubled)}`);
+  assert.equal(new Set(ROSTER.headquarters.map((row) => row.displayName)).size, 22, 'one headquarters row per Nation');
+});
+
+test('the rules behind the last 25: a state-area or headquarters pin reopens when its source changes', () => {
+  const roster = ['Lumbee Tribe of North Carolina', 'Kialegee Tribal Town', 'Cherokee Nation'];
+  const area = (NAME, BASENAME, AIANNH, AIANNHCC) => ({ attributes: { NAME, BASENAME, AIANNH, AIANNHCC } });
+  const features = [area('Lumbee SDTSA', 'Lumbee', '9815', 'D9'), area('Cherokee OTSA', 'Cherokee', '5550', 'D6')];
+  const pin = [['9815', 'Lumbee', 'Lumbee Tribe of North Carolina']];
+  assert.deepEqual(stateAreaRows(features, roster, new Set(), pin), [
+    { aiannh: '9815', name: 'Lumbee SDTSA', displayName: 'Lumbee Tribe of North Carolina', provenance: 'safe-match', stateArea: true }
+  ]);
+  assert.throws(() => stateAreaRows([area('Lumbee SDTSA', 'Lumbee', '9815', 'D6')], roster, new Set(), pin), /9815 \(Lumbee\) is REOPENED/);
+  assert.throws(() => stateAreaRows([area('Lumbee-Cheraw SDTSA', 'Lumbee-Cheraw', '9815', 'D9')], roster, new Set(), pin), /REOPENED/);
+  assert.throws(() => stateAreaRows(features, ['Cherokee Nation'], new Set(), pin), /not a name in the Federal Register roster/);
+  assert.throws(() => stateAreaRows(features, roster, new Set(['Lumbee Tribe of North Carolina']), pin), /another row now finds/);
+
+  const place = (GEOID, NAME, BASENAME) => ({ attributes: { GEOID, NAME, BASENAME, INTPTLAT: '+35.2421282', INTPTLON: '-096.2337441' } });
+  const hq = [['Kialegee Tribal Town', 'Wetumka', 'OK', '4080500', 'https://example.test/kialegee']];
+  assert.deepEqual(headquartersRows([place('4080500', 'Wetumka city', 'Wetumka')], roster, new Set(), hq), [{
+    displayName: 'Kialegee Tribal Town', provenance: 'safe-match', town: 'Wetumka', state: 'OK', placeGeoid: '4080500',
+    placeName: 'Wetumka city', point: [-96.23374, 35.24213], source: 'https://example.test/kialegee'
+  }]);
+  assert.throws(() => headquartersRows([], roster, new Set(), hq), /4080500 \(Wetumka\) is REOPENED/);
+  assert.throws(() => headquartersRows([place('4080500', 'Wetumpka city', 'Wetumpka')], roster, new Set(), hq), /REOPENED/);
+  assert.throws(() => headquartersRows([place('4080500', 'Wetumka city', 'Wetumka')], ['Cherokee Nation'], new Set(), hq), /not a name in the Federal Register roster/);
+  assert.throws(() => headquartersRows([place('4080500', 'Wetumka city', 'Wetumka')], roster, new Set(['Kialegee Tribal Town']), hq), /another row now finds/);
+});
+
+test('the briefing of a last-25 row carries its plain line, and no boundary caveat where no boundary is drawn', async () => {
+  const { createBriefingSkeleton } = await import('../src/impact/briefing.ts');
+  const base = {
+    kind: 'aiannh', title: 'Kialegee Tribal Town', properties: { STUSPS: 'OK' }, lngLat: { lng: -96.23, lat: 35.24 },
+    regionKey: null, containing: { state: 'OK', basis: 'feature-property' }
+  };
+  const note = "Neither of the map's boundary sources (BIA, Census) draws an area for this Nation. The map opens at its headquarters town, Wetumka, Oklahoma.";
+  const town = createBriefingSkeleton({ ...base, landNote: note, kindLabel: 'Headquarters town (US Census place)' });
+  assert.deepEqual([town.landTitle, town.landKind, town.landCaveat], ['Kialegee Tribal Town', 'Headquarters town (US Census place)', note]);
+  const areaNote = "Lumbee SDTSA is a state-recognized area in the Census list; the map's Tribal Lands layer draws its outline but names federal areas only.";
+  const area = createBriefingSkeleton({ ...base, title: 'Lumbee Tribe of North Carolina', landNote: areaNote, areaLabel: 'Census area: Lumbee SDTSA' });
+  assert.equal(area.landKind, 'Tribal Lands (US Census AIANNH) · Census area: Lumbee SDTSA');
+  assert.equal(area.landCaveat, `${areaNote} ${context.caveatFor('aiannh')}`, 'the line, then the representation caveat');
+  assert.equal(createBriefingSkeleton(base).landCaveat, context.caveatFor('aiannh'), 'any other area: the caveat alone');
 });
 
 test('count 3: every BIA land area is titled with a Nation or is on the audit list of BIA labels, and the list only shrinks', () => {
@@ -144,8 +200,9 @@ test('count 4: a click on a labelled Census area is titled with the Nations its 
     if (title.split('; ').map(labelName).join('; ') !== nations.join('; ')) differs.push(`${code} "${title}"`);
   }
   assert.deepEqual(differs, [], `of ${Object.keys(ROSTER.labelAreas).length} labelled areas, the click title differs on ${some(differs)}`);
+  // A state-recognized area (rule 13) is no federal area: the label map never names it.
   const strays = ROSTER.censusAreas
-    .filter((row) => trusted(row) && !(ROSTER.labelAreas[row.aiannh] ?? []).includes(labelName(row.displayName)))
+    .filter((row) => trusted(row) && !row.stateArea && !(ROSTER.labelAreas[row.aiannh] ?? []).includes(labelName(row.displayName)))
     .map((row) => `${row.name}: ${row.displayName}`);
   assert.deepEqual(strays, [], `a search row names a Nation its area's label does not, ${some(strays)}`);
   // An area with no label keeps its Census name.

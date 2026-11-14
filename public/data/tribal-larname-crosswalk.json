@@ -5,17 +5,21 @@
     "landAreaSource": "BIA AIAN-LAR FeatureServer (distinct LARNAME)",
     "matcher": "LAR areas, safe-match v2 (D-0.7.0-026): unique whole-phrase containment, state-constrained, distinctive-token guard; plus the maintainer-curated known-ambiguous gate (D-0.7.0-026a); then rule 10: a remaining BIA label takes the Nations of its one same-name Census reservation",
     "censusMatcher": "Census areas (rule 7): maintainer-curated known-ambiguous gate (D-0.7.0-026a) first; then unique whole-phrase containment of BASENAME outside the roster name parentheses, or equality with a parenthetical, distinctive-token guard; several candidates resolve only when exactly one carries BASENAME as its parenthetical; no state constraint",
-    "generated": "2026-11-13",
+    "generated": "2026-11-14",
     "rosterCount": 573,
     "landAreaCount": 335,
     "safeMatchCount": 287,
     "larLabelCount": 48,
     "censusSource": "US Census Bureau TIGERweb AIANNH layer 47 (names only)",
-    "censusAreaCount": 299,
+    "censusAreaCount": 302,
     "censusSafeMatchCount": 232,
     "censusFederalCount": 578,
-    "labelAreaCount": 545,
-    "labelConfirmedCount": 93
+    "labelAreaCount": 570,
+    "labelConfirmedCount": 93,
+    "labelAreaNameCount": 25,
+    "stateAreaCount": 3,
+    "headquartersCount": 22,
+    "headquartersSource": "US Census Bureau TIGERweb Places, incorporated and census designated places (internal point)"
   },
   "matched": [
     {
@@ -3303,17 +3307,13 @@
     }
   ],
   "censusLabel": [
-    "Arctic Village ANVSA",
     "Caddo-Wichita-Delaware OTSA",
     "Canyon Village ANVSA",
     "Citizen Potawatomi Nation-Absentee Shawnee OTSA",
     "Kiowa-Comanche-Apache-Fort Sill Apache OTSA",
     "Lake Minchumina ANVSA",
     "Port Alsworth ANVSA",
-    "St. George ANVSA",
-    "St. Paul ANVSA",
-    "Uyak ANVSA",
-    "Venetie ANVSA"
+    "Uyak ANVSA"
   ],
   "censusAmbiguous": [
     {
@@ -3470,34 +3470,9 @@
   ],
   "censusUnlabelled": [
     {
-      "aiannh": "0155",
-      "name": "Barona Reservation and Off-Reservation Trust Land",
-      "nation": "Capitan Grande Band of Diegueno Mission Indians of California (Barona Group of Capitan Grande Band of Mission Indians of the Barona Reservation, California; Viejas (Baron Long) Group of Capitan Grande Band of Mission Indians of the Viejas Reservation, California)"
-    },
-    {
       "aiannh": "0165",
       "name": "Battle Mountain Reservation and Off-Reservation Trust Land",
       "nation": "Te-Moak Tribe of Western Shoshone Indians of Nevada (Four constituent bands: Battle Mountain Band; Elko Band; South Fork Band; and Wells Band)"
-    },
-    {
-      "aiannh": "0215",
-      "name": "Big Bend Rancheria",
-      "nation": "Pit River Tribe, California (includes XL Ranch, Big Bend, Likely, Lookout, Montgomery Creek, and Roaring Creek Rancherias)"
-    },
-    {
-      "aiannh": "0335",
-      "name": "Bois Forte Reservation and Off-Reservation Trust Land",
-      "nation": "Minnesota Chippewa Tribe, Minnesota (Six component reservations: Bois Forte Band (Nett Lake); Fond du Lac Band; Grand Portage Band; Leech Lake Band; Mille Lacs Band; White Earth Band)"
-    },
-    {
-      "aiannh": "0510",
-      "name": "Carson Colony",
-      "nation": "Washoe Tribe of Nevada & California (Carson Colony, Dresslerville Colony, Woodfords Community, Stewart Community, & Washoe Ranches)"
-    },
-    {
-      "aiannh": "0940",
-      "name": "Dresslerville Colony",
-      "nation": "Washoe Tribe of Nevada & California (Carson Colony, Dresslerville Colony, Woodfords Community, Stewart Community, & Washoe Ranches)"
     },
     {
       "aiannh": "1005",
@@ -3505,99 +3480,14 @@
       "nation": "Te-Moak Tribe of Western Shoshone Indians of Nevada (Four constituent bands: Battle Mountain Band; Elko Band; South Fork Band; and Wells Band)"
     },
     {
-      "aiannh": "1125",
-      "name": "Fond du Lac Reservation and Off-Reservation Trust Land",
-      "nation": "Minnesota Chippewa Tribe, Minnesota (Six component reservations: Bois Forte Band (Nett Lake); Fond du Lac Band; Grand Portage Band; Leech Lake Band; Mille Lacs Band; White Earth Band)"
-    },
-    {
-      "aiannh": "1355",
-      "name": "Grand Portage Reservation and Off-Reservation Trust Land",
-      "nation": "Minnesota Chippewa Tribe, Minnesota (Six component reservations: Bois Forte Band (Nett Lake); Fond du Lac Band; Grand Portage Band; Leech Lake Band; Mille Lacs Band; White Earth Band)"
-    },
-    {
-      "aiannh": "1575",
-      "name": "Indian Township Reservation",
-      "nation": "Passamaquoddy Tribe"
-    },
-    {
-      "aiannh": "1940",
-      "name": "Leech Lake Reservation and Off-Reservation Trust Land",
-      "nation": "Minnesota Chippewa Tribe, Minnesota (Six component reservations: Bois Forte Band (Nett Lake); Fond du Lac Band; Grand Portage Band; Leech Lake Band; Mille Lacs Band; White Earth Band)"
-    },
-    {
-      "aiannh": "1955",
-      "name": "Likely Rancheria",
-      "nation": "Pit River Tribe, California (includes XL Ranch, Big Bend, Likely, Lookout, Montgomery Creek, and Roaring Creek Rancherias)"
-    },
-    {
-      "aiannh": "1980",
-      "name": "Lookout Rancheria",
-      "nation": "Pit River Tribe, California (includes XL Ranch, Big Bend, Likely, Lookout, Montgomery Creek, and Roaring Creek Rancherias)"
-    },
-    {
-      "aiannh": "2270",
-      "name": "Mille Lacs Reservation and Off-Reservation Trust Land",
-      "nation": "Minnesota Chippewa Tribe, Minnesota (Six component reservations: Bois Forte Band (Nett Lake); Fond du Lac Band; Grand Portage Band; Leech Lake Band; Mille Lacs Band; White Earth Band)"
-    },
-    {
-      "aiannh": "2330",
-      "name": "Montgomery Creek Rancheria",
-      "nation": "Pit River Tribe, California (includes XL Ranch, Big Bend, Likely, Lookout, Montgomery Creek, and Roaring Creek Rancherias)"
-    },
-    {
-      "aiannh": "2850",
-      "name": "Pleasant Point Reservation",
-      "nation": "Passamaquoddy Tribe"
-    },
-    {
-      "aiannh": "3185",
-      "name": "Roaring Creek Rancheria",
-      "nation": "Pit River Tribe, California (includes XL Ranch, Big Bend, Likely, Lookout, Montgomery Creek, and Roaring Creek Rancherias)"
-    },
-    {
       "aiannh": "3930",
       "name": "South Fork Reservation and Off-Reservation Trust Land",
       "nation": "Te-Moak Tribe of Western Shoshone Indians of Nevada (Four constituent bands: Battle Mountain Band; Elko Band; South Fork Band; and Wells Band)"
     },
     {
-      "aiannh": "3980",
-      "name": "Stewart Community",
-      "nation": "Washoe Tribe of Nevada & California (Carson Colony, Dresslerville Colony, Woodfords Community, Stewart Community, & Washoe Ranches)"
-    },
-    {
-      "aiannh": "4500",
-      "name": "Viejas Reservation and Off-Reservation Trust Land",
-      "nation": "Capitan Grande Band of Diegueno Mission Indians of California (Barona Group of Capitan Grande Band of Mission Indians of the Barona Reservation, California; Viejas (Baron Long) Group of Capitan Grande Band of Mission Indians of the Viejas Reservation, California)"
-    },
-    {
-      "aiannh": "4560",
-      "name": "Washoe Ranches Trust Land",
-      "nation": "Washoe Tribe of Nevada & California (Carson Colony, Dresslerville Colony, Woodfords Community, Stewart Community, & Washoe Ranches)"
-    },
-    {
       "aiannh": "4580",
       "name": "Wells Colony",
       "nation": "Te-Moak Tribe of Western Shoshone Indians of Nevada (Four constituent bands: Battle Mountain Band; Elko Band; South Fork Band; and Wells Band)"
-    },
-    {
-      "aiannh": "4595",
-      "name": "White Earth Reservation and Off-Reservation Trust Land",
-      "nation": "Minnesota Chippewa Tribe, Minnesota (Six component reservations: Bois Forte Band (Nett Lake); Fond du Lac Band; Grand Portage Band; Leech Lake Band; Mille Lacs Band; White Earth Band)"
-    },
-    {
-      "aiannh": "4665",
-      "name": "Woodfords Community",
-      "nation": "Washoe Tribe of Nevada & California (Carson Colony, Dresslerville Colony, Woodfords Community, Stewart Community, & Washoe Ranches)"
-    },
-    {
-      "aiannh": "4680",
-      "name": "XL Ranch Rancheria",
-      "nation": "Pit River Tribe, California (includes XL Ranch, Big Bend, Likely, Lookout, Montgomery Creek, and Roaring Creek Rancherias)"
-    },
-    {
-      "aiannh": "6140",
-      "name": "Arctic Village ANVSA",
-      "nation": "Native Village of Venetie Tribal Government (Arctic Village and Village of Venetie)"
     },
     {
       "aiannh": "6257",
@@ -3615,24 +3505,9 @@
       "nation": null
     },
     {
-      "aiannh": "7340",
-      "name": "St. George ANVSA",
-      "nation": "Pribilof Islands Aleut Communities of St. Paul & St. George Islands (St. George Island and Saint Paul Island)"
-    },
-    {
-      "aiannh": "7390",
-      "name": "St. Paul ANVSA",
-      "nation": "Pribilof Islands Aleut Communities of St. Paul & St. George Islands (St. George Island and Saint Paul Island)"
-    },
-    {
       "aiannh": "7705",
       "name": "Uyak ANVSA",
       "nation": null
-    },
-    {
-      "aiannh": "7725",
-      "name": "Venetie ANVSA",
-      "nation": "Native Village of Venetie Tribal Government (Arctic Village and Village of Venetie)"
     }
   ]
 }
