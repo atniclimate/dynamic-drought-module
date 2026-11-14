@@ -1470,8 +1470,12 @@ export function refreshOpenBriefing(token: number): void {
   setSheetBriefing(activeBriefing);
 }
 
-/** Close the panel and supersede any in-flight hydration. */
-export function closeImpactPanel(): void {
+/**
+ * Close the panel and supersede any in-flight hydration. `keepSelection` is
+ * the reader's own "Back to map" or Escape: the window closes and the place
+ * stays selected and lit (owner, 2026-11-13).
+ */
+export function closeImpactPanel(keepSelection = false): void {
   // A deliberate close outranks any async opener still in flight: the
   // user said "no panel", so a late-resolving boundary fetch must yield.
   onClose?.();
@@ -1481,13 +1485,13 @@ export function closeImpactPanel(): void {
   legendPollGeneration++;
   activeBriefing = null;
   setSheetBriefing(null);
-  // Panel-owned selection clear (the stage-5 majors 3/4 fix): closing the
-  // briefing ends the selection, which drops the feature-state emphasis and
-  // the located-boundary highlight through their store seams; this also
-  // covers the mobile Brief path, which never registers a popup close
-  // handler. A NEWER selection (a popup opened after this briefing) is not
-  // clobbered: the identity guard stands down in that case.
-  if (panelSelection !== null && getPlaceSelection() === panelSelection) {
+  // Panel-owned selection clear (the stage-5 majors 3/4 fix): a programmatic
+  // close (a mode switch, a region outside the United States) ends the
+  // selection, which drops the feature-state emphasis and the located-boundary
+  // highlight through their store seams; the reader's "Back to map" and
+  // Escape keep it (`keepSelection`). A NEWER selection (a popup opened after
+  // this briefing) is not clobbered: the identity guard stands down then.
+  if (!keepSelection && panelSelection !== null && getPlaceSelection() === panelSelection) {
     setPlaceSelection(null);
   }
   panelSelection = null;

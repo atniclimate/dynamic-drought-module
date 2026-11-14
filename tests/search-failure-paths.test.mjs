@@ -29,6 +29,7 @@ const S = (globalThis.__sfp = {
   opened: [],
   openOpts: [],
   toasts: [],
+  closeListeners: [],
   lazyLoads: 0
 });
 
@@ -61,7 +62,8 @@ const STUBS = {
   './layer-toggle-command': 'export const requestLayerOn = () => {};',
   './impact-panel':
     'let n = 0; export const nextBriefingIntent = () => ++n;' +
-    ' export const isCurrentBriefingIntent = (i) => i === n; export const openImpactPanel = () => {};',
+    ' export const isCurrentBriefingIntent = (i) => i === n; export const openImpactPanel = () => {};' +
+    ' export const onImpactPanelClose = (fn) => globalThis.__sfp.closeListeners.push(fn);',
   './overlay': 'export const showToast = (t) => globalThis.__sfp.toasts.push(t);',
   './island/search': 'export const Search = () => null;'
 };
@@ -331,6 +333,25 @@ test('a Tribal locate superseded during its read logs and toasts nothing; a real
   } finally {
     console.warn = warn;
   }
+});
+
+test('closing the briefing aborts an in-flight Tribal locate, though "Back to map" keeps the selection', async () => {
+  let signal;
+  answers.set(LAR_URL, (init) => {
+    signal = init.signal;
+    return new Promise((_, reject) => {
+      init.signal.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')));
+    });
+  });
+  S.toasts.length = 0;
+  wiring.onSelect(tribalItem);
+  await waitFor(() => signal !== undefined);
+  assert.equal(signal.aborted, false);
+  assert.ok(S.closeListeners.length > 0, 'the controller hears briefing closes');
+  for (const fn of S.closeListeners) fn();
+  assert.equal(signal.aborted, true, 'the close cancels the request itself, not only its late result');
+  for (let i = 0; i < 20; i += 1) await flush();
+  assert.deepEqual(S.toasts, [], 'a cancel by a close is not a failure');
 });
 
 test('a census: result locates against the Census service; an HTTP 200 error envelope is unavailable', async () => {

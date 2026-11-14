@@ -438,8 +438,7 @@ test.describe('DDM-P2-T09: one canonical place reference', () => {
    * from the `data-ddm-emphasis` truth stamp on the document root, written
    * by place-emphasis.ts from what the map was told, in ONE page so the
    * generated ids are comparable. The studio stamp is read before the studio
-   * closes, because closing the briefing clears the popup-scoped selection
-   * and with it the emphasis.
+   * closes, so the click door below is read on its own stamp.
    */
   test('the studio door and the click door emphasize the same us-states feature id', async ({
     page
@@ -651,7 +650,7 @@ test.describe('PS-CORE mobile sheet entry', () => {
   }) => {
     await gotoApp(page, '?view=brief&layers=places');
     await page.locator('#mobile-footer-nav button[data-tab="place"]').click();
-    await expect(page.locator('#app')).toHaveAttribute('data-sheet-detent', 'half');
+    await expect(page.locator('#app')).toHaveAttribute('data-sheet-detent', 'full');
     await expect(page.locator('#sheet-search [data-ddm-search]')).toBeVisible();
 
     // The sheet entry is the ONLY mobile door to the full PLACE studio:
@@ -665,7 +664,7 @@ test.describe('PS-CORE mobile sheet entry', () => {
     await page.locator('#place-studio-back').click();
 
     await expect(page.locator(PLACE_ROOT)).toHaveCount(0);
-    await expect(page.locator('#app')).toHaveAttribute('data-sheet-detent', 'half');
+    await expect(page.locator('#app')).toHaveAttribute('data-sheet-detent', 'full');
     await expect(page.locator('#sheet-search [data-ddm-search]')).toBeVisible();
   });
 });

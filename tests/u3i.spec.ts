@@ -438,52 +438,41 @@ test.describe('U3i one search across hosts (U3b/c/d)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// The half-detent fit (Codex plan-attack MINOR 6)
+// The console window's reach (Codex plan-attack MINOR 6; every window full
+// screen since the owner's ruling of 2026-11-13, so there is no half stop)
 // ---------------------------------------------------------------------------
 
 /**
- * At a short-phone 390x844 in console mode, the sheet's HALF detent must fit
- * the whole console-half stack (the region jump-to list and
- * the door to the full catalog) without the retired U2 compaction. Because
- * `.sidebar-scroll` is `overflow: hidden` at half, anything pushed below the
- * fold is clipped and unreachable; the load-bearing assertion is that the
- * all-layers door's bottom edge falls inside the 844px viewport.
+ * At a 390x844 phone in console mode, the Layers window must keep the whole
+ * console stack reachable: the region jump-to list at its head and the layer
+ * catalog below it. The window scrolls INTERNALLY (`.sidebar-scroll`), so the
+ * load-bearing assertion is that the catalog can be brought inside the 844px
+ * viewport by that scroll surface.
  */
-test.describe('U3i half-detent fit at 390x844 (MINOR 6)', () => {
+test.describe('U3i console window reach at 390x844 (MINOR 6)', () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
-  test('the console-half stack fits without the retired compaction', async ({ page }) => {
+  test('the console stack is reachable inside the full-screen window', async ({ page }) => {
     await gotoApp(page, '?view=console'); // the shell boots map-first (closed)
     const app = page.locator('#app');
 
-    // The Layers door opens the console at half. (A broken door or detent
-    // transition fails HERE, before the known-gap marker below, so a real
-    // regression still reds the suite.)
+    // The Layers door opens the console window. (A broken door or stop
+    // transition fails HERE, so a real regression still reds the suite.)
     await page.locator('#mobile-footer-nav button[data-tab="layers"]').click();
-    await expect(app).toHaveAttribute('data-sheet-detent', 'half');
+    await expect(app).toHaveAttribute('data-sheet-detent', 'full');
 
-    // The whole half-console stack is present.
     await expect(page.locator('#panel-region')).toBeVisible();
-    const door = page.locator('#sheet-all-layers-btn');
-    await expect(door).toBeVisible();
+    const catalog = page.locator('#panel-layers');
+    await expect(catalog).toBeVisible();
 
-    const doorBox = await door.boundingBox();
-    const sheetBox = await page.locator('#sidebar').boundingBox();
-    expect(doorBox).not.toBeNull();
-    expect(sheetBox).not.toBeNull();
-    expect(doorBox!.y).toBeGreaterThanOrEqual(sheetBox!.y); // inside the sheet band
-
-    // MINOR 6 RESOLVED (2026-07-14 mobile-shell build, from the ratified
-    // 2026-07-11 mockup): the conditions strip left the half detent (it is
-    // peek's content) and `.sidebar-scroll` scrolls INTERNALLY at half, the
-    // mockup's own sheet-body behavior. The former expected-fail marker is
-    // off: the contract is now that a touch user can genuinely REACH the
-    // door at half, by layout or by the real scroll surface.
     const scroll = page.locator('#sidebar .sidebar-scroll');
     expect(await scroll.evaluate((el) => getComputedStyle(el).overflowY)).toBe('auto');
-    await door.scrollIntoViewIfNeeded();
-    const reachableBox = await door.boundingBox();
+    await catalog.scrollIntoViewIfNeeded();
+    const reachableBox = await catalog.boundingBox();
+    const sheetBox = await page.locator('#sidebar').boundingBox();
     expect(reachableBox).not.toBeNull();
-    expect(reachableBox!.y + reachableBox!.height).toBeLessThanOrEqual(844);
+    expect(sheetBox).not.toBeNull();
+    expect(reachableBox!.y).toBeGreaterThanOrEqual(sheetBox!.y); // inside the window
+    expect(reachableBox!.y).toBeLessThan(844);
   });
 });

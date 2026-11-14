@@ -171,11 +171,10 @@ test.describe('impact panel accessibility', () => {
     const lastResource = panel.locator('.impact-resources a[href]').last();
     const technical = panel.locator('.impact-technical-information');
     const summary = technical.locator('summary');
-    // D1 M21: Mail and Print are real, focusable controls now, and Close
-    // moves after them in DOM order (D1.md's M21 Notes), so the header's
-    // first focusable (where the trap wraps a forward Tab from the panel's
-    // last focusable) is Mail, not Close.
-    const mail = panel.locator('.impact-panel-action-mail');
+    // "Back to map" leads the header (owner, 2026-11-13: the briefing covers
+    // the map as a studio does), so it is the header's first focusable, where
+    // the trap wraps a forward Tab from the panel's last focusable.
+    const back = panel.locator('.impact-panel-close');
 
     // Resource-catalog hydration replaces the whole body independently of
     // horizon hydration. Wait for the deterministic WA catalog row so that
@@ -203,7 +202,7 @@ test.describe('impact panel accessibility', () => {
     await page.keyboard.press('Tab');
     await expect(acknowledgements).toBeFocused();
     await page.keyboard.press('Tab');
-    await expect(mail).toBeFocused();
+    await expect(back).toBeFocused();
     await page.keyboard.press('Shift+Tab');
     await expect(acknowledgements).toBeFocused();
     await page.keyboard.press('Shift+Tab');

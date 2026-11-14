@@ -57,7 +57,12 @@ import type { TribalHeadquarters } from '../state/tribal-roster';
 import { fetchBufferedWithBudget, fetchJsonWithBudget } from '../util/fetch';
 import { isObject } from '../util/guards';
 import { requestLayerOn } from './layer-toggle-command';
-import { isCurrentBriefingIntent, nextBriefingIntent, openImpactPanel } from './impact-panel';
+import {
+  isCurrentBriefingIntent,
+  nextBriefingIntent,
+  onImpactPanelClose,
+  openImpactPanel
+} from './impact-panel';
 import { showToast } from './overlay';
 import { Search } from './island/search';
 import type { SearchItem } from './island/search';
@@ -241,15 +246,18 @@ function loadTribal(): Promise<SearchItem[]> {
  */
 let locateAbort: AbortController | null = null;
 
-// Every selection change supersedes an in-flight locate (invariant 5): the
-// panel closing (selection to null) or a different briefing opening cancels
-// the LARNAME request itself, not merely its late result. The locate's own
-// completion also lands here, but only after its fetch has resolved, where
-// the abort is a no-op.
-onPlaceSelectionChange(() => {
+// Every selection change and every briefing close supersedes an in-flight
+// locate (invariant 5): a different briefing opening, or the panel closing
+// (its "Back to map" keeps the selection, so the close is heard on its own),
+// cancels the LARNAME request itself, not merely its late result. The
+// locate's own completion also lands here, but only after its fetch has
+// resolved, where the abort is a no-op.
+const cancelLocate = (): void => {
   locateAbort?.abort();
   locateAbort = null;
-});
+};
+onPlaceSelectionChange(cancelLocate);
+onImpactPanelClose(cancelLocate);
 
 /** One live boundary service a search selection can locate against. */
 interface LocateSpec {

@@ -507,8 +507,10 @@ test.describe('the acknowledgements pointer and section (D1 M22)', () => {
     // open down the facade's unavailable render (src/ui/impact-panel.ts
     // openImpactPanel's rejection branch, renderUnavailable) into the one
     // shared shell the acknowledgements-only view is still showing.
-    // At 2560 wide the briefing panel (capped at 880px) leaves the map's
-    // centre, where the collision fixtures sit, uncovered.
+    // The briefing covers the map as a studio does (owner, 2026-11-13), so
+    // the reader goes back to the map from the acknowledgements-only view
+    // before the centre click; the briefing then reopens the same shared
+    // shell that view left behind.
     await page.setViewportSize({ width: 2560, height: 1440 });
     await page.route('**/assets/containing-state-*.js', (route) => route.abort('failed'));
     // The boot and the centre click of tests/interaction-coordinator.spec.ts
@@ -526,19 +528,18 @@ test.describe('the acknowledgements pointer and section (D1 M22)', () => {
     await expect(panel.locator('#impact-panel-title')).toHaveText('Acknowledgements');
     await expect(mail).toHaveAttribute('aria-disabled', 'true');
 
+    await panel.locator('.impact-panel-close').click();
+    await expect(panel).toBeHidden();
     const map = await page.locator('#map').boundingBox();
-    const seat = await panel.boundingBox();
-    if (!map || !seat) throw new Error('the map or the panel has no box');
+    if (!map) throw new Error('the map has no box');
     const centre = { x: map.x + map.width / 2, y: map.y + map.height / 2 };
-    expect(centre.x, 'the map centre must lie outside the open panel').toBeLessThan(seat.x);
     const popup = page.locator('.maplibregl-popup-content');
     await expect(async () => {
       await page.mouse.click(centre.x, centre.y);
       await expect(popup).toBeVisible({ timeout: 1500 });
     }).toPass({ timeout: 20_000 });
-    // Activate the door from the keyboard: the card may be wider than the
-    // gap to the panel's edge, and a pointer hit-test there would land on
-    // the panel; Enter on the focused button runs the same click handler.
+    // Activate the door from the keyboard; Enter on the focused button runs
+    // the same click handler a pointer would.
     await popup.locator('[data-ddm-impact-trigger]').press('Enter');
 
     await expect(panel.locator('.impact-capability-unavailable')).toBeVisible({ timeout: 15_000 });

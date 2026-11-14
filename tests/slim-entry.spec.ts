@@ -50,11 +50,7 @@ test.describe('lazy impact briefing cluster', () => {
     await expect(panel).toHaveClass(/\bsheet-hosted\b/);
     await expect(panel).toHaveClass(/\bopen\b/);
     await expect(panel).toHaveAttribute('aria-modal', 'false');
-    await expect(app).toHaveAttribute('data-sheet-detent', 'half');
-    await expect(page.locator('#sheet-report-door')).toBeVisible();
-    await expect(page.locator('.sheet-at-hand-title')).toHaveText('Washington');
-
-    await page.locator('#sheet-report-door').click();
+    // The report opens in the full-screen window at once (owner, 2026-11-13).
     await expect(app).toHaveAttribute('data-sheet-detent', 'full');
     await expect(panel).toBeVisible();
     await expect(panel.locator('.impact-capability-unavailable')).toContainText(
@@ -64,10 +60,17 @@ test.describe('lazy impact briefing cluster', () => {
       'application module could not load'
     );
 
-    await panel.locator('.impact-panel-close').click();
-    await expect(app).toHaveAttribute('data-sheet-detent', 'half');
+    // Back to map closes the window, keeps the briefing and returns focus to the lit door.
+    await page.locator('#sheet-close').click();
+    await expect(app).toHaveAttribute('data-sheet-detent', 'closed');
     await expect(panel).toHaveClass(/\bopen\b/);
-    await expect(page.locator('#sheet-report-door')).toBeFocused();
+    await expect(page.locator('#mobile-footer-nav button[data-tab="brief"]')).toBeFocused();
+
+    // The Place window still names the place and offers its report.
+    await page.locator('#mobile-footer-nav button[data-tab="place"]').click();
+    await expect(app).toHaveAttribute('data-sheet-detent', 'full');
+    await expect(page.locator('#sheet-report-door')).toBeVisible();
+    await expect(page.locator('.sheet-at-hand-title')).toHaveText('Washington');
     expect(pageErrors).toEqual([]);
   });
 

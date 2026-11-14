@@ -1330,7 +1330,7 @@ test.describe('found-090: the phone at-hand Tribal Nations control is a real tog
   test('three presses give three asserted states at 390x844', async ({ page }) => {
     await gotoApp(page, '?view=console&layers=');
     await page.locator('#mobile-footer-nav button[data-tab="place"]').click();
-    await expect(page.locator('#app')).toHaveAttribute('data-sheet-detent', 'half');
+    await expect(page.locator('#app')).toHaveAttribute('data-sheet-detent', 'full');
     await expect(page.locator('#sheet-at-hand')).toBeVisible();
 
     const action = page.locator('#tribal-nations-at-hand-action');

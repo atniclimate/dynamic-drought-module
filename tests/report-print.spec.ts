@@ -199,7 +199,7 @@ test.describe('U1 the report in print', () => {
       await stubGridGuidance(page);
       await gotoApp(page, '?view=brief&select=state:WA&flow=off');
       if (width === 390) {
-        await page.locator('#sheet-report-door').click();
+        // The shared link opens the report in its full-screen window at once (owner, 2026-11-13).
         await expect(page.locator('#app')).toHaveAttribute('data-sheet-detent', 'full');
       }
       const panel = page.locator('#impact-panel');

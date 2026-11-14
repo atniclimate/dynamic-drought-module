@@ -223,7 +223,7 @@ test.describe('the exact desktop and mobile boundary', () => {
     await page.setViewportSize({ width: 720, height: 844 });
     await gotoApp(page);
     await page.locator('#mobile-footer-nav button[data-tab="place"]').click();
-    await expect(page.locator('#app')).toHaveAttribute('data-sheet-detent', 'half');
+    await expect(page.locator('#app')).toHaveAttribute('data-sheet-detent', 'full');
 
     const entry = page.locator('#sheet-place-studio-entry');
     await entry.scrollIntoViewIfNeeded();
@@ -962,10 +962,9 @@ for (const width of [400, 200]) {
  *   "the bottom dock computes to zero width between 721 and 804px with the
  *    briefing open, and the impact panel overlaps the sidebar below 780px"
  *
- * Both are pinned below, together with the case the first fix left behind:
- * the dock's `--dock-min-w` floor kept its box alive but parked all 180px of
- * it UNDERNEATH the open panel, where the panel's z-index hides it. A dock
- * that is present and invisible is not a dock with a usable width.
+ * Both were pinned here until the owner's ruling of 2026-11-13: the briefing
+ * now covers the map as a studio does, the whole viewport in this band, so
+ * neither collision can arise and the case pins that cover instead.
  *
  * WHAT COUNTS AS AN INTERACTIVE TARGET. A tap at the element's own centre
  * has to land on the element. That excludes three classes of node that are
@@ -1325,7 +1324,7 @@ for (const bandWidth of TABLET_BAND_WIDTHS) {
     test.describe(`tablet band ${bandWidth}x${bandHeight} ${orientation}`, () => {
       test.use({ viewport: { width: bandWidth, height: bandHeight }, hasTouch: true });
 
-      test('keeps the dock clear of the briefing and every target at the touch floor', async ({
+      test('the briefing covers the shell and every target keeps the touch floor', async ({
         page
       }) => {
         await gotoApp(page, '?select=state:WA');
@@ -1335,37 +1334,15 @@ for (const bandWidth of TABLET_BAND_WIDTHS) {
         ).toBe(true);
         await settledBriefing(page);
 
+        // The briefing covers the map as a studio does (owner, 2026-11-13).
+        // Below 1025px the studio box is the whole viewport, so the old
+        // drawer's collisions with the sidebar (DR-036 failure B) and the
+        // bottom dock (failure A) cannot arise: nothing sits beside it.
         const panel = await rect(page.locator('#impact-panel'));
-        const sidebar = await rect(page.locator('.sidebar'));
-        const dock = await rect(page.locator('#map-bottom-dock'));
-
-        // DR-036 failure B: the panel covered the sidebar's right edge below
-        // 780px (12px at 768, 59px at 721), taking the sidebar's scrollbar
-        // and the right end of every control row with it.
-        expect(sidebar.width, 'the sidebar is a real column in this shell').toBeGreaterThan(0);
-        expect(intersects(panel, sidebar), 'the open briefing overlaps the sidebar').toBe(false);
-        expect(
-          panel.left - sidebar.right,
-          'the briefing keeps its gap off the sidebar'
-        ).toBeGreaterThanOrEqual(0);
-
-        // DR-036 failure A: the dock computed to zero width between 721 and
-        // 804px with the briefing open. Its declared floor is the bar.
-        const dockFloor = await page.evaluate(() =>
-          Number.parseFloat(
-            getComputedStyle(document.documentElement).getPropertyValue('--dock-min-w')
-          )
-        );
-        expect(dockFloor, 'the dock floor token is still a real floor').toBeGreaterThanOrEqual(180);
-        expect(
-          dock.width,
-          'the bottom dock lost its width under the briefing'
-        ).toBeGreaterThanOrEqual(dockFloor);
-        // That width has to be width a user can see: a dock parked under the
-        // panel is present and invisible.
-        expect(dock.right, 'the bottom dock runs underneath the open briefing').toBeLessThanOrEqual(
-          panel.left
-        );
+        expect(Math.abs(panel.left), 'the briefing starts at the left edge').toBeLessThanOrEqual(1);
+        expect(Math.abs(panel.right - bandWidth), 'the briefing reaches the right edge').toBeLessThanOrEqual(1);
+        expect(Math.abs(panel.top), 'the briefing starts at the top edge').toBeLessThanOrEqual(1);
+        await expect(page.locator('#impact-panel .impact-panel-close')).toHaveText('Back to map');
 
         await settledLayout(page);
         expect(

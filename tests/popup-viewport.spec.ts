@@ -259,14 +259,15 @@ test.describe('DEF-3 finding 1: mobile side panel geometry (390x844, touch)', ()
     await gotoApp(page, '?region=washington_state&layers=bia-reservations');
     await waitForLayerSettled(page, 'bia-reservations');
 
-    // The Layers door raises the phone sheet to half. While open the sheet is
-    // bottom chrome: the popup region ends at its top edge (src/ui/popup-viewport.ts
-    // containingBounds). Measure it at rest: while it moves, #sidebar holds its
-    // full height plus a transform (data-sheet-moving).
+    // The Layers door opens the phone window full screen (owner, 2026-11-13).
+    // While open it covers the map, so the popup region has no room above
+    // it (src/ui/popup-viewport.ts containingBounds). Measure it at rest:
+    // while it moves, #sidebar holds its full height plus a transform
+    // (data-sheet-moving).
     const app = page.locator('#app');
     await expect(app).toHaveAttribute('data-sheet-detent', 'closed');
     await page.locator('#mobile-footer-nav button[data-tab="layers"]').click();
-    await expect(app).toHaveAttribute('data-sheet-detent', 'half');
+    await expect(app).toHaveAttribute('data-sheet-detent', 'full');
 
     const viewportHeight = await page.evaluate(() => window.innerHeight);
     const sidebar = page.locator('#sidebar');
@@ -277,20 +278,19 @@ test.describe('DEF-3 finding 1: mobile side panel geometry (390x844, touch)', ()
           const box = await sidebar.boundingBox();
           return box ? Math.abs(box.y + box.height - viewportHeight) : Number.POSITIVE_INFINITY;
         },
-        { message: 'the half sheet never came to rest on the bottom edge' }
+        { message: 'the window never came to rest on the bottom edge' }
       )
       .toBeLessThanOrEqual(1);
     const sidebarBox = await sidebar.boundingBox();
     expect(sidebarBox).not.toBeNull();
-    // A half sheet, not the full one, and clear of the top of the screen.
-    expect(sidebarBox!.y).toBeGreaterThan(0);
-    expect(sidebarBox!.height).toBeLessThan(viewportHeight);
-    // The popup region's bottom edge is the sheet's top edge.
+    // The whole screen, from the top edge.
+    expect(Math.abs(sidebarBox!.y)).toBeLessThanOrEqual(1);
+    // The popup region's bottom edge is the window's top edge.
     expect(Math.abs((await bottomChromeTop(page)) - sidebarBox!.y)).toBeLessThanOrEqual(1);
 
-    // Close the Layers panel before opening the coordinated response. Closed
+    // Back to the map before opening the coordinated response. Closed
     // leaves no stale inset: the popup gets the map's whole vertical region.
-    await page.locator('#mobile-footer-nav button[data-tab="layers"]').click();
+    await page.locator('#sheet-close').click();
     await expect(app).toHaveAttribute('data-sheet-detent', 'closed');
     await expect(sidebar).toBeHidden();
     expect(await bottomChromeTop(page)).toBe(Number.POSITIVE_INFINITY);
@@ -1426,7 +1426,7 @@ test.describe('DDM-P11-T02 clause 2: the popup is dismissable and keyboard-trave
  * on a place-bearing (boundary) popup outside the mobile Brief sheet's U2
  * route (the shipped route stays: interaction-coordinator.ts:376-385
  * sends a place-bearing tap in the active mobile Brief sheet straight to
- * the half detent with no popup; this is `?view=console`, not that
+ * its full-screen window with no popup; this is `?view=console`, not that
  * surface).
  */
 test.describe('DDM-P11-T02 clause 3: the door names the place it opens a briefing for', () => {

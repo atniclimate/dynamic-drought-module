@@ -513,10 +513,10 @@ test.describe('the Brief-door action at 400px (mobile and embed)', () => {
   }) => {
     await gotoApp(page, '?view=console&layers=');
 
-    // The Place door opens the at-hand summary at the half detent (the
-    // surface that REPLACES the report on mobile).
+    // The Place door opens the at-hand summary in its full-screen window
+    // (the surface that REPLACES the report on mobile).
     await page.locator('#mobile-footer-nav button[data-tab="place"]').click();
-    await expect(page.locator('#app')).toHaveAttribute('data-sheet-detent', 'half');
+    await expect(page.locator('#app')).toHaveAttribute('data-sheet-detent', 'full');
     await expect(page.locator('#sheet-at-hand')).toBeVisible();
 
     const atHandAction = page.locator('#tribal-nations-at-hand-action');

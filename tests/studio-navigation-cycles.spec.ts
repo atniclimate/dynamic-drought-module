@@ -222,30 +222,37 @@ test.describe('DR-065 mode 3: repeated studio cycles stay consistent (phone)', (
     const placeTab = page.locator('#mobile-footer-nav button[data-tab="place"]');
     const layersTab = page.locator('#mobile-footer-nav button[data-tab="layers"]');
 
+    const back = page.locator('#sheet-close');
+
     await placeTab.click();
-    await expect(app).toHaveAttribute('data-sheet-detent', 'half');
+    await expect(app).toHaveAttribute('data-sheet-detent', 'full');
     await expect(page.locator('#sheet-search [data-ddm-search]')).toBeVisible();
 
     const opener = page.locator('#sheet-place-studio-entry');
     const mapUrl = page.url();
 
     const firstUrl = await studioCycle(page, opener, PLACE_ROOT, 'place', mapUrl, 'phone cycle 1');
-    await expect(app).toHaveAttribute('data-sheet-detent', 'half');
+    await expect(app).toHaveAttribute('data-sheet-detent', 'full');
 
     // The phone's own view switch is the footer. Layers rides the console
     // mode; there is no mobile LAYERS studio door, and the desktop door pair
     // is never admitted to the sheet, so that absence is pinned here rather
-    // than driven.
+    // than driven. Each window covers the doors (owner, 2026-11-13), so the
+    // switch goes back to the map first.
+    await back.click();
+    await expect(app).toHaveAttribute('data-sheet-detent', 'closed');
     await layersTab.click();
-    await expect(app).toHaveAttribute('data-sheet-detent', 'half');
+    await expect(app).toHaveAttribute('data-sheet-detent', 'full');
     await expect
       .poll(() => new URL(page.url()).searchParams.get('view'))
       .toBe('console');
     await expect(page.locator('#studio-entry-pair')).toBeHidden();
     await expect(page.locator(LAYERS_ROOT)).toHaveCount(0);
 
+    await back.click();
+    await expect(app).toHaveAttribute('data-sheet-detent', 'closed');
     await placeTab.click();
-    await expect(app).toHaveAttribute('data-sheet-detent', 'half');
+    await expect(app).toHaveAttribute('data-sheet-detent', 'full');
     await expect
       .poll(() => page.url(), { message: 'the footer view round trip did not return the map URL' })
       .toBe(mapUrl);

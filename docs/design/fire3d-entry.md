@@ -27,6 +27,8 @@ The scene publishes `active` at the end of activateScene (src/map/fire3d.ts) whi
 - A Preact island, not a plain DOM module. src/ui/island/shell.tsx:1-3 records that new UI surfaces are islands; this surface has a reducer, timers, focus, inert state and live regions. v2 mounts an independent island in `#fire3d-loading-root` inside the map container, so it works in embeds where the shell is absent. fire3d.ts keeps only facts.
 - Accessibility restructured. Cancel no longer sits inside a `role="status"`; the stage sentence lives in its own polite, atomic live node; the map canvas and its controls are inerted while the desktop sidebar stays operable; in an embed the cover is the whole surface and traps focus; focus is saved when the cover actually appears and restored only if still connected.
 
+Amended 2026-11-13 (owner ruling): on desktop and tablet the Impact Briefing covers the map as a studio does, so while a briefing is open the scene, its card, the Locate card and the Key sit beneath it; "Back to map" returns to them as they were, with the place still selected.
+
 ## On phones (built 2026-11-09)
 
 Owner direction 2026-11-09 (sprint; DR-pending) lets a phone enter the scene
@@ -45,6 +47,8 @@ stylesheet: a press whose chrome could not load says in a short notice
 that the 3D view is unavailable and the flat map remains accurate, and the
 next press asks for the stylesheet again (`src/util/chunk-stylesheets.ts`).
 A phone-width embed loads none of the scene's code.
+
+Amended 2026-11-13 (owner ruling): every phone window (Brief, Place, Layers, Alerts, the ENSO guide, the report) now opens full screen with "Back to map", so an open window covers the card and the pad; the scene's gate still admits a phone while the card is mounted, and "Back to map" returns to both as they were.
 
 Where it differs, and why. The transaction below is still not built, so the
 phone shows the steps the built one really waits on: the archive probe, then

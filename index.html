@@ -63,15 +63,14 @@
     </script>
 
     <aside id="sidebar" class="sidebar" aria-label="Map controls">
-      <!-- The mobile bottom-sheet grabber (0.7.0 U2, D-0.7.0-017). Display
-           is stylesheet-gated: it exists only below 720px when the sheet is
-           active (never in embed). The grabber is a real button and the ONLY
-           gesture surface that moves the sheet (drag, tap to cycle,
-           Enter/Space cycles, arrow keys step); wired in src/ui/mobile-sheet.ts. -->
+      <!-- The phone window's header (owner, 2026-11-13: every window opens
+           full screen with "Back to map"). Display is stylesheet-gated: it
+           exists only below 720px when the sheet is active (never in embed).
+           The button is static markup wired in src/ui/mobile-sheet.ts, so a
+           failed motion chunk still leaves the way back; the title after it
+           arrives with src/ui/sheet-motion.ts. -->
       <div class="sheet-grabber-row">
-        <button type="button" id="sheet-grabber" class="sheet-grabber" aria-label="Resize the briefing sheet">
-          <span class="sheet-grabber-bar" aria-hidden="true"></span>
-        </button>
+        <button type="button" id="sheet-close" class="sheet-close">Back to map</button>
       </div>
       <header class="sidebar-header">
         <div class="brand">

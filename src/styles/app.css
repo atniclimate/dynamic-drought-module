@@ -250,25 +250,11 @@
      phones and in embeds. The desktop shell's column reads --map-cell-w
      instead (S30D D1 M9, THE DESKTOP COLUMN). */
   --map-ctrl-w: 104px;
-  /* Impact-panel geometry (UI-02). The panel's width and the bottom
-     dock's inset were two independent literals (440px and 452px) that
-     could not be kept in step; they now read one token plus one gap.
-     Owner ruling (2026-09): the panel should read as "about double" its
-     old 440px footprint, capped there because a literal 880px would be
-     61% of a 1440px laptop. --impact-panel-w-min is the single 440px
-     floor both this clamp and the tablet band read, so the two can never
-     drift apart again; 1025px and wider now SCALES with the viewport
-     (38vw) between that floor and double it, 880px. The tablet band
-     narrows the token in place (see the 721-1024px block beside
-     .impact-panel), where 38vw stays under the 440px floor for the
-     whole band, so the floor is what the band's min() still caps
-     against. --dock-min-w is the floor the dock keeps no matter how
-     wide the panel is, so its box can never solve to zero width and
-     clip its whole contents away. */
-  --impact-panel-w-min: 440px;
-  --impact-panel-w: clamp(var(--impact-panel-w-min), 38vw, 880px);
-  --impact-panel-gap: 12px;
-  --dock-min-w: 180px;
+  /* The Impact Briefing's reading column (owner, 2026-11-13: the briefing
+     covers the map as a studio does). The window is as wide as the map;
+     its header and body hold to this centred column so a line stays
+     readable at 2560px. 880px is the old drawer's widest. */
+  --briefing-column-max: 880px;
   /* Bottom-dock seat (DDM-P10-T01). The dock's edge inset and its lift
      above the scale bar were literals repeated in four places (the base
      rule, the phone rule, the embed rule) and the tablet band has to
@@ -2696,37 +2682,6 @@ button.conditions-metric:hover .conditions-action-hide {
 }
 .map-dock-foot > * { pointer-events: auto; }
 
-@media (min-width: 721px) {
-  /* Panel-inset awareness: the panel's own width plus one gap, read
-     from the shared token so the two can never drift (UI-02). The
-     min() is a floor, not a second opinion: percentages here resolve
-     against #map-container, which is only `100vw - var(--sidebar-w)`
-     wide, so between 721px and about 985px the literal inset used to
-     exceed the container and the dock solved to ZERO width, silently
-     clipping the on-map key, the notices row, the embed date stamp,
-     the brand chip, and the telemetry cap chip out of the layout for
-     that whole band. The floor keeps --dock-min-w of dock alive.
-     Above ~985px the first term always wins, so 1280px and wider are
-     byte-identical to the old 452px. */
-  body:has(.impact-panel.open) .map-bottom-dock {
-    right: min(
-      calc(var(--impact-panel-w) + var(--impact-panel-gap)),
-      calc(100% - var(--impact-panel-gap) - var(--dock-min-w))
-    );
-  }
-}
-/* From 1025px, outside an embed, the drawer stands left of the map-button
-   column (the block above the briefing panel), so the dock clears that
-   column too. */
-@media (min-width: 1025px) {
-  body:has(.impact-panel.open:not(.sheet-hosted)) .app-shell:not(.embed) .map-bottom-dock {
-    right: min(
-      calc(var(--impact-panel-w) + 2 * var(--impact-panel-gap) + var(--chrome-inset) + var(--map-cell-w)),
-      calc(100% - var(--impact-panel-gap) - var(--dock-min-w))
-    );
-  }
-}
-
 /* ----------------------------------------------------------------------------
    Map overlay controls
    ---------------------------------------------------------------------------- */
@@ -3227,7 +3182,13 @@ button.conditions-metric:hover .conditions-action-hide {
   letter-spacing: var(--track-display);
 }
 
-.layers-studio-back {
+/* The Impact Briefing's "Back to map" (.impact-panel-close) and the phone
+   window's (.sheet-close, src/styles/mobile-panels.css adds the phone pill)
+   share this look by the list, never the class: specs find the studios'
+   Back by `.layers-studio-back` page-wide. */
+.layers-studio-back,
+.impact-panel-close,
+.sheet-close {
   justify-self: start;
   padding: 7px 11px;
   background: var(--bg-2);
@@ -3241,7 +3202,11 @@ button.conditions-metric:hover .conditions-action-hide {
 }
 
 .layers-studio-back:hover,
-.layers-studio-back:focus-visible {
+.layers-studio-back:focus-visible,
+.impact-panel-close:hover,
+.impact-panel-close:focus-visible,
+.sheet-close:hover,
+.sheet-close:focus-visible {
   border-color: var(--accent-strong);
   color: var(--fg-0);
 }
@@ -4079,8 +4044,7 @@ button.conditions-metric:hover .conditions-action-hide {
   #app[data-sheet-detent] .sidebar-footer,
   #app[data-sheet-detent] .sidebar-scroll > * { display: none; }
 
-  /* The header strip (the grabber, the title, the close control): every
-     open detent. */
+  /* The header strip ("Back to map" and the title): every open detent. */
   #app[data-sheet-detent] .sheet-grabber-row {
     display: flex;
   }
@@ -4108,10 +4072,12 @@ button.conditions-metric:hover .conditions-action-hide {
 
   /* Full, Brief: the standalone report; the map has receded. Until a
      report is actually hosted and open, the at-hand block holds the
-     detent so Brief is never an empty sheet (D-0.7.0-006). */
-  #app[data-sheet-detent='full'].view-brief #sheet-report { display: block; }
+     detent so Brief is never an empty sheet (D-0.7.0-006). Every door
+     opens at full now (owner, 2026-11-13), so the Place door's window keeps
+     its search and never shows a report it did not ask for. */
+  #app[data-sheet-detent='full'].view-brief:not([data-sheet-tab='place']) #sheet-report { display: block; }
   #app[data-sheet-detent='full'].view-brief #sheet-at-hand { display: block; }
-  #app[data-sheet-detent='full'].view-brief:has(#sheet-report .impact-panel.open) #sheet-at-hand {
+  #app[data-sheet-detent='full'].view-brief:not([data-sheet-tab='place']):has(#sheet-report .impact-panel.open) #sheet-at-hand {
     display: none;
   }
 
@@ -4130,13 +4096,14 @@ button.conditions-metric:hover .conditions-action-hide {
   }
   /* Full, console, with an OPEN report (a console briefing open drives
      the sheet to full): the report takes the detent; one sheet, never
-     two surfaces fighting inside it. Close restores the prior detent. */
-  #app[data-sheet-detent='full'].view-console:has(#sheet-report .impact-panel.open)
+     two surfaces fighting inside it. Close restores the prior detent. A
+     pressed door (Layers, Alerts) shows its own window instead. */
+  #app[data-sheet-detent='full'].view-console:not([data-sheet-tab]):has(#sheet-report .impact-panel.open)
     .sidebar-scroll
     > *:not(.sheet-report) {
     display: none;
   }
-  #app[data-sheet-detent='full'].view-console #sheet-report:has(.impact-panel.open) {
+  #app[data-sheet-detent='full'].view-console:not([data-sheet-tab]) #sheet-report:has(.impact-panel.open) {
     display: block;
   }
   /* The sheet owns height via the grabber; the desktop collapse control
@@ -4454,30 +4421,6 @@ button.conditions-metric:hover .conditions-action-hide {
   white-space: nowrap;
 }
 
-/* The grabber: a real button. The bar is the visual handle; inside the
-   phone sheet the button fills the header strip, so the hit target is the
-   strip (src/styles/mobile-panels.css gives it that seat and its faces). */
-.sheet-grabber {
-  appearance: none;
-  background: transparent;
-  border: none;
-  width: 100%;
-  min-height: 26px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 7px 0 5px;
-  cursor: grab;
-  touch-action: none;
-}
-.sheet-grabber-bar {
-  width: 44px;
-  height: 5px;
-  border-radius: 999px;
-  background: var(--line-strong);
-}
-.sheet-grabber:hover .sheet-grabber-bar { background: var(--fg-3); }
-
 /* The one-time first-peek hint (product lens): dismissible, floats above
    the sheet's top edge, never repeats once dismissed. Offset high enough
    to clear the dock's legend chip row (the U4 stage-5 matrix caught the
@@ -4664,68 +4607,27 @@ button.telemetry-item {
   text-align: left;
 }
 
-/* The open briefing leaves the map's buttons usable AND in their seats (owner,
-   2026-11-13: a State or city pick opens the drawer, and #reset-btn sat under
-   it; DR-102: the desktop keeps its controls in fixed places, pinned by
-   tests/map-chrome-seats.spec.ts). On desktop and tablet the drawer's right
-   edge sits one gap left of the Reset, SAT, Help and Share column, so the
-   column never moves and is never under the drawer, and the Key chip is held
-   to the room left of the drawer so its disclosure chevron stays clear.
-   The drawer is appended to <body>, outside .app-shell, so the column tokens
-   (--chrome-inset 12px, --map-cell-w, the 12px gap) do not reach it: its
-   inset repeats them, 12 + 96 + 12 on desktop and 12 + --touch-target + 12 in
-   the tablet band, and src/state/deep-link.ts adds the same clearance to the
-   camera pad (MAP_COLUMN_CLEAR). Phones (the sheet-hosted panel) and embeds
-   are outside this block. */
-@media (min-width: 721px) {
-  body:has(.impact-panel.open:not(.sheet-hosted)) .app-shell:not(.embed) {
-    --briefing-clear: calc(var(--impact-panel-w) + var(--impact-panel-gap));
-    --briefing-chip-left: 12px;
-  }
-  body:has(.impact-panel.open:not(.sheet-hosted)) .app-shell.sidebar-collapsed:not(.embed) {
-    --briefing-chip-left: 60px;
-  }
-  body:has(.impact-panel.open:not(.sheet-hosted)) .app-shell:not(.embed) #map-condition-indicator {
-    max-width: calc(100% - var(--briefing-clear) - var(--briefing-chip-left));
-  }
-}
-@media (min-width: 721px) and (pointer: coarse) {
-  body:has(.impact-panel.open:not(.sheet-hosted)) .app-shell.sidebar-collapsed:not(.embed) {
-    --briefing-chip-left: 64px;
-  }
-}
-/* From 1025px the drawer stands left of the button column, so the chip clears the column too. */
-@media (min-width: 1025px) {
-  body:has(.impact-panel.open:not(.sheet-hosted)) .app-shell:not(.embed) {
-    --briefing-clear: calc(
-      var(--impact-panel-w) + 2 * var(--impact-panel-gap) + var(--chrome-inset) + var(--map-cell-w)
-    );
-  }
-}
-
 /* ----------------------------------------------------------------------------
    Drought-impact briefing panel
-   The headline kernel-integration feature: a slide-in panel over the map that
-   turns a boundary selection into a sourced, three-horizon impact read plus
-   routed resources. Appended to <body>, positioned over the map, so it is
-   embed-safe (independent of the sidebar) and works under ?embed=true. Below
-   720px it becomes a bottom sheet. Themed entirely from the :root tokens.
+   The headline kernel-integration feature: a window that turns a boundary
+   selection into a sourced, three-horizon impact read plus routed resources.
+   Appended to <body>, so it is embed-safe (independent of the sidebar) and
+   works under ?embed=true. Wider than 720px it covers the map exactly as a
+   studio does (owner, 2026-11-13): the studios' box (`--studio-inset-start`
+   keeps a live sidebar beside it from 1025px; below that it covers the whole
+   viewport), "Back to map" first in its header, and a centred reading
+   column. On the phone it is hosted by the sheet. Themed from :root tokens.
    ---------------------------------------------------------------------------- */
 
 .impact-panel {
   position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: var(--impact-panel-w);
-  max-width: 92vw;
+  inset: 0 0 0 var(--studio-inset-start);
   z-index: calc(var(--z-sheet) + 50);
   display: flex;
   flex-direction: column;
   background: var(--bg-1);
-  border-left: 1px solid var(--line-strong);
-  border-right-color: var(--line-strong);
-  box-shadow: -10px 0 32px rgba(0, 0, 0, 0.55);
+  /* The slide stays: `hidden` lands 260ms after the close
+     (closeImpactPanelShell), so the window must already be leaving by then. */
   transform: translateX(100%);
   transition: transform 0.25s ease;
 }
@@ -4741,7 +4643,7 @@ button.telemetry-item {
   transform: translateX(0);
 }
 
-/* The desktop drawer is glass over the map, the same face as the Key (owner
+/* The desktop window is glass over the map, the same face as the Key (owner
    2026-11-13): --glass-read under --rich-black-blur, so more-contrast and
    forced colours turn it solid through the tokens, with no rule of their
    own. Only the gaps between cards are translucent; every content box keeps
@@ -4756,8 +4658,6 @@ button.telemetry-item {
       --fg-2: var(--ink-soft);
       --fg-3: var(--ink-soft);
       background: var(--glass-read);
-      border-left-color: var(--keyline);
-      border-right-color: var(--keyline);
       -webkit-backdrop-filter: blur(var(--rich-black-blur));
       backdrop-filter: blur(var(--rich-black-blur));
     }
@@ -4767,100 +4667,29 @@ button.telemetry-item {
   }
 }
 
-/* The drawer's inset left of the map-button column (the block above the
-   briefing panel explains it), from 1025px only: in the tablet band the
-   sidebar, the dock and the column leave no readable drawer beside them
-   (149 px at 721, measured 2026-11-13), so there the drawer keeps the right
-   edge and covers the column, as it always has on tablets. After the glass
-   rule so the first `.impact-panel:not(.sheet-hosted)` rule a contract test
-   reads stays the glass one. */
-@media (min-width: 1025px) {
-  body:has(.app-shell:not(.embed)) .impact-panel:not(.sheet-hosted) {
-    right: 120px;
-    border-right-style: solid;
-    border-right-width: 1px;
-  }
+/* The centred reading column (the studio header's own arithmetic,
+   .layers-studio-header): header and body pad in to --briefing-column-max,
+   so "Back to map", the title and every line register on one column at any
+   width. Never on the sheet-hosted phone report. */
+.impact-panel:not(.sheet-hosted) :is(.impact-panel-header, .impact-panel-body) {
+  padding-inline: max(var(--gutter), calc((100% - var(--briefing-column-max)) / 2));
 }
 
-/* The tablet band (UI-02 collision B, 02-impact-briefing EF-9 / IB-15).
-   Between 721px and 1024px the desktop shell is in force, so the 340px
-   sidebar is on screen and the panel is a fixed slab against the right
-   edge. At a literal 440px its left edge lands at `100vw - 440`, which
-   clears the sidebar only from 780px up: at 768px it covered the
-   sidebar's right edge by 12px and at 721px by 59px, taking the
-   sidebar's scrollbar and the right end of every control row with it.
-   Capping the token at the room actually left keeps a full gap at every
-   width in the band (369px of panel at 721px, 416px at 768px, the full
-   440px from 792px up), so the cap is inert at 1025px and wider and
-   desktop geometry is untouched. The sidebar is a real column only when
-   the shell is neither collapsed nor embedded; in those two shells the
-   map is full-bleed and the panel keeps its 440px.
-
-   DDM-P10-T01 widens that cap by the dock's floor. Clearing the sidebar
-   was only half the collision: with the panel at the old cap the bottom
-   dock's `right` inset fell through to its `--dock-min-w` floor at every
-   width from 721 to about 1010, which kept the dock's box alive (never
-   zero) but parked all 180px of it UNDERNEATH the open panel, where the
-   panel's z-index (--z-sheet + 50) hides it. Measured on 5be15f5 at
-   721, 768, 820 and 900px, both orientations: dock 180px wide, dock left
-   edge and panel left edge both at the map container's 12px inset. So
-   the panel's real ceiling is the room left after the dock's inset, the
-   dock's floor and one gap, and beyond that ceiling the two terms of the
-   dock's own `min()` swap places and the floor stops being reachable.
-   Panel widths that leaves in the band (with the fluid sidebar below,
-   --sidebar-w = clamp(300px, 30vw + 64px, 340px), minus the 12px dock
-   inset, the 180px dock floor and the 12px gap): 217px at 721, 264px at
-   768, 306px at 820, 362px at 900, the full 440px from 984px up (the
-   sidebar reaches 340px at 920). At 1025px and wider the whole block is
-   inert. */
-@media (min-width: 721px) and (max-width: 1024px) {
-  body:has(#app.app-shell:not(.sidebar-collapsed):not(.embed)) {
-    --impact-panel-w: min(
-      var(--impact-panel-w-min),
-      calc(
-        100vw - var(--sidebar-w) - var(--map-dock-inset) -
-          var(--dock-min-w) - var(--impact-panel-gap)
-      )
-    );
-  }
-
-  /* The header stacks in this band, 2026-09-10. The mail and print actions
-     joined the close control here, and all three carry the 44px touch floor,
-     so the icon cluster costs 144px of a panel that is 217px wide at 721 and
-     264px at 768. After the header's own padding, gap and border there was
-     nothing left for the title, and "Washington" painted into the icons while
-     the jurisdiction line broke into five lines. Two independent review
-     passes found it, one by measuring the CSS and one by looking at the
-     768px capture.
-
-     Both are kept, at full size: the actions take their own row above a
-     full-width title block, which is the ordinary toolbar arrangement and
-     costs one row of height in the one band that cannot afford the width.
-     Nothing shrinks, no target drops below the floor, and no place name is
-     truncated. */
-  #impact-panel .impact-panel-header {
-    flex-wrap: wrap;
-  }
-  #impact-panel .impact-panel-actions {
-    order: 1;
-    margin-left: auto;
-  }
-  #impact-panel .impact-panel-heading {
-    order: 2;
-    flex: 1 1 100%;
-  }
-}
-
+/* Header: [Back to map][title block][mail, print]. Where the window is too
+   narrow for one row (a 200px embed's overlay), the actions keep the first
+   row beside Back and the title takes a full row below: nothing shrinks
+   under the touch floor and no place name is truncated (2026-09-10 rule). */
 .impact-panel-header {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 12px;
   padding: 16px var(--gutter) 14px;
   border-bottom: 1px solid var(--line);
   flex-shrink: 0;
 }
 .impact-panel-heading {
+  flex: 1 1 14rem;
   min-width: 0;
 }
 .impact-panel-kicker {
@@ -4887,10 +4716,9 @@ button.telemetry-item {
   color: var(--fg-2);
   letter-spacing: 0.02em;
 }
-/* The header's icon cluster (mail, print, then close). One wrapper keeps
-   the header at exactly two flex children so `justify-content:
-   space-between` still separates the title block from the icons, whatever
-   the cluster's own count. */
+/* The header's icon cluster (mail, print). "Back to map" is
+   .impact-panel-close, first in the header, in the studios' Back look
+   (the .layers-studio-back rule lists it). */
 .impact-panel-actions {
   display: flex;
   align-items: center;
@@ -4899,22 +4727,6 @@ button.telemetry-item {
 }
 .impact-panel-close {
   flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  background: transparent;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  color: var(--fg-2);
-  cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
-}
-.impact-panel-close:hover {
-  background: var(--bg-2);
-  color: var(--fg-0);
-  border-color: var(--line-strong);
 }
 /* Mail (a real `mailto:` anchor) and print (calls window.print()): real
    controls, styled like the close button's own icon button so the wired-up
@@ -5708,6 +5520,15 @@ a.impact-resource-link::after {
   }
   .impact-panel.open {
     transform: translateY(0);
+  }
+  /* Narrow overlay: Back and the actions share the first row, the title
+     takes the second (the header rule's wrap). */
+  .impact-panel:not(.sheet-hosted) .impact-panel-heading {
+    order: 1;
+    flex-basis: 100%;
+  }
+  .impact-panel:not(.sheet-hosted) .impact-panel-actions {
+    margin-left: auto;
   }
 }
 

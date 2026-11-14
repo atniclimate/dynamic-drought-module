@@ -121,6 +121,10 @@ async function expectPresetAtRest(page: Page, preset: ViewPreset, moment: string
 /** Tap a rail button after proving it is a control a person could use, then see it pressed. */
 async function tapRail(page: Page, preset: ViewPreset, moment: string): Promise<void> {
   const button = page.locator(`#hazard-rail button[data-preset="${preset.key}"]`);
+  // An open window covers the rail (owner, 2026-11-13): a reader goes back to the map first.
+  if ((await page.locator('#app').getAttribute('data-sheet-detent')) !== 'closed') {
+    await page.locator('#sheet-close').tap();
+  }
   await expect(button, `${moment}: the ${preset.label} rail button is not on screen`).toBeVisible();
   await expect(button, `${moment}: the ${preset.label} rail button is disabled`).toBeEnabled();
   await expect(button, `${moment}: the ${preset.label} rail button reads unavailable`).not.toHaveAttribute(
@@ -128,7 +132,7 @@ async function tapRail(page: Page, preset: ViewPreset, moment: string): Promise<
     'true'
   );
   await button.tap();
-  // A rail press closes an open sheet to the map; #app is stamped closed only when the close comes to rest.
+  // A rail press leaves the map in view; #app is stamped closed only when a close comes to rest.
   await expect(page.locator('#app'), `${moment}: the ${preset.label} rail tap left the sheet open`).toHaveAttribute(
     'data-sheet-detent',
     'closed'
@@ -137,13 +141,11 @@ async function tapRail(page: Page, preset: ViewPreset, moment: string): Promise<
   await expect(button, `${moment}: the ${preset.label} rail button`).toHaveAttribute('aria-pressed', 'true');
 }
 
-/** Open the full catalog through the sheet's Layers door (a rail tap closes the sheet). */
+/** Open the full catalog through the Layers door's full-screen window. */
 async function openCatalog(page: Page): Promise<void> {
   const app = page.locator('#app');
   if ((await app.getAttribute('data-sheet-detent')) === 'full') return;
   await page.locator('#mobile-footer-nav button[data-tab="layers"]').tap();
-  await expect(app).toHaveAttribute('data-sheet-detent', 'half');
-  await page.locator('#sheet-all-layers-btn').tap();
   await expect(app).toHaveAttribute('data-sheet-detent', 'full');
 }
 

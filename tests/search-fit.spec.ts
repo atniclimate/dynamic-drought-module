@@ -6,12 +6,11 @@ import { gotoApp, waitForLayerSettled } from './helpers';
  * U-UX-FIX-1 DEF-5: the search fit pads only for a panel that will
  * actually render.
  *
- * Owner 2026-11-13: a search pick now opens the briefing drawer on every
- * shell, so the right pad is reserved on this path again and Washington is
- * framed in the map left of the drawer. The history below is the original
- * fault; the probe now sits just west of the open drawer's left edge, where
- * Washington's eastern side (or Idaho at the seam) lands under the padded
- * fit. A fit that never ran leaves the boot's wide framing there instead.
+ * Owner 2026-11-13: a search pick opens the briefing on every shell, and
+ * the briefing now covers the map as a studio does, so the fit pads every
+ * side alike and "Back to map" reveals Washington centred, still selected.
+ * The history below is the original fault, and the probe is its own again:
+ * 90% of the map width, read after Back to map.
  *
  * The proven cause (2026-07-24 reproduction): briefingCameraPadding() in
  * src/state/deep-link.ts unconditionally reserved the desktop right
@@ -57,9 +56,10 @@ async function stateUnderProbe(page: Page, fx: number, fy: number): Promise<stri
   return text.replace(/^\s*State/, '').trim();
 }
 
-test.describe('DEF-5 the search fit frames the place beside the briefing drawer (desktop)', () => {
+test.describe('DEF-5 the search fit frames the place for the map the briefing returns to (desktop)', () => {
   test.use({ viewport: { width: 1440, height: 900 } });
 
+  // The title is the sleep inventory's key (tests/sleep-inventory.test.mjs); the case now reads after Back to map.
   test('selecting Washington frames the state in the map left of the open briefing', async ({
     page
   }) => {
@@ -69,7 +69,7 @@ test.describe('DEF-5 the search fit frames the place beside the briefing drawer 
     await waitForLayerSettled(page, 'states');
 
     // Select Washington through the shared search: the pick opens its
-    // briefing drawer over the map's right side (owner 2026-11-13).
+    // briefing over the map (owner 2026-11-13).
     await page.locator('#catalog-search [data-ddm-search]').fill('washington');
     await page
       .locator('#catalog-search [data-search-group="place"] [data-search-kind="place"]', {
@@ -79,18 +79,14 @@ test.describe('DEF-5 the search fit frames the place beside the briefing drawer 
       .click();
     await expect(page.locator('#app')).toHaveAttribute('data-place-selected', '');
 
-    // PREMISE PIN: this path opens the impact panel over the map's right
-    // side, so the fit's right pad is the drawer's.
-    const drawer = page.locator('#impact-panel.open');
-    await expect(drawer).toBeVisible();
-    // The drawer slides in over 0.25 s. Measured mid-slide its box sits further right, which put the probe on the
-    // drawer's final footprint (off the map, so no hover readout ever came): wait for the slide to end.
-    await drawer.evaluate((el) => Promise.all(el.getAnimations().map((animation) => animation.finished)));
-    const mapBox = await page.locator('#map').boundingBox();
-    const drawerBox = await drawer.boundingBox();
-    if (!mapBox || !drawerBox) throw new Error('map or drawer has no box');
-    // Just west of the drawer's left edge, on the midline, as a map fraction.
-    const fx = (drawerBox.x - 40 - mapBox.x) / mapBox.width;
+    // PREMISE PIN: this path opens the impact panel; its "Back to map"
+    // keeps the place selected and shows the map the fit framed.
+    const panel = page.locator('#impact-panel.open');
+    await expect(panel).toBeVisible();
+    await panel.locator('.impact-panel-close').click();
+    await expect(page.locator('#impact-panel')).toBeHidden();
+    await expect(page.locator('#app')).toHaveAttribute('data-place-selected', '');
+    const fx = 0.9;
 
     // Let the fit's fly settle: the probe must read a STABLE state, not a
     // frame of the animation. Two identical non-empty reads 600ms apart
@@ -106,12 +102,12 @@ test.describe('DEF-5 the search fit frames the place beside the briefing drawer 
       settled = second;
     }).toPass({ timeout: 25_000 });
 
-    // The load-bearing assertion: the padded fit puts Washington's eastern
-    // side (Idaho accepted at the border seam) just west of the drawer.
+    // The load-bearing assertion: the symmetric fit puts Washington's
+    // eastern side (Idaho accepted at the border seam) under the probe.
     expect(
       ['Washington', 'Idaho'],
-      `the probe west of the drawer read "${settled}": the fit did not frame ` +
-        'Washington in the map left of the open briefing'
+      `the probe at 90% of the map read "${settled}": the fit did not frame ` +
+        'Washington across the map'
     ).toContain(settled);
   });
 });

@@ -123,7 +123,7 @@ test.describe('U4 stage-5: bottom-chrome collisions stay fixed', () => {
 
     await page.locator('#mobile-footer-nav button[data-tab="layers"]').click();
     const app = page.locator('#app');
-    await expect(app).toHaveAttribute('data-sheet-detent', 'half');
+    await expect(app).toHaveAttribute('data-sheet-detent', 'full');
     await expect(chip).not.toBeInViewport();
   });
 

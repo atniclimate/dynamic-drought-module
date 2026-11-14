@@ -608,7 +608,7 @@ function openGuide(): void {
   if (state.app.hasAttribute('data-sheet-tab') && getSheetDetent() !== 'closed') {
     setSheetDetent('closed', { announce: false });
   }
-  if (getSheetDetent() === 'closed') setSheetDetent('half');
+  if (getSheetDetent() === 'closed') setSheetDetent('full');
   const scroll = state.panel.closest<HTMLElement>('.sidebar-scroll');
   if (scroll) scroll.scrollTop = 0;
 }
