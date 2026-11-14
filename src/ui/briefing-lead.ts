@@ -27,6 +27,7 @@ import { NIFC_INCIDENT_PRESENTATION } from '../config/wildfire-presentation';
 import { claimDateLine, claimRegisterTag, EVIDENCE_PRESENTATION } from '../impact/evidence';
 import { HORIZON_CHROME, POINT_HEAT_HAZARD } from '../impact/horizon-chrome';
 import { HAZARD_KEYS, HAZARD_LABELS, HORIZON_KEYS } from '../impact/matrix';
+import { seasonalOutlookTitle } from '../impact/point-heat-format';
 import {
   PRIORITY_ORDER_NOTE,
   PRIORITY_ROWS,
@@ -671,7 +672,7 @@ export function buildEnsoChainLinks(briefing: ImpactBriefing): ChainLink[] {
   };
   links.push({
     key: 'tendency',
-    title: 'Seasonal outlook at this point',
+    title: seasonalOutlookTitle(briefing.context),
     relation: 'read beside',
     action: 'detail:heat',
     actionLabel: 'Open the Heat detail',

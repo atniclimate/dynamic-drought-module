@@ -16,6 +16,7 @@ import {
   type PlaceSelection
 } from '../state/place-selection';
 import { registry } from '../state/registry';
+import { pointReadPlace } from '../impact/point-heat-format';
 import { escapeHtml } from '../util/escape';
 import { fetchJsonWithBudget } from '../util/fetch';
 import { isObject } from '../util/guards';
@@ -574,7 +575,7 @@ function renderRead(read: SequenceRead): void {
       : undefined;
   host.innerHTML =
     '<div class="heatrisk-sequence-heading">' +
-    `<strong>HeatRisk at the selected point for ${escapeHtml(selection.label)}</strong>` +
+    `<strong>HeatRisk at ${escapeHtml(pointReadPlace(selection.context))} for ${escapeHtml(selection.label)}</strong>` +
     '<span>7 days</span></div>' +
     // The all-zero statement sits above the cells so it is read before the fold.
     (allZero(read.values)
@@ -594,7 +595,7 @@ function renderRead(read: SequenceRead): void {
     `Retrieved ${escapeHtml(dateTok(read.retrievedAt))}. Selected valid period shown above.</p>`;
   host.setAttribute(
     'aria-label',
-    `National Weather Service HeatRisk seven-day sequence at the selected point for ${selection.label}`
+    `National Weather Service HeatRisk seven-day sequence at ${pointReadPlace(selection.context)} for ${selection.label}`
   );
   host.setAttribute('aria-describedby', 'heatrisk-sequence-alt');
   host.hidden = false;
@@ -609,13 +610,13 @@ function renderState(copy: string): void {
   if (!host || !selection) return;
   host.innerHTML =
     '<div class="heatrisk-sequence-heading">' +
-    `<strong>HeatRisk at the selected point for ${escapeHtml(selection.label)}</strong>` +
+    `<strong>HeatRisk at ${escapeHtml(pointReadPlace(selection.context))} for ${escapeHtml(selection.label)}</strong>` +
     '</div>' +
     `<p class="heatrisk-sequence-state">${escapeHtml(copy)}</p>`;
   host.removeAttribute('aria-describedby');
   host.setAttribute(
     'aria-label',
-    `National Weather Service HeatRisk sequence at the selected point for ${selection.label}: ${copy}`
+    `National Weather Service HeatRisk sequence at ${pointReadPlace(selection.context)} for ${selection.label}: ${copy}`
   );
   host.hidden = false;
 }

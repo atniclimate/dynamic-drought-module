@@ -20,7 +20,10 @@ registerHooks({
   }
 });
 
-const { openTribalGrants, grantsListedForMode, grantsShownForPlace,GRANTS_LISTED, GRANTS_GOV_ATTRIBUTION } = await import('../src/impact/grants.ts');
+const {
+  openTribalGrants, grantsListedForMode, grantsShownForPlace, GRANTS_LISTED, GRANTS_GOV_ATTRIBUTION,
+  grantNameIndex, grantPlace, grantListedAt, nationsNamed, statesNamed
+} = await import('../src/impact/grants.ts');
 const { HAZARD_CLUSTER_KEYS } = await import('../src/config/clusters.ts');
 const {
   GRANTS_SEARCH_PAGE, grantStatusLine, grantsCountLine, renderGrantsSection
@@ -98,13 +101,13 @@ test('the count line counts every open and forecast row, and says "at least" whe
 });
 
 test('loading: the heading and one short reading line, no rows, no count', () => {
-  const html = renderGrantsSection({ state: 'loading' }, 'drought', TODAY);
+  const html = renderGrantsSection({ state: 'loading' }, 'drought', null, TODAY);
   assert.equal(text(html), 'Open federal funding (Grants.gov) Reading Grants.gov...');
   assert.match(html, /data-grants-state="loading"/);
 });
 
 test('unavailable: one line that sends the reader to Grants.gov, never "no grants"', () => {
-  const html = renderGrantsSection({ state: 'unavailable', reason: 'timeout' }, 'drought', TODAY);
+  const html = renderGrantsSection({ state: 'unavailable', reason: 'timeout' }, 'drought', null, TODAY);
   assert.equal(text(html), 'Open federal funding (Grants.gov) Grants.gov did not answer. Search it directly.');
   assert.ok(html.includes(`href="${GRANTS_SEARCH_PAGE.replace(/&/g, '&amp;')}"`));
   assert.doesNotMatch(text(html), /no grants|no data|0 open/i);
@@ -117,7 +120,7 @@ test('live: the mode rows with title link, agency and status, then the count ove
     row({ id: '3', title: 'Example Water Planning', agency: null, status: 'forecasted', closes: null }),
     row({ id: '4', title: 'Example Closed Drought', closes: '2026-11-01' })
   ];
-  const html = renderGrantsSection(live(rows), 'drought', TODAY);
+  const html = renderGrantsSection(live(rows), 'drought', null, TODAY);
   assert.equal(text(html), [
     'Open federal funding (Grants.gov)',
     'Example Drought &lt;Relief&gt; &amp; Recovery Example Bureau Open, closes December 5, 2026',
@@ -131,7 +134,7 @@ test('live: the mode rows with title link, agency and status, then the count ove
 });
 
 test('live with no row for the mode: the count, the link and the credit, and no empty list claim', () => {
-  const html = renderGrantsSection(live([row({ id: '1', title: 'Example Youth Health' })]), 'wildfire', TODAY);
+  const html = renderGrantsSection(live([row({ id: '1', title: 'Example Youth Health' })]), 'wildfire', null, TODAY);
   assert.equal(text(html), [
     'Open federal funding (Grants.gov)',
     '1 open and 0 forecast opportunities list federally recognized Tribal governments as eligible. Search all on Grants.gov',
@@ -158,6 +161,73 @@ test('the subsection shows for a place inside the United States, Northwest or no
   // British Columbia, Mexico and open ocean resolve no State; a Northwest camera framing must not stand in.
   assert.equal(grantsShownForPlace(place({ lngLat: { lng: -123, lat: 50 } })), false);
   assert.equal(grantsShownForPlace(place({ regionKey: 'washington_state', lngLat: { lng: -123, lat: 50 } })), false);
+});
+
+// Two live titles seen at Warm Springs, Oregon on 2026-11-13, and a general one.
+const BASIN_TITLE = 'Native American Affairs: Fiscal Year 2025 Colorado River Basin Tribal Drought Resiliency Program';
+const OSAGE_TITLE = 'Osage Nation Wildland Fire Response';
+const GENERAL_TITLE = 'Tribal Wildfire Resilience and Drought Planning';
+const WARM_SPRINGS = 'Confederated Tribes of the Warm Springs Reservation of Oregon';
+const OSAGE = 'The Osage Nation';
+
+/** The two roster sources the app loads, read from the shipped files: Federal Register names and label short names. */
+function shippedNameIndex() {
+  const roster = JSON.parse(readFileSync(new URL('../public/data/tribal-roster.json', import.meta.url), 'utf8'));
+  const labels = JSON.parse(readFileSync(new URL('../public/data/tribal-label-names.json', import.meta.url), 'utf8'));
+  const formal = Object.values(roster.labelAreas).flat();
+  return grantNameIndex([...formal.map((n) => [n, n]), ...labels.shortNames.map((r) => [r.shortName, r.nation])]);
+}
+
+const placeAt = (title, state) => ({
+  kind: 'aiannh', title, properties: null, lngLat: { lng: -121.3, lat: 44.8 },
+  regionKey: null, containing: { state, basis: 'point-in-polygon' }
+});
+
+test('a title naming a Nation lists only in that Nation\'s briefing, by whole words, never on generic words', () => {
+  const names = shippedNameIndex();
+  assert.deepEqual([...nationsNamed(OSAGE_TITLE, names)], [OSAGE], 'a leading "The" in the roster name is dropped');
+  assert.deepEqual([...nationsNamed(GENERAL_TITLE, names)], []);
+  assert.deepEqual([...nationsNamed('Native Village Tribe Nation Band Indian grants', names)], []);
+  assert.deepEqual([...nationsNamed('Confederated Tribes of Warm Springs housing', names)], [WARM_SPRINGS], 'the label short name');
+  assert.deepEqual([...nationsNamed('OSAGE NATIONAL forest', names)], [], 'whole words only');
+  assert.equal(grantNameIndex([['Native Village', 'X'], ['The Tribe', 'Y']]), null, 'generic names alone are dropped');
+
+  const warmSprings = grantPlace(placeAt(WARM_SPRINGS, 'OR'), names);
+  const osage = grantPlace(placeAt(OSAGE, 'OK'), names);
+  assert.equal(grantListedAt(OSAGE_TITLE, warmSprings), false);
+  assert.equal(grantListedAt(OSAGE_TITLE, osage), true);
+  assert.equal(grantListedAt(GENERAL_TITLE, warmSprings), true);
+});
+
+test('a title naming a State or the Colorado River Basin lists only for a place inside it', () => {
+  const names = shippedNameIndex();
+  assert.deepEqual([...statesNamed(BASIN_TITLE)].sort(), ['AZ', 'CA', 'CO', 'NM', 'NV', 'UT', 'WY']);
+  assert.deepEqual([...statesNamed('West Virginia Watershed Program')], ['WV'], 'the longer State name wins');
+  assert.deepEqual([...statesNamed('Indiana and Arkansas')].sort(), ['AR', 'IN']);
+  assert.deepEqual([...statesNamed('Indian Affairs, Kansas')], ['KS'], 'whole words: "Indian" is not Indiana');
+  assert.equal(grantListedAt(BASIN_TITLE, grantPlace(placeAt(WARM_SPRINGS, 'OR'), names)), false);
+  assert.equal(grantListedAt(BASIN_TITLE, grantPlace(placeAt('Navajo Nation', 'AZ'), names)), true);
+  assert.equal(grantListedAt('Oregon Drought Relief', grantPlace(placeAt('Example', null), names)), false, 'no State known: a State row is not listed');
+  // A Nation's name is set aside before States are read: "Mississippi Choctaw" names a Nation, not the State.
+  const choctaw = grantPlace(placeAt('Mississippi Band of Choctaw Indians', 'MS'), names);
+  assert.equal(grantListedAt('Mississippi Choctaw Drought Plan', choctaw), true);
+});
+
+test('Warm Springs lists the general rows and neither real title; the count still counts every row', () => {
+  const names = shippedNameIndex();
+  const rows = [
+    row({ id: '1', title: BASIN_TITLE, closes: '2026-11-20' }),
+    row({ id: '2', title: OSAGE_TITLE, closes: '2026-11-21' }),
+    row({ id: '3', title: GENERAL_TITLE, closes: '2026-11-22' })
+  ];
+  const place = grantPlace(placeAt(WARM_SPRINGS, 'OR'), names);
+  const open = openTribalGrants(rows, TODAY);
+  assert.deepEqual(grantsListedForMode(open, 'drought', place).map((r) => r.id), ['3']);
+  assert.deepEqual(grantsListedForMode(open, 'wildfire', place).map((r) => r.id), ['3']);
+  assert.deepEqual(grantsListedForMode(open, 'drought').map((r) => r.id), ['1', '3'], 'no place: every mode row');
+  const html = renderGrantsSection(live(rows), 'wildfire', place, TODAY);
+  assert.ok(!html.includes(OSAGE_TITLE) && html.includes(GENERAL_TITLE));
+  assert.ok(text(html).includes('3 open and 0 forecast opportunities'), 'filtered rows still count');
 });
 
 test('no authored long dash in the subsection source or this test', () => {

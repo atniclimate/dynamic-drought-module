@@ -8741,6 +8741,15 @@ a.impact-resource-link::after {
   /* "Acknowledgements" sits inside a sentence. Its box takes the floor and
      its block margins give the extra height back, so the line keeps its
      leading and the box reaches over the lines beside it. */
+  /* Grants.gov's search link sits inside the count sentence the same way:
+     a 44 px box whose margins give back all but the sentence's own line
+     (1.5em, the framing's line-height), so the text size and leading stay. */
+  .impact-grants-search {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--touch-target);
+    margin-block: calc((1.5em - var(--touch-target)) / 2);
+  }
   .map-info-ack-link[data-open-acknowledgements] {
     margin-block: calc((var(--pointer-target) - var(--touch-target)) / 2);
   }

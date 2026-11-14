@@ -1519,6 +1519,15 @@ test('a fire-only NWS answer gives the Heat cell its absence claim, never unavai
   );
 });
 
+test('at a headquarters town the heat-alert absence names the town, never the selected point', async () => {
+  clearNwsResponseCache();
+  const context = { ...place(-111.3, 47.5), readAt: 'the headquarters town, Great Falls' };
+  const result = await withFetch(nwsAlertsAnswer(['Red Flag Warning']), () => sources.fetchNwsAlertClaims(context, signal()));
+  assert.equal(result.heatRead.text, 'NWS reports no active heat alert at the headquarters town, Great Falls.');
+  const heat = settledCell('current', 'heat', [['nwsAlerts', result]]);
+  assert.equal(heat.claims[0].text, 'NWS reports no active heat alert at the headquarters town, Great Falls.');
+});
+
 test('a heat-only NWS answer leaves the Fire row exactly as at base: no alerts claim of its own', async () => {
   clearNwsResponseCache();
   // vocab-allow: a verbatim NWS product name, quoted fixture data

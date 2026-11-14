@@ -3,9 +3,9 @@
  * end of the federal resources group (DR-258). Pure and DOM-free: a read state
  * and a mode in, markup out. Every issuer string passes through `escapeHtml`.
  *
- * The rows are the active mode's (src/impact/grants.ts `grantsListedForMode`);
- * the count line counts every open and forecast row the read returned, listed
- * or not. A failed read says so and sends the reader to Grants.gov; it never
+ * The rows are the active mode's that belong to the place (src/impact/grants.ts
+ * `grantsListedForMode`, `grantListedAt`); the count line counts every open
+ * and forecast row the read returned, listed or not. A failed read says so and sends the reader to Grants.gov; it never
  * reads as "no grants". The Grants.gov API terms ask for the attribution
  * sentence wherever its rows show, so a live read always carries it.
  */
@@ -16,6 +16,7 @@ import {
   grantsListedForMode,
   openTribalGrants,
   type GrantOpportunity,
+  type GrantPlace,
   type GrantsRead
 } from '../impact/grants';
 import { checkPopupHref, escapeHtml } from '../util/escape';
@@ -58,7 +59,7 @@ export function grantsCountLine(open: number, forecast: number, partial: boolean
 }
 
 function searchLink(words: string): string {
-  return `<a href="${escapeHtml(GRANTS_SEARCH_PAGE)}" target="_blank" rel="noopener">${words}</a>`;
+  return `<a class="impact-grants-search" href="${escapeHtml(GRANTS_SEARCH_PAGE)}" target="_blank" rel="noopener">${words}</a>`;
 }
 
 function renderGrant(row: GrantOpportunity): string {
@@ -71,14 +72,14 @@ function renderGrant(row: GrantOpportunity): string {
   return `<div class="impact-resource">${title}${agency}<p class="impact-resource-desc">${escapeHtml(grantStatusLine(row))}</p></div>`;
 }
 
-function body(view: GrantsView, mode: HazardClusterKey, today: string): string {
+function body(view: GrantsView, mode: HazardClusterKey, place: GrantPlace | null, today: string): string {
   if (view.state === 'loading') return '<p class="impact-resources-framing">Reading Grants.gov...</p>';
   if (view.state === 'unavailable') {
     return `<p class="impact-resources-framing">Grants.gov did not answer. ${searchLink('Search it directly.')}</p>`;
   }
   const open = openTribalGrants(view.rows, today);
   const posted = open.filter((row) => row.status === 'posted').length;
-  return `${grantsListedForMode(open, mode).map(renderGrant).join('')}
+  return `${grantsListedForMode(open, mode, place).map(renderGrant).join('')}
     <p class="impact-resources-framing">${escapeHtml(grantsCountLine(posted, open.length - posted, view.partial))} ${searchLink('Search all on Grants.gov')}</p>
     <p class="impact-resources-framing">${escapeHtml(GRANTS_GOV_ATTRIBUTION)}</p>`;
 }
@@ -88,12 +89,21 @@ function readerToday(now = new Date()): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 }
 
-/** The subsection markup for one read state, the active mode and the reader's date (ISO). */
-export function renderGrantsSection(view: GrantsView, mode: HazardClusterKey, today: string = readerToday()): string {
+/**
+ * The subsection markup for one read state, the active mode, the place the
+ * rows are listed for (`grantListedAt`; null lists every mode row) and the
+ * reader's date (ISO).
+ */
+export function renderGrantsSection(
+  view: GrantsView,
+  mode: HazardClusterKey,
+  place: GrantPlace | null,
+  today: string = readerToday()
+): string {
   return `
     <div class="impact-grants" data-grants-state="${view.state}">
       <h5 class="impact-resource-group-title">${HEADING}</h5>
-      ${body(view, mode, today)}
+      ${body(view, mode, place, today)}
     </div>
   `;
 }
