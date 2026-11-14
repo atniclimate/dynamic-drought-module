@@ -7,7 +7,8 @@ import { fileURLToPath } from 'node:url';
 /**
  * The Grants.gov open-opportunity reader (src/impact/grants.ts), ported from
  * Policy Sentinel's Worker adapter (worker/src/sources/grants.ts there) and its
- * source review of 2026-10-23. Not wired into any screen yet.
+ * source review of 2026-10-23. The briefing's subsection is pinned in
+ * tests/grants-briefing.test.mjs.
  *
  * Pinned here: the request (a text/plain POST, so a browser sends no
  * preflight), the parser (made-up opportunities in the live response's shape),

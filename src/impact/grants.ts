@@ -1,7 +1,8 @@
 /**
  * Open Grants.gov funding opportunities that list federally recognized Tribal
  * governments among eligible applicants: one request, a pure parser, a pure
- * open filter and a hazard tag table. Not wired into any screen yet.
+ * open filter and a hazard tag table. The Impact Briefing's federal resources
+ * list them (src/ui/grants-render.ts).
  *
  * Ported from ATNI's Policy Sentinel project: the request shape, the
  * field whitelist, the date rule, the forecast rule, the entity table and the
@@ -12,7 +13,8 @@
  * direct from the browser: Grants.gov answers `Access-Control-Allow-Origin: *`
  * and refuses the preflight a JSON content type would trigger (403), so the
  * body is sent as `text/plain`, which a browser sends without a preflight.
- * Measured with curl on 2026-11-13; not yet seen in a real browser.
+ * Measured with curl on 2026-11-13, then in a real browser from the deploy
+ * origin the same day (200 in 0.7 s, 296 KB, no preflight).
  *
  * What a row says: Grants.gov listed the opportunity under eligibility code 07
  * when asked for it. That is the posting agency's statement of who may apply,
@@ -26,6 +28,8 @@
 
 import type { HazardClusterKey } from '../config/clusters';
 import { fetchJsonWithBudget, isFetchTimeout } from '../util/fetch';
+import { resolveStateCode } from './resources';
+import type { BoundarySelectionContext } from './types';
 
 export const GRANTS_GOV_SEARCH_URL = 'https://api.grants.gov/v1/api/search2';
 
@@ -221,6 +225,41 @@ export function openTribalGrants(rows: readonly GrantOpportunity[], today: strin
 /** The rows tagged with one mode's hazard. */
 export function grantsForMode(rows: readonly TaggedGrant[], mode: HazardClusterKey): TaggedGrant[] {
   return rows.filter((row) => row.topics.includes(mode));
+}
+
+/**
+ * Topics a mode lists beyond its own key (session decision, 2026-11-13): water
+ * grants show with drought. A mode with no entry lists only its own tag, and a
+ * mode no tag rule names lists none; flood and untagged rows are counted, never listed.
+ */
+export const GRANT_MODE_EXTRA_TOPICS: Readonly<Partial<Record<HazardClusterKey, readonly GrantTopic[]>>> = {
+  drought: ['water']
+};
+
+/** The most rows the briefing lists for one mode. */
+export const GRANTS_LISTED = 5;
+
+/** Posted with a stated close date first (soonest first), then posted with none, then forecasts. */
+const listingRank = (row: GrantOpportunity): string =>
+  row.status === 'forecasted' ? '2' : row.closes === null ? '1' : `0${row.closes}`;
+
+/** The rows the briefing lists for one mode, in reading order, at most `GRANTS_LISTED`. Pure. */
+export function grantsListedForMode(rows: readonly TaggedGrant[], mode: HazardClusterKey): TaggedGrant[] {
+  const topics: readonly GrantTopic[] = [mode, ...(GRANT_MODE_EXTRA_TOPICS[mode] ?? [])];
+  return rows
+    .filter((row) => row.topics.some((topic) => topics.includes(topic)))
+    .sort((a, b) => listingRank(a).localeCompare(listingRank(b)))
+    .slice(0, GRANTS_LISTED);
+}
+
+/**
+ * Whether the briefing shows the Grants.gov subsection: only for a place inside
+ * the United States, by the briefing's own state rule (`resolveStateCode`). The
+ * camera-region guess is cleared, so a British Columbia or ocean place framed
+ * by a Northwest view never counts as inside. Pure.
+ */
+export function grantsShownForPlace(context: BoundarySelectionContext): boolean {
+  return resolveStateCode({ ...context, regionKey: null }) !== null;
 }
 
 function unavailableReason(err: unknown): GrantsUnavailableReason {

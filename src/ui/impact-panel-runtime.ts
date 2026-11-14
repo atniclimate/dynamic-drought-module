@@ -59,6 +59,9 @@ import { renderAcknowledgements } from './acknowledgements';
 import { getLegendSection } from './legend-registry';
 import { legendPanelUsable } from './map-key';
 import { requestLayerOn } from './layer-toggle-command';
+import { grantsShownForPlace, readTribalGrants } from '../impact/grants';
+import type { GrantsRead } from '../impact/grants';
+import { renderGrantsSection } from './grants-render';
 import { loadFederalResources, resourcesForIdentity } from '../impact/resource-catalog';
 import { orderFederalByCondition, resourceAgencyLine, resourcesCheckedLine } from '../impact/resources';
 import type { CatalogResource } from '../impact/resources';
@@ -171,6 +174,15 @@ let focusOpenerKey: string | null = null;
 
 /** The panel's polite live region for view changes; created once. */
 let viewLiveEl: HTMLElement | null = null;
+
+/**
+ * The page's one Grants.gov read (DR-258): the first briefing open starts it,
+ * every later open reuses it. `grantsPending` is the read in flight; a close
+ * cancels it and clears both, so the next open starts afresh, never stuck.
+ */
+let grantsRead: GrantsRead | null = null;
+let grantsPending: Promise<void> | null = null;
+let grantsController: AbortController | null = null;
 
 // ---------------------------------------------------------------------------
 // Status pill text
@@ -975,17 +987,20 @@ function renderResource(resource: CatalogResource): string {
  * shortcut: the slot has no link in any build today, so no place draws it; when
  * a deployer can fill it, show it only for a place that is a Tribal Nation.
  */
-function renderResources(all: readonly ResourceLink[]): string {
+function renderResources(all: readonly ResourceLink[], grantsShown: boolean): string {
   const resources = all.filter((r) => r.tier !== 'tribe-own' || checkPopupHref(r.url) !== null);
-  if (resources.length === 0) return '';
-  const ordered = orderFederalByCondition(resources, getCommittedSnapshot().selectedHazard);
+  if (resources.length === 0 && !grantsShown) return '';
+  const mode = getCommittedSnapshot().selectedHazard;
+  const ordered = orderFederalByCondition(resources, mode);
   const groups = TIER_ORDER.map((tier) => {
     const items = ordered.filter((r) => r.tier === tier);
-    if (items.length === 0) return '';
+    const grants = tier === 'federal' && grantsShown;
+    if (items.length === 0 && !grants) return '';
     return `
       <div class="impact-resource-group">
         <h4 class="impact-resource-group-title">${escapeHtml(TIER_HEADING[tier])}</h4>
         ${items.map(renderResource).join('')}
+        ${grants ? renderGrantsSection(grantsRead ?? { state: 'loading' }, mode) : ''}
       </div>
     `;
   }).join('');
@@ -1063,7 +1078,7 @@ function renderBriefingSections(briefing: ImpactBriefing): string {
     ${lead}
     ${landscapeContextShown(briefing.context) ? renderLandscapeContext(briefing.landscape) : ''}
     ${impact}
-    ${renderResources(briefing.resources)}
+    ${renderResources(briefing.resources, grantsShownForPlace(briefing.context))}
     ${renderMapTechnicalInformation(false, renderPriorityRule() + renderUncoveredSources(briefing))}
   `;
 }
@@ -1188,8 +1203,39 @@ export function openImpactPanel(
     // outside it starts no catalog route.
     void rehydrateResourcesFromCatalog(briefing, context, signal, token);
   }
+  // Grants.gov rows are national: read wherever the subsection shows, a place inside the United States.
+  if (grantsShownForPlace(briefing.context)) startGrantsRead(token);
 
   return token;
+}
+
+/**
+ * Start the page's one Grants.gov read if none is settled or in flight, and
+ * re-render this open when it lands. The read is the page's, not this open's:
+ * a new place reuses it, and only a close (`cancelGrantsRead`) stops it.
+ */
+function startGrantsRead(token: number): void {
+  if (grantsRead === null && grantsPending === null) {
+    const controller = new AbortController();
+    const pending: Promise<void> = readTribalGrants(controller.signal).then((read) => {
+      if (grantsPending !== pending) return;
+      grantsRead = read;
+      grantsPending = null;
+      grantsController = null;
+    });
+    // Only a cancel rejects, and `cancelGrantsRead` has already cleared the state.
+    pending.catch(() => undefined);
+    grantsPending = pending;
+    grantsController = controller;
+  }
+  grantsPending?.then(() => refreshOpenBriefing(token), () => undefined);
+}
+
+/** Stop an unfinished Grants.gov read when no briefing is left to show it. */
+function cancelGrantsRead(): void {
+  grantsController?.abort();
+  grantsController = null;
+  grantsPending = null;
 }
 
 async function rehydrateLandscapeContext(
@@ -1436,6 +1482,7 @@ export function closeImpactPanel(): void {
     activeController.abort();
     activeController = null;
   }
+  cancelGrantsRead();
   setMailActionEnabled(true);
   closeImpactPanelShell();
 }
@@ -1464,6 +1511,7 @@ export function openNoPlacePanel(section: NoPlaceSection, opener: HTMLElement | 
     activeController.abort();
     activeController = null;
   }
+  cancelGrantsRead();
   openToken++;
   legendPollGeneration++;
   activeBriefing = null;
