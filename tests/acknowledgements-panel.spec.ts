@@ -252,7 +252,7 @@ test.describe('the acknowledgements pointer and section (D1 M22)', () => {
     // no lane landing can retire the summary between focus and Enter; the
     // settled catalog row only anchors the read after the first paint.
     await expect(
-      panel.getByRole('link', { name: 'Agricultural drought relief information' })
+      panel.getByRole('link', { name: 'Drought relief and recovery information' })
     ).toBeVisible({ timeout: 15_000 });
     const section = panel.locator('.impact-acknowledgements');
     const summary = section.locator('summary');
@@ -299,7 +299,7 @@ test.describe('the acknowledgements pointer and section (D1 M22)', () => {
       });
       // The catalog read is in flight and held: its row has not landed yet.
       await expect.poll(() => heldReads, { timeout: 15_000 }).toBeGreaterThan(0);
-      const catalogRow = panel.getByRole('link', { name: 'Agricultural drought relief information' });
+      const catalogRow = panel.getByRole('link', { name: 'Drought relief and recovery information' });
       await expect(catalogRow).toHaveCount(0);
       const summary = panel.locator('.impact-acknowledgements > summary');
       await summary.scrollIntoViewIfNeeded();
@@ -582,7 +582,7 @@ test.describe('the acknowledgements pointer and section (D1 M22)', () => {
       timeout: 15_000
     });
     await expect(
-      panel.getByRole('link', { name: 'Agricultural drought relief information' })
+      panel.getByRole('link', { name: 'Drought relief and recovery information' })
     ).toBeVisible({ timeout: 15_000 });
     const mail = panel.locator('.impact-panel-action-mail');
     await expect(mail).toHaveAttribute('href', /^mailto:\?/);

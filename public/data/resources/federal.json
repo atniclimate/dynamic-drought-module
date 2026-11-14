@@ -1,6 +1,6 @@
 {
   "label": "Federal",
-  "verified": "2026-07-09",
+  "verified": "2026-11-13",
   "resources": [
     {
       "label": "Tribal Community Resilience program",
@@ -10,8 +10,8 @@
       "conditions": [
         "any"
       ],
-      "kind": "technical-assistance",
-      "description": "Technical assistance and pre-disaster resilience support for federally recognized Tribes and Alaska Native Villages: adaptation planning and vulnerability assessments for threats to health, safety, Treaty, and Trust resources."
+      "kind": "funding",
+      "description": "Technical and financial assistance for federally recognized Tribes and Alaska Native Villages on natural hazard preparedness, including community-driven relocation, managed retreat, and protect-in-place, to protect Tribal Trust and Treaty assets and human health and safety."
     },
     {
       "label": "Tribal Community Resilience Annual Awards Program",
@@ -22,7 +22,7 @@
         "any"
       ],
       "kind": "grant",
-      "description": "The standing annual award vehicle for Tribal resilience funding; cycles and amounts change year to year."
+      "description": "Competitive funding for federally recognized Tribes and Tribal organizations to build community resilience capacity; the program page says updates on future funding cycles are pending."
     },
     {
       "label": "Sanitation Facilities Construction program",
@@ -52,10 +52,10 @@
       "agency": "United States Department of Agriculture (USDA)",
       "tier": "federal",
       "conditions": [
-        "drought"
+        "any"
       ],
       "kind": "information",
-      "description": "The department's primary point of contact for government-to-government coordination on drought, farm, and conservation programs."
+      "description": "The USDA staff office in the Office of the Secretary responsible for government-to-government relations between USDA and Tribal governments, and a single point of contact for Tribal issues."
     },
     {
       "label": "USDA partnerships with Tribal Nations",
@@ -92,7 +92,7 @@
     },
     {
       "label": "Disaster assistance loans",
-      "url": "https://www.sba.gov/funding-programs/disaster-assistance",
+      "url": "https://www.sba.gov/disaster/",
       "agency": "United States Small Business Administration (SBA)",
       "tier": "federal",
       "conditions": [

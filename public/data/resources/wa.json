@@ -1,6 +1,6 @@
 {
   "label": "Washington",
-  "verified": "2026-07-09",
+  "verified": "2026-11-13",
   "resources": [
     {
       "label": "Drinking-water drought guidance",
@@ -17,11 +17,11 @@
       "description": "Statewide water availability and drought-declaration status."
     },
     {
-      "label": "Agricultural drought relief information",
-      "url": "https://agr.wa.gov/services/emergency-management/disasters/drought",
+      "label": "Drought relief and recovery information",
+      "url": "https://agr.wa.gov/services/emergency-management/disasters/drought/drought-recovery",
       "agency": "Washington State Department of Agriculture",
       "tier": "state",
-      "description": "Information on state agricultural drought emergency programs and relief."
+      "description": "WSDA does not offer direct drought relief funding but works closely with decision makers to support those affected. The Department of Ecology can issue a drought declaration, allowing access to emergency relief options."
     }
   ]
 }

@@ -181,7 +181,7 @@ test.describe('impact panel accessibility', () => {
     // horizon hydration. Wait for the deterministic WA catalog row so that
     // replacement cannot retire the focused last link between focus and Tab.
     await expect(
-      panel.getByRole('link', { name: 'Agricultural drought relief information' })
+      panel.getByRole('link', { name: 'Drought relief and recovery information' })
     ).toBeVisible();
     // Visual uniformity D10: the empty Nation's-own slot draws nothing, its heading included.
     await expect(panel.locator('.impact-resources')).not.toContainText("Nation's own resources");
@@ -243,7 +243,7 @@ test.describe('impact panel accessibility', () => {
     await expect(panel.locator('#impact-panel-title')).toHaveText('Washington');
     await expect(panel.locator('.impact-horizon-loading')).toHaveCount(0);
     await expect(
-      panel.getByRole('link', { name: 'Agricultural drought relief information' })
+      panel.getByRole('link', { name: 'Drought relief and recovery information' })
     ).toBeVisible();
 
     // A durable URL key changes without any briefing re-render: collapsing
@@ -393,7 +393,7 @@ test.describe('impact panel accessibility', () => {
     // second time: waiting for its known WA fixture row proves a refresh
     // happened, not just the panel's first paint.
     await expect(
-      panel.getByRole('link', { name: 'Agricultural drought relief information' })
+      panel.getByRole('link', { name: 'Drought relief and recovery information' })
     ).toBeVisible();
 
     await expect(panel.locator('.point-heat-series[open]')).toHaveCount(1);
