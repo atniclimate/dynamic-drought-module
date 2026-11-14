@@ -417,6 +417,14 @@ export function setSheetBriefingOpener(open: (selection: PlaceSelection) => void
   openSelectedBriefing = open;
 }
 
+/** Closes an open briefing with its place kept lit; registered by src/ui/impact-panel.ts, as above. */
+let closeKeptBriefing: (() => void) | null = null;
+
+/** Register the close `deactivate` uses for a briefing the reader left behind a closed window. */
+export function setSheetBriefingCloser(close: () => void): void {
+  closeKeptBriefing = close;
+}
+
 function updateAtHandActions(): void {
   const hasBriefing = sheetBriefing !== null;
   const offersBriefing = hasBriefing || selectedWithoutBriefing() !== null;
@@ -715,8 +723,13 @@ function activate(initial?: SheetDetent): void {
 
 function deactivate(): void {
   if (!appEl || detent === null) return;
+  // What the reader closed stays closed: a briefing kept behind the closed
+  // window must not come back as the desktop cover when the phone turns on
+  // its side. Closed while still in the sheet's host, so it never shows.
+  const leftClosed = detent === 'closed';
   detent = null;
   restoreDetent = null;
+  if (leftClosed) closeKeptBriefing?.();
   coverMap(false);
   motion?.reset();
   appEl.removeAttribute('data-sheet-detent');

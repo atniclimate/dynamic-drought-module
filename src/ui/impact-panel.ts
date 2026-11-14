@@ -34,6 +34,7 @@ import {
   onSheetDetentSettle,
   restoreSheetDetent,
   setSheetBriefing,
+  setSheetBriefingCloser,
   setSheetBriefingOpener,
   setSheetDetent,
   sheetAllowsAutoRaise,
@@ -794,6 +795,11 @@ export function openImpactPanel(context: BoundarySelectionContext): number {
 // sheet importing this one would close a cycle.
 setSheetBriefingOpener((selection) => {
   openImpactPanel(selection.context);
+});
+// A briefing left behind a closed phone window closes, place kept lit, when
+// the layout turns to desktop. Only an open one: a pending open is not undone.
+setSheetBriefingCloser(() => {
+  if (isImpactPanelShellOpen()) closeImpactPanel(true);
 });
 
 /** Report an unavailable briefing when a prerequisite lazy module failed. */

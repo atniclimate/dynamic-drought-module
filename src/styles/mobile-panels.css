@@ -126,15 +126,16 @@
     will-change: transform;
   }
 
-  /* The glass plate, one sheet of the studios' phone glass. It continues
-     below the screen edge so a spring that overshoots the top never opens
-     a gap. */
+  /* The window's ground: the solid rich black the glass is made of, so no
+     map shows through a window that covers it (owner, 2026-11-13). It
+     continues below the screen edge so a spring that overshoots the top
+     never opens a gap. */
   #app[data-sheet-detent] .sidebar::before {
     content: '';
     position: absolute;
     inset: 0 0 -120px;
     z-index: -1;
-    background: var(--glass-panel-solid);
+    background: var(--surface-base);
     pointer-events: none;
   }
 
@@ -256,6 +257,11 @@
     padding: 10px 16px 14px;
     border-bottom-color: var(--glass-hairline);
   }
+  /* The view details (the loading and availability line) are no .panel: the
+     same inline padding, or the line starts at the screen's edge. */
+  #app[data-sheet-detent] .sidebar-scroll > .shell-details-panel {
+    padding-inline: 16px;
+  }
   /* The header names the door, so the pane does not repeat it. */
   #app[data-sheet-detent] #sheet-alerts > .panel-title {
     display: none;
@@ -360,17 +366,6 @@
   to {
     opacity: 1;
     transform: none;
-  }
-}
-
-/* Real glass where the browser can blur what is behind it. */
-@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  @media (max-width: 720px) {
-    #app[data-sheet-detent] .sidebar::before {
-      background: var(--glass-panel);
-      -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
-      backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
-    }
   }
 }
 

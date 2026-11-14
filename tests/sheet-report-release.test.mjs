@@ -77,8 +77,16 @@ layersDoor.dataset.tab = 'layers';
 footer.querySelectorAll = () => [layersDoor];
 const byId = { app, sidebar, 'mobile-footer-nav': footer };
 
+// The phone band's query: a test turns the phone on its side by flipping it.
+const phoneBand = {
+  matches: true,
+  change: () => {},
+  addEventListener(type, fn) {
+    if (type === 'change') this.change = fn;
+  }
+};
 globalThis.window = {
-  matchMedia: () => ({ matches: true, addEventListener() {} }),
+  matchMedia: () => phoneBand,
   addEventListener() {},
   setTimeout: () => 0,
   clearTimeout() {}
@@ -96,9 +104,8 @@ globalThis.document = {
 globalThis.MutationObserver = class { observe() {} };
 globalThis.HTMLButtonElement = class {};
 
-const { initMobileSheet, driveSheetForReport, getSheetDetent, restoreSheetDetent } = await import(
-  '../src/ui/mobile-sheet.ts'
-);
+const { initMobileSheet, driveSheetForReport, getSheetDetent, restoreSheetDetent, setSheetBriefingCloser } =
+  await import('../src/ui/mobile-sheet.ts');
 const map = { resize() {}, isMoving: () => false, jumpTo() {}, once() {} };
 initMobileSheet(map);
 
@@ -114,4 +121,24 @@ test('a report opened in the full Layers window releases the door, so the report
   // The report's close leaves the window open where it was, never lowered or closed.
   restoreSheetDetent();
   assert.equal(getSheetDetent(), 'full');
+});
+
+// The look of 2026-11-13: Back to map closed the phone window, the phone turned to landscape (the desktop
+// layout), and the briefing came back over the map the reader had gone back to. What was closed stays closed.
+test('turning the phone to the desktop layout closes only a briefing whose window was closed', () => {
+  let closes = 0;
+  setSheetBriefingCloser(() => closes++);
+  const turn = (phone) => {
+    phoneBand.matches = phone;
+    phoneBand.change();
+  };
+
+  turn(false); // the window is open (full, from the test above): the reader is still reading
+  assert.equal(getSheetDetent(), null);
+  assert.equal(closes, 0, 'an open window carries its briefing to the desktop layout');
+
+  turn(true); // the phone shell comes back with its window closed
+  assert.equal(getSheetDetent(), 'closed');
+  turn(false);
+  assert.equal(closes, 1, 'a closed window leaves its briefing closed');
 });

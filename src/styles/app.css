@@ -4643,27 +4643,29 @@ button.telemetry-item {
   transform: translateX(0);
 }
 
-/* The desktop window is glass over the map, the same face as the Key (owner
-   2026-11-13): --glass-read under --rich-black-blur, so more-contrast and
-   forced colours turn it solid through the tokens, with no rule of their
-   own. Only the gaps between cards are translucent; every content box keeps
-   its own opaque --bg-1 / --bg-2 fill. Text on bare glass is held to T0-T2
-   as on the Key, and the header mail link takes --ink because the red link
-   ink is banned on glass. The opaque --bg-1 above is the fallback where the
-   browser cannot blur; the phone sheet card, the narrow overlay and print
-   never reach this rule. */
-@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  @media screen and (min-width: 721px) {
-    .impact-panel:not(.sheet-hosted) {
-      --fg-2: var(--ink-soft);
-      --fg-3: var(--ink-soft);
-      background: var(--glass-read);
-      -webkit-backdrop-filter: blur(var(--rich-black-blur));
-      backdrop-filter: blur(var(--rich-black-blur));
-    }
-    .impact-panel:not(.sheet-hosted) .impact-panel-header a[href] {
-      color: var(--ink);
-    }
+/* The desktop window covers the map with no map showing through (owner
+   2026-11-13, "better for visibility"): the solid rich black the Key's glass
+   is made of, so every card's own --bg-1 / --bg-2 fill still reads as a card
+   and forced colours turn it to Canvas through the token. Text on the bare
+   ground is held to T0-T2 (--ink-soft is 12.2:1 on it), and the header mail
+   link keeps --ink. The phone sheet card, the narrow overlay and print never
+   reach this rule. */
+@media screen and (min-width: 721px) {
+  .impact-panel:not(.sheet-hosted) {
+    --fg-2: var(--ink-soft);
+    --fg-3: var(--ink-soft);
+    background: var(--surface-base);
+    /* A notched phone on its side takes this layout (844 x 390): "Back to
+       map", the title and the text stay clear of the notch, as the phone
+       window does (src/styles/mobile-panels.css); the ground runs edge to edge. */
+    padding:
+      env(safe-area-inset-top, 0px)
+      env(safe-area-inset-right, 0px)
+      env(safe-area-inset-bottom, 0px)
+      env(safe-area-inset-left, 0px);
+  }
+  .impact-panel:not(.sheet-hosted) .impact-panel-header a[href] {
+    color: var(--ink);
   }
 }
 

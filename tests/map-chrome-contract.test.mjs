@@ -397,19 +397,21 @@ test('Brief clips the display caveat and the date line is the Console column foo
   assert.match(ruleBody('#app.view-console:not(.embed) .shell-time-foot'), /display:\s*block;/);
 });
 
-// Owner 2026-11-13 (items 7, 8 and 15): the four map cells and the desktop
-// briefing drawer wear the Key's glass and blur, by token.
-test('the map cells and the briefing drawer wear the Key glass', () => {
+// Owner 2026-11-13 (items 7, 8 and 15): the four map cells wear the Key's glass and blur, by token. The briefing
+// covers the map instead (the same day's later ruling, "better for visibility"): the solid rich black the glass is
+// made of, no map through it, and a notched phone on its side keeps its header clear of the notch.
+test('the map cells wear the Key glass; the covering briefing is solid and clears the notch', () => {
   const cell = ruleBody('.app-shell:not(.embed) .map-overlay-controls .map-cell');
   assert.match(cell, /background:\s*var\(--glass-read\) !important;/);
   assert.match(cell, /(?:^|[^-])backdrop-filter:\s*blur\(var\(--rich-black-blur\)\);/);
   assert.match(ruleBody('.app-shell:not(.embed) .map-overlay-controls .map-cell:hover'), /var\(--glass-press\)[^;]*var\(--glass-read\) !important;/);
-  const drawer = ruleBody('.impact-panel:not(.sheet-hosted)');
-  assert.match(drawer, /background:\s*var\(--glass-read\);/);
-  assert.match(drawer, /(?:^|[^-])backdrop-filter:\s*blur\(var\(--rich-black-blur\)\);/);
-  // The opaque base stays the fallback where the browser cannot blur.
-  assert.match(ruleBody('.impact-panel'), /background:\s*var\(--bg-1\);/);
-  assert.match(code, /@supports \(\(backdrop-filter: blur\(1px\)\) or \(-webkit-backdrop-filter: blur\(1px\)\)\) \{\s*@media screen and \(min-width: 721px\) \{\s*\.impact-panel:not\(\.sheet-hosted\) \{/);
+  const cover = ruleBody('.impact-panel:not(.sheet-hosted)');
+  assert.match(cover, /background:\s*var\(--surface-base\);/);
+  assert.doesNotMatch(cover, /backdrop-filter|--glass-read/);
+  for (const side of ['top', 'right', 'bottom', 'left']) {
+    assert.match(cover, new RegExp(`env\\(safe-area-inset-${side}, 0px\\)`));
+  }
+  assert.match(code, /@media screen and \(min-width: 721px\) \{\s*\.impact-panel:not\(\.sheet-hosted\) \{/);
 });
 
 // Owner 2026-11-13: on desktop and tablet the briefing covers the map as a studio does, in the studios' own box,
