@@ -59,6 +59,13 @@ const RESERVED = new Map([
 
 const VERIFIED_RE = /^\d{4}-\d{2}-\d{2}$/;
 
+// The hazard modes come from the mode table (Node strips the types), so a new
+// mode is a valid tag the day it is added.
+const { HAZARD_CLUSTER_KEYS: MODE_KEYS } = await import('../src/config/clusters.ts');
+// Keep in sync with RESOURCE_KINDS in src/impact/resources.ts (that module's
+// extensionless imports do not load under plain node).
+const KINDS = ['technical-assistance', 'grant', 'loan', 'funding', 'disaster-program', 'program', 'information'];
+
 const errors = [];
 function fail(file, reason) {
   errors.push(`${file}: ${reason}`);
@@ -73,6 +80,25 @@ function isIsoCalendarDate(v) {
   if (!VERIFIED_RE.test(v)) return false;
   const d = new Date(`${v}T00:00:00Z`);
   return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
+}
+
+/** Federal rows only: `conditions` (hazard modes or ["any"]) and `kind` are required. */
+function checkProgramFields(file, at, row) {
+  const c = row.conditions;
+  if (!Array.isArray(c) || c.length === 0) {
+    fail(file, `${at} "conditions" must be a non-empty array of hazard modes, or ["any"]`);
+  } else if (c.includes('any') && c.length > 1) {
+    fail(file, `${at} "conditions" mixes "any" with a mode`);
+  } else {
+    for (const key of c) {
+      if (key !== 'any' && !MODE_KEYS.includes(key)) {
+        fail(file, `${at} "conditions" holds ${JSON.stringify(key)}, which is not a hazard mode (${MODE_KEYS.join(', ')})`);
+      }
+    }
+  }
+  if (!KINDS.includes(row.kind)) {
+    fail(file, `${at} "kind" must be one of ${KINDS.join(', ')} (got ${JSON.stringify(row.kind)})`);
+  }
 }
 
 function checkFile(file) {
@@ -133,6 +159,7 @@ function checkFile(file) {
     if (row.description !== undefined && typeof row.description !== 'string') {
       fail(file, `${at} "description" must be a string when present`);
     }
+    if (expected.tier === 'federal') checkProgramFields(file, at, row);
   });
 }
 

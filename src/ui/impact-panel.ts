@@ -34,6 +34,7 @@ import {
   onSheetDetentSettle,
   restoreSheetDetent,
   setSheetBriefing,
+  setSheetBriefingCloser,
   setSheetBriefingOpener,
   setSheetDetent,
   sheetAllowsAutoRaise,
@@ -87,7 +88,7 @@ let unavailableSelection: PlaceSelection | null = null;
 
 let shell: ImpactPanelShell | null = null;
 let shellOpener: HTMLElement | null = null;
-let shellHardClose: (() => void) | null = null;
+let shellHardClose: ((keepSelection?: boolean) => void) | null = null;
 let hostSyncArmed = false;
 
 /**
@@ -137,11 +138,14 @@ function requestPanelDismiss(): void {
     isSheetActive() &&
     getViewMode() === 'brief'
   ) {
-    restoreSheetDetent();
-    document.getElementById('sheet-report-door')?.focus();
+    // The phone window goes back to the map with the briefing kept, as its
+    // "Back to map" does; the sheet returns focus to the lit door.
+    setSheetDetent('closed');
     return;
   }
-  shellHardClose?.();
+  // "Back to map" and Escape only close the window: the place stays selected
+  // and lit (owner, 2026-11-13). A programmatic close still ends the selection.
+  shellHardClose?.(true);
 }
 
 /** Create or return the one panel shell shared by every presentation. */
@@ -157,6 +161,7 @@ export function ensureImpactPanelShell(): ImpactPanelShell {
   panel.hidden = true;
   panel.innerHTML = `
     <header class="impact-panel-header">
+      <button type="button" class="impact-panel-close">Back to map</button>
       <div class="impact-panel-heading">
         <p class="impact-panel-kicker">Impact briefing</p>
         <h2 id="impact-panel-title" class="impact-panel-title"></h2>
@@ -168,9 +173,6 @@ export function ensureImpactPanelShell(): ImpactPanelShell {
         </a>
         <button type="button" class="impact-panel-action impact-panel-action-print" aria-label="Print this briefing" title="Print this briefing">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V3h12v6"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="7"/></svg>
-        </button>
-        <button type="button" class="impact-panel-close" aria-label="Close briefing">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
     </header>
@@ -266,14 +268,11 @@ export function syncImpactPanelHost(): void {
   if (!shell) return;
   const { panel } = shell;
   const host = sheetReportHost();
-  const closeBtn = panel.querySelector<HTMLButtonElement>('.impact-panel-close');
   if (host) {
     const entering = panel.parentElement !== host;
     if (entering) host.appendChild(panel);
     panel.classList.add('sheet-hosted');
     panel.setAttribute('aria-modal', 'false');
-    // Accessible name only (W2-D7): no title duplicating it verbatim.
-    closeBtn?.setAttribute('aria-label', 'Close the full report');
     if (entering && !panel.hidden && getViewMode() === 'console') {
       driveSheetForReport('full');
     }
@@ -282,7 +281,6 @@ export function syncImpactPanelHost(): void {
 
   if (panel.parentElement !== document.body) document.body.appendChild(panel);
   panel.classList.remove('sheet-hosted');
-  closeBtn?.setAttribute('aria-label', 'Close briefing');
   if (!panel.hidden) panel.setAttribute('aria-modal', 'true');
 }
 
@@ -291,7 +289,7 @@ export function syncImpactPanelHost(): void {
  * hard-close owner.
  */
 export function openImpactPanelShell(
-  onHardClose: () => void,
+  onHardClose: (keepSelection?: boolean) => void,
   requestedOpener?: HTMLElement | null
 ): ImpactPanelShell {
   const current = ensureImpactPanelShell();
@@ -319,11 +317,9 @@ export function openImpactPanelShell(
   if (panel.classList.contains('sheet-hosted')) {
     if (getViewMode() === 'console') {
       driveSheetForReport('full');
-    } else if (
-      getSheetDetent() === 'peek' ||
-      (getSheetDetent() === 'closed' && sheetAllowsAutoRaise())
-    ) {
-      setSheetDetent('half');
+    } else if (getSheetDetent() !== 'closed' || sheetAllowsAutoRaise()) {
+      // Every phone window is full screen (owner, 2026-11-13).
+      setSheetDetent('full');
     }
   } else {
     panel.setAttribute('aria-modal', 'true');
@@ -331,13 +327,13 @@ export function openImpactPanelShell(
   void panel.offsetWidth;
   panel.classList.add('open');
 
-  const closeBtn = panel.querySelector<HTMLButtonElement>('.impact-panel-close');
-  if (
-    closeBtn &&
-    (!panel.classList.contains('sheet-hosted') || getSheetDetent() === 'full')
-  ) {
-    closeBtn.focus();
-  }
+  // On a phone the window's own "Back to map" leads; the report's is hidden there.
+  const back = !panel.classList.contains('sheet-hosted')
+    ? panel.querySelector<HTMLButtonElement>('.impact-panel-close')
+    : getSheetDetent() === 'full'
+      ? document.getElementById('sheet-close')
+      : null;
+  back?.focus();
   body.scrollTop = 0;
   return current;
 }
@@ -435,12 +431,24 @@ function releasePendingSelection(): void {
   pendingSelection = null;
 }
 
+const closeListeners = new Set<() => void>();
+
+/**
+ * Hear every briefing close, whatever the selection does: a "Back to map"
+ * keeps the place selected, so a selection listener alone would miss it. A
+ * no-place open supersedes the briefing the same way and is heard too.
+ */
+export function onImpactPanelClose(fn: () => void): void {
+  closeListeners.add(fn);
+}
+
 function invalidatePendingIntent(): void {
   briefingIntentSeq++;
   openToken++;
   currentRuntimeToken = null;
   finishPendingOpen();
   releasePendingSelection();
+  for (const fn of closeListeners) fn();
 }
 
 function loadRuntime(): Promise<ImpactPanelRuntime> {
@@ -587,10 +595,11 @@ function unavailableBriefing(
   };
 }
 
-function clearUnavailableState(): void {
+function clearUnavailableState(keepSelection = false): void {
   unavailableOpen = false;
   setSheetBriefing(null);
   if (
+    !keepSelection &&
     unavailableSelection !== null &&
     getPlaceSelection() === unavailableSelection
   ) {
@@ -787,6 +796,11 @@ export function openImpactPanel(context: BoundarySelectionContext): number {
 setSheetBriefingOpener((selection) => {
   openImpactPanel(selection.context);
 });
+// A briefing left behind a closed phone window closes, place kept lit, when
+// the layout turns to desktop. Only an open one: a pending open is not undone.
+setSheetBriefingCloser(() => {
+  if (isImpactPanelShellOpen()) closeImpactPanel(true);
+});
 
 /** Report an unavailable briefing when a prerequisite lazy module failed. */
 export function openImpactPanelUnavailable(
@@ -929,16 +943,16 @@ export function refreshOpenBriefing(token: number): void {
   runtime.refreshOpenBriefing(currentRuntimeToken);
 }
 
-/** Close the panel and invalidate an in-flight lazy open. */
-export function closeImpactPanel(): void {
+/** Close the panel and invalidate an in-flight lazy open; `keepSelection` leaves the place lit. */
+export function closeImpactPanel(keepSelection = false): void {
   if (unavailableOpen) {
     invalidatePendingIntent();
-    clearUnavailableState();
+    clearUnavailableState(keepSelection);
     closeImpactPanelShell();
     return;
   }
   if (runtime) {
-    runtime.closeImpactPanel();
+    runtime.closeImpactPanel(keepSelection);
     return;
   }
   invalidatePendingIntent();

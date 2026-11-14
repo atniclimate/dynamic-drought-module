@@ -34,9 +34,10 @@ test('censusAreas rows are well formed, unique and gated', () => {
     assert.equal(typeof a.displayName, 'string');
     assert.ok(['safe-match', 'census-label'].includes(a.provenance), `provenance for ${a.name}`);
     if (a.provenance === 'census-label') assert.equal(a.displayName, a.name);
-    codes.add(a.aiannh);
+    // An area several Nations share has one row per Nation (build rule 11), never the same Nation twice.
+    codes.add(`${a.aiannh} ${a.displayName}`);
   }
-  assert.equal(codes.size, census.length, 'AIANNH codes are unique');
+  assert.equal(codes.size, census.length, 'an area and a name make one row');
 });
 
 test('Creek OTSA carries the Muscogee (Creek) Nation by the parenthetical alias', () => {
@@ -51,12 +52,18 @@ test('Creek OTSA carries the Muscogee (Creek) Nation by the parenthetical alias'
   );
 });
 
-test('ambiguous and renamed areas keep the Census label', () => {
-  for (const name of ['Cherokee OTSA', 'Russian Mission ANVSA', 'Galena ANVSA']) {
+test('the name matcher never guesses an ambiguous or renamed area; its row takes the Nation the label map confirmed', () => {
+  for (const [name, nation] of [
+    ['Cherokee OTSA', 'Cherokee Nation'],
+    ['Russian Mission ANVSA', 'Iqugmiut Traditional Council'],
+    ['Galena ANVSA', 'Louden Tribe (previously listed as Galena Village (aka Louden Village))']
+  ]) {
+    assert.ok(!crosswalk.censusMatched.some((m) => m.name === name), `${name} is not guessed by the matcher`);
     const row = census.find((a) => a.name === name);
-    assert.ok(row, `${name} is present`);
-    assert.equal(row.provenance, 'census-label', `${name} is not guessed`);
+    assert.deepEqual([row?.displayName, row?.provenance], [nation, 'safe-match'], name);
   }
+  // An area no source names keeps its Census name.
+  assert.equal(census.find((a) => a.name === 'Uyak ANVSA')?.provenance, 'census-label');
 });
 
 test('Census reservation rows never duplicate a LAR-located Tribe', () => {
@@ -249,17 +256,18 @@ test('Enter on a formal name shared by several land areas opens none of them', (
   assert.equal(enterChoice(rows.slice(0, 1), foldSearchText(formal))?.id, 'Carson', 'a unique exact label opens');
 });
 
-test('a formal Nation name finds its Census area, whose label keeps the Census name', () => {
+test('a formal Nation name finds a Census area whose label keeps the Census name', () => {
   // The haystack search-controller builds for a census-label row: name plus the gated label.
-  const row = census.find((a) => a.name === 'Cherokee OTSA');
-  assert.equal(row.provenance, 'census-label');
+  // An area several Nations share keeps a row on its Census name beside the Nations' own rows.
+  const row = census.find((a) => a.name === 'Kiowa-Comanche-Apache-Fort Sill Apache OTSA' && a.provenance === 'census-label');
+  assert.equal(row.displayName, row.name);
   const haystack = foldSearchText(`${row.name} ${row.displayName}`);
   const tokens = (q) => foldSearchText(q).split(' ');
-  assert.ok(matchesTokens(haystack, tokens('Cherokee Nation'), true));
-  assert.ok(matchesTokens(haystack, tokens('Cherokee Nat'), true), 'no dead end while typing');
-  assert.ok(!matchesTokens(haystack, tokens('Cherokee Nation'), false), 'only Tribal rows relax');
+  assert.ok(matchesTokens(haystack, tokens('Comanche Nation'), true));
+  assert.ok(matchesTokens(haystack, tokens('Comanche Nat'), true), 'no dead end while typing');
+  assert.ok(!matchesTokens(haystack, tokens('Comanche Nation'), false), 'only Tribal rows relax');
   assert.ok(!matchesTokens(haystack, tokens('Nation'), true), 'a generic word alone finds nothing new');
-  assert.ok(!matchesTokens(haystack, tokens('Cherokee Creek'), true));
+  assert.ok(!matchesTokens(haystack, tokens('Comanche Creek'), true));
   // An OTSA's haystack carries "oklahoma" (search-controller loadTribal); "oklahoma" is never skipped.
   const seminole = census.find((a) => a.name === 'Seminole OTSA');
   assert.ok(matchesTokens(foldSearchText(`${seminole.name} oklahoma`), tokens('The Seminole Nation of Oklahoma'), true));

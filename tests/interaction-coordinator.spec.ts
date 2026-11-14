@@ -393,10 +393,11 @@ test.describe('InteractionCoordinator: one click, one response', () => {
     await waitForLayerSettled(page, 'states');
 
     // Select Washington through the shared search: the pick opens its
-    // briefing drawer (owner 2026-11-13) and sets a selection with no popup
-    // and no feature-state emphasis; the promotion must ride the
-    // place-selection label, not the emphasis store. The drawer sits on the
-    // map's right; the probe below stays west of it.
+    // briefing (owner 2026-11-13) and sets a selection with no popup and no
+    // feature-state emphasis; the promotion must ride the place-selection
+    // label, not the emphasis store. The briefing covers the map as a studio
+    // does, and its "Back to map" keeps the place selected and lit (owner,
+    // 2026-11-13), so the probe below runs on the map after that Back.
     await page.locator('#catalog-search [data-ddm-search]').fill('washington');
     await page
       .locator('[data-search-group="place"] [data-search-kind="place"]', {
@@ -406,27 +407,22 @@ test.describe('InteractionCoordinator: one click, one response', () => {
       .click();
     await expect(page.locator('#app')).toHaveAttribute('data-place-selected', '');
     await expect(page.locator('#impact-panel.open')).toBeVisible();
+    await page.locator('#impact-panel .impact-panel-close').click();
+    await expect(page.locator('#impact-panel')).toBeHidden();
+    await expect(page.locator('#app')).toHaveAttribute('data-place-selected', '');
 
     // The search flew the camera to Washington; the flyTo briefly widens
     // the view before settling, so the click must wait until the camera has
     // landed ON Washington, not merely on some state. The hover inspector
     // reads us-states-fill, so poll the center until its State readout reads
     // Washington: that holds only once the fly has settled over WA and the
-    // state fill is painted and queryable there. A close-reset retry cannot
-    // be used here (closing would clear the very selection under test) and a
-    // single click mid-fly would commit the wrong state and overwrite it, so
-    // the settle gate must precede one deliberate click.
+    // state fill is painted and queryable there. A single click mid-fly
+    // would commit the wrong state and overwrite the selection under test,
+    // so the settle gate must precede one deliberate click.
     const box = await page.locator('#map').boundingBox();
-    // Measured after the drawer's 0.25 s slide ends: mid-slide its box sits further right.
-    await page
-      .locator('#impact-panel')
-      .evaluate((el) => Promise.all(el.getAnimations().map((animation) => animation.finished)));
-    const drawerBox = await page.locator('#impact-panel').boundingBox();
-    if (!box || !drawerBox) throw new Error('map container or drawer has no box');
-    // The probe sits in the middle of the map the briefing fit frames Washington in: from the fit's 40 px left
-    // pad to 40 px west of the drawer, which now stands left of the map-button column. A fixed fraction of the map
-    // landed on the Idaho border once the drawer moved; this follows the geometry instead.
-    const cx = (box.x + 40 + (drawerBox.x - 40)) / 2;
+    if (!box) throw new Error('map container has no box');
+    // The briefing fit pads every side alike now, so Washington sits at the map's centre.
+    const cx = box.x + box.width / 2;
     const cy = box.y + box.height / 2;
     const inspector = page.locator('#hover-inspector');
     const stateReadout = inspector.locator('.hover-item', { hasText: 'State' });

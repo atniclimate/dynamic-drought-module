@@ -1,26 +1,26 @@
 /* =============================================================================
-   The phone sheet: its glass, its stops, its header and its seat beside the
-   right-edge column (owner direction 2026-11-09 (sprint), DR-pending; this
-   supersedes the top-anchored panel of docs/design/mobile-map-chrome.md).
+   The phone window: its glass, its header and "Back to map" (owner direction
+   2026-11-09 (sprint), DR-pending; every window full screen, owner
+   2026-11-13; this supersedes the bottom sheet with stops and the landscape
+   drawer of docs/design/mobile-map-chrome.md).
 
    WHAT IT IS. While the phone shell is active (src/ui/mobile-sheet.ts stamps
    `data-sheet-detent` on #app; never on desktop, never in an embed) the
-   sidebar element is ONE glass sheet that rises from the bottom edge and
-   rests at a stop: closed, peek, half or full. It is docked beside the
-   right-edge column (src/styles/edge-column.css), so the two can never
-   share a pixel. In a short landscape window the same element is a drawer
-   from the left edge instead.
+   sidebar element is ONE glass window. Closed, it waits below the bottom
+   edge. Open (any stop: the peek and half names survive only for older
+   callers), it covers the whole screen, above the right-edge column and
+   below the studios, the way a studio covers the map. The Key drop-down on
+   the map is not a window and is untouched.
 
-   AT REST the sheet is exactly as tall as its stop and carries no
-   transform, so its box is the glass you see and the content scrolls inside
-   it. IN MOTION src/ui/sheet-motion.ts gives it its full height once and
-   moves it with `transform` alone, then hands it back here. Nothing in this
-   file animates: without that module, or under reduced motion, a stop
-   change lands at once on the same end state.
+   AT REST the window carries no transform. IN MOTION src/ui/sheet-motion.ts
+   gives it its full height once and moves it with `transform` alone, then
+   hands it back here. Nothing in this file animates: without that module,
+   or under reduced motion, a stop change lands at once on the same end
+   state.
 
-   WHICH CONTENT shows for each door, stop and view mode is the visibility
-   matrix in src/styles/app.css ("The phone sheet's content"). The numbers
-   here are mirrored by SHEET_TOKENS in src/config/sheet-detents.ts, and
+   WHICH CONTENT shows for each door and view mode is the visibility matrix
+   in src/styles/app.css ("The phone sheet's content"). The numbers here are
+   mirrored by SHEET_TOKENS in src/config/sheet-detents.ts, and
    tests/sheet-detents.test.mjs fails when the two disagree.
    ============================================================================= */
 
@@ -28,8 +28,8 @@
   display: none;
 }
 
-/* The header's title and close control are built by src/ui/sheet-motion.ts
-   and exist only inside the phone sheet. */
+/* The header's title (built by src/ui/sheet-motion.ts) and "Back to map"
+   (static in index.html) exist only inside the phone window. */
 .sheet-title,
 .sheet-close {
   display: none;
@@ -43,16 +43,14 @@
   #app[data-sheet-detent] {
     /* Height of MapLibre's two stacked scale rulers above the bottom inset. */
     --mobile-scale-block: 44px;
-    /* The full stop ends under the key chip. */
-    --mobile-panel-top: calc(env(safe-area-inset-top, 0px) + 76px);
     /* The doors live in the right-edge column: no footer under the sheet. */
     --mobile-footer-h: 0px;
 
-    /* Tight, like every glass body: the radius the phone panel always had. */
-    --sheet-radius: var(--glass-radius);
+    /* Mirrored by SHEET_TOKENS.head; the header now sizes to its Back pill. */
     --sheet-head-h: 52px;
     --sheet-rider-gap: 6px;
-    --sheet-h-full: calc(100vh - var(--mobile-panel-top));
+    /* An open window is the whole screen. */
+    --sheet-h-full: 100vh;
     --sheet-h-peek: calc(136px + env(safe-area-inset-bottom, 0px));
     --sheet-h-half: min(
       var(--sheet-h-full),
@@ -66,7 +64,7 @@
   }
   @supports (height: 1dvh) {
     #app[data-sheet-detent] {
-      --sheet-h-full: calc(100dvh - var(--mobile-panel-top));
+      --sheet-h-full: 100dvh;
       --sheet-h-half: min(
         var(--sheet-h-full),
         max(50dvh, calc(var(--sheet-h-peek) + 64px))
@@ -88,8 +86,9 @@
   }
 
   /* ---------------------------------------------------------------------
-     The sheet. Left edge on the key chip's margin; right edge one gap short
-     of the column, whatever width the column's plan gives it.
+     The window at rest below the edge. Left edge on the key chip's margin;
+     right edge one gap short of the column. Open, it is the whole screen
+     (the rule after the closed one).
      --------------------------------------------------------------------- */
   #app[data-sheet-detent] .sidebar {
     position: fixed;
@@ -127,20 +126,16 @@
     will-change: transform;
   }
 
-  /* The glass plate. It continues below the screen edge so a spring that
-     overshoots full, or a finger pulling past it, never opens a gap. */
+  /* The window's ground: the solid rich black the glass is made of, so no
+     map shows through a window that covers it (owner, 2026-11-13). It
+     continues below the screen edge so a spring that overshoots the top
+     never opens a gap. */
   #app[data-sheet-detent] .sidebar::before {
     content: '';
     position: absolute;
     inset: 0 0 -120px;
     z-index: -1;
-    border: 1px solid var(--glass-edge);
-    border-bottom: 0;
-    border-radius: var(--sheet-radius) var(--sheet-radius) 0 0;
-    background: var(--glass-panel-solid);
-    box-shadow:
-      inset 0 1px 0 var(--glass-sheen),
-      0 -8px 30px rgba(0, 0, 0, 0.4);
+    background: var(--surface-base);
     pointer-events: none;
   }
 
@@ -152,22 +147,35 @@
     transform: translate3d(0, 120%, 0);
   }
 
+  /* Open: one full-screen window over the map and the right-edge column
+     (z-sheet + 60), under the toast and the studios (owner, 2026-11-13).
+     What it covers is inert meanwhile (src/ui/mobile-sheet.ts). */
+  #app[data-sheet-detent]:not([data-sheet-detent='closed']) .sidebar {
+    top: 0;
+    left: 0;
+    right: 0;
+    height: auto;
+    /* The glass runs edge to edge; a notched phone on its side keeps "Back
+       to map" and the content clear of the notch (top and bottom insets are
+       the header's and the scroll's). */
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+    z-index: calc(var(--z-sheet) + 100);
+  }
+
   /* ---------------------------------------------------------------------
-     The header: the grabber is a real control and fills the strip, so the
-     whole strip drags and a tap anywhere on it steps the stop. The title
-     and the close control sit over it.
+     The header, drawn as the studios draw theirs on a phone: "Back to map"
+     first, then the open door's word, a hairline under both, the top safe
+     area inside it.
      --------------------------------------------------------------------- */
   #app[data-sheet-detent] .sheet-grabber-row {
     position: relative;
     display: flex;
     flex: none;
     align-items: center;
-    justify-content: flex-start;
-    height: var(--sheet-head-h);
-    padding: 12px 4px 0 16px;
-    touch-action: none;
-    -webkit-user-select: none;
-    user-select: none;
+    gap: 10px;
+    min-height: calc(var(--touch-target) + 8px + env(safe-area-inset-top, 0px));
+    padding: calc(4px + env(safe-area-inset-top, 0px)) 8px 4px;
   }
   #app[data-sheet-detent] .sheet-grabber-row::after {
     content: '';
@@ -179,62 +187,7 @@
     background: var(--glass-hairline);
     pointer-events: none;
   }
-  #app[data-sheet-detent] .sheet-grabber {
-    position: absolute;
-    /* Up to the close control, never under it: two targets, no overlap. */
-    inset: 0 calc(var(--touch-target) + 4px) 0 0;
-    display: block;
-    width: auto;
-    min-height: var(--touch-target);
-    padding: 0;
-    border-radius: var(--sheet-radius) 0 0 0;
-    cursor: grab;
-    touch-action: none;
-    -webkit-tap-highlight-color: transparent;
-  }
-  #app[data-sheet-detent] .sheet-grabber:active {
-    cursor: grabbing;
-  }
-  #app[data-sheet-detent] .sheet-grabber-bar {
-    position: absolute;
-    top: 7px;
-    /* Centred on the sheet, not on the button, which stops short of the
-       close control. */
-    left: calc(50% + (var(--touch-target) + 4px) / 2);
-    width: 36px;
-    height: 4px;
-    margin-left: -18px;
-    border-radius: 999px;
-    background: var(--ink-muted);
-    transition:
-      background-color var(--dur-micro) var(--ease-standard),
-      transform var(--dur-fast) var(--ease-standard);
-  }
-  /* Held: the handle answers the hand before the sheet moves. */
-  #app[data-sheet-detent] .sheet-grabber:active .sheet-grabber-bar,
-  #app[data-sheet-detent] .sidebar[data-sheet-dragging] .sheet-grabber-bar {
-    background: var(--ink-strong);
-    transform: scaleX(1.22);
-  }
-  @media (hover: hover) {
-    #app[data-sheet-detent] .sheet-grabber:hover .sheet-grabber-bar {
-      background: var(--ink);
-    }
-  }
-  /* Keyboard focus rings the handle, not the whole strip. */
-  #app[data-sheet-detent] .sheet-grabber:focus-visible {
-    outline: none;
-    box-shadow: none;
-  }
-  #app[data-sheet-detent] .sheet-grabber:focus-visible .sheet-grabber-bar {
-    background: var(--ink-strong);
-    outline: 2px solid var(--focus-inner);
-    outline-offset: 3px;
-    box-shadow: 0 0 0 7px var(--focus-outer);
-  }
-
   #app[data-sheet-detent] .sheet-title {
-    position: relative;
     display: block;
     flex: 1 1 auto;
     min-width: 0;
@@ -248,52 +201,45 @@
     line-height: 1.2;
     text-overflow: ellipsis;
     white-space: nowrap;
-    /* The strip under it is the grabber: presses fall through. */
-    pointer-events: none;
   }
+  /* "Back to map" in the studios' phone look (src/styles/studios.css, the
+     phone block): a glass pill a thumb can hit, with a chevron. The rest of
+     its face is the shared Back rule in src/styles/app.css. */
   #app[data-sheet-detent] .sheet-close {
-    appearance: none;
-    position: relative;
-    display: flex;
+    display: inline-flex;
     flex: none;
     align-items: center;
-    justify-content: center;
-    width: var(--touch-target);
-    height: var(--touch-target);
-    margin: -6px 0 0;
-    padding: 0;
-    border: 0;
-    border-radius: var(--radius-md);
-    background: transparent;
-    color: var(--ink-soft);
-    cursor: pointer;
+    gap: 7px;
+    min-height: var(--touch-target);
+    padding: 0 12px 0 10px;
+    border-color: var(--glass-edge);
+    background: var(--glass-press);
+    color: var(--ink);
+    font-size: 12px;
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
   }
+  /* The shared hover and focus face, restated: the pill's id-scoped colours
+     above outrank the shared rule in src/styles/app.css. */
+  #app[data-sheet-detent] .sheet-close:hover,
+  #app[data-sheet-detent] .sheet-close:focus-visible {
+    border-color: var(--accent-strong);
+    color: var(--fg-0);
+  }
   #app[data-sheet-detent] .sheet-close::before {
     content: '';
-    position: absolute;
-    inset: 7px;
-    border-radius: var(--radius-md);
-    background: var(--glass-press);
-    opacity: 0.55;
-    transition: opacity var(--dur-micro) var(--ease-standard);
-  }
-  #app[data-sheet-detent] .sheet-close:active::before {
-    opacity: 1;
-  }
-  #app[data-sheet-detent] .sheet-close svg {
-    position: relative;
-  }
-  #app[data-sheet-detent] .sheet-close:focus-visible {
-    outline-offset: -5px;
-    box-shadow: inset 0 0 0 5px var(--focus-outer);
+    flex: none;
+    width: 7px;
+    height: 7px;
+    margin-left: 3px;
+    border: solid currentColor;
+    border-width: 0 0 1.8px 1.8px;
+    transform: rotate(45deg);
   }
 
   /* ---------------------------------------------------------------------
-     The content. One scroll context at half and full; at peek the first
-     lines show and the strip does not scroll (any drag there moves the
-     sheet). The bottom safe area belongs to this padding.
+     The content: one scroll context. The bottom safe area belongs to this
+     padding.
      --------------------------------------------------------------------- */
   #app[data-sheet-detent] .sidebar-scroll {
     flex: 1 1 auto;
@@ -311,6 +257,11 @@
     padding: 10px 16px 14px;
     border-bottom-color: var(--glass-hairline);
   }
+  /* The view details (the loading and availability line) are no .panel: the
+     same inline padding, or the line starts at the screen's edge. */
+  #app[data-sheet-detent] .sidebar-scroll > .shell-details-panel {
+    padding-inline: 16px;
+  }
   /* The header names the door, so the pane does not repeat it. */
   #app[data-sheet-detent] #sheet-alerts > .panel-title {
     display: none;
@@ -323,12 +274,15 @@
   }
 
   /* ---------------------------------------------------------------------
-     The full report is a second layer. It opens OVER the at-hand answer as
-     its own card (inset, edged, casting a shadow on the sheet's glass) and
-     rises into place, so it reads as depth; the door's header stays above
-     it as the layer underneath. Its own close control is the way back, and
-     so is pulling the sheet down to half.
+     The report is a card on the window's glass (inset, edged, casting a
+     shadow) that rises into place; the window's header stays above it. The
+     window's "Back to map" is the one way back, so the report's own is not
+     drawn here; Escape inside the report still takes the same road
+     (src/ui/impact-panel.ts, requestPanelDismiss).
      --------------------------------------------------------------------- */
+  #app[data-sheet-detent] #sheet-report .impact-panel-close {
+    display: none;
+  }
   #app[data-sheet-detent='full'] #sheet-report:has(.impact-panel.open) {
     padding: 8px 8px 0;
   }
@@ -344,9 +298,9 @@
 
   /* ---------------------------------------------------------------------
      The report's head on a phone (owner direction 2026-11-09 (sprint),
-     DR-pending). Mail, print and the way back are the report's only tools,
-     and each is a full touch target here, as each already is on a tablet.
-     Three of them are 144px of a head under 300px wide, so the head takes
+     DR-pending). Mail and print are the report's only tools here, and each
+     is a full touch target, as each already is on a tablet. They are 88px
+     of a head under 300px wide, so the head takes
      the tablet band's stacked arrangement one step further: the kicker
      shares the tools' row, and the place name has the whole width under it,
      where a long Tribal name wraps to two lines instead of five. The
@@ -379,7 +333,6 @@
   #app[data-sheet-detent] #sheet-report .impact-panel-kind {
     margin-top: 0;
   }
-  #app[data-sheet-detent] #sheet-report .impact-panel-close,
   #app[data-sheet-detent] #sheet-report .impact-panel-action {
     min-width: var(--touch-target);
     min-height: var(--touch-target);
@@ -390,9 +343,9 @@
      ("THE TOUCH FLOOR, EVERY HAND"), which a tablet shares. */
 
   /* ---------------------------------------------------------------------
-     Map furniture rides the sheet's top edge at peek and half: the scale
-     rulers, and above them the dock (its notices), so neither is ever hidden under the glass while the map
-     leads. At full the sheet covers them, as it covers the map.
+     Map furniture once rode the sheet's top edge at peek and half: the
+     scale rulers and the dock. No door asks for those stops now, so with
+     the window closed or open the lift is the bottom safe area.
      --------------------------------------------------------------------- */
   #app[data-sheet-detent] .maplibregl-ctrl-bottom-left,
   #app[data-sheet-detent] .maplibregl-ctrl-bottom-right {
@@ -402,107 +355,6 @@
     bottom: calc(
       var(--sheet-lift) + var(--mobile-map-edge, 8px) + var(--mobile-scale-block)
     );
-  }
-}
-
-/* =============================================================================
-   A short landscape window (a phone on its side, still inside the phone
-   shell): there is no height for three stops, so the same element is a
-   DRAWER from the left edge. It has one open seat, at full height, and it
-   closes by the close control, Escape, its door, or a drag to the left.
-   The stop attribute still decides which content shows. The query is
-   SHEET_DRAWER_QUERY in src/config/sheet-detents.ts.
-   ============================================================================= */
-@media (min-width: 481px) and (max-width: 720px) and (max-height: 480px) and (orientation: landscape) {
-  #app[data-sheet-detent] {
-    /* As wide as the content wants, leaving the map a readable strip
-       between the drawer and the column. */
-    --sheet-w: min(
-      360px,
-      calc(
-        100vw -
-        env(safe-area-inset-right, 0px) -
-        var(--edge-inset, 8px) -
-        var(--mobile-map-control-size, 48px) -
-        var(--mobile-map-control-gap, 8px) -
-        180px
-      )
-    );
-  }
-  /* A drawer takes no height from the map, and nothing rides it upward. */
-  #app[data-sheet-detent='peek'],
-  #app[data-sheet-detent='half'],
-  #app[data-sheet-detent='full'] {
-    --sheet-height: 0px;
-    --sheet-lift: env(safe-area-inset-bottom, 0px);
-  }
-
-  #app[data-sheet-detent] .sidebar {
-    top: 0;
-    right: auto;
-    /* The box stops 2px short of the bottom edge on purpose (the glass
-       below still reaches it). src/ui/popup-viewport.ts reads any sheet
-       whose box touches the bottom edge as bottom-docked chrome and gives
-       a popup only the room above its top; a full-height drawer would
-       leave a popup none, even while closed. */
-    bottom: 2px;
-    left: 0;
-    width: var(--sheet-w);
-    height: auto;
-    padding-left: env(safe-area-inset-left, 0px);
-  }
-  #app[data-sheet-detent] .sidebar::before {
-    inset: 0 0 -2px -120px;
-    border: 1px solid var(--glass-edge);
-    border-left: 0;
-    border-radius: 0 var(--sheet-radius) var(--sheet-radius) 0;
-    box-shadow:
-      inset -1px 0 0 var(--glass-sheen),
-      8px 0 30px rgba(0, 0, 0, 0.4);
-  }
-  #app[data-sheet-detent='closed'] .sidebar {
-    height: auto;
-    transform: translate3d(-110%, 0, 0);
-  }
-  /* The handle moves to the edge the drawer leaves by. */
-  #app[data-sheet-detent] .sidebar::after {
-    content: '';
-    position: absolute;
-    top: 50%;
-    right: 5px;
-    width: 4px;
-    height: 36px;
-    margin-top: -18px;
-    border-radius: 999px;
-    background: var(--ink-muted);
-    pointer-events: none;
-  }
-  #app[data-sheet-detent] .sidebar[data-sheet-dragging]::after {
-    background: var(--ink-strong);
-  }
-  /* Nothing to resize: the strip keeps the title and the close control,
-     and still drags. */
-  #app[data-sheet-detent] .sheet-grabber {
-    display: none;
-  }
-  #app[data-sheet-detent] .sheet-grabber-row {
-    padding-top: 0;
-  }
-  #app[data-sheet-detent] .sheet-close {
-    margin-top: 0;
-  }
-  /* Up and down scroll; left and right belong to the drawer. */
-  #app[data-sheet-detent] .sidebar-scroll,
-  #app[data-sheet-detent='peek'] .sidebar-scroll {
-    overflow-y: auto;
-    touch-action: pan-y;
-  }
-  /* The rulers and the dock step out from under an open drawer. */
-  #app[data-sheet-detent]:not([data-sheet-detent='closed']) .maplibregl-ctrl-bottom-left {
-    margin-left: var(--sheet-w);
-  }
-  #app[data-sheet-detent]:not([data-sheet-detent='closed']) .map-bottom-dock {
-    left: calc(var(--sheet-w) + var(--mobile-map-edge, 8px));
   }
 }
 
@@ -517,22 +369,7 @@
   }
 }
 
-/* Real glass where the browser can blur what is behind it. */
-@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  @media (max-width: 720px) {
-    #app[data-sheet-detent] .sidebar::before {
-      background: var(--glass-panel);
-      -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
-      backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
-    }
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  #app[data-sheet-detent] .sheet-grabber-bar,
-  #app[data-sheet-detent] .sheet-close::before {
-    transition: none;
-  }
   /* The report layer is simply there: same end state, no rise. */
   #app[data-sheet-detent] #sheet-report .impact-panel.sheet-hosted {
     animation: none;

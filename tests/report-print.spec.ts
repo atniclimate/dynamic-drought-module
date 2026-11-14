@@ -10,7 +10,7 @@ test('D3 chart helpers print readable neutral series and preserve issuer colors'
   await gotoApp(page, '?select=state:WA');
   const panel = page.locator('#impact-panel');
   await expect(panel).toBeVisible({ timeout: 15_000 });
-  await expect(panel.getByRole('link', { name: 'Agricultural drought relief information' })).toBeVisible();
+  await expect(panel.getByRole('link', { name: 'Drought relief and recovery information' })).toBeVisible();
   const phases = [{ seas: 'DJF', year: 2025, anom: -0.7 }, { seas: 'JFM', year: 2025, anom: 0.6 }];
   const charts = [
     oniLineSvg(phases, { title: 'ONI fixture', source: 'Offline fixture', compare: { label: 'RONI', values: phases } }),
@@ -199,12 +199,12 @@ test.describe('U1 the report in print', () => {
       await stubGridGuidance(page);
       await gotoApp(page, '?view=brief&select=state:WA&flow=off');
       if (width === 390) {
-        await page.locator('#sheet-report-door').click();
+        // The shared link opens the report in its full-screen window at once (owner, 2026-11-13).
         await expect(page.locator('#app')).toHaveAttribute('data-sheet-detent', 'full');
       }
       const panel = page.locator('#impact-panel');
       await expect(panel).toBeVisible({ timeout: 15_000 });
-      await expect(panel.getByRole('link', { name: 'Agricultural drought relief information' })).toBeVisible();
+      await expect(panel.getByRole('link', { name: 'Drought relief and recovery information' })).toBeVisible();
       // Every shell opens on the priority view; the full detail is one tap away.
       const lead = panel.locator('.briefing-view-btn[data-briefing-view="lead"]');
       const full = panel.locator('.briefing-view-btn[data-briefing-view="matrix"]');
@@ -324,7 +324,7 @@ test.describe('U1 the report in print', () => {
     // WA fixture row (a fresh DOM read, not a sleep) proves that refresh has
     // already landed, so none is still pending to race the print pass below.
     await expect(
-      panel.getByRole('link', { name: 'Agricultural drought relief information' })
+      panel.getByRole('link', { name: 'Drought relief and recovery information' })
     ).toBeVisible();
     const closedBefore = await panel.locator('details:not([open])').count();
     expect(closedBefore).toBeGreaterThan(0);
@@ -425,7 +425,7 @@ test.describe('U1 the report in print', () => {
     // A fresh DOM read, not a sleep: this known WA fixture row appears only
     // once the resource-catalog refresh has actually landed and re-rendered.
     await expect(
-      panel.getByRole('link', { name: 'Agricultural drought relief information' })
+      panel.getByRole('link', { name: 'Drought relief and recovery information' })
     ).toBeVisible();
 
     // The refresh replaced every disclosure node; every one of them must

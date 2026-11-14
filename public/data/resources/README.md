@@ -46,6 +46,23 @@ Rules the application enforces at load time:
   reserved for the deploying Nation's own resources, configured by the
   deployer; it never ships in this repository.)
 
+Every `federal.json` row also carries two fields, checked by
+`npm run check:resources` (optional in state files):
+
+- `conditions`: the hazard modes the row's own label and description name,
+  as keys of `HAZARD_CLUSTERS` (`src/config/clusters.ts`), or `["any"]` when
+  the text names no mode. `any` never mixes with a mode.
+- `kind`: one of `technical-assistance`, `grant`, `loan`, `funding`,
+  `disaster-program`, `program`, `information`, taken from the row's own
+  words. `funding` is for a row that says funding or financial help without
+  settling grant or loan; `program` is for a standing program whose words
+  name no kind of help; a hub, office or reading page is `information`.
+
+The briefing lists the federal program rows whose `conditions` include the
+active mode first (each group in file order), shows the kind beside the
+agency, and prints the file's `verified` date once, in words, at the foot of
+the Resources section. Tag only from the row's text; never look a program up.
+
 ## Wording convention
 
 Resource rows link programs with program-page framing only: what the

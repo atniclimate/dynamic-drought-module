@@ -24,7 +24,7 @@ registerHooks({
   }
 });
 
-const { censusLabelAreas, labelName, larNamesFromCensus } = await import('../scripts/build-tribal-roster.mjs');
+const { areaLabelRows, censusLabelAreas, labelName, larNamesFromCensus } = await import('../scripts/build-tribal-roster.mjs');
 const { fadeLayerIds, labelMinZoom, nationLabelPoints, nationTextField } = await import('../src/layers/aiannh.ts');
 const { TOP_LABEL_IDS } = await import('../src/map/layer-order.ts');
 
@@ -86,7 +86,8 @@ test('a curated own-language name leads its Nation, a curated shorter name repla
   const labels = new Map([['9010', ['Nez Perce Tribe', 'Kialegee Tribal Town']], ['9011', [warmSprings]]]);
   const curated = {
     own: new Map([['Nez Perce Tribe', 'Stand-in ə̓']]),
-    short: new Map([[warmSprings, 'Stand-in Short Name']])
+    short: new Map([[warmSprings, 'Stand-in Short Name']]),
+    area: new Map()
   };
   const [shared, single] = nationLabelPoints(
     { type: 'FeatureCollection', features: [area('9010', 'D1', { NAME: 'Shared Area' }), area('9011', 'D1')] },
@@ -110,6 +111,44 @@ test('a curated own-language name leads its Nation, a curated shorter name repla
   assert.ok(!flat.includes('"en2"'), 'no slot beyond the most Nations an area holds');
   assert.equal(flat.split('"DDM Nation Names"').length - 1, 2, 'the Nation-name face only on the own-language sections');
   assert.equal(JSON.stringify(nationTextField(1)).includes('\\n\\n'), false, 'one Nation, no separator');
+});
+
+test('an area label names one band, place or community of a Nation on its own area, and only where that area names one Nation', () => {
+  const pitRiver = 'Pit River Tribe, California (includes XL Ranch, Big Bend, Likely, Lookout, Montgomery Creek, and Roaring Creek Rancherias)';
+  const labels = new Map([['9010', [pitRiver]], ['9011', [pitRiver]], ['9012', ['Nez Perce Tribe', 'Kialegee Tribal Town']]]);
+  const curated = {
+    own: new Map(),
+    short: new Map([[pitRiver, 'Stand-in Short Name']]),
+    area: new Map([['9010', 'Big Bend Rancheria, Pit River Tribe'], ['9012', 'Stand-in Area Label']])
+  };
+  const [bigBend, sibling, shared] = nationLabelPoints(
+    { type: 'FeatureCollection', features: [area('9010', 'D2'), area('9011', 'D2'), area('9012', 'D1')] },
+    labels,
+    curated
+  ).features.map((f) => f.properties);
+  assert.deepEqual([bigBend.text, bigBend.en0], ['Big Bend Rancheria, Pit River Tribe', 'Big Bend Rancheria, Pit River Tribe']);
+  assert.equal(sibling.text, 'Stand-in Short Name', 'another area of the same Nation keeps the Nation\'s label');
+  assert.equal(shared.text, 'Nez Perce Tribe\n\nKialegee Tribal Town', 'an area several Nations share names every Nation');
+});
+
+test('the shipped area labels: each area the label map names with its one Nation, sourced and dated, from shipped glyphs', () => {
+  const { areaNames } = JSON.parse(readFileSync(new URL('../public/data/tribal-label-names.json', import.meta.url), 'utf8'));
+  const ranges = readdirSync(new URL('../public/fonts/glyphs/Noto Sans Regular/', import.meta.url)).map((file) => file.replace('.pbf', '').split('-').map(Number));
+  assert.ok(Array.isArray(areaNames) && areaNames.length > 0, 'the file carries areaNames');
+  const seen = new Set();
+  for (const row of areaNames) {
+    assert.ok(!seen.has(row.aiannh), `${row.aiannh} has two areaName rows`);
+    seen.add(row.aiannh);
+    assert.deepEqual(ROSTER.labelAreas[row.aiannh], [row.nation], `${row.aiannh}: the label map names the area with its one Nation`);
+    assert.ok(row.census && row.areaName && row.areaName === row.areaName.normalize('NFC') && row.areaName === row.areaName.trim(), row.aiannh);
+    assert.match(row.page, /^https?:\/\/\S+$/, row.aiannh);
+    assert.match(row.read, /^\d{4}-\d{2}-\d{2}$/, row.aiannh);
+    assert.ok(row.premise.length > 20, `${row.aiannh}: why this form`);
+    for (const char of row.areaName) {
+      const cp = char.codePointAt(0);
+      assert.ok(ranges.some(([lo, hi]) => cp >= lo && cp <= hi), `${row.aiannh}: U+${cp.toString(16).toUpperCase()} has no shipped glyph range`);
+    }
+  }
 });
 
 test('the shipped label names: labelled Nations once each, sourced and dated; a shorter name is shorter and draws from shipped glyphs', () => {
@@ -203,6 +242,11 @@ test('a confirmed row names an area its Census name cannot settle, and reopens w
   reopened(['9020', 'Warm Spring', [warmSprings]], /REOPENED: the Census now names the area "Warm Springs"/);
   reopened(['9020', 'Warm Springs', ['Kiowa Indian Tribe of Oklahoma']], /is not a name in the Federal Register roster/);
   reopened(['9022', 'Kialegee', ['Kiowa Tribe']], /the name matcher now answers "Kialegee Tribal Town"/);
+  // An area label row (tribal-label-names.json areaNames) pins its area to its Nation the same way.
+  const areaRow = { aiannh: '9021', census: 'Pine Ridge', nation: 'Kialegee Tribal Town', areaName: 'Stand-in Area Label' };
+  assert.deepEqual(censusLabelAreas(features, roster, areaLabelRows({ areaNames: [areaRow] }))['9021'], ['Kialegee Tribal Town']);
+  assert.throws(() => censusLabelAreas(features, roster, areaLabelRows({ areaNames: [{ ...areaRow, census: 'Renamed' }] })), /REOPENED/);
+  assert.deepEqual(areaLabelRows({}), [], 'a file with no areaNames pins nothing');
 });
 
 test('a BIA land area on its BIA label takes the one Nation of its one same-name Census reservation, never a statistical area', () => {
@@ -225,10 +269,9 @@ test('a BIA land area on its BIA label takes the one Nation of its one same-name
   for (const open of ['Choctaw', 'Iowa', 'Santa Rosa', 'Wind River', 'Celilo']) assert.equal(shipped[open].provenance, 'lar-label', open);
 });
 
-test('the shipped roster labels at least 540 areas: Creek OTSA, Warm Springs, both Nations of Wind River', () => {
+test('the shipped roster labels Creek OTSA, Warm Springs and both Nations of Wind River (the count is tests/truth-counts.test.mjs)', () => {
   const labels = ROSTER.labelAreas;
   assert.ok(labels && typeof labels === 'object', 'the roster carries labelAreas');
-  assert.ok(Object.keys(labels).length >= 540, `${Object.keys(labels).length} labelled areas`);
   const creek = ROSTER.censusAreas.find((a) => a.name === 'Creek OTSA');
   assert.deepEqual(labels[creek.aiannh], ['The Muscogee (Creek) Nation']);
   assert.deepEqual(labels['4545'], ['Confederated Tribes of the Warm Springs Reservation of Oregon']);
@@ -236,8 +279,12 @@ test('the shipped roster labels at least 540 areas: Creek OTSA, Warm Springs, bo
     'Eastern Shoshone Tribe of the Wind River Reservation, Wyoming',
     'Northern Arapaho Tribe of the Wind River Reservation, Wyoming'
   ]);
-  // A place or band one Nation's Federal Register name lists among several waits for the maintainer's word.
-  for (const held of ['4595', '7390', '7725']) assert.equal(labels[held], undefined, held);
+  // A band or place one Nation's Federal Register name lists among several is labelled by its own area label
+  // (tribal-label-names.json areaNames) and named by its Nation in the label map; the Te-Moak bands wait for the owner.
+  for (const held of ['0165', '1005', '3930', '4580']) assert.equal(labels[held], undefined, held);
+  assert.deepEqual(labels['4595'], ['Minnesota Chippewa Tribe, Minnesota (Six component reservations: Bois Forte Band (Nett Lake); ' +
+    'Fond du Lac Band; Grand Portage Band; Leech Lake Band; Mille Lacs Band; White Earth Band)']);
+  assert.deepEqual(labels['7725'], ['Native Village of Venetie Tribal Government (Arctic Village and Village of Venetie)']);
   for (const [code, names] of Object.entries(labels)) {
     assert.match(code, /^\d{4}$/);
     assert.ok(Array.isArray(names) && names.length > 0, code);

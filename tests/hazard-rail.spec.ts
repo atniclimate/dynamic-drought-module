@@ -13,8 +13,9 @@ import {
  * Satellite control leads the view tools in the same right-edge column.
  *
  * Contract under test:
- * - The rail stays reachable beside the mobile side panel and stays
- *   absent on desktop and in embed
+ * - The rail answers on the map, sits inert under an open window (owner,
+ *   2026-11-13: every window is full screen) and stays absent on desktop
+ *   and in embed
  *   byte for byte (hard rule 8).
  * - A hazard tap routes through the ONE layer controller (applyPreset):
  *   the preset's layer set replaces the active set in the URL, so the
@@ -241,7 +242,7 @@ test.describe('the mobile hazard rail (390x844)', () => {
     ).toHaveAttribute('aria-pressed', 'false');
   });
 
-  test('the rail stays reachable beside open panels; a rail button closes the panel', async ({
+  test('an open window covers the rail and the map controls; Back to map returns them', async ({
     page
   }) => {
     await gotoApp(page);
@@ -250,61 +251,54 @@ test.describe('the mobile hazard rail (390x844)', () => {
     const satellite = page.locator('.basemap-switcher-btn');
     const share = page.locator('#share-btn');
     const reset = page.locator('#reset-btn');
+    const back = page.locator('#sheet-close');
+    // Whether a control can take focus: false while it sits inert under an open window.
+    const focusable = (locator: typeof share): Promise<boolean> =>
+      locator.evaluate((button) => {
+        (button as HTMLButtonElement).focus();
+        return document.activeElement === button;
+      });
     await expect(rail).toBeVisible();
     await expect(satellite).toBeVisible();
     await expect(share).toBeVisible();
     await expect(reset).toBeVisible();
 
-    // The glass panel leaves the right-side map controls reachable.
+    // Every window is full screen (owner, 2026-11-13): what it covers is
+    // inert until the reader goes back to the map.
     await page.locator('#mobile-footer-nav button[data-tab="layers"]').click();
-    await expect(app).toHaveAttribute('data-sheet-detent', 'half');
-    await expect(rail).toBeVisible();
-    await expect(satellite).toBeVisible();
-    await expect(share).toBeVisible();
-    await expect(reset).toBeVisible();
-    await satellite.evaluate((button) => (button as HTMLButtonElement).focus());
-    await expect(satellite).toBeFocused();
+    await expect(app).toHaveAttribute('data-sheet-detent', 'full');
+    await expect(back).toBeVisible();
+    expect(await focusable(satellite)).toBe(false);
+    expect(await focusable(share)).toBe(false);
+    expect(await focusable(rail.locator('.hazard-rail-btn').first())).toBe(false);
 
-    // A rail button applies its preset AND closes the sheet (the
-    // mockup's rule 5: the map answers).
-    await page.locator('#hazard-rail button[data-preset="hazard-fire"]').click();
+    await back.click();
     await expect(app).toHaveAttribute('data-sheet-detent', 'closed');
     await expect(rail).toBeVisible();
     await expect(satellite).toBeVisible();
     await expect(share).toBeVisible();
     await expect(reset).toBeVisible();
+    expect(await focusable(satellite)).toBe(true);
+
+    // Back on the map, a rail button applies its preset and the map answers.
+    await page.locator('#hazard-rail button[data-preset="hazard-fire"]').click();
+    await expect(app).toHaveAttribute('data-sheet-detent', 'closed');
     await expect
       .poll(async () => (await urlLayers(page)).has('spc-fire-weather'))
       .toBe(true);
 
-    // The Brief door with no place chosen opens at half: a sheet is only as tall as
-    // what it has to say (owner direction 2026-11-09, sprint). Brief opens at full
-    // only with a briefing to read. The map controls stay reachable beside it.
+    // The Brief door with no place chosen opens its window too, and the same
+    // Back to map returns the controls.
     const briefDoor = page.locator('#mobile-footer-nav button[data-tab="brief"]');
     await briefDoor.click();
-    await expect(app).toHaveAttribute('data-sheet-detent', 'half');
+    await expect(app).toHaveAttribute('data-sheet-detent', 'full');
     await expect(app).toHaveAttribute('data-sheet-tab', 'brief');
     await expect(briefDoor).toHaveAttribute('aria-expanded', 'true');
-    await expect(rail).toBeVisible();
-    await expect(satellite).toBeVisible();
-    await expect(share).toBeVisible();
-    await expect(reset).toBeVisible();
-    await share.evaluate((button) => (button as HTMLButtonElement).focus());
-    await expect(share).toBeFocused();
-    await briefDoor.click();
+    expect(await focusable(share)).toBe(false);
+    await back.click();
     await expect(app).toHaveAttribute('data-sheet-detent', 'closed');
-    await expect(rail).toBeVisible();
-    await expect(satellite).toBeVisible();
-    await expect(share).toBeVisible();
-    await expect(reset).toBeVisible();
-
-    // The full stop leaves the map controls reachable too.
-    await page.locator('#mobile-footer-nav button[data-tab="layers"]').click();
-    await expect(app).toHaveAttribute('data-sheet-detent', 'half');
-    await page.locator('#sheet-all-layers-btn').click();
-    await expect(app).toHaveAttribute('data-sheet-detent', 'full');
-    await expect(rail).toBeVisible();
-    await expect(share).toBeVisible();
+    await expect(briefDoor).toHaveAttribute('aria-expanded', 'false');
+    expect(await focusable(share)).toBe(true);
     await expect(reset).toBeVisible();
   });
 
@@ -335,7 +329,7 @@ test.describe('the mobile hazard rail (390x844)', () => {
     const app = page.locator('#app');
 
     await page.locator('#mobile-footer-nav button[data-tab="alerts"]').click();
-    await expect(app).toHaveAttribute('data-sheet-detent', 'half');
+    await expect(app).toHaveAttribute('data-sheet-detent', 'full');
     await expect(app).toHaveAttribute('data-sheet-tab', 'alerts');
     await expect(page.locator('#sheet-alerts')).toBeVisible();
     // The pane is the sheet's only content (one sheet, one surface).
@@ -347,8 +341,8 @@ test.describe('the mobile hazard rail (390x844)', () => {
       .poll(async () => (await page.locator('#sheet-alerts-body').textContent())?.trim().length ?? 0)
       .toBeGreaterThan(0);
 
-    // Re-tapping the active door closes back to the map.
-    await page.locator('#mobile-footer-nav button[data-tab="alerts"]').click();
+    // Back to map closes the window (it covers the doors).
+    await page.locator('#sheet-close').click();
     await expect(app).toHaveAttribute('data-sheet-detent', 'closed');
     await expect(app).not.toHaveAttribute('data-sheet-tab', /.+/);
   });

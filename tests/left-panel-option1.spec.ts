@@ -75,13 +75,15 @@ test.describe('D-0.7.0-067 contextual time rail', () => {
     const panel = page.locator('#impact-panel');
     await expect(panel).toBeVisible();
     await expect(panel.locator('.impact-panel-title')).toHaveText('Oregon');
-    // A desktop hard close retires its owned selection. Its report door
-    // becomes hidden, so the stable Brief search receives keyboard focus.
+    // "Back to map" closes the window and keeps the place selected and lit
+    // (owner, 2026-11-13), so its briefing door stays the way back. The
+    // search result that opened it is gone, so the stable Brief search
+    // receives keyboard focus.
     await panel.locator('.impact-panel-close').click();
     await expect(panel).toBeHidden();
-    await expect(page.locator('#brief-selection-summary')).toBeHidden();
-    await expect(door).toBeHidden();
-    await expect(page.locator('#app')).not.toHaveAttribute('data-place-selected', '');
+    await expect(page.locator('#brief-selection-summary')).toHaveJSProperty('hidden', false);
+    await expect(door).toBeVisible();
+    await expect(page.locator('#app')).toHaveAttribute('data-place-selected', '');
     await expect(search).toBeFocused();
     await search.fill('oregon');
     await page.locator('#brief-search [data-search-kind="place"][data-search-id="OR"]').click();
@@ -89,7 +91,8 @@ test.describe('D-0.7.0-067 contextual time rail', () => {
     await expect(panel.locator('.impact-panel-close')).toBeFocused();
     await page.keyboard.press('Escape');
     await expect(panel).toBeHidden();
-    await expect(page.locator('#brief-selection-summary')).toBeHidden();
+    await expect(page.locator('#brief-selection-summary')).toHaveJSProperty('hidden', false);
+    await expect(page.locator('#app')).toHaveAttribute('data-place-selected', '');
     await expect(search).toBeFocused();
   });
 
@@ -114,7 +117,7 @@ test.describe('D-0.7.0-067 contextual time rail', () => {
     await expect(page.locator('#time-bar .time-bar-stamp-headline')).toHaveText('Valid Jun 30, 2026');
 
     await page.locator('#mobile-footer-nav button[data-tab="place"]').click();
-    await expect(page.locator('#app')).toHaveAttribute('data-sheet-detent', 'half');
+    await expect(page.locator('#app')).toHaveAttribute('data-sheet-detent', 'full');
 
     const bar = page.locator('#time-bar');
     await expect(bar).toBeVisible();

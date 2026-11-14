@@ -115,7 +115,7 @@ test('a city chosen from any search host leaves the menu on Selected place', () 
   };
   const selectResult = new Function(
     ...Object.keys(deps),
-    `let locateAbort = null;\n${functionBody(controller, 'selectResult')}\nreturn selectResult;`
+    `let locateAbort = null;\n${functionBody(controller, 'easeToPoint')}\n${functionBody(controller, 'selectResult')}\nreturn selectResult;`
   )(...Object.values(deps));
   selectResult(h.map, { kind: 'city', id: 'seattle', label: 'Seattle' });
   h.land('city:seattle');

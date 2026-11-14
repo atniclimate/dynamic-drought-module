@@ -121,10 +121,10 @@ test.describe('studio focus and geometry', () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await gotoApp(page, '?view=brief&layers=places');
     // Deterministic activation: await the mobile shell's ready stamp, then
-    // the half-detent and search-mount signals, before touching the entry.
+    // the full-window and search-mount signals, before touching the entry.
     await expect(page.locator('#app')).toHaveAttribute('data-sheet-detent', /./);
     await page.locator('#mobile-footer-nav button[data-tab="place"]').click();
-    await expect(page.locator('#app')).toHaveAttribute('data-sheet-detent', 'half');
+    await expect(page.locator('#app')).toHaveAttribute('data-sheet-detent', 'full');
     await expect(page.locator('#sheet-search [data-ddm-search]')).toBeVisible();
     await expect(page.locator(PLACE_ROOT)).toHaveCount(0);
 
@@ -144,6 +144,9 @@ test.describe('studio focus and geometry', () => {
     await expect(opener).toBeFocused();
     await expect(opener).toBeVisible();
 
+    // Each window covers the doors (owner, 2026-11-13): back to the map between doors.
+    await page.locator('#sheet-close').click();
+    await expect(page.locator('#app')).toHaveAttribute('data-sheet-detent', 'closed');
     await page.locator('#mobile-footer-nav button[data-tab="brief"]').click();
     // The desktop studio door pair lives in #brief-display, which the mobile
     // sheet matrix never admits: there is no mobile LAYERS-studio door (the
@@ -152,8 +155,10 @@ test.describe('studio focus and geometry', () => {
     // F7 gate; the lane's original phase scrolled a control that cannot
     // render at this breakpoint and hung).
     await expect(page.locator('#studio-entry-pair')).toBeHidden();
+    await page.locator('#sheet-close').click();
+    await expect(page.locator('#app')).toHaveAttribute('data-sheet-detent', 'closed');
     await page.locator('#mobile-footer-nav button[data-tab="layers"]').click();
-    await expect(page.locator('#app')).toHaveAttribute('data-sheet-detent', 'half');
+    await expect(page.locator('#app')).toHaveAttribute('data-sheet-detent', 'full');
     await expect(page.locator(LAYERS_ROOT)).toHaveCount(0);
   });
 

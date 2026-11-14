@@ -29,6 +29,7 @@ const S = (globalThis.__sfp = {
   opened: [],
   openOpts: [],
   toasts: [],
+  closeListeners: [],
   lazyLoads: 0
 });
 
@@ -37,9 +38,11 @@ const STUBS = {
   '../config/urls':
     'export const URLS = { usPlacesLocal: "https://stub.test/us-places.json",' +
     ' biaLarFeatureServer: "https://stub.test/lar", censusAiannhMapServer: "https://stub.test/census" };',
-  '../impact/resources': 'export const STATE_LABEL = {};',
+  '../impact/resources': 'export const STATE_LABEL = { OK: "Oklahoma" };',
   '../impact/context':
-    'export const buildBoundaryContext = (_k, _p, _g, _l, t) => ({ title: t || "Located area" });',
+    'export const buildBoundaryContext = (_k, _p, _g, _l, t) => ({ title: t || "Located area" });' +
+    // The real sentence: the test below pins what the row's click carries.
+    ' export const stateAreaNote = (n) => `${n} is a state-recognized area in the Census list; the map\'s Tribal Lands layer draws its outline but names federal areas only.`;',
   '../util/bbox':
     'export const bboxCenter = () => ({ lng: 0, lat: 0 }); export const bboxToContinuousBounds = (b) => b;',
   '../util/antimeridian': 'export const geometryBboxAcrossAntimeridian = () => [0, 0, 1, 1];',
@@ -59,7 +62,8 @@ const STUBS = {
   './layer-toggle-command': 'export const requestLayerOn = () => {};',
   './impact-panel':
     'let n = 0; export const nextBriefingIntent = () => ++n;' +
-    ' export const isCurrentBriefingIntent = (i) => i === n; export const openImpactPanel = () => {};',
+    ' export const isCurrentBriefingIntent = (i) => i === n; export const openImpactPanel = () => {};' +
+    ' export const onImpactPanelClose = (fn) => globalThis.__sfp.closeListeners.push(fn);',
   './overlay': 'export const showToast = (t) => globalThis.__sfp.toasts.push(t);',
   './island/search': 'export const Search = () => null;'
 };
@@ -331,6 +335,25 @@ test('a Tribal locate superseded during its read logs and toasts nothing; a real
   }
 });
 
+test('closing the briefing aborts an in-flight Tribal locate, though "Back to map" keeps the selection', async () => {
+  let signal;
+  answers.set(LAR_URL, (init) => {
+    signal = init.signal;
+    return new Promise((_, reject) => {
+      init.signal.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')));
+    });
+  });
+  S.toasts.length = 0;
+  wiring.onSelect(tribalItem);
+  await waitFor(() => signal !== undefined);
+  assert.equal(signal.aborted, false);
+  assert.ok(S.closeListeners.length > 0, 'the controller hears briefing closes');
+  for (const fn of S.closeListeners) fn();
+  assert.equal(signal.aborted, true, 'the close cancels the request itself, not only its late result');
+  for (let i = 0; i < 20; i += 1) await flush();
+  assert.deepEqual(S.toasts, [], 'a cancel by a close is not a failure');
+});
+
 test('a census: result locates against the Census service; an HTTP 200 error envelope is unavailable', async () => {
   const censusItem = {
     kind: 'tribal',
@@ -415,9 +438,21 @@ test('a formal Oklahoma Nation name lists its Census area first, never a land ar
   const choctaw = hits('Choctaw Nation of Oklahoma');
   assert.equal(choctaw[0]?.id, `census:${code('Choctaw OTSA')}`);
   assert.ok(!choctaw.some((i) => i.label.includes('Jena Band')), 'the Louisiana Band is not listed');
-  assert.equal(hits('Sac and Fox Nation')[0]?.id, `census:${code('Sac and Fox OTSA')}`);
+  // Two Nations carry "Sac & Fox Nation": the bare phrase lists both under their own names, the State settles it.
+  assert.equal(hits('Sac and Fox Nation, Oklahoma')[0]?.id, `census:${code('Sac and Fox OTSA')}`);
+  assert.deepEqual(
+    hits('Sac and Fox Nation').map((i) => i.label).filter((label) => label.startsWith('Sac & Fox Nation')).sort(),
+    ['Sac & Fox Nation of Missouri in Kansas and Nebraska', 'Sac & Fox Nation, Oklahoma']
+  );
   assert.equal(hits('Iowa Tribe of Oklahoma')[0]?.id, `census:${code('Iowa OTSA')}`);
   assert.equal(hits('Cherokee Nation')[0]?.id, `census:${code('Cherokee OTSA')}`);
+  assert.equal(hits('Cherokee Nation')[0]?.label, 'Cherokee Nation', 'under the Nation\'s name, the Census title beside it');
+  // An area several Nations share: each Nation answers to its own name, the area's row to the area's.
+  assert.deepEqual(hits('comanche').map((i) => i.label), ['Comanche Nation, Oklahoma', 'Kiowa-Comanche-Apache-Fort Sill Apache OTSA']);
+  assert.deepEqual(hits('Northern Arapaho').map((i) => i.label), ['Northern Arapaho Tribe of the Wind River Reservation, Wyoming']);
+  const windRiver = hits('wind river').map((i) => i.label);
+  for (const nation of ['Eastern Shoshone', 'Northern Arapaho']) assert.ok(windRiver.some((label) => label.startsWith(nation)), nation);
+  assert.equal(new Set(items.map((i) => i.id)).size, items.length, 'every row has its own id');
 
   // Opening that row asks the Census service for the Kickapoo OTSA's AIANNH code.
   answers.set(CENSUS_URL, () => json(fc));
@@ -430,6 +465,96 @@ test('a formal Oklahoma Nation name lists its Census area first, never a land ar
   const sent = fetchUrls.slice(callsBefore);
   assert.equal(sent[0].split('?')[0], CENSUS_URL);
   assert.equal(new URL(sent[0]).searchParams.get('where'), `AIANNH='${code('Kickapoo OTSA')}'`);
+});
+
+// The search line of src/ui/island/search.tsx, run over the real loadTribal items.
+async function tribalHits() {
+  const items = (await wiring.loadTribal()).filter((i) => i.kind === 'tribal');
+  return (q) => {
+    const folded = foldSearchText(q);
+    const tokens = folded.split(' ');
+    return prefixFirst(items.filter((i) => matchesTokens(i.haystack, tokens, i.id.startsWith('census:'))), folded);
+  };
+}
+
+test('every Nation on the Federal Register list reaches a row under its own name through the search matcher', async () => {
+  const { labelName } = await import('../scripts/build-tribal-roster.mjs');
+  const crosswalk = JSON.parse(readFileSync(new URL('../public/data/tribal-larname-crosswalk.json', import.meta.url), 'utf8'));
+  const nations = [...new Set([
+    ...crosswalk.rosterNoLar,
+    ...crosswalk.matched.filter((row) => !row.rule.includes('rule 10')).map((row) => row.tribe)
+  ])];
+  const roster = JSON.parse(readFileSync(new URL('../public/data/tribal-roster.json', import.meta.url), 'utf8'));
+  assert.equal(nations.length, roster.meta.rosterCount);
+  const hits = await tribalHits();
+  // The search list shows only GROUP_CAP rows per group (search.tsx); a row past it is not on screen.
+  const cap = Number(/const GROUP_CAP = (\d+);/.exec(readFileSync(new URL('../src/ui/island/search.tsx', import.meta.url), 'utf8'))?.[1]);
+  assert.ok(cap > 0, 'GROUP_CAP is readable from search.tsx');
+  // The name as a person reads it on the list or the map ("previously listed as ..." dropped).
+  const unreached = nations.filter((name) => {
+    const at = hits(labelName(name)).findIndex((i) => labelName(i.label) === labelName(name));
+    return at < 0 || at >= cap;
+  });
+  assert.deepEqual(unreached, [], `${unreached.length} Nations a search for the name does not reach: ${unreached.slice(0, 10).join(' | ')}`);
+});
+
+test('a headquarters-town row opens the Nation\'s briefing at the town with one plain line, and asks no service', async () => {
+  const hits = await tribalHits();
+  const row = hits('Kialegee Tribal Town')[0];
+  assert.equal(row?.label, 'Kialegee Tribal Town');
+  assert.equal(row.sublabel, 'Headquarters town: Wetumka, Oklahoma');
+  S.selections.length = 0;
+  S.highlights.length = 0;
+  const callsBefore = fetchUrls.length;
+  const moves = [];
+  const prior = map.easeTo;
+  map.easeTo = (opts) => moves.push(opts);
+  try {
+    wiring.onSelect(row);
+  } finally {
+    map.easeTo = prior;
+  }
+  assert.equal(S.selections.length, 1);
+  const { label, context } = S.selections[0];
+  assert.equal(label, 'Kialegee Tribal Town', 'titled with the full Federal Register name');
+  assert.equal(
+    context.landNote,
+    "Neither of the map's boundary sources (BIA, Census) draws an area for this Nation. The map opens at its headquarters town, Wetumka, Oklahoma."
+  );
+  assert.equal(context.kindLabel, 'Headquarters town (US Census place)');
+  assert.equal(context.readAt, 'the headquarters town, Wetumka', 'point readings say where they are read: nobody clicked');
+  assert.deepEqual(moves.map((m) => m.center.map((n) => Math.round(n * 10) / 10)), [[-96.2, 35.2]]);
+  assert.equal(fetchUrls.length, callsBefore, 'the town point is in the roster: no live request');
+  assert.equal(S.highlights.length, 0, 'no outline is lit: the town is not the Nation\'s land');
+});
+
+test('a state-recognized Census area row locates the area by code and carries its plain line', async () => {
+  const hits = await tribalHits();
+  const row = hits('Lumbee Tribe of North Carolina')[0];
+  assert.equal(row?.id, 'census:9815');
+  assert.equal(row.sublabel, 'Census area: Lumbee SDTSA');
+  answers.set(CENSUS_URL, () => json(fc));
+  S.selections.length = 0;
+  const callsBefore = fetchUrls.length;
+  const heldBefore = S.held.length;
+  wiring.onSelect(row);
+  await waitFor(() => S.held.length > heldBefore);
+  S.held.at(-1)();
+  await waitFor(() => S.selections.length === 1);
+  assert.equal(new URL(fetchUrls[callsBefore]).searchParams.get('where'), "AIANNH='9815'");
+  assert.equal(S.selections[0].label, 'Lumbee Tribe of North Carolina');
+  assert.equal(
+    S.selections[0].context.landNote,
+    "Lumbee SDTSA is a state-recognized area in the Census list; the map's Tribal Lands layer draws its outline but names federal areas only."
+  );
+  // A federal area's row carries no such line.
+  S.selections.length = 0;
+  const creekHeld = S.held.length;
+  wiring.onSelect(hits('The Muscogee (Creek) Nation')[0]);
+  await waitFor(() => S.held.length > creekHeld);
+  S.held.at(-1)();
+  await waitFor(() => S.selections.length === 1);
+  assert.equal(S.selections[0].context.landNote, undefined);
 });
 
 // The REAL src/ui/island/search.tsx, transpiled by the installed rolldown (oxc) and

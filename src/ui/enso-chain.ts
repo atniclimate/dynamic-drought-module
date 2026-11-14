@@ -194,7 +194,11 @@ function paint(): void {
     surface: { status: registry.getStatus(SURFACE_KEY) ?? null, date: state.frameDate },
     jet: state.jet,
     place: state.place
-      ? { label: state.place.label, inside: state.place.context.pointInsidePlace === true }
+      ? {
+          label: state.place.label,
+          inside: state.place.context.pointInsidePlace === true,
+          ...(state.place.context.readAt ? { readAt: state.place.context.readAt } : {})
+        }
       : null,
     outlook: state.outlook,
     here: state.here,
@@ -604,7 +608,7 @@ function openGuide(): void {
   if (state.app.hasAttribute('data-sheet-tab') && getSheetDetent() !== 'closed') {
     setSheetDetent('closed', { announce: false });
   }
-  if (getSheetDetent() === 'closed') setSheetDetent('half');
+  if (getSheetDetent() === 'closed') setSheetDetent('full');
   const scroll = state.panel.closest<HTMLElement>('.sidebar-scroll');
   if (scroll) scroll.scrollTop = 0;
 }

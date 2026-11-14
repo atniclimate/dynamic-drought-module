@@ -34,7 +34,10 @@ import {
   formatDistanceKm,
   formatPointHeatInterval,
   formatPointHeatTimestamp,
-  formatPointHeatValue
+  formatPointHeatValue,
+  pointHeatHeading,
+  pointHeatScope,
+  pointReadPlace
 } from '../impact/point-heat-format';
 import {
   landscapeContextShown,
@@ -59,7 +62,12 @@ import { renderAcknowledgements } from './acknowledgements';
 import { getLegendSection } from './legend-registry';
 import { legendPanelUsable } from './map-key';
 import { requestLayerOn } from './layer-toggle-command';
+import { grantPlace, grantsShownForPlace, loadGrantNameIndex, readTribalGrants } from '../impact/grants';
+import type { GrantNameIndex, GrantPlace, GrantsRead } from '../impact/grants';
+import { renderGrantsSection } from './grants-render';
 import { loadFederalResources, resourcesForIdentity } from '../impact/resource-catalog';
+import { orderFederalByCondition, resourceAgencyLine, resourcesCheckedLine } from '../impact/resources';
+import type { CatalogResource } from '../impact/resources';
 import {
   getCommittedSnapshot,
   onCommittedSnapshotChange
@@ -169,6 +177,17 @@ let focusOpenerKey: string | null = null;
 
 /** The panel's polite live region for view changes; created once. */
 let viewLiveEl: HTMLElement | null = null;
+
+/**
+ * The page's one Grants.gov read (DR-258): the first briefing open starts it,
+ * every later open reuses it. `grantsPending` is the read in flight; a close
+ * cancels it and clears both, so the next open starts afresh, never stuck.
+ */
+let grantsRead: GrantsRead | null = null;
+/** The Nation names a grant title is matched against; null until loaded, or when the roster failed (titles then list by State alone). */
+let grantNames: GrantNameIndex | null = null;
+let grantsPending: Promise<void> | null = null;
+let grantsController: AbortController | null = null;
 
 // ---------------------------------------------------------------------------
 // Status pill text
@@ -777,7 +796,7 @@ function renderMetricValue(metric: PointHeatMetricSeries): string {
   return `<span title="Issuer value ${escapeHtml(String(value.value))} ${escapeHtml(value.unitCode)}">${escapeHtml(formatPointHeatValue(value.value, value.unitCode))}</span>`;
 }
 
-function renderObservation(pointHeat: PointHeatBriefing): string {
+function renderObservation(pointHeat: PointHeatBriefing, context: BoundarySelectionContext): string {
   const observation = pointHeat.observation;
   if (observation.status === 'loading') {
     return '<p class="point-heat-state">Reading the nearest NWS station...</p>';
@@ -797,7 +816,7 @@ function renderObservation(pointHeat: PointHeatBriefing): string {
   const distance =
     observation.distanceKm === undefined
       ? ''
-      : `<span>${escapeHtml(formatDistanceKm(observation.distanceKm))} from the selected point</span>`;
+      : `<span>${escapeHtml(`${formatDistanceKm(observation.distanceKm)} from ${pointReadPlace(context)}`)}</span>`;
   const timestamp = observation.timestamp
     ? `<time datetime="${escapeHtml(observation.timestamp)}">${escapeHtml(formatPointHeatTimestamp(observation.timestamp))}</time>`
     : '';
@@ -916,24 +935,26 @@ function renderHeatSynthesis(synthesis: HeatSynthesis): string {
 
 function renderPointHeat(
   pointHeat: PointHeatBriefing,
-  synthesis: HeatSynthesis
+  synthesis: HeatSynthesis,
+  context: BoundarySelectionContext
 ): string {
   const pointLabel =
     `${pointHeat.point.lat.toFixed(4)}, ${pointHeat.point.lng.toFixed(4)}`;
+  const heading = escapeHtml(pointHeatHeading(context));
   return `
-    <section class="point-heat" aria-label="Heat at selected point">
+    <section class="point-heat" aria-label="${heading}">
       <div class="impact-horizon-head">
         <div>
-          <h4 class="impact-section-title">Heat at selected point</h4>
+          <h4 class="impact-section-title">${heading}</h4>
           <p class="point-heat-coordinate">${escapeHtml(pointLabel)}</p>
         </div>
         <span class="point-heat-pill point-heat-pill-${pointHeat.status}">${escapeHtml(SOURCE_PILL_TEXT[pointHeat.status])}</span>
       </div>
-      <p class="point-heat-scope">Values describe this coordinate and nearby station, not the complete selected boundary or jurisdiction.</p>
+      <p class="point-heat-scope">${escapeHtml(pointHeatScope(context))}</p>
       <div class="point-heat-grid">
         <section class="point-heat-card" aria-label="Observed nearby">
           <h5>Observed nearby</h5>
-          ${renderObservation(pointHeat)}
+          ${renderObservation(pointHeat, context)}
         </section>
         <section class="point-heat-card" aria-label="NWS grid guidance">
           <h5>NWS grid guidance</h5>
@@ -946,7 +967,7 @@ function renderPointHeat(
 }
 
 /** Render one resource link. */
-function renderResource(resource: ResourceLink): string {
+function renderResource(resource: CatalogResource): string {
   const href = checkPopupHref(resource.url);
   const hasLink = href !== null;
   const desc = resource.description
@@ -959,7 +980,7 @@ function renderResource(resource: ResourceLink): string {
     <div class="impact-resource">
       ${labelHtml}
       ${desc}
-      <p class="impact-resource-agency">${escapeHtml(resource.agency)}</p>
+      <p class="impact-resource-agency">${escapeHtml(resourceAgencyLine(resource))}</p>
     </div>
   `;
 }
@@ -973,25 +994,32 @@ function renderResource(resource: ResourceLink): string {
  * shortcut: the slot has no link in any build today, so no place draws it; when
  * a deployer can fill it, show it only for a place that is a Tribal Nation.
  */
-function renderResources(all: readonly ResourceLink[]): string {
+function renderResources(all: readonly ResourceLink[], grantsAt: GrantPlace | null): string {
+  const grantsShown = grantsAt !== null;
   const resources = all.filter((r) => r.tier !== 'tribe-own' || checkPopupHref(r.url) !== null);
-  if (resources.length === 0) return '';
+  if (resources.length === 0 && !grantsShown) return '';
+  const mode = getCommittedSnapshot().selectedHazard;
+  const ordered = orderFederalByCondition(resources, mode);
   const groups = TIER_ORDER.map((tier) => {
-    const items = resources.filter((r) => r.tier === tier);
-    if (items.length === 0) return '';
+    const items = ordered.filter((r) => r.tier === tier);
+    const grants = tier === 'federal' && grantsShown;
+    if (items.length === 0 && !grants) return '';
     return `
       <div class="impact-resource-group">
         <h4 class="impact-resource-group-title">${escapeHtml(TIER_HEADING[tier])}</h4>
         ${items.map(renderResource).join('')}
+        ${grants ? renderGrantsSection(grantsRead ?? { state: 'loading' }, mode, grantsAt) : ''}
       </div>
     `;
   }).join('');
 
+  const checked = resourcesCheckedLine(resources);
   return `
     <section class="impact-resources" aria-label="Resources">
       <h3 class="impact-section-title">Resources to route</h3>
       <p class="impact-resources-framing">Tribal sovereignty is primary; external resources are supplementary. Each link below is plainly attributed to its agency as regional context, never as governing a Tribal Nation.</p>
       ${groups}
+      ${checked ? `<p class="impact-resources-framing">${escapeHtml(checked)}</p>` : ''}
     </section>
   `;
 }
@@ -1025,7 +1053,7 @@ function renderBriefingSections(briefing: ImpactBriefing): string {
   const caveat = briefing.landCaveat
     ? `<p class="impact-land-caveat">${escapeHtml(briefing.landCaveat)}</p>`
     : '';
-  const pointHeatSection = renderPointHeat(briefing.pointHeat, briefing.heatSynthesis);
+  const pointHeatSection = renderPointHeat(briefing.pointHeat, briefing.heatSynthesis, briefing.context);
   // The block holds four hazards, so it is not titled "Drought impact"; the
   // briefing's names are an open question (DR-013) and this does not answer
   // it. Point heat renders inside Current Conditions, after the heat cell and
@@ -1058,7 +1086,7 @@ function renderBriefingSections(briefing: ImpactBriefing): string {
     ${lead}
     ${landscapeContextShown(briefing.context) ? renderLandscapeContext(briefing.landscape) : ''}
     ${impact}
-    ${renderResources(briefing.resources)}
+    ${renderResources(briefing.resources, grantsShownForPlace(briefing.context) ? grantPlace(briefing.context, grantNames) : null)}
     ${renderMapTechnicalInformation(false, renderPriorityRule() + renderUncoveredSources(briefing))}
   `;
 }
@@ -1183,8 +1211,44 @@ export function openImpactPanel(
     // outside it starts no catalog route.
     void rehydrateResourcesFromCatalog(briefing, context, signal, token);
   }
+  // Grants.gov rows are national: read wherever the subsection shows, a place inside the United States.
+  if (grantsShownForPlace(briefing.context)) startGrantsRead(token);
 
   return token;
+}
+
+/**
+ * Start the page's one Grants.gov read if none is settled or in flight, and
+ * re-render this open when it lands. The read is the page's, not this open's:
+ * a new place reuses it, and only a close (`cancelGrantsRead`) stops it.
+ */
+function startGrantsRead(token: number): void {
+  if (grantsRead === null && grantsPending === null) {
+    const controller = new AbortController();
+    // The names load beside the read (one cached roster file), so the rows never list before their Nation rule can run.
+    const pending: Promise<void> = Promise.all([
+      readTribalGrants(controller.signal),
+      loadGrantNameIndex().catch(() => null)
+    ]).then(([read, names]) => {
+      if (grantsPending !== pending) return;
+      grantsRead = read;
+      grantNames = names;
+      grantsPending = null;
+      grantsController = null;
+    });
+    // Only a cancel rejects, and `cancelGrantsRead` has already cleared the state.
+    pending.catch(() => undefined);
+    grantsPending = pending;
+    grantsController = controller;
+  }
+  grantsPending?.then(() => refreshOpenBriefing(token), () => undefined);
+}
+
+/** Stop an unfinished Grants.gov read when no briefing is left to show it. */
+function cancelGrantsRead(): void {
+  grantsController?.abort();
+  grantsController = null;
+  grantsPending = null;
 }
 
 async function rehydrateLandscapeContext(
@@ -1406,8 +1470,12 @@ export function refreshOpenBriefing(token: number): void {
   setSheetBriefing(activeBriefing);
 }
 
-/** Close the panel and supersede any in-flight hydration. */
-export function closeImpactPanel(): void {
+/**
+ * Close the panel and supersede any in-flight hydration. `keepSelection` is
+ * the reader's own "Back to map" or Escape: the window closes and the place
+ * stays selected and lit (owner, 2026-11-13).
+ */
+export function closeImpactPanel(keepSelection = false): void {
   // A deliberate close outranks any async opener still in flight: the
   // user said "no panel", so a late-resolving boundary fetch must yield.
   onClose?.();
@@ -1417,13 +1485,13 @@ export function closeImpactPanel(): void {
   legendPollGeneration++;
   activeBriefing = null;
   setSheetBriefing(null);
-  // Panel-owned selection clear (the stage-5 majors 3/4 fix): closing the
-  // briefing ends the selection, which drops the feature-state emphasis and
-  // the located-boundary highlight through their store seams; this also
-  // covers the mobile Brief path, which never registers a popup close
-  // handler. A NEWER selection (a popup opened after this briefing) is not
-  // clobbered: the identity guard stands down in that case.
-  if (panelSelection !== null && getPlaceSelection() === panelSelection) {
+  // Panel-owned selection clear (the stage-5 majors 3/4 fix): a programmatic
+  // close (a mode switch, a region outside the United States) ends the
+  // selection, which drops the feature-state emphasis and the located-boundary
+  // highlight through their store seams; the reader's "Back to map" and
+  // Escape keep it (`keepSelection`). A NEWER selection (a popup opened after
+  // this briefing) is not clobbered: the identity guard stands down then.
+  if (!keepSelection && panelSelection !== null && getPlaceSelection() === panelSelection) {
     setPlaceSelection(null);
   }
   panelSelection = null;
@@ -1431,6 +1499,7 @@ export function closeImpactPanel(): void {
     activeController.abort();
     activeController = null;
   }
+  cancelGrantsRead();
   setMailActionEnabled(true);
   closeImpactPanelShell();
 }
@@ -1459,6 +1528,7 @@ export function openNoPlacePanel(section: NoPlaceSection, opener: HTMLElement | 
     activeController.abort();
     activeController = null;
   }
+  cancelGrantsRead();
   openToken++;
   legendPollGeneration++;
   activeBriefing = null;

@@ -90,7 +90,11 @@ for (const width of [1440, 721, 720, 390]) {
       await expect(rail).toHaveCSS('background-color', 'rgb(255, 255, 255)');
       await expect(rail).toHaveCSS('color', 'rgb(1, 11, 19)');
       await expect(rail).toHaveCSS('border-radius', '7px');
-      await rail.focus();
+      // The open window covers the door (owner, 2026-11-13): Back to map from
+      // the keyboard returns focus to it, where its focus ring shows.
+      await page.locator('#sheet-close').focus();
+      await page.keyboard.press('Enter');
+      await expect(rail).toBeFocused();
       await expect(rail).toHaveCSS('outline-offset', '-4px');
       await expect(rail).toHaveCSS('box-shadow', /rgb\(1, 11, 19\) 0px 0px 0px 2px inset, rgb\(1, 11, 19\) 0px 0px 0px 6px inset/);
     }

@@ -24,7 +24,7 @@ function firstValue(
     : null;
 }
 
-function pointHeatRead(pointHeat: PointHeatBriefing): HeatSourceRead | null {
+function pointHeatRead(pointHeat: PointHeatBriefing, at: string): HeatSourceRead | null {
   if (pointHeat.status !== 'ready' && pointHeat.status !== 'degraded') {
     return null;
   }
@@ -43,7 +43,7 @@ function pointHeatRead(pointHeat: PointHeatBriefing): HeatSourceRead | null {
     const distance =
       observation.distanceKm === undefined
         ? ''
-        : `, ${formatDistanceKm(observation.distanceKm)} from the selected point`;
+        : `, ${formatDistanceKm(observation.distanceKm)} from ${at}`;
     const timestamp = observation.timestamp
       ? ` at ${formatPointHeatTimestamp(observation.timestamp)}`
       : '';
@@ -88,14 +88,16 @@ function pointHeatRead(pointHeat: PointHeatBriefing): HeatSourceRead | null {
 /**
  * Compose a comparison without inventing thresholds or a DDM heat class.
  * Each read remains issuer-verbatim or a direct formatting of issuer values.
+ * `at` names where the point read is made (`pointReadPlace`).
  */
 export function synthesizeHeatSources(
   pointHeat: PointHeatBriefing,
   results: readonly SourceResult[],
-  allSettled: boolean
+  allSettled: boolean,
+  at = 'the selected point'
 ): HeatSynthesis {
   const reads: HeatSourceRead[] = [];
-  const pointRead = pointHeatRead(pointHeat);
+  const pointRead = pointHeatRead(pointHeat, at);
   if (pointRead) reads.push(pointRead);
   for (const result of results) {
     if (result.heatRead) reads.push(result.heatRead);
@@ -134,7 +136,7 @@ export function synthesizeHeatSources(
     reads.length > 0
       ? 'These issuer products describe different times and spatial supports. DDM shows them together but does not combine them into a new heat class.'
       : pointHeat.note ??
-        'No heat source returned a readable value for the selected point.';
+        `No heat source returned a readable value for ${at}.`;
   return {
     status,
     reads,

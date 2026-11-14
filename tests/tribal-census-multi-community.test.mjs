@@ -74,11 +74,16 @@ test('the roster restores the space the 2026 notice drops from the Pulikla Tribe
   assert.ok(committed.includes(PULIKLA));
 });
 
-test('the committed roster keeps the Census names for St. George, St. Paul and Venetie', () => {
-  const roster = JSON.parse(readFileSync(new URL('../public/data/tribal-roster.json', import.meta.url), 'utf8'));
-  for (const code of ['7340', '7390', '7725']) {
+// 2026-11-13: each community's area carries its own map label (tribal-label-names.json areaNames), so the
+// search row and the briefing take the Nation's full name, which names every community, never one alone.
+test('the committed roster names each community area by its Nation, and the map label names the community', () => {
+  const read = (file) => JSON.parse(readFileSync(new URL(`../public/data/${file}`, import.meta.url), 'utf8'));
+  const roster = read('tribal-roster.json');
+  const { areaNames } = read('tribal-label-names.json');
+  for (const [code, nation] of [['6140', VENETIE], ['7340', PRIBILOF], ['7390', PRIBILOF], ['7725', VENETIE]]) {
     const row = roster.censusAreas.find((a) => a.aiannh === code);
-    assert.equal(row.provenance, 'census-label');
-    assert.equal(row.displayName, row.name);
+    assert.deepEqual([row.provenance, row.displayName], ['safe-match', nation], code);
+    const label = areaNames.find((a) => a.aiannh === code);
+    assert.ok(label && label.areaName !== nation, `${code}: the map label names the community`);
   }
 });

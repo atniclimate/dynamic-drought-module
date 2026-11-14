@@ -65,15 +65,15 @@ const FETCH_TIMEOUT_MS = 10_000;
  * pre-fix padding values.
  *
  * Three cases:
- * - Desktop: the panel overlays the right 440px; a transient right pad,
- *   clamped to half the viewport so a small window can never be asked
- *   for more padding than it has pixels (MapLibre rejects that). With
- *   no panel coming, symmetric aesthetic margins only.
- * - Mobile with the phone sheet active: the briefing answers in the bottom
- *   sheet at half, so the fit keeps that band clear (`sheetCameraInset`;
- *   owner direction 2026-11-09 (sprint), DR-pending) and the band the
- *   right-edge column occupies (`edgeColumnInset`). The landscape drawer
- *   takes no height; it takes width on the left (`sheetCameraSideInset`).
+ * - Desktop and tablet: the briefing covers the whole map, as a studio
+ *   does (owner, 2026-11-13), so there is no band to keep clear. The
+ *   pad is the symmetric margin either way, and "Back to map" reveals
+ *   the place centred.
+ * - Mobile with the phone sheet active: the briefing answers in a window
+ *   that covers the whole screen (owner, 2026-11-13), so `sheetCameraInset`
+ *   and `sheetCameraSideInset` are 0 and the fit centres the place for the
+ *   moment the reader goes back to the map, clear of the right-edge column
+ *   it returns to (`edgeColumnInset`).
  * - Mobile without the sheet (embed keeps today's hidden-chrome
  *   semantics; the no-JavaScript fallback stacks): the briefing overlay
  *   still covers the lower viewport, so the pre-U2 transient bottom pad
@@ -84,7 +84,6 @@ export function briefingCameraPadding(panelWillOpen: boolean): maplibregl.Paddin
   if (mobile && isSheetActive()) {
     return {
       top: 24,
-      // The landscape drawer covers the left of the map.
       left: 24 + sheetCameraSideInset(),
       // The right-edge column stays on screen with a sheet open.
       right: 24 + edgeColumnInset(),
@@ -101,18 +100,8 @@ export function briefingCameraPadding(panelWillOpen: boolean): maplibregl.Paddin
         : 24
     };
   }
-  // The drawer is clamp(440px, 38vw, 880px) wide (--impact-panel-w, app.css; tests/map-chrome-contract.test.mjs
-  // pins the two together) and sits left of the map-button column (MAP_COLUMN_CLEAR, the drawer's `right` in
-  // app.css): the pad is both plus the usual 40 px margin, so a framed place ends clear of the drawer.
-  const drawer = Math.min(Math.max(440, Math.round(window.innerWidth * 0.38)), 880);
-  // shortcut: the inset applies from 1025 px only (the tablet drawer keeps the right edge); the numbers mirror app.css.
-  const MAP_COLUMN_CLEAR = window.innerWidth <= 1024 ? 0 : 120;
-  return {
-    top: 40,
-    left: 40,
-    bottom: 40,
-    right: panelWillOpen ? Math.min(drawer + MAP_COLUMN_CLEAR + 40, Math.round(window.innerWidth * 0.5)) : 40
-  };
+  // The full-cover briefing leaves no part of the map beside it, so the pad is uniform.
+  return { top: 40, left: 40, bottom: 40, right: 40 };
 }
 
 /**

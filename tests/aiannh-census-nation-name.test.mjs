@@ -33,7 +33,10 @@ const { gatedCensusName } = await import('../src/state/tribal-roster.ts');
 
 const ROSTER = JSON.parse(readFileSync(new URL('../public/data/tribal-roster.json', import.meta.url), 'utf8'));
 const trusted = ROSTER.censusAreas.find((area) => area.name === 'Creek OTSA');
-const untrusted = ROSTER.censusAreas.find((area) => area.provenance === 'census-label');
+// An area alone on its Census name: a shared area's Census row shares its NAME with each Nation's row.
+const untrusted = ROSTER.censusAreas.find(
+  (area) => area.provenance === 'census-label' && ROSTER.censusAreas.filter((other) => other.name === area.name).length === 1
+);
 const CONDITIONS = { head: [{ label: 'Conditions', text: 'Fixture conditions.' }], rows: [], hasWarning: false, warningLabel: null };
 const LNG_LAT = { lng: -96, lat: 35.6 };
 
@@ -62,6 +65,13 @@ test('a Census-only Tribal area titles its click as the search titles it, throug
     assert.equal(selection.areaLabel, `Census area: ${trusted.name}`, "the search's own sublabel");
     assert.equal(selection.kind, 'aiannh', 'the Census source kind (its subtitle) is unchanged');
     assert.equal(context.resolveBoundaryTitle('aiannh', props), selection.title, 'the click label moves with the title');
+
+    // A state-recognized area carries the search row's line on a click too; a federal one carries none.
+    for (const area of ROSTER.censusAreas.filter((a) => a.stateArea)) {
+      const click = context.buildBoundaryContext('aiannh', { NAME: area.name }, null, LNG_LAT);
+      assert.equal(click.landNote, context.stateAreaNote(area.name), `${area.name}: the click carries the state-recognized line`);
+    }
+    assert.equal(selection.landNote, undefined, 'a federal area carries no state-recognized line');
 
     const kept = context.buildBoundaryContext('aiannh', { NAME: untrusted.name }, null, LNG_LAT);
     assert.equal(kept.title, untrusted.name, 'an untrusted row keeps the Census name');

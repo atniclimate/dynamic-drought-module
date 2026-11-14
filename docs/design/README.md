@@ -342,7 +342,10 @@ everything read for it.
 **Seats.** The cell is the last of the right-edge column's view tools and
 inverts while a position is shown. The card stands in the map's dock above
 the sheet and folds to its title; on a short screen unfolding it lowers or
-closes the sheet, so the two never share a pixel. Everything but the cell and
+closes the sheet, so the two never share a pixel. (Amended 2026-11-13, owner
+ruling: every phone window now opens full screen with "Back to map", so an
+open window covers the card and the card returns with the map; see
+`mobile-map-chrome.md`, "The sheet".) Everything but the cell and
 the launch check is one lazy chunk, loaded on the first press or the first
 eligible launch. A chunk that fails to load is asked for again, under a new
 address, by the next press, its stylesheet first, and the card is never

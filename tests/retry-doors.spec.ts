@@ -113,7 +113,8 @@ test.describe('found-075: explicit doors retry a failed checked layer', () => {
         if (door === 'Alerts pane') {
           // Close and reopen while the retry is held. Opening the pane asks
           // for the layer again, but loading intent must not enqueue a retry.
-          await alertsDoor(page).click();
+          // DR-263: the window is full screen over the doors, so it closes by Back to map.
+          await page.locator('#sheet-close').click();
           await alertsDoor(page).click();
           await expect(page.locator('#sheet-alerts-body')).toContainText('Checking');
           await expectHeatIntent(page);

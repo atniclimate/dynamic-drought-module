@@ -121,6 +121,13 @@ function biaLandArea(props: GeoJsonProperties): string {
 /** Census AIANNH NAME to the gated name the search titles a Census-only area with, once loaded. */
 let censusNames: ReadonlyMap<string, string> | null = null;
 let censusNamesLoad: Promise<ReadonlyMap<string, string>> | null = null;
+/** Census NAMEs of the state-recognized areas (the roster's `stateArea` rows), once loaded. */
+let stateAreaNames: ReadonlySet<string> = new Set();
+
+/** The one line a state-recognized Census area carries, on a search row and on a map click alike. */
+export function stateAreaNote(name: string): string {
+  return `${name} is a state-recognized area in the Census list; the map's Tribal Lands layer draws its outline but names federal areas only.`;
+}
 
 /**
  * Load, once, the Census area to name map through the same gate
@@ -129,8 +136,10 @@ let censusNamesLoad: Promise<ReadonlyMap<string, string>> | null = null;
  * resolves (a failure is retried on the next call), a Census area titles itself.
  */
 export function loadCensusNationNames(): Promise<ReadonlyMap<string, string>> {
-  censusNamesLoad ??= loadTribalCensusAreas().then((areas) => {
+  // The label map comes with it (one roster file): a title needs both to name a shared area.
+  censusNamesLoad ??= Promise.all([loadTribalCensusAreas(), loadCensusLabelNames()]).then(([areas]) => {
     censusNames = new Map(areas.map((area) => [area.name, gatedCensusName(area)]));
+    stateAreaNames = new Set(areas.filter((area) => area.stateArea).map((area) => area.name));
     return censusNames;
   }, (err: unknown) => {
     censusNamesLoad = null;
@@ -191,6 +200,8 @@ function resolveTitle(kind: BoundaryKind, props: GeoJsonProperties): string {
       if (!censusLabelsLoad) loadCensusLabelNames().catch(() => {});
       const area = censusArea(props);
       const nations = censusLabels?.get(firstString(props, ['AIANNH']) ?? '');
+      // An area several Nations share names every one, as its map label does; each of its search rows names one.
+      if (nations && nations.length > 1) return nations.join('; ');
       return censusNames?.get(area) ?? (nations?.length ? nations.join('; ') : area);
     }
     case 'treaty':
@@ -297,6 +308,7 @@ export function buildBoundaryContext(
     lngLat: { lng: lngLat.lng, lat: lngLat.lat },
     // DRAFT wording: "Census area", the search's own sublabel word for a Census row.
     ...(landArea !== title ? { areaLabel: `${kind === 'aiannh' ? 'Census area' : 'Land area'}: ${landArea}` } : {}),
+    ...(kind === 'aiannh' && stateAreaNames.has(censusArea(properties)) ? { landNote: stateAreaNote(censusArea(properties)) } : {}),
     ...(bbox ? { bbox } : {}),
     ...(serviceBbox ? { serviceBbox } : {}),
     ...(crossesAntimeridian ? { bboxCrossesAntimeridian: true } : {}),

@@ -49,3 +49,30 @@ test('an observation with no distance keeps the bare station name', () => {
   const line = selectBriefNarrativeLine(briefing({ status: 'ready', stationName: 'Far Airport', metrics: [temperature] }));
   assert.match(line, /^Heat at the selected point: Far Airport reports temperature /);
 });
+
+const { pointHeatHeading, pointHeatScope, pointReadPlace, seasonalOutlookTitle } = await import('../src/impact/point-heat-format.ts');
+const { synthesizeHeatSources } = await import('../src/impact/heat-synthesis.ts');
+
+// A Nation's headquarters town (src/ui/search-controller.ts openHeadquarters): nobody clicked and no boundary was drawn.
+const HQ = { readAt: 'the headquarters town, Great Falls' };
+
+test('a headquarters-town briefing names the town in the heat card and drops the boundary caveat', () => {
+  assert.equal(pointReadPlace(HQ), 'the headquarters town, Great Falls');
+  assert.equal(pointHeatHeading(HQ), 'Heat at the headquarters town, Great Falls');
+  assert.equal(pointHeatScope(HQ), 'Values describe this coordinate and nearby station.');
+  assert.equal(seasonalOutlookTitle(HQ), 'Seasonal outlook at the headquarters town, Great Falls');
+  const synthesis = synthesizeHeatSources(
+    { status: 'ready', observation: { status: 'ready', stationName: 'Great Falls Airport', distanceKm: 7, metrics: [temperature] }, grid: { status: 'no-data', metrics: [] } },
+    [], true, pointReadPlace(HQ)
+  );
+  assert.match(synthesis.reads[0].text, /Great Falls Airport, 4\.3 mi \(7\.0 km\) from the headquarters town, Great Falls:/);
+});
+
+test('a clicked or chosen point keeps the selected-point words and the boundary caveat', () => {
+  for (const context of [{}, undefined]) {
+    assert.equal(pointReadPlace(context), 'the selected point');
+    assert.equal(pointHeatHeading(context), 'Heat at selected point');
+    assert.match(pointHeatScope(context), /not the complete selected boundary or jurisdiction\.$/);
+    assert.equal(seasonalOutlookTitle(context), 'Seasonal outlook at this point');
+  }
+});

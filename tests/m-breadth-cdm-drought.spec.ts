@@ -177,15 +177,15 @@ test.describe('Canadian Drought Monitor committed monthly snapshot', () => {
     expect(statSync(ARTIFACT_PATH).size).toBeLessThanOrEqual(2_450_000);
     expect(artifact.schemaVersion).toBe(1);
     expect(artifact.product).toBe('Canadian Drought Monitor');
-    expect(artifact.month).toBe('2026-09');
+    expect(artifact.month).toBe('2026-10');
     expect(artifact.monthState).toBe('published');
     expect(artifact.license.title).toBe(LICENSE_TITLE);
     expect(artifact.license.url).toBe(LICENSE_URL);
     expect(artifact.provenance.sourceUrl).toBe(
-      'https://agriculture.canada.ca/atlas/data_donnees/canadianDroughtMonitor/data_donnees/geoJSON/areasofDrought/2026/cdm_2609_drought_areas_json.zip'
+      'https://agriculture.canada.ca/atlas/data_donnees/canadianDroughtMonitor/data_donnees/geoJSON/areasofDrought/2026/cdm_2610_drought_areas_json.zip'
     );
-    expect(artifact.provenance.retrieved).toBe('2026-11-06');
-    expect(artifact.provenance.archiveBytes).toBe(6_747_946);
+    expect(artifact.provenance.retrieved).toBe('2026-11-13');
+    expect(artifact.provenance.archiveBytes).toBe(7_802_370);
     expect(artifact.provenance.classesPresent).toEqual([
       'D0',
       'D1',
@@ -206,10 +206,10 @@ test.describe('Canadian Drought Monitor committed monthly snapshot', () => {
       'PASS: shipped component count equals source component count for every class.'
     );
     const expectedComponentCounts = {
-      D0: 1604,
-      D1: 1087,
-      D2: 639,
-      D3: 146,
+      D0: 1837,
+      D1: 1237,
+      D2: 614,
+      D3: 347,
       D4: 0
     };
     expect(
@@ -258,13 +258,13 @@ test.describe('Canadian Drought Monitor committed monthly snapshot', () => {
       '#legend-panel [data-legend="cdm-drought"]'
     );
     await expect(legend).toContainText(
-      'Canadian Drought Monitor · September 2026'
+      'Canadian Drought Monitor · October 2026'
     );
     await expect(legend).toContainText('D4 · no area in this class this month');
     await expect(legend).toContainText(
       'bare map means no polygon coverage in this artifact, not class zero'
     );
-    await expect(page.locator('#time-bar')).toContainText('Month September 2026');
+    await expect(page.locator('#time-bar')).toContainText('Month October 2026');
     await expect(page.locator('#map-key')).toBeVisible();
     await expect(page.locator('#map-key-details-toggle')).toHaveAttribute('aria-expanded', 'false');
     await expect(page.locator('#map-key-content')).toBeHidden();
@@ -288,7 +288,7 @@ test.describe('Canadian Drought Monitor committed monthly snapshot', () => {
     expect(upstreamRequests).toEqual([]);
 
     await page.emulateMedia({ media: 'print' });
-    await expect(page.locator('#time-bar')).toContainText('Month September 2026');
+    await expect(page.locator('#time-bar')).toContainText('Month October 2026');
     await expect(legend).toContainText('Agriculture and Agri-Food Canada');
     await expect(legendLicense).toBeVisible();
     await expect(legendLicense).toHaveText(LICENSE_TITLE);

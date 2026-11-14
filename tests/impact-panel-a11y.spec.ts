@@ -171,17 +171,16 @@ test.describe('impact panel accessibility', () => {
     const lastResource = panel.locator('.impact-resources a[href]').last();
     const technical = panel.locator('.impact-technical-information');
     const summary = technical.locator('summary');
-    // D1 M21: Mail and Print are real, focusable controls now, and Close
-    // moves after them in DOM order (D1.md's M21 Notes), so the header's
-    // first focusable (where the trap wraps a forward Tab from the panel's
-    // last focusable) is Mail, not Close.
-    const mail = panel.locator('.impact-panel-action-mail');
+    // "Back to map" leads the header (owner, 2026-11-13: the briefing covers
+    // the map as a studio does), so it is the header's first focusable, where
+    // the trap wraps a forward Tab from the panel's last focusable.
+    const back = panel.locator('.impact-panel-close');
 
     // Resource-catalog hydration replaces the whole body independently of
     // horizon hydration. Wait for the deterministic WA catalog row so that
     // replacement cannot retire the focused last link between focus and Tab.
     await expect(
-      panel.getByRole('link', { name: 'Agricultural drought relief information' })
+      panel.getByRole('link', { name: 'Drought relief and recovery information' })
     ).toBeVisible();
     // Visual uniformity D10: the empty Nation's-own slot draws nothing, its heading included.
     await expect(panel.locator('.impact-resources')).not.toContainText("Nation's own resources");
@@ -203,7 +202,7 @@ test.describe('impact panel accessibility', () => {
     await page.keyboard.press('Tab');
     await expect(acknowledgements).toBeFocused();
     await page.keyboard.press('Tab');
-    await expect(mail).toBeFocused();
+    await expect(back).toBeFocused();
     await page.keyboard.press('Shift+Tab');
     await expect(acknowledgements).toBeFocused();
     await page.keyboard.press('Shift+Tab');
@@ -243,7 +242,7 @@ test.describe('impact panel accessibility', () => {
     await expect(panel.locator('#impact-panel-title')).toHaveText('Washington');
     await expect(panel.locator('.impact-horizon-loading')).toHaveCount(0);
     await expect(
-      panel.getByRole('link', { name: 'Agricultural drought relief information' })
+      panel.getByRole('link', { name: 'Drought relief and recovery information' })
     ).toBeVisible();
 
     // A durable URL key changes without any briefing re-render: collapsing
@@ -393,7 +392,7 @@ test.describe('impact panel accessibility', () => {
     // second time: waiting for its known WA fixture row proves a refresh
     // happened, not just the panel's first paint.
     await expect(
-      panel.getByRole('link', { name: 'Agricultural drought relief information' })
+      panel.getByRole('link', { name: 'Drought relief and recovery information' })
     ).toBeVisible();
 
     await expect(panel.locator('.point-heat-series[open]')).toHaveCount(1);

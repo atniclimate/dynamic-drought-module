@@ -57,14 +57,11 @@ test.describe('precedence: boot, Reset and embed defaults (DR-109)', () => {
     page
   }) => {
     // Where a user can press Reset with a briefing open: the phone. On the
-    // desktop the briefing is a modal dialog seated over the right edge
-    // (`.impact-panel` is fixed top/right/bottom above the map controls,
-    // aria-modal="true" with a Tab trap, src/ui/impact-panel.ts:176-192,
-    // :266), so #reset-btn sits under it and no pointer or keyboard reaches
-    // it until the briefing closes. On the phone the briefing is hosted in
-    // the sheet, non-modal, at the half detent, and the right-side map
-    // controls stay reachable beside it (tests/hazard-rail.spec.ts, "the
-    // rail stays reachable beside open panels").
+    // desktop the briefing covers the map as a modal window (owner,
+    // 2026-11-13), and its "Back to map" closes it. On the phone the
+    // briefing is hosted in the full-screen window, and "Back to map" closes
+    // the window but keeps the briefing open behind the Brief door, so the
+    // map's Reset is reachable with a briefing open.
     await page.setViewportSize({ width: 390, height: 844 });
     // select=state:WA opens the impact briefing at boot; the boot's silent
     // region fit (national, DR-109) runs first and sets STATE.currentRegion.
@@ -73,7 +70,10 @@ test.describe('precedence: boot, Reset and embed defaults (DR-109)', () => {
     const app = page.locator('#app');
     const panel = page.locator('#impact-panel');
     await expect(page.locator('#sheet-report .impact-panel')).toHaveCount(1, { timeout: 15_000 });
-    await expect(app).toHaveAttribute('data-sheet-detent', 'half');
+    await expect(app).toHaveAttribute('data-sheet-detent', 'full');
+    await expect(panel).toHaveClass(/\bopen\b/);
+    await page.locator('#sheet-close').click();
+    await expect(app).toHaveAttribute('data-sheet-detent', 'closed');
     await expect(panel).toHaveClass(/\bopen\b/);
     await expect(panel.locator('#impact-panel-title')).toHaveText('Washington');
     // The deep link's camera leaves the national framing for Washington, so the menu may show the neutral place
@@ -90,9 +90,9 @@ test.describe('precedence: boot, Reset and embed defaults (DR-109)', () => {
 
     await expect(regionSelect(page)).toHaveValue('region:national');
     await expect(panel).toHaveClass(/\bopen\b/);
-    // The briefing the Reset left open is the one the full report shows:
+    // The briefing the Reset left open is the one the Brief door shows:
     // raise it and read it, visible, still on the typed place.
-    await page.locator('#sheet-report-door').click();
+    await page.locator('#mobile-footer-nav button[data-tab="brief"]').click();
     await expect(app).toHaveAttribute('data-sheet-detent', 'full');
     await expect(panel).toBeVisible();
     await expect(panel.locator('#impact-panel-title')).toHaveText('Washington');
@@ -1727,7 +1727,7 @@ test.describe('found-083: the desktop expand control stays on desktop', () => {
   // (mobile-sheet.ts shouldBeActive). The register's app.css reading was
   // right about app.css alone and not about the page. These cases guard it.
 
-  /** The phone rail works: the Place door opens a painted panel and closes it. */
+  /** The phone rail works: the Place door opens a painted window and Back to map closes it. */
   async function expectPhoneRailWorks(page: Page, label: string): Promise<void> {
     const app = page.locator('#app');
     const rail = page.locator('#mobile-footer-nav');
@@ -1738,7 +1738,7 @@ test.describe('found-083: the desktop expand control stays on desktop', () => {
     );
     await expect(rail, `${label}: the rail`).toBeVisible();
     await place.click();
-    await expect(app, `${label}: Place opens the panel`).toHaveAttribute('data-sheet-detent', 'half');
+    await expect(app, `${label}: Place opens the panel`).toHaveAttribute('data-sheet-detent', 'full');
     await expect(page.locator('#sidebar'), `${label}: the panel`).toBeVisible();
     const panelWidth = await page
       .locator('#sidebar')
@@ -1746,8 +1746,8 @@ test.describe('found-083: the desktop expand control stays on desktop', () => {
     expect(panelWidth, `${label}: the panel is painted wider than the collapsed column`).toBeGreaterThan(
       100
     );
-    await place.click();
-    await expect(app, `${label}: a second press closes it`).toHaveAttribute(
+    await page.locator('#sheet-close').click();
+    await expect(app, `${label}: Back to map closes it`).toHaveAttribute(
       'data-sheet-detent',
       'closed'
     );

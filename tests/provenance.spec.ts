@@ -160,13 +160,9 @@ test.describe('Unit D: provenance survives the mobile shell (390x844)', () => {
     // Brief report at the full detent, which is not the surface under test.
     await gotoApp(page, '?view=console');
 
-    // Open the Layers door (half detent), then its one door to the full
-    // catalog stack, then the Place group's Sources disclosure.
+    // Open the Layers door (its full-screen window holds the whole catalog
+    // stack), then the Place group's Sources disclosure.
     await page.locator('#mobile-footer-nav button[data-tab="layers"]').click();
-    await expect(page.locator('#app')).toHaveAttribute('data-sheet-detent', 'half');
-    const allLayers = page.locator('#sheet-all-layers-btn');
-    await expect(allLayers).toBeVisible();
-    await allLayers.click();
     await expect(page.locator('#app')).toHaveAttribute('data-sheet-detent', 'full');
 
     const place = page

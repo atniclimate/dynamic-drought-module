@@ -31,6 +31,7 @@
  */
 
 import { DDM_NOTICE_LABEL, RAWS_PUBLIC_VIEW_NOTICE } from './ddm-notice';
+import { GRANTS_GOV_ATTRIBUTION } from '../impact/grants';
 import type { ProductKey } from './products';
 
 /** Every row id, in no rendered order (the renderer groups and sorts). */
@@ -70,6 +71,7 @@ export const ACKNOWLEDGEMENT_IDS = [
   'nadm',
   'natural-earth',
   'cocorahs-iem',
+  'grants-gov',
   'deployer'
 ] as const;
 
@@ -90,7 +92,8 @@ export const PROVIDER_KEYS = [
   'structures',
   'dryness-ground',
   'landscape-signature',
-  'minimap-drought-metric'
+  'minimap-drought-metric',
+  'grants-feed'
 ] as const;
 
 export type ProviderKey = (typeof PROVIDER_KEYS)[number];
@@ -416,6 +419,15 @@ export const ACKNOWLEDGEMENTS: Readonly<Record<AcknowledgementId, Acknowledgemen
       }
     ]
   },
+  'grants-gov': {
+    ...nameOnly('grants-gov', 'Grants.gov (U.S. Department of Health and Human Services)'),
+    credits: [
+      // DRAFT for the owner's citation check: the sentence the API terms require wherever its rows show
+      // (https://www.grants.gov/api/terms-conditions). The briefing's Grants.gov subsection carries it beside the
+      // rows; here a null citeId never renders (DR-147) until ddm-cite records it.
+      { text: GRANTS_GOV_ATTRIBUTION, citeId: null }
+    ]
+  },
   deployer: nameOnly('deployer', "This deployment's own data", 'deployer')
 };
 
@@ -501,5 +513,7 @@ export const PROVIDERS: Readonly<
   // public/data/landscape-signature-pnw.json, the briefing's terrain, soil, land cover and fuels facts.
   'landscape-signature': ['usgs', 'usda-nrcs', 'usfs', 'landfire', 'mrlc'],
   // The minimap drought metric: CDM input and the Nunavut exclusion mask.
-  'minimap-drought-metric': ['aafc', 'statcan']
+  'minimap-drought-metric': ['aafc', 'statcan'],
+  // The briefing's open federal funding rows (src/impact/grants.ts), read live from the Grants.gov API.
+  'grants-feed': ['grants-gov']
 };

@@ -167,7 +167,7 @@ function federalResources(state: StateCode | null): ResourceLink[] {
         tier: 'federal',
         description: 'Federal drought portal: national current conditions, outlooks, and impacts.'
       };
-  return [
+  const anchors: ResourceLink[] = [
     droughtGov,
     {
       label: 'U.S. Drought Monitor',
@@ -184,6 +184,71 @@ function federalResources(state: StateCode | null): ResourceLink[] {
       description: 'Federal disaster designations and producer relief programs for drought.'
     }
   ];
+  // Each is a drought page: it leads in the drought mode and follows the mode's own programs elsewhere.
+  return anchors.map((row) => ({ ...row, conditions: ['drought'] }));
+}
+
+/** The kinds of help a federal program row can be, from the row's own words. */
+// `funding`: the row says funding or financial help without settling grant or loan. `program`: a standing program
+// whose words name no kind of help. Neither is guessed into a narrower word.
+export const RESOURCE_KINDS = ['technical-assistance', 'grant', 'loan', 'funding', 'disaster-program', 'program', 'information'] as const;
+export type ResourceKind = (typeof RESOURCE_KINDS)[number];
+
+export const RESOURCE_KIND_LABEL: Record<ResourceKind, string> = {
+  'technical-assistance': 'Technical assistance',
+  grant: 'Grant',
+  loan: 'Loan',
+  funding: 'Funding',
+  'disaster-program': 'Disaster program',
+  program: 'Program',
+  information: 'Information'
+};
+
+/**
+ * What a catalog row carries beyond `ResourceLink` (`public/data/resources/`):
+ * the hazard modes it answers (`HAZARD_CLUSTERS` keys, or `["any"]`), its kind,
+ * and its file's `verified` date. Intersected here because `types.ts` is not
+ * this module's to widen; the runtime objects carry the fields either way.
+ */
+export interface ResourceCatalogFields {
+  readonly conditions?: readonly string[];
+  readonly kind?: ResourceKind;
+  readonly verified?: string;
+}
+export type CatalogResource = ResourceLink & ResourceCatalogFields;
+
+/**
+ * Federal program rows (those carrying `conditions`) whose conditions include
+ * the active mode first, then the rest, each group in its existing order.
+ * `any` rows are not moved up. Rows without `conditions` (the in-code anchors)
+ * and rows of other tiers keep their places; no active or an unknown mode
+ * matches nothing, so the order is unchanged.
+ */
+export function orderFederalByCondition<T extends ResourceLink>(rows: readonly T[], mode: string | null): T[] {
+  const isProgram = (r: T): boolean => r.tier === 'federal' && Array.isArray((r as CatalogResource).conditions);
+  const answers = (r: T): boolean => mode !== null && ((r as CatalogResource).conditions ?? []).includes(mode);
+  const programs = rows.filter(isProgram);
+  const sorted = [...programs.filter(answers), ...programs.filter((r) => !answers(r))];
+  let next = 0;
+  return rows.map((r) => (isProgram(r) ? sorted[next++]! : r));
+}
+
+/** The agency line: the kind as quiet text before the agency, when the row has one. */
+export function resourceAgencyLine(r: { readonly agency: string; readonly kind?: string }): string {
+  const label = (RESOURCE_KIND_LABEL as Record<string, string | undefined>)[r.kind ?? ''];
+  return label ? `${label} · ${r.agency}` : r.agency;
+}
+
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+/** "Program pages checked July 9, 2026." from the oldest `verified` date among the rows, or null. */
+export function resourcesCheckedLine(rows: readonly (ResourceLink | ResourceCatalogFields)[]): string | null {
+  const dates = rows.map((r) => (r as ResourceCatalogFields).verified).filter((v): v is string => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v));
+  const oldest = dates.sort()[0];
+  if (oldest === undefined) return null;
+  const [y, m, d] = oldest.split('-').map(Number);
+  const month = MONTHS[m! - 1];
+  return month ? `Program pages checked ${month} ${d}, ${y}.` : null;
 }
 
 /**

@@ -83,9 +83,12 @@ one manager owns (`src/ui/edge-column.ts`), arranged by one pure planner
 - Locate is the last cell of the view tools, on the phone shell only. Its
   card stands in the map's dock above the sheet and never under the column
   (owner direction 2026-11-09 (sprint), DR-pending; see "Locate" in
-  [`README.md`](README.md)).
+  [`README.md`](README.md)). Amended 2026-11-13 (owner ruling): an open
+  window covers the whole column and the card; both return with "Back to map".
 
 ## The sheet
+
+Superseded 2026-11-13 (owner ruling: "instead of slide up drawers, instead just make full screen (with back to map button) for the windows; key drop-down on map view stays the same"). Every door and every raise now opens one full-screen window over the map and the right-edge column, with "Back to map" first in its header (static markup, wired by `src/ui/mobile-sheet.ts`) and the door's word after it; the stops, the grabber, the drag and the landscape drawer below are retired, and what the window covers is inert while it is open. The Key drop-down is unchanged.
 
 Superseded 2026-11-09 (owner direction, sprint; DR-pending). The panel was
 top-anchored, with no grabber and no drawer form. It is now one glass sheet
@@ -138,6 +141,8 @@ Panel state is presentation only and is never written to the URL.
 Embed mode has no rail. Exiting an embed restores the closed mobile shell.
 
 ## 3D on phones
+
+Amended 2026-11-13 (owner ruling, "The sheet" above): an open window now covers the 3D card, the pad and Locate's card; "No sheet stop covers it" below holds only while the map is in view, and "Back to map" returns to all three as they were.
 
 Superseded 2026-11-09 (owner direction, sprint; DR-pending). This note said
 "Phone views do not load or present the 3D Fire controls." A phone may now

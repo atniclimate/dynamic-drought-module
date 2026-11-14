@@ -1,20 +1,25 @@
 {
-  "_comment": "Crosswalk audit for maintainer review (U3b; safe matcher per D-0.7.0-026). matched: land area LARNAME to the formal Federal Register Tribe name, with the safety rule that matched it; rows carrying a confirmed field were explicitly maintainer-confirmed against a flagged historical-renaming collision on the parallel-LAR premise (D-0.7.0-026b; parallelLar names the LAR row held by the other claimant Nation). larLabel: land areas that keep the BIA land-area label (no unambiguous match; NOT mapped to a guessed Tribe name, per hard rules 5 and 6 and D-0.7.0-026); this is the maintainer residue list. ambiguous: the subset of larLabel rows where several roster names contained the LARNAME phrase OR the maintainer curated the row as known-ambiguous (D-0.7.0-026a; curated rows carry a rule field naming that ruling; the candidates are listed; automation refuses to pick). rosterNoLar: federally recognized Tribes with no matched land area in AIAN-LAR (landless Tribes, Alaska Native villages, or differently-named areas). censusMatched: Census AIANNH areas matched to a roster name under rule 7 of the build script, with the rule that matched. censusLabel: Census areas that keep the Census name (no unique match). censusAmbiguous: the subset of censusLabel with several candidates or a maintainer-curated known-ambiguous BASENAME (rule field), candidates listed.",
+  "_comment": "Crosswalk audit for maintainer review (U3b; safe matcher per D-0.7.0-026). matched: land area LARNAME to the formal Federal Register Tribe name, with the safety rule that matched it; rows carrying a confirmed field were explicitly maintainer-confirmed against a flagged historical-renaming collision on the parallel-LAR premise (D-0.7.0-026b; parallelLar names the LAR row held by the other claimant Nation). larLabel: land areas that keep the BIA land-area label (no unambiguous match; NOT mapped to a guessed Tribe name, per hard rules 5 and 6 and D-0.7.0-026); this is the maintainer residue list. ambiguous: the subset of larLabel rows where several roster names contained the LARNAME phrase OR the maintainer curated the row as known-ambiguous (D-0.7.0-026a; curated rows carry a rule field naming that ruling; the candidates are listed; automation refuses to pick). rosterNoLar: federally recognized Tribes with no matched land area in AIAN-LAR (landless Tribes, Alaska Native villages, or differently-named areas). censusMatched: Census AIANNH areas matched to a roster name under rule 7 of the build script, with the rule that matched. censusLabel: Census search rows that keep the Census name (no one Nation named). censusAmbiguous: the Census areas the name matcher met with several candidates or a maintainer-curated known-ambiguous BASENAME (rule field), candidates listed. censusUnlabelled: the federal Census areas the Tribal Lands layer draws no Nation name on; with the labelled areas they add up to meta.censusFederalCount. A row with a nation is one band or place among several in that Nation's Federal Register name, held until the form of its label is settled; a row with nation null is an area no name in the Federal Register list or the US EPA Tribal Areas tables names.",
   "meta": {
     "rosterSource": "Federal Register 2026-01899 (2026-01-30)",
     "landAreaSource": "BIA AIAN-LAR FeatureServer (distinct LARNAME)",
     "matcher": "LAR areas, safe-match v2 (D-0.7.0-026): unique whole-phrase containment, state-constrained, distinctive-token guard; plus the maintainer-curated known-ambiguous gate (D-0.7.0-026a); then rule 10: a remaining BIA label takes the Nations of its one same-name Census reservation",
     "censusMatcher": "Census areas (rule 7): maintainer-curated known-ambiguous gate (D-0.7.0-026a) first; then unique whole-phrase containment of BASENAME outside the roster name parentheses, or equality with a parenthetical, distinctive-token guard; several candidates resolve only when exactly one carries BASENAME as its parenthetical; no state constraint",
-    "generated": "2026-11-13",
+    "generated": "2026-11-14",
     "rosterCount": 573,
     "landAreaCount": 335,
     "safeMatchCount": 287,
     "larLabelCount": 48,
     "censusSource": "US Census Bureau TIGERweb AIANNH layer 47 (names only)",
-    "censusAreaCount": 272,
+    "censusAreaCount": 302,
     "censusSafeMatchCount": 232,
-    "labelAreaCount": 545,
-    "labelConfirmedCount": 93
+    "censusFederalCount": 578,
+    "labelAreaCount": 570,
+    "labelConfirmedCount": 93,
+    "labelAreaNameCount": 25,
+    "stateAreaCount": 3,
+    "headquartersCount": 22,
+    "headquartersSource": "US Census Bureau TIGERweb Places, incorporated and census designated places (internal point)"
   },
   "matched": [
     {
@@ -3302,46 +3307,13 @@
     }
   ],
   "censusLabel": [
-    "Pitkas Point ANVSA",
-    "Naknek ANVSA",
-    "Mountain Village ANVSA",
-    "Andreafsky ANVSA",
-    "Chistochina ANVSA",
-    "St. Paul ANVSA",
-    "Kalskag ANVSA",
-    "Port Alsworth ANVSA",
-    "St. George ANVSA",
-    "Council ANVSA",
-    "Chignik ANVSA",
-    "Lake Minchumina ANVSA",
-    "Lesnoi ANVSA",
-    "Galena ANVSA",
-    "Arctic Village ANVSA",
-    "Canyon Village ANVSA",
-    "Venetie ANVSA",
-    "Stevens Village ANVSA",
-    "Bethel ANVSA",
-    "Toksook Bay ANVSA",
-    "St. Michael ANVSA",
-    "Mentasta Lake ANVSA",
-    "Russian Mission ANVSA",
-    "Seminole OTSA",
-    "Kiowa-Comanche-Apache-Fort Sill Apache OTSA",
-    "Citizen Potawatomi Nation-Absentee Shawnee OTSA",
-    "Sac and Fox OTSA",
-    "Ottawa OTSA",
-    "Iowa OTSA",
-    "Cherokee OTSA",
     "Caddo-Wichita-Delaware OTSA",
-    "Kickapoo OTSA",
-    "Ponca OTSA",
-    "Choctaw OTSA",
-    "Chickahominy TDSA",
-    "Cayuga Nation TDSA",
-    "Eastern Chickahominy TDSA",
-    "Uyak ANVSA",
-    "Dillingham ANVSA",
-    "White Mountain ANVSA"
+    "Canyon Village ANVSA",
+    "Citizen Potawatomi Nation-Absentee Shawnee OTSA",
+    "Kiowa-Comanche-Apache-Fort Sill Apache OTSA",
+    "Lake Minchumina ANVSA",
+    "Port Alsworth ANVSA",
+    "Uyak ANVSA"
   ],
   "censusAmbiguous": [
     {
@@ -3494,6 +3466,48 @@
         "White Mountain Apache Tribe of the Fort Apache Reservation, Arizona",
         "Native Village of White Mountain"
       ]
+    }
+  ],
+  "censusUnlabelled": [
+    {
+      "aiannh": "0165",
+      "name": "Battle Mountain Reservation and Off-Reservation Trust Land",
+      "nation": "Te-Moak Tribe of Western Shoshone Indians of Nevada (Four constituent bands: Battle Mountain Band; Elko Band; South Fork Band; and Wells Band)"
+    },
+    {
+      "aiannh": "1005",
+      "name": "Elko Colony",
+      "nation": "Te-Moak Tribe of Western Shoshone Indians of Nevada (Four constituent bands: Battle Mountain Band; Elko Band; South Fork Band; and Wells Band)"
+    },
+    {
+      "aiannh": "3930",
+      "name": "South Fork Reservation and Off-Reservation Trust Land",
+      "nation": "Te-Moak Tribe of Western Shoshone Indians of Nevada (Four constituent bands: Battle Mountain Band; Elko Band; South Fork Band; and Wells Band)"
+    },
+    {
+      "aiannh": "4580",
+      "name": "Wells Colony",
+      "nation": "Te-Moak Tribe of Western Shoshone Indians of Nevada (Four constituent bands: Battle Mountain Band; Elko Band; South Fork Band; and Wells Band)"
+    },
+    {
+      "aiannh": "6257",
+      "name": "Canyon Village ANVSA",
+      "nation": null
+    },
+    {
+      "aiannh": "6850",
+      "name": "Lake Minchumina ANVSA",
+      "nation": null
+    },
+    {
+      "aiannh": "7263",
+      "name": "Port Alsworth ANVSA",
+      "nation": null
+    },
+    {
+      "aiannh": "7705",
+      "name": "Uyak ANVSA",
+      "nation": null
     }
   ]
 }

@@ -692,7 +692,8 @@ test.describe('H2 critical-first surfaces', () => {
           await gotoApp(page, '?select=state:WA');
           const panel = page.locator('#impact-panel');
           const fullDetail = panel.locator('.briefing-view-btn[data-briefing-view="matrix"]');
-          if (width === 390) await page.locator('#sheet-report-door').click();
+          // The phone's shared link opens the report in its full-screen window at once (owner, 2026-11-13).
+          if (width === 390) await expect(page.locator('#app')).toHaveAttribute('data-sheet-detent', 'full');
           // Every shell opens the briefing on the priority view; Full detail is the explicit step.
           await expect(fullDetail).toHaveAttribute('aria-pressed', 'false');
           await fullDetail.click();
@@ -723,8 +724,16 @@ test.describe('H2 critical-first surfaces', () => {
     await page.clock.setFixedTime('2026-07-29T12:30:00+00:00');
     await stubBrowserNwsHeat(page);
     await gotoApp(page, '?select=state:WA');
+    // The shared link opens the report full screen (owner, 2026-11-13); the
+    // at-hand summary is the Place window's, one Back to map away.
+    await expect(page.locator('#app')).toHaveAttribute('data-sheet-detent', 'full');
+    await expect(page.locator('#sheet-report .impact-panel')).toBeVisible();
+    await page.locator('#sheet-close').click();
+    await expect(page.locator('#app')).toHaveAttribute('data-sheet-detent', 'closed');
+    await page.locator('#mobile-footer-nav button[data-tab="place"]').click();
 
     // R5-27: the station's distance from the selected point sits between its name and its reading.
+    await expect(page.locator('.sheet-at-hand-headline')).toBeVisible();
     await expect(page.locator('.sheet-at-hand-headline')).toContainText(
       /Heat at the selected point: Near Station, [\d.]+ mi \([\d.]+ km\) from the selected point, reports temperature 90 °F \(32 °C\), heat index 95 °F \(35 °C\)/
     );

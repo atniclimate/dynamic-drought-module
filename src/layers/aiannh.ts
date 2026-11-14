@@ -129,7 +129,9 @@ export function labelMinZoom(areaLand: number, cls: string): number {
  * One label point per area the label map names, at the Census internal point
  * (INTPTLAT, INTPTLON). A Nation is drawn by the shorter name it is generally
  * known by where one is curated (owner, 2026-11-13; the Impact Briefing a click
- * opens carries the full Federal Register name), otherwise by its full name,
+ * opens carries the full Federal Register name), or on one band's, place's or
+ * community's own area by that area's curated label (`area`, by Census code),
+ * otherwise by its full name,
  * never cut. A blank line sets each Nation apart: a long name wraps, and
  * wrapped lines alone do not say where one Nation's name ends (look of
  * 2026-11-13, the Kiowa-Comanche-Apache-Fort Sill Apache area).
@@ -148,7 +150,9 @@ export function nationLabelPoints(
     const lng = parseFloat(String(p['INTPTLON']));
     if (!names?.length || !Number.isFinite(lat) || !Number.isFinite(lng)) continue;
     const areaLand = parseFloat(String(p['AREALAND']));
-    const shown = (name: string): string => curated?.short.get(name) ?? name;
+    // One band's, place's or community's own area label, only where the area names one Nation.
+    const areaLabel = names.length === 1 ? curated?.area.get(String(p['AIANNH'] ?? '')) : undefined;
+    const shown = (name: string): string => areaLabel ?? curated?.short.get(name) ?? name;
     const own = (name: string): string | undefined => curated?.own.get(name);
     // `text` is the whole label as read; en0, own0, en1, ... are the slots nationTextField draws;
     // AIANNH and NAME let a click on the name answer for its area (bindPopups).

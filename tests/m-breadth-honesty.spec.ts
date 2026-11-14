@@ -249,9 +249,14 @@ test('a place outside the Northwest reads every source that covers it, with no r
   await expect(panel.locator('.impact-capability-unavailable')).toHaveCount(0);
   await expect(panel).not.toContainText('not validated outside the Pacific Northwest');
   await expect(panel.locator('.briefing-view-switch')).toBeVisible();
-  // D4 (the look of 2026-11-05): no empty Resources heading stands over zero
-  // links; the Northwest-curated resources keep their data limit.
-  await expect(panel.locator('.impact-resources')).toHaveCount(0);
+  // D4 (the look of 2026-11-05): the Northwest-curated resources keep their
+  // data limit, so a Kansas place lists none of their rows. Since 2026-11-13
+  // (DR-258 amendment) Resources holds the Grants.gov subsection for every
+  // place inside the United States, so the section stands over it alone.
+  const resources = panel.locator('.impact-resources');
+  await expect(resources).toHaveCount(1);
+  await expect(resources.locator('.impact-grants')).toHaveCount(1);
+  await expect(resources.locator('.impact-resource-group > .impact-resource')).toHaveCount(0);
   await expect(
     panel.locator('.point-heat > .impact-horizon-head .point-heat-pill-ready')
   ).toHaveText('live');

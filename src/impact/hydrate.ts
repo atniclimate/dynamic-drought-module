@@ -43,6 +43,7 @@ import {
 } from './sources';
 import { makeClaim } from './evidence';
 import { synthesizeHeatSources } from './heat-synthesis';
+import { pointReadPlace } from './point-heat-format';
 import { applyMatrix, MATRIX_LANE_KEYS, type MatrixLaneKey } from './matrix';
 import { createNwsRequestSession } from './nws-point';
 import { sourceMayRun } from './source-policy';
@@ -185,7 +186,8 @@ export async function hydrateBriefing(
     briefing.heatSynthesis = synthesizeHeatSources(
       briefing.pointHeat,
       [...heatResults.values()],
-      heatPending === 0
+      heatPending === 0,
+      pointReadPlace(context)
     );
     onUpdate();
   };

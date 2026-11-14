@@ -44,6 +44,7 @@ import { isObject } from '../util/guards';
 import { trendLineSvg, type TrendPoint } from '../ui/charts';
 import { categoryImpact } from './category-impacts';
 import { makeClaim, todayIso } from './evidence';
+import { pointReadPlace } from './point-heat-format';
 import { contextStateFips, contextStateName } from './resources';
 import { registry } from '../state/registry';
 import {
@@ -411,7 +412,7 @@ export async function fetchHeatRiskClaims(
 
     if (identified.value === null) {
       const text =
-        `HeatRisk (Experimental): no data at the selected point for ${context.title} for ${frameLabel}. ` +
+        `HeatRisk (Experimental): no data at ${pointReadPlace(context)} for ${context.title} for ${frameLabel}. ` +
         `Valid ${validity}.`;
       return {
         ok: true,
@@ -433,7 +434,7 @@ export async function fetchHeatRiskClaims(
 
     const category = HEATRISK_CATEGORIES[identified.value]!;
     const text =
-      `HeatRisk (Experimental) value ${category.value}, ${category.label}, at the selected point for ${context.title}. ` +
+      `HeatRisk (Experimental) value ${category.value}, ${category.label}, at ${pointReadPlace(context)} for ${context.title}. ` +
       `Valid ${validity}. ${category.meaning}`;
     return {
       ok: true,
@@ -629,7 +630,13 @@ export async function fetchUsdmClaims(
   const source = 'U.S. Drought Monitor (NDMC / NOAA / USDA)';
   const sourceUrl = 'https://droughtmonitor.unl.edu/';
   // Where the read is: the place's own area, the user's click, or a point the app chose inside a selected place.
-  const at = area ? 'in this area' : context.pointInsidePlace ? 'at a point inside the selected place' : 'at the clicked point';
+  const at = area
+    ? 'in this area'
+    : context.readAt
+      ? `at ${context.readAt}`
+      : context.pointInsidePlace
+        ? 'at a point inside the selected place'
+        : 'at the clicked point';
 
   try {
     let json: unknown;
@@ -731,7 +738,7 @@ export async function fetchUsdmClaims(
         claims: [
           makeClaim({
             // For a click, the popup's no-polygon sentence (popup-conditions.ts), word for word.
-            text: `No D0-D4 category polygon ${area || context.pointInsidePlace ? at : 'here'} (U.S. Drought Monitor). This client has no analyzed-area mask, so this does not confirm no drought.${mapProduct}`,
+            text: `No D0-D4 category polygon ${area || context.pointInsidePlace || context.readAt ? at : 'here'} (U.S. Drought Monitor). This client has no analyzed-area mask, so this does not confirm no drought.${mapProduct}`,
             ...usdmShared,
             reading: usdmReading
           })
@@ -1383,11 +1390,11 @@ export async function fetchNwsAlertClaims(
     const heatText =
       heat.length > 0
         // vocab-allow: reports upstream NWS alert products in effect
-        ? `NWS active alerts at the selected point: ${heat.join(', ')}.`
+        ? `NWS active alerts at ${pointReadPlace(context)}: ${heat.join(', ')}.`
         // DRAFT wording: "heat alert", as in the presence sentence below; HEAT_EVENTS
         // includes a Heat Advisory, so "extreme-heat" understated the absence.
         // vocab-allow: reports the absence of upstream NWS alert products
-        : 'NWS reports no active heat alert at the selected point.';
+        : `NWS reports no active heat alert at ${pointReadPlace(context)}.`;
     // Whether an NWS alert is in effect at the point is a directly observed
     // fact (the alert names quoted are verbatim upstream product names).
     const alertShared = { source, sourceUrl, product: 'nws-alerts', evidence: 'observed', dates: { retrieved: todayIso() } } as const;
@@ -1634,10 +1641,10 @@ export async function fetchCpcSeasonalTempClaims(
         : null;
     const text =
       cat === 'EC'
-        ? `NOAA Climate Prediction Center seasonal temperature outlook for ${season}: Equal Chances (no favored tercile), at the selected point.${issuedText}`
+        ? `NOAA Climate Prediction Center seasonal temperature outlook for ${season}: Equal Chances (no favored tercile), at ${pointReadPlace(context)}.${issuedText}`
         : `NOAA Climate Prediction Center seasonal temperature outlook for ${season}: ${prob}% chance of ${
             CPC_SEASONAL_CAT_LABEL[cat] ?? cat
-          } temperature, at the selected point.${issuedText}`;
+          } temperature, at ${pointReadPlace(context)}.${issuedText}`;
     return {
       claims: [
         makeClaim({

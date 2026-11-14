@@ -9,7 +9,7 @@ import { gotoApp, search } from './helpers';
 test.describe('DEF-2 explicit view=brief on a mobile cold load (390x844)', () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
-  test('a shared ?view=brief URL starts closed and the Place door toggles its panel', async ({
+  test('a shared ?view=brief URL starts closed, the Place door opens its window and Back to map closes it', async ({
     page
   }) => {
     await gotoApp(page, '?view=brief');
@@ -17,17 +17,18 @@ test.describe('DEF-2 explicit view=brief on a mobile cold load (390x844)', () =>
     const app = page.locator('#app');
     await expect(app).toHaveClass(/\bview-brief\b/);
     await expect(app).toHaveAttribute('data-sheet-detent', 'closed');
-    await expect(page.locator('#sheet-grabber')).toBeHidden();
+    await expect(page.locator('#sheet-close')).toBeHidden();
     await expect(page.locator('#sidebar')).toBeHidden();
     await expect(page.locator('#mobile-footer-nav')).toBeVisible();
     const placeDoor = page.locator('#mobile-footer-nav button[data-tab="place"]');
     await placeDoor.click();
-    await expect(app).toHaveAttribute('data-sheet-detent', 'half');
+    await expect(app).toHaveAttribute('data-sheet-detent', 'full');
     await expect(placeDoor).toHaveAttribute('aria-expanded', 'true');
     await expect(page.locator('.sheet-at-hand-title')).toBeVisible();
     await expect(page.locator('.sheet-at-hand-title')).toHaveText('Pick a place');
     await expect(page.locator('#sheet-report .impact-panel')).toHaveCount(0);
-    await placeDoor.click();
+    // The window covers the rail (owner, 2026-11-13): its Back to map closes it.
+    await page.locator('#sheet-close').click();
     await expect(app).toHaveAttribute('data-sheet-detent', 'closed');
     await expect(placeDoor).toHaveAttribute('aria-expanded', 'false');
     await expect(page.locator('#sidebar')).toBeHidden();
@@ -44,7 +45,7 @@ test.describe('DEF-2 explicit view=brief on a mobile cold load (390x844)', () =>
   }) => {
     await gotoApp(page, '?view=brief');
     await page.locator('#mobile-footer-nav button[data-tab="place"]').click();
-    await expect(page.locator('#app')).toHaveAttribute('data-sheet-detent', 'half');
+    await expect(page.locator('#app')).toHaveAttribute('data-sheet-detent', 'full');
     await page.reload({ waitUntil: 'domcontentloaded' });
     await expect(page.locator('#region-select option')).not.toHaveCount(0);
     await expect(page.locator('#app')).toHaveAttribute('data-sheet-detent', 'closed');
@@ -58,7 +59,7 @@ test.describe('DEF-2 explicit view=brief on a mobile cold load (390x844)', () =>
     await expect(app).toHaveClass(/\bview-brief\b/);
     // Derived Brief (bare URL) is NOT an explicit ask: closed, edgeless.
     await expect(app).toHaveAttribute('data-sheet-detent', 'closed');
-    await expect(page.locator('#sheet-grabber')).toBeHidden();
+    await expect(page.locator('#sheet-close')).toBeHidden();
   });
 
   test('GUARD: an explicit view=console boot stays map-first closed', async ({ page }) => {
@@ -75,7 +76,7 @@ test.describe('DEF-2 explicit view=brief on a mobile cold load (390x844)', () =>
     const app = page.locator('#app');
     await expect(app).toHaveClass(/\bembed\b/);
     await expect(app).not.toHaveAttribute('data-sheet-detent', /.+/);
-    await expect(page.locator('#sheet-grabber')).toBeHidden();
+    await expect(page.locator('#sheet-close')).toBeHidden();
     await expect(page.locator('#mobile-footer-nav')).toBeHidden();
   });
 
@@ -136,6 +137,6 @@ test.describe('DEF-2 one-shot consumption across a desktop-to-mobile crossing', 
 
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(app).toHaveAttribute('data-sheet-detent', 'closed');
-    await expect(page.locator('#sheet-grabber')).toBeHidden();
+    await expect(page.locator('#sheet-close')).toBeHidden();
   });
 });

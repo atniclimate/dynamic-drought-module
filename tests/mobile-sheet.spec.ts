@@ -14,7 +14,7 @@ test.describe('mobile side rail and glass panels', () => {
     await gotoApp(page, '?view=brief&select=state:WA&flow=off');
     const app = page.locator('#app');
     const panel = page.locator('#impact-panel');
-    await page.locator('#sheet-report-door').click();
+    // The shared link opens the report in a full-screen window at once (owner, 2026-11-13).
     await expect(app).toHaveAttribute('data-sheet-detent', 'full');
     await expect(panel).toBeVisible();
     await page.evaluate(() => {
@@ -51,7 +51,7 @@ test.describe('mobile side rail and glass panels', () => {
     await expect(rail).toBeVisible();
     await expect(rail).toHaveAttribute('aria-label', 'Mobile panels');
     await expect(buttons).toHaveCount(4);
-    await expect(page.locator('#sheet-grabber')).toBeHidden();
+    await expect(page.locator('#sheet-close')).toBeHidden();
     await expect(page.locator('.sheet-hint')).toHaveCount(0);
     await expect(page.locator('#sidebar')).toBeHidden();
 
@@ -76,57 +76,55 @@ test.describe('mobile side rail and glass panels', () => {
     expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBe(844);
   });
 
-  test('Place raises a bottom-docked glass sheet beside the rail and a second press closes it', async ({ page }) => {
+  test('Place opens a full-screen glass window over the rail and Back to map closes it', async ({ page }) => {
     await gotoApp(page);
     const app = page.locator('#app');
     const place = page.locator('#mobile-footer-nav button[data-tab="place"]');
 
     await expect(place).toHaveAttribute('aria-controls', 'sidebar');
     await place.click();
-    await expect(app).toHaveAttribute('data-sheet-detent', 'half');
+    await expect(app).toHaveAttribute('data-sheet-detent', 'full');
     await expect(place).toHaveAttribute('aria-expanded', 'true');
     await expect(page.locator('#sheet-search [data-ddm-search]')).toBeVisible();
+    await expect(page.locator('#sheet-close')).toHaveText('Back to map');
 
     // While the spring runs the box holds its full height under a transform; it equals its stop only at rest.
     await expect(page.locator('#sidebar')).not.toHaveAttribute('data-sheet-moving', /.*/);
-    const railBox = await rect(page.locator('#mobile-footer-nav'));
+    // Every window covers the whole screen (owner, 2026-11-13), the rail and the map included.
     const panelBox = await rect(page.locator('#sidebar'));
-    expect(panelBox.y).toBeGreaterThan(40);
-    expect(panelBox.x + panelBox.width).toBeLessThanOrEqual(railBox.x);
-    // Bottom-docked: the half stop rests on the bottom edge (50dvh at 844).
-    expect(Math.abs(panelBox.y + panelBox.height - 844)).toBeLessThan(1);
-    expect(Math.abs(panelBox.height - 422)).toBeLessThan(1);
-    // The glass and its top corners live on #sidebar::before, not on the box.
+    expect(Math.abs(panelBox.x)).toBeLessThan(1);
+    expect(Math.abs(panelBox.y)).toBeLessThan(1);
+    expect(Math.abs(panelBox.width - 390)).toBeLessThan(1);
+    expect(Math.abs(panelBox.height - 844)).toBeLessThan(1);
+    // What the window covers leaves the tab order (src/ui/mobile-sheet.ts coverMap).
+    expect(await page.evaluate(() => ['map-container', 'edge-column'].map((id) => document.getElementById(id)?.inert))).toEqual([true, true]);
+    // The glass lives on #sidebar::before, not on the box.
     const panelStyle = await page.locator('#sidebar').evaluate((element) => {
       const own = getComputedStyle(element);
       const glass = getComputedStyle(element, '::before');
       return {
         position: own.position,
-        bottom: own.bottom,
         background: glass.backgroundColor,
-        backdrop: glass.backdropFilter,
-        topLeftRadius: glass.borderTopLeftRadius,
-        bottomLeftRadius: glass.borderBottomLeftRadius
+        backdrop: glass.backdropFilter
       };
     });
     expect(panelStyle.position).toBe('fixed');
-    expect(panelStyle.bottom).toBe('0px');
-    expect(panelStyle.background).toMatch(/rgba\(/);
-    expect(panelStyle.backdrop).not.toBe('none');
-    expect(panelStyle.topLeftRadius).not.toBe('0px');
-    expect(panelStyle.bottomLeftRadius).toBe('0px');
+    // DR-263 and the look after it: the window is solid --surface-base, no glass, so the map never shows through.
+    expect(panelStyle.background).toBe('rgb(1, 11, 19)');
+    expect(panelStyle.backdrop).toBe('none');
 
-    await place.click();
+    await page.locator('#sheet-close').click();
     await expect(app).toHaveAttribute('data-sheet-detent', 'closed');
     await expect(place).toHaveAttribute('aria-expanded', 'false');
     await expect(page.locator('#sidebar')).toBeHidden();
+    expect(await page.evaluate(() => ['map-container', 'edge-column'].map((id) => document.getElementById(id)?.inert))).toEqual([false, false]);
   });
 
   test('Escape closes the active panel and returns focus to its rail button', async ({ page }) => {
     await gotoApp(page);
     const layers = page.locator('#mobile-footer-nav button[data-tab="layers"]');
     await layers.click();
-    await expect(page.locator('#app')).toHaveAttribute('data-sheet-detent', 'half');
+    await expect(page.locator('#app')).toHaveAttribute('data-sheet-detent', 'full');
 
     await page.locator('#region-select').focus();
     await page.keyboard.press('Escape');
@@ -141,24 +139,24 @@ test.describe('mobile side rail and glass panels', () => {
     await page.locator('#hazard-rail button[data-preset="hazard-enso"]').click();
     const layers = page.locator('#mobile-footer-nav button[data-tab="layers"]');
     await layers.click();
-    await expect(app).toHaveAttribute('data-sheet-detent', 'half');
+    // The Layers window opens straight to the whole stack: no half stop, no "All layers" step.
+    await expect(app).toHaveAttribute('data-sheet-detent', 'full');
     await expect(page.locator('#panel-region')).toBeVisible();
     await expect(page.locator('#sheet-enso-flow-host')).toBeVisible();
     await expect(page.locator('#sheet-enso-flow-host #enso-flow-controls')).toBeVisible();
-    await expect(page.locator('#sheet-all-layers-btn')).toBeVisible();
-
-    await page.locator('#sheet-all-layers-btn').click();
-    await expect(app).toHaveAttribute('data-sheet-detent', 'full');
     await expect(page.locator('#panel-layers')).toBeVisible();
-    await expect(page.locator('#mobile-footer-nav')).toBeVisible();
     await expect(page.locator('#sidebar')).not.toHaveAttribute('data-sheet-moving', /.*/);
     const fullPanel = await rect(page.locator('#sidebar'));
-    expect(Math.abs(fullPanel.y - 76)).toBeLessThan(1);
+    expect(Math.abs(fullPanel.y)).toBeLessThan(1);
     expect(Math.abs(fullPanel.y + fullPanel.height - 844)).toBeLessThan(1);
 
+    // The rail stays available from the map: Back to map, then the next door.
+    await page.locator('#sheet-close').click();
+    await expect(app).toHaveAttribute('data-sheet-detent', 'closed');
+    await expect(page.locator('#mobile-footer-nav')).toBeVisible();
     const alerts = page.locator('#mobile-footer-nav button[data-tab="alerts"]');
     await alerts.click();
-    await expect(app).toHaveAttribute('data-sheet-detent', 'half');
+    await expect(app).toHaveAttribute('data-sheet-detent', 'full');
     await expect(page.locator('#sheet-alerts')).toBeVisible();
     await expect(page.locator('#sheet-alerts .panel-title')).toHaveText('Alerts');
     await expect(alerts).toHaveAttribute('aria-expanded', 'true');
@@ -182,19 +180,27 @@ test.describe('mobile side rail and glass panels', () => {
     const app = page.locator('#app');
     const hostedPanel = page.locator('#sheet-report .impact-panel');
     await expect(hostedPanel).toHaveCount(1, { timeout: 15_000 });
-    await expect(app).toHaveAttribute('data-sheet-detent', 'half');
-
-    await page.locator('#sheet-report-door').click();
+    // The report opens in a full-screen window, its "Back to map" first (owner, 2026-11-13).
     await expect(app).toHaveAttribute('data-sheet-detent', 'full');
     await expect(hostedPanel).toBeVisible();
     await expect(hostedPanel).toHaveAttribute('aria-modal', 'false');
+    await expect(page.locator('#sheet-close')).toBeFocused();
+    // The report's own Back is hidden inside the window: one way back, not two.
+    await expect(hostedPanel.locator('.impact-panel-close')).toBeHidden();
 
-    await page.locator('.impact-panel-close').focus();
+    // Escape goes back to the map and keeps the briefing.
     await page.keyboard.press('Escape');
-    await expect(app).toHaveAttribute('data-sheet-detent', 'half');
+    await expect(app).toHaveAttribute('data-sheet-detent', 'closed');
     await expect(hostedPanel).toHaveClass(/\bopen\b/);
-    await expect(page.locator('#sheet-report-door')).toBeFocused();
+
+    // The Place window holds the at-hand summary of that place and its one door to the report.
+    await page.locator('#mobile-footer-nav button[data-tab="place"]').click();
+    await expect(app).toHaveAttribute('data-sheet-detent', 'full');
     await expect(page.locator('.sheet-at-hand-title')).not.toHaveText('Pick a place');
+    await expect(hostedPanel).toBeHidden();
+    await page.locator('#sheet-report-door').click();
+    await expect(hostedPanel).toBeVisible();
+    await expect(page.locator('#sheet-close')).toBeFocused();
   });
 
   test('an open desktop report rehosts when the viewport becomes a phone', async ({ page }) => {
@@ -223,7 +229,7 @@ test.describe('mobile side rail and glass panels', () => {
     await input.fill('Yak');
     const results = page.locator('#sheet-search .ddm-search-results');
     await expect(results).toBeVisible();
-    // A text entry raises the sheet to full; measure it once it rests.
+    // The window is full screen from the door's press; measure it once it rests.
     await expect(page.locator('#app')).toHaveAttribute('data-sheet-detent', 'full');
     await expect(page.locator('#sidebar')).not.toHaveAttribute('data-sheet-moving', /.*/);
 
@@ -251,7 +257,7 @@ test.describe('mobile side rail and glass panels', () => {
     const before = southEdges[southEdges.length - 1]!;
 
     await page.locator('#mobile-footer-nav button[data-tab="layers"]').click();
-    await expect(page.locator('#app')).toHaveAttribute('data-sheet-detent', 'half');
+    await expect(page.locator('#app')).toHaveAttribute('data-sheet-detent', 'full');
     await page.waitForTimeout(350);
     const after = southEdges[southEdges.length - 1]!;
     expect(Math.abs(after - before)).toBeLessThan(0.2);
@@ -271,11 +277,10 @@ test.describe('mobile side rail and glass panels', () => {
     const beforeCount = envelopes.length;
 
     await page.locator('#mobile-footer-nav button[data-tab="brief"]').click();
-    // With no place chosen the Brief door opens at half; a text entry then raises the sheet to full.
-    await expect(page.locator('#app')).toHaveAttribute('data-sheet-detent', 'half');
+    // With no place chosen the Brief door's full-screen window holds the at-hand search.
+    await expect(page.locator('#app')).toHaveAttribute('data-sheet-detent', 'full');
     const input = page.locator('#sheet-search [data-ddm-search]');
     await input.fill('Washington');
-    await expect(page.locator('#app')).toHaveAttribute('data-sheet-detent', 'full');
     await page.locator('#sheet-search .ddm-search-result').filter({ hasText: 'Washington' }).first().click();
 
     await expect.poll(() => envelopes.length).toBeGreaterThan(beforeCount);
@@ -306,6 +311,6 @@ test.describe('mobile embed exit', () => {
     await expect(app).toHaveAttribute('data-sheet-detent', 'closed');
     await expect(page.locator('#mobile-footer-nav')).toBeVisible();
     await expect(page.locator('#sidebar')).toBeHidden();
-    await expect(page.locator('#sheet-grabber')).toBeHidden();
+    await expect(page.locator('#sheet-close')).toBeHidden();
   });
 });

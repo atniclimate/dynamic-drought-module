@@ -397,32 +397,41 @@ test('Brief clips the display caveat and the date line is the Console column foo
   assert.match(ruleBody('#app.view-console:not(.embed) .shell-time-foot'), /display:\s*block;/);
 });
 
-// Owner 2026-11-13 (items 7, 8 and 15): the four map cells and the desktop
-// briefing drawer wear the Key's glass and blur, by token.
-test('the map cells and the briefing drawer wear the Key glass', () => {
+// Owner 2026-11-13 (items 7, 8 and 15): the four map cells wear the Key's glass and blur, by token. The briefing
+// covers the map instead (the same day's later ruling, "better for visibility"): the solid rich black the glass is
+// made of, no map through it, and a notched phone on its side keeps its header clear of the notch.
+test('the map cells wear the Key glass; the covering briefing is solid and clears the notch', () => {
   const cell = ruleBody('.app-shell:not(.embed) .map-overlay-controls .map-cell');
   assert.match(cell, /background:\s*var\(--glass-read\) !important;/);
   assert.match(cell, /(?:^|[^-])backdrop-filter:\s*blur\(var\(--rich-black-blur\)\);/);
   assert.match(ruleBody('.app-shell:not(.embed) .map-overlay-controls .map-cell:hover'), /var\(--glass-press\)[^;]*var\(--glass-read\) !important;/);
-  const drawer = ruleBody('.impact-panel:not(.sheet-hosted)');
-  assert.match(drawer, /background:\s*var\(--glass-read\);/);
-  assert.match(drawer, /(?:^|[^-])backdrop-filter:\s*blur\(var\(--rich-black-blur\)\);/);
-  // The opaque base stays the fallback where the browser cannot blur.
-  assert.match(ruleBody('.impact-panel'), /background:\s*var\(--bg-1\);/);
-  assert.match(code, /@supports \(\(backdrop-filter: blur\(1px\)\) or \(-webkit-backdrop-filter: blur\(1px\)\)\) \{\s*@media screen and \(min-width: 721px\) \{\s*\.impact-panel:not\(\.sheet-hosted\) \{/);
+  const cover = ruleBody('.impact-panel:not(.sheet-hosted)');
+  assert.match(cover, /background:\s*var\(--surface-base\);/);
+  assert.doesNotMatch(cover, /backdrop-filter|--glass-read/);
+  for (const side of ['top', 'right', 'bottom', 'left']) {
+    assert.match(cover, new RegExp(`env\\(safe-area-inset-${side}, 0px\\)`));
+  }
+  assert.match(code, /@media screen and \(min-width: 721px\) \{\s*\.impact-panel:not\(\.sheet-hosted\) \{/);
 });
 
-// The camera pad that keeps a framed place clear of the briefing drawer follows the drawer's own width formula.
-// It stopped at 480 px while the drawer grew to 38vw, which left a picked place's east edge under the drawer at
-// 1440 px (browser look, 2026-11-13).
-test('the briefing camera pad follows the drawer width formula in the stylesheet', async () => {
-  assert.match(code, /--impact-panel-w-min:\s*440px;/);
-  assert.match(code, /--impact-panel-w:\s*clamp\(var\(--impact-panel-w-min\),\s*38vw,\s*880px\);/);
+// Owner 2026-11-13: on desktop and tablet the briefing covers the map as a studio does, in the studios' own box,
+// with "Back to map" first in its header. Nothing of the map stands beside it, so the camera pad is uniform and
+// Back to map reveals the place centred; the drawer's width tokens and its dodging rules are gone.
+test('the desktop briefing takes the studio box, a reading column and a uniform camera pad', async () => {
+  const panel = ruleBody('.impact-panel');
+  assert.match(panel, /inset:\s*0 0 0 var\(--studio-inset-start\);/);
+  assert.doesNotMatch(panel, /width:/);
+  assert.match(code, /--briefing-column-max:\s*880px;/);
+  assert.match(
+    ruleBody('.impact-panel:not(.sheet-hosted) :is(.impact-panel-header, .impact-panel-body)'),
+    /padding-inline:\s*max\(var\(--gutter\),\s*calc\(\(100% - var\(--briefing-column-max\)\) \/ 2\)\);/
+  );
+  assert.doesNotMatch(code, /--impact-panel-w|--briefing-clear|--dock-min-w/);
+  // The Back look is shared by the selector list, never the studio class (specs find that class page-wide).
+  assert.match(code, /\.layers-studio-back,\s*\.impact-panel-close,\s*\.sheet-close \{/);
+  const facade = (await readFile(new URL('src/ui/impact-panel.ts', ROOT), 'utf8')).replace(/\r\n/g, '\n');
+  assert.match(facade, /<header class="impact-panel-header">\s*<button type="button" class="impact-panel-close">Back to map<\/button>/);
   const deepLink = (await readFile(new URL('src/state/deep-link.ts', ROOT), 'utf8')).replace(/\r\n/g, '\n');
-  assert.match(deepLink, /Math\.min\(Math\.max\(440,\s*Math\.round\(window\.innerWidth \* 0\.38\)\),\s*880\)/);
-  assert.match(deepLink, /right:\s*panelWillOpen \? Math\.min\(drawer \+ MAP_COLUMN_CLEAR \+ 40,/);
-  // The drawer sits left of the map-button column so the column keeps its seats (DR-102): the stylesheet's inset
-  // and the camera pad's clearance are the same numbers.
-  assert.match(deepLink, /const MAP_COLUMN_CLEAR = window\.innerWidth <= 1024 \? 0 : 120;/);
-  assert.match(code, /@media \(min-width: 1025px\) \{\s*body:has\(\.app-shell:not\(\.embed\)\) \.impact-panel:not\(\.sheet-hosted\) \{\s*right: 120px;/);
+  assert.match(deepLink, /return \{ top: 40, left: 40, bottom: 40, right: 40 \};\n\}/);
+  assert.doesNotMatch(deepLink, /MAP_COLUMN_CLEAR/);
 });

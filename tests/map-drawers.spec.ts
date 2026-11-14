@@ -1,5 +1,5 @@
 import { test, expect, type Page } from './offline-test';
-import { gotoApp, layerPill, PILL, search, stubHeatRiskCatalog, waitForLayerSettled } from './helpers';
+import { backToMap, gotoApp, layerPill, PILL, search, stubHeatRiskCatalog, waitForLayerSettled } from './helpers';
 import { isNwsWwaRequestUrl, NWS_WWA_EMPTY, nwsWwaStubLog } from './nws-wwa-fixtures';
 import { stubWildfireFeeds } from './wildfire-fixtures';
 
@@ -26,6 +26,7 @@ import { stubWildfireFeeds } from './wildfire-fixtures';
 const DESKTOP_VIEWPORT = { width: 1440, height: 900 } as const;
 
 async function openKeyDrawer(page: Page): Promise<void> {
+  await backToMap(page);
   const toggle = page.locator('#map-key-details-toggle');
   await expect(toggle).toBeVisible();
   if ((await toggle.getAttribute('aria-expanded')) === 'false') await toggle.click();

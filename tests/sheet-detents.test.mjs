@@ -22,7 +22,6 @@ import test from 'node:test';
 
 const ROOT = new URL('..', import.meta.url);
 const {
-  SHEET_DRAWER_QUERY,
   SHEET_OPEN_STOPS,
   SHEET_TOKENS,
   drawerOffsets,
@@ -54,25 +53,46 @@ test('the stylesheet declares the numbers the rules mirror', () => {
   assert.match(css, new RegExp(`--sheet-h-peek:\\s*calc\\(${SHEET_TOKENS.peek}px \\+ env\\(safe-area-inset-bottom`));
   assert.match(css, new RegExp(`calc\\(var\\(--sheet-h-peek\\) \\+ ${SHEET_TOKENS.halfStep}px\\)`));
   assert.match(css, new RegExp(`--sheet-rider-gap:\\s*${SHEET_TOKENS.riderGap}px`));
-  // The motion module measures these by name through its probe.
   for (const name of ['--sheet-h-peek', '--sheet-h-half', '--sheet-h-full']) {
     assert.ok(css.includes(`${name}:`), `${name} is declared`);
-    assert.ok(motion.includes(`var(${name})`), `${name} is measured`);
   }
+  // Every open stop is one full-screen window (owner, 2026-11-13): the
+  // motion module measures that one height by name through its probe.
+  assert.ok(motion.includes('var(--sheet-h-full)'), '--sheet-h-full is measured');
+  assert.match(css, /--sheet-h-full:\s*100dvh;/);
   // The glass runs further below the edge than a spring or a finger can lift it.
   const below = /inset:\s*0 0 -(\d+)px/.exec(css);
   assert.ok(below && Number(below[1]) > SHEET_TOKENS.rubber, 'the plate extends past the rubber band');
 });
 
-test('the drawer window is one query, stated once in each language', () => {
-  const conditions = SHEET_DRAWER_QUERY.split(' and ');
-  // The width floor keeps an upright phone whose keyboard shrank the window
-  // (360 by 304 is "landscape" to a media query) out of the drawer.
-  assert.deepEqual(conditions, ['(min-width: 481px)', '(max-width: 720px)', '(max-height: 480px)', '(orientation: landscape)']);
-  const queries = [...css.matchAll(/@media ([^{]+)\{/g)].map((match) => match[1].trim());
-  for (const query of queries.filter((text) => text.includes('orientation'))) {
-    assert.equal(query, SHEET_DRAWER_QUERY, 'a drawer rule uses the shared query');
-  }
+test('every phone window opens full screen, with a "Back to map" that needs no chunk', async () => {
+  const text = async (path) => (await readFile(new URL(path, ROOT), 'utf8')).replace(/\r\n/g, '\n');
+  const html = await text('index.html');
+  const controller = await text('src/ui/mobile-sheet.ts');
+  const panel = await text('src/ui/impact-panel.ts');
+  // The way back is static markup in the header row, wired by the eager controller.
+  assert.match(html, /<div class="sheet-grabber-row">\s*<button type="button" id="sheet-close" class="sheet-close">Back to map<\/button>\s*<\/div>/);
+  assert.match(controller, /getElementById\('sheet-close'\)\?\.addEventListener\('click', \(\) => \{\s*setSheetDetent\('closed'\);/);
+  assert.doesNotMatch(motion, /sheet-close|sheet-grabber'|attachDrag/, 'the lazy chunk builds no way back and no drag');
+  // Every door, the report and the camera treat the window as the whole screen.
+  assert.match(controller, /const target: SheetDetent = 'full';/);
+  assert.match(controller, /export function sheetCameraInset\(\): number \{\s*return 0;\s*\}/);
+  assert.match(panel, /setSheetDetent\('full'\);/);
+  assert.doesNotMatch(panel, /setSheetDetent\('half'\)/);
+  // What the window covers leaves the tab order while it is open, before any focus moves.
+  assert.match(controller, /for \(const id of \['map-container', 'edge-column'\]\)/);
+  assert.match(controller, /detent = next;\s*\/\/[^\n]*\n\s*coverMap\(next !== 'closed'\);/);
+  // Open, the window is the screen and sits over the edge column (z-sheet + 60);
+  // its side padding keeps Back and the content clear of a notch on a phone on its side.
+  assert.match(
+    css,
+    /#app\[data-sheet-detent\]:not\(\[data-sheet-detent='closed'\]\) \.sidebar \{\s*top: 0;\s*left: 0;\s*right: 0;\s*height: auto;\s*padding-left: env\(safe-area-inset-left, 0px\);\s*padding-right: env\(safe-area-inset-right, 0px\);\s*z-index: calc\(var\(--z-sheet\) \+ 100\);/
+  );
+  // The report's own Back is not drawn in the window; the window's is the one way back.
+  assert.match(css, /#app\[data-sheet-detent\] #sheet-report \.impact-panel-close \{\s*display: none;/);
+  assert.match(css, /#app\[data-sheet-detent\] \.sheet-close \{[^}]*min-height: var\(--touch-target\);/);
+  // The pill keeps the shared hover and focus face its id-scoped colours would otherwise outrank.
+  assert.match(css, /#app\[data-sheet-detent\] \.sheet-close:hover,\s*#app\[data-sheet-detent\] \.sheet-close:focus-visible \{\s*border-color: var\(--accent-strong\);/);
 });
 
 test('stops keep their order whatever heights are measured', () => {

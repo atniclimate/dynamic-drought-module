@@ -10,7 +10,8 @@ import {
   search,
   waitForLayerSettled,
   DEFAULT_ON,
-  PILL
+  PILL,
+  backToMap
 } from './helpers';
 import {
   AIANNH_ROUTE,
@@ -562,6 +563,8 @@ test.describe('the region menu follows a place chosen from search', () => {
     await page.locator('[data-search-kind="city"][data-search-id="Tulsa"]').click();
     await expect(menu).toHaveValue('view:place');
 
+    // DR-263: the city's State briefing covers the map on desktop; Reset is on the map.
+    await backToMap(page);
     await page.locator('#reset-btn').click();
     await expect(menu).toHaveValue('region:national');
   });
@@ -974,6 +977,13 @@ test.describe('D1 M13: the Share control states its own restore contract (found-
 
     const beforeSearch = await search(page);
 
+    // The briefing covers the map and its Share control (owner, 2026-11-13):
+    // the reader goes back to the map, which keeps the place selected and
+    // writes nothing to the URL.
+    await panel.locator('.impact-panel-close').click();
+    await expect(panel).toBeHidden();
+    expect(await search(page)).toBe(beforeSearch);
+
     // Pan the camera by dragging the map. Panning is not tracked by any URL
     // key (only the nine editorial `framing=` presets are), so this changes
     // nothing about to be asserted below except by NOT changing it.
@@ -986,9 +996,9 @@ test.describe('D1 M13: the Share control states its own restore contract (found-
     await page.mouse.down();
     await page.mouse.move(cx - 180, cy - 140, { steps: 12 });
     await page.mouse.up();
-    await expect(panel).toBeVisible();
+    await expect(panel).toBeHidden();
 
-    // The pan and the open briefing are byte-identical to the URL before
+    // The pan and the briefing opened and closed are byte-identical to the URL before
     // them (found-010's own reproduction evidence).
     expect(await search(page)).toBe(beforeSearch);
 

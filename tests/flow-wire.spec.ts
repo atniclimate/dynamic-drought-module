@@ -7,7 +7,7 @@ import * as ensoFlowData from '../src/layers/enso-flow-data';
 import { locateMessage } from '../src/layers/flow/nodd';
 import { FLOW_SOURCES, frameGrid } from '../src/layers/flow/source';
 import type { EnsoFlowKind } from '../src/state/enso-flow';
-import { gotoApp, layerCheckbox, noddStubLog } from './helpers';
+import { backToMap, gotoApp, layerCheckbox, noddStubLog } from './helpers';
 
 /*
  * ENSO-FLOW-PLAN block E2, unit E2-1 (FLOW-WIRE): in ENSO mode, Wind and
@@ -114,6 +114,7 @@ async function choose(page: Page, kind: EnsoFlowKind): Promise<void> {
 }
 
 async function openKeyDrawer(page: Page): Promise<void> {
+  await backToMap(page);
   const toggle = page.locator('#map-key-details-toggle');
   await expect(toggle).toBeVisible();
   if (await toggle.getAttribute('aria-expanded') === 'false') await toggle.click();
