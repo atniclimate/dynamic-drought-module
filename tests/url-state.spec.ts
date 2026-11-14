@@ -10,7 +10,8 @@ import {
   search,
   waitForLayerSettled,
   DEFAULT_ON,
-  PILL
+  PILL,
+  backToMap
 } from './helpers';
 import {
   AIANNH_ROUTE,
@@ -562,6 +563,8 @@ test.describe('the region menu follows a place chosen from search', () => {
     await page.locator('[data-search-kind="city"][data-search-id="Tulsa"]').click();
     await expect(menu).toHaveValue('view:place');
 
+    // DR-263: the city's State briefing covers the map on desktop; Reset is on the map.
+    await backToMap(page);
     await page.locator('#reset-btn').click();
     await expect(menu).toHaveValue('region:national');
   });

@@ -453,6 +453,18 @@ export async function installDefaultGrantsStub(page: Page): Promise<void> {
   );
 }
 
+/**
+ * DR-263: on desktop an open briefing covers the map. A spec that next acts on
+ * the map (the Key, Reset, a map control) goes back to it first, the way a
+ * reader would; the place stays selected. No-op when no briefing covers the map.
+ */
+export async function backToMap(page: Page): Promise<void> {
+  const back = page.locator('#impact-panel.open .impact-panel-close');
+  if (!(await back.isVisible())) return;
+  await back.click();
+  await expect(page.locator('#impact-panel')).toBeHidden();
+}
+
 export async function gotoApp(
   page: Page,
   query = '',

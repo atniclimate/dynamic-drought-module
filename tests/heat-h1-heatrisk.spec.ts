@@ -15,13 +15,15 @@ import {
   gotoApp,
   layerCheckbox,
   layerPill,
-  search
+  search,
+  backToMap
 } from './helpers';
 
 const HEATRISK_PATH =
   '/experimental/rest/services/NWS_HeatRisk/ImageServer';
 
 async function openHeatKey(page: Page): Promise<void> {
+  await backToMap(page);
   const toggle = page.locator('#map-key-details-toggle');
   await expect(toggle).toBeVisible();
   if (await toggle.getAttribute('aria-expanded') === 'false') await toggle.click();
