@@ -401,12 +401,14 @@ export function buildAiannhPopupModel(
   props: GeoJsonProperties,
   conditions: PlaceConditions,
   /** Census NAME to the search's name through the roster's provenance gate (gatedCensusName); absent until the roster loads. */
-  censusNames?: ReadonlyMap<string, string>
+  censusNames?: ReadonlyMap<string, string>,
+  /** The title the briefing resolves for this area (impact/context resolveBoundaryTitle); it wins when given. */
+  title?: string
 ): PopupModel {
   const p = props ?? {};
   const censusArea = placeTitle([p.NAME, p.BASENAME, p.name], 'Tribal land area');
   // The name the search and the briefing give this Census area; the Census name stays a detail row.
-  const name = censusNames?.get(censusArea) ?? censusArea;
+  const name = title ?? censusNames?.get(censusArea) ?? censusArea;
   const code = firstText([p.AIANNHCC, p.aiannhcc]);
   // Census class D6 holds both Oklahoma Tribal Statistical Areas (MTFCC G2140)
   // and Tribal Designated Statistical Areas elsewhere (G2160, Samish among them).

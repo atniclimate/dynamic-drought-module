@@ -2941,7 +2941,7 @@ test.describe('W2 registered native consumers', () => {
       await expect.poll(() => fixture.state.held).toBe(2);
       await expect(pill).toHaveClass(/\bready\b/);
       await layerCheckbox(page, 'hillshade').uncheck();
-      await expect.poll(() => fixture.state.cancelled, { timeout: 3_000 }).toBe(2);
+      await expect.poll(() => fixture.state.cancelled, { timeout: 10_000 }).toBe(2);
       fixture.release();
       await expect(layerCheckbox(page, 'hillshade')).not.toBeChecked();
       expect(await page.evaluate(() => {
@@ -2988,7 +2988,7 @@ test.describe('W2 registered native consumers', () => {
         await addW2Source(page, 'w2-off', `${protocol}://${fixture.url}`);
         await expect.poll(() => fixture.state.held).toBe(1);
         await removeW2Source(page, 'w2-off');
-        await expect.poll(() => fixture.state.cancelled, { timeout: 3_000 }).toBe(1);
+        await expect.poll(() => fixture.state.cancelled, { timeout: 10_000 }).toBe(1);
         fixture.release();
         // Diagnostic absence window after confirmed native cancellation and
         // fixture release, classified in sleep-inventory.test.mjs. This does

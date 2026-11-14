@@ -61,18 +61,24 @@ import type * as maplibregl from 'maplibre-gl';
 import type { Feature, FeatureCollection, GeoJsonProperties, Point } from 'geojson';
 
 import { URLS } from '../config/urls';
-import { MAP_GROUND_COLOR } from '../config/interface-tokens';
+import { MAP_GROUND_COLOR, NATION_NAME_FONT } from '../config/interface-tokens';
 import { AIANNH_FILL_COLOR, AIANNH_OUTLINE_COLOR, TRIBAL_LABEL_COLOR } from '../config/palette';
 import { buildAiannhPopupModel } from '../ui/popups';
 import { buildPlaceConditionsHtml } from '../ui/popup-conditions';
-import { buildBoundaryContext, censusNationNames, loadCensusNationNames, resolveBoundaryTitle } from '../impact/context';
+import {
+  buildBoundaryContext,
+  censusNationNames,
+  loadCensusLabelNames,
+  loadCensusNationNames,
+  resolveBoundaryTitle
+} from '../impact/context';
 import { registerClickTarget } from '../map/interaction-coordinator';
 import type { LayerActivation } from '../config/layers';
 import { fetchBufferedWithBudget, linkAbort } from '../util/fetch';
 import { buildQueryEnvelope, envelopeCovers, toCoverageEnvelope } from '../util/bbox';
 import { assertFeatureCollection, isTruncated } from '../util/geojson-checks';
 import { registry } from '../state/registry';
-import { loadTribalLabelAreas } from '../state/tribal-roster';
+import { loadTribalLabelAreas, loadTribalLabelNames, type TribalLabelNames } from '../state/tribal-roster';
 import {
   TRIBAL_DETAIL_LAYER_IDS,
   cancelTribalStreets,
@@ -121,11 +127,17 @@ export function labelMinZoom(areaLand: number, cls: string): number {
 
 /**
  * One label point per area the label map names, at the Census internal point
- * (INTPTLAT, INTPTLON), every Nation on its own line and never shortened.
+ * (INTPTLAT, INTPTLON). A Nation is drawn by the shorter name it is generally
+ * known by where one is curated (owner, 2026-11-13; the Impact Briefing a click
+ * opens carries the full Federal Register name), otherwise by its full name,
+ * never cut. A blank line sets each Nation apart: a long name wraps, and
+ * wrapped lines alone do not say where one Nation's name ends (look of
+ * 2026-11-13, the Kiowa-Comanche-Apache-Fort Sill Apache area).
  */
 export function nationLabelPoints(
   geojson: FeatureCollection,
-  labels: ReadonlyMap<string, readonly string[]> | null
+  labels: ReadonlyMap<string, readonly string[]> | null,
+  curated: TribalLabelNames | null = null
 ): FeatureCollection<Point> {
   const features: Feature<Point>[] = [];
   for (const f of geojson.features ?? []) {
@@ -136,37 +148,100 @@ export function nationLabelPoints(
     const lng = parseFloat(String(p['INTPTLON']));
     if (!names?.length || !Number.isFinite(lat) || !Number.isFinite(lng)) continue;
     const areaLand = parseFloat(String(p['AREALAND']));
-    features.push({
-      type: 'Feature',
-      geometry: { type: 'Point', coordinates: [lng, lat] },
-      properties: { text: names.join('\n'), km2: areaLand / 1e6 || 0, minzoom: labelMinZoom(areaLand, cls) }
+    const shown = (name: string): string => curated?.short.get(name) ?? name;
+    const own = (name: string): string | undefined => curated?.own.get(name);
+    // `text` is the whole label as read; en0, own0, en1, ... are the slots nationTextField draws;
+    // AIANNH and NAME let a click on the name answer for its area (bindPopups).
+    const properties: Record<string, string | number> = {
+      AIANNH: String(p['AIANNH'] ?? ''),
+      NAME: String(p['NAME'] ?? ''),
+      text: names.map((name) => [own(name), shown(name)].filter(Boolean).join('\n')).join('\n\n'),
+      km2: areaLand / 1e6 || 0,
+      minzoom: labelMinZoom(areaLand, cls)
+    };
+    names.forEach((name, i) => {
+      properties[`en${i}`] = shown(name);
+      const ownName = own(name);
+      if (ownName) properties[`own${i}`] = ownName;
     });
+    features.push({ type: 'Feature', geometry: { type: 'Point', coordinates: [lng, lat] }, properties });
   }
   return { type: 'FeatureCollection', features };
+}
+
+/** The English name's size beside the own-language name above it (11.25 px at the label's smallest). */
+const ENGLISH_UNDER_OWN_SCALE = 0.9;
+
+/**
+ * The label's text. Per Nation: its name in its own language, where its row is
+ * curated (DR-247), in the Nation-name face, above its English name; a blank
+ * line between Nations. One slot per Nation, `slots` being the most Nations
+ * any one area holds: a format expression cannot loop.
+ */
+export function nationTextField(slots: number): maplibregl.ExpressionSpecification {
+  const sections: unknown[] = [];
+  for (let i = 0; i < slots; i++) {
+    if (i) sections.push(['case', ['has', `en${i}`], '\n\n', ''], {});
+    sections.push(
+      ['case', ['has', `own${i}`], ['concat', ['get', `own${i}`], '\n'], ''],
+      { 'text-font': ['literal', [NATION_NAME_FONT]] },
+      ['coalesce', ['get', `en${i}`], ''],
+      { 'font-scale': ['case', ['has', `own${i}`], ENGLISH_UNDER_OWN_SCALE, 1] }
+    );
+  }
+  return ['format', ...sections] as maplibregl.ExpressionSpecification;
 }
 
 /** The roster's label map (Census AIANNH code to the Nations' names) once read; null before. */
 let nationLabels: ReadonlyMap<string, readonly string[]> | null = null;
 let nationLabelsLoad: Promise<void> | null = null;
+/** The curated label names (own-language and shorter names, by Federal Register name) once read; null before. */
+let curatedNames: TribalLabelNames | null = null;
+let curatedNamesLoad: Promise<void> | null = null;
 
-/** Read the label map once, from the roster's one shared load. A failure is retried by the next activation, never by a pan. */
+/** The most Nations any one labelled area holds (one before the label map is read). */
+function labelSlots(): number {
+  let most = 1;
+  for (const names of nationLabels?.values() ?? []) most = Math.max(most, names.length);
+  return most;
+}
+
+/**
+ * Read the label map once, from the roster's one shared load, and the curated
+ * label names beside it. A failure of either is retried by the next
+ * activation, never by a pan; the Federal Register names never wait for the
+ * curated ones, which replace them when they arrive.
+ */
 function loadNationLabels(map: maplibregl.Map): void {
-  if (nationLabels || nationLabelsLoad) return;
-  nationLabelsLoad = loadTribalLabelAreas()
-    .then((labels) => {
-      nationLabels = labels;
-      if (appliedData) setLabelData(map, appliedData);
-    })
-    .catch((err: unknown) => console.warn('[aiannh] Tribal name labels unavailable: the roster did not load.', err))
-    .finally(() => {
-      nationLabelsLoad = null;
-    });
+  if (!nationLabels && !nationLabelsLoad) {
+    nationLabelsLoad = loadTribalLabelAreas()
+      .then((labels) => {
+        nationLabels = labels;
+        if (map.getLayer(LABEL_LAYER_ID)) map.setLayoutProperty(LABEL_LAYER_ID, 'text-field', nationTextField(labelSlots()));
+        if (appliedData) setLabelData(map, appliedData);
+      })
+      .catch((err: unknown) => console.warn('[aiannh] Tribal name labels unavailable: the roster did not load.', err))
+      .finally(() => {
+        nationLabelsLoad = null;
+      });
+  }
+  if (!curatedNames && !curatedNamesLoad) {
+    curatedNamesLoad = loadTribalLabelNames()
+      .then((names) => {
+        curatedNames = names;
+        if (appliedData) setLabelData(map, appliedData);
+      })
+      .catch((err: unknown) => console.warn('[aiannh] Curated Nation label names unavailable: their file did not load.', err))
+      .finally(() => {
+        curatedNamesLoad = null;
+      });
+  }
 }
 
 /** Rebuild the label points from the areas the layer holds. */
 function setLabelData(map: maplibregl.Map, geojson: FeatureCollection): void {
   const labels = map.getSource(LABEL_SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
-  labels?.setData(nationLabelPoints(geojson, nationLabels));
+  labels?.setData(nationLabelPoints(geojson, nationLabels, curatedNames));
 }
 
 /** Symbol anchor so the boundary stacks below basemap labels (shared idiom). */
@@ -633,7 +708,7 @@ function addSourceAndLayers(map: maplibregl.Map, geojson: FeatureCollection): vo
     beforeId
   );
 
-  map.addSource(LABEL_SOURCE_ID, { type: 'geojson', data: nationLabelPoints(geojson, nationLabels) });
+  map.addSource(LABEL_SOURCE_ID, { type: 'geojson', data: nationLabelPoints(geojson, nationLabels, curatedNames) });
   // Added on top; reassertLabelOrder keeps it the topmost label (TOP_LABEL_IDS, src/map/layer-order.ts),
   // which MapLibre places first, so a Nation's name wins a collision with a city name.
   map.addLayer({
@@ -644,7 +719,7 @@ function addSourceAndLayers(map: maplibregl.Map, geojson: FeatureCollection): vo
     // The ladder per point. A filter reads the tile's whole zoom, so the 9.5 step shows from zoom 10.
     filter: ['>=', ['zoom'], ['get', 'minzoom']],
     layout: {
-      'text-field': ['get', 'text'],
+      'text-field': nationTextField(labelSlots()),
       'text-font': ['Noto Sans Regular'],
       // Never smaller than the city names beside them (design pass 2026-11-13).
       'text-size': ['interpolate', ['linear'], ['zoom'], 5, 12.5, 8, 14, 12, 15],
@@ -778,28 +853,41 @@ export function bindPopups(map: maplibregl.Map): void {
   // Until it loads, a popup titles the Census area as before; a failed read is
   // retried by the next click's label, so the map is read at click time.
   loadCensusNationNames().catch(() => {});
+  loadCensusLabelNames().catch(() => {});
   registerClickTarget({
     kind: 'tribal-lands',
-    layerIds: [FILL_LAYER_ID],
+    // The Nation's name answers too: it can stand outside its area (text-variable-anchor), and
+    // one registration keeps one hit when the name and the fill beneath it are both under the click.
+    layerIds: [FILL_LAYER_ID, LABEL_LAYER_ID],
     label: (feature) => resolveBoundaryTitle('aiannh', feature.properties ?? null),
     respond: (feature, click, map) => {
-      const props: GeoJsonProperties = feature.properties ?? null;
+      // A click on a name answers for the whole area it names, from the data the layer holds.
+      const area = feature.layer.id === LABEL_LAYER_ID
+        ? appliedData?.features.find((f) => String(f.properties?.['AIANNH'] ?? '') === feature.properties?.['AIANNH'])
+        : undefined;
+      const props: GeoJsonProperties = (area ?? feature).properties ?? null;
+      const id = area ? props?.['AIANNHNS'] : feature.id;
       return {
-        model: buildAiannhPopupModel(props, buildPlaceConditionsHtml(map, click.point, feature), censusNationNames()),
-        selection: buildBoundaryContext('aiannh', props, feature.geometry, click.lngLat),
+        model: buildAiannhPopupModel(
+          props,
+          buildPlaceConditionsHtml(map, click.point, area ? area.geometry : feature),
+          censusNationNames(),
+          resolveBoundaryTitle('aiannh', props)
+        ),
+        selection: buildBoundaryContext('aiannh', props, (area ?? feature).geometry, click.lngLat),
         // An id-less feature clears any prior emphasis (the old
         // emphasizePlace contract) rather than lighting an unknown one.
-        emphasis: feature.id === undefined || feature.id === null
-          ? []
-          : [{ source: SOURCE_ID, id: feature.id }]
+        emphasis: id === undefined || id === null ? [] : [{ source: SOURCE_ID, id: id as string | number }]
       };
     }
   });
 
-  map.on('mouseenter', FILL_LAYER_ID, () => {
-    map.getCanvas().style.cursor = 'pointer';
-  });
-  map.on('mouseleave', FILL_LAYER_ID, () => {
-    map.getCanvas().style.cursor = '';
-  });
+  for (const layer of [FILL_LAYER_ID, LABEL_LAYER_ID]) {
+    map.on('mouseenter', layer, () => {
+      map.getCanvas().style.cursor = 'pointer';
+    });
+    map.on('mouseleave', layer, () => {
+      map.getCanvas().style.cursor = '';
+    });
+  }
 }

@@ -256,6 +256,9 @@ const { setCurrentRegion } = await import('../src/state/region-store.ts');
 const { clearEmphasis, getEmphasisTargets } = await import('../src/state/place-emphasis.ts');
 const { setViewMode } = await import('../src/state/view-mode.ts');
 const { getTypedPlace, setTypedPlace } = await import('../src/state/typed-place.ts');
+// The popup's lifecycle is the Console's: in Brief a place-bearing click opens the briefing at every
+// width (owner, 2026-11-13). The cases about Brief set it themselves and hand the Console back.
+setViewMode('console');
 
 /** The frame import has resolved and every continuation queued on it has run. */
 async function settle() {
@@ -992,7 +995,7 @@ test('the mobile Brief sheet taking over during the wait wins: the stale commit 
     assert.equal(getPlaceSelection(), null, 'the stale commit wrote no selection');
     assert.equal(thrown, null, 'the click threw nothing');
   } finally {
-    setViewMode('brief');
+    setViewMode('console');
     globalThis.__ddmSheetActive = false;
   }
 });
@@ -1000,6 +1003,7 @@ test('the mobile Brief sheet taking over during the wait wins: the stale commit 
 test('the mobile Brief sheet route needs no frame: a cold place-bearing model answer opens the briefing at once', () => {
   const selection = context('Sheet');
   const { click } = harness({ place: [{ model: MODEL, selection, emphasis: [] }] });
+  setViewMode('brief');
   globalThis.__ddmSheetActive = true;
   try {
     click();
@@ -1007,7 +1011,38 @@ test('the mobile Brief sheet route needs no frame: a cold place-bearing model an
     assert.deepEqual(rendered, [], 'no popup markup was rendered');
     assert.equal(getPlaceSelection()?.context, selection);
   } finally {
+    setViewMode('console');
     globalThis.__ddmSheetActive = false;
+  }
+});
+
+test('in Brief on a desktop a place-bearing click opens its briefing at once; an embed and the Console keep the popup', async () => {
+  const getElementById = globalThis.document.getElementById;
+  try {
+    setViewMode('brief');
+    const desk = context('Desk');
+    harness({ place: [{ model: MODEL, selection: desk, emphasis: [] }] }).click();
+    assert.deepEqual(globalThis.__ddmPanelOpens, [desk], 'no sheet, and still the briefing');
+    assert.deepEqual(rendered, [], 'no popup markup was rendered');
+    assert.equal(getPlaceSelection()?.context, desk);
+
+    globalThis.__ddmPanelOpens.length = 0;
+    globalThis.document.getElementById = (id) =>
+      id === 'app' ? { classList: { contains: (c) => c === 'embed' } } : getElementById(id);
+    harness({ place: [{ model: MODEL, selection: context('Embedded'), emphasis: [] }] }).click();
+    await settle();
+    assert.deepEqual(globalThis.__ddmPanelOpens, [], 'an embed without its sheet keeps its popup');
+    assert.equal(rendered.length, 1);
+
+    globalThis.document.getElementById = getElementById;
+    setViewMode('console');
+    harness({ place: [{ model: MODEL, selection: context('Console'), emphasis: [] }] }).click();
+    await settle();
+    assert.deepEqual(globalThis.__ddmPanelOpens, [], 'the Console keeps its popup');
+    assert.equal(rendered.length, 1, 'each harness starts its own record');
+  } finally {
+    globalThis.document.getElementById = getElementById;
+    setViewMode('console');
   }
 });
 

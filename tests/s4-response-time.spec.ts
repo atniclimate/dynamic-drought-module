@@ -2,22 +2,24 @@ import { test, expect, type Page } from './offline-test';
 import { gotoApp, waitForLayerSettled } from './helpers';
 
 /**
- * S4c: the panel-foot response (the coordinator's swappable sink) and
- * the compact temporal adapter (the TimeBarSpec facade).
+ * S4c: the desktop Brief place click and the compact temporal adapter (the
+ * TimeBarSpec facade).
  *
- * The response cases drive the two live Tribal-geography layers against
- * the synthetic route fixtures, exactly as the coordinator suite does:
- * a center click is a real place-bearing hit, and on the desktop shell
- * it must land at the panel foot, not in a map popup.
+ * The response case drives the live reservation layer against the synthetic
+ * route fixture (gotoApp's boundary stubs): a center click is a real
+ * place-bearing hit. Since the owner's 2026-11-13 ruling ("clicking on a place
+ * should open the impact briefing drawer") it opens the place's briefing on
+ * the desktop Brief shell: never a map popup, and never the panel-foot card,
+ * which carried the place response before.
  */
 
-async function clickCenterForFootResponse(page: Page): Promise<void> {
+async function clickCenterForBriefing(page: Page): Promise<void> {
   const box = await page.locator('#map').boundingBox();
   if (!box) throw new Error('map container has no box');
-  const foot = page.locator('#panel-response .coordinated-response');
+  const panel = page.locator('#impact-panel');
   await expect(async () => {
     await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
-    await expect(foot).toBeVisible({ timeout: 1500 });
+    await expect(panel).toBeVisible({ timeout: 1500 });
   }).toPass({ timeout: 30_000 });
 }
 
@@ -41,41 +43,21 @@ async function stubUsdmTimeSurface(page: Page): Promise<void> {
   await page.route('**/USDM_archive/**', fulfill);
 }
 
-test.describe('S4c panel-foot response', () => {
-  test('a place-bearing click lands at the panel foot, frozen head over scrolling body, no popup', async ({
+test.describe('S4c desktop Brief place click', () => {
+  test('a place-bearing click in desktop Brief opens its briefing: no popup, no panel-foot card, no door', async ({
     page
   }) => {
-    await gotoApp(page, '?region=washington_state&view=brief');
-    // The sink registers with the island; the fixture layers must paint.
-    await expect(page.locator('.shell-cluster-btn')).toHaveCount(4);
-    await waitForLayerSettled(page, 'aiannh');
+    // The reservation layer alone, so the one place under the centre is the
+    // synthetic reservation and the briefing's title is known.
+    await gotoApp(page, '?region=washington_state&view=brief&layers=bia-reservations');
     await waitForLayerSettled(page, 'bia-reservations');
-    await clickCenterForFootResponse(page);
+    await clickCenterForBriefing(page);
 
-    // One response, at the foot; never a second surface.
-    await expect(page.locator('.maplibregl-popup-content')).toHaveCount(0);
-    const card = page.locator('#panel-response .panel-response-card');
-    await expect(card).toBeVisible();
-    // Frozen head: title and the briefing door.
-    await expect(
-      card.locator('.coordinated-response-head .popup-title')
-    ).toBeVisible();
-    // The active-cluster-aware context line.
-    await expect(card.locator('.panel-response-context')).toHaveText(
-      /view · Current Conditions$/
-    );
-    // The scrolling body exists as the one bounded scroll region.
-    await expect(card.locator('.coordinated-response-body')).toBeAttached();
-
-    // Closing retires the response and clears the place selection; a keyboard
-    // close hands focus to the map, never the page body (the look at 4237781, R1-5).
-    await card.locator('.panel-response-close').focus();
-    await page.keyboard.press('Enter');
-    await expect(
-      page.locator('#panel-response .coordinated-response')
-    ).toHaveCount(0);
-    await expect(page.locator('#brief-place-context')).toBeHidden();
-    await expect(page.locator('.maplibregl-canvas')).toBeFocused();
+    await expect(page.locator('#impact-panel-title')).toHaveText('Synthetic Reservation Fixture');
+    // The briefing is the one answer: no map popup, no foot card, no door to it.
+    await expect(page.locator('.maplibregl-popup')).toHaveCount(0);
+    await expect(page.locator('#panel-response .coordinated-response')).toHaveCount(0);
+    await expect(page.locator('[data-ddm-impact-trigger]')).toHaveCount(0);
   });
 });
 

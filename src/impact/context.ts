@@ -21,7 +21,13 @@ import { postalCodeFromProperties } from '../config/geography';
 import { placeRefFromBoundary } from '../config/entities';
 import { isStateCode } from './resources';
 import { getCurrentRegion } from '../state/region-store';
-import { gatedCensusName, gatedDisplayName, loadTribalCensusAreas, loadTribalRoster } from '../state/tribal-roster';
+import {
+  gatedCensusName,
+  gatedDisplayName,
+  loadTribalCensusAreas,
+  loadTribalLabelAreas,
+  loadTribalRoster
+} from '../state/tribal-roster';
 import {
   geometryBboxAcrossAntimeridian,
   geometryLikelyCrossesAntimeridian
@@ -138,6 +144,29 @@ export function censusNationNames(): ReadonlyMap<string, string> | undefined {
   return censusNames ?? undefined;
 }
 
+/** Census AIANNH code to the Nations' full Federal Register names, once loaded. */
+let censusLabels: ReadonlyMap<string, readonly string[]> | null = null;
+let censusLabelsLoad: Promise<ReadonlyMap<string, readonly string[]>> | null = null;
+
+/**
+ * Load, once, the roster's label map (`labelAreas`: Census code to the
+ * Nations' Federal Register names, every row safe-matched or confirmed at
+ * build; scripts/build-tribal-roster.mjs rules 8 and 9). It titles an area
+ * the search's Census rows do not, so a reservation such as Warm Springs is
+ * briefed under its Nation's full name rather than its Census title, whatever
+ * shorter name the map label draws. Rejects like the roster; retried on the next call.
+ */
+export function loadCensusLabelNames(): Promise<ReadonlyMap<string, readonly string[]>> {
+  censusLabelsLoad ??= loadTribalLabelAreas().then((labels) => {
+    censusLabels = labels;
+    return labels;
+  }, (err: unknown) => {
+    censusLabelsLoad = null;
+    throw err;
+  });
+  return censusLabelsLoad;
+}
+
 /** The Census AIANNH area a feature names (NAME; BASENAME the descriptor-stripped form). */
 function censusArea(props: GeoJsonProperties): string {
   return firstString(props, ['NAME', 'BASENAME', 'name']) ?? 'Tribal land area';
@@ -155,10 +184,14 @@ function resolveTitle(kind: BoundaryKind, props: GeoJsonProperties): string {
       );
     case 'aiannh': {
       // A Census-only area takes the name the search gives it: the roster's
-      // gated Nation name, never one written here; otherwise the Census name.
+      // gated Nation name, never one written here; then the Nations' full
+      // names from the label map, several joined by semicolons (their names
+      // hold commas); otherwise the Census name.
       if (!censusNamesLoad) loadCensusNationNames().catch(() => {});
+      if (!censusLabelsLoad) loadCensusLabelNames().catch(() => {});
       const area = censusArea(props);
-      return censusNames?.get(area) ?? area;
+      const nations = censusLabels?.get(firstString(props, ['AIANNH']) ?? '');
+      return censusNames?.get(area) ?? (nations?.length ? nations.join('; ') : area);
     }
     case 'treaty':
       return (

@@ -86,17 +86,19 @@ test.describe('DDM-P14-T06: shared static reads', () => {
 
     // The click door: a map click resolves through location-identity.ts
     // (the rendered `states` fill first, the bundled-file fallback only if
-    // that misses) and opens the same briefing a second time.
+    // that misses) and, in Brief, opens the same briefing a second time
+    // directly, with no popup and no door to press (owner, 2026-11-13).
     await waitForLayerSettled(page, 'states');
     const box = await page.locator('#map').boundingBox();
     if (!box) throw new Error('map container has no box');
-    const trigger = page.locator('[data-ddm-impact-trigger]');
+    const panel = page.locator('#impact-panel');
     await expect(async () => {
       await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
-      await expect(trigger).toBeVisible({ timeout: 1500 });
+      await expect(panel).toBeVisible({ timeout: 1500 });
     }).toPass({ timeout: 20_000 });
-    await trigger.click();
     await expect(page.locator('#impact-panel-title')).toHaveText('Washington');
+    await expect(page.locator('.maplibregl-popup')).toHaveCount(0);
+    await expect(page.locator('[data-ddm-impact-trigger]')).toHaveCount(0);
     await expect(ensoCurrentCell(page)).not.toContainText(ENSO_LOADING_TEXT, {
       timeout: 15_000
     });

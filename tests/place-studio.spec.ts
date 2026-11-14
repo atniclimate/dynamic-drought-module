@@ -469,14 +469,19 @@ test.describe('DDM-P2-T09: one canonical place reference', () => {
     await page.locator('#impact-panel .impact-panel-close').click();
     await expect(page.locator('#impact-panel')).toBeHidden();
 
+    // The click door: in Brief a place click opens the place's briefing
+    // directly (owner, 2026-11-13), with no popup and no door to press.
     await waitForLayerSettled(page, 'states');
     const box = await page.locator('#map').boundingBox();
     if (!box) throw new Error('map container has no box');
-    const trigger = page.locator('[data-ddm-impact-trigger]');
+    const panel = page.locator('#impact-panel');
     await expect(async () => {
       await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
-      await expect(trigger).toBeVisible({ timeout: 1500 });
+      await expect(panel).toBeVisible({ timeout: 1500 });
     }).toPass({ timeout: 20_000 });
+    await expect(page.locator('#impact-panel-title')).toHaveText('Washington');
+    await expect(page.locator('.maplibregl-popup')).toHaveCount(0);
+    await expect(page.locator('[data-ddm-impact-trigger]')).toHaveCount(0);
     await expect.poll(stamp, { timeout: 15_000 }).toMatch(/^us-states:\d+$/);
     const clickStamp = await stamp();
 

@@ -1,0 +1,1526 @@
+{
+  "_comment": "How the Tribal Lands labels name a Nation, beside the Federal Register name the Impact Briefing always carries in full. nation: the Federal Register name as public/data/tribal-roster.json labelAreas holds it. ownNames (decision DR-247): the Nation's name in its own language, one row per Nation, added by hand, only from the Nation's own public pages and only where the page presents the form as the Nation's own name for itself; ownName exactly as the page writes it (capitals, apostrophes and marks kept; Unicode NFC); page, the address read; read, the date read; premise, what the page says the form is. Never from an aggregator, never translated, transliterated or corrected; a Nation whose pages give more than one form, or only a people's or language's name shared with other Nations, has no row; a new letter may need the label face re-cut (scripts/cut-nation-names-font.py; tests/font-coverage.test.mjs says so). shortNames (owner, 2026-11-13): the shorter name a Nation is generally known by, drawn on the map in place of a long formal name; shortName exactly as its source writes it; page and read, the source; basis, why this form was chosen. A Nation with no row keeps its full Federal Register name on the map.",
+  "ownNames": [
+    {
+      "nation": "Coeur D'Alene Tribe",
+      "ownName": "Schitsu’umsh",
+      "page": "https://www.cdatribe-nsn.gov/our-tribe/",
+      "read": "2026-11-13",
+      "premise": "The page is titled \"The Coeur d’Alene Tribe (Schitsu’umsh)\" and says: \"The original name of the Coeur d’Alene Tribe was Schitsu’umsh ... This has been our name since time immemorial.\" The same page spells a memorial's name \"Shitsu’umsh Warriors\", and the site footer writes the name with a straight apostrophe; the form carried is the one the page states as the name."
+    },
+    {
+      "nation": "Kalispel Indian Community of the Kalispel Reservation",
+      "ownName": "Qlispé",
+      "page": "https://kalispeltribe.com/",
+      "read": "2026-11-13",
+      "premise": "The Tribe's home page says the name Qlispé \"reflects the traditional language of the Tribe\" and quotes its Executive Director of Language and Culture: \"We are Qlispé. We are Camas People.\""
+    },
+    {
+      "nation": "Lummi Tribe of the Lummi Reservation",
+      "ownName": "Lhaq'temish",
+      "page": "https://www.lummi-nsn.gov/",
+      "read": "2026-11-13",
+      "premise": "The Nation's home page says: \"We are the Lhaq'temish, the Lummi People.\" A menu entry for the Lhaqtemish Foundation, an organization's name, drops the apostrophe."
+    }
+  ],
+  "shortNames": [
+    {
+      "nation": "Absentee-Shawnee Tribe of Indians of Oklahoma",
+      "shortName": "Absentee Shawnee Tribe",
+      "page": "https://www.astribe.com/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title: \"Absentee Shawnee Tribe |\""
+    },
+    {
+      "nation": "Agua Caliente Band of Cahuilla Indians of the Agua Caliente Indian Reservation, California",
+      "shortName": "Agua Caliente Band of Cahuilla Indians",
+      "page": "https://www.aguacaliente.org/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, footer and page heading (site refused a scripted read, HTTP 403; read through a Parallel search excerpt): \"Copyright 2026 - Agua Caliente Band of Cahuilla Indians\""
+    },
+    {
+      "nation": "Algaaciq Native Village (St. Mary's)",
+      "shortName": "Algaaciq Native Village",
+      "page": "https://www.algaaciq.org/",
+      "read": "2026-11-13",
+      "basis": "Session decision where the judges split or a pick failed the criteria: the other pick names the governing body, not the Nation. Source, nation-self, site body text: \"Algaaciq Native Village (also known as St. Mary’s) is a predominantly Yupik village of approximately 500 people.\""
+    },
+    {
+      "nation": "Alturas Indian Rancheria, California",
+      "shortName": "Alturas Indian Rancheria",
+      "page": "https://www.cgcc.ca.gov/documents/Tribal/Federally_Recognized_Tribes_in_CA.pdf",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, agency, California Gambling Control Commission list of federally recognized tribes, 2026-02-27: \"2 Alturas Indian Rancheria\""
+    },
+    {
+      "nation": "Assiniboine and Sioux Tribes of the Fort Peck Indian Reservation, Montana",
+      "shortName": "Fort Peck Tribes",
+      "page": "https://fortpecktribes.org/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, footer; page title 'Fort Peck Tribes | Fort Peck Tribes' (read through Parallel; scripted fetch got a socket error): \"© Fort Peck Tribes | All Rights Reserved | 501 Medicine Bear Road, Poplar, MT 59255\""
+    },
+    {
+      "nation": "Augustine Band of Cahuilla Indians, California",
+      "shortName": "Augustine Band of Cahuilla Indians",
+      "page": "https://tribe.augustinetribe-nsn.gov/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title and footer: \"©2025 Augustine Band of Cahuilla Indians. All rights reserved.\""
+    },
+    {
+      "nation": "Bad River Band of the Lake Superior Tribe of Chippewa Indians of the Bad River Reservation, Wisconsin",
+      "shortName": "Bad River Tribe",
+      "page": "https://www.badriver-nsn.gov/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title and site header: \"Bad River Tribe – The Energy Program of the Mashkiiziibii Natural Resource Department’s goals are designed to align with Tribal Values.\""
+    },
+    {
+      "nation": "Bay Mills Indian Community, Michigan",
+      "shortName": "Bay Mills Indian Community",
+      "page": "https://www.baymills.org/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title; header text BAY MILLS INDIAN COMMUNITY: \"Tribal Organization | Bay Mills Indian Community | Brimley\""
+    },
+    {
+      "nation": "Bear River Band of the Rohnerville Rancheria, California",
+      "shortName": "Bear River Tribe",
+      "page": "https://www.bearriverrancheria.org/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, og:site_name meta tag: \"og:site_name: Bear River Tribe\""
+    },
+    {
+      "nation": "Big Lagoon Rancheria, California",
+      "shortName": "Big Lagoon Rancheria",
+      "page": "https://www.biglagoonrancheria.org/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, homepage excerpt cut off by the Parallel fetch (partial read): \"Big Lagoon Rancheria Tribal\""
+    },
+    {
+      "nation": "Big Pine Paiute Tribe of the Owens Valley",
+      "shortName": "Big Pine Paiute Tribe",
+      "page": "https://bigpinepaiute.org/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, footer, page title and og:site_name: \"© Copyright 2020 - | Big Pine Paiute Tribe | All Rights Reserved\""
+    },
+    {
+      "nation": "Big Sandy Rancheria of Western Mono Indians of California",
+      "shortName": "Big Sandy Rancheria",
+      "page": "https://www.bigsandyrancheria.com/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, footer (page title is the Wix default 'Home | Mysite 5'): \"© 2023 by Big Sandy Rancheria\""
+    },
+    {
+      "nation": "Big Valley Band of Pomo Indians of the Big Valley Rancheria, California",
+      "shortName": "Big Valley Band of Pomo Indians",
+      "page": "https://www.bvrancheria.com/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title and heading: \"Big Valley Band of Pomo Indians\""
+    },
+    {
+      "nation": "Blackfeet Tribe of the Blackfeet Indian Reservation of Montana",
+      "shortName": "Blackfeet Nation",
+      "page": "https://blackfeetnation.com/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title and homepage text: \"The Blackfeet Indian Reservation is home to the 17,321-member Blackfeet Nation, one of the 10 largest tribes in the United States.\""
+    },
+    {
+      "nation": "Blue Lake Rancheria, California",
+      "shortName": "Blue Lake Rancheria",
+      "page": "https://www.bluelakerancheria-nsn.gov/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title, og:site_name and footer: \"Copyright © 2026 Blue Lake Rancheria. All Rights Reserved\""
+    },
+    {
+      "nation": "Cachil DeHe Band of Wintun Indians of the Colusa Indian Community of the Colusa Rancheria, California",
+      "shortName": "Colusa Indian Community",
+      "page": "https://www.colusa-nsn.gov/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, homepage heading: \"Welcome to Colusa Indian Community\""
+    },
+    {
+      "nation": "Cahto Tribe of the Laytonville Rancheria",
+      "shortName": "Cahto Tribe",
+      "page": "http://cahtotribe-nsn.gov/about",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, About page (flag description); heading 'About the Cahto Tribe A Brief History': \"The Words “CAHTO TRIBE” is written in white block letters above the lake pictograph.\""
+    },
+    {
+      "nation": "Campo Band of Diegueno Mission Indians of the Campo Indian Reservation, California",
+      "shortName": "Campo Kumeyaay Nation",
+      "page": "http://www.campo-nsn.gov/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title and footer: \"Campo Kumeyaay Nation | Sovereign Tribe in Campo, CA\""
+    },
+    {
+      "nation": "Capitan Grande Band of Diegueno Mission Indians of California (Barona Group of Capitan Grande Band of Mission Indians of the Barona Reservation, California; Viejas (Baron Long) Group of Capitan Grande Band of Mission Indians of the Viejas Reservation, California)",
+      "shortName": "Capitan Grande Band of Diegueno Mission Indians",
+      "page": "https://www.federalregister.gov/d/2026-01899",
+      "read": "2026-11-13",
+      "basis": "Session decision where the judges split or a pick failed the criteria: one Federal Register entry names two governments (Barona, Viejas); the label shows the entry's name without its parenthetical list of the two groups, both named in the briefing. Source, federal-register, the formal listing: \"Capitan Grande Band of Diegueno Mission Indians of California (Barona Group of Capitan Grande Band of Mission Indians of the Barona Reservation, California; Vie\""
+    },
+    {
+      "nation": "Cedarville Rancheria, California",
+      "shortName": "Cedarville Rancheria",
+      "page": "https://cedarvillerancheria.com/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title, og:site_name and footer: \"The Cedarville Rancheria strives to serve its members in a way that honors tradition and family.\""
+    },
+    {
+      "nation": "Chemehuevi Indian Tribe of the Chemehuevi Reservation, California",
+      "shortName": "Chemehuevi Indian Tribe",
+      "page": "https://chemehuevi.org/",
+      "read": "2026-11-13",
+      "basis": "Session decision where the judges split or a pick failed the criteria: the form the Nation's own site uses most. Source, nation-self, page title, og:site_name and footer: \"Copyright © 2026 Chemehuevi Indian Tribe - All Rights Reserved.\""
+    },
+    {
+      "nation": "Cher-Ae Heights Indian Community of the Trinidad Rancheria, California",
+      "shortName": "Trinidad Rancheria",
+      "page": "https://trinidad-rancheria.org/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title; footer 'Trinidad Rancheria © 2026.': \"Trinidad Rancheria – Honoring the Past, Living in the Present, Looking Towards the Future\""
+    },
+    {
+      "nation": "Cheyenne and Arapaho Tribes, Oklahoma",
+      "shortName": "Cheyenne and Arapaho Tribes",
+      "page": "https://www.cheyenneandarapaho-nsn.gov/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title and footer '© 2022 Cheyenne and Arapaho Tribes': \"The Cheyenne and Arapaho Tribes | Homepage\""
+    },
+    {
+      "nation": "Cheyenne River Sioux Tribe of the Cheyenne River Reservation, South Dakota",
+      "shortName": "Cheyenne River Sioux Tribe",
+      "page": "https://www.cheyenneriversioux.com/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title 'Home | Cheyenne River Sioux Tribe', heading and footer (read through Parallel): \"© Cheyenne River Sioux Tribe Copyright\""
+    },
+    {
+      "nation": "Chickahominy Indian Tribe-Eastern Division",
+      "shortName": "Chickahominy Indians-Eastern Division",
+      "page": "BIA Tribal Leaders Directory",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, bia-directory, BIA short field: \"tribe: Chickahominy Indians-Eastern Division\""
+    },
+    {
+      "nation": "Chicken Ranch Rancheria of Me-Wuk Indians of California",
+      "shortName": "Chicken Ranch Rancheria Me-Wuk Indians",
+      "page": "https://chickenranchrancheria.org/home",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, site header (capitals as published): \"CHICKEN RANCH RANCHERIA ME-WUK INDIANS\""
+    },
+    {
+      "nation": "Chilkat Indian Village (Klukwan)",
+      "shortName": "Chilkat Indian Village",
+      "page": "https://chilkat-nsn.gov/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, homepage news headline; page title 'Chilkat Indian Village | Klukwan Alaska': \"Chilkat Indian Village (Klukwan) and Chilkat Forever put new owners on notice\""
+    },
+    {
+      "nation": "Chilkoot Indian Association (Haines)",
+      "shortName": "Chilkoot Indian Association",
+      "page": "https://www.chilkoot-nsn.gov/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title, og:site_name and homepage text: \"The Chilkoot Indian Association represents a Native Sovereign Nation.\""
+    },
+    {
+      "nation": "Chinik Eskimo Community (Golovin)",
+      "shortName": "Chinik Eskimo Community",
+      "page": "https://kawerak.org/our-region/golovin",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, agency, Kawerak (regional Native nonprofit) Golovin page, citing State of Alaska DCRA: \"A federally-recognized tribe is located in the community - the Chinik Eskimo Community.\""
+    },
+    {
+      "nation": "Chippewa Cree Indians of the Rocky Boy's Reservation, Montana",
+      "shortName": "Chippewa Cree Tribe",
+      "page": "https://www.chippewa-cree.org/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title and og:site_name: \"Official Website of the Chippewa Cree Tribe | Rocky Boy’s Reservation, Montana\""
+    },
+    {
+      "nation": "Citizen Potawatomi Nation, Oklahoma",
+      "shortName": "Citizen Potawatomi Nation",
+      "page": "http://www.potawatomi.org/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title and footer: \"Citizen Potawatomi Nation - People of the Place of the Fire\""
+    },
+    {
+      "nation": "Cold Springs Rancheria of Mono Indians of California",
+      "shortName": "Cold Springs Rancheria",
+      "page": "https://coldspringsrancheria.gov/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, homepage and page title: \"We are Cold Springs Rancheria. Home of the Mono Indians of California, a federally recognized tribe of Mono Native Americans.\""
+    },
+    {
+      "nation": "Colorado River Indian Tribes of the Colorado River Indian Reservation, Arizona and California",
+      "shortName": "Colorado River Indian Tribes",
+      "page": "https://crit-nsn.gov/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title: \"Colorado River Indian Tribes\""
+    },
+    {
+      "nation": "Confederated Salish and Kootenai Tribes of the Flathead Reservation",
+      "shortName": "Confederated Salish & Kootenai Tribes",
+      "page": "https://cskt.org/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title, og:site_name and footer (ampersand): \"Copyright © 2024 Confederated Salish & Kootenai Tribes. All Rights Reserved.\""
+    },
+    {
+      "nation": "Confederated Tribes and Bands of the Yakama Nation",
+      "shortName": "Yakama Nation",
+      "page": "https://yakama.com/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title; footer '©2021 Yakama Nation • All Rights Reserved': \"Yakama Nation: Programs, Services & History | Confederated Tribes and Bands of the Yakama Nation\""
+    },
+    {
+      "nation": "Confederated Tribes of Siletz Indians of Oregon",
+      "shortName": "Confederated Tribes of Siletz Indians",
+      "page": "https://ctsi.nsn.us/",
+      "read": "2026-11-13",
+      "basis": "Session decision where the judges split or a pick failed the criteria: the form the Nation's own site uses most. Source, nation-self, page title and og:site_name: \"Homepage - Confederated Tribes of Siletz Indians\""
+    },
+    {
+      "nation": "Confederated Tribes of the Chehalis Reservation",
+      "shortName": "Chehalis Tribe",
+      "page": "https://www.chehalistribe.org/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title and og:site_name: \"Home - Chehalis Tribe\""
+    },
+    {
+      "nation": "Confederated Tribes of the Colville Reservation",
+      "shortName": "Colville Tribes",
+      "page": "https://www.colvilletribes.com/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title, og:site_name, footer: \"title and og:site_name: Colville Tribes; footer: Colville Tribes, 21 Colville St, Nespelem, WA, 99155\""
+    },
+    {
+      "nation": "Confederated Tribes of the Coos, Lower Umpqua and Siuslaw Indians",
+      "shortName": "Confederated Tribes of Coos, Lower Umpqua and Siuslaw Indians",
+      "page": "https://ctclusi.org/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title, footer and address block (drops only the word the): \"Homepage - Confederated Tribes of Coos, Lower Umpqua and Siuslaw Indians\""
+    },
+    {
+      "nation": "Confederated Tribes of the Goshute Reservation, Nevada and Utah",
+      "shortName": "Goshute Indian Tribe",
+      "page": "https://ctgr.us/home",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title and og:description: \"title: CTGR – Goshute Indian Tribe; og:description: Goshute Indian Tribe\""
+    },
+    {
+      "nation": "Confederated Tribes of the Grand Ronde Community of Oregon",
+      "shortName": "Confederated Tribes of Grand Ronde",
+      "page": "https://www.grandronde.org/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title, h1, footer: \"The Confederated Tribes of Grand Ronde | Confederated Tribes of Grand Ronde; h1: The Confederated Tribes of Grand Ronde; footer: © 2025 Confederated Tribes of G\""
+    },
+    {
+      "nation": "Confederated Tribes of the Warm Springs Reservation of Oregon",
+      "shortName": "Confederated Tribes of Warm Springs",
+      "page": "https://warmsprings-nsn.gov/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, footer (lower case as written): \"© copyright 2021 confederated tribes of warm springs\""
+    },
+    {
+      "nation": "Cow Creek Band of Umpqua Tribe of Indians",
+      "shortName": "Cow Creek Umpqua Tribe",
+      "page": "https://cowcreek-nsn.gov/",
+      "read": "2026-11-13",
+      "basis": "Session decision where the judges split or a pick failed the criteria: keeps the people's name, Umpqua, that the shorter pick drops. Source, nation-self, Tribal Story section on the home page: \"The Cow Creek Umpqua Tribe, located in Southwestern Oregon, is governed by an elected eleven-member council\""
+    },
+    {
+      "nation": "Coyote Valley Band of Pomo Indians of California",
+      "shortName": "Coyote Valley Tribe",
+      "page": "https://www.coyotevalleytribe.org/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title and og:site_name: \"title: Coyote Valley Tribe | Preserving Pomo Culture & Community | Redwood Valley, CA; og:site_name: Coyote Valley Tribe\""
+    },
+    {
+      "nation": "Crow Creek Sioux Tribe of the Crow Creek Reservation, South Dakota",
+      "shortName": "Crow Creek Sioux Tribe",
+      "page": "https://crow-creek.org/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title, h1, footer: \"Crow Creek Sioux Tribe – Fort Thompson, SD; footer: Copyright © 2026 Crow Creek Sioux Tribe\""
+    },
+    {
+      "nation": "Dry Creek Rancheria Band of Pomo Indians, California",
+      "shortName": "Dry Creek Rancheria",
+      "page": "https://drycreekrancheria.com/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, og:site_name and footer: \"og:site_name: Dry Creek Rancheria; footer: © All rights reserved. • Dry Creek Rancheria\""
+    },
+    {
+      "nation": "Eastern Shoshone Tribe of the Wind River Reservation, Wyoming",
+      "shortName": "Eastern Shoshone Tribe",
+      "page": "https://easternshoshone.org/",
+      "read": "2026-11-13",
+      "basis": "Session decision where the judges split or a pick failed the criteria: the form the Nation's own site uses most. Source, nation-self, page title and h1: \"Tribal Government | Eastern Shoshone Tribe; h1: Assisting Members of the Eastern Shoshone Tribe\""
+    },
+    {
+      "nation": "Elem Indian Colony of Pomo Indians of the Sulphur Bank Rancheria, California",
+      "shortName": "Elem Indian Colony",
+      "page": "http://www.elemindiancolony.org/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title and site header: \"Elem Indian Colony – 1400 North Dutton Ave Suite 7 Santa Rosa, CA 95401\""
+    },
+    {
+      "nation": "Elk Valley Rancheria, California",
+      "shortName": "Elk Valley Rancheria",
+      "page": "https://elk-valley.com/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, h1, og:site_name, footer: \"h1: Elk Valley Rancheria; og:site_name: Elk Valley Rancheria; footer: ©2023 Elk Valley Rancheria All Rights Reserved\""
+    },
+    {
+      "nation": "Enterprise Rancheria of Maidu Indians of California",
+      "shortName": "Enterprise Rancheria",
+      "page": "https://enterpriserancheria.org/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, h1, og:site_name, footer: \"h1: Enterprise Rancheria; og:site_name: Enterprise Rancheria; footer: © 2026 Enterprise Rancheria\""
+    },
+    {
+      "nation": "Evansville Village (aka Bettles Field)",
+      "shortName": "Native Village of Evansville",
+      "page": "https://www.tananachiefs.org/wp-content/uploads/2022/02/Evansville-Tribal-HMP-2017.pdf",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, agency, Tanana Chiefs Conference hazard mitigation plan (regional tribal consortium, not the Nation's own page): \"land use development trends of the Native Village of Evansville.\""
+    },
+    {
+      "nation": "Flandreau Santee Sioux Tribe of South Dakota",
+      "shortName": "Flandreau Santee Sioux Tribe",
+      "page": "https://fsst-nsn.gov/culture/about-us",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title and About text: \"Flandreau Santee Sioux Tribe | About Us; The Flandreau Santee Sioux Tribe is comprised primarily of descendants of \"Mdewakantonwan\"\""
+    },
+    {
+      "nation": "Forest County Potawatomi Community, Wisconsin",
+      "shortName": "Forest County Potawatomi",
+      "page": "https://www.fcpotawatomi.com/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, title, og:site_name, footer: \"title and og:site_name: Forest County Potawatomi; Copyright © 2026 Forest County Potawatomi. All rights reserved.\""
+    },
+    {
+      "nation": "Fort Belknap Indian Community of the Fort Belknap Reservation of Montana",
+      "shortName": "Fort Belknap Indian Community",
+      "page": "https://ftbelknap.org/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, title and footer: \"title: Fort Belknap Indian Community; Copyright © 2026 Fort Belknap Indian Community - All Rights Reserved.\""
+    },
+    {
+      "nation": "Fort Bidwell Indian Community of the Fort Bidwell Reservation of California",
+      "shortName": "Gidutikad Paiute",
+      "page": "https://gidutikadpaiute.com/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title of the Nation's site: \"Gidutikad Paiute Home -\""
+    },
+    {
+      "nation": "Fort Independence Indian Community of Paiute Indians of the Fort Independence Reservation, California",
+      "shortName": "Fort Independence Tribe of Paiute Indians",
+      "page": "https://fortindependence.com/",
+      "read": "2026-11-13",
+      "basis": "Session decision where the judges split or a pick failed the criteria: the Nation's own sentence (\"We are the Fort Independence tribe of Paiute Indians\"), with Tribe capitalized by the project's rule; the other pick names the reservation. Source, nation-self, meta description and home page line: \"We are the Fort Independence tribe of Paiute Indians. We are a sovereign nation and a federally recognized Native American tribe\""
+    },
+    {
+      "nation": "Fort McDermitt Paiute and Shoshone Tribes of the Fort McDermitt Indian Reservation, Nevada and Oregon",
+      "shortName": "Fort McDermitt Paiute and Shoshone Tribe",
+      "page": "https://www.fmpst.org/departments",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, Departments page title: \"Departments - Fort McDermitt Paiute and Shoshone Tribe\""
+    },
+    {
+      "nation": "Fort McDowell Yavapai Nation, Arizona",
+      "shortName": "Fort McDowell Yavapai Nation",
+      "page": "https://fmyn.org/about-fmyn",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, About page: \"The Fort McDowell Yavapai Nation is a 950-member Native American tribe which calls Central Arizona's upper Sonoran Desert home.\""
+    },
+    {
+      "nation": "Fort Mojave Indian Tribe of Arizona, California & Nevada",
+      "shortName": "Fort Mojave Indian Tribe",
+      "page": "https://www.fortmojaveindiantribe.com/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, home page: \"The Fort Mojave Indian Tribe is a sovereign Tribal Nation located in the Tristate area.\""
+    },
+    {
+      "nation": "Fort Sill-Chiricahua-Warm Springs-Apache Tribe",
+      "shortName": "Fort Sill Apache Tribe",
+      "page": "https://fortsillapache-nsn.gov/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, title, og:site_name, h1: \"title: Fort Sill Apache Tribe; og:site_name: Fort Sill Apache Tribe; h1: Fort Sill Apache Tribe\""
+    },
+    {
+      "nation": "Gila River Indian Community of the Gila River Indian Reservation, Arizona",
+      "shortName": "Gila River Indian Community",
+      "page": "https://www.gilariver.org/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title and footer: \"title: Gila River Indian Community; footer: © 2015 Gila River Indian Community. All rights reserved.\""
+    },
+    {
+      "nation": "Grand Traverse Band of Ottawa and Chippewa Indians, Michigan",
+      "shortName": "Grand Traverse Band of Ottawa and Chippewa Indians",
+      "page": "https://www.gtbindians.org/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title and h1: \"Welcome - Grand Traverse Band of Ottawa and Chippewa Indians\""
+    },
+    {
+      "nation": "Grindstone Indian Rancheria of Wintun-Wailaki Indians of California",
+      "shortName": "Grindstone Indian Rancheria",
+      "page": "https://caltribalfamilies.org/places/grindstone-indian-rancheria",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, agency, California Tribal Families Coalition directory entry: \"Tribe/Indian Organization: Grindstone Indian Rancheria\""
+    },
+    {
+      "nation": "Guidiville Rancheria of California",
+      "shortName": "Guidiville Rancheria",
+      "page": "https://caltribalfamilies.org/places/guidiville-rancheria",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, agency, California Tribal Families Coalition directory entry: \"Tribe/Indian Organization: Guidiville Rancheria\""
+    },
+    {
+      "nation": "Habematolel Pomo of Upper Lake, California",
+      "shortName": "Habematolel Pomo of Upper Lake",
+      "page": "https://www.hpultribe-nsn.gov/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, title, h1, footer: \"title and h1: Habematolel Pomo of Upper Lake; © 2026 Habematolel Pomo of Upper Lake. All Rights Reserved.\""
+    },
+    {
+      "nation": "Hannahville Indian Community, Michigan",
+      "shortName": "Hannahville Indian Community",
+      "page": "https://hannahville.net/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, h1, og:site_name, footer: \"h1 and og:site_name: Hannahville Indian Community; Hannahville Indian Community © All Rights Reserved\""
+    },
+    {
+      "nation": "Havasupai Tribe of the Havasupai Reservation, Arizona",
+      "shortName": "Havasupai Tribe",
+      "page": "https://theofficialhavasupaitribe.com/Havasupai-Government/havasupai-government.html",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, Government page; footer says Copyright © Havasupai Tribe 2017-2020: \"The Havasupai Tribe is a federally recognized Indian Tribe located in northwestern Arizona.\""
+    },
+    {
+      "nation": "Hopland Band of Pomo Indians, California",
+      "shortName": "Hopland Band of Pomo Indians",
+      "page": "https://www.hbpi.gov/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, title and og:site_name: \"title and og:site_name: Hopland Band of Pomo Indians\""
+    },
+    {
+      "nation": "Hualapai Indian Tribe of the Hualapai Indian Reservation, Arizona",
+      "shortName": "Hualapai Tribe",
+      "page": "https://www.hualapai-nsn.gov/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, title, h1, About link: \"title and h1: Hualapai Tribe, AZ; About the Hualapai Tribe\""
+    },
+    {
+      "nation": "Iipay Nation of Santa Ysabel, California",
+      "shortName": "Iipay Nation of Santa Ysabel",
+      "page": "https://www.iipaynationofsantaysabel-nsn.gov/",
+      "read": "2026-11-13",
+      "basis": "Session decision where the judges split or a pick failed the criteria: the form the Nation's own site uses most. Source, nation-self, page title and h1: \"Iipay Nation Of Santa Ysabel | Santa Ysabel; h1: IIPAY NATION OF SANTA YSABEL\""
+    },
+    {
+      "nation": "Inaja Band of Diegueno Mission Indians of the Inaja and Cosmit Reservation, California",
+      "shortName": "Inaja-Cosmit Band of Indians",
+      "page": "https://sctca.net/inaja-cosmit-band-of-indians",
+      "read": "2026-11-13",
+      "basis": "Session decision where the judges split or a pick failed the criteria: no site of the Nation; the form the Southern California Tribal Chairmen's Association uses, shorter of two regional forms. Source, agency, Southern California Tribal Chairmen's Association member page title (a tribal consortium, not the Nation's own site): \"Inaja-Cosmit Band of Indians\""
+    },
+    {
+      "nation": "Ione Band of Miwok Indians of California",
+      "shortName": "Ione Band of Miwok Indians",
+      "page": "https://ionemiwok.net/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, footer and page title of the Nation's site: \"Copyright 2020 | All Rights Reserved | Ione Band of Miwok Indians.\""
+    },
+    {
+      "nation": "Jamul Indian Village of California",
+      "shortName": "Jamul Indian Village",
+      "page": "https://jamulindianvillage.com/tribal-government/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, site footer; logo and nav also read 'Jamul Indian Village': \"Copyright © 2026 Jamul Indian Village. All Rights Reserved.\""
+    },
+    {
+      "nation": "Jicarilla Apache Nation, New Mexico",
+      "shortName": "Jicarilla Apache Nation",
+      "page": "https://www.iad.nm.gov/nations-pueblos-and-tribes/apaches/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, agency, New Mexico Indian Affairs Department listing of the Apache Nations: \"Jicarilla Apache Nation\""
+    },
+    {
+      "nation": "Kaibab Band of Paiute Indians of the Kaibab Indian Reservation, Arizona",
+      "shortName": "Kaibab Paiute Tribe",
+      "page": "https://www.kaibabpaiute-nsn.gov/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title of the Nation's -nsn.gov homepage (read 2026-11-13): \"Kaibab Paiute Tribe\""
+    },
+    {
+      "nation": "Kaktovik Village (aka Barter Island)",
+      "shortName": "Native Village of Kaktovik",
+      "page": "https://icas-nsn.gov/wp-content/uploads/2025/04/ICAS-CEDS-2025-2030-v1.0-compressed.pdf",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, agency, Inupiat Community of the Arctic Slope 2025-2030 economic strategy, list of member villages: \"Native Village of Kaktovik\""
+    },
+    {
+      "nation": "Kalispel Indian Community of the Kalispel Reservation",
+      "shortName": "Kalispel Tribe of Indians",
+      "page": "http://www.kalispeltribe.com",
+      "read": "2026-11-13",
+      "basis": "Session decision where the judges split or a pick failed the criteria: the form the Nation's own site uses most. Source, nation-self, homepage; page title 'Kalispel Tribe of Indians | We Are Kalispel': \"The Kalispel Tribe of Indians is rich in heritage.\""
+    },
+    {
+      "nation": "Kashia Band of Pomo Indians of the Stewarts Point Rancheria, California",
+      "shortName": "Kashia Band of Pomo Indians",
+      "page": "https://www.stewartspoint.org/wp2/",
+      "read": "2026-11-13",
+      "basis": "Session decision where the judges split or a pick failed the criteria: both judges, the form the Nation's own site uses most. Source, nation-self, homepage heading and body: \"About the Kashia Band of Pomo Indians: ... The Kashia Band of Pomo Indians of the Stewarts Point Rancheria is a Federally Recognized Tribe\""
+    },
+    {
+      "nation": "Keweenaw Bay Indian Community, Michigan",
+      "shortName": "Keweenaw Bay Indian Community",
+      "page": "http://www.kbic-nsn.gov",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, homepage; page title 'Home - Keweenaw Bay Indian Community': \"The Keweenaw Bay Indian Community members share our heritage and future together as one community.\""
+    },
+    {
+      "nation": "Kickapoo Tribe of Indians of the Kickapoo Reservation in Kansas",
+      "shortName": "Kickapoo Tribe in Kansas",
+      "page": "https://www.ktik-nsn.gov/our-mission-and-vision",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, Mission and Vision page of the Nation's site: \"The Mission of the Kickapoo Tribe in Kansas is to enhance the quality of life for the tribe, its members and its community\""
+    },
+    {
+      "nation": "Kletsel Dehe Wintun Nation of the Cortina Rancheria",
+      "shortName": "Kletsel Dehe Wintun Nation",
+      "page": "https://www.kletseldehe.org/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, homepage; also footer '© 2026 Kletsel Dehe Wintun Nation. All Rights Reserved.': \"This is the official website of the Kletsel Dehe Wintun Nation.\""
+    },
+    {
+      "nation": "La Jolla Band of Luiseno Indians, California",
+      "shortName": "La Jolla Band of Luiseño Indians",
+      "page": "https://lajolla-nsn.gov/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title; homepage heading 'La Jolla Band OF LUISEÑO INDIANS': \"La Jolla Band of Luiseño Indians | Official Tribal Site\""
+    },
+    {
+      "nation": "La Posta Band of Diegueno Mission Indians of the La Posta Indian Reservation, California",
+      "shortName": "La Posta Band of Mission Indians",
+      "page": "http://www.lptribe.net",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, footer; page title 'La Posta Band Of Mission Indians | Kumeyaay Indians | California': \"© La Posta Band of Mission Indians | All Rights Reserved\""
+    },
+    {
+      "nation": "Lac Courte Oreilles Band of Lake Superior Chippewa Indians of Wisconsin",
+      "shortName": "Lac Courte Oreilles",
+      "page": "http://www.lco-nsn.gov",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, homepage; page title 'The Official Website of Lac Courte Oreilles': \"This is the official & sanctioned website of Lac Courte Oreilles\""
+    },
+    {
+      "nation": "Lac du Flambeau Band of Lake Superior Chippewa Indians of the Lac du Flambeau Reservation of Wisconsin",
+      "shortName": "Lac du Flambeau Band of Lake Superior Chippewa Indians",
+      "page": "https://www.ldftribe.com/about",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title and og:site_name of the Nation's site (54 characters): \"About - Lac du Flambeau Band of Lake Superior Chippewa Indians\""
+    },
+    {
+      "nation": "Lac Vieux Desert Band of Lake Superior Chippewa Indians of Michigan",
+      "shortName": "Lac Vieux Desert Band of Lake Superior Chippewa Indians",
+      "page": "http://www.lvdtribal.com",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title and homepage heading (55 characters): \"Lac Vieux Desert Band of Lake Superior Chippewa Indians\""
+    },
+    {
+      "nation": "Las Vegas Tribe of Paiute Indians of the Las Vegas Indian Colony, Nevada",
+      "shortName": "Las Vegas Paiute Tribe",
+      "page": "https://www.lvpaiute.gov/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, homepage footer; page title 'Las Vegas Paiute Tribe | Official Tribal Government Website': \"This is an official website of the Las Vegas Paiute Tribe, a federally recognized sovereign nation.\""
+    },
+    {
+      "nation": "Little River Band of Ottawa Indians, Michigan",
+      "shortName": "Little River Band of Ottawa Indians",
+      "page": "http://www.lrboi-nsn.gov",
+      "read": "2026-11-13",
+      "basis": "Session decision where the judges split or a pick failed the criteria: the form the Nation's own site uses most; it tells the Nation from the Little River Band of Pomo. Source, nation-self, homepage heading; page title 'Homepage | Little River Band of Ottawa Indians': \"The Little River Band of Ottawa Indians\""
+    },
+    {
+      "nation": "Little Traverse Bay Bands of Odawa Indians, Michigan",
+      "shortName": "Little Traverse Bay Bands of Odawa Indians",
+      "page": "http://www.ltbbodawa-nsn.gov",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, homepage history text (42 characters): \"On Sept. 21, 1994, the Little Traverse Bay Bands of Odawa Indians (LTBB) was federally reaffirmed\""
+    },
+    {
+      "nation": "Los Coyotes Band of Cahuilla and Cupeno Indians, California",
+      "shortName": "Los Coyotes Band of Cahuilla & Cupeño Indians",
+      "page": "https://www.loscoyotestribe.org/contact",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, footer and contact heading of the Nation's tourism site: \"© 2021 Los Coyotes Band of Cahuilla & Cupeño Indians\""
+    },
+    {
+      "nation": "Lovelock Paiute Tribe of the Lovelock Indian Colony, Nevada",
+      "shortName": "Lovelock Paiute Tribe",
+      "page": "https://dnaa.nv.gov/tribal-nations/tribal-directory",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, agency, Nevada Department of Native American Affairs tribal directory: \"Lovelock Paiute Tribe is located within Pershing County which is approximately 90 miles east of Reno along Interstate 80.\""
+    },
+    {
+      "nation": "Lower Brule Sioux Tribe of the Lower Brule Reservation, South Dakota",
+      "shortName": "Lower Brule Sioux Tribe",
+      "page": "https://www.lowerbrulesiouxtribe.com/about-us",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, site header and About page: \"THE OFFICIAL SITE OF THE LOWER BRULE SIOUX TRIBE\""
+    },
+    {
+      "nation": "Lower Sioux Indian Community in the State of Minnesota",
+      "shortName": "Lower Sioux Indian Community",
+      "page": "http://www.lowersioux.com",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, homepage heading; schema.org site name; title 'Lower Sioux Indian Community | Morton MN': \"The Lower Sioux Indian Community in Morton, MN\""
+    },
+    {
+      "nation": "Lummi Tribe of the Lummi Reservation",
+      "shortName": "Lummi Nation",
+      "page": "https://www.lummi-nsn.gov",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title and homepage heading; calendar 'Lummi Nation Calendar': \"Newileng Si’iam - Welcome to Lummi Nation\""
+    },
+    {
+      "nation": "Makah Indian Tribe of the Makah Indian Reservation",
+      "shortName": "Makah Tribe",
+      "page": "http://www.makah.com",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, homepage text; og:site_name 'Makah Tribe'; contact block 'Makah Tribe': \"The Makah Tribe has called the spectacular Neah Bay, Washington area home since time immemorial.\""
+    },
+    {
+      "nation": "Manchester Band of Pomo Indians of the Manchester Rancheria, California",
+      "shortName": "Manchester-Point Arena Band of Pomo Indians",
+      "page": "https://mpapomotribe.com/",
+      "read": "2026-11-13",
+      "basis": "Session decision where the judges split or a pick failed the criteria: the form the Nation's own site uses most. Source, nation-self, homepage header and footer: \"Tribal Government website for the Manchester-Point Arena Band of Pomo Indians.\""
+    },
+    {
+      "nation": "Manzanita Band of Diegueno Mission Indians of the Manzanita Reservation, California",
+      "shortName": "Manzanita Band of Diegueño Mission Indians of the Manzanita Reservation",
+      "page": "https://data.nativemi.org/tribal-directory/Find?advFilter=eyJDdXN0b21GaWVsZFZhbHVlcyI6W10sIkNhdGVnb3J5VmFsdWVzIjpbXSwiU3RhdGUiOiJDQSJ9&term",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, agency, Native Ministries International directory (formal name, not shorter): \"The Manzanita Band of Diegueño Mission Indians of the Manzanita Reservation is a federally recognized tribe of Kumeyaay Indians\""
+    },
+    {
+      "nation": "Match-E-Be-Nash-She-Wish Band of Pottawatomi",
+      "shortName": "Gun Lake Tribe",
+      "page": "https://www.gunlaketribe-nsn.gov",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title 'Gun Lake Tribe - Gun Lake Tribe', homepage text, and footer heading '### Gun Lake Tribe': \"See what's going on around Gun Lake Tribe\""
+    },
+    {
+      "nation": "Mechoopda Indian Tribe of Chico Rancheria, California",
+      "shortName": "Mechoopda Indian Tribe",
+      "page": "http://www.mechoopda-nsn.gov/",
+      "read": "2026-11-13",
+      "basis": "Session decision where the judges split or a pick failed the criteria: both judges, the form the Nation's own site uses most. Source, nation-self, homepage text; contact block 'Mechoopda Indian Tribe of Chico Rancheria': \"Today, the Mechoopda Indian Tribe is a federally recognized tribe comprised of 560 Tribal Members\""
+    },
+    {
+      "nation": "Menominee Indian Tribe of Wisconsin",
+      "shortName": "Menominee Tribe",
+      "page": "http://www.menominee-nsn.gov",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, homepage text: \"The Menominee Tribe's history is unique because our origin or creation begins at the mouth of the Menominee River\""
+    },
+    {
+      "nation": "Mesa Grande Band of Diegueno Mission Indians of the Mesa Grande Reservation, California",
+      "shortName": "Mesa Grande Band of Mission Indians",
+      "page": "https://www.mesagrandeband-nsn.gov",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title: \"Mesa Grande Band of Mission Indians (Official) Mesa Grande\""
+    },
+    {
+      "nation": "Mescalero Apache Tribe of the Mescalero Reservation, New Mexico",
+      "shortName": "Mescalero Apache Tribe",
+      "page": "https://mescaleroapachetribe.com/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title of the Nation's site: \"Home - Official Website of the Mescalero Apache Tribe\""
+    },
+    {
+      "nation": "Metlakatla Indian Community, Annette Island Reserve",
+      "shortName": "Metlakatla Indian Community",
+      "page": "http://www.metlakatla.com",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, homepage heading and text: \"The Metlakatla Indian Community (MIC) is located on the Annette Islands and is the only Indian Reserve in Alaska.\""
+    },
+    {
+      "nation": "Middletown Rancheria of Pomo Indians of California",
+      "shortName": "Middletown Rancheria",
+      "page": "https://middletownrancheria-nsn.gov/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title: \"Middletown Rancheria of Pomo Indians California – Middletown Rancheria information and updates\""
+    },
+    {
+      "nation": "Minnesota Chippewa Tribe, Minnesota (Six component reservations: Bois Forte Band (Nett Lake); Fond du Lac Band; Grand Portage Band; Leech Lake Band; Mille Lacs Band; White Earth Band)",
+      "shortName": "Minnesota Chippewa Tribe",
+      "page": "https://www.mnchippewatribe.org",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, homepage heading: \"# Minnesota Chippewa Tribe Safeguarding resources and fostering the prosperity of our people and future descendants\""
+    },
+    {
+      "nation": "Mississippi Band of Choctaw Indians",
+      "shortName": "Mississippi Choctaw",
+      "page": "https://www.choctaw.org/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, home page welcome text; also \"Mississippi Choctaw\" throughout About Us: \"We, the Mississippi Choctaw, take great pride in our history and culture and we enjoy sharing our story with you.\""
+    },
+    {
+      "nation": "Moapa Band of Paiute Indians of the Moapa River Indian Reservation, Nevada",
+      "shortName": "Moapa Band of Paiutes",
+      "page": "https://www.moapabandofpaiutes.com/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title and site header (Wix site launched 2025): \"Moapa Band of Paiutes | Moapa Nevada\""
+    },
+    {
+      "nation": "Mohegan Tribe of Indians of Connecticut",
+      "shortName": "The Mohegan Tribe",
+      "page": "https://www.mohegan.nsn.us/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title (read through Parallel fetch; the site refuses a scripted read with HTTP 403): \"The Mohegan Tribe | Native American Tribe | Southeastern CT\""
+    },
+    {
+      "nation": "Mooretown Rancheria of Maidu Indians of California",
+      "shortName": "Mooretown Rancheria",
+      "page": "https://www.mooretownrancheria-nsn.gov/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title; logo reads \"Mooretown Rancheria of Maidu Indians of California\": \"Mooretown Rancheria - Home\""
+    },
+    {
+      "nation": "Morongo Band of Mission Indians, California",
+      "shortName": "Morongo Band of Mission Indians",
+      "page": "https://morongonation.org/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, home page body, About Us, footer copyright; also the og/search title of the site: \"The Morongo Band of Mission Indians is a sovereign tribal government serving the Morongo Indian Reservation beneath the San Gorgonio Mountains\""
+    },
+    {
+      "nation": "Native Village of Barrow Inupiat Traditional Government",
+      "shortName": "Native Village of Barrow",
+      "page": "https://nvb-nsn.gov/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title and header: \"Native Village of Barrow | To protect and promote Iñupiat Rights, Self-Determination, and Self-Sufficiency.\""
+    },
+    {
+      "nation": "Native Village of Chuathbaluk (Russian Mission, Kuskokwim)",
+      "shortName": "Native Village Of Chuathbaluk",
+      "page": "https://www.curarpaluk.com/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, site header (capital \"Of\" as the site writes it): \"Native Village Of Chuathbaluk\""
+    },
+    {
+      "nation": "Native Village of Diomede (aka Inalik)",
+      "shortName": "Native Village of Diomede",
+      "page": "https://www.nortonsoundhealth.org/villages/little-diomede",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, agency, Norton Sound Health Corporation village page, \"Tribe\" field: \"Native Village of Diomede, Contact\""
+    },
+    {
+      "nation": "Native Village of Eyak (Cordova)",
+      "shortName": "Native Village of Eyak",
+      "page": "https://www.eyak-nsn.gov/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title and header; body: \"The Native Village of Eyak is a federally recognized tribe based in Cordova, Alaska.\": \"Native Village of Eyak - Home\""
+    },
+    {
+      "nation": "Native Village of Kluti Kaah (aka Copper Center)",
+      "shortName": "Native Village of Kluti-Kaah",
+      "page": "https://www.klutikaah.org/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title (\"Home | Native Village of Kluti-Kaah\") and site header: \"Native Village of Kluti-Kaah\""
+    },
+    {
+      "nation": "Native Village of Kwinhagak (aka Quinhagak)",
+      "shortName": "Native Village of Kwinhagak",
+      "page": "https://kwinhagak.org/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title of the Nation's project site (the State of Alaska 2012 report says the site \"is owned by the NVK\"): \"Native Village of Kwinhagak Community Development & Special Projects Site\""
+    },
+    {
+      "nation": "Native Village of Marshall (aka Fortuna Ledge)",
+      "shortName": "Native Village of Marshall",
+      "page": "https://www.facebook.com/p/Native-Village-of-Marshall-Marshall-Traditional-Council-100083334637308",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, the tribe's own Facebook page intro (no website found): \"The Native Village of Marshall, Marshall Traditional Council, is an Alaskan tribal government that serves its Marshall Tribal Members.\""
+    },
+    {
+      "nation": "Native Village of Nanwalek (aka English Bay)",
+      "shortName": "Native Village of Nanwalek",
+      "page": "https://www.chugachmiut.org/about-us/about-chugachmiut/service-area/nanwalek",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, agency, Chugachmiut (regional tribal consortium) service area page: \"The Native Village of Nanwalek is governed by the Nanwalek IRA Council, consisting of an elected seven-member body.\""
+    },
+    {
+      "nation": "Native Village of Nuiqsut (aka Nooiksut)",
+      "shortName": "Native Village of Nuiqsut",
+      "page": "https://www.nvnuiqsut.org/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, site header; page title is \"HOME | Nuiqsut\": \"Native Village of Nuiqsut\""
+    },
+    {
+      "nation": "Native Village of Saint Michael",
+      "shortName": "Native Village of St. Michael",
+      "page": "https://opengovus.com/sam-entity/F268RX3AF4L6",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, agency, same SAM.gov registration, second name: \"Native Village of Saint Michael · Native Village of St. Michael\""
+    },
+    {
+      "nation": "Navajo Nation, Arizona, New Mexico, & Utah",
+      "shortName": "Navajo Nation",
+      "page": "https://www.navajo-nsn.gov/History",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title pattern across the site; nav lists \"Navajo Nation Washington Office\": \"Navajo Nation > History\""
+    },
+    {
+      "nation": "Northern Arapaho Tribe of the Wind River Reservation, Wyoming",
+      "shortName": "Northern Arapaho Tribe",
+      "page": "https://northernarapaho.com/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title and header of the current site: \"Northern Arapaho Tribe |\""
+    },
+    {
+      "nation": "Northern Cheyenne Tribe of the Northern Cheyenne Indian Reservation, Montana",
+      "shortName": "Northern Cheyenne Tribe",
+      "page": "http://www.cheyennenation.com/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title; contact page \"Northern Cheyenne Tribe 600 Cheyenne Ave\": \"Northern Cheyenne Tribe Homepage\""
+    },
+    {
+      "nation": "Northfork Rancheria of Mono Indians of California",
+      "shortName": "North Fork Rancheria",
+      "page": "https://nfr-nsn.gov/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, footer of the Nation's second site; contact page also says \"North Fork Rancheria Tribal Office\": \"Copyright 2026 - North Fork Rancheria\""
+    },
+    {
+      "nation": "Northwestern Band of the Shoshone Nation",
+      "shortName": "Northwestern Shoshone",
+      "page": "https://nwbshoshone.com/about/",
+      "read": "2026-11-13",
+      "basis": "Session decision where the judges split or a pick failed the criteria: both judges. Source, nation-self, About page: \"So-so-goi means “those who travel on foot.” The Northwestern Shoshone traveled with the changing season.\""
+    },
+    {
+      "nation": "Nottawaseppi Huron Band of the Potawatomi, Michigan",
+      "shortName": "Nottawaseppi Huron Band of the Potawatomi",
+      "page": "https://nhbp-nsn.gov/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title and header; formal name minus \", Michigan\": \"NHBP | Nottawaseppi Huron Band of the Potawatomi\""
+    },
+    {
+      "nation": "Organized Village of Grayling (aka Holikachuk)",
+      "shortName": "Organized Village of Grayling",
+      "page": "https://maps.commerce.alaska.gov/server/rest/services/Contacts/CDO_Contacts_Federally_Recognized_Tribes/MapServer/0/70",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, agency, State of Alaska federally recognized tribes contact layer: \"EntityName: Organized Village of Grayling EntityType: Federally Recognized Tribe AlternateName: Holikachuk\""
+    },
+    {
+      "nation": "Orutsararmiut Traditional Native Council",
+      "shortName": "Orutsararmiut Native Council",
+      "page": "https://orutsararmiut.org/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title and header (BIA-listed nativecouncil.org redirects here): \"Orutsararmiut Native Council - Bethel, Alaska\""
+    },
+    {
+      "nation": "Otoe-Missouria Tribe of Indians, Oklahoma",
+      "shortName": "Otoe-Missouria Tribe",
+      "page": "https://www.omtribe.org/who-we-are/government",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, Government page; footer \"Copyright © Otoe-Missouria Tribe\": \"The Tribal Council is the elected governing body of the Otoe-Missouria Tribe.\""
+    },
+    {
+      "nation": "Paiute Indian Tribe of Utah (Cedar Band of Paiutes, Kanosh Band of Paiutes, Koosharem Band of Paiutes, Indian Peaks Band of Paiutes, and Shivwits Band of Paiutes)",
+      "shortName": "Paiute Indian Tribe of Utah",
+      "page": "https://pitu.gov/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, home page (read through Parallel; scripted read failed): \"Welcome to official website of the Paiute Indian Tribe of Utah (PITU).\""
+    },
+    {
+      "nation": "Paiute-Shoshone Tribe of the Fallon Reservation and Colony, Nevada",
+      "shortName": "Fallon Paiute Shoshone Tribe",
+      "page": "https://www.fpst.org/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title: \"Fallon Paiute Shoshone Tribe, NV | Official Website\""
+    },
+    {
+      "nation": "Paskenta Band of Nomlaki Indians of California",
+      "shortName": "Paskenta Band of Nomlaki Indians",
+      "page": "https://paskenta-nsn.gov/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, home page; page title \"Home - Paskenta Band of Nomlaki Indians\": \"We are the Paskenta Band of Nomlaki Indians, a resilient and vibrant tribe in the Corning area of Northern California.\""
+    },
+    {
+      "nation": "Pauma Band of Luiseno Mission Indians of the Pauma & Yuima Reservation, California",
+      "shortName": "Pauma Band of Luiseño Indians",
+      "page": "https://www.paumatribe.com/",
+      "read": "2026-11-13",
+      "basis": "Session decision where the judges split or a pick failed the criteria: the form the Nation's own site uses most. Source, nation-self, home page: \"The Pauma Band of Luiseño Indians and our ancestors have lived in the Pauma Valley and surrounding area since time immemorial.\""
+    },
+    {
+      "nation": "Peoria Tribe of Indians of Oklahoma",
+      "shortName": "Peoria Tribe of Oklahoma",
+      "page": "BIA Tribal Leaders Directory",
+      "read": "2026-11-13",
+      "basis": "Session decision where the judges split or a pick failed the criteria: closest to the formal name the Nation uses most. Source, bia-directory, BIA tribe field: \"tribe: Peoria Tribe of Oklahoma\""
+    },
+    {
+      "nation": "Picayune Rancheria of Chukchansi Indians of California",
+      "shortName": "Picayune Rancheria of the Chukchansi Indians",
+      "page": "https://chukchansi-nsn.gov/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title and header (note \"the\" before Chukchansi); address from the Nation's LinkedIn page: \"Picayune Rancheria of the Chukchansi Indians\""
+    },
+    {
+      "nation": "Pinoleville Pomo Nation, California",
+      "shortName": "Pinoleville Pomo Nation",
+      "page": "https://pinoleville-nsn.gov/",
+      "read": "2026-11-13",
+      "basis": "Session decision where the judges split or a pick failed the criteria: the form the Nation's own site uses most. Source, nation-self, page title; header \"Welcome to Pinoleville Pomo Nation\": \"Pinoleville Pomo Nation – Northern California Pomo Indians\""
+    },
+    {
+      "nation": "Pit River Tribe, California (includes XL Ranch, Big Bend, Likely, Lookout, Montgomery Creek, and Roaring Creek Rancherias)",
+      "shortName": "Pit River Tribe",
+      "page": "https://pitrivertribe.gov/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, home page; page title \"Official Home of the Pit River Tribe\": \"Welcome to the official home of the Pit River Tribe The Pit River Tribe is a Tribe comprised of eleven (11) autonomous bands\""
+    },
+    {
+      "nation": "Pitka's Point Traditional Council",
+      "shortName": "Native Village of Pitka's Point",
+      "page": "https://maps.commerce.alaska.gov/server/rest/services/Contacts/CDO_Contacts_Federally_Recognized_Tribes/MapServer/0/163",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, agency, State of Alaska federally recognized tribes contact layer: \"EntityName: Pitka's Point Traditional Council EntityType: Federally Recognized Tribe AlternateName: Native Village of Pitka's Point\""
+    },
+    {
+      "nation": "Pokagon Band of Potawatomi Indians, Michigan and Indiana",
+      "shortName": "Pokagon Band of Potawatomi",
+      "page": "https://www.pokagonband-nsn.gov/",
+      "read": "2026-11-13",
+      "basis": "Session decision where the judges split or a pick failed the criteria: the form the Nation's own site uses most. Source, nation-self, page title (same site also at pokagon.com): \"Pokagon Band of Potawatomi – A Native American Government Supporting Its Citizens\""
+    },
+    {
+      "nation": "Ponca Tribe of Indians of Oklahoma",
+      "shortName": "Ponca Tribe of Oklahoma",
+      "page": "https://www.ponca-nsn.gov/self-governance.html",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, Self-Governance page: \"The Ponca Tribe of Oklahoma has been a federally recognized self-governing tribe since 1999.\""
+    },
+    {
+      "nation": "Portage Creek Village (aka Ohgsenakale)",
+      "shortName": "Portage Creek Village",
+      "page": "https://maps.commerce.alaska.gov/server/rest/services/Contacts/CDO_Contacts_Federally_Recognized_Tribes/MapServer/0/170",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, agency, Alaska Dept of Commerce federally recognized tribes contacts layer: \"CommunityName: Portage Creek EntityName: Portage Creek Village EntityType: Federally Recognized Tribe AlternateName: Ohgsenakale\""
+    },
+    {
+      "nation": "Prairie Island Indian Community in the State of Minnesota",
+      "shortName": "Prairie Island Indian Community",
+      "page": "https://prairieisland.org/who-we-are/our-nation",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, Our Nation page; also site header and page title Prairie Island Indian Community: \"The Prairie Island Indian Community is a federally recognized Indian tribe.\""
+    },
+    {
+      "nation": "Pueblo of San Felipe, New Mexico",
+      "shortName": "Pueblo of San Felipe",
+      "page": "https://www.sfpueblo.com/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, home page welcome heading; page title Welcome to Pueblo of San Felipe: \"WELCOME TO PUEBLO OF SAN FELIPE\""
+    },
+    {
+      "nation": "Pueblo of San Ildefonso, New Mexico",
+      "shortName": "Pueblo de San Ildefonso",
+      "page": "https://sanipueblo.org/",
+      "read": "2026-11-13",
+      "basis": "Session decision where the judges split or a pick failed the criteria: the form the Nation's own site uses most. Source, nation-self, home page heading; also footer Pueblo de San Ildefonso: \"Welcome to the Pueblo de San Ildefonso\""
+    },
+    {
+      "nation": "Pueblo of Santa Ana, New Mexico",
+      "shortName": "Santa Ana Pueblo",
+      "page": "https://santaana-nsn.gov/",
+      "read": "2026-11-13",
+      "basis": "Session decision where the judges split or a pick failed the criteria: both judges, the form the Nation's own site uses most. Source, nation-self, page title; also Copyright 2025 Santa Ana Pueblo in the footer: \"Santa Ana Pueblo\""
+    },
+    {
+      "nation": "Pueblo of Santa Clara, New Mexico",
+      "shortName": "Santa Clara Pueblo",
+      "page": "https://www.santaclarapueblo.org/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, home page welcome heading; page title Santa Clara Pueblo | Rich History-Vibrant Present: \"Welcome to the Santa Clara Pueblo!\""
+    },
+    {
+      "nation": "Puyallup Tribe of the Puyallup Reservation",
+      "shortName": "Puyallup Tribe",
+      "page": "https://www.puyallup-tribe.com",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title; og:site_name Puyallup Tribe; About Our Tribe heading, Puyallup Tribe nav pages: \"Home | Puyallup Tribe\""
+    },
+    {
+      "nation": "Pyramid Lake Paiute Tribe of the Pyramid Lake Reservation, Nevada",
+      "shortName": "Pyramid Lake Paiute Tribe",
+      "page": "https://plpt.nsn.us/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title, home page heading, footer Copyright © 2026 Pyramid Lake Paiute Tribe: \"Home - Pyramid Lake Paiute Tribe\""
+    },
+    {
+      "nation": "Qagan Tayagungin Tribe of Sand Point",
+      "shortName": "Qagan Tayagungin Tribe",
+      "page": "https://www.qttribe.org",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title; also the sentence The purpose of the Qagan Tayagungin Tribe is to provide for the self-government: \"Qagan Tayagungin Tribe, AK\""
+    },
+    {
+      "nation": "Quartz Valley Indian Community of the Quartz Valley Reservation of California",
+      "shortName": "Quartz Valley Indian Community",
+      "page": "https://www.federalregister.gov/d/2026-01899",
+      "read": "2026-11-13",
+      "basis": "Session decision where the judges split or a pick failed the criteria: the Nation's site names the reservation (Quartz Valley Indian Reservation); the label shows the Federal Register name without its reservation clause. Source, federal-register, the formal listing: \"Quartz Valley Indian Community of the Quartz Valley Reservation of California\""
+    },
+    {
+      "nation": "Quechan Tribe of the Fort Yuma Indian Reservation, California & Arizona",
+      "shortName": "Fort Yuma Quechan Indian Tribe",
+      "page": "https://www.quechantribe.com/index.html",
+      "read": "2026-11-13",
+      "basis": "Session decision where the judges split or a pick failed the criteria: the form the Nation's own site uses most. Source, nation-self, page title and footer copyright © 2026 Fort Yuma Quechan Indian Tribe: \"Fort Yuma Quechan Indian Tribe\""
+    },
+    {
+      "nation": "Quileute Tribe of the Quileute Reservation",
+      "shortName": "Quileute Tribe",
+      "page": "http://www.quileutenation.org",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, home page heading The Quileute Tribe and body; page title Quileute Tribe: \"The Quileute Tribe is located in La Push, Washington, on the shores of the Pacific Ocean.\""
+    },
+    {
+      "nation": "Ramona Band of Cahuilla, California",
+      "shortName": "Ramona Band of Cahuilla",
+      "page": "https://ramona-nsn.gov",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, Chairwoman welcome text; page title Ramona Band of Cahuilla -; og:site_name Ramona Band of Cahuilla: \"On behalf of the Ramona Band of Cahuilla, we welcome you to our Tribal website.\""
+    },
+    {
+      "nation": "Red Cliff Band of Lake Superior Chippewa Indians of Wisconsin",
+      "shortName": "Red Cliff Band of Lake Superior Chippewa",
+      "page": "https://www.redcliff-nsn.gov",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, site logo text, page title Welcome to Red Cliff Band of Lake Superior Chippewa, and footer: \"Red Cliff Band of Lake Superior Chippewa\""
+    },
+    {
+      "nation": "Red Lake Band of Chippewa Indians, Minnesota",
+      "shortName": "Red Lake Nation",
+      "page": "https://www.redlakenation.org/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, home page heading; page title Red Lake Nation - Home of the Red Lake Band of Chippewa Indians; footer Red_Lake_Nation-Footer: \"RED LAKE NATION\""
+    },
+    {
+      "nation": "Redwood Valley or Little River Band of Pomo Indians of the Redwood Valley Rancheria California",
+      "shortName": "Redwood Valley Little River Band of Pomo Indians",
+      "page": "https://www.rvrpomo.net/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, site header and page title Home | Redwood Valley Little River Band of Pomo Indians: \"Redwood Valley Little River Band of Pomo Indians\""
+    },
+    {
+      "nation": "Reno-Sparks Indian Colony, Nevada",
+      "shortName": "Reno-Sparks Indian Colony",
+      "page": "https://www.rsic.org/27/About-Us",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title; About Us text Reno-Sparks Indian Colony Tribe; footer Reno-Sparks Indian Colony: \"Reno-Sparks Indian Colony, NV\""
+    },
+    {
+      "nation": "Rosebud Sioux Tribe of the Rosebud Indian Reservation, South Dakota",
+      "shortName": "Rosebud Sioux Tribe",
+      "page": "https://www.rosebudsiouxtribe-nsn.gov",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, home page notice; page title HOME | RosebudSiouxTribe; site name RosebudSiouxTribe; footer An official website of the Rosebud Sioux Tribe: \"THIS IS THE OFFICIAL WEBSITE OF THE ROSEBUD SIOUX TRIBE.\""
+    },
+    {
+      "nation": "Round Valley Indian Tribes, Round Valley Reservation, California",
+      "shortName": "Round Valley Indian Tribes",
+      "page": "https://www.rvit.org",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, footer copyright; page title Round Valley Indian Tribes; footer logo text: \"© Round Valley Indian Tribes, Located 1 Mile North of Covelo in Round Valley\""
+    },
+    {
+      "nation": "Sac & Fox Nation of Missouri in Kansas and Nebraska",
+      "shortName": "Sac & Fox Nation of Missouri",
+      "page": "https://www.sacandfoxks.com",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title: \"History Of The Tribe | Sac & Fox Nation of Missouri\""
+    },
+    {
+      "nation": "Sac & Fox Tribe of the Mississippi in Iowa",
+      "shortName": "Meskwaki Nation",
+      "page": "https://www.meskwaki.org",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, home page body; og:site_name Meskwaki Nation; About the Meskwaki Nation: \"is known as the Meskwaki Nation, or the “People of the Red Earth.”\""
+    },
+    {
+      "nation": "Saginaw Chippewa Indian Tribe of Michigan",
+      "shortName": "Saginaw Chippewa Indian Tribe",
+      "page": "https://www.sagchip.org",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, home page Docket text: \"Since May 1994, The Saginaw Chippewa Indian Tribe has distributed $300,075,846.20 to local businesses and schools.\""
+    },
+    {
+      "nation": "Salt River Pima-Maricopa Indian Community of the Salt River Reservation, Arizona",
+      "shortName": "Salt River Pima-Maricopa Indian Community",
+      "page": "https://www.srpmic-nsn.gov",
+      "read": "2026-11-13",
+      "basis": "Session decision where the judges split or a pick failed the criteria: the form the Nation's own site uses most. Source, nation-self, page title and footer; also As a Salt River Pima-Maricopa Indian Community member: \"Home | Salt River Pima-Maricopa Indian Community\""
+    },
+    {
+      "nation": "San Carlos Apache Tribe of the San Carlos Reservation, Arizona",
+      "shortName": "San Carlos Apache Tribe",
+      "page": "http://scat-nsn.gov/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title; Chairman's Welcome text; footer 2026 – San Carlos Apache Tribe: \"SAN CARLOS APACHE TRIBE - OFFICIAL WEBSITE\""
+    },
+    {
+      "nation": "San Pasqual Band of Diegueno Mission Indians of California",
+      "shortName": "San Pasqual Band of Mission Indians",
+      "page": "https://sanpasqualbandofmissionindians.org/about-us/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, footer; page title San Pasqual Band of Mission Indians; Facebook page name: \"© 2026. San Pasqual Band of Mission Indians. All Rights Reserved.\""
+    },
+    {
+      "nation": "Santa Rosa Band of Cahuilla Indians, California",
+      "shortName": "Santa Rosa Band of Cahuilla Indians",
+      "page": "https://www.santarosacahuilla-nsn.gov/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title and only text the page returned: \"Santa Rosa Band of Cahuilla Indians\""
+    },
+    {
+      "nation": "Santa Rosa Indian Community of the Santa Rosa Rancheria, California",
+      "shortName": "Tachi Yokut Tribe",
+      "page": "https://www.tachi-yokut-nsn.gov/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, home page; page title Santa Rosa Rancheria | Tachi Yokut Tribe: \"Meet the governing body of our mighty sovereign nation, the Tachi Yokut Tribal Council.\""
+    },
+    {
+      "nation": "Santa Ynez Band of Chumash Mission Indians of the Santa Ynez Reservation, California",
+      "shortName": "Santa Ynez Band of Chumash Indians",
+      "page": "https://www.santaynezchumash.org",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, home page heading and page title; news items also use this name: \"# Santa Ynez Band of Chumash Indians\""
+    },
+    {
+      "nation": "Sault Ste. Marie Tribe of Chippewa Indians, Michigan",
+      "shortName": "Sault Tribe",
+      "page": "https://www.saulttribe.com",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, home page headings and body throughout: \"# Sault Tribe Secretarial Election ballots mailed out\""
+    },
+    {
+      "nation": "Shakopee Mdewakanton Sioux Community of Minnesota",
+      "shortName": "Shakopee Mdewakanton Sioux Community",
+      "page": "https://www.shakopeedakota.org",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title and og:site_name; also magazine of the Shakopee Mdewakanton Sioux Community (SMSC): \"Shakopee Mdewakanton Sioux Community in Scott County, MN\""
+    },
+    {
+      "nation": "Sherwood Valley Rancheria of Pomo Indians of California",
+      "shortName": "Sherwood Valley Band of Pomo Indians",
+      "page": "https://www.sherwoodvalleybandofpomo.com/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, home page welcome line; page title Sherwood Valley Band of Pomo Indians; footer: \"Welcome to the Sherwood Valley Band of Pomo Indians website\""
+    },
+    {
+      "nation": "Shingle Springs Band of Miwok Indians, Shingle Springs Rancheria (Verona Tract), California",
+      "shortName": "Shingle Springs Band of Miwok Indians",
+      "page": "https://www.shinglespringsrancheria.com",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, home page heading; page title Shingle Springs Band of Miwok Indians | Official Tribal Website: \"Séekas’in! Welcome to Shingle Springs Band of Miwok Indians\""
+    },
+    {
+      "nation": "Shoalwater Bay Indian Tribe of the Shoalwater Bay Indian Reservation",
+      "shortName": "Shoalwater Bay Indian Tribe",
+      "page": "https://www.shoalwaterbay-nsn.gov",
+      "read": "2026-11-13",
+      "basis": "Session decision where the judges split or a pick failed the criteria: the form the Nation's own site uses most. Source, nation-self, page title and og:site_name; also the Shoalwater Bay Indian Tribe in the about text: \"Home Page » Shoalwater Bay Indian Tribe\""
+    },
+    {
+      "nation": "Shoshone-Bannock Tribes of the Fort Hall Reservation",
+      "shortName": "Shoshone-Bannock Tribes",
+      "page": "https://www.sbtribes.com/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title, site header, logo and footer Copyright 2026 by the Shoshone-Bannock Tribes: \"Shoshone-Bannock Tribes | Located on the Fort Hall Indian Reservation\""
+    },
+    {
+      "nation": "Sisseton-Wahpeton Oyate of the Lake Traverse Reservation, South Dakota",
+      "shortName": "Sisseton-Wahpeton Oyate",
+      "page": "https://www.swo-nsn.gov",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, home page heading; footer Sisseton Wahpeton Oyate: \"# SISSETON-WAHPETON OYATE OF THE LAKE TRAVERSE RESERVATION\""
+    },
+    {
+      "nation": "Skull Valley Band of Goshute Indians of Utah",
+      "shortName": "Skull Valley Band of Goshute",
+      "page": "https://indian.utah.gov/tribalnations",
+      "read": "2026-11-13",
+      "basis": "Session decision where the judges split or a pick failed the criteria: the form the Utah Division of Indian Affairs writes; the Nation's site is unverified. Source, agency, Utah Division of Indian Affairs tribal nations page: \"Skull Valley Band of Goshute Kyle Craig Vice Chairman (Acting Chairman) 407 Skull Valley Road\""
+    },
+    {
+      "nation": "Soboba Band of Luiseno Indians, California",
+      "shortName": "Soboba Band of Luiseño Indians",
+      "page": "https://www.soboba-nsn.gov",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, site header link, footer SOBOBA BAND OF LUISEÑO INDIANS © ALL RIGHTS RESERVED; page title spells Luiseno without the tilde: \"Soboba Band of Luiseño Indians\""
+    },
+    {
+      "nation": "Sokaogon Chippewa Community, Wisconsin",
+      "shortName": "Sokaogon Chippewa Community",
+      "page": "https://www.sokaogonchippewa.com",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title and home page heading: \"Sokaogon Chippewa Community – Mole Lake Band of Lake Superior Chippewa\""
+    },
+    {
+      "nation": "Southern Ute Indian Tribe of the Southern Ute Reservation, Colorado",
+      "shortName": "Southern Ute Indian Tribe",
+      "page": "https://www.southernute-nsn.gov/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, home page welcome; page title Southern Ute Indian Tribe – Southern Ute Reservation, Colorado; logo: \"We invite you to the Southern Ute Indian Reservation in beautiful Southwest Colorado, home of the Southern Ute Indian Tribe.\""
+    },
+    {
+      "nation": "Spirit Lake Tribe, North Dakota",
+      "shortName": "Spirit Lake Nation",
+      "page": "https://www.spiritlakenation.com/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title and og:site_name: \"Spirit Lake Nation\""
+    },
+    {
+      "nation": "Spokane Tribe of the Spokane Reservation",
+      "shortName": "Spokane Tribe",
+      "page": "https://www.spokanetribe.com/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, home page body and footer ('© Copyright - Spokane Tribe'): \"We commit to the Spokane Tribe’s vision of attaining self-sufficiency\""
+    },
+    {
+      "nation": "Squaxin Island Tribe of the Squaxin Island Reservation",
+      "shortName": "Squaxin Island Tribe",
+      "page": "https://squaxinisland.org/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title and footer ('© 2026 – All Rights Reserved – Squaxin Island Tribe'): \"Squaxin Island Tribe – People of the Water\""
+    },
+    {
+      "nation": "St. Croix Chippewa Indians of Wisconsin",
+      "shortName": "St Croix Chippewa Indians of Wisconsin",
+      "page": "https://stcroixojibwe-nsn.gov/our-tribe/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title and og:site_name (no period after St): \"Our Tribe - St Croix Chippewa Indians of Wisconsin\""
+    },
+    {
+      "nation": "Standing Rock Sioux Tribe of North & South Dakota",
+      "shortName": "Standing Rock Sioux Tribe",
+      "page": "https://www.standingrock.org/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, home page body, page title 'Homepage - Standing Rock Sioux Tribe', footer: \"the Standing Rock Sioux Tribe is committed to protecting the language, culture and well-being of its people\""
+    },
+    {
+      "nation": "Stillaguamish Tribe of Indians of Washington",
+      "shortName": "Stillaguamish Tribe",
+      "page": "https://www.stillaguamish.com/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title and og:site_name: \"Home - Stillaguamish Tribe\""
+    },
+    {
+      "nation": "Stockbridge Munsee Community, Wisconsin",
+      "shortName": "Stockbridge-Munsee Community",
+      "page": "https://mohican-nsn.gov/",
+      "read": "2026-11-13",
+      "basis": "Session decision where the judges split or a pick failed the criteria: the form the Nation's own site uses most. Source, nation-self, page title (hyphen between Stockbridge and Munsee): \"Stockbridge-Munsee Community | Band of Mohican Indians – \"People of the waters that are never still\"\""
+    },
+    {
+      "nation": "Summit Lake Paiute Tribe of Nevada",
+      "shortName": "Summit Lake Paiute Tribe",
+      "page": "https://www.summitlaketribe.org/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title 'Home | Summit Lake Paiute Tribe', og:site_name, copyright footer: \"The Administration Office of the Summit Lake Paiute Tribe\""
+    },
+    {
+      "nation": "Suquamish Indian Tribe of the Port Madison Reservation",
+      "shortName": "Suquamish Tribe",
+      "page": "https://suquamish.nsn.us/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title; og:site_name 'The Suquamish Tribe'; footer '© Copyright - 2026 Suquamish Tribe': \"Home | The Suquamish Tribe\""
+    },
+    {
+      "nation": "Susanville Indian Rancheria, California",
+      "shortName": "Susanville Indian Rancheria",
+      "page": "https://sir-nsn.gov/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title, home page heading (same as formal name without ', California'): \"Home | SIR | Susanville Indian Rancheria\""
+    },
+    {
+      "nation": "Sycuan Band of the Kumeyaay Nation",
+      "shortName": "Sycuan Tribe",
+      "page": "https://sycuantribe.com/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title, og:site_name, footer 'Sycuan Tribe | 1 Kwaaypaay Court': \"Sycuan Tribe\""
+    },
+    {
+      "nation": "The Seminole Nation of Oklahoma",
+      "shortName": "Seminole Nation of Oklahoma",
+      "page": "BIA Tribal Leaders Directory",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, bia-directory, BIA short field (two spaces after Nation, as listed): \"tribe: Seminole Nation of Oklahoma\""
+    },
+    {
+      "nation": "Three Affiliated Tribes of the Fort Berthold Reservation, North Dakota",
+      "shortName": "Mandan, Hidatsa, and Arikara Nation",
+      "page": "https://www.mhanation.com/",
+      "read": "2026-11-13",
+      "basis": "Session decision where the judges split or a pick failed the criteria: the Nation's current name as its own site writes it in full; its everyday form is an acronym, which a label never uses. Source, nation-self, page title (long form): \"MHA Nation | Mandan, Hidatsa, and Arikara Nation\""
+    },
+    {
+      "nation": "Tohono O'odham Nation of Arizona",
+      "shortName": "Tohono O’odham Nation",
+      "page": "https://www.tonation-nsn.gov/about-tohono-oodham-nation/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, About page body (curly apostrophe U+2019); og:site_name also 'Tohono O'odham Nation' with a straight apostrophe on some pages: \"The Tohono O’odham Nation is a federally-recognized tribe that includes approximately 28,000 members\""
+    },
+    {
+      "nation": "Tonkawa Tribe of Indians of Oklahoma",
+      "shortName": "Tonkawa Tribe of Oklahoma",
+      "page": "https://tonkawatribe.com/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title, header text, footer '© 2025 Tonkawa Tribe of Oklahoma': \"Tonkawa Tribe of Oklahoma | Official Website\""
+    },
+    {
+      "nation": "Torres Martinez Desert Cahuilla Indians, California",
+      "shortName": "Torres Martinez Desert Cahuilla Indians",
+      "page": "https://torresmartinez.org/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title and footer 'Copyright © Torres Martinez Desert Cahuilla Indians': \"Torres Martinez Desert Cahuilla Indians | Mau-Wal-Mah Su-Kutt Menyil\""
+    },
+    {
+      "nation": "Tule River Indian Tribe of the Tule River Reservation, California",
+      "shortName": "Tule River Tribe",
+      "page": "https://tulerivertribe-nsn.gov/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, home page body; footer '© 2024 Tule River Tribe': \"Tule River Tribe of California is a proud sovereign nation that strives to improve the livelihood of their members\""
+    },
+    {
+      "nation": "Tuolumne Band of Me-Wuk Indians of the Tuolumne Rancheria of California",
+      "shortName": "Tuolumne Band of Me-Wuk Indians",
+      "page": "https://mewuk.com/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, vision statement on home page: \"The Tuolumne Band of Me-Wuk Indians is a sovereign nation that is dedicated to uphold social and economic stability through self-reliance\""
+    },
+    {
+      "nation": "Turtle Mountain Band of Chippewa Indians of North Dakota",
+      "shortName": "Turtle Mountain Band of Chippewa",
+      "page": "https://tmchippewa.com/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, home page header text above 'Belcourt, North Dakota': \"Turtle Mountain Band of Chippewa\""
+    },
+    {
+      "nation": "Twenty-Nine Palms Band of Mission Indians of California",
+      "shortName": "Twenty-Nine Palms Band of Mission Indians",
+      "page": "https://www.29palmstribe.org/",
+      "read": "2026-11-13",
+      "basis": "Session decision where the judges split or a pick failed the criteria: the form the Nation's own site uses most. Source, nation-self, site header and og:site_name (formal name without 'of California'): \"# TWENTY-NINE PALMS BAND OF MISSION INDIANS\""
+    },
+    {
+      "nation": "United Auburn Indian Community of the Auburn Rancheria of California",
+      "shortName": "United Auburn Indian Community",
+      "page": "https://www.auburnrancheria.com/about-us/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, About page; page title 'Home - United Auburn Indian Community'; header: \"The United Auburn Indian Community is invested in enriching the community through economic development, education services\""
+    },
+    {
+      "nation": "Upper Sioux Community, Minnesota",
+      "shortName": "Upper Sioux Community",
+      "page": "https://www.uppersiouxcommunity-nsn.gov/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, home page heading: \"# Upper Sioux Community\""
+    },
+    {
+      "nation": "Ute Indian Tribe of the Uintah & Ouray Reservation, Utah",
+      "shortName": "Ute Indian Tribe",
+      "page": "https://www.utetribe.com/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, page title (read through the search tool; the scripted fetch failed with a socket error): \"Ute Indian Tribe\""
+    },
+    {
+      "nation": "Utu Utu Gwaitu Paiute Tribe of the Benton Paiute Reservation, California",
+      "shortName": "Utu Utu Gwaitu Paiute Tribe",
+      "page": "https://www.bentonpaiutereservation.org/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, site header and footer logo text: \"Utu Utu Gwaitu Paiute Tribe\""
+    },
+    {
+      "nation": "Walker River Paiute Tribe of the Walker River Reservation, Nevada",
+      "shortName": "Walker River Paiute Tribe",
+      "page": "https://www.wrpt.org/",
+      "read": "2026-11-13",
+      "basis": "Session decision where the judges split or a pick failed the criteria: the form the Nation's own site uses most. Source, nation-self, home page heading; footer '© 2026 Walker River Paiute Tribe': \"Welcome To The Walker River Paiute Tribe\""
+    },
+    {
+      "nation": "White Mountain Apache Tribe of the Fort Apache Reservation, Arizona",
+      "shortName": "White Mountain Apache Tribe",
+      "page": "http://www.wmat.us/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, home page welcome text; page title 'White Mountain Apache Tribe': \"Hello and welcome to the new website of the White Mountain Apache Tribe.\""
+    },
+    {
+      "nation": "Wichita and Affiliated Tribes (Wichita, Keechi, Waco, & Tawakonie), Oklahoma",
+      "shortName": "Wichita and Affiliated Tribes",
+      "page": "https://www.wichitatribe.com/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, home page heading; page title 'Home - Wichita and Affiliated Tribes': \"# Welcome to the Wichita and Affiliated Tribes\""
+    },
+    {
+      "nation": "Winnemucca Indian Colony of Nevada",
+      "shortName": "Winnemucca Indian Colony",
+      "page": "https://winnemuccaindiancolony.org/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, home page; page title and og:site_name 'Winnemucca Indian Colony': \"The Winnemucca Indian Colony is a federally recognized Tribe located within Humboldt County, Nevada.\""
+    },
+    {
+      "nation": "Yankton Sioux Tribe of South Dakota",
+      "shortName": "Yankton Sioux Tribe",
+      "page": "https://www.yanktonsiouxtribe.net/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, home page; page title and og:site_name 'Yankton Sioux Tribe': \"This is the Yankton Sioux Tribe with an important message for tribal members and businesses within Charles Mix County.\""
+    },
+    {
+      "nation": "Yavapai-Apache Nation of the Camp Verde Indian Reservation, Arizona",
+      "shortName": "Yavapai-Apache Nation",
+      "page": "https://yavapai-apache.org/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, home page title, header, and footer '© 2026 Yavapai-Apache Nation': \"Welcome to the Yavapai-Apache Nation Gah’nahvah: To Tell (Yavapai) | Ya Ti: To Talk (Apache)\""
+    },
+    {
+      "nation": "Yerington Paiute Tribe of the Yerington Colony & Campbell Ranch, Nevada",
+      "shortName": "Yerington Paiute Tribe",
+      "page": "https://ypt-nsn.gov/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, home page heading; page title 'Yerington Paiute Tribe'; About page: \"Welcome To The YERINGTON PAIUTE TRIBE\""
+    },
+    {
+      "nation": "Yocha Dehe Wintun Nation, California",
+      "shortName": "Yocha Dehe Wintun Nation",
+      "page": "https://www.yochadehe.org/",
+      "read": "2026-11-13",
+      "basis": "Session decision where the judges split or a pick failed the criteria: the form the Nation's own site uses most. Source, nation-self, home page heading: \"We Are The Yocha Dehe Wintun Nation\""
+    },
+    {
+      "nation": "Yomba Shoshone Tribe of the Yomba Reservation, Nevada",
+      "shortName": "Yomba Shoshone Tribe",
+      "page": "https://www.yombatribe.com/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, home page; page title 'Yomba Shoshone Tribe' and seal text: \"Welcome to the Official Yomba Shoshone Tribal Website\""
+    },
+    {
+      "nation": "Yurok Tribe of the Yurok Reservation, California",
+      "shortName": "Yurok Tribe",
+      "page": "https://www.yuroktribe.org/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, home page; page title 'Home | Yurok Tribe', og:site_name 'Yurok Tribe': \"The mission of the Yurok Tribe is to exercise the aboriginal and sovereign rights of the Yurok People\""
+    },
+    {
+      "nation": "Zuni Tribe of the Zuni Reservation, New Mexico",
+      "shortName": "Pueblo of Zuni",
+      "page": "https://ashiwi.org/",
+      "read": "2026-11-13",
+      "basis": "Jev (both option orders) and the Codex adversary chose it. Source, nation-self, home page body; also 'The mission of the Pueblo of Zuni Tribal Government is to deliver effective community-oriented services': \"To receive Pueblo of Zuni Alerts, Updates, and Notifications, text the word\""
+    }
+  ]
+}
