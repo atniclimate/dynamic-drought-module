@@ -46,12 +46,14 @@ function dateInWords(iso: string): string {
 
 /** One row's status, in the issuer's terms. */
 export function grantStatusLine(row: GrantOpportunity): string {
+  // vocab-allow: Grants.gov's own opportunity status ("forecasted"), an agency's announced funding, not a DDM read
   if (row.status === 'forecasted') return 'Forecast, not yet open';
   return row.closes === null ? 'Open, no close date stated' : `Open, closes ${dateInWords(row.closes)}`;
 }
 
 /** The count over every open and forecast row; "At least" when the read was partial. */
 export function grantsCountLine(open: number, forecast: number, partial: boolean): string {
+  // vocab-allow: Grants.gov's own opportunity status ("forecasted"), an agency's announced funding, not a DDM read
   return `${partial ? 'At least ' : ''}${open} open and ${forecast} forecast opportunities list federally recognized Tribal governments as eligible.`;
 }
 
