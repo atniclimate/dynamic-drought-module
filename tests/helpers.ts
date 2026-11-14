@@ -436,6 +436,23 @@ export async function showFullDetail(page: Page): Promise<void> {
   }).toPass();
 }
 
+/**
+ * DR-258: a briefing for a place in the United States reads Grants.gov once per
+ * page (src/impact/grants.ts). Every routine boot answers that POST with a valid
+ * empty search, so no spec reaches the live API or a strict backstop; a spec's
+ * own `page.route` registered later still wins.
+ */
+export async function installDefaultGrantsStub(page: Page): Promise<void> {
+  await page.route('https://api.grants.gov/v1/api/search2', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      headers: { 'access-control-allow-origin': '*' },
+      body: JSON.stringify({ errorcode: 0, data: { hitCount: 0, oppHits: [] } })
+    })
+  );
+}
+
 export async function gotoApp(
   page: Page,
   query = '',
@@ -497,6 +514,8 @@ export async function gotoApp(
   // boot never waits on NOAA's answer. See `installDefaultNwsWwaStub`'s own
   // comment for the opt-out and why a spec's own `page.route` still wins.
   await installDefaultNwsWwaStub(page, options.nwsWwa ?? 'fixture');
+  // DR-258: see `installDefaultGrantsStub`.
+  await installDefaultGrantsStub(page);
   // ENSO block B3: every routine boot answers the tropical MapServer from
   // tests/tropical-fixtures.ts (an empty season unless the spec names an arm).
   await installDefaultTropicalStub(page, options.tropical ?? 'allEmpty');
