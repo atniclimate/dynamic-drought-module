@@ -832,8 +832,8 @@ function nadmKey(): KeySpec {
     label: 'North America drought',
     ariaLabel:
       `North American Drought Monitor tri-national consensus key for ${month}. No polygon means no coverage from this source, not class zero.`,
+    // The month is in the Key's head (the time bar's stamp).
     itemsHtml:
-      `<span class="map-key-item">${escapeHtml(month)} · tri-national consensus</span>` +
       NADM_CATEGORIES.map((entry) => swatchItem(entry.color, entry.code)).join('') +
       '<span class="map-key-item">No polygon: no source coverage</span>'
   };
@@ -1830,10 +1830,10 @@ export function initMapKey(): void {
         )).join('') + '</span>'
       : '';
     // The head names the product drawn and its date, from the time bar's own stamp (one source, so the two cannot
-    // disagree), when the bar belongs to a product this key describes. An embed carries its own stamp.
+    // disagree), when the bar belongs to a product this key describes.
     const timeBarSpec = getTimeBarSpec();
     const productHead =
-      timeBarSpec && productKeys.includes(timeBarOwner() ?? '') && !app?.classList.contains('embed')
+      timeBarSpec && productKeys.includes(timeBarOwner() ?? '')
         ? `<span class="map-key-product" data-map-key-product><span>${escapeHtml(stampProduct(timeBarSpec.stamp))}</span>` +
           `<span>${escapeHtml(timeBarSpec.stamp.headline)}</span></span>`
         : '';
