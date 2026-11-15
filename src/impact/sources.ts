@@ -1084,7 +1084,8 @@ function serviceRectangle(
  * even when the layer is off, which is the common case.
  */
 async function nifcClaimFromLoadedCollection(
-  requestBbox: readonly [number, number, number, number]
+  requestBbox: readonly [number, number, number, number],
+  placeGeometry: Geometry | null | undefined
 ): Promise<SourceResult | null> {
   // S30D P3-TRUTH (repair round 2): this read tests the ONE rectangle the
   // network read below sends the service, normalized and split by
@@ -1149,7 +1150,18 @@ async function nifcClaimFromLoadedCollection(
       ? feature.properties.attr_IncidentTypeCategory
       : undefined
   );
-  const text = buildNifcAreaPerimeterClaim(incidentTypes);
+  // A place that carries its own outline: the wildfire perimeters whose geometry meets it (M-113).
+  const onPlace =
+    placeGeometry?.type === 'Polygon' || placeGeometry?.type === 'MultiPolygon'
+      ? deduped.filter(
+          (feature) =>
+            isObject(feature) &&
+            isObject(feature.properties) &&
+            classifyNifcIncidentType(feature.properties.attr_IncidentTypeCategory) === 'wildfire' &&
+            geometriesOverlap(feature.geometry as Geometry | null, placeGeometry)
+        ).length
+      : undefined;
+  const text = buildNifcAreaPerimeterClaim(incidentTypes, onPlace === undefined ? {} : { onPlace });
 
   return {
     ok: true,
@@ -1159,10 +1171,53 @@ async function nifcClaimFromLoadedCollection(
       nifcAreaClaim(
         text,
         isoDayLocal(new Date(loaded.fetchedAt)),
-        nifcPerimetersReading(incidentTypes, false)
+        nifcPerimetersReading(incidentTypes, false, onPlace)
       )
     ]
   };
+}
+
+/**
+ * The wildfire perimeters that meet the place's own outline (M-113), asked of
+ * the service as the Drought Monitor's area read asks: the outline posted as a
+ * form. Undefined when the place carries no outline the service can take, or
+ * the read does not answer; the box count then stands alone, as it always did.
+ * Never rejects.
+ */
+async function nifcWildfiresOnPlace(
+  context: BoundarySelectionContext,
+  signal: AbortSignal
+): Promise<number | undefined> {
+  const outline = esriPlacePolygon(context.placeGeometry);
+  if (outline === null) return undefined;
+  try {
+    const query = esriEnvelopeQuery(outline, 'attr_UniqueFireIdentifier,attr_IncidentTypeCategory', NIFC_AREA_QUERY_RECORD_CAP);
+    query.set('geometryType', 'esriGeometryPolygon');
+    query.delete('f');
+    const json = await fetchJsonWithBudget(
+      `${URLS.nifcFires}/query?f=geojson`,
+      {
+        method: 'POST',
+        headers: { ...GEOJSON_ACCEPT, 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+        body: query
+      },
+      signal,
+      TIMEOUT_MS
+    );
+    const seen = new Set<unknown>();
+    return featuresOf(json).filter((feature) => {
+      if (!isObject(feature) || !isObject(feature.properties)) return false;
+      if (classifyNifcIncidentType(feature.properties.attr_IncidentTypeCategory) !== 'wildfire') return false;
+      // One fire can carry several perimeter records: counted once, as the box count does.
+      const id = feature.properties.attr_UniqueFireIdentifier ?? feature;
+      if (seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    }).length;
+  } catch (err) {
+    if (!signal.aborted) warnSourceFailure('NIFC place-outline query', err);
+    return undefined;
+  }
 }
 
 /**
@@ -1175,11 +1230,18 @@ async function nifcClaimFromLoadedCollection(
  */
 function nifcPerimetersReading(
   incidentTypes: readonly unknown[],
-  lowerBound: boolean
+  lowerBound: boolean,
+  onPlace?: number
 ): WfigsPerimetersReading {
   const counts = { wildfire: 0, prescribed: 0, other: 0 };
   for (const value of incidentTypes) counts[classifyNifcIncidentType(value)] += 1;
-  return { kind: 'wfigs-perimeters', ...counts, lowerBound };
+  // The outline lies inside the box, so a box with no wildfire has none on the place: the sentence and the reading agree.
+  return {
+    kind: 'wfigs-perimeters',
+    ...counts,
+    lowerBound,
+    ...(onPlace === undefined ? {} : { onPlace: counts.wildfire === 0 ? 0 : onPlace })
+  };
 }
 
 /** The one `makeClaim` call site both the network read below and the
@@ -1260,7 +1322,7 @@ export async function fetchNifcClaims(
   // briefing abort settles this read with no late claim and no request.
   if (registry.getStatus('nifc-fires') === 'ready') {
     const fromCollection = await settleLazy(
-      () => nifcClaimFromLoadedCollection(requestBbox),
+      () => nifcClaimFromLoadedCollection(requestBbox, context.placeGeometry),
       signal,
       'NIFC loaded-perimeters read'
     );
@@ -1269,23 +1331,26 @@ export async function fetchNifcClaims(
   }
 
   try {
-    const payloads = await loadServiceEnvelopePieces(
-      requestBbox,
-      signal,
-      async (piece, siblingSignal) => {
-        const envelope = serviceRectangle(piece).join(',');
-        const query = esriEnvelopeQuery(
-          envelope,
-          'attr_UniqueFireIdentifier,attr_IncidentName,attr_IncidentTypeCategory',
-          NIFC_AREA_QUERY_RECORD_CAP
-        );
-        return fetchJson(
-          `${URLS.nifcFires}/query?${query.toString()}`,
-          GEOJSON_ACCEPT,
-          siblingSignal
-        );
-      }
-    );
+    const [payloads, onPlace] = await Promise.all([
+      loadServiceEnvelopePieces(
+        requestBbox,
+        signal,
+        async (piece, siblingSignal) => {
+          const envelope = serviceRectangle(piece).join(',');
+          const query = esriEnvelopeQuery(
+            envelope,
+            'attr_UniqueFireIdentifier,attr_IncidentName,attr_IncidentTypeCategory',
+            NIFC_AREA_QUERY_RECORD_CAP
+          );
+          return fetchJson(
+            `${URLS.nifcFires}/query?${query.toString()}`,
+            GEOJSON_ACCEPT,
+            siblingSignal
+          );
+        }
+      ),
+      nifcWildfiresOnPlace(context, signal)
+    ]);
     if (signal.aborted) return { claims: [], ok: false };
 
     const pages = payloads.map(featuresOf);
@@ -1305,11 +1370,11 @@ export async function fetchNifcClaims(
         ? feature.properties.attr_IncidentTypeCategory
         : undefined
     );
-    const text = buildNifcAreaPerimeterClaim(incidentTypes, { truncated });
+    const text = buildNifcAreaPerimeterClaim(incidentTypes, { truncated, ...(onPlace === undefined ? {} : { onPlace }) });
     // Mapped incident perimeters and their count: directly observed.
     return {
       ok: true,
-      claims: [nifcAreaClaim(text, todayIso(), nifcPerimetersReading(incidentTypes, truncated))]
+      claims: [nifcAreaClaim(text, todayIso(), nifcPerimetersReading(incidentTypes, truncated, onPlace))]
     };
   } catch (err) {
     if (signal.aborted) return { claims: [], ok: false };

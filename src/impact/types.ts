@@ -159,6 +159,12 @@ export interface WfigsPerimetersReading {
   readonly prescribed: number;
   readonly other: number;
   readonly lowerBound: boolean;
+  /**
+   * How many of the wildfire perimeters meet the place's own outline. Absent
+   * when the place carries no outline (a click, a headquarters town) or that
+   * read did not answer: the box count then stands alone.
+   */
+  readonly onPlace?: number;
 }
 
 /**

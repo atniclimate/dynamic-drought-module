@@ -331,7 +331,7 @@ const NIFC_AREA_QUERY_EXTENT = 'the bounding box around this selection';
  * page that came back at the record cap reads as a lower bound. */
 export function buildNifcAreaPerimeterClaim(
   incidentTypes: readonly unknown[],
-  options: { readonly truncated?: boolean } = {}
+  options: { readonly truncated?: boolean; readonly onPlace?: number } = {}
 ): string {
   const counts: Record<NifcIncidentClass, number> = {
     wildfire: 0,
@@ -353,6 +353,15 @@ export function buildNifcAreaPerimeterClaim(
     ? ` The service returned the ${NIFC_AREA_QUERY_RECORD_CAP} records this briefing asks for, so this count is a lower bound.`
     : '';
   const verb = total === 1 ? 'perimeter intersects' : 'perimeters intersect';
+  // The box is wider than the place, so a place that carries its own outline also says how many of the
+  // wildfire perimeters meet that outline. DRAFT wording (the owner's call).
+  const onPlace = options.onPlace;
+  const place =
+    onPlace === undefined || counts.wildfire === 0
+      ? ''
+      : onPlace === 0
+        ? " No wildfire perimeter intersects this place's mapped boundary."
+        : ` ${onPlace} wildfire ${onPlace === 1 ? 'perimeter intersects' : 'perimeters intersect'} this place's mapped boundary.`;
 
   const categoryLabel: Record<NifcIncidentClass, string> = {
     wildfire: 'wildfire',
@@ -364,12 +373,12 @@ export function buildNifcAreaPerimeterClaim(
   );
   if (present.length === 1) {
     const only = present[0] as NifcIncidentClass;
-    return `${total} current mapped NIFC ${categoryLabel[only]} ${verb} ${NIFC_AREA_QUERY_EXTENT}.${floor}`;
+    return `${total} current mapped NIFC ${categoryLabel[only]} ${verb} ${NIFC_AREA_QUERY_EXTENT}.${place}${floor}`;
   }
 
   const parts = present.map((key) => `${counts[key]} ${categoryLabel[key]}`);
   const categories = `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}`;
-  return `${total} current mapped NIFC fire ${verb} ${NIFC_AREA_QUERY_EXTENT}: ${categories}.${floor}`;
+  return `${total} current mapped NIFC fire ${verb} ${NIFC_AREA_QUERY_EXTENT}: ${categories}.${place}${floor}`;
 }
 
 const NORMALIZED_NIFC_TYPE: maplibregl.ExpressionSpecification = [
