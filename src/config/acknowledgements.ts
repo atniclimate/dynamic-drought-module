@@ -290,7 +290,23 @@ export const ACKNOWLEDGEMENTS: Readonly<Record<AcknowledgementId, Acknowledgemen
     ]
   },
   usbr: nameOnly('usbr', 'Bureau of Reclamation'),
-  usace: nameOnly('usace', 'U.S. Army Corps of Engineers'),
+  usace: {
+    ...nameOnly('usace', 'U.S. Army Corps of Engineers'),
+    // ledger: usace-national-inventory-of-dams (verdicts of 2026-11-15). How the Dams layer selects (DAM_WHERE in
+    // scripts/build-base-tiles.mjs), in the Inventory's own terms. DRAFT wording until the owner's word.
+    notices: [
+      {
+        text:
+          "The Dams layer draws dams in the U.S. Army Corps of Engineers National Inventory of Dams that have an NID height of 50 feet or more, or that the Inventory classes as high hazard potential. NID height is the Inventory's general height of the dam, the largest of its dam height, structural height and hydraulic height, in feet.",
+        citeId: 'usace-national-inventory-of-dams'
+      },
+      {
+        text:
+          "Hazard potential, as the Inventory defines it, describes the possible adverse consequences of a dam failing or being misoperated. It does not reflect the dam's current condition, such as its safety, structural integrity or flood routing capacity.",
+        citeId: 'usace-national-inventory-of-dams'
+      }
+    ]
+  },
   nifc: {
     ...nameOnly('nifc', 'National Interagency Fire Center'),
     notices: [RAWS_PUBLIC_VIEW_NOTICE]
