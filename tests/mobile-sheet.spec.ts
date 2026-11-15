@@ -109,9 +109,9 @@ test.describe('mobile side rail and glass panels', () => {
       };
     });
     expect(panelStyle.position).toBe('fixed');
-    // DR-263 and the look after it: the window is solid --surface-base, no glass, so the map never shows through.
-    expect(panelStyle.background).toBe('rgb(1, 11, 19)');
-    expect(panelStyle.backdrop).toBe('none');
+    // Owner 2026-11-15: the window is glass again, the studios' phone glass (solid from 2026-11-13 to then).
+    expect(panelStyle.background).toMatch(/rgba\(/);
+    expect(panelStyle.backdrop).not.toBe('none');
 
     await page.locator('#sheet-close').click();
     await expect(app).toHaveAttribute('data-sheet-detent', 'closed');

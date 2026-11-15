@@ -126,16 +126,17 @@
     will-change: transform;
   }
 
-  /* The window's ground: the solid rich black the glass is made of, so no
-     map shows through a window that covers it (owner, 2026-11-13). It
-     continues below the screen edge so a spring that overshoots the top
-     never opens a gap. */
+  /* The window's ground: one sheet of the studios' phone glass, the briefing
+     and every other window alike (owner 2026-11-15; solid from 2026-11-13 to
+     then). This near-solid face is the ground where the browser cannot blur;
+     the real glass follows this block. It continues below the screen
+     edge so a spring that overshoots the top never opens a gap. */
   #app[data-sheet-detent] .sidebar::before {
     content: '';
     position: absolute;
     inset: 0 0 -120px;
     z-index: -1;
-    background: var(--surface-base);
+    background: var(--glass-panel-solid);
     pointer-events: none;
   }
 
@@ -355,6 +356,17 @@
     bottom: calc(
       var(--sheet-lift) + var(--mobile-map-edge, 8px) + var(--mobile-scale-block)
     );
+  }
+}
+
+/* Real glass where the browser can blur what is behind it. */
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  @media (max-width: 720px) {
+    #app[data-sheet-detent] .sidebar::before {
+      background: var(--glass-panel);
+      -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+      backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+    }
   }
 }
 

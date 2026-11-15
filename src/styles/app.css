@@ -4643,13 +4643,15 @@ button.telemetry-item {
   transform: translateX(0);
 }
 
-/* The desktop window covers the map with no map showing through (owner
-   2026-11-13, "better for visibility"): the solid rich black the Key's glass
-   is made of, so every card's own --bg-1 / --bg-2 fill still reads as a card
-   and forced colours turn it to Canvas through the token. Text on the bare
-   ground is held to T0-T2 (--ink-soft is 12.2:1 on it), and the header mail
-   link keeps --ink. The phone sheet card, the narrow overlay and print never
-   reach this rule. */
+/* The desktop window covers the map as glass, semitransparent like the two
+   studios (owner 2026-11-15; solid from 2026-11-13 to then): --glass-read
+   under --rich-black-blur, the Key's face, so more-contrast and forced
+   colours turn it solid through the tokens. Only the gaps between cards are
+   translucent: every card keeps its own opaque --bg-1 / --bg-2 fill. Text on
+   the bare glass is held to T0-T2 (tests/contrast-contract.test.mjs), and the
+   header mail link keeps --ink because the red link ink is banned on glass.
+   The solid rich black below is the ground where the browser cannot blur. The
+   phone sheet card, the narrow overlay and print never reach this rule. */
 @media screen and (min-width: 721px) {
   .impact-panel:not(.sheet-hosted) {
     --fg-2: var(--ink-soft);
@@ -4666,6 +4668,15 @@ button.telemetry-item {
   }
   .impact-panel:not(.sheet-hosted) .impact-panel-header a[href] {
     color: var(--ink);
+  }
+}
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  @media screen and (min-width: 721px) {
+    .impact-panel:not(.sheet-hosted) {
+      background: var(--glass-read);
+      -webkit-backdrop-filter: blur(var(--rich-black-blur));
+      backdrop-filter: blur(var(--rich-black-blur));
+    }
   }
 }
 
