@@ -5888,6 +5888,19 @@ a.impact-resource-link::after {
   text-transform: uppercase;
   color: var(--fg-1);
 }
+/* The product drawn and its date, on their own lines under the Key's title. */
+.map-key-product {
+  flex: 0 0 100%;
+  display: grid;
+  gap: 1px;
+  font-size: 11px;
+  line-height: 1.3;
+  color: var(--fg-1);
+}
+.map-key-product > :first-child {
+  font-weight: var(--fw-strong, 700);
+  color: var(--fg-0);
+}
 .map-key-item {
   display: inline-flex;
   align-items: center;

@@ -106,6 +106,11 @@ export function stampHorizonText(horizon: HorizonKey, asOf?: string): string {
   return `${chrome.title} · ${asOf ?? chrome.subtitle}`;
 }
 
+/** The product's own name: the detail line's first part ("CPC Monthly Drought Outlook" of "... · a shift in odds"). */
+export function stampProduct(stamp: TimeBarStamp): string {
+  return stamp.detail.split(' · ')[0]!;
+}
+
 export function freshnessDate(stamp: TimeBarStamp): string {
   const date = stamp.freshness?.checkedAt;
   if (!date || !Number.isFinite(Date.parse(date))) return '';

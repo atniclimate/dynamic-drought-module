@@ -70,7 +70,7 @@ import {
 } from './heatrisk-sequence-loader';
 import { openTechnicalInformation } from './impact-panel';
 import { watchDesktopMapSeat } from './map-control-seat';
-import { getTimeBarSpec, onTimeBarSpecChange } from './time-bar';
+import { getTimeBarSpec, onTimeBarSpecChange, stampProduct, timeBarOwner } from './time-bar';
 import { getActiveLegends, onLegendChange, type LegendSpec } from './legend-registry';
 import { MAP_GROUND_COLOR } from '../config/interface-tokens';
 import { WHP_3D_SHADE_CATEGORIES, WHP_SHADE_CATEGORIES, WHP_SHADE_QUALIFICATION, WHP_SURFACE_OPACITY } from '../config/whp-shade';
@@ -1829,8 +1829,16 @@ export function initMapKey(): void {
           whiteShade(category.opacity), category.label
         )).join('') + '</span>'
       : '';
+    // The head names the product drawn and its date, from the time bar's own stamp (one source, so the two cannot
+    // disagree), when the bar belongs to a product this key describes. An embed carries its own stamp.
+    const timeBarSpec = getTimeBarSpec();
+    const productHead =
+      timeBarSpec && productKeys.includes(timeBarOwner() ?? '') && !app?.classList.contains('embed')
+        ? `<span class="map-key-product" data-map-key-product><span>${escapeHtml(stampProduct(timeBarSpec.stamp))}</span>` +
+          `<span>${escapeHtml(timeBarSpec.stamp.headline)}</span></span>`
+        : '';
     const html =
-      `<span class="map-key-label">${escapeHtml(spec.label)}</span>` + spec.itemsHtml + shadeKey + drynessKeyHtml() +
+      `<span class="map-key-label">${escapeHtml(spec.label)}</span>` + productHead + spec.itemsHtml + shadeKey + drynessKeyHtml() +
       tribalNationsKeyHtml() + alsoOnMapHtml(productKeys);
     if (html !== rendered) {
       // A re-render replaces every node in the strip, so anything the
@@ -1923,13 +1931,13 @@ export function initMapKey(): void {
     // The first reading after boot or a mode switch is the switch's own result, not news: it is not announced.
     const sentence = shown ? shown.aria : '';
     const strip = document.getElementById('conditions-strip');
-    if (sentence && sentence !== announced) {
+    if (sentence !== announced) {
       const mode = getSelectedHazard();
-      if (mode === announcedMode && !(strip && strip.getClientRects().length > 0)) {
-        const status = document.getElementById('map-key-reading-status');
-        if (status) status.textContent = sentence;
-      }
-      announcedMode = mode;
+      const announce = sentence !== '' && mode === announcedMode && !(strip && strip.getClientRects().length > 0);
+      // Cleared when not announced, so a reading the chip no longer shows never stays in the status line.
+      const status = document.getElementById('map-key-reading-status');
+      if (status) status.textContent = announce ? sentence : '';
+      if (sentence) announcedMode = mode;
     }
     announced = sentence;
     syncFlowPause(host, pauseButton, ensoFlowSnapshot);
@@ -1937,7 +1945,6 @@ export function initMapKey(): void {
     // computed from the pressed horizon chip, never invented for a
     // layer, such as WHP, that declares none): src/ui/time-bar.ts is
     // the single source, so the key and the time bar can never disagree.
-    const timeBarSpec = getTimeBarSpec();
     if (timeBarSpec) {
       host.dataset.register = timeBarSpec.stamp.register;
     } else {

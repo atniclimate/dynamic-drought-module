@@ -364,6 +364,10 @@ test('Conditions in view leads the Key chip in one box', async () => {
   assert.match(stripSrc, /setConditionsHeadline\(/);
   assert.match(keySrc, /onConditionsHeadline\(/);
   assert.match(html, /<span id="map-key-reading-status" class="sr-only" role="status"/);
+  assert.match(keySrc, /status\.textContent = announce \? sentence : '';/, 'a reading the chip no longer shows is cleared from the status line');
+  // The Key's head names the product and its date from the time bar's stamp, only for a product the key describes.
+  assert.match(keySrc, /productKeys\.includes\(timeBarOwner\(\) \?\? ''\)/);
+  assert.match(keySrc, /stampProduct\(timeBarSpec\.stamp\)[\s\S]{0,120}timeBarSpec\.stamp\.headline/);
   // Console still shows its status line when no tile renders.
   assert.match(stripSrc, /<p class="conditions-empty">[^<]+<\/p>\s*<\/>/, 'the status line renders last');
   assert.match(code, /\.conditions-metric ~ \.conditions-empty \{ display: none; \}/);
