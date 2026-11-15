@@ -144,7 +144,8 @@ test.describe('PS-CORE PLACE studio', () => {
     );
   });
 
-  test('the roster-first Tribal Nations list includes geometry-less Nations honestly', async ({
+  // Until 2026-11-15 a Nation the BIA set does not draw read "unavailable" here; the search already reached it.
+  test('the roster-first Tribal Nations list reaches every Nation: by its Census area where the BIA set draws none, at its headquarters town where neither source does', async ({
     page
   }) => {
     await gotoApp(page, '?view=brief&layers=places&studio=place');
@@ -162,11 +163,17 @@ test.describe('PS-CORE PLACE studio', () => {
     await expect(page.locator('#place-selection-title')).toHaveText(
       'Absentee-Shawnee Tribe of Indians of Oklahoma'
     );
-    await expect(page.locator('#place-capability-selectable')).toContainText('available');
-    await expect(page.locator('#place-capability-briefable')).toContainText('unavailable');
-    await expect(page.locator('#place-capability-overlap-computable')).toContainText(
-      'unavailable'
-    );
+    // Read from its Census area: a briefing and an overlap listing, as a Nation the BIA set draws has.
+    await expect(page.locator('#place-capability-selectable')).toContainText(/^available/);
+    await expect(page.locator('#place-capability-briefable')).toContainText(/^available/);
+    await expect(page.locator('#place-capability-overlap-computable')).toContainText(/^available/);
+
+    // Read at its headquarters town: a briefing, and honestly no overlap listing, because a town has no outline.
+    await page.locator('#place-studio-search').fill('Kialegee Tribal Town');
+    await page.locator('#place-option-tribe-0').click();
+    await expect(page.locator('#place-selection-title')).toHaveText('Kialegee Tribal Town');
+    await expect(page.locator('#place-capability-briefable')).toContainText(/^available/);
+    await expect(page.locator('#place-capability-overlap-computable')).toContainText(/^unavailable/);
     const params = new URLSearchParams(await search(page));
     expect(params.has('place')).toBe(false);
     expect(params.has('typed-place')).toBe(false);

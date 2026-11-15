@@ -1154,9 +1154,14 @@ function PlaceStudio() {
   const retryCatalog = (placeKind: TypedPlaceKind): void =>
     setAttempts((prior) => ({ ...prior, [placeKind]: prior[placeKind] + 1 }));
   const tribeCatalog = catalogs.tribe;
+  const openedWithRef = useRef(initialSelection);
   useEffect(() => {
     if (pickedNation === null || tribeCatalog.status !== 'ready') return;
     setPickedNation(null);
+    // Newest intent wins: a row pressed or a choice cleared while the list was loading stands.
+    const now = getTypedPlace();
+    const opened = openedWithRef.current;
+    if (now?.kind !== opened?.kind || now?.id !== opened?.id) return;
     // An area several Nations share is titled with all of them and names no one row: nothing is chosen for it.
     const entry = tribeCatalog.entries.find((candidate) => candidate.label === pickedNation);
     if (entry) setTypedPlace(typedPlaceRef(entry));
