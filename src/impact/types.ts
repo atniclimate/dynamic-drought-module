@@ -43,10 +43,10 @@ export type EvidenceClass =
 
 /**
  * The dates a claim carries, all ISO 8601 (`YYYY-MM-DD`). The shown line uses
- * the precedence valid, else issued, else published, else retrieved (see
- * `claimDateLine` in `src/impact/evidence.ts`). Live fetches set `retrieved`
- * to the fetch date; fixed prose claims set `retrieved` to the date their
- * source statement was last verified.
+ * the precedence valid, else issued, else published, else retrieved, else
+ * checked (see `claimDateLine` in `src/impact/evidence.ts`). Live fetches set
+ * `retrieved` to the fetch date; fixed prose claims, which read nothing, set
+ * `checked` to the date their source statement was last verified.
  */
 export interface ClaimDates {
   /** When the source published the underlying product. */
@@ -57,6 +57,8 @@ export interface ClaimDates {
   readonly issued?: string;
   /** When DDM retrieved the value (fetch date or snapshot build date). */
   readonly retrieved?: string;
+  /** When a fixed statement and its link were last checked against the source's page: nothing was retrieved. */
+  readonly checked?: string;
 }
 
 /** The spatial support a claim's value actually has, stated honestly. */

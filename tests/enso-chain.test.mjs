@@ -723,7 +723,10 @@ test('a claim shows one date, and its line and its clock are the same field', ()
     [{ valid: '2026-11-05', issued: '2026-11-01', published: '2026-10-30', retrieved: '2026-11-09' }, 'Valid', '2026-11-05'],
     [{ issued: '2026-11-01', published: '2026-10-30', retrieved: '2026-11-09' }, 'Issued', '2026-11-01'],
     [{ published: '2026-10-30', retrieved: '2026-11-09' }, 'Published', '2026-10-30'],
-    [{ retrieved: '2026-11-09' }, 'Retrieved', '2026-11-09']
+    [{ retrieved: '2026-11-09' }, 'Retrieved', '2026-11-09'],
+    // A fixed statement reads nothing: its date is the day the citation was checked, never worded as a read.
+    [{ retrieved: '2026-11-09', checked: '2026-09-07' }, 'Retrieved', '2026-11-09'],
+    [{ checked: '2026-09-07' }, 'Citation checked', '2026-09-07']
   ];
   for (const [dates, word, date] of cases) {
     assert.deepEqual(claimClock({ dates }), { word, date });

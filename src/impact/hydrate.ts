@@ -61,7 +61,7 @@ const HEATRISK_FRAMES_EVENT = 'ddm:heatrisk-frames';
 
 /**
  * The cited long-range CPC Seasonal Drought Outlook claim. Fixed prose, not a
- * fetch, so `dates.retrieved` is the date the statement and its link were last
+ * fetch, so `dates.checked` is the date the statement and its link were last
  * verified against the live product (the T-P0-2 contract rule for fixed
  * claims); re-stamp it whenever this text is re-checked.
  */
@@ -76,7 +76,7 @@ const CPC_SEASONAL_OUTLOOK: SourcedClaim = makeClaim({
   sourceUrl: 'https://www.cpc.ncep.noaa.gov/products/expert_assessment/sdo_summary.php',
   product: 'cpcSeasonal',
   evidence: 'outlook',
-  dates: { retrieved: '2026-11-06' },
+  dates: { checked: '2026-11-06' },
   // vocab-allow: honesty disclaimer, denies being a forecast
   uncertainty: { kind: 'categorical', text: 'a seasonal tendency category (persists, develops, improves, removed), not a forecast of outcomes' }
 });

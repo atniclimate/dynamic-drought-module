@@ -1064,7 +1064,7 @@ export async function readEnsoClaims(signal: AbortSignal): Promise<SourceResult>
             sourceUrl: CPC_STATUS_URL,
             product: 'ensoAuthority',
             evidence: 'analyzed',
-            dates: { retrieved: CITATIONS_VERIFIED },
+            dates: { checked: CITATIONS_VERIFIED },
             // Where CPC states the status that holds now.
             horizon: 'current'
           })
@@ -1083,7 +1083,7 @@ export async function readEnsoClaims(signal: AbortSignal): Promise<SourceResult>
             sourceUrl: tendencyRead.sourceUrl,
             product: 'ensoTendency',
             evidence: 'derived',
-            dates: { retrieved: CITATIONS_VERIFIED },
+            dates: { checked: CITATIONS_VERIFIED },
             lineage: tendencyRead.lineage,
             uncertainty: {
               kind: 'typical',
