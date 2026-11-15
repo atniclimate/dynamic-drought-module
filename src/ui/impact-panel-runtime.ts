@@ -264,8 +264,13 @@ let printForcedPreservedKeys = new Set<string>();
  */
 function openAllDisclosuresForPrint(): void {
   if (!bodyEl) return;
+  // The hourly tables (`.point-heat-series`) stay as the reader left them: a
+  // page of 48 rows per metric is not a briefing. A series the reader opened
+  // by hand prints open; a closed one prints as its summary line.
   const closed = Array.from(
-    bodyEl.querySelectorAll<HTMLDetailsElement>('details:not([open])')
+    bodyEl.querySelectorAll<HTMLDetailsElement>(
+      'details:not([open]):not(.point-heat-series)'
+    )
   );
   closed.forEach((details) => {
     details.open = true;
@@ -277,8 +282,8 @@ function openAllDisclosuresForPrint(): void {
 }
 
 /**
- * Every closed briefing disclosure prints open, whichever door started the
- * print: the panel's own Print control calls `window.print()` once
+ * Every closed briefing disclosure but the hourly tables prints open, and the
+ * masthead is added, whichever door started the print: the panel's own Print control calls `window.print()` once
  * (impact-panel.ts), and the browser's own Print reaches this same
  * `beforeprint` event, so one listener covers both.
  */
@@ -287,6 +292,32 @@ function handleBeforePrint(): void {
   printing = true;
   printForcedPreservedKeys = new Set();
   openAllDisclosuresForPrint();
+  addPrintMasthead();
+}
+
+/**
+ * The page's masthead: the ATNI Climate lockup, today's date and the page's
+ * address, at the head of the panel's own header (which prints the place's
+ * name under it). Added at `beforeprint` and removed at `afterprint`, so the
+ * screen never carries it and a reader's copy of the address is the one that
+ * printed. The lockup is the shell's own print footer image, shown here instead.
+ */
+function addPrintMasthead(): void {
+  const header = panelEl?.querySelector('.impact-panel-header');
+  if (!header) return;
+  header.querySelector('.impact-print-masthead')?.remove();
+  const lockup = panelEl?.querySelector('.impact-print-brand img')?.getAttribute('src');
+  const date = new Date().toLocaleDateString('en-US', {
+    year: 'numeric', month: 'long', day: 'numeric'
+  });
+  const masthead = document.createElement('div');
+  masthead.className = 'impact-print-masthead';
+  masthead.innerHTML =
+    (lockup
+      ? `<img src="${escapeHtml(lockup)}" alt="Affiliated Tribes of Northwest Indians, ATNI Climate" />`
+      : '') +
+    `<p class="impact-print-meta"><span>${escapeHtml(date)}</span><span>${escapeHtml(location.href)}</span></p>`;
+  header.prepend(masthead);
 }
 
 /** Restore exactly the disclosures the last `openAllDisclosuresForPrint`
@@ -295,6 +326,7 @@ function handleBeforePrint(): void {
  * re-derives `openedForPrint` from the live DOM (see its own comment). */
 function handleAfterPrint(): void {
   printing = false;
+  panelEl?.querySelector('.impact-print-masthead')?.remove();
   openedForPrint.forEach((details) => {
     details.open = false;
   });
@@ -1050,9 +1082,16 @@ function renderUncoveredSources(briefing: ImpactBriefing): string {
  * hydration refresh re-renders (`refreshOpenBriefing`).
  */
 function renderBriefingSections(briefing: ImpactBriefing): string {
-  const caveat = briefing.landCaveat
-    ? `<p class="impact-land-caveat">${escapeHtml(briefing.landCaveat)}</p>`
-    : '';
+  // The Nation's name in its own writing (DR-247): the form, then the Nation's own page and the day it was read.
+  const own = briefing.ownName;
+  const ownName =
+    own && own.page.startsWith('https://')
+      ? `<p class="impact-own-name"><strong>${escapeHtml(own.name)}</strong> Name in the Nation's own writing, as the Nation publishes it: ` +
+        `<a href="${escapeHtml(own.page)}" target="_blank" rel="noopener">${escapeHtml(own.page.replace(/^https:\/\/(www\.)?|\/$/g, ''))}</a>, read ${escapeHtml(own.read)}.</p>`
+      : '';
+  const caveat =
+    ownName +
+    (briefing.landCaveat ? `<p class="impact-land-caveat">${escapeHtml(briefing.landCaveat)}</p>` : '');
   const pointHeatSection = renderPointHeat(briefing.pointHeat, briefing.heatSynthesis, briefing.context);
   // The block holds four hazards, so it is not titled "Drought impact"; the
   // briefing's names are an open question (DR-013) and this does not answer

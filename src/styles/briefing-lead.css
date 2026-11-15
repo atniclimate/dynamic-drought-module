@@ -903,20 +903,53 @@
 
 /* ---- Paper ------------------------------------------------------------------ */
 
-/* On paper the briefing is the full detail, exactly as it printed before this
-   view existed. The priority view is a screen presentation and does not
-   print, and whatever the screen had hidden of the full detail is shown
-   (these four are block boxes in app.css). */
+/* On paper the briefing is the tab that is showing, Priority or Full detail,
+   never both: the `hidden` the view switch sets stays in force. The switch
+   itself is a screen control. */
 @media print {
-  .impact-panel-body > :is(.impact-landscape, .impact-horizons)[hidden],
-  .impact-horizons .impact-hazard[hidden],
-  .impact-horizons .point-heat[hidden] {
-    display: block !important;
-  }
   .briefing-view-switch,
-  .briefing-focus,
-  .briefing-lead {
+  .lead-doors,
+  .lead-links,
+  .lead-link,
+  .lead-open {
     display: none !important;
+  }
+  /* The priority view's tiles, chain and gauges are drawn from the dark
+     theme's tokens; on paper those tokens are ink on white, so every card and
+     gauge mark below reads from them unchanged. Issuer colors are literals and
+     never pass through here. */
+  body:has(.impact-panel.open) :is(.briefing-lead, .priority-rule-rows) {
+    --ink: #000;
+    --ink-strong: #000;
+    --ink-soft: #333;
+    --ink-muted: #555;
+    --keyline: #555;
+    --bg-2: #fff;
+    --fg-0: #000;
+    --fg-1: #000;
+    --fg-2: #444;
+    --fg-3: #444;
+    --line: #999;
+    --line-strong: #666;
+  }
+  /* A tile, a chain link and a rest item never split across two pages. */
+  .lead-tile,
+  .lead-rest-item,
+  .lead-together-list,
+  .evidence-chain-link {
+    break-inside: avoid;
+  }
+  .lead-head,
+  .evidence-chain-title,
+  .evidence-chain-caption {
+    break-after: avoid;
+  }
+  /* The observed plate stays a filled plate: white words on the ink. Exact, so
+     a print dialog with "background graphics" off cannot leave white on white. */
+  body:has(.impact-panel.open) .impact-panel [data-evidence='observed'] .impact-claim-badge {
+    color: #fff;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 }
 

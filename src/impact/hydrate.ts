@@ -124,6 +124,19 @@ export async function hydrateBriefing(
   onUpdate: UpdateHook
 ): Promise<void> {
   const { context, horizons, sourcePolicy } = briefing;
+  // A Nation's name in its own writing (DR-247): only a curated, cited row, keyed by the full Federal Register
+  // name the briefing is titled with. A failed load leaves the line out; the briefing is whole without it.
+  // Asked only for a Tribal place, through a lazy import so the roster module stays out of this chunk's first closure.
+  if (context.kind === 'aiannh' || context.kind === 'bia-reservation' || context.kind === 'tribal') {
+    void import('../state/tribal-roster')
+      .then(({ loadTribalLabelNames }) => loadTribalLabelNames())
+      .then((names) => {
+        const [name, page, read] = [names.own, names.ownPage, names.ownRead].map((rows) => rows.get(context.title));
+        if (signal.aborted || !name || !page || !read) return;
+        briefing.ownName = { name, page, read };
+        onUpdate();
+      }, () => undefined);
+  }
   const nwsSession = createNwsRequestSession(signal);
   const heatResults = new Map<
     'heatRisk' | 'nwsForecast' | 'nwsAlerts',

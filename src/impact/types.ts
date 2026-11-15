@@ -667,6 +667,12 @@ export interface ImpactBriefing {
   readonly landKind: string;
   /** The representation caveat, or empty string when none applies. */
   readonly landCaveat: string;
+  /**
+   * The Nation's name in its own writing, with the Nation's own page that
+   * states it and the day that page was read (DR-247). Set when the curated
+   * row loads, for a place titled with that Nation's Federal Register name.
+   */
+  ownName?: { readonly name: string; readonly page: string; readonly read: string };
   /** Lazy, static ecoregion context. Replaced when its artifact read settles. */
   landscape: LandscapeContext;
   pointHeat: PointHeatBriefing;

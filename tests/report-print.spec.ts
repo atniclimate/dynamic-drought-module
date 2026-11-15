@@ -219,7 +219,23 @@ test.describe('U1 the report in print', () => {
       // The separate native-PDF regression owns native event/lifecycle proof.
       await page.evaluate(() => window.dispatchEvent(new Event('beforeprint')));
       await page.emulateMedia({ media: 'print' });
-      await expect(panel.locator('details:not([open])')).toHaveCount(0);
+      // Every disclosure prints open except the hourly tables, which stay as
+      // the reader left them (closed here).
+      await expect(panel.locator('details:not([open]):not(.point-heat-series)')).toHaveCount(0);
+      expect(await panel.locator('.point-heat-series:not([open])').count()).toBeGreaterThan(0);
+      // The page's masthead: lockup, place name, date, address.
+      const masthead = panel.locator('.impact-panel-header .impact-print-masthead');
+      await expect(masthead.locator('img')).toBeVisible();
+      await expect(masthead.locator('.impact-print-meta span').nth(0)).toHaveText(/^July (29|30), 2026$/);
+      await expect(masthead.locator('.impact-print-meta span').nth(1)).toHaveText(page.url());
+      await expect(panel.locator('.impact-panel-title')).toHaveText('Washington');
+      // The tab that is showing prints, and only it: the full detail here.
+      await expect(panel.locator('.briefing-lead')).toBeHidden();
+      await expect(panel.locator('.impact-horizons')).toBeVisible();
+      await expect(panel.locator('.briefing-view-switch')).toBeHidden();
+      // Paper: no glass, and the text takes the page's width, not the screen's column.
+      await expect(panel).toHaveCSS('backdrop-filter', 'none');
+      await expect(panel.locator('.impact-panel-body')).toHaveCSS('padding-left', '0px');
       const surfaces = panel.locator([
         '.impact-land-caveat', '.impact-landscape-card', '.point-heat',
         '.point-heat-card', '.point-heat-synthesis', '.impact-horizon',
@@ -230,8 +246,8 @@ test.describe('U1 the report in print', () => {
         await expect(surface).toHaveCSS('background-color', 'rgb(255, 255, 255)');
         await expect(surface).toHaveCSS('color', 'rgb(0, 0, 0)');
       }
-      const brand = panel.locator('.impact-print-brand');
-      await expect(brand).toBeVisible();
+      // The shell's footer lockup is the masthead's source and never prints twice.
+      await expect(panel.locator('.impact-print-brand')).toBeHidden();
       const hosts = width === 390
         ? ['html', 'body', '#app', '.sidebar', '.sidebar-scroll', '.sheet-report', '.impact-panel-body']
         : ['html', 'body', '.impact-panel-body'];
@@ -246,12 +262,14 @@ test.describe('U1 the report in print', () => {
       if (width === 390) {
         const bounds = await page.evaluate(() => ({
           host: document.querySelector('#app')!.getBoundingClientRect().bottom,
-          end: document.querySelector('.impact-print-brand')!.getBoundingClientRect().bottom
+          end: document.querySelector('.impact-panel-body')!.getBoundingClientRect().bottom
         }));
         expect(bounds.end).toBeLessThanOrEqual(bounds.host + 1);
       }
       await page.evaluate(() => window.dispatchEvent(new Event('afterprint')));
       await page.emulateMedia({ media: 'screen' });
+      // The masthead belongs to the printed page only.
+      await expect(panel.locator('.impact-print-masthead')).toHaveCount(0);
     });
   }
 
@@ -288,7 +306,32 @@ test.describe('U1 the report in print', () => {
     await expect(page.locator('#app')).toBeVisible();
   });
 
-  test('Print calls window.print once and every briefing disclosure prints open with dark ink', async ({
+  test('the Priority tab prints on its own, with the masthead, and the masthead leaves after', async ({
+    page
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await gotoApp(page, '?select=state:WA');
+    const panel = page.locator('#impact-panel');
+    await expect(panel).toBeVisible({ timeout: 15_000 });
+    await expect(panel.locator('.briefing-view-btn[data-briefing-view="lead"]')).toHaveAttribute('aria-pressed', 'true');
+
+    await page.evaluate(() => window.dispatchEvent(new Event('beforeprint')));
+    await page.emulateMedia({ media: 'print' });
+    await expect(panel.locator('.impact-print-masthead')).toHaveCount(1);
+    await expect(panel.locator('.briefing-lead')).toBeVisible();
+    await expect(panel.locator('.impact-horizons')).toBeHidden();
+    await expect(panel.locator('.briefing-view-switch')).toBeHidden();
+    // Paper is opaque: no tile keeps the dark theme's fill.
+    for (const tile of await panel.locator('.lead-tile').all()) {
+      await expect(tile).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+    }
+
+    await page.evaluate(() => window.dispatchEvent(new Event('afterprint')));
+    await page.emulateMedia({ media: 'screen' });
+    await expect(panel.locator('.impact-print-masthead')).toHaveCount(0);
+  });
+
+  test('Print calls window.print once and every briefing disclosure but the hourly tables prints open with dark ink', async ({
     page
   }) => {
     await page.clock.setFixedTime('2026-07-29T12:30:00+00:00');
@@ -341,7 +384,11 @@ test.describe('U1 the report in print', () => {
     await page.evaluate(() => window.dispatchEvent(new Event('beforeprint')));
     await page.emulateMedia({ media: 'print' });
 
-    await expect(panel.locator('details:not([open])')).toHaveCount(0);
+    // The hourly tables stay as the reader left them; the other disclosures open.
+    await expect(panel.locator('details:not([open]):not(.point-heat-series)')).toHaveCount(0);
+    await expect(
+      panel.locator('.point-heat-series:not([open])', { hasNotText: 'Heat index' }).first()
+    ).toBeAttached();
     await expect(heatIndexSeries.locator('summary')).toHaveCSS('color', 'rgb(0, 0, 0)');
 
     await page.evaluate(() => window.dispatchEvent(new Event('afterprint')));
@@ -417,7 +464,7 @@ test.describe('U1 the report in print', () => {
 
     await page.evaluate(() => window.dispatchEvent(new Event('beforeprint')));
     await page.emulateMedia({ media: 'print' });
-    await expect(panel.locator('details:not([open])')).toHaveCount(0);
+    await expect(panel.locator('details:not([open]):not(.point-heat-series)')).toHaveCount(0);
 
     // Release the held resource-catalog request now that print has started:
     // its landing replaces the whole briefing body mid-print.
@@ -430,7 +477,7 @@ test.describe('U1 the report in print', () => {
 
     // The refresh replaced every disclosure node; every one of them must
     // still be open for print, including the ones it just re-rendered.
-    await expect(panel.locator('details:not([open])')).toHaveCount(0);
+    await expect(panel.locator('details:not([open]):not(.point-heat-series)')).toHaveCount(0);
 
     await page.evaluate(() => window.dispatchEvent(new Event('afterprint')));
     await page.emulateMedia({ media: 'screen' });
