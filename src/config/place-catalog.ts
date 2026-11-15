@@ -1,6 +1,13 @@
 import { URLS } from './urls';
-import { TRUSTED_PROVENANCE, gatedDisplayName, loadTribalRoster } from '../state/tribal-roster';
-import type { TribalRosterArea } from '../state/tribal-roster';
+import {
+  TRUSTED_PROVENANCE,
+  gatedCensusName,
+  gatedDisplayName,
+  loadTribalCensusAreas,
+  loadTribalHeadquarters,
+  loadTribalRoster
+} from '../state/tribal-roster';
+import type { TribalCensusArea, TribalHeadquarters, TribalRosterArea } from '../state/tribal-roster';
 import type { TypedPlaceKind, TypedPlaceRef } from '../state/typed-place';
 import { fetchJsonWithBudget, fetchSharedJsonWithBudget, US_STATES_SHARED_KEY } from '../util/fetch';
 
@@ -43,6 +50,10 @@ export interface PlaceCatalogEntry {
   readonly provenance: readonly string[];
   readonly representationIds: readonly string[];
   readonly geometryAvailable: boolean;
+  /** Census AIANNH codes of a Nation the BIA set draws no land area for: its boundary is read there, as the search reads it. */
+  readonly censusCodes?: readonly string[];
+  /** The headquarters town of a Nation neither boundary source draws: a point to read at, never the Nation's land. */
+  readonly headquarters?: TribalHeadquarters;
 }
 
 const UNITED_STATES_SCOPE = 'United States';
@@ -176,6 +187,9 @@ const CATALOG_TIMEOUT_MS = 8_000;
 // page (the same idiom as src/config/urls-boot.ts:29, DDM-P2-T12).
 const TRIBAL_CROSSWALK_URL =
   (import.meta.env?.BASE_URL ?? '/dynamic-drought-module/') + 'data/tribal-larname-crosswalk.json';
+/** The Census source of a Nation's area where the BIA set draws none (the Acknowledgements' own words for it). */
+const CENSUS_AREA_SOURCE =
+  'U.S. Census Bureau TIGERweb, American Indian, Alaska Native, and Native Hawaiian Areas';
 const ECOREGION_CATALOG_URL =
   (import.meta.env?.BASE_URL ?? '/dynamic-drought-module/') + 'data/ecoregions-pnw-catalog.json';
 const STATE_CATALOG_STUSPS: ReadonlySet<string> = new Set([
@@ -301,12 +315,15 @@ function compareEntries(a: PlaceCatalogEntry, b: PlaceCatalogEntry): number {
 }
 
 async function loadTribeEntries(signal: AbortSignal): Promise<readonly PlaceCatalogEntry[]> {
-  const [areas, rawCrosswalk] = await Promise.all([
+  // The three roster reads share one cached file (src/state/tribal-roster.ts).
+  const [areas, census, headquarters, rawCrosswalk] = await Promise.all([
     loadTribalRoster(),
+    loadTribalCensusAreas(),
+    loadTribalHeadquarters(),
     fetchJson(TRIBAL_CROSSWALK_URL, signal)
   ]);
   abortIfNeeded(signal);
-  return buildTribeCatalogEntries(areas, rawCrosswalk as TribalCrosswalk);
+  return buildTribeCatalogEntries(areas, rawCrosswalk as TribalCrosswalk, census, headquarters);
 }
 
 /**
@@ -319,10 +336,18 @@ async function loadTribeEntries(signal: AbortSignal): Promise<readonly PlaceCata
  * `displayName` happens to equal its `larName`); a trusted row is labelled
  * with the gated roster value (`gated`), never with the crosswalk's own
  * `tribe` string.
+ *
+ * A Nation the BIA set draws no land area for is reached the way the search
+ * reaches it: by the Census areas whose gated name is the Nation's
+ * (`censusCodes`), else by its headquarters town (`headquarters`, trusted rows
+ * only, as `loadTribalHeadquarters` returns them). The BIA land area leads
+ * where there is one.
  */
 export function buildTribeCatalogEntries(
   areas: readonly TribalRosterArea[],
-  crosswalk: TribalCrosswalk
+  crosswalk: TribalCrosswalk,
+  census: readonly TribalCensusArea[] = [],
+  headquarters: readonly TribalHeadquarters[] = []
 ): readonly PlaceCatalogEntry[] {
   const rosterSource =
     textValue(crosswalk.meta?.rosterSource) ?? PLACE_CATALOG.tribe.sourceLabels[0] ?? '';
@@ -389,18 +414,29 @@ export function buildTribeCatalogEntries(
     if (name) formalNames.add(name);
   }
 
+  const censusByLabel = new Map<string, Set<string>>();
+  for (const area of census) {
+    const label = gatedCensusName(area);
+    censusByLabel.set(label, (censusByLabel.get(label) ?? new Set<string>()).add(area.aiannh));
+  }
+  const townByLabel = new Map(headquarters.map((row) => [row.displayName, row] as const));
+
   const labels = new Set<string>([...formalNames, ...gatedLarLabels]);
   return [...labels]
     .map((label): PlaceCatalogEntry => {
       const ids = [...(representationIds.get(label) ?? [])].sort();
+      const censusCodes = ids.length === 0 ? [...(censusByLabel.get(label) ?? [])].sort() : [];
+      const town = ids.length === 0 && censusCodes.length === 0 ? townByLabel.get(label) : undefined;
       return {
         kind: 'tribe',
         id: label,
         label,
         detail: null,
-        provenance: [rosterSource, landAreaSource],
+        provenance: [rosterSource, censusCodes.length > 0 ? CENSUS_AREA_SOURCE : town ? town.source : landAreaSource],
         representationIds: ids,
-        geometryAvailable: ids.length > 0
+        geometryAvailable: ids.length > 0 || censusCodes.length > 0,
+        ...(censusCodes.length > 0 ? { censusCodes } : {}),
+        ...(town ? { headquarters: town } : {})
       };
     })
     .sort(compareEntries);
@@ -566,13 +602,14 @@ export function typedPlaceRef(entry: PlaceCatalogEntry): TypedPlaceRef {
 /** Resolve geometry-dependent cells for one concrete catalog entry. */
 export function coverageForEntry(entry: PlaceCatalogEntry): PlaceCapabilityMatrix {
   const matrix = PLACE_COVERAGE_MATRIX[entry.kind];
-  const resolve = (cell: PlaceCapabilityCell): PlaceCapabilityCell =>
-    cell.geometryDependent && !entry.geometryAvailable && cell.state === 'available'
+  const resolve = (cell: PlaceCapabilityCell, readAtPoint = false): PlaceCapabilityCell =>
+    cell.geometryDependent && !entry.geometryAvailable && !readAtPoint && cell.state === 'available'
       ? { ...cell, state: 'unavailable' }
       : cell;
   return {
     selectable: resolve(matrix.selectable),
-    briefable: resolve(matrix.briefable),
+    // A headquarters town has no outline, and its briefing reads at the town.
+    briefable: resolve(matrix.briefable, entry.headquarters !== undefined),
     'overlap-computable': resolve(matrix['overlap-computable'])
   };
 }

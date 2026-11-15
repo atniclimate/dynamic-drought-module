@@ -19,7 +19,8 @@ import type { GeoJsonProperties, Geometry, Position } from 'geojson';
 
 import { postalCodeFromProperties } from '../config/geography';
 import { placeRefFromBoundary } from '../config/entities';
-import { isStateCode } from './resources';
+import { STATE_LABEL, isStateCode } from './resources';
+import type { StateCode } from './resources';
 import { getCurrentRegion } from '../state/region-store';
 import {
   gatedCensusName,
@@ -28,6 +29,7 @@ import {
   loadTribalLabelAreas,
   loadTribalRoster
 } from '../state/tribal-roster';
+import type { TribalHeadquarters } from '../state/tribal-roster';
 import {
   geometryBboxAcrossAntimeridian,
   geometryLikelyCrossesAntimeridian
@@ -315,6 +317,30 @@ export function buildBoundaryContext(
     regionKey: getCurrentRegion(),
     containing: containingFromProperties(properties),
     place: placeRefFromBoundary(kind, properties)
+  };
+}
+
+/** The one line a headquarters-town briefing carries: the town is where the office is, not the Nation's land. */
+export function headquartersNote(row: TribalHeadquarters): string {
+  return (
+    "Neither of the map's boundary sources (BIA, Census) draws an area for this Nation. " +
+    `The map opens at its headquarters town, ${row.town}, ${STATE_LABEL[row.state as StateCode] ?? row.state}.`
+  );
+}
+
+/**
+ * A Nation neither boundary source draws (roster build rule 14), as a place
+ * to brief under its full Federal Register name: a point at its headquarters
+ * town, with no outline. The search and the Place studio both open it from here.
+ */
+export function buildHeadquartersContext(row: TribalHeadquarters): BoundarySelectionContext {
+  const [lng, lat] = row.point;
+  return {
+    ...buildBoundaryContext('aiannh', { NAME: row.displayName, STUSPS: row.state }, null, { lng, lat }, row.displayName),
+    kindLabel: 'Headquarters town (US Census place)',
+    // Nobody clicked: point readings say they are read at the town.
+    readAt: `the headquarters town, ${row.town}`,
+    landNote: headquartersNote(row)
   };
 }
 

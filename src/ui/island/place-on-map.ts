@@ -56,13 +56,42 @@ export function releaseShownPlace(): void {
 export function showPlaceOnMap(
   kind: TypedPlaceKind,
   context: BoundarySelectionContext,
-  geometry: StudioBoundaryGeometry,
+  // Null for a headquarters town: the map goes there, and no outline is drawn.
+  geometry: StudioBoundaryGeometry | null,
   bbox: readonly [number, number, number, number]
 ): void {
   release?.();
   const selection = { label: context.title, context };
   // Selection first: the located overlay records the selection current when it is shown.
   setPlaceSelection(selection);
+  const map = getMap();
+  if (!map) return;
+  framePlaceOnMap(bbox);
+  if (!geometry) {
+    clearStudioEmphasis();
+    return;
+  }
+  if (kind === 'tribe') {
+    showStudioReturnBoundary(geometry);
+    return;
+  }
+  // One mark, not two: the neutral boundary stands in for the studio's emphasis.
+  clearStudioEmphasis();
+  showStudioBoundary(map, geometry);
+  const stop = onPlaceSelectionChange((next) => {
+    // The briefing taking ownership of the same place keeps its boundary.
+    if (next && next.label === selection.label && next.context.kind === context.kind) return;
+    release?.();
+  });
+  release = () => {
+    release = null;
+    stop();
+    clearStudioBoundary(map);
+  };
+}
+
+/** Frame `bbox` on the map, clear of the phone chrome that is on screen with it. */
+export function framePlaceOnMap(bbox: readonly [number, number, number, number]): void {
   const map = getMap();
   if (!map) return;
   // Keep the place clear of the phone chrome that is on screen with it: the
@@ -82,21 +111,4 @@ export function showPlaceOnMap(
         }
       : { top: 40, left: 40, right: 40, bottom: 40 }
   });
-  if (kind === 'tribe') {
-    showStudioReturnBoundary(geometry);
-    return;
-  }
-  // One mark, not two: the neutral boundary stands in for the studio's emphasis.
-  clearStudioEmphasis();
-  showStudioBoundary(map, geometry);
-  const stop = onPlaceSelectionChange((next) => {
-    // The briefing taking ownership of the same place keeps its boundary.
-    if (next && next.label === selection.label && next.context.kind === context.kind) return;
-    release?.();
-  });
-  release = () => {
-    release = null;
-    stop();
-    clearStudioBoundary(map);
-  };
 }

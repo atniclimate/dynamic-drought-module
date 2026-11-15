@@ -140,7 +140,7 @@ test.describe('PS-CORE PLACE studio', () => {
     await expect(page.locator('#place-type-all')).toHaveText('All');
     await expect(page.locator('#place-type-all')).toHaveAttribute('aria-pressed', 'true');
     await expect(page.locator('#place-selection-empty')).toHaveText(
-      'No place is chosen yet. Choose one from the list to open its briefing or show it on the map.'
+      'No place from this list is chosen yet. Choose one to open its briefing or show it on the map.'
     );
   });
 
@@ -213,7 +213,7 @@ test.describe('PS-CORE PLACE studio', () => {
 
     await page.reload({ waitUntil: 'domcontentloaded' });
     await expect(page.locator('#place-selection-empty')).toHaveText(
-      'No place is chosen yet. Choose one from the list to open its briefing or show it on the map.'
+      'No place from this list is chosen yet. Choose one to open its briefing or show it on the map.'
     );
   });
 
@@ -639,6 +639,150 @@ test.describe('C3 housekeeping: newest intent wins the emphasis', () => {
     await page.waitForTimeout(1_000);
     expect(await stamp(page)).toBe(washingtonStamp);
     expect(await stamp(page)).not.toContain('bia-reservations');
+  });
+});
+
+test.describe('PS-CORE a Nation the BIA set does not draw still opens', () => {
+  const CENSUS_NATION = 'Synthetic Census-Read Fixture Nation';
+  const TOWN_NATION = 'Synthetic Town-Read Fixture Nation';
+
+  // Synthetic names only: no real Nation's name ever touches a fabricated shape.
+  async function stubRoster(
+    page: Page,
+    roster: Record<string, unknown>,
+    rosterNoLar: string[]
+  ): Promise<void> {
+    await page.route('**/data/tribal-roster.json', (route) =>
+      route.fulfill({ contentType: 'application/json', body: JSON.stringify(roster) })
+    );
+    await page.route('**/data/tribal-larname-crosswalk.json', (route) =>
+      route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({
+          meta: {
+            rosterSource: 'Synthetic fixture roster',
+            landAreaSource: 'Synthetic fixture land areas'
+          },
+          matched: [],
+          rosterNoLar
+        })
+      })
+    );
+  }
+
+  async function chooseNation(page: Page, name: string): Promise<void> {
+    await gotoApp(page, '?view=brief&layers=places&studio=place');
+    await page.locator('#place-type-tribe').click();
+    await page.locator('#place-studio-search').fill(name);
+    await expect(page.locator('#place-list .place-studio-option')).toHaveCount(1);
+    await page.locator('#place-option-tribe-0').click();
+    await expect(page.locator('#place-selection-title')).toHaveText(name);
+  }
+
+  test('a Nation the BIA set does not draw reads its Census area', async ({ page }) => {
+    await stubRoster(
+      page,
+      {
+        areas: [],
+        censusAreas: [
+          {
+            aiannh: '9901',
+            name: 'Synthetic Fixture Census Area',
+            displayName: CENSUS_NATION,
+            provenance: 'safe-match'
+          }
+        ]
+      },
+      [CENSUS_NATION]
+    );
+    await routeGeojson(page, BIA_ROUTE, emptyCollectionBody());
+    const censusWheres: string[] = [];
+    const biaWheres: string[] = [];
+    await routeBoundary(page, AIANNH_ROUTE, (route) => {
+      censusWheres.push(new URL(route.request().url()).searchParams.get('where') ?? '');
+      return route.fulfill({
+        contentType: 'application/geo+json',
+        body: JSON.stringify({
+          type: 'FeatureCollection',
+          features: [
+            {
+              type: 'Feature',
+              id: 9901,
+              properties: {
+                NAME: 'Synthetic Fixture Census Area',
+                AIANNH: '9901',
+                AIANNHNS: '99010001'
+              },
+              geometry: {
+                type: 'Polygon',
+                coordinates: [
+                  [
+                    [-123.4, 46.1],
+                    [-123.0, 46.1],
+                    [-123.0, 46.4],
+                    [-123.4, 46.4],
+                    [-123.4, 46.1]
+                  ]
+                ]
+              }
+            }
+          ]
+        })
+      });
+    });
+    page.on('request', (request) => {
+      if (!request.url().includes('biamaps.geoplatform.gov')) return;
+      biaWheres.push(new URL(request.url()).searchParams.get('where') ?? '');
+    });
+
+    await chooseNation(page, CENSUS_NATION);
+
+    await expect(page.locator('#place-selection-bar')).toHaveAttribute(
+      'data-boundary',
+      'ready'
+    );
+    await expect(page.locator('#place-selection-state')).toHaveText(
+      'A briefing is available for this place.'
+    );
+    await expect(page.locator('#place-open-briefing')).toBeVisible();
+    await expect(page.locator('#place-show-on-map')).toBeVisible();
+    expect(censusWheres.some((where) => where.includes("AIANNH IN ('9901')"))).toBe(true);
+    // The selection never asks the BIA set for a land area it does not hold.
+    expect(biaWheres.some((where) => where.includes('LARNAME'))).toBe(false);
+  });
+
+  test('a Nation neither source draws reads at its headquarters town', async ({ page }) => {
+    await stubRoster(
+      page,
+      {
+        areas: [],
+        censusAreas: [],
+        headquarters: [
+          {
+            displayName: TOWN_NATION,
+            provenance: 'safe-match',
+            town: 'Fixture Town',
+            state: 'OR',
+            point: [-121.3, 44.8],
+            source: 'https://example.test/contact'
+          }
+        ]
+      },
+      [TOWN_NATION]
+    );
+
+    await chooseNation(page, TOWN_NATION);
+
+    await expect(page.locator('#place-selection-bar')).toHaveAttribute(
+      'data-boundary',
+      'ready'
+    );
+    await expect(page.locator('#place-selection-town')).toHaveText(
+      "Neither of the map's boundary sources (BIA, Census) draws an area for this Nation. The map opens at its headquarters town, Fixture Town, Oregon."
+    );
+    await expect(page.locator('#place-selection-live-read')).toHaveCount(0);
+    await expect(page.locator('#place-selection-caveat')).toHaveCount(0);
+    await expect(page.locator('#place-open-briefing')).toBeVisible();
   });
 });
 
