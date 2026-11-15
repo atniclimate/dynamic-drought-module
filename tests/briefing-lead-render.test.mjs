@@ -253,6 +253,13 @@ test('a tile\'s accessible name carries the scope words its face shows (B9)', ()
   const names = [...html.matchAll(/class="lead-tile"[^>]*aria-label="([^"]*)"/g)].map((m) => m[1]);
   assert.ok(names.some((name) => name.includes('The weekly map, at the selected point.')), names.join(' | '));
   assert.ok(names.some((name) => name.includes('Current perimeters in a search area wider than this place.')), names.join(' | '));
+  // A place with its own outline (M-113): the tile counts and names the perimeters that meet it.
+  briefing.horizons.current.cells.fire = cell('fire', 'current', 'ready', [
+    { ...nwsClaim, reading: { kind: 'wfigs-perimeters', wildfire: 2, prescribed: 0, other: 0, lowerBound: false, onPlace: 1 } }
+  ]);
+  const onPlace = renderLeadView(briefing, NOW);
+  assert.match(onPlace, /1 mapped wildfire perimeter\b/);
+  assert.ok(onPlace.includes('Current perimeters that intersect this place&#039;s mapped boundary.'), 'the scope words name the boundary');
 });
 
 test('a cell with no reading leaves other reads and gaps; a gap stays with its state (B5)', () => {

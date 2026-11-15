@@ -374,7 +374,10 @@ function scopeWords(entry: PriorityEntry): string {
     case 'nws-products':
       return 'In effect at the selected point.';
     case 'wfigs-perimeters':
-      return 'Current perimeters in a search area wider than this place.';
+      // DRAFT wording (the owner's call): a place with its own outline counts the perimeters that meet it (M-113).
+      return reading.onPlace !== undefined
+        ? "Current perimeters that intersect this place's mapped boundary."
+        : 'Current perimeters in a search area wider than this place.';
     case 'usdm-category':
       // Not "this week's map": that is true only until the next release
       // (src/impact/sources.ts, the map date note). The tile's source line
