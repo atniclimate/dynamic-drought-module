@@ -205,6 +205,9 @@ const LABEL_NAMES_URL = (import.meta.env?.BASE_URL ?? '/dynamic-drought-module/'
 export interface TribalLabelNames {
   /** Its name in its own language (DR-247), drawn above. */
   readonly own: ReadonlyMap<string, string>;
+  /** The Nation's own page that states that name, and the day it was read: the briefing's own-writing line cites both. */
+  readonly ownPage: ReadonlyMap<string, string>;
+  readonly ownRead: ReadonlyMap<string, string>;
   /** The shorter name it is generally known by (owner, 2026-11-13), drawn in place of a long formal name. */
   readonly short: ReadonlyMap<string, string>;
   /**
@@ -230,13 +233,16 @@ function namesOf(json: unknown, list: string, field: string, key = 'nation'): Re
 
 /**
  * The curated label names (public/data/tribal-label-names.json): loaded once;
- * rejects on failure, and a later call retries. The briefing never reads them:
- * it carries the full Federal Register name.
+ * rejects on failure, and a later call retries. The briefing's title never reads
+ * them: it carries the full Federal Register name; its own-writing line reads the
+ * own name with its page and date (DR-247).
  */
 export function loadTribalLabelNames(): Promise<TribalLabelNames> {
   labelNamesLoad ??= fetchJsonWithBudget(LABEL_NAMES_URL, null, null, ROSTER_TIMEOUT_MS).then(
     (json) => ({
       own: namesOf(json, 'ownNames', 'ownName'),
+      ownPage: namesOf(json, 'ownNames', 'page'),
+      ownRead: namesOf(json, 'ownNames', 'read'),
       short: namesOf(json, 'shortNames', 'shortName'),
       area: namesOf(json, 'areaNames', 'areaName', 'aiannh')
     }),

@@ -140,7 +140,7 @@ export const PRIORITY_ROWS: readonly PriorityRow[] = [
   },
   {
     key: 'wfigs-wildfire',
-    title: 'A current mapped wildfire perimeter in the bounding box around the selection',
+    title: "A current mapped wildfire perimeter that meets the place's own boundary, or, for a selection with no boundary, in the bounding box around it",
     issuer: 'NIFC WFIGS',
     // src/impact/sources.ts fetchNifcClaims: `attr_IncidentTypeCategory`,
     // classed by classifyNifcIncidentType (src/config/wildfire-presentation.ts).
@@ -336,7 +336,9 @@ function rankOf(reading: ClaimReading): Rank | null {
             day: 0
           };
     case 'wfigs-perimeters':
-      return reading.wildfire > 0
+      // A place with its own outline leads only with a wildfire that meets it; a fire in the box but off
+      // the place stays in the claim's own sentence, under the other reads.
+      return (reading.onPlace ?? reading.wildfire) > 0
         ? { rowIndex: ROW_INDEX['wfigs-wildfire'], classRank: 0, day: 0 }
         : null;
     case 'usdm-category':
@@ -416,9 +418,11 @@ export function readingHeadline(reading: ClaimReading): string | null {
     case 'nws-products':
       return reading.events.length > 0 ? sortNwsEvents(reading.events).join(', ') : null;
     case 'wfigs-perimeters': {
-      if (reading.wildfire === 0) return null;
-      const floor = reading.lowerBound ? 'At least ' : '';
-      return `${floor}${reading.wildfire} mapped wildfire ${reading.wildfire === 1 ? 'perimeter' : 'perimeters'}`;
+      const count = reading.onPlace ?? reading.wildfire;
+      if (count === 0) return null;
+      // shortcut: the outline read's own record cap is not carried, so 50 or more wildfires on one place read as exactly that many; carry it if a place ever holds that many.
+      const floor = reading.lowerBound && reading.onPlace === undefined ? 'At least ' : '';
+      return `${floor}${count} mapped wildfire ${count === 1 ? 'perimeter' : 'perimeters'}`;
     }
     case 'usdm-category': {
       if (reading.dm === null) return USDM_NONE_SWATCH.label;
@@ -449,6 +453,11 @@ function reasonFor(reading: ClaimReading): string {
     case 'nws-products':
       return `NWS ${sortNwsEvents(reading.events).join(' and ')} in effect here`;
     case 'wfigs-perimeters': {
+      if (reading.onPlace !== undefined) {
+        // DRAFT wording (the owner's call), the claim's own sentence without its full stop.
+        const verb = reading.onPlace === 1 ? 'perimeter intersects' : 'perimeters intersect';
+        return `${reading.onPlace} current mapped NIFC wildfire ${verb} this place's mapped boundary`;
+      }
       const floor = reading.lowerBound ? 'At least ' : '';
       const verb = reading.wildfire === 1 ? 'perimeter intersects' : 'perimeters intersect';
       return `${floor}${reading.wildfire} current mapped NIFC wildfire ${verb} the bounding box around this selection`;

@@ -150,7 +150,7 @@ export function makeClaim(input: SourcedClaimInput): SourcedClaim {
     throw new Error(`makeClaim: unknown product key "${String(input.product)}"`);
   }
   const dates = input.dates ?? {};
-  const dateValues = [dates.valid, dates.issued, dates.published, dates.retrieved].filter(
+  const dateValues = [dates.valid, dates.issued, dates.published, dates.retrieved, dates.checked].filter(
     (d): d is string => d !== undefined
   );
   if (dateValues.length === 0) {
@@ -171,7 +171,7 @@ export function todayIso(): string {
 
 /** A claim's shown date as data: the word it wears and its ISO day. */
 export interface ClaimClock {
-  readonly word: 'Valid' | 'Issued' | 'Published' | 'Retrieved';
+  readonly word: 'Valid' | 'Issued' | 'Published' | 'Retrieved' | 'Citation checked';
   /** `YYYY-MM-DD`, as the claim carries it. */
   readonly date: string;
 }
@@ -179,7 +179,8 @@ export interface ClaimClock {
 /**
  * The one date a claim shows, as data. Precedence: valid, else issued, else
  * published, else retrieved (so `retrieved` always shows when nothing more
- * specific exists). Null only for a claim with no dates at all. A figure
+ * specific exists), else checked: a fixed statement's date is never worded
+ * as a read of data. Null only for a claim with no dates at all. A figure
  * that places a claim in time reads this, so it can never plot another date
  * than the one the claim's own line states.
  */
@@ -190,6 +191,7 @@ export function claimClock(claim: Pick<SourcedClaim, 'dates'>): ClaimClock | nul
   if (d.issued) return { word: 'Issued', date: d.issued };
   if (d.published) return { word: 'Published', date: d.published };
   if (d.retrieved) return { word: 'Retrieved', date: d.retrieved };
+  if (d.checked) return { word: 'Citation checked', date: d.checked };
   return null;
 }
 

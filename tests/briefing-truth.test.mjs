@@ -1589,3 +1589,76 @@ test('an NWS answer with neither alert keeps the one shared all-clear in both ro
   // NIFC, which this case does not settle.
   assert.equal(settledCell('current', 'heat', [['nwsAlerts', result]]).status, 'ready');
 });
+
+// M-113: a place that carries its own outline also counts the wildfire perimeters that meet that outline.
+const FIRE_BOX = [-122, 46, -118, 49];
+// The empty north-west corner of DIAGONAL's box.
+const NW_CORNER = { type: 'Polygon', coordinates: [[[-121.9, 48.5], [-121.5, 48.5], [-121.5, 48.9], [-121.9, 48.9], [-121.9, 48.5]]] };
+const outlinedPlace = { ...place(-120, 47.5, FIRE_BOX), placeGeometry: NW_CORNER };
+
+test('a place with an outline asks the service which wildfires meet it; a failed outline read leaves the box count alone', async () => {
+  const three = collection(['A', 'B', 'C'].map((id) => wildfire(id, null)));
+  const bodies = [];
+  const read = (outlineAnswer) =>
+    withFetch(
+      (url, init) => {
+        if (init?.method !== 'POST') return jsonResponse(three);
+        bodies.push(init.body);
+        return outlineAnswer();
+      },
+      () => sources.fetchNifcClaims(outlinedPlace, signal())
+    );
+
+  const met = (await read(() => jsonResponse(collection([wildfire('B', null), wildfire('B', null)])))).claims[0];
+  assert.equal(bodies[0].get('geometryType'), 'esriGeometryPolygon');
+  assert.equal(met.reading.wildfire, 3);
+  assert.equal(met.reading.onPlace, 1, 'one fire with two perimeter records counts once');
+  assert.equal(met.text, buildNifcAreaPerimeterClaim(['WF', 'WF', 'WF'], { onPlace: 1 }));
+  // The owner's wording of 2026-11-16: the on-the-place count leads, the box count follows in plain words.
+  assert.equal(
+    met.text,
+    "1 current mapped NIFC wildfire perimeter intersects this place's mapped boundary. 3 current mapped NIFC wildfire perimeters intersect the wider search area around it."
+  );
+
+  const failed = (await read(() => jsonResponse({ message: 'down' }, 503))).claims[0];
+  assert.equal('onPlace' in failed.reading, false);
+  assert.equal(failed.text, buildNifcAreaPerimeterClaim(['WF', 'WF', 'WF']));
+});
+
+test('a loaded perimeter in the box but off the place is counted in the box and not on the place', async () => {
+  registry.setStatus('nifc-fires', 'ready');
+  globalThis.__p3truthLoadedNifc = { collection: collection([wildfire('DIAG-1', DIAGONAL)]), envelope: null, fetchedAt: Date.now() };
+  try {
+    const result = await withFetch(
+      () => jsonResponse({ message: 'no network expected' }, 599),
+      () => sources.fetchNifcClaims(outlinedPlace, signal())
+    );
+    assert.equal(result.claims[0].reading.wildfire, 1);
+    assert.equal(result.claims[0].reading.onPlace, 0);
+    assert.equal(
+      result.claims[0].text,
+      "No current mapped NIFC wildfire perimeter intersects this place's mapped boundary. 1 current mapped NIFC wildfire perimeter intersects the wider search area around it."
+    );
+    // Mixed kinds and an empty box, for a place with an outline.
+    assert.equal(
+      buildNifcAreaPerimeterClaim(['WF', 'WF', 'RX'], { onPlace: 1 }),
+      "1 current mapped NIFC wildfire perimeter intersects this place's mapped boundary. 3 current mapped NIFC fire perimeters intersect the wider search area around it: 2 wildfire and 1 Prescribed fire."
+    );
+    assert.equal(
+      buildNifcAreaPerimeterClaim(['RX'], { onPlace: 0 }),
+      '1 current mapped NIFC Prescribed fire perimeter intersects the wider search area around this place.'
+    );
+    assert.equal(
+      buildNifcAreaPerimeterClaim([], { onPlace: 0 }),
+      "No current mapped NIFC fire perimeters intersect this place's mapped boundary or the wider search area around it."
+    );
+    // A selection with no outline keeps the box wording.
+    assert.equal(
+      buildNifcAreaPerimeterClaim(['WF']),
+      '1 current mapped NIFC wildfire perimeter intersects the bounding box around this selection.'
+    );
+  } finally {
+    delete globalThis.__p3truthLoadedNifc;
+    registry.setStatus('nifc-fires', 'loading');
+  }
+});

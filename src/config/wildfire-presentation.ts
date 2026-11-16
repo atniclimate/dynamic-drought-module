@@ -328,10 +328,17 @@ const NIFC_AREA_QUERY_EXTENT = 'the bounding box around this selection';
  * old form repeated it: "3 ... perimeters intersect this area: 3 wildfire
  * perimeters"); when categories mix, Prescribed fire and unclassified
  * records stay explicit instead of being folded into a wildfire count. A
- * page that came back at the record cap reads as a lower bound. */
+ * page that came back at the record cap reads as a lower bound.
+ *
+ * A place that carries its own outline (`options.onPlace`, M-113) leads with
+ * how many wildfire perimeters meet that outline, then states the box count
+ * in plain words as "the wider search area around it" (the owner's choice of
+ * 2026-11-16: the box wording was a stopgap while the on-the-place count was
+ * too large to build). A click or a headquarters town has no outline and keeps
+ * the box wording above. */
 export function buildNifcAreaPerimeterClaim(
   incidentTypes: readonly unknown[],
-  options: { readonly truncated?: boolean } = {}
+  options: { readonly truncated?: boolean; readonly onPlace?: number } = {}
 ): string {
   const counts: Record<NifcIncidentClass, number> = {
     wildfire: 0,
@@ -343,8 +350,12 @@ export function buildNifcAreaPerimeterClaim(
   }
 
   const total = incidentTypes.length;
+  const onPlace = options.onPlace;
   if (total === 0) {
-    return `No current mapped NIFC fire perimeters intersect ${NIFC_AREA_QUERY_EXTENT}.`;
+    // The outline lies inside the box, so an empty box is empty on the place too.
+    return onPlace === undefined
+      ? `No current mapped NIFC fire perimeters intersect ${NIFC_AREA_QUERY_EXTENT}.`
+      : "No current mapped NIFC fire perimeters intersect this place's mapped boundary or the wider search area around it.";
   }
 
   // The cap is this briefing's own resultRecordCount, not the service's limit.
@@ -353,6 +364,20 @@ export function buildNifcAreaPerimeterClaim(
     ? ` The service returned the ${NIFC_AREA_QUERY_RECORD_CAP} records this briefing asks for, so this count is a lower bound.`
     : '';
   const verb = total === 1 ? 'perimeter intersects' : 'perimeters intersect';
+  // The box is wider than the place, so a place that carries its own outline leads with how many of the
+  // wildfire perimeters meet that outline (the owner's wording choice of 2026-11-16).
+  const lead =
+    onPlace === undefined || counts.wildfire === 0
+      ? ''
+      : onPlace === 0
+        ? "No current mapped NIFC wildfire perimeter intersects this place's mapped boundary. "
+        : `${onPlace} current mapped NIFC wildfire ${onPlace === 1 ? 'perimeter intersects' : 'perimeters intersect'} this place's mapped boundary. `;
+  const extent =
+    onPlace === undefined
+      ? NIFC_AREA_QUERY_EXTENT
+      : lead === ''
+        ? 'the wider search area around this place'
+        : 'the wider search area around it';
 
   const categoryLabel: Record<NifcIncidentClass, string> = {
     wildfire: 'wildfire',
@@ -364,12 +389,12 @@ export function buildNifcAreaPerimeterClaim(
   );
   if (present.length === 1) {
     const only = present[0] as NifcIncidentClass;
-    return `${total} current mapped NIFC ${categoryLabel[only]} ${verb} ${NIFC_AREA_QUERY_EXTENT}.${floor}`;
+    return `${lead}${total} current mapped NIFC ${categoryLabel[only]} ${verb} ${extent}.${floor}`;
   }
 
   const parts = present.map((key) => `${counts[key]} ${categoryLabel[key]}`);
   const categories = `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}`;
-  return `${total} current mapped NIFC fire ${verb} ${NIFC_AREA_QUERY_EXTENT}: ${categories}.${floor}`;
+  return `${lead}${total} current mapped NIFC fire ${verb} ${extent}: ${categories}.${floor}`;
 }
 
 const NORMALIZED_NIFC_TYPE: maplibregl.ExpressionSpecification = [

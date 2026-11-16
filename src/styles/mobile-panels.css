@@ -403,4 +403,11 @@
     box-shadow: none;
     animation: none;
   }
+  /* The phone head's two-row arrangement is a screen's; paper's width can
+     still match the phone band (a Letter page less its margins is 700px), so
+     the head prints as the desktop one does: masthead, kicker, name, kind. */
+  #app[data-sheet-detent] #sheet-report .impact-panel-header,
+  #app[data-sheet-detent] #sheet-report .impact-panel-heading {
+    display: block;
+  }
 }

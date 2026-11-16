@@ -4776,6 +4776,19 @@ button.telemetry-item {
 .impact-panel-body::-webkit-scrollbar-track { background: transparent; }
 .impact-panel-body::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 4px; }
 
+/* The Nation's name in its own writing, then its source in small print (DR-247). */
+.impact-own-name {
+  margin: 0 0 12px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--fg-1);
+}
+.impact-own-name strong {
+  display: block;
+  font-size: 16px;
+  color: var(--fg-0);
+}
+
 .impact-land-caveat {
   margin: 0 0 16px;
   padding: 10px 12px;
@@ -5796,14 +5809,9 @@ a.impact-resource-link::after {
   background: #FFFFFF;
 }
 .ack-atni-lockup { margin: 12px 0; }
+/* Never shown: it holds the lockup the print masthead reuses
+   (impact-panel-runtime.ts addPrintMasthead). */
 .impact-print-brand { display: none; }
-@media print {
-  body:has(.impact-panel.open) .impact-print-brand {
-    display: block;
-    margin-top: 16px;
-    break-inside: avoid;
-  }
-}
 .about-card .about-links { margin: 0; font-size: 12px; }
 .about-card a { color: #0e7490; }
 
@@ -5887,6 +5895,19 @@ a.impact-resource-link::after {
   letter-spacing: var(--track-caps-sm);
   text-transform: uppercase;
   color: var(--fg-1);
+}
+/* The product drawn and its date, on their own lines under the Key's title. */
+.map-key-product {
+  flex: 0 0 100%;
+  display: grid;
+  gap: 1px;
+  font-size: 11px;
+  line-height: 1.3;
+  color: var(--fg-1);
+}
+.map-key-product > :first-child {
+  font-weight: var(--fw-strong, 700);
+  color: var(--fg-0);
 }
 .map-key-item {
   display: inline-flex;
@@ -7135,13 +7156,34 @@ a.impact-resource-link::after {
    map is interactive chrome, not part of the document. With no briefing
    open, printing is the browser default (this block keys off :has(.open)).
    PNG export is 0.8.0; this stylesheet is the U1 report-at-depth delivery.
+
+   The page is a proper page: a masthead (impact-panel-runtime.ts
+   addPrintMasthead), page numbers in the foot, the paper's whole width for
+   the text, the tab that is showing and nothing else, opaque paper.
    ---------------------------------------------------------------------------- */
+.impact-print-masthead { display: none; }
+.impact-print-credits { display: none; }
+@page briefing {
+  margin: 0.6in 0.6in 0.75in;
+  /* The margins are not the root's background: without this they print the
+     screen's dark ground. */
+  background: #fff;
+  @bottom-right {
+    content: 'Page ' counter(page) ' of ' counter(pages);
+    font: 9pt/1 var(--font-body, sans-serif);
+    color: #444;
+  }
+}
 @media print {
+  body:has(.impact-panel.open) {
+    page: briefing;
+  }
   html:has(.impact-panel.open),
   body:has(.impact-panel.open) {
     height: auto;
     overflow: visible;
   }
+  html:has(.impact-panel.open),
   body:has(.impact-panel.open) {
     background: #fff;
   }
@@ -7152,22 +7194,77 @@ a.impact-resource-link::after {
   body:has(.impact-panel.open) #about-atni {
     display: none !important;
   }
+  /* The Priority page is the short handout (owner 2026-11-16): the method and
+     the credits list stay with Full detail, and a closing line says where the
+     credits are (impact-panel-runtime.ts addPrintCredits). */
+  body:has(.impact-panel.open) .impact-panel-body[data-briefing-view='lead'] :is(.impact-technical-information, .impact-acknowledgements) {
+    display: none !important;
+  }
+  body:has(.impact-panel.open) .impact-print-credits {
+    display: block;
+    margin: 14pt 0 0;
+    font-size: 9pt;
+    line-height: 1.4;
+    color: #333;
+  }
   /* The panel becomes a static document: full width, natural height (every
      claim and resource prints, not one scrollport), no chrome. */
   body:has(.impact-panel.open) .impact-panel {
+    display: block;
     position: static;
     width: auto;
     max-width: none;
     height: auto;
+    padding: 0;
     transform: none;
     transition: none;
     box-shadow: none;
     border: 0;
     background: #fff;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
     color: #000;
   }
   body:has(.impact-panel.open) .impact-panel-body {
     overflow: visible;
+  }
+  /* Full measure: the screen's centred reading column and gutters give way to
+     the page's own margins. */
+  body:has(.impact-panel.open) .impact-panel :is(.impact-panel-header, .impact-panel-body) {
+    padding-inline: 0;
+  }
+  body:has(.impact-panel.open) .impact-panel-header {
+    display: block;
+    padding-top: 0;
+  }
+  body:has(.impact-panel.open) .impact-panel-heading {
+    display: block;
+  }
+  /* The masthead: lockup left, date and address right, one rule under. */
+  .impact-print-masthead {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 16px;
+    margin-bottom: 14px;
+  }
+  .impact-print-masthead img {
+    flex: none;
+    width: 200px;
+    height: auto;
+  }
+  .impact-print-meta {
+    margin: 0;
+    min-width: 0;
+    display: grid;
+    gap: 2px;
+    text-align: right;
+    font-size: 9pt;
+    line-height: 1.3;
+    color: #444;
+  }
+  .impact-print-meta span {
+    overflow-wrap: anywhere;
   }
   /* Report surfaces become paper; issuer swatches and chart marks retain
      their own colors. Black print text must not sit on screen-theme cards. */
@@ -7214,11 +7311,17 @@ a.impact-resource-link::after {
      on one page where the engine allows. */
   .impact-claim,
   .impact-resource,
-  .impact-resource-group,
   .ack-row {
     break-inside: avoid;
   }
-  .impact-horizon-head {
+  /* A group of resources is longer than a page: let it run on, each resource
+     whole, rather than leave a page that holds one line. */
+  .impact-resource-group {
+    break-inside: auto;
+  }
+  .impact-horizon-head,
+  .impact-resource-group-title,
+  .impact-panel summary {
     break-after: avoid;
   }
   /* A hazard row keeps its label with its first claim on paper. */

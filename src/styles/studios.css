@@ -20,8 +20,8 @@
 
    TEXT ON THE PHONE GLASS. app.css requires an opaque card under every
    block of studio text, because its 0.55 studio glass over a bright map
-   leaves --fg-0 at 3.72:1. That rule still holds above 720 px, where the
-   cards stay. On a phone the surface is --glass-panel (0.82): composited
+   leaves --fg-0 at 3.72:1. Above 720 px the plate is --glass-read and the
+   cards are --glass-panel (see "THE DOCKED STUDIOS ARE GLASS" below). On a phone the surface is --glass-panel (0.82): composited
    over a pure white map patch, before any blur, it is rgb(46.7, 54.9, 61.5),
    against which --ink is 10.21:1, --ink-soft 7.44:1 and --ink-muted 4.67:1.
    So text may sit on this glass, and --ink-muted is the faintest ink that
@@ -1564,6 +1564,48 @@
     align-self: start;
     max-height: calc(var(--place-page-h, 100vh) - 36px);
     overflow-y: auto;
+  }
+}
+
+/* THE DOCKED STUDIOS ARE GLASS, like the Impact Briefing (owner 2026-11-15; the
+   plate kept at its 0.55 on the owner's word of 2026-11-16). The plate stays
+   the --rich-black-glass-strong under the blur app.css gives it, so the map
+   shows through the gaps as much as it did; the header, the cards, the
+   unchosen type chips and the bar each carry --glass-panel (the briefing's
+   darker translucent tile), so every line of text sits on at least 0.82 and
+   the map shows faintly through them too. Worst case for text is a white
+   cloud under a card: --glass-panel over white is rgb(46.7, 54.9, 61.5), so
+   --ink-strong is 12.12:1, --ink 10.21:1, --ink-soft 7.44:1 and --ink-muted
+   (named here, 10.5 to 11.5 px) 4.67:1. The faint tiers (--fg-2, --fg-3) read
+   as --ink-soft on this glass, the briefing's own rule (app.css, .impact-panel
+   :not(.sheet-hosted)): --ink-faint over white is 3.96:1, and the group hint's
+   0.8 opacity takes it lower. Over black every tier is 6.5:1 or more. Controls
+   keep their own faces. Without backdrop-filter none of this applies and the
+   opaque faces above stand. Never the phone: its glass is the block above. */
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  @media (min-width: 721px) {
+    :is(#place-studio-root, #layers-studio-root) {
+      --fg-2: var(--ink-soft);
+      --fg-3: var(--ink-soft);
+    }
+    :is(#place-studio-root, #layers-studio-root) .layers-studio-header {
+      background: var(--glass-panel);
+      border-bottom-color: var(--glass-hairline);
+    }
+    :is(#place-studio-root, #layers-studio-root) :is(
+      .layers-studio-search,
+      .layers-studio-catalog,
+      .layers-studio-depth,
+      .layers-now,
+      .place-studio-list-panel,
+      .place-studio-selection-panel,
+      .place-studio-type:not([aria-pressed='true'])
+    ) {
+      background: var(--glass-panel);
+    }
+    #place-studio-root .place-studio-bar {
+      background: var(--glass-panel);
+    }
   }
 }
 

@@ -518,6 +518,13 @@ test('reasons are sentences in issuer words, carrying no number the reading did 
     orderBriefing(place({ 'fire:current': cell('fire', 'current', [claim(READ.wfigs(1))]) })).ranked[0].reason,
     '1 current mapped NIFC wildfire perimeter intersects the bounding box around this selection'
   );
+  // A place with its own outline (M-113): a wildfire in the box but off the place does not lead; one on it does.
+  const fires = (onPlace) =>
+    orderBriefing(place({ 'fire:current': cell('fire', 'current', [claim({ ...READ.wfigs(3), onPlace })]) }));
+  assert.deepEqual(fires(0).ranked, [], 'three wildfires in the box, none on the place: nothing leads');
+  assert.equal(fires(1).ranked[0].headline, '1 mapped wildfire perimeter');
+  assert.equal(fires(1).ranked[0].reason, "1 current mapped NIFC wildfire perimeter intersects this place's mapped boundary");
+  assert.equal(fires(2).ranked[0].reason, "2 current mapped NIFC wildfire perimeters intersect this place's mapped boundary");
   assert.equal(readingHeadline(READ.heat(null)), 'No data at the selected point');
   assert.equal(daysPhrase([3, 4, 5, 6, 7, 8]), 'Days 3 to 8');
   assert.equal(daysPhrase([2, 1]), 'Days 1 and 2');

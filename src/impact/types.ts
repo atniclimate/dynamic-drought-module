@@ -43,10 +43,10 @@ export type EvidenceClass =
 
 /**
  * The dates a claim carries, all ISO 8601 (`YYYY-MM-DD`). The shown line uses
- * the precedence valid, else issued, else published, else retrieved (see
- * `claimDateLine` in `src/impact/evidence.ts`). Live fetches set `retrieved`
- * to the fetch date; fixed prose claims set `retrieved` to the date their
- * source statement was last verified.
+ * the precedence valid, else issued, else published, else retrieved, else
+ * checked (see `claimDateLine` in `src/impact/evidence.ts`). Live fetches set
+ * `retrieved` to the fetch date; fixed prose claims, which read nothing, set
+ * `checked` to the date their source statement was last verified.
  */
 export interface ClaimDates {
   /** When the source published the underlying product. */
@@ -57,6 +57,8 @@ export interface ClaimDates {
   readonly issued?: string;
   /** When DDM retrieved the value (fetch date or snapshot build date). */
   readonly retrieved?: string;
+  /** When a fixed statement and its link were last checked against the source's page: nothing was retrieved. */
+  readonly checked?: string;
 }
 
 /** The spatial support a claim's value actually has, stated honestly. */
@@ -157,6 +159,12 @@ export interface WfigsPerimetersReading {
   readonly prescribed: number;
   readonly other: number;
   readonly lowerBound: boolean;
+  /**
+   * How many of the wildfire perimeters meet the place's own outline. Absent
+   * when the place carries no outline (a click, a headquarters town) or that
+   * read did not answer: the box count then stands alone.
+   */
+  readonly onPlace?: number;
 }
 
 /**
@@ -659,6 +667,12 @@ export interface ImpactBriefing {
   readonly landKind: string;
   /** The representation caveat, or empty string when none applies. */
   readonly landCaveat: string;
+  /**
+   * The Nation's name in its own writing, with the Nation's own page that
+   * states it and the day that page was read (DR-247). Set when the curated
+   * row loads, for a place titled with that Nation's Federal Register name.
+   */
+  ownName?: { readonly name: string; readonly page: string; readonly read: string };
   /** Lazy, static ecoregion context. Replaced when its artifact read settles. */
   landscape: LandscapeContext;
   pointHeat: PointHeatBriefing;

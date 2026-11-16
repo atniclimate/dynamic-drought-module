@@ -59,7 +59,9 @@ const CITED = new Set<string>([
   'nrcan-atlas-of-canada-1m',
   'usgs-nhd-tribal-streets',
   'usgs-padus-4-1',
-  'usfs-administrative-forest-boundaries'
+  'usfs-administrative-forest-boundaries',
+  // How the Dams layer selects dams, verdicts read 2026-11-15.
+  'usace-national-inventory-of-dams'
 ]);
 
 const DEPLOYER = { name: 'Fixture GIS office' };

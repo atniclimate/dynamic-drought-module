@@ -131,6 +131,41 @@ const stateContext = (code, lng, lat) => ({
   containing: { state: code, basis: 'feature-property' }
 });
 
+test("DR-247: a Tribal place titled with a curated Nation gets that Nation's own-writing name, its page and its read date; any other place gets none", async () => {
+  const names = {
+    ownNames: [{ nation: 'Lummi Tribe of the Lummi Reservation', ownName: "Lhaq'temish", page: 'https://www.lummi-nsn.gov/', read: '2026-11-13' }]
+  };
+  const hydrateWithNames = async (context) => {
+    const original = globalThis.fetch;
+    globalThis.window = new EventTarget();
+    globalThis.fetch = async (input) => {
+      if (String(input?.url ?? input).includes('tribal-label-names.json')) return new Response(JSON.stringify(names), { status: 200 });
+      throw new TypeError('network down');
+    };
+    const [warn, error] = [console.warn, console.error];
+    console.warn = console.error = () => {};
+    try {
+      const briefing = createBriefingSkeleton(context);
+      await hydrateBriefing(briefing, new AbortController().signal, () => {});
+      // The names are a side read the hydration does not wait on.
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      return briefing;
+    } finally {
+      globalThis.fetch = original;
+      console.warn = warn;
+      console.error = error;
+    }
+  };
+  const tribal = (title) => ({ ...stateContext('WA', -122.6, 48.8), kind: 'aiannh', title });
+  assert.deepEqual((await hydrateWithNames(tribal('Lummi Tribe of the Lummi Reservation'))).ownName, {
+    name: "Lhaq'temish",
+    page: 'https://www.lummi-nsn.gov/',
+    read: '2026-11-13'
+  });
+  assert.equal((await hydrateWithNames(tribal('Nooksack Indian Tribe'))).ownName, undefined, 'no curated row, no line');
+  assert.equal((await hydrateWithNames(stateContext('WA', -122.6, 48.8))).ownName, undefined, 'a State never reads the names');
+});
+
 test('DR-256: a place outside the Northwest gets the matrix cell by cell, never the regional gate', async () => {
   const briefing = await hydrateOffline(stateContext('AZ', -111.7, 34.3));
   for (const cell of allCells(briefing)) {

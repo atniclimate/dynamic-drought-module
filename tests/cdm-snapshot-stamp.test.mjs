@@ -35,7 +35,7 @@ globalThis.fetch = async () => new Response(artifact, { status: 200 });
 globalThis.document = { getElementById: () => null };
 
 const { activate } = await import('../src/layers/cdm-drought.ts');
-const { getTimeBarSpec } = await import('../src/ui/time-bar.ts');
+const { getTimeBarSpec, stampProduct } = await import('../src/ui/time-bar.ts');
 const { LAYER_DEFS } = await import('../src/config/layers.ts');
 
 function fakeMap() {
@@ -63,6 +63,8 @@ test('the time statement names the committed monthly snapshot beside its month',
   });
   assert.match(spec.stamp.headline, new RegExp(`${monthName} ${year}`));
   assert.match(spec.stamp.headline, new RegExp(snapshotWords));
+  // The Key's head names the product by the stamp's first part.
+  assert.equal(stampProduct(spec.stamp), 'Canadian Drought Monitor');
 });
 
 test('the builder refuses an archive whose classes do not nest, so a dropped member never reads as no drought', () => {

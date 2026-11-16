@@ -256,6 +256,9 @@ function perimeterMark(): string {
 
 /** WFIGS perimeters: the counts by incident class, as the read carries them. */
 function wfigsCounts(reading: Extract<ClaimReading, { kind: 'wfigs-perimeters' }>): string {
+  // The split is the box's (M-113): under a headline that counts the place's own boundary it would contradict it,
+  // and Prescribed and other perimeters are not counted on the place. The claim's sentence keeps the box split.
+  if (reading.onPlace !== undefined) return '';
   // Only a mixed set needs the split: a wildfire-only count is the headline.
   if (reading.prescribed === 0 && reading.other === 0) return '';
   const parts: string[] = [];
@@ -374,7 +377,10 @@ function scopeWords(entry: PriorityEntry): string {
     case 'nws-products':
       return 'In effect at the selected point.';
     case 'wfigs-perimeters':
-      return 'Current perimeters in a search area wider than this place.';
+      // DRAFT wording (the owner's call): a place with its own outline counts the perimeters that meet it (M-113).
+      return reading.onPlace !== undefined
+        ? "Current perimeters that intersect this place's mapped boundary."
+        : 'Current perimeters in a search area wider than this place.';
     case 'usdm-category':
       // Not "this week's map": that is true only until the next release
       // (src/impact/sources.ts, the map date note). The tile's source line

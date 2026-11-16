@@ -176,8 +176,10 @@ test.describe('NIFC WFIGS query scope', () => {
           const envelope = parseEnvelope(url);
           // A place pick also opens that place's briefing, which reads this service for its own fire tile (an
           // attribute-only query, returnGeometry=false; since DR-256 the briefing reads nationally). It is answered
-          // at once and not counted: only the layer's perimeter queries are under test.
-          if (url.searchParams.get('returnGeometry') === 'false') {
+          // at once and not counted: only the layer's perimeter queries are under test. The same holds for the
+          // outline POST a place with its own outline adds (a State picked from search carries one): its form
+          // body holds returnGeometry, so it is told apart by its method.
+          if (route.request().method() === 'POST' || url.searchParams.get('returnGeometry') === 'false') {
             await route.fulfill({
               status: 200,
               contentType: 'application/geo+json',
@@ -750,7 +752,9 @@ test.describe('DDM-P14-T07: the briefing and the minimap read the loaded NIFC co
     // Prescribed unit (RX) lie inside Washington; Synthetic Ridge lies south
     // of it; the ring's hole holds it.
     expect(expectedTypes).toEqual(['WF', 'RX']);
-    const expectedText = buildNifcAreaPerimeterClaim(expectedTypes);
+    // A state briefing carries the state's own outline (M-113): the wildfire inside Washington meets it, the
+    // Prescribed unit is not a wildfire, and the ring's hole holds the whole state. So one wildfire is on the place.
+    const expectedText = buildNifcAreaPerimeterClaim(expectedTypes, { onPlace: 1 });
 
     const claim = currentFireCell(page).locator('.impact-claim').first();
     await expect(claim).toContainText(expectedText);
@@ -894,6 +898,7 @@ test.describe('DDM-P14-T07: the briefing and the minimap read the loaded NIFC co
   }) => {
     await stubOtherBriefingLanes(page);
     const geojsonQueries: string[] = [];
+    const outlineQueries: string[] = [];
     let releaseHeld = (): void => undefined;
     const held = new Promise<void>((resolve) => {
       releaseHeld = resolve;
@@ -902,7 +907,10 @@ test.describe('DDM-P14-T07: the briefing and the minimap read the loaded NIFC co
       (url) =>
         url.href.includes('WFIGS_Interagency_Perimeters_Current') && url.pathname.endsWith('/query'),
       async (route) => {
-        geojsonQueries.push(route.request().url());
+        // The bounded box read is the GET. A place with its own outline also posts that outline once (M-113):
+        // held and answered like the box read, counted apart.
+        if (route.request().method() === 'POST') outlineQueries.push(route.request().url());
+        else geojsonQueries.push(route.request().url());
         await held;
         await route.fulfill({
           status: 200,
@@ -924,6 +932,7 @@ test.describe('DDM-P14-T07: the briefing and the minimap read the loaded NIFC co
     await page.locator('#region-briefing-btn').click();
 
     await expect.poll(() => geojsonQueries.length).toBe(1);
+    expect(outlineQueries.length, 'at most one outline read beside the box read').toBeLessThanOrEqual(1);
     const params = new URL(geojsonQueries[0]!).searchParams;
     expect(params.get('resultRecordCount')).toBe(String(NIFC_AREA_QUERY_RECORD_CAP));
     expect(params.get('f')).toBe('geojson');

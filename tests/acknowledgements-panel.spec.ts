@@ -24,7 +24,7 @@ import { stubWildfireFeeds } from './wildfire-fixtures';
 
 const POINTER = '#map-info-attribution button[data-open-acknowledgements]';
 
-test('D3 ATNI lockup appears in acknowledgements and the print-only report footer', async ({ page }) => {
+test('D3 ATNI lockup appears in acknowledgements, and the retired report footer keeps the image the printed masthead borrows', async ({ page }) => {
   await gotoApp(page, '?view=console&flow=off');
   await openPointer(page);
   const panel = page.locator('#impact-panel');
@@ -37,10 +37,10 @@ test('D3 ATNI lockup appears in acknowledgements and the print-only report foote
   })).toBe(true);
   const footer = panel.locator('.impact-print-brand');
   await expect(footer).toBeHidden();
+  // The footer no longer prints: the page's masthead carries the lockup (tests/report-print.spec.ts) and reads its address from here.
   await page.emulateMedia({ media: 'print' });
-  await expect(footer).toBeVisible();
+  await expect(footer).toBeHidden();
   await expect(footer.locator('img')).toHaveAttribute('src', /brand\/atni-climate-lockup\.png$/);
-  await expect(footer.locator('img')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
   await page.emulateMedia({ media: 'screen' });
   await expect(footer).toBeHidden();
   await expect(lockup).toBeVisible();
@@ -378,6 +378,9 @@ test.describe('the acknowledgements pointer and section (D1 M22)', () => {
     await expect(panel.locator('#impact-panel-title')).toHaveText('Washington', {
       timeout: 15_000
     });
+    // Full detail is the whole record and prints the credits list; a Priority printout drops it and says where it is
+    // (owner 2026-11-16, tests/report-print.spec.ts holds that half).
+    await panel.locator('.briefing-view-btn[data-briefing-view="matrix"]').click();
     const section = panel.locator('.impact-acknowledgements');
     await expect(section).toHaveJSProperty('open', false);
     await page.evaluate(() => window.dispatchEvent(new Event('beforeprint')));
