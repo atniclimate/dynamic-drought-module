@@ -246,7 +246,7 @@ test.describe('DDM-P1-T03: activation failure, thrown and non-thrown, self-corre
 
 // Imported here rather than in the header so the found-073 cases below are
 // a pure append (ES module imports are hoisted wherever they sit).
-import { DEFAULT_ON_KEYS } from '../src/config/layers';
+import { DEFAULT_ON } from './helpers';
 
 /**
  * found-073 and found-074 (D1 follow-up to M5, 2026-09-27; DDM-P10-T09).
@@ -407,8 +407,9 @@ test.describe('found-073 and found-074: a failed reference layer and a persisted
         await gotoApp(page, token === null ? '?view=console' : `?view=console&cluster=${token}`);
         await waitForLayerSettled(page, REFERENCE);
 
-        // A bare Drought boot is the default-on set (src/state/url.ts).
-        await expectModeKept(page, cluster, DEFAULT_ON_KEYS);
+        // A bare Drought boot is the default set a boot with no layers shows
+        // (the weekly U.S. map in the United States, DR-270), as DEFAULT_ON mirrors it.
+        await expectModeKept(page, cluster, new Set<string>(DEFAULT_ON));
       });
     }
   });

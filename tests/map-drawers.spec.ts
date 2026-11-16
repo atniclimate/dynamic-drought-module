@@ -132,12 +132,12 @@ test.describe('the Key drawer (S30D D1 M11)', () => {
     // One box (owner 2026-11-13): the desktop toggle's title is the mode's
     // own lead reading, or the keyed product while none is live, never the
     // mode word the pressed mode button already shows. The default boot
-    // (Drought, Current) reads the tri-national NADM key, not the USDM key
-    // (nadmKey vs droughtKey; the latter serves only the outlook horizons).
-    await expect(page.locator('#map-key-details-toggle')).toHaveText(/^(D\d|No polygon|North America drought)/);
+    // (Drought, Current, in the United States) reads the weekly U.S. Drought
+    // Monitor key (DR-270), not the North American one or the outlook key.
+    await expect(page.locator('#map-key-details-toggle')).toHaveText(/^(D\d|No polygon|Drought)/);
     // Item 4 (2026-11-13): a decorative key glyph beside the title tells a reader the chip opens the key.
     await expect(page.locator('#map-key-details-toggle > svg.map-key-chip-icon')).toHaveAttribute('aria-hidden', 'true');
-    await expect(page.locator('#map-key .map-key-label')).toHaveText('North America drought');
+    await expect(page.locator('#map-key .map-key-label')).toHaveText('Drought');
 
     const heatButton = page.locator('.shell-cluster-btn[data-cluster="heat"]');
     await heatButton.click();

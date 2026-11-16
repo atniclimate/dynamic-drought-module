@@ -69,6 +69,7 @@ import { loadFederalResources, resourcesForIdentity } from '../impact/resource-c
 import { orderFederalByCondition, resourceAgencyLine, resourcesCheckedLine } from '../impact/resources';
 import type { CatalogResource } from '../impact/resources';
 import {
+  followPlace,
   getCommittedSnapshot,
   onCommittedSnapshotChange
 } from '../state/cluster-service';
@@ -1232,6 +1233,8 @@ export function openImpactPanel(
   // the popup-close identity guard stands down.
   panelSelection = { label: context.title, context };
   setPlaceSelection(panelSelection);
+  // The map draws the product this briefing quotes (DR-270).
+  followPlace();
 
   paint(briefing);
   openImpactPanelShell(closeImpactPanel, opener);

@@ -165,7 +165,9 @@ test.describe('DR-065 mode 1: repeated toggling returns the interface to its rai
     page
   }) => {
     const fire = presetNamed('hazard-fire');
-    const drought = presetNamed('hazard-drought');
+    // The rail applies the mode's United States stand-in here (usdm for the
+    // table's nadm-drought, DR-270); the boot below is national.
+    const drought: ViewPreset = { ...presetNamed('hazard-drought'), layers: ['usdm', 'aiannh'] };
 
     await stubFireProducts(page);
     await gotoApp(page, '?view=console');
@@ -174,7 +176,7 @@ test.describe('DR-065 mode 1: repeated toggling returns the interface to its rai
       'the cycle must run with a coarse pointer'
     ).toBe(true);
     // Settle the default surface so the first swap is not racing its own boot activation.
-    await waitForLayerSettled(page, 'nadm-drought');
+    await waitForLayerSettled(page, 'usdm');
 
     await tapRail(page, fire, 'the first Fire rail tap');
 
@@ -187,7 +189,7 @@ test.describe('DR-065 mode 1: repeated toggling returns the interface to its rai
     // Cross to another hazard, toggle there too, and come back.
     await tapRail(page, drought, 'the Drought rail tap');
     for (let round = 1; round <= 2; round++) {
-      await toggleRound(page, ['nadm-drought']);
+      await toggleRound(page, ['usdm']);
       await expectPresetAtRest(page, drought, `after toggle round ${String(round)} in Drought`);
     }
 

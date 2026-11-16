@@ -63,8 +63,12 @@
 import { HAZARD_CLUSTERS, TEMPORAL_HORIZON_KEYS } from '../config/clusters';
 import type { HazardClusterKey, TemporalHorizonKey } from '../config/clusters';
 import { DEFAULT_ON_KEYS, LAYER_DEFS, getLayerDef } from '../config/layers';
-import type { FramingKey } from '../config/framings';
+import { FRAMINGS } from '../config/framings';
+import type { FramingKey, FramingSelection } from '../config/framings';
 import type { OceanKey } from '../config/oceans';
+import { regionIsUnitedStates } from '../config/region-capability';
+import { DEFAULT_REGION } from '../config/regions';
+import type { RegionKey } from '../config/regions';
 import type { LayerStatus } from '../types/layer';
 import type { DisplaySummary, TimelineSnapshot } from '../types/display-summary';
 import { deriveDisplaySummary } from './display-summary';
@@ -75,10 +79,11 @@ import {
   setHazardCluster
 } from './cluster-store';
 import { getFraming, onFramingChange } from './framing-store';
+import { getCurrentRegion } from './region-store';
 import { registry } from './registry';
 import { horizonSurfaceSignature, timeline } from './timeline';
 import { checkedSnapshot, isChecked } from '../ui/island/bridge';
-import { requestLayerOff, requestLayerOnExact } from '../ui/layer-toggle-command';
+import { requestLayerOff, requestLayerOn, requestLayerOnExact } from '../ui/layer-toggle-command';
 
 /**
  * The committed shell state S4 renders. Named CommittedShellSnapshot
@@ -148,11 +153,14 @@ const listeners = new Set<() => void>();
  * of 2026-09-28, found-007, so the expansion adds nothing today). For 'drought' at 'current' this composes back to
  * exactly the default-on set, so the bare boot and the absent-cluster
  * boot are the same set by construction. An EMPTY recipe (Extreme Heat
- * at season-ahead) honestly yields the reference set alone.
+ * at season-ahead) honestly yields the reference set alone. Where the
+ * geography is of the United States (`us`), a recipe surface with a stand-in
+ * there composes as that stand-in (DR-270).
  */
 export function composeClusterIntent(
   cluster: HazardClusterKey,
-  horizon: TemporalHorizonKey = timeline.horizon
+  horizon: TemporalHorizonKey = timeline.horizon,
+  us: boolean = isUnitedStatesGeography()
 ): readonly string[] {
   const out: string[] = [];
   const push = (key: string): void => {
@@ -161,23 +169,97 @@ export function composeClusterIntent(
   for (const def of LAYER_DEFS) {
     if (DEFAULT_ON_KEYS.has(def.key) && def.role !== 'surface') push(def.key);
   }
-  for (const key of HAZARD_CLUSTERS[cluster].recipes[horizon]) {
+  for (const recipeKey of HAZARD_CLUSTERS[cluster].recipes[horizon]) {
+    const key = keyForGeography(cluster, recipeKey, us);
     push(key);
     for (const partner of getLayerDef(key)?.coActivateWith ?? []) push(partner);
   }
   return out;
 }
 
+/**
+ * True while the newest committed geography is a place whose briefing was
+ * opened (DR-270): the place outranks the framing and the region it was opened
+ * under, and a framing or region chosen after it outranks the place. Closing
+ * the briefing commits nothing, so the surface a place brought stays.
+ */
+let placeLeads = false;
+
+/**
+ * Whether the committed geography is of the United States (DR-270; method
+ * M-114), the first that applies: a place whose briefing was opened last
+ * (`placeLeads`; a briefing reads only where its United States sources cover
+ * the place); else the minimap framing's own declaration (the ALL camera is
+ * the continent); else the region. A pan, a zoom and an identify click commit
+ * nothing, so the product on the map never changes under a drag or a popup.
+ * The link parser passes the link's own framing, region and place, read before
+ * the stores are seeded.
+ */
+export function isUnitedStatesGeography(
+  framing: FramingSelection = getFraming(),
+  region: RegionKey | null = getCurrentRegion(),
+  placeOpened: boolean = placeLeads
+): boolean {
+  if (placeOpened) return true;
+  if (framing !== null) return framing !== 'all' && FRAMINGS[framing].unitedStates;
+  return regionIsUnitedStates(region ?? DEFAULT_REGION);
+}
+
+/**
+ * `key` as `mode` draws it for the geography (HazardClusterDef.unitedStatesStandIns):
+ * a recipe surface's stand-in in the United States, and the recipe's own
+ * surface for a stand-in elsewhere. Any other key is itself.
+ */
+export function keyForGeography(
+  mode: HazardClusterKey,
+  key: string,
+  us: boolean = isUnitedStatesGeography()
+): string {
+  const standIns: Readonly<Partial<Record<string, string>>> = HAZARD_CLUSTERS[mode].unitedStatesStandIns ?? {};
+  if (us) return standIns[key] ?? key;
+  return Object.keys(standIns).find((recipeKey) => standIns[recipeKey] === key) ?? key;
+}
+
+/**
+ * A committed geography re-picks the stand-in surface the person's mode is
+ * showing (DR-270). Only a surface of a stand-in pair that is on is exchanged,
+ * through the ordinary toggle door, whose one-surface rule takes the other
+ * off: a custom set keeps every other layer, and a display with neither on is
+ * left alone. A hand-picked surface holds until the next committed geography.
+ */
+function exchangeForGeography(): void {
+  if (applying) return;
+  const us = isUnitedStatesGeography();
+  const standIns = HAZARD_CLUSTERS[selectedHazard].unitedStatesStandIns ?? {};
+  for (const [recipeKey, standIn] of Object.entries(standIns)) {
+    if (isChecked(us ? recipeKey : standIn)) requestLayerOn(us ? standIn : recipeKey);
+  }
+}
+
+/** A region or a framing was chosen: it is the committed geography now, over any place opened before it. */
+export function followGeography(): void {
+  placeLeads = false;
+  exchangeForGeography();
+}
+
+/** A place's briefing was opened: the map draws the product that briefing quotes. */
+export function followPlace(): void {
+  placeLeads = true;
+  exchangeForGeography();
+}
+
 /** Whether `keys` shows `cluster` at `horizon`: its composition plus only the
  * mode's optional layers (HazardClusterDef.optionalLayers); an optional surface
  * stands in for the recipe's surface. With no optional layers this is set
- * equality. */
+ * equality. Either surface of a United States stand-in pair is the mode's
+ * display, so the comparison is made on the recipe's own keys. */
 export function isModeDisplay(
   cluster: HazardClusterKey,
   horizon: TemporalHorizonKey,
-  keys: ReadonlySet<string>
+  shown: ReadonlySet<string>
 ): boolean {
-  const base = composeClusterIntent(cluster, horizon);
+  const keys = new Set([...shown].map((key) => keyForGeography(cluster, key, false)));
+  const base = composeClusterIntent(cluster, horizon, false);
   const optional: readonly string[] = HAZARD_CLUSTERS[cluster].optionalLayers ?? [];
   const isSurface = (key: string): boolean => getLayerDef(key)?.role === 'surface';
   const optionalSurfaceOn = optional.some((key) => keys.has(key) && isSurface(key));
@@ -558,6 +640,9 @@ export function restoreCommittedCluster(
     applying = false;
   }
   resyncFromStore(hazard);
+  // A place opened while the studio held the display aside found no surface to
+  // exchange; the restored one follows it now.
+  if (placeLeads) exchangeForGeography();
 }
 
 /**
@@ -724,6 +809,7 @@ export function initClusterService(hazard: HazardClusterKey = getHazardCluster()
   // Drought default.
   selectedHazard = hazard;
   entryUndo = null;
+  placeLeads = false;
   current = null;
   const unsubscribers = [
     registry.on('change', () => {

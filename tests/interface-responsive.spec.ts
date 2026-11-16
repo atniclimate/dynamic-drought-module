@@ -246,14 +246,14 @@ test.describe('mobile key growth at 390x844', () => {
     page
   }) => {
     await gotoApp(page);
-    // The 390px shell has no visible sidebar legend, so the default NADM
-    // surface earns its on-map key exactly like Fire and Heat, seated by
-    // the same measured-height machinery.
+    // The 390px shell has no visible sidebar legend, so the default weekly
+    // U.S. surface (DR-270) earns its on-map key exactly like Fire and Heat,
+    // seated by the same measured-height machinery.
     const key = page.locator('#map-key');
     await openMapKey(page);
     await expect(key).toBeVisible();
     await expect(key).toHaveAttribute('data-key-family', 'drought');
-    await expect(key.locator('.map-key-label')).toHaveText('North America drought');
+    await expect(key.locator('.map-key-label')).toHaveText('Drought');
     await expectMobileKeyClearance(page, '.map-key-item');
 
     // An explicitly opened key remains open when the viewport grows.
@@ -431,9 +431,7 @@ test.describe('mobile key growth at 390x844', () => {
     await page.locator('#hazard-rail button[data-preset="hazard-drought"]').click();
     await openMapKey(page);
     await expect(key).toBeVisible();
-    await expect(key.locator('.map-key-label')).toHaveText(
-      'North America drought'
-    );
+    await expect(key.locator('.map-key-label')).toHaveText('Drought');
     await expect(key).toHaveAttribute('data-key-family', 'drought');
     await expect(page.locator('#map-key-expand')).toHaveCount(0);
   });

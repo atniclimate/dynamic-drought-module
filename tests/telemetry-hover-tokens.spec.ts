@@ -15,8 +15,8 @@ for (const width of [1440, 820]) {
     await expect(chip).toHaveAttribute('aria-pressed', 'false');
     await chip.focus();
     await page.keyboard.press('Space');
-    await waitForLayerSettled(page, 'nadm-drought');
-    await expect(sidebar.locator('[data-layer-status="nadm-drought"]')).toHaveClass(/\bready\b/);
+    await waitForLayerSettled(page, 'usdm');
+    await expect(sidebar.locator('[data-layer-status="usdm"]')).toHaveClass(/\bready\b/);
     await expect(chip).toHaveAttribute('aria-pressed', 'true');
     await expect(chip).toBeFocused();
     await expect(chip).toHaveCSS('background-color', 'rgb(255, 255, 255)');
@@ -30,7 +30,7 @@ for (const width of [1440, 820]) {
     expect(shadow).toContain('rgb(1, 11, 19) 0px 0px 0px 2px inset');
     expect(shadow).not.toContain('2px 0px 0px 0px inset');
     expect(shadow).toContain('rgb(1, 11, 19) 0px 0px 0px 4px');
-    await expect(sidebar.locator('input[type="checkbox"][data-layer-key="nadm-drought"]')).toBeChecked();
+    await expect(sidebar.locator('input[type="checkbox"][data-layer-key="usdm"]')).toBeChecked();
     await chip.hover();
     await expect(chip).toHaveCSS('background-color', 'rgb(255, 255, 255)');
     await expect(chip).toHaveCSS('color', 'rgb(1, 11, 19)');

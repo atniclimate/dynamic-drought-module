@@ -2,8 +2,13 @@ import { test, expect } from './offline-test';
 
 import {
   composeClusterIntent,
+  followGeography,
+  followPlace,
   getCommittedSnapshot,
   initClusterService,
+  isModeDisplay,
+  isUnitedStatesGeography,
+  keyForGeography,
   onCommittedSnapshotChange,
   reconcileClusterWithLayerIntent,
   requestCluster,
@@ -87,6 +92,13 @@ onCheckedChange(() => {
   reconcileClusterWithLayerIntent(checked);
 });
 
+/**
+ * Drought's current surface in this spec's world: no framing and no region is
+ * the default United States geography, where "now" draws the weekly U.S.
+ * Drought Monitor in place of the recipe's North American map (DR-270).
+ */
+const DROUGHT_NOW = 'usdm';
+
 const REFERENCE_KEYS = LAYER_DEFS.filter(
   (def) => def.defaultOn && def.role !== 'surface'
 ).map((def) => def.key);
@@ -123,7 +135,9 @@ test.describe('S3 composeClusterIntent (the composition the URL boot shares)', (
         for (const key of REFERENCE_KEYS) {
           expect(composed, `${cluster}/${horizon} keeps ${key}`).toContain(key);
         }
-        for (const key of HAZARD_CLUSTERS[cluster].recipes[horizon]) {
+        for (const recipeKey of HAZARD_CLUSTERS[cluster].recipes[horizon]) {
+          // The recipe's surface, or its stand-in in the United States (DR-270).
+          const key = keyForGeography(cluster, recipeKey);
           expect(composed, `${cluster}/${horizon} applies ${key}`).toContain(key);
           // Amendment rule 4: never rely on the controller cascade; a
           // recipe member's co-activation partner is in the intent.
@@ -154,7 +168,7 @@ test.describe('S3 requestCluster (the transaction)', () => {
     resetWorld();
     const dispose = initClusterService();
     try {
-      expect(registry.getActiveKeys().has('nadm-drought')).toBe(true);
+      expect(registry.getActiveKeys().has(DROUGHT_NOW)).toBe(true);
 
       let notified = 0;
       const off = onCommittedSnapshotChange(() => {
@@ -169,8 +183,8 @@ test.describe('S3 requestCluster (the transaction)', () => {
         expect(checkedKeys().has(key), `${key} stays checked`).toBe(true);
       }
       // The old cluster's exclusive surface is gone.
-      expect(registry.getActiveKeys().has('nadm-drought')).toBe(false);
-      expect(checkedKeys().has('nadm-drought')).toBe(false);
+      expect(registry.getActiveKeys().has(DROUGHT_NOW)).toBe(false);
+      expect(checkedKeys().has(DROUGHT_NOW)).toBe(false);
       // The new recipe (the explicit co-pair) is on.
       expect(registry.getActiveKeys().has('nifc-fires')).toBe(true);
       expect(registry.getActiveKeys().has('hms-smoke')).toBe(true);
@@ -188,7 +202,7 @@ test.describe('S3 requestCluster (the transaction)', () => {
         [...composeClusterIntent('wildfire', 'current')].sort()
       );
       // No stale non-intended status leaks into the snapshot.
-      expect(snapshot.statuses.has('nadm-drought')).toBe(false);
+      expect(snapshot.statuses.has(DROUGHT_NOW)).toBe(false);
       expect(snapshot.summary.primary).toContain(
         'Current Mapped Fire Perimeters (National Interagency Fire Center, NIFC)'
       );
@@ -216,14 +230,14 @@ test.describe('S3 requestCluster (the transaction)', () => {
       requestCluster('drought');
       expect(timeline.horizon).toBe('current');
       expect(getCommittedSnapshot().horizon).toBe('current');
-      expect(getCommittedSnapshot().intendedKeys.has('nadm-drought')).toBe(true);
+      expect(getCommittedSnapshot().intendedKeys.has(DROUGHT_NOW)).toBe(true);
       expect(getCommittedSnapshot().intendedKeys.has('drought')).toBe(false);
 
       // A horizon picked inside Drought re-resolves its recipe at that horizon.
       requestHorizon('season-ahead');
       expect(getCommittedSnapshot().horizon).toBe('season-ahead');
       expect(getCommittedSnapshot().intendedKeys.has('drought')).toBe(true);
-      expect(getCommittedSnapshot().intendedKeys.has('nadm-drought')).toBe(false);
+      expect(getCommittedSnapshot().intendedKeys.has(DROUGHT_NOW)).toBe(false);
       // The timeline owns the horizon-to-register mapping.
       expect(timeline.outlookRange).toBe('seasonal');
       requestHorizon('weeks-ahead');
@@ -373,9 +387,9 @@ test.describe('S3 requestCluster (the transaction)', () => {
         requestCluster('drought');
         const snapshot = getCommittedSnapshot();
         expect(snapshot.horizon, carried).toBe('current');
-        expect(snapshot.intendedKeys.has('nadm-drought'), carried).toBe(true);
+        expect(snapshot.intendedKeys.has(DROUGHT_NOW), carried).toBe(true);
         expect(snapshot.intendedKeys.has('drought'), carried).toBe(false);
-        expect(registry.getActiveKeys().has('nadm-drought'), carried).toBe(true);
+        expect(registry.getActiveKeys().has(DROUGHT_NOW), carried).toBe(true);
       } finally {
         dispose();
       }
@@ -392,7 +406,7 @@ test.describe('S3 requestCluster (the transaction)', () => {
       const snapshot = getCommittedSnapshot();
       expect(snapshot.cluster).toBe('custom');
       expect(timeline.horizon).toBe('current');
-      expect(snapshot.intendedKeys.has('nadm-drought')).toBe(true);
+      expect(snapshot.intendedKeys.has(DROUGHT_NOW)).toBe(true);
       expect(snapshot.intendedKeys.has('places')).toBe(true);
       expect(snapshot.intendedKeys.has('drought')).toBe(false);
     } finally {
@@ -455,7 +469,7 @@ test.describe('S3 requestCluster (the transaction)', () => {
       requestCluster('wildfire');
       expect(registry.getActiveKeys().has('nifc-fires')).toBe(true);
       expect(registry.getActiveKeys().has('hms-smoke')).toBe(true);
-      expect(registry.getActiveKeys().has('nadm-drought')).toBe(false);
+      expect(registry.getActiveKeys().has(DROUGHT_NOW)).toBe(false);
       // ...and the reference extra survives (never deactivated)...
       expect(registry.getActiveKeys().has('hydrography')).toBe(true);
       expect(checkedKeys().has('hydrography')).toBe(true);
@@ -569,14 +583,14 @@ test.describe('S3 snapshot revisions and honesty under later changes', () => {
 
       // A late status write for the dropped drought surface (the old
       // generation resolving after the switch): at the current horizon the
-      // Drought surface is nadm-drought.
-      registry.setStatus('nadm-drought', 'error');
+      // Drought surface here is the weekly U.S. map.
+      registry.setStatus(DROUGHT_NOW, 'error');
       const after = getCommittedSnapshot();
       expect(after.revision).toBe(before.revision);
-      expect(after.summary.caveat ?? '').not.toContain('North American Drought Monitor');
-      expect(after.statuses.has('nadm-drought')).toBe(false);
+      expect(after.summary.caveat ?? '').not.toContain('Drought Monitor');
+      expect(after.statuses.has(DROUGHT_NOW)).toBe(false);
       // Clean up the stray status.
-      registry.deactivate('nadm-drought');
+      registry.deactivate(DROUGHT_NOW);
     } finally {
       dispose();
     }
@@ -727,8 +741,8 @@ test.describe('S3 snapshot revisions and honesty under later changes', () => {
       // intended again under newer generations: every one is dropped.
       for (const op of [...staleFire, ...staleDrought]) settle(op);
       // The surface the Drought press switched to at the current horizon
-      // is nadm-drought (clusters.ts recipes.current), not usdm.
-      expect(registry.getActiveKeys().has('nadm-drought')).toBe(false);
+      // is the weekly U.S. map here (DROUGHT_NOW).
+      expect(registry.getActiveKeys().has(DROUGHT_NOW)).toBe(false);
       expect(registry.getActiveKeys().has('nifc-fires')).toBe(false);
       expect(getCommittedSnapshot().statuses.get('nifc-fires')).toBe('loading');
       // No published snapshot has EVER claimed the pair displayed.
@@ -741,7 +755,7 @@ test.describe('S3 snapshot revisions and honesty under later changes', () => {
       for (const op of freshFire) settle(op);
       expect(registry.getActiveKeys().has('nifc-fires')).toBe(true);
       expect(registry.getActiveKeys().has('hms-smoke')).toBe(true);
-      expect(registry.getActiveKeys().has('nadm-drought')).toBe(false);
+      expect(registry.getActiveKeys().has(DROUGHT_NOW)).toBe(false);
 
       // Final checked intent is exactly the wildfire composition.
       expect([...checkedKeys()].sort()).toEqual(
@@ -803,6 +817,191 @@ test.describe('S3 snapshot revisions and honesty under later changes', () => {
       expect(getCommittedSnapshot().cluster).toBe('custom');
     } finally {
       dispose();
+    }
+  });
+});
+test.describe('DR-270: Drought "now" follows the committed geography', () => {
+  test('what is of the United States: a selected place, else the framing, else the region', () => {
+    // No region yet is the default region, the contiguous United States.
+    expect(isUnitedStatesGeography(null, null, false)).toBe(true);
+    expect(isUnitedStatesGeography(null, 'washington_state', false)).toBe(true);
+    expect(isUnitedStatesGeography(null, 'alaska', false)).toBe(true);
+    expect(isUnitedStatesGeography(null, 'british_columbia', false)).toBe(false);
+    // A framing outranks the region under it; the ALL camera is the continent.
+    expect(isUnitedStatesGeography('all', 'national', false)).toBe(false);
+    expect(isUnitedStatesGeography('arid-west', 'british_columbia', false)).toBe(true);
+    expect(isUnitedStatesGeography('southeast-gulf', 'national', false)).toBe(true);
+    expect(isUnitedStatesGeography('hawaii', 'national', false)).toBe(true);
+    // A framing that reaches into Canada or Mexico keeps the continental product.
+    for (const framing of ['alaska-northwest', 'boreal-arctic', 'pacific-coast', 'plains-prairies', 'eastern-forests', 'mexico'] as const) {
+      expect(isUnitedStatesGeography(framing, 'national', false), framing).toBe(false);
+    }
+    // A selected place outranks both.
+    expect(isUnitedStatesGeography('all', 'british_columbia', true)).toBe(true);
+  });
+
+  test('the composition draws the stand-in in the United States, and either surface of a pair is the mode', () => {
+    expect(composeClusterIntent('drought', 'current', true)).toContain('usdm');
+    expect(composeClusterIntent('drought', 'current', true)).not.toContain('nadm-drought');
+    expect(composeClusterIntent('drought', 'current', false)).toContain('nadm-drought');
+    expect(composeClusterIntent('drought', 'current', false)).not.toContain('usdm');
+    // The outlook horizons name no stand-in: the same set either way.
+    for (const horizon of ['weeks-ahead', 'season-ahead'] as const) {
+      expect(composeClusterIntent('drought', horizon, true)).toEqual(composeClusterIntent('drought', horizon, false));
+    }
+    expect(keyForGeography('drought', 'nadm-drought', true)).toBe('usdm');
+    expect(keyForGeography('drought', 'usdm', false)).toBe('nadm-drought');
+    expect(keyForGeography('drought', 'aiannh', true)).toBe('aiannh');
+    expect(keyForGeography('wildfire', 'nadm-drought', true)).toBe('nadm-drought');
+    for (const us of [true, false]) {
+      const shown = new Set(composeClusterIntent('drought', 'current', us));
+      expect(isModeDisplay('drought', 'current', shown), `us ${us}`).toBe(true);
+      // Neither current surface is the mode's display at an outlook horizon.
+      expect(isModeDisplay('drought', 'weeks-ahead', shown), `us ${us}`).toBe(false);
+    }
+    // The exchange relies on the one-surface rule: every pair is two surfaces.
+    for (const mode of HAZARD_CLUSTER_KEYS) {
+      for (const [recipeKey, standIn] of Object.entries(HAZARD_CLUSTERS[mode].unitedStatesStandIns ?? {})) {
+        expect(getLayerDef(recipeKey)?.role, `${mode} ${recipeKey}`).toBe('surface');
+        expect(getLayerDef(standIn)?.role, `${mode} ${standIn}`).toBe('surface');
+        expect(
+          Object.values(HAZARD_CLUSTERS[mode].recipes).some((recipe) => recipe.some((key) => key === recipeKey)),
+          `${mode} names ${recipeKey} in a recipe`
+        ).toBe(true);
+      }
+    }
+  });
+
+  test('a link that lists no layers follows its own view; a listed set is shown as written', () => {
+    const originalWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+    const parse = (search: string): Set<string> => {
+      Object.defineProperty(globalThis, 'window', { configurable: true, value: { location: { search } } });
+      return parseUrlParams().layers;
+    };
+    try {
+      // The bare boot and a United States region: the weekly U.S. map.
+      for (const search of ['', '?region=national', '?region=washington_state', '?framing=arid-west']) {
+        expect(parse(search).has('usdm'), search).toBe(true);
+        expect(parse(search).has('nadm-drought'), search).toBe(false);
+      }
+      // A view of Canada, Mexico or the continent: the North American map.
+      for (const search of ['?region=british_columbia', '?framing=all', '?framing=mexico', '?framing=pacific-coast']) {
+        expect(parse(search).has('nadm-drought'), search).toBe(true);
+        expect(parse(search).has('usdm'), search).toBe(false);
+      }
+      // The bare boot keeps the default set's members and order, the surface exchanged in place.
+      expect([...parse('')]).toEqual(
+        LAYER_DEFS.filter((def) => def.defaultOn).map((def) => (def.key === 'nadm-drought' ? 'usdm' : def.key))
+      );
+      // A link that opens a place's briefing draws the product that briefing quotes.
+      expect(parse('?framing=mexico&select=state:WA').has('usdm')).toBe(true);
+      // A listed set is the person's: shown as written in either geography.
+      expect(parse('?region=national&layers=nadm-drought,aiannh').has('nadm-drought')).toBe(true);
+      expect(parse('?region=british_columbia&layers=usdm,aiannh').has('usdm')).toBe(true);
+      // An outlook horizon and another mode are unchanged by the geography.
+      expect([...parse('?horizon=season-ahead')].sort()).toEqual([...parse('?framing=all&horizon=season-ahead')].sort());
+      expect([...parse('?cluster=wildfire')].sort()).toEqual([...parse('?cluster=wildfire&framing=all')].sort());
+    } finally {
+      if (originalWindow) Object.defineProperty(globalThis, 'window', originalWindow);
+      else Reflect.deleteProperty(globalThis, 'window');
+    }
+  });
+
+  test('a mode press and a horizon change resolve the surface for the geography', () => {
+    resetWorld();
+    const dispose = initClusterService();
+    try {
+      expect(checkedKeys().has('usdm')).toBe(true);
+      // The continental camera, then a re-entry into Drought: the North American map.
+      setFraming('all');
+      requestCluster('wildfire');
+      requestCluster('drought');
+      expect(checkedKeys().has('nadm-drought')).toBe(true);
+      expect(checkedKeys().has('usdm')).toBe(false);
+      expect(getCommittedSnapshot().cluster).toBe('drought');
+      // Back from an outlook horizon to Current under a United States framing: the weekly map.
+      requestHorizon('season-ahead');
+      setFraming('arid-west');
+      requestHorizon('current');
+      expect(checkedKeys().has('usdm')).toBe(true);
+      expect(checkedKeys().has('nadm-drought')).toBe(false);
+      expect(getCommittedSnapshot().cluster).toBe('drought');
+    } finally {
+      dispose();
+      setFraming(null);
+      timeline.reset();
+    }
+  });
+
+  test('a committed geography asks for the other surface of the pair that is on, and the mode holds', () => {
+    resetWorld();
+    const dispose = initClusterService();
+    try {
+      // Nothing to exchange while the geography is unchanged.
+      activationLog.length = 0;
+      followGeography();
+      expect(activationLog).toEqual([]);
+      // The continental camera asks for the North American map. This harness
+      // controller has no one-surface rule (tests/stale-generation.test.mjs
+      // proves the exchange through the real one), so the weekly map is taken
+      // off here as the controller would.
+      setFraming('all');
+      followGeography();
+      expect(activationLog).toEqual([{ op: 'activate', key: 'nadm-drought' }]);
+      expect(getCommittedSnapshot().cluster, 'both of the pair on, mid-exchange').toBe('drought');
+      requestLayerOff('usdm');
+      expect(getCommittedSnapshot().cluster).toBe('drought');
+      expect(getHazardCluster()).toBe('drought');
+      // A display with neither surface on is left alone.
+      requestLayerOff('nadm-drought');
+      activationLog.length = 0;
+      setFraming(null);
+      followGeography();
+      expect(activationLog).toEqual([]);
+      // Another mode's display is not Drought's to exchange.
+      requestCluster('wildfire');
+      activationLog.length = 0;
+      setFraming('all');
+      followGeography();
+      expect(activationLog).toEqual([]);
+    } finally {
+      dispose();
+      setFraming(null);
+      resetWorld();
+    }
+  });
+
+  test('the newest commitment wins: an opened place outranks the framing under it, and a framing chosen after it outranks the place', () => {
+    resetWorld();
+    const dispose = initClusterService();
+    try {
+      // Under the continental camera Drought draws the North American map.
+      setFraming('all');
+      requestCluster('wildfire');
+      requestCluster('drought');
+      expect(checkedKeys().has('nadm-drought')).toBe(true);
+      // A place's briefing opens: the weekly map, the product the briefing quotes, is asked for.
+      activationLog.length = 0;
+      followPlace();
+      expect(activationLog).toEqual([{ op: 'activate', key: 'usdm' }]);
+      // (This harness controller has no one-surface rule; the real one takes the other off.)
+      requestLayerOff('nadm-drought');
+      expect(isUnitedStatesGeography()).toBe(true);
+      // Closing the briefing commits nothing: a mode re-entry keeps the place's product.
+      requestCluster('wildfire');
+      requestCluster('drought');
+      expect(checkedKeys().has('usdm')).toBe(true);
+      expect(checkedKeys().has('nadm-drought')).toBe(false);
+      // A framing chosen after it outranks the place.
+      setFraming('mexico');
+      activationLog.length = 0;
+      followGeography();
+      expect(activationLog).toEqual([{ op: 'activate', key: 'nadm-drought' }]);
+      expect(isUnitedStatesGeography()).toBe(false);
+    } finally {
+      dispose();
+      setFraming(null);
+      resetWorld();
     }
   });
 });

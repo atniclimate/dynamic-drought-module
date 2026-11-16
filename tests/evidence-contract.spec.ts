@@ -518,7 +518,9 @@ test.describe('legend reachable from the claim (DDM-P13-T02 correction)', () => 
       })
     );
 
-    await gotoApp(page, '?select=state:WA');
+    // A bare boot draws usdm now (DR-270), so the boot lists the reference
+    // layers alone to start with the USDM layer off.
+    await gotoApp(page, '?select=state:WA&view=brief&layers=aiannh,bia-reservations,states,hillshade');
     const panel = page.locator('#impact-panel');
     await expect(panel).toBeVisible({ timeout: 15_000 });
     await showFullDetail(page);

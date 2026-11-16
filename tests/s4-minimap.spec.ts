@@ -574,8 +574,9 @@ test.describe('S4b minimap', () => {
     // Coverage honesty relocated off the popped-up caption (2026-09-10,
     // owner ask) and onto the on-map key, its one home now: the caption
     // still names the framing but never repeats the coverage sentence,
-    // and the key (whatever hazard is active; the default boot's US
-    // Drought Monitor here) carries it instead.
+    // and the key (whatever hazard is active; choosing the Pacific Coast
+    // framing swaps the default U.S. map for the North American one,
+    // DR-270) carries it instead.
     await expect(
       page.locator('#shell-framing-note'),
     ).not.toContainText('North American Drought Monitor');

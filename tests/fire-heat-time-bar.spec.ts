@@ -949,7 +949,9 @@ test.describe('DDM-P8-T02: the Drought and ENSO screens state their horizon in t
     page
   }) => {
     await stubCommon(page);
-    await gotoApp(page, '?view=console');
+    // The case reads the North American stamp, so the boot lists that map
+    // (a bare boot draws the weekly U.S. map in the United States, DR-270).
+    await gotoApp(page, '?view=console&layers=nadm-drought,aiannh,bia-reservations,states,hillshade');
     await expect(layerPill(page, 'nadm-drought')).toHaveText(PILL.live, { timeout: 25_000 });
     const stamp = await readStamp(page);
     expectStampContract('NADM', stamp, {

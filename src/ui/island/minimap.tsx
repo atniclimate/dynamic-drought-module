@@ -121,7 +121,7 @@ import type { EnsoPhaseLabel } from '../../impact/enso';
 import { fitFraming, fitOcean } from '../../map/camera-fit';
 import { requestBasemapMode } from '../../map/basemap-switcher';
 import { defaultBasemapFor } from '../../state/basemap-store';
-import { requestOcean } from '../../state/cluster-service';
+import { followGeography, requestOcean } from '../../state/cluster-service';
 import { setMapTechnicalNote } from '../map-technical-information';
 import { dateTok } from '../../util/text-tokens';
 
@@ -650,6 +650,7 @@ function choose(map: maplibregl.Map, key: FramingKey): void {
   // (D-0.7.0-053; the selectRegion precedent in src/ui/sidebar.ts).
   clearOceanFraming();
   setFraming(key);
+  followGeography();
   fitFraming(map, key);
 }
 
