@@ -38,7 +38,7 @@ import { LAYER_DEFS } from '../config/layers';
 import { URLS } from '../config/urls';
 import { STATE_LABEL } from '../impact/resources';
 import type { StateCode } from '../impact/resources';
-import { buildBoundaryContext, stateAreaNote } from '../impact/context';
+import { buildBoundaryContext, buildHeadquartersContext, stateAreaNote } from '../impact/context';
 import { escapeSql, mergeArealGeometry } from '../util/arcgis-features';
 import { bboxCenter, bboxToContinuousBounds } from '../util/bbox';
 import { geometryBboxAcrossAntimeridian } from '../util/antimeridian';
@@ -477,15 +477,7 @@ function openHeadquarters(map: maplibregl.Map, row: TribalHeadquarters): void {
   const [lng, lat] = row.point;
   easeToPoint(map, [lng, lat]);
   requestLayerOn('aiannh');
-  const context = {
-    ...buildBoundaryContext('aiannh', { NAME: row.displayName, STUSPS: row.state }, null, { lng, lat }, row.displayName),
-    kindLabel: 'Headquarters town (US Census place)',
-    // Nobody clicked: point readings say they are read at the town.
-    readAt: `the headquarters town, ${row.town}`,
-    landNote:
-      "Neither of the map's boundary sources (BIA, Census) draws an area for this Nation. " +
-      `The map opens at its headquarters town, ${row.town}, ${stateName(row.state)}.`
-  };
+  const context = buildHeadquartersContext(row);
   setPlaceSelection({ label: context.title, context });
   openImpactPanel(context);
   clearEmphasis(map);

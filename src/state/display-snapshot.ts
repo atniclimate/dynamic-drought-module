@@ -237,7 +237,9 @@ function applyCurrentEmphasis(): void {
  */
 export function seedTribeEmphasisTargets(
   entry: PlaceCatalogEntry,
-  larIds: readonly (string | number)[]
+  larIds: readonly (string | number)[],
+  // A Nation read from its Census area seeds that layer's ids (AIANNHNS) instead.
+  source: 'bia-reservations' | 'aiannh' = 'bia-reservations'
 ): void {
   if (larIds.length === 0) return;
   const cacheKey = `${entry.kind}:${entry.id}:${entry.representationIds.join('|')}`;
@@ -247,7 +249,7 @@ export function seedTribeEmphasisTargets(
     const dedupeKey = String(id);
     if (seen.has(dedupeKey)) continue;
     seen.add(dedupeKey);
-    targets.push({ source: 'bia-reservations', id });
+    targets.push({ source, id });
   }
   featureIdCache.set(cacheKey, targets);
 }

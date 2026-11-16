@@ -398,16 +398,20 @@ test('Brief clips the display caveat and the date line is the Console column foo
 });
 
 // Owner 2026-11-13 (items 7, 8 and 15): the four map cells wear the Key's glass and blur, by token. The briefing
-// covers the map instead (the same day's later ruling, "better for visibility"): the solid rich black the glass is
-// made of, no map through it, and a notched phone on its side keeps its header clear of the notch.
-test('the map cells wear the Key glass; the covering briefing is solid and clears the notch', () => {
+// covers the map in the same glass (owner 2026-11-15, after two days solid), and a notched phone on its side keeps
+// its header clear of the notch.
+test('the map cells wear the Key glass; the covering briefing is glass and clears the notch', () => {
   const cell = ruleBody('.app-shell:not(.embed) .map-overlay-controls .map-cell');
   assert.match(cell, /background:\s*var\(--glass-read\) !important;/);
   assert.match(cell, /(?:^|[^-])backdrop-filter:\s*blur\(var\(--rich-black-blur\)\);/);
   assert.match(ruleBody('.app-shell:not(.embed) .map-overlay-controls .map-cell:hover'), /var\(--glass-press\)[^;]*var\(--glass-read\) !important;/);
+  // Owner 2026-11-15: the covering briefing is glass like the studios; the solid ground stays where the browser cannot blur.
   const cover = ruleBody('.impact-panel:not(.sheet-hosted)');
   assert.match(cover, /background:\s*var\(--surface-base\);/);
-  assert.doesNotMatch(cover, /backdrop-filter|--glass-read/);
+  assert.match(
+    code,
+    /@supports \(\(backdrop-filter: blur\(1px\)\) or \(-webkit-backdrop-filter: blur\(1px\)\)\) \{\s*@media screen and \(min-width: 721px\) \{\s*\.impact-panel:not\(\.sheet-hosted\) \{\s*background:\s*var\(--glass-read\);\s*-webkit-backdrop-filter:\s*blur\(var\(--rich-black-blur\)\);\s*backdrop-filter:\s*blur\(var\(--rich-black-blur\)\);/
+  );
   for (const side of ['top', 'right', 'bottom', 'left']) {
     assert.match(cover, new RegExp(`env\\(safe-area-inset-${side}, 0px\\)`));
   }

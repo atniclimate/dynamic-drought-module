@@ -1,10 +1,18 @@
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
-import { registerHooks } from 'node:module';
+import { registerHooks, stripTypeScriptTypes } from 'node:module';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import { foldSearchText, matchesTokens, prefixFirst } from '../src/util/search-fold.ts';
+
+// The shipped headquarters-town context (src/impact/context.ts), run inside the stub below.
+const CONTEXT_SOURCE = readFileSync(new URL('../src/impact/context.ts', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
+const shippedContext = (name) => {
+  const found = CONTEXT_SOURCE.match(new RegExp(`^export function ${name}\\([\\s\\S]*?^}`, 'm'))?.[0];
+  assert.ok(found, `${name} is still an exported function of src/impact/context.ts`);
+  return stripTypeScriptTypes(found);
+};
 
 /**
  * The search controller's failure paths (the 2026-10-19 live-review block,
@@ -42,7 +50,9 @@ const STUBS = {
   '../impact/context':
     'export const buildBoundaryContext = (_k, _p, _g, _l, t) => ({ title: t || "Located area" });' +
     // The real sentence: the test below pins what the row's click carries.
-    ' export const stateAreaNote = (n) => `${n} is a state-recognized area in the Census list; the map\'s Tribal Lands layer draws its outline but names federal areas only.`;',
+    ' export const stateAreaNote = (n) => `${n} is a state-recognized area in the Census list; the map\'s Tribal Lands layer draws its outline but names federal areas only.`;' +
+    // The real headquarters-town context: the test below pins what that row's click carries.
+    ` const STATE_LABEL = { OK: "Oklahoma" }; ${shippedContext('headquartersNote')} ${shippedContext('buildHeadquartersContext')}`,
   '../util/bbox':
     'export const bboxCenter = () => ({ lng: 0, lat: 0 }); export const bboxToContinuousBounds = (b) => b;',
   '../util/antimeridian': 'export const geometryBboxAcrossAntimeridian = () => [0, 0, 1, 1];',

@@ -41,7 +41,7 @@ import { createBriefingSkeleton } from '../../impact/briefing';
 import { selectBriefNarrativeLine } from '../../impact/brief-narrative-selector';
 import { SHELL_HAZARD_KEY } from '../../impact/horizon-chrome';
 import { getCommittedSnapshot } from '../../state/cluster-service';
-import { buildBoundaryContext, caveatFor } from '../../impact/context';
+import { buildBoundaryContext, buildHeadquartersContext, caveatFor, headquartersNote } from '../../impact/context';
 import {
   bboxIntersection,
   bboxIntersects,
@@ -75,6 +75,8 @@ import {
 } from '../../state/display-snapshot';
 import { getEmphasisTargets } from '../../state/place-emphasis';
 import { setPlaceReturnBriefing, takePlaceReturn } from '../../state/place-return';
+import { getPlaceSelection } from '../../state/place-selection';
+import type { TribalHeadquarters } from '../../state/tribal-roster';
 import { backToMap, getStudioRoute } from '../../state/studio-route';
 import {
   loadWatershedCandidates,
@@ -90,7 +92,7 @@ import type { ArealGeometry } from '../../util/arcgis-features';
 import { fetchJsonWithBudget, fetchSharedJsonWithBudget, US_STATES_SHARED_KEY } from '../../util/fetch';
 import { enterChoice, foldSearchText, matchesTokens, prefixFirst } from '../../util/search-fold';
 import { openImpactPanel } from '../impact-panel';
-import { releaseShownPlace, showPlaceOnMap } from './place-on-map';
+import { framePlaceOnMap, releaseShownPlace, showPlaceOnMap } from './place-on-map';
 import { applyStudioInertScope } from './studio-inert';
 import '../../styles/studios.css';
 
@@ -214,9 +216,12 @@ const BOUNDARY_SOURCE: Readonly<Record<TypedPlaceKind, string>> = {
  */
 type BoundaryRead = 'loading' | 'ready' | 'unreachable' | 'empty' | 'unmatched';
 
+/** A Nation the BIA set draws no land area for reads its Census area (the search's own name for that service). */
+const CENSUS_BOUNDARY_SOURCE = 'the Census Tribal area service';
+
 /** The one sentence the bar says about the read. Never a claim the read did not earn. */
-function boundarySentence(kind: TypedPlaceKind, read: BoundaryRead): string {
-  const source = BOUNDARY_SOURCE[kind];
+function boundarySentence(kind: TypedPlaceKind, read: BoundaryRead, fromCensus = false): string {
+  const source = fromCensus ? CENSUS_BOUNDARY_SOURCE : BOUNDARY_SOURCE[kind];
   switch (read) {
     case 'loading':
       return `Reading the boundary from ${source}...`;
@@ -241,7 +246,8 @@ type OverlapStatus = 'loading' | 'ready';
 
 interface ResolvedPlaceSelection {
   readonly context: BoundarySelectionContext;
-  readonly geometry: ArealGeometry;
+  /** Null for a headquarters town: a point to read at, with no outline to draw or overlap. */
+  readonly geometry: ArealGeometry | null;
   readonly bbox: readonly [number, number, number, number];
 }
 
@@ -468,20 +474,84 @@ async function resolveStateSelection(
 
 /** Every LARID a query's response carried, in feature order, deduped later
  * by `seedTribeEmphasisTargets`. */
-function larIdsFrom(features: readonly Feature[]): readonly (string | number)[] {
+function larIdsFrom(features: readonly Feature[], key = 'LARID'): readonly (string | number)[] {
   const ids: Array<string | number> = [];
   for (const feature of features) {
-    const id = feature.properties?.['LARID'];
+    const id = feature.properties?.[key];
     if (typeof id === 'string' || typeof id === 'number') ids.push(id);
   }
   return ids;
+}
+
+/**
+ * A Nation the BIA set draws no land area for: its Census area (or areas,
+ * merged), read live and never stored, with the request the search's Census
+ * row makes. The briefing keeps the Census area's own name beside the source.
+ */
+async function resolveCensusSelection(
+  entry: PlaceCatalogEntry,
+  codes: readonly string[],
+  signal: AbortSignal
+): Promise<ResolvedPlaceSelection | null> {
+  const params = new URLSearchParams({
+    where: `AIANNH IN (${codes.map((code) => `'${escapeSql(code)}'`).join(',')})`,
+    outFields: 'NAME,AIANNHCC,MTFCC,BASENAME,AIANNHNS,AREALAND,AREAWATER',
+    returnGeometry: 'true',
+    outSR: '4326',
+    geometryPrecision: '5',
+    maxAllowableOffset: '0.002',
+    f: 'geojson'
+  });
+  const collection = assertCompleteFeatureCollection(
+    await fetchJson(
+      `${URLS.censusAiannhMapServer}/47/query?${params.toString()}`,
+      signal,
+      { cache: 'no-store' }
+    )
+  );
+  abortIfNeeded(signal);
+  const geometry = mergeArealGeometry(collection.features);
+  if (!geometry) return null;
+  // shortcut: seeded for this session only; a restored display lights no Census area until it is chosen again.
+  seedTribeEmphasisTargets(entry, larIdsFrom(collection.features, 'AIANNHNS'), 'aiannh');
+  const resolved = resolvedSelection(
+    'aiannh',
+    entry.label,
+    collection.features[0]?.properties ?? null,
+    geometry
+  );
+  const names = [
+    ...new Set(
+      collection.features.flatMap((feature) => textProperty(feature.properties, 'NAME') ?? [])
+    )
+  ];
+  return resolved && names.length > 0
+    ? { ...resolved, context: { ...resolved.context, areaLabel: `Census area: ${names.join('; ')}` } }
+    : resolved;
+}
+
+/**
+ * A Nation neither boundary source draws: its briefing reads at its
+ * headquarters town. No outline, no live request; the frame is about 20 km
+ * around the town.
+ */
+function headquartersSelection(row: TribalHeadquarters): ResolvedPlaceSelection {
+  const [lng, lat] = row.point;
+  return {
+    context: buildHeadquartersContext(row),
+    geometry: null,
+    bbox: [lng - 0.15, lat - 0.1, lng + 0.15, lat + 0.1]
+  };
 }
 
 async function resolveTribeSelection(
   entry: PlaceCatalogEntry,
   signal: AbortSignal
 ): Promise<ResolvedPlaceSelection | null> {
-  if (entry.representationIds.length === 0) return null;
+  if (entry.representationIds.length === 0) {
+    if (entry.censusCodes?.length) return resolveCensusSelection(entry, entry.censusCodes, signal);
+    return entry.headquarters ? headquartersSelection(entry.headquarters) : null;
+  }
   const where = entry.representationIds
     .map((name) => `LARNAME='${escapeSql(name)}'`)
     .join(' OR ');
@@ -840,7 +910,7 @@ async function loadCandidateKind(
 
 async function loadOverlapView(
   entry: PlaceCatalogEntry,
-  selected: ResolvedPlaceSelection,
+  selected: ResolvedPlaceSelection & { readonly geometry: ArealGeometry },
   signal: AbortSignal
 ): Promise<OverlapViewState> {
   const availableKinds = PLACE_TYPE_ORDER.filter((kind) =>
@@ -1000,7 +1070,10 @@ function queueReturnBriefing(action: () => void): void {
 /** The exit briefing; a Nation's boundary is drawn after the open, so the overlay records the Nation's selection. */
 function openReturnBriefing(entry: PlaceCatalogEntry, resolved: ResolvedPlaceSelection): void {
   openImpactPanel(resolved.context);
-  if (entry.kind === 'tribe') showStudioReturnBoundary(resolved.geometry);
+  if (entry.kind !== 'tribe') return;
+  if (resolved.geometry) showStudioReturnBoundary(resolved.geometry);
+  // A headquarters town has no outline: the map goes to the town, as the search takes it there.
+  else framePlaceOnMap(resolved.bbox);
 }
 
 /**
@@ -1057,8 +1130,21 @@ function PlaceStudio() {
   const searching = foldSearchText(query) !== '';
   // A catalog loads while the list shows its type, the map shows its
   // reference layers (`kind`), or the chosen place belongs to it.
+  // A Nation whose briefing is open (picked by search or on the map) is the
+  // chosen place here too: its briefing title is its name in this list. Read
+  // once, at open, so "Clear this choice" stays cleared.
+  const [pickedNation, setPickedNation] = useState<string | null>(() => {
+    const picked = getPlaceSelection()?.context;
+    const tribal = picked?.kind === 'bia-reservation' || picked?.kind === 'aiannh';
+    return picked && tribal && picked.title !== initialSelection?.label ? picked.title : null;
+  });
   const wants = (placeKind: TypedPlaceKind): boolean =>
-    searching || scope === 'all' || scope === placeKind || kind === placeKind || selection?.kind === placeKind;
+    searching ||
+    scope === 'all' ||
+    scope === placeKind ||
+    kind === placeKind ||
+    selection?.kind === placeKind ||
+    (placeKind === 'tribe' && pickedNation !== null);
   const catalogs: Readonly<Record<TypedPlaceKind, CatalogState>> = {
     tribe: useCatalog('tribe', wants('tribe'), attempts.tribe),
     state: useCatalog('state', wants('state'), attempts.state),
@@ -1067,6 +1153,19 @@ function PlaceStudio() {
   };
   const retryCatalog = (placeKind: TypedPlaceKind): void =>
     setAttempts((prior) => ({ ...prior, [placeKind]: prior[placeKind] + 1 }));
+  const tribeCatalog = catalogs.tribe;
+  const openedWithRef = useRef(initialSelection);
+  useEffect(() => {
+    if (pickedNation === null || tribeCatalog.status !== 'ready') return;
+    setPickedNation(null);
+    // Newest intent wins: a row pressed or a choice cleared while the list was loading stands.
+    const now = getTypedPlace();
+    const opened = openedWithRef.current;
+    if (now?.kind !== opened?.kind || now?.id !== opened?.id) return;
+    // An area several Nations share is titled with all of them and names no one row: nothing is chosen for it.
+    const entry = tribeCatalog.entries.find((candidate) => candidate.label === pickedNation);
+    if (entry) setTypedPlace(typedPlaceRef(entry));
+  }, [pickedNation, tribeCatalog]);
   // The display kind's catalog, as the technical view and the selection read it.
   const entries = catalogs[kind].entries;
   const loading = catalogs[kind].status === 'loading' || catalogs[kind].status === 'idle';
@@ -1352,8 +1451,9 @@ function PlaceStudio() {
           setNarrativeStatus('unavailable');
         }
 
-        if (coverage['overlap-computable'].state === 'available') {
-          void loadOverlapView(selectionEntry, resolved, masterAbort.signal)
+        const { geometry } = resolved;
+        if (coverage['overlap-computable'].state === 'available' && geometry) {
+          void loadOverlapView(selectionEntry, { ...resolved, geometry }, masterAbort.signal)
             .then((view) => {
               if (!masterAbort.signal.aborted) setOverlapView(view);
             })
@@ -1653,7 +1753,7 @@ function PlaceStudio() {
           ? 'This screen has no briefing for this place.'
           : entryPending
             ? 'Reading the list this place belongs to...'
-            : boundarySentence(selection.kind, read);
+            : boundarySentence(selection.kind, read, Boolean(selectionEntry?.censusCodes?.length));
 
   const retryRead = (): void => {
     if (!selection) return;
@@ -1952,7 +2052,7 @@ function PlaceStudio() {
             <h3 id="place-selection-panel-heading">About this place</h3>
             {!selection ? (
               <p id="place-selection-empty">
-                No place is chosen yet. Choose one from the list to open its briefing or show it
+                No place from this list is chosen yet. Choose one to open its briefing or show it
                 on the map.
               </p>
             ) : (
@@ -2122,7 +2222,12 @@ function PlaceStudio() {
             <p id="place-selection-state" class="place-studio-bar-state" role="status">
               {stateSentence}
             </p>
-            {selection.kind === 'tribe' ? (
+            {selection.kind === 'tribe' && selectionEntry?.headquarters ? (
+              // No boundary is read for a headquarters town: the briefing's own line says where it reads.
+              <p id="place-selection-town" class="place-studio-bar-note">
+                {headquartersNote(selectionEntry.headquarters)}
+              </p>
+            ) : selection.kind === 'tribe' ? (
               <>
                 {read === 'loading' || read === 'ready' ? (
                   <p id="place-selection-live-read" class="place-studio-bar-note">

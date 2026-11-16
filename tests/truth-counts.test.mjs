@@ -248,6 +248,25 @@ test('count 6: for ten places a briefing can open on, every United States source
   assert.deepEqual(wrong, [], `of ${places.length} places, a source is silent that should read or reads where it cannot, ${some(wrong)}`);
 });
 
+test('count 7: every Nation in the Place studio list has a briefing: a BIA land area, a Census area or a headquarters town, and they add up', async () => {
+  const { buildTribeCatalogEntries, coverageForEntry } = await import('../src/config/place-catalog.ts');
+  const entries = buildTribeCatalogEntries(ROSTER.areas, CROSSWALK, ROSTER.censusAreas, ROSTER.headquarters.filter(trusted));
+  const bia = entries.filter((e) => e.representationIds.length > 0);
+  const census = entries.filter((e) => e.censusCodes);
+  const town = entries.filter((e) => e.headquarters);
+  const none = entries.filter((e) => coverageForEntry(e).briefable.state !== 'available').map((e) => e.label);
+  assert.deepEqual(none, [], `Nations the studio lists with no briefing, ${some(none)}`);
+  assert.equal(bia.length + census.length + town.length, entries.length, 'each Nation is reached one way only, and the three add up');
+  assert.equal(entries.length, ROSTER.meta.rosterCount, 'the studio lists the Federal Register list, no more and no fewer');
+  // The BIA land area leads: a Census area or a town is read only for a Nation the BIA set does not draw.
+  assert.ok([...census, ...town].every((e) => e.representationIds.length === 0));
+  // A town is a point: its briefing reads there, and no outline is there to overlap.
+  assert.ok(town.every((e) => !e.geometryAvailable && coverageForEntry(e)['overlap-computable'].state === 'unavailable'));
+  // An untrusted Census row keeps its Census name, so it never lends its area to a Nation's formal name.
+  const lent = buildTribeCatalogEntries([], { rosterNoLar: ['A Nation'] }, [{ aiannh: '0001', name: 'A Census name', displayName: 'A Nation' }], []);
+  assert.deepEqual([lent[0].censusCodes, lent[0].geometryAvailable], [undefined, false]);
+});
+
 test('the rules behind the counts: label-map search rows, and an unlabelled area on no list fails the build', () => {
   const roster = ['Kiowa Tribe (previously listed as Kiowa Indian Tribe of Oklahoma)', 'Comanche Nation, Oklahoma', 'Cherokee Nation', 'Kialegee Tribal Town'];
   const feature = (NAME, AIANNH, AIANNHCC) => ({ attributes: { NAME, BASENAME: NAME, AIANNH, AIANNHCC } });
