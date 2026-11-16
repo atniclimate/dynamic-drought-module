@@ -752,7 +752,9 @@ test.describe('DDM-P14-T07: the briefing and the minimap read the loaded NIFC co
     // Prescribed unit (RX) lie inside Washington; Synthetic Ridge lies south
     // of it; the ring's hole holds it.
     expect(expectedTypes).toEqual(['WF', 'RX']);
-    const expectedText = buildNifcAreaPerimeterClaim(expectedTypes);
+    // A state briefing carries the state's own outline (M-113): the wildfire inside Washington meets it, the
+    // Prescribed unit is not a wildfire, and the ring's hole holds the whole state. So one wildfire is on the place.
+    const expectedText = buildNifcAreaPerimeterClaim(expectedTypes, { onPlace: 1 });
 
     const claim = currentFireCell(page).locator('.impact-claim').first();
     await expect(claim).toContainText(expectedText);

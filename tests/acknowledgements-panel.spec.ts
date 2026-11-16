@@ -378,6 +378,9 @@ test.describe('the acknowledgements pointer and section (D1 M22)', () => {
     await expect(panel.locator('#impact-panel-title')).toHaveText('Washington', {
       timeout: 15_000
     });
+    // Full detail is the whole record and prints the credits list; a Priority printout drops it and says where it is
+    // (owner 2026-11-16, tests/report-print.spec.ts holds that half).
+    await panel.locator('.briefing-view-btn[data-briefing-view="matrix"]').click();
     const section = panel.locator('.impact-acknowledgements');
     await expect(section).toHaveJSProperty('open', false);
     await page.evaluate(() => window.dispatchEvent(new Event('beforeprint')));
