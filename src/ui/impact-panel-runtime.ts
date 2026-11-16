@@ -293,6 +293,7 @@ function handleBeforePrint(): void {
   printForcedPreservedKeys = new Set();
   openAllDisclosuresForPrint();
   addPrintMasthead();
+  addPrintCredits();
 }
 
 /**
@@ -320,6 +321,24 @@ function addPrintMasthead(): void {
   header.prepend(masthead);
 }
 
+/**
+ * The Priority page is the short handout: its CSS drops Technical information
+ * and the Acknowledgements, so a closing line says where the credits are (the
+ * owner's wording choice of 2026-11-16). Full detail keeps both and needs none.
+ * Added after the body, which a mid-print refresh never replaces, and removed
+ * at `afterprint`.
+ */
+function addPrintCredits(): void {
+  panelEl?.querySelector('.impact-print-credits')?.remove();
+  if (!bodyEl || bodyEl.dataset['briefingView'] !== 'lead') return;
+  const credits = document.createElement('p');
+  credits.className = 'impact-print-credits';
+  // DRAFT wording (the owner's choice of 2026-11-16, shortened so it does not promise a row for every linked resource)
+  credits.textContent =
+    "Source credits are listed under Acknowledgements, in the map's information panel, at atniclimate.github.io/dynamic-drought-module.";
+  bodyEl.after(credits);
+}
+
 /** Restore exactly the disclosures the last `openAllDisclosuresForPrint`
  * call opened; a reader's own open disclosure was never in that list, so it
  * is left alone. Covers a body reborn mid-print because that call always
@@ -327,6 +346,7 @@ function addPrintMasthead(): void {
 function handleAfterPrint(): void {
   printing = false;
   panelEl?.querySelector('.impact-print-masthead')?.remove();
+  panelEl?.querySelector('.impact-print-credits')?.remove();
   openedForPrint.forEach((details) => {
     details.open = false;
   });

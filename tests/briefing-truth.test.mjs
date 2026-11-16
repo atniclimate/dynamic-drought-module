@@ -1614,7 +1614,11 @@ test('a place with an outline asks the service which wildfires meet it; a failed
   assert.equal(met.reading.wildfire, 3);
   assert.equal(met.reading.onPlace, 1, 'one fire with two perimeter records counts once');
   assert.equal(met.text, buildNifcAreaPerimeterClaim(['WF', 'WF', 'WF'], { onPlace: 1 }));
-  assert.match(met.text, / 1 wildfire perimeter intersects this place's mapped boundary\.$/);
+  // The owner's wording of 2026-11-16: the on-the-place count leads, the box count follows in plain words.
+  assert.equal(
+    met.text,
+    "1 current mapped NIFC wildfire perimeter intersects this place's mapped boundary. 3 current mapped NIFC wildfire perimeters intersect the wider search area around it."
+  );
 
   const failed = (await read(() => jsonResponse({ message: 'down' }, 503))).claims[0];
   assert.equal('onPlace' in failed.reading, false);
@@ -1631,7 +1635,28 @@ test('a loaded perimeter in the box but off the place is counted in the box and 
     );
     assert.equal(result.claims[0].reading.wildfire, 1);
     assert.equal(result.claims[0].reading.onPlace, 0);
-    assert.match(result.claims[0].text, / No wildfire perimeter intersects this place's mapped boundary\.$/);
+    assert.equal(
+      result.claims[0].text,
+      "No current mapped NIFC wildfire perimeter intersects this place's mapped boundary. 1 current mapped NIFC wildfire perimeter intersects the wider search area around it."
+    );
+    // Mixed kinds and an empty box, for a place with an outline.
+    assert.equal(
+      buildNifcAreaPerimeterClaim(['WF', 'WF', 'RX'], { onPlace: 1 }),
+      "1 current mapped NIFC wildfire perimeter intersects this place's mapped boundary. 3 current mapped NIFC fire perimeters intersect the wider search area around it: 2 wildfire and 1 Prescribed fire."
+    );
+    assert.equal(
+      buildNifcAreaPerimeterClaim(['RX'], { onPlace: 0 }),
+      '1 current mapped NIFC Prescribed fire perimeter intersects the wider search area around this place.'
+    );
+    assert.equal(
+      buildNifcAreaPerimeterClaim([], { onPlace: 0 }),
+      "No current mapped NIFC fire perimeters intersect this place's mapped boundary or the wider search area around it."
+    );
+    // A selection with no outline keeps the box wording.
+    assert.equal(
+      buildNifcAreaPerimeterClaim(['WF']),
+      '1 current mapped NIFC wildfire perimeter intersects the bounding box around this selection.'
+    );
   } finally {
     delete globalThis.__p3truthLoadedNifc;
     registry.setStatus('nifc-fires', 'loading');

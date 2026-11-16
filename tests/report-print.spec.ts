@@ -228,6 +228,10 @@ test.describe('U1 the report in print', () => {
       await expect(masthead.locator('img')).toBeVisible();
       await expect(masthead.locator('.impact-print-meta span').nth(0)).toHaveText(/^July (29|30), 2026$/);
       await expect(masthead.locator('.impact-print-meta span').nth(1)).toHaveText(page.url());
+      // Full detail is the whole record: it keeps Technical information and the credits list, and needs no credits line.
+      await expect(panel.locator('.impact-technical-information')).toBeVisible();
+      await expect(panel.locator('.impact-acknowledgements')).toBeVisible();
+      await expect(panel.locator('.impact-print-credits')).toHaveCount(0);
       await expect(panel.locator('.impact-panel-title')).toHaveText('Washington');
       // The tab that is showing prints, and only it: the full detail here.
       await expect(panel.locator('.briefing-lead')).toBeHidden();
@@ -321,6 +325,12 @@ test.describe('U1 the report in print', () => {
     await expect(panel.locator('.briefing-lead')).toBeVisible();
     await expect(panel.locator('.impact-horizons')).toBeHidden();
     await expect(panel.locator('.briefing-view-switch')).toBeHidden();
+    // The short handout (owner 2026-11-16): no method, no credits list, and a closing line that says where the credits are.
+    await expect(panel.locator('.impact-technical-information')).toBeHidden();
+    await expect(panel.locator('.impact-acknowledgements')).toBeHidden();
+    await expect(panel.locator('.impact-print-credits')).toHaveText(
+      "Source credits are listed under Acknowledgements, in the map's information panel, at atniclimate.github.io/dynamic-drought-module."
+    );
     // Paper is opaque: no tile keeps the dark theme's fill.
     for (const tile of await panel.locator('.lead-tile').all()) {
       await expect(tile).toHaveCSS('background-color', 'rgb(255, 255, 255)');
@@ -329,6 +339,7 @@ test.describe('U1 the report in print', () => {
     await page.evaluate(() => window.dispatchEvent(new Event('afterprint')));
     await page.emulateMedia({ media: 'screen' });
     await expect(panel.locator('.impact-print-masthead')).toHaveCount(0);
+    await expect(panel.locator('.impact-print-credits')).toHaveCount(0);
   });
 
   test('Print calls window.print once and every briefing disclosure but the hourly tables prints open with dark ink', async ({

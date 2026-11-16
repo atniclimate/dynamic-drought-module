@@ -28,7 +28,8 @@ test.describe('minimal LAYERS studio', () => {
       const row = studio.locator('.layer-toggle').filter({ has: page.locator('input[data-layer-key="places"]') });
       await expect(input).toBeChecked();
       await expect(studio.locator('[data-layer-status="places"]')).toHaveClass(/\bready\b/);
-      await expect(studio.locator('.layers-studio-catalog')).toHaveCSS('background-color', 'rgb(20, 20, 20)');
+      // Glass above 720 px (the briefing's translucent tile); the opaque face stands where a browser cannot blur.
+      await expect(studio.locator('.layers-studio-catalog')).toHaveCSS('background-color', 'rgba(1, 11, 19, 0.82)');
       // In the studio the on row has no plate; the strong name and the inverted checkbox mark it. The sidebar row keeps its plate (asserted below).
       await expect(row).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
       await expect(row).toHaveCSS('border-top-color', 'rgba(0, 0, 0, 0)');

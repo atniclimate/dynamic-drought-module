@@ -176,8 +176,10 @@ test.describe('NIFC WFIGS query scope', () => {
           const envelope = parseEnvelope(url);
           // A place pick also opens that place's briefing, which reads this service for its own fire tile (an
           // attribute-only query, returnGeometry=false; since DR-256 the briefing reads nationally). It is answered
-          // at once and not counted: only the layer's perimeter queries are under test.
-          if (url.searchParams.get('returnGeometry') === 'false') {
+          // at once and not counted: only the layer's perimeter queries are under test. The same holds for the
+          // outline POST a place with its own outline adds (a State picked from search carries one): its form
+          // body holds returnGeometry, so it is told apart by its method.
+          if (route.request().method() === 'POST' || url.searchParams.get('returnGeometry') === 'false') {
             await route.fulfill({
               status: 200,
               contentType: 'application/geo+json',

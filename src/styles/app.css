@@ -7162,6 +7162,7 @@ a.impact-resource-link::after {
    the text, the tab that is showing and nothing else, opaque paper.
    ---------------------------------------------------------------------------- */
 .impact-print-masthead { display: none; }
+.impact-print-credits { display: none; }
 @page briefing {
   margin: 0.6in 0.6in 0.75in;
   /* The margins are not the root's background: without this they print the
@@ -7192,6 +7193,19 @@ a.impact-resource-link::after {
   body:has(.impact-panel.open) #sidebar-expand,
   body:has(.impact-panel.open) #about-atni {
     display: none !important;
+  }
+  /* The Priority page is the short handout (owner 2026-11-16): the method and
+     the credits list stay with Full detail, and a closing line says where the
+     credits are (impact-panel-runtime.ts addPrintCredits). */
+  body:has(.impact-panel.open) .impact-panel-body[data-briefing-view='lead'] :is(.impact-technical-information, .impact-acknowledgements) {
+    display: none !important;
+  }
+  body:has(.impact-panel.open) .impact-print-credits {
+    display: block;
+    margin: 14pt 0 0;
+    font-size: 9pt;
+    line-height: 1.4;
+    color: #333;
   }
   /* The panel becomes a static document: full width, natural height (every
      claim and resource prints, not one scrollport), no chrome. */
