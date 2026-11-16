@@ -308,9 +308,28 @@ test('a chain never draws more than five links, and escapes what it is given', (
 
 const read = (path) => readFileSync(fileURLToPath(new URL(path, import.meta.url)), 'utf8');
 
-/** The declarations of the rule whose selector list holds `selector`, whitespace folded. */
+/** A sheet without its `@media print` blocks: paper may restate a tier (the observed plate's white words). */
+function screenRules(css) {
+  let out = '';
+  let from = 0;
+  for (;;) {
+    const at = css.indexOf('@media print', from);
+    if (at < 0) return out + css.slice(from);
+    out += css.slice(from, at);
+    let end = css.indexOf('{', at);
+    let depth = 0;
+    do {
+      if (css[end] === '{') depth += 1;
+      else if (css[end] === '}') depth -= 1;
+      end += 1;
+    } while (depth > 0 && end < css.length);
+    from = end;
+  }
+}
+
+/** The declarations of the screen rule whose selector list holds `selector`, whitespace folded. */
 function declarationsFor(css, selector) {
-  const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)];
+  const rules = [...screenRules(css).matchAll(/([^{}]+)\{([^{}]*)\}/g)];
   const found = rules.filter(([, selectors]) =>
     selectors.replace(/\/\*[\s\S]*?\*\//g, '').split(',').some((part) => part.trim().includes(selector))
   );

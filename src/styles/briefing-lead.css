@@ -945,7 +945,8 @@
     break-after: avoid;
   }
   /* The observed plate stays a filled plate: white words on the ink. Exact, so
-     a print dialog with "background graphics" off cannot leave white on white. */
+     a print dialog with "background graphics" off cannot leave white on white.
+     Paper's one restatement of a tier; tests/briefing-gauges.test.mjs compares the screen rules. */
   body:has(.impact-panel.open) .impact-panel [data-evidence='observed'] .impact-claim-badge {
     color: #fff;
     -webkit-print-color-adjust: exact;
