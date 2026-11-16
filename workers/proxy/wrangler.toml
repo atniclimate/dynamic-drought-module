@@ -5,7 +5,7 @@
 # exact route table is defined in src/index.ts and currently covers only the
 # reads used by the application: NRCS AWDB data and station discovery; USBR
 # AgriMet registry and Hydromet daily CGI; the NWRFC water-supply report; USDM
-# DSCI statistics; USFS Wildfire Hazard Potential exportImage tiles; and NWS
+# DSCI statistics and Tribal area statistics; USFS Wildfire Hazard Potential exportImage tiles; and NWS
 # points, gridpoints, station/latest-observation, and active-alert reads. It does
 # not transform response bodies, does not authenticate, does not log requests,
 # and does not collect telemetry. See workers/proxy/src/index.ts for the logic

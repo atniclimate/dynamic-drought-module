@@ -88,6 +88,8 @@ test('the exact current DDM read routes are allowed', () => {
     'https://www.usbr.gov/pn-bin/webarccsv.pl?parameter=OWY%20AF',
     'https://www.nwrfc.noaa.gov/water_supply/ws_report_csv.cgi?Type=ALL',
     'https://usdmdataservices.unl.edu/api/StateStatistics/GetDSCI?aoi=53',
+    'https://usdmdataservices.unl.edu/api/TribalStatistics/GetDroughtSeverityStatisticsByAreaPercent?aoi=4545R',
+    'https://usdmdataservices.unl.edu/api/TribalStatistics/GetDSCI?aoi=4545R',
     'https://imagery.geoplatform.gov/iipp/rest/services/Fire_Aviation/USFS_EDW_RMRS_WildfireHazardPotentialClassified/ImageServer/exportImage?f=image',
     'https://api.weather.gov/points/38.5,-97.5',
     'https://api.weather.gov/gridpoints/TOP/31,80',
@@ -132,7 +134,9 @@ test('each route accepts only the query parameter names the client sends', () =>
     'https://api.weather.gov/gridpoints/TOP/31,80/forecast?units=si',
     'https://www.usbr.gov/gp/agrimet/data_files/AgrimetSites.js?v=2',
     'https://www.nwrfc.noaa.gov/water_supply/ws_report_csv.cgi?Type=ALL&type=ALL',
-    'https://usdmdataservices.unl.edu/api/StateStatistics/GetDSCI?aoi=53&cb=1'
+    'https://usdmdataservices.unl.edu/api/StateStatistics/GetDSCI?aoi=53&cb=1',
+    'https://usdmdataservices.unl.edu/api/TribalStatistics/GetDroughtSeverityStatisticsByAreaPercent?aoi=4545R&dx=2',
+    'https://usdmdataservices.unl.edu/api/TribalStatistics/GetDSCI?aoi=4545R&cb=1'
   ];
   for (const target of refused) {
     expect(isAllowedRoute(new URL(target)), target).toBe(false);
@@ -143,6 +147,8 @@ test('each route accepts only the query parameter names the client sends', () =>
     'https://www.usbr.gov/pn-bin/webarccsv.pl?parameter=OWY%20AF&syer=2026&smnth=1&sdy=1&eyer=2026&emnth=1&edy=2&format=2',
     'https://www.nwrfc.noaa.gov/water_supply/ws_report_csv.cgi?Type=ALL&Source=ALL&Wyr=2026&WyrDate=2026-01-02&Flavor=ESP10',
     'https://usdmdataservices.unl.edu/api/StateStatistics/GetDSCI?aoi=53&startdate=1/1/2026&enddate=1/7/2026&statisticsType=1',
+    'https://usdmdataservices.unl.edu/api/TribalStatistics/GetDroughtSeverityStatisticsByAreaPercent?aoi=4545R&startdate=1/1/2000&enddate=11/16/2026&statisticsType=1',
+    'https://usdmdataservices.unl.edu/api/TribalStatistics/GetDSCI?aoi=4545R&startdate=11/1/2026&enddate=11/16/2026&statisticsType=1',
     'https://imagery.geoplatform.gov/iipp/rest/services/Fire_Aviation/USFS_EDW_RMRS_WildfireHazardPotentialClassified/ImageServer/exportImage?bbox=1,2,3,4&bboxSR=3857&imageSR=3857&size=256,256&format=png&transparent=true&f=image&interpolation=RSP_NearestNeighbor'
   ];
   for (const target of clientShaped) {
@@ -194,6 +200,7 @@ test('former host-wide and off-path routes are rejected', async () => {
     'https://www.cpc.ncep.noaa.gov/products/example',
     'https://biamaps.geoplatform.gov/server/rest/services/example',
     'https://usdmdataservices.unl.edu/api/USStatistics/GetDroughtSeverityStatisticsByArea',
+    'https://usdmdataservices.unl.edu/api/TribalStatistics/GetBasicStatisticsByAreaPercent',
     'https://imagery.geoplatform.gov/iipp/rest/services/other/ImageServer/exportImage',
     'https://api.weather.gov/offices/TOP',
     'https://api.weather.gov/stations/KSEA'

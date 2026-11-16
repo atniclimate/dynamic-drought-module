@@ -133,6 +133,10 @@ const NWRFC_WS =
 const USDM_DSCI =
   'https://usdmdataservices.unl.edu/api/StateStatistics/GetDSCI' +
   '?aoi=53&startdate=1/1/2026&enddate=1/7/2026&statisticsType=1';
+/** The issuer's statistics for one Tribal area (Warm Springs, `4545R`), a small fixed window. */
+const USDM_TRIBAL =
+  'https://usdmdataservices.unl.edu/api/TribalStatistics/GetDroughtSeverityStatisticsByAreaPercent' +
+  '?aoi=4545R&startdate=1/1/2026&enddate=1/7/2026&statisticsType=1';
 const WHP_EXPORT_IMAGE =
   'https://imagery.geoplatform.gov/iipp/rest/services/Fire_Aviation/' +
   'USFS_EDW_RMRS_WildfireHazardPotentialClassified/ImageServer/exportImage' +
@@ -248,6 +252,7 @@ export const PROBES = Object.freeze([
   relay('relay-hydromet-arc', 'GET relay: Hydromet daily arc CSV', HYDROMET_ARC),
   relay('relay-nwrfc-ws', 'GET relay: NWRFC water-supply CSV', NWRFC_WS),
   relay('relay-usdm-dsci', 'GET relay: USDM DSCI statistics', USDM_DSCI),
+  relay('relay-usdm-tribal', 'GET relay: USDM Tribal area statistics', USDM_TRIBAL),
   relay('relay-whp-export', 'GET relay: USFS WHP exportImage tile', WHP_EXPORT_IMAGE),
   relay('relay-nws-point', 'GET relay: NWS point metadata', NWS_POINT),
   relay('relay-nws-gridpoint', 'GET relay: NWS gridpoint forecast', NWS_GRIDPOINT),

@@ -193,6 +193,16 @@ const LANDSCAPE_PROBES = [
 const WHP_EXPORT_IMAGE_QUERY =
   '/exportImage?bbox=-13887106,5700582,-13877106,5710582&bboxSR=3857&imageSR=3857&size=256,256&format=png&transparent=true&f=image';
 
+/** The Tribal area statistics read through the Worker (Warm Springs, a small fixed window). */
+const USDM_TRIBAL_PROBE_PATH =
+  '/TribalStatistics/GetDroughtSeverityStatisticsByAreaPercent?' +
+  new URLSearchParams({
+    aoi: '4545R',
+    startdate: '1/1/2026',
+    enddate: '1/7/2026',
+    statisticsType: '1'
+  }).toString();
+
 /** A small, anonymous NWS metadata read already used by the point-heat client. */
 const NWS_POINT_PROBE_PATH = '/points/38.5,-97.5';
 
@@ -1104,6 +1114,13 @@ async function main() {
     entries.push({
       key: 'workerProxy->usdmDsci',
       url: `${workerProxy.url}/proxy?url=${encodeURIComponent(usdm.url + suffix)}`,
+      corsRequired: true
+    });
+    // The Tribal area statistics ride the same host and Worker (DR-271): a
+    // Worker deploy older than that route answers HTTP 403 on this row.
+    entries.push({
+      key: 'workerProxy->usdmTribal',
+      url: `${workerProxy.url}/proxy?url=${encodeURIComponent(usdm.url + USDM_TRIBAL_PROBE_PATH)}`,
       corsRequired: true
     });
   }
