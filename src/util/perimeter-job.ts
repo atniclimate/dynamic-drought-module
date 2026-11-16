@@ -5,9 +5,11 @@ import { assertPerimeterJobLimits, type PerimeterJobLimits, type PerimeterJobRes
 import type { ClipCoordinates } from './polygon-clip-validation';
 import type { PolygonClipLimits } from './polygon-clip-contract';
 type Intersect = (a: unknown, b: unknown, limits: PolygonClipLimits) => ClipCoordinates;
-/** Worker-only whole job. Injected loader is a pure-test seam, never a runtime provider. */
+type Union = (geometries: readonly unknown[], limits: PolygonClipLimits) => ClipCoordinates;
+/** Worker-only whole job. Injected loaders are pure-test seams, never runtime providers. */
 export async function runPerimeterJob(sourceJson: string, limits: PerimeterJobLimits,
-  loadIntersection: () => Promise<Intersect> = async () => (await import('./polygon-clip')).intersectPolygons
+  loadIntersection: () => Promise<Intersect> = async () => (await import('./polygon-clip')).intersectPolygons,
+  loadUnion: () => Promise<Union> = async () => (await import('./polygon-clip')).unionPolygons
 ): Promise<PerimeterJobResult> {
   assertPerimeterJobLimits(limits);
   if (typeof sourceJson !== 'string' || sourceJson.length > limits.maxInputChars) throw new RangeError('Perimeter input allowance exceeded.');
@@ -73,5 +75,19 @@ export async function runPerimeterJob(sourceJson: string, limits: PerimeterJobLi
     evidence.get(key(a.versionKey, b.versionKey)) ?? { status: 'undetermined' }, limits.kernel);
   const indices = new Map<string, number[]>();
   for (const row of prepared) { const list = indices.get(row.identity.versionKey) ?? []; list.push(row.index); indices.set(row.identity.versionKey, list); }
-  return { graph, sources: graph.versions.map(version => ({ versionKey: version.versionKey, indices: indices.get(version.versionKey)! })) };
+  // After grouping: one outline per fire area of two or more records, the
+  // union of every member version. A refused union leaves the area unoutlined.
+  const footprints: { key: string; coordinates: ClipCoordinates | null }[] = [];
+  const areas = graph.groups.filter(group => group.members.length > 1);
+  if (areas.length) {
+    const union = await loadUnion();
+    for (const area of areas) {
+      const members = new Set(area.members);
+      const geometries = [...byVersion.values()].filter(row => members.has(row.identity.recordKey)).map(row => row.geometry);
+      let coordinates: ClipCoordinates | null = null;
+      try { coordinates = union(geometries, limits.clip); } catch { coordinates = null; }
+      footprints.push({ key: area.key, coordinates });
+    }
+  }
+  return { graph, sources: graph.versions.map(version => ({ versionKey: version.versionKey, indices: indices.get(version.versionKey)! })), footprints };
 }

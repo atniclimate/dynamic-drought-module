@@ -56,6 +56,24 @@ function signedArea(ring: readonly (readonly number[])[]): number {
   return twiceArea / 2;
 }
 
+/**
+ * The BC Wildfire Service read beside the nine NIFC POSTs
+ * (src/state/minimap-wildfire.ts `readBcwsActive`): the edit stamps of a
+ * finished reload that holds still and no active perimeter, so each framing's
+ * answer is its NIFC answer. Null for every other request.
+ */
+function bcwsAnswer(input: RequestInfo | URL): Response | null {
+  const url = String(input);
+  if (!url.includes('BCWS_FirePerimeters_PublicView')) return null;
+  const body = !new URL(url).pathname.endsWith('/query')
+    ? { editingInfo: { schemaLastEditDate: 1793940086179, dataLastEditDate: 1793940092833 } }
+    : { type: 'FeatureCollection', features: [] };
+  return new Response(JSON.stringify(body), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
 async function waitFor(
   predicate: () => boolean,
   timeoutMs = 2_000,
@@ -367,6 +385,8 @@ test.describe.serial('retained minimap wildfire runtime', () => {
     let activeCalls = 0;
     let peakCalls = 0;
     globalThis.fetch = async (input, init) => {
+      const bc = bcwsAnswer(input);
+      if (bc) return bc;
       const index = requests.length;
       requests.push({ url: String(input), init: init ?? {} });
       activeCalls++;
@@ -430,7 +450,9 @@ test.describe.serial('retained minimap wildfire runtime', () => {
     let callIndex = 0;
     // Captured inside the try below, so the patch cannot outlive a throw.
     let warnings: CapturedWarnings | undefined;
-    globalThis.fetch = async () => {
+    globalThis.fetch = async (input) => {
+      const bc = bcwsAnswer(input);
+      if (bc) return bc;
       const index = callIndex++;
       const value =
         index === 2
@@ -500,7 +522,8 @@ test.describe.serial('retained minimap wildfire runtime', () => {
       }
       originalClearTimeout(handle);
     }) as typeof clearTimeout;
-    globalThis.fetch = async () =>
+    globalThis.fetch = async (input) =>
+      bcwsAnswer(input) ??
       new Response(JSON.stringify({ count: 0 }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
@@ -527,7 +550,9 @@ test.describe.serial('retained minimap wildfire runtime', () => {
     const originalFetch = globalThis.fetch;
     let calls = 0;
     let aborts = 0;
-    globalThis.fetch = (_input, init) => {
+    globalThis.fetch = (input, init) => {
+      const bc = bcwsAnswer(input);
+      if (bc) return Promise.resolve(bc);
       calls++;
       return new Promise<Response>((_resolve, reject) => {
         const signal = init?.signal;

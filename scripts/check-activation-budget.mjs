@@ -501,6 +501,15 @@ const FEATURE_BUDGETS = [
     requestCount: 60,
     dataAssets: [],
   },
+  {
+    key: 'fire-area-grouping',
+    label: 'NEW 2026-11-06 with the BC Wildfire Service perimeters (an unadmitted provider\'s branch): the perimeter grouping Worker (src/util/perimeter-job-worker.ts), which carries the one MIT-licensed polygon-clipping package, folded into the Worker bundle by its build. src/layers/fire-areas.ts starts it only when a BC and a NIFC perimeter share a cross-border bounding-box candidate (the owner\'s ruling of 2026-09-26: loaded lazily only when a cross-border pair exists). A Worker has no manifest entry; it is resolved by its name and sourcemap. Measured 16.3 kB (16,317 bytes gzip, perimeter-job-worker-NHhXX3wK.js) by npm run build && npm run check:activation on base a9b80b6 plus this change. It fetches nothing: it groups the perimeters the two layers already hold, so its network columns are zero.',
+    rootModules: ['src/util/perimeter-job-worker.ts'],
+    measuredJsGzipKb: 16.3,
+    networkBytes: 0,
+    requestCount: 0,
+    dataAssets: [],
+  },
 ];
 
 /* ------------------------------------------------------------------ */

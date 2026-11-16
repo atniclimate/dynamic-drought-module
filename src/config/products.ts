@@ -21,15 +21,15 @@ export type UrlsKey = keyof typeof URLS;
  * inferring one from the other's literal keys.
  *
  * One product per DISTINCT issuer data product (the design ruling this file
- * follows, not a rule invented here). The first 29 keys are the layer-backed
+ * follows, not a rule invented here). The first 34 keys are the layer-backed
  * products, one per `LAYER_DEFS` entry in that array's own order; the
  * remaining keys are briefing products, which no map layer draws except
  * `cpcSeasonalTemp`: its own `cpc-seasonal-temp` layer reads the same Lead 1
- * service its lane reads, so the one product backs both. Nine more layer
+ * service its lane reads, so the one product backs both. Ten more layer
  * products also carry a briefing lane, because the same issuer endpoint
  * feeds both the map and a matrix cell: `usdm`, `heatrisk`, `nifc-fires`,
- * `nws-alerts`, `spc-fire-weather`, and the four 6-10 and 8-14 day outlook
- * layers, whose two services the `cpcExtended` lane reads as one product.
+ * `bcws-fires`, `nws-alerts`, `spc-fire-weather`, and the four 6-10 and 8-14
+ * day outlook layers, whose two services the `cpcExtended` lane reads as one product.
  */
 export const PRODUCT_KEYS = Object.freeze([
   'hydrography',
@@ -52,6 +52,7 @@ export const PRODUCT_KEYS = Object.freeze([
   'places',
   'power-infrastructure',
   'nifc-fires',
+  'bcws-fires',
   'nws-alerts',
   'hms-smoke',
   'heatrisk',
@@ -324,6 +325,16 @@ export const PRODUCTS: Readonly<Record<ProductKey, ProductDef>> = Object.freeze(
     layerKey: 'nifc-fires',
     lane: 'nifc',
     clock: { register: 'observed', cadence: 'on demand' }
+  },
+  'bcws-fires': {
+    key: 'bcws-fires',
+    issuer: 'BC Wildfire Service · FeatureServer',
+    endpointKey: 'bcwsFirePerimeters',
+    layerKey: 'bcws-fires',
+    lane: 'bcws',
+    // The issuer's own statement: "The data is refreshed from operational
+    // systems every 15 min" (BC Data Catalogue record, read 2026-11-06).
+    clock: { register: 'observed', cadence: 'every 15 minutes' }
   },
   'nws-alerts': {
     key: 'nws-alerts',

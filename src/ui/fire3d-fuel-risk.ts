@@ -32,7 +32,7 @@ export function fireKeySections(
 ): { readonly fire: boolean; readonly whp: boolean } | null {
   const whp = (eligible.has(FLAT_FUEL_RISK_KEY) && !drapeMounted) || eligible.has('usfs-whp-classes');
   if (!whp && !eligible.has('spc-fire-weather')) return null;
-  return { fire: eligible.has('spc-fire-weather') || eligible.has('nifc-fires'), whp };
+  return { fire: eligible.has('spc-fire-weather') || eligible.has('nifc-fires') || eligible.has('bcws-fires'), whp };
 }
 
 /**

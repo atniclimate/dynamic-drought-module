@@ -36,6 +36,7 @@ export const KEY_ELIGIBLE_LABELS: Readonly<Record<string, string>> = {
   'gridded-index': 'Gridded SPI',
   'sst-anomaly': 'Ocean temperature',
   'nifc-fires': 'Fire',
+  'bcws-fires': 'Fire',
   // vocab-allow: the National Weather Service's own product name, not DDM's own read calling itself an alert (BRIEF L4).
   'nws-alerts': 'NWS alerts',
   'tropical-cyclones': 'Tropical cyclones'

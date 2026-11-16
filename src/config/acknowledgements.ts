@@ -67,6 +67,7 @@ export const ACKNOWLEDGEMENT_IDS = [
   'aafc',
   'statcan',
   'nrcan',
+  'bcws',
   'usdm-partners',
   'nadm',
   'natural-earth',
@@ -142,6 +143,7 @@ export const ACKNOWLEDGEMENT_GROUPS: readonly {
 ];
 
 const OGL_CANADA_URL = 'https://open.canada.ca/en/open-government-licence-canada';
+const OGL_BC_URL = 'https://www2.gov.bc.ca/gov/content/data/policy-standards/data-policies/open-data/open-government-licence-bc';
 
 // The public-view RAWS notice and the DDM notice label (DR-159) live in
 // their own two-literal module so the station legend's chunk never carries
@@ -397,6 +399,20 @@ export const ACKNOWLEDGEMENTS: Readonly<Record<AcknowledgementId, Acknowledgemen
     ],
     licence: { name: 'Open Government Licence – Canada', url: OGL_CANADA_URL }
   },
+  bcws: {
+    ...nameOnly('bcws', 'BC Wildfire Service', 'canada'),
+    credits: [
+      // ledger: bcws-ogl-bc-attribution (the licence's own attribution
+      // statement, verbatim, U+2013 kept; OGL_BC_URL read 2026-11-06). The
+      // BC logo is not licensed and no mark is shown.
+      {
+        text: 'Contains information licensed under the Open Government Licence – British Columbia.',
+        html: `Contains information licensed under the <a href="${OGL_BC_URL}">Open Government Licence – British Columbia</a>.`,
+        citeId: 'bcws-ogl-bc-attribution'
+      }
+    ],
+    licence: { name: 'Open Government Licence – British Columbia', url: OGL_BC_URL }
+  },
   'usdm-partners': {
     ...nameOnly('usdm-partners', 'U.S. Drought Monitor', 'partnerships-and-other'),
     credits: [
@@ -477,6 +493,7 @@ export const PRODUCT_CREDITS: Readonly<Record<ProductKey, CreditRows>> = {
   places: ['natural-earth', 'usgs'],
   'power-infrastructure': ['hifld', 'eia'],
   'nifc-fires': ['nifc'],
+  'bcws-fires': ['bcws'],
   'nws-alerts': ['noaa-nws'],
   'hms-smoke': ['noaa-ospo'],
   heatrisk: ['noaa-nws', 'noaa-wpc'],

@@ -24,7 +24,8 @@ import { HAZARD_CLUSTERS, HEAT_FIRE_ALERTS } from '../../config/clusters';
 import { NADM_CATEGORIES, USDM_CATEGORIES, readUsdmDm } from '../../config/palette';
 import { normalizeNadmYearMonth } from '../../util/nadm-collection';
 import { getLayerDef } from '../../config/layers';
-import { classifyNifcIncidentType } from '../../config/wildfire-presentation';
+import { OVERLAP_COUNT_LABEL, classifyNifcIncidentType } from '../../config/wildfire-presentation';
+import { countFireAreas, fireRecordKey } from '../../layers/fire-areas';
 import { resolveStatusPillText } from './pill-text';
 import { isChecked } from './bridge';
 
@@ -56,6 +57,11 @@ const ALERTS_FILL = 'nws-alerts-fill';
 
 const FIRES_KEY = 'nifc-fires';
 const FIRES_FILL = 'nifc-fires-fill';
+// src/layers/bcws-fires.ts: the BC perimeters and the fire areas where they overlap NIFC's.
+const BCWS_KEY = 'bcws-fires';
+const BCWS_FILL = 'bcws-fires-fill';
+const FOOTPRINT_SOURCE = 'fire-footprints';
+const FOOTPRINT_FILL = 'fire-footprints-fill';
 
 /** Only these sources can change the rendered readings in this strip. */
 export const CONDITIONS_METRIC_SOURCES: ReadonlySet<string> = new Set([
@@ -64,7 +70,9 @@ export const CONDITIONS_METRIC_SOURCES: ReadonlySet<string> = new Set([
   'usdm-frame-b',
   'usdm-change',
   ALERTS_KEY,
-  FIRES_KEY
+  FIRES_KEY,
+  BCWS_KEY,
+  FOOTPRINT_SOURCE
 ]);
 
 export interface Metric {
@@ -84,6 +92,8 @@ export interface Metric {
    * (critical-review #6). Currently only the weekly USDM surface sets this.
    */
   readonly stale?: boolean;
+  /** The tile's name where it reads more than its own layer; absent, the view names the tile's layer. */
+  readonly name?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -371,38 +381,73 @@ export function alertsMetric(map: maplibregl.Map): Metric {
   };
 }
 
+/** The fires tile's name while both agencies' perimeters are on (DRAFT wording, DR-177): it counts both. */
+export const FIRES_BOTH_AGENCIES_NAME = 'Current Mapped Fire Perimeters (NIFC and BC Wildfire Service)';
+
 export function firesMetric(map: maplibregl.Map): Metric {
-  if (!isLayerOn(FIRES_KEY)) return offMetric('wildfires');
-  if (!map.getLayer(FIRES_FILL)) return pendingMetric(FIRES_KEY);
+  const metric = firesReading(map);
+  return isLayerOn(FIRES_KEY) && isLayerOn(BCWS_KEY) ? { ...metric, name: FIRES_BOTH_AGENCIES_NAME } : metric;
+}
+
+function firesReading(map: maplibregl.Map): Metric {
+  const nifcOn = isLayerOn(FIRES_KEY);
+  const bcOn = isLayerOn(BCWS_KEY);
+  if (!nifcOn && !bcOn) return offMetric('wildfires');
+  if (nifcOn && !map.getLayer(FIRES_FILL)) return pendingMetric(FIRES_KEY);
+  // The BC layer removes its fill for a verified empty answer ('no-data');
+  // any other state with no fill is not a zero for British Columbia. BC holds
+  // the tile only while it loads; a failed BC read leaves NIFC's count standing.
+  const bcStatus = registry.getStatus(BCWS_KEY);
+  const bcMissing = bcOn && !map.getLayer(BCWS_FILL) && bcStatus !== 'no-data';
+  if (bcMissing && (bcStatus === 'loading' || !nifcOn)) return pendingMetric(BCWS_KEY);
   // The owning layer already filters this fill to WF and CX. Retain the
   // property check defensively so Prescribed fire can never enter this count.
-  const feats = map
-    .queryRenderedFeatures({ layers: [FIRES_FILL] })
-    .filter((f) => {
-      const cat = f.properties?.['attr_IncidentTypeCategory'];
-      return classifyNifcIncidentType(cat) === 'wildfire';
-    });
+  const feats = nifcOn
+    ? map.queryRenderedFeatures({ layers: [FIRES_FILL] }).filter((f) => {
+        const cat = f.properties?.['attr_IncidentTypeCategory'];
+        return classifyNifcIncidentType(cat) === 'wildfire';
+      })
+    : [];
+  // Every BC perimeter is a wildfire perimeter (the owner's ruling of 2026-09-26).
+  const bcFeats = bcOn && map.getLayer(BCWS_FILL) ? map.queryRenderedFeatures({ layers: [BCWS_FILL] }) : [];
+  // The fire areas drawn in view, by member record key, so an overlapping BC and NIFC pair counts once.
+  const areaOf = new Map<string, string>();
+  if (map.getLayer(FOOTPRINT_FILL)) {
+    for (const f of map.queryRenderedFeatures({ layers: [FOOTPRINT_FILL] })) {
+      const key = f.properties?.['footprint'];
+      const members = f.properties?.['members'];
+      if (typeof key === 'string' && typeof members === 'string') for (const member of members.split(',')) areaOf.set(member, key);
+    }
+  }
   // Prefer the stable WFIGS identifiers over the incident name (names are
   // reused across unrelated fires; identifiers are unique per incident).
-  const n = countDistinct(feats, (p) =>
-    firstNonBlank(
-      p?.['attr_UniqueFireIdentifier'],
-      p?.['attr_IrwinID'],
-      p?.['attr_IncidentName'],
-      p?.['poly_IncidentName'],
-      p?.['IncidentName']
-    )
-  );
-  // Never a zero while the request is in flight or after it failed (the source
+  const rows = [
+    ...feats.map((f) => ({
+      identity: firstNonBlank(
+        f.properties?.['attr_UniqueFireIdentifier'],
+        f.properties?.['attr_IrwinID'],
+        f.properties?.['attr_IncidentName'],
+        f.properties?.['poly_IncidentName'],
+        f.properties?.['IncidentName']
+      ),
+      recordKey: fireRecordKey('nifc', f.properties)
+    })),
+    ...bcFeats.map((f) => {
+      const recordKey = fireRecordKey('bcws', f.properties);
+      return { identity: recordKey ?? '', recordKey };
+    })
+  ].map((row, i) => (row.identity.trim() === '' ? { ...row, identity: `__anon_${i}` } : row));
+  const { count: n, merged } = countFireAreas(rows, (key) => areaOf.get(key) ?? null);
+  // Never a zero while the NIFC request is in flight or after it failed (the source
   // still holds the previous view's perimeters); a nonzero count is kept.
   const status = registry.getStatus(FIRES_KEY);
-  if (n === 0 && (status === 'loading' || status === 'error')) return pendingMetric(FIRES_KEY);
+  if (n === 0 && nifcOn && (status === 'loading' || status === 'error')) return pendingMetric(FIRES_KEY);
+  const sublabel = n === 1 ? 'mapped wildfire perimeter in view' : 'mapped wildfire perimeters in view';
+  // DRAFT wording (DR-177): the note when the BC read failed and the count is NIFC's alone.
+  const notes = [...(merged > 0 ? [OVERLAP_COUNT_LABEL] : []), ...(bcMissing ? ['BC Wildfire Service perimeters unavailable'] : [])];
   return {
     value: String(n),
-    sublabel:
-      n === 1
-        ? 'mapped wildfire perimeter in view'
-        : 'mapped wildfire perimeters in view',
+    sublabel: [sublabel, ...notes].join('; '),
     tone: n > 0 ? 'data' : 'none'
   };
 }

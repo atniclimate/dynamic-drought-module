@@ -118,6 +118,7 @@ import {
 } from '../../state/minimap-outlook';
 import type { MinimapOutlookSnapshot } from '../../state/minimap-outlook';
 import type { EnsoPhaseLabel } from '../../impact/enso';
+import { OVERLAP_COUNT_LABEL, buildAgencyCountsApart } from '../../config/wildfire-presentation';
 import { fitFraming, fitOcean } from '../../map/camera-fit';
 import { requestBasemapMode } from '../../map/basemap-switcher';
 import { defaultBasemapFor } from '../../state/basemap-store';
@@ -399,9 +400,11 @@ function wildfireDescription(
   if (status === 'loading' || status === 'idle') {
     return 'Current mapped wildfire perimeter summary loading.';
   }
+  // DRAFT wording (DR-177): a framing that reaches British Columbia names both agencies.
+  const agencies = summary?.bcwsPerimeterCount === undefined ? 'NIFC' : 'NIFC or BC Wildfire Service';
   if (!summary || summary.status === 'unavailable') {
     return (
-      'Current mapped NIFC wildfire perimeter summary unavailable. ' +
+      `Current mapped ${agencies} wildfire perimeter summary unavailable. ` +
       'Static Wildfire Hazard Potential is not substituted when the current-fire check is unresolved.'
     );
   }
@@ -409,14 +412,20 @@ function wildfireDescription(
   const check = checkedTimeLabel(checkedAtUtc);
   const perimeterCount = summary.mappedWildfirePerimeterCount ?? 0;
   if (summary.condition === 'mapped-wildfire') {
+    const merged = (summary.fireAreasMerged ?? 0) > 0 ? `; ${OVERLAP_COUNT_LABEL}` : '';
+    const bcMissing = summary.bcwsPerimeterCount === null ? '; BC Wildfire Service perimeters were unavailable' : '';
+    // Where no overlap could be established, each agency's count stands apart and none is combined.
+    const counted = summary.nifcPerimeterCount !== undefined && typeof summary.bcwsPerimeterCount === 'number'
+      ? buildAgencyCountsApart(summary.nifcPerimeterCount, summary.bcwsPerimeterCount)
+      : `${perimeterCount} current mapped ${agencies} wildfire ${perimeterCount === 1 ? 'perimeter intersects' : 'perimeters intersect'} this authored framing${merged}${bcMissing}`;
     return (
-      `${perimeterCount} current mapped NIFC wildfire ${perimeterCount === 1 ? 'perimeter intersects' : 'perimeters intersect'} this authored framing; prescribed fire is excluded; browser checked ${check}. ` +
+      `${counted}; prescribed fire is excluded; browser checked ${check}. ` +
       'This is mapped-perimeter evidence, not a count of every active wildfire.'
     );
   }
 
   const noMappedPerimeter =
-    `No current mapped NIFC wildfire perimeter intersected this authored framing when the browser checked ${check}. `;
+    `No current mapped ${agencies} wildfire perimeter intersected this authored framing when the browser checked ${check}. `;
   if (summary.condition === 'no-data') {
     return (
       noMappedPerimeter +
@@ -481,22 +490,28 @@ const COUNT_TIER_TEXT = MINIMAP_WILDFIRE_COUNT_TIERS.map((tier, index) => {
  * label tooltip both read this constant so they cannot disagree. */
 const COUNT_DEPTH_NOTE = `Orange-red marks current mapped wildfire perimeters, deeper for more: ${COUNT_TIER_TEXT} per framing; a zero count does not establish no active wildfire.`;
 
+// DRAFT wording (DR-177): the minimap checks both agencies (src/state/minimap-wildfire.ts), so its labels name both.
+const WILDFIRE_AGENCIES = 'NIFC and BC Wildfire Service';
+// DRAFT wording (DR-177): the Technical information wildfire clause (src/ui/map-technical-information.ts), reworded to stand alone.
+const BC_COUNT_CLAUSE =
+  "In the framings that reach British Columbia, the BC Wildfire Service perimeters in its three active stages count beside NIFC's, with overlapping agency perimeters counted as one fire area.";
+
 function wildfireMetricNote(snapshot: MinimapWildfireSnapshot): string {
   if (snapshot.status === 'loading' || snapshot.status === 'idle') {
     return (
-      'Checking current mapped NIFC wildfire perimeters. Static WHP is not ' +
+      `Checking current mapped ${WILDFIRE_AGENCIES} wildfire perimeters. Static WHP is not ` +
       'substituted until each current-fire check resolves.'
     );
   }
   if (snapshot.status === 'unavailable') {
     return (
-      'Current mapped NIFC wildfire perimeter check unavailable. Static WHP ' +
+      `Current mapped ${WILDFIRE_AGENCIES} wildfire perimeter check unavailable. Static WHP ` +
       'is not substituted, so the dark regions are unknown rather than no fire.'
     );
   }
   return (
-    `NIFC browser check: ${checkedTimeLabel(snapshot.checkedAtUtc)}. ` +
-    `${COUNT_DEPTH_NOTE} ` +
+    `${WILDFIRE_AGENCIES} browser check: ${checkedTimeLabel(snapshot.checkedAtUtc)}. ` +
+    `${BC_COUNT_CLAUSE} ${COUNT_DEPTH_NOTE} ` +
     'Otherwise, WHP 2023 fills are orange above 50% High or Very High, yellow above 30% Moderate or higher, light below both thresholds, and dark for no data or an unavailable current check. ' +
     // vocab-allow: honesty disclaimer denying that static WHP is a forecast
     'Percentages are approximate shares of classified WHP land in the covered United States portion. WHP is static strategic context, not a forecast; hatching marks partial coverage. ' +
@@ -984,7 +999,8 @@ export function Minimap({
         ? 'Checking wildfire'
         : wildfire.status === 'unavailable'
           ? 'Wildfire unavailable'
-          : 'NIFC / WHP 2023'
+          : // DRAFT wording (DR-177): the scale credit names both agencies the minimap checks.
+            'NIFC, BCWS / WHP 2023'
       : outlookReading !== null
         ? outlookScaleText(minimapProductName(outlookReading.product), outlook.status)
         : ensoScaleText ?? UNSHADED_SCALE_TEXT;
@@ -994,10 +1010,11 @@ export function Minimap({
       : scaleText
     : showWildfireMetric
       ? wildfire.status === 'loading' || wildfire.status === 'idle'
-        ? 'Checking current mapped NIFC wildfire perimeters for the nine authored framings.'
+        ? `Checking current mapped ${WILDFIRE_AGENCIES} wildfire perimeters for the nine authored framings.`
         : wildfire.status === 'unavailable'
-          ? 'Current mapped NIFC wildfire perimeter summary unavailable. Static WHP is not substituted.'
-          : 'Current mapped NIFC wildfire perimeters with static United States Forest Service Wildfire Hazard Potential 2023 fallback.'
+          ? `Current mapped ${WILDFIRE_AGENCIES} wildfire perimeter summary unavailable. Static WHP is not substituted.`
+          : // DRAFT wording (DR-177): the BC clause.
+            'Current mapped NIFC wildfire perimeters, and in the framings that reach British Columbia the BC Wildfire Service perimeters in its three active stages, with static United States Forest Service Wildfire Hazard Potential 2023 fallback.'
       : outlookReading !== null
         ? scaleText
         : ensoScaleAccessibleText ?? unshadedNote(metricContext, horizon);

@@ -576,7 +576,13 @@ async function retainWildfire(counts, run) {
   const wildfire = await import('../src/state/minimap-wildfire.ts');
   const byGeometry = new Map(FRAMING_KEYS.map((key) => [wildfire.buildMinimapWildfireQueryBody(key).get('geometry'), key]));
   const state = { counts, posts: 0, refresh: null, seen: [] };
-  answer = (_url, init) => {
+  answer = (url, init) => {
+    // The BC Wildfire Service read beside NIFC's (src/util/bcws-perimeter-read.ts): a steady, empty table, not a count POST.
+    if (url.includes('BCWS_FirePerimeters_PublicView')) {
+      return new URL(url).pathname.endsWith('/query')
+        ? { type: 'FeatureCollection', features: [] }
+        : { editingInfo: { schemaLastEditDate: 1793940086179, dataLastEditDate: 1793940092833 } };
+    }
     state.posts += 1;
     const key = byGeometry.get(new URLSearchParams(String(init?.body ?? '')).get('geometry'));
     return { count: state.counts[key] ?? 0 };

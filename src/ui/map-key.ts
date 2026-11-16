@@ -51,7 +51,7 @@ import { TRIBAL_NATIONS_GROUP } from '../config/layer-groups';
 import { HAZARD_CLUSTERS, HEAT_FIRE_ALERTS } from '../config/clusters';
 import { DETAIL_SECTIONS } from '../config/detail-sections';
 import { ensureDetailSectionHosts } from './detail-section-hosts';
-import { NIFC_INCIDENT_PRESENTATION, USFS_WHP_PRESENTATION } from '../config/wildfire-presentation';
+import { BCWS_STATUS_PRESENTATION, NIFC_INCIDENT_PRESENTATION, USFS_WHP_PRESENTATION } from '../config/wildfire-presentation';
 import { FRAMINGS } from '../config/framings';
 import { minimapProvenanceAt } from '../config/minimap-readings';
 import { getFraming, onFramingChange } from '../state/framing-store';
@@ -399,7 +399,7 @@ export function resolveMapKeyFamily(
   // named peer of drought, fire, and heat for CSS hooks, disclosure
   // behavior, and tests. Naming the family adds no styling by itself.
   if (active.has('sst-anomaly')) return 'enso';
-  if (active.has('nifc-fires')) return 'fire';
+  if (active.has('nifc-fires') || active.has('bcws-fires')) return 'fire';
   return 'other';
 }
 
@@ -857,6 +857,22 @@ function griddedKey(): KeySpec {
   };
 }
 
+/**
+ * One BC stage on a line of its own, its swatch drawn as the map draws the
+ * stage: a filled mark for the active stages, an outline alone (dotted where
+ * the map dots it) for Out and an unstated stage.
+ */
+function bcwsStageItem(cls: 'active' | 'inactive' | 'unknown'): string {
+  const row = BCWS_STATUS_PRESENTATION[cls];
+  const swatch = row.fillOpacity > 0
+    ? `background:${row.lineColor}`
+    : `background:transparent;border:2px ${row.lineDasharray[1] === 0 ? 'solid' : 'dotted'} ${row.lineColor};box-shadow:none`;
+  return (
+    `<span class="map-key-item" style="flex-basis:100%" data-bcws-stage="${cls}">` +
+    `<span class="map-key-swatch" style="${escapeHtml(swatch)}"></span>${escapeHtml(row.legendLabel)}</span>`
+  );
+}
+
 /** A placeholder row for a still-loading key section (W2-D6): the section
  * is named rather than omitted, so live activation never silently drops a
  * source from the reference. 'unavailable' keeps its absence semantics. */
@@ -873,9 +889,11 @@ export function buildFireKey(
 ): KeySpec {
   const includeSpcOutlook = activeKeys.has('spc-fire-weather');
   const includeNifcPerimeters = activeKeys.has('nifc-fires');
+  const includeBcwsPerimeters = activeKeys.has('bcws-fires');
   const spcLoading = !includeSpcOutlook && loadingKeys.has('spc-fire-weather');
   const nifcLoading = !includeNifcPerimeters && loadingKeys.has('nifc-fires');
-  if (!includeSpcOutlook && !includeNifcPerimeters && !spcLoading && !nifcLoading) {
+  const bcwsLoading = !includeBcwsPerimeters && loadingKeys.has('bcws-fires');
+  if (!includeSpcOutlook && !includeNifcPerimeters && !includeBcwsPerimeters && !spcLoading && !nifcLoading && !bcwsLoading) {
     throw new Error('A fire key requires at least one active fire product.');
   }
   // The issuer's no-area answer draws nothing, so the key says so instead of listing three classes that are not on the map.
@@ -883,6 +901,16 @@ export function buildFireKey(
   const spcNoArea = includeSpcOutlook && registry.getStatus('spc-fire-weather') === 'no-data' && isSpcNoArea();
   // vocab-allow: verbatim SPC term for this state, from its Day 1 Fire Weather Outlook product page (2026-09-27, found-079)
   const SPC_NO_AREA_WORDS = 'No Risk Areas Forecast today';
+  // DRAFT wording (DR-177): the BC section's label, its stage rows (src/config/wildfire-presentation.ts) and its name for assistive technology.
+  const bcwsPerimeters =
+    includeBcwsPerimeters || bcwsLoading
+      ? '<span class="map-key-scale" data-bcws-perimeter-key>' +
+        '<strong class="map-key-scale-label">BC Wildfire Service current perimeters</strong>' +
+        (bcwsLoading
+          ? loadingSectionRow('bcws-fires')
+          : (['active', 'inactive', 'unknown'] as const).map(bcwsStageItem).join('')) +
+        '</span>'
+      : '';
   const outlook =
     includeSpcOutlook || spcLoading
       ? '<span class="map-key-scale" data-spc-fire-weather-key>' +
@@ -935,10 +963,17 @@ export function buildFireKey(
       'National Interagency Fire Center (NIFC) current mapped fire perimeters loading.'
     );
   }
+  if (includeBcwsPerimeters) {
+    ariaParts.push(
+      'BC Wildfire Service current perimeters by stage of control: Out of Control, Being Held or Under Control; Out; Stage of control not stated. Overlapping agency perimeters are outlined once as one fire area.'
+    );
+  } else if (bcwsLoading) {
+    ariaParts.push('BC Wildfire Service current perimeters loading.');
+  }
   return {
     label: 'Fire',
     ariaLabel: ariaParts.join(' '),
-    itemsHtml: outlook + perimeters
+    itemsHtml: outlook + perimeters + bcwsPerimeters
   };
 }
 
@@ -1147,7 +1182,7 @@ function activeKey(): HazardKeyResult | null {
  * way): a solo NIFC fallback names only 'nifc-fires', never a
  * spc-fire-weather status that is not part of what is drawn. */
 function fireProductKeys(eligible: ReadonlySet<string>): readonly string[] {
-  return (['spc-fire-weather', 'nifc-fires'] as const).filter((key) => eligible.has(key));
+  return (['spc-fire-weather', 'nifc-fires', 'bcws-fires'] as const).filter((key) => eligible.has(key));
 }
 
 /**
@@ -1315,7 +1350,7 @@ function surfaceKey(): HazardKeyResult | null {
   } else if (eligible.has('sst-anomaly')) {
     spec = active.has('sst-anomaly') ? sstKey() : loadingKeySpec('sst-anomaly');
     productKeys = ['sst-anomaly'];
-  } else if (eligible.has('nifc-fires')) {
+  } else if (eligible.has('nifc-fires') || eligible.has('bcws-fires')) {
     spec = buildFireKey(active, loading);
     productKeys = fireProductKeys(eligible);
   }

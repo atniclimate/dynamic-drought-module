@@ -1,6 +1,7 @@
 import type { PolygonClipLimits } from './polygon-clip-contract';
 import type { PerimeterFingerprintLimits } from './perimeter-fingerprints';
 import type { PerimeterKernelLimits, PerimeterKernelResult } from './perimeter-grouping';
+import type { ClipCoordinates } from './polygon-clip-validation';
 export interface PerimeterJobLimits {
   readonly maxInputChars: number;
   readonly maxTotalVertices: number;
@@ -20,6 +21,8 @@ export interface PerimeterJobResult {
   readonly graph: PerimeterKernelResult;
   /** Exact source array positions, including duplicate versions, for raw readback. */
   readonly sources: readonly { readonly versionKey: string; readonly indices: readonly number[] }[];
+  /** One entry per group of two or more records: the union outline, or null when it was refused. */
+  readonly footprints: readonly { readonly key: string; readonly coordinates: ClipCoordinates | null }[];
 }
 export type PerimeterJobReply = { readonly operation: 'group-perimeters'; readonly generation: number } &
   ({ readonly ok: true; readonly result: PerimeterJobResult } | { readonly ok: false; readonly reason: 'job-failed' });

@@ -53,6 +53,7 @@ export const LAYER_KEYS = Object.freeze([
   'places',
   'power-infrastructure',
   'nifc-fires',
+  'bcws-fires',
   'nws-alerts',
   'hms-smoke',
   'heatrisk',
@@ -356,6 +357,10 @@ export const LAYER_DEFS: readonly LayerDef[] = [
   // failure modes, and either can be live without the other.
   { key: 'power-infrastructure', product: 'power-infrastructure', name: 'Power Lines & Plants', source: 'HIFLD archive (2024-09-30) · EIA (live)', searchTerms: ['transmission', 'electric', 'grid', 'power plant', 'utility'], role: 'reference', defaultOn: false, load: () => import('../layers/power-3d') },
   { key: 'nifc-fires', product: 'nifc-fires', name: 'Current Mapped Fire Perimeters (NIFC)', source: 'NIFC WFIGS · FeatureServer', searchTerms: ['wildfire', 'Prescribed fire', 'fire perimeter'], role: 'event', defaultOn: false, noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/nifc-fires') },
+  // British Columbia only, so its zero state names the Province, as the
+  // Census-areas and AIAN-LAR rows above name their own coverage. DRAFT
+  // wording (DR-177): the row name and the zero state.
+  { key: 'bcws-fires', product: 'bcws-fires', name: 'Current Fire Perimeters (BC Wildfire Service)', source: 'BC Wildfire Service · FeatureServer', searchTerms: ['wildfire', 'fire perimeter', 'British Columbia'], role: 'event', defaultOn: false, noDataLabel: 'no features returned for this view (British Columbia only)', load: () => import('../layers/bcws-fires') },
   // Named by the committed mode, beside the products it reads (HazardClusterDef.alerts).
   { key: 'nws-alerts', product: 'nws-alerts', get name() { return (HAZARD_CLUSTERS[getSelectedHazard()].alerts ?? HEAT_FIRE_ALERTS).name; }, source: 'NOAA NWS · MapServer', role: 'event', defaultOn: false, noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/nws-alerts') },
   { key: 'hms-smoke', product: 'hms-smoke', name: 'Smoke Plumes (HMS)', source: 'NOAA OSPO · FeatureServer', role: 'event', defaultOn: false, noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/hms-smoke') },

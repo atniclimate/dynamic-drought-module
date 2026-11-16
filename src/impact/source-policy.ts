@@ -60,6 +60,8 @@ export const BRIEFING_SOURCE_LABELS: Readonly<Record<BriefingSourceKey, string>>
   usdm: 'U.S. Drought Monitor',
   dsci: 'USDM Drought Severity and Coverage Index',
   nifc: 'NIFC current mapped fire perimeters',
+  // DRAFT wording (DR-177): the BC lane's own claim source line (src/impact/sources.ts).
+  bcws: 'BC Wildfire Service current fire perimeters',
   cpcExtended: 'NOAA CPC 6-10 and 8-14 day outlooks',
   enso: 'NOAA CPC ENSO index',
   waterSupply: 'NWRFC water supply outlook',

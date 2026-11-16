@@ -540,6 +540,8 @@ export const ARCGIS_FIELD_PROBES = Object.freeze([
   { key: 'wbdMapServer', file: 'src/config/place-catalog.ts', layer: '/2' },
   { key: 'wbdMapServer', file: 'src/impact/water-supply.ts', layer: '/4' },
   { key: 'nifcFires', file: 'src/layers/nifc-fires.ts', layer: '', constName: 'NIFC_OUT_FIELDS' },
+  // The BC Wildfire Service perimeters (layer, minimap and briefing share this reader).
+  { key: 'bcwsFirePerimeters', file: 'src/util/bcws-perimeter-read.ts', layer: '', constName: 'BCWS_OUT_FIELDS' },
   { key: 'censusAiannhMapServer', file: 'src/layers/aiannh.ts', layer: '/47' },
   // The detail inside Tribal areas: TIGERweb Local Roads, USGS NHD named streams
   // and lakes, and Census Designated Places.
@@ -598,8 +600,6 @@ export const ARCGIS_FIELD_PROBES = Object.freeze([
  */
 export const OUT_FIELDS_SENDERS_COVERED_ELSEWHERE = Object.freeze({
   'src/config/urls.ts': 'documentation comments only; no query is built here',
-  'src/util/bcws-perimeter-read.ts':
-    'dormant: reached only from src/layers/bcws-fires.ts, which no shipped module imports, so no build carries it and nothing contacts the Province (checked 2026-10-08 for release 0.7.1); BC read limits are undecided, add its probe row only with that ruling',
   'src/state/display-snapshot.ts': 'extracted list (BIA LARID) is a subset of the biaLarFeatureServer row today; not probed on its own',
   'src/ui/search-controller.ts':
     'the BIA fields are the same five as the biaLarFeatureServer row, and the Census AIANNH layer 47 fields are byte-identical to the censusAiannhMapServer row (src/layers/aiannh.ts); not probed on its own',
