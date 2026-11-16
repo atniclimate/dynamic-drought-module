@@ -214,12 +214,12 @@ test.describe('real layer-controller integration (DG-080 r2 finding 4)', () => {
 
     // B: Drought, before anything wildfire settled. The production
     // controller must supersede the in-flight pair activations. The surface
-    // the Drought press switches to at the current horizon is nadm-drought.
+    // the Drought press switches to at the current horizon is usdm.
     await droughtBtn.click();
     await expect(droughtBtn).toHaveAttribute('aria-pressed', 'true');
     await expect(wildfireBtn).toHaveAttribute('aria-pressed', 'false');
     await expect(layerCheckbox(page, 'nifc-fires')).not.toBeChecked();
-    await expect(layerCheckbox(page, 'nadm-drought')).toBeChecked();
+    await expect(layerCheckbox(page, 'usdm')).toBeChecked();
 
     // A again: fresh wildfire generation, answered normally with the FRESH
     // payload.
@@ -228,7 +228,7 @@ test.describe('real layer-controller integration (DG-080 r2 finding 4)', () => {
     await expect(wildfireBtn).toHaveAttribute('aria-pressed', 'true');
     await expect(layerCheckbox(page, 'nifc-fires')).toBeChecked();
     await expect(layerCheckbox(page, 'hms-smoke')).toBeChecked();
-    await expect(layerCheckbox(page, 'nadm-drought')).not.toBeChecked();
+    await expect(layerCheckbox(page, 'usdm')).not.toBeChecked();
 
     // The fresh generation settles live through the real controller and
     // registry (module status writes included) WHILE the stale responses are
@@ -283,13 +283,13 @@ test.describe('real layer-controller integration (DG-080 r2 finding 4)', () => {
       ).toEqual([]);
       expect(seen[seen.length - 1], `${key} pill history ends live`).toContain('ready');
     }
-    // The dropped surface (nadm-drought, the Drought press's surface at the
+    // The dropped surface (usdm, the Drought press's surface at the
     // current horizon) is off and makes no claim: unchecked, and its pill
     // carries no stale status class from the superseded generation. The pill
     // clears only after the off-toggle's fade-out (LAYER_FADE_MS plus a render),
     // so poll for the settled state; a pill stuck on "ready" still fails.
-    await expect(layerCheckbox(page, 'nadm-drought')).not.toBeChecked();
-    await expect.poll(() => pillStatusClasses(page, 'nadm-drought')).not.toContain('ready');
+    await expect(layerCheckbox(page, 'usdm')).not.toBeChecked();
+    await expect.poll(() => pillStatusClasses(page, 'usdm')).not.toContain('ready');
     await expect(page.locator('#shell-summary-primary')).toContainText(
       'Current Mapped Fire Perimeters (National Interagency Fire Center, NIFC)'
     );

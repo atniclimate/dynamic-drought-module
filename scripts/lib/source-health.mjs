@@ -46,8 +46,10 @@ const STUBBED_TILE_MATCHERS = STUBBED_TILE_GLOBS.map((glob) => {
  * so a terminal `no data`, a partial answer (`degraded`, the ArcGIS transfer
  * limit), or a zero-record response is a breach rather than an honest
  * absence. Events (alerts, smoke, perimeters) can legitimately be empty and
- * are warned on, not breached, when partial. */
-export const EXPECTS_RECORDS = new Set(['nadm-drought', 'aiannh', 'bia-reservations']);
+ * are warned on, not breached, when partial. The default boot draws the
+ * weekly U.S. Drought Monitor (DR-270); the North American map stays listed
+ * for a boot that names it. */
+export const EXPECTS_RECORDS = new Set(['usdm', 'nadm-drought', 'aiannh', 'bia-reservations']);
 
 /** Response headers worth carrying into the receipt: they say whether the
  * observed timing was a warm cache path or an origin fetch. */

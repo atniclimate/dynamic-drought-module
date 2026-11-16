@@ -392,7 +392,7 @@ const CLUSTER_KEYS = ['drought', 'wildfire', 'heat', 'enso'] as const;
 test.describe('DR-190: a mode switch and its shared link show the same horizon', () => {
   for (const [destination, expectedHorizon, product] of [
     ['heat', 'current', 'heatrisk'],
-    ['drought', 'current', 'nadm-drought']
+    ['drought', 'current', 'usdm']
   ] as const) {
     test(`Wildfire Long Range to ${destination} resolves before and after reload`, async ({ page }) => {
       await stubWildfireProducts(page);

@@ -215,18 +215,18 @@ test.describe('LAYERS studio: every option exercised (owner-1c)', () => {
     await page.locator('#layers-studio-entry').click();
     await expect(page.locator(STUDIO)).toBeVisible();
 
-    // nadm-drought is default-on; cdm-drought reads a bundled local
+    // usdm is the default surface (DR-270); cdm-drought reads a bundled local
     // artifact (public/data/cdm-drought-areas.json), so this swap needs no
     // network stub at all.
-    await expect(studioCheckbox(page, 'nadm-drought')).toBeChecked();
-    await expect.poll(async () => (await urlLayers(page)).has('nadm-drought')).toBe(true);
+    await expect(studioCheckbox(page, 'usdm')).toBeChecked();
+    await expect.poll(async () => (await urlLayers(page)).has('usdm')).toBe(true);
 
     await studioCheckbox(page, 'cdm-drought').check();
 
     await expect(studioCheckbox(page, 'cdm-drought')).toBeChecked();
-    await expect(studioCheckbox(page, 'nadm-drought')).not.toBeChecked();
+    await expect(studioCheckbox(page, 'usdm')).not.toBeChecked();
     await expect.poll(async () => (await urlLayers(page)).has('cdm-drought')).toBe(true);
-    await expect.poll(async () => (await urlLayers(page)).has('nadm-drought')).toBe(false);
+    await expect.poll(async () => (await urlLayers(page)).has('usdm')).toBe(false);
   });
 
   test('Layer details and each source group open their content', async ({ page }) => {

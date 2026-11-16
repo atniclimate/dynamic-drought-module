@@ -638,10 +638,11 @@ test.describe('found-076: a failed checked composition member through the Place 
   test('a recipe layer already failed and checked before the studio opens is set aside like any other, and the restore re-checks it into one genuine retry of its chunk', async ({
     page
   }) => {
+    // The default recipe surface is the weekly U.S. map (DR-270), so its chunk is usdm.
     let nadmRequests = 0;
     // The query allowance catches found-087's retry URL (`.js?retry=1`):
     // Playwright tests a RegExp route against the full URL, query included.
-    await page.route(/\/nadm-drought-[A-Za-z0-9_-]{8}\.js(\?.*)?$/, (route) => {
+    await page.route(/\/usdm-[A-Za-z0-9_-]{8}\.js(\?.*)?$/, (route) => {
       nadmRequests += 1;
       void route.abort();
     });
@@ -649,22 +650,22 @@ test.describe('found-076: a failed checked composition member through the Place 
     await routeGeojson(page, BIA_ROUTE, emptyCollectionBody());
 
     await gotoApp(page, '?view=brief');
-    await waitForLayerSettled(page, 'nadm-drought');
+    await waitForLayerSettled(page, 'usdm');
     expect(nadmRequests).toBe(1);
-    await expect(layerCheckbox(page, 'nadm-drought')).toBeChecked();
-    await expect(layerPill(page, 'nadm-drought')).toHaveText(PILL.unavailable);
+    await expect(layerCheckbox(page, 'usdm')).toBeChecked();
+    await expect(layerPill(page, 'usdm')).toHaveText(PILL.unavailable);
 
     await page.locator('#studio-entry-pair #place-studio-entry').click();
     const studio = page.locator(PLACE_ROOT);
     await expect(studio).toBeVisible();
     // The clean display sets a failed recipe layer aside exactly like a
     // working one, by role alone: no ledger entry needed.
-    await expect(layerCheckbox(page, 'nadm-drought')).not.toBeChecked();
+    await expect(layerCheckbox(page, 'usdm')).not.toBeChecked();
     expect(nadmRequests).toBe(1);
 
     await studio.getByRole('button', { name: 'Back to map' }).click();
     await expect(studio).toHaveCount(0);
-    await waitForLayerSettled(page, 'nadm-drought');
+    await waitForLayerSettled(page, 'usdm');
     // The restore re-checks the captured intent, and the controller
     // re-attempts it once. Since found-087, loadLayerModule
     // (src/config/layers.ts) retries a failed chunk through
@@ -672,8 +673,8 @@ test.describe('found-076: a failed checked composition member through the Place 
     // URL the engine has never marked failed, so a second request is made.
     // This route aborts it too, so the layer honestly reads unavailable.
     expect(nadmRequests).toBe(2);
-    await expect(layerCheckbox(page, 'nadm-drought')).toBeChecked();
-    await expect(layerPill(page, 'nadm-drought')).toHaveText(PILL.unavailable);
+    await expect(layerCheckbox(page, 'usdm')).toBeChecked();
+    await expect(layerPill(page, 'usdm')).toHaveText(PILL.unavailable);
     await expect(
       page.locator('.shell-cluster-btn[data-cluster="drought"]')
     ).toHaveAttribute('aria-pressed', 'true');

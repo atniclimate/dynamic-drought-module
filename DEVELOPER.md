@@ -166,7 +166,7 @@ current URL.
 | Param | Values | Default |
 | ----- | ------ | ------- |
 | `region` | `washington_state`, `columbia_snake_basin`, `cascades`, `central_oregon`, `southwest_washington`, `south_puget_sound`, `national`, `alaska`, `hawaii`, `british_columbia` | `national` (add `region=washington_state&view=brief` to keep the prior Washington framing) |
-| `layers` | comma-separated keys from the [layer table](README.md#layers-and-data-sources) | `hillshade,nadm-drought,aiannh,bia-reservations,states` |
+| `layers` | comma-separated keys from the [layer table](README.md#layers-and-data-sources) | `hillshade,usdm,aiannh,bia-reservations,states` where the view is of the United States (the default region); `nadm-drought` in place of `usdm` for `framing=all`, a framing that reaches into Canada or Mexico, or `region=british_columbia`. A listed set is shown as written |
 | `framing` | one of the nine ATNI-authored editorial framing keys, or `all` | none; `region` remains in control |
 | `cluster` | `wildfire`, `heat`, or `enso`; an explicit `layers` list outranks it unless the list matches that mode's recipe at the selected horizon, including any enabled optional layers (such as Wildfire with Fuel risk) | Drought, encoded by absence |
 | `ocean` | `pacific`, `arctic`, or `atlantic`, only with `cluster=enso` | none |

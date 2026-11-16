@@ -61,6 +61,8 @@ import {
   resetDroughtSurfacePresentation,
   setDroughtSurfacePresentation
 } from '../config/layers';
+import type { LayerKey } from '../config/layers';
+import type { HazardClusterKey } from '../config/clusters';
 import { MOBILE_HAZARD_PRESETS } from '../config/presets';
 import type { ViewPreset } from '../config/presets';
 import { hazardRailMarkup } from './hazard-rail';
@@ -133,10 +135,12 @@ import {
   setHazardCluster
 } from '../state/cluster-store';
 import {
+  followGeography,
   getCommittedSnapshot,
   getSelectedHazard,
   initClusterService,
   isCustomComposition,
+  keyForGeography,
   onCommittedSnapshotChange,
   reconcileClusterWithLayerIntent,
   requestOcean,
@@ -652,6 +656,9 @@ function selectRegion(
   // any future consumer) can read it without threading it through every
   // layer signature. See src/state/region-store.ts.
   setCurrentRegion(key);
+  // An explicit region choice commits a geography (DR-270); the boot fit shows
+  // what its link parsed to.
+  if (!silent) followGeography();
 
   // The region math lives once, in src/map/camera-fit.ts (D1 M8). Suppress
   // the fit animation for reduced-motion users (WCAG 2.3.3, #7).
@@ -875,6 +882,7 @@ function buildRegionSelect(): void {
     clearOceanFraming();
     if (rawKey === 'all') {
       setFraming('all');
+      followGeography();
       map.fitBounds(
         framingFitBounds({ bounds: ALL_FRAMING_BOUNDS, padding: 0 }),
         { padding: 20, animate: !prefersReducedMotion() }
@@ -884,6 +892,7 @@ function buildRegionSelect(): void {
     if (!rawKey || !(rawKey in FRAMINGS)) return;
     const key = rawKey as FramingKey;
     setFraming(key);
+    followGeography();
     map.fitBounds(
       framingFitBounds(FRAMINGS[key]),
       { padding: 20, animate: !prefersReducedMotion() }
@@ -1034,7 +1043,11 @@ function updateRegionBriefingTrigger(regionKey: RegionKey | null | undefined): v
 function applyViewPreset(preset: ViewPreset): void {
   const map = mapRef;
   if (!map || !controllerRef) return;
-  controllerRef.applyPreset(preset);
+  // A preset's surface is its mode's stand-in where the geography is of the United States (DR-270).
+  controllerRef.applyPreset({
+    ...preset,
+    layers: preset.layers.map((key) => keyForGeography(preset.mode, key) as LayerKey)
+  });
   requestPresetHorizon(preset.mode);
   if (preset.preferredBasemap) {
     requestBasemapMode(map, preset.preferredBasemap);
@@ -1060,7 +1073,7 @@ function wireHazardRail(): void {
   const rail = document.getElementById('hazard-rail');
   if (!rail) return;
   rail.innerHTML = hazardRailMarkup();
-  const buttons: Array<{ btn: HTMLButtonElement; surface: string; mode: string }> = [];
+  const buttons: Array<{ btn: HTMLButtonElement; surface: string; mode: HazardClusterKey }> = [];
   for (const btn of rail.querySelectorAll<HTMLButtonElement>('button[data-preset]')) {
     const preset = MOBILE_HAZARD_PRESETS.find((p) => p.key === btn.dataset.preset);
     if (!preset) continue;
@@ -1094,7 +1107,9 @@ function wireHazardRail(): void {
     const active = registry.getActiveKeys();
     const committed = getCommittedSnapshot().cluster;
     for (const { btn, surface, mode } of buttons) {
-      btn.setAttribute('aria-pressed', String(active.has(surface) || committed === mode));
+      // The surface, or the stand-in drawn in its place in the United States (DR-270).
+      const shown = active.has(surface) || active.has(keyForGeography(mode, surface, true));
+      btn.setAttribute('aria-pressed', String(shown || committed === mode));
     }
   };
   registry.on('change', reflect);

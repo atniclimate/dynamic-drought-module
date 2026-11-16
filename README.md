@@ -199,8 +199,8 @@ opens Console.
 
 | Key | Layer | Role | Source |
 | --- | ----- | ---- | ------ |
-| `usdm` | US Drought Monitor | surface | NDMC FeatureServer (live) |
-| `nadm-drought` | North American Drought Monitor | surface | NOAA NCEI GeoJSON (live, default-on) |
+| `usdm` | US Drought Monitor | surface | NDMC FeatureServer (live; the default current drought map for a place or view in the United States) |
+| `nadm-drought` | North American Drought Monitor | surface | NOAA NCEI GeoJSON (live; the default current drought map for a view of Canada, Mexico or the continent) |
 | `cdm-drought` | Canadian Drought Monitor | surface | Agriculture and Agri-Food Canada, committed monthly snapshot |
 | `gridded-index` | Gridded Drought Index (SPI) | surface | NOAA NIDIS raster tiles (live, contiguous United States only) |
 | `drought` | Drought Outlook (CPC) | surface | NOAA CPC vector MapServer (live, monthly and seasonal) |

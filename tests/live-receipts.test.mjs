@@ -294,11 +294,18 @@ test('EXPECTED_BOOT_LAYERS still matches src/config/layers.ts and src/config/clu
   const clusterObject = clusterBody.slice(0, clusterBody.indexOf('\n};'));
   const marks = [...clusterObject.matchAll(/\n {2}(\w+): \{/g)];
   const currentRecipe = new Map();
+  // The live boots name no region and no framing: the default United States
+  // geography, where a recipe surface composes as its stand-in
+  // (`unitedStatesStandIns`, DR-270; src/state/cluster-service.ts).
+  const standIns = new Map();
   for (const [i, mark] of marks.entries()) {
     const chunk = clusterObject.slice(mark.index, marks[i + 1]?.index ?? clusterObject.length);
     const list = /current: \[([^\]]*)\]/.exec(chunk)?.[1] ?? '';
-    currentRecipe.set(mark[1], [...list.matchAll(/'([^']+)'/g)].map((m) => m[1]));
+    const pairs = /unitedStatesStandIns: \{([^}]*)\}/.exec(chunk)?.[1] ?? '';
+    standIns.set(mark[1], new Map([...pairs.matchAll(/'([^']+)': '([^']+)'/g)].map((m) => [m[1], m[2]])));
+    currentRecipe.set(mark[1], [...list.matchAll(/'([^']+)'/g)].map((m) => standIns.get(mark[1]).get(m[1]) ?? m[1]));
   }
+  assert.equal(standIns.get('drought').get('nadm-drought'), 'usdm', 'the Drought stand-in could not be parsed');
   assert.deepEqual([...currentRecipe.keys()], ['drought', 'wildfire', 'heat', 'enso']);
 
   // composeClusterIntent: every default-on key that is not a surface, then
@@ -312,8 +319,12 @@ test('EXPECTED_BOOT_LAYERS still matches src/config/layers.ts and src/config/clu
     }
     return out.sort();
   };
-  // A bare URL is the default-on set exactly (src/state/url.ts).
-  const defaultOn = [...defs].filter(([, d]) => d.defaultOn).map(([key]) => key).sort();
+  // A bare URL is the default-on set (src/state/url.ts), its Drought surface
+  // exchanged for the stand-in in the United States.
+  const defaultOn = [...defs]
+    .filter(([, d]) => d.defaultOn)
+    .map(([key]) => standIns.get('drought').get(key) ?? key)
+    .sort();
 
   const sorted = (keys) => [...keys].sort();
   assert.deepEqual(sorted(EXPECTED_BOOT_LAYERS.root), defaultOn);
@@ -324,7 +335,10 @@ test('EXPECTED_BOOT_LAYERS still matches src/config/layers.ts and src/config/clu
   assert.deepEqual(sorted(EXPECTED_BOOT_LAYERS['embed-1280']), compose('wildfire'));
   assert.deepEqual(sorted(EXPECTED_BOOT_LAYERS['embed-390']), compose('wildfire'));
   for (const [boot, keys] of Object.entries(EXPECTED_BOOT_LAYERS)) {
-    for (const key of keys) assert.ok(defs.has(key), `${boot} expects unknown layer ${key}`);
+    // `usdm` is defined over several lines, which the one-line parse above does not read.
+    for (const key of keys) {
+      assert.ok(defs.has(key) || layersSrc.includes(`key: '${key}',`), `${boot} expects unknown layer ${key}`);
+    }
   }
 });
 
