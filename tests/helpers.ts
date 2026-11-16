@@ -78,6 +78,50 @@ async function installDefaultNadmStub(page: Page, mode: NadmStubMode): Promise<v
   });
 }
 
+/** The default boot's weekly U.S. Drought Monitor read: one D2 polygon, map dated Aug 11, 2026. */
+const TEST_USDM_SNAPSHOT = {
+  type: 'FeatureCollection',
+  features: [
+    {
+      type: 'Feature',
+      properties: {
+        DM: 2,
+        MapDate: Date.UTC(2026, 7, 11),
+        ValidStart: Date.UTC(2026, 7, 11),
+        ValidEnd: Date.UTC(2026, 7, 17)
+      },
+      geometry: {
+        type: 'Polygon',
+        coordinates: [[[-140, 20], [-50, 20], [-50, 75], [-140, 75], [-140, 20]]]
+      }
+    }
+  ]
+} as const;
+
+const usdmStubContexts = new WeakSet<BrowserContext>();
+
+/**
+ * Route the U.S. Drought Monitor's current and archive services on the browser
+ * CONTEXT, as `installDefaultNadmStub` does and for the same reasons. Since
+ * DR-270 a boot that lists no layers draws the weekly U.S. map in the default
+ * United States geography, so without this every routine boot would read the
+ * live service. A spec's own `page.route` for these services still wins
+ * (Playwright checks Page routes before Context routes).
+ */
+async function installDefaultUsdmStub(page: Page): Promise<void> {
+  const context = page.context();
+  if (usdmStubContexts.has(context)) return;
+  usdmStubContexts.add(context);
+  const fulfill = (route: Route): Promise<void> =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/geo+json',
+      body: JSON.stringify(TEST_USDM_SNAPSHOT)
+    });
+  await context.route('**/USDM_current/**', fulfill);
+  await context.route('**/USDM_archive/**', fulfill);
+}
+
 const coveredContexts = new WeakSet<BrowserContext>();
 
 /**
@@ -150,8 +194,11 @@ export const ROLE_GROUPS: ReadonlyArray<{ title: string; hint: string | null }> 
  * default carries the two present-day layers. Each change was a ratified,
  * deliberate default change. Hillshade joined 2026-07-16 (E1 deliverable 4,
  * D-0.7.0-043 part 3: terrain shading is part of the calm default
- * composition). */
-export const DEFAULT_ON = ['nadm-drought', 'aiannh', 'bia-reservations', 'states', 'hillshade'] as const;
+ * composition). Since DR-270 this is what a boot that lists no layers shows
+ * in the default United States geography: the `defaultOn: true` rows with
+ * Drought's `nadm-drought` exchanged for its stand-in there, `usdm`. A boot
+ * whose view is of Canada, Mexico or the continent keeps `nadm-drought`. */
+export const DEFAULT_ON = ['usdm', 'aiannh', 'bia-reservations', 'states', 'hillshade'] as const;
 
 /** Surface-role keys (mutually exclusive), mirroring `role: 'surface'` rows in `LAYER_DEFS`.
  * sst-anomaly joined 2026-07-10 (alignment-review catch: the mirror had
@@ -514,6 +561,8 @@ export async function gotoApp(
   // `installDefaultNadmStub`'s own comment for the opt-out and why a spec's
   // own `page.route` for this pattern is unaffected either way.
   await installDefaultNadmStub(page, options.nadm ?? 'fixture');
+  // DR-270: the default boot draws the weekly U.S. Drought Monitor; see `installDefaultUsdmStub`.
+  await installDefaultUsdmStub(page);
   // J12 (DDM-P10-T13): every routine boot answers the NIFC WFIGS
   // current-perimeters service from the deterministic fixture, whatever the
   // query string names. Under the national default region an unrouted

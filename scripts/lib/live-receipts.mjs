@@ -194,8 +194,10 @@ export function evaluateRange(row) {
  * `?layers=`, and none passes `?horizon=`, so every cluster boot composes
  * at the `current` horizon: wildfire is nifc-fires plus hms-smoke, heat is
  * heatrisk plus nws-alerts, enso is sst-anomaly plus tropical-cyclones, and drought (the bare
- * root boot) is nadm-drought, which composes back to exactly the
- * default-on set.
+ * root boot) is the default-on set with its surface exchanged: the boots
+ * name no region and no framing, which is the default United States
+ * geography, where Drought's nadm-drought composes as its stand-in usdm
+ * (`unitedStatesStandIns` in src/config/clusters.ts, DR-270).
  *
  * tests/live-receipts.test.mjs re-derives this table from those two config
  * files on every run, so a recipe or defaultOn change that this table does
@@ -205,7 +207,7 @@ export function evaluateRange(row) {
 const PERSISTENT_REFERENCE = ['hillshade', 'aiannh', 'bia-reservations', 'states'];
 const WILDFIRE_BOOT = [...PERSISTENT_REFERENCE, 'nifc-fires', 'hms-smoke'];
 export const EXPECTED_BOOT_LAYERS = Object.freeze({
-  root: [...PERSISTENT_REFERENCE, 'nadm-drought'],
+  root: [...PERSISTENT_REFERENCE, 'usdm'],
   wildfire: WILDFIRE_BOOT,
   heat: [...PERSISTENT_REFERENCE, 'heatrisk', 'nws-alerts'],
   enso: [...PERSISTENT_REFERENCE, 'sst-anomaly', 'tropical-cyclones'],

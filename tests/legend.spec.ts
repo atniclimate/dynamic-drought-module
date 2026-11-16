@@ -57,10 +57,10 @@ test.describe('UX-3 unified legend registry', () => {
     await gotoApp(page, '?view=console');
     // Settle the default surface first so its own activation cannot race the
     // swap below (an in-flight activation could re-add its section).
-    await waitForLayerSettled(page, 'nadm-drought');
+    await waitForLayerSettled(page, 'usdm');
 
     // Turn on the fixture-backed outlook and the bundled ecoregion reference.
-    // The outlook surface deactivates NADM.
+    // The outlook surface deactivates the default surface.
     await layerCheckbox(page, 'drought').check();
     await expect(layerPill(page, 'drought')).toHaveText(PILL.live);
     await expect(layerCheckbox(page, 'drought')).toBeChecked();
@@ -69,7 +69,7 @@ test.describe('UX-3 unified legend registry', () => {
     const panel = page.locator('#legend-panel');
     await expect(panel).toBeVisible();
 
-    // One panel, two sections, ordered surface then reference (NADM gone).
+    // One panel, two sections, ordered surface then reference (the default surface gone).
     await expect
       .poll(() => sectionKeys(page))
       .toEqual(['drought', 'ecoregions']);
@@ -88,7 +88,7 @@ test.describe('UX-3 unified legend registry', () => {
   test('switching the surface swaps only the surface section', async ({ page }) => {
     await stubCpcDroughtOutlook(page);
     await gotoApp(page, '?view=console'); // catalog-driving spec (E1 deliverable 1)
-    await waitForLayerSettled(page, 'nadm-drought');
+    await waitForLayerSettled(page, 'usdm');
     await layerCheckbox(page, 'drought').check();
     await expect(layerPill(page, 'drought')).toHaveText(PILL.live);
     await expect(layerCheckbox(page, 'drought')).toBeChecked();
@@ -119,7 +119,7 @@ test.describe('UX-3 unified legend registry', () => {
     page
   }) => {
     await gotoApp(page, '?view=console'); // catalog-driving spec (E1 deliverable 1)
-    await waitForLayerSettled(page, 'nadm-drought');
+    await waitForLayerSettled(page, 'usdm');
 
     const dateByWindow: Record<string, string> = {
       'spi-90d': '2026-08-31',
@@ -194,7 +194,7 @@ test.describe('UX-3 unified legend registry', () => {
   test('the panel hides when the last legend layer is turned off', async ({ page }) => {
     await stubCpcDroughtOutlook(page);
     await gotoApp(page, '?view=console'); // catalog-driving spec (E1 deliverable 1)
-    await waitForLayerSettled(page, 'nadm-drought');
+    await waitForLayerSettled(page, 'usdm');
     await layerCheckbox(page, 'drought').check();
     await expect(layerPill(page, 'drought')).toHaveText(PILL.live);
     await expect(layerCheckbox(page, 'drought')).toBeChecked();
@@ -221,7 +221,7 @@ test.describe('UX-3 unified legend registry', () => {
     page
   }) => {
     await gotoApp(page, '?view=console');
-    await waitForLayerSettled(page, 'nadm-drought');
+    await waitForLayerSettled(page, 'usdm');
     const enso = page.locator('.shell-cluster-btn[data-cluster="enso"]');
     await enso.click();
     await expect(enso).toHaveAttribute('aria-pressed', 'true');
@@ -266,7 +266,7 @@ test.describe('UX-3 unified legend registry', () => {
     page
   }) => {
     await gotoApp(page, '?view=console');
-    await waitForLayerSettled(page, 'nadm-drought');
+    await waitForLayerSettled(page, 'usdm');
     const enso = page.locator('.shell-cluster-btn[data-cluster="enso"]');
     await enso.click();
     await expect(enso).toHaveAttribute('aria-pressed', 'true');

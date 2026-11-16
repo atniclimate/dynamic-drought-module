@@ -224,7 +224,7 @@ test.describe('mobile map-information disclosure (390x844)', () => {
 
     await infoButton.click();
     await expect(panel).toBeVisible();
-    await expect(sourceList).toContainText('North American Drought Monitor');
+    await expect(sourceList).toContainText('US Drought Monitor');
 
     // The license credits (owner direction 2026-08-31): the panel is the
     // only credits surface, so the live per-source attribution strings,
@@ -240,7 +240,7 @@ test.describe('mobile map-information disclosure (390x844)', () => {
     // and the basemap state), never a verbatim restatement of the on-map
     // key aria text that sits directly beneath it.
     await expect(contextLine).toContainText(
-      'Active view: North American Drought Monitor.'
+      'Active view: US Drought Monitor.'
     );
     await expect(contextLine).toContainText('basemap');
     const keyAria =
@@ -306,7 +306,7 @@ test.describe('mobile map-information disclosure (390x844)', () => {
     await expect(panel).toBeVisible();
     await expect(infoButton).toHaveAttribute('aria-expanded', 'true');
     await expect(sourceList).toContainText('Ocean Temperature Anomaly');
-    await expect(sourceList).not.toContainText('North American Drought Monitor');
+    await expect(sourceList).not.toContainText('US Drought Monitor');
     await expect(contextLine).toContainText(
       'Active view: Ocean Temperature Anomaly.'
     );

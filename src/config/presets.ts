@@ -94,8 +94,12 @@ export const MOBILE_HAZARD_PRESETS: readonly ViewPreset[] = [
   {
     key: 'hazard-drought',
     label: 'Drought',
-    description: 'Current drought conditions: the tri-national North American Drought Monitor',
+    // DRAFT wording (pending the owner's read-back): names both current products (DR-270).
+    description:
+      'Current drought conditions: the weekly U.S. Drought Monitor in the United States, the monthly North American Drought Monitor elsewhere',
     mode: 'drought',
+    // The recipe's continental surface; the rail applies its United States
+    // stand-in where the geography is of the United States (src/ui/sidebar.ts).
     layers: ['nadm-drought', 'aiannh']
   },
   {

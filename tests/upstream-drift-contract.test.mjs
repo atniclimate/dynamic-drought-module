@@ -135,8 +135,8 @@ test('EXPECTED_WORKER_REVISION is truly wired to readWorkerRevision(), not a har
 // revision string, so /healthz could not tell those Workers apart.
 // shortcut: any edit (comments too) needs a re-pin; an editor could re-pin the hash alone, so review that the revision moved with it.
 const WORKER_SOURCE_PIN = {
-  revision: '2026-10-13-query-pin-v7',
-  sha256: '66b6e74f9c9ef19a4f30c697904a01c2565144fcf28d968b3538aaf58f373a52',
+  revision: '2026-11-16-tribal-statistics-v8',
+  sha256: 'e5be7587d3e3644b938866f368e8db2661eaf759769ab1f0a380e3adaf271f1e',
 };
 
 test('an edit to the Worker source changes WORKER_REVISION in the same commit', async () => {

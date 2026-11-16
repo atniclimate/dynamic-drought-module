@@ -141,7 +141,7 @@ test.describe('the mobile hazard rail (390x844)', () => {
     // The default-on drought surface presses the Drought button (the rail
     // reflects the registry, it never claims a hazard the map is not
     // showing).
-    await waitForLayerSettled(page, 'nadm-drought');
+    await waitForLayerSettled(page, 'usdm');
     await expect(buttons.nth(0)).toHaveAttribute('aria-pressed', 'false');
     await expect(buttons.nth(1)).toHaveAttribute('aria-pressed', 'false');
     await expect(buttons.nth(2)).toHaveAttribute('aria-pressed', 'true');
@@ -190,7 +190,7 @@ test.describe('the mobile hazard rail (390x844)', () => {
     page
   }) => {
     await gotoApp(page);
-    await waitForLayerSettled(page, 'nadm-drought');
+    await waitForLayerSettled(page, 'usdm');
 
     const ensoBtn = page.locator('#hazard-rail button[data-preset="hazard-enso"]');
     await ensoBtn.click();
@@ -218,7 +218,7 @@ test.describe('the mobile hazard rail (390x844)', () => {
 
     // Settle the default-on surface before the preset swap (the helpers'
     // documented precondition for deterministic URL assertions).
-    await waitForLayerSettled(page, 'nadm-drought');
+    await waitForLayerSettled(page, 'usdm');
 
     const fireBtn = page.locator('#hazard-rail button[data-preset="hazard-fire"]');
     await fireBtn.click();

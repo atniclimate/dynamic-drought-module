@@ -122,7 +122,7 @@ test.describe('UX-3 conditions strip', () => {
     // The bottom Layer legends is gone (owner 2026-11-13, item 13); the Key carries the legend.
     await expect(page.locator('#legend-panel')).toBeHidden();
 
-    await waitForLayerSettled(page, 'nadm-drought');
+    await waitForLayerSettled(page, 'usdm');
     const drought = tiles.nth(0);
     await expect(drought).toHaveAttribute('data-tone', 'data');
     // One box: the chip's title is the reading, on one line, and nothing sits under it.
@@ -350,7 +350,7 @@ test.describe('UX-3 conditions strip', () => {
     await gotoApp(page, '?region=washington_state');
     for (const key of [
       'hillshade',
-      'nadm-drought',
+      'usdm',
       'aiannh',
       'bia-reservations',
       'states'
@@ -371,14 +371,14 @@ test.describe('UX-3 conditions strip', () => {
     await expect(page.locator('#map-key-content')).toBeVisible();
     await expect(page.locator('#map-key-content')).toContainText('D3');
     expect(page.url()).toBe(beforeUrl);
-    expect((await urlLayers(page)).has('nadm-drought')).toBe(true);
-    await expect(layerCheckbox(page, 'nadm-drought')).toBeChecked();
+    expect((await urlLayers(page)).has('usdm')).toBe(true);
+    await expect(layerCheckbox(page, 'usdm')).toBeChecked();
     await expect(tile.locator('.conditions-value')).toHaveText(beforeReading ?? '');
     await tile.click();
     await expect(tile).toHaveAttribute('aria-expanded', 'false');
     await expect(page.locator('#map-key-content')).toBeHidden();
-    await expect(layerCheckbox(page, 'nadm-drought')).toBeChecked();
-    await expect(layerPill(page, 'nadm-drought')).toHaveText(PILL.live);
+    await expect(layerCheckbox(page, 'usdm')).toBeChecked();
+    await expect(layerPill(page, 'usdm')).toHaveText(PILL.live);
   });
 
   test('a non-drought view leads with its own tiles; the off drought anchor renders last (W2-D10)', async ({
@@ -470,20 +470,20 @@ test.describe('UX-3 conditions strip', () => {
     // deliverable 1 hides the Brief-mode catalog behind the console door.
     await gotoApp(page, '?view=console');
 
-    // The default NADM surface keeps a compact trigger while its full key
-    // stays behind the disclosure.
+    // The default drought surface (usdm in the United States, DR-270) keeps a
+    // compact trigger while its full key stays behind the disclosure.
     const key = page.locator('#map-key');
     await expect(key).toBeVisible();
     await expect(key.locator('#map-key-content')).toBeHidden();
-    await expect(page.locator('#legend-panel [data-legend="nadm-drought"]')).toBeVisible();
+    await expect(page.locator('#legend-panel [data-legend="usdm"]')).toBeVisible();
 
     // Turning the USDM surface off no longer hides the key (value-only
     // migration, S30D D1 M10; interface-chrome-popups-text.md section 2.4,
     // "the chip never hides"): it falls back to the committed mode's own
     // word instead of claiming a surface that is not on the map, and the
     // seat stays present. Before this change the key went `hidden`.
-    await waitForLayerSettled(page, 'nadm-drought');
-    await layerCheckbox(page, 'nadm-drought').uncheck();
+    await waitForLayerSettled(page, 'usdm');
+    await layerCheckbox(page, 'usdm').uncheck();
     await expect(key).toBeVisible();
     await expect(key.locator('.map-key-chip-label')).toHaveText('Drought');
   });

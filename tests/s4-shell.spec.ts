@@ -497,7 +497,7 @@ test.describe('S4 temporal register coherence (DG-080 review blocker 1)', () => 
   test('a horizon switch to a longer outlook headline does not shift the shell layout (fix-lane Defect 1)', async ({
     page
   }) => {
-    // NADM's 'Consensus month ...' stamp is short and single-line; the CPC
+    // The weekly U.S. map's 'Valid ...' stamp (DR-270) is short and single-line; the CPC
     // outlook's 'Issued ... . through ...' stamp is markedly longer and,
     // pre-fix, wrapped the headline to a second line with no reserved
     // height, pushing every control below it down. app.css's
@@ -511,7 +511,7 @@ test.describe('S4 temporal register coherence (DG-080 review blocker 1)', () => 
 
     const headline = page.locator('.shell-time-headline');
     await expect(headline).toBeAttached();
-    await expect(headline).toContainText('Consensus month');
+    await expect(headline).toContainText('Valid ');
 
     const navigation = page.locator('#shell-minimap-heading');
     const before = await navigation.boundingBox();
@@ -552,7 +552,7 @@ test.describe('S4 temporal register coherence (DG-080 review blocker 1)', () => 
       // Attached, not drawn: Brief carries no date line (owner 2026-11-13).
       const headline = page.locator('.shell-time-headline');
       await expect(headline).toBeAttached();
-      await expect(headline).toContainText('Consensus month');
+      await expect(headline).toContainText('Valid ');
 
       const navigation = page.locator('#shell-minimap-heading');
       const shareHost = page.locator('.map-overlay-controls > #share-btn');
