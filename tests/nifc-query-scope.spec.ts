@@ -894,6 +894,7 @@ test.describe('DDM-P14-T07: the briefing and the minimap read the loaded NIFC co
   }) => {
     await stubOtherBriefingLanes(page);
     const geojsonQueries: string[] = [];
+    const outlineQueries: string[] = [];
     let releaseHeld = (): void => undefined;
     const held = new Promise<void>((resolve) => {
       releaseHeld = resolve;
@@ -902,7 +903,10 @@ test.describe('DDM-P14-T07: the briefing and the minimap read the loaded NIFC co
       (url) =>
         url.href.includes('WFIGS_Interagency_Perimeters_Current') && url.pathname.endsWith('/query'),
       async (route) => {
-        geojsonQueries.push(route.request().url());
+        // The bounded box read is the GET. A place with its own outline also posts that outline once (M-113):
+        // held and answered like the box read, counted apart.
+        if (route.request().method() === 'POST') outlineQueries.push(route.request().url());
+        else geojsonQueries.push(route.request().url());
         await held;
         await route.fulfill({
           status: 200,
@@ -924,6 +928,7 @@ test.describe('DDM-P14-T07: the briefing and the minimap read the loaded NIFC co
     await page.locator('#region-briefing-btn').click();
 
     await expect.poll(() => geojsonQueries.length).toBe(1);
+    expect(outlineQueries.length, 'at most one outline read beside the box read').toBeLessThanOrEqual(1);
     const params = new URL(geojsonQueries[0]!).searchParams;
     expect(params.get('resultRecordCount')).toBe(String(NIFC_AREA_QUERY_RECORD_CAP));
     expect(params.get('f')).toBe('geojson');

@@ -256,6 +256,9 @@ function perimeterMark(): string {
 
 /** WFIGS perimeters: the counts by incident class, as the read carries them. */
 function wfigsCounts(reading: Extract<ClaimReading, { kind: 'wfigs-perimeters' }>): string {
+  // The split is the box's (M-113): under a headline that counts the place's own boundary it would contradict it,
+  // and Prescribed and other perimeters are not counted on the place. The claim's sentence keeps the box split.
+  if (reading.onPlace !== undefined) return '';
   // Only a mixed set needs the split: a wildfire-only count is the headline.
   if (reading.prescribed === 0 && reading.other === 0) return '';
   const parts: string[] = [];

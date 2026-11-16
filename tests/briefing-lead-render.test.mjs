@@ -255,10 +255,12 @@ test('a tile\'s accessible name carries the scope words its face shows (B9)', ()
   assert.ok(names.some((name) => name.includes('Current perimeters in a search area wider than this place.')), names.join(' | '));
   // A place with its own outline (M-113): the tile counts and names the perimeters that meet it.
   briefing.horizons.current.cells.fire = cell('fire', 'current', 'ready', [
-    { ...nwsClaim, reading: { kind: 'wfigs-perimeters', wildfire: 2, prescribed: 0, other: 0, lowerBound: false, onPlace: 1 } }
+    { ...nwsClaim, reading: { kind: 'wfigs-perimeters', wildfire: 2, prescribed: 1, other: 0, lowerBound: false, onPlace: 1 } }
   ]);
   const onPlace = renderLeadView(briefing, NOW);
   assert.match(onPlace, /1 mapped wildfire perimeter\b/);
+  // The box's split (2 wildfire, 1 Prescribed fire) never sits under the on-boundary count (review finding).
+  assert.ok(!onPlace.includes('2 wildfire') && !onPlace.includes('1 Prescribed fire'), 'no box counts on an on-boundary tile');
   assert.ok(onPlace.includes('Current perimeters that intersect this place&#039;s mapped boundary.'), 'the scope words name the boundary');
 });
 
