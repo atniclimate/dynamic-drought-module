@@ -37,7 +37,7 @@ import { MINIMAP_WHP } from '../config/minimap-whp';
 import type { MinimapWhpFramingSummary } from '../config/minimap-whp';
 import { MINIMAP_ACTIVE_WILDFIRE_FILTER, bcwsStatusClass } from '../config/wildfire-presentation';
 import { URLS } from '../config/urls';
-import { countFireAreas, fireRecordKey, type CountedPerimeter } from '../layers/fire-areas';
+import { countFireAreas, fireRecordKey, onFireAreasSettled, type CountedPerimeter } from '../layers/fire-areas';
 import { bboxCoveredByEnvelope, type ViewEnvelope } from '../util/bbox';
 import { BCWS_ACTIVE_WHERE, BCWS_COVERAGE, BCWS_READ_LIMITS, readBcwsPerimeters } from '../util/bcws-perimeter-read';
 import { fetchJsonWithBudget } from '../util/fetch';
@@ -387,7 +387,7 @@ function combineWithBc(
   outcome: FramingCountOutcome,
   bc: readonly { readonly properties: Record<string, unknown> | null; readonly geometry: Geometry | null }[] | null,
   known: { readonly areaOf: (recordKey: string) => string | null; readonly coverage: ViewEnvelope } | null,
-): { readonly result: MinimapWildfireCountResult; readonly bcwsPerimeterCount?: number | null; readonly fireAreasMerged?: number; readonly nifcPerimeterCount?: number } {
+): { readonly result: MinimapWildfireCountResult; readonly bcwsPerimeterCount?: number | null; readonly fireAreasMerged?: number; readonly nifcPerimeterCount?: number; readonly ungrouped?: true } {
   if (!framingReachesBc(outcome.key) || outcome.result.status === 'unavailable') return { result: outcome.result };
   if (bc === null) {
     return outcome.result.count > 0
@@ -405,7 +405,9 @@ function combineWithBc(
     const both = outcome.result.count > 0 && bcRows.length > 0;
     return {
       result: { status: 'live', count: Math.max(outcome.result.count, bcRows.length) },
-      bcwsPerimeterCount: bcRows.length, fireAreasMerged: 0, ...(both ? { nifcPerimeterCount: outcome.result.count } : {})
+      bcwsPerimeterCount: bcRows.length, fireAreasMerged: 0, ...(both ? { nifcPerimeterCount: outcome.result.count } : {}),
+      // BC perimeters counted with no grouping to say: a later grouping can count this framing again.
+      ...(bcRows.length > 0 ? { ungrouped: true as const } : {})
     };
   }
   const { count, merged } = countFireAreas([...outcome.rows, ...bcRows], known.areaOf);
@@ -570,6 +572,9 @@ let epoch = 0;
 let controller: AbortController | null = null;
 let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 const listeners = new Set<(next: MinimapWildfireSnapshot) => void>();
+/** The framings the last summary counted BC perimeters in with no grouping to say whether they overlap NIFC's. */
+let ungroupedFramings: readonly FramingKey[] = [];
+let stopHearingFireAreas: (() => void) | null = null;
 
 function publish(next: MinimapWildfireSnapshot): void {
   snapshot = next;
@@ -615,6 +620,7 @@ async function loadSummaries(
     if (signal.aborted || epoch !== loadEpoch || retainCount === 0) return;
     const combined = counted.map((outcome) => ({ outcome, ...combineWithBc(outcome, bc, known) }));
     const outcomes = combined.map(({ outcome, result }) => ({ ...outcome, result }));
+    ungroupedFramings = combined.filter((row) => row.ungrouped === true).map((row) => row.outcome.key);
 
     const failed = outcomes.filter((outcome) => outcome.error !== undefined);
     if (failed.length > 0) {
@@ -643,6 +649,7 @@ async function loadSummaries(
     });
   } catch (error) {
     if (signal.aborted || epoch !== loadEpoch || retainCount === 0) return;
+    ungroupedFramings = [];
     console.warn('[minimap-wildfire] framing count load failed.', error);
     publish({
       status: 'unavailable',
@@ -655,6 +662,25 @@ async function loadSummaries(
       scheduleRefresh(loadEpoch);
     }
   }
+}
+
+/**
+ * A grouping the BC layer landed after the summary counted. The summary loads
+ * as the mode's layers start, so its first count rarely has one: count again
+ * when the grouping now reaches a framing counted with BC perimeters and no
+ * grouping, or when a load in flight may have read the layer before it landed.
+ */
+async function recountOnGrouping(loadEpoch: number): Promise<void> {
+  if (retainCount === 0 || epoch !== loadEpoch) return;
+  if (controller === null) {
+    const pending = ungroupedFramings;
+    if (pending.length === 0) return;
+    const known = await knownFireAreas();
+    if (known === null || !pending.some((key) => groupedViewCovers(known.coverage, key))) return;
+    // A load that began meanwhile reads the landed grouping itself.
+    if (retainCount === 0 || epoch !== loadEpoch || controller !== null) return;
+  }
+  void loadSummaries(loadEpoch, false);
 }
 
 /** Current state for the concurrently mounted minimap instances. */
@@ -675,6 +701,9 @@ export function retainMinimapWildfire(
   listener(snapshot);
   if (retainCount === 1) {
     const loadEpoch = ++epoch;
+    stopHearingFireAreas = onFireAreasSettled(() => {
+      void recountOnGrouping(loadEpoch);
+    });
     void loadSummaries(loadEpoch, true);
   }
 
@@ -686,6 +715,9 @@ export function retainMinimapWildfire(
     retainCount = Math.max(0, retainCount - 1);
     if (retainCount !== 0) return;
     epoch++;
+    stopHearingFireAreas?.();
+    stopHearingFireAreas = null;
+    ungroupedFramings = [];
     controller?.abort();
     controller = null;
     clearRefreshTimer();

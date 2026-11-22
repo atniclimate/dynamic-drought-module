@@ -53,6 +53,7 @@ import {
   FIRE_AREA_JOB_DEADLINE_MS,
   FIRE_AREA_JOB_LIMITS,
   NO_FIRE_AREAS,
+  announceFireAreasSettled,
   fireRecordKey,
   groupFireAreas,
   type FireAreaState
@@ -439,6 +440,7 @@ function scheduleGrouping(map: maplibregl.Map): void {
       areas = state;
       drawFootprints(map, state);
       reorder(map);
+      announceFireAreasSettled();
     },
     () => {
       if (generation !== groupingGeneration) return;

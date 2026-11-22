@@ -435,6 +435,72 @@ test('where no overlap can be established the two agencies are never added: the 
   );
 });
 
+test('a summary counted before the BC layer grouped its pair counts again when the grouping lands, once: the known fire area then counts once', async () => {
+  // Entering Wildfire loads the summary while the layers are still loading: no
+  // grouping can say, so each agency stands apart. The layer then groups the
+  // pair; the minimap must not wait five minutes to say so.
+  const { announceFireAreasSettled } = await import('../src/layers/fire-areas.ts');
+  const original = globalThis.fetch;
+  const bcUrls = [];
+  forgetBcwsStampRead();
+  globalThis.fetch = async (input) => {
+    const url = String(input);
+    if (!url.includes('BCWS_FirePerimeters_PublicView')) {
+      return new Response(JSON.stringify({ count: 0 }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    bcUrls.push(url);
+    const body = !new URL(url).pathname.endsWith('/query') ? { editingInfo: STEADY_STAMPS } : { type: 'FeatureCollection', features: [BC_ACTIVE] };
+    return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  };
+  globalThis.__minimapLoaded = loaded({ type: 'FeatureCollection', features: [NIFC_BORDER] }, { truncated: false });
+  globalThis.__minimapAreas = undefined;
+  registry.deactivate('nifc-fires');
+  registry.deactivate('bcws-fires');
+  registry.setStatus('nifc-fires', 'ready');
+  const published = [];
+  let wake = () => {};
+  const next = () => new Promise((resolve) => { wake = resolve; });
+  let release = () => {};
+  try {
+    let waiting = next();
+    release = minimap.retainMinimapWildfire((snapshot) => {
+      if (snapshot.checkedAtUtc === null) return;
+      published.push(snapshot);
+      wake();
+    });
+    await waiting;
+    assert.equal(published[0].summaries[COVERED].nifcPerimeterCount, 1, 'before the grouping, each agency stands apart');
+    // The BC layer answers and groups the pair over the whole province.
+    registry.setStatus('bcws-fires', 'ready');
+    globalThis.__minimapAreas = {
+      status: 'complete',
+      areaOf: new Map([['nifc:2026-WANCP-000266', 'fa:x'], ['bcws:2026-V10885', 'fa:x']]),
+      coverage: BC_WIDE_VIEW
+    };
+    waiting = next();
+    announceFireAreasSettled();
+    await waiting;
+    const regrouped = published.at(-1).summaries[COVERED];
+    assert.equal(regrouped.fireAreasMerged, 1, 'the pair counts as one fire area');
+    assert.equal(regrouped.mappedWildfirePerimeterCount, 1);
+    assert.equal('nifcPerimeterCount' in regrouped, false);
+    // Grouped already: a further landing sends no new read.
+    const reads = bcUrls.length;
+    const count = published.length;
+    announceFireAreasSettled();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.equal(bcUrls.length, reads, 'no new BC read');
+    assert.equal(published.length, count, 'no new summary');
+  } finally {
+    release();
+    registry.deactivate('nifc-fires');
+    registry.deactivate('bcws-fires');
+    globalThis.__minimapLoaded = null;
+    globalThis.__minimapAreas = undefined;
+    globalThis.fetch = original;
+  }
+});
+
 test('the BC stage whitelist decides what the minimap counts: Out and an unstated stage are not active', async () => {
   const out = { ...BC_ACTIVE, properties: { ...BC_ACTIVE.properties, FIRE_STATUS: 'Out' } };
   const unstated = { ...BC_ACTIVE, properties: { ...BC_ACTIVE.properties, OBJECTID: 1, FIRE_NUMBER: 'C22352', FIRE_STATUS: null } };

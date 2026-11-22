@@ -59,6 +59,24 @@ export const NO_FIRE_AREAS: FireAreaState = {
   unresolved: new Set()
 };
 
+const settledListeners = new Set<() => void>();
+
+/**
+ * Hear each grouping the BC layer lands, so a reader that counted before it
+ * (the minimap summary, loaded as the mode's layers start) can count again.
+ */
+export function onFireAreasSettled(listener: () => void): () => void {
+  settledListeners.add(listener);
+  return () => {
+    settledListeners.delete(listener);
+  };
+}
+
+/** Told by the BC layer when a grouping lands (src/layers/bcws-fires.ts). */
+export function announceFireAreasSettled(): void {
+  for (const listener of [...settledListeners]) listener();
+}
+
 /**
  * Production allowances for the grouping Worker, sized from the measured
  * province (2026-11-06: 319 BC records, 11,444 vertices, the largest 1,802;

@@ -1199,12 +1199,10 @@ test.describe('the wildfire minimap counts BC Wildfire Service beside NIFC', () 
     await expect(layerPill(page, 'nifc-fires')).toHaveText(/live/);
     await expect(layerPill(page, 'bcws-fires')).toHaveText(/live/);
     const pacific = page.locator('.shell-minimap-map [data-framing="pacific-coast"]');
-    // The summary reloads on its five-minute cadence or when the mode is re-entered; re-enter it.
-    await expect(async () => {
-      await page.locator('.shell-cluster-btn[data-cluster="drought"]').click();
-      await page.locator('.shell-cluster-btn[data-cluster="wildfire"]').click();
-      await expect(pacific).toHaveAttribute('aria-label', /overlapping agency perimeters counted as one fire area/, { timeout: 3000 });
-    }).toPass({ timeout: 45_000 });
+    // The summary loads as the mode's layers start, before any grouping, and
+    // counts again when the BC layer's grouping lands. Re-entering the mode
+    // never helps: leaving it tears both layers down.
+    await expect(pacific).toHaveAttribute('aria-label', /overlapping agency perimeters counted as one fire area/, { timeout: 20_000 });
     await expect(pacific).toHaveAttribute('aria-label', /1 current mapped NIFC or BC Wildfire Service wildfire perimeter intersects/);
   });
 });
