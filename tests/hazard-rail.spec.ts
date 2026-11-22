@@ -140,8 +140,7 @@ test.describe('the mobile hazard rail (390x844)', () => {
 
     // The default-on drought surface presses the Drought button (the rail
     // reflects the registry, it never claims a hazard the map is not
-    // showing).
-    await waitForLayerSettled(page, 'usdm');
+    // showing). gotoApp's boot-idle wait already settled that surface.
     await expect(buttons.nth(0)).toHaveAttribute('aria-pressed', 'false');
     await expect(buttons.nth(1)).toHaveAttribute('aria-pressed', 'false');
     await expect(buttons.nth(2)).toHaveAttribute('aria-pressed', 'true');
@@ -190,8 +189,8 @@ test.describe('the mobile hazard rail (390x844)', () => {
   test('tapping ENSO applies the shipped SST anomaly preset through shareable URL state', async ({
     page
   }) => {
+    // gotoApp's boot-idle wait settles the default surface before the tap.
     await gotoApp(page);
-    await waitForLayerSettled(page, 'usdm');
 
     const ensoBtn = page.locator('#hazard-rail button[data-preset="hazard-enso"]');
     await ensoBtn.click();
@@ -217,9 +216,8 @@ test.describe('the mobile hazard rail (390x844)', () => {
     const app = page.locator('#app');
     await expect(app).toHaveAttribute('data-sheet-detent', 'closed');
 
-    // Settle the default-on surface before the preset swap (the helpers'
-    // documented precondition for deterministic URL assertions).
-    await waitForLayerSettled(page, 'usdm');
+    // The default-on surface settled under gotoApp's boot-idle wait before
+    // the preset swap (the precondition for deterministic URL assertions).
 
     const fireBtn = page.locator('#hazard-rail button[data-preset="hazard-fire"]');
     await fireBtn.click();

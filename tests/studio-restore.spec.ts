@@ -1,7 +1,7 @@
 import { expect, test, type Page } from './offline-test';
 
 import { HAZARD_CLUSTERS, HAZARD_CLUSTER_KEYS } from '../src/config/clusters';
-import { keyForGeography } from '../src/state/cluster-service';
+import { DEFAULT_SURFACE, modeLayers } from './defaults';
 import {
   gotoApp,
   layerCheckbox,
@@ -639,43 +639,44 @@ test.describe('found-076: a failed checked composition member through the Place 
   test('a recipe layer already failed and checked before the studio opens is set aside like any other, and the restore re-checks it into one genuine retry of its chunk', async ({
     page
   }) => {
-    // The default recipe surface is the weekly U.S. map (DR-270), so its chunk is usdm.
-    let nadmRequests = 0;
+    // The default recipe surface's chunk is named after it (the weekly U.S.
+    // map since DR-270), plus Vite's eight-character hash.
+    let surfaceChunkRequests = 0;
     // The query allowance catches found-087's retry URL (`.js?retry=1`):
     // Playwright tests a RegExp route against the full URL, query included.
-    await page.route(/\/usdm-[A-Za-z0-9_-]{8}\.js(\?.*)?$/, (route) => {
-      nadmRequests += 1;
+    await page.route(new RegExp(`/${DEFAULT_SURFACE}-[A-Za-z0-9_-]{8}\\.js(\\?.*)?$`), (route) => {
+      surfaceChunkRequests += 1;
       void route.abort();
     });
     await routeGeojson(page, AIANNH_ROUTE, emptyCollectionBody());
     await routeGeojson(page, BIA_ROUTE, emptyCollectionBody());
 
+    // gotoApp's boot-idle wait already held for the default surface's failure.
     await gotoApp(page, '?view=brief');
-    await waitForLayerSettled(page, 'usdm');
-    expect(nadmRequests).toBe(1);
-    await expect(layerCheckbox(page, 'usdm')).toBeChecked();
-    await expect(layerPill(page, 'usdm')).toHaveText(PILL.unavailable);
+    expect(surfaceChunkRequests).toBe(1);
+    await expect(layerCheckbox(page, DEFAULT_SURFACE)).toBeChecked();
+    await expect(layerPill(page, DEFAULT_SURFACE)).toHaveText(PILL.unavailable);
 
     await page.locator('#studio-entry-pair #place-studio-entry').click();
     const studio = page.locator(PLACE_ROOT);
     await expect(studio).toBeVisible();
     // The clean display sets a failed recipe layer aside exactly like a
     // working one, by role alone: no ledger entry needed.
-    await expect(layerCheckbox(page, 'usdm')).not.toBeChecked();
-    expect(nadmRequests).toBe(1);
+    await expect(layerCheckbox(page, DEFAULT_SURFACE)).not.toBeChecked();
+    expect(surfaceChunkRequests).toBe(1);
 
     await studio.getByRole('button', { name: 'Back to map' }).click();
     await expect(studio).toHaveCount(0);
-    await waitForLayerSettled(page, 'usdm');
+    await waitForLayerSettled(page, DEFAULT_SURFACE);
     // The restore re-checks the captured intent, and the controller
     // re-attempts it once. Since found-087, loadLayerModule
     // (src/config/layers.ts) retries a failed chunk through
     // createChunkLoader (src/util/chunk-retry.ts) under a fresh `?retry=1`
     // URL the engine has never marked failed, so a second request is made.
     // This route aborts it too, so the layer honestly reads unavailable.
-    expect(nadmRequests).toBe(2);
-    await expect(layerCheckbox(page, 'usdm')).toBeChecked();
-    await expect(layerPill(page, 'usdm')).toHaveText(PILL.unavailable);
+    expect(surfaceChunkRequests).toBe(2);
+    await expect(layerCheckbox(page, DEFAULT_SURFACE)).toBeChecked();
+    await expect(layerPill(page, DEFAULT_SURFACE)).toHaveText(PILL.unavailable);
     await expect(
       page.locator('.shell-cluster-btn[data-cluster="drought"]')
     ).toHaveAttribute('aria-pressed', 'true');
@@ -723,8 +724,7 @@ test.describe('a fresh studio=place URL then Back lands on its mode with its haz
 
       // The boot is in the default United States geography, where a recipe
       // surface with a United States stand-in draws the stand-in (DR-270).
-      const recipeKey = HAZARD_CLUSTERS[cluster].recipes.current[0];
-      const settleKey = recipeKey === undefined ? undefined : keyForGeography(cluster, recipeKey, true);
+      const settleKey = modeLayers(cluster, 'current')[0];
       if (settleKey) await waitForLayerSettled(page, settleKey);
       await expect(
         page.locator(`.shell-cluster-btn[data-cluster="${cluster}"]`),

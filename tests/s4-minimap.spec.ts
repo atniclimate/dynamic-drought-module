@@ -80,6 +80,7 @@ async function exposedWaterPoint(
 
 test.describe('S4b minimap', () => {
   test.beforeEach(async ({ page }) => {
+    // own-stub: the minimap's own NADM fixture (NADM_FIXTURE), which this file's cases read.
     await page.route('**/NADM-current.geojson', (route) =>
       route.fulfill({
         status: 200,
@@ -98,6 +99,7 @@ test.describe('S4b minimap', () => {
   test('monthly NADM D1 uses its own issuer color in the actual minimap', async ({ page }) => {
     const body = structuredClone(NADM_FIXTURE);
     body.features[0]!.properties.DROUGHTCAT = 'd1';
+    // own-stub: a D1 NADM frame fixture, the colour under test.
     await page.route('**/NADM-current.geojson', route => route.fulfill({
       status: 200, contentType: 'application/geo+json', body: JSON.stringify(body)
     }));
@@ -244,6 +246,7 @@ test.describe('S4b minimap', () => {
   }) => {
     let nadmRequests = 0;
     let wildfirePosts = 0;
+    // own-stub: counts the minimap's NADM reads, the subject of this case.
     await page.route('**/NADM-current.geojson', (route) => {
       nadmRequests += 1;
       return route.fulfill({
@@ -985,6 +988,7 @@ test.describe('S4b minimap: compact height band geometry gating (DDM-P11-T01 cla
   test('neither instance builds geometry until the popover opens', async ({
     page,
   }) => {
+    // own-stub: the minimap's NADM fixture for this case's geometry count.
     await page.route('**/NADM-current.geojson', (route) =>
       route.fulfill({
         status: 200,
@@ -1037,6 +1041,7 @@ test.describe('framing coverage clauses render only where each is true', () => {
   async function stubUsdmSurface(page: Page): Promise<void> {
     // A successful US-scoped surface keeps the coverage clauses under test
     // independent of failed custom-layer rollback at the offline boundary.
+    // own-stub: a map frame fixture for callers that boot layers=usdm.
     await page.route('**/USDM_current/**', (route) => route.fulfill({
       status: 200,
       contentType: 'application/geo+json',

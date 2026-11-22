@@ -1,5 +1,6 @@
 import { test, expect, type Page } from './offline-test';
-import { gotoApp, layerCheckbox, layerPill, PILL, urlLayers, search, DEFAULT_ON } from './helpers';
+import { gotoApp, layerCheckbox, layerPill, PILL, urlLayers, search } from './helpers';
+import { DEFAULT_ON } from './defaults';
 import { TEMPORAL_HORIZON_KEYS } from '../src/config/clusters';
 import {
   stubCpcDroughtOutlook,
@@ -50,6 +51,7 @@ function usdmFc(dm: number, mapDateMs: number): unknown {
 
 /** Stub the USDM current + archive services with distinct weeks. */
 async function stubUsdm(page: Page): Promise<void> {
+  // own-stub: distinct current and archive weeks, the map frame fixture under test.
   await page.route('**/USDM_current/**', (route) =>
     route.fulfill({
       status: 200,
@@ -57,6 +59,7 @@ async function stubUsdm(page: Page): Promise<void> {
       body: JSON.stringify(usdmFc(2, LATEST_MS))
     })
   );
+  // own-stub: the archive week of the same map frame fixture.
   await page.route('**/USDM_archive/**', (route) =>
     route.fulfill({
       status: 200,
@@ -660,6 +663,7 @@ test.describe('DDM-P2-T11 time anchors across a mode switch (the heatday rule)',
   /** An empty answer for the North American Drought Monitor tile source's
    * vector companion, reached the moment the display switches to Drought. */
   async function stubNadmEmpty(page: Page): Promise<void> {
+    // own-stub: an empty NADM frame for the switch into Drought, the subject here.
     await page.route('**/NADM-current.geojson', (route) =>
       route.fulfill({
         status: 200,

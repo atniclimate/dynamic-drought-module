@@ -1,7 +1,7 @@
 // Page-free tests moved from tests/s2-url-migration.spec.ts so they run in the pure lane (npm run verify:pure).
 
 import { test, expect } from './offline-test';
-import { DEFAULT_ON } from './helpers';
+import { DEFAULT_ON } from './defaults';
 import { FRAMING_KEYS } from '../src/config/framings';
 import { HAZARD_CLUSTER_KEYS, HAZARD_CLUSTERS } from '../src/config/clusters';
 import { OCEAN_KEYS } from '../src/config/oceans';

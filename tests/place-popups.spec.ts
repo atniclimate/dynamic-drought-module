@@ -60,7 +60,7 @@ test('briefing warning ring changes width only and keeps a 2px reduced-motion ed
 import { gotoApp, layerCheckbox, layerPill, waitForLayerSettled } from './helpers';
 import { AIANNH_ROUTE, routeGeojson } from './tribal-fixtures';
 import { HAZARD_CLUSTERS, type HazardClusterKey } from '../src/config/clusters';
-import { keyForGeography } from '../src/state/cluster-service';
+import { modeLayers } from './defaults';
 import {
   AIANNH_CAVEATS,
   MAP_ROOT,
@@ -164,10 +164,10 @@ test.describe('place popups: the briefing door', () => {
     for (const mode of modes) {
       await test.step(`${mode} mode`, async () => {
         expect(Object.prototype.hasOwnProperty.call(HAZARD_CLUSTERS, mode), `${mode} is a cluster`).toBe(true);
-        const { recipes, urlToken } = HAZARD_CLUSTERS[mode as HazardClusterKey];
+        const { urlToken } = HAZARD_CLUSTERS[mode as HazardClusterKey];
         // Washington State is in the United States: a recipe surface with a
         // United States stand-in draws the stand-in there (DR-270).
-        const recipe = recipes.current.map((key) => keyForGeography(mode as HazardClusterKey, key, true));
+        const recipe = modeLayers(mode as HazardClusterKey, 'current', true);
         // Boot into the mode by URL: a press of the ENSO button fits the Pacific
         // and leaves the reservation, while a deep link naming a region keeps its
         // camera (ensoBootFitsPacific). The default mode carries no token.

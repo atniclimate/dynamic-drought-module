@@ -1,6 +1,7 @@
 import { expect, test, type Route } from './offline-test';
 
 import { gotoApp, readDdmSeam } from './helpers';
+import { TEST_NADM_SNAPSHOT } from './usdm-fixtures';
 
 /**
  * DDM-P1-T09 step 2 parts b and d (S30D C4 M4): `gotoApp`'s own boot-idle
@@ -103,7 +104,7 @@ test.describe('gotoApp boot-idle diagnostic and the deterministic NADM fixture',
     await expect.poll(() => bodies.length, {
       message: 'no NADM-current.geojson response was recorded for the routine boot'
     }).toBeGreaterThanOrEqual(1);
-    expect(yearMonthOf(bodies[0])).toBe('202606');
+    expect(yearMonthOf(bodies[0])).toBe(TEST_NADM_SNAPSHOT.features[0].properties.YEAR_MONTH);
     expect(sentinelFulfillments).toBe(0);
 
     // The explicit opt-out: this switches the EXISTING context route (the

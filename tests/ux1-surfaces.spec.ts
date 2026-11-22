@@ -4,13 +4,12 @@ import {
   layerCheckbox,
   layerPill,
   urlLayers,
-  waitForLayerSettled,
   openTribalNationsDetails,
   ROLE_GROUPS,
-  SURFACE_KEYS,
   PILL,
   stubHeatRiskCatalog
 } from './helpers';
+import { DEFAULT_SURFACE, SURFACE_KEYS } from './defaults';
 
 /**
  * UX-1 (2026-07-01): the map distinguishes place from state
@@ -48,17 +47,16 @@ test.describe('UX-1 role groups and exclusive surfaces', () => {
     // hides the Brief-mode catalog behind the console door.
     await gotoApp(page, '?view=console');
 
-    // Default-on surface is the weekly U.S. Drought Monitor (DR-270). Let its initial activation
-    // settle before toggling, so the exclusivity removal is not racing its
-    // own in-flight boot activation.
-    await expect(layerCheckbox(page, 'usdm')).toBeChecked();
-    await waitForLayerSettled(page, 'usdm');
+    // The default-on surface (the weekly U.S. Drought Monitor since DR-270)
+    // settled under gotoApp's boot-idle wait before toggling, so the
+    // exclusivity removal is not racing its own in-flight boot activation.
+    await expect(layerCheckbox(page, DEFAULT_SURFACE)).toBeChecked();
 
     // Turning on HeatRisk must turn the drought surface off.
     await layerCheckbox(page, 'heatrisk').check();
     await expect(layerPill(page, 'heatrisk')).toHaveText(PILL.live);
     await expect(layerCheckbox(page, 'heatrisk')).toBeChecked();
-    await expect(layerCheckbox(page, 'usdm')).not.toBeChecked();
+    await expect(layerCheckbox(page, DEFAULT_SURFACE)).not.toBeChecked();
     await expect(layerCheckbox(page, 'heatrisk')).toBeChecked();
 
     // Exactly one surface is checked, and it is heatrisk.
@@ -68,9 +66,9 @@ test.describe('UX-1 role groups and exclusive surfaces', () => {
       else await expect(cb).not.toBeChecked();
     }
 
-    // The URL tracks exactly one settled surface: usdm dropped, HeatRisk present.
+    // The URL tracks exactly one settled surface: the default dropped, HeatRisk present.
     await expect
-      .poll(async () => (await urlLayers(page)).has('usdm'), { timeout: 25_000 })
+      .poll(async () => (await urlLayers(page)).has(DEFAULT_SURFACE), { timeout: 25_000 })
       .toBe(false);
     await expect
       .poll(async () => (await urlLayers(page)).has('heatrisk'), { timeout: 25_000 })
@@ -78,6 +76,7 @@ test.describe('UX-1 role groups and exclusive surfaces', () => {
   });
 
   test('an old multi-surface link keeps the first surface named (usdm before heatrisk)', async ({ page }) => {
+    // own-stub: a map frame fixture for this case's layers=usdm boot.
     await page.route('**/USDM_current/**', (route) =>
       route.fulfill({
         status: 200,
@@ -120,16 +119,16 @@ test.describe('UX-1 role groups and exclusive surfaces', () => {
     // Brief-mode catalog behind the console door).
     await gotoApp(page, '?view=console');
 
-    // The default surface (usdm, DR-270) is on and, once settled, carries a terminal status pill.
-    await waitForLayerSettled(page, 'usdm');
-    await expect(layerPill(page, 'usdm')).not.toBeEmpty();
+    // The default surface (DR-270) is on and, settled under gotoApp's
+    // boot-idle wait, carries a terminal status pill.
+    await expect(layerPill(page, DEFAULT_SURFACE)).not.toBeEmpty();
 
     // Turning on another surface deactivates it; an off layer has no load
     // status, so its pill returns to the empty pre-activation state.
     await layerCheckbox(page, 'heatrisk').check();
     await expect(layerPill(page, 'heatrisk')).toHaveText(PILL.live);
     await expect(layerCheckbox(page, 'heatrisk')).toBeChecked();
-    await expect(layerPill(page, 'usdm')).toBeEmpty();
+    await expect(layerPill(page, DEFAULT_SURFACE)).toBeEmpty();
   });
 });
 

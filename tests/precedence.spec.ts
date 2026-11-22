@@ -425,6 +425,7 @@ async function installRawBootStubs(page: Page): Promise<void> {
   await stubCpcSeasonalTempOutlook(page);
   await stubSpcFireOutlook(page);
   await installDefaultNifcStub(page, 'fixture');
+  // own-stub: a raw boot installs the default stubs by hand; this is the NADM one.
   await page.route('**/NADM-current.geojson', (route) =>
     route.fulfill({
       status: 200,

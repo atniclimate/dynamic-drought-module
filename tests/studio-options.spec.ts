@@ -2,6 +2,7 @@ import { expect, test, type Page } from './offline-test';
 
 import { LAYER_DEFS, LAYER_ROLE_ORDER } from '../src/config/layers';
 import { gotoApp, urlLayers } from './helpers';
+import { DEFAULT_SURFACE } from './defaults';
 import { stubCpcDroughtOutlook } from './cpc-outlook-fixtures';
 import { stubWildfireFeeds } from './wildfire-fixtures';
 import { stubHeatRiskCatalog } from './helpers';
@@ -88,14 +89,9 @@ async function stubEveryStudioLayer(page: Page): Promise<void> {
   // exportImage) -- the SAME fixture the map layer's own activation reads.
   await stubHeatRiskCatalog(page);
 
-  // usdm: US Drought Monitor current-conditions FeatureServer.
-  await page.route('**/USDM_current/FeatureServer/0/query*', (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: 'application/geo+json',
-      body: JSON.stringify(EMPTY_FC)
-    })
-  );
+  // usdm: gotoApp's context default answers the US Drought Monitor
+  // (tests/usdm-fixtures.ts installDefaultUsdmStub): the map's frame read a
+  // D2 frame, a briefing read an empty collection.
 
   // gridded-index: the NOAA NIDIS gridded drought index tile server (an
   // info.json sidecar plus PNG tiles; src/layers/gridded-index.ts).
@@ -217,18 +213,18 @@ test.describe('LAYERS studio: every option exercised (owner-1c)', () => {
     await page.locator('#layers-studio-entry').click();
     await expect(page.locator(STUDIO)).toBeVisible();
 
-    // usdm is the default surface (DR-270); cdm-drought reads a bundled local
-    // artifact (public/data/cdm-drought-areas.json), so this swap needs no
-    // network stub at all.
-    await expect(studioCheckbox(page, 'usdm')).toBeChecked();
-    await expect.poll(async () => (await urlLayers(page)).has('usdm')).toBe(true);
+    // DEFAULT_SURFACE is the default surface (the weekly U.S. map since
+    // DR-270); cdm-drought reads a bundled local artifact
+    // (public/data/cdm-drought-areas.json), so this swap needs no network stub.
+    await expect(studioCheckbox(page, DEFAULT_SURFACE)).toBeChecked();
+    await expect.poll(async () => (await urlLayers(page)).has(DEFAULT_SURFACE)).toBe(true);
 
     await studioCheckbox(page, 'cdm-drought').check();
 
     await expect(studioCheckbox(page, 'cdm-drought')).toBeChecked();
-    await expect(studioCheckbox(page, 'usdm')).not.toBeChecked();
+    await expect(studioCheckbox(page, DEFAULT_SURFACE)).not.toBeChecked();
     await expect.poll(async () => (await urlLayers(page)).has('cdm-drought')).toBe(true);
-    await expect.poll(async () => (await urlLayers(page)).has('usdm')).toBe(false);
+    await expect.poll(async () => (await urlLayers(page)).has(DEFAULT_SURFACE)).toBe(false);
   });
 
   test('Layer details and each source group open their content', async ({ page }) => {
@@ -332,13 +328,7 @@ test.describe('PLACE studio: every rail kind exercised (owner-1c)', () => {
         })
       })
     );
-    await page.route('**/USDM_current/FeatureServer/0/query*', (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/geo+json',
-        body: JSON.stringify(EMPTY_FC)
-      })
-    );
+    // The US Drought Monitor's briefing reads get gotoApp's default empty collection.
     await page.route('**/WFIGS_Interagency_Perimeters_Current/**', (route) =>
       route.fulfill({ contentType: 'application/geo+json', body: JSON.stringify(EMPTY_FC) })
     );

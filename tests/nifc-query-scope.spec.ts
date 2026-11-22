@@ -613,13 +613,7 @@ const WASHINGTON_BRIEFING_BBOX = leafletBoundsToMapLibre(REGIONS.washington_stat
  * Matches `tests/briefing-matrix.spec.ts`'s own `stubBaselineBriefingHosts`,
  * restated rather than imported (that helper is private to that file). */
 async function stubOtherBriefingLanes(page: Page): Promise<void> {
-  await page.route('**/USDM_current/FeatureServer/0/query?*', (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: 'application/geo+json',
-      body: JSON.stringify({ type: 'FeatureCollection', features: [] })
-    })
-  );
+  // The weekly map's briefing reads get gotoApp's default empty collection (tests/usdm-fixtures.ts).
   await page.route('https://api.weather.gov/alerts/active?*', (route) =>
     route.fulfill({
       status: 200,

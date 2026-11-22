@@ -76,8 +76,8 @@ test.describe('U4g: terrain shading', () => {
       }
     });
 
+    // gotoApp's boot-idle wait settles the default surface.
     await gotoApp(page, '?view=console&basemap=satellite');
-    await waitForLayerSettled(page, 'usdm');
     // Hillshade is default-on since E1 deliverable 4, so the combination
     // stacks at boot; settle it rather than re-toggling.
     await expect(layerCheckbox(page, 'hillshade')).toBeChecked();

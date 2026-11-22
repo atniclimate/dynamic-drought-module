@@ -2,7 +2,7 @@ import { expect, test, type Page } from './offline-test';
 
 import { FRAMINGS, type FramingKey } from '../src/config/framings';
 import { HAZARD_CLUSTERS, HAZARD_CLUSTER_KEYS } from '../src/config/clusters';
-import { keyForGeography } from '../src/state/cluster-service';
+import { modeLayers } from './defaults';
 import { TRIBAL_NATIONS_GROUP } from '../src/config/layer-groups';
 import { gotoApp, search, stubHeatRiskCatalog, urlLayers, waitForLayerSettled } from './helpers';
 import { stubRecentSatellite } from './satellite-fixture';
@@ -564,8 +564,7 @@ test.describe('studio URL precedence matrix', () => {
         await gotoApp(page, query);
         // The boot is in the default United States geography, where a recipe
         // surface with a United States stand-in draws the stand-in (DR-270).
-        const recipeKey = HAZARD_CLUSTERS[cluster].recipes.current[0];
-        const settleKey = recipeKey === undefined ? undefined : keyForGeography(cluster, recipeKey, true);
+        const settleKey = modeLayers(cluster, 'current')[0];
         if (settleKey) await waitForLayerSettled(page, settleKey);
         const button = page.locator(`.shell-cluster-btn[data-cluster="${cluster}"]`);
         await expect(button, `${cluster}: pressed before the studio`).toHaveAttribute(

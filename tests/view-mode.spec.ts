@@ -196,6 +196,7 @@ test.describe('U1 the two doors (view mode)', () => {
     await stubRecentSatellite(page);
     // This boot uses a raw goto, so no default stub applies. The default
     // surface is the weekly U.S. map (DR-270), so stub its service.
+    // own-stub: a raw goto gets no default stub, so this boot brings its own frame.
     await page.route('**/USDM_current/**', (route) =>
       route.fulfill({
         status: 200,

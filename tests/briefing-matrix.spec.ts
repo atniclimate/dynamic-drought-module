@@ -45,13 +45,7 @@ function collection(features: unknown[]): string {
  * the briefing never reaches a live agency (S17's lesson).
  */
 async function stubBaselineBriefingHosts(page: Page): Promise<void> {
-  await page.route('**/USDM_current/FeatureServer/0/query?*', (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: 'application/geo+json',
-      body: collection([])
-    })
-  );
+  // The weekly map's briefing reads get gotoApp's default empty collection (tests/usdm-fixtures.ts).
   await page.route('**/WFIGS_Interagency_Perimeters_Current/**', (route) =>
     route.fulfill({
       status: 200,
