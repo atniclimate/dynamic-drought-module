@@ -88,9 +88,9 @@ export interface MinimapWildfireSummary {
   readonly whpCoverage: MinimapWhpFramingSummary['coverage'];
   /** Absent for a framing outside British Columbia; null when the BC read failed (never read as zero). */
   readonly bcwsPerimeterCount?: number | null;
-  /** Fire areas that joined a BC and a NIFC perimeter into one count; above zero, the count carries the ratified label. */
+  /** Fire areas that joined a BC and a NIFC perimeter into one count; above zero, the shading count is one fire area per pair (no text states it, DR-281). */
   readonly fireAreasMerged?: number;
-  /** NIFC's own count, present only when its overlap with BC could not be established; each agency's count is then stated apart. */
+  /** NIFC's own count, present only when its overlap with BC could not be established; the shading then follows the larger agency count and no sum is made. */
   readonly nifcPerimeterCount?: number;
 }
 
@@ -436,6 +436,82 @@ export function mappedWildfireFillOpacity(count: number): number {
     if (count >= tier.min) opacity = tier.opacity;
   }
   return opacity;
+}
+
+function whpScope(summary: MinimapWildfireSummary): string {
+  if (summary.whpCoverage === 'live-partial') {
+    return 'The WHP percentage covers only the United States portion of this cross-border framing.';
+  }
+  if (summary.whpCoverage === 'no-data') {
+    return 'The United States WHP raster does not cover this framing.';
+  }
+  return 'The WHP percentage covers the United States land in this framing.';
+}
+
+/**
+ * One framing's wildfire sentence for the minimap's accessible name (DR-281).
+ * It states no number of fires: the count above is the number that drives the
+ * region's shade and is never put into words here. A region where perimeters
+ * were found says so in words for a reader the shading does not reach. `check`
+ * is the already formatted browser check time.
+ */
+export function minimapWildfireDescription(
+  status: MinimapWildfireSnapshot['status'],
+  summary: MinimapWildfireSummary | undefined,
+  check: string,
+): string {
+  if (status === 'loading' || status === 'idle') {
+    return 'Current mapped wildfire perimeter summary loading.';
+  }
+  // DRAFT wording (DR-177): a framing that reaches British Columbia names both agencies.
+  const agencies = summary?.bcwsPerimeterCount === undefined ? 'NIFC' : 'NIFC or BC Wildfire Service';
+  if (!summary || summary.status === 'unavailable') {
+    return (
+      `Current mapped ${agencies} wildfire perimeter summary unavailable. ` +
+      'Static Wildfire Hazard Potential is not substituted when the current-fire check is unresolved.'
+    );
+  }
+
+  if (summary.condition === 'mapped-wildfire') {
+    const bcMissing = summary.bcwsPerimeterCount === null ? '; BC Wildfire Service perimeters were unavailable' : '';
+    return (
+      `Current mapped ${agencies} wildfire perimeters intersect this authored framing${bcMissing}; ` +
+      `prescribed fire is excluded; browser checked ${check}. ` +
+      'This is mapped-perimeter evidence, not a count of every active wildfire.'
+    );
+  }
+
+  const noMappedPerimeter =
+    `No current mapped ${agencies} wildfire perimeter intersected this authored framing when the browser checked ${check}. `;
+  if (summary.condition === 'no-data') {
+    return (
+      noMappedPerimeter +
+      'No United States Forest Service WHP 2023 fallback covers this framing. This does not establish that no wildfire exists.'
+    );
+  }
+
+  const high = summary.highOrVeryHighPercent ?? 0;
+  const moderate = summary.moderateOrHigherPercent ?? 0;
+  const scope = whpScope(summary);
+  const qualification =
+    // vocab-allow: honesty disclaimer denying that static WHP is a forecast
+    'WHP 2023 is static strategic landscape potential, not current fire conditions or a forecast.';
+  if (summary.condition === 'high-potential') {
+    return (
+      noMappedPerimeter +
+      `Approximately ${high}% of classified WHP land is High or Very High, above the strict 50% threshold. ${scope} ${qualification}`
+    );
+  }
+  if (summary.condition === 'moderate-potential') {
+    return (
+      noMappedPerimeter +
+      `Approximately ${moderate}% of classified WHP land is Moderate, High, or Very High, above the strict 30% threshold; High or Very High is ${high}%. ${scope} ${qualification}`
+    );
+  }
+  return (
+    noMappedPerimeter +
+    `High or Very High WHP is ${high}%, and Moderate or higher is ${moderate}%; neither strict display threshold is exceeded. ${scope} ${qualification}`
+  );
 }
 
 /**

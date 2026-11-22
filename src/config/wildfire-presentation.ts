@@ -636,11 +636,6 @@ export function buildFireAreaClaim(count: number): string {
   return `${count} fire ${count === 1 ? 'area' : 'areas'} in ${NIFC_AREA_QUERY_EXTENT} from NIFC WFIGS and BC Wildfire Service perimeters; ${OVERLAP_COUNT_LABEL}.`;
 }
 
-/** A minimap framing where no overlap between the agencies can be established: each count apart, none combined (DRAFT wording, DR-177). */
-export function buildAgencyCountsApart(nifc: number, bcws: number): string {
-  return `${nifc} current mapped NIFC wildfire ${nifc === 1 ? 'perimeter' : 'perimeters'} and ${bcws} current mapped BC Wildfire Service wildfire ${bcws === 1 ? 'perimeter' : 'perimeters'} intersect this authored framing; each agency is counted on its own because overlaps between them are not checked here`;
-}
-
 export type HmsDensityClass = 'Light' | 'Medium' | 'Heavy' | 'Unknown';
 
 /** A warm taupe ramp (owner palette, 2026-10-19), darker with density and carried with opacity, and an explicit neutral fallback. */

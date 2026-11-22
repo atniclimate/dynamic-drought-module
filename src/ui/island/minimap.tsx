@@ -104,6 +104,7 @@ import {
   MINIMAP_WILDFIRE_COUNT_TIERS,
   getMinimapWildfireSnapshot,
   mappedWildfireFillOpacity,
+  minimapWildfireDescription,
   retainMinimapWildfire,
 } from '../../state/minimap-wildfire';
 import type {
@@ -118,7 +119,6 @@ import {
 } from '../../state/minimap-outlook';
 import type { MinimapOutlookSnapshot } from '../../state/minimap-outlook';
 import type { EnsoPhaseLabel } from '../../impact/enso';
-import { OVERLAP_COUNT_LABEL, buildAgencyCountsApart } from '../../config/wildfire-presentation';
 import { fitFraming, fitOcean } from '../../map/camera-fit';
 import { requestBasemapMode } from '../../map/basemap-switcher';
 import { defaultBasemapFor } from '../../state/basemap-store';
@@ -380,81 +380,6 @@ function checkedTimeLabel(checkedAtUtc: string | null): string {
   if (checkedAtUtc === null) return 'at an unavailable check time';
   // The house date token, as the Wildfire time statement writes the same browser check.
   return dateTok(checkedAtUtc);
-}
-
-function whpScope(summary: MinimapWildfireSummary): string {
-  if (summary.whpCoverage === 'live-partial') {
-    return 'The WHP percentage covers only the United States portion of this cross-border framing.';
-  }
-  if (summary.whpCoverage === 'no-data') {
-    return 'The United States WHP raster does not cover this framing.';
-  }
-  return 'The WHP percentage covers the United States land in this framing.';
-}
-
-function wildfireDescription(
-  status: MinimapWildfireSnapshot['status'],
-  summary: MinimapWildfireSummary | undefined,
-  checkedAtUtc: string | null,
-): string {
-  if (status === 'loading' || status === 'idle') {
-    return 'Current mapped wildfire perimeter summary loading.';
-  }
-  // DRAFT wording (DR-177): a framing that reaches British Columbia names both agencies.
-  const agencies = summary?.bcwsPerimeterCount === undefined ? 'NIFC' : 'NIFC or BC Wildfire Service';
-  if (!summary || summary.status === 'unavailable') {
-    return (
-      `Current mapped ${agencies} wildfire perimeter summary unavailable. ` +
-      'Static Wildfire Hazard Potential is not substituted when the current-fire check is unresolved.'
-    );
-  }
-
-  const check = checkedTimeLabel(checkedAtUtc);
-  const perimeterCount = summary.mappedWildfirePerimeterCount ?? 0;
-  if (summary.condition === 'mapped-wildfire') {
-    const merged = (summary.fireAreasMerged ?? 0) > 0 ? `; ${OVERLAP_COUNT_LABEL}` : '';
-    const bcMissing = summary.bcwsPerimeterCount === null ? '; BC Wildfire Service perimeters were unavailable' : '';
-    // Where no overlap could be established, each agency's count stands apart and none is combined.
-    const counted = summary.nifcPerimeterCount !== undefined && typeof summary.bcwsPerimeterCount === 'number'
-      ? buildAgencyCountsApart(summary.nifcPerimeterCount, summary.bcwsPerimeterCount)
-      : `${perimeterCount} current mapped ${agencies} wildfire ${perimeterCount === 1 ? 'perimeter intersects' : 'perimeters intersect'} this authored framing${merged}${bcMissing}`;
-    return (
-      `${counted}; prescribed fire is excluded; browser checked ${check}. ` +
-      'This is mapped-perimeter evidence, not a count of every active wildfire.'
-    );
-  }
-
-  const noMappedPerimeter =
-    `No current mapped ${agencies} wildfire perimeter intersected this authored framing when the browser checked ${check}. `;
-  if (summary.condition === 'no-data') {
-    return (
-      noMappedPerimeter +
-      'No United States Forest Service WHP 2023 fallback covers this framing. This does not establish that no wildfire exists.'
-    );
-  }
-
-  const high = summary.highOrVeryHighPercent ?? 0;
-  const moderate = summary.moderateOrHigherPercent ?? 0;
-  const scope = whpScope(summary);
-  const qualification =
-    // vocab-allow: honesty disclaimer denying that static WHP is a forecast
-    'WHP 2023 is static strategic landscape potential, not current fire conditions or a forecast.';
-  if (summary.condition === 'high-potential') {
-    return (
-      noMappedPerimeter +
-      `Approximately ${high}% of classified WHP land is High or Very High, above the strict 50% threshold. ${scope} ${qualification}`
-    );
-  }
-  if (summary.condition === 'moderate-potential') {
-    return (
-      noMappedPerimeter +
-      `Approximately ${moderate}% of classified WHP land is Moderate, High, or Very High, above the strict 30% threshold; High or Very High is ${high}%. ${scope} ${qualification}`
-    );
-  }
-  return (
-    noMappedPerimeter +
-    `High or Very High WHP is ${high}%, and Moderate or higher is ${moderate}%; neither strict display threshold is exceeded. ${scope} ${qualification}`
-  );
 }
 
 /**
@@ -726,10 +651,10 @@ function accessibleName(
           drought.analysisMaskMissing,
         )
       : reading?.rule === 'nifc-perimeter-count'
-        ? wildfireDescription(
+        ? minimapWildfireDescription(
             wildfire.status,
             wildfire.summaries[key],
-            wildfire.checkedAtUtc,
+            checkedTimeLabel(wildfire.checkedAtUtc),
           )
         : reading?.rule === 'classes-drawn'
           ? outlookFramingWords(
