@@ -469,19 +469,19 @@ Use `npm run gate` when build or cross-cutting configuration changes need it;
 reuse its CI evidence instead of adding a duplicate local gate.
 `npm run verify:smoke` is GitHub's, not a local step.
 
-The full browser suite runs on GitHub in the `Validate` workflow. When integration
-is needed and no matching run exists, start it on a branch without an open pull
-request with `gh workflow run validate.yml --ref <branch>`. That full run supplies
-application integration evidence. Partway through a block, a
+The full browser suite runs on GitHub in the `Validate` workflow. Open the draft
+pull request at the block's first commit; its run is the integration evidence.
+Only a branch with no pull request needs `gh workflow run validate.yml --ref
+<branch>`. That full run supplies application integration evidence. Partway through a block, a
 targeted run of the block's own specs (`npm run spec:impact -- --dispatch`
 after a push; it refuses an empty list, which would be the full run) answers
 in about five minutes and its run name says it is not a landing run. Before
 the full dispatch, `npm run spec:impact` must show no spec still naming text
 the block deleted everywhere (it does not catch text moved or reworded; its
 fixed cross-cutting specs for shared style, key, dock, minimap and test-seam
-changes are a guess at ownership, not a dependency graph). Choose a focused local
-`npm run test:touched` or targeted GitHub run when needed; reuse passing evidence
-instead of requiring both before integration. The testing guide's "Iteration and
+changes are a guess at ownership, not a dependency graph). Before every push run
+`npm run check:push`; after a red, `npm run spec:impact -- --red` re-runs here the
+cases that failed. The testing guide's "Iteration and
 session closeout" explains the choices. Proxy-only pull requests run the proxy
 typecheck, audit and client-contract/receipt tests; docs outside the artifact
 report Validate without application jobs. Named browser dispatches skip the
@@ -507,12 +507,6 @@ tree already satisfies is held at zero, and the thirteen rules that fire today
 are switched off in `biome.jsonc` with their measured count and the reason
 beside each. Burning those down, and widening the command to `tests/`, is
 DDM-P15-T05.
-
-Run the fire and 3D specs directly when fire or 3D changed (about 20 min):
-
-```powershell
-npx playwright test --workers=1 tests/fire3d-mode.spec.ts tests/view-contracts.spec.ts
-```
 
 Only one Playwright run at a time: the preview server pins port 4173. If a
 killed run leaves the port held, Playwright refuses to start; find and stop
@@ -711,18 +705,18 @@ Local commits are not yet delivered: compare pending work with freshly fetched
 Updating remote main requires an authorized push or merge; the live receipt identifies
 what was actually published. A review branch, when needed, does not replace the daily
 checkout. An already integrated, revision-verified candidate needs no new release.
-`validate.yml` is `on: pull_request`, so a branch without an open pull request
-runs no CI on push; start it by hand with `gh workflow run validate.yml --ref
-<branch>` when full integration is needed. While developing, run the focused
-checks for the change. Commit and push pieces without repeating checks that
-already passed. Inspect changed interface modes once per coherent feature;
+`validate.yml` is `on: pull_request` (drafts included), so the draft pull request
+opened at the block's first commit is what tests each push; a branch with none
+runs no CI and is started by hand with `gh workflow run validate.yml --ref
+<branch>`. While developing, run the focused
+checks for the change; `npm run check:push` before every push. Inspect changed
+interface modes once per coherent feature;
 GitHub's integration run supplies the gate, without a mandatory local duplicate.
 A finished feature block needs a clear delivery state; it does not automatically
 require a full suite, fresh review, version bump, data rebuild or publication.
-Carry out an already-authorized landing or record the candidate as ready with its
-next action before stacking unrelated work. Full integration belongs at a real
-integration/release boundary or a specific broad regression risk. Explain its scope
-first. The full browser suite runs on GitHub in fourteen shards for that candidate.
+Nothing new is started on a pull request that is red. A pull request's own run
+needs no explanation; a hand dispatch does. The full browser suite runs on GitHub
+in fourteen shards for that candidate.
 Reuse passing evidence when source, dependencies, configuration, relevant inputs and
 main base match; do not dispatch a duplicate. An open PR, including a draft,
 already triggers validation on pushes, so inspect existing runs first; a
