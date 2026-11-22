@@ -212,6 +212,7 @@ test.describe('the Tribal Nations umbrella (console catalog)', () => {
     }
     await expect(page.locator(COUNT)).toHaveText('0 of 2 selected');
     await expect(cta).toHaveAttribute('aria-pressed', 'false');
+    // spec-impact: intended, the umbrella's name is composed in src/ui/island/catalog.tsx; only the Brief copy left.
     await expect(cta).toHaveAccessibleName('Show Tribal Nations layers');
     await expect(cta).toHaveAccessibleDescription(TRIBAL_NATIONS_GROUP.actionDescription);
 
@@ -498,6 +499,7 @@ test.describe('the Tribal Nations controls at 400px (mobile and embed)', () => {
     await expect(page.locator('#app')).toHaveAttribute('data-sheet-detent', 'full');
     const cta = page.locator(CTA);
     await expect(cta).toBeVisible();
+    // spec-impact: intended, the umbrella's name is composed in src/ui/island/catalog.tsx; only the Brief copy left.
     await expect(cta).toHaveAccessibleName('Show Tribal Nations layers');
 
     await cta.click();
