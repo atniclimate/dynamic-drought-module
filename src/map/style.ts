@@ -6,12 +6,15 @@ import { BOOT_URLS } from '../config/urls-boot';
 import {
   BASE_GLACIER_COLOR,
   BASE_LAND_COLOR,
+  BASE_PLACE_LABEL_COLOR,
   BASE_REGION_LINE_COLOR,
   BASE_WATER_LABEL_COLOR,
   MAP_GROUND_COLOR,
+  MAP_LABEL_CUSHION,
   NATION_NAME_FONT,
   PLACE_LABEL_COLOR,
   PLACE_LABEL_HALO,
+  REGION_LABEL_COLOR,
   STATE_OUTLINE_COLOR
 } from '../config/interface-tokens';
 import { ROAD_CLASS_COLORS } from '../config/palette';
@@ -54,7 +57,8 @@ const placeLayer = (id: string, source: string): maplibregl.SymbolLayerSpecifica
     'text-padding': 12,
     'text-max-width': 8
   },
-  paint: { 'text-color': PLACE_LABEL_COLOR, 'text-halo-color': PLACE_LABEL_HALO, 'text-halo-width': 1.4 }
+  // A soft cushion, not an outline (owner, 2026-11-22): the blur leaves no drawn edge on the dark ground.
+  paint: { 'text-color': BASE_PLACE_LABEL_COLOR, 'text-halo-color': MAP_LABEL_CUSHION, 'text-halo-width': 1.4, 'text-halo-blur': 1 }
 });
 
 /** Peak names in a warm grey, so a summit never reads as a water name. */
@@ -287,8 +291,9 @@ export function buildBaseStyle(): maplibregl.StyleSpecification {
         minzoom: 3.5,
         maxzoom: 7.5,
         layout: quietCapitals(['interpolate', ['linear'], ['zoom'], 3.5, 9.5, 6, 12], 0.25),
-        // Quiet by the muted ink, not by transparency: 5.11:1 on land (design pass 2026-11-13).
-        paint: { 'text-color': BASE_WATER_LABEL_COLOR, 'text-halo-color': MAP_GROUND_COLOR, 'text-halo-width': 1 }
+        // Translucent grey capitals on a blurred cushion, no drawn outline (owner, 2026-11-22). At the cushion's
+        // core: 10.0:1 on land, 6.3:1 over Drought Monitor D0 yellow, 6.1:1 over white cloud.
+        paint: { 'text-color': REGION_LABEL_COLOR, 'text-halo-color': MAP_LABEL_CUSHION, 'text-halo-width': 1.5, 'text-halo-blur': 1.5 }
       },
       waterLabelLayer('base-world-water-label', WORLD),
       waterLabelLayer('base-water-label', NA),

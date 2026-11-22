@@ -27,7 +27,7 @@ import type * as maplibregl from 'maplibre-gl';
 import type { FeatureCollection } from 'geojson';
 
 import { URLS } from '../config/urls';
-import { PLACE_LABEL_COLOR, PLACE_LABEL_HALO } from '../config/palette';
+import { BASE_PLACE_LABEL_COLOR, MAP_LABEL_CUSHION } from '../config/interface-tokens';
 import { registerClickTarget } from '../map/interaction-coordinator';
 import type { IssuedModel, PopupClock } from '../ui/popup-frame';
 import { fetchBufferedWithBudget } from '../util/fetch';
@@ -157,11 +157,14 @@ export async function activate(map: maplibregl.Map): Promise<void> {
       'text-padding': 6,
       'text-max-width': 8
     },
+    // The base map's city names exactly (src/map/style.ts placeLayer; owner, 2026-11-22: readable
+    // names, no drawn outline): brighter text on a soft dark cushion that carries the contrast over
+    // both basemaps and the Drought Monitor fills without an edge on the dark ground.
     paint: {
-      'text-color': PLACE_LABEL_COLOR,
-      // The halo carries the both-basemaps contrast (the corpus rule).
-      'text-halo-color': PLACE_LABEL_HALO,
-      'text-halo-width': 1.4
+      'text-color': BASE_PLACE_LABEL_COLOR,
+      'text-halo-color': MAP_LABEL_CUSHION,
+      'text-halo-width': 1.4,
+      'text-halo-blur': 1
     }
   });
 

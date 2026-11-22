@@ -28,11 +28,14 @@ test('D3 M5 actual map ground, place label and state outline use adopted neutral
       label: map.getPaintProperty('us-places-labels', 'text-color'),
       halo: map.getPaintProperty('us-places-labels', 'text-halo-color'),
       haloWidth: map.getPaintProperty('us-places-labels', 'text-halo-width'),
+      haloBlur: map.getPaintProperty('us-places-labels', 'text-halo-blur'),
       state: map.getPaintProperty('us-states-outline', 'line-color'),
       cssGround: getComputedStyle(document.documentElement).getPropertyValue('--surface-base').trim().toUpperCase(),
       cssShade: getComputedStyle(document.documentElement).getPropertyValue('--surface-overlay').trim().toUpperCase()
     };
   });
-  expect(colors).toEqual({ ground: '#010B13', label: '#C6CBD4', halo: '#010B13',
-    haloWidth: 1.4, state: '#8A94A6', cssGround: '#010B13', cssShade: '#1E242C' });
+  // The Places layer's names match the base map's city names: brighter text on a soft cushion, no drawn
+  // outline (owner, 2026-11-22; src/config/interface-tokens.ts BASE_PLACE_LABEL_COLOR, MAP_LABEL_CUSHION).
+  expect(colors).toEqual({ ground: '#010B13', label: '#E8ECF0', halo: 'rgba(1, 11, 19, 0.8)',
+    haloWidth: 1.4, haloBlur: 1, state: '#8A94A6', cssGround: '#010B13', cssShade: '#1E242C' });
 });

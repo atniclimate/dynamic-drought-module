@@ -71,7 +71,11 @@ export const BOTTOM_STACK_IDS: readonly string[] = [
 
 /** Reference label layers that always read above every data layer, bottom to top. MapLibre
  * places the topmost first, so the Nations' names on the Tribal Lands layer
- * (src/layers/aiannh.ts, mirrored literal) win a collision with a city name. */
+ * (src/layers/aiannh.ts, mirrored literal) win a collision with a city name.
+ * State and province names sit above the base map's city names (owner, 2026-11-22: state names
+ * hard to read): placed after the cities, they lost nearly every collision from zoom 4, where the
+ * city list grows from about 16 to about 60 names, and only 8 of 52 stayed on screen. Their own
+ * zoom range (3.5 to 7.5) ends before the Tribal detail names begin. */
 export const TOP_LABEL_IDS: readonly string[] = [
   'base-river-label',
   'base-road-label',
@@ -83,12 +87,12 @@ export const TOP_LABEL_IDS: readonly string[] = [
   'tribal-waterbodies-label',
   'base-range-label',
   'base-peak',
-  'base-region-label',
   'base-world-water-label',
   'base-water-label',
   'tribal-communities-label',
   'base-world-place',
   'base-place',
+  'base-region-label',
   'us-places-labels',
   'aiannh-nation-labels'
 ];

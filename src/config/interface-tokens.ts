@@ -19,6 +19,13 @@ export const NATION_NAME_FONT = 'DDM Nation Names';
 // were the loudest marks on the map, made for the retired raster ground.
 export const PLACE_LABEL_COLOR = '#C6CBD4'; // app.css --ink-soft
 export const PLACE_LABEL_HALO = '#010B13'; // app.css --surface-base
+// The base map's own names (owner, 2026-11-22: state text hard to read; "outline free capitalized
+// transparent grey type"). No drawn outline: a soft dark cushion under each name, invisible on the dark
+// ground, darkens a Drought Monitor yellow or a bright cloud just enough to carry the letters. States in
+// translucent grey capitals, cities in brighter sentence case, so a city never reads as a state.
+export const MAP_LABEL_CUSHION = 'rgba(1, 11, 19, 0.8)'; // app.css --surface-base at 80 percent
+export const REGION_LABEL_COLOR = 'rgba(198, 203, 212, 0.92)'; // app.css --ink-soft at 92 percent
+export const BASE_PLACE_LABEL_COLOR = '#E8ECF0'; // app.css --ink
 export const STATE_OUTLINE_COLOR = '#8A94A6'; // app.css --ink-faint
 export const BASE_LAND_COLOR = '#1E242C'; // app.css --surface-overlay
 export const BASE_GLACIER_COLOR = '#2A3138'; // app.css --surface-hover
