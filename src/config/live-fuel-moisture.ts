@@ -3,7 +3,7 @@
  * how the values are drawn, and every public string, in this one place.
  *
  * The source. Eight-day maps of live fuel moisture content (the water in
- * living plants as a percentage of their dry weight) for the western United
+ * living plants as a percentage of their dry mass) for the western United
  * States, estimated from Suomi NPP VIIRS reflectance, daily weather and
  * terrain by the models of Pampanoni, Chuvieco, Ferrari, Laneve and Saquella
  * (2026), "A Unified Multisensor Machine-Learning Framework for Live Fuel
@@ -80,8 +80,8 @@ export const LFMC_LAYER_MIN_COVERAGE = 0.5;
  * The 3D ground: white at a per-class alpha, whiter where living plants hold
  * less water, the same direction as the plant-stress ground and the fuel-risk
  * drape (DR-199). The class edges are the tick marks of the publisher's own
- * colour scale (30, 60, 100, 150, 200); they are display steps, not fire-danger
- * thresholds, and the authors say their display limits define none. The alphas
+ * colour scale (30, 60, 100, 150, 200); the classes between them are DDM's,
+ * display steps and not fire-danger thresholds. The alphas
  * run from 40 percent white to a 4 percent lift in even steps, as the other
  * two grounds do. A DDM display derivation (method M-115).
  */
@@ -149,17 +149,19 @@ export const LFMC_BRIEFING = {
 } as const;
 
 /**
- * Public wording. DRAFT until the owner reads it (new public scientific
- * wording is the owner's call): the key's lines, the layer's name and the
- * briefing's sentences and notes.
+ * Public wording. The wording follows the references-ledger entry
+ * `eosial-lfmc-western-us` (clause verdicts read 2026-11-22) and is still a
+ * DRAFT until the owner reads it (new public scientific wording is the owner's
+ * call): the key's lines, the layer's name and the briefing's sentences and
+ * notes.
  */
 export const LFMC_TEXT = {
   name: 'Live fuel moisture',
-  groundTitle: 'Live fuel moisture (% of dry weight), whiter is drier',
-  flatTitle: 'Live fuel moisture (% of dry weight)',
-  noValue: 'No value shown (cloud, snow, or land the model does not cover)',
-  definition: 'Water in living plants as a percentage of their dry weight, estimated from satellite, weather and terrain data.',
-  coverage: 'Coverage: western United States, 29°N to 51°N and 128°W to 101°W.',
+  groundTitle: 'Live fuel moisture (% of dry mass), whiter is drier',
+  flatTitle: 'Live fuel moisture (% of dry mass)',
+  noValue: 'No value shown (land the model does not cover, or satellite input missing or screened out)',
+  definition: 'Water in living plants as a percentage of their dry mass, estimated from satellite, weather and terrain data.',
+  coverage: 'Coverage: western United States, 29.2°N to 51.4°N and 127.9°W to 101.4°W.',
   unavailable: 'Live fuel moisture unavailable: the publisher\'s maps could not be read.',
   issuer: 'EOSIAL Laboratory, Sapienza University of Rome',
   source: 'EOSIAL Laboratory, Sapienza University of Rome (Pampanoni et al. 2026)',
@@ -167,6 +169,6 @@ export const LFMC_TEXT = {
   modelNote: 'A model estimate for land the model treats as grass, shrub or tree; not a field measurement.',
   // From the abstract of doi:10.3390/rs18213744, read 2026-11-21.
   accuracyNote: 'The authors test the models on dates held out from training at sites that also supplied training data, and report that "Testing at sites excluded from training gives lower accuracy."',
-  thresholdNote: 'The classes are display steps taken from the publisher\'s colour scale. The authors state that their display limits "do not define universal fire-danger thresholds."',
+  thresholdNote: 'The white shading and its classes are DDM\'s: display steps between the tick marks of the publisher\'s colour scale, not fire-danger thresholds.',
   termsNote: 'Used under the PolyForm Noncommercial License 1.0.0 and the publisher\'s Terms for Generated Maps and Model Outputs: non-commercial use, with attribution.'
 } as const;

@@ -87,7 +87,7 @@ export function buildLfmcClaims(
         text:
           `No live fuel moisture estimate ${where} in the ${reached.length === 1 ? 'newest map' : `${reached.length} newest maps`} ` +
           `(${lfmcDateSpan(first.start, last.endExclusive)}). ` +
-          'Cloud, snow, and land the model does not treat as grass, shrub or tree leave cells without a value.',
+          'A cell has no value where the publisher\'s model made no estimate: land it does not treat as grass, shrub or tree, or satellite input that was missing or screened out. No value is not zero.',
         dates: { retrieved },
         support: { native: LFMC_TEXT.nativeSupport, reporting }
       })
@@ -106,7 +106,7 @@ export function buildLfmcClaims(
     ? trendLineSvg(
         usable.map((row) => ({ t: Date.parse(row.map.start), v: row.reading.median })),
         {
-          title: `Live fuel moisture ${where}, percent of dry weight, ${lfmcDateSpan(usable[0]!.map.start, current.map.endExclusive)}`,
+          title: `Live fuel moisture ${where}, median percent of dry mass, ${lfmcDateSpan(usable[0]!.map.start, current.map.endExclusive)}`,
           yMax: 250,
           yLabel: 'Percent',
           source: LFMC_TEXT.issuer
@@ -118,13 +118,13 @@ export function buildLfmcClaims(
     makeClaim({
       ...common,
       text:
-        `Live fuel moisture ${where}: about ${median} percent of dry weight${spread}, ` +
+        `Live fuel moisture ${where}: about ${median} percent of dry mass${spread}, ` +
         `in the satellite-based estimate for ${lfmcDateSpan(current.map.start, current.map.endExclusive)}.${before} ` +
         'Lower values mean drier living plants.',
       dates: { valid: lastDay(current.map), retrieved },
       support: {
         native: LFMC_TEXT.nativeSupport,
-        effective: `median of the ${cellsWithValue.toLocaleString('en-US')} cells with a value, of ${cells.toLocaleString('en-US')} read, each about ${cellWidth} wide`,
+        effective: `median of the ${cellsWithValue.toLocaleString('en-US')} cells with a value, of ${cells.toLocaleString('en-US')} read, each about ${cellWidth} wide; computed by DDM from EOSIAL Laboratory maps`,
         reporting
       },
       uncertainty: { kind: 'not-quantified', text: `The maps carry no per-cell uncertainty. ${LFMC_TEXT.accuracyNote}` },

@@ -452,7 +452,8 @@ Nebraska-Lincoln)
   18(21), 3744. <https://doi.org/10.3390/rs18213744>. Models and tools:
   <https://github.com/valpamp/lfmc-multisensor>. Used under the PolyForm
   Noncommercial License 1.0.0 and the publisher's Terms for Generated Maps
-  and Model Outputs: non-commercial use, with attribution. The maps are
+  and Model Outputs: non-commercial use, with attribution. Copyright (c)
+  2026 Valerio Pampanoni. The maps are
   read live from the publisher's host; this project stores and
   redistributes none of them. A value is a model estimate for land the
   model treats as grass, shrub or tree, not a field measurement.

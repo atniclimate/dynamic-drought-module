@@ -32,6 +32,7 @@
 
 import { DDM_NOTICE_LABEL, RAWS_PUBLIC_VIEW_NOTICE } from './ddm-notice';
 import { GRANTS_GOV_ATTRIBUTION } from '../impact/grants';
+import { LIVE_FUEL_MOISTURE_LINKS } from './live-fuel-moisture';
 import type { ProductKey } from './products';
 
 /** Every row id, in no rendered order (the renderer groups and sorts). */
@@ -415,13 +416,24 @@ export const ACKNOWLEDGEMENTS: Readonly<Record<AcknowledgementId, Acknowledgemen
     licence: { name: 'Open Government Licence – British Columbia', url: OGL_BC_URL }
   },
   // The publisher of the live fuel moisture maps (src/config/live-fuel-moisture.ts).
-  // Name and licence only: a credit sentence waits for its references-ledger entry (DR-147).
+  // The credit sentence is the publisher's REQUIRED attribution (OUTPUT_TERMS.md section 2: attribution
+  // to the models and the repository), cited as the ledger entry `eosial-lfmc-western-us`
+  // (clause verdicts read 2026-11-22). The links mirror LIVE_FUEL_MOISTURE_LINKS.paper and .terms.
   'eosial-sapienza': {
     ...nameOnly(
       'eosial-sapienza',
       'EOSIAL Laboratory, School of Aerospace Engineering, Sapienza University of Rome',
       'partnerships-and-other'
     ),
+    credits: [
+      {
+        text:
+          'Live fuel moisture maps from the EOSIAL Laboratory, School of Aerospace Engineering, Sapienza University of Rome, made with the models of Pampanoni, V.; Chuvieco, E.; Ferrari, A.; Laneve, G.; Saquella, S. (2026). A Unified Multisensor Machine-Learning Framework for Live Fuel Moisture Content Retrieval. Remote Sensing, 18(21), 3744. https://doi.org/10.3390/rs18213744. Models and tools: https://github.com/valpamp/lfmc-multisensor. Copyright (c) 2026 Valerio Pampanoni. Used under the PolyForm Noncommercial License 1.0.0 and the Terms for Generated Maps and Model Outputs.',
+        html:
+          `Live fuel moisture maps from the EOSIAL Laboratory, School of Aerospace Engineering, Sapienza University of Rome, made with the models of Pampanoni, V.; Chuvieco, E.; Ferrari, A.; Laneve, G.; Saquella, S. (2026). A Unified Multisensor Machine-Learning Framework for Live Fuel Moisture Content Retrieval. Remote Sensing, 18(21), 3744. <a href="${LIVE_FUEL_MOISTURE_LINKS.paper}">${LIVE_FUEL_MOISTURE_LINKS.paper}</a>. Models and tools: <a href="https://github.com/valpamp/lfmc-multisensor">https://github.com/valpamp/lfmc-multisensor</a>. Copyright (c) 2026 Valerio Pampanoni. Used under the <a href="https://polyformproject.org/licenses/noncommercial/1.0.0">PolyForm Noncommercial License 1.0.0</a> and the <a href="${LIVE_FUEL_MOISTURE_LINKS.terms}">Terms for Generated Maps and Model Outputs</a>.`,
+        citeId: 'eosial-lfmc-western-us'
+      }
+    ],
     licence: { name: 'PolyForm Noncommercial License 1.0.0', url: 'https://polyformproject.org/licenses/noncommercial/1.0.0' }
   },
   'usdm-partners': {

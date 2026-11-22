@@ -249,13 +249,14 @@ test('the briefing states the newest comparable map, an earlier one beside it, a
   const [claim, ...rest] = impact.buildLfmcClaims(rows, 'across Example Reservation', 'Example Reservation', '2026-11-21');
   assert.equal(rest.length, 0);
   assert.equal(claim.text,
-    'Live fuel moisture across Example Reservation: about 92 percent of dry weight, with the middle half of the area ' +
+    'Live fuel moisture across Example Reservation: about 92 percent of dry mass, with the middle half of the area ' +
     'between 82 and 97, in the satellite-based estimate for Oct 16 to 23, 2026. In the estimate for Sep 30 to Oct 7, 2026 ' +
     'it was about 96. Lower values mean drier living plants.');
   assert.equal(claim.evidence, 'modeled-analysis');
   assert.equal(claim.product, 'live-fuel-moisture');
   assert.deepEqual(claim.dates, { valid: '2026-10-23', retrieved: '2026-11-21' });
-  assert.match(claim.support.effective, /^median of the 98 cells with a value, of 100 read, each about 400 m wide$/);
+  assert.match(claim.support.effective, /^median of the 98 cells with a value, of 100 read, each about 400 m wide; computed by DDM from EOSIAL Laboratory maps$/);
+  assert.match(claim.chartSvg, /Live fuel moisture across Example Reservation, median percent of dry mass, Sep 30 to Oct 23, 2026/);
   assert.equal(claim.uncertainty.kind, 'not-quantified');
   assert.equal(claim.method.basis, config.LFMC_TEXT.modelNote);
   assert.match(claim.chartSvg, /<svg/);
@@ -272,6 +273,8 @@ test('one comparable map states no earlier value and draws no chart; none states
     [row('2026-10-24', '2026-11-01', 0, Number.NaN), row('2026-11-01', '2026-11-09', 2, 70)],
     'across Example Reservation', 'Example Reservation', '2026-11-21');
   assert.match(absent.text, /^No live fuel moisture estimate across Example Reservation in the 2 newest maps \(Oct 24 to Nov 8, 2026\)\./);
+  assert.match(absent.text,
+    /\(Oct 24 to Nov 8, 2026\)\. A cell has no value where the publisher's model made no estimate: land it does not treat as grass, shrub or tree, or satellite input that was missing or screened out\. No value is not zero\.$/);
   assert.deepEqual(absent.dates, { retrieved: '2026-11-21' });
 
   assert.deepEqual(impact.buildLfmcClaims([row('2026-11-01', '2026-11-09', null, 0)], 'x', 'x', '2026-11-21'), []);
@@ -288,7 +291,7 @@ test('the briefing lane reads the list and the newest maps, and says nothing whe
     const result = await impact.fetchLiveFuelMoistureClaims(place(-119.7, 47.8, [WEST + 0.2, NORTH - 0.2, WEST + 0.3, NORTH - 0.1]), signal);
     assert.equal(result.ok, true);
     assert.equal(result.claims.length, 1);
-    assert.match(result.claims[0].text, /^Live fuel moisture across Example Reservation: about \d+ percent of dry weight/);
+    assert.match(result.claims[0].text, /^Live fuel moisture across Example Reservation: about \d+ percent of dry mass/);
 
     // Inside the publisher's box but off these two rasters: the maps do not reach it, so nothing is stated.
     const elsewhere = await impact.fetchLiveFuelMoistureClaims(place(-110, 40), signal);

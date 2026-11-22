@@ -56,7 +56,7 @@ test('the briefing states live fuel moisture for a place the maps reach, as mode
   await showFullDetail(page);
   const claim = panel.locator('.impact-claim-modeled-analysis', { hasText: 'Live fuel moisture across Washington' });
   await expect(claim).toHaveCount(1, { timeout: 20_000 });
-  await expect(claim).toContainText(/about \d+ percent of dry weight/);
+  await expect(claim).toContainText(/about \d+ percent of dry mass/);
   await expect(claim).toContainText('in the satellite-based estimate for Oct 24 to 31, 2026.');
   await expect(claim).toContainText('Lower values mean drier living plants.');
   await expect(claim).toContainText('Modeled analysis');

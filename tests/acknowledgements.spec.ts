@@ -61,7 +61,9 @@ const CITED = new Set<string>([
   'usgs-padus-4-1',
   'usfs-administrative-forest-boundaries',
   // How the Dams layer selects dams, verdicts read 2026-11-15.
-  'usace-national-inventory-of-dams'
+  'usace-national-inventory-of-dams',
+  // The live fuel moisture credit, verdicts read 2026-11-22.
+  'eosial-lfmc-western-us'
 ]);
 
 const DEPLOYER = { name: 'Fixture GIS office' };
