@@ -635,8 +635,9 @@ test.describe('the 2026-08-19 map chrome seats', () => {
     expect(Math.abs(satellite.right - reset.right)).toBeLessThanOrEqual(2);
 
     // Help sits under SAT in the same column since D1 M9 (2026-09-27;
-    // interface-chrome section 2.2, slot 3; it left the bottom-right corner,
-    // which the old wording here described). Its credits still render inside
+    // interface-chrome section 2.2; slot 3 then, slot 5 since the Layer and
+    // Place cells took slots 2 and 3 on 2026-11-22; it left the bottom-right
+    // corner, which the old wording here described). Its credits still render inside
     // its panel (owner direction 2026-08-31); the preview badge sits clear
     // of the scale bars since D1 M10 (found-019), no longer bottom centre.
     // No overlap.
@@ -761,16 +762,20 @@ test.describe('desktop Place and Layer cells in the map column (1440x900)', () =
   test.use({ viewport: { width: 1440, height: 900 } });
 
   // The two studio doors left the Brief column for the map's top-right column
-  // (owner, 2026-11-21 and 22): Place above Layer, under Share, in that
-  // column's cells and on its x. The Tribal Nations button left the main
-  // navigation the same day. The column's gap is --map-cell-gap, 4px.
-  test('in every hazard mode, Place and Layer stand under Share on the column\'s x, one gap apart', async ({
+  // (owner, 2026-11-21 and 22): slots 2 and 3 of the column, Layer above
+  // Place ("reset, layer, place, sat, help, share", 2026-11-22), under Reset
+  // and above SAT, in that column's cells and on its x. The Tribal Nations
+  // button left the main navigation the same day. The column's gap is
+  // --map-cell-gap, 4px.
+  test('in every hazard mode, Layer and Place stand under Reset and above SAT on the column\'s x, one gap apart', async ({
     page
   }) => {
     await gotoApp(page);
     await expect(page.locator('#brief-display #studio-entry-pair')).toHaveCount(0);
     await expect(page.locator('#brief-display .tribal-nations-brief-row')).toHaveCount(0);
     const share = page.locator('#share-btn');
+    const reset = page.locator('#reset-btn');
+    const sat = page.locator('#basemap-switcher-overlay-host .basemap-switcher-btn');
     const seat = page.locator('.map-overlay-controls > #map-studio-seat');
     const place = seat.locator('#place-studio-entry');
     const layer = seat.locator('#layers-studio-entry');
@@ -783,8 +788,19 @@ test.describe('desktop Place and Layer cells in the map column (1440x900)', () =
       await expect(chip).toHaveAttribute('aria-pressed', 'true');
       await expect(place).toBeVisible();
       await expect(layer).toBeVisible();
-      const [shareBox, placeBox, layerBox] = await Promise.all([rect(share), rect(place), rect(layer)]);
-      for (const [name, box, above] of [['Place', placeBox, shareBox], ['Layer', layerBox, placeBox]] as const) {
+      const [shareBox, resetBox, layerBox, placeBox, satBox] = await Promise.all([
+        rect(share),
+        rect(reset),
+        rect(layer),
+        rect(place),
+        rect(sat)
+      ]);
+      // Top to bottom: Reset, Layer, Place, SAT; each one gap under the cell above.
+      for (const [name, box, above] of [
+        ['Layer', layerBox, resetBox],
+        ['Place', placeBox, layerBox],
+        ['SAT', satBox, placeBox]
+      ] as const) {
         expect(Math.abs(box.left - shareBox.left), `${key}: ${name} is off the column's x`).toBeLessThanOrEqual(0.5);
         expect(Math.abs(box.right - shareBox.right), `${key}: ${name} is not the column's width`).toBeLessThanOrEqual(0.5);
         expect(

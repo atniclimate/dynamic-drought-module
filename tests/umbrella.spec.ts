@@ -455,11 +455,12 @@ test.describe('partial-outage visibility on mobile (390x844)', () => {
 });
 
 test.describe('the Brief main navigation (owner, 2026-11-21 and 22)', () => {
-  test('a bare desktop boot shows Place and Layer in the map column and no Tribal Nations button', async ({ page }) => {
+  test('a bare desktop boot shows Layer and Place in the map column and no Tribal Nations button', async ({ page }) => {
     await gotoApp(page);
     const pair = page.locator('.map-overlay-controls > #map-studio-seat #studio-entry-pair');
     await expect(pair).toBeVisible();
-    await expect(pair.locator('button')).toHaveText(['Place', 'Layer']);
+    // Layer above Place (owner, 2026-11-22: "reset, layer, place, sat, help, share").
+    await expect(pair.locator('button')).toHaveText(['Layer', 'Place']);
     await expect(page.locator('#brief-display #studio-entry-pair')).toHaveCount(0);
     await expect(page.locator('#brief-display .tribal-nations-brief-row')).toHaveCount(0);
     await expect(page.locator('#tribal-nations-brief-action')).toHaveCount(0);

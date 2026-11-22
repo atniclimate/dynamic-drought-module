@@ -11,7 +11,8 @@ test.describe('studio focus and geometry', () => {
     await page.setViewportSize({ width: 1280, height: 900 });
     await gotoApp(page, '?view=brief&layers=places');
 
-    // The openers are cells of the map's top-right column (owner, 2026-11-21 and 22).
+    // The openers are cells of the map's top-right column (owner, 2026-11-21 and 22);
+    // the column order is Reset, Layer, Place, SAT, Help, Share, so the pair is Layer then Place.
     const host = page.locator('.map-overlay-controls > #map-studio-seat');
     const pair = host.locator('#studio-entry-pair');
     const placeOpener = pair.locator('#place-studio-entry');
@@ -20,7 +21,7 @@ test.describe('studio focus and geometry', () => {
     await expect(placeOpener).toBeVisible();
     await expect(layersOpener).toBeVisible();
     expect(await pair.locator('button').evaluateAll((buttons) => buttons.map((button) => button.id)))
-      .toEqual(['place-studio-entry', 'layers-studio-entry']);
+      .toEqual(['layers-studio-entry', 'place-studio-entry']);
 
     await placeOpener.focus();
     await expect(placeOpener).toBeFocused();

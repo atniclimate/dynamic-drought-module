@@ -653,28 +653,9 @@ a:hover {
   grid-column: 1;
   grid-row: 1;
 }
-/* The adopted wordmark opens the About card without changing its button role. */
-.brand-seal {
-  appearance: none;
-  width: auto;
-  height: auto;
-  min-height: 40px;
-  padding: 4px;
-  /* The plate hangs out by its own padding, so the wordmark's letters stand
-     on the gutter with every other first word in the column (D7). */
-  margin-inline-start: -4px;
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--surface-base);
-  border: none;
-  border-radius: 0;
-  box-shadow: none;
-  cursor: pointer;
-  transition: box-shadow 0.15s ease;
-}
-.brand-seal:hover { box-shadow: 0 0 0 1px var(--accent-strong); }
+/* The sidebar's wordmark left the header (owner, 2026-11-22); the About
+   card's door is the map's bottom-right mark (.map-brand-mark). The
+   wordmark rules below stay for the embed's link-out (.embed-brand). */
 .brand-text { min-width: 0; }
 .atni-wordmark {
   display: flex;
@@ -691,11 +672,6 @@ a:hover {
   letter-spacing: 0;
 }
 .atni-wordmark-climate { color: var(--brand-wordmark-red); }
-.brand-seal:focus-visible {
-  outline: 2px solid var(--focus-inner);
-  outline-offset: 0;
-  box-shadow: 0 0 0 4px var(--focus-outer);
-}
 .brand-text h1 {
   margin: 0;
   font-family: var(--font-display);
@@ -2833,13 +2809,15 @@ button.conditions-metric:hover .conditions-action-hide {
    THE DESKTOP COLUMN (S30D D1 M9; register owner-1f, DDM-P10-T11; design
    record interface-chrome-popups-text.md sections 2.1 to 2.3 and 2.6;
    owner rulings R1 a, square-edged labelled cells, and R2 a, Share in a
-   reserved slot 4).
+   reserved slot, slot 4 then and slot 6 since 2026-11-22).
 
-   Four fixed slots, top to bottom: 1 Reset, 2 SAT (MapLibre's control,
-   moved in by src/map/init.ts), 3 Help with its Map information drawer
-   (moved in by src/ui/map-information.ts), 4 Share view, reserved. The
-   grid rows are explicit, so a slot's box exists whether or not its
-   control is there: Share fills slot 4 in every view and nothing moves
+   Six fixed slots, top to bottom (owner, 2026-11-22: "reset, layer,
+   place, sat, help, share"): 1 Reset, 2 Layer and 3 Place (the studio
+   pair, built by src/ui/view-shell.ts), 4 SAT (MapLibre's control, moved
+   in by src/map/init.ts), 5 Help with its Map information drawer (moved
+   in by src/ui/map-information.ts), 6 Share. The grid rows are explicit,
+   so a slot's box exists whether or not its control is there: Share fills
+   slot 6 in every view and nothing moves
    (the 2026-09-13 stable-position rule, measured to
    1px by tests/map-chrome-seats.spec.ts). The seat table lives in
    src/config/map-chrome.ts and tests/map-chrome-contract.test.mjs keeps
@@ -2881,7 +2859,8 @@ button.conditions-metric:hover .conditions-action-hide {
 }
 @media (min-width: 721px) and (pointer: coarse) {
   /* A hand gets the 44px floor (DR-036 a) in the cell's height; the slot
-     formula follows, so slot 2 sits at y 60, slot 3 at 108, slot 4 at 156. */
+     formula follows, so slot 2 sits at y 60, slot 3 at 108, and so on by 48
+     to slot 6 at 252. */
   .app-shell:not(.embed) {
     --map-cell-h: var(--touch-target);
   }
@@ -2892,7 +2871,7 @@ button.conditions-metric:hover .conditions-action-hide {
     right: var(--chrome-inset);
     display: grid;
     grid-template-columns: var(--map-cell-w);
-    grid-template-rows: repeat(4, var(--map-cell-h));
+    grid-template-rows: repeat(6, var(--map-cell-h));
     grid-auto-rows: auto;
     gap: var(--map-cell-gap);
     align-items: stretch;
@@ -2902,11 +2881,13 @@ button.conditions-metric:hover .conditions-action-hide {
     pointer-events: none;
   }
   .app-shell:not(.embed) .map-overlay-controls > [data-map-slot='1'] { grid-area: 1 / 1; }
-  .app-shell:not(.embed) .map-overlay-controls > [data-map-slot='2'] { grid-area: 2 / 1; }
-  .app-shell:not(.embed) .map-overlay-controls > [data-map-slot='3'] { grid-area: 3 / 1; }
+  /* The studio seat holds slots 2 (Layer) and 3 (Place) as one box. */
+  .app-shell:not(.embed) .map-overlay-controls > [data-map-slot='2'] { grid-area: 2 / 1 / 4 / 2; }
   .app-shell:not(.embed) .map-overlay-controls > [data-map-slot='4'] { grid-area: 4 / 1; }
-  /* Slots 2 and 3 stop being `display: contents` and become their own
-     boxes: the moved control fills its slot, and slot 3 anchors the
+  .app-shell:not(.embed) .map-overlay-controls > [data-map-slot='5'] { grid-area: 5 / 1; }
+  .app-shell:not(.embed) .map-overlay-controls > [data-map-slot='6'] { grid-area: 6 / 1; }
+  /* Slots 4 and 5 stop being `display: contents` and become their own
+     boxes: the moved control fills its slot, and slot 5 anchors the
      drawer. */
   .app-shell:not(.embed) .map-overlay-controls > .map-spine-slot {
     display: block;
@@ -2914,25 +2895,24 @@ button.conditions-metric:hover .conditions-action-hide {
     min-width: 0;
     min-height: 0;
   }
-  /* A physically framed page that is not an embed still gets the full-site
-     link-outs (src/ui/view-shell.ts); they follow the grid, never take a
-     slot. */
+  /* A physically framed page that is not an embed gets the full-site
+     link-outs in place of the studio cells (src/ui/view-shell.ts), so they
+     take the studio rows, 2 and 3, from the column's right edge leftward,
+     and the slots under them keep their seats. */
   .app-shell:not(.embed) .map-overlay-controls > .studio-linkout-pair {
     grid-column: 1;
-    grid-row: 5;
+    grid-row: 2 / 4;
+    align-self: start;
     justify-self: end;
     pointer-events: auto;
   }
 
-  /* THE STUDIO CELLS (owner, 2026-11-21 and 22): Place above Layer, under
-     the four slots in this column's own cells, on its x, with its gap and
-     faces. The four slots above keep their seats; the pair takes the grid's
-     fifth row, which is why the column's own gap stands between Share and
-     Place. Seated only when the full app filled it: a framed page gets the
-     full-site links in the same row instead. */
+  /* THE STUDIO CELLS (owner, 2026-11-21 and 22): Layer above Place, slots 2
+     and 3 under Reset, in this column's own cells, on its x, with its gap
+     and faces. Seated only when the full app filled it: a framed page gets
+     the full-site links in the same rows instead, and the empty seat keeps
+     its two rows so SAT, Help and Share never move. */
   .app-shell:not(.embed) .map-overlay-controls > .map-studio-seat:not(:empty) {
-    grid-column: 1;
-    grid-row: 5;
     display: block;
     min-width: 0;
   }
@@ -2978,7 +2958,7 @@ button.conditions-metric:hover .conditions-action-hide {
   /* The cell (R1 a): a fixed 20px icon column, an 8px gap, then the word.
      The 1px edge plus 9px padding puts every icon centre 20px in from the
      cell's left edge: one x for the whole column, W - 12 - --map-cell-w
-     + 20 (W - 88 at 96px). The Place and Layer cells under the four slots
+     + 20 (W - 88 at 96px). The Layer and Place cells in slots 2 and 3
      (.map-studio-seat, THE STUDIO CELLS above) are cells of this column and
      take every rule here. */
   .app-shell:not(.embed) .map-overlay-controls .map-cell {
@@ -3102,6 +3082,76 @@ button.conditions-metric:hover .conditions-action-hide {
   }
 }
 
+/* THE BRAND MARK (owner, 2026-11-22): the ATNI Climate mark at the map's
+   bottom right, the map chrome's one logo (DR-106) and the About card's
+   door. As wide as the column's cells (--map-cell-w: 96px, 44px in the
+   tablet band) with its right edge on the column's, and the column's own
+   inset from the bottom. Nothing else holds that corner on the desktop
+   shell: the dock's notices stop --dock-inset short of it above 1024px and
+   ride above it (--map-dock-bottom) in the band, the scale bars and the
+   preview mark are bottom-left, and MapLibre's attribution control is off
+   (src/map/init.ts). It sits in the map chrome's band, under the controls,
+   popups and the covering briefing. Its slate ink is the owner's artwork,
+   unrecoloured; at rest it is a little transparent and it comes up whole on
+   hover and focus. Under a hand (the band, or a coarse pointer) the button
+   keeps the 44px floor with the mark on its foot. Phones and embeds never
+   draw it: a phone's header never showed the wordmark, and an embed keeps
+   its link-out wordmark in the dock. */
+.map-brand-mark {
+  display: none;
+}
+@media (min-width: 721px) {
+  .app-shell:not(.embed) .map-brand-mark {
+    --map-brand-rest: 0.85;
+    position: absolute;
+    right: var(--chrome-inset);
+    bottom: var(--chrome-inset);
+    z-index: var(--z-map-chrome);
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-end;
+    box-sizing: border-box;
+    width: var(--map-cell-w);
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    cursor: pointer;
+  }
+  /* The labels' soft cushion (src/config/interface-tokens.ts MAP_LABEL_CUSHION): a dark glow that
+     follows the artwork's own shape, unseen on the dark ground, keeps the slate seal and words
+     readable over white cloud on SAT (looked at in Chrome, 2026-11-22). */
+  .app-shell:not(.embed) .map-brand-mark > img {
+    display: block;
+    width: 100%;
+    height: auto;
+    opacity: var(--map-brand-rest);
+    filter:
+      drop-shadow(0 0 1px color-mix(in srgb, var(--surface-base) 85%, transparent))
+      drop-shadow(0 0 3px color-mix(in srgb, var(--surface-base) 70%, transparent));
+    transition: opacity var(--dur-micro) var(--ease-standard);
+  }
+  .app-shell:not(.embed) .map-brand-mark:is(:hover, :focus-visible) > img {
+    opacity: 1;
+  }
+  .app-shell:not(.embed) .map-brand-mark:focus-visible {
+    outline: 2px solid var(--focus-inner);
+    outline-offset: 0;
+    box-shadow: 0 0 0 4px var(--focus-outer);
+  }
+}
+@media (min-width: 721px) and (max-width: 1024px), (min-width: 721px) and (pointer: coarse) {
+  .app-shell:not(.embed) .map-brand-mark {
+    min-height: var(--touch-target);
+  }
+}
+@media (min-width: 721px) and (prefers-reduced-motion: reduce) {
+  .app-shell:not(.embed) .map-brand-mark > img {
+    transition: none;
+  }
+}
+
 .layers-studio-linkout {
   width: auto;
   max-width: 240px;
@@ -3192,22 +3242,9 @@ button.conditions-metric:hover .conditions-action-hide {
   align-items: center;
   gap: 16px;
   flex: 0 0 auto;
-  min-height: 64px;
-  /* Registers Back / the heading / the end group with the content
-     column below (.layers-studio-grid, .place-studio-layout: both
-     `width: min(1080px, 100%); margin: 0 auto` inside
-     .layers-studio-scroll's own 18px padding) instead of the header's
-     own full-bleed edge (D1 M17, DR-169 item 2: at 2560x1440 the two
-     used to sit about 1080px apart). --studio-header-max defaults to
-     that same 1080px cap; the Place studio's own @container widening to
-     a 1400px column (near :3585) overrides it there so the two stay in
-     step. Below the cap the 18px floor matches .layers-studio-scroll's
-     own padding exactly (the header has no scroller inset of its own to
-     subtract, so the two arithmetics agree without one). The header
-     itself stays full width (its background and border-bottom are
-     chrome, not content); only its padding narrows to line the content
-     up. */
-  padding: 10px max(18px, calc((100% - var(--studio-header-max, 1080px)) / 2));
+  /* Its columns, height and padding are the phone's in the block below and
+     src/styles/studios.css, and the wider shells' in that file ("Wider than
+     a phone": Back to map is a map cell at the strip's end). */
   background: var(--bg-1);
   border-bottom: 1px solid var(--line-strong);
 }
@@ -3249,19 +3286,29 @@ button.conditions-metric:hover .conditions-action-hide {
   color: var(--fg-0);
 }
 
+/* The strip with Back to map on top (the studios' own header, so the cell
+   rule in src/styles/studios.css seats it at the top right), the notice
+   centred in the rest. */
 .studio-load-failure {
   display: grid;
+  grid-template-rows: auto 1fr;
   place-items: center;
   width: 100%;
   min-height: 100vh;
   min-height: 100dvh;
-  padding: 24px;
   background: var(--bg-0);
   color: var(--fg-0);
 }
 
+.studio-load-failure-header {
+  align-self: start;
+  justify-content: flex-end;
+  justify-self: stretch;
+}
+
 .studio-load-failure-panel {
-  width: min(440px, 100%);
+  width: min(440px, calc(100% - 48px));
+  margin: 24px;
   padding: 24px;
   background: var(--bg-1);
   border: 1px solid var(--line-strong);
@@ -3304,21 +3351,10 @@ button.conditions-metric:hover .conditions-action-hide {
 }
 
 .layers-studio-search {
-  max-width: 720px;
-  margin: 0 auto 16px;
   padding: 12px;
   background: var(--bg-1);
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
-}
-
-.layers-studio-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.8fr);
-  align-items: start;
-  gap: 16px;
-  width: min(1080px, 100%);
-  margin: 0 auto;
 }
 
 .layers-studio-catalog {
@@ -3361,26 +3397,9 @@ button.conditions-metric:hover .conditions-action-hide {
   .layers-studio-grid { grid-template-columns: 1fr; gap: 10px; }
 }
 
-/* Screen-filling desktop geometry (owner direction): the studio now
-   starts at the sidebar's inner edge instead of the viewport's, so its
-   rendered width tracks the sidebar's own state (collapsed, embed, the
-   fluid tablet band) rather than the viewport 1:1. A container query
-   reads that ACTUAL width instead of guessing from a viewport
-   breakpoint: below 760px of real room the two-column catalog grid
-   would squeeze the 280px-floor second column against a starved first
-   column, so it collapses to one column, exactly as it already does
-   below the 720px viewport breakpoint above (#layers-studio-root
-   declares container-type: inline-size). 760 is a judgment call:
-   comfortably above the 280px second-column floor plus a workable first
-   column and the gap, comfortably below what a normal desktop viewport
-   leaves beside a docked sidebar. */
-@container (max-width: 759px) {
-  .layers-studio-grid {
-    grid-template-columns: 1fr;
-    gap: 10px;
-    width: 100%;
-  }
-}
+/* (The Layer studio's columns follow its own rendered width, read from
+   #layers-studio-root's container-type, in src/styles/studios.css: "THE LAYER
+   STUDIO, wider than a phone".) */
 
 /* =============================================================================
    PLACE studio. Lazy route, catalog rail, and selection panel shell.
@@ -3445,14 +3464,6 @@ button.conditions-metric:hover .conditions-action-hide {
   min-width: 1px;
 }
 
-.place-studio-type-rail {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
-  width: min(1080px, 100%);
-  margin: 0 auto 14px;
-}
-
 .place-studio-type {
   min-height: 42px;
   padding: 8px 10px;
@@ -3494,13 +3505,11 @@ button.conditions-metric:hover .conditions-action-hide {
   border-color: var(--accent-strong);
 }
 
+/* Its columns, gap and width are src/styles/studios.css's ("THE PLACE STUDIO,
+   wider than a phone"); a phone draws it as a block there. */
 .place-studio-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(300px, 0.9fr);
   align-items: start;
-  gap: 16px;
-  width: min(1080px, 100%);
-  margin: 0 auto;
 }
 
 .place-studio-list-panel,
@@ -3825,49 +3834,11 @@ button.conditions-metric:hover .conditions-action-hide {
     width: 100%;
     height: 100%;
   }
-
-  .place-studio-type-rail {
-    width: 100%;
-  }
-
-  .place-studio-layout {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 10px;
-    width: 100%;
-  }
 }
 
-/* Rebalances the single column above once the ROOT is actually wide
-   enough (see container-type on #place-studio-root): the same
-   two-column list/detail split the base (mobile-first) rule already
-   declares, widened past the old 560px-column cap and re-centered, so a
-   spacious desktop pane (a wide monitor, or the sidebar collapsed/embed)
-   does not read as one sparse column. 760px mirrors the threshold
-   .layers-studio-grid uses for the same reason and the same judgment
-   call: comfortably above the 300px second-column floor plus a workable
-   first column and the gap. Below it (the 1025px and wider dock's own
-   viewport band with the sidebar docked, or the sub-1025px full-viewport
-   studio before the root is this wide) the single column above stands.
-   --studio-header-max here keeps .layers-studio-header's own padding
-   (near :2923) registered with the WIDENED 1400px content column below,
-   instead of the 1080px default the Layers studio and the narrower Place
-   studio both use (D1 M17, DR-169 item 2). */
-@container (min-width: 760px) {
-  .place-studio-header {
-    --studio-header-max: 1400px;
-  }
-
-  .place-studio-type-rail {
-    width: min(1400px, 100%);
-    margin: 0 auto 14px;
-  }
-
-  .place-studio-layout {
-    grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
-    gap: 20px;
-    width: min(1400px, 100%);
-  }
-}
+/* (The Place studio's two-column list/detail split at 760 px of its own
+   width, and the 1400 px centred column it drew, are in src/styles/studios.css
+   now: "THE PLACE STUDIO, wider than a phone".) */
 
 .sheet-at-hand-actions {
   display: grid;
@@ -6327,7 +6298,7 @@ a.impact-resource-link::after {
    design record interface-chrome-popups-text.md sections 2.2, 2.3 and 2.6;
    superseding the 2026-08-31 bottom-right corner).
 
-   Help is slot 3 of the desktop column, a labelled cell like its
+   Help is slot 5 of the desktop column, a labelled cell like its
    neighbours (THE DESKTOP COLUMN, above), and its panel is the right-hand
    drawer: it docks against the column, its top on the help slot's top and
    its right edge 8px left of the column (container right 12 +
@@ -6386,9 +6357,17 @@ a.impact-resource-link::after {
       calc(100vw - var(--sidebar-w) - 2 * var(--chrome-inset) - var(--map-cell-w) - 8px)
     );
     /* The container is the full shell height (100dvh, 100vh where dvh is
-       unknown); 170px keeps the drawer's foot above the bottom seats. */
-    max-height: min(520px, calc(100vh - 170px));
-    max-height: min(520px, calc(100dvh - 170px));
+       unknown). The drawer's top is Help's (slot 5, four cells and gaps
+       under the inset), and its foot stays 70px above the container's
+       bottom, clear of the bottom seats, as it did when Help was slot 3. */
+    max-height: min(
+      520px,
+      calc(100vh - 70px - var(--chrome-inset) - 4 * (var(--map-cell-h) + var(--map-cell-gap)))
+    );
+    max-height: min(
+      520px,
+      calc(100dvh - 70px - var(--chrome-inset) - 4 * (var(--map-cell-h) + var(--map-cell-gap)))
+    );
     overflow-y: auto;
     overscroll-behavior: contain;
     padding: 12px 14px;
@@ -8573,9 +8552,8 @@ a.impact-resource-link::after {
    .layer-toggle label row is its activation target and that row already
    measures well over the floor. */
 @media (pointer: coarse) and (min-width: 721px) {
-  /* Sidebar header: the seal (32px), the Brief/Console switch (17px), and
-     the collapse control (28px). */
-  .brand-seal,
+  /* Sidebar header: the Brief/Console switch (17px) and the collapse
+     control (28px). The map's brand mark takes the floor in its own rule. */
   #sidebar-collapse.icon-btn,
   #sidebar-expand.icon-btn {
     min-width: var(--touch-target);

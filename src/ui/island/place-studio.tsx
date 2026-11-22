@@ -1708,8 +1708,17 @@ function PlaceStudio() {
       }
       return;
     }
+    const vertical = event.key === 'ArrowDown' || event.key === 'ArrowUp';
     const step =
-      event.key === 'ArrowDown' ? 1 : event.key === 'ArrowUp' ? -1 : event.key === 'Home' ? -Infinity : event.key === 'End' ? Infinity : 0;
+      event.key === 'ArrowDown' || event.key === 'ArrowRight'
+        ? 1
+        : event.key === 'ArrowUp' || event.key === 'ArrowLeft'
+          ? -1
+          : event.key === 'Home'
+            ? -Infinity
+            : event.key === 'End'
+              ? Infinity
+              : 0;
     if (step === 0) return;
     const options = Array.from(
       scrollRef.current?.querySelectorAll<HTMLButtonElement>('.place-studio-option') ?? []
@@ -1717,7 +1726,21 @@ function PlaceStudio() {
     const at = options.indexOf(event.currentTarget as HTMLButtonElement);
     if (at < 0) return;
     event.preventDefault();
-    const next = options[Math.min(Math.max(at + step, 0), options.length - 1)];
+    // A wide studio lays the rows out in columns, read along each line: the
+    // side arrows walk that reading order, and the up and down arrows go to
+    // the row above or below in the same column. In one column both meet.
+    let target = at + step;
+    if (vertical) {
+      const here = options[at].getBoundingClientRect();
+      for (let i = at + step; i >= 0 && i < options.length; i += step) {
+        const box = options[i].getBoundingClientRect();
+        if (Math.abs(box.left - here.left) < 2 && (step > 0 ? box.top > here.top : box.top < here.top)) {
+          target = i;
+          break;
+        }
+      }
+    }
+    const next = options[Math.min(Math.max(target, 0), options.length - 1)];
     if (!next) return;
     setCursor(`${next.dataset['placeKind'] ?? ''}:${next.dataset['placeId'] ?? ''}`);
     next.focus();
@@ -1863,7 +1886,12 @@ function PlaceStudio() {
           disabled={backPending}
           onClick={() => void handleBack()}
         >
-          Back to map
+          {/* The glyph is drawn wider than a phone only, where Back to map is
+              a cell in the seat of the map's Reset (src/styles/studios.css). */}
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+            <path d="M19 12H5M12 19l-7-7 7-7" />
+          </svg>
+          <span class="layers-studio-back-word">Back to map</span>
         </button>
         <h2 id="place-studio-heading">Place studio</h2>
         <div />
@@ -1877,91 +1905,96 @@ function PlaceStudio() {
             aria-labelledby={`place-type-${searching ? 'all' : scope}`}
             aria-busy={pending.length > 0 ? 'true' : 'false'}
           >
-            <label class="place-studio-search" for="place-studio-search">
-              <span class="sr-only">Search places</span>
-              {/* The field is named for assistive technology and says what
-                  typing does for everyone else; the placeholder is a hint,
-                  never the accessible name. */}
-              <input
-                id="place-studio-search"
-                type="search"
-                value={query}
-                aria-label="Search places"
-                aria-controls="place-list-panel"
-                placeholder="Search places"
-                autocomplete="off"
-                autocapitalize="off"
-                spellcheck={false}
-                enterkeyhint="search"
-                onInput={(event) => setQuery(event.currentTarget.value)}
-                onKeyDown={onSearchKeyDown}
-              />
-            </label>
+            {/* The search, the type rail and what the list says about itself.
+                A phone draws no box for it (the search stays pinned to the
+                page); a wide studio stands it beside the list as one rail. */}
+            <div class="place-studio-controls">
+              <label class="place-studio-search" for="place-studio-search">
+                <span class="sr-only">Search places</span>
+                {/* The field is named for assistive technology and says what
+                    typing does for everyone else; the placeholder is a hint,
+                    never the accessible name. */}
+                <input
+                  id="place-studio-search"
+                  type="search"
+                  value={query}
+                  aria-label="Search places"
+                  aria-controls="place-list-panel"
+                  placeholder="Search places"
+                  autocomplete="off"
+                  autocapitalize="off"
+                  spellcheck={false}
+                  enterkeyhint="search"
+                  onInput={(event) => setQuery(event.currentTarget.value)}
+                  onKeyDown={onSearchKeyDown}
+                />
+              </label>
 
-            <nav class="place-studio-type-rail" aria-label="Place type">
-              <button
-                id="place-type-all"
-                type="button"
-                class="place-studio-type"
-                aria-pressed={scope === 'all'}
-                aria-controls="place-list-panel"
-                onClick={() => setScope('all')}
-              >
-                All
-              </button>
-              {PLACE_TYPE_ORDER.map((placeKind) => (
+              <nav class="place-studio-type-rail" aria-label="Place type">
                 <button
-                  key={placeKind}
-                  id={`place-type-${placeKind}`}
+                  id="place-type-all"
                   type="button"
                   class="place-studio-type"
-                  aria-pressed={scope === placeKind}
+                  aria-pressed={scope === 'all'}
                   aria-controls="place-list-panel"
-                  onClick={() => {
-                    setScope(placeKind);
-                    setKind(placeKind);
-                  }}
+                  onClick={() => setScope('all')}
                 >
-                  {PLACE_CATALOG[placeKind].label}
+                  All
                 </button>
-              ))}
-            </nav>
+                {PLACE_TYPE_ORDER.map((placeKind) => (
+                  <button
+                    key={placeKind}
+                    id={`place-type-${placeKind}`}
+                    type="button"
+                    class="place-studio-type"
+                    aria-pressed={scope === placeKind}
+                    aria-controls="place-list-panel"
+                    onClick={() => {
+                      setScope(placeKind);
+                      setKind(placeKind);
+                    }}
+                  >
+                    {PLACE_CATALOG[placeKind].label}
+                  </button>
+                ))}
+              </nav>
 
-            {!selection ? (
-              <p class="place-studio-lead">
-                Choose a place to open its briefing or show it on the map.
+              {!selection ? (
+                <p class="place-studio-lead">
+                  Choose a place to open its briefing or show it on the map.
+                </p>
+              ) : null}
+
+              <p id="place-list-summary" class="place-studio-summary" aria-live="polite">
+                {summary}
               </p>
-            ) : null}
 
-            <p id="place-list-summary" class="place-studio-summary" aria-live="polite">
-              {summary}
-            </p>
-
-            {/* In the all-types list a type that is still loading or could
-                not load says so here, above the rows, never as an empty group. */}
-            {listed.length > 0 && (pending.length > 0 || failed.length > 0) ? (
-              <ul class="place-studio-type-notes">
-                {pending.map((group) => (
-                  <li key={group.kind} data-place-note={group.kind}>
-                    Loading {PLACE_CATALOG[group.kind].label}...
-                  </li>
-                ))}
-                {failed.map((group) => (
-                  <li key={group.kind} data-place-note={group.kind}>
-                    <span>{PLACE_CATALOG[group.kind].label} are not available right now.</span>
-                    {/* Its own class only: `.layers-studio-back` in this root is the header's Back and the one-list failure's retry. */}
-                    <button
-                      type="button"
-                      class="place-studio-retry"
-                      aria-label={`Try ${PLACE_CATALOG[group.kind].label} again`}
-                      onClick={() => retryCatalog(group.kind)}
-                    >
-                      Try again
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            ) : null}
+              {/* In the all-types list a type that is still loading or could
+                  not load says so here, above the rows, never as an empty group. */}
+              {listed.length > 0 && (pending.length > 0 || failed.length > 0) ? (
+                <ul class="place-studio-type-notes">
+                  {pending.map((group) => (
+                    <li key={group.kind} data-place-note={group.kind}>
+                      Loading {PLACE_CATALOG[group.kind].label}...
+                    </li>
+                  ))}
+                  {failed.map((group) => (
+                    <li key={group.kind} data-place-note={group.kind}>
+                      <span>{PLACE_CATALOG[group.kind].label} are not available right now.</span>
+                      {/* Its own class only: `.layers-studio-back` in this root is the header's Back and the one-list failure's retry. */}
+                      <button
+                        type="button"
+                        class="place-studio-retry"
+                        aria-label={`Try ${PLACE_CATALOG[group.kind].label} again`}
+                        onClick={() => retryCatalog(group.kind)}
+                      >
+                        Try again
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
 
             {listStatus === 'loading' ? (
               <p id="place-list-status" class="place-studio-list-status" role="status">

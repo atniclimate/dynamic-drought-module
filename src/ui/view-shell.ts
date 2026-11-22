@@ -67,7 +67,7 @@ const LAYERS_STUDIO_ENTRY_ID = 'layers-studio-entry';
 const PLACE_STUDIO_ENTRY_ID = 'place-studio-entry';
 const STUDIO_ENTRY_PAIR_ID = 'studio-entry-pair';
 const STUDIO_LINKOUT_PAIR_ID = 'studio-linkout-pair';
-/** The seat under the map column's four slots for the two studio buttons (index.html). */
+/** The seat of the two studio buttons, slots 2 and 3 of the map column (index.html). */
 const MAP_STUDIO_SEAT_ID = 'map-studio-seat';
 const PLACE_STUDIO_ENTRY_STATUS_ID = 'place-studio-entry-status';
 const PLACE_STUDIO_OPENER_EVENT = 'ddm:place-studio-opener';
@@ -196,11 +196,37 @@ export function renderStudioLoadFailure(
   const actions = document.createElement('div');
   actions.className = 'studio-load-failure-actions';
 
+  // Back to map is the same cell as in the studios (an arrow glyph, then the
+  // word), seated at the area's top right by the studios' rule for a
+  // `.layers-studio-back` that is a direct child of a `.layers-studio-header`
+  // (src/styles/studios.css). The header carries only that button here.
+  const header = document.createElement('div');
+  header.className = 'layers-studio-header studio-load-failure-header';
+
   const back = document.createElement('button');
   back.type = 'button';
   back.className = 'layers-studio-back';
-  back.textContent = 'Back to map';
+  const svgNs = 'http://www.w3.org/2000/svg';
+  const glyph = document.createElementNS(svgNs, 'svg');
+  glyph.setAttribute('viewBox', '0 0 24 24');
+  glyph.setAttribute('width', '20');
+  glyph.setAttribute('height', '20');
+  glyph.setAttribute('fill', 'none');
+  glyph.setAttribute('stroke', 'currentColor');
+  glyph.setAttribute('stroke-width', '2');
+  glyph.setAttribute('stroke-linecap', 'round');
+  glyph.setAttribute('stroke-linejoin', 'round');
+  glyph.setAttribute('aria-hidden', 'true');
+  glyph.setAttribute('focusable', 'false');
+  const arrow = document.createElementNS(svgNs, 'path');
+  arrow.setAttribute('d', 'M19 12H5M12 19l-7-7 7-7');
+  glyph.appendChild(arrow);
+  const word = document.createElement('span');
+  word.className = 'layers-studio-back-word';
+  word.textContent = 'Back to map';
+  back.append(glyph, word);
   back.addEventListener('click', backToMap);
+  header.appendChild(back);
 
   const retry = document.createElement('button');
   retry.type = 'button';
@@ -211,9 +237,9 @@ export function renderStudioLoadFailure(
     window.location.reload();
   });
 
-  actions.append(back, retry);
+  actions.append(retry);
   panel.append(heading, body, actions);
-  surface.appendChild(panel);
+  surface.append(header, panel);
   root.replaceChildren(surface);
   back.focus();
 }
@@ -488,9 +514,9 @@ function mapStudioButton(id: string, kind: string, icon: string, word: string): 
 }
 
 /**
- * Render the ruled studio entry in the correct host. A full app gets the Place
- * and Layer map buttons, stacked under the four slots of the map's top-right
- * column, in its cells and on its x (owner, 2026-11-21 and 22); the stylesheet
+ * Render the ruled studio entry in the correct host. A full app gets the Layer
+ * and Place map buttons, slots 2 and 3 of the map's top-right column under
+ * Reset, in its cells and on its x (owner, 2026-11-21 and 22); the stylesheet
  * shows the seat on the desktop shell only (721 px and wider, outside an
  * embed), and the phone keeps its sheet's Place door and footer Layers tab. An embed or
  * physical frame gets only full-site link-outs, never an in-frame studio route.
@@ -559,7 +585,9 @@ export function refreshLayersStudioEntry(): void {
   layersButton.setAttribute('aria-label', LAYERS_STUDIO_ENTRY_TITLE);
   layersButton.addEventListener('click', enterLayersStudio);
 
-  pair.append(placeButton, layersButton);
+  // Layer above Place (owner, 2026-11-22: "reset, layer, place, sat, help,
+  // share"): slots 2 and 3 of the column, in Tab order as they read.
+  pair.append(layersButton, placeButton);
   host.appendChild(pair);
   syncPlaceStudioRoute(getStudioRoute());
 }

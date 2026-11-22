@@ -6,8 +6,9 @@
    layers-studio.tsx import it), so nothing here reaches the entry bundle. The
    studios' older rules stay in src/styles/app.css ("Minimal LAYERS studio" and
    "PLACE studio"); this file comes after them and answers them where the look
-   changed. The desktop dock geometry (root inset, content column widths, the
-   header's registration) is still app.css's and is not restated here.
+   changed. The desktop dock's root inset is still app.css's; the header, the
+   Back to map cell and the content layout wider than a phone are this
+   file's ("Wider than a phone: the studio uses its whole area" below).
 
    ON A PHONE a studio is the bottom sheet's sibling: the same rich-black
    glass over the map, the same tight corners, the same header strip, and the
@@ -1462,7 +1463,9 @@
     grid-template-columns: minmax(0, 1fr) auto auto;
     align-items: center;
     gap: 10px 16px;
-    padding: 12px max(18px, calc((100% - var(--studio-header-max, 1080px)) / 2));
+    /* Registers with the cards' text (the tokens are in "Wider than a
+       phone" below). */
+    padding: 12px calc(var(--chrome-inset) + var(--studio-card-pad));
     border-top-color: var(--line-strong);
     border-radius: 0;
     background: var(--bg-1);
@@ -1548,10 +1551,6 @@
   .place-studio-details-toggle {
     display: none;
   }
-  /* The bar registers with the widened content column, as the header does. */
-  .place-studio-bar {
-    --studio-header-max: 1400px;
-  }
 }
 
 /* In two columns the technical view stays beside the list while the list
@@ -1606,6 +1605,377 @@
     #place-studio-root .place-studio-bar {
       background: var(--glass-panel);
     }
+  }
+}
+
+/* -----------------------------------------------------------------------------
+   Wider than a phone: the studio uses its whole area, and Back to map sits
+   in the seat of the map's Reset (owner, 2026-11-22: "Layer and Place
+   studios should make better use of space and layout"; "Back to Map button
+   can be top right (takes place of Reset, user naturally realizes can click
+   it)").
+
+   THE AREA. The content runs edge to edge of the studio's area with the
+   map chrome's own inset (12 px) at both sides and between cards, instead
+   of a centred column with half the width left empty. The studio roots are
+   children of body, outside .app-shell, so the map's geometry tokens are
+   declared again here with the map's values and the same three bands
+   (desktop, coarse pointer, the tablet band of icon squares).
+
+   BACK TO MAP is a map cell: the face of `.map-overlay-controls .map-cell`
+   in app.css (glass --glass-read under the blur, a 1 px --keyline edge,
+   --ink, 14 px bold, a 20 px glyph then the word) at right 12 px and top
+   12 px of the studio's area, which is where Reset stands on the map. It
+   is --map-cell-h tall like every cell; it is as wide as its word needs
+   and never narrower than a map cell: "Back to map" measured 80.7 px in
+   DDM Heros 14 px bold at 1920 x 943 on 2026-11-22, so the cell needs
+   1 + 9 + 20 + 8 + 81 + 9 + 1 = 129 px, where "Share" sized the map's 96.
+   In the tablet band it is the band's 44 px icon square, the word visually
+   hidden and still the button's name. The header strip is exactly one cell
+   plus the inset above and below, so the cell also reads as the header's
+   end, and the title registers with the cards' text.
+
+   SAT, in the Layer studio, is the rehosted map cell. It stands beside Back
+   to map in the same strip, not under it: under it, it would hang below the
+   strip over the page, which would then have to keep a lane free down its
+   whole height (or let rows and their Turn off buttons scroll beneath a
+   control) for one cell. Back to map is first in the keyboard order, as it
+   is the studio's first focus; SAT follows, then the page.
+
+   Every value here is a token or a measure stated beside it; the colours
+   are the map cell's, so the contrast is the map cell's: --ink on
+   --glass-read over white imagery is 6.98:1 (tests/contrast-contract
+   .test.mjs), over the header's --glass-panel strip higher still.
+   ----------------------------------------------------------------------------- */
+@media (min-width: 721px) {
+  :is(#place-studio-root, #layers-studio-root) {
+    --chrome-inset: 12px;
+    --map-cell-w: 96px;
+    --map-cell-h: 40px;
+    --map-cell-gap: 4px;
+    /* Between cards, the same as the edge: one rhythm across the area. */
+    --studio-gap: var(--chrome-inset);
+    /* A card's own inset to its text; the title and the bar register to it. */
+    --studio-card-pad: 14px;
+  }
+}
+@media (min-width: 721px) and (pointer: coarse) {
+  :is(#place-studio-root, #layers-studio-root) {
+    --map-cell-h: var(--touch-target);
+  }
+}
+@media (min-width: 721px) and (max-width: 1024px) {
+  :is(#place-studio-root, #layers-studio-root) {
+    --map-cell-w: var(--touch-target);
+    --map-cell-h: var(--touch-target);
+  }
+}
+
+@media (max-width: 720px) {
+  /* The phone's Back keeps its chevron (drawn by ::before above); the cell's
+     glyph is the wider shells' only. */
+  :is(#place-studio-root, #layers-studio-root) .layers-studio-header > .layers-studio-back > svg {
+    display: none;
+  }
+  /* The Place studio's controls wrapper draws no box on a phone, so the
+     search stays pinned to the page exactly as before. */
+  #place-studio-root .place-studio-controls {
+    display: contents;
+  }
+}
+
+@media (min-width: 721px) {
+  /* THE HEADER STRIP: the title at the start, the cells at the end. Back to
+     map is first in the markup (first focus, first Tab) and last in the
+     row, so it stands in the corner. */
+  :is(#place-studio-root, #layers-studio-root) .layers-studio-header {
+    display: flex;
+    align-items: center;
+    gap: var(--map-cell-gap);
+    min-height: 0;
+    padding: var(--chrome-inset) var(--chrome-inset) var(--chrome-inset)
+      calc(var(--chrome-inset) + var(--studio-card-pad));
+  }
+  :is(#place-studio-root, #layers-studio-root) .layers-studio-header h2 {
+    flex: 1 1 auto;
+    min-width: 0;
+    line-height: 1.2;
+  }
+  #layers-studio-root .layers-studio-basemap {
+    order: 1;
+    flex: none;
+  }
+  :is(#place-studio-root, #layers-studio-root) .layers-studio-header > .layers-studio-back {
+    order: 2;
+  }
+
+  /* The cell face, Back to map and the rehosted SAT alike. SAT's marks
+     answer the base .basemap-switcher-btn rule and MapLibre's control
+     group, both !important or later than this file's selectors could
+     otherwise outrank (app.css, "THE DESKTOP COLUMN"). */
+  :is(#place-studio-root, #layers-studio-root) .layers-studio-header > .layers-studio-back,
+  #layers-studio-root .layers-studio-header .basemap-switcher-btn.map-cell {
+    box-sizing: border-box;
+    display: grid !important;
+    grid-template-columns: 20px auto;
+    column-gap: 8px;
+    align-items: center;
+    justify-content: start;
+    flex: none;
+    min-width: var(--map-cell-w);
+    height: var(--map-cell-h);
+    min-height: 0;
+    margin: 0;
+    padding: 0 9px;
+    border: 1px solid var(--keyline);
+    border-radius: 0;
+    background: var(--glass-read) !important;
+    -webkit-backdrop-filter: blur(var(--rich-black-blur));
+    backdrop-filter: blur(var(--rich-black-blur));
+    color: var(--ink) !important;
+    box-shadow: none;
+    font-family: var(--font-body);
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0;
+    line-height: 1;
+    text-align: left;
+    text-transform: none;
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+      background-color var(--dur-micro) var(--ease-standard),
+      border-color var(--dur-micro) var(--ease-standard),
+      color var(--dur-micro) var(--ease-standard);
+  }
+  #layers-studio-root .layers-studio-header .basemap-switcher-btn.map-cell {
+    width: var(--map-cell-w) !important;
+  }
+  #layers-studio-root .layers-studio-basemap .basemap-switcher-control {
+    display: block;
+    margin: 0;
+    background: none;
+    box-shadow: none;
+  }
+  :is(#place-studio-root, #layers-studio-root) .layers-studio-header > .layers-studio-back > svg,
+  #layers-studio-root .layers-studio-header .basemap-switcher-btn.map-cell > svg {
+    display: block;
+    width: 20px;
+    height: 20px;
+    justify-self: center;
+    stroke-width: 2;
+    opacity: 1;
+  }
+  #layers-studio-root .layers-studio-header .basemap-switcher-btn[data-imagery-unavailable] > svg {
+    opacity: 0.45;
+  }
+  /* The word, trimmed to cap height so it centres by its capitals. */
+  :is(#place-studio-root, #layers-studio-root) .layers-studio-header > .layers-studio-back > span,
+  #layers-studio-root .layers-studio-header .basemap-switcher-btn.map-cell > span {
+    display: block;
+    min-width: 0;
+    font: inherit;
+    letter-spacing: 0;
+    text-box: trim-both cap alphabetic;
+  }
+  :is(#place-studio-root, #layers-studio-root) .layers-studio-header > .layers-studio-back:hover,
+  #layers-studio-root .layers-studio-header .basemap-switcher-btn.map-cell:hover {
+    border-color: var(--keyline);
+    background: linear-gradient(var(--glass-press), var(--glass-press)), var(--glass-read) !important;
+    color: var(--ink) !important;
+  }
+  /* SAT on inverts, as it does on the map. */
+  #layers-studio-root .layers-studio-header .basemap-switcher-btn.map-cell[aria-pressed='true'] {
+    forced-color-adjust: none; /* FORCED COLOURS, app.css */
+    border-color: var(--face-selected);
+    background: var(--face-selected) !important;
+    color: var(--ink-on-selected) !important;
+  }
+  /* One ring for all chrome (palette-tokens.md section 2, "Focus"). */
+  :is(#place-studio-root, #layers-studio-root) .layers-studio-header > .layers-studio-back:focus-visible,
+  #layers-studio-root .layers-studio-header .basemap-switcher-btn.map-cell:focus-visible {
+    border-color: var(--keyline);
+    outline: 2px solid var(--focus-inner);
+    outline-offset: 0;
+    box-shadow: 0 0 0 4px var(--focus-outer);
+  }
+  #layers-studio-root .layers-studio-header .basemap-switcher-btn.map-cell[aria-pressed='true']:focus-visible {
+    border-color: var(--face-selected);
+    box-shadow:
+      var(--selected-focus-inset),
+      0 0 0 4px var(--focus-outer);
+  }
+  /* Waiting on the boundary read: the instrument's one pending vocabulary. */
+  #place-studio-root .layers-studio-header > .layers-studio-back:disabled {
+    opacity: var(--ctl-pending-opacity);
+    cursor: var(--ctl-pending-cursor);
+  }
+
+  /* THE PAGE: one scroller, the chrome inset at every edge. */
+  :is(#place-studio-root, #layers-studio-root) .layers-studio-scroll {
+    padding: var(--chrome-inset);
+  }
+}
+/* The tablet band: icon squares, the word visually hidden (the project's
+   .sr-only pattern) and still the name. */
+@media (min-width: 721px) and (max-width: 1024px) {
+  :is(#place-studio-root, #layers-studio-root) .layers-studio-header > .layers-studio-back,
+  #layers-studio-root .layers-studio-header .basemap-switcher-btn.map-cell {
+    position: relative;
+    grid-template-columns: 20px;
+    justify-content: center;
+    place-items: center;
+    width: var(--map-cell-w) !important;
+    min-width: 0;
+    padding: 0;
+  }
+  :is(#place-studio-root, #layers-studio-root) .layers-studio-header > .layers-studio-back > span,
+  #layers-studio-root .layers-studio-header .basemap-switcher-btn.map-cell > span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+}
+@media (min-width: 721px) and (prefers-reduced-motion: reduce) {
+  :is(#place-studio-root, #layers-studio-root) .layers-studio-header > .layers-studio-back,
+  #layers-studio-root .layers-studio-header .basemap-switcher-btn.map-cell {
+    transition: none;
+  }
+}
+
+/* THE LAYER STUDIO, wider than a phone. One column of full-width cards while
+   the area is narrow; "On the map now" lays its rows side by side and the
+   catalog its groups, as many columns as the width holds. */
+@media (min-width: 721px) {
+  #layers-studio-root .layers-studio-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+    gap: var(--studio-gap);
+    width: 100%;
+    margin: 0;
+  }
+  #layers-studio-root .layers-studio-search {
+    max-width: none;
+    margin: 0;
+  }
+  #layers-studio-root .layers-now-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
+    column-gap: var(--studio-gap);
+  }
+  /* The catalog's groups in columns, in their reading order along each line:
+     Conditions, then Place boundaries, Events and Stations. A group keeps
+     its column when another folds, so nothing moves under the pointer. */
+  /* A track is at least 17.5rem and at least the share one group gets when
+     every group (--layer-group-count, set by layers-studio.tsx from the
+     role order) stands in one row, so the width never opens an empty
+     column beside the last group. */
+  #layers-studio-root .layers-studio-catalog {
+    --layer-group-share: calc(
+      (100% - (var(--layer-group-count, 4) - 1) * var(--studio-gap)) / var(--layer-group-count, 4)
+    );
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, max(17.5rem, var(--layer-group-share))), 1fr));
+    align-items: start;
+    gap: 10px var(--studio-gap);
+  }
+  #layers-studio-root .layers-studio-catalog > .layers-add-heading {
+    grid-column: 1 / -1;
+  }
+  #layers-studio-root .layers-studio-catalog > .layer-group {
+    min-width: 0;
+    margin: 0;
+  }
+}
+/* Wide: what is on the map and its search down the start, what can be added
+   beside it; Water & Snow under the catalog, so the keyboard reads the page
+   in the order the eye does. */
+@container (min-width: 1080px) {
+  #layers-studio-root .layers-studio-grid {
+    grid-template-columns: clamp(300px, 26%, 400px) minmax(0, 1fr);
+    grid-template-rows: auto auto 1fr;
+    grid-template-areas:
+      'search catalog'
+      'now catalog'
+      'now depth';
+  }
+  #layers-studio-root .layers-studio-search {
+    grid-area: search;
+  }
+  #layers-studio-root .layers-now {
+    grid-area: now;
+  }
+  #layers-studio-root .layers-studio-catalog {
+    grid-area: catalog;
+  }
+  #layers-studio-root .layers-studio-depth {
+    grid-area: depth;
+  }
+  #layers-studio-root .layers-now-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* THE PLACE STUDIO, wider than a phone. The list and "About this place" side
+   by side once the area holds both (app.css's 760 px), the list's rows in as
+   many columns as the list holds; wide, the search and the type rail stand
+   beside the list as its own rail and stay in reach while it scrolls. */
+@media (min-width: 721px) {
+  #place-studio-root .place-studio-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--studio-gap);
+    width: 100%;
+    margin: 0;
+  }
+  #place-studio-root .place-studio-group ul {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr));
+    gap: 2px var(--ctl-gap);
+  }
+  /* The selection panel stays beside the list and no taller than the page
+     it stands in, now that the page's inset is the chrome's. */
+  #place-studio-root .place-studio-selection-panel {
+    max-height: calc(var(--place-page-h, 100vh) - 2 * var(--chrome-inset));
+  }
+}
+@container (min-width: 760px) {
+  #place-studio-root .place-studio-layout {
+    grid-template-columns: minmax(0, 1fr) clamp(300px, 32%, 420px);
+  }
+}
+@container (min-width: 1200px) {
+  #place-studio-root .place-studio-layout {
+    grid-template-columns: minmax(0, 1fr) clamp(320px, 28%, 440px);
+  }
+  #place-studio-root .place-studio-list-panel {
+    display: grid;
+    grid-template-columns: clamp(200px, 20%, 260px) minmax(0, 1fr);
+    align-items: start;
+    gap: 0 var(--studio-gap);
+  }
+  #place-studio-root .place-studio-controls {
+    position: sticky;
+    top: var(--studio-card-pad);
+    z-index: 1;
+    min-width: 0;
+  }
+  /* The rail: one type to a line, read top to bottom like the list. */
+  #place-studio-root .place-studio-controls .place-studio-type {
+    flex-basis: 100%;
+    justify-content: flex-start;
+    padding-inline: 12px;
+    text-align: left;
+  }
+  #place-studio-root .place-studio-list-panel > :not(.place-studio-controls) {
+    grid-column: 2;
+    min-width: 0;
   }
 }
 

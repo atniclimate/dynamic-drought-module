@@ -168,7 +168,8 @@ export function createMap(containerId: string): maplibregl.Map {
   map.addControl(new BasemapSwitcherControl(), 'bottom-right');
 
   // On the desktop shell the same control moves into the app's top-right
-  // column beneath Reset (owner direction, 2026-08-19), which is where the
+  // column, slot 4 under Reset, Layer and Place (owner direction,
+  // 2026-08-19; the order is the owner's of 2026-11-22), which is where the
   // E2 ruling already said the three map buttons belong as one family. The
   // node moves; its listeners, aria-pressed state, and store subscription
   // ride along.

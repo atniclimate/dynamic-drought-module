@@ -163,9 +163,10 @@ test.describe('the mobile hazard rail (390x844)', () => {
       expect(((await button.getAttribute('aria-label')) ?? '').length).toBeGreaterThan(0);
     }
 
-    // The sidebar collapse/expand pair and the ATNI seal trigger follow
-    // the same rule.
-    for (const selector of ['#sidebar-collapse', '#sidebar-expand', '.brand-seal']) {
+    // The sidebar collapse/expand pair and the About door (the ATNI Climate
+    // mark at the map's bottom right, which took the sidebar wordmark's
+    // place on 2026-11-22) follow the same rule.
+    for (const selector of ['#sidebar-collapse', '#sidebar-expand', '#map-brand-mark']) {
       const element = page.locator(selector);
       expect(await element.getAttribute('title'), selector).toBeNull();
       expect(

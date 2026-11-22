@@ -140,6 +140,11 @@ test.describe('at 1025px and wider, a studio centres its content column in the m
             Math.abs(columnCenter - rootCenter),
             `${studio.kind} at ${width}x${height} (${sidebarState}): the content column is not centred in the map area within 1px`
           ).toBeLessThanOrEqual(1);
+          // Edge to edge of the area, the map chrome's 12px inset at the start.
+          expect(
+            Math.abs(column.left - root.left - 12),
+            `${studio.kind} at ${width}x${height} (${sidebarState}): the content column does not start 12px inside the studio's area`
+          ).toBeLessThanOrEqual(1);
         }
       });
     }
@@ -182,6 +187,10 @@ test.describe('from 721 to 1024px, a studio covers and centres on the whole view
         expect(
           Math.abs(columnCenter - rootCenter),
           `${studio.kind} at ${width}x${height}: the content column is not centred on the viewport within 1px`
+        ).toBeLessThanOrEqual(1);
+        expect(
+          Math.abs(column.left - root.left - 12),
+          `${studio.kind} at ${width}x${height}: the content column does not start 12px inside the viewport`
         ).toBeLessThanOrEqual(1);
       });
     }
@@ -376,14 +385,17 @@ test('the Place studio has one scroll container and its last list row is reachab
   expect(reached, 'the last list row is not reachable by scrolling the single outer container').toBe(true);
 });
 
-test('at 2560x1440 the studio header controls register with the content column', async ({ page }) => {
-  // Registration, defined exactly: Back's left edge sits within 1px of the
-  // content column's left edge, and the header's own end padding (its
-  // rendered right edge minus its computed padding-right, i.e. where its
-  // end group's content box stops) sits within 1px of the column's right
-  // edge. 1px is this codebase's own "1px stability" tolerance
-  // (interface-chrome section 5), reused rather than invented here.
+test('at 2560x1440 Back to map is the map cell in the studio area\'s top right corner', async ({ page }) => {
+  // The seat, defined exactly (owner, 2026-11-22: Back to map takes the place
+  // of the map's Reset): the cell's right edge is the map chrome's inset
+  // (12px) inside the studio root's right edge, its top edge the same inset
+  // below the root's top, and it is as tall as a map cell (40px on a fine
+  // pointer, the 44px touch floor on a coarse one). The content runs edge to
+  // edge with the same inset, so the content column's left edge is 12px in.
+  // 1px is this codebase's own "1px stability" tolerance (interface-chrome
+  // section 5), reused rather than invented here.
   const N = 1;
+  const INSET = 12;
   await page.setViewportSize({ width: 2560, height: 1440 });
 
   for (const studio of STUDIOS) {
@@ -391,39 +403,44 @@ test('at 2560x1440 the studio header controls register with the content column',
     await expect(page.locator(studio.root)).toBeVisible();
 
     const data = await page.evaluate(
-      ({ backSel, columnSel }) => {
+      ({ rootSel, backSel, columnSel }) => {
+        const root = document.querySelector(rootSel);
         const back = document.querySelector(backSel);
         const column = document.querySelector(columnSel);
-        const header = document.querySelector('.layers-studio-header');
-        if (!back || !column || !header) return null;
+        if (!root || !back || !column) return null;
+        const rootRect = root.getBoundingClientRect();
         const backRect = back.getBoundingClientRect();
         const columnRect = column.getBoundingClientRect();
-        const headerRect = header.getBoundingClientRect();
-        const paddingRight = parseFloat(getComputedStyle(header).paddingRight);
         return {
-          backLeft: backRect.left,
-          columnLeft: columnRect.left,
-          columnRight: columnRect.right,
-          headerContentRight: headerRect.right - paddingRight
+          rightGap: rootRect.right - backRect.right,
+          topGap: backRect.top - rootRect.top,
+          backHeight: backRect.height,
+          columnLeftGap: columnRect.left - rootRect.left,
+          coarse: window.matchMedia('(pointer: coarse)').matches
         };
       },
-      { backSel: studio.back, columnSel: studio.column }
+      { rootSel: studio.root, backSel: studio.back, columnSel: studio.column }
     );
-    expect(data, `${studio.kind}: header, Back or the content column is missing`).not.toBeNull();
-    const { backLeft, columnLeft, columnRight, headerContentRight } = data!;
+    expect(data, `${studio.kind}: the root, Back or the content column is missing`).not.toBeNull();
+    const { rightGap, topGap, backHeight, columnLeftGap, coarse } = data!;
 
-    // Predicted red on the pre-fix tree: the header's fixed 18px padding
-    // left Back's edge near the root's own edge while the content column
-    // (width: min(1080px, 100%), margin: 0 auto) sat about 570px in from
-    // it at this width with the sidebar docked (1080px apart end to end,
-    // the D1 M17 diagnosis's own number).
+    // Predicted red on the pre-change tree: Back stood at the header's start
+    // (18px padding, lined up with a centred 1080px column), not the end.
     expect(
-      Math.abs(backLeft - columnLeft),
-      `${studio.kind}: Back's left edge does not register with the content column's left edge`
+      Math.abs(rightGap - INSET),
+      `${studio.kind}: Back's right edge is not the chrome inset from the studio's right edge`
     ).toBeLessThanOrEqual(N);
     expect(
-      Math.abs(headerContentRight - columnRight),
-      `${studio.kind}: the header's end group does not register with the content column's right edge`
+      Math.abs(topGap - INSET),
+      `${studio.kind}: Back's top edge is not the chrome inset from the studio's top edge`
+    ).toBeLessThanOrEqual(N);
+    expect(
+      Math.abs(backHeight - (coarse ? 44 : 40)),
+      `${studio.kind}: Back is not the map cell's height`
+    ).toBeLessThanOrEqual(N);
+    expect(
+      Math.abs(columnLeftGap - INSET),
+      `${studio.kind}: the content column does not start at the chrome inset`
     ).toBeLessThanOrEqual(N);
   }
 });
