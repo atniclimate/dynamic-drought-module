@@ -723,7 +723,10 @@ test.describe('H2 critical-first surfaces', () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.clock.setFixedTime('2026-07-29T12:30:00+00:00');
     await stubBrowserNwsHeat(page);
-    await gotoApp(page, '?select=state:WA');
+    // Point heat leads the at-hand line in Heat, its own mode; in any other mode that
+    // mode's own current claim leads (src/impact/brief-narrative-selector.ts). Before
+    // DR-270 this case booted Drought and passed only because no drought read answered.
+    await gotoApp(page, '?cluster=heat&select=state:WA');
     // The shared link opens the report full screen (owner, 2026-11-13); the
     // at-hand summary is the Place window's, one Back to map away.
     await expect(page.locator('#app')).toHaveAttribute('data-sheet-detent', 'full');

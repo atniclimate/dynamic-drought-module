@@ -214,6 +214,11 @@ test.describe('PS-CORE PLACE studio', () => {
 
     await page.locator('#place-studio-back').click();
     await expect(page.locator(PLACE_ROOT)).toHaveCount(0);
+    // Oregon's briefing is open and covers the map's column, the Place cell with it:
+    // Back to map (in Reset's seat) returns to it with Oregon kept (the owner, 2026-11-22).
+    const panel = page.locator('#impact-panel');
+    await panel.locator('.impact-panel-close').click();
+    await expect(panel).toBeHidden();
     await page.locator('#place-studio-entry').click();
     await expect(page.locator('#place-selection-title')).toHaveText('Oregon');
     expect(new URLSearchParams(await search(page)).has('place')).toBe(false);
