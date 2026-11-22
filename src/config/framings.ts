@@ -74,6 +74,14 @@ export interface FramingDef {
   /** Display label (tooltips, assistive names; the minimap drawing
    * itself is label-free for pointer users, D-0.7.0-054). */
   readonly label: string;
+  /**
+   * Whether the framing's named geography lies within the United States, where
+   * a mode draws its United States stand-ins (DR-270; `unitedStatesStandIns`,
+   * src/config/clusters.ts). False for a framing that reaches into Canada or
+   * Mexico, which the continental products cover whole. REQUIRED, so a new
+   * framing cannot be added without deciding it.
+   */
+  readonly unitedStates: boolean;
   /** Camera fit bounds, Leaflet order [[south, west], [north, east]]. */
   readonly bounds: readonly [
     readonly [number, number],
@@ -173,6 +181,7 @@ const AUTHORED_NOTE =
 export const FRAMINGS: Record<FramingKey, FramingDef> = {
   'alaska-northwest': {
     label: 'Alaska & Northwest',
+    unitedStates: false,
     // Split out of Boreal & Arctic (round 4 item 4) along the northern
     // Rockies and Mackenzie Mountains trend: Alaska, Yukon, and
     // northwestern British Columbia as one navigable area of focus.
@@ -193,6 +202,7 @@ export const FRAMINGS: Record<FramingKey, FramingDef> = {
   },
   'boreal-arctic': {
     label: 'Boreal Northern Canada',
+    unitedStates: false,
     // East of the Alaska & Northwest divide across contiguous northern
     // Canada. The Arctic Archipelago is deliberately outside this compact
     // navigation framing.
@@ -214,6 +224,7 @@ export const FRAMINGS: Record<FramingKey, FramingDef> = {
   },
   'pacific-coast': {
     label: 'Pacific Coast & Northwest Cascades',
+    unitedStates: false,
     // Coastal British Columbia through Washington, Oregon, and
     // northwestern California; the Columbia-Fraser sphere.
     bounds: [
@@ -231,6 +242,7 @@ export const FRAMINGS: Record<FramingKey, FramingDef> = {
   },
   'arid-west': {
     label: 'Arid West & Desert Southwest',
+    unitedStates: true,
     bounds: [
       [31.0, -124.5],
       [44.5, -102.0],
@@ -240,6 +252,7 @@ export const FRAMINGS: Record<FramingKey, FramingDef> = {
   },
   'plains-prairies': {
     label: 'Agricultural Great Plains & Prairies',
+    unitedStates: false,
     bounds: [
       [33.5, -110.5],
       [55.5, -89.5],
@@ -255,6 +268,7 @@ export const FRAMINGS: Record<FramingKey, FramingDef> = {
   },
   'eastern-forests': {
     label: 'Eastern Forests & Great Lakes',
+    unitedStates: false,
     bounds: [
       [38.0, -95.5],
       [52.0, -52.0],
@@ -270,6 +284,7 @@ export const FRAMINGS: Record<FramingKey, FramingDef> = {
   },
   'southeast-gulf': {
     label: 'Southeast & Gulf Coast',
+    unitedStates: true,
     bounds: [
       [24.4, -100.5],
       [39.0, -74.5],
@@ -279,6 +294,7 @@ export const FRAMINGS: Record<FramingKey, FramingDef> = {
   },
   mexico: {
     label: 'Mexico',
+    unitedStates: false,
     // Camera-only framing riding North American Drought Monitor coverage.
     // Mexico place catalogs and local briefings remain out of scope. The
     // camera includes the full country extent represented by NADM.
@@ -302,6 +318,7 @@ export const FRAMINGS: Record<FramingKey, FramingDef> = {
   },
   hawaii: {
     label: 'Hawaii',
+    unitedStates: true,
     // The minimap draws Hawaii as an enlarged inset (round 4 item 6),
     // but clicking it fits the REAL island-chain bounds; kept equal to
     // REGIONS.hawaii so the framing and the legacy region land the same

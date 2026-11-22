@@ -448,7 +448,8 @@ test('an in-session entry into ENSO commits Season ahead and leaving undoes it; 
     assert.equal(timeline.horizon, 'season-ahead');
     service.requestCluster('drought');
     assert.equal(service.getCommittedSnapshot().horizon, 'current');
-    assert.ok(service.getCommittedSnapshot().intendedKeys.has('nadm-drought'));
+    // The default geography is the United States, where "now" is the weekly U.S. map (DR-270).
+    assert.ok(service.getCommittedSnapshot().intendedKeys.has('usdm'));
     // So does a horizon picked inside ENSO.
     reset();
     service.requestHorizon('weeks-ahead');
@@ -495,7 +496,7 @@ test('an in-session entry into ENSO commits Season ahead and leaving undoes it; 
     snap = service.getCommittedSnapshot();
     assert.equal(snap.cluster, 'custom');
     assert.equal(timeline.horizon, 'current');
-    assert.ok(snap.intendedKeys.has('nadm-drought') && snap.intendedKeys.has('places'));
+    assert.ok(snap.intendedKeys.has('usdm') && snap.intendedKeys.has('places'));
     assert.ok(!snap.intendedKeys.has('drought'));
     // The phone rail: an ENSO preset commits Season ahead, a later preset of a mode that opens on Current commits Current.
     const tapPreset = (mode) => {

@@ -358,7 +358,7 @@ test.describe('URL as state', () => {
     // brief embed never mounts the catalog island at all (headroom C1), so
     // no pill DOM exists here. The assertions are unchanged.)
     await expect
-      .poll(async () => (await urlLayers(page)).has('nadm-drought'), { timeout: 25_000 })
+      .poll(async () => (await urlLayers(page)).has('usdm'), { timeout: 25_000 })
       .toBe(true);
     expect(await search(page)).toContain('embed=true');
   });

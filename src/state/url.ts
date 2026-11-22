@@ -12,7 +12,13 @@ import { defaultBasemapFor, isImageryUnavailable, parseBasemapParam } from './ba
 import type { BasemapMode } from './basemap-store';
 import { parseFramingParam } from './framing-store';
 import { parseClusterParam, parseOceanParam } from './cluster-store';
-import { composeClusterIntent, isModeDisplay, resolveHorizonForCluster } from './cluster-service';
+import {
+  composeClusterIntent,
+  isModeDisplay,
+  isUnitedStatesGeography,
+  keyForGeography,
+  resolveHorizonForCluster
+} from './cluster-service';
 import {
   parseUsdmMode,
   parseUsdmWeek,
@@ -393,6 +399,11 @@ export function parseUrlParams(): ParsedUrlParams {
     ? urlHorizon
     : resolveHorizonForCluster(shell.cluster, urlHorizon);
 
+  // DR-270: a link that lists no layers draws its mode's United States
+  // stand-ins where its own view is of the United States, or where it opens a
+  // place's briefing (`select=`). A listed set is shown as written.
+  const us = isUnitedStatesGeography(shell.framing, region, parseSelectParam() !== null);
+
   let layers: Set<string>;
   if (params.has('layers')) {
     const raw = params.get('layers') ?? '';
@@ -419,9 +430,9 @@ export function parseUrlParams(): ParsedUrlParams {
     // fallback (DR-109's bare boot is the default view; the composed set
     // has the same members in a different member order, not a byte match,
     // so this branch must not widen to cover it).
-    layers = new Set(composeClusterIntent(shell.cluster, horizon));
+    layers = new Set(composeClusterIntent(shell.cluster, horizon, us));
   } else {
-    layers = new Set(DEFAULT_ON_KEYS);
+    layers = new Set([...DEFAULT_ON_KEYS].map((key) => keyForGeography('drought', key, us)));
   }
 
   const embed = parseEmbedParam(params);

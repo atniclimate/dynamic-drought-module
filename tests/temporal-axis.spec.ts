@@ -822,14 +822,16 @@ test.describe('found-030: a Drought boot at an outlook horizon composes the CPC 
 
         // Predicted red at 531ab66: the Drought fallback ignores the URL's
         // horizon and always seeds DEFAULT_ON_KEYS, so `drought` stays off
-        // and `nadm-drought` stays on regardless of horizon=.
+        // and the current surface (usdm in the United States, DR-270) stays
+        // on regardless of horizon=.
         await expect
           .poll(async () => {
             const layers = await urlLayers(page);
-            return layers.has('drought') && !layers.has('nadm-drought');
+            return layers.has('drought') && !layers.has('usdm') && !layers.has('nadm-drought');
           })
           .toBe(true);
         await expect(layerCheckbox(page, 'drought')).toBeChecked();
+        await expect(layerCheckbox(page, 'usdm')).not.toBeChecked();
         await expect(layerCheckbox(page, 'nadm-drought')).not.toBeChecked();
         await expect(
           page.locator('.shell-cluster-btn[data-cluster="drought"]')

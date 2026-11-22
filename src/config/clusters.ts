@@ -106,6 +106,15 @@ export interface HazardClusterDef {
    */
   readonly optionalLayers?: readonly LayerKey[];
   /**
+   * A recipe surface's stand-in where the geography is of the United States
+   * (DR-270; method M-114): the recipe names the continental product, and this
+   * names the United States product drawn in its place for a place or view in
+   * the United States. Both of a pair are surfaces, so the one-surface rule
+   * takes the other off, and either one showing is this mode's display. Read
+   * only through the cluster service (`keyForGeography`), never as a mode literal.
+   */
+  readonly unitedStatesStandIns?: Partial<Record<LayerKey, LayerKey>>;
+  /**
    * The horizon an in-session entry into this mode commits (the mode
    * switcher, the minimap ocean door, the phone rail), read only through the
    * cluster service and the rail, never as a mode literal (DR-113). Unset
@@ -182,8 +191,9 @@ export const HAZARD_CLUSTERS: Record<HazardClusterKey, HazardClusterDef> = {
     // First-use acronym expansion (DG-080 r2 finding 5):
     // this tooltip is the cluster's first prose use of the agency name,
     // so both acronyms are spelled out here; later uses stay compact.
+    // DRAFT wording (pending the owner's read-back): names both current products (DR-270).
     description:
-      'Current North American Drought Monitor conditions and the National Oceanic and Atmospheric Administration (NOAA) Climate Prediction Center (CPC) drought outlooks.',
+      'Current drought conditions, from the weekly U.S. Drought Monitor in the United States and the monthly North American Drought Monitor elsewhere, and the National Oceanic and Atmospheric Administration (NOAA) Climate Prediction Center (CPC) drought outlooks.',
     defaultBasemap: 'satellite',
     recipes: {
       // The monthly tri-national product is the current continental read.
@@ -194,6 +204,9 @@ export const HAZARD_CLUSTERS: Record<HazardClusterKey, HazardClusterDef> = {
       'weeks-ahead': ['drought'],
       'season-ahead': ['drought']
     },
+    // The weekly U.S. Drought Monitor, the product the briefing quotes, is the
+    // current read for a place or view in the United States (DR-270).
+    unitedStatesStandIns: { 'nadm-drought': 'usdm' },
     // A move into this mode opens on Current Conditions: a Near Term or Long
     // Range carried in from another mode showed the CPC outlook in place of the
     // current drought map (owner's report, 2026-11-13: "drought layers don't load").

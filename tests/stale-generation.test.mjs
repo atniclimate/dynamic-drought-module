@@ -189,7 +189,9 @@ async function bootDrought(holdKeys) {
   // registry.deactivate also clears a key's status.
   for (const def of LAYER_DEFS) registry.deactivate(def.key);
   timeline.reset();
-  setFraming(null);
+  // The continental camera: Drought composes the North American map these cases
+  // hold (in the United States it composes the weekly U.S. map, DR-270).
+  setFraming('all');
   setHazardCluster('drought', null);
   const records = installModules(new Set());
   bindRealController();
@@ -550,5 +552,40 @@ test('an abort at off intent frees the key at once: a held activation that honou
     }
   } finally {
     live.stop();
+  }
+});
+test('DR-270: a committed geography exchanges the current drought surface through the real controller; the mode holds and a custom set keeps its other layers', async () => {
+  await bootDrought([]);
+  const live = startService();
+  try {
+    assert.equal(registry.getActiveKeys().has('nadm-drought'), true, 'the continental camera draws the North American map');
+    assert.equal(registry.getActiveKeys().has('usdm'), false);
+
+    // A United States framing: the weekly U.S. map takes the North American map's place.
+    setFraming('arid-west');
+    service.followGeography();
+    await flush();
+    assert.equal(registry.getActiveKeys().has('usdm'), true, 'the weekly U.S. map is on');
+    assert.equal(registry.getActiveKeys().has('nadm-drought'), false, 'the one-surface rule took the North American map off');
+    assert.equal(checkedKeys().has('nadm-drought'), false);
+    assert.equal(service.getCommittedSnapshot().cluster, 'drought', 'either surface of the pair is Drought');
+    assert.equal(getHazardCluster(), 'drought');
+
+    // A custom set (a reference extra) exchanges only its surface.
+    toggle.requestLayerOn('hydrography');
+    await flush();
+    assert.equal(service.getCommittedSnapshot().cluster, 'custom');
+    const others = [...checkedKeys()].filter((key) => key !== 'usdm').sort();
+    setFraming('all');
+    service.followGeography();
+    await flush();
+    assert.equal(registry.getActiveKeys().has('nadm-drought'), true);
+    assert.equal(registry.getActiveKeys().has('usdm'), false);
+    assert.deepEqual([...checkedKeys()].filter((key) => key !== 'nadm-drought').sort(), others, 'every other layer stays');
+    assert.equal(service.getSelectedHazard(), 'drought');
+  } finally {
+    live.stop();
+    toggle.requestLayerOff('hydrography');
+    await flush();
   }
 });

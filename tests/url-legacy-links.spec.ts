@@ -171,17 +171,17 @@ test.describe('URL legacy links and tolerant reading', () => {
     // Settling a default-on layer guarantees several syncUrl writes have
     // run; select must be gone from the URL afterward. This is a
     // client-side guarantee, independent of the deep-link fetch outcome.
-    // The nadm-drought-in-URL assertion relies on its activate() reporting
+    // The usdm-in-URL assertion (the default surface, DR-270) relies on its activate() reporting
     // an error status rather than throwing (the ratified stay-on
     // contract), so the layer stays registered and in the URL even on a
     // bad-network day. Both polls carry the doctrine's 25s ceiling.
     await gotoApp(page, '?select=state:WA');
-    await waitForLayerSettled(page, 'nadm-drought');
+    await waitForLayerSettled(page, 'usdm');
     await expect
       .poll(async () => (await search(page)).includes('select='), { timeout: 25_000 })
       .toBe(false);
     await expect
-      .poll(async () => (await urlLayers(page)).has('nadm-drought'), { timeout: 25_000 })
+      .poll(async () => (await urlLayers(page)).has('usdm'), { timeout: 25_000 })
       .toBe(true);
   });
 });

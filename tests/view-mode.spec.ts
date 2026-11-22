@@ -194,7 +194,9 @@ test.describe('U1 the two doors (view mode)', () => {
     });
 
     await stubRecentSatellite(page);
-    await page.route('**/NADM-current.geojson', (route) =>
+    // This boot uses a raw goto, so no default stub applies. The default
+    // surface is the weekly U.S. map (DR-270), so stub its service.
+    await page.route('**/USDM_current/**', (route) =>
       route.fulfill({
         status: 200,
         contentType: 'application/geo+json',
@@ -202,7 +204,7 @@ test.describe('U1 the two doors (view mode)', () => {
           type: 'FeatureCollection',
           features: [{
             type: 'Feature',
-            properties: { DROUGHTCAT: 'd0', YEAR_MONTH: '202607' },
+            properties: { DM: 0, MapDate: Date.UTC(2026, 6, 28) },
             geometry: {
               type: 'Polygon',
               coordinates: [[[-125, 45], [-115, 45], [-115, 50], [-125, 50], [-125, 45]]]
@@ -223,7 +225,7 @@ test.describe('U1 the two doors (view mode)', () => {
     // The default layer set still activates with no catalog DOM at all
     // (the shared toggle command and the bridge are the doors since U1b).
     await expect
-      .poll(async () => (await urlLayers(page)).has('nadm-drought'), { timeout: 25_000 })
+      .poll(async () => (await urlLayers(page)).has('usdm'), { timeout: 25_000 })
       .toBe(true);
 
     // No briefing opens unsolicited (D-0.7.0-041; the old zero-click
