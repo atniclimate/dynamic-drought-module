@@ -208,6 +208,7 @@ opens Console.
 | `spc-fire-weather` | Fire Weather Outlook (Day 1) | surface | NOAA SPC MapServer (live) |
 | `usfs-whp` | Wildfire Hazard Potential | surface | USFS GeoPlatform ImageServer (live) |
 | `usfs-whp-classes` | Wildfire Hazard Potential (USFS colors) | surface | USFS GeoPlatform ImageServer (live) |
+| `live-fuel-moisture` | Live fuel moisture | surface | EOSIAL Laboratory, Sapienza University of Rome: published eight-day maps for the western United States, read by byte range (live); offered in Wildfire mode only |
 | `sst-anomaly` | Ocean Temperature Anomaly | surface | NASA GIBS WMTS, GHRSST MUR (live) |
 | `hydrography` | Hydrography | reference | USGS, Natural Resources Canada and Natural Earth, bundled |
 | `forests` | National Forests | reference | USDA Forest Service boundaries, bundled PMTiles |
@@ -440,6 +441,22 @@ Nebraska-Lincoln)
 **Federal Register** (National Archives and Records Administration)
 
 - Indian Entities Recognized by and Eligible to Receive Services from BIA
+
+**Sapienza University of Rome** (EOSIAL Laboratory, School of Aerospace Engineering)
+
+- Live fuel moisture content maps for the western United States: eight-day
+  estimates from Suomi NPP VIIRS reflectance, daily weather and terrain,
+  made with the models of Pampanoni, V.; Chuvieco, E.; Ferrari, A.;
+  Laneve, G.; Saquella, S. (2026). A Unified Multisensor Machine-Learning
+  Framework for Live Fuel Moisture Content Retrieval. *Remote Sensing*,
+  18(21), 3744. <https://doi.org/10.3390/rs18213744>. Models and tools:
+  <https://github.com/valpamp/lfmc-multisensor>. Used under the PolyForm
+  Noncommercial License 1.0.0 and the publisher's Terms for Generated Maps
+  and Model Outputs: non-commercial use, with attribution. Copyright (c)
+  2026 Valerio Pampanoni. The maps are
+  read live from the publisher's host; this project stores and
+  redistributes none of them. A value is a model estimate for land the
+  model treats as grass, shrub or tree, not a field measurement.
 
 ## Attribution and licensing
 

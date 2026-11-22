@@ -104,8 +104,14 @@ async function fulfilJson(route: Route, body: unknown): Promise<void> {
 async function stubCommon(page: Page): Promise<void> {
   // Broad first, specific later: Playwright matches the most recently
   // registered route, so the fire and heat handlers below win.
+  // The weekly U.S. Drought Monitor (the default United States surface since
+  // DR-270) shares this host. It falls through to gotoApp's dated default
+  // frame: an empty frame reads no data and never installs the time card's
+  // spec (src/layers/usdm.ts installTimeBar).
   await page.route('https://services5.arcgis.com/**', (route) =>
-    route.fulfill({ status: 200, contentType: 'application/geo+json', body: emptyCollection() })
+    /\/USDM_(current|archive)\//.test(route.request().url())
+      ? route.fallback()
+      : route.fulfill({ status: 200, contentType: 'application/geo+json', body: emptyCollection() })
   );
   await page.route('https://services3.arcgis.com/**', (route) =>
     route.fulfill({ status: 200, contentType: 'application/geo+json', body: emptyCollection() })

@@ -53,12 +53,14 @@ export const LAYER_KEYS = Object.freeze([
   'places',
   'power-infrastructure',
   'nifc-fires',
+  'bcws-fires',
   'nws-alerts',
   'hms-smoke',
   'heatrisk',
   'spc-fire-weather',
   'usfs-whp',
   'usfs-whp-classes',
+  'live-fuel-moisture',
   'sst-anomaly',
   'tropical-cyclones',
   'cpc-seasonal-precip',
@@ -197,6 +199,16 @@ export interface LayerDef {
    * while the keys stay shipped, documented, and URL-reachable.
    */
   readonly uiHidden?: boolean;
+  /**
+   * Offered and loaded only while this mode is the person's mode (owner,
+   * 2026-11-21, for live fuel moisture: "it should only be loaded in Wildfire
+   * mode"). In any other mode the layer has no catalog row and no search
+   * result, and an address that names it is read without it
+   * (`layerAllowedInMode`, below), as `fire3d=` is outside Wildfire.
+   * Leaving the mode turns it off like every other non-reference layer
+   * (src/state/cluster-service.ts, applyCluster).
+   */
+  readonly onlyInMode?: keyof typeof HAZARD_CLUSTERS;
 }
 
 /**
@@ -356,6 +368,10 @@ export const LAYER_DEFS: readonly LayerDef[] = [
   // failure modes, and either can be live without the other.
   { key: 'power-infrastructure', product: 'power-infrastructure', name: 'Power Lines & Plants', source: 'HIFLD archive (2024-09-30) · EIA (live)', searchTerms: ['transmission', 'electric', 'grid', 'power plant', 'utility'], role: 'reference', defaultOn: false, load: () => import('../layers/power-3d') },
   { key: 'nifc-fires', product: 'nifc-fires', name: 'Current Mapped Fire Perimeters (NIFC)', source: 'NIFC WFIGS · FeatureServer', searchTerms: ['wildfire', 'Prescribed fire', 'fire perimeter'], role: 'event', defaultOn: false, noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/nifc-fires') },
+  // British Columbia only, so its zero state names the Province, as the
+  // Census-areas and AIAN-LAR rows above name their own coverage. DRAFT
+  // wording (DR-177): the row name and the zero state.
+  { key: 'bcws-fires', product: 'bcws-fires', name: 'Current Fire Perimeters (BC Wildfire Service)', source: 'BC Wildfire Service · FeatureServer', searchTerms: ['wildfire', 'fire perimeter', 'British Columbia'], role: 'event', defaultOn: false, noDataLabel: 'no features returned for this view (British Columbia only)', load: () => import('../layers/bcws-fires') },
   // Named by the committed mode, beside the products it reads (HazardClusterDef.alerts).
   { key: 'nws-alerts', product: 'nws-alerts', get name() { return (HAZARD_CLUSTERS[getSelectedHazard()].alerts ?? HEAT_FIRE_ALERTS).name; }, source: 'NOAA NWS · MapServer', role: 'event', defaultOn: false, noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/nws-alerts') },
   { key: 'hms-smoke', product: 'hms-smoke', name: 'Smoke Plumes (HMS)', source: 'NOAA OSPO · FeatureServer', role: 'event', defaultOn: false, noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/hms-smoke') },
@@ -364,6 +380,7 @@ export const LAYER_DEFS: readonly LayerDef[] = [
   { key: 'spc-fire-weather', product: 'spc-fire-weather', name: 'Fire Weather Outlook (Day 1)', source: 'NOAA SPC · MapServer', role: 'surface', defaultOn: false, noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/spc-fire-weather') },
   { key: 'usfs-whp', product: 'usfs-whp', name: 'Wildfire Hazard Potential', source: 'USFS · GeoPlatform', role: 'surface', defaultOn: false, noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/usfs-whp') },
   { key: 'usfs-whp-classes', product: 'usfs-whp', name: 'Wildfire Hazard Potential (USFS colors)', source: 'USFS · GeoPlatform', role: 'surface', defaultOn: false, noDataLabel: LIVE_NO_FEATURES_LABEL, load: () => import('../layers/usfs-whp-classes') },
+  { key: 'live-fuel-moisture', product: 'live-fuel-moisture', name: 'Live fuel moisture', source: 'EOSIAL Laboratory, Sapienza University of Rome', searchTerms: ['fuel moisture', 'LFMC', 'dryness', 'wildfire'], role: 'surface', defaultOn: false, onlyInMode: 'wildfire', load: () => import('../layers/live-fuel-moisture') },
   { key: 'sst-anomaly', product: 'sst-anomaly', name: 'Ocean Temperature Anomaly', source: 'NASA GIBS · GHRSST MUR', role: 'surface', defaultOn: false, load: () => import('../layers/sst-anomaly') },
   // ENSO block B3: on in the ENSO mode's recipe only. Its coverage is the
   // issuer's three basins, so its zero state names them, never "this view".
@@ -453,6 +470,16 @@ const LAYER_DEFS_BY_KEY: ReadonlyMap<string, LayerDef> = new Map(
  */
 export function getLayerDef(key: string): LayerDef | null {
   return LAYER_DEFS_BY_KEY.get(key) ?? null;
+}
+
+/**
+ * Whether a layer may be offered or loaded while `mode` is the person's mode:
+ * true for every layer but one that names a different mode in
+ * `LayerDef.onlyInMode`. An unknown key is not this rule's business and passes.
+ */
+export function layerAllowedInMode(key: string, mode: string): boolean {
+  const only = LAYER_DEFS_BY_KEY.get(key)?.onlyInMode;
+  return only === undefined || only === mode;
 }
 
 /**

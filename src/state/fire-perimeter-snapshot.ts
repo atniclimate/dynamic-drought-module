@@ -10,16 +10,18 @@ import type { FeatureCollection } from 'geojson';
 
 export interface FirePerimeterSnapshot {
   readonly collection: FeatureCollection | null;
+  /** The browser's retrieval time of that collection (the NIFC popup's own check time), or null. */
+  readonly fetchedAt: number | null;
   readonly revision: number;
 }
 
-let snapshot: FirePerimeterSnapshot = { collection: null, revision: 0 };
+let snapshot: FirePerimeterSnapshot = { collection: null, fetchedAt: null, revision: 0 };
 const listeners = new Set<() => void>();
 
 /** Publish what the map now holds; the same object again changes nothing. */
-export function setPerimeterSnapshot(collection: FeatureCollection | null): void {
+export function setPerimeterSnapshot(collection: FeatureCollection | null, fetchedAt: number | null = null): void {
   if (collection === snapshot.collection) return;
-  snapshot = { collection, revision: snapshot.revision + 1 };
+  snapshot = { collection, fetchedAt: collection === null ? null : fetchedAt, revision: snapshot.revision + 1 };
   listeners.forEach((fn) => {
     fn();
   });

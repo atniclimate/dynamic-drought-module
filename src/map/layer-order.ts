@@ -63,13 +63,19 @@ export const BOTTOM_STACK_IDS: readonly string[] = [
   ...BASE_GROUND_IDS,
   'basemap-satellite',
   'wildfire-dryness-ground',
+  // The other ground choice of the same scene (src/layers/live-fuel-moisture.ts, mirrored literal).
+  'wildfire-lfmc-ground',
   'hillshade',
   ...BASE_LINE_IDS
 ];
 
 /** Reference label layers that always read above every data layer, bottom to top. MapLibre
  * places the topmost first, so the Nations' names on the Tribal Lands layer
- * (src/layers/aiannh.ts, mirrored literal) win a collision with a city name. */
+ * (src/layers/aiannh.ts, mirrored literal) win a collision with a city name.
+ * State and province names sit above the base map's city names (owner, 2026-11-22: state names
+ * hard to read): placed after the cities, they lost nearly every collision from zoom 4, where the
+ * city list grows from about 16 to about 60 names, and only 8 of 52 stayed on screen. Their own
+ * zoom range (3.5 to 7.5) ends before the Tribal detail names begin. */
 export const TOP_LABEL_IDS: readonly string[] = [
   'base-river-label',
   'base-road-label',
@@ -81,12 +87,12 @@ export const TOP_LABEL_IDS: readonly string[] = [
   'tribal-waterbodies-label',
   'base-range-label',
   'base-peak',
-  'base-region-label',
   'base-world-water-label',
   'base-water-label',
   'tribal-communities-label',
   'base-world-place',
   'base-place',
+  'base-region-label',
   'us-places-labels',
   'aiannh-nation-labels'
 ];
@@ -139,6 +145,7 @@ export const CONDITION_SURFACE_IDS: readonly string[] = [
   'heatrisk',
   'usfs-whp',
   'usfs-whp-classes',
+  'live-fuel-moisture',
   'drought-outlook-fill',
   'drought-outlook-outline',
   'spc-fire-weather-fill',
@@ -200,6 +207,13 @@ export const EVENT_OVERLAY_IDS: readonly string[] = [
   'nifc-prescribed-fill',
   'nifc-prescribed-outline',
   'nifc-other-outline',
+  // The BC Wildfire Service perimeters beside NIFC's, then the fire areas
+  // where the two overlap, drawn once over both (src/layers/bcws-fires.ts).
+  'bcws-fires-fill',
+  'bcws-fires-casing',
+  'bcws-fires-line',
+  'fire-footprints-fill',
+  'fire-footprints-line',
   'nws-alerts-fill',
   'nws-alerts-outline',
   // ENSO block B3, above the SST frames, the Nino 3.4 box and the flow

@@ -152,7 +152,8 @@ function readyState(frame: DrynessFrame, map: MapLibreMap): 'live' | 'live (part
 /** What the map key renders; `productKey` is the product mounted on the map, read from the map. */
 export interface DrynessGroundDetail {
   readonly state: DrynessSnapshot['state'];
-  readonly productKey: DrynessFrame['productKey'] | 'none';
+  /** `live-fuel-moisture` is the other ground choice, published through this same channel (src/layers/live-fuel-moisture.ts). */
+  readonly productKey: DrynessFrame['productKey'] | 'live-fuel-moisture' | 'none';
   readonly title: string | null;
   /** `alpha` is the white opacity the class draws at; 0 is the no-value row, drawn transparent. */
   readonly rows: readonly { readonly alpha: number; readonly label: string }[];
@@ -162,6 +163,8 @@ export interface DrynessGroundDetail {
 }
 
 export interface DrynessBriefing {
+  /** The section's heading in Technical information; absent means the plant-stress ground's own. */
+  readonly heading?: string;
   readonly lines: readonly string[];
   readonly disclaimerUrl: string | null;
 }
@@ -289,6 +292,36 @@ export async function activateWildfireDryness(map: MapLibreMap, signal: AbortSig
     if (getFire3DGroundLayer('plantStress')) void mine.activate(map, signal);
     else mine.deactivate();
   });
-  signal.addEventListener('abort', () => { release(); if (ground === mine) ground = null; }, { once: true });
+  // The other ground choice, "Live fuel moisture" (off until a person turns it
+  // on, and never on together with plant stress: src/state/fire3d-ground-layers.ts).
+  // Its chunk loads only when the switch is first turned on, and it publishes
+  // through this module's `announce`, so the key and the briefing have one voice.
+  let fuelMoisture: { stop(): void } | null = null;
+  let fuelMoistureWanted = false;
+  const followFuelMoisture = (): void => {
+    fuelMoistureWanted = getFire3DGroundLayer('liveFuelMoisture') && !signal.aborted;
+    if (!fuelMoistureWanted) {
+      fuelMoisture?.stop();
+      fuelMoisture = null;
+      return;
+    }
+    if (fuelMoisture) return;
+    void import('./live-fuel-moisture').then((module) => {
+      // The switch may have been turned off, or the scene left, while the chunk loaded.
+      if (!fuelMoistureWanted || fuelMoisture || signal.aborted) return;
+      fuelMoisture = module.activateLiveFuelMoistureGround(map, signal, announce);
+    }).catch((error: unknown) => console.warn('[live-fuel-moisture] ground chunk failed.', error));
+  };
+  const releaseFuelMoisture = onFire3DGroundLayerChange((layer) => {
+    if (layer === 'liveFuelMoisture') followFuelMoisture();
+  });
+  signal.addEventListener('abort', () => {
+    release();
+    releaseFuelMoisture();
+    fuelMoisture?.stop();
+    fuelMoisture = null;
+    if (ground === mine) ground = null;
+  }, { once: true });
+  followFuelMoisture();
   if (getFire3DGroundLayer('plantStress')) await mine.activate(map, signal);
 }

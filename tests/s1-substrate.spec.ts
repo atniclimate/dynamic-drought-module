@@ -119,7 +119,8 @@ test.describe('S1 hazard clusters (D-0.7.0-042/043/044)', () => {
 
   test('the current wildfire recipe is perimeters plus smoke only (D-0.7.0-043 part 1)', () => {
     const current = HAZARD_CLUSTERS.wildfire.recipes.current;
-    expect([...current].sort()).toEqual(['hms-smoke', 'nifc-fires']);
+    // Both agencies' perimeters: NIFC's and, beside them, BC Wildfire Service's.
+    expect([...current].sort()).toEqual(['bcws-fires', 'hms-smoke', 'nifc-fires']);
     expect(current).not.toContain('usfs-whp');
   });
 

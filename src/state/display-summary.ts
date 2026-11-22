@@ -74,7 +74,9 @@ const SENTENCE_ROLE_ORDER: readonly LayerRole[] = [
 const US_SCOPE_CAUTION_EXEMPT_KEYS: ReadonlySet<string> = new Set([
   'sst-anomaly',
   'nadm-drought',
-  'tropical-cyclones'
+  'tropical-cyclones',
+  // British Columbia's own perimeters, named so by their layer row and key.
+  'bcws-fires'
 ]);
 
 /**

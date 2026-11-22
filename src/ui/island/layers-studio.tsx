@@ -235,6 +235,9 @@ function LayersStudio({ controller, checked, statuses, search }: LayersStudioPro
 
   return (
     <section class="layers-studio" aria-labelledby="layers-studio-heading">
+      {/* Wider than a phone, Back to map is a cell in the seat of the map's
+          Reset (top right) with the rehosted SAT cell beside it; the glyph is
+          drawn there only. On a phone the header keeps its own strip. */}
       <header class="layers-studio-header">
         <button
           ref={backRef}
@@ -242,20 +245,30 @@ function LayersStudio({ controller, checked, statuses, search }: LayersStudioPro
           class="layers-studio-back"
           onClick={backToMap}
         >
-          Back to map
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+            <path d="M19 12H5M12 19l-7-7 7-7" />
+          </svg>
+          <span class="layers-studio-back-word">Back to map</span>
         </button>
         <h2 id="layers-studio-heading">Layer studio</h2>
         <div class="layers-studio-basemap" ref={basemapHostRef} />
       </header>
       <div class="layers-studio-scroll">
-        {search && (
-          <div class="layers-studio-search">
-            <Search {...search} />
-          </div>
-        )}
+        {/* The search is the grid's first item, so a wide studio can seat it
+            over "On the map now" and give the catalog the columns beside. */}
         <div class="layers-studio-grid">
+          {search && (
+            <div class="layers-studio-search">
+              <Search {...search} />
+            </div>
+          )}
           <OnTheMapNow controller={controller} checked={checked} statuses={statuses} />
-          <div class="layers-studio-catalog">
+          {/* The number of role groups, for the stylesheet: a wide catalog
+              lays them in columns and never draws more columns than groups. */}
+          <div
+            class="layers-studio-catalog"
+            style={`--layer-group-count: ${LAYER_ROLE_ORDER.length}`}
+          >
             <h3 class="layers-add-heading">Add to the map</h3>
             <Catalog
               controller={controller}

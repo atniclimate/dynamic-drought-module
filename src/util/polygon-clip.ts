@@ -9,15 +9,31 @@ import { validatePolygonForClip, certifyEmptyClip, PolygonClipValidationError, t
 import { PolygonClipError, assertClipLimits, type PolygonClipLimits } from './polygon-clip-contract';
 
 type Intersection = (a:ClipCoordinates,b:ClipCoordinates)=>unknown;
+type Union = (a:ClipCoordinates,...rest:ClipCoordinates[])=>unknown;
+function validate(value:unknown,phase:'invalid-input'|'invalid-output',cap:PolygonClipLimits['input']):ClipCoordinates {
+  try { return validatePolygonForClip(value,cap); }
+  catch(error) {
+    throw new PolygonClipError(phase,error instanceof PolygonClipValidationError ? error.code : 'validation-failed');
+  }
+}
+/**
+ * One fire area's single outline: the union of its member records, taken
+ * after grouping has decided the members (never an input to that decision).
+ * Operands and output pass the same strict gate as the intersection.
+ */
+export function unionPolygons(geometries:readonly unknown[],limits:PolygonClipLimits,
+  operation:Union=polygonClipping.union):ClipCoordinates {
+  assertClipLimits(limits);
+  const [first,...rest]=geometries.map(g=>validate(g,'invalid-input',limits.input));
+  if(first===undefined) throw new PolygonClipError('invalid-input','no-operands');
+  let output:unknown;
+  try { output=operation(first,...rest); }
+  catch { throw new PolygonClipError('operation-failed','union-threw'); }
+  return validate({type:'MultiPolygon',coordinates:output},'invalid-output',limits.output);
+}
 export function intersectPolygons(a:unknown,b:unknown,limits:PolygonClipLimits,
   operation:Intersection=polygonClipping.intersection):ClipCoordinates {
   assertClipLimits(limits);
-  const validate=(value:unknown,phase:'invalid-input'|'invalid-output',cap:PolygonClipLimits['input']):ClipCoordinates=>{
-    try { return validatePolygonForClip(value,cap); }
-    catch(error) {
-      throw new PolygonClipError(phase,error instanceof PolygonClipValidationError ? error.code : 'validation-failed');
-    }
-  };
   const left=validate(a,'invalid-input',limits.input);
   const right=validate(b,'invalid-input',limits.input);
   refuseVendorInputCollapse(left,right);

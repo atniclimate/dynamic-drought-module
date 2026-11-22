@@ -78,7 +78,7 @@ test.describe('minimal LAYERS studio', () => {
     const beforeLength = await page.evaluate(() => window.history.length);
 
     const entry = page.locator('#layers-studio-entry');
-    await expect(entry).toHaveText('Layers'); // mixed case since visual uniformity wave 1, D1
+    await expect(entry).toHaveText('Layer'); // singular on the map cell (owner, 2026-11-21)
     await expect(entry).toHaveAttribute(
       'aria-label',
       'Open the LAYERS studio: layer search, toggles, and sources'
@@ -194,10 +194,9 @@ test.describe('minimal LAYERS studio', () => {
       page
     }) => {
       // deriveViewMode (src/state/view-mode.ts) sends a bare `layers=` URL to
-      // CONSOLE, whose surface has no on-screen studio door (#layers-studio-entry
-      // lives only in #brief-display, the Brief surface); an explicit
-      // view=brief keeps the door visible, matching every other case in this
-      // file that opens the studio by pressing it.
+      // CONSOLE. The studio door is a map cell in both views since 2026-11-21;
+      // the explicit view=brief stays so this case opens the studio from
+      // Brief, matching every other case in this file that presses the door.
       await page.emulateMedia({ reducedMotion });
       await gotoApp(page, '?view=brief&layers=telemetry');
       await expect(layerPill(page, 'telemetry')).toHaveText(PILL.zoomIn);

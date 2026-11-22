@@ -1,6 +1,6 @@
 import { REGIONS, DEFAULT_REGION } from '../config/regions';
 import type { RegionKey } from '../config/regions';
-import { DEFAULT_ON_KEYS, resolveExclusiveSurface } from '../config/layers';
+import { DEFAULT_ON_KEYS, layerAllowedInMode, resolveExclusiveSurface } from '../config/layers';
 import type { FramingSelection } from '../config/framings';
 import { HAZARD_CLUSTERS } from '../config/clusters';
 import type { HazardClusterKey } from '../config/clusters';
@@ -433,6 +433,11 @@ export function parseUrlParams(): ParsedUrlParams {
     layers = new Set(composeClusterIntent(shell.cluster, horizon, us));
   } else {
     layers = new Set([...DEFAULT_ON_KEYS].map((key) => keyForGeography('drought', key, us)));
+  }
+  // A layer that belongs to one mode (LayerDef.onlyInMode) is read out of an
+  // address written under another, as `fire3d=` is outside Wildfire (DR-122).
+  for (const key of [...layers]) {
+    if (!layerAllowedInMode(key, shell.hazard)) layers.delete(key);
   }
 
   const embed = parseEmbedParam(params);

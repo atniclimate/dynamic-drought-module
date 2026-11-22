@@ -123,7 +123,7 @@ test.describe('DR-065 mode 3: repeated studio cycles stay consistent (desktop)',
   }) => {
     await gotoApp(page, '?view=brief&layers=places');
 
-    const pair = page.locator('#brief-display #layers-studio-entry-host #studio-entry-pair');
+    const pair = page.locator('.map-overlay-controls > #map-studio-seat #studio-entry-pair');
     const placeDoor = pair.locator('#place-studio-entry');
     const layersDoor = pair.locator('#layers-studio-entry');
     await expect(pair).toBeVisible();
@@ -148,14 +148,16 @@ test.describe('DR-065 mode 3: repeated studio cycles stay consistent (desktop)',
       'cycle 1'
     );
 
-    // The view switch, with no studio open: the doors live inside the Brief
-    // display, so Console takes them away and Brief must bring them back.
+    // The view switch, with no studio open: the doors are cells of the map
+    // column (owner, 2026-11-21 and 22), which is the same in both views, so
+    // Console keeps them and Brief still has them on the way back.
     const consoleButton = page.locator('.view-switch [data-view="console"]');
     const briefButton = page.locator('.view-switch [data-view="brief"]');
 
     await consoleButton.click();
     await expect(consoleButton).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.locator('#brief-display')).toBeHidden();
+    await expect(page.locator('#app')).toHaveClass(/\bview-console\b/);
+    await expect(pair).toBeVisible();
     await expect
       .poll(() => new URL(page.url()).searchParams.get('view'))
       .toBe('console');
@@ -169,7 +171,7 @@ test.describe('DR-065 mode 3: repeated studio cycles stay consistent (desktop)',
 
     await briefButton.click();
     await expect(briefButton).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.locator('#brief-display')).toBeVisible();
+    await expect(page.locator('#app')).toHaveClass(/\bview-brief\b/);
     await expect(pair).toBeVisible();
     await expect
       .poll(() => page.url(), { message: 'the view round trip did not return the map URL' })

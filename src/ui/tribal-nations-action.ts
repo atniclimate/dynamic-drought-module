@@ -1,12 +1,14 @@
 /**
  * The eager Tribal Nations action (the umbrella build's Unit F; the Codex
- * front-end consultation Q1): the ratified "prominent button in the initial
- * display" cannot live only in the catalog, because a bare URL opens the
- * BRIEF door where no catalog exists (and a brief embed never downloads the
- * island chunk at all, headroom C1). This module supplies the compact
- * Brief-door affordance: one labeled row hosted by the impact panel's
- * static chrome, wired through the same `LayerGroupDef` action set and the
- * same bridge-safe `requestLayerOn` command the catalog umbrella uses.
+ * front-end consultation Q1). The group's commands (on, off, toggle) and its
+ * shared health format serve the console catalog's umbrella card and the
+ * place locator. The Brief's main navigation carries no Tribal Nations button
+ * (owner, 2026-11-21: the search finds the Nations and the Console's layer
+ * list turns the layers off). The one remaining button is a brief embed's:
+ * an embed never downloads the island chunk (headroom C1), so the compact row
+ * rides the impact panel's static chrome there, wired through the same
+ * `LayerGroupDef` action set and the same bridge-safe `requestLayerOn`
+ * command the catalog umbrella uses.
  *
  * Eager-chunk discipline: this file may import ONLY eager modules (the pure
  * group config and the layer-toggle command). It must never import the
@@ -112,13 +114,13 @@ function unavailableCount(): number {
 
 /**
  * Keep an element's text mirroring the group's FAULT (Codex final-pass
- * finding 2: a partial agency outage must be VISIBLE on the default Brief,
- * mobile at-hand, and brief-embed surfaces, not only inside the lazy
- * catalog's hidden details). The line reads "1 unavailable" while an agency
- * has failed and is empty otherwise: the selected count left the display
- * (visual uniformity wave 1, D5) and reads in the button's accessible name
- * (`wireTribalNationsToggle`) and the catalog card. Eager wiring only; both
- * Brief-door hosts call this once at build time.
+ * finding 2: a partial agency outage must be VISIBLE on the brief-embed
+ * surface, not only inside the lazy catalog's hidden details). The line
+ * reads "1 unavailable" while an agency has failed and is empty otherwise:
+ * the selected count left the display (visual uniformity wave 1, D5) and
+ * reads in the button's accessible name (`wireTribalNationsToggle`) and the
+ * catalog card. Eager wiring only; the Brief-door row calls this once at
+ * build time.
  */
 export function wireTribalNationsHealth(el: HTMLElement): void {
   const update = (): void => {
@@ -142,10 +144,9 @@ export function wireTribalNationsHealth(el: HTMLElement): void {
  *
  * `descEl`, when given, also tracks the state: the pressed description
  * (`actionOffDescription`, "Turns off...") while every member is on, the
- * activate description (`actionDescription`, "Turns on...") otherwise. Two
- * hosts present as pressed, the Brief-door control and its phone at-hand
- * mirror (found-090), so both pass their description element; the repair
- * for the false-while-pressed "Turns on" text (found-006 repair round).
+ * activate description (`actionDescription`, "Turns on...") otherwise. The
+ * Brief-door row passes its description element; the repair for the
+ * false-while-pressed "Turns on" text (found-006 repair round).
  */
 export function wireTribalNationsToggle(
   button: HTMLButtonElement,
@@ -174,8 +175,8 @@ export function wireTribalNationsToggle(
 /**
  * Build the compact Brief-door action row: the visible "Tribal Nations"
  * button, its screen-reader effect description, and the fault line under
- * it, empty unless an agency is unavailable. The caller owns placement (the
- * impact panel inserts it between its header and body).
+ * it, empty unless an agency is unavailable. The caller owns placement (a
+ * brief embed's impact panel inserts it between its header and body).
  */
 export function buildTribalNationsBriefAction(): HTMLElement {
   const row = document.createElement('div');

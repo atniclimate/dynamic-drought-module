@@ -11,6 +11,7 @@ import {
   stubWildfireMinimapUnavailable,
 } from './minimap-fixtures';
 import { stubCpcDroughtOutlook } from './cpc-outlook-fixtures';
+import { fulfillBcws, isBcwsRequestUrl } from './wildfire-fixtures';
 
 test('the Alaska framing camera includes the wrapped western Aleutians', () => {
   const [[west], [east]] = framingFitBounds(FRAMINGS['alaska-northwest']);
@@ -270,7 +271,7 @@ test.describe('S4b minimap', () => {
     await gotoApp(page, '?view=brief&cluster=wildfire');
     const minimap = page.locator('.shell-minimap-map');
     await expect(minimap.locator('.shell-minimap-scale')).toHaveText(
-      'NIFC / WHP 2023',
+      'NIFC, BCWS / WHP 2023',
     );
     await expect(minimap.locator('.shell-minimap-metric-note')).toHaveCount(0);
     await expect(minimap.locator('.shell-minimap-canvas')).toHaveAttribute(
@@ -427,7 +428,7 @@ test.describe('S4b minimap', () => {
     await expect(
       page.locator('.shell-horizon-btn[data-horizon="weeks-ahead"]'),
     ).toHaveAttribute('aria-pressed', 'true');
-    await expect(scale).toHaveText('NIFC / WHP 2023');
+    await expect(scale).toHaveText('NIFC, BCWS / WHP 2023');
     await expect(
       minimap.locator('[data-framing="alaska-northwest"]'),
     ).toHaveAttribute('data-wildfire-condition', 'mapped-wildfire');
@@ -439,7 +440,7 @@ test.describe('S4b minimap', () => {
     await expect(pacific).not.toHaveAttribute('aria-label', /NIFC|Wildfire Hazard Potential/);
     // Back at Current, the shipped reading returns as it was.
     await page.locator('.shell-horizon-btn[data-horizon="current"]').click();
-    await expect(scale).toHaveText('NIFC / WHP 2023');
+    await expect(scale).toHaveText('NIFC, BCWS / WHP 2023');
     await expect(
       minimap.locator('[data-framing="alaska-northwest"]'),
     ).toHaveAttribute('data-wildfire-condition', 'mapped-wildfire');
@@ -1129,5 +1130,79 @@ test.describe('framing coverage clauses render only where each is true', () => {
     await expect(key).not.toContainText(MEXICO_DISPLAY);
     await expect(key).not.toContainText(MEXICO_MINIMAP);
     await expect(key).not.toContainText(MEXICO_BRIEFING);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// BC Wildfire Service in the wildfire minimap (the acceptance of 2026-09-25):
+// a framing that reaches British Columbia counts the issuer's active stages,
+// one footprint once with the ratified label, and a failed BC read never as
+// zero. The NIFC side is the usual count stub; BC answers through
+// `fulfillBcws` (tests/wildfire-fixtures.ts).
+// ---------------------------------------------------------------------------
+
+/** A square at the Border 2 fire, inside Pacific Coast and British Columbia's box. */
+const BORDER_SQUARE = { type: 'Polygon', coordinates: [[[-121.1, 49.0], [-121.0, 49.0], [-121.0, 49.1], [-121.1, 49.1], [-121.1, 49.0]]] };
+const BC_ACTIVE = {
+  type: 'Feature',
+  properties: { OBJECTID: 217, FIRE_NUMBER: 'V10885', FIRE_YEAR: 2026, FIRE_STATUS: 'Under Control', FIRE_SIZE_HECTARES: 6595.6 },
+  geometry: BORDER_SQUARE
+};
+
+test.describe('the wildfire minimap counts BC Wildfire Service beside NIFC', () => {
+  test('a framing that reaches British Columbia counts its active BC perimeter; one outside it does not', async ({ page }) => {
+    await stubWildfireMinimap(page, {});
+    await page.route(
+      (url) => isBcwsRequestUrl(url.href),
+      (route) => fulfillBcws(route, { type: 'FeatureCollection', features: [BC_ACTIVE] })
+    );
+    await gotoApp(page, '?view=brief&cluster=wildfire');
+    const minimap = page.locator('.shell-minimap-map');
+    const pacific = minimap.locator('[data-framing="pacific-coast"]');
+    await expect(pacific).toHaveAttribute('data-wildfire-condition', 'mapped-wildfire');
+    await expect(pacific).toHaveAttribute('aria-label', /1 current mapped NIFC or BC Wildfire Service wildfire perimeter intersects this authored framing/);
+    await expect(minimap.locator('[data-framing="arid-west"]')).not.toHaveAttribute('data-wildfire-condition', 'mapped-wildfire');
+  });
+
+  test('a failed BC read is never a zero for British Columbia: the framing reads unavailable, never the WHP fallback', async ({ page }) => {
+    await stubWildfireMinimap(page, {});
+    await page.route(
+      (url) => isBcwsRequestUrl(url.href),
+      (route) => route.fulfill({ status: 503, contentType: 'text/plain', body: '' })
+    );
+    await gotoApp(page, '?view=brief&cluster=wildfire');
+    const minimap = page.locator('.shell-minimap-map');
+    await expect(minimap.locator('[data-framing="pacific-coast"]')).toHaveAttribute('data-wildfire-condition', 'unavailable');
+    await expect(minimap.locator('#shell-minimap-whp-pacific-coast')).toHaveCount(0);
+    // Hawaii and the Southeast never reach British Columbia; their reads stand.
+    await expect(minimap.locator('[data-framing="southeast-gulf"]')).not.toHaveAttribute('data-wildfire-condition', 'unavailable');
+  });
+
+  test('the footprint of an overlapping BC and NIFC pair counts once, with the ratified label', async ({ page }) => {
+    const nifcBorder = {
+      type: 'Feature',
+      properties: { attr_IncidentName: 'Border 2', attr_IncidentTypeCategory: 'WF', attr_UniqueFireIdentifier: '2026-WANCP-000266', attr_ActiveFireCandidate: 1 },
+      geometry: { type: 'Polygon', coordinates: [[[-121.15, 48.95], [-120.95, 48.95], [-120.95, 49.15], [-121.15, 49.15], [-121.15, 48.95]]] }
+    };
+    // The NIFC layer's own read (a GET) holds the pair's NIFC record; its count POSTs stay zero.
+    await stubWildfireMinimap(page, {});
+    await page.route(
+      (url) => url.href.includes('WFIGS_Interagency_Perimeters_Current') && new URL(url.href).searchParams.get('f') === 'geojson',
+      (route) => route.fulfill({ status: 200, contentType: 'application/geo+json', body: JSON.stringify({ type: 'FeatureCollection', features: [nifcBorder] }) })
+    );
+    await page.route(
+      (url) => isBcwsRequestUrl(url.href),
+      (route) => fulfillBcws(route, { type: 'FeatureCollection', features: [BC_ACTIVE] })
+    );
+    // The Pacific Coast camera puts the whole framing inside both layers' answered envelopes.
+    await gotoApp(page, '?view=brief&cluster=wildfire&framing=pacific-coast');
+    await expect(layerPill(page, 'nifc-fires')).toHaveText(/live/);
+    await expect(layerPill(page, 'bcws-fires')).toHaveText(/live/);
+    const pacific = page.locator('.shell-minimap-map [data-framing="pacific-coast"]');
+    // The summary loads as the mode's layers start, before any grouping, and
+    // counts again when the BC layer's grouping lands. Re-entering the mode
+    // never helps: leaving it tears both layers down.
+    await expect(pacific).toHaveAttribute('aria-label', /overlapping agency perimeters counted as one fire area/, { timeout: 20_000 });
+    await expect(pacific).toHaveAttribute('aria-label', /1 current mapped NIFC or BC Wildfire Service wildfire perimeter intersects/);
   });
 });

@@ -123,7 +123,7 @@ test.describe('DEG-2 desktop keeps the compact control family', () => {
   test('the desktop switcher stays in the one-family stack, unchanged', async ({
     page
   }) => {
-    // Share sits in slot 4 of the on-map control family in Brief and Console alike.
+    // Share sits in slot 6 of the on-map control family in Brief and Console alike.
     await gotoApp(page, '?view=console');
     const btn = page.locator('.basemap-switcher-btn');
     await expect(btn).toBeVisible();

@@ -2,6 +2,17 @@
  * The desktop 3D Fire view toggle (W3/W4), rendered in the shell island
  * in the view details below the persistent navigation controls.
  *
+ * A Console control (owner, 2026-11-22: the 3D Fire view and its ground
+ * switches belong in the console, not the Brief column). In Brief the
+ * stack, its refusal sentence included, renders nothing, so the Brief
+ * column is the same in every mode. The component stays mounted in Brief:
+ * the preference and the ground layers live in their stores and the
+ * scene follows them, so a scene that is on (a `fire3d=true` address, or
+ * one turned on in Console before pressing Brief) stays on, and its
+ * status keeps feeding the map's technical note. Console is where it is
+ * changed; a hazard button in Brief that leaves Wildfire still ends it
+ * (src/ui/sidebar.ts, DR-122), so the scene is never stuck.
+ *
  * Visibility: only while the committed cluster is 'wildfire' (Fuel risk
  * included, an optional layer of Wildfire) or the scene is still up after a
  * custom demotion (the button is the way out) AND the
@@ -89,6 +100,7 @@ import {
   setFire3DPreference
 } from '../../state/fire3d-store';
 import { registry } from '../../state/registry';
+import { getViewMode, onViewModeChange } from '../../state/view-mode';
 import {
   FLAT_FUEL_RISK_KEY,
   FUEL_RISK_TITLE,
@@ -113,6 +125,8 @@ const HMS_SMOKE_LAYER_KEY = 'hms-smoke';
  */
 const GROUND_SWITCHES: readonly (readonly [Fire3DGroundLayer, string])[] = [
   ['plantStress', 'Plant stress'],
+  // Off until pressed; pressing it releases Plant stress, and the other way round (src/state/fire3d-ground-layers.ts).
+  ['liveFuelMoisture', 'Live fuel moisture'],
   ['fuelRisk', 'Fuel risk']
 ];
 
@@ -245,6 +259,14 @@ export function Fire3DControl({
   const [tallEnough, setTallEnough] = useState<boolean>(
     () => window.matchMedia(FIRE3D_MIN_HEIGHT_QUERY).matches
   );
+  // Offered in Console only; Brief draws none of the stack (see the file comment).
+  const [consoleView, setConsoleView] = useState<boolean>(() => getViewMode() === 'console');
+  useEffect(() => {
+    setConsoleView(getViewMode() === 'console'); // a switch between the first render and this subscription
+    return onViewModeChange((mode) => setConsoleView(mode === 'console'));
+  }, []);
+  // Held here, not in the element, so a trip through Brief keeps the disclosure as it was left.
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [preference, setPreference] = useState<boolean>(getFire3DPreference);
   const [status, setStatus] = useState<Fire3DStatus | null>(null);
   const [smokeStatus, setSmokeStatus] = useState<string | undefined>(() =>
@@ -385,6 +407,10 @@ export function Fire3DControl({
   // than the standing notes), so the refusal reads as the answer to "where
   // is the 3D view" rather than as fine print. `.shell-fire3d-note` stays
   // countable: this paragraph is not one of the standing notes.
+  //
+  // Brief draws neither the stack nor the refusal; every hook above still runs, so the status
+  // subscription, the drape listener and the reveal refs carry on unchanged underneath.
+  if (!consoleView) return null;
   if (offer !== 'control') {
     if (offer === 'silent') return null;
     return (
@@ -444,7 +470,11 @@ export function Fire3DControl({
           Fuel risk
         </button>
       ) : null}
-      <details class="shell-fire3d-details">
+      <details
+        class="shell-fire3d-details"
+        open={detailsOpen}
+        onToggle={(event) => setDetailsOpen((event.currentTarget as HTMLDetailsElement).open)}
+      >
         <summary>
           3D information
           {/* A state that needs a reader's attention rides the summary; plain "live" does not (D6). */}

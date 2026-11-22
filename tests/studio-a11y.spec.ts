@@ -11,7 +11,9 @@ test.describe('studio focus and geometry', () => {
     await page.setViewportSize({ width: 1280, height: 900 });
     await gotoApp(page, '?view=brief&layers=places');
 
-    const host = page.locator('#brief-display #layers-studio-entry-host');
+    // The openers are cells of the map's top-right column (owner, 2026-11-21 and 22);
+    // the column order is Reset, Layer, Place, SAT, Help, Share, so the pair is Layer then Place.
+    const host = page.locator('.map-overlay-controls > #map-studio-seat');
     const pair = host.locator('#studio-entry-pair');
     const placeOpener = pair.locator('#place-studio-entry');
     const layersOpener = pair.locator('#layers-studio-entry');
@@ -19,7 +21,7 @@ test.describe('studio focus and geometry', () => {
     await expect(placeOpener).toBeVisible();
     await expect(layersOpener).toBeVisible();
     expect(await pair.locator('button').evaluateAll((buttons) => buttons.map((button) => button.id)))
-      .toEqual(['place-studio-entry', 'layers-studio-entry']);
+      .toEqual(['layers-studio-entry', 'place-studio-entry']);
 
     await placeOpener.focus();
     await expect(placeOpener).toBeFocused();
@@ -41,7 +43,7 @@ test.describe('studio focus and geometry', () => {
   test('PLACE regains focus when its click did not focus it (Safari)', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 900 });
     await gotoApp(page, '?view=brief&layers=places');
-    const placeOpener = page.locator('#brief-display #place-studio-entry');
+    const placeOpener = page.locator('#map-studio-seat #place-studio-entry');
     await expect(placeOpener).toBeVisible();
     // Safari does not focus a button on click: dispatch the click with focus left on the body.
     await page.evaluate(() => {
@@ -148,8 +150,8 @@ test.describe('studio focus and geometry', () => {
     await page.locator('#sheet-close').click();
     await expect(page.locator('#app')).toHaveAttribute('data-sheet-detent', 'closed');
     await page.locator('#mobile-footer-nav button[data-tab="brief"]').click();
-    // The desktop studio door pair lives in #brief-display, which the mobile
-    // sheet matrix never admits: there is no mobile LAYERS-studio door (the
+    // The desktop studio door pair lives in the map column's desktop-only
+    // seat, which a phone never draws: there is no mobile LAYERS-studio door (the
     // footer Layers tab opens the console sheet instead). Pin that honestly
     // rather than driving a desktop-only control (conductor truing at the
     // F7 gate; the lane's original phase scrolled a control that cannot

@@ -6,17 +6,19 @@ import { gotoApp, stubHeatRiskCatalog, waitForLayerSettled } from './helpers';
  * owner-1f, owner-1h and found-088; task DDM-P10-T11; design record
  * interface-chrome-popups-text.md section 2.7, "Keyboard reach and focus").
  *
- * THE ORDER. Tab runs down the column as it reads (WCAG 2.4.3), the order
- * the design record lists: Reset, SAT, Help with its drawer, then Share.
- * index.html ships Share (`#share-btn`) BEFORE Reset, the order an embed
- * stacks them in; outside an embed src/ui/edge-column.ts seats Share after
- * Help's seat in the DOM, where the grid shows it (slot 4). Until 2026-11-13
- * Tab reached Share first; that recorded difference is closed.
+ * THE ORDER. Tab runs down the column as it reads (WCAG 2.4.3), in the
+ * owner's order of 2026-11-22 ("reset, layer, place, sat, help, share"):
+ * Reset, Layer, Place, SAT, Help with its drawer, then Share, and after the
+ * column the ATNI Climate mark at the map's bottom right (`#map-brand-mark`,
+ * the About card's door). index.html ships Share (`#share-btn`) BEFORE Reset,
+ * the order an embed stacks them in; outside an embed src/ui/edge-column.ts
+ * seats Share after Help's seat in the DOM, where the grid shows it (slot 6).
+ * Until 2026-11-13 Tab reached Share first; that recorded difference is closed.
  *
  * THE DOCK. The bottom dock is no stop. Its one focusable control was the
  * link in the on-map OpenStreetMap credit, which left with OpenStreetMap
  * (commit 7979a6a, the base map from public files); the embed's brand link
- * shows in embeds only. Share is the last stop of the map chrome.
+ * shows in embeds only. The mark is the last stop of the map chrome.
  *
  * THE RING. Every stop shows a 2 px solid outline when reached by keyboard:
  * the column's cells keep the chrome ring (2 px #FFFFFF at offset 0 on a
@@ -52,6 +54,9 @@ async function readStop(page: Page): Promise<Stop> {
     else if (inside('#map-key-content')) name = 'key drawer';
     else if (el.id === 'share-btn') name = 'share';
     else if (el.id === 'reset-btn') name = 'reset';
+    else if (el.id === 'layers-studio-entry') name = 'layer';
+    else if (el.id === 'place-studio-entry') name = 'place';
+    else if (el.id === 'map-brand-mark') name = 'about';
     else if (el.matches('.basemap-switcher-btn')) name = 'sat';
     else if (el.id === 'map-info-btn') name = 'help';
     else if (inside('#map-info-panel')) name = 'help drawer';
@@ -93,7 +98,7 @@ function expectRings(stops: readonly Stop[]): void {
     if (stop.name === 'canvas') {
       expect.soft(parseFloat(stop.outlineOffset), 'the canvas ring is inset').toBeLessThan(0);
     }
-    if (['share', 'reset', 'sat', 'help'].includes(stop.name)) {
+    if (['share', 'reset', 'layer', 'place', 'sat', 'help', 'about'].includes(stop.name)) {
       expect.soft(`${stop.name}: offset ${stop.outlineOffset}`).toBe(`${stop.name}: offset 0px`);
       expect.soft(stop.boxShadow, `${stop.name} keeps the 4 px casing`).toContain('rgb(1, 11, 19) 0px 0px 0px 4px');
     }
@@ -130,7 +135,7 @@ async function clickCentreForPopup(page: Page, withSwitcher = false): Promise<vo
 }
 
 test.describe('map chrome focus (S30D D1 M28)', () => {
-  test('Tab visits expand (collapsed), the canvas, the chip and its drawer, Reset, SAT, Help and its drawer, then Share last, in that order, each with the 2 px ring', async ({
+  test('Tab visits expand (collapsed), the canvas, the chip and its drawer, Reset, Layer, Place, SAT, Help and its drawer, Share, then the ATNI Climate mark last, in that order, each with the 2 px ring', async ({
     page
   }) => {
     await page.setViewportSize(DESKTOP_VIEWPORT);
@@ -154,27 +159,32 @@ test.describe('map chrome focus (S30D D1 M28)', () => {
     await expect(page.locator('#map-info-btn')).toBeFocused();
     const backToHelp = await readStop(page);
     const toShare = await tabUntil(page, (s) => s.name === 'share');
+    // The mark follows the column (owner, 2026-11-22).
+    const toAbout = await tabUntil(page, (s) => s.name === 'about');
 
-    const walk = [...toChip, ...toHelp, ...intoHelpDrawer, backToHelp, ...toShare];
-    // The column top to bottom: Reset, SAT, Help, Share.
+    const walk = [...toChip, ...toHelp, ...intoHelpDrawer, backToHelp, ...toShare, ...toAbout];
+    // The column top to bottom: Reset, Layer, Place, SAT, Help, Share, then the mark.
     expect(seats(walk)).toEqual([
       'expand',
       'canvas',
       'chip',
       'key drawer',
       'reset',
+      'layer',
+      'place',
       'sat',
       'help',
       'help drawer',
       'help',
-      'share'
+      'share',
+      'about'
     ]);
     expectRings(walk);
 
-    // Share is the last stop: the dock holds no control since the on-map
+    // The mark is the last stop: the dock holds no control since the on-map
     // OpenStreetMap credit left (7979a6a), so the next Tab leaves the page.
     await page.keyboard.press('Tab');
-    expect((await readStop(page)).name, 'nothing after Share takes focus').toBe('body');
+    expect((await readStop(page)).name, 'nothing after the ATNI Climate mark takes focus').toBe('body');
   });
 
   test('an embed keeps Share above Reset, in the order Tab reaches them', async ({ page }) => {

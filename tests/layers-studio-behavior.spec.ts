@@ -94,6 +94,7 @@ test.describe('LAYERS studio behavior', () => {
     const studio = page.locator(STUDIO);
     const placeGroup = studio.getByRole('group', { name: 'Place · boundaries & rivers' });
 
+    // spec-impact: intended, the umbrella's name is composed in src/ui/island/catalog.tsx; only the Brief copy left.
     await placeGroup.getByRole('button', { name: 'Show Tribal Nations layers' }).click();
     await expect(placeGroup.locator('.layer-umbrella-count')).toHaveText('2 of 2 selected');
     await expect(placeGroup.locator('.layer-group-count')).toHaveText('2 on');

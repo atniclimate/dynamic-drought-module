@@ -56,6 +56,8 @@ const LANE_PRODUCT: Readonly<Record<MatrixLaneKey, ProductKey>> = {
   usdm: 'usdm',
   dsci: 'dsci',
   nifc: 'nifc-fires',
+  bcws: 'bcws-fires',
+  liveFuelMoisture: 'live-fuel-moisture',
   nwsAlerts: 'nws-alerts',
   heatRisk: 'heatrisk',
   nwsForecast: 'nwsForecast',

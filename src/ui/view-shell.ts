@@ -39,7 +39,6 @@ import type { PlaceSelection } from '../state/place-selection';
 import { getViewMode, onViewModeChange, setViewMode } from '../state/view-mode';
 import type { ViewMode } from '../state/view-mode';
 import { closeImpactPanel, openImpactPanel } from './impact-panel';
-import { buildTribalNationsBriefAction } from './tribal-nations-action';
 import { loadSearchController } from './search-chunk';
 import { createChunkLoader } from '../util/chunk-retry';
 import { prefersReducedMotion } from '../util/motion';
@@ -68,12 +67,23 @@ const LAYERS_STUDIO_ENTRY_ID = 'layers-studio-entry';
 const PLACE_STUDIO_ENTRY_ID = 'place-studio-entry';
 const STUDIO_ENTRY_PAIR_ID = 'studio-entry-pair';
 const STUDIO_LINKOUT_PAIR_ID = 'studio-linkout-pair';
+/** The seat of the two studio buttons, slots 2 and 3 of the map column (index.html). */
+const MAP_STUDIO_SEAT_ID = 'map-studio-seat';
 const PLACE_STUDIO_ENTRY_STATUS_ID = 'place-studio-entry-status';
 const PLACE_STUDIO_OPENER_EVENT = 'ddm:place-studio-opener';
 const LAYERS_STUDIO_ENTRY_TITLE =
   'Open the LAYERS studio: layer search, toggles, and sources';
 const PLACE_STUDIO_ENTRY_TITLE =
   'Open the PLACE studio: choose a place for the briefing';
+/**
+ * The two map buttons' glyphs, drawn as the four top-right cells draw theirs:
+ * inline SVG in a 24 box at 20 px with a 2 px round stroke. Place is a folded
+ * map; Layer is a stack of three sheets.
+ */
+const MAP_CELL_SVG_OPEN =
+  '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">';
+const PLACE_STUDIO_ICON = `${MAP_CELL_SVG_OPEN}<path d="M2 6l7-3 6 3 7-3v15l-7 3-6-3-7 3z"/><path d="M9 3v15M15 6v15"/></svg>`;
+const LAYERS_STUDIO_ICON = `${MAP_CELL_SVG_OPEN}<path d="M12 2 2 7l10 5 10-5z"/><path d="m2 12 10 5 10-5"/><path d="m2 17 10 5 10-5"/></svg>`;
 
 let placeStudioRoot: HTMLElement | null = null;
 let placeStudioModule: typeof import('./island/place-studio') | null = null;
@@ -186,11 +196,37 @@ export function renderStudioLoadFailure(
   const actions = document.createElement('div');
   actions.className = 'studio-load-failure-actions';
 
+  // Back to map is the same cell as in the studios (an arrow glyph, then the
+  // word), seated at the area's top right by the studios' rule for a
+  // `.layers-studio-back` that is a direct child of a `.layers-studio-header`
+  // (src/styles/studios.css). The header carries only that button here.
+  const header = document.createElement('div');
+  header.className = 'layers-studio-header studio-load-failure-header';
+
   const back = document.createElement('button');
   back.type = 'button';
   back.className = 'layers-studio-back';
-  back.textContent = 'Back to map';
+  const svgNs = 'http://www.w3.org/2000/svg';
+  const glyph = document.createElementNS(svgNs, 'svg');
+  glyph.setAttribute('viewBox', '0 0 24 24');
+  glyph.setAttribute('width', '20');
+  glyph.setAttribute('height', '20');
+  glyph.setAttribute('fill', 'none');
+  glyph.setAttribute('stroke', 'currentColor');
+  glyph.setAttribute('stroke-width', '2');
+  glyph.setAttribute('stroke-linecap', 'round');
+  glyph.setAttribute('stroke-linejoin', 'round');
+  glyph.setAttribute('aria-hidden', 'true');
+  glyph.setAttribute('focusable', 'false');
+  const arrow = document.createElementNS(svgNs, 'path');
+  arrow.setAttribute('d', 'M19 12H5M12 19l-7-7 7-7');
+  glyph.appendChild(arrow);
+  const word = document.createElement('span');
+  word.className = 'layers-studio-back-word';
+  word.textContent = 'Back to map';
+  back.append(glyph, word);
   back.addEventListener('click', backToMap);
+  header.appendChild(back);
 
   const retry = document.createElement('button');
   retry.type = 'button';
@@ -201,9 +237,9 @@ export function renderStudioLoadFailure(
     window.location.reload();
   });
 
-  actions.append(back, retry);
+  actions.append(retry);
   panel.append(heading, body, actions);
-  surface.appendChild(panel);
+  surface.append(header, panel);
   root.replaceChildren(surface);
   back.focus();
 }
@@ -394,8 +430,8 @@ function buildModeSwitch(): void {
 /**
  * Fill the place-bearing Brief head. It deliberately ends after the concise
  * lede and the ONE search (U3, replacing the U1 stopgap state `<select>`).
- * The stable #time-bar sibling follows in index.html; display prose, studios,
- * and selection response live in #brief-display after that anchor.
+ * The stable #time-bar sibling follows in index.html; the selection response
+ * lives in #brief-display after that anchor, and the studio buttons on the map.
  *
  * E1 deliverable 1 (D-0.7.0-041 part 2, review E1.2): the lede is worded
  * around selecting a place on the map, not around an already-open report,
@@ -409,19 +445,6 @@ function buildBriefHead(map: maplibregl.Map): void {
   head.innerHTML = '<div id="brief-search"></div>';
   syncBriefingTitle();
   refreshLayersStudioEntry();
-
-  // The compact Tribal Nations action (umbrella Unit F) moved here from
-  // the impact panel's chrome at the S2/E1 integration: D-0.7.0-041
-  // retired the unsolicited briefing, so the panel is no longer the
-  // default Brief surface, and the ratified visibility guarantee (the
-  // group command and its health line visible on the default Brief,
-  // Codex final-pass finding 2) now rides the post-time display block. A brief embed
-  // keeps the panel-hosted instance instead (the sidebar is collapsed
-  // there); one instance ever, the id is unique.
-  const isEmbedBoot = document.getElementById('app')?.classList.contains('embed') ?? false;
-  if (!isEmbedBoot) {
-    document.getElementById('brief-secondary-actions')?.appendChild(buildTribalNationsBriefAction());
-  }
 
   mountBriefSearch(map);
 }
@@ -480,9 +503,22 @@ function syncBriefSelection(selection: PlaceSelection | null): void {
   if (selectionSummary) selectionSummary.hidden = selection === null;
 }
 
+/** One studio button in the map cell family: the glyph, then the word. */
+function mapStudioButton(id: string, kind: string, icon: string, word: string): HTMLButtonElement {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.id = id;
+  button.className = `overlay-btn map-cell ${kind}`;
+  button.innerHTML = `${icon}<span class="map-control-label">${word}</span>`;
+  return button;
+}
+
 /**
- * Render the ruled studio entry in the correct host. A full app gets the
- * adjacent PLACE and LAYERS doors after the display description. An embed or
+ * Render the ruled studio entry in the correct host. A full app gets the Layer
+ * and Place map buttons, slots 2 and 3 of the map's top-right column under
+ * Reset, in its cells and on its x (owner, 2026-11-21 and 22); the stylesheet
+ * shows the seat on the desktop shell only (721 px and wider, outside an
+ * embed), and the phone keeps its sheet's Place door and footer Layers tab. An embed or
  * physical frame gets only full-site link-outs, never an in-frame studio route.
  */
 export function refreshLayersStudioEntry(): void {
@@ -524,23 +560,23 @@ export function refreshLayersStudioEntry(): void {
     });
 
     pair.append(placeLink, layersLink);
-    host.appendChild(pair);
+    // A framed full app draws the pair in the studio rows, under Reset, so it
+    // sits where the studio seat is in the DOM and Tab reaches it second, as
+    // it reads. The embed's stack keeps it last.
+    const seat = document.getElementById(MAP_STUDIO_SEAT_ID);
+    host.insertBefore(pair, !isEmbed && seat?.parentElement === host ? seat : null);
     syncPlaceStudioRoute(getStudioRoute());
     return;
   }
 
-  const host = document.getElementById('layers-studio-entry-host');
+  const host = document.getElementById(MAP_STUDIO_SEAT_ID);
   if (!host) return;
   const pair = document.createElement('div');
   pair.id = STUDIO_ENTRY_PAIR_ID;
   pair.className = 'studio-entry-pair';
 
-  const placeButton = document.createElement('button');
-  placeButton.type = 'button';
-  placeButton.id = PLACE_STUDIO_ENTRY_ID;
-  placeButton.className = 'brief-console-door place-studio-entry';
   // Mixed case, as the phone rail writes it (visual uniformity wave 1, D1).
-  placeButton.textContent = 'Place';
+  const placeButton = mapStudioButton(PLACE_STUDIO_ENTRY_ID, 'place-studio-entry', PLACE_STUDIO_ICON, 'Place');
   // Accessible name only (W2-D7): no title that duplicates it verbatim.
   placeButton.setAttribute('aria-label', PLACE_STUDIO_ENTRY_TITLE);
   placeButton.addEventListener('click', () => {
@@ -548,15 +584,14 @@ export function refreshLayersStudioEntry(): void {
     enterPlaceStudio();
   });
 
-  const layersButton = document.createElement('button');
-  layersButton.type = 'button';
-  layersButton.id = LAYERS_STUDIO_ENTRY_ID;
-  layersButton.className = 'brief-console-door layers-studio-entry';
-  layersButton.textContent = 'Layers';
+  // "Layer", singular, on the face (owner, 2026-11-21); the name keeps the studio's.
+  const layersButton = mapStudioButton(LAYERS_STUDIO_ENTRY_ID, 'layers-studio-entry', LAYERS_STUDIO_ICON, 'Layer');
   layersButton.setAttribute('aria-label', LAYERS_STUDIO_ENTRY_TITLE);
   layersButton.addEventListener('click', enterLayersStudio);
 
-  pair.append(placeButton, layersButton);
+  // Layer above Place (owner, 2026-11-22: "reset, layer, place, sat, help,
+  // share"): slots 2 and 3 of the column, in Tab order as they read.
+  pair.append(layersButton, placeButton);
   host.appendChild(pair);
   syncPlaceStudioRoute(getStudioRoute());
 }
@@ -598,23 +633,6 @@ function mountBriefSearch(map: maplibregl.Map): void {
  */
 export function ensureBriefHeadSearch(map: maplibregl.Map): void {
   mountBriefSearch(map);
-}
-
-/**
- * Public seam for the embed-exit path (Codex S2/E1 integration finding
- * 2): an embed boot skips the head-hosted Tribal Nations action, and
- * the panel hosts it only when BUILT under the embed class, so an
- * exited embed could end up with no instance at all. Idempotent: if
- * the unique id already exists anywhere (the panel-hosted instance
- * from an embed-boot panel build), this is a no-op; otherwise the
- * post-time display block gains the action, keeping the umbrella's
- * default-Brief visibility guarantee after the exit.
- */
-export function ensureBriefHeadTribalAction(): void {
-  if (document.getElementById('tribal-nations-brief-action')) return;
-  const host = document.getElementById('brief-secondary-actions');
-  if (!host) return;
-  host.appendChild(buildTribalNationsBriefAction());
 }
 
 /**

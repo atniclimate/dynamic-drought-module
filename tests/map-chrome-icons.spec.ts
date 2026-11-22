@@ -25,7 +25,8 @@ import { gotoApp } from './helpers';
  *   middle);
  * - the ink-weighted centroid is within 1 px on each axis the glyph is
  *   symmetric about (GLYPH_OPTICS);
- * - all four icons share one x within 0.5 px, and that x is the formula's
+ * - all the column's icons (six since the owner's order of 2026-11-22:
+ *   Reset, Layer, Place, SAT, Help, Share) share one x within 0.5 px, and that x is the formula's
  *   (`mapCellIconCentreX`: W - 88 in container px at the 96 px cell).
  * Under R1 a the words are checked too: their left edges share one x
  * within 0.5 px, each word's trimmed box centres in its cell within 1 px,
@@ -52,6 +53,13 @@ const GLYPH_OPTICS: Readonly<Record<MapChromeSeat['key'], readonly Axis[]>> = {
   // Feather rotate-ccw: an open arc and an arrowhead, no axis of symmetry;
   // only its ink box is centred.
   reset: [],
+  // The stacked layers (src/ui/view-shell.ts LAYERS_STUDIO_ICON): the
+  // diamond and both chevrons mirror about x = 12; the stack is not
+  // symmetric top to bottom.
+  layers: ['x'],
+  // The folded map (PLACE_STUDIO_ICON): its outline and its two folds are
+  // point symmetric about (12, 12), so both axes.
+  place: ['x', 'y'],
   // The satellite: point symmetric about (12, 12), so both axes.
   satellite: ['x', 'y'],
   // A circle around a question mark: the mark is not mirror symmetric.
@@ -313,7 +321,8 @@ test.describe('the desktop column icons (D1 M9)', () => {
     page
   }) => {
     test.setTimeout(120_000);
-    // Console keeps Share home in slot 4, so all four icons are measured.
+    // Console keeps Share home in slot 6 and the studio pair in slots 2 and 3
+    // (owner, 2026-11-22), so all six icons are measured.
     await gotoApp(page, '?view=console');
     await hideCanvas(page);
     expect(await measureColumn(page, 'fine pointer')).toEqual([]);

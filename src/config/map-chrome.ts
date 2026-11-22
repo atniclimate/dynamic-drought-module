@@ -4,9 +4,14 @@
  * sections 2.1 to 2.3; owner rulings R1 a and R2 a).
  *
  * THE RULE. On the desktop shell (721 px and wider, outside an embed) the
- * top-right column is a grid of four fixed slots that never move: Reset,
- * SAT, Help (with the Map information drawer it opens), then Share, which
- * fills slot 4 in every view (the 2026-09-13 stable-position rule). Above 1024 px each slot is a
+ * top-right column is a grid of six fixed slots that never move, in the
+ * owner's order of 2026-11-22 ("reset, layer, place, sat, help, share"):
+ * Reset, Layer, Place, SAT, Help (with the Map information drawer it
+ * opens), then Share, which fills slot 6 in every view (the 2026-09-13
+ * stable-position rule). Layer and Place are the studio pair that
+ * src/ui/view-shell.ts builds into `#map-studio-seat`, one box over slots 2
+ * and 3; a framed page that is not an embed seats its full-site links in
+ * those two rows instead. Above 1024 px each slot is a
  * square-edged, labelled cell (R1 a): a fixed 20 px icon column, then the
  * word. Across the 721 to 1024 px tablet band it is a 44 px icon square
  * with the word visually hidden (owner ruling DR-153; MAP_CHROME_TABLET_BAND).
@@ -141,12 +146,15 @@ export const MAP_CELL_ANATOMY = {
   labelFontPx: 14
 } as const;
 
-export type MapChromeSlot = 1 | 2 | 3 | 4;
+export type MapChromeSlot = 1 | 2 | 3 | 4 | 5 | 6;
 
 export interface MapChromeSeat {
   readonly slot: MapChromeSlot;
-  readonly key: 'reset' | 'satellite' | 'help' | 'share';
-  /** The slot's own box, present whether or not its control is seated. */
+  readonly key: 'reset' | 'layers' | 'place' | 'satellite' | 'help' | 'share';
+  /**
+   * The slot's own box, present whether or not its control is seated. The
+   * studio pair's seat spans slots 2 and 3, so each of those is its button.
+   */
   readonly slotSelector: string;
   /** The control that fills the slot on the desktop shell. */
   readonly controlSelector: string;
@@ -170,6 +178,22 @@ export const MAP_CHROME_SEATS: readonly MapChromeSeat[] = [
   },
   {
     slot: 2,
+    key: 'layers',
+    slotSelector: '.map-overlay-controls > #map-studio-seat #layers-studio-entry',
+    controlSelector: '#map-studio-seat #layers-studio-entry',
+    word: 'Layer',
+    formula: SLOT_FORMULA
+  },
+  {
+    slot: 3,
+    key: 'place',
+    slotSelector: '.map-overlay-controls > #map-studio-seat #place-studio-entry',
+    controlSelector: '#map-studio-seat #place-studio-entry',
+    word: 'Place',
+    formula: SLOT_FORMULA
+  },
+  {
+    slot: 4,
     key: 'satellite',
     slotSelector: '.map-overlay-controls > #basemap-switcher-overlay-host',
     controlSelector: '#basemap-switcher-overlay-host .basemap-switcher-btn',
@@ -177,7 +201,7 @@ export const MAP_CHROME_SEATS: readonly MapChromeSeat[] = [
     formula: SLOT_FORMULA
   },
   {
-    slot: 3,
+    slot: 5,
     key: 'help',
     slotSelector: '.map-overlay-controls > #map-info-seat',
     controlSelector: '#map-info-seat > #map-info-btn',
@@ -185,7 +209,7 @@ export const MAP_CHROME_SEATS: readonly MapChromeSeat[] = [
     formula: SLOT_FORMULA
   },
   {
-    slot: 4,
+    slot: 6,
     key: 'share',
     slotSelector: '.map-overlay-controls > #share-btn',
     controlSelector: '.map-overlay-controls > #share-btn',
@@ -238,6 +262,37 @@ export function mapCellIconCentreX(
   if (isTabletBand(viewportWidth)) return containerWidth - chromeInset - width / 2;
   const { edge, paddingInline, iconColumn } = MAP_CELL_ANATOMY;
   return containerWidth - chromeInset - mapCellW + edge + paddingInline + iconColumn / 2;
+}
+
+/**
+ * THE BRAND MARK (owner, 2026-11-22): the ATNI Climate mark at the map's
+ * bottom right, the About card's door (`#map-brand-mark`). Its drawn width
+ * is the column's cell width and its right edge the column's; its foot
+ * keeps the chrome inset from the container's bottom. The image is the
+ * owner's 1817 x 798 artwork, served at 96 and 192 px wide
+ * (public/brand/README.md).
+ */
+export const MAP_BRAND_MARK = {
+  selector: '#map-brand-mark',
+  sourceWidth: 1817,
+  sourceHeight: 798
+} as const;
+
+/** The mark's drawn image rectangle in `#map-container` px. */
+export function mapBrandMarkRect(
+  containerWidth: number,
+  containerHeight: number,
+  viewportWidth: number
+): MapChromeRect {
+  const { chromeInset } = MAP_CHROME_TOKENS;
+  const { width } = mapChromeCellSize(viewportWidth);
+  const height = (width * MAP_BRAND_MARK.sourceHeight) / MAP_BRAND_MARK.sourceWidth;
+  return {
+    x: containerWidth - chromeInset - width,
+    y: containerHeight - chromeInset - height,
+    width,
+    height
+  };
 }
 
 /*

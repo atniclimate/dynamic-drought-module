@@ -1,6 +1,7 @@
 import { expect, test, type Page } from './offline-test';
 
 import { HAZARD_CLUSTERS, HAZARD_CLUSTER_KEYS } from '../src/config/clusters';
+import { keyForGeography } from '../src/state/cluster-service';
 import {
   gotoApp,
   layerCheckbox,
@@ -720,7 +721,10 @@ test.describe('a fresh studio=place URL then Back lands on its mode with its haz
       await studio.getByRole('button', { name: 'Back to map' }).click();
       await expect(studio, `${cluster}: Back closes the studio`).toHaveCount(0);
 
-      const settleKey = HAZARD_CLUSTERS[cluster].recipes.current[0];
+      // The boot is in the default United States geography, where a recipe
+      // surface with a United States stand-in draws the stand-in (DR-270).
+      const recipeKey = HAZARD_CLUSTERS[cluster].recipes.current[0];
+      const settleKey = recipeKey === undefined ? undefined : keyForGeography(cluster, recipeKey, true);
       if (settleKey) await waitForLayerSettled(page, settleKey);
       await expect(
         page.locator(`.shell-cluster-btn[data-cluster="${cluster}"]`),

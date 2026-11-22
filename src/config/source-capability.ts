@@ -13,6 +13,8 @@ export type BriefingSourceKey =
   | 'usdm'
   | 'dsci'
   | 'nifc'
+  | 'bcws'
+  | 'liveFuelMoisture'
   | 'cpcExtended'
   | 'enso'
   | 'waterSupply'
@@ -38,6 +40,8 @@ export const BRIEFING_SOURCE_KEYS: readonly BriefingSourceKey[] = [
   'usdm',
   'dsci',
   'nifc',
+  'bcws',
+  'liveFuelMoisture',
   'cpcExtended',
   'enso',
   'waterSupply',

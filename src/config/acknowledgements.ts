@@ -32,6 +32,7 @@
 
 import { DDM_NOTICE_LABEL, RAWS_PUBLIC_VIEW_NOTICE } from './ddm-notice';
 import { GRANTS_GOV_ATTRIBUTION } from '../impact/grants';
+import { LIVE_FUEL_MOISTURE_LINKS } from './live-fuel-moisture';
 import type { ProductKey } from './products';
 
 /** Every row id, in no rendered order (the renderer groups and sorts). */
@@ -67,6 +68,8 @@ export const ACKNOWLEDGEMENT_IDS = [
   'aafc',
   'statcan',
   'nrcan',
+  'bcws',
+  'eosial-sapienza',
   'usdm-partners',
   'nadm',
   'natural-earth',
@@ -142,6 +145,7 @@ export const ACKNOWLEDGEMENT_GROUPS: readonly {
 ];
 
 const OGL_CANADA_URL = 'https://open.canada.ca/en/open-government-licence-canada';
+const OGL_BC_URL = 'https://www2.gov.bc.ca/gov/content/data/policy-standards/data-policies/open-data/open-government-licence-bc';
 
 // The public-view RAWS notice and the DDM notice label (DR-159) live in
 // their own two-literal module so the station legend's chunk never carries
@@ -397,6 +401,41 @@ export const ACKNOWLEDGEMENTS: Readonly<Record<AcknowledgementId, Acknowledgemen
     ],
     licence: { name: 'Open Government Licence – Canada', url: OGL_CANADA_URL }
   },
+  bcws: {
+    ...nameOnly('bcws', 'BC Wildfire Service', 'canada'),
+    credits: [
+      // ledger: bcws-ogl-bc-attribution (the licence's own attribution
+      // statement, verbatim, U+2013 kept; OGL_BC_URL read 2026-11-06). The
+      // BC logo is not licensed and no mark is shown.
+      {
+        text: 'Contains information licensed under the Open Government Licence – British Columbia.',
+        html: `Contains information licensed under the <a href="${OGL_BC_URL}">Open Government Licence – British Columbia</a>.`,
+        citeId: 'bcws-ogl-bc-attribution'
+      }
+    ],
+    licence: { name: 'Open Government Licence – British Columbia', url: OGL_BC_URL }
+  },
+  // The publisher of the live fuel moisture maps (src/config/live-fuel-moisture.ts).
+  // The credit sentence is the publisher's REQUIRED attribution (OUTPUT_TERMS.md section 2: attribution
+  // to the models and the repository), cited as the ledger entry `eosial-lfmc-western-us`
+  // (clause verdicts read 2026-11-22). The links mirror LIVE_FUEL_MOISTURE_LINKS.paper and .terms.
+  'eosial-sapienza': {
+    ...nameOnly(
+      'eosial-sapienza',
+      'EOSIAL Laboratory, School of Aerospace Engineering, Sapienza University of Rome',
+      'partnerships-and-other'
+    ),
+    credits: [
+      {
+        text:
+          'Live fuel moisture maps from the EOSIAL Laboratory, School of Aerospace Engineering, Sapienza University of Rome, made with the models of Pampanoni, V.; Chuvieco, E.; Ferrari, A.; Laneve, G.; Saquella, S. (2026). A Unified Multisensor Machine-Learning Framework for Live Fuel Moisture Content Retrieval. Remote Sensing, 18(21), 3744. https://doi.org/10.3390/rs18213744. Models and tools: https://github.com/valpamp/lfmc-multisensor. Copyright (c) 2026 Valerio Pampanoni. Used under the PolyForm Noncommercial License 1.0.0 and the Terms for Generated Maps and Model Outputs.',
+        html:
+          `Live fuel moisture maps from the EOSIAL Laboratory, School of Aerospace Engineering, Sapienza University of Rome, made with the models of Pampanoni, V.; Chuvieco, E.; Ferrari, A.; Laneve, G.; Saquella, S. (2026). A Unified Multisensor Machine-Learning Framework for Live Fuel Moisture Content Retrieval. Remote Sensing, 18(21), 3744. <a href="${LIVE_FUEL_MOISTURE_LINKS.paper}">${LIVE_FUEL_MOISTURE_LINKS.paper}</a>. Models and tools: <a href="https://github.com/valpamp/lfmc-multisensor">https://github.com/valpamp/lfmc-multisensor</a>. Copyright (c) 2026 Valerio Pampanoni. Used under the <a href="https://polyformproject.org/licenses/noncommercial/1.0.0">PolyForm Noncommercial License 1.0.0</a> and the <a href="${LIVE_FUEL_MOISTURE_LINKS.terms}">Terms for Generated Maps and Model Outputs</a>.`,
+        citeId: 'eosial-lfmc-western-us'
+      }
+    ],
+    licence: { name: 'PolyForm Noncommercial License 1.0.0', url: 'https://polyformproject.org/licenses/noncommercial/1.0.0' }
+  },
   'usdm-partners': {
     ...nameOnly('usdm-partners', 'U.S. Drought Monitor', 'partnerships-and-other'),
     credits: [
@@ -477,6 +516,8 @@ export const PRODUCT_CREDITS: Readonly<Record<ProductKey, CreditRows>> = {
   places: ['natural-earth', 'usgs'],
   'power-infrastructure': ['hifld', 'eia'],
   'nifc-fires': ['nifc'],
+  'bcws-fires': ['bcws'],
+  'live-fuel-moisture': ['eosial-sapienza'],
   'nws-alerts': ['noaa-nws'],
   'hms-smoke': ['noaa-ospo'],
   heatrisk: ['noaa-nws', 'noaa-wpc'],

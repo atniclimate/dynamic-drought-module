@@ -2,20 +2,36 @@ import { test, expect } from './offline-test';
 import { gotoApp } from './helpers';
 import { installBoundaryStubs } from './tribal-fixtures';
 import { installMinimapAnalysisStubs } from './minimap-fixtures';
+import { mapBrandMarkRect } from '../src/config/map-chrome';
 
-test('D3 sidebar identity keeps its About door and uses the adopted stacked wordmark', async ({ page }) => {
+test('D3 About door: the ATNI Climate mark at the map\'s bottom right opens the About card', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await gotoApp(page, '?view=console&flow=off');
+  // The sidebar's wordmark button left the header (owner, 2026-11-22); the
+  // About card's door is the map's own mark, the one logo on the map.
+  await expect(page.locator('.brand-seal')).toHaveCount(0);
   const button = page.getByRole('button', { name: 'About ATNI Climate', exact: true });
+  await expect(button).toHaveCount(1);
+  await expect(button).toHaveAttribute('id', 'map-brand-mark');
   await expect(button).toHaveAttribute('popovertarget', 'about-atni');
-  const mark = button.locator('.atni-wordmark');
-  await expect(mark.locator(':scope > span')).toHaveText(['ATNI', 'CLIMATE']);
-  await expect(mark).toHaveCSS('font-family', '"Spartan MB", sans-serif');
-  await expect(mark).toHaveCSS('font-weight', '800');
-  await expect(mark).toHaveCSS('background-color', 'rgb(1, 11, 19)');
-  await expect(mark.locator(':scope > span').first()).toHaveCSS('color', 'rgb(255, 255, 255)');
-  await expect(mark.locator('.atni-wordmark-climate')).toHaveCSS('color', 'rgb(225, 61, 51)');
-  expect(await mark.evaluate(node => node.getBoundingClientRect().height)).toBeGreaterThanOrEqual(32);
+  // The image is decoration: the button carries the name, the image an empty alt.
+  const image = button.locator('img');
+  await expect(image).toHaveAttribute('alt', '');
+  await expect.poll(() => image.evaluate(node => {
+    const img = node as HTMLImageElement;
+    return img.complete && img.naturalWidth > 0;
+  })).toBe(true);
+  // Its drawn rectangle follows MAP_BRAND_MARK: as wide as the column's cells,
+  // on the column's right edge, the chrome inset above the map's foot.
+  const container = await page.locator('#map-container').boundingBox();
+  const drawn = await image.boundingBox();
+  expect(container, 'the map has no box').not.toBeNull();
+  expect(drawn, 'the mark has no box').not.toBeNull();
+  const want = mapBrandMarkRect(container!.width, container!.height, 1440);
+  expect(drawn!.x - container!.x).toBeCloseTo(want.x, 0);
+  expect(drawn!.y - container!.y).toBeCloseTo(want.y, 0);
+  expect(drawn!.width).toBeCloseTo(want.width, 0);
+  expect(drawn!.height).toBeCloseTo(want.height, 0);
   await button.focus();
   await page.keyboard.press('Enter');
   const about = page.locator('#about-atni');
@@ -46,7 +62,7 @@ test('D3 sidebar identity keeps its About door and uses the adopted stacked word
         return [...range.getClientRects()].every(rect => rect.left >= seat.left - 1 && rect.right <= seat.right + 1);
       });
     });
-    expect(fits, 'all title and subtitle words fit the wider wordmark header').toBe(true);
+    expect(fits, 'the title words fit the header, now that the wordmark has left it').toBe(true);
   }
   await expect(page.locator('link[rel="icon"]')).toHaveAttribute('href', /\/brand\/atni-seal\.png$/);
 });
@@ -59,6 +75,13 @@ test('D3 embed wordmark preserves its full-site link at ' + width, async ({ page
   await expect(door).toHaveAccessibleName('Open the full Dynamic Drought Module by ATNI Climate');
   await expect(door).toHaveAttribute('href', 'https://atniclimate.github.io/dynamic-drought-module/');
   await expect(door.locator('.atni-wordmark > span')).toHaveText(['ATNI', 'CLIMATE']);
+  // The adopted stacked wordmark's face and colours live here since the
+  // sidebar's wordmark left the header (owner, 2026-11-22).
+  const mark = door.locator('.atni-wordmark');
+  await expect(mark).toHaveCSS('font-family', '"Spartan MB", sans-serif');
+  await expect(mark).toHaveCSS('font-weight', '800');
+  await expect(mark.locator(':scope > span').first()).toHaveCSS('color', 'rgb(255, 255, 255)');
+  await expect(mark.locator('.atni-wordmark-climate')).toHaveCSS('color', 'rgb(225, 61, 51)');
   await expect(door).toHaveCSS('background-color', 'rgb(1, 11, 19)');
   expect(await door.locator('.atni-wordmark').evaluate(node => node.getBoundingClientRect().height)).toBeGreaterThanOrEqual(32);
   expect(await door.evaluate(node => {

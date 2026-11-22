@@ -84,7 +84,7 @@ for (const viewport of [{ width: 1440, height: 1000 }, { width: 958, height: 935
     await gotoApp(page);
     const minimap = viewport.height < 700 ? '.shell-minimap-popover-wrap' : '.shell-minimap-map';
     const selectors = ['#shell-panel', '.shell-view', '.shell-when', minimap,
-      '#shell-region-host', '#brief-search', '#layers-studio-entry-host'];
+      '#shell-region-host', '#brief-search', '#map-studio-seat'];
     const readings: Array<{ phase: string; bounds: Array<{ selector: string; x: number; y: number; width: number; height: number }> }> = [];
     const sample = async (phase: string): Promise<void> => {
       // Read consecutive painted frames, including the held loading state,
@@ -529,7 +529,7 @@ test.describe('S4 temporal register coherence (DG-080 review blocker 1)', () => 
   // S30D D1 M13 (found-010, found-017; DDM-P8-T07): a STRENGTHENED
   // assertion over the case above, not an edit to make a test pass. The
   // case above reads only #shell-minimap-heading at the suite's default
-  // viewport; this extension adds Share in the map column's slot 4 (it
+  // viewport; this extension adds Share in the map column's slot 6 (it
   // stays there in Brief, owner 2026-10-19) at the four desktop widths
   // the design record's acceptance names, where --sidebar-w is the
   // unclamped 340px constant (app.css:394-398's tablet clamp band ends at

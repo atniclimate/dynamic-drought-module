@@ -29,7 +29,8 @@ const {
   isTabletBand,
   mapChromeCellSize,
   mapChromeSeatRect,
-  mapCellIconCentreX
+  mapCellIconCentreX,
+  mapBrandMarkRect
 } = await import(new URL('src/config/map-chrome.ts', ROOT).href);
 
 const css = await readFile(new URL('src/styles/app.css', ROOT), 'utf8');
@@ -111,15 +112,20 @@ test('the chrome tokens in app.css equal MAP_CHROME_SEATS', () => {
   assert.ok(touch, 'app.css declares no --touch-target');
   assert.equal(Number(touch[1]), MAP_CELL_H_COARSE, '--touch-target disagrees with MAP_CELL_H_COARSE');
 
-  // The seat table: four slots in order, one key each, and the formula
-  // the seat spec measures against.
+  // The seat table: six slots in the owner's order of 2026-11-22 ("reset,
+  // layer, place, sat, help, share"), one key each, and the formula the
+  // seat spec measures against.
   assert.deepEqual(
     MAP_CHROME_SEATS.map((seat) => seat.slot),
-    [1, 2, 3, 4]
+    [1, 2, 3, 4, 5, 6]
   );
   assert.deepEqual(
     MAP_CHROME_SEATS.map((seat) => seat.key),
-    ['reset', 'satellite', 'help', 'share']
+    ['reset', 'layers', 'place', 'satellite', 'help', 'share']
+  );
+  assert.deepEqual(
+    MAP_CHROME_SEATS.map((seat) => seat.word),
+    ['Reset', 'Layer', 'Place', 'SAT', 'Help', 'Share']
   );
   // The formula at the 1280x720 open-sidebar container (W 940), every
   // number derived from the table: x = W - inset - cell width, y = inset +
@@ -229,13 +235,13 @@ test('the tablet band gives the family 44 px icon squares on the app\'s own tabl
   }
 });
 
-test('the column rules read the tokens, and index.html carries every slot', () => {
+test('the column rules read the tokens, and index.html carries every slot', async () => {
   const column = ruleBody('.app-shell:not(.embed) .map-overlay-controls');
   for (const line of [
     'top: var(--chrome-inset)',
     'right: var(--chrome-inset)',
     'grid-template-columns: var(--map-cell-w)',
-    'grid-template-rows: repeat(4, var(--map-cell-h))',
+    'grid-template-rows: repeat(6, var(--map-cell-h))',
     'gap: var(--map-cell-gap)'
   ]) {
     assert.ok(column.includes(line), `the column rule lost "${line}"`);
@@ -254,19 +260,40 @@ test('the column rules read the tokens, and index.html carries every slot', () =
     assert.ok(cell.includes(line), `the cell rule disagrees with MAP_CELL_ANATOMY: "${line}"`);
   }
 
-  // Each slot's box exists in the shipped markup with its slot number.
+  // Each slot's box exists in the shipped markup with its slot number; the
+  // studio seat is one box over slots 2 and 3.
   const slotMarkup = {
     1: /<button id="reset-btn"[^>]*data-map-slot="1"/,
-    2: /<div id="basemap-switcher-overlay-host"[^>]*data-map-slot="2"/,
-    3: /<div id="map-info-seat"[^>]*data-map-slot="3"/,
-    4: /<button id="share-btn"[^>]*data-map-slot="4"/
+    2: /<div id="map-studio-seat"[^>]*data-map-slot="2"/,
+    3: /<div id="map-studio-seat"[^>]*data-map-slot="2"/,
+    4: /<div id="basemap-switcher-overlay-host"[^>]*data-map-slot="4"/,
+    5: /<div id="map-info-seat"[^>]*data-map-slot="5"/,
+    6: /<button id="share-btn"[^>]*data-map-slot="6"/
   };
   for (const seat of MAP_CHROME_SEATS) {
     assert.match(html, slotMarkup[seat.slot], `index.html lost slot ${seat.slot} (${seat.key})`);
   }
-  // Share is slot 4's own box, as Reset is slot 1's: no empty reserve under it.
+  // The grid places each seat in its row; the studio seat spans rows 2 and 3.
+  const area = (slot) => ruleBody(`.app-shell:not(.embed) .map-overlay-controls > [data-map-slot='${slot}']`);
+  assert.match(area(1), /grid-area:\s*1 \/ 1;/);
+  assert.match(area(2), /grid-area:\s*2 \/ 1 \/ 4 \/ 2;/);
+  for (const slot of [4, 5, 6]) assert.match(area(slot), new RegExp(`grid-area:\\s*${slot} \\/ 1;`));
+  assert.doesNotMatch(code, /\[data-map-slot='3'\]/, 'slot 3 is the studio seat\'s second row, not a seat of its own');
+  // Static source order (before edge-column.ts moves Share after Help outside
+  // an embed): Reset, the studio seat, SAT, Help, so Tab runs down the column.
+  const at = (s) => html.indexOf(s);
+  assert.ok(
+    at('id="reset-btn"') < at('id="map-studio-seat"') &&
+      at('id="map-studio-seat"') < at('id="basemap-switcher-overlay-host"') &&
+      at('id="basemap-switcher-overlay-host"') < at('id="map-info-seat"'),
+    'the column\'s seats keep their reading order in the markup'
+  );
+  // The pair is built Layer first, then Place.
+  const viewShell = await readFile(new URL('src/ui/view-shell.ts', ROOT), 'utf8');
+  assert.match(viewShell, /pair\.append\(layersButton, placeButton\);/);
+  // Share is slot 6's own box, as Reset is slot 1's: no empty reserve under it.
   assert.equal(
-    MAP_CHROME_SEATS.find((seat) => seat.slot === 4)?.slotSelector,
+    MAP_CHROME_SEATS.find((seat) => seat.slot === 6)?.slotSelector,
     '.map-overlay-controls > #share-btn'
   );
   assert.doesNotMatch(html, /map-spine-reserve/, 'the retired slot 4 reserve span is gone');
@@ -276,6 +303,43 @@ test('the column rules read the tokens, and index.html carries every slot', () =
   // in the markup and no Share entry in the Brief rehost table.
   assert.doesNotMatch(html, /id="shell-share-host"/, 'the sidebar Share seat is gone');
   assert.doesNotMatch(shellSrc, /nodeId:\s*'share-btn'/, 'Share is not rehosted');
+});
+
+// Owner 2026-11-22: the sidebar's ATNI CLIMATE wordmark leaves the top left and
+// the owner's mark sits at the map's bottom right, as wide as the column's
+// cells, on its right edge, and opens the About card.
+test('the ATNI Climate mark is the bottom-right About door, one cell wide', async () => {
+  assert.doesNotMatch(html, /class="brand-seal"/, 'the sidebar wordmark button is gone');
+  assert.doesNotMatch(code, /\.brand-seal\b/, 'no rule for the retired sidebar wordmark');
+  assert.match(html, /<a class="embed-brand"[^>]*>\s*<span class="atni-wordmark"/, 'the embed keeps its link-out wordmark');
+
+  const button = /<button type="button" id="map-brand-mark" class="map-brand-mark" popovertarget="about-atni" aria-label="About ATNI Climate">\s*<img ([^>]*)\/>/.exec(html);
+  assert.ok(button, 'the mark is a button that opens the About card, with its name');
+  assert.match(button[1], /alt=""/, 'the button carries the name; the image is not read twice');
+  assert.match(button[1], /srcset="\/brand\/atni-climate-mark-96\.png 96w, \/brand\/atni-climate-mark-192\.png 192w"/);
+  for (const file of ['atni-climate-mark-96.png', 'atni-climate-mark-192.png']) {
+    const bytes = await readFile(new URL(`public/brand/${file}`, ROOT));
+    assert.ok(bytes.length > 0, `public/brand/${file} is missing`);
+  }
+
+  assert.match(ruleBody('.map-brand-mark'), /display:\s*none;/, 'phones and embeds never draw it');
+  const mark = ruleBody('.app-shell:not(.embed) .map-brand-mark');
+  for (const line of [
+    'right: var(--chrome-inset)',
+    'bottom: var(--chrome-inset)',
+    'width: var(--map-cell-w)',
+    'z-index: var(--z-map-chrome)'
+  ]) {
+    assert.ok(mark.includes(line), `the mark rule lost "${line}"`);
+  }
+  assert.match(ruleBody('.app-shell:not(.embed) .map-brand-mark:focus-visible'), /outline:\s*2px solid var\(--focus-inner\);/);
+
+  const { chromeInset, mapCellW } = MAP_CHROME_TOKENS;
+  const rect = mapBrandMarkRect(940, 720, 1280);
+  assert.equal(rect.x, 940 - chromeInset - mapCellW, 'the mark\'s right edge is the column\'s');
+  assert.equal(rect.width, mapChromeSeatRect(1, 940, 1280).width, 'the mark is one cell wide');
+  assert.equal(rect.y + rect.height, 720 - chromeInset);
+  assert.equal(mapBrandMarkRect(500, 700, MAP_CHROME_TABLET_BAND.minViewport).width, MAP_CHROME_TABLET_BAND.cell);
 });
 
 // Owner 2026-10-19: controls stay put across modes. The Console strip sits
@@ -429,7 +493,8 @@ test('the desktop briefing takes the studio box, a reading column and a uniform 
   const panel = ruleBody('.impact-panel');
   assert.match(panel, /inset:\s*0 0 0 var\(--studio-inset-start\);/);
   assert.doesNotMatch(panel, /width:/);
-  assert.match(code, /--briefing-column-max:\s*880px;/);
+  // The frame (owner, 2026-11-22: "better use of space"); sentences keep --measure.
+  assert.match(code, /--briefing-column-max:\s*1440px;/);
   assert.match(
     ruleBody('.impact-panel:not(.sheet-hosted) :is(.impact-panel-header, .impact-panel-body)'),
     /padding-inline:\s*max\(var\(--gutter\),\s*calc\(\(100% - var\(--briefing-column-max\)\) \/ 2\)\);/
@@ -438,8 +503,80 @@ test('the desktop briefing takes the studio box, a reading column and a uniform 
   // The Back look is shared by the selector list, never the studio class (specs find that class page-wide).
   assert.match(code, /\.layers-studio-back,\s*\.impact-panel-close,\s*\.sheet-close \{/);
   const facade = (await readFile(new URL('src/ui/impact-panel.ts', ROOT), 'utf8')).replace(/\r\n/g, '\n');
-  assert.match(facade, /<header class="impact-panel-header">\s*<button type="button" class="impact-panel-close">Back to map<\/button>/);
+  // Back is first in the header: the studios' cell, an arrow glyph hidden from assistive technology, then the word.
+  assert.match(
+    facade,
+    /<header class="impact-panel-header">\s*<button type="button" class="impact-panel-close"><svg [^>]*aria-hidden="true"[^>]*>[\s\S]*?<\/svg><span class="impact-panel-close-word">Back to map<\/span><\/button>/
+  );
   const deepLink = (await readFile(new URL('src/state/deep-link.ts', ROOT), 'utf8')).replace(/\r\n/g, '\n');
   assert.match(deepLink, /return \{ top: 40, left: 40, bottom: 40, right: 40 \};\n\}/);
   assert.doesNotMatch(deepLink, /MAP_COLUMN_CLEAR/);
+});
+
+// Owner 2026-11-22: "Back to Map button can be top right (takes place of Reset, user naturally realizes can click
+// it), this should also be top right for the brief view". The window mounts outside .app-shell, so its cells read
+// their own tokens; they hold the map column's numbers, and the face is the studios' Back cell, declaration for
+// declaration (studios.css is lazy, so app.css restates it rather than sharing the rule).
+test('the briefing\'s Back to map, Email and Print are map cells in Reset\'s seat', async () => {
+  const blocks = [...code.matchAll(/\.impact-panel:not\(\.sheet-hosted\) \{([^}]*--brief-cell-[a-z]+\s*:[^}]*)\}/g)].map((m) =>
+    declarations(m[1])
+  );
+  const desktop = blocks.find((d) => /px$/.test(d.get('--brief-cell-w') ?? ''));
+  assert.ok(desktop, 'no rule declares the briefing\'s cell tokens in px');
+  const { chromeInset, mapCellW, mapCellH, mapCellGap } = MAP_CHROME_TOKENS;
+  assert.equal(desktop.get('--brief-cell-w'), `${mapCellW}px`, '--brief-cell-w disagrees with MAP_CHROME_TOKENS.mapCellW');
+  assert.equal(desktop.get('--brief-cell-h'), `${mapCellH}px`, '--brief-cell-h disagrees with MAP_CHROME_TOKENS.mapCellH');
+  assert.equal(desktop.get('--brief-cell-inset'), `${chromeInset}px`, '--brief-cell-inset disagrees with MAP_CHROME_TOKENS.chromeInset');
+  assert.equal(desktop.get('--brief-cell-gap'), `${mapCellGap}px`, '--brief-cell-gap disagrees with MAP_CHROME_TOKENS.mapCellGap');
+  // Every other value of a cell token is the touch floor (a coarse pointer, the tablet band).
+  for (const d of blocks.filter((b) => b !== desktop)) {
+    for (const name of ['--brief-cell-w', '--brief-cell-h', '--brief-hit']) {
+      if (d.has(name)) assert.equal(d.get(name), 'var(--touch-target)', `${name} is overridden to ${d.get(name)}`);
+    }
+  }
+  // The map's --map-cell-* stay declared only on .app-shell (the first case counts them).
+  assert.doesNotMatch(code, /\.impact-panel[^{]*\{[^}]*--map-cell-[a-z]+\s*:/);
+
+  // The header seats the cells at the window's top right: Back last in the row, its inset the chrome's.
+  const header = ruleBody('.impact-panel:not(.sheet-hosted) .impact-panel-header');
+  for (const line of [
+    "grid-template-areas: 'heading tools back'",
+    'column-gap: var(--brief-cell-gap)',
+    'padding-top: var(--brief-cell-inset)',
+    'padding-inline-end: var(--brief-cell-inset)'
+  ]) {
+    assert.ok(header.includes(line), `the briefing header lost "${line}"`);
+  }
+
+  // The face: the studios' Back cell, line for line.
+  const studios = (await readFile(new URL('src/styles/studios.css', ROOT), 'utf8'))
+    .replace(/\r\n/g, '\n')
+    .replace(/\/\*[\s\S]*?\*\//g, '');
+  // The face rule is the one that lists Back with the rehosted SAT cell.
+  const studioAt = studios.indexOf(
+    ':is(#place-studio-root, #layers-studio-root) .layers-studio-header > .layers-studio-back,\n  #layers-studio-root .layers-studio-header .basemap-switcher-btn.map-cell {'
+  );
+  assert.notEqual(studioAt, -1, 'studios.css lost the Back cell face rule');
+  const studioFace = studios.slice(studios.indexOf('{', studioAt) + 1, studios.indexOf('}', studioAt));
+  const briefFace =
+    ruleBody('.impact-panel:not(.sheet-hosted) :is(.impact-panel-close, .impact-panel-action)') +
+    ruleBody('.impact-panel:not(.sheet-hosted) .impact-panel-close');
+  for (const line of [
+    'border: 1px solid var(--keyline)',
+    'border-radius: 0',
+    'background: var(--glass-read)',
+    'backdrop-filter: blur(var(--rich-black-blur))',
+    'color: var(--ink)',
+    'grid-template-columns: 20px auto',
+    'column-gap: 8px',
+    'padding: 0 9px',
+    'font-family: var(--font-body)',
+    'font-size: 14px',
+    'font-weight: 700'
+  ]) {
+    assert.ok(studioFace.includes(line), `the studios' Back cell no longer reads "${line}"; move both faces together`);
+    assert.ok(briefFace.includes(line), `the briefing's Back cell disagrees with the studios' face: "${line}"`);
+  }
+  assert.match(briefFace, /height: var\(--brief-cell-h\);/);
+  assert.match(briefFace, /min-width: var\(--brief-cell-w\);/);
 });

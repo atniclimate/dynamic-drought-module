@@ -38,11 +38,20 @@ const S = (globalThis.__sfp = {
   openOpts: [],
   toasts: [],
   closeListeners: [],
-  lazyLoads: 0
+  lazyLoads: 0,
+  mode: 'drought',
+  layersOn: []
 });
 
 const STUBS = {
-  '../config/layers': 'export const LAYER_DEFS = [];',
+  // One layer that belongs to one mode, as live fuel moisture does in the shipped table.
+  '../config/layers':
+    'export const LAYER_DEFS = []; const HOME = { "scoped-layer": "wildfire" };' +
+    ' export const getLayerDef = (key) => (key in HOME ? { key, onlyInMode: HOME[key] } : undefined);' +
+    ' export const layerAllowedInMode = (key, mode) => !(key in HOME) || HOME[key] === mode;',
+  '../config/clusters':
+    'export const HAZARD_CLUSTERS = { drought: { title: "Drought" }, wildfire: { title: "Wildfire" } };',
+  '../state/cluster-service': 'export const getSelectedHazard = () => globalThis.__sfp.mode;',
   '../config/urls':
     'export const URLS = { usPlacesLocal: "https://stub.test/us-places.json",' +
     ' biaLarFeatureServer: "https://stub.test/lar", censusAiannhMapServer: "https://stub.test/census" };',
@@ -69,7 +78,7 @@ const STUBS = {
     ' export const setPlaceSelection = (s) => globalThis.__sfp.selections.push(s);',
   './mobile-sheet':
     'export const isSheetActive = () => false; export const sheetCameraInset = () => 0; export const sheetCameraSideInset = () => 0;',
-  './layer-toggle-command': 'export const requestLayerOn = () => {};',
+  './layer-toggle-command': 'export const requestLayerOn = (key) => globalThis.__sfp.layersOn.push(key);',
   './impact-panel':
     'let n = 0; export const nextBriefingIntent = () => ++n;' +
     ' export const isCurrentBriefingIntent = (i) => i === n; export const openImpactPanel = () => {};' +
@@ -752,6 +761,27 @@ test('clearing the box and typing again retries, shows loading, then the rows wi
   assert.deepEqual(shown.rows, ['tribal:Washoe', 'place:WA'], 'no other action needed');
   assert.equal(shown.unavailable, false);
   assert.equal(shown.loading, 0);
+});
+
+test('a layer that belongs to one mode is turned on from search only there; elsewhere a toast says where it lives', () => {
+  const scoped = { kind: 'layer', id: 'scoped-layer', label: 'Scoped layer', haystack: 'scoped layer' };
+  // Earlier cases turned Tribal layers on through the same stand-in: count from here.
+  const toastsBefore = S.toasts.length;
+  const layersBefore = S.layersOn.length;
+  S.mode = 'drought';
+  wiring.onSelect(scoped);
+  assert.deepEqual(S.layersOn.slice(layersBefore), [], 'the layer was turned on outside its mode');
+  assert.deepEqual(S.toasts.slice(toastsBefore), ['Scoped layer is shown in Wildfire mode. Choose Wildfire, then turn it on.']);
+
+  S.mode = 'wildfire';
+  wiring.onSelect(scoped);
+  assert.deepEqual(S.layersOn.slice(layersBefore), ['scoped-layer']);
+  assert.equal(S.toasts.length, toastsBefore + 1, 'no toast in its own mode');
+
+  // A layer with no home mode is turned on from any mode.
+  S.mode = 'drought';
+  wiring.onSelect({ kind: 'layer', id: 'any-layer', label: 'Any layer', haystack: 'any layer' });
+  assert.deepEqual(S.layersOn.slice(layersBefore), ['scoped-layer', 'any-layer']);
 });
 
 test('focus with a query in the box does not retry; focus on an empty box does', async () => {

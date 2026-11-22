@@ -124,7 +124,10 @@ const ROUTE_HOMES = [
   },
   // ENSO block B3: the tropical MapServer's arms (installDefaultTropicalStub);
   // a spec names an arm through gotoApp's `tropical` option.
-  { home: 'tests/tropical-fixtures.ts', marker: /NHC_tropical_weather|TROPICAL_SERVICE_PATH|isTropicalRequestUrl/, family: 'tropical cyclones' }
+  { home: 'tests/tropical-fixtures.ts', marker: /NHC_tropical_weather|TROPICAL_SERVICE_PATH|isTropicalRequestUrl/, family: 'tropical cyclones' },
+  // Live fuel moisture: the publisher's list and rasters (installDefaultLfmcStub);
+  // a spec sets an arm through `lfmcStub(page)`, never its own route.
+  { home: 'tests/lfmc-fixtures.ts', marker: /LFMC_HOST_PATH|eosial-lfmc-data/, family: 'live fuel moisture' }
 ];
 
 /**
@@ -534,6 +537,18 @@ test('the shared boot helper installs the WFIGS default on the context before it
   assert.match(wildfire, /await context\.route\(\s*\(url\) => isNifcRequestUrl\(url\.href\)/);
   assert.match(wildfire, /const NIFC_SERVICE_NAME = 'WFIGS_Interagency_Perimeters_Current';/);
   assert.match(urls, /\/WFIGS_Interagency_Perimeters_Current\/FeatureServer\/0'/);
+});
+
+test('the shared boot helper installs the BC Wildfire Service default on the context before it navigates', async () => {
+  const helpers = await readFile(join(TESTS_DIR, 'helpers.ts'), 'utf8');
+  const wildfire = await readFile(join(TESTS_DIR, 'wildfire-fixtures.ts'), 'utf8');
+  const urls = await readFile(join(ROOT, 'src/config/urls.ts'), 'utf8');
+  const gotoApp = helpers.slice(helpers.indexOf('export async function gotoApp'));
+  const body = gotoApp.slice(0, gotoApp.indexOf('page.goto('));
+  assert.match(body, /await installDefaultBcwsStub\(page, options\.bcws \?\? 'fixture'\);/);
+  assert.match(wildfire, /await context\.route\(\s*\(url\) => isBcwsRequestUrl\(url\.href\)/);
+  assert.match(wildfire, /const BCWS_SERVICE_NAME = 'BCWS_FirePerimeters_PublicView';/);
+  assert.match(urls, /\/BCWS_FirePerimeters_PublicView\/FeatureServer\/0'/);
 });
 
 test('the fixture route patterns still match the URLs the runtime builds', async () => {

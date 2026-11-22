@@ -44,7 +44,7 @@ test('the fire perimeter key leaves when a re-query draws no perimeters', () => 
     hideLegend: (key) => legend.push(['hide', key])
   };
   const apply = new Function(...Object.keys(dependencies),
-    `let lastAppliedStatus = null;\n${functionBody('../src/layers/nifc-fires.ts', 'applyFeatureCollection')}\nreturn applyFeatureCollection;`)(...Object.values(dependencies));
+    `let lastAppliedStatus = null;\nlet lastLoaded = null;\n${functionBody('../src/layers/nifc-fires.ts', 'applyFeatureCollection')}\nreturn applyFeatureCollection;`)(...Object.values(dependencies));
   const map = { getSource: () => ({ setData() {} }) };
   apply(map, { type: 'FeatureCollection', features: [{ properties: { type: 'WF' } }] });
   apply(map, { type: 'FeatureCollection', features: [] });

@@ -425,10 +425,15 @@ export function Search(props: SearchProps): preact.JSX.Element {
           the input; the input already carries the same words as both its
           placeholder and its aria-label, so assistive tech loses nothing.
           The honest zero-match line below (inside the results) stays. */}
+      {/* Focusable by a press only (never by Tab): a touch press on a row then
+          moves focus here, inside the search, rather than to the page body, so
+          a host that folds the list away when focus leaves the search (the
+          desktop Brief band) keeps it under the finger until the click. */}
       <div
         class="ddm-search-results"
         role="listbox"
         id={`${uid}-listbox`}
+        tabIndex={-1}
       >
         {!isEmptyQuery && loading ? <p class="ddm-search-loading">Loading search results...</p> : null}
         {groupsForRender.map((group) => renderGroup(group, rowsByKind(group.kind)))}

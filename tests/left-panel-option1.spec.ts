@@ -44,8 +44,11 @@ test.describe('D-0.7.0-067 contextual time rail', () => {
     await expect(page.locator('#time-bar')).toBeAttached();
     await expect(page.locator('#shell-time')).toBeAttached();
     await expect(page.locator('#shell-time')).toBeHidden();
-    await expect(page.locator('#brief-display')).toBeVisible();
-    await expect(page.locator('#brief-display #studio-entry-pair')).toBeVisible();
+    // The Place and Layer doors are map cells now (owner, 2026-11-21 and 22),
+    // so the display section holds only the announced selection and draws no box.
+    await expect(page.locator('#brief-display')).toBeAttached();
+    await expect(page.locator('#brief-display #studio-entry-pair')).toHaveCount(0);
+    await expect(page.locator('.map-overlay-controls #map-studio-seat #studio-entry-pair')).toBeVisible();
     await expect(page.locator('#brief-display #enso-driver')).toHaveCount(0);
     await expect(page.locator('#brief-selection-summary')).toBeHidden();
     await expect(page.locator('#impact-panel')).toHaveCount(0);
@@ -56,7 +59,7 @@ test.describe('D-0.7.0-067 contextual time rail', () => {
     await expect(page.locator('#brief-place-name')).toHaveText('Oregon');
     // Repair R2 (2026-11-13): the name card left the column; its paragraph
     // stays as the visually hidden live region that announces the choice.
-    await expect(page.locator('#brief-secondary-actions + #brief-selection-summary #brief-place-context')).toHaveClass(/\bsr-only\b/);
+    await expect(page.locator('#brief-display > #brief-selection-summary #brief-place-context')).toHaveClass(/\bsr-only\b/);
     await expect(page.locator('#brief-head #brief-place-context')).toHaveCount(0);
     // Visual uniformity wave 1, D6 (2026-11-13): the sentence that repeated
     // the name is gone; the chosen place has ONE briefing door, the region

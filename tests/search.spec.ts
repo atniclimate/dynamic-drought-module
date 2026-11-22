@@ -211,6 +211,6 @@ test.describe('Owner 2026-11-13: a search pick opens the briefing, on Priority',
     // The State's own briefing (its header is the State's name), resolved from the bundled outlines.
     await expect(page.locator('#impact-panel.open')).toBeVisible({ timeout: 15_000 });
     await expect(page.locator('#impact-panel-title')).toHaveText('Oklahoma');
-    await expect(page.locator('#region-briefing-note')).toBeHidden();
+    await expect(page.locator('#region-briefing-note')).toHaveCount(0);
   });
 });

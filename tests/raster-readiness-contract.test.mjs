@@ -315,7 +315,8 @@ function sharedProofDeadlineMs() {
 const TILE_PROVEN = new Map([
   ['src/layers/gridded-index.ts', 'C3 gridded index (NIDIS SPI), DDM-P14-T04'],
   ['src/layers/dryness-ground.ts', 'the Wildfire 3D dryness ground (NOAA STAR VHI, USGS Relative Greenness), DDM-P9-T13: every frame it mounts'],
-  ['src/layers/sst-anomaly.ts', 'C1 SST anomaly (GIBS GHRSST MUR, default and every dated frame), DDM-P14-T04']
+  ['src/layers/sst-anomaly.ts', 'C1 SST anomaly (GIBS GHRSST MUR, default and every dated frame), DDM-P14-T04'],
+  ['src/layers/live-fuel-moisture.ts', 'live fuel moisture (the catalog layer and the Wildfire 3D ground, both mounted by one function): tiles drawn in the browser from the publisher\'s raster by byte range']
 ]);
 
 /**

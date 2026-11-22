@@ -255,7 +255,11 @@ test.describe('U7 British Columbia basin drought display', () => {
     await page.waitForTimeout(250);
     const resourceRequestsBeforeSwitch = briefingResourceRequests.length;
     await selectRegion(page, 'british_columbia');
-    await expect(layerPill(page, 'usdm')).toHaveText('live');
+    // DR-270: a committed geography outside the United States draws the North
+    // American map in place of the weekly U.S. map (the default NADM fixture,
+    // tests/helpers.ts TEST_NADM_SNAPSHOT, consensus month 2026-06).
+    await expect(layerPill(page, 'nadm-drought')).toHaveText('live');
+    await expect(layerCheckbox(page, 'usdm')).not.toBeChecked();
     await expect(panel).toBeHidden();
     await expect(page.locator('#region-briefing-btn')).toBeHidden();
     await page.waitForTimeout(500);
@@ -264,17 +268,17 @@ test.describe('U7 British Columbia basin drought display', () => {
     await page.emulateMedia({ media: 'print' });
     await expect(page.locator('#app')).toBeVisible();
     await expect(panel).toBeHidden();
-    // DR-160 (2026-09-28): value-only migration. Before (basin edition):
-    // time-bar 'Source date Jul 23, 2026', legend 'Province of British
-    // Columbia'. After (held; British Columbia shows the US Drought
-    // Monitor's own week, from USDM_FIXTURE's MapDate 2026-07-21): the
-    // time-bar's 'Valid <date>' stamp and the ordinary USDM legend.
+    // DR-160 (2026-09-28): the basin edition is held, so British Columbia
+    // never shows 'Province of British Columbia'. DR-270: the move into
+    // British Columbia draws the North American map, so the printed time bar
+    // carries its consensus month and the legend is its own.
     await expect(page.locator('#time-bar')).toContainText(
-      'Valid Jul 21, 2026'
+      'Consensus month June 2026'
     );
+    await expect(page.locator('#time-bar')).not.toContainText('Province of British Columbia');
     await expect(
-      page.locator('#legend-panel [data-legend="usdm"]')
-    ).toContainText('U.S. Drought Monitor');
+      page.locator('#legend-panel [data-legend="nadm-drought"]')
+    ).toContainText('North American Drought Monitor');
     await expect(page.locator('#map-key-content')).toBeHidden();
   });
 

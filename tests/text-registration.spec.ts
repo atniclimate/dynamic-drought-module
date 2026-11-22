@@ -29,7 +29,14 @@ import { expect, test, type Page } from './offline-test';
 import { KEY_ELIGIBLE_LABELS } from '../src/config/chip-labels';
 import { HAZARD_CLUSTERS, HAZARD_CLUSTER_KEYS } from '../src/config/clusters';
 import { NADM_CATEGORIES, USDM_CATEGORIES } from '../src/config/palette';
-import { awaitQuiescence, gotoApp, showFullDetail, stubHeatRiskCatalog, waitForLayerSettled } from './helpers';
+import {
+  awaitQuiescence,
+  gotoApp,
+  isUsdmMapFrameRead,
+  showFullDetail,
+  stubHeatRiskCatalog,
+  waitForLayerSettled
+} from './helpers';
 import {
   describeFindings,
   lineCounts,
@@ -69,8 +76,13 @@ const FIT_SELECTORS = [
 /** Deterministic answers for the briefing hosts a WA boot reaches (codex C6). */
 async function stubBriefingHosts(page: Page): Promise<void> {
   const empty = JSON.stringify({ type: 'FeatureCollection', features: [] });
+  // The briefing's point and place reads are empty; the weekly map's own frame
+  // read (the default United States surface since DR-270) falls through to
+  // gotoApp's default D2 frame, so the layer has a category to show.
   await page.route('**/USDM_current/FeatureServer/0/query?*', (route) =>
-    route.fulfill({ status: 200, contentType: 'application/geo+json', body: empty })
+    isUsdmMapFrameRead(route.request().method(), new URL(route.request().url()))
+      ? route.fallback()
+      : route.fulfill({ status: 200, contentType: 'application/geo+json', body: empty })
   );
   await page.route('https://api.weather.gov/alerts/active?*', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ features: [] }) })
@@ -545,7 +557,14 @@ for (const viewport of VIEWPORTS) {
       // The briefing for WA (DR-109).
       await gotoApp(page, '?view=brief&layers=places&select=state:WA&region=washington_state');
       await expect(page.locator('#impact-panel')).toBeVisible({ timeout: 15_000 });
-      // The scan reads visible text only: step to the full detail so the matrix is scanned too.
+      // The scan reads visible text only. The Priority view first: since the
+      // briefing's frame (owner, 2026-11-22) its cards sit in tracks 288 px
+      // and wider and its open frames hold their sentences in a track, so
+      // their lines are judged at the widths a reader gets.
+      await expect(page.locator('#impact-panel .briefing-lead')).toBeVisible({ timeout: 15_000 });
+      await settle(page);
+      await scan('WA briefing priority', ['#impact-panel']);
+      // Then the full detail, where a hazard's claims now run two per row.
       await showFullDetail(page);
       await expect(page.locator('.impact-horizons .impact-hazard').first()).toBeVisible();
       await settle(page);

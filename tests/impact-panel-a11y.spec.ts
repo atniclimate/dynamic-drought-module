@@ -401,6 +401,54 @@ test.describe('impact panel accessibility', () => {
 });
 
 /**
+ * Owner 2026-11-22: "Back to Map button can be top right (takes place of
+ * Reset, user naturally realizes can click it), this should also be top
+ * right for the brief view". The briefing opened by a real path (the
+ * console's keyboard trigger) puts Back to map exactly where Reset stood on
+ * the map, and the keyboard still meets Back first, then Email, then Print.
+ */
+test.describe('the briefing seats Back to map in Reset\'s place', () => {
+  test.use({ viewport: { width: 1920, height: 943 } });
+
+  test('Back to map has the right edge, top and height of the map\'s Reset cell', async ({ page }) => {
+    await gotoApp(page, '?region=washington_state&view=console');
+    const reset = page.locator('#reset-btn');
+    await expect(reset).toBeVisible();
+    const seat = await reset.evaluate((element) => {
+      const box = element.getBoundingClientRect();
+      return { right: box.right, top: box.top, height: box.height };
+    });
+
+    const trigger = page.locator('#region-briefing-btn');
+    await expect(trigger).toBeVisible();
+    await trigger.click();
+    const panel = page.locator('#impact-panel');
+    await expect(panel).toBeVisible({ timeout: 15_000 });
+    // The slide has settled before any geometry is read.
+    await expect
+      .poll(() => panel.evaluate((element) => getComputedStyle(element).transform))
+      .toBe('matrix(1, 0, 0, 1, 0, 0)');
+
+    const back = panel.locator('.impact-panel-close');
+    await expect(back).toBeFocused();
+    await expect(back).toHaveAccessibleName('Back to map');
+    const cell = await back.evaluate((element) => {
+      const box = element.getBoundingClientRect();
+      return { right: box.right, top: box.top, height: box.height };
+    });
+    expect(Math.abs(cell.right - seat.right), `Back to map's right edge (${cell.right}) is Reset's (${seat.right})`).toBeLessThanOrEqual(0.5);
+    expect(Math.abs(cell.top - seat.top), `Back to map's top (${cell.top}) is Reset's (${seat.top})`).toBeLessThanOrEqual(0.5);
+    expect(Math.abs(cell.height - seat.height), `Back to map's height (${cell.height}) is Reset's (${seat.height})`).toBeLessThanOrEqual(0.5);
+
+    // Tab order is the markup's: Back, Email, Print, then the body.
+    await page.keyboard.press('Tab');
+    await expect(panel.locator('.impact-panel-action-mail')).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(panel.locator('.impact-panel-action-print')).toBeFocused();
+  });
+});
+
+/**
  * D1 M13 repair (register found-017): the copy confirmation is announced
  * through a dedicated status region that exists from boot, so assistive
  * tech has already found it before the first Share press (the first

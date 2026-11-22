@@ -161,7 +161,7 @@ export function ensureImpactPanelShell(): ImpactPanelShell {
   panel.hidden = true;
   panel.innerHTML = `
     <header class="impact-panel-header">
-      <button type="button" class="impact-panel-close">Back to map</button>
+      <button type="button" class="impact-panel-close"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M19 12H5M12 19l-7-7 7-7"/></svg><span class="impact-panel-close-word">Back to map</span></button>
       <div class="impact-panel-heading">
         <p class="impact-panel-kicker">Impact briefing</p>
         <h2 id="impact-panel-title" class="impact-panel-title"></h2>

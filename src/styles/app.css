@@ -163,7 +163,7 @@
      control already at or above 24px keeps its own geometry. */
   --pointer-target: 24px;
   /* One control face for the left column (visual uniformity wave 1, D1):
-     the mode, horizon, Place and Layers, Tribal Nations and 3D Fire buttons
+     the mode, horizon and 3D Fire buttons
      read one gap, one height floor and one label. A coarse pointer lifts
      the floor to --touch-target (the rule after :root). */
   --ctl-gap: 6px;
@@ -250,11 +250,13 @@
      phones and in embeds. The desktop shell's column reads --map-cell-w
      instead (S30D D1 M9, THE DESKTOP COLUMN). */
   --map-ctrl-w: 104px;
-  /* The Impact Briefing's reading column (owner, 2026-11-13: the briefing
-     covers the map as a studio does). The window is as wide as the map;
-     its header and body hold to this centred column so a line stays
-     readable at 2560px. 880px is the old drawer's widest. */
-  --briefing-column-max: 880px;
+  /* The Impact Briefing's FRAME (owner, 2026-11-13: the briefing covers the
+     map as a studio does; 2026-11-22: "better use of space"). The window is
+     as wide as the map; its header and body hold to this centred frame,
+     min(100% - 2 x --gutter, 1440px), and the cards lay out in its tracks
+     (BRIEFING FRAME below). It is not a line length: sentences keep
+     --measure (520px), so a line stays readable at 2560px. */
+  --briefing-column-max: 1440px;
   /* Bottom-dock seat (DDM-P10-T01). The dock's edge inset and its lift
      above the scale bar were literals repeated in four places (the base
      rule, the phone rule, the embed rule) and the tablet band has to
@@ -653,28 +655,9 @@ a:hover {
   grid-column: 1;
   grid-row: 1;
 }
-/* The adopted wordmark opens the About card without changing its button role. */
-.brand-seal {
-  appearance: none;
-  width: auto;
-  height: auto;
-  min-height: 40px;
-  padding: 4px;
-  /* The plate hangs out by its own padding, so the wordmark's letters stand
-     on the gutter with every other first word in the column (D7). */
-  margin-inline-start: -4px;
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--surface-base);
-  border: none;
-  border-radius: 0;
-  box-shadow: none;
-  cursor: pointer;
-  transition: box-shadow 0.15s ease;
-}
-.brand-seal:hover { box-shadow: 0 0 0 1px var(--accent-strong); }
+/* The sidebar's wordmark left the header (owner, 2026-11-22); the About
+   card's door is the map's bottom-right mark (.map-brand-mark). The
+   wordmark rules below stay for the embed's link-out (.embed-brand). */
 .brand-text { min-width: 0; }
 .atni-wordmark {
   display: flex;
@@ -691,11 +674,6 @@ a:hover {
   letter-spacing: 0;
 }
 .atni-wordmark-climate { color: var(--brand-wordmark-red); }
-.brand-seal:focus-visible {
-  outline: 2px solid var(--focus-inner);
-  outline-offset: 0;
-  box-shadow: 0 0 0 4px var(--focus-outer);
-}
 .brand-text h1 {
   margin: 0;
   font-family: var(--font-display);
@@ -1147,22 +1125,16 @@ button.conditions-metric:hover .conditions-action-hide {
   margin: 6px 0 10px;
 }
 
-#layers-studio-entry-host { margin-top: 12px; }
-#layers-studio-entry-host:empty { display: none; }
-/* The Tribal Nations button spans the row under the two doors, one control
-   gap below them (D5). Its count reads in the button's accessible name; a
-   fault takes its own line under the button (.tribal-nations-health). */
-#brief-secondary-actions .tribal-nations-brief-row {
-  padding: var(--ctl-gap) 0 0;
-}
-/* The Place and Layers doors wear THE CONTROL FACE (the shell section). */
-.brief-console-door {
-  display: block;
-  width: 100%;
+/* The Place and Layer doors left this display for the map's top-right column
+   (owner, 2026-11-21 and 22); what stays is the announced, never drawn, selection
+   summary, so the section draws no band of its own. */
+.brief-display {
+  padding: 0;
+  border-bottom: 0;
 }
 
 /* found-012: the held-chunk entry feedback (view-shell.ts, sidebar.ts). Not
-   scoped to .brief-console-door alone: the mobile PLACE opener
+   scoped to the map's studio buttons alone: the mobile PLACE opener
    (#sheet-place-studio-entry, .sheet-report-door) gets the same class from
    the same shared marking helper. The spinner glyph itself reuses
    .impact-spinner (its border and animation tokens, and its
@@ -1494,16 +1466,12 @@ button.conditions-metric:hover .conditions-action-hide {
 }
 
 /* The compact Brief-door action (the eager mirror of the umbrella button,
-   hosted by the impact panel's static chrome). One labeled row; no child
+   hosted by a brief embed's impact panel chrome). One labeled row; no child
    rows, no provenance paragraph (those stay in the catalog). */
 .tribal-nations-brief-row {
   padding: 8px var(--gutter) 0;
 }
-/* The at-hand mirror rides its section's own gutters. */
-.tribal-nations-at-hand-row {
-  padding: 10px 0 0;
-}
-/* The fault line under each Brief-door action: it has text only while an
+/* The fault line under the Brief-door action: it has text only while an
    agency is unavailable (D5), and draws nothing otherwise. */
 .tribal-nations-health {
   display: block;
@@ -2763,6 +2731,13 @@ button.conditions-metric:hover .conditions-action-hide {
   display: contents;
 }
 
+/* The Place and Layer cells are the desktop shell's alone (THE STUDIO CELLS
+   below): phones keep the sheet's Place door and the footer's Layers tab,
+   and an embed its full-site links. */
+.map-studio-seat {
+  display: none;
+}
+
 /* The key in the control column is bounded by the column, not by the
    bottom dock's width, and stays non-interactive chrome. */
 @media (min-width: 721px) {
@@ -2836,13 +2811,15 @@ button.conditions-metric:hover .conditions-action-hide {
    THE DESKTOP COLUMN (S30D D1 M9; register owner-1f, DDM-P10-T11; design
    record interface-chrome-popups-text.md sections 2.1 to 2.3 and 2.6;
    owner rulings R1 a, square-edged labelled cells, and R2 a, Share in a
-   reserved slot 4).
+   reserved slot, slot 4 then and slot 6 since 2026-11-22).
 
-   Four fixed slots, top to bottom: 1 Reset, 2 SAT (MapLibre's control,
-   moved in by src/map/init.ts), 3 Help with its Map information drawer
-   (moved in by src/ui/map-information.ts), 4 Share view, reserved. The
-   grid rows are explicit, so a slot's box exists whether or not its
-   control is there: Share fills slot 4 in every view and nothing moves
+   Six fixed slots, top to bottom (owner, 2026-11-22: "reset, layer,
+   place, sat, help, share"): 1 Reset, 2 Layer and 3 Place (the studio
+   pair, built by src/ui/view-shell.ts), 4 SAT (MapLibre's control, moved
+   in by src/map/init.ts), 5 Help with its Map information drawer (moved
+   in by src/ui/map-information.ts), 6 Share. The grid rows are explicit,
+   so a slot's box exists whether or not its control is there: Share fills
+   slot 6 in every view and nothing moves
    (the 2026-09-13 stable-position rule, measured to
    1px by tests/map-chrome-seats.spec.ts). The seat table lives in
    src/config/map-chrome.ts and tests/map-chrome-contract.test.mjs keeps
@@ -2884,7 +2861,8 @@ button.conditions-metric:hover .conditions-action-hide {
 }
 @media (min-width: 721px) and (pointer: coarse) {
   /* A hand gets the 44px floor (DR-036 a) in the cell's height; the slot
-     formula follows, so slot 2 sits at y 60, slot 3 at 108, slot 4 at 156. */
+     formula follows, so slot 2 sits at y 60, slot 3 at 108, and so on by 48
+     to slot 6 at 252. */
   .app-shell:not(.embed) {
     --map-cell-h: var(--touch-target);
   }
@@ -2895,7 +2873,7 @@ button.conditions-metric:hover .conditions-action-hide {
     right: var(--chrome-inset);
     display: grid;
     grid-template-columns: var(--map-cell-w);
-    grid-template-rows: repeat(4, var(--map-cell-h));
+    grid-template-rows: repeat(6, var(--map-cell-h));
     grid-auto-rows: auto;
     gap: var(--map-cell-gap);
     align-items: stretch;
@@ -2905,11 +2883,13 @@ button.conditions-metric:hover .conditions-action-hide {
     pointer-events: none;
   }
   .app-shell:not(.embed) .map-overlay-controls > [data-map-slot='1'] { grid-area: 1 / 1; }
-  .app-shell:not(.embed) .map-overlay-controls > [data-map-slot='2'] { grid-area: 2 / 1; }
-  .app-shell:not(.embed) .map-overlay-controls > [data-map-slot='3'] { grid-area: 3 / 1; }
+  /* The studio seat holds slots 2 (Layer) and 3 (Place) as one box. */
+  .app-shell:not(.embed) .map-overlay-controls > [data-map-slot='2'] { grid-area: 2 / 1 / 4 / 2; }
   .app-shell:not(.embed) .map-overlay-controls > [data-map-slot='4'] { grid-area: 4 / 1; }
-  /* Slots 2 and 3 stop being `display: contents` and become their own
-     boxes: the moved control fills its slot, and slot 3 anchors the
+  .app-shell:not(.embed) .map-overlay-controls > [data-map-slot='5'] { grid-area: 5 / 1; }
+  .app-shell:not(.embed) .map-overlay-controls > [data-map-slot='6'] { grid-area: 6 / 1; }
+  /* Slots 4 and 5 stop being `display: contents` and become their own
+     boxes: the moved control fills its slot, and slot 5 anchors the
      drawer. */
   .app-shell:not(.embed) .map-overlay-controls > .map-spine-slot {
     display: block;
@@ -2917,14 +2897,55 @@ button.conditions-metric:hover .conditions-action-hide {
     min-width: 0;
     min-height: 0;
   }
-  /* A physically framed page that is not an embed still gets the full-site
-     link-outs (src/ui/view-shell.ts); they follow the grid, never take a
-     slot. */
+  /* A physically framed page that is not an embed gets the full-site
+     link-outs in place of the studio cells (src/ui/view-shell.ts), so they
+     take the studio rows, 2 and 3, from the column's right edge leftward,
+     and the slots under them keep their seats. */
   .app-shell:not(.embed) .map-overlay-controls > .studio-linkout-pair {
     grid-column: 1;
-    grid-row: 5;
+    grid-row: 2 / 4;
+    align-self: start;
     justify-self: end;
     pointer-events: auto;
+  }
+
+  /* THE STUDIO CELLS (owner, 2026-11-21 and 22): Layer above Place, slots 2
+     and 3 under Reset, in this column's own cells, on its x, with its gap
+     and faces. Seated only when the full app filled it: a framed page gets
+     the full-site links in the same rows instead, and the empty seat keeps
+     its two rows so SAT, Help and Share never move. */
+  .app-shell:not(.embed) .map-overlay-controls > .map-studio-seat:not(:empty) {
+    display: block;
+    min-width: 0;
+  }
+  .app-shell:not(.embed) .map-studio-seat > .studio-entry-pair {
+    display: grid;
+    grid-template-columns: var(--map-cell-w);
+    grid-template-rows: repeat(2, var(--map-cell-h));
+    gap: var(--map-cell-gap);
+  }
+  /* A held studio chunk (found-012): the spinner takes the icon's place in
+     the icon column, so the cell keeps its one row and its size. It is a
+     span, so it is named here above the cell's word rule and keeps its own
+     box and ring across the tablet band, where the word is visually hidden.
+     The ring is drawn in the cell's ink, which reads on the glass. */
+  .app-shell:not(.embed) .map-studio-seat .map-cell > .studio-entry-pending-spinner {
+    position: static;
+    grid-area: 1 / 1;
+    justify-self: center;
+    width: 11px;
+    height: 11px;
+    margin: 0;
+    border: 2px solid color-mix(in srgb, currentColor 35%, transparent);
+    border-top-color: currentColor;
+    overflow: visible;
+    clip: auto;
+  }
+  /* The hidden icon keeps its box, so it shares the spinner's cell: placed
+     there, it leaves the word its own column and the cell one row. */
+  .app-shell:not(.embed) .map-studio-seat .map-cell.studio-entry-pending > svg {
+    visibility: hidden;
+    grid-area: 1 / 1;
   }
 
   /* MapLibre's control group, borrowed into slot 2, loses its white card
@@ -2942,7 +2963,9 @@ button.conditions-metric:hover .conditions-action-hide {
   /* The cell (R1 a): a fixed 20px icon column, an 8px gap, then the word.
      The 1px edge plus 9px padding puts every icon centre 20px in from the
      cell's left edge: one x for the whole column, W - 12 - --map-cell-w
-     + 20 (W - 88 at 96px). */
+     + 20 (W - 88 at 96px). The Layer and Place cells in slots 2 and 3
+     (.map-studio-seat, THE STUDIO CELLS above) are cells of this column and
+     take every rule here. */
   .app-shell:not(.embed) .map-overlay-controls .map-cell {
     box-sizing: border-box;
     display: grid !important;
@@ -3064,6 +3087,76 @@ button.conditions-metric:hover .conditions-action-hide {
   }
 }
 
+/* THE BRAND MARK (owner, 2026-11-22): the ATNI Climate mark at the map's
+   bottom right, the map chrome's one logo (DR-106) and the About card's
+   door. As wide as the column's cells (--map-cell-w: 96px, 44px in the
+   tablet band) with its right edge on the column's, and the column's own
+   inset from the bottom. Nothing else holds that corner on the desktop
+   shell: the dock's notices stop --dock-inset short of it above 1024px and
+   ride above it (--map-dock-bottom) in the band, the scale bars and the
+   preview mark are bottom-left, and MapLibre's attribution control is off
+   (src/map/init.ts). It sits in the map chrome's band, under the controls,
+   popups and the covering briefing. Its slate ink is the owner's artwork,
+   unrecoloured; at rest it is a little transparent and it comes up whole on
+   hover and focus. Under a hand (the band, or a coarse pointer) the button
+   keeps the 44px floor with the mark on its foot. Phones and embeds never
+   draw it: a phone's header never showed the wordmark, and an embed keeps
+   its link-out wordmark in the dock. */
+.map-brand-mark {
+  display: none;
+}
+@media (min-width: 721px) {
+  .app-shell:not(.embed) .map-brand-mark {
+    --map-brand-rest: 0.85;
+    position: absolute;
+    right: var(--chrome-inset);
+    bottom: var(--chrome-inset);
+    z-index: var(--z-map-chrome);
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-end;
+    box-sizing: border-box;
+    width: var(--map-cell-w);
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    cursor: pointer;
+  }
+  /* The labels' soft cushion (src/config/interface-tokens.ts MAP_LABEL_CUSHION): a dark glow that
+     follows the artwork's own shape, unseen on the dark ground, keeps the slate seal and words
+     readable over white cloud on SAT (looked at in Chrome, 2026-11-22). */
+  .app-shell:not(.embed) .map-brand-mark > img {
+    display: block;
+    width: 100%;
+    height: auto;
+    opacity: var(--map-brand-rest);
+    filter:
+      drop-shadow(0 0 1px color-mix(in srgb, var(--surface-base) 85%, transparent))
+      drop-shadow(0 0 3px color-mix(in srgb, var(--surface-base) 70%, transparent));
+    transition: opacity var(--dur-micro) var(--ease-standard);
+  }
+  .app-shell:not(.embed) .map-brand-mark:is(:hover, :focus-visible) > img {
+    opacity: 1;
+  }
+  .app-shell:not(.embed) .map-brand-mark:focus-visible {
+    outline: 2px solid var(--focus-inner);
+    outline-offset: 0;
+    box-shadow: 0 0 0 4px var(--focus-outer);
+  }
+}
+@media (min-width: 721px) and (max-width: 1024px), (min-width: 721px) and (pointer: coarse) {
+  .app-shell:not(.embed) .map-brand-mark {
+    min-height: var(--touch-target);
+  }
+}
+@media (min-width: 721px) and (prefers-reduced-motion: reduce) {
+  .app-shell:not(.embed) .map-brand-mark > img {
+    transition: none;
+  }
+}
+
 .layers-studio-linkout {
   width: auto;
   max-width: 240px;
@@ -3154,22 +3247,9 @@ button.conditions-metric:hover .conditions-action-hide {
   align-items: center;
   gap: 16px;
   flex: 0 0 auto;
-  min-height: 64px;
-  /* Registers Back / the heading / the end group with the content
-     column below (.layers-studio-grid, .place-studio-layout: both
-     `width: min(1080px, 100%); margin: 0 auto` inside
-     .layers-studio-scroll's own 18px padding) instead of the header's
-     own full-bleed edge (D1 M17, DR-169 item 2: at 2560x1440 the two
-     used to sit about 1080px apart). --studio-header-max defaults to
-     that same 1080px cap; the Place studio's own @container widening to
-     a 1400px column (near :3585) overrides it there so the two stay in
-     step. Below the cap the 18px floor matches .layers-studio-scroll's
-     own padding exactly (the header has no scroller inset of its own to
-     subtract, so the two arithmetics agree without one). The header
-     itself stays full width (its background and border-bottom are
-     chrome, not content); only its padding narrows to line the content
-     up. */
-  padding: 10px max(18px, calc((100% - var(--studio-header-max, 1080px)) / 2));
+  /* Its columns, height and padding are the phone's in the block below and
+     src/styles/studios.css, and the wider shells' in that file ("Wider than
+     a phone": Back to map is a map cell at the strip's end). */
   background: var(--bg-1);
   border-bottom: 1px solid var(--line-strong);
 }
@@ -3211,19 +3291,40 @@ button.conditions-metric:hover .conditions-action-hide {
   color: var(--fg-0);
 }
 
+/* The strip with Back to map on top (the studios' own header, so the cell
+   rule in src/styles/studios.css seats it at the top right), the notice
+   centred in the rest. */
 .studio-load-failure {
   display: grid;
+  grid-template-rows: auto 1fr;
   place-items: center;
   width: 100%;
   min-height: 100vh;
   min-height: 100dvh;
-  padding: 24px;
   background: var(--bg-0);
   color: var(--fg-0);
 }
 
+.studio-load-failure-header {
+  align-self: start;
+  justify-content: flex-end;
+  justify-self: stretch;
+}
+
+/* This surface is what shows when src/styles/studios.css could not load, so
+   it seats Back to map at the strip's right end without it; when that file
+   is present, its id-scoped header rule sets the cell seat's padding. The
+   phone keeps Back at the start, as the studios do. */
+@media (min-width: 721px) {
+  .studio-load-failure-header {
+    display: flex;
+    padding: 10px 18px;
+  }
+}
+
 .studio-load-failure-panel {
-  width: min(440px, 100%);
+  width: min(440px, calc(100% - 48px));
+  margin: 24px;
   padding: 24px;
   background: var(--bg-1);
   border: 1px solid var(--line-strong);
@@ -3266,21 +3367,10 @@ button.conditions-metric:hover .conditions-action-hide {
 }
 
 .layers-studio-search {
-  max-width: 720px;
-  margin: 0 auto 16px;
   padding: 12px;
   background: var(--bg-1);
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
-}
-
-.layers-studio-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.8fr);
-  align-items: start;
-  gap: 16px;
-  width: min(1080px, 100%);
-  margin: 0 auto;
 }
 
 .layers-studio-catalog {
@@ -3323,37 +3413,15 @@ button.conditions-metric:hover .conditions-action-hide {
   .layers-studio-grid { grid-template-columns: 1fr; gap: 10px; }
 }
 
-/* Screen-filling desktop geometry (owner direction): the studio now
-   starts at the sidebar's inner edge instead of the viewport's, so its
-   rendered width tracks the sidebar's own state (collapsed, embed, the
-   fluid tablet band) rather than the viewport 1:1. A container query
-   reads that ACTUAL width instead of guessing from a viewport
-   breakpoint: below 760px of real room the two-column catalog grid
-   would squeeze the 280px-floor second column against a starved first
-   column, so it collapses to one column, exactly as it already does
-   below the 720px viewport breakpoint above (#layers-studio-root
-   declares container-type: inline-size). 760 is a judgment call:
-   comfortably above the 280px second-column floor plus a workable first
-   column and the gap, comfortably below what a normal desktop viewport
-   leaves beside a docked sidebar. */
-@container (max-width: 759px) {
-  .layers-studio-grid {
-    grid-template-columns: 1fr;
-    gap: 10px;
-    width: 100%;
-  }
-}
+/* (The Layer studio's columns follow its own rendered width, read from
+   #layers-studio-root's container-type, in src/styles/studios.css: "THE LAYER
+   STUDIO, wider than a phone".) */
 
 /* =============================================================================
    PLACE studio. Lazy route, catalog rail, and selection panel shell.
+   The full app's Place and Layer entries are cells of the map's top-right
+   column (.map-studio-seat, THE STUDIO CELLS above).
    ============================================================================= */
-
-.studio-entry-pair {
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(0, 1fr);
-  gap: var(--ctl-gap);
-}
 
 .studio-linkout-pair {
   display: grid;
@@ -3412,14 +3480,6 @@ button.conditions-metric:hover .conditions-action-hide {
   min-width: 1px;
 }
 
-.place-studio-type-rail {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
-  width: min(1080px, 100%);
-  margin: 0 auto 14px;
-}
-
 .place-studio-type {
   min-height: 42px;
   padding: 8px 10px;
@@ -3461,13 +3521,11 @@ button.conditions-metric:hover .conditions-action-hide {
   border-color: var(--accent-strong);
 }
 
+/* Its columns, gap and width are src/styles/studios.css's ("THE PLACE STUDIO,
+   wider than a phone"); a phone draws it as a block there. */
 .place-studio-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(300px, 0.9fr);
   align-items: start;
-  gap: 16px;
-  width: min(1080px, 100%);
-  margin: 0 auto;
 }
 
 .place-studio-list-panel,
@@ -3792,49 +3850,11 @@ button.conditions-metric:hover .conditions-action-hide {
     width: 100%;
     height: 100%;
   }
-
-  .place-studio-type-rail {
-    width: 100%;
-  }
-
-  .place-studio-layout {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 10px;
-    width: 100%;
-  }
 }
 
-/* Rebalances the single column above once the ROOT is actually wide
-   enough (see container-type on #place-studio-root): the same
-   two-column list/detail split the base (mobile-first) rule already
-   declares, widened past the old 560px-column cap and re-centered, so a
-   spacious desktop pane (a wide monitor, or the sidebar collapsed/embed)
-   does not read as one sparse column. 760px mirrors the threshold
-   .layers-studio-grid uses for the same reason and the same judgment
-   call: comfortably above the 300px second-column floor plus a workable
-   first column and the gap. Below it (the 1025px and wider dock's own
-   viewport band with the sidebar docked, or the sub-1025px full-viewport
-   studio before the root is this wide) the single column above stands.
-   --studio-header-max here keeps .layers-studio-header's own padding
-   (near :2923) registered with the WIDENED 1400px content column below,
-   instead of the 1080px default the Layers studio and the narrower Place
-   studio both use (D1 M17, DR-169 item 2). */
-@container (min-width: 760px) {
-  .place-studio-header {
-    --studio-header-max: 1400px;
-  }
-
-  .place-studio-type-rail {
-    width: min(1400px, 100%);
-    margin: 0 auto 14px;
-  }
-
-  .place-studio-layout {
-    grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
-    gap: 20px;
-    width: min(1400px, 100%);
-  }
-}
+/* (The Place studio's two-column list/detail split at 760 px of its own
+   width, and the 1400 px centred column it drew, are in src/styles/studios.css
+   now: "THE PLACE STUDIO, wider than a phone".) */
 
 .sheet-at-hand-actions {
   display: grid;
@@ -4615,8 +4635,9 @@ button.telemetry-item {
    works under ?embed=true. Wider than 720px it covers the map exactly as a
    studio does (owner, 2026-11-13): the studios' box (`--studio-inset-start`
    keeps a live sidebar beside it from 1025px; below that it covers the whole
-   viewport), "Back to map" first in its header, and a centred reading
-   column. On the phone it is hosted by the sheet. Themed from :root tokens.
+   viewport), "Back to map" first in its header and standing in Reset's
+   seat, and a centred frame of card tracks (BRIEFING FRAME). On the phone
+   it is hosted by the sheet. Themed from :root tokens.
    ---------------------------------------------------------------------------- */
 
 .impact-panel {
@@ -4680,18 +4701,271 @@ button.telemetry-item {
   }
 }
 
-/* The centred reading column (the studio header's own arithmetic,
-   .layers-studio-header): header and body pad in to --briefing-column-max,
-   so "Back to map", the title and every line register on one column at any
-   width. Never on the sheet-hosted phone report. */
+/* The centred frame: header and body pad in to --briefing-column-max, so the
+   title and every card register on one left edge at any width. Wider than a
+   phone, the header's end is the map chrome's inset instead (BRIEFING FRAME
+   below), so Back to map stands where Reset stands. Never on the
+   sheet-hosted phone report. */
 .impact-panel:not(.sheet-hosted) :is(.impact-panel-header, .impact-panel-body) {
   padding-inline: max(var(--gutter), calc((100% - var(--briefing-column-max)) / 2));
 }
 
-/* Header: [Back to map][title block][mail, print]. Where the window is too
-   narrow for one row (a 200px embed's overlay), the actions keep the first
-   row beside Back and the title takes a full row below: nothing shrinks
-   under the touch floor and no place name is truncated (2026-09-10 rule). */
+/* -----------------------------------------------------------------------------
+   BRIEFING FRAME (owner, 2026-11-22: "have Opus5.5 design team tackle the
+   Impact Brief view, better use of space and conditions blocks may have
+   better use of frames"; "Back to Map button can be top right (takes place
+   of Reset, user naturally realizes can click it), this should also be top
+   right for the brief view"). Wider than a phone, never the sheet-hosted
+   report, never paper (the print block hides the header cells).
+
+   THE FRAME is min(100% - 2 x --gutter, --briefing-column-max). Every
+   collection of cards in it (the priority view's tiles, other reads and
+   doors in src/styles/briefing-lead.css; the resources here) shares one
+   track rule: repeat(auto-fill, minmax(min(100%, --brief-track-min), 1fr))
+   with --brief-track-gap, so 4 tracks from a 1188 px frame, 3 from 888, 2
+   below. auto-fill, never auto-fit: a tile's size follows the width, not
+   the number of tiles (N modes, DR-113). Sentences keep --measure.
+
+   THE HEADER is a grid, 'heading tools back': the title block on the
+   frame's left edge, never truncated (a Federal Register name wraps), and
+   at the window's top right three map cells: [Print][Email][Back to map].
+   The markup order stays Back, heading, actions, so Tab walks Back, Email,
+   Print, then the body; Back stays the first focus.
+
+   BACK TO MAP is the studios' Back cell (src/styles/studios.css, "BACK TO
+   MAP is a map cell"), which is the map cell's face: --glass-read under the
+   blur, a 1 px --keyline edge, square, --ink at 14 px bold, a 20 px glyph
+   then the word, --brief-cell-h tall and as wide as its word, at right and
+   top --brief-cell-inset of the window: Reset's seat on the map. In the
+   tablet band it is the band's 44 px icon square, the word visually hidden
+   and still the name. Email and Print are square cells of the same face to
+   its left, the column's gap apart. The studios' sheet is lazy (it rides the
+   studio chunks), so the face is restated here with this window's tokens,
+   declaration for declaration (tests/map-chrome-contract.test.mjs). The
+   window mounts outside .app-shell and cannot inherit --map-cell-*, so its
+   geometry tokens are its own, held equal to MAP_CHROME_TOKENS by the same
+   test. Contrast is the map cell's: --ink on --glass-read over white
+   imagery 6.98:1 (tests/contrast-contract.test.mjs).
+
+   FULL DETAIL: horizon and hazard frames span the frame; inside a hazard
+   the claims run two per row when both keep --brief-claim-min, never three,
+   in their order; anything that is not a claim (the point-heat section, a
+   note) spans the row.
+   ----------------------------------------------------------------------------- */
+.impact-panel-close > svg {
+  display: none;
+}
+@media screen and (min-width: 721px) {
+  .impact-panel:not(.sheet-hosted) {
+    /* The map column's geometry (src/config/map-chrome.ts). */
+    --brief-cell-w: 96px;
+    --brief-cell-h: 40px;
+    --brief-cell-inset: 12px;
+    --brief-cell-gap: 4px;
+    /* One card track; 4 x 288 + 3 x 12 = 1188. */
+    --brief-track-min: 288px;
+    --brief-track-gap: 12px;
+    /* A full-detail claim keeps about 66 characters of its 12.5 px text. */
+    --brief-claim-min: 440px;
+    --brief-claim-gap: 28px;
+    /* The briefing's own controls on a fine pointer; the touch floor below. */
+    --brief-hit: 36px;
+  }
+  .impact-panel:not(.sheet-hosted) .impact-panel-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas: 'heading tools back';
+    column-gap: var(--brief-cell-gap);
+    align-items: start;
+    padding-top: var(--brief-cell-inset);
+    padding-bottom: 14px;
+    padding-inline-end: var(--brief-cell-inset);
+  }
+  .impact-panel:not(.sheet-hosted) .impact-panel-heading {
+    grid-area: heading;
+    margin-inline-end: 20px;
+    padding-top: 2px;
+  }
+  .impact-panel:not(.sheet-hosted) .impact-panel-title {
+    font-size: 22px;
+    line-height: 1.18;
+  }
+  .impact-panel:not(.sheet-hosted) .impact-panel-kind {
+    font-size: 11.5px;
+  }
+  .impact-panel:not(.sheet-hosted) .impact-panel-actions {
+    grid-area: tools;
+    flex-direction: row-reverse;
+    gap: var(--brief-cell-gap);
+  }
+  /* The cell face, Back, Email and Print alike. */
+  .impact-panel:not(.sheet-hosted) :is(.impact-panel-close, .impact-panel-action) {
+    box-sizing: border-box;
+    height: var(--brief-cell-h);
+    min-height: 0;
+    margin: 0;
+    border: 1px solid var(--keyline);
+    border-radius: 0;
+    background: var(--glass-read);
+    -webkit-backdrop-filter: blur(var(--rich-black-blur));
+    backdrop-filter: blur(var(--rich-black-blur));
+    color: var(--ink);
+    box-shadow: none;
+    cursor: pointer;
+    transition:
+      background-color var(--dur-micro) var(--ease-standard),
+      border-color var(--dur-micro) var(--ease-standard),
+      color var(--dur-micro) var(--ease-standard);
+  }
+  .impact-panel:not(.sheet-hosted) .impact-panel-close {
+    grid-area: back;
+    justify-self: end;
+    display: grid;
+    grid-template-columns: 20px auto;
+    column-gap: 8px;
+    align-items: center;
+    justify-content: start;
+    min-width: var(--brief-cell-w);
+    padding: 0 9px;
+    font-family: var(--font-body);
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0;
+    line-height: 1;
+    text-align: left;
+    text-transform: none;
+    white-space: nowrap;
+  }
+  .impact-panel:not(.sheet-hosted) .impact-panel-close > svg {
+    display: block;
+    width: 20px;
+    height: 20px;
+    justify-self: center;
+    stroke-width: 2;
+  }
+  /* The word, trimmed to cap height so it centres by its capitals. */
+  .impact-panel:not(.sheet-hosted) .impact-panel-close > span {
+    display: block;
+    min-width: 0;
+    font: inherit;
+    letter-spacing: 0;
+    text-box: trim-both cap alphabetic;
+  }
+  .impact-panel:not(.sheet-hosted) .impact-panel-action {
+    width: var(--brief-cell-h);
+    min-width: 0;
+    padding: 0;
+  }
+  .impact-panel:not(.sheet-hosted) .impact-panel-action > svg {
+    width: 20px;
+    height: 20px;
+  }
+  .impact-panel:not(.sheet-hosted) :is(.impact-panel-close, .impact-panel-action):hover {
+    border-color: var(--keyline);
+    background: linear-gradient(var(--glass-press), var(--glass-press)), var(--glass-read);
+    color: var(--ink);
+  }
+  /* One ring for all chrome (palette-tokens.md section 2, "Focus"). */
+  .impact-panel:not(.sheet-hosted) :is(.impact-panel-close, .impact-panel-action):focus-visible {
+    border-color: var(--keyline);
+    outline: 2px solid var(--focus-inner);
+    outline-offset: 0;
+    box-shadow: 0 0 0 4px var(--focus-outer);
+  }
+
+  /* The body is the frame's container: the resources' tracks answer to it. */
+  .impact-panel:not(.sheet-hosted) .impact-panel-body {
+    container: briefing-body / inline-size;
+    padding-top: 20px;
+  }
+
+  .impact-panel:not(.sheet-hosted) .impact-hazard-claims {
+    display: grid;
+    grid-template-columns: repeat(
+      auto-fill,
+      minmax(min(100%, max(var(--brief-claim-min), calc((100% - var(--brief-claim-gap)) / 2))), 1fr)
+    );
+    column-gap: var(--brief-claim-gap);
+    align-items: start;
+  }
+  /* Side by side, every claim carries its own rule, so the second column's
+     first claim is ruled like the first's. */
+  .impact-panel:not(.sheet-hosted) .impact-hazard-claims > .impact-claim {
+    border-top: 1px dashed var(--line);
+  }
+  .impact-panel:not(.sheet-hosted) .impact-hazard-claims > :not(.impact-claim) {
+    grid-column: 1 / -1;
+  }
+
+  /* Resources: the cards in the frame's tracks; a group's heading and the
+     Grants block take the whole row. */
+  @container briefing-body (min-width: 600px) {
+    .impact-panel:not(.sheet-hosted) .impact-resource-group {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--brief-track-min)), 1fr));
+      gap: 8px var(--brief-track-gap);
+      margin-bottom: 18px;
+    }
+    .impact-panel:not(.sheet-hosted) .impact-resource-group > :not(.impact-resource) {
+      grid-column: 1 / -1;
+    }
+    .impact-panel:not(.sheet-hosted) .impact-resource {
+      margin: 0;
+      padding: 10px 12px;
+    }
+  }
+}
+/* The touch floor: a coarse pointer and the tablet band take 44 px cells
+   and controls. The band also draws Back to map as its icon square. */
+@media screen and (min-width: 721px) and (pointer: coarse) {
+  .impact-panel:not(.sheet-hosted) {
+    --brief-cell-h: var(--touch-target);
+    --brief-hit: var(--touch-target);
+  }
+}
+@media screen and (min-width: 721px) and (max-width: 1024px) {
+  .impact-panel:not(.sheet-hosted) {
+    --brief-cell-w: var(--touch-target);
+    --brief-cell-h: var(--touch-target);
+    --brief-hit: var(--touch-target);
+  }
+  .impact-panel:not(.sheet-hosted) .impact-panel-title {
+    font-size: 20px;
+  }
+  .impact-panel:not(.sheet-hosted) .impact-panel-close {
+    position: relative;
+    grid-template-columns: 20px;
+    justify-content: center;
+    place-items: center;
+    width: var(--brief-cell-w);
+    min-width: 0;
+    padding: 0;
+  }
+  /* The project's visually-hidden pattern (.sr-only): still the name. */
+  .impact-panel:not(.sheet-hosted) .impact-panel-close > span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+}
+@media screen and (min-width: 721px) and (prefers-reduced-motion: reduce) {
+  .impact-panel:not(.sheet-hosted) :is(.impact-panel-close, .impact-panel-action) {
+    transition: none;
+  }
+}
+
+/* Header, the narrow overlay's (wider than a phone, BRIEFING FRAME above
+   draws it as a grid with the cells at the top right): [Back to map][title
+   block][mail, print]. Where the window is too narrow for one row (a 200px
+   embed's overlay), the actions keep the first row beside Back and the
+   title takes a full row below: nothing shrinks under the touch floor and
+   no place name is truncated (2026-09-10 rule). */
 .impact-panel-header {
   display: flex;
   flex-wrap: wrap;
@@ -4730,8 +5004,9 @@ button.telemetry-item {
   letter-spacing: 0.02em;
 }
 /* The header's icon cluster (mail, print). "Back to map" is
-   .impact-panel-close, first in the header, in the studios' Back look
-   (the .layers-studio-back rule lists it). */
+   .impact-panel-close, first in the header, in the studios' Back look on
+   the narrow overlay (the .layers-studio-back rule lists it); wider than a
+   phone all three are map cells (BRIEFING FRAME above). */
 .impact-panel-actions {
   display: flex;
   align-items: center;
@@ -6294,7 +6569,7 @@ a.impact-resource-link::after {
    design record interface-chrome-popups-text.md sections 2.2, 2.3 and 2.6;
    superseding the 2026-08-31 bottom-right corner).
 
-   Help is slot 3 of the desktop column, a labelled cell like its
+   Help is slot 5 of the desktop column, a labelled cell like its
    neighbours (THE DESKTOP COLUMN, above), and its panel is the right-hand
    drawer: it docks against the column, its top on the help slot's top and
    its right edge 8px left of the column (container right 12 +
@@ -6353,9 +6628,17 @@ a.impact-resource-link::after {
       calc(100vw - var(--sidebar-w) - 2 * var(--chrome-inset) - var(--map-cell-w) - 8px)
     );
     /* The container is the full shell height (100dvh, 100vh where dvh is
-       unknown); 170px keeps the drawer's foot above the bottom seats. */
-    max-height: min(520px, calc(100vh - 170px));
-    max-height: min(520px, calc(100dvh - 170px));
+       unknown). The drawer's top is Help's (slot 5, four cells and gaps
+       under the inset), and its foot stays 70px above the container's
+       bottom, clear of the bottom seats, as it did when Help was slot 3. */
+    max-height: min(
+      520px,
+      calc(100vh - 70px - var(--chrome-inset) - 4 * (var(--map-cell-h) + var(--map-cell-gap)))
+    );
+    max-height: min(
+      520px,
+      calc(100dvh - 70px - var(--chrome-inset) - 4 * (var(--map-cell-h) + var(--map-cell-gap)))
+    );
     overflow-y: auto;
     overscroll-behavior: contain;
     padding: 12px 14px;
@@ -7568,11 +7851,10 @@ a.impact-resource-link::after {
   padding: 0;
   border-bottom: 0;
 }
-/* A briefable region uses the second row; every other region shows the
-   plain-text alternate there instead (D1 M4 repair, found-024): the row
-   keeps var(--shell-region-row) in every state, so it is never an empty
-   reserved band and #brief-search below never moves when the door appears
-   or disappears (the 2026-09-13 stable-position rule). The door's row is
+/* The second row is the briefing door's seat. It is reserved in every state,
+   empty while the door is hidden (the "Pick a place" line left it, owner
+   2026-11-21), so #brief-search below never moves when the door appears or
+   disappears (the 2026-09-13 stable-position rule). The door's row is
    the touch floor on every pointer: that holds its two lines, a chosen
    place's one-line name over "Open briefing" (repair R2). A name that
    needs a second line is never cut, so it alone grows the row. */
@@ -7582,15 +7864,47 @@ a.impact-resource-link::after {
   grid-template-rows: minmax(var(--shell-region-row), auto) minmax(var(--touch-target), auto);
   gap: 8px;
 }
-#shell-region-host .region-briefing-btn,
-#shell-region-host .region-briefing-note { margin-top: 0; }
-#shell-region-host .region-briefing-note {
-  display: flex;
-  align-items: center;
-  font-size: 11.5px;
-  color: var(--fg-2);
+#shell-region-host .region-briefing-btn { margin-top: 0; }
+
+/* THE RESULTS BAND (owner, 2026-11-21). In desktop Brief the search's results
+   own the space under the box that the Place and Layer doors left. The search
+   is a two-row grid, the box and then a band of one fixed height, so typing,
+   results arriving and clearing move nothing in the column (the 2026-09-13
+   stable-position rule). The band is the height the doors and the Tribal
+   Nations button gave back (two 36px control rows and their 12px of gaps), so
+   the column is no taller than it was and Wildfire's 3D stack still fits the
+   screens it fitted. A result with its second line (a land area, a source) fits the band;
+   a longer list keeps its own height and runs down over the controls under
+   the band, on the column's own surface, and scrolls past --brief-results-max.
+   The Brief head is seated here only in desktop Brief
+   (src/ui/island/shell.tsx); every other search host keeps its own list. */
+#shell-refine-host {
+  --brief-results-h: 84px;
+  --brief-results-max: 320px;
 }
-#shell-region-host .region-briefing-note[hidden] { display: none; }
+#shell-refine-host .ddm-search {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto var(--brief-results-h);
+}
+#shell-refine-host .ddm-search-results {
+  position: relative;
+  z-index: 2;
+  align-self: start;
+  max-height: var(--brief-results-max);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--bg-1);
+}
+#shell-refine-host .ddm-search-results:not(:empty) {
+  padding-bottom: 8px;
+}
+/* A list that runs over the controls under the band folds away once focus
+   leaves the search, so it never hides a control focus or a pointer goes to
+   next (WCAG 2.4.11); the typed words stay and the list returns on focus. */
+#shell-refine-host .ddm-search:not(:focus-within) .ddm-search-results {
+  visibility: hidden;
+}
 
 /* Optional controls and live explanations expand below the shared doors. */
 .shell-details-panel { display: none; }
@@ -7733,17 +8047,15 @@ a.impact-resource-link::after {
 }
 
 /* THE CONTROL FACE (visual uniformity wave 1, D1). One face for every button
-   in the left column: the modes, the horizons, the Place and Layers doors,
-   the Tribal Nations button and the 3D Fire stack. Its values are the
+   in the left column: the modes, the horizons and the 3D Fire stack (the
+   Place and Layer doors are map cells now, owner 2026-11-21). Its values are the
    --ctl-* tokens; a coarse pointer lifts --ctl-min-h to the touch floor.
    Labels are mixed case; uppercase belongs to section heads. The pressed
    face is SELECTED INVERTS, near the end of this file. */
 .shell-cluster-btn,
 .shell-horizon-btn,
 .shell-fire3d-btn,
-.shell-fire3d-layer,
-.brief-console-door,
-#brief-secondary-actions .tribal-nations-brief-action {
+.shell-fire3d-layer {
   appearance: none;
   min-width: 0;
   min-height: var(--ctl-min-h);
@@ -7763,15 +8075,13 @@ a.impact-resource-link::after {
     color var(--dur-micro) var(--ease-standard),
     border-color var(--dur-micro) var(--ease-standard);
 }
-:is(.shell-cluster-btn, .shell-horizon-btn, .shell-fire3d-btn, .shell-fire3d-layer, .brief-console-door):hover,
-#brief-secondary-actions .tribal-nations-brief-action:hover {
+:is(.shell-cluster-btn, .shell-horizon-btn, .shell-fire3d-btn, .shell-fire3d-layer):hover {
   background: var(--bg-2);
   border-color: var(--line-strong);
   color: var(--fg-0);
 }
 @media (prefers-reduced-motion: reduce) {
-  :is(.shell-cluster-btn, .shell-horizon-btn, .shell-fire3d-btn, .shell-fire3d-layer, .brief-console-door),
-  #brief-secondary-actions .tribal-nations-brief-action {
+  :is(.shell-cluster-btn, .shell-horizon-btn, .shell-fire3d-btn, .shell-fire3d-layer) {
     transition: none;
   }
 }
@@ -8519,9 +8829,8 @@ a.impact-resource-link::after {
    .layer-toggle label row is its activation target and that row already
    measures well over the floor. */
 @media (pointer: coarse) and (min-width: 721px) {
-  /* Sidebar header: the seal (32px), the Brief/Console switch (17px), and
-     the collapse control (28px). */
-  .brand-seal,
+  /* Sidebar header: the Brief/Console switch (17px) and the collapse
+     control (28px). The map's brand mark takes the floor in its own rule. */
   #sidebar-collapse.icon-btn,
   #sidebar-expand.icon-btn {
     min-width: var(--touch-target);
@@ -8534,14 +8843,13 @@ a.impact-resource-link::after {
 
   /* Sidebar body: the place search (31px), the
      region select and its briefing trigger (38px), the Tribal Nations
-     action (32px), the two studio doors (28px), the conditions metrics
-     (37px), and the key disclosure (38px). */
+     action (32px), the conditions metrics (37px), and the key disclosure
+     (38px). The two studio buttons are map cells and take the floor through
+     --map-cell-h. */
   .ddm-search-input,
   .region-select,
   .region-briefing-btn,
   .tribal-nations-brief-action,
-  #brief-secondary-actions .tribal-nations-brief-action,
-  .brief-console-door,
   .conditions-metric,
   .layer-umbrella-details-toggle,
   .layer-toggle {
@@ -8874,11 +9182,10 @@ a.impact-resource-link::after {
   outline-offset: 0;
   box-shadow: 0 0 0 4px var(--focus-outer), var(--selection-shadow);
 }
-/* The Brief's Tribal Nations toggle wears the same face. The sidebar copy sits
-   under an id rule, so it is named here with its own id; both draw Highlight on
-   HighlightText under forced colours (a respect defect when the label vanished). */
-.tribal-nations-brief-action[aria-pressed='true'],
-#brief-secondary-actions .tribal-nations-brief-action[aria-pressed='true'] {
+/* The embed briefing's Tribal Nations toggle wears the same face, and draws
+   Highlight on HighlightText under forced colours (a respect defect when the
+   label vanished). */
+.tribal-nations-brief-action[aria-pressed='true'] {
   forced-color-adjust: none; /* FORCED COLOURS, app.css */
   background: var(--face-selected);
   color: var(--ink-on-selected);

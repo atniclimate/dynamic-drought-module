@@ -84,6 +84,13 @@ export const LANE_PLACEMENT: Readonly<
   usdm: { hazards: ['drought'], horizons: ['current'] },
   dsci: { hazards: ['drought'], horizons: ['current'] },
   nifc: { hazards: ['fire'], horizons: ['current'] },
+  // The BC Wildfire Service perimeters beside NIFC's: each agency's own
+  // figures, and the place's fire areas counted once where they overlap.
+  bcws: { hazards: ['fire'], horizons: ['current'] },
+  // The newest published live fuel moisture maps, summarized over the place
+  // (src/impact/live-fuel-moisture.ts): a modelled estimate of how dry living
+  // plants are, read beside the perimeters and never combined with them.
+  liveFuelMoisture: { hazards: ['fire'], horizons: ['current'] },
   // One query, two hazards: the fire-weather claim carries hazards ['fire'],
   // the extreme-heat claim carries ['heat'], and the claim reporting neither
   // in effect speaks for both rows, so it keeps the lane's own pair.
@@ -119,6 +126,8 @@ export const MATRIX_LANE_KEYS: readonly MatrixLaneKey[] = [
   'usdm',
   'dsci',
   'nifc',
+  'bcws',
+  'liveFuelMoisture',
   'nwsAlerts',
   'heatRisk',
   'nwsForecast',

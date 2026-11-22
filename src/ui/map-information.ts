@@ -32,8 +32,8 @@ function setObscuredInteractionBlocked(blocked: boolean): void {
 }
 
 /**
- * Seat help and its Map information drawer in the desktop column's slot 3
- * (S30D D1 M9; design record interface-chrome-popups-text.md sections 2.3
+ * Seat help and its Map information drawer in the desktop column's slot 5,
+ * under Reset, Layer, Place and SAT (owner, 2026-11-22; design record interface-chrome-popups-text.md sections 2.3
  * and 2.6). The SAME two nodes move, button first, so the drawer stays the
  * next thing after its trigger in DOM order and every listener, the open
  * state and `aria-expanded` ride along. Phones and embeds keep both nodes
