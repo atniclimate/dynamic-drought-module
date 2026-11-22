@@ -261,7 +261,7 @@ function probeStamp(page: Page): Promise<string | undefined> {
   return page.evaluate(() => document.documentElement.dataset['probe']);
 }
 
-test('an answered-read wait is not charged for a page the renderer has frozen past its budget', async ({
+test('an answered-read wait is not charged for a page the renderer has frozen past its budget', { tag: '@landing' }, async ({
   page
 }) => {
   // The found-145 shape without the renderer: the page freezes for 8 s,
@@ -276,7 +276,7 @@ test('an answered-read wait is not charged for a page the renderer has frozen pa
   expect(Date.now() - startedAt).toBeGreaterThan(8_000);
 });
 
-test('an answered-read wait still fails at its budget when the state never comes, frozen or not', async ({
+test('an answered-read wait still fails at its budget when the state never comes, frozen or not', { tag: '@landing' }, async ({
   page
 }) => {
   // A page that answers and never gets there fails on the budget, as the
@@ -476,7 +476,7 @@ test.describe('W3/W4 browser truth', () => {
    * rather than reusing Stevens Pass (a SNOTEL station, which serves no
    * wind fields and so never carries a glyph).
    */
-  test('a RAWS station marker in the active 3D scene is a MapLibre-managed marker and carries the same wind glyph as on the flat map', async ({
+  test('a RAWS station marker in the active 3D scene is a MapLibre-managed marker and carries the same wind glyph as on the flat map', { tag: '@landing' }, async ({
     page
   }) => {
     // A longer budget than most other browser cases in this file (mirrors
@@ -656,7 +656,7 @@ test.describe('W3/W4 browser truth', () => {
     await expect(marker.locator('svg[data-telemetry-wind-glyph]')).toHaveCount(1);
   });
 
-  test('the perimeter ribbon follows the perimeter layer, not the other way round', async ({
+  test('the perimeter ribbon follows the perimeter layer, not the other way round', { tag: '@landing' }, async ({
     page
   }) => {
     // A terrain build plus the perimeter fetch on the software renderer.
@@ -725,7 +725,7 @@ test.describe('W3/W4 browser truth', () => {
     await expect(page.locator(TOGGLE)).toHaveCount(0);
   });
 
-  test('unchecking perimeters removes a ribbon whose pulse is advancing', async ({ page }) => {
+  test('unchecking perimeters removes a ribbon whose pulse is advancing', { tag: '@landing' }, async ({ page }) => {
     test.setTimeout(180_000);
     await page.emulateMedia({ reducedMotion: 'no-preference' });
     // Observe the actual map constructor, as in flow-wire. Its methods and
@@ -774,7 +774,7 @@ test.describe('W3/W4 browser truth', () => {
     }, [...PERIMETER_RIBBON_LAYER_IDS]), (anyRibbonLayer) => !anyRibbonLayer, 30_000, 'a ribbon layer survived uncheck');
   });
 
-  test('a shared fire3d link boots active and ordinary URL writes preserve the flag', async ({
+  test('a shared fire3d link boots active and ordinary URL writes preserve the flag', { tag: '@landing' }, async ({
     page
   }) => {
     // The region write moves the scene to central Oregon, where the buildings
@@ -811,7 +811,7 @@ test.describe('W3/W4 browser truth', () => {
     expect(await search(page)).toContain('fire3d=true');
   });
 
-  test('reduced motion still enters and leaves the 3D scene', async ({
+  test('reduced motion still enters and leaves the 3D scene', { tag: '@landing' }, async ({
     page
   }) => {
     test.setTimeout(120_000);
@@ -836,7 +836,7 @@ test.describe('W3/W4 browser truth', () => {
     await expect.poll(async () => search(page)).not.toContain('fire3d');
   });
 
-  test('embed stays chrome-inert while a URL-named fire3d still drives the map effect', async ({
+  test('embed stays chrome-inert while a URL-named fire3d still drives the map effect', { tag: '@landing' }, async ({
     page
   }) => {
     // Unlike every other heavy case in this block (120_000-180_000), this one
@@ -895,7 +895,7 @@ test.describe('W3/W4 browser truth', () => {
     }
   });
 
-  test('the Buildings key row shows only where a building can draw', async ({ page }) => {
+  test('the Buildings key row shows only where a building can draw', { tag: '@landing' }, async ({ page }) => {
     test.setTimeout(120_000);
     // The real map, observed at its constructor (no production test handle).
     await observeW2Map(page);
@@ -925,7 +925,7 @@ test.describe('W3/W4 browser truth', () => {
     await expect(structuresLegend).toHaveText('Buildings');
   });
 
-  test('an empty smoke read says so in the 3D control instead of looking broken', async ({
+  test('an empty smoke read says so in the 3D control instead of looking broken', { tag: '@landing' }, async ({
   page
 }) => {
   test.setTimeout(150_000);
@@ -962,7 +962,7 @@ test.describe('W3/W4 browser truth', () => {
   await expect(page.locator('.shell-fire3d-note')).toHaveCount(2);
 });
 
-test('a failed smoke read says smoke is unavailable in the 3D control, not that it stays in a flat veil', async ({
+test('a failed smoke read says smoke is unavailable in the 3D control, not that it stays in a flat veil', { tag: '@landing' }, async ({
   page
 }) => {
   test.setTimeout(150_000);
@@ -1085,7 +1085,7 @@ test('an embed without the flag never activates and never gains it', async ({
     await expect(refusal).toHaveCount(0);
   });
 
-  test('a scene ended by a short window leaves no 3D refusal behind in Drought', async ({ page }) => {
+  test('a scene ended by a short window leaves no 3D refusal behind in Drought', { tag: '@landing' }, async ({ page }) => {
     test.setTimeout(150_000);
     await stubWildfireFeeds(page);
     await stubDeepTerrainArchive(page);
@@ -1162,7 +1162,7 @@ test('an embed without the flag never activates and never gains it', async ({
     expect(await search(page)).toContain('cluster=wildfire');
   });
 
-  test('one extra reference layer keeps the scene; losing every fire layer or the cluster exits it', async ({
+  test('one extra reference layer keeps the scene; losing every fire layer or the cluster exits it', { tag: '@landing' }, async ({
     page
   }) => {
     // The drape's tile fan-out on the software renderer pushes this
@@ -1258,7 +1258,7 @@ test('an embed without the flag never activates and never gains it', async ({
     expect(await search(page)).toContain('fire3d=true');
   });
 
-  test('switching clusters exits the scene, hides the control and drops the preference (DR-122)', async ({
+  test('switching clusters exits the scene, hides the control and drops the preference (DR-122)', { tag: '@landing' }, async ({
     page
   }) => {
     // Unlike its siblings above (120_000-180_000), this test declared no
@@ -1450,7 +1450,7 @@ async function removeW2Source(page: Page, id: string): Promise<void> {
   }, id);
 }
 
-test.describe('W2 registered native consumers', () => {
+test.describe('W2 registered native consumers', { tag: '@landing' }, () => {
   test.setTimeout(120_000);
 
   test('hillshade native deadline downgrades its real pill; checkbox Off cancels the retry', async ({ page }) => {

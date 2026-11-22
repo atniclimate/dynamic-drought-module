@@ -6,7 +6,7 @@
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { EXIT, exitCode, lastRedRun, nothingToPush, parseArgs, pushBase, remainderAdvice, remainderOf } from '../scripts/check-push.mjs';
+import { EXIT, exitCode, landingFilesOf, lastRedRun, nothingToPush, parseArgs, pushBase, remainderAdvice, remainderOf } from '../scripts/check-push.mjs';
 
 test('arguments: a base, the block, a branch; a flag without its value or an unknown one is refused', () => {
   assert.deepEqual(parseArgs([]), { base: null, block: false, branch: null });
@@ -47,12 +47,26 @@ test('the remainder: nothing, or what is over the limit, chromium-3d and BROAD',
   assert.deepEqual(remainderAdvice(none, { openPull: null, branch: 'work/x', base: 'b0' }), []);
 });
 
-test('an open pull request covers the remainder with its own run, so nothing is dispatched', () => {
-  const lines = remainderAdvice(some, { openPull: { number: 121 }, branch: 'work/x', base: 'b0' });
+test('a ready pull request covers the remainder with its own full run, so nothing is dispatched', () => {
+  const lines = remainderAdvice(some, { openPull: { number: 121, isDraft: false }, branch: 'work/x', base: 'b0' });
   assert.match(lines.join('\n'), /chromium-3d, never run locally: tests\/fire3d-mode\.spec\.ts/);
   assert.match(lines.join('\n'), /Over the 10\.0 min local limit: tests\/a\.spec\.ts/);
-  assert.match(lines.at(-1), /Pull request #121 is open on work\/x: the push runs the full Validate, which covers this remainder\. Do not dispatch\./);
+  assert.match(lines.at(-1), /Pull request #121 is open on work\/x and ready for review: the push runs the full Validate, which covers this remainder\. Do not dispatch\./);
   assert.ok(!lines.some((line) => /gh workflow run|--dispatch/.test(line)));
+});
+
+test('a draft pull request runs the fast Validate: the remainder\'s @landing cases wait for the full run when it is marked ready', () => {
+  const landing = landingFilesOf(some, [
+    { path: 'tests/fire3d-mode.spec.ts', text: "test('scene', { tag: '@landing' }, () => {});" },
+    { path: 'tests/a.spec.ts', text: "test('plain', () => {});" },
+    { path: 'tests/b.spec.ts', text: "test('elsewhere', { tag: '@landing' }, () => {});" }
+  ]);
+  assert.deepEqual(landing, ['tests/fire3d-mode.spec.ts']);
+  const draft = remainderAdvice(some, { openPull: { number: 121, isDraft: true }, branch: 'work/x', base: 'b0', landing });
+  assert.equal(draft.at(-1), 'Pull request #121 is open on work/x as a draft: the push runs the fast Validate, which covers this remainder except the cases tagged @landing (in tests/fire3d-mode.spec.ts). Those run in the full Validate when the pull request is marked ready for review. Do not dispatch.');
+  assert.ok(!draft.some((line) => /gh workflow run|--dispatch/.test(line)));
+  // GitHub did not say whether it is a draft: both tiers are named.
+  assert.match(remainderAdvice(some, { openPull: { number: 121 }, branch: 'work/x', base: 'b0' }).at(-1), /fast while it is a draft .* full once it is ready\. Do not dispatch\./);
 });
 
 test('without a pull request: the targeted dispatch to run after the push, or the full run when BROAD', () => {

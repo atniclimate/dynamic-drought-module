@@ -482,7 +482,7 @@ async function openPlaceResponse(page: Page, sink: string): Promise<void> {
 }
 
 for (const viewport of VIEWPORTS) {
-  test.describe(`text registration at ${viewport.width}x${viewport.height} (DDM-P10-T12)`, () => {
+  test.describe(`text registration at ${viewport.width}x${viewport.height} (DDM-P10-T12)`, { tag: viewport.width > 1280 ? ['@landing'] : [] }, () => {
     test.use({ viewport });
 
     test('no block of two or more lines and three or more words ends in a single-word line in the sidebar, the drawers, the map popup and the briefing for WA and CONUS', async ({
@@ -801,7 +801,7 @@ test.describe('text registration leaves the phone layout alone (codex C5)', () =
 // found-104 (block 5): the HeatRisk moment ("Jul 30, 2026, 12:00 UTC") is one
 // unbreakable token on the map stamp and in the briefing claim.
 for (const viewport of VIEWPORTS.filter((v) => v.width !== 1440)) {
-  test.describe(`HeatRisk moment token at ${viewport.width}x${viewport.height} (found-104)`, () => {
+  test.describe(`HeatRisk moment token at ${viewport.width}x${viewport.height} (found-104)`, { tag: viewport.width > 1280 ? ['@landing'] : [] }, () => {
     test.use({ viewport });
 
     test('the HeatRisk stamp and briefing claim tie every time to its zone word with U+00A0 and show no orphan', async ({

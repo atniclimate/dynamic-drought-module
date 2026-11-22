@@ -11,14 +11,30 @@
 # more runners, never more workers per runner: each page is its own
 # software-GL MapLibre context.
 #
-# Three Playwright projects fan out with `--shard=i/n` (Playwright slices
-# each project's file-ordered test list into contiguous equal-count chunks),
-# one worker per runner: `chromium` (general), `chromium-interaction` (the
-# measured flake cluster; see INTERACTION_SPECS in playwright.config.ts), and
-# `chromium-3d` (the Fire 3D specs, their own per-test budgets). Every shard
-# builds and serves its own dist/, so no shard reads another's state.
+# Three Playwright projects fan out, one worker per runner: `chromium`
+# (general), `chromium-interaction` (the measured flake cluster; see
+# INTERACTION_SPECS in playwright.config.ts), and `chromium-3d` (the Fire 3D
+# specs, their own per-test budgets). Every shard builds and serves its own
+# dist/, so no shard reads another's state.
 #
-# Counts, measured with `npx playwright test --list --project=<p>
+# Re-fit 2026-11-22 (owner, DR-280): the `plan` job writes the matrix
+# (.github/scripts/plan-browser-shards.mjs). Each job gets whole spec files
+# balanced by their seconds in tests/spec-timings.json, a file heavier than a
+# job is split with `--shard=i/k` over that file alone, and the `coverage`
+# job proves from Playwright's own listing that every collected case sits in
+# exactly one job. Playwright's `--shard=i/n` over a whole project cuts equal
+# COUNTS, so the cost clustered: on run 45014874847 one 3D shard ran 22.2
+# minutes and another 0.7. Two tiers: `full` (every case; 8 chromium, 2
+# interaction, 4 3D jobs) and `fast` (every case not tagged `@landing`, for a
+# draft pull request; 12, 2 and 1 jobs). A fast run is never landing
+# evidence. A targeted run (`specs`) keeps the count slices described below.
+# Each job writes its failed cases to a small `browser-reds-*` artifact and
+# the `report` job gathers them into one summary; a full run also keeps the
+# measured seconds of every case (`browser-case-seconds`), from which
+# `node scripts/refresh-spec-timings.mjs <file>` rebuilds the timings. Nothing
+# commits the timings by itself.
+#
+# History. Counts, measured with `npx playwright test --list --project=<p>
 # --shard=i/n` on 56dd46a (2026-08-29): chromium 763 tests over 4 shards
 # (191/191/191/190; 778 tests in 101 files as of 2026-09-01, so about
 # 195 per shard), chromium-interaction 42 tests over 2 shards (21/21),
@@ -103,11 +119,85 @@ on:
         required: false
         type: string
         default: ''
+      # 2026-11-22 (owner, DR-280): `fast` leaves out every case tagged
+      # @landing, for a draft pull request; `full` runs them all. The
+      # schedule has no inputs, so every use below falls back to full.
+      tier:
+        description: >-
+          fast (every case not tagged @landing; never a landing run) or full
+          (every case, the default).
+        required: false
+        type: string
+        default: 'full'
 
 permissions:
   contents: read
 
 jobs:
+  # The matrix: whole spec files balanced by their measured seconds. No
+  # install and no browser: a checkout and Node are enough.
+  plan:
+    name: Plan the browser jobs
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      jobs: ${{ steps.plan.outputs.jobs }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Check the planner
+        run: node --test .github/scripts/plan-browser-shards.test.mjs
+
+      - name: Plan the matrix
+        id: plan
+        env:
+          TIER: ${{ inputs.tier || 'full' }}
+          SPECS: ${{ inputs.specs }}
+        run: |
+          [[ "$TIER" =~ ^(fast|full)$ ]] || { echo "::error::tier must be fast or full, not $TIER."; exit 1; }
+          mode="$TIER"
+          if test -n "$SPECS"; then mode=targeted; fi
+          node .github/scripts/plan-browser-shards.mjs --mode "$mode"
+
+  # A stale timings file only costs balance, never coverage, as long as every
+  # collected case sits in a planned job. Playwright's own listing decides.
+  # It runs beside the shards, not before them, so it costs no wall clock.
+  coverage:
+    name: The plan runs every collected case once
+    needs: plan
+    if: ${{ inputs.specs == '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install application dependencies
+        run: npm ci
+
+      - name: Compare the plan with the collected cases
+        env:
+          TIER: ${{ inputs.tier || 'full' }}
+          MATRIX: ${{ needs.plan.outputs.matrix }}
+        run: |
+          args=(test --list --reporter=json --project=chromium --project=chromium-interaction --project=chromium-3d)
+          if test "$TIER" = fast; then args+=(--grep-invert @landing); fi
+          npx playwright "${args[@]}" > "$RUNNER_TEMP/listing.json"
+          node .github/scripts/plan-browser-shards.mjs --verify "$RUNNER_TEMP/listing.json"
+
   # A targeted run whose named files belong to no matrix project (a file only
   # the measure project owns, say) would leave every shard green having run
   # nothing. Listing is cheap: no browser, no build.
@@ -141,7 +231,8 @@ jobs:
           npx playwright test --list --project=chromium --project=chromium-interaction --project=chromium-3d "${files[@]}"
 
   shard:
-    name: ${{ matrix.project }} ${{ matrix.shard }}/${{ matrix.total }}
+    name: ${{ matrix.project }} ${{ matrix.job }}/${{ matrix.jobs }}
+    needs: plan
     runs-on: ubuntu-latest
     # The job budget covers a cache-miss browser install (10), the suite
     # step's retry envelope (35), and the summary and upload steps, so a
@@ -160,24 +251,12 @@ jobs:
     env:
       DDM_BUILD_SHA: ${{ inputs.build-sha || github.sha }}
       DDM_BUILD_NONCE: ${{ inputs.build-nonce || github.run_id }}
+    # Each row: `project`, `job` of `jobs` (the job's name), `files` (the
+    # spec files it runs, space-separated; empty only on a targeted run,
+    # where `specs` names them) and `shard` (`i/k`, or empty for whole files).
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - { project: chromium, shard: 1, total: 8 }
-          - { project: chromium, shard: 2, total: 8 }
-          - { project: chromium, shard: 3, total: 8 }
-          - { project: chromium, shard: 4, total: 8 }
-          - { project: chromium, shard: 5, total: 8 }
-          - { project: chromium, shard: 6, total: 8 }
-          - { project: chromium, shard: 7, total: 8 }
-          - { project: chromium, shard: 8, total: 8 }
-          - { project: chromium-interaction, shard: 1, total: 2 }
-          - { project: chromium-interaction, shard: 2, total: 2 }
-          - { project: chromium-3d, shard: 1, total: 4 }
-          - { project: chromium-3d, shard: 2, total: 4 }
-          - { project: chromium-3d, shard: 3, total: 4 }
-          - { project: chromium-3d, shard: 4, total: 4 }
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -200,11 +279,20 @@ jobs:
           WORKERS: ${{ inputs.workers || '1' }}
           RETRIES: ${{ inputs.retries }}
           SPECS: ${{ inputs.specs }}
+          TIER: ${{ inputs.tier || 'full' }}
+          PROJECT: ${{ matrix.project }}
+          SHARD: ${{ matrix.shard }}
         run: |
           [[ "$WORKERS" =~ ^[0-9]{1,2}$ ]] || { echo "::error::workers must be a small whole number."; exit 1; }
           [[ "$RETRIES" =~ ^[0-9]{0,2}$ ]] || { echo "::error::retries must be empty or a small whole number."; exit 1; }
-          args=(test "--project=${{ matrix.project }}" "--shard=${{ matrix.shard }}/${{ matrix.total }}" "--workers=$WORKERS")
+          [[ "$TIER" =~ ^(fast|full)$ ]] || { echo "::error::tier must be fast or full."; exit 1; }
+          [[ "$PROJECT" =~ ^chromium(-interaction|-3d)?$ ]] || { echo "::error::$PROJECT is not a browser project."; exit 1; }
+          [[ "$SHARD" =~ ^([0-9]{1,2}/[0-9]{1,2})?$ ]] || { echo "::error::shard must be empty or i/k."; exit 1; }
+          args=(test "--project=$PROJECT")
+          if test -n "$SHARD"; then args+=("--shard=$SHARD"); fi
+          args+=("--workers=$WORKERS")
           if test -n "$RETRIES"; then args+=("--retries=$RETRIES"); fi
+          if test "$TIER" = fast; then args+=(--grep-invert @landing); fi
           if test -n "$SPECS"; then
             read -r -a files <<< "$SPECS"
             if test "${#files[@]}" -eq 0; then
@@ -259,19 +347,34 @@ jobs:
           # playwright.config.ts's own isCI retries setting governs, unchanged.
           RETRIES: ${{ inputs.retries }}
           # Empty unless a targeted run named files (the `specs` input); empty
-          # on the schedule too, so the command below is today's exactly.
+          # on the schedule too.
           SPECS: ${{ inputs.specs }}
+          # `fast` adds --grep-invert @landing; the schedule falls back to full.
+          TIER: ${{ inputs.tier || 'full' }}
+          # The plan's row, through env like the inputs: never spliced into
+          # the command line.
+          PROJECT: ${{ matrix.project }}
+          SHARD: ${{ matrix.shard }}
+          FILES: ${{ matrix.files }}
         # Each input is checked, then the command is built as an array, so a
         # stray space cannot add arguments. A blank spec list would run the
         # whole suite under the targeted run's name, and a path that is not a
         # spec file (or does not exist) would match nothing, so both fail.
         # The selection step skips shards that own none of the named tests;
-        # the `collect` job fails the run when no shard owns any.
+        # the `collect` job fails the run when no shard owns any. A planned
+        # row names its files; a row with neither files nor named specs would
+        # run its whole project and is refused.
         run: |
           [[ "$WORKERS" =~ ^[0-9]{1,2}$ ]] || { echo "::error::workers must be a small whole number."; exit 1; }
           [[ "$RETRIES" =~ ^[0-9]{0,2}$ ]] || { echo "::error::retries must be empty or a small whole number."; exit 1; }
-          args=(test "--project=${{ matrix.project }}" "--shard=${{ matrix.shard }}/${{ matrix.total }}" "--workers=$WORKERS")
+          [[ "$TIER" =~ ^(fast|full)$ ]] || { echo "::error::tier must be fast or full."; exit 1; }
+          [[ "$PROJECT" =~ ^chromium(-interaction|-3d)?$ ]] || { echo "::error::$PROJECT is not a browser project."; exit 1; }
+          [[ "$SHARD" =~ ^([0-9]{1,2}/[0-9]{1,2})?$ ]] || { echo "::error::shard must be empty or i/k."; exit 1; }
+          args=(test "--project=$PROJECT")
+          if test -n "$SHARD"; then args+=("--shard=$SHARD"); fi
+          args+=("--workers=$WORKERS")
           if test -n "$RETRIES"; then args+=("--retries=$RETRIES"); fi
+          if test "$TIER" = fast; then args+=(--grep-invert @landing); fi
           if test -n "$SPECS"; then
             read -r -a files <<< "$SPECS"
             if test "${#files[@]}" -eq 0; then
@@ -282,6 +385,16 @@ jobs:
               test -f "$spec" || { echo "::error::No spec file $spec on this commit."; exit 1; }
             done
             args+=(--pass-with-no-tests "${files[@]}")
+          else
+            read -r -a planned <<< "$FILES"
+            if test "${#planned[@]}" -eq 0; then
+              echo "::error::This planned job names no spec files."; exit 1
+            fi
+            for spec in "${planned[@]}"; do
+              [[ "$spec" =~ ^tests/[A-Za-z0-9._-]+\.spec\.ts$ ]] || { echo "::error::$spec is not a tests/*.spec.ts path."; exit 1; }
+              test -f "$spec" || { echo "::error::No spec file $spec on this commit."; exit 1; }
+            done
+            args+=("${planned[@]}")
           fi
           npx playwright "${args[@]}"
 
@@ -294,8 +407,47 @@ jobs:
         id: summary
         if: ${{ !cancelled() && (inputs.specs == '' || steps.selection.outputs.has-tests == 'true') }}
         env:
-          PLAYWRIGHT_PROJECT: ${{ matrix.project }} ${{ matrix.shard }}/${{ matrix.total }}
+          PLAYWRIGHT_PROJECT: ${{ matrix.project }} ${{ matrix.job }}/${{ matrix.jobs }}
         run: node scripts/summarize-playwright-shard.mjs test-results/report.json >> "$GITHUB_STEP_SUMMARY"
+
+      # A red that reads in seconds (owner, 2026-11-22): each failed or
+      # retried case with its file, line, title and first error line, to this
+      # job's summary and to a small `browser-reds-*` artifact. The `report`
+      # job gathers every job's list into one summary, and
+      # `npm run spec:impact -- --red <run id>` reads these lists before it
+      # falls back to the run log. A full run also writes the measured
+      # seconds of every attempt. Titles, lines, error heads and durations
+      # only: the same content as the failure report below, same retention.
+      - name: Name the failed cases
+        if: ${{ !cancelled() && (inputs.specs == '' || steps.selection.outputs.has-tests == 'true') }}
+        continue-on-error: true
+        env:
+          LABEL: ${{ matrix.project }} ${{ matrix.job }}/${{ matrix.jobs }}
+          TIER: ${{ inputs.tier || 'full' }}
+          PLANNED_JOBS: ${{ needs.plan.outputs.jobs }}
+          KEEP_SECONDS: ${{ inputs.specs == '' && (inputs.tier || 'full') == 'full' }}
+        run: |
+          args=(--reds test-results/report.json --label "$LABEL" --out "$RUNNER_TEMP/browser-reds")
+          if test "$KEEP_SECONDS" = true; then args+=(--seconds-dir "$RUNNER_TEMP/browser-seconds"); fi
+          node .github/scripts/plan-browser-shards.mjs "${args[@]}"
+
+      - name: Keep the red list
+        if: ${{ !cancelled() && (inputs.specs == '' || steps.selection.outputs.has-tests == 'true') }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: browser-reds-${{ matrix.project }}-${{ matrix.job }}-of-${{ matrix.jobs }}
+          path: ${{ runner.temp }}/browser-reds/
+          retention-days: 3
+          if-no-files-found: ignore
+
+      - name: Keep the measured seconds
+        if: ${{ !cancelled() && (inputs.specs == '' || steps.selection.outputs.has-tests == 'true') && inputs.specs == '' && (inputs.tier || 'full') == 'full' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: browser-seconds-${{ matrix.project }}-${{ matrix.job }}-of-${{ matrix.jobs }}
+          path: ${{ runner.temp }}/browser-seconds/
+          retention-days: 3
+          if-no-files-found: ignore
 
       # Measurement channel (R1/R3, 2026-08-29): upload the raw JSON report
       # unconditionally, every shard, not only on failure or flake, so a real
@@ -316,7 +468,7 @@ jobs:
         if: ${{ !cancelled() && (inputs.specs == '' || steps.selection.outputs.has-tests == 'true') }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: playwright-json-${{ matrix.project }}-${{ matrix.shard }}-of-${{ matrix.total }}
+          name: playwright-json-${{ matrix.project }}-${{ matrix.job }}-of-${{ matrix.jobs }}
           path: test-results/report.json
           retention-days: 3
           if-no-files-found: ignore
@@ -345,7 +497,7 @@ jobs:
         if: ${{ !cancelled() && (inputs.specs == '' || steps.selection.outputs.has-tests == 'true') && (steps.suite.outcome != 'success' || steps.summary.outputs.flaky != '0') }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: playwright-report-${{ matrix.project }}-${{ matrix.shard }}-of-${{ matrix.total }}
+          name: playwright-report-${{ matrix.project }}-${{ matrix.job }}-of-${{ matrix.jobs }}
           path: playwright-report/
           retention-days: 3
           if-no-files-found: ignore
@@ -363,7 +515,73 @@ jobs:
         if: ${{ !cancelled() && (inputs.specs == '' || steps.selection.outputs.has-tests == 'true') && (steps.suite.outcome != 'success' || steps.summary.outputs.flaky != '0') }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: playwright-traces-${{ matrix.project }}-${{ matrix.shard }}-of-${{ matrix.total }}
+          name: playwright-traces-${{ matrix.project }}-${{ matrix.job }}-of-${{ matrix.jobs }}
           path: test-results/
           retention-days: 3
+          if-no-files-found: ignore
+
+  # One list of every job's failed cases, at the top of the run: an
+  # annotation per failed case (the first ten) and one summary. It only
+  # names what the jobs decided, so it can never turn a run red
+  # (continue-on-error) and a cancelled run skips it. A full run also merges
+  # every job's seconds into `browser-case-seconds`, the file
+  # `node scripts/refresh-spec-timings.mjs` turns into tests/spec-timings.json
+  # when a session refreshes and commits it.
+  report:
+    name: One list of the failed cases
+    needs: [plan, shard]
+    if: ${{ !cancelled() && needs.plan.result == 'success' }}
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+
+      # This run's own artifacts: no token and no permission beyond the
+      # run's own.
+      - name: Fetch every job's red list
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: browser-reds-*
+          path: ${{ runner.temp }}/browser-reds
+          merge-multiple: true
+
+      - name: Gather the failed cases
+        continue-on-error: true
+        env:
+          # A targeted run's empty slices leave no list, so no count is claimed.
+          PLANNED_JOBS: ${{ inputs.specs == '' && needs.plan.outputs.jobs || '' }}
+        run: node .github/scripts/plan-browser-shards.mjs --gather "$RUNNER_TEMP/browser-reds"
+
+      - name: Fetch every job's measured seconds
+        if: ${{ inputs.specs == '' && (inputs.tier || 'full') == 'full' }}
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: browser-seconds-*
+          path: ${{ runner.temp }}/browser-seconds
+          merge-multiple: true
+
+      - name: Merge the measured seconds
+        if: ${{ inputs.specs == '' && (inputs.tier || 'full') == 'full' }}
+        continue-on-error: true
+        run: node .github/scripts/plan-browser-shards.mjs --merge-seconds "$RUNNER_TEMP/browser-seconds" --out "$RUNNER_TEMP/case-seconds.log"
+
+      # Seven days: long enough to refresh the timings at a landing a few
+      # days after the run. Titles, lines and durations only.
+      - name: Keep the measured seconds for the timings file
+        if: ${{ inputs.specs == '' && (inputs.tier || 'full') == 'full' }}
+        continue-on-error: true
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: browser-case-seconds
+          path: ${{ runner.temp }}/case-seconds.log
+          retention-days: 7
           if-no-files-found: ignore

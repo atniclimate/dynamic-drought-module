@@ -9,18 +9,38 @@
 
 name: Validate DDM
 
-# A targeted run (the `specs` input below, 2026-10-19) must never be taken for
-# a landing run. Empty keeps GitHub's event-specific name (the
-# pull request's title; the workflow name on a plain dispatch): the
-# `run-name` entry of the workflow syntax reference.
+# A targeted run (the `specs` input below, 2026-10-19) and a fast run (a
+# draft pull request, or `tier: fast`, 2026-11-22) must never be taken for a
+# landing run. Empty keeps GitHub's event-specific name (the pull request's
+# title; the workflow name on a plain dispatch): the `run-name` entry of the
+# workflow syntax reference.
 run-name: >-
-  ${{ inputs.specs != '' && format('Targeted browser run on {0}, not a landing run', github.ref_name) || '' }}
+  ${{ inputs.specs != '' && format('Targeted browser run on {0}, not a landing run', github.ref_name)
+  || ((github.event.pull_request.draft || inputs.tier == 'fast') && format('Fast run on {0}, not a landing run', github.head_ref || github.ref_name))
+  || '' }}
 
+# Two tiers (owner, 2026-11-22, DR-280). A push to a DRAFT pull request runs
+# the fast tier: every browser case not tagged @landing, about seven minutes,
+# never landing evidence. A push to a pull request that is not a draft,
+# marking a pull request ready for review, a dispatch (tier full, the
+# default) and the weekly schedule in browser-suite.yml run the full tier.
+# Marking ready starts the full run, which cancels a fast run still in
+# progress on the same pull request (the concurrency group below).
 on:
   pull_request:
     # Classify paths inside the workflow so even docs-only PRs report Validate.
+    # The default three types, and ready_for_review for the full run.
+    types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
     inputs:
+      tier:
+        description: >-
+          full (every browser case; the only tier that decides a landing) or
+          fast (cases tagged @landing do not run).
+        required: false
+        type: choice
+        options: [full, fast]
+        default: full
       # Mirrors browser-suite.yml's workflow_call experiment inputs, defaults
       # identical, so a workers=2 trial or a retries=0 sample runs by
       # dispatching Validate on a branch (R3, 2026-08-29), never through
@@ -195,6 +215,12 @@ jobs:
       workers: ${{ inputs.workers || '1' }}
       retries: ${{ inputs.retries || '' }}
       specs: ${{ inputs.specs || '' }}
+      # Fast on a draft pull request or a `tier: fast` dispatch, else full.
+      # On a dispatch `github.event.pull_request` is empty; on a pull request
+      # `inputs.tier` is. A targeted (`specs`) dispatch is never fast: its
+      # collect job lists the named files without the grep, so a fast tier
+      # there could run none of them and still read green (review, 2026-11-22).
+      tier: ${{ inputs.specs == '' && (github.event.pull_request.draft || inputs.tier == 'fast') && 'fast' || 'full' }}
 
   # `!cancelled()` rather than `always()`: a run superseded by
   # `cancel-in-progress` must read as cancelled, not as a red Validate.
@@ -215,6 +241,12 @@ jobs:
         run: |
           echo "::notice::Targeted browser run of named specs only. Not a landing run: only a full Validate run (no specs) decides a landing."
           printf '### Targeted run, not a landing run\n\nOnly these spec files ran: %s\n\nA landing needs a full Validate run, dispatched with no specs.\n' "$SPECS" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Say that this is a fast run
+        if: ${{ inputs.specs == '' && needs.scope.outputs.mode == 'full' && (github.event.pull_request.draft || inputs.tier == 'fast') }}
+        run: |
+          echo "::notice::Fast run: browser cases tagged @landing did not run. Not a landing run: only a full run (a ready pull request, or a dispatch with tier full) decides a landing."
+          printf '### Fast run, not a landing run\n\nBrowser cases tagged `@landing` (the heavy 3D scenes, the 1440, 1920 and 2560 variants of loops that also run at 1280, and a few long popup and tablet cases) did not run.\n\nA landing needs the full run: mark the pull request ready for review, or dispatch Validate with tier full.\n' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Require every selected job to have passed
         env:

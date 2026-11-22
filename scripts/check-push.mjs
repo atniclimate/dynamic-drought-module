@@ -21,8 +21,10 @@
  *      alone too is exit 1; passing only alone is named as a retry-only pass
  *      (two workers on this laptop timed out two heavy cases, 2026-11-22).
  *   6. Name the remainder (over the limit, chromium-3d, BROAD) and how GitHub
- *      covers it: the open pull request's own run, or the exact command to
- *      run after the push.
+ *      covers it: the open pull request's own run at its tier (a draft's
+ *      fast run leaves the cases tagged @landing for the full run when the
+ *      pull request is marked ready), or the exact command to run after the
+ *      push.
  * Exit 0: everything selected ran here and passed, nothing remains. Exit 3:
  * the local part passed, or passed only alone, and the named remainder and
  * any retry-only case are GitHub's to decide.
@@ -43,10 +45,10 @@ import {
   costModel,
   describeSelection,
   gather,
+  gh,
   git,
   mergeEntries,
   minutes,
-  openPullRequest,
   parseEntry,
   planLocalRun,
   readTimings,
@@ -104,21 +106,37 @@ export function remainderOf(plan, broad) {
   return { ...remainder, any: remainder.over.length + remainder.threeD.length + remainder.broad.length > 0 };
 }
 
+/** The remainder's spec files whose source at HEAD tags a case `@landing`, sorted. */
+export function landingFilesOf(remainder, specs) {
+  const files = new Set([...remainder.over, ...remainder.threeD].map((entry) => parseEntry(entry).file));
+  return specs.filter(({ path, text }) => files.has(path) && text.includes('@landing')).map(({ path }) => path).sort();
+}
+
 /**
  * What to say about the remainder, as lines. An open pull request's run on
- * the push is full integration and covers all of it; without one, the exact
+ * the push covers it, at the tier of that run: a draft gets the fast run
+ * (cases tagged `@landing` wait for the full run when it is marked ready), a
+ * ready one the full run (2026-11-22, DR-280). Without one, the exact
  * command the session runs after the push (a dispatch is its action, not
  * this command's). `openPull` is null when none is open and undefined when
- * GitHub could not be asked.
+ * GitHub could not be asked; its `isDraft` is undefined when GitHub did not
+ * say. `landing` names the remainder's files that tag a case `@landing`.
  */
-export function remainderAdvice(remainder, { openPull, branch, base }) {
+export function remainderAdvice(remainder, { openPull, branch, base, landing = [] }) {
   if (!remainder.any) return [];
   const lines = [];
   if (remainder.broad.length > 0) lines.push(...remainder.broad.map((reason) => `BROAD: ${reason}.`));
   if (remainder.threeD.length > 0) lines.push(`chromium-3d, never run locally: ${remainder.threeD.join(' ')}`);
   if (remainder.over.length > 0) lines.push(`Over the ${minutes(LOCAL_LIMIT_SECONDS)} local limit: ${remainder.over.join(' ')}`);
   if (openPull) {
-    lines.push(`Pull request #${openPull.number} is open on ${branch}: the push runs the full Validate, which covers this remainder. Do not dispatch.`);
+    const tagged = landing.length > 0 ? ` (in ${landing.join(' ')})` : '';
+    if (openPull.isDraft === true) {
+      lines.push(`Pull request #${openPull.number} is open on ${branch} as a draft: the push runs the fast Validate, which covers this remainder except the cases tagged @landing${tagged}. Those run in the full Validate when the pull request is marked ready for review. Do not dispatch.`);
+    } else if (openPull.isDraft === false) {
+      lines.push(`Pull request #${openPull.number} is open on ${branch} and ready for review: the push runs the full Validate, which covers this remainder. Do not dispatch.`);
+    } else {
+      lines.push(`Pull request #${openPull.number} is open on ${branch}: the push runs Validate, fast while it is a draft (cases tagged @landing${tagged} wait for the full run when it is marked ready), full once it is ready. Do not dispatch.`);
+    }
     return lines;
   }
   if (!branch) lines.push('No work branch on origin contains HEAD yet. After pushing one, run the command below on it.');
@@ -133,6 +151,13 @@ export function remainderAdvice(remainder, { openPull, branch, base }) {
 export function exitCode({ localFailed, retryOnly = false, remainder }) {
   if (localFailed) return EXIT.failed;
   return remainder.any || retryOnly ? EXIT.remainder : EXIT.passed;
+}
+
+/** The open pull request on a branch, `{ number, url, isDraft }`, or null. Throws when gh cannot answer. */
+function openPullRequest(branch) {
+  if (!branch) return null;
+  const rows = JSON.parse(gh(['pr', 'list', '--head', branch, '--state', 'open', '--json', 'number,url,isDraft']));
+  return rows[0] ?? null;
 }
 
 function npm(script) {
@@ -202,7 +227,7 @@ async function main(argv) {
     }
   }
   if (red) {
-    console.log(`Validate run ${red.run} on ${branch} was red: ${red.failed.length} failed cases join Tier 1.`);
+    console.log(`Validate run ${red.run} on ${branch} was red: ${red.failed.length} failed cases join Tier 1 (read from its ${red.source}).`);
     for (const { file, line, title } of red.unmatched) console.log(`  not found at HEAD (renamed or removed?): ${file}:${line} "${title}"`);
   }
   const redBrowser = (red?.entries ?? []).filter((entry) => !picked.pureOnly.has(parseEntry(entry).file));
@@ -233,7 +258,7 @@ async function main(argv) {
 
   heading('6. Remainder');
   const remainder = remainderOf(plan, picked.broad);
-  const advice = remainderAdvice(remainder, { openPull, branch, base });
+  const advice = remainderAdvice(remainder, { openPull, branch, base, landing: landingFilesOf(remainder, picked.specs) });
   console.log(advice.length > 0 ? advice.join('\n') : 'None: everything selected ran here.');
   const code = exitCode({ localFailed, retryOnly, remainder });
   const passedPart = retryOnly ? 'The local part passed, some cases only alone (named above)' : 'The local part passed';

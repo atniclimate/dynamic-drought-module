@@ -94,7 +94,7 @@ const DESKTOP_VIEWPORTS = [
 test.describe('at 1025px and wider, a studio centres its content column in the map area beside the sidebar (DR-169)', () => {
   for (const { width, height } of DESKTOP_VIEWPORTS) {
     for (const studio of STUDIOS) {
-      test(`${studio.kind} studio at ${width}x${height}, sidebar open and collapsed`, async ({
+      test(`${studio.kind} studio at ${width}x${height}, sidebar open and collapsed`, { tag: width > 1280 ? ['@landing'] : [] }, async ({
         page
       }) => {
         for (const sidebarState of ['open', 'closed'] as const) {
@@ -244,7 +244,7 @@ test('the sidebar stays visible but inert while a studio is open at 1025px and w
 test.describe('every studio lies wholly inside the viewport with no horizontal page scroll', () => {
   for (const { width, height } of DESKTOP_VIEWPORTS) {
     for (const studio of STUDIOS) {
-      test(`${studio.kind} studio at ${width}x${height}`, async ({ page }) => {
+      test(`${studio.kind} studio at ${width}x${height}`, { tag: width > 1280 ? ['@landing'] : [] }, async ({ page }) => {
         await page.setViewportSize({ width, height });
         await gotoApp(page, `?view=brief&layers=places&studio=${studio.kind}`);
         await expect(page.locator(studio.root)).toBeVisible();

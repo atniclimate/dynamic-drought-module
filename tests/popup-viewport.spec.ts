@@ -1781,7 +1781,7 @@ async function readSeat(page: Page): Promise<SeatRead> {
 
 for (const viewport of SEAT_VIEWPORTS) {
   for (const coarse of [false, true]) {
-    test.describe(`DDM-P17-T11: the close seat at ${viewport.width}x${viewport.height}, ${coarse ? 'coarse' : 'fine'} pointer`, () => {
+    test.describe(`DDM-P17-T11: the close seat at ${viewport.width}x${viewport.height}, ${coarse ? 'coarse' : 'fine'} pointer`, { tag: viewport.width > 1280 ? ['@landing'] : [] }, () => {
       test.use({ viewport, hasTouch: coarse });
 
       test('the close control owns its seat: no head content intersects it, long title and one-word title', async ({
@@ -1948,7 +1948,7 @@ test.describe('D1 M23 PF3: framed heads keep the tier promises (generic over mig
     );
   });
 
-  test('long desktop heads and panel responses preserve required scrolling and close access', async ({ context }) => {
+  test('long desktop heads and panel responses preserve required scrolling and close access', { tag: '@landing' }, async ({ context }) => {
     test.setTimeout(60_000 + 90_000 * migratedBuilders().length);
     await eachTierFixture(context, 'long-head and panel', (fixture, page) => fixture.longHeadAndPanel(page));
   });
@@ -2096,7 +2096,7 @@ test.describe('D1 M26b: the NWS, SPC and power fixtures keep the PF3 tier promis
     await eachM26bFixture(context, (fixture, page) => fixture.sourcesAtTierBoundaries(page));
   });
 
-  test('the NWS, SPC and power long desktop heads and panel responses keep their scrolling and close access', async ({ context }) => {
+  test('the NWS, SPC and power long desktop heads and panel responses keep their scrolling and close access', { tag: '@landing' }, async ({ context }) => {
     test.setTimeout(60_000 + 90_000 * M26B_IDS.length);
     await eachM26bFixture(context, (fixture, page) => fixture.longHeadAndPanel(page));
   });

@@ -64,7 +64,7 @@ async function nearGroundLuminance(page: Page): Promise<number> {
   return sum / (png.data.length / 4);
 }
 
-test.describe('Wildfire 3D dryness ground', () => {
+test.describe('Wildfire 3D dryness ground', { tag: '@landing' }, () => {
   test.setTimeout(180_000);
 
   test('entering Wildfire 3D requests no MERGEDGC, GIBS GOES, nowCOAST, Blue Marble or D8-ground host and no VHI tile at z8 or deeper', async ({ page }) => {
