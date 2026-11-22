@@ -56,6 +56,15 @@ test('no rail preset declares a horizon', () => {
   }
 });
 
+test("the phone's Fire view draws every layer of the Wildfire mode's Current recipe", async () => {
+  // applyPreset makes the active set equal the preset's list, so a layer the mode
+  // draws and the preset omits is switched off on a phone (the BC perimeters were, until 2026-11-22).
+  const { HAZARD_CLUSTERS } = await import('../src/config/clusters.ts');
+  const fire = MOBILE_HAZARD_PRESETS.find((preset) => preset.mode === 'wildfire');
+  assert.ok(fire, 'a rail preset for the Wildfire mode');
+  for (const key of HAZARD_CLUSTERS.wildfire.recipes.current) assert.ok(fire.layers.includes(key), key);
+});
+
 test('the markup and the stylesheet carry no Quick views row', () => {
   const html = read('../index.html');
   assert.doesNotMatch(html, /panel-quick-views|preset-chips/);

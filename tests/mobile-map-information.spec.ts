@@ -210,6 +210,37 @@ test.describe('mobile map-information disclosure (390x844)', () => {
     expect([glass.backdropFilter, glass.webkitBackdropFilter]).toContain('blur(15px)');
   });
 
+  test('the Info sheet ends with a door to About ATNI Climate, and the card behaves as a dialog', async ({ page }) => {
+    // The ATNI Climate mark is not drawn below 721 px, so on a phone this entry is the only door to About.
+    await gotoApp(page);
+    const panel = page.locator('#map-info-panel');
+    await page.getByRole('button', { name: 'Map information' }).click();
+    await expect(panel).toBeVisible();
+
+    const door = page.locator('#map-info-about');
+    await expect(door).toBeVisible();
+    await expect(door).toHaveText('About ATNI Climate');
+    expect((await door.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+
+    await door.click();
+    const card = page.getByRole('dialog', { name: 'About ATNI Climate' });
+    await expect(card).toBeVisible();
+    await expect(card).toBeFocused();
+    // The card draws above the open sheet: its own centre hits the card.
+    const onTop = await card.evaluate((el) => {
+      const rect = el.getBoundingClientRect();
+      const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+      return hit !== null && el.contains(hit);
+    });
+    expect(onTop).toBe(true);
+
+    // Escape closes the card alone: focus returns to the door and the sheet stays open.
+    await page.keyboard.press('Escape');
+    await expect(card).toBeHidden();
+    await expect(door).toBeFocused();
+    await expect(panel).toBeVisible();
+  });
+
   test('the right control spine remains above and usable while active-source information stays live', async ({
     page
   }) => {

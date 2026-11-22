@@ -1742,8 +1742,8 @@ test('the place counts each fire area once with the ratified label when both age
   const nifcBorder = feature({ attr_UniqueFireIdentifier: '2026-WANCP-000266', attr_IncidentName: 'Border 2', attr_IncidentTypeCategory: 'WF' }, BORDER_SQUARE);
   registry.setStatus('bcws-fires', 'ready');
   registry.setStatus('nifc-fires', 'ready');
-  globalThis.__p3truthLoadedBcws = { collection: collection([bcRecord('V10885', 'Under Control')]), coverage: [-130, 45, -115, 55], fetchedAt: Date.UTC(2026, 10, 5, 12), complete: true };
-  // NIFC's answer inside its 5-minute check window: an older one is not current (main's fast-path rule).
+  // Both loaded answers inside the 5-minute check window: an older one is not current (main's fast-path rule).
+  globalThis.__p3truthLoadedBcws = { collection: collection([bcRecord('V10885', 'Under Control')]), coverage: [-130, 45, -115, 55], fetchedAt: Date.now(), complete: true };
   globalThis.__p3truthLoadedNifc = { collection: collection([nifcBorder]), envelope: null, fetchedAt: Date.now(), truncated: false };
   globalThis.__p3truthFireAreas = { areaOf: new Map([['nifc:2026-WANCP-000266', 'fa:x'], ['bcws:2026-V10885', 'fa:x']]) };
   try {
@@ -1758,6 +1758,47 @@ test('the place counts each fire area once with the ratified label when both age
     globalThis.__p3truthFireAreas = { areaOf: new Map() };
     const apart = await withFetch(() => jsonResponse({}, 599), () => sources.fetchBcwsClaims(place(-121.05, 49.05, BORDER_BOX), signal()));
     assert.equal(apart.claims.length, 1);
+  } finally {
+    delete globalThis.__p3truthLoadedBcws;
+    delete globalThis.__p3truthLoadedNifc;
+    delete globalThis.__p3truthFireAreas;
+    registry.setStatus('bcws-fires', 'loading');
+    registry.setStatus('nifc-fires', 'loading');
+  }
+});
+
+test('a BC loaded answer older than its 5-minute check window declines, and the network read answers', async () => {
+  registry.setStatus('bcws-fires', 'ready');
+  // The layer keeps `ready` after a failed refresh and refetches only on a pan, so this set is not current.
+  globalThis.__p3truthLoadedBcws = {
+    collection: collection([bcRecord('K9', 'Out')]),
+    coverage: [-130, 45, -115, 55],
+    fetchedAt: Date.now() - 5 * 60_000 - 1,
+    complete: true
+  };
+  try {
+    const service = bcService({ features: [bcRecord('V10885', 'Under Control')] });
+    const result = await withFetch(service.answer, () => sources.fetchBcwsClaims(place(-121.05, 49.05, BORDER_BOX), signal()));
+    assert.ok(service.urls.some((url) => url.includes('f=geojson')), 'the network read runs');
+    assert.deepEqual(result.claims.map((claim) => claim.text), [buildBcwsAreaPerimeterClaim(['Under Control'])]);
+  } finally {
+    delete globalThis.__p3truthLoadedBcws;
+    registry.setStatus('bcws-fires', 'loading');
+  }
+});
+
+test('the place\'s fire-area count takes NIFC wildfire perimeters only, as the strip and the minimap count', async () => {
+  const nifcBorder = feature({ attr_UniqueFireIdentifier: '2026-WANCP-000266', attr_IncidentName: 'Border 2', attr_IncidentTypeCategory: 'WF' }, BORDER_SQUARE);
+  const nifcBurn = feature({ attr_UniqueFireIdentifier: '2026-WAOWF-000901', attr_IncidentName: 'Pile Burn', attr_IncidentTypeCategory: 'RX' }, BORDER_SQUARE);
+  registry.setStatus('bcws-fires', 'ready');
+  registry.setStatus('nifc-fires', 'ready');
+  globalThis.__p3truthLoadedBcws = { collection: collection([bcRecord('V10885', 'Under Control')]), coverage: [-130, 45, -115, 55], fetchedAt: Date.now(), complete: true };
+  globalThis.__p3truthLoadedNifc = { collection: collection([nifcBorder, nifcBurn]), envelope: null, fetchedAt: Date.now(), truncated: false };
+  globalThis.__p3truthFireAreas = { areaOf: new Map([['nifc:2026-WANCP-000266', 'fa:x'], ['bcws:2026-V10885', 'fa:x']]) };
+  try {
+    const result = await withFetch(() => jsonResponse({}, 599), () => sources.fetchBcwsClaims(place(-121.05, 49.05, BORDER_BOX), signal()));
+    // The Prescribed fire never enters the fire-area count: one area, the overlapping Border 2 pair.
+    assert.deepEqual(result.claims.map((claim) => claim.text), [buildBcwsAreaPerimeterClaim(['Under Control']), buildFireAreaClaim(1)]);
   } finally {
     delete globalThis.__p3truthLoadedBcws;
     delete globalThis.__p3truthLoadedNifc;

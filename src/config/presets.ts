@@ -120,6 +120,7 @@ export const MOBILE_HAZARD_PRESETS: readonly ViewPreset[] = [
     // the preset brings smoke in: applyPreset takes the non-cascading path,
     // and since the owner's ruling of 2026-09-28 (found-007) no layer declares
     // coActivateWith partners, so the two checkboxes are independent.
-    layers: ['spc-fire-weather', 'nifc-fires', 'hms-smoke', 'aiannh']
+    // bcws-fires rides beside nifc-fires, as in every Wildfire recipe.
+    layers: ['spc-fire-weather', 'nifc-fires', 'bcws-fires', 'hms-smoke', 'aiannh']
   }
 ];

@@ -165,6 +165,31 @@ test('the layer draws the newest map that is at least half as full as the fulles
   assert.equal(read.chooseLayerComposite(uncounted).start, '2026-10-03');
 });
 
+test('the layer key names its map\'s dates where the Key keeps them, outside the note it strips', async () => {
+  // The list as published on 2026-11-22: the 1 to 8 November map holds 14 percent of the fullest
+  // map's cells, so the layer (and the 3D ground, through the same choice) draws 24 to 31 October,
+  // while the briefing may state 1 to 8 November for a place that map does cover (method M-115).
+  const list = read.parseLfmcManifest(lfmcList([
+    lfmcListRow('2026-10-16', '2026-10-24', 9_577_651),
+    lfmcListRow('2026-10-24', '2026-11-01', 8_423_679),
+    lfmcListRow('2026-11-01', '2026-11-09', 1_355_673)
+  ]), `${BASE}manifest.json`);
+  const drawn = read.chooseLayerComposite(list);
+  assert.equal(drawn.start, '2026-10-24');
+  const layer = await import('../src/layers/live-fuel-moisture.ts');
+  const body = { innerHTML: '' };
+  layer.renderLfmcFlatLegend(body, drawn);
+  // The Key's "Also on the map" copies a legend section without its `.legend-note` (src/ui/map-key.ts).
+  const kept = body.innerHTML.replace(/<p class="legend-note">[\s\S]*?<\/p>/g, '');
+  assert.match(kept, /<h3 class="legend-section-title">Live fuel moisture \(% of dry mass\) · Oct 24 to 31, 2026<\/h3>/);
+  // The date is said once, in the title; the note keeps the definition.
+  assert.equal(body.innerHTML.split('Oct 24 to 31, 2026').length, 2);
+  assert.match(body.innerHTML, new RegExp(`<p class="legend-note">${config.LFMC_TEXT.definition}</p>`));
+  // Before a map is chosen the title names no date.
+  layer.renderLfmcFlatLegend(body, null);
+  assert.match(body.innerHTML, /<h3 class="legend-section-title">Live fuel moisture \(% of dry mass\)<\/h3>/);
+});
+
 test('dates, quantiles and the box read for a place', () => {
   assert.equal(read.lfmcDateSpan('2026-10-16', '2026-10-24'), 'Oct 16 to 23, 2026');
   assert.equal(read.lfmcDateSpan('2026-09-30', '2026-10-08'), 'Sep 30 to Oct 7, 2026');

@@ -235,7 +235,7 @@ test.describe('the mobile hazard rail (390x844)', () => {
         // room under a parallel suite.
         { timeout: 30_000 }
       )
-      .toEqual(['aiannh', 'hms-smoke', 'nifc-fires', 'spc-fire-weather']);
+      .toEqual(['aiannh', 'bcws-fires', 'hms-smoke', 'nifc-fires', 'spc-fire-weather']);
     await waitForLayerSettled(page, 'spc-fire-weather');
     await expect(fireBtn).toHaveAttribute('aria-pressed', 'true');
     await expect(
