@@ -35,20 +35,34 @@ Avoid copying spec counts and runtime estimates into several documents.
 | Pure logic | `npm run verify:pure -- tests/layer-order.spec.ts` | Selected source-level cases; omit the selector for the whole pure lane |
 | Source checks without a bundle | `npm run gate:nobuild` | Types and all source checks, including the pure lane |
 | A red that reading the code cannot explain | `npx playwright test --workers=1 -g "case title"` | Fresh production build and the one case, with every diagnostic in the first run |
-| A needed local check of touched browser behavior | `npm run test:touched` | The specs `npm run spec:impact` lists as touched; refuses none, more than 12, or a held port 4173 or 4180 |
+| Before every push | `npm run check:push` | Typecheck, `check:all`, the stale-mention scan, the cases the unpushed commits edited and the last red's cases here within about ten minutes; names what is left for the pull request's run |
+| A needed local check of touched browser behavior | `npm run test:touched` | The specs `npm run spec:impact` lists as touched; refuses none or a held port 4173 or 4180, and a list above the estimated minutes it allows |
 | Cross-cutting build/configuration changes | `npm run gate` | Fresh build, artifact budgets and all source checks |
-| The full suite | `gh workflow run validate.yml --ref <branch>` | GitHub's fourteen shards; `npm run test:serial` is not a local step |
+| The full suite | The block's draft pull request validates every push; `gh workflow run validate.yml --ref <branch>` only for a branch with none | GitHub's fourteen shards; `npm run test:serial` is not a local step |
 
 The full browser suite normally runs on GitHub, in the Validate workflow, which
-slices it into fourteen shards. When full integration is needed and no matching run
-exists, use an existing PR's run or, without a PR, dispatch
-`gh workflow run validate.yml --ref <branch>`. The normal application landing route
-requires that integration evidence. Proxy-only pull requests run the proxy typecheck,
+slices it into fourteen shards. A block's draft pull request, opened at its first
+commit, runs it on every push; use that run, and dispatch
+`gh workflow run validate.yml --ref <branch>` only for a branch with none. The normal
+application landing route requires that integration evidence. Proxy-only pull requests run the proxy typecheck,
 audit and client-contract/receipt tests without the application, terrain,
 landscape or browser suites. Docs outside the artifact report Validate without
 application jobs. Named browser dispatches run only those specs. An empty
 dispatch requests full integration. A local `test:serial` takes more than an
 hour and is not a local step: the full suite is GitHub's.
+
+`npm run check:push` (`scripts/check-push.mjs`, read its header comment) is the
+step before every push. It refuses uncommitted build inputs, runs typecheck,
+`check:all` and the stale-mention scan, then runs here the cases the unpushed
+commits edited plus the last red run's cases within about ten minutes of this
+machine's time (a case costs about twice its GitHub seconds, `LOCAL_SLOWDOWN`
+in `scripts/spec-impact.mjs`), runs a failed case once more alone, and names
+what is left for the pull request's run. Exit 0: all ran and passed. Exit 3:
+the local part passed and the rest is GitHub's, a normal push. Exit 1: a
+failure. Exit 2: refused. It never pushes or dispatches. After a red,
+`npm run spec:impact -- --red [run id]` re-runs here the cases that failed
+every attempt in a Validate run. `npm run refresh:spec-timings` rebuilds
+`tests/spec-timings.json` from a Validate run.
 
 `npm test` runs the same three assertion projects with the configured worker
 count. Keep one browser runner at a time. The pure lane starts no browser or
@@ -125,8 +139,9 @@ prints only the touched paths. Choose the needed evidence:
    shard runs only its slice of the named files; the run's name says it is not
    a landing run.
 2. Before a needed full dispatch, run `npm run spec:impact` with no counted
-   mention left. Reuse passing focused evidence; `npm run test:touched` is an
-   option when a local browser check is needed, not a mandatory extra run.
+   mention left. Before every push run `npm run check:push`, which runs the
+   spec files the unpushed commits edited here; after a red, `npm run
+   spec:impact -- --red` re-runs the cases that failed.
 3. At an application integration or release boundary, use the full Validate
    run with no `specs`, once. Reuse a matching full green rather than dispatch
    a duplicate. A targeted browser pass is not full landing evidence.
@@ -328,7 +343,7 @@ Validate runs the deterministic root gate and Worker checks beside the browser
 suite. Pages builds and gates the publication artifact, publishes it, and then
 runs the live proof; it does not repeat the candidate's browser suite. Use the
 focused and bounded touched-spec checks described above while developing.
-The full GitHub suite covers the frozen candidate once.
+The full GitHub suite covers the pull request's final tip.
 
 ## How CI runs the suite
 
@@ -371,14 +386,13 @@ laptop and has never been re-tested on CI.
 Shard layout and counts. The layout is the matrix in
 `.github/workflows/browser-suite.yml`: `chromium` over 8 shards,
 `chromium-interaction` over 2, `chromium-3d` over 4, 14 shard jobs in all. The
-last test counts recorded are in that workflow's re-fit note (2026-10-12):
-`chromium` about 1,630 tests and `chromium-3d` 84 tests; `chromium-interaction`
-was 42 tests on 2026-09-01 and has not been re-measured since. The checkout
-holds 168 spec files under `tests/` (the `*.spec.ts` files), 34 of them in the
-pure lane (`PURE_SPECS` in `playwright.config.ts`). The 2026-09-01 figures
-this paragraph used to carry (778, 42 and 32 tests; 852 in 107 files) are
-superseded. Re-measure with `npx playwright test --list --project=<p>` when
-the suite is next re-fitted, and replace this paragraph with that result.
+counts below were measured on 2026-11-22 with `npx playwright test --list
+--project=<p>` (listing only): `chromium` 1,095 tests in 126 spec files,
+`chromium-interaction` 109 in 4, `chromium-3d` 52 in 3, and the pure lane
+(`npx playwright test --list -c playwright.pure.config.ts`) 646 in 69. The
+checkout holds 204 `*.spec.ts` files under `tests/`; `PURE_SPECS` in
+`playwright.config.ts` names the pure ones. Re-measure with the same commands
+when the suite is next re-fitted, and replace this paragraph with that result.
 
 `chromium-3d` moved from 3 shards to 2 to pay for `chromium-interaction`'s two
 runners without raising the total shard count more than by one, and moved to

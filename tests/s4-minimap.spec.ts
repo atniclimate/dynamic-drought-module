@@ -1126,10 +1126,13 @@ test.describe('framing coverage clauses render only where each is true', () => {
 // ---------------------------------------------------------------------------
 // BC Wildfire Service in the wildfire minimap (the acceptance of 2026-09-25):
 // a framing that reaches British Columbia counts the issuer's active stages,
-// one footprint once with the ratified label, and a failed BC read never as
-// zero. The NIFC side is the usual count stub; BC answers through
+// one footprint once for the shade (no sentence states a count, DR-281), and a
+// failed BC read never as zero. The NIFC side is the usual count stub; BC answers through
 // `fulfillBcws` (tests/wildfire-fixtures.ts).
 // ---------------------------------------------------------------------------
+
+/** A number of fires in a minimap sentence (DR-281): a digit, then "current mapped" or "perimeter". */
+const NUMBERED_FIRES = /\d\s*(?:current mapped|perimeter)/i;
 
 /** A square at the Border 2 fire, inside Pacific Coast and British Columbia's box. */
 const BORDER_SQUARE = { type: 'Polygon', coordinates: [[[-121.1, 49.0], [-121.0, 49.0], [-121.0, 49.1], [-121.1, 49.1], [-121.1, 49.0]]] };
@@ -1150,7 +1153,11 @@ test.describe('the wildfire minimap counts BC Wildfire Service beside NIFC', () 
     const minimap = page.locator('.shell-minimap-map');
     const pacific = minimap.locator('[data-framing="pacific-coast"]');
     await expect(pacific).toHaveAttribute('data-wildfire-condition', 'mapped-wildfire');
-    await expect(pacific).toHaveAttribute('aria-label', /1 current mapped NIFC or BC Wildfire Service wildfire perimeter intersects this authored framing/);
+    // DR-281: the name says in words that mapped perimeters intersect, and states no number of fires.
+    await expect(pacific).toHaveAttribute('aria-label', /Current mapped NIFC or BC Wildfire Service wildfire perimeters intersect this authored framing/);
+    await expect(pacific).not.toHaveAttribute('aria-label', NUMBERED_FIRES);
+    // The shade still carries the amount: the one active BC perimeter reads in the lowest count tier.
+    await expect(pacific).toHaveCSS('fill-opacity', '0.4');
     await expect(minimap.locator('[data-framing="arid-west"]')).not.toHaveAttribute('data-wildfire-condition', 'mapped-wildfire');
   });
 
@@ -1168,7 +1175,7 @@ test.describe('the wildfire minimap counts BC Wildfire Service beside NIFC', () 
     await expect(minimap.locator('[data-framing="southeast-gulf"]')).not.toHaveAttribute('data-wildfire-condition', 'unavailable');
   });
 
-  test('the footprint of an overlapping BC and NIFC pair counts once, with the ratified label', async ({ page }) => {
+  test('an overlapping BC and NIFC pair shades its region as holding fires, and the name states no number (DR-281)', async ({ page }) => {
     const nifcBorder = {
       type: 'Feature',
       properties: { attr_IncidentName: 'Border 2', attr_IncidentTypeCategory: 'WF', attr_UniqueFireIdentifier: '2026-WANCP-000266', attr_ActiveFireCandidate: 1 },
@@ -1190,9 +1197,13 @@ test.describe('the wildfire minimap counts BC Wildfire Service beside NIFC', () 
     await expect(layerPill(page, 'bcws-fires')).toHaveText(/live/);
     const pacific = page.locator('.shell-minimap-map [data-framing="pacific-coast"]');
     // The summary loads as the mode's layers start, before any grouping, and
-    // counts again when the BC layer's grouping lands. Re-entering the mode
-    // never helps: leaving it tears both layers down.
-    await expect(pacific).toHaveAttribute('aria-label', /overlapping agency perimeters counted as one fire area/, { timeout: 20_000 });
-    await expect(pacific).toHaveAttribute('aria-label', /1 current mapped NIFC or BC Wildfire Service wildfire perimeter intersects/);
+    // counts again when the BC layer's grouping lands; the count is the shade's
+    // alone and no sentence states it. The pair is one fire area, so the shade
+    // is the lowest count tier and the name says neither a number nor an overlap count.
+    await expect(pacific).toHaveAttribute('data-wildfire-condition', 'mapped-wildfire', { timeout: 20_000 });
+    await expect(pacific).toHaveCSS('fill-opacity', '0.4');
+    await expect(pacific).toHaveAttribute('aria-label', /Current mapped NIFC or BC Wildfire Service wildfire perimeters intersect this authored framing/);
+    await expect(pacific).not.toHaveAttribute('aria-label', NUMBERED_FIRES);
+    await expect(pacific).not.toHaveAttribute('aria-label', /counted as one fire area|counted on its own/);
   });
 });

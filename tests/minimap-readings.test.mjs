@@ -645,3 +645,52 @@ test('finding ("fire seems static"): the shipped Wildfire reading follows only i
     assert.equal(latest().summaries['arid-west'].mappedWildfirePerimeterCount, 4);
   });
 });
+
+// DR-281: the wildfire minimap states no number of fires in any sentence. The count
+// stays in the snapshot (it drives the shade) and is never put into words.
+test('no wildfire minimap sentence puts a fire count into words: no digit before "current mapped" or "perimeter", in any state, condition or agency mix', async () => {
+  const wildfire = await import('../src/state/minimap-wildfire.ts');
+  const numberedFires = /\d\s*(?:current mapped|perimeter)/i;
+  const everyFraming = Object.fromEntries(FRAMING_KEYS.map((key) => [key, 37]));
+  const sentences = [];
+  await retainWildfire(everyFraming, async (_state, latest) => {
+    await until(() => latest()?.checkedAtUtc != null, 'the read');
+    const snapshot = latest();
+    for (const key of FRAMING_KEYS) {
+      const summary = snapshot.summaries[key];
+      assert.equal(summary.condition, 'mapped-wildfire', `${key} holds perimeters in this fixture`);
+      assert.equal(summary.mappedWildfirePerimeterCount, 37, 'the count stays in the snapshot for the shade');
+      sentences.push(wildfire.minimapWildfireDescription(snapshot.status, summary, '2026-11-22'));
+    }
+  });
+  const conditions = ['mapped-wildfire', 'high-potential', 'moderate-potential', 'below-threshold', 'no-data', 'unavailable'];
+  for (const status of ['idle', 'loading', 'live', 'live-partial', 'no-data', 'unavailable']) {
+    sentences.push(wildfire.minimapWildfireDescription(status, undefined, '2026-11-22'));
+    for (const condition of conditions) {
+      for (const bcwsPerimeterCount of [undefined, null, 0, 1, 308]) {
+        const summary = {
+          condition,
+          status: condition === 'unavailable' ? 'unavailable' : 'live',
+          mappedWildfirePerimeterCount: 84,
+          highOrVeryHighPercent: 55,
+          moderateOrHigherPercent: 70,
+          whpCoverage: 'live',
+          nifcPerimeterCount: 37,
+          fireAreasMerged: 2,
+          ...(bcwsPerimeterCount === undefined ? {} : { bcwsPerimeterCount }),
+        };
+        sentences.push(wildfire.minimapWildfireDescription(status, summary, '2026-11-22'));
+      }
+    }
+  }
+  assert.ok(sentences.length > FRAMING_KEYS.length);
+  for (const sentence of sentences) {
+    assert.doesNotMatch(sentence, numberedFires, sentence);
+    assert.doesNotMatch(sentence, /counted on its own|counted as one fire area/i, sentence);
+  }
+  // The mapped state still says in words that perimeters were found, with the clauses that carry no number.
+  assert.match(
+    sentences[0],
+    /^Current mapped NIFC(?: or BC Wildfire Service)? wildfire perimeters intersect this authored framing; prescribed fire is excluded; browser checked 2026-11-22\. This is mapped-perimeter evidence, not a count of every active wildfire\.$/
+  );
+});

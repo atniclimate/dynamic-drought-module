@@ -399,7 +399,7 @@ test('a BC answer taken across a service reload (its edit stamps moved during th
 /** A BC layer view over the whole of British Columbia's box, so its grouping reaches every framing's BC part. */
 const BC_WIDE_VIEW = [-140, 40, -110, 61];
 
-test('a known fire area counts once and carries the ratified label; grouped and apart, the two agencies add', async () => {
+test('a known fire area counts once (for the shade; no text states the count); grouped and apart, the two agencies add', async () => {
   const nifc = loaded({ type: 'FeatureCollection', features: [NIFC_BORDER] }, { truncated: false });
   const areaOf = new Map([['nifc:2026-WANCP-000266', 'fa:x'], ['bcws:2026-V10885', 'fa:x']]);
   const once = await runFeed({ status: 'ready', snapshot: nifc, bc: { features: [BC_ACTIVE] }, bcStatus: 'ready', areas: { status: 'complete', areaOf, coverage: BC_WIDE_VIEW } });
@@ -412,7 +412,7 @@ test('a known fire area counts once and carries the ratified label; grouped and 
   assert.equal('nifcPerimeterCount' in apart.snapshot.summaries[COVERED], false);
 });
 
-test('where no overlap can be established the two agencies are never added: the larger count shades and each is stated apart', async () => {
+test('where no overlap can be established the two agencies are never added: the larger count shades and the text states no count (DR-281)', async () => {
   // NIFC's count from the network (a count-only answer) beside the Border 2 BC record.
   const counted = await runFeed({ status: undefined, nifcCount: 1, bc: { features: [BC_ACTIVE] } });
   // NIFC's loaded record with no BC grouping to say (the BC layer off, failed, or its grouping pending).
@@ -428,11 +428,16 @@ test('where no overlap can be established the two agencies are never added: the 
     assert.equal(summary.bcwsPerimeterCount, 1);
     assert.equal(summary.fireAreasMerged, 0);
   }
-  const { buildAgencyCountsApart } = await import('../src/config/wildfire-presentation.ts');
   assert.equal(
-    buildAgencyCountsApart(1, 2),
-    '1 current mapped NIFC wildfire perimeter and 2 current mapped BC Wildfire Service wildfire perimeters intersect this authored framing; each agency is counted on its own because overlaps between them are not checked here'
+    (await import('../src/config/wildfire-presentation.ts')).buildAgencyCountsApart,
+    undefined,
+    'the per-agency count sentence is gone: no text states an agency count'
   );
+  for (const { snapshot } of [counted, ungrouped, narrow]) {
+    const words = minimap.minimapWildfireDescription('live', snapshot.summaries[COVERED], '2026-11-22');
+    assert.ok(words.startsWith('Current mapped NIFC or BC Wildfire Service wildfire perimeters intersect this authored framing'), words);
+    assert.doesNotMatch(words, /counted on its own|counted as one fire area|\d\s*(current mapped|perimeter)/i);
+  }
 });
 
 test('a summary counted before the BC layer grouped its pair counts again when the grouping lands, once: the known fire area then counts once', async () => {
