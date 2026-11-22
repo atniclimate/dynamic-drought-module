@@ -8,9 +8,9 @@ import {
   selectRegion,
   search,
   urlLayers,
-  waitForLayerSettled,
-  DEFAULT_ON
+  waitForLayerSettled
 } from './helpers';
+import { DEFAULT_ON } from './defaults';
 
 /**
  * S2: the region-shell URL migration (D-0.7.0-039/041/042/044/046/053;

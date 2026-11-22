@@ -1510,6 +1510,7 @@ const BROAD_CONDITION_FC = {
 };
 
 async function stubBroadCondition(page: Page): Promise<void> {
+  // own-stub: a broad NADM frame fixture the condition popup rows read.
   await page.route('**/NADM-current.geojson', (route: Route) =>
     route.fulfill({
       status: 200,

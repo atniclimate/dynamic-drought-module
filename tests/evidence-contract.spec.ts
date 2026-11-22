@@ -2,7 +2,7 @@ import { expect, test, type Page } from './offline-test';
 
 import { makeClaim } from '../src/impact/evidence';
 import { renderClaim } from '../src/ui/claim-render';
-import { gotoApp, showFullDetail } from './helpers';
+import { gotoApp, showFullDetail, stubUsdmBriefingReads } from './helpers';
 
 /**
  * The evidence/claim contract (0.8.0 T-P0-2; D-0.8.0-012).
@@ -24,16 +24,12 @@ const EMPTY_COLLECTION = JSON.stringify({ type: 'FeatureCollection', features: [
 
 /** Deterministic briefing sources: USDM answers D2; the rest answer empty. */
 async function stubBriefingSources(page: Page): Promise<void> {
-  await page.route('**/USDM_current/FeatureServer/0/query?*', (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: 'application/geo+json',
-      body: JSON.stringify({
-        type: 'FeatureCollection',
-        features: [{ type: 'Feature', properties: { DM: 2 }, geometry: null }]
-      })
-    })
-  );
+  // The briefing's point and place reads; the map's own frame read falls
+  // through to gotoApp's default frame.
+  await stubUsdmBriefingReads(page, {
+    type: 'FeatureCollection',
+    features: [{ type: 'Feature', properties: { DM: 2 }, geometry: null }]
+  });
   await page.route('**/WFIGS_Interagency_Perimeters_Current/**', (route) =>
     route.fulfill({ contentType: 'application/geo+json', body: EMPTY_COLLECTION })
   );
@@ -71,6 +67,7 @@ test.describe('rendered briefing under the contract', () => {
     await expect(usdmClaim.first()).toContainText('Method:');
     await expect(usdmClaim.first()).toContainText('D0 to D4 by percentile');
     await expect(usdmClaim.first()).toContainText('Support: the USDM polygons in this area');
+    // default-ok: the briefing's USDM claim names its own product's legend, not the default surface.
     const usdmLegendLink = usdmClaim.first().locator('a[data-legend-key="usdm"]');
     await expect(usdmLegendLink).toBeVisible();
     // DDM-P13-T02 F4: `usdm` is role: 'surface' (src/config/layers.ts), so
@@ -121,6 +118,7 @@ test.describe('rendered briefing under the contract', () => {
           makeClaim({
             text: `A ${evidence} statement.`,
             source: 'Test source',
+            // default-ok: a claim fixture's product id, data rather than a boot's surface.
             product: 'usdm',
             evidence,
             dates: { retrieved: '2026-07-21' }

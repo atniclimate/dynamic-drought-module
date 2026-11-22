@@ -2,7 +2,7 @@ import { expect, test, type Page } from './offline-test';
 import type { FeatureCollection, MultiPolygon, Polygon } from 'geojson';
 
 import { caveatFor } from '../src/impact/context';
-import { gotoApp, search } from './helpers';
+import { gotoApp, search, stubUsdmBriefingReads } from './helpers';
 import {
   AIANNH_ROUTE,
   BIA_ROUTE,
@@ -88,22 +88,18 @@ async function stubStateGeometry(
 }
 
 async function stubBriefingSources(page: Page): Promise<void> {
-  await page.route('**/USDM_current/FeatureServer/0/query?*', (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: 'application/geo+json',
-      body: JSON.stringify({
-        type: 'FeatureCollection',
-        features: [
-          {
-            type: 'Feature',
-            properties: { DM: 2 },
-            geometry: null
-          }
-        ]
-      })
-    })
-  );
+  // The briefing's point and place reads; the map's own frame read falls
+  // through to gotoApp's default frame.
+  await stubUsdmBriefingReads(page, {
+    type: 'FeatureCollection',
+    features: [
+      {
+        type: 'Feature',
+        properties: { DM: 2 },
+        geometry: null
+      }
+    ]
+  });
   await page.route('**/WFIGS_Interagency_Perimeters_Current/**', (route) =>
     route.fulfill({ contentType: 'application/geo+json', body: EMPTY_COLLECTION })
   );

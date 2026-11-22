@@ -21,20 +21,16 @@ import { installDefaultTropicalStub, type TropicalStubMode } from './tropical-fi
 import { installDefaultLfmcStub } from './lfmc-fixtures';
 import { untilAnswered } from './answered-read';
 import { cpcExtendedPolygons, cpcSeasonalPolygons } from './cpc-seasonal-polygon-fixtures.mjs';
+import { installDefaultUsdmStub, TEST_NADM_SNAPSHOT } from './usdm-fixtures';
 
-const TEST_NADM_SNAPSHOT = {
-  type: 'FeatureCollection',
-  features: [
-    {
-      type: 'Feature',
-      properties: { DROUGHTCAT: 'd2', YEAR_MONTH: '202606' },
-      geometry: {
-        type: 'Polygon',
-        coordinates: [[[-140, 20], [-50, 20], [-50, 75], [-140, 75], [-140, 20]]]
-      }
-    }
-  ]
-} as const;
+// The default drought stubs' bodies and the briefing-read helper live in
+// tests/usdm-fixtures.ts; re-exported so a spec's import from here stays valid.
+export {
+  DEFAULT_NADM_MONTH,
+  DEFAULT_USDM_MAP_DATE,
+  isUsdmMapFrameRead,
+  stubUsdmBriefingReads
+} from './usdm-fixtures';
 
 /** How a boot answers the North American Drought Monitor's continental snapshot query. */
 export type NadmStubMode = 'fixture' | 'live';
@@ -77,66 +73,6 @@ async function installDefaultNadmStub(page: Page, mode: NadmStubMode): Promise<v
       body: JSON.stringify(TEST_NADM_SNAPSHOT)
     });
   });
-}
-
-/** The default boot's weekly U.S. Drought Monitor read: one D2 polygon, map dated Aug 11, 2026. */
-const TEST_USDM_SNAPSHOT = {
-  type: 'FeatureCollection',
-  features: [
-    {
-      type: 'Feature',
-      properties: {
-        DM: 2,
-        MapDate: Date.UTC(2026, 7, 11),
-        ValidStart: Date.UTC(2026, 7, 11),
-        ValidEnd: Date.UTC(2026, 7, 17)
-      },
-      geometry: {
-        type: 'Polygon',
-        coordinates: [[[-140, 20], [-50, 20], [-50, 75], [-140, 75], [-140, 20]]]
-      }
-    }
-  ]
-} as const;
-
-const usdmStubContexts = new WeakSet<BrowserContext>();
-
-/**
- * Whether a U.S. Drought Monitor request is a map frame read. The map layer
- * (src/layers/usdm.ts `buildCurrentQueryUrl`, `buildArchiveQueryUrl`) GETs a
- * whole frame with a `where` and no geometry; the briefing's read
- * (src/impact/sources.ts `fetchUsdmClaims`) asks for one point or one place,
- * as a GET carrying `geometry` or as a form POST.
- */
-export function isUsdmMapFrameRead(method: string, url: URL): boolean {
-  return method === 'GET' && !url.searchParams.has('geometry');
-}
-
-/**
- * Route the U.S. Drought Monitor's current and archive services on the browser
- * CONTEXT, as `installDefaultNadmStub` does and for the same reasons. Since
- * DR-270 a boot that lists no layers draws the weekly U.S. map in the default
- * United States geography, so without this every routine boot would read the
- * live service. Only the map's frame reads get the D2 polygon: a briefing's
- * point or place read gets a valid empty collection, so the default map never
- * decides what a briefing leads with. A spec's own `page.route` for these
- * services still wins (Playwright checks Page routes before Context routes).
- */
-async function installDefaultUsdmStub(page: Page): Promise<void> {
-  const context = page.context();
-  if (usdmStubContexts.has(context)) return;
-  usdmStubContexts.add(context);
-  const fulfill = (route: Route): Promise<void> => {
-    const request = route.request();
-    const mapFrame = isUsdmMapFrameRead(request.method(), new URL(request.url()));
-    return route.fulfill({
-      status: 200,
-      contentType: 'application/geo+json',
-      body: JSON.stringify(mapFrame ? TEST_USDM_SNAPSHOT : { type: 'FeatureCollection', features: [] })
-    });
-  };
-  await context.route('**/USDM_current/**', fulfill);
-  await context.route('**/USDM_archive/**', fulfill);
 }
 
 const coveredContexts = new WeakSet<BrowserContext>();
@@ -203,35 +139,8 @@ export const ROLE_GROUPS: ReadonlyArray<{ title: string; hint: string | null }> 
   { title: 'Stations', hint: null }
 ];
 
-/** Default-on layer keys, mirroring `defaultOn: true` rows in `LAYER_DEFS`.
- * Telemetry left this set 2026-07-09 (0.7.0 H4, D-0.7.0-018 item 1);
- * states joined 2026-07-12 (U4c, boundaries as chrome). The Tribal Nations
- * umbrella build (D-0.7.0-032/033, 2026-07-15) deliberately swapped the
- * bundled `tribal` placeholder for live Tribal-geography layers. The current
- * default carries the two present-day layers. Each change was a ratified,
- * deliberate default change. Hillshade joined 2026-07-16 (E1 deliverable 4,
- * D-0.7.0-043 part 3: terrain shading is part of the calm default
- * composition). Since DR-270 this is what a boot that lists no layers shows
- * in the default United States geography: the `defaultOn: true` rows with
- * Drought's `nadm-drought` exchanged for its stand-in there, `usdm`. A boot
- * whose view is of Canada, Mexico or the continent keeps `nadm-drought`. */
-export const DEFAULT_ON = ['usdm', 'aiannh', 'bia-reservations', 'states', 'hillshade'] as const;
-
-/** Surface-role keys (mutually exclusive), mirroring `role: 'surface'` rows in `LAYER_DEFS`.
- * sst-anomaly joined 2026-07-10 (alignment-review catch: the mirror had
- * drifted, so exclusivity loops never asserted it off). */
-export const SURFACE_KEYS = [
-  'drought',
-  'gridded-index',
-  'usdm',
-  'cdm-drought',
-  'nadm-drought',
-  'heatrisk',
-  'spc-fire-weather',
-  'usfs-whp',
-  'usfs-whp-classes',
-  'sst-anomaly'
-] as const;
+// The default layer set (`DEFAULT_ON`) and the surface keys (`SURFACE_KEYS`)
+// are derived from src/config in tests/defaults.ts, not mirrored here.
 
 // ---------------------------------------------------------------------------
 // Locators
@@ -311,7 +220,7 @@ export interface GotoAppOptions {
   /**
    * How this boot answers the North American Drought Monitor's continental
    * snapshot query (DDM-P1-T09 step 2 part d). Defaults to `fixture`, the
-   * deterministic single-feature body in this file (`TEST_NADM_SNAPSHOT`),
+   * deterministic single-feature body (`TEST_NADM_SNAPSHOT`, tests/usdm-fixtures.ts),
    * claimed unconditionally so every routine boot is offline and
    * reproducible regardless of what the query string names. `live` is the
    * explicit opt-out: it installs a pass-through context route, for a

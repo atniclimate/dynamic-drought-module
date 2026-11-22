@@ -8,7 +8,7 @@ import {
   type HazardClusterKey,
   type TemporalHorizonKey
 } from '../src/config/clusters';
-import { keyForGeography } from '../src/state/cluster-service';
+import { modeLayers } from './defaults';
 import {
   gotoApp,
   layerCheckbox,
@@ -159,13 +159,13 @@ test.describe('DDM-P1-T03: activation failure, thrown and non-thrown, self-corre
     for (const cluster of HAZARD_CLUSTER_KEYS) {
       const seen = new Set<string>();
       for (const horizon of TEMPORAL_HORIZON_KEYS) {
-        const recipe = HAZARD_CLUSTERS[cluster].recipes[horizon];
+        // A `?view=console` boot is in the default United States geography, so
+        // the layer that fails is the recipe surface's stand-in there (DR-270).
+        const recipe = modeLayers(cluster, horizon);
         const signature = recipe.join(',');
         if (recipe[0] === undefined || seen.has(signature)) continue;
         seen.add(signature);
-        // A `?view=console` boot is in the default United States geography, so
-        // the layer that fails is the recipe surface's stand-in there (DR-270).
-        cases.push({ cluster, horizon, failing: keyForGeography(cluster, recipe[0], true) });
+        cases.push({ cluster, horizon, failing: recipe[0] });
       }
     }
     expect(new Set(cases.map((c) => c.cluster))).toEqual(new Set(HAZARD_CLUSTER_KEYS));
@@ -230,7 +230,7 @@ test.describe('DDM-P1-T03: activation failure, thrown and non-thrown, self-corre
         // Current Conditions stays enabled as the way back.
         expect(
           await page
-            .locator(`.shell-horizon-btn[data-horizon="${TEMPORAL_HORIZON_KEYS[0]}"]`)
+            .locator('.shell-horizon-btn[data-horizon="current"]')
             .getAttribute('aria-disabled')
         ).toBeNull();
       });
@@ -248,7 +248,7 @@ test.describe('DDM-P1-T03: activation failure, thrown and non-thrown, self-corre
 
 // Imported here rather than in the header so the found-073 cases below are
 // a pure append (ES module imports are hoisted wherever they sit).
-import { DEFAULT_ON } from './helpers';
+import { DEFAULT_ON } from './defaults';
 
 /**
  * found-073 and found-074 (D1 follow-up to M5, 2026-09-27; DDM-P10-T09).
@@ -410,7 +410,7 @@ test.describe('found-073 and found-074: a failed reference layer and a persisted
         await waitForLayerSettled(page, REFERENCE);
 
         // A bare Drought boot is the default set a boot with no layers shows
-        // (the weekly U.S. map in the United States, DR-270), as DEFAULT_ON mirrors it.
+        // (the weekly U.S. map in the United States, DR-270), as DEFAULT_ON derives it.
         await expectModeKept(page, cluster, new Set<string>(DEFAULT_ON));
       });
     }
@@ -421,9 +421,9 @@ test.describe('found-073 and found-074: a failed reference layer and a persisted
   }) => {
     const EXTRA = 'places';
     const cases = HAZARD_CLUSTER_KEYS.flatMap((cluster) => {
-      const recipeKey = HAZARD_CLUSTERS[cluster].recipes[TEMPORAL_HORIZON_KEYS[0]][0];
       // The boot is in the default United States geography: the stand-in fails there (DR-270).
-      return recipeKey === undefined ? [] : [{ cluster, failing: keyForGeography(cluster, recipeKey, true) }];
+      const failing = modeLayers(cluster, 'current')[0];
+      return failing === undefined ? [] : [{ cluster, failing }];
     });
     expect(new Set(cases.map((c) => c.cluster))).toEqual(new Set(HAZARD_CLUSTER_KEYS));
     test.setTimeout(60_000 + cases.length * 45_000);

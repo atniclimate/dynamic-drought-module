@@ -37,9 +37,7 @@ async function stubBriefingAndOverlapSources(page: Page): Promise<void> {
     (route) =>
       route.fulfill({ contentType: 'application/geo+json', body: EMPTY_COLLECTION })
   );
-  await page.route('**/USDM_current/FeatureServer/0/query?*', (route) =>
-    route.fulfill({ contentType: 'application/geo+json', body: EMPTY_COLLECTION })
-  );
+  // The weekly map's briefing reads get gotoApp's default empty collection (tests/usdm-fixtures.ts).
   await page.route('**/WFIGS_Interagency_Perimeters_Current/**', (route) =>
     route.fulfill({ contentType: 'application/geo+json', body: EMPTY_COLLECTION })
   );

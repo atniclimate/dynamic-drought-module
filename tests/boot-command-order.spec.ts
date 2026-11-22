@@ -4,10 +4,9 @@ import { test, expect, type Page } from './offline-test';
 import {
   awaitQuiescence,
   gotoApp,
-  stubHeatRiskCatalog,
-  DEFAULT_ON,
-  SURFACE_KEYS
+  stubHeatRiskCatalog
 } from './helpers';
+import { DEFAULT_ON, SURFACE_KEYS, presetLayers } from './defaults';
 import { stubCpcDroughtOutlook } from './cpc-outlook-fixtures';
 import { emptyCollectionBody, routeGeojson } from './tribal-fixtures';
 import { MOBILE_HAZARD_PRESETS, type ViewPreset } from '../src/config/presets';
@@ -245,7 +244,9 @@ test.describe('a command during the deferred boot (phone, 390x844)', () => {
       }
     });
     expect(last).not.toBeNull();
-    await expectDisplayIs(page, (last as ViewPreset | null)?.layers ?? []);
+    // The rail applies a preset's layers as the geography draws them (DR-270).
+    const lastPreset = last as ViewPreset | null;
+    await expectDisplayIs(page, lastPreset === null ? [] : presetLayers(lastPreset.key));
   });
 });
 

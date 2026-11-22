@@ -7,6 +7,8 @@ import {
   regionSelect,
   selectRegion
 } from './helpers';
+import { requiredSurface } from './defaults';
+import { DEFAULT_NADM_MONTH } from './usdm-fixtures';
 
 // DR-160 (2026-09-28): the Province of British Columbia basin drought
 // edition is HELD until the Province's written permission or the owner's
@@ -256,8 +258,9 @@ test.describe('U7 British Columbia basin drought display', () => {
     await selectRegion(page, 'british_columbia');
     // DR-270: a committed geography outside the United States draws the North
     // American map in place of the weekly U.S. map (the default NADM fixture,
-    // tests/helpers.ts TEST_NADM_SNAPSHOT, consensus month 2026-06).
-    await expect(layerPill(page, 'nadm-drought')).toHaveText('live');
+    // tests/usdm-fixtures.ts TEST_NADM_SNAPSHOT, consensus month DEFAULT_NADM_MONTH).
+    const outsideSurface = requiredSurface('drought', 'current', false);
+    await expect(layerPill(page, outsideSurface)).toHaveText('live');
     await expect(layerCheckbox(page, 'usdm')).not.toBeChecked();
     await expect(panel).toBeHidden();
     await expect(page.locator('#region-briefing-btn')).toBeHidden();
@@ -271,12 +274,15 @@ test.describe('U7 British Columbia basin drought display', () => {
     // never shows 'Province of British Columbia'. DR-270: the move into
     // British Columbia draws the North American map, so the printed time bar
     // carries its consensus month and the legend is its own.
-    await expect(page.locator('#time-bar')).toContainText(
-      'Consensus month June 2026'
-    );
+    const consensusMonth = new Date(`${DEFAULT_NADM_MONTH}-01T00:00:00Z`).toLocaleString('en-US', {
+      month: 'long',
+      year: 'numeric',
+      timeZone: 'UTC'
+    });
+    await expect(page.locator('#time-bar')).toContainText(`Consensus month ${consensusMonth}`);
     await expect(page.locator('#time-bar')).not.toContainText('Province of British Columbia');
     await expect(
-      page.locator('#legend-panel [data-legend="nadm-drought"]')
+      page.locator(`#legend-panel [data-legend="${outsideSurface}"]`)
     ).toContainText('North American Drought Monitor');
     await expect(page.locator('#map-key-content')).toBeHidden();
   });

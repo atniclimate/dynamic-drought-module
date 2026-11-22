@@ -51,6 +51,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { HAZARD_CLUSTERS, type HazardClusterKey } from '../src/config/clusters';
+import { modeShowsLayer } from './defaults';
 import {
   awaitQuiescence,
   gotoApp,
@@ -175,9 +176,14 @@ async function pillClasses(page: Page, key: string): Promise<string> {
 async function stubCommon(page: Page): Promise<void> {
   // Broad first, specific later: Playwright matches the most recently
   // registered route, so a test's own held route below wins.
+  // The weekly U.S. Drought Monitor, the default surface of a bare boot since
+  // DR-270, shares services5's host. It falls through to gotoApp's default
+  // frame, as tests/fire-heat-time-bar.spec.ts's stubCommon does.
   for (const host of ['services5', 'services3', 'services2']) {
     await page.route(`https://${host}.arcgis.com/**`, (route) =>
-      route.fulfill({ status: 200, contentType: 'application/geo+json', body: emptyCollection() })
+      /\/USDM_(current|archive)\//.test(route.request().url())
+        ? route.fallback()
+        : route.fulfill({ status: 200, contentType: 'application/geo+json', body: emptyCollection() })
     );
   }
   await page.route('https://api.weather.gov/**', (route) =>
@@ -584,9 +590,9 @@ async function renderedClusters(page: Page): Promise<string[]> {
     .evaluateAll((buttons) => buttons.map((button) => button.getAttribute('data-cluster') ?? ''));
 }
 
+/** Whether a rendered mode shows `layerKey` at any horizon, as the default United States geography draws it. */
 function clusterShowsLayer(cluster: string, layerKey: string): boolean {
-  const def = (HAZARD_CLUSTERS as Record<string, (typeof HAZARD_CLUSTERS)[HazardClusterKey]>)[cluster];
-  return Object.values(def?.recipes ?? {}).some((recipe) => recipe.some((key) => key === layerKey));
+  return Object.hasOwn(HAZARD_CLUSTERS, cluster) && modeShowsLayer(cluster as HazardClusterKey, layerKey);
 }
 
 /**

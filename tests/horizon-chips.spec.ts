@@ -46,6 +46,7 @@ import { HORIZON_CHROME, SHELL_HORIZON_KEY } from '../src/impact/horizon-chrome'
 import { CELL_ABSENCE } from '../src/impact/matrix';
 import { HAZARD_CLUSTER_KEYS, HAZARD_CLUSTERS, TEMPORAL_HORIZON_KEYS } from '../src/config/clusters';
 import { stubCpcDroughtOutlook } from './cpc-outlook-fixtures';
+import { requiredSurface } from './defaults';
 import { gotoApp, layerCheckbox, layerPill, PILL, search, stubHeatRiskCatalog, urlLayers, waitForLayerSettled } from './helpers';
 
 const SNAPSHOT_PATH = join(process.cwd(), 'public', 'data', 'enso-indices.json');
@@ -90,13 +91,8 @@ async function openBriefing(
   // CELL_ABSENCE, which is exactly what the R4 check below needs. Heat
   // longRange now has a lane (DDM-P7-T07); `gotoApp` stubs its endpoint with
   // a default fixture, so that cell renders a claim, not an absence.
-  await page.route('**/USDM_current/FeatureServer/0/query?*', (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: 'application/geo+json',
-      body: JSON.stringify({ type: 'FeatureCollection', features: [] })
-    })
-  );
+  // The weekly map's briefing reads get gotoApp's default empty collection
+  // (tests/usdm-fixtures.ts installDefaultUsdmStub); no route of its own here.
   await page.route('**/WFIGS_Interagency_Perimeters_Current/**', (route) =>
     route.fulfill({
       status: 200,
@@ -280,14 +276,14 @@ const DISABLED_CHIPS: ReadonlySet<string> = new Set([
   'heat:weeks-ahead',
   'heat:season-ahead'
 ]);
-const CLUSTER_KEYS = ['drought', 'wildfire', 'heat', 'enso'] as const;
-
 test.describe('DR-190: a mode switch and its shared link show the same horizon', () => {
-  for (const [destination, expectedHorizon, product] of [
-    ['heat', 'current', 'heatrisk'],
-    ['drought', 'current', 'usdm']
+  for (const [destination, expectedHorizon] of [
+    ['heat', 'current'],
+    ['drought', 'current']
   ] as const) {
     test(`Wildfire Long Range to ${destination} resolves before and after reload`, async ({ page }) => {
+      // The surface the destination draws there, from the mode table (DR-270 for Drought).
+      const product = requiredSurface(destination, expectedHorizon);
       await stubWildfireProducts(page);
       await stubHeatRiskCatalog(page);
       await stubCpcDroughtOutlook(page);
@@ -335,7 +331,7 @@ test.describe('DDM-P8-T03 clause 1: every horizon chip either changes the map or
     // test the CUSTOM branch of horizonDisabledReason instead of the one
     // this describe is about.
     await gotoApp(page);
-    for (const cluster of CLUSTER_KEYS) {
+    for (const cluster of HAZARD_CLUSTER_KEYS) {
       await page.locator(`.shell-cluster-btn[data-cluster="${cluster}"]`).click();
       for (const key of TEMPORAL_HORIZON_KEYS) {
         const btn = page.locator(`.shell-horizon-btn[data-horizon="${key}"]`);

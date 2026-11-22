@@ -7,9 +7,9 @@ import {
   regionSelect,
   urlLayers,
   search,
-  waitForLayerSettled,
-  DEFAULT_ON
+  waitForLayerSettled
 } from './helpers';
+import { DEFAULT_ON, DEFAULT_SURFACE } from './defaults';
 
 /**
  * The URL-schema stability policy (unit A1):
@@ -169,19 +169,19 @@ test.describe('URL legacy links and tolerant reading', () => {
     // A valid deep link is applied once at boot and must never persist in
     // the URL (the link must not keep claiming a briefing the user closed).
     // Settling a default-on layer guarantees several syncUrl writes have
-    // run; select must be gone from the URL afterward. This is a
-    // client-side guarantee, independent of the deep-link fetch outcome.
-    // The usdm-in-URL assertion (the default surface, DR-270) relies on its activate() reporting
+    // run (gotoApp's boot-idle wait settles every boot layer); select must
+    // be gone from the URL afterward. This is a client-side guarantee,
+    // independent of the deep-link fetch outcome. The default surface's
+    // in-URL assertion (DR-270) relies on its activate() reporting
     // an error status rather than throwing (the ratified stay-on
     // contract), so the layer stays registered and in the URL even on a
     // bad-network day. Both polls carry the doctrine's 25s ceiling.
     await gotoApp(page, '?select=state:WA');
-    await waitForLayerSettled(page, 'usdm');
     await expect
       .poll(async () => (await search(page)).includes('select='), { timeout: 25_000 })
       .toBe(false);
     await expect
-      .poll(async () => (await urlLayers(page)).has('usdm'), { timeout: 25_000 })
+      .poll(async () => (await urlLayers(page)).has(DEFAULT_SURFACE), { timeout: 25_000 })
       .toBe(true);
   });
 });

@@ -9,10 +9,10 @@ import {
   urlLayers,
   search,
   waitForLayerSettled,
-  DEFAULT_ON,
   PILL,
   backToMap
 } from './helpers';
+import { DEFAULT_ON, DEFAULT_SURFACE } from './defaults';
 import {
   AIANNH_ROUTE,
   BIA_ROUTE,
@@ -155,6 +155,7 @@ test.describe('URL as state', () => {
   });
 
   test('a deep link restores the region and the exact layer set', async ({ page }) => {
+    // own-stub: a map frame fixture for this case's layers= boot.
     await page.route('**/USDM_current/**', (route) =>
       route.fulfill({
         status: 200,
@@ -358,7 +359,7 @@ test.describe('URL as state', () => {
     // brief embed never mounts the catalog island at all (headroom C1), so
     // no pill DOM exists here. The assertions are unchanged.)
     await expect
-      .poll(async () => (await urlLayers(page)).has('usdm'), { timeout: 25_000 })
+      .poll(async () => (await urlLayers(page)).has(DEFAULT_SURFACE), { timeout: 25_000 })
       .toBe(true);
     expect(await search(page)).toContain('embed=true');
   });

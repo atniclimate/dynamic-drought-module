@@ -1,7 +1,8 @@
 import { test, expect } from './offline-test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { gotoApp, layerCheckbox, regionSelect, DEFAULT_ON, ROLE_GROUPS } from './helpers';
+import { gotoApp, layerCheckbox, regionSelect, ROLE_GROUPS } from './helpers';
+import { DEFAULT_ON } from './defaults';
 
 /**
  * Boot smoke: the app comes up in a headless software-WebGL browser, the map

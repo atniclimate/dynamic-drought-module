@@ -596,6 +596,7 @@ test.describe('DDM-P8-T02: the Wildfire screen has a time control at every horiz
     // token, not a layers= list (src/state/url.ts): the share URL carries
     // the layer through the recipe that token composes at this horizon.
     // A demotion would have replaced the token with a layers= list.
+    // default-ok: the precondition names the raw recipe the cluster= token composes.
     expect(HAZARD_CLUSTERS.wildfire.recipes['weeks-ahead']).toContain('spc-fire-weather');
     const params = new URLSearchParams(await search(page));
     expect(params.get('cluster')).toBe('wildfire');

@@ -516,13 +516,7 @@ test('ENSO offers its flood, storm, wind and coastal products off by default; on
 test('an invalid NWS active-products body is unavailable, never an all-clear', async ({
   page
 }) => {
-  await page.route('**/USDM_current/FeatureServer/0/query?*', (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: 'application/geo+json',
-      body: collection([])
-    })
-  );
+  // The weekly map's briefing reads get gotoApp's default empty collection (tests/usdm-fixtures.ts).
   await page.route('**/WFIGS_Interagency_Perimeters_Current/**', (route) =>
     route.fulfill({
       status: 200,

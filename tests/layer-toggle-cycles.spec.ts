@@ -1,7 +1,8 @@
 import { expect, test, type Page } from './offline-test';
 
 import { MOBILE_HAZARD_PRESETS, type ViewPreset } from '../src/config/presets';
-import { gotoApp, layerCheckbox, urlLayers, waitForLayerSettled } from './helpers';
+import { presetLayers, requiredSurface } from './defaults';
+import { gotoApp, layerCheckbox, urlLayers } from './helpers';
 import { emptyCollectionBody } from './tribal-fixtures';
 
 /**
@@ -165,9 +166,13 @@ test.describe('DR-065 mode 1: repeated toggling returns the interface to its rai
     page
   }) => {
     const fire = presetNamed('hazard-fire');
-    // The rail applies the mode's United States stand-in here (usdm for the
-    // table's nadm-drought, DR-270); the boot below is national.
-    const drought: ViewPreset = { ...presetNamed('hazard-drought'), layers: ['usdm', 'aiannh'] };
+    // The rail applies the mode's United States stand-in here (DR-270); the
+    // boot below is national.
+    const drought: ViewPreset = {
+      ...presetNamed('hazard-drought'),
+      layers: presetLayers('hazard-drought')
+    };
+    const droughtSurface = requiredSurface(drought.mode);
 
     await stubFireProducts(page);
     await gotoApp(page, '?view=console');
@@ -175,8 +180,8 @@ test.describe('DR-065 mode 1: repeated toggling returns the interface to its rai
       await page.evaluate(() => window.matchMedia('(pointer: coarse)').matches),
       'the cycle must run with a coarse pointer'
     ).toBe(true);
-    // Settle the default surface so the first swap is not racing its own boot activation.
-    await waitForLayerSettled(page, 'usdm');
+    // gotoApp's boot-idle wait settled the default surface, so the first swap
+    // is not racing its own boot activation.
 
     await tapRail(page, fire, 'the first Fire rail tap');
 
@@ -189,7 +194,7 @@ test.describe('DR-065 mode 1: repeated toggling returns the interface to its rai
     // Cross to another hazard, toggle there too, and come back.
     await tapRail(page, drought, 'the Drought rail tap');
     for (let round = 1; round <= 2; round++) {
-      await toggleRound(page, ['usdm']);
+      await toggleRound(page, [droughtSurface]);
       await expectPresetAtRest(page, drought, `after toggle round ${String(round)} in Drought`);
     }
 

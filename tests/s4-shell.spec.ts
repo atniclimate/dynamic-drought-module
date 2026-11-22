@@ -3,6 +3,7 @@ import { test, expect } from './offline-test';
 import { stubCpcDroughtOutlook } from './cpc-outlook-fixtures';
 import { HAZARD_CLUSTER_KEYS, TEMPORAL_HORIZON_KEYS } from '../src/config/clusters';
 import { stubUsdmWeeks } from './usdm-fixtures';
+import { requiredSurface } from './defaults';
 import { HORIZON_CHROME, SHELL_HORIZON_KEY } from '../src/impact/horizon-chrome';
 import {
   gotoApp,
@@ -40,7 +41,8 @@ for (const viewport of [{ width: 1440, height: 1000 }, { width: 958, height: 935
       gates.set(key, { promise, release });
     }
     let sstModuleRequests = 0;
-    await page.route(/\/assets\/sst-anomaly-[^/?]+\.js(?:\?|$)/, async (route) => {
+    // ENSO's surface chunk, named after the surface the mode table gives it.
+    await page.route(new RegExp(`/assets/${requiredSurface('enso')}-[^/?]+\\.js(?:\\?|$)`), async (route) => {
       // SST reports its latest surface ready before its date axis resolves.
       // The layer controller's module load is the observable pending phase.
       sstModuleRequests += 1;
