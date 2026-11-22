@@ -25,6 +25,8 @@ function methodPhrase(method: SourcedClaim['method']): string | null {
   if (method.baseline) bits.push(`${method.baseline} baseline`);
   if (method.version) bits.push(`version ${method.version}`);
   if (method.sourceVintage) bits.push(`source vintage ${method.sourceVintage}`);
+  // A basis that ends its own sentence would read ".;" ahead of the provenance joined to it.
+  if (method.basis && bits.length > 1) bits[0] = method.basis.replace(/[.;]\s*$/, '');
   return bits.length > 0 ? bits.join('; ') : null;
 }
 

@@ -169,19 +169,26 @@ function viewCoverage(map: MapLibreMap, bounds: readonly [number, number, number
 let flat: Mounted | null = null;
 let flatRelease: (() => void) | null = null;
 
-function renderFlatLegend(body: HTMLElement): void {
+/**
+ * The flat layer's legend section. The title names the dates of the map on
+ * screen (method M-115), as the drought monitors' titles name their month: the
+ * Key's "Also on the map" copies a section without its note, so a date in the
+ * note never reached the Key. `composite` is null before a map is chosen.
+ */
+export function renderLfmcFlatLegend(body: Pick<HTMLElement, 'innerHTML'>, composite: LfmcComposite | null): void {
   renderSwatchLegend(
-    body,
-    LFMC_TEXT.flatTitle,
+    body as HTMLElement,
+    composite ? `${LFMC_TEXT.flatTitle} · ${lfmcDateSpan(composite.start, composite.endExclusive)}` : LFMC_TEXT.flatTitle,
     LFMC_ISSUER_TICKS.map(([value, label]) => {
       const [r, g, b] = lfmcColor(value, 'issuer');
       return { color: `rgb(${r},${g},${b})`, label };
     }),
-    // The key names the dates of the map on screen.
-    flat
-      ? `Map for ${lfmcDateSpan(flat.composite.start, flat.composite.endExclusive)}. ${LFMC_TEXT.definition}`
-      : LFMC_TEXT.definition
+    LFMC_TEXT.definition
   );
+}
+
+function renderFlatLegend(body: HTMLElement): void {
+  renderLfmcFlatLegend(body, flat?.composite ?? null);
 }
 
 export async function activate(map: MapLibreMap, activation?: LayerActivation): Promise<void> {

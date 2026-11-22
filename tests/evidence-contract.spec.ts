@@ -204,6 +204,19 @@ test.describe('claim rendering honesty', () => {
     expect(html).toContain('Method: 1991-2020 normal baseline; version 2.6; source vintage 2025 release');
   });
 
+  test('a basis that ends its own sentence joins the provenance without ".;"', () => {
+    const claim = (method: { basis: string; version?: string }): string =>
+      renderClaim(
+        makeClaim({ text: 't', source: 's', product: 'usdm', evidence: 'observed', dates: { retrieved: '2026-07-21' }, method })
+      );
+    // Seen in the fuel moisture briefing (2026-11-22): "not a field measurement.; version model v01".
+    const joined = claim({ basis: 'An estimate, not a field measurement.', version: 'v01' });
+    expect(joined).toContain('Method: An estimate, not a field measurement; version v01');
+    expect(joined).not.toContain('.;');
+    // Alone, the basis keeps the full stop its author gave it.
+    expect(claim({ basis: 'An estimate, not a field measurement.' })).toContain('Method: An estimate, not a field measurement.');
+  });
+
   test('a lineage reference rides the title attribute, never the sentence (DR-058 a)', () => {
     const html = renderClaim(
       makeClaim({
