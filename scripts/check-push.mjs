@@ -16,12 +16,16 @@
  *      and the BROAD verdict for a helper change that reaches every boot.
  *   5. Refuse a held 4173 or 4180 (exit 2), then one local run, two workers,
  *      chromium and chromium-interaction, of everything when it fits the
- *      ten-minute estimate, otherwise of Tier 1 (exit 1 on a failure).
+ *      ten-minute estimate, otherwise of Tier 1. A case that fails there runs
+ *      once more alone, as GitHub gives a failed case one retry: failing
+ *      alone too is exit 1; passing only alone is named as a retry-only pass
+ *      (two workers on this laptop timed out two heavy cases, 2026-11-22).
  *   6. Name the remainder (over the limit, chromium-3d, BROAD) and how GitHub
  *      covers it: the open pull request's own run, or the exact command to
  *      run after the push.
  * Exit 0: everything selected ran here and passed, nothing remains. Exit 3:
- * the local part passed and the named remainder is GitHub's.
+ * the local part passed, or passed only alone, and the named remainder and
+ * any retry-only case are GitHub's to decide.
  *
  * The range is the unpushed commits: from the work branch's origin tip when
  * HEAD contains it, otherwise (or with --block) from the merge base with
@@ -125,10 +129,10 @@ export function remainderAdvice(remainder, { openPull, branch, base }) {
   return lines;
 }
 
-/** The exit code of a finished check. */
-export function exitCode({ localFailed, remainder }) {
+/** The exit code of a finished check. A retry-only pass is never a clean 0. */
+export function exitCode({ localFailed, retryOnly = false, remainder }) {
   if (localFailed) return EXIT.failed;
-  return remainder.any ? EXIT.remainder : EXIT.passed;
+  return remainder.any || retryOnly ? EXIT.remainder : EXIT.passed;
 }
 
 function npm(script) {
@@ -209,6 +213,7 @@ async function main(argv) {
 
   heading('5. Local run');
   let localFailed = false;
+  let retryOnly = false;
   if (plan.run.length === 0) {
     console.log('Nothing selected for a local run.');
   } else {
@@ -218,14 +223,21 @@ async function main(argv) {
       return EXIT.refused;
     }
     localFailed = runLocally(plan.run) !== 0;
+    if (localFailed) {
+      console.log('\nA case failed at two workers. On GitHub a failed case gets one retry; here it gets one run alone.');
+      localFailed = runLocally(plan.run, { workers: 1, lastFailed: true }) !== 0;
+      retryOnly = !localFailed;
+      if (retryOnly) console.log('Passed only alone: the failed cases above are retry-only passes on this machine, not passes. Name them with the push; GitHub\'s run decides.');
+    }
   }
 
   heading('6. Remainder');
   const remainder = remainderOf(plan, picked.broad);
   const advice = remainderAdvice(remainder, { openPull, branch, base });
   console.log(advice.length > 0 ? advice.join('\n') : 'None: everything selected ran here.');
-  const code = exitCode({ localFailed, remainder });
-  console.log(`\n${{ 0: 'Passed, nothing remains.', 1: 'A local case failed.', 3: 'The local part passed; the remainder above is GitHub\'s.' }[code]}`);
+  const code = exitCode({ localFailed, retryOnly, remainder });
+  const passedPart = retryOnly ? 'The local part passed, some cases only alone (named above)' : 'The local part passed';
+  console.log(`\n${{ 0: 'Passed, nothing remains.', 1: 'A local case failed, alone too.', 3: `${passedPart}; the remainder above is GitHub\'s.` }[code]}`);
   return code;
 }
 

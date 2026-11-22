@@ -71,4 +71,7 @@ test('exit codes: 0 all ran and passed, 3 the rest is GitHub\'s, 1 a failure', (
   assert.equal(exitCode({ localFailed: false, remainder: some }), 3);
   assert.equal(exitCode({ localFailed: true, remainder: some }), 1);
   assert.equal(exitCode({ localFailed: true, remainder: none }), 1);
+  // A case that failed at two workers and passed alone is GitHub's to decide, never a clean pass.
+  assert.equal(exitCode({ localFailed: false, retryOnly: true, remainder: none }), 3);
+  assert.equal(exitCode({ localFailed: false, retryOnly: true, remainder: some }), 3);
 });

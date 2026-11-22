@@ -192,8 +192,8 @@ test('cross-cutting rules: shared style, key and dock components, minimap and th
 test('cross-cutting rules stay small, name real non-measurement specs, and join touchedSpecs', () => {
   const union = new Set(CROSS_CUTTING.flatMap(({ specs }) => specs));
   assert.ok(union.size <= 6, `${union.size} fixed specs`);
-  // Every rule's specs together still fit one local run, since they join every estimate.
-  assert.ok(estimateWait([...union], REAL_COST) <= LOCAL_LIMIT_SECONDS, `${estimateWait([...union], REAL_COST)} s`);
+  // At this machine's measured speed they no longer fit one local run together (about 17 min):
+  // the plan takes Tier 1 first and names the rest as GitHub's, so the rules only need to stay few.
   for (const { specs } of CROSS_CUTTING) assert.ok(specs.length <= 5);
   const config = CONFIG;
   for (const path of union) {
@@ -233,7 +233,8 @@ test('modules the browser specs reach only through the app pick their own specs'
     const picked = touchedSpecs({ changedSpecs: [], mentions: [], specs: [], changedModules: [module], crossCutting, ...browserOnly });
     assert.ok(picked.length > 0 && picked.length <= 5, `${module}: ${picked.length} specs`);
     assert.equal(picked.length, crossCutting.size, `${module}: a mapped spec is missing, pure or measurement-only`);
-    assert.equal(runRefusal(picked, estimateWait(picked, REAL_COST)), null, module);
+    // Some of what a module change picks always runs here; the plan names the rest as GitHub's.
+    assert.ok(planLocalRun({ tier1: picked, fire3d: new Set(), cost: REAL_COST }).run.length > 0, module);
   }
   // A module named only by the coordinator's spec, through the popup's Conditions slot.
   assert.deepEqual(Object.keys(Object.fromEntries(crossCuttingSpecs(['src/ui/popup-conditions.ts'], specPaths))).sort(), ['tests/interaction-coordinator.spec.ts', 'tests/place-popups.spec.ts']);
@@ -404,23 +405,24 @@ test('cost: timed files and cases, the file median for a moved case, the median 
   assert.equal(cost('tests/new.spec.ts:5'), 600);
   assert.equal(costModel(null)('tests/x.spec.ts'), 23);
   assert.equal(estimateWait([], cost), 0);
-  // One build, then the cases shared by two workers.
-  assert.equal(estimateWait(['tests/b.spec.ts', 'tests/a.spec.ts:10'], cost), BUILD_SECONDS + 65);
+  // One build, then the cases at twice their GitHub seconds, shared by two workers.
+  assert.equal(estimateWait(['tests/b.spec.ts', 'tests/a.spec.ts:10'], cost), BUILD_SECONDS + 130);
 });
 
 test('the local plan runs everything that fits, otherwise Tier 1 up to the limit, and names the rest', () => {
   const cost = costModel({ files: { 'tests/a.spec.ts': 600, 'tests/b.spec.ts': 100, 'tests/c.spec.ts': 1200 }, cases: { 'tests/a.spec.ts:10': 30 } });
   const fire3d = new Set(['tests/c.spec.ts']);
   assert.deepEqual(planLocalRun({ tier1: ['tests/a.spec.ts:10'], tier2: ['tests/b.spec.ts', 'tests/c.spec.ts'], fire3d, cost }), {
-    run: ['tests/a.spec.ts:10', 'tests/b.spec.ts'], seconds: BUILD_SECONDS + 65, threeD: ['tests/c.spec.ts'], over: []
+    run: ['tests/a.spec.ts:10', 'tests/b.spec.ts'], seconds: BUILD_SECONDS + 130, threeD: ['tests/c.spec.ts'], over: []
   });
   const tight = planLocalRun({ tier1: ['tests/a.spec.ts:10', 'tests/b.spec.ts'], tier2: ['tests/a.spec.ts', 'tests/new.spec.ts'], fire3d, cost });
   assert.deepEqual(tight.run, ['tests/a.spec.ts:10', 'tests/b.spec.ts']);
   assert.deepEqual(tight.over, ['tests/a.spec.ts', 'tests/new.spec.ts']);
   // Tier 1 itself over the limit: its entries in order while they fit.
   const heavy = planLocalRun({ tier1: ['tests/a.spec.ts', 'tests/b.spec.ts', 'tests/new.spec.ts'], fire3d, cost });
-  assert.deepEqual(heavy.run, ['tests/a.spec.ts', 'tests/b.spec.ts']);
-  assert.deepEqual(heavy.over, ['tests/new.spec.ts']);
+  // a alone (600 s on GitHub, 660 s here with the build) does not fit; b after it does.
+  assert.deepEqual(heavy.run, ['tests/b.spec.ts']);
+  assert.deepEqual(heavy.over, ['tests/a.spec.ts', 'tests/new.spec.ts']);
   assert.ok(heavy.seconds <= LOCAL_LIMIT_SECONDS);
 });
 

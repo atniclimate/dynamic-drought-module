@@ -41,8 +41,8 @@
  *
  * A local run is limited by its estimated wait, not a file count: one build
  * plus the GitHub seconds of the selected cases (tests/spec-timings.json,
- * rebuilt by scripts/refresh-spec-timings.mjs) at two workers, at most ten
- * minutes.
+ * rebuilt by scripts/refresh-spec-timings.mjs), doubled for this machine
+ * (LOCAL_SLOWDOWN), at two workers, at most ten minutes.
  */
 
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -58,6 +58,10 @@ export const LOCAL_WORKERS = 2;
 // under a minute locally (audit, 2026-11-22). Counted so a one-case run still
 // reads as a minute of waiting, which it is.
 export const BUILD_SECONDS = 60;
+// A case here takes about twice its GitHub seconds: the first real check:push
+// (2026-11-22) estimated 9.0 min of cases for 26 files at two workers and they
+// ran 19.4 min on this laptop, the build included.
+export const LOCAL_SLOWDOWN = 2;
 // The median browser spec file when no timing is known (files.tsv, cef1d35).
 export const DEFAULT_FILE_SECONDS = 23;
 export const LOCAL_PROJECTS = ['chromium', 'chromium-interaction'];
@@ -665,7 +669,7 @@ export function costModel(timings) {
 /** Estimated seconds of waiting for one local run: the build, then the cases shared by the workers. */
 export function estimateWait(entries, cost, workers = LOCAL_WORKERS) {
   if (entries.length === 0) return 0;
-  return BUILD_SECONDS + entries.reduce((sum, entry) => sum + cost(entry), 0) / workers;
+  return BUILD_SECONDS + (entries.reduce((sum, entry) => sum + cost(entry), 0) * LOCAL_SLOWDOWN) / workers;
 }
 
 export const minutes = (seconds) => `${(seconds / 60).toFixed(1)} min`;
@@ -979,12 +983,19 @@ export function describeSelection({ tier1, tier2, broad, helperReasons, crossCut
   return out;
 }
 
-/** One local Playwright run of some entries, two workers, never chromium-3d. Returns the exit status. */
-export function runLocally(entries) {
+/**
+ * One local Playwright run of some entries, never chromium-3d. Returns the
+ * exit status. `lastFailed` runs only the cases the previous run failed
+ * (Playwright's own record in test-results), with no retry.
+ */
+export function runLocally(entries, { workers = LOCAL_WORKERS, lastFailed = false } = {}) {
   const cli = fileURLToPath(new URL('../node_modules/@playwright/test/cli.js', import.meta.url));
   const projects = LOCAL_PROJECTS.map((name) => `--project=${name}`);
-  console.log(`Running ${entries.length} entries once: ${entries.join(' ')}`);
-  return spawnSync(process.execPath, [cli, 'test', ...projects, `--workers=${LOCAL_WORKERS}`, ...entries], { stdio: 'inherit' }).status ?? 1;
+  const only = lastFailed ? ['--last-failed', '--retries=0'] : [];
+  console.log(lastFailed
+    ? `Running the failed cases once more, ${workers === 1 ? 'alone (one worker)' : `at ${workers} workers`}.`
+    : `Running ${entries.length} entries once: ${entries.join(' ')}`);
+  return spawnSync(process.execPath, [cli, 'test', ...projects, `--workers=${workers}`, ...only, ...entries], { stdio: 'inherit' }).status ?? 1;
 }
 
 /** `--red [id]`: the red run to read, given or the newest failed one on the work branch. */
