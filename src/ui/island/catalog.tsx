@@ -54,10 +54,11 @@
  * surfaced here. All labels come from the config tables in `src/config/`.
  */
 
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import type { ReadonlySignal } from '@preact/signals';
 
-import { LAYER_DEFS, LAYER_ROLE_ORDER, getLayerDef } from '../../config/layers';
+import { LAYER_DEFS, LAYER_ROLE_ORDER, getLayerDef, layerAllowedInMode } from '../../config/layers';
+import { getCommittedSnapshot, onCommittedSnapshotChange } from '../../state/cluster-service';
 import type { LayerDef } from '../../config/layers';
 import { TRIBAL_NATIONS_PROVENANCE_NOTE } from '../../config/provenance';
 import { TRIBAL_NATIONS_GROUP } from '../../config/layer-groups';
@@ -371,6 +372,9 @@ function LayerUmbrella({ sourcesOpen, ...props }: UmbrellaProps) {
  */
 export function Catalog(props: CatalogProps) {
   const { checked, studio = false } = props;
+  // The person's mode, followed live: a mode-scoped layer's row comes and goes with it.
+  const [mode, setMode] = useState(() => getCommittedSnapshot().selectedHazard);
+  useEffect(() => onCommittedSnapshotChange(() => setMode(getCommittedSnapshot().selectedHazard)), []);
   // Which groups have their provider attributions revealed. Ephemeral view
   // state: a fresh Set so the default is "all collapsed" on every mount.
   const [openSources, setOpenSources] = useState<Set<LayerRole>>(() => new Set());
@@ -417,8 +421,12 @@ export function Catalog(props: CatalogProps) {
         const grouped = isReference
           ? defs.filter((def) => !TRIBAL_NATIONS_GROUP.members.includes(def.key))
           : defs;
+        // A layer that belongs to one mode (LayerDef.onlyInMode) has a row
+        // only in that mode, or while it is on so it can be turned off.
         const flatDefs = grouped.filter(
-          (def) => !def.uiHidden || (checked.value.get(def.key) ?? false)
+          (def) =>
+            (checked.value.get(def.key) ?? false) ||
+            (!def.uiHidden && layerAllowedInMode(def.key, mode))
         );
         const rows = (
           <>

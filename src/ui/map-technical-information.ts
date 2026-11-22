@@ -47,7 +47,7 @@ export function setMapTechnicalNote(overview: Overview, text: string, sceneActiv
 
 function plantStressHtml(): string {
   if (!plantStress) return '';
-  return '<h4>Plant stress ground (Wildfire 3D)</h4>' +
+  return `<h4>${escapeHtml(plantStress.heading ?? 'Plant stress ground (Wildfire 3D)')}</h4>` +
     plantStress.lines.map((line) => `<p>${escapeHtml(line)}</p>`).join('') +
     (plantStress.disclaimerUrl
       ? `<p><a href="${escapeHtml(plantStress.disclaimerUrl)}" target="_blank" rel="noopener">NOAA STAR product disclaimer</a></p>`

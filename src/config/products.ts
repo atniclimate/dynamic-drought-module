@@ -58,6 +58,7 @@ export const PRODUCT_KEYS = Object.freeze([
   'heatrisk',
   'spc-fire-weather',
   'usfs-whp',
+  'live-fuel-moisture',
   'sst-anomaly',
   'tropical-cyclones',
   'cpc-seasonal-precip',
@@ -335,6 +336,22 @@ export const PRODUCTS: Readonly<Record<ProductKey, ProductDef>> = Object.freeze(
     // The issuer's own statement: "The data is refreshed from operational
     // systems every 15 min" (BC Data Catalogue record, read 2026-11-06).
     clock: { register: 'observed', cadence: 'every 15 minutes' }
+  },
+  // Live fuel moisture (src/config/live-fuel-moisture.ts): a modelled estimate
+  // of conditions in a past eight-day window. Its claims are modelled analysis,
+  // whose register is outlook by the class rule (src/impact/evidence.ts: nothing
+  // model-borne wears the observed register), and the layer's time statement
+  // uses the same register so the two never disagree. Its address is kept
+  // outside the URLS catalog (see that file), hence no endpoint key. The
+  // publisher states no update schedule; the maps seen so far were published
+  // by hand.
+  'live-fuel-moisture': {
+    key: 'live-fuel-moisture',
+    issuer: 'EOSIAL Laboratory, Sapienza University of Rome',
+    endpointKey: null,
+    layerKey: 'live-fuel-moisture',
+    lane: 'liveFuelMoisture',
+    clock: { register: 'outlook', cadence: 'eight-day composites, no stated schedule' }
   },
   'nws-alerts': {
     key: 'nws-alerts',

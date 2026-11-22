@@ -239,6 +239,16 @@ test('the Wildfire 3D ground\'s NOAA STAR land-cover template, kept out of the c
   assert.ok(!extractUrls(await read('../src/config/urls.ts')).some(({ key }) => key === 'starLandCoverTileTemplate'));
 });
 
+test('the live fuel moisture list, kept out of the catalog chunk, is the one address of its file that is extracted and probed', async () => {
+  const read = (path) => readFile(new URL(path, import.meta.url), 'utf8');
+  const entries = extractUrls(await read('../src/config/live-fuel-moisture.ts'));
+  // The reading links in that file (the publisher's viewer, the paper, the terms) are not data endpoints and are not probed.
+  assert.deepEqual(entries.map(({ key, tier, url }) => ({ key, tier, url })),
+    [{ key: 'lfmcManifest', tier: DRIFT_TIERS.RUNTIME, url: 'https://valpamp.github.io/eosial-lfmc-data/manifest.json' }]);
+  assert.match(await read('../scripts/check-upstream-drift.mjs'), /readFile\(LIVE_FUEL_MOISTURE_URLS_PATH, 'utf8'\)/);
+  assert.ok(!extractUrls(await read('../src/config/urls.ts')).some(({ key }) => key === 'lfmcManifest'));
+});
+
 test('the current URL registry keeps representative lifecycle tiers distinct', async () => {
   const source = await readFile(
     new URL('../src/config/urls.ts', import.meta.url),

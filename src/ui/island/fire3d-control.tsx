@@ -113,6 +113,8 @@ const HMS_SMOKE_LAYER_KEY = 'hms-smoke';
  */
 const GROUND_SWITCHES: readonly (readonly [Fire3DGroundLayer, string])[] = [
   ['plantStress', 'Plant stress'],
+  // Off until pressed; pressing it releases Plant stress, and the other way round (src/state/fire3d-ground-layers.ts).
+  ['liveFuelMoisture', 'Live fuel moisture'],
   ['fuelRisk', 'Fuel risk']
 ];
 

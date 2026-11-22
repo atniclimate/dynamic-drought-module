@@ -34,7 +34,9 @@ import { h, render } from 'preact';
 import type * as maplibregl from 'maplibre-gl';
 import type { FeatureCollection } from 'geojson';
 
-import { LAYER_DEFS } from '../config/layers';
+import { HAZARD_CLUSTERS } from '../config/clusters';
+import { LAYER_DEFS, getLayerDef, layerAllowedInMode } from '../config/layers';
+import { getSelectedHazard } from '../state/cluster-service';
 import { URLS } from '../config/urls';
 import { STATE_LABEL } from '../impact/resources';
 import type { StateCode } from '../impact/resources';
@@ -486,6 +488,15 @@ function openHeadquarters(map: maplibregl.Map, row: TribalHeadquarters): void {
 /** Route a chosen search result to its action. */
 function selectResult(map: maplibregl.Map, item: SearchItem): void {
   if (item.kind === 'layer') {
+    // A layer that belongs to one mode (LayerDef.onlyInMode) is found by search
+    // everywhere, so a person learns where it lives, and is loaded only there.
+    // (The list is built once, so it cannot simply leave the layer out by mode.)
+    const mode = getSelectedHazard();
+    if (!layerAllowedInMode(item.id, mode)) {
+      const home = HAZARD_CLUSTERS[getLayerDef(item.id)!.onlyInMode!].title;
+      showToast(`${item.label} is shown in ${home} mode. Choose ${home}, then turn it on.`);
+      return;
+    }
     requestLayerOn(item.id);
     return;
   }

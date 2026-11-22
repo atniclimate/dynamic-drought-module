@@ -244,7 +244,9 @@ export const HAZARD_CLUSTERS: Record<HazardClusterKey, HazardClusterDef> = {
     },
     // The console's Fuel risk switch (src/ui/fire3d-fuel-risk.ts), and the
     // National Forests outline (owner, 2026-11-12: a Wildfire console option).
-    optionalLayers: ['usfs-whp', 'forests'],
+    // Live fuel moisture is a Layers studio choice (owner, 2026-11-21) that
+    // keeps Wildfire pressed while it is on.
+    optionalLayers: ['usfs-whp', 'forests', 'live-fuel-moisture'],
     // Opens on Current Conditions, as Drought does (owner's report, 2026-11-13).
     entryHorizon: 'current',
     placeConditionRow: 'wildfire-perimeter',

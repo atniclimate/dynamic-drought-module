@@ -186,8 +186,10 @@ test.describe('LAYERS studio: every option exercised (owner-1c)', () => {
     await openTribalNationsDetailsInStudio(page);
 
     for (const role of LAYER_ROLE_ORDER) {
+      // A layer that belongs to one mode (LayerDef.onlyInMode: live fuel
+      // moisture, Wildfire) has no row in this Drought boot.
       const rows = LAYER_DEFS.filter(
-        (def) => def.role === role && def.uiHidden !== true
+        (def) => def.role === role && def.uiHidden !== true && def.onlyInMode === undefined
       );
       for (const def of rows) {
         const checkbox = studioCheckbox(page, def.key);

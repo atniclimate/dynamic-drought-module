@@ -18,6 +18,7 @@ import { installBoundaryStubs, type BoundaryStubMode } from './tribal-fixtures';
 import { installDefaultBcwsStub, installDefaultNifcStub, type BcwsStubMode, type NifcStubMode } from './wildfire-fixtures';
 import { installDefaultNwsWwaStub, type NwsWwaStubMode } from './nws-wwa-fixtures';
 import { installDefaultTropicalStub, type TropicalStubMode } from './tropical-fixtures';
+import { installDefaultLfmcStub } from './lfmc-fixtures';
 import { untilAnswered } from './answered-read';
 import { cpcExtendedPolygons, cpcSeasonalPolygons } from './cpc-seasonal-polygon-fixtures.mjs';
 
@@ -605,6 +606,10 @@ export async function gotoApp(
   // USGS Relative Greenness WMS. Every boot answers both from synthetic
   // fixtures (`installDefaultDrynessStub`), so no spec reaches either agency.
   await installDefaultDrynessStub(page);
+  // Live fuel moisture: every briefing over the western United States reads
+  // the publisher's list. The default stand-in's maps reach no place a spec
+  // selects, so the lane states nothing (tests/lfmc-fixtures.ts).
+  await installDefaultLfmcStub(page);
   coverFuturePages(page);
   // shortcut: a full-site display boot written before 0.7.7 derived the console; pin it so those specs keep their door; drop once specs name view=console themselves.
   if (!options.derivedView && !/[?&]embed=(true|1)\b/.test(query) && !/[?&](view|select)=/.test(query) && /[?&](layers=|region=|cluster=|ocean=|framing=)/.test(query)) query += '&view=console';

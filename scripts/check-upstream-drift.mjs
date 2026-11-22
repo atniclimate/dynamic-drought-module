@@ -52,14 +52,21 @@ const URLS_BOOT_PATH = join(__dirname, '..', 'src', 'config', 'urls-boot.ts');
  * probed here like any catalog key (runtime tier by default). */
 const DRYNESS_GROUND_URLS_PATH = join(__dirname, '..', 'src', 'config', 'dryness-ground.ts');
 
-/** The catalog, its boot slice and the ground's one address as one extraction source. */
+/** The live fuel moisture maps' list (2026-11-21): kept beside that source's
+ * own config for the same reason, in the same `key: 'https...'` form. Only the
+ * list is probed, never a raster (a raster is megabytes; the app reads it by
+ * byte range). */
+const LIVE_FUEL_MOISTURE_URLS_PATH = join(__dirname, '..', 'src', 'config', 'live-fuel-moisture.ts');
+
+/** The catalog, its boot slice and the two addresses kept beside their own config as one extraction source. */
 async function readUrlsSource() {
-  const [catalog, boot, ground] = await Promise.all([
+  const [catalog, boot, ground, fuelMoisture] = await Promise.all([
     readFile(URLS_PATH, 'utf8'),
     readFile(URLS_BOOT_PATH, 'utf8'),
     readFile(DRYNESS_GROUND_URLS_PATH, 'utf8'),
+    readFile(LIVE_FUEL_MOISTURE_URLS_PATH, 'utf8'),
   ]);
-  return `${catalog}\n${boot}\n${ground}`;
+  return `${catalog}\n${boot}\n${ground}\n${fuelMoisture}`;
 }
 
 const TIMEOUT_MS = 15_000;

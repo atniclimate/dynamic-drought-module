@@ -221,15 +221,17 @@ test('count 6: for ten places a briefing can open on, every United States source
     containing: { state, basis: kind === 'state' ? 'feature-property' : 'point-in-polygon' }
   });
   // [place, the sources whose issuer does not cover it]. HeatRisk and the SPC fire weather outlook are issued for the
-  // contiguous States only; every other source answers across the United States.
+  // contiguous States only, and the live fuel moisture maps cover a box over the western States (128 W to 101 W,
+  // src/config/live-fuel-moisture.ts); every other source answers across the United States.
   const NONE = [];
-  const OUTSIDE_CONUS = ['heatRisk', 'spcFireOutlook'];
+  const EAST_OF_THE_FUEL_MOISTURE_MAPS = ['liveFuelMoisture'];
+  const OUTSIDE_CONUS = ['heatRisk', 'liveFuelMoisture', 'spcFireOutlook'];
   const places = [
     [place('aiannh', 'Warm Springs', 'OR', -121.3, 44.85, { NAME: 'Warm Springs Reservation and Off-Reservation Trust Land', AIANNH: '4545' }), NONE],
     [place('bia-reservation', 'Warm Springs (BIA)', 'OR', -121.3, 44.85, { LARNAME: 'Warm Springs' }), NONE],
     [place('aiannh', 'Navajo Nation', 'AZ', -109.5, 36.2, { NAME: 'Navajo Nation Reservation and Off-Reservation Trust Land', AIANNH: '2430' }), NONE],
     [place('aiannh', "Tohono O'odham Nation", 'AZ', -112.0, 32.1, { NAME: "Tohono O'odham Nation Reservation and Off-Reservation Trust Land", AIANNH: '4200' }), NONE],
-    [place('aiannh', 'Creek OTSA', 'OK', -96.0, 35.6, { NAME: 'Creek OTSA', AIANNH: '5620' }), NONE],
+    [place('aiannh', 'Creek OTSA', 'OK', -96.0, 35.6, { NAME: 'Creek OTSA', AIANNH: '5620' }), EAST_OF_THE_FUEL_MOISTURE_MAPS],
     [place('aiannh', 'Annette Island Reserve', 'AK', -131.5, 55.1, { NAME: 'Annette Island Reserve', AIANNH: '0110' }), OUTSIDE_CONUS],
     [place('aiannh', 'Bethel ANVSA', 'AK', -161.76, 60.79, { NAME: 'Bethel ANVSA', AIANNH: '6205' }), OUTSIDE_CONUS],
     [place('state', 'Washington', 'WA', -122.33, 47.6, { STUSPS: 'WA' }), NONE],

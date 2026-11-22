@@ -63,6 +63,8 @@ export const BOTTOM_STACK_IDS: readonly string[] = [
   ...BASE_GROUND_IDS,
   'basemap-satellite',
   'wildfire-dryness-ground',
+  // The other ground choice of the same scene (src/layers/live-fuel-moisture.ts, mirrored literal).
+  'wildfire-lfmc-ground',
   'hillshade',
   ...BASE_LINE_IDS
 ];
@@ -139,6 +141,7 @@ export const CONDITION_SURFACE_IDS: readonly string[] = [
   'heatrisk',
   'usfs-whp',
   'usfs-whp-classes',
+  'live-fuel-moisture',
   'drought-outlook-fill',
   'drought-outlook-outline',
   'spc-fire-weather-fill',

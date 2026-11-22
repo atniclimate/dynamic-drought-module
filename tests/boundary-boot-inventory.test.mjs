@@ -124,7 +124,10 @@ const ROUTE_HOMES = [
   },
   // ENSO block B3: the tropical MapServer's arms (installDefaultTropicalStub);
   // a spec names an arm through gotoApp's `tropical` option.
-  { home: 'tests/tropical-fixtures.ts', marker: /NHC_tropical_weather|TROPICAL_SERVICE_PATH|isTropicalRequestUrl/, family: 'tropical cyclones' }
+  { home: 'tests/tropical-fixtures.ts', marker: /NHC_tropical_weather|TROPICAL_SERVICE_PATH|isTropicalRequestUrl/, family: 'tropical cyclones' },
+  // Live fuel moisture: the publisher's list and rasters (installDefaultLfmcStub);
+  // a spec sets an arm through `lfmcStub(page)`, never its own route.
+  { home: 'tests/lfmc-fixtures.ts', marker: /LFMC_HOST_PATH|eosial-lfmc-data/, family: 'live fuel moisture' }
 ];
 
 /**

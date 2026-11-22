@@ -333,6 +333,9 @@ export async function hydrateBriefing(
     runLane('dsci', () => fetchDsciTrendClaims(context, signal)),
     runLane('nifc', () => fetchNifcClaims(context, signal)),
     runLane('bcws', () => fetchBcwsClaims(context, signal)),
+    // A lazy chunk: the raster reader rides only a briefing that reaches this lane.
+    runLane('liveFuelMoisture', () =>
+      import('./live-fuel-moisture').then((m) => m.fetchLiveFuelMoistureClaims(context, signal))),
     runLane('cpcExtended', () => fetchCpcOutlookClaims(context, signal)),
     runLane('enso', () => loadEnsoClaims(context, signal)),
     runLane('waterSupply', () => fetchWaterSupplyClaims(context, signal)),

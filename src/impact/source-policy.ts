@@ -17,6 +17,7 @@ import {
   regionCapabilityLevel,
   regionCapabilityNote
 } from '../config/region-capability';
+import { lfmcCovers } from '../config/live-fuel-moisture';
 import { pointHasHeatRiskCoverage } from '../layers/heatrisk-coverage';
 import type { BoundarySelectionContext } from './types';
 
@@ -62,6 +63,8 @@ export const BRIEFING_SOURCE_LABELS: Readonly<Record<BriefingSourceKey, string>>
   nifc: 'NIFC current mapped fire perimeters',
   // DRAFT wording (DR-177): the BC lane's own claim source line (src/impact/sources.ts).
   bcws: 'BC Wildfire Service current fire perimeters',
+  // DRAFT wording: the live fuel moisture lane's name (src/config/live-fuel-moisture.ts).
+  liveFuelMoisture: 'Live fuel moisture maps (EOSIAL Laboratory, Sapienza University of Rome)',
   cpcExtended: 'NOAA CPC 6-10 and 8-14 day outlooks',
   enso: 'NOAA CPC ENSO index',
   waterSupply: 'NWRFC water supply outlook',
@@ -146,6 +149,18 @@ export function briefingSourcePolicy(
     sources.heatRisk = {
       state: 'unavailable',
       note: 'The selected point is outside the shipped CONUS HeatRisk coverage.'
+    };
+  }
+
+  // The live fuel moisture maps cover a fixed box over the western United
+  // States; a place whose own box misses it is told so and asks nothing.
+  if (
+    sources.liveFuelMoisture.state !== 'unavailable' &&
+    !lfmcCovers(context.bbox ?? [context.lngLat.lng, context.lngLat.lat, context.lngLat.lng, context.lngLat.lat])
+  ) {
+    sources.liveFuelMoisture = {
+      state: 'unavailable',
+      note: 'The selected place is outside the area the live fuel moisture maps cover (the western United States).'
     };
   }
 

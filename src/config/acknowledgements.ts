@@ -68,6 +68,7 @@ export const ACKNOWLEDGEMENT_IDS = [
   'statcan',
   'nrcan',
   'bcws',
+  'eosial-sapienza',
   'usdm-partners',
   'nadm',
   'natural-earth',
@@ -413,6 +414,16 @@ export const ACKNOWLEDGEMENTS: Readonly<Record<AcknowledgementId, Acknowledgemen
     ],
     licence: { name: 'Open Government Licence – British Columbia', url: OGL_BC_URL }
   },
+  // The publisher of the live fuel moisture maps (src/config/live-fuel-moisture.ts).
+  // Name and licence only: a credit sentence waits for its references-ledger entry (DR-147).
+  'eosial-sapienza': {
+    ...nameOnly(
+      'eosial-sapienza',
+      'EOSIAL Laboratory, School of Aerospace Engineering, Sapienza University of Rome',
+      'partnerships-and-other'
+    ),
+    licence: { name: 'PolyForm Noncommercial License 1.0.0', url: 'https://polyformproject.org/licenses/noncommercial/1.0.0' }
+  },
   'usdm-partners': {
     ...nameOnly('usdm-partners', 'U.S. Drought Monitor', 'partnerships-and-other'),
     credits: [
@@ -494,6 +505,7 @@ export const PRODUCT_CREDITS: Readonly<Record<ProductKey, CreditRows>> = {
   'power-infrastructure': ['hifld', 'eia'],
   'nifc-fires': ['nifc'],
   'bcws-fires': ['bcws'],
+  'live-fuel-moisture': ['eosial-sapienza'],
   'nws-alerts': ['noaa-nws'],
   'hms-smoke': ['noaa-ospo'],
   heatrisk: ['noaa-nws', 'noaa-wpc'],
