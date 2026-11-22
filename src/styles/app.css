@@ -250,11 +250,13 @@
      phones and in embeds. The desktop shell's column reads --map-cell-w
      instead (S30D D1 M9, THE DESKTOP COLUMN). */
   --map-ctrl-w: 104px;
-  /* The Impact Briefing's reading column (owner, 2026-11-13: the briefing
-     covers the map as a studio does). The window is as wide as the map;
-     its header and body hold to this centred column so a line stays
-     readable at 2560px. 880px is the old drawer's widest. */
-  --briefing-column-max: 880px;
+  /* The Impact Briefing's FRAME (owner, 2026-11-13: the briefing covers the
+     map as a studio does; 2026-11-22: "better use of space"). The window is
+     as wide as the map; its header and body hold to this centred frame,
+     min(100% - 2 x --gutter, 1440px), and the cards lay out in its tracks
+     (BRIEFING FRAME below). It is not a line length: sentences keep
+     --measure (520px), so a line stays readable at 2560px. */
+  --briefing-column-max: 1440px;
   /* Bottom-dock seat (DDM-P10-T01). The dock's edge inset and its lift
      above the scale bar were literals repeated in four places (the base
      rule, the phone rule, the embed rule) and the tablet band has to
@@ -4619,8 +4621,9 @@ button.telemetry-item {
    works under ?embed=true. Wider than 720px it covers the map exactly as a
    studio does (owner, 2026-11-13): the studios' box (`--studio-inset-start`
    keeps a live sidebar beside it from 1025px; below that it covers the whole
-   viewport), "Back to map" first in its header, and a centred reading
-   column. On the phone it is hosted by the sheet. Themed from :root tokens.
+   viewport), "Back to map" first in its header and standing in Reset's
+   seat, and a centred frame of card tracks (BRIEFING FRAME). On the phone
+   it is hosted by the sheet. Themed from :root tokens.
    ---------------------------------------------------------------------------- */
 
 .impact-panel {
@@ -4684,18 +4687,271 @@ button.telemetry-item {
   }
 }
 
-/* The centred reading column (the studio header's own arithmetic,
-   .layers-studio-header): header and body pad in to --briefing-column-max,
-   so "Back to map", the title and every line register on one column at any
-   width. Never on the sheet-hosted phone report. */
+/* The centred frame: header and body pad in to --briefing-column-max, so the
+   title and every card register on one left edge at any width. Wider than a
+   phone, the header's end is the map chrome's inset instead (BRIEFING FRAME
+   below), so Back to map stands where Reset stands. Never on the
+   sheet-hosted phone report. */
 .impact-panel:not(.sheet-hosted) :is(.impact-panel-header, .impact-panel-body) {
   padding-inline: max(var(--gutter), calc((100% - var(--briefing-column-max)) / 2));
 }
 
-/* Header: [Back to map][title block][mail, print]. Where the window is too
-   narrow for one row (a 200px embed's overlay), the actions keep the first
-   row beside Back and the title takes a full row below: nothing shrinks
-   under the touch floor and no place name is truncated (2026-09-10 rule). */
+/* -----------------------------------------------------------------------------
+   BRIEFING FRAME (owner, 2026-11-22: "have Opus5.5 design team tackle the
+   Impact Brief view, better use of space and conditions blocks may have
+   better use of frames"; "Back to Map button can be top right (takes place
+   of Reset, user naturally realizes can click it), this should also be top
+   right for the brief view"). Wider than a phone, never the sheet-hosted
+   report, never paper (the print block hides the header cells).
+
+   THE FRAME is min(100% - 2 x --gutter, --briefing-column-max). Every
+   collection of cards in it (the priority view's tiles, other reads and
+   doors in src/styles/briefing-lead.css; the resources here) shares one
+   track rule: repeat(auto-fill, minmax(min(100%, --brief-track-min), 1fr))
+   with --brief-track-gap, so 4 tracks from a 1188 px frame, 3 from 888, 2
+   below. auto-fill, never auto-fit: a tile's size follows the width, not
+   the number of tiles (N modes, DR-113). Sentences keep --measure.
+
+   THE HEADER is a grid, 'heading tools back': the title block on the
+   frame's left edge, never truncated (a Federal Register name wraps), and
+   at the window's top right three map cells: [Print][Email][Back to map].
+   The markup order stays Back, heading, actions, so Tab walks Back, Email,
+   Print, then the body; Back stays the first focus.
+
+   BACK TO MAP is the studios' Back cell (src/styles/studios.css, "BACK TO
+   MAP is a map cell"), which is the map cell's face: --glass-read under the
+   blur, a 1 px --keyline edge, square, --ink at 14 px bold, a 20 px glyph
+   then the word, --brief-cell-h tall and as wide as its word, at right and
+   top --brief-cell-inset of the window: Reset's seat on the map. In the
+   tablet band it is the band's 44 px icon square, the word visually hidden
+   and still the name. Email and Print are square cells of the same face to
+   its left, the column's gap apart. The studios' sheet is lazy (it rides the
+   studio chunks), so the face is restated here with this window's tokens,
+   declaration for declaration (tests/map-chrome-contract.test.mjs). The
+   window mounts outside .app-shell and cannot inherit --map-cell-*, so its
+   geometry tokens are its own, held equal to MAP_CHROME_TOKENS by the same
+   test. Contrast is the map cell's: --ink on --glass-read over white
+   imagery 6.98:1 (tests/contrast-contract.test.mjs).
+
+   FULL DETAIL: horizon and hazard frames span the frame; inside a hazard
+   the claims run two per row when both keep --brief-claim-min, never three,
+   in their order; anything that is not a claim (the point-heat section, a
+   note) spans the row.
+   ----------------------------------------------------------------------------- */
+.impact-panel-close > svg {
+  display: none;
+}
+@media screen and (min-width: 721px) {
+  .impact-panel:not(.sheet-hosted) {
+    /* The map column's geometry (src/config/map-chrome.ts). */
+    --brief-cell-w: 96px;
+    --brief-cell-h: 40px;
+    --brief-cell-inset: 12px;
+    --brief-cell-gap: 4px;
+    /* One card track; 4 x 288 + 3 x 12 = 1188. */
+    --brief-track-min: 288px;
+    --brief-track-gap: 12px;
+    /* A full-detail claim keeps about 66 characters of its 12.5 px text. */
+    --brief-claim-min: 440px;
+    --brief-claim-gap: 28px;
+    /* The briefing's own controls on a fine pointer; the touch floor below. */
+    --brief-hit: 36px;
+  }
+  .impact-panel:not(.sheet-hosted) .impact-panel-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas: 'heading tools back';
+    column-gap: var(--brief-cell-gap);
+    align-items: start;
+    padding-top: var(--brief-cell-inset);
+    padding-bottom: 14px;
+    padding-inline-end: var(--brief-cell-inset);
+  }
+  .impact-panel:not(.sheet-hosted) .impact-panel-heading {
+    grid-area: heading;
+    margin-inline-end: 20px;
+    padding-top: 2px;
+  }
+  .impact-panel:not(.sheet-hosted) .impact-panel-title {
+    font-size: 22px;
+    line-height: 1.18;
+  }
+  .impact-panel:not(.sheet-hosted) .impact-panel-kind {
+    font-size: 11.5px;
+  }
+  .impact-panel:not(.sheet-hosted) .impact-panel-actions {
+    grid-area: tools;
+    flex-direction: row-reverse;
+    gap: var(--brief-cell-gap);
+  }
+  /* The cell face, Back, Email and Print alike. */
+  .impact-panel:not(.sheet-hosted) :is(.impact-panel-close, .impact-panel-action) {
+    box-sizing: border-box;
+    height: var(--brief-cell-h);
+    min-height: 0;
+    margin: 0;
+    border: 1px solid var(--keyline);
+    border-radius: 0;
+    background: var(--glass-read);
+    -webkit-backdrop-filter: blur(var(--rich-black-blur));
+    backdrop-filter: blur(var(--rich-black-blur));
+    color: var(--ink);
+    box-shadow: none;
+    cursor: pointer;
+    transition:
+      background-color var(--dur-micro) var(--ease-standard),
+      border-color var(--dur-micro) var(--ease-standard),
+      color var(--dur-micro) var(--ease-standard);
+  }
+  .impact-panel:not(.sheet-hosted) .impact-panel-close {
+    grid-area: back;
+    justify-self: end;
+    display: grid;
+    grid-template-columns: 20px auto;
+    column-gap: 8px;
+    align-items: center;
+    justify-content: start;
+    min-width: var(--brief-cell-w);
+    padding: 0 9px;
+    font-family: var(--font-body);
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0;
+    line-height: 1;
+    text-align: left;
+    text-transform: none;
+    white-space: nowrap;
+  }
+  .impact-panel:not(.sheet-hosted) .impact-panel-close > svg {
+    display: block;
+    width: 20px;
+    height: 20px;
+    justify-self: center;
+    stroke-width: 2;
+  }
+  /* The word, trimmed to cap height so it centres by its capitals. */
+  .impact-panel:not(.sheet-hosted) .impact-panel-close > span {
+    display: block;
+    min-width: 0;
+    font: inherit;
+    letter-spacing: 0;
+    text-box: trim-both cap alphabetic;
+  }
+  .impact-panel:not(.sheet-hosted) .impact-panel-action {
+    width: var(--brief-cell-h);
+    min-width: 0;
+    padding: 0;
+  }
+  .impact-panel:not(.sheet-hosted) .impact-panel-action > svg {
+    width: 20px;
+    height: 20px;
+  }
+  .impact-panel:not(.sheet-hosted) :is(.impact-panel-close, .impact-panel-action):hover {
+    border-color: var(--keyline);
+    background: linear-gradient(var(--glass-press), var(--glass-press)), var(--glass-read);
+    color: var(--ink);
+  }
+  /* One ring for all chrome (palette-tokens.md section 2, "Focus"). */
+  .impact-panel:not(.sheet-hosted) :is(.impact-panel-close, .impact-panel-action):focus-visible {
+    border-color: var(--keyline);
+    outline: 2px solid var(--focus-inner);
+    outline-offset: 0;
+    box-shadow: 0 0 0 4px var(--focus-outer);
+  }
+
+  /* The body is the frame's container: the resources' tracks answer to it. */
+  .impact-panel:not(.sheet-hosted) .impact-panel-body {
+    container: briefing-body / inline-size;
+    padding-top: 20px;
+  }
+
+  .impact-panel:not(.sheet-hosted) .impact-hazard-claims {
+    display: grid;
+    grid-template-columns: repeat(
+      auto-fill,
+      minmax(min(100%, max(var(--brief-claim-min), calc((100% - var(--brief-claim-gap)) / 2))), 1fr)
+    );
+    column-gap: var(--brief-claim-gap);
+    align-items: start;
+  }
+  /* Side by side, every claim carries its own rule, so the second column's
+     first claim is ruled like the first's. */
+  .impact-panel:not(.sheet-hosted) .impact-hazard-claims > .impact-claim {
+    border-top: 1px dashed var(--line);
+  }
+  .impact-panel:not(.sheet-hosted) .impact-hazard-claims > :not(.impact-claim) {
+    grid-column: 1 / -1;
+  }
+
+  /* Resources: the cards in the frame's tracks; a group's heading and the
+     Grants block take the whole row. */
+  @container briefing-body (min-width: 600px) {
+    .impact-panel:not(.sheet-hosted) .impact-resource-group {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--brief-track-min)), 1fr));
+      gap: 8px var(--brief-track-gap);
+      margin-bottom: 18px;
+    }
+    .impact-panel:not(.sheet-hosted) .impact-resource-group > :not(.impact-resource) {
+      grid-column: 1 / -1;
+    }
+    .impact-panel:not(.sheet-hosted) .impact-resource {
+      margin: 0;
+      padding: 10px 12px;
+    }
+  }
+}
+/* The touch floor: a coarse pointer and the tablet band take 44 px cells
+   and controls. The band also draws Back to map as its icon square. */
+@media screen and (min-width: 721px) and (pointer: coarse) {
+  .impact-panel:not(.sheet-hosted) {
+    --brief-cell-h: var(--touch-target);
+    --brief-hit: var(--touch-target);
+  }
+}
+@media screen and (min-width: 721px) and (max-width: 1024px) {
+  .impact-panel:not(.sheet-hosted) {
+    --brief-cell-w: var(--touch-target);
+    --brief-cell-h: var(--touch-target);
+    --brief-hit: var(--touch-target);
+  }
+  .impact-panel:not(.sheet-hosted) .impact-panel-title {
+    font-size: 20px;
+  }
+  .impact-panel:not(.sheet-hosted) .impact-panel-close {
+    position: relative;
+    grid-template-columns: 20px;
+    justify-content: center;
+    place-items: center;
+    width: var(--brief-cell-w);
+    min-width: 0;
+    padding: 0;
+  }
+  /* The project's visually-hidden pattern (.sr-only): still the name. */
+  .impact-panel:not(.sheet-hosted) .impact-panel-close > span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+}
+@media screen and (min-width: 721px) and (prefers-reduced-motion: reduce) {
+  .impact-panel:not(.sheet-hosted) :is(.impact-panel-close, .impact-panel-action) {
+    transition: none;
+  }
+}
+
+/* Header, the narrow overlay's (wider than a phone, BRIEFING FRAME above
+   draws it as a grid with the cells at the top right): [Back to map][title
+   block][mail, print]. Where the window is too narrow for one row (a 200px
+   embed's overlay), the actions keep the first row beside Back and the
+   title takes a full row below: nothing shrinks under the touch floor and
+   no place name is truncated (2026-09-10 rule). */
 .impact-panel-header {
   display: flex;
   flex-wrap: wrap;
@@ -4734,8 +4990,9 @@ button.telemetry-item {
   letter-spacing: 0.02em;
 }
 /* The header's icon cluster (mail, print). "Back to map" is
-   .impact-panel-close, first in the header, in the studios' Back look
-   (the .layers-studio-back rule lists it). */
+   .impact-panel-close, first in the header, in the studios' Back look on
+   the narrow overlay (the .layers-studio-back rule lists it); wider than a
+   phone all three are map cells (BRIEFING FRAME above). */
 .impact-panel-actions {
   display: flex;
   align-items: center;

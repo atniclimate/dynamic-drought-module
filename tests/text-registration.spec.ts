@@ -545,7 +545,14 @@ for (const viewport of VIEWPORTS) {
       // The briefing for WA (DR-109).
       await gotoApp(page, '?view=brief&layers=places&select=state:WA&region=washington_state');
       await expect(page.locator('#impact-panel')).toBeVisible({ timeout: 15_000 });
-      // The scan reads visible text only: step to the full detail so the matrix is scanned too.
+      // The scan reads visible text only. The Priority view first: since the
+      // briefing's frame (owner, 2026-11-22) its cards sit in tracks 288 px
+      // and wider and its open frames hold their sentences in a track, so
+      // their lines are judged at the widths a reader gets.
+      await expect(page.locator('#impact-panel .briefing-lead')).toBeVisible({ timeout: 15_000 });
+      await settle(page);
+      await scan('WA briefing priority', ['#impact-panel']);
+      // Then the full detail, where a hazard's claims now run two per row.
       await showFullDetail(page);
       await expect(page.locator('.impact-horizons .impact-hazard').first()).toBeVisible();
       await settle(page);

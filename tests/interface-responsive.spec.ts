@@ -1371,6 +1371,24 @@ for (const bandWidth of TABLET_BAND_WIDTHS) {
         expect(Math.abs(panel.top), 'the briefing starts at the top edge').toBeLessThanOrEqual(1);
         await expect(page.locator('#impact-panel .impact-panel-close')).toHaveText('Back to map');
 
+        // Back to map stands in Reset's seat (owner, 2026-11-22): in the band
+        // it is the band's 44 px icon square at the chrome inset, the word
+        // visually hidden and still the name, with Print and Email the same
+        // squares to its left, 4 px apart (app.css, BRIEFING FRAME).
+        const back = await rect(page.locator('#impact-panel .impact-panel-close'));
+        expect(Math.round(back.width), 'Back to map is the band\'s icon square').toBe(44);
+        expect(Math.round(back.height), 'Back to map is the band\'s icon square').toBe(44);
+        expect(Math.round(bandWidth - back.right), 'Back to map sits at the chrome inset').toBe(12);
+        expect(Math.round(back.top - panel.top), 'Back to map sits at the chrome inset').toBe(12);
+        await expect(page.locator('#impact-panel .impact-panel-close')).toHaveAccessibleName('Back to map');
+        const mail = await rect(page.locator('#impact-panel .impact-panel-action-mail'));
+        const print = await rect(page.locator('#impact-panel .impact-panel-action-print'));
+        expect(Math.round(back.left - mail.right), 'Email is the column gap left of Back').toBe(4);
+        expect(Math.round(mail.left - print.right), 'Print is the column gap left of Email').toBe(4);
+        for (const cell of [mail, print]) {
+          expect([Math.round(cell.width), Math.round(cell.height), Math.round(cell.top)]).toEqual([44, 44, Math.round(back.top)]);
+        }
+
         await settledLayout(page);
         expect(
           undersizedTargets(await reachableTargets(page)),

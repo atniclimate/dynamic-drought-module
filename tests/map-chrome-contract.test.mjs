@@ -493,7 +493,8 @@ test('the desktop briefing takes the studio box, a reading column and a uniform 
   const panel = ruleBody('.impact-panel');
   assert.match(panel, /inset:\s*0 0 0 var\(--studio-inset-start\);/);
   assert.doesNotMatch(panel, /width:/);
-  assert.match(code, /--briefing-column-max:\s*880px;/);
+  // The frame (owner, 2026-11-22: "better use of space"); sentences keep --measure.
+  assert.match(code, /--briefing-column-max:\s*1440px;/);
   assert.match(
     ruleBody('.impact-panel:not(.sheet-hosted) :is(.impact-panel-header, .impact-panel-body)'),
     /padding-inline:\s*max\(var\(--gutter\),\s*calc\(\(100% - var\(--briefing-column-max\)\) \/ 2\)\);/
@@ -502,8 +503,80 @@ test('the desktop briefing takes the studio box, a reading column and a uniform 
   // The Back look is shared by the selector list, never the studio class (specs find that class page-wide).
   assert.match(code, /\.layers-studio-back,\s*\.impact-panel-close,\s*\.sheet-close \{/);
   const facade = (await readFile(new URL('src/ui/impact-panel.ts', ROOT), 'utf8')).replace(/\r\n/g, '\n');
-  assert.match(facade, /<header class="impact-panel-header">\s*<button type="button" class="impact-panel-close">Back to map<\/button>/);
+  // Back is first in the header: the studios' cell, an arrow glyph hidden from assistive technology, then the word.
+  assert.match(
+    facade,
+    /<header class="impact-panel-header">\s*<button type="button" class="impact-panel-close"><svg [^>]*aria-hidden="true"[^>]*>[\s\S]*?<\/svg><span class="impact-panel-close-word">Back to map<\/span><\/button>/
+  );
   const deepLink = (await readFile(new URL('src/state/deep-link.ts', ROOT), 'utf8')).replace(/\r\n/g, '\n');
   assert.match(deepLink, /return \{ top: 40, left: 40, bottom: 40, right: 40 \};\n\}/);
   assert.doesNotMatch(deepLink, /MAP_COLUMN_CLEAR/);
+});
+
+// Owner 2026-11-22: "Back to Map button can be top right (takes place of Reset, user naturally realizes can click
+// it), this should also be top right for the brief view". The window mounts outside .app-shell, so its cells read
+// their own tokens; they hold the map column's numbers, and the face is the studios' Back cell, declaration for
+// declaration (studios.css is lazy, so app.css restates it rather than sharing the rule).
+test('the briefing\'s Back to map, Email and Print are map cells in Reset\'s seat', async () => {
+  const blocks = [...code.matchAll(/\.impact-panel:not\(\.sheet-hosted\) \{([^}]*--brief-cell-[a-z]+\s*:[^}]*)\}/g)].map((m) =>
+    declarations(m[1])
+  );
+  const desktop = blocks.find((d) => /px$/.test(d.get('--brief-cell-w') ?? ''));
+  assert.ok(desktop, 'no rule declares the briefing\'s cell tokens in px');
+  const { chromeInset, mapCellW, mapCellH, mapCellGap } = MAP_CHROME_TOKENS;
+  assert.equal(desktop.get('--brief-cell-w'), `${mapCellW}px`, '--brief-cell-w disagrees with MAP_CHROME_TOKENS.mapCellW');
+  assert.equal(desktop.get('--brief-cell-h'), `${mapCellH}px`, '--brief-cell-h disagrees with MAP_CHROME_TOKENS.mapCellH');
+  assert.equal(desktop.get('--brief-cell-inset'), `${chromeInset}px`, '--brief-cell-inset disagrees with MAP_CHROME_TOKENS.chromeInset');
+  assert.equal(desktop.get('--brief-cell-gap'), `${mapCellGap}px`, '--brief-cell-gap disagrees with MAP_CHROME_TOKENS.mapCellGap');
+  // Every other value of a cell token is the touch floor (a coarse pointer, the tablet band).
+  for (const d of blocks.filter((b) => b !== desktop)) {
+    for (const name of ['--brief-cell-w', '--brief-cell-h', '--brief-hit']) {
+      if (d.has(name)) assert.equal(d.get(name), 'var(--touch-target)', `${name} is overridden to ${d.get(name)}`);
+    }
+  }
+  // The map's --map-cell-* stay declared only on .app-shell (the first case counts them).
+  assert.doesNotMatch(code, /\.impact-panel[^{]*\{[^}]*--map-cell-[a-z]+\s*:/);
+
+  // The header seats the cells at the window's top right: Back last in the row, its inset the chrome's.
+  const header = ruleBody('.impact-panel:not(.sheet-hosted) .impact-panel-header');
+  for (const line of [
+    "grid-template-areas: 'heading tools back'",
+    'column-gap: var(--brief-cell-gap)',
+    'padding-top: var(--brief-cell-inset)',
+    'padding-inline-end: var(--brief-cell-inset)'
+  ]) {
+    assert.ok(header.includes(line), `the briefing header lost "${line}"`);
+  }
+
+  // The face: the studios' Back cell, line for line.
+  const studios = (await readFile(new URL('src/styles/studios.css', ROOT), 'utf8'))
+    .replace(/\r\n/g, '\n')
+    .replace(/\/\*[\s\S]*?\*\//g, '');
+  // The face rule is the one that lists Back with the rehosted SAT cell.
+  const studioAt = studios.indexOf(
+    ':is(#place-studio-root, #layers-studio-root) .layers-studio-header > .layers-studio-back,\n  #layers-studio-root .layers-studio-header .basemap-switcher-btn.map-cell {'
+  );
+  assert.notEqual(studioAt, -1, 'studios.css lost the Back cell face rule');
+  const studioFace = studios.slice(studios.indexOf('{', studioAt) + 1, studios.indexOf('}', studioAt));
+  const briefFace =
+    ruleBody('.impact-panel:not(.sheet-hosted) :is(.impact-panel-close, .impact-panel-action)') +
+    ruleBody('.impact-panel:not(.sheet-hosted) .impact-panel-close');
+  for (const line of [
+    'border: 1px solid var(--keyline)',
+    'border-radius: 0',
+    'background: var(--glass-read)',
+    'backdrop-filter: blur(var(--rich-black-blur))',
+    'color: var(--ink)',
+    'grid-template-columns: 20px auto',
+    'column-gap: 8px',
+    'padding: 0 9px',
+    'font-family: var(--font-body)',
+    'font-size: 14px',
+    'font-weight: 700'
+  ]) {
+    assert.ok(studioFace.includes(line), `the studios' Back cell no longer reads "${line}"; move both faces together`);
+    assert.ok(briefFace.includes(line), `the briefing's Back cell disagrees with the studios' face: "${line}"`);
+  }
+  assert.match(briefFace, /height: var\(--brief-cell-h\);/);
+  assert.match(briefFace, /min-width: var\(--brief-cell-w\);/);
 });

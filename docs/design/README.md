@@ -214,6 +214,28 @@ a step to Full detail holds until the briefing closes. The choice is
 presentation state and never enters the URL. Paper carries the full detail
 only: the priority view does not print.
 
+**The frame and its card frames** (owner direction 2026-11-22: "better use of
+space and conditions blocks may have better use of frames"). Wider than a
+phone the briefing lays out in one centred frame, at most 1440 px wide
+(`--briefing-column-max`); sentences keep the 520 px measure. Every set of cards
+shares one track rule (tracks of at least 288 px that fill the width: four
+from a 1188 px frame, three from 888, two below), so a tile's size follows the
+width and never the number of modes. At four tracks, "Present together here",
+"Other reads and gaps" and the ENSO link hang their heading and caption in the
+first track beside their list. Three kinds of frame say three things. A ranked
+read is a filled card with five rows that line up across the row: a header
+strip with the hazard word and its evidence tag, the headline, the scope, the
+figure, and a ruled foot with the source and date and the way into the full
+detail. A read that holds no ranked class is an open frame, no fill and a solid
+edge, its door row as the strip. A hazard that was not read is an open frame
+with a dashed edge; its state word carries the meaning. No hazard is dropped,
+no colour is added and no issuer colour changes. In the full detail a hazard's
+claims run two per row where both keep about 440 px, never three, in their
+order. Back to map is the map cell in Reset's seat at the window's top right,
+the same cell as the studios' Back, with Email and Print as square cells to
+its left; the keyboard still meets Back first, then Email and Print. The phone
+sheet is unchanged.
+
 ## The ENSO chain and its Guide door
 
 Owner direction 2026-11-09 (sprint), DR-pending.

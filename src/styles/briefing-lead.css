@@ -8,11 +8,14 @@
    - Colour belongs to the data. Every hue drawn here arrives as an issuer
      class colour on a mark (a gauge block, a product flag); the chrome is ink
      on the panel's own surfaces. No hazard hue, no new accent.
-   - Layout answers to the CONTAINER, not the viewport: the briefing is a
-     450 px panel on a desktop, a 264 px slab on a tablet and a 300 px card
-     in the phone sheet. The single column is the base; container queries only
-     add columns where there is room, so a browser without them keeps a sane
-     layout.
+   - Layout answers to the CONTAINER where it can: the briefing is a frame
+     up to 1440 px wide covering the map on a desktop or tablet (app.css,
+     BRIEFING FRAME), a 300 px card in the phone sheet and as little as
+     200 px in an embed. The single column is the base; container queries
+     only add columns where there is room, so a browser without them keeps a
+     sane layout. The covering window's card frames and shared tracks are
+     one section, "The briefing's frame, wider than a phone", keyed to the
+     window (never the sheet) and to the screen (never paper).
    - Nothing here moves. State changes are instant, so reduced motion needs no
      twin, and no emphasis is carried by motion.
    ============================================================================= */
@@ -885,6 +888,171 @@
   .lead-together-item::after {
     top: 11px;
     left: 12px;
+  }
+}
+
+/* ---- The briefing's frame, wider than a phone ------------------------------ */
+
+/* The covering window (never the phone sheet, never paper) lays this view
+   in the frame's card tracks (app.css, BRIEFING FRAME: --brief-track-min,
+   --brief-track-gap, --brief-hit). Three kinds of frame say three things,
+   and no hazard is dropped and no colour added:
+   - a RANKED read is a filled card with a header strip (the hazard word and
+     its evidence tag), the headline, the scope, the figure, and a ruled
+     foot (source and date, then the way in);
+   - a read that holds NO RANKED CLASS is an open frame: no fill, a solid
+     --line-strong edge, its door row as the strip;
+   - NOTHING WAS READ is an open frame with a dashed --ink-muted edge
+     (3.19:1 on the glass; the state word carries the meaning).
+   Text in an open frame is --ink-soft or brighter. */
+@media screen and (min-width: 721px) {
+  .impact-panel:not(.sheet-hosted) .briefing-view-switch {
+    width: fit-content;
+    grid-template-columns: repeat(2, minmax(136px, max-content));
+    margin-bottom: 22px;
+  }
+  .impact-panel:not(.sheet-hosted) .briefing-view-btn {
+    min-height: var(--brief-hit);
+    padding-inline: 22px;
+    font-size: 12.5px;
+  }
+  .impact-panel:not(.sheet-hosted) :is(.lead-tiles, .lead-rest-list, .lead-doors) {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--brief-track-min)), 1fr));
+    gap: var(--brief-track-gap);
+  }
+  /* A card takes its track; the sentences inside keep the measure. */
+  .impact-panel:not(.sheet-hosted) :is(.lead-tile-item, .lead-rest-item) {
+    max-inline-size: none;
+  }
+  .impact-panel:not(.sheet-hosted) .lead-hazard {
+    font-size: 10.5px;
+  }
+  .impact-panel:not(.sheet-hosted) .lead-headline {
+    font-size: 18px;
+  }
+  .impact-panel:not(.sheet-hosted) .lead-scope {
+    font-size: 12px;
+  }
+  .impact-panel:not(.sheet-hosted) .lead-source {
+    font-size: 11px;
+  }
+  .impact-panel:not(.sheet-hosted) .lead-open {
+    font-size: 11.5px;
+  }
+  /* The open frames. */
+  .impact-panel:not(.sheet-hosted) .lead-rest-list {
+    margin-top: 10px;
+    border-top: 0;
+  }
+  .impact-panel:not(.sheet-hosted) .lead-rest-item {
+    display: flex;
+    flex-direction: column;
+    padding: 0 14px 12px;
+    border: 1px solid var(--line-strong);
+    border-radius: var(--glass-radius);
+  }
+  .impact-panel:not(.sheet-hosted) .lead-rest-item:not(:has(.lead-read)) {
+    border: 1px dashed var(--ink-muted);
+  }
+  .impact-panel:not(.sheet-hosted) .lead-rest-open {
+    width: calc(100% + 28px);
+    min-height: var(--brief-hit);
+    margin: 0 -14px 2px;
+    padding: 8px 14px;
+    border-bottom: 1px solid var(--line);
+  }
+  .impact-panel:not(.sheet-hosted) .lead-door {
+    min-height: var(--brief-hit);
+  }
+
+  /* At four tracks, "Present together here", "Other reads and gaps" and the
+     ENSO link hang their heading and caption in the first track and lay
+     their list across the other three. "What leads here", the resources,
+     Technical information and the Acknowledgements stay stacked. */
+  @container briefing-lead (min-width: 1188px) {
+    .impact-panel:not(.sheet-hosted) .briefing-lead > :is(.lead-together, .lead-rest, .evidence-chain) {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-rows: auto auto auto 1fr;
+      column-gap: var(--brief-track-gap);
+      align-items: start;
+      margin-top: 30px;
+    }
+    .impact-panel:not(.sheet-hosted)
+      .briefing-lead
+      > :is(.lead-together, .lead-rest, .evidence-chain)
+      > :is(.lead-subtitle, .lead-caption, .evidence-chain-title, .evidence-chain-caption) {
+      grid-column: 1;
+      margin: 0 16px 8px 0;
+    }
+    .impact-panel:not(.sheet-hosted)
+      .briefing-lead
+      > :is(.lead-together, .lead-rest, .evidence-chain)
+      > :is(.lead-together-list, .lead-rest-list, .evidence-chain-links) {
+      grid-column: 2 / -1;
+      grid-row: 1 / -1;
+      margin: 0;
+    }
+  }
+}
+
+/* The ranked card's frame: five rows shared across a row of tiles (a
+   subgrid), so every strip, headline, scope, figure and foot starts on one
+   line across the row. The scope is drawn above the figure by its row; the
+   reading order in the markup is unchanged. Without subgrid a tile keeps
+   the flex column above. */
+@supports (grid-template-rows: subgrid) {
+  @media screen and (min-width: 721px) {
+    .impact-panel:not(.sheet-hosted) .lead-tiles {
+      row-gap: 0;
+    }
+    .impact-panel:not(.sheet-hosted) .lead-tile-item {
+      display: grid;
+      grid-row: span 5;
+      grid-template-rows: subgrid;
+      row-gap: 0;
+      padding-bottom: var(--brief-track-gap);
+    }
+    .impact-panel:not(.sheet-hosted) .lead-tile {
+      display: grid;
+      grid-row: 1 / -1;
+      grid-template-rows: subgrid;
+      row-gap: 0;
+      height: auto;
+      padding: 0;
+    }
+    .impact-panel:not(.sheet-hosted) .lead-tile > .lead-tile-top {
+      grid-row: 1;
+      padding: 9px 14px;
+      border-bottom: 1px solid var(--line);
+      border-radius: calc(var(--glass-radius) - 1px) calc(var(--glass-radius) - 1px) 0 0;
+      background: var(--surface-raised);
+    }
+    .impact-panel:not(.sheet-hosted) .lead-tile > .lead-headline {
+      grid-row: 2;
+      padding: 12px 14px 0;
+    }
+    .impact-panel:not(.sheet-hosted) .lead-tile > .lead-scope {
+      grid-row: 3;
+      padding: 4px 14px 0;
+    }
+    .impact-panel:not(.sheet-hosted) .lead-tile > .lead-figure {
+      grid-row: 4;
+      margin: 0;
+      padding: 12px 14px 0;
+    }
+    .impact-panel:not(.sheet-hosted) .lead-tile > .lead-foot {
+      grid-row: 5;
+      align-self: stretch;
+      align-items: flex-start;
+      margin: 14px 0 0;
+      padding: 9px 14px 10px;
+      border-top: 1px solid var(--line);
+    }
+    .impact-panel:not(.sheet-hosted) .lead-tile > .lead-foot > .lead-open {
+      align-self: flex-end;
+    }
   }
 }
 
