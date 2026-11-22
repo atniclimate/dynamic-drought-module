@@ -746,8 +746,10 @@ test.describe('H2 critical-first surfaces', () => {
     await expect(fullDetail).toHaveAttribute('aria-pressed', 'false');
     await fullDetail.click();
     await expect(fullDetail).toHaveAttribute('aria-pressed', 'true');
+    // In Heat the priority view carries the same section as its lead detail
+    // (DESIGN B6), hidden under Full detail; read the matrix's own copy.
     const pointHeat = page.locator(
-      '#sheet-report .point-heat[aria-label="Heat at selected point"]'
+      '#sheet-report .impact-horizons .point-heat[aria-label="Heat at selected point"]'
     );
     await expect(pointHeat).toBeVisible();
     await expect(pointHeat.locator('.point-heat-station')).toContainText(
