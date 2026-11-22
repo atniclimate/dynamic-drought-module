@@ -342,6 +342,104 @@ test('the ATNI Climate mark is the bottom-right About door, one cell wide', asyn
   assert.equal(mapBrandMarkRect(500, 700, MAP_CHROME_TABLET_BAND.minViewport).width, MAP_CHROME_TABLET_BAND.cell);
 });
 
+// The look of 2026-11-22: the mark is not drawn below 721px, so a phone had no
+// door to About ATNI Climate. The phone's Info sheet carries one as its last
+// entry, opening the same card by the same popovertarget, and the card is a
+// dialog named by its own heading.
+test('a phone reaches About ATNI Climate from the Info sheet, and the card is a named dialog', () => {
+  const panel = /<section id="map-info-panel"[^>]*>([\s\S]*?)<\/section>/.exec(html);
+  assert.ok(panel, 'index.html lost the Info sheet');
+  const entry = '<button type="button" id="map-info-about" class="map-info-about" popovertarget="about-atni">About ATNI Climate</button>';
+  assert.ok(panel[1].includes(entry), 'the Info sheet has the About ATNI Climate entry, wired to the card');
+  assert.match(panel[1], new RegExp(`${entry.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*</div>\\s*$`), 'the entry is the sheet\'s last');
+
+  assert.match(ruleBody('.map-info-about'), /display:\s*none;/, 'the desktop, tablet and embed keep the mark as the door');
+  const phone = ruleBody('#app[data-sheet-detent] .map-info-about');
+  for (const line of ['display: flex', 'min-height: var(--touch-target)']) {
+    assert.ok(phone.includes(line), `the phone entry rule lost "${line}"`);
+  }
+
+  const card = /<div id="about-atni" ([^>]*)>\s*(<h2[^>]*>[^<]*<\/h2>)/.exec(html);
+  assert.ok(card, 'the About card opens with its own heading');
+  for (const attribute of ['popover', 'class="about-card"', 'role="dialog"', 'aria-labelledby="about-atni-title"', 'tabindex="-1"']) {
+    assert.ok(card[1].includes(attribute), `the About card lost ${attribute}`);
+  }
+  assert.equal(card[2], '<h2 id="about-atni-title" class="sr-only">About ATNI Climate</h2>', 'the heading names the card with the door\'s own words');
+});
+
+test('the About card takes focus on opening, closes on its own Escape, and gives focus back to its door', async () => {
+  class FakeElement {
+    constructor(id) {
+      this.id = id;
+      this.isConnected = true;
+      this.listeners = new Map();
+    }
+    addEventListener(type, fn) { this.listeners.set(type, fn); }
+    removeEventListener(type, fn) { if (this.listeners.get(type) === fn) this.listeners.delete(type); }
+    focus() { doc.activeElement = this; }
+    closest(selector) { return this.door && selector.includes('popovertarget="about-atni"') ? this : null; }
+  }
+  const body = new FakeElement('body');
+  const card = new FakeElement('about-atni');
+  const link = new FakeElement('about-link');
+  const mark = new FakeElement('map-brand-mark');
+  const entry = new FakeElement('map-info-about');
+  mark.door = true;
+  entry.door = true;
+  card.contains = (node) => node === card || node === link;
+  card.hidePopover = () => {
+    card.open = false;
+    card.listeners.get('toggle')?.({ newState: 'closed' });
+  };
+  const docListeners = new Map();
+  const doc = {
+    activeElement: body,
+    body,
+    getElementById: (id) => (id === 'about-atni' ? card : null),
+    addEventListener: (type, fn) => docListeners.set(type, fn),
+    removeEventListener: (type, fn) => { if (docListeners.get(type) === fn) docListeners.delete(type); }
+  };
+  globalThis.Element = FakeElement;
+  globalThis.document = doc;
+  const { initAboutCard } = await import(new URL('src/ui/about-card.ts', ROOT).href);
+  initAboutCard();
+
+  // The native popovertarget opens the card: click, then beforetoggle, then toggle.
+  const open = (door) => {
+    docListeners.get('click')({ target: door });
+    card.listeners.get('beforetoggle')({ newState: 'open' });
+    card.open = true;
+    card.listeners.get('toggle')({ newState: 'open' });
+  };
+
+  // A pointer that never focused its door (Safari) still gets focus back there.
+  open(entry);
+  assert.equal(doc.activeElement, card, 'focus moves into the card when it opens');
+  let prevented = false;
+  card.listeners.get('keydown')({ key: 'Escape', target: card, defaultPrevented: false, preventDefault() { prevented = true; } });
+  assert.equal(card.open, false, 'Escape closes the card');
+  assert.equal(prevented, true, 'the card owns its Escape: a map popup behind it stays');
+  assert.equal(doc.activeElement, entry, 'focus returns to the phone entry that opened it');
+
+  // The mark on a wide screen, closed from inside the card.
+  mark.focus();
+  open(mark);
+  link.focus();
+  card.hidePopover();
+  assert.equal(doc.activeElement, mark, 'focus returns to the mark');
+
+  // A light dismiss onto another control leaves focus where the reader put it.
+  open(mark);
+  const share = new FakeElement('share-btn');
+  share.focus();
+  card.open = false;
+  card.listeners.get('toggle')({ newState: 'closed' });
+  assert.equal(doc.activeElement, share, 'focus is not pulled back from a control the reader chose');
+
+  delete globalThis.document;
+  delete globalThis.Element;
+});
+
 // Owner 2026-10-19: controls stay put across modes. The Console strip sits
 // below the hazard buttons and the ENSO buttons above the mode-sized view
 // details. Owner 2026-11-13 (items 11 and 13): desktop Brief seats the strip

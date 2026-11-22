@@ -6554,6 +6554,15 @@ a.impact-resource-link::after {
   cursor: pointer;
 }
 
+/* About ATNI Climate, the Info sheet's last entry (the look of 2026-11-22):
+   the phone's door to the About card, since the map's mark is not drawn
+   below 721px. The desktop, the tablet band and an embed keep the mark (or
+   the embed's link-out wordmark) and never show it; the phone rule sits
+   beside the sheet's other entries below. */
+.map-info-about {
+  display: none;
+}
+
 .enso-flow-credit { margin: 4px 0 0; font-size: 11px; color: var(--fg-2); }
 .enso-flow-credit[hidden] { display: none; }
 
@@ -7028,6 +7037,27 @@ a.impact-resource-link::after {
     cursor: pointer;
   }
   .map-info-tribal p { margin: 8px 0 0; }
+  /* The sheet's last entry wears the Tribal source note's row: the same
+     rule above it, the same type, a 44px floor. */
+  #app[data-sheet-detent] .map-info-about {
+    display: flex;
+    align-items: center;
+    box-sizing: border-box;
+    width: 100%;
+    min-height: var(--touch-target);
+    margin: 18px 0 0;
+    padding: 10px 0 0;
+    border: 0;
+    border-top: 1px solid rgba(203, 213, 225, 0.24);
+    border-radius: 0;
+    background: none;
+    color: var(--fg-0);
+    font: inherit;
+    font-size: 10.5px;
+    line-height: 1.55;
+    text-align: left;
+    cursor: pointer;
+  }
 }
 
 @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {

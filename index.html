@@ -382,6 +382,12 @@
           </details>
           <h3>Credits</h3>
           <p id="map-info-attribution" class="map-info-attribution"></p>
+          <!-- The phone's door to the About card (the look of 2026-11-22):
+               the map's mark is not drawn below 721px, so the Info sheet
+               ends with this entry; the stylesheet shows it on the phone
+               shell only. Same popovertarget as the mark; the dialog
+               wiring is src/ui/about-card.ts. -->
+          <button type="button" id="map-info-about" class="map-info-about" popovertarget="about-atni">About ATNI Climate</button>
         </div>
       </section>
 
@@ -454,7 +460,11 @@
 
   </div>
 
-  <div id="about-atni" popover class="about-card">
+  <!-- A dialog named by its own heading (hidden: the card's look is
+       unchanged); src/ui/about-card.ts moves focus in when it opens and
+       back to its door when it closes. -->
+  <div id="about-atni" popover class="about-card" role="dialog" aria-labelledby="about-atni-title" tabindex="-1">
+    <h2 id="about-atni-title" class="sr-only">About ATNI Climate</h2>
     <img class="about-seal" src="/brand/atni-seal-on-dark-64.png" srcset="/brand/atni-seal-on-dark-128.png 2x" alt="Seal of the Affiliated Tribes of Northwest Indians" width="64" height="64" />
     <p>The Dynamic Drought Module is a project of ATNI Climate, the climate resilience program of the Affiliated Tribes of Northwest Indians (ATNI).</p>
     <p class="about-links">

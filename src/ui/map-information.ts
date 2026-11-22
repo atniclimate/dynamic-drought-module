@@ -2,6 +2,7 @@ import { LAYER_DEFS } from '../config/layers';
 import { TRIBAL_NATIONS_PROVENANCE_NOTE } from '../config/provenance';
 import { getBasemapMode, onBasemapChange } from '../state/basemap-store';
 import { registry } from '../state/registry';
+import { initAboutCard } from './about-card';
 import { openAcknowledgements } from './impact-panel';
 import { isChecked } from './island/bridge';
 import { resolveStatusPillText } from './island/pill-text';
@@ -108,6 +109,8 @@ function seatMapInformationOnDesktop(
  */
 export function initMapInformation(): void {
   disposeMapInformation?.();
+  // The About card's doors: the map's mark, and this sheet's last entry on a phone.
+  initAboutCard();
 
   const app = document.getElementById('app');
   const mapContainer = document.getElementById('map-container');
