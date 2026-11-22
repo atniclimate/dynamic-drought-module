@@ -1,5 +1,5 @@
 {
-  "retrieved": "2026-11-09",
+  "retrieved": "2026-11-16",
   "sourceQuotes": [
     {
       "text": "NOAA's Climate Prediction Center, which is part of the National Weather Service, declares the onset of an El Nino episode when the 3-month average sea-surface temperature departure exceeds 0.5 C in the east-central equatorial Pacific [between 5 N-5 S and 170 W-120 W].",
@@ -538,269 +538,269 @@
   },
   "nino34": {
     "source": "NOAA CPC detrended monthly Nino 3.4 sea surface temperature anomaly",
-    "sourceUrl": "https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/ensostuff/detrend.nino34.ascii.txt",
+    "sourceUrl": "https://www.cpc.ncep.noaa.gov/data/indices/detrend.nino34.ascii.txt",
     "attribution": "NOAA Climate Prediction Center (CPC), public domain U.S. Government work",
     "description": "Analyzed monthly Nino 3.4 sea surface temperature anomaly, retained as a fast-moving companion and never used as an ENSO phase declaration on its own.",
-    "published": "2026-08-05",
+    "published": "2026-11-03",
     "latest": {
       "year": 2026,
-      "month": 6,
-      "total": 29.17,
-      "climAdjust": 27.67,
-      "anom": 1.5
+      "month": 10,
+      "total": 29.39,
+      "climAdjust": 26.71,
+      "anom": 2.68
     },
     "values": [
       {
         "year": 2023,
-        "month": 7,
-        "total": 28.31,
-        "climAdjust": 27.25,
-        "anom": 1.07
-      },
-      {
-        "year": 2023,
-        "month": 8,
-        "total": 28.2,
-        "climAdjust": 26.81,
-        "anom": 1.39
-      },
-      {
-        "year": 2023,
-        "month": 9,
-        "total": 28.32,
-        "climAdjust": 26.68,
-        "anom": 1.64
-      },
-      {
-        "year": 2023,
-        "month": 10,
-        "total": 28.44,
-        "climAdjust": 26.67,
-        "anom": 1.77
-      },
-      {
-        "year": 2023,
         "month": 11,
         "total": 28.72,
-        "climAdjust": 26.65,
-        "anom": 2.08
+        "climAdjust": 26.71,
+        "anom": 2.01
       },
       {
         "year": 2023,
         "month": 12,
-        "total": 28.63,
-        "climAdjust": 26.5,
-        "anom": 2.13
+        "total": 28.55,
+        "climAdjust": 26.53,
+        "anom": 2.02
       },
       {
         "year": 2024,
         "month": 1,
-        "total": 28.36,
-        "climAdjust": 26.38,
-        "anom": 1.98
+        "total": 28.39,
+        "climAdjust": 26.44,
+        "anom": 1.94
       },
       {
         "year": 2024,
         "month": 2,
-        "total": 28.28,
-        "climAdjust": 26.61,
-        "anom": 1.67
+        "total": 28.22,
+        "climAdjust": 26.66,
+        "anom": 1.56
       },
       {
         "year": 2024,
         "month": 3,
-        "total": 28.42,
-        "climAdjust": 27.19,
-        "anom": 1.22
+        "total": 28.31,
+        "climAdjust": 27.22,
+        "anom": 1.09
       },
       {
         "year": 2024,
         "month": 4,
-        "total": 28.6,
-        "climAdjust": 27.71,
+        "total": 28.69,
+        "climAdjust": 27.79,
         "anom": 0.89
       },
       {
         "year": 2024,
         "month": 5,
-        "total": 28.17,
-        "climAdjust": 27.83,
+        "total": 28.22,
+        "climAdjust": 27.88,
         "anom": 0.34
       },
       {
         "year": 2024,
         "month": 6,
-        "total": 27.9,
-        "climAdjust": 27.67,
-        "anom": 0.23
+        "total": 27.78,
+        "climAdjust": 27.71,
+        "anom": 0.08
       },
       {
         "year": 2024,
         "month": 7,
-        "total": 27.34,
-        "climAdjust": 27.25,
-        "anom": 0.09
+        "total": 27.42,
+        "climAdjust": 27.29,
+        "anom": 0.13
       },
       {
         "year": 2024,
         "month": 8,
-        "total": 26.74,
-        "climAdjust": 26.81,
-        "anom": -0.07
+        "total": 26.87,
+        "climAdjust": 26.87,
+        "anom": 0
       },
       {
         "year": 2024,
         "month": 9,
-        "total": 26.46,
-        "climAdjust": 26.68,
+        "total": 26.49,
+        "climAdjust": 26.71,
         "anom": -0.22
       },
       {
         "year": 2024,
         "month": 10,
-        "total": 26.45,
-        "climAdjust": 26.67,
-        "anom": -0.22
+        "total": 26.58,
+        "climAdjust": 26.71,
+        "anom": -0.13
       },
       {
         "year": 2024,
         "month": 11,
-        "total": 26.46,
-        "climAdjust": 26.65,
-        "anom": -0.19
+        "total": 26.5,
+        "climAdjust": 26.71,
+        "anom": -0.21
       },
       {
         "year": 2024,
         "month": 12,
         "total": 26,
-        "climAdjust": 26.5,
-        "anom": -0.49
+        "climAdjust": 26.53,
+        "anom": -0.53
       },
       {
         "year": 2025,
         "month": 1,
-        "total": 25.82,
-        "climAdjust": 26.38,
-        "anom": -0.56
+        "total": 25.92,
+        "climAdjust": 26.44,
+        "anom": -0.53
       },
       {
         "year": 2025,
         "month": 2,
-        "total": 26.33,
-        "climAdjust": 26.61,
-        "anom": -0.28
+        "total": 26.36,
+        "climAdjust": 26.66,
+        "anom": -0.3
       },
       {
         "year": 2025,
         "month": 3,
-        "total": 27.3,
-        "climAdjust": 27.19,
-        "anom": 0.11
+        "total": 27.4,
+        "climAdjust": 27.22,
+        "anom": 0.18
       },
       {
         "year": 2025,
         "month": 4,
-        "total": 27.69,
-        "climAdjust": 27.71,
-        "anom": -0.02
-      },
-      {
-        "year": 2025,
-        "month": 5,
-        "total": 27.8,
-        "climAdjust": 27.83,
-        "anom": -0.02
-      },
-      {
-        "year": 2025,
-        "month": 6,
-        "total": 27.66,
-        "climAdjust": 27.67,
-        "anom": -0.01
-      },
-      {
-        "year": 2025,
-        "month": 7,
-        "total": 27.15,
-        "climAdjust": 27.25,
+        "total": 27.7,
+        "climAdjust": 27.79,
         "anom": -0.1
       },
       {
         "year": 2025,
+        "month": 5,
+        "total": 27.87,
+        "climAdjust": 27.88,
+        "anom": -0.01
+      },
+      {
+        "year": 2025,
+        "month": 6,
+        "total": 27.72,
+        "climAdjust": 27.71,
+        "anom": 0.01
+      },
+      {
+        "year": 2025,
+        "month": 7,
+        "total": 27.25,
+        "climAdjust": 27.29,
+        "anom": -0.04
+      },
+      {
+        "year": 2025,
         "month": 8,
-        "total": 26.49,
-        "climAdjust": 26.81,
-        "anom": -0.32
+        "total": 26.57,
+        "climAdjust": 26.87,
+        "anom": -0.3
       },
       {
         "year": 2025,
         "month": 9,
-        "total": 26.25,
-        "climAdjust": 26.68,
-        "anom": -0.43
+        "total": 26.28,
+        "climAdjust": 26.71,
+        "anom": -0.44
       },
       {
         "year": 2025,
         "month": 10,
-        "total": 26.22,
-        "climAdjust": 26.67,
-        "anom": -0.45
+        "total": 26.16,
+        "climAdjust": 26.71,
+        "anom": -0.55
       },
       {
         "year": 2025,
         "month": 11,
-        "total": 26.01,
-        "climAdjust": 26.65,
-        "anom": -0.64
+        "total": 25.99,
+        "climAdjust": 26.71,
+        "anom": -0.72
       },
       {
         "year": 2025,
         "month": 12,
-        "total": 25.93,
-        "climAdjust": 26.5,
-        "anom": -0.57
+        "total": 25.99,
+        "climAdjust": 26.53,
+        "anom": -0.54
       },
       {
         "year": 2026,
         "month": 1,
-        "total": 25.97,
-        "climAdjust": 26.38,
-        "anom": -0.41
+        "total": 25.93,
+        "climAdjust": 26.44,
+        "anom": -0.52
       },
       {
         "year": 2026,
         "month": 2,
-        "total": 26.49,
-        "climAdjust": 26.61,
-        "anom": -0.12
+        "total": 26.55,
+        "climAdjust": 26.66,
+        "anom": -0.11
       },
       {
         "year": 2026,
         "month": 3,
-        "total": 27.29,
-        "climAdjust": 27.19,
-        "anom": 0.09
+        "total": 27.25,
+        "climAdjust": 27.22,
+        "anom": 0.03
       },
       {
         "year": 2026,
         "month": 4,
-        "total": 28.13,
-        "climAdjust": 27.71,
-        "anom": 0.42
+        "total": 28.23,
+        "climAdjust": 27.79,
+        "anom": 0.43
       },
       {
         "year": 2026,
         "month": 5,
-        "total": 28.84,
-        "climAdjust": 27.83,
-        "anom": 1.01
+        "total": 28.82,
+        "climAdjust": 27.88,
+        "anom": 0.94
       },
       {
         "year": 2026,
         "month": 6,
-        "total": 29.17,
-        "climAdjust": 27.67,
-        "anom": 1.5
+        "total": 29.18,
+        "climAdjust": 27.71,
+        "anom": 1.47
+      },
+      {
+        "year": 2026,
+        "month": 7,
+        "total": 29.07,
+        "climAdjust": 27.29,
+        "anom": 1.78
+      },
+      {
+        "year": 2026,
+        "month": 8,
+        "total": 29.05,
+        "climAdjust": 26.87,
+        "anom": 2.17
+      },
+      {
+        "year": 2026,
+        "month": 9,
+        "total": 29.26,
+        "climAdjust": 26.71,
+        "anom": 2.55
+      },
+      {
+        "year": 2026,
+        "month": 10,
+        "total": 29.39,
+        "climAdjust": 26.71,
+        "anom": 2.68
       }
     ]
   },
@@ -811,22 +811,15 @@
     "description": "Weekly Nino 3.4 sea surface temperature and anomaly on the 1991-2020 base period. Each date is the centre of its week, as the file states on its own first line. Retained as an observed trajectory read and never used as an ENSO phase declaration, which CPC makes from three-month averages.",
     "basePeriod": "1991-2020",
     "dateMeaning": "week centre",
-    "published": "2026-11-09",
+    "published": "2026-11-16",
     "latest": {
       "year": 2026,
       "month": 11,
-      "day": 4,
-      "total": 30.1,
-      "anom": 3.3
+      "day": 11,
+      "total": 29.9,
+      "anom": 3.2
     },
     "values": [
-      {
-        "year": 2025,
-        "month": 11,
-        "day": 12,
-        "total": 26,
-        "anom": -0.8
-      },
       {
         "year": 2025,
         "month": 11,
@@ -1168,7 +1161,7 @@
         "month": 10,
         "day": 21,
         "total": 30.1,
-        "anom": 3.4
+        "anom": 3.3
       },
       {
         "year": 2026,
@@ -1183,6 +1176,13 @@
         "day": 4,
         "total": 30.1,
         "anom": 3.3
+      },
+      {
+        "year": 2026,
+        "month": 11,
+        "day": 11,
+        "total": 29.9,
+        "anom": 3.2
       }
     ]
   },
