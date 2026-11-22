@@ -2941,8 +2941,11 @@ button.conditions-metric:hover .conditions-action-hide {
     overflow: visible;
     clip: auto;
   }
+  /* The hidden icon keeps its box, so it shares the spinner's cell: placed
+     there, it leaves the word its own column and the cell one row. */
   .app-shell:not(.embed) .map-studio-seat .map-cell.studio-entry-pending > svg {
     visibility: hidden;
+    grid-area: 1 / 1;
   }
 
   /* MapLibre's control group, borrowed into slot 2, loses its white card
@@ -3306,6 +3309,17 @@ button.conditions-metric:hover .conditions-action-hide {
   align-self: start;
   justify-content: flex-end;
   justify-self: stretch;
+}
+
+/* This surface is what shows when src/styles/studios.css could not load, so
+   it seats Back to map at the strip's right end without it; when that file
+   is present, its id-scoped header rule sets the cell seat's padding. The
+   phone keeps Back at the start, as the studios do. */
+@media (min-width: 721px) {
+  .studio-load-failure-header {
+    display: flex;
+    padding: 10px 18px;
+  }
 }
 
 .studio-load-failure-panel {
@@ -7884,6 +7898,12 @@ a.impact-resource-link::after {
 }
 #shell-refine-host .ddm-search-results:not(:empty) {
   padding-bottom: 8px;
+}
+/* A list that runs over the controls under the band folds away once focus
+   leaves the search, so it never hides a control focus or a pointer goes to
+   next (WCAG 2.4.11); the typed words stay and the list returns on focus. */
+#shell-refine-host .ddm-search:not(:focus-within) .ddm-search-results {
+  visibility: hidden;
 }
 
 /* Optional controls and live explanations expand below the shared doors. */

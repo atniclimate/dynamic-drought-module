@@ -560,7 +560,11 @@ export function refreshLayersStudioEntry(): void {
     });
 
     pair.append(placeLink, layersLink);
-    host.appendChild(pair);
+    // A framed full app draws the pair in the studio rows, under Reset, so it
+    // sits where the studio seat is in the DOM and Tab reaches it second, as
+    // it reads. The embed's stack keeps it last.
+    const seat = document.getElementById(MAP_STUDIO_SEAT_ID);
+    host.insertBefore(pair, !isEmbed && seat?.parentElement === host ? seat : null);
     syncPlaceStudioRoute(getStudioRoute());
     return;
   }

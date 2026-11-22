@@ -60,6 +60,7 @@ export const LFMC_RASTER_ENCODING = 'uint16-nearest-v1';
 export const LFMC_LIMITS = {
   timeoutMs: 15_000,
   manifestBytes: 1_048_576,
+  // The newest this many maps are kept from the list (every row is checked first).
   maxComposites: 400,
   cog: { timeoutMs: 15_000, maxHeaderBytes: 262_144, maxTileBytes: 524_288 }
 } as const;
@@ -152,8 +153,9 @@ export const LFMC_BRIEFING = {
  * Public wording. The wording follows the references-ledger entry
  * `eosial-lfmc-western-us` (clause verdicts read 2026-11-22) and is still a
  * DRAFT until the owner reads it (new public scientific wording is the owner's
- * call): the key's lines, the layer's name and the briefing's sentences and
- * notes.
+ * call): the key's lines, the layer's name, the time bar's stamp detail, and
+ * the briefing's sentences and notes (with the "part of a place" wording in
+ * src/impact/live-fuel-moisture.ts).
  */
 export const LFMC_TEXT = {
   name: 'Live fuel moisture',
@@ -167,6 +169,8 @@ export const LFMC_TEXT = {
   source: 'EOSIAL Laboratory, Sapienza University of Rome (Pampanoni et al. 2026)',
   nativeSupport: 'about 500 m cells, eight-day satellite composite',
   modelNote: 'A model estimate for land the model treats as grass, shrub or tree; not a field measurement.',
+  // The time bar's detail: nativeSupport's eight-day satellite composite and modelNote's model estimate, in one line.
+  stampDetail: 'an eight-day satellite-based model estimate, not a field measurement',
   // From the abstract of doi:10.3390/rs18213744, read 2026-11-21.
   accuracyNote: 'The authors test the models on dates held out from training at sites that also supplied training data, and report that "Testing at sites excluded from training gives lower accuracy."',
   thresholdNote: 'The white shading and its classes are DDM\'s: display steps between the tick marks of the publisher\'s colour scale, not fire-danger thresholds.',

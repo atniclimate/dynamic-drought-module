@@ -494,6 +494,10 @@ test.describe('the Tribal Nations controls at 400px (mobile and embed)', () => {
     await expect(page.locator('#sheet-at-hand')).toBeVisible();
     await expect(page.locator('#sheet-at-hand .tribal-nations-brief-row')).toHaveCount(0);
 
+    // The window covers the doors; the way to another door is back through the map.
+    await page.locator('#sheet-close').click();
+    await expect(page.locator('#app')).toHaveAttribute('data-sheet-detent', 'closed');
+
     // The Layers door opens the Console's layer list, umbrella included.
     await page.locator('#mobile-footer-nav button[data-tab="layers"]').click();
     await expect(page.locator('#app')).toHaveAttribute('data-sheet-detent', 'full');

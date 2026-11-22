@@ -875,7 +875,8 @@ test.describe('desktop Brief region band', () => {
     // other control keeps its place. The search block is the box and a band
     // of one height; a list longer than the band runs over what is under it
     // and pushes nothing. Wildfire has controls under the band to measure.
-    await gotoApp(page, '?cluster=wildfire');
+    // The band is the desktop Brief's (a bare cluster= address boots the Console).
+    await gotoApp(page, '?cluster=wildfire&view=brief');
     const searchBlock = page.locator('#brief-search');
     const under = page.locator('#shell-details-panel');
     await expect(under).toBeVisible();

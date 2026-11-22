@@ -14,6 +14,7 @@
 
 import {
   LFMC_BRIEFING,
+  LFMC_COVERAGE,
   LFMC_TEXT,
   LIVE_FUEL_MOISTURE_LINKS,
   lfmcCovers
@@ -58,7 +59,8 @@ const lastDay = (map: LfmcComposite): string => new Date(Date.parse(map.endExclu
 
 /**
  * The briefing's claims from the maps read for a place. Pure: no network, no
- * clock but `retrieved`. Returns no claim when no map reaches the place.
+ * clock but `retrieved`. Returns no claim when no map reaches the place, or
+ * when the place holds too few valued cells for a statement.
  */
 export function buildLfmcClaims(
   rows: readonly LfmcMapReading[],
@@ -79,6 +81,12 @@ export function buildLfmcClaims(
   } as const;
 
   if (usable.length === 0) {
+    // The absence is stated only when the maps read cells here and none of them holds a value.
+    // A place with a few valued cells, fewer than a statement is made from, or one too small to
+    // hold a cell centre, gets no sentence: its gap is DDM's floor or sampling, not the model's.
+    const read = Math.max(0, ...reached.map((row) => row.reading!.cells));
+    const valued = Math.max(0, ...reached.map((row) => row.reading!.cellsWithValue));
+    if (read === 0 || valued > 0) return [];
     const first = reached[0]!.map;
     const last = reached[reached.length - 1]!.map;
     return [
@@ -138,6 +146,30 @@ export function buildLfmcClaims(
 }
 
 /**
+ * How the briefing names the ground it read. A place reaching past the maps'
+ * area (Oklahoma, the Dakotas, a reservation across 101.4°W) is read only
+ * where the maps reach, and its sentence says so: a strip is never given as
+ * the whole place. An outline's box is touched by the outline, so a box past
+ * an edge means the place is past it too.
+ */
+export function lfmcPlaceWording(
+  title: string,
+  box: readonly [number, number, number, number] | null
+): { readonly where: string; readonly reporting: string } {
+  if (box === null) {
+    return {
+      where: `within about ${LFMC_BRIEFING.pointHalfWidthKm} km of the selected point`,
+      reporting: `a square about ${LFMC_BRIEFING.pointHalfWidthKm * 2} km across, centred on the selected point`
+    };
+  }
+  const [west, south, east, north] = LFMC_COVERAGE;
+  const partial = box[0] < west || box[1] < south || box[2] > east || box[3] > north;
+  return partial
+    ? { where: `across the part of ${title} the maps cover`, reporting: `the part of ${title} inside the maps' area` }
+    : { where: `across ${title}`, reporting: title };
+}
+
+/**
  * Read the newest maps for the selection and state what they say. A place the
  * maps cannot cover states nothing and asks the network nothing. A list or a
  * map that cannot be read is a note, never a missing-value sentence.
@@ -147,8 +179,7 @@ export async function fetchLiveFuelMoistureClaims(context: BoundarySelectionCont
   const area = context.bbox !== undefined && context.bbox[0] < context.bbox[2] && context.bbox[1] < context.bbox[3];
   const box = lfmcBoxFor(context.lngLat, context.bbox);
   if (!lfmcCovers(box)) return { claims: [], ok: true };
-  const where = area ? `across ${context.title}` : `within about ${LFMC_BRIEFING.pointHalfWidthKm} km of the selected point`;
-  const reporting = area ? context.title : `a square about ${LFMC_BRIEFING.pointHalfWidthKm * 2} km across, centred on the selected point`;
+  const { where, reporting } = lfmcPlaceWording(context.title, area ? box : null);
 
   try {
     const composites = await readLfmcComposites(signal);

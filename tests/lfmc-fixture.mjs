@@ -60,6 +60,8 @@ export function buildLfmcCog({ west, north, pixel, tile = 16, levels, overrides 
         [42113, 2, `${LFMC_NO_DATA}\0`]
       );
     }
+    // A predictor field is written only when asked for (the publisher's rasters carry none).
+    if (overrides[317]) base.push([317, 3, overrides[317]]);
     for (const [tag, values] of Object.entries(overrides)) {
       const entry = base.find((row) => row[0] === Number(tag));
       if (entry) entry[2] = values;

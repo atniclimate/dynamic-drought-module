@@ -96,9 +96,9 @@ async function mount(
   layerId: string,
   style: LfmcTileStyle,
   opacity: number,
-  beforeId: string | undefined,
+  beforeId: () => string | undefined,
   signal: AbortSignal,
-  report: (outcome: RasterTileOutcome) => void
+  report: (outcome: RasterTileOutcome | null) => void
 ): Promise<Mounted> {
   const composite = chooseLayerComposite(await readLfmcComposites(signal));
   const bounds = cogBounds(await lfmcGrid(composite.url, signal));
@@ -127,7 +127,15 @@ async function mount(
     });
     // Whole-percent classes: take the tile of the zoom below and magnify it, never blend two.
     map.getSource<RasterTileSource>(sourceId)!.roundZoom = false;
-    watch = watchRasterTiles(map, sourceId, report, TILE_PROOF_WATCH);
+    // A view showing none of the maps' area settles with no tiles, which the watch reads as an
+    // error: that is no verdict at all, so a later pan into the area reads loading, not unavailable.
+    watch = watchRasterTiles(
+      map,
+      sourceId,
+      (outcome) => report(outcome === 'error' && viewCoverage(map, bounds) === 'none' ? null : outcome),
+      TILE_PROOF_WATCH
+    );
+    // The anchor is looked up now, after the reads: the layer it named may have left meanwhile.
     map.addLayer(
       {
         id: layerId,
@@ -135,8 +143,10 @@ async function mount(
         source: sourceId,
         paint: { 'raster-opacity': opacity, 'raster-fade-duration': 0, 'raster-resampling': 'nearest' }
       },
-      beforeId
+      beforeId()
     );
+    // MapLibre reports a refused layer as an error event, not a throw.
+    if (!map.getLayer(layerId)) throw new Error('The live fuel moisture layer was not added');
   } catch (error) {
     release();
     throw error;
@@ -185,7 +195,7 @@ export async function activate(map: MapLibreMap, activation?: LayerActivation): 
     registry.setStatus(KEY, viewCoverage(map, mounted.bounds) === 'none' ? 'no-data' : (verdict ?? 'loading'));
   };
   try {
-    mounted = await mount(map, KEY, KEY, 'issuer', FLAT_OPACITY, undefined, signal, (outcome) => {
+    mounted = await mount(map, KEY, KEY, 'issuer', FLAT_OPACITY, () => undefined, signal, (outcome) => {
       verdict = outcome;
       sync();
     });
@@ -209,7 +219,7 @@ export async function activate(map: MapLibreMap, activation?: LayerActivation): 
       horizon: 'current',
       asOf: lfmcDateSpan(start, endExclusive),
       headline: lfmcDateSpan(start, endExclusive),
-      detail: `${LFMC_TEXT.name} · ${LFMC_TEXT.issuer} · an eight-day satellite-based model estimate, not a field measurement`,
+      detail: `${LFMC_TEXT.name} · ${LFMC_TEXT.issuer} · ${LFMC_TEXT.stampDetail}`,
       // Model-borne, so never the observed register (src/impact/evidence.ts, CLAIM_REGISTER_TAG).
       register: 'outlook'
     }
@@ -314,7 +324,8 @@ export function activateLiveFuelMoistureGround(
   publish(describeLfmcGround('loading', null, 'all'));
   const sourceId = `${LFMC_GROUND_LAYER_ID}-source`;
   // Under the hillshade and every drape, above the basemaps (BOTTOM_STACK_IDS order).
-  const beforeId = firstLayerIdAbove(map, BOTTOM_STACK_IDS.slice(0, BOTTOM_STACK_IDS.indexOf(LFMC_GROUND_LAYER_ID)));
+  const beforeId = (): string | undefined =>
+    firstLayerIdAbove(map, BOTTOM_STACK_IDS.slice(0, BOTTOM_STACK_IDS.indexOf(LFMC_GROUND_LAYER_ID)));
   mount(map, sourceId, LFMC_GROUND_LAYER_ID, 'ground', 1, beforeId, own.signal, (outcome) => {
     verdict = outcome;
     sync();

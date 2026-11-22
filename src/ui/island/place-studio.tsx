@@ -1729,7 +1729,8 @@ function PlaceStudio() {
     // A wide studio lays the rows out in columns, read along each line: the
     // side arrows walk that reading order, and the up and down arrows go to
     // the row above or below in the same column. In one column both meet.
-    let target = at + step;
+    // With nothing above or below in the column, up and down stay put.
+    let target = vertical ? at : at + step;
     if (vertical) {
       const here = options[at].getBoundingClientRect();
       for (let i = at + step; i >= 0 && i < options.length; i += step) {

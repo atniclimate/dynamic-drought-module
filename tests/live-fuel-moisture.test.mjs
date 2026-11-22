@@ -83,10 +83,10 @@ test('a file of any other kind is refused, never half-read', () => {
     ['tile tables that do not match', raster({ overrides: { 325: [1, 2, 3] } })]
   ];
   for (const [name, bytes] of refused) {
-    // The predictor row has no field 317 to override, so it parses; every other row must throw.
-    if (name === 'a predictor') continue;
     assert.throws(() => cog.parseCogHeader(arrayBuffer(bytes)), cog.CogFormatError, name);
   }
+  // No predictor (1) is the plain case and parses.
+  assert.ok('levels' in cog.parseCogHeader(arrayBuffer(raster({ overrides: { 317: [1] } }))));
 });
 
 test('a place costs one header read and one tile read, by exact byte range', async () => {
@@ -141,6 +141,18 @@ test('the publisher\'s list: unusable rows are skipped, addresses stay in its fo
   assert.deepEqual(maps.map((m) => m.validCells), [100, 90]);
   assert.throws(() => read.parseLfmcManifest({ schema: 'something-else', composites: rows }, `${BASE}manifest.json`));
   assert.throws(() => read.parseLfmcManifest(lfmcList([rows[2]]), `${BASE}manifest.json`));
+});
+
+test('a list longer than the cap keeps its newest maps, whatever order it is written in', () => {
+  const day = (n) => new Date(Date.UTC(2020, 0, 1) + n * 86_400_000).toISOString().slice(0, 10);
+  const long = Array.from({ length: 450 }, (_, i) => lfmcListRow(day(i * 8), day(i * 8 + 8), 100));
+  const cap = config.LFMC_LIMITS.maxComposites;
+  for (const list of [long, [...long].reverse()]) {
+    const maps = read.parseLfmcManifest(lfmcList(list), `${BASE}manifest.json`);
+    assert.equal(maps.length, cap);
+    assert.equal(maps[maps.length - 1].start, day(449 * 8));
+    assert.equal(maps[0].start, day((450 - cap) * 8));
+  }
 });
 
 test('the layer draws the newest map that is at least half as full as the fullest', () => {
@@ -270,7 +282,7 @@ test('one comparable map states no earlier value and draws no chart; none states
   assert.equal(single.chartSvg, undefined);
 
   const [absent] = impact.buildLfmcClaims(
-    [row('2026-10-24', '2026-11-01', 0, Number.NaN), row('2026-11-01', '2026-11-09', 2, 70)],
+    [row('2026-10-24', '2026-11-01', 0, Number.NaN), row('2026-11-01', '2026-11-09', 0, Number.NaN)],
     'across Example Reservation', 'Example Reservation', '2026-11-21');
   assert.match(absent.text, /^No live fuel moisture estimate across Example Reservation in the 2 newest maps \(Oct 24 to Nov 8, 2026\)\./);
   assert.match(absent.text,
@@ -278,6 +290,26 @@ test('one comparable map states no earlier value and draws no chart; none states
   assert.deepEqual(absent.dates, { retrieved: '2026-11-21' });
 
   assert.deepEqual(impact.buildLfmcClaims([row('2026-11-01', '2026-11-09', null, 0)], 'x', 'x', '2026-11-21'), []);
+  // Valued cells below the statement floor are not an absence: a small place, every cell valued,
+  // and a large one with two valued cells both state nothing rather than "no estimate".
+  assert.deepEqual(impact.buildLfmcClaims([row('2026-10-16', '2026-10-24', 4, 80, 4)], 'x', 'x', '2026-11-21'), []);
+  assert.deepEqual(impact.buildLfmcClaims(
+    [row('2026-10-24', '2026-11-01', 0, Number.NaN), row('2026-11-01', '2026-11-09', 2, 70)], 'x', 'x', '2026-11-21'), []);
+  // A place too small to hold a cell centre was not read, so nothing is said about it.
+  assert.deepEqual(impact.buildLfmcClaims([row('2026-10-16', '2026-10-24', 0, Number.NaN, 0)], 'x', 'x', '2026-11-21'), []);
+});
+
+test('a place reaching past the maps\' area is named as the part the maps cover', () => {
+  const [west, south, , north] = config.LFMC_COVERAGE;
+  assert.deepEqual(impact.lfmcPlaceWording('Washington', [-124.8, 45.5, -116.9, 49.0]),
+    { where: 'across Washington', reporting: 'Washington' });
+  // Oklahoma runs from about 103.0 W to 94.4 W: only its panhandle's west end is on the maps.
+  assert.deepEqual(impact.lfmcPlaceWording('Oklahoma', [-103.0, 33.6, -94.4, 37.0]),
+    { where: 'across the part of Oklahoma the maps cover', reporting: 'the part of Oklahoma inside the maps\' area' });
+  for (const box of [[west - 1, 40, -120, 42], [-120, south - 1, -119, 40], [-120, 50, -119, north + 1]]) {
+    assert.match(impact.lfmcPlaceWording('X', box).where, /^across the part of X the maps cover$/);
+  }
+  assert.match(impact.lfmcPlaceWording('X', null).where, /^within about 5 km of the selected point$/);
 });
 
 test('the briefing lane reads the list and the newest maps, and says nothing where the maps cannot reach', async () => {

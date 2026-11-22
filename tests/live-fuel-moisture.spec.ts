@@ -68,7 +68,9 @@ test('with the default stand-in the maps reach no selected place, so a briefing 
   const panel = page.locator('#impact-panel');
   await expect(panel.locator('#impact-panel-title')).toHaveText('Washington', { timeout: 15_000 });
   await showFullDetail(page);
-  // The lane ran (the list was read) and stated nothing.
-  await expect.poll(() => lfmcStub(page).log.some((entry) => entry.path === 'manifest.json'), { timeout: 20_000 }).toBe(true);
-  await expect(panel.getByText(/live fuel moisture/i)).toHaveCount(0);
+  // The lane ran (the list, then each map's header, were read) and stated nothing. The
+  // Acknowledgements credit names live fuel moisture in every briefing, so only claims count.
+  await expect.poll(() => lfmcStub(page).log.filter((entry) => entry.path.endsWith('.tif')).length, { timeout: 20_000 })
+    .toBeGreaterThanOrEqual(2);
+  await expect(panel.locator('.impact-claim', { hasText: /live fuel moisture/i })).toHaveCount(0);
 });

@@ -1982,11 +1982,12 @@ function wireSidebar(map: maplibregl.Map, onRegionSelect: (key: RegionKey) => vo
     source: StudioRouteChangeSource
   ): void => {
     if (route === 'layers' && source === 'push') {
-      const active = document.activeElement;
-      studioOpener =
-        active instanceof HTMLElement && active.id === 'layers-studio-entry'
-          ? active
-          : null;
+      // The Layer cell's click is the only push of this route. Safari and
+      // Firefox on macOS do not focus a button on a mouse click, so the cell
+      // is the opener whether or not it holds focus (the Place cell's click
+      // records its opener the same way).
+      const entry = document.getElementById('layers-studio-entry');
+      studioOpener = entry instanceof HTMLButtonElement ? entry : null;
     }
 
     if (source === 'popstate') {

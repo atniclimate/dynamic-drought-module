@@ -53,7 +53,9 @@ export function parseLfmcManifest(json: unknown, manifestUrl: string): LfmcCompo
   }
   const base = new URL('.', manifestUrl);
   const out: LfmcComposite[] = [];
-  for (const row of json['composites'].slice(0, LFMC_LIMITS.maxComposites)) {
+  // Every row is checked (the list's byte cap bounds the loop) and the newest are kept: the
+  // publisher writes the list oldest first, so cutting it before sorting would drop the newest maps.
+  for (const row of json['composites']) {
     if (!isRecord(row) || row['encoding'] !== LFMC_RASTER_ENCODING) continue;
     const { start, end_exclusive: end, raster, model_version: version, stats } = row;
     if (typeof start !== 'string' || typeof end !== 'string' || !ISO_DAY.test(start) || !ISO_DAY.test(end) ||
@@ -70,7 +72,7 @@ export function parseLfmcManifest(json: unknown, manifestUrl: string): LfmcCompo
     });
   }
   if (out.length === 0) throw new Error('The live fuel moisture list holds no usable map');
-  return out.sort((a, b) => a.start.localeCompare(b.start));
+  return out.sort((a, b) => a.start.localeCompare(b.start)).slice(-LFMC_LIMITS.maxComposites);
 }
 
 /**
