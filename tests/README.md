@@ -38,13 +38,14 @@ Avoid copying spec counts and runtime estimates into several documents.
 | Before every push | `npm run check:push` | Typecheck, `check:all`, the stale-mention scan, the cases the unpushed commits edited and the last red's cases here within about ten minutes; names what is left for the pull request's run |
 | A needed local check of touched browser behavior | `npm run test:touched` | The specs `npm run spec:impact` lists as touched; refuses none or a held port 4173 or 4180, and a list above the estimated minutes it allows |
 | Cross-cutting build/configuration changes | `npm run gate` | Fresh build, artifact budgets and all source checks |
-| The full suite | The block's draft pull request validates every push; `gh workflow run validate.yml --ref <branch>` only for a branch with none | GitHub's fourteen shards; `npm run test:serial` is not a local step |
+| The full suite | Marking the block's pull request ready (a draft's pushes run the fast tier); `gh workflow run validate.yml --ref <branch>` only for a branch with none | GitHub's fourteen jobs; `npm run test:serial` is not a local step |
 
 The full browser suite normally runs on GitHub, in the Validate workflow, which
-slices it into fourteen shards. A block's draft pull request, opened at its first
-commit, runs it on every push; use that run, and dispatch
+gives it fourteen jobs. A block's draft pull request, opened at its first
+commit, runs the fast tier on every push and the full suite once marked ready
+("How CI runs the suite"); use those runs, and dispatch
 `gh workflow run validate.yml --ref <branch>` only for a branch with none. The normal
-application landing route requires that integration evidence. Proxy-only pull requests run the proxy typecheck,
+application landing route requires the full run's integration evidence. Proxy-only pull requests run the proxy typecheck,
 audit and client-contract/receipt tests without the application, terrain,
 landscape or browser suites. Docs outside the artifact report Validate without
 application jobs. Named browser dispatches run only those specs. An empty
@@ -372,9 +373,14 @@ projects use the same browser settings). `npm test` and `npm run test:serial`
 select all three projects, but the full suite runs only on GitHub.
 
 In CI (`.github/workflows/browser-suite.yml`, called by Validate and run weekly
-on main) each project is sliced with `--shard=i/n` onto its own runners,
-one worker each: eight shards for `chromium` (four until 2026-10-12), two for `chromium-interaction`,
-four for `chromium-3d` (two until 2026-10-12). Each runner builds and serves its own `dist/`, so no
+on main) a `plan` job (`.github/scripts/plan-browser-shards.mjs`) gives each
+runner whole spec files balanced by their measured seconds in
+`tests/spec-timings.json`, splitting a file too heavy for one runner with
+`--shard=i/k` over that file alone, and a `coverage` job proves from
+Playwright's own listing that every case sits in exactly one job (since
+2026-11-22; before, each project was cut with `--shard=i/n` into equal-count
+slices, and one 3D slice ran 22 minutes while another ran under one). One
+worker per runner. Each runner builds and serves its own `dist/`, so no
 shard reads another's state. Each page is its own software-GL MapLibre
 context, so more runners is the lever; more workers per runner is not (see
 the `workers` note in the config, and the `workers`/`retries` experiment
@@ -383,10 +389,20 @@ Public-repo standard runners are 4 vCPU / 16 GB, not the 2-core machine an
 older comment here assumed; that assumption was measured on a developer
 laptop and has never been re-tested on CI.
 
-Shard layout and counts. The layout is the matrix in
-`.github/workflows/browser-suite.yml`: `chromium` over 8 shards,
-`chromium-interaction` over 2, `chromium-3d` over 4, 14 shard jobs in all. The
-counts below were measured on 2026-11-22 with `npx playwright test --list
+Two tiers (owner, 2026-11-22). FULL, on a push to a pull request that is not
+a draft, on marking one ready, on a hand dispatch (default `tier: full`) and on
+the weekly schedule: 8 `chromium` jobs, 2 `chromium-interaction`, 4
+`chromium-3d`, every case. FAST, on a push to a draft pull request or a
+`tier: fast` dispatch: 12, 2 and 1 jobs with `--grep-invert @landing`, which
+leaves out the 90 heavy cases tagged `@landing` (the wider widths of loops
+that also run at 1280, the middle tablet sizes, the heaviest 3D cases, and the
+`tier: landing` rows of `tests/view-contracts.yaml`). A fast run's name says it
+is not a landing run, and it never counts for one. A targeted (`specs`)
+dispatch is always full. Each job writes its failed cases to its summary and a
+small `reds-*` artifact; a `report` job gathers them into one summary at the top
+of the run, and `npm run spec:impact -- --red` reads them. A full run uploads
+`browser-case-seconds`: `npm run refresh:spec-timings -- <that file>` rebuilds
+the timings, and a session commits them. The counts below were measured on 2026-11-22 with `npx playwright test --list
 --project=<p>` (listing only): `chromium` 1,095 tests in 126 spec files,
 `chromium-interaction` 109 in 4, `chromium-3d` 52 in 3, and the pure lane
 (`npx playwright test --list -c playwright.pure.config.ts`) 646 in 69. The

@@ -1349,7 +1349,7 @@ for (const bandWidth of TABLET_BAND_WIDTHS) {
       orientation === 'portrait' ? (bandWidth * 4) / 3 : (bandWidth * 3) / 4
     );
 
-    test.describe(`tablet band ${bandWidth}x${bandHeight} ${orientation}`, () => {
+    test.describe(`tablet band ${bandWidth}x${bandHeight} ${orientation}`, { tag: TABLET_BAND_WIDTHS.slice(1, -1).includes(bandWidth) ? ['@landing'] : [] }, () => {
       test.use({ viewport: { width: bandWidth, height: bandHeight }, hasTouch: true });
 
       test('the briefing covers the shell and every target keeps the touch floor', async ({
@@ -1829,7 +1829,7 @@ async function censusEveryCluster(
 for (const width of Object.keys(POINTER_CENSUS_WIDTHS).map(Number)) {
   const height = POINTER_CENSUS_WIDTHS[width]!;
   for (const view of ['brief', 'console'] as const) {
-    test.describe(`desktop pointer-target floor ${width}x${height} view=${view} (DDM-P17-T07, found-020)`, () => {
+    test.describe(`desktop pointer-target floor ${width}x${height} view=${view} (DDM-P17-T07, found-020)`, { tag: width > 1280 ? ['@landing'] : [] }, () => {
       test.use({ viewport: { width, height } });
 
       // 2560x1440 is the named-slowest boot in the gate log
@@ -1953,7 +1953,7 @@ test.describe('map-information source rows (found-021)', () => {
     { width: 1440, height: 900 },
     { width: 2560, height: 1440 }
   ]) {
-    test(`map-information source rows show name, detail and state as separate non-touching cells on desktop at ${viewport.width}x${viewport.height}`, async ({
+    test(`map-information source rows show name, detail and state as separate non-touching cells on desktop at ${viewport.width}x${viewport.height}`, { tag: viewport.width > 1280 ? ['@landing'] : [] }, async ({
       page
     }) => {
       await page.setViewportSize(viewport);

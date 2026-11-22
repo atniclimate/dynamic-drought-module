@@ -28,6 +28,7 @@ import {
   entryFiles,
   estimateWait,
   failedCases,
+  failedFromRedLists,
   findMentions,
   fire3dSpecs,
   helperChange,
@@ -564,6 +565,22 @@ test('a run log yields its cases, the timings table and the cases that failed ev
     'chromium tests/basemap.spec.ts DEG-2 › a removed switcher releases',
     'pure tests/acknowledgements.spec.ts every row'
   ]);
+});
+
+test('a run\'s red lists give its failed cases when every planned job left one, never a retry-only pass', () => {
+  const list = (label, cases, extra = {}) => ({ label, tier: 'full', planned: 2, cases, ...extra });
+  const opens = { project: 'chromium', file: 'tests/dock.spec.ts', line: 30, title: 'the dock › opens', error: 'Error: x', attempts: 2, passedOnRetry: false };
+  const closes = { project: 'chromium', file: 'tests/dock.spec.ts', line: 35, title: 'the dock › closes', error: 'Error: y', attempts: 2, passedOnRetry: true };
+  const both = failedFromRedLists([list('chromium 1/2', [opens, closes]), list('chromium 2/2', [])]);
+  assert.equal(both.complete, true);
+  assert.deepEqual(both.failed, [{ project: 'chromium', file: 'tests/dock.spec.ts', line: 30, title: 'the dock › opens' }]);
+  // The same shape the log gives, so the same matcher places them at HEAD.
+  assert.deepEqual(matchRedCases(both.failed, [{ path: 'tests/dock.spec.ts', text: DOCK_SPEC }]).entries, ['tests/dock.spec.ts:11']);
+  // A job that left no list, an unreadable one, or no lists at all: the log decides.
+  assert.equal(failedFromRedLists([list('chromium 1/2', [opens])]).complete, false);
+  assert.equal(failedFromRedLists([list('chromium 1/2', [opens]), list('chromium 2/2', [], { unreadable: true })]).complete, false);
+  assert.equal(failedFromRedLists([list('chromium 1/2', [opens], { planned: null }), list('chromium 2/2', [], { planned: null })]).complete, false);
+  assert.equal(failedFromRedLists([]).complete, false);
 });
 
 test('red cases match by file and title where they are now: moved lines, loop titles, a test moved to another file', () => {

@@ -542,7 +542,7 @@ test.describe('S4 temporal register coherence (DG-080 review blocker 1)', () => 
     { width: 1920, height: 1080 },
     { width: 2560, height: 1440 }
   ]) {
-    test(`a horizon switch to a longer outlook headline moves neither #shell-minimap-heading nor Share in the map column by more than 1 px at ${viewport.width}x${viewport.height} (found-010, found-017)`, async ({
+    test(`a horizon switch to a longer outlook headline moves neither #shell-minimap-heading nor Share in the map column by more than 1 px at ${viewport.width}x${viewport.height} (found-010, found-017)`, { tag: viewport.width > 1280 ? ['@landing'] : [] }, async ({
       page
     }) => {
       await page.setViewportSize(viewport);

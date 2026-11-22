@@ -8,7 +8,8 @@ const validate = workflow('validate');
 const full = "${{ needs.scope.outputs.mode == 'full' }}";
 
 test('Validate keeps privacy and scope checks unconditional and requires all selected results', () => {
-  assert.deepEqual(validate.on.pull_request, null);
+  // The default three pull request types, and ready_for_review for the full run.
+  assert.deepEqual(validate.on.pull_request, { types: ['opened', 'synchronize', 'reopened', 'ready_for_review'] });
   const scope = validate.jobs.scope;
   assert.equal(scope.if, undefined);
   assert.equal(scope.steps[0].with['fetch-depth'], 2);
@@ -43,6 +44,29 @@ test('proxy-only validation has no application, terrain, landscape or browser wo
   assert.equal(validate.jobs.browser.if, "${{ needs.scope.outputs.mode == 'full' || needs.scope.outputs.mode == 'targeted' }}");
   assert.equal(validate.jobs.browser.with.specs, "${{ inputs.specs || '' }}");
   assert.match(validate['run-name'], /Targeted browser run.*not a landing run/);
+});
+
+test('a draft pull request runs the fast tier and says so; ready, a plain dispatch and the schedule run the full tier', () => {
+  const fast = "github.event.pull_request.draft || inputs.tier == 'fast'";
+  // A targeted dispatch is never fast (its collect job lists files without the grep).
+  assert.equal(validate.jobs.browser.with.tier, `\${{ inputs.specs == '' && (${fast}) && 'fast' || 'full' }}`);
+  const tier = validate.on.workflow_dispatch.inputs.tier;
+  assert.deepEqual([tier.type, tier.options, tier.default], ['choice', ['full', 'fast'], 'full']);
+  // The run name: targeted first, then fast, else GitHub's own.
+  assert.ok(validate['run-name'].includes(`|| ((${fast}) && format('Fast run on {0}, not a landing run', github.head_ref || github.ref_name))`));
+  const say = validate.jobs.validate.steps.find((step) => step.name === 'Say that this is a fast run');
+  assert.equal(say.if, `\${{ inputs.specs == '' && needs.scope.outputs.mode == 'full' && (${fast}) }}`);
+  assert.match(say.run, /::notice::Fast run: .*Not a landing run/);
+  // The step that decides the result stays the last one, unconditional.
+  assert.equal(validate.jobs.validate.steps.at(-1).run, 'node .github/scripts/validation-scope.mjs --verify');
+  // Unchanged: one concurrency group per ref, a targeted run apart, superseded runs cancelled.
+  assert.deepEqual(validate.concurrency, { group: "validate-${{ github.ref }}${{ inputs.specs != '' && '-targeted' || '' }}", 'cancel-in-progress': true });
+  assert.deepEqual(validate.permissions, { contents: 'read' });
+  // The schedule calls the browser suite with no inputs, and its tier falls back to full.
+  const suite = workflow('browser-suite');
+  assert.deepEqual(suite.on.schedule, [{ cron: '13 15 * * 1' }]);
+  assert.equal(suite.on.workflow_call.inputs.tier.default, 'full');
+  assert.equal(suite.jobs.plan.steps.find((step) => step.id === 'plan').env.TIER, "${{ inputs.tier || 'full' }}");
 });
 
 test('Pages has one main-only publisher, isolated concurrency, freshness and minimal permissions', () => {

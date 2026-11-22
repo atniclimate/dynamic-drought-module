@@ -8,6 +8,7 @@
  *   node scripts/spec-impact.mjs --list           touched spec paths, one line
  *   node scripts/spec-impact.mjs --run            one local run of the selection
  *   node scripts/spec-impact.mjs --red [run id]   one local run of a red run's failed cases
+ *                                                 (read from its red-list artifacts, else its log)
  *   node scripts/spec-impact.mjs --dispatch       a targeted GitHub run of them
  *
  * The range is <base>...HEAD; the default base is `git merge-base HEAD
@@ -46,9 +47,10 @@
  */
 
 import { execFileSync, spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { connect } from 'node:net';
-import { posix, resolve } from 'node:path';
+import { tmpdir } from 'node:os';
+import { join, posix, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const MIN_LENGTH = 4;
@@ -834,6 +836,30 @@ export function matchRedCases(failed, specs) {
   return { entries: mergeEntries([...entries]), moved, unmatched };
 }
 
+/**
+ * The failed cases of a run's red lists (the `browser-reds-*` artifacts each
+ * browser job writes, .github/scripts/plan-browser-shards.mjs):
+ * `{ complete, failed }`, `failed` as failedCases gives them, one per case
+ * that failed every attempt. `complete` only when every planned job left a
+ * readable list: a job cancelled or timed out before its report leaves none,
+ * and then only the run log names its cases.
+ */
+export function failedFromRedLists(lists) {
+  const planned = new Set(lists.map((list) => list.planned));
+  const complete = lists.length > 0
+    && !lists.some((list) => list.unreadable || !Array.isArray(list.cases))
+    && planned.size === 1 && lists.length === [...planned][0];
+  const seen = new Map();
+  for (const list of lists) {
+    for (const entry of list.cases ?? []) {
+      if (entry.passedOnRetry) continue;
+      const key = `${entry.project}\t${entry.file}\t${entry.title}`;
+      if (!seen.has(key)) seen.set(key, { project: entry.project, file: entry.file, line: entry.line, title: entry.title });
+    }
+  }
+  return { complete, failed: [...seen.values()] };
+}
+
 /** The Validate run `--red` re-runs: the newest failed one in `runs` (newest first), or null. */
 export function newestFailedRun(runs) {
   return runs.find((run) => run.conclusion === 'failure') ?? null;
@@ -938,10 +964,50 @@ export function validateRuns(branch) {
   return JSON.parse(gh(['run', 'list', '--workflow', 'validate.yml', '--branch', branch, '--limit', '20', '--json', 'databaseId,conclusion,status,headSha,createdAt']));
 }
 
-/** A red run's failed cases matched to HEAD, `{ run, entries, moved, unmatched, failed }`. */
+/**
+ * A run's red lists, downloaded from its `browser-reds-*` artifacts, or null
+ * when it has none (a run from before them, or past their three days).
+ */
+export function redListsOfRun(runId) {
+  const dir = mkdtempSync(join(tmpdir(), 'ddm-reds-'));
+  try {
+    try {
+      gh(['run', 'download', String(runId), '--pattern', 'browser-reds-*', '--dir', dir]);
+    } catch {
+      return null;
+    }
+    const lists = [];
+    const visit = (at) => {
+      for (const entry of readdirSync(at, { withFileTypes: true })) {
+        const path = join(at, entry.name);
+        if (entry.isDirectory()) visit(path);
+        else if (/^reds-.+\.json$/.test(entry.name)) {
+          try {
+            lists.push(JSON.parse(readFileSync(path, 'utf8')));
+          } catch {
+            lists.push({ unreadable: true, cases: [] });
+          }
+        }
+      }
+    };
+    visit(dir);
+    return lists.length > 0 ? lists : null;
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+/**
+ * A red run's failed cases matched to HEAD, `{ run, source, entries, moved,
+ * unmatched, failed }`: from the run's red lists when every job left one,
+ * otherwise from its failed jobs' log.
+ */
 export function redSelection(runId, specs) {
+  const lists = redListsOfRun(runId);
+  const fromLists = lists ? failedFromRedLists(lists) : null;
+  if (fromLists?.complete) return { run: runId, source: 'red lists', failed: fromLists.failed, ...matchRedCases(fromLists.failed, specs) };
   const failed = failedCases(parseCaseLog(gh(['run', 'view', String(runId), '--log-failed'])));
-  return { run: runId, failed, ...matchRedCases(failed, specs) };
+  return { run: runId, source: lists ? 'run log (the red lists are incomplete)' : 'run log', failed, ...matchRedCases(failed, specs) };
 }
 
 /** Everything the modes need about a range, read from commits. */
@@ -1027,7 +1093,7 @@ async function main(argv) {
     const config = git(['show', 'HEAD:playwright.config.ts']);
     const pureOnly = pureSpecs(config);
     const red = redSelection(redRunId(argv), specs);
-    say(`Validate run ${red.run}: ${red.failed.length} failed cases.`);
+    say(`Validate run ${red.run}: ${red.failed.length} failed cases, read from its ${red.source}.`);
     for (const { file, title, now } of red.moved) say(`  moved: ${file} "${title}" is now ${now}`);
     for (const { file, line, title } of red.unmatched) say(`  not found at HEAD (renamed or removed?): ${file}:${line} "${title}"`);
     const pure = red.entries.filter((entry) => pureOnly.has(parseEntry(entry).file));

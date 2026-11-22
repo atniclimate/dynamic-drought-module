@@ -88,15 +88,20 @@ interface Row {
   /** Run the row with `prefers-reduced-motion: reduce` (S30D B3 CI3). */
   reduced_motion?: boolean;
   timeout_ms?: number;
+  /** `landing`: the row carries the @landing tag and runs in the full run only. */
+  tier?: 'landing';
   steps: Step[];
   expect: Expectations;
 }
 
 const MATRIX_URL = new URL('./view-contracts.yaml', import.meta.url);
 const matrix = parse(readFileSync(MATRIX_URL, 'utf8')) as { rows: Row[] };
-
 if (!Array.isArray(matrix?.rows) || matrix.rows.length === 0) {
   throw new Error('view-contracts.yaml carries no rows');
+}
+// A misspelt tier would quietly put a heavy row into every fast run.
+for (const row of matrix.rows) {
+  if (row.tier !== undefined && row.tier !== 'landing') throw new Error(`${row.id}: tier must be landing or absent, not ${String(row.tier)}`);
 }
 
 const seen = new Set<string>();
@@ -471,8 +476,10 @@ async function assertExpectations(
 // The matrix
 // ---------------------------------------------------------------------------
 
-test.describe('view contracts', () => {
-  for (const row of matrix.rows) {
+// Two blocks under the one title, so each row keeps its title path: the rows
+// with `tier: landing` carry the @landing tag and run in the full run only.
+for (const tier of [undefined, 'landing'] as const) test.describe('view contracts', { tag: tier ? ['@landing'] : [] }, () => {
+  for (const row of matrix.rows.filter((entry) => entry.tier === tier)) {
     test(row.id, async ({ page }) => {
       if (row.timeout_ms) test.setTimeout(row.timeout_ms);
       test.info().annotations.push({

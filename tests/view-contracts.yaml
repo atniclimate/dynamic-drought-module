@@ -22,6 +22,9 @@
 # reduced_motion when true, boot with prefers-reduced-motion: reduce (no
 #               wildfire pulse refilling the software renderer's draw queue)
 # timeout_ms    per-row budget; raise it for rows that build terrain
+# tier          `landing` tags the row @landing: it runs in the full run only,
+#               never in the fast run a draft pull request gets. Omitted, the
+#               row runs on every push.
 # steps         ordered actions (see the step vocabulary below)
 # expect        invariants asserted after the last step
 #
@@ -113,6 +116,7 @@ rows:
     url: '?region=washington_state&cluster=wildfire'
     stub_wildfire: true
     timeout_ms: 150000
+    tier: landing
     steps:
       - wait_settled: hms-smoke
       - fire3d: on
@@ -132,6 +136,7 @@ rows:
     url: '?region=washington_state&cluster=wildfire&fire3d=true'
     stub_wildfire: true
     timeout_ms: 150000
+    tier: landing
     steps:
       - wait_fire3d: active
       - fire3d: off
@@ -151,6 +156,7 @@ rows:
     url: '?region=washington_state&cluster=wildfire&fire3d=true'
     stub_wildfire: true
     timeout_ms: 180000
+    tier: landing
     steps:
       - wait_fire3d: active
       - click_cluster: drought
@@ -171,6 +177,7 @@ rows:
     url: '?region=washington_state&cluster=wildfire&fire3d=true'
     stub_wildfire: true
     timeout_ms: 150000
+    tier: landing
     steps:
       - wait_fire3d: active
       - select_region: central_oregon
@@ -210,6 +217,7 @@ rows:
     url: '?region=washington_state&cluster=wildfire&fire3d=true&embed=true'
     stub_wildfire: true
     timeout_ms: 150000
+    tier: landing
     steps:
       - wait_fire3d: active
     expect:
@@ -229,6 +237,7 @@ rows:
     url: '?region=washington_state&cluster=wildfire'
     stub_wildfire: true
     timeout_ms: 150000
+    tier: landing
     steps:
       - wait_settled: hms-smoke
       - fire3d: on
@@ -257,6 +266,7 @@ rows:
     stub_wildfire: true
     reduced_motion: true
     timeout_ms: 180000
+    tier: landing
     steps:
       - wait_settled: hms-smoke
       - fire3d: on
@@ -284,6 +294,7 @@ rows:
     stub_wildfire: true
     reduced_motion: true
     timeout_ms: 180000
+    tier: landing
     steps:
       - wait_settled: hms-smoke
       - fire3d: on
@@ -322,6 +333,7 @@ rows:
     stub_wildfire: true
     reduced_motion: true
     timeout_ms: 180000
+    tier: landing
     steps:
       - wait_fire3d: active
       - reload: true

@@ -325,7 +325,7 @@ const shareInColumn = (page: Page) => page.locator('.map-overlay-controls > #sha
 
 test.describe('the desktop column holds its six seats (D1 M9)', () => {
   for (const viewport of DESKTOP_VIEWPORTS) {
-    test(`Reset, Layer, Place, SAT, Help and Share hold their MAP_CHROME_SEATS rects within 1 px across modes, horizons, loading, selection and the views at ${viewport.width}x${viewport.height}`, async ({
+    test(`Reset, Layer, Place, SAT, Help and Share hold their MAP_CHROME_SEATS rects within 1 px across modes, horizons, loading, selection and the views at ${viewport.width}x${viewport.height}`, { tag: viewport.width > 1280 ? ['@landing'] : [] }, async ({
       page
     }) => {
       test.setTimeout(240_000);
