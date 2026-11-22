@@ -348,8 +348,9 @@ test('the probe table covers every allow-listed route family and every negative 
   const ids = PROBES.map((p) => p.id);
   assert.equal(new Set(ids).size, ids.length, 'probe ids must be unique');
   // Row 4 is every route FAMILY, not a sample: both AWDB paths, both USBR
-  // paths, NWRFC, USDM DSCI, the WHP tile, and all four NWS shapes.
-  assert.equal(PROBES.filter((p) => p.row === 4).length, 11);
+  // paths, NWRFC, USDM DSCI, the USDM Tribal area statistics, the WHP tile,
+  // and all four NWS shapes.
+  assert.equal(PROBES.filter((p) => p.row === 4).length, 12);
   for (const id of [
     'healthz', 'healthz-head', 'options-healthz', 'head-allowed', 'head-off-route',
     'options-allowed', 'options-off-route', 'options-unknown-path',
@@ -480,6 +481,7 @@ const LIVE_ANSWERS = new Map([
   ['relay-hydromet-arc', { status: 200 }],
   ['relay-nwrfc-ws', { status: 200, elapsedMs: 12_661 }],
   ['relay-usdm-dsci', { status: 200 }],
+  ['relay-usdm-tribal', { status: 200 }],
   ['relay-whp-export', { status: 200 }],
   ['relay-nws-point', { status: 200 }],
   ['relay-nws-gridpoint', { status: 200 }],
@@ -536,6 +538,7 @@ const CANDIDATE_ANSWERS = new Map([
   ['relay-hydromet-arc', { status: 200 }],
   ['relay-nwrfc-ws', { status: 504, error: 'upstream_timeout', elapsedMs: 12_100 }],
   ['relay-usdm-dsci', { status: 200 }],
+  ['relay-usdm-tribal', { status: 200 }],
   ['relay-whp-export', { status: 200 }],
   ['relay-nws-point', { status: 200 }],
   ['relay-nws-gridpoint', { status: 200 }],

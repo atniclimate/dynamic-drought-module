@@ -102,6 +102,16 @@ const EXACT_PATHS_BY_HOST: ReadonlyMap<
       [
         "/api/StateStatistics/GetDSCI",
         new Set(["aoi", "startdate", "enddate", "statisticsType"])
+      ],
+      // The issuer's statistics per Tribal area (DR-271): the weekly percent of
+      // area per category, and its Drought Severity and Coverage Index.
+      [
+        "/api/TribalStatistics/GetDroughtSeverityStatisticsByAreaPercent",
+        new Set(["aoi", "startdate", "enddate", "statisticsType"])
+      ],
+      [
+        "/api/TribalStatistics/GetDSCI",
+        new Set(["aoi", "startdate", "enddate", "statisticsType"])
       ]
     ])
   ],
@@ -186,7 +196,7 @@ function isExportImageRoute(upstreamUrl: URL): boolean {
 
 const USER_AGENT =
   "DDM-Proxy/0.1.0 (+https://github.com/atniclimate/dynamic-drought-module)";
-const WORKER_REVISION = "2026-10-13-query-pin-v7";
+const WORKER_REVISION = "2026-11-16-tribal-statistics-v8";
 
 const UPSTREAM_TIMEOUT_MS = 12_000;
 export const MAX_UPSTREAM_BYTES = 16 * 1024 * 1024;
