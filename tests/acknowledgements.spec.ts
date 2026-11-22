@@ -63,7 +63,9 @@ const CITED = new Set<string>([
   // How the Dams layer selects dams, verdicts read 2026-11-15.
   'usace-national-inventory-of-dams',
   // The live fuel moisture credit, verdicts read 2026-11-22.
-  'eosial-lfmc-western-us'
+  'eosial-lfmc-western-us',
+  // The BC Wildfire Service licence statement, verdict read 2026-11-22.
+  'bcws-ogl-bc-attribution'
 ]);
 
 const DEPLOYER = { name: 'Fixture GIS office' };
@@ -107,11 +109,23 @@ test('every non-catalog provider is credited by a rendered row', () => {
 
 test('a credit sentence renders only after ddm-cite, and a link never changes a word', () => {
   const html = renderAcknowledgements({ deployer: DEPLOYER });
+  // A sentence with a linked form never shows its plain text in one piece (the
+  // licence name sits inside an anchor), so the plain-text check alone passes
+  // whatever the citation state. The linked form is compared by its words too.
+  const renderedWords = stripTags(html);
   for (const id of ACKNOWLEDGEMENT_IDS) {
     for (const sentence of allSentences(id)) {
       const cited = sentence.citeId !== null && CITED.has(sentence.citeId);
       if (!cited) {
         expect(html, `${id}: uncited text rendered`).not.toContain(escapeHtml(sentence.text));
+        if (sentence.html !== undefined) {
+          expect(html, `${id}: uncited linked sentence rendered`).not.toContain(
+            externalLinks(sentence.html)
+          );
+          expect(renderedWords, `${id}: uncited linked words rendered`).not.toContain(
+            stripTags(sentence.html)
+          );
+        }
         continue;
       }
       if (sentence.html !== undefined) {
@@ -120,6 +134,9 @@ test('a credit sentence renders only after ddm-cite, and a link never changes a 
         );
         expect(html, `${id}: cited linked sentence not rendered`).toContain(
           externalLinks(sentence.html)
+        );
+        expect(renderedWords, `${id}: cited linked words not rendered`).toContain(
+          stripTags(sentence.html)
         );
       } else {
         expect(html, `${id}: cited sentence not rendered`).toContain(escapeHtml(sentence.text));

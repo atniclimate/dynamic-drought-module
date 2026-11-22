@@ -1436,6 +1436,9 @@ async function bcwsClaimsFromLoaded(rect: readonly [number, number, number, numb
   const bc = await import('../layers/bcws-fires');
   const loaded = bc.loadedBcwsCollection();
   if (loaded === null || !loaded.complete || loaded.coverage === null || loaded.fetchedAt === null) return null;
+  // The BC layer, like NIFC's, keeps `ready` after a failed refresh and refetches only on a pan
+  // (src/layers/bcws-fires.ts), so a set past its 5-minute check window is not current.
+  if (Date.now() - loaded.fetchedAt >= 5 * 60_000) return null;
   if (!bboxCoveredByEnvelope(loaded.coverage, rect)) return null;
   const { geometriesOverlap } = await import('../util/polygon-overlap');
   const rectangle = rectanglePolygon(rect);
@@ -1451,8 +1454,11 @@ async function bcwsClaimsFromLoaded(rect: readonly [number, number, number, numb
     if (nifc !== null && !nifc.truncated && Date.now() - nifc.fetchedAt < 5 * 60_000 && bboxCoveredByEnvelope(nifc.envelope, rect)) {
       const { countFireAreas, fireRecordKey } = await import('../layers/fire-areas');
       const areas = bc.fireAreas();
+      // NIFC wildfire perimeters only (WF and CX), as the strip and the minimap count; a Prescribed fire is not a fire area here.
+      const nifcWildfire = (feature: unknown): boolean =>
+        meets(feature) && classifyNifcIncidentType((feature as { properties: Record<string, unknown> }).properties.attr_IncidentTypeCategory) === 'wildfire';
       const rows = [
-        ...nifc.collection.features.filter(meets).map((f, i) => ({ issuer: 'nifc' as const, properties: f.properties, i })),
+        ...nifc.collection.features.filter(nifcWildfire).map((f, i) => ({ issuer: 'nifc' as const, properties: f.properties, i })),
         ...bcHits.map((f, i) => ({ issuer: 'bcws' as const, properties: f.properties, i }))
       ].map((row) => {
         const recordKey = fireRecordKey(row.issuer, row.properties);
