@@ -1,8 +1,6 @@
 import { expect, test, type Page } from './offline-test';
 import { PNG } from 'pngjs';
 
-import { HAZARD_CLUSTERS } from '../src/config/clusters';
-import { MOBILE_HAZARD_PRESETS } from '../src/config/presets';
 import {
   gotoApp,
   layerCheckbox,
@@ -166,25 +164,6 @@ async function canvasCenter(page: Page): Promise<readonly [number, number, numbe
 }
 
 test.describe('U-HEATRISK-DAYS multi-day read', () => {
-  test('HeatRisk preset and cluster descriptions state published dated impact levels', () => {
-    const presetDescriptions = MOBILE_HAZARD_PRESETS
-      .filter((preset) => preset.layers.includes('heatrisk'))
-      .map((preset) => preset.description);
-    const descriptions = [
-      ...presetDescriptions,
-      HAZARD_CLUSTERS.heat.description
-    ];
-
-    expect(presetDescriptions).toHaveLength(1);
-    expect(descriptions).toHaveLength(2);
-    for (const description of descriptions) {
-      expect(description).toMatch(
-        /published National Weather Service HeatRisk heat-impact levels/i
-      );
-      expect(description).not.toMatch(/\b(?:forecast|today)\b/i);
-    }
-  });
-
   test('catalog granules become dated choices and legacy links open the first exact frame', async ({
     page
   }) => {

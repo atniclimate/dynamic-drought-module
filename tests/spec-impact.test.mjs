@@ -1,26 +1,56 @@
 /**
- * scripts/spec-impact.mjs: what a block removed that specs still name, and
- * the refusals that keep `--run` from becoming a local full suite. Inline
- * fixtures only; no git, no browser.
+ * scripts/spec-impact.mjs: what a block removed that specs still name, the
+ * selection by test and by rule, the BROAD verdict, the cost limit, the red
+ * run's cases, and the refusals that keep `--run` from becoming a local full
+ * suite. Also scripts/refresh-spec-timings.mjs's refusal. Inline fixtures
+ * only; no git, no gh, no browser.
  */
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import test from 'node:test';
+import { refreshRefusal } from '../scripts/refresh-spec-timings.mjs';
 import {
+  BUILD_SECONDS,
   CROSS_CUTTING,
-  MAX_LOCAL_SPECS,
+  LOCAL_LIMIT_SECONDS,
   MODULE_SPECS,
+  RUN_PATHS,
+  buildTimings,
+  caseSelection,
+  changedCodeLines,
+  chooseWorkBranch,
+  costModel,
   crossCuttingSpecs,
+  describeSelection,
+  diffHunks,
+  dirtyRefusal,
   dispatchRefusal,
+  entryFiles,
+  estimateWait,
+  failedCases,
   findMentions,
+  fire3dSpecs,
+  helperChange,
+  helperGraph,
   importsChanged,
+  matchRedCases,
   measureSpecs,
+  mergeEntries,
+  newestFailedRun,
+  parseCaseLog,
+  planLocalRun,
   pureSpecs,
+  readTimings,
   removedLiterals,
   runRefusal,
+  selectSpecs,
   staleLiterals,
+  testSpans,
   touchedSpecs
 } from '../scripts/spec-impact.mjs';
+
+const CONFIG = readFileSync(new URL('../playwright.config.ts', import.meta.url), 'utf8');
+const REAL_COST = costModel(readTimings());
 
 const DIFF = [
   'diff --git a/src/ui/panel.ts b/src/ui/panel.ts',
@@ -161,9 +191,11 @@ test('cross-cutting rules: shared style, key and dock components, minimap and th
 
 test('cross-cutting rules stay small, name real non-measurement specs, and join touchedSpecs', () => {
   const union = new Set(CROSS_CUTTING.flatMap(({ specs }) => specs));
-  assert.ok(union.size <= MAX_LOCAL_SPECS / 2, `${union.size} fixed specs`);
+  assert.ok(union.size <= 6, `${union.size} fixed specs`);
+  // At this machine's measured speed they no longer fit one local run together (about 17 min):
+  // the plan takes Tier 1 first and names the rest as GitHub's, so the rules only need to stay few.
   for (const { specs } of CROSS_CUTTING) assert.ok(specs.length <= 5);
-  const config = readFileSync(new URL('../playwright.config.ts', import.meta.url), 'utf8');
+  const config = CONFIG;
   for (const path of union) {
     assert.ok(path.endsWith('.spec.ts') && !measureSpecs(config).has(path), path);
     readFileSync(new URL(`../${path}`, import.meta.url));
@@ -201,7 +233,8 @@ test('modules the browser specs reach only through the app pick their own specs'
     const picked = touchedSpecs({ changedSpecs: [], mentions: [], specs: [], changedModules: [module], crossCutting, ...browserOnly });
     assert.ok(picked.length > 0 && picked.length <= 5, `${module}: ${picked.length} specs`);
     assert.equal(picked.length, crossCutting.size, `${module}: a mapped spec is missing, pure or measurement-only`);
-    assert.equal(runRefusal(picked), null, module);
+    // Some of what a module change picks always runs here; the plan names the rest as GitHub's.
+    assert.ok(planLocalRun({ tier1: picked, fire3d: new Set(), cost: REAL_COST }).run.length > 0, module);
   }
   // A module named only by the coordinator's spec, through the popup's Conditions slot.
   assert.deepEqual(Object.keys(Object.fromEntries(crossCuttingSpecs(['src/ui/popup-conditions.ts'], specPaths))).sort(), ['tests/interaction-coordinator.spec.ts', 'tests/place-popups.spec.ts']);
@@ -216,7 +249,7 @@ test('the measurement-only specs are read from playwright.config.ts', () => {
 test('pure-only changes never become browser runs, while mixed changes retain browser coverage', () => {
   const config = readFileSync(new URL('../playwright.config.ts', import.meta.url), 'utf8');
   const pureOnly = pureSpecs(config);
-  assert.equal(pureOnly.size, 34);
+  assert.equal(pureOnly.size, 69);
   assert(pureOnly.has('tests/antimeridian.spec.ts'));
   assert.throws(() => pureSpecs(''), /Cannot read PURE_SPECS/);
   const selection = {
@@ -232,16 +265,348 @@ test('pure-only changes never become browser runs, while mixed changes retain br
   assert.equal(findMentions(['retired control'], [{ path: 'tests/antimeridian.spec.ts', text: "expect('retired control').toBe('retired control');" }]).length, 1);
 });
 
-test('--dispatch refuses an empty list (the full run), a detached HEAD and an unpushed tip', () => {
+test('--dispatch refuses an empty list (the full run), a detached HEAD, no work branch, an open pull request and an unpushed tip', () => {
   assert.match(dispatchRefusal([], 'work/x', 'a1', 'a1'), /full run/);
   assert.match(dispatchRefusal(['tests/a.spec.ts'], 'HEAD', 'a1', ''), /detached/);
+  assert.match(dispatchRefusal(['tests/a.spec.ts'], null, 'a1', ''), /No work branch/);
+  // The pull request's own Validate run tests the push; a dispatch would only duplicate it.
+  assert.match(dispatchRefusal(['tests/a.spec.ts'], 'work/x', 'a1', 'a1', { number: 121 }), /#121 is open on work\/x: its own Validate run covers/);
   assert.match(dispatchRefusal(['tests/a.spec.ts'], 'work/x', 'a1', 'b2'), /push first/);
   assert.equal(dispatchRefusal(['tests/a.spec.ts'], 'work/x', 'a1', 'a1'), null);
+  assert.equal(dispatchRefusal(['tests/a.spec.ts'], 'work/x', 'a1', 'a1', null), null);
 });
 
-test('--run refuses an empty list (the whole suite) and a list too broad for one local run', () => {
+test('--run refuses an empty list (the whole suite) and an estimate over ten minutes, never a file count', () => {
   assert.match(runRefusal([]), /whole suite/);
-  const many = Array.from({ length: MAX_LOCAL_SPECS + 1 }, (_, i) => `tests/s${i}.spec.ts`);
-  assert.match(runRefusal(many), /too broad for a local run; use the targeted GitHub run/);
-  assert.equal(runRefusal(many.slice(0, MAX_LOCAL_SPECS)), null);
+  const many = Array.from({ length: 40 }, (_, i) => `tests/s${i}.spec.ts:${i + 1}`);
+  assert.equal(runRefusal(many, LOCAL_LIMIT_SECONDS), null);
+  assert.match(runRefusal(['tests/a.spec.ts'], LOCAL_LIMIT_SECONDS + 1), /estimated 10\.0 min at 2 workers \(limit 10\.0 min\): too broad for a local run; use the targeted GitHub run/);
+});
+
+test('--run and --red refuse uncommitted changes the build reads, since the selection reads commits', () => {
+  assert.equal(dirtyRefusal(''), null);
+  assert.equal(dirtyRefusal('\n'), null);
+  const refusal = dirtyRefusal(' M src/main.ts\nM  playwright.config.ts\n');
+  assert.match(refusal, /src\/main\.ts, playwright\.config\.ts/);
+  assert.match(refusal, /Commit first/);
+  assert.match(dirtyRefusal(Array.from({ length: 10 }, (_, i) => ` M tests/s${i}.spec.ts`).join('\n')), /and 2 more/);
+  for (const path of ['src', 'tests', 'index.html', 'public', 'playwright.config.ts', 'vite.config.ts']) assert.ok(RUN_PATHS.includes(path), path);
+});
+
+test('the chromium-3d specs are read from playwright.config.ts and are never local', () => {
+  const fire3d = fire3dSpecs(CONFIG);
+  assert.deepEqual([...fire3d].sort(), ['tests/fire3d-mode.spec.ts', 'tests/view-contracts.spec.ts', 'tests/wildfire3d-ground.spec.ts']);
+  assert.throws(() => fire3dSpecs(''), /Cannot read FIRE3D_SPECS/);
+  const plan = planLocalRun({ tier1: ['tests/fire3d-mode.spec.ts:91'], tier2: ['tests/view-contracts.spec.ts'], fire3d, cost: () => 1 });
+  assert.deepEqual(plan.run, []);
+  assert.deepEqual(plan.threeD, ['tests/fire3d-mode.spec.ts', 'tests/view-contracts.spec.ts']);
+});
+
+// A spec in the house style: a describe with a hook, two tests, a runtime
+// skip, a loop-declared test and a one-line test.
+const DOCK_SPEC = [
+  "import { test, expect } from './offline-test';",
+  "import { gotoApp, layerCheckbox } from './helpers';",
+  '',
+  'const WIDTH = 390;',
+  '',
+  "test.describe('the dock', () => {",
+  '  test.beforeEach(async ({ page }) => {',
+  '    await gotoApp(page);',
+  '  });',
+  '',
+  "  test('opens', async ({ page }) => {",
+  "    await expect(page.locator('#dock')).toBeVisible();",
+  '  });',
+  '',
+  "  test.skip(process.env.CI === undefined, 'CI only');",
+  "  test('closes', async ({ page }) => {",
+  '    const close = /\\)/;',
+  "    await layerCheckbox(page, 'usdm').click();",
+  '  });',
+  '});',
+  '',
+  "for (const name of ['a', 'b']) test(`row ${name}`, async () => {",
+  '  expect(name).toBeTruthy();',
+  '});',
+  "test('one line', () => expect(WIDTH).toBe(390));"
+].join('\n');
+
+test('test spans: declarations with their describes, a loop-declared test, and no runtime skip', () => {
+  assert.deepEqual(testSpans(DOCK_SPEC), [
+    { line: 11, end: 13, title: 'opens', describes: ['the dock'] },
+    { line: 16, end: 19, title: 'closes', describes: ['the dock'] },
+    { line: 22, end: 24, title: 'row ${name}', describes: [] },
+    { line: 25, end: 25, title: 'one line', describes: [] }
+  ]);
+  // CRLF working copies give the same spans.
+  assert.deepEqual(testSpans(DOCK_SPEC.replace(/\n/g, '\r\n')), testSpans(DOCK_SPEC));
+  // A test that closes at the wrong indentation still ends before the next one.
+  const skewed = ["test('a', async () => {", '  x();', '  });', '', "  test('b', async () => {", '  });'].join('\n');
+  assert.deepEqual(testSpans(skewed).map(({ line, end }) => [line, end]), [[1, 4], [5, 6]]);
+});
+
+test('case selection: edits inside tests select those tests; an edit outside every test selects the file', () => {
+  const path = 'tests/dock.spec.ts';
+  assert.deepEqual(caseSelection(path, DOCK_SPEC, []), []);
+  assert.deepEqual(caseSelection(path, DOCK_SPEC, [12]), ['tests/dock.spec.ts:11']);
+  assert.deepEqual(caseSelection(path, DOCK_SPEC, [18, 12, 17]), ['tests/dock.spec.ts:11', 'tests/dock.spec.ts:16']);
+  assert.deepEqual(caseSelection(path, DOCK_SPEC, [23]), ['tests/dock.spec.ts:22']);
+  // A hook, a shared constant, an import and a describe header reach every test.
+  for (const line of [8, 4, 2, 6]) assert.deepEqual(caseSelection(path, DOCK_SPEC, [12, line]), [path], `line ${line}`);
+});
+
+test('a -U0 diff gives new-side code lines; comments, blank lines and deleted files give none', () => {
+  const diff = [
+    'diff --git a/tests/dock.spec.ts b/tests/dock.spec.ts',
+    'index 1111111..2222222 100644',
+    '--- a/tests/dock.spec.ts',
+    '+++ b/tests/dock.spec.ts',
+    '@@ -12 +12 @@',
+    "-    await expect(page.locator('#dock')).toBeHidden();",
+    "+    await expect(page.locator('#dock')).toBeVisible();",
+    '@@ -17,0 +18,2 @@',
+    '+    // why this waits',
+    '+',
+    '@@ -30,2 +29,0 @@',
+    '-  const gone = 1;',
+    '-  // and its note',
+    '@@ -40 +39 @@',
+    '-  // an old note',
+    '+  // a new note',
+    'diff --git a/tests/old.spec.ts b/tests/old.spec.ts',
+    'deleted file mode 100644',
+    '--- a/tests/old.spec.ts',
+    '+++ /dev/null',
+    '@@ -1 +0,0 @@',
+    "-test('x', () => {});"
+  ].join('\r\n');
+  const hunks = diffHunks(diff);
+  assert.deepEqual([...hunks.keys()], ['tests/dock.spec.ts']);
+  assert.equal(hunks.get('tests/dock.spec.ts').length, 4);
+  assert.deepEqual(hunks.get('tests/dock.spec.ts')[1].added, [{ line: 18, text: '    // why this waits' }, { line: 19, text: '' }]);
+  // Removed code with nothing added belongs to both new-side neighbours.
+  assert.deepEqual(changedCodeLines(hunks.get('tests/dock.spec.ts')), [12, 29, 30]);
+});
+
+test('entries: a whole file absorbs its cases, and a dispatch names files', () => {
+  const entries = ['tests/b.spec.ts:20', 'tests/a.spec.ts:9', 'tests/b.spec.ts', 'tests/a.spec.ts:10', 'tests/a.spec.ts:9'];
+  assert.deepEqual(mergeEntries(entries), ['tests/a.spec.ts:9', 'tests/a.spec.ts:10', 'tests/b.spec.ts']);
+  assert.deepEqual(entryFiles(entries), ['tests/a.spec.ts', 'tests/b.spec.ts']);
+});
+
+test('cost: timed files and cases, the file median for a moved case, the median file for an unknown one', () => {
+  const timings = { files: { 'tests/a.spec.ts': 600, 'tests/b.spec.ts': 100, 'tests/c.spec.ts': 1200 }, cases: { 'tests/a.spec.ts:10': 30, 'tests/a.spec.ts:20': 50 } };
+  const cost = costModel(timings);
+  assert.equal(cost('tests/a.spec.ts'), 600);
+  assert.equal(cost('tests/a.spec.ts:10'), 30);
+  assert.equal(cost('tests/a.spec.ts:99'), 40);
+  assert.equal(cost('tests/new.spec.ts'), 600);
+  assert.equal(cost('tests/new.spec.ts:5'), 600);
+  assert.equal(costModel(null)('tests/x.spec.ts'), 23);
+  assert.equal(estimateWait([], cost), 0);
+  // One build, then the cases at twice their GitHub seconds, shared by two workers.
+  assert.equal(estimateWait(['tests/b.spec.ts', 'tests/a.spec.ts:10'], cost), BUILD_SECONDS + 130);
+});
+
+test('the local plan runs everything that fits, otherwise Tier 1 up to the limit, and names the rest', () => {
+  const cost = costModel({ files: { 'tests/a.spec.ts': 600, 'tests/b.spec.ts': 100, 'tests/c.spec.ts': 1200 }, cases: { 'tests/a.spec.ts:10': 30 } });
+  const fire3d = new Set(['tests/c.spec.ts']);
+  assert.deepEqual(planLocalRun({ tier1: ['tests/a.spec.ts:10'], tier2: ['tests/b.spec.ts', 'tests/c.spec.ts'], fire3d, cost }), {
+    run: ['tests/a.spec.ts:10', 'tests/b.spec.ts'], seconds: BUILD_SECONDS + 130, threeD: ['tests/c.spec.ts'], over: []
+  });
+  const tight = planLocalRun({ tier1: ['tests/a.spec.ts:10', 'tests/b.spec.ts'], tier2: ['tests/a.spec.ts', 'tests/new.spec.ts'], fire3d, cost });
+  assert.deepEqual(tight.run, ['tests/a.spec.ts:10', 'tests/b.spec.ts']);
+  assert.deepEqual(tight.over, ['tests/a.spec.ts', 'tests/new.spec.ts']);
+  // Tier 1 itself over the limit: its entries in order while they fit.
+  const heavy = planLocalRun({ tier1: ['tests/a.spec.ts', 'tests/b.spec.ts', 'tests/new.spec.ts'], fire3d, cost });
+  // a alone (600 s on GitHub, 660 s here with the build) does not fit; b after it does.
+  assert.deepEqual(heavy.run, ['tests/b.spec.ts']);
+  assert.deepEqual(heavy.over, ['tests/a.spec.ts', 'tests/new.spec.ts']);
+  assert.ok(heavy.seconds <= LOCAL_LIMIT_SECONDS);
+});
+
+const HELPERS = [
+  {
+    path: 'tests/helpers.ts',
+    text: [
+      "import { installStub } from './fixtures';",
+      '',
+      '/** Every boot goes through here. */',
+      'export async function gotoApp(page) {',
+      '  await installStub(page);',
+      '  await settle(page);',
+      '}',
+      '',
+      'async function settle(page) {',
+      '  await page.waitForTimeout(TIMEOUT);',
+      '}',
+      '',
+      'const TIMEOUT = 10;',
+      '',
+      'export function layerCheckbox(page, key) {',
+      '  // Unlike gotoApp, this boots nothing: a comment is no call.',
+      '  return page.locator(`#${key}`);',
+      '}',
+      '',
+      'export function selectRegion(page, key) {',
+      '  return layerCheckbox(page, key);',
+      '}'
+    ].join('\n')
+  },
+  {
+    path: 'tests/fixtures.ts',
+    text: [
+      'export async function installStub(page) {',
+      "  await page.route('**/x', (route) => route.fulfill({ body: BODY }));",
+      '}',
+      "export const BODY = 'x';",
+      'export function unusedByBoot() {',
+      '  return 1;',
+      '}'
+    ].join('\n')
+  }
+];
+const HELPER_SPECS = [
+  { path: 'tests/a.spec.ts', text: "import { gotoApp } from './helpers';" },
+  { path: 'tests/b.spec.ts', text: "import { selectRegion } from './helpers';" },
+  { path: 'tests/c.spec.ts', text: "import { layerCheckbox as box } from './helpers';" },
+  { path: 'tests/d.spec.ts', text: "import { unusedByBoot } from './fixtures.ts';" },
+  { path: 'tests/e.spec.ts', text: "import * as h from './helpers';" },
+  { path: 'tests/f.spec.ts', text: "import { gotoApp } from './helpers';" },
+  { path: 'tests/g.spec.ts', text: "import {\n  gotoApp,\n  type Mode\n} from './helpers';" }
+];
+
+test('a helper change reaching gotoApp is BROAD; a narrow one selects the specs importing what it reaches', () => {
+  const graph = helperGraph(HELPERS);
+  const change = (path, line) => helperChange(graph, path, [line], HELPER_SPECS);
+  // layerCheckbox and selectRegion, which calls it: three specs of seven.
+  assert.deepEqual(change('tests/helpers.ts', 17), { path: 'tests/helpers.ts', names: ['layerCheckbox'], specs: ['tests/b.spec.ts', 'tests/c.spec.ts', 'tests/e.spec.ts'], broad: null });
+  // A constant settle reads, and a stub in another file that gotoApp installs, both change every boot.
+  assert.match(change('tests/helpers.ts', 13).broad, /tests\/helpers\.ts changes TIMEOUT, which tests\/helpers\.ts's gotoApp reaches: every boot changes/);
+  assert.match(change('tests/fixtures.ts', 2).broad, /tests\/fixtures\.ts changes installStub, which .*gotoApp reaches/);
+  assert.deepEqual(change('tests/fixtures.ts', 6), { path: 'tests/fixtures.ts', names: ['unusedByBoot'], specs: ['tests/d.spec.ts'], broad: null });
+  // An import line changes nothing by itself.
+  assert.deepEqual(change('tests/helpers.ts', 1), { path: 'tests/helpers.ts', names: [], specs: [], broad: null });
+  // A name most specs import is BROAD without gotoApp.
+  assert.match(helperChange(graph, 'tests/helpers.ts', [17], HELPER_SPECS.slice(1, 3)).broad, /2 of 2 browser specs import/);
+});
+
+test('the whole selection: edited tests in Tier 1, rules and narrow helpers in Tier 2, BROAD helpers left out', () => {
+  const specs = [
+    ...HELPER_SPECS,
+    { path: 'tests/dock.spec.ts', text: DOCK_SPEC },
+    { path: 'tests/panel.spec.ts', text: "import { x } from '../src/ui/panel';" },
+    { path: 'tests/pure.spec.ts', text: "import { x } from '../src/ui/panel';" },
+    { path: 'tests/s4-shell.spec.ts', text: '' }
+  ];
+  const hunks = (path, line) => [path, [{ start: line, count: 1, added: [{ line, text: '  changed();' }], removed: ['  was();'] }]];
+  const base = { specs, helpers: HELPERS, mentions: [], pureOnly: new Set(['tests/pure.spec.ts']) };
+  const broad = selectSpecs({
+    ...base,
+    changed: ['src/ui/panel.ts', 'tests/dock.spec.ts', 'tests/helpers.ts'],
+    hunks: new Map([hunks('tests/dock.spec.ts', 12), hunks('tests/helpers.ts', 13)])
+  });
+  assert.deepEqual(broad.tier1, ['tests/dock.spec.ts:11']);
+  assert.deepEqual(broad.tier2, ['tests/panel.spec.ts']);
+  assert.deepEqual(broad.broad.map(({ path }) => path), ['tests/helpers.ts']);
+  // The test seam rule is the same helpers change: it is GitHub's too.
+  assert.equal(broad.crossCutting.size, 0);
+  assert.deepEqual(broad.pureTouched, ['tests/pure.spec.ts']);
+  assert.ok(describeSelection(broad, null).some((line) => /^BROAD: .*GitHub's full Validate run is the test for that part/.test(line)));
+
+  const narrow = selectSpecs({ ...base, changed: ['tests/helpers.ts'], hunks: new Map([hunks('tests/helpers.ts', 17)]) });
+  assert.deepEqual(narrow.broad, []);
+  // dock imports layerCheckbox too; s4-shell comes from the test seam rule, which a narrow change keeps.
+  assert.deepEqual(narrow.tier2, ['tests/b.spec.ts', 'tests/c.spec.ts', 'tests/dock.spec.ts', 'tests/e.spec.ts', 'tests/s4-shell.spec.ts']);
+  assert.deepEqual([...narrow.helperReasons.get('tests/b.spec.ts')], ['tests/helpers.ts: layerCheckbox']);
+
+  // A stale mention inside a test selects that test; a spec with no readable hunk is taken whole.
+  const mentioned = selectSpecs({ ...base, changed: ['tests/dock.spec.ts'], hunks: new Map(), mentions: [{ file: 'tests/dock.spec.ts', line: 18 }] });
+  assert.deepEqual(mentioned.tier1, ['tests/dock.spec.ts']);
+  assert.deepEqual(mentioned.tier2, ['tests/dock.spec.ts:16']);
+});
+
+const LOG = [
+  'Browser suite / chromium 1/8\tUNKNOWN STEP\t2026-11-11T23:53:18.9Z   ✘   27 [chromium] › tests/dock.spec.ts:30:3 › the dock › opens (11.9s)',
+  'Browser suite / chromium 1/8\tUNKNOWN STEP\t2026-11-11T23:53:31.0Z   ✘   28 [chromium] › tests/dock.spec.ts:30:3 › the dock › opens (retry #1) (11.7s)',
+  'Browser suite / chromium 1/8\tUNKNOWN STEP\t2026-11-11T23:53:33.0Z   ✘   29 [chromium] › tests/dock.spec.ts:35:3 › the dock › closes (2s)',
+  'Browser suite / chromium 1/8\tUNKNOWN STEP\t2026-11-11T23:53:36.0Z   ✓   30 [chromium] › tests/dock.spec.ts:35:3 › the dock › closes (retry #1) (3s)',
+  'Browser suite / chromium 1/8\tUNKNOWN STEP\t2026-11-11T23:54:00.0Z   ✘   31 [chromium] › tests/dock.spec.ts:40:1 › row b (1.2m)',
+  'Browser suite / chromium 1/8\tUNKNOWN STEP\t2026-11-11T23:55:00.0Z   ✘   32 [chromium] › tests/dock.spec.ts:99:1 › gone (1s)',
+  'Browser suite / chromium 1/8\tUNKNOWN STEP\t2026-11-11T23:55:01.0Z   ✘   33 [chromium] › tests/basemap.spec.ts:45:3 › DEG-2 › a removed switcher releases (2ms)',
+  'Browser suite / chromium 1/8\tUNKNOWN STEP\t2026-11-11T23:55:02.0Z   -   34 [chromium] › tests/dock.spec.ts:50:3 › skipped one',
+  'Gate and Worker typecheck\tUNKNOWN STEP\t2026-11-11T23:50:00.0Z   ✘    1 [pure] › tests/acknowledgements.spec.ts:80:1 › every row (14ms)',
+  'Browser suite / chromium 1/8\tUNKNOWN STEP\t2026-11-11T23:55:03.0Z ##[error]  1) [chromium] › tests/dock.spec.ts:30:3 › the dock › opens ',
+  'Browser suite / chromium 1/8\tUNKNOWN STEP\t  154 passed (10.3m)'
+].join('\r\n');
+
+test('a run log yields its cases, the timings table and the cases that failed every attempt', () => {
+  const cases = parseCaseLog(LOG);
+  assert.equal(cases.length, 9);
+  assert.deepEqual(cases[0], { job: 'chromium 1/8', project: 'chromium', file: 'tests/dock.spec.ts', line: 30, title: 'the dock › opens', status: 'fail', retry: false, ms: 11900 });
+  assert.equal(cases[1].retry, true);
+  assert.equal(cases[4].ms, 72000);
+  assert.equal(cases[7].status, 'skip');
+  assert.equal(cases[8].project, 'pure');
+  // First attempts of browser cases only; a pure case and a skip cost no browser time.
+  assert.deepEqual(buildTimings(cases, { run: 1 }), {
+    run: 1,
+    unit: 'GitHub seconds, one worker, first attempt',
+    files: { 'tests/basemap.spec.ts': 0, 'tests/dock.spec.ts': 86.9 },
+    cases: { 'tests/basemap.spec.ts:45': 0, 'tests/dock.spec.ts:30': 11.9, 'tests/dock.spec.ts:35': 2, 'tests/dock.spec.ts:40': 72, 'tests/dock.spec.ts:99': 1 }
+  });
+  // `closes` passed on retry: flaky, not failed.
+  assert.deepEqual(failedCases(cases).map(({ project, file, title }) => `${project} ${file} ${title}`), [
+    'chromium tests/dock.spec.ts the dock › opens',
+    'chromium tests/dock.spec.ts row b',
+    'chromium tests/dock.spec.ts gone',
+    'chromium tests/basemap.spec.ts DEG-2 › a removed switcher releases',
+    'pure tests/acknowledgements.spec.ts every row'
+  ]);
+});
+
+test('red cases match by file and title where they are now: moved lines, loop titles, a test moved to another file', () => {
+  const specs = [
+    { path: 'tests/dock.spec.ts', text: DOCK_SPEC },
+    { path: 'tests/basemap-logic.spec.ts', text: "test('a removed switcher releases', () => {\n  expect(1).toBe(1);\n});" },
+    { path: 'tests/acknowledgements.spec.ts', text: "\n\ntest('every row', () => {});" }
+  ];
+  const { entries, moved, unmatched } = matchRedCases(failedCases(parseCaseLog(LOG)), specs);
+  assert.deepEqual(entries, ['tests/acknowledgements.spec.ts:3', 'tests/basemap-logic.spec.ts:1', 'tests/dock.spec.ts:11', 'tests/dock.spec.ts:22']);
+  assert.deepEqual(moved.map(({ now }) => now), ['tests/basemap-logic.spec.ts:1']);
+  assert.deepEqual(unmatched.map(({ title }) => title), ['gone']);
+  assert.deepEqual(newestFailedRun([{ databaseId: 3, conclusion: 'success' }, { databaseId: 2, conclusion: 'failure' }, { databaseId: 1, conclusion: 'failure' }]), { databaseId: 2, conclusion: 'failure' });
+  assert.equal(newestFailedRun([{ databaseId: 3, conclusion: 'cancelled' }]), null);
+});
+
+test('the work branch: a checked-out work branch, else the newest origin work branch HEAD contains', () => {
+  assert.equal(chooseWorkBranch('work/x', [], () => false), 'work/x');
+  const remotes = [{ name: 'work/newest' }, { name: 'feature/y' }, { name: 'work/older' }, { name: 'work/oldest' }];
+  assert.equal(chooseWorkBranch('main', remotes, (name) => name !== 'work/newest'), 'work/older');
+  assert.equal(chooseWorkBranch('HEAD', remotes, () => true), 'work/newest');
+  assert.equal(chooseWorkBranch('main', [{ name: 'feature/y' }], () => true), null);
+});
+
+test('tests/spec-timings.json holds seconds for browser spec files and their test lines', () => {
+  const timings = readTimings();
+  assert.ok(timings, 'tests/spec-timings.json is missing or not JSON');
+  assert.ok(Object.keys(timings.files).length >= 100, 'a full run names well over 100 browser spec files');
+  for (const [file, seconds] of Object.entries(timings.files)) {
+    assert.match(file, /^tests\/[\w.-]+\.spec\.ts$/);
+    assert.ok(Number.isFinite(seconds) && seconds >= 0, file);
+  }
+  for (const [key, seconds] of Object.entries(timings.cases)) {
+    assert.match(key, /^tests\/[\w.-]+\.spec\.ts:\d+$/);
+    assert.ok(key.slice(0, key.lastIndexOf(':')) in timings.files, key);
+    assert.ok(Number.isFinite(seconds) && seconds >= 0, key);
+  }
+});
+
+test('a refresh refuses a log with no cases, or one too small to stand for the suite', () => {
+  assert.match(refreshRefusal({ files: {} }, null), /No browser case lines/);
+  const known = { files: { a: 1, b: 1, c: 1, d: 1, e: 1 } };
+  assert.match(refreshRefusal({ files: { a: 1, b: 1, c: 1 } }, known), /targeted run cannot stand for the suite/);
+  assert.equal(refreshRefusal({ files: { a: 1, b: 1, c: 1, d: 1 } }, known), null);
+  assert.equal(refreshRefusal({ files: { a: 1 } }, null), null);
 });
