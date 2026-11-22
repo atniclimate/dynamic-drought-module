@@ -73,9 +73,26 @@ rows:
 
   - id: committing-wildfire-writes-the-one-word-claim
     description: >
-      Choosing Wildfire commits the cluster, replaces any granular layer list
-      with the one-word URL claim, and reveals the 3D control unpressed.
+      Choosing Wildfire in Brief commits the cluster and replaces any granular
+      layer list with the one-word URL claim; Brief offers no 3D control, since
+      the 3D Fire view and its ground switches are Console controls (owner,
+      2026-11-22).
     url: ''
+    steps:
+      - click_cluster: wildfire
+    expect:
+      cluster_pressed: wildfire
+      url_params:
+        cluster: wildfire
+        layers: null
+      fire3d_toggle: absent
+      fire3d_stamp: absent
+
+  - id: committing-wildfire-in-console-reveals-the-3d-control
+    description: >
+      Choosing Wildfire in Console commits the cluster and reveals the 3D
+      control unpressed, the one place it is offered.
+    url: '?view=console'
     steps:
       - click_cluster: wildfire
     expect:

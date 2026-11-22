@@ -4,8 +4,11 @@
  *
  * Shared desktop order: hazard, time horizon, regional navigation, and place
  * search, whose results fill the band under it. Variable view details follow.
- * Share stays in the map column's slot 4 in every view, and the Place and
- * Layer studio buttons stand under it in the same column. The
+ * The map's top-right column holds, top to bottom and in every view, Reset,
+ * Layer, Place, SAT, Help and Share. The Fire 3D stack (the 3D Fire view
+ * button, its ground switches and the 3D information disclosure) is a
+ * Console control: Brief's column draws none of it, so nothing in Brief
+ * moves when the mode changes (owner, 2026-11-22; fire3d-control.tsx). The
  * active condition readout is one line under the map's Key chip in Brief and
  * below the hazard buttons in Console; source details stay available
  * through the map key and the Impact Briefing.
@@ -516,7 +519,10 @@ function Shell({ map, snap, framing, onMinimapNoteChange }: ShellProps) {
   );
 }
 
-/** Variable claims and optional controls do not displace shared navigation. */
+/**
+ * Variable claims and optional controls do not displace shared navigation.
+ * The Fire 3D stack is mounted in both views and draws itself in Console only.
+ */
 function ShellDetails({ map, snap, framingNote }: {
   readonly map: maplibregl.Map;
   readonly snap: ReadonlySignal<CommittedShellSnapshot>;

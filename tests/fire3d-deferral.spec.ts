@@ -92,10 +92,12 @@ test.describe('Fire 3D controller deferral (DDM-P2-T04)', () => {
       if (FIRE3D_CHUNK_PATTERN.test(req.url())) fire3dRequests += 1;
     });
 
-    // Bare Drought boot: no eligibility, no fetch (mirrors the previous case
+    // Drought boot: no eligibility, no fetch (mirrors the previous case
     // so this test also proves the defect is gone from the exact starting
-    // point a desktop-to-Wildfire switch begins from).
-    await gotoApp(page, '');
+    // point a desktop-to-Wildfire switch begins from). In Console, because
+    // the 3D Fire view is a Console control (owner, 2026-11-22); Brief draws
+    // none of its stack.
+    await gotoApp(page, '?view=console');
     expect(fire3dRequests).toBe(0);
 
     await page.locator('.shell-cluster-btn[data-cluster="wildfire"]').click();

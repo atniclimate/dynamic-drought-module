@@ -166,6 +166,12 @@ test('the console control asks the console width, never the scene floor', () => 
   assert.doesNotMatch(control, /FIRE3D_MIN_WIDTH_QUERY/);
 });
 
+test('the desktop stack is a Console control: it follows the view and draws nothing in Brief (owner, 2026-11-22)', () => {
+  const control = read('src/ui/island/fire3d-control.tsx');
+  assert.match(control, /onViewModeChange\(\(mode\) => setConsoleView\(mode === 'console'\)\)/);
+  assert.match(control, /if \(!consoleView\) return null;/);
+});
+
 test('the phone card speaks the console control\'s own status sentences', () => {
   const control = read('src/ui/island/fire3d-control.tsx');
   const scene = read('src/ui/fire3d-phone-scene.ts');
