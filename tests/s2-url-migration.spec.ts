@@ -20,7 +20,7 @@ import { parseClusterParam, parseOceanParam } from '../src/state/cluster-store';
 // The boot composition moved to the S3 cluster service (the S2 interim
 // mechanics retired per the 2026-07-24 conductor amendment); the pinned
 // assertions below are unchanged.
-import { composeClusterIntent } from '../src/state/cluster-service';
+import { composeClusterIntent, keyForGeography } from '../src/state/cluster-service';
 import { parseShellParams } from '../src/state/url';
 import { deriveViewMode } from '../src/state/view-mode';
 
@@ -182,8 +182,10 @@ test.describe('S2 cluster boot composition (Node)', () => {
       for (const key of reference) {
         expect(composed, `${cluster}: reference ${key} survives`).toContain(key);
       }
-      // Every current-recipe member is applied.
-      for (const key of HAZARD_CLUSTERS[cluster].recipes.current) {
+      // Every current-recipe member is applied: the recipe's own surface, or
+      // its stand-in in the committed United States geography (DR-270).
+      for (const recipeKey of HAZARD_CLUSTERS[cluster].recipes.current) {
+        const key = keyForGeography(cluster, recipeKey);
         expect(composed, `${cluster}: recipe ${key} applied`).toContain(key);
       }
       // The one-surface invariant (UX-1) holds by construction. Cast: every

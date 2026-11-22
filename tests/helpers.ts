@@ -102,23 +102,39 @@ const TEST_USDM_SNAPSHOT = {
 const usdmStubContexts = new WeakSet<BrowserContext>();
 
 /**
+ * Whether a U.S. Drought Monitor request is a map frame read. The map layer
+ * (src/layers/usdm.ts `buildCurrentQueryUrl`, `buildArchiveQueryUrl`) GETs a
+ * whole frame with a `where` and no geometry; the briefing's read
+ * (src/impact/sources.ts `fetchUsdmClaims`) asks for one point or one place,
+ * as a GET carrying `geometry` or as a form POST.
+ */
+export function isUsdmMapFrameRead(method: string, url: URL): boolean {
+  return method === 'GET' && !url.searchParams.has('geometry');
+}
+
+/**
  * Route the U.S. Drought Monitor's current and archive services on the browser
  * CONTEXT, as `installDefaultNadmStub` does and for the same reasons. Since
  * DR-270 a boot that lists no layers draws the weekly U.S. map in the default
  * United States geography, so without this every routine boot would read the
- * live service. A spec's own `page.route` for these services still wins
- * (Playwright checks Page routes before Context routes).
+ * live service. Only the map's frame reads get the D2 polygon: a briefing's
+ * point or place read gets a valid empty collection, so the default map never
+ * decides what a briefing leads with. A spec's own `page.route` for these
+ * services still wins (Playwright checks Page routes before Context routes).
  */
 async function installDefaultUsdmStub(page: Page): Promise<void> {
   const context = page.context();
   if (usdmStubContexts.has(context)) return;
   usdmStubContexts.add(context);
-  const fulfill = (route: Route): Promise<void> =>
-    route.fulfill({
+  const fulfill = (route: Route): Promise<void> => {
+    const request = route.request();
+    const mapFrame = isUsdmMapFrameRead(request.method(), new URL(request.url()));
+    return route.fulfill({
       status: 200,
       contentType: 'application/geo+json',
-      body: JSON.stringify(TEST_USDM_SNAPSHOT)
+      body: JSON.stringify(mapFrame ? TEST_USDM_SNAPSHOT : { type: 'FeatureCollection', features: [] })
     });
+  };
   await context.route('**/USDM_current/**', fulfill);
   await context.route('**/USDM_archive/**', fulfill);
 }

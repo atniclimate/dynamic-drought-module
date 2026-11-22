@@ -433,6 +433,10 @@ test.describe('PLACE studio: every rail kind exercised (owner-1c)', () => {
 
     // Watersheds: the same select-then-frame proof, from a fresh PLACE
     // entry (the WBD stub above already answers both watershed layers).
+    // The Place cell is in the map's column, under the open briefing: Back
+    // to map (in Reset's seat) returns to it first (the owner, 2026-11-22).
+    await statePanel.locator('.impact-panel-close').click();
+    await expect(statePanel).toBeHidden();
     await page.locator('#place-studio-entry').click();
     await expect(page.locator(PLACE_ROOT)).toBeVisible();
     await page.locator('#place-type-watershed').click();
