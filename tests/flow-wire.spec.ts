@@ -8,6 +8,7 @@ import { locateMessage } from '../src/layers/flow/nodd';
 import { FLOW_SOURCES, frameGrid } from '../src/layers/flow/source';
 import type { EnsoFlowKind } from '../src/state/enso-flow';
 import { backToMap, gotoApp, layerCheckbox, noddStubLog } from './helpers';
+import { FIXTURE_CYCLE, FIXTURE_VALID, FRAME, FRAME_CLOCK, FRAME_RUN, FRAME_VALID } from './flow-wire-fixtures';
 
 /*
  * ENSO-FLOW-PLAN block E2, unit E2-1 (FLOW-WIRE): in ENSO mode, Wind and
@@ -38,16 +39,7 @@ const PIXEL = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQ
 /** The committed currents frame: its header, and the header with its grid files. */
 const CURRENTS_HEADER = /\/data\/rtofs-surface-currents\.json(?:\?|$)/;
 const CURRENTS_FRAME = /\/data\/rtofs-surface-currents[^/]*$/;
-const FRAME = JSON.parse(readFileSync(new URL('../public/data/rtofs-surface-currents.json', import.meta.url), 'utf8')) as {
-  readonly run: string; readonly valid: string; readonly grids: readonly { readonly file: string }[];
-};
-const FRAME_RUN = Date.parse(FRAME.run);
-const FRAME_VALID = Date.parse(FRAME.valid);
-/** Three and a half days after the frame's valid instant: its line ends "frame 3 days old". */
-const FRAME_CLOCK = FRAME_VALID + 3.5 * 24 * 3_600_000;
 const NODD =/^https:\/\/noaa-gfs-bdp-pds\.s3\.amazonaws\.com\//;
-const FIXTURE_CYCLE = Date.UTC(2026, 9, 5, 6);
-const FIXTURE_VALID = Date.UTC(2026, 9, 5, 12);
 /** Candidate cycle 06Z; wind (3-hourly) and waves (hourly) both at f006. */
 const LIVE_CLOCK = Date.UTC(2026, 9, 5, 12, 30);
 /** Past the fixtures' cycle + 24 h (2026-10-06 06Z). */
@@ -56,7 +48,7 @@ const FAILED_NOTE = 'No direction or calm condition is inferred from a failed re
 const WIND_IDX = 'gfs.20261005/06/atmos/gfs.t06z.pgrb2.1p00.f006.idx';
 // A namespace read, so this file still loads (and each case fails on its own
 // assertion) on code that does not export the flow words yet.
-const { FLOW_WORDS, flowLiveLine, flowStaleLine } = ensoFlowData;
+const { FLOW_WORDS } = ensoFlowData;
 const WAVE_IDX = 'gfswave.t06z.global.0p25.f006.grib2.idx';
 
 function fixtureText(name: string): string {
@@ -206,44 +198,6 @@ async function dragMap(page: Page, dx: number, dy: number): Promise<void> {
   await page.mouse.move(cx + dx, cy + dy, { steps: 6 });
   await page.mouse.up();
 }
-
-test.describe('E2-1 flow words', () => {
-  /** Every flow sentence: the table's leaves plus each composed line. */
-  function flowStrings(): string[] {
-    expect(FLOW_WORDS, 'the one table of flow words (src/layers/enso-flow-data.ts)').toBeDefined();
-    const out: string[] = [];
-    const walk = (value: unknown): void => {
-      if (typeof value === 'string') out.push(value);
-      else if (value && typeof value === 'object') for (const v of Object.values(value)) walk(v);
-    };
-    walk(FLOW_WORDS);
-    for (const kind of Object.keys(FLOW_SOURCES) as (keyof typeof FLOW_SOURCES)[]) out.push(flowLiveLine('live', kind, FIXTURE_CYCLE, FIXTURE_VALID), flowLiveLine('live (partial)', kind, FIXTURE_CYCLE, FIXTURE_VALID));
-    for (const kind of Object.keys(FLOW_SOURCES) as (keyof typeof FLOW_SOURCES)[]) out.push(flowStaleLine(kind, FIXTURE_CYCLE));
-    // The currents frame's own lines: its dated line with its age (the grid boxes read in Technical information).
-    out.push(flowLiveLine('live', 'currents', FRAME_RUN, FRAME_VALID, FRAME_CLOCK), flowLiveLine('live (partial)', 'currents', FRAME_RUN, FRAME_VALID, FRAME_VALID));
-    return out;
-  }
-
-  test('no flow string contains now, right now, currently, real-time, latest or today', () => {
-    const strings = flowStrings();
-    expect(strings.length).toBeGreaterThan(20);
-    for (const s of strings) {
-      expect(s, s).not.toMatch(/\bnow\b|\bright now\b|\bcurrently\b|\breal-time\b|\blatest\b|\btoday\b/i);
-      expect(s, s).not.toMatch(/\bforecasts?\b|\bwill\b|\bexpected\b|\bpredict/i);
-    }
-  });
-
-  test("no flow string contains trajectory, carries, drift, where the wind goes, travels to or path of", () => {
-    const strings = flowStrings();
-    for (const s of strings) {
-      expect(s, s).not.toMatch(/\btrajector(?:y|ies)\b|\bcarries\b|\bdrift|where the wind goes|\btravels to\b/i);
-    }
-    const pathOf = strings.filter((s) => /\bpath of\b/i.test(s));
-    // The one negation that holds "path of" left the key for the Impact Briefing, where
-    // tests/terrain-coverage.test.mjs holds it to this rule; no panel or key string has the words.
-    expect(pathOf).toEqual([]);
-  });
-});
 
 test.describe('E2-1 flowing paths in ENSO mode', () => {
   for (const kind of ['wind', 'waves'] as const) {

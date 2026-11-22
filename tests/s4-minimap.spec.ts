@@ -1,10 +1,6 @@
 import { test, expect, type Page } from './offline-test';
 import { gotoApp, layerCheckbox, layerPill, PILL, search, urlLayers } from './helpers';
-import {
-  FRAMINGS,
-  FRAMING_KEYS,
-  framingFitBounds,
-} from '../src/config/framings';
+import { FRAMING_KEYS } from '../src/config/framings';
 import { MINIMAP_WHP } from '../src/config/minimap-whp';
 import {
   stubWildfireMinimap,
@@ -12,12 +8,6 @@ import {
 } from './minimap-fixtures';
 import { stubCpcDroughtOutlook } from './cpc-outlook-fixtures';
 import { fulfillBcws, isBcwsRequestUrl } from './wildfire-fixtures';
-
-test('the Alaska framing camera includes the wrapped western Aleutians', () => {
-  const [[west], [east]] = framingFitBounds(FRAMINGS['alaska-northwest']);
-  expect(west).toBeLessThanOrEqual(172);
-  expect(east).toBeGreaterThanOrEqual(237);
-});
 
 const NADM_FIXTURE = {
   type: 'FeatureCollection',

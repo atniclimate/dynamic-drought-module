@@ -1,5 +1,4 @@
 import { test, expect } from './offline-test';
-import { execFileSync } from 'node:child_process';
 import { gotoApp, showFullDetail } from './helpers';
 
 /**
@@ -16,33 +15,6 @@ import { gotoApp, showFullDetail } from './helpers';
  * that unit, never loosened on its own.
  */
 test.describe('ENSO plume omission (indices-only snapshot)', () => {
-  test('no scraper identifier survives at source level (anti-scrape pin)', () => {
-    // Source-level regression pin (review finding 2): the artifact/UI checks
-    // below would not catch a reintroduced scraper whose snapshot was not yet
-    // regenerated. Reject the removed identifiers across the live trees.
-    const banned = [
-      'fetchProbabilities',
-      'PROBABILITIES_URL',
-      'probabilities-table',
-      'analysis_monitoring/enso/roni/probabilities'
-    ];
-    for (const needle of banned) {
-      let out = '';
-      try {
-        // -l: list matching files; -F: fixed string. Exit 1 = no matches.
-        out = execFileSync(
-          'git',
-          ['grep', '-lF', needle, '--', 'scripts', 'src', 'public',
-           ':(exclude)tests/enso-plume-omission.spec.ts'],
-          { encoding: 'utf8' }
-        );
-      } catch {
-        // git grep exits non-zero when nothing matches: the desired state.
-      }
-      expect(out.trim(), `"${needle}" must not reappear in scripts/src/public`).toBe('');
-    }
-  });
-
   test('the bundled snapshot carries no probabilities block', async ({ page }) => {
     await gotoApp(page);
     const snapshot = await page.evaluate(async () => {

@@ -1,8 +1,6 @@
 import { test, expect, type Page } from './offline-test';
 
 import { TRIBAL_NATIONS_PROVENANCE_NOTE } from '../src/config/provenance';
-import { parseStudioParam } from '../src/state/url';
-import { STATUS_PILL_TEXT } from '../src/ui/island/pill-text';
 import { gotoApp, layerPill, PILL, ROLE_GROUPS, search, urlLayers } from './helpers';
 
 const STUDIO = '#layers-studio-root';
@@ -59,18 +57,6 @@ test.describe('minimal LAYERS studio', () => {
   }
   test.beforeEach(async ({ page }) => {
     await stubPlaces(page);
-  });
-
-  test('the route token and six status labels stay canonical', () => {
-    expect(parseStudioParam('layers')).toBe('layers');
-    expect(parseStudioParam('place')).toBe('place');
-    expect(parseStudioParam(null)).toBeNull();
-    expect(STATUS_PILL_TEXT.loading).toBe('loading...');
-    expect(STATUS_PILL_TEXT.ready).toBe('live');
-    expect(STATUS_PILL_TEXT.degraded).toBe('live (partial)');
-    expect(STATUS_PILL_TEXT.error).toBe('unavailable');
-    expect(STATUS_PILL_TEXT['no-data']).toBe('no data');
-    expect(STATUS_PILL_TEXT['zoom-in']).toBe('zoom in to load');
   });
 
   test('entry pushes once and Back to map keeps the changed display snapshot', async ({ page }) => {

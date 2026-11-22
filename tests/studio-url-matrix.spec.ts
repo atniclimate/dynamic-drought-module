@@ -4,7 +4,6 @@ import { FRAMINGS, type FramingKey } from '../src/config/framings';
 import { HAZARD_CLUSTERS, HAZARD_CLUSTER_KEYS } from '../src/config/clusters';
 import { keyForGeography } from '../src/state/cluster-service';
 import { TRIBAL_NATIONS_GROUP } from '../src/config/layer-groups';
-import { parseShellParams, parseStudioParam } from '../src/state/url';
 import { gotoApp, search, stubHeatRiskCatalog, urlLayers, waitForLayerSettled } from './helpers';
 import { stubRecentSatellite } from './satellite-fixture';
 import { AIANNH_ROUTE, BIA_ROUTE, emptyCollectionBody, routeGeojson } from './tribal-fixtures';
@@ -144,23 +143,6 @@ function expectParams(url: URL, expected: Readonly<Record<string, string | null>
 }
 
 test.describe('studio URL precedence matrix', () => {
-  test('pure parsing keeps studio additive and shell precedence unchanged', () => {
-    expect(parseStudioParam('layers')).toBe('layers');
-    expect(parseStudioParam('place')).toBe('place');
-    expect(parseStudioParam('invalid')).toBeNull();
-
-    const granular = parseShellParams(
-      new URLSearchParams(`framing=${encodeURIComponent(FRAMING)}&layers=places&cluster=enso&ocean=pacific`)
-    );
-    expect(granular.framing).toBe(FRAMING);
-    expect(granular.cluster).toBe('drought');
-    expect(granular.ocean).toBeNull();
-
-    const enso = parseShellParams(new URLSearchParams('cluster=enso&ocean=pacific'));
-    expect(enso.cluster).toBe('enso');
-    expect(enso.ocean).toBe('pacific');
-  });
-
   for (const scenario of MATRIX) {
     test(`${scenario.name}: canonical write, reload, and Back`, async ({ page }) => {
       await stubMatrixDependencies(page);

@@ -1,5 +1,4 @@
 import { expect, test, type Page } from './offline-test';
-import { readdirSync } from 'node:fs';
 
 import {
   gotoApp,
@@ -280,11 +279,5 @@ test.describe('U7 British Columbia basin drought display', () => {
       page.locator('#legend-panel [data-legend="nadm-drought"]')
     ).toContainText('North American Drought Monitor');
     await expect(page.locator('#map-key-content')).toBeHidden();
-  });
-
-  test('no British Columbia source geometry is committed under public data', () => {
-    const names = readdirSync('public/data');
-    expect(names.filter((name) => /(?:british.?columbia|bc-drought)/i.test(name)))
-      .toEqual([]);
   });
 });

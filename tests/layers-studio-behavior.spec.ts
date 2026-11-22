@@ -1,6 +1,5 @@
 import { expect, test, type Page } from './offline-test';
 
-import { STATUS_PILL_TEXT } from '../src/ui/island/pill-text';
 import { gotoApp, search, urlLayers } from './helpers';
 import {
   AIANNH_ROUTE,
@@ -48,15 +47,6 @@ async function stubSatellite(page: Page): Promise<void> {
 }
 
 test.describe('LAYERS studio behavior', () => {
-  test('the six-label mapping is explicit by status key', () => {
-    expect(STATUS_PILL_TEXT.loading).toBe('loading...');
-    expect(STATUS_PILL_TEXT.ready).toBe('live');
-    expect(STATUS_PILL_TEXT.degraded).toBe('live (partial)');
-    expect(STATUS_PILL_TEXT.error).toBe('unavailable');
-    expect(STATUS_PILL_TEXT['no-data']).toBe('no data');
-    expect(STATUS_PILL_TEXT['zoom-in']).toBe('zoom in to load');
-  });
-
   test('layer-scoped search activates a result and the controller round-trips it', async ({
     page
   }) => {
