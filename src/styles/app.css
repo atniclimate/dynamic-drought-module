@@ -163,7 +163,7 @@
      control already at or above 24px keeps its own geometry. */
   --pointer-target: 24px;
   /* One control face for the left column (visual uniformity wave 1, D1):
-     the mode, horizon, Place and Layers, Tribal Nations and 3D Fire buttons
+     the mode, horizon and 3D Fire buttons
      read one gap, one height floor and one label. A coarse pointer lifts
      the floor to --touch-target (the rule after :root). */
   --ctl-gap: 6px;
@@ -1147,22 +1147,16 @@ button.conditions-metric:hover .conditions-action-hide {
   margin: 6px 0 10px;
 }
 
-#layers-studio-entry-host { margin-top: 12px; }
-#layers-studio-entry-host:empty { display: none; }
-/* The Tribal Nations button spans the row under the two doors, one control
-   gap below them (D5). Its count reads in the button's accessible name; a
-   fault takes its own line under the button (.tribal-nations-health). */
-#brief-secondary-actions .tribal-nations-brief-row {
-  padding: var(--ctl-gap) 0 0;
-}
-/* The Place and Layers doors wear THE CONTROL FACE (the shell section). */
-.brief-console-door {
-  display: block;
-  width: 100%;
+/* The Place and Layer doors left this display for the map's top-right column
+   (owner, 2026-11-21 and 22); what stays is the announced, never drawn, selection
+   summary, so the section draws no band of its own. */
+.brief-display {
+  padding: 0;
+  border-bottom: 0;
 }
 
 /* found-012: the held-chunk entry feedback (view-shell.ts, sidebar.ts). Not
-   scoped to .brief-console-door alone: the mobile PLACE opener
+   scoped to the map's studio buttons alone: the mobile PLACE opener
    (#sheet-place-studio-entry, .sheet-report-door) gets the same class from
    the same shared marking helper. The spinner glyph itself reuses
    .impact-spinner (its border and animation tokens, and its
@@ -1494,16 +1488,12 @@ button.conditions-metric:hover .conditions-action-hide {
 }
 
 /* The compact Brief-door action (the eager mirror of the umbrella button,
-   hosted by the impact panel's static chrome). One labeled row; no child
+   hosted by a brief embed's impact panel chrome). One labeled row; no child
    rows, no provenance paragraph (those stay in the catalog). */
 .tribal-nations-brief-row {
   padding: 8px var(--gutter) 0;
 }
-/* The at-hand mirror rides its section's own gutters. */
-.tribal-nations-at-hand-row {
-  padding: 10px 0 0;
-}
-/* The fault line under each Brief-door action: it has text only while an
+/* The fault line under the Brief-door action: it has text only while an
    agency is unavailable (D5), and draws nothing otherwise. */
 .tribal-nations-health {
   display: block;
@@ -2763,6 +2753,13 @@ button.conditions-metric:hover .conditions-action-hide {
   display: contents;
 }
 
+/* The Place and Layer cells are the desktop shell's alone (THE STUDIO CELLS
+   below): phones keep the sheet's Place door and the footer's Layers tab,
+   and an embed its full-site links. */
+.map-studio-seat {
+  display: none;
+}
+
 /* The key in the control column is bounded by the column, not by the
    bottom dock's width, and stays non-interactive chrome. */
 @media (min-width: 721px) {
@@ -2927,6 +2924,45 @@ button.conditions-metric:hover .conditions-action-hide {
     pointer-events: auto;
   }
 
+  /* THE STUDIO CELLS (owner, 2026-11-21 and 22): Place above Layer, under
+     the four slots in this column's own cells, on its x, with its gap and
+     faces. The four slots above keep their seats; the pair takes the grid's
+     fifth row, which is why the column's own gap stands between Share and
+     Place. Seated only when the full app filled it: a framed page gets the
+     full-site links in the same row instead. */
+  .app-shell:not(.embed) .map-overlay-controls > .map-studio-seat:not(:empty) {
+    grid-column: 1;
+    grid-row: 5;
+    display: block;
+    min-width: 0;
+  }
+  .app-shell:not(.embed) .map-studio-seat > .studio-entry-pair {
+    display: grid;
+    grid-template-columns: var(--map-cell-w);
+    grid-template-rows: repeat(2, var(--map-cell-h));
+    gap: var(--map-cell-gap);
+  }
+  /* A held studio chunk (found-012): the spinner takes the icon's place in
+     the icon column, so the cell keeps its one row and its size. It is a
+     span, so it is named here above the cell's word rule and keeps its own
+     box and ring across the tablet band, where the word is visually hidden.
+     The ring is drawn in the cell's ink, which reads on the glass. */
+  .app-shell:not(.embed) .map-studio-seat .map-cell > .studio-entry-pending-spinner {
+    position: static;
+    grid-area: 1 / 1;
+    justify-self: center;
+    width: 11px;
+    height: 11px;
+    margin: 0;
+    border: 2px solid color-mix(in srgb, currentColor 35%, transparent);
+    border-top-color: currentColor;
+    overflow: visible;
+    clip: auto;
+  }
+  .app-shell:not(.embed) .map-studio-seat .map-cell.studio-entry-pending > svg {
+    visibility: hidden;
+  }
+
   /* MapLibre's control group, borrowed into slot 2, loses its white card
      and rounded corners and fills the slot. */
   .app-shell:not(.embed) #basemap-switcher-overlay-host > .basemap-switcher-control {
@@ -2942,7 +2978,9 @@ button.conditions-metric:hover .conditions-action-hide {
   /* The cell (R1 a): a fixed 20px icon column, an 8px gap, then the word.
      The 1px edge plus 9px padding puts every icon centre 20px in from the
      cell's left edge: one x for the whole column, W - 12 - --map-cell-w
-     + 20 (W - 88 at 96px). */
+     + 20 (W - 88 at 96px). The Place and Layer cells under the four slots
+     (.map-studio-seat, THE STUDIO CELLS above) are cells of this column and
+     take every rule here. */
   .app-shell:not(.embed) .map-overlay-controls .map-cell {
     box-sizing: border-box;
     display: grid !important;
@@ -3346,14 +3384,9 @@ button.conditions-metric:hover .conditions-action-hide {
 
 /* =============================================================================
    PLACE studio. Lazy route, catalog rail, and selection panel shell.
+   The full app's Place and Layer entries are cells of the map's top-right
+   column (.map-studio-seat, THE STUDIO CELLS above).
    ============================================================================= */
-
-.studio-entry-pair {
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(0, 1fr);
-  gap: var(--ctl-gap);
-}
 
 .studio-linkout-pair {
   display: grid;
@@ -7568,11 +7601,10 @@ a.impact-resource-link::after {
   padding: 0;
   border-bottom: 0;
 }
-/* A briefable region uses the second row; every other region shows the
-   plain-text alternate there instead (D1 M4 repair, found-024): the row
-   keeps var(--shell-region-row) in every state, so it is never an empty
-   reserved band and #brief-search below never moves when the door appears
-   or disappears (the 2026-09-13 stable-position rule). The door's row is
+/* The second row is the briefing door's seat. It is reserved in every state,
+   empty while the door is hidden (the "Pick a place" line left it, owner
+   2026-11-21), so #brief-search below never moves when the door appears or
+   disappears (the 2026-09-13 stable-position rule). The door's row is
    the touch floor on every pointer: that holds its two lines, a chosen
    place's one-line name over "Open briefing" (repair R2). A name that
    needs a second line is never cut, so it alone grows the row. */
@@ -7582,15 +7614,41 @@ a.impact-resource-link::after {
   grid-template-rows: minmax(var(--shell-region-row), auto) minmax(var(--touch-target), auto);
   gap: 8px;
 }
-#shell-region-host .region-briefing-btn,
-#shell-region-host .region-briefing-note { margin-top: 0; }
-#shell-region-host .region-briefing-note {
-  display: flex;
-  align-items: center;
-  font-size: 11.5px;
-  color: var(--fg-2);
+#shell-region-host .region-briefing-btn { margin-top: 0; }
+
+/* THE RESULTS BAND (owner, 2026-11-21). In desktop Brief the search's results
+   own the space under the box that the Place and Layer doors left. The search
+   is a two-row grid, the box and then a band of one fixed height, so typing,
+   results arriving and clearing move nothing in the column (the 2026-09-13
+   stable-position rule). The band is the height the doors and the Tribal
+   Nations button gave back (two 36px control rows and their 12px of gaps), so
+   the column is no taller than it was and Wildfire's 3D stack still fits the
+   screens it fitted. A result with its second line (a land area, a source) fits the band;
+   a longer list keeps its own height and runs down over the controls under
+   the band, on the column's own surface, and scrolls past --brief-results-max.
+   The Brief head is seated here only in desktop Brief
+   (src/ui/island/shell.tsx); every other search host keeps its own list. */
+#shell-refine-host {
+  --brief-results-h: 84px;
+  --brief-results-max: 320px;
 }
-#shell-region-host .region-briefing-note[hidden] { display: none; }
+#shell-refine-host .ddm-search {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto var(--brief-results-h);
+}
+#shell-refine-host .ddm-search-results {
+  position: relative;
+  z-index: 2;
+  align-self: start;
+  max-height: var(--brief-results-max);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--bg-1);
+}
+#shell-refine-host .ddm-search-results:not(:empty) {
+  padding-bottom: 8px;
+}
 
 /* Optional controls and live explanations expand below the shared doors. */
 .shell-details-panel { display: none; }
@@ -7733,17 +7791,15 @@ a.impact-resource-link::after {
 }
 
 /* THE CONTROL FACE (visual uniformity wave 1, D1). One face for every button
-   in the left column: the modes, the horizons, the Place and Layers doors,
-   the Tribal Nations button and the 3D Fire stack. Its values are the
+   in the left column: the modes, the horizons and the 3D Fire stack (the
+   Place and Layer doors are map cells now, owner 2026-11-21). Its values are the
    --ctl-* tokens; a coarse pointer lifts --ctl-min-h to the touch floor.
    Labels are mixed case; uppercase belongs to section heads. The pressed
    face is SELECTED INVERTS, near the end of this file. */
 .shell-cluster-btn,
 .shell-horizon-btn,
 .shell-fire3d-btn,
-.shell-fire3d-layer,
-.brief-console-door,
-#brief-secondary-actions .tribal-nations-brief-action {
+.shell-fire3d-layer {
   appearance: none;
   min-width: 0;
   min-height: var(--ctl-min-h);
@@ -7763,15 +7819,13 @@ a.impact-resource-link::after {
     color var(--dur-micro) var(--ease-standard),
     border-color var(--dur-micro) var(--ease-standard);
 }
-:is(.shell-cluster-btn, .shell-horizon-btn, .shell-fire3d-btn, .shell-fire3d-layer, .brief-console-door):hover,
-#brief-secondary-actions .tribal-nations-brief-action:hover {
+:is(.shell-cluster-btn, .shell-horizon-btn, .shell-fire3d-btn, .shell-fire3d-layer):hover {
   background: var(--bg-2);
   border-color: var(--line-strong);
   color: var(--fg-0);
 }
 @media (prefers-reduced-motion: reduce) {
-  :is(.shell-cluster-btn, .shell-horizon-btn, .shell-fire3d-btn, .shell-fire3d-layer, .brief-console-door),
-  #brief-secondary-actions .tribal-nations-brief-action {
+  :is(.shell-cluster-btn, .shell-horizon-btn, .shell-fire3d-btn, .shell-fire3d-layer) {
     transition: none;
   }
 }
@@ -8534,14 +8588,13 @@ a.impact-resource-link::after {
 
   /* Sidebar body: the place search (31px), the
      region select and its briefing trigger (38px), the Tribal Nations
-     action (32px), the two studio doors (28px), the conditions metrics
-     (37px), and the key disclosure (38px). */
+     action (32px), the conditions metrics (37px), and the key disclosure
+     (38px). The two studio buttons are map cells and take the floor through
+     --map-cell-h. */
   .ddm-search-input,
   .region-select,
   .region-briefing-btn,
   .tribal-nations-brief-action,
-  #brief-secondary-actions .tribal-nations-brief-action,
-  .brief-console-door,
   .conditions-metric,
   .layer-umbrella-details-toggle,
   .layer-toggle {
@@ -8874,11 +8927,10 @@ a.impact-resource-link::after {
   outline-offset: 0;
   box-shadow: 0 0 0 4px var(--focus-outer), var(--selection-shadow);
 }
-/* The Brief's Tribal Nations toggle wears the same face. The sidebar copy sits
-   under an id rule, so it is named here with its own id; both draw Highlight on
-   HighlightText under forced colours (a respect defect when the label vanished). */
-.tribal-nations-brief-action[aria-pressed='true'],
-#brief-secondary-actions .tribal-nations-brief-action[aria-pressed='true'] {
+/* The embed briefing's Tribal Nations toggle wears the same face, and draws
+   Highlight on HighlightText under forced colours (a respect defect when the
+   label vanished). */
+.tribal-nations-brief-action[aria-pressed='true'] {
   forced-color-adjust: none; /* FORCED COLOURS, app.css */
   background: var(--face-selected);
   color: var(--ink-on-selected);

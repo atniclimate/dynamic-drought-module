@@ -30,16 +30,10 @@ import { SHELL_HAZARD_KEY } from '../impact/horizon-chrome';
 import { getCommittedSnapshot } from '../state/cluster-service';
 import { getViewMode, setViewMode } from '../state/view-mode';
 import { escapeHtml } from '../util/escape';
-import { TRIBAL_NATIONS_GROUP } from '../config/layer-groups';
 import { getPlaceSelection, onPlaceSelectionChange } from '../state/place-selection';
 import type { PlaceSelection } from '../state/place-selection';
 import { enterPlaceStudio } from '../state/studio-route';
 import { createChunkLoader } from '../util/chunk-retry';
-import {
-  toggleTribalNationsGroup,
-  wireTribalNationsHealth,
-  wireTribalNationsToggle
-} from './tribal-nations-action';
 import { loadSearchController } from './search-chunk';
 
 // ---------------------------------------------------------------------------
@@ -809,24 +803,6 @@ export function initMobileSheet(
   document.getElementById('sheet-all-layers-btn')?.addEventListener('click', () => {
     setSheetDetent('full');
   });
-
-  // The at-hand Tribal Nations action (umbrella build Unit F): the Brief
-  // half detent shows the at-hand summary INSTEAD of the report, so the
-  // report-hosted action needs this mirror to stay reachable. found-090:
-  // wired as a real toggle through the same shared command and pressed-state
-  // mirror the Brief-door host uses (M14), not a one-shot activation, so a
-  // third press can turn the set off again. The visible label is re-stamped
-  // from the group config so the static index.html copy cannot drift from
-  // it; the accessible name and description are the toggle wiring's job.
-  const atHandAction = document.getElementById('tribal-nations-at-hand-action');
-  if (atHandAction instanceof HTMLButtonElement) {
-    atHandAction.textContent = TRIBAL_NATIONS_GROUP.label;
-    atHandAction.addEventListener('click', () => toggleTribalNationsGroup());
-    const atHandDesc = document.getElementById('tribal-nations-at-hand-action-desc') ?? undefined;
-    wireTribalNationsToggle(atHandAction, atHandDesc);
-    const atHandHealth = document.getElementById('tribal-nations-at-hand-health');
-    if (atHandHealth) wireTribalNationsHealth(atHandHealth);
-  }
 
   buildSheetPlaceStudioEntry();
 

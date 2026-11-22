@@ -121,14 +121,13 @@
              embeds show only the mirrored #embed-date-stamp. -->
         <div id="time-bar" class="time-bar" role="group" hidden></div>
 
-        <!-- What is shown and how to refine it. Stable hosts let view-shell
-             update prose, studio entries, and the selected-place response
-             without ever rebuilding or nesting #time-bar. The ENSO capability
+        <!-- What is shown and how to refine it. A stable host lets view-shell
+             update the selected-place response without ever rebuilding or
+             nesting #time-bar; the studio entries moved to the map's
+             top-right column (#map-studio-seat). The ENSO capability
              is demoted into this description with its detail behind disclosure. -->
         <section class="panel brief-display" id="brief-display" aria-label="Refine the view" hidden>
           <!-- DisplaySummary owns the live summary in the shell; do not duplicate it here. -->
-          <div id="layers-studio-entry-host"></div>
-          <div id="brief-secondary-actions"></div>
           <!-- The chosen place's name, announced and not drawn: the one
                briefing door (#region-briefing-btn, the region row's, in
                Brief and Console alike) shows it. -->
@@ -165,15 +164,6 @@
                preserves this order after mobile-sheet groups the door. -->
           <div id="sheet-time-host" class="sheet-time-host"></div>
           <button type="button" id="sheet-report-door" class="sheet-report-door" hidden>Read the full report</button>
-          <!-- The compact Tribal Nations action, mirrored on the mobile
-               at-hand surface (umbrella build Unit F). It follows the primary
-               place, time, and report path and stays stable outside the body
-               that renderAtHand() rebuilds. -->
-          <div class="tribal-nations-brief-row tribal-nations-at-hand-row">
-            <button type="button" id="tribal-nations-at-hand-action" class="tribal-nations-brief-action" aria-label="Show Tribal Nations layers" aria-describedby="tribal-nations-at-hand-action-desc">Tribal Nations</button>
-            <span id="tribal-nations-at-hand-action-desc" class="sr-only">Turns on Tribal Lands and Reservation Boundaries.</span>
-            <span id="tribal-nations-at-hand-health" class="tribal-nations-health" aria-live="polite"></span>
-          </div>
         </section>
 
         <!-- Stable fallback seat for the one region radiogroup. Its desktop
@@ -342,6 +332,14 @@
              together on the desktop shell; phones and embeds keep their
              homes beside #map-info-home below. -->
         <div id="map-info-seat" class="map-overlay-seat map-spine-slot" data-map-slot="3"></div>
+        <!-- Under the four slots (owner, 2026-11-21 and 22): the Place and
+             Layer studio buttons, filled by src/ui/view-shell.ts in this
+             column's cells, Place above Layer, on the column's own x. The
+             four slots above keep their seats. The stylesheet shows the seat
+             on the desktop shell only (721px and wider, outside an embed):
+             phones keep the sheet's Place door and the footer's Layers tab,
+             and an embed keeps its full-site links. -->
+        <div id="map-studio-seat" class="map-studio-seat"></div>
       </div>
 
       <!-- The mobile hazard rail (0.7.0 mobile shell): the quick hazard

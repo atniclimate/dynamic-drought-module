@@ -22,12 +22,9 @@ const STUBS = {
   '/state/cluster-service': 'export const getCommittedSnapshot = () => ({ selectedHazard: "drought" });',
   '/state/view-mode': 'let m = "brief"; export const getViewMode = () => m; export const setViewMode = (v) => { m = v; };',
   '/util/escape': 'export const escapeHtml = (s) => s;',
-  '/config/layer-groups': 'export const TRIBAL_NATIONS_GROUP = { label: "Tribal Nations" };',
   '/state/place-selection': 'export const getPlaceSelection = () => null; export const onPlaceSelectionChange = () => () => {};',
   '/state/studio-route': 'export const enterPlaceStudio = () => {};',
   '/util/chunk-retry': 'export const createChunkLoader = () => () => new Promise(() => {});',
-  '/ui/tribal-nations-action':
-    'export const toggleTribalNationsGroup = () => {}; export const wireTribalNationsHealth = () => {}; export const wireTribalNationsToggle = () => {};',
   '/ui/search-chunk': 'export const loadSearchController = () => new Promise(() => {});'
 };
 

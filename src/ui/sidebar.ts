@@ -89,7 +89,6 @@ import { getPlaceSelection, onPlaceSelectionChange } from '../state/place-select
 import type { PlaceSelection } from '../state/place-selection';
 import {
   ensureBriefHeadSearch,
-  ensureBriefHeadTribalAction,
   refreshLayersStudioEntry,
   renderStudioLoadFailure
 } from './view-shell';
@@ -935,20 +934,6 @@ function buildRegionSelect(): void {
   });
   select.insertAdjacentElement('afterend', briefingBtn);
 
-  // The door's plain-text alternate (D1 M4 repair, found-024): the second
-  // shell row is never empty, so when the door has nothing to show, this
-  // statement takes its place instead of a reserved but empty band. It is
-  // not a button (no click handler, no URL state) and is not a live region
-  // (no per-change announcement); updateRegionBriefingTrigger keeps it the
-  // exact inverse of the door's own hidden state, so exactly one of the two
-  // occupies the row.
-  const briefingNote = document.createElement('span');
-  briefingNote.id = 'region-briefing-note';
-  briefingNote.className = 'region-briefing-note';
-  briefingNote.textContent = 'Pick a place to open its briefing.';
-  briefingNote.hidden = true;
-  briefingBtn.insertAdjacentElement('afterend', briefingNote);
-
   // Reflect the region active at build time (boot applies it again via selectRegion).
   syncRegionSelect();
   updateRegionBriefingTrigger(STATE.currentRegion);
@@ -966,10 +951,6 @@ function buildRegionSelect(): void {
 function updateRegionBriefingTrigger(regionKey: RegionKey | null | undefined): void {
   const btn = document.getElementById('region-briefing-btn');
   if (!(btn instanceof HTMLButtonElement)) return;
-  // The plain-text alternate (D1 M4 repair, found-024) is optional only for
-  // callers that run before buildRegionSelect has inserted it; every real
-  // path keeps it the exact inverse of the door below.
-  const note = document.getElementById('region-briefing-note');
   // A selected map place takes precedence over the region anchor (F3, the
   // answer-first front door): the button becomes "Open briefing" for the
   // place the user just clicked, the phone's and the Place studio's words.
@@ -988,24 +969,20 @@ function updateRegionBriefingTrigger(regionKey: RegionKey | null | undefined): v
     // Mode-neutral on purpose: the door opens the same briefing in every mode.
     // The name starts with the visible words (WCAG 2.5.3) and adds the place.
     btn.setAttribute('aria-label', `Open briefing for ${place.label}`);
-    if (note) note.hidden = true;
     return;
   }
   if (getFraming() !== null) {
     btn.hidden = true;
-    if (note) note.hidden = false;
     return;
   }
   const anchor = regionKey ? REGIONS[regionKey]?.briefing : undefined;
   if (!anchor) {
     btn.hidden = true;
-    if (note) note.hidden = false;
     return;
   }
   btn.hidden = false;
   btn.textContent = `Impact briefing: ${anchor.label}`;
   btn.setAttribute('aria-label', `Open the impact briefing for ${anchor.label}`);
-  if (note) note.hidden = true;
 }
 
 // ---------------------------------------------------------------------------
@@ -1512,11 +1489,6 @@ function wireTopLevelEvents(map: maplibregl.Map): void {
       STATE.embed = false;
       void mountSidebarIslandNow();
       ensureBriefHeadSearch(map);
-      // An embed boot hosts the Tribal Nations Brief-door action on the
-      // impact panel (or nowhere, if the panel builds after this exit);
-      // the full chrome's host is the Brief head. Idempotent (Codex
-      // S2/E1 integration finding 2).
-      ensureBriefHeadTribalAction();
       // Expanding also opens the desktop preference, so the write below
       // drops `sidebar=` (DR-139); the embed exit opens with the key absent.
       STATE.desktopSidebarClosed = false;

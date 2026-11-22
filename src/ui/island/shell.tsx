@@ -3,8 +3,9 @@
  * D-0.7.0-042/052/074; ADR 0002: new UI surfaces are Preact islands).
  *
  * Shared desktop order: hazard, time horizon, regional navigation, and place
- * search. Variable view details follow Place, Layers, and Tribal Nations.
- * Share stays in the map column's slot 4 in every view. The
+ * search, whose results fill the band under it. Variable view details follow.
+ * Share stays in the map column's slot 4 in every view, and the Place and
+ * Layer studio buttons stand under it in the same column. The
  * active condition readout is one line under the map's Key chip in Brief and
  * below the hazard buttons in Console; source details stay available
  * through the map key and the Impact Briefing.

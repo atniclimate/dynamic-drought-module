@@ -757,40 +757,42 @@ test.describe('short landscape coarse-pointer shell', () => {
   });
 });
 
-test.describe('desktop Tribal Nations action in the visible column (1440x900)', () => {
+test.describe('desktop Place and Layer cells in the map column (1440x900)', () => {
   test.use({ viewport: { width: 1440, height: 900 } });
 
-  // Visual uniformity wave 1, D5 (2026-11-13): the selected count left the
-  // display for the action's accessible name, so the line under the button is
-  // the fault line and draws nothing while both agencies answer. The column's
-  // foot dock is gone (owner items 11 and 13), so the column's own foot bounds it.
-  test('at rest, in every hazard mode, the action ends at least 8px above the column foot and its fault line is empty', async ({
+  // The two studio doors left the Brief column for the map's top-right column
+  // (owner, 2026-11-21 and 22): Place above Layer, under Share, in that
+  // column's cells and on its x. The Tribal Nations button left the main
+  // navigation the same day. The column's gap is --map-cell-gap, 4px.
+  test('in every hazard mode, Place and Layer stand under Share on the column\'s x, one gap apart', async ({
     page
   }) => {
     await gotoApp(page);
-    const scroller = page.locator('.sidebar-scroll');
-    const action = page.locator('#tribal-nations-brief-action');
-    const fault = page.locator('#tribal-nations-brief-action ~ .tribal-nations-health');
+    await expect(page.locator('#brief-display #studio-entry-pair')).toHaveCount(0);
+    await expect(page.locator('#brief-display .tribal-nations-brief-row')).toHaveCount(0);
+    const share = page.locator('#share-btn');
+    const seat = page.locator('.map-overlay-controls > #map-studio-seat');
+    const place = seat.locator('#place-studio-entry');
+    const layer = seat.locator('#layers-studio-entry');
+    await expect(place).toHaveText('Place');
+    await expect(layer).toHaveText('Layer');
 
     for (const key of HAZARD_CLUSTER_KEYS) {
       const chip = page.locator(`.shell-cluster-btn[data-cluster="${key}"]`);
       await chip.click();
       await expect(chip).toHaveAttribute('aria-pressed', 'true');
-      await expect(action).toBeVisible();
-      await expect(fault).toHaveText('');
-      await expect(fault).toBeHidden();
-      await expect
-        .poll(
-          async () => {
-            await scroller.evaluate((element) => {
-              element.scrollTop = 0;
-            });
-            const [columnBox, actionBox] = await Promise.all([rect(scroller), rect(action)]);
-            return columnBox.bottom - actionBox.bottom;
-          },
-          { message: `${key}: the Tribal Nations action runs past the column foot` }
-        )
-        .toBeGreaterThanOrEqual(8);
+      await expect(place).toBeVisible();
+      await expect(layer).toBeVisible();
+      const [shareBox, placeBox, layerBox] = await Promise.all([rect(share), rect(place), rect(layer)]);
+      for (const [name, box, above] of [['Place', placeBox, shareBox], ['Layer', layerBox, placeBox]] as const) {
+        expect(Math.abs(box.left - shareBox.left), `${key}: ${name} is off the column's x`).toBeLessThanOrEqual(0.5);
+        expect(Math.abs(box.right - shareBox.right), `${key}: ${name} is not the column's width`).toBeLessThanOrEqual(0.5);
+        expect(
+          Math.abs(box.bottom - box.top - (shareBox.bottom - shareBox.top)),
+          `${key}: ${name} is not the column's cell height`
+        ).toBeLessThanOrEqual(0.5);
+        expect(Math.abs(box.top - above.bottom - 4), `${key}: ${name} is not one gap under the cell above`).toBeLessThanOrEqual(0.5);
+      }
     }
   });
 });
@@ -832,40 +834,51 @@ test.describe('the horizon row stays inside the sidebar', () => {
 test.describe('desktop Brief region band', () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
-  test('at region=national the region panel leaves no empty band where the hidden briefing door was', async ({
+  test('at region=national the hidden briefing door leaves its row with no hint line', async ({
     page
   }) => {
     // A bare boot resolves to the national default and Brief mode (DR-109,
     // 60c3a66), where the region panel is rehosted inside the desktop shell
     // and its briefing door has no anchor to show (D1 M4, found-024). The
-    // repair (D1 M4 repair) keeps the row occupied by a plain-text
-    // alternate rather than collapsing it: this must be RED against the
-    // original pre-M4 code (an empty reserved band, no statement anywhere)
-    // because #region-briefing-note would not exist there at all.
+    // plain-text alternate that once filled the row ("Pick a place to open
+    // its briefing.") left on the owner's direction (2026-11-21). The row
+    // stays reserved, so the search below never moves (the next case).
     await gotoApp(page);
     const panel = page.locator('#shell-region-host > #panel-region');
     await expect(panel).toBeVisible();
     await expect(page.locator('#region-briefing-btn')).toBeHidden();
-    const note = page.locator('#shell-region-host #region-briefing-note');
-    await expect(note).toBeVisible();
-    await expect(note).toHaveText('Pick a place to open its briefing.');
+    await expect(page.locator('#region-briefing-note')).toHaveCount(0);
+    await expect(page.locator('#shell-region-host')).not.toContainText('Pick a place');
+  });
 
-    // The statement's own box must sit inside the second row with no blank
-    // gap above or below it beyond the row's own 8px gap token (measured,
-    // not assumed): top gap is select-bottom to note-top, bottom gap is
-    // note-bottom to panel-bottom (panel padding is zeroed by .shell-rehost
-    // while seated here, so panel-bottom is the row's own edge).
-    const selectBox = await rect(page.locator('#shell-region-host #region-select'));
-    const noteBox = await rect(note);
-    const panelBox = await rect(panel);
+  test('search results fill one band under the box, so typing and clearing move nothing below it', async ({
+    page
+  }) => {
+    // The owner's direction of 2026-11-21: the space the Place and Layers
+    // doors left under the search box shows the search's results, and every
+    // other control keeps its place. The search block is the box and a band
+    // of one height; a list longer than the band runs over what is under it
+    // and pushes nothing. Wildfire has controls under the band to measure.
+    await gotoApp(page, '?cluster=wildfire');
+    const searchBlock = page.locator('#brief-search');
+    const under = page.locator('#shell-details-panel');
+    await expect(under).toBeVisible();
+    const measure = async (): Promise<{ search: number; underTop: number }> => {
+      const [searchBox, underBox] = await Promise.all([rect(searchBlock), rect(under)]);
+      return { search: searchBox.bottom - searchBox.top, underTop: underBox.top };
+    };
+    const empty = await measure();
+    const input = page.locator('#brief-search [data-ddm-search]');
+    const inputBox = await rect(input);
     expect(
-      noteBox.top - selectBox.bottom,
-      'a blank gap sits above the statement beyond the row gap token'
-    ).toBeLessThanOrEqual(9);
-    expect(
-      panelBox.bottom - noteBox.bottom,
-      'a blank gap sits below the statement inside the reserved row'
-    ).toBeLessThanOrEqual(1);
+      empty.search - (inputBox.bottom - inputBox.top),
+      'no band is reserved under the search box while the list is empty'
+    ).toBeGreaterThanOrEqual(80);
+    await input.fill('oregon');
+    await expect(page.locator('#brief-search [data-search-kind="place"][data-search-id="OR"]')).toBeVisible();
+    const matched = await measure();
+    expect(Math.abs(matched.search - empty.search), 'the search block grew when results arrived').toBeLessThanOrEqual(0.5);
+    expect(Math.abs(matched.underTop - empty.underTop), 'results pushed the controls under the band').toBeLessThanOrEqual(0.5);
   });
 
   test('the region row keeps its height when a place selection shows the door', async ({

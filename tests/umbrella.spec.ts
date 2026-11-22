@@ -21,13 +21,14 @@ import { TRIBAL_NATIONS_GROUP } from '../src/config/layer-groups';
 
 /**
  * The Tribal Nations umbrella UI (Unit F, D-0.7.0-033): the featured group
- * card in the Place role group plus the eager Brief-door action. Built to
- * the 2026-07-15 Codex front-end consultation: two separate
- * controls (a command button and a details disclosure), permanently mounted
- * member rows behind a native `hidden` region, group provenance controlled
- * by the role group's Sources state, and the compact Brief action that
- * satisfies "prominent in the initial display" on the door a bare URL
- * actually opens. All live responses are synthetic fixtures.
+ * card in the Place role group plus the eager action a brief embed's
+ * briefing carries. Built to the 2026-07-15 Codex front-end consultation:
+ * two separate controls (a command button and a details disclosure),
+ * permanently mounted member rows behind a native `hidden` region, group
+ * provenance controlled by the role group's Sources state. The Brief's main
+ * navigation carries no Tribal Nations button (owner, 2026-11-21): the
+ * search finds the Nations and the Console's umbrella turns the layers off.
+ * All live responses are synthetic fixtures.
  */
 
 const UMBRELLA = '[data-layer-group-key="tribal-nations"]';
@@ -365,16 +366,16 @@ test.describe('partial-outage visibility (the final-pass finding 2)', () => {
   // checked (M5's rule, extended from the recipe to the composition), so the
   // BIA outage leaves both selected and one unavailable; it used to uncheck
   // BIA and demote the Drought view to a custom set.
-  // The visible line is the fault alone (visual uniformity wave 1, D5); the
-  // selected count reads in the action's accessible name.
+  // The embed action's visible line is the fault alone (visual uniformity
+  // wave 1, D5); the selected count reads in the action's accessible name.
   const HEALTH_DEGRADED = '1 unavailable';
-  const BRIEF_HEALTH =
-    '.tribal-nations-brief-row:not(.tribal-nations-at-hand-row) .tribal-nations-health';
+  const BRIEF_HEALTH = '.tribal-nations-brief-row .tribal-nations-health';
   // found-073's pin: the failed layer stays checked, so the name still reads
   // "2 of 2 selected" beside the fault.
-  const BRIEF_ACTION =
-    '.tribal-nations-brief-row:not(.tribal-nations-at-hand-row) .tribal-nations-brief-action';
+  const BRIEF_ACTION = '.tribal-nations-brief-row .tribal-nations-brief-action';
   const NAME_DEGRADED = 'Hide Tribal Nations layers, 2 of 2 selected · 1 unavailable';
+  // The Console umbrella's visible count carries the same shared format.
+  const COUNT_DEGRADED = '2 of 2 selected · 1 unavailable';
 
   async function oneAgencyDown(page: import('./offline-test').Page): Promise<void> {
     await routeGeojsonPair(page);
@@ -389,15 +390,12 @@ test.describe('partial-outage visibility (the final-pass finding 2)', () => {
     );
   }
 
-  test('desktop Brief: the action health line names the outage', async ({ page }) => {
+  test('desktop Console: the umbrella count names the outage', async ({ page }) => {
     await oneAgencyDown(page);
-    // The briefing (which hosts the action row) is opened by the select=
-    // deep link: since S2 (D-0.7.0-041) no boot opens one unsolicited.
-    await gotoApp(page, '?select=state:WA');
-    await expect(page.locator(BRIEF_HEALTH)).toHaveText(HEALTH_DEGRADED, {
-      timeout: 25_000
-    });
-    await expect(page.locator(BRIEF_ACTION)).toHaveAccessibleName(NAME_DEGRADED);
+    await gotoApp(page, '?view=console');
+    await expect(page.locator(COUNT)).toHaveText(COUNT_DEGRADED, { timeout: 25_000 });
+    // The Brief's main navigation carries no Tribal Nations button.
+    await expect(page.locator(BRIEF_ACTION)).toHaveCount(0);
   });
 
   test('brief embed at 400x600: the outage is visible with zero island requests', async ({
@@ -435,7 +433,7 @@ test.describe('partial-outage visibility (the final-pass finding 2)', () => {
 test.describe('partial-outage visibility on mobile (390x844)', () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
-  test('the at-hand health line names the outage', async ({ page }) => {
+  test('the Layers window\'s umbrella count names the outage', async ({ page }) => {
     await routeBoundary(page, AIANNH_ROUTE, (route) =>
       route.fulfill({
         contentType: 'application/geo+json',
@@ -445,87 +443,63 @@ test.describe('partial-outage visibility on mobile (390x844)', () => {
     await routeBoundary(page, BIA_ROUTE, (route) => route.abort('failed'));
     await gotoApp(page, '?view=console');
 
-    await page.locator('#mobile-footer-nav button[data-tab="place"]').click();
-    await expect(page.locator('#sheet-at-hand')).toBeVisible();
+    await page.locator('#mobile-footer-nav button[data-tab="layers"]').click();
+    await expect(page.locator('#app')).toHaveAttribute('data-sheet-detent', 'full');
+    await expect(page.locator(UMBRELLA)).toBeVisible();
     // found-073: the failed BIA layer stays checked in the committed view.
-    await expect(page.locator('#tribal-nations-at-hand-health')).toHaveText(
-      '1 unavailable',
-      { timeout: 25_000 }
-    );
-    await expect(page.locator('#tribal-nations-at-hand-action')).toHaveAccessibleName(
-      'Hide Tribal Nations layers, 2 of 2 selected · 1 unavailable'
-    );
+    await expect(page.locator(COUNT)).toHaveText('2 of 2 selected · 1 unavailable', {
+      timeout: 25_000
+    });
+    await expect(page.locator(CTA)).toHaveAccessibleName('Hide Tribal Nations layers');
   });
 });
 
-test.describe('the Brief-door Tribal Nations action', () => {
-  test('a bare desktop boot (the Brief door) shows the compact action', async ({ page }) => {
+test.describe('the Brief main navigation (owner, 2026-11-21 and 22)', () => {
+  test('a bare desktop boot shows Place and Layer in the map column and no Tribal Nations button', async ({ page }) => {
     await gotoApp(page);
-    const action = page.locator('#tribal-nations-brief-action');
-    await expect(action).toBeVisible();
-    // Both Tribal members (aiannh, bia-reservations) default on (found-006):
-    // a bare boot is the pressed state, so the accessible name reads Hide.
-    await expect(action).toHaveAccessibleName('Hide Tribal Nations layers, 2 of 2 selected');
-    await expect(action).toHaveAttribute('aria-pressed', 'true');
+    const pair = page.locator('.map-overlay-controls > #map-studio-seat #studio-entry-pair');
+    await expect(pair).toBeVisible();
+    await expect(pair.locator('button')).toHaveText(['Place', 'Layer']);
+    await expect(page.locator('#brief-display #studio-entry-pair')).toHaveCount(0);
+    await expect(page.locator('#brief-display .tribal-nations-brief-row')).toHaveCount(0);
+    await expect(page.locator('#tribal-nations-brief-action')).toHaveCount(0);
   });
 
-  test('activating from the Brief action reaches the map on desktop too', async ({ page }) => {
-    await gotoApp(page, '?view=brief&layers=');
-    const action = page.locator('#tribal-nations-brief-action');
-    await expect(action).toBeVisible();
-    await action.click();
-    await expect
-      .poll(
-        async () => {
-          const layers = await urlLayers(page);
-          return BUTTON_SET.every((key) => layers.has(key));
-        },
-        { timeout: 25_000 }
-      )
-      .toBe(true);
-  });
-
-  test('an exited embed regains the action in the Brief head (Codex S2/E1 integration finding 2)', async ({
-    page
-  }) => {
+  test('an exited embed gains no Tribal Nations button in the Brief column', async ({ page }) => {
     await routeAllTribalFixtures(page);
     await installMinimapAnalysisStubs(page);
     await stubRecentSatellite(page);
-    // An embed boot hosts the action on the impact panel only (the
-    // sidebar is collapsed); expanding exits embed mode and the Brief
-    // head must gain the one instance so the umbrella's default-Brief
-    // visibility guarantee survives the exit.
     await page.goto('?embed=true', { waitUntil: 'domcontentloaded' });
     await expect(page.locator('#app')).toHaveClass(/\bembed\b/);
     await page.locator('#sidebar-expand').click();
     await expect(page.locator('#app')).not.toHaveClass(/\bembed\b/);
-    const action = page.locator('#tribal-nations-brief-action');
-    await expect(action).toBeVisible();
-    await expect(action).toHaveCount(1);
+    await expect(page.locator('#map-studio-seat #studio-entry-pair')).toBeVisible();
+    await expect(page.locator('#brief-display .tribal-nations-brief-row')).toHaveCount(0);
   });
 });
 
-test.describe('the Brief-door action at 400px (mobile and embed)', () => {
+test.describe('the Tribal Nations controls at 400px (mobile and embed)', () => {
   test.use({ viewport: { width: 400, height: 600 } });
 
-  test('non-embed mobile Brief: the at-hand mirror is the reachable, operable instance', async ({
+  test('non-embed phone: the Layers window\'s umbrella is the reachable, operable control', async ({
     page
   }) => {
     await gotoApp(page, '?view=console&layers=');
 
-    // The Place door opens the at-hand summary in its full-screen window
-    // (the surface that REPLACES the report on mobile).
+    // The Place door's at-hand window carries no Tribal Nations button.
     await page.locator('#mobile-footer-nav button[data-tab="place"]').click();
     await expect(page.locator('#app')).toHaveAttribute('data-sheet-detent', 'full');
     await expect(page.locator('#sheet-at-hand')).toBeVisible();
+    await expect(page.locator('#sheet-at-hand .tribal-nations-brief-row')).toHaveCount(0);
 
-    const atHandAction = page.locator('#tribal-nations-at-hand-action');
-    await expect(atHandAction).toBeVisible();
-    await expect(atHandAction).toHaveAccessibleName('Show Tribal Nations layers, 0 of 2 selected');
-    // The report-hosted twin is not this surface's instance.
-    await expect(page.locator('#tribal-nations-brief-action')).not.toBeVisible();
+    // The Layers door opens the Console's layer list, umbrella included.
+    await page.locator('#mobile-footer-nav button[data-tab="layers"]').click();
+    await expect(page.locator('#app')).toHaveAttribute('data-sheet-detent', 'full');
+    const cta = page.locator(CTA);
+    await expect(cta).toBeVisible();
+    await expect(cta).toHaveAccessibleName('Show Tribal Nations layers');
 
-    await atHandAction.click();
+    await cta.click();
     await expect
       .poll(
         async () => {

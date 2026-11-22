@@ -84,7 +84,7 @@ for (const viewport of [{ width: 1440, height: 1000 }, { width: 958, height: 935
     await gotoApp(page);
     const minimap = viewport.height < 700 ? '.shell-minimap-popover-wrap' : '.shell-minimap-map';
     const selectors = ['#shell-panel', '.shell-view', '.shell-when', minimap,
-      '#shell-region-host', '#brief-search', '#layers-studio-entry-host'];
+      '#shell-region-host', '#brief-search', '#map-studio-seat'];
     const readings: Array<{ phase: string; bounds: Array<{ selector: string; x: number; y: number; width: number; height: number }> }> = [];
     const sample = async (phase: string): Promise<void> => {
       // Read consecutive painted frames, including the held loading state,

@@ -32,9 +32,10 @@ export interface LayerGroupDef {
   readonly actionDescription: string;
   /**
    * One-sentence effect description for a toggle that is currently pressed
-   * (found-006 repair): the Brief-door control, its phone at-hand mirror
-   * (found-090) and the catalog umbrella button (P3-03, 2026-11-05) are all
-   * toggles whose next press turns the set off while every member is on.
+   * (found-006 repair): the embed briefing's control and the catalog umbrella
+   * button (P3-03, 2026-11-05) are both toggles whose next press turns the
+   * set off while every member is on. The Brief column's button and its phone
+   * at-hand mirror left the main navigation (owner, 2026-11-21).
    */
   readonly actionOffDescription: string;
 }

@@ -93,8 +93,7 @@ test('every pressed button that paints its own face has a forced-colours selecte
     }
   }
   const faces = faceSelectors.join(' ');
-  // The Brief's Tribal Nations toggle, in the sidebar (an id rule outranks the class) and in the phone Brief sheet.
-  assert.match(faces, /#brief-secondary-actions \.tribal-nations-brief-action\[aria-pressed='true'\]/);
+  // The brief embed's Tribal Nations toggle in its briefing.
   assert.match(faces, /(?:^|[\s,])\.tribal-nations-brief-action\[aria-pressed='true'\]/);
   let pressed = 0;
   for (const path of sheets) {
